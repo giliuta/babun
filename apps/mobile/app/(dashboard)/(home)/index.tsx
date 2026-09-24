@@ -766,10 +766,6 @@ export default function CalendarTab() {
   // окно, выбрал — тогда можно»). В режиме у неё ручки сверху и снизу, сетка
   // не прокручивается, палец двигает запись и тянет края.
   const [editingApt, setEditingApt] = useState<Appointment | null>(null);
-  // Без блока «Оплата» (Кабинет → «Запись») визит закрывать нечем: статус на
-  // странице записи меняет только оплата. Тогда «Выполнена» живёт здесь, в
-  // меню долгого нажатия, — денег она не пишет.
-  const paymentBlockOn = useBookingBlocks().includes("payment");
 
   // Лента календарей: свои плюс чужие, одним рядом. Правила склейки и
   // переход в другую компанию живут в `useCalendarChips` — та же лента стоит
@@ -823,6 +819,10 @@ export default function CalendarTab() {
     teamChoice && teams.some((tm) => tm.id === teamChoice)
       ? teamChoice
       : teams[0]?.id ?? null;
+  // Без блока «Оплата» («Дизайн» команды) визит закрывать нечем: статус на
+  // странице записи меняет только оплата. Тогда «Выполнена» живёт здесь, в
+  // меню долгого нажатия, — денег она не пишет.
+  const paymentBlockOn = useBookingBlocks(activeTeamId).includes("payment");
   const activeTeam = teams.find((tm) => tm.id === activeTeamId);
   // Что сотрудник может в открытом календаре: новые записи, события, метка
   // дня. Владельцу — всё.
@@ -1185,13 +1185,13 @@ export default function CalendarTab() {
   // МЕТКИ АКТИВНОГО КАЛЕНДАРЯ, а не всего тенанта. С 2026-08-29 метка
   // принадлежит команде, и у каждой своя копия: без фильтра пикер дня
   // показывал «Лимассол» столько раз, сколько в компании команд.
-  const autoColorRule = useAutoColorRule();
+  const autoColorRule = useAutoColorRule(activeTeamId);
   // ПАЛИТРА СТАБИЛЬНОЙ ССЫЛКОЙ. Хук собирает новый объект на каждый рендер,
   // а палитра — зависимость резолверов цвета сетки (`teamColorFor`,
   // `situationFor`, `holeByDay`): новая ссылка роняла memo Недели, Дня и всех
   // колонок на каждом флаге запроса, тосте и тике минуты. Ключ memo — сами
   // три цвета: строки сравниваются значением.
-  const paletteRaw = useSituationPalette();
+  const paletteRaw = useSituationPalette(activeTeamId);
   const situationPalette = useMemo<SituationPalette>(
     () => ({
       noClient: paletteRaw.noClient,
@@ -1200,10 +1200,10 @@ export default function CalendarTab() {
     }),
     [paletteRaw.noClient, paletteRaw.noObject, paletteRaw.noServices],
   );
-  const fallbackColor = useFallbackColor();
+  const fallbackColor = useFallbackColor(activeTeamId);
   // Ситуация про блок, выключенный в настройке, не считается дырой: у бьюти-
   // мастера объекта нет вовсе.
-  const bookingBlocks = useBookingBlocks();
+  const bookingBlocks = useBookingBlocks(activeTeamId);
   const activeSituations = useMemo<ColorSituation[]>(
     () =>
       COLOR_SITUATIONS.map((s) => s.id).filter(
@@ -1886,9 +1886,10 @@ export default function CalendarTab() {
   const canAddBreak =
     canManageBookings || (isCrew && activeActions.events === "write");
   const canSlotMenu = canAddBreak;
-  const eventTypesQuery = usePersonalEventTypes();
+  // Типы событий открытой команды (владелец 24.09: «у каждой команды свои»).
+  const eventTypesQuery = usePersonalEventTypes(activeTeamId);
   // Блок «Тип» у события выключен — типов в быстром событии нет.
-  const eventTypesOn = useEventBlocks().includes("type");
+  const eventTypesOn = useEventBlocks(activeTeamId).includes("type");
   const quickTypes = useMemo(
     () =>
       (eventTypesQuery.data ?? [])
@@ -1919,7 +1920,11 @@ export default function CalendarTab() {
       })),
       // Справочник типов правят владелец и диспетчер; у сотрудника двери нет.
       onSettings: canManageBookings && eventTypesOn
-        ? () => router.push("/calendar/event-types" as Href)
+        ? () =>
+            router.push({
+              pathname: "/calendar/event-types",
+              params: activeTeamId ? { team: activeTeamId } : {},
+            } as Href)
         : undefined,
       settingsLabel: "Типы событий",
     });

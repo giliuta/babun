@@ -1,4 +1,4 @@
-import { useDisabledFeatures } from "@/features/settings/company-features";
+import { useRecordFeaturesOff } from "@/features/appointments/booking-prefs";
 import { useMemo } from "react";
 import { Linking, Modal, ScrollView, Text } from "react-native";
 import { useRouter } from "expo-router";
@@ -67,7 +67,8 @@ export function CrewAppointmentSheet({
   const role = useCurrentRole().data;
   const access = useMyAccess().data;
 
-  const disabledFeatures = useDisabledFeatures();
+  // Функции компании плюс блоки «Дизайна» команды записи (24.09).
+  const disabledFeatures = useRecordFeaturesOff(appointment?.team_id ?? null);
   const blocks = crewBlocks({
     role,
     map: access,

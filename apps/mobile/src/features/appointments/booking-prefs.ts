@@ -5,7 +5,6 @@ import type {
 import { useEffect } from "react";
 import {
   featureOfBookingBlock,
-  featureOfEventBlock,
   isFeatureOn,
 } from "@babun/shared/local/company-features";
 import { getStorage } from "@babun/shared/storage";
@@ -13,6 +12,12 @@ import { useDataRole } from "@/features/settings/tenant";
 import { useDisabledFeatures, useSetCompanyFeature } from "@/features/settings/company-features";
 import { useTenantId } from "@/lib/tenant";
 import { localBookingCarry } from "./booking-carry";
+import {
+  useSaveTeamDesign,
+  useTeamDesign,
+  type TeamBlockKey,
+  type TeamDesign,
+} from "./team-design";
 import {
   useCalendarSettings,
   useSaveCalendarSettings,
@@ -82,14 +87,57 @@ export const BOOKING_BLOCKS: BookingBlockDef[] = [
 // одинаково, и владелец выключает его один раз.
 const LEGACY_KEY = "babun-booking-blocks";
 
-/** Включённые блоки формы записи, в порядке показа. */
-export function useBookingBlocks(): BookingBlockId[] {
+/** Ключ блока записи в «Дизайне» команды. */
+const RECORD_BLOCK_KEY: Partial<Record<BookingBlockId, TeamBlockKey>> = {
+  label: "record_label",
+  object: "record_object",
+  payment: "record_payment",
+  note: "record_note",
+  files: "record_files",
+};
+
+/** Выключенные блоки «Дизайна» команды; без строки команды — выводятся из
+ *  прежних функций компании (так переезд ничего не ломает). */
+function useTeamBlocksOff(teamId: string | null | undefined): Set<TeamBlockKey> {
+  const design = useTeamDesign(teamId);
+  const disabled = useDisabledFeatures();
+  if (design) return new Set(design.disabledBlocks);
+  const off = new Set<TeamBlockKey>();
+  for (const block of BOOKING_BLOCKS) {
+    const feature = featureOfBookingBlock(block.id);
+    const key = RECORD_BLOCK_KEY[block.id];
+    if (feature && key && !isFeatureOn(disabled, feature)) off.add(key);
+  }
+  return off;
+}
+
+/** Выключенное — ключами функций компании, как их ждут `crewBlocks` и
+ *  финансы дня: функции компании плюс блоки записи ЭТОЙ команды
+ *  (record_object → objects). Одна правда на экран мастера и владельца. */
+export function useRecordFeaturesOff(teamId: string | null | undefined): string[] {
+  const off = useTeamBlocksOff(teamId);
+  const disabled = useDisabledFeatures();
+  const out = new Set<string>(disabled);
+  if (off.has("record_label")) out.add("record_label");
+  if (off.has("record_object")) out.add("objects");
+  if (off.has("record_payment")) out.add("record_payment");
+  if (off.has("record_note")) out.add("record_note");
+  if (off.has("record_files")) out.add("record_files");
+  return [...out];
+}
+
+/** Включённые блоки формы записи КОМАНДЫ, в порядке показа (владелец 24.09:
+ *  «всё отдельно под каждую команду»). Объект — ещё и функция компании
+ *  (объекты клиентов): выключены объекты у компании — блока нет нигде. */
+export function useBookingBlocks(teamId: string | null | undefined): BookingBlockId[] {
+  const off = useTeamBlocksOff(teamId);
   const disabled = useDisabledFeatures();
   useCarryLocalBookingBlocks();
   return BOOKING_BLOCKS.filter((block) => {
     if (block.pinned) return true;
-    const feature = featureOfBookingBlock(block.id);
-    return feature === null || isFeatureOn(disabled, feature);
+    if (block.id === "object" && !isFeatureOn(disabled, "objects")) return false;
+    const key = RECORD_BLOCK_KEY[block.id];
+    return !key || !off.has(key);
   }).map((block) => block.id);
 }
 
@@ -129,44 +177,69 @@ export const EVENT_BLOCKS: EventBlockDef[] = [
   { id: "files", label: "Файлы" },
 ];
 
-/** Включённые блоки формы события, в порядке показа. */
-export function useEventBlocks(): EventBlockId[] {
+const EVENT_BLOCK_KEY: Partial<Record<EventBlockId, TeamBlockKey>> = {
+  label: "event_label",
+  type: "event_type",
+  client: "event_client",
+  object: "event_object",
+  note: "event_note",
+  files: "event_files",
+};
+
+/** Включённые блоки формы события КОМАНДЫ, в порядке показа. */
+export function useEventBlocks(teamId: string | null | undefined): EventBlockId[] {
+  const off = useTeamBlocksOff(teamId);
   const disabled = useDisabledFeatures();
   return EVENT_BLOCKS.filter((block) => {
     if (block.pinned) return true;
     // Объекта события нет там, где у компании нет объектов вовсе.
     if (block.id === "object" && !isFeatureOn(disabled, "objects")) return false;
-    const feature = featureOfEventBlock(block.id);
-    return feature === null || isFeatureOn(disabled, feature);
+    const key = EVENT_BLOCK_KEY[block.id];
+    return !key || !off.has(key);
   }).map((block) => block.id);
 }
 
-/** Тумблер блока события — тумблер его функции компании. */
-export function useToggleEventBlock() {
-  const disabled = useDisabledFeatures();
-  const set = useSetCompanyFeature();
+/** Текущий «Дизайн» команды целиком — основа для патча. Без строки —
+ *  собирается из настроек компании. */
+function useDesignBase(teamId: string | null | undefined): TeamDesign {
+  const design = useTeamDesign(teamId);
+  const off = useTeamBlocksOff(teamId);
+  const settings = useCalendarSettings().data;
+  return (
+    design ?? {
+      rule: settings?.recordColorRule ?? "team",
+      palette: settings?.recordColorPalette ?? null,
+      fallback: settings?.recordColorFallback ?? null,
+      disabledBlocks: [...off],
+    }
+  );
+}
+
+function useToggleTeamBlock(teamId: string | null | undefined) {
+  const base = useDesignBase(teamId);
+  const save = useSaveTeamDesign();
   return {
-    ...set,
-    mutate: (id: EventBlockId) => {
-      const feature = featureOfEventBlock(id);
-      if (!feature) return;
-      set.mutate({ key: feature, on: !isFeatureOn(disabled, feature) });
+    ...save,
+    mutate: (key: TeamBlockKey | undefined) => {
+      if (!teamId || !key) return;
+      const off = new Set(base.disabledBlocks);
+      if (off.has(key)) off.delete(key);
+      else off.add(key);
+      save.mutate({ teamId, next: { ...base, disabledBlocks: [...off] } });
     },
   };
 }
 
-/** Тумблер блока на странице «Блоки формы» — это тумблер функции компании. */
-export function useToggleBookingBlock() {
-  const disabled = useDisabledFeatures();
-  const set = useSetCompanyFeature();
-  return {
-    ...set,
-    mutate: (id: BookingBlockId) => {
-      const feature = featureOfBookingBlock(id);
-      if (!feature) return;
-      set.mutate({ key: feature, on: !isFeatureOn(disabled, feature) });
-    },
-  };
+/** Тумблер блока события команды («Дизайн» → «Блоки», колонка «Событие»). */
+export function useToggleEventBlock(teamId: string | null | undefined) {
+  const t = useToggleTeamBlock(teamId);
+  return { ...t, mutate: (id: EventBlockId) => t.mutate(EVENT_BLOCK_KEY[id]) };
+}
+
+/** Тумблер блока записи команды («Дизайн» → «Блоки», колонка «Клиент»). */
+export function useToggleBookingBlock(teamId: string | null | undefined) {
+  const t = useToggleTeamBlock(teamId);
+  return { ...t, mutate: (id: BookingBlockId) => t.mutate(RECORD_BLOCK_KEY[id]) };
 }
 
 /** ПЕРЕНОС С ТЕЛЕФОНА — ОДИН РАЗ. У владельца, который уже выключил блоки на
@@ -278,35 +351,39 @@ function paletteWithDefaults(
   return out;
 }
 
-export function useAutoColorRule(): AutoColorRule {
-  return useCalendarSettings().data?.recordColorRule ?? "team";
+export function useAutoColorRule(teamId: string | null | undefined): AutoColorRule {
+  return useDesignBase(teamId).rule;
 }
 
-export function useSituationPalette(): SituationPalette {
-  return paletteWithDefaults(
-    useCalendarSettings().data?.recordColorPalette,
-  );
+export function useSituationPalette(teamId: string | null | undefined): SituationPalette {
+  return paletteWithDefaults(useDesignBase(teamId).palette ?? undefined);
 }
 
-export function useFallbackColor(): string {
-  return useCalendarSettings().data?.recordColorFallback ?? FALLBACK_DEFAULT;
+export function useFallbackColor(teamId: string | null | undefined): string {
+  return useDesignBase(teamId).fallback ?? FALLBACK_DEFAULT;
 }
 
-export function useSetAutoColorRule() {
-  const save = useSaveCalendarSettings();
+function useSaveDesign(teamId: string | null | undefined) {
+  const base = useDesignBase(teamId);
+  const save = useSaveTeamDesign();
   return {
-    ...save,
-    mutate: (rule: AutoColorRule) => save.mutate({ recordColorRule: rule }),
+    save,
+    base,
+    patch: (p: Partial<TeamDesign>) => {
+      if (!teamId) return;
+      save.mutate({ teamId, next: { ...base, ...p } });
+    },
   };
 }
 
-export function useSetFallbackColor() {
-  const save = useSaveCalendarSettings();
-  return {
-    ...save,
-    mutate: (color: string) =>
-      save.mutate({ recordColorFallback: color || undefined }),
-  };
+export function useSetAutoColorRule(teamId: string | null | undefined) {
+  const { save, patch } = useSaveDesign(teamId);
+  return { ...save, mutate: (rule: AutoColorRule) => patch({ rule }) };
+}
+
+export function useSetFallbackColor(teamId: string | null | undefined) {
+  const { save, patch } = useSaveDesign(teamId);
+  return { ...save, mutate: (color: string) => patch({ fallback: color || null }) };
 }
 
 /** Заводские цвета подсветки незаполненного — чтобы общий переключатель
@@ -316,28 +393,23 @@ export function situationDefaults(): SituationPalette {
 }
 
 /** Палитра подсветки целиком — одним патчем (общий переключатель). */
-export function useSetSituationPalette() {
-  const save = useSaveCalendarSettings();
+export function useSetSituationPalette(teamId: string | null | undefined) {
+  const { save, patch } = useSaveDesign(teamId);
   return {
     ...save,
-    mutate: (palette: SituationPalette) =>
-      save.mutate({ recordColorPalette: { ...palette } }),
+    mutate: (palette: SituationPalette) => patch({ palette: { ...palette } }),
   };
 }
 
-export function useSetSituationColor() {
-  const settings = useCalendarSettings();
-  const save = useSaveCalendarSettings();
+export function useSetSituationColor(teamId: string | null | undefined) {
+  const { save, base, patch } = useSaveDesign(teamId);
   return {
     ...save,
-    // Патч цвета ОДНОЙ ситуации переписывает палитру целиком: колонка одна,
-    // и частичного слияния jsonb здесь нет. Основа — то, что сейчас на
-    // экране (с заводскими), иначе первая же правка стёрла бы соседние.
+    // Патч цвета ОДНОЙ ситуации переписывает палитру целиком — основа то, что
+    // на экране (с заводскими), иначе первая правка стёрла бы соседние.
     mutate: (input: { situation: ColorSituation; color: string | null }) => {
-      const base = paletteWithDefaults(settings.data?.recordColorPalette);
-      save.mutate({
-        recordColorPalette: { ...base, [input.situation]: input.color },
-      });
+      const current = paletteWithDefaults(base.palette ?? undefined);
+      patch({ palette: { ...current, [input.situation]: input.color } });
     },
   };
 }

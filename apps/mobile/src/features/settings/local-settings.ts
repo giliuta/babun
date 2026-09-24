@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
 import {
   useMutation,
   useQuery,
@@ -470,18 +470,27 @@ function rowToEventType(r: EventTypeRow): PersonalEventType {
     allDay: r.all_day,
     order: r.position,
     hidden: !r.is_active,
+    ...(r.team_id ? { teamId: r.team_id } : {}),
   };
 }
 
-export function usePersonalEventTypes() {
+/** Типы событий КОМАНДЫ (владелец 24.09: «у каждой команды свои»). Запрос
+ *  несёт справочник всей компании одним ключом, команда — `select`, как у
+ *  меток: смена команды не гонит новый запрос. Тип без команды (старый кэш
+ *  до миграции 20260924233000) виден всем командам, пока не перечитан. */
+export function usePersonalEventTypes(teamId?: string | null) {
   const tenantId = useTenantId();
   const roleQuery = useDataRole();
   const role = roleQuery.data;
+  const select = useCallback(
+    (list: PersonalEventType[]) =>
+      teamId ? list.filter((type) => !type.teamId || type.teamId === teamId) : list,
+    [teamId],
+  );
   return useQuery({
     queryKey: ["event-types", tenantId, role ?? "role-pending"],
-    // Запрос включён любой подтверждённой роли; ЧТО видно, решает RLS
-    // таблицы. Сейчас (24.09) политики ещё «по автору»; владелец решил, что
-    // типы живут у КОМАНДЫ — переделка на team_id впереди.
+    select,
+    // Читают все члены компании; правят владелец и диспетчер (RLS).
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
     networkMode: "always",
     // ЛЕНТА ТИПОВ РИСУЕТСЯ СРАЗУ, А НЕ ПОСЛЕ ОТВЕТА СЕРВЕРА (владелец
@@ -556,10 +565,14 @@ export function useSavePersonalEventTypes() {
     mutationFn: async ({
       types,
       removeIds = [],
+      teamId,
     }: {
+      /** Типы ОДНОЙ команды — её полный список в порядке показа. */
       types: PersonalEventType[];
       /** Ids the user explicitly deleted in THIS action. */
       removeIds?: string[];
+      /** Команда, чьи это типы. */
+      teamId: string;
     }) => {
       if (!tenantId) throw new Error("Нет активной компании");
       if (role !== "owner" && role !== "dispatcher") {
@@ -582,6 +595,7 @@ export function useSavePersonalEventTypes() {
               all_day: t.allDay,
               position: i,
               is_active: !t.hidden,
+              team_id: teamId,
               // Строка возвращается из удалённых, если её id снова сохранили:
               // «Показать» у скрытой и повторное заведение того же типа
               // должны воскрешать одну и ту же запись, а не спорить с ней.
@@ -613,12 +627,15 @@ export function useSavePersonalEventTypes() {
           );
         }
       }
-      return list;
+      return { list: list.map((t) => ({ ...t, teamId })), teamId };
     },
-    onSuccess: (types) => {
+    onSuccess: ({ list, teamId }) => {
       // Cache writes happen only after every canonical server write succeeds.
-      safeSavePersonalEventTypes(types);
-      qc.setQueryData(mutationKey, types);
+      // В кэше справочник ВСЕЙ компании: заменяем типы только этой команды.
+      const all = qc.getQueryData<PersonalEventType[]>(mutationKey) ?? [];
+      const next = [...all.filter((t) => t.teamId && t.teamId !== teamId), ...list];
+      safeSavePersonalEventTypes(next);
+      qc.setQueryData(mutationKey, next);
     },
     onSettled: () => {
       if (qc.isMutating({ mutationKey }) <= 1) {

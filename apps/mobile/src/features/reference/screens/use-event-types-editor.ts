@@ -22,9 +22,12 @@ export type EventTypeEditing =
   | { mode: "create" }
   | { mode: "edit"; type: PersonalEventType };
 
-export function useEventTypesEditor() {
+/** `teamId` — команда, чьи типы правим (владелец 24.09: «у каждой команды
+ *  свои»). Без команды правка не пишется: тип без хозяина-команды база
+ *  больше не принимает. */
+export function useEventTypesEditor(teamId: string | null) {
   const toast = useToast();
-  const typesQuery = usePersonalEventTypes();
+  const typesQuery = usePersonalEventTypes(teamId);
   const save = useSavePersonalEventTypes();
   const [editing, setEditing] = useState<EventTypeEditing | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -41,8 +44,12 @@ export function useEventTypesEditor() {
     done?: () => void,
     removeIds?: string[],
   ) => {
+    if (!teamId) {
+      notify(failure, "Сначала заведите календарь.");
+      return;
+    }
     save.mutate(
-      { types: next.map((type, i) => ({ ...type, order: i })), removeIds },
+      { types: next.map((type, i) => ({ ...type, order: i })), removeIds, teamId },
       {
         onSuccess: () => done?.(),
         onError: (e) => notify(failure, e.message),

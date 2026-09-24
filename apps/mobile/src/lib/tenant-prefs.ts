@@ -41,6 +41,8 @@ export const TENANT_SCOPED_KEY_PREFIXES: readonly string[] = [
   "babun:accounts:snapshot",
   "babun2:settings:calendar:operational",
   "babun2:settings:location-labels",
+  // «Дизайн» команд компании (team_design, 24.09).
+  "babun-team-design",
   // Штамп «эта компания прошла онбординг» — он и так именной, и переживать
   // переход обязан: ради него переход и перестал показывать гейт.
   "babun:tenant:onboarded",

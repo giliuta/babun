@@ -16,6 +16,8 @@ import { durationLabel } from "@/features/services/format";
 import { useThemeColors } from "@/theme/colors";
 import { EventTypeSheet } from "./EventTypeSheet";
 import { useEventTypesEditor } from "./use-event-types-editor";
+import { useLocalSearchParams } from "expo-router";
+import { useTeams } from "@/features/reference/queries";
 
 // ТИПЫ СОБЫТИЙ — СПРАВОЧНИК ПО ОБЩЕМУ КАНОНУ (владелец 2026-09-08: «в
 // настройках событий надо сделать то же самое, как сделано в услугах или как
@@ -40,8 +42,15 @@ import { useEventTypesEditor } from "./use-event-types-editor";
  *  перелетел палец. Та же, что у меток. */
 const ROW_H = 60;
 
-export function EventTypesScreen() {
+export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null } = {}) {
   const t = useThemeColors();
+  // ТИПЫ КОМАНДЫ: команда едет адресом (`?team=`) из «Дизайна», пропом — из
+  // формы события; без неё — первая команда.
+  const params = useLocalSearchParams<{ team?: string }>();
+  const { data: teams = [] } = useTeams();
+  const teamId =
+    teamProp ?? teams.find((x) => x.id === params.team)?.id ?? teams[0]?.id ?? null;
+  const teamName = teams.find((x) => x.id === teamId)?.name;
   const {
     typesQuery,
     types,
@@ -54,11 +63,11 @@ export function EventTypesScreen() {
     reorder,
     dragging,
     setDragging,
-  } = useEventTypesEditor();
+  } = useEventTypesEditor(teamId);
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Типы событий" />
+      <ScreenHeader title="Типы событий" subtitle={teams.length > 1 ? teamName : undefined} />
 
       {typesQuery.isLoading ? (
         <EmptyState state="loading" fill />

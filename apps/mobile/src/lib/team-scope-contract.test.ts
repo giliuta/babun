@@ -47,8 +47,7 @@ const EXEMPT: Record<string, string> = {
 
 /** НАРУШЕНИЯ, КОТОРЫЕ ЕЩЁ НЕ ИСПРАВЛЕНЫ. Только сокращается. */
 const TODO_NO_TEAM: Record<string, string> = {
-  calendar_settings: "«Дизайн», блоки, часы — должны быть у команды",
-  personal_event_types: "типы событий — у команды",
+  calendar_settings: "часы, шаг, неделя, пояс — у команды («Дизайн» уже в team_design)",
   finance_category_hidden: "за категориями",
   finance_category_order: "за категориями",
   service_categories: "категории услуг — у команды",

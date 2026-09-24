@@ -165,7 +165,7 @@ describe("сетка календаря мемоизирована и корми
     );
     assert.doesNotMatch(
       screen,
-      /const situationPalette = useSituationPalette\(\)/,
+      /const situationPalette = useSituationPalette\(/,
       "палитра прямо из хука — новый объект на каждый рендер",
     );
   });

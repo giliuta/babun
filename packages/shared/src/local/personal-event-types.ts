@@ -36,6 +36,9 @@ export interface PersonalEventType {
    *  удалить, влево — скрыть», как у услуг и меток). Удалённый тип не
    *  приезжает с сервера вовсе — у него своя колонка `deleted_at`. */
   hidden: boolean;
+  /** Команда, которой принадлежит тип (владелец 24.09: «типы событий у
+   *  каждой команды»; миграция 20260924233000). У старых кэшей поля нет. */
+  teamId?: string;
 }
 
 const STORAGE_KEY = "babun2:settings:personal-event-types";
@@ -88,6 +91,7 @@ export function loadPersonalEventTypes(): PersonalEventType[] {
         order: Number.isFinite(p.order) ? Number(p.order) : i,
         // Старый кэш поля не знает: тип из него — видимый.
         hidden: Boolean(p.hidden),
+        ...(typeof p.teamId === "string" ? { teamId: p.teamId } : {}),
       }))
       .sort((a, b) => a.order - b.order);
 }

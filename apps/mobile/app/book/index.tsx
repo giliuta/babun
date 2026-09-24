@@ -290,36 +290,6 @@ export default function BookScreen() {
   const toast = useToast();
   const { data: dayCities = {} } = useDayCities();
   const dayLabelsOn = useFeatureOn("day_labels");
-  // КАКИЕ БЛОКИ НУЖНЫ ЭТОМУ БИЗНЕСУ (Кабинет → «Запись», владелец 2026-09-05:
-  // «для бьюти-мастеров объект не нужен — можем вообще его убрать»).
-  const blocks = useBookingBlocks();
-  const showObject = blocks.includes("object");
-  const showLabelBlock = blocks.includes("label");
-  const showPayment = blocks.includes("payment");
-  const showNote = blocks.includes("note");
-  const showFiles = blocks.includes("files");
-  // БЛОКИ СОБЫТИЯ — СВОИ (владелец 24.09, «Дизайн» → «Блоки события»): у
-  // события заметка или объект включаются отдельно от записи.
-  const eventBlocks = useEventBlocks();
-  const evShowLabel = eventBlocks.includes("label");
-  // Тип у события необязателен: выключен — событие как запись с заметкой.
-  const evShowType = eventBlocks.includes("type");
-  const evShowClient = eventBlocks.includes("client");
-  const evShowObject = eventBlocks.includes("object");
-  const evShowNote = eventBlocks.includes("note");
-  const evShowFiles = eventBlocks.includes("files");
-  // Чем красить запись, когда цвет не выбирали руками, и какими цветами
-  // говорить о незаполненном (Кабинет → «Запись»).
-  const autoColorRule = useAutoColorRule();
-  const situationPalette = useSituationPalette();
-  const fallbackColor = useFallbackColor();
-  const activeSituations = useMemo<ColorSituation[]>(
-    () =>
-      COLOR_SITUATIONS.map((s) => s.id).filter(
-        (id) => id !== "noObject" || showObject,
-      ),
-    [showObject],
-  );
   const params = useLocalSearchParams<{
     date?: string;
     time_start?: string;
@@ -335,6 +305,39 @@ export default function BookScreen() {
      *  «invoice:<id>». Словарь дорог — `resolveReturnTo`. */
     from?: string;
   }>();
+  const [teamId, setTeamId] = useState<string | null>(
+    first(params.teamId) ?? null,
+  );
+  // КАКИЕ БЛОКИ НУЖНЫ ЭТОМУ БИЗНЕСУ (Кабинет → «Запись», владелец 2026-09-05:
+  // «для бьюти-мастеров объект не нужен — можем вообще его убрать»).
+  const blocks = useBookingBlocks(teamId);
+  const showObject = blocks.includes("object");
+  const showLabelBlock = blocks.includes("label");
+  const showPayment = blocks.includes("payment");
+  const showNote = blocks.includes("note");
+  const showFiles = blocks.includes("files");
+  // БЛОКИ СОБЫТИЯ — СВОИ (владелец 24.09, «Дизайн» → «Блоки события»): у
+  // события заметка или объект включаются отдельно от записи.
+  const eventBlocks = useEventBlocks(teamId);
+  const evShowLabel = eventBlocks.includes("label");
+  // Тип у события необязателен: выключен — событие как запись с заметкой.
+  const evShowType = eventBlocks.includes("type");
+  const evShowClient = eventBlocks.includes("client");
+  const evShowObject = eventBlocks.includes("object");
+  const evShowNote = eventBlocks.includes("note");
+  const evShowFiles = eventBlocks.includes("files");
+  // Чем красить запись, когда цвет не выбирали руками, и какими цветами
+  // говорить о незаполненном (Кабинет → «Запись»).
+  const autoColorRule = useAutoColorRule(teamId);
+  const situationPalette = useSituationPalette(teamId);
+  const fallbackColor = useFallbackColor(teamId);
+  const activeSituations = useMemo<ColorSituation[]>(
+    () =>
+      COLOR_SITUATIONS.map((s) => s.id).filter(
+        (id) => id !== "noObject" || showObject,
+      ),
+    [showObject],
+  );
 
   // ── справочные данные (кеш уже тёплый — календарь грузит те же ключи) ──
   const teamsQuery = useTeams();
@@ -348,7 +351,8 @@ export default function BookScreen() {
   const clientsQuery = useClients();
   const appointmentsQuery = useAppointments();
   const calendarSettingsQuery = useCalendarSettings();
-  const eventTypesQuery = usePersonalEventTypes();
+  // Типы событий ЭТОЙ команды (владелец 24.09).
+  const eventTypesQuery = usePersonalEventTypes(teamId);
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const masters = useMemo(() => mastersQuery.data ?? [], [mastersQuery.data]);
   const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data]);
@@ -460,9 +464,6 @@ export default function BookScreen() {
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [overrides, setOverrides] = useState<Record<string, ServiceOverride>>(
     {},
-  );
-  const [teamId, setTeamId] = useState<string | null>(
-    first(params.teamId) ?? null,
   );
   const teamScheduleQuery = useTeamSchedule(teamId ?? undefined);
   // Метки принадлежат команде — те же, что предлагаются её дню.
@@ -3528,7 +3529,12 @@ export default function BookScreen() {
               ? clearEventType
               : () => applyEventType(type.id),
         }))}
-        onSettings={() => router.push("/event-types" as Href)}
+        onSettings={() =>
+          router.push({
+            pathname: "/event-types",
+            params: teamId ? { team: teamId } : {},
+          } as Href)
+        }
         settingsLabel="Типы событий"
         onClose={() => setEventTypeSheetOpen(false)}
       />

@@ -2583,6 +2583,7 @@ export type Database = {
           label: string
           position: number
           tenant_id: string
+          team_id: string
           updated_at: string
         }
         Insert: {
@@ -2598,6 +2599,7 @@ export type Database = {
           label: string
           position?: number
           tenant_id: string
+          team_id?: string
           updated_at?: string
         }
         Update: {
@@ -2613,6 +2615,7 @@ export type Database = {
           label?: string
           position?: number
           tenant_id?: string
+          team_id?: string
           updated_at?: string
         }
         Relationships: [

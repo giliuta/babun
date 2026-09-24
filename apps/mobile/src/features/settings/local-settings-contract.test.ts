@@ -20,7 +20,7 @@ function section(start: string, end?: string): string {
 describe("canonical settings cache contract", () => {
   test("personal event reads hide only transport or rolling-contract failures", () => {
     const read = section(
-      "export function usePersonalEventTypes()",
+      "export function usePersonalEventTypes(teamId?: string | null)",
       "export function useSavePersonalEventTypes()",
     );
     assert.match(read, /isConfirmedNetworkUnavailable\(readError\)/);

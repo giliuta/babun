@@ -1,4 +1,4 @@
-import { useFeatureOn } from "@/features/settings/company-features";
+import { useBookingBlocks } from "@/features/appointments/booking-prefs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
@@ -104,7 +104,8 @@ export function DayFinanceSheet({
   onReopen?: (ymd: string) => void;
 }) {
   const t = useThemeColors();
-  const paymentOn = useFeatureOn("record_payment");
+  // Блок «Оплата» — из «Дизайна» этой команды (24.09).
+  const paymentOn = useBookingBlocks(teamId).includes("payment");
   const router = useRouter();
   const { height: screenH } = useWindowDimensions();
   const services = useFinanceServices();

@@ -139,16 +139,6 @@ function CalendarIdentityCard({
 export default function CalendarSettingsScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  // ПОДПИСЬ СТРОКИ «ДИЗАЙН»: строка настройки обязана говорить своё
-  // состояние — откуда цвет и сколько блоков у записи.
-  const bookingBlocks = useBookingBlocks();
-  const bookingRule = useAutoColorRule();
-  const bookingSub = [
-    AUTO_COLOR_RULES.find((r) => r.id === bookingRule)?.label ?? "Цвет команды",
-    bookingBlocks.length === BOOKING_BLOCKS.length
-      ? "все блоки"
-      : `${bookingBlocks.length} из ${BOOKING_BLOCKS.length} блоков`,
-  ].join(" · ");
   const params = useLocalSearchParams<{ team?: string }>();
   const settingsQuery = useCalendarSettings();
   const settings = settingsQuery.data;
@@ -226,6 +216,15 @@ export default function CalendarSettingsScreen() {
     : undefined;
   const activeId = params.team ?? persisted ?? teams[0]?.id;
   const team = teams.find((x) => x.id === activeId) ?? teams[0];
+  // ПОДПИСЬ СТРОКИ «ДИЗАЙН» — ЭТОЙ КОМАНДЫ: откуда цвет и сколько блоков.
+  const bookingBlocks = useBookingBlocks(team?.id ?? null);
+  const bookingRule = useAutoColorRule(team?.id ?? null);
+  const bookingSub = [
+    AUTO_COLOR_RULES.find((r) => r.id === bookingRule)?.label ?? "Цвет команды",
+    bookingBlocks.length === BOOKING_BLOCKS.length
+      ? "все блоки"
+      : `${bookingBlocks.length} из ${BOOKING_BLOCKS.length} блоков`,
+  ].join(" · ");
   // Метки ЭТОГО календаря: подпись строки обязана перечислять его собственные.
   const { data: labels = [] } = useCities({ teamId: activeId ?? null });
 
@@ -546,7 +545,14 @@ export default function CalendarSettingsScreen() {
                 // вида, цвета, блоков записи и события и типов событий.
                 title="Дизайн"
                 sub={bookingSub}
-                onPress={() => router.push("/calendar/design" as Href)}
+                // КАЛЕНДАРЬ ЕДЕТ АДРЕСОМ, как у «Услуг» и «Меток»: «Дизайн» у
+                // каждой команды свой (владелец 24.09).
+                onPress={() =>
+                  router.push({
+                    pathname: "/calendar/design",
+                    params: { team: team.id },
+                  } as Href)
+                }
               />
             </SectionCard>
           ) : null}

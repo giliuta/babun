@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   Bookmark,
   Briefcase,
@@ -131,26 +131,32 @@ const BLOCK_ROWS: { record: BookingBlockId | null; event: EventBlockId | null }[
 export function DesignScreen() {
   const t = useThemeColors();
   const router = useRouter();
+  // «ДИЗАЙН» — У КАЖДОЙ КОМАНДЫ СВОЙ (владелец 24.09). Команда едет адресом из
+  // настроек календаря; без неё — первая.
+  const params = useLocalSearchParams<{ team?: string }>();
+  const { data: allTeams = [] } = useTeams();
+  const team = allTeams.find((x) => x.id === params.team) ?? allTeams[0];
+  const teamId = team?.id ?? null;
 
   // ── цвет ──
-  const rule = useAutoColorRule();
-  const setRule = useSetAutoColorRule();
-  const palette = useSituationPalette();
-  const setSituationColor = useSetSituationColor();
-  const fallback = useFallbackColor();
-  const setFallback = useSetFallbackColor();
+  const rule = useAutoColorRule(teamId);
+  const setRule = useSetAutoColorRule(teamId);
+  const palette = useSituationPalette(teamId);
+  const setSituationColor = useSetSituationColor(teamId);
+  const fallback = useFallbackColor(teamId);
+  const setFallback = useSetFallbackColor(teamId);
   const [editingColor, setEditingColor] = useState<ColorTarget | null>(null);
   const [ruleOpen, setRuleOpen] = useState(false);
 
   // ── блоки ──
-  const recordBlocks = useBookingBlocks();
-  const toggleRecordBlock = useToggleBookingBlock();
-  const eventBlocks = useEventBlocks();
-  const toggleEventBlock = useToggleEventBlock();
+  const recordBlocks = useBookingBlocks(teamId);
+  const toggleRecordBlock = useToggleBookingBlock(teamId);
+  const eventBlocks = useEventBlocks(teamId);
+  const toggleEventBlock = useToggleEventBlock(teamId);
   const objectsOn = recordBlocks.includes("object");
 
   // ── типы событий ──
-  const typesQuery = usePersonalEventTypes();
+  const typesQuery = usePersonalEventTypes(teamId);
   const liveTypes = (typesQuery.data ?? []).filter((type) => !type.hidden);
   // Подпись двери — имена типов, как у «Меток»; пока грузится — пусто.
   const typesSub = typesQuery.isLoading
@@ -161,7 +167,7 @@ export function DesignScreen() {
 
   // ОБЫЧНАЯ ЗАПИСЬ — ЦВЕТОМ ТОГО ИСТОЧНИКА, ЧТО ВЫБРАН: первая команда,
   // первая метка или первая услуга. Нет у источника цвета — запасной.
-  const { data: teams = [] } = useTeams();
+  const teams = allTeams;
   const { data: labels = [] } = useCities();
   const { data: services = [] } = useServices();
   const ordinary =
@@ -183,7 +189,7 @@ export function DesignScreen() {
 
   // ПОДСВЕТКА ВКЛЮЧЕНА, если хоть один случай красит. Выключатель пишет
   // палитру целиком: выкл. — все «не красить», вкл. — заводские цвета.
-  const setPalette = useSetSituationPalette();
+  const setPalette = useSetSituationPalette(teamId);
   const highlightOn = situations.some((sit) => palette[sit.id] != null);
 
   // ДЕНЬ-ОБРАЗЕЦ: записи того же вида, что на сетке. Обычная — цветом
@@ -224,7 +230,7 @@ export function DesignScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Дизайн" />
+      <ScreenHeader title="Дизайн" subtitle={team?.name} />
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         {/* ── ЦВЕТ ЗАПИСИ — КУСОЧЕК КАЛЕНДАРЯ (владелец 24.09: «разбери полностью,
             переделай цвет записи, чтобы улучшить дизайн самого календаря»).
@@ -366,7 +372,10 @@ export function DesignScreen() {
             sub={typesSub}
             onPress={() => {
               haptics.tap();
-              router.push("/calendar/event-types" as Href);
+              router.push({
+                pathname: "/calendar/event-types",
+                params: teamId ? { team: teamId } : {},
+              } as Href);
             }}
           />
         </SectionCard>
