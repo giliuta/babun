@@ -1,4 +1,5 @@
-import { Pressable, Switch, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { SwitchControl } from "@/components/ui/SwitchControl";
 import { useThemeColors } from "@/theme/colors";
 
 // Строка-тумблер списка настроек: подпись (+ необязательное пояснение) слева,
@@ -70,7 +71,7 @@ export function SwitchRow({
       {/* Тумблер здесь — ПОКАЗАНИЕ, а не цель касания: жест собирает строка.
           Роль и озвучку тоже несёт она, поэтому контрол молчит для ротора. */}
       <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Switch value={value} disabled={disabled} trackColor={{ true: t.accent }} />
+        <SwitchControl value={value} disabled={disabled} />
       </View>
     </Pressable>
   );

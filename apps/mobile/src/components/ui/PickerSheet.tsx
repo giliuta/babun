@@ -45,6 +45,7 @@ export function PickerSheet({
   onSettings,
   settingsLabel = "Настроить список",
   onClose,
+  onExited,
 }: {
   visible: boolean;
   title: string;
@@ -56,6 +57,9 @@ export function PickerSheet({
   onSettings?: () => void;
   settingsLabel?: string;
   onClose: () => void;
+  /** Лист ушёл и его окно снято — отсюда можно поднимать СЛЕДУЮЩУЮ шторку
+   *  (iOS не показывает вторую модалку, пока первая не ушла). */
+  onExited?: () => void;
 }) {
   const t = useThemeColors();
   return (
@@ -63,6 +67,7 @@ export function PickerSheet({
       padded={false}
       visible={visible}
       onClose={onClose}
+      onExited={onExited}
       // ПОЛЭКРАНА И ПРОКРУТКА ВНУТРИ. Лист задумывался под «что сделать» —
       // пять-шесть строк, которые всегда влезали, — и потому жил без потолка
       // и без `scroll`. Потом им стали выбирать категорию операции: строк

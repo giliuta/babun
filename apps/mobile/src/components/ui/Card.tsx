@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { Text, View, type ViewProps } from "react-native";
+import { View, type ViewProps } from "react-native";
 import { useThemeColors } from "@/theme/colors";
 
 // «Halo Cobalt» surfaces — apps/mobile/docs/DESIGN-SYSTEM.md.
@@ -43,27 +43,5 @@ export function Card({
       />
       {children}
     </View>
-  );
-}
-
-// Caption eyebrow above a section («ОПЕРАЦИИ», day dividers, settings groups).
-export function SectionHeader({ children }: { children: string }) {
-  const t = useThemeColors();
-  return (
-    <Text
-      accessibilityRole="header"
-      style={{
-        fontSize: 11,
-        fontWeight: "700",
-        letterSpacing: 0.6,
-        color: t.faint,
-        textTransform: "uppercase",
-        marginTop: 24,
-        marginBottom: 8,
-        marginLeft: 4,
-      }}
-    >
-      {children}
-    </Text>
   );
 }

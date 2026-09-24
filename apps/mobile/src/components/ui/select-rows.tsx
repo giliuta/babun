@@ -59,6 +59,7 @@ export function SelectSearch({
   accessibilityLabel,
   onClear,
   autoCapitalize,
+  autoFocus,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -66,6 +67,12 @@ export function SelectSearch({
   accessibilityLabel: string;
   onClear?: () => void;
   autoCapitalize?: "none" | "words";
+  /** КУРСОР СРАЗУ В ПОИСКЕ. Не всем шторкам: у выбора счёта или категории
+   *  строк десяток, и поднятая клавиатура закрыла бы половину списка. Нужен
+   *  там, где шторку открыла дверь с готовым вопросом («Кто живёт в Вилле
+   *  5»): справочник на сотни имён, и первое движение там — набрать имя, а
+   *  не искать глазами. */
+  autoFocus?: boolean;
 }) {
   const t = useThemeColors();
   return (
@@ -97,6 +104,7 @@ export function SelectSearch({
         autoCorrect={false}
         spellCheck={false}
         autoCapitalize={autoCapitalize}
+        autoFocus={autoFocus}
         style={{ flex: 1, fontSize: 15, color: t.ink }}
       />
       {value && onClear ? (

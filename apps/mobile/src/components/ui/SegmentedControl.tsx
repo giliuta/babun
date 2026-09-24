@@ -17,6 +17,7 @@ export function SegmentedControl<V extends string>({
   value,
   onChange,
   disabled,
+  compact,
   style,
 }: {
   options: readonly SegmentOption<V>[];
@@ -24,6 +25,10 @@ export function SegmentedControl<V extends string>({
   onChange: (v: V) => void;
   /** Locks the control (e.g. type of an existing operation). */
   disabled?: boolean;
+  /** ПЛОТНЫЙ — В ХВОСТЕ СТРОКИ (страница прав, STORY-087): тот же сегмент, но
+   *  ячейка 36 (с дорожкой — 44, норма касания) и кегль 13. Во всю ширину под
+   *  строкой он делал строку права высотой ~150pt. */
+  compact?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const t = useThemeColors();
@@ -34,7 +39,7 @@ export function SegmentedControl<V extends string>({
         {
           flexDirection: "row",
           borderRadius: t.radius.card,
-          padding: 4,
+          padding: compact ? 3 : 4,
           backgroundColor: t.fill,
         },
         style,
@@ -65,8 +70,9 @@ export function SegmentedControl<V extends string>({
               alignItems: "center",
               justifyContent: "center",
               borderRadius: t.radius.card,
-              paddingVertical: 8,
-              minHeight: 44,
+              paddingVertical: compact ? 4 : 8,
+              paddingHorizontal: compact ? 6 : 0,
+              minHeight: compact ? 38 : 44,
               backgroundColor: active ? t.surface : "transparent",
               opacity: disabled && !active ? 0.4 : 1,
             }}
@@ -77,7 +83,7 @@ export function SegmentedControl<V extends string>({
               adjustsFontSizeToFit
               minimumFontScale={0.75}
               style={{
-                fontSize: 15,
+                fontSize: compact ? 13 : 15,
                 fontWeight: "600",
                 color: active ? (opt.color ?? t.ink) : t.sub,
               }}

@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
-// Относительный путь обязателен: платформенный двойник (.web.tsx) Metro
-// подхватывает только так — алиас «@/» платформенными расширениями не растёт.
-import { DateTimeInput } from "./DateTimeInput";
+import { DateSpinner } from "@/components/ui/DateSpinner";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 
@@ -77,17 +75,11 @@ export function DateWheelSheet({
         </Text>
 
         <View style={{ alignItems: "center" }}>
-          <DateTimeInput
-            themeVariant="light"
+          <DateSpinner
             value={parseYMD(draft)}
-            mode="date"
-            display="spinner"
-            locale="ru-RU"
             maximumDate={maximumDate ? parseYMD(maximumDate) : undefined}
             minimumDate={minimumDate ? parseYMD(minimumDate) : undefined}
-            onChange={(_, d) => {
-              if (d) setDraft(formatYMD(d));
-            }}
+            onChange={(next) => setDraft(formatYMD(next))}
           />
         </View>
 

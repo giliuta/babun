@@ -1,5 +1,4 @@
 import { Text, View } from "react-native";
-import type { AppointmentStatus } from "@babun/shared/local/appointments";
 import { useThemeColors } from "@/theme/colors";
 import { readableColorOnTint } from "./color-contrast";
 
@@ -88,21 +87,4 @@ export function Badge({
       <Text style={{ fontSize: 11, fontWeight: "600", color: fg }}>{label}</Text>
     </View>
   );
-}
-
-// Appointment status → RU label + variant. Single source for the calendar,
-// client visits block, and appointment sheet.
-export const APPT_STATUS: Record<
-  AppointmentStatus,
-  { label: string; variant: BadgeVariant }
-> = {
-  scheduled: { label: "Запланировано", variant: "scheduled" },
-  in_progress: { label: "В работе", variant: "in_progress" },
-  completed: { label: "Выполнено", variant: "completed" },
-  cancelled: { label: "Отменено", variant: "cancelled" },
-};
-
-export function StatusBadge({ status }: { status: AppointmentStatus }) {
-  const s = APPT_STATUS[status];
-  return <Badge label={s.label} variant={s.variant} />;
 }

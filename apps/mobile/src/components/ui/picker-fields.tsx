@@ -1,51 +1,11 @@
 import { useState, type ReactNode, type Ref } from "react";
-import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
 import { ChevronRight, type LucideIcon } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { AppearanceSheet, AppearanceTile } from "./AppearanceSheet";
 import { FieldLabel } from "./Field";
-import { iconPreset, type IconPreset } from "./icon-set";
+import { type IconPreset } from "./icon-set";
 import { ICON } from "./tokens";
-
-/** Точка цвета — оттиск ответа в строке. Пустой цвет не рисует ничего, только
- *  держит место: обводка-заготовка читалась как «белый уже выбран». */
-export function ColorDot({ value, size = 22 }: { value?: string | null; size?: number }) {
-  const t = useThemeColors();
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: 999,
-        backgroundColor: value ?? "transparent",
-        borderWidth: value ? StyleSheet.hairlineWidth : 0,
-        borderColor: t.separator,
-      }}
-    />
-  );
-}
-
-/** Глиф выбранного значка — оттиск ответа в строке. */
-export function IconGlyph({
-  value,
-  color,
-  size = 22,
-  icons,
-}: {
-  value?: string | null;
-  color?: string | null;
-  size?: number;
-  /** Набор-переопределение — тот же, что отдан пикеру: иначе значок в строке
-   *  и значок в решётке брались бы из разных наборов. */
-  icons?: readonly IconPreset[];
-}) {
-  const t = useThemeColors();
-  const Glyph = icons
-    ? icons.find((i) => i.value === value)?.icon ?? null
-    : iconPreset(value);
-  if (!Glyph) return <View style={{ width: size, height: size }} />;
-  return <Glyph color={color ?? t.ink} size={size} strokeWidth={2} />;
-}
 
 /** СТРОКА «ВИД» — образец и одна шторка на цвет и значок. Раньше это были два
  *  поля, каждое со своей плавающей решёткой; вопрос у них один, и владелец

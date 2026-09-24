@@ -10,8 +10,15 @@ import { useThemeColors } from "@/theme/colors";
 import { haptics } from "@/lib/haptics";
 import { readableColorOnTint, readableTextOnColor } from "./color-contrast";
 
-// «Halo Cobalt» chip — the ONE pill for every selectable token in the app
-// (DS §5): 32pt pill + vertical hitSlop to a 44pt target.
+// «Halo Cobalt» chip — ОДИН чип на все выбираемые ярлыки приложения (DS §5):
+// 32pt высоты + вертикальный hitSlop до цели в 44pt.
+//
+// УГОЛ — КАК У КНОПКИ (`radius.card`, 10), а не пилюля. Владелец 21.09,
+// глядя на ленты команд и типов: «давай изменим все чипы, чтоб они были
+// квадратные с закруглением, как кнопка». Пилюля на 32pt даёт радиус 16 —
+// она читается как отдельная порода элемента; при 10 лента чипов, кнопка
+// футера и карточка блока стоят на одном угле, и экран перестаёт спорить
+// сам с собой. Радиус один на все варианты: чип не бывает «немного другим».
 //
 // Variants:
 //   filled  (default) selected → solid hue fill + onAccent label;
@@ -164,7 +171,7 @@ export function Chip({
       style={({ pressed }) => [
         {
           minHeight: 32,
-          borderRadius: t.radius.pill,
+          borderRadius: t.radius.card,
           borderCurve: "continuous",
           paddingHorizontal: 14,
           flexDirection: "row",
