@@ -29,6 +29,11 @@ import { InvoiceBlocks } from "./InvoiceBlocks";
 import { useNextInvoiceSeries } from "./queries";
 import { InvoicePreviewSheet } from "./InvoicePreviewSheet";
 import { ScopeChips } from "@/components/ui/ScopeChips";
+import {
+  clientRequisitesOf,
+  invoiceRequisites,
+  requisitesMirror,
+} from "@babun/shared/local/client-requisites";
 import type { InvoiceLanguage } from "./dictionary";
 import {
   addDaysYmd,
@@ -66,6 +71,8 @@ export interface InvoiceEditorValue {
   company_id: string | null;
   /** Объект клиента, под который выписан счёт (миграция 20260922060000). */
   location_id?: string | null;
+  /** Набор реквизитов клиента (миграция 20260922100000); `null` — основной. */
+  client_requisites_id?: string | null;
   /** Счёт, на который ждём деньги. */
   account_id: string | null;
 }
@@ -226,6 +233,9 @@ export function InvoiceEditor({
   const [locationId, setLocationId] = useState<string | null>(
     sourceAppointment?.location_id ?? null,
   );
+  /** РЕКВИЗИТЫ КЛИЕНТА (владелец 22.09): на какой набор клиента выписан
+   *  счёт; `null` — основной. */
+  const [clientRequisitesId, setClientRequisitesId] = useState<string | null>(null);
   // ЗАЯВКА ПРИЕЗЖАЕТ, НО НЕ МЕНЯЕТСЯ ЗДЕСЬ: счёт по работе открывают ИЗ
   // работы, и форма только несёт её дальше на сервер.
   const appointmentId = prefill?.appointmentId ?? null;
@@ -351,6 +361,7 @@ export function InvoiceEditor({
     dueOn,
     clientId,
     locationId,
+    clientRequisitesId,
     appointmentId,
     teamId,
     vatMode,
@@ -380,7 +391,11 @@ export function InvoiceEditor({
   // новому клиенту не принадлежит.
   const changeClient = (id: string | null) => {
     setClientId(id);
-    if (id !== clientId) setLocationId(null);
+    if (id !== clientId) {
+      setLocationId(null);
+      // Реквизиты прошлого клиента новому не принадлежат — снова основной.
+      setClientRequisitesId(null);
+    }
   };
 
   const parsedLines = useMemo<InvoiceLineDraft[]>(
@@ -459,7 +474,17 @@ export function InvoiceEditor({
       buildInvoiceDocument({
             language,
             tenant,
-            client: selectedClient ?? undefined,
+            // Превью печатает ВЫБРАННЫЙ набор реквизитов клиента — как снимок
+            // сервера (`build_invoice_client_snapshot_for`).
+            client: selectedClient
+              ? {
+                  ...selectedClient,
+                  ...requisitesMirror(
+                    [invoiceRequisites(clientRequisitesOf(selectedClient), clientRequisitesId)]
+                      .filter((set) => set !== null),
+                  ),
+                }
+              : undefined,
             location: selectedLocation,
             company: paperSeller,
             draft: {
@@ -491,7 +516,7 @@ export function InvoiceEditor({
             },
           }),
     // Пересобираем на каждое изменение формы — в этом весь смысл зеркала.
-    [tenant, selectedClient, selectedLocation, paperSeller, nextNumber, issuedOn, dueOn,
+    [tenant, selectedClient, clientRequisitesId, selectedLocation, paperSeller, nextNumber, issuedOn, dueOn,
      clientId, parsedLines, vatMode, rate, totals, notes, businessToday,
      currency, language],
   );
@@ -570,6 +595,7 @@ export function InvoiceEditor({
         due_on: dueOn,
         client_id: clientId,
         location_id: locationId,
+        client_requisites_id: clientRequisitesId,
         appointment_id: appointmentId,
         brigade_id: teamId,
         vat_mode: vatMode,
@@ -624,6 +650,8 @@ export function InvoiceEditor({
             onClientChange={changeClient}
             locationId={locationId}
             onLocationChange={setLocationId}
+            clientRequisitesId={clientRequisitesId}
+            onClientRequisitesChange={setClientRequisitesId}
             issuedOn={issuedOn}
             dueOn={dueOn}
             onIssuedOnChange={changeIssuedOn}

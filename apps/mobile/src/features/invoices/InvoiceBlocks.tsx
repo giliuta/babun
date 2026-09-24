@@ -28,6 +28,7 @@ import { useThemeColors } from "@/theme/colors";
 import { InvoiceDatesBlock } from "./InvoiceDatesBlock";
 import { InvoiceRequisitesBlock } from "./InvoiceRequisitesBlock";
 import { InvoiceObjectBlock } from "./InvoiceObjectBlock";
+import { InvoiceClientRequisitesBlock } from "./InvoiceClientRequisitesBlock";
 import type { InvoiceNumberTarget } from "./InvoiceNumberRow";
 import { parseDecimal, parseMoneyAmount, type EditableInvoiceLine } from "./format";
 
@@ -61,6 +62,8 @@ export function InvoiceBlocks({
   onClientChange,
   locationId,
   onLocationChange,
+  clientRequisitesId,
+  onClientRequisitesChange,
   issuedOn,
   dueOn,
   onIssuedOnChange,
@@ -94,6 +97,9 @@ export function InvoiceBlocks({
   /** Объект клиента, под который выписан счёт. */
   locationId: string | null;
   onLocationChange: (id: string | null) => void;
+  /** Набор реквизитов клиента; `null` — основной. */
+  clientRequisitesId: string | null;
+  onClientRequisitesChange: (id: string | null) => void;
   issuedOn: string;
   dueOn: string | null;
   /** `null` барабан даты выставления не отдаёт (строка не `optional`), но тип
@@ -300,6 +306,15 @@ export function InvoiceBlocks({
           onLocationChange={onLocationChange}
         />
 
+        {/* РЕКВИЗИТЫ КЛИЕНТА — ПОСЛЕ ОБЪЕКТА, блоком как «Объект» (владелец
+            22.09: «клиент, потом объект, потом реквизиты клиента; есть —
+            выбираем, нет — добавляем»). */}
+        <InvoiceClientRequisitesBlock
+          client={client}
+          requisitesId={clientRequisitesId}
+          onRequisitesChange={onClientRequisitesChange}
+        />
+
         {/* УСЛУГИ И «ИТОГО» — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ И В ЧЕКЕ, с той же
             шапкой (владелец 2026-09-21: «я бы назвал целый блок услуги»).
             Услуги прайса — строками выбора (тап открывает прайс). Своя
@@ -383,6 +398,11 @@ export function InvoiceBlocks({
           onClientChange(picked.id);
           setSheet(null);
         }}
+        // Повторный тап по выбранному клиенту снимает его (владелец 22.09).
+        onDeselect={() => {
+          onClientChange(null);
+          setSheet(null);
+        }}
         onClose={() => setSheet(null)}
       />
 
@@ -406,17 +426,19 @@ export function InvoiceBlocks({
           включает сама. */}
       <TotalSheet
         visible={sheet === "total"}
-        // Пустая своя строка (добавили и не заполнили) при закрытии уходит —
-        // в услугах остаются только названные.
+        // СВОЯ СТРОКА БЕЗ НАЗВАНИЯ УХОДИТ САМА (владелец 2026-09-22: «стираем
+        // имя услуги — и она удаляется»): в услугах остаются только названные.
         onClose={() => {
           for (const line of lines) {
-            if (!line.serviceId && !line.title.trim() && !parseMoneyAmount(line.unitPrice)) {
-              onRemoveLine(line);
-            }
+            if (!line.serviceId && !line.title.trim()) onRemoveLine(line);
           }
           setSheet(null);
         }}
         onAddLine={onAddCustomLine}
+        onRemoveLine={(id) => {
+          const line = lines.find((item) => item.id === id);
+          if (line) onRemoveLine(line);
+        }}
         onNameChange={(id, title) => {
           const line = lines.find((item) => item.id === id);
           if (line) onLineChange({ ...line, title });
