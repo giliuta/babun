@@ -19,6 +19,10 @@ import {
 export type InvoiceStatus = "issued" | "paid" | "void" | "cancelled";
 export type InvoiceDisplayStatus = InvoiceStatus | "partial" | "overdue";
 export type InvoiceVatMode = "off" | "inclusive" | "exclusive";
+/** Бумага бывает двух видов: сам счёт и сторно к нему. Кредит-нота живёт в той
+ *  же таблице и несёт заявку и клиента своего инвойса — поэтому витрины обязаны
+ *  различать их по виду, а не по сумме. */
+export type InvoiceKind = "invoice" | "credit_note";
 
 export interface InvoiceLineDraft {
   title: string;
@@ -173,6 +177,15 @@ export interface InvoiceLedger {
    *  и вчерашняя бумага не переписывается от сегодняшней настройки. */
   language: string;
   status: InvoiceStatus;
+  /** Вид документа. Необязательное поле: офлайн-фикстуры, написанные до того,
+   *  как колонку начали маппить, его не знают, и отсутствие значит «инвойс». */
+  kind?: InvoiceKind;
+  /** Инвойс, который сторнирует эта кредит-нота. */
+  credit_note_of_id?: string | null;
+  /** Режим НДС, КОТОРЫМ ДОКУМЕНТ ПОСЧИТАН (колонка с 20260915120000): сервер
+   *  пишет ровно то, чем считал. У выписанных раньше пусто — их режим
+   *  восстанавливают по суммам, а не выдумывают (`invoiceVatMode`). */
+  vat_mode?: InvoiceVatMode | null;
   pdf_url: string | null;
   notes: string | null;
   created_at: string;
@@ -332,6 +345,32 @@ export function invoiceInTeamScope(
   return invoice.brigade_id === teamId;
 }
 
+/**
+ * ЗАЯВКИ, НА КОТОРЫЕ УЖЕ ВЫСТАВЛЕН ЖИВОЙ СЧЁТ. Их деньги считает плитка
+ * «Документы», и в «Долгах» они были бы посчитаны второй раз.
+ *
+ * Правило одно на продукт, потому что им считают и цифра, и список под ней
+ * (плитка «Долги», лента долгов, `DebtorsList`): спорить о том, выставлен ли
+ * счёт, витрины не имеют права — раньше одна показывала «Долги €0», а другая
+ * должника на €250. Из набора выпадают:
+ *   • аннулированный (`void`) и отменённый кредит-нотой (`cancelled`) — они
+ *     ничего не ждут, и работа возвращается в долги;
+ *   • сама кредит-нота: она несёт заявку своего инвойса, а статус у неё
+ *     «выставлена», то есть после отмены она продолжала вычёркивать работу.
+ */
+export function invoicedAppointmentIds(
+  invoices: readonly Pick<InvoiceLedger, "appointment_id" | "status" | "kind">[],
+): Set<string> {
+  const ids = new Set<string>();
+  for (const invoice of invoices) {
+    if (!invoice.appointment_id) continue;
+    if (invoice.kind === "credit_note") continue;
+    if (invoice.status === "void" || invoice.status === "cancelled") continue;
+    ids.add(invoice.appointment_id);
+  }
+  return ids;
+}
+
 /** `overdue` is a view state: the database keeps the legal status `issued`. */
 export function invoiceDisplayStatus(
   invoice: Pick<InvoiceLedger, "status" | "due_on">,
@@ -379,18 +418,21 @@ export function calculateInvoiceSettlement(
   const rawPaid = round2(Math.max(0, recognizedIncome - refunded));
   const paid = round2(Math.min(invoice.total, rawPaid));
   const overpaid = round2(Math.max(0, rawPaid - invoice.total));
-  const remaining =
-    invoice.status === "void"
-      ? 0
-      : round2(Math.max(0, invoice.total - paid));
+  // ЗАКРЫТАЯ БУМАГА ДЕНЕГ НЕ ЖДЁТ. «Аннулирован» — ошибочный документ;
+  // «отменён» — сторнированный кредит-нотой, и сервер отменяет инвойс только
+  // когда у нас по нему ничего не осталось (`cancel_invoice`: доходы минус
+  // возвраты). Пока `cancelled` считался открытым, отменённый счёт показывал
+  // остаток, попадал в «ждут оплату» и звал принять по нему деньги.
+  const closed = invoice.status === "void" || invoice.status === "cancelled";
+  const remaining = closed ? 0 : round2(Math.max(0, invoice.total - paid));
   return {
     income,
     refunded,
     paid,
     remaining,
     overpaid,
-    isPartial: invoice.status !== "void" && paid > 0 && remaining > 0,
-    isPaid: invoice.status !== "void" && remaining <= 0,
+    isPartial: !closed && paid > 0 && remaining > 0,
+    isPaid: !closed && remaining <= 0,
   };
 }
 

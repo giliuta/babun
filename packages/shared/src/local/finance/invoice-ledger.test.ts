@@ -4,6 +4,7 @@ import {
   calculateInvoiceTotals,
   calculateInvoiceSettlement,
   invoiceDisplayStatus,
+  invoicedAppointmentIds,
   invoicePaymentRefundDestination,
   parseInvoiceClientSnapshot,
   parseInvoiceSellerSnapshot,
@@ -104,6 +105,17 @@ describe("invoiceDisplayStatus", () => {
       ),
     ).toBe("paid");
   });
+
+  it("отменённый называет себя, а не «просрочен» и не «оплачен»", () => {
+    const settlement = calculateInvoiceSettlement({ status: "cancelled", total: 119 }, []);
+    expect(
+      invoiceDisplayStatus(
+        { status: "cancelled", due_on: "2026-07-01" },
+        "2026-07-20",
+        settlement,
+      ),
+    ).toBe("cancelled");
+  });
 });
 
 describe("calculateInvoiceSettlement", () => {
@@ -172,6 +184,59 @@ describe("calculateInvoiceSettlement", () => {
       remaining: 0,
       isPaid: true,
     });
+  });
+
+  // ОТМЕНЁННЫЙ КРЕДИТ-НОТОЙ ДОКУМЕНТ ЗАКРЫТ, как и аннулированный: остатка у
+  // него нет и «оплаченным» он не становится. Пока он считался открытым,
+  // отменённый счёт показывал остаток, звал принять по нему деньги и двоил
+  // работу с «Долгами».
+  it("отменённый документ не ждёт денег и не зовёт принять оплату", () => {
+    expect(calculateInvoiceSettlement({ status: "cancelled", total: 119 }, [])).toMatchObject({
+      paid: 0,
+      remaining: 0,
+      isPartial: false,
+      isPaid: false,
+    });
+  });
+
+  it("возврат перед отменой не оставляет остатка", () => {
+    expect(
+      calculateInvoiceSettlement({ status: "cancelled", total: 119 }, [
+        payment({ amount: 119 }),
+        payment({ id: "refund", type: "refund", amount: -119, refund_of_id: "payment-1" }),
+      ]),
+    ).toMatchObject({ income: 119, refunded: 119, paid: 0, remaining: 0, isPaid: false });
+  });
+});
+
+// РАБОТА ПОД СЧЁТОМ — ОДНО ПРАВИЛО НА ПРОДУКТ: по нему плитка «Долги» и лента
+// под ней вычёркивают работу, чтобы не посчитать её дважды с «Документами».
+// Ошибка здесь прячет дебиторку целиком или двоит её.
+describe("invoicedAppointmentIds", () => {
+  type Doc = Parameters<typeof invoicedAppointmentIds>[0][number];
+  const doc = (over: Partial<Doc> = {}): Doc => ({
+    appointment_id: "apt-1",
+    status: "issued",
+    kind: "invoice",
+    ...over,
+  });
+
+  it("берёт живой счёт с заявкой", () => {
+    expect([...invoicedAppointmentIds([doc(), doc({ appointment_id: "apt-2", status: "paid" })])])
+      .toEqual(["apt-1", "apt-2"]);
+  });
+
+  it("не берёт аннулированный и отменённый счёт — работа снова долг", () => {
+    expect(invoicedAppointmentIds([doc({ status: "void" })]).size).toBe(0);
+    expect(invoicedAppointmentIds([doc({ status: "cancelled" })]).size).toBe(0);
+  });
+
+  it("не берёт кредит-ноту, хотя она «выставлена» и несёт заявку инвойса", () => {
+    expect(invoicedAppointmentIds([doc({ kind: "credit_note" })]).size).toBe(0);
+  });
+
+  it("документ без заявки в набор не попадает", () => {
+    expect(invoicedAppointmentIds([doc({ appointment_id: null })]).size).toBe(0);
   });
 });
 

@@ -10,6 +10,7 @@ import { getDebtAmount } from "@babun/shared/local/appointments";
 import {
   calculateInvoiceSettlement,
   invoiceInTeamScope,
+  invoicedAppointmentIds,
 } from "@babun/shared/local/finance/invoice-ledger";
 import { appointmentMaterialCost } from "@babun/shared/local/finance/appointment-calc";
 import {
@@ -489,17 +490,11 @@ function FinancesContent() {
   // она честно показывала «Долги €0», а список под ней печатал должника на
   // €250 — две витрины спорили об одних деньгах.
   const invoicedAppointments = useMemo(
-    () =>
-      new Set(
-        invoices
-          .filter(
-            (inv) =>
-              inv.appointment_id &&
-              inv.status !== "void" &&
-              inv.status !== "cancelled",
-          )
-          .map((inv) => inv.appointment_id as string),
-      ),
+    // Правило «эта работа уже под счётом» живёт ОДНОЙ функцией на продукт
+    // (`invoicedAppointmentIds`): им считают и плитка «Долги», и лента под ней,
+    // и `DebtorsList`. Аннулированные, отменённые и сами кредит-ноты из набора
+    // выпадают — тест правила лежит рядом с ним.
+    () => invoicedAppointmentIds(invoices),
     [invoices],
   );
 

@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
 import { rpcArgs } from "../rpc-args";
 import type {
+  InvoiceKind,
   InvoiceLedger,
   InvoiceLedgerWithLines,
   InvoiceLineLedger,
@@ -76,6 +77,12 @@ function rowToInvoice(r: Row): InvoiceLedger {
     total: Number(r.total ?? 0),
     currency: r.currency,
     status: r.status as InvoiceStatus,
+    // ВИД И РЕЖИМ НДС — С САМОГО ДОКУМЕНТА. Без вида витрины отличали сторно
+    // от счёта по минусовой сумме и отдельным запросом связей, а режим НДС
+    // угадывали по суммам, хотя сервер его теперь пишет.
+    kind: (r.kind as InvoiceKind | null) ?? "invoice",
+    credit_note_of_id: r.credit_note_of_id,
+    vat_mode: (r.vat_mode as InvoiceVatMode | null) ?? null,
     pdf_url: r.pdf_url,
     notes: r.notes,
     created_at: r.created_at,
