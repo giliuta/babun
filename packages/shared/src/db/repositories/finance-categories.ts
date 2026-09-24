@@ -22,7 +22,11 @@ export interface FinanceCategory {
   type: FinanceCategoryKind;
   icon: string | null;
   color: string | null;
-  /** Тенант убрал строку из своего списка (finance_category_hidden). */
+  /** Команда, которой принадлежит категория (владелец 2026-09-24: «у каждой
+   *  команды свой тип расходов, свой тип доходов»). `null` — только у
+   *  служебных категорий сервера. */
+  team_id: string | null;
+  /** Команда убрала категорию из выбора; строка остаётся в справочнике. */
   hidden: boolean;
   /** Что категория спрашивает в операции (владелец 2026-09-24: «зарплата
    *  смотрит сотрудников, другая прикрепляет клиента»). Флажки независимы:
@@ -39,31 +43,26 @@ export interface FinanceCategory {
    *  и она пришлёт уведомление, что перевалил лимит»). `null` — бюджета нет.
    *  Потраченное считает приложение по журналу месяца. */
   monthly_budget: number | null;
-  /** Место в списке ЭТОГО тенанта (finance_category_order). Строки нет — ноль,
-   *  дальше разводит имя: справочник, который не перетаскивали, выглядит как
-   *  раньше. Позиция живёт отдельной таблицей, потому что сами категории
-   *  глобальные и колонка в них переставила бы список всем компаниям. */
+  /** Место в списке своей команды (перетаскивание). Ноль — не
+   *  перетаскивали, дальше разводит имя. */
   position: number;
 }
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["finance_categories"]["Row"];
 
-function rowToCategory(
-  r: Row,
-  hidden = false,
-  position = 0,
-): FinanceCategory {
+function rowToCategory(r: Row): FinanceCategory {
   return {
     id: r.id,
     tenant_id: r.tenant_id,
+    team_id: r.team_id ?? null,
     slug: r.slug,
     name: r.name,
     type: r.type as FinanceCategoryKind,
     icon: r.icon,
     color: r.color,
-    hidden,
-    position,
+    hidden: Boolean(r.hidden),
+    position: r.position ?? 0,
     ask_employee: Boolean(r.ask_employee),
     ask_client: Boolean(r.ask_client),
     require_receipt: Boolean(r.require_receipt),
@@ -72,67 +71,47 @@ function rowToCategory(
   };
 }
 
-/** Returns ALL categories visible to this tenant — globals + own.
- *  Скрытые тенантом строки приходят с hidden: true, а не пропадают: экран
- *  настроек должен их показать (чтобы вернуть), а выбор — отфильтровать. */
+/** Все категории, видимые этому человеку: служебные сервера и категории
+ *  команд компании (сотруднику RLS отдаёт только его команды). Скрытые
+ *  приходят с `hidden: true`, а не пропадают: справочник должен их показать
+ *  (чтобы вернуть), а выбор — отфильтровать. */
 export async function listFinanceCategories(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<FinanceCategory[]> {
-  const [list, hidden, order] = await Promise.all([
-    supabase
-      .from("finance_categories")
-      .select("*")
-      .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
-      .order("type", { ascending: true })
-      .order("name", { ascending: true }),
-    supabase
-      .from("finance_category_hidden")
-      .select("category_id")
-      .eq("tenant_id", tenantId),
-    supabase
-      .from("finance_category_order")
-      .select("category_id, position")
-      .eq("tenant_id", tenantId),
-  ]);
-  if (list.error) throw new Error(`listFinanceCategories: ${list.error.message}`);
-  if (hidden.error) throw new Error(`listFinanceCategories: ${hidden.error.message}`);
-  // Порядок необязателен: у справочника, который никто не перетаскивал, строк
-  // нет вовсе, и это не ошибка чтения.
-  const at = new Map(
-    (order.data ?? []).map((r) => [r.category_id, r.position] as const),
-  );
-  const off = new Set((hidden.data ?? []).map((r) => r.category_id));
+  const { data, error } = await supabase
+    .from("finance_categories")
+    .select("*")
+    .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
+    .order("type", { ascending: true })
+    .order("name", { ascending: true });
+  if (error) throw new Error(`listFinanceCategories: ${error.message}`);
   // ГОТОВЫЕ ОБЩИЕ КАТЕГОРИИ ВЫВЕДЕНЫ ИЗ ПРОДУКТА (20260924200000): строки в
   // базе остались, но у компании их больше нет — справочник у каждой свой.
-  return ((list.data ?? []) as Row[])
-    .filter((r) => !r.retired)
-    .map((r) => rowToCategory(r, off.has(r.id), at.get(r.id) ?? 0));
+  return ((data ?? []) as Row[]).filter((r) => !r.retired).map(rowToCategory);
 }
 
-/** Прячет/возвращает категорию в списке этого тенанта. */
+/** Прячет/возвращает категорию в выборе её команды. */
 export async function setFinanceCategoryHidden(
   supabase: DbSupabase,
-  tenantId: string,
   categoryId: string,
   hidden: boolean,
 ): Promise<void> {
-  const { error } = hidden
-    ? await supabase
-        .from("finance_category_hidden")
-        .upsert(
-          { tenant_id: tenantId, category_id: categoryId },
-          { onConflict: "tenant_id,category_id" },
-        )
-    : await supabase
-        .from("finance_category_hidden")
-        .delete()
-        .eq("tenant_id", tenantId)
-        .eq("category_id", categoryId);
-  if (error) throw new Error(error.message);
+  const { data, error } = await supabase
+    .from("finance_categories")
+    .update({ hidden })
+    .eq("id", categoryId)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) {
+    throw new Error(error?.message ?? "Категория не найдена или недоступна");
+  }
 }
 
 export interface NewFinanceCategory {
+  /** Команда категории — обязательна: категория компании без команды не
+   *  существует (`finance_categories_team_required`). */
+  team_id: string;
   name: string;
   type: FinanceCategoryKind;
   icon?: string | null;
@@ -156,6 +135,7 @@ export async function insertFinanceCategory(
     .from("finance_categories")
     .insert({
       tenant_id: tenantId,
+      team_id: draft.team_id,
       slug,
       name: draft.name.trim(),
       type: draft.type,
@@ -227,23 +207,18 @@ export async function deleteFinanceCategory(
   }
 }
 
-/** ПОРЯДОК СПРАВОЧНИКА — РУКОЙ ВЛАДЕЛЬЦА И ТОЛЬКО ЕГО ТЕНАНТА. Пишем разом:
- *  перетаскивание меняет позиции всей видимой пачки, и построчная запись
- *  оставила бы список наполовину переставленным при обрыве связи. */
+/** ПОРЯДОК СПРАВОЧНИКА КОМАНДЫ — РУКОЙ ВЛАДЕЛЬЦА. Позиция — колонка самой
+ *  категории: она и так своя у команды. Пишем всю пачку: перетаскивание меняет
+ *  позиции всех видимых строк. */
 export async function setFinanceCategoryOrder(
   supabase: DbSupabase,
-  tenantId: string,
   orderedIds: readonly string[],
 ): Promise<void> {
-  if (orderedIds.length === 0) return;
-  const { error } = await supabase.from("finance_category_order").upsert(
-    orderedIds.map((category_id, position) => ({
-      tenant_id: tenantId,
-      category_id,
-      position,
-      updated_at: new Date().toISOString(),
-    })),
-    { onConflict: "tenant_id,category_id" },
+  const results = await Promise.all(
+    orderedIds.map((id, position) =>
+      supabase.from("finance_categories").update({ position }).eq("id", id),
+    ),
   );
-  if (error) throw new Error(`setFinanceCategoryOrder: ${error.message}`);
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw new Error(`setFinanceCategoryOrder: ${failed.error.message}`);
 }

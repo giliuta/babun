@@ -66,7 +66,12 @@ import { formatHM } from "@/features/appointments/helpers";
 import { useRouter, type Href } from "expo-router";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
-import { asksOf, payeeOptions, pickableCategories } from "./category-asks";
+import {
+  asksOf,
+  categoryInTeam,
+  payeeOptions,
+  pickableCategories,
+} from "./category-asks";
 import { DebtWhoBlock } from "./DebtWhoBlock";
 import { useClientChoice } from "./use-client-choice";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
@@ -365,9 +370,19 @@ export function OperationSheet({
         categories,
         type === "expense" ? "expense" : "income",
         categoryId,
+        teamId,
       ),
-    [categories, type, categoryId],
+    [categories, type, categoryId, teamId],
   );
+  // КАТЕГОРИЯ — У КОМАНДЫ (владелец 2026-09-24). Сменили команду операции —
+  // выбранная категория переходит на такую же у новой команды или снимается:
+  // чужая команда в подписи денег — ошибка, и сервер её не примет. Пока
+  // команды нет, выбор не трогаем: старая строка без команды не теряет
+  // подписи при открытии.
+  useEffect(() => {
+    if (!teamId) return;
+    setCategoryId((current) => categoryInTeam(categories, current, teamId));
+  }, [teamId, categories]);
   // Счета команды операции. Способ оплаты их НЕ фильтрует: он из счёта и
   // выводится — раньше эти два контрола фильтровали друг друга, и человек
   // выбирал одно и то же дважды, сначала «Карта», потом «Карта».

@@ -33,18 +33,48 @@ export function asksOf(
   };
 }
 
-/** Категории, которые человек выбирает руками: свои, этого вида, не скрытые
- *  (скрытую, уже стоящую на операции, оставляем — иначе правка её потеряет).
- *  Служебные («Услуги» оплаты записи, «Возврат», пересчёт кассы) сюда не
- *  входят: ими подписывает деньги сервер. */
+/** Категории, которые человек выбирает руками: КОМАНДЫ ЭТИХ ДЕНЕГ (владелец
+ *  2026-09-24: «у каждой команды свой тип расходов, свой тип доходов»), этого
+ *  вида, не скрытые. Уже стоящую на операции оставляем, даже скрытую, — иначе
+ *  правка её потеряет. Команда ещё не выбрана — выбирать не из чего: чужие
+ *  категории предлагать нельзя. Служебные («Услуги» оплаты записи, «Возврат»,
+ *  пересчёт кассы) сюда не входят: ими подписывает деньги сервер. */
 export function pickableCategories(
   categories: readonly FinanceCategory[],
   type: FinanceCategoryKind,
   keepId: string | null,
+  teamId: string | null,
 ): FinanceCategory[] {
   return categories.filter(
-    (c) => !c.is_system && c.type === type && (!c.hidden || c.id === keepId),
+    (c) =>
+      !c.is_system &&
+      c.type === type &&
+      (c.id === keepId || (!c.hidden && teamId != null && c.team_id === teamId)),
   );
+}
+
+/** Категория в другой команде. Сменили команду операции — «Топливо» Команды 1
+ *  становится «Топливом» Команды 3 (та же по имени и виду); у новой команды
+ *  такой нет — выбор снимается, а не остаётся чужим. */
+export function categoryInTeam(
+  categories: readonly FinanceCategory[],
+  categoryId: string | null,
+  teamId: string | null,
+): string | null {
+  if (!categoryId) return null;
+  const current = categories.find((c) => c.id === categoryId);
+  if (!current) return null;
+  if (current.team_id == null || current.team_id === teamId) return categoryId;
+  if (!teamId) return null;
+  const key = current.name.trim().toLocaleLowerCase("ru");
+  const twin = categories.find(
+    (c) =>
+      c.team_id === teamId &&
+      !c.is_system &&
+      c.type === current.type &&
+      c.name.trim().toLocaleLowerCase("ru") === key,
+  );
+  return twin?.id ?? null;
 }
 
 /** «Зарплата · Даня» — заголовок строки с получателем. Без получателя —
@@ -94,8 +124,14 @@ export function payeeName(
  *  2026-09-24), поэтому пустой справочник называет себя словами, а не прячется
  *  за общей фразой. Служебные и скрытые не считаются. */
 export function categoriesDoorLine(categories: readonly FinanceCategory[]): string {
+  // «Топливо» у двух команд — одна категория для строки-двери: считаем
+  // имена, а не копии команд.
   const count = (type: FinanceCategoryKind) =>
-    categories.filter((c) => !c.is_system && !c.hidden && c.type === type).length;
+    new Set(
+      categories
+        .filter((c) => !c.is_system && !c.hidden && c.type === type)
+        .map((c) => c.name.trim().toLocaleLowerCase("ru")),
+    ).size;
   const parts = [
     ["Расход", count("expense")],
     ["доход", count("income")],

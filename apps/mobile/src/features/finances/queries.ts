@@ -226,30 +226,26 @@ export function useUpdateCategory() {
   });
 }
 
-/** Скрыть/вернуть категорию в списке этого тенанта. Стандартные строки
- *  нельзя ни переименовать, ни удалить (они общие на весь продукт) — зато
- *  можно убрать из своего списка. */
-/** ПОРЯДОК СПРАВОЧНИКА КАТЕГОРИЙ — по тенанту (владелец 2026-09-10: «шесть
+/** ПОРЯДОК СПРАВОЧНИКА КАТЕГОРИЙ — у команды (владелец 2026-09-10: «шесть
  *  точек справа для передвижения… везде это добавь»). Пишем всю пачку разом:
- *  перетаскивание меняет позиции всех видимых строк. */
+ *  перетаскивание меняет позиции всех видимых строк команды. */
 export function useReorderFinanceCategories() {
-  const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (orderedIds: string[]) =>
-      setFinanceCategoryOrder(supabase, tenantId as string, orderedIds),
+      setFinanceCategoryOrder(supabase, orderedIds),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
     meta: { errorHandled: true },
   });
 }
 
+/** Скрыть/вернуть категорию в выборе её команды. */
 export function useSetCategoryHidden() {
-  const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: ({ id, hidden }: { id: string; hidden: boolean }) =>
-      setFinanceCategoryHidden(supabase, tenantId as string, id, hidden),
+      setFinanceCategoryHidden(supabase, id, hidden),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
     meta: { errorHandled: true }, // call sites alert themselves
   });

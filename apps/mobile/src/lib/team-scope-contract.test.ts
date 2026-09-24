@@ -49,7 +49,6 @@ const EXEMPT: Record<string, string> = {
 const TODO_NO_TEAM: Record<string, string> = {
   calendar_settings: "«Дизайн», блоки, часы — должны быть у команды",
   personal_event_types: "типы событий — у команды",
-  finance_categories: "категории денег — у команды (кроме системных)",
   finance_category_hidden: "за категориями",
   finance_category_order: "за категориями",
   service_categories: "категории услуг — у команды",
@@ -68,6 +67,8 @@ const NULLABLE_OK: Record<string, string> = {
   "appointments.team_id": "пусто = личное событие создателя",
   "member_access.team_id": "пусто = блок уровня компании (клиенты)",
   "invitations.team_id": "устарела, канон — team_ids[]",
+  "finance_categories.team_id":
+    "пусто — только у служебных категорий сервера (tenant_id is null); у категорий компании команду держит CHECK finance_categories_team_required",
 };
 
 /** Пустая команда там, где её быть не должно. Только сокращается. */

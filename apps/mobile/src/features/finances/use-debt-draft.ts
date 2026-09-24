@@ -12,6 +12,7 @@ import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useIsOnline } from "@babun/shared/sync";
 import { useFinanceCategories } from "./queries";
+import { pickableCategories } from "./category-asks";
 import { useClientChoice } from "./use-client-choice";
 import { useDeleteDebt, useInsertDebt, useUpdateDebt } from "./debts-queries";
 import { useReceiptSession } from "./receipt-upload";
@@ -142,12 +143,10 @@ export function useDebtDraft({
 
   // Категории долгов НЕ смешиваются с доходными и расходными (владелец
   // 2026-09-10): в списке поставщиков и займов «Бензину» делать нечего.
+  // И они у команды долга (владелец 2026-09-24): чужих команд в выборе нет.
   const cats = useMemo(
-    () =>
-      (categoriesQuery.data ?? []).filter(
-        (c) => c.type === "debt" && !c.hidden && !c.is_system,
-      ),
-    [categoriesQuery.data],
+    () => pickableCategories(categoriesQuery.data ?? [], "debt", categoryId, teamId ?? null),
+    [categoriesQuery.data, categoryId, teamId],
   );
   const category = cats.find((c) => c.id === categoryId);
 

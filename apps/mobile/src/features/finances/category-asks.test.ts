@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { asksOf, categoriesDoorLine, payeeName, payeeOptions, pickableCategories, withPayee } from "./category-asks";
+import {
+  asksOf,
+  categoriesDoorLine,
+  categoryInTeam,
+  payeeName,
+  payeeOptions,
+  pickableCategories,
+  withPayee,
+} from "./category-asks";
 
 const p = (id: string, full_name: string, team_id: string | null, is_active = true) => ({
   id,
@@ -18,22 +26,50 @@ describe("зарплата — расход с получателем", () => {
     assert.deepEqual(asksOf(null), { employee: false, client: false, receipt: false });
   });
 
-  test("в выборе — свои категории вида, без служебных; скрытая только уже стоящая", () => {
-    const cat = (id: string, over: Record<string, unknown> = {}) =>
-      ({
-        id, tenant_id: "t", slug: id, name: id, type: "expense", icon: null, color: null,
-        hidden: false, position: 0, ask_employee: false, ask_client: false,
-        require_receipt: false, is_system: false, ...over,
-      }) as never;
+  const cat = (id: string, over: Record<string, unknown> = {}) =>
+    ({
+      id, tenant_id: "t", team_id: "A", slug: id, name: id, type: "expense", icon: null,
+      color: null, hidden: false, position: 0, ask_employee: false, ask_client: false,
+      require_receipt: false, is_system: false, monthly_budget: null, ...over,
+    }) as never;
+
+  test("в выборе — категории команды этих денег, без служебных; скрытая только уже стоящая", () => {
     const list = [
       cat("fuel"),
+      cat("fuel-b", { name: "fuel", team_id: "B" }),
       cat("tips", { type: "income" }),
-      cat("services", { type: "income", is_system: true, tenant_id: null }),
+      cat("services", { type: "income", is_system: true, tenant_id: null, team_id: null }),
       cat("old", { hidden: true }),
     ];
-    assert.deepEqual(pickableCategories(list, "expense", null).map((c) => c.id), ["fuel"]);
-    assert.deepEqual(pickableCategories(list, "expense", "old").map((c) => c.id), ["fuel", "old"]);
-    assert.deepEqual(pickableCategories(list, "income", null).map((c) => c.id), ["tips"]);
+    assert.deepEqual(pickableCategories(list, "expense", null, "A").map((c) => c.id), ["fuel"]);
+    assert.deepEqual(pickableCategories(list, "expense", "old", "A").map((c) => c.id), ["fuel", "old"]);
+    assert.deepEqual(pickableCategories(list, "income", null, "A").map((c) => c.id), ["tips"]);
+    assert.deepEqual(pickableCategories(list, "expense", null, "B").map((c) => c.id), ["fuel-b"]);
+    // Команды ещё нет — чужих категорий не предлагаем.
+    assert.deepEqual(pickableCategories(list, "expense", null, null), []);
+  });
+
+  test("смена команды: та же категория по имени у новой команды или пусто", () => {
+    const list = [
+      cat("fuel", { name: "Топливо" }),
+      cat("fuel-b", { name: " топливо ", team_id: "B" }),
+      cat("rent", { name: "Аренда" }),
+      cat("services", { type: "income", is_system: true, tenant_id: null, team_id: null }),
+    ];
+    assert.equal(categoryInTeam(list, "fuel", "B"), "fuel-b");
+    assert.equal(categoryInTeam(list, "fuel", "A"), "fuel");
+    assert.equal(categoryInTeam(list, "rent", "B"), null);
+    assert.equal(categoryInTeam(list, "services", "B"), "services");
+    assert.equal(categoryInTeam(list, null, "B"), null);
+  });
+
+  test("строка-дверь считает имена, а не копии команд", () => {
+    const list = [
+      cat("fuel", { name: "Топливо" }),
+      cat("fuel-b", { name: "Топливо", team_id: "B" }),
+      cat("tips", { type: "income", name: "Чаевые" }),
+    ];
+    assert.equal(categoriesDoorLine(list), "Расход 1 · доход 1");
   });
 
   test("заголовок с получателем и без", () => {
@@ -64,9 +100,10 @@ describe("зарплата — расход с получателем", () => {
 });
 
 describe("подпись строки категорий в настройках", () => {
+  let n = 0;
   const cat = (type: string, over: Record<string, unknown> = {}) =>
     ({
-      id: Math.random().toString(36), tenant_id: "t", slug: "x", name: "x", type, icon: null,
+      id: `c${++n}`, tenant_id: "t", slug: "x", name: `Категория ${n}`, type, icon: null,
       color: null, hidden: false, position: 0, ask_employee: false, ask_client: false,
       require_receipt: false, is_system: false, ...over,
     }) as never;

@@ -53,6 +53,8 @@ import {
 } from "@/features/finances/category-budget";
 import { askBudgetNotificationPermission } from "@/features/finances/budget-notify";
 import { useCategoryMonthSpend } from "@/features/finances/use-category-budget";
+import { useTeams } from "@/features/reference/queries";
+import { Chip } from "@/components/ui/Chip";
 
 // КАТЕГОРИИ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
 //
@@ -105,6 +107,13 @@ import { useCategoryMonthSpend } from "@/features/finances/use-category-budget";
 // жёлтым от 80%, красным при превышении; уведомление владельцу — на 80% и на
 // 100% (`budget-notify.ts`).
 //
+// У КАЖДОЙ КОМАНДЫ СВОИ КАТЕГОРИИ (владелец 2026-09-24: «у каждой команды
+// свой тип расходов, свой тип доходов и так далее»). Сверху — команды
+// пилюлями, как во всём продукте; справочник, скрытие, порядок и бюджет —
+// выбранной команды. Новая категория создаётся в ней, а тумблер «Во всех
+// командах» заводит такую же каждой команде разом — «Топливо» не набирают
+// руками дважды.
+//
 // УДАЛИТЬ МОЖНО ТОЛЬКО НЕИСПОЛЬЗОВАННУЮ. По категории с операциями сервер
 // удаление отбивает (история не теряет подписей), и экран предлагает то, что
 // можно, — скрыть её из выбора.
@@ -146,6 +155,13 @@ export default function CategoriesScreen() {
   const [icon, setIcon] = useState<string | null>(null);
   const [asks, setAsks] = useState<Asks>(NO_ASKS);
   const [budgetText, setBudgetText] = useState("");
+  const teams = useTeams().data ?? [];
+  const [pickedTeamId, setPickedTeamId] = useState<string | null>(null);
+  // Выбранная команда; пока не выбирали — первая. Команда пропала (ушла в
+  // архив) — тоже первая, а не пустой список.
+  const teamId =
+    teams.find((t) => t.id === pickedTeamId)?.id ?? teams[0]?.id ?? null;
+  const [allTeams, setAllTeams] = useState(false);
   const currency = useCurrency();
   const fmt = (n: number) => money(n, currency);
   const spend = useCategoryMonthSpend(type === "expense");
@@ -163,14 +179,14 @@ export default function CategoriesScreen() {
     // До 2026-09-10 порядка не было вовсе: список шёл как пришёл из базы.
     () =>
       cats
-        .filter((c) => c.type === type && !c.is_system)
+        .filter((c) => c.type === type && !c.is_system && c.team_id === teamId)
         .sort(
           (a, b) =>
             Number(a.hidden) - Number(b.hidden) ||
             a.position - b.position ||
             a.name.localeCompare(b.name, "ru", { sensitivity: "base" }),
         ),
-    [cats, type],
+    [cats, type, teamId],
   );
 
   // У долга «кто» уже есть своим блоком (клиент или имя) — прикреплять нечего.
@@ -189,6 +205,7 @@ export default function CategoriesScreen() {
     setIcon(null);
     setAsks(NO_ASKS);
     setBudgetText("");
+    setAllTeams(false);
     opened.current = JSON.stringify(["", DEFAULT_COLOR, null, NO_ASKS, ""]);
     setOpen(true);
   };
@@ -275,13 +292,20 @@ export default function CategoriesScreen() {
           patch: { name: name.trim(), color, icon, ...asksPayload },
         });
       } else {
-        await insert.mutateAsync({
-          name: name.trim(),
-          type,
-          color,
-          icon,
-          ...asksPayload,
-        });
+        // «Во всех командах» — такая же категория каждой команде; иначе —
+        // только выбранной. Команды без своей копии не остаётся ни одной.
+        const targets = allTeams ? teams.map((t) => t.id) : teamId ? [teamId] : [];
+        if (targets.length === 0) return;
+        for (const target of targets) {
+          await insert.mutateAsync({
+            team_id: target,
+            name: name.trim(),
+            type,
+            color,
+            icon,
+            ...asksPayload,
+          });
+        }
       }
       setName("");
       setOpen(false);
@@ -328,6 +352,28 @@ export default function CategoriesScreen() {
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title="Категории" />
+
+      {/* КОМАНДЫ — пилюлями, как во всём продукте. Одна команда — выбирать
+          нечего, ряда нет. */}
+      {teams.length > 1 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{ gap: 8, paddingHorizontal: GUTTER, paddingTop: 12 }}
+        >
+          {teams.map((team) => (
+            <Chip
+              key={team.id}
+              label={team.name}
+              color={team.color ?? undefined}
+              selected={team.id === teamId}
+              radio
+              onPress={() => setPickedTeamId(team.id)}
+            />
+          ))}
+        </ScrollView>
+      ) : null}
 
       <SegmentedControl
         options={[
@@ -474,6 +520,21 @@ export default function CategoriesScreen() {
               onIconChange={setIcon}
               autoFocus={!editing}
             />
+            {!editing && teams.length > 1 ? (
+              <>
+                <Divider inset={16} />
+                <SwitchRow
+                  label="Во всех командах"
+                  hint={
+                    allTeams
+                      ? "Такая же категория появится у каждой команды"
+                      : `Только у команды «${teams.find((t) => t.id === teamId)?.name ?? ""}»`
+                  }
+                  value={allTeams}
+                  onChange={setAllTeams}
+                />
+              </>
+            ) : null}
           </SectionCard>
 
           {/* БЮДЖЕТ — ТОЛЬКО У РАСХОДА. Ноль или пусто — бюджета нет. */}

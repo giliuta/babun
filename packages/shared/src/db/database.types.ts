@@ -1470,14 +1470,17 @@ export type Database = {
           ask_employee: boolean
           color: string | null
           created_at: string
+          hidden: boolean
           icon: string | null
           id: string
           is_system: boolean
           monthly_budget: number | null
           name: string
+          position: number
           require_receipt: boolean
           retired: boolean
           slug: string
+          team_id: string | null
           tenant_id: string | null
           type: string
         }
@@ -1486,14 +1489,17 @@ export type Database = {
           ask_employee?: boolean
           color?: string | null
           created_at?: string
+          hidden?: boolean
           icon?: string | null
           id?: string
           is_system?: boolean
           monthly_budget?: number | null
           name: string
+          position?: number
           require_receipt?: boolean
           retired?: boolean
           slug: string
+          team_id?: string | null
           tenant_id?: string | null
           type: string
         }
@@ -1502,14 +1508,17 @@ export type Database = {
           ask_employee?: boolean
           color?: string | null
           created_at?: string
+          hidden?: boolean
           icon?: string | null
           id?: string
           is_system?: boolean
           monthly_budget?: number | null
           name?: string
+          position?: number
           require_receipt?: boolean
           retired?: boolean
           slug?: string
+          team_id?: string | null
           tenant_id?: string | null
           type?: string
         }

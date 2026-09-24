@@ -27,6 +27,7 @@ import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useMoney } from "@/features/settings/currency";
 import { useFinanceCategories } from "@/features/finances/queries";
+import { categoryInTeam, pickableCategories } from "@/features/finances/category-asks";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { useTeams } from "@/features/reference/queries";
 import { notify } from "@/lib/notify";
@@ -125,14 +126,17 @@ export default function TemplatesScreen() {
   // Скрытой категории в выборе нет (владелец 2026-09-10: «когда идёт скрыть,
   // она больше не показывается в выборе категории»). Исключение — та, что уже
   // стоит в этом шаблоне: иначе правка шаблона молча обнулила бы категорию.
+  // И только команды шаблона (владелец 2026-09-24: «у каждой команды свой
+  // тип расходов»): сменили команду — категория переходит на такую же у
+  // новой команды или снимается.
   const cats = useMemo(
-    () =>
-      categories.filter(
-        (c) =>
-          !c.is_system && c.type === kind && (!c.hidden || c.id === categoryId),
-      ),
-    [categories, kind, categoryId],
+    () => pickableCategories(categories, kind, categoryId, brigadeId),
+    [categories, kind, categoryId, brigadeId],
   );
+  useEffect(() => {
+    if (!brigadeId) return;
+    setCategoryId((current) => categoryInTeam(categories, current, brigadeId));
+  }, [brigadeId, categories]);
   // Чипы счёта появляются после выбора команды: её собственные счета плюс
   // счета компании, к которым команда подключена.
   const brigadeAccounts = useMemo(

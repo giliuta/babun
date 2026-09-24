@@ -203,21 +203,22 @@ describe("кромки свайпа", () => {
     const rule = readFileSync(join(app, "src/features/finances/category-asks.ts"), "utf8");
     assert.match(
       rule,
-      /!c\.hidden \|\| c\.id === keepId/,
+      /c\.id === keepId \|\| \(!c\.hidden/,
       "pickableCategories: скрытая категория обязана исчезать из выбора — кроме уже выбранной",
     );
+    // Категории у команды (2026-09-24): шаблоны и долги берут выбор из того
+    // же правила, а не своим фильтром — иначе скрытая и чужая команда
+    // вернутся в выбор в одном из трёх мест.
     for (const [file, hint] of [
       ["app/(dashboard)/cabinet/templates.tsx", "шаблоны операций"],
+      ["src/features/finances/use-debt-draft.ts", "долги"],
     ] as const) {
       const src = readFileSync(join(app, file), "utf8");
-      assert.match(
-        src,
-        /!c\.hidden \|\| c\.id === categoryId/,
-        `${file} (${hint}): скрытая категория обязана исчезать из выбора — кроме уже выбранной в этой операции`,
+      assert.ok(
+        src.includes("pickableCategories("),
+        `${file} (${hint}): выбор категорий обязан идти через pickableCategories`,
       );
     }
-    const debt = readFileSync(join(app, "src/features/finances/use-debt-draft.ts"), "utf8");
-    assert.ok(debt.includes("!c.hidden"), "долги: скрытая категория не предлагается");
   });
 
   test("закон записан в каноне", () => {

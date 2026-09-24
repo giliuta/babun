@@ -73,6 +73,7 @@ const CATEGORIES: FinanceCategory[] = [
     require_receipt: false,
     is_system: false,
     monthly_budget: null,
+    team_id: "t1",
   },
   {
     id: "cat-service",
@@ -89,6 +90,7 @@ const CATEGORIES: FinanceCategory[] = [
     require_receipt: false,
     is_system: false,
     monthly_budget: null,
+    team_id: "t1",
   },
 ];
 
