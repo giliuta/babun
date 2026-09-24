@@ -350,14 +350,17 @@ export function ClientDetailScreen() {
   const clientSmsContext = useMemo(
     () =>
       c
-        ? clientSmsVars({
-            client: c,
-            appointments,
-            teams: smsTeams,
-            company: companyName,
-            debt: caps.money ? (stats?.debt ?? 0) : null,
-            showMoney: caps.money,
-          })
+        ? {
+            clientId: c.id,
+            vars: clientSmsVars({
+              client: c,
+              appointments,
+              teams: smsTeams,
+              company: companyName,
+              debt: caps.money ? (stats?.debt ?? 0) : null,
+              showMoney: caps.money,
+            }),
+          }
         : null,
     [appointments, c, caps.money, companyName, smsTeams, stats?.debt],
   );
@@ -591,7 +594,7 @@ export function ClientDetailScreen() {
   return (
     // Все номера страницы — клиента, его людей, доп. номера — предлагают
     // шаблоны SMS, заполненные этим клиентом (STORY-089).
-    <SmsComposeProvider vars={clientSmsContext}>
+    <SmsComposeProvider context={clientSmsContext}>
       <Stack.Screen options={{ gestureEnabled: !isDraftDirty }} />
       <Screen edges={["top"]}>
       {/* «Готово» из правого верхнего угла снесено: единственное действие

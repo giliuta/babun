@@ -1084,6 +1084,20 @@ export default function BookScreen() {
         : null,
     [address, can.showMoney, client, companyName, date, effectiveTotal, serviceLines, team?.name, timeStart],
   );
+  // Сервису нужны ещё запись, клиент и календарь: SMS через сервис владелец
+  // разрешает по календарям (STORY-089, волна 2).
+  const recordSmsContext = useMemo(
+    () =>
+      recordSmsVars
+        ? {
+            vars: recordSmsVars,
+            appointmentId: editing?.id ?? null,
+            clientId: client?.id ?? null,
+            teamId: teamId ?? null,
+          }
+        : null,
+    [client?.id, editing?.id, recordSmsVars, teamId],
+  );
 
   // Keep the editable total in sync with catalog pricing until the operator
   // explicitly changes it. A manual amount then stays stable while services
@@ -2491,7 +2505,7 @@ export default function BookScreen() {
                   его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
                   ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
               {can.showClient ? (
-              <SmsComposeProvider vars={recordSmsVars}>
+              <SmsComposeProvider context={recordSmsContext}>
                 <ClientBlock
                   client={client}
                   stats={clientStats}
@@ -2876,7 +2890,7 @@ export default function BookScreen() {
                   его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
                   ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
               {evShowClient ? (
-              <SmsComposeProvider vars={recordSmsVars}>
+              <SmsComposeProvider context={recordSmsContext}>
                 <ClientBlock
                   client={client}
                   stats={clientStats}

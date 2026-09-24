@@ -299,6 +299,9 @@ export interface Client {
   birthday: string;
   /** Блокировка: клиент в чёрном списке. */
   blacklisted: boolean;
+  /** Клиент просил не присылать SMS: сервис ему не пишет ни сам, ни по
+   *  кнопке (STORY-089). Правится только `set_client_sms_opt_out`. */
+  sms_opt_out?: boolean;
   /** v313 — закреплён вверху списка. ISO timestamp когда закрепили. */
   pinned_at?: string | null;
   /** v313 — отметка «напомнить про клиента» (ISO). Когда наступит,

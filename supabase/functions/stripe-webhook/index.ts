@@ -171,66 +171,52 @@ async function resolveTenantId(event: Stripe.Event, sbs: any): Promise<string | 
   return null;
 }
 
-// STORY-069 — SMS topup credit. Idempotent via the UNIQUE on
-// sms_topups.stripe_payment_intent_id; the balance bump itself goes
-// through the bump_sms_balance RPC (atomic INSERT..ON CONFLICT), which
-// STORY-079 introduced after a read-then-update lost credits under
-// concurrent webhooks.
+// ПОПОЛНЕНИЕ БАЛАНСА SMS (STORY-089). Зачисление — одна функция базы
+// `sms_credit_topup`: запись оплаты и прибавка к балансу в одной транзакции,
+// повтор той же оплаты ничего не делает (UNIQUE по payment_intent).
+//
+// Сумма — то, что Stripe СПИСАЛ (`amount_total`), а не метаданные сессии:
+// метаданные пишет наш же код, но деньги — правда платёжной системы.
+// Только `payment_status = paid`: отложенные способы оплаты приходят позже
+// отдельным событием.
+//
+// ПОРЯДОК: зачисление идёт ДО журнала `billing_events` и на сбое отвечает
+// 500. Раньше журнал писался первым, а сбой зачисления отвечал 200 — повтор
+// Stripe упирался в «уже обработано», и оплаченные деньги не доходили до
+// баланса никогда.
 // deno-lint-ignore no-explicit-any
-async function maybeCreditSmsTopup(event: Stripe.Event, sbs: any): Promise<void> {
-  if (event.type !== "checkout.session.completed") return;
+async function creditSmsTopup(event: Stripe.Event, sbs: any): Promise<"credited" | "replay" | "skip"> {
+  if (
+    event.type !== "checkout.session.completed" &&
+    event.type !== "checkout.session.async_payment_succeeded"
+  ) {
+    return "skip";
+  }
   const session = event.data.object as Stripe.Checkout.Session;
   const meta = (session.metadata ?? {}) as Record<string, string | undefined>;
-  if (meta.kind !== "sms_topup") return;
+  if (meta.kind !== "sms_topup") return "skip";
+  if (session.payment_status !== "paid") return "skip";
 
   const tenantId = meta.tenant_id;
-  const packId = meta.pack_id;
-  const amountCents = Number(meta.amount_cents);
-  const credits = Number(meta.credits);
-  if (
-    !tenantId ||
-    !packId ||
-    !Number.isFinite(amountCents) ||
-    !Number.isFinite(credits)
-  ) {
-    console.warn("sms topup: missing metadata", meta);
-    return;
-  }
-
+  const amountCents = session.amount_total ?? 0;
   const paymentIntentId =
     typeof session.payment_intent === "string"
       ? session.payment_intent
       : session.payment_intent?.id ?? null;
-  if (!paymentIntentId) {
-    console.warn("sms topup: no payment_intent on session", session.id);
-    return;
+  if (!tenantId || amountCents <= 0 || !paymentIntentId) {
+    console.warn("sms topup: incomplete session", session.id);
+    return "skip";
   }
 
-  const { error: insertErr } = await sbs.from("sms_topups").insert({
-    tenant_id: tenantId,
-    amount_cents: amountCents,
-    credits_added: credits,
-    pack_label: packId,
-    stripe_session_id: session.id,
-    stripe_payment_intent_id: paymentIntentId,
-    status: "completed",
-    completed_at: new Date().toISOString(),
-  });
-  if (insertErr) {
-    if ((insertErr as { code?: string }).code === "23505") return; // already credited
-    throw insertErr;
-  }
-
-  const { data: rpcData, error: rpcErr } = await sbs.rpc("bump_sms_balance", {
-    p_tenant_id: tenantId,
+  const { data, error } = await sbs.rpc("sms_credit_topup", {
+    p_tenant: tenantId,
     p_amount_cents: amountCents,
+    p_session: session.id,
+    p_payment_intent: paymentIntentId,
+    p_pack: meta.pack_id ?? null,
   });
-  if (rpcErr) throw rpcErr;
-  if (rpcData && typeof rpcData === "object" && "error" in rpcData) {
-    throw new Error(
-      `bump_sms_balance: ${(rpcData as { error: string }).error}`,
-    );
-  }
+  if (error) throw error;
+  return data === true ? "credited" : "replay";
 }
 
 Deno.serve(async (req: Request) => {
@@ -280,7 +266,16 @@ Deno.serve(async (req: Request) => {
   // deno-lint-ignore no-explicit-any
   const sbs = service as any;
 
-  // Audit FIRST — the UNIQUE on stripe_event_id is the idempotency
+  // Пополнение SMS — ДО журнала: оно само идемпотентно, а сбой должен
+  // вернуть Stripe 5xx, чтобы он прислал событие ещё раз.
+  try {
+    await creditSmsTopup(event, sbs);
+  } catch (err) {
+    console.error("stripe webhook: sms topup credit failed", err);
+    return json(500, { error: "sms topup credit failed" });
+  }
+
+  // Audit — the UNIQUE on stripe_event_id is the idempotency
   // primitive, and a recorded event survives a failed reconcile.
   const tenantIdHint = await resolveTenantId(event, sbs);
   const { error: auditErr } = await sbs.from("billing_events").insert({
@@ -311,13 +306,6 @@ Deno.serve(async (req: Request) => {
     // Audit row is in place; ACK so Stripe stops retrying and we replay
     // from billing_events instead.
     return json(200, { ok: true, reconcile_warning: true });
-  }
-
-  try {
-    await maybeCreditSmsTopup(event, sbs);
-  } catch (err) {
-    console.error("stripe webhook: sms topup credit failed", err);
-    return json(200, { ok: true, topup_warning: true });
   }
 
   return json(200, { ok: true });

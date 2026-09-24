@@ -4,25 +4,33 @@ import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useSmsTemplates } from "@/features/settings/sms-templates";
+import { useSmsAccount } from "@/features/sms/sms-account";
+import { euro } from "@/features/sms/sms-words";
 
 // СТРОКА «SMS» В КАБИНЕТЕ (STORY-089; владелец 24.09: «у них есть
 // собственный кабинет отправки СМС»). Это место компании, а не настройка
-// раздела: шаблоны, по которым пишут клиентам со своего телефона, а со второй
-// волны — баланс, автоматическая отправка по календарям и история.
+// раздела: баланс, отправка через сервис по календарям, автоматические SMS,
+// шаблоны и история — страница `/cabinet/sms`.
 //
-// Подпись — живое состояние (закон Кабинета): сколько шаблонов готово.
+// Подпись — живое состояние (закон Кабинета): баланс и сколько шаблонов
+// готово.
 export function SmsRow() {
   const router = useRouter();
   const { data: templates = [] } = useSmsTemplates();
+  const owner = useSmsAccount().data?.owner;
   const ready = templates.filter((tpl) => tpl.enabled && tpl.body.trim()).length;
+  const parts = [
+    owner ? euro(owner.balanceCents) : null,
+    ready > 0 ? formatCountRu(ready, ["шаблон", "шаблона", "шаблонов"]) : "Шаблонов нет",
+  ].filter(Boolean);
 
   return (
     <SettingsRow
       tile={SETTINGS_TILE.green}
       icon={MessageSquare}
       title="SMS"
-      sub={ready > 0 ? formatCountRu(ready, ["шаблон", "шаблона", "шаблонов"]) : "Шаблонов нет"}
-      onPress={() => router.push("/cabinet/sms-templates" as Href)}
+      sub={parts.join(" · ")}
+      onPress={() => router.push("/cabinet/sms" as Href)}
     />
   );
 }

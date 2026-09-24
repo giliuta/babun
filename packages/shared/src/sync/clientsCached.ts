@@ -795,6 +795,8 @@ function makeServerRow(
     property_type: input.property_type ?? "",
     birthday: input.birthday ?? "",
     blacklisted: input.blacklisted ?? false,
+    // Отказ от SMS правится своей функцией базы; новый клиент его не несёт.
+    sms_opt_out: input.sms_opt_out ?? false,
     pinned_at: input.pinned_at ?? null,
     reminder_at: input.reminder_at ?? null,
     phones: (input.phones ?? []) as unknown as CachedClient["phones"],

@@ -60,14 +60,18 @@ function serviceClient() {
   });
 }
 
+// «В пути» у Twilio (queued / accepted / sending) — для нас уже 'sent'.
+// Наш 'queued' значит «ещё не отдано Twilio», и курьер `send_sms` забирает
+// такие строки: прежняя карта возвращала отправленное в очередь, и оно
+// ушло бы клиенту второй раз со вторым списанием (STORY-089).
 const STATUS_MAP: Record<string, string> = {
-  queued: "queued",
+  queued: "sent",
+  accepted: "sent",
+  sending: "sent",
   sent: "sent",
   delivered: "delivered",
   failed: "failed",
   undelivered: "undelivered",
-  accepted: "queued",
-  sending: "queued",
 };
 const TERMINAL = new Set(["delivered", "failed", "undelivered"]);
 
@@ -211,10 +215,11 @@ Deno.serve(async (req: Request) => {
   if (errorMessage) update.error_message = errorMessage;
   if (TERMINAL.has(status)) update.delivered_at = new Date().toISOString();
 
-  const { error: updErr } = await sb
-    .from("sms_messages")
-    .update(update)
-    .eq("twilio_sid", messageSid);
+  // Колбэки приходят не по порядку: запоздалый «в пути» не имеет права
+  // затереть уже доставленное или отказ.
+  let query = sb.from("sms_messages").update(update).eq("twilio_sid", messageSid);
+  if (!TERMINAL.has(status)) query = query.eq("status", "sent");
+  const { error: updErr } = await query;
   if (updErr) {
     console.error("twilio/status: update failed", updErr);
     return json(500, { error: "update failed" });

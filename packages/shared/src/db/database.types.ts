@@ -1050,6 +1050,7 @@ export type Database = {
           referred_by_client_id: string | null
           reminder_at: string | null
           sms_name: string
+          sms_opt_out: boolean
           telegram_username: string
           tenant_id: string
           updated_at: string
@@ -1093,6 +1094,7 @@ export type Database = {
           referred_by_client_id?: string | null
           reminder_at?: string | null
           sms_name?: string
+          sms_opt_out?: boolean
           telegram_username?: string
           tenant_id: string
           updated_at?: string
@@ -1136,6 +1138,7 @@ export type Database = {
           referred_by_client_id?: string | null
           reminder_at?: string | null
           sms_name?: string
+          sms_opt_out?: boolean
           telegram_username?: string
           tenant_id?: string
           updated_at?: string
@@ -5084,6 +5087,25 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_client_sms_opt_out: {
+        Args: { p_client_id: string; p_value: boolean }
+        Returns: boolean
+      }
+      sms_account: { Args: never; Returns: Json }
+      sms_history: {
+        Args: { p_before?: string; p_limit?: number }
+        Returns: Json[]
+      }
+      sms_save_settings: { Args: { p: Json }; Returns: Json }
+      sms_send_manual: {
+        Args: {
+          p_appointment_id: string
+          p_body: string
+          p_client_id: string
+          p_template_id?: string
+        }
+        Returns: string
       }
       write_sms_templates_safe: { Args: { p_templates: Json }; Returns: Json }
     }

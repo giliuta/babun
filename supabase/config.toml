@@ -40,3 +40,8 @@ verify_jwt = false
 # unauthenticated — the per-user URL is itself the secret.
 [functions.calendar-ics]
 verify_jwt = false
+
+# SMS balance top-up on the website (STORY-089): the signed-in owner opens
+# a Stripe Checkout session. Credit happens only in stripe-webhook.
+[functions.sms-checkout]
+verify_jwt = true

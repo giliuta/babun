@@ -44,6 +44,30 @@
       плашка «нет связи» вместо «Не удалось загрузить».
 - [ ] Своя ежедневная копия базы отдельно от Supabase.
 
+## SMS через сервис (STORY-089)
+
+Код готов и проверен; сервис выключен, пока нет ключей.
+
+Владелец:
+- [ ] **Twilio** — аккаунт и пополнение баланса Twilio.
+  - Отправитель «Babun» буквами — на Кипре без регистрации.
+  - Ключи `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` → Supabase → Edge
+    Functions → Secrets.
+- [ ] **Stripe** — аккаунт.
+  - `STRIPE_SECRET_KEY` → те же секреты.
+  - Webhook на `https://rdtokosbqvgemicqeqwz.supabase.co/functions/v1/stripe-webhook`
+    (события `checkout.session.completed`,
+    `checkout.session.async_payment_succeeded`); его секрет →
+    `STRIPE_WEBHOOK_SECRET`.
+- [ ] **Цена части SMS** — сейчас €0,10. Сверить с ценой Twilio для Кипра
+  и решить наценку.
+
+012 (по слову владельца):
+- [ ] Развернуть функции `send_sms`, `twilio-status`, `stripe-webhook`,
+  `sms-checkout`.
+- [ ] Включить сервис: `app_settings.sms_enabled = on`.
+- [ ] Первая SMS себе на номер: списание, статус «Доставлено», история.
+
 ## Когда расти дальше
 
 Сигнал к следующему серверу — любое из:
