@@ -52,7 +52,6 @@ const TODO_NO_TEAM: Record<string, string> = {
   finance_category_order: "за категориями",
   service_categories: "категории услуг — у команды",
   location_labels: "типы объектов — у команды",
-  receipts: "чек — команда от операции",
   tenant_state: "SMS-шаблоны в prototype_state — у команды",
   // event_templates есть в базе, но в миграциях её нет (создана мимо
   // репозитория) — разбор её не видит; снести отдельной миграцией.
@@ -72,12 +71,6 @@ const NULLABLE_OK: Record<string, string> = {
 
 /** Пустая команда там, где её быть не должно. Только сокращается. */
 const TODO_NULLABLE: Record<string, string> = {
-  "accounts.brigade_id": "каждый счёт — у команды",
-  "finance_transactions.team_id": "каждая операция — у команды",
-  "finance_transfer_requests.team_id": "перевод — у команды",
-  "debts.team_id": "долг — у команды",
-  "finance_templates.brigade_id": "шаблон — у команды",
-  "invoices.brigade_id": "инвойс — у команды",
   "masters.team_id": "мастер прикреплён к команде",
   "recurring_reminders.team_id": "напоминание ТО — у команды",
   "sms_messages.team_id": "SMS — у календаря",
