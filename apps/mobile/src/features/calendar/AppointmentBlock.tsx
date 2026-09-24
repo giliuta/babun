@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -14,7 +14,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import type { PlacedAppt } from "@/features/calendar/layout";
+import { blockFrame, type PlacedAppt } from "@/features/calendar/layout";
 import {
   blockEdge,
   CANCELLED_BORDER,
@@ -73,6 +73,8 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   editing = false,
   dayW,
   onEdit,
+  deckIndex,
+  deckSize,
   onMenu,
   onReschedule,
 }: {
@@ -109,6 +111,10 @@ export const AppointmentBlock = memo(function AppointmentBlock({
    *  по дням — шагом в колонку. В Дне не задана: там одна колонка. */
   dayW?: number;
   onEdit: (a: Appointment) => void;
+  /** Место в стопке узкой колонки (`decksFor`): номер снизу и размер.
+   *  Числами, а не объектом, — чтобы `memo` сравнивал по значению. */
+  deckIndex?: number;
+  deckSize?: number;
   /** Долгое нажатие — меню записи. Двигать и растягивать — только после
    *  выбора этого в меню (владелец 2026-09-24: «просто так тянуть нельзя,
    *  она зафиксирована; зажимаешь — окно, выбрал — тогда можно»). */
@@ -161,9 +167,21 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // a negative top and vanishing above the grid.
   const visStart = Math.max(startMin, winStart);
   const visEnd = Math.min(endMin, winEnd);
-  const colW = laneW / colCount;
-  const left = colIndex * colW + 1;
-  const width = colW - GAP;
+  // МЕСТО В КОЛОНКЕ — `blockFrame` (layout.ts, под тестом): в Дне записи
+  // рядом с растяжкой вправо, в узкой Неделе — «веером» поверх друг друга.
+  const frame = blockFrame(
+    placed,
+    laneW,
+    GAP,
+    deckSize && deckSize > 1 ? { index: deckIndex ?? 0, size: deckSize } : undefined,
+  );
+  // Верхняя карточка стопки несёт «+N» — сколько записей под ней.
+  const deckMore =
+    deckSize && deckSize > 1 && deckIndex === deckSize - 1 ? deckSize - 1 : 0;
+  const deckBadgeW = deckMore > 0 ? 20 : 0;
+  const { left, width } = frame;
+  void colIndex;
+  void colCount;
   const cancelled = apt.status === "cancelled";
   const completed = apt.status === "completed";
   // ═══ ГЕОМЕТРИЯ И ЦВЕТ БЛОКА ═══
@@ -227,6 +245,9 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // лежит абсолютно в правом нижнем углу; раньше отступ был вшит только в
   // адрес, и на карточке, где последней осталась услуга (или время), её хвост
   // заезжал под точку.
+  // «+N» стопки: внизу, если под именем есть ещё строка; иначе сверху, и
+  // тогда имя отступает на ширину значка.
+  const deckBadgeLow = deckMore > 0 && rowsFit >= 2;
   const dotReserve =
     offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? 12 : 0;
 
@@ -426,6 +447,11 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // maxDuration не задаём: до порога long-press отпускание — всегда тап,
   // после — pan уже активен и Exclusive отменяет tap сам; явный
   // maxDuration(250) оставлял мёртвое окно 250–300 мс без реакции.
+  // Смена режима (вход/выход из свободного перемещения) пересобирает жесты —
+  // незавершённое нажатие не должно пережить её.
+  useEffect(() => {
+    press.value = withTiming(0, { duration: 120 });
+  }, [editing, press]);
   const tap = Gesture.Tap()
     .onBegin(() => {
       press.value = withTiming(1, { duration: 90 });
@@ -439,6 +465,10 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   const longPress = Gesture.LongPress()
     .minDuration(300)
     .onStart(() => {
+      // Долгое нажатие перехватило тап — его «притухание» гасим сразу:
+      // жест дальше перестраивается под меню/перемещение, и onFinalize тапа
+      // до карточки уже не доходит (карточка оставалась уменьшенной).
+      press.value = withTiming(0, { duration: 120 });
       if (onMenu) runOnJS(onMenu)(apt);
     });
   // В ПОКОЕ ЗАПИСЬ ЗАКРЕПЛЕНА: тап открывает, долгое нажатие — меню.
@@ -458,10 +488,12 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // ЦВЕТНАЯ ТЕНЬ (вариант 5, 24.09): плотный блок «парит» над сеткой своим
   // же тоном; под пальцем тень глубже. У отменённой тени нет — ей некуда
   // ехать, и выпуклость её бы выделяла.
+  const stackZ = frame.z;
   const shadowTone = cancelled ? "#000" : colors.solid;
   const restShadow = cancelled ? 0 : 0.35;
   const wrapperStyle = useAnimatedStyle(() => ({
-    zIndex: active.value > 0 || editing ? 20 : 1,
+    // В «веере» следующая запись лежит поверх предыдущей.
+    zIndex: active.value > 0 || editing ? 20 : 1 + stackZ,
     shadowColor: shadowTone,
     shadowOpacity: Math.max(restShadow, active.value * 0.45),
     shadowRadius: 4 + active.value * 6,
@@ -561,6 +593,12 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               borderCurve: "continuous",
               overflow: "hidden",
             },
+            // ВЫРЕЗ «ВЕЕРА»: запись, лежащая поверх соседки, отделена от неё
+            // полоской фона слева — видно, где кончается нижняя и начинается
+            // верхняя, даже когда обе одного цвета.
+            frame.overlapped
+              ? { borderLeftWidth: 2, borderLeftColor: t.surface }
+              : null,
             cardStyle,
           ]}
         >
@@ -658,6 +696,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
                     fontWeight: "700",
                     marginRight: Math.max(
                       i === 0 ? markReserve : 0,
+                      i === 0 && deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0,
                       lastRow === "name" && i === nameParts.length - 1
                         ? dotReserve
                         : 0,
@@ -731,6 +770,41 @@ export const AppointmentBlock = memo(function AppointmentBlock({
             </Text>
           ) : null}
 
+          {/* «+N» СТОПКИ — справа вверху верхней карточки: под ней ещё записи
+              на то же время; тап откроет их списком. */}
+          {deckMore > 0 ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                // Высокая карточка — «+N» в нижнем углу, имя не трогает;
+                // низкая — в верхнем, а имя уступает ему место.
+                ...(deckBadgeLow ? { bottom: 4 } : { top: 2 }),
+                right: 2,
+                zIndex: 3,
+                minWidth: 18,
+                height: 16,
+                paddingHorizontal: 3,
+                borderRadius: 8,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "rgba(255,255,255,0.92)",
+              }}
+            >
+              <Text
+                maxFontSizeMultiplier={1.1}
+                style={{
+                  fontSize: 11,
+                  lineHeight: 13,
+                  fontWeight: "800",
+                  color: colors.solid,
+                  fontVariant: ["tabular-nums"],
+                }}
+              >
+                +{deckMore}
+              </Text>
+            </View>
+          ) : null}
           {/* УГЛОВОЙ ЗНАК ОДИН И ОДНОЗНАЧНЫЙ: белый круг с галкой — работа
               закрыта. Просрочка знака не носит: её сигнал — тёмный ободок
               блока, и два разных знака в углу на колонке недели, где глиф не

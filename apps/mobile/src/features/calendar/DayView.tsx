@@ -4,7 +4,14 @@ import type { SharedValue } from "react-native-reanimated";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD, pad2, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
-import { layoutDay } from "@/features/calendar/layout";
+import {
+  decksFor,
+  layoutDay,
+  type PlacedAppt,
+} from "@/features/calendar/layout";
+import { PickerSheet } from "@/components/ui/PickerSheet";
+import { CalendarClock } from "lucide-react-native";
+import { haptics } from "@/lib/haptics";
 import {
   CANCELLED_BORDER,
   CANCELLED_EDGE,
@@ -567,6 +574,9 @@ export const DayColumn = memo(function DayColumn({
   const winEndMin = endHour * 60;
   const totalMin = winEndMin - winStartMin;
 
+  // СТОПКИ узкой колонки (Неделя): записи на одно время — одна карточка с
+  // «+N»; тап открывает их списком.
+  const [deckOpen, setDeckOpen] = useState<PlacedAppt[] | null>(null);
   const placements = useMemo(
     () =>
       layoutDay(appointments.filter((a) => a.event_all_day !== true)).filter(
@@ -574,6 +584,14 @@ export const DayColumn = memo(function DayColumn({
       ),
     [appointments, winStartMin, winEndMin],
   );
+
+  const decks = useMemo(() => decksFor(placements, laneW), [placements, laneW]);
+  const openDeck = (apt: Appointment) => {
+    const deck = decks.get(apt.id);
+    if (!deck) return onEdit(apt);
+    haptics.tap();
+    setDeckOpen(deck.members);
+  };
 
   const nowMin =
     isToday && nowMinutes != null && nowMinutes >= winStartMin && nowMinutes <= winEndMin
@@ -928,10 +946,14 @@ export const DayColumn = memo(function DayColumn({
       ) : null}
 
       {laneW > 0
-        ? placements.map((p) => (
+        ? placements.map((p) => {
+            const deck = decks.get(p.apt.id);
+            return (
             <AppointmentBlock
               key={p.apt.id}
               placed={p}
+              deckIndex={deck?.index}
+              deckSize={deck?.size}
               hourH={hourH}
               laneW={laneW}
               startHour={startHour}
@@ -947,13 +969,29 @@ export const DayColumn = memo(function DayColumn({
               editing={editingId === p.apt.id}
               dayW={compact && laneW > 0 ? laneW + 1 : undefined}
               overdue={isOverdue(p.apt, todayYmd, isToday ? nowMinutes : null)}
-              onEdit={onEdit}
+              // Тап по стопке — список её записей, а не первая попавшаяся.
+              onEdit={deck ? openDeck : onEdit}
               onReschedule={
                 canReschedule?.(p.apt) === false ? undefined : onReschedule
               }
             />
-          ))
+            );
+          })
         : null}
+
+      <PickerSheet
+        visible={deckOpen != null}
+        title={deckOpen ? `${minToHM(deckOpen[0].startMin)} · ${deckOpen.length} ${deckOpen.length < 5 ? "записи" : "записей"}` : ""}
+        onClose={() => setDeckOpen(null)}
+        items={(deckOpen ?? []).map((p) => ({
+          id: p.apt.id,
+          label: clientName(p.apt) || p.apt.comment || "Запись",
+          hint: `${p.apt.time_start}–${p.apt.time_end}`,
+          icon: CalendarClock,
+          color: blockColors(p.apt).solid,
+          onPress: () => onEdit(p.apt),
+        }))}
+      />
 
     </View>
   );
