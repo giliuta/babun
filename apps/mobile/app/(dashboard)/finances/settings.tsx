@@ -24,6 +24,7 @@ import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { accountsDoorLine } from "@/features/finances/accounts-sections";
 import { useCurrentRole, useTenant, type Tenant } from "@/features/settings/tenant";
 import { financeSettingsRows } from "@/features/finances/settings-rows";
+import { LedgerExportRow } from "@/features/finances/LedgerExportRow";
 import { formatInvoiceNumber } from "@/features/invoices/numbering";
 import { useNextInvoiceNumber } from "@/features/invoices/queries";
 
@@ -126,6 +127,12 @@ export default function FinanceSettingsScreen() {
                       sub="Повторяющиеся расходы в один тап"
                       onPress={() => router.push("/finances/templates")}
                     />
+                  </>
+                ) : null}
+                {rows.templates ? (
+                  <>
+                    <Divider inset={56} />
+                    <LedgerExportRow />
                   </>
                 ) : null}
               </SectionCard>
