@@ -27,6 +27,7 @@ import {
   refundTotalsQueryKey,
 } from "@/lib/company-query-keys";
 import { NEVER_PAUSE } from "./accounts";
+import { checkBudgetsAfterWrite } from "./budget-notify";
 import {
   idsFromKey,
   idsKey,
@@ -164,18 +165,27 @@ export function useInsertTransaction() {
     ...NEVER_PAUSE,
     mutationFn: (draft: TransactionDraft) =>
       insertTransaction(supabase, tenantId as string, draft),
-    onSuccess: () => invalidateLedger(qc),
+    // Расход мог перевалить бюджет категории — владелец узнаёт сразу
+    // (`budget-notify.ts`).
+    onSuccess: () => {
+      invalidateLedger(qc);
+      checkBudgetsAfterWrite(qc, tenantId);
+    },
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
 export function useUpdateTransaction() {
+  const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: ({ id, patch }: { id: string; patch: Partial<TransactionDraft> }) =>
       updateTransaction(supabase, id, patch),
-    onSuccess: () => invalidateLedger(qc),
+    onSuccess: () => {
+      invalidateLedger(qc);
+      checkBudgetsAfterWrite(qc, tenantId);
+    },
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }

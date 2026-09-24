@@ -42,6 +42,9 @@ export interface ReferenceValue {
   color?: string | null;
   /** Значок из словаря справочника (`iconPreset`, `eventTypeIcon`). */
   Icon?: LucideIcon | null;
+  /** Вторая строка под именем — живое состояние выбранного (у категории —
+   *  остаток бюджета месяца). Нет — строка одна, как раньше. */
+  subtitle?: string | null;
 }
 
 export function ReferenceBlock({
@@ -99,7 +102,12 @@ export function ReferenceBlock({
           icon={value.Icon ?? emptyIcon}
           color={color}
           title={value.name}
-          accessibilityLabel={`${title}: ${value.name}`}
+          subtitle={value.subtitle ?? undefined}
+          accessibilityLabel={
+            value.subtitle
+              ? `${title}: ${value.name}. ${value.subtitle}`
+              : `${title}: ${value.name}`
+          }
           // Та же подсказка, что у пустой двери: тап по выбранному открывает
           // тот же список, и VoiceOver обязан сказать это в обоих состояниях.
           accessibilityHint={emptyHint}

@@ -2,6 +2,7 @@ import { Tag } from "lucide-react-native";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
 import { iconPreset } from "@/components/ui/icon-set";
+import { useCategoryBudgetLine } from "./use-category-budget";
 
 // БЛОК КАТЕГОРИИ — КАНОН (владелец 2026-09-10: «категории сверху, как написано
 // „клиент“, то же самое; ниже — выбор самой категории. Если я прошу создать
@@ -43,6 +44,10 @@ export function CategoryBlock({
   // категории была единственной в продукте, которая выглядела иначе, чем
   // строка команды, метки и типа события. Различает категории цвет.
   const Glyph = iconPreset(category?.icon) ?? Tag;
+  // БЮДЖЕТ — ПОД ИМЕНЕМ (владелец 2026-09-24): набирая топливо, человек
+  // сразу видит, сколько на него осталось в этом месяце. Только владельцу и
+  // только у категории с бюджетом; остальным строка одна, как была.
+  const budgetLine = useCategoryBudgetLine(category);
 
   return (
     <ReferenceBlock
@@ -53,7 +58,12 @@ export function CategoryBlock({
       emptyHint={emptyHint}
       value={
         category
-          ? { name: category.name, color: category.color, Icon: Glyph }
+          ? {
+              name: category.name,
+              color: category.color,
+              Icon: Glyph,
+              subtitle: budgetLine,
+            }
           : null
       }
       onPress={onPress}

@@ -1473,6 +1473,7 @@ export type Database = {
           icon: string | null
           id: string
           is_system: boolean
+          monthly_budget: number | null
           name: string
           require_receipt: boolean
           retired: boolean
@@ -1488,6 +1489,7 @@ export type Database = {
           icon?: string | null
           id?: string
           is_system?: boolean
+          monthly_budget?: number | null
           name: string
           require_receipt?: boolean
           retired?: boolean
@@ -1503,6 +1505,7 @@ export type Database = {
           icon?: string | null
           id?: string
           is_system?: boolean
+          monthly_budget?: number | null
           name?: string
           require_receipt?: boolean
           retired?: boolean

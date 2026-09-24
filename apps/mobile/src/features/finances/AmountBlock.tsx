@@ -20,12 +20,16 @@ export function AmountBlock({
   color,
   title = "Сумма",
   accessibilityLabel,
+  hint,
 }: {
   value: string;
   onChange: (next: string) => void;
   color: string;
   title?: string;
   accessibilityLabel: string;
+  /** Строка под числом, внутри блока: что эта сумма значит сейчас (у
+   *  бюджета категории — сколько уже потрачено) или почему она не годится. */
+  hint?: { text: string; error?: boolean } | null;
 }) {
   const t = useThemeColors();
   return (
@@ -78,6 +82,21 @@ export function AmountBlock({
           }}
         />
       </View>
+      {hint ? (
+        <Text
+          accessibilityLiveRegion={hint.error ? "assertive" : "none"}
+          maxFontSizeMultiplier={1.2}
+          style={{
+            paddingHorizontal: 16,
+            paddingBottom: 10,
+            fontSize: 13,
+            lineHeight: 18,
+            color: hint.error ? t.danger : t.sub,
+          }}
+        >
+          {hint.text}
+        </Text>
+      ) : null}
     </SectionCard>
   );
 }

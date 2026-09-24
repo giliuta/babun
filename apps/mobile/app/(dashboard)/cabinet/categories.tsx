@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Pressable,
   ScrollView,
@@ -13,13 +13,14 @@ import type {
 } from "@babun/shared/db/repositories/finance-categories";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { Divider } from "@/components/ui/Divider";
-import { FieldLabel } from "@/components/ui/Field";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { BottomSheet } from "@/components/ui/BottomSheet";
+import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { AmountBlock } from "@/features/finances/AmountBlock";
 import { Button } from "@/components/ui/Button";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SwipeRow } from "@/components/ui/SwipeRow";
@@ -32,7 +33,9 @@ import { NameColorField } from "@/components/ui/picker-fields";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
-import { confirmThen } from "@/lib/confirm";
+import { confirmAction, confirmThen } from "@/lib/confirm";
+import { money } from "@babun/shared/common/utils/money";
+import { useCurrency } from "@/features/settings/currency";
 import {
   useDeleteCategory,
   useFinanceCategories,
@@ -41,6 +44,15 @@ import {
   useUpdateCategory,
   useReorderFinanceCategories,
 } from "@/features/finances/queries";
+import {
+  budgetInputText,
+  budgetLevel,
+  budgetShort,
+  hasBudget,
+  parseBudgetInput,
+} from "@/features/finances/category-budget";
+import { askBudgetNotificationPermission } from "@/features/finances/budget-notify";
+import { useCategoryMonthSpend } from "@/features/finances/use-category-budget";
 
 // КАТЕГОРИИ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
 //
@@ -87,6 +99,12 @@ import {
 // независимых тумблера, а не выбор одного из трёх: у чаевых и клиент, и
 // мастер; топливу нужен чек. Форма операции показывает ровно эти блоки.
 //
+// БЮДЖЕТ НА МЕСЯЦ (владелец 2026-09-24: «когда создам категорию, выставить
+// бюджет, и она пришлёт уведомление, что перевалил лимит»). Только у расхода.
+// Пусто — бюджета нет. В строке справочника — «€180 из €250» за этот месяц,
+// жёлтым от 80%, красным при превышении; уведомление владельцу — на 80% и на
+// 100% (`budget-notify.ts`).
+//
 // УДАЛИТЬ МОЖНО ТОЛЬКО НЕИСПОЛЬЗОВАННУЮ. По категории с операциями сервер
 // удаление отбивает (история не теряет подписей), и экран предлагает то, что
 // можно, — скрыть её из выбора.
@@ -127,6 +145,18 @@ export default function CategoriesScreen() {
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [icon, setIcon] = useState<string | null>(null);
   const [asks, setAsks] = useState<Asks>(NO_ASKS);
+  const [budgetText, setBudgetText] = useState("");
+  const currency = useCurrency();
+  const fmt = (n: number) => money(n, currency);
+  const spend = useCategoryMonthSpend(type === "expense");
+
+  // ЗАКРЫТЬ БЕЗ СОХРАНЕНИЯ — ТОЛЬКО ПОСЛЕ ВОПРОСА (аудит 2026-09-24: свайп
+  // по граберу молча терял набранное имя и тумблеры). Снимок — то, с чем
+  // лист открылся; вопрос задаётся, когда лист уже уехал (окно поверх
+  // уезжающего листа iOS не покажет) — как у формы операции.
+  const opened = useRef("");
+  const [askingClose, setAskingClose] = useState(false);
+  const askOnExit = useRef(false);
 
   const filtered = useMemo(
     // Скрытые в конец, дальше — ПОРЯДОК ТЕНАНТА (перетаскивание), дальше имя.
@@ -145,6 +175,12 @@ export default function CategoriesScreen() {
 
   // У долга «кто» уже есть своим блоком (клиент или имя) — прикреплять нечего.
   const attachable = (editing?.type ?? type) !== "debt";
+  const budgetable = (editing?.type ?? type) === "expense";
+  const budget = budgetable ? parseBudgetInput(budgetText) : null;
+  const snapshot = JSON.stringify([name.trim(), color, icon, asks, budgetText.trim()]);
+  const saving = insert.isPending || update.isPending;
+  const dirty = open && snapshot !== opened.current;
+  const editingSpent = editing ? spend?.get(editing.id) : undefined;
 
   const openCreate = () => {
     setEditing(null);
@@ -152,6 +188,8 @@ export default function CategoriesScreen() {
     setColor(DEFAULT_COLOR);
     setIcon(null);
     setAsks(NO_ASKS);
+    setBudgetText("");
+    opened.current = JSON.stringify(["", DEFAULT_COLOR, null, NO_ASKS, ""]);
     setOpen(true);
   };
   // Скрывает только левая кромка — тапом это не делается (см. закон в шапке).
@@ -177,18 +215,59 @@ export default function CategoriesScreen() {
     setName(c.name);
     setColor(c.color ?? DEFAULT_COLOR);
     setIcon(c.icon ?? null);
-    setAsks({ employee: c.ask_employee, client: c.ask_client, receipt: c.require_receipt });
+    const openedAsks = { employee: c.ask_employee, client: c.ask_client, receipt: c.require_receipt };
+    setAsks(openedAsks);
+    const openedBudget = budgetInputText(c.monthly_budget);
+    setBudgetText(openedBudget);
+    opened.current = JSON.stringify([
+      c.name.trim(),
+      c.color ?? DEFAULT_COLOR,
+      c.icon ?? null,
+      openedAsks,
+      openedBudget,
+    ]);
     setOpen(true);
   };
 
+  const guardedClose = () => {
+    if (saving) return;
+    if (!dirty) {
+      setOpen(false);
+      return;
+    }
+    askOnExit.current = true;
+    setAskingClose(true);
+  };
+
+  const askAfterExit = () => {
+    if (!askOnExit.current) return;
+    askOnExit.current = false;
+    void confirmAction("Закрыть без сохранения?", {
+      message: "Набранное в категории не сохранится.",
+      confirmLabel: "Закрыть",
+      destructive: true,
+    }).then((ok) => {
+      if (ok) {
+        setOpen(false);
+        setEditing(null);
+      }
+      // Лист возвращается (или остаётся закрытым), когда уехал вопрос.
+      setTimeout(() => setAskingClose(false), SHEET_EXIT_MS + 350);
+    });
+  };
+
   const submit = async () => {
-    if (!name.trim()) return;
+    if (!name.trim() || budget === undefined || saving) return;
     // У долга своих вопросов нет — «кто» у него отдельным блоком.
     const asksPayload = {
       ask_employee: attachable && asks.employee,
       ask_client: attachable && asks.client,
       require_receipt: attachable && asks.receipt,
+      // Бюджет бывает только у расхода; у дохода и долга поля нет.
+      ...(budgetable ? { monthly_budget: budget } : {}),
     };
+    const budgetAdded =
+      budgetable && budget != null && budget !== (editing?.monthly_budget ?? null);
     try {
       if (editing) {
         await update.mutateAsync({
@@ -207,6 +286,9 @@ export default function CategoriesScreen() {
       setName("");
       setOpen(false);
       setEditing(null);
+      // Разрешение на уведомления спрашиваем, когда бюджет только что
+      // поставлен: тогда вопрос iOS понятен без объяснений.
+      if (budgetAdded) void askBudgetNotificationPermission();
     } catch (e) {
       // Sheet stays open — nothing entered is lost.
       notify("Ошибка", (e as Error).message);
@@ -319,6 +401,14 @@ export default function CategoriesScreen() {
                 >
                   <CategoryRow
                     item={item}
+                    budget={
+                      hasBudget(item) && spend
+                        ? {
+                            text: budgetShort(spend.get(item.id) ?? 0, item.monthly_budget, fmt),
+                            level: budgetLevel(spend.get(item.id) ?? 0, item.monthly_budget),
+                          }
+                        : null
+                    }
                     handle={handle}
                     onEdit={() => openEdit(item)}
                     onToggleHidden={() => toggleHidden(item)}
@@ -340,8 +430,11 @@ export default function CategoriesScreen() {
       ) : null}
 
       <BottomSheet
-        visible={open}
-        onClose={() => setOpen(false)}
+        visible={open && !askingClose}
+        onClose={guardedClose}
+        onExited={askAfterExit}
+        padded={false}
+        scroll
         title={
           editing
             ? "Категория"
@@ -354,53 +447,82 @@ export default function CategoriesScreen() {
           <View style={{ paddingHorizontal: GUTTER }}>
             <Button
               label={editing ? "Сохранить" : "Создать категорию"}
-              disabled={!name.trim()}
+              disabled={!name.trim() || budget === undefined || saving}
               onPress={() => void submit()}
             />
           </View>
         }
       >
-        <NameColorField
-          name={name}
-          onNameChange={setName}
-          color={color}
-          onColorChange={setColor}
-          icon={icon}
-          onIconChange={setIcon}
-          autoFocus={!editing}
-        />
-        {/* В ОПЕРАЦИИ СПРАШИВАТЬ — тумблеры с последствием словами: человек
-            решает по тому, что появится в форме, а не по термину. Вёрстка —
-            как у поля «Название» над ними: подпись поля и строки без своей
-            карточки, иначе лист отступал бы от поля. */}
-        {attachable ? (
-          <View style={{ marginTop: 16, marginBottom: 8 }}>
-            <FieldLabel text="В операции спрашивать" />
-            <SwitchRow
-              inset={false}
-              label="Сотрудника"
-              hint="Кому выплата или кто принёс: зарплата, аванс, подотчёт"
-              value={asks.employee}
-              onChange={(v) => setAsks((a) => ({ ...a, employee: v }))}
+        {/* ЛИСТ СОБРАН ИЗ БЛОКОВ, КАК ДОЛГ, ОПЕРАЦИЯ И СЧЁТ (владелец
+            2026-09-24: «переделай в категориях так, чтобы соблюдать нашу
+            архитектуру»). Каждый вопрос — свой блок со своей шапкой и
+            границами, а не поле формы с ярлыком: «Категория» — имя, цвет и
+            значок одной строкой (как у календаря и счёта), «Бюджет в месяц» —
+            тот же блок суммы, что в операции, «В операции спрашивать» —
+            тумблеры в карточке. */}
+        <View style={{ backgroundColor: th.canvas, paddingBottom: 16 }}>
+          <SectionCard title="Категория" dense>
+            <NameColorField
+              bare
+              label={null}
+              placeholder="Название категории"
+              name={name}
+              onNameChange={setName}
+              color={color}
+              onColorChange={setColor}
+              icon={icon}
+              onIconChange={setIcon}
+              autoFocus={!editing}
             />
-            <Divider />
-            <SwitchRow
-              inset={false}
-              label="Клиента"
-              hint="От кого или для кого: продажа, чаевые, поставщик"
-              value={asks.client}
-              onChange={(v) => setAsks((a) => ({ ...a, client: v }))}
+          </SectionCard>
+
+          {/* БЮДЖЕТ — ТОЛЬКО У РАСХОДА. Ноль или пусто — бюджета нет. */}
+          {budgetable ? (
+            <AmountBlock
+              title="Бюджет в месяц"
+              value={budgetText}
+              onChange={setBudgetText}
+              color={th.danger}
+              accessibilityLabel="Бюджет в месяц"
+              hint={
+                budget === undefined
+                  ? { text: "Сумма, не больше двух знаков после запятой", error: true }
+                  : {
+                      text: editingSpent
+                        ? `В этом месяце — ${fmt(editingSpent)} · сообщим на 80% и при превышении`
+                        : "Сообщим на 80% и при превышении",
+                    }
+              }
             />
-            <Divider />
-            <SwitchRow
-              inset={false}
-              label="Фото чека"
-              hint="Без фото чека операцию не сохранить"
-              value={asks.receipt}
-              onChange={(v) => setAsks((a) => ({ ...a, receipt: v }))}
-            />
-          </View>
-        ) : null}
+          ) : null}
+
+          {/* В ОПЕРАЦИИ СПРАШИВАТЬ — тумблеры с последствием словами: человек
+              решает по тому, что появится в форме, а не по термину. */}
+          {attachable ? (
+            <SectionCard title="В операции спрашивать" dense>
+              <SwitchRow
+                label="Сотрудника"
+                hint="Кому выплата или кто принёс: зарплата, аванс, подотчёт"
+                value={asks.employee}
+                onChange={(v) => setAsks((a) => ({ ...a, employee: v }))}
+              />
+              <Divider inset={16} />
+              <SwitchRow
+                label="Клиента"
+                hint="От кого или для кого: продажа, чаевые, поставщик"
+                value={asks.client}
+                onChange={(v) => setAsks((a) => ({ ...a, client: v }))}
+              />
+              <Divider inset={16} />
+              <SwitchRow
+                label="Фото чека"
+                hint="Без фото чека операцию не сохранить"
+                value={asks.receipt}
+                onChange={(v) => setAsks((a) => ({ ...a, receipt: v }))}
+              />
+            </SectionCard>
+          ) : null}
+        </View>
       </BottomSheet>
     </Screen>
   );
@@ -414,12 +536,15 @@ export default function CategoriesScreen() {
  *  действия словами — подложка свайпа от него спрятана (см. SwipeRow). */
 function CategoryRow({
   item,
+  budget,
   handle,
   onEdit,
   onToggleHidden,
   onDelete,
 }: {
   item: FinanceCategory;
+  /** Бюджет месяца: «€180 из €250» и порог (80 — жёлтым, 100 — красным). */
+  budget: { text: string; level: 0 | 80 | 100 } | null;
   /** Ручка перетаскивания — СНАРУЖИ нажимаемой области строки. */
   handle: ReactNode;
   onEdit: () => void;
@@ -437,7 +562,9 @@ function CategoryRow({
   };
   const label = item.hidden
     ? `Категория ${item.name}, скрыта`
-    : `Категория ${item.name}`;
+    : budget
+      ? `Категория ${item.name}, бюджет: ${budget.text}`
+      : `Категория ${item.name}`;
   const box = (pressed: boolean) =>
     ({
       height: 52,
@@ -464,6 +591,24 @@ function CategoryRow({
       >
         {item.name}
       </Text>
+      {budget && !item.hidden ? (
+        <Text
+          maxFontSizeMultiplier={1.2}
+          style={{
+            fontSize: 13,
+            fontVariant: ["tabular-nums"],
+            fontWeight: budget.level ? "600" : "400",
+            color:
+              budget.level === 100
+                ? th.danger
+                : budget.level === 80
+                  ? th.warning
+                  : th.faint,
+          }}
+        >
+          {budget.text}
+        </Text>
+      ) : null}
       {item.hidden ? (
         <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 12, color: th.faint }}>
           скрыта

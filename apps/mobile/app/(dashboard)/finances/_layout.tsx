@@ -5,6 +5,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useMyAccess } from "@/features/access/queries";
 import { LockedFinances } from "@/features/finances/LockedFinances";
 import { financesGate } from "@/features/finances/finances-gate";
+import { useBudgetWatch } from "@/features/finances/use-category-budget";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { useCurrentRole } from "@/features/settings/tenant";
 
@@ -66,6 +67,9 @@ export default function FinancesLayout() {
   const accessQuery = useMyAccess();
   const pathname = usePathname();
   const gate = financesGate(role, accessQuery.data);
+  // Бюджеты категорий: пока раздел открыт, владелец узнаёт о перевале лимита
+  // и по расходам с чужих телефонов (`use-category-budget.ts`).
+  useBudgetWatch();
 
   if (gate === "locked") return <LockedFinances />;
 

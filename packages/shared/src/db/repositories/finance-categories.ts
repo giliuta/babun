@@ -35,6 +35,10 @@ export interface FinanceCategory {
    *  «Возврат», «Излишек», «Недостача»). Человек её не выбирает и не видит
    *  в справочнике. */
   is_system: boolean;
+  /** Бюджет на месяц (владелец 2026-09-24: «выставить бюджет по категории,
+   *  и она пришлёт уведомление, что перевалил лимит»). `null` — бюджета нет.
+   *  Потраченное считает приложение по журналу месяца. */
+  monthly_budget: number | null;
   /** Место в списке ЭТОГО тенанта (finance_category_order). Строки нет — ноль,
    *  дальше разводит имя: справочник, который не перетаскивали, выглядит как
    *  раньше. Позиция живёт отдельной таблицей, потому что сами категории
@@ -64,6 +68,7 @@ function rowToCategory(
     ask_client: Boolean(r.ask_client),
     require_receipt: Boolean(r.require_receipt),
     is_system: Boolean(r.is_system),
+    monthly_budget: r.monthly_budget == null ? null : Number(r.monthly_budget),
   };
 }
 
@@ -135,6 +140,7 @@ export interface NewFinanceCategory {
   ask_employee?: boolean;
   ask_client?: boolean;
   require_receipt?: boolean;
+  monthly_budget?: number | null;
 }
 
 /** Inserts a tenant-owned category. RLS (finance_categories_write_own)
@@ -158,6 +164,7 @@ export async function insertFinanceCategory(
       ask_employee: draft.ask_employee ?? false,
       ask_client: draft.ask_client ?? false,
       require_receipt: draft.require_receipt ?? false,
+      monthly_budget: draft.monthly_budget ?? null,
     })
     .select("*")
     .single();
@@ -174,6 +181,7 @@ export interface FinanceCategoryPatch {
   ask_employee?: boolean;
   ask_client?: boolean;
   require_receipt?: boolean;
+  monthly_budget?: number | null;
 }
 
 /** Updates a tenant-owned category. RLS blocks edits to global defaults
@@ -190,6 +198,7 @@ export async function updateFinanceCategory(
   if (patch.ask_employee !== undefined) update.ask_employee = patch.ask_employee;
   if (patch.ask_client !== undefined) update.ask_client = patch.ask_client;
   if (patch.require_receipt !== undefined) update.require_receipt = patch.require_receipt;
+  if (patch.monthly_budget !== undefined) update.monthly_budget = patch.monthly_budget;
   const { data, error } = await supabase
     .from("finance_categories")
     .update(update)
