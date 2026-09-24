@@ -7,6 +7,9 @@ import {
   CalendarRange,
   FileText,
   MapPin,
+  Check,
+  Clock,
+  Lock,
   StickyNote,
   Tags,
   UserRound,
@@ -17,8 +20,6 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { Chip } from "@/components/ui/Chip";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { RecordMark, recordMarkText } from "@/components/ui/RecordMark";
 import { RowCaption } from "@/components/ui/card-rows";
@@ -71,7 +72,6 @@ import { usePersonalEventTypes } from "@/features/settings/local-settings";
 // ТИПЫ СОБЫТИЙ. Дверь на свою страницу, как у услуг и меток.
 
 type ColorTarget = ColorSituation | "fallback";
-type BlockTab = "record" | "event";
 
 const RULE_ICON: Record<AutoColorRule, LucideIcon> = {
   team: CalendarRange,
@@ -79,15 +79,13 @@ const RULE_ICON: Record<AutoColorRule, LucideIcon> = {
   service: Briefcase,
 };
 
-/** Во что красится обычная запись — словами подписи образца. */
-const RULE_SUB: Record<AutoColorRule, string> = {
-  team: "цвет команды",
-  label: "цвет метки",
-  service: "цвет услуги",
-};
 
 /** Значок блока формы — тот же, что у сущности в продукте (BLOCKS.md §0.2). */
 const BLOCK_ICON: Record<string, LucideIcon> = {
+  team: CalendarRange,
+  type: Tags,
+  when: Clock,
+  services: Briefcase,
   label: Bookmark,
   client: UserRound,
   object: MapPin,
@@ -111,7 +109,6 @@ export function DesignScreen() {
   const [ruleOpen, setRuleOpen] = useState(false);
 
   // ── блоки ──
-  const [blockTab, setBlockTab] = useState<BlockTab>("record");
   const recordBlocks = useBookingBlocks();
   const toggleRecordBlock = useToggleBookingBlock();
   const eventBlocks = useEventBlocks();
@@ -145,117 +142,112 @@ export function DesignScreen() {
   const situations = COLOR_SITUATIONS.filter(
     (s) => s.id !== "noObject" || objectsOn,
   );
-  const tiles: { id: ColorTarget; title: string; hue: string | null }[] = [
-    ...situations.map((s) => ({
-      id: s.id as ColorTarget,
-      title: s.label,
-      hue: palette[s.id] ?? null,
-    })),
-    { id: "fallback", title: "Без цвета", hue: fallback },
-  ];
-
   const openColor = (target: ColorTarget) => {
     haptics.tap();
     setEditingColor(target);
   };
 
-  // Блоки выбранной формы: обязательные уходят в строку «Всегда».
-  const blockDefs = blockTab === "record" ? BOOKING_BLOCKS : EVENT_BLOCKS;
-  const optional = blockDefs.filter((b) => !b.pinned);
-  const always = blockDefs.filter((b) => b.pinned).map((b) => b.label);
-  const isOn = (id: string) =>
-    blockTab === "record"
-      ? recordBlocks.includes(id as BookingBlockId)
-      : eventBlocks.includes(id as EventBlockId);
-  const toggle = (id: string) =>
-    blockTab === "record"
-      ? toggleRecordBlock.mutate(id as BookingBlockId)
-      : toggleEventBlock.mutate(id as EventBlockId);
+  const recordOn = (id: string) => recordBlocks.includes(id as BookingBlockId);
+  const eventOn = (id: string) => eventBlocks.includes(id as EventBlockId);
 
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title="Дизайн" />
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        {/* ── ЦВЕТ ── */}
-        <SectionCard title="Цвет" padded>
-          <ColorTile
-            title="Обычная запись"
-            sub={RULE_SUB[rule]}
-            hue={ordinary}
-            height={56}
-            onPress={() => {
-              haptics.tap();
-              setRuleOpen(true);
-            }}
-          />
-          <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
-            {tiles.map((tile) => (
+        {/* ── ЦВЕТ ЗАПИСИ — В ПОРЯДКЕ ПРАВИЛА (владелец 24.09: «как правильно
+            работают цвета — надо правильно донести до пользователя»). Карточка
+            читается сверху вниз ровно так, как календарь выбирает цвет:
+            1) чего не хватает — этим цветом, пока не заполнят;
+            2) всё заполнено — цветом команды / метки / услуги;
+            3) у источника цвета нет — запасным.
+            Над всем — цвет, выбранный в самой записи (подпись под карточкой). */}
+        <SectionCard title="Цвет записи" padded>
+          {situations.length > 0 ? (
+            <>
+              <StepLabel text="Пока в записи не хватает" first />
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                {situations.map((s) => {
+                  const hue = palette[s.id] ?? null;
+                  return (
+                    <ColorTile
+                      key={s.id}
+                      // Ровно две строки у каждого («Нет / клиента»).
+                      title={s.label.replace(" ", "\n")}
+                      // Цвет виден самим образцом; словами — только отказ.
+                      sub={hue ? undefined : "Не красить"}
+                      a11yColor={hue ? colorName(hue) : "не красить"}
+                      hue={hue}
+                      height={64}
+                      onPress={() => openColor(s.id)}
+                    />
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
+          <StepLabel text="Когда всё заполнено" first={situations.length === 0} />
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            <View style={{ flex: 2, minWidth: 0 }}>
               <ColorTile
-                key={tile.id}
-                // РОВНО ДВЕ СТРОКИ У КАЖДОГО («Нет / клиента», «Без / цвета»):
-                // иначе «Нет услуг» вставал в одну и сетка шла вразнобой.
-                title={tile.title.replace(" ", "\n")}
-                // Цвет виден самим образцом; имя цвета — в палитре. Словами
-                // говорит только отказ — «Не красить».
-                sub={tile.hue ? undefined : "Не красить"}
-                a11yColor={tile.hue ? colorName(tile.hue) : "не красить"}
-                hue={tile.hue}
+                title={AUTO_COLOR_RULES.find((r) => r.id === rule)?.label ?? "Цвет команды"}
+                hue={ordinary}
                 height={64}
-                onPress={() => openColor(tile.id)}
+                onPress={() => {
+                  haptics.tap();
+                  setRuleOpen(true);
+                }}
               />
-            ))}
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <ColorTile
+                title={"Если нет\nцвета"}
+                a11yColor={colorName(fallback)}
+                hue={fallback}
+                height={64}
+                onPress={() => openColor("fallback")}
+              />
+            </View>
           </View>
         </SectionCard>
+        <RowCaption text="Цвет, выбранный в самой записи, главнее всего." />
 
-        {/* ── БЛОКИ ── */}
-        <SectionCard title="Блоки" padded>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {optional.map((block) => {
-              const Icon = BLOCK_ICON[block.id] ?? Bookmark;
-              // Объекта события нет, пока у компании выключены объекты.
-              const locked = blockTab === "event" && block.id === "object" && !objectsOn;
-              const on = !locked && isOn(block.id);
-              return (
-                <Chip
+        {/* ── БЛОКИ — ДВЕ КОЛОНКИ (владелец 24.09: «клиент слева, событие
+            справа, посередине разделитель, вниз всё показано; тапом включаю и
+            выключаю»). Обязательные стоят в списке с замком — видно весь
+            состав формы, но выключить их нельзя. */}
+        <SectionCard title="Блоки">
+          <View style={{ flexDirection: "row" }}>
+            <View style={{ flex: 1 }}>
+              <ColumnTitle text="Клиент" />
+              {BOOKING_BLOCKS.map((block) => (
+                <BlockCell
                   key={block.id}
-                  variant="tint"
-                  checkbox
-                  selected={on}
-                  disabled={locked}
                   label={block.label}
-                  icon={
-                    <Icon
-                      size={16}
-                      strokeWidth={2.2}
-                      color={on ? t.accent : t.sub}
-                    />
-                  }
-                  onPress={() => toggle(block.id)}
+                  icon={BLOCK_ICON[block.id] ?? Bookmark}
+                  on={block.pinned ? true : recordOn(block.id)}
+                  locked={!!block.pinned}
+                  onToggle={() => toggleRecordBlock.mutate(block.id)}
                 />
-              );
-            })}
-          </View>
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{ marginTop: 12, fontSize: 13, color: t.sub }}
-          >
-            Всегда: {always.join(", ").toLowerCase()}
-          </Text>
-          {/* «КЛИЕНТ | СОБЫТИЕ» — СЛОВАМИ И МЕСТОМ ДВУХ ДОРОГ СОЗДАНИЯ
-              (владелец 24.09: «не запись, а клиент и событие, как у нас, и
-              вниз»): в шторке свободного времени те же два слова стоят внизу. */}
-          <View style={{ marginTop: 14 }}>
-            <SegmentedControl
-              options={[
-                { value: "record", label: "Клиент" },
-                { value: "event", label: "Событие" },
-              ]}
-              value={blockTab}
-              onChange={(next) => {
-                haptics.tap();
-                setBlockTab(next);
-              }}
-            />
+              ))}
+            </View>
+            <View style={{ width: 1, backgroundColor: t.separator }} />
+            <View style={{ flex: 1 }}>
+              <ColumnTitle text="Событие" />
+              {EVENT_BLOCKS.map((block) => {
+                // Объекта события нет, пока у компании выключены объекты.
+                const noObjects = block.id === "object" && !objectsOn;
+                return (
+                  <BlockCell
+                    key={block.id}
+                    label={block.label}
+                    icon={BLOCK_ICON[block.id] ?? Bookmark}
+                    on={block.pinned ? true : !noObjects && eventOn(block.id)}
+                    locked={!!block.pinned || noObjects}
+                    onToggle={() => toggleEventBlock.mutate(block.id)}
+                  />
+                );
+              })}
+            </View>
           </View>
         </SectionCard>
         <RowCaption text="Выключенный блок пропадает у всей компании. Данные остаются." />
@@ -381,6 +373,93 @@ function ColorTile({
           </Text>
         ) : null}
       </RecordMark>
+    </Pressable>
+  );
+}
+
+/** Шаг правила цвета — тихая строка над образцами. */
+function StepLabel({ text, first }: { text: string; first?: boolean }) {
+  const t = useThemeColors();
+  return (
+    <Text
+      maxFontSizeMultiplier={1.3}
+      style={{ fontSize: 13, color: t.sub, marginTop: first ? 0 : 14, marginBottom: 6 }}
+    >
+      {text}
+    </Text>
+  );
+}
+
+/** Заголовок колонки блоков — «Клиент» / «Событие». */
+function ColumnTitle({ text }: { text: string }) {
+  const t = useThemeColors();
+  return (
+    <Text
+      maxFontSizeMultiplier={1.3}
+      style={{
+        paddingHorizontal: 16,
+        paddingTop: 2,
+        paddingBottom: 6,
+        fontSize: 15,
+        fontWeight: "700",
+        color: t.ink,
+      }}
+    >
+      {text}
+    </Text>
+  );
+}
+
+/** Строка колонки блоков: значок, слово, справа галка (вкл.) или ничего;
+ *  обязательный — замок, тапа нет. */
+function BlockCell({
+  label,
+  icon: Icon,
+  on,
+  locked,
+  onToggle,
+}: {
+  label: string;
+  icon: LucideIcon;
+  on: boolean;
+  locked: boolean;
+  onToggle: () => void;
+}) {
+  const t = useThemeColors();
+  const tone = locked ? t.faint : on ? t.ink : t.faint;
+  return (
+    <Pressable
+      disabled={locked}
+      onPress={() => {
+        haptics.tap();
+        onToggle();
+      }}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: on, disabled: locked }}
+      accessibilityLabel={label}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        minHeight: 44,
+        paddingLeft: 16,
+        paddingRight: 12,
+        backgroundColor: pressed ? t.pressed : "transparent",
+      })}
+    >
+      <Icon size={17} strokeWidth={2.1} color={on && !locked ? t.accent : t.faint} />
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.3}
+        style={{ flex: 1, fontSize: 15, fontWeight: on ? "600" : "500", color: tone }}
+      >
+        {label}
+      </Text>
+      {locked ? (
+        <Lock size={14} strokeWidth={2.2} color={t.faint} />
+      ) : on ? (
+        <Check size={18} strokeWidth={2.6} color={t.accent} />
+      ) : null}
     </Pressable>
   );
 }
