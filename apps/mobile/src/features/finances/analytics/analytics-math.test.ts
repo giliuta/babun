@@ -3,6 +3,9 @@ import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import {
+  changePct,
+  previousPeriod,
+  serviceProfit,
   accountBreakdown,
   cancelledCount,
   weekdayLoad,
@@ -272,5 +275,62 @@ describe("таблица по месяцам через новый год", () =
     assert.equal(t.rows.length, 13);
     assert.equal(t.total.income, 150);
     assert.equal(t.total.key, "2025–2026");
+  });
+});
+
+describe("сравнение с прошлым периодом", () => {
+  test("идущий месяц — те же дни прошлого", () => {
+    assert.deepEqual(previousPeriod("2026-09-01", "2026-09-30", "2026-09-24"), {
+      from: "2026-08-01",
+      to: "2026-08-24",
+      partial: true,
+    });
+  });
+  test("законченный месяц — весь прошлый; 31-е прижимается к концу короткого", () => {
+    assert.deepEqual(previousPeriod("2026-08-01", "2026-08-31", "2026-09-24"), {
+      from: "2026-07-01",
+      to: "2026-07-31",
+      partial: false,
+    });
+    assert.deepEqual(previousPeriod("2026-03-01", "2026-03-31", "2026-04-10"), {
+      from: "2026-02-01",
+      to: "2026-02-28",
+      partial: false,
+    });
+  });
+  test("квартал и год — прошлые такие же; через новый год", () => {
+    assert.deepEqual(previousPeriod("2026-01-01", "2026-03-31", "2026-05-01").from, "2025-10-01");
+    assert.deepEqual(previousPeriod("2025-01-01", "2025-12-31", "2026-05-01"), {
+      from: "2024-01-01",
+      to: "2024-12-31",
+      partial: false,
+    });
+  });
+  test("неделя и свой период — отрезок той же длины перед ним", () => {
+    assert.deepEqual(previousPeriod("2026-09-21", "2026-09-27", "2026-09-30"), {
+      from: "2026-09-14",
+      to: "2026-09-20",
+      partial: false,
+    });
+  });
+  test("процент изменения; с нуля сравнивать не с чем", () => {
+    assert.equal(changePct(120, 100), 20);
+    assert.equal(changePct(50, 100), -50);
+    assert.equal(changePct(10, 0), null);
+    assert.equal(changePct(-20, -10), -100);
+  });
+});
+
+describe("прибыль по услугам", () => {
+  test("работы минус материалы по количеству", () => {
+    const records = [appt({ id: "1", services: [line("c", 3, 50)] as never })];
+    const rows = serviceProfit(
+      [{ id: "c", name: "Чистка", quantity: 3, records: 1, amount: 150 }],
+      records,
+      [{ id: "c", name: "Чистка", materials: [{ name: "Химия", cost: 10 }] } as never],
+    );
+    assert.equal(rows[0].amount, 150);
+    assert.ok(rows[0].materials >= 0);
+    assert.equal(rows[0].profit, 150 - rows[0].materials);
   });
 });

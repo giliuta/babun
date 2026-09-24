@@ -1,5 +1,5 @@
-import { useMemo, type ReactNode } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { useMemo, type ReactElement, type ReactNode } from "react";
+import { ScrollView, Text, View, type RefreshControlProps } from "react-native";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
@@ -38,6 +38,7 @@ export function ProfitBreakdown({
   title = "Прибыль",
   people,
   footer,
+  refreshControl,
 }: {
   transactions: FinanceTransaction[];
   categories: FinanceCategory[];
@@ -53,6 +54,8 @@ export function ProfitBreakdown({
   /** Секции ниже разбора — у «Аналитики» («По счетам», «Работы и оплаты»):
    *  тот же лист, та же прокрутка, те же строки. */
   footer?: ReactNode;
+  /** Потянуть вниз — перечитать (у «Аналитики»). */
+  refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   const th = useThemeColors();
 
@@ -105,7 +108,7 @@ export function ProfitBreakdown({
 
   if (empty) {
     return (
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView style={{ flex: 1 }} refreshControl={refreshControl}>
         <PanelHeader title={title} />
         <EmptyState
           title={
@@ -121,7 +124,11 @@ export function ProfitBreakdown({
   }
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 96 }}>
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ paddingBottom: 96 }}
+      refreshControl={refreshControl}
+    >
       {/* Эйбрау вместо героя-карточки. Сама цифра прибыли стоит строкой выше —
           в переключателе, которым эту панель и открыли, и тем же кобальтом.
           Карточка «Прибыль за период / €900» повторяла её через 8pt: одни и те
@@ -184,6 +191,8 @@ export function BreakdownBarRow({
   value,
   color,
   share,
+  note,
+  delta,
 }: {
   name: string;
   /** «×N» после имени; ноль — без счётчика. */
@@ -193,6 +202,10 @@ export function BreakdownBarRow({
   color: string;
   /** Доля 0…1; вне отрезка прижимается. */
   share: number;
+  /** Тихая подпись после имени — «было €593», «материалы €40». */
+  note?: string;
+  /** Изменение перед суммой — «↑ 23%» цветом смысла (рост или падение). */
+  delta?: { text: string; color: string };
 }) {
   const th = useThemeColors();
   const pct = Math.min(100, Math.max(0, share * 100));
@@ -211,8 +224,25 @@ export function BreakdownBarRow({
             ×{count}
           </Text>
         ) : null}
+        {note ? (
+          <Text
+            className="ml-1.5 shrink text-xs"
+            numberOfLines={1}
+            style={{ color: th.faint, fontVariant: ["tabular-nums"] }}
+          >
+            {note}
+          </Text>
+        ) : null}
+        {delta ? (
+          <Text
+            className="ml-auto pl-2.5 text-[13px] font-semibold"
+            style={{ fontVariant: ["tabular-nums"], color: delta.color }}
+          >
+            {delta.text}
+          </Text>
+        ) : null}
         <Text
-          className="ml-auto pl-2.5 text-[15px] font-semibold"
+          className={`${delta ? "ml-2.5" : "ml-auto pl-2.5"} text-[15px] font-semibold`}
           style={{ fontVariant: ["tabular-nums"], color }}
         >
           {value}

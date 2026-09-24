@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { RefreshControl, ScrollView, Text, View } from "react-native";
 import {
   formatEURExact as formatEUR,
   moneySign,
@@ -36,11 +36,14 @@ import {
   BreakdownSectionHeader,
   ProfitBreakdown,
 } from "../ProfitBreakdown";
-import { makePeriod, type Period } from "../period";
+import { dmyShort, makePeriod, type Period } from "../period";
 import { useFinanceCategories, useTransactions } from "../queries";
 import {
   accountBreakdown,
   cancelledCount,
+  changePct,
+  previousPeriod,
+  serviceProfit,
   clientBreakdown,
   hoursLabel,
   ledgerInScope,
@@ -54,7 +57,7 @@ import {
   workTotals,
   type Scope,
 } from "./analytics-math";
-import { MonthTable } from "./MonthTable";
+import { MonthTable, monthLabel } from "./MonthTable";
 
 // «АНАЛИТИКА» — ЗНАЧОК СПРАВА ВВЕРХУ «ФИНАНСОВ» И «КЛИЕНТОВ» (владелец
 // 2026-09-24, по образцу старого приложения: «градация по количеству
@@ -163,7 +166,9 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   const yearFrom = Number(period.from.slice(0, 4));
   const yearTo = Number(period.to.slice(0, 4));
   const yearEnd = `${yearTo}-12-31`;
-  const ledgerFrom = [period.from, `${yearFrom}-01-01`].sort()[0];
+  // Прошлый период — для списка «К прошлому периоду» (`previousPeriod`).
+  const prev = previousPeriod(period.from, period.to, today);
+  const ledgerFrom = [period.from, prev.from, `${yearFrom}-01-01`].sort()[0];
   const ledgerTo = [period.to, yearEnd < today ? yearEnd : today].sort()[1];
   const ledger = useTransactions(ledgerFrom, ledgerTo, { enabled: showMoney });
   const txs = useMemo(() => ledger.data ?? [], [ledger.data]);
@@ -184,6 +189,25 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
     [appointments, financeServices, scope],
   );
   const serviceRows = useMemo(() => serviceBreakdown(records, catalog), [records, catalog]);
+  const serviceProfitRows = useMemo(
+    () => serviceProfit(serviceRows, records, financeServices),
+    [serviceRows, records, financeServices],
+  );
+  const prevScope: Scope = useMemo(
+    () => ({ ...scope, from: prev.from, to: prev.to }),
+    [scope, prev.from, prev.to],
+  );
+  const workPrev = useMemo(
+    () => workTotals(performedRecords(appointments, prevScope)),
+    [appointments, prevScope],
+  );
+  const moneyPrev = useMemo(
+    () => moneyTotals(txs, appointments, financeServices, prevScope),
+    [txs, appointments, financeServices, prevScope],
+  );
+  // Текущий период до сегодня отдельно не режем: будущих денег в нём нет, а
+  // будущие записи не «сделаны» (`isPerformed`) — сравниваются равные куски.
+  const [refreshing, setRefreshing] = useState(false);
   const clientRows = useMemo(() => clientBreakdown(records), [records]);
   // КОМАНДЫ СРАВНИВАЮТСЯ МЕЖДУ СОБОЙ — «по всем мастерам»: панель берёт весь
   // период компании, а не только выбранный чип, иначе в ней была бы одна строка.
@@ -219,6 +243,17 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
     () => appointments.filter((a) => teamId === null || a.team_id === teamId),
     [appointments, teamId],
   );
+
+  // ПОТЯНУТЬ ВНИЗ — ПЕРЕЧИТАТЬ ВСЁ СРАЗУ: деньги, записи, счета. Цифры
+  // пересчитываются в тот же кадр, как приехал ответ.
+  const refresh = () => {
+    setRefreshing(true);
+    void Promise.allSettled([
+      ledger.refetch(),
+      apptsQuery.refetch(),
+    ]).finally(() => setRefreshing(false));
+  };
+  const refreshControl = <RefreshControl refreshing={refreshing} onRefresh={refresh} />;
 
   const toggle = (next: Panel) => setPanel((cur) => (cur === next ? "services" : next));
   const quantity = serviceRows.reduce((s, r) => s + r.quantity, 0);
@@ -277,6 +312,57 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   const listEnd = { paddingBottom: 96 };
   const empty = <EmptyState title="За период работ нет" />;
 
+  // СПИСОК «К ПРОШЛОМУ ПЕРИОДУ». Цвет изменения — смысл, а не знак: рост
+  // расхода красный, падение — зелёное.
+  const deltaOf = (now: number, before: number, goodUp: boolean) => {
+    const pct = changePct(now, before);
+    if (pct === null || pct === 0) return null;
+    const up = pct > 0;
+    return {
+      text: `${up ? "↑" : "↓"} ${Math.abs(pct)}%`,
+      color: up === goodUp ? t.success : t.danger,
+    };
+  };
+  const cmp = (
+    key: string,
+    name: string,
+    now: number,
+    before: number,
+    fmt: (v: number) => string,
+    color: string,
+    goodUp = true,
+  ) => ({
+    key,
+    name,
+    now: fmt(now),
+    before: fmt(before),
+    color,
+    delta: deltaOf(now, before, goodUp),
+    share: Math.max(now, before) > 0 ? Math.max(0, now) / Math.max(now, before) : 0,
+  });
+  const compareRows = [
+    ...(showMoney && !moneyPending
+      ? [
+          cmp("income", "Доход", money.income, moneyPrev.income, formatEUR, t.success),
+          cmp("expense", "Расход", money.expense, moneyPrev.expense, formatEUR, t.danger, false),
+          cmp("profit", "Прибыль", money.profit, moneyPrev.profit, formatEUR, t.brandAccent),
+          cmp("worked", "Работ на", work.worked, workPrev.worked, formatEUR, t.accent),
+          cmp("check", "Средний чек", work.averageCheck, workPrev.averageCheck, formatEUR, t.accent),
+        ]
+      : []),
+    cmp("records", "Записи", work.records, workPrev.records, (v) => String(v), t.accent),
+    cmp("time", "Время", work.minutes, workPrev.minutes, hoursLabel, t.accent),
+  ];
+  // Месяцы новые сверху; изменение — к предыдущему месяцу таблицы.
+  const monthTrend = months.rows
+    .map((m, i) => ({
+      key: m.key,
+      profit: m.profit,
+      delta: i > 0 ? deltaOf(m.profit, months.rows[i - 1].profit, true) : null,
+    }))
+    .reverse();
+  const monthTop = Math.max(0, ...monthTrend.map((m) => m.profit));
+
   const panelBody = (() => {
     switch (panel) {
       case "income":
@@ -292,6 +378,7 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
             materialCost={panel === "expense" ? materials.amount : 0}
             materialAppointmentCount={materials.count}
             people={people}
+            refreshControl={refreshControl}
             footer={
               <>
                 {/* ПО СЧЕТАМ — наличные против карты: сколько денег через
@@ -347,7 +434,27 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
         );
       case "profit":
         return (
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={listEnd}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={listEnd} refreshControl={refreshControl}>
+            {/* К ПРОШЛОМУ ПЕРИОДУ — СПИСКОМ (владелец 2026-09-24: «сравнивание
+                между месяцами — очень хорошо, но списком»). Каждая строка:
+                сейчас, было и насколько изменилось; полоска — сейчас против
+                большего из двух. Расход растёт — это красное, не зелёное. */}
+            <PanelHeader
+              title={`К прошлому периоду · ${dmyShort(prev.from).slice(0, 5)}–${dmyShort(prev.to)}`}
+            />
+            {compareRows.map((c) => (
+              <BreakdownBarRow
+                key={c.key}
+                name={c.name}
+                count={0}
+                note={`было ${c.before}`}
+                value={c.now}
+                color={c.color}
+                delta={c.delta ?? undefined}
+                share={c.share}
+              />
+            ))}
+
             <PanelHeader
               title={`${yearFrom === yearTo ? yearFrom : `${yearFrom}–${yearTo}`} · по месяцам`}
             />
@@ -361,11 +468,30 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
                 setPanel("services");
               }}
             />
+
+            {/* МЕСЯЦ К МЕСЯЦУ — прибыль каждого месяца и её изменение к
+                предыдущему: рост и провалы видно глазом, без вычитания. */}
+            {showMoney && monthTrend.length > 1 ? (
+              <View className="mt-1">
+                <BreakdownSectionHeader title="Месяц к месяцу · прибыль" />
+                {monthTrend.map((m) => (
+                  <BreakdownBarRow
+                    key={m.key}
+                    name={monthLabel(m.key)}
+                    count={0}
+                    value={formatEUR(m.profit)}
+                    color={m.profit < 0 ? t.danger : t.brandAccent}
+                    delta={m.delta ?? undefined}
+                    share={monthTop > 0 ? Math.max(0, m.profit) / monthTop : 0}
+                  />
+                ))}
+              </View>
+            ) : null}
           </ScrollView>
         );
       case "services":
         return (
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={listEnd}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={listEnd} refreshControl={refreshControl}>
             <PanelHeader title={panelCount("Услуги", quantity)} />
             {serviceRows.length === 0 ? (
               empty
@@ -395,13 +521,38 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
                     }
                   />
                 ))}
+                {/* ПРИБЫЛЬ ПО УСЛУГАМ — работы минус материалы услуги: что
+                    реально выгодно, а не только что дорого стоит. */}
+                {showMoney ? (
+                  <View className="mt-1">
+                    <BreakdownSectionHeader
+                      title="Прибыль по услугам"
+                      value={formatEUR(serviceProfitRows.reduce((sum, r) => sum + r.profit, 0))}
+                      color={t.brandAccent}
+                    />
+                    {(() => {
+                      const top = Math.max(0, ...serviceProfitRows.map((r) => r.profit));
+                      return serviceProfitRows.map((r) => (
+                        <BreakdownBarRow
+                          key={r.id}
+                          name={r.name}
+                          count={0}
+                          note={r.materials > 0 ? `материалы ${formatEUR(r.materials)}` : undefined}
+                          value={formatEUR(r.profit)}
+                          color={r.profit < 0 ? t.danger : t.brandAccent}
+                          share={top > 0 ? Math.max(0, r.profit) / top : 0}
+                        />
+                      ));
+                    })()}
+                  </View>
+                ) : null}
               </>
             )}
           </ScrollView>
         );
       case "clients":
         return (
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={listEnd}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={listEnd} refreshControl={refreshControl}>
             <PanelHeader title={panelCount("Клиенты", clientRows.length)} />
             {clientRows.length === 0
               ? empty
@@ -431,7 +582,7 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
         const max = Math.max(0, ...teamRows.map(measure));
         const perHour = showMoney && work.perHour !== null ? `${formatEUR(work.perHour)} / ч` : null;
         return (
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={listEnd}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={listEnd} refreshControl={refreshControl}>
             <PanelHeader
               // Панель одна на три плитки — шапка называет, ЧТО сравнивается
               // (аудит 2026-09-24): иначе, пролистав, не понять, часы это

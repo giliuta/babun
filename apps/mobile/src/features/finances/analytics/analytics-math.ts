@@ -2,6 +2,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { getPaidAmount } from "@babun/shared/local/appointments";
 import {
   appointmentMaterialCost,
+  appointmentMaterialCostLines,
   lineTotal,
 } from "@babun/shared/local/finance/appointment-calc";
 import {
@@ -415,4 +416,92 @@ export function cancelledCount(
   return appointments.filter(
     (a) => (!a.kind || a.kind === "work") && a.status === "cancelled" && inScope(a, s),
   ).length;
+}
+
+// ─── Сравнение с прошлым периодом ─────────────────────────────────────
+
+const ymdOf = (d: Date) =>
+  `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+const dateOf = (ymd: string) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+};
+const addDaysYmd = (ymd: string, n: number) => {
+  const d = dateOf(ymd);
+  d.setUTCDate(d.getUTCDate() + n);
+  return ymdOf(d);
+};
+const daysBetween = (from: string, to: string) =>
+  Math.round((dateOf(to).getTime() - dateOf(from).getTime()) / 86_400_000);
+const lastDayOfMonth = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+
+/**
+ * ПРОШЛЫЙ ПЕРИОД ДЛЯ СРАВНЕНИЯ — ЧЕСТНЫЙ (владелец 2026-09-24: «сравнивание
+ * между месяцами — это очень хорошо»).
+ *
+ * Период, выровненный по календарю (месяц, квартал, год), сравнивается с
+ * прошлым таким же — но ТЕМИ ЖЕ ДНЯМИ, если текущий ещё идёт: 1–24 сентября
+ * против 1–24 августа, а не против всего августа. Иначе в середине месяца
+ * любая цифра выглядела бы падением. Прочие периоды — отрезок той же длины
+ * вплотную перед текущим.
+ */
+export function previousPeriod(
+  from: string,
+  to: string,
+  today: string,
+): { from: string; to: string; partial: boolean } {
+  const effectiveTo = to > today && from <= today ? today : to;
+  const partial = effectiveTo !== to;
+  const elapsed = daysBetween(from, effectiveTo);
+  const [fy, fm, fd] = from.split("-").map(Number);
+  const [ty, tm, td] = to.split("-").map(Number);
+  const monthsSpan = (ty - fy) * 12 + (tm - fm) + 1;
+  const calendarAligned =
+    fd === 1 && td === lastDayOfMonth(ty, tm) && [1, 3, 12].includes(monthsSpan);
+  if (calendarAligned) {
+    const start = new Date(Date.UTC(fy, fm - 1 - monthsSpan, 1));
+    const prevFrom = ymdOf(start);
+    const prevEnd = ymdOf(new Date(Date.UTC(fy, fm - 1, 0)));
+    // Законченный период — весь прошлый целиком (в високосный год в нём на
+    // день больше); идущий — столько же дней с начала.
+    if (!partial) return { from: prevFrom, to: prevEnd, partial };
+    const prevTo = addDaysYmd(prevFrom, elapsed);
+    return { from: prevFrom, to: prevTo < prevEnd ? prevTo : prevEnd, partial };
+  }
+  const length = elapsed + 1;
+  return { from: addDaysYmd(from, -length), to: addDaysYmd(from, -1), partial };
+}
+
+/** Изменение в процентах; прошлое ноль — сравнивать не с чем (`null`). */
+export function changePct(current: number, previous: number): number | null {
+  if (Math.round(previous * 100) === 0) return null;
+  return Math.round(((current - previous) / Math.abs(previous)) * 100);
+}
+
+// ─── Прибыль по услугам ───────────────────────────────────────────────
+
+export interface ServiceProfitRow extends ServiceRow {
+  materials: number;
+  profit: number;
+}
+
+/** ПРИБЫЛЬ ПО УСЛУГАМ — работы по услуге минус её материалы (тот же расчёт
+ *  расхода по количеству, что у плитки «Расход»). Крупные по прибыли сверху. */
+export function serviceProfit(
+  rows: readonly ServiceRow[],
+  records: readonly Appointment[],
+  costServices: readonly Service[],
+): ServiceProfitRow[] {
+  const materials = new Map<string, number>();
+  for (const a of records) {
+    for (const line of appointmentMaterialCostLines(a, costServices as Service[])) {
+      materials.set(line.serviceId, (materials.get(line.serviceId) ?? 0) + cents(line.totalCost));
+    }
+  }
+  return rows
+    .map((r) => {
+      const m = materials.get(r.id) ?? 0;
+      return { ...r, materials: euros(m), profit: euros(cents(r.amount) - m) };
+    })
+    .sort((a, b) => b.profit - a.profit);
 }
