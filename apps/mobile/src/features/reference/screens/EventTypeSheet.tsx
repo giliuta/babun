@@ -6,7 +6,6 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { FieldLabel } from "@/components/ui/Field";
 import { NameColorField } from "@/components/ui/picker-fields";
-import { SwitchRow } from "@/components/ui/SwitchRow";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { eventTypeIconPresets } from "@/features/calendar/event-type-icons";
 
@@ -47,7 +46,6 @@ export function EventTypeSheet({
   const [label, setLabel] = useState("");
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [icon, setIcon] = useState<PersonalEventTypeIcon>("tag");
-  const [allDay, setAllDay] = useState(false);
   const [duration, setDuration] = useState(60);
   // Черновик берётся у той строки, которую открыли, и ровно один раз: пока
   // лист открыт, значениями владеют поля.
@@ -58,7 +56,6 @@ export function EventTypeSheet({
     setLabel(type?.label ?? "");
     setColor(type?.color ?? DEFAULT_COLOR);
     setIcon(type?.icon ?? "tag");
-    setAllDay(type?.allDay ?? false);
     setDuration(type?.defaultDuration ?? 60);
   }
 
@@ -77,7 +74,10 @@ export function EventTypeSheet({
         <Button
           label={type ? "Сохранить" : "Создать"}
           onPress={() =>
-            onSubmit({ label, color, icon, allDay, duration: parsed })
+            // «Весь день» у типа снят (24.09): ни форма события, ни «Быстрое
+            // событие» его не читают — тумблер прятал длительность и не
+            // менял ничего. Тип всегда задаёт длительность.
+            onSubmit({ label, color, icon, allDay: false, duration: parsed })
           }
           disabled={!label.trim() || busy}
           loading={busy}
@@ -103,13 +103,7 @@ export function EventTypeSheet({
       {/* СВОЁ ВРЕМЯ У КАЖДОГО ТИПА (владелец 2026-09-08: «на каждом типе
           событий нужно выставлять своё время: выбираю обед — оно
           автоматически подстраивает время»). Это СТАНДАРТ: время, выбранное
-          в самом событии руками, сильнее — так и написано под лентой типов.
-
-          СТРОКА, А НЕ ГОЛЫЙ ТУМБЛЕР (2026-09-10): здесь стоял `Switch` в
-          самодельной строке, и тап по слову «Весь день» не переключал ничего
-          — попасть надо было точно в тумблер. `SwitchRow` для этого и
-          существует (LOCKED 2026-08-17). */}
-      <SwitchRow label="Весь день" value={allDay} onChange={setAllDay} />
+          в самом событии руками, сильнее — так и написано под лентой типов. */}
 
       {/* ДЛИТЕЛЬНОСТЬ — БАРАБАНОМ (владелец 2026-09-10: «барабан везде»).
           Здесь было поле «Длительность, мин» с цифровой клавиатурой и лента
@@ -118,19 +112,19 @@ export function EventTypeSheet({
           пресетов, никаких полей ввода минут, никаких степперов». Подписи
           «ч» и «мин» под колонками обязательны: «00 : 30» без них читается
           как полпервого ночи. */}
-      {!allDay ? (
-        <View style={{ paddingTop: 8, paddingBottom: 12 }}>
+      <View style={{ paddingTop: 8, paddingBottom: 12 }}>
           <FieldLabel text="Длительность" />
           <TimeWheelPair
             hour={Math.floor(duration / 60)}
             minute={duration % 60}
-            onChangeHour={(h) => setDuration(h * 60 + (duration % 60))}
-            onChangeMinute={(m) => setDuration(Math.floor(duration / 60) * 60 + m)}
+            // Функциональный setState: половины барабана не собирают значение
+            // из устаревшего `duration` (DS §5, баг BookSlotSheet).
+            onChangeHour={(h) => setDuration((d) => h * 60 + (d % 60))}
+            onChangeMinute={(m) => setDuration((d) => Math.floor(d / 60) * 60 + m)}
             labelPrefix="Длительность"
             units
           />
         </View>
-      ) : null}
     </BottomSheet>
   );
 }

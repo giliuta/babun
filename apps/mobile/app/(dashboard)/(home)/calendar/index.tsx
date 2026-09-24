@@ -139,18 +139,15 @@ function CalendarIdentityCard({
 export default function CalendarSettingsScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  // ПОДПИСЬ СТРОКИ «ЗАПИСЬ» — ТА ЖЕ, ЧТО В КАБИНЕТЕ: строка настройки обязана
-  // говорить своё состояние, иначе её открывают, чтобы вспомнить, что в ней
-  // стоит. Два места печатают одно и то же и обязаны не разойтись.
+  // ПОДПИСЬ СТРОКИ «ДИЗАЙН»: строка настройки обязана говорить своё
+  // состояние — откуда цвет и сколько блоков у записи.
   const bookingBlocks = useBookingBlocks();
   const bookingRule = useAutoColorRule();
   const bookingSub = [
     AUTO_COLOR_RULES.find((r) => r.id === bookingRule)?.label ?? "Цвет команды",
     bookingBlocks.length === BOOKING_BLOCKS.length
       ? "все блоки"
-      : BOOKING_BLOCKS.filter((b) => bookingBlocks.includes(b.id))
-          .map((b) => b.label)
-          .join(" · ") || "ни одного блока",
+      : `${bookingBlocks.length} из ${BOOKING_BLOCKS.length} блоков`,
   ].join(" · ");
   const params = useLocalSearchParams<{ team?: string }>();
   const settingsQuery = useCalendarSettings();
@@ -545,9 +542,11 @@ export default function CalendarSettingsScreen() {
               <SettingsRow
                 tile={SETTINGS_TILE.blue}
                 icon={Palette}
-                title="Запись"
+                // «ДИЗАЙН», А НЕ «ЗАПИСЬ» (владелец 2026-09-24): одна страница
+                // вида, цвета, блоков записи и события и типов событий.
+                title="Дизайн"
                 sub={bookingSub}
-                onPress={() => router.push("/calendar/booking" as Href)}
+                onPress={() => router.push("/calendar/design" as Href)}
               />
             </SectionCard>
           ) : null}
