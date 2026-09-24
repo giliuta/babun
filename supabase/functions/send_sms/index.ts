@@ -15,8 +15,8 @@
 // расписания раз в 5 минут) с заголовком `x-cron-secret` из
 // `edge_cron_secrets`. Никто другой — JWT здесь не принимается.
 //
-// Секреты (заводит владелец): TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN; по
-// желанию TWILIO_STATUS_CALLBACK_URL (иначе — наша функция twilio-status).
+// Секреты (заводит владелец): TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN. Статусы
+// доставки Twilio шлёт в нашу функцию twilio-status.
 // Без ключей Twilio функция ничего не списывает и не трогает очередь:
 // сообщения ждут, пока ключи не появятся.
 
@@ -86,11 +86,14 @@ function twilioFromEnv(): Twilio | null {
   const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
   if (!accountSid || !authToken) return null;
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  // Статусы — всегда в нашу функцию. Секрет TWILIO_STATUS_CALLBACK_URL
+  // остался от удалённого веба и указывает на мёртвый адрес
+  // babun.app/api/twilio/status: если бы код его читал, «Доставлено» не
+  // пришло бы никогда.
   return {
     accountSid,
     authToken,
-    statusCallbackUrl:
-      Deno.env.get("TWILIO_STATUS_CALLBACK_URL") ?? `${supabaseUrl}/functions/v1/twilio-status`,
+    statusCallbackUrl: `${supabaseUrl}/functions/v1/twilio-status`,
   };
 }
 

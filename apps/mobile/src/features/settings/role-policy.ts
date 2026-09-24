@@ -108,7 +108,6 @@ const DISPATCHER_CABINET_ROUTES = new Set([
   "/cabinet/business",
   "/cabinet/inventory",
   "/cabinet/recurring",
-  "/cabinet/sms-templates",
   "/cabinet/sync",
   ...PERSONAL_CABINET_ROUTES,
 ]);
@@ -119,9 +118,6 @@ const MASTER_CABINET_ROUTES = new Set([
   "/cabinet/account",
   "/cabinet/business",
   "/cabinet/inventory",
-  // Шаблоны SMS — по строке прав «Шаблоны SMS: Меняет» (STORY-089): дверь
-  // к ним стоит только у того, кому их открыли, сервер проверяет то же.
-  "/cabinet/sms-templates",
   ...PERSONAL_CABINET_ROUTES,
 ]);
 

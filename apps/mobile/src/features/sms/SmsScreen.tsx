@@ -113,8 +113,8 @@ export function SmsScreen() {
 
   const topup = async (cents: number) => {
     try {
-      const back = typeof window !== "undefined" ? `${window.location.origin}/cabinet/sms` : undefined;
-      const url = await startSmsTopup(cents, back ?? "https://babun.app/cabinet/sms");
+      const back = typeof window !== "undefined" ? `${window.location.origin}/clients/sms` : undefined;
+      const url = await startSmsTopup(cents, back ?? "https://babun.app/clients/sms");
       if (typeof window !== "undefined") window.location.assign(url);
     } catch (e) {
       notify("Оплата не открылась", e instanceof Error ? e.message : undefined);
@@ -126,6 +126,15 @@ export function SmsScreen() {
       <Screen edges={["top"]}>
         <ScreenHeader title="SMS" />
         <EmptyState state="loading" fill />
+      </Screen>
+    );
+  }
+  // Сотруднику баланс и настройки не приходят: SMS компании ведёт владелец.
+  if (data && !owner) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="SMS" />
+        <EmptyState fill title="SMS настраивает владелец компании" />
       </Screen>
     );
   }
@@ -248,7 +257,7 @@ export function SmsScreen() {
                 ? formatCountRu(readyTemplates.length, ["шаблон", "шаблона", "шаблонов"])
                 : "Шаблонов нет"
             }
-            onPress={() => router.push("/cabinet/sms-templates" as Href)}
+            onPress={() => router.push("/clients/sms-templates" as Href)}
           />
         </SectionCard>
 
@@ -266,7 +275,7 @@ export function SmsScreen() {
             icon={History}
             title="Вся история"
             sub={(history.data ?? []).length > 0 ? undefined : "Сообщений пока нет"}
-            onPress={() => router.push("/cabinet/sms-history" as Href)}
+            onPress={() => router.push("/clients/sms-history" as Href)}
           />
         </SectionCard>
       </ScrollView>
@@ -289,7 +298,7 @@ export function SmsScreen() {
             title={autoRows.find((row) => row.key === key)?.title ?? ""}
             items={templateItems(field)}
             selectedId={current ?? "none"}
-            onSettings={() => router.push("/cabinet/sms-templates" as Href)}
+            onSettings={() => router.push("/clients/sms-templates" as Href)}
             settingsLabel="Шаблоны SMS"
             onClose={() => setPicking(null)}
           />

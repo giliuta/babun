@@ -164,7 +164,7 @@ export function SmsTemplateSheet({
             onPress={() => {
               haptics.tap();
               onClose();
-              router.push("/cabinet/sms-templates" as Href);
+              router.push("/clients/sms-templates" as Href);
             }}
             accessibilityRole="button"
             accessibilityLabel="Шаблоны SMS"

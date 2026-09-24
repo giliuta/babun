@@ -21,6 +21,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { CONTACTS_AVAILABLE } from "@/features/clients/import/ContactsImportSheet";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
+import { SmsSettingsRow } from "@/features/sms/SmsSettingsRow";
 import { Divider } from "@/components/ui/Divider";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -177,6 +178,14 @@ function ClientsSettingsScreen() {
                 sub={mapServicesSummary(mapServices)}
                 onPress={() => router.push("/clients/maps")}
               />
+            </SectionCard>
+
+            {/* SMS (STORY-089; владелец 24.09: «давай добавим это в настройки
+                к клиентам»): шаблоны, баланс, отправка через сервис по
+                календарям, автоматические SMS и история — одной дверью. */}
+            <SectionEyebrow>Сообщения</SectionEyebrow>
+            <SectionCard>
+              <SmsSettingsRow />
             </SectionCard>
   
             {/* СПРАВОЧНИКИ — то, из чего собирается карточка: типы объектов

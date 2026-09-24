@@ -34,7 +34,7 @@ const RETURN_ORIGINS = [
   "http://localhost:8081",
   "http://localhost:8082",
 ];
-const DEFAULT_RETURN = "https://babun.app/cabinet/sms";
+const DEFAULT_RETURN = "https://babun.app/clients/sms";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -47,6 +47,24 @@ const json = (status: number, body: unknown): Response =>
     status,
     headers: { ...cors, "content-type": "application/json" },
   });
+
+/** Публичный ключ проекта: новый `SUPABASE_PUBLISHABLE_KEYS` (JSON), а
+ *  устаревший `SUPABASE_ANON_KEY` — только запасным. */
+function publishableKey(): string | undefined {
+  const json = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
+  if (json) {
+    try {
+      const keys = Object.values(JSON.parse(json) as Record<string, unknown>).filter(
+        (v): v is string => typeof v === "string" && v.length > 20,
+      );
+      const key = keys.find((v) => v.startsWith("sb_publishable_")) ?? keys[0];
+      if (key) return key;
+    } catch {
+      // запасной ключ ниже
+    }
+  }
+  return Deno.env.get("SUPABASE_ANON_KEY") || undefined;
+}
 
 function safeReturn(value: unknown): string {
   if (typeof value !== "string") return DEFAULT_RETURN;
@@ -67,7 +85,7 @@ Deno.serve(async (request: Request) => {
 
   const auth = request.headers.get("authorization") ?? "";
   const url = Deno.env.get("SUPABASE_URL");
-  const anon = Deno.env.get("SUPABASE_ANON_KEY");
+  const anon = publishableKey();
   if (!auth.startsWith("Bearer ") || !url || !anon) return json(401, { error: "unauthorized" });
 
   // Клиент ОТ ЛИЦА человека: база сама решит, чья это компания и кто он в ней.

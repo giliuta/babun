@@ -49,11 +49,13 @@
 Код готов и проверен; сервис выключен, пока нет ключей.
 
 Владелец:
-- [ ] **Twilio** — аккаунт и пополнение баланса Twilio.
+- [x] **Twilio** — аккаунт есть, ключи в секретах (24.09). Пополнение баланса
+  Twilio и Geo permissions (Кипр) — проверить при первой отправке.
   - Отправитель «Babun» буквами — на Кипре без регистрации.
   - Ключи `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` → Supabase → Edge
     Functions → Secrets.
-- [ ] **Stripe** — аккаунт.
+- [x] **Stripe** — аккаунт «Babun» (боевой), ключи в секретах, адрес
+  уведомлений `babun-sms-topup` заведён 24.09 (012 через Chrome).
   - `STRIPE_SECRET_KEY` → те же секреты.
   - Webhook на `https://rdtokosbqvgemicqeqwz.supabase.co/functions/v1/stripe-webhook`
     (события `checkout.session.completed`,
@@ -63,8 +65,9 @@
   и решить наценку.
 
 012 (по слову владельца):
-- [ ] Развернуть функции `send_sms`, `twilio-status`, `stripe-webhook`,
-  `sms-checkout`.
+- [x] Развернуть функции `send_sms` (v4), `twilio-status` (v3),
+  `stripe-webhook` (v3), `sms-checkout` (v1) — 24.09, пробы без отправки
+  ответили как задумано.
 - [ ] Включить сервис: `app_settings.sms_enabled = on`.
 - [ ] Первая SMS себе на номер: списание, статус «Доставлено», история.
 

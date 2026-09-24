@@ -7,14 +7,14 @@ import { useSmsTemplates } from "@/features/settings/sms-templates";
 import { useSmsAccount } from "@/features/sms/sms-account";
 import { euro } from "@/features/sms/sms-words";
 
-// СТРОКА «SMS» В КАБИНЕТЕ (STORY-089; владелец 24.09: «у них есть
-// собственный кабинет отправки СМС»). Это место компании, а не настройка
-// раздела: баланс, отправка через сервис по календарям, автоматические SMS,
-// шаблоны и история — страница `/cabinet/sms`.
+// СТРОКА «SMS» В НАСТРОЙКАХ КЛИЕНТОВ (STORY-089). Сначала стояла в Кабинете
+// («собственный кабинет отправки СМС»), владелец 24.09: «давай добавим это
+// в настройки к клиентам» — SMS пишут клиентам, и у настройки одна дверь в
+// её разделе. Страница `/clients/sms`: баланс, отправка через сервис по
+// календарям, автоматические SMS, шаблоны и история.
 //
-// Подпись — живое состояние (закон Кабинета): баланс и сколько шаблонов
-// готово.
-export function SmsRow() {
+// Подпись — живое состояние: баланс и сколько шаблонов готово.
+export function SmsSettingsRow() {
   const router = useRouter();
   const { data: templates = [] } = useSmsTemplates();
   const owner = useSmsAccount().data?.owner;
@@ -30,7 +30,7 @@ export function SmsRow() {
       icon={MessageSquare}
       title="SMS"
       sub={parts.join(" · ")}
-      onPress={() => router.push("/cabinet/sms" as Href)}
+      onPress={() => router.push("/clients/sms" as Href)}
     />
   );
 }
