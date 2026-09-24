@@ -95,7 +95,17 @@ export function parseMoneyAmount(value: string): number | null {
   return cents == null ? null : cents / 100;
 }
 
+/**
+ * РЕЖИМ НДС ДОКУМЕНТА — С САМОГО ДОКУМЕНТА, ПОКА ОН ЕСТЬ.
+ *
+ * С 20260915120000 сервер пишет в `invoices.vat_mode` ровно то, чем посчитал
+ * бумагу. У выписанных раньше колонка пуста — для них режим и приходится
+ * восстанавливать по суммам: к чему ближе сумма строк, к итогу («в цене») или
+ * к нетто («сверху»). Догадка осталась только для них, и она не обязана быть
+ * правдой — поэтому колонка сильнее.
+ */
 export function invoiceVatMode(invoice: InvoiceLedgerWithLines): InvoiceVatMode {
+  if (invoice.vat_mode) return invoice.vat_mode;
   if (invoice.vat_percent <= 0 || invoice.vat_amount <= 0) return "off";
   const lineTotal = invoice.lines.reduce((sum, line) => sum + line.total, 0);
   return Math.abs(lineTotal - invoice.total) < Math.abs(lineTotal - invoice.subtotal_net)

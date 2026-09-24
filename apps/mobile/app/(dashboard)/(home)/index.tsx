@@ -1845,9 +1845,6 @@ export default function CalendarTab() {
       master_id: null,
       status: "scheduled",
       comment: "Перерыв",
-      // Перерыв — пауза, а не работа: серым, чтобы в сетке он не читался
-      // ещё одним выездом цвета команды. Цвет меняется, как у любой записи.
-      color_override: "#8E8E93",
       event_all_day: false,
       service_ids: [],
       services: [],

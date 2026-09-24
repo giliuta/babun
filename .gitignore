@@ -62,3 +62,6 @@ ds-dist/
 .design-sync/learnings/
 .design-sync/node_modules
 apps/mobile/ds-web/out/
+
+# Кэш Supabase CLI (версия CLI), не исходник
+supabase/.temp/

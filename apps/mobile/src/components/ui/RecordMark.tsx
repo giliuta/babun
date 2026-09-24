@@ -76,31 +76,8 @@ export function RecordMark({
             ? blockContour(hue)
             : t.separator,
         borderStyle: cancelled ? CANCELLED_BORDER : "solid",
-        overflow: "hidden",
       }}
     >
-      {/* Тот же блик, что у блока в сетке (вариант 5): образец не имеет
-          права выглядеть площе, чем то, что он обещает. */}
-      {hue && !cancelled
-        ? ([
-            ["18%", 0.07],
-            ["34%", 0.06],
-            ["52%", 0.05],
-          ] as const).map(([h, a]) => (
-            <View
-              key={h}
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                height: h,
-                backgroundColor: `rgba(255,255,255,${a})`,
-              }}
-            />
-          ))
-        : null}
       {children}
     </View>
   );
