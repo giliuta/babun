@@ -3,7 +3,6 @@ import {
   Bell,
   Bookmark,
   CalendarClock,
-  CalendarPlus,
   CheckCircle2,
   Coffee,
   Copy,
@@ -45,6 +44,10 @@ export type ActionMenu = {
   title: string;
   subtitle?: string;
   items: ActionMenuItem[];
+  /** Значок справа в шапке — дверь на страницу списка, из которого меню
+   *  собрано («Быстрое событие» → «Типы событий»). */
+  onSettings?: () => void;
+  settingsLabel?: string;
 };
 
 const LOOK: Record<string, { icon: LucideIcon; color: string }> = {
@@ -65,7 +68,6 @@ const LOOK: Record<string, { icon: LucideIcon; color: string }> = {
   // Перерыв — цветом того, что заводит (серое событие), как строки типов
   // событий в «Быстром событии» — цветом своего типа.
   Перерыв: { icon: Coffee, color: "#8E8E93" },
-  "Другое событие": { icon: CalendarPlus, color: SETTINGS_TILE.blue },
   "Метка дня": { icon: Bookmark, color: SETTINGS_TILE.teal },
 };
 
@@ -100,6 +102,8 @@ export function ActionMenuSheet({
       visible={visible}
       title={shown?.title ?? ""}
       subtitle={shown?.subtitle}
+      onSettings={shown?.onSettings}
+      settingsLabel={shown?.settingsLabel}
       onClose={onClose}
       onExited={() => {
         exiting.current = false;
