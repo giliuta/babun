@@ -236,7 +236,7 @@ const SENTENCES: Record<string, LevelCopy> = {
     write: "Меняет время и длительность",
   },
   "record.client": {
-    off: "Кто клиент — не видит",
+    off: "Клиента записи не видит",
     read: "Видит, к какому клиенту едет",
   },
   "record.object": {
@@ -244,7 +244,7 @@ const SENTENCES: Record<string, LevelCopy> = {
     read: "Видит объект и адрес выезда",
   },
   "record.services": {
-    off: "Что делать по записи — не видит",
+    off: "Услуги записи не видит",
     read: "Видит услуги записи, но не меняет",
   },
   "calendar.move": {
@@ -268,8 +268,8 @@ export function levelSentence(blockKey: string, level: AccessLevel): string {
 /** Слово на сегменте. Короче, чем в реестре: «Из его календарей» в трети
  *  ширины не помещается, а фраза под названием и так говорит правило целиком. */
 export const SEGMENT_WORD: Record<AccessLevel, string> = {
-  off: "Скрыт",
-  read: "Смотрит",
+  off: "Не видит",
+  read: "Видит",
   write: "Меняет",
   own: "Его",
   all: "Все",

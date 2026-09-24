@@ -6,12 +6,19 @@ import {
   applyPickedCalendars,
   areaLevel,
   areaWord,
+  calendarAreaLevel,
+  calendarRightsLine,
+  clientsRightsLine,
   calendarsBlockMode,
+  copyCalendarLevels,
   dependantResets,
   draftAccessChanges,
   draftFromInvitation,
   draftLevel,
+  blankMasterDraft,
   emptyMasterDraft,
+  starterCalendarChanges,
+  STARTER_CALENDAR_LEVELS,
   invitationCarriesCardFields,
   invitationIdFromSegment,
   invitationRequest,
@@ -77,18 +84,18 @@ const checks = {
   isPhone: (value: string) => value.replace(/\D/g, "").length >= 8,
 };
 
-const twoCalendars = (): MasterDraft => toggleTeam(emptyMasterDraft("team-1"), "team-2");
+const twoCalendars = (): MasterDraft => toggleTeam(blankMasterDraft("team-1"), "team-2");
 
 describe("черновик нового мастера", () => {
   test("открыт в календаре, из которого пришли", () => {
-    assert.deepEqual(emptyMasterDraft("team-1").teamIds, ["team-1"]);
-    assert.deepEqual(emptyMasterDraft(null).teamIds, []);
+    assert.deepEqual(blankMasterDraft("team-1").teamIds, ["team-1"]);
+    assert.deepEqual(blankMasterDraft(null).teamIds, []);
   });
 
   test("нетронутый черновик: все четыре раздела «Скрыт», и слово тихое", () => {
-    for (const draft of [emptyMasterDraft("team-1"), twoCalendars(), emptyMasterDraft(null)]) {
+    for (const draft of [blankMasterDraft("team-1"), twoCalendars(), blankMasterDraft(null)]) {
       for (const area of AREAS) {
-        assert.equal(areaWord(REGISTRY, draft, area), "Скрыт", area);
+        assert.equal(areaWord(REGISTRY, draft, area), "Не видит", area);
         assert.equal(levelTone(areaLevel(REGISTRY, draft, area)), "faint");
       }
     }
@@ -97,17 +104,17 @@ describe("черновик нового мастера", () => {
   test("календари с разными положениями — «Разное», одинаковыми — само положение", () => {
     const records = byKey("calendar.records");
     let draft = withLevel(twoCalendars(), records, "read", "team-1");
-    assert.equal(areaWord(REGISTRY, draft, "calendar"), "Разное");
+    assert.equal(areaWord(REGISTRY, draft, "calendar"), "Частично");
     assert.equal(levelTone(areaLevel(REGISTRY, draft, "calendar")), "ink");
     draft = withLevel(draft, records, "read", "team-2");
     // «Новые записи» и остальные зависимые всё ещё скрыты — раздел разный.
-    assert.equal(areaWord(REGISTRY, draft, "calendar"), "Разное");
+    assert.equal(areaWord(REGISTRY, draft, "calendar"), "Частично");
     const onlyRecords = [records];
-    assert.equal(areaWord(onlyRecords, draft, "calendar"), "Смотрит");
+    assert.equal(areaWord(onlyRecords, draft, "calendar"), "Видит");
     assert.equal(levelTone(areaLevel(onlyRecords, draft, "calendar")), "sub");
     // Охват клиентов в слово не идёт: «Все» при скрытых клиентах — всё ещё «Скрыт».
     const scoped = withLevel(twoCalendars(), byKey("clients.scope"), "all", null);
-    assert.equal(areaWord(REGISTRY, scoped, "clients"), "Скрыт");
+    assert.equal(areaWord(REGISTRY, scoped, "clients"), "Не видит");
   });
 
   test("невыбранный блок стоит на умолчании реестра, в каждом календаре своё", () => {
@@ -122,7 +129,7 @@ describe("черновик нового мастера", () => {
 
   test("положение, которого у блока нет, и календарь не из черновика не принимаются", () => {
     const create = byKey("calendar.create");
-    const draft = emptyMasterDraft("team-1");
+    const draft = blankMasterDraft("team-1");
     assert.equal(withLevel(draft, create, "read", "team-1"), draft);
     assert.equal(withLevel(draft, create, "write", "team-9"), draft);
     assert.equal(withLevel(draft, create, "write", null), draft);
@@ -131,13 +138,16 @@ describe("черновик нового мастера", () => {
   test("умолчание не хранится: вернули положение — черновик снова чистый", () => {
     const records = byKey("calendar.records");
     const services = byKey("services");
-    let draft = withLevel(emptyMasterDraft("team-1"), records, "read", "team-1");
+    let draft = withLevel(blankMasterDraft("team-1"), records, "read", "team-1");
     draft = withLevel(draft, services, "write", null);
     assert.equal(isDraftDirty(draft, "team-1"), true);
     draft = withLevel(withLevel(draft, records, "off", "team-1"), services, "off", null);
     assert.deepEqual(draft.calendarLevels, {});
     assert.deepEqual(draft.companyLevels, {});
-    assert.equal(isDraftDirty(draft, "team-1"), false);
+    // Чистым считается черновик, равный своему началу (со стартовыми
+    // правами) — пустой без них уже правка.
+    assert.equal(isDraftDirty(draft, "team-1"), true);
+    assert.equal(isDraftDirty(emptyMasterDraft("team-1"), "team-1"), false);
   });
 
   test("снятый календарь уносит свои положения, добавленный снова — с умолчаний", () => {
@@ -195,7 +205,7 @@ describe("черновик нового мастера", () => {
     assert.equal(draftLevel(byKey("finance.operations"), draft, "team-2"), "write");
     assert.equal(draftLevel(byKey("calendar.settings"), draft, null), "read");
 
-    let clients = withLevel(emptyMasterDraft("team-1"), byKey("clients"), "read", null);
+    let clients = withLevel(blankMasterDraft("team-1"), byKey("clients"), "read", null);
     clients = withLevel(clients, byKey("clients.scope"), "all", null);
     clients = withLevel(clients, byKey("clients.contacts"), "read", null);
     clients = withLevel(clients, byKey("clients"), "off", null);
@@ -212,8 +222,8 @@ describe("черновик нового мастера", () => {
       ],
     });
     assert.deepEqual(draftAccessChanges(REGISTRY, draft), []);
-    assert.equal(areaWord(REGISTRY, draft, "calendar"), "Скрыт");
-    assert.equal(areaWord(REGISTRY, draft, "clients"), "Скрыт");
+    assert.equal(areaWord(REGISTRY, draft, "calendar"), "Не видит");
+    assert.equal(areaWord(REGISTRY, draft, "clients"), "Не видит");
     const parentLevel = (key: string) => draftLevel(byKey(key), draft, "team-1");
     assert.equal(isBlockFolded("calendar.create", parentLevel), true);
     assert.equal(isBlockFolded("calendar.records", parentLevel), false);
@@ -240,12 +250,12 @@ describe("черновик нового мастера", () => {
   });
 
   test("до «Пригласить» нужны имя, почта и календарь; телефон — только если набран", () => {
-    assert.deepEqual(inviteBlockers(emptyMasterDraft(null), checks), [
+    assert.deepEqual(inviteBlockers(blankMasterDraft(null), checks), [
       "name",
       "email",
       "calendar",
     ]);
-    const filled = { ...emptyMasterDraft("team-1"), name: "Dmitry", email: "d@airfix.cy" };
+    const filled = { ...blankMasterDraft("team-1"), name: "Dmitry", email: "d@airfix.cy" };
     assert.deepEqual(inviteBlockers(filled, checks), []);
     assert.deepEqual(inviteBlockers({ ...filled, phone: "12" }, checks), ["phone"]);
   });
@@ -253,7 +263,7 @@ describe("черновик нового мастера", () => {
   test("приглашение из черновика: обрезано, пустое не шлётся, календари без повторов", () => {
     const records = byKey("calendar.records");
     let draft: MasterDraft = {
-      ...emptyMasterDraft("team-2"),
+      ...blankMasterDraft("team-2"),
       name: "  Dmitry ",
       email: " d@airfix.cy ",
       phone: "",
@@ -347,7 +357,7 @@ describe("карточка ждущего приглашения", () => {
       phone: null,
       team_id: "team-1",
     });
-    assert.deepEqual(draft, { ...emptyMasterDraft("team-1"), email: "d@airfix.cy" });
+    assert.deepEqual(draft, { ...blankMasterDraft("team-1"), email: "d@airfix.cy" });
     assert.deepEqual(draftFromInvitation({ email: "x@y.z", team_id: null }).teamIds, []);
   });
 
@@ -392,7 +402,7 @@ describe("карточка ждущего приглашения", () => {
 
   test("архивный календарь уходит со страницы и из отправки вместе с уровнями", () => {
     const records = byKey("calendar.records");
-    let draft = toggleTeam(emptyMasterDraft("archived"), "team-2");
+    let draft = toggleTeam(blankMasterDraft("archived"), "team-2");
     draft = withLevel(draft, records, "write", "archived");
     draft = withLevel(draft, records, "read", "team-2");
     const live = withLiveTeams(draft, new Set(["team-2"]));
@@ -418,5 +428,109 @@ describe("карточка ждущего приглашения", () => {
     assert.equal(invitationIdFromSegment("new"), null);
     assert.equal(invitationIdFromSegment("master-1"), null);
     assert.equal(invitationIdFromSegment(undefined), null);
+  });
+});
+
+// STORY-087: у мастера в каждом календаре свои права (владелец 23.09).
+describe("права календаря одной строкой", () => {
+  const draftIn = (levels: Record<string, Record<string, AccessLevel>>): MasterDraft => ({
+    ...blankMasterDraft("A"),
+    teamIds: ["A", "B"],
+    calendarLevels: levels,
+  });
+
+  test("у каждого календаря своя строка", () => {
+    const draft = draftIn({
+      A: { "calendar.records": "write", "calendar.create": "write", "record.status": "write", "record.amount": "write", "record.payment": "write", "calendar.day_labels": "write", "finance.operations": "off" },
+      B: { "calendar.records": "read", "calendar.create": "off", "record.status": "read", "record.amount": "read", "record.payment": "read", "calendar.day_labels": "read", "finance.operations": "read" },
+    });
+    assert.equal(calendarRightsLine(REGISTRY, draft, "A"), "Записи: меняет · Деньги: не видит");
+    assert.equal(calendarRightsLine(REGISTRY, draft, "B"), "Записи: видит 5 из 6 · Деньги: видит");
+  });
+
+  test("смешанный раздел называет закрытое словами", () => {
+    const base = { "calendar.records": "write", "calendar.create": "write", "record.status": "write", "record.payment": "write", "calendar.day_labels": "write" } as const;
+    // Закрыта одна сумма — «без суммы».
+    const one = draftIn({ A: { ...base, "record.amount": "off" } });
+    assert.match(calendarRightsLine(REGISTRY, one, "A"), /^Записи: без суммы · /);
+    // Две — обе по имени.
+    const two = draftIn({ A: { ...base, "record.amount": "off", "record.payment": "off" } });
+    assert.match(calendarRightsLine(REGISTRY, two, "A"), /^Записи: без суммы и оплаты · /);
+    // Закрытого нет, меняет не всё.
+    const part = draftIn({ A: { ...base, "record.amount": "read" } });
+    assert.match(calendarRightsLine(REGISTRY, part, "A"), /^Записи: видит, меняет часть · /);
+  });
+
+  test("положение раздела считается только в своём календаре", () => {
+    // Деньги свёрнуты под «Календарём и записями»: без него они скрыты.
+    const draft = draftIn({
+      A: { "calendar.records": "read", "finance.operations": "write" },
+      B: { "calendar.records": "read" },
+    });
+    assert.equal(calendarAreaLevel(REGISTRY, draft, "finance", "A"), "write");
+    assert.equal(calendarAreaLevel(REGISTRY, draft, "finance", "B"), "off");
+  });
+
+  test("раздела без живых календарных блоков в строке нет", () => {
+    const onlyRecords = REGISTRY.filter((block) => block.area !== "finance");
+    assert.doesNotMatch(calendarRightsLine(onlyRecords, draftIn({}), "A"), /Деньги/);
+  });
+});
+
+describe("права «как в том календаре»", () => {
+  test("переносятся живые календарные блоки в новый календарь", () => {
+    const draft: MasterDraft = {
+      ...blankMasterDraft("A"),
+      teamIds: ["A", "B"],
+      calendarLevels: { A: { "calendar.records": "read", "record.status": "write", "finance.operations": "read" } },
+    };
+    const changes = copyCalendarLevels(REGISTRY, draft, "A", "B");
+    assert.ok(changes.every((c) => c.team_id === "B"));
+    const byBlock = new Map(changes.map((c) => [c.block, c.level]));
+    assert.equal(byBlock.get("record.status"), "write");
+    assert.equal(byBlock.get("finance.operations"), "read");
+    // Компанейские блоки (клиенты) не трогаются: они одни на все календари.
+    assert.equal(byBlock.has("clients"), false);
+  });
+});
+
+describe("клиенты одной строкой", () => {
+  const draftWith = (companyLevels: Record<string, AccessLevel>): MasterDraft => ({
+    ...blankMasterDraft("A"),
+    companyLevels,
+  });
+
+  test("положение, какие клиенты и телефоны", () => {
+    assert.equal(clientsRightsLine(REGISTRY, draftWith({ clients: "off" })), "Не видит");
+    assert.equal(
+      clientsRightsLine(REGISTRY, draftWith({ clients: "write", "clients.scope": "own", "clients.contacts": "read" })),
+      "Меняет · свои",
+    );
+    assert.equal(
+      clientsRightsLine(REGISTRY, draftWith({ clients: "read", "clients.scope": "all", "clients.contacts": "off" })),
+      "Видит · все · без телефонов",
+    );
+  });
+});
+
+describe("стартовые права нового календаря (владелец 24.09)", () => {
+  test("черновик нового мастера видит статус, объект и услуги — и он чистый", () => {
+    const draft = emptyMasterDraft("A");
+    assert.deepEqual(draft.calendarLevels, { A: STARTER_CALENDAR_LEVELS });
+    assert.equal(isDraftDirty(draft, "A"), false);
+    assert.equal(isDraftDirty(withLevel(draft, byKey("record.status"), "off", "A"), "A"), true);
+  });
+
+  test("добавленный календарь — со стартовыми правами только там, где попросили", () => {
+    assert.deepEqual(toggleTeam(blankMasterDraft("A"), "B", true).calendarLevels.B, STARTER_CALENDAR_LEVELS);
+    assert.equal(toggleTeam(blankMasterDraft("A"), "B").calendarLevels.B, undefined);
+    const picked = applyPickedCalendars(blankMasterDraft("A"), ["A", "B"], true);
+    assert.deepEqual(picked.calendarLevels, { B: STARTER_CALENDAR_LEVELS });
+  });
+
+  test("изменения для сотрудника — только живые блоки", () => {
+    assert.deepEqual(starterCalendarChanges(REGISTRY, "B"), [
+      { block: "record.status", team_id: "B", level: "read" },
+    ]);
   });
 });

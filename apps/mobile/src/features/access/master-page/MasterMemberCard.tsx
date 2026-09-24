@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Keyboard } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
@@ -24,12 +24,23 @@ import {
   useAccessBlocks,
   useCalendarMembers,
   useMemberAccess,
+  useSetMemberAccess,
   useSetMemberCalendars,
 } from "../queries";
 import { removalMessage, upcomingWorkCount } from "./removal-impact";
+import { MasterPersonalBlocks, MasterWorkBlock } from "./MasterProfileBlocks";
+import { rightsFocusQuery } from "./rights-focus";
+import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
+import { usePreview } from "./rights-page-shared";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
-import { withLiveTeams } from "./master-draft";
+import {
+  calendarRightsLine,
+  clientsRightsLine,
+  copyCalendarLevels,
+  starterCalendarChanges,
+  withLiveTeams,
+} from "./master-draft";
 import { MEMBER_REFUSAL_TEXT, RIGHTS_AREAS, areaLevelsOf, draftFromMemberAccess, liveAreasOf } from "./rights-rows";
 
 // СОТРУДНИК — ТА ЖЕ КАРТОЧКА МАСТЕРА (владелец 15.09: «полная карточка
@@ -76,8 +87,26 @@ export function MasterMemberCard({
   const updateMaster = useUpdateMaster();
   const remove = useRemoveTenantMember();
   const setCalendars = useSetMemberCalendars(userId);
+  const setAccess = useSetMemberAccess(userId);
+  const preview = usePreview();
   const [nameText, setNameText] = useState<string | null>(null);
   const [calendarsOpen, setCalendarsOpen] = useState(false);
+  // Кто ждёт, пока лист календарей уедет (`onExited`).
+  const afterCalendars = useRef<(() => void) | null>(null);
+  const closeCalendarsSheet = () =>
+    new Promise<void>((resolve) => {
+      // Лист уже закрыли раньше («Применить» до ответа сервера) — `onExited`
+      // не придёт; страховка по времени, чтобы вопрос не пропал вовсе.
+      const fallback = setTimeout(() => {
+        afterCalendars.current = null;
+        resolve();
+      }, 900);
+      afterCalendars.current = () => {
+        clearTimeout(fallback);
+        resolve();
+      };
+      setCalendarsOpen(false);
+    });
 
   const member = membersQuery.data?.find((candidate) => candidate.userId === userId) ?? null;
   const card = mastersQuery.data?.find((master) => master.user_id === userId) ?? null;
@@ -147,33 +176,85 @@ export function MasterMemberCard({
     const current = draft.teamIds;
     const attached = current.includes(id);
     const next = attached ? current.filter((teamId) => teamId !== id) : [...current, id];
-    const save = () => {
-      setCalendars.mutate(next, {
-        onError: (error) => toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error"),
-      });
+    // ЖДЁМ ОТВЕТ ПРЯМО (`mutateAsync`), а не обратным вызовом `mutate`:
+    // ответ перерисовывает карточку, и обратный вызов прежнего нажатия
+    // react-query молча не зовёт — вопрос про права не появлялся (снято
+    // 23.09 на симуляторе).
+    const save = async (): Promise<boolean> => {
+      try {
+        await setCalendars.mutateAsync(next);
+        return true;
+      } catch (error) {
+        toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
+        return false;
+      }
     };
     if (!attached) {
-      save();
+      // НОВЫЙ КАЛЕНДАРЬ — СПРОСИТЬ, КАК В КАКОМ (STORY-087; владелец 23.09:
+      // «в каждый календарь буду добавлять одного и того же мастера»). В новом
+      // календаре у человека всё «Не видит»; чаще всего нужны те же права,
+      // что уже стоят в его первом календаре, — одним тапом, без десяти строк.
+      const source = current.find((teamId) => teamNameOf(teamId));
+      if (!(await save())) return;
+      // Стартовые права нового календаря (владелец 24.09): без них человек
+      // входил в календарь и не видел в нём даже своей работы.
+      const applyStarter = async () => {
+        const changes = starterCalendarChanges(blocks, id);
+        if (changes.length === 0) return;
+        try {
+          await setAccess.mutateAsync(changes);
+        } catch (error) {
+          toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
+        }
+      };
+      if (!source) {
+        await applyStarter();
+        return;
+      }
+      // ВОПРОС — КОГДА ЛИСТ КАЛЕНДАРЕЙ УЖЕ СНЯТ. Два нижних листа iOS подряд
+      // не показывает: вопрос, поднятый по таймеру, пока лист ещё уезжал,
+      // молча терялся (снято 23.09). Ждём `onExited` самого листа.
+      await closeCalendarsSheet();
+      const sourceName = teamNameOf(source) ?? "первом календаре";
+      const targetName = teamNameOf(id) ?? "новом календаре";
+      const picked = await chooseOption(`Права в «${targetName}»`, [
+        { label: `Как в «${sourceName}»` },
+        { label: "Выставлю сам" },
+      ]);
+      if (picked === 0) {
+        try {
+          await setAccess.mutateAsync(copyCalendarLevels(blocks, draft, source, id));
+          toast(`Права как в «${sourceName}»`);
+        } catch (error) {
+          toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
+        }
+      } else {
+        // «Выставлю сам» и закрытый вопрос — со стартовых прав.
+        await applyStarter();
+      }
+      if (picked === 1) {
+        router.push(
+          `/calendar/masters/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
+        );
+      }
       return;
     }
-    const teamName = teamNameOf(id) ?? "этот календарь";
-    // ВОПРОС НЕЛЬЗЯ ЗАДАТЬ ИЗ-ЗА ОТКРЫТОЙ ШТОРКИ. Подтверждение рисуется
-    // хостом на уровне приложения и встало бы ЗА шторкой календарей: палец
-    // получил бы ничего, а открепление молча не случилось бы. Сначала
-    // закрываем шторку и ждём, пока она уедет (канон 29.08, тот же приём в
-    // `MasterInviteCard`).
+    // УБИРАЕМ СРАЗУ, С «ОТМЕНИТЬ» (владелец 22.09: «всё можно вот так вот
+    // убирать» — свайпом, без вопроса). Права в этом календаре уходят вместе
+    // с ним (каскад на сервере), поэтому «Отменить» возвращает и календарь, и
+    // его положения — из снимка до ухода.
+    const teamName = teamNameOf(id) ?? "календаря";
+    const restoreLevels = copyCalendarLevels(blocks, draft, id, id);
     setCalendarsOpen(false);
-    await waitSheetExit();
-    confirmThen(
-      `Открепить от «${teamName}»?`,
-      {
-        message:
-          "Записи и деньги этого календаря пропадут у человека сразу. Права в нём тоже перестанут действовать.",
-        confirmLabel: "Открепить",
-        destructive: true,
-      },
-      save,
-    );
+    if (!(await save())) return;
+    toast(`Убран из «${teamName}»`, "success", {
+      label: "Отменить",
+      onPress: () =>
+        void setCalendars
+          .mutateAsync(current)
+          .then(() => setAccess.mutateAsync(restoreLevels))
+          .catch((error) => toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error")),
+    });
   };
 
   const patchCard = (patch: {
@@ -181,6 +262,7 @@ export function MasterMemberCard({
     phone?: string | null;
     title?: string | null;
     color?: string | null;
+    is_active?: boolean;
   }) => {
     if (!card) return;
     updateMaster.mutate(
@@ -199,13 +281,35 @@ export function MasterMemberCard({
   // «Убрать из компании», а не «из календаря»: членство одно на компанию, а
   // открепить от одного календаря приложение ещё не умеет. Слово не обещает
   // меньше, чем будет.
+  // ⋯ — ТО, ЧЕГО НЕТ В БЛОКАХ СТРАНИЦЫ (STORY-087): посмотреть его глазами
+  // (раньше жило только на странице прав), архив карточки и уход из компании.
   const openMenu = async () => {
     if (!member) return;
     Keyboard.dismiss();
+    const homeName = teamNameOf(draft.teamIds[0] ?? "") ?? null;
+    const options = [
+      { label: "Посмотреть его глазами", run: () => preview({ blocks, draft, name, calendarName: homeName }) },
+      ...(card
+        ? [
+            {
+              label: card.is_active ? "В архив" : "Вернуть из архива",
+              run: () => {
+                patchCard({ is_active: !card.is_active });
+                toast(card.is_active ? "Мастер в архиве — в выборе команды его нет" : "Мастер снова в работе");
+              },
+            },
+          ]
+        : []),
+    ];
     const picked = await chooseOption(member.name, [
+      ...options.map((option) => ({ label: option.label })),
       { label: "Убрать из компании", destructive: true },
     ]);
-    if (picked !== 0) return;
+    if (picked === null) return;
+    if (picked < options.length) {
+      options[picked].run();
+      return;
+    }
     await waitSheetExit();
     confirmThen(
       `Убрать ${member.name} из компании?`,
@@ -214,7 +318,7 @@ export function MasterMemberCard({
         // что на четверг у человека три выезда: убрал в среду — узнал от
         // клиента (`removal-impact.ts`).
         message: removalMessage(
-          upcomingWorkCount(appts.data ?? [], card?.id, businessNow().ymd),
+          upcomingWorkCount(appts.data ?? [], draft.teamIds, businessNow().ymd),
         ),
         confirmLabel: "Убрать",
         destructive: true,
@@ -268,18 +372,45 @@ export function MasterMemberCard({
         liveAreas={liveAreasOf(blocks, RIGHTS_AREAS)}
         showCalendars
         areaLevels={areaLevelsOf(blocks, draft)}
+        // Права компании (клиенты) — своей страницей; календарные живут в
+        // строках календарей (STORY-087).
         onOpenArea={(area) =>
-        router.push(
-          `/calendar/masters/access/${userId}?team=${encodeURIComponent(teamId ?? "")}&rights=1&area=${area}` as Href,
-        )
+          router.push(
+            `/calendar/masters/access/${userId}?team=${encodeURIComponent(teamId ?? "")}&rights=1&area=${area}&${rightsFocusQuery({ kind: "company" })}` as Href,
+          )
         }
-        />
+        // У КАЖДОГО КАЛЕНДАРЯ СВОИ ПРАВА (владелец 23.09): строка календаря
+        // говорит, что человек может в НЁМ, и открывает права этого календаря.
+        calendarLine={(id) => calendarRightsLine(blocks, draft, id)}
+        areaValues={{ clients: clientsRightsLine(blocks, draft) }}
+        onOpenCalendarRights={(id) =>
+          router.push(
+            `/calendar/masters/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
+          )
+        }
+        onDetachCalendar={(id) => void toggleCalendar(id)}
+        phoneAction={
+          identity.phone ? <PhoneChannelButton number={card?.phone ?? member?.phone ?? ""} label={name} /> : undefined
+        }
+      >
+        {card ? (
+          <>
+            <MasterWorkBlock card={card} teamIds={draft.teamIds} />
+            <MasterPersonalBlocks card={card} />
+          </>
+        ) : null}
+      </MasterCardView>
       <CalendarPickerSheet
         visible={calendarsOpen}
         teams={teams}
         selected={draft.teamIds}
         onToggle={(id) => void toggleCalendar(id)}
         onClose={() => setCalendarsOpen(false)}
+        onExited={() => {
+          const run = afterCalendars.current;
+          afterCalendars.current = null;
+          run?.();
+        }}
       />
     </>
   );

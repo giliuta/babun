@@ -267,7 +267,15 @@ export default function MastersScreen() {
                     ? teamColorById.get(item.master.team_id) ?? t.faint
                     : t.faint
                 }
-                onPress={() => router.push(`/calendar/masters/${item.master.id}`)}
+                // ОДНА ДВЕРЬ (STORY-087): карточка с аккаунтом — сразу страница
+                // сотрудника с правами, а не старый хаб без них.
+                onPress={() =>
+                  router.push(
+                    (item.master.user_id
+                      ? `/calendar/masters/access/${item.master.user_id}?team=${encodeURIComponent(teamId ?? item.master.team_id ?? "")}`
+                      : `/calendar/masters/${item.master.id}`) as Href,
+                  )
+                }
               />
             );
           }}

@@ -27,6 +27,8 @@ import { useUpdateMasterInvitation } from "./invitation-api";
 import { invitationRefusalText, isInvitationGone } from "./invitation-contract";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import {
+  calendarRightsLine,
+  clientsRightsLine,
   applyPickedCalendars,
   draftFromInvitation,
   invitationCarriesCardFields,
@@ -36,6 +38,7 @@ import {
   withLiveTeams,
   type MasterDraft,
 } from "./master-draft";
+import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, liveAreasOf } from "./rights-rows";
 import { waitSubtitle } from "../invitation-wait";
 
@@ -171,7 +174,7 @@ export function MasterInviteCard({
       toast(invitationErrorMessage("master invitation requires a calendar"), "error");
       return;
     }
-    commit(applyPickedCalendars(draft, picked));
+    commit(applyPickedCalendars(draft, picked, true));
   };
 
   const share = () =>
@@ -265,8 +268,20 @@ export function MasterInviteCard({
         // такого раздела нет вовсе.
         liveAreas={liveAreasOf(blocks, RIGHTS_AREAS)}
         areaLevels={areaLevelsOf(blocks, draft)}
+        // Как у сотрудника (STORY-087): календари строками со своими правами,
+        // клиенты — «Правами в компании» со сводкой словами.
+        showCalendars
+        calendarLine={(id) => calendarRightsLine(blocks, draft, id)}
+        areaValues={{ clients: clientsRightsLine(blocks, draft) }}
+        onOpenCalendarRights={(id) =>
+          router.push(
+            `/calendar/masters/${invitationSegment(row.id)}/rights?${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
+          )
+        }
         onOpenArea={(area) =>
-          router.push(`/calendar/masters/${invitationSegment(row.id)}/rights?area=${area}` as Href)
+          router.push(
+            `/calendar/masters/${invitationSegment(row.id)}/rights?area=${area}&${rightsFocusQuery({ kind: "company" })}` as Href,
+          )
         }
         footer={<GradientButton label="Отправить ещё раз" onPress={() => void share()} />}
       />

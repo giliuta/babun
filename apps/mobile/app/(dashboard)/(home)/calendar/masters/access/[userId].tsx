@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 
 import { MasterCard } from "@/features/access/master-page/MasterCard";
+import { rightsFocusOf } from "@/features/access/master-page/rights-focus";
 import { MasterRightsPage } from "@/features/access/master-page/MasterRightsPage";
 
 // СОТРУДНИК ИЗ КАЛЕНДАРЯ — ДВЕРЬ, А НЕ ФОРМА (AGENTS, Canon Reuse п.3). Тело —
@@ -20,6 +21,10 @@ export default function MemberAccessRoute() {
     team?: string | string[];
     rights?: string | string[];
     area?: string | string[];
+    /** Права ОДНОГО календаря (строка календаря на карточке, STORY-087). */
+    calendar?: string | string[];
+    /** `company` — права компании (клиенты). */
+    scope?: string | string[];
   }>();
   const userId = first(params.userId);
   const team = first(params.team) || null;
@@ -42,6 +47,7 @@ export default function MemberAccessRoute() {
         userId={userId}
         teamId={team}
         area={first(params.area)}
+        focus={rightsFocusOf(first(params.calendar), first(params.scope))}
         onBack={back}
       />
     );

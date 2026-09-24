@@ -40,7 +40,7 @@ export function areaLevelsOf(
   };
 }
 
-/** Слово положения — и раздела («Разное»), и блока. */
+/** Слово положения — и раздела («Частично»), и блока. */
 export function levelWord(level: AreaLevel): string {
   return level === "mixed" ? MIXED_WORD : LEVEL_WORD[level];
 }

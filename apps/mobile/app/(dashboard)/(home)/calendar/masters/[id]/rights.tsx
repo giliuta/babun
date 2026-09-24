@@ -2,6 +2,7 @@ import { Redirect, useLocalSearchParams, useRouter, type Href } from "expo-route
 
 import { MasterRightsPage } from "@/features/access/master-page/MasterRightsPage";
 import { invitationIdFromSegment } from "@/features/access/master-page/master-draft";
+import { rightsFocusOf } from "@/features/access/master-page/rights-focus";
 
 // «ПРАВА» — СТРАНИЦА ВНУТРИ МАСТЕРА (владелец 15.09: «разрешения можно сделать
 // отдельной страницей внутри уже мастера»). `new` — черновик нового мастера,
@@ -17,11 +18,15 @@ export default function MasterRightsRoute() {
     id: string;
     team?: string | string[];
     area?: string | string[];
+    calendar?: string | string[];
+    scope?: string | string[];
   }>();
   const router = useRouter();
   const team = first(params.team);
   const area = first(params.area);
   const invitationId = invitationIdFromSegment(params.id);
+  // Права ОДНОГО календаря или только компании — как у сотрудника (STORY-087).
+  const focus = rightsFocusOf(first(params.calendar), first(params.scope));
 
   const back = () => {
     if (router.canGoBack()) {
@@ -37,10 +42,18 @@ export default function MasterRightsRoute() {
     router.replace(home as Href);
   };
 
-  if (params.id === "new") return <MasterRightsPage mode="draft" area={area} onBack={back} />;
+  if (params.id === "new") {
+    return <MasterRightsPage mode="draft" area={area} focus={focus} onBack={back} />;
+  }
   if (invitationId) {
     return (
-      <MasterRightsPage mode="invite" invitationId={invitationId} area={area} onBack={back} />
+      <MasterRightsPage
+        mode="invite"
+        invitationId={invitationId}
+        area={area}
+        focus={focus}
+        onBack={back}
+      />
     );
   }
   return <Redirect href={`/calendar/masters/${params.id}` as Href} />;

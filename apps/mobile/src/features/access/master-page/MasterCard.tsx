@@ -25,6 +25,9 @@ import { MasterCardView, type EmailState } from "./MasterCardView";
 import { MasterInviteCard } from "./MasterInviteCard";
 import { MasterMemberCard } from "./MasterMemberCard";
 import {
+  calendarRightsLine,
+  clientsRightsLine,
+  draftChangedFrom,
   invitationRequest,
   invitationSegment,
   inviteBlockers,
@@ -32,6 +35,7 @@ import {
   toggleTeam,
   type MasterDraft,
 } from "./master-draft";
+import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, liveAreasOf } from "./rights-rows";
 
 // КАРТОЧКА МАСТЕРА — ОДНА НА ТРИ СЛУЧАЯ (владелец 15.09: «„Добавить мастера"
@@ -44,7 +48,7 @@ import { RIGHTS_AREAS, areaLevelsOf, liveAreasOf } from "./rights-rows";
 // Тело одно (`MasterCardView`); режим решает, откуда данные и куда правка.
 
 export type MasterCardProps =
-  | { mode: "draft"; teamId: string | null; onBack: () => void }
+  | { mode: "draft"; teamId: string | null; cardId?: string | null; onBack: () => void }
   | { mode: "invite"; invitationId: string; onBack: () => void }
   | { mode: "member"; userId: string; teamId: string | null; onBack: () => void };
 
@@ -57,15 +61,19 @@ export function MasterCard(props: MasterCardProps) {
         <MasterMemberCard userId={props.userId} teamId={props.teamId} onBack={props.onBack} />
       );
     default:
-      return <MasterDraftCard teamId={props.teamId} onBack={props.onBack} />;
+      return (
+        <MasterDraftCard teamId={props.teamId} cardId={props.cardId ?? null} onBack={props.onBack} />
+      );
   }
 }
 
 function MasterDraftCard({
   teamId,
+  cardId,
   onBack,
 }: {
   teamId: string | null;
+  cardId: string | null;
   onBack: () => void;
 }) {
   const toast = useToast();
@@ -85,11 +93,14 @@ function MasterDraftCard({
   // Черновик общий со страницей «Права» (`draft-store`). После «Пригласить» и
   // «Удалить черновик» экран ещё уезжает — держим последний вид, чтобы поля
   // не мигнули пустыми.
-  const [opened] = useState(() => openMasterDraft(teamId));
+  const [opened] = useState(() => openMasterDraft(teamId, cardId));
   const current = useMasterDraft();
   const last = useRef(opened);
   if (current) last.current = current;
   const draft = last.current.draft;
+  // Зовут по существующей карточке без аккаунта (STORY-087): имя и телефон
+  // уже её, должность и цвет живут в ней и здесь не правятся.
+  const masterId = last.current.masterId ?? null;
 
   const update = (patch: Partial<MasterDraft>) =>
     updateMasterDraft((currentDraft) => ({ ...currentDraft, ...patch }));
@@ -101,7 +112,8 @@ function MasterDraftCard({
   // Серая по двум причинам: чего-то не хватает — или реестр прав ещё не
   // пришёл, и права ушли бы пустыми.
   const grey = blocked || !blocks;
-  const dirty = isDraftDirty(draft, teamId);
+  const baseline = last.current.baseline;
+  const dirty = baseline ? draftChangedFrom(draft, baseline) : isDraftDirty(draft, teamId);
   const emailRefused = refusedEmail !== null && draft.email === refusedEmail;
   const emailState: EmailState =
     isInvitationEmail(draft.email) && !emailRefused
@@ -130,7 +142,11 @@ function MasterDraftCard({
 
   const openArea = (area: string) =>
     router.push(
-      `/calendar/masters/new/rights?area=${area}&team=${encodeURIComponent(teamId ?? "")}` as Href,
+      `/calendar/masters/new/rights?area=${area}&team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "company" })}` as Href,
+    );
+  const openCalendarRights = (id: string) =>
+    router.push(
+      `/calendar/masters/new/rights?team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
     );
 
   // СЕРАЯ КНОПКА НЕ МОЛЧИТ И НЕ ОБЪЯСНЯЕТ СЛОВАМИ: тап отзывается вибрацией и
@@ -163,7 +179,7 @@ function MasterDraftCard({
     }
     // Без реестра блоков права ушли бы пустыми — кнопка до него серая.
     if (!blocks || create.isPending) return;
-    create.mutate(invitationRequest(draft, blocks, phoneToSave), {
+    create.mutate({ ...invitationRequest(draft, blocks, phoneToSave), masterId }, {
       onSuccess: (saved) => {
         haptics.success();
         toast("Приглашение отправлено");
@@ -189,13 +205,16 @@ function MasterDraftCard({
     <>
       <Stack.Screen options={{ gestureEnabled: !dirty && !create.isPending }} />
       <MasterCardView
-        title="Новый мастер"
+        title={masterId ? "Пригласить в CRM" : "Новый мастер"}
+        subtitle={masterId ? draft.name.trim() || undefined : undefined}
         onBack={leave}
         identity={draft}
         live
         editable
+        cardFieldsEditable={!masterId}
         emailEditable
-        autoFocusName
+        // По карточке имя уже есть — курсор сразу в почту.
+        autoFocusName={!masterId}
         emailState={emailState}
         refs={{ name: nameRef, email: emailRef, phone: phoneRef }}
         onNameChange={(name) => update({ name })}
@@ -220,13 +239,15 @@ function MasterDraftCard({
         onTitleChange={(title) => update({ title })}
         teams={teams}
         teamIds={draft.teamIds}
-        onOpenCalendars={() => {
-          Keyboard.dismiss();
-          setCalendarsOpen(true);
-        }}
         liveAreas={blocks ? liveAreasOf(blocks, RIGHTS_AREAS) : []}
         areaLevels={blocks ? areaLevelsOf(blocks, draft) : null}
         onOpenArea={openArea}
+        // Как у сотрудника (STORY-087): календарь строкой со своими правами —
+        // он задан тем, откуда позвали, поэтому без «Добавить» и свайпа.
+        showCalendars={!!blocks}
+        calendarLine={blocks ? (id) => calendarRightsLine(blocks, draft, id) : undefined}
+        areaValues={blocks ? { clients: clientsRightsLine(blocks, draft) } : undefined}
+        onOpenCalendarRights={openCalendarRights}
         footer={
           // Серая кнопка — чего-то не хватает или реестр прав не пришёл — сама
           // тапов не ловит: их ловит обёртка, чтобы отозваться и повести к
@@ -247,7 +268,7 @@ function MasterDraftCard({
         visible={calendarsOpen}
         teams={teams}
         selected={draft.teamIds}
-        onToggle={(id) => updateMasterDraft((currentDraft) => toggleTeam(currentDraft, id))}
+        onToggle={(id) => updateMasterDraft((currentDraft) => toggleTeam(currentDraft, id, true))}
         onClose={() => setCalendarsOpen(false)}
       />
     </>

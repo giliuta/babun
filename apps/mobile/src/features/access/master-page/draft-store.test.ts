@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import { draftChangedFrom } from "./master-draft";
 import {
   closeMasterDraft,
   openMasterDraft,
+  openMasterDraftFromCard,
   readMasterDraft,
   updateMasterDraft,
 } from "./draft-store";
@@ -35,5 +37,26 @@ describe("черновик нового мастера между карточк
     assert.equal(readMasterDraft(), null);
     updateMasterDraft((draft) => ({ ...draft, name: "x" }));
     assert.equal(readMasterDraft(), null);
+  });
+
+  test("черновик по карточке: чистый на входе, «Новый мастер» его не подхватывает", () => {
+    closeMasterDraft();
+    const card = openMasterDraftFromCard({
+      teamId: "team-1",
+      masterId: "master-1",
+      name: "Проба",
+      phone: "+357 99 123456",
+      teamIds: ["team-1"],
+    });
+    // Карточка открывает тот же черновик — с именем и телефоном карточки.
+    const opened = openMasterDraft("team-1", "master-1");
+    assert.equal(opened.draft.name, "Проба");
+    assert.equal(draftChangedFrom(opened.draft, card.baseline!), false);
+    updateMasterDraft((draft) => ({ ...draft, email: "a@b.cy" }));
+    assert.equal(draftChangedFrom(readMasterDraft()!.draft, card.baseline!), true);
+    // «Новый мастер» того же календаря — пустой и без карточки.
+    const fresh = openMasterDraft("team-1");
+    assert.equal(fresh.draft.name, "");
+    assert.equal(fresh.masterId ?? null, null);
   });
 });

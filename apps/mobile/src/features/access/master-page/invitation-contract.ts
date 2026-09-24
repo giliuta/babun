@@ -23,6 +23,8 @@ export interface CreateInvitationArgs {
   p_master_title: string | null;
   p_master_color: string | null;
   p_access: AccessChange[];
+  /** Карточка мастера без аккаунта, по которой зовут (STORY-087). */
+  p_master_id?: string;
 }
 
 export interface UpdateInvitationArgs {
@@ -48,6 +50,11 @@ export function createInvitationArgs(request: MasterInvitationRequest): CreateIn
     p_master_title: request.title,
     p_master_color: request.color,
     p_access: request.access,
+    // ПО СУЩЕСТВУЮЩЕЙ КАРТОЧКЕ: сервер привяжет аккаунт к ней, а должность и
+    // цвет не примет — они живут в самой карточке.
+    ...(request.masterId
+      ? { p_master_id: request.masterId, p_master_title: null, p_master_color: null }
+      : {}),
   };
 }
 

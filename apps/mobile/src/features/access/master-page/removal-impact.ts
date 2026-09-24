@@ -8,29 +8,36 @@
 // Канон разрушительного действия (AGENTS 7.3): вопрос называет ПОСЛЕДСТВИЕ.
 // Цифра — самое честное последствие, какое у нас есть.
 //
-// Записи при этом НЕ пропадают и мастера не теряют: членство в компании и
-// карточка мастера — разные строки, `remove_tenant_member` трогает первую.
-// Поэтому фраза говорит «останутся в календаре», а не «останутся без
-// мастера» — второе было бы неправдой.
+// Записи при этом НЕ пропадают: они принадлежат КАЛЕНДАРЮ (`team_id`), а не
+// человеку (`master_id` у работ пуст, STORY-087). Поэтому счёт идёт по его
+// календарям, и отдельная «передача» не нужна: чтобы работу вёл другой,
+// его добавляют в тот же календарь. Раньше счёт искал `master_id` и всегда
+// давал ноль — вопрос о цифре молчал.
 
 /** Минимум, который нужен счёту: форма записи целиком тут ни при чём. */
 export interface WorkRow {
   date: string;
-  master_id?: string | null;
+  team_id?: string | null;
   status?: string | null;
+  kind?: string | null;
 }
 
-/** Сколько у человека работы начиная с `today` включительно. Отменённые не
- *  считаются: их отсутствие никого не подведёт. */
+/** Сколько работы впереди в календарях человека, начиная с `today`
+ *  включительно. Отменённые и события не считаются. */
 export function upcomingWorkCount(
   rows: readonly WorkRow[],
-  masterId: string | null | undefined,
+  teamIds: readonly string[],
   today: string,
 ): number {
-  if (!masterId) return 0;
+  const teams = new Set(teamIds);
+  if (teams.size === 0) return 0;
   return rows.filter(
     (row) =>
-      row.master_id === masterId && row.date >= today && row.status !== "cancelled",
+      row.kind !== "event" &&
+      !!row.team_id &&
+      teams.has(row.team_id) &&
+      row.date >= today &&
+      row.status !== "cancelled",
   ).length;
 }
 
@@ -38,7 +45,8 @@ export function upcomingWorkCount(
 export function removalMessage(upcoming: number): string {
   const base = "Доступ ко всем календарям компании пропадёт сразу. Вернуть можно только новым приглашением.";
   if (upcoming <= 0) return base;
-  return `${workWord(upcoming)} останутся в календаре — ехать будет некому. ${base}`;
+  // Без глагола при числе: «1 запись … останутся» ломало согласование.
+  return `Впереди в его календарях: ${workWord(upcoming)}. Записи останутся в календаре. ${base}`;
 }
 
 /** «1 запись», «2 записи», «5 записей» — русский счёт без библиотек. */

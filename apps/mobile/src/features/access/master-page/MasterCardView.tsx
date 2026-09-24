@@ -8,7 +8,7 @@ import {
   View,
   type TextInput,
 } from "react-native";
-import { CalendarRange, Check, MoreHorizontal, UserRound } from "lucide-react-native";
+import { CalendarRange, Check, ChevronRight, MoreHorizontal, UserRound } from "lucide-react-native";
 
 import { FieldRow, NavRow } from "@/components/ui/card-rows";
 import { ChooseRow } from "@/components/ui/ChooseRow";
@@ -17,7 +17,9 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectRow } from "@/components/ui/select-rows";
-import { ICON } from "@/components/ui/tokens";
+import { SwipeRow } from "@/components/ui/SwipeRow";
+import { AppearanceTile } from "@/components/ui/AppearanceSheet";
+import { ICON, TYPE } from "@/components/ui/tokens";
 import type { Team } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 
@@ -103,6 +105,8 @@ export interface MasterCardViewProps {
   cardFieldsEditable?: boolean;
   /** Почта правится только до «Пригласить»: потом это адрес приглашения. */
   emailEditable: boolean;
+  /** Строки почты нет — у мастера без аккаунта её нет вовсе. */
+  hideEmail?: boolean;
   autoFocusName?: boolean;
   emailState: EmailState;
   refs?: { name: InputRef; email: InputRef; phone: InputRef };
@@ -130,6 +134,21 @@ export interface MasterCardViewProps {
   liveAreas?: readonly RightsArea[];
   onOpenArea: (area: RightsArea) => void;
   footer?: ReactNode;
+  /** ПРАВА КАЛЕНДАРЯ СТРОКОЙ (STORY-087; владелец 23.09: «в одном календаре у
+   *  него свои доступы, в другом — другие»). Есть — каждый календарь стоит
+   *  строкой со СВОИМИ правами («Записи: меняет · Деньги: не видит»), тап
+   *  открывает права этого календаря, а в блоке «Права» остаются только
+   *  права компании. */
+  calendarLine?: (teamId: string) => string;
+  /** Слово строки раздела вместо «Частично» — например, «Меняет · свои». */
+  areaValues?: Partial<Record<RightsArea, string>>;
+  onOpenCalendarRights?: (teamId: string) => void;
+  /** Свайп по календарю — открепить. Нет — свайпа нет. */
+  onDetachCalendar?: (teamId: string) => void;
+  /** Кнопка в хвосте номера — «Связаться». */
+  phoneAction?: ReactNode;
+  /** Блоки ниже прав: «Работа», «Личное». */
+  children?: ReactNode;
 }
 
 const noop = () => {};
@@ -137,6 +156,11 @@ const noop = () => {};
 export function MasterCardView(p: MasterCardViewProps) {
   const t = useThemeColors();
   const areas = p.liveAreas ?? RIGHTS_AREAS;
+  // Календарные разделы живут в строках календарей — в «Правах» остаются
+  // разделы, у которых есть права компании (клиенты).
+  const shownAreas = p.calendarLine
+    ? areas.filter((area) => area !== "calendar" && area !== "finance")
+    : areas;
   const check = <Check color={t.success} size={18} strokeWidth={2.5} />;
   const chosen = p.teamIds
     .map((id) => p.teams.find((team) => team.id === id))
@@ -162,12 +186,14 @@ export function MasterCardView(p: MasterCardViewProps) {
         >
           {/* ЛИЧНОСТЬ — БЕЗЫМЯННОЙ КАРТОЧКОЙ, КАК У КЛИЕНТА. Плитка у имени —
               цвет мастера: так он узнаётся в списке и в записях. */}
-          <SectionCard padded={false}>
+          {/* У КАЖДОГО БЛОКА ШАПКА — как у клиента (владелец 22.09: первый блок
+              тоже с именем). */}
+          <SectionCard title="Сотрудник" padded={false}>
             {p.editable ? (
               <NameColorField
                 bare
-                // Ровно по строкам `FieldRow stacked` ниже — 60, как у клиента.
-                minHeight={60}
+                // Плотно, как блок «Клиент» (44pt строки под именем).
+                minHeight={52}
                 colorReadOnly={!cardFields}
                 label={null}
                 name={p.identity.name}
@@ -180,7 +206,9 @@ export function MasterCardView(p: MasterCardViewProps) {
                 autoCapitalize="words"
                 autoFocus={p.autoFocusName}
                 inputRef={p.refs?.name}
-                trailing={p.identity.name.trim() ? check : null}
+                // Галочка — подсказка черновика «имя есть»; у живого
+                // сотрудника она ничего не говорит.
+                trailing={p.live && p.identity.name.trim() ? check : null}
               />
             ) : (
               <FieldRow
@@ -194,7 +222,9 @@ export function MasterCardView(p: MasterCardViewProps) {
                 onSave={noop}
               />
             )}
+            {p.hideEmail ? null : (
             <FieldRow
+              compact
               stacked
               hideLabel
               separated
@@ -212,10 +242,12 @@ export function MasterCardView(p: MasterCardViewProps) {
               onEditEnd={p.onEmailEditEnd}
               onSave={p.onEmailChange ?? noop}
             />
+            )}
             {/* Пустое, которое нельзя заполнить, не показываем: строка без
                 значения и без правки читалась бы сломанным полем. */}
             {p.editable || p.identity.phone ? (
               <FieldRow
+              compact
                 stacked
                 hideLabel
                 separated
@@ -229,10 +261,12 @@ export function MasterCardView(p: MasterCardViewProps) {
                 inputRef={p.refs?.phone}
                 onEditEnd={p.onPhoneEditEnd}
                 onSave={p.onPhoneChange ?? noop}
+                trailing={p.identity.phone ? p.phoneAction : undefined}
               />
             ) : null}
             {cardFields || p.identity.title ? (
               <FieldRow
+              compact
                 stacked
                 hideLabel
                 separated
@@ -254,7 +288,34 @@ export function MasterCardView(p: MasterCardViewProps) {
               кнопки: мёртвых тапов на карточке нет (`calendarsBlockMode`). */}
           {p.showCalendars ? (
           <SectionCard title="Календари" padded={false}>
-            {calendarsMode === "choose" ? (
+            {p.calendarLine && chosen.length > 0 ? (
+              <>
+                {chosen.map((team, i) => (
+                  <CalendarRightsRow
+                    key={team.id}
+                    team={team}
+                    line={p.calendarLine!(team.id)}
+                    separated={i > 0}
+                    onPress={p.onOpenCalendarRights ? () => p.onOpenCalendarRights!(team.id) : undefined}
+                    onDetach={p.onDetachCalendar ? () => p.onDetachCalendar!(team.id) : undefined}
+                  />
+                ))}
+                {openCalendars && anyUnchosen ? (
+                  <ChooseRow
+                    compact
+                    icon={CalendarRange}
+                    label="Добавить календарь"
+                    onPress={openCalendars}
+                  />
+                ) : null}
+              </>
+            ) : calendarsMode === "rows-display" ? (
+              // Показание без выбора (карточка без аккаунта) — теми же строками,
+              // что у сотрудника: плитка цвета и имя, без мёртвой подложки.
+              chosen.map((team, i) => (
+                <CalendarRightsRow key={team.id} team={team} separated={i > 0} />
+              ))
+            ) : calendarsMode === "choose" ? (
               <ChooseRow
                 icon={CalendarRange}
                 label="Выбрать календари"
@@ -324,15 +385,15 @@ export function MasterCardView(p: MasterCardViewProps) {
               Разделов столько, сколько ДЕРЖИТ СЕРВЕР: раздел, у которого все
               блоки спят, с карточки убран — он обещал бы настройку, которой
               нет (STORY-083). */}
-          {areas.length > 0 ? (
-            <SectionCard title="Права" padded={false}>
-              {areas.map((area, i) => {
+          {shownAreas.length > 0 ? (
+            <SectionCard title={p.calendarLine ? "Права в компании" : "Права"} padded={false}>
+              {shownAreas.map((area, i) => {
                 const level = p.areaLevels?.[area];
                 return (
                   <NavRow
                     key={area}
                     label={AREA_TITLE[area]}
-                    value={level ? levelWord(level) : undefined}
+                    value={p.areaValues?.[area] || (level ? levelWord(level) : undefined)}
                     valueColor={level ? levelColor(t, level) : undefined}
                     separated={i > 0}
                     onPress={() => p.onOpenArea(area)}
@@ -341,6 +402,7 @@ export function MasterCardView(p: MasterCardViewProps) {
               })}
             </SectionCard>
           ) : null}
+          {p.children}
         </ScrollView>
 
         {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ, ВСЕГДА (AGENTS 7.1): 20 по бокам, 8 сверху,
@@ -353,5 +415,63 @@ export function MasterCardView(p: MasterCardViewProps) {
         ) : null}
       </KeyboardAvoidingView>
     </Screen>
+  );
+}
+
+/** СТРОКА КАЛЕНДАРЯ С ЕГО ПРАВАМИ. Плитка цвета календаря, имя и одна строка
+ *  прав этого календаря; тап — права этого календаря, свайп — открепить. */
+function CalendarRightsRow({
+  team,
+  line,
+  separated,
+  onPress,
+  onDetach,
+}: {
+  team: Team;
+  line?: string;
+  separated: boolean;
+  onPress?: () => void;
+  onDetach?: () => void;
+}) {
+  const t = useThemeColors();
+  const row = (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={line ? `${team.name}: ${line}` : team.name}
+      accessibilityHint={onPress ? "Открывает права в этом календаре" : undefined}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        minHeight: line ? 60 : 52,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderTopWidth: separated ? 1 : 0,
+        borderTopColor: t.separator,
+        backgroundColor: pressed && onPress ? t.pressed : t.surface,
+      })}
+    >
+      <AppearanceTile color={team.color ?? null} icon={team.icon ?? null} fallback={CalendarRange} size={30} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ ...TYPE.callout, color: t.ink }}>
+          {team.name}
+        </Text>
+        {line ? (
+          <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, lineHeight: 17, color: t.sub, marginTop: 2 }}>
+            {line}
+          </Text>
+        ) : null}
+      </View>
+      {onPress ? <ChevronRight color={t.chevron} size={18} strokeWidth={2.2} /> : null}
+    </Pressable>
+  );
+  return onDetach ? (
+    <SwipeRow label="Убрать" color={t.danger} onAction={onDetach} accessibilityLabel={`Убрать из ${team.name}`}>
+      {row}
+    </SwipeRow>
+  ) : (
+    row
   );
 }

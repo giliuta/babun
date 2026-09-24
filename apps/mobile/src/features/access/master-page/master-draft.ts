@@ -37,7 +37,21 @@ export interface MasterDraft {
 
 export type RightsArea = Exclude<AccessArea, "owner">;
 
-export function emptyMasterDraft(teamId: string | null): MasterDraft {
+/** СТАРТОВЫЕ ПРАВА В НОВОМ КАЛЕНДАРЕ (владелец 24.09: «да, сделай»). С одними
+ *  «Не видит» новый мастер входил и не видел в календаре даже своей работы,
+ *  пока владелец не открывал права. Теперь он видит, что и где делать —
+ *  статус, объект и услуги, — а клиент, суммы, оплата и деньги закрыты, пока
+ *  владелец их не откроет. Это ЗАГОТОВКА черновика и только что добавленного
+ *  календаря, а не умолчание реестра: у живого сотрудника страница читает
+ *  то, что лежит на сервере, и не может показать «Видит» там, где «Не видит». */
+export const STARTER_CALENDAR_LEVELS: Readonly<Record<string, AccessLevel>> = {
+  "record.status": "read",
+  "record.object": "read",
+  "record.services": "read",
+};
+
+/** Черновик без заготовки — чистая механика (и база для чтения с сервера). */
+export function blankMasterDraft(teamId: string | null): MasterDraft {
   return {
     name: "",
     email: "",
@@ -48,6 +62,26 @@ export function emptyMasterDraft(teamId: string | null): MasterDraft {
     companyLevels: {},
     calendarLevels: {},
   };
+}
+
+/** Черновик НОВОГО мастера: календарь, откуда позвали, — со стартовыми
+ *  правами. */
+export function emptyMasterDraft(teamId: string | null): MasterDraft {
+  const draft = blankMasterDraft(teamId);
+  return teamId ? { ...draft, calendarLevels: { [teamId]: { ...STARTER_CALENDAR_LEVELS } } } : draft;
+}
+
+/** Стартовые права календаря изменениями — для сотрудника, которого
+ *  прикрепили к новому календарю и выбрали «Выставлю сам». Только живые
+ *  блоки: запись неживого сервер бы отверг. */
+export function starterCalendarChanges(
+  blocks: readonly AccessBlock[],
+  teamId: string,
+): AccessChange[] {
+  return offeredBlocks(blocks)
+    .filter((block) => block.scope === "calendar" && STARTER_CALENDAR_LEVELS[block.key])
+    .filter((block) => block.levels.includes(STARTER_CALENDAR_LEVELS[block.key]))
+    .map((block) => ({ block: block.key, team_id: teamId, level: STARTER_CALENDAR_LEVELS[block.key] }));
 }
 
 const defaultLevel = (block: AccessBlock): AccessLevel => block.levels[0] ?? "off";
@@ -181,9 +215,16 @@ export function dependantResets(
 /** Второй тап снимает календарь — вместе с его положениями: календарь,
  *  добавленный снова, начинает с умолчаний, а не со старых прав. Порядок
  *  выбора сохраняется: первый выбранный остаётся домашним. */
-export function toggleTeam(draft: MasterDraft, teamId: string): MasterDraft {
+export function toggleTeam(draft: MasterDraft, teamId: string, starter = false): MasterDraft {
   if (!draft.teamIds.includes(teamId)) {
-    return { ...draft, teamIds: [...draft.teamIds, teamId] };
+    const added = { ...draft, teamIds: [...draft.teamIds, teamId] };
+    // Добавленный календарь начинается со стартовых прав — где их просят.
+    return starter && !draft.calendarLevels[teamId]
+      ? {
+          ...added,
+          calendarLevels: { ...draft.calendarLevels, [teamId]: { ...STARTER_CALENDAR_LEVELS } },
+        }
+      : added;
   }
   const calendarLevels = { ...draft.calendarLevels };
   delete calendarLevels[teamId];
@@ -203,11 +244,20 @@ export function toggleTeam(draft: MasterDraft, teamId: string): MasterDraft {
 export function applyPickedCalendars(
   draft: MasterDraft,
   picked: readonly string[],
+  starter = false,
 ): MasterDraft {
   const teamIds = [...new Set(picked)];
-  const calendarLevels = Object.fromEntries(
+  const calendarLevels: MasterDraft["calendarLevels"] = Object.fromEntries(
     Object.entries(draft.calendarLevels).filter(([teamId]) => teamIds.includes(teamId)),
   );
+  // Новые в приглашении календари — со стартовыми правами, где их просят.
+  if (starter) {
+    for (const teamId of teamIds) {
+      if (!draft.teamIds.includes(teamId) && !calendarLevels[teamId]) {
+        calendarLevels[teamId] = { ...STARTER_CALENDAR_LEVELS };
+      }
+    }
+  }
   return { ...draft, teamIds, calendarLevels };
 }
 
@@ -266,6 +316,20 @@ export function inviteBlockers(
 }
 
 /** Черновик тронут: уход с экрана спросит, не потерять ли набранное. */
+function sameCalendarLevels(
+  a: MasterDraft["calendarLevels"],
+  b: MasterDraft["calendarLevels"],
+): boolean {
+  const norm = (levels: MasterDraft["calendarLevels"]) =>
+    JSON.stringify(
+      Object.entries(levels)
+        .filter(([, byKey]) => Object.keys(byKey).length > 0)
+        .map(([teamId, byKey]) => [teamId, Object.entries(byKey).sort()] as const)
+        .sort(([x], [y]) => x.localeCompare(y)),
+    );
+  return norm(a) === norm(b);
+}
+
 export function isDraftDirty(draft: MasterDraft, initialTeamId: string | null): boolean {
   const initial = initialTeamId ? [initialTeamId] : [];
   return (
@@ -275,10 +339,30 @@ export function isDraftDirty(draft: MasterDraft, initialTeamId: string | null): 
     draft.title.trim() !== "" ||
     draft.color !== null ||
     Object.keys(draft.companyLevels).length > 0 ||
-    Object.values(draft.calendarLevels).some((levels) => Object.keys(levels).length > 0) ||
+    // Стартовые права — заготовка, а не правка: сравниваем с нею.
+    !sameCalendarLevels(draft.calendarLevels, emptyMasterDraft(initialTeamId).calendarLevels) ||
     draft.teamIds.length !== initial.length ||
     draft.teamIds.some((id, i) => id !== initial[i])
   );
+}
+
+/** Черновик по карточке (STORY-087) открывается уже с именем, телефоном и
+ *  календарями карточки — «грязный» он, только если что-то поменяли против
+ *  этого начала. Без сравнения нетронутая «Пригласить в CRM» спрашивала
+ *  «Удалить черновик?» на первом же «Назад». */
+export function draftChangedFrom(draft: MasterDraft, baseline: MasterDraft): boolean {
+  const norm = (d: MasterDraft) =>
+    JSON.stringify([
+      d.name.trim(),
+      d.email.trim(),
+      d.phone.trim(),
+      d.title.trim(),
+      d.color,
+      d.teamIds,
+      d.companyLevels,
+      Object.entries(d.calendarLevels).filter(([, levels]) => Object.keys(levels).length > 0),
+    ]);
+  return norm(draft) !== norm(baseline);
 }
 
 /** Положение, которое видно на странице прав: свёрнутый зависимый стоит на
@@ -321,7 +405,9 @@ export function foldedBlock(blocks: readonly AccessBlock[], draft: MasterDraft) 
 /** Положение раздела целиком — «mixed», когда блоки или календари расходятся. */
 export type AreaLevel = AccessLevel | "mixed";
 
-export const MIXED_WORD = "Разное";
+// «ЧАСТИЧНО», А НЕ «РАЗНОЕ» (STORY-087): «разное» не отвечает на вопрос
+// владельца «что он видит», «частично» — отвечает: что-то видит, что-то нет.
+export const MIXED_WORD = "Частично";
 
 /** Положение раздела на карточке. Считаются только блоки, которые можно
  *  скрыть: у «Валюты» и «Какие клиенты» положения «Скрыт» нет, и в счёте они
@@ -353,6 +439,140 @@ export function areaLevel(
     }
   }
   return seen ?? "off";
+}
+
+/** Положение раздела В ОДНОМ КАЛЕНДАРЕ (STORY-087). Владелец 23.09: «в одном
+ *  календаре у него свои доступы, в другом — другие». Строка календаря на
+ *  странице сотрудника говорит про СВОЙ календарь, а не «Разное» по всем. */
+export function calendarAreaLevel(
+  blocks: readonly AccessBlock[],
+  draft: MasterDraft,
+  area: RightsArea,
+  teamId: string,
+): AreaLevel {
+  let seen: AccessLevel | null = null;
+  const shown = visibleLevel(blocks, draft);
+  for (const block of offeredBlocks(blocks)) {
+    if (block.area !== area || block.scope !== "calendar") continue;
+    if (block.ownerOnly || !block.levels.includes("off")) continue;
+    const level = shown(block, teamId);
+    if (seen === null) seen = level;
+    else if (seen !== level) return "mixed";
+  }
+  return seen ?? "off";
+}
+
+/** ПРАВА «КАК В ТОМ КАЛЕНДАРЕ» (STORY-087): добавили мастеру второй календарь —
+ *  одним тапом перенести положения первого, а не выставлять десять строк
+ *  заново. Только живые календарные блоки; свёрнутое переносится свёрнутым. */
+export function copyCalendarLevels(
+  blocks: readonly AccessBlock[],
+  draft: MasterDraft,
+  fromTeamId: string,
+  toTeamId: string,
+): AccessChange[] {
+  const shown = visibleLevel(blocks, draft);
+  return offeredBlocks(blocks)
+    .filter((block) => block.scope === "calendar")
+    .map((block) => ({ block: block.key, team_id: toTeamId, level: shown(block, fromTeamId) }));
+}
+
+/** Разделы, у которых в календаре есть что выставить (живые блоки). */
+export const CALENDAR_AREAS = ["calendar", "finance"] as const satisfies readonly RightsArea[];
+
+/** Короткое имя раздела в строке календаря: «Записи», «Деньги». */
+export const CALENDAR_AREA_WORD: Record<(typeof CALENDAR_AREAS)[number], string> = {
+  calendar: "Записи",
+  finance: "Деньги",
+};
+
+/** Права календаря одной строкой — «Записи: меняет · Деньги: скрыт».
+ *  Раздела без живых блоков в строке нет. */
+export function calendarRightsLine(
+  blocks: readonly AccessBlock[],
+  draft: MasterDraft,
+  teamId: string,
+): string {
+  const offered = offeredBlocks(blocks);
+  return CALENDAR_AREAS.filter((area) =>
+    offered.some(
+      (block) =>
+        block.area === area &&
+        block.scope === "calendar" &&
+        !block.ownerOnly &&
+        block.levels.includes("off"),
+    ),
+  )
+    .map((area) => {
+      const level = calendarAreaLevel(blocks, draft, area, teamId);
+      const word =
+        level === "mixed"
+          ? mixedAreaWord(blocks, draft, area, teamId)
+          : LEVEL_WORD[level].toLocaleLowerCase("ru-RU");
+      return `${CALENDAR_AREA_WORD[area]}: ${word}`;
+    })
+    .join(" · ");
+}
+
+/** Родительный падеж блоков записи и денег — для «без клиента и суммы». */
+const BLOCK_GENITIVE: Record<string, string> = {
+  "record.status": "статуса",
+  "record.client": "клиента",
+  "record.object": "объекта",
+  "record.services": "услуг",
+  "record.amount": "суммы",
+  "record.payment": "оплаты",
+  "record.files": "файлов",
+  "finance.operations": "операций",
+  "finance.accounts": "счетов",
+  "finance.debts": "долгов",
+};
+
+/** СМЕШАННЫЙ РАЗДЕЛ — СЛОВАМИ, ЧТО ИМЕННО (аудит 24.09). «Записи: частично»
+ *  не отвечало на вопрос владельца «что он видит»: закрыто одно-два — строка
+ *  их называет («без клиента», «без клиента и суммы»); закрыто больше —
+ *  сколько открыто («видит 3 из 7»); закрытого нет, но меняет не всё —
+ *  «видит, меняет часть». */
+export function mixedAreaWord(
+  blocks: readonly AccessBlock[],
+  draft: MasterDraft,
+  area: RightsArea,
+  teamId: string,
+): string {
+  const shown = visibleLevel(blocks, draft);
+  const rows = offeredBlocks(blocks)
+    .filter(
+      (block) =>
+        block.area === area &&
+        block.scope === "calendar" &&
+        !block.ownerOnly &&
+        block.levels.includes("off"),
+    )
+    .map((block) => ({ key: block.key, level: shown(block, teamId) }));
+  const closed = rows.filter((row) => row.level === "off");
+  if (closed.length === 0) return "видит, меняет часть";
+  const named = closed.map((row) => BLOCK_GENITIVE[row.key]);
+  if (closed.length <= 2 && named.every(Boolean)) return `без ${named.join(" и ")}`;
+  return `видит ${rows.length - closed.length} из ${rows.length}`;
+}
+
+/** КЛИЕНТЫ ОДНОЙ СТРОКОЙ (аудит 24.09). «Клиенты — Частично» на карточке не
+ *  говорило ничего: теперь строка называет положение базы, какие клиенты и
+ *  телефоны — «Меняет · свои · без телефонов». Части, чьих блоков сервер не
+ *  держит, в строку не идут. */
+export function clientsRightsLine(blocks: readonly AccessBlock[], draft: MasterDraft): string {
+  const shown = visibleLevel(blocks, draft);
+  const byKey = new Map(offeredBlocks(blocks).map((block) => [block.key, block]));
+  const main = byKey.get("clients");
+  if (!main) return "";
+  const level = shown(main, null);
+  if (level === "off") return LEVEL_WORD.off;
+  const parts = [LEVEL_WORD[level]];
+  const scope = byKey.get("clients.scope");
+  if (scope) parts.push(shown(scope, null) === "all" ? "все" : "свои");
+  const contacts = byKey.get("clients.contacts");
+  if (contacts && shown(contacts, null) === "off") parts.push("без телефонов");
+  return parts.join(" · ");
 }
 
 /** Слово раздела: «Скрыт», «Смотрит», «Меняет» или «Разное». Счётчиков нет. */
@@ -412,6 +632,8 @@ export function draftAccessChanges(
  *  `undefined` — набран мусор (тогда кнопку уже остановил `inviteBlockers`, а
  *  здесь номер просто не уйдёт). */
 export interface MasterInvitationRequest {
+  /** Карточка мастера без аккаунта, по которой зовут (STORY-087). */
+  masterId?: string | null;
   email: string;
   fullName: string;
   phone: string | null;

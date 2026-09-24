@@ -121,7 +121,7 @@ describe("право, выданное владельцем, доходит до
 
     assert.equal(rowLevel(draft, "finance.operations"), "write", "строка страницы");
     assert.equal(sentLevel(draft, "finance.operations"), "write", "уходит на сервер");
-    // Раздел целиком — «Разное»: живых блоков в «Финансах» три, поднят один.
+    // Раздел целиком — «Частично»: живых блоков в «Финансах» три, поднят один.
     assert.equal(areaLevel(REGISTRY, draft, "finance"), "mixed", "слово раздела");
 
 

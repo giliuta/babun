@@ -20,7 +20,7 @@ import {
   useSetMemberAccess,
 } from "../queries";
 import { memberRefusal } from "./MasterMemberCard";
-import { MasterRightsView } from "./MasterRightsView";
+import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRightsView";
 import {
   MEMBER_REFUSAL_TEXT,
   draftFromMemberAccess,
@@ -40,11 +40,14 @@ export function MemberRights({
   userId,
   teamId,
   area,
+  focus,
   onBack,
 }: {
   userId: string;
   teamId: string | null;
   area?: string;
+  /** Права одного календаря или компании (STORY-087). */
+  focus?: RightsFocus;
   onBack: () => void;
 }) {
   const toast = useToast();
@@ -123,7 +126,8 @@ export function MemberRights({
       blocks={blocks}
       teams={teams}
       teamIds={visible}
-      activeTeamId={activeOf(active, visible)}
+      activeTeamId={focus?.kind === "calendar" ? focus.teamId : activeOf(active, visible)}
+      {...focusViewProps(focus, teams)}
       onSelectTeam={setActive}
       levelOf={(block, pickTeam) => mapLevelOf(block, map, pickTeam ?? "")}
       // Неживой блок правится как остальные (владелец 15.09, миграция

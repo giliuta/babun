@@ -20,6 +20,7 @@ export function CalendarPickerSheet({
   selected,
   onToggle,
   onClose,
+  onExited,
 }: {
   visible: boolean;
   /** Живые календари компании. */
@@ -27,11 +28,14 @@ export function CalendarPickerSheet({
   selected: readonly string[];
   onToggle: (teamId: string) => void;
   onClose: () => void;
+  /** Лист уехал и его окно снято — отсюда можно поднимать следующий. */
+  onExited?: () => void;
 }) {
   return (
     <BottomSheet
       visible={visible}
       onClose={onClose}
+      onExited={onExited}
       title="Календари"
       padded={false}
       scroll

@@ -29,12 +29,25 @@ const stringIds = (value: unknown): string[] =>
 
 /** Старый состав бригады: карточки, записанные в календарь списками
  *  ведущих и помощников, а не своим `team_id`. */
-const brigadeOf = (team: TeamLike): Set<string> =>
+export const brigadeOf = (team: TeamLike): Set<string> =>
   new Set([
     ...stringIds(team.lead_ids),
     ...stringIds(team.helper_ids),
     ...(team.lead_id ? [team.lead_id] : []),
   ]);
+
+/** Календари карточки без аккаунта: свой `team_id` первым (домашний), за ним
+ *  календари, где она стоит в старом составе бригады. */
+export function cardTeamIds(
+  card: { id: string; team_id: string | null },
+  teams: readonly TeamLike[],
+): string[] {
+  const ids: string[] = card.team_id ? [card.team_id] : [];
+  for (const team of teams) {
+    if (!ids.includes(team.id) && brigadeOf(team).has(card.id)) ids.push(team.id);
+  }
+  return ids;
+}
 
 /** Карточки для раздела «Мастера» календаря `teamId`:
  *   • человек с доступом к этому календарю уже стоит строкой выше — его

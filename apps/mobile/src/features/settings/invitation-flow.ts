@@ -46,6 +46,11 @@ export function invitationErrorMessage(message: string): string {
   if (/finish company setup|company setup is incomplete/i.test(message)) {
     return "Сначала завершите настройку компании, затем пригласите сотрудника.";
   }
+  // Принять приглашение можно только с подтверждённой почтой (миграция
+  // 20260924120000): иначе его забрал бы любой, кто занял адрес сотрудника.
+  if (/invite:email_not_confirmed/i.test(message)) {
+    return "Подтвердите почту — письмо пришло при регистрации — и примите приглашение снова.";
+  }
   if (/already has access/i.test(message)) {
     return "У этого аккаунта уже есть доступ к компании.";
   }

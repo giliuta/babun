@@ -161,8 +161,8 @@ describe("сотрудник на карточке мастера", () => {
     const draft = draftFromMemberAccess(map, identity);
     assert.deepEqual(draft.teamIds, ["team-1", "team-2"]);
     assert.equal(draft.calendarLevels["team-old"], undefined);
-    assert.equal(areaWord(REGISTRY, draft, "calendar"), "Разное");
-    assert.equal(areaWord(REGISTRY, draft, "finance"), "Скрыт");
+    assert.equal(areaWord(REGISTRY, draft, "calendar"), "Частично");
+    assert.equal(areaWord(REGISTRY, draft, "finance"), "Не видит");
   });
 
   test("положение уходит вместе со сбросом зависимых; календарный без календаря — никак", () => {

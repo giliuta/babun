@@ -1,38 +1,17 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Screen } from "@/components/ui/Screen";
-import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
 import { phoneToSave } from "@/features/profile/profile";
-import { useTeams, type Team } from "@/features/reference/queries";
-import { memberAccessQueryKey } from "@/lib/company-query-keys";
-import { useTenantId } from "@/lib/tenant";
+import { useTeams } from "@/features/reference/queries";
 
-import {
-  levelOf as mapLevelOf,
-  type AccessBlock,
-  type AccessLevel,
-  type AccessRefusal,
-  type MemberAccessMap,
-} from "../access-map";
-import {
-  useAccessBlocks,
-  useCalendarMembers,
-  useMemberAccess,
-  useSetMemberAccess,
-} from "../queries";
+import { useAccessBlocks } from "../queries";
 import { updateMasterDraft, useMasterDraft } from "./draft-store";
 import { useUpdateMasterInvitation } from "./invitation-api";
 import { invitationRefusalText, isInvitationGone } from "./invitation-contract";
 import { usePendingInvitation } from "./MasterInviteCard";
-import { memberRefusal } from "./MasterMemberCard";
-import { MasterRightsView } from "./MasterRightsView";
+import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRightsView";
 import { MemberRights } from "./MemberRights";
 import { RightsPlaceholder, activeOf, liveIdsOf, usePreview } from "./rights-page-shared";
-import { mirrorMapOf } from "../mirror/mirror-map";
-import { useMirrorMode } from "../mirror/mirror-state";
 import {
   draftFromInvitation,
   invitationCarriesCardFields,
@@ -40,11 +19,8 @@ import {
   visibleLevel,
   withLevel,
   withLiveTeams,
-  type RightsArea,
 } from "./master-draft";
-import {
-  rightsAreaOf,
-} from "./rights-rows";
+import { rightsAreaOf } from "./rights-rows";
 
 // «ПРАВА» ВНУТРИ КАРТОЧКИ МАСТЕРА — ТРИ ИСТОЧНИКА, ОДНА СТРАНИЦА. Что куда
 // ложится при выборе положения:
@@ -52,10 +28,11 @@ import {
 //   • invite — в приглашение (`update_invitation`), сразу, с откатом при отказе;
 //   • member — в права сотрудника (`set_member_access`), сразу, с откатом.
 
-export type MasterRightsPageProps =
+export type MasterRightsPageProps = (
   | { mode: "draft"; area?: string; onBack: () => void }
   | { mode: "invite"; invitationId: string; area?: string; onBack: () => void }
-  | { mode: "member"; userId: string; teamId: string | null; area?: string; onBack: () => void };
+  | { mode: "member"; userId: string; teamId: string | null; area?: string; onBack: () => void }
+) & { focus?: RightsFocus };
 
 /** Включить зеркало и уйти в продукт. Имя в плашке — как на карточке; роль в
  *  зеркале всегда сотрудничья (владельцем человек не бывает, иначе экраны
@@ -65,7 +42,12 @@ export function MasterRightsPage(props: MasterRightsPageProps) {
   switch (props.mode) {
     case "invite":
       return (
-        <InviteRights invitationId={props.invitationId} area={props.area} onBack={props.onBack} />
+        <InviteRights
+          invitationId={props.invitationId}
+          area={props.area}
+          focus={props.focus}
+          onBack={props.onBack}
+        />
       );
     case "member":
       return (
@@ -73,17 +55,26 @@ export function MasterRightsPage(props: MasterRightsPageProps) {
           userId={props.userId}
           teamId={props.teamId}
           area={props.area}
+          focus={props.focus}
           onBack={props.onBack}
         />
       );
     default:
-      return <DraftRights area={props.area} onBack={props.onBack} />;
+      return <DraftRights area={props.area} focus={props.focus} onBack={props.onBack} />;
   }
 }
 
 /** Страница, которой пока нечего показать: едет, отказ или черновика нет. */
 
-function DraftRights({ area, onBack }: { area?: string; onBack: () => void }) {
+function DraftRights({
+  area,
+  focus,
+  onBack,
+}: {
+  area?: string;
+  focus?: RightsFocus;
+  onBack: () => void;
+}) {
   const preview = usePreview();
   const blocksQuery = useAccessBlocks();
   const teamsQuery = useTeams();
@@ -119,7 +110,8 @@ function DraftRights({ area, onBack }: { area?: string; onBack: () => void }) {
       blocks={blocks}
       teams={teams}
       teamIds={draft.teamIds}
-      activeTeamId={activeOf(active, draft.teamIds)}
+      activeTeamId={focus?.kind === "calendar" ? focus.teamId : activeOf(active, draft.teamIds)}
+      {...focusViewProps(focus, teams)}
       onSelectTeam={setActive}
       levelOf={visibleLevel(blocks, draft)}
       onPick={(block, level, teamId) =>
@@ -143,10 +135,12 @@ function DraftRights({ area, onBack }: { area?: string; onBack: () => void }) {
 function InviteRights({
   invitationId,
   area,
+  focus,
   onBack,
 }: {
   invitationId: string;
   area?: string;
+  focus?: RightsFocus;
   onBack: () => void;
 }) {
   const toast = useToast();
@@ -184,7 +178,8 @@ function InviteRights({
       blocks={blocks}
       teams={teams}
       teamIds={draft.teamIds}
-      activeTeamId={activeOf(active, draft.teamIds)}
+      activeTeamId={focus?.kind === "calendar" ? focus.teamId : activeOf(active, draft.teamIds)}
+      {...focusViewProps(focus, teams)}
       onSelectTeam={setActive}
       levelOf={visibleLevel(blocks, draft)}
       onPick={(block, level, teamId) => {
