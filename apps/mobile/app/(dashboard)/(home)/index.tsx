@@ -366,7 +366,19 @@ export default function CalendarTab() {
     calSettings?.timezone ??
     "Europe/Nicosia";
 
-  const reschedule = (apt: Appointment, newStart: string, newEnd: string) => {
+  const reschedule = (
+    apt: Appointment,
+    newStart: string,
+    newEnd: string,
+    newDate?: string,
+    newTeam?: string | null,
+  ) => {
+    // Свободное перемещение (24.09) двигает запись и по дням, и в другую
+    // свою команду; обычная растяжка/перенос в дне даты и команды не несут.
+    const date = newDate ?? apt.date;
+    const teamId = newTeam === undefined ? apt.team_id : newTeam;
+    const dateMoves = date !== apt.date;
+    const teamMoves = teamId !== apt.team_id;
     if (!canMoveAppointment(apt)) {
       toast(
         isCalendarEvent(apt)
@@ -378,7 +390,13 @@ export default function CalendarTab() {
     }
     // Ничего не поменялось — ни начало, ни конец. Сравнивать одно начало
     // нельзя: растяжка за нижний край меняет только конец (24.09).
-    if (apt.time_start === newStart && apt.time_end === newEnd) return;
+    if (
+      apt.time_start === newStart &&
+      apt.time_end === newEnd &&
+      !dateMoves &&
+      !teamMoves
+    )
+      return;
     // Виртуальное вхождение повтора двигать нельзя — правится только seed
     // (id виртуала синтетический, мутация по нему невалидна).
     if ((apt as { virtualParentId?: string }).virtualParentId) {
@@ -387,10 +405,14 @@ export default function CalendarTab() {
     }
     // Дабл-букинг команды — предупреждаем, но НЕ блокируем (web parity:
     // findOverlap перед записью; диспетчер иногда ставит внахлёст сознательно).
-    const clash = findOverlap(
-      { ...apt, time_start: newStart, time_end: newEnd },
-      visibleAppts,
-    );
+    const moved = {
+      ...apt,
+      date,
+      team_id: teamId,
+      time_start: newStart,
+      time_end: newEnd,
+    };
+    const clash = findOverlap(moved, visibleAppts);
     // Перерыв / нерабочие часы команды — то же «предупредить, не блокировать»:
     // диспетчер иногда сознательно ставит до открытия или в обед.
     const toMin = (s: string) => {
@@ -399,7 +421,7 @@ export default function CalendarTab() {
     };
     const startMin = toMin(newStart);
     const endMin = toMin(newEnd);
-    const band = workBandFor?.(apt.date);
+    const band = workBandFor?.(date);
     const bandWarn =
       band === null
         ? "Нерабочий день команды"
@@ -410,40 +432,53 @@ export default function CalendarTab() {
             : null;
     // Буфер на дорогу/уборку — самый слабый из трёх сигналов, поэтому
     // последним: пересечение и нерабочие часы важнее.
-    const tight = findBufferClash(
-      { ...apt, time_start: newStart, time_end: newEnd },
-      visibleAppts,
-      bufferMinutes,
-    );
+    const tight = findBufferClash(moved, visibleAppts, bufferMinutes);
     const warn = clash
       ? `Пересечение с ${clash.time_start}–${clash.time_end}`
       : (bandWarn ??
         (tight
           ? `Меньше ${bufferMinutes} мин до ${tight.time_start}–${tight.time_end}`
           : null));
+    const patch = {
+      time_start: newStart,
+      time_end: newEnd,
+      ...(dateMoves ? { date } : {}),
+      ...(teamMoves ? { team_id: teamId } : {}),
+    };
+    // Запись ушла за видимую неделю («вправо сильно — перелистнёт») —
+    // календарь едет за ней, чтобы она осталась перед глазами.
+    if (dateMoves) setDay(startOfDay(parseYMD(date)));
+    if (editingApt?.id === apt.id) setEditingApt(moved);
     updateAppt.mutate(
-      { id: apt.id, patch: { time_start: newStart, time_end: newEnd } },
+      { id: apt.id, patch },
       {
         onSuccess: () => {
           // Физический «удар» на успешное приземление drag-переноса —
           // блок лёг на слот, рука это чувствует.
           haptics.impact();
           if (isCalendarEvent(apt)) {
-            void syncEventAppointmentReminders(
-              { ...apt, time_start: newStart, time_end: newEnd },
-              appointmentTimeZone(apt),
-            );
+            void syncEventAppointmentReminders(moved, appointmentTimeZone(apt));
           } else {
             void cancelAppointmentReminders(apt.id);
           }
           // Растяжка (начало на месте) называет новое время целиком, перенос —
           // куда встала запись. «Отменить» возвращает прежние границы: жест
           // легко сделать случайно, а искать старое время по памяти нельзя.
+          const teamName = teamMoves
+            ? teams.find((tm) => tm.id === teamId)?.name
+            : null;
           const what =
-            apt.time_start === newStart
-              ? `Время: ${newStart}–${newEnd}`
-              : `Перенесено на ${newStart}`;
-          const prev = { time_start: apt.time_start, time_end: apt.time_end };
+            dateMoves || teamMoves
+              ? `Перенесено: ${teamName ? `${teamName}, ` : ""}${humanDay(date)}, ${newStart}`
+              : apt.time_start === newStart
+                ? `Время: ${newStart}–${newEnd}`
+                : `Перенесено на ${newStart}`;
+          const prev = {
+            time_start: apt.time_start,
+            time_end: apt.time_end,
+            ...(dateMoves ? { date: apt.date } : {}),
+            ...(teamMoves ? { team_id: apt.team_id } : {}),
+          };
           toast(warn ? `${what}. ${warn}` : what, "success", {
             label: "Отменить",
             onPress: () =>
@@ -1812,29 +1847,18 @@ export default function CalendarTab() {
   };
 
   // ═══ ДОЛГОЕ НАЖАТИЕ ПО СВОБОДНОМУ ВРЕМЕНИ (владелец 2026-09-24) ═══
-  // Разметка дня без формы записи: «Перерыв» — событие команды на полчаса
-  // (растягивается за край прямо в сетке), «Метка дня» — та же шторка, что
-  // тап по числу. Тап по свободному времени по-прежнему заводит запись.
-  // Права: перерыв — кто заводит события в этом календаре, метка — кто правит
-  // метки дня. Нет ни того, ни другого — меню нет вовсе.
+  // «Перерыв» — событие команды на полчаса, серое; растягивается в свободном
+  // перемещении. Тап по свободному времени по-прежнему заводит запись, метка
+  // дня — тапом по числу. Право — заводить события в этом календаре.
   const canAddBreak =
     canManageBookings || (isCrew && activeActions.events === "write");
-  const canSlotMenu = canAddBreak || canManageDayLabels;
+  // ДОЛГОЕ НАЖАТИЕ ПО СВОБОДНОМУ МЕСТУ — СРАЗУ ПЕРЕРЫВ (владелец 24.09:
+  // «открывается просто перерыв, и всё; метка дня — тапом по дате»).
+  const canSlotMenu = canAddBreak;
   const slotMenu = (dateYmd: string, timeStart: string) => {
-          type Item = { label: string; run: () => void };
-          const items: Item[] = [];
-          if (canAddBreak)
-            items.push({ label: "Перерыв", run: () => addBreak(dateYmd, timeStart) });
-          if (canManageDayLabels)
-            items.push({ label: "Метка дня", run: () => setCityPickerYmd(dateYmd) });
-          haptics.tap();
-          setSheetMenu({
-            title: "Свободное время",
-            subtitle: `${humanDay(dateYmd)}, ${timeStart}`,
-            items,
-          });
+    haptics.tap();
+    addBreak(dateYmd, timeStart);
   };
-
   const addBreak = (dateYmd: string, timeStart: string) => {
     const brk = createBlankAppointment({
       kind: "event",
@@ -2065,7 +2089,7 @@ export default function CalendarTab() {
         (!event || mutable)
       ) {
         items.push({
-          label: "Двигать и растягивать",
+          label: "Свободное перемещение",
           run: () => {
             setMoving(null);
             setEditingApt(apt);
@@ -2496,10 +2520,22 @@ export default function CalendarTab() {
 
   /** Тап по пустому времени — одна дорога для Недели и Дня. */
   const createAt = (dateYmd: string, timeStart: string) => {
-    // Режим правки записи: тап по сетке мимо записи — выход из режима, а не
-    // новая запись.
+    // СВОБОДНОЕ ПЕРЕМЕЩЕНИЕ: тап по любому месту сетки ставит запись туда —
+    // любой день, любая неделя (сетку можно листать), любая своя команда
+    // (чип над сеткой). Прошлое не запрещено: так отмечают выезд, который
+    // уже был (владелец 24.09).
     if (editingApt) {
-      setEditingApt(null);
+      const dur = Math.max(
+        15,
+        minutesBetweenHM(editingApt.time_start, editingApt.time_end) || 30,
+      );
+      reschedule(
+        editingApt,
+        timeStart,
+        addMinutesHM(timeStart, dur),
+        dateYmd,
+        activeTeamId ?? editingApt.team_id,
+      );
       return;
     }
     // Режим переноса: тап по кубику — переезд записи, не новая запись.
@@ -2803,9 +2839,13 @@ export default function CalendarTab() {
         />
       ) : editingApt ? (
         <ModePlaque
-          title={`Двигать: ${clientName(editingApt) || editingApt.comment || "Запись"}`}
-          subtitle="Тяните запись или её край"
-          exitLabel="Закончить правку"
+          title={`Перемещение: ${clientName(editingApt) || editingApt.comment || "Запись"}`}
+          subtitle={
+            teams.length > 1
+              ? "Тяните или тапните время · команда — ниже"
+              : "Тяните запись или тапните время"
+          }
+          exitLabel="Закончить перемещение"
           onExit={() => setEditingApt(null)}
         />
       ) : moving ? (

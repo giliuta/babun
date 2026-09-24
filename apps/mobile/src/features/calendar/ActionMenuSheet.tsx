@@ -47,7 +47,7 @@ export type ActionMenu = {
 };
 
 const LOOK: Record<string, { icon: LucideIcon; color: string }> = {
-  "Двигать и растягивать": { icon: Move, color: SETTINGS_TILE.blue },
+  "Свободное перемещение": { icon: Move, color: SETTINGS_TILE.blue },
   Перенести: { icon: CalendarClock, color: SETTINGS_TILE.indigo },
   Копировать: { icon: Copy, color: SETTINGS_TILE.teal },
   Цвет: { icon: Palette, color: SETTINGS_TILE.purple },

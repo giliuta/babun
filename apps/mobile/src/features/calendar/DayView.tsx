@@ -95,6 +95,18 @@ const TAP_STEP = 30;
 const HALF_MARK_MIN_H = 52;
 
 const minToHM = (min: number) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
+/** Дата `ymd`, сдвинутая на `days` дней (по местной полуночи). */
+const shiftYmd = (ymd: string, days: number) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(y, (m || 1) - 1, (d || 1) + days);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+};
+const DOW_SHORT = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+/** «Пт 26» — день, куда встанет запись, для подписи на карточке. */
+const dayShort = (ymd: string, days: number) => {
+  const [y, m, d] = shiftYmd(ymd, days).split("-").map(Number);
+  return `${DOW_SHORT[new Date(y, m - 1, d).getDay()]} ${d}`;
+};
 
 // Per-date work band (minutes since midnight) resolved from team_schedules
 // by the parent via shared getDayScheduleForDate — web DayColumn.tsx:231.
@@ -170,6 +182,8 @@ function MinuteBand({
 const MIN_H = (lineH: number) => 9 + lineH;
 /** Высота зоны края блока, за которую запись растягивают. */
 const EDGE_H = 16;
+/** Зона у края экрана, где перетаскивание уходит в соседнюю неделю. */
+const EDGE_PAGE = 28;
 /** Блик плотного блока: высота плёнки от верха и её белизна. */
 const GLASS: readonly (readonly [`${number}%`, number])[] = [
   ["18%", 0.07],
@@ -387,6 +401,7 @@ const Block = memo(function Block({
   lineH,
   overdue = false,
   editing = false,
+  dayW,
   onEdit,
   onMenu,
   onReschedule,
@@ -420,13 +435,16 @@ const Block = memo(function Block({
   /** Запись в режиме правки («Двигать и растягивать» из меню): только тогда
    *  её можно тащить и тянуть за края. В покое запись закреплена. */
   editing?: boolean;
+  /** Ширина колонки дня в Неделе: в свободном перемещении запись ходит и
+   *  по дням — шагом в колонку. В Дне не задана: там одна колонка. */
+  dayW?: number;
   onEdit: (a: Appointment) => void;
   /** Долгое нажатие — меню записи. Двигать и растягивать — только после
    *  выбора этого в меню (владелец 2026-09-24: «просто так тянуть нельзя,
    *  она зафиксирована; зажимаешь — окно, выбрал — тогда можно»). */
   onMenu?: (a: Appointment) => void;
   /** Undefined for crew: the block stays tappable but has no drag affordance. */
-  onReschedule?: (a: Appointment, s: string, e: string) => void;
+  onReschedule?: (a: Appointment, s: string, e: string, date?: string) => void;
 }) {
   const t = useThemeColors();
   const { apt, startMin, endMin, colIndex, colCount } = placed;
@@ -436,6 +454,9 @@ const Block = memo(function Block({
   const press = useSharedValue(0);
   /** Сколько ступеней магнита пройдено от начала переноса. */
   const snapSteps = useSharedValue(0);
+  /** Сдвиг по дням в свободном перемещении (в точках, шагом в колонку). */
+  const tx = useSharedValue(0);
+  const daySteps = useSharedValue(0);
   /** Растяжка за край: смещение верхнего и нижнего края в точках. */
   const topPx = useSharedValue(0);
   const botPx = useSharedValue(0);
@@ -448,11 +469,17 @@ const Block = memo(function Block({
   // по часу, запись прыгает по часу. Клавиатура и диктор ходят по шагу
   // сетки (`moveBy(stepMinutes)`), магнит — только палец.
   const dragStep = Math.max(30, Math.min(60, stepMinutes));
+  const screenW = useWindowDimensions().width;
   /** Новое начало, пока запись под пальцем, — пишется на самой карточке. */
   const [liveStart, setLiveStart] = useState<string | null>(null);
-  const onSnap = (steps: number) => {
+  const onSnap = (steps: number, days = 0) => {
     haptics.tap();
-    setLiveStart(steps === 0 ? null : minToHM(startMin + steps * dragStep));
+    if (steps === 0 && days === 0) {
+      setLiveStart(null);
+      return;
+    }
+    const time = minToHM(startMin + steps * dragStep);
+    setLiveStart(days === 0 ? time : `${dayShort(apt.date, days)} ${time}`);
   };
   const clearLive = () => setLiveStart(null);
 
@@ -539,18 +566,17 @@ const Block = memo(function Block({
   // говорила до сих пор, живёт только там, где имя влезает.
   const edgeStyle = cancelled ? CANCELLED_BORDER : "solid";
 
-  const commit = (translationY: number) => {
+  const commit = (translationY: number, dayDelta = 0) => {
     if (!onReschedule) {
       ty.value = withSpring(0);
+      tx.value = withSpring(0);
       return;
     }
     const duration = Math.max(15, endMin - startMin);
     // Base the move on the UNCLAMPED startMin (like moveBy below), not on
     // the clamped visual top: a block clipped by the visible window
     // (e.g. 06:30 with startHour=7) must keep its real start, not get
-    // silently pinned to the window edge. The DELTA snaps to gridStep so
-    // an off-grid start keeps its offset — exactly what the a11y actions
-    // do.
+    // silently pinned to the window edge.
     const step = dragStep;
     const deltaMin =
       Math.round(((translationY / hourH) * 60) / step) * step;
@@ -560,17 +586,23 @@ const Block = memo(function Block({
     const lo = Math.min(startMin, winStart);
     const hi = Math.max(endMin, winEnd) - duration;
     newStart = Math.max(lo, Math.min(hi, newStart));
-    if (newStart === startMin) {
+    if (newStart === startMin && dayDelta === 0) {
       // Некуда двигать — мягко возвращаем карточку на место.
       ty.value = withSpring(0);
+      tx.value = withSpring(0);
       return;
     }
-    onReschedule(apt, minToHM(newStart), minToHM(newStart + duration));
+    onReschedule(
+      apt,
+      minToHM(newStart),
+      minToHM(newStart + duration),
+      dayDelta === 0 ? undefined : shiftYmd(apt.date, dayDelta),
+    );
     // Оптимистический кеш переписан синхронно внутри onReschedule → база
     // блока уже на новом слоте. Мгновенный сброс смещения приземляется тем
-    // же кадром — блок остаётся под пальцем. Прежний withSpring(0) 300 мс
-    // вёз карточку к СТАРОМУ слоту и она «дёргалась» после ребейза.
+    // же кадром — блок остаётся под пальцем.
     ty.value = 0;
+    tx.value = 0;
   };
 
   const moveBy = (deltaMin: number) => {
@@ -640,6 +672,7 @@ const Block = memo(function Block({
     .onStart(() => {
       active.value = withSpring(1);
       snapSteps.value = 0;
+      daySteps.value = 0;
       rSteps.value = 0;
       // РЕЖИМ — ПО МЕСТУ КАСАНИЯ, одним жестом: нижний край растягивает
       // конец, верхний — начало, середина переносит.
@@ -674,9 +707,20 @@ const Block = memo(function Block({
       const stepPx = (dragStep / 60) * hourH;
       const steps = Math.round(e.translationY / stepPx);
       ty.value = steps * stepPx;
-      if (steps !== snapSteps.value) {
+      // ПО ДНЯМ — шагом в колонку (свободное перемещение, владелец 24.09:
+      // «между днями полностью как угодно; вправо сильно — перелистнёт на
+      // следующую неделю»). За край недели запись уходит в соседнюю.
+      let days = dayW ? Math.round(e.translationX / dayW) : 0;
+      // КРАЙ ЭКРАНА = СОСЕДНЯЯ НЕДЕЛЯ: дальше воскресенья тянуть некуда,
+      // поэтому палец у правого края ставит запись на день ПОСЛЕ последней
+      // видимой колонки (у левого, за рельсом времени, — на день до первой).
+      if (dayW && e.absoluteX > screenW - EDGE_PAGE) days += 1;
+      else if (dayW && e.absoluteX < RAIL_W + EDGE_PAGE / 2) days -= 1;
+      tx.value = days * (dayW ?? 0);
+      if (steps !== snapSteps.value || days !== daySteps.value) {
         snapSteps.value = steps;
-        runOnJS(onSnap)(steps);
+        daySteps.value = days;
+        runOnJS(onSnap)(steps, days);
       }
     })
     .onEnd((e) => {
@@ -690,10 +734,11 @@ const Block = memo(function Block({
       // (web ActionMenuModal). Сдвинул — перенос: сброс ty решает commit
       // на JS (перенос состоялся → мгновенно, база уже переписана
       // оптимистически; нет → пружиной домой).
-      if (Math.abs(e.translationY) < 8) {
+      if (Math.abs(e.translationY) < 8 && daySteps.value === 0) {
         ty.value = withSpring(0);
+        tx.value = withSpring(0);
       } else {
-        runOnJS(commit)(e.translationY);
+        runOnJS(commit)(e.translationY, daySteps.value);
       }
       runOnJS(clearLive)();
       active.value = withSpring(0);
@@ -770,6 +815,7 @@ const Block = memo(function Block({
     top: topPx.value,
     bottom: 2 - botPx.value,
     transform: [
+      { translateX: tx.value },
       { translateY: ty.value },
       { scale: (1 + active.value * 0.03) * (1 - press.value * 0.03) },
     ],
@@ -1237,7 +1283,12 @@ export const DayColumn = memo(function DayColumn({
   /** Запись в режиме правки («Двигать и растягивать» из меню записи): только
    *  у неё палец двигает и тянет за края, и только пока режим включён. */
   editingId?: string | null;
-  onReschedule?: (a: Appointment, newStart: string, newEnd: string) => void;
+  onReschedule?: (
+    a: Appointment,
+    newStart: string,
+    newEnd: string,
+    date?: string,
+  ) => void;
   /** Per-record mutation guard (shared team events are creator-only). */
   canReschedule?: (a: Appointment) => boolean;
   startHour?: number;
@@ -1359,6 +1410,10 @@ export const DayColumn = memo(function DayColumn({
       style={{
         flex: 1,
         position: "relative",
+        // Колонка с записью в свободном перемещении — поверх соседних:
+        // иначе запись, утащенная в соседний день, уходила бы ПОД его белую
+        // колонку и пропадала из-под пальца.
+        zIndex: editingId && appointments.some((a) => a.id === editingId) ? 10 : 0,
         borderLeftWidth: 1,
         borderLeftColor: gridLine,
         // Рабочее поле — чистый белый (Bumpix): серый нерабочих часов и
@@ -1663,6 +1718,7 @@ export const DayColumn = memo(function DayColumn({
               lineH={lineH}
               onMenu={onMenu}
               editing={editingId === p.apt.id}
+              dayW={compact && laneW > 0 ? laneW + 1 : undefined}
               overdue={isOverdue(p.apt, todayYmd, isToday ? nowMinutes : null)}
               onEdit={onEdit}
               onReschedule={
@@ -1790,7 +1846,12 @@ export const DayView = memo(function DayView({
   /** Запись в режиме правки («Двигать и растягивать» из меню записи): только
    *  у неё палец двигает и тянет за края, и только пока режим включён. */
   editingId?: string | null;
-  onReschedule?: (a: Appointment, newStart: string, newEnd: string) => void;
+  onReschedule?: (
+    a: Appointment,
+    newStart: string,
+    newEnd: string,
+    date?: string,
+  ) => void;
   /** Per-record mutation guard (shared team events are creator-only). */
   canReschedule?: (a: Appointment) => boolean;
   /** Палец долистал страницу: родитель сдвигает день на ±1. */

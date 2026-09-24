@@ -103,7 +103,7 @@ export const WeekView = memo(function WeekView({
   /** Запись в режиме правки («Двигать и растягивать» из меню записи): только
    *  у неё палец двигает и тянет за края, и только пока режим включён. */
   editingId?: string | null;
-  onReschedule?: (a: Appointment, s: string, e: string) => void;
+  onReschedule?: (a: Appointment, s: string, e: string, date?: string) => void;
   /** Per-record mutation guard (shared team events are creator-only). */
   canReschedule?: (a: Appointment) => boolean;
   /** Долгий тап по шапке даты — открыть её Днём. */
