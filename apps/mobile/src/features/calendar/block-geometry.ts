@@ -69,6 +69,28 @@ export function blockLadder(input: {
   return { nameRows, showTime, showService, showAddress, lastRow };
 }
 
+// ── ИМЯ В УЗКОЙ КАРТОЧКЕ ──
+
+/** Нижний предел подгонки кегля имени: 0.85 от 13 = 11, пол шрифта продукта. */
+export const NAME_MIN_SCALE = 0.85;
+/** Средняя ширина жирной буквы (кириллица и латиница SF) в долях кегля.
+ *  Сверено на симуляторе 24.09: «Перерыв» в колонке недели Pro Max (текст
+ *  44pt) встаёт целиком при кегле ~11.5, «Константин» — нет. */
+const BOLD_GLYPH_EM = 0.55;
+
+/** Можно ли подогнать кегль имени, чтобы оно влезло целиком. iOS сама
+ *  предела `minimumFontScale` не держит (Fabric ужимала «Константина» до
+ *  нечитаемых 6pt), поэтому решаем здесь: влезает не мельче 11 — сжимаем,
+ *  иначе кегль 13 и обрезка по краю, как раньше. */
+export function nameShrinkFits(
+  text: string,
+  textW: number,
+  fontSize = 13,
+): boolean {
+  if (textW <= 0) return false;
+  return text.length * fontSize * BOLD_GLYPH_EM * NAME_MIN_SCALE <= textW;
+}
+
 // ── ЧИПЫ «ВЕСЬ ДЕНЬ» ──
 
 export const CHIP_GAP = 2;

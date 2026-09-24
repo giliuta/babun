@@ -6,6 +6,7 @@ import {
   chipTextW,
   chipsThatFit,
   blockLadder,
+  nameShrinkFits,
   rowsThatFit,
   textRows,
   TEXT_MIN_W,
@@ -151,5 +152,22 @@ describe("лестница содержимого блока", () => {
   });
   test("самый низкий блок печатает хотя бы имя", () => {
     assert.equal(blockLadder({ ...base, rowsFit: 0 }).lastRow, "name");
+  });
+});
+
+describe("nameShrinkFits — подгонка имени в узкой карточке", () => {
+  // Колонка недели Pro Max (440pt): ширина 55, паддинг 3 → текст 47.
+  const proMaxText = weekCell(440) - 2 * 3 - 2;
+  test("короткие имена сжимаются и встают целиком", () => {
+    assert.equal(nameShrinkFits("Андрей", proMaxText), true);
+    assert.equal(nameShrinkFits("Перерыв", proMaxText), true);
+    // Две записи рядом отнимают у колонки зазор — «Перерыв» всё равно встаёт.
+    assert.equal(nameShrinkFits("Перерыв", 44), true);
+  });
+  test("длинное имя не ужимается ниже 11pt — остаётся многоточие", () => {
+    assert.equal(nameShrinkFits("Константин", proMaxText), false);
+  });
+  test("нулевая ширина — не сжимаем", () => {
+    assert.equal(nameShrinkFits("А", 0), false);
   });
 });

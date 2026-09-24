@@ -22,6 +22,8 @@ import {
 } from "@/features/calendar/status-colors";
 import {
   blockLadder,
+  NAME_MIN_SCALE,
+  nameShrinkFits,
   rowsThatFit,
 } from "@/features/calendar/block-geometry";
 import { BLOCK_TEXT, fillRgba } from "@/components/ui/color-contrast";
@@ -45,12 +47,14 @@ import {
 const EDGE_H = 16;
 /** Зона у края экрана, где перетаскивание уходит в соседнюю неделю. */
 const EDGE_PAGE = 28;
-/** Блик плотного блока: высота плёнки от верха и её белизна. */
+/** Блик плотного блока: высота плёнки от верха и её белизна. ВОСЕМЬ ТОНКИХ
+ *  ПЛЁНОК ВМЕСТО ТРЁХ (24.09): три плёнки по 5–7 % давали на широкой
+ *  карточке Дня три заметные полосы — ровно по строкам имени, времени и
+ *  услуги. Восемь по 2.3 % до той же глубины 52 % дают ту же силу блика
+ *  сверху (≈17 %), но ступень в 2.3 % глаз уже не видит — перелив плавный. */
 const GLASS: readonly (readonly [`${number}%`, number])[] = [
-  ["18%", 0.07],
-  ["34%", 0.06],
-  ["52%", 0.05],
-];
+  6.5, 13, 19.5, 26, 32.5, 39, 45.5, 52,
+].map((h) => [`${h}%` as const, 0.023] as const);
 
 // `memo` со сравнением размещения по содержимому (`blockPropsEqual`): перенос
 // одной записи пересоздаёт размещения всей колонки, а перерисовать надо только
@@ -171,7 +175,10 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // Всё считается арифметикой от ширины и высоты, а не флагом «компактный»:
   // блок недели и блок дня — один и тот же блок при разной ширине.
   const cardH = Math.max(MIN_H(lineH), ((visEnd - visStart) / 60) * hourH) - 2;
-  const pad = width >= 96 ? 6 : 4;
+  // Третья ступень паддинга (3pt) в колонке недели уже 60pt — как у чипов
+  // «весь день» (`chipPad`): имя из шести букв («Андрей») влезает целиком,
+  // а не обрывается на «Андре».
+  const pad = width >= 96 ? 6 : width >= 60 ? 4 : 3;
   // ТОЛЩИНА — ВЕСЬ СИГНАЛ ПРОСРОЧКИ, И ЭТО ЕДИНСТВЕННЫЙ КАНАЛ, КОТОРЫЙ
   // УСИЛИВАЕТСЯ ПРИ СУЖЕНИИ. Кант 1 → 2pt меняет долю канта в площади плитки:
   // 21pt (две наложенные записи в Неделе) 13.6 % → 26.4 %, неделя 46pt
@@ -663,7 +670,19 @@ export const AppointmentBlock = memo(function AppointmentBlock({
                     textDecorationLine: cancelled ? "line-through" : "none",
                   }}
                   numberOfLines={1}
-                  ellipsizeMode={textW < 96 ? "clip" : "tail"}
+                  // УЗКАЯ КАРТОЧКА: КОРОТКОЕ ИМЯ СЖИМАЕТСЯ, А НЕ РЕЖЕТСЯ
+                  // ПОПОЛАМ БУКВЫ. Обрезка по краю оставляла огрызок глифа
+                  // («Андреі», «Перерı»); кегль до 11 (0.85 от 13 — пол шрифта
+                  // продукта) вмещает «Андрей», «Встреча», «Перерыв» целиком.
+                  // Режим «clip» подгонку кегля в iOS выключает, поэтому при
+                  // сжатии — «tail» (текст и так влез). Длинное имя, которому
+                  // и 11pt мало, режется по краю, как раньше: «Конс» говорит
+                  // больше, чем «Ко…».
+                  ellipsizeMode={
+                    textW >= 96 || nameShrinkFits(part, textW) ? "tail" : "clip"
+                  }
+                  adjustsFontSizeToFit={textW < 96 && nameShrinkFits(part, textW)}
+                  minimumFontScale={NAME_MIN_SCALE}
                   maxFontSizeMultiplier={1.3}
                 >
                   {part}
