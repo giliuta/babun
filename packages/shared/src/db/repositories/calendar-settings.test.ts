@@ -73,7 +73,7 @@ describe("operational calendar settings repository", () => {
               ...OPERATIONAL_ROW,
               show_day_finance: false,
               record_color_rule: "label",
-              record_color_palette: { noClient: "#112233" },
+              record_color_palette: { unpaid: "#112233" },
               record_color_fallback: "#445566",
               disabled_features: ["objects", "nonsense", "objects", "debts"],
               booking_block_order: ["team", "when", "client"],
@@ -197,9 +197,9 @@ describe("operational calendar settings repository", () => {
                         hide_cancelled: false,
                         record_color_rule: "label",
                         record_color_palette: {
-                          noClient: "#112233",
+                          unpaid: "#112233",
                           noObject: "синий",
-                          noServices: null,
+                          noClient: "#ffffff",
                           somethingElse: "#ffffff",
                         },
                         record_color_fallback: "rgba(0,0,0,0.5)",
@@ -219,11 +219,12 @@ describe("operational calendar settings repository", () => {
 
     expect(settings.recordColorRule).toBe("label");
     expect(settings.recordColorPalette).toEqual({
-      noClient: "#112233",
+      unpaid: "#112233",
       // Не hex — значит «ситуация не красит», а не «покрасим чем попало».
       noObject: null,
-      noServices: null,
     });
+    // Снятые случаи (25.09) и чужие ключи не переживают маппер.
+    expect(settings.recordColorPalette).not.toHaveProperty("noClient");
     // Чужой ключ в палитре не переживает маппер.
     expect(settings.recordColorPalette).not.toHaveProperty("somethingElse");
     // Запасной цвет с альфой — тот самый случай, ради которого писалась

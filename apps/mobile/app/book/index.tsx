@@ -333,10 +333,11 @@ export default function BookScreen() {
   const fallbackColor = useFallbackColor(teamId);
   const activeSituations = useMemo<ColorSituation[]>(
     () =>
-      COLOR_SITUATIONS.map((s) => s.id).filter(
-        (id) => id !== "noObject" || showObject,
+      // Подсветка — только у включённых блоков (владелец 25.09).
+      COLOR_SITUATIONS.map((s) => s.id).filter((id) =>
+        id === "noObject" ? showObject : showPayment,
       ),
-    [showObject],
+    [showObject, showPayment],
   );
 
   // ── справочные данные (кеш уже тёплый — календарь грузит те же ключи) ──
@@ -2181,14 +2182,21 @@ export default function BookScreen() {
     kind === "work"
       ? resolveRecordColor({
           override,
-          filled: recordFilled({
-            client_id: clientId,
-            location_id: locationId,
-            address,
-            service_ids: serviceIds,
-            custom_total: customTotal,
-            total_amount: effectiveTotal,
-          }),
+          filled: recordFilled(
+            {
+              // Деньги — у сохранённой записи (леджер, аванс, статус оплаты).
+              ...(editing ?? {}),
+              kind: "work",
+              date,
+              client_id: clientId,
+              location_id: locationId,
+              address,
+              service_ids: serviceIds,
+              custom_total: customTotal,
+              total_amount: effectiveTotal,
+            },
+            todayYmd,
+          ),
           base: autoBase,
           palette: situationPalette,
           active: activeSituations,

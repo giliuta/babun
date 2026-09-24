@@ -20,7 +20,8 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { SwitchRow } from "@/components/ui/SwitchRow";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { GUTTER } from "@/components/ui/tokens";
 import { RecordMark, recordMarkText } from "@/components/ui/RecordMark";
 import { RowCaption } from "@/components/ui/card-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
@@ -37,9 +38,7 @@ import {
   useEventBlocks,
   useFallbackColor,
   useSetAutoColorRule,
-  situationDefaults,
   useSetSituationColor,
-  useSetSituationPalette,
   useSituationPalette,
   useToggleBookingBlock,
   useToggleEventBlock,
@@ -88,21 +87,6 @@ const BLOCK_ICON: Record<string, LucideIcon> = {
 
 
 
-/** СТРОКИ ТАБЛИЦЫ БЛОКОВ: одинаковые блоки записи и события стоят
- *  напротив друг друга (владелец 24.09: «почему разделение — у обоих
- *  команда, метка, время»), различия — своими строками. Порядок — порядок
- *  формы. */
-const BLOCK_ROWS: { record: BookingBlockId | null; event: EventBlockId | null }[] = [
-  { record: "team", event: "team" },
-  { record: "label", event: "label" },
-  { record: "when", event: "when" },
-  { record: "client", event: "client" },
-  { record: "object", event: "object" },
-  { record: "services", event: "type" },
-  { record: "payment", event: null },
-  { record: "note", event: "note" },
-  { record: "files", event: "files" },
-];
 
 export function DesignScreen() {
   const t = useThemeColors();
@@ -147,20 +131,19 @@ export function DesignScreen() {
   const ordinary = team?.color || fallback;
   const updateTeam = useUpdateTeam();
 
-  // Ситуация про выключенный блок не показывается: у бьюти-мастера объекта нет
-  // вовсе, и «нет объекта» для него не дыра, а норма.
-  const situations = COLOR_SITUATIONS.filter(
-    (s) => s.id !== "noObject" || objectsOn,
+  // ПОДСВЕТКА — ТОЛЬКО У ВКЛЮЧЁННОГО БЛОКА (владелец 25.09: «убираю объект —
+  // подсветка уходит; то же с оплатой; тогда запись считается заполненной»).
+  const situations = COLOR_SITUATIONS.filter((s) =>
+    s.id === "noObject" ? objectsOn : recordBlocks.includes("payment"),
   );
+  // ПЕРЕКЛЮЧАТЕЛЬ СТРАНИЦЫ (владелец 25.09): «Клиент» — цвет записи и её
+  // блоки, «Событие» — блоки события и типы; открывается «Клиент».
+  const [tab, setTab] = useState<"record" | "event">("record");
   const openColor = (target: ColorTarget) => {
     haptics.tap();
     setEditingColor(target);
   };
 
-  // ПОДСВЕТКА ВКЛЮЧЕНА, если хоть один случай красит. Выключатель пишет
-  // палитру целиком: выкл. — все «не красить», вкл. — заводские цвета.
-  const setPalette = useSetSituationPalette(teamId);
-  const highlightOn = situations.some((sit) => palette[sit.id] != null);
 
   // ДЕНЬ-ОБРАЗЕЦ: записи того же вида, что на сетке. Обычная — цветом
   // источника; незаполненные — своим цветом, а при «не красить» — обычным
@@ -185,7 +168,7 @@ export function DesignScreen() {
     ...situations.map((sit, i) => ({
       id: sit.id,
       time: ["11:00", "13:00", "15:00"][i] ?? "17:00",
-      name: sit.id === "noClient" ? "Без клиента" : ["Иван", "Олег"][i - 1] ?? "Анна",
+      name: ["Иван", "Олег"][i] ?? "Анна",
       sub: palette[sit.id] ? sit.label.toLowerCase() : `${sit.label.toLowerCase()} · не красить`,
       hue: holeHue(sit.id),
       onPress: () => openColor(sit.id),
@@ -199,136 +182,114 @@ export function DesignScreen() {
     <Screen edges={["top"]}>
       <ScreenHeader title="Дизайн" subtitle={team?.name} />
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        {/* ── ЦВЕТ ЗАПИСИ — КУСОЧЕК КАЛЕНДАРЯ (владелец 24.09: «разбери полностью,
-            переделай цвет записи, чтобы улучшить дизайн самого календаря»).
-            Сверху — не абстрактные плитки, а день календаря: рельс часов и
-            записи ровно того вида, что на сетке, каждая на своём случае
-            правила. Тап по записи — её цвет. Под ним три вопроса правила,
-            каждый ответ виден и ставится одним тапом:
-              «Красить по» — откуда обычный цвет (команда / метка / услуга);
-              «Подсвечивать, чего не хватает» — выкл. — все записи обычного
-              цвета, вкл. — незаполненные своим цветом, пока не заполнят;
-              «Если нет цвета» — запасной. */}
-        <SectionCard title="Цвет записи" padded>
-          <View style={{ gap: 6 }}>
-            {preview.map((row) => (
-              <View key={row.id} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <Text
-                  maxFontSizeMultiplier={1.2}
-                  style={{
-                    width: 42,
-                    fontSize: 13,
-                    fontWeight: "600",
-                    color: t.sub,
-                    fontVariant: ["tabular-nums"],
-                  }}
-                >
-                  {row.time}
-                </Text>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <ColorTile
-                    title={row.name}
-                    sub={row.sub}
-                    hue={row.hue}
-                    height={48}
-                    onPress={row.onPress}
+        {/* ПЕРЕКЛЮЧАТЕЛЬ «КЛИЕНТ | СОБЫТИЕ» — НАВЕРХУ И НА ВСЮ СТРАНИЦУ
+            (владелец 25.09: «выбираю клиенты — настраиваю всё по клиентам,
+            события — всё по событиям»). */}
+        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 4 }}>
+          <SegmentedControl
+            options={[
+              { value: "record", label: "Клиент" },
+              { value: "event", label: "Событие" },
+            ]}
+            value={tab}
+            onChange={(next) => {
+              haptics.tap();
+              setTab(next);
+            }}
+          />
+        </View>
+
+        {tab === "record" ? (
+          <>
+            {/* ЦВЕТ ЗАПИСИ — кусочек календаря: «всё заполнено» и по одной
+                записи на каждый включённый блок, который подсвечивается. Тап —
+                её цвет. Выключили блок — его записи здесь нет, и в календаре
+                такая запись красится как заполненная. */}
+            <SectionCard title="Цвет записи" padded>
+              <View style={{ gap: 6 }}>
+                {preview.map((row) => (
+                  <View key={row.id} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Text
+                      maxFontSizeMultiplier={1.2}
+                      style={{
+                        width: 42,
+                        fontSize: 13,
+                        fontWeight: "600",
+                        color: t.sub,
+                        fontVariant: ["tabular-nums"],
+                      }}
+                    >
+                      {row.time}
+                    </Text>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <ColorTile
+                        title={row.name}
+                        sub={row.sub}
+                        hue={row.hue}
+                        height={48}
+                        onPress={row.onPress}
+                      />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </SectionCard>
+            <RowCaption text="Цвет, выбранный в самой записи, главнее всего." />
+
+            <SectionCard title="Блоки записи">
+              {BOOKING_BLOCKS.map((block) => (
+                <BlockCell
+                  key={block.id}
+                  label={block.label}
+                  icon={BLOCK_ICON[block.id] ?? Bookmark}
+                  on={block.pinned ? true : recordOn(block.id)}
+                  locked={!!block.pinned}
+                  onToggle={() => toggleRecordBlock.mutate(block.id)}
+                />
+              ))}
+            </SectionCard>
+            <RowCaption text="Выключенный блок пропадает у всей команды. Данные остаются." />
+          </>
+        ) : (
+          <>
+            <SectionCard title="Блоки события">
+              {EVENT_BLOCKS.map((block) => {
+                // Объекта события нет, пока у команды выключены объекты.
+                const noObjects = block.id === "object" && !objectsOn;
+                return (
+                  <BlockCell
+                    key={block.id}
+                    label={block.label}
+                    icon={BLOCK_ICON[block.id] ?? Bookmark}
+                    on={block.pinned ? true : !noObjects && eventOn(block.id)}
+                    locked={!!block.pinned || noObjects}
+                    onToggle={() => toggleEventBlock.mutate(block.id)}
                   />
-                </View>
-              </View>
-            ))}
-          </View>
+                );
+              })}
+            </SectionCard>
+            <RowCaption text="Выключенный блок пропадает у всей команды. Данные остаются." />
 
-        </SectionCard>
-        <SectionCard>
-          <SwitchRow
-            label="Подсвечивать, чего не хватает"
-            value={highlightOn}
-            onChange={(on) => {
-              haptics.tap();
-              setPalette.mutate(
-                on
-                  ? situationDefaults()
-                  : (Object.fromEntries(
-                      COLOR_SITUATIONS.map((sit) => [sit.id, null]),
-                    ) as typeof palette),
-              );
-            }}
-          />
-        </SectionCard>
-        <RowCaption text="Цвет, выбранный в самой записи, главнее всего." />
-
-        {/* ── БЛОКИ — ДВЕ КОЛОНКИ (владелец 24.09: «клиент слева, событие
-            справа, посередине разделитель, вниз всё показано; тапом включаю и
-            выключаю»). Обязательные стоят в списке с замком — видно весь
-            состав формы, но выключить их нельзя. */}
-        <SectionCard title="Блоки">
-          <View style={{ flexDirection: "row" }}>
-            <View style={{ flex: 1 }}>
-              <ColumnTitle text="Клиент" />
-            </View>
-            <View style={{ width: 1, backgroundColor: t.separator }} />
-            <View style={{ flex: 1 }}>
-              <ColumnTitle text="Событие" />
-            </View>
-          </View>
-          {BLOCK_ROWS.map((row) => {
-            const rec = row.record
-              ? BOOKING_BLOCKS.find((b) => b.id === row.record)
-              : null;
-            const ev = row.event ? EVENT_BLOCKS.find((b) => b.id === row.event) : null;
-            // Объекта события нет, пока у компании выключены объекты.
-            const noObjects = ev?.id === "object" && !objectsOn;
-            return (
-              <View key={`${row.record}-${row.event}`} style={{ flexDirection: "row" }}>
-                <View style={{ flex: 1 }}>
-                  {rec ? (
-                    <BlockCell
-                      label={rec.label}
-                      icon={BLOCK_ICON[rec.id] ?? Bookmark}
-                      on={rec.pinned ? true : recordOn(rec.id)}
-                      locked={!!rec.pinned}
-                      onToggle={() => toggleRecordBlock.mutate(rec.id)}
-                    />
-                  ) : null}
-                </View>
-                <View style={{ width: 1, backgroundColor: t.separator }} />
-                <View style={{ flex: 1 }}>
-                  {ev ? (
-                    <BlockCell
-                      label={ev.label}
-                      icon={BLOCK_ICON[ev.id] ?? Bookmark}
-                      on={ev.pinned ? true : !noObjects && eventOn(ev.id)}
-                      locked={!!ev.pinned || noObjects}
-                      onToggle={() => toggleEventBlock.mutate(ev.id)}
-                    />
-                  ) : null}
-                </View>
-              </View>
-            );
-          })}
-        </SectionCard>
-        <RowCaption text="Выключенный блок пропадает у всей команды. Данные остаются." />
-
-        {/* ── ТИПЫ СОБЫТИЙ — ДВЕРЬ, КАК У УСЛУГ И МЕТОК (владелец 24.09:
-            «отдельной страницей, как и везде»). Все типы и так стоят в
-            «Быстром событии» — отдельно это не объясняется. */}
-        {eventOn("type") ? (
-        <SectionCard>
-          <SettingsRow
-            tile={SETTINGS_TILE.purple}
-            icon={Tags}
-            title="Типы событий"
-            sub={typesSub}
-            onPress={() => {
-              haptics.tap();
-              router.push({
-                pathname: "/calendar/event-types",
-                params: teamId ? { team: teamId } : {},
-              } as Href);
-            }}
-          />
-        </SectionCard>
-        ) : null}
+            {/* ТИПЫ СОБЫТИЙ — дверь на свою страницу, как у услуг и меток. */}
+            {eventOn("type") ? (
+              <SectionCard>
+                <SettingsRow
+                  tile={SETTINGS_TILE.purple}
+                  icon={Tags}
+                  title="Типы событий"
+                  sub={typesSub}
+                  onPress={() => {
+                    haptics.tap();
+                    router.push({
+                      pathname: "/calendar/event-types",
+                      params: teamId ? { team: teamId } : {},
+                    } as Href);
+                  }}
+                />
+              </SectionCard>
+            ) : null}
+          </>
+        )}
       </ScrollView>
 
 
@@ -429,25 +390,6 @@ function ColorTile({
 }
 
 
-/** Заголовок колонки блоков — «Клиент» / «Событие». */
-function ColumnTitle({ text }: { text: string }) {
-  const t = useThemeColors();
-  return (
-    <Text
-      maxFontSizeMultiplier={1.3}
-      style={{
-        paddingHorizontal: 16,
-        paddingTop: 2,
-        paddingBottom: 6,
-        fontSize: 15,
-        fontWeight: "700",
-        color: t.ink,
-      }}
-    >
-      {text}
-    </Text>
-  );
-}
 
 /** Строка колонки блоков: значок, слово, справа галка (вкл.) или ничего;
  *  обязательный — замок, тапа нет. */

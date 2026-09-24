@@ -1194,20 +1194,22 @@ export default function CalendarTab() {
   const paletteRaw = useSituationPalette(activeTeamId);
   const situationPalette = useMemo<SituationPalette>(
     () => ({
-      noClient: paletteRaw.noClient,
+      unpaid: paletteRaw.unpaid,
       noObject: paletteRaw.noObject,
-      noServices: paletteRaw.noServices,
     }),
-    [paletteRaw.noClient, paletteRaw.noObject, paletteRaw.noServices],
+    [paletteRaw.unpaid, paletteRaw.noObject],
   );
   const fallbackColor = useFallbackColor(activeTeamId);
-  // Ситуация про блок, выключенный в настройке, не считается дырой: у бьюти-
-  // мастера объекта нет вовсе.
+  // Подсветка есть только у включённого блока (владелец 25.09: «убираю
+  // объект — подсветка уходит; убираю оплату — тоже; запись считается
+  // заполненной»).
   const bookingBlocks = useBookingBlocks(activeTeamId);
   const activeSituations = useMemo<ColorSituation[]>(
     () =>
-      COLOR_SITUATIONS.map((s) => s.id).filter(
-        (id) => id !== "noObject" || bookingBlocks.includes("object"),
+      COLOR_SITUATIONS.map((s) => s.id).filter((id) =>
+        id === "noObject"
+          ? bookingBlocks.includes("object")
+          : bookingBlocks.includes("payment"),
       ),
     [bookingBlocks],
   );
@@ -1291,7 +1293,7 @@ export default function CalendarTab() {
       if (a.kind !== "work") return base;
       return resolveRecordColor({
         override: a.color_override,
-        filled: recordFilled(a),
+        filled: recordFilled(a, todayYmd),
         base,
         palette: situationPalette,
         active: activeSituations,
@@ -1307,6 +1309,7 @@ export default function CalendarTab() {
       situationPalette,
       activeSituations,
       fallbackColor,
+      todayYmd,
     ],
   );
   // ЧУЖАЯ МЕТКА НА БЛОКЕ ЗАПИСИ (владелец 2026-09-04: «можно подсвечивать
@@ -1330,12 +1333,13 @@ export default function CalendarTab() {
       const id = appointmentSituation(a, {
         palette: situationPalette,
         active: activeSituations,
+        todayYmd,
       });
       return id
         ? COLOR_SITUATIONS.find((s) => s.id === id)?.label ?? null
         : null;
     },
-    [situationPalette, activeSituations],
+    [situationPalette, activeSituations, todayYmd],
   );
 
   // ЛЕНТА НАЗЫВАЕТ И НЕЗАКРЫТУЮ РАБОТУ. В сетке просрочка говорит толщиной
@@ -1463,6 +1467,7 @@ export default function CalendarTab() {
         appointmentSituation(a, {
           palette: situationPalette,
           active: activeSituations,
+          todayYmd,
         }),
       );
       byDate.set(a.date, arr);
@@ -1477,7 +1482,7 @@ export default function CalendarTab() {
       });
     }
     return out;
-  }, [mode, visibleAppts, situationPalette, activeSituations]);
+  }, [mode, visibleAppts, situationPalette, activeSituations, todayYmd]);
   const holeFor = useCallback(
     (dateYmd: string) => holeByDay.get(dateYmd) ?? null,
     [holeByDay],

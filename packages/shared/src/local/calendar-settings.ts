@@ -23,10 +23,12 @@ import { getStorage } from "../storage/provider";
  *  ЕДИНСТВЕННЫЙ: подписи к этим же идентификаторам живут в приложении
  *  (`features/appointments/record-color.ts`) и берут ids отсюда — двух списков
  *  одного и того же не бывает. */
+// Владелец 25.09: «нет клиента» и «нет услуг» подсвечивать не надо — запись
+// клиента без клиента и услуги больше не сохраняется. Остаются «не оплачено»
+// (долг после визита) и «нет объекта». Порядок — порядок важности.
 export const RECORD_COLOR_SITUATIONS = [
-  "noClient",
+  "unpaid",
   "noObject",
-  "noServices",
 ] as const;
 
 export type RecordColorSituation = (typeof RECORD_COLOR_SITUATIONS)[number];

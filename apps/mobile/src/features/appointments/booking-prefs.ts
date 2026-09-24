@@ -329,11 +329,11 @@ export const AUTO_COLOR_RULES: { id: AutoColorRule; label: string }[] = [
 // заводской заново было нельзя, а на плотном блоке оранжевый и жёлтый
 // сходились в один янтарь. Морковный и Янтарный разведены по тону и после
 // затемнения блока; серого в наборе нет намеренно, он остаётся заводским
-// нейтральным сигналом «нет клиента».
+// нейтральным сигналом. 25.09: «нет клиента» и «нет услуг» сняты, «не
+// оплачено» — рубиновый из набора (деньги, которые должны).
 const SITUATION_DEFAULTS: Record<ColorSituation, string> = {
-  noClient: "#8E8E93",
+  unpaid: "#E8145D",
   noObject: "#DF510F",
-  noServices: "#FDAA1B",
 };
 
 const FALLBACK_DEFAULT = "#3276FB";
@@ -384,21 +384,6 @@ export function useSetAutoColorRule(teamId: string | null | undefined) {
 export function useSetFallbackColor(teamId: string | null | undefined) {
   const { save, patch } = useSaveDesign(teamId);
   return { ...save, mutate: (color: string) => patch({ fallback: color || null }) };
-}
-
-/** Заводские цвета подсветки незаполненного — чтобы общий переключатель
- *  «Подсвечивать, чего не хватает» включал их обратно. */
-export function situationDefaults(): SituationPalette {
-  return { ...SITUATION_DEFAULTS } as SituationPalette;
-}
-
-/** Палитра подсветки целиком — одним патчем (общий переключатель). */
-export function useSetSituationPalette(teamId: string | null | undefined) {
-  const { save, patch } = useSaveDesign(teamId);
-  return {
-    ...save,
-    mutate: (palette: SituationPalette) => patch({ palette: { ...palette } }),
-  };
 }
 
 export function useSetSituationColor(teamId: string | null | undefined) {

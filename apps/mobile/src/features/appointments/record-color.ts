@@ -41,9 +41,8 @@ export interface ColorSituationDef {
  *  ЦВЕТА — то, чего не видно на бледном образце, — а сама ситуация названа
  *  заголовком и объяснять себя другими словами не нуждается. */
 const SITUATION_LABELS: Record<ColorSituation, string> = {
-  noClient: "Нет клиента",
+  unpaid: "Не оплачено",
   noObject: "Нет объекта",
-  noServices: "Нет услуг",
 };
 
 export const COLOR_SITUATIONS: ColorSituationDef[] =
@@ -59,15 +58,26 @@ export const COLOR_SITUATIONS: ColorSituationDef[] =
  *  — УСЛУГИ закрыты снимком строк или вписанной рукой суммой: по базе работ
  *    без каталожной услуги 9 из 27, а сумма вписана рукой в 20 записях из 30 —
  *    без этого треть книги загорелась бы «дырой» на готовых записях. */
-export function recordFilled(apt: {
-  client_id?: string | null;
-  location_id?: string | null;
-  address?: string | null;
-  service_ids?: unknown[] | null;
-  services?: unknown[] | null;
-  custom_total?: boolean | null;
-  total_amount?: number | string | null;
-}): { client: boolean; object: boolean; services: boolean } {
+export function recordFilled(
+  apt: {
+    kind?: string | null;
+    status?: string | null;
+    date?: string | null;
+    client_id?: string | null;
+    location_id?: string | null;
+    address?: string | null;
+    service_ids?: unknown[] | null;
+    services?: unknown[] | null;
+    custom_total?: boolean | null;
+    total_amount?: number | string | null;
+    payment_status?: string | null;
+    prepaid_amount?: number | null;
+    paid_amount?: number | null;
+    payments?: readonly { amount: number }[] | null;
+    payment?: { cashAmount: number; cardAmount: number } | null;
+  },
+  todayYmd?: string,
+): { client: boolean; object: boolean; services: boolean; paid: boolean } {
   return {
     client: !!apt.client_id,
     object:
@@ -77,7 +87,36 @@ export function recordFilled(apt: {
       (apt.services?.length ?? 0) > 0 ||
       !!apt.custom_total ||
       Number(apt.total_amount ?? 0) > 0,
+    paid: !owesAfterVisit(apt, todayYmd),
   };
+}
+
+/** «НЕ ОПЛАЧЕНО» = ДОЛГ ПОСЛЕ ВИЗИТА (владелец 25.09: «когда долг у клиента —
+ *  свой цвет»). Визит состоялся — выполнен или его день прошёл, — а получено
+ *  меньше суммы. Будущая запись не оплачена по определению, и красить её
+ *  «долгом» значило бы красить весь план. Сумма «получено» — та же, что у
+ *  долга в финансах (`getPaidAmount`: аванс + леджер/зеркало веба). */
+function owesAfterVisit(
+  apt: Parameters<typeof recordFilled>[0],
+  todayYmd?: string,
+): boolean {
+  const happened =
+    apt.status === "completed" ||
+    (!!todayYmd && !!apt.date && apt.date < todayYmd);
+  if (!happened) return false;
+  if (apt.payment_status === "refunded" || apt.payment_status === "paid") {
+    return false;
+  }
+  const total = Number(apt.total_amount ?? 0);
+  if (!(total > 0)) return false;
+  const ledger = (apt.payments ?? []).reduce((sum, p) => sum + p.amount, 0);
+  const mirror = apt.payment
+    ? apt.payment.cashAmount + apt.payment.cardAmount
+    : (apt.payment_status ?? "unpaid") !== "unpaid"
+      ? apt.paid_amount ?? 0
+      : 0;
+  const paid = (apt.prepaid_amount ?? 0) + Math.max(ledger, mirror);
+  return paid < total;
 }
 
 /** ЦВЕТ ЗАПИСИ ПО УСЛУГЕ — ПЕРВАЯ СТРОКА, У КОТОРОЙ ЦВЕТ ЕЩЁ ЕСТЬ.
@@ -138,7 +177,7 @@ export interface RecordColorInput {
   /** Цвет, выбранный руками у этой записи. Сильнее любого правила. */
   override?: string | null;
   /** Что в записи заполнено. */
-  filled: { client: boolean; object: boolean; services: boolean };
+  filled: { client: boolean; object: boolean; services: boolean; paid: boolean };
   /** Цвет «обычной» записи: команды или метки — по настройке. */
   base?: string | null;
   /** Настроенные цвета ситуаций; `null` — ситуация не красит. */
@@ -159,9 +198,8 @@ export function resolveRecordSituation(
   if ((input.override ?? "").trim()) return null;
   const active = input.active ?? COLOR_SITUATIONS.map((s) => s.id);
   const missing: Record<ColorSituation, boolean> = {
-    noClient: !input.filled.client,
+    unpaid: !input.filled.paid,
     noObject: !input.filled.object,
-    noServices: !input.filled.services,
   };
   for (const def of COLOR_SITUATIONS) {
     if (!active.includes(def.id)) continue;
@@ -189,17 +227,25 @@ export function appointmentSituation(
     services?: unknown[] | null;
     custom_total?: boolean | null;
     total_amount?: number | string | null;
+    date?: string | null;
+    payment_status?: string | null;
+    prepaid_amount?: number | null;
+    paid_amount?: number | null;
+    payments?: readonly { amount: number }[] | null;
+    payment?: { cashAmount: number; cardAmount: number } | null;
   },
   opts: {
     palette: Partial<Record<ColorSituation, string | null>>;
     active?: readonly ColorSituation[];
+    /** Сегодня (YYYY-MM-DD) — чтобы знать, что визит уже прошёл. */
+    todayYmd?: string;
   },
 ): ColorSituation | null {
   if (apt.kind !== "work") return null;
   if (apt.status === "cancelled") return null;
   return resolveRecordSituation({
     override: apt.color_override,
-    filled: recordFilled(apt),
+    filled: recordFilled(apt, opts.todayYmd),
     palette: opts.palette,
     active: opts.active,
   });
@@ -226,9 +272,8 @@ export function resolveRecordColor(input: RecordColorInput): string {
 
   const active = input.active ?? COLOR_SITUATIONS.map((s) => s.id);
   const missing: Record<ColorSituation, boolean> = {
-    noClient: !input.filled.client,
+    unpaid: !input.filled.paid,
     noObject: !input.filled.object,
-    noServices: !input.filled.services,
   };
   for (const def of COLOR_SITUATIONS) {
     if (!active.includes(def.id)) continue;

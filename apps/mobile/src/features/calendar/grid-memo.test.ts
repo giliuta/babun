@@ -161,7 +161,7 @@ describe("сетка календаря мемоизирована и корми
     // в пропсах Недели, Дня и каждой колонки.
     assert.match(
       screen,
-      /const situationPalette = useMemo<SituationPalette>\(\s*\(\) => \(\{\s*noClient: paletteRaw\.noClient,\s*noObject: paletteRaw\.noObject,\s*noServices: paletteRaw\.noServices,?\s*\}\),\s*\[paletteRaw\.noClient, paletteRaw\.noObject, paletteRaw\.noServices\],?\s*\);/,
+      /const situationPalette = useMemo<SituationPalette>\(\s*\(\) => \(\{\s*unpaid: paletteRaw\.unpaid,\s*noObject: paletteRaw\.noObject,?\s*\}\),\s*\[paletteRaw\.unpaid, paletteRaw\.noObject\],?\s*\);/,
     );
     assert.doesNotMatch(
       screen,
