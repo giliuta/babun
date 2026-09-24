@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import {
@@ -7,8 +7,8 @@ import {
   CalendarRange,
   FileText,
   MapPin,
-  Settings2,
   StickyNote,
+  Tags,
   UserRound,
   Wallet,
   type LucideIcon,
@@ -21,7 +21,6 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Chip } from "@/components/ui/Chip";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { RecordMark, recordMarkText } from "@/components/ui/RecordMark";
-import { Divider } from "@/components/ui/Divider";
 import { RowCaption } from "@/components/ui/card-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { haptics } from "@/lib/haptics";
@@ -49,9 +48,7 @@ import {
   type BookingBlockId,
   type EventBlockId,
 } from "@/features/appointments/booking-prefs";
-import { durationLabel } from "@/features/services/format";
-import { EventTypeSheet } from "@/features/reference/screens/EventTypeSheet";
-import { useEventTypesEditor } from "@/features/reference/screens/use-event-types-editor";
+import { usePersonalEventTypes } from "@/features/settings/local-settings";
 
 // «ДИЗАЙН» — КАК ВЫГЛЯДИТ И ИЗ ЧЕГО СОСТОИТ ЗАПИСЬ. ТРИ КАРТОЧКИ, ВСЁ ТАПОМ.
 //
@@ -67,12 +64,11 @@ import { useEventTypesEditor } from "@/features/reference/screens/use-event-type
 // Отдельных списков «автоматически» и «если цвета нет» больше нет — они
 // повторяли то, что образцы уже показывают.
 //
-// БЛОКИ. Одна карточка, переключатель «Запись | Событие» и чипы — вкл. залит
+// БЛОКИ. Одна карточка, чипы и под ними «Клиент | Событие» — вкл. залит
 // цветом, выкл. серый. Обязательные блоки не притворяются настройкой: их
 // называет строка «Всегда: …».
 //
-// ТИПЫ СОБЫТИЙ. Строки того же вида, что в шторке «Быстрое событие»: что
-// здесь, то там. Тап — правка, «Добавить» в шапке, ползунки — полный список.
+// ТИПЫ СОБЫТИЙ. Дверь на свою страницу, как у услуг и меток.
 
 type ColorTarget = ColorSituation | "fallback";
 type BlockTab = "record" | "event";
@@ -123,7 +119,14 @@ export function DesignScreen() {
   const objectsOn = recordBlocks.includes("object");
 
   // ── типы событий ──
-  const editor = useEventTypesEditor();
+  const typesQuery = usePersonalEventTypes();
+  const liveTypes = (typesQuery.data ?? []).filter((type) => !type.hidden);
+  // Подпись двери — имена типов, как у «Меток»; пока грузится — пусто.
+  const typesSub = typesQuery.isLoading
+    ? undefined
+    : liveTypes.length === 0
+      ? "Типов пока нет"
+      : liveTypes.map((type) => type.label).join(", ");
 
   // ОБЫЧНАЯ ЗАПИСЬ — ЦВЕТОМ ТОГО ИСТОЧНИКА, ЧТО ВЫБРАН: первая команда,
   // первая метка или первая услуга. Нет у источника цвета — запасной.
@@ -206,20 +209,7 @@ export function DesignScreen() {
 
         {/* ── БЛОКИ ── */}
         <SectionCard title="Блоки" padded>
-          <SegmentedControl
-            options={[
-              { value: "record", label: "Запись" },
-              { value: "event", label: "Событие" },
-            ]}
-            value={blockTab}
-            onChange={(next) => {
-              haptics.tap();
-              setBlockTab(next);
-            }}
-          />
-          <View
-            style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}
-          >
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {optional.map((block) => {
               const Icon = BLOCK_ICON[block.id] ?? Bookmark;
               // Объекта события нет, пока у компании выключены объекты.
@@ -251,57 +241,40 @@ export function DesignScreen() {
           >
             Всегда: {always.join(", ").toLowerCase()}
           </Text>
+          {/* «КЛИЕНТ | СОБЫТИЕ» — СЛОВАМИ И МЕСТОМ ДВУХ ДОРОГ СОЗДАНИЯ
+              (владелец 24.09: «не запись, а клиент и событие, как у нас, и
+              вниз»): в шторке свободного времени те же два слова стоят внизу. */}
+          <View style={{ marginTop: 14 }}>
+            <SegmentedControl
+              options={[
+                { value: "record", label: "Клиент" },
+                { value: "event", label: "Событие" },
+              ]}
+              value={blockTab}
+              onChange={(next) => {
+                haptics.tap();
+                setBlockTab(next);
+              }}
+            />
+          </View>
         </SectionCard>
         <RowCaption text="Выключенный блок пропадает у всей компании. Данные остаются." />
 
-        {/* ── ТИПЫ СОБЫТИЙ ── */}
-        <SectionCard
-          title="Типы событий"
-          action={[
-            {
-              label: "Порядок, скрыть и удалить",
-              icon: Settings2,
-              onPress: () => {
-                haptics.tap();
-                router.push("/calendar/event-types" as Href);
-              },
-            },
-            {
-              label: "Добавить",
-              onPress: () => {
-                haptics.tap();
-                editor.setEditing({ mode: "create" });
-              },
-            },
-          ]}
-        >
-          {editor.types.length === 0 ? (
-            <Text
-              maxFontSizeMultiplier={1.3}
-              style={{ paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: t.sub }}
-            >
-              {editor.typesQuery.isLoading ? " " : "Типов пока нет"}
-            </Text>
-          ) : (
-            editor.types.map((type, i) => (
-              <Fragment key={type.id}>
-                {i > 0 ? <Divider inset={56} /> : null}
-                <SettingsRow
-                  appearance={{ color: type.color, icon: type.icon }}
-                  title={type.label}
-                  sub={[durationLabel(type.defaultDuration), type.hidden ? "скрыт" : null]
-                    .filter(Boolean)
-                    .join(" · ")}
-                  onPress={() => {
-                    haptics.tap();
-                    editor.setEditing({ mode: "edit", type });
-                  }}
-                />
-              </Fragment>
-            ))
-          )}
+        {/* ── ТИПЫ СОБЫТИЙ — ДВЕРЬ, КАК У УСЛУГ И МЕТОК (владелец 24.09:
+            «отдельной страницей, как и везде»). Все типы и так стоят в
+            «Быстром событии» — отдельно это не объясняется. */}
+        <SectionCard>
+          <SettingsRow
+            tile={SETTINGS_TILE.purple}
+            icon={Tags}
+            title="Типы событий"
+            sub={typesSub}
+            onPress={() => {
+              haptics.tap();
+              router.push("/calendar/event-types" as Href);
+            }}
+          />
         </SectionCard>
-        <RowCaption text="Эти типы стоят в «Быстром событии» — долгое нажатие по свободному месту календаря." />
       </ScrollView>
 
       {/* Источник обычного цвета — наша шторка выбора со значками и галкой. */}
@@ -353,13 +326,6 @@ export function DesignScreen() {
         }}
       />
 
-      <EventTypeSheet
-        visible={editor.editing !== null}
-        type={editor.editing?.mode === "edit" ? editor.editing.type : null}
-        busy={editor.save.isPending}
-        onClose={() => editor.setEditing(null)}
-        onSubmit={editor.submit}
-      />
     </Screen>
   );
 }
