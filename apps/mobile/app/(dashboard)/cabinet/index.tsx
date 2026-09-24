@@ -1,33 +1,40 @@
 // Кабинет — ЛИЧНОЕ ПРОСТРАНСТВО ЧЕЛОВЕКА во всей системе (владелец
-// 2026-09-15: «как компании не будет, будет только как личное»; «там то, что
-// относится ко всей системе: синхронизация, вход и безопасность,
-// приглашения…»).
+// 2026-09-15: «как компании не будет, будет только как личное»; «продумай всё
+// максимально… максимально удобно и информативно»).
 //
 // НАСТРОЕК РАЗДЕЛОВ ЗДЕСЬ НЕТ (владелец 2026-09-14: «дублировать в кабинете не
 // надо — все настройки там, где открывают шестерёнку»). Календарь, клиенты и
-// финансы настраиваются за шестерёнкой своего раздела. Строки без второй двери
-// (Закрыть день, Незакрытые дни, Склад, Шаблоны SMS, Программа лояльности,
-// Повторяющиеся ТО) сняты тем же решением; их экраны остались в коде.
+// финансы настраиваются за шестерёнкой своего раздела.
 //
-// Здесь только то, что принадлежит человеку и этому устройству: карта
-// человека → «Профиль», приглашения в компании, вход и безопасность,
-// синхронизация, выход. Строки — канонический `SettingsRow`, как за
-// шестерёнками разделов. Новую настройку раздела сюда не добавлять.
+// Состав — то, что принадлежит человеку и этому телефону, и у каждой строки
+// подпись с живым состоянием, а не пояснение:
+//   • карта человека → «Профиль»;
+//   • МОИ КОМПАНИИ — приглашения и компании, где он состоит (роль, календари);
+//   • КОМПАНИЯ — «Архив» (только владельцу): удалённые календари, откуда их
+//     возвращают или стирают навсегда. Это не настройка раздела, а место
+//     хранения — и поставил его сюда сам владелец (2026-09-21: «архив засунь
+//     в Кабинет»);
+//   • ЭТОТ ТЕЛЕФОН — уведомления и синхронизация;
+//   • АККАУНТ — вход и безопасность, «О приложении» (там же версия, поэтому
+//     отдельной подписи версии внизу нет);
+//   • выход только с этого устройства.
+// Новую настройку раздела сюда не добавлять — её место за шестерёнкой.
 
 import { ScrollView, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { RefreshCw, Shield } from "lucide-react-native";
-import { DISPLAY_VERSION } from "@babun/shared/common/utils/version";
 import { useQueueDepth } from "@babun/shared/sync";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Divider } from "@/components/ui/Divider";
 import { Screen } from "@/components/ui/Screen";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { TYPE } from "@/components/ui/tokens";
-import { InvitationsRow } from "@/features/access/InvitationsRow";
+import { AboutRow } from "@/features/cabinet/AboutRow";
 import { ArchiveRow } from "@/features/cabinet/ArchiveRow";
+import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
+import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { signOutAndWipe } from "@/lib/auth-clear";
@@ -50,35 +57,30 @@ export default function CabinetHome() {
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         <PersonCard onPress={() => router.push("/cabinet/profile" as Href)} />
 
-        {/* ПРИГЛАШЕНИЯ — СТРОКОЙ НА ПОСТОЯННОМ МЕСТЕ. Прежний блок появлялся
-            только при приглашениях, и владелец его не нашёл (2026-09-15). Число
-            справа — сколько ждут ответа; внутри страница с карточками. */}
-        <SectionCard>
-          <InvitationsRow />
-        </SectionCard>
+        <CompaniesSection />
 
         {/* АРХИВ — ТОЛЬКО ВЛАДЕЛЬЦУ: в архив календарь уводит он, и только
-            он может вернуть его или стереть навсегда (владелец 2026-09-21:
-            «архив засунь в Кабинет»). */}
+            он может вернуть его или стереть. Экран `/cabinet/archive` закрыт
+            для остальных тем же правилом, что и весь Кабинет. */}
         {role === "owner" ? (
-          <SectionCard>
-            <ArchiveRow />
-          </SectionCard>
+          <>
+            <SectionEyebrow>Компания</SectionEyebrow>
+            <SectionCard>
+              <ArchiveRow />
+            </SectionCard>
+          </>
         ) : null}
 
+        <SectionEyebrow>Этот телефон</SectionEyebrow>
         <SectionCard>
-          <SettingsRow
-            tile={SETTINGS_TILE.orange}
-            icon={Shield}
-            title="Вход и безопасность"
-            sub="Пароль, устройства, удаление аккаунта"
-            onPress={() => router.push("/cabinet/account")}
-          />
+          <NotificationsRow />
           {showSync ? (
             <>
-              <Divider inset={56} />
+              <Divider inset={48} />
               <SettingsRow
-                tile={SETTINGS_TILE.blue}
+                // Своего пигмента у синхронизации нет: зелёный уже носят
+                // «Приглашения», и два одинаковых якоря на экране глаз спутает.
+                tile="neutral"
                 icon={RefreshCw}
                 title="Синхронизация"
                 sub={syncDepth > 0 ? "Ждут отправки" : "Все изменения на сервере"}
@@ -90,27 +92,31 @@ export default function CabinetHome() {
           ) : null}
         </SectionCard>
 
+        <SectionEyebrow>Аккаунт</SectionEyebrow>
+        <SectionCard>
+          <SettingsRow
+            // Своего пигмента у безопасности в словаре `SETTINGS_TILE` нет:
+            // голый глиф, как у «Часового пояса».
+            tile="neutral"
+            icon={Shield}
+            title="Вход и безопасность"
+            sub="Пароль, устройства, удаление аккаунта"
+            onPress={() => router.push("/cabinet/account")}
+          />
+          <Divider inset={48} />
+          <AboutRow />
+        </SectionCard>
+
         {/* ВЫХОД — ОДИН НА ПРИЛОЖЕНИЕ И ТОЛЬКО С ЭТОГО УСТРОЙСТВА
             (`signOutAndWipe` → `scope: "local"`). Выход со всех устройств —
             явной строкой в «Вход и безопасность». */}
-        <SectionCard>
+        <SectionCard className="mt-4">
           <ActionRow
             label="Выйти из аккаунта"
             tone="danger"
             onPress={() => void signOutAndWipe()}
           />
         </SectionCard>
-
-        <Text
-          style={{
-            paddingVertical: 12,
-            textAlign: "center",
-            ...TYPE.subhead,
-            color: t.caption,
-          }}
-        >
-          Babun · {DISPLAY_VERSION}
-        </Text>
       </ScrollView>
     </Screen>
   );

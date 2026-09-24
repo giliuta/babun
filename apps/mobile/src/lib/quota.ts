@@ -81,6 +81,21 @@ async function fetchCount(
   return count ?? 0;
 }
 
+/** Сколько использовано и какой лимит — для строки тарифа в Кабинете. Те же
+ *  чтения, что у проверки перед созданием: цифры на экране и отказ сервера
+ *  не могут разойтись. */
+export async function fetchQuotaUsage(
+  client: DbSupabase,
+  tenantId: string,
+  kind: MobileQuotaKind,
+): Promise<{ limit: number; current: number }> {
+  const [limit, current] = await Promise.all([
+    fetchQuota(client, tenantId, kind),
+    fetchCount(client, tenantId, kind),
+  ]);
+  return { limit, current };
+}
+
 export async function fetchRemainingQuota(
   client: DbSupabase,
   tenantId: string,

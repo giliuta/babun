@@ -63,7 +63,14 @@ describe("role policy", () => {
   // Без этого мастер, которого позвали в календарь, упёрся бы в «Недостаточно
   // прав» ровно на странице, где принимают приглашение.
   test("личные страницы Кабинета открыты любой роли", () => {
-    for (const path of ["/cabinet/invitations", "/cabinet/profile"]) {
+    for (const path of [
+      "/cabinet/invitations",
+      "/cabinet/profile",
+      "/cabinet/notifications",
+      "/cabinet/about",
+      "/cabinet/company",
+      "/cabinet/company?tenant=0b6f2d1e-3c4a-4b5d-8e9f-a1b2c3d4e5f6",
+    ]) {
       assert.equal(canAccessCabinetPath("owner", path), true, path);
       assert.equal(canAccessCabinetPath("dispatcher", path), true, path);
       assert.equal(canAccessCabinetPath("master", path), true, path);
@@ -81,6 +88,9 @@ describe("role policy", () => {
       "/cabinet/sms-templates",
       "/cabinet/invitations",
       "/cabinet/profile",
+      "/cabinet/notifications",
+      "/cabinet/about",
+      "/cabinet/company",
     ];
     const masterLinks = [
       "/cabinet",
@@ -89,6 +99,9 @@ describe("role policy", () => {
       "/cabinet/inventory",
       "/cabinet/invitations",
       "/cabinet/profile",
+      "/cabinet/notifications",
+      "/cabinet/about",
+      "/cabinet/company",
     ];
     // «Сводка» переехала из владельческих в общие (владелец 20.09: значок
     // аналитики стоит всегда, «открывается, ну значит не будет данных там»).

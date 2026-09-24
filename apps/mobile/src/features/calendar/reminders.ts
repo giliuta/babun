@@ -70,6 +70,24 @@ export async function cancelAppointmentReminders(
   }
 }
 
+/** Снять только РУЧНОЕ напоминание записи — Кабинет → «Уведомления». Напоминание
+ * события живёт в базе и вернётся сверкой календаря, поэтому его выключают в
+ * самом событии, а этот вызов его не трогает. */
+export async function cancelManualAppointmentReminder(
+  appointmentId: string,
+): Promise<void> {
+  const registry = readRegistry();
+  await removeBabunNotificationOwners(
+    [manualOwnerKey(appointmentId)],
+    registry[appointmentId] ?? [],
+  );
+  if (appointmentId in registry) {
+    const next = { ...registry };
+    delete next[appointmentId];
+    writeRegistry(next);
+  }
+}
+
 // Локальное напоминание о записи. Для каждой записи хранится id системного
 // уведомления: новый пресет заменяет старый, а перенос/отмена/удаление снимают
 // устаревшее уведомление через cancelAppointmentReminders.
