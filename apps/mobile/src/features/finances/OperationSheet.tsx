@@ -45,7 +45,7 @@ import { iconPreset } from "@/components/ui/icon-set";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
-import { confirmThen } from "@/lib/confirm";
+import { confirmAction, confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
@@ -73,6 +73,7 @@ import { useAccountsWithBalances } from "./accounts";
 import { accountIcon } from "./account-ui";
 import { vatModeForDraft } from "./operation-vat";
 import { useFinanceTemplates } from "./templates-queries";
+import { operationDraftKey, operationIsDirty } from "./operation-dirty";
 import { templatesForSheet } from "./template-apply";
 import { useCurrentRole } from "@/features/settings/tenant";
 
@@ -237,6 +238,9 @@ export function OperationSheet({
   // Гидрация ТОЛЬКО по фронту открытия/смене операции: смена businessToday
   // в полночь или фоновый рефетч не должны стирать заполняемую форму.
   const hydratedFor = useRef<string | null>(null);
+  /** Снимок формы в момент открытия — по нему решается, есть ли что терять
+   *  при закрытии свайпом (`operation-dirty.ts`). */
+  const initialDraftKey = useRef<string | null>(null);
   useEffect(() => {
     if (!visible) {
       hydratedFor.current = null;
@@ -271,6 +275,16 @@ export function OperationSheet({
       setTime(transaction.occurred_time ?? null);
       setNotes(transaction.notes ?? "");
       setReceiptUrl(transaction.receipt_url ?? null);
+      initialDraftKey.current = operationDraftKey({
+        type: transaction.type === "income" ? "income" : "expense",
+        amount: String(
+          inputFromGross(transaction.amount, txVat, Number(transaction.vat_rate ?? 0)),
+        ),
+        categoryId: transaction.category_id ?? null,
+        notes: transaction.notes ?? "",
+        receiptUrl: transaction.receipt_url ?? null,
+        pickedAccountId: null,
+      });
     } else {
       setType(defaultType);
       setVatTouched(false);
@@ -286,6 +300,14 @@ export function OperationSheet({
       setTime(formatHM(new Date()));
       setNotes(debtPayment ? `Долг: ${debtPayment.counterparty}` : "");
       setReceiptUrl(null);
+      initialDraftKey.current = operationDraftKey({
+        type: defaultType,
+        amount: debtPayment ? String(debtPayment.amount) : "",
+        categoryId: null,
+        notes: debtPayment ? `Долг: ${debtPayment.counterparty}` : "",
+        receiptUrl: null,
+        pickedAccountId: null,
+      });
     }
     // Hydrate once per opened transaction id (guarded by hydratedFor).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -657,8 +679,47 @@ export function OperationSheet({
   // Пока мутация в полёте, лист не закрывается ни скримом, ни свайпом:
   // ошибка сохранения должна прилететь в открытую форму, а не поверх уже
   // закрытой ленты, где набранное потеряно.
+  //
+  // НАБРАННОЕ НЕ ТЕРЯЕТСЯ МОЛЧА (прогон финансов 2026-09-24): свайп вниз и
+  // тап мимо закрывали форму с суммой и фото чека без слова. Есть что терять —
+  // форма уезжает (из открытого листа iOS вопрос не покажет, закон удаления
+  // выше), звучит «Закрыть без сохранения?»; «Отмена» возвращает форму со
+  // всем набранным.
+  const [askingClose, setAskingClose] = useState(false);
+  const dirty = operationIsDirty(initialDraftKey.current, {
+    type,
+    amount,
+    categoryId,
+    notes,
+    receiptUrl,
+    pickedAccountId: accountTouched ? accountId : null,
+  });
   const guardedClose = () => {
-    if (!busy) onClose();
+    if (busy) return;
+    if (!dirty) {
+      onClose();
+      return;
+    }
+    afterExit.current = () => {
+      void confirmAction("Закрыть без сохранения?", {
+        message: "Набранное в операции не сохранится.",
+        confirmLabel: "Закрыть",
+        destructive: true,
+      }).then((ok) => {
+        if (!ok) {
+          // Лист возвращается, когда уехал вопрос: окно поверх уезжающего
+          // iOS не покажет, и форма осталась бы невидимой (прогон 24.09).
+          setTimeout(() => setAskingClose(false), SHEET_EXIT_MS + 350);
+          return;
+        }
+        onClose();
+        setAskingClose(false);
+        // Лист уже снят — хозяин ждёт `onExited` (шторка дня возвращается по
+        // нему); зовём его сами, когда уехал вопрос.
+        setTimeout(() => onExited?.(), SHEET_EXIT_MS + 350);
+      });
+    };
+    setAskingClose(true);
   };
 
   /** Что сделать, когда окно листа СНЯТО. Вопрос об удалении живёт здесь: см.
@@ -775,7 +836,7 @@ export function OperationSheet({
   return (
     <BottomSheet
       padded={false}
-      visible={visible && !doorway.parked}
+      visible={visible && !doorway.parked && !askingClose}
       onClose={guardedClose}
       // ДВА ХОЗЯИНА У ОДНОГО СОБЫТИЯ, И ЗВАТЬ ИХ ВМЕСТЕ НЕЛЬЗЯ (слияние
       // 2026-09-10). Своё отложенное — это вопрос об удалении, ЧУЖОЕ — возврат
