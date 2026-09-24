@@ -170,6 +170,12 @@ function MinuteBand({
 const MIN_H = (lineH: number) => 9 + lineH;
 /** Высота зоны края блока, за которую запись растягивают. */
 const EDGE_H = 16;
+/** Блик плотного блока: высота плёнки от верха и её белизна. */
+const GLASS: readonly (readonly [`${number}%`, number])[] = [
+  ["18%", 0.07],
+  ["34%", 0.06],
+  ["52%", 0.05],
+];
 
 // ═══ СОБЫТИЯ «ВЕСЬ ДЕНЬ» — ЧИПЫ В ЗАКРЕПЛЁННОЙ ПОЛОСЕ НАД СЕТКОЙ ═══
 //
@@ -731,12 +737,17 @@ const Block = memo(function Block({
   // geometry stays untouched by the gesture springs.
   // ТЕНЬ ПЕРЕТАСКИВАНИЯ — НА ОБЁРТКЕ. На карточке она рисовалась под
   // `overflow: "hidden"` и не была видна ни разу.
+  // ЦВЕТНАЯ ТЕНЬ (вариант 5, 24.09): плотный блок «парит» над сеткой своим
+  // же тоном; под пальцем тень глубже. У отменённой тени нет — ей некуда
+  // ехать, и выпуклость её бы выделяла.
+  const shadowTone = cancelled ? "#000" : colors.solid;
+  const restShadow = cancelled ? 0 : 0.35;
   const wrapperStyle = useAnimatedStyle(() => ({
     zIndex: active.value > 0 || editing ? 20 : 1,
-    shadowColor: "#000",
-    shadowOpacity: active.value * 0.25,
-    shadowRadius: active.value * 8,
-    shadowOffset: { width: 0, height: 3 },
+    shadowColor: shadowTone,
+    shadowOpacity: Math.max(restShadow, active.value * 0.45),
+    shadowRadius: 4 + active.value * 6,
+    shadowOffset: { width: 0, height: 2 + active.value * 2 },
   }));
   // ОТКЛИК — ЗАЛИВКОЙ И МАСШТАБОМ, А НЕ ПРОЗРАЧНОСТЬЮ. Прежний `opacity`
   // гасил и текст, и заставлял iOS рисовать слой offscreen на 21 колонке; к
@@ -862,6 +873,26 @@ const Block = memo(function Block({
                 ),
               )
             : null}
+          {/* БЛИК СВЕРХУ (вариант 5, 24.09): три плёнки белого 7→5 % дают
+              плавный объём без градиентной библиотеки (её нативный модуль
+              потребовал бы пересборки клиента). Под текстом, касаний не
+              принимает; у отменённой блика нет. */}
+          {cancelled
+            ? null
+            : GLASS.map(([h, a]) => (
+                <View
+                  key={h}
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: h,
+                    backgroundColor: `rgba(255,255,255,${a})`,
+                  }}
+                />
+              ))}
           {/* НОВОЕ ВРЕМЯ — ПРЯМО НА КАРТОЧКЕ, пока она под пальцем: рельс
               слева далеко от пальца, а магнит щёлкает по получасам. */}
           {liveStart ? (
