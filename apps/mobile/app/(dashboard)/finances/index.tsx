@@ -782,7 +782,7 @@ function FinancesContent() {
   // всех счетов, включая закрытые, в порядке плиток — строка «Наличные ·
   // Карта» читается в том же порядке, что счета над ней.
   // Сотрудники — получатель выплаты зарплаты в строках и разборе
-  // («Зарплата · Даня», `salary.ts`). С уволенными: старая выплата не должна
+  // («Зарплата · Даня», `category-asks.ts`). С уволенными: старая выплата не должна
   // терять имя.
   const peopleData = useMasters({ includeInactive: true }).data;
   const people = useMemo(() => peopleData ?? [], [peopleData]);
@@ -1039,15 +1039,14 @@ function FinancesContent() {
           внутри, решают его же права на записи и деньги. */}
       <Pressable
         onPress={() =>
-          // Аналитика открывается на том же срезе, что был под значком:
-          // тот же период и та же команда.
+          // Аналитика открывается на том же периоде, что был под значком, и
+          // на всей компании — команду в ней выбирают тапом.
           router.push({
             pathname: "/finances/insights",
             params: {
               period: period.preset,
               from: period.from,
               to: period.to,
-              ...(scope && scope !== NO_TEAM ? { team: scope } : {}),
             },
           })
         }

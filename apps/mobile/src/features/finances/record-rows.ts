@@ -9,7 +9,7 @@ import {
   FORMS_PLATEZH,
   formatCountRu,
 } from "@babun/shared/common/utils/plural-ru";
-import { payeeName, withPayee } from "./salary";
+import { payeeName, withPayee } from "./category-asks";
 
 // ОДИН ВИЗИТ — ОДНА СТРОКА (владелец 2026-09-08: «нам без разницы, предоплата,
 // доплата или переплата: это всё единая сумма, зафиксированная за этой

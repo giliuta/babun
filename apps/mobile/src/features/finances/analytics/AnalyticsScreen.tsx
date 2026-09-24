@@ -94,7 +94,6 @@ type Panel =
 
 export interface AnalyticsStart {
   period: Period | null;
-  teamId: string | null;
 }
 
 export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
@@ -123,24 +122,18 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   );
   const [presetOpen, setPresetOpen] = useState(false);
   const [wheelsOpen, setWheelsOpen] = useState(false);
-  /** `undefined` — ещё не выбирали: команда, с которой пришли, иначе первая;
-   *  `null` — «Все команды»; строка — команда. */
-  const [pickedTeam, setPickedTeam] = useState<string | null | undefined>(
-    start.teamId ?? undefined,
-  );
+  /** `null` — вся компания (так аналитика и открывается, владелец
+   *  2026-09-24: «захожу — показывает все команды, нажимаю команду — её»);
+   *  строка — выбранная команда, повторный тап по ней снимает выбор. */
+  const [pickedTeam, setPickedTeam] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>("services");
 
   const teamsData = useTeams().data;
   const teams = useMemo(() => teamsData ?? [], [teamsData]);
-  // СРЕЗ: «Все команды» (`null`, владелец 2026-09-24: «аналитика может быть
-  // по всем командам») или команда. Пришли с командой — она; нет или её
-  // удалили (ушли в другую компанию) — первая живая, как на «Финансах».
+  // Выбранная команда исчезла (удалили, ушли в другую компанию) — снова вся
+  // компания, а не чужой срез.
   const teamId =
-    pickedTeam === null
-      ? null
-      : teams.some((team) => team.id === pickedTeam)
-        ? (pickedTeam as string)
-        : (teams[0]?.id ?? null);
+    pickedTeam !== null && teams.some((team) => team.id === pickedTeam) ? pickedTeam : null;
 
   const apptsQuery = useAppointments();
   const appointments = useMemo(() => apptsQuery.data ?? [], [apptsQuery.data]);
@@ -715,8 +708,8 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
                             ? formatEUR(r.worked)
                             : String(r.records)
                     }
-                    // Выбранная команда — акцентом, остальные тише; при «Все
-                    // команды» акцентом все: сравниваются равные.
+                    // Выбранная команда — акцентом, остальные тише; без выбора
+                    // акцентом все: сравниваются равные.
                     color={teamId === null || r.id === teamId ? t.accent : t.sub}
                     share={max > 0 ? measure(r) / max : 0}
                   />
@@ -755,7 +748,7 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
           teams={teams}
           scopeTeamId={teamId}
           onScopeChange={setPickedTeam}
-          allLabel="Все команды"
+          deselectable
           period={period}
           onOpenPresets={() => setPresetOpen(true)}
           onOpenCustom={() => setWheelsOpen(true)}

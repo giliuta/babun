@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { asksOf, payeeName, payeeOptions, pickableCategories, withPayee } from "./salary";
+import { asksOf, payeeName, payeeOptions, pickableCategories, withPayee } from "./category-asks";
 
 const p = (id: string, full_name: string, team_id: string | null, is_active = true) => ({
   id,

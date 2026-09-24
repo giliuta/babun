@@ -31,7 +31,7 @@ import { humanDay } from "@/features/appointments/helpers";
 import type { Team } from "@/features/reference/queries";
 import { deleteTransferAlert } from "./account-alerts";
 import { refundRemainingCents as refundRemainingCentsOf } from "./refund";
-import { payeeName } from "./salary";
+import { payeeName } from "./category-asks";
 
 /** Строка-факт витрины: ярлык слева, значение справа. Читается, но не
  *  правится — правка живёт в форме операции. */

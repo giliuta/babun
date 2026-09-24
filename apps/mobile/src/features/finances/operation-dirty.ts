@@ -18,7 +18,7 @@ export interface OperationDraftFields {
   receiptUrl: string | null;
   /** Счёт, если его выбрали руками; иначе `null`. */
   pickedAccountId: string | null;
-  /** Получатель выплаты зарплаты (`salary.ts`). */
+  /** Получатель выплаты зарплаты (`category-asks.ts`). */
   masterId?: string | null;
   /** Клиент — у категории, которая его прикрепляет. */
   clientId?: string | null;

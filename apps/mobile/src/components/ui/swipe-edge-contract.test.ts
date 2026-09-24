@@ -200,7 +200,7 @@ describe("кромки свайпа", () => {
       sheet.includes("pickableCategories("),
       "лист операции: выбор категорий обязан идти через pickableCategories",
     );
-    const rule = readFileSync(join(app, "src/features/finances/salary.ts"), "utf8");
+    const rule = readFileSync(join(app, "src/features/finances/category-asks.ts"), "utf8");
     assert.match(
       rule,
       /!c\.hidden \|\| c\.id === keepId/,

@@ -5,7 +5,7 @@ import {
   type FinanceTransaction,
 } from "@babun/shared/local/finance/transaction";
 import { csvCell, csvDocument, csvTextCell, shareCsvFile } from "@/lib/share-csv";
-import { payeeName, withPayee } from "./salary";
+import { payeeName, withPayee } from "./category-asks";
 
 // ВЫГРУЗКА ОПЕРАЦИЙ ДЛЯ БУХГАЛТЕРА (аудит финансов 2026-09-24).
 //

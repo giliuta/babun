@@ -7,7 +7,7 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Service } from "@/features/services/queries";
-import { payeeName, withPayee } from "./salary";
+import { payeeName, withPayee } from "./category-asks";
 
 export interface BreakdownRow {
   /** Stable React key + accessible label (the bucket name). */
@@ -46,7 +46,7 @@ export function expenseLabel(
   t: FinanceTransaction,
   categories: FinanceCategory[],
   /** Сотрудники — чтобы выплата звалась «Зарплата · Даня» и разбор делил
-   *  зарплату по людям (`salary.ts`). */
+   *  зарплату по людям (`category-asks.ts`). */
   people?: readonly { id: string; full_name: string }[],
 ): string {
   const category = t.category_id

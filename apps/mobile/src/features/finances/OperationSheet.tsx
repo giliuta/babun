@@ -65,7 +65,7 @@ import { formatHM } from "@/features/appointments/helpers";
 import { useRouter, type Href } from "expo-router";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
-import { asksOf, payeeOptions, pickableCategories } from "./salary";
+import { asksOf, payeeOptions, pickableCategories } from "./category-asks";
 import { DebtWhoBlock } from "./DebtWhoBlock";
 import { useClientChoice } from "./use-client-choice";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
@@ -220,7 +220,7 @@ export function OperationSheet({
   // Категория выбирается ЛИСТОМ, а не лентой чипов: категорий бывает два
   // десятка, и половина ленты всегда за краем экрана.
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
-  /** Получатель выплаты — у категории «Зарплата» (`salary.ts`). */
+  /** Получатель выплаты — у категории «Зарплата» (`category-asks.ts`). */
   const [masterId, setMasterId] = useState<string | null>(null);
   const [payeePickerOpen, setPayeePickerOpen] = useState(false);
   /** Клиент операции — у категории, которая прикрепляет клиента. */
@@ -593,7 +593,7 @@ export function OperationSheet({
   // сотрудников, другая прикрепляет клиента»). Блок «Кому» или «Клиент» есть
   // только у категории, которая это прикрепляет: у прочих человеку нечего
   // выбирать, и лишний блок стоял бы пустым.
-  const salary = asks.employee;
+  const askEmployee = asks.employee;
   const attachClient = asks.client && !debtPayment;
   const pickedClient = clientId
     ? ((clientChoice.clients as Client[]).find((c) => c.id === clientId) ?? null)
@@ -660,7 +660,7 @@ export function OperationSheet({
         category_id: categoryId,
         // Получатель — только у зарплаты: сменили категорию — человек не
         // остаётся висеть на «Топливе».
-        master_id: salary ? masterId : null,
+        master_id: askEmployee ? masterId : null,
         // Клиент — у категории, которая его прикрепляет. У прочих поле не
         // трогаем: клиент оплаты записи или инвойса остаётся на месте.
         ...(attachClient ? { client_id: clientId } : {}),
@@ -1042,7 +1042,7 @@ export function OperationSheet({
         {/* 3a. КОМУ — тот же блок-справочник, что категория: шапка, строка-
             дверь, выбранный человек его цветом. Необязателен: выплату без
             имени сервер примет, просто разбор не разделит её по людям. */}
-        {salary ? (
+        {askEmployee ? (
           <ReferenceBlock
             dense
             // Расход — «Кому» ушли деньги; доход — «Сотрудник», кто их принёс.

@@ -17,9 +17,9 @@ import { makePeriod, type PeriodKind } from "@/features/finances/period";
 // тогда экран берёт её источником. Без хвоста — как было: компания
 // устройства.
 //
-// «ФИНАНСЫ» ПЕРЕДАЮТ СВОЙ СРЕЗ: `?period=` (и `from`/`to` у своего периода) и
-// `?team=` — аналитика открывается на том же периоде и той же команде, что
-// были на экране под значком.
+// «ФИНАНСЫ» ПЕРЕДАЮТ СВОЙ ПЕРИОД: `?period=` (и `from`/`to` у своего
+// периода) — аналитика открывается на том же периоде. Команду не передают:
+// аналитика всегда открывается на всей компании (владелец 2026-09-24).
 const KINDS: readonly PeriodKind[] = [
   "today", "yesterday", "week", "lastweek", "month", "lastmonth",
   "quarter", "lastquarter", "year", "lastyear",
@@ -27,12 +27,11 @@ const KINDS: readonly PeriodKind[] = [
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 export default function InsightsRoute() {
-  const { tenant, period, from, to, team } = useLocalSearchParams<{
+  const { tenant, period, from, to } = useLocalSearchParams<{
     tenant?: string;
     period?: string;
     from?: string;
     to?: string;
-    team?: string;
   }>();
   const start: AnalyticsStart = {
     period:
@@ -41,7 +40,6 @@ export default function InsightsRoute() {
         : KINDS.includes(period as PeriodKind)
           ? makePeriod(period as PeriodKind)
           : null,
-    teamId: team || null,
   };
   if (!tenant) return <InsightsScreen start={start} />;
   return (
