@@ -57,6 +57,7 @@ export const WeekView = memo(function WeekView({
   onMenu,
   onCreateAt,
   onSlotLongPress,
+  editingId = null,
   onReschedule,
   canReschedule,
   onPickDay,
@@ -99,6 +100,9 @@ export const WeekView = memo(function WeekView({
   /** Долгое нажатие по свободному времени — быстрое меню («Перерыв»,
    *  «Метка дня») без формы записи. */
   onSlotLongPress?: (dateYmd: string, timeStart: string) => void;
+  /** Запись в режиме правки («Двигать и растягивать» из меню записи): только
+   *  у неё палец двигает и тянет за края, и только пока режим включён. */
+  editingId?: string | null;
   onReschedule?: (a: Appointment, s: string, e: string) => void;
   /** Per-record mutation guard (shared team events are creator-only). */
   canReschedule?: (a: Appointment) => boolean;
@@ -224,6 +228,7 @@ export const WeekView = memo(function WeekView({
       {/* grid */}
       <ZoomableTimeGrid
         hourHSv={hourHSv}
+        scrollLocked={!!editingId}
         onZoom={onZoom}
         startHour={startHour ?? 0}
         endHour={endHour ?? 24}
@@ -260,6 +265,7 @@ export const WeekView = memo(function WeekView({
                     onMenu={onMenu}
                     onCreateAt={onCreateAt}
                     onSlotLongPress={onSlotLongPress}
+                    editingId={editingId}
                     onReschedule={onReschedule}
                     canReschedule={canReschedule}
                     startHour={startHour}

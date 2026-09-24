@@ -40,6 +40,7 @@ export interface PickerSheetItem {
 export function PickerSheet({
   visible,
   title,
+  subtitle,
   items,
   selectedId,
   onSettings,
@@ -49,6 +50,9 @@ export function PickerSheet({
 }: {
   visible: boolean;
   title: string;
+  /** Тихая строка под заголовком — «пт, 25 сентября, 10:00–10:30» у меню
+   *  записи: о чём меню, видно, не глядя на сетку за шторкой. */
+  subtitle?: string;
   items: PickerSheetItem[];
   /** Что выбрано сейчас. У выбора «с нуля» (тип события новой записи) его
    *  нет; у правки существующей операции без него не видно, что стоит. */
@@ -79,6 +83,7 @@ export function PickerSheet({
       // ручным центрированием заголовка «на ширину шестерёнки»; `BottomSheet`
       // умеет это сам, и умеет одинаково для всех шторок продукта.
       title={title}
+      subtitle={subtitle}
       headerAction={
         onSettings ? (
           <Pressable

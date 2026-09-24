@@ -380,6 +380,7 @@ const Block = memo(function Block({
   address,
   lineH,
   overdue = false,
+  editing = false,
   onEdit,
   onMenu,
   onReschedule,
@@ -410,9 +411,13 @@ const Block = memo(function Block({
    *  своего цвета, ни углового знака у просрочки нет — кант остаётся цветом
    *  записи, а почему именно так, объяснено в `status-colors`. */
   overdue?: boolean;
+  /** Запись в режиме правки («Двигать и растягивать» из меню): только тогда
+   *  её можно тащить и тянуть за края. В покое запись закреплена. */
+  editing?: boolean;
   onEdit: (a: Appointment) => void;
-  /** Долгое нажатие БЕЗ движения — контекстное меню (web ActionMenuModal);
-   *  с движением — перенос, как раньше. */
+  /** Долгое нажатие — меню записи. Двигать и растягивать — только после
+   *  выбора этого в меню (владелец 2026-09-24: «просто так тянуть нельзя,
+   *  она зафиксирована; зажимаешь — окно, выбрал — тогда можно»). */
   onMenu?: (a: Appointment) => void;
   /** Undefined for crew: the block stays tappable but has no drag affordance. */
   onReschedule?: (a: Appointment, s: string, e: string) => void;
@@ -431,6 +436,8 @@ const Block = memo(function Block({
   const rSteps = useSharedValue(0);
   /** 0 — перенос, 1 — растяжка верхнего края, 2 — нижнего. */
   const edgeMode = useSharedValue(0);
+  /** Где палец коснулся карточки (y от её верха). */
+  const touchY = useSharedValue(0);
   // Ступень магнита — полчаса, но не мельче шага сетки команды: у кого сетка
   // по часу, запись прыгает по часу. Клавиатура и диктор ходят по шагу
   // сетки (`moveBy(stepMinutes)`), магнит — только палец.
@@ -580,7 +587,7 @@ const Block = memo(function Block({
   // Тянуть можно любую запись от 24pt — и получасовой перерыв при обычном
   // масштабе. Зона края у короткой записи пропорционально меньше (не больше
   // трети высоты), чтобы середина, за которую переносят, оставалась.
-  const canResize = !!onReschedule && !cancelled && cardH >= 24;
+  const canResize = editing && !!onReschedule && !cancelled && cardH >= 24;
   const edgeH = Math.min(EDGE_H, cardH / 3);
   const resizeStep = Math.max(15, Math.min(60, stepMinutes));
   const durMin = Math.max(resizeStep, endMin - startMin);
@@ -615,19 +622,25 @@ const Block = memo(function Block({
   };
 
   const pan = Gesture.Pan()
-    .activateAfterLongPress(300)
-    .onStart((e) => {
+    // В режиме правки палец двигает запись сразу — сетка при этом не
+    // прокручивается (`scrollLocked`), путаницы жестов нет.
+    .minDistance(2)
+    // Режим решает ТОЧКА КАСАНИЯ, а не место активации: за первый кадр
+    // движения палец успевает уйти на десяток точек, и у короткой записи
+    // середина «переезжала» в зону нижнего края (поймано на симуляторе).
+    .onBegin((e) => {
+      touchY.value = e.y;
+    })
+    .onStart(() => {
       active.value = withSpring(1);
       snapSteps.value = 0;
       rSteps.value = 0;
       // РЕЖИМ — ПО МЕСТУ КАСАНИЯ, одним жестом: нижний край растягивает
-      // конец, верхний край высокой записи — начало, середина переносит.
-      // Отдельные детекторы на краях внутри карточки не получали касание
-      // под нативной прокруткой сетки — проверено на симуляторе.
+      // конец, верхний — начало, середина переносит.
       edgeMode.value =
-        canResize && e.y >= cardH - edgeH
+        canResize && touchY.value >= cardH - edgeH
           ? 2
-          : canResize && cardH >= 64 && e.y <= edgeH
+          : canResize && cardH >= 40 && touchY.value <= edgeH
             ? 1
             : 0;
     })
@@ -671,9 +684,8 @@ const Block = memo(function Block({
       // (web ActionMenuModal). Сдвинул — перенос: сброс ty решает commit
       // на JS (перенос состоялся → мгновенно, база уже переписана
       // оптимистически; нет → пружиной домой).
-      if (Math.abs(e.translationY) < 8 && onMenu) {
+      if (Math.abs(e.translationY) < 8) {
         ty.value = withSpring(0);
-        runOnJS(onMenu)(apt);
       } else {
         runOnJS(commit)(e.translationY);
       }
@@ -705,8 +717,10 @@ const Block = memo(function Block({
     .onStart(() => {
       if (onMenu) runOnJS(onMenu)(apt);
     });
-  const gesture = onReschedule
-    ? Gesture.Exclusive(pan, tap)
+  // В ПОКОЕ ЗАПИСЬ ЗАКРЕПЛЕНА: тап открывает, долгое нажатие — меню.
+  // Тащить и тянуть — только в режиме правки, который включает пункт меню.
+  const gesture = editing && onReschedule
+    ? pan
     : onMenu
       ? Gesture.Exclusive(longPress, tap)
       : tap;
@@ -718,7 +732,7 @@ const Block = memo(function Block({
   // ТЕНЬ ПЕРЕТАСКИВАНИЯ — НА ОБЁРТКЕ. На карточке она рисовалась под
   // `overflow: "hidden"` и не была видна ни разу.
   const wrapperStyle = useAnimatedStyle(() => ({
-    zIndex: active.value > 0 ? 20 : 1,
+    zIndex: active.value > 0 || editing ? 20 : 1,
     shadowColor: "#000",
     shadowOpacity: active.value * 0.25,
     shadowRadius: active.value * 8,
@@ -822,27 +836,32 @@ const Block = memo(function Block({
         >
           {/* РУЧКА РАСТЯЖКИ — видно, что нижний край тянется. Сам край ловит
               общий жест карточки (`edgeMode`), ручка касаний не принимает. */}
-          {canResize && cardH >= 40 ? (
-            <View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                bottom: 3,
-                left: 0,
-                right: 0,
-                alignItems: "center",
-              }}
-            >
-              <View
-                style={{
-                  width: 18,
-                  height: 3,
-                  borderRadius: 999,
-                  backgroundColor: "rgba(255,255,255,0.55)",
-                }}
-              />
-            </View>
-          ) : null}
+          {canResize
+            ? (cardH >= 40 ? (["top", "bottom"] as const) : (["bottom"] as const)).map(
+                (edge) => (
+                  <View
+                    key={edge}
+                    pointerEvents="none"
+                    style={{
+                      position: "absolute",
+                      [edge]: 3,
+                      left: 0,
+                      right: 0,
+                      alignItems: "center",
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 22,
+                        height: 4,
+                        borderRadius: 999,
+                        backgroundColor: "rgba(255,255,255,0.9)",
+                      }}
+                    />
+                  </View>
+                ),
+              )
+            : null}
           {/* НОВОЕ ВРЕМЯ — ПРЯМО НА КАРТОЧКЕ, пока она под пальцем: рельс
               слева далеко от пальца, а магнит щёлкает по получасам. */}
           {liveStart ? (
@@ -1143,6 +1162,7 @@ export const DayColumn = memo(function DayColumn({
   onMenu,
   onCreateAt,
   onSlotLongPress,
+  editingId = null,
   onReschedule,
   canReschedule,
   startHour = DEFAULT_START,
@@ -1183,6 +1203,9 @@ export const DayColumn = memo(function DayColumn({
   /** Долгое нажатие по свободному времени — быстрое меню («Перерыв»,
    *  «Метка дня») без формы записи. */
   onSlotLongPress?: (dateYmd: string, timeStart: string) => void;
+  /** Запись в режиме правки («Двигать и растягивать» из меню записи): только
+   *  у неё палец двигает и тянет за края, и только пока режим включён. */
+  editingId?: string | null;
   onReschedule?: (a: Appointment, newStart: string, newEnd: string) => void;
   /** Per-record mutation guard (shared team events are creator-only). */
   canReschedule?: (a: Appointment) => boolean;
@@ -1608,6 +1631,7 @@ export const DayColumn = memo(function DayColumn({
               address={addressFor ? addressFor(p.apt) : null}
               lineH={lineH}
               onMenu={onMenu}
+              editing={editingId === p.apt.id}
               overdue={isOverdue(p.apt, todayYmd, isToday ? nowMinutes : null)}
               onEdit={onEdit}
               onReschedule={
@@ -1690,6 +1714,7 @@ export const DayView = memo(function DayView({
   onMenu,
   onCreateAt,
   onSlotLongPress,
+  editingId = null,
   onReschedule,
   canReschedule,
   onCommitPage,
@@ -1731,6 +1756,9 @@ export const DayView = memo(function DayView({
   /** Долгое нажатие по свободному времени — быстрое меню («Перерыв»,
    *  «Метка дня») без формы записи. */
   onSlotLongPress?: (dateYmd: string, timeStart: string) => void;
+  /** Запись в режиме правки («Двигать и растягивать» из меню записи): только
+   *  у неё палец двигает и тянет за края, и только пока режим включён. */
+  editingId?: string | null;
   onReschedule?: (a: Appointment, newStart: string, newEnd: string) => void;
   /** Per-record mutation guard (shared team events are creator-only). */
   canReschedule?: (a: Appointment) => boolean;
@@ -1835,6 +1863,7 @@ export const DayView = memo(function DayView({
       ) : null}
       <ZoomableTimeGrid
         hourHSv={hourHSv}
+        scrollLocked={!!editingId}
         onZoom={onZoom}
         startHour={startHour}
         endHour={endHour}
@@ -1865,6 +1894,7 @@ export const DayView = memo(function DayView({
                 onMenu={onMenu}
                 onCreateAt={onCreateAt}
                 onSlotLongPress={onSlotLongPress}
+                editingId={editingId}
                 onReschedule={onReschedule}
                 canReschedule={canReschedule}
                 startHour={startHour}

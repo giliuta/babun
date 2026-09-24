@@ -18,7 +18,8 @@ import {
   type Href,
 } from "expo-router";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
-import { chooseOption } from "@/lib/choose";
+import { Ban, Bell } from "lucide-react-native";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import type { Appointment } from "@babun/shared/local/appointments";
@@ -63,6 +64,10 @@ import {
 } from "@/features/appointments/helpers";
 import { CrewAppointmentSheet } from "@/features/appointments/CrewAppointmentSheet";
 import { ColorSheet } from "@/features/appointments/BookingSheets";
+import {
+  ActionMenuSheet,
+  type ActionMenu,
+} from "@/features/calendar/ActionMenuSheet";
 import {
   resolveReturnTo,
   returnToParam,
@@ -554,6 +559,7 @@ export default function CalendarTab() {
   const tenantId = useTenantId();
   useEffect(() => {
     setMoving(null);
+    setEditingApt(null);
   }, [tenantId]);
   const [mode, setMode] = useState<CalMode>(() => {
     let saved: CalMode | undefined;
@@ -710,6 +716,13 @@ export default function CalendarTab() {
   // записи: пять тапов, и «Применить» в листе лишь закрывал его, а сохранял
   // футер формы. Отсюда — тап по цвету сразу пишет запись.
   const [recolor, setRecolor] = useState<Appointment | null>(null);
+  // Меню записи и свободного времени — наша шторка (`ActionMenuSheet`).
+  const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
+  // РЕЖИМ ПРАВКИ ЗАПИСИ («Двигать и растягивать»). В покое запись закреплена
+  // (владелец 2026-09-24: «просто так тянуть нельзя — зажимаешь, открывается
+  // окно, выбрал — тогда можно»). В режиме у неё ручки сверху и снизу, сетка
+  // не прокручивается, палец двигает запись и тянет края.
+  const [editingApt, setEditingApt] = useState<Appointment | null>(null);
   // Без блока «Оплата» (Кабинет → «Запись») визит закрывать нечем: статус на
   // странице записи меняет только оплата. Тогда «Выполнена» живёт здесь, в
   // меню долгого нажатия, — денег она не пишет.
@@ -1729,13 +1742,17 @@ export default function CalendarTab() {
   /** «Отменить визит» — вторым листом причина, без неё визит не отменяется:
    *  отмена без причины в отчёте дня читается как «забыли». */
   const cancelWithReason = (apt: Appointment) => {
-    void chooseOption(
-      "Причина отмены",
-      CANCEL_REASONS.map((label) => ({ label })),
-      { haptic: false },
-    ).then((i) => {
-      const reason = i === null ? undefined : CANCEL_REASONS[i];
-      if (reason) setCancelled(apt, reason);
+    // Та же наша шторка, что меню записи: подменю не имеет права выглядеть
+    // системным листом посреди нашего.
+    setSheetMenu({
+      title: "Причина отмены",
+      subtitle: clientName(apt) || apt.comment || undefined,
+      items: CANCEL_REASONS.map((label) => ({
+        label,
+        icon: Ban,
+        color: SETTINGS_TILE.yellow,
+        run: () => setCancelled(apt, label),
+      })),
     });
   };
 
@@ -1785,6 +1802,7 @@ export default function CalendarTab() {
     setPick(null);
     setNotice(null);
     setMovingKind(kind);
+    setEditingApt(null);
     setMoving(apt);
     if (mode !== "week" && mode !== "day") {
       setMode("week");
@@ -1810,13 +1828,10 @@ export default function CalendarTab() {
           if (canManageDayLabels)
             items.push({ label: "Метка дня", run: () => setCityPickerYmd(dateYmd) });
           haptics.tap();
-          void chooseOption(
-            `${humanDay(dateYmd)}, ${timeStart}`,
-            items.map((i) => ({ label: i.label })),
-            { haptic: false },
-          ).then((i) => {
-            if (i === null) return;
-            setTimeout(() => items[i]?.run(), SHEET_EXIT_MS);
+          setSheetMenu({
+            title: "Свободное время",
+            subtitle: `${humanDay(dateYmd)}, ${timeStart}`,
+            items,
           });
   };
 
@@ -1900,13 +1915,17 @@ export default function CalendarTab() {
       { label: "Накануне в 20:00", timing: "previous-day-20" },
       { label: "Утром в 8:00", timing: "same-day-08" },
     ];
-    void chooseOption(
-      `${isCalendarEvent(apt) ? "Напомнить о событии" : "Напомнить о записи"} ${apt.time_start}`,
-      presets.map((p) => ({ label: p.label })),
-      { haptic: false },
-    ).then((i) => {
-      const preset = i === null ? undefined : presets[i];
-      if (!preset) return;
+    setSheetMenu({
+      title: isCalendarEvent(apt) ? "Напомнить о событии" : "Напомнить о записи",
+      subtitle: `${humanDay(apt.date)}, ${apt.time_start}`,
+      items: presets.map((preset) => ({
+        label: preset.label,
+        icon: Bell,
+        color: SETTINGS_TILE.yellow,
+        run: () => applyReminder(preset),
+      })),
+    });
+    function applyReminder(preset: (typeof presets)[number]) {
       let when: Date;
       try {
         when = appointmentReminderInstant(
@@ -1946,7 +1965,7 @@ export default function CalendarTab() {
           toast("Появится после обновления приложения", "info");
         }
       });
-    });
+    }
   };
 
   const openActionMenu = (apt: Appointment) => {
@@ -2041,8 +2060,16 @@ export default function CalendarTab() {
         apt.status !== "cancelled" &&
         apt.event_all_day !== true &&
         (!event || mutable)
-      )
+      ) {
+        items.push({
+          label: "Двигать и растягивать",
+          run: () => {
+            setMoving(null);
+            setEditingApt(apt);
+          },
+        });
         items.push({ label: "Перенести", run: () => startMove(apt) });
+      }
       items.push({
         label: "Копировать",
         // «Весь день» кубиками не ставится (его окно — сутки): копия встаёт
@@ -2082,19 +2109,12 @@ export default function CalendarTab() {
         });
     }
 
-    void chooseOption(
-      `${apt.time_start}–${apt.time_end} · ${
-        clientName(apt) || apt.comment || "Запись"
-      }`,
-      items.map((i) => ({ label: i.label, destructive: i.destructive })),
-      // Хаптик уже был на долгом нажатии — второй подряд читается как сбой.
-      { haptic: false },
-    ).then((i) => {
-      if (i === null) return;
-      // Меню — тоже нижний лист: почти каждый пункт открывает СВОЁ окно
-      // (второй лист, подтверждение, карточка записи), а оно не появится, пока
-      // этот не уедет.
-      setTimeout(() => items[i]?.run(), SHEET_EXIT_MS);
+    // Шапка — кто, подпись — когда. Действие ждёт ухода листа сам
+    // `PickerSheet`: почти каждый пункт открывает своё окно.
+    setSheetMenu({
+      title: clientName(apt) || apt.comment || "Запись",
+      subtitle: `${humanDay(apt.date)}, ${apt.time_start}–${apt.time_end}`,
+      items,
     });
   };
 
@@ -2473,6 +2493,12 @@ export default function CalendarTab() {
 
   /** Тап по пустому времени — одна дорога для Недели и Дня. */
   const createAt = (dateYmd: string, timeStart: string) => {
+    // Режим правки записи: тап по сетке мимо записи — выход из режима, а не
+    // новая запись.
+    if (editingApt) {
+      setEditingApt(null);
+      return;
+    }
     // Режим переноса: тап по кубику — переезд записи, не новая запись.
     if (moving) {
       if (movingKind === "copy") copyToSlot(moving, dateYmd, timeStart);
@@ -2772,6 +2798,13 @@ export default function CalendarTab() {
           exitLabel="Отменить выбор времени"
           onExit={() => setPick(null)}
         />
+      ) : editingApt ? (
+        <ModePlaque
+          title={`Двигать: ${clientName(editingApt) || editingApt.comment || "Запись"}`}
+          subtitle="Тяните запись или её край"
+          exitLabel="Закончить правку"
+          onExit={() => setEditingApt(null)}
+        />
       ) : moving ? (
         <ModePlaque
           title={`${movingKind === "copy" ? "Копировать" : "Перенести"}: ${clientName(moving) || moving.comment || "Запись"}`}
@@ -2861,6 +2894,7 @@ export default function CalendarTab() {
               onSlotLongPress={
                 !canSlotMenu || moving || pickClientId ? undefined : slotMenuGrid
               }
+              editingId={editingApt?.id ?? null}
               onMenu={onMenuGrid}
               onPickDay={pickDay}
               onPickLabelDay={onPickLabelDay}
@@ -2897,6 +2931,7 @@ export default function CalendarTab() {
               onSlotLongPress={
                 !canSlotMenu || moving || pickClientId ? undefined : slotMenuGrid
               }
+              editingId={editingApt?.id ?? null}
               onCommitPage={onCommitDayPage}
               {...gridProps}
             />
@@ -2997,6 +3032,7 @@ export default function CalendarTab() {
       />
 
 
+      <ActionMenuSheet menu={sheetMenu} onClose={() => setSheetMenu(null)} />
       <ColorSheet
         visible={recolor != null}
         onClose={() => setRecolor(null)}

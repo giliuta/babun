@@ -57,6 +57,7 @@ export function ZoomableTimeGrid({
   endHour,
   scrollToHour,
   pageGesture,
+  scrollLocked = false,
   children,
 }: {
   hourHSv: SharedValue<number>;
@@ -70,6 +71,9 @@ export function ZoomableTimeGrid({
   /** Горизонтальный pan пейджера периода (см. pager.tsx) — компонуется
    *  Race'ом с пинчем: один палец вбок = листание, два = зум. */
   pageGesture?: PanGesture;
+  /** Запись в режиме правки («Двигать и растягивать»): прокрутка стоит, чтобы
+   *  палец на записи двигал её, а не сетку. */
+  scrollLocked?: boolean;
   children: ReactNode;
 }) {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -256,6 +260,7 @@ export function ZoomableTimeGrid({
           // часом читалась как баг.
           bounces={false}
           overScrollMode="never"
+          scrollEnabled={!scrollLocked}
           contentContainerStyle={{
             paddingTop: PAD_TOP,
             paddingBottom: PAD_BOTTOM,
