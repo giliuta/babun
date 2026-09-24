@@ -116,7 +116,11 @@ describe("заметки: клиента — наверху, объекта — 
   test("«Заметка клиента» стоит ВТОРЫМ блоком, под «Клиентом»", () => {
     // Владелец 23.09: «сначала идёт блок „Клиент", потом заметка клиента».
     const page = read("../../../app/(dashboard)/clients/[id].tsx");
-    assert.match(page, /note=\{<NotesBlock client=\{c\} update=\{update\} \/>\}/);
+    // Без «Клиенты: Меняет» заметка только читается (STORY-088, волна 4).
+    assert.match(
+      page,
+      /note=\{<NotesBlock client=\{c\} update=\{update\} readOnly=\{!isDraft && !caps\.edit\} \/>\}/,
+    );
     assert.match(read("ClientHeader.tsx"), /\{note \?\? null\}\s*\{people \?\? null\}/);
     assert.doesNotMatch(read("ClientProfileBlocks.tsx"), /<NotesBlock/);
   });
@@ -127,7 +131,8 @@ describe("заметки: клиента — наверху, объекта — 
     assert.match(objects, /placeholder="Заметка объекта"/);
     assert.match(
       read("ClientObjectsSection.tsx"),
-      /onNote=\{\(id, next\) => void locationWriter\.patchLocation\(id, \{ note: next \|\| undefined \}\)\}/,
+      // Плашка — тому, кто правит карточку (STORY-088, волна 4).
+      /onNote=\{\s*canEdit\s*\? \(id, next\) => void locationWriter\.patchLocation\(id, \{ note: next \|\| undefined \}\)\s*: undefined\s*\}/,
     );
   });
 });

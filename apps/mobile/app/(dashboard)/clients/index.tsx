@@ -784,7 +784,7 @@ function ClientsListScreen() {
           count={pickedCount}
           onSms={() => setSmsOpen(true)}
           onExport={onExport}
-          onArchive={onArchive}
+          onArchive={caps.manage ? onArchive : undefined}
         />
       ) : (
         // КНОПКА НА СВОЁМ МЕСТЕ И СЕРАЯ, как в «Финансах» (владелец 20.09:
@@ -818,13 +818,16 @@ function ClientsListScreen() {
       />
       <ClientActionsSheet
         client={menuClient}
-        onBook={bookFor}
+        // Те же права, что у свайпов строки: записать — «можно записать»,
+        // напомнить — «меняет карточку», закрепить, архив и удаление —
+        // владелец своей компании (сервер у сотрудника их отказывает).
+        onBook={caps.book ? bookFor : undefined}
         onClose={() => setMenuClient(null)}
         onSelectMany={(c) => enterSelection(c.id)}
-        onTogglePin={onTogglePin}
-        onRemind={openRemindMenu}
-        onArchive={confirmArchiveOne}
-        onDelete={confirmDeleteOne}
+        onTogglePin={caps.manage ? onTogglePin : undefined}
+        onRemind={caps.edit ? openRemindMenu : undefined}
+        onArchive={caps.manage ? confirmArchiveOne : undefined}
+        onDelete={caps.manage ? confirmDeleteOne : undefined}
       />
       <ClientsFilterSheet
         visible={sheetOpen}

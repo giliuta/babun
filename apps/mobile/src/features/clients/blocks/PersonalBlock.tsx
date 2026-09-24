@@ -38,6 +38,9 @@ import { useThemeColors } from "@/theme/colors";
 interface PersonalBlockProps {
   client: Client;
   update: (patch: Partial<Client>) => Promise<boolean> | void;
+  /** Сотрудник без «Клиенты: Меняет»: строки показывают, но не открывают
+   *  выбор — сервер правку карточки отказал бы (STORY-088, волна 4). */
+  readOnly?: boolean;
 }
 
 /** Значок источника: откуда пришёл клиент, узнаётся с одного взгляда. */
@@ -52,7 +55,7 @@ const SOURCE_ICONS: Partial<Record<AcquisitionSource, LucideIcon>> = {
   other: Circle,
 };
 
-export function PersonalBlock({ client, update }: PersonalBlockProps) {
+export function PersonalBlock({ client, update, readOnly = false }: PersonalBlockProps) {
   const t = useThemeColors();
   const [birthdayOpen, setBirthdayOpen] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
@@ -74,20 +77,28 @@ export function PersonalBlock({ client, update }: PersonalBlockProps) {
           label="День рождения"
           value={birthday ? formatShortDateRu(birthday) : null}
           placeholder="не указан"
-          onPress={() => {
-            haptics.tap();
-            setBirthdayOpen(true);
-          }}
+          onPress={
+            readOnly
+              ? undefined
+              : () => {
+                  haptics.tap();
+                  setBirthdayOpen(true);
+                }
+          }
         />
         <NavRow
           label="Источник"
           value={source}
           placeholder="неизвестен"
           separated
-                  onPress={() => {
-            haptics.tap();
-            setSourceOpen(true);
-          }}
+          onPress={
+            readOnly
+              ? undefined
+              : () => {
+                  haptics.tap();
+                  setSourceOpen(true);
+                }
+          }
         />
         {/* КТО ПРИВЁЛ — только при источнике «Рекомендация». */}
         {client.acquisition_source === "referral" ? (
@@ -96,10 +107,14 @@ export function PersonalBlock({ client, update }: PersonalBlockProps) {
             value={referrerName}
             placeholder="не указан"
             separated
-            onPress={() => {
-              haptics.tap();
-              setReferrerOpen(true);
-            }}
+            onPress={
+              readOnly
+                ? undefined
+                : () => {
+                    haptics.tap();
+                    setReferrerOpen(true);
+                  }
+            }
           />
         ) : null}
       </SectionCard>

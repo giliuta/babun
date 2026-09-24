@@ -24,7 +24,9 @@ export function BulkActionBar({
   count: number;
   onSms: () => void;
   onExport: () => void;
-  onArchive: () => void;
+  /** Нет — кнопки «Архив» нет: архивирует владелец своей компании, у
+   *  сотрудника сервер запись откажет (STORY-088, волна 4). */
+  onArchive?: () => void;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -55,14 +57,16 @@ export function BulkActionBar({
         count={count}
         onPress={onExport}
       />
-      <BarButton
-        label="Архив"
-        icon={<Archive color={disabled ? t.faint : t.danger} size={20} strokeWidth={2} />}
-        color={t.danger}
-        disabled={disabled}
-        count={count}
-        onPress={onArchive}
-      />
+      {onArchive ? (
+        <BarButton
+          label="Архив"
+          icon={<Archive color={disabled ? t.faint : t.danger} size={20} strokeWidth={2} />}
+          color={t.danger}
+          disabled={disabled}
+          count={count}
+          onPress={onArchive}
+        />
+      ) : null}
     </View>
   );
 }

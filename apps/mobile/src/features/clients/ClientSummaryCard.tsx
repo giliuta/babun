@@ -12,7 +12,10 @@ import {
 import { clientDebt } from "@/features/clients/filter";
 import { useTeams } from "@/features/reference/queries";
 import { clientSubParams } from "@/features/clients/clients-company";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import {
+  useClientsCapabilities,
+  useClientsScopeOrNull,
+} from "@/features/clients/company-scope";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -48,7 +51,12 @@ export function ClientSummaryCard({
   // `stats.debt`, а список и фильтр считали иначе: карточка молчала о долге,
   // который список печатал крупно. Три формулы на трёх экранах — прямая
   // причина «я не верю этим числам» (владелец 2026-08-07).
-  const debtAmount = clientDebt(client, stats);
+  // ДЕНЬГИ КЛИЕНТА — ТОЛЬКО ТОМУ, КОМУ ОНИ ОТКРЫТЫ (STORY-088, волна 4). Долг
+  // и «потрачено» у сотрудника считались бы из сумм, которые сервер отдал
+  // ему по блокам записи, — неполная цифра хуже никакой. Визиты и «был …»
+  // остаются: это история, а не деньги.
+  const money = useClientsCapabilities().money;
+  const debtAmount = money ? clientDebt(client, stats) : 0;
   const debt = debtAmount > 0 ? formatEUR(debtAmount) : null;
   // «Напомнить» (card-actions) пишет reminder_at — строка делает дату
   // видимой: серая, когда впереди, красная — сегодня/прошло.
@@ -71,7 +79,7 @@ export function ClientSummaryCard({
                 weight: "700" as const,
               }
             : null,
-          stats.totalSpent > 0
+          money && stats.totalSpent > 0
             ? {
                 text: formatEUR(stats.totalSpent),
                 color: t.success,

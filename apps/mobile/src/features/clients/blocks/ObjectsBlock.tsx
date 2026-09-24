@@ -98,13 +98,15 @@ export default function ObjectsBlock({
   /** Записать заметку объекта. Нет — плашек заметок под строками нет
    *  (форма записи: там заметка объекта своя и живёт в самой записи). */
   onNote?: (locId: string, next: string) => void;
-  /** Открыть лист правки этого объекта. */
-  onOpen: (locId: string) => void;
-  /** Удалить объект (спрашивает подтверждение сама карточка). */
-  onDelete: (loc: Location) => void;
+  /** Открыть лист правки этого объекта. Нет — строка только читается
+   *  (сотрудник без «Клиенты: Меняет»: сервер правку откажет). */
+  onOpen?: (locId: string) => void;
+  /** Удалить объект (спрашивает подтверждение сама карточка). Нет — свайпа
+   *  «Удалить» нет. */
+  onDelete?: (loc: Location) => void;
   /** Открыть лист добавления. Работает и в черновике: объект пишется в тот же
-   *  черновик, поэтому пригашать строку больше не нужно. */
-  onAdd: () => void;
+   *  черновик, поэтому пригашать строку больше не нужно. Нет — двери нет. */
+  onAdd?: () => void;
   /** Показывать ссылки «отметьте адрес», отправленные клиенту (STORY-077).
    *  Только у сохранённого клиента и у владельца/диспетчера: черновику
    *  ссылку не выписать, а мастеру таблица по RLS не видна. */
@@ -147,17 +149,14 @@ export default function ObjectsBlock({
 
   const shown = limit ? ordered.slice(0, limit) : ordered;
   const rest = ordered.length - shown.length;
+  // Без объектов и без права добавлять смотреть нечего: блока нет, а не
+  // пустая карточка с одной шапкой.
+  if (ordered.length === 0 && shownRequests.length === 0 && !onAdd) return null;
 
   return (
     <SectionCard title={bare ? undefined : "Объекты"}>
-      {shown.map((loc, i) => (
-        <SwipeRow
-          key={loc.id}
-          label="Удалить"
-          color={t.danger}
-          onAction={() => onDelete(loc)}
-          accessibilityLabel={`Удалить объект ${loc.label || ""}`.trim()}
-        >
+      {shown.map((loc, i) => {
+        const row = (
           <>
             <ObjectRow
               loc={loc}
@@ -167,7 +166,7 @@ export default function ObjectsBlock({
               showNote={!onNote}
               residents={residentsFor?.(loc)}
               lastVisit={lastVisitFor?.(loc)}
-              onPress={() => onOpen(loc.id)}
+              onPress={onOpen ? () => onOpen(loc.id) : undefined}
               // Долгое нажатие копирует адрес (нет адреса — ссылку на карту):
               // его пересылают бригаде или вставляют в навигатор.
               onLongPress={objectTarget(loc) ? () => copy(objectTarget(loc)) : undefined}
@@ -176,8 +175,23 @@ export default function ObjectsBlock({
               <ObjectNote loc={loc} ownerKey={client.id} onSave={onNote} />
             ) : null}
           </>
-        </SwipeRow>
-      ))}
+        );
+        // Без права удалять свайпа нет вовсе: жест, который кончится отказом
+        // сервера, хуже отсутствующего.
+        return onDelete ? (
+          <SwipeRow
+            key={loc.id}
+            label="Удалить"
+            color={t.danger}
+            onAction={() => onDelete(loc)}
+            accessibilityLabel={`Удалить объект ${loc.label || ""}`.trim()}
+          >
+            {row}
+          </SwipeRow>
+        ) : (
+          <View key={loc.id}>{row}</View>
+        );
+      })}
       {/* Пустого состояния нет: при нуле объектов группа — одна эта строка.
           Добавление открывается ЛИСТОМ снизу (владелец 2026-07-27), а не
           страницей: три поля не стоят экрана поверх экрана, и объектов подряд
@@ -204,7 +218,7 @@ export default function ObjectsBlock({
           без кружка со значком и с волоском сверху. Владелец 2026-09-09,
           поймав это на записи: «почему тут изменилась архитектура, если она
           должна быть другой — как у нас принято». Один вопрос — одна дверь. */}
-      <ChooseRow compact icon={MapPin} label="Добавить объект" onPress={onAdd} />
+      {onAdd ? <ChooseRow compact icon={MapPin} label="Добавить объект" onPress={onAdd} /> : null}
     </SectionCard>
   );
 }

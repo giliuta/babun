@@ -168,7 +168,7 @@ export function ClientProfileBlocks({
         />
       ) : null}
       {labelTags ?? null}
-      <PersonalBlock client={client} update={update} />
+      <PersonalBlock client={client} update={update} readOnly={!draft && !caps.edit} />
       {/* Строки «Ещё» больше нет (владелец 2026-08-02: «чтобы внизу
           уменьшить»). Мессенджеры и почта уехали к номерам — их добавляют
           плюсом в блоке контактов; источник — в «Личное», к метке и дню

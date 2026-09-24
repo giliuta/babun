@@ -655,7 +655,7 @@ export function ClientDetailScreen() {
           memberOf={peopleOn ? people.memberOfRows : undefined}
           // Заметка клиента — вторым блоком, под «Клиентом» (владелец 23.09:
           // «сначала идёт блок „Клиент", потом заметка клиента»).
-          note={<NotesBlock client={c} update={update} />}
+          note={<NotesBlock client={c} update={update} readOnly={!isDraft && !caps.edit} />}
           people={
             peopleOn && (people.peopleRows || people.onAddPerson) ? (
               <SectionCard title="Люди">

@@ -11,6 +11,7 @@ import { lastVisitByObject } from "@/features/clients/object-last-visit";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
 
 // ОБЪЕКТЫ КЛИЕНТА — ОДИН КУСОК НА ДВА МЕСТА (владелец 22.09: «блок объекты —
 // нажимаю, и открывается страница, где все объекты… если у клиента 12
@@ -82,6 +83,10 @@ export function ClientObjectsSection({
   // мастеру сервер откажет.
   const role = useCurrentRole().data;
   const canRequestAddress = !draft && (role === "owner" || role === "dispatcher");
+  // Черновик нового клиента правит тот, кто его заводит; сохранённого —
+  // по праву «Клиенты: Меняет» в этой компании.
+  const caps = useClientsCapabilities();
+  const canEdit = draft || caps.edit;
   const requestActions = useLocationRequestActions();
 
   // ЧЕЙ ЛИСТ ОТКРЫТ — ДЕРЖИМ ДО КОНЦА АНИМАЦИИ ЗАКРЫТИЯ. Сам лист так же
@@ -110,13 +115,20 @@ export function ClientObjectsSection({
     <>
       <ObjectsBlock
         client={client}
-        onOpen={(id) => setSheet({ id })}
-        onDelete={(loc) => setSheet({ id: loc.id, askDelete: true })}
-        onAdd={() => setObjectsOpen(true)}
+        // ОБЪЕКТЫ ПРАВИТ ТОТ, КОМУ СЕРВЕР ПРАВИТ КАРТОЧКУ (STORY-088, волна 4):
+        // объекты лежат в самом клиенте, и без «Клиенты: Меняет» запись
+        // откажет. Раньше у «Видит» стояли и «Добавить», и свайп, и лист.
+        onOpen={canEdit ? (id) => setSheet({ id }) : undefined}
+        onDelete={canEdit ? (loc) => setSheet({ id: loc.id, askDelete: true }) : undefined}
+        onAdd={canEdit ? () => setObjectsOpen(true) : undefined}
         requestsEnabled={canRequestAddress}
         residentsFor={residentsLine}
         lastVisitFor={(loc) => lastVisits.get(loc.id)}
-        onNote={(id, next) => void locationWriter.patchLocation(id, { note: next || undefined })}
+        onNote={
+          canEdit
+            ? (id, next) => void locationWriter.patchLocation(id, { note: next || undefined })
+            : undefined
+        }
         limit={limit}
         onOpenAll={onOpenAll}
         bare={bare}
