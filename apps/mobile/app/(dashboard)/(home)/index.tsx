@@ -182,7 +182,11 @@ import {
   useCreateTeam,
   useTeams,
 } from "@/features/reference/queries";
-import { useCalendarSettings } from "@/features/settings/local-settings";
+import {
+  useCalendarSettings,
+  usePersonalEventTypes,
+} from "@/features/settings/local-settings";
+import { eventTypeIcon } from "@/features/calendar/event-type-icons";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { accessGate } from "@/features/access/my-access";
 import { useMyAccess } from "@/features/access/queries";
@@ -1812,7 +1816,9 @@ export default function CalendarTab() {
       {
         message: repeating
           ? "Удалится исходное событие и все его повторы. Действие необратимо."
-          : "Действие необратимо; связанные фото также исчезнут из заявки.",
+          : isCalendarEvent(apt)
+            ? "Действие необратимо."
+            : "Действие необратимо; связанные фото также исчезнут из заявки.",
         confirmLabel: repeating ? "Удалить серию" : "Удалить",
         destructive: true,
       },
@@ -1846,51 +1852,107 @@ export default function CalendarTab() {
     setDay(startOfDay(parseYMD(apt.date)));
   };
 
-  // ═══ ДОЛГОЕ НАЖАТИЕ ПО СВОБОДНОМУ ВРЕМЕНИ (владелец 2026-09-24) ═══
-  // «Перерыв» — событие команды на полчаса, серое; растягивается в свободном
-  // перемещении. Тап по свободному времени по-прежнему заводит запись, метка
-  // дня — тапом по числу. Право — заводить события в этом календаре.
+  // ═══ ДОЛГОЕ НАЖАТИЕ ПО СВОБОДНОМУ ВРЕМЕНИ — «БЫСТРОЕ СОБЫТИЕ» ═══
+  // Владелец 24.09 вечером: «не сразу перерыв, а шторка снизу — перечень
+  // типов событий, я быстро нажимаю, чтобы не заводить с нуля; это даже
+  // лучше, чем перерыв». Шторка — та же `ActionMenuSheet`: первым «Перерыв»
+  // (полчаса, серый), за ним типы из справочника (значок, цвет, длительность
+  // — как при выборе типа в форме события), последним «Другое событие» —
+  // полная форма на это же время. Тап по свободному времени по-прежнему
+  // заводит запись, метка дня — тапом по числу. Право — заводить события в
+  // этом календаре.
   const canAddBreak =
     canManageBookings || (isCrew && activeActions.events === "write");
-  // ДОЛГОЕ НАЖАТИЕ ПО СВОБОДНОМУ МЕСТУ — СРАЗУ ПЕРЕРЫВ (владелец 24.09:
-  // «открывается просто перерыв, и всё; метка дня — тапом по дате»).
   const canSlotMenu = canAddBreak;
+  const eventTypesQuery = usePersonalEventTypes();
+  const quickTypes = useMemo(
+    () =>
+      (eventTypesQuery.data ?? [])
+        .filter((type) => !type.hidden)
+        .sort((a, b) => a.order - b.order),
+    [eventTypesQuery.data],
+  );
   const slotMenu = (dateYmd: string, timeStart: string) => {
     haptics.tap();
-    addBreak(dateYmd, timeStart);
+    // Свой тип «Перерыв» в справочнике заменяет встроенный, а не дублирует.
+    const ownBreak = quickTypes.some(
+      (type) => type.label.trim().toLowerCase() === "перерыв",
+    );
+    setSheetMenu({
+      title: "Быстрое событие",
+      subtitle: `${humanDay(dateYmd)}, ${timeStart}`,
+      items: [
+        ...(ownBreak
+          ? []
+          : [
+              {
+                label: "Перерыв",
+                run: () =>
+                  addQuickEvent(dateYmd, timeStart, {
+                    label: "Перерыв",
+                    // Пауза, а не работа: серым, чтобы в сетке не читалась
+                    // ещё одним выездом цвета команды.
+                    color: "#8E8E93",
+                    minutes: 30,
+                  }),
+              },
+            ]),
+        ...quickTypes.map((type) => ({
+          label: type.label,
+          icon: eventTypeIcon(type.icon),
+          color: type.color,
+          run: () =>
+            addQuickEvent(dateYmd, timeStart, {
+              label: type.label,
+              color: type.color,
+              // Длительность типа — как в форме события (`applyEventType`);
+              // «весь день» форма больше не ставит, и здесь его нет.
+              minutes: type.defaultDuration,
+            }),
+        })),
+        {
+          label: "Другое событие",
+          run: () => bookAt({ date: dateYmd, time_start: timeStart, kind: "event" }),
+        },
+      ],
+    });
   };
-  const addBreak = (dateYmd: string, timeStart: string) => {
-    const brk = createBlankAppointment({
+  const addQuickEvent = (
+    dateYmd: string,
+    timeStart: string,
+    preset: { label: string; color: string; minutes: number },
+  ) => {
+    const ev = createBlankAppointment({
       kind: "event",
       date: dateYmd,
       time_start: timeStart,
-      time_end: addMinutesHM(timeStart, 30),
+      time_end: addMinutesHM(timeStart, preset.minutes),
       team_id: activeTeamId ?? null,
       master_id: null,
       status: "scheduled",
-      comment: "Перерыв",
-      // Перерыв — пауза, а не работа: серым, чтобы в сетке он не читался
-      // ещё одним выездом цвета команды. Цвет меняется, как у любой записи.
-      color_override: "#8E8E93",
+      // Название события — имя типа, как у события из формы: по нему форма
+      // сама узнаёт тип при открытии.
+      comment: preset.label,
+      color_override: preset.color,
       event_all_day: false,
       service_ids: [],
       services: [],
       total_amount: 0,
     });
-    createAppt.mutate(brk, {
+    createAppt.mutate(ev, {
       onSuccess: () => {
         haptics.success();
-        toast(`Перерыв ${timeStart}–${brk.time_end}`, "success", {
+        toast(`${preset.label} ${timeStart}–${ev.time_end}`, "success", {
           label: "Отменить",
           onPress: () =>
-            deleteAppt.mutate(brk.id, {
+            deleteAppt.mutate(ev.id, {
               onError: (e) =>
-                toast(serverReason(e) ?? "Не удалось убрать перерыв", "error"),
+                toast(serverReason(e) ?? "Не удалось убрать событие", "error"),
             }),
         });
       },
       onError: (e) =>
-        toast(serverReason(e) ?? "Не удалось добавить перерыв", "error"),
+        toast(serverReason(e) ?? "Не удалось добавить событие", "error"),
     });
   };
 
