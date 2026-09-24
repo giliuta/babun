@@ -22,7 +22,6 @@ import {
   type LocationLabel,
 } from "@babun/shared/local/location-labels";
 import {
-  SEED_PERSONAL_EVENT_TYPES,
   loadPersonalEventTypes,
   savePersonalEventTypes,
   type PersonalEventType,
@@ -480,10 +479,10 @@ export function usePersonalEventTypes() {
   const role = roleQuery.data;
   return useQuery({
     queryKey: ["event-types", tenantId, role ?? "role-pending"],
-    enabled:
-      !!tenantId &&
-      roleQuery.isSuccess &&
-      (role === "owner" || role === "dispatcher"),
+    // ЧИТАЮТ ВСЕ ЧЛЕНЫ КОМПАНИИ (24.09, миграция 20260924231000): мастер с
+    // правом заводить события видит те же типы в «Быстром событии». Кто
+    // правит справочник, решает сервер — владелец и диспетчер.
+    enabled: !!tenantId && roleQuery.isSuccess && role != null,
     networkMode: "always",
     // ЛЕНТА ТИПОВ РИСУЕТСЯ СРАЗУ, А НЕ ПОСЛЕ ОТВЕТА СЕРВЕРА (владелец
     // 2026-09-08: «когда открываю событие, долго прогружается тип события —
@@ -566,24 +565,8 @@ export function useSavePersonalEventTypes() {
       if (role !== "owner" && role !== "dispatcher") {
         throw new Error("Роль сотрудника не позволяет менять типы событий.");
       }
-      let list = types;
-      const retiredSeedIds: string[] = [];
-      // The fixed seed ids are identical for every user, while rows are
-      // author-scoped. Re-key deterministically before the first server save.
-      const seedIds = new Set(SEED_PERSONAL_EVENT_TYPES.map((s) => s.id));
-      if (types.some((t) => seedIds.has(t.id))) {
-        const { data: auth, error: authError } = await supabase.auth.getSession();
-        if (authError) {
-          throw serverOperationError("useSavePersonalEventTypes", authError);
-        }
-        const uid = auth.session?.user.id;
-        if (!uid) throw new Error("Сессия пользователя недоступна");
-        list = types.map((t) => {
-          if (!seedIds.has(t.id)) return t;
-          retiredSeedIds.push(t.id);
-          return { ...t, id: `pet-${uid}-${t.id}` };
-        });
-      }
+      // Заготовок с общими id больше нет (24.09) — перекладывать нечего.
+      const list = types;
 
       if (list.length > 0) {
         const { data, error } = await supabase
@@ -615,8 +598,8 @@ export function useSavePersonalEventTypes() {
           throw new Error("Сохранение типов событий не подтверждено сервером");
         }
       }
-      // Soft-delete only explicit removals plus this user's retired seed ids.
-      const gone = [...new Set([...removeIds, ...retiredSeedIds])];
+      // Soft-delete only explicit removals.
+      const gone = [...new Set(removeIds)];
       if (gone.length > 0) {
         const { error: deleteError } = await supabase
           .from("personal_event_types")
