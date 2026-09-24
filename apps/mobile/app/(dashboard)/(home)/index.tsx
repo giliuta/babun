@@ -352,7 +352,9 @@ export default function CalendarTab() {
       );
       return;
     }
-    if (apt.time_start === newStart) return;
+    // Ничего не поменялось — ни начало, ни конец. Сравнивать одно начало
+    // нельзя: растяжка за нижний край меняет только конец (24.09).
+    if (apt.time_start === newStart && apt.time_end === newEnd) return;
     // Виртуальное вхождение повтора двигать нельзя — правится только seed
     // (id виртуала синтетический, мутация по нему невалидна).
     if ((apt as { virtualParentId?: string }).virtualParentId) {
@@ -410,7 +412,25 @@ export default function CalendarTab() {
           } else {
             void cancelAppointmentReminders(apt.id);
           }
-          toast(warn ? `Перенесено. ${warn}` : `Перенесено на ${newStart}`);
+          // Растяжка (начало на месте) называет новое время целиком, перенос —
+          // куда встала запись. «Отменить» возвращает прежние границы: жест
+          // легко сделать случайно, а искать старое время по памяти нельзя.
+          const what =
+            apt.time_start === newStart
+              ? `Время: ${newStart}–${newEnd}`
+              : `Перенесено на ${newStart}`;
+          const prev = { time_start: apt.time_start, time_end: apt.time_end };
+          toast(warn ? `${what}. ${warn}` : what, "success", {
+            label: "Отменить",
+            onPress: () =>
+              updateAppt.mutate(
+                { id: apt.id, patch: prev },
+                {
+                  onError: (e) =>
+                    toast(serverReason(e) ?? "Не удалось вернуть время", "error"),
+                },
+              ),
+          });
         },
         onError: (e) => toast(serverReason(e) ?? "Не удалось перенести"),
       },
@@ -513,6 +533,9 @@ export default function CalendarTab() {
   // Дефолт для нового пользователя — «Неделя» (стандарт по решению
   // владельца 2026-07-13; дальше вид запоминается за пользователем).
   const tenantId = useTenantId();
+  useEffect(() => {
+    setMoving(null);
+  }, [tenantId]);
   const [mode, setMode] = useState<CalMode>(() => {
     let saved: CalMode | undefined;
     try {
@@ -656,6 +679,13 @@ export default function CalendarTab() {
   // (владелец 2026-09-06: «нажимаю Перенести — и кубики появляются зелёные,
   // куда можно перевести по всей таблице»). null = обычный календарь.
   const [moving, setMoving] = useState<Appointment | null>(null);
+  // «ПЕРЕНЕСТИ» И «КОПИРОВАТЬ» — ОДИН РЕЖИМ ЗЕЛЁНЫХ КУБИКОВ (владелец 24.09:
+  // «копирую на команде Y&D, переношу в Команду 1… качественное и удобное
+  // управление»). Разница только в том, что делает тап по кубику: запись
+  // уезжает целиком или туда встаёт её копия. Раньше «Копировать» сразу
+  // клал дубль ПОВЕРХ оригинала и открывал форму — куда вставить, приходилось
+  // править руками.
+  const [movingKind, setMovingKind] = useState<"move" | "copy">("move");
   // «ЦВЕТ» ИЗ МЕНЮ ДОЛГОГО НАЖАТИЯ (владелец 2026-09-24: «после записи функция
   // смены цветов — максимально улучшить»). Раньше цвет менялся только из формы
   // записи: пять тапов, и «Применить» в листе лишь закрывал его, а сохранял
@@ -677,7 +707,11 @@ export default function CalendarTab() {
   } = useCalendarChips({
     own: teams,
     onPickOwn: (teamId) => {
-      setMoving(null);
+      // РЕЖИМ ПЕРЕНОСА/КОПИИ ПЕРЕЖИВАЕТ СМЕНУ СВОЕГО КАЛЕНДАРЯ: так запись
+      // уезжает в другую команду — переключил чип, кубики показывают её
+      // свободное время, тап ставит запись туда. Чужая компания режим
+      // снимает (эффект по `tenantId` ниже): запись не может сменить
+      // компанию.
       // ЧИП ЗАГОРАЕТСЯ В ТОМ ЖЕ КАДРЕ, СЕТКА ДОГОНЯЕТ ПЕРЕХОДОМ. Отрисовка
       // недели другого календаря — самая тяжёлая работа экрана, и пока она
       // шла срочно, тап выглядел несработавшим. Подсветка берёт оптимистичное
@@ -1708,9 +1742,10 @@ export default function CalendarTab() {
   /** «Перенести» из меню — в режим зелёных кубиков. Список и Месяц кубиков не
    *  рисуют, поэтому переезжаем в Неделю этой записи; выйти — крестиком на
    *  плашке, сменой команды или уходом с экрана. */
-  const startMove = (apt: Appointment) => {
+  const startMove = (apt: Appointment, kind: "move" | "copy" = "move") => {
     setPick(null);
     setNotice(null);
+    setMovingKind(kind);
     setMoving(apt);
     if (mode !== "week" && mode !== "day") {
       setMode("week");
@@ -1719,12 +1754,35 @@ export default function CalendarTab() {
     setDay(startOfDay(parseYMD(apt.date)));
   };
 
-  const copyAppointment = (apt: Appointment) => {
+  const copyInPlace = (apt: Appointment) => {
     const copy = { ...duplicateAppointment(apt), id: randomUuid() };
     createAppt.mutate(copy, {
+      onSuccess: () => router.push(`/book?appointmentId=${copy.id}` as Href),
+      onError: (e) => toast(serverReason(e) ?? "Не удалось скопировать", "error"),
+    });
+  };
+
+  /** Тап по кубику в режиме копии: копия встаёт в выбранное время выбранной
+   *  команды, оригинал остаётся на месте. «Открыть» в тосте — сразу на
+   *  правку копии, «Отменить» — копия удаляется. */
+  const copyToSlot = (apt: Appointment, dateYmd: string, timeStart: string) => {
+    if (rejectOutsideFreeSlots(dateYmd, timeStart)) return;
+    setMoving(null);
+    const copy = {
+      ...duplicateAppointment(apt),
+      id: randomUuid(),
+      date: dateYmd,
+      time_start: timeStart,
+      time_end: addMinutesHM(timeStart, moveWindowMin),
+      team_id: activeTeamId ?? apt.team_id,
+    };
+    createAppt.mutate(copy, {
       onSuccess: () => {
-        // Открываем копию на правку сразу — на странице записи.
-        router.push(`/book?appointmentId=${copy.id}` as Href);
+        haptics.success();
+        toast(`Скопировано: ${humanDay(dateYmd)}, ${timeStart}`, "success", {
+          label: "Открыть",
+          onPress: () => router.push(`/book?appointmentId=${copy.id}` as Href),
+        });
       },
       onError: (e) => toast(serverReason(e) ?? "Не удалось скопировать", "error"),
     });
@@ -1859,7 +1917,13 @@ export default function CalendarTab() {
         (!event || mutable)
       )
         items.push({ label: "Перенести", run: () => startMove(apt) });
-      items.push({ label: "Копировать", run: () => copyAppointment(apt) });
+      items.push({
+        label: "Копировать",
+        // «Весь день» кубиками не ставится (его окно — сутки): копия встаёт
+        // на тот же день и открывается на правку, как раньше.
+        run: () =>
+          apt.event_all_day === true ? copyInPlace(apt) : startMove(apt, "copy"),
+      });
       if (!event || mutable)
         items.push({ label: "Цвет", run: () => setRecolor(apt) });
       if (!event) {
@@ -2138,7 +2202,12 @@ export default function CalendarTab() {
         nowMinutes: dateYmd === todayYmd ? nowMinutes ?? null : null,
         // Перенос: окно = длительность записи, её собственное время свободно.
         durationMinutes: moving ? moveWindowMin : undefined,
-        ignoreId: moving?.id ?? null,
+        // Своё время свободно только при ПЕРЕНОСЕ в своей же команде: копия
+        // встаёт рядом с оригиналом, а в чужой команде записи нет вовсе.
+        ignoreId:
+          moving && movingKind === "move" && moving.team_id === activeTeamId
+            ? moving.id
+            : null,
       }).map((slot) => ({
         startMin: slot.startMin,
         endMin: slot.startMin + step,
@@ -2147,6 +2216,7 @@ export default function CalendarTab() {
   }, [
     pickClientId,
     moving,
+    movingKind,
     moveWindowMin,
     apptsFor,
     activeTeamId,
@@ -2223,16 +2293,21 @@ export default function CalendarTab() {
   const moveToSlot = (apt: Appointment, dateYmd: string, timeStart: string) => {
     if (rejectOutsideFreeSlots(dateYmd, timeStart)) return;
     setMoving(null);
-    if (apt.date === dateYmd && apt.time_start === timeStart) return;
+    const toTeam = activeTeamId ?? apt.team_id;
+    const teamChanges = toTeam !== apt.team_id;
+    if (!teamChanges && apt.date === dateYmd && apt.time_start === timeStart) return;
     const prev = {
       date: apt.date,
       time_start: apt.time_start,
       time_end: apt.time_end,
+      ...(teamChanges ? { team_id: apt.team_id } : {}),
     };
     const next = {
       date: dateYmd,
       time_start: timeStart,
       time_end: addMinutesHM(timeStart, moveWindowMin),
+      // В ДРУГУЮ КОМАНДУ — ТЕМ ЖЕ ТАПОМ: чип над сеткой выбран, кубики — её.
+      ...(teamChanges ? { team_id: toTeam } : {}),
     };
     const tz = appointmentTimeZone(apt);
     const syncReminders = (placed: Appointment) => {
@@ -2245,7 +2320,13 @@ export default function CalendarTab() {
         onSuccess: () => {
           haptics.success();
           syncReminders({ ...apt, ...next });
-          toast(`Перенесено: ${humanDay(dateYmd)}, ${timeStart}`, "success", {
+          const teamName = teamChanges
+            ? teams.find((tm) => tm.id === toTeam)?.name
+            : null;
+          toast(
+            `Перенесено: ${teamName ? `${teamName}, ` : ""}${humanDay(dateYmd)}, ${timeStart}`,
+            "success",
+            {
             label: "Отменить",
             onPress: () =>
               updateAppt.mutate(
@@ -2256,7 +2337,8 @@ export default function CalendarTab() {
                     toast(serverReason(e) ?? "Не удалось вернуть запись", "error"),
                 },
               ),
-          });
+            },
+          );
         },
         onError: (e) => toast(serverReason(e) ?? "Не удалось перенести", "error"),
       },
@@ -2267,7 +2349,8 @@ export default function CalendarTab() {
   const createAt = (dateYmd: string, timeStart: string) => {
     // Режим переноса: тап по кубику — переезд записи, не новая запись.
     if (moving) {
-      moveToSlot(moving, dateYmd, timeStart);
+      if (movingKind === "copy") copyToSlot(moving, dateYmd, timeStart);
+      else moveToSlot(moving, dateYmd, timeStart);
       return;
     }
     // Кнопка на плашке зовёт ровно тот же путь, минуя проверки: на них уже
@@ -2562,9 +2645,13 @@ export default function CalendarTab() {
         />
       ) : moving ? (
         <ModePlaque
-          title={`Перенести: ${clientName(moving) || moving.comment || "Запись"}`}
-          subtitle={`Выберите зелёное время · ${moveWindowMin} мин`}
-          exitLabel="Отменить перенос"
+          title={`${movingKind === "copy" ? "Копировать" : "Перенести"}: ${clientName(moving) || moving.comment || "Запись"}`}
+          subtitle={
+            teams.length > 1
+              ? `Зелёное время · ${moveWindowMin} мин · команда — ниже`
+              : `Выберите зелёное время · ${moveWindowMin} мин`
+          }
+          exitLabel={movingKind === "copy" ? "Отменить копирование" : "Отменить перенос"}
           onExit={() => setMoving(null)}
         />
       ) : null}
@@ -2628,7 +2715,6 @@ export default function CalendarTab() {
           hueFor={(a) => a.color_override || teamColorFor(a) || t.accent}
           situationFor={situationFor}
           overdueFor={overdueFor}
-          onCreateNew={canManageBookings ? () => bookAt() : undefined}
           showAmounts={!isCrew}
           refreshing={pull.refreshing}
           onRefresh={pull.onRefresh}

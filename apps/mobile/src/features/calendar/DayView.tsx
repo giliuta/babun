@@ -1,4 +1,5 @@
 import { memo, useMemo, useState } from "react";
+import { haptics } from "@/lib/haptics";
 import {
   Pressable,
   Text,
@@ -167,6 +168,8 @@ function MinuteBand({
 /** Минимальная высота карточки: обвязка 9pt + одна строка текста. Ниже —
  *  блок без текста, только заливка, кант и знаки. */
 const MIN_H = (lineH: number) => 9 + lineH;
+/** Высота зоны края блока, за которую запись растягивают. */
+const EDGE_H = 16;
 
 // ═══ СОБЫТИЯ «ВЕСЬ ДЕНЬ» — ЧИПЫ В ЗАКРЕПЛЁННОЙ ПОЛОСЕ НАД СЕТКОЙ ═══
 //
@@ -420,6 +423,25 @@ const Block = memo(function Block({
   const active = useSharedValue(0);
   /** 0 — покой, 1 — под пальцем. Гонит заливку и лёгкое сжатие. */
   const press = useSharedValue(0);
+  /** Сколько ступеней магнита пройдено от начала переноса. */
+  const snapSteps = useSharedValue(0);
+  /** Растяжка за край: смещение верхнего и нижнего края в точках. */
+  const topPx = useSharedValue(0);
+  const botPx = useSharedValue(0);
+  const rSteps = useSharedValue(0);
+  /** 0 — перенос, 1 — растяжка верхнего края, 2 — нижнего. */
+  const edgeMode = useSharedValue(0);
+  // Ступень магнита — полчаса, но не мельче шага сетки команды: у кого сетка
+  // по часу, запись прыгает по часу. Клавиатура и диктор ходят по шагу
+  // сетки (`moveBy(stepMinutes)`), магнит — только палец.
+  const dragStep = Math.max(30, Math.min(60, stepMinutes));
+  /** Новое начало, пока запись под пальцем, — пишется на самой карточке. */
+  const [liveStart, setLiveStart] = useState<string | null>(null);
+  const onSnap = (steps: number) => {
+    haptics.tap();
+    setLiveStart(steps === 0 ? null : minToHM(startMin + steps * dragStep));
+  };
+  const clearLive = () => setLiveStart(null);
 
   const winStart = startHour * 60;
   const winEnd = endHour * 60;
@@ -516,7 +538,7 @@ const Block = memo(function Block({
     // silently pinned to the window edge. The DELTA snaps to gridStep so
     // an off-grid start keeps its offset — exactly what the a11y actions
     // do.
-    const step = Math.max(5, Math.min(60, stepMinutes));
+    const step = dragStep;
     const deltaMin =
       Math.round(((translationY / hourH) * 60) / step) * step;
     let newStart = startMin + deltaMin;
@@ -549,15 +571,98 @@ const Block = memo(function Block({
     onReschedule(apt, minToHM(newStart), minToHM(newStart + duration));
   };
 
+  // ═══ РАСТЯЖКА ЗА КРАЙ (владелец 2026-09-24: «запись растягивать по
+  // времени — тянуть вниз, увеличивать, если тянуть вверх») ═══
+  // Нижний край двигает конец, верхний — начало. Тот же жест, что перенос
+  // (удержание 300 мс, потом тянуть), — обычная прокрутка сетки по краю в
+  // растяжку не превращается. Шаг — сетка команды (15 мин), со щелчком на
+  // каждой ступени; короче 15 минут запись не становится.
+  const canResize = !!onReschedule && !cancelled && cardH >= 40;
+  const resizeStep = Math.max(15, Math.min(60, stepMinutes));
+  const durMin = Math.max(resizeStep, endMin - startMin);
+  const maxShrink = Math.floor((durMin - resizeStep) / resizeStep);
+  const onResizeSnap = (edge: "top" | "bottom", steps: number) => {
+    haptics.tap();
+    const s0 = edge === "top" ? startMin + steps * resizeStep : startMin;
+    const e0 = edge === "bottom" ? endMin + steps * resizeStep : endMin;
+    setLiveStart(`${minToHM(s0)}–${minToHM(e0)}`);
+  };
+  const commitResize = (edge: "top" | "bottom", steps: number) => {
+    setLiveStart(null);
+    const reset = () => {
+      topPx.value = withSpring(0);
+      botPx.value = withSpring(0);
+    };
+    if (!onReschedule || steps === 0) {
+      reset();
+      return;
+    }
+    const ns = edge === "top" ? startMin + steps * resizeStep : startMin;
+    const ne = edge === "bottom" ? endMin + steps * resizeStep : endMin;
+    if (ns < 0 || ne > 24 * 60 || ne - ns < resizeStep) {
+      reset();
+      return;
+    }
+    onReschedule(apt, minToHM(ns), minToHM(ne));
+    // Оптимистический кэш уже перерисовал блок новой высоты — смещения
+    // сбрасываются тем же кадром, без пружины назад.
+    topPx.value = 0;
+    botPx.value = 0;
+  };
+
   const pan = Gesture.Pan()
     .activateAfterLongPress(300)
-    .onStart(() => {
+    .onStart((e) => {
       active.value = withSpring(1);
+      snapSteps.value = 0;
+      rSteps.value = 0;
+      // РЕЖИМ — ПО МЕСТУ КАСАНИЯ, одним жестом: нижний край растягивает
+      // конец, верхний край высокой записи — начало, середина переносит.
+      // Отдельные детекторы на краях внутри карточки не получали касание
+      // под нативной прокруткой сетки — проверено на симуляторе.
+      edgeMode.value =
+        canResize && e.y >= cardH - EDGE_H
+          ? 2
+          : canResize && cardH >= 64 && e.y <= EDGE_H
+            ? 1
+            : 0;
     })
     .onUpdate((e) => {
-      ty.value = e.translationY;
+      if (edgeMode.value !== 0) {
+        const edge = edgeMode.value === 1 ? "top" : "bottom";
+        const stepPx = (resizeStep / 60) * hourH;
+        let steps = Math.round(e.translationY / stepPx);
+        // Сжиматься можно до одной ступени; расти — сколько угодно.
+        if (edge === "bottom") steps = Math.max(-maxShrink, steps);
+        else steps = Math.min(maxShrink, steps);
+        if (edge === "top") topPx.value = steps * stepPx;
+        else botPx.value = steps * stepPx;
+        if (steps !== rSteps.value) {
+          rSteps.value = steps;
+          runOnJS(onResizeSnap)(edge, steps);
+        }
+        return;
+      }
+      // МАГНИТ (владелец 2026-09-24: «прикольная штука»): карточка не
+      // плывёт за пальцем, а прыгает по ступеням `dragStep` (полчаса), и
+      // каждый переход отзывается щелчком — попасть в нужное время можно,
+      // не глядя на рельс. На мелком масштабе (28pt в час) палец иначе
+      // промахивался мимо слота.
+      const stepPx = (dragStep / 60) * hourH;
+      const steps = Math.round(e.translationY / stepPx);
+      ty.value = steps * stepPx;
+      if (steps !== snapSteps.value) {
+        snapSteps.value = steps;
+        runOnJS(onSnap)(steps);
+      }
     })
     .onEnd((e) => {
+      if (edgeMode.value !== 0) {
+        runOnJS(commitResize)(edgeMode.value === 1 ? "top" : "bottom", rSteps.value);
+        edgeMode.value = 0;
+        active.value = withSpring(0);
+        return;
+      }
       // Отпустил, не сдвинув (<8px) — это «подержал» → контекстное меню
       // (web ActionMenuModal). Сдвинул — перенос: сброс ty решает commit
       // на JS (перенос состоялся → мгновенно, база уже переписана
@@ -568,7 +673,13 @@ const Block = memo(function Block({
       } else {
         runOnJS(commit)(e.translationY);
       }
+      runOnJS(clearLive)();
       active.value = withSpring(0);
+    })
+    // Жест отменён системой (звонок, пейджер) — подпись времени не должна
+    // остаться висеть на карточке.
+    .onFinalize(() => {
+      runOnJS(clearLive)();
     });
   // Мгновенный отклик на обычный тап (iOS-подсветка): лёгкое притухание
   // с onBegin, возврат в onFinalize — раньше блок «молчал» до открытия шита.
@@ -595,6 +706,7 @@ const Block = memo(function Block({
     : onMenu
       ? Gesture.Exclusive(longPress, tap)
       : tap;
+
 
   // The wrapper owns position + stacking (zIndex must live among siblings);
   // the card owns the drag transform + shadow, so the wrapper's percent
@@ -626,6 +738,8 @@ const Block = memo(function Block({
   // картинку канта каждый кадр нажатия. Отклик у неё остаётся масштабом —
   // отменённую и не открывают так часто, чтобы платить за это кадрами.
   const cardStyle = useAnimatedStyle(() => ({
+    top: topPx.value,
+    bottom: 2 - botPx.value,
     transform: [
       { translateY: ty.value },
       { scale: (1 + active.value * 0.03) * (1 - press.value * 0.03) },
@@ -702,6 +816,58 @@ const Block = memo(function Block({
             cardStyle,
           ]}
         >
+          {/* РУЧКА РАСТЯЖКИ — видно, что нижний край тянется. Сам край ловит
+              общий жест карточки (`edgeMode`), ручка касаний не принимает. */}
+          {canResize ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                bottom: 3,
+                left: 0,
+                right: 0,
+                alignItems: "center",
+              }}
+            >
+              <View
+                style={{
+                  width: 18,
+                  height: 3,
+                  borderRadius: 999,
+                  backgroundColor: "rgba(255,255,255,0.55)",
+                }}
+              />
+            </View>
+          ) : null}
+          {/* НОВОЕ ВРЕМЯ — ПРЯМО НА КАРТОЧКЕ, пока она под пальцем: рельс
+              слева далеко от пальца, а магнит щёлкает по получасам. */}
+          {liveStart ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: 2,
+                right: 2,
+                zIndex: 2,
+                paddingHorizontal: 5,
+                borderRadius: t.radius.card,
+                backgroundColor: "rgba(11,18,32,0.78)",
+              }}
+            >
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{
+                  color: BLOCK_TEXT,
+                  fontSize: 13,
+                  lineHeight: 18,
+                  fontWeight: "700",
+                  fontVariant: ["tabular-nums"],
+                }}
+              >
+                {liveStart}
+              </Text>
+            </View>
+          ) : null}
           {/* ЛЕСТНИЦА СОДЕРЖИМОГО: имя → время → услуга → адрес. Имя первым, потому
               что время уже названо рельсом слева и позицией блока, а имя не
               выводится ниоткуда. Кегль 13 — типографический пол продукта;
