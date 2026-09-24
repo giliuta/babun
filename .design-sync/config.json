@@ -1,0 +1,252 @@
+{
+  "shape": "package",
+  "pkg": "@babun/ui",
+  "globalName": "Babun",
+  "buildCmd": "node .design-sync/build-web.mjs",
+  "entry": "ds-dist/index.mjs",
+  "srcDir": "../apps/mobile/src",
+  "cssEntry": "babun.css",
+  "provider": {
+    "component": "BabunProvider"
+  },
+  "componentSrcMap": {
+    "RowGroupHeader": "../apps/mobile/src/components/ui/card-rows.tsx",
+    "RowGroupBody": "../apps/mobile/src/components/ui/card-rows.tsx",
+    "RowGroup": "../apps/mobile/src/components/ui/card-rows.tsx",
+    "FieldRow": "../apps/mobile/src/components/ui/card-rows.tsx",
+    "NavRow": "../apps/mobile/src/components/ui/card-rows.tsx",
+    "RowActionButton": "../apps/mobile/src/components/ui/card-rows.tsx",
+    "ActionRow": "../apps/mobile/src/components/ui/card-rows.tsx",
+    "ChoiceRow": "../apps/mobile/src/components/ui/card-rows.tsx",
+    "ControlRow": "../apps/mobile/src/components/ui/card-rows.tsx",
+    "RowCaption": "../apps/mobile/src/components/ui/card-rows.tsx",
+    "AppearanceField": "../apps/mobile/src/components/ui/picker-fields.tsx",
+    "NameField": "../apps/mobile/src/components/ui/picker-fields.tsx",
+    "NameColorField": "../apps/mobile/src/components/ui/picker-fields.tsx",
+    "SelectSearch": "../apps/mobile/src/components/ui/select-rows.tsx",
+    "SelectRow": "../apps/mobile/src/components/ui/select-rows.tsx",
+    "SelectList": "../apps/mobile/src/components/ui/select-rows.tsx",
+    "AppearanceTile": "../apps/mobile/src/components/ui/AppearanceSheet.tsx",
+    "ChoiceSheetHost": "../apps/mobile/src/components/ui/ChoiceSheet.tsx",
+    "FieldLabel": "../apps/mobile/src/components/ui/Field.tsx",
+    "LoopWheelColumn": "../apps/mobile/src/components/ui/TimeWheel.tsx",
+    "TimeWheelPair": "../apps/mobile/src/components/ui/TimeWheel.tsx",
+    "TimeRangePicker": "../apps/mobile/src/components/ui/TimeWheel.tsx",
+    "ToastProvider": "../apps/mobile/src/components/ui/Toast.tsx",
+    "ValueOptionList": "../apps/mobile/src/components/ui/ValuePickerSheet.tsx",
+    "DateTimeInput": "../apps/mobile/src/components/ui/DateTimeInput.web.tsx",
+    "BabunProvider": "../apps/mobile/ds-web/BabunProvider.tsx",
+    "SwitchControl": "../apps/mobile/src/components/ui/SwitchControl.web.tsx"
+  },
+  "runtimeFontPrefixes": [
+    "SystemAndroid"
+  ],
+  "overrides": {
+    "BottomSheet": {
+      "cardMode": "single",
+      "viewport": "390x844"
+    },
+    "OptionSheet": {
+      "cardMode": "single",
+      "viewport": "390x844"
+    },
+    "PickerSheet": {
+      "cardMode": "single",
+      "viewport": "390x844"
+    },
+    "ValuePickerSheet": {
+      "cardMode": "single",
+      "viewport": "390x844"
+    },
+    "DateWheelSheet": {
+      "cardMode": "single",
+      "viewport": "390x844"
+    },
+    "AppearanceSheet": {
+      "cardMode": "single",
+      "viewport": "390x844"
+    },
+    "BabunProvider": {
+      "cardMode": "column"
+    },
+    "ActionRow": {
+      "cardMode": "column"
+    },
+    "AddRow": {
+      "cardMode": "column"
+    },
+    "AppearanceField": {
+      "cardMode": "column"
+    },
+    "AppearanceTile": {
+      "cardMode": "column"
+    },
+    "Badge": {
+      "cardMode": "column"
+    },
+    "Button": {
+      "cardMode": "column"
+    },
+    "Card": {
+      "cardMode": "column"
+    },
+    "Chip": {
+      "cardMode": "column"
+    },
+    "ChoiceRow": {
+      "cardMode": "column"
+    },
+    "ChoiceSheetHost": {
+      "cardMode": "column"
+    },
+    "ChooseRow": {
+      "cardMode": "column"
+    },
+    "ColorPicker": {
+      "cardMode": "column"
+    },
+    "ControlRow": {
+      "cardMode": "column"
+    },
+    "DateTimeInput": {
+      "cardMode": "column"
+    },
+    "Divider": {
+      "cardMode": "column"
+    },
+    "EmptyState": {
+      "cardMode": "column"
+    },
+    "Field": {
+      "cardMode": "column"
+    },
+    "FieldLabel": {
+      "cardMode": "column"
+    },
+    "FieldRow": {
+      "cardMode": "column"
+    },
+    "GradientButton": {
+      "cardMode": "column"
+    },
+    "Halo": {
+      "cardMode": "column"
+    },
+    "IconCircle": {
+      "cardMode": "column"
+    },
+    "IconPicker": {
+      "cardMode": "column"
+    },
+    "LabelTag": {
+      "cardMode": "column"
+    },
+    "LoadingBar": {
+      "cardMode": "column"
+    },
+    "LoopWheelColumn": {
+      "cardMode": "column"
+    },
+    "MoneyField": {
+      "cardMode": "column"
+    },
+    "NameColorField": {
+      "cardMode": "column"
+    },
+    "NameField": {
+      "cardMode": "column"
+    },
+    "NavRow": {
+      "cardMode": "column"
+    },
+    "NoticeBar": {
+      "cardMode": "column"
+    },
+    "RecordMark": {
+      "cardMode": "column"
+    },
+    "ReferenceBlock": {
+      "cardMode": "column"
+    },
+    "ReorderList": {
+      "cardMode": "column"
+    },
+    "RowActionButton": {
+      "cardMode": "column"
+    },
+    "RowCaption": {
+      "cardMode": "column"
+    },
+    "RowGroup": {
+      "cardMode": "column"
+    },
+    "RowGroupBody": {
+      "cardMode": "column"
+    },
+    "RowGroupHeader": {
+      "cardMode": "column"
+    },
+    "ScopeChips": {
+      "cardMode": "column"
+    },
+    "Screen": {
+      "cardMode": "column"
+    },
+    "ScreenHeader": {
+      "cardMode": "column"
+    },
+    "SectionCard": {
+      "cardMode": "column"
+    },
+    "SectionEyebrow": {
+      "cardMode": "column"
+    },
+    "SegmentedControl": {
+      "cardMode": "column"
+    },
+    "SelectList": {
+      "cardMode": "column"
+    },
+    "SelectRow": {
+      "cardMode": "column"
+    },
+    "SelectSearch": {
+      "cardMode": "column"
+    },
+    "SettingsRow": {
+      "cardMode": "column"
+    },
+    "Spinner": {
+      "cardMode": "column"
+    },
+    "SwipeRow": {
+      "cardMode": "column"
+    },
+    "SwitchControl": {
+      "cardMode": "column"
+    },
+    "SwitchRow": {
+      "cardMode": "column"
+    },
+    "TimeRangePicker": {
+      "cardMode": "column"
+    },
+    "TimeWheelPair": {
+      "cardMode": "column"
+    },
+    "ToastProvider": {
+      "cardMode": "column"
+    },
+    "ToggleListScreen": {
+      "cardMode": "column"
+    },
+    "ValueOptionList": {
+      "cardMode": "column"
+    },
+    "ValueRow": {
+      "cardMode": "column"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md",
+  "projectId": "dbaa3ae9-258d-4583-8176-32481edc190c"
+}

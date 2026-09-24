@@ -51,3 +51,14 @@ bumpix-*.png
 # Рабочие скриншоты агентов-дизайнеров: черновики сравнения, не результат.
 # Результат живёт в docs/ и в коде, а не картинками в служебной папке.
 .claude/design-reviews/
+
+# design-sync (Claude Design): служебные скрипты конвертера, сборки и кэш.
+# Коммитится только постоянное в .design-sync/ (config, NOTES, conventions,
+# previews, build-web.mjs) и apps/mobile/ds-web/ (вход сборки).
+.ds-sync/
+ds-bundle/
+ds-dist/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+apps/mobile/ds-web/out/
