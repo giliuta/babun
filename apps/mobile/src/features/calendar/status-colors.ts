@@ -2,6 +2,9 @@ import { useCallback } from "react";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { useThemeColors } from "@/theme/colors";
 import {
+  blockOverdueEdge,
+  blockPressed,
+  blockSolid,
   CANCELLED_EDGE,
   edgeColor,
   fillOver,
@@ -80,8 +83,16 @@ export type BlockColors = {
    *  теряла ровно это. Рисовать блок этим значением нельзя и не нужно:
    *  карточку красит `fillRgba` в анимированном стиле. */
   fill: string;
-  /** Кант по периметру: тот же цвет, затемнённый под порог 3 : 1. */
+  /** Кант по периметру: тот же цвет, затемнённый под порог 3 : 1. Живёт для
+   *  мест, где запись ещё рисуется тонировкой (лента, шторка цвета). */
   edge: string;
+  /** ПЛОТНАЯ заливка блока сетки (владелец 2026-09-24, вариант 7): цвет,
+   *  затемнённый по светлоте OKLCH, пока белое имя не возьмёт 3.6 : 1. */
+  solid: string;
+  /** Та же заливка под пальцем — на ступень глубже. */
+  pressed: string;
+  /** Кант просрочки на плотном блоке: тот же тон почти чёрным. */
+  overdueEdge: string;
 };
 
 const cache = new Map<string, BlockColors>();
@@ -94,7 +105,14 @@ export function blockColorsFor(hue: string): BlockColors {
   if (hit) return hit;
   // ОДИН И ТОТ ЖЕ ОБЪЕКТ НА ОДИН ЦВЕТ: свежий литерал на каждый рендер ломал
   // бы `React.memo` у полутора сотен блоков смонтированной недели.
-  const out: BlockColors = { hue, fill: fillOver(hue), edge: edgeColor(hue) };
+  const out: BlockColors = {
+    hue,
+    fill: fillOver(hue),
+    edge: edgeColor(hue),
+    solid: blockSolid(hue),
+    pressed: blockPressed(hue),
+    overdueEdge: blockOverdueEdge(hue),
+  };
   cache.set(hue, out);
   return out;
 }
@@ -128,8 +146,13 @@ export function useBlockColors(
 export function blockEdge(
   colors: BlockColors,
   status: Appointment["status"],
+  overdue = false,
 ): string {
-  return status === "cancelled" ? CANCELLED_EDGE : colors.edge;
+  if (status === "cancelled") return CANCELLED_EDGE;
+  // На плотной заливке кант цвета записи невидим — он и есть заливка. Кант
+  // остаётся в бокс-модели (геометрия строк считает его), но говорит только
+  // просрочка: тёмным ободком того же тона.
+  return overdue ? colors.overdueEdge : colors.solid;
 }
 
 /** Заливка блока поверх названной подложки — для измерений и тестов. */

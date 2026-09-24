@@ -41,10 +41,8 @@ import {
   TEXT_MIN_W,
 } from "@/features/calendar/block-geometry";
 import {
-  BLOCK_FILL,
-  deepen,
+  BLOCK_TEXT,
   fillRgba,
-  markColor,
 } from "@/components/ui/color-contrast";
 import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
@@ -259,14 +257,11 @@ export function AllDayRow({
         ? appointments.slice(0, shown).map((a, i) => {
             const c = blockColors(a);
             const cancelled = a.status === "cancelled";
-            const completed = a.status === "completed";
             const reserve =
               overflow > 0 && i === shown - 1 ? chipOverflowW(overflow) : 0;
             const pad = chipPad(chipW);
             const textW = chipTextW(chipW, reserve);
             const name = clientName(a) || a.comment || "Событие";
-            const fill = (alpha: number) =>
-              fillRgba(cancelled ? t.ink : c.hue, alpha);
             return (
               <Pressable
                 key={a.id}
@@ -288,14 +283,17 @@ export function AllDayRow({
                   justifyContent: "center",
                   paddingHorizontal: pad,
                   borderWidth: 1,
-                  borderColor: cancelled ? CANCELLED_EDGE : c.edge,
+                  borderColor: cancelled ? CANCELLED_EDGE : c.solid,
                   borderStyle: cancelled ? CANCELLED_BORDER : "solid",
                   borderRadius: t.radius.card,
                   borderCurve: "continuous",
                   overflow: "hidden",
-                  backgroundColor: pressed
-                    ? fill(cancelled ? 0.2 : completed ? 0.2588 : 0.4)
-                    : fill(cancelled ? 0.0784 : completed ? 0.102 : BLOCK_FILL),
+                  // Тот же плотный рецепт, что у блока сетки (вариант 7).
+                  backgroundColor: cancelled
+                    ? fillRgba(t.ink, pressed ? 0.2 : 0.0784)
+                    : pressed
+                      ? c.pressed
+                      : c.solid,
                 })}
               >
                 {/* УГЛОВЫХ ЗНАКОВ У ЧИПА НЕТ СОЗНАТЕЛЬНО: «просрочено» к
@@ -308,7 +306,7 @@ export function AllDayRow({
                     ellipsizeMode={textW < 96 ? "clip" : "tail"}
                     maxFontSizeMultiplier={1.3}
                     style={{
-                      color: t.ink,
+                      color: cancelled ? t.ink : BLOCK_TEXT,
                       fontSize: 13,
                       lineHeight: lineH,
                       fontWeight: "700",
@@ -343,7 +341,8 @@ export function AllDayRow({
                       style={{
                         fontSize: 11,
                         fontWeight: "700",
-                        color: onOverflow ? t.accent : t.body,
+                        // «+N» лежит на плотной заливке чипа — белым, как имя.
+                        color: BLOCK_TEXT,
                         fontVariant: ["tabular-nums"],
                       }}
                     >
@@ -496,7 +495,7 @@ const Block = memo(function Block({
         : "name";
 
   // КАНТ ЗАБИРАЕТ ТОЛЬКО ОТМЕНЁННАЯ — правило и его гейт в `status-colors`.
-  const edge = blockEdge(colors, apt.status);
+  const edge = blockEdge(colors, apt.status, overdue);
   // РАЗОМКНУТЫЙ КАНТ = РАБОТЫ НЕ БУДЕТ. Кант — единственный слой блока, который
   // рисуется ВСЕГДА: текста нет при textW < 24 (наложение в Неделе даёт 11),
   // углового знака нет при ширине < 40. Цвет канта занят категорией, толщина —
@@ -613,14 +612,14 @@ const Block = memo(function Block({
   // тому же он перетирал `opacity: 0.55` отменённой, то есть тот сигнал не
   // работал вовсе. Заливка под пальцем — 40 %: имя и время на ней читаются
   // (измерено, 5.81 : 1 и 4.85 : 1 в худшем цвете палитры).
-  const fillIdle = fillRgba(
-    cancelled ? t.ink : colors.hue,
-    cancelled ? 0.0784 : completed ? 0.102 : BLOCK_FILL,
-  );
-  const fillPressed = fillRgba(
-    cancelled ? t.ink : colors.hue,
-    cancelled ? 0.2 : completed ? 0.2588 : 0.4,
-  );
+  // ПЛОТНАЯ ЗАЛИВКА (владелец 2026-09-24, вариант 7): блок — сам цвет записи,
+  // затемнённый ровно до читаемого белого имени; сквозь него больше не
+  // просвечивают ни часовые линии, ни линия «сейчас». Выполненная носит ту же
+  // заливку и белую галку; отменённая по-прежнему теряет цвет.
+  const fillIdle = cancelled ? fillRgba(t.ink, 0.0784) : colors.solid;
+  const fillPressed = cancelled ? fillRgba(t.ink, 0.2) : colors.pressed;
+  const nameColor = cancelled ? t.ink : BLOCK_TEXT;
+  const subColor = cancelled ? t.body : BLOCK_TEXT;
   // У ОТМЕНЁННОЙ ЗАЛИВКА НЕ АНИМИРУЕТСЯ. Разомкнутый кант выбивает вью из
   // быстрого пути отрисовки, и смена фона заставляла бы iOS перерисовывать
   // картинку канта каждый кадр нажатия. Отклик у неё остаётся масштабом —
@@ -711,7 +710,7 @@ const Block = memo(function Block({
           {lines >= 1 && textW >= 24 ? (
             <Text
               style={{
-                color: t.ink,
+                color: nameColor,
                 fontSize: 13,
                 lineHeight: lineH,
                 fontWeight: "700",
@@ -731,7 +730,7 @@ const Block = memo(function Block({
           {lines >= 2 && textW >= 24 ? (
             <Text
               style={{
-                color: t.body,
+                color: subColor,
                 fontSize: 13,
                 lineHeight: lineH,
                 fontWeight: overdue ? "700" : "500",
@@ -747,7 +746,7 @@ const Block = memo(function Block({
           {showService ? (
             <Text
               style={{
-                color: t.body,
+                color: subColor,
                 fontSize: 13,
                 lineHeight: lineH,
                 marginRight: lastRow === "service" ? dotReserve : 0,
@@ -761,7 +760,7 @@ const Block = memo(function Block({
           {showAddress ? (
             <Text
               style={{
-                color: t.body,
+                color: subColor,
                 fontSize: 13,
                 lineHeight: lineH,
                 marginRight: dotReserve,
@@ -774,13 +773,10 @@ const Block = memo(function Block({
             </Text>
           ) : null}
 
-          {/* УГЛОВОЙ ЗНАК ОДИН И ОДНОЗНАЧНЫЙ: зелёный круг — работа закрыта.
-              Просрочка знака не носит, и причина не в экономии места:
-              markColor(t.warning) = #835400 и markColor(t.success) = #076b48
-              дают друг к другу 1.01 : 1 — на колонке недели, где глиф не
-              рисуется, «выполнено» и «просрочено» были двумя одинаково
-              светлыми кружками, неразличимыми ни для кого. Убрав один из двух,
-              делаем знак односмысленным. Глиф рисуется только на широком
+          {/* УГЛОВОЙ ЗНАК ОДИН И ОДНОЗНАЧНЫЙ: белый круг с галкой — работа
+              закрыта. Просрочка знака не носит: её сигнал — тёмный ободок
+              блока, и два разных знака в углу на колонке недели, где глиф не
+              рисуется, слились бы в два одинаковых кружка. Глиф рисуется только на широком
               блоке: SVG монтирует отдельное дерево на каждый знак, а неделя
               держит 21 колонку. */}
           {markSize > 0 && completed ? (
@@ -792,36 +788,36 @@ const Block = memo(function Block({
                 width: markSize,
                 height: markSize,
                 borderRadius: 999,
-                backgroundColor: markColor(t.success),
+                // На плотной заливке зелёный круг тонул бы в зелёных записях;
+                // белая плёнка с белой галкой читается на любом цвете.
+                backgroundColor: "rgba(255,255,255,0.32)",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
               {markSize >= 14 ? (
-                <Check color={t.onAccent} size={10} strokeWidth={3} />
+                <Check color={BLOCK_TEXT} size={10} strokeWidth={3.5} />
               ) : null}
             </View>
           ) : null}
 
-          {/* ЧУЖАЯ МЕТКА — точка в нижнем углу: периметр занят цветом самой
-              записи. Цвет точки затемняется против ЕЁ заливки, а не против
-              сетки: точка лежит на чужом цвете.
-
-              `colors.fill` — НЕПРОЗРАЧНЫЙ композит (см. `BlockColors.fill`).
-              Пока здесь лежала строка с альфой, `deepen` мерил контраст об
-              отброшенную альфу, то есть о полный цвет записи, и топил метку
-              вдвое глубже нужного: зелёная на кобальтовой выходила почти
-              чёрной. */}
+          {/* ЧУЖАЯ МЕТКА — точка в нижнем углу: сам блок залит цветом записи.
+              Точка несёт цвет метки как есть, а белое кольцо отделяет её от
+              чужой заливки при любом сочетании. */}
           {offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? (
             <View
               style={{
                 position: "absolute",
                 bottom: 2,
                 right: 2,
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: deepen(offLabelColor, [colors.fill]),
+                width: 9,
+                height: 9,
+                borderRadius: 999,
+                // Точка лежит на плотном чужом цвете: белое кольцо отделяет
+                // её от заливки, и цвет метки виден как есть.
+                backgroundColor: offLabelColor,
+                borderWidth: 1.5,
+                borderColor: BLOCK_TEXT,
               }}
             />
           ) : null}

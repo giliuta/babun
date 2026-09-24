@@ -41,21 +41,23 @@ describe("цвета блока записи", () => {
     assert.equal(blockColorsFor("#FF9500"), blockColorsFor("#FF9500"));
   });
 
-  test("кант забирает только отменённая", () => {
-    // Кант — единственный надёжный канал КАТЕГОРИИ (заливка при 18 % даёт по
-    // палитре максимум попарного ΔE 6.7). Право забрать его есть ровно у
-    // одного состояния; просрочка своё право потеряла — при протанопии её
-    // янтарь и оранжевое «нет объекта» дают ΔE 0.0.
+  test("на плотном блоке кант молчит; говорят только отмена и просрочка", () => {
+    // Плотная заливка (вариант 7) сама несёт цвет записи — кант того же тона
+    // невидим и оставлен лишь в бокс-модели. Право заговорить кантом есть у
+    // двух состояний: отменённая (нейтраль, пунктир) и просрочка (тёмный
+    // ободок того же тона, вдвое толще).
     for (const preset of PRESET_COLORS) {
       const c = blockColorsFor(preset.value);
       for (const status of ["scheduled", "in_progress", "completed"] as const) {
         assert.equal(
           blockEdge(c, status),
-          c.edge,
-          `${preset.name}/${status} отнял кант у цвета записи`,
+          c.solid,
+          `${preset.name}/${status}: кант обязан слиться с заливкой`,
         );
+        assert.equal(blockEdge(c, status, true), c.overdueEdge);
       }
       assert.equal(blockEdge(c, "cancelled"), CANCELLED_EDGE);
+      assert.equal(blockEdge(c, "cancelled", true), CANCELLED_EDGE);
     }
   });
 

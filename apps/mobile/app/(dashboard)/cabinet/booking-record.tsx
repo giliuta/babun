@@ -7,7 +7,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { RecordMark } from "@/components/ui/RecordMark";
+import { RecordMark, recordMarkText } from "@/components/ui/RecordMark";
 import { Divider } from "@/components/ui/Divider";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { chooseValue } from "@/lib/choose";
@@ -134,7 +134,7 @@ export default function BookingRecordSettingsScreen() {
       <ScreenHeader title="Запись" />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
         {/* ОБРАЗЕЦ — НАСТОЯЩИЙ БЛОК КАЛЕНДАРЯ, а не увеличенный кружок: та же
-            заливка, тот же кант, тот же радиус и та же лестница строк (имя,
+            плотная заливка, тот же радиус и та же лестница строк (имя,
             потом время). Рисует его общий `RecordMark`, поэтому разойтись с
             сеткой он не может. */}
         <SectionEyebrow>Как выглядит</SectionEyebrow>
@@ -143,7 +143,11 @@ export default function BookingRecordSettingsScreen() {
             <Text
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
-              style={{ fontSize: 13, fontWeight: "700", color: t.ink }}
+              style={{
+                fontSize: 13,
+                fontWeight: "700",
+                color: recordMarkText(previewColor, t.ink),
+              }}
             >
               {previewTitle}
             </Text>
@@ -153,7 +157,7 @@ export default function BookingRecordSettingsScreen() {
               style={{
                 fontSize: 13,
                 fontWeight: "500",
-                color: t.body,
+                color: recordMarkText(previewColor, t.body),
                 fontVariant: ["tabular-nums"],
               }}
             >
