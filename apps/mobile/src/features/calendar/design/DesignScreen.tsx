@@ -201,7 +201,22 @@ export function DesignScreen() {
 
         {tab === "record" ? (
           <>
-            {/* ЦВЕТ ЗАПИСИ — кусочек календаря: «всё заполнено» и по одной
+
+            <SectionCard title="Блоки записи">
+              {BOOKING_BLOCKS.map((block) => (
+                <BlockCell
+                  key={block.id}
+                  label={block.label}
+                  icon={BLOCK_ICON[block.id] ?? Bookmark}
+                  on={block.pinned ? true : recordOn(block.id)}
+                  locked={!!block.pinned}
+                  onToggle={() => toggleRecordBlock.mutate(block.id)}
+                />
+              ))}
+            </SectionCard>
+            <RowCaption text="Выключенный блок пропадает у всей команды. Данные остаются." />
+
+            {/* ЦВЕТ ЗАПИСИ — ПОД БЛОКАМИ (владелец 25.09). Кусочек календаря: «всё заполнено» и по одной
                 записи на каждый включённый блок, который подсвечивается. Тап —
                 её цвет. Выключили блок — его записи здесь нет, и в календаре
                 такая запись красится как заполненная. */}
@@ -235,20 +250,6 @@ export function DesignScreen() {
               </View>
             </SectionCard>
             <RowCaption text="Цвет, выбранный в самой записи, главнее всего." />
-
-            <SectionCard title="Блоки записи">
-              {BOOKING_BLOCKS.map((block) => (
-                <BlockCell
-                  key={block.id}
-                  label={block.label}
-                  icon={BLOCK_ICON[block.id] ?? Bookmark}
-                  on={block.pinned ? true : recordOn(block.id)}
-                  locked={!!block.pinned}
-                  onToggle={() => toggleRecordBlock.mutate(block.id)}
-                />
-              ))}
-            </SectionCard>
-            <RowCaption text="Выключенный блок пропадает у всей команды. Данные остаются." />
           </>
         ) : (
           <>
