@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { useClients } from "@/features/clients/queries";
-import { useTeams } from "@/features/reference/queries";
+import { useMasters, useTeams } from "@/features/reference/queries";
 import { useAccountsWithBalances } from "./accounts";
 import { shareLedgerCsv } from "./ledger-export";
 import { PERIOD_LABELS, presetHint, presetRange, type PeriodKind } from "./period";
@@ -40,6 +40,7 @@ export function LedgerExportRow() {
   const categories = useFinanceCategories();
   const clients = useClients();
   const teams = useTeams({ includeInactive: true });
+  const people = useMasters({ includeInactive: true });
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   /** Выбранный период ждёт ухода листа: «Поделиться» — отдельное окно, и
@@ -63,6 +64,7 @@ export function LedgerExportRow() {
           categories: categories.data ?? [],
           clients: clients.data ?? [],
           teams: teams.data ?? [],
+          people: people.data ?? [],
         },
         from,
         to,

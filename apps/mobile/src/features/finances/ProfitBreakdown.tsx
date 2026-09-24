@@ -36,6 +36,7 @@ export function ProfitBreakdown({
   materialAppointmentCount,
   only,
   title = "Прибыль",
+  people,
 }: {
   transactions: FinanceTransaction[];
   categories: FinanceCategory[];
@@ -46,6 +47,8 @@ export function ProfitBreakdown({
   /** Только одна половина разбора — у плиток «Доход» и «Расход» «Аналитики». */
   only?: "income" | "expense";
   title?: string;
+  /** Сотрудники — зарплата делится по людям: «Зарплата · Даня». */
+  people?: readonly { id: string; full_name: string }[];
 }) {
   const th = useThemeColors();
 
@@ -54,7 +57,7 @@ export function ProfitBreakdown({
     [transactions, categories, services, appointments],
   );
   const expenseRows = useMemo(() => {
-    const rows = breakdownExpense(transactions, categories);
+    const rows = breakdownExpense(transactions, categories, people);
     if (materialCost > 0) {
       rows.push({
         id: "appointment-material-cost",
@@ -65,7 +68,7 @@ export function ProfitBreakdown({
       rows.sort((a, b) => b.amount - a.amount);
     }
     return rows;
-  }, [transactions, categories, materialCost, materialAppointmentCount]);
+  }, [transactions, categories, materialCost, materialAppointmentCount, people]);
   const income = incomeRows.reduce((s, r) => s + r.amount, 0);
   const expense = expenseRows.reduce((s, r) => s + r.amount, 0);
   // The donut clamps negatives away (a refund bucket has no share of a

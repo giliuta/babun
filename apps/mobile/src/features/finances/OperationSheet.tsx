@@ -1,7 +1,7 @@
 import { useFeatureOn } from "@/features/settings/company-features";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { Repeat, Tag } from "lucide-react-native";
+import { Repeat, Tag, User } from "lucide-react-native";
 import type {
   FinanceTransaction,
   PaymentMethod,
@@ -62,8 +62,10 @@ import {
   isPaymentAccountCompatible,
 } from "@babun/shared/local/finance/integrity";
 import { formatHM } from "@/features/appointments/helpers";
-import { useRouter } from "expo-router";
-import { useTeams } from "@/features/reference/queries";
+import { useRouter, type Href } from "expo-router";
+import { useMasters, useTeams } from "@/features/reference/queries";
+import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
+import { isSalaryCategory, payeeOptions } from "./salary";
 import {
   useDeleteTransaction,
   useFinanceCategories,
@@ -214,6 +216,9 @@ export function OperationSheet({
   // Категория выбирается ЛИСТОМ, а не лентой чипов: категорий бывает два
   // десятка, и половина ленты всегда за краем экрана.
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  /** Получатель выплаты — у категории «Зарплата» (`salary.ts`). */
+  const [masterId, setMasterId] = useState<string | null>(null);
+  const [payeePickerOpen, setPayeePickerOpen] = useState(false);
   // Лист шаблонов — тот же вид выбора, что у категории.
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   // Дата и время правятся ТЕМ ЖЕ листом, что у записи.
@@ -271,6 +276,7 @@ export function OperationSheet({
         ),
       );
       setCategoryId(transaction.category_id ?? null);
+      setMasterId(transaction.master_id ?? null);
       setTeamId(transaction.team_id ?? null);
       setAccountId(transaction.account_id ?? null);
       setDate(transaction.occurred_on);
@@ -286,6 +292,7 @@ export function OperationSheet({
         notes: transaction.notes ?? "",
         receiptUrl: transaction.receipt_url ?? null,
         pickedAccountId: null,
+        masterId: transaction.master_id ?? null,
       });
     } else {
       setType(defaultType);
@@ -294,6 +301,7 @@ export function OperationSheet({
       // долг останется висеть на разницу, как и должен.
       setAmount(debtPayment ? String(debtPayment.amount) : "");
       setCategoryId(null);
+      setMasterId(null);
       setTeamId(defaultTeamId ?? null);
       setAccountId(null);
       // Разбор дня открывает форму на своём дне; будущее леджер не примет,
@@ -309,6 +317,7 @@ export function OperationSheet({
         notes: debtPayment ? `Долг: ${debtPayment.counterparty}` : "",
         receiptUrl: null,
         pickedAccountId: null,
+        masterId: null,
       });
     }
     // Hydrate once per opened transaction id (guarded by hydratedFor).
@@ -355,6 +364,8 @@ export function OperationSheet({
   // Значок места не занимает и есть только у новой операции владельца, когда
   // для этой команды есть хоть один шаблон.
   const templatesQuery = useFinanceTemplates();
+  // С уволенными: правка старой выплаты должна показать, кому она ушла.
+  const peopleQuery = useMasters({ includeInactive: true });
   const sheetTemplates = useMemo(
     () => templatesForSheet(templatesQuery.data ?? [], teamId),
     [templatesQuery.data, teamId],
@@ -365,6 +376,7 @@ export function OperationSheet({
     setType(tpl.kind);
     setAmount(formatMoneyForInput(Number(tpl.amount)));
     setCategoryId(tpl.category_id);
+    if (tpl.master_id) setMasterId(tpl.master_id);
     // Счёт шаблона — только если он ещё открыт и обслуживает эту команду;
     // иначе остаётся счёт по умолчанию, а не пустой выбор.
     if (tpl.account_id && teamAccounts.some((acc) => acc.id === tpl.account_id)) {
@@ -558,6 +570,15 @@ export function OperationSheet({
   // Значок и цвет категории живут теперь в самом блоке (`CategoryBlock`) —
   // одном на долг и операцию: две копии этой развилки уже начинали расходиться.
 
+  // ЗАРПЛАТА — С ПОЛУЧАТЕЛЕМ (владелец 2026-09-24: «Зарплата Даня»). Блок
+  // «Кому» есть только у категории «Зарплата» и только в расходе: у прочих
+  // категорий человеку нечего выбирать, и лишний блок стоял бы пустым.
+  const salary = isExpense && isSalaryCategory(category);
+  const payees = payeeOptions(peopleQuery.data ?? [], teamId, masterId);
+  const payee = masterId
+    ? (peopleQuery.data ?? []).find((m) => m.id === masterId) ?? null
+    : null;
+
   const save = async () => {
     // Синхронный гард: isPending включается только после ре-рендера,
     // сверхбыстрый двойной тап успевал бы дважды.
@@ -613,6 +634,9 @@ export function OperationSheet({
         amount: breakdown.gross,
         ...(vatModeToSend ? { vat_mode: vatModeToSend } : {}),
         category_id: categoryId,
+        // Получатель — только у зарплаты: сменили категорию — человек не
+        // остаётся висеть на «Топливе».
+        master_id: salary ? masterId : null,
         team_id: teamId,
         account_id: accountId,
         payment_method: payment,
@@ -695,6 +719,7 @@ export function OperationSheet({
     notes,
     receiptUrl,
     pickedAccountId: accountTouched ? accountId : null,
+    masterId,
   });
   const guardedClose = () => {
     if (busy) return;
@@ -981,6 +1006,28 @@ export function OperationSheet({
           }}
         />
 
+        {/* 3a. КОМУ — тот же блок-справочник, что категория: шапка, строка-
+            дверь, выбранный человек его цветом. Необязателен: выплату без
+            имени сервер примет, просто разбор не разделит её по людям. */}
+        {salary ? (
+          <ReferenceBlock
+            dense
+            title="Кому"
+            emptyIcon={User}
+            emptyLabel="Выбрать сотрудника"
+            emptyHint="Открывает список сотрудников"
+            value={
+              payee
+                ? { name: payee.full_name, color: payee.color ?? null, Icon: User }
+                : null
+            }
+            onPress={() => {
+              setPayeePickerOpen(true);
+              haptics.tap();
+            }}
+          />
+        ) : null}
+
         {/* КЛАВИАТУРА НЕ ПОДНИМАЕТСЯ САМА (владелец 2026-09-10: «когда я
             нажимаю „добавить доход“, оно не должно сразу переключаться на
             клавиатуру»). Автофокус на сумме закрывал половину формы ещё до
@@ -1248,6 +1295,43 @@ export function OperationSheet({
         }
         settingsLabel="Категории операций"
         onClose={() => setCategoryPickerOpen(false)}
+      />
+      <PickerSheet
+        visible={payeePickerOpen}
+        title="Кому"
+        // ПУСТОЙ СПИСОК — СЛОВАМИ (канон пустых состояний): у компании без
+        // сотрудников лист иначе был бы одной шапкой без ответа, что делать.
+        subtitle={
+          payees.length > 0
+            ? undefined
+            : isOwner && teamId
+              ? "Сотрудников нет — добавьте в «Мастерах»"
+              : "Сотрудников нет"
+        }
+        items={payees.map((m) => ({
+          id: m.id,
+          label: m.full_name,
+          hint: m.is_active ? undefined : "Не работает",
+          icon: User,
+          color: m.color ?? th.accent,
+          onPress: () => setMasterId(m.id),
+        }))}
+        selectedId={masterId}
+        // ЛЮДЕЙ БЕРЁМ ИЗ «МАСТЕРОВ» — там же их и заводят. Пустой список у
+        // компании без сотрудников не тупик: ползунки в шапке ведут на
+        // страницу мастеров календаря (тот же приём, что у категорий).
+        onSettings={
+          isOwner && teamId
+            ? () =>
+                doorway.open(() =>
+                  router.push(
+                    `/calendar/masters?team=${encodeURIComponent(teamId)}` as Href,
+                  ),
+                )
+            : undefined
+        }
+        settingsLabel="Сотрудники"
+        onClose={() => setPayeePickerOpen(false)}
       />
       <PickerSheet
         visible={templatePickerOpen}

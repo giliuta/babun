@@ -23,7 +23,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingBar } from "@/components/ui/LoadingBar";
 import { useThemeColors } from "@/theme/colors";
 import { usePullRefresh } from "@/lib/pull-refresh";
-import { useTeams, type Team } from "@/features/reference/queries";
+import { useMasters, useTeams, type Team } from "@/features/reference/queries";
 import { useMyAccess } from "@/features/access/queries";
 import { useCurrentRole, usePlanAllows } from "@/features/settings/tenant";
 import { useAllServices } from "@/features/services/queries";
@@ -781,6 +781,11 @@ function FinancesContent() {
   // Каждая строка называет свой счёт (владелец 2026-09-15): имена берутся со
   // всех счетов, включая закрытые, в порядке плиток — строка «Наличные ·
   // Карта» читается в том же порядке, что счета над ней.
+  // Сотрудники — получатель выплаты зарплаты в строках и разборе
+  // («Зарплата · Даня», `salary.ts`). С уволенными: старая выплата не должна
+  // терять имя.
+  const peopleData = useMasters({ includeInactive: true }).data;
+  const people = useMemo(() => peopleData ?? [], [peopleData]);
   const recordRefs = useMemo(
     () => ({
       appointments: scopedAppointments,
@@ -788,8 +793,9 @@ function FinancesContent() {
       services,
       categories,
       accounts: sortAccountRows(allAccounts),
+      people,
     }),
-    [scopedAppointments, clients, services, categories, allAccounts],
+    [scopedAppointments, clients, services, categories, allAccounts, people],
   );
 
   const blockRows = useMemo(() => {
@@ -1233,6 +1239,7 @@ function FinancesContent() {
             appointments={scopedAppointments}
             materialCost={materialSummary.amount}
             materialAppointmentCount={materialSummary.appointmentCount}
+            people={people}
           />
         ) : view === "debt" ? (
           <DebtorsList
@@ -1325,6 +1332,7 @@ function FinancesContent() {
         accounts={accounts}
         teams={allTeams}
         categories={categories}
+        people={people}
         // Пока Σ возвратов не загрузилась (refundTotals === undefined),
         // консервативно прячем «Создать возврат» (Infinity → остаток 0):
         // занизить кап хуже, чем задержать кнопку на долю секунды.

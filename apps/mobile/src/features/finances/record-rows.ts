@@ -9,6 +9,7 @@ import {
   FORMS_PLATEZH,
   formatCountRu,
 } from "@babun/shared/common/utils/plural-ru";
+import { payeeName, withPayee } from "./salary";
 
 // ОДИН ВИЗИТ — ОДНА СТРОКА (владелец 2026-09-08: «нам без разницы, предоплата,
 // доплата или переплата: это всё единая сумма, зафиксированная за этой
@@ -104,6 +105,8 @@ export interface RecordRowRefs {
    *  отдают счета в порядке плиток. Закрытые тоже: операция периода могла
    *  пройти через счёт, который с тех пор закрыли, и имя у неё осталось. */
   accounts?: readonly { id: string; name: string }[];
+  /** Сотрудники — получатель выплаты в заголовке: «Зарплата · Даня». */
+  people?: readonly { id: string; full_name: string }[];
 }
 
 /** Имена услуг визита. Снимок в записи сильнее каталога: услугу могли
@@ -232,12 +235,13 @@ export function recordRows(
       // Перевод НЕ отдаёт заголовок заметке: «на бензин −€50» без слова
       // «Перевод» неотличим от расхода, хотя для прибыли строка нейтральна
       // (тот же закон, что в ленте операций).
+      const categoryName = tx.category_id ? category.get(tx.category_id) : null;
       const title =
         tx.type === "transfer"
           ? "Перевод"
-          : (tx.category_id ? category.get(tx.category_id) : null) ||
-            note ||
-            "Операция";
+          : categoryName
+            ? withPayee(categoryName, payeeName(refs.people, tx.master_id))
+            : note || "Операция";
       rows.push({
         key: tx.id,
         appointmentId: null,

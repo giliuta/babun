@@ -237,6 +237,30 @@ describe("breakdownExpense — группировка по категории/з
       { id: "фреон", name: "фреон", amount: 40, count: 1 },
     ]);
   });
+
+  test("зарплата делится по людям, без получателя — общей строкой", () => {
+    const rows = breakdownExpense(
+      [
+        tx({ id: "s1", type: "expense", amount: 500, category_id: "cat-fuel", master_id: "m1" }),
+        tx({ id: "s2", type: "expense", amount: 300, category_id: "cat-fuel", master_id: "m2" }),
+        tx({ id: "s3", type: "expense", amount: 200, category_id: "cat-fuel", master_id: "m1" }),
+        tx({ id: "s4", type: "expense", amount: 50, category_id: "cat-fuel" }),
+      ],
+      CATEGORIES,
+      [
+        { id: "m1", full_name: "Даня" },
+        { id: "m2", full_name: "Дима" },
+      ],
+    );
+    assert.deepEqual(
+      rows.map((r) => [r.name, r.amount, r.count]),
+      [
+        ["Бензин · Даня", 700, 2],
+        ["Бензин · Дима", 300, 1],
+        ["Бензин", 50, 1],
+      ],
+    );
+  });
 });
 
 describe("секции сходятся с «Прибылью»", () => {

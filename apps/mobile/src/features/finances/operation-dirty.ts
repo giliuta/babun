@@ -18,6 +18,8 @@ export interface OperationDraftFields {
   receiptUrl: string | null;
   /** Счёт, если его выбрали руками; иначе `null`. */
   pickedAccountId: string | null;
+  /** Получатель выплаты зарплаты (`salary.ts`). */
+  masterId?: string | null;
 }
 
 export function operationDraftKey(f: OperationDraftFields): string {
@@ -28,6 +30,7 @@ export function operationDraftKey(f: OperationDraftFields): string {
     f.notes.trim(),
     f.receiptUrl,
     f.pickedAccountId,
+    f.masterId ?? null,
   ]);
 }
 

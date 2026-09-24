@@ -5,6 +5,7 @@ import {
   type FinanceTransaction,
 } from "@babun/shared/local/finance/transaction";
 import { csvCell, csvDocument, csvTextCell, shareCsvFile } from "@/lib/share-csv";
+import { payeeName, withPayee } from "./salary";
 
 // ВЫГРУЗКА ОПЕРАЦИЙ ДЛЯ БУХГАЛТЕРА (аудит финансов 2026-09-24).
 //
@@ -26,6 +27,8 @@ export interface LedgerExportRefs {
   categories: readonly { id: string; name: string }[];
   clients: readonly { id: string; full_name: string }[];
   teams: readonly { id: string; name: string }[];
+  /** Сотрудники — получатель зарплаты в колонке категории: «Зарплата · Даня». */
+  people?: readonly { id: string; full_name: string }[];
 }
 
 const HEADER = [
@@ -97,7 +100,11 @@ export function ledgerToCsv(
       csvAmount(vatSigned),
       csvCell(vat === null || vat === undefined || tx.vat_rate == null ? "" : `${tx.vat_rate}%`),
       csvTextCell(name(refs.accounts, tx.account_id, (a) => a.name)),
-      csvTextCell(name(refs.categories, tx.category_id, (c) => c.name)),
+      csvTextCell(
+        name(refs.categories, tx.category_id, (c) =>
+          withPayee(c.name, payeeName(refs.people, tx.master_id)),
+        ),
+      ),
       csvTextCell(name(refs.clients, tx.client_id, (c) => c.full_name)),
       csvTextCell(name(refs.teams, tx.team_id, (t) => t.name)),
       csvCell(paymentMethodLabel(tx.payment_method)),

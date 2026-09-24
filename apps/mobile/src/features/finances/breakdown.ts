@@ -7,6 +7,7 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Service } from "@/features/services/queries";
+import { payeeName, withPayee } from "./salary";
 
 export interface BreakdownRow {
   /** Stable React key + accessible label (the bucket name). */
@@ -44,12 +45,15 @@ export function incomeLabel(
 export function expenseLabel(
   t: FinanceTransaction,
   categories: FinanceCategory[],
+  /** Сотрудники — чтобы выплата звалась «Зарплата · Даня» и разбор делил
+   *  зарплату по людям (`salary.ts`). */
+  people?: readonly { id: string; full_name: string }[],
 ): string {
-  return (
-    (t.category_id && categories.find((c) => c.id === t.category_id)?.name) ||
-    t.notes ||
-    "Прочее"
-  );
+  const category = t.category_id
+    ? categories.find((c) => c.id === t.category_id)?.name
+    : undefined;
+  if (category) return withPayee(category, payeeName(people, t.master_id));
+  return t.notes || "Прочее";
 }
 
 /** Income grouped by service/category, sorted by amount desc. Refunds
@@ -100,11 +104,12 @@ export function breakdownIncome(
 export function breakdownExpense(
   transactions: FinanceTransaction[],
   categories: FinanceCategory[],
+  people?: readonly { id: string; full_name: string }[],
 ): BreakdownRow[] {
   const map = new Map<string, BreakdownRow>();
   for (const t of transactions) {
     if (t.type !== "expense") continue;
-    const name = expenseLabel(t, categories);
+    const name = expenseLabel(t, categories, people);
     const row = map.get(name) ?? { id: name, name, amount: 0, count: 0 };
     row.amount += t.amount;
     row.count += 1;

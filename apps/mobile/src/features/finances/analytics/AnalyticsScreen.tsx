@@ -17,7 +17,7 @@ import { bestCalendarLevel } from "@/features/access/my-access";
 import { useAppointments, useFinanceServices } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
 import { todayYmd } from "@/features/invoices/format";
-import { useTeams } from "@/features/reference/queries";
+import { useMasters, useTeams } from "@/features/reference/queries";
 import { useAllServices } from "@/features/services/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useCurrentRole } from "@/features/settings/tenant";
@@ -120,6 +120,8 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   const services = useMemo(() => allServices ?? [], [allServices]);
   const financeServices = useFinanceServices();
   const catalog = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
+  const peopleData = useMasters({ includeInactive: true }).data;
+  const people = useMemo(() => peopleData ?? [], [peopleData]);
   const categoriesData = useFinanceCategories().data;
   const categories = useMemo(() => categoriesData ?? [], [categoriesData]);
   const accountsData = useAccountsWithBalances({ includeInactive: true }).data;
@@ -233,6 +235,7 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
             appointments={scopedAppointments}
             materialCost={panel === "expense" ? materials.amount : 0}
             materialAppointmentCount={materials.count}
+            people={people}
           />
         );
       case "profit":

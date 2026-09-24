@@ -63,4 +63,18 @@ describe("выгрузка операций для бухгалтера", () => 
     );
     assert.equal(out[1], "10.09.2026;10:30;Доход;100,00;;;Наличные;;;Y&D;Наличные;'=SUM(A1)");
   });
+
+  test("выплата зарплаты называет получателя в колонке категории", () => {
+    const out = lines(
+      ledgerToCsv(
+        [tx({ id: "s", type: "expense", amount: 500, category_id: "sal", master_id: "m1" } as Partial<FinanceTransaction>)],
+        {
+          ...REFS,
+          categories: [{ id: "sal", name: "Зарплата" }],
+          people: [{ id: "m1", full_name: "Даня" }],
+        },
+      ),
+    );
+    assert.ok(out[1]?.includes("Зарплата · Даня"), out[1]);
+  });
 });

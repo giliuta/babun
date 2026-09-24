@@ -31,6 +31,7 @@ import { humanDay } from "@/features/appointments/helpers";
 import type { Team } from "@/features/reference/queries";
 import { deleteTransferAlert } from "./account-alerts";
 import { refundRemainingCents as refundRemainingCentsOf } from "./refund";
+import { payeeName } from "./salary";
 
 /** Строка-факт витрины: ярлык слева, значение справа. Читается, но не
  *  правится — правка живёт в форме операции. */
@@ -116,6 +117,7 @@ export function TransactionPopup({
   accounts,
   teams,
   categories,
+  people,
   alreadyRefunded = 0,
   onClose,
   onInvoice,
@@ -129,6 +131,8 @@ export function TransactionPopup({
   accounts: Account[];
   teams: Team[];
   categories: FinanceCategory[];
+  /** Сотрудники — строка «Кому» у выплаты зарплаты. */
+  people?: readonly { id: string; full_name: string }[];
   /** Σ already-refunded for this income — caps the new refund. */
   alreadyRefunded?: number;
   onClose: () => void;
@@ -299,6 +303,8 @@ export function TransactionPopup({
     { label: "Дата", value: humanDay(tx.occurred_on) },
   ];
   if (category) metaRows.push({ label: "Категория", value: category.name });
+  const payee = payeeName(people, tx.master_id);
+  if (payee) metaRows.push({ label: "Кому", value: payee });
   // Перевод отвечает «откуда и куда ушли деньги» обеими ногами; пока вторая
   // не найдена — обычная строка «Счёт».
   if (transferLegs) {
