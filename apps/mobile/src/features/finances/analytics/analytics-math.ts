@@ -505,3 +505,22 @@ export function serviceProfit(
     })
     .sort((a, b) => b.profit - a.profit);
 }
+
+// ─── Прогноз ──────────────────────────────────────────────────────────
+
+/** ЗАПИСИ ВПЕРЕДИ — рабочие, не отменённые, ещё не сделанные записи среза:
+ *  на сколько работ осталось до конца периода. Та же граница «сделано», что
+ *  у плиток (`isPerformed`), поэтому одна запись не бывает и сделанной, и
+ *  впереди. */
+export function upcomingRecords(
+  appointments: readonly Appointment[],
+  s: Scope,
+): Appointment[] {
+  return appointments.filter(
+    (a) =>
+      (!a.kind || a.kind === "work") &&
+      a.status !== "cancelled" &&
+      inScope(a, s) &&
+      !isPerformed(a, s.today, s.nowHm),
+  );
+}

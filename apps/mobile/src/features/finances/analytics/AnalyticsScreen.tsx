@@ -37,6 +37,7 @@ import {
   ProfitBreakdown,
 } from "../ProfitBreakdown";
 import { dmyShort, makePeriod, type Period } from "../period";
+import { summarizeVat } from "@babun/shared/local/finance/vat";
 import { useFinanceCategories, useTransactions } from "../queries";
 import {
   accountBreakdown,
@@ -44,6 +45,7 @@ import {
   changePct,
   previousPeriod,
   serviceProfit,
+  upcomingRecords,
   clientBreakdown,
   hoursLabel,
   ledgerInScope,
@@ -235,6 +237,16 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
     [periodTxs, accountsList],
   );
   const weekdays = useMemo(() => weekdayLoad(records), [records]);
+  // ПРОГНОЗ: записи, которые ещё впереди в периоде, и их сумма работ.
+  const upcoming = useMemo(() => upcomingRecords(appointments, scope), [appointments, scope]);
+  const upcomingWork = useMemo(() => workTotals(upcoming), [upcoming]);
+  // VAT ЗА ПЕРИОД — тем же расчётом, что страница VAT (`summarizeVat`), по
+  // операциям среза: команда и период уже отобраны.
+  const vat = useMemo(() => summarizeVat(periodTxs), [periodTxs]);
+  const vatSeen = useMemo(
+    () => periodTxs.some((tx) => tx.vat_amount != null && tx.vat_mode !== "none"),
+    [periodTxs],
+  );
   const cancelled = useMemo(() => cancelledCount(appointments, scope), [appointments, scope]);
   // ДЕНЬГИ ЕЩЁ ЕДУТ — плитка говорит «—», а не «€0»: ноль выглядел бы фактом
   // (аудит 2026-09-24), хотя журнал просто не доехал.
@@ -428,6 +440,47 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
                     />
                   </View>
                 ) : null}
+                {/* ПРОГНОЗ ДО КОНЦА ПЕРИОДА — сколько ещё может прийти: записи
+                    впереди и долги за уже сделанное. Шапка — всё вместе с
+                    тем, что уже пришло. Только у периода, который ещё идёт. */}
+                {panel === "income" && period.to >= today && !moneyPending ? (
+                  (() => {
+                    const owed = Math.max(0, work.worked - work.paid);
+                    const ahead = upcomingWork.worked;
+                    const total = money.income + owed + ahead;
+                    const base = Math.max(total, 0);
+                    return (
+                      <View className="mt-1">
+                        <BreakdownSectionHeader
+                          title={`Прогноз до ${dmyShort(period.to).slice(0, 5)}`}
+                          value={formatEUR(total)}
+                          color={t.success}
+                        />
+                        <BreakdownBarRow
+                          name="Уже пришло"
+                          count={0}
+                          value={formatEUR(money.income)}
+                          color={t.success}
+                          share={base > 0 ? money.income / base : 0}
+                        />
+                        <BreakdownBarRow
+                          name="Записи впереди"
+                          count={upcoming.length}
+                          value={formatEUR(ahead)}
+                          color={t.accent}
+                          share={base > 0 ? ahead / base : 0}
+                        />
+                        <BreakdownBarRow
+                          name="Долги к сбору"
+                          count={0}
+                          value={formatEUR(owed)}
+                          color={t.warning}
+                          share={base > 0 ? owed / base : 0}
+                        />
+                      </View>
+                    );
+                  })()
+                ) : null}
               </>
             }
           />
@@ -454,6 +507,44 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
                 share={c.share}
               />
             ))}
+
+            {/* VAT ЗА ПЕРИОД — сколько отложить на налог и что остаётся от
+                прибыли после него. Только если в периоде есть операции с
+                налогом: у компании без VAT этих строк нет вовсе. */}
+            {showMoney && vatSeen && !moneyPending ? (
+              <View className="mt-1">
+                <BreakdownSectionHeader
+                  title={vat.due >= 0 ? "VAT к уплате" : "VAT к возврату"}
+                  value={formatEUR(Math.abs(vat.due))}
+                  color={t.warning}
+                />
+                <BreakdownBarRow
+                  name="Начислен с дохода"
+                  count={0}
+                  value={formatEUR(vat.collected)}
+                  color={t.ink}
+                  share={vat.collected > 0 ? 1 : 0}
+                />
+                <BreakdownBarRow
+                  name="К вычету с расхода"
+                  count={0}
+                  value={`−${formatEUR(vat.paid)}`}
+                  color={t.ink}
+                  share={vat.collected > 0 ? Math.min(1, vat.paid / vat.collected) : 0}
+                />
+                <BreakdownBarRow
+                  name="Прибыль после VAT"
+                  count={0}
+                  value={formatEUR(money.profit - Math.max(0, vat.due))}
+                  color={t.brandAccent}
+                  share={
+                    money.profit > 0
+                      ? Math.max(0, money.profit - Math.max(0, vat.due)) / money.profit
+                      : 0
+                  }
+                />
+              </View>
+            ) : null}
 
             <PanelHeader
               title={`${yearFrom === yearTo ? yearFrom : `${yearFrom}–${yearTo}`} · по месяцам`}

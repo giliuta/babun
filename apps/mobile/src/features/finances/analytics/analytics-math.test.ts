@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import {
+  upcomingRecords,
   changePct,
   previousPeriod,
   serviceProfit,
@@ -332,5 +333,23 @@ describe("прибыль по услугам", () => {
     assert.equal(rows[0].amount, 150);
     assert.ok(rows[0].materials >= 0);
     assert.equal(rows[0].profit, 150 - rows[0].materials);
+  });
+});
+
+describe("прогноз: записи впереди", () => {
+  test("будущие и сегодняшние несделанные — впереди; сделанные и отменённые — нет", () => {
+    const s = { ...SEP, nowHm: "12:00" };
+    const ids = upcomingRecords(
+      [
+        appt({ id: "past", status: "scheduled", date: "2026-09-20" }),
+        appt({ id: "later-today", status: "scheduled", date: "2026-09-24", time_start: "18:00", time_end: "19:00" }),
+        appt({ id: "tomorrow", status: "scheduled", date: "2026-09-25" }),
+        appt({ id: "cancelled", status: "cancelled", date: "2026-09-26" }),
+        appt({ id: "event", status: "scheduled", date: "2026-09-26", kind: "event" }),
+        appt({ id: "october", status: "scheduled", date: "2026-10-02" }),
+      ],
+      s,
+    ).map((a) => a.id);
+    assert.deepEqual(ids, ["later-today", "tomorrow"]);
   });
 });
