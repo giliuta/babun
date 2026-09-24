@@ -106,13 +106,15 @@ describe("сравнение пропсов сетки", () => {
 
 describe("сетка календаря мемоизирована и кормится стабильными пропсами", () => {
   const dayView = code(read("./DayView.tsx"));
+  // Блок записи вынесен в свой файл 24.09 — сторож смотрит туда.
+  const blockFile = code(read("./AppointmentBlock.tsx"));
   const weekView = code(read("./WeekView.tsx"));
   const hook = code(read("./use-latest-handler.ts"));
   const screen = code(read("../../../app/(dashboard)/(home)/index.tsx"));
 
   test("колонка, блок, День и Неделя обёрнуты в memo", () => {
-    assert.match(dayView, /const Block = memo\(function Block\(/);
-    assert.match(dayView, /\}, blockPropsEqual\);/);
+    assert.match(blockFile, /export const AppointmentBlock = memo\(function AppointmentBlock\(/);
+    assert.match(blockFile, /\}, blockPropsEqual\);/);
     assert.match(dayView, /export const DayColumn = memo\(function DayColumn\(/);
     assert.match(dayView, /\}, dayColumnPropsEqual\);/);
     assert.match(dayView, /export const DayView = memo\(function DayView\(/);
