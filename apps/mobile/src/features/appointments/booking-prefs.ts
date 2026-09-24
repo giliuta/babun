@@ -309,6 +309,22 @@ export function useSetFallbackColor() {
   };
 }
 
+/** Заводские цвета подсветки незаполненного — чтобы общий переключатель
+ *  «Подсвечивать, чего не хватает» включал их обратно. */
+export function situationDefaults(): SituationPalette {
+  return { ...SITUATION_DEFAULTS } as SituationPalette;
+}
+
+/** Палитра подсветки целиком — одним патчем (общий переключатель). */
+export function useSetSituationPalette() {
+  const save = useSaveCalendarSettings();
+  return {
+    ...save,
+    mutate: (palette: SituationPalette) =>
+      save.mutate({ recordColorPalette: { ...palette } }),
+  };
+}
+
 export function useSetSituationColor() {
   const settings = useCalendarSettings();
   const save = useSaveCalendarSettings();

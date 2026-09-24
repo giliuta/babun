@@ -20,6 +20,9 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { SwitchRow } from "@/components/ui/SwitchRow";
+import { Divider } from "@/components/ui/Divider";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { RecordMark, recordMarkText } from "@/components/ui/RecordMark";
 import { RowCaption } from "@/components/ui/card-rows";
@@ -41,7 +44,9 @@ import {
   useFallbackColor,
   useSetAutoColorRule,
   useSetFallbackColor,
+  situationDefaults,
   useSetSituationColor,
+  useSetSituationPalette,
   useSituationPalette,
   useToggleBookingBlock,
   useToggleEventBlock,
@@ -92,6 +97,19 @@ const BLOCK_ICON: Record<string, LucideIcon> = {
   payment: Wallet,
   note: StickyNote,
   files: FileText,
+};
+
+const RULE_OPTIONS = [
+  { value: "team", label: "Команде" },
+  { value: "label", label: "Метке" },
+  { value: "service", label: "Услуге" },
+] as const satisfies readonly { value: AutoColorRule; label: string }[];
+
+/** Подпись обычной записи в дне-образце. */
+const RULE_WORD: Record<AutoColorRule, string> = {
+  team: "цвет команды",
+  label: "цвет метки",
+  service: "цвет услуги",
 };
 
 /** СТРОКИ ТАБЛИЦЫ БЛОКОВ: одинаковые блоки записи и события стоят
@@ -163,6 +181,44 @@ export function DesignScreen() {
     setEditingColor(target);
   };
 
+  // ПОДСВЕТКА ВКЛЮЧЕНА, если хоть один случай красит. Выключатель пишет
+  // палитру целиком: выкл. — все «не красить», вкл. — заводские цвета.
+  const setPalette = useSetSituationPalette();
+  const highlightOn = situations.some((sit) => palette[sit.id] != null);
+
+  // ДЕНЬ-ОБРАЗЕЦ: записи того же вида, что на сетке. Обычная — цветом
+  // источника; незаполненные — своим цветом, а при «не красить» — обычным
+  // (так они и лягут на сетку).
+  const holeHue = (id: ColorSituation) => palette[id] ?? ordinary;
+  const preview: {
+    id: string;
+    time: string;
+    name: string;
+    sub: string;
+    hue: string;
+    onPress: () => void;
+  }[] = [
+    {
+      id: "ordinary",
+      time: "09:00",
+      name: "Мария",
+      sub: `всё заполнено · ${RULE_WORD[rule]}`,
+      hue: ordinary,
+      onPress: () => {
+        haptics.tap();
+        setRuleOpen(true);
+      },
+    },
+    ...situations.map((sit, i) => ({
+      id: sit.id,
+      time: ["11:00", "13:00", "15:00"][i] ?? "17:00",
+      name: sit.id === "noClient" ? "Без клиента" : ["Иван", "Олег"][i - 1] ?? "Анна",
+      sub: palette[sit.id] ? sit.label.toLowerCase() : `${sit.label.toLowerCase()} · не красить`,
+      hue: holeHue(sit.id),
+      onPress: () => openColor(sit.id),
+    })),
+  ];
+
   const recordOn = (id: string) => recordBlocks.includes(id as BookingBlockId);
   const eventOn = (id: string) => eventBlocks.includes(id as EventBlockId);
 
@@ -170,60 +226,79 @@ export function DesignScreen() {
     <Screen edges={["top"]}>
       <ScreenHeader title="Дизайн" />
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        {/* ── ЦВЕТ ЗАПИСИ — В ПОРЯДКЕ ПРАВИЛА (владелец 24.09: «как правильно
-            работают цвета — надо правильно донести до пользователя»). Карточка
-            читается сверху вниз ровно так, как календарь выбирает цвет:
-            1) чего не хватает — этим цветом, пока не заполнят;
-            2) всё заполнено — цветом команды / метки / услуги;
-            3) у источника цвета нет — запасным.
-            Над всем — цвет, выбранный в самой записи (подпись под карточкой). */}
+        {/* ── ЦВЕТ ЗАПИСИ — КУСОЧЕК КАЛЕНДАРЯ (владелец 24.09: «разбери полностью,
+            переделай цвет записи, чтобы улучшить дизайн самого календаря»).
+            Сверху — не абстрактные плитки, а день календаря: рельс часов и
+            записи ровно того вида, что на сетке, каждая на своём случае
+            правила. Тап по записи — её цвет. Под ним три вопроса правила,
+            каждый ответ виден и ставится одним тапом:
+              «Красить по» — откуда обычный цвет (команда / метка / услуга);
+              «Подсвечивать, чего не хватает» — выкл. — все записи обычного
+              цвета, вкл. — незаполненные своим цветом, пока не заполнят;
+              «Если нет цвета» — запасной. */}
         <SectionCard title="Цвет записи" padded>
-          {situations.length > 0 ? (
-            <>
-              <StepLabel text="Пока в записи не хватает" first />
-              <View style={{ flexDirection: "row", gap: 6 }}>
-                {situations.map((s) => {
-                  const hue = palette[s.id] ?? null;
-                  return (
-                    <ColorTile
-                      key={s.id}
-                      // Ровно две строки у каждого («Нет / клиента»).
-                      title={s.label.replace(" ", "\n")}
-                      // Цвет виден самим образцом; словами — только отказ.
-                      sub={hue ? undefined : "Не красить"}
-                      a11yColor={hue ? colorName(hue) : "не красить"}
-                      hue={hue}
-                      height={64}
-                      onPress={() => openColor(s.id)}
-                    />
-                  );
-                })}
+          <View style={{ gap: 6 }}>
+            {preview.map((row) => (
+              <View key={row.id} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Text
+                  maxFontSizeMultiplier={1.2}
+                  style={{
+                    width: 42,
+                    fontSize: 13,
+                    fontWeight: "600",
+                    color: t.sub,
+                    fontVariant: ["tabular-nums"],
+                  }}
+                >
+                  {row.time}
+                </Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <ColorTile
+                    title={row.name}
+                    sub={row.sub}
+                    hue={row.hue}
+                    height={48}
+                    onPress={row.onPress}
+                  />
+                </View>
               </View>
-            </>
-          ) : null}
-          <StepLabel text="Когда всё заполнено" first={situations.length === 0} />
-          <View style={{ flexDirection: "row", gap: 6 }}>
-            <View style={{ flex: 2, minWidth: 0 }}>
-              <ColorTile
-                title={AUTO_COLOR_RULES.find((r) => r.id === rule)?.label ?? "Цвет команды"}
-                hue={ordinary}
-                height={64}
-                onPress={() => {
-                  haptics.tap();
-                  setRuleOpen(true);
-                }}
-              />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <ColorTile
-                title={"Если нет\nцвета"}
-                a11yColor={colorName(fallback)}
-                hue={fallback}
-                height={64}
-                onPress={() => openColor("fallback")}
-              />
-            </View>
+            ))}
           </View>
+
+          <View style={{ marginTop: 16 }}>
+            <StepLabel text="Красить по" first />
+            <SegmentedControl
+              options={RULE_OPTIONS}
+              value={rule}
+              onChange={(next) => {
+                haptics.tap();
+                setRule.mutate(next);
+              }}
+            />
+          </View>
+        </SectionCard>
+        <SectionCard>
+          <SwitchRow
+            label="Подсвечивать, чего не хватает"
+            value={highlightOn}
+            onChange={(on) => {
+              haptics.tap();
+              setPalette.mutate(
+                on
+                  ? situationDefaults()
+                  : (Object.fromEntries(
+                      COLOR_SITUATIONS.map((sit) => [sit.id, null]),
+                    ) as typeof palette),
+              );
+            }}
+          />
+          <Divider inset={16} />
+          <SettingsRow
+            swatch={fallback}
+            title="Если нет цвета"
+            sub={colorName(fallback)}
+            onPress={() => openColor("fallback")}
+          />
         </SectionCard>
         <RowCaption text="Цвет, выбранный в самой записи, главнее всего." />
 
