@@ -24,9 +24,21 @@ export type CompanyFeatureKey =
   | "documents"
   | "client_people"
   | "client_requisites"
-  | "client_files";
+  | "client_files"
+  // Блоки формы СОБЫТИЯ — свои, не общие с записью (владелец 24.09,
+  // миграция 20260924230000).
+  | "event_label"
+  | "event_client"
+  | "event_object"
+  | "event_note"
+  | "event_files";
 
-export type CompanyFeatureGroup = "record" | "calendar" | "money" | "clients";
+export type CompanyFeatureGroup =
+  | "record"
+  | "event"
+  | "calendar"
+  | "money"
+  | "clients";
 
 export interface CompanyFeatureDef {
   key: CompanyFeatureKey;
@@ -35,10 +47,13 @@ export interface CompanyFeatureDef {
   group: CompanyFeatureGroup;
   /** Блок формы записи, который эта функция включает и выключает. */
   bookingBlock?: string;
+  /** Блок формы события, который эта функция включает и выключает. */
+  eventBlock?: string;
 }
 
 export const COMPANY_FEATURE_GROUP_TITLE: Record<CompanyFeatureGroup, string> = {
   record: "Запись",
+  event: "Событие",
   calendar: "Календарь",
   money: "Деньги",
   clients: "Клиенты",
@@ -59,6 +74,11 @@ export const COMPANY_FEATURES: readonly CompanyFeatureDef[] = [
   { key: "client_people", label: "Люди и связи", group: "clients" },
   { key: "client_requisites", label: "Реквизиты клиента", group: "clients" },
   { key: "client_files", label: "Файлы клиента", group: "clients" },
+  { key: "event_label", label: "Метка события", group: "event", eventBlock: "label" },
+  { key: "event_client", label: "Клиент события", group: "event", eventBlock: "client" },
+  { key: "event_object", label: "Объект события", group: "event", eventBlock: "object" },
+  { key: "event_note", label: "Заметка события", group: "event", eventBlock: "note" },
+  { key: "event_files", label: "Файлы события", group: "event", eventBlock: "files" },
 ];
 
 const KNOWN = new Set<string>(COMPANY_FEATURES.map((feature) => feature.key));
@@ -100,4 +120,9 @@ export function withFeature(
 /** Функция, которая включает блок формы записи (`object` → `objects`). */
 export function featureOfBookingBlock(blockId: string): CompanyFeatureKey | null {
   return COMPANY_FEATURES.find((feature) => feature.bookingBlock === blockId)?.key ?? null;
+}
+
+/** Функция, которая включает блок формы события (`note` → `event_note`). */
+export function featureOfEventBlock(blockId: string): CompanyFeatureKey | null {
+  return COMPANY_FEATURES.find((feature) => feature.eventBlock === blockId)?.key ?? null;
 }

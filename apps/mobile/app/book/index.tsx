@@ -81,6 +81,7 @@ import { useDayCities } from "@/features/calendar/day-cities";
 import {
   useAutoColorRule,
   useBookingBlocks,
+  useEventBlocks,
   useFallbackColor,
   useSituationPalette,
 } from "@/features/appointments/booking-prefs";
@@ -286,6 +287,14 @@ export default function BookScreen() {
   const showPayment = blocks.includes("payment");
   const showNote = blocks.includes("note");
   const showFiles = blocks.includes("files");
+  // БЛОКИ СОБЫТИЯ — СВОИ (владелец 24.09, «Дизайн» → «Блоки события»): у
+  // события заметка или объект включаются отдельно от записи.
+  const eventBlocks = useEventBlocks();
+  const evShowLabel = eventBlocks.includes("label");
+  const evShowClient = eventBlocks.includes("client");
+  const evShowObject = eventBlocks.includes("object");
+  const evShowNote = eventBlocks.includes("note");
+  const evShowFiles = eventBlocks.includes("files");
   // Чем красить запись, когда цвет не выбирали руками, и какими цветами
   // говорить о незаполненном (Кабинет → «Запись»).
   const autoColorRule = useAutoColorRule();
@@ -2804,7 +2813,7 @@ export default function BookScreen() {
                   teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
                 }
                 labelFromDay={city == null}
-                showLabel={showLabelBlock && can.showLabel}
+                showLabel={evShowLabel && can.showLabel}
                 onEditTeam={
                   can.editTeam
                     ? () => {
@@ -2866,6 +2875,7 @@ export default function BookScreen() {
               {/* БЛОК «КЛИЕНТ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ClientBlock.tsx`):
                   его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
                   ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
+              {evShowClient ? (
               <SmsComposeProvider vars={recordSmsVars}>
                 <ClientBlock
                   client={client}
@@ -2891,6 +2901,7 @@ export default function BookScreen() {
                   }
                 />
               </SmsComposeProvider>
+              ) : null}
 
               {/* ОБЪЕКТ — ТОТ ЖЕ, ЧТО В КЛИЕНТАХ, ОДИН В ОДИН (владелец
                   2026-09-08: «объект надо сделать точно такой же вид объекта,
@@ -2910,7 +2921,7 @@ export default function BookScreen() {
 
                   Прежний вольный адрес старого события НЕ ТЕРЯЕТСЯ: пока
                   объект не выбран, он стоит тем же полем и уезжает в патч. */}
-              {showObject &&
+              {evShowObject &&
               (can.editObject || eventLocationEntry || eventAddress.trim()) ? (
               <SectionCard title="Объект">
                 {eventLocationEntry ? (
@@ -3036,7 +3047,7 @@ export default function BookScreen() {
                   заметка записи»). Пустое поле без подсказки читалось как
                   пустое место; имя берётся у сущности — «Заметка события»,
                   как «Заметка клиента» у клиента, — а шапка блока остаётся. */}
-              {showNote ? (
+              {evShowNote ? (
               <SectionCard title="Заметка">
                 <InlineNoteField
                   note={{
@@ -3061,7 +3072,7 @@ export default function BookScreen() {
                   это точно такое же, только без услуги и оплаты»). У события
                   без клиента документы не заводятся — их место карточка
                   клиента, — а фото и сканы живут на самом событии. */}
-              {showFiles ? (
+              {evShowFiles ? (
                 <AppointmentFilesBlock
                   appointmentId={editing?.id ?? null}
                   clientId={editing?.client_id ?? client?.id ?? null}

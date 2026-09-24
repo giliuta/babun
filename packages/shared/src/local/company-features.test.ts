@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   COMPANY_FEATURES,
   featureOfBookingBlock,
+  featureOfEventBlock,
   isFeatureOn,
   sanitizeDisabledFeatures,
   withFeature,
@@ -28,13 +29,23 @@ describe("функции компании", () => {
     expect(featureOfBookingBlock("client")).toBeNull();
   });
 
+  test("блоки события — свои функции, не общие с записью", () => {
+    expect(featureOfEventBlock("note")).toBe("event_note");
+    expect(featureOfEventBlock("object")).toBe("event_object");
+    expect(featureOfEventBlock("team")).toBeNull();
+    // Блок записи и блок события с одним именем — разные функции.
+    expect(featureOfBookingBlock("note")).not.toBe(featureOfEventBlock("note"));
+  });
+
   test("ключи совпадают со сторожем базы", () => {
     // Список в `calendar_settings_disabled_features_known`
-    // (миграция 20260924140000): ключ вне его база не примет.
+    // (миграции 20260924140000 и 20260924230000): ключ вне его база не
+    // примет.
     expect(COMPANY_FEATURES.map((f) => f.key)).toEqual([
       "objects", "record_label", "record_payment", "record_note", "record_files",
       "day_labels", "events", "debts", "accounts", "documents",
       "client_people", "client_requisites", "client_files",
+      "event_label", "event_client", "event_object", "event_note", "event_files",
     ]);
   });
 });

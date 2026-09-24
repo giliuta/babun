@@ -3,7 +3,11 @@ import type {
   RecordColorRule,
 } from "@babun/shared/local/calendar-settings";
 import { useEffect } from "react";
-import { featureOfBookingBlock, isFeatureOn } from "@babun/shared/local/company-features";
+import {
+  featureOfBookingBlock,
+  featureOfEventBlock,
+  isFeatureOn,
+} from "@babun/shared/local/company-features";
 import { getStorage } from "@babun/shared/storage";
 import { useDataRole } from "@/features/settings/tenant";
 import { useDisabledFeatures, useSetCompanyFeature } from "@/features/settings/company-features";
@@ -87,6 +91,65 @@ export function useBookingBlocks(): BookingBlockId[] {
     const feature = featureOfBookingBlock(block.id);
     return feature === null || isFeatureOn(disabled, feature);
   }).map((block) => block.id);
+}
+
+// ── БЛОКИ СОБЫТИЯ ──
+// Свои, не общие с записью (владелец 24.09: «на странице дизайна — выбор
+// блоков в записи, выбор блоков в событиях»; миграция 20260924230000). Тип,
+// время и команда закреплены: без них события нет. Объект события включён,
+// только когда у компании вообще есть объекты (`objects`).
+
+export type EventBlockId =
+  | "team"
+  | "type"
+  | "when"
+  | "label"
+  | "client"
+  | "object"
+  | "note"
+  | "files";
+
+export interface EventBlockDef {
+  id: EventBlockId;
+  label: string;
+  pinned?: boolean;
+}
+
+export const EVENT_BLOCKS: EventBlockDef[] = [
+  { id: "team", label: "Команда", pinned: true },
+  { id: "type", label: "Тип", pinned: true },
+  { id: "when", label: "Время", pinned: true },
+  { id: "label", label: "Метка" },
+  { id: "client", label: "Клиент" },
+  { id: "object", label: "Объект" },
+  { id: "note", label: "Заметка" },
+  { id: "files", label: "Файлы" },
+];
+
+/** Включённые блоки формы события, в порядке показа. */
+export function useEventBlocks(): EventBlockId[] {
+  const disabled = useDisabledFeatures();
+  return EVENT_BLOCKS.filter((block) => {
+    if (block.pinned) return true;
+    // Объекта события нет там, где у компании нет объектов вовсе.
+    if (block.id === "object" && !isFeatureOn(disabled, "objects")) return false;
+    const feature = featureOfEventBlock(block.id);
+    return feature === null || isFeatureOn(disabled, feature);
+  }).map((block) => block.id);
+}
+
+/** Тумблер блока события — тумблер его функции компании. */
+export function useToggleEventBlock() {
+  const disabled = useDisabledFeatures();
+  const set = useSetCompanyFeature();
+  return {
+    ...set,
+    mutate: (id: EventBlockId) => {
+      const feature = featureOfEventBlock(id);
+      if (!feature) return;
+      set.mutate({ key: feature, on: !isFeatureOn(disabled, feature) });
+    },
+  };
 }
 
 /** Тумблер блока на странице «Блоки формы» — это тумблер функции компании. */
