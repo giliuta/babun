@@ -58,6 +58,7 @@ import {
   cacheGetOne,
   hasAuthoritativeTenantSnapshot,
   dequeueAll,
+  hasQueuedOps,
   type CachedAppointment,
   type CachedAppointmentData,
 } from "../db/cache/sql";
@@ -328,7 +329,11 @@ export async function updateAppointment(
     expected_updated_at: expectedUpdatedAt,
   };
 
-  if (isOnline()) {
+  // ПОРЯДОК ПРАВОК ОДНОЙ ЗАПИСИ — ПОРЯДОК ЖЕСТОВ. Если по записи уже
+  // лежат неотправленные правки (прошлая упала на сбое сети), новая встаёт
+  // В ОЧЕРЕДЬ за ними, а не идёт в сеть напрямую: иначе очередь дошлёт
+  // старую правку ПОСЛЕ свежей и перезапишет её.
+  if (isOnline() && !(await hasQueuedOps("appointments", id))) {
     // Online: standalone optimistic upsert (no queued op to pair with).
     if (merged) await cacheUpsert("appointments", merged);
     try {
@@ -354,8 +359,10 @@ export async function updateAppointment(
     }
   }
 
-  // Offline — ATOMIC with the optimistic row when cached (risk #6).
+  // Offline — или в сети, но за старыми правками этой записи: ATOMIC with
+  // the optimistic row when cached (risk #6). В сети очередь пинаем сразу.
   await enqueueUpdate(updateOp, merged);
+  if (isOnline()) void kickReplayer({ supabase });
   return { ...toDomain(existing), ...patch, id } as Appointment;
 }
 
@@ -404,7 +411,9 @@ export async function deleteAppointment(
     expected_updated_at: null,
   };
 
-  if (isOnline()) {
+  // Удаление тоже встаёт за неотправленными правками этой записи: иначе
+  // поздняя правка догонит уже удалённую запись.
+  if (isOnline() && !(await hasQueuedOps("appointments", id))) {
     await cacheDelete("appointments", id); // optimistic (standalone online)
     try {
       await repoDeleteAppointment(supabase, id, tenantId);
@@ -421,8 +430,9 @@ export async function deleteAppointment(
     }
   }
 
-  // Offline — ATOMIC optimistic delete + enqueue (risk #6).
+  // Offline — или за старыми правками: ATOMIC optimistic delete + enqueue.
   await enqueueOpWithCacheDeleteAndEmit(deleteOp, "appointments", id);
+  if (isOnline()) void kickReplayer({ supabase });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────

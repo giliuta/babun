@@ -28,7 +28,16 @@ export class ExpoSqliteAdapter implements SqlAdapter {
   private db: SQLiteDatabase | null = null;
 
   private handle(): SQLiteDatabase {
-    this.db ??= openDatabaseSync(DB_NAME);
+    if (!this.db) {
+      this.db = openDatabaseSync(DB_NAME);
+      // ПОДОЖДАТЬ, А НЕ УПАСТЬ. Эксклюзивная транзакция очереди (enqueue +
+      // оптимистичная строка) идёт своим соединением; без ожидания любая
+      // запись основного соединения в это время сразу падала «database is
+      // locked» — промис без обработчика, правка не уходила, а после
+      // перезапуска старая правка догоняла свежую (24.09). Пять секунд
+      // ожидания блокировки — настройка соединения, на файл не влияет.
+      this.db.execSync("PRAGMA busy_timeout = 5000;");
+    }
     return this.db;
   }
 
@@ -61,9 +70,9 @@ export class ExpoSqliteAdapter implements SqlAdapter {
     // SQLiteDatabase). It structurally implements every SqlAdapter method
     // with matching signatures, so we forward it straight through as the
     // scoped adapter — queries the cache layer runs on `txn` stay INSIDE
-    // the exclusive transaction. Other async writers abort with «database
-    // is locked» until this commits, which is exactly the isolation the
-    // atomic enqueue+upsert pair and cacheClearAll wipe need.
+    // the exclusive transaction. Other writers WAIT (busy_timeout above) until
+    // this commits — the isolation the atomic enqueue+upsert pair and the
+    // cacheClearAll wipe need, without failing them.
     return this.handle().withExclusiveTransactionAsync(
       (txn) => task(txn as unknown as SqlAdapter),
     );

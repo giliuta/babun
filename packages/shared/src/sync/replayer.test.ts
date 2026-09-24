@@ -471,6 +471,56 @@ describe("replayer — LWW update", () => {
   });
 });
 
+describe("replayer — порядок правок одной строки", () => {
+  test("правка упала — следующие правки той же строки ждут, чужие строки уходят", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "15:00" },
+      expected_updated_at: null,
+    });
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "14:30" },
+      expected_updated_at: null,
+    });
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_B,
+      payload: { comment: "другая запись" },
+      expected_updated_at: null,
+    });
+    let firstA = true;
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update" && rec.filters.id === UUID_A && firstA) {
+        firstA = false;
+        return { data: null, error: { status: 504, message: "Gateway Timeout" } };
+      }
+      return { data: [{ id: rec.filters.id }], error: null };
+    });
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    const sentA = calls.filter((c) => c.op === "update" && c.filters.id === UUID_A);
+    // Свежая правка A не обогнала упавшую старую.
+    expect(sentA.map((c) => (c.payload as { time_end?: string }).time_end)).toEqual([
+      "15:00",
+    ]);
+    // Запись B от чужого сбоя не страдает.
+    expect(calls.some((c) => c.op === "update" && c.filters.id === UUID_B)).toBe(true);
+    // Обе правки A остались в очереди — в прежнем порядке.
+    const left = (await dequeueAll()).filter((o) => o.row_id === UUID_A);
+    expect(left.map((o) => (o.payload as { time_end?: string }).time_end)).toEqual([
+      "15:00",
+      "14:30",
+    ]);
+  });
+});
+
 describe("replayer — injected quota gate", () => {
   test("host defaults protect wrapper kicks that provide only supabase", async () => {
     await enqueueOp({

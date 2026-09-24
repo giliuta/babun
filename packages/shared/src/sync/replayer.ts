@@ -239,8 +239,17 @@ async function drain(opts: ReplayerOptions): Promise<void> {
   // операции остаются в очереди и уедут, когда просмотр кончится.
   if (writesBlocked()) return;
 
+  // СТРОКИ, ЧЬЯ ПРАВКА УПАЛА В ЭТОМ ПРОХОДЕ. Следующие правки той же строки
+  // ждут следующего прохода: уйди они сейчас, упавшая старая правка
+  // долетела бы ПОСЛЕ них и перезаписала свежую (24.09: растяжка 14:30→15:00
+  // на 504, возврат к 14:30 — и в базе снова 15:00). Порядок жестов по одной
+  // строке — закон; разные строки друг друга не держат.
+  const heldRows = new Set<string>();
+  const rowKey = (o: QueuedOp) => `${o.table}:${o.row_id}`;
+
   for (const op of ops) {
     let legacyUpdate = false;
+    if (heldRows.has(rowKey(op))) continue;
     if (op.attempts >= MAX_ATTEMPTS) {
       // Already failed permanently — leave in queue so the UI can
       // show the manual-retry button. Manual retry resets attempts.
@@ -367,6 +376,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
       await removeOp(op.id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      heldRows.add(rowKey(op));
       await bumpAttempt(op.id, msg);
       // If we just exceeded the cap, surface to UI once.
       if (op.attempts + 1 >= MAX_ATTEMPTS) {

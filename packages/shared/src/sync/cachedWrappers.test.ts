@@ -26,6 +26,7 @@ import {
   cacheRead,
   cacheReplaceTenant,
   dequeueAll,
+  removeOp,
 } from "../db/cache/sql";
 import {
   createClient,
@@ -557,6 +558,9 @@ describe("appointments cache-of-domain", () => {
       }),
       TENANT,
     );
+    // Вставка «ушла на сервер»: без неё в очереди правка в сети идёт напрямую
+    // (иначе она встала бы за неотправленной вставкой той же записи).
+    for (const op of await dequeueAll()) await removeOp(op.id);
     const queuedBefore = (await dequeueAll()).length;
     setNetwork(new OnlineNetwork());
 
@@ -577,6 +581,48 @@ describe("appointments cache-of-domain", () => {
     expect((await dequeueAll()).length).toBe(queuedBefore);
   });
 
+  test("правка в сети встаёт В ОЧЕРЕДЬ за неотправленной правкой той же записи", async () => {
+    // 24.09: растяжка 14:30→15:00 легла в очередь на 504, возврат к 14:30
+    // ушёл в сеть напрямую, потом очередь дослала 15:00 — старое время
+    // перезаписало новое. Свежая правка обязана встать за старой.
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "13:00",
+        time_end: "14:30",
+      }),
+      TENANT,
+    );
+    // Первая правка — без сети: ложится в очередь.
+    await updateAppointment(stubSupabase, APPT_ID, { time_end: "15:00" }, TENANT);
+
+    // Сеть вернулась. Любое обращение к серверу мимо очереди — провал теста.
+    setNetwork(new OnlineNetwork());
+    let directWrites = 0;
+    const spy = {
+      from() {
+        directWrites += 1;
+        throw new Error("прямая запись мимо очереди");
+      },
+      rpc() {
+        directWrites += 1;
+        throw new Error("прямая запись мимо очереди");
+      },
+    };
+    await updateAppointment(spy as never, APPT_ID, { time_end: "14:30" }, TENANT);
+
+    expect(directWrites).toBe(0);
+    const updates = (await dequeueAll()).filter(
+      (o) => o.op === "update" && o.row_id === APPT_ID,
+    );
+    // Обе правки в очереди и в порядке жестов: последней уйдёт свежая.
+    expect(updates.map((o) => o.payload.time_end)).toEqual(["15:00", "14:30"]);
+    const a = (await listAppointments(stubSupabase, TENANT))[0]!;
+    expect(a.time_end).toBe("14:30");
+  });
+
   test("online semantic delete rejection restores the appointment", async () => {
     await createAppointment(
       stubSupabase,
@@ -588,6 +634,9 @@ describe("appointments cache-of-domain", () => {
       }),
       TENANT,
     );
+    // Вставка «ушла на сервер»: без неё в очереди правка в сети идёт напрямую
+    // (иначе она встала бы за неотправленной вставкой той же записи).
+    for (const op of await dequeueAll()) await removeOp(op.id);
     const queuedBefore = (await dequeueAll()).length;
     setNetwork(new OnlineNetwork());
 
