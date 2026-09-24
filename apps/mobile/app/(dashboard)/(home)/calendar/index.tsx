@@ -30,6 +30,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SwitchRow } from "@/components/ui/SwitchRow";
+import { useFeatureOn, useSetCompanyFeature } from "@/features/settings/company-features";
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { NameColorField } from "@/components/ui/picker-fields";
@@ -211,6 +212,9 @@ export default function CalendarSettingsScreen() {
   });
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const dayLabelsOn = useFeatureOn("day_labels");
+  const eventsOn = useFeatureOn("events");
+  const setFeature = useSetCompanyFeature();
 
   const tenantId = useTenantId();
   // Какой календарь настраиваем: параметр из шестерёнки → тот, что открыт в
@@ -642,6 +646,29 @@ export default function CalendarSettingsScreen() {
                 label="Скрывать отменённые"
                 value={!!s.hideCancelled}
                 onChange={(v) => patchSettings({ hideCancelled: v })}
+              />
+            </SectionCard>
+          ) : null}
+          {/* ФУНКЦИИ КАЛЕНДАРЯ (STORY-088, владелец 24.09: «тумблер — и его
+              не будет ни у кого, даже у владельца»). Выключенные метки дня и
+              события пропадают у всех; данные остаются и вернутся при
+              включении. Функции записи (объект, метка, оплата…) — на своей
+              странице «Запись → Блоки формы». */}
+          {rows.viewPrefs ? (
+            <SectionCard>
+              <SwitchRow
+                label="Метки дня"
+                value={dayLabelsOn}
+                onChange={(v) => setFeature.mutate({ key: "day_labels", on: v })}
+              />
+            </SectionCard>
+          ) : null}
+          {rows.viewPrefs ? (
+            <SectionCard>
+              <SwitchRow
+                label="События"
+                value={eventsOn}
+                onChange={(v) => setFeature.mutate({ key: "events", on: v })}
               />
             </SectionCard>
           ) : null}

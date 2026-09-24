@@ -1,3 +1,4 @@
+import { useFeatureOn } from "@/features/settings/company-features";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Repeat, Tag } from "lucide-react-native";
@@ -185,6 +186,7 @@ export function OperationSheet({
   // справочник категорий, настройки счёта, инвойс и возврат сервер отдаёт
   // только владельцу — живой контрол над запрещённым канон не допускает.
   const isOwner = useCurrentRole().data === "owner";
+  const documentsOn = useFeatureOn("documents");
   const insert = useInsertTransaction();
   const update = useUpdateTransaction();
   const del = useDeleteTransaction();
@@ -737,7 +739,9 @@ export function OperationSheet({
   const showClientRow = !!transaction?.client_id && !!onClientOpen;
   // ДОКУМЕНТЫ И ВОЗВРАТЫ — ВЛАДЕЛЬЧЕСКИЕ (уровни финансов, 2026-09-15):
   // сотрудник пишет только доход и расход, поэтому этих строк у него нет.
-  const showInvoiceRow = isOwner && transaction?.type === "income" && !!onInvoice;
+  // Инвойсы и чеки — функция компании (STORY-088): выключены — строк нет.
+  const showInvoiceRow =
+    documentsOn && isOwner && transaction?.type === "income" && !!onInvoice;
   const showRefundRow =
     isOwner &&
     !!transaction &&
@@ -760,6 +764,7 @@ export function OperationSheet({
   // Идемпотентность двери снимает вопрос двойного нажатия: второй раз она
   // отдаёт тот же документ, второго номера не бывает.
   const showReceiptRow =
+    documentsOn &&
     transaction?.type === "income" && !!transaction.client_id && !transaction.refund_of_id;
   const showMoreCard =
     showClientRow ||

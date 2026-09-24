@@ -1,3 +1,4 @@
+import { useDisabledFeatures } from "@/features/settings/company-features";
 import { useMemo } from "react";
 import { Linking, Modal, ScrollView, Text } from "react-native";
 import { useRouter } from "expo-router";
@@ -66,7 +67,13 @@ export function CrewAppointmentSheet({
   const role = useCurrentRole().data;
   const access = useMyAccess().data;
 
-  const blocks = crewBlocks({ role, map: access, teamId: appointment?.team_id ?? null });
+  const disabledFeatures = useDisabledFeatures();
+  const blocks = crewBlocks({
+    role,
+    map: access,
+    teamId: appointment?.team_id ?? null,
+    disabledFeatures,
+  });
   const client =
     blocks.client && appointment?.client_id
       ? clients.find((item) => item.id === appointment.client_id) ?? null

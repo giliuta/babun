@@ -1,3 +1,4 @@
+import { useFeatureOn } from "@/features/settings/company-features";
 import { useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
@@ -850,8 +851,11 @@ export function ClientsFilterSheet({
     tagOptions,
     facetCounts,
     hasSourceData,
-    hasPropertyData,
+    hasPropertyData: propertyDataRaw,
   } = result;
+  // Объекты выключены у компании (STORY-088) — фильтра по их типу нет.
+  const objectsOn = useFeatureOn("objects");
+  const hasPropertyData = objectsOn && propertyDataRaw;
   const shownCount = filtered.length;
   const trimmedSearch = search.trim();
   // Поиск — часть набора: без этого при активном запросе «Сбросить» была
@@ -1371,7 +1375,7 @@ export function ClientsFilterSheet({
           {hasSourceData ||
           hasPropertyData ||
           filter.sources.length > 0 ||
-          filter.propertyTypes.length > 0 ? (
+          (objectsOn && filter.propertyTypes.length > 0) ? (
             <View style={{ gap: 12 }}>
               {hasSourceData || filter.sources.length > 0 ? (
                 <FilterRow
@@ -1380,7 +1384,7 @@ export function ClientsFilterSheet({
                   onPress={() => setOpenFacet("source")}
                 />
               ) : null}
-              {hasPropertyData || filter.propertyTypes.length > 0 ? (
+              {hasPropertyData || (objectsOn && filter.propertyTypes.length > 0) ? (
                 <FilterRow
                   name="Тип объекта"
                   value={propertyValue}

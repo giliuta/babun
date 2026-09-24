@@ -1,3 +1,4 @@
+import { isFeatureOn } from "@babun/shared/local/company-features";
 import type { Account } from "@babun/shared/local/finance/account";
 import type { Debt } from "@babun/shared/local/finance/debt";
 import {
@@ -42,12 +43,18 @@ export interface FinancePageAccessInput {
   map: MemberAccessMap | undefined;
   /** Выбранный чип: календарь, `NO_TEAM` или null (у компании нет команд). */
   scope: string | null;
+  /** Выключенные функции компании (STORY-088): долги, счета, документы.
+   *  Выключенное пропадает у всех, у владельца тоже. */
+  disabledFeatures?: readonly string[];
 }
 
 export interface FinancePageAccess {
   /** Роль и карта на месте. Пока `false` — ни одной живой кнопки. */
   ready: boolean;
   owner: boolean;
+  /** Что вообще есть в компании (функции компании). Выключенного нет ни
+   *  плиткой, ни кнопкой — в отличие от закрытого правом, которое серое. */
+  has: { accounts: boolean; debts: boolean; documents: boolean };
   /** Уровни ВЫБРАННОГО чипа. */
   ops: Level;
   accounts: Level;
@@ -90,6 +97,11 @@ const accountCalendar = (account: AccountLike): string | null =>
 
 export function financePageAccess(input: FinancePageAccessInput): FinancePageAccess {
   const { role, map, scope } = input;
+  const has = {
+    accounts: isFeatureOn(input.disabledFeatures, "accounts"),
+    debts: isFeatureOn(input.disabledFeatures, "debts"),
+    documents: isFeatureOn(input.disabledFeatures, "documents"),
+  };
   const owner = role === "owner" || map?.isOwner === true;
   const ready = owner || (role !== undefined && role !== null && !!map);
 
@@ -154,10 +166,11 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
   return {
     ready,
     owner,
+    has,
     ops,
     accounts,
     debts,
-    documents: owner,
+    documents: owner && has.documents,
     settings: owner,
     refunds: owner,
     noTeamChip: owner,
@@ -165,6 +178,10 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
     search: ops !== "locked",
     periodLocked: ops === "locked" && accounts === "locked" && debts === "locked",
     view: (view) => {
+      // Выключенная функция — её вида нет вовсе.
+      if (view === "accounts" && !has.accounts) return "all";
+      if (view === "debt" && !has.debts) return "all";
+      if (view === "documents" && !has.documents) return "all";
       if (view === "accounts" && accounts === "locked") return "all";
       // ПЛАШКА «ДОКУМЕНТЫ» ОСТАЁТСЯ И БЕЗ ДОСТУПА (владелец 20.09: «если нет
       // доступа к документам, тогда всё равно остаётся плашка „Документы“, и

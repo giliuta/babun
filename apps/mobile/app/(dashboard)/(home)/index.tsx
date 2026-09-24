@@ -105,6 +105,7 @@ import {
   type DayLabel,
 } from "@/features/calendar/day-label";
 import { resolveOffDayLabel } from "@/features/calendar/appointment-label";
+import { useFeatureOn } from "@/features/settings/company-features";
 import { isOverdue } from "@/features/calendar/overdue";
 import {
   useAutoColorRule,
@@ -287,7 +288,10 @@ export default function CalendarTab() {
   const { session } = useSession();
   const isCrew = role === "master";
   const canManageBookings = role === "owner" || role === "dispatcher";
-  const canManageDayLabels = canManageBookings;
+  // Метки дня — функция компании (STORY-088): выключены — тап по дате метку
+  // не открывает, в сетке меток нет.
+  const dayLabelsOn = useFeatureOn("day_labels");
+  const canManageDayLabels = canManageBookings && dayLabelsOn;
   const canMutateAppointment = useCallback(
     (appointment: Appointment) =>
       canMutateCalendarAppointment(role, session?.user.id, appointment),
@@ -1124,8 +1128,9 @@ export default function CalendarTab() {
         dateYmd,
         todayYmd,
         fallbackColor: t.faint,
+        off: !dayLabelsOn,
       }),
-    [activeTeamId, dayCities, cities, todayYmd, t.faint],
+    [activeTeamId, dayCities, cities, todayYmd, t.faint, dayLabelsOn],
   );
 
   // ЦВЕТ ЗАПИСИ В АВТОМАТИЧЕСКОМ РЕЖИМЕ — ПО ПРАВИЛУ ИЗ НАСТРОЙКИ (Кабинет →
@@ -1261,10 +1266,15 @@ export default function CalendarTab() {
         : true,
     [activeTeamId],
   );
+  // События — функция компании (STORY-088): выключены — их нет в сетке ни у
+  // кого; данные не стираются.
+  const eventsOn = useFeatureOn("events");
   const byTeam = useCallback(
     (a: Appointment) =>
-      inTeamCal(a) && (!hideCancelled || a.status !== "cancelled"),
-    [inTeamCal, hideCancelled],
+      inTeamCal(a) &&
+      (!hideCancelled || a.status !== "cancelled") &&
+      (eventsOn || a.kind !== "event"),
+    [inTeamCal, hideCancelled, eventsOn],
   );
 
   // Web parity (dashboard/page.tsx, STORY-091): recurring seeds expand into

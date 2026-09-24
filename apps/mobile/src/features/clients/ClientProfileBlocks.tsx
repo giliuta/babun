@@ -1,3 +1,4 @@
+import { useFeatureOn } from "@/features/settings/company-features";
 import type { ReactNode } from "react";
 import { Paperclip } from "lucide-react-native";
 import { ChooseRow } from "@/components/ui/ChooseRow";
@@ -88,9 +89,14 @@ export function ClientProfileBlocks({
   labelTags,
 }: ClientProfileBlocksProps) {
   const caps = useClientsCapabilities();
+  // Функции компании (STORY-088): выключенное — у всех, у владельца тоже.
+  const objectsOn = useFeatureOn("objects");
+  const filesOn = useFeatureOn("client_files");
+  const requisitesOn = useFeatureOn("client_requisites");
 
   return (
     <>
+      {objectsOn ? (
       <ClientObjectsSection
         client={client}
         update={update}
@@ -107,6 +113,7 @@ export function ClientProfileBlocks({
         onResidentRole={onResidentRole}
         onRemoveResident={onRemoveResident}
       />
+      ) : null}
 
       {/* СОЗДАНИЕ ПОКАЗЫВАЕТ ВСЮ СТРАНИЦУ (владелец 2026-07-26: «страница
           должна показываться сразу — добавить клиента открывается чётко вся
@@ -131,7 +138,7 @@ export function ClientProfileBlocks({
           хранятся файлы»). В черновике его нет: путь в хранилище строится по
           id клиента, которого ещё нет. Добавлять — только с правом менять
           карточку и там, где хранилище видит компанию (`caps.files`). */}
-      {!draft && showDocuments ? (
+      {!draft && showDocuments && filesOn ? (
         <ClientFilesBlock
           clientId={client.id}
           canChange={caps.edit && caps.files}
@@ -142,7 +149,7 @@ export function ClientProfileBlocks({
       {/* В НОВОМ КЛИЕНТЕ — ТОТ ЖЕ БЛОК (владелец 22.09: «при создании — те
           же самые блоки»). Файл кладётся по id клиента, поэтому «Добавить»
           сперва создаёт карточку, а лист открывается уже на ней. */}
-      {draft && showDocuments && caps.edit && caps.files && onDraftFiles ? (
+      {draft && showDocuments && filesOn && caps.edit && caps.files && onDraftFiles ? (
         <SectionCard title="Файлы">
           <ChooseRow compact icon={Paperclip} label="Добавить файл" onPress={onDraftFiles} />
         </SectionCard>
@@ -151,7 +158,7 @@ export function ClientProfileBlocks({
           2026-09-21: «инвойс могут просить прямо на клиента с его
           реквизитами»). Только владельцу: это получатель на инвойсе, документы
           и деньги (STORY-085). */}
-      {caps.money ? (
+      {caps.money && requisitesOn ? (
         <RequisitesBlock
           client={client}
           draft={draft}

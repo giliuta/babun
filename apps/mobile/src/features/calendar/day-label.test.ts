@@ -113,4 +113,16 @@ describe("метка дня календаря", () => {
     const got = call({ dayCities: { [`team-2:${TODAY}`]: "Лимассол" } });
     assert.equal(got, null);
   });
+
+  // STORY-088: метки дня — функция компании. Выключена — метки нет ни явной,
+  // ни по расписанию, у всех.
+  test("выключенные метки дня не показываются ни явные, ни по расписанию", () => {
+    const explicit = call({ dayCities: { [`${TEAM}:${TODAY}`]: "Лимассол" }, off: true });
+    assert.equal(explicit, null);
+    assert.notEqual(
+      call({ dayCities: { [`${TEAM}:${TODAY}`]: "Лимассол" } }),
+      null,
+      "без выключателя та же метка на месте",
+    );
+  });
 });

@@ -1,3 +1,4 @@
+import { useFeatureOn } from "@/features/settings/company-features";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Linking, View } from "react-native";
@@ -121,20 +122,24 @@ export function AppointmentFilesBlock({
     () => (saved ? (attachments.data?.items ?? []).filter((a) => a.appointment_id === appointmentId) : []),
     [attachments.data, appointmentId, saved],
   );
+  // Инвойсы и чеки — функция компании (STORY-088): выключены — их плашек в
+  // «Файлах» нет; бумаги остаются в базе и вернутся при включении.
+  const documentsOn = useFeatureOn("documents");
   const invoices = useMemo(
     () =>
-      saved
+      saved && documentsOn
         ? liveAppointmentInvoices(
             invoicesQuery.data ?? [],
             appointmentId,
             creditLinks.data?.originalByNoteId ?? new Map(),
           )
         : [],
-    [invoicesQuery.data, creditLinks.data, appointmentId, saved],
+    [invoicesQuery.data, creditLinks.data, appointmentId, saved, documentsOn],
   );
   const receipts = useMemo(
-    () => (saved ? (receiptsQuery.data ?? []).filter((r) => r.status !== "void") : []),
-    [receiptsQuery.data, saved],
+    () =>
+      saved && documentsOn ? (receiptsQuery.data ?? []).filter((r) => r.status !== "void") : [],
+    [receiptsQuery.data, saved, documentsOn],
   );
   // Очередь новой записи делится на медиа (квадраты) и документы (плашки) —
   // владелец 20.09: у них разный вид, поэтому и группы в раскладке разные.

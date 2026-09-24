@@ -15,6 +15,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SwitchRow } from "@/components/ui/SwitchRow";
+import { useFeatureOn, useSetCompanyFeature } from "@/features/settings/company-features";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import {
   useVatSettings,
@@ -73,7 +75,18 @@ export default function FinanceSettingsScreen() {
   // числа.
   // СТРАНИЦА ОТКРЫТА ВСЕМ, СТРОКИ — ПО ДОСТУПУ (владелец 20.09). Правило и
   // его причины — `features/finances/settings-rows.ts`.
-  const rows = financeSettingsRows(useCurrentRole().data);
+  const debtsOn = useFeatureOn("debts");
+  const accountsOn = useFeatureOn("accounts");
+  const documentsOn = useFeatureOn("documents");
+  const setFeature = useSetCompanyFeature();
+  // Выключенная функция уносит и свою дверь в настройки.
+  const base = financeSettingsRows(useCurrentRole().data);
+  const rows = {
+    ...base,
+    accounts: base.accounts && accountsOn,
+    invoices: base.invoices && documentsOn,
+    requisites: base.requisites && documentsOn,
+  };
   const accounts = useAccountsWithBalances({ includeInactive: true });
   const openCount = accounts.data?.filter((a) => a.is_active).length;
   const closedCount = accounts.data?.filter((a) => !a.is_active).length;
@@ -189,6 +202,37 @@ export default function FinanceSettingsScreen() {
                     />
                   </>
                 ) : null}
+              </SectionCard>
+            </>
+          ) : null}
+
+          {/* ФУНКЦИИ ДЕНЕГ (STORY-088, владелец 24.09: «тумблер — и его не
+              будет ни у кого, даже у владельца»). Каждый тумблер — своя
+              карточка, как в настройках календаря. Данные выключенной функции
+              не стираются. */}
+          {rows.moneyGroup ? (
+            <>
+              <SectionEyebrow>Функции</SectionEyebrow>
+              <SectionCard>
+                <SwitchRow
+                  label="Долги"
+                  value={debtsOn}
+                  onChange={(v) => setFeature.mutate({ key: "debts", on: v })}
+                />
+              </SectionCard>
+              <SectionCard>
+                <SwitchRow
+                  label="Счета и переводы"
+                  value={accountsOn}
+                  onChange={(v) => setFeature.mutate({ key: "accounts", on: v })}
+                />
+              </SectionCard>
+              <SectionCard>
+                <SwitchRow
+                  label="Инвойсы и чеки"
+                  value={documentsOn}
+                  onChange={(v) => setFeature.mutate({ key: "documents", on: v })}
+                />
               </SectionCard>
             </>
           ) : null}

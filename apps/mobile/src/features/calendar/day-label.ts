@@ -60,9 +60,12 @@ export function resolveCalendarDayLabel(opts: {
   /** Чем красить метку, которой уже нет в справочнике: имя на дне стоит,
    *  цвета взять неоткуда. */
   fallbackColor: string;
+  /** Метки дня выключены у компании (STORY-088): метки нет ни явной, ни по
+   *  расписанию дней недели. */
+  off?: boolean;
 }): DayLabel | null {
   const { dayCities, cities, teamId, dateYmd, todayYmd, fallbackColor } = opts;
-  if (!teamId) return null;
+  if (!teamId || opts.off) return null;
 
   const assigned = dayCities[dayCityKey(teamId, dateYmd)];
   if (assigned === CITY_CLEARED) return null;

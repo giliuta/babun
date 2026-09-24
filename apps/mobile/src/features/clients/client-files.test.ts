@@ -117,7 +117,7 @@ describe("у клиента тот же блок «Файлы», что у за�
 
   test("страница ставит блок «Файлы»; в черновике — только его дверь", () => {
     assert.match(profile(), /import ClientFilesBlock from "@\/features\/clients\/blocks\/ClientFilesBlock"/);
-    assert.match(profile(), /\{!draft && showDocuments \? \(\s*<ClientFilesBlock\s/);
+    assert.match(profile(), /\{!draft && showDocuments && filesOn \? \(\s*<ClientFilesBlock\s/);
     assert.match(block(), /<SectionCard title="Файлы">/);
   });
 

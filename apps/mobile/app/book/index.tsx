@@ -76,6 +76,7 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
 import { resolveCalendarDayLabel } from "@/features/calendar/day-label";
+import { useFeatureOn } from "@/features/settings/company-features";
 import { useDayCities } from "@/features/calendar/day-cities";
 import {
   useAutoColorRule,
@@ -269,6 +270,7 @@ export default function BookScreen() {
   const keyboardShown = useKeyboardShown();
   const toast = useToast();
   const { data: dayCities = {} } = useDayCities();
+  const dayLabelsOn = useFeatureOn("day_labels");
   // КАКИЕ БЛОКИ НУЖНЫ ЭТОМУ БИЗНЕСУ (Кабинет → «Запись», владелец 2026-09-05:
   // «для бьюти-мастеров объект не нужен — можем вообще его убрать»).
   const blocks = useBookingBlocks();
@@ -711,8 +713,9 @@ export default function BookScreen() {
         dateYmd: date,
         todayYmd,
         fallbackColor: t.faint,
+        off: !dayLabelsOn,
       }),
-    [dayCities, teamCities, teamId, date, todayYmd, t.faint],
+    [dayCities, teamCities, teamId, date, todayYmd, t.faint, dayLabelsOn],
   );
   const dayLabel = dayLabelResolved?.name ?? null;
   // Новая запись надевает метку дня сама и меняет её вслед за днём и

@@ -16,6 +16,7 @@ import type {
   CalendarSettings,
   OperationalCalendarSettings,
 } from "../../local/calendar-settings";
+import { sanitizeDisabledFeatures } from "../../local/company-features";
 import {
   DEFAULT_CALENDAR_SETTINGS,
   sanitizeRecordColorSettings,
@@ -35,6 +36,14 @@ type RecordColorColumns = {
   record_color_palette: unknown;
   record_color_fallback: string | null;
 };
+/** Функции компании и порядок блоков записи (миграция 20260924140000). */
+type FeatureColumns = {
+  disabled_features: string[] | null;
+  booking_block_order: string[] | null;
+};
+
+const blockOrderOf = (raw: unknown): string[] | undefined =>
+  Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : undefined;
 type OperationalRow =
   Database["public"]["Functions"]["read_operational_calendar_settings_safe"]["Returns"][number];
 
@@ -113,6 +122,10 @@ function rowToSettings(r: Row): CalendarSettings {
       palette: (r as Row & Partial<RecordColorColumns>).record_color_palette,
       fallback: (r as Row & Partial<RecordColorColumns>).record_color_fallback,
     }),
+    disabledFeatures: sanitizeDisabledFeatures(
+      (r as Row & Partial<FeatureColumns>).disabled_features,
+    ),
+    bookingBlockOrder: blockOrderOf((r as Row & Partial<FeatureColumns>).booking_block_order),
   };
 }
 
@@ -170,6 +183,22 @@ export async function getOperationalCalendarSettings(
     // settings` ловит любую попытку протащить сюда лишнее поле — он и поймал.
     workStartHour: row.work_start_hour ?? undefined,
     workEndHour: row.work_end_hour ?? undefined,
+    // С 24.09 (STORY-088) функция отдаёт сотруднику и это: без него у
+    // мастера были заводские цвета записи, полоса денег не слушала
+    // настройку, а выключенные у компании блоки стояли в его записи.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    showDayFinance: (row as any).show_day_finance ?? true,
+    ...sanitizeRecordColorSettings({
+      rule: (row as OperationalRow & Partial<RecordColorColumns>).record_color_rule,
+      palette: (row as OperationalRow & Partial<RecordColorColumns>).record_color_palette,
+      fallback: (row as OperationalRow & Partial<RecordColorColumns>).record_color_fallback,
+    }),
+    disabledFeatures: sanitizeDisabledFeatures(
+      (row as OperationalRow & Partial<FeatureColumns>).disabled_features,
+    ),
+    bookingBlockOrder: blockOrderOf(
+      (row as OperationalRow & Partial<FeatureColumns>).booking_block_order,
+    ),
   };
 }
 
@@ -239,6 +268,17 @@ export async function updateCalendarSettings(
   }
   if (patch.recordColorFallback !== undefined) {
     colorInsert.record_color_fallback = patch.recordColorFallback || null;
+  }
+
+  const featureInsert = insert as typeof insert & Partial<FeatureColumns>;
+  if (patch.disabledFeatures !== undefined) {
+    featureInsert.disabled_features = sanitizeDisabledFeatures(patch.disabledFeatures);
+  }
+  if (patch.bookingBlockOrder !== undefined) {
+    featureInsert.booking_block_order =
+      patch.bookingBlockOrder && patch.bookingBlockOrder.length > 0
+        ? patch.bookingBlockOrder
+        : null;
   }
 
   const { data, error } = await supabase

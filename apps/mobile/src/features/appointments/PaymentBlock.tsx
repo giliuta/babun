@@ -1,3 +1,4 @@
+import { useFeatureOn } from "@/features/settings/company-features";
 import { useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
@@ -98,6 +99,7 @@ export function PaymentBlock({
 }: PaymentBlockProps) {
   const t = useThemeColors();
   const router = useRouter();
+  const documentsOn = useFeatureOn("documents");
   const toast = useToast();
   const currency = useTenant().data?.currency;
   const businessNow = useBusinessNow();
@@ -346,7 +348,10 @@ export function PaymentBlock({
   // вставку инвойса, а канон запрещает живой контрол над запрещённым —
   // значка «Инвойс» просто нет. Уже выписанный документ открыть можно: он
   // существует, и прятать дорогу к нему значило бы потерять бумагу.
-  const canInvoice = Boolean(invoice) || (outstanding > 0 && canUseDocuments);
+  // Инвойсы — функция компании (STORY-088): выключены — иконки нет, даже у
+  // уже выставленного (он открывается из «Файлов», когда функцию вернут).
+  const canInvoice =
+    documentsOn && (Boolean(invoice) || (outstanding > 0 && canUseDocuments));
   const hasHistory = canSeeHistory && rows.length > 0;
   const anyAction = Boolean(teamId) && (canSplit || canInvoice || hasHistory);
   // Строка состояния нужна, когда ей ЕСТЬ ЧТО СКАЗАТЬ: подпись, поле суммы или

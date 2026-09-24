@@ -38,6 +38,7 @@ describe("карточка записи у команды спрашивает �
       services: true,
       amount: true,
       payment: "write",
+      note: true,
     });
   });
 
@@ -50,6 +51,7 @@ describe("карточка записи у команды спрашивает �
       services: true,
       amount: false,
       payment: "read",
+      note: true,
     });
   });
 
@@ -62,6 +64,7 @@ describe("карточка записи у команды спрашивает �
       services: false,
       amount: false,
       payment: "hidden",
+      note: true,
     });
   });
 
@@ -80,8 +83,29 @@ describe("карточка записи у команды спрашивает �
       services: false,
       amount: false,
       payment: "hidden",
+      note: true,
     });
     assert.equal(crewBlocks({ role: undefined, map: MIXED, teamId: TEAM }).files, "hidden");
+  });
+});
+
+// STORY-088: выключенное у компании не видно ни при каком праве — «ни у
+// кого, даже у владельца» (владелец 24.09).
+describe("функции компании сильнее прав", () => {
+  test("выключенные объекты, оплата, файлы и заметка пропадают и у владельца", () => {
+    const blocks = crewBlocks({
+      role: "owner",
+      map: undefined,
+      teamId: TEAM,
+      disabledFeatures: ["objects", "record_payment", "record_files", "record_note"],
+    });
+    assert.equal(blocks.object, false);
+    assert.equal(blocks.payment, "hidden");
+    assert.equal(blocks.files, "hidden");
+    assert.equal(blocks.note, false);
+    // Остальное — по правам, как было.
+    assert.equal(blocks.status, "write");
+    assert.equal(blocks.client, true);
   });
 });
 

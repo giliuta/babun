@@ -16,6 +16,7 @@ export { TIMEZONE_OPTIONS } from "./timezones";
 // `scroll_open_hour`) остались: они `not null default`, и запись без них
 // проходит. Сносить их — отдельная миграция и отдельное решение.
 
+import type { CompanyFeatureKey } from "./company-features";
 import { getStorage } from "../storage/provider";
 
 /** Ситуации, которыми красится запись, когда своего цвета у неё нет. Список
@@ -105,6 +106,14 @@ export interface CalendarSettings {
   recordColorRule?: RecordColorRule;
   recordColorPalette?: RecordColorPalette;
   recordColorFallback?: string;
+  /** ФУНКЦИИ КОМПАНИИ, КОТОРЫЕ ВЫКЛЮЧЕНЫ (STORY-088, владелец 24.09:
+   *  «тумблер выключить — и его не будет ни у кого, даже у владельца»).
+   *  Пусто — включено всё. Словарь ключей — `company-features.ts`. */
+  disabledFeatures?: CompanyFeatureKey[];
+  /** Порядок блоков формы записи. Жил в телефоне (MMKV) — у мастера и на
+   *  втором телефоне владельца форма собиралась иначе. `undefined` —
+   *  заводской порядок. */
+  bookingBlockOrder?: string[];
 }
 
 /**
@@ -115,18 +124,11 @@ export interface CalendarSettings {
 export type OperationalCalendarSettings = Omit<
   CalendarSettings,
   // Контрактный тест мастерского среза ловит любую попытку протащить сюда
-  // личное поле.
-  | "personalLabels"
-  | "personalDefaultLabel"
-  // Цвета записи сюда НЕ входят, и это не забывчивость: их не отдаёт
-  // `read_operational_calendar_settings_safe()` — единственный путь мастера к
-  // настройкам. Пока функция их не знает, у мастера цвета заводские, и тип
-  // обязан говорить это вслух, а не обещать поле, которого не будет.
-  // Чинится вместе с переписыванием безопасных функций — очередь прав на
-  // календарь (docs/PLAN-CALENDARS-2026-09-10.md).
-  | "recordColorRule"
-  | "recordColorPalette"
-  | "recordColorFallback"
+  // личное поле. Цвета записи, «Доход и расход», минуты окна и функции
+  // компании С 24.09 ВХОДЯТ (STORY-088): их отдаёт
+  // `read_operational_calendar_settings_safe()`, а без них у сотрудника
+  // были заводские цвета и форма записи с выключенными у компании блоками.
+  "personalLabels" | "personalDefaultLabel"
 >;
 
 const STORAGE_KEY = "babun2:settings:calendar";
@@ -285,11 +287,19 @@ export function toOperationalCalendarSettings(
   return {
     startHour: settings.startHour,
     endHour: settings.endHour,
+    startMinute: settings.startMinute,
+    endMinute: settings.endMinute,
     timezone: settings.timezone,
     bufferMinutes: settings.bufferMinutes,
     hideCancelled: settings.hideCancelled,
+    showDayFinance: settings.showDayFinance,
     workStartHour: settings.workStartHour,
     workEndHour: settings.workEndHour,
+    recordColorRule: settings.recordColorRule,
+    recordColorPalette: settings.recordColorPalette,
+    recordColorFallback: settings.recordColorFallback,
+    disabledFeatures: settings.disabledFeatures,
+    bookingBlockOrder: settings.bookingBlockOrder,
   };
 }
 

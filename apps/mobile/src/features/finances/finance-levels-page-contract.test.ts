@@ -23,7 +23,10 @@ describe("экран «Финансы» спрашивает уровень од
   const index = read(INDEX);
 
   test("правило зовётся ровно один раз, ролью и картой прав", () => {
-    const calls = index.match(/financePageAccess\(\{ role, map: myAccessQuery\.data, scope \}\)/g);
+    // С 24.09 (STORY-088) правило знает и функции компании.
+    const calls = index.match(
+      /financePageAccess\(\{ role, map: myAccessQuery\.data, scope, disabledFeatures \}\)/g,
+    );
     assert.equal(calls?.length, 1);
   });
 
@@ -51,7 +54,10 @@ describe("экран «Финансы» спрашивает уровень од
     // остаётся плашка „Документы“, и там просто не показываются документы»).
     // Тариф её по-прежнему убирает: без оплаченных документов их в продукте
     // нет вовсе, и «Счета» занимают ряд целиком.
-    assert.match(index, /showDocuments=\{canUseDocuments\}/);
+    // Выключенная функция компании (STORY-088) убирает плитку так же, как тариф.
+    assert.match(index, /showDocuments=\{canUseDocuments && access\.has\.documents\}/);
+    assert.match(index, /showAccounts=\{access\.has\.accounts\}/);
+    assert.match(index, /showDebts=\{access\.has\.debts\}/);
     assert.match(index, /lockAccounts=\{access\.accounts === "locked"\}/);
     assert.match(index, /lockOps=\{access\.ops === "locked"\}/);
     assert.match(index, /lockDebts=\{access\.debts === "locked"\}/);

@@ -1,3 +1,4 @@
+import { useFeatureOn } from "@/features/settings/company-features";
 import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Linking, View } from "react-native";
@@ -92,6 +93,7 @@ export default function ClientFilesBlock({
   const attachments = useClientAttachments(clientId);
   const visitPhotos = useClientVisitPhotos(clientId, appointmentIds);
   const invoices = useInvoices({ clientId });
+  const documentsOn = useFeatureOn("documents");
   const receipts = useReceipts({ clientId });
   // Два экземпляра одной загрузки: так спиннер встаёт квадратом у снимков и
   // плашкой у документов, без отдельного состояния «что грузим».
@@ -119,10 +121,11 @@ export default function ClientFilesBlock({
       layoutClientFiles({
         attachments: attachments.data?.items ?? [],
         visitPhotos: visitPhotos.data ?? [],
-        invoices: invoices.data ?? [],
-        receipts: receipts.data ?? [],
+        // Инвойсы и чеки — функция компании (STORY-088).
+        invoices: documentsOn ? (invoices.data ?? []) : [],
+        receipts: documentsOn ? (receipts.data ?? []) : [],
       }),
-    [attachments.data, visitPhotos.data, invoices.data, receipts.data],
+    [attachments.data, visitPhotos.data, invoices.data, receipts.data, documentsOn],
   );
   const mediaBusy = uploadMedia.isPending;
   const docBusy = uploadDocs.isPending;

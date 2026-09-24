@@ -1,3 +1,4 @@
+import { useDisabledFeatures } from "@/features/settings/company-features";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, RefreshControl, Text, TextInput, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
@@ -259,7 +260,8 @@ function FinancesContent() {
   // (`finance-page-access.ts`). Экран только читает ответы: что живое, что
   // серое, что можно править. Владелец карты прав не ждёт.
   const myAccessQuery = useMyAccess();
-  const access = financePageAccess({ role, map: myAccessQuery.data, scope });
+  const disabledFeatures = useDisabledFeatures();
+  const access = financePageAccess({ role, map: myAccessQuery.data, scope, disabledFeatures });
   // Гасим РАЗРЕЗ документов, а не только плитку: в «Документы» приходят и
   // адресом `?view=documents`, и возвратом из записи. Закрытая уровнем панель
   // уходит туда же — на общий вид, а не показывает пустоту.
@@ -1141,7 +1143,9 @@ function FinancesContent() {
           totals={shownTotals}
           accounts={access.accounts === "locked" ? { total: 0 } : accountsSummary}
           invoices={invoiceSummary}
-          showDocuments={canUseDocuments}
+          showDocuments={canUseDocuments && access.has.documents}
+          showAccounts={access.has.accounts}
+          showDebts={access.has.debts}
           lockAccounts={access.accounts === "locked"}
           lockOps={access.ops === "locked"}
           lockDebts={access.debts === "locked"}

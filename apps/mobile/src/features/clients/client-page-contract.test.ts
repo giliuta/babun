@@ -70,7 +70,9 @@ describe("люди карточки — только у сохранённой �
     assert.match(
       page(),
       // Между ними стоит слот заметки клиента (владелец 23.09).
-      /memberOf=\{people\.memberOfRows\}[\s\S]{0,400}?people=\{/,
+      // «Люди и связи» — функция компании (STORY-088): выключена — ни людей,
+      // ни «Входит в».
+      /memberOf=\{peopleOn \? people\.memberOfRows : undefined\}[\s\S]{0,400}?people=\{/,
       "страница перестала ставить люди и строку «чей он» в шапку",
     );
   });
@@ -125,7 +127,7 @@ describe("люди карточки — только у сохранённой �
     );
     assert.match(
       page(),
-      /\{\.\.\.people\.residents\}/,
+      /\{\.\.\.\(peopleOn \? people\.residents : \{\}\)\}/,
       "страница перестала отдавать блокам жильцов",
     );
   });
@@ -528,7 +530,7 @@ describe("«Разделить клиента» в «⋯» карточки", ()
     assert.match(hook(), /const onSplit = eligible\s*\?/, "обработчик отдаётся без номеров — пункт висит впустую");
     assert.match(
       page(),
-      /useSplitClient\(\{ client: c, isDraft, canEdit: caps\.edit, canLinks: caps\.links, menuOpen \}\)/,
+      /useSplitClient\(\{ client: c, isDraft, canEdit: caps\.edit, canLinks: caps\.links && peopleOn, menuOpen \}\)/,
       "страница передаёт сплиту не те права",
     );
     assert.match(page(), /onSplit=\{split\.onSplit\}/, "страница не ставит пункт в меню");

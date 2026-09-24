@@ -29,6 +29,7 @@
 // Linking sms:, share via RN Share, blacklist toggle via update) — the
 // blocks stay free of screen-level concerns.
 
+import { useFeatureOn } from "@/features/settings/company-features";
 import { useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -311,6 +312,9 @@ export function ClientDetailScreen() {
     }
     void saveDraft({ open });
   };
+  // Люди и связи — функция компании (STORY-088): выключены — нет ни
+  // «Людей», ни «Входит в», ни жильцов объекта, ни «Разделить».
+  const peopleOn = useFeatureOn("client_people");
   const people = useClientPeople({
     id,
     // На карточке — первые трое и дверь «Все люди · N» (владелец 22.09).
@@ -327,7 +331,7 @@ export function ClientDetailScreen() {
   // «Объединить с дублем» в «⋯» — вся проводка в `use-merge-duplicate.ts`.
   const onMerge = useMergeDuplicate({ client: c, isDraft, canManage: caps.manage, closeMenu: () => setMenuOpen(false) });
   // «Разделить клиента» в «⋯» — вся проводка в `use-split-client.ts`.
-  const split = useSplitClient({ client: c, isDraft, canEdit: caps.edit, canLinks: caps.links, menuOpen });
+  const split = useSplitClient({ client: c, isDraft, canEdit: caps.edit, canLinks: caps.links && peopleOn, menuOpen });
 
   // Shared selectors — memoized so unrelated state changes don't re-scan
   // every appointment. Hooks must run unconditionally, hence the guards
@@ -648,12 +652,12 @@ export function ClientDetailScreen() {
           client={c}
           update={update}
           readOnly={!isDraft && !caps.edit}
-          memberOf={people.memberOfRows}
+          memberOf={peopleOn ? people.memberOfRows : undefined}
           // Заметка клиента — вторым блоком, под «Клиентом» (владелец 23.09:
           // «сначала идёт блок „Клиент", потом заметка клиента»).
           note={<NotesBlock client={c} update={update} />}
           people={
-            people.peopleRows || people.onAddPerson ? (
+            peopleOn && (people.peopleRows || people.onAddPerson) ? (
               <SectionCard title="Люди">
                 {people.peopleRows}
                 {people.peopleHidden > 0 ? (
@@ -774,7 +778,7 @@ export function ClientDetailScreen() {
           onArrived={() => router.setParams({ open: undefined })}
           // ЖИЛЬЦЫ: под объектом на странице — показание, в листе объекта —
           // строки с ролью и единственная дверь заведения.
-          {...people.residents}
+          {...(peopleOn ? people.residents : {})}
         />
       </ScrollView>
 

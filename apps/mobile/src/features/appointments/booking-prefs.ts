@@ -2,7 +2,13 @@ import type {
   RecordColorPalette,
   RecordColorRule,
 } from "@babun/shared/local/calendar-settings";
-import { createEnabledPrefs } from "@/lib/enabled-prefs";
+import { useEffect } from "react";
+import { featureOfBookingBlock, isFeatureOn } from "@babun/shared/local/company-features";
+import { getStorage } from "@babun/shared/storage";
+import { useDataRole } from "@/features/settings/tenant";
+import { useDisabledFeatures, useSetCompanyFeature } from "@/features/settings/company-features";
+import { useTenantId } from "@/lib/tenant";
+import { localBookingCarry } from "./booking-carry";
 import {
   useCalendarSettings,
   useSaveCalendarSettings,
@@ -27,8 +33,7 @@ import {
 // запись перестаёт быть записью — это не настройка вкуса, а определение
 // предмета.
 //
-// Настройка МЕСТНАЯ (MMKV) и по тенанту, как способы связи и карты: это
-// привычка ЭТОГО телефона и ЭТОЙ фирмы, а мастер работает на две.
+// Настройка — КОМПАНИИ (с 24.09, STORY-088): см. `useBookingBlocks` ниже.
 
 export type BookingBlockId =
   | "team"
@@ -49,17 +54,10 @@ export interface BookingBlockDef {
 }
 
 // ПОДПИСЕЙ У СТРОК НЕТ, И ПОЛЯ ПОД НИХ ТОЖЕ (владелец 2026-09-04: «эти
-// подсказки просто ненужные»). Здесь лежало поле `hint` с текстами «куда
-// ехать», «предоплата и долг» — оно не доезжало до экрана ни разу:
-// `ToggleListScreen` подписи не рисует по прямому отказу владельца. Мёртвое
-// поле опаснее пустого: следующий читатель поверит, что подпись где-то есть.
+// подсказки просто ненужные»).
 // ВСЕ БЛОКИ СТРАНИЦЫ, В ПОРЯДКЕ СТРАНИЦЫ (владелец 2026-09-06: «в настройках
 // добавь блок команда, метка, время, клиент, объект, услуга, оплата, заметка,
 // файл»). Команда, время, клиент и услуги закреплены: без них записи нет.
-// «Файлы» закреплены тоже (владелец 2026-09-06: «мне нужен блок файла, чтоб
-// он был всегда — страница создаётся, и он остаётся»): на устройстве, где
-// список блоков сохранили раньше, чем блок появился, он молча стоял
-// выключенным, и у новой записи файлов не было.
 export const BOOKING_BLOCKS: BookingBlockDef[] = [
   { id: "team", label: "Команда", pinned: true },
   { id: "label", label: "Метка" },
@@ -69,24 +67,83 @@ export const BOOKING_BLOCKS: BookingBlockDef[] = [
   { id: "services", label: "Услуги", pinned: true },
   { id: "payment", label: "Оплата" },
   { id: "note", label: "Заметка" },
-  { id: "files", label: "Файлы", pinned: true },
+  { id: "files", label: "Файлы" },
 ];
 
-const blocks = createEnabledPrefs<BookingBlockId>({
-  storageKey: "babun-booking-blocks",
-  queryKey: "booking-blocks",
-  all: BOOKING_BLOCKS.map((b) => b.id),
-  // По умолчанию включено всё: продукт не решает за бизнес, чего ему не надо.
-  defaults: BOOKING_BLOCKS.map((b) => b.id),
-  pinned: BOOKING_BLOCKS.filter((b) => b.pinned).map((b) => b.id),
-  // До 2026-09-06 набор знал только эти четыре; «Файлы» у старых устройств
-  // иначе стартовали бы выключенными.
-  legacyIds: ["object", "label", "payment", "note"],
-});
+// БЛОКИ ЗАПИСИ — ЭТО ФУНКЦИИ КОМПАНИИ (STORY-088, 24.09). Тумблеры «Метка»,
+// «Объект», «Оплата», «Заметка», «Файлы» жили в ТЕЛЕФОНЕ (MMKV
+// `babun-booking-blocks:<tenant>`): выключенный у владельца объект стоял у
+// мастера и на втором телефоне. Теперь блок включён, когда включена его
+// функция компании (`calendar_settings.disabled_features`), — у всех
+// одинаково, и владелец выключает его один раз.
+const LEGACY_KEY = "babun-booking-blocks";
 
 /** Включённые блоки формы записи, в порядке показа. */
-export const useBookingBlocks = blocks.use;
-export const useToggleBookingBlock = blocks.useToggle;
+export function useBookingBlocks(): BookingBlockId[] {
+  const disabled = useDisabledFeatures();
+  useCarryLocalBookingBlocks();
+  return BOOKING_BLOCKS.filter((block) => {
+    if (block.pinned) return true;
+    const feature = featureOfBookingBlock(block.id);
+    return feature === null || isFeatureOn(disabled, feature);
+  }).map((block) => block.id);
+}
+
+/** Тумблер блока на странице «Блоки формы» — это тумблер функции компании. */
+export function useToggleBookingBlock() {
+  const disabled = useDisabledFeatures();
+  const set = useSetCompanyFeature();
+  return {
+    ...set,
+    mutate: (id: BookingBlockId) => {
+      const feature = featureOfBookingBlock(id);
+      if (!feature) return;
+      set.mutate({ key: feature, on: !isFeatureOn(disabled, feature) });
+    },
+  };
+}
+
+/** ПЕРЕНОС С ТЕЛЕФОНА — ОДИН РАЗ. У владельца, который уже выключил блоки на
+ *  своём телефоне, они не должны молча вернуться: если в компании ещё ничего
+ *  не выключено, а в телефоне выключено — переносим и забываем телефон. */
+let carried = false;
+function useCarryLocalBookingBlocks() {
+  const tenantId = useTenantId();
+  const role = useDataRole().data;
+  const settings = useCalendarSettings();
+  const set = useSaveCalendarSettings();
+  useEffect(() => {
+    if (carried || role !== "owner" || !tenantId || !settings.isSuccess) return;
+    carried = true;
+    const plan = localBookingCarry(
+      readLocal(`${LEGACY_KEY}:${tenantId}`),
+      settings.data?.disabledFeatures ?? [],
+      BOOKING_BLOCKS,
+    );
+    if (plan) set.mutate({ disabledFeatures: plan });
+    clearLocal(tenantId);
+    // Одноразовый перенос: зависимость от `set` лишняя и перезапускала бы его.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, tenantId, settings.isSuccess]);
+}
+
+function readLocal(key: string): string[] | undefined {
+  try {
+    const raw = getStorage().get<string[]>(key);
+    return Array.isArray(raw) ? raw : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function clearLocal(tenantId: string) {
+  try {
+    const storage = getStorage();
+    for (const suffix of ["", ":order", ":known"]) storage.remove(`${LEGACY_KEY}:${tenantId}${suffix}`);
+  } catch {
+    // Кэш телефона — не данные компании: не стёрся — не беда.
+  }
+}
 
 // ЦВЕТ ЗАПИСИ В АВТОМАТИЧЕСКОМ РЕЖИМЕ (владелец 2026-09-05: «разберём
 // полноценно автоматический режим — это надо придумать в настройках и

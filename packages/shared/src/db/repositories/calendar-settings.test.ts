@@ -35,16 +35,17 @@ describe("operational calendar settings repository", () => {
     expect(settings).toEqual({
       startHour: 7,
       endHour: 23,
-      // Минуты окна у мастерского среза пока нулевые: их нет в сигнатуре
-      // `read_operational_calendar_settings_safe`, и проекция честно ставит 0,
-      // а не выдумывает значение. Рельс мастера встаёт на целый час.
+      // Строка старого вида (без минут, цветов и функций) — проекция ставит
+      // честные умолчания, а не выдумывает значения.
       startMinute: 0,
       endMinute: 0,
       timezone: "Asia/Dubai",
       bufferMinutes: 20,
       hideCancelled: true,
+      showDayFinance: true,
       workStartHour: 8,
       workEndHour: 19,
+      disabledFeatures: [],
     });
     expect(settings).not.toHaveProperty("personalLabels");
     expect(settings).not.toHaveProperty("personalDefaultLabel");
@@ -54,15 +55,43 @@ describe("operational calendar settings repository", () => {
     // вернётся в модель через заднюю дверь и снова начнёт обещать настройку,
     // которой нет (владелец 2026-09-10: сетка всегда 30, неделя всегда с
     // понедельника, «за пределами часов» — предупреждением, а не флагом).
-    // ЦВЕТА ЗАПИСИ МАСТЕРУ НЕ ЕДУТ — пока RPC их не отдаёт, проекция обязана
-    // молчать, а не подставлять заводские под видом настройки компании.
-    expect(settings).not.toHaveProperty("recordColorRule");
-    expect(settings).not.toHaveProperty("recordColorPalette");
-    expect(settings).not.toHaveProperty("recordColorFallback");
     expect(settings).not.toHaveProperty("gridStep");
     expect(settings).not.toHaveProperty("weekStart");
     expect(settings).not.toHaveProperty("allowOvertime");
     expect(settings).not.toHaveProperty("scrollOpenHour");
+  });
+
+  // STORY-088: с 24.09 RPC отдаёт сотруднику цвета записи, «Доход и расход»
+  // и функции компании — без них у мастера были заводские цвета, а в его
+  // записи стояли выключенные у компании блоки.
+  test("цвета, полоса денег и функции компании доходят до сотрудника", async () => {
+    const supabase = {
+      rpc() {
+        return Promise.resolve({
+          data: [
+            {
+              ...OPERATIONAL_ROW,
+              show_day_finance: false,
+              record_color_rule: "label",
+              record_color_palette: { noClient: "#112233" },
+              record_color_fallback: "#445566",
+              disabled_features: ["objects", "nonsense", "objects", "debts"],
+              booking_block_order: ["team", "when", "client"],
+            },
+          ],
+          error: null,
+        });
+      },
+    };
+
+    const settings = await getOperationalCalendarSettings(supabase as never);
+
+    expect(settings.showDayFinance).toBe(false);
+    expect(settings.recordColorRule).toBe("label");
+    expect(settings.recordColorFallback).toBe("#445566");
+    // Незнакомый ключ и повтор выброшены — выключить ими нечего.
+    expect(settings.disabledFeatures).toEqual(["objects", "debts"]);
+    expect(settings.bookingBlockOrder).toEqual(["team", "when", "client"]);
   });
 
   // КОНТРАКТ НА ДЕНЬ, КОГДА RPC НАУЧИТСЯ МИНУТАМ. Фолбэк `?? 0` обязан

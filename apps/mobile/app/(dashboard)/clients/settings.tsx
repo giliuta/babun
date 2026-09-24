@@ -43,6 +43,8 @@ import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useClientsCapabilities } from "@/features/clients/company-scope";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SwitchRow } from "@/components/ui/SwitchRow";
+import { useFeatureOn, useSetCompanyFeature } from "@/features/settings/company-features";
 
 // v811 — «Настройки клиентов». Открывается шестерёнкой из хедера списка
 // (порт web ClientsSettingsScreen). Группы:
@@ -71,6 +73,11 @@ function ClientsSettingsScreen() {
   // но у человека без своей компании править здесь нечего: страница остаётся
   // собой, а тело говорит одной строкой.
   const caps = useClientsCapabilities();
+  const objectsOn = useFeatureOn("objects");
+  const peopleOn = useFeatureOn("client_people");
+  const requisitesOn = useFeatureOn("client_requisites");
+  const filesOn = useFeatureOn("client_files");
+  const setFeature = useSetCompanyFeature();
   const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields();
   const clientsQuery = useClients();
   const tagsQuery = useClientTags();
@@ -179,15 +186,19 @@ function ClientsSettingsScreen() {
                 нужно, нужен вход отсюда, из места, где ими пользуются. */}
             <SectionEyebrow>Справочники</SectionEyebrow>
             <SectionCard>
-              <SettingsRow
-                tile={SETTINGS_TILE.teal}
-                icon={Home}
-                title="Типы объектов"
-                sub="Вилла, дом, квартира, офис"
-                onPress={() => router.push("/clients/object-types")}
-              />
-  
-              <Divider inset={56} />
+              {/* Выключенные у компании объекты уносят и свой справочник. */}
+              {objectsOn ? (
+                <>
+                  <SettingsRow
+                    tile={SETTINGS_TILE.teal}
+                    icon={Home}
+                    title="Типы объектов"
+                    sub="Вилла, дом, квартира, офис"
+                    onPress={() => router.push("/clients/object-types")}
+                  />
+                  <Divider inset={56} />
+                </>
+              ) : null}
               <SettingsRow
                 tile={SETTINGS_TILE.purple}
                 icon={Tags}
@@ -262,6 +273,33 @@ function ClientsSettingsScreen() {
                 title="Недавно удалённые"
                 sub={`Хранятся ${TRASH_DAYS} дней, потом стираются`}
                 onPress={() => router.push("/clients/trash")}
+              />
+            </SectionCard>
+
+            {/* ФУНКЦИИ КЛИЕНТОВ (STORY-088, владелец 24.09: «тумблер — и его
+                не будет ни у кого, даже у владельца»). Каждый тумблер — своя
+                карточка. Данные выключенной части не стираются. Объекты
+                выключаются там, где их заводят, — «Запись → Блоки формы». */}
+            <SectionEyebrow>Функции</SectionEyebrow>
+            <SectionCard>
+              <SwitchRow
+                label="Люди и связи"
+                value={peopleOn}
+                onChange={(v) => setFeature.mutate({ key: "client_people", on: v })}
+              />
+            </SectionCard>
+            <SectionCard>
+              <SwitchRow
+                label="Реквизиты клиента"
+                value={requisitesOn}
+                onChange={(v) => setFeature.mutate({ key: "client_requisites", on: v })}
+              />
+            </SectionCard>
+            <SectionCard>
+              <SwitchRow
+                label="Файлы клиента"
+                value={filesOn}
+                onChange={(v) => setFeature.mutate({ key: "client_files", on: v })}
               />
             </SectionCard>
         </ScrollView>

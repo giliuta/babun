@@ -1,3 +1,4 @@
+import { useFeatureOn } from "@/features/settings/company-features";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
@@ -103,6 +104,7 @@ export function DayFinanceSheet({
   onReopen?: (ymd: string) => void;
 }) {
   const t = useThemeColors();
+  const paymentOn = useFeatureOn("record_payment");
   const router = useRouter();
   const { height: screenH } = useWindowDimensions();
   const services = useFinanceServices();
@@ -417,13 +419,18 @@ export function DayFinanceSheet({
               />
             </View>
             <View style={{ flexDirection: "row", gap: 6 }}>
-              <SummaryToggle
-                label="Долг"
-                color={t.warning}
-                value={formatEUR(debtTotal)}
-                active={view === "debt"}
-                onPress={() => pick("debt")}
-              />
+              {/* Долг дня — неоплаченные записи. Без оплаты в записи
+                  (функция компании выключена, STORY-088) все записи
+                  выглядели бы долгом — плитки нет. */}
+              {paymentOn ? (
+                <SummaryToggle
+                  label="Долг"
+                  color={t.warning}
+                  value={formatEUR(debtTotal)}
+                  active={view === "debt"}
+                  onPress={() => pick("debt")}
+                />
+              ) : null}
               {/* Серым: план — не деньги, а то, что ещё предстоит. */}
               <SummaryToggle
                 label="Ожидается"

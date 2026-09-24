@@ -180,6 +180,8 @@ export function FinanceOverview({
   accounts,
   invoices,
   showDocuments = true,
+  showAccounts = true,
+  showDebts = true,
   view,
   onTap,
   locked = false,
@@ -200,6 +202,9 @@ export function FinanceOverview({
    *  не показывается либо только читается; «видно, но при нажатии ошибка» в
    *  продукте не бывает). «Счета» занимают ряд целиком. */
   showDocuments?: boolean;
+  /** Функции компании (STORY-088): выключенные счета и долги — без плиток. */
+  showAccounts?: boolean;
+  showDebts?: boolean;
   view: HomeView;
   onTap: (v: HomeView) => void;
   /** ФИНАНСЫ ЭТОЙ КОМПАНИИ ЧЕЛОВЕКУ ЗАКРЫТЫ (`LockedFinances`, владелец 15.09:
@@ -326,7 +331,9 @@ export function FinanceOverview({
             Точка у счетов и документов чернильная: остаток на счетах — не
             приход и не расход, у него нет знака, а документ и вовсе не деньги;
             красить их в зелёное значило бы назвать это доходом. */}
+        {showAccounts || showDocuments ? (
         <View className="flex-row" style={{ gap: 6 }}>
+          {showAccounts ? (
           <SummaryToggle
             label={accountsTitle}
             color={t.ink}
@@ -336,6 +343,7 @@ export function FinanceOverview({
             locked={locked || lockAccounts}
             onPress={() => onTap("accounts")}
           />
+          ) : null}
           {/* ДОКУМЕНТ — НЕ ДЕНЬГИ (владелец 2026-08-11: «какой смысл в
               документах евро показывать»). Здесь стояла сумма к оплате, и
               рядом с остатком на счетах она читалась как второй кошелёк, хотя
@@ -369,6 +377,7 @@ export function FinanceOverview({
           />
           ) : null}
         </View>
+        ) : null}
 
         {/* ПЕРЕКЛЮЧАТЕЛИ — ОДИН ОБЪЕКТ (владелец 2026-08-11: «компактно,
             чтоб всё было в одном стиле»). Раньше они разъезжались втроём: доход
@@ -410,6 +419,7 @@ export function FinanceOverview({
         </View>
 
         <View className="flex-row" style={{ gap: 6 }}>
+          {showDebts ? (
           <SummaryToggle
             label="Долги"
             color={t.warning}
@@ -419,6 +429,7 @@ export function FinanceOverview({
             locked={locked || lockDebts}
             onPress={() => onTap("debt")}
           />
+          ) : null}
           {/* Минус печатает сам форматтер — по округлённым центам, а не по
               сырому знаку: убыток в 0,4 цента иначе показывал «−€0». */}
           <SummaryToggle
