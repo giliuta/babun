@@ -28,7 +28,6 @@ import { RowCaption } from "@/components/ui/card-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { colorName } from "@babun/shared/common/utils/colors";
 import { ColorSheet } from "@/features/appointments/BookingSheets";
 import { useTeams, useUpdateTeam } from "@/features/reference/queries";
 import { COLOR_SITUATIONS, type ColorSituation } from "@/features/appointments/record-color";
@@ -150,11 +149,23 @@ export function DesignScreen() {
   // СТРОКИ ЦВЕТА (владелец 25.09: «нормально — всё заполнено, справа
   // выбираешь цвет, и всё, или вообще без цвета»). Первая — обычный цвет,
   // за ней по строке на каждый включённый блок, который подсвечивается.
-  const colorRows: { id: ColorTarget; title: string; hue: string | null }[] = [
-    { id: "filled", title: "Всё заполнено", hue: ordinary },
+  // У КАЖДОЙ СТРОКИ — КОГДА ОНА СРАБАТЫВАЕТ (владелец 25.09: «как человеку
+  // понять, что значит „всё заполнено“»). Не имя цвета — его говорит образец.
+  const SIT_WHEN: Record<string, string> = {
+    unpaid: "Визит прошёл, а оплаты нет",
+    noObject: "У записи не выбран объект",
+  };
+  const colorRows: {
+    id: ColorTarget;
+    title: string;
+    when: string;
+    hue: string | null;
+  }[] = [
+    { id: "filled", title: "Обычный цвет", when: "Когда с записью всё в порядке", hue: ordinary },
     ...situations.map((sit) => ({
       id: sit.id as ColorTarget,
       title: sit.label,
+      when: SIT_WHEN[sit.id] ?? "",
       hue: palette[sit.id] ?? null,
     })),
   ];
@@ -207,13 +218,14 @@ export function DesignScreen() {
                 <ColorRow
                   key={row.id}
                   title={row.title}
+                  when={row.when}
                   hue={row.hue}
                   separated={i > 0}
                   onPress={() => openColor(row.id)}
                 />
               ))}
             </SectionCard>
-            <RowCaption text="Цвет, выбранный в самой записи, главнее всего." />
+            <RowCaption text="Цвет, выбранный в самой записи, главнее." />
           </>
         ) : (
           <>
@@ -263,7 +275,7 @@ export function DesignScreen() {
         onClose={() => setEditingColor(null)}
         title={
           editingColor === "filled"
-            ? "Всё заполнено"
+            ? "Обычный цвет"
             : COLOR_SITUATIONS.find((s) => s.id === editingColor)?.label
         }
         // «Не красить»: у случая нет автомата — есть отказ от сигнала, и
@@ -299,16 +311,20 @@ export function DesignScreen() {
   );
 }
 
-/** Строка цвета: название случая слева, образец блока (`RecordMark`, тот же
- *  рецепт, что на сетке) и шеврон справа. `hue = null` — «Без цвета»: такая
- *  запись красится как заполненная. */
+/** СТРОКА ЦВЕТА — КУСОЧЕК КАЛЕНДАРЯ И ПРАВИЛО. Слева образец блока записи
+ *  (`RecordMark`, тот же рецепт, что на сетке: плотная заливка, контур, блик)
+ *  — так запись и ляжет в календарь. Справа случай и одной
+ *  строкой, когда он срабатывает. `hue = null` — «Без цвета»: пустой контур,
+ *  такая запись красится обычным цветом. */
 function ColorRow({
   title,
+  when,
   hue,
   separated,
   onPress,
 }: {
   title: string;
+  when: string;
   hue: string | null;
   separated: boolean;
   onPress: () => void;
@@ -318,30 +334,37 @@ function ColorRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${title}: ${hue ? colorName(hue) : "без цвета"}`}
+      accessibilityLabel={`${title}. ${when}${hue ? "" : ". Без цвета"}`}
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
-        minHeight: 52,
+        gap: 14,
+        minHeight: 68,
         paddingLeft: 16,
         paddingRight: 12,
+        paddingVertical: 10,
         borderTopWidth: separated ? 1 : 0,
         borderTopColor: t.separator,
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >
-      <Text
-        numberOfLines={1}
-        maxFontSizeMultiplier={1.3}
-        style={{ flex: 1, fontSize: 16, color: t.ink }}
-      >
-        {title}
-      </Text>
-      <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 15, color: t.sub }}>
-        {hue ? colorName(hue) : "Без цвета"}
-      </Text>
-      <RecordMark hue={hue} size={28} />
+      <RecordMark hue={hue} size={40} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.3}
+          style={{ fontSize: 16, fontWeight: "600", color: t.ink }}
+        >
+          {title}
+        </Text>
+        <Text
+          numberOfLines={2}
+          maxFontSizeMultiplier={1.3}
+          style={{ fontSize: 13, color: t.sub, marginTop: 2 }}
+        >
+          {hue ? when : `${when} · без цвета`}
+        </Text>
+      </View>
       <ChevronRight size={18} color={t.faint} strokeWidth={2.2} />
     </Pressable>
   );
