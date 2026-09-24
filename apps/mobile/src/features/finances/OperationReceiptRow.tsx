@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -40,7 +40,15 @@ export function OperationReceiptRow({
 }) {
   const t = useThemeColors();
   const tenantId = useTenantId();
-  const [busy, setBusy] = useState(false);
+  // Слово над спиннером меняется по фазе: до системного пикера строка не
+  // врёт словом «Загружаем» — там ещё нечего загружать, идёт лишь разрешение
+  // камеры и пауза перед открытием нативного экрана.
+  const [stage, setStage] = useState<"idle" | "opening" | "uploading">("idle");
+  const busy = stage !== "idle";
+  // Синхронный гард поверх стейта (тот же приём, что savingRef в
+  // OperationSheet): `stage` меняется только после ре-рендера, а
+  // сверхбыстрый двойной тап успевал открыть системный пикер дважды.
+  const busyRef = useRef(false);
   // Лист выбора живёт ЗДЕСЬ, а не в корневом хосте (chooseOption): корневой
   // лист рисуется под Modal операции и просто не виден. Вложенный — виден.
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -53,6 +61,24 @@ export function OperationReceiptRow({
   const signed = useSignedReceiptUrl(receiptUrl);
 
   const attach = async (from: "camera" | "gallery" | "file") => {
+    // «Занято» — С ТАПА, А НЕ С ЗАГРУЗКИ (прогон финансов 2026-09-24). До
+    // открытия системного пикера уходит ~1с (разрешение камеры + пауза ниже),
+    // и всё это время строка молчала — тап читался как не сработавший, и
+    // случался повторный тап, открывавший ВТОРОЙ пикер поверх первого. Гейт
+    // синхронный: `stage` из state успевает включиться только после ре-рендера,
+    // а второй тап в тот же кадр — раньше.
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setStage("opening");
+    // СТРАХОВКА ОТ ВЕЧНОГО «ОТКРЫВАЕМ…». Системный выбор иногда не
+    // открывается вовсе, и его обещание не решается никогда — так строка уже
+    // застревала на «Загружаем документ…». Через 1,5 с после тапа строка
+    // оживает сама; открытый пикер к этому времени и так закрывает экран, а
+    // загрузка снова включит «занято» своим этапом.
+    const unstick = setTimeout(() => {
+      busyRef.current = false;
+      setStage((stage) => (stage === "opening" ? "idle" : stage));
+    }, 1500);
     try {
       if (from === "camera") {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -70,9 +96,6 @@ export function OperationReceiptRow({
       // ничего: тап проваливался в пустоту. 240 мс листа не хватает.
       await new Promise((r) => setTimeout(r, 450));
 
-      // «Занято» включается ТОЛЬКО на загрузку. Раньше оно включалось перед
-      // системным выбором файла, и если тот не открывался, строка навсегда
-      // застревала на «Загружаем документ…».
       const picked =
         from === "camera"
           ? await ImagePicker.launchCameraAsync({
@@ -91,7 +114,9 @@ export function OperationReceiptRow({
       if (picked.canceled) return;
       const asset = picked.assets?.[0];
       if (!asset?.uri) return;
-      setBusy(true);
+      clearTimeout(unstick);
+      busyRef.current = true;
+      setStage("uploading");
       const path = await uploadOperationReceipt(
         {
           uri: asset.uri,
@@ -108,7 +133,9 @@ export function OperationReceiptRow({
     } catch (e) {
       notify("Не удалось приложить документ", (e as Error).message);
     } finally {
-      setBusy(false);
+      clearTimeout(unstick);
+      busyRef.current = false;
+      setStage("idle");
     }
   };
 
@@ -121,7 +148,7 @@ export function OperationReceiptRow({
           maxFontSizeMultiplier={1.3}
           style={{ color: t.sub }}
         >
-          Загружаем документ…
+          {stage === "uploading" ? "Загружаем документ…" : "Открываем…"}
         </Text>
       </View>
     );

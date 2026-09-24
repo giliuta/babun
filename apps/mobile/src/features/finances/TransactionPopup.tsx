@@ -120,6 +120,8 @@ export function TransactionPopup({
   categories,
   people,
   alreadyRefunded = 0,
+  refundTotalsLoading = false,
+  refundTotalsError = false,
   onClose,
   onInvoice,
   onClientOpen,
@@ -136,6 +138,13 @@ export function TransactionPopup({
   people?: readonly { id: string; full_name: string }[];
   /** Σ already-refunded for this income — caps the new refund. */
   alreadyRefunded?: number;
+  /** Σ возвратов ещё не приехала (первая загрузка `useRefundTotals`): кап
+   *  неизвестен, поэтому «Создать возврат» прячется консервативно
+   *  (`alreadyRefunded = Infinity`), а строка ниже обязана сказать почему —
+   *  молчание читалось бы как «возврата тут не бывает». */
+  refundTotalsLoading?: boolean;
+  /** Запрос Σ возвратов упал: та же консервативная защита, другое слово. */
+  refundTotalsError?: boolean;
   onClose: () => void;
   onInvoice: (tx: FinanceTransaction) => void;
   onClientOpen: (clientId: string) => void;
@@ -227,7 +236,24 @@ export function TransactionPopup({
     (allow?.refund ?? true) &&
     tx.type === "income" &&
     !isAppointmentLedger &&
+    // Кап неизвестен, пока Σ возвратов не приехала (или упала) — действие
+    // не предлагаем, а не гасим молча: строка ниже называет причину.
+    !refundTotalsLoading &&
+    !refundTotalsError &&
     refundRemainingCents > 0;
+  // ПОДПИСЬ ВМЕСТО МОЛЧАНИЯ. «Создать возврат» и так не появится, пока кап не
+  // известен, — но пустое место рядом с доходом читалось бы как «у этой
+  // операции возврата вообще не бывает». Условие то же, что у canRefund,
+  // кроме самого кап-числа: показываем строку ИМЕННО тогда, когда причина —
+  // загрузка или ошибка, а не типы/права/appointment-ledger.
+  const refundStatusCaption =
+    (allow?.refund ?? true) && tx.type === "income" && !isAppointmentLedger
+      ? refundTotalsLoading
+        ? "Считаем, сколько уже возвращено…"
+        : refundTotalsError
+          ? "Не удалось проверить прошлые возвраты — возврат недоступен."
+          : null
+      : null;
   // Перевод УДАЛЯЕТСЯ, но не правится и не возвращается: сервер запрещает
   // редактировать ноги, а onDelete сверху отменяет перевод целиком — обе
   // ноги атомарно по transfer_group_id. Это единственная дверь к отмене
@@ -439,6 +465,19 @@ export function TransactionPopup({
             />
           ))}
         </RowGroup>
+
+        {/* ПОДПИСЬ ВМЕСТО МОЛЧАНИЯ — пока кап возврата не известен (или
+            запрос упал), «Создать возврат» не появляется вовсе; без этой
+            строки пустое место рядом с доходом читалось бы как «возврата тут
+            не бывает». */}
+        {refundStatusCaption ? (
+          <Text
+            className="px-5 pb-1 pt-3 text-center text-[13px]"
+            style={{ color: refundTotalsError ? t.danger : t.sub }}
+          >
+            {refundStatusCaption}
+          </Text>
+        ) : null}
 
         {!showRefundForm ? (
           actions.length > 0 ? (

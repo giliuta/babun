@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import {
   formatEURExact as formatEUR,
@@ -17,7 +17,7 @@ import { Screen } from "@/components/ui/Screen";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { BottomSheet } from "@/components/ui/BottomSheet";
+import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { Field } from "@/components/ui/Field";
@@ -30,7 +30,7 @@ import { useFinanceCategories } from "@/features/finances/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { useTeams } from "@/features/reference/queries";
 import { notify } from "@/lib/notify";
-import { confirmThen } from "@/lib/confirm";
+import { confirmAction, confirmThen } from "@/lib/confirm";
 import {
   useDeleteTemplate,
   useFinanceTemplates,
@@ -55,6 +55,29 @@ import {
 
 const methodLabel = (m: PaymentMethod | null) =>
   m ? PAYMENT_METHOD_LABEL[m] : null;
+
+/** ЕСТЬ ЛИ В ШТОРКЕ ШАБЛОНА ЧТО ТЕРЯТЬ (аудит финансов 2026-09-24): свайп
+ *  вниз, тап по скриму и системная кнопка «назад» закрывали лист молча — тот
+ *  же баг, что чинили в форме операции (`operation-dirty.ts`). Команда и счёт
+ *  не входят напрямую: их ставит эффект-дефолт у пустой формы (одна команда,
+ *  первый счёт), и такая подстановка — не то, что человек набрал руками. */
+function templateDraftKey(f: {
+  name: string;
+  kind: "income" | "expense";
+  amount: string;
+  categoryId: string | null;
+  brigadeId: string | null;
+  accountId: string | null;
+}): string {
+  return JSON.stringify([
+    f.name.trim(),
+    f.kind,
+    f.amount.trim(),
+    f.categoryId,
+    f.brigadeId,
+    f.accountId,
+  ]);
+}
 
 export default function TemplatesScreen() {
   const templatesQuery = useFinanceTemplates();
@@ -88,6 +111,16 @@ export default function TemplatesScreen() {
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [brigadeId, setBrigadeId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
+  // Команду/счёт нажали руками — отличает жест человека от эффекта-дефолта
+  // (одна команда, первый счёт), который дирти-чек обязан игнорировать.
+  const [brigadeTouched, setBrigadeTouched] = useState(false);
+  const [accountTouched, setAccountTouched] = useState(false);
+  // Снимок формы В МОМЕНТ открытия — сравнение живёт в `templateDraftKey`.
+  const initialDraftKey = useRef<string | null>(null);
+  // ИЗ ОТКРЫТОГО ЛИСТА ВОПРОС НЕ ПОКАЗАТЬ (DS, LOCKED 2026-08-29): лист
+  // уезжает первым (askingClose), вопрос звучит по `onExited` листа.
+  const [askingClose, setAskingClose] = useState(false);
+  const afterExit = useRef<(() => void) | null>(null);
 
   // Скрытой категории в выборе нет (владелец 2026-09-10: «когда идёт скрыть,
   // она больше не показывается в выборе категории»). Исключение — та, что уже
@@ -171,6 +204,18 @@ export default function TemplatesScreen() {
     setCategoryId(null);
     setBrigadeId(null);
     setAccountId(null);
+    setBrigadeTouched(false);
+    setAccountTouched(false);
+    initialDraftKey.current = templateDraftKey({
+      name: "",
+      kind: "expense",
+      amount: "",
+      categoryId: null,
+      // Эффект-дефолт ещё не сработал — снимок берёт пустое состояние, как
+      // и дирти-чек ниже, пока команду/счёт не тронули руками.
+      brigadeId: null,
+      accountId: null,
+    });
     setOpen(true);
   };
   const openEdit = (tpl: FinanceTemplate) => {
@@ -181,7 +226,61 @@ export default function TemplatesScreen() {
     setCategoryId(tpl.category_id);
     setBrigadeId(tpl.brigade_id);
     setAccountId(tpl.account_id);
+    setBrigadeTouched(false);
+    setAccountTouched(false);
+    initialDraftKey.current = templateDraftKey({
+      name: tpl.name,
+      kind: tpl.kind,
+      amount: String(tpl.amount),
+      categoryId: tpl.category_id,
+      brigadeId: tpl.brigade_id,
+      accountId: tpl.account_id,
+    });
     setOpen(true);
+  };
+
+  // Дирти-чек: команда/счёт участвуют только когда их выбрали РУКАМИ (или это
+  // правка существующего шаблона — там оба поля были частью снимка с самого
+  // начала). Иначе эффект-дефолт «одна команда» / «первый счёт» на пустой
+  // форме читался бы как правка секунду спустя после открытия.
+  const currentDraftKey = templateDraftKey({
+    name,
+    kind,
+    amount,
+    categoryId,
+    brigadeId: editing || brigadeTouched ? brigadeId : null,
+    accountId: editing || accountTouched ? accountId : null,
+  });
+  const dirty =
+    initialDraftKey.current !== null &&
+    currentDraftKey !== initialDraftKey.current;
+
+  /** Свайп вниз, тап по скриму, системная кнопка «назад» — все идут сюда
+   *  (`BottomSheet.onClose`). Есть что терять — лист сначала уезжает, вопрос
+   *  звучит когда он уже снят (см. закон в OperationSheet.guardedClose). */
+  const guardedClose = () => {
+    if (busy) return;
+    if (!dirty) {
+      setOpen(false);
+      return;
+    }
+    afterExit.current = () => {
+      void confirmAction("Закрыть без сохранения?", {
+        message: "Набранное не сохранится.",
+        confirmLabel: "Закрыть",
+        destructive: true,
+      }).then((ok) => {
+        if (!ok) {
+          // Лист возвращается, когда уехал вопрос: окно поверх уезжающего
+          // iOS не покажет, и лист остался бы невидимым.
+          setTimeout(() => setAskingClose(false), SHEET_EXIT_MS + 350);
+          return;
+        }
+        setAskingClose(false);
+        setOpen(false);
+      });
+    };
+    setAskingClose(true);
   };
 
   const submit = async () => {
@@ -389,8 +488,13 @@ export default function TemplatesScreen() {
       ) : null}
 
       <BottomSheet
-        visible={open}
-        onClose={() => setOpen(false)}
+        visible={open && !askingClose}
+        onClose={guardedClose}
+        onExited={() => {
+          const run = afterExit.current;
+          afterExit.current = null;
+          run?.();
+        }}
         title={editing ? "Шаблон" : "Новый шаблон"}
         avoidKeyboard
         scroll
@@ -490,7 +594,9 @@ export default function TemplatesScreen() {
                   onPress={() => {
                     const next = brigadeId === tm.id ? null : tm.id;
                     setBrigadeId(next);
+                    setBrigadeTouched(true);
                     setAccountId(null);
+                    setAccountTouched(false);
                   }}
                 />
               ))}
@@ -509,7 +615,10 @@ export default function TemplatesScreen() {
                   label={accountDisplayName(a)}
                   radio
                   selected={accountId === a.id}
-                  onPress={() => setAccountId(accountId === a.id ? null : a.id)}
+                  onPress={() => {
+                    setAccountId(accountId === a.id ? null : a.id);
+                    setAccountTouched(true);
+                  }}
                 />
               ))}
             </View>

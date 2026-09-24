@@ -80,6 +80,11 @@ import {
 import { useAccountsWithBalances } from "./accounts";
 import { accountIcon } from "./account-ui";
 import { vatModeForDraft } from "./operation-vat";
+import {
+  operationPatchBaseline,
+  operationTransactionPatch,
+  type OperationPatchBaseline,
+} from "./operation-patch";
 import { useFinanceTemplates } from "./templates-queries";
 import { operationDraftKey, operationIsDirty } from "./operation-dirty";
 import { templatesForSheet } from "./template-apply";
@@ -258,6 +263,11 @@ export function OperationSheet({
   /** Снимок формы в момент открытия — по нему решается, есть ли что терять
    *  при закрытии свайпом (`operation-dirty.ts`). */
   const initialDraftKey = useRef<string | null>(null);
+  /** Строка операции, КАКОЙ ОНА БЫЛА при открытии формы, — против неё
+   *  считается патч правки. Не живой проп: список перечитывается, пока форма
+   *  открыта, и снимок «с сервера сейчас» превратил бы чужую свежую правку в
+   *  отличие от формы — и форма затёрла бы её старым значением. */
+  const patchBaseline = useRef<OperationPatchBaseline | null>(null);
   useEffect(() => {
     if (!visible) {
       hydratedFor.current = null;
@@ -270,6 +280,7 @@ export function OperationSheet({
     setRequestId(randomUuid());
     setAccountTouched(false);
     setVatRetouched(false);
+    patchBaseline.current = transaction ? operationPatchBaseline(transaction) : null;
     if (transaction) {
       setType(transaction.type === "income" ? "income" : "expense");
       const txVat: TxVatMode =
@@ -689,7 +700,22 @@ export function OperationSheet({
           : {}),
       };
       if (isEdit && transaction) {
-        await update.mutateAsync({ id: transaction.id, patch: draft });
+        // ПАТЧ, А НЕ ОВЕРВРАЙТ (аудит финансов 2026-09-24): полный черновик
+        // перезаписывал поля, которых форма не касалась, — правка заметки на
+        // одном устройстве стирала счёт, поменянный секундой раньше на
+        // другом. Вычитаем из черновика то, что совпало со снимком, с
+        // которым форма открылась (`operation-patch.ts`), и шлём остаток.
+        const patch = operationTransactionPatch(
+          draft,
+          patchBaseline.current ?? operationPatchBaseline(transaction),
+        );
+        if (Object.keys(patch).length === 0) {
+          // Нечего сохранять — форма открылась и закрылась без правки:
+          // сеть здесь не нужна вовсе.
+          onClose();
+          return;
+        }
+        await update.mutateAsync({ id: transaction.id, patch });
       } else {
         // request_id стабилен на время попытки: ретрай после потерянного
         // ответа не задваивает деньги (duplicate key = успех в репозитории).

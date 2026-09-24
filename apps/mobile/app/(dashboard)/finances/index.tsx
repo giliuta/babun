@@ -2,8 +2,11 @@ import { useDisabledFeatures } from "@/features/settings/company-features";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, RefreshControl, Text, TextInput, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, Search, Settings, X } from "lucide-react-native";
+import { supabase } from "@/lib/supabase";
+import { useTenantId } from "@/lib/tenant";
+import { GUTTER } from "@/components/ui/tokens";
 import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { accountServesTeam } from "@babun/shared/local/finance/integrity";
 import { accountsTotal } from "@/features/finances/account-ui";
@@ -147,6 +150,7 @@ function FinancesContent() {
   const [query, setQuery] = useState("");
   // Аналитика — только владельцу, как в Клиентах.
   const role = useCurrentRole().data;
+  const tenantId = useTenantId();
   // ОДНА ДВЕРЬ НАРУЖУ на весь экран: панели уводят через неё же, поэтому
   // защита от двойного тапа одна и её нельзя забыть в новой панели.
   const pushOnce = (href: string) => {
@@ -598,6 +602,18 @@ function FinancesContent() {
   // and let repeat refunds silently overdraw the ledger.
   const refundTotalsQuery = useRefundTotals();
   const refundTotals = refundTotalsQuery.data;
+  // Σ ВОЗВРАТОВ — ВНЕ ПОЛНОГО ГЕЙТА (аудит финансов 2026-09-24). Витрина
+  // операции и лист правки уже консервативны без неё: `alreadyRefunded` /
+  // `refundedTotal` ниже подставляют Infinity, пока `refundTotals`
+  // не приехал, — «Создать возврат» гасится сам, а не ждёт всей компании.
+  // Держать эту цифру в общем гейте значило прятать ВЕСЬ экран (журнал,
+  // счета, долги — всё готово) ради одного запроса, который нужен только
+  // форме возврата; тот же трюк уже применили к «Долгам платежей» нельзя —
+  // там цена ошибки другая (закрытый долг мигнул бы открытым), а тут кап
+  // просто не предлагается, пока не известен.
+  const refundTotalsLoading = refundTotalsQuery.isPending;
+  const refundTotalsFailed =
+    refundTotalsQuery.data === undefined && refundTotalsQuery.error != null;
 
   // Every number on this screen combines several independent sources. Do not
   // render plausible-looking zeroes when one of them is still loading or has
@@ -622,7 +638,6 @@ function FinancesContent() {
     invoicesQuery.isPending ||
     invoicePaymentsQuery.isPending ||
     accountsQuery.isPending ||
-    refundTotalsQuery.isPending ||
     calendarSettingsQuery.isPending;
   // Смена периода: прошлый срез ещё на экране, подпись уже новая. Такие цифры
   // гасятся (§8) — подменять деньги молча нельзя, по ним принимают решения.
@@ -642,7 +657,6 @@ function FinancesContent() {
     (invoicesQuery.data === undefined ? invoicesQuery.error : null) ||
     (invoicePaymentsQuery.data === undefined ? invoicePaymentsQuery.error : null) ||
     (accountsQuery.data === undefined ? accountsQuery.error : null) ||
-    (refundTotalsQuery.data === undefined ? refundTotalsQuery.error : null) ||
     (calendarSettingsQuery.data === undefined ? calendarSettingsQuery.error : null);
   const refreshAll = () =>
     void Promise.all([
@@ -1073,6 +1087,81 @@ function FinancesContent() {
     blockRows.length,
   );
 
+  // ПОИСК ЗА ВСЁ ВРЕМЯ, КОГДА В ПЕРИОДЕ ПУСТО (аудит финансов 2026-09-24).
+  // Шапка обещает «Сумма, счёт, заметка», а лента грузится окном периода:
+  // первая же буква находила ноль, даже когда операция стояла за прошлый
+  // месяц. Фолбэк — только по заметке (её и пишут руками) и только когда
+  // открытый период честно пуст: лишний поход в сеть на каждую букву не
+  // нужен, пока в периоде есть результат.
+  const trimmedQuery = query.trim();
+  const recordSearchView = view === "all" || view === "income" || view === "expense";
+  const searchInPeriodEmpty =
+    recordSearchView && trimmedQuery.length > 0 && blockRows.length === 0;
+  const allTimeSearchQuery = useQuery({
+    queryKey: ["transactions", tenantId, "search-all-time", trimmedQuery],
+    enabled: !!tenantId && searchInPeriodEmpty,
+    queryFn: async (): Promise<FinanceTransaction[]> => {
+      const { data, error } = await supabase
+        .from("finance_transactions")
+        .select("*")
+        .eq("tenant_id", tenantId as string)
+        .ilike("notes", `%${trimmedQuery}%`)
+        .order("occurred_on", { ascending: false })
+        .limit(50);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as FinanceTransaction[];
+    },
+  });
+  // Те же рамки, что у ленты: чип команды (строки без команды — по команде
+  // счёта), клиент из диплинка и разрез. Иначе под «Доходом» Команды 1
+  // поиск показывал бы и расходы, и чужие команды.
+  const allTimeRows = useMemo(() => {
+    if (!searchInPeriodEmpty) return [];
+    const found = allTimeSearchQuery.data ?? [];
+    const orphanIds = new Set(orphanAccounts.map((account) => account.id));
+    const teamRows = !scope
+      ? found
+      : withTeamlessRows(
+          scope === NO_TEAM
+            ? found.filter((tx) => tx.account_id != null && orphanIds.has(tx.account_id))
+            : found.filter((tx) => tx.team_id != null && inTeamScope(tx.team_id, scope)),
+          teamlessLedgerRows(found, scope, accountTeam),
+        );
+    const rows = requestedClientId
+      ? teamRows.filter((tx) => tx.client_id === requestedClientId)
+      : teamRows;
+    const income =
+      view === "expense"
+        ? []
+        : recordRows(incomeDeals(rows), recordRefs).map((row) => ({
+            ...row,
+            tone: "income" as const,
+            key: `income:${row.key}`,
+          }));
+    const expense =
+      view === "income"
+        ? []
+        : recordRows(rows.filter((tx) => tx.type === "expense"), recordRefs).map(
+            (row) => ({ ...row, tone: "expense" as const, key: `expense:${row.key}` }),
+          );
+    const transfers =
+      view === "all"
+        ? recordRows(rows.filter((tx) => tx.type === "transfer"), recordRefs).map(
+            (row) => ({ ...row, key: `tr:${row.key}` }),
+          )
+        : [];
+    return [...income, ...expense, ...transfers];
+  }, [
+    searchInPeriodEmpty,
+    allTimeSearchQuery.data,
+    orphanAccounts,
+    scope,
+    accountTeam,
+    requestedClientId,
+    view,
+    recordRefs,
+  ]);
+
   // СТРОКА ЛЮБОЙ ПАНЕЛИ ВЕДЁТ В ОДНО МЕСТО — и в разрезах «Доход / Расход /
   // Долги», и в ленте счёта под «Счетами»: одна дверь на одну строку.
   const openRecordRow = (row: RecordRow) => {
@@ -1088,9 +1177,12 @@ function FinancesContent() {
     }
     // Одиночная операция — бензин, обед, перевод — открывается на
     // правку: другой двери к ней на экране нет. Витрина остаётся
-    // тому, что править нельзя (перевод, проводка инвойса).
+    // тому, что править нельзя (перевод, проводка инвойса). Строка могла
+    // приехать поиском за всё время — её в `scopedTransactions` (окно
+    // периода) не найти, ищем и там, и там.
     const tx = row.txId
-      ? scopedTransactions.find((x) => x.id === row.txId)
+      ? (scopedTransactions.find((x) => x.id === row.txId) ??
+        (allTimeSearchQuery.data ?? []).find((x) => x.id === row.txId))
       : null;
     if (!tx) return;
     // ПРАВКА — ПО УРОВНЮ КАЛЕНДАРЯ САМОЙ СТРОКИ, а не выбранного чипа: у
@@ -1270,21 +1362,46 @@ function FinancesContent() {
             refreshControl={refreshControl}
           />
         ) : (
-          <RecordRowsPanel
-            rows={blockRows}
-            title={feedTitle}
-            emptyTitle={
-              query.trim()
-                ? "В выбранном периоде ничего не найдено"
-                : view === "income"
-                  ? "Дохода за период нет"
-                  : view === "expense"
-                    ? "Расхода за период нет"
-                    : "Нет операций за период"
-            }
-            refreshControl={refreshControl}
-            onOpenRecord={openRecordRow}
-          />
+          <View style={{ flex: 1 }}>
+            {/* ПОИСК ЗА ВСЁ ВРЕМЯ — СЛОВАМИ, а не молчаливым нулём: период
+                честно пуст, но операция может стоять за его границей. */}
+            {searchInPeriodEmpty ? (
+              <Text
+                maxFontSizeMultiplier={1.3}
+                style={{
+                  paddingHorizontal: GUTTER,
+                  paddingTop: 12,
+                  paddingBottom: 4,
+                  textAlign: "center",
+                  fontSize: 13,
+                  color: t.sub,
+                }}
+              >
+                {allTimeSearchQuery.isPending
+                  ? "В этом периоде нет — ищем за всё время…"
+                  : allTimeRows.length > 0
+                    ? "В этом периоде нет — найдено за всё время"
+                    : "В этом периоде нет"}
+              </Text>
+            ) : null}
+            <RecordRowsPanel
+              rows={searchInPeriodEmpty ? allTimeRows : blockRows}
+              title={searchInPeriodEmpty ? undefined : feedTitle}
+              emptyTitle={
+                searchInPeriodEmpty
+                  ? "Не нашли и за всё время"
+                  : query.trim()
+                    ? "В выбранном периоде ничего не найдено"
+                    : view === "income"
+                      ? "Дохода за период нет"
+                      : view === "expense"
+                        ? "Расхода за период нет"
+                        : "Нет операций за период"
+              }
+              refreshControl={refreshControl}
+              onOpenRecord={openRecordRow}
+            />
+          </View>
         )}
       </View>
 
@@ -1340,6 +1457,8 @@ function FinancesContent() {
               : Number.POSITIVE_INFINITY
             : 0
         }
+        refundTotalsLoading={refundTotalsLoading}
+        refundTotalsError={refundTotalsFailed}
         // Что этому человеку открыто: возврат и инвойс пока владельческие, а
         // удаление — ровно то же правило, что у правки строки. Отмена перевода
         // сотруднику не открывается: вторую ногу знает только сама витрина, а
