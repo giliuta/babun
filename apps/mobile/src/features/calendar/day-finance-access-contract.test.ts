@@ -36,7 +36,10 @@ describe("шторка «Финансы дня»", () => {
       sheet,
       /if \(canWrite && canEditTransaction\(tx\) && \(role === "owner" \|\| tx\.type === "expense"\)\)/,
     );
-    assert.match(sheet, /onRemove=\{teamId && canWrite \? \(\) => askRemoveLegacy\(e\) : undefined\}/);
+    // Удаление ручной строки — свайпом (24.09): кромка «Удалить» есть только
+    // при праве записи, без него строка стоит без свайпа.
+    assert.match(sheet, /return teamId && canWrite \? \( <SwipeRow key=\{e\.id\} label="Удалить"/);
+    assert.match(sheet, /onAction=\{\(\) => askRemoveLegacy\(e\)\}/);
   });
 });
 

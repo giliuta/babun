@@ -281,7 +281,7 @@ export const MonthView = memo(function MonthView({
                         <Text
                           maxFontSizeMultiplier={1.3}
                           style={{
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: "700",
                             lineHeight: !pill && unclosed > 0 ? 14 : 16,
                             color: pill
@@ -335,7 +335,7 @@ function MoneyRow({
     <Text
       numberOfLines={1}
       maxFontSizeMultiplier={1.3}
-      style={{ fontVariant: ["tabular-nums"], fontSize: 10, fontWeight: "600", lineHeight: 13, color }}
+      style={{ fontVariant: ["tabular-nums"], fontSize: 11, fontWeight: "600", lineHeight: 14, color }}
     >
       {formatEUR(v)}
     </Text>

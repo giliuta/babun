@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { X } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount, getPaidAmount } from "@babun/shared/local/appointments";
 import {
@@ -18,9 +17,9 @@ import type { DayExtra } from "@babun/shared/local/day-extras";
 import { getDayExtras } from "@babun/shared/local/day-extras";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { RowGroup } from "@/components/ui/card-rows";
+import { SwipeRow } from "@/components/ui/SwipeRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { ICON } from "@/components/ui/tokens";
 import { formatHM, humanDay } from "@/features/appointments/helpers";
 import {
   dayDebtRecords,
@@ -493,17 +492,33 @@ export function DayFinanceSheet({
                   onPress={rowAction(tx)}
                 />
               ))}
-              {listExtras.map((e, i) => (
-                <TxRow
-                  key={e.id}
-                  context="Ручная операция"
-                  title={e.name}
-                  amount={e.amount}
-                  outflow={e.kind === "expense"}
-                  separated={i > 0 || listTx.length > 0 || (view === "all" && dayPlan.length > 0)}
-                  onRemove={teamId && canWrite ? () => askRemoveLegacy(e) : undefined}
-                />
-              ))}
+              {listExtras.map((e, i) => {
+                const row = (
+                  <TxRow
+                    context="Ручная операция"
+                    title={e.name}
+                    amount={e.amount}
+                    outflow={e.kind === "expense"}
+                    separated={i > 0 || listTx.length > 0 || (view === "all" && dayPlan.length > 0)}
+                  />
+                );
+                // УДАЛЕНИЕ — СВАЙПОМ, ПРАВОЙ КРОМКОЙ (канон 9, аудит 24.09):
+                // крестик в строке был четвёртым способом удалить что-то в
+                // продукте и мишенью 36pt рядом с суммой.
+                return teamId && canWrite ? (
+                  <SwipeRow
+                    key={e.id}
+                    label="Удалить"
+                    color={t.danger}
+                    onAction={() => askRemoveLegacy(e)}
+                    accessibilityLabel={`Удалить «${e.name}»`}
+                  >
+                    {row}
+                  </SwipeRow>
+                ) : (
+                  <View key={e.id}>{row}</View>
+                );
+              })}
             </RowGroup>
           )}
         </View>
@@ -534,7 +549,6 @@ function TxRow({
   outflow,
   separated,
   onPress,
-  onRemove,
 }: {
   context: string;
   title: string;
@@ -542,7 +556,6 @@ function TxRow({
   outflow: boolean;
   separated?: boolean;
   onPress?: () => void;
-  onRemove?: () => void;
 }) {
   const t = useThemeColors();
   const color = outflow ? t.danger : t.success;
@@ -559,7 +572,7 @@ function TxRow({
         gap: 12,
         minHeight: 56,
         paddingLeft: 16,
-        paddingRight: onRemove ? 8 : 16,
+        paddingRight: 16,
         borderTopWidth: separated ? 1 : 0,
         borderTopColor: t.separator,
         backgroundColor: pressed && onPress ? t.pressed : "transparent",
@@ -579,24 +592,6 @@ function TxRow({
       <Text style={{ fontSize: 16, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}>
         {money}
       </Text>
-      {onRemove ? (
-        <Pressable
-          onPress={onRemove}
-          accessibilityRole="button"
-          accessibilityLabel={`Удалить «${title}»`}
-          hitSlop={8}
-          style={({ pressed }) => ({
-            width: 36,
-            height: 36,
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 999,
-            backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
-          })}
-        >
-          <X color={t.faint} size={ICON.xs} />
-        </Pressable>
-      ) : null}
     </Pressable>
   );
 }

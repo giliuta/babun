@@ -108,7 +108,8 @@ export function DayFinanceFooter({
         // В тон линиям сетки над футером — один шов, а не два диалекта.
         borderTopColor: `${t.ink}33`,
         backgroundColor: t.surface,
-        paddingVertical: 4,
+        // 7 + две строки ≈ 44pt мишени у ячейки дня (аудит 24.09: было ~38).
+        paddingVertical: 7,
       }}
     >
       {/* Лейблы — нейтральный t.sub: семантический цвет несут только суммы.
@@ -123,6 +124,8 @@ export function DayFinanceFooter({
           <Pressable
             key={ymd}
             onPress={() => onTapDay?.(d)}
+            // Мишень — во всю высоту полосы: поле полосы тоже нажимает день.
+            hitSlop={{ top: 7, bottom: 7 }}
             accessibilityRole="button"
             accessibilityLabel={`Финансы за ${dateLabel}: доход ${formatEUR(income)}, расход ${formatEUR(spent)}`}
             style={{

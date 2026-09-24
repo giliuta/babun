@@ -124,8 +124,8 @@ export function DateCell({
         <Text
           maxFontSizeMultiplier={1.2}
           style={{
-            height: 13,
-            fontSize: 10,
+            height: 14,
+            fontSize: 11,
             fontWeight: "600",
             letterSpacing: 0.5,
             textTransform: "uppercase",
@@ -163,7 +163,7 @@ export function DateCell({
             position: "absolute",
             top: 2,
             right: 4,
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: "600",
             color: isToday ? t.accent : t.faint,
           }}

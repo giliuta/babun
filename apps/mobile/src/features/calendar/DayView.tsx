@@ -929,7 +929,7 @@ export function TimeRail({
           <Text
             maxFontSizeMultiplier={1.2}
             style={{
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: "700",
               color: t.onAccent,
               fontVariant: ["tabular-nums"],
