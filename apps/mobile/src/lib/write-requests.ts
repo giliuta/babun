@@ -88,6 +88,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "set_default_company",
   "set_member_access",
   "set_member_calendars",
+  "sms_save_rule",
   "sms_save_settings",
   "sms_send_manual",
   "undo_appointment_payment",

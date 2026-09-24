@@ -2705,6 +2705,7 @@ export type Database = {
           seller_snapshot: Json
           seq: number
           status: string
+          team_id: string
           tenant_id: string
           transaction_id: string | null
           vat_amount: number | null
@@ -2728,6 +2729,7 @@ export type Database = {
           seller_snapshot?: Json
           seq: number
           status?: string
+          team_id?: string
           tenant_id: string
           transaction_id?: string | null
           vat_amount?: number | null
@@ -2751,6 +2753,7 @@ export type Database = {
           seller_snapshot?: Json
           seq?: number
           status?: string
+          team_id?: string
           tenant_id?: string
           transaction_id?: string | null
           vat_amount?: number | null
@@ -5109,8 +5112,23 @@ export type Database = {
       }
       sms_account: { Args: never; Returns: Json }
       sms_history: {
-        Args: { p_before?: string; p_limit?: number }
+        Args: {
+          p_before?: string
+          p_limit?: number
+          p_team_id?: string
+          p_trigger?: string
+        }
         Returns: Json[]
+      }
+      sms_save_rule: {
+        Args: {
+          p_body?: string
+          p_event: string
+          p_mode: string
+          p_team_id: string
+          p_timing?: number
+        }
+        Returns: Json
       }
       sms_save_settings: { Args: { p: Json }; Returns: Json }
       sms_send_manual: {

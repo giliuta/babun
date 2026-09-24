@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Platform, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { CalendarClock, FileText, History, MessageSquare, Wallet } from "lucide-react-native";
+import { CalendarClock, FileText, History, Moon, Users, Wallet } from "lucide-react-native";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { NoticeBar } from "@/components/ui/NoticeBar";
-import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
+import { PickerSheet } from "@/components/ui/PickerSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -26,28 +26,39 @@ import {
   useSaveSmsSettings,
   useSmsAccount,
   useSmsHistory,
+  type SmsEvent,
   type SmsSettingsPatch,
 } from "./sms-account";
+import { teamStats } from "./sms-model";
+import { SmsEventRows } from "./SmsEventRows";
+import { SmsEventSheet } from "./SmsEventSheet";
 import { SmsHistoryRow } from "./SmsHistoryRow";
-import { balanceWords, euro, hoursWords, HOURS_OPTIONS } from "./sms-words";
+import { balanceWords, euro, QUIET_OPTIONS, quietWords } from "./sms-words";
 
 // СТРАНИЦА SMS — «СОБСТВЕННЫЙ КАБИНЕТ ОТПРАВКИ SMS» КОМПАНИИ (STORY-089;
 // владелец 24.09: «он видит сумму баланса… может разрешать отправлять с этой
 // командой SMS или не отправлять… с его счёта списывается за каждую SMS»).
 //
-// Блоки сверху вниз — в порядке вопросов владельца:
+// Владелец 24.09: «новая запись — свой шаблон, напоминание — свой, отмена —
+// свой… шаблон под каждую команду… сколько сообщений ушло через команду
+// один, сколько через команду три»; решение — всё здесь, в «Клиенты» →
+// «SMS», с разделом на каждую команду (разбор — STORY-089-sms-analysis).
+//
+// Блоки сверху вниз:
 //   • БАЛАНС — сколько денег и примерно сколько SMS, сколько ушло за месяц;
-//   • ОТПРАВКА ЧЕРЕЗ СЕРВИС — общий выключатель и календари, где можно;
-//   • АВТОМАТИЧЕСКИ — какой шаблон уходит на новую запись, напоминание и
-//     отмену (у каждого повода — «Не отправлять»);
-//   • ШАБЛОНЫ — дверь в справочник;
+//   • ОТПРАВКА — общий выключатель и тихие часы;
+//   • КОМАНДЫ — строка на команду: отправляет ли, сколько SMS и денег за
+//     месяц, сколько своих текстов; тап — страница команды;
+//   • ДО ВИЗИТА / ИЗМЕНЕНИЯ / ПОСЛЕ ВИЗИТА — события компании: у каждого
+//     свой текст, своё «вкл» и срок; команда берёт их, пока не задаст своё;
+//   • РУЧНАЯ ОТПРАВКА — дверь в шаблоны листа «SMS» у номера;
 //   • ИСТОРИЯ — последние сообщения и дверь ко всем.
 //
 // ПОПОЛНЕНИЕ — ТОЛЬКО НА САЙТЕ (владелец: «чтоб не брал Apple»). В iOS нет
 // ни кнопки, ни ссылки, ни цены — правило App Store о цифровых товарах. В
 // веб-версии кнопка «Пополнить» стоит футером — одно действие экрана.
 
-type Picking = "new" | "reminder" | "cancel" | "hours" | "topup" | null;
+type Picking = "quiet" | "topup" | null;
 
 const WEB = Platform.OS === "web";
 
@@ -62,6 +73,7 @@ export function SmsScreen() {
   const history = useSmsHistory(5);
   const { data: teams = [] } = useTeams();
   const [picking, setPicking] = useState<Picking>(null);
+  const [editing, setEditing] = useState<SmsEvent | null>(null);
 
   // Возврат с оплаты на сайте: Stripe привёл обратно — баланс пересчитает
   // вебхук через секунды, страница перечитывает его.
@@ -76,12 +88,6 @@ export function SmsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.topup]);
 
-  const templateName = useMemo(() => {
-    const byId = new Map(templates.map((tpl) => [tpl.id, tpl.name]));
-    return (id: string | null | undefined) =>
-      !id ? "Не отправлять" : (byId.get(id) ?? "Шаблон удалён");
-  }, [templates]);
-
   const change = (patch: SmsSettingsPatch) =>
     save.mutate(patch, {
       onError: (e) => notify("Не удалось сохранить", e instanceof Error ? e.message : undefined),
@@ -90,26 +96,6 @@ export function SmsScreen() {
   const data = account.data;
   const owner = data?.owner;
   const readyTemplates = templates.filter((tpl) => tpl.enabled && tpl.body.trim());
-
-  const templateItems = (field: keyof SmsSettingsPatch): PickerSheetItem[] => [
-    {
-      id: "none",
-      label: "Не отправлять",
-      icon: MessageSquare,
-      // Серый hex, а не токен темы: строка шторки дописывает к цвету
-      // прозрачность, а к rgba её не допишешь.
-      color: "#8E8E93",
-      onPress: () => change({ [field]: null } as SmsSettingsPatch),
-    },
-    ...readyTemplates.map((tpl) => ({
-      id: tpl.id,
-      label: tpl.name,
-      hint: tpl.body,
-      icon: MessageSquare,
-      color: t.accent,
-      onPress: () => change({ [field]: tpl.id } as SmsSettingsPatch),
-    })),
-  ];
 
   const topup = async (cents: number) => {
     try {
@@ -152,11 +138,14 @@ export function SmsScreen() {
     );
   }
 
-  const autoRows: { key: Exclude<Picking, "hours" | "topup" | null>; title: string; value: string }[] = [
-    { key: "new", title: "Новая запись", value: templateName(owner.autoNewTemplate) },
-    { key: "reminder", title: "Напоминание", value: templateName(owner.autoReminderTemplate) },
-    { key: "cancel", title: "Отмена записи", value: templateName(owner.autoCancelTemplate) },
-  ];
+  const ownTexts = (teamId: string) => owner.teamRules.filter((r) => r.teamId === teamId).length;
+  const teamSub = (teamId: string): string => {
+    if (!data.enabled || !data.teamIds.includes(teamId)) return "Не отправляет";
+    const parts = [formatCountRu(teamStats(data, teamId).count, ["SMS", "SMS", "SMS"])];
+    const own = ownTexts(teamId);
+    if (own > 0) parts.push(formatCountRu(own, ["свой текст", "своих текста", "своих текстов"]));
+    return parts.join(" · ");
+  };
 
   return (
     <Screen edges={["top"]}>
@@ -189,7 +178,7 @@ export function SmsScreen() {
           />
         </SectionCard>
 
-        <SectionEyebrow>Отправка через сервис</SectionEyebrow>
+        <SectionEyebrow>Отправка</SectionEyebrow>
         <SectionCard>
           <SwitchRow
             label="Отправлять через сервис"
@@ -199,54 +188,44 @@ export function SmsScreen() {
             value={data.enabled}
             onChange={(enabled) => change({ enabled })}
           />
-          {teams.map((team) => (
-            <View key={team.id}>
-              <Divider inset={16} />
-              <SwitchRow
-                label={team.name}
-                value={data.teamIds.includes(team.id)}
-                disabled={!data.enabled}
-                onChange={(on) =>
-                  change({
-                    team_ids: on
-                      ? [...data.teamIds, team.id]
-                      : data.teamIds.filter((id) => id !== team.id),
-                  })
-                }
-              />
-            </View>
-          ))}
+          <Divider inset={48} />
+          <SettingsRow
+            tile="neutral"
+            icon={Moon}
+            title="Тихие часы"
+            sub={quietWords(owner.quietFrom, owner.quietTo)}
+            onPress={() => setPicking("quiet")}
+          />
         </SectionCard>
 
-        <SectionEyebrow>Автоматически</SectionEyebrow>
-        <SectionCard>
-          {autoRows.map((row, index) => (
-            <View key={row.key}>
-              {index > 0 ? <Divider inset={48} /> : null}
-              <SettingsRow
-                tile="neutral"
-                icon={MessageSquare}
-                title={row.title}
-                sub={row.value}
-                onPress={() => setPicking(row.key)}
-              />
-              {row.key === "reminder" && owner.autoReminderTemplate ? (
-                <>
-                  <Divider inset={48} />
-                  <SettingsRow
-                    tile="neutral"
-                    icon={CalendarClock}
-                    title="Когда напоминать"
-                    sub={hoursWords(owner.reminderHours)}
-                    onPress={() => setPicking("hours")}
-                  />
-                </>
-              ) : null}
-            </View>
-          ))}
-        </SectionCard>
+        {teams.length > 0 ? (
+          <>
+            <SectionEyebrow>Команды</SectionEyebrow>
+            <SectionCard>
+              {teams.map((team, index) => {
+                const stats = teamStats(data, team.id);
+                return (
+                  <View key={team.id}>
+                    {index > 0 ? <Divider inset={48} /> : null}
+                    <SettingsRow
+                      appearance={{ color: team.color, icon: team.icon, fallback: Users }}
+                      title={team.name}
+                      sub={teamSub(team.id)}
+                      value={stats.cents > 0 ? euro(stats.cents) : undefined}
+                      onPress={() =>
+                        router.push({ pathname: "/clients/sms-team", params: { teamId: team.id } } as unknown as Href)
+                      }
+                    />
+                  </View>
+                );
+              })}
+            </SectionCard>
+          </>
+        ) : null}
 
-        <SectionEyebrow>Шаблоны</SectionEyebrow>
+        <SmsEventRows account={data} teamId="" onOpen={setEditing} />
+
+        <SectionEyebrow>Ручная отправка</SectionEyebrow>
         <SectionCard>
           <SettingsRow
             tile="neutral"
@@ -286,37 +265,21 @@ export function SmsScreen() {
         </View>
       ) : null}
 
-      {(["new", "reminder", "cancel"] as const).map((key) => {
-        const field =
-          key === "new" ? "auto_new_template" : key === "reminder" ? "auto_reminder_template" : "auto_cancel_template";
-        const current =
-          key === "new" ? owner.autoNewTemplate : key === "reminder" ? owner.autoReminderTemplate : owner.autoCancelTemplate;
-        return (
-          <PickerSheet
-            key={key}
-            visible={picking === key}
-            title={autoRows.find((row) => row.key === key)?.title ?? ""}
-            items={templateItems(field)}
-            selectedId={current ?? "none"}
-            onSettings={() => router.push("/clients/sms-templates" as Href)}
-            settingsLabel="Шаблоны SMS"
-            onClose={() => setPicking(null)}
-          />
-        );
-      })}
       <PickerSheet
-        visible={picking === "hours"}
-        title="Когда напоминать"
-        items={HOURS_OPTIONS.map((hours) => ({
-          id: String(hours),
-          label: hoursWords(hours),
-          icon: CalendarClock,
+        visible={picking === "quiet"}
+        title="Тихие часы"
+        subtitle="Автоматические SMS в это время ждут утра"
+        items={QUIET_OPTIONS.map((q) => ({
+          id: `${q.from}-${q.to}`,
+          label: quietWords(q.from, q.to),
+          icon: Moon,
           color: t.accent,
-          onPress: () => change({ reminder_hours: hours }),
+          onPress: () => change({ quiet_from: q.from, quiet_to: q.to }),
         }))}
-        selectedId={String(owner.reminderHours)}
+        selectedId={`${owner.quietFrom}-${owner.quietTo}`}
         onClose={() => setPicking(null)}
       />
+      <SmsEventSheet account={data} event={editing} teamId="" onClose={() => setEditing(null)} />
       {WEB ? (
         <PickerSheet
           visible={picking === "topup"}

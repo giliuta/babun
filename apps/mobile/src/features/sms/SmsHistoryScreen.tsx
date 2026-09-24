@@ -1,26 +1,32 @@
 import { FlatList, View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { GUTTER } from "@/components/ui/tokens";
 import { usePullRefresh } from "@/lib/pull-refresh";
+import { useTeams } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 import { useSmsHistory } from "./sms-account";
 import { SmsHistoryRow } from "./SmsHistoryRow";
 
 // ВСЯ ИСТОРИЯ SMS КОМПАНИИ (STORY-089) — владельцу: кому, по какому поводу,
 // что ушло и сколько стоило. Двести последних сообщений — больше в телефоне
-// не читают; выгрузка, если понадобится, — отдельная просьба.
+// не читают; выгрузка, если понадобится, — отдельная просьба. Со страницы
+// команды приходит `teamId` — тогда только её сообщения.
 
 export function SmsHistoryScreen() {
   const t = useThemeColors();
-  const history = useSmsHistory(200);
+  const { teamId } = useLocalSearchParams<{ teamId?: string }>();
+  const { data: teams = [] } = useTeams();
+  const team = teamId ? teams.find((x) => x.id === teamId) : undefined;
+  const history = useSmsHistory(200, { teamId: teamId || null });
   const items = history.data ?? [];
   const pull = usePullRefresh(history.refetch);
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="История SMS" />
+      <ScreenHeader title="История SMS" subtitle={team?.name} />
       {history.isLoading ? (
         <EmptyState state="loading" fill />
       ) : history.isError ? (

@@ -19,13 +19,16 @@ export function SmsHistoryRow({ item }: { item: SmsHistoryItem }) {
   const t = useThemeColors();
   const failed = isFailure(item.status);
   const cost = costWords(item);
+  // Ждёт своего часа (тихие часы, «Спасибо» через 2 часа) — когда уйдёт.
+  const waits = item.status === "queued" && item.sendAfter && new Date(item.sendAfter).getTime() > Date.now();
+  const status = waits && item.sendAfter ? `Уйдёт ${when(item.sendAfter)}` : statusWords(item.status);
   return (
     <View
       accessible
       accessibilityLabel={[
         item.clientName ?? item.toPhone,
         triggerWords(item.trigger),
-        statusWords(item.status),
+        status,
         cost,
         item.body,
       ]
@@ -53,7 +56,7 @@ export function SmsHistoryRow({ item }: { item: SmsHistoryItem }) {
       </View>
       <View style={{ alignItems: "flex-end" }}>
         <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 13, fontWeight: "600", color: failed ? t.danger : t.sub }}>
-          {statusWords(item.status)}
+          {status}
         </Text>
         {cost ? (
           <Text

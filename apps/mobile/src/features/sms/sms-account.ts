@@ -5,9 +5,11 @@ import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/features/settings/tenant";
 import {
   applyPatch,
+  applyRule,
   parseSmsAccount,
   parseSmsHistory,
   type SmsAccount,
+  type SmsRulePatch,
   type SmsSettingsPatch,
 } from "./sms-model";
 
@@ -64,14 +66,53 @@ export function useSaveSmsSettings() {
   });
 }
 
-export function useSmsHistory(limit = 50) {
+/** Правка события компании или команды. Строка откликается сразу, ответ
+ *  базы — истина после. */
+export function useSaveSmsRule() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: SmsRulePatch) => {
+      const { data, error } = await supabase.rpc("sms_save_rule", {
+        p_team_id: patch.teamId,
+        p_event: patch.event,
+        p_mode: patch.mode,
+        p_body: patch.body ?? undefined,
+        p_timing: patch.timing ?? undefined,
+      });
+      if (error) throw new Error(error.message);
+      return parseSmsAccount(data);
+    },
+    onMutate: async (patch) => {
+      const key = smsAccountKey(tenantId);
+      await qc.cancelQueries({ queryKey: key });
+      const before = qc.getQueryData<SmsAccount>(key);
+      if (before) qc.setQueryData<SmsAccount>(key, applyRule(before, patch));
+      return { before };
+    },
+    onError: (_e, _patch, context) => {
+      if (context?.before) qc.setQueryData(smsAccountKey(tenantId), context.before);
+    },
+    onSuccess: (account) => qc.setQueryData(smsAccountKey(tenantId), account),
+    meta: { errorHandled: true },
+  });
+}
+
+/** История: вся или одной команды / одного события. */
+export function useSmsHistory(limit = 50, filter?: { teamId?: string | null; trigger?: string | null }) {
   const tenantId = useTenantId();
   const role = useDataRole();
+  const teamId = filter?.teamId ?? null;
+  const trigger = filter?.trigger ?? null;
   return useQuery({
-    queryKey: [...smsHistoryKey(tenantId), limit],
+    queryKey: [...smsHistoryKey(tenantId), limit, teamId, trigger],
     enabled: !!tenantId && role.data === "owner",
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("sms_history", { p_limit: limit });
+      const { data, error } = await supabase.rpc("sms_history", {
+        p_limit: limit,
+        p_team_id: teamId ?? undefined,
+        p_trigger: trigger ?? undefined,
+      });
       if (error) throw new Error(error.message);
       return parseSmsHistory(data);
     },
