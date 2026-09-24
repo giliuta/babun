@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   Bookmark,
+  ChevronRight,
   Briefcase,
   CalendarRange,
   FileText,
@@ -22,11 +23,12 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { GUTTER } from "@/components/ui/tokens";
-import { RecordMark, recordMarkText } from "@/components/ui/RecordMark";
+import { RecordMark } from "@/components/ui/RecordMark";
 import { RowCaption } from "@/components/ui/card-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { colorName } from "@babun/shared/common/utils/colors";
 import { ColorSheet } from "@/features/appointments/BookingSheets";
 import { useTeams, useUpdateTeam } from "@/features/reference/queries";
 import { COLOR_SITUATIONS, type ColorSituation } from "@/features/appointments/record-color";
@@ -145,33 +147,15 @@ export function DesignScreen() {
   };
 
 
-  // ДЕНЬ-ОБРАЗЕЦ: записи того же вида, что на сетке. Обычная — цветом
-  // источника; незаполненные — своим цветом, а при «не красить» — обычным
-  // (так они и лягут на сетку).
-  const holeHue = (id: ColorSituation) => palette[id] ?? ordinary;
-  const preview: {
-    id: string;
-    time: string;
-    name: string;
-    sub: string;
-    hue: string;
-    onPress: () => void;
-  }[] = [
-    {
-      id: "ordinary",
-      time: "09:00",
-      name: "Мария",
-      sub: "всё заполнено",
-      hue: ordinary,
-      onPress: () => openColor("filled"),
-    },
-    ...situations.map((sit, i) => ({
-      id: sit.id,
-      time: ["11:00", "13:00", "15:00"][i] ?? "17:00",
-      name: ["Иван", "Олег"][i] ?? "Анна",
-      sub: palette[sit.id] ? sit.label.toLowerCase() : `${sit.label.toLowerCase()} · не красить`,
-      hue: holeHue(sit.id),
-      onPress: () => openColor(sit.id),
+  // СТРОКИ ЦВЕТА (владелец 25.09: «нормально — всё заполнено, справа
+  // выбираешь цвет, и всё, или вообще без цвета»). Первая — обычный цвет,
+  // за ней по строке на каждый включённый блок, который подсвечивается.
+  const colorRows: { id: ColorTarget; title: string; hue: string | null }[] = [
+    { id: "filled", title: "Всё заполнено", hue: ordinary },
+    ...situations.map((sit) => ({
+      id: sit.id as ColorTarget,
+      title: sit.label,
+      hue: palette[sit.id] ?? null,
     })),
   ];
 
@@ -216,38 +200,18 @@ export function DesignScreen() {
             </SectionCard>
             <RowCaption text="Выключенный блок пропадает у всей команды. Данные остаются." />
 
-            {/* ЦВЕТ ЗАПИСИ — ПОД БЛОКАМИ (владелец 25.09). Кусочек календаря: «всё заполнено» и по одной
-                записи на каждый включённый блок, который подсвечивается. Тап —
-                её цвет. Выключили блок — его записи здесь нет, и в календаре
-                такая запись красится как заполненная. */}
-            <SectionCard title="Цвет записи" padded>
-              <View style={{ gap: 6 }}>
-                {preview.map((row) => (
-                  <View key={row.id} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <Text
-                      maxFontSizeMultiplier={1.2}
-                      style={{
-                        width: 42,
-                        fontSize: 13,
-                        fontWeight: "600",
-                        color: t.sub,
-                        fontVariant: ["tabular-nums"],
-                      }}
-                    >
-                      {row.time}
-                    </Text>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <ColorTile
-                        title={row.name}
-                        sub={row.sub}
-                        hue={row.hue}
-                        height={48}
-                        onPress={row.onPress}
-                      />
-                    </View>
-                  </View>
-                ))}
-              </View>
+            {/* ЦВЕТ ЗАПИСИ — ПОД БЛОКАМИ, ОБЫЧНЫМИ СТРОКАМИ: слева случай,
+                справа его цвет (или «Без цвета»), тап — палитра. */}
+            <SectionCard title="Цвет записи">
+              {colorRows.map((row, i) => (
+                <ColorRow
+                  key={row.id}
+                  title={row.title}
+                  hue={row.hue}
+                  separated={i > 0}
+                  onPress={() => openColor(row.id)}
+                />
+              ))}
             </SectionCard>
             <RowCaption text="Цвет, выбранный в самой записи, главнее всего." />
           </>
@@ -335,57 +299,50 @@ export function DesignScreen() {
   );
 }
 
-/** Образец-кнопка: настоящий блок сетки (`RecordMark`) с названием случая и
- *  его цветом словами. `hue = null` — «не красить», пустой контур. */
-function ColorTile({
+/** Строка цвета: название случая слева, образец блока (`RecordMark`, тот же
+ *  рецепт, что на сетке) и шеврон справа. `hue = null` — «Без цвета»: такая
+ *  запись красится как заполненная. */
+function ColorRow({
   title,
-  sub,
-  a11yColor,
   hue,
-  height,
+  separated,
   onPress,
 }: {
   title: string;
-  sub?: string;
-  /** Имя цвета для озвучки, когда подписи на образце нет. */
-  a11yColor?: string;
   hue: string | null;
-  height: number;
+  separated: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
-  const ink = hue ? recordMarkText(hue, t.ink) : t.ink;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${title.replace("\n", " ")}: ${sub ?? a11yColor ?? ""}`}
-      style={({ pressed }) => ({ flex: 1, minWidth: 0, opacity: pressed ? 0.7 : 1 })}
+      accessibilityLabel={`${title}: ${hue ? colorName(hue) : "без цвета"}`}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        minHeight: 52,
+        paddingLeft: 16,
+        paddingRight: 12,
+        borderTopWidth: separated ? 1 : 0,
+        borderTopColor: t.separator,
+        backgroundColor: pressed ? t.pressed : "transparent",
+      })}
     >
-      <RecordMark hue={hue} full size={height}>
-        <Text
-          numberOfLines={2}
-          maxFontSizeMultiplier={1.2}
-          style={{ fontSize: 13, lineHeight: 16, fontWeight: "700", color: ink }}
-        >
-          {title}
-        </Text>
-        {sub ? (
-          <Text
-            numberOfLines={1}
-            maxFontSizeMultiplier={1.2}
-            style={{
-              fontSize: 12,
-              lineHeight: 15,
-              fontWeight: "500",
-              color: ink,
-              opacity: hue ? 0.85 : 0.6,
-            }}
-          >
-            {sub}
-          </Text>
-        ) : null}
-      </RecordMark>
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.3}
+        style={{ flex: 1, fontSize: 16, color: t.ink }}
+      >
+        {title}
+      </Text>
+      <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 15, color: t.sub }}>
+        {hue ? colorName(hue) : "Без цвета"}
+      </Text>
+      <RecordMark hue={hue} size={28} />
+      <ChevronRight size={18} color={t.faint} strokeWidth={2.2} />
     </Pressable>
   );
 }
