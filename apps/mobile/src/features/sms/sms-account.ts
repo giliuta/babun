@@ -8,6 +8,7 @@ import {
   applyRule,
   parseSmsAccount,
   parseSmsHistory,
+  parseSmsRecordLog,
   type SmsAccount,
   type SmsRulePatch,
   type SmsSettingsPatch,
@@ -24,6 +25,8 @@ export * from "./sms-model";
 
 export const smsAccountKey = (tenantId: string | null) => ["sms-account", tenantId];
 export const smsHistoryKey = (tenantId: string | null) => ["sms-history", tenantId];
+/** SMS записи и клиента — один префикс: после отправки перечитываются оба. */
+export const smsLogKey = (tenantId: string | null) => ["sms-log", tenantId];
 
 export function useSmsAccount() {
   const tenantId = useTenantId();
@@ -119,6 +122,43 @@ export function useSmsHistory(limit = 50, filter?: { teamId?: string | null; tri
   });
 }
 
+/** SMS записи — блок внизу страницы записи. */
+export function useAppointmentSms(appointmentId: string | null | undefined) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: [...smsLogKey(tenantId), "appointment", appointmentId],
+    enabled: !!tenantId && !!appointmentId,
+    // Статусы («Доставлено», «Не доставлено») меняет сервер — при каждом
+    // открытии записи и карточки блок перечитывается.
+    staleTime: 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("sms_for_appointment", {
+        p_appointment_id: appointmentId as string,
+      });
+      if (error) throw new Error(error.message);
+      return parseSmsRecordLog(data);
+    },
+  });
+}
+
+/** SMS клиента — блок на странице клиента. */
+export function useClientSms(clientId: string | null | undefined, limit = 20) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: [...smsLogKey(tenantId), "client", clientId, limit],
+    enabled: !!tenantId && !!clientId,
+    staleTime: 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("sms_for_client", {
+        p_client_id: clientId as string,
+        p_limit: limit,
+      });
+      if (error) throw new Error(error.message);
+      return parseSmsHistory(data);
+    },
+  });
+}
+
 export function useSendSmsViaService() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
@@ -143,6 +183,7 @@ export function useSendSmsViaService() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: smsAccountKey(tenantId) });
       void qc.invalidateQueries({ queryKey: smsHistoryKey(tenantId) });
+      void qc.invalidateQueries({ queryKey: smsLogKey(tenantId) });
     },
     meta: { errorHandled: true },
   });

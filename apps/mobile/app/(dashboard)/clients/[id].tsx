@@ -103,6 +103,7 @@ import {
 import ClientContactRow from "@/features/clients/ClientContactRow";
 import { useCurrentRole, useTenant } from "@/features/settings/tenant";
 import { SmsComposeProvider } from "@/features/sms/SmsCompose";
+import { SmsClientBlock } from "@/features/sms/SmsRecordBlock";
 import { clientSmsVars } from "@/features/sms/client-sms-vars";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { shareText } from "@/features/clients/client-share";
@@ -806,6 +807,10 @@ export function ClientDetailScreen() {
           // строки с ролью и единственная дверь заведения.
           {...(peopleOn ? people.residents : {})}
         />
+
+        {/* SMS КЛИЕНТУ (STORY-089; владелец 25.09: «история SMS к клиенту»):
+            что ушло, что не дошло, что ждёт утра. Отправка — в кнопке номера. */}
+        {!isDraft ? <SmsClientBlock clientId={c.id} /> : null}
       </ScrollView>
 
       {/* ЕДИНСТВЕННОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ, ПОД ПАЛЬЦЕМ, ВНЕ ПРОКРУТКИ.

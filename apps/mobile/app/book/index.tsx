@@ -159,6 +159,7 @@ import {
 import { useLocationRequests } from "@/features/clients/location-requests";
 import { useCurrentRole, useTenant } from "@/features/settings/tenant";
 import { SmsComposeProvider } from "@/features/sms/SmsCompose";
+import { SmsRecordBlock } from "@/features/sms/SmsRecordBlock";
 import { smsVars } from "@/features/sms/sms-compose";
 import { addressedAs, firstName } from "@/features/clients/sms-name";
 import {
@@ -2882,6 +2883,17 @@ export default function BookScreen() {
                   canDelete={!isMemberView}
                   pending={pendingFiles}
                   onPendingChange={setPendingFiles}
+                />
+              ) : null}
+
+              {/* SMS ЗАПИСИ (STORY-089; владелец 25.09: «на записи в самом низу
+                  блок — что мы уже отправили ему или не отправили… нажал
+                  „Отправить SMS“ — и оно сразу отправляет то, что записал»).
+                  Только у сохранённой записи с клиентом: SMS — о ней. */}
+              {editing?.id && client && recordSmsContext ? (
+                <SmsRecordBlock
+                  context={recordSmsContext}
+                  phone={client.phone_e164 || client.phone || null}
                 />
               ) : null}
 

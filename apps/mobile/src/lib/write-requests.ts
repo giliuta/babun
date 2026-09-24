@@ -46,6 +46,8 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "read_operational_calendar_settings_safe",
   "read_sms_templates_safe",
   "sms_account",
+  "sms_for_appointment",
+  "sms_for_client",
   "sms_history",
   "tenant_quota_appointments_month",
   "tenant_quota_clients",

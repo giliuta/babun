@@ -6,6 +6,7 @@ import {
   applyRule,
   parseSmsAccount,
   parseSmsHistory,
+  parseSmsRecordLog,
   smsErrorText,
   teamEventState,
   teamStats,
@@ -143,6 +144,17 @@ describe("ответ базы", () => {
     assert.equal(row.teamId, null);
     assert.equal(row.sendAfter, null);
     assert.equal(parseSmsHistory(null).length, 0);
+  });
+
+  test("SMS записи: текст записи и сообщения, неушедшее — с шаблоном", () => {
+    const log = parseSmsRecordLog({
+      confirm_body: "[Имя], вы записаны",
+      messages: [{ id: "m1", status: "queued", trigger: "reminder", template_body: "Напоминаем [Время]", send_after: "2026-09-25T05:00:00Z" }],
+    });
+    assert.equal(log.confirmBody, "[Имя], вы записаны");
+    assert.equal(log.messages[0]?.templateBody, "Напоминаем [Время]");
+    assert.equal(log.messages[0]?.body, null);
+    assert.deepEqual(parseSmsRecordLog(null), { confirmBody: "", messages: [] });
   });
 
   test("отказы базы — словами", () => {

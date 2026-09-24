@@ -5111,6 +5111,14 @@ export type Database = {
         Returns: boolean
       }
       sms_account: { Args: never; Returns: Json }
+      sms_for_appointment: {
+        Args: { p_appointment_id: string }
+        Returns: Json
+      }
+      sms_for_client: {
+        Args: { p_client_id: string; p_limit?: number }
+        Returns: Json[]
+      }
       sms_history: {
         Args: {
           p_before?: string

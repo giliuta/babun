@@ -81,6 +81,8 @@ export interface SmsHistoryItem {
   appointmentId: string | null;
   teamId: string | null;
   body: string | null;
+  /** Текст события до подстановки — у сообщения, которое ещё не ушло. */
+  templateBody: string | null;
   status: "queued" | "sending" | "sent" | "delivered" | "failed" | "undelivered" | "blocked";
   trigger: string;
   segments: number | null;
@@ -159,6 +161,7 @@ export function parseSmsHistory(rows: unknown): SmsHistoryItem[] {
       appointmentId: str(r.appointment_id),
       teamId: str(r.team_id),
       body: str(r.body),
+      templateBody: str(r.template_body),
       status: (str(r.status) ?? "queued") as SmsHistoryItem["status"],
       trigger: String(r.trigger ?? ""),
       segments: typeof r.segments === "number" ? r.segments : null,
@@ -167,6 +170,18 @@ export function parseSmsHistory(rows: unknown): SmsHistoryItem[] {
       error: str(r.error),
     };
   });
+}
+
+/** SMS записи: сообщения и текст «Новая запись» её команды — его лист
+ *  «Отправить SMS» подставляет первым. */
+export interface SmsRecordLog {
+  confirmBody: string;
+  messages: SmsHistoryItem[];
+}
+
+export function parseSmsRecordLog(data: unknown): SmsRecordLog {
+  const r = (data && typeof data === "object" ? data : {}) as Raw;
+  return { confirmBody: str(r.confirm_body) ?? "", messages: parseSmsHistory(r.messages) };
 }
 
 /** Слова отказа базы — человеку. */

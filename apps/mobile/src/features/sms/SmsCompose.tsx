@@ -64,7 +64,13 @@ export function useSmsOptions(name?: string | null): SmsOption[] {
  *  включил отправку, календарь записи среди разрешённых (из карточки без
  *  записи — только владельцу), деньги есть. Решает всё равно база. */
 export function useSmsService(): { available: boolean; priceCents: number; context: SmsContext | null } {
-  const context = useContext(SmsVarsContext);
+  return useSmsServiceFor(useContext(SmsVarsContext));
+}
+
+/** То же — для места, которое знает запись само (блок «SMS» записи). */
+export function useSmsServiceFor(
+  context: SmsContext | null,
+): { available: boolean; priceCents: number; context: SmsContext | null } {
   const account = useSmsAccount().data;
   const role = useCurrentRole().data;
   const available = Boolean(

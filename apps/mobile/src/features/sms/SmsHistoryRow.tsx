@@ -15,8 +15,22 @@ function when(iso: string): string {
   return `${formatDateShortRu(formatDateKey(date))}, ${time}`;
 }
 
-export function SmsHistoryRow({ item }: { item: SmsHistoryItem }) {
+export function SmsHistoryRow({
+  item,
+  showClient = true,
+  body,
+}: {
+  item: SmsHistoryItem;
+  /** Нет — в записи и у клиента: кому, и так ясно; первой строкой — повод. */
+  showClient?: boolean;
+  /** Текст вместо сохранённого — у ещё не ушедшего: шаблон, заполненный
+   *  полями записи. */
+  body?: string | null;
+}) {
   const t = useThemeColors();
+  const text = item.body ?? body ?? null;
+  const title = showClient ? (item.clientName ?? item.toPhone) : triggerWords(item.trigger);
+  const meta = showClient ? `${triggerWords(item.trigger)} · ${when(item.createdAt)}` : when(item.createdAt);
   const failed = isFailure(item.status);
   const cost = costWords(item);
   // Ждёт своего часа (тихие часы, «Спасибо» через 2 часа) — когда уйдёт.
@@ -25,27 +39,21 @@ export function SmsHistoryRow({ item }: { item: SmsHistoryItem }) {
   return (
     <View
       accessible
-      accessibilityLabel={[
-        item.clientName ?? item.toPhone,
-        triggerWords(item.trigger),
-        status,
-        cost,
-        item.body,
-      ]
+      accessibilityLabel={[title, meta, status, cost, text]
         .filter(Boolean)
         .join(", ")}
       style={{ flexDirection: "row", gap: 12, paddingHorizontal: 16, paddingVertical: 12 }}
     >
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
-          {item.clientName ?? item.toPhone}
+          {title}
         </Text>
         <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, color: t.sub, marginTop: 1 }}>
-          {`${triggerWords(item.trigger)} · ${when(item.createdAt)}`}
+          {meta}
         </Text>
-        {item.body ? (
+        {text ? (
           <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ fontSize: 14, lineHeight: 19, color: t.body, marginTop: 4 }}>
-            {item.body}
+            {text}
           </Text>
         ) : null}
         {failed && item.error ? (
