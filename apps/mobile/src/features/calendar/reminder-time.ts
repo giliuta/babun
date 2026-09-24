@@ -159,3 +159,80 @@ export function eventReminderOccurrences(
     .sort((a, b) => a.when.getTime() - b.when.getTime())
     .slice(0, options.maxCount ?? 32);
 }
+
+// ── НАПОМИНАНИЕ СЕБЕ ──
+// Колокольчик в шапке записи и события (владелец 24.09: «напомнить за какое-то
+// время — за 24 часа, или свой диапазон: дни и время; вылазит пуш»). Правило
+// хранит СМЕЩЕНИЕ, а не момент: запись переносят — пуш едет следом.
+
+export type SelfReminder =
+  /** За N минут до начала. */
+  | { kind: "before"; minutes: number }
+  /** За N дней до даты записи, в заданное время суток. */
+  | { kind: "dayAt"; daysBefore: number; time: string };
+
+/** Готовые варианты шторки — в порядке от ближнего к дальнему. */
+export const SELF_REMINDER_PRESETS: readonly SelfReminder[] = [
+  { kind: "before", minutes: 15 },
+  { kind: "before", minutes: 60 },
+  { kind: "dayAt", daysBefore: 0, time: "08:00" },
+  { kind: "dayAt", daysBefore: 1, time: "20:00" },
+  { kind: "before", minutes: 24 * 60 },
+];
+
+export function sameSelfReminder(a: SelfReminder | null, b: SelfReminder | null): boolean {
+  if (!a || !b) return a === b;
+  if (a.kind === "before" && b.kind === "before") return a.minutes === b.minutes;
+  if (a.kind === "dayAt" && b.kind === "dayAt") {
+    return a.daysBefore === b.daysBefore && a.time === b.time;
+  }
+  return false;
+}
+
+const dayWord = (n: number) => {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "день";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "дня";
+  return "дней";
+};
+
+/** Правило словами: «За 15 минут», «За 24 часа», «Накануне в 20:00»,
+ *  «Утром в 08:00», «За 3 дня в 09:00». */
+export function selfReminderLabel(rule: SelfReminder): string {
+  if (rule.kind === "before") {
+    if (rule.minutes % (24 * 60) === 0) {
+      const d = rule.minutes / (24 * 60);
+      return d === 1 ? "За 24 часа" : `За ${d} ${dayWord(d)}`;
+    }
+    if (rule.minutes % 60 === 0) {
+      const h = rule.minutes / 60;
+      return h === 1 ? "За 1 час" : `За ${h} ч`;
+    }
+    return `За ${rule.minutes} минут`;
+  }
+  if (rule.daysBefore === 0) return `В день записи в ${rule.time}`;
+  if (rule.daysBefore === 1) return `Накануне в ${rule.time}`;
+  return `За ${rule.daysBefore} ${dayWord(rule.daysBefore)} в ${rule.time}`;
+}
+
+/** Момент пуша в часовом поясе команды записи. */
+export function selfReminderInstant(
+  appointment: AppointmentWallTime,
+  rule: SelfReminder,
+  timeZone: string,
+): Date {
+  if (rule.kind === "before") {
+    const start = zonedWallTimeToInstant(
+      appointment.date,
+      appointment.time_start,
+      timeZone,
+    );
+    return new Date(start.getTime() - rule.minutes * 60 * 1000);
+  }
+  return zonedWallTimeToInstant(
+    shiftDateKey(appointment.date, -rule.daysBefore),
+    rule.time,
+    timeZone,
+  );
+}

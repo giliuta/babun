@@ -4,6 +4,9 @@ import { createBlankAppointment } from "@babun/shared/local/appointments";
 import {
   appointmentReminderInstant,
   eventReminderOccurrences,
+  sameSelfReminder,
+  selfReminderInstant,
+  selfReminderLabel,
 } from "./reminder-time";
 
 const appointment = { date: "2026-07-20", time_start: "10:00" };
@@ -103,5 +106,40 @@ describe("eventReminderOccurrences", () => {
       ),
       [],
     );
+  });
+});
+
+describe("напоминание себе", () => {
+  test("«за 24 часа» — ровно сутки до начала в поясе команды", () => {
+    assert.equal(
+      selfReminderInstant(
+        { date: "2026-09-26", time_start: "10:00" },
+        { kind: "before", minutes: 24 * 60 },
+        "Europe/Nicosia",
+      ).toISOString(),
+      "2026-09-25T07:00:00.000Z",
+    );
+  });
+  test("«за 3 дня в 09:00» — дата сдвигается, время суток своё", () => {
+    assert.equal(
+      selfReminderInstant(
+        { date: "2026-09-26", time_start: "15:30" },
+        { kind: "dayAt", daysBefore: 3, time: "09:00" },
+        "Europe/Nicosia",
+      ).toISOString(),
+      "2026-09-23T06:00:00.000Z",
+    );
+  });
+  test("подписи правил", () => {
+    assert.equal(selfReminderLabel({ kind: "before", minutes: 15 }), "За 15 минут");
+    assert.equal(selfReminderLabel({ kind: "before", minutes: 1440 }), "За 24 часа");
+    assert.equal(selfReminderLabel({ kind: "dayAt", daysBefore: 1, time: "20:00" }), "Накануне в 20:00");
+    assert.equal(selfReminderLabel({ kind: "dayAt", daysBefore: 2, time: "09:00" }), "За 2 дня в 09:00");
+    assert.equal(selfReminderLabel({ kind: "dayAt", daysBefore: 5, time: "09:00" }), "За 5 дней в 09:00");
+  });
+  test("сравнение правил", () => {
+    assert.equal(sameSelfReminder({ kind: "before", minutes: 60 }, { kind: "before", minutes: 60 }), true);
+    assert.equal(sameSelfReminder({ kind: "before", minutes: 60 }, { kind: "dayAt", daysBefore: 0, time: "08:00" }), false);
+    assert.equal(sameSelfReminder(null, null), true);
   });
 });

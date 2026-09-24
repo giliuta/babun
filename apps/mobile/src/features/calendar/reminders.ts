@@ -1,6 +1,11 @@
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getStorage } from "@babun/shared/storage";
-import { eventReminderOccurrences } from "@/features/calendar/reminder-time";
+import {
+  eventReminderOccurrences,
+  selfReminderInstant,
+  selfReminderLabel,
+  type SelfReminder,
+} from "@/features/calendar/reminder-time";
 import {
   getNotificationsModule,
   removeBabunNotificationOwners,
@@ -302,4 +307,109 @@ export async function reconcileEventAppointmentReminders(
     for (const appointmentId of eventIds) delete next[appointmentId];
     writeRegistry(next);
   }
+}
+
+// ── НАПОМИНАНИЕ СЕБЕ (колокольчик в шапке записи и события, владелец 24.09) ──
+//
+// ЛИЧНОЕ И ЛОКАЛЬНОЕ: «пуш для себя». Правило лежит в памяти ЭТОГО телефона,
+// а не в записи: в записи его увидели бы все устройства команды, и пуш пришёл
+// бы каждому мастеру. Хранится СМЕЩЕНИЕ, момент пересчитывается от даты и
+// времени записи при каждой сверке — перенесли запись, пуш переехал; запись
+// удалили или отменили — пуш снят (своя группа уведомлений `self:`).
+
+const SELF_REMINDERS_KEY = "calendar.selfReminders.v1";
+const selfOwnerKey = (appointmentId: string) => `self:${appointmentId}`;
+
+function readSelfReminders(): Record<string, SelfReminder> {
+  return getStorage().get<Record<string, SelfReminder>>(SELF_REMINDERS_KEY) ?? {};
+}
+
+function writeSelfReminders(next: Record<string, SelfReminder>): void {
+  getStorage().set(SELF_REMINDERS_KEY, next);
+}
+
+/** Правило напоминания себе у этой записи на этом телефоне. */
+export function getSelfReminder(appointmentId: string): SelfReminder | null {
+  return readSelfReminders()[appointmentId] ?? null;
+}
+
+/** Поставить (или снять — `rule = null`) напоминание себе и сразу
+ *  запланировать пуш. Разрешение на уведомления спрашивается здесь: это
+ *  явное действие человека. */
+export async function setSelfReminder(
+  apt: Appointment,
+  rule: SelfReminder | null,
+  timeZone: string,
+  clientName?: string,
+): Promise<ReminderResult | "cleared"> {
+  const all = { ...readSelfReminders() };
+  if (!rule) {
+    delete all[apt.id];
+    writeSelfReminders(all);
+    await removeBabunNotificationOwners([selfOwnerKey(apt.id)]);
+    return "cleared";
+  }
+  all[apt.id] = rule;
+  writeSelfReminders(all);
+  let when: Date;
+  try {
+    when = selfReminderInstant(apt, rule, timeZone);
+  } catch {
+    return "unavailable";
+  }
+  if (when.getTime() <= Date.now()) {
+    await removeBabunNotificationOwners([selfOwnerKey(apt.id)]);
+    return "past";
+  }
+  try {
+    const result = await replaceBabunNotificationOwner(
+      selfOwnerKey(apt.id),
+      notificationDrafts(
+        apt,
+        [{ when, label: selfReminderLabel(rule), date: apt.date }],
+        clientName,
+        selfOwnerKey(apt.id),
+      ),
+      { requestPermission: true },
+    );
+    return result.status;
+  } catch {
+    return "unavailable";
+  }
+}
+
+/** Пересобрать все пуши «себе» по свежему списку записей (без запроса
+ *  разрешения). Правила записей, которых нет в списке, не трогаем — список
+ *  календаря бывает неполным; их пуши уходят вместе с группой и вернутся при
+ *  следующей сверке, когда запись снова загрузится. */
+export async function reconcileSelfReminders(
+  appointments: readonly Appointment[],
+  timeZoneFor: (appointment: Appointment) => string,
+  clientNameFor?: (appointment: Appointment) => string | undefined,
+): Promise<void> {
+  const rules = readSelfReminders();
+  const owners: BabunNotificationOwnerDrafts[] = [];
+  const now = Date.now();
+  for (const apt of appointments) {
+    const rule = rules[apt.id];
+    if (!rule || apt.status === "cancelled") continue;
+    let when: Date;
+    try {
+      when = selfReminderInstant(apt, rule, timeZoneFor(apt));
+    } catch {
+      continue;
+    }
+    if (when.getTime() <= now) continue;
+    const ownerKey = selfOwnerKey(apt.id);
+    owners.push({
+      ownerKey,
+      drafts: notificationDrafts(
+        apt,
+        [{ when, label: selfReminderLabel(rule), date: apt.date }],
+        clientNameFor?.(apt),
+        ownerKey,
+      ),
+    });
+  }
+  await replaceBabunNotificationScope("self:", owners, { requestPermission: false });
 }

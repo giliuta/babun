@@ -154,13 +154,16 @@ import { serverReason } from "@/features/calendar/server-reason";
 import {
   cancelAppointmentReminders,
   reconcileEventAppointmentReminders,
-  scheduleAppointmentReminder,
+  reconcileSelfReminders,
+  getSelfReminder,
+  setSelfReminder,
   syncEventAppointmentReminders,
 } from "@/features/calendar/reminders";
 import {
-  appointmentReminderInstant,
-  type AppointmentReminderTiming,
+  selfReminderLabel,
+  type SelfReminder,
 } from "@/features/calendar/reminder-time";
+import { SelfReminderSheet } from "@/features/calendar/SelfReminderSheet";
 import { nextCrewAppointmentStatus } from "@/features/calendar/crew-status";
 import {
   canMutateCalendarAppointment,
@@ -880,15 +883,14 @@ export default function CalendarTab() {
     const teamTimezones = new Map(
       teams.map((team) => [team.id, team.timezone] as const),
     );
-    void reconcileEventAppointmentReminders(
-      appts,
-      (appointment) =>
-        (appointment.team_id
-          ? teamTimezones.get(appointment.team_id)
-          : null) ??
-        calSettings?.timezone ??
-        "Europe/Nicosia",
-    ).catch(() => {});
+    const tzFor = (appointment: Appointment) =>
+      (appointment.team_id ? teamTimezones.get(appointment.team_id) : null) ??
+      calSettings?.timezone ??
+      "Europe/Nicosia";
+    void reconcileEventAppointmentReminders(appts, tzFor).catch(() => {});
+    // Пуши «себе» (колокольчик) пересчитываются от свежих дат: перенесли
+    // запись — напоминание переехало, отменили — снято.
+    void reconcileSelfReminders(appts, tzFor).catch(() => {});
   }, [
     appts,
     calSettings?.timezone,
@@ -1978,71 +1980,29 @@ export default function CalendarTab() {
     });
   };
 
-  // «Напомнить…» — локальное уведомление о записи, пресеты вторым листом.
-  // Appointment date/time are business wall-clock fields:
-  // resolve them in the assigned brigade timezone (global business timezone
-  // as fallback), never in the timezone of the dispatcher's current device.
-  const openReminderMenu = (apt: Appointment) => {
-    const presets: {
-      label: string;
-      timing: AppointmentReminderTiming;
-    }[] = [
-      { label: "За 30 минут", timing: "before-30" },
-      { label: "За 1 час", timing: "before-60" },
-      { label: "Накануне в 20:00", timing: "previous-day-20" },
-      { label: "Утром в 8:00", timing: "same-day-08" },
-    ];
-    setSheetMenu({
-      title: isCalendarEvent(apt) ? "Напомнить о событии" : "Напомнить о записи",
-      subtitle: `${humanDay(apt.date)}, ${apt.time_start}`,
-      items: presets.map((preset) => ({
-        label: preset.label,
-        icon: Bell,
-        color: SETTINGS_TILE.yellow,
-        run: () => applyReminder(preset),
-      })),
-    });
-    function applyReminder(preset: (typeof presets)[number]) {
-      let when: Date;
-      try {
-        when = appointmentReminderInstant(
-          apt,
-          preset.timing,
-          appointmentTimeZone(apt),
-        );
-      } catch {
-        toast("Не удалось определить время напоминания", "error");
-        return;
-      }
-      void scheduleAppointmentReminder(
-        apt,
-        when,
-        preset.label,
-        clientName(apt) || undefined,
-      ).then((res) => {
-        if (res === "scheduled") {
-          // «За 30 минут» → «Напомню за 30 минут».
-          const l = preset.label;
+  // «Напомнить…» из меню записи — та же шторка, что колокольчик в шапке
+  // записи (владелец 24.09): одно правило «себе» на телефоне, пуш пересчитан
+  // от даты и времени записи в поясе её команды.
+  const [reminderFor, setReminderFor] = useState<Appointment | null>(null);
+  const openReminderMenu = (apt: Appointment) => setReminderFor(apt);
+  const pickReminderFor = (rule: SelfReminder | null) => {
+    const apt = reminderFor;
+    setReminderFor(null);
+    if (!apt) return;
+    void setSelfReminder(apt, rule, appointmentTimeZone(apt), clientName(apt) || undefined).then(
+      (res) => {
+        if (res === "cleared") toast("Напоминание снято", "info");
+        else if (res === "scheduled" && rule) {
+          const l = selfReminderLabel(rule);
           toast(`Напомню ${l.charAt(0).toLowerCase()}${l.slice(1)}`);
-        } else if (res === "deferred") {
-          toast(
-            "Напоминание сохранено в очереди и установится, когда на iPhone освободится место",
-            "info",
-          );
-        } else if (res === "capacity") {
-          toast(
-            "Очередь напоминаний переполнена — удалите ненужные напоминания",
-            "error",
-          );
-        } else if (res === "denied") {
-          toast("Разрешите уведомления в Настройках", "error");
-        } else if (res === "past") {
-          toast("Это время уже прошло", "info");
-        } else {
-          toast("Появится после обновления приложения", "info");
-        }
-      });
-    }
+        } else if (res === "denied") toast("Разрешите уведомления в Настройках", "error");
+        else if (res === "past") toast("Это время уже прошло", "info");
+        else if (res === "deferred")
+          toast("Напоминание в очереди — установится, когда на iPhone освободится место", "info");
+        else if (res === "capacity") toast("Очередь напоминаний переполнена", "error");
+        else if (res === "unavailable") toast("Появится после обновления приложения", "info");
+      },
+    );
   };
 
   const openActionMenu = (apt: Appointment) => {
@@ -3126,6 +3086,15 @@ export default function CalendarTab() {
 
 
       <ActionMenuSheet menu={sheetMenu} onClose={() => setSheetMenu(null)} />
+      <SelfReminderSheet
+        visible={reminderFor != null}
+        value={reminderFor ? getSelfReminder(reminderFor.id) : null}
+        subtitle={
+          reminderFor ? `${humanDay(reminderFor.date)}, ${reminderFor.time_start}` : undefined
+        }
+        onPick={pickReminderFor}
+        onClose={() => setReminderFor(null)}
+      />
       <ColorSheet
         visible={recolor != null}
         onClose={() => setRecolor(null)}

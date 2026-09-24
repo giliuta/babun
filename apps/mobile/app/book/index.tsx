@@ -22,6 +22,8 @@ import { usePreventRemove } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AlertTriangle,
+  Bell,
+  BellRing,
   MapPin,
   UserRound,
   Users,
@@ -75,6 +77,15 @@ import { resolveReturnTo } from "@/features/appointments/return-to";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
+import { SelfReminderSheet } from "@/features/calendar/SelfReminderSheet";
+import {
+  getSelfReminder,
+  setSelfReminder,
+} from "@/features/calendar/reminders";
+import {
+  selfReminderLabel,
+  type SelfReminder,
+} from "@/features/calendar/reminder-time";
 import { resolveCalendarDayLabel } from "@/features/calendar/day-label";
 import { useFeatureOn } from "@/features/settings/company-features";
 import { useDayCities } from "@/features/calendar/day-cities";
@@ -402,6 +413,12 @@ export default function BookScreen() {
   // рисует календарь: кеш уже тёплый, отдельный запрос завёл бы вторую
   // правду о той же записи.
   const editId = first(params.appointmentId) ?? null;
+  // НАПОМНИТЬ СЕБЕ — колокольчик в шапке (владелец 24.09). Правило личное и
+  // лежит на телефоне (`reminders.ts`), а не в записи.
+  const [selfReminder, setSelfReminderRule] = useState<SelfReminder | null>(
+    () => (editId ? getSelfReminder(editId) : null),
+  );
+  const [reminderSheetOpen, setReminderSheetOpen] = useState(false);
   const isEdit = editId != null;
   const editing = useMemo(
     () => (editId ? allAppts.find((a) => a.id === editId) ?? null : null),
@@ -1886,6 +1903,39 @@ export default function BookScreen() {
     else router.replace("/");
   };
 
+  // Итог постановки пуша — одной строкой, теми же словами, что меню записи.
+  const reminderToast = (
+    res: Awaited<ReturnType<typeof setSelfReminder>>,
+    rule: SelfReminder | null,
+  ) => {
+    if (res === "cleared") toast("Напоминание снято", "info");
+    else if (res === "scheduled" && rule) {
+      const l = selfReminderLabel(rule);
+      toast(`Напомню ${l.charAt(0).toLowerCase()}${l.slice(1)}`);
+    } else if (res === "denied") toast("Разрешите уведомления в Настройках", "error");
+    else if (res === "past") toast("Это время уже прошло", "info");
+    else if (res === "deferred")
+      toast("Напоминание в очереди — установится, когда на iPhone освободится место", "info");
+    else if (res === "capacity")
+      toast("Очередь напоминаний переполнена", "error");
+    else if (res === "unavailable") toast("Появится после обновления приложения", "info");
+  };
+
+  const pickSelfReminder = (rule: SelfReminder | null) => {
+    setSelfReminderRule(rule);
+    setReminderSheetOpen(false);
+    // У сохранённой записи пуш ставится сразу — это не поле записи, его не
+    // надо «сохранять»; у новой — после создания, когда появится id.
+    if (isEdit && editing) {
+      void setSelfReminder(
+        { ...editing, date, time_start: timeStart },
+        rule,
+        team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
+        client?.full_name,
+      ).then((res) => reminderToast(res, rule));
+    }
+  };
+
   const save = async () => {
     if (!canSave || bookingBusy) {
       toast(missingHint, "info");
@@ -1924,6 +1974,14 @@ export default function BookScreen() {
           timezone:
             team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
         });
+        if (selfReminder) {
+          void setSelfReminder(
+            created,
+            selfReminder,
+            team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
+            client?.full_name,
+          ).then((res) => reminderToast(res, selfReminder));
+        }
         if (pendingPayment && created.kind === "work") {
           // Деньги новой записи ждали её id — уходят тем же событием, что
           // тап по счёту у существующей записи (STORY-065).
@@ -2309,7 +2367,38 @@ export default function BookScreen() {
           >
             {title}
           </Text>
-          <View style={{ minWidth: 72, alignItems: "flex-end" }}>
+          <View
+            style={{
+              minWidth: 72,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: 2,
+            }}
+          >
+            {/* КОЛОКОЛЬЧИК — НАПОМНИТЬ СЕБЕ (владелец 24.09: «вверху справа
+                рядом с выбором цвета, и на клиенте, и на событии»). Стоит
+                напоминание — звонящий колокольчик акцентом. */}
+            <Pressable
+              onPress={() => {
+                haptics.tap();
+                setReminderSheetOpen(true);
+              }}
+              hitSlop={6}
+              style={{ minWidth: 40, minHeight: 44, alignItems: "center", justifyContent: "center" }}
+              accessibilityRole="button"
+              accessibilityLabel={
+                selfReminder
+                  ? `Напоминание: ${selfReminderLabel(selfReminder)}`
+                  : "Напомнить себе"
+              }
+            >
+              {selfReminder ? (
+                <BellRing size={22} strokeWidth={2.2} color={t.accent} />
+              ) : (
+                <Bell size={22} strokeWidth={2} color={t.body} />
+              )}
+            </Pressable>
             {/* Подписанный контрол цвета (не Done-слот): swatch + «Цвет» —
                 самоочевидная кнопка, единственный коммит — градиент снизу. */}
             <Pressable
@@ -3442,6 +3531,13 @@ export default function BookScreen() {
         onSettings={() => router.push("/event-types" as Href)}
         settingsLabel="Типы событий"
         onClose={() => setEventTypeSheetOpen(false)}
+      />
+      <SelfReminderSheet
+        visible={reminderSheetOpen}
+        value={selfReminder}
+        subtitle={`${kind === "event" ? "Событие" : "Запись"} · ${date.split("-").reverse().slice(0, 2).join(".")}, ${timeStart}`}
+        onPick={pickSelfReminder}
+        onClose={() => setReminderSheetOpen(false)}
       />
       <ColorSheet
         visible={colorSheetOpen}
