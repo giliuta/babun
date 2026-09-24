@@ -1017,6 +1017,12 @@ export type Database = {
           address: string
           avatar_url: string | null
           balance: number
+          billing_address: string | null
+          legal_name: string | null
+          memberships: Json
+          reg_number: string | null
+          requisites: Json
+          vat_number: string | null
           birthday: string
           blacklisted: boolean
           city: string
@@ -1054,6 +1060,12 @@ export type Database = {
           address?: string
           avatar_url?: string | null
           balance?: number
+          billing_address?: string | null
+          legal_name?: string | null
+          memberships?: Json
+          reg_number?: string | null
+          requisites?: Json
+          vat_number?: string | null
           birthday?: string
           blacklisted?: boolean
           city?: string
@@ -1091,6 +1103,12 @@ export type Database = {
           address?: string
           avatar_url?: string | null
           balance?: number
+          billing_address?: string | null
+          legal_name?: string | null
+          memberships?: Json
+          reg_number?: string | null
+          requisites?: Json
+          vat_number?: string | null
           birthday?: string
           blacklisted?: boolean
           city?: string
@@ -1976,6 +1994,7 @@ export type Database = {
           appointment_id: string | null
           brigade_id: string | null
           client_id: string | null
+          client_requisites_id: string | null
           client_snapshot: Json | null
           company_id: string | null
           created_at: string
@@ -2009,6 +2028,7 @@ export type Database = {
           appointment_id?: string | null
           brigade_id?: string | null
           client_id?: string | null
+          client_requisites_id?: string | null
           client_snapshot?: Json | null
           company_id?: string | null
           created_at?: string
@@ -2042,6 +2062,7 @@ export type Database = {
           appointment_id?: string | null
           brigade_id?: string | null
           client_id?: string | null
+          client_requisites_id?: string | null
           client_snapshot?: Json | null
           company_id?: string | null
           created_at?: string
@@ -3819,6 +3840,11 @@ export type Database = {
         Args: { p_invitation_id: string }
         Returns: string
       }
+      access_accounts_for: {
+        Args: { p_block: string; p_min: string }
+        Returns: string[]
+      }
+      access_accounts_totals: { Args: never; Returns: string[] }
       access_apply_changes: {
         Args: {
           p_changes: Json
@@ -3828,9 +3854,25 @@ export type Database = {
         }
         Returns: undefined
       }
+      access_calendars: {
+        Args: { p_block: string; p_min: string }
+        Returns: string[]
+      }
+      access_calendars_of: {
+        Args: { p_block: string; p_min: string; p_tenant: string; p_user: string }
+        Returns: string[]
+      }
+      access_company: {
+        Args: { p_block: string; p_min: string }
+        Returns: boolean
+      }
       access_map_for: {
         Args: { p_include_off: boolean; p_tenant_id: string; p_user_id: string }
         Returns: Json
+      }
+      access_records_level: {
+        Args: { p_team: string; p_tenant: string; p_user: string }
+        Returns: string
       }
       access_validate_changes: {
         Args: { p_changes: Json; p_team_ids: string[]; p_tenant: string }
@@ -4204,6 +4246,7 @@ export type Database = {
           p_appointment_id: string
           p_brigade_id: string
           p_client_id: string
+          p_client_requisites_id?: string
           p_company_id?: string
           p_due_on: string
           p_issued_on: string

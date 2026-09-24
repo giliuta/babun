@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { View } from "react-native";
-import { UserRound } from "lucide-react-native";
+import { Text, View } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { matchesClient } from "@babun/shared/local/selectors/client-search";
@@ -21,6 +20,7 @@ import {
 } from "@/features/appointments/booking-prefill";
 import { useClients } from "@/features/clients/queries";
 import { haptics } from "@/lib/haptics";
+import { useThemeColors } from "@/theme/colors";
 
 // ВЫБОР КЛИЕНТА — ОДНА ШТОРКА НА ВЕСЬ ПРОДУКТ (владелец 2026-09-10: «если я
 // прошу „выбрать клиента", архитектура этой шторки должна быть везде
@@ -45,8 +45,11 @@ export function ClientPickerSheet({
   clients: given,
   selectedId,
   excludeId,
+  excludeIds,
   recentIds,
   statsById,
+  linkFor,
+  autoFocusSearch,
   onCreate,
   onSelect,
   onDeselect,
@@ -63,6 +66,16 @@ export function ClientPickerSheet({
   selectedId?: string | null;
   /** Кого не предлагать (себя же — в «кто привёл»). */
   excludeId?: string | null;
+  /** КРУГ СВЯЗЕЙ ЗАПРЕЩЁН В ДВЕРИ (STORY-086, решение 4). Связь живёт у того,
+   *  кто входит: привязать Екатерину к Павлу — значит вписать Павла в её
+   *  `memberships`. Если Павел уже вписан в Екатерину, оба окажутся друг у
+   *  друга и в «Людях», и в строке «чей он», и снять это нечем. Поэтому
+   *  дверь, открытая на карточке Павла, не предлагает те карточки, членом
+   *  которых состоит САМ Павел (их и считает `LinkPickerSheet`).
+   *
+   *  Сервер этого НЕ сторожит намеренно: триггеру пришлось бы читать чужие
+   *  строки ради вежливости интерфейса. */
+  excludeIds?: readonly string[];
   /** Недавние наверх: в девяти случаях из десяти записывают того, кто уже был. */
   recentIds?: string[];
   /** Долг, визиты, деньги, последний визит — вводная о человеке (владелец
@@ -70,6 +83,21 @@ export function ClientPickerSheet({
    *  информация, как это написано в клиентах»). Считает вызывающий: карта на
    *  весь список строится один раз, а не по клиенту на строку. */
   statsById?: Map<string, ClientStats>;
+  /** Чей это человек — «жена · Павел Иванов», «жилец · Наталья · Вилла 5»
+   *  (STORY-086). Звонит Екатерина — по строке видно, что запись встанет на
+   *  Павла. Нет связи — строки нет.
+   *
+   *  СТРОКА ОДНА, А СВЯЗЕЙ БЫВАЕТ НЕСКОЛЬКО (жилец двух вилл одной
+   *  управляющей): что печатать, решает не шторка, а общий построитель
+   *  `linkLine` — первую связь и « +N» хвостом (решение 6). Здесь строка
+   *  только показывается: полный перечень виден на карточке. */
+  linkFor?: (client: Client) => string | undefined;
+  /** Курсор сразу в поиске — у шторки, поднятой дверью с готовым вопросом
+   *  («Кто это», «Кто здесь живёт»): человека там ИЩУТ по имени, и
+   *  лишний тап в поле стоял бы между вопросом и ответом. У «Кто привёл» и
+   *  у выбора клиента в записи автофокуса нет: там сначала смотрят список
+   *  недавних, и клавиатура закрыла бы его половину. */
+  autoFocusSearch?: boolean;
   /** Заводить клиента прямо отсюда. Нет обработчика — ни строки, ни кнопки:
    *  у инвойса и у «кто привёл» создавать некого. */
   onCreate?: (prefill: { name?: string; phone?: string }) => void;
@@ -87,15 +115,22 @@ export function ClientPickerSheet({
    *  этот сигнал. */
   onExited?: () => void;
 }) {
+  const t = useThemeColors();
   const { data: all = [] } = useClients();
   const clients = given ?? all;
   const [q, setQ] = useState("");
   // Что сделать, когда шторка ПОЛНОСТЬЮ уйдёт (см. `onExited`).
   const afterExit = useRef<(() => void) | null>(null);
 
+  // Набор запрещённых собирается ОДИН раз на список, а не сканируется на
+  // каждую строку: у владельца справочник на сотни имён.
+  const banned = useMemo(() => new Set(excludeIds ?? []), [excludeIds]);
   const pool = useMemo(
-    () => clients.filter((c) => c.id !== excludeId && !c.deleted_at),
-    [clients, excludeId],
+    () =>
+      clients.filter(
+        (c) => c.id !== excludeId && !banned.has(c.id) && !c.deleted_at,
+      ),
+    [clients, excludeId, banned],
   );
 
   const quickDraft = useMemo(() => buildQuickClientDraft(q), [q]);
@@ -144,6 +179,13 @@ export function ClientPickerSheet({
   /** Набранное в поиске и есть будущий клиент — уносим его в карточку.
    *  Найденный по номеру дубль — не создание, а выбор: два клиента на одном
    *  номере невозможны. */
+  const typedName = q.trim();
+  const createLabel = duplicate
+    ? `Выбрать «${duplicate.full_name || duplicate.phone || typedName}»`
+    : typedName
+      ? `Создать «${typedName}»`
+      : "Создать клиента";
+
   const create = () => {
     if (!onCreate) return;
     if (duplicate) {
@@ -183,8 +225,14 @@ export function ClientPickerSheet({
       footer={
         onCreate || (onClear && selectedId) ? (
           <View style={{ paddingHorizontal: GUTTER }}>
+            {/* ДВЕРЬ СОЗДАНИЯ ОДНА — В ФУТЕРЕ (22.09, прогон «Добавить →
+                Человек»): под пустым поиском стояли ДВЕ одинаковые двери —
+                строка «Создать клиента «Мария»» и кнопка «Создать клиента».
+                Строка ушла, а кнопка называет набранное сама: видно, кого
+                именно заведут, и найденный по номеру дубль она выбирает, а не
+                заводит второй раз. */}
             {onCreate ? (
-              <Button label="Создать клиента" onPress={create} />
+              <Button label={createLabel} onPress={create} />
             ) : null}
             {onClear && selectedId ? (
               <Button
@@ -209,6 +257,7 @@ export function ClientPickerSheet({
         accessibilityLabel="Поиск клиента"
         onClear={() => setQ("")}
         autoCapitalize="words"
+        autoFocus={autoFocusSearch}
       />
       <SelectList>
         {rows.length > 0 ? (
@@ -217,8 +266,21 @@ export function ClientPickerSheet({
               key={c.id}
               title={c.full_name || "Без имени"}
               subtitle={
-                statsById ? (
-                  <ClientHistoryLine client={c} stats={statsById.get(c.id)} size={12} />
+                statsById || linkFor?.(c) ? (
+                  <>
+                    {statsById ? (
+                      <ClientHistoryLine client={c} stats={statsById.get(c.id)} size={12} />
+                    ) : null}
+                    {linkFor?.(c) ? (
+                      <Text
+                        numberOfLines={1}
+                        maxFontSizeMultiplier={1.3}
+                        style={{ fontSize: 13, color: t.sub }}
+                      >
+                        {linkFor(c)}
+                      </Text>
+                    ) : null}
+                  </>
                 ) : undefined
               }
               hint={c.phone || undefined}
@@ -227,6 +289,7 @@ export function ClientPickerSheet({
               accessibilityLabel={[
                 c.full_name || "Без имени",
                 c.phone,
+                linkFor?.(c) ?? "",
                 statsById ? clientHistoryText(c, statsById.get(c.id)) : "",
               ]
                 .filter(Boolean)
@@ -240,21 +303,6 @@ export function ClientPickerSheet({
           />
         )}
 
-        {/* Строка создания стоит ПОД списком и повторяет набранное: так видно,
-            кого именно заведут. */}
-        {onCreate && q.trim() ? (
-          <SelectRow
-            icon={UserRound}
-            title={
-              duplicate
-                ? `Выбрать существующего «${
-                    duplicate.full_name || duplicate.phone || q.trim()
-                  }»`
-                : `Создать клиента «${q.trim()}»`
-            }
-            onPress={create}
-          />
-        ) : null}
       </SelectList>
     </BottomSheet>
   );

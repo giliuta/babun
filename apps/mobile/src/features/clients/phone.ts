@@ -135,3 +135,76 @@ export function formatPhoneAsYouType(
  *  формата (без «+») — страна по умолчанию, которой его и разбирают.
  *  Пустой номер → undefined (флагу нечего показывать). Один хелпер на
  *  оба режима карточки клиента: черновик и сохранённая строка. */
+
+/** НОМЕР ДЛЯ ГЛАЗ (владелец 22.09: «как правильно писать номер»). Правило
+ *  libphonenumber, своей маски нет: номер своей страны — как его диктуют,
+ *  без кода («99 000101» на Кипре), чужой — с «+кодом» («+7 916 123-45-67»),
+ *  чтобы мастер сразу видел иностранца. Набору это не мешает — звонок идёт
+ *  по разобранному номеру. Неразбираемое — как ввели. */
+export function formatPhoneForDisplay(
+  raw: string,
+  home: CountryCode = DEFAULT_COUNTRY,
+): string {
+  const s = (raw ?? "").trim();
+  if (!s) return s;
+  const parsed = parsePhoneNumberFromString(s, home);
+  if (!parsed || !parsed.isPossible()) return s;
+  return parsed.country === home
+    ? parsed.formatNational()
+    : parsed.formatInternational();
+}
+
+// ─── ВВОД НОМЕРА: СТРАНА ОТДЕЛЬНО, ЦИФРЫ ОТДЕЛЬНО (владелец 22.09: «сделать
+// удобное вписывание номера, выбор кода страны»). Поле держит только цифры
+// номера, код страны — в подписи над ним, тапом меняется. В данные уходит
+// полный номер «+357 99887766»: так его разбирает любой дальнейший код, и
+// номер чужой страны не зависит от страны компании.
+
+/** Флаг страны из ISO-кода: «CY» → 🇨🇾. */
+export function countryFlag(code: CountryCode): string {
+  return String.fromCodePoint(
+    ...[...code.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65),
+  );
+}
+
+/** Страна набранного номера: с «+» — по коду (среди стран списка, самый
+ *  длинный совпавший код), без «+» — страна по умолчанию. */
+export function phoneCountryOf(
+  raw: string,
+  home: CountryCode = DEFAULT_COUNTRY,
+): CountryCode {
+  const s = (raw ?? "").replace(/[^\d+]/g, "");
+  if (!s.startsWith("+")) return home;
+  const digits = s.slice(1);
+  const byCode = [...SUPPORTED_COUNTRIES]
+    .filter((c) => digits.startsWith(countryDialCode(c).slice(1)))
+    .sort((a, b) => countryDialCode(b).length - countryDialCode(a).length);
+  // Один код на несколько стран (+7, +44…) — берём ту, что назовёт сам
+  // номер, иначе первую из списка.
+  const told = new AsYouType();
+  told.input(s);
+  const named = told.getCountry();
+  if (named && (SUPPORTED_COUNTRIES as readonly string[]).includes(named)) return named;
+  return byCode[0] ?? home;
+}
+
+/** Цифры номера без кода страны, группами по маске страны. */
+export function nationalPart(raw: string, country: CountryCode): string {
+  const s = (raw ?? "").trim();
+  if (!s) return "";
+  const dial = countryDialCode(country).slice(1);
+  const digits = s.replace(/\D/g, "");
+  const rest = s.startsWith("+") && digits.startsWith(dial)
+    ? digits.slice(dial.length)
+    : digits;
+  return rest ? new AsYouType(country).input(rest) : "";
+}
+
+/** Полный номер из страны и набранных цифр; пусто — пусто. Набрали сами
+ *  «+…» — уважаем как есть. */
+export function composePhone(typed: string, country: CountryCode): string {
+  const s = (typed ?? "").trim();
+  if (!s) return "";
+  if (s.startsWith("+")) return s;
+  return `${countryDialCode(country)} ${s}`;
+}

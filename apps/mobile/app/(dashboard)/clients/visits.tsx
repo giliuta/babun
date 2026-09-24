@@ -1,9 +1,10 @@
 import { useMemo } from "react";
-import { ScrollView, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS, getDebtAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Spinner } from "@/components/ui/Spinner";
@@ -11,6 +12,7 @@ import { NavRow, RowCaption, RowGroup } from "@/components/ui/card-rows";
 import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { todayYMD } from "@/features/clients/filter";
+import { unpaidVisits } from "@/features/clients/unpaid-visits";
 import { useClient } from "@/features/clients/queries";
 import { buildTimeline, type TimelineEvent } from "@/features/clients/timeline";
 import { archivedVisitTag, visitRowValue } from "@/features/clients/archived-visit";
@@ -53,7 +55,12 @@ export default function ClientVisitsScreenRoute() {
 
 function ClientVisitsScreen() {
   const t = useThemeColors();
-  const { clientId } = useLocalSearchParams<{ clientId: string }>();
+  // `unpaid=1` — вход из сводки по «Долг €…»: только неоплаченные записи.
+  const { clientId, unpaid } = useLocalSearchParams<{
+    clientId: string;
+    unpaid?: string;
+  }>();
+  const unpaidOnly = unpaid === "1";
   const { data: client } = useClient(clientId ?? "");
   const { data: appointments = [], isLoading } = useClientAppointments(
     clientId ?? "",
@@ -87,8 +94,27 @@ function ClientVisitsScreen() {
   // Локальная дата, а не UTC: `toISOString()` ночью на Кипре отдавал
   // вчерашний день, и сегодняшние визиты уезжали в «Впереди».
   const today = todayYMD();
-  const upcoming = sorted.filter(
-    (a) => a.date >= today && a.status !== "completed" && a.status !== "cancelled",
+  // НЕОПЛАЧЕННЫЕ — правилом долга из сводки (`unpaid-visits.ts`), а не
+  // итогом ниже: тот складывает только выполненные, а «Долг» в сводке — ещё
+  // и прошедшие незакрытые. Тапнули по €240 — список обязан дать €240.
+  const unpaidList = useMemo(
+    () => unpaidVisits(appointments, today),
+    [appointments, today],
+  );
+  const unpaidIds = useMemo(
+    () => new Set(unpaidList.list.map((a) => a.id)),
+    [unpaidList],
+  );
+  // Будущая запись долгом не бывает — в фильтре группы «Впереди» нет.
+  const upcoming = useMemo(
+    () =>
+      unpaidOnly
+        ? []
+        : sorted.filter(
+            (a) =>
+              a.date >= today && a.status !== "completed" && a.status !== "cancelled",
+          ),
+    [unpaidOnly, sorted, today],
   );
   const pastAppts = sorted.filter((a) => !upcoming.includes(a));
 
@@ -116,11 +142,13 @@ function ClientVisitsScreen() {
   const byYear = useMemo(() => {
     const groups = new Map<string, TimelineEvent[]>();
     for (const e of past) {
+      // В фильтре — только записи с долгом: заметки и напоминания не долг.
+      if (unpaidOnly && !(e.apptId && unpaidIds.has(e.apptId))) continue;
       const y = yearOf(e.date);
       groups.set(y, [...(groups.get(y) ?? []), e]);
     }
     return [...groups.entries()];
-  }, [past]);
+  }, [past, unpaidOnly, unpaidIds]);
 
   // Запись открывается ПОВЕРХ истории, а не через таб «Календарь».
   // Владелец 2026-07-26: «нажимаю на запись — оно открывает эту запись; если
@@ -157,21 +185,60 @@ function ClientVisitsScreen() {
 
   return (
     <Screen>
+      {/* ФИЛЬТР НАЗВАН В ШАПКЕ и снимается там же словом «Все» — как разрез
+          ленты в «Финансах» (PanelHeader). В содержимом кнопок нет: снятый
+          фильтр возвращает ту же страницу целиком, без второго захода. */}
       <ScreenHeader
-        title="История"
+        title={unpaidOnly ? "Неоплаченные" : "История"}
         subtitle={client?.full_name || undefined}
+        right={
+          unpaidOnly ? (
+            <Pressable
+              onPress={() => {
+                haptics.tap();
+                router.setParams({ unpaid: "" });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Показать всю историю"
+              hitSlop={8}
+              style={({ pressed }) => ({
+                minHeight: 44,
+                justifyContent: "center",
+                paddingHorizontal: 12,
+                opacity: pressed ? 0.5 : 1,
+              })}
+            >
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{ fontSize: 16, fontWeight: "600", color: t.accent }}
+              >
+                Все
+              </Text>
+            </Pressable>
+          ) : undefined
+        }
       />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         {isLoading ? (
           <View className="items-center py-10">
             <Spinner size={26} label="Загрузка истории записей" />
           </View>
+        ) : unpaidOnly ? (
+          // Итог фильтра — тем же числом, что «Долг» в сводке.
+          <RowCaption
+            text={
+              unpaidList.list.length > 0
+                ? `${formatCountRu(unpaidList.list.length, ["запись", "записи", "записей"])} · долг ${formatEUR(unpaidList.total)}`
+                : "Неоплаченных записей нет."
+            }
+            tone={unpaidList.list.length > 0 ? "warning" : "quiet"}
+          />
         ) : sorted.length === 0 && past.length === 0 ? (
           <RowCaption text="Пока ничего не было." />
         ) : null}
 
         {/* Итог сверху — то, ради чего историю чаще всего и открывают. */}
-        {done.length > 0 ? (
+        {!unpaidOnly && done.length > 0 ? (
           <RowCaption
             text={`${done.length} ${visitsWord(done.length)} · заплачено ${formatEUR(spent)}${
               debt > 0 ? ` · долг ${formatEUR(debt)}` : ""

@@ -120,7 +120,9 @@ export function PhotoTile({
   onOpen,
   onDelete,
 }: {
-  photo: AppointmentPhotoRecord;
+  /** Плитке нужны только путь (видео или фото) и ссылка — поэтому её же
+   *  ставит блок файлов клиента для вложений и фото с выездов. */
+  photo: Pick<AppointmentPhotoRecord, "storage_path" | "url">;
   deleting: boolean;
   onOpen: () => void;
   /** Нет — удалять нельзя: ни корзинки, ни удержания. */

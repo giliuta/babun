@@ -81,6 +81,8 @@ export interface ClientsCapabilities {
   book: boolean;
   /** Файлы и фото: хранилище читает компанию из токена, а не из заголовка. */
   files: boolean;
+  /** ЛЮДИ КАРТОЧКИ: блок есть целиком или его НЕТ. */
+  links: boolean;
   /** Правка уходит на сервер сразу; очереди на потом нет. */
   onlineOnly: boolean;
 }
@@ -103,6 +105,19 @@ export function capabilitiesOf(scope: ClientsScope): ClientsCapabilities {
     money: own,
     book: !record && scope.isActive,
     files: own && scope.isActive,
+    // ЛЮДИ КАРТОЧКИ: БЛОК ЕСТЬ ЦЕЛИКОМ ИЛИ ЕГО НЕТ (STORY-086).
+    //
+    // `list_client_members` отдаёт людей владельцу либо сотруднику, у которого
+    // набор НЕ урезан: «Какие клиенты: Все» И «Телефоны и контакты: Смотрит».
+    // Урезанному она отдаёт ноль строк — и «видно, но пусто» соврало бы: связь,
+    // которую нечем назвать, читается как «жилец · (никого)». Поэтому условие
+    // здесь повторяет серверное слово в слово, а не смягчает его: блок либо
+    // стоит целиком, либо его на странице нет.
+    //
+    // Клиент ЗАПИСИ сюда не проходит сам собой: его окно
+    // (`list_master_clients_safe`) связей не отдаёт вовсе, а `everyClient` у
+    // него `false` — набор мастера это его заявки, а не база.
+    links: (own || scope.everyClient) && scope.contacts,
     onlineOnly: !scope.isActive || scope.kind === "member",
   };
 }
@@ -352,6 +367,24 @@ export function clientsRouteDecision(input: RouteInput): RouteDecision {
   return { state: "open", scope: source };
 }
 
+/** ИСТОЧНИК ВНЕ ВКЛАДКИ — КОМПАНИЯ УСТРОЙСТВА И РОЛЬ В НЕЙ.
+ *
+ *  Карточку клиента зовут не только из вкладки: из записи, из шторки долга, из
+ *  пикеров. Там провайдера источника нет, и хуки берут активную компанию —
+ *  ровно как до общей страницы. Правилам, которым мало `QueryScope` (связи
+ *  спрашивают `caps.links`, а он считается из уровней), нужен тот же ответ
+ *  ЦЕЛЫМ источником, и собирается он здесь — одной веткой с `card` выше, а не
+ *  вторым её списком. */
+export function activeCompanyScope(
+  tenantId: string,
+  role: UserRole,
+  name: string | null,
+): ClientsScope {
+  return can(role, "operate-clients")
+    ? { ...ownScope(tenantId, new Map(), tenantId), tenantName: name, role }
+    : recordScope(tenantId, role, name);
+}
+
 // ИНСТРУМЕНТЫ ШАПКИ НЕ ЗАВИСЯТ ОТ ТОГО, ЧТО ОТКРЫТО В КАЛЕНДАРЕ.
 //
 // Владелец 20.09: «визуал вообще не меняется… как есть в моей команде это
@@ -381,6 +414,23 @@ export function clientsInsightsHref(scope: ClientsScope) {
 /** Ссылка на карточку клиента ВНУТРИ вкладки: компания едет в `?tenant=`. */
 export function clientCardHref(id: string, tenantId: string) {
   return { pathname: "/clients/[id]" as const, params: { id, tenant: tenantId } };
+}
+
+/** Параметры подстраницы карточки («Все объекты», «Люди», «Реквизиты»,
+ *  «Файлы», «История»). Карточка клиента компании-работодателя открыта с
+ *  `tenant` — и подстраница обязана унести его с собой, иначе откроется в
+ *  АКТИВНОЙ компании: «это часть компании» или вечная загрузка, а правки
+ *  уйдут не туда (аудит 23.09). */
+export function clientSubParams(
+  clientId: string,
+  scope: { tenantId: string; isActive: boolean } | null | undefined,
+  extra: Record<string, string> = {},
+): Record<string, string> {
+  return {
+    clientId,
+    ...(scope && !scope.isActive ? { tenant: scope.tenantId } : {}),
+    ...extra,
+  };
 }
 
 /** Отказ записи без сети, когда правится не активная компания. */

@@ -761,6 +761,18 @@ function makeServerRow(
     tenant_id: tenantId,
     full_name: input.full_name ?? "",
     phone: input.phone ?? "",
+    // STORY-085 — те же поля, что у онлайн-записи (`clientToInsert`): офлайн-
+    // очередь, забывшая поле, стирает его при повторной отправке.
+    legal_name: input.legal_name ?? null,
+    vat_number: input.vat_number ?? null,
+    reg_number: input.reg_number ?? null,
+    billing_address: input.billing_address ?? null,
+    // Наборы реквизитов — целым массивом, как связи ниже.
+    requisites: (input.requisites ?? []) as unknown as CachedClient["requisites"],
+    // Связи едут целым массивом: третий ключ `location_id` (STORY-086) внутри
+    // jsonb, перечислять ключи здесь нельзя — забытый ключ офлайн-очередь
+    // стёрла бы при отправке, а перечень пришлось бы держать в двух местах.
+    memberships: (input.memberships ?? []) as unknown as CachedClient["memberships"],
     whatsapp_phone: input.whatsapp_phone ?? "",
     email: input.email ?? "",
     sms_name: input.sms_name ?? "",
@@ -804,6 +816,12 @@ function patchToRow(patch: Partial<Client>): Partial<CachedClient> {
   const out: Partial<CachedClient> = {};
   if (patch.full_name !== undefined) out.full_name = patch.full_name;
   if (patch.phone !== undefined) out.phone = patch.phone;
+  if (patch.legal_name !== undefined) out.legal_name = patch.legal_name ?? null;
+  if (patch.vat_number !== undefined) out.vat_number = patch.vat_number ?? null;
+  if (patch.reg_number !== undefined) out.reg_number = patch.reg_number ?? null;
+  if (patch.billing_address !== undefined) out.billing_address = patch.billing_address ?? null;
+  if (patch.requisites !== undefined) out.requisites = patch.requisites as unknown as CachedClient["requisites"];
+  if (patch.memberships !== undefined) out.memberships = patch.memberships as unknown as CachedClient["memberships"];
   if (patch.whatsapp_phone !== undefined) out.whatsapp_phone = patch.whatsapp_phone;
   if (patch.email !== undefined) out.email = patch.email;
   if (patch.sms_name !== undefined) out.sms_name = patch.sms_name;

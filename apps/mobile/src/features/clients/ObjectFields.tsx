@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Ref } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { MapPinned, Send, Tag } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
@@ -92,6 +92,7 @@ export function ObjectFields({
   onTypeSettings,
   onRequestFromClient,
   onCommit,
+  addressRef,
 }: {
   value: ObjectFieldsValue;
   typeOptions: string[];
@@ -106,6 +107,8 @@ export function ObjectFields({
   /** Уход с поля. Правка пишет объект сразу; создание молчит — там всё
    *  уезжает одной кнопкой. */
   onCommit?: () => void;
+  /** Поле адреса — лист нового объекта ставит в него курсор сам. */
+  addressRef?: Ref<TextInput>;
 }) {
   const t = useThemeColors();
   /** Раскрыта ли карта под адресом. */
@@ -234,6 +237,7 @@ export function ObjectFields({
           live
           onSave={(v) => onChange({ target: v })}
           onEditEnd={onCommit}
+          inputRef={addressRef}
         />
 
         {/* КАРТА РАСКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, ПОД АДРЕСОМ: два модальных листа в

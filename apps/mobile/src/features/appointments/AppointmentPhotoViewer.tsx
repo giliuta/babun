@@ -27,7 +27,9 @@ export function AppointmentPhotoViewer({
   onClose,
   onRetry,
 }: {
-  photo: AppointmentPhotoRecord | null;
+  /** Просмотру нужны ссылка, вид и подпись — фото записи и картинка из
+   *  вложений клиента открываются одним и тем же экраном. */
+  photo: Pick<AppointmentPhotoRecord, "url" | "kind" | "caption"> | null;
   onClose: () => void;
   onRetry: () => Promise<boolean>;
 }) {

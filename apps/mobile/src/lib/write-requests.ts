@@ -24,6 +24,9 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "current_tenant_profile_safe",
   "current_user_role",
   "invitation_preview",
+  // STORY-086: `stable` объявлено в `20260922010000_client_members_read.sql`;
+  // в боевой базе её ещё нет — сверить `provolatile` после наката.
+  "list_client_members",
   "list_dispatcher_services_safe",
   "list_master_appointments_safe",
   "list_master_clients_safe",

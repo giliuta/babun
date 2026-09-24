@@ -1,29 +1,57 @@
-import { useState } from "react";
+import type { ReactNode } from "react";
+import { Paperclip } from "lucide-react-native";
+import { ChooseRow } from "@/components/ui/ChooseRow";
+import { SectionCard } from "@/components/ui/SectionCard";
 import type { Appointment } from "@babun/shared/local/appointments";
-import type { Client, ClientTag, Location } from "@babun/shared/local/clients";
-import ObjectsBlock from "@/features/clients/blocks/ObjectsBlock";
-import { useLocationRequestActions } from "@/features/clients/location-request-actions";
-import { useLocationWriter } from "@/features/clients/use-location-writer";
-import { ObjectSheet } from "@/features/clients/ObjectSheet";
-import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
-import DocumentationBlock from "@/features/clients/blocks/DocumentationBlock";
-import NotesBlock from "@/features/clients/blocks/NotesBlock";
+import type { Client, Location } from "@babun/shared/local/clients";
+import type { ClientLinkItem } from "@/features/clients/blocks/ClientLinksBlock";
+import { ClientObjectsSection, OBJECTS_ON_CARD } from "@/features/clients/ClientObjectsSection";
+import {
+  REQUISITES_ON_CARD,
+  RequisitesBlock,
+} from "@/features/clients/blocks/RequisitesBlock";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
+import ClientFilesBlock from "@/features/clients/blocks/ClientFilesBlock";
 import { PersonalBlock } from "@/features/clients/blocks/PersonalBlock";
 import { RowCaption } from "@/components/ui/card-rows";
-import { useCurrentRole } from "@/features/settings/tenant";
 
-const EMPTY_LOCATIONS: Location[] = [];
 
 interface ClientProfileBlocksProps {
   client: Client;
   /** Визиты клиента — блок объектов считает по ним срок обслуживания. */
   appointments: readonly Appointment[];
   draft: boolean;
-  tags: ClientTag[];
   update: (patch: Partial<Client>) => Promise<boolean>;
   /** Инвойсы и чеки клиента. У клиента компании, где человек только
    *  работает, их нет: это деньги той компании (STORY-082). */
   showDocuments?: boolean;
+  /** ЖИЛЬЦЫ ОБЪЕКТА ОДНОЙ СТРОКОЙ — показание под объектом на странице
+   *  («Мария Спиру · жилец, Андреас · жилец»). Считает страница: связи живут
+   *  у людей, а не в карточке-группе, и приезжают они отдельным запросом.
+   *  Нет пропа — четвёртой строки у объекта нет вовсе. */
+  residentsLine?: (loc: Location) => string | undefined;
+  /** ЖИЛЬЦЫ ЭТОГО ОБЪЕКТА СТРОКАМИ — блок «Жильцы» внутри листа объекта.
+   *  Тот же перечень, что на странице, только отфильтрованный по месту. */
+  residentsAt?: (loc: Location) => readonly ClientLinkItem[];
+  /** ЕДИНСТВЕННАЯ ДВЕРЬ ЗАВЕДЕНИЯ ЖИЛЬЦА — в листе объекта (ТЗ, «что НЕ
+   *  делаем» 3). Лист к этому моменту уже уехал: шторку поднимает страница. */
+  onAddResident?: (loc: Location) => void;
+  onOpenResident?: (item: ClientLinkItem) => void;
+  onResidentRole?: (item: ClientLinkItem, role: string) => void;
+  onRemoveResident?: (item: ClientLinkItem) => void;
+  /** Открыть страницу всех объектов клиента. */
+  onOpenObjects?: () => void;
+  /** Открыть страницу всех наборов реквизитов. */
+  onOpenRequisites?: () => void;
+  /** Новый клиент: «Добавить» в «Файлах» сперва создаёт карточку. */
+  onDraftFiles?: () => void;
+  /** Карточку только что создали ради файла — сразу открыть лист. */
+  openFilesOnArrive?: boolean;
+  onArrived?: () => void;
+  /** Метка и тег плитками — стоят ПЕРЕД «Личным» (владелец 22.09: «это не
+   *  должно быть на первой странице»). Собирает страница: ей видно каталог
+   *  тегов и право менять. */
+  labelTags?: ReactNode;
 }
 
 // БЛОКИ КАРТОЧКИ — НА `SectionCard`, КАК НА СТРАНИЦЕ ЗАПИСИ (владелец
@@ -44,65 +72,40 @@ export function ClientProfileBlocks({
   client,
   appointments,
   draft,
-  tags,
   update,
   showDocuments = true,
+  residentsLine,
+  residentsAt,
+  onAddResident,
+  onOpenResident,
+  onResidentRole,
+  onRemoveResident,
+  onOpenObjects,
+  onOpenRequisites,
+  onDraftFiles,
+  openFilesOnArrive,
+  onArrived,
+  labelTags,
 }: ClientProfileBlocksProps) {
-  const [objectsOpen, setObjectsOpen] = useState(false);
-  // Правка объекта — лист, а не страница (владелец 2026-08-06). Страницы
-  // /clients/object и /clients/unit удалены вместе с уровнем «Информация».
-  // Правка и удаление — ОДИН лист с двумя настроениями: два экземпляра
-  // заводили по своей очереди записи и по своему снимку массива, и свайп
-  // «Удалить» после правки откатывал её вместе с чужими объектами.
-  const [sheet, setSheet] = useState<{
-    id: string;
-    askDelete?: boolean;
-  } | null>(null);
-  // ОДИН ПИСАТЕЛЬ НА `locations` ДЛЯ ВСЕЙ КАРТОЧКИ. Свой писатель в каждом
-  // листе означал три независимые очереди от трёх снимков: добавили объект в
-  // одном листе, тут же поправили другой — и новый объект стирался ответом
-  // из соседней очереди.
-  const locationWriter = useLocationWriter(
-    client.locations ?? EMPTY_LOCATIONS,
-    update,
-  );
-  // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС» (STORY-077) — у сохранённого клиента и
-  // только владельцу/диспетчеру: черновику ссылку не выписать (нет id), а
-  // мастеру сервер откажет.
-  const role = useCurrentRole().data;
-  const canRequestAddress = !draft && (role === "owner" || role === "dispatcher");
-  const requestActions = useLocationRequestActions();
+  const caps = useClientsCapabilities();
+
   return (
     <>
-      <ObjectsBlock
+      <ClientObjectsSection
         client={client}
-        onOpen={(id) => setSheet({ id })}
-        onDelete={(loc) => setSheet({ id: loc.id, askDelete: true })}
-        onAdd={() => setObjectsOpen(true)}
-        requestsEnabled={canRequestAddress}
-      />
-      {/* Свайп по строке открывает тот же лист сразу с вопросом об удалении —
-          подтверждение и запись остаются в одном месте. */}
-      <ObjectEditSheet
-        visible={sheet !== null}
-        client={client}
-        locationId={sheet?.id ?? null}
-        askDelete={sheet?.askDelete}
-        writer={locationWriter}
-        onRequestFromClient={
-          canRequestAddress ? () => void requestActions.request(client.id) : undefined
-        }
-        onClose={() => setSheet(null)}
-      />
-      {/* Добавление объекта — лист снизу (владелец 2026-07-27). Живёт рядом с
-          блоком, а не в карточке: кроме открытия у карточки к нему дел нет. */}
-      <ObjectSheet
-        visible={objectsOpen}
-        writer={locationWriter}
-        onRequestFromClient={
-          canRequestAddress ? () => void requestActions.request(client.id) : undefined
-        }
-        onClose={() => setObjectsOpen(false)}
+        update={update}
+        draft={draft}
+        appointments={appointments}
+        // НА КАРТОЧКЕ — ПЕРВЫЕ ТРИ И ДВЕРЬ (владелец 22.09: «если у клиента
+        // 12 объектов, их надо листать, чтобы добраться до файлов»).
+        limit={OBJECTS_ON_CARD}
+        onOpenAll={onOpenObjects}
+        residentsLine={residentsLine}
+        residentsAt={residentsAt}
+        onAddResident={onAddResident}
+        onOpenResident={onOpenResident}
+        onResidentRole={onResidentRole}
+        onRemoveResident={onRemoveResident}
       />
 
       {/* СОЗДАНИЕ ПОКАЗЫВАЕТ ВСЮ СТРАНИЦУ (владелец 2026-07-26: «страница
@@ -113,23 +116,52 @@ export function ClientProfileBlocks({
           Каждое поле этих блоков проходит белый список create_client_with_tags
           (phones, locations, notes, city, birthday, language, telegram/
           instagram/whatsapp) — то есть в черновике они пишут в тот же объект,
-          который уедет в базу по «Готово», а не в пустоту. */}
+          который уедет в базу по «Создать клиента», а не в пустоту. */}
       {/* Строки «История записей · N» здесь больше нет: в историю ведёт сама
           сводка под номером — «6 визитов · €600 · был 30 мая» (владелец
           2026-08-02). Число визитов и так стояло в сводке, и строка повторяла
           его второй раз ради одного шеврона. */}
 
-      {/* ПОРЯДОК (владелец 2026-08-06): объекты → заметки → документация →
+      {/* ПОРЯДОК (владелец 2026-08-06): объекты → заметки → файлы →
           личное. Сразу под объектами — то, что ЗАПИСЫВАЮТ по ходу дела, и
           только потом справочные свойства человека.
 
-          ДОКУМЕНТАЦИЯ — СВОЯ КАРТОЧКА (владелец 2026-09-07: «заметка клиента
-          — отдельный блок, а документация со счетами и чеками — всё вместе,
-          с разбивкой по записям»). В черновике её нет: документы живут у
-          записей, а записей у несохранённого клиента не бывает. */}
-      <NotesBlock client={client} update={update} />
-      {!draft && showDocuments ? <DocumentationBlock clientId={client.id} /> : null}
-      <PersonalBlock client={client} update={update} tags={tags} />
+          ФАЙЛЫ — ТОТ ЖЕ БЛОК, ЧТО У ЗАПИСИ (владелец 22.09: «уберём полностью
+          блок документации и просто туда вставим, как у нас файлы, как везде
+          хранятся файлы»). В черновике его нет: путь в хранилище строится по
+          id клиента, которого ещё нет. Добавлять — только с правом менять
+          карточку и там, где хранилище видит компанию (`caps.files`). */}
+      {!draft && showDocuments ? (
+        <ClientFilesBlock
+          clientId={client.id}
+          canChange={caps.edit && caps.files}
+          openOnArrive={openFilesOnArrive}
+          onArrived={onArrived}
+        />
+      ) : null}
+      {/* В НОВОМ КЛИЕНТЕ — ТОТ ЖЕ БЛОК (владелец 22.09: «при создании — те
+          же самые блоки»). Файл кладётся по id клиента, поэтому «Добавить»
+          сперва создаёт карточку, а лист открывается уже на ней. */}
+      {draft && showDocuments && caps.edit && caps.files && onDraftFiles ? (
+        <SectionCard title="Файлы">
+          <ChooseRow compact icon={Paperclip} label="Добавить файл" onPress={onDraftFiles} />
+        </SectionCard>
+      ) : null}
+      {/* РЕКВИЗИТЫ — у любого клиента, постоянным блоком (владелец
+          2026-09-21: «инвойс могут просить прямо на клиента с его
+          реквизитами»). Только владельцу: это получатель на инвойсе, документы
+          и деньги (STORY-085). */}
+      {caps.money ? (
+        <RequisitesBlock
+          client={client}
+          draft={draft}
+          update={update}
+          limit={REQUISITES_ON_CARD}
+          onOpenAll={onOpenRequisites}
+        />
+      ) : null}
+      {labelTags ?? null}
+      <PersonalBlock client={client} update={update} />
       {/* Строки «Ещё» больше нет (владелец 2026-08-02: «чтобы внизу
           уменьшить»). Мессенджеры и почта уехали к номерам — их добавляют
           плюсом в блоке контактов; источник — в «Личное», к метке и дню

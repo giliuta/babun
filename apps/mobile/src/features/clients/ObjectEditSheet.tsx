@@ -9,6 +9,10 @@ import { Button } from "@/components/ui/Button";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ActionRow } from "@/components/ui/card-rows";
 import { useLastNonNull } from "@/lib/use-last-non-null";
+import {
+  ClientLinksBlock,
+  type ClientLinkItem,
+} from "@/features/clients/blocks/ClientLinksBlock";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
 import {
   ObjectFields,
@@ -36,8 +40,20 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Удаление живёт ЗДЕСЬ (и свайпом по строке на карточке) — с подтверждением:
 // объект с историей стирается насовсем.
+//
+// ЖИЛЬЦЫ ЗАВОДЯТСЯ ТОЖЕ ЗДЕСЬ И БОЛЬШЕ НИГДЕ (STORY-086). Вопрос «кто здесь
+// живёт» задаётся там, где место названо, — в листе самой виллы. На странице
+// клиента двери под каждым объектом НЕТ намеренно: у управляющей десять вилл,
+// и это были бы десять одинаковых акцентных строк при нуле жильцов (ТЗ,
+// «что НЕ делаем» 3). Под виллой на странице стоит только ПОКАЗАНИЕ —
+// четвёртая строка «Мария Спиру · жилец, Андреас · жилец».
 
 const EMPTY_LOCATIONS: Location[] = [];
+/** Ссылка постоянная: новый пустой массив на каждый рендер перерисовывал бы
+ *  блок жильцов вместе с полем роли под курсором. */
+const EMPTY_RESIDENTS: readonly ClientLinkItem[] = [];
+/** Карточку жильца открывать некуда (лист записи) — строка остаётся строкой. */
+const NOOP = () => {};
 
 export function ObjectEditSheet({
   visible,
@@ -45,6 +61,11 @@ export function ObjectEditSheet({
   locationId,
   writer,
   askDelete,
+  residents,
+  onAddResident,
+  onOpenResident,
+  onResidentRole,
+  onRemoveResident,
   onRequestFromClient,
   onDeleted,
   onClose,
@@ -58,6 +79,22 @@ export function ObjectEditSheet({
   writer: LocationWriter;
   /** Открыт свайпом «Удалить» — спрашиваем сразу, форму не показываем. */
   askDelete?: boolean;
+  /** Кто живёт НА ЭТОМ объекте. Лист в сеть не ходит и связи не считает:
+   *  данные приносит страница, у которой они уже есть. Нет пропа — блока
+   *  «Жильцы» в листе нет вовсе (форма записи, роль без права на контакты). */
+  residents?: readonly ClientLinkItem[];
+  /** ЕДИНСТВЕННАЯ ДВЕРЬ ЗАВЕДЕНИЯ ЖИЛЬЦА. Зовётся НЕ по тапу, а когда лист
+   *  полностью ушёл: шторка выбора — второе окно `Modal`, и поверх
+   *  уезжающего листа iOS отвечает «already presenting» (см. `onExited`).
+   *  Объект передаётся тем же вызовом — дверь тем и ценна, что уже знает
+   *  место, и спрашивать его вторым шагом не надо. */
+  onAddResident?: (loc: Location) => void;
+  /** Открыть карточку жильца — это отдельный клиент со своей страницей. */
+  onOpenResident?: (item: ClientLinkItem) => void;
+  /** Нет — роли жильцов только читаются (нет права менять контакты). */
+  onResidentRole?: (item: ClientLinkItem, role: string) => void;
+  /** Свайп «Убрать»: карточка человека остаётся в клиентах, уходит связь. */
+  onRemoveResident?: (item: ClientLinkItem) => void;
   /** «Попросить адрес у клиента» — та же иконка, что у листа создания
    *  (2026-09-10). Объект часто заводят по названию улицы и уточняют точку
    *  при первом выезде: дослать ссылку УЖЕ созданному объекту надо чаще, чем
@@ -97,6 +134,10 @@ export function ObjectEditSheet({
   /** Что сделать, когда лист полностью уйдёт (см. `onExited`). Хук стоит
    *  ДО `if (!loc) return null`: иначе число хуков плясало между рендерами. */
   const afterExit = useRef<(() => void) | null>(null);
+  const residentsHere = useMemo(
+    () => (residents ?? EMPTY_RESIDENTS).map((r) => ({ ...r, place: undefined })),
+    [residents],
+  );
   const [target, setTarget] = useState("");
   const [note, setNote] = useState("");
   useEffect(() => {
@@ -269,6 +310,42 @@ export function ObjectEditSheet({
             />
           </SectionCard>
         ) : null}
+
+        {/* ЖИЛЬЦЫ — ТОТ ЖЕ БЛОК СВЯЗЕЙ, ЧТО НА КАРТОЧКЕ, только плотнее: в
+            листе блоков несколько, и воздух страницы съедал бы треть окна
+            (`dense`, владелец 2026-09-10 — «сделай все эти блоки
+            компактнее»). Второй вёрстки строки человека в продукте нет: она
+            одна на «Людей» карточки, «Чей он» и «Жильцов» (`LinkRow`).
+
+            Блок сам исчезает, когда показывать нечего и двери нет, — так он
+            не занимает место в листе записи, где жильцов не заводят. */}
+        <ClientLinksBlock
+          dense
+          title="Жильцы"
+          // Место жильца здесь не пишется: лист и есть это место, и «· Вилла
+          // 5» у каждого жильца Виллы 5 было бы эхом заголовка.
+          items={residentsHere}
+          addLabel="Добавить жильца"
+          onAdd={
+            onAddResident
+              ? () => {
+                  // СПЕРВА УЕЗЖАЕТ ЛИСТ, ПОТОМ ПОДНИМАЕТСЯ ШТОРКА. Таймер
+                  // здесь мерил бы анимацию, а не снятие окна, — ровно так
+                  // «Удалить объект» из этого листа однажды получал от iOS
+                  // «already presenting» и не показывался вовсе
+                  // (2026-09-04). Набранное в полях коммитим, как при любом
+                  // другом закрытии.
+                  const place = loc;
+                  afterExit.current = () => onAddResident(place);
+                  commitAll();
+                  onClose();
+                }
+              : undefined
+          }
+          onOpen={onOpenResident ?? NOOP}
+          onRoleChange={onResidentRole}
+          onRemove={onRemoveResident}
+        />
       </ScrollView>
 
       <View

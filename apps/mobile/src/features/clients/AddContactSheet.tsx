@@ -19,6 +19,9 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Уже заполненное в листе не показывается: строка такого способа связи и так
 // стоит на карточке, и второй раз его не заводят.
+//
+// ЛЮДЕЙ ЗДЕСЬ НЕТ: у них свой блок «Люди» с дверью «Добавить человека»
+// (владелец 22.09). Этот лист — только способы связи ЭТОГО клиента.
 
 export type AddContactChoice = "phone" | ContactFieldId;
 
@@ -27,11 +30,14 @@ export function AddContactSheet({
   client,
   onPick,
   onClose,
+  onExited,
 }: {
   visible: boolean;
   client: Client;
   onPick: (choice: AddContactChoice) => void;
   onClose: () => void;
+  /** Лист ушёл — сюда страница вешает следующую шторку (выбор человека). */
+  onExited?: () => void;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -78,6 +84,7 @@ export function AddContactSheet({
       onSettings={() => router.push(channelsHref)}
       settingsLabel="Способы связи"
       onClose={onClose}
+      onExited={onExited}
     />
   );
 }

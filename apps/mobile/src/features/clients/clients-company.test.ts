@@ -262,6 +262,7 @@ describe("что можно в источнике", () => {
       money: true,
       book: true,
       files: true,
+      links: true,
       onlineOnly: false,
     });
   });
@@ -288,6 +289,8 @@ describe("что можно в источнике", () => {
       // Календарь этой компании сейчас и открыт — запись пойдёт в него.
       book: true,
       files: false,
+      // «Какие клиенты: из его календарей» — набор урезан, и блока людей нет.
+      links: false,
       onlineOnly: true,
     });
   });

@@ -385,7 +385,13 @@
 ## 6. Блок «Файлы»
 
 **Канон:** `src/features/appointments/AppointmentFilesBlock.tsx` — один и тот
-же блок у записи и у события.
+же блок у записи и у события. Вид — общие плитки
+`src/features/appointments/AppointmentFileTiles.tsx` (`PhotoTile` — квадрат фото
+и видео, `DocumentPill` — плашка документа, инвойса и чека) и общий лист
+«Добавить» `src/features/appointments/FileAddSheet.tsx`. На странице клиента
+тот же блок собирает `src/features/clients/blocks/ClientFilesBlock.tsx` из тех
+же плиток и того же листа (владелец 22.09: «как у нас файлы, как везде
+хранятся файлы») — второй анатомии нет.
 
 ```tsx
 <AppointmentFilesBlock
@@ -486,8 +492,8 @@
 |---|---|---|---|
 | Метка записи и события | докет `TeamLabelRow` | `reference/LabelPickerSheet` | нет |
 | Метка дня | тап по числу в календаре | `calendar/DayLabelSheet` (обёртка над той же) | нет |
-| Метка клиента | строка в блоке «Личное» | `reference/LabelPickerSheet` | нет |
-| Теги клиента | строка в блоке «Личное» | `clients/TagPickerSheet` | «Применить» |
+| Метка клиента | плитка `IdentityCard` под блоком «Клиент» (`ClientLabelTags`) | `reference/LabelPickerSheet` | нет |
+| Тег клиента | плитка `IdentityCard` под блоком «Клиент» (`ClientLabelTags`) | `clients/TagPickerSheet` — тег один, тап выбирает и закрывает | нет |
 | Категория операции | `finances/CategoryBlock` (в листе операции — плотная строка в общей карточке с суммой) | `ui/PickerSheet` | нет |
 | Тип события | `appointments/EventTypeBlock` — тот же `ReferenceBlock`, что у категории | `ui/PickerSheet`; тап по выбранной строке снимает тип | нет |
 | Счёт | `PaymentTiles` либо `ValueRow` | `ui/ValuePickerSheet` | нет |
@@ -590,14 +596,31 @@
 Все на `SectionCard` — той же архитектуры, что блоки записи (сведено
 2026-09-10; до этого стояли на `RowGroup` с подписью НАД карточкой).
 
+Порядок сверху вниз (владелец 22–23.09): Клиент · Заметка клиента · Люди ·
+История · Объекты · Файлы · Реквизиты · Метка | Тег · Личное. У КАЖДОГО блока
+своя шапка, двери — `ChooseRow compact` со значком, голых «Добавить» нет.
+Новый клиент — та же страница с теми же блоками; двери, которым нужен id
+(«Добавить человека», «Добавить файл», «Записать»), сперва создают клиента.
+
+ДЛИННЫЙ СПИСОК — СВОЯ СТРАНИЦА (23.09): в карточке первые строки и `NavRow`
+«Все … · N», полный перечень — страницей, собранной ТЕМ ЖЕ куском кода, что
+блок (на своей странице блок стоит без шапки, `bare`). Люди — 3
+(`PEOPLE_ON_CARD`), объекты — 3 (`OBJECTS_ON_CARD`), реквизиты — 2
+(`REQUISITES_ON_CARD`), файлы — по плиткам. Очередь записи массива одна на
+клиента и поле (`src/features/clients/use-json-writer.ts`, `SHARED`): карточка и страница пишут
+один массив. Убирают свайпом без вопроса, с «Отменить» в подсказке.
+
 | Блок | Канон | Из чего |
 |---|---|---|
-| «Объекты» | `src/features/clients/blocks/ObjectsBlock.tsx:84` | `SwipeRow` («Удалить») вокруг `ObjectRow` · строка добавления · лист `ObjectSheet` |
-| «Заметка клиента» | `src/features/clients/blocks/NotesBlock.tsx:99` | `InlineNoteField`, пишет в клиента через `useJsonArrayWriter` |
-| «Личное» | `src/features/clients/blocks/PersonalBlock.tsx:164` | `NavRow` × 5: Метка · Теги · День рождения · Источник · Кто привёл — каждая открывает свою шторку |
-| «Документация» | `src/features/clients/blocks/DocumentationBlock.tsx:71` | `NavRow` по датам визитов + «Все файлы» |
-
-Шапка карточки (имя, телефоны, «Записать») — `src/features/clients/ClientHeader.tsx`.
+| «Клиент» | `src/features/clients/ClientHeader.tsx` | имя · «чей он» (`src/features/clients/MemberOfLine.tsx`) · номер с кнопкой «Связаться» (тап — лист способов, удержание — звонок) · доп. номера и мессенджеры (`src/features/clients/ClientExtraContacts.tsx`) · дверь «Добавить контакт»; в новом клиенте над номером — страна «🇨🇾 Кипр +357» с поиском (`src/features/clients/use-phone-country.tsx`) |
+| «Заметка клиента» | `src/features/clients/blocks/NotesBlock.tsx` | `InlineNoteField` сразу под «Клиентом» (слот `note` шапки) |
+| «Люди» | `app/(dashboard)/clients/[id].tsx` + `src/features/clients/ClientPeopleDoor.tsx` | `LinkRow` одной строкой без аватара · свайп «Убрать» + «Отменить» · «Все люди · N» → `clients/people.tsx` · дверь «Добавить человека» |
+| «История» | `src/features/clients/ClientContactRow.tsx` | сводка `src/features/clients/ClientSummaryCard.tsx` (визиты · сумма · был · команда; при долге — в «Неоплаченные») · дверь «Записать» |
+| «Объекты» | `src/features/clients/ClientObjectsSection.tsx` + `src/features/clients/blocks/ObjectsBlock.tsx` | `ObjectRow` · мини-заметка объекта под строкой · «Все объекты · N» → `clients/objects.tsx` · дверь «Добавить объект» (курсор сразу в адрес) |
+| «Файлы» | `src/features/clients/blocks/ClientFilesBlock.tsx` | плитки и плашки из `AppointmentFileTiles` · «Все файлы · N» (файлы + инвойсы и чеки) → `clients/attachments.tsx`, там же «Инвойсы и чеки» · дверь «Добавить файл» |
+| «Реквизиты» | `src/features/clients/blocks/RequisitesBlock.tsx` | наборы (`RequisitesRow` без шеврона, свайп «Удалить» + «Отменить») · «Все реквизиты · N» → `clients/requisites.tsx` · дверь «Добавить реквизиты» → `src/features/clients/RequisitesSheet.tsx` |
+| «Метка \| Тег» | `src/features/clients/ClientLabelTags.tsx` | две `IdentityCard` из шапки записи; метка «по записи» — пришла сама (`src/features/clients/label-auto-assign.ts`); тег один, как метка; шестерёнки в шторках ведут в справочники |
+| «Личное» | `src/features/clients/blocks/PersonalBlock.tsx` | День рождения · Источник · Кто привёл (при «Рекомендации») |
 
 ## 9.2 Блоки листа операции (финансы)
 
@@ -657,5 +680,6 @@
 Уже компоненты и копируются одним тегом: `ObjectFields`, `ClientPickerSheet`,
 `ObjectPickerSheet`, `LabelPickerSheet`, `TagPickerSheet`, `ServicePicker`,
 `ReferenceBlock`, `CategoryBlock`, `EventTypeBlock`, `PaymentBlock`,
-`AppointmentFilesBlock`, `InlineNoteField`, `TeamLabelRow`, `WhenRow`,
+`AppointmentFilesBlock`, `PhotoTile`, `DocumentPill`, `FileAddSheet`,
+`InlineNoteField`, `TeamLabelRow`, `WhenRow`,
 `TotalRow`, `SelectRow`, `ServicesBlock`, `ClientBlock`.

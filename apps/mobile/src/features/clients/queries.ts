@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Linking } from "react-native";
 import { useMirror } from "@/features/access/mirror/mirror-state";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -63,6 +64,7 @@ import {
 import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
 import { useClientsScopeOrNull } from "./company-scope";
 import {
+  activeCompanyScope,
   capabilitiesOf,
   offlineForeignWriteMessage,
   viewKeyOf,
@@ -163,6 +165,24 @@ function useQueryScope(): QueryScope {
   };
 }
 
+/** ИСТОЧНИК ЭКРАНА ЦЕЛИКОМ — для правил, которым мало `QueryScope`.
+ *
+ *  `QueryScope` несёт СЛЕПОК уровней одной строкой (`view`) — ключу запроса
+ *  этого хватает, а правилу нет: `caps.links` считается из «Какие клиенты» и
+ *  «Телефоны», и разбирать их обратно из строки значило бы завести второе
+ *  правило. Вне вкладки источник тот же, что у `useQueryScope`: компания
+ *  устройства и роль в ней. `null` — роль ещё в пути. */
+export function useClientsSourceScope(): ClientsScope | null {
+  const scope = useClientsScopeOrNull();
+  const activeTenantId = useTenantId();
+  const activeRole = useCurrentRole().data;
+  return useMemo(() => {
+    if (scope) return scope;
+    if (!activeTenantId || !activeRole) return null;
+    return activeCompanyScope(activeTenantId, activeRole, null);
+  }, [scope, activeTenantId, activeRole]);
+}
+
 function scopeOf(scope: ClientsScope): QueryScope {
   return {
     tenantId: scope.tenantId,
@@ -218,8 +238,10 @@ type RpcWithMemberClients = {
 };
 
 /** Ответ окна — строка клиента в JSON плюс `tag_ids`: разбирается тем же
- *  маппером, что прямое чтение, значит на экране тот же домен. */
-function memberClientJsonToClient(row: unknown): Client {
+ *  маппером, что прямое чтение, значит на экране тот же домен. Его же зовёт
+ *  чтение людей карточки (`use-client-links.ts`): `list_client_members` —
+ *  такое же окно, и второй разборщик разошёлся бы с этим на первом же поле. */
+export function memberClientJsonToClient(row: unknown): Client {
   const record = row as Parameters<typeof rowToClient>[0] & { tag_ids?: unknown };
   return {
     ...rowToClient(record),
@@ -425,6 +447,11 @@ export function useUpdateClient(id: string) {
       // authoritative row either way.
       qc.invalidateQueries({ queryKey: ["client", id] });
       qc.invalidateQueries({ queryKey: ["clients"] });
+      // ЧЕЛОВЕК ВИДЕН И В ЧУЖОМ БЛОКЕ «ЛЮДИ» — своим запросом
+      // (`client-members`). Без этого Марии вписали номер на её карточке, а у
+      // Павла в «Людях» она осталась без трубки: владелец 22.09 прочитал это
+      // как «номер не сохраняется», хотя в базе он был.
+      qc.invalidateQueries({ queryKey: ["client-members"] });
       if (patch.reminder_at !== undefined) {
         syncClientReminderWithFeedback(updated);
       }
@@ -443,21 +470,56 @@ export function useUpdateClient(id: string) {
 // Как useUpdateClient, но id приходит с вызовом — для действий по строке
 // СПИСКА (long-press меню: закрепить, напомнить), где хук на каждый ряд
 // не заведёшь. Семантика кэша и ошибок — та же.
+//
+// ПРАВКА ВИДНА ДО ОТВЕТА СЕРВЕРА И ОТКАТЫВАЕТСЯ ПРИ ОТКАЗЕ (STORY-086).
+// Этим хуком пишутся связи людей: связь правится в строке ЧУЖОЙ карточки
+// (добавили Екатерину к Павлу — патчится Екатерина), и её собственная строка
+// в кэше обязана измениться сразу — иначе следующая правка соберёт патч от
+// старого массива и затрёт первую. `notify` в `onError` при этом остаётся:
+// откат чинит кэш, но молчать об отказе нельзя.
 export function useUpdateClientById() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: Partial<Client> }) =>
       saveClient(scope, id, patch),
+    onMutate: async ({ id, patch }) => {
+      // Чтение, уже летящее по этому ключу, ответит ПОСЛЕ нашей подстановки и
+      // вернуло бы строку без правки — отменяем его до, а не после.
+      await qc.cancelQueries({ queryKey: ["client", id] });
+      const previous = qc.getQueriesData<Client | null>({ queryKey: ["client", id] });
+      qc.setQueriesData<Client | null>({ queryKey: ["client", id] }, (current) =>
+        current ? { ...current, ...patch } : current,
+      );
+      return { previous };
+    },
     onSuccess: (updated, { id, patch }) => {
       qc.setQueriesData({ queryKey: ["client", id] }, updated);
       qc.invalidateQueries({ queryKey: ["client", id] });
       qc.invalidateQueries({ queryKey: ["clients"] });
+      // ЧЕЛОВЕК ВИДЕН И В ЧУЖОМ БЛОКЕ «ЛЮДИ» — своим запросом
+      // (`client-members`). Без этого Марии вписали номер на её карточке, а у
+      // Павла в «Людях» она осталась без трубки: владелец 22.09 прочитал это
+      // как «номер не сохраняется», хотя в базе он был.
+      qc.invalidateQueries({ queryKey: ["client-members"] });
       if (patch.reminder_at !== undefined) {
         syncClientReminderWithFeedback(updated);
       }
     },
-    onError: (e) => {
+    onError: (e, variables, context) => {
+      // Откатываем ТОЛЬКО поля своей правки (аудит 23.09). Прежде в кэш
+      // возвращалась вся строка, снятая до записи, — и неудачная связь заодно
+      // откатывала объект или набор реквизитов, добавленный в это же время
+      // удачной записью с карточки; следующая запись уносила откат в базу.
+      const keys = Object.keys(variables.patch) as (keyof Client)[];
+      for (const [key, value] of context?.previous ?? []) {
+        qc.setQueryData<Client | null>(key, (current) => {
+          if (!current || !value) return value;
+          const restored: Partial<Client> = {};
+          for (const k of keys) (restored as Record<string, unknown>)[k] = value[k];
+          return { ...current, ...restored };
+        });
+      }
       notify(
         "Не удалось сохранить",
         (e as Error).message || "Проверьте соединение и попробуйте ещё раз.",

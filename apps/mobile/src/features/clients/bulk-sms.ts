@@ -24,11 +24,7 @@
 import { Platform } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { renderTemplate } from "@babun/shared/local/sms-templates";
-
-/** First word of the full name — what [Имя] resolves to in a greeting. */
-export function firstName(client: Client): string {
-  return (client.full_name || "").trim().split(/\s+/)[0] ?? "";
-}
+import { addressedAs, firstName } from "./sms-name";
 
 /** Dialable phone for the sms: address. Prefers the canonical E.164
  *  (phone_e164) so a locally-typed number without a country code still
@@ -70,10 +66,9 @@ function stripUnresolvedTokens(text: string): string {
 function smsUrlForClient(body: string, client: Client): string | null {
   const digits = smsDigits(client);
   if (!digits) return null;
-  const rendered = renderTemplate(body, {
-    Name: firstName(client),
-    Имя: firstName(client),
-  });
+  // [Имя] — «Обращение» клиента, а пустое — первое слово имени, как раньше.
+  const name = addressedAs(client, firstName(client));
+  const rendered = renderTemplate(body, { Name: name, Имя: name });
   const text = stripUnresolvedTokens(rendered);
   return `sms:${digits}${bodySep()}body=${encodeURIComponent(text)}`;
 }

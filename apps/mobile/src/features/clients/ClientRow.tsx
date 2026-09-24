@@ -25,7 +25,7 @@ import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { clientDebt } from "@/features/clients/filter";
 import { formatShortDateRu, reminderBadge } from "@/features/clients/format";
-import { formatPhoneAsYouType } from "@/features/clients/phone";
+import { formatPhoneForDisplay } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import type { CardFieldPrefs } from "@/features/clients/card-prefs";
@@ -54,6 +54,7 @@ export default function ClientRow({
   onArchive,
   onSwipeOpen,
   trailing,
+  link,
 }: {
   client: Client;
   stats: ClientStats | undefined;
@@ -81,6 +82,16 @@ export default function ClientRow({
   onSwipeOpen?: (row: SwipeableMethods | null) => void;
   /** Хвост строки ВМЕСТО кнопки связи: «через 27 дней» в корзине. */
   trailing?: React.ReactNode;
+  /** Чей это человек — «жена · Павел Иванов» (STORY-086). Второй строкой,
+   *  сразу под именем: звонит Екатерина — по строке видно, чья она.
+   *
+   *  Строка приходит ГОТОВОЙ, из общего построителя `linkLine`
+   *  (`selectors/client-links.ts`) — того же, что печатает `MemberOfLine` на
+   *  карточке и `linkFor` в шторке выбора. Считать её здесь нельзя: строке
+   *  видно одного клиента, а связь названа именем ДРУГОЙ карточки, и список
+   *  разрешает их один раз на все строки. Связей бывает несколько — что
+   *  показать одной строкой, решает тот же построитель (первую и « +N»). */
+  link?: string;
 }) {
   const t = useThemeColors();
   const country = useDefaultCountry();
@@ -215,6 +226,11 @@ export default function ClientRow({
   // порядке экрана, а не только имя+телефон.
   const a11yLabel = [
     client.full_name || "Без имени",
+    // Связь зачитывается сразу за именем — там же, где она и нарисована.
+    // Без неё VoiceOver называл Екатерину просто «Екатерина», а глазами в
+    // этот момент видно «жена · Павел Иванов»: строка и её озвучка говорили
+    // разное.
+    link ?? "",
     client.pinned_at ? "закреплён" : "",
     client.blacklisted ? "чёрный список" : "",
     cardFields.debt && debt > 0 ? `долг ${formatEUR(debt)}` : "",
@@ -304,6 +320,16 @@ export default function ClientRow({
               {client.full_name || "Без имени"}
             </Text>
           </View>
+          {link ? (
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              className="mt-0.5 text-[13px]"
+              style={{ color: t.sub }}
+            >
+              {link}
+            </Text>
+          ) : null}
           {/* НОМЕР ПОД ИМЕНЕМ (владелец 2026-08-06: «хочу, чтоб сразу было
               видно номер телефона»). Он же — то, по чему ищут: поиск и так
               понимает цифры, но раньше найденный номер нигде не показывался,
@@ -319,7 +345,7 @@ export default function ClientRow({
                   когда-то ввели или как пришли из импорта, и рядом стояли
                   «+357 97469998» и «+357 97 469998» — два вида одного
                   номера читаются как два разных человека. */}
-              {formatPhoneAsYouType(client.phone, country)}
+              {formatPhoneForDisplay(client.phone, country)}
             </Text>
           ) : null}
           {figs.length > 0 ? (

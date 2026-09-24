@@ -147,6 +147,31 @@ export function nameInComment(commentNorm: string, cnameNorm: string): boolean {
   }
 }
 
+/** ВИЗИТ — подтверждённая работа, запись со статусом «выполнено». Одно
+ *  правило на всё, что говорит «был»: число визитов и «был 30 мая» в сводке,
+ *  «был 12 авг» у объекта (`object-last-visit.ts`). Прошедшая незакрытая
+ *  запись визитом не считается — она уходит в долг, а не в историю приездов. */
+export function isVisit(a: Pick<Appointment, "status">): boolean {
+  return a.status === "completed";
+}
+
+/** НЕПОЛУЧЕННЫЕ ДЕНЬГИ ОДНОЙ ЗАПИСИ — ровно то, из чего складывается долг
+ *  клиента. Вынесено из `buildStats`, чтобы фильтр «Неоплаченные» в истории
+ *  визитов отбирал записи ТЕМ ЖЕ правилом, которым сводка печатает «Долг»:
+ *  своё правило на экране истории разошлось бы с суммой, по которой тапнули.
+ *
+ *  Выполненная — недоплата; отменённая — ничего; прошедшая, по которой
+ *  бригада не отчиталась, — тоже долг (владелец 2026-08-09, см. ниже);
+ *  будущая — ещё не долг. `today` — локальный YYYY-MM-DD. */
+export function appointmentDebt(
+  a: Appointment,
+  today: string,
+): number {
+  if (a.status === "cancelled") return 0;
+  if (isVisit(a)) return getDebtAmount(a);
+  return a.date < today ? getDebtAmount(a) : 0;
+}
+
 export function buildStats(
   // `locations` нужен для срока обслуживания объектов; поле необязательное,
   // чтобы старые вызовы с урезанным клиентом продолжали работать.
@@ -191,14 +216,11 @@ export function buildStats(
     //
     // ВИЗИТОМ такая запись не считается — визитов у клиента ровно столько,
     // сколько подтверждённых работ; на них живут ритм, «Пропали» и доход.
-    if (a.status !== "completed" && a.status !== "cancelled" && a.date < today) {
-      debt += getDebtAmount(a);
-    }
+    debt += appointmentDebt(a, today);
 
-    if (a.status === "completed") {
+    if (isVisit(a)) {
       visits += 1;
       totalSpent += getPaidAmount(a);
-      debt += getDebtAmount(a);
       if (a.date) visitDates.push(a.date);
       if (a.date > lastVisitDate) lastVisitDate = a.date;
       // «команда» = team of the most-recent COMPLETED visit that had one.

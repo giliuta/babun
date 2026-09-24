@@ -207,10 +207,61 @@ export interface PhoneEntry {
   name?: string;
 }
 
+/** Один набор реквизитов клиента — то, что печатается получателем инвойса.
+ *  Ровно один набор основной (`is_default`), он же зеркалится в четыре
+ *  колонки клиента. Правила чистки — `client-requisites.ts`. */
+export interface ClientRequisites {
+  id: string;
+  legal_name: string | null;
+  vat_number: string | null;
+  reg_number: string | null;
+  billing_address: string | null;
+  is_default: boolean;
+}
+
+/**
+ * СВЯЗЬ КЛИЕНТА С ДРУГОЙ КАРТОЧКОЙ (STORY-085, вариант 3 владельца 2026-09-21:
+ * «все — клиенты, связаны друг с другом»). Екатерина входит в карточку Павла
+ * («жена»), Ольга — в карточку Gem Capital («управляющая»). Хранится у того,
+ * кто входит: «в какие карточки я вхожу и кем». Люди карточки X — клиенты, у
+ * которых в `memberships` стоит X. Роль — своими словами, пусто — без роли.
+ */
+export interface ClientMembership {
+  group_id: string;
+  role: string;
+  /** МЕСТО ВНУТРИ КАРТОЧКИ-ГРУППЫ — id объекта из `locations` той карточки
+   *  (STORY-086). Без него вопрос «кто живёт в Вилле 5» не имеет ответа:
+   *  управляющая с десятью виллами держит всех жильцов в одной карточке, и
+   *  связь «жилец Натальи» сама по себе не говорит, чей он жилец.
+   *
+   *  `null`/нет ключа — связь без места (жена, управляющая): это законно и
+   *  НЕ значит «место потерялось». Сервер сверяет id с `locations` группы и
+   *  обнуляет чужой или исчезнувший, оставляя саму связь живой — человек не
+   *  перестал быть жильцом Натальи оттого, что виллу стёрли. */
+  location_id?: string | null;
+}
+
 export interface Client {
   id: string;
   full_name: string;
   phone: string;
+  /** Реквизиты клиента для инвойса — у компании и у человека одинаково
+   *  (владелец 2026-09-21: «инвойс могут просить прямо на клиента с его
+   *  реквизитами»). Имена те же, что у реквизитов продавца (`companies`),
+   *  чтобы инвойс печатал обе стороны одним кодом. Сотруднику сервер их не
+   *  отдаёт: это документы и деньги. */
+  legal_name?: string | null;
+  vat_number?: string | null;
+  reg_number?: string | null;
+  billing_address?: string | null;
+  /** НАБОРЫ РЕКВИЗИТОВ (владелец 22.09: «один инвойс на эти реквизиты, второй —
+   *  на эти… как объекты»). Четыре поля выше — ЗЕРКАЛО основного набора: его
+   *  держит сервер (триггер `clients_sync_requisites`, миграция
+   *  20260922100000), и старые читатели работают без правок. Нет ключа —
+   *  строка старше миграции; читать через `clientRequisitesOf`. */
+  requisites?: ClientRequisites[];
+  /** STORY-085: в какие карточки входит этот клиент и кем. */
+  memberships?: ClientMembership[];
   /** Дополнительные номера — супруг(а), арендатор, помощник, рабочий, WhatsApp на другом номере. */
   phones: PhoneEntry[];
   /** Если WhatsApp зарегистрирован на другой номер, не основной. */
@@ -277,11 +328,19 @@ export interface Client {
   created_at: string;
 }
 
+/** Связи клиента; у старых объектов — пусто. */
+export function clientMemberships(
+  client: Pick<Client, "memberships">,
+): ClientMembership[] {
+  return Array.isArray(client.memberships) ? client.memberships : [];
+}
+
 export function createBlankClient(overrides: Partial<Client> = {}): Client {
   return {
     id: newClientId(),
     full_name: "",
     phone: "",
+    memberships: [],
     phones: [],
     whatsapp_phone: "",
     email: "",

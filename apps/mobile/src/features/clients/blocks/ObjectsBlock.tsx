@@ -1,10 +1,13 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
-import { MapPin, MoreHorizontal } from "lucide-react-native";
+import { MapPin, MoreHorizontal, UserRound } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
+import { NavRow } from "@/components/ui/card-rows";
+import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { useInlineNote } from "@/features/appointments/use-inline-note";
 import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { LocationRequestRow } from "@/features/clients/blocks/LocationRequestRow";
 import { useLocationRequestActions } from "@/features/clients/location-request-actions";
@@ -14,8 +17,10 @@ import {
 } from "@/features/clients/location-request-link";
 import { useLocationRequests } from "@/features/clients/location-requests";
 import { objectTarget, routeAddress } from "@/features/clients/object-address";
+import { formatShortDateRu } from "@/features/clients/format";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { useCopyValue } from "@/lib/copy-value";
 
 // ОБЪЕКТЫ на карточке клиента.
 //
@@ -41,14 +46,58 @@ import { useThemeColors } from "@/theme/colors";
 
 const EMPTY_REQUESTS: LocationRequest[] = [];
 
+/** МИНИ-ЗАМЕТКА ОБЪЕКТА — ТА ЖЕ ПЛАШКА, ЧТО У ЗАМЕТКИ ЗАПИСИ (владелец
+ *  22.09: «в записи мы выбираем объект, и там снизу сразу заметка; сделай
+ *  такую же у клиента — под каждым объектом своя»). Своим компонентом, а не
+ *  в цикле: у каждой плашки свой черновик и своя запись по уходу с поля. */
+function ObjectNote({
+  loc,
+  ownerKey,
+  onSave,
+}: {
+  loc: Location;
+  ownerKey: string;
+  onSave: (id: string, next: string) => void;
+}) {
+  const note = useInlineNote<string>(
+    loc.note ?? "",
+    loc.id,
+    (next, id) => onSave(id, next),
+    ownerKey,
+  );
+  return (
+    <InlineNoteField
+      note={note}
+      placeholder="Заметка объекта"
+      accessibilityLabel={`Заметка объекта ${loc.label || loc.address || ""}`.trim()}
+      maxLength={500}
+    />
+  );
+}
+
 export default function ObjectsBlock({
   client,
   onOpen,
   onDelete,
   onAdd,
   requestsEnabled = false,
+  residentsFor,
+  lastVisitFor,
+  onNote,
+  limit,
+  onOpenAll,
+  bare,
 }: {
   client: Client;
+  /** На своей странице шапки у блока нет: название уже в заголовке экрана. */
+  bare?: boolean;
+  /** Сколько строк показывать; больше — за дверью «Все объекты · N». */
+  limit?: number;
+  /** Открыть страницу всех объектов (дверь под списком). */
+  onOpenAll?: () => void;
+  /** Записать заметку объекта. Нет — плашек заметок под строками нет
+   *  (форма записи: там заметка объекта своя и живёт в самой записи). */
+  onNote?: (locId: string, next: string) => void;
   /** Открыть лист правки этого объекта. */
   onOpen: (locId: string) => void;
   /** Удалить объект (спрашивает подтверждение сама карточка). */
@@ -60,6 +109,21 @@ export default function ObjectsBlock({
    *  Только у сохранённого клиента и у владельца/диспетчера: черновику
    *  ссылку не выписать, а мастеру таблица по RLS не видна. */
   requestsEnabled?: boolean;
+  /** Кто живёт на объекте — «Мария Спиру · жилец, Андреас · жилец»
+   *  (STORY-086: управляющая даёт виллы, в виллах жильцы). Нет — строки
+   *  жильцов нет.
+   *
+   *  ТОЛЬКО ПОКАЗАНИЕ. Ни роль отсюда не правится, ни жилец не заводится:
+   *  дверь «Добавить жильца» стоит ОДНА — в листе самой виллы, где вопрос
+   *  «кто здесь живёт» и задаётся (ТЗ, «что НЕ делаем» 3). Под каждым
+   *  объектом страницы она была бы десятью одинаковыми акцентными строками
+   *  при нуле жильцов у управляющей с десятью виллами. */
+  residentsFor?: (loc: Location) => string | undefined;
+  /** Дата последнего визита на объект (YYYY-MM-DD) — «был 12 авг» в третьей
+   *  строке. Считает карточка клиента (`object-last-visit.ts`); у записи и
+   *  инвойса пропа нет, и строки «был» там нет: там объект выбирают, а не
+   *  вспоминают. */
+  lastVisitFor?: (loc: Location) => string | undefined;
 }) {
   const t = useThemeColors();
   // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС»: пока клиент не ответил, в списке стоит
@@ -69,6 +133,7 @@ export default function ObjectsBlock({
     requestsEnabled ? client.id : null,
   );
   const requestActions = useLocationRequestActions();
+  const copy = useCopyValue();
   const shownRequests = useMemo(() => visibleLocationRequests(requests), [requests]);
   // Основной первым: при записи подставляется он, и в списке он должен
   // читаться первым. Бейджа «основной» нет — порядок и есть признак.
@@ -80,9 +145,12 @@ export default function ObjectsBlock({
     [client.locations],
   );
 
+  const shown = limit ? ordered.slice(0, limit) : ordered;
+  const rest = ordered.length - shown.length;
+
   return (
-    <SectionCard title="Объекты">
-      {ordered.map((loc, i) => (
+    <SectionCard title={bare ? undefined : "Объекты"}>
+      {shown.map((loc, i) => (
         <SwipeRow
           key={loc.id}
           label="Удалить"
@@ -90,17 +158,40 @@ export default function ObjectsBlock({
           onAction={() => onDelete(loc)}
           accessibilityLabel={`Удалить объект ${loc.label || ""}`.trim()}
         >
-          <ObjectRow
-            loc={loc}
-            separated={i > 0}
-            onPress={() => onOpen(loc.id)}
-          />
+          <>
+            <ObjectRow
+              loc={loc}
+              separated={i > 0}
+              // Заметка стоит ПОД строкой своей плашкой — третьей строкой её
+              // печатать больше не надо.
+              showNote={!onNote}
+              residents={residentsFor?.(loc)}
+              lastVisit={lastVisitFor?.(loc)}
+              onPress={() => onOpen(loc.id)}
+              // Долгое нажатие копирует адрес (нет адреса — ссылку на карту):
+              // его пересылают бригаде или вставляют в навигатор.
+              onLongPress={objectTarget(loc) ? () => copy(objectTarget(loc)) : undefined}
+            />
+            {onNote ? (
+              <ObjectNote loc={loc} ownerKey={client.id} onSave={onNote} />
+            ) : null}
+          </>
         </SwipeRow>
       ))}
       {/* Пустого состояния нет: при нуле объектов группа — одна эта строка.
           Добавление открывается ЛИСТОМ снизу (владелец 2026-07-27), а не
           страницей: три поля не стоят экрана поверх экрана, и объектов подряд
           заводят несколько. */}
+      {/* ОСТАЛЬНЫЕ — НА СВОЕЙ СТРАНИЦЕ (владелец 22.09): двенадцать объектов
+          в карточке пришлось бы пролистывать до файлов. */}
+      {rest > 0 && onOpenAll ? (
+        <NavRow
+          label="Все объекты"
+          value={String(ordered.length)}
+          separated
+          onPress={onOpenAll}
+        />
+      ) : null}
       {shownRequests.map((request, i) => (
         <LocationRequestRow
           key={request.id}
@@ -113,7 +204,7 @@ export default function ObjectsBlock({
           без кружка со значком и с волоском сверху. Владелец 2026-09-09,
           поймав это на записи: «почему тут изменилась архитектура, если она
           должна быть другой — как у нас принято». Один вопрос — одна дверь. */}
-      <ChooseRow icon={MapPin} label="Добавить объект" onPress={onAdd} />
+      <ChooseRow compact icon={MapPin} label="Добавить объект" onPress={onAdd} />
     </SectionCard>
   );
 }
@@ -128,7 +219,10 @@ export function ObjectRow({
   separated,
   onMore,
   showNote = true,
+  residents,
+  lastVisit,
   onPress,
+  onLongPress,
 }: {
   loc: Location;
   separated?: boolean;
@@ -141,13 +235,29 @@ export function ObjectRow({
   /** Заметка третьей строкой. Запись выключает: у неё заметка объекта стоит
    *  своей плашкой под строкой, и третья строка дублировала бы её. */
   showNote?: boolean;
+  /** Жильцы объекта одной строкой — «Мария Спиру · жилец, Андреас · жилец».
+   *  Четвёртый этаж строки, со значком человека: без него перечень имён
+   *  читался бы продолжением заметки. */
+  residents?: string;
+  /** Последний визит на объект, YYYY-MM-DD. Печатается «был 12 авг» в той же
+   *  третьей строке, что заметка, — не четвёртым этажом. */
+  lastVisit?: string;
   /** Нет — строка только читается (STORY-084: в записи объект человеку не
    *  меняется). Маршрут при этом остаётся: это дорога, а не правка. */
   onPress?: () => void;
+  /** Долгое нажатие по строке — на карточке клиента копирует адрес. Запись и
+   *  инвойс его не передают: там строка ведёт свой сценарий выбора. */
+  onLongPress?: () => void;
 }) {
   const t = useThemeColors();
   const target = objectTarget(loc);
   const note = showNote ? (loc.note ?? "").trim() : "";
+  const people = (residents ?? "").trim();
+  // «БЫЛ 12 АВГ» ДЕЛИТ ТРЕТЬЮ СТРОКУ С ЗАМЕТКОЙ через «·» — формат тот же,
+  // что «был 30 мая» в сводке. Дата ПЕРВОЙ: строка одна и режется хвостом,
+  // короткая дата должна уцелеть, а длинная заметка — обрезаться.
+  const visited = lastVisit ? `был ${formatShortDateRu(lastVisit)}` : "";
+  const thirdLine = [visited, note].filter(Boolean).join(" · ");
 
   return (
     <View
@@ -165,10 +275,19 @@ export function ObjectRow({
     >
       <Pressable
         onPress={onPress}
-        disabled={!onPress}
+        onLongPress={onLongPress}
+        disabled={!onPress && !onLongPress}
         accessible
         accessibilityRole={onPress ? "button" : "text"}
-        accessibilityLabel={[loc.label || "Объект", target, note]
+        accessibilityLabel={[
+          loc.label || "Объект",
+          target,
+          visited,
+          note,
+          // Перечень имён без слова «жильцы» VoiceOver прочитал бы как
+          // продолжение заметки: значок он не озвучивает.
+          people ? `Жильцы: ${people}` : "",
+        ]
           .filter(Boolean)
           .join(", ")}
         accessibilityHint={
@@ -204,17 +323,32 @@ export function ObjectRow({
           >
             {target || "адрес не указан"}
           </Text>
-          {/* ТРЕТЬЯ СТРОКА — ЗАМЕТКА («код домофона»). Срок обслуживания делил
-              её через «·», пока у объекта был интервал; сам интервал снесён
-              2026-09-04 (владелец: «сделаем лучше в напоминаниях»). */}
-          {note ? (
+          {/* ТРЕТЬЯ СТРОКА — «был 12 авг · код домофона». Срок обслуживания
+              делил её через «·», пока у объекта был интервал; сам интервал
+              снесён 2026-09-04 (владелец: «сделаем лучше в напоминаниях»).
+              Нет заметки — строка из одной даты; нет обоих — строки нет. */}
+          {thirdLine ? (
             <Text
               maxFontSizeMultiplier={1.2}
               numberOfLines={1}
               style={{ fontSize: 13, color: t.sub }}
             >
-              {note}
+              {thirdLine}
             </Text>
+          ) : null}
+          {people ? (
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+            >
+              <UserRound color={t.faint} size={12} strokeWidth={2.2} />
+              <Text
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={1}
+                style={{ flexShrink: 1, fontSize: 13, color: t.sub }}
+              >
+                {people}
+              </Text>
+            </View>
           ) : null}
         </View>
       </Pressable>

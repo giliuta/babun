@@ -41,6 +41,7 @@ import {
   QUICK_REPLIES,
 } from "@babun/shared/common/utils/quick-replies";
 import { renderTemplate } from "@babun/shared/local/sms-templates";
+import { addressedAs } from "@/features/clients/sms-name";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -319,14 +320,23 @@ export default function ChatThreadScreen() {
   // value in a chat context and stay literal — renderTemplate keeps
   // unresolved tokens visible so the operator fills them before send.
   const smsInserts = useMemo(() => {
-    const name = (linkedClient?.full_name || chat?.contact_name || "").trim();
+    // «Обращение» клиента первым (строка в «Личном»); пустое — как раньше.
+    const name = addressedAs(
+      linkedClient,
+      linkedClient?.full_name || chat?.contact_name || "",
+    );
     const vars: Record<string, string> = {};
     if (name) vars.Name = name;
     if (tenant?.name) vars.Company = tenant.name;
     return smsTemplates
       .filter((tpl) => tpl.enabled)
       .map((tpl) => ({ ...tpl, rendered: renderTemplate(tpl.body, vars) }));
-  }, [smsTemplates, linkedClient?.full_name, chat?.contact_name, tenant?.name]);
+  }, [
+    smsTemplates,
+    linkedClient,
+    chat?.contact_name,
+    tenant?.name,
+  ]);
 
   const copyMessage = useCallback(
     (m: ChatMessage) => {

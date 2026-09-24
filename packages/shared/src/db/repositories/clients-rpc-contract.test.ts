@@ -65,6 +65,13 @@ const fullClient: Client = {
   id: CLIENT_ID,
   full_name: "Анна Клиент",
   phone: "+35799000000",
+  // STORY-085: реквизиты и люди — те же ключи обязан знать белый список
+  // обеих функций.
+  legal_name: "Anna Client Ltd",
+  vat_number: "CY10234567X",
+  reg_number: "HE123456",
+  billing_address: "Agias Fylaxeos 10, Limassol",
+  memberships: [{ group_id: "33333333-3333-4333-8333-333333333333", role: "управляющая" }],
   whatsapp_phone: "+35799000001",
   email: "a@example.com",
   sms_name: "Анна",
@@ -130,6 +137,25 @@ describe("client write payload matches the RPC whitelist", () => {
     const patch = calls[0]?.p_patch as Record<string, unknown>;
     const rejected = Object.keys(patch).filter((k) => !UPDATE_ALLOWED.has(k));
     expect(rejected).toEqual([]);
+  });
+
+  // STORY-085: мало не прислать лишнего — надо ДОВЕЗТИ своё. Маппер, забывший
+  // поле, молча создаёт клиента без реквизитов и без связей с людьми.
+  test("requisites and memberships reach both functions", async () => {
+    const created: Record<string, unknown>[] = [];
+    await createClient(recordingSupabase(created), fullClient, TENANT);
+    const updated: Record<string, unknown>[] = [];
+    await updateClient(recordingSupabase(updated), CLIENT_ID, fullClient, TENANT);
+    for (const sent of [
+      created[0]?.p_client as Record<string, unknown>,
+      updated[0]?.p_patch as Record<string, unknown>,
+    ]) {
+      expect(sent.legal_name).toBe("Anna Client Ltd");
+      expect(sent.vat_number).toBe("CY10234567X");
+      expect(sent.reg_number).toBe("HE123456");
+      expect(sent.billing_address).toBe("Agias Fylaxeos 10, Limassol");
+      expect(sent.memberships).toEqual(fullClient.memberships);
+    }
   });
 
   test("purge_at stays a server-side lifecycle field", () => {

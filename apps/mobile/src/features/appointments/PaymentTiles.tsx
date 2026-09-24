@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { Check, ChevronRight, FileText } from "lucide-react-native";
+import { Check } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { AddRow } from "@/components/ui/AddRow";
 import { GUTTER } from "@/components/ui/tokens";
@@ -367,37 +367,6 @@ export function QuietLink({
         </Text>
       </Pressable>
     </View>
-  );
-}
-
-/** Строка выставленного инвойса: номер, срок или «Оплачен», сумма. */
-export function InvoiceRow({
-  number,
-  subtitle,
-  onPress,
-}: {
-  number: string;
-  subtitle: string;
-  onPress: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`Инвойс ${number}, открыть`}
-      className="flex-row items-center"
-      style={{ marginHorizontal: 16, marginTop: 4, minHeight: 44, gap: 10 }}
-    >
-      <FileText size={18} strokeWidth={2} color={t.accent} />
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
-          Инвойс {number}
-        </Text>
-        <Text style={{ fontSize: 13, color: t.sub }}>{subtitle}</Text>
-      </View>
-      <ChevronRight size={18} color={t.faint} />
-    </Pressable>
   );
 }
 

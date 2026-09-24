@@ -149,7 +149,7 @@ export function TeamLabelRow({
  *
  *  Шеврона нет (владелец 2026-09-04: «убери справа эти стрелочки») — вся
  *  карточка и есть кнопка. */
-function IdentityCard({
+export function IdentityCard({
   icon: Icon,
   color,
   title,

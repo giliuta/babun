@@ -27,6 +27,8 @@ import type {
   ACUnit,
   AcquisitionSource,
   Client,
+  ClientMembership,
+  ClientRequisites,
   ClientNote,
   ClientTag,
   Location,
@@ -145,6 +147,34 @@ export function rowToClient(r: ClientRow): Client {
     id: r.id,
     full_name: r.full_name,
     phone: r.phone,
+    // STORY-085: реквизиты клиента для инвойса и люди клиента.
+    legal_name: r.legal_name ?? null,
+    vat_number: r.vat_number ?? null,
+    reg_number: r.reg_number ?? null,
+    billing_address: r.billing_address ?? null,
+    // Наборы реквизитов — перечислением полей, как связи ниже: чужой ключ в
+    // домен не проходит. Строка старше миграции ключа не знает — пусто, и
+    // читатель берёт четыре колонки (`clientRequisitesOf`).
+    requisites: asArray<ClientRequisites>(r.requisites).map((set) => ({
+      id: set.id,
+      legal_name: set.legal_name ?? null,
+      vat_number: set.vat_number ?? null,
+      reg_number: set.reg_number ?? null,
+      billing_address: set.billing_address ?? null,
+      is_default: set.is_default === true,
+    })),
+    // Связи — ПЕРЕЧИСЛЕНИЕМ полей, как объекты ниже: чужой ключ в домен не
+    // проходит, а поле, забытое здесь, стёрлось бы первой же правкой связей.
+    memberships: asArray<ClientMembership>(r.memberships).map((m) => ({
+      group_id: m.group_id,
+      role: m.role ?? "",
+      // Место связи (STORY-086). Сервер отдаёт связь без места БЕЗ ключа
+      // (`jsonb_strip_nulls` в триггере), строка до миграции не знает его
+      // вовсе — а домен держит ОДНУ форму: ключ есть всегда, «места нет» это
+      // null. Так писателю связей не приходится различать «ключа не было» и
+      // «место сняли», и снятие места пишется значением, а не удалением ключа.
+      location_id: m.location_id ?? null,
+    })),
     whatsapp_phone: r.whatsapp_phone,
     email: r.email,
     sms_name: r.sms_name,
@@ -231,6 +261,20 @@ function clientToInsert(c: Client, tenantId: string): ClientInsert {
     tenant_id: tenantId,
     full_name: c.full_name,
     phone: c.phone ?? "",
+    legal_name: c.legal_name ?? null,
+    vat_number: c.vat_number ?? null,
+    reg_number: c.reg_number ?? null,
+    billing_address: c.billing_address ?? null,
+    // Наборы реквизитов — только непустые, как связи: пустой массив в базе
+    // и так по умолчанию, а сервер без миграции 20260922100000 отверг бы
+    // незнакомый ключ у КАЖДОГО нового клиента.
+    ...(c.requisites && c.requisites.length > 0
+      ? { requisites: c.requisites as unknown as Json }
+      : {}),
+    // Пустой список не шлём: в базе он и так пустой по умолчанию.
+    ...(c.memberships && c.memberships.length > 0
+      ? { memberships: c.memberships as unknown as Json }
+      : {}),
     whatsapp_phone: c.whatsapp_phone ?? "",
     email: c.email ?? "",
     sms_name: c.sms_name ?? "",
@@ -277,6 +321,12 @@ function clientToUpdate(patch: Partial<Client>): ClientUpdate {
   const out: ClientUpdate = {};
   if (patch.full_name !== undefined) out.full_name = patch.full_name;
   if (patch.phone !== undefined) out.phone = patch.phone;
+  if (patch.legal_name !== undefined) out.legal_name = patch.legal_name ?? null;
+  if (patch.vat_number !== undefined) out.vat_number = patch.vat_number ?? null;
+  if (patch.reg_number !== undefined) out.reg_number = patch.reg_number ?? null;
+  if (patch.billing_address !== undefined) out.billing_address = patch.billing_address ?? null;
+  if (patch.requisites !== undefined) out.requisites = patch.requisites as unknown as Json;
+  if (patch.memberships !== undefined) out.memberships = patch.memberships as unknown as Json;
   if (patch.whatsapp_phone !== undefined) out.whatsapp_phone = patch.whatsapp_phone;
   if (patch.email !== undefined) out.email = patch.email;
   if (patch.sms_name !== undefined) out.sms_name = patch.sms_name;

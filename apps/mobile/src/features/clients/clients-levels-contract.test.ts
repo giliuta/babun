@@ -55,12 +55,196 @@ describe("сервер: клиенты по уровням", () => {
       "access_company_level",
       "list_member_clients",
       "client_seen_by_caller",
-      "client_without_contacts",
-      "client_without_money",
       "current_user_can_edit_client",
     ]) {
       assert.equal(lastDefiner(fn), MIGRATION, `${fn} переопределён позже`);
     }
+  });
+
+  // МАСКИРОВКУ МОЖНО ПЕРЕОПРЕДЕЛИТЬ — НО ТОЛЬКО ПРЯЧА НЕ МЕНЬШЕ. STORY-085
+  // (2026-09-21) законно переписала оба помощника: номера людей клиента и
+  // реквизиты компании теперь тоже прячутся. Сторож поэтому держит не имя
+  // файла, а правило: последнее определение обнуляет КАЖДОЕ поле, которое
+  // обнуляла миграция уровней. Ослабить — упадёт; усилить — можно.
+  test("последнее определение маскировки прячет не меньше, чем прятало", () => {
+    const required: Record<string, string[]> = {
+      client_without_contacts: [
+        "'phone', ''",
+        "'whatsapp_phone', ''",
+        "'email', ''",
+        "'telegram_username', ''",
+        "'instagram_username', ''",
+        "'phones', '[]'::jsonb",
+        "'phone_e164', null",
+        // STORY-086: роль в связи («жена», «жилец») рассказывает о человеке
+        // столько же, сколько номер, — маска гасит и связи.
+        "'memberships', '[]'::jsonb",
+      ],
+      client_without_money: ["'balance', 0", "'discount', 0"],
+    };
+    for (const [fn, keys] of Object.entries(required)) {
+      const file = lastDefiner(fn);
+      const sql = norm(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
+      const start = sql.search(
+        new RegExp(String.raw`create or replace function public\.${fn}\s*\(`, "i"),
+      );
+      const body = sql.slice(start, sql.indexOf("$function$;", start));
+      for (const key of keys) {
+        assert.ok(body.includes(key), `${fn} в ${file} больше не прячет ${key}`);
+      }
+    }
+  });
+
+  // STORY-085 (2026-09-21): человек клиента — отдельный клиент, и его контакты
+  // прячет его собственная строка тем же помощником. STORY-086 (2026-09-22)
+  // добавила связи ТРЕТИЙ ключ — место: без него у вопроса «кто живёт в Вилле
+  // 5» нет ответа. Свободным текстом ключ не стал: триггер сверяет место с
+  // объектами самой карточки-группы, поэтому телефон внутри связи — мимо
+  // маскировки — по-прежнему не провезти.
+  const membershipsGuard = (() => {
+    const file = lastDefiner("enforce_client_memberships");
+    assert.ok(file, "функции enforce_client_memberships больше нет");
+    const sql = norm(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
+    const start = sql.search(/create or replace function public\.enforce_client_memberships\s*\(/i);
+    return { file, sql, body: sql.slice(start, sql.indexOf("$function$;", start)) };
+  })();
+
+  test("связь человека несёт карточку, роль и место — контакт в неё не спрятать", () => {
+    const { file, sql, body } = membershipsGuard;
+    assert.ok(
+      body.includes(
+        "new.memberships := coalesce(( select jsonb_agg( jsonb_strip_nulls(jsonb_build_object( 'group_id', d.group_id, 'role', d.role, 'location_id', d.location_id )) order by d.pos)",
+      ),
+      `${file}: связь больше не пересобирается из трёх ключей`,
+    );
+    assert.ok(
+      body.includes("and l.value ->> 'id' = m.value ->> 'location_id'"),
+      `${file}: место связи больше не сверяется с объектами карточки-группы — в третий ключ полезет свободный текст`,
+    );
+    assert.ok(
+      body.includes("select distinct on (v.group_id, v.location_id)"),
+      `${file}: дедуп идёт не по паре «карточка + место» — жилец двух вилл одной управляющей потеряет одну`,
+    );
+    assert.ok(
+      sql.includes(
+        "before insert or update of memberships on public.clients for each row execute function public.enforce_client_memberships()",
+      ),
+      `${file}: триггер связей не висит на clients`,
+    );
+  });
+
+  // ЦЕЛЬ СВЯЗИ — ВНУТРИ НАБОРА СОТРУДНИКА (STORY-086, дыра 8 критика).
+  // Право править спрашивается по правимой строке, а карточка-группа — строка
+  // чужая: без этого правила сотрудник, зная uuid, привязал бы своего клиента
+  // к карточке, которую ему не показывает уровень «Какие клиенты».
+  test("сотрудник не привяжет клиента к карточке вне своего набора", () => {
+    const { file, body } = membershipsGuard;
+    assert.ok(
+      body.includes("select coalesce(array_agg(seen.id::text), array[]::text[]) into seen_ids from unnest(public.access_client_ids()) as seen(id);"),
+      `${file}: цель связи не сверяется с набором сотрудника`,
+    );
+    assert.ok(
+      body.includes("hint = 'block:clients.scope'"),
+      `${file}: отказ по набору потерял свой блок`,
+    );
+    // Судятся только НОВЫЕ цели: уже стоящую связь сотрудник обязан пронести
+    // через правку имени, иначе один запрет запер бы всю карточку.
+    assert.ok(
+      body.includes("into kept from jsonb_array_elements(coalesce(old.memberships, '[]'::jsonb)) m;")
+        && body.includes("into fresh from jsonb_array_elements(new.memberships) m where not (m.value ->> 'group_id' = any(kept));"),
+      `${file}: правило судит все связи, а не только новые — правка карточки со старой связью запрётся`,
+    );
+  });
+
+  // АРХИВ, СТИРАНИЕ И ИСЧЕЗНУВШИЙ ОБЪЕКТ (STORY-086, дыры 4 и 12). Архив — это
+  // `update clients set deleted_at` прямо по таблице, стирание — `delete`: RPC,
+  // к которой можно было бы прицепить правило, на этих дорогах нет, поэтому оно
+  // висит триггерами у самой таблицы.
+  test("архив и стирание карточки снимают связи, исчезнувший объект гасит место", () => {
+    const detachFile = lastDefiner("detach_client_memberships");
+    const placesFile = lastDefiner("clear_gone_membership_places");
+    assert.ok(detachFile, "сторож снятия связей при архиве и стирании пропал");
+    assert.ok(placesFile, "сторож гашения исчезнувшего места пропал");
+    const detach = norm(readFileSync(join(MIGRATIONS_DIR, detachFile), "utf8"));
+    const places = norm(readFileSync(join(MIGRATIONS_DIR, placesFile), "utf8"));
+    assert.ok(
+      detach.includes(
+        "after update of deleted_at on public.clients for each row when (new.deleted_at is not null and old.deleted_at is null) execute function public.detach_client_memberships();",
+      ),
+      `${detachFile}: архив карточки больше не снимает связи у её людей`,
+    );
+    assert.ok(
+      detach.includes(
+        "after delete on public.clients for each row execute function public.detach_client_memberships();",
+      ),
+      `${detachFile}: стирание карточки оставляет висячий group_id навсегда`,
+    );
+    assert.ok(
+      detach.includes("where m.value ->> 'group_id' <> old.id::text"),
+      `${detachFile}: снимается не та связь`,
+    );
+    assert.ok(
+      places.includes(
+        "after update of locations on public.clients for each row execute function public.clear_gone_membership_places();",
+      ),
+      `${placesFile}: стёртая вилла оставляет у жильца место, которому неоткуда взять имя`,
+    );
+    assert.ok(
+      places.includes("then m.value - 'location_id' else m.value end"),
+      `${placesFile}: у исчезнувшего объекта снимается не только место`,
+    );
+  });
+
+  // ЛЮДИ КАРТОЧКИ — ОДНА ДВЕРЬ (STORY-086). «Набор урезан — блока нет»:
+  // третьего состояния «видно, но не всё» не остаётся, иначе у сотрудника
+  // появится строка «жилец · (никого)».
+  test("дверь людей карточки: набор, контакты, глаза вызывающего, не anon", () => {
+    const file = lastDefiner("list_client_members");
+    assert.ok(file, "функции list_client_members больше нет");
+    const sql = norm(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
+    const start = sql.search(/create or replace function public\.list_client_members\s*\(/i);
+    const body = sql.slice(start, sql.indexOf("$function$;", start));
+    for (const [rule, why] of [
+      ["not public.access_company('clients', 'read')", "блок «Клиенты» больше не спрашивается"],
+      ["not public.access_company('clients.contacts', 'read')", "люди приходят без права на контакты"],
+      ["public.access_company_level('clients.scope') is distinct from 'all'", "люди приходят при урезанном наборе"],
+      ["visible := public.access_client_ids();", "набор сотрудника больше не читается"],
+      ["if not (p_group_id = any(visible)) then", "карточка-группа не сверяется с набором"],
+      ["public.client_seen_by_caller(", "люди приходят мимо глаз вызывающего"],
+      ["and c.deleted_at is null", "в людях карточки архив и корзина"],
+      [
+        "and c.memberships @> jsonb_build_array( jsonb_build_object('group_id', p_group_id::text))",
+        "люди карточки ищутся не по связи",
+      ],
+    ] as const) {
+      assert.ok(body.includes(rule), `${file}: ${why}`);
+    }
+    // Новая функция по умолчанию исполнима для PUBLIC, то есть и для anon.
+    assert.ok(
+      sql.includes(
+        "revoke all on function public.list_client_members(uuid) from public, anon, authenticated, service_role; grant execute on function public.list_client_members(uuid) to authenticated;",
+      ),
+      `${file}: дверь людей карточки открыта незашедшему`,
+    );
+    assert.ok(
+      sql.includes(
+        "create index if not exists clients_memberships_gin on public.clients using gin (memberships jsonb_path_ops);",
+      ),
+      `${file}: указателя по связям нет — «люди карточки» станут перебором базы`,
+    );
+  });
+
+  // Маска гасит связи до `[]` — и этот пустой массив не должен записаться
+  // обратно поверх настоящих связей (STORY-086).
+  test("скрытые маской связи сотрудник не запишет обратно", () => {
+    const file = lastDefiner("update_client_with_tags");
+    const sql = norm(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
+    assert.ok(
+      sql.includes(
+        "if not public.access_company('clients.contacts', 'read') and p_patch ?| array['phone', 'whatsapp_phone', 'email', 'telegram_username', 'instagram_username', 'phones', 'phone_e164', 'memberships'] then",
+      ),
+      `${file}: связи выпали из списка ключей, запрещённых сотруднику без «Телефонов»`,
+    );
   });
 
   test("сотрудник не читает таблицу клиентов: правила — только владельцу", () => {
@@ -267,7 +451,9 @@ describe("экраны: вкладка «Клиенты» открывается
       "utf8",
     );
     assert.ok(insights.includes("<ClientsCompanyRoute"), "аналитика мимо ворот источника");
-    assert.ok(insights.includes("if (!tenant) return <InsightsScreen />"), "ссылка без компании обязана вести себя как раньше");
+    // Экран принимает стартовый период (с «Финансов» — месяц), поэтому
+    // сверяется сама ветка «без компании — экран как есть», а не пропсы.
+    assert.match(insights, /if \(!tenant\) return <InsightsScreen[ />]/, "ссылка без компании обязана вести себя как раньше");
     const boundary = readFileSync(
       resolve(here, "../settings/CabinetRoleBoundary.tsx"),
       "utf8",

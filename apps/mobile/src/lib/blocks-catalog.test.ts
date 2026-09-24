@@ -57,6 +57,8 @@ describe("библиотека блоков указывает на живой �
       "src/features/appointments/EventTypeBlock.tsx",
       "src/features/appointments/PaymentBlock.tsx",
       "src/features/appointments/AppointmentFilesBlock.tsx",
+      "src/features/appointments/AppointmentFileTiles.tsx",
+      "src/features/appointments/FileAddSheet.tsx",
       "src/features/appointments/InlineNoteField.tsx",
       "src/features/appointments/BookingSummary.tsx",
       "src/features/appointments/TeamLabelRow.tsx",

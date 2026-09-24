@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "expo-router";
-import { AccessibilityInfo, ScrollView, Text, View } from "react-native";
+import { AccessibilityInfo, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
@@ -94,6 +94,15 @@ export function ObjectSheet({
   // лист остаётся смонтированным, и без засова подстановка перетирала бы то,
   // что человек уже набрал.
   const seeded = useRef(false);
+  // КУРСОР СРАЗУ В АДРЕС (аудит 23.09): лист открыли, чтобы вписать адрес, —
+  // тап по полю был лишним шагом самого частого действия. Ждём, пока лист
+  // доедет: фокус на уезжающем вверх окне клавиатура не поднимает.
+  const addressRef = useRef<TextInput>(null);
+  useEffect(() => {
+    if (!visible) return;
+    const timer = setTimeout(() => addressRef.current?.focus(), 350);
+    return () => clearTimeout(timer);
+  }, [visible]);
   useEffect(() => {
     if (!visible) {
       seeded.current = false;
@@ -152,12 +161,13 @@ export function ObjectSheet({
       }
       haptics.success();
       onAdded?.({ id, label, address, mapUrl, note });
-      // ДОБАВИЛ — ЛИСТ УХОДИТ (владелец 2026-09-04: «когда я добавил объект,
-      // он уже должен закрываться и перекидывать на саму запись»). Второй
-      // объект заводят вторым открытием, как и всё остальное в продукте.
+      // Форма пустеет ТОЛЬКО после подтверждённой записи (выше — ранний
+      // выход по !id): иначе набранный адрес исчезал вместе с неудавшимся
+      // PATCH-ем. Тип остаётся: три виллы подряд заводят одним типом.
       setDraft((d) => ({ ...EMPTY_DRAFT, type: d.type }));
-      // Анонс — не в тот же кадр: лист уже уходит, и VoiceOver перебивал бы
-      // сам себя (тот же приём, что в листе фильтров).
+      // Анонс — не в тот же кадр: форма в этот момент пустеет (а на записи
+      // лист ещё и уходит), и VoiceOver перебивал бы сам себя (тот же приём,
+      // что в листе фильтров).
       setTimeout(
         () =>
           AccessibilityInfo.announceForAccessibility(
@@ -165,6 +175,13 @@ export function ObjectSheet({
           ),
         350,
       );
+      // ДОБАВИЛИ — ЛИСТ УХОДИТ, ВСЕГДА. У записи объект уезжает в саму запись
+      // (`onAdded` выбирает его, владелец 2026-09-04: «когда я добавил объект,
+      // он уже должен закрываться»). На карточке клиента одно время лист
+      // оставался открытым с пустой формой — ради трёх вилл подряд, — и
+      // прогон 22.09 показал цену: нажал «Добавить объект», а перед глазами
+      // та же пустая форма, будто ничего не сохранилось. Объект встаёт в блок
+      // за листом; следующий — одним тапом по той же двери.
       onClose();
       return true;
     } finally {
@@ -201,6 +218,7 @@ export function ObjectSheet({
         keyboardShouldPersistTaps="handled"
       >
         <ObjectFields
+          addressRef={addressRef}
           value={draft}
           typeOptions={typeOptions}
           onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}

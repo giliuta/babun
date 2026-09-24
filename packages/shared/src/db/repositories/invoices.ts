@@ -53,6 +53,10 @@ export interface IssueInvoiceDraft {
   /** Объект клиента (id элемента `clients.locations`, миграция
    *  20260922060000). Не задан у счёта из записи — сервер берёт её объект. */
   location_id?: string | null;
+  /** Набор реквизитов клиента (id элемента `clients.requisites`, миграция
+   *  20260922100000). Не задан — основной; чужой или удалённый сервер
+   *  сводит к основному. */
+  client_requisites_id?: string | null;
 }
 
 function rowToInvoice(r: Row): InvoiceLedger {
@@ -178,6 +182,12 @@ export async function issueInvoice(
       p_company_id: draft.company_id ?? null,
       p_account_id: draft.account_id ?? null,
       p_location_id: draft.location_id ?? null,
+      // Только когда выбран НЕосновной набор: без выбора сигнатура вызова та
+      // же, что до миграции 20260922100000, и счёт выставляется на базе,
+      // где её ещё нет.
+      ...(draft.client_requisites_id
+        ? { p_client_requisites_id: draft.client_requisites_id }
+        : {}),
     }),
   );
   if (error || !data || data.id !== draft.request_id || data.tenant_id !== tenantId) {

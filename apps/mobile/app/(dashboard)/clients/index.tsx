@@ -17,6 +17,11 @@ import {
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import type { Client } from "@babun/shared/local/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
+import {
+  clientMemberOf,
+  clientsById,
+  linkLine,
+} from "@babun/shared/local/selectors/client-links";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingBar } from "@/components/ui/LoadingBar";
@@ -192,6 +197,9 @@ function ClientsListScreen() {
     () => uniqueById([...(data ?? []), ...guests.list.flatMap((guest) => guest.clients)]),
     [data, guests.list],
   );
+  // Карта карточек для строки связи «жилец · Наталья · Вилла 5» — одна на
+  // список, а не по строке: строк сотни, и каждая спрашивает её заново.
+  const byId = useMemo(() => clientsById(clients), [clients]);
   const guestOf = useMemo(() => {
     const byClient = new Map<string, ClientsScope>();
     for (const guest of guests.list) {
@@ -695,6 +703,7 @@ function ClientsListScreen() {
                 stats={stats}
                 teamName={teamName}
                 tags={tags}
+                link={linkLine(clientMemberOf(item, byId))?.text}
                 cardFields={guest ? guestCardFields : cardFields}
                 selectionMode={selecting && !guest}
                 picked={selectedIds.has(item.id)}

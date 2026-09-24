@@ -1,19 +1,13 @@
-import { useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useQuery } from "@tanstack/react-query";
+import { Text, View } from "react-native";
 import { Users } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
-import { useAppointments } from "@/features/calendar/queries";
-import { useUpdateAppointment } from "@/features/calendar/mutations";
-import {
-  useArchiveClients,
-  useClients,
-  useUpdateClientById,
-} from "@/features/clients/queries";
-import { mergeClientPatch, phoneKey } from "@/features/clients/merge-clients";
-import { useToast } from "@/components/ui/Toast";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { phoneKey } from "@/features/clients/merge-clients";
 import { GUTTER } from "@/components/ui/tokens";
-import { haptics } from "@/lib/haptics";
-import { confirmThen } from "@/lib/confirm";
+import { supabase } from "@/lib/supabase";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
+import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
 
 // «ПОХОЖЕ, ЭТО ОДИН ЧЕЛОВЕК».
@@ -23,102 +17,88 @@ import { useThemeColors } from "@/theme/colors";
 // половина у другой, и долг не сходится ни там, ни там. Проверка на дубль
 // была ТОЛЬКО при создании — на живых карточках никто никогда не смотрел.
 //
-// Плашка не решает за пользователя: она показывает, кого считает тем же
-// человеком, и предлагает объединить. Слияние дополняет эту карточку тем,
-// чего в ней нет (см. mergeClientPatch), переносит записи и убирает дубль в
-// архив — не удаляет, чтобы ошибку можно было пережить.
+// ПЛАШКА ТОЛЬКО ГОВОРИТ. Кнопка «Объединить» отсюда убрана: слияние
+// необратимо, а внутри содержимого страницы кнопок не бывает (владелец
+// 2026-09-15). Действие живёт в «⋯» карточки, к остальным необратимым, —
+// пункт «Объединить с дублем» (`use-merge-duplicate.ts`). Кого сливать, он
+// узнаёт ЭТИМ ЖЕ поиском (`useDuplicateOf`): ключ один, запрос один, и плашка
+// с пунктом не могут назвать дублем разные карточки.
+//
+// ИЩЕМ ТОЧЕЧНО. Плашка тянула ВЕСЬ справочник (`useClients`) и ВСЕ записи
+// (`useAppointments`) ради одного сравнения — на тысяче клиентов это
+// страница, которая ждёт два списка, чтобы почти всегда не показать ничего.
+// Спрашиваем у сервера ровно то, что нужно: есть ли ЖИВАЯ чужая карточка с
+// таким же хвостом номера.
+
+/** Последние 8 цифр — тот же ключ, что у слияния и импорта: «+357 99 12 34
+ *  56» и «99123456» один человек. Короче восьми цифр ключа нет: по четырём
+ *  совпадёт пол-базы. */
+const KEY_DIGITS = 8;
+
+/** Ровно то, что показывает плашка. Полная карточка ей не нужна: слияние
+ *  берёт строку дубля само (`useClient`), по id отсюда. */
+interface DuplicateHit {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+}
+
+/** Префикс ключа поиска: слияние сбрасывает по нему ответ, чтобы плашка и
+ *  пункт «⋯» ушли вместе с архивным дублем. */
+export function duplicateQueryKeyPrefix(tenantId: string | null, clientId: string) {
+  return ["client-duplicate", tenantId, clientId] as const;
+}
+
+/** Поиск дубля — один на плашку и на пункт «⋯». `null` вместо карточки —
+ *  искать не нужно (черновик, нет права): запрос тогда не уходит вовсе. */
+function useDuplicateHit(client: Client | null | undefined): DuplicateHit | null {
+  // Компания карточки, а не активная: своя база читается обычным клиентом,
+  // чужая — клиентом с заголовком компании (тот же выбор, что в черновике).
+  const scope = useClientsScopeOrNull();
+  const activeTenantId = useTenantId();
+  const tenantId = scope?.tenantId ?? activeTenantId;
+  const db = scope && !scope.isActive ? tenantBoundClient(scope.tenantId) : supabase;
+
+  const clientId = client?.id ?? "";
+  const key = !client || client.deleted_at ? "" : phoneKey(client.phone);
+  const searchable = key.length >= KEY_DIGITS;
+
+  const { data: dup = null } = useQuery({
+    // Ключ несёт компанию: у клиента работодателя и своего совпадение хвостов
+    // ищется в РАЗНЫХ базах, и один ключ склеил бы два ответа.
+    queryKey: [...duplicateQueryKeyPrefix(tenantId, clientId), key],
+    enabled: !!tenantId && !!clientId && searchable,
+    staleTime: 60_000,
+    queryFn: async (): Promise<DuplicateHit | null> => {
+      // ТОЛЬКО ПО НОМЕРУ. Дубли ловятся и по имени (`findClientByPhoneE164`
+      // умеет иначе), но за этой подсказкой стоит НЕОБРАТИМОЕ слияние: двух
+      // разных Марий с разными телефонами оно предложило бы склеить.
+      const { data, error } = await db
+        .from("clients")
+        .select("id, full_name, phone")
+        .eq("tenant_id", tenantId as string)
+        .like("phone_e164", `%${key}`)
+        .neq("id", clientId)
+        .is("deleted_at", null)
+        .limit(1);
+      // Нет сети — нет и подсказки: плашка не обвиняет карточку в дубле по
+      // догадке, и молчание здесь безопаснее выдумки.
+      if (error) return null;
+      return data?.[0] ?? null;
+    },
+  });
+  return dup;
+}
+
+/** Id живого дубля карточки или `null`. */
+export function useDuplicateOf(client: Client | null | undefined): string | null {
+  return useDuplicateHit(client)?.id ?? null;
+}
 
 export function DuplicateNotice({ client }: { client: Client }) {
   const t = useThemeColors();
-  const toast = useToast();
-  const { data: all = [] } = useClients();
-  const { data: appts = [] } = useAppointments();
-  const updateById = useUpdateClientById();
-  const updateAppt = useUpdateAppointment();
-  const archive = useArchiveClients();
-  const [busy, setBusy] = useState(false);
-  const running = useRef(false);
-
-  // ТОЛЬКО ПО НОМЕРУ. `findDuplicateCandidates` умеет ловить и по имени —
-  // для подсказки при создании это уместно («открыть карточку?»), но здесь
-  // за подсказкой стоит НЕОБРАТИМОЕ слияние: двух разных Марий с разными
-  // телефонами оно предложило бы объединить одним тапом.
-  //
-  // Ключ — последние 8 цифр (тот же, что у слияния и импорта): «+357 99 12
-  // 34 56» и «99123456» один человек, а имена — нет.
-  const dup = useMemo(() => {
-    if (!client.id || client.deleted_at) return null;
-    const key = phoneKey(client.phone);
-    if (!key || key.length < 8) return null;
-    return (
-      all.find(
-        (c) =>
-          c.id !== client.id &&
-          !c.deleted_at &&
-          (phoneKey(c.phone) === key ||
-            (c.phones ?? []).some((p) => phoneKey(p.number) === key)),
-      ) ?? null
-    );
-  }, [all, client.id, client.phone, client.deleted_at]);
-
+  const dup = useDuplicateHit(client);
   if (!dup) return null;
-
-  const merge = async () => {
-    // Засов рефом, а не состоянием: два тапа в одном кадре оба видели
-    // `busy === false` и запускали слияние дважды — балансы складывались
-    // ВТОРОЙ раз, заметки дублировались.
-    if (running.current) return;
-    running.current = true;
-    setBusy(true);
-    try {
-      // 1. Дополняем карточку. Если не записалось — дальше не идём: иначе
-      //    записи уедут к клиенту, который не получил данных дубля.
-      const patch = mergeClientPatch(client, dup);
-      if (Object.keys(patch).length > 0) {
-        await updateById.mutateAsync({ id: client.id, patch });
-      }
-      // 2. Переносим визиты — ради них слияние и затевается.
-      const moving = appts.filter((a) => a.client_id === dup.id);
-      for (const a of moving) {
-        await updateAppt.mutateAsync({
-          id: a.id,
-          patch: { client_id: client.id },
-        });
-      }
-      // 3. Дубль — в архив, а не в удаление. Архивация возвращает список
-      //    неудач вместо исключения: без этой проверки слияние отчитывалось
-      //    успехом, дубль оставался живым, плашка возвращалась — и второе
-      //    слияние удваивало баланс.
-      const res = await archive.mutateAsync({ ids: [dup.id] });
-      if (res.failed > 0 || res.archived === 0) {
-        throw new Error("Карточка объединена, но дубль не ушёл в архив");
-      }
-      haptics.success();
-      toast(
-        moving.length > 0
-          ? `Объединили · ${moving.length} ${moving.length === 1 ? "визит перенесён" : "визитов перенесено"}`
-          : "Объединили",
-      );
-    } catch (e) {
-      haptics.warning();
-      toast((e as Error).message || "Не удалось объединить", "error");
-    } finally {
-      running.current = false;
-      setBusy(false);
-    }
-  };
-
-  const ask = () => {
-    haptics.tap();
-    confirmThen(
-      "Объединить карточки?",
-      {
-        message: `Данные и визиты «${dup.full_name || dup.phone}» переедут сюда, а сама карточка уйдёт в архив.`,
-        confirmLabel: "Объединить",
-      },
-      () => void merge(),
-    );
-  };
 
   return (
     // ОДИН ГОЛОС С ОСТАЛЬНЫМИ ПЛАШКАМИ страницы (ClientDataNotice,
@@ -155,29 +135,6 @@ export function DuplicateNotice({ client }: { client: Client }) {
         >
           {`${dup.full_name || "Без имени"}${dup.phone ? ` · ${dup.phone}` : ""}`}
         </Text>
-        <Pressable
-          onPress={ask}
-          disabled={busy}
-          accessibilityRole="button"
-          accessibilityLabel={`Объединить с ${dup.full_name || dup.phone}`}
-          hitSlop={8}
-          style={({ pressed }) => ({
-            marginTop: 10,
-            alignSelf: "flex-start",
-            paddingHorizontal: 14,
-            minHeight: 36,
-            justifyContent: "center",
-            borderRadius: t.radius.input,
-            backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
-          })}
-        >
-          <Text
-            maxFontSizeMultiplier={1.2}
-            style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
-          >
-            {busy ? "Объединяем…" : "Объединить"}
-          </Text>
-        </Pressable>
       </View>
     </View>
   );

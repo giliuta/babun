@@ -9,8 +9,6 @@ import {
   amountProblem,
   blockCaption,
   closesVisit,
-  invoiceOverdue,
-  invoiceSubtitle,
   outstandingCents,
   paidAtLabel,
   paidTileIntent,
@@ -284,13 +282,5 @@ describe("labels", () => {
     assert.equal(recordedToast({ kind: "settlement", amount: 50, already: 0, accountName: "Наличные" }), "Оплачено €50 · Наличные");
     assert.equal(recordedToast({ kind: "prepayment", amount: 50, already: 0, accountName: "Карта" }), "Предоплата €50 · Карта");
     assert.equal(recordedToast({ kind: "settlement", amount: 50, already: 50, accountName: "Наличные" }), "+€50 · Наличные · всего €100");
-  });
-  test("invoiceSubtitle", () => {
-    assert.equal(invoiceSubtitle({ status: "paid", due_on: "2026-09-10", total: 135 }), "Оплачен · €135");
-    assert.equal(invoiceSubtitle({ status: "issued", due_on: null, total: 135 }), "Ждёт оплаты · €135");
-    assert.match(invoiceSubtitle({ status: "issued", due_on: "2026-09-10", total: 135 }, "2026-09-06"), /^Ждёт оплаты до .*10 сентября · €135$/);
-    assert.match(invoiceSubtitle({ status: "issued", due_on: "2026-09-01", total: 135 }, "2026-09-06"), /^Просрочен с .*1 сентября · €135$/);
-    assert.equal(invoiceOverdue({ status: "issued", due_on: "2026-09-01" }, "2026-09-06"), true);
-    assert.equal(invoiceOverdue({ status: "paid", due_on: "2026-09-01" }, "2026-09-06"), false);
   });
 });

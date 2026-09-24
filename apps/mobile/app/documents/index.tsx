@@ -10,7 +10,9 @@ import { formatInvoiceMoney } from "@/features/invoices/format";
 import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
 import { useReceipts } from "@/features/documents/receipts-queries";
 
-// «Документы клиента» — дверь из карточки клиента (DocumentationBlock) к его
+// «Документы клиента» — бывшая дверь карточки клиента («Счета и чеки» в
+// снятой 22.09 «Документации»; теперь бумаги клиента стоят плашками в его
+// блоке «Файлы») к его
 // бумагам: инвойсам и чекам. Бумаги ВСЕЙ компании живут не здесь, а в панели
 // «Документы» на «Финансах» (канон 2026-08-12: только Инвойсы|Чеки) — этот
 // экран остаётся до переезда карточки клиента на неё. Без clientId он

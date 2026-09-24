@@ -3,6 +3,7 @@ import type { Client, ClientTag } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { matchesClient } from "@babun/shared/local/selectors/client-search";
+import { clientMemberOf, clientsById } from "@babun/shared/local/selectors/client-links";
 import { nameInComment } from "@babun/shared/local/selectors/client-stats";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import {
@@ -292,10 +293,20 @@ export function useClientFilters(
   }, [tags]);
 
   // ── Предикаты (замыкания на текущем состоянии) ───────────────────
+  // Карта карточек — один раз на набор, а не на каждую строку каждой клавиши.
+  const groupsById = useMemo(() => clientsById(clients), [clients]);
   const passesSearch = useMemo(() => {
     const q = search.trim();
-    return (c: Client) => (q ? matchesClient(c, search) : true);
-  }, [search]);
+    // Жильцов управляющей находят по её имени: к полям клиента добавляются
+    // имя каждой карточки, в которую он входит, его роль и место.
+    const linkWords = (c: Client): string[] =>
+      clientMemberOf(c, groupsById).flatMap((e) => [
+        e.group?.full_name ?? "",
+        e.role,
+        e.location?.label ?? "",
+      ]);
+    return (c: Client) => (q ? matchesClient(c, search, linkWords(c)) : true);
+  }, [search, groupsById]);
 
   // Одна дата на весь проход фильтра. Пересчитывается вместе с набором
   // статусов и картой статистики — этого достаточно: экран живёт минуты,

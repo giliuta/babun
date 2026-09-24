@@ -2,20 +2,18 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Linking, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { Camera, FileText, Images, Receipt, ScanLine } from "lucide-react-native";
+import { FileText, Receipt } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
 import { listAccounts } from "@babun/shared/db/repositories/accounts";
 import type { Receipt as ReceiptDoc } from "@babun/shared/local/finance/receipt";
 import { randomUuid } from "@babun/shared/sync";
 import { AddRow } from "@/components/ui/AddRow";
-import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useThemeColors } from "@/theme/colors";
 import {
   getSignedUrl,
   useClientAttachments,
@@ -46,7 +44,7 @@ import {
   type PickedAppointmentPhoto,
   type UploadAppointmentPhotosInput,
 } from "./appointment-photos";
-import { scannerAvailable } from "./document-scanner";
+import { FileAddSheet } from "./FileAddSheet";
 import { TILE_GAP } from "./PaymentTiles";
 import { useFilePickers } from "./use-file-pickers";
 
@@ -92,7 +90,6 @@ export function AppointmentFilesBlock({
   pending,
   onPendingChange,
 }: AppointmentFilesBlockProps) {
-  const t = useThemeColors();
   const toast = useToast();
   const router = useRouter();
   const tenantId = useTenantId();
@@ -232,17 +229,6 @@ export function AppointmentFilesBlock({
     removeDoc.mutate(doc, { onSuccess: () => toast("Документ удалён", "info") });
   };
 
-  const menu: PickerSheetItem[] = [
-    { id: "camera", label: "Снять фото или видео", icon: Camera, color: t.accent, onPress: () => void pickers.shoot() },
-    { id: "library", label: "Выбрать из галереи", icon: Images, color: t.accent, onPress: () => void pickers.pick() },
-    ...(clientId
-      ? [{ id: "file", label: "Выбрать файл", icon: FileText, color: t.accent, onPress: () => void pickers.pickDocument() }]
-      : []),
-    ...(clientId && scannerAvailable()
-      ? [{ id: "scan", label: "Отсканировать документ", icon: ScanLine, color: t.accent, onPress: () => void pickers.scanDocument() }]
-      : []),
-  ];
-
   return (
     <>
       <SectionCard title="Файлы">
@@ -327,18 +313,12 @@ export function AppointmentFilesBlock({
         ) : null}
       </SectionCard>
 
-      <PickerSheet
+      {/* Лист «Добавить» — общий с блоком файлов клиента. Документы и скан
+          требуют клиента: до его выбора этих пунктов нет. */}
+      <FileAddSheet
         visible={menuOpen}
-        title="Добавить"
-        items={menu.map((item) => ({
-          ...item,
-          onPress: () => {
-            setMenuOpen(false);
-            // Системный пикер поверх уходящего листа не открывается — даём
-            // листу уехать.
-            setTimeout(item.onPress, 350);
-          },
-        }))}
+        pickers={pickers}
+        withDocuments={!!clientId}
         onClose={() => setMenuOpen(false)}
       />
 
