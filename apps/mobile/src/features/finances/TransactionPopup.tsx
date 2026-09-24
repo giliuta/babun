@@ -26,6 +26,7 @@ import { notify } from "@/lib/notify";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useTenant } from "@/features/settings/tenant";
+import { useFeatureOn } from "@/features/settings/company-features";
 import { humanDay } from "@/features/appointments/helpers";
 import type { Team } from "@/features/reference/queries";
 import { deleteTransferAlert } from "./account-alerts";
@@ -151,6 +152,7 @@ export function TransactionPopup({
   /** Отложенное до полного ухода листа: вопрос об удалении (см. handleDelete). */
   const afterExit = useRef<(() => void) | null>(null);
   const currency = useTenant().data?.currency;
+  const documentsOn = useFeatureOn("documents");
   const { data: counterpartAccountId } = useTransferCounterpartAccountId(
     visible ? transaction : null,
   );
@@ -223,7 +225,8 @@ export function TransactionPopup({
   // ноги атомарно по transfer_group_id. Это единственная дверь к отмене
   // перевода с главного экрана.
   const canDelete = (allow?.remove ?? true) && !isAppointmentLedger && !tx.invoice_id;
-  const canInvoice = (allow?.invoice ?? true) && tx.type === "income";
+  // «Инвойсы и чеки» выключены у компании (STORY-088) — пункта нет ни у кого.
+  const canInvoice = (allow?.invoice ?? true) && tx.type === "income" && documentsOn;
 
   const refundCents = parseMoneyInputToCents(refundAmount);
   const refundNum = (refundCents ?? 0) / 100;

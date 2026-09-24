@@ -25,6 +25,7 @@ import { accountIcon } from "@/features/finances/account-ui";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import type { Service } from "@/features/services/queries";
 import { useThemeColors } from "@/theme/colors";
+import { useFeatureOn } from "@/features/settings/company-features";
 import { InvoiceDatesBlock } from "./InvoiceDatesBlock";
 import { InvoiceRequisitesBlock } from "./InvoiceRequisitesBlock";
 import { InvoiceObjectBlock } from "./InvoiceObjectBlock";
@@ -145,6 +146,10 @@ export function InvoiceBlocks({
   const t = useThemeColors();
   const router = useRouter();
   const accounts = useAccountsWithBalances();
+  // Функции компании (STORY-088): выключенные объекты и реквизиты клиента не
+  // спрашиваются и в инвойсе — у всех, у владельца тоже.
+  const objectsOn = useFeatureOn("objects");
+  const requisitesOn = useFeatureOn("client_requisites");
   const tileWidth = useTileWidth();
   const [sheet, setSheet] = useState<"client" | "services" | "total" | null>(null);
 
@@ -300,20 +305,24 @@ export function InvoiceBlocks({
 
         {/* ОБЪЕКТ — ПОД КЛИЕНТОМ, КАК В ЗАПИСИ (владелец 2026-09-22: «под
             каждый объект свой инвойс»); его точный адрес — адрес на бумаге. */}
-        <InvoiceObjectBlock
-          client={client}
-          locationId={locationId}
-          onLocationChange={onLocationChange}
-        />
+        {objectsOn ? (
+          <InvoiceObjectBlock
+            client={client}
+            locationId={locationId}
+            onLocationChange={onLocationChange}
+          />
+        ) : null}
 
         {/* РЕКВИЗИТЫ КЛИЕНТА — ПОСЛЕ ОБЪЕКТА, блоком как «Объект» (владелец
             22.09: «клиент, потом объект, потом реквизиты клиента; есть —
             выбираем, нет — добавляем»). */}
-        <InvoiceClientRequisitesBlock
-          client={client}
-          requisitesId={clientRequisitesId}
-          onRequisitesChange={onClientRequisitesChange}
-        />
+        {requisitesOn ? (
+          <InvoiceClientRequisitesBlock
+            client={client}
+            requisitesId={clientRequisitesId}
+            onRequisitesChange={onClientRequisitesChange}
+          />
+        ) : null}
 
         {/* УСЛУГИ И «ИТОГО» — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ И В ЧЕКЕ, с той же
             шапкой (владелец 2026-09-21: «я бы назвал целый блок услуги»).
