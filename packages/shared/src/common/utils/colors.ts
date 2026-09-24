@@ -95,12 +95,55 @@ export const PRESET_COLOR_VALUES: string[] = PRESET_COLORS.map((c) => c.value);
  *  только кружком. Бледный кружок на белой карточке виден плохо (Ванильный к
  *  белому — 1.14 : 1), и настоящий читатель значения — это слово рядом.
  *  Регистр не важен: умолчания записаны заглавными, а из пикера цвет приходит
- *  как в справочнике. `null` — «не красить», цвет вне набора — «Свой». */
+ *  как в справочнике. `null` — «не красить».
+ *
+ *  ЦВЕТ ВНЕ НАБОРА НАЗЫВАЕТСЯ БЛИЖАЙШИМ ИМЕНЕМ, А НЕ «СВОЙ» (2026-09-24).
+ *  Строки «Чего не хватает» подписывались «Свой · Свой · Свой»: слово не
+ *  отличало одну строку от другой и ничего не называло. Серый (в наборе
+ *  серого нет) — «Серый»; остальное — имя ближайшего цвета набора. */
 export function colorName(hex: string | null | undefined): string {
   if (!hex) return "Не красить";
   const needle = hex.trim().toLowerCase();
-  return (
-    PRESET_COLORS.find((c) => c.value.toLowerCase() === needle)?.name ?? "Свой"
+  const exact = PRESET_COLORS.find((c) => c.value.toLowerCase() === needle);
+  if (exact) return exact.name;
+  const rgb = parseRgb(needle);
+  if (!rgb) return "Свой";
+  const max = Math.max(...rgb);
+  const min = Math.min(...rgb);
+  if (max - min < 24) return "Серый";
+  let best = PRESET_COLORS[0];
+  let bestD = Infinity;
+  for (const c of PRESET_COLORS) {
+    const other = parseRgb(c.value.toLowerCase());
+    if (!other) continue;
+    const d = redmean(rgb, other);
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+    }
+  }
+  return best.name;
+}
+
+function parseRgb(hex: string): [number, number, number] | null {
+  const m = /^#?([0-9a-f]{6})$/.exec(hex);
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Взвешенная разница цветов («redmean»): дешёвое приближение восприятия,
+ *  которого хватает, чтобы назвать ближайший цвет набора. */
+function redmean(
+  a: readonly [number, number, number],
+  b: readonly [number, number, number],
+): number {
+  const r = (a[0] + b[0]) / 2;
+  const dr = a[0] - b[0];
+  const dg = a[1] - b[1];
+  const db = a[2] - b[2];
+  return Math.sqrt(
+    (2 + r / 256) * dr * dr + 4 * dg * dg + (2 + (255 - r) / 256) * db * db,
   );
 }
 

@@ -15,6 +15,7 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { colorName } from "@babun/shared/common/utils/colors";
 import { ColorSheet } from "@/features/appointments/BookingSheets";
+import { useTeams } from "@/features/reference/queries";
 import {
   COLOR_SITUATIONS,
   type ColorSituation,
@@ -45,10 +46,12 @@ import {
 // цвет команды. Теперь экран читается тем же порядком, которым работает
 // правило, и объяснять его словами не нужно.
 //
-// ОБРАЗЕЦ СВЕРХУ — В НАТУРАЛЬНУЮ ВЕЛИЧИНУ. Кружки в строках показывают цвет, но
-// не отвечают на вопрос, ради которого его выбирают: читается ли имя на этой
-// заливке. Образец перекрашивается в тот же кадр, что и строка, а лист цвета
-// закрывает только низ экрана — значит выбор виден на большом блоке сразу.
+// СВЕРХУ — ЛЕГЕНДА, А НЕ ОДИН ОБРАЗЕЦ (владелец 2026-09-24: «в настройках —
+// какая автоматизация цветов будет»). Рядом стоят настоящие блоки календаря на
+// каждый случай правила: обычная запись и каждая незакрытая дыра — ровно так,
+// как они лягут на сетку. Автоматизация читается одним взглядом, без слов, и
+// перекрашивается в тот же кадр, что и строка ниже: лист цвета закрывает
+// только низ экрана.
 //
 // Блоки формы уехали своей страницей: четыре тумблера здесь переполняли экран,
 // а обещание «всё видно сразу» дороже одной лишней двери.
@@ -96,19 +99,6 @@ export default function BookingRecordSettingsScreen() {
     setEditing(target);
   };
 
-  // ОБРАЗЕЦ ПОКАЗЫВАЕТ ТУ СТРОКУ, КОТОРУЮ СЕЙЧАС ПРАВЯТ, и подписывается её
-  // именем: иначе большой блок наверху висел бы неизвестно про что. Пока лист
-  // закрыт — запасной цвет: он единственный на этой странице означает «просто
-  // запись», без ситуации.
-  const previewColor =
-    editing === "fallback" || editing == null
-      ? fallback
-      : palette[editing] ?? fallback;
-  const previewTitle =
-    editing && editing !== "fallback"
-      ? COLOR_SITUATIONS.find((s) => s.id === editing)?.label ?? "Клиент"
-      : "Клиент";
-
   const editingColor =
     editing === "fallback"
       ? fallback
@@ -122,6 +112,21 @@ export default function BookingRecordSettingsScreen() {
     (s) => s.id !== "noObject" || blocks.includes("object"),
   );
 
+  // «ОБЫЧНАЯ» В ЛЕГЕНДЕ — ЦВЕТОМ ПЕРВОЙ КОМАНДЫ: любое из трёх правил падает
+  // на цвет команды, когда своего цвета нет, а без команд красит запасной.
+  const { data: teams = [] } = useTeams();
+  const ordinary = teams[0]?.color || fallback;
+  // Ситуация «Не красить» в легенде показывает то, что покрасит вместо неё, —
+  // обычный цвет.
+  const legend = [
+    { id: "ordinary", title: "Обычная", color: ordinary },
+    ...situations.map((s) => ({
+      id: s.id,
+      title: s.label,
+      color: palette[s.id] ?? ordinary,
+    })),
+  ];
+
   const blocksSub =
     blocks.length === BOOKING_BLOCKS.length
       ? "все блоки"
@@ -133,37 +138,29 @@ export default function BookingRecordSettingsScreen() {
     <Screen>
       <ScreenHeader title="Запись" />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
-        {/* ОБРАЗЕЦ — НАСТОЯЩИЙ БЛОК КАЛЕНДАРЯ, а не увеличенный кружок: та же
-            плотная заливка, тот же радиус и та же лестница строк (имя,
-            потом время). Рисует его общий `RecordMark`, поэтому разойтись с
-            сеткой он не может. */}
+        {/* ЛЕГЕНДА — НАСТОЯЩИЕ БЛОКИ КАЛЕНДАРЯ: та же плотная заливка, тот же
+            контур и радиус (общий `RecordMark`), поэтому разойтись с сеткой они
+            не могут. */}
         <SectionEyebrow>Как выглядит</SectionEyebrow>
-        <View className="mx-4">
-          <RecordMark hue={previewColor} full size={62}>
-            <Text
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-              style={{
-                fontSize: 13,
-                fontWeight: "700",
-                color: recordMarkText(previewColor, t.ink),
-              }}
-            >
-              {previewTitle}
-            </Text>
-            <Text
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-              style={{
-                fontSize: 13,
-                fontWeight: "500",
-                color: recordMarkText(previewColor, t.body),
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              11:30 – 13:00
-            </Text>
-          </RecordMark>
+        <View className="mx-4" style={{ flexDirection: "row", gap: 6 }}>
+          {legend.map((item) => (
+            <View key={item.id} style={{ flex: 1, minWidth: 0 }}>
+              <RecordMark hue={item.color} full size={58}>
+                <Text
+                  numberOfLines={2}
+                  maxFontSizeMultiplier={1.2}
+                  style={{
+                    fontSize: 13,
+                    lineHeight: 16,
+                    fontWeight: "700",
+                    color: recordMarkText(item.color, t.ink),
+                  }}
+                >
+                  {item.title}
+                </Text>
+              </RecordMark>
+            </View>
+          ))}
         </View>
 
         {/* ЧЕГО НЕ ХВАТАЕТ — цвет отвечает на вопрос, а не украшает. Порядок

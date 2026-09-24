@@ -128,13 +128,19 @@ export const AUTO_COLOR_RULES: { id: AutoColorRule; label: string }[] = [
 // «владелец не выбирал»: только так «сбросить к заводскому» отличимо от
 // «владелец выбрал ровно этот серый».
 
+// ЗАВОДСКИЕ ЦВЕТА — ИЗ НАБОРА (2026-09-24). Прежние #FF9500 / #FFCC00 /
+// #005BD3 в набор не входили: в настройке стояло «Свой · Свой · Свой», выбрать
+// заводской заново было нельзя, а на плотном блоке оранжевый и жёлтый
+// сходились в один янтарь. Морковный и Янтарный разведены по тону и после
+// затемнения блока; серого в наборе нет намеренно, он остаётся заводским
+// нейтральным сигналом «нет клиента».
 const SITUATION_DEFAULTS: Record<ColorSituation, string> = {
   noClient: "#8E8E93",
-  noObject: "#FF9500",
-  noServices: "#FFCC00",
+  noObject: "#DF510F",
+  noServices: "#FDAA1B",
 };
 
-const FALLBACK_DEFAULT = "#005BD3";
+const FALLBACK_DEFAULT = "#3276FB";
 
 export type SituationPalette = Record<ColorSituation, string | null>;
 
