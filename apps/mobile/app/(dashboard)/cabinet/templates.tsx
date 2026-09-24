@@ -95,7 +95,8 @@ export default function TemplatesScreen() {
   const cats = useMemo(
     () =>
       categories.filter(
-        (c) => c.type === kind && (!c.hidden || c.id === categoryId),
+        (c) =>
+          !c.is_system && c.type === kind && (!c.hidden || c.id === categoryId),
       ),
     [categories, kind, categoryId],
   );

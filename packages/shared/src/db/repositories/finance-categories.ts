@@ -13,6 +13,11 @@ import type { Database } from "../database.types";
 // займов «Бензину» делать нечего.
 export type FinanceCategoryKind = "income" | "expense" | "debt";
 
+/** Что категория прикрепляет к операции (владелец 2026-09-24: «зарплата
+ *  смотрит сотрудников, другая прикрепляет клиента»): ничего, сотрудника
+ *  (`master_id`) или клиента (`client_id`). */
+export type CategoryAttach = "none" | "employee" | "client";
+
 export interface FinanceCategory {
   id: string;
   tenant_id: string | null; // null = global default
@@ -23,6 +28,11 @@ export interface FinanceCategory {
   color: string | null;
   /** Тенант убрал строку из своего списка (finance_category_hidden). */
   hidden: boolean;
+  attach: CategoryAttach;
+  /** Служебная: ею подписывает деньги сервер («Услуги» оплаты записи,
+   *  «Возврат», «Излишек», «Недостача»). Человек её не выбирает и не видит
+   *  в справочнике. */
+  is_system: boolean;
   /** Место в списке ЭТОГО тенанта (finance_category_order). Строки нет — ноль,
    *  дальше разводит имя: справочник, который не перетаскивали, выглядит как
    *  раньше. Позиция живёт отдельной таблицей, потому что сами категории
@@ -48,6 +58,8 @@ function rowToCategory(
     color: r.color,
     hidden,
     position,
+    attach: (["employee", "client"].includes(r.attach) ? r.attach : "none") as CategoryAttach,
+    is_system: Boolean(r.is_system),
   };
 }
 
@@ -82,9 +94,11 @@ export async function listFinanceCategories(
     (order.data ?? []).map((r) => [r.category_id, r.position] as const),
   );
   const off = new Set((hidden.data ?? []).map((r) => r.category_id));
-  return ((list.data ?? []) as Row[]).map((r) =>
-    rowToCategory(r, off.has(r.id), at.get(r.id) ?? 0),
-  );
+  // ГОТОВЫЕ ОБЩИЕ КАТЕГОРИИ ВЫВЕДЕНЫ ИЗ ПРОДУКТА (20260924200000): строки в
+  // базе остались, но у компании их больше нет — справочник у каждой свой.
+  return ((list.data ?? []) as Row[])
+    .filter((r) => !r.retired)
+    .map((r) => rowToCategory(r, off.has(r.id), at.get(r.id) ?? 0));
 }
 
 /** Прячет/возвращает категорию в списке этого тенанта. */
@@ -114,6 +128,7 @@ export interface NewFinanceCategory {
   type: FinanceCategoryKind;
   icon?: string | null;
   color?: string | null;
+  attach?: CategoryAttach;
 }
 
 /** Inserts a tenant-owned category. RLS (finance_categories_write_own)
@@ -132,8 +147,9 @@ export async function insertFinanceCategory(
       slug,
       name: draft.name.trim(),
       type: draft.type,
-      icon: draft.icon ?? "🏷️",
+      icon: draft.icon ?? null,
       color: draft.color ?? null,
+      attach: draft.attach ?? "none",
     })
     .select("*")
     .single();
@@ -147,6 +163,7 @@ export interface FinanceCategoryPatch {
   name?: string;
   icon?: string | null;
   color?: string | null;
+  attach?: CategoryAttach;
 }
 
 /** Updates a tenant-owned category. RLS blocks edits to global defaults
@@ -160,6 +177,7 @@ export async function updateFinanceCategory(
   if (patch.name !== undefined) update.name = patch.name.trim();
   if (patch.icon !== undefined) update.icon = patch.icon;
   if (patch.color !== undefined) update.color = patch.color;
+  if (patch.attach !== undefined) update.attach = patch.attach;
   const { data, error } = await supabase
     .from("finance_categories")
     .update(update)

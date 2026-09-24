@@ -20,6 +20,8 @@ export interface OperationDraftFields {
   pickedAccountId: string | null;
   /** Получатель выплаты зарплаты (`salary.ts`). */
   masterId?: string | null;
+  /** Клиент — у категории, которая его прикрепляет. */
+  clientId?: string | null;
 }
 
 export function operationDraftKey(f: OperationDraftFields): string {
@@ -31,6 +33,7 @@ export function operationDraftKey(f: OperationDraftFields): string {
     f.receiptUrl,
     f.pickedAccountId,
     f.masterId ?? null,
+    f.clientId ?? null,
   ]);
 }
 

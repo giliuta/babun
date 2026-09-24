@@ -137,7 +137,9 @@ export function useDebtDraft({
   // 2026-09-10): в списке поставщиков и займов «Бензину» делать нечего.
   const cats = useMemo(
     () =>
-      (categoriesQuery.data ?? []).filter((c) => c.type === "debt" && !c.hidden),
+      (categoriesQuery.data ?? []).filter(
+        (c) => c.type === "debt" && !c.hidden && !c.is_system,
+      ),
     [categoriesQuery.data],
   );
   const category = cats.find((c) => c.id === categoryId);

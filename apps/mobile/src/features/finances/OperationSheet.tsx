@@ -65,7 +65,11 @@ import { formatHM } from "@/features/appointments/helpers";
 import { useRouter, type Href } from "expo-router";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
-import { isSalaryCategory, payeeOptions } from "./salary";
+import { attachOf, payeeOptions, pickableCategories } from "./salary";
+import { DebtWhoBlock } from "./DebtWhoBlock";
+import { useClientChoice } from "./use-client-choice";
+import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
+import type { Client } from "@babun/shared/local/clients";
 import {
   useDeleteTransaction,
   useFinanceCategories,
@@ -219,6 +223,9 @@ export function OperationSheet({
   /** Получатель выплаты — у категории «Зарплата» (`salary.ts`). */
   const [masterId, setMasterId] = useState<string | null>(null);
   const [payeePickerOpen, setPayeePickerOpen] = useState(false);
+  /** Клиент операции — у категории, которая прикрепляет клиента. */
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
   // Лист шаблонов — тот же вид выбора, что у категории.
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   // Дата и время правятся ТЕМ ЖЕ листом, что у записи.
@@ -277,6 +284,7 @@ export function OperationSheet({
       );
       setCategoryId(transaction.category_id ?? null);
       setMasterId(transaction.master_id ?? null);
+      setClientId(transaction.client_id ?? null);
       setTeamId(transaction.team_id ?? null);
       setAccountId(transaction.account_id ?? null);
       setDate(transaction.occurred_on);
@@ -293,6 +301,7 @@ export function OperationSheet({
         receiptUrl: transaction.receipt_url ?? null,
         pickedAccountId: null,
         masterId: transaction.master_id ?? null,
+        clientId: transaction.client_id ?? null,
       });
     } else {
       setType(defaultType);
@@ -302,6 +311,7 @@ export function OperationSheet({
       setAmount(debtPayment ? String(debtPayment.amount) : "");
       setCategoryId(null);
       setMasterId(null);
+      setClientId(null);
       setTeamId(defaultTeamId ?? null);
       setAccountId(null);
       // Разбор дня открывает форму на своём дне; будущее леджер не примет,
@@ -318,6 +328,7 @@ export function OperationSheet({
         receiptUrl: null,
         pickedAccountId: null,
         masterId: null,
+        clientId: null,
       });
     }
     // Hydrate once per opened transaction id (guarded by hydratedFor).
@@ -334,10 +345,10 @@ export function OperationSheet({
 
   const cats = useMemo(
     () =>
-      categories.filter(
-        (c) =>
-          c.type === (type === "expense" ? "expense" : "income") &&
-          (!c.hidden || c.id === categoryId),
+      pickableCategories(
+        categories,
+        type === "expense" ? "expense" : "income",
+        categoryId,
       ),
     [categories, type, categoryId],
   );
@@ -366,6 +377,7 @@ export function OperationSheet({
   const templatesQuery = useFinanceTemplates();
   // С уволенными: правка старой выплаты должна показать, кому она ушла.
   const peopleQuery = useMasters({ includeInactive: true });
+  const clientChoice = useClientChoice();
   const sheetTemplates = useMemo(
     () => templatesForSheet(templatesQuery.data ?? [], teamId),
     [templatesQuery.data, teamId],
@@ -570,10 +582,16 @@ export function OperationSheet({
   // Значок и цвет категории живут теперь в самом блоке (`CategoryBlock`) —
   // одном на долг и операцию: две копии этой развилки уже начинали расходиться.
 
-  // ЗАРПЛАТА — С ПОЛУЧАТЕЛЕМ (владелец 2026-09-24: «Зарплата Даня»). Блок
-  // «Кому» есть только у категории «Зарплата» и только в расходе: у прочих
-  // категорий человеку нечего выбирать, и лишний блок стоял бы пустым.
-  const salary = isExpense && isSalaryCategory(category);
+  // ЧТО ПРИКРЕПИТЬ, РЕШАЕТ КАТЕГОРИЯ (владелец 2026-09-24: «зарплата смотрит
+  // сотрудников, другая прикрепляет клиента»). Блок «Кому» или «Клиент» есть
+  // только у категории, которая это прикрепляет: у прочих человеку нечего
+  // выбирать, и лишний блок стоял бы пустым.
+  const attach = attachOf(category);
+  const salary = attach === "employee";
+  const attachClient = attach === "client" && !debtPayment;
+  const pickedClient = clientId
+    ? ((clientChoice.clients as Client[]).find((c) => c.id === clientId) ?? null)
+    : null;
   const payees = payeeOptions(peopleQuery.data ?? [], teamId, masterId);
   const payee = masterId
     ? (peopleQuery.data ?? []).find((m) => m.id === masterId) ?? null
@@ -637,6 +655,9 @@ export function OperationSheet({
         // Получатель — только у зарплаты: сменили категорию — человек не
         // остаётся висеть на «Топливе».
         master_id: salary ? masterId : null,
+        // Клиент — у категории, которая его прикрепляет. У прочих поле не
+        // трогаем: клиент оплаты записи или инвойса остаётся на месте.
+        ...(attachClient ? { client_id: clientId } : {}),
         team_id: teamId,
         account_id: accountId,
         payment_method: payment,
@@ -720,6 +741,7 @@ export function OperationSheet({
     receiptUrl,
     pickedAccountId: accountTouched ? accountId : null,
     masterId,
+    clientId,
   });
   const guardedClose = () => {
     if (busy) return;
@@ -1028,6 +1050,22 @@ export function OperationSheet({
           />
         ) : null}
 
+        {/* 3b. КЛИЕНТ — у категории, которая прикрепляет клиента. Та же
+            строка, что у долга и в записи: имя, вводная, телефон. */}
+        {attachClient ? (
+          <SectionCard title="Клиент" dense>
+            <DebtWhoBlock
+              client={pickedClient}
+              stats={pickedClient ? clientChoice.statsById.get(pickedClient.id) : undefined}
+              counterparty=""
+              onOpenPicker={() => {
+                setClientPickerOpen(true);
+                haptics.tap();
+              }}
+            />
+          </SectionCard>
+        ) : null}
+
         {/* КЛАВИАТУРА НЕ ПОДНИМАЕТСЯ САМА (владелец 2026-09-10: «когда я
             нажимаю „добавить доход“, оно не должно сразу переключаться на
             клавиатуру»). Автофокус на сумме закрывал половину формы ещё до
@@ -1271,6 +1309,15 @@ export function OperationSheet({
       <PickerSheet
         visible={categoryPickerOpen}
         title={isExpense ? "Категория расхода" : "Категория дохода"}
+        // Готовых категорий нет — компания заводит свои (владелец
+        // 2026-09-24). Пустой лист говорит, где их создают.
+        subtitle={
+          cats.length > 0
+            ? undefined
+            : isOwner
+              ? "Категорий нет — создайте их (значок справа)"
+              : "Категорий пока нет"
+        }
         items={cats.map((c) => ({
           id: c.id,
           label: c.name,
@@ -1295,6 +1342,22 @@ export function OperationSheet({
         }
         settingsLabel="Категории операций"
         onClose={() => setCategoryPickerOpen(false)}
+      />
+      <ClientPickerSheet
+        visible={clientPickerOpen}
+        onClose={() => setClientPickerOpen(false)}
+        clients={clientChoice.clients as Client[]}
+        recentIds={clientChoice.recentIds}
+        statsById={clientChoice.statsById}
+        selectedId={clientId}
+        onSelect={(picked) => {
+          setClientId(picked.id);
+          setClientPickerOpen(false);
+        }}
+        onDeselect={() => {
+          setClientId(null);
+          setClientPickerOpen(false);
+        }}
       />
       <PickerSheet
         visible={payeePickerOpen}

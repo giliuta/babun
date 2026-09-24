@@ -193,8 +193,20 @@ describe("кромки свайпа", () => {
     // Сортировка НАЧИНАЕТСЯ со скрытых — что идёт дальше (порядок тенанта,
     // имя), закон не касается; важно, что скрытая падает вниз.
     assert.match(screen, /Number\(a\.hidden\) - Number\(b\.hidden\)/);
+    // Лист операции берёт выбор из общего правила (`pickableCategories`):
+    // сторож смотрит и на правило, и на то, что лист его зовёт.
+    const sheet = readFileSync(join(app, "src/features/finances/OperationSheet.tsx"), "utf8");
+    assert.ok(
+      sheet.includes("pickableCategories("),
+      "лист операции: выбор категорий обязан идти через pickableCategories",
+    );
+    const rule = readFileSync(join(app, "src/features/finances/salary.ts"), "utf8");
+    assert.match(
+      rule,
+      /!c\.hidden \|\| c\.id === keepId/,
+      "pickableCategories: скрытая категория обязана исчезать из выбора — кроме уже выбранной",
+    );
     for (const [file, hint] of [
-      ["src/features/finances/OperationSheet.tsx", "лист операции"],
       ["app/(dashboard)/cabinet/templates.tsx", "шаблоны операций"],
     ] as const) {
       const src = readFileSync(join(app, file), "utf8");

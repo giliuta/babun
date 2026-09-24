@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { isSalaryCategory, payeeName, payeeOptions, withPayee } from "./salary";
+import { attachOf, payeeName, payeeOptions, pickableCategories, withPayee } from "./salary";
 
 const p = (id: string, full_name: string, team_id: string | null, is_active = true) => ({
   id,
@@ -10,10 +10,28 @@ const p = (id: string, full_name: string, team_id: string | null, is_active = tr
 });
 
 describe("зарплата — расход с получателем", () => {
-  test("категорию зарплаты узнаём по slug, а не по имени", () => {
-    assert.equal(isSalaryCategory({ slug: "salary" }), true);
-    assert.equal(isSalaryCategory({ slug: "fuel" }), false);
-    assert.equal(isSalaryCategory(null), false);
+  test("что прикрепить, решает сама категория, а не её имя", () => {
+    assert.equal(attachOf({ attach: "employee" }), "employee");
+    assert.equal(attachOf({ attach: "client" }), "client");
+    assert.equal(attachOf({}), "none");
+    assert.equal(attachOf(null), "none");
+  });
+
+  test("в выборе — свои категории вида, без служебных; скрытая только уже стоящая", () => {
+    const cat = (id: string, over: Record<string, unknown> = {}) =>
+      ({
+        id, tenant_id: "t", slug: id, name: id, type: "expense", icon: null, color: null,
+        hidden: false, position: 0, attach: "none", is_system: false, ...over,
+      }) as never;
+    const list = [
+      cat("fuel"),
+      cat("tips", { type: "income" }),
+      cat("services", { type: "income", is_system: true, tenant_id: null }),
+      cat("old", { hidden: true }),
+    ];
+    assert.deepEqual(pickableCategories(list, "expense", null).map((c) => c.id), ["fuel"]);
+    assert.deepEqual(pickableCategories(list, "expense", "old").map((c) => c.id), ["fuel", "old"]);
+    assert.deepEqual(pickableCategories(list, "income", null).map((c) => c.id), ["tips"]);
   });
 
   test("заголовок с получателем и без", () => {

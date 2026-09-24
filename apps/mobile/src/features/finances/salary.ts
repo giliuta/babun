@@ -1,18 +1,37 @@
-// ЗАРПЛАТА — РАСХОД С ПОЛУЧАТЕЛЕМ (владелец 2026-09-24: «зарплату мастеров
-// я планировал как категорию: „Зарплата Даня“ — и записывать туда расход»).
+// КАТЕГОРИЯ РЕШАЕТ, КОГО ПРИКРЕПИТЬ К ОПЕРАЦИИ (владелец 2026-09-24:
+// «при добавлении категории надо понимать, что она должна делать — зарплата
+// смотрит сотрудников, другая прикрепляет клиента»; «категорий не должно быть
+// готовых — клиент сам их создаёт»).
 //
-// Категория одна на всех — глобальная «Зарплата» (`slug = 'salary'`), а человек
-// выбирается блоком «Кому» в форме операции и ложится в `master_id` проводки.
-// Категория на каждого («Зарплата Даня», «Зарплата Дима») размножила бы
-// справочник и развалила разбор расхода: «сколько ушло на зарплату» пришлось
-// бы складывать руками. С получателем разбор делит зарплату по людям сам.
+// Поэтому ни одно имя и ни один slug здесь не зашит: «Зарплата» — просто
+// категория компании с `attach = 'employee'`, и назвать её можно как угодно
+// («Выплаты», «ЗП бригаде»). Сотрудник ложится в `master_id`, клиент — в
+// `client_id` проводки.
 
-export const SALARY_SLUG = "salary";
+import type {
+  CategoryAttach,
+  FinanceCategory,
+  FinanceCategoryKind,
+} from "@babun/shared/db/repositories/finance-categories";
 
-export function isSalaryCategory(
-  category: { slug: string } | null | undefined,
-): boolean {
-  return category?.slug === SALARY_SLUG;
+export function attachOf(
+  category: { attach?: CategoryAttach } | null | undefined,
+): CategoryAttach {
+  return category?.attach ?? "none";
+}
+
+/** Категории, которые человек выбирает руками: свои, этого вида, не скрытые
+ *  (скрытую, уже стоящую на операции, оставляем — иначе правка её потеряет).
+ *  Служебные («Услуги» оплаты записи, «Возврат», пересчёт кассы) сюда не
+ *  входят: ими подписывает деньги сервер. */
+export function pickableCategories(
+  categories: readonly FinanceCategory[],
+  type: FinanceCategoryKind,
+  keepId: string | null,
+): FinanceCategory[] {
+  return categories.filter(
+    (c) => !c.is_system && c.type === type && (!c.hidden || c.id === keepId),
+  );
 }
 
 /** «Зарплата · Даня» — заголовок строки с получателем. Без получателя —
