@@ -49,7 +49,12 @@ export function operationPatchBaseline(
     occurred_on: tx.occurred_on,
     occurred_time: tx.occurred_time,
     receipt_url: tx.receipt_url,
-    vat_mode: tx.vat_mode,
+    // Режим — КАК ЕГО ПОКАЗАЛА ФОРМА, а не как лежит в колонке. У старых
+    // строк колонка пуста («сервер решает сам»), а форма выводит режим из
+    // суммы налога — ровно так же, как здесь. Сравнивай с сырой колонкой —
+    // и сохранение БЕЗ правок молча вписывало бы в строку явный режим, а
+    // явный режим сервер уважает сильнее настроек компании.
+    vat_mode: tx.vat_mode ?? (tx.vat_amount ? "inclusive" : "none"),
     debt_id: tx.debt_id,
   };
 }

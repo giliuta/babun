@@ -145,3 +145,42 @@ describe("operationPatchBaseline — снимок из строки леджер
     });
   });
 });
+
+describe("operationPatchBaseline — режим НДС старой строки", () => {
+  const row = (vat_mode: string | null, vat_amount: number) =>
+    ({
+      amount: 121,
+      category_id: null,
+      master_id: null,
+      client_id: null,
+      team_id: null,
+      account_id: null,
+      payment_method: "cash",
+      notes: null,
+      occurred_on: "2026-09-20",
+      occurred_time: null,
+      receipt_url: null,
+      vat_mode,
+      vat_amount,
+      debt_id: null,
+    }) as unknown as FinanceTransaction;
+
+  test("пустой режим с налогом — снимок «внутри», как показала форма", () => {
+    const base = operationPatchBaseline(row(null, 21));
+    assert.equal(base.vat_mode, "inclusive");
+    // Сохранили без правок — режим в патч не попал, колонка остаётся пустой.
+    assert.deepEqual(operationTransactionPatch({ ...base, vat_mode: "inclusive" }, base), {});
+  });
+
+  test("пустой режим без налога — снимок «без НДС»", () => {
+    const base = operationPatchBaseline(row(null, 0));
+    assert.deepEqual(operationTransactionPatch({ ...base, vat_mode: "none" }, base), {});
+  });
+
+  test("режим сменили руками — уходит", () => {
+    const base = operationPatchBaseline(row(null, 21));
+    assert.deepEqual(operationTransactionPatch({ ...base, vat_mode: "exclusive" }, base), {
+      vat_mode: "exclusive",
+    });
+  });
+});
