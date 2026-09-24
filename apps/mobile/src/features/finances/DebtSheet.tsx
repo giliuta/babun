@@ -107,6 +107,7 @@ export function DebtSheet({
     setNote,
     receiptUrl,
     setReceiptUrl,
+    receiptSession,
     busy,
     clients,
     statsById,
@@ -138,7 +139,7 @@ export function DebtSheet({
     <BottomSheet
       padded={false}
       visible={visible && !doorway.parked && !askingClose}
-      onClose={guardedClose}
+      onClose={() => guardedClose()}
       onExited={runAfterExit}
       title={isEdit ? "Долг" : "Новый долг"}
       subtitle={teamName ?? "Компания"}
@@ -299,6 +300,7 @@ export function DebtSheet({
             receiptUrl={receiptUrl}
             onPick={setReceiptUrl}
             disabled={busy}
+            session={receiptSession}
           />
         </SectionCard>
 
@@ -312,13 +314,16 @@ export function DebtSheet({
               <ActionRow
                 label={`Записать оплату · ${formatEUR(remainder)}`}
                 onPress={() =>
-                  onPay({
-                    debtId: debt.id,
-                    counterparty: debt.counterparty,
-                    amount: remainder,
-                    clientId: debt.client_id,
-                    direction: debt.direction,
-                  })
+                  // Правки долга не пропадают молча и тут: сперва вопрос.
+                  guardedClose(() =>
+                    onPay({
+                      debtId: debt.id,
+                      counterparty: debt.counterparty,
+                      amount: remainder,
+                      clientId: debt.client_id,
+                      direction: debt.direction,
+                    }),
+                  )
                 }
               />
             ) : null}

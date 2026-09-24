@@ -256,9 +256,11 @@ export default function TemplatesScreen() {
             ? "Назовите шаблон."
             : amountCents == null
               ? "Укажите сумму."
-              : !categoryId || !cats.some((c) => c.id === categoryId)
-                ? "Выберите категорию."
-                : null;
+              : cats.length === 0
+                ? `Сначала создайте категорию ${kind === "expense" ? "расходов" : "доходов"} в «Категориях операций».`
+                : !categoryId || !cats.some((c) => c.id === categoryId)
+                  ? "Выберите категорию."
+                  : null;
 
   return (
     <Screen edges={["top"]}>
@@ -448,24 +450,31 @@ export default function TemplatesScreen() {
             Сумма — больше нуля и не больше двух знаков после запятой.
           </Text>
         ) : null}
+        {/* КАТЕГОРИЯ ОБЯЗАТЕЛЬНА — ПОЭТОМУ ПОЛЕ ЕСТЬ ВСЕГДА. Готовых
+            категорий у компании больше нет (владелец 2026-09-24), и пустой
+            справочник прятал поле целиком: кнопка просила «Выберите
+            категорию», а выбрать было не из чего. Теперь поле говорит
+            словами, где категорию завести. */}
+        <Text style={{ marginBottom: 8, fontSize: 13, fontWeight: "500", color: t.sub }}>
+          Категория
+        </Text>
         {cats.length > 0 ? (
-          <>
-            <Text style={{ marginBottom: 8, fontSize: 13, fontWeight: "500", color: t.sub }}>
-              Категория
-            </Text>
-            <View style={{ marginBottom: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {cats.map((c) => (
-                <Chip
-                  key={c.id}
-                  label={c.name}
-                  radio
-                  selected={categoryId === c.id}
-                  onPress={() => setCategoryId(c.id)}
-                />
-              ))}
-            </View>
-          </>
-        ) : null}
+          <View style={{ marginBottom: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {cats.map((c) => (
+              <Chip
+                key={c.id}
+                label={c.name}
+                radio
+                selected={categoryId === c.id}
+                onPress={() => setCategoryId(c.id)}
+              />
+            ))}
+          </View>
+        ) : (
+          <Text style={{ marginBottom: 12, fontSize: 15, color: t.faint }}>
+            {`Категорий ${kind === "expense" ? "расходов" : "доходов"} пока нет — их создают в «Категориях операций»`}
+          </Text>
+        )}
         {teams.length > 1 ? (
           <>
             <Text style={{ marginBottom: 8, fontSize: 13, fontWeight: "500", color: t.sub }}>

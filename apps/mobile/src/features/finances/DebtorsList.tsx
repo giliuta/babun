@@ -10,6 +10,7 @@ import { panelCount } from "./PanelHeader";
 import { RecordRowsPanel } from "./RecordRowsPanel";
 import { debtRows, manualDebtRows, mergeDebtRows } from "./debt-rows";
 import type { RecordRow } from "./record-rows";
+import { inTeamScope } from "./team-scope";
 
 // «Долги» panel — port of the web DebtorsList
 // (apps/web/src/components/finance/DebtorsList.tsx): completed-but-unpaid
@@ -147,7 +148,7 @@ export function DebtorsList({
           invoicedAppointmentIds.has(a.id) &&
           a.date >= fromDate &&
           a.date <= toDate &&
-          (!teamId || a.team_id === teamId),
+          inTeamScope(a.team_id, teamId),
       ),
     [appointments, fromDate, invoicedAppointmentIds, teamId, toDate],
   );
@@ -192,8 +193,14 @@ export function DebtorsList({
         accessibilityRole="radio"
         accessibilityState={{ selected: active }}
         accessibilityLabel={DEBT_DIRECTION_LABEL[side]}
-        hitSlop={{ top: 12, bottom: 12, left: 6, right: 6 }}
-        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        // Цель касания — 44pt по высоте: строка сама 32pt + запас сверху и
+        // снизу (аудит 2026-09-24: было ≈37pt при подписи 13pt).
+        style={({ pressed }) => ({
+          minHeight: 32,
+          justifyContent: "center",
+          opacity: pressed ? 0.6 : 1,
+        })}
       >
         <Text
           maxFontSizeMultiplier={1.2}

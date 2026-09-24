@@ -14,6 +14,7 @@ import { useIsOnline } from "@babun/shared/sync";
 import { useFinanceCategories } from "./queries";
 import { useClientChoice } from "./use-client-choice";
 import { useDeleteDebt, useInsertDebt, useUpdateDebt } from "./debts-queries";
+import { useReceiptSession } from "./receipt-upload";
 
 // ЧЕРНОВИК ДОЛГА — ДАННЫЕ ФОРМЫ ОТДЕЛЬНО ОТ ЕЁ ВЁРСТКИ (тот же приём, что у
 // карточки клиента, `useClientDraft`). Поля, пересев, проверки, запись,
@@ -70,6 +71,12 @@ export function useDebtDraft({
   /** Ушли заводить клиента: вернувшись, лист открывается сам и НЕ пересевается
    *  — иначе набранные сумма и заметка пропали бы по дороге. */
   const wentForClient = useRef(false);
+  // Файлы, залитые в этом долге: чистим, когда лист закрыт насовсем — но не
+  // когда он уехал за новым клиентом и вернётся с тем же черновиком.
+  const receiptSession = useReceiptSession();
+  useEffect(() => {
+    if (!visible && !wentForClient.current) receiptSession.flush();
+  }, [visible, receiptSession]);
   const keepDraft = useRef(false);
   /** Снимок черновика при открытии: по нему решается, спросить ли перед
    *  закрытием свайпом (прогон финансов 2026-09-24 — €44 пропали молча). */
@@ -164,8 +171,13 @@ export function useDebtDraft({
         ? { text: "Введите сумму долга", error: false }
         : null;
 
+  // Синхронный засов: `busy` включается только к следующему кадру, и
+  // двойной тап успевал записать два одинаковых долга (аудит 2026-09-24) —
+  // тот же приём, что `savingRef` формы операции.
+  const savingRef = useRef(false);
   const save = async () => {
-    if (!canSave) return;
+    if (!canSave || savingRef.current) return;
+    savingRef.current = true;
     setBusy(true);
     try {
       const payload = {
@@ -192,6 +204,7 @@ export function useDebtDraft({
     } catch (e) {
       notify("Не удалось сохранить", (e as Error).message);
     } finally {
+      savingRef.current = false;
       setBusy(false);
     }
   };
@@ -245,10 +258,12 @@ export function useDebtDraft({
     initialKey.current !== null
     && draftKey({ direction, counterparty, clientId, amount, categoryId, note, receiptUrl })
       !== initialKey.current;
-  const guardedClose = () => {
+  /** Закрыть — или уйти к оплате долга: набранное в долге не пропадает молча
+   *  ни тем, ни другим путём (аудит 2026-09-24). */
+  const guardedClose = (leave?: () => void) => {
     if (busy) return;
     if (!dirty) {
-      onClose();
+      (leave ?? onClose)();
       return;
     }
     afterExit.current = () => {
@@ -259,7 +274,7 @@ export function useDebtDraft({
       }).then((ok) => {
         if (ok) {
           setAskingClose(false);
-          onClose();
+          (leave ?? onClose)();
           return;
         }
         setTimeout(() => setAskingClose(false), SHEET_EXIT_MS + 350);
@@ -298,6 +313,7 @@ export function useDebtDraft({
     setNote,
     receiptUrl,
     setReceiptUrl,
+    receiptSession,
     busy,
     clients,
     statsById,

@@ -3,6 +3,7 @@ import { ScrollView, Text, TextInput, View } from "react-native";
 import { type Href, useRouter } from "expo-router";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
@@ -65,6 +66,22 @@ export default function VatSettingsScreen() {
     }
   }, [settings.data]);
 
+  // БЕЗ СЕТИ — НЕ ВЕЧНЫЙ КРУГ (аудит 2026-09-24): ошибка чтения называет
+  // себя и даёт повторить, как страница счетов.
+  if (settings.isError && !settings.data) {
+    return (
+      <Screen>
+        <ScreenHeader title="VAT" />
+        <EmptyState
+          state="error"
+          fill
+          title="Нет связи с сервером"
+          subtitle="Настройки загрузятся, как только появится интернет."
+          action={{ label: "Повторить", onPress: () => void settings.refetch() }}
+        />
+      </Screen>
+    );
+  }
   if (settings.isLoading || !settings.data) {
     return (
       <Screen className="items-center justify-center">

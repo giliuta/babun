@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { asksOf, payeeName, payeeOptions, pickableCategories, withPayee } from "./category-asks";
+import { asksOf, categoriesDoorLine, payeeName, payeeOptions, pickableCategories, withPayee } from "./category-asks";
 
 const p = (id: string, full_name: string, team_id: string | null, is_active = true) => ({
   id,
@@ -60,5 +60,22 @@ describe("зарплата — расход с получателем", () => {
     assert.equal(payeeName(people, "gone"), null);
     assert.equal(payeeName(undefined, "m1"), null);
     assert.equal(payeeName(people, null), null);
+  });
+});
+
+describe("подпись строки категорий в настройках", () => {
+  const cat = (type: string, over: Record<string, unknown> = {}) =>
+    ({
+      id: Math.random().toString(36), tenant_id: "t", slug: "x", name: "x", type, icon: null,
+      color: null, hidden: false, position: 0, ask_employee: false, ask_client: false,
+      require_receipt: false, is_system: false, ...over,
+    }) as never;
+  test("считает свои по видам, без служебных и скрытых", () => {
+    assert.equal(
+      categoriesDoorLine([cat("expense"), cat("expense"), cat("income"), cat("income", { is_system: true }), cat("expense", { hidden: true })]),
+      "Расход 2 · доход 1",
+    );
+    assert.equal(categoriesDoorLine([cat("income")]), "Доход 1");
+    assert.equal(categoriesDoorLine([]), "Пока нет — создайте свои");
   });
 });

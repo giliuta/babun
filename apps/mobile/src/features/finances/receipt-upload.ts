@@ -1,3 +1,4 @@
+import { useCallback, useMemo, useRef, type MutableRefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
@@ -123,4 +124,31 @@ export function useSignedReceiptUrl(path: string | null | undefined) {
       return data?.signedUrl ?? null;
     },
   }).data;
+}
+
+/** Файлы, залитые в ОДНОЙ форме (операция, долг), пока она открыта. */
+export interface ReceiptSession {
+  uploads: MutableRefObject<Set<string>>;
+  /** Форма закрыта окончательно: всё залитое, на что не сослалась ни одна
+   *  запись, стирается. Сохранённый файл переживает — на него ссылаются. */
+  flush: () => void;
+}
+
+/**
+ * ЧИСТКА ЗАЛИТЫХ ФАЙЛОВ — У ФОРМЫ, А НЕ У СТРОКИ (аудит 2026-09-24).
+ *
+ * Строка файла чистила на своём размонтировании, а лист снимает содержимое
+ * каждый раз, как уезжает, — даже на миг: вопрос «Закрыть без сохранения?»,
+ * поход за клиентом или в категории. «Отмена» возвращала форму с «Документ
+ * приложен», а файла в хранилище уже не было — сохранение писало ссылку в
+ * пустоту. Форма живёт дольше листа: она и решает, когда закрыта насовсем.
+ */
+export function useReceiptSession(): ReceiptSession {
+  const uploads = useRef<Set<string>>(new Set());
+  const flush = useCallback(() => {
+    const paths = [...uploads.current];
+    uploads.current = new Set();
+    for (const path of paths) void discardOperationReceiptIfOrphan(path);
+  }, []);
+  return useMemo(() => ({ uploads, flush }), [flush]);
 }

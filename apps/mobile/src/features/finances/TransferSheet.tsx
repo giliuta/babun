@@ -253,6 +253,11 @@ export function TransferSheet({
         ? "Выберите, куда"
         : transferValidationError(from, to, amountNum);
   const canSend = reason === null && !sending;
+  // ПОКА ПЕРЕВОД ЛЕТИТ, ЛИСТ НЕ ЗАКРЫВАЕТСЯ (аудит 2026-09-24): смахнутый в
+  // этот момент лист прятал отказ сервера, и человек думал, что деньги ушли.
+  const closeUnlessSending = () => {
+    if (!sending) onClose();
+  };
 
   /** `request_id` привязан к НАМЕРЕНИЮ, а не к открытию листа: та же пара,
    *  сумма, день и комментарий — тот же ключ и серверный дедуп после
@@ -397,7 +402,7 @@ export function TransferSheet({
       <BottomSheet
       padded={false}
         visible={visible}
-        onClose={onClose}
+        onClose={closeUnlessSending}
         title={title}
         footer={
           <View style={{ paddingHorizontal: 20 }}>
@@ -454,7 +459,7 @@ export function TransferSheet({
       <BottomSheet
       padded={false}
         visible={visible}
-        onClose={onClose}
+        onClose={closeUnlessSending}
         title={title}
         scroll
         maxHeightRatio={0.8}
@@ -556,7 +561,7 @@ export function TransferSheet({
     <BottomSheet
       padded={false}
       visible={visible}
-      onClose={onClose}
+      onClose={closeUnlessSending}
       title={title}
       scroll
       avoidKeyboard

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Chip } from "@/components/ui/Chip";
 import { OperationReceiptRow } from "./OperationReceiptRow";
+import { useReceiptSession } from "./receipt-upload";
 import { AmountBlock } from "./AmountBlock";
 import { CategoryBlock } from "./CategoryBlock";
 import { paymentMethodForAccountKind } from "@/features/appointments/payment";
@@ -226,6 +227,8 @@ export function OperationSheet({
   /** Клиент операции — у категории, которая прикрепляет клиента. */
   const [clientId, setClientId] = useState<string | null>(null);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
+  /** День и время меняли руками — тогда их потеря тоже «набранное». */
+  const [whenTouched, setWhenTouched] = useState(false);
   // Лист шаблонов — тот же вид выбора, что у категории.
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   // Дата и время правятся ТЕМ ЖЕ листом, что у записи.
@@ -284,6 +287,7 @@ export function OperationSheet({
       );
       setCategoryId(transaction.category_id ?? null);
       setMasterId(transaction.master_id ?? null);
+      setWhenTouched(false);
       setClientId(transaction.client_id ?? null);
       setTeamId(transaction.team_id ?? null);
       setAccountId(transaction.account_id ?? null);
@@ -312,6 +316,7 @@ export function OperationSheet({
       setCategoryId(null);
       setMasterId(null);
       setClientId(null);
+      setWhenTouched(false);
       setTeamId(defaultTeamId ?? null);
       setAccountId(null);
       // Разбор дня открывает форму на своём дне; будущее леджер не примет,
@@ -378,6 +383,11 @@ export function OperationSheet({
   // С уволенными: правка старой выплаты должна показать, кому она ушла.
   const peopleQuery = useMasters({ includeInactive: true });
   const clientChoice = useClientChoice();
+  // Файлы, залитые в этой форме: чистит форма, когда закрыта насовсем.
+  const receiptSession = useReceiptSession();
+  useEffect(() => {
+    if (!visible) receiptSession.flush();
+  }, [visible, receiptSession]);
   const sheetTemplates = useMemo(
     () => templatesForSheet(templatesQuery.data ?? [], teamId),
     [templatesQuery.data, teamId],
@@ -748,11 +758,15 @@ export function OperationSheet({
     pickedAccountId: accountTouched ? accountId : null,
     masterId,
     clientId,
+    when: whenTouched ? `${date} ${time ?? ""}` : null,
   });
-  const guardedClose = () => {
+  /** Закрыть — или уйти по строке «Ещё» (возврат, инвойс, клиент): набранное
+   *  не пропадает молча ни тем, ни другим путём (аудит 2026-09-24: строки
+   *  «Ещё» закрывали форму мимо вопроса, и правка суммы исчезала). */
+  const guardedClose = (leave?: () => void) => {
     if (busy) return;
     if (!dirty) {
-      onClose();
+      (leave ?? onClose)();
       return;
     }
     afterExit.current = () => {
@@ -767,8 +781,12 @@ export function OperationSheet({
           setTimeout(() => setAskingClose(false), SHEET_EXIT_MS + 350);
           return;
         }
-        onClose();
         setAskingClose(false);
+        if (leave) {
+          leave();
+          return;
+        }
+        onClose();
         // Лист уже снят — хозяин ждёт `onExited` (шторка дня возвращается по
         // нему); зовём его сами, когда уехал вопрос.
         setTimeout(() => onExited?.(), SHEET_EXIT_MS + 350);
@@ -900,7 +918,7 @@ export function OperationSheet({
     <BottomSheet
       padded={false}
       visible={visible && !doorway.parked && !askingClose}
-      onClose={guardedClose}
+      onClose={() => guardedClose()}
       // ДВА ХОЗЯИНА У ОДНОГО СОБЫТИЯ, И ЗВАТЬ ИХ ВМЕСТЕ НЕЛЬЗЯ (слияние
       // 2026-09-10). Своё отложенное — это вопрос об удалении, ЧУЖОЕ — возврат
       // шторки дня. Открытые в один кадр, они дают iOS «already presenting», и
@@ -1215,6 +1233,7 @@ export function OperationSheet({
               receiptUrl={receiptUrl}
               onPick={setReceiptUrl}
               disabled={busy || !canWrite}
+              session={receiptSession}
             />
           </SectionCard>
         ) : null}
@@ -1229,7 +1248,9 @@ export function OperationSheet({
             {showClientRow ? (
               <ActionRow
                 label="Открыть клиента"
-                onPress={() => onClientOpen?.(transaction.client_id as string)}
+                onPress={() =>
+                  guardedClose(() => onClientOpen?.(transaction.client_id as string))
+                }
               />
             ) : null}
             {showInvoiceRow ? (
@@ -1238,7 +1259,7 @@ export function OperationSheet({
                 label={
                   transaction.invoice_id ? "Открыть инвойс" : "Выставить инвойс"
                 }
-                onPress={() => onInvoice?.(transaction)}
+                onPress={() => guardedClose(() => onInvoice?.(transaction))}
               />
             ) : null}
             {showReceiptRow ? (
@@ -1264,7 +1285,7 @@ export function OperationSheet({
               <ActionRow
                 separated={showClientRow || showInvoiceRow || showReceiptRow}
                 label="Создать возврат"
-                onPress={() => onRefund?.(transaction)}
+                onPress={() => guardedClose(() => onRefund?.(transaction))}
               />
             ) : null}
             {txAccountClosed && txAccountId ? (
@@ -1316,6 +1337,7 @@ export function OperationSheet({
         onCommit={(next) => {
           setDate(next.date);
           setTime(next.timeStart);
+          setWhenTouched(true);
         }}
       />
       <PickerSheet

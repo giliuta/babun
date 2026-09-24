@@ -22,6 +22,9 @@ export interface OperationDraftFields {
   masterId?: string | null;
   /** Клиент — у категории, которая его прикрепляет. */
   clientId?: string | null;
+  /** День и время, если их меняли руками (`WhenSheet`); иначе `null` — время
+   *  «сейчас», подставленное формой, правкой не считается. */
+  when?: string | null;
 }
 
 export function operationDraftKey(f: OperationDraftFields): string {
@@ -34,6 +37,7 @@ export function operationDraftKey(f: OperationDraftFields): string {
     f.pickedAccountId,
     f.masterId ?? null,
     f.clientId ?? null,
+    f.when ?? null,
   ]);
 }
 

@@ -40,3 +40,20 @@ describe("несохранённое в форме операции", () => {
     assert.equal(operationIsDirty(null, { ...blank, amount: "5" }), false);
   });
 });
+
+describe("день и время — набранное, только если меняли руками", () => {
+  const base = {
+    type: "expense" as const,
+    amount: "10",
+    categoryId: "c",
+    notes: "",
+    receiptUrl: null,
+    pickedAccountId: null,
+  };
+  test("подставленное «сейчас» не делает форму грязной, выбранный день — делает", () => {
+    const initial = operationDraftKey(base);
+    assert.equal(operationIsDirty(initial, { ...base, when: null }), false);
+    assert.equal(operationIsDirty(initial, { ...base, when: "2026-09-20 10:00" }), true);
+  });
+});
+

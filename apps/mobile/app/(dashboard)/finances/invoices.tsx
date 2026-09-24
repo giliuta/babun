@@ -3,6 +3,7 @@ import { ScrollView, Text, TextInput, View } from "react-native";
 import { Divider } from "@/components/ui/Divider";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -65,6 +66,22 @@ export default function InvoiceSettingsScreen() {
     setFooter(tenant.data.invoice_footer_note ?? "");
   }, [tenant.data]);
 
+  // БЕЗ СЕТИ — НЕ ВЕЧНЫЙ КРУГ (аудит 2026-09-24): ошибка чтения называет
+  // себя и даёт повторить, как страница счетов.
+  if (tenant.isError && !tenant.data) {
+    return (
+      <Screen>
+        <ScreenHeader title="Счета клиентам" />
+        <EmptyState
+          state="error"
+          fill
+          title="Нет связи с сервером"
+          subtitle="Настройки загрузятся, как только появится интернет."
+          action={{ label: "Повторить", onPress: () => void tenant.refetch() }}
+        />
+      </Screen>
+    );
+  }
   if (tenant.isLoading || !tenant.data) {
     return (
       <Screen className="items-center justify-center">

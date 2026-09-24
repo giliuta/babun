@@ -27,6 +27,8 @@ import { accountsDoorLine } from "@/features/finances/accounts-sections";
 import { useCurrentRole, useTenant, type Tenant } from "@/features/settings/tenant";
 import { financeSettingsRows } from "@/features/finances/settings-rows";
 import { LedgerExportRow } from "@/features/finances/LedgerExportRow";
+import { categoriesDoorLine } from "@/features/finances/category-asks";
+import { useFinanceCategories } from "@/features/finances/queries";
 import { formatInvoiceNumber } from "@/features/invoices/numbering";
 import { useNextInvoiceNumber } from "@/features/invoices/queries";
 
@@ -88,6 +90,7 @@ export default function FinanceSettingsScreen() {
     requisites: base.requisites && documentsOn,
   };
   const accounts = useAccountsWithBalances({ includeInactive: true });
+  const categoriesQuery = useFinanceCategories();
   const openCount = accounts.data?.filter((a) => a.is_active).length;
   const closedCount = accounts.data?.filter((a) => !a.is_active).length;
 
@@ -125,7 +128,7 @@ export default function FinanceSettingsScreen() {
                       tile={SETTINGS_TILE.purple}
                       icon={Tags}
                       title="Категории операций"
-                      sub="На что уходят и откуда приходят деньги"
+                      sub={categoriesDoorLine(categoriesQuery.data ?? [])}
                       onPress={() => router.push("/finances/categories")}
                     />
                   </>
@@ -237,11 +240,6 @@ export default function FinanceSettingsScreen() {
             </>
           ) : null}
 
-          {/* «Отчёта бухгалтеру» в продукте нет (владелец 2026-08-11). Сводный
-              CSV за период не имел ни остатка на начало, ни на конец, поэтому не
-              сводился ни с банком, ни с кассой. Выписку по счёту владелец
-              2026-09-15 тоже снял со страницы счёта («никаких кнопок внутри»),
-              так что сюда её не возвращаем без его слова. */}
         </ScrollView>
       ) : (
         // Строк не открыли ни одной: страница остаётся собой, а тело

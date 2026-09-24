@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -11,9 +11,9 @@ import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
   deleteOperationReceipt,
-  discardOperationReceiptIfOrphan,
   uploadOperationReceipt,
   useSignedReceiptUrl,
+  type ReceiptSession,
 } from "./receipt-upload";
 
 // ДОКУМЕНТ, ПОДТВЕРЖДАЮЩИЙ ОПЕРАЦИЮ.
@@ -29,10 +29,14 @@ export function OperationReceiptRow({
   receiptUrl,
   onPick,
   disabled,
+  session,
 }: {
   receiptUrl: string | null;
   onPick: (path: string | null) => void;
   disabled?: boolean;
+  /** Залитое в этой форме — его чистит сама форма, когда закрыта насовсем
+   *  (`useReceiptSession`). */
+  session: ReceiptSession;
 }) {
   const t = useThemeColors();
   const tenantId = useTenantId();
@@ -40,25 +44,12 @@ export function OperationReceiptRow({
   // Лист выбора живёт ЗДЕСЬ, а не в корневом хосте (chooseOption): корневой
   // лист рисуется под Modal операции и просто не виден. Вложенный — виден.
   const [pickerOpen, setPickerOpen] = useState(false);
-  // Что залили в этой форме. Снятый ЗДЕСЬ файл стирается из хранилища сразу:
-  // иначе каждая опечатка («не тот чек») оставляла бы мусор навсегда.
-  // Документ уже сохранённой операции не трогаем — он часть истории.
-  const uploadedHere = useRef<Set<string>>(new Set());
-  const unmounted = useRef(false);
-  // Закрытие листа БЕЗ сохранения — тот же случай мусора: файл уже в бакете,
-  // а операция с ним так и не записана. Крестик формы про это не узнает,
-  // поэтому подчищаем на размонтировании; сохранённый файл переживёт чистку —
-  // discardOperationReceiptIfOrphan удаляет только то, на что не ссылается
-  // ни одна операция.
-  useEffect(
-    () => () => {
-      unmounted.current = true;
-      for (const path of uploadedHere.current) {
-        void discardOperationReceiptIfOrphan(path);
-      }
-    },
-    [],
-  );
+  // Что залили в этой форме — живёт у ФОРМЫ (`session`), а не у строки:
+  // лист снимает строку при каждом отъезде, и чистка на размонтировании
+  // стирала файл, который форма ещё держала. Снятый ЗДЕСЬ файл стирается
+  // сразу: иначе каждая опечатка («не тот чек») оставляла бы мусор. Документ
+  // уже сохранённой операции не трогаем — он часть истории.
+  const uploadedHere = session.uploads;
   const signed = useSignedReceiptUrl(receiptUrl);
 
   const attach = async (from: "camera" | "gallery" | "file") => {
@@ -110,12 +101,8 @@ export function OperationReceiptRow({
         },
         tenantId,
       );
-      // Лист закрыли, пока файл летел: показать и сохранить его уже некому,
-      // а чистка размонтирования прошла до конца загрузки — убираем сами.
-      if (unmounted.current) {
-        void deleteOperationReceipt(path).catch(() => {});
-        return;
-      }
+      // Форма могла уехать, пока файл летел: она держит черновик и получит
+      // файл; не сохранят — сотрёт при окончательном закрытии.
       uploadedHere.current.add(path);
       onPick(path);
     } catch (e) {

@@ -900,17 +900,15 @@ function FinancesContent() {
   // с наследованием НДС-снимка исходника.
   // Хаптик успеха НЕ здесь: возврат проводится только через TransactionPopup,
   // и сигналит он — второй вызов на экране давал двойную вибрацию.
-  const handleRefund = async (tx: FinanceTransaction, amount: number) => {
+  const handleRefund = async (tx: FinanceTransaction, amount: number, requestId: string) => {
     if (tx.source === "auto") {
       throw new Error("Возврат этой оплаты оформляется в связанной заявке.");
     }
-    await insertTx.mutateAsync(buildRefundDraft(tx, amount, businessToday));
+    await insertTx.mutateAsync(buildRefundDraft(tx, amount, businessToday, requestId));
   };
 
-  // ВЫГРУЗОК ОПЕРАЦИЙ НЕТ. Владелец 2026-08-11: «Отчёт бухгалтеру» убран из
-  // продукта — сводный CSV за период не имел границ счёта и ни с чем не
-  // сходился. Выписку по счёту владелец убрал следом (2026-09-15: «убери
-  // кнопку выгрузить выписку»).
+  // Выгрузка операций для бухгалтера живёт в настройках финансов
+  // (`LedgerExportRow`), а не на этом экране: здесь действие одно — в футере.
 
   /**
    * Открыть заявку в календаре. Возвращает false, если её нет в загруженном

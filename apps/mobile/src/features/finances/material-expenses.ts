@@ -4,6 +4,7 @@ import {
   type MaterialCatalogService,
 } from "@babun/shared/local/finance/appointment-calc";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
+import { inTeamScope } from "./team-scope";
 
 // МАТЕРИАЛЫ ЗАПИСЕЙ — СТРОКАМИ В «РАСХОДЕ» (владелец 2026-09-07: «если это
 // минус записи — затраченное на услуги считается как минус; оно заходит,
@@ -31,7 +32,9 @@ export function materialExpenseRows(
   for (const a of appointments) {
     if (a.status !== "completed" && a.status !== "in_progress") continue;
     if (a.date < window.from || a.date > window.to) continue;
-    if (window.teamId && a.team_id !== window.teamId) continue;
+    // «Без команды» — записи без команды (`inTeamScope`), как у плитки
+    // «Расход»: сравнение с литералом чипа теряло их строки в списке.
+    if (!inTeamScope(a.team_id, window.teamId)) continue;
     const lines = appointmentMaterialCostLines(a, services);
     const amount = lines.reduce((sum, line) => sum + line.totalCost, 0);
     if (amount <= 0) continue;

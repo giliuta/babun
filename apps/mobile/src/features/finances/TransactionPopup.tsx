@@ -32,6 +32,7 @@ import type { Team } from "@/features/reference/queries";
 import { deleteTransferAlert } from "./account-alerts";
 import { refundRemainingCents as refundRemainingCentsOf } from "./refund";
 import { payeeName } from "./category-asks";
+import { randomUuid } from "@babun/shared/sync";
 
 /** Строка-факт витрины: ярлык слева, значение справа. Читается, но не
  *  правится — правка живёт в форме операции. */
@@ -139,7 +140,7 @@ export function TransactionPopup({
   onInvoice: (tx: FinanceTransaction) => void;
   onClientOpen: (clientId: string) => void;
   onDelete: (tx: FinanceTransaction) => Promise<void>;
-  onRefund: (tx: FinanceTransaction, amount: number) => Promise<void>;
+  onRefund: (tx: FinanceTransaction, amount: number, requestId: string) => Promise<void>;
   /** Что этому человеку открыто по уровню (этап 2 доступа). Не передано —
    *  открыто всё, как было: витрину зовут и с экранов без уровней. Ряд
    *  действия не рисуется вовсе — «видно, но при нажатии отказ» не бывает. */
@@ -148,6 +149,9 @@ export function TransactionPopup({
   const t = useThemeColors();
   const [showRefundForm, setShowRefundForm] = useState(false);
   const [refundAmount, setRefundAmount] = useState("");
+  // Id попытки возврата — один на открытую форму: повтор после потерянного
+  // ответа упирается в тот же id и не проводит возврат второй раз.
+  const [refundRequestId, setRefundRequestId] = useState(randomUuid);
   const [busy, setBusy] = useState(false);
   // Синхронный гард поверх busy: state включается только после ре-рендера,
   // и сверхбыстрый двойной тап «Возврат» успевал записать возврат дважды —
@@ -285,7 +289,7 @@ export function TransactionPopup({
     savingRef.current = true;
     setBusy(true);
     try {
-      await onRefund(tx, refundNum);
+      await onRefund(tx, refundNum, refundRequestId);
       haptics.success();
       onClose();
     } catch (e) {
@@ -376,6 +380,7 @@ export function TransactionPopup({
       onPress: () => {
         setShowRefundForm(true);
         setRefundAmount(String(refundRemaining));
+        setRefundRequestId(randomUuid());
       },
     });
   }
