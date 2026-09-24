@@ -459,6 +459,13 @@ export function areaLevel(
 /** Положение раздела В ОДНОМ КАЛЕНДАРЕ (STORY-087). Владелец 23.09: «в одном
  *  календаре у него свои доступы, в другом — другие». Строка календаря на
  *  странице сотрудника говорит про СВОЙ календарь, а не «Разное» по всем. */
+/** Блок на своём ПОТОЛКЕ считается «меняет»: у «Услуг» потолок — «Видит»,
+ *  у «Новых записей» — «Может». Без этого директор со всем на максимуме
+ *  читался бы «меняет часть» (STORY-088, наборы). */
+function asAreaLevel(block: AccessBlock, level: AccessLevel): AccessLevel {
+  return level !== "off" && level === block.levels[block.levels.length - 1] ? "write" : level;
+}
+
 export function calendarAreaLevel(
   blocks: readonly AccessBlock[],
   draft: MasterDraft,
@@ -470,7 +477,7 @@ export function calendarAreaLevel(
   for (const block of offeredBlocks(blocks)) {
     if (block.area !== area || block.scope !== "calendar") continue;
     if (block.ownerOnly || !block.levels.includes("off")) continue;
-    const level = shown(block, teamId);
+    const level = asAreaLevel(block, shown(block, teamId));
     if (seen === null) seen = level;
     else if (seen !== level) return "mixed";
   }
@@ -565,7 +572,9 @@ export function mixedAreaWord(
     )
     .map((block) => ({ key: block.key, level: shown(block, teamId) }));
   const closed = rows.filter((row) => row.level === "off");
-  if (closed.length === 0) return "видит, меняет часть";
+  if (closed.length === 0) {
+    return rows.some((row) => row.level === "write") ? "видит, меняет часть" : "видит";
+  }
   const named = closed.map((row) => BLOCK_GENITIVE[row.key]);
   if (closed.length <= 2 && named.every(Boolean)) return `без ${named.join(" и ")}`;
   return `видит ${rows.length - closed.length} из ${rows.length}`;

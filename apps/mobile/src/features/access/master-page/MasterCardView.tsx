@@ -16,6 +16,7 @@ import { NameColorField } from "@/components/ui/picker-fields";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SelectRow } from "@/components/ui/select-rows";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { AppearanceTile } from "@/components/ui/AppearanceSheet";
@@ -31,6 +32,7 @@ import {
   type RightsArea,
 } from "./master-draft";
 import { RIGHTS_AREAS, levelWord } from "./rights-rows";
+import { PRESETS, presetSentence, type PresetKey } from "./presets";
 
 // КАРТОЧКА МАСТЕРА — ОДНО ТЕЛО НА ТРИ СЛУЧАЯ (владелец 15.09: «„Добавить
 // мастера" — сразу полная страница мастера, как добавление клиента; красиво,
@@ -149,7 +151,13 @@ export interface MasterCardViewProps {
   phoneAction?: ReactNode;
   /** Блоки ниже прав: «Работа», «Личное». */
   children?: ReactNode;
+  /** НАБОР ПРАВ (STORY-088): «Мастер / Старший / Директор» одним тапом.
+   *  `value` — набор, которому соответствуют положения сейчас, `null` — свои.
+   *  Нет пропа — блока нет. */
+  preset?: { value: PresetKey | null; onPick: (key: PresetKey) => void; busy?: boolean };
 }
+
+const PRESET_OPTIONS = PRESETS.map((preset) => ({ value: preset.key, label: preset.title }));
 
 const noop = () => {};
 
@@ -280,6 +288,32 @@ export function MasterCardView(p: MasterCardViewProps) {
               />
             ) : null}
           </SectionCard>
+
+          {/* НАБОР ПРАВ — ОДИН ТАП ВМЕСТО ДВУХ ДЕСЯТКОВ СТРОК (владелец 24.09:
+              «назначить директора… полное предоставление всех прав»). Набор
+              выставляет те же строки, что страница прав, во всех его
+              календарях; дальше каждая правится как обычно, и сегмент гаснет —
+              фраза тогда говорит «Свой набор». */}
+          {p.preset ? (
+            <SectionCard title="Набор прав" padded={false}>
+              <View style={{ paddingHorizontal: 16, paddingTop: 2, paddingBottom: 12, gap: 8 }}>
+                <SegmentedControl<PresetKey | "custom">
+                  options={PRESET_OPTIONS}
+                  value={p.preset.value ?? "custom"}
+                  disabled={p.preset.busy}
+                  onChange={(key) => {
+                    if (key !== "custom") p.preset?.onPick(key);
+                  }}
+                />
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  style={{ fontSize: 13, lineHeight: 18, color: t.sub }}
+                >
+                  {presetSentence(p.preset.value)}
+                </Text>
+              </View>
+            </SectionCard>
+          ) : null}
 
           {/* КАЛЕНДАРИ — ТЕ ЖЕ СТРОКИ, ЧТО В ШТОРКЕ ВЫБОРА (реестр выбора,
               AGENTS 5.2): пусто — «Выбрать календари», выбрано — строки цвета
