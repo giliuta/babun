@@ -84,6 +84,7 @@ import {
   useSituationPalette,
 } from "@/features/appointments/booking-prefs";
 import {
+  autoBaseColor,
   COLOR_SITUATIONS,
   recordFilled,
   resolveRecordColor,
@@ -2010,6 +2011,17 @@ export default function BookScreen() {
   // записи, и им красится всё; без него — цвет, который ДЕЙСТВОВАЛ БЫ, и его
   // показывает кнопка «Автоматически» в листе. Иначе выбор идёт вслепую:
   // слово обещает, что цвет подставят, и умалчивает какой.
+  const autoBase = autoBaseColor(autoColorRule, {
+    team: team?.color,
+    label: teamCities.find((c) => c.name === effectiveLabel)?.color,
+    // Источник — живой черновик, поэтому шапка перекрашивается прямо в момент
+    // выбора услуги, а кнопка «Автоматически» в листе цвета показывает то, что
+    // встанет в сетке.
+    service: serviceBaseColor(
+      { service_ids: serviceIds },
+      (id) => serviceColorById.get(id),
+    ),
+  });
   const identityFor = (override: string | null) =>
     kind === "work"
       ? resolveRecordColor({
@@ -2022,27 +2034,14 @@ export default function BookScreen() {
             custom_total: customTotal,
             total_amount: effectiveTotal,
           }),
-          base:
-            autoColorRule === "label"
-              ? teamCities.find((c) => c.name === effectiveLabel)?.color ??
-                team?.color ??
-                null
-              : autoColorRule === "service"
-                ? // Источник — живой черновик, поэтому шапка перекрашивается
-                  // прямо в момент выбора услуги, а кнопка «Автоматически» в
-                  // листе цвета показывает то, что встанет в сетке.
-                  serviceBaseColor(
-                    { service_ids: serviceIds },
-                    (id) => serviceColorById.get(id),
-                  ) ??
-                  team?.color ??
-                  null
-                : team?.color ?? null,
+          base: autoBase,
           palette: situationPalette,
           active: activeSituations,
           fallback: fallbackColor,
         })
-      : override ?? team?.color ?? t.accent;
+      : // Событие: без палитры «чего не хватает», но по тому же правилу, что
+        // и сетка (`autoBaseColor`), — иначе цвет формы и блока расходился.
+        override ?? autoBase ?? t.accent;
   const identityC = identityFor(picked);
   /** Что подставится, если руками не выбирать. */
   const identityAuto = identityFor(null);

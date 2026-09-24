@@ -28,12 +28,18 @@ export function ColorPicker({
   onChange,
   colors,
   disabled,
+  tone,
 }: {
   value: string | null | undefined;
   onChange: (hex: string) => void;
   /** Palette override (hex values) — defaults to the shared PRESET_COLORS. */
   colors?: readonly string[];
   disabled?: boolean;
+  /** Как цвет ВЫГЛЯДИТ там, куда его ставят. Цвет записи ложится в календарь
+   *  плотной заливкой (`blockSolid`), и плитка обязана показать ровно её:
+   *  иначе человек выбирает по одному оттенку, а получает другой. Сохраняется
+   *  по-прежнему сам цвет палитры. Тон обязан держать белую галку. */
+  tone?: (hex: string) => string;
 }) {
   const t = useThemeColors();
   const palette: ColorPreset[] = colors
@@ -100,7 +106,7 @@ export function ColorPicker({
                 flex: 1,
                 borderRadius: PICKER_RADIUS,
                 borderCurve: "continuous",
-                backgroundColor: hex,
+                backgroundColor: tone ? tone(hex) : hex,
                 alignItems: "center",
                 justifyContent: "center",
               }}
@@ -109,7 +115,9 @@ export function ColorPicker({
                 <Check
                   size={20}
                   strokeWidth={3}
-                  color={readableTextOnColor(hex, t.ink, "#FFFFFF")}
+                  // Плитка в тоне блока несёт белый текст, как сам блок, —
+                  // и галка на ней белая.
+                  color={tone ? "#FFFFFF" : readableTextOnColor(hex, t.ink, "#FFFFFF")}
                 />
               ) : null}
             </View>

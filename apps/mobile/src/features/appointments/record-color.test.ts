@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  autoBaseColor,
   recordFilled,
   resolveRecordColor,
   resolveRecordSituation,
@@ -231,5 +232,21 @@ describe("serviceBaseColor", () => {
       ),
       "#FF9500",
     );
+  });
+});
+
+describe("autoBaseColor — обычный цвет по настройке, один для сетки и формы", () => {
+  const colors = { team: "#3276FB", label: "#15A84F", service: "#FDAA1B" };
+  test("правило выбирает свой источник", () => {
+    assert.equal(autoBaseColor("team", colors), "#3276FB");
+    assert.equal(autoBaseColor("label", colors), "#15A84F");
+    assert.equal(autoBaseColor("service", colors), "#FDAA1B");
+  });
+  test("нет своего цвета — цвет команды", () => {
+    assert.equal(autoBaseColor("label", { team: "#3276FB", label: null }), "#3276FB");
+    assert.equal(autoBaseColor("service", { team: "#3276FB", service: "  " }), "#3276FB");
+  });
+  test("нет ничего — null, решает запасной цвет у вызывающего", () => {
+    assert.equal(autoBaseColor("label", {}), null);
   });
 });

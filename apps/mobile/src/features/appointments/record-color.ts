@@ -113,6 +113,27 @@ export function serviceBaseColor(
   return null;
 }
 
+/** «ОБЫЧНЫЙ» ЦВЕТ ЗАПИСИ ПО НАСТРОЙКЕ — ОДНА ФУНКЦИЯ ДЛЯ СЕТКИ И ФОРМЫ.
+ *  Правило «метка» или «услуга» берёт свой цвет, а когда его нет — цвет
+ *  команды: блок без цвета хуже блока «не той» окраски.
+ *
+ *  Раньше тернарник жил двумя копиями, и форма считала СОБЫТИЕ мимо правила
+ *  (`override ?? team.color`): при «Цвете метки» событие в сетке красилось
+ *  меткой дня, а в собственной форме — командой, то есть шапка, подсветка и
+ *  образец «Автоматически» показывали не тот цвет, что календарь. */
+export function autoBaseColor(
+  rule: "team" | "label" | "service",
+  colors: {
+    team?: string | null;
+    label?: string | null;
+    service?: string | null;
+  },
+): string | null {
+  const own =
+    rule === "label" ? colors.label : rule === "service" ? colors.service : null;
+  return (own ?? "").trim() || (colors.team ?? "").trim() || null;
+}
+
 export interface RecordColorInput {
   /** Цвет, выбранный руками у этой записи. Сильнее любого правила. */
   override?: string | null;

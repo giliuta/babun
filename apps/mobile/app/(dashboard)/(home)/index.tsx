@@ -59,6 +59,7 @@ import {
   parseYMD,
 } from "@/features/appointments/helpers";
 import { CrewAppointmentSheet } from "@/features/appointments/CrewAppointmentSheet";
+import { ColorSheet } from "@/features/appointments/BookingSheets";
 import {
   resolveReturnTo,
   returnToParam,
@@ -115,6 +116,7 @@ import {
 import {
   COLOR_SITUATIONS,
   appointmentSituation,
+  autoBaseColor,
   recordFilled,
   resolveRecordColor,
   serviceBaseColor,
@@ -650,6 +652,11 @@ export default function CalendarTab() {
   // (владелец 2026-09-06: «нажимаю Перенести — и кубики появляются зелёные,
   // куда можно перевести по всей таблице»). null = обычный календарь.
   const [moving, setMoving] = useState<Appointment | null>(null);
+  // «ЦВЕТ» ИЗ МЕНЮ ДОЛГОГО НАЖАТИЯ (владелец 2026-09-24: «после записи функция
+  // смены цветов — максимально улучшить»). Раньше цвет менялся только из формы
+  // записи: пять тапов, и «Применить» в листе лишь закрывал его, а сохранял
+  // футер формы. Отсюда — тап по цвету сразу пишет запись.
+  const [recolor, setRecolor] = useState<Appointment | null>(null);
   // Без блока «Оплата» (Кабинет → «Запись») визит закрывать нечем: статус на
   // странице записи меняет только оплата. Тогда «Выполнена» живёт здесь, в
   // меню долгого нажатия, — денег она не пишет.
@@ -1130,18 +1137,14 @@ export default function CalendarTab() {
     (a: Appointment) => {
       // Цвет команды — общая последняя ступень для всех трёх правил: блок без
       // цвета хуже блока «не той» окраски.
-      const teamBase = a.team_id ? teamColor.get(a.team_id) ?? null : null;
-      const base =
-        autoColorRule === "label"
-          ? (() => {
-              const name = (a.city ?? "").trim() || labelFor(a.date)?.name;
-              return name
-                ? cities.find((c) => c.name === name)?.color ?? null
-                : null;
-            })() ?? teamBase
-          : autoColorRule === "service"
-            ? serviceBaseColor(a, (id) => serviceColorById.get(id)) ?? teamBase
-            : teamBase;
+      const labelName = (a.city ?? "").trim() || labelFor(a.date)?.name;
+      const base = autoBaseColor(autoColorRule, {
+        team: a.team_id ? teamColor.get(a.team_id) : null,
+        label: labelName
+          ? cities.find((c) => c.name === labelName)?.color
+          : null,
+        service: serviceBaseColor(a, (id) => serviceColorById.get(id)),
+      });
       // СОБЫТИЕ НЕ ИМЕЕТ НИ КЛИЕНТА, НИ ОБЪЕКТА, НИ УСЛУГ ПО ОПРЕДЕЛЕНИЮ:
       // палитра «чего не хватает» к нему не применяется — иначе обед в
       // календаре горел бы «нет клиента».
@@ -1847,6 +1850,8 @@ export default function CalendarTab() {
       )
         items.push({ label: "Перенести", run: () => startMove(apt) });
       items.push({ label: "Копировать", run: () => copyAppointment(apt) });
+      if (!event || mutable)
+        items.push({ label: "Цвет", run: () => setRecolor(apt) });
       if (!event) {
         if (!paymentBlockOn && apt.status !== "cancelled")
           items.push(
@@ -2758,6 +2763,46 @@ export default function CalendarTab() {
         }}
       />
 
+
+      <ColorSheet
+        visible={recolor != null}
+        onClose={() => setRecolor(null)}
+        commitOnPick
+        isEvent={recolor != null && isCalendarEvent(recolor)}
+        value={recolor?.color_override ?? null}
+        // Образец «Автоматически» — цвет, который запись получит БЕЗ ручного:
+        // то же правило, что красит сетку, только с пустым override.
+        autoColor={
+          recolor ? teamColorFor({ ...recolor, color_override: null }) : null
+        }
+        onPick={(c) => {
+          const apt = recolor;
+          setRecolor(null);
+          if (!apt) return;
+          const prev = apt.color_override ?? null;
+          if ((c ?? null) === prev) return;
+          haptics.tap();
+          updateAppt.mutate(
+            { id: apt.id, patch: { color_override: c } },
+            {
+              onSuccess: () =>
+                toast(c ? "Цвет изменён" : "Цвет — автоматически", "success", {
+                  label: "Отменить",
+                  onPress: () =>
+                    updateAppt.mutate(
+                      { id: apt.id, patch: { color_override: prev } },
+                      {
+                        onError: () =>
+                          toast("Не удалось вернуть цвет", "error"),
+                      },
+                    ),
+                }),
+              onError: (e) =>
+                toast(serverReason(e) ?? "Не удалось изменить цвет", "error"),
+            },
+          );
+        }}
+      />
 
       {/* Метка дня — нижний лист (web parity CityPickerModal); тап по
           активной строке снимает метку. Целевую дату задаёт открывшая

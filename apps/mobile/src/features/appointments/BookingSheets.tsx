@@ -4,7 +4,7 @@ import {
   PRESET_COLOR_VALUES,
   colorName,
 } from "@babun/shared/common/utils/colors";
-import { edgeColor } from "@/components/ui/color-contrast";
+import { blockSolid } from "@/components/ui/color-contrast";
 
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
@@ -150,6 +150,7 @@ export function ColorSheet({
   autoLabel,
   autoColor,
   allowNone = true,
+  commitOnPick = false,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -167,6 +168,12 @@ export function ColorSheet({
   /** Можно ли остаться без цвета. У запасного цвета записи нельзя: он и есть
    *  последняя ступень правила, и «ничего» на его месте — дыра. */
   allowNone?: boolean;
+  /** Тап по цвету — сразу выбор и закрытие, без кнопки (канон 5.2: одиночный
+   *  выбор кнопки не имеет). Так зовут лист из календаря, где за листом нет
+   *  страницы, подсвеченной цветом, и «Применить» лишь делал вид, что
+   *  сохраняет. В форме записи кнопка остаётся: там цвет виден сразу всей
+   *  страницей, а сохраняет его футер формы. */
+  commitOnPick?: boolean;
 }) {
   return (
     <BottomSheet
@@ -175,12 +182,14 @@ export function ColorSheet({
       title={title ?? (isEvent ? "Цвет события" : "Цвет записи")}
       padded={false}
       footer={
+        commitOnPick ? undefined : (
         <View style={{ paddingHorizontal: SIDE }}>
           {/* «ПРИМЕНИТЬ» ВНИЗУ, А НЕ «ГОТОВО» В УГЛУ ШАПКИ (владелец
               2026-09-04). Цвет виден сразу — вся страница за листом уже
               подсвечена им, — поэтому кнопка только закрывает. */}
           <Button label="Применить" onPress={onClose} />
         </View>
+        )
       }
     >
       <View style={{ paddingHorizontal: SIDE, paddingBottom: 8 }}>
@@ -196,11 +205,10 @@ export function ColorSheet({
             label={autoLabel ?? "Автоматически"}
             radio
             variant="tint"
-            // КАНТ, А НЕ СЫРОЙ ПИГМЕНТ: пилюля красит им свою рамку и тинт, а
-            // Ванильный #FFF0BC в полную силу даёт к белому листу 1.14 : 1 —
-            // выбранное состояние на бледном цвете просто исчезало бы.
-            // Кружок рядом остаётся сырым: в нём цвет ВЫБИРАЮТ.
-            color={autoColor ? edgeColor(autoColor) : undefined}
+            // ТОТ ЖЕ ТОН, ЧТО У БЛОКА В КАЛЕНДАРЕ (`blockSolid`): пилюля и
+            // кружок показывают то, что человек получит на сетке, а не сырой
+            // пигмент, который на бледных цветах растворялся в листе.
+            color={autoColor ? blockSolid(autoColor) : undefined}
             // ОБРАЗЕЦ ДЕЙСТВУЮЩЕГО ЦВЕТА ПРЯМО НА КНОПКЕ (владелец 2026-09-05:
             // «выбрал „Автоматически“ — значит подсвечивается тем цветом,
             // который сейчас стоит в автоматическом режиме»). Слово говорило,
@@ -215,11 +223,7 @@ export function ColorSheet({
                     width: 10,
                     height: 10,
                     borderRadius: 5,
-                    backgroundColor: autoColor,
-                    // Волосяной кант тем же затемнением: без него бледный цвет
-                    // растворяется в подложке пилюли и кружка не видно.
-                    borderWidth: 1,
-                    borderColor: edgeColor(autoColor),
+                    backgroundColor: blockSolid(autoColor),
                   }}
                 />
               ) : undefined
@@ -237,7 +241,12 @@ export function ColorSheet({
           />
         </View>
         ) : null}
-        <ColorPicker colors={EVENT_COLORS} value={value} onChange={onPick} />
+        <ColorPicker
+          colors={EVENT_COLORS}
+          value={value}
+          onChange={onPick}
+          tone={blockSolid}
+        />
       </View>
     </BottomSheet>
   );
