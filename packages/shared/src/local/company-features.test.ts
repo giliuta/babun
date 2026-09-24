@@ -45,7 +45,7 @@ describe("функции компании", () => {
       "objects", "record_label", "record_payment", "record_note", "record_files",
       "day_labels", "events", "debts", "accounts", "documents",
       "client_people", "client_requisites", "client_files",
-      "event_label", "event_client", "event_object", "event_note", "event_files",
+      "event_label", "event_type", "event_client", "event_object", "event_note", "event_files",
     ]);
   });
 });

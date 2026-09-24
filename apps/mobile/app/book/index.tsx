@@ -291,6 +291,8 @@ export default function BookScreen() {
   // события заметка или объект включаются отдельно от записи.
   const eventBlocks = useEventBlocks();
   const evShowLabel = eventBlocks.includes("label");
+  // Тип у события необязателен: выключен — событие как запись с заметкой.
+  const evShowType = eventBlocks.includes("type");
   const evShowClient = eventBlocks.includes("client");
   const evShowObject = eventBlocks.includes("object");
   const evShowNote = eventBlocks.includes("note");
@@ -2868,7 +2870,7 @@ export default function BookScreen() {
                   строка-дверь → шторка. Цвет события и есть цвет типа. */}
               {/* Без права править событие тип только читается: пустую дверь
                   «Выбрать тип» не показываем, выбранный — без действия. */}
-              {can.editEventType || eventType ? (
+              {evShowType && (can.editEventType || eventType) ? (
                 <EventTypeBlock
                   type={eventType}
                   onPress={

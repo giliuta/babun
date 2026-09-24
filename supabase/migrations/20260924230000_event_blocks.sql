@@ -7,6 +7,8 @@
 -- компании (`calendar_settings.disabled_features`, миграция
 -- 20260924140000), со своими ключами:
 --   event_label   — метка события
+--   event_type    — тип события (необязателен: без него событие — запись
+--                   с заметкой, владелец 24.09)
 --   event_client  — клиент события
 --   event_object  — объект события
 --   event_note    — заметка события
@@ -35,6 +37,7 @@ alter table public.calendar_settings
       'client_requisites',-- реквизиты клиентов
       'client_files',     -- файлы клиентов
       'event_label',      -- метка события
+      'event_type',       -- тип события
       'event_client',     -- клиент события
       'event_object',     -- объект события
       'event_note',       -- заметка события

@@ -28,6 +28,7 @@ export type CompanyFeatureKey =
   // Блоки формы СОБЫТИЯ — свои, не общие с записью (владелец 24.09,
   // миграция 20260924230000).
   | "event_label"
+  | "event_type"
   | "event_client"
   | "event_object"
   | "event_note"
@@ -75,6 +76,9 @@ export const COMPANY_FEATURES: readonly CompanyFeatureDef[] = [
   { key: "client_requisites", label: "Реквизиты клиента", group: "clients" },
   { key: "client_files", label: "Файлы клиента", group: "clients" },
   { key: "event_label", label: "Метка события", group: "event", eventBlock: "label" },
+  // Тип у события НЕОБЯЗАТЕЛЕН (владелец 24.09: «можно вообще без типа —
+  // событие останется как обычная запись с заметкой»).
+  { key: "event_type", label: "Тип события", group: "event", eventBlock: "type" },
   { key: "event_client", label: "Клиент события", group: "event", eventBlock: "client" },
   { key: "event_object", label: "Объект события", group: "event", eventBlock: "object" },
   { key: "event_note", label: "Заметка события", group: "event", eventBlock: "note" },

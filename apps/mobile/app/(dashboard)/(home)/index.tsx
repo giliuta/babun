@@ -119,6 +119,7 @@ import { isOverdue } from "@/features/calendar/overdue";
 import {
   useAutoColorRule,
   useBookingBlocks,
+  useEventBlocks,
   useFallbackColor,
   useSituationPalette,
   type SituationPalette,
@@ -1867,6 +1868,8 @@ export default function CalendarTab() {
     canManageBookings || (isCrew && activeActions.events === "write");
   const canSlotMenu = canAddBreak;
   const eventTypesQuery = usePersonalEventTypes();
+  // Блок «Тип» у события выключен — типов в быстром событии нет.
+  const eventTypesOn = useEventBlocks().includes("type");
   const quickTypes = useMemo(
     () =>
       (eventTypesQuery.data ?? [])
@@ -1882,7 +1885,7 @@ export default function CalendarTab() {
     setSheetMenu({
       title: "Быстрое событие",
       subtitle: `${humanDay(dateYmd)}, ${timeStart}`,
-      items: quickTypes.map((type) => ({
+      items: (eventTypesOn ? quickTypes : []).map((type) => ({
         label: type.label,
         icon: eventTypeIcon(type.icon),
         color: type.color,
@@ -1896,7 +1899,7 @@ export default function CalendarTab() {
           }),
       })),
       // Справочник типов правят владелец и диспетчер; у сотрудника двери нет.
-      onSettings: canManageBookings
+      onSettings: canManageBookings && eventTypesOn
         ? () => router.push("/calendar/event-types" as Href)
         : undefined,
       settingsLabel: "Типы событий",

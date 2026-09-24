@@ -94,6 +94,22 @@ const BLOCK_ICON: Record<string, LucideIcon> = {
   files: FileText,
 };
 
+/** СТРОКИ ТАБЛИЦЫ БЛОКОВ: одинаковые блоки записи и события стоят
+ *  напротив друг друга (владелец 24.09: «почему разделение — у обоих
+ *  команда, метка, время»), различия — своими строками. Порядок — порядок
+ *  формы. */
+const BLOCK_ROWS: { record: BookingBlockId | null; event: EventBlockId | null }[] = [
+  { record: "team", event: "team" },
+  { record: "label", event: "label" },
+  { record: "when", event: "when" },
+  { record: "client", event: "client" },
+  { record: "object", event: "object" },
+  { record: "services", event: "type" },
+  { record: "payment", event: null },
+  { record: "note", event: "note" },
+  { record: "files", event: "files" },
+];
+
 export function DesignScreen() {
   const t = useThemeColors();
   const router = useRouter();
@@ -219,42 +235,54 @@ export function DesignScreen() {
           <View style={{ flexDirection: "row" }}>
             <View style={{ flex: 1 }}>
               <ColumnTitle text="Клиент" />
-              {BOOKING_BLOCKS.map((block) => (
-                <BlockCell
-                  key={block.id}
-                  label={block.label}
-                  icon={BLOCK_ICON[block.id] ?? Bookmark}
-                  on={block.pinned ? true : recordOn(block.id)}
-                  locked={!!block.pinned}
-                  onToggle={() => toggleRecordBlock.mutate(block.id)}
-                />
-              ))}
             </View>
             <View style={{ width: 1, backgroundColor: t.separator }} />
             <View style={{ flex: 1 }}>
               <ColumnTitle text="Событие" />
-              {EVENT_BLOCKS.map((block) => {
-                // Объекта события нет, пока у компании выключены объекты.
-                const noObjects = block.id === "object" && !objectsOn;
-                return (
-                  <BlockCell
-                    key={block.id}
-                    label={block.label}
-                    icon={BLOCK_ICON[block.id] ?? Bookmark}
-                    on={block.pinned ? true : !noObjects && eventOn(block.id)}
-                    locked={!!block.pinned || noObjects}
-                    onToggle={() => toggleEventBlock.mutate(block.id)}
-                  />
-                );
-              })}
             </View>
           </View>
+          {BLOCK_ROWS.map((row) => {
+            const rec = row.record
+              ? BOOKING_BLOCKS.find((b) => b.id === row.record)
+              : null;
+            const ev = row.event ? EVENT_BLOCKS.find((b) => b.id === row.event) : null;
+            // Объекта события нет, пока у компании выключены объекты.
+            const noObjects = ev?.id === "object" && !objectsOn;
+            return (
+              <View key={`${row.record}-${row.event}`} style={{ flexDirection: "row" }}>
+                <View style={{ flex: 1 }}>
+                  {rec ? (
+                    <BlockCell
+                      label={rec.label}
+                      icon={BLOCK_ICON[rec.id] ?? Bookmark}
+                      on={rec.pinned ? true : recordOn(rec.id)}
+                      locked={!!rec.pinned}
+                      onToggle={() => toggleRecordBlock.mutate(rec.id)}
+                    />
+                  ) : null}
+                </View>
+                <View style={{ width: 1, backgroundColor: t.separator }} />
+                <View style={{ flex: 1 }}>
+                  {ev ? (
+                    <BlockCell
+                      label={ev.label}
+                      icon={BLOCK_ICON[ev.id] ?? Bookmark}
+                      on={ev.pinned ? true : !noObjects && eventOn(ev.id)}
+                      locked={!!ev.pinned || noObjects}
+                      onToggle={() => toggleEventBlock.mutate(ev.id)}
+                    />
+                  ) : null}
+                </View>
+              </View>
+            );
+          })}
         </SectionCard>
         <RowCaption text="Выключенный блок пропадает у всей компании. Данные остаются." />
 
         {/* ── ТИПЫ СОБЫТИЙ — ДВЕРЬ, КАК У УСЛУГ И МЕТОК (владелец 24.09:
             «отдельной страницей, как и везде»). Все типы и так стоят в
             «Быстром событии» — отдельно это не объясняется. */}
+        {eventOn("type") ? (
         <SectionCard>
           <SettingsRow
             tile={SETTINGS_TILE.purple}
@@ -267,6 +295,7 @@ export function DesignScreen() {
             }}
           />
         </SectionCard>
+        ) : null}
       </ScrollView>
 
       {/* Источник обычного цвета — наша шторка выбора со значками и галкой. */}
