@@ -869,6 +869,19 @@ export default function CalendarTab() {
   // across midnight. Per-brigade timezone wins over the global setting
   // (web parity: activeBrigadeTimezone, dashboard/page.tsx:752-756).
   const timezone = activeTeam?.timezone ?? calSettings?.timezone;
+  // ПОДПИСЬ ДЛЯ СВЕРКИ НАПОМИНАНИЙ: только то, от чего зависит момент пуша.
+  // Эффект звал нативные уведомления на КАЖДУЮ новую ссылку списка — в том
+  // числе на каждый шаг переноса; теперь — когда реально сменились дата,
+  // время или статус, и не чаще раза в секунду.
+  const reminderSig = useMemo(
+    () =>
+      appts
+        .map((a) => `${a.id}|${a.date}|${a.time_start}|${a.status}|${a.team_id ?? ""}|${a.event_push_enabled ? 1 : 0}`)
+        .join(";"),
+    [appts],
+  );
+  const apptsRef = useRef(appts);
+  apptsRef.current = appts;
   useEffect(() => {
     if (
       isLoading ||
@@ -887,12 +900,16 @@ export default function CalendarTab() {
       (appointment.team_id ? teamTimezones.get(appointment.team_id) : null) ??
       calSettings?.timezone ??
       "Europe/Nicosia";
-    void reconcileEventAppointmentReminders(appts, tzFor).catch(() => {});
-    // Пуши «себе» (колокольчик) пересчитываются от свежих дат: перенесли
-    // запись — напоминание переехало, отменили — снято.
-    void reconcileSelfReminders(appts, tzFor).catch(() => {});
+    const timer = setTimeout(() => {
+      const list = apptsRef.current;
+      void reconcileEventAppointmentReminders(list, tzFor).catch(() => {});
+      // Пуши «себе» (колокольчик) пересчитываются от свежих дат: перенесли
+      // запись — напоминание переехало, отменили — снято.
+      void reconcileSelfReminders(list, tzFor).catch(() => {});
+    }, 1000);
+    return () => clearTimeout(timer);
   }, [
-    appts,
+    reminderSig,
     calSettings?.timezone,
     calSettingsQuery.isError,
     calSettingsQuery.isLoading,
@@ -2530,22 +2547,15 @@ export default function CalendarTab() {
 
   /** Тап по пустому времени — одна дорога для Недели и Дня. */
   const createAt = (dateYmd: string, timeStart: string) => {
-    // СВОБОДНОЕ ПЕРЕМЕЩЕНИЕ: тап по любому месту сетки ставит запись туда —
-    // любой день, любая неделя (сетку можно листать), любая своя команда
-    // (чип над сеткой). Прошлое не запрещено: так отмечают выезд, который
-    // уже был (владелец 24.09).
+    // СВОБОДНОЕ ПЕРЕМЕЩЕНИЕ: ТАП ПО ПУСТОМУ МЕСТУ — ГОТОВО (владелец 24.09:
+    // «поставил в нужное место — тапаю по любому незанятому месту, и она
+    // остаётся, перемещение заканчивается»). Запись двигают пальцем —
+    // по времени, по дням, в соседнюю неделю краем экрана; тап только
+    // отпускает её. Раньше тап переносил запись в место тапа, и «отпустить»
+    // её было нечем, кроме крестика на плашке.
     if (editingApt) {
-      const dur = Math.max(
-        15,
-        minutesBetweenHM(editingApt.time_start, editingApt.time_end) || 30,
-      );
-      reschedule(
-        editingApt,
-        timeStart,
-        addMinutesHM(timeStart, dur),
-        dateYmd,
-        activeTeamId ?? editingApt.team_id,
-      );
+      haptics.tap();
+      setEditingApt(null);
       return;
     }
     // Режим переноса: тап по кубику — переезд записи, не новая запись.
@@ -2850,11 +2860,9 @@ export default function CalendarTab() {
       ) : editingApt ? (
         <ModePlaque
           title={`Перемещение: ${clientName(editingApt) || editingApt.comment || "Запись"}`}
-          subtitle={
-            teams.length > 1
-              ? "Тяните или тапните время · команда — ниже"
-              : "Тяните запись или тапните время"
-          }
+          // В другую команду — «Перенести» в меню записи (кубики по сетке
+          // выбранной команды); здесь только палец и «готово» тапом.
+          subtitle="Тяните запись · тап по пустому месту — готово"
           exitLabel="Закончить перемещение"
           onExit={() => setEditingApt(null)}
         />

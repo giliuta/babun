@@ -79,6 +79,9 @@ function invalidateKeys() {
   ];
 }
 
+/** Поля «места» записи: перенос по сетке трогает только их. */
+const PLACE_FIELDS = new Set(["time_start", "time_end", "date", "team_id"]);
+
 // Fields whose change can move money server-side. A pure reschedule
 // (time/date) skips the finance refetch entirely.
 const FINANCE_FIELDS = [
@@ -249,8 +252,23 @@ export function useUpdateAppointment() {
         cur?.map((a) => (a.id === id ? prevRecord : a)),
       );
     },
-    onSuccess: (_data, { id, patch }) => {
-      qc.invalidateQueries({ queryKey: ["appointments"] });
+    onSuccess: (data, { id, patch }) => {
+      // ПЕРЕНОС БЕЗ ПЕРЕЗАГРУЗКИ ВСЕГО КАЛЕНДАРЯ (владелец 24.09: «свободное
+      // перемещение как будто лагает, особенно когда несколько записей на
+      // одно время»). Каждый перенос звал полное перечитывание списка: сетка
+      // перерисовывалась целиком второй раз, уже после оптимистичного
+      // шага. Когда патч трогает только место записи (время, дата, команда),
+      // кладём в список ответ сервера — и всё; остальные ключи записи
+      // помечаются устаревшими без немедленного похода в сеть.
+      const placeOnly = Object.keys(patch).every((k) => PLACE_FIELDS.has(k));
+      if (placeOnly && data && typeof data === "object" && "id" in data) {
+        qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
+          cur?.map((a) => (a.id === id ? { ...a, ...(data as Appointment) } : a)),
+        );
+        qc.invalidateQueries({ queryKey: ["appointments"], refetchType: "none" });
+      } else {
+        qc.invalidateQueries({ queryKey: ["appointments"] });
+      }
       // Finance/clients refetch only when the patch can actually move money —
       // a time_start/time_end reschedule doesn't need 3 full refetches.
       if (FINANCE_FIELDS.some((f) => patch[f] !== undefined)) {
