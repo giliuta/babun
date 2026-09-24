@@ -53,10 +53,14 @@ import {
 // БЛОК «ОПЛАТА» (STORY-065). Тап по счёту — деньги получены и записаны СРАЗУ
 // (владелец 2026-09-06: без черновика); визит закрывается, если начался.
 // ОДНА кнопка суммы (стрелки врозь — «распределение», владелец) и для предоплаты, и для части: «это одна и та же
-// функция — какая разница, столько-то или столько-то» (владелец). До начала
-// визита без неё плитки погашены — любые деньги до визита это предоплата;
-// после начала введённая сумма — часть, остаток остаётся долгом или уходит на
-// вторую плитку. Зелёная плитка при ОТКРЫТОМ поле прибавляет на тот же счёт
+// функция — какая разница, столько-то или столько-то» (владелец). Плитка
+// принимает деньги В ЛЮБОЙ МОМЕНТ (владелец 2026-09-24: «когда угодно могу
+// нажать наличку — и оно будет оплачено, не обязательно, чтоб заканчивалось
+// время»): до начала визита тап записывает всю сумму предоплатой, и запись
+// оплачена заранее; после начала — оплатой. Раньше до начала плитки были
+// погашены и отвечали «визит ещё не начался», и оплата у клиента «не
+// записывалась». Введённая сумма — часть, остаток остаётся долгом или уходит
+// на вторую плитку. Зелёная плитка при ОТКРЫТОМ поле прибавляет на тот же счёт
 // (владелец: «оно должно плюсануть, а не снимать»): плитка одна на счёт, с
 // суммой всех его платежей. Ошибочный платёж снимает тап по зелёной плитке без
 // поля или «Снять» в тосте — сервер пишет сторно «деньги не поступили», не
@@ -104,7 +108,13 @@ export function PaymentBlock({
   const currency = useTenant().data?.currency;
   const businessNow = useBusinessNow();
   const tileWidth = useTileWidth();
-  const { data: accounts = [], isLoading: accountsLoading } = useTeamPaymentAccounts(teamId);
+  const {
+    data: accounts = [],
+    isSuccess: accountsLoaded,
+    // Счётчик ошибок, а не `isError`: на повторе react-query возвращает
+    // ни разу не загруженный запрос в «pending», и слова мигали бы.
+    errorUpdateCount: accountsFailures,
+  } = useTeamPaymentAccounts(teamId);
   const record = useRecordPayment();
   const cancel = useCancelPayment();
   const invoicesQuery = useInvoices();
@@ -163,11 +173,15 @@ export function PaymentBlock({
   const busy = record.isPending || cancel.isPending;
   const amountMode = partText != null;
   // Вид платежа выводится из времени, а не выбирается: до начала — предоплата.
-  const kindForTap: PaymentKind = started ? "settlement" : "prepayment";
+  // Запись, уже отмеченная выполненной или начатой, платит оплатой и до
+  // своего часа: предоплату по выполненной сервер отбивает.
+  const kindForTap: PaymentKind =
+    started || visit.status === "completed" || visit.status === "in_progress"
+      ? "settlement"
+      : "prepayment";
   const amountCents = amountMode ? amountCentsFromInput(partText) : outstanding;
   const problem = amountProblem(amountCents, outstanding);
-  const acceptsMoney =
-    outstanding > 0 && (started || amountMode) && !billUnsaved && canTakeMoney;
+  const acceptsMoney = outstanding > 0 && !billUnsaved && canTakeMoney;
 
   const runCancel = (
     appointmentId: string,
@@ -201,11 +215,6 @@ export function PaymentBlock({
     if (billUnsaved) {
       haptics.warning();
       toast("Итог изменился — сначала сохраните запись", "info");
-      return;
-    }
-    if (!started && !amountMode) {
-      haptics.warning();
-      toast("Визит ещё не начался — предоплата через кнопку суммы или инвойс", "info");
       return;
     }
     if (problem === "exceeds") {
@@ -407,7 +416,15 @@ export function PaymentBlock({
           {row.kind === "prepayment" ? "Предоплата" : "Оплачено"} {formatEURExact(row.amount)} · счёт определён автоматически
         </Text>
       ))}
-      {!teamId ? null : accountsLoading ? null : accounts.length === 0 ? (
+      {/* НЕ ЗАГРУЗИЛИСЬ — НЕ ЗНАЧИТ «НЕТ СЧЕТОВ». Ошибка сети раньше
+          рисовалась как «У команды нет счёта — создать счёт»: плиток не было,
+          оплата «не записывалась», а блок звал завести второй такой же счёт.
+          Теперь блок говорит, что случилось, и сам повторяет запрос. */}
+      {!teamId || (accounts.length === 0 && !accountsLoaded && accountsFailures === 0) ? null : accounts.length === 0 && !accountsLoaded ? (
+        <Text style={{ marginHorizontal: 16, marginTop: 4, marginBottom: 12, fontSize: 13, color: t.sub }}>
+          Счета не загрузились — пробуем ещё раз
+        </Text>
+      ) : accounts.length === 0 ? (
         <NoAccountsNotice canCreate={canCreateAccount} onCreate={() => setCreateOpen(true)} />
       ) : (
         <View

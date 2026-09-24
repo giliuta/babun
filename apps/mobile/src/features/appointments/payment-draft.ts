@@ -264,9 +264,6 @@ export function blockCaption(input: {
   if (input.hasAppointment && input.visitCompleted && input.outstanding > 0) {
     return { text: `Долг ${input.outstandingLabel}`, tone: "warning" };
   }
-  if (!input.started && input.outstanding > 0) {
-    return { text: "До визита: предоплата или инвойс", tone: "neutral" };
-  }
   if (input.hasAppointment && input.rowsCount > 0 && input.outstanding > 0) {
     return { text: `Остаток ${input.outstandingLabel}`, tone: "warning" };
   }

@@ -423,7 +423,8 @@ export async function updateClient(
     table: "clients" as const,
     op: "update" as const,
     row_id: id,
-    payload: patchToRow(scrubbedPatch) as Record<string, unknown>,
+    // Компания — для гейта очереди (`replayer.ts`), на сервер она не уходит.
+    payload: { ...patchToRow(scrubbedPatch), tenant_id: tenantId } as Record<string, unknown>,
     expected_updated_at: expectedUpdatedAt,
   };
 
@@ -518,7 +519,7 @@ export async function archiveClient(
     table: "clients" as const,
     op: "update" as const,
     row_id: id,
-    payload: { deleted_at: archivedAt, purge_at: purgeAt },
+    payload: { deleted_at: archivedAt, purge_at: purgeAt, tenant_id: tenantId },
     expected_updated_at: existing?.updated_at ?? null,
   };
   const queue = () =>
@@ -568,7 +569,7 @@ export async function restoreClient(
     table: "clients" as const,
     op: "update" as const,
     row_id: client.id,
-    payload: { deleted_at: null, purge_at: null },
+    payload: { deleted_at: null, purge_at: null, tenant_id: tenantId },
     expected_updated_at: null,
   };
 

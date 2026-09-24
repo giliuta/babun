@@ -658,6 +658,119 @@ describe("replayer — гейт по компании", () => {
   });
 });
 
+// ─── Правки без компании в теле (до 24.09) ────────────────────────────
+// Гейт 12.09 молча пропускал правку без компании на каждом круге: она не
+// уходила и не падала, а пока в очереди висит правка записи, перечитка
+// записей с сервера не идёт — календарь телефона замирал, и оплата, принятая
+// сервером, на экране оставалась «не оплачено» (владелец 2026-09-24).
+
+describe("replayer — правки без компании в теле", () => {
+  test("компания берётся из строки кэша, правка уходит, в SET компании нет", async () => {
+    await cacheUpsert("clients", {
+      id: UUID_A,
+      tenant_id: TENANT,
+      updated_at: "2026-01-01T00:00:00.000Z",
+    } as unknown as CachedClient);
+    await enqueueOp({
+      table: "clients",
+      op: "update",
+      row_id: UUID_A,
+      payload: { full_name: "Mine" },
+      expected_updated_at: "2026-01-01T00:00:00.000Z",
+    });
+    const { client, calls } = makeFakeSupabase((rec) =>
+      rec.op === "update" ? { data: [{ id: UUID_A }], error: null } : { data: null, error: null },
+    );
+
+    await kickReplayer({ supabase: asSupabase(client), tenantId: TENANT });
+
+    expect(calls.filter((c) => c.op === "update")).toHaveLength(1);
+    expect(await queueDepth()).toBe(0);
+  });
+
+  test("строку правили после — побеждает сервер: силой не пишем, кэш берёт строку сервера", async () => {
+    await cacheUpsert("clients", {
+      id: UUID_A,
+      tenant_id: TENANT,
+      full_name: "Old",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    } as unknown as CachedClient);
+    await enqueueOp({
+      table: "clients",
+      op: "update",
+      row_id: UUID_A,
+      payload: { full_name: "Stale" },
+      expected_updated_at: "2026-01-01T00:00:00.000Z",
+    });
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update") return { data: [], error: null }; // конфликт
+      if (rec.op === "select") {
+        return {
+          data: {
+            id: UUID_A,
+            tenant_id: TENANT,
+            full_name: "Server",
+            updated_at: "2026-09-24T11:06:21.000Z",
+          },
+          error: null,
+        };
+      }
+      return { data: null, error: null };
+    });
+    let conflicts = 0;
+
+    await kickReplayer({
+      supabase: asSupabase(client),
+      tenantId: TENANT,
+      onConflict: () => {
+        conflicts += 1;
+      },
+    });
+
+    // Одна условная правка, без силовой второй.
+    expect(calls.filter((c) => c.op === "update")).toHaveLength(1);
+    expect(conflicts).toBe(0);
+    expect(await queueDepth()).toBe(0);
+    const cached = await cacheGetOne<CachedClient>("clients", UUID_A);
+    expect(cached?.updated_at).toBe("2026-09-24T11:06:21.000Z");
+  });
+
+  test("компанию узнать неоткуда — операция в «не удалось», очередь её больше не ждёт", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_B,
+      payload: { status: "completed" },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    await kickReplayer({ supabase: asSupabase(client), tenantId: TENANT });
+
+    expect(calls).toHaveLength(0);
+    const [op] = await dequeueAll();
+    expect(op?.attempts).toBeGreaterThanOrEqual(3);
+    expect(op?.last_error).toContain("без компании");
+  });
+
+  test("новая правка несёт компанию для гейта, но не шлёт её колонкой", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_C,
+      payload: { status: "completed", tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    await kickReplayer({ supabase: asSupabase(client), tenantId: TENANT });
+
+    const update = calls.find((c) => c.op === "update");
+    expect(update?.payload).toEqual({ status: "completed" });
+    expect(await queueDepth()).toBe(0);
+  });
+});
+
 // ─── Удаление отчитывается строками ───────────────────────────────────
 // `delete()` без `select()` возвращает ошибку только когда сервер ОТВЕТИЛ
 // ошибкой. «Политика не дала удалить» ошибкой не считается: под RLS строка

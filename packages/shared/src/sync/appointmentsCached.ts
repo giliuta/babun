@@ -323,7 +323,8 @@ export async function updateAppointment(
     table: "appointments" as const,
     op: "update" as const,
     row_id: id,
-    payload: patchToRow(patch) as Record<string, unknown>,
+    // Компания — для гейта очереди (`replayer.ts`), на сервер она не уходит.
+    payload: { ...patchToRow(patch), tenant_id: tenantId } as Record<string, unknown>,
     expected_updated_at: expectedUpdatedAt,
   };
 

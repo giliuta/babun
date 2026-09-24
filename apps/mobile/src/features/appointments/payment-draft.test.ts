@@ -253,7 +253,9 @@ describe("blockCaption", () => {
   test("amount field open needs no caption; not started, remaining, debt, pending", () => {
     assert.equal(blockCaption({ ...base, amountMode: true }), null);
     assert.equal(blockCaption({ ...base, amountMode: true, started: false }), null);
-    assert.equal(blockCaption({ ...base, started: false })?.text, "До визита: предоплата или инвойс");
+    // Плитки принимают деньги и до визита — подпись называет сумму, а не
+    // отсылает к «предоплате или инвойсу» (владелец 2026-09-24).
+    assert.deepEqual(blockCaption({ ...base, started: false }), { text: "К оплате €135", tone: "neutral" });
     assert.deepEqual(blockCaption({ ...base, rowsCount: 1, outstanding: 3500, outstandingLabel: "€35" }), { text: "Остаток €35", tone: "warning" });
     assert.deepEqual(blockCaption({ ...base, visitCompleted: true }), { text: "Долг €135", tone: "warning" });
     assert.equal(blockCaption({ ...base, hasAppointment: false, hasPending: true })?.text, "Запишется при создании");

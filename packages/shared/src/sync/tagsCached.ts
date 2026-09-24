@@ -265,7 +265,8 @@ export async function updateClientTag(
     table: "tags" as const,
     op: "update" as const,
     row_id: id,
-    payload: patch as Record<string, unknown>,
+    // Компания — для гейта очереди (`replayer.ts`), на сервер она не уходит.
+    payload: { ...patch, tenant_id: tenantId } as Record<string, unknown>,
     expected_updated_at: null, // no updated_at column → no detection
   };
 

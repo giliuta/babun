@@ -54,5 +54,10 @@ export function useTeamPaymentAccounts(teamId: string | null | undefined) {
   return useQuery({
     ...paymentAccountsQuery(tenantId, teamId),
     enabled: !!tenantId && !!teamId,
+    // НЕ ЗАГРУЗИЛОСЬ — ПРОБУЕМ СНОВА, ПОКА ЭКРАН ОТКРЫТ (владелец 2026-09-24:
+    // «оплата у клиента не записывается»). Обрыв связи на открытии записи
+    // оставлял запрос в ошибке на все пять минут свежести: плиток не было, и
+    // тапать было не во что, пока запись не откроют заново.
+    refetchInterval: (query) => (query.state.status === "error" ? 5_000 : false),
   });
 }

@@ -240,6 +240,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
   if (writesBlocked()) return;
 
   for (const op of ops) {
+    let legacyUpdate = false;
     if (op.attempts >= MAX_ATTEMPTS) {
       // Already failed permanently — leave in queue so the UI can
       // show the manual-retry button. Manual retry resets attempts.
@@ -263,12 +264,35 @@ async function drain(opts: ReplayerOptions): Promise<void> {
         break;
       }
 
-      const payloadTenant = (op.payload as { tenant_id?: unknown })?.tenant_id;
+      let payloadTenant = (op.payload as { tenant_id?: unknown })?.tenant_id;
+      if (
+        (typeof payloadTenant !== "string" || payloadTenant.length === 0)
+        && op.op === "update"
+      ) {
+        // ПРАВКИ, ПОСТАВЛЕННЫЕ ДО 24.09, КОМПАНИИ В ТЕЛЕ НЕ НЕСУТ. Обёртки
+        // клали её во вставку и удаление, а в правку — нет, и гейт 12.09
+        // молча пропускал такую операцию на каждом круге: она не уходила,
+        // не падала и держала очередь. Держала буквально: пока в очереди
+        // висит правка записи, перечитка записей с сервера не идёт вовсе
+        // (`appointmentsCached`), и календарь телефона замирал — оплата,
+        // принятая сервером, на экране оставалась «не оплачено» (владелец
+        // 2026-09-24: «оплата у клиента не записывается»). Компания такой
+        // правки — компания самой строки в кэше.
+        const cached = await cacheGetOne(op.table as CachedTable, op.row_id).catch(
+          () => null,
+        );
+        payloadTenant = (cached as { tenant_id?: unknown } | null)?.tenant_id;
+        legacyUpdate = true;
+      }
       if (typeof payloadTenant !== "string" || payloadTenant.length === 0) {
-        // ОПЕРАЦИЯ БЕЗ КОМПАНИИ НЕ ВЫГРУЖАЕТСЯ ВОВСЕ. Компанию кладут все
-        // обёртки, удаление в том числе (`{ id, tenant_id }`), так что сюда
-        // попадает только испорченная запись. Отправить её — значит отдать
-        // серверу решать, в какую компанию писать, а он возьмёт ТЕКУЩУЮ.
+        // ОПЕРАЦИЯ БЕЗ КОМПАНИИ НЕ ВЫГРУЖАЕТСЯ ВОВСЕ: отправить её — значит
+        // отдать серверу решать, в какую компанию писать, а он возьмёт
+        // ТЕКУЩУЮ. Но и молча лежать ей нельзя — молчаливый пропуск держал
+        // очередь вечно. Она уходит в «не удалось» с причиной: видна в
+        // очереди, там её удаляют руками, и перечитка больше не ждёт её.
+        const msg = "Операция без компании — отправлять её некуда";
+        await markOpPermanentlyFailedAndEmit(op.id, msg);
+        opts.onPermanentFailure?.({ ...op, attempts: MAX_ATTEMPTS, last_error: msg });
         continue;
       }
       if (payloadTenant !== liveTenantId) continue;
@@ -334,7 +358,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
     if (gateTenantId && readTenantId(opts) !== gateTenantId) break;
 
     try {
-      const conflict = await dispatch(opts.supabase, op);
+      const conflict = await dispatch(opts.supabase, op, legacyUpdate);
       if (conflict) {
         opts.onConflict?.(
           "Запись была обновлена на другом устройстве. Применены ваши изменения.",
@@ -367,6 +391,10 @@ async function drain(opts: ReplayerOptions): Promise<void> {
 async function dispatch(
   supabase: DbSupabase,
   op: QueuedOp,
+  /** Правка старого образца (без компании в теле, см. гейт в `drain`). Она
+   *  пролежала в очереди часы и дни, и строку за это время правили — при
+   *  конфликте побеждает сервер, а не она. */
+  serverWinsOnConflict = false,
 ): Promise<boolean> {
   // The repositories accept the row shapes already; payloads are
   // pre-shaped at enqueue time so dispatch is mostly a relay. We
@@ -559,10 +587,15 @@ async function dispatch(
   // PostgrestFilterBuilder so we can chain `.eq("updated_at", ...)`
   // without per-table type narrowing. The replayer is intentionally
   // generic across cached tables.
+  // КОМПАНИЯ В ТЕЛЕ ПРАВКИ — ДЛЯ ГЕЙТА, А НЕ ДЛЯ СЕРВЕРА. Правка компанию
+  // строки не меняет никогда: колонку из SET убираем.
+  const { tenant_id: _tenantForGate, ...updatePayload } = op.payload as Record<string, unknown>;
+  void _tenantForGate;
+
   if (op.expected_updated_at) {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const filter = (
-      supabase.from(tableName).update(op.payload as any) as any
+      supabase.from(tableName).update(updatePayload as any) as any
     )
       .eq("id", op.row_id)
       .eq("updated_at", op.expected_updated_at)
@@ -572,6 +605,31 @@ async function dispatch(
     if (error) throw new Error(`replay update: ${error.message}`);
     if (data && data.length > 0) return false; // matched cleanly
 
+    if (serverWinsOnConflict) {
+      // Строку правили после того, как эта правка встала в очередь. Старая
+      // правка поверх новой затёрла бы свежие изменения (время, услуги),
+      // поэтому операция снимается, а кэш берёт строку сервера.
+      const { data: fresh, error: freshErr } = await supabase
+        .from(tableName)
+        .select()
+        .eq("id", op.row_id)
+        .maybeSingle();
+      if (freshErr) throw new Error(`replay refresh: ${freshErr.message}`);
+      if (fresh) {
+        const row = fresh as Record<string, unknown>;
+        if (op.table === "clients" && row.deleted_at != null) {
+          await cacheDelete("clients", op.row_id);
+        } else {
+          const prevCached =
+            op.table === "clients"
+              ? await cacheGetOne<CachedClientData>("clients", op.row_id).catch(() => null)
+              : null;
+          await cacheUpsert(op.table as CachedTable, toCachedRow(op.table, row, prevCached));
+        }
+      }
+      return false;
+    }
+
     // 0 rows → conflict. Retry without updated_at filter and re-fetch
     // the canonical server row (now carrying the new updated_at) so
     // the cache stays consistent. Without this re-fetch, IDB would
@@ -579,7 +637,7 @@ async function dispatch(
     // next edit.
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const forceFilter = (
-      supabase.from(tableName).update(op.payload as any) as any
+      supabase.from(tableName).update(updatePayload as any) as any
     )
       .eq("id", op.row_id)
       .select()
@@ -645,7 +703,7 @@ async function dispatch(
   const { error: plainErr } = await supabase
     .from(tableName)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update(op.payload as any)
+    .update(updatePayload as any)
     .eq("id", op.row_id);
   if (plainErr) throw new Error(`replay update (plain): ${plainErr.message}`);
   return false;

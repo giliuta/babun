@@ -283,6 +283,7 @@ describe("clients cache-of-domain", () => {
     expect(updateOp).toBeDefined();
     expect(updateOp.payload.full_name).toBe("Пётр");
     expect(updateOp.payload.tag_ids).toBeUndefined();
+    expect(updateOp.payload.tenant_id).toBe(TENANT);
   });
 
   test("offline tag_ids patch is stripped from BOTH cache merge and queue", async () => {
@@ -539,6 +540,9 @@ describe("appointments cache-of-domain", () => {
     const updateOp = (await dequeueAll()).find((o) => o.op === "update")!;
     expect(updateOp.payload.status).toBe("completed");
     expect(updateOp.payload.comment).toBe("готово");
+    // Компания в теле — иначе гейт очереди правку не отправит никогда, а
+    // висящая правка записи замораживает перечитку календаря (2026-09-24).
+    expect(updateOp.payload.tenant_id).toBe(TENANT);
   });
 
   test("online semantic update rejection restores the canonical appointment", async () => {
