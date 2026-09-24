@@ -12,6 +12,7 @@ import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
 import { useMasters, useTeams, type Master } from "@/features/reference/queries";
 import { usePendingInvitations } from "@/features/settings/team-access";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { refusalOf } from "@/features/access/access-map";
 import { calendarCards } from "@/features/access/masters-list";
 import { openMasterDraft } from "@/features/access/master-page/draft-store";
@@ -44,6 +45,8 @@ type MastersRow =
 export default function MastersScreen() {
   const t = useThemeColors();
   const router = useRouter();
+  // Приглашает людей только владелец — сервер откажет остальным (аудит 24.09).
+  const isOwner = useCurrentRole().data === "owner";
   // Включая архивных: «Вернуть из архива» живёт в хабе мастера, и без
   // архивного хвоста в списке он недостижим (аудит P1-10). Активные
   // сверху, архив серым снизу.
@@ -302,8 +305,9 @@ export default function MastersScreen() {
           там, где человек его ищет. Футер стоит ВСЕГДА — список пуст или нет,
           место действия не переезжает.
 
-          Без календаря в адресе звать некуда: приглашение всегда в календарь. */}
-      {teamId ? (
+          Без календаря в адресе звать некуда: приглашение всегда в календарь.
+          Приглашает только владелец: остальным кнопки нет (аудит 24.09). */}
+      {teamId && isOwner ? (
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
           <GradientButton
             label="Добавить мастера"

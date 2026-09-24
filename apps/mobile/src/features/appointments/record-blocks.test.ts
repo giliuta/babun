@@ -24,7 +24,7 @@ const REGISTRY: { key: string; live: boolean; levels: AccessLevel[] }[] = [
   { key: "record.amount", live: true, levels: ["off", "read", "write"] },
   { key: "record.payment", live: true, levels: ["off", "read", "write"] },
   { key: "record.files", live: true, levels: ["off", "read", "write"] },
-  { key: "record.status", live: true, levels: ["off", "read", "write"] },
+  { key: "record.status", live: true, levels: ["read", "write"] },
   { key: "record.color", live: true, levels: ["off", "write"] },
 ];
 
@@ -125,6 +125,12 @@ describe("страница записи — одна для всех, блоки
     assert.equal(blocks.status, "read");
     assert.equal(blocks.note, "read");
     assert.equal(blocks.when, "read", "время видно всегда, даже без переноса");
+  });
+
+  test("статус не прячется: старое «Не видит» читается как «Видит»", () => {
+    const blocks = recordBlocks(at(map({ "record.status": "off" })));
+    assert.equal(blocks.status, "read");
+    assert.equal(blocks.note, "read");
   });
 
   test("неживой блок — без правки, даже если в карте «Меняет»", () => {

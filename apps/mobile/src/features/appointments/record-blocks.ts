@@ -158,7 +158,9 @@ export function recordBlocks(input: Input): RecordBlocks {
   /** Два положения «Не меняет / Меняет»: видят всегда, меняет — по праву. */
   const writeOrRead = (key: string): RecordLevel => (read(key) === "write" ? "write" : "read");
 
-  const status = level("record.status");
+  // Статус виден всегда (аудит 24.09: «Не видит» у него снято — отменённая
+  // запись без статуса выглядела бы живой); меняет — по праву.
+  const status = writeOrRead("record.status");
   const amount = level("record.amount");
   const services = level("record.services");
   return {

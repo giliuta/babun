@@ -24,7 +24,8 @@ const block = (over: Partial<AccessBlock>): AccessBlock => ({
 const REGISTRY: AccessBlock[] = [
   block({ key: "calendar.records", area: "calendar", scope: "calendar", live: false, title: "Календарь и записи" }),
   block({ key: "calendar.create", area: "calendar", scope: "calendar", levels: ["off", "write"], live: false, title: "Новые записи" }),
-  block({ key: "record.status", area: "calendar", scope: "calendar", title: "Статус записи" }),
+  // «Не видит» у статуса снято аудитом 24.09.
+  block({ key: "record.status", area: "calendar", scope: "calendar", levels: ["read", "write"], title: "Статус записи" }),
   block({ key: "record.client", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Клиент в записи" }),
   block({ key: "record.object", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Объект в записи" }),
   block({ key: "record.services", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Услуги в записи" }),

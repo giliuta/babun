@@ -2719,6 +2719,9 @@ export default function BookScreen() {
                   clientId={editing?.client_id ?? client?.id ?? null}
                   locationId={editing?.location_id ?? locationId ?? null}
                   canUpload={status !== "cancelled"}
+                  // Удаляет файлы записи только владелец и диспетчер — сервер
+                  // сотруднику откажет, корзину ему не рисуем (аудит 24.09).
+                  canDelete={!isMemberView}
                   pending={pendingFiles}
                   onPendingChange={setPendingFiles}
                 />
@@ -3035,6 +3038,9 @@ export default function BookScreen() {
                   clientId={editing?.client_id ?? client?.id ?? null}
                   locationId={editing?.location_id ?? locationId ?? null}
                   canUpload={status !== "cancelled"}
+                  // Удаляет файлы записи только владелец и диспетчер — сервер
+                  // сотруднику откажет, корзину ему не рисуем (аудит 24.09).
+                  canDelete={!isMemberView}
                   pending={pendingFiles}
                   onPendingChange={setPendingFiles}
                 />
