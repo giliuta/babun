@@ -3,6 +3,9 @@ import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import {
+  accountBreakdown,
+  cancelledCount,
+  weekdayLoad,
   isPerformed,
   moneyTotals,
   monthTable,
@@ -57,6 +60,14 @@ describe("аналитика: что считается сделанной ра�
     assert.equal(isPerformed(appt({ status: "scheduled", date: "2026-09-25" }), "2026-09-24"), false);
     assert.equal(isPerformed(appt({ status: "cancelled" }), "2026-09-24"), false);
     assert.equal(isPerformed(appt({ kind: "event" }), "2026-09-24"), false);
+  });
+
+  test("сегодняшняя — сделана, когда её время кончилось или её отметили", () => {
+    const today = appt({ status: "scheduled", date: "2026-09-24", time_start: "18:00", time_end: "19:00" });
+    assert.equal(isPerformed(today, "2026-09-24", "12:00"), false);
+    assert.equal(isPerformed(today, "2026-09-24", "19:00"), true);
+    assert.equal(isPerformed(today, "2026-09-24"), false);
+    assert.equal(isPerformed({ ...today, status: "in_progress" }, "2026-09-24", "12:00"), true);
   });
 
   test("срез по периоду и команде", () => {
@@ -194,5 +205,72 @@ describe("разрез по командам", () => {
     assert.deepEqual(rows.map((r) => [r.name, r.worked]), [
       ["D&K", 180], ["Y&D", 50], ["Без команды", 10],
     ]);
+  });
+});
+
+describe("по счетам, по дням недели, отмены", () => {
+  test("доход по счетам — со знаком возврата, расход — суммой", () => {
+    const rows = accountBreakdown(
+      [
+        tx({ id: "1", type: "income", amount: 100, account_id: "cash" }),
+        tx({ id: "2", type: "refund", amount: -30, account_id: "cash" }),
+        tx({ id: "3", type: "income", amount: 50, account_id: "card" }),
+        tx({ id: "4", type: "expense", amount: 20, account_id: "card" }),
+      ],
+      "income",
+      [
+        { id: "cash", name: "Наличные" },
+        { id: "card", name: "Карта" },
+      ],
+    );
+    assert.deepEqual(rows.map((r) => [r.name, r.amount, r.count]), [
+      ["Наличные", 70, 2],
+      ["Карта", 50, 1],
+    ]);
+    const exp = accountBreakdown([tx({ id: "4", type: "expense", amount: 20, account_id: "gone" })], "expense", []);
+    assert.deepEqual(exp.map((r) => [r.name, r.amount]), [["Счёт закрыт", 20]]);
+  });
+
+  test("дни недели — с понедельника, пустые тоже", () => {
+    const rows = weekdayLoad([
+      appt({ id: "1", date: "2026-09-21" }), // понедельник
+      appt({ id: "2", date: "2026-09-27", time_start: "10:00", time_end: "11:30" }), // воскресенье
+    ]);
+    assert.equal(rows.length, 7);
+    assert.equal(rows[0].records, 1);
+    assert.equal(rows[6].records, 1);
+    assert.equal(rows[6].minutes, 90);
+    assert.equal(rows[2].records, 0);
+  });
+
+  test("отменённые — только рабочие и в срезе", () => {
+    const n = cancelledCount(
+      [
+        appt({ id: "1", status: "cancelled" }),
+        appt({ id: "2", status: "cancelled", kind: "event" }),
+        appt({ id: "3", status: "cancelled", date: "2026-08-01" }),
+        appt({ id: "4" }),
+      ],
+      SEP,
+    );
+    assert.equal(n, 1);
+  });
+});
+
+describe("таблица по месяцам через новый год", () => {
+  test("период 2025→2026 — месяцы обоих лет, итог сходится", () => {
+    const t = monthTable(
+      { from: 2025, to: 2026 },
+      [
+        tx({ id: "a", type: "income", amount: 100, occurred_on: "2025-12-28" }),
+        tx({ id: "b", type: "income", amount: 50, occurred_on: "2026-01-05" }),
+      ],
+      [],
+      [],
+      { today: "2026-01-10", teamId: null },
+    );
+    assert.equal(t.rows.length, 13);
+    assert.equal(t.total.income, 150);
+    assert.equal(t.total.key, "2025–2026");
   });
 });

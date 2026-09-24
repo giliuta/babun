@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
@@ -37,6 +37,7 @@ export function ProfitBreakdown({
   only,
   title = "Прибыль",
   people,
+  footer,
 }: {
   transactions: FinanceTransaction[];
   categories: FinanceCategory[];
@@ -49,6 +50,9 @@ export function ProfitBreakdown({
   title?: string;
   /** Сотрудники — зарплата делится по людям: «Зарплата · Даня». */
   people?: readonly { id: string; full_name: string }[];
+  /** Секции ниже разбора — у «Аналитики» («По счетам», «Работы и оплаты»):
+   *  тот же лист, та же прокрутка, те же строки. */
+  footer?: ReactNode;
 }) {
   const th = useThemeColors();
 
@@ -128,21 +132,11 @@ export function ProfitBreakdown({
 
       {showIncome ? (
       <View className="mt-1">
-        <View className="flex-row items-baseline px-4 pb-1 pt-3">
-          <Text
-            className="text-xs font-semibold uppercase tracking-wider"
-            style={{ color: th.sub }}
-          >
-            Что принесло денег
-          </Text>
-          <Text
-            className="ml-auto text-[13px] font-bold"
-            style={{ fontVariant: ["tabular-nums"], color: income >= 0 ? th.success : th.danger }}
-          >
-            {income >= 0 ? "" : "−"}
-            {formatEUR(Math.abs(income))}
-          </Text>
-        </View>
+        <BreakdownSectionHeader
+          title="Что принесло денег"
+          value={`${income >= 0 ? "" : "−"}${formatEUR(Math.abs(income))}`}
+          color={income >= 0 ? th.success : th.danger}
+        />
         {incomeRows.length === 0 ? (
           <Text className="px-4 py-1.5 text-[13px]" style={{ color: th.faint }}>
             Нет доходов за период
@@ -160,20 +154,11 @@ export function ProfitBreakdown({
 
       {showExpense ? (
       <View className="mt-1">
-        <View className="flex-row items-baseline px-4 pb-1 pt-3">
-          <Text
-            className="text-xs font-semibold uppercase tracking-wider"
-            style={{ color: th.sub }}
-          >
-            Куда ушёл расход
-          </Text>
-          <Text
-            className="ml-auto text-[13px] font-bold"
-            style={{ fontVariant: ["tabular-nums"], color: th.danger }}
-          >
-            −{formatEUR(expense)}
-          </Text>
-        </View>
+        <BreakdownSectionHeader
+          title="Куда ушёл расход"
+          value={`−${formatEUR(expense)}`}
+          color={th.danger}
+        />
         {expenseRows.length === 0 ? (
           <Text className="px-4 py-1.5 text-[13px]" style={{ color: th.faint }}>
             Нет расходов за период
@@ -183,6 +168,7 @@ export function ProfitBreakdown({
         )}
       </View>
       ) : null}
+      {footer}
     </ScrollView>
   );
 }
@@ -241,6 +227,38 @@ export function BreakdownBarRow({
           style={{ width: `${pct}%`, backgroundColor: color }}
         />
       </View>
+    </View>
+  );
+}
+
+/** Шапка секции разбора — «ЧТО ПРИНЕСЛО ДЕНЕГ · €728». Одна на «Прибыль» и
+ *  секции «Аналитики»: капс слева, итог секции её цветом справа. */
+export function BreakdownSectionHeader({
+  title,
+  value,
+  color,
+}: {
+  title: string;
+  value?: string;
+  color?: string;
+}) {
+  const th = useThemeColors();
+  return (
+    <View className="flex-row items-baseline px-4 pb-1 pt-3">
+      <Text
+        className="text-xs font-semibold uppercase tracking-wider"
+        style={{ color: th.sub }}
+      >
+        {title}
+      </Text>
+      {value ? (
+        <Text
+          className="ml-auto text-[13px] font-bold"
+          style={{ fontVariant: ["tabular-nums"], color: color ?? th.ink }}
+        >
+          {value}
+        </Text>
+      ) : null}
     </View>
   );
 }

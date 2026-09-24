@@ -170,6 +170,9 @@ export function SummaryToggle({
  * мы использовали в финансах, такую же используй в аналитике»): две копии
  * разошлись бы на первой правке отступа.
  */
+/** Id чипа «вся компания» — не пересекается ни с одним календарём. */
+const ALL_TEAMS_CHIP = "__all_teams__";
+
 export function ScopePeriodBar({
   teams,
   scopeTeamId,
@@ -178,6 +181,7 @@ export function ScopePeriodBar({
   onOpenPresets,
   onOpenCustom,
   locked = false,
+  allLabel,
 }: {
   teams: Team[];
   scopeTeamId: string | null;
@@ -186,6 +190,12 @@ export function ScopePeriodBar({
   onOpenPresets: () => void;
   onOpenCustom: () => void;
   locked?: boolean;
+  /** Чип «вся компания» первым в ленте — ТОЛЬКО у «Аналитики» (владелец
+   *  2026-09-24: «кнопку „Все команды“, аналитика может быть по всем
+   *  командам»). На «Финансах» его нет и не будет: деньги там всегда чьи-то
+   *  (закон 2026-08-10), а итог компании — ровно вопрос аналитики. Выбран —
+   *  `scopeTeamId === null`. */
+  allLabel?: string;
 }) {
   const t = useThemeColors();
   const toast = useToast();
@@ -213,12 +223,21 @@ export function ScopePeriodBar({
           склеен идентификатор и что делает тап. Две копии этих правил разошлись
           бы на первой же правке, и деньги разъехались бы с расписанием. */}
       <ScopeChips
-        items={calendarChips.items}
+        items={
+          allLabel
+            ? [{ id: ALL_TEAMS_CHIP, name: allLabel }, ...calendarChips.items]
+            : calendarChips.items
+        }
         // Пока идёт переход в другую компанию, подсвечен выбранный чип, а не
         // прежний: касание обязано отвечать сразу.
-        activeId={calendarChips.pendingId ?? scopeTeamId}
+        activeId={
+          calendarChips.pendingId ??
+          (allLabel && scopeTeamId === null ? ALL_TEAMS_CHIP : scopeTeamId)
+        }
         seam={false}
-        onSelect={calendarChips.pick}
+        onSelect={(id) =>
+          id === ALL_TEAMS_CHIP ? onScopeChange(null) : calendarChips.pick(id)
+        }
       />
 
       {/* period row — NAME opens the preset list, DATES open the wheels.

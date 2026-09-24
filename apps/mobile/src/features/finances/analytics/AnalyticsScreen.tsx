@@ -5,6 +5,11 @@ import {
   moneySign,
 } from "@babun/shared/common/utils/money";
 import {
+  formatCountRu,
+  FORMS_USLUGA,
+  type PluralFormsRu,
+} from "@babun/shared/common/utils/plural-ru";
+import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
 } from "@babun/shared/common/utils/date-utils";
@@ -26,10 +31,16 @@ import { ScopePeriodBar, SummaryToggle } from "../FinanceOverview";
 import { IncomeShareDonut } from "../IncomeShareDonut";
 import { PanelHeader, panelCount } from "../PanelHeader";
 import { PeriodPresetModal, PeriodWheelsModal } from "../PeriodSheets";
-import { BreakdownBarRow, ProfitBreakdown } from "../ProfitBreakdown";
+import {
+  BreakdownBarRow,
+  BreakdownSectionHeader,
+  ProfitBreakdown,
+} from "../ProfitBreakdown";
 import { makePeriod, type Period } from "../period";
 import { useFinanceCategories, useTransactions } from "../queries";
 import {
+  accountBreakdown,
+  cancelledCount,
   clientBreakdown,
   hoursLabel,
   ledgerInScope,
@@ -39,6 +50,7 @@ import {
   performedRecords,
   serviceBreakdown,
   teamBreakdown,
+  weekdayLoad,
   workTotals,
   type Scope,
 } from "./analytics-math";
@@ -60,6 +72,10 @@ import { MonthTable } from "./MonthTable";
 // Деньги видит тот, кому их показывают «Финансы»; остальным — штуки и часы.
 // Плиток денег у них нет вовсе, а не серые (канон «блок без права
 // отсутствует»).
+
+const FORMS_ZAPIS: PluralFormsRu = ["запись", "записи", "записей"];
+const FORMS_KLIENT: PluralFormsRu = ["клиент", "клиента", "клиентов"];
+const WEEKDAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 
 type Panel =
   | "income"
@@ -92,22 +108,34 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
     ? getCurrentTimeInZone(timezone)
     : getCurrentCyprusTime();
   const today = todayYmd(timezone);
+  // «Сейчас» для сегодняшних записей: сделана — когда её время кончилось.
+  const nowHm = `${String(businessNow.getHours()).padStart(2, "0")}:${String(
+    businessNow.getMinutes(),
+  ).padStart(2, "0")}`;
 
   const [period, setPeriod] = useState<Period>(
     () => start.period ?? makePeriod("month", businessNow),
   );
   const [presetOpen, setPresetOpen] = useState(false);
   const [wheelsOpen, setWheelsOpen] = useState(false);
-  const [pickedTeam, setPickedTeam] = useState<string | null>(start.teamId);
+  /** `undefined` — ещё не выбирали: команда, с которой пришли, иначе первая;
+   *  `null` — «Все команды»; строка — команда. */
+  const [pickedTeam, setPickedTeam] = useState<string | null | undefined>(
+    start.teamId ?? undefined,
+  );
   const [panel, setPanel] = useState<Panel>("services");
 
   const teamsData = useTeams().data;
   const teams = useMemo(() => teamsData ?? [], [teamsData]);
-  // КОМАНДА ВСЕГДА ЧЬЯ-ТО — правило ленты «Финансов»: пришли с командой —
-  // она, нет или её удалили (или ушли в другую компанию) — первая живая.
-  const teamId = teams.some((team) => team.id === pickedTeam)
-    ? pickedTeam
-    : (teams[0]?.id ?? null);
+  // СРЕЗ: «Все команды» (`null`, владелец 2026-09-24: «аналитика может быть
+  // по всем командам») или команда. Пришли с командой — она; нет или её
+  // удалили (ушли в другую компанию) — первая живая, как на «Финансах».
+  const teamId =
+    pickedTeam === null
+      ? null
+      : teams.some((team) => team.id === pickedTeam)
+        ? (pickedTeam as string)
+        : (teams[0]?.id ?? null);
 
   const apptsQuery = useAppointments();
   const appointments = useMemo(() => apptsQuery.data ?? [], [apptsQuery.data]);
@@ -130,17 +158,19 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
     [accountsData],
   );
 
-  // ОДИН ЗАПРОС ЖУРНАЛА НА ВСЁ: период и год таблицы по месяцам.
-  const year = Number(period.from.slice(0, 4));
-  const yearEnd = `${year}-12-31`;
-  const ledgerFrom = [period.from, `${year}-01-01`].sort()[0];
+  // ОДИН ЗАПРОС ЖУРНАЛА НА ВСЁ: период и все его годы для таблицы по месяцам
+  // (период через новый год — оба года).
+  const yearFrom = Number(period.from.slice(0, 4));
+  const yearTo = Number(period.to.slice(0, 4));
+  const yearEnd = `${yearTo}-12-31`;
+  const ledgerFrom = [period.from, `${yearFrom}-01-01`].sort()[0];
   const ledgerTo = [period.to, yearEnd < today ? yearEnd : today].sort()[1];
   const ledger = useTransactions(ledgerFrom, ledgerTo, { enabled: showMoney });
   const txs = useMemo(() => ledger.data ?? [], [ledger.data]);
 
   const scope: Scope = useMemo(
-    () => ({ from: period.from, to: period.to, today, teamId, accountTeam }),
-    [period.from, period.to, today, teamId, accountTeam],
+    () => ({ from: period.from, to: period.to, today, teamId, accountTeam, nowHm }),
+    [period.from, period.to, today, teamId, accountTeam, nowHm],
   );
   const records = useMemo(() => performedRecords(appointments, scope), [appointments, scope]);
   const work = useMemo(() => workTotals(records), [records]);
@@ -162,9 +192,29 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
     [appointments, scope, teams],
   );
   const months = useMemo(
-    () => monthTable(year, txs, appointments, financeServices, { today, teamId, accountTeam }),
-    [year, txs, appointments, financeServices, today, teamId, accountTeam],
+    () =>
+      monthTable({ from: yearFrom, to: yearTo }, txs, appointments, financeServices, {
+        today,
+        teamId,
+        accountTeam,
+        nowHm,
+      }),
+    [yearFrom, yearTo, txs, appointments, financeServices, today, teamId, accountTeam, nowHm],
   );
+  const accountsList = useMemo(() => accountsData ?? [], [accountsData]);
+  const incomeByAccount = useMemo(
+    () => accountBreakdown(periodTxs, "income", accountsList),
+    [periodTxs, accountsList],
+  );
+  const expenseByAccount = useMemo(
+    () => accountBreakdown(periodTxs, "expense", accountsList),
+    [periodTxs, accountsList],
+  );
+  const weekdays = useMemo(() => weekdayLoad(records), [records]);
+  const cancelled = useMemo(() => cancelledCount(appointments, scope), [appointments, scope]);
+  // ДЕНЬГИ ЕЩЁ ЕДУТ — плитка говорит «—», а не «€0»: ноль выглядел бы фактом
+  // (аудит 2026-09-24), хотя журнал просто не доехал.
+  const moneyPending = showMoney && ledger.data === undefined;
   const scopedAppointments = useMemo(
     () => appointments.filter((a) => teamId === null || a.team_id === teamId),
     [appointments, teamId],
@@ -198,24 +248,30 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
     value: string,
     color: string,
     quiet: boolean,
+    a11yValue?: string,
   ) => (
     <SummaryToggle
       label={label}
       color={color}
       value={value}
       quiet={quiet}
+      a11yValue={a11yValue}
       active={panel === key}
       onPress={() => toggle(key)}
     />
   );
+  const moneyText = (v: number) => (moneyPending ? "—" : formatEUR(v));
   const row = (children: ReactNode) => (
     <View className="flex-row" style={{ gap: 6 }}>
       {children}
     </View>
   );
-  const recordsTile = tile("records", "Записи", String(work.records), t.ink, work.records === 0);
-  const servicesTile = tile("services", "Услуги", String(quantity), t.ink, quantity === 0);
-  const clientsTile = tile("clients", "Клиенты", String(clientRows.length), t.ink, clientRows.length === 0);
+  const recordsTile = tile("records", "Записи", String(work.records), t.ink, work.records === 0,
+    formatCountRu(work.records, FORMS_ZAPIS));
+  const servicesTile = tile("services", "Услуги", String(quantity), t.ink, quantity === 0,
+    formatCountRu(quantity, FORMS_USLUGA));
+  const clientsTile = tile("clients", "Клиенты", String(clientRows.length), t.ink, clientRows.length === 0,
+    formatCountRu(clientRows.length, FORMS_KLIENT));
   const timeTile = tile("time", "Время", hoursLabel(work.minutes), t.ink, work.minutes === 0);
 
   const listEnd = { paddingBottom: 96 };
@@ -236,12 +292,65 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
             materialCost={panel === "expense" ? materials.amount : 0}
             materialAppointmentCount={materials.count}
             people={people}
+            footer={
+              <>
+                {/* ПО СЧЕТАМ — наличные против карты: сколько денег через
+                    какой счёт прошло. Строки — те же, что у разбора. */}
+                {(panel === "income" ? incomeByAccount : expenseByAccount).length > 0 ? (
+                  <View className="mt-1">
+                    <BreakdownSectionHeader title="По счетам" />
+                    {(panel === "income" ? incomeByAccount : expenseByAccount).map((r) => {
+                      const list = panel === "income" ? incomeByAccount : expenseByAccount;
+                      const total = list.reduce((sum, x) => sum + Math.max(0, x.amount), 0);
+                      const negative = panel === "expense" || r.amount < 0;
+                      return (
+                        <BreakdownBarRow
+                          key={r.id}
+                          name={r.name}
+                          count={r.count}
+                          value={`${negative ? "−" : ""}${formatEUR(Math.abs(r.amount))}`}
+                          color={negative ? t.danger : t.success}
+                          share={total > 0 ? r.amount / total : 0}
+                        />
+                      );
+                    })}
+                  </View>
+                ) : null}
+                {/* РАБОТЫ И ОПЛАТЫ — сколько сделано и сколько из этого
+                    пришло. Разница — деньги, которые ещё у клиентов. */}
+                {panel === "income" && work.worked > 0 ? (
+                  <View className="mt-1">
+                    <BreakdownSectionHeader
+                      title="Работы и оплаты"
+                      value={formatEUR(work.worked)}
+                      color={t.ink}
+                    />
+                    <BreakdownBarRow
+                      name="Оплачено"
+                      count={0}
+                      value={formatEUR(Math.min(work.paid, work.worked))}
+                      color={t.success}
+                      share={work.paid / work.worked}
+                    />
+                    <BreakdownBarRow
+                      name="Не оплачено"
+                      count={0}
+                      value={formatEUR(Math.max(0, work.worked - work.paid))}
+                      color={t.warning}
+                      share={Math.max(0, work.worked - work.paid) / work.worked}
+                    />
+                  </View>
+                ) : null}
+              </>
+            }
           />
         );
       case "profit":
         return (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={listEnd}>
-            <PanelHeader title={`${year} · по месяцам`} />
+            <PanelHeader
+              title={`${yearFrom === yearTo ? yearFrom : `${yearFrom}–${yearTo}`} · по месяцам`}
+            />
             {/* Тап по месяцу — тот же экран за этот месяц: плитки и услуги
                 перечитываются под него, как после выбора периода. */}
             <MonthTable
@@ -324,7 +433,12 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
         return (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={listEnd}>
             <PanelHeader
-              title={panelCount("Команды", teamRows.length)}
+              // Панель одна на три плитки — шапка называет, ЧТО сравнивается
+              // (аудит 2026-09-24): иначе, пролистав, не понять, часы это
+              // или записи.
+              title={`${panelCount("Команды", teamRows.length)} · ${
+                panel === "time" ? "часы" : panel === "check" ? "средний чек" : "записи"
+              }`}
               right={
                 panel === "time" && perHour ? (
                   <Text
@@ -332,6 +446,13 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
                     style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
                   >
                     {perHour}
+                  </Text>
+                ) : panel === "records" && cancelled > 0 ? (
+                  <Text
+                    className="text-[13px] font-semibold"
+                    style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
+                  >
+                    {`отменено ${cancelled}`}
                   </Text>
                 ) : undefined
               }
@@ -352,10 +473,32 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
                             ? formatEUR(r.worked)
                             : String(r.records)
                     }
-                    color={r.id === teamId ? t.accent : t.sub}
+                    // Выбранная команда — акцентом, остальные тише; при «Все
+                    // команды» акцентом все: сравниваются равные.
+                    color={teamId === null || r.id === teamId ? t.accent : t.sub}
                     share={max > 0 ? measure(r) / max : 0}
                   />
                 ))}
+            {/* ПО ДНЯМ НЕДЕЛИ — когда забито, когда пусто. Только у «Времени»:
+                это вопрос о загрузке, а не о деньгах. */}
+            {panel === "time" && work.records > 0 ? (
+              <View className="mt-1">
+                <BreakdownSectionHeader title="По дням недели" />
+                {(() => {
+                  const top = Math.max(0, ...weekdays.map((w) => w.minutes));
+                  return weekdays.map((w) => (
+                    <BreakdownBarRow
+                      key={w.day}
+                      name={WEEKDAYS[w.day]}
+                      count={w.records}
+                      value={w.minutes > 0 ? hoursLabel(w.minutes) : "—"}
+                      color={t.accent}
+                      share={top > 0 ? w.minutes / top : 0}
+                    />
+                  ));
+                })()}
+              </View>
+            ) : null}
           </ScrollView>
         );
       }
@@ -370,6 +513,7 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
           teams={teams}
           scopeTeamId={teamId}
           onScopeChange={setPickedTeam}
+          allLabel="Все команды"
           period={period}
           onOpenPresets={() => setPresetOpen(true)}
           onOpenCustom={() => setWheelsOpen(true)}
@@ -383,16 +527,16 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
                   {tile(
                     "income",
                     "Доход",
-                    formatEUR(money.income),
+                    moneyText(money.income),
                     moneySign(money.income) < 0 ? t.danger : t.success,
-                    moneySign(money.income) === 0,
+                    moneyPending || moneySign(money.income) === 0,
                   )}
-                  {tile("expense", "Расход", formatEUR(money.expense), t.danger, moneySign(money.expense) === 0)}
+                  {tile("expense", "Расход", moneyText(money.expense), t.danger, moneyPending || moneySign(money.expense) === 0)}
                 </>,
               )}
               {row(
                 <>
-                  {tile("profit", "Прибыль", formatEUR(money.profit), t.brandAccent, moneySign(money.profit) === 0)}
+                  {tile("profit", "Прибыль", moneyText(money.profit), t.brandAccent, moneyPending || moneySign(money.profit) === 0)}
                   {tile("check", "Средний чек", formatEUR(work.averageCheck), t.ink, work.records === 0)}
                 </>,
               )}

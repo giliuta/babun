@@ -31,6 +31,9 @@ export interface Scope {
   today: string;
   /** Команда среза; `null` — вся компания. */
   teamId: string | null;
+  /** «ЧЧ:ММ» сейчас в поясе компании. Сегодняшняя запись считается сделанной,
+   *  когда её время кончилось; не передали — только отмеченные выполненными. */
+  nowHm?: string;
   /** Команда каждого счёта: строка журнала без команды считается под
    *  командой своего счёта — тем же правилом, что «Финансы» (`team-scope.ts`). */
   accountTeam?: ReadonlyMap<string, string | null>;
@@ -39,10 +42,15 @@ export interface Scope {
 const cents = (v: number) => Math.round(v * 100);
 const euros = (c: number) => c / 100;
 
-export function isPerformed(a: Appointment, today: string): boolean {
+// СЕГОДНЯШНЯЯ ЗАПИСЬ — СДЕЛАНА, КОГДА ЕЁ ВРЕМЯ ПРОШЛО (аудит 2026-09-24).
+// Раньше хватало `date <= today`: запись на 18:00 ложилась в «Записи»,
+// «Время» и «Средний чек» с утра, и цифры росли весь день сами, раньше работы.
+export function isPerformed(a: Appointment, today: string, nowHm?: string): boolean {
   if (a.kind && a.kind !== "work") return false;
   if (a.status === "cancelled") return false;
-  return a.status === "completed" || a.date <= today;
+  if (a.status === "completed" || a.status === "in_progress") return true;
+  if (a.date < today) return true;
+  return a.date === today && !!nowHm && !!a.time_end && a.time_end <= nowHm;
 }
 
 function inScope(a: Pick<Appointment, "date" | "team_id">, s: Scope): boolean {
@@ -54,7 +62,7 @@ export function performedRecords(
   appointments: readonly Appointment[],
   s: Scope,
 ): Appointment[] {
-  return appointments.filter((a) => inScope(a, s) && isPerformed(a, s.today));
+  return appointments.filter((a) => inScope(a, s) && isPerformed(a, s.today, s.nowHm));
 }
 
 /** Минуты записи из «HH:MM – HH:MM»; кривое время или ночь через полночь —
@@ -202,13 +210,18 @@ export function yearMonths(
 }
 
 export function monthTable(
-  year: number,
+  years: { from: number; to: number } | number,
   transactions: readonly FinanceTransaction[],
   appointments: readonly Appointment[],
   services: readonly Service[],
-  base: Pick<Scope, "today" | "teamId" | "accountTeam">,
+  base: Pick<Scope, "today" | "teamId" | "accountTeam" | "nowHm">,
 ): { rows: MonthRow[]; total: MonthRow } {
-  const rows = yearMonths(year, base.today).map((m) => {
+  // ПЕРИОД ЧЕРЕЗ НОВЫЙ ГОД — ВСЕ ЕГО ГОДЫ (аудит 2026-09-24): таблица
+  // строилась по году начала, и у «20.12–10.01» январь выпадал из «Итого».
+  const span = typeof years === "number" ? { from: years, to: years } : years;
+  const months: { key: string; from: string; to: string }[] = [];
+  for (let y = span.from; y <= span.to; y += 1) months.push(...yearMonths(y, base.today));
+  const rows = months.map((m) => {
     const s = { ...base, from: m.from, to: m.to };
     const money = moneyTotals(transactions, appointments, services, s);
     const work = workTotals(performedRecords(appointments, s));
@@ -219,9 +232,9 @@ export function monthTable(
       ? rows.reduce((s, r) => s + r.records, 0)
       : euros(rows.reduce((s, r) => s + cents(r[k]), 0));
   const total: MonthRow = {
-    key: `${year}`,
-    from: `${year}-01-01`,
-    to: `${year}-12-31`,
+    key: span.from === span.to ? `${span.from}` : `${span.from}–${span.to}`,
+    from: `${span.from}-01-01`,
+    to: `${span.to}-12-31`,
     income: sum("income"),
     expense: sum("expense"),
     profit: sum("profit"),
@@ -245,7 +258,9 @@ export function teamBreakdown(
   const by = new Map<string, Appointment[]>();
   for (const a of records) {
     const k = a.team_id ?? "__none__";
-    by.set(k, [...(by.get(k) ?? []), a]);
+    const list = by.get(k);
+    if (list) list.push(a);
+    else by.set(k, [a]);
   }
   return [...by.entries()]
     .map(([id, list]) => ({
@@ -311,7 +326,9 @@ export function clientBreakdown(records: readonly Appointment[]): ClientRow[] {
   const by = new Map<string, Appointment[]>();
   for (const a of records) {
     if (!a.client_id) continue;
-    by.set(a.client_id, [...(by.get(a.client_id) ?? []), a]);
+    const list = by.get(a.client_id);
+    if (list) list.push(a);
+    else by.set(a.client_id, [a]);
   }
   return [...by.entries()]
     .map(([id, list]) => {
@@ -319,4 +336,83 @@ export function clientBreakdown(records: readonly Appointment[]): ClientRow[] {
       return { id, records: w.records, worked: w.worked };
     })
     .sort((a, b) => b.worked - a.worked || b.records - a.records);
+}
+
+export interface AccountRow {
+  id: string;
+  name: string;
+  color: string | null;
+  amount: number;
+  count: number;
+}
+
+/** «ПО СЧЕТАМ» — наличные против карты: сколько пришло (или ушло) через
+ *  каждый счёт. Доход — со знаком (возврат уменьшает счёт, как на плитке),
+ *  расход — суммой. Счёт, которого нет в справочнике, — «Счёт закрыт». */
+export function accountBreakdown(
+  transactions: readonly FinanceTransaction[],
+  kind: "income" | "expense",
+  accounts: readonly { id: string; name: string; color?: string | null }[],
+): AccountRow[] {
+  const by = new Map<string, { c: number; n: number }>();
+  for (const tx of transactions) {
+    const fits =
+      kind === "income"
+        ? tx.type === "income" || tx.type === "refund"
+        : tx.type === "expense";
+    if (!fits) continue;
+    const key = tx.account_id ?? "__none__";
+    const row = by.get(key) ?? { c: 0, n: 0 };
+    row.c += cents(kind === "income" ? signedAmount(tx) : tx.amount);
+    row.n += 1;
+    by.set(key, row);
+  }
+  return [...by.entries()]
+    .map(([id, r]) => {
+      const account = accounts.find((a) => a.id === id);
+      return {
+        id,
+        name: account?.name ?? (id === "__none__" ? "Без счёта" : "Счёт закрыт"),
+        color: account?.color ?? null,
+        amount: euros(r.c),
+        count: r.n,
+      };
+    })
+    .sort((a, b) => b.amount - a.amount);
+}
+
+export interface WeekdayRow {
+  /** 0 — понедельник … 6 — воскресенье. */
+  day: number;
+  records: number;
+  minutes: number;
+}
+
+/** ЗАГРУЖЕННОСТЬ ПО ДНЯМ НЕДЕЛИ — когда забито, когда пусто. Все семь дней,
+ *  в том числе пустые: пустой вторник — тоже ответ. */
+export function weekdayLoad(records: readonly Appointment[]): WeekdayRow[] {
+  const rows: WeekdayRow[] = Array.from({ length: 7 }, (_, day) => ({
+    day,
+    records: 0,
+    minutes: 0,
+  }));
+  for (const a of records) {
+    const [y, m, d] = a.date.split("-").map(Number);
+    if (!y || !m || !d) continue;
+    const js = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    const row = rows[(js + 6) % 7];
+    row.records += 1;
+    row.minutes += recordMinutes(a);
+  }
+  return rows;
+}
+
+/** Отменённые рабочие записи среза — «сколько выездов слито». */
+export function cancelledCount(
+  appointments: readonly Appointment[],
+  s: Scope,
+): number {
+  return appointments.filter(
+    (a) => (!a.kind || a.kind === "work") && a.status === "cancelled" && inScope(a, s),
+  ).length;
 }
