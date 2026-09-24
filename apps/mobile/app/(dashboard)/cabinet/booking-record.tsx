@@ -5,7 +5,6 @@ import { LayoutList, Palette } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { RecordMark, recordMarkText } from "@/components/ui/RecordMark";
 import { Divider } from "@/components/ui/Divider";
@@ -141,8 +140,10 @@ export default function BookingRecordSettingsScreen() {
         {/* ЛЕГЕНДА — НАСТОЯЩИЕ БЛОКИ КАЛЕНДАРЯ: та же плотная заливка, тот же
             контур и радиус (общий `RecordMark`), поэтому разойтись с сеткой они
             не могут. */}
-        <SectionEyebrow>Как выглядит</SectionEyebrow>
-        <View className="mx-4" style={{ flexDirection: "row", gap: 6 }}>
+        {/* ПОДПИСЬ ВНУТРИ КАРТОЧКИ, как на соседних страницах сценария
+            («Запись», «Событие»): канон — один способ подписи на путь. */}
+        <SectionCard title="Как выглядит" padded>
+        <View style={{ flexDirection: "row", gap: 6 }}>
           {legend.map((item) => (
             <View key={item.id} style={{ flex: 1, minWidth: 0 }}>
               <RecordMark hue={item.color} full size={58}>
@@ -162,13 +163,13 @@ export default function BookingRecordSettingsScreen() {
             </View>
           ))}
         </View>
+        </SectionCard>
 
         {/* ЧЕГО НЕ ХВАТАЕТ — цвет отвечает на вопрос, а не украшает. Порядок
             строк и есть порядок важности: первая незакрытая сверху и красит.
             Секция стоит ПЕРВОЙ, потому что первой и срабатывает: дыра
             перебивает и цвет команды, и цвет метки. */}
-        <SectionEyebrow>Чего не хватает</SectionEyebrow>
-        <SectionCard>
+        <SectionCard title="Чего не хватает">
           {situations.map((situation, i) => (
             <Fragment key={situation.id}>
               {i > 0 ? <Divider inset={56} /> : null}
@@ -187,8 +188,7 @@ export default function BookingRecordSettingsScreen() {
             разных материала читались как склеенные куски разных списков.
             Вопросы тоже разные: «что считать обычным цветом» и «чем красить,
             когда не сказало ничто». */}
-        <SectionEyebrow>Обычный цвет</SectionEyebrow>
-        <SectionCard>
+        <SectionCard title="Обычный цвет">
           {/* Правило называется вслух и живёт в одном месте: календарь и форма
               красят запись одинаково, потому что спрашивают его. */}
           <SettingsRow
@@ -208,8 +208,7 @@ export default function BookingRecordSettingsScreen() {
           />
         </SectionCard>
 
-        <SectionEyebrow>Форма</SectionEyebrow>
-        <SectionCard>
+        <SectionCard title="Форма">
           <SettingsRow
             tile={SETTINGS_TILE.indigo}
             icon={LayoutList}
