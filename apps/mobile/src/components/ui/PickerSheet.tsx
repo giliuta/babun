@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Pressable } from "react-native";
 import { Settings2 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
@@ -66,12 +67,36 @@ export function PickerSheet({
   onExited?: () => void;
 }) {
   const t = useThemeColors();
+  // Выбранный пункт ждёт, пока окно листа снимут (см. `onPress` строки).
+  const pendingAction = useRef<(() => void) | null>(null);
+  const fallback = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flush = () => {
+    if (fallback.current) clearTimeout(fallback.current);
+    fallback.current = null;
+    const run = pendingAction.current;
+    pendingAction.current = null;
+    run?.();
+  };
+  // СТРАХОВКА: родитель снял лист целиком (условный рендер) — `onExited` уже
+  // не придёт, а выбор сделан. Выполняем его после ухода окна, как раньше.
+  useEffect(
+    () => () => {
+      const run = pendingAction.current;
+      pendingAction.current = null;
+      if (fallback.current) clearTimeout(fallback.current);
+      if (run) setTimeout(run, SHEET_EXIT_MS);
+    },
+    [],
+  );
   return (
     <BottomSheet
       padded={false}
       visible={visible}
       onClose={onClose}
-      onExited={onExited}
+      onExited={() => {
+        onExited?.();
+        flush();
+      }}
       // ПОЛЭКРАНА И ПРОКРУТКА ВНУТРИ. Лист задумывался под «что сделать» —
       // пять-шесть строк, которые всегда влезали, — и потому жил без потолка
       // и без `scroll`. Потом им стали выбирать категорию операции: строк
@@ -126,13 +151,18 @@ export function PickerSheet({
             onPress={() => {
               haptics.tap();
               onClose();
-              // ДЕЙСТВИЕ ЖДЁТ, ПОКА ЛИСТ УЕДЕТ. BottomSheet закрывается 240 мс,
-              // и всё, что открывает своё окно поверх (второй лист, Alert,
-              // системный «Поделиться»), в тот же кадр просто не появлялось:
-              // «Напомнить» из меню не открывало ничего. Держим правило в
-              // примитиве — иначе каждый экран заводит свой setTimeout и
-              // забывает его там, где лист второй раз не нужен.
-              setTimeout(item.onPress, SHEET_EXIT_MS);
+              // ДЕЙСТВИЕ ЖДЁТ, ПОКА ЛИСТ УЕДЕТ. Всё, что открывает своё окно
+              // поверх (второй лист, вопрос «Удалить?», системный
+              // «Поделиться»), поверх уходящего листа iOS не показывает.
+              // Раньше ждали таймером SHEET_EXIT_MS (240 мс) — но окно снимают
+              // ПОСЛЕ анимации и коммита, и таймер его обгонял: 24.09
+              // «Удалить событие» в меню записи не открывало вопроса вовсе.
+              // Теперь ждём `onExited` — окно листа уже снято.
+              // Страховка на случай, если лист так и не закроют: выбор не
+              // теряется, срабатывает через секунду.
+              pendingAction.current = item.onPress;
+              if (fallback.current) clearTimeout(fallback.current);
+              fallback.current = setTimeout(flush, 1000);
             }}
           />
         ))}
