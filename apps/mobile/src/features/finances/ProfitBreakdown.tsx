@@ -34,6 +34,8 @@ export function ProfitBreakdown({
   appointments,
   materialCost,
   materialAppointmentCount,
+  only,
+  title = "Прибыль",
 }: {
   transactions: FinanceTransaction[];
   categories: FinanceCategory[];
@@ -41,6 +43,9 @@ export function ProfitBreakdown({
   appointments: Appointment[];
   materialCost: number;
   materialAppointmentCount: number;
+  /** Только одна половина разбора — у плиток «Доход» и «Расход» «Аналитики». */
+  only?: "income" | "expense";
+  title?: string;
 }) {
   const th = useThemeColors();
 
@@ -68,58 +73,42 @@ export function ProfitBreakdown({
   // actually draw — otherwise one sale + one refund would look like two
   // buckets and render a pointless full ring.
   const positiveIncomeBuckets = incomeRows.filter((r) => r.amount > 0).length;
-  const empty = incomeRows.length === 0 && expenseRows.length === 0;
+  const showIncome = only !== "expense";
+  const showExpense = only !== "income";
+  const empty =
+    (!showIncome || incomeRows.length === 0) && (!showExpense || expenseRows.length === 0);
 
   // Expense amounts are stored positive but represent outflows → always
   // «−». Income buckets are normally «+»; a refund whose original sale
   // is outside the period leaves a negative «Возвраты» bucket → «−» red.
   const renderRow = (r: BreakdownRow, total: number, kind: "income" | "expense") => {
-    const color =
-      kind === "expense" || r.amount < 0 ? th.danger : th.success;
-    const sign = kind === "expense" || r.amount < 0 ? "−" : "";
-    // negative rows (refunds) get no proportion bar
-    const pct = total > 0 ? Math.min(100, Math.max(0, (r.amount / total) * 100)) : 0;
+    const negative = kind === "expense" || r.amount < 0;
     return (
-      <View key={`${kind}-${r.id}`} className="px-4 py-2.5">
-        <View className="flex-row items-center">
-          <Text
-            className="shrink text-[15px]"
-            style={{ color: th.ink }}
-            numberOfLines={1}
-          >
-            {r.name}
-          </Text>
-          {r.count > 0 ? (
-            <Text className="ml-1.5 text-xs" style={{ color: th.faint }}>
-              ×{r.count}
-            </Text>
-          ) : null}
-          <Text
-            className="ml-auto pl-2.5 text-[15px] font-semibold"
-            style={{ fontVariant: ["tabular-nums"], color }}
-          >
-            {sign}
-            {formatEUR(Math.abs(r.amount))}
-          </Text>
-        </View>
-        <View
-          className="mt-1.5 h-1.5 overflow-hidden rounded-full"
-          style={{ backgroundColor: th.separator }}
-        >
-          <View
-            className="h-1.5 rounded-full"
-            style={{ width: `${pct}%`, backgroundColor: color }}
-          />
-        </View>
-      </View>
+      <BreakdownBarRow
+        key={`${kind}-${r.id}`}
+        name={r.name}
+        count={r.count}
+        value={`${negative ? "−" : ""}${formatEUR(Math.abs(r.amount))}`}
+        color={negative ? th.danger : th.success}
+        // negative rows (refunds) get no proportion bar
+        share={total > 0 ? r.amount / total : 0}
+      />
     );
   };
 
   if (empty) {
     return (
       <ScrollView style={{ flex: 1 }}>
-        <PanelHeader title="Прибыль" />
-        <EmptyState title="Нет доходов и расходов за период" />
+        <PanelHeader title={title} />
+        <EmptyState
+          title={
+            only === "income"
+              ? "Нет доходов за период"
+              : only === "expense"
+                ? "Нет расходов за период"
+                : "Нет доходов и расходов за период"
+          }
+        />
       </ScrollView>
     );
   }
@@ -130,8 +119,11 @@ export function ProfitBreakdown({
           в переключателе, которым эту панель и открыли, и тем же кобальтом.
           Карточка «Прибыль за период / €900» повторяла её через 8pt: одни и те
           же деньги дважды на одном экране. */}
-      <PanelHeader title="Прибыль" />
+      {/* У половины разбора своя капс-строка («Что принесло денег») уже
+          называет панель — второе имя над ней было бы повтором. */}
+      {only ? null : <PanelHeader title={title} />}
 
+      {showIncome ? (
       <View className="mt-1">
         <View className="flex-row items-baseline px-4 pb-1 pt-3">
           <Text
@@ -161,7 +153,9 @@ export function ProfitBreakdown({
           </>
         )}
       </View>
+      ) : null}
 
+      {showExpense ? (
       <View className="mt-1">
         <View className="flex-row items-baseline px-4 pb-1 pt-3">
           <Text
@@ -185,6 +179,65 @@ export function ProfitBreakdown({
           expenseRows.map((r) => renderRow(r, expense, "expense"))
         )}
       </View>
+      ) : null}
     </ScrollView>
+  );
+}
+
+/**
+ * СТРОКА РАЗБОРА — имя, «×N», сумма справа и полоска доли под ними. Одна
+ * вёрстка на «Прибыль» «Финансов» и на панели «Аналитики» (владелец
+ * 2026-09-24: «бери всё созданное, не придумывай с нуля»).
+ */
+export function BreakdownBarRow({
+  name,
+  count,
+  value,
+  color,
+  share,
+}: {
+  name: string;
+  /** «×N» после имени; ноль — без счётчика. */
+  count: number;
+  value: string;
+  /** Цвет суммы и полоски — цвет смысла строки. */
+  color: string;
+  /** Доля 0…1; вне отрезка прижимается. */
+  share: number;
+}) {
+  const th = useThemeColors();
+  const pct = Math.min(100, Math.max(0, share * 100));
+  return (
+    <View className="px-4 py-2.5">
+      <View className="flex-row items-center">
+        <Text
+          className="shrink text-[15px]"
+          style={{ color: th.ink }}
+          numberOfLines={1}
+        >
+          {name}
+        </Text>
+        {count > 0 ? (
+          <Text className="ml-1.5 text-xs" style={{ color: th.faint }}>
+            ×{count}
+          </Text>
+        ) : null}
+        <Text
+          className="ml-auto pl-2.5 text-[15px] font-semibold"
+          style={{ fontVariant: ["tabular-nums"], color }}
+        >
+          {value}
+        </Text>
+      </View>
+      <View
+        className="mt-1.5 h-1.5 overflow-hidden rounded-full"
+        style={{ backgroundColor: th.separator }}
+      >
+        <View
+          className="h-1.5 rounded-full"
+          style={{ width: `${pct}%`, backgroundColor: color }}
+        />
+      </View>
+    </View>
   );
 }

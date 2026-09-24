@@ -1,385 +1,52 @@
-import { useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
-import { Minus, TrendingDown, TrendingUp } from "lucide-react-native";
-import {
-  getPaidAmount,
-  type Appointment,
-} from "@babun/shared/local/appointments";
-import { formatEUR } from "@babun/shared/common/utils/money";
-import { formatCountRu, FORMS_RAZ, pluralRu } from "@babun/shared/common/utils/plural-ru";
-import { Screen } from "@/components/ui/Screen";
-import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { SectionCard } from "@/components/ui/SectionCard";
-import { Chip } from "@/components/ui/Chip";
-import { useThemeColors, type ThemeColors } from "@/theme/colors";
-import { useAppointments } from "@/features/calendar/queries";
-import { useClients } from "@/features/clients/queries";
-import { useAllServices } from "@/features/services/queries";
-import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { useMyAccess } from "@/features/access/queries";
-import { bestCalendarLevel } from "@/features/access/my-access";
 import { useLocalSearchParams } from "expo-router";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import {
+  AnalyticsScreen as InsightsScreen,
+  type AnalyticsStart,
+} from "@/features/finances/analytics/AnalyticsScreen";
+import { makePeriod, type PeriodKind } from "@/features/finances/period";
 
-// «Сводка» — mobile port of apps/web/src/app/dashboard/insights/page.tsx.
-// KPI tiles + top-3 leaderboards by period. Pure derivations over the same
-// four datasets; the period/delta math is copied 1:1 (incl. the v686 rule:
-// prev=0 → no delta chip, never a «999%» sentinel).
-
-// ─── Period helpers (web parity) ─────────────────────────────────────────
-
-type PeriodKey = "today" | "week" | "month" | "year";
-interface PeriodRange {
-  fromKey: string;
-  toKey: string;
-}
-
-function toDateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function periodRange(period: PeriodKey): PeriodRange {
-  const now = new Date();
-  const toKey = toDateKey(now);
-  if (period === "today") return { fromKey: toKey, toKey };
-  if (period === "week") {
-    const d = new Date(now);
-    const day = d.getDay(); // 0=Sun; неделя с понедельника (web parity)
-    d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
-    return { fromKey: toDateKey(d), toKey };
-  }
-  if (period === "month") {
-    return { fromKey: toDateKey(new Date(now.getFullYear(), now.getMonth(), 1)), toKey };
-  }
-  return { fromKey: toDateKey(new Date(now.getFullYear(), 0, 1)), toKey };
-}
-
-function prevPeriodRange(period: PeriodKey): PeriodRange {
-  const now = new Date();
-  if (period === "today") {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 1);
-    const key = toDateKey(d);
-    return { fromKey: key, toKey: key };
-  }
-  if (period === "week") {
-    const d = new Date(now);
-    const day = d.getDay();
-    d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
-    const prevMon = new Date(d);
-    prevMon.setDate(d.getDate() - 7);
-    const prevSun = new Date(d);
-    prevSun.setDate(d.getDate() - 1);
-    return { fromKey: toDateKey(prevMon), toKey: toDateKey(prevSun) };
-  }
-  if (period === "month") {
-    const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const last = new Date(now.getFullYear(), now.getMonth(), 0);
-    return { fromKey: toDateKey(first), toKey: toDateKey(last) };
-  }
-  const first = new Date(now.getFullYear() - 1, 0, 1);
-  const last = new Date(now.getFullYear() - 1, 11, 31);
-  return { fromKey: toDateKey(first), toKey: toDateKey(last) };
-}
-
-/** Work appointments (no personal events) inside the range. */
-function filterWork(apts: Appointment[], range: PeriodRange): Appointment[] {
-  return apts.filter(
-    (a) =>
-      (a.kind === undefined || a.kind === "work") &&
-      a.date >= range.fromKey &&
-      a.date <= range.toKey,
-  );
-}
-
-/** prev=0 → null (no chip); web v686: «↗999%» sentinel was confusing. */
-function toDeltaPct(raw: number | null): number | null {
-  if (raw === null || !Number.isFinite(raw)) return null;
-  return raw;
-}
-
-function deltaOf(current: number, prev: number): number | null {
-  if (prev === 0) return current > 0 ? Number.POSITIVE_INFINITY : null;
-  return ((current - prev) / prev) * 100;
-}
-
-// ─── Presentational pieces ───────────────────────────────────────────────
-
-function KpiTile({
-  label,
-  value,
-  delta,
-  color,
-  t,
-}: {
-  label: string;
-  value: string;
-  delta: number | null;
-  color: string;
-  t: ThemeColors;
-}) {
-  const deltaColor = delta === null ? t.sub : delta > 0 ? t.success : delta < 0 ? t.danger : t.sub;
-  const DeltaIcon = delta === null ? null : delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
-  return (
-    <View
-      className="flex-1 px-3 py-3"
-      style={{ backgroundColor: t.surface, borderRadius: t.radius.card, boxShadow: t.cardShadow }}
-    >
-      <Text className="text-lg font-bold" style={{ color }} numberOfLines={1}>
-        {value}
-      </Text>
-      <Text className="mt-0.5 text-[11px]" style={{ color: t.sub }} numberOfLines={1}>
-        {label}
-      </Text>
-      {DeltaIcon ? (
-        <View className="mt-1.5 flex-row items-center gap-0.5">
-          <DeltaIcon color={deltaColor} size={12} strokeWidth={2} />
-          <Text className="text-xs font-medium" style={{ color: deltaColor }}>
-            {delta === null ? "" : `${Math.abs(Math.round(delta))}%`}
-          </Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-interface LeaderItem {
-  id: string;
-  name: string;
-  value: number;
-  valueLabel: string;
-}
-
-function LeaderCard({ title, items, t }: { title: string; items: LeaderItem[]; t: ThemeColors }) {
-  const maxVal = items[0]?.value ?? 0;
-  return (
-    <SectionCard title={title}>
-      {items.length === 0 ? (
-        <Text className="px-4 py-3 text-[13px]" style={{ color: t.faint }}>
-          За выбранный период данных нет
-        </Text>
-      ) : (
-        <View className="gap-3 px-4 py-3">
-          {items.map((item, idx) => (
-            <View key={item.id} className="gap-1">
-              <View className="flex-row items-center justify-between gap-2">
-                <View className="min-w-0 flex-1 flex-row items-center gap-2">
-                  <Text className="w-4 text-xs font-semibold" style={{ color: t.faint }}>
-                    {idx + 1}
-                  </Text>
-                  <Text className="flex-1 text-sm font-medium" style={{ color: t.ink }} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                </View>
-                <Text className="text-[13px] font-semibold" style={{ color: t.ink }}>
-                  {item.valueLabel}
-                </Text>
-              </View>
-              <View className="h-1 overflow-hidden rounded-full" style={{ backgroundColor: t.fill }}>
-                <View
-                  className="h-full rounded-full"
-                  style={{
-                    backgroundColor: t.accent,
-                    width: `${Math.max(maxVal > 0 ? Math.round((item.value / maxVal) * 100) : 0, 4)}%`,
-                  }}
-                />
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
-    </SectionCard>
-  );
-}
-
-// ─── Screen ──────────────────────────────────────────────────────────────
-
-const PERIODS: { key: PeriodKey; label: string }[] = [
-  { key: "today", label: "Сегодня" },
-  { key: "week", label: "Неделя" },
-  { key: "month", label: "Месяц" },
-  { key: "year", label: "Год" },
-];
-
-// АНАЛИТИКА КЛИЕНТОВ ОТКРЫВАЕТСЯ ИЗ ВКЛАДКИ «КЛИЕНТЫ», А ТАМ КОМПАНИЯ СВОЯ.
+// «АНАЛИТИКА» (бывшая «Сводка») — экран живёт в `features/finances/analytics`
+// (владелец 2026-09-24: «градация по услугам, по всем мастерам, по месяцам —
+// продумай на максимум»). Этот файл — только адрес и ворота компании.
 //
+// АНАЛИТИКА КЛИЕНТОВ ОТКРЫВАЕТСЯ ИЗ ВКЛАДКИ «КЛИЕНТЫ», А ТАМ КОМПАНИЯ СВОЯ.
 // Кабинет смотрит на компанию УСТРОЙСТВА, а вкладка «Клиенты» — общая
 // страница: в «Команде 1» её список и её шапка — про свою компанию
 // (STORY-082). Поэтому шапка клиентов передаёт свою компанию в `?tenant=`, и
 // тогда экран берёт её источником. Без хвоста — как было: компания
-// устройства, и «Финансы» ведут сюда по-прежнему.
+// устройства.
+//
+// «ФИНАНСЫ» ПЕРЕДАЮТ СВОЙ СРЕЗ: `?period=` (и `from`/`to` у своего периода) и
+// `?team=` — аналитика открывается на том же периоде и той же команде, что
+// были на экране под значком.
+const KINDS: readonly PeriodKind[] = [
+  "today", "yesterday", "week", "lastweek", "month", "lastmonth",
+  "quarter", "lastquarter", "year", "lastyear",
+];
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+
 export default function InsightsRoute() {
-  const { tenant, period } = useLocalSearchParams<{ tenant?: string; period?: string }>();
-  const start = PERIODS.some((p) => p.key === period) ? (period as PeriodKey) : "week";
-  if (!tenant) return <InsightsScreen initialPeriod={start} />;
+  const { tenant, period, from, to, team } = useLocalSearchParams<{
+    tenant?: string;
+    period?: string;
+    from?: string;
+    to?: string;
+    team?: string;
+  }>();
+  const start: AnalyticsStart = {
+    period:
+      period === "custom" && from && to && YMD.test(from) && YMD.test(to) && from <= to
+        ? { preset: "custom", from, to }
+        : KINDS.includes(period as PeriodKind)
+          ? makePeriod(period as PeriodKind)
+          : null,
+    teamId: team || null,
+  };
+  if (!tenant) return <InsightsScreen start={start} />;
   return (
     <ClientsCompanyRoute kind="tab">
-      <InsightsScreen initialPeriod={start} />
+      <InsightsScreen start={start} />
     </ClientsCompanyRoute>
-  );
-}
-
-function InsightsScreen({ initialPeriod }: { initialPeriod: PeriodKey }) {
-  const t = useThemeColors();
-  // С «Финансов» сводка приходит с периодом МЕСЯЦ (`?period=month`) — тем же,
-  // что по умолчанию стоит на «Финансах»; из «Клиентов» — неделя, как было.
-  const [period, setPeriod] = useState<PeriodKey>(initialPeriod);
-  // Записи — становой хребет всех KPI: их загрузку/ошибку показываем
-  // честно (раньше сбой сети выглядел как нулевая сводка, аудит P2-21).
-  // Остальные три запроса только резолвят имена — их сбой не нулит цифры.
-  const {
-    data: appointments = [],
-    isLoading: apptsLoading,
-    isError: apptsError,
-    error: apptsErrorObj,
-    refetch: refetchAppts,
-  } = useAppointments();
-  const { data: clients = [] } = useClients();
-  const { data: teams = [] } = useTeams();
-  // ДЕНЬГИ В СВОДКЕ — ПО ФИНАНСОВОМУ ПРАВУ, А НЕ ПО ТОМУ, ЧТО ЭКРАН ОТКРЫТ.
-  //
-  // «Сводка» с 20.09 открыта всем ролям (значок аналитики стоит всегда), и её
-  // числа считаются из ЗАПИСЕЙ, а не из «Финансов». У мастера записи приходят
-  // с нулями, а вот диспетчеру — с суммами: выручка компании утекала бы мимо
-  // блока «Доходы и расходы». Поэтому денежные плитка и подборки живут по
-  // тому же уровню, что и сами «Финансы», — хоть в одном календаре.
-  const role = useCurrentRole().data;
-  const myAccess = useMyAccess().data;
-  const moneyLevel = myAccess ? bestCalendarLevel(myAccess, "finance.operations") : undefined;
-  const canSeeMoney = role === "owner" || moneyLevel === "read" || moneyLevel === "write";
-  // Аналитика считает ПРОШЛОЕ: убранная услуга остаётся в топе со
-  // своим именем, а не выпадает в голый id.
-  const { data: services = [] } = useAllServices();
-
-  const clientName = useMemo(() => new Map(clients.map((c) => [c.id, c.full_name])), [clients]);
-  const teamName = useMemo(() => new Map(teams.map((tm) => [tm.id, tm.name])), [teams]);
-  const serviceName = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
-
-  const range = useMemo(() => periodRange(period), [period]);
-  const prevRange = useMemo(() => prevPeriodRange(period), [period]);
-  const currentApts = useMemo(() => filterWork(appointments, range), [appointments, range]);
-  const prevApts = useMemo(() => filterWork(appointments, prevRange), [appointments, prevRange]);
-  const completedApts = useMemo(
-    () => currentApts.filter((a) => a.status === "completed"),
-    [currentApts],
-  );
-
-  // ДЕНЬГИ СВОДКИ — ПОЛУЧЕННЫЕ, А НЕ СТОИМОСТЬ РАБОТ (владелец 2026-09-24:
-  // «если не заплатили — это не считается доходом»). Здесь стояла стоимость
-  // выполненных записей: неоплаченная работа шла в «Выручку» и в «Топ
-  // клиенты» (Nikita €195, у которого оплату сняли), и сводка расходилась с
-  // «Финансами». Теперь — деньги, пришедшие по записям периода, любой записи
-  // (предоплата тоже деньги); полный возврат `getPaidAmount` сводит к нулю.
-  // Ручные операции («Товары») сюда не входят — сводка считает записи,
-  // поэтому плитка зовётся «Оплачено», а не «Доход».
-  const revenue = currentApts.reduce((sum, a) => sum + getPaidAmount(a), 0);
-  const prevCompleted = prevApts.filter((a) => a.status === "completed");
-  const prevRevenue = prevApts.reduce((sum, a) => sum + getPaidAmount(a), 0);
-  const countDelta = deltaOf(currentApts.length, prevApts.length);
-  const revenueDelta = deltaOf(revenue, prevRevenue);
-  const completedDelta = deltaOf(completedApts.length, prevCompleted.length);
-
-  const topTeams = useMemo((): LeaderItem[] => {
-    const map = new Map<string, number>();
-    for (const a of currentApts) {
-      if (!a.team_id) continue;
-      map.set(a.team_id, (map.get(a.team_id) ?? 0) + getPaidAmount(a));
-    }
-    return [...map.entries()]
-      .filter(([, val]) => val > 0)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([id, val]) => ({ id, name: teamName.get(id) ?? id, value: val, valueLabel: formatEUR(val) }));
-  }, [currentApts, teamName]);
-
-  const topServices = useMemo((): LeaderItem[] => {
-    const map = new Map<string, number>();
-    // Имя со снимка строки: у своей услуги записи (`custom:…`) прайса нет,
-    // и без снимка в топе стоял бы её id.
-    const snapshotName = new Map<string, string>();
-    for (const a of currentApts) {
-      if (a.services && a.services.length > 0) {
-        for (const s of a.services) {
-          map.set(s.serviceId, (map.get(s.serviceId) ?? 0) + (s.quantity ?? 1));
-          if (s.serviceName?.trim()) snapshotName.set(s.serviceId, s.serviceName.trim());
-        }
-      } else {
-        for (const sid of a.service_ids ?? []) map.set(sid, (map.get(sid) ?? 0) + 1);
-      }
-    }
-    return [...map.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([id, count]) => ({
-        id,
-        name: serviceName.get(id) ?? snapshotName.get(id) ?? "Услуга удалена",
-        value: count,
-        valueLabel: formatCountRu(count, FORMS_RAZ),
-      }));
-  }, [currentApts, serviceName]);
-
-  const topClients = useMemo((): LeaderItem[] => {
-    const map = new Map<string, number>();
-    for (const a of currentApts) {
-      if (!a.client_id) continue;
-      map.set(a.client_id, (map.get(a.client_id) ?? 0) + getPaidAmount(a));
-    }
-    return [...map.entries()]
-      .filter(([, val]) => val > 0)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([id, val]) => ({ id, name: clientName.get(id) ?? "—", value: val, valueLabel: formatEUR(val) }));
-  }, [currentApts, clientName]);
-
-  if (apptsLoading || apptsError) {
-    return (
-      <Screen edges={["top"]}>
-        <ScreenHeader title="Сводка" />
-        {apptsLoading ? (
-          <EmptyState state="loading" fill />
-        ) : (
-          <EmptyState
-            fill
-            state="error"
-            subtitle={
-              apptsErrorObj instanceof Error ? apptsErrorObj.message : undefined
-            }
-            action={{ label: "Повторить", onPress: () => void refetchAppts() }}
-          />
-        )}
-      </Screen>
-    );
-  }
-
-  return (
-    <Screen edges={["top"]}>
-      <ScreenHeader title="Сводка" />
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
-        <View className="flex-row gap-2 px-4 pb-3 pt-2">
-          {PERIODS.map(({ key, label }) => (
-            <Chip key={key} label={label} selected={period === key} onPress={() => setPeriod(key)} />
-          ))}
-        </View>
-
-        <View className="flex-row gap-2.5 px-4">
-          {/* Слово согласовано с числом (прогон 2026-09-24: «1 Записей»). */}
-          <KpiTile
-            label={pluralRu(currentApts.length, ["Запись", "Записи", "Записей"])}
-            value={String(currentApts.length)} delta={toDeltaPct(countDelta)} color={t.accent} t={t} />
-          {canSeeMoney ? (
-            <KpiTile label="Оплачено" value={formatEUR(revenue)} delta={toDeltaPct(revenueDelta)} color={t.success} t={t} />
-          ) : null}
-          <KpiTile label="Завершено" value={String(completedApts.length)} delta={toDeltaPct(completedDelta)} color={t.accent} t={t} />
-        </View>
-
-        {/* «Топ команды» и «Топ клиенты» ранжируют по деньгам — им тот же
-            ключ, что и плитке выручки. «Топ услуги» считает штуки и остаётся. */}
-        {canSeeMoney ? <LeaderCard title="Топ команды" items={topTeams} t={t} /> : null}
-        <LeaderCard title="Топ услуги" items={topServices} t={t} />
-        {canSeeMoney ? <LeaderCard title="Топ клиенты" items={topClients} t={t} /> : null}
-      </ScrollView>
-    </Screen>
   );
 }

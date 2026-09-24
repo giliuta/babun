@@ -1033,7 +1033,17 @@ function FinancesContent() {
           внутри, решают его же права на записи и деньги. */}
       <Pressable
         onPress={() =>
-          router.push({ pathname: "/finances/insights", params: { period: "month" } })
+          // Аналитика открывается на том же срезе, что был под значком:
+          // тот же период и та же команда.
+          router.push({
+            pathname: "/finances/insights",
+            params: {
+              period: period.preset,
+              from: period.from,
+              to: period.to,
+              ...(scope && scope !== NO_TEAM ? { team: scope } : {}),
+            },
+          })
         }
         hitSlop={6}
         accessibilityRole="button"

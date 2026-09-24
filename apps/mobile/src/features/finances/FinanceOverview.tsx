@@ -164,30 +164,20 @@ export function SummaryToggle({
   );
 }
 
-// LOCKED v5 overview #6 «grouped-iOS premium» (finances-design.html +
-// web FinanceOverview.tsx): company/team scope chips →
-// period row split into NAME and DATES tap targets → шесть одинаковых
-// `SummaryToggle` тремя рядами.
-// Every card toggles the panel below; прибыль is always brandAccent.
-export function FinanceOverview({
+/**
+ * ЛЕНТА КОМАНД И СТРОКА ПЕРИОДА — ШАПКА ДЕНЕЖНЫХ ЭКРАНОВ. Одна вёрстка на
+ * «Финансы» и «Аналитику» (владелец 2026-09-24: «всю нашу настройку, которую
+ * мы использовали в финансах, такую же используй в аналитике»): две копии
+ * разошлись бы на первой правке отступа.
+ */
+export function ScopePeriodBar({
   teams,
   scopeTeamId,
   onScopeChange,
   period,
   onOpenPresets,
   onOpenCustom,
-  totals,
-  accounts,
-  invoices,
-  showDocuments = true,
-  showAccounts = true,
-  showDebts = true,
-  view,
-  onTap,
   locked = false,
-  lockAccounts = false,
-  lockOps = false,
-  lockDebts = false,
 }: {
   teams: Team[];
   scopeTeamId: string | null;
@@ -195,39 +185,9 @@ export function FinanceOverview({
   period: Period;
   onOpenPresets: () => void;
   onOpenCustom: () => void;
-  totals: OverviewTotals;
-  accounts: AccountTileSummary;
-  invoices: InvoiceTileSummary;
-  /** Документы есть в тарифе. Нет — плитки нет ВОВСЕ (канон: без права блок
-   *  не показывается либо только читается; «видно, но при нажатии ошибка» в
-   *  продукте не бывает). «Счета» занимают ряд целиком. */
-  showDocuments?: boolean;
-  /** Функции компании (STORY-088): выключенные счета и долги — без плиток. */
-  showAccounts?: boolean;
-  showDebts?: boolean;
-  view: HomeView;
-  onTap: (v: HomeView) => void;
-  /** ФИНАНСЫ ЭТОЙ КОМПАНИИ ЧЕЛОВЕКУ ЗАКРЫТЫ (`LockedFinances`, владелец 15.09:
-   *  «всё серое, всё по нулям, но переключаться можно»). Период и плитки
-   *  серые и не нажимаются; лента команд остаётся живой — по ней уходят в
-   *  компанию, где деньги этого человека есть. */
   locked?: boolean;
-  /** ЗАКРЫТ ОТДЕЛЬНЫЙ БЛОК, а не весь раздел (уровни доступа, этап 2): человек
-   *  видит «Доходы и расходы» этой команды, но не видит её счета или долги.
-   *  Такая плитка серая, по нулям и не нажимается — как при закрытом разделе,
-   *  только поодиночке. */
-  lockAccounts?: boolean;
-  lockOps?: boolean;
-  lockDebts?: boolean;
 }) {
   const t = useThemeColors();
-
-  // ПРОСТО «СЧЕТА» (владелец 2026-08-11). Уточнение «команды» было нужно, пока
-  // рядом существовало понятие «счёт компании» и плитка могла соврать про чей
-  // это остаток. Понятия больше нет: деньги в продукте всегда чьи-то, а чьи
-  // именно — говорит выбранный чип прямо над плиткой.
-  const accountsTitle = "Счета";
-
   const toast = useToast();
   const calendarChips = useCalendarChips({
     own: teams,
@@ -236,7 +196,7 @@ export function FinanceOverview({
   });
 
   return (
-    <View>
+    <>
       {/* ОДНА ЛЕНТА НА ПРОДУКТ (`ScopeChips`, DESIGN-SYSTEM.md §5). Здесь
           лежала своя копия того же контрола: те же пилюли, но со своими
           отступами и без подводки к выбранному чипу — команда, доехавшая
@@ -316,7 +276,85 @@ export function FinanceOverview({
           </Text>
         </Pressable>
       </View>
+    </>
+  );
+}
 
+// LOCKED v5 overview #6 «grouped-iOS premium» (finances-design.html +
+// web FinanceOverview.tsx): company/team scope chips →
+// period row split into NAME and DATES tap targets → шесть одинаковых
+// `SummaryToggle` тремя рядами.
+// Every card toggles the panel below; прибыль is always brandAccent.
+export function FinanceOverview({
+  teams,
+  scopeTeamId,
+  onScopeChange,
+  period,
+  onOpenPresets,
+  onOpenCustom,
+  totals,
+  accounts,
+  invoices,
+  showDocuments = true,
+  showAccounts = true,
+  showDebts = true,
+  view,
+  onTap,
+  locked = false,
+  lockAccounts = false,
+  lockOps = false,
+  lockDebts = false,
+}: {
+  teams: Team[];
+  scopeTeamId: string | null;
+  onScopeChange: (id: string | null) => void;
+  period: Period;
+  onOpenPresets: () => void;
+  onOpenCustom: () => void;
+  totals: OverviewTotals;
+  accounts: AccountTileSummary;
+  invoices: InvoiceTileSummary;
+  /** Документы есть в тарифе. Нет — плитки нет ВОВСЕ (канон: без права блок
+   *  не показывается либо только читается; «видно, но при нажатии ошибка» в
+   *  продукте не бывает). «Счета» занимают ряд целиком. */
+  showDocuments?: boolean;
+  /** Функции компании (STORY-088): выключенные счета и долги — без плиток. */
+  showAccounts?: boolean;
+  showDebts?: boolean;
+  view: HomeView;
+  onTap: (v: HomeView) => void;
+  /** ФИНАНСЫ ЭТОЙ КОМПАНИИ ЧЕЛОВЕКУ ЗАКРЫТЫ (`LockedFinances`, владелец 15.09:
+   *  «всё серое, всё по нулям, но переключаться можно»). Период и плитки
+   *  серые и не нажимаются; лента команд остаётся живой — по ней уходят в
+   *  компанию, где деньги этого человека есть. */
+  locked?: boolean;
+  /** ЗАКРЫТ ОТДЕЛЬНЫЙ БЛОК, а не весь раздел (уровни доступа, этап 2): человек
+   *  видит «Доходы и расходы» этой команды, но не видит её счета или долги.
+   *  Такая плитка серая, по нулям и не нажимается — как при закрытом разделе,
+   *  только поодиночке. */
+  lockAccounts?: boolean;
+  lockOps?: boolean;
+  lockDebts?: boolean;
+}) {
+  const t = useThemeColors();
+
+  // ПРОСТО «СЧЕТА» (владелец 2026-08-11). Уточнение «команды» было нужно, пока
+  // рядом существовало понятие «счёт компании» и плитка могла соврать про чей
+  // это остаток. Понятия больше нет: деньги в продукте всегда чьи-то, а чьи
+  // именно — говорит выбранный чип прямо над плиткой.
+  const accountsTitle = "Счета";
+
+  return (
+    <View>
+      <ScopePeriodBar
+        teams={teams}
+        scopeTeamId={scopeTeamId}
+        onScopeChange={onScopeChange}
+        period={period}
+        onOpenPresets={onOpenPresets}
+        onOpenCustom={onOpenCustom}
+        locked={locked}
+      />
       {/* overview cards */}
       <View className="px-4 pb-2 pt-2" style={{ gap: 6 }}>
         {/* Счета | Документы — ТОТ ЖЕ РЯД, ЧТО И СВОДКА (владелец 2026-08-11:
