@@ -171,13 +171,23 @@ export type SelfReminder =
   /** За N дней до даты записи, в заданное время суток. */
   | { kind: "dayAt"; daysBefore: number; time: string };
 
-/** Готовые варианты шторки — в порядке от ближнего к дальнему. */
-export const SELF_REMINDER_PRESETS: readonly SelfReminder[] = [
+/** Готовые варианты режима «Заранее» — за сколько до начала. */
+export const SELF_REMINDER_BEFORE_PRESETS: readonly SelfReminder[] = [
   { kind: "before", minutes: 15 },
   { kind: "before", minutes: 60 },
+  { kind: "before", minutes: 24 * 60 },
+];
+
+/** Готовые варианты режима «Ко времени» — в какой день и во сколько. */
+export const SELF_REMINDER_AT_PRESETS: readonly SelfReminder[] = [
   { kind: "dayAt", daysBefore: 0, time: "08:00" },
   { kind: "dayAt", daysBefore: 1, time: "20:00" },
-  { kind: "before", minutes: 24 * 60 },
+];
+
+/** Все готовые варианты (для узнавания «стоит готовый или свой»). */
+export const SELF_REMINDER_PRESETS: readonly SelfReminder[] = [
+  ...SELF_REMINDER_BEFORE_PRESETS,
+  ...SELF_REMINDER_AT_PRESETS,
 ];
 
 export function sameSelfReminder(a: SelfReminder | null, b: SelfReminder | null): boolean {
@@ -197,23 +207,32 @@ const dayWord = (n: number) => {
   return "дней";
 };
 
-/** Правило словами: «За 15 минут», «За 24 часа», «Накануне в 20:00»,
- *  «Утром в 08:00», «За 3 дня в 09:00». */
+/** День напоминания словами: «В день записи», «Накануне», «За 3 дня». */
+export function reminderDayLabel(daysBefore: number): string {
+  if (daysBefore === 0) return "В день записи";
+  if (daysBefore === 1) return "Накануне";
+  return `За ${daysBefore} ${dayWord(daysBefore)}`;
+}
+
+/** Правило словами: «За 15 минут», «За 24 часа», «За 1 день 2 ч 30 мин»,
+ *  «Накануне в 20:00», «В день записи в 10:00», «За 3 дня в 09:00». */
 export function selfReminderLabel(rule: SelfReminder): string {
-  if (rule.kind === "before") {
-    if (rule.minutes % (24 * 60) === 0) {
-      const d = rule.minutes / (24 * 60);
-      return d === 1 ? "За 24 часа" : `За ${d} ${dayWord(d)}`;
-    }
-    if (rule.minutes % 60 === 0) {
-      const h = rule.minutes / 60;
-      return h === 1 ? "За 1 час" : `За ${h} ч`;
-    }
-    return `За ${rule.minutes} минут`;
+  if (rule.kind === "dayAt") {
+    return `${reminderDayLabel(rule.daysBefore)} в ${rule.time}`;
   }
-  if (rule.daysBefore === 0) return `В день записи в ${rule.time}`;
-  if (rule.daysBefore === 1) return `Накануне в ${rule.time}`;
-  return `За ${rule.daysBefore} ${dayWord(rule.daysBefore)} в ${rule.time}`;
+  const total = rule.minutes;
+  if (total === 24 * 60) return "За 24 часа";
+  if (total === 60) return "За 1 час";
+  if (total < 60) return `За ${total} минут`;
+  const d = Math.floor(total / (24 * 60));
+  const h = Math.floor((total % (24 * 60)) / 60);
+  const m = total % 60;
+  const parts = [
+    d > 0 ? `${d} ${dayWord(d)}` : null,
+    h > 0 ? `${h} ч` : null,
+    m > 0 ? `${m} мин` : null,
+  ].filter(Boolean);
+  return `За ${parts.join(" ")}`;
 }
 
 /** Момент пуша в часовом поясе команды записи. */

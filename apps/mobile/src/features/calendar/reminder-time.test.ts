@@ -136,6 +136,10 @@ describe("напоминание себе", () => {
     assert.equal(selfReminderLabel({ kind: "dayAt", daysBefore: 1, time: "20:00" }), "Накануне в 20:00");
     assert.equal(selfReminderLabel({ kind: "dayAt", daysBefore: 2, time: "09:00" }), "За 2 дня в 09:00");
     assert.equal(selfReminderLabel({ kind: "dayAt", daysBefore: 5, time: "09:00" }), "За 5 дней в 09:00");
+    assert.equal(selfReminderLabel({ kind: "dayAt", daysBefore: 0, time: "10:00" }), "В день записи в 10:00");
+    assert.equal(selfReminderLabel({ kind: "before", minutes: 2 * 1440 }), "За 2 дня");
+    assert.equal(selfReminderLabel({ kind: "before", minutes: 1440 + 150 }), "За 1 день 2 ч 30 мин");
+    assert.equal(selfReminderLabel({ kind: "before", minutes: 180 }), "За 3 ч");
   });
   test("сравнение правил", () => {
     assert.equal(sameSelfReminder({ kind: "before", minutes: 60 }, { kind: "before", minutes: 60 }), true);
