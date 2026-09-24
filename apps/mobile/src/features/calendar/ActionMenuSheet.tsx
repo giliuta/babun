@@ -4,7 +4,6 @@ import {
   Bookmark,
   CalendarClock,
   CheckCircle2,
-  Coffee,
   Copy,
   ExternalLink,
   MoreHorizontal,
@@ -65,9 +64,6 @@ const LOOK: Record<string, { icon: LucideIcon; color: string }> = {
   "Напомнить…": { icon: Bell, color: SETTINGS_TILE.yellow },
   Позвонить: { icon: Phone, color: SETTINGS_TILE.green },
   Маршрут: { icon: Navigation, color: SETTINGS_TILE.teal },
-  // Перерыв — цветом того, что заводит (серое событие), как строки типов
-  // событий в «Быстром событии» — цветом своего типа.
-  Перерыв: { icon: Coffee, color: "#8E8E93" },
   "Метка дня": { icon: Bookmark, color: SETTINGS_TILE.teal },
 };
 
