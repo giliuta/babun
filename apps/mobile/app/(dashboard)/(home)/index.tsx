@@ -22,7 +22,10 @@ import { chooseOption } from "@/lib/choose";
 import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { duplicateAppointment } from "@babun/shared/local/appointments";
+import {
+  createBlankAppointment,
+  duplicateAppointment,
+} from "@babun/shared/local/appointments";
 import {
   isColdOfflineCacheMissError,
   randomUuid,
@@ -1790,6 +1793,65 @@ export default function CalendarTab() {
     setDay(startOfDay(parseYMD(apt.date)));
   };
 
+  // ═══ ДОЛГОЕ НАЖАТИЕ ПО СВОБОДНОМУ ВРЕМЕНИ (владелец 2026-09-24) ═══
+  // Разметка дня без формы записи: «Перерыв» — событие команды на полчаса
+  // (растягивается за край прямо в сетке), «Метка дня» — та же шторка, что
+  // тап по числу. Тап по свободному времени по-прежнему заводит запись.
+  // Права: перерыв — кто заводит события в этом календаре, метка — кто правит
+  // метки дня. Нет ни того, ни другого — меню нет вовсе.
+  const canAddBreak =
+    canManageBookings || (isCrew && activeActions.events === "write");
+  const canSlotMenu = canAddBreak || canManageDayLabels;
+  const slotMenu = (dateYmd: string, timeStart: string) => {
+          type Item = { label: string; run: () => void };
+          const items: Item[] = [];
+          if (canAddBreak)
+            items.push({ label: "Перерыв", run: () => addBreak(dateYmd, timeStart) });
+          if (canManageDayLabels)
+            items.push({ label: "Метка дня", run: () => setCityPickerYmd(dateYmd) });
+          haptics.tap();
+          void chooseOption(
+            `${humanDay(dateYmd)}, ${timeStart}`,
+            items.map((i) => ({ label: i.label })),
+            { haptic: false },
+          ).then((i) => {
+            if (i === null) return;
+            setTimeout(() => items[i]?.run(), SHEET_EXIT_MS);
+          });
+  };
+
+  const addBreak = (dateYmd: string, timeStart: string) => {
+    const brk = createBlankAppointment({
+      kind: "event",
+      date: dateYmd,
+      time_start: timeStart,
+      time_end: addMinutesHM(timeStart, 30),
+      team_id: activeTeamId ?? null,
+      master_id: null,
+      status: "scheduled",
+      comment: "Перерыв",
+      event_all_day: false,
+      service_ids: [],
+      services: [],
+      total_amount: 0,
+    });
+    createAppt.mutate(brk, {
+      onSuccess: () => {
+        haptics.success();
+        toast(`Перерыв ${timeStart}–${brk.time_end}`, "success", {
+          label: "Отменить",
+          onPress: () =>
+            deleteAppt.mutate(brk.id, {
+              onError: (e) =>
+                toast(serverReason(e) ?? "Не удалось убрать перерыв", "error"),
+            }),
+        });
+      },
+      onError: (e) =>
+        toast(serverReason(e) ?? "Не удалось добавить перерыв", "error"),
+    });
+  };
+
   const copyInPlace = (apt: Appointment) => {
     const copy = { ...duplicateAppointment(apt), id: randomUuid() };
     createAppt.mutate(copy, {
@@ -2468,6 +2530,8 @@ export default function CalendarTab() {
   const onEditGrid = useLatestHandler(openEdit);
   const onMenuGrid = useLatestHandler(openActionMenu);
   const createAtGrid = useLatestHandler(createAt);
+  // Стабильная ссылка, как у тапа: иначе memo Недели мёртв на каждом рендере.
+  const slotMenuGrid = useLatestHandler(slotMenu);
   const rescheduleGrid = useLatestHandler(reschedule);
   // Коммит зума — низким приоритетом: полный ре-рендер сетки на отпускании
   // щипка давал видимый «прыжок» кадра (жалоба владельца). Живая геометрия
@@ -2794,6 +2858,9 @@ export default function CalendarTab() {
               labelFor={labelFor}
               offLabelColorFor={offLabelColorFor}
               onCreateAt={canCreateOnGrid || moving ? createAtGrid : undefined}
+              onSlotLongPress={
+                !canSlotMenu || moving || pickClientId ? undefined : slotMenuGrid
+              }
               onMenu={onMenuGrid}
               onPickDay={pickDay}
               onPickLabelDay={onPickLabelDay}
@@ -2827,6 +2894,9 @@ export default function CalendarTab() {
               onDayLabelTap={onDayLabelTap}
               onMenu={onMenuGrid}
               onCreateAt={canCreateOnGrid || moving ? createAtGrid : undefined}
+              onSlotLongPress={
+                !canSlotMenu || moving || pickClientId ? undefined : slotMenuGrid
+              }
               onCommitPage={onCommitDayPage}
               {...gridProps}
             />

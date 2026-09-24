@@ -577,7 +577,11 @@ const Block = memo(function Block({
   // (удержание 300 мс, потом тянуть), — обычная прокрутка сетки по краю в
   // растяжку не превращается. Шаг — сетка команды (15 мин), со щелчком на
   // каждой ступени; короче 15 минут запись не становится.
-  const canResize = !!onReschedule && !cancelled && cardH >= 40;
+  // Тянуть можно любую запись от 24pt — и получасовой перерыв при обычном
+  // масштабе. Зона края у короткой записи пропорционально меньше (не больше
+  // трети высоты), чтобы середина, за которую переносят, оставалась.
+  const canResize = !!onReschedule && !cancelled && cardH >= 24;
+  const edgeH = Math.min(EDGE_H, cardH / 3);
   const resizeStep = Math.max(15, Math.min(60, stepMinutes));
   const durMin = Math.max(resizeStep, endMin - startMin);
   const maxShrink = Math.floor((durMin - resizeStep) / resizeStep);
@@ -621,9 +625,9 @@ const Block = memo(function Block({
       // Отдельные детекторы на краях внутри карточки не получали касание
       // под нативной прокруткой сетки — проверено на симуляторе.
       edgeMode.value =
-        canResize && e.y >= cardH - EDGE_H
+        canResize && e.y >= cardH - edgeH
           ? 2
-          : canResize && cardH >= 64 && e.y <= EDGE_H
+          : canResize && cardH >= 64 && e.y <= edgeH
             ? 1
             : 0;
     })
@@ -818,7 +822,7 @@ const Block = memo(function Block({
         >
           {/* РУЧКА РАСТЯЖКИ — видно, что нижний край тянется. Сам край ловит
               общий жест карточки (`edgeMode`), ручка касаний не принимает. */}
-          {canResize ? (
+          {canResize && cardH >= 40 ? (
             <View
               pointerEvents="none"
               style={{
@@ -1138,6 +1142,7 @@ export const DayColumn = memo(function DayColumn({
   onEdit,
   onMenu,
   onCreateAt,
+  onSlotLongPress,
   onReschedule,
   canReschedule,
   startHour = DEFAULT_START,
@@ -1175,6 +1180,9 @@ export const DayColumn = memo(function DayColumn({
   onMenu?: (a: Appointment) => void;
   /** Undefined for read-only calendars: empty slots are plain grid cells. */
   onCreateAt?: (dateYmd: string, timeStart: string) => void;
+  /** Долгое нажатие по свободному времени — быстрое меню («Перерыв»,
+   *  «Метка дня») без формы записи. */
+  onSlotLongPress?: (dateYmd: string, timeStart: string) => void;
   onReschedule?: (a: Appointment, newStart: string, newEnd: string) => void;
   /** Per-record mutation guard (shared team events are creator-only). */
   canReschedule?: (a: Appointment) => boolean;
@@ -1273,8 +1281,8 @@ export const DayColumn = memo(function DayColumn({
   // верхней кромке окна и кроет колонку целиком одним слоем.
   const workEnd = band ? clampWin(band.endMin) : winStartMin;
 
-  const onSlotPress = (hour: number, locationY: number) => {
-    if (!onCreateAt) return;
+  /** Время под пальцем в ячейке часа, с шагом TAP_STEP. */
+  const slotTime = (hour: number, locationY: number) => {
     // Sub-hour snap by touch position (web handleColumnClick parity):
     // floor to multiples of TAP_STEP, so a tap at 11:27 creates 11:00, at
     // 11:40 → 11:30. Screen-reader activation has no coordinates → whole
@@ -1284,7 +1292,11 @@ export const DayColumn = memo(function DayColumn({
       60 - step,
       Math.floor(((locationY / hourH) * 60) / step) * step,
     );
-    onCreateAt(dateYmd, minToHM(hour * 60 + Math.max(0, offset)));
+    return minToHM(hour * 60 + Math.max(0, offset));
+  };
+  const onSlotPress = (hour: number, locationY: number) => {
+    if (!onCreateAt) return;
+    onCreateAt(dateYmd, slotTime(hour, locationY));
   };
 
   return (
@@ -1402,6 +1414,18 @@ export const DayColumn = memo(function DayColumn({
           <Pressable
             key={h}
             onPress={(e) => onSlotPress(h, e?.nativeEvent?.locationY ?? 0)}
+            // ДОЛГОЕ НАЖАТИЕ ПО СВОБОДНОМУ ВРЕМЕНИ (владелец 2026-09-24:
+            // «перерыв — интересная идея»): разметка дня без формы записи.
+            onLongPress={
+              onSlotLongPress
+                ? (e) =>
+                    onSlotLongPress(
+                      dateYmd,
+                      slotTime(h, e?.nativeEvent?.locationY ?? 0),
+                    )
+                : undefined
+            }
+            delayLongPress={400}
             accessibilityRole="button"
             accessibilityLabel={`Создать запись в ${pad2(h)}:00`}
             // В режиме подбора выбор — это кубики. Часы остаются кликабельными
@@ -1665,6 +1689,7 @@ export const DayView = memo(function DayView({
   onEdit,
   onMenu,
   onCreateAt,
+  onSlotLongPress,
   onReschedule,
   canReschedule,
   onCommitPage,
@@ -1703,6 +1728,9 @@ export const DayView = memo(function DayView({
   /** Долгое нажатие без движения по блоку — контекстное меню записи. */
   onMenu?: (a: Appointment) => void;
   onCreateAt?: (dateYmd: string, timeStart: string) => void;
+  /** Долгое нажатие по свободному времени — быстрое меню («Перерыв»,
+   *  «Метка дня») без формы записи. */
+  onSlotLongPress?: (dateYmd: string, timeStart: string) => void;
   onReschedule?: (a: Appointment, newStart: string, newEnd: string) => void;
   /** Per-record mutation guard (shared team events are creator-only). */
   canReschedule?: (a: Appointment) => boolean;
@@ -1836,6 +1864,7 @@ export const DayView = memo(function DayView({
                 onEdit={onEdit}
                 onMenu={onMenu}
                 onCreateAt={onCreateAt}
+                onSlotLongPress={onSlotLongPress}
                 onReschedule={onReschedule}
                 canReschedule={canReschedule}
                 startHour={startHour}

@@ -56,6 +56,7 @@ export const WeekView = memo(function WeekView({
   onEdit,
   onMenu,
   onCreateAt,
+  onSlotLongPress,
   onReschedule,
   canReschedule,
   onPickDay,
@@ -95,6 +96,9 @@ export const WeekView = memo(function WeekView({
   onMenu?: (a: Appointment) => void;
   /** Undefined for crew: empty slots and blocks are read-only. */
   onCreateAt?: (dateYmd: string, timeStart: string) => void;
+  /** Долгое нажатие по свободному времени — быстрое меню («Перерыв»,
+   *  «Метка дня») без формы записи. */
+  onSlotLongPress?: (dateYmd: string, timeStart: string) => void;
   onReschedule?: (a: Appointment, s: string, e: string) => void;
   /** Per-record mutation guard (shared team events are creator-only). */
   canReschedule?: (a: Appointment) => boolean;
@@ -255,6 +259,7 @@ export const WeekView = memo(function WeekView({
                     onEdit={onEdit}
                     onMenu={onMenu}
                     onCreateAt={onCreateAt}
+                    onSlotLongPress={onSlotLongPress}
                     onReschedule={onReschedule}
                     canReschedule={canReschedule}
                     startHour={startHour}
