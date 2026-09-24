@@ -20,22 +20,16 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SwitchRow } from "@/components/ui/SwitchRow";
-import { Divider } from "@/components/ui/Divider";
-import { PickerSheet } from "@/components/ui/PickerSheet";
 import { RecordMark, recordMarkText } from "@/components/ui/RecordMark";
 import { RowCaption } from "@/components/ui/card-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { colorName } from "@babun/shared/common/utils/colors";
 import { ColorSheet } from "@/features/appointments/BookingSheets";
-import { useCities, useTeams } from "@/features/reference/queries";
-import { useServices } from "@/features/services/queries";
+import { useTeams, useUpdateTeam } from "@/features/reference/queries";
 import { COLOR_SITUATIONS, type ColorSituation } from "@/features/appointments/record-color";
 import {
-  AUTO_COLOR_RULES,
   BOOKING_BLOCKS,
   EVENT_BLOCKS,
   useAutoColorRule,
@@ -43,14 +37,12 @@ import {
   useEventBlocks,
   useFallbackColor,
   useSetAutoColorRule,
-  useSetFallbackColor,
   situationDefaults,
   useSetSituationColor,
   useSetSituationPalette,
   useSituationPalette,
   useToggleBookingBlock,
   useToggleEventBlock,
-  type AutoColorRule,
   type BookingBlockId,
   type EventBlockId,
 } from "@/features/appointments/booking-prefs";
@@ -76,13 +68,8 @@ import { usePersonalEventTypes } from "@/features/settings/local-settings";
 //
 // ТИПЫ СОБЫТИЙ. Дверь на свою страницу, как у услуг и меток.
 
-type ColorTarget = ColorSituation | "fallback";
+type ColorTarget = ColorSituation | "filled";
 
-const RULE_ICON: Record<AutoColorRule, LucideIcon> = {
-  team: CalendarRange,
-  label: Bookmark,
-  service: Briefcase,
-};
 
 
 /** Значок блока формы — тот же, что у сущности в продукте (BLOCKS.md §0.2). */
@@ -99,18 +86,7 @@ const BLOCK_ICON: Record<string, LucideIcon> = {
   files: FileText,
 };
 
-const RULE_OPTIONS = [
-  { value: "team", label: "Команде" },
-  { value: "label", label: "Метке" },
-  { value: "service", label: "Услуге" },
-] as const satisfies readonly { value: AutoColorRule; label: string }[];
 
-/** Подпись обычной записи в дне-образце. */
-const RULE_WORD: Record<AutoColorRule, string> = {
-  team: "цвет команды",
-  label: "цвет метки",
-  service: "цвет услуги",
-};
 
 /** СТРОКИ ТАБЛИЦЫ БЛОКОВ: одинаковые блоки записи и события стоят
  *  напротив друг друга (владелец 24.09: «почему разделение — у обоих
@@ -144,9 +120,7 @@ export function DesignScreen() {
   const palette = useSituationPalette(teamId);
   const setSituationColor = useSetSituationColor(teamId);
   const fallback = useFallbackColor(teamId);
-  const setFallback = useSetFallbackColor(teamId);
   const [editingColor, setEditingColor] = useState<ColorTarget | null>(null);
-  const [ruleOpen, setRuleOpen] = useState(false);
 
   // ── блоки ──
   const recordBlocks = useBookingBlocks(teamId);
@@ -165,17 +139,13 @@ export function DesignScreen() {
       ? "Типов пока нет"
       : liveTypes.map((type) => type.label).join(", ");
 
-  // ОБЫЧНАЯ ЗАПИСЬ — ЦВЕТОМ ТОГО ИСТОЧНИКА, ЧТО ВЫБРАН: первая команда,
-  // первая метка или первая услуга. Нет у источника цвета — запасной.
+  // ВСЁ ЗАПОЛНЕНО — ЦВЕТОМ КОМАНДЫ (владелец 25.09: «убери „красить по“ —
+  // просто выбор самого цвета, в какой красить, когда всё заполнено»).
+  // Выбор здесь и есть цвет команды: так он один на сетку, ленту команд и
+  // её записи.
   const teams = allTeams;
-  const { data: labels = [] } = useCities();
-  const { data: services = [] } = useServices();
-  const ordinary =
-    (rule === "team"
-      ? teams[0]?.color
-      : rule === "label"
-        ? labels[0]?.color
-        : services[0]?.color) || fallback;
+  const ordinary = team?.color || fallback;
+  const updateTeam = useUpdateTeam();
 
   // Ситуация про выключенный блок не показывается: у бьюти-мастера объекта нет
   // вовсе, и «нет объекта» для него не дыра, а норма.
@@ -208,12 +178,9 @@ export function DesignScreen() {
       id: "ordinary",
       time: "09:00",
       name: "Мария",
-      sub: `всё заполнено · ${RULE_WORD[rule]}`,
+      sub: "всё заполнено",
       hue: ordinary,
-      onPress: () => {
-        haptics.tap();
-        setRuleOpen(true);
-      },
+      onPress: () => openColor("filled"),
     },
     ...situations.map((sit, i) => ({
       id: sit.id,
@@ -271,17 +238,6 @@ export function DesignScreen() {
             ))}
           </View>
 
-          <View style={{ marginTop: 16 }}>
-            <StepLabel text="Красить по" first />
-            <SegmentedControl
-              options={RULE_OPTIONS}
-              value={rule}
-              onChange={(next) => {
-                haptics.tap();
-                setRule.mutate(next);
-              }}
-            />
-          </View>
         </SectionCard>
         <SectionCard>
           <SwitchRow
@@ -297,13 +253,6 @@ export function DesignScreen() {
                     ) as typeof palette),
               );
             }}
-          />
-          <Divider inset={16} />
-          <SettingsRow
-            swatch={fallback}
-            title="Если нет цвета"
-            sub={colorName(fallback)}
-            onPress={() => openColor("fallback")}
           />
         </SectionCard>
         <RowCaption text="Цвет, выбранный в самой записи, главнее всего." />
@@ -382,28 +331,13 @@ export function DesignScreen() {
         ) : null}
       </ScrollView>
 
-      {/* Источник обычного цвета — наша шторка выбора со значками и галкой. */}
-      <PickerSheet
-        visible={ruleOpen}
-        title="Обычная запись"
-        subtitle="От чего берёт цвет"
-        selectedId={rule}
-        onClose={() => setRuleOpen(false)}
-        items={AUTO_COLOR_RULES.map((r) => ({
-          id: r.id,
-          label: r.label,
-          icon: RULE_ICON[r.id],
-          color: SETTINGS_TILE.blue,
-          onPress: () => setRule.mutate(r.id),
-        }))}
-      />
 
       <ColorSheet
         visible={editingColor != null}
         onClose={() => setEditingColor(null)}
         title={
-          editingColor === "fallback"
-            ? "Без цвета"
+          editingColor === "filled"
+            ? "Всё заполнено"
             : COLOR_SITUATIONS.find((s) => s.id === editingColor)?.label
         }
         // «Не красить»: у случая нет автомата — есть отказ от сигнала, и
@@ -411,19 +345,23 @@ export function DesignScreen() {
         // последняя ступень.
         autoLabel="Не красить"
         autoColor={ordinary}
-        allowNone={editingColor !== "fallback"}
+        allowNone={editingColor !== "filled"}
         commitOnPick
         value={
-          editingColor === "fallback"
-            ? fallback
+          editingColor === "filled"
+            ? ordinary
             : editingColor
               ? palette[editingColor] ?? null
               : null
         }
         onPick={(color) => {
           if (!editingColor) return;
-          if (editingColor === "fallback") {
-            if (color) setFallback.mutate(color);
+          if (editingColor === "filled") {
+            if (color && team) {
+              updateTeam.mutate({ id: team.id, patch: { color } });
+              // Записи красятся цветом команды — правило ставим на неё.
+              if (rule !== "team") setRule.mutate("team");
+            }
           } else {
             setSituationColor.mutate({ situation: editingColor, color });
           }
@@ -490,18 +428,6 @@ function ColorTile({
   );
 }
 
-/** Шаг правила цвета — тихая строка над образцами. */
-function StepLabel({ text, first }: { text: string; first?: boolean }) {
-  const t = useThemeColors();
-  return (
-    <Text
-      maxFontSizeMultiplier={1.3}
-      style={{ fontSize: 13, color: t.sub, marginTop: first ? 0 : 14, marginBottom: 6 }}
-    >
-      {text}
-    </Text>
-  );
-}
 
 /** Заголовок колонки блоков — «Клиент» / «Событие». */
 function ColumnTitle({ text }: { text: string }) {
