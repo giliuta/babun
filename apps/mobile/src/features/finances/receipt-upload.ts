@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
+import { RECEIPT_REFERENCE_TABLES } from "./receipt-reference-tables";
 
 // ДОКУМЕНТ ОПЕРАЦИИ В ХРАНИЛИЩЕ.
 //
@@ -92,12 +93,16 @@ export async function discardOperationReceiptIfOrphan(
   path: string,
 ): Promise<void> {
   try {
-    const { data, error } = await supabase
-      .from("finance_transactions")
-      .select("id")
-      .eq("receipt_url", path)
-      .limit(1);
-    if (error || (data ?? []).length > 0) return;
+    for (const table of RECEIPT_REFERENCE_TABLES) {
+      const { data, error } = await supabase
+        .from(table)
+        .select("id")
+        .eq("receipt_url", path)
+        .limit(1);
+      // Ошибка или найденная ссылка — файл остаётся: удалить документ
+      // сохранённой записи хуже, чем оставить копеечный мусор.
+      if (error || (data ?? []).length > 0) return;
+    }
     await deleteOperationReceipt(path);
   } catch {
     // Молча: жаловаться некому — форма уже закрыта, а оставить файл безопасно.
