@@ -1,15 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
-import { Trash2 } from "lucide-react-native";
+import { FlatList, Pressable, Text, View } from "react-native";
 import {
   formatEURExact as formatEUR,
   parseMoneyInputToCents,
@@ -27,12 +17,13 @@ import { Screen } from "@/components/ui/Screen";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { AddRow } from "@/components/ui/AddRow";
-import { Divider } from "@/components/ui/Divider";
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { GradientButton } from "@/components/ui/GradientButton";
+import { SwipeRow } from "@/components/ui/SwipeRow";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
-import { ICON } from "@/components/ui/tokens";
+import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useMoney } from "@/features/settings/currency";
 import { useFinanceCategories } from "@/features/finances/queries";
@@ -54,6 +45,13 @@ import {
 // здесь были только name/kind/amount/category, а полноценный шаблон можно
 // было получить лишь инлайн-захватом из формы операции; редактирования не
 // было вовсе (аудит P1-7).
+//
+// ПО КАНОНУ ПРОДУКТА (прогон финансов 2026-09-24). Экран был старше
+// дизайн-системы: мусорка на каждой строке, редактор отдельным окном `Modal`,
+// «Добавить» то строкой внутри списка, то кнопкой пустого состояния. Теперь
+// как у категорий: удаление — правой кромкой свайпа с вопросом, правка — та же
+// шторка `BottomSheet`, главное действие — всегда кнопкой в футере. У компании
+// с одной командой вопроса «Команда» нет — она подставляется сама.
 
 const methodLabel = (m: PaymentMethod | null) =>
   m ? PAYMENT_METHOD_LABEL[m] : null;
@@ -124,9 +122,14 @@ export default function TemplatesScreen() {
   // normalisation as submit(), otherwise the button never enables.
   const amountCents = parseMoneyInputToCents(amount);
   const busy = insert.isPending || update.isPending;
+  // КАТЕГОРИЯ ОБЯЗАТЕЛЬНА (прогон 2026-09-24): форма операции без неё не
+  // сохраняет, и шаблон без категории «в один тап» упирался в «Выберите
+  // категорию операции».
   const canSave =
     !!name.trim() &&
     amountCents != null &&
+    !!categoryId &&
+    cats.some((c) => c.id === categoryId) &&
     !!brigadeId &&
     !!accountId &&
     !accountMismatch &&
@@ -153,6 +156,11 @@ export default function TemplatesScreen() {
     if (!open || accountId || brigadeAccounts.length === 0) return;
     setAccountId(brigadeAccounts[0].id);
   }, [open, accountId, brigadeAccounts]);
+  // Одна команда — выбирать не из чего: она и есть команда шаблона.
+  useEffect(() => {
+    if (!open || brigadeId || teams.length !== 1) return;
+    setBrigadeId(teams[0].id);
+  }, [open, brigadeId, teams]);
 
   const openCreate = () => {
     setEditing(null);
@@ -224,17 +232,36 @@ export default function TemplatesScreen() {
     confirmThen(
       "Удалить шаблон?",
       {
-        message: label,
-        confirmLabel: "Удалить",
+        // Последствие, а не имя: имя уже в заголовке строки, которую смахнули.
+        message: `«${label}» пропадёт из списка шаблонов в форме операции. Сами операции, внесённые по нему, останутся.`,
+        confirmLabel: "Удалить шаблон",
         destructive: true,
       },
       () =>
         del.mutate(id, { onError: (e) => notify("Ошибка", e.message) }),
     );
 
+  // Причина погашенной кнопки — над ней, словами: серая кнопка без причины
+  // читается как поломка.
+  const reason = accountMismatch
+    ? "Сохранённый счёт больше не подходит — выберите доступный."
+    : brigadeId && brigadeAccounts.length === 0
+      ? "У этой команды нет открытого счёта."
+      : !brigadeId
+        ? "Выберите команду."
+        : !accountId
+          ? "Выберите счёт."
+          : !name.trim()
+            ? "Назовите шаблон."
+            : amountCents == null
+              ? "Укажите сумму."
+              : !categoryId || !cats.some((c) => c.id === categoryId)
+                ? "Выберите категорию."
+                : null;
+
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Шаблоны транзакций" />
+      <ScreenHeader title="Шаблоны операций" />
       {loading ? (
         <EmptyState state="loading" fill />
       ) : loadError ? (
@@ -249,205 +276,236 @@ export default function TemplatesScreen() {
           style={{ flex: 1 }}
           data={templates}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ flexGrow: 1, paddingTop: 8 }}
+          // СТРОКА — СВОЯ КАРТОЧКА, как у категорий и счетов (`ReorderList
+          // spaced`): полоса во всю ширину экрана с волосиной между строками
+          // была облика другого, старого продукта.
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingTop: 12,
+            paddingBottom: 16,
+            paddingHorizontal: GUTTER,
+          }}
           renderItem={({ item }) => {
-            // Подзаголовок повторяет веб-строку: вид · способ · команда.
+            // Подзаголовок: вид · способ · команда (команду — только когда их
+            // несколько: у одной команды это повтор в каждой строке).
             const bits = [
               item.kind === "expense" ? "Расход" : "Доход",
               methodLabel(item.payment_method),
-              item.brigade_id ? teamName.get(item.brigade_id) : null,
+              teams.length > 1 && item.brigade_id
+                ? teamName.get(item.brigade_id)
+                : null,
             ].filter(Boolean);
             return (
-              <View className="flex-row items-stretch">
+              <View
+                style={{
+                  borderRadius: t.radius.card,
+                  borderCurve: "continuous",
+                  overflow: "hidden",
+                  backgroundColor: t.surface,
+                  boxShadow: t.cardShadow,
+                }}
+              >
+              <SwipeRow
+                // УДАЛИТЬ — ПРАВОЙ КРОМКОЙ, С ВОПРОСОМ (канон кромок, AGENTS 9).
+                label="Удалить"
+                color={t.danger}
+                accessibilityLabel={`Удалить шаблон ${item.name}`}
+                onAction={() => confirmDelete(item.id, item.name)}
+              >
                 <Pressable
                   onPress={() => openEdit(item)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Шаблон ${item.name}, редактировать`}
-                  className="min-h-[52px] flex-1 flex-row items-center py-3 pl-4 active:opacity-60"
+                  accessibilityLabel={`Шаблон ${item.name}, ${formatEUR(Number(item.amount))}`}
+                  accessibilityHint="Открывает правку шаблона"
+                  accessibilityActions={[{ name: "delete", label: "Удалить" }]}
+                  onAccessibilityAction={(event) => {
+                    if (event.nativeEvent.actionName === "delete") {
+                      confirmDelete(item.id, item.name);
+                    }
+                  }}
+                  style={({ pressed }) => ({
+                    minHeight: 56,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    backgroundColor: pressed ? t.pressed : t.surface,
+                  })}
                 >
-                  <View className="flex-1 pr-2">
-                  <Text
-                    className="text-base font-semibold"
-                    style={{ color: t.ink }}
-                    numberOfLines={1}
-                  >
-                    {item.name}
-                  </Text>
-                  <Text className="text-xs" style={{ color: t.faint }} numberOfLines={1}>
-                    {bits.join(" · ")}
-                  </Text>
+                  <View style={{ flex: 1, paddingRight: 8, minWidth: 0 }}>
+                    <Text
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={1.3}
+                      style={{ fontSize: 16, fontWeight: "600", color: t.ink }}
+                    >
+                      {item.name}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={1.3}
+                      style={{ fontSize: 13, color: t.sub }}
+                    >
+                      {bits.join(" · ")}
+                    </Text>
                   </View>
                   <Text
-                    className="mr-2 text-base font-bold"
-                    style={{ fontVariant: ["tabular-nums"], color: item.kind === "expense" ? t.danger : t.success }}
+                    maxFontSizeMultiplier={1.3}
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "700",
+                      fontVariant: ["tabular-nums"],
+                      color: item.kind === "expense" ? t.danger : t.success,
+                    }}
                   >
                     {formatEUR(Number(item.amount))}
                   </Text>
                 </Pressable>
-                <Pressable
-                  onPress={() => confirmDelete(item.id, item.name)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Удалить шаблон ${item.name}`}
-                  className="min-h-[52px] min-w-11 items-center justify-center pr-2 active:opacity-60"
-                >
-                  <Trash2 color={t.danger} size={ICON.sm} />
-                </Pressable>
+              </SwipeRow>
               </View>
             );
           }}
-          ItemSeparatorComponent={() => <Divider inset={16} />}
-          ListFooterComponent={
-            templates.length > 0 ? (
-              <>
-                <Divider inset={16} />
-                <AddRow label="Добавить шаблон" onPress={openCreate} />
-              </>
-            ) : null
-          }
+          ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           ListEmptyComponent={
+            // Только слова: кнопка «Добавить шаблон» стоит в футере всегда.
+            // Подпись говорит, зачем шаблон, — одно «Нет шаблонов» не
+            // объясняло, что это вообще.
             <EmptyState
               fill
               title="Нет шаблонов"
-              action={{ label: "Добавить шаблон", onPress: openCreate }}
+              subtitle="Аренда, связь, топливо — повторяющийся расход сохраняется один раз и вносится одним тапом."
             />
           }
         />
       )}
 
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <KeyboardAvoidingView
-          className="flex-1"
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-        <Pressable
-          className="flex-1"
-          style={{ backgroundColor: t.scrim }}
-          onPress={() => setOpen(false)}
-          accessible={false}
-        />
-        <View
-          className="max-h-[80%] rounded-t-[10px]"
-          style={{ backgroundColor: t.surface }}
-        >
-        <ScrollView
-          className="p-5"
-          contentContainerStyle={{ paddingBottom: 32 }}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>
-            {editing ? "Шаблон" : "Новый шаблон"}
-          </Text>
-          <SegmentedControl
-            options={[
-              { value: "expense", label: "Расход", color: t.danger },
-              { value: "income", label: "Доход", color: t.success },
-            ]}
-            value={kind}
-            onChange={(k) => {
-              setKind(k);
-              setCategoryId(null);
-            }}
-            style={{ marginBottom: 12 }}
-          />
-          <Field label="Название" value={name} onChangeText={setName} placeholder="Аренда" autoFocus={!editing} />
-          <Field
-            label={`Сумма ${symbol}`}
-            value={amount}
-            onChangeText={setAmount}
-            placeholder="0"
-            keyboardType="decimal-pad"
-          />
-          {amount.length > 0 && amountCents == null ? (
-            <Text className="mb-3 text-sm" style={{ color: t.danger }}>
-              Введите сумму больше нуля и не больше двух знаков после запятой.
-            </Text>
-          ) : null}
-          {cats.length > 0 ? (
-            <>
-              <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>Категория</Text>
-              <View className="mb-3 flex-row flex-wrap gap-2">
-                {cats.map((c) => (
-                  <Chip
-                    key={c.id}
-                    label={c.name}
-                    radio
-                    selected={categoryId === c.id}
-                    onPress={() => setCategoryId(categoryId === c.id ? null : c.id)}
-                  />
-                ))}
-              </View>
-            </>
-          ) : null}
-          {teams.length > 0 ? (
-            <>
-              <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>Команда</Text>
-              <View className="mb-3 flex-row flex-wrap gap-2">
-                {teams.map((tm) => (
-                  <Chip
-                    key={tm.id}
-                    label={tm.name}
-                    radio
-                    selected={brigadeId === tm.id}
-                    onPress={() => {
-                      const next = brigadeId === tm.id ? null : tm.id;
-                      setBrigadeId(next);
-                      setAccountId(null);
-                    }}
-                  />
-                ))}
-              </View>
-            </>
-          ) : null}
-          {brigadeAccounts.length > 0 ? (
-            <>
-              <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>Счёт</Text>
-              <View className="mb-3 flex-row flex-wrap gap-2">
-                {brigadeAccounts.map((a) => (
-                  <Chip
-                    key={a.id}
-                    label={accountDisplayName(a)}
-                    radio
-                    selected={accountId === a.id}
-                    onPress={() => setAccountId(accountId === a.id ? null : a.id)}
-                  />
-                ))}
-              </View>
-            </>
-          ) : null}
-          {accountMismatch ? (
-            <Text className="mb-3 text-sm" style={{ color: t.danger }}>
-              Сохранённый счёт больше не подходит. Выберите доступный счёт заново.
-            </Text>
-          ) : brigadeId && brigadeAccounts.length === 0 ? (
-            <Text className="mb-3 text-sm" style={{ color: t.danger }}>
-              У этой команды нет активного счёта.
-            </Text>
-          ) : !brigadeId || !accountId ? (
-            <Text className="mb-3 text-sm" style={{ color: t.sub }}>
-              Для рабочего шаблона нужны команда и счёт.
-            </Text>
-          ) : !name.trim() ? (
-            // ИМЯ И СУММА ТОЖЕ НАЗЫВАЮТ СЕБЯ. `canSave` требует их, а цепочка
-            // причин знала только про команду и счёт: выбрал оба — кнопка
-            // «Создать» серая, и ни слова почему.
-            <Text className="mb-3 text-sm" style={{ color: t.sub }}>
-              Назовите шаблон.
-            </Text>
-          ) : amountCents == null ? (
-            <Text className="mb-3 text-sm" style={{ color: t.sub }}>
-              Укажите сумму шаблона.
-            </Text>
-          ) : null}
-          <Button
-            label={editing ? "Сохранить" : "Создать"}
-            onPress={submit}
-            disabled={!canSave}
-            loading={busy}
-          />
-        </ScrollView>
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ — В ФУТЕРЕ, ВСЕГДА (AGENTS 7.1), как у категорий. */}
+      {!loading && !loadError ? (
+        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+          <GradientButton label="Добавить шаблон" onPress={openCreate} />
         </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      ) : null}
+
+      <BottomSheet
+        visible={open}
+        onClose={() => setOpen(false)}
+        title={editing ? "Шаблон" : "Новый шаблон"}
+        avoidKeyboard
+        scroll
+        footer={
+          <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
+            {reason ? (
+              <Text
+                maxFontSizeMultiplier={1.3}
+                style={{
+                  fontSize: 13,
+                  textAlign: "center",
+                  color: accountMismatch || (brigadeId && brigadeAccounts.length === 0)
+                    ? t.danger
+                    : t.sub,
+                }}
+              >
+                {reason}
+              </Text>
+            ) : null}
+            <Button
+              label={editing ? "Сохранить" : "Создать шаблон"}
+              onPress={() => void submit()}
+              disabled={!canSave}
+              loading={busy}
+            />
+          </View>
+        }
+      >
+        <SegmentedControl
+          options={[
+            { value: "expense", label: "Расход", color: t.danger },
+            { value: "income", label: "Доход", color: t.success },
+          ]}
+          value={kind}
+          onChange={(k) => {
+            setKind(k);
+            setCategoryId(null);
+          }}
+          style={{ marginBottom: 12 }}
+        />
+        <Field
+          label="Название"
+          value={name}
+          onChangeText={setName}
+          placeholder="Аренда"
+          autoFocus={!editing}
+        />
+        <Field
+          label={`Сумма ${symbol}`}
+          value={amount}
+          onChangeText={setAmount}
+          placeholder="0"
+          keyboardType="decimal-pad"
+        />
+        {amount.length > 0 && amountCents == null ? (
+          <Text style={{ marginBottom: 12, fontSize: 13, color: t.danger }}>
+            Сумма — больше нуля и не больше двух знаков после запятой.
+          </Text>
+        ) : null}
+        {cats.length > 0 ? (
+          <>
+            <Text style={{ marginBottom: 8, fontSize: 13, fontWeight: "500", color: t.sub }}>
+              Категория
+            </Text>
+            <View style={{ marginBottom: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {cats.map((c) => (
+                <Chip
+                  key={c.id}
+                  label={c.name}
+                  radio
+                  selected={categoryId === c.id}
+                  onPress={() => setCategoryId(c.id)}
+                />
+              ))}
+            </View>
+          </>
+        ) : null}
+        {teams.length > 1 ? (
+          <>
+            <Text style={{ marginBottom: 8, fontSize: 13, fontWeight: "500", color: t.sub }}>
+              Команда
+            </Text>
+            <View style={{ marginBottom: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {teams.map((tm) => (
+                <Chip
+                  key={tm.id}
+                  label={tm.name}
+                  radio
+                  selected={brigadeId === tm.id}
+                  onPress={() => {
+                    const next = brigadeId === tm.id ? null : tm.id;
+                    setBrigadeId(next);
+                    setAccountId(null);
+                  }}
+                />
+              ))}
+            </View>
+          </>
+        ) : null}
+        {brigadeAccounts.length > 0 ? (
+          <>
+            <Text style={{ marginBottom: 8, fontSize: 13, fontWeight: "500", color: t.sub }}>
+              Счёт
+            </Text>
+            <View style={{ marginBottom: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {brigadeAccounts.map((a) => (
+                <Chip
+                  key={a.id}
+                  label={accountDisplayName(a)}
+                  radio
+                  selected={accountId === a.id}
+                  onPress={() => setAccountId(accountId === a.id ? null : a.id)}
+                />
+              ))}
+            </View>
+          </>
+        ) : null}
+      </BottomSheet>
     </Screen>
   );
 }

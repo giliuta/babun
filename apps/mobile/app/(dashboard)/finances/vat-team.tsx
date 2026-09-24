@@ -67,7 +67,7 @@ export default function TeamVatSettingsScreen() {
   ) {
     return (
       <Screen className="items-center justify-center">
-        <Spinner size={28} label="Загрузка настроек НДС" />
+        <Spinner size={28} label="Загрузка настроек VAT" />
       </Screen>
     );
   }
@@ -79,7 +79,7 @@ export default function TeamVatSettingsScreen() {
     // диплинк на архивированную или чужую команду.
     return (
       <Screen>
-        <ScreenHeader title="НДС команды" />
+        <ScreenHeader title="VAT команды" />
         <EmptyState state="error" title="Команда не найдена" fill />
       </Screen>
     );
@@ -138,7 +138,7 @@ export default function TeamVatSettingsScreen() {
     {
       value: "off",
       label: VAT_MODE_LABELS.off,
-      hint: "Клавиш НДС в операциях команды нет",
+      hint: "Клавиш VAT в операциях команды нет",
     },
     {
       value: "inherit",
@@ -149,7 +149,7 @@ export default function TeamVatSettingsScreen() {
 
   return (
     <Screen>
-      <ScreenHeader title={team.name} subtitle="НДС команды" />
+      <ScreenHeader title={team.name} subtitle="VAT команды" />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
         {v.mode === "off" ? (
           // Сюда можно попасть холодным диплинком при выключенном НДС компании:
@@ -163,8 +163,8 @@ export default function TeamVatSettingsScreen() {
               color: t.warning,
             }}
           >
-            НДС выключен у всей компании — настройка команды заработает после
-            включения на странице «НДС».
+            VAT выключен у всей компании — настройка команды заработает после
+            включения на странице «VAT».
           </Text>
         ) : null}
 
@@ -212,7 +212,7 @@ export default function TeamVatSettingsScreen() {
                   onSubmitEditing={commitRate}
                   keyboardType="decimal-pad"
                   keyboardAppearance="light"
-                  accessibilityLabel="Ставка НДС команды в процентах"
+                  accessibilityLabel="Ставка VAT команды в процентах"
                   className="min-w-16 px-3 py-2 text-[15px] font-semibold"
                   // textAlign через style: NativeWind не доносит класс
                   // выравнивания до TextInput (контрактный тест на это есть).
@@ -234,7 +234,7 @@ export default function TeamVatSettingsScreen() {
 
       <OptionSheet<ModeChoice>
         visible={modeSheetOpen}
-        title="Режим НДС"
+        title="Режим VAT"
         options={modeOptions}
         value={override?.mode ?? "inherit"}
         onPick={(choice) => {

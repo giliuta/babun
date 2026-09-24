@@ -137,9 +137,9 @@ export function useSaveTeamVat() {
 export { effectiveVatSettings } from "@babun/shared/local/finance/vat";
 
 export const VAT_MODE_LABELS: Record<VatMode, string> = {
-  off: "Без НДС",
-  inclusive: "НДС включён в цену",
-  exclusive: "НДС плюсом к цене",
+  off: "Без VAT",
+  inclusive: "VAT включён в цену",
+  exclusive: "VAT плюсом к цене",
 };
 
 /** Подпись под строкой настройки: показывает действующее значение, чтобы не

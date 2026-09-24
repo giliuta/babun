@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Text, View } from "react-native";
-import { Tag } from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
+import { Repeat, Tag } from "lucide-react-native";
 import type {
   FinanceTransaction,
   PaymentMethod,
@@ -16,6 +16,7 @@ import { OperationReceiptRow } from "./OperationReceiptRow";
 import { AmountBlock } from "./AmountBlock";
 import { CategoryBlock } from "./CategoryBlock";
 import { paymentMethodForAccountKind } from "@/features/appointments/payment";
+import { useIssueReceipt } from "@/features/documents/receipts-queries";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
@@ -43,13 +44,14 @@ import { PickerSheet } from "@/components/ui/PickerSheet";
 import { iconPreset } from "@/components/ui/icon-set";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
-import { useIssueReceipt } from "@/features/documents/receipts-queries";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
   formatEURExact as formatEUR,
+  formatMoneyForInput,
+  money,
   moneySign,
   parseMoneyInputToCents,
 } from "@babun/shared/common/utils/money";
@@ -69,6 +71,9 @@ import {
 } from "./queries";
 import { useAccountsWithBalances } from "./accounts";
 import { accountIcon } from "./account-ui";
+import { vatModeForDraft } from "./operation-vat";
+import { useFinanceTemplates } from "./templates-queries";
+import { templatesForSheet } from "./template-apply";
 import { useCurrentRole } from "@/features/settings/tenant";
 
 /** Финансы онлайн-only НА ЗАПИСЬ (ТЗ §8): без сети кнопка гасится и называет
@@ -183,8 +188,8 @@ export function OperationSheet({
   const update = useUpdateTransaction();
   const del = useDeleteTransaction();
   const toast = useToast();
-  const issueReceipt = useIssueReceipt();
   const isEdit = !!transaction;
+  const issueReceipt = useIssueReceipt();
   const router = useRouter();
 
   // No free-form «Возврат» here — a real refund is created from the
@@ -206,6 +211,8 @@ export function OperationSheet({
   // Категория выбирается ЛИСТОМ, а не лентой чипов: категорий бывает два
   // десятка, и половина ленты всегда за краем экрана.
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  // Лист шаблонов — тот же вид выбора, что у категории.
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   // Дата и время правятся ТЕМ ЖЕ листом, что у записи.
   const [whenOpen, setWhenOpen] = useState(false);
   // Три клавиши НДС на самой операции. Владелец 2026-08-09: «не всегда надо
@@ -317,6 +324,35 @@ export function OperationSheet({
     [accounts, teamId],
   );
 
+  // ШАБЛОНЫ — ЗНАЧКОМ В ШАПКЕ, А НЕ ПОЛОСОЙ (прогон финансов 2026-09-24).
+  // 09.08 владелец снял полосу шаблонов с формы: «встречали первыми и занимали
+  // место под то, чем пользуются раз в месяц». Страница «Шаблоны операций»
+  // при этом осталась и обещала «в один тап» — а тапнуть шаблон было негде.
+  // Значок места не занимает и есть только у новой операции владельца, когда
+  // для этой команды есть хоть один шаблон.
+  const templatesQuery = useFinanceTemplates();
+  const sheetTemplates = useMemo(
+    () => templatesForSheet(templatesQuery.data ?? [], teamId),
+    [templatesQuery.data, teamId],
+  );
+  const showTemplates =
+    isOwner && !isEdit && !debtPayment && sheetTemplates.length > 0;
+  const applyTemplate = (tpl: (typeof sheetTemplates)[number]) => {
+    setType(tpl.kind);
+    setAmount(formatMoneyForInput(Number(tpl.amount)));
+    setCategoryId(tpl.category_id);
+    // Счёт шаблона — только если он ещё открыт и обслуживает эту команду;
+    // иначе остаётся счёт по умолчанию, а не пустой выбор.
+    if (tpl.account_id && teamAccounts.some((acc) => acc.id === tpl.account_id)) {
+      setAccountId(tpl.account_id);
+      setAccountTouched(true);
+    }
+    // Имя шаблона — заметкой, если своей нет: в ленте строка скажет
+    // «Аренда», а не только категорию.
+    setNotes((current) => (current.trim() ? current : tpl.name));
+    haptics.tap();
+  };
+
   const selectedAccount = useMemo(
     () => accounts.find((a) => a.id === accountId) ?? null,
     [accounts, accountId],
@@ -390,6 +426,10 @@ export function OperationSheet({
   // НДС не отдаются: «Без НДС» у него вышло бы не выбором, а последствием
   // отказа чтения — и молча уносило бы налог из операции компании.
   const vatVisible = isOwner && tenantVatOn && vat.rate > 0;
+  // Настройки компании И переопределения команд доехали — только тогда режим
+  // формы что-то значит для сервера (`operation-vat.ts`).
+  const vatSettingsKnown =
+    vatSettingsQuery.data !== undefined && teamVatOverrides.data !== undefined;
 
   // Дефолт счёта = счёт команды операции (командный раньше общего). Эффект
   // (а не разовый сет при открытии), потому что счета приезжают асинхронно
@@ -536,9 +576,18 @@ export function OperationSheet({
     savingRef.current = true;
     try {
       const breakdown = applyTxVat(amountNum, vatMode, opVatRate);
+      // РЕЖИМ НДС НАЗЫВАЕМ, ТОЛЬКО ЕСЛИ ЕГО ЗНАЕМ (`operation-vat.ts`): пустая
+      // колонка значит «считай сам», а явное 'none' сервер уважает сильнее
+      // настроек компании.
+      const vatModeToSend = vatModeForDraft({
+        mode: vatMode,
+        chosen: vatTouched,
+        canReadSettings: isOwner,
+        settingsKnown: vatSettingsKnown,
+      });
       const draft = {
         amount: breakdown.gross,
-        vat_mode: vatMode,
+        ...(vatModeToSend ? { vat_mode: vatModeToSend } : {}),
         category_id: categoryId,
         team_id: teamId,
         account_id: accountId,
@@ -749,6 +798,25 @@ export function OperationSheet({
       subtitle={
         teamId ? (teams.find((t) => t.id === teamId)?.name ?? undefined) : "Компания"
       }
+      headerAction={
+        showTemplates ? (
+          <Pressable
+            onPress={() => setTemplatePickerOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Шаблоны операций"
+            hitSlop={8}
+            style={({ pressed }) => ({
+              width: 36,
+              height: 36,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Repeat size={20} strokeWidth={2} color={th.accent} />
+          </Pressable>
+        ) : undefined
+      }
       scroll
       avoidKeyboard
       maxHeightRatio={0.86}
@@ -866,7 +934,7 @@ export function OperationSheet({
             Под клавишами стоит последствие в евро, потому что разница
             между «включён» и «плюсом» — это деньги, а не термин. */}
         {vatVisible ? (
-          <SectionCard title="НДС">
+          <SectionCard title="VAT">
             <View className="flex-row flex-wrap gap-2 px-3 py-3">
               {(["none", "inclusive", "exclusive"] as TxVatMode[]).map(
                 (m) => (
@@ -1114,6 +1182,25 @@ export function OperationSheet({
         }
         settingsLabel="Категории операций"
         onClose={() => setCategoryPickerOpen(false)}
+      />
+      <PickerSheet
+        visible={templatePickerOpen}
+        title="Шаблоны"
+        items={sheetTemplates.map((tpl) => ({
+          id: tpl.id,
+          label: tpl.name,
+          icon: Repeat,
+          color: tpl.kind === "expense" ? th.danger : th.success,
+          hint: `${tpl.kind === "expense" ? "Расход" : "Доход"} · ${money(Number(tpl.amount))}`,
+          onPress: () => applyTemplate(tpl),
+        }))}
+        // Шестерёнка — на страницу шаблонов, паркуя лист операции (та же
+        // дверь, что у категорий).
+        onSettings={() =>
+          doorway.open(() => router.push("/finances/templates"))
+        }
+        settingsLabel="Шаблоны операций"
+        onClose={() => setTemplatePickerOpen(false)}
       />
     </BottomSheet>
   );

@@ -324,7 +324,7 @@ export function TransactionPopup({
   // налог, а его отсутствие.
   if (tx.vat_amount != null && tx.vat_amount !== 0) {
     metaRows.push({
-      label: "НДС",
+      label: "VAT",
       value: `в т.ч. ${formatEUR(Math.abs(tx.vat_amount))}${
         tx.vat_rate != null ? ` (${tx.vat_rate}%)` : ""
       }`,

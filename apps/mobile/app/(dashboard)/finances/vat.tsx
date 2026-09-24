@@ -65,7 +65,7 @@ export default function VatSettingsScreen() {
   if (settings.isLoading || !settings.data) {
     return (
       <Screen className="items-center justify-center">
-        <Spinner size={28} label="Загрузка настроек НДС" />
+        <Spinner size={28} label="Загрузка настроек VAT" />
       </Screen>
     );
   }
@@ -83,7 +83,7 @@ export default function VatSettingsScreen() {
     if (!(rate > 0) || rate >= 100) {
       notify(
         "Ставка вне диапазона",
-        "Введите значение больше 0 и меньше 100. Если с НДС не работаете — выключите его тумблером выше.",
+        "Введите значение больше 0 и меньше 100. Если с VAT не работаете — выключите его тумблером выше.",
       );
       setRateDraft(String(v.rate));
       return;
@@ -99,15 +99,15 @@ export default function VatSettingsScreen() {
 
   return (
     <Screen>
-      <ScreenHeader title="НДС" />
+      <ScreenHeader title="VAT" />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
         <SectionCard>
           <SwitchRow
-            label="Работаем с НДС"
+            label="Работаем с VAT"
             hint={
               v.mode === "off"
                 ? "Приложение не спрашивает про налог и не считает его"
-                : "В каждой операции можно выбрать «Без НДС», «включён» или «плюсом»"
+                : "В каждой операции можно выбрать «Без VAT», «включён» или «плюсом»"
             }
             value={v.mode !== "off"}
             onChange={(on) =>
@@ -184,7 +184,7 @@ export default function VatSettingsScreen() {
                   onSubmitEditing={commitRate}
                   keyboardType="decimal-pad"
                   keyboardAppearance="light"
-                  accessibilityLabel="Ставка НДС в процентах"
+                  accessibilityLabel="Ставка VAT в процентах"
                   className="min-w-16 px-3 py-2 text-[15px] font-semibold"
                   // textAlign через style: NativeWind не доносит класс
                   // выравнивания до TextInput (контрактный тест на это есть).
@@ -213,8 +213,8 @@ export default function VatSettingsScreen() {
                   color: t.warning,
                 }}
               >
-                Ставка 0% — клавиши НДС в операциях не появляются. Укажите
-                ставку или выключите НДС тумблером выше.
+                Ставка 0% — клавиши VAT в операциях не появляются. Укажите
+                ставку или выключите VAT тумблером выше.
               </Text>
             )}
 

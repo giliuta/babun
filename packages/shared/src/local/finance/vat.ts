@@ -18,9 +18,9 @@ export type VatMode = "off" | "inclusive" | "exclusive";
 export type TxVatMode = "none" | "inclusive" | "exclusive";
 
 export const TX_VAT_MODE_LABELS: Record<TxVatMode, string> = {
-  none: "Без НДС",
-  inclusive: "НДС включён",
-  exclusive: "Плюс НДС",
+  none: "Без VAT",
+  inclusive: "VAT включён",
+  exclusive: "Плюс VAT",
 };
 
 /** Режим операции по умолчанию — из действующей настройки (счёт → команда →

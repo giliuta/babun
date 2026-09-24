@@ -112,7 +112,7 @@ export default function FinanceSettingsScreen() {
                       icon={Tags}
                       title="Категории операций"
                       sub="На что уходят и откуда приходят деньги"
-                      onPress={() => router.push("/cabinet/categories")}
+                      onPress={() => router.push("/finances/categories")}
                     />
                   </>
                 ) : null}
@@ -124,7 +124,7 @@ export default function FinanceSettingsScreen() {
                       icon={Receipt}
                       title="Шаблоны операций"
                       sub="Повторяющиеся расходы в один тап"
-                      onPress={() => router.push("/cabinet/templates")}
+                      onPress={() => router.push("/finances/templates")}
                     />
                   </>
                 ) : null}
@@ -145,7 +145,7 @@ export default function FinanceSettingsScreen() {
                     // рядом с адресом и телефоном. Дверь обещала настройку,
                     // которой за ней нет, и человек шёл искать страну туда, где
                     // её никогда не стояло.
-                    title="НДС"
+                    title="VAT"
                     sub={vatSummaryLine(vat.data)}
                     onPress={() => router.push("/finances/vat")}
                   />

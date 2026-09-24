@@ -119,7 +119,7 @@ export default function ReceiptsScreen() {
                     деньги внутри полученной суммы. */}
                 {item.vat_amount ? (
                   <Text className="text-[11px]" style={{ color: t.sub }}>
-                    в т.ч. НДС {money(item.vat_amount, item.currency)}
+                    в т.ч. VAT {money(item.vat_amount, item.currency)}
                   </Text>
                 ) : null}
               </View>
