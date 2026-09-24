@@ -414,7 +414,11 @@ export default function CalendarSettingsScreen() {
               {rows.timezone ? (
                 <SectionCard>
                   <SettingsRow
-                    tile="neutral"
+                    // ЦВЕТНАЯ ПЛИТКА, КАК У ВСЕХ ДВЕРЕЙ ЭТОЙ СТРАНИЦЫ (24.09):
+                    // «neutral» — материал денежных экранов (канон SettingsRow),
+                    // здесь он делал три верхние строки чужими. Оранжевый —
+                    // «время и допуски» по словарю плиток.
+                    tile={SETTINGS_TILE.orange}
                     icon={Globe}
                     title="Часовой пояс"
                     // Строка печатает РАСПИСКУ, а не имя зоны: город и часы.
@@ -440,7 +444,7 @@ export default function CalendarSettingsScreen() {
               {rows.currency ? (
                 <SectionCard>
                   <SettingsRow
-                    tile="neutral"
+                    tile={SETTINGS_TILE.green}
                     icon={Banknote}
                     title="Валюта"
                     sub={`${moneyName(currency)} · ${moneySymbol(currency)} · ${currency}`}
@@ -472,7 +476,7 @@ export default function CalendarSettingsScreen() {
               {rows.masters ? (
                 <SectionCard>
                   <SettingsRow
-                    tile="neutral"
+                    tile={SETTINGS_TILE.indigo}
                     icon={Users}
                     title="Мастера"
                     sub="Сотрудники и их доступ"
