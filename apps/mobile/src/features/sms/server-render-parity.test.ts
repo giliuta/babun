@@ -21,6 +21,7 @@ const TEMPLATES = [
   "[Имя], спасибо!",
   "Без полей вовсе",
   "[Имя], ссылка [СсылкаНаОтмену]",
+  "[Имя], подтвердите запись: [Ссылка]",
   "   ",
 ];
 
@@ -36,6 +37,7 @@ const RECORDS = [
     debt: 40,
     company: "Giliuta",
     currency: "EUR",
+    link: "babun.app/r/6rJqe5dyEeJE",
   },
   { name: "Ппк", date: "2026-09-27", time: "13:30", calendar: "Команда 1", services: [], address: "", total: 200, company: "Giliuta", currency: "EUR" },
   { name: "", date: null, time: null, calendar: null, services: null, address: null, total: 0, company: "X", currency: "USD" },

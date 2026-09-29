@@ -154,7 +154,7 @@ describe("ответ базы", () => {
     assert.equal(log.confirmBody, "[Имя], вы записаны");
     assert.equal(log.messages[0]?.templateBody, "Напоминаем [Время]");
     assert.equal(log.messages[0]?.body, null);
-    assert.deepEqual(parseSmsRecordLog(null), { confirmBody: "", messages: [] });
+    assert.deepEqual(parseSmsRecordLog(null), { confirmBody: "", messages: [], clientAnswer: null, clientAnsweredAt: null });
   });
 
   test("отказы базы — словами", () => {

@@ -32,7 +32,8 @@ export type SmsVarKey =
   | "Price"
   | "Amount"
   | "Company"
-  | "CancelUrl";
+  | "CancelUrl"
+  | "Link";
 
 const WEEKDAYS = [
   "воскресенье",
@@ -80,6 +81,9 @@ export interface SmsSource {
   company?: string | null;
   /** Валюта для [Цена] и [Сумма]; по умолчанию — валюта компании. */
   currency?: string;
+  /** [Ссылка] — «Подтвердить / Отменить», babun.app/r/…; есть только у
+   *  записи, и только когда текст её просит. */
+  link?: string | null;
 }
 
 const clean = (value: string | null | undefined): string | undefined => {
@@ -121,6 +125,7 @@ export function smsVars(source: SmsSource): SmsVars {
   put("Price", positiveMoney(source.total, source.currency));
   put("Amount", positiveMoney(source.debt, source.currency));
   put("Company", clean(source.company));
+  put("Link", clean(source.link));
   return vars;
 }
 

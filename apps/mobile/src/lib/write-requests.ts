@@ -21,6 +21,7 @@
 /** Функции, которые только читают: `provolatile = 's'` на 20.09.2026. */
 export const READ_RPCS: ReadonlySet<string> = new Set([
   "account_balances",
+  "appointment_link_lookup",
   "current_tenant_profile_safe",
   "current_user_role",
   "invitation_preview",
@@ -61,6 +62,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "accept_invitation_by_id",
   "activate_tenant",
   "apply_location_label_changes",
+  "appointment_link_answer",
   "cancel_appointment_payment",
   "cancel_invoice",
   "create_client_with_tags",
@@ -90,6 +92,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "set_default_company",
   "set_member_access",
   "set_member_calendars",
+  "sms_appointment_link",
   "sms_save_rule",
   "sms_save_settings",
   "sms_send_manual",

@@ -22,6 +22,9 @@ export interface SmsRenderVars {
   debt?: number | string | null;
   company?: string | null;
   currency?: string | null;
+  /** Ссылка «Подтвердить / Отменить» — `sms_claim` кладёт её, только если
+   *  текст просит [Ссылка]. */
+  link?: string | null;
 }
 
 const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
@@ -42,6 +45,7 @@ const TOKEN_ALIASES: Record<string, string> = {
   Сумма: "Amount",
   Компания: "Company",
   СсылкаНаОтмену: "CancelUrl",
+  Ссылка: "Link",
 };
 
 /** Символы ходовых валют — как в `packages/shared/src/common/utils/currencies`.
@@ -102,6 +106,7 @@ export function renderVars(v: SmsRenderVars): Record<string, string> {
   put("Price", positiveMoney(v.total, v.currency));
   put("Amount", positiveMoney(v.debt, v.currency));
   put("Company", clean(v.company));
+  put("Link", clean(v.link));
   return out;
 }
 

@@ -4023,6 +4023,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      appointment_link_answer: {
+        Args: { p_answer: string; p_token: string }
+        Returns: Json
+      }
+      appointment_link_lookup: {
+        Args: { p_token: string }
+        Returns: Json
+      }
       appointment_payment_mirror: { Args: { p_payments: Json }; Returns: Json }
       attach_invited_master_card: {
         Args: {
@@ -5149,6 +5157,10 @@ export type Database = {
         Returns: boolean
       }
       sms_account: { Args: never; Returns: Json }
+      sms_appointment_link: {
+        Args: { p_appointment_id: string }
+        Returns: string
+      }
       sms_for_appointment: {
         Args: { p_appointment_id: string }
         Returns: Json

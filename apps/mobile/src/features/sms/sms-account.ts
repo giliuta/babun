@@ -166,6 +166,25 @@ export function useAppointmentSms(appointmentId: string | null | undefined) {
   });
 }
 
+/** Ссылка «Подтвердить / Отменить» записи — для ручной отправки, когда
+ *  выбранный текст просит [Ссылка]. Первая просьба заводит ссылку на
+ *  сервере, дальше она та же. */
+export function useAppointmentLink(appointmentId: string | null | undefined, enabled: boolean) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: [...smsLogKey(tenantId), "link", appointmentId],
+    enabled: enabled && !!tenantId && !!appointmentId,
+    staleTime: Infinity,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("sms_appointment_link", {
+        p_appointment_id: appointmentId as string,
+      });
+      if (error) throw new Error(error.message);
+      return typeof data === "string" && data ? data : null;
+    },
+  });
+}
+
 /** SMS клиента — блок на странице клиента. */
 export function useClientSms(clientId: string | null | undefined, limit = 20) {
   const tenantId = useTenantId();

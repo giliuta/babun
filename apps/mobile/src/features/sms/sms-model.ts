@@ -177,12 +177,24 @@ export function parseSmsHistory(rows: unknown): SmsHistoryItem[] {
 export interface SmsRecordLog {
   confirmBody: string;
   messages: SmsHistoryItem[];
+  /** Ответ клиента по ссылке «Подтвердить / Отменить» и когда он был. */
+  clientAnswer: "confirmed" | "cancelled" | null;
+  clientAnsweredAt: string | null;
 }
 
 export function parseSmsRecordLog(data: unknown): SmsRecordLog {
   const r = (data && typeof data === "object" ? data : {}) as Raw;
-  return { confirmBody: str(r.confirm_body) ?? "", messages: parseSmsHistory(r.messages) };
+  const answer = r.client_answer === "confirmed" || r.client_answer === "cancelled" ? r.client_answer : null;
+  return {
+    confirmBody: str(r.confirm_body) ?? "",
+    messages: parseSmsHistory(r.messages),
+    clientAnswer: answer,
+    clientAnsweredAt: answer ? str(r.client_answered_at) : null,
+  };
 }
+
+/** Просит ли текст ссылку «Подтвердить / Отменить». */
+export const wantsLink = (body: string | null | undefined): boolean => /\[(Ссылка|Link)\]/u.test(body ?? "");
 
 /** Слова отказа базы — человеку. */
 export function smsErrorText(error: unknown): string {
