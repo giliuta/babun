@@ -27,6 +27,9 @@ export interface FinanceSettingsRows {
   vat: boolean;
   invoices: boolean;
   requisites: boolean;
+  /** «Валюта» — одна на компанию (владелец 30.09: перенесена из шестерёнки
+   *  календаря сюда, к деньгам). */
+  currency: boolean;
   /** Заголовок «Деньги»: без своих строк он не рисуется — подпись над
    *  пустотой читается как сломанный экран. */
   moneyGroup: boolean;
@@ -50,8 +53,9 @@ export function financeSettingsRows(
   return {
     ...money,
     ...documents,
+    currency: owner,
     moneyGroup,
     documentsGroup,
-    any: moneyGroup || documentsGroup,
+    any: moneyGroup || documentsGroup || owner,
   };
 }

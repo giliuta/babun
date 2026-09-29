@@ -39,6 +39,7 @@ import { accountsDoorLine } from "@/features/finances/accounts-sections";
 import { useCurrentRole, useTenant, type Tenant } from "@/features/settings/tenant";
 import { financeSettingsRows } from "@/features/finances/settings-rows";
 import { LedgerExportRow } from "@/features/finances/LedgerExportRow";
+import { CurrencySettingsRow } from "@/features/settings/CurrencySettingsRow";
 import { useFinanceCategories } from "@/features/finances/queries";
 import { formatInvoiceNumber } from "@/features/invoices/numbering";
 import { useNextInvoiceNumber } from "@/features/invoices/queries";
@@ -138,7 +139,7 @@ export default function FinanceSettingsScreen() {
   );
 
   const teamGroup = rows.accounts || rows.categories || rows.templates || rows.vat;
-  const companyGroup = rows.invoices || rows.requisites || rows.templates;
+  const companyGroup = rows.currency || rows.invoices || rows.requisites || rows.templates;
 
   return (
     <Screen edges={["top"]}>
@@ -231,7 +232,12 @@ export default function FinanceSettingsScreen() {
                   компании. */}
               <SectionEyebrow>Вся компания</SectionEyebrow>
               <SectionCard>
+                {/* ВАЛЮТА — ПЕРВОЙ (владелец 30.09: «валюту — в настройки
+                    финансов»): в чём компания считает все деньги. */}
+                {rows.currency ? <CurrencySettingsRow /> : null}
                 {rows.invoices ? (
+                  <>
+                  {rows.currency ? <Divider inset={56} /> : null}
                   <SettingsRow
                     tile={SETTINGS_TILE.blue}
                     icon={FileText}
@@ -239,10 +245,11 @@ export default function FinanceSettingsScreen() {
                     sub={invoiceLine(tenant.data, nextNumber.data)}
                     onPress={() => router.push("/finances/invoices")}
                   />
+                  </>
                 ) : null}
                 {rows.requisites ? (
                   <>
-                    {rows.invoices ? <Divider inset={56} /> : null}
+                    {rows.invoices || rows.currency ? <Divider inset={56} /> : null}
                     <SettingsRow
                       // Цветная плитка, как у соседей (прогон 2026-09-23): голый
                       // глиф в ряду плиток читался как строка другого рода.
@@ -256,7 +263,7 @@ export default function FinanceSettingsScreen() {
                 ) : null}
                 {rows.templates ? (
                   <>
-                    {rows.invoices || rows.requisites ? <Divider inset={56} /> : null}
+                    {rows.currency || rows.invoices || rows.requisites ? <Divider inset={56} /> : null}
                     <LedgerExportRow />
                   </>
                 ) : null}

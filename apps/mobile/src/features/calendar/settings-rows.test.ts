@@ -14,7 +14,6 @@ describe("строки настроек календаря", () => {
       addCalendar: true,
       timezone: true,
       timezoneEdit: true,
-      currency: true,
       hours: true,
       hoursEdit: true,
       schedule: true,
@@ -56,7 +55,7 @@ describe("строки настроек календаря", () => {
     assert.equal(write.scheduleEdit, true);
     // «Видит и меняет» — меняет всё в строке, перерыв после записи тоже.
     assert.equal(write.buffer, true);
-    for (const other of ["rename", "timezone", "currency", "hours", "booking", "labels", "remove"] as const) {
+    for (const other of ["rename", "timezone", "hours", "booking", "labels", "remove"] as const) {
       assert.equal(write[other], false, `«${other}» сотруднику не открывается правом графика`);
     }
   });
@@ -68,7 +67,6 @@ describe("строки настроек календаря", () => {
     assert.equal(rows.timezone, true);
     assert.equal(rows.timezoneEdit, false, "«Только видит» — строка без двери");
     assert.equal(rows.hours, false);
-    assert.equal(rows.currency, false);
     assert.equal(rows.remove, false);
     assert.equal(rows.addCalendar, false);
   });
@@ -90,6 +88,6 @@ describe("строки настроек календаря", () => {
     // Владелец бесплатного контура, у которого обе тарифные строки погашены,
     // всё равно видит остальные: иначе «any» врал бы про свою же страницу.
     const rows = calendarSettingsRows("owner", FREE);
-    assert.equal(rows.any, rows.timezone || rows.currency || rows.labels);
+    assert.equal(rows.any, rows.timezone || rows.labels);
   });
 });

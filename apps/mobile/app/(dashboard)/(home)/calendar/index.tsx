@@ -9,7 +9,6 @@ import {
   Palette,
   Tags,
   Trash2,
-  Banknote,
 } from "lucide-react-native";
 import { readTenantPref } from "@/lib/tenant-prefs";
 import { useTenantId } from "@/lib/tenant";
@@ -52,12 +51,9 @@ import { useCalendarDelete } from "@/features/calendar/useCalendarDelete";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
 import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
 import { calendarSettingsRows } from "@/features/calendar/settings-rows";
-import { useCurrentRole, useUpdateTenant ,
+import { useCurrentRole,
   usePlanAllows,
 } from "@/features/settings/tenant";
-import { useCurrency } from "@/features/settings/currency";
-import { moneyName, moneySymbol } from "@babun/shared/common/utils/money";
-import { CurrencySheet } from "@/features/settings/CurrencySheet";
 import { TeamScheduleSheet } from "@/features/calendar/TeamScheduleSheet";
 import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { useMemberUpdateTeam } from "@/features/calendar/mutations";
@@ -157,33 +153,9 @@ export default function CalendarSettingsScreen() {
   // когда работает команда, отвечает её ГРАФИК — он правится листом снизу.
   // Колонки `work_start_hour/work_end_hour` живы и остаются фолбэком сетки для
   // команды без строки расписания — стандарт 06:00–20:00.
-  const [picker, setPicker] = useState<"view" | "tz" | "currency" | null>(null);
-  // Валюта — настройка ТЕНАНТА (одна на бизнес: `tenants.currency`), но
-  // выбирается здесь, рядом с часовым поясом (владелец 2026-09-06: «добавь в
-  // настройки календаря раздел „валюта“… примерно то же понятие, что часовой
-  // пояс»). Меняет её владелец; остальные видят значение.
-  const currency = useCurrency();
-  const updateTenant = useUpdateTenant();
+  const [picker, setPicker] = useState<"view" | "tz" | null>(null);
   const role = useCurrentRole().data;
   const isOwner = role === "owner";
-  const applyCurrency = (code: string) => {
-    if (code === currency) return;
-    updateTenant.mutate(
-      { currency: code },
-      {
-        onSuccess: () => toast(`Валюта: ${moneySymbol(code)} ${moneyName(code)}`, "success"),
-        onError: (error) => {
-          const message = error instanceof Error ? error.message : "";
-          toast(
-            /currency_check|check constraint/i.test(message)
-              ? "База пока принимает пять валют — нужна миграция"
-              : message || "Не удалось сменить валюту",
-            "error",
-          );
-        },
-      },
-    );
-  };
   // График команды правится ЛИСТОМ, а не страницей (владелец 2026-08-17):
   // семь дней надо видеть целиком, пока правишь один. См. шапку
   // `TeamScheduleSheet` — там же, почему это исключение из закона «настройка —
@@ -470,25 +442,8 @@ export default function CalendarSettingsScreen() {
                   />
                 </SectionCard>
               ) : null}
-              {/* ВАЛЮТА — СРАЗУ ПОД ПОЯСОМ: обе настройки говорят, в каких
-                  единицах бизнес считает день и деньги. Одна на весь бизнес. */}
-              {rows.currency ? (
-                <SectionCard>
-                  <SettingsRow
-                    tile={SETTINGS_TILE.green}
-                    icon={Banknote}
-                    title="Валюта"
-                    sub={`${moneyName(currency)} · ${moneySymbol(currency)} · ${currency}`}
-                    onPress={() => {
-                      if (!isOwner) {
-                        toast("Валюту меняет владелец", "info");
-                        return;
-                      }
-                      setPicker("currency");
-                    }}
-                  />
-                </SectionCard>
-              ) : null}
+              {/* ВАЛЮТЫ ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 30.09): она одна на
+                  компанию и живёт в «Настройки финансов → Вся компания». */}
               {/* МАСТЕРА — СОСТАВ ЭТОГО КАЛЕНДАРЯ, СРАЗУ ПОД ВАЛЮТОЙ (владелец
                   2026-09-14: «мастера поставь после валюты»). Заглушка «Скоро» стояла с
                   2026-08-30, пока экрана не было под рукой; 2026-09-10 владелец:
@@ -854,12 +809,6 @@ export default function CalendarSettingsScreen() {
             calendar_window_end: formatHm({ hour: v.end, minute: v.endMinute }),
           })
         }
-      />
-      <CurrencySheet
-        visible={picker === "currency"}
-        onClose={() => setPicker(null)}
-        value={currency}
-        onApply={applyCurrency}
       />
       <TimezoneSheet
         visible={picker === "tz"}

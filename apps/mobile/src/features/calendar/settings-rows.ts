@@ -60,7 +60,6 @@ export interface CalendarSettingsRows {
   addCalendar: boolean;
   timezone: boolean;
   timezoneEdit: boolean;
-  currency: boolean;
   /** «Часы календаря» — видимое окно команды. */
   hours: boolean;
   hoursEdit: boolean;
@@ -102,7 +101,6 @@ export function calendarSettingsRows(
     addCalendar: manage,
     timezone: shown(access.timezone),
     timezoneEdit: edits(access.timezone),
-    currency: manage,
     hours: shown(access.hours),
     hoursEdit: edits(access.hours),
     schedule: shown(access.schedule),

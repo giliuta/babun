@@ -11,6 +11,7 @@ describe("строки настроек финансов", () => {
       vat: true,
       invoices: true,
       requisites: true,
+      currency: true,
       moneyGroup: true,
       documentsGroup: true,
       any: true,
