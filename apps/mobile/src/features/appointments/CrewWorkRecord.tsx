@@ -16,6 +16,8 @@ import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesB
 import { humanDay } from "@/features/appointments/helpers";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
+import { useDefaultCountry } from "@/features/clients/default-country";
+import { formatPhoneForDisplay } from "@/features/clients/phone";
 
 import type { CrewBlocks } from "./crew-blocks";
 import { ActionRow, AmountRow, InfoRow, WorkLineRow } from "./crew-rows";
@@ -68,6 +70,7 @@ export function CrewWorkRecord({
   onOpenClient: (clientId: string) => void;
 }) {
   const t = useThemeColors();
+  const country = useDefaultCountry();
   const toast = useToast();
   const update = useUpdateAppointment();
   const [comment, setComment] = useState(appointment.comment ?? "");
@@ -166,7 +169,7 @@ export function CrewWorkRecord({
               <Divider inset={16} />
               <ActionRow
                 icon={<Phone color={t.accent} size={ICON.sm} />}
-                title={phone}
+                title={formatPhoneForDisplay(phone, country)}
                 subtitle="Позвонить"
                 onPress={() => void Linking.openURL(`tel:${phone.replace(/[^+\d]/g, "")}`)}
               />

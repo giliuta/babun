@@ -21,6 +21,8 @@ import {
 import { useClients } from "@/features/clients/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { useDefaultCountry } from "@/features/clients/default-country";
+import { formatPhoneForDisplay } from "@/features/clients/phone";
 
 // ВЫБОР КЛИЕНТА — ОДНА ШТОРКА НА ВЕСЬ ПРОДУКТ (владелец 2026-09-10: «если я
 // прошу „выбрать клиента", архитектура этой шторки должна быть везде
@@ -116,6 +118,9 @@ export function ClientPickerSheet({
   onExited?: () => void;
 }) {
   const t = useThemeColors();
+  // Номер — тем же правилом, что в списке клиентов (аудит 29.09: в списке
+  // «99 000 001», а здесь тот же человек был «+357 99000001»).
+  const country = useDefaultCountry();
   const { data: all = [] } = useClients();
   const clients = given ?? all;
   const [q, setQ] = useState("");
@@ -283,7 +288,7 @@ export function ClientPickerSheet({
                   </>
                 ) : undefined
               }
-              hint={c.phone || undefined}
+              hint={c.phone ? formatPhoneForDisplay(c.phone, country) : undefined}
               initial={c.full_name || "?"}
               selected={c.id === selectedId}
               accessibilityLabel={[

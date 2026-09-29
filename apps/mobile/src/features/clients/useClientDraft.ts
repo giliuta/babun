@@ -276,6 +276,10 @@ export function useClientDraft(
   }, [tenantId, scope?.kind, draftClient]);
 
   const sequence = useRef(0);
+  // Номер, для которого фоновая проверка уже ответила (аудит 29.09:
+  // «создание клиента крутится 4–6 с»). Повторять её перед записью для того
+  // же номера — лишняя поездка в сеть; арбитр всё равно UNIQUE-индекс базы.
+  const checkedFor = useRef<string | null>(null);
   // Засов «идёт создание» — синхронный, в отличие от create.isPending.
   const savingRef = useRef(false);
   useEffect(() => {
@@ -287,7 +291,10 @@ export function useClientDraft(
     }
     const timer = setTimeout(async () => {
       const existing = await findDuplicate(e164);
-      if (sequence.current === currentSequence) setDuplicate(existing);
+      if (sequence.current === currentSequence) {
+        setDuplicate(existing);
+        checkedFor.current = e164;
+      }
     }, 350);
     return () => clearTimeout(timer);
   }, [active, e164, tenantId, findDuplicate]);
@@ -400,8 +407,9 @@ export function useClientDraft(
     await new Promise((resolve) => setTimeout(resolve, 80));
     const d = draftRef.current;
 
-    // Дебаунс мог не успеть к быстрому тапу — перепроверяем перед записью.
-    if (e164 && !duplicate && tenantId) {
+    // Дебаунс мог не успеть к быстрому тапу — тогда перепроверяем перед
+    // записью. Успел для этого же номера — ответ уже есть, в сеть не ходим.
+    if (e164 && !duplicate && tenantId && checkedFor.current !== e164) {
       const existing = await findDuplicate(e164);
       if (existing) {
         haptics.warning();

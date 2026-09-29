@@ -448,14 +448,14 @@ describe("двери шапки: своя компания, что бы ни б�
 
   test("своя компания открыта — аналитика без хвоста", () => {
     assert.deepEqual(clientsInsightsHref(own(true)), {
-      pathname: "/cabinet/insights",
+      pathname: "/clients/insights",
       params: {},
     });
   });
 
   test("в календаре чужая — аналитика несёт свою компанию", () => {
     assert.deepEqual(clientsInsightsHref(own(false)), {
-      pathname: "/cabinet/insights",
+      pathname: "/clients/insights",
       params: { tenant: AIRFIX },
     });
   });

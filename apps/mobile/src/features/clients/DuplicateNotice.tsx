@@ -9,6 +9,8 @@ import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
+import { useDefaultCountry } from "@/features/clients/default-country";
+import { formatPhoneForDisplay } from "@/features/clients/phone";
 
 // «ПОХОЖЕ, ЭТО ОДИН ЧЕЛОВЕК».
 //
@@ -97,6 +99,7 @@ export function useDuplicateOf(client: Client | null | undefined): string | null
 
 export function DuplicateNotice({ client }: { client: Client }) {
   const t = useThemeColors();
+  const country = useDefaultCountry();
   const dup = useDuplicateHit(client);
   if (!dup) return null;
 
@@ -133,7 +136,7 @@ export function DuplicateNotice({ client }: { client: Client }) {
           numberOfLines={2}
           style={{ marginTop: 2, fontSize: 13, color: t.sub }}
         >
-          {`${dup.full_name || "Без имени"}${dup.phone ? ` · ${dup.phone}` : ""}`}
+          {`${dup.full_name || "Без имени"}${dup.phone ? ` · ${formatPhoneForDisplay(dup.phone, country)}` : ""}`}
         </Text>
       </View>
     </View>

@@ -6,7 +6,7 @@ describe("splitNameAndPhone — вставка «имя + номер» в пол
   test("контакт из WhatsApp: имя остаётся, номер уходит в телефон", () => {
     assert.deepEqual(splitNameAndPhone("Мария Спиру +357 99 123456", "CY"), {
       name: "Мария Спиру",
-      phone: "+357 99 123456",
+      phone: "+357 99 123 456",
       e164: "+35799123456",
     });
   });

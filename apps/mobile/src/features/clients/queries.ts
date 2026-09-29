@@ -643,6 +643,23 @@ export function useArchiveClients() {
       }
       return { archived, failed, archivedIds };
     },
+    // СТРОКА УХОДИТ СРАЗУ (аудит 29.09: «тост „Клиент в удалённых“ уже
+    // показан, а клиент ещё ~5 с в списке и счётчик „11 клиентов“»). Список
+    // ждал перечитки с сервера. Теперь убранные исчезают из списка до ответа;
+    // отказ возвращает список как был, а частичную неудачу исправит
+    // перечитка в `onSettled` — не дошедшие до архива вернутся сами.
+    onMutate: async ({ ids }) => {
+      await qc.cancelQueries({ queryKey: ["clients"] });
+      const previous = qc.getQueriesData<Client[]>({ queryKey: ["clients"] });
+      const gone = new Set(ids);
+      qc.setQueriesData<Client[]>({ queryKey: ["clients"] }, (list) =>
+        Array.isArray(list) ? list.filter((c) => !gone.has(c.id)) : list,
+      );
+      return { previous };
+    },
+    onError: (_e, _input, context) => {
+      for (const [key, value] of context?.previous ?? []) qc.setQueryData(key, value);
+    },
     onSuccess: ({ archivedIds }) => {
       void Promise.all(archivedIds.map(cancelClientReminder));
     },

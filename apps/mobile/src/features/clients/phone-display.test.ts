@@ -5,7 +5,9 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   composePhone,
+  formatPhoneAsYouType,
   formatPhoneForDisplay,
+  groupCyprusDigits,
   nationalPart,
   phoneCountryOf,
   tryToE164,
@@ -19,8 +21,12 @@ const read = (relative: string) => readFileSync(resolve(here, relative), "utf8")
 
 describe("номер для глаз", () => {
   test("своя страна — без кода, как диктуют", () => {
-    assert.equal(formatPhoneForDisplay("+35799000101", "CY"), "99 000101");
-    assert.equal(formatPhoneForDisplay("99000101", "CY"), "99 000101");
+    assert.equal(formatPhoneForDisplay("+35799000101", "CY"), "99 000 101");
+    assert.equal(formatPhoneForDisplay("99000101", "CY"), "99 000 101");
+    assert.equal(formatPhoneForDisplay("+357 97 469998", "CY"), "97 469 998");
+  });
+  test("кипрский номер у компании другой страны — с кодом, теми же группами", () => {
+    assert.equal(formatPhoneForDisplay("+35799000101", "GB"), "+357 99 000 101");
   });
   test("чужая страна — с «+кодом»", () => {
     assert.equal(formatPhoneForDisplay("+79161234567", "CY"), "+7 916 123 45 67");
@@ -46,6 +52,21 @@ describe("кнопка связи у номера", () => {
   });
 });
 
+describe("кипрский номер группами 2 · 3 · 3 (аудит 29.09)", () => {
+  test("по мере ввода — сколько набрано", () => {
+    assert.equal(groupCyprusDigits("9"), "9");
+    assert.equal(groupCyprusDigits("9900"), "99 00");
+    assert.equal(groupCyprusDigits("99000001"), "99 000 001");
+    assert.equal(groupCyprusDigits("990000011"), null);
+  });
+  test("поле ввода и живой формат", () => {
+    assert.equal(nationalPart("99000001", "CY"), "99 000 001");
+    assert.equal(formatPhoneAsYouType("99000001", "CY"), "99 000 001");
+    assert.equal(formatPhoneAsYouType("+35799000001", "CY"), "+357 99 000 001");
+    assert.equal(formatPhoneAsYouType("+79161234567", "CY"), "+7 916 123 45 67");
+  });
+});
+
 describe("ввод номера: страна подписью, цифры в поле", () => {
   test("страна узнаётся по набранному коду", () => {
     assert.equal(phoneCountryOf("+35799887766", "CY"), "CY");
@@ -54,8 +75,8 @@ describe("ввод номера: страна подписью, цифры в п
     assert.equal(phoneCountryOf("99887766", "CY"), "CY");
   });
   test("поле держит цифры без кода, в данные — полный номер", () => {
-    assert.equal(nationalPart("+357 99887766", "CY"), "99 887766");
-    assert.equal(composePhone("99 887766", "CY"), "+357 99 887766");
+    assert.equal(nationalPart("+357 99887766", "CY"), "99 887 766");
+    assert.equal(composePhone("99 887 766", "CY"), "+357 99 887 766");
     assert.equal(tryToE164(composePhone("916 123 45 67", "RU"), "CY"), "+79161234567");
     assert.equal(composePhone("", "CY"), "");
     assert.equal(composePhone("+7 916", "CY"), "+7 916");

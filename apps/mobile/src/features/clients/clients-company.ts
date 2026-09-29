@@ -401,12 +401,13 @@ export function clientsSettingsHref() {
   return "/clients/settings" as const;
 }
 
-/** Аналитика клиентов живёт в Кабинете, а он смотрит на компанию УСТРОЙСТВА.
- *  Поэтому своя компания едет в ссылке: по ней экран берёт источник, а
- *  Кабинет — роль в компании экрана. Своя открыта — ссылка без хвоста. */
+/** Аналитика открывается ВНУТРИ вкладки «Клиенты» (аудит 29.09: адрес
+ *  Кабинета зажигал внизу «Кабинет», и «Назад» уводил на чужой экран).
+ *  Своя компания едет в ссылке: по ней экран берёт источник. Своя открыта —
+ *  ссылка без хвоста. */
 export function clientsInsightsHref(scope: ClientsScope) {
   return {
-    pathname: "/cabinet/insights" as const,
+    pathname: "/clients/insights" as const,
     params: scope.isActive ? {} : { tenant: scope.tenantId },
   };
 }
