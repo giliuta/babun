@@ -3,13 +3,14 @@ import type { AccountKind, AccountScope } from "@babun/shared/local/finance/acco
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { paymentAccountsQueryKey } from "@/lib/company-query-keys";
+import { sortPaymentAccounts } from "./payment-accounts-order";
 
 // СЧЕТА, ДОСТУПНЫЕ ДЛЯ ПРИЁМА ДЕНЕГ ПО ЭТОЙ ЗАЯВКЕ.
 //
 // Отдельный RPC, а не обычный список счетов: тот owner-only и несёт балансы.
 // Здесь нужен ровно набор «куда можно положить» — без сумм, зато видимый
-// всем, кто принимает деньги. Порядок задаёт сервер: сначала счета своей
-// команды, потом общие; человек тапает первый попавшийся правильный.
+// всем, кто принимает деньги. Порядок плиток — ручка на странице «Счета»
+// (см. queryFn ниже).
 
 // Значок и цвет — те же, что человек выбрал счёту в финансах: проекция
 // `list_payment_accounts_safe` отдаёт их с 2026-08-15, и плитки блока «Оплата»
@@ -53,6 +54,7 @@ export function useTeamPaymentAccounts(teamId: string | null | undefined) {
   const tenantId = useTenantId();
   return useQuery({
     ...paymentAccountsQuery(tenantId, teamId),
+    select: sortPaymentAccounts,
     enabled: !!tenantId && !!teamId,
     // НЕ ЗАГРУЗИЛОСЬ — ПРОБУЕМ СНОВА, ПОКА ЭКРАН ОТКРЫТ (владелец 2026-09-24:
     // «оплата у клиента не записывается»). Обрыв связи на открытии записи
