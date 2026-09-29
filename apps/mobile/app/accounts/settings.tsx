@@ -23,7 +23,6 @@ import {
 import {
   accountEditParam,
   accountRowMark,
-  cashOnHandLine,
   presetTeamFor,
 } from "@/features/finances/accounts-page/page-rules";
 import { useHideAccount } from "@/features/finances/accounts-page/use-hide-account";
@@ -37,9 +36,7 @@ import {
   financeAccountsHref,
   sumAccountBalances,
 } from "@/features/finances/accounts-sections";
-import { todayYmd } from "@/features/invoices/format";
 import { useTeams } from "@/features/reference/queries";
-import { useCalendarSettings } from "@/features/settings/local-settings";
 
 // СЧЕТА — ОДНА СТРАНИЦА ЗА ДВУМЯ ДВЕРЯМИ (владелец 2026-09-15).
 //
@@ -80,10 +77,6 @@ export default function AccountsScreen() {
   const teamsQuery = useTeams({ includeInactive: true });
   const unassigned = useUnassignedMoney();
   const reorder = useReorderAccounts();
-  // «Сегодня» компании, а не телефона: срок «на руках» считается в тех же
-  // сутках, что лист перевода.
-  const calendarSettings = useCalendarSettings();
-  const today = todayYmd(calendarSettings.data?.timezone ?? "Europe/Nicosia");
   const [dragging, setDragging] = useState(false);
   // Оптимистичные позиции: после отпускания пальца строка обязана остаться
   // там, куда её положили, а не прыгнуть обратно на те 300 мс, пока сервер
@@ -292,7 +285,6 @@ export default function AccountsScreen() {
                             )
                           : "Закрыт"
                       }
-                      sub={account.is_active ? cashOnHandLine(account, today) : null}
                       handle={handle}
                       onPress={() => setEditor({ open: true, id: account.id })}
                       onHide={() => hider.hide(account)}
