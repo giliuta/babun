@@ -1,84 +1,182 @@
-import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { CircleAlert, CircleCheck, History, Send } from "lucide-react-native";
+import {
+  AlarmClock,
+  CalendarClock,
+  CalendarPlus,
+  CalendarX,
+  CircleAlert,
+  CircleCheck,
+  Clock,
+  EyeOff,
+  Hand,
+  Heart,
+  History,
+  Repeat,
+  RotateCcw,
+  Send,
+  Trash2,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react-native";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SwipeRow } from "@/components/ui/SwipeRow";
 import { SwitchRow } from "@/components/ui/SwitchRow";
+import { GUTTER } from "@/components/ui/tokens";
 import { useTeams } from "@/features/reference/queries";
+import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
-import { useSaveSmsSettings, useSmsAccount, useSmsHistory, type SmsEvent } from "./sms-account";
+import {
+  useDeleteTeamTemplate,
+  useSaveSmsSettings,
+  useSetTeamTemplateEnabled,
+  useSmsAccount,
+  useSmsHistory,
+  useTeamTemplates,
+  whenWords,
+  type SmsTeamTemplate,
+  type SmsWhen,
+} from "./sms-account";
 import { teamStats } from "./sms-model";
-import { SmsEventRows } from "./SmsEventRows";
-import { SmsEventSheet } from "./SmsEventSheet";
 import { SmsHistoryRow } from "./SmsHistoryRow";
-import { euro, monthWords } from "./sms-words";
+import { balanceWords, euro, monthWords } from "./sms-words";
 
-// SMS ОДНОЙ КОМАНДЫ (STORY-089; владелец 24.09: «шаблон под каждую команду…
-// отправка через команду один… сколько сообщений отправилось через команду
-// один, сколько через команду три»). Живёт внутри «Клиенты» → «SMS» —
-// решение владельца «всё в клиентах», в календаре SMS нет.
-//   • «Отправлять через сервис» — та же галочка, что «календари, где можно»;
-//   • СЧЁТ МЕСЯЦА — сколько ушло, частей и денег, доставлено / не дошло;
-//   • СОБЫТИЯ — «как у компании», свой текст или «не отправлять»;
-//   • ИСТОРИЯ — последние сообщения этой команды и дверь ко всем.
+// SMS ОДНОЙ КОМАНДЫ — В НАСТРОЙКАХ КАЛЕНДАРЯ (STORY-089; владелец 29.09:
+// «открываю Команда 1 → SMS — все шаблоны этой команды; Команда 3 —
+// добавляю заново… баланс единый, независимо от команды»).
+//
+// Блоки сверху вниз:
+//   • БАЛАНС — общий у компании: одна строка-дверь в Кабинет → SMS, где
+//     пополняют и видят всё;
+//   • ОТПРАВКА — «Отправлять SMS этой команды»;
+//   • ШАБЛОНЫ — строка на шаблон: название и «когда» («Накануне в 18:00»).
+//     Тап — настройка; свайп влево — «Удалить», вправо — «Выключить» /
+//     «Включить» (канон справочников, как у типов событий и меток);
+//   • СЧЁТ МЕСЯЦА — сколько ушло, доставлено, не доставлено;
+//   • ИСТОРИЯ — последние сообщения команды и дверь ко всем.
+// Действие экрана одно — «Добавить шаблон» внизу.
+
+/** Значок «когда» — строка читается глазом раньше, чем словом. */
+const WHEN_ICON: Record<SmsWhen, LucideIcon> = {
+  manual: Hand,
+  created: CalendarPlus,
+  before: AlarmClock,
+  day_before: Clock,
+  rescheduled: CalendarClock,
+  cancelled: CalendarX,
+  after: Heart,
+  repeat: Repeat,
+};
 
 export function SmsTeamScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  const { teamId = "" } = useLocalSearchParams<{ teamId?: string }>();
+  const params = useLocalSearchParams<{ team?: string }>();
+  const { data: teams = [] } = useTeams();
+  const team = teams.find((x) => x.id === params.team) ?? teams[0];
+  const teamId = team?.id ?? "";
   const account = useSmsAccount();
   const save = useSaveSmsSettings();
-  const { data: teams = [] } = useTeams();
+  const templates = useTeamTemplates(teamId || null);
+  const toggle = useSetTeamTemplateEnabled();
+  const remove = useDeleteTeamTemplate();
   const history = useSmsHistory(5, { teamId });
-  const [editing, setEditing] = useState<SmsEvent | null>(null);
 
-  const team = teams.find((x) => x.id === teamId);
   const data = account.data;
-  const title = team?.name ?? "Команда";
+  const owner = data?.owner;
+  const subtitle = team?.name;
 
-  if (account.isLoading) {
+  if (account.isLoading || templates.isLoading) {
     return (
       <Screen edges={["top"]}>
-        <ScreenHeader title={title} />
+        <ScreenHeader title="SMS" subtitle={subtitle} />
         <EmptyState state="loading" fill />
       </Screen>
     );
   }
-  if (account.isError || !data?.owner || !teamId) {
+  if (account.isError || templates.isError || !data || !owner || !teamId) {
+    const error = account.error ?? templates.error;
     return (
       <Screen edges={["top"]}>
-        <ScreenHeader title={title} />
+        <ScreenHeader title="SMS" subtitle={subtitle} />
         <EmptyState
           state="error"
           fill
-          subtitle={account.error instanceof Error ? account.error.message : undefined}
-          action={{ label: "Повторить", onPress: () => void account.refetch() }}
+          subtitle={error instanceof Error ? error.message : undefined}
+          action={{
+            label: "Повторить",
+            onPress: () => {
+              void account.refetch();
+              void templates.refetch();
+            },
+          }}
         />
       </Screen>
     );
   }
 
+  const list = templates.data ?? [];
   const on = data.teamIds.includes(teamId);
   const stats = teamStats(data, teamId);
   const items = history.data ?? [];
 
+  const open = (template: SmsTeamTemplate | null) =>
+    router.push({
+      pathname: "/calendar/sms-template",
+      params: template ? { team: teamId, id: template.id } : { team: teamId },
+    } as unknown as Href);
+
+  const drop = (template: SmsTeamTemplate) =>
+    confirmThen(
+      `Удалить шаблон «${template.name}»?`,
+      {
+        message: "Отправленные SMS останутся в истории, неотправленные по нему — не уйдут.",
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      () =>
+        remove.mutate(template.id, {
+          onError: (e) => notify("Не удалось удалить", e instanceof Error ? e.message : undefined),
+        }),
+    );
+
+  const flip = (template: SmsTeamTemplate) =>
+    toggle.mutate(
+      { id: template.id, enabled: !template.enabled },
+      { onError: (e) => notify("Не удалось сохранить", e instanceof Error ? e.message : undefined) },
+    );
+
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title={title} />
+      <ScreenHeader title="SMS" subtitle={subtitle} />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
+        <SectionEyebrow>Баланс</SectionEyebrow>
+        <SectionCard>
+          <SettingsRow
+            tile="neutral"
+            icon={Wallet}
+            title="Баланс компании"
+            sub={balanceWords(owner.balanceCents, owner.freeLeft, data.priceCents)}
+            value={euro(owner.balanceCents)}
+            valueQuiet={owner.balanceCents === 0}
+            onPress={() => router.push("/cabinet/sms" as Href)}
+          />
+        </SectionCard>
+
         <SectionEyebrow>Отправка</SectionEyebrow>
         <SectionCard>
           <SwitchRow
-            label="Отправлять через сервис"
-            hint={data.enabled ? undefined : "Выключено у всей компании"}
+            label="Отправлять SMS этой команды"
+            hint={data.enabled ? undefined : "Выключено в Кабинете → SMS"}
             value={on}
             disabled={!data.enabled}
             onChange={(next) =>
@@ -90,6 +188,47 @@ export function SmsTeamScreen() {
               )
             }
           />
+        </SectionCard>
+
+        <SectionEyebrow>
+          {list.length > 0 ? `Шаблоны · ${list.length}` : "Шаблоны"}
+        </SectionEyebrow>
+        <SectionCard>
+          {list.length === 0 ? (
+            <SettingsRow tile="neutral" icon={Send} title="Шаблонов нет" />
+          ) : (
+            list.map((template, index) => (
+              <View key={template.id}>
+                {index > 0 ? <Divider inset={48} /> : null}
+                <SwipeRow
+                  label="Удалить"
+                  color={t.danger}
+                  icon={Trash2}
+                  accessibilityLabel={`Удалить шаблон ${template.name}`}
+                  onAction={() => drop(template)}
+                  leading={{
+                    label: template.enabled ? "Выключить" : "Включить",
+                    color: template.enabled ? t.warning : t.success,
+                    icon: template.enabled ? EyeOff : RotateCcw,
+                    accessibilityLabel: template.enabled
+                      ? `Выключить шаблон ${template.name}`
+                      : `Включить шаблон ${template.name}`,
+                    onAction: () => flip(template),
+                  }}
+                >
+                  <View style={{ backgroundColor: t.surface, opacity: template.enabled ? 1 : 0.5 }}>
+                    <SettingsRow
+                      tile="neutral"
+                      icon={WHEN_ICON[template.trigger]}
+                      title={template.name}
+                      sub={template.enabled ? whenWords(template) : `Выключен · ${whenWords(template)}`}
+                      onPress={() => open(template)}
+                    />
+                  </View>
+                </SwipeRow>
+              </View>
+            ))
+          )}
         </SectionCard>
 
         <SectionEyebrow>{monthWords(new Date())}</SectionEyebrow>
@@ -121,8 +260,6 @@ export function SmsTeamScreen() {
           />
         </SectionCard>
 
-        <SmsEventRows account={data} teamId={teamId} onOpen={setEditing} />
-
         <SectionEyebrow>История</SectionEyebrow>
         <SectionCard>
           {items.map((item, index) => (
@@ -144,7 +281,9 @@ export function SmsTeamScreen() {
         </SectionCard>
       </ScrollView>
 
-      <SmsEventSheet account={data} event={editing} teamId={teamId} onClose={() => setEditing(null)} />
+      <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+        <GradientButton label="Добавить шаблон" onPress={() => open(null)} />
+      </View>
     </Screen>
   );
 }

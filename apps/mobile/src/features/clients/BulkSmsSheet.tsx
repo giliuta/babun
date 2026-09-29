@@ -10,7 +10,8 @@
 //     body. Offered only when the chosen text has no [Имя] token, so the
 //     operator never silently loses the personalisation.
 //
-// Text comes from the operator's own SMS templates (useSmsTemplates); a
+// Text comes from the SMS templates of every team the operator sees
+// (useTeamTemplates(null), same text once — STORY-089 29.09); a
 // blank «Свой текст» option lets them type ad-hoc. Recipients without a
 // dialable phone are counted out up front (parity with the web sheet).
 
@@ -31,7 +32,7 @@ import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { useSmsTemplates } from "@/features/settings/sms-templates";
+import { uniqueByBody, useTeamTemplates } from "@/features/sms/sms-account";
 import { notify } from "@/lib/notify";
 import {
   bodyHasNameToken,
@@ -54,7 +55,7 @@ export function BulkSmsSheet({
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { data: templates = [] } = useSmsTemplates();
+  const { data: templates = [] } = useTeamTemplates(null);
   const [body, setBody] = useState("");
   // Sequential cursor — index of the recipient whose composer opens next.
   const [seqIdx, setSeqIdx] = useState<number | null>(null);
@@ -66,7 +67,7 @@ export function BulkSmsSheet({
   const noPhone = recipients.length - withPhone.length;
 
   const usableTemplates = useMemo(
-    () => templates.filter((tpl) => tpl.enabled && tpl.body.trim()),
+    () => uniqueByBody(templates.filter((tpl) => tpl.enabled && tpl.body.trim())),
     [templates],
   );
 

@@ -8,8 +8,8 @@ import { FieldLabel } from "@/components/ui/Field";
 import { useThemeColors } from "@/theme/colors";
 import { smsVars } from "./sms-compose";
 
-// ТЕКСТ SMS — ОДНО ПОЛЕ НА ВСЕ ЛИСТЫ (STORY-089): шаблон ручной отправки и
-// текст события (новая запись, напоминание, отмена…) пишутся одинаково.
+// ТЕКСТ SMS — ОДНО ПОЛЕ (STORY-089): текст шаблона команды пишется здесь,
+// в настройке шаблона.
 //   • «Текст» — поле; под ним — сколько знаков и частей SMS: сервис берёт
 //     деньги за часть, а кириллица — 70 знаков на часть;
 //   • «Вставить» — фишки полей, встают туда, где стоит курсор;
@@ -30,6 +30,7 @@ function sampleVars() {
     total: 80,
     debt: 40,
     company: "Компания",
+    link: "babun.app/r/Ab3dE5fG7hJ9",
   });
 }
 
@@ -44,14 +45,17 @@ export function SmsTextField({
   editable?: boolean;
 }) {
   const t = useThemeColors();
-  const [cursor, setCursor] = useState(value.length);
+  // Где стоит курсор. `null` — человек его ещё не ставил: поле встаёт в
+  // конец. Текст мог прийти целиком снаружи («Готовые»), и курсор с
+  // открытия (0) поставил бы поле в самое начало.
+  const [cursor, setCursor] = useState<number | null>(null);
   const sample = useMemo(sampleVars, []);
   const preview = value.trim() ? renderTemplate(value, sample) : "";
   const encoding = analyzeSmsEncoding(preview);
   const multipart = encoding.segments > 1;
 
   const insert = (token: string) => {
-    const at = Math.min(cursor, value.length);
+    const at = cursor == null ? value.length : Math.min(cursor, value.length);
     // Токен не липнет к слову: пробел ставится, только если его нет рядом.
     const before = at > 0 && !/\s$/.test(value.slice(0, at)) ? " " : "";
     onChange(value.slice(0, at) + before + token + value.slice(at));

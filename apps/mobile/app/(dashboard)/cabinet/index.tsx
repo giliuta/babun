@@ -10,10 +10,13 @@
 // подпись с живым состоянием, а не пояснение:
 //   • карта человека → «Профиль»;
 //   • МОИ КОМПАНИИ — приглашения и компании, где он состоит (роль, календари);
-//   • КОМПАНИЯ — «Архив» (только владельцу): удалённые календари, откуда их
-//     возвращают или стирают навсегда. Это не настройка раздела, а место
-//     хранения — и поставил его сюда сам владелец (2026-09-21: «архив засунь
-//     в Кабинет»);
+//   • КОМПАНИЯ — «SMS» и «Архив» (только владельцу). SMS — баланс,
+//     пополнение и отправка всей компании (владелец 2026-09-29: «баланс и
+//     пополнение — это всё будет Кабинет SMS»); шаблоны команд — за
+//     шестерёнкой календаря. Архив — удалённые календари, откуда их
+//     возвращают или стирают навсегда. Это не настройки раздела, а деньги и
+//     место хранения — и поставил их сюда сам владелец (2026-09-21: «архив
+//     засунь в Кабинет»);
 //   • ЭТОТ ТЕЛЕФОН — уведомления и синхронизация;
 //   • АККАУНТ — вход и безопасность, «О приложении» (там же версия, поэтому
 //     отдельной подписи версии внизу нет);
@@ -36,6 +39,7 @@ import { AboutRow } from "@/features/cabinet/AboutRow";
 import { ArchiveRow } from "@/features/cabinet/ArchiveRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
 import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
+import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
 import { useCurrentRole, usePlanAllows } from "@/features/settings/tenant";
 import { signOutAndWipe } from "@/lib/auth-clear";
@@ -85,6 +89,8 @@ export default function CabinetHome() {
                   <Divider inset={48} />
                 </>
               ) : null}
+              <SmsCabinetRow />
+              <Divider inset={48} />
               <ArchiveRow />
             </SectionCard>
           </>

@@ -5,21 +5,29 @@ import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/features/settings/tenant";
 import {
   applyPatch,
-  applyRule,
   parseSmsAccount,
   parseSmsHistory,
   parseSmsRecordLog,
   type SmsAccount,
-  type SmsRulePatch,
   type SmsSettingsPatch,
 } from "./sms-model";
+import {
+  draftPayload,
+  parseTeamTemplate,
+  parseTeamTemplates,
+  type SmsTeamTemplate,
+  type TemplateDraft,
+} from "./sms-team-templates";
 
 export * from "./sms-model";
+export * from "./sms-team-templates";
 
 // КАБИНЕТ SMS — ЧТЕНИЕ И ЗАПИСЬ (STORY-089, волна 2).
 //
 // Всё решает база (`sms_account`, `sms_save_settings`, `sms_history`,
-// `sms_send_manual`): экран только показывает и просит. Баланс приходит
+// `sms_send_manual`, шаблоны команд `sms_team_templates` / `sms_save_team_template`
+// / `sms_set_team_template_enabled` / `sms_delete_team_template`): экран
+// только показывает и просит. Баланс приходит
 // только владельцу — сотрудник узнаёт лишь, можно ли отправить через сервис
 // в его календаре и хватает ли денег (`can_pay`).
 
@@ -27,6 +35,8 @@ export const smsAccountKey = (tenantId: string | null) => ["sms-account", tenant
 export const smsHistoryKey = (tenantId: string | null) => ["sms-history", tenantId];
 /** SMS записи и клиента — один префикс: после отправки перечитываются оба. */
 export const smsLogKey = (tenantId: string | null) => ["sms-log", tenantId];
+/** Шаблоны команд: все и одной команды — один префикс. */
+export const smsTemplatesKey = (tenantId: string | null) => ["sms-team-templates", tenantId];
 
 export function useSmsAccount() {
   const tenantId = useTenantId();
@@ -69,34 +79,103 @@ export function useSaveSmsSettings() {
   });
 }
 
-/** Правка события компании или команды. Строка откликается сразу, ответ
- *  базы — истина после. */
-export function useSaveSmsRule() {
+/** Шаблоны команды (`teamId`) или всех видимых команд (`null`). */
+export function useTeamTemplates(teamId: string | null) {
+  const tenantId = useTenantId();
+  const role = useDataRole();
+  return useQuery({
+    queryKey: [...smsTemplatesKey(tenantId), teamId],
+    enabled: !!tenantId && role.isSuccess && role.data != null,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("sms_team_templates", { p_team_id: teamId ?? undefined });
+      if (error) throw new Error(error.message);
+      return parseTeamTemplates(data);
+    },
+  });
+}
+
+/** После правки шаблона перечитываются списки, счёт шаблонов команд и
+ *  шаблоны в листах записи. */
+function useTemplatesChanged() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: smsTemplatesKey(tenantId) });
+    void qc.invalidateQueries({ queryKey: smsAccountKey(tenantId) });
+    void qc.invalidateQueries({ queryKey: smsLogKey(tenantId) });
+  };
+}
+
+export function useSaveTeamTemplate() {
+  const changed = useTemplatesChanged();
   return useMutation({
-    mutationFn: async (patch: SmsRulePatch) => {
-      const { data, error } = await supabase.rpc("sms_save_rule", {
-        p_team_id: patch.teamId,
-        p_event: patch.event,
-        p_mode: patch.mode,
-        p_body: patch.body ?? undefined,
-        p_timing: patch.timing ?? undefined,
+    mutationFn: async (draft: TemplateDraft): Promise<SmsTeamTemplate> => {
+      const { data, error } = await supabase.rpc("sms_save_team_template", {
+        p: draftPayload(draft) as unknown as Json,
       });
       if (error) throw new Error(error.message);
-      return parseSmsAccount(data);
+      const saved = parseTeamTemplate(data);
+      if (!saved) throw new Error("Шаблон не сохранился");
+      return saved;
     },
-    onMutate: async (patch) => {
-      const key = smsAccountKey(tenantId);
+    onSettled: changed,
+    meta: { errorHandled: true },
+  });
+}
+
+/** Включить / выключить: строка откликается сразу, ответ базы — после. */
+export function useSetTeamTemplateEnabled() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  const changed = useTemplatesChanged();
+  return useMutation({
+    mutationFn: async (input: { id: string; enabled: boolean }) => {
+      const { error } = await supabase.rpc("sms_set_team_template_enabled", {
+        p_id: input.id,
+        p_enabled: input.enabled,
+      });
+      if (error) throw new Error(error.message);
+      return input;
+    },
+    onMutate: async (input) => {
+      const key = smsTemplatesKey(tenantId);
       await qc.cancelQueries({ queryKey: key });
-      const before = qc.getQueryData<SmsAccount>(key);
-      if (before) qc.setQueryData<SmsAccount>(key, applyRule(before, patch));
+      const before = qc.getQueriesData<SmsTeamTemplate[]>({ queryKey: key });
+      qc.setQueriesData<SmsTeamTemplate[]>({ queryKey: key }, (list) =>
+        list?.map((x) => (x.id === input.id ? { ...x, enabled: input.enabled } : x)),
+      );
       return { before };
     },
-    onError: (_e, _patch, context) => {
-      if (context?.before) qc.setQueryData(smsAccountKey(tenantId), context.before);
+    onError: (_e, _input, context) => {
+      for (const [key, value] of context?.before ?? []) qc.setQueryData(key, value);
     },
-    onSuccess: (account) => qc.setQueryData(smsAccountKey(tenantId), account),
+    onSettled: changed,
+    meta: { errorHandled: true },
+  });
+}
+
+export function useDeleteTeamTemplate() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  const changed = useTemplatesChanged();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.rpc("sms_delete_team_template", { p_id: id });
+      if (error) throw new Error(error.message);
+      return id;
+    },
+    // Строка уходит сразу; отказ базы возвращает её на место.
+    onMutate: async (id) => {
+      const key = smsTemplatesKey(tenantId);
+      await qc.cancelQueries({ queryKey: key });
+      const before = qc.getQueriesData<SmsTeamTemplate[]>({ queryKey: key });
+      qc.setQueriesData<SmsTeamTemplate[]>({ queryKey: key }, (list) => list?.filter((x) => x.id !== id));
+      return { before };
+    },
+    onError: (_e, _id, context) => {
+      for (const [key, value] of context?.before ?? []) qc.setQueryData(key, value);
+    },
+    onSettled: changed,
     meta: { errorHandled: true },
   });
 }

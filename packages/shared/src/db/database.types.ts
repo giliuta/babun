@@ -5178,17 +5178,9 @@ export type Database = {
         }
         Returns: Json[]
       }
-      sms_save_rule: {
-        Args: {
-          p_body?: string
-          p_event: string
-          p_mode: string
-          p_team_id: string
-          p_timing?: number
-        }
-        Returns: Json
-      }
+      sms_delete_team_template: { Args: { p_id: string }; Returns: boolean }
       sms_save_settings: { Args: { p: Json }; Returns: Json }
+      sms_save_team_template: { Args: { p: Json }; Returns: Json }
       sms_send_manual: {
         Args: {
           p_appointment_id: string
@@ -5198,6 +5190,11 @@ export type Database = {
         }
         Returns: string
       }
+      sms_set_team_template_enabled: {
+        Args: { p_enabled: boolean; p_id: string }
+        Returns: boolean
+      }
+      sms_team_templates: { Args: { p_team_id?: string }; Returns: Json[] }
       write_sms_templates_safe: { Args: { p_templates: Json }; Returns: Json }
     }
     Enums: {

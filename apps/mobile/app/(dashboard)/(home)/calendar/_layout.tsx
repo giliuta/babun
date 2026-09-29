@@ -40,11 +40,7 @@ export default function CalendarSettingsLayout() {
     />
   );
   const isIndex = pathname === "/calendar" || pathname === "/calendar/";
-  // ШАБЛОНЫ SMS открываются и из листа «SMS» в записи — сотруднику с правом
-  // «Шаблоны SMS». Замок настроек календаря (только владелец) их не держит:
-  // экран сам спрашивает своё право (`useSmsTemplates` → `accessGate`).
-  const smsTemplates = pathname.startsWith("/calendar/sms-templates");
-  if (isIndex || smsTemplates) return stack;
+  if (isIndex) return stack;
   return (
     <RoleCapabilityBoundary capability="manage-calendar-settings" title="Календарь">
       {stack}

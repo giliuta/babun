@@ -1,9 +1,5 @@
 import { money } from "@babun/shared/common/utils/money";
-import {
-  renderTemplate,
-  templateTokenKeys,
-  type SmsTemplate,
-} from "@babun/shared/local/sms-templates";
+import { renderTemplate, templateTokenKeys } from "@babun/shared/local/sms-templates";
 
 // SMS ПО ШАБЛОНУ СО СВОЕГО ТЕЛЕФОНА (STORY-089, волна 1).
 //
@@ -138,15 +134,24 @@ export function fillTemplate(body: string, vars: SmsVars): string | null {
   return renderTemplate(body, vars).replace(/[ \t]{2,}/g, " ").trim();
 }
 
-export interface SmsOption {
-  template: SmsTemplate;
+/** Что нужно от шаблона листу: шаблон команды (`sms_team_templates`) и
+ *  прежний шаблон компании отвечают одинаково. */
+export interface SmsTemplateLike {
+  id: string;
+  name: string;
+  body: string;
+  enabled: boolean;
+}
+
+export interface SmsOption<T extends SmsTemplateLike = SmsTemplateLike> {
+  template: T;
   text: string;
 }
 
 /** Шаблоны, готовые к отправке: включённые и заполняемые целиком, в порядке
- *  списка компании. */
-export function smsOptions(templates: readonly SmsTemplate[], vars: SmsVars): SmsOption[] {
-  const out: SmsOption[] = [];
+ *  списка. */
+export function smsOptions<T extends SmsTemplateLike>(templates: readonly T[], vars: SmsVars): SmsOption<T>[] {
+  const out: SmsOption<T>[] = [];
   for (const template of templates) {
     if (!template.enabled) continue;
     const text = fillTemplate(template.body, vars);

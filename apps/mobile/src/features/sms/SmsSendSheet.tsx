@@ -8,12 +8,17 @@ import { Chip } from "@/components/ui/Chip";
 import { FieldLabel } from "@/components/ui/Field";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useToast } from "@/components/ui/Toast";
-import { useSmsTemplates } from "@/features/settings/sms-templates";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { fillTemplate } from "./sms-compose";
-import { smsErrorText, useSendSmsViaService } from "./sms-account";
+import {
+  smsErrorText,
+  useAppointmentLink,
+  useSendSmsViaService,
+  wantsLink,
+  type SmsTeamTemplate,
+} from "./sms-account";
 import { openSms, useSmsServiceFor, type SmsContext } from "./SmsCompose";
 import { priceOf } from "./sms-words";
 
@@ -21,9 +26,12 @@ import { priceOf } from "./sms-words";
 // нажал кнопку „Отправить SMS“ — и оно сразу отправляет то, что записал…
 // вручную»).
 //
-// Лист открывается уже с готовым текстом: «Запись» — текст «Новая запись»
-// команды, заполненный полями этой записи. Рядом — ручные шаблоны, тап
-// заменяет текст; текст можно поправить рукой. Одно действие внизу:
+// Лист открывается уже с готовым текстом: первый шаблон команды записи,
+// заполненный её полями. Рядом — остальные шаблоны команды (владелец 29.09:
+// «написал шаблон — отправил клиенту»), тап заменяет текст; текст можно
+// поправить рукой. Шаблон с полем, которого у записи нет, не предлагается.
+// [Ссылка] — ссылка «Подтвердить / Отменить» этой записи: её выдаёт база,
+// пока она не пришла, такой шаблон в выборе не стоит. Одно действие внизу:
 //   • сервис подключён и календарь разрешён — «Отправить» уходит сразу,
 //     с баланса компании;
 //   • иначе (или выбрано «С телефона») — «Сообщения» с этим текстом.
@@ -41,35 +49,35 @@ export function SmsSendSheet({
   visible,
   context,
   phone,
-  confirmBody,
+  templates,
   onClose,
 }: {
   visible: boolean;
   context: SmsContext;
   /** Номер клиента — для «С телефона». */
   phone: string | null;
-  /** Текст «Новая запись» команды записи (ещё с полями). */
-  confirmBody: string;
+  /** Включённые шаблоны команды записи (ещё с полями). */
+  templates: readonly SmsTeamTemplate[];
   onClose: () => void;
 }) {
   const t = useThemeColors();
   const toast = useToast();
   const send = useSendSmsViaService();
   const service = useSmsServiceFor(context);
-  const templates = useSmsTemplates().data ?? [];
+  const needsLink = templates.some((tpl) => wantsLink(tpl.body));
+  const link = useAppointmentLink(context.appointmentId, visible && needsLink).data ?? null;
 
-  // Выбор: «Запись» и ручные шаблоны, которые заполнились полями записи.
+  // Выбор: шаблоны команды, которые заполнились полями записи.
   const choices = useMemo(() => {
+    const vars = link ? { ...context.vars, Link: link } : context.vars;
     const out: { id: string; name: string; text: string }[] = [];
-    const record = confirmBody ? fillTemplate(confirmBody, context.vars) : null;
-    if (record) out.push({ id: "record", name: "Запись", text: record });
     for (const tpl of templates) {
       if (!tpl.enabled || !tpl.body.trim()) continue;
-      const text = fillTemplate(tpl.body, context.vars);
+      const text = fillTemplate(tpl.body, vars);
       if (text) out.push({ id: tpl.id, name: tpl.name, text });
     }
     return out;
-  }, [confirmBody, context.vars, templates]);
+  }, [context.vars, link, templates]);
 
   const [picked, setPicked] = useState<string | null>(null);
   const [text, setText] = useState("");
@@ -99,7 +107,7 @@ export function SmsSendSheet({
           appointmentId: context.appointmentId ?? null,
           clientId: context.clientId ?? null,
           body,
-          templateId: picked && picked !== "record" ? picked : null,
+          templateId: picked,
         },
         {
           onSuccess: () => toast("SMS отправляется", "success"),

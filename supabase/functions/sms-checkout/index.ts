@@ -34,7 +34,7 @@ const RETURN_ORIGINS = [
   "http://localhost:8081",
   "http://localhost:8082",
 ];
-const DEFAULT_RETURN = "https://babun.app/clients/sms";
+const DEFAULT_RETURN = "https://babun.app/cabinet/sms";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

@@ -8,14 +8,11 @@ import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { analyzeSmsEncoding } from "@babun/shared/local/sms-encoding";
 import { SELECT_SHEET_RATIO, SelectList, SelectRow } from "@/components/ui/select-rows";
-import { accessGate } from "@/features/access/my-access";
-import { useMyAccess } from "@/features/access/queries";
-import { useSmsTemplates } from "@/features/settings/sms-templates";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { smsOptions, smsUrlWithBody, type SmsOption, type SmsVars } from "./sms-compose";
-import { smsErrorText, useSendSmsViaService, useSmsAccount } from "./sms-account";
+import { smsErrorText, uniqueByBody, useSendSmsViaService, useSmsAccount, useTeamTemplates } from "./sms-account";
 import { priceOf } from "./sms-words";
 
 // ЧТО ПОДСТАВЛЯТЬ В ШАБЛОН — ОТ ТОГО, ГДЕ НАЖАЛИ «SMS» (STORY-089, волна 1).
@@ -40,14 +37,16 @@ export function SmsComposeProvider({ context, children }: { context: SmsContext 
   return <SmsVarsContext.Provider value={context}>{children}</SmsVarsContext.Provider>;
 }
 
-/** Шаблоны, готовые к отправке с этого места. Пусто — когда подставлять
- *  нечего, шаблонов нет или право «Шаблоны SMS» закрыто.
+/** Шаблоны, готовые к отправке с этого места: у записи — шаблоны её
+ *  команды, у карточки без записи — всех команд, которые человек видит
+ *  (одинаковый текст — одной строкой). Пусто — когда подставлять нечего
+ *  или шаблонов нет. Какие команды видны — решает база.
  *
  *  `name` — чей это номер, если не самого клиента страницы: у строки
  *  человека («Екатерина · бухгалтер») [Имя] — её имя, а не клиента. */
 export function useSmsOptions(name?: string | null): SmsOption[] {
   const context = useContext(SmsVarsContext);
-  const templates = useSmsTemplates().data;
+  const templates = useTeamTemplates(context?.teamId ?? null).data;
   return useMemo(() => {
     if (!context || !templates) return [];
     const vars: SmsVars = { ...context.vars };
@@ -56,7 +55,7 @@ export function useSmsOptions(name?: string | null): SmsOption[] {
       if (first) vars.Name = first;
       else delete vars.Name;
     }
-    return smsOptions(templates, vars);
+    return smsOptions(uniqueByBody(templates), vars);
   }, [context, name, templates]);
 }
 
@@ -83,13 +82,10 @@ export function useSmsServiceFor(
   return { available, priceCents: account?.priceCents ?? 10, context };
 }
 
-/** Может ли человек править шаблоны — тогда у листа есть вход в них. */
+/** Может ли человек править шаблоны — тогда у листа есть вход в них.
+ *  Шаблоны команд правит только владелец (`sms_save_team_template`). */
 export function useCanEditSmsTemplates(): boolean {
-  const role = useCurrentRole().data;
-  const map = useMyAccess().data;
-  return (
-    accessGate({ role, map, blockKey: "company.sms_templates", scope: "company" }) === "write"
-  );
+  return useCurrentRole().data === "owner";
 }
 
 /** Цена отправки до нажатия. В iOS-приложении о деньгах сервиса молчим
@@ -170,7 +166,10 @@ export function SmsTemplateSheet({
             onPress={() => {
               haptics.tap();
               onClose();
-              router.push("/calendar/sms-templates" as Href);
+              const teamId = service.context?.teamId;
+              router.push(
+                (teamId ? { pathname: "/calendar/sms", params: { team: teamId } } : "/calendar/sms") as Href,
+              );
             }}
             accessibilityRole="button"
             accessibilityLabel="Шаблоны SMS"

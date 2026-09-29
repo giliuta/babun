@@ -51,7 +51,7 @@ import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useClients, useCreateClient } from "@/features/clients/queries";
 import { tryToE164 } from "@/features/clients/phone";
-import { useSmsTemplates } from "@/features/settings/sms-templates";
+import { uniqueByBody, useTeamTemplates } from "@/features/sms/sms-account";
 import { useTenant } from "@/features/settings/tenant";
 import { notify } from "@/lib/notify";
 import { chooseOption } from "@/lib/choose";
@@ -245,7 +245,10 @@ export default function ChatThreadScreen() {
   const togglePin = useTogglePin();
   const setStatus = useSetChatStatus();
   const createClient = useCreateClient();
-  const { data: smsTemplates = [] } = useSmsTemplates();
+  // Шаблоны SMS живут у команд (STORY-089, 29.09): в чате — все команды,
+  // которые человек видит, одинаковый текст — одной строкой.
+  const { data: teamTemplates = [] } = useTeamTemplates(null);
+  const smsTemplates = useMemo(() => uniqueByBody(teamTemplates), [teamTemplates]);
   const { data: tenant } = useTenant();
 
   const [draft, setDraft] = useState("");
@@ -853,7 +856,7 @@ export default function ChatThreadScreen() {
                   <Pressable
                     onPress={() => {
                       setQrOpen(false);
-                      router.push("/calendar/sms-templates" as Href);
+                      router.push("/calendar/sms" as Href);
                     }}
                     accessibilityRole="button"
                     accessibilityLabel="Настроить SMS-шаблоны"
