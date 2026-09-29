@@ -14,7 +14,7 @@ import type { Team } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 
 import { AREA_TITLE, type AccessBlock, type AccessLevel } from "../access-map";
-import { CALENDAR_GROUP_TITLE, orderGroupRows, type CalendarGroup } from "./access-summary";
+import { CALENDAR_GROUPS, CALENDAR_GROUP_TITLE, orderGroupRows } from "./access-summary";
 import type { RightsArea } from "./master-draft";
 import { sectionColumns, segmentSlot } from "./rights-columns";
 import { levelSentence, segmentWord } from "./rights-copy";
@@ -45,13 +45,6 @@ export type { RightsFocus };
 // строки блоков календаря, блоки компании стоят в конце своего раздела.
 // Календаря нет вовсе — на странице только строки компании: календарную
 // строку выставить некуда, а пригашенной она читалась бы сломанной.
-
-/** В правах одного календаря разделы называются так же, как в его строке на
- *  карточке: «Записи» и «Деньги». */
-const CALENDAR_SECTION_TITLE: Partial<Record<string, string>> = {
-  calendar: "Записи",
-  finance: "Деньги",
-};
 
 /** Короткие названия под шапкой раздела (аудит 24.09): длинные ломались на
  *  две строки рядом с сегментом, а шапка уже говорит, о чём раздел; фраза
@@ -86,17 +79,12 @@ export function shortRightsTitle(title: string): string {
 export function focusViewProps(
   focus: RightsFocus | undefined,
   teams: readonly Team[],
-): { title?: string; onlyCalendar: boolean; onlyCompany: boolean; group?: CalendarGroup } {
+): { title?: string; onlyCalendar: boolean; onlyCompany: boolean } {
   if (!focus) return { onlyCalendar: false, onlyCompany: false };
   if (focus.kind === "company") {
     return { title: "Права в компании", onlyCalendar: false, onlyCompany: true };
   }
   const name = teams.find((team) => team.id === focus.teamId)?.name;
-  // Страница раздела: «Запись · Команда 1».
-  if (focus.group) {
-    const section = CALENDAR_GROUP_TITLE[focus.group];
-    return { title: name ? `${section} · ${name}` : section, onlyCalendar: true, onlyCompany: false, group: focus.group };
-  }
   return { title: name ?? "Права", onlyCalendar: true, onlyCompany: false };
 }
 
@@ -116,11 +104,7 @@ export function MasterRightsView({
   title = "Права",
   onlyCalendar = false,
   onlyCompany = false,
-  group,
 }: {
-  /** Только строки этого раздела календаря (`calendar.*`, `record.*`,
-   *  `finance.*`) — страница открыта строкой блока «Доступ». */
-  group?: CalendarGroup;
   /** Заголовок: имя календаря, когда страница — права ОДНОГО календаря. */
   title?: string;
   /** Только строки этого календаря, без ленты чипов и без строк компании
@@ -164,19 +148,37 @@ export function MasterRightsView({
     activeTeamId !== null && chips.some((chip) => chip.id === activeTeamId)
       ? activeTeamId
       : (chips[0]?.id ?? null);
-  const sections = rightsSections(blocks, levelOf, onlyCompany ? null : activeId)
+  const registrySections = rightsSections(blocks, levelOf, onlyCompany ? null : activeId)
     .map((section) => ({
-      ...section,
-      rows: orderGroupRows(group, section.rows).filter(
-        (row) =>
-          (onlyCalendar ? row.block.scope === "calendar" : onlyCompany ? row.block.scope !== "calendar" : true) &&
-          (group ? row.block.key.startsWith(`${group}.`) : true),
+      key: section.area as string,
+      area: section.area,
+      title: section.title,
+      rows: section.rows.filter((row) =>
+        onlyCalendar ? row.block.scope === "calendar" : onlyCompany ? row.block.scope !== "calendar" : true,
       ),
     }))
     // Права компании, открытые строкой «Клиенты» или «Компания», — только
     // свой раздел (владелец 29.09: «полностью разграничить»).
-    .filter((section) => !(onlyCompany && area) || section.area === area)
-    .filter((section) => section.rows.length > 0);
+    .filter((section) => !(onlyCompany && area) || section.area === area);
+  // ПРАВА ОДНОЙ КОМАНДЫ — БЛОКАМИ РАЗДЕЛОВ ПРИЛОЖЕНИЯ (владелец 29.09):
+  // «Календарь» (новые, перенос, отмена, события, метки дня, график),
+  // «Запись» (в порядке блоков страницы записи) и «Финансы». В реестре первые
+  // два — один раздел «Записи».
+  const sections = (
+    onlyCalendar
+      ? CALENDAR_GROUPS.map((group) => ({
+          key: group as string,
+          area: (group === "finance" ? "finance" : "calendar") as RightsArea,
+          title: CALENDAR_GROUP_TITLE[group],
+          rows: orderGroupRows(
+            group,
+            registrySections
+              .flatMap((section) => section.rows)
+              .filter((row) => row.block.key.startsWith(`${group}.`)),
+          ),
+        }))
+      : registrySections
+  ).filter((section) => section.rows.length > 0);
   const companyTitle = onlyCompany && area ? AREA_TITLE[area] : null;
 
   return (
@@ -202,7 +204,7 @@ export function MasterRightsView({
       >
         {sections.map((section) => (
           <View
-            key={section.area}
+            key={section.key}
             onLayout={(event) => {
               if (section.area !== area || scrolled.current) return;
               scrolled.current = true;
@@ -210,13 +212,7 @@ export function MasterRightsView({
             }}
           >
             <SectionCard
-              title={
-                group
-                  ? CALENDAR_GROUP_TITLE[group]
-                  : onlyCalendar
-                    ? (CALENDAR_SECTION_TITLE[section.area] ?? section.title)
-                    : section.title
-              }
+              title={section.title}
               padded={false}
             >
               {section.rows.map((row, i) => {

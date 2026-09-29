@@ -25,7 +25,6 @@ import { MasterCardView, type EmailState } from "./MasterCardView";
 import { MasterInviteCard } from "./MasterInviteCard";
 import { MasterMemberCard } from "./MasterMemberCard";
 import {
-  calendarRightsLine,
   clientsRightsLine,
   draftChangedFrom,
   invitationRequest,
@@ -35,7 +34,7 @@ import {
   toggleTeam,
   type MasterDraft,
 } from "./master-draft";
-import { calendarGroupLine, type CalendarGroup } from "./access-summary";
+import { calendarGroupLine } from "./access-summary";
 import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, liveAreasOf } from "./rights-rows";
 
@@ -143,11 +142,11 @@ function MasterDraftCard({
 
   const openArea = (area: string) =>
     router.push(
-      `/calendar/masters/new/rights?area=${area}&team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "company" })}` as Href,
+      `/cabinet/people/new/rights?area=${area}&team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "company" })}` as Href,
     );
-  const openCalendarRights = (id: string, group?: CalendarGroup) =>
+  const openCalendarRights = (id: string) =>
     router.push(
-      `/calendar/masters/new/rights?team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "calendar", teamId: id, group })}` as Href,
+      `/cabinet/people/new/rights?team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
     );
 
   // СЕРАЯ КНОПКА НЕ МОЛЧИТ И НЕ ОБЪЯСНЯЕТ СЛОВАМИ: тап отзывается вибрацией и
@@ -187,7 +186,7 @@ function MasterDraftCard({
         closeMasterDraft();
         // Не «назад», а сразу карточка приглашения: владелец видит то, что
         // только что отправил, и может поправить до ответа.
-        router.replace(`/calendar/masters/${invitationSegment(saved.id)}` as Href);
+        router.replace(`/cabinet/people/${invitationSegment(saved.id)}` as Href);
       },
       onError: (error) => {
         toast(invitationRefusalText(error), "error");
@@ -206,7 +205,7 @@ function MasterDraftCard({
     <>
       <Stack.Screen options={{ gestureEnabled: !dirty && !create.isPending }} />
       <MasterCardView
-        title={masterId ? "Пригласить в CRM" : "Новый мастер"}
+        title={masterId ? "Пригласить в CRM" : "Новый сотрудник"}
         subtitle={masterId ? draft.name.trim() || undefined : undefined}
         onBack={leave}
         identity={draft}
@@ -242,10 +241,12 @@ function MasterDraftCard({
         liveAreas={blocks ? liveAreasOf(blocks, RIGHTS_AREAS) : []}
         areaLevels={blocks ? areaLevelsOf(blocks, draft) : null}
         onOpenArea={openArea}
-        // Как у сотрудника (STORY-087): календарь строкой со своими правами —
-        // он задан тем, откуда позвали, поэтому без «Добавить» и свайпа.
+        // Команды нового сотрудника выбираются здесь (29.09: сотрудники живут
+        // в Кабинете, команды из адреса больше нет): «Добавить в команду» и
+        // свайп «Убрать», как у сотрудника.
         showCalendars={!!blocks}
-        calendarLine={blocks ? (id) => calendarRightsLine(blocks, draft, id) : undefined}
+        onOpenCalendars={() => setCalendarsOpen(true)}
+        onDetachCalendar={(id) => updateMasterDraft((currentDraft) => toggleTeam(currentDraft, id, true))}
         groupLine={blocks ? (id, group) => calendarGroupLine(blocks, draft, id, group) : undefined}
         areaValues={blocks ? { clients: clientsRightsLine(blocks, draft) } : undefined}
         onOpenCalendarRights={openCalendarRights}

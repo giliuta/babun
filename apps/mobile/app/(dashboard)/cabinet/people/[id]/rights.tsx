@@ -20,14 +20,13 @@ export default function MasterRightsRoute() {
     area?: string | string[];
     calendar?: string | string[];
     scope?: string | string[];
-    group?: string | string[];
   }>();
   const router = useRouter();
   const team = first(params.team);
   const area = first(params.area);
   const invitationId = invitationIdFromSegment(params.id);
   // Права ОДНОГО календаря или только компании — как у сотрудника (STORY-087).
-  const focus = rightsFocusOf(first(params.calendar), first(params.scope), first(params.group));
+  const focus = rightsFocusOf(first(params.calendar), first(params.scope));
 
   const back = () => {
     if (router.canGoBack()) {
@@ -37,9 +36,9 @@ export default function MasterRightsRoute() {
     const home =
       params.id === "new"
         ? team
-          ? `/calendar/masters/new?team=${encodeURIComponent(team)}`
-          : "/calendar/masters"
-        : `/calendar/masters/${params.id}`;
+          ? `/cabinet/people/new?team=${encodeURIComponent(team)}`
+          : "/cabinet/people"
+        : `/cabinet/people/${params.id}`;
     router.replace(home as Href);
   };
 
@@ -57,5 +56,5 @@ export default function MasterRightsRoute() {
       />
     );
   }
-  return <Redirect href={`/calendar/masters/${params.id}` as Href} />;
+  return <Redirect href={`/cabinet/people/${params.id}` as Href} />;
 }

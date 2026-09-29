@@ -38,7 +38,6 @@ import { CalendarPickerSheet } from "./CalendarPickerSheet";
 import { usePreview } from "./rights-page-shared";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import {
-  calendarRightsLine,
   clientsRightsLine,
   copyCalendarLevels,
   starterCalendarChanges,
@@ -245,7 +244,7 @@ export function MasterMemberCard({
       }
       if (picked === 1) {
         router.push(
-          `/calendar/masters/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
+          `/cabinet/people/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
         );
       }
       return;
@@ -384,21 +383,20 @@ export function MasterMemberCard({
         // строках календарей (STORY-087).
         onOpenArea={(area) =>
           router.push(
-            `/calendar/masters/access/${userId}?team=${encodeURIComponent(teamId ?? "")}&rights=1&area=${area}&${rightsFocusQuery({ kind: "company" })}` as Href,
+            `/cabinet/people/access/${userId}?team=${encodeURIComponent(teamId ?? "")}&rights=1&area=${area}&${rightsFocusQuery({ kind: "company" })}` as Href,
           )
         }
         // У КАЖДОГО КАЛЕНДАРЯ СВОИ ПРАВА (владелец 23.09): строка календаря
         // говорит, что человек может в НЁМ, и открывает права этого календаря.
-        calendarLine={(id) => calendarRightsLine(blocks, draft, id)}
         groupLine={(id, group) => calendarGroupLine(blocks, draft, id, group)}
         // «Посмотреть его глазами» — строкой в блоке «Доступ», а не в ⋯.
         onMirror={() =>
           preview({ blocks, draft, name, calendarName: teamNameOf(draft.teamIds[0] ?? "") ?? null })
         }
         areaValues={{ clients: clientsRightsLine(blocks, draft) }}
-        onOpenCalendarRights={(id, group) =>
+        onOpenCalendarRights={(id) =>
           router.push(
-            `/calendar/masters/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id, group })}` as Href,
+            `/cabinet/people/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
           )
         }
         onDetachCalendar={(id) => void toggleCalendar(id)}

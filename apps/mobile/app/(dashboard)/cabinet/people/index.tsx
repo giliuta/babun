@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { FlatList, Pressable, Text, TextInput, View } from "react-native";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { Search } from "lucide-react-native";
 import { getInitials } from "@babun/shared/local/masters";
 import { Screen } from "@/components/ui/Screen";
@@ -17,19 +17,22 @@ import { refusalOf } from "@/features/access/access-map";
 import { calendarCards } from "@/features/access/masters-list";
 import { openMasterDraft } from "@/features/access/master-page/draft-store";
 import {
-  draftFromInvitation,
   invitationSegment,
 } from "@/features/access/master-page/master-draft";
 import { MemberRow, PendingInvitationRow } from "@/features/access/PeopleRows";
 import {
   AccessRequestError,
-  useCalendarMembers,
+  useCompanyMembers,
   type CalendarMember,
 } from "@/features/access/queries";
 
-// Мастера календаря — корневой экран nav-хаба (masters/index.tsx). Сверху люди
-// с доступом к календарю и приглашения, на которые ещё не ответили; ниже
-// старые карточки мастеров (строка пушит на хаб ./[id]).
+// СОТРУДНИКИ КОМПАНИИ — «Кабинет → Сотрудники» (владелец 29.09: «страницу
+// мастера перенесём в кабинет… и полноценно на каждую команду, что он может
+// делать»). Раньше это были «Мастера» каждого календаря: один человек стоял в
+// двух местах, и права другой команды открывались выбором календарей на его
+// странице. Теперь список один на компанию, под именем — его команды; права
+// по командам — на странице человека. Сверху люди с доступом и приглашения
+// без ответа, ниже карточки мастеров без аккаунта.
 //
 // «ДОБАВИТЬ МАСТЕРА» — СРАЗУ ПОЛНАЯ КАРТОЧКА НОВОГО МАСТЕРА (владелец 15.09:
 // «как добавление клиента»), приглашение по почте уходит из неё кнопкой
@@ -84,15 +87,9 @@ export default function MastersScreen() {
     });
   }, [search, sortedMasters]);
 
-  // ЛЮДИ С ДОСТУПОМ К ЭТОМУ КАЛЕНДАРЮ (STORY-081). Сотрудник теперь — аккаунт,
-  // прикреплённый к календарю, а не карточка по имени и телефону: у Giliuta
-  // карточек ноль, и человека с доступом к «Команде 1» в списке не было вовсе
-  // (владелец 2026-09-14: «захожу в мастера — ничего не вижу»). Календарь
-  // приходит адресом из его настроек; без адреса раздела нет.
-  const params = useLocalSearchParams<{ team?: string | string[] }>();
-  const teamId = Array.isArray(params.team) ? params.team[0] : params.team;
-  const teamName = teamId ? teams.find((team) => team.id === teamId)?.name : undefined;
-  const membersQuery = useCalendarMembers(teamId);
+  // ЛЮДИ КОМПАНИИ С ДОСТУПОМ (STORY-081): сотрудник — аккаунт, прикреплённый к
+  // календарям, а не карточка по имени и телефону.
+  const membersQuery = useCompanyMembers();
   // Владельца в разделе нет: его права не меняются (сервер: access:target_owner).
   const staff = useMemo(
     () => (membersQuery.data ?? []).filter((member) => member.role !== "owner"),
@@ -110,12 +107,10 @@ export default function MastersScreen() {
   // а сам он уже стоит строкой «С доступом к календарю»: карточка ниже
   // повторила бы его вторым рядом.
   const staffIds = useMemo(() => new Set(staff.map((member) => member.userId)), [staff]);
-  // И ТОЛЬКО КАРТОЧКИ ЭТОГО КАЛЕНДАРЯ (владелец 15.09: мастер, принятый в
-  // «Команду 1», стоял карточкой в мастерах «Команды 2»). Правило — в
-  // `features/access/masters-list.ts`.
+  // Все карточки компании, кроме тех, чей человек уже стоит строкой выше.
   const cards = useMemo(
-    () => calendarCards(masters, { teamId, teams, staffUserIds: staffIds }),
-    [masters, teamId, teams, staffIds],
+    () => calendarCards(masters, { teamId: undefined, teams, staffUserIds: staffIds }),
+    [masters, teams, staffIds],
   );
   // Отказ «людей видит владелец» — не беда: раздела просто нет. Любая другая
   // ошибка называется вслух, иначе пустой список соврёт «Нет мастеров».
@@ -123,20 +118,10 @@ export default function MastersScreen() {
     membersQuery.isError &&
     !(membersQuery.error instanceof AccessRequestError && refusalOf(membersQuery.error) === "not_owner");
 
-  // ПРИГЛАШЕНИЯ В ЭТОТ КАЛЕНДАРЬ БЕЗ ОТВЕТА. Без них «Пригласить» уходило бы в
-  // пустоту: ни следа на экране, ни способа отправить ссылку ещё раз.
+  // ПРИГЛАШЕНИЯ БЕЗ ОТВЕТА. Без них «Пригласить» уходило бы в пустоту: ни
+  // следа на экране, ни способа отправить ссылку ещё раз.
   const invitationsQuery = usePendingInvitations();
-  // Приглашение зовёт в несколько календарей (15.09) и стоит в каждом из них,
-  // а не только в домашнем.
-  const calendarInvitations = useMemo(
-    () =>
-      teamId
-        ? (invitationsQuery.data ?? []).filter((inv) =>
-            draftFromInvitation(inv).teamIds.includes(teamId),
-          )
-        : [],
-    [invitationsQuery.data, teamId],
-  );
+  const calendarInvitations = useMemo(() => invitationsQuery.data ?? [], [invitationsQuery.data]);
   const pending = useMemo(() => {
     const needle = normalizeSearch(search);
     if (!needle) return calendarInvitations;
@@ -168,19 +153,23 @@ export default function MastersScreen() {
     [members, pending, cards],
   );
 
-  // Тинт аватара по основной команде мастера (цвет команды), как на вебе.
+  // Тинт аватара по первой команде человека (цвет команды), как на вебе.
   const teamColorById = useMemo(() => {
     const m = new Map<string, string>();
     for (const team of teams) if (team.color) m.set(team.id, team.color);
     return m;
   }, [teams]);
+  // Под именем — его команды («Команда 1, Команда 3»): по ним и открываются
+  // права на его странице.
+  const teamNames = (ids: readonly string[]) =>
+    ids
+      .map((id) => teams.find((team) => team.id === id)?.name)
+      .filter((name): name is string => !!name)
+      .join(", ");
 
   return (
     <Screen edges={["top"]}>
-      {/* ЧЕЙ ЭТО СОСТАВ — ПОД ИМЕНЕМ ЭКРАНА (владелец 14.09: «под словом
-          мастера написать Команда 1»). Так же, как у «Меток» и у шторки
-          «Пригласить мастера»: раздел и приглашение живут в одном календаре. */}
-      <ScreenHeader title="Мастера" subtitle={teamName} />
+      <ScreenHeader title="Сотрудники" />
 
       {isLoading || teamsQuery.isLoading || membersQuery.isLoading || invitationsQuery.isLoading ? (
         <EmptyState state="loading" fill />
@@ -241,11 +230,10 @@ export default function MastersScreen() {
               return (
                 <MemberRow
                   member={item.member}
-                  tint={(teamId && teamColorById.get(teamId)) || t.faint}
+                  tint={teamColorById.get(item.member.calendars[0] ?? "") || t.faint}
+                  sub={teamNames(item.member.calendars) || "Без команды"}
                   onPress={() =>
-                    router.push(
-                      `/calendar/masters/access/${item.member.userId}?team=${encodeURIComponent(teamId ?? "")}` as Href,
-                    )
+                    router.push(`/cabinet/people/access/${item.member.userId}` as Href)
                   }
                 />
               );
@@ -256,7 +244,7 @@ export default function MastersScreen() {
                   invitation={item.invitation}
                   onPress={() =>
                     router.push(
-                      `/calendar/masters/${invitationSegment(item.invitation.id)}` as Href,
+                      `/cabinet/people/${invitationSegment(item.invitation.id)}` as Href,
                     )
                   }
                 />
@@ -275,8 +263,8 @@ export default function MastersScreen() {
                 onPress={() =>
                   router.push(
                     (item.master.user_id
-                      ? `/calendar/masters/access/${item.master.user_id}?team=${encodeURIComponent(teamId ?? item.master.team_id ?? "")}`
-                      : `/calendar/masters/${item.master.id}`) as Href,
+                      ? `/cabinet/people/access/${item.master.user_id}`
+                      : `/cabinet/people/${item.master.id}`) as Href,
                   )
                 }
               />
@@ -287,7 +275,7 @@ export default function MastersScreen() {
             membersFailed ? null : (
               <EmptyState
                 fill
-                title={search.trim() ? "Ничего не найдено" : "Нет мастеров"}
+                title={search.trim() ? "Ничего не найдено" : "Сотрудников пока нет"}
                 subtitle={search.trim() ? "Измените имя, телефон или email в поиске." : undefined}
               />
             )
@@ -305,15 +293,15 @@ export default function MastersScreen() {
           там, где человек его ищет. Футер стоит ВСЕГДА — список пуст или нет,
           место действия не переезжает.
 
-          Без календаря в адресе звать некуда: приглашение всегда в календарь.
-          Приглашает только владелец: остальным кнопки нет (аудит 24.09). */}
-      {teamId && isOwner ? (
+          Команды нового сотрудника выбираются на его карточке. Приглашает
+          только владелец: остальным кнопки нет (аудит 24.09). */}
+      {isOwner ? (
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
           <GradientButton
-            label="Добавить мастера"
+            label="Пригласить сотрудника"
             onPress={() => {
-              openMasterDraft(teamId);
-              router.push(`/calendar/masters/new?team=${encodeURIComponent(teamId)}` as Href);
+              openMasterDraft(null);
+              router.push("/cabinet/people/new" as Href);
             }}
           />
         </View>

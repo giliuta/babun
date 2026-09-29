@@ -25,8 +25,6 @@ export default function MemberAccessRoute() {
     calendar?: string | string[];
     /** `company` — права компании (клиенты). */
     scope?: string | string[];
-    /** Раздел календаря: `calendar` · `record` · `finance`. */
-    group?: string | string[];
   }>();
   const userId = first(params.userId);
   const team = first(params.team) || null;
@@ -38,7 +36,7 @@ export default function MemberAccessRoute() {
       return;
     }
     router.replace(
-      (team ? `/calendar/masters?team=${encodeURIComponent(team)}` : "/calendar/masters") as Href,
+      (team ? `/cabinet/people?team=${encodeURIComponent(team)}` : "/cabinet/people") as Href,
     );
   };
 
@@ -49,7 +47,7 @@ export default function MemberAccessRoute() {
         userId={userId}
         teamId={team}
         area={first(params.area)}
-        focus={rightsFocusOf(first(params.calendar), first(params.scope), first(params.group))}
+        focus={rightsFocusOf(first(params.calendar), first(params.scope))}
         onBack={back}
       />
     );

@@ -228,10 +228,11 @@ describe("Expo Router navigation integrity", () => {
       .filter((route) => route.includes("["))
       .map(routeMatcher);
     // The create-client screen intentionally reuses /clients/[id] with id=new.
-    // The master card does the same (/calendar/masters/[id] with id=new or
+    // The master card does the same (/cabinet/people/[id] with id=new or
     // invite-<uuid>, and its /rights), but every such link carries a query or
     // an id, so it is a dynamic target already and needs no alias here.
-    const intentionalDynamicAliases = new Set(["/clients/new"]);
+    // «Пригласить сотрудника» открывает ту же карточку с id=new без запроса.
+    const intentionalDynamicAliases = new Set(["/clients/new", "/cabinet/people/new"]);
 
     const missing = navigationTargets().filter((target) => {
       const destination = publicPath(target.path);

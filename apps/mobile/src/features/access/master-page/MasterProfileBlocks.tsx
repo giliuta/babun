@@ -47,7 +47,7 @@ export function MasterWorkBlock({
         value={workLine(work)}
         onPress={() =>
           router.push(
-            `/calendar/masters/${card.id}/visits?teams=${encodeURIComponent(teamIds.join(","))}` as Href,
+            `/cabinet/people/${card.id}/visits?teams=${encodeURIComponent(teamIds.join(","))}` as Href,
           )
         }
       />

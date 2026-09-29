@@ -1463,7 +1463,7 @@ export function OperationSheet({
             ? () =>
                 doorway.open(() =>
                   router.push(
-                    `/calendar/masters?team=${encodeURIComponent(teamId)}` as Href,
+                    "/cabinet/people" as Href,
                   ),
                 )
             : undefined

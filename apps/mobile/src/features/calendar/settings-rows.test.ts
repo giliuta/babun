@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { calendarSettingsRows } from "./settings-rows";
 
-const PAID = { services: true, masters: true };
-const FREE = { services: false, masters: false };
+const PAID = { services: true };
+const FREE = { services: false };
 
 describe("строки настроек календаря", () => {
   test("владелец на платном видит все строки", () => {
@@ -13,7 +13,6 @@ describe("строки настроек календаря", () => {
       addCalendar: true,
       timezone: true,
       currency: true,
-      masters: true,
       hours: true,
       schedule: true,
       booking: true,
@@ -25,10 +24,9 @@ describe("строки настроек календаря", () => {
     });
   });
 
-  test("тариф гасит только свои две строки", () => {
+  test("тариф гасит только «Услуги»", () => {
     const rows = calendarSettingsRows("owner", FREE);
     assert.equal(rows.services, false);
-    assert.equal(rows.masters, false);
     assert.equal(rows.timezone, true);
     assert.equal(rows.any, true);
   });

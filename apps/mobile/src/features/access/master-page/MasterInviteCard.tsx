@@ -27,7 +27,6 @@ import { useUpdateMasterInvitation } from "./invitation-api";
 import { invitationRefusalText, isInvitationGone } from "./invitation-contract";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import {
-  calendarRightsLine,
   clientsRightsLine,
   applyPickedCalendars,
   draftFromInvitation,
@@ -265,17 +264,16 @@ export function MasterInviteCard({
         // Как у сотрудника (STORY-087): календари строками со своими правами,
         // клиенты — «Правами в компании» со сводкой словами.
         showCalendars
-        calendarLine={(id) => calendarRightsLine(blocks, draft, id)}
         groupLine={(id, group) => calendarGroupLine(blocks, draft, id, group)}
         areaValues={{ clients: clientsRightsLine(blocks, draft) }}
-        onOpenCalendarRights={(id, group) =>
+        onOpenCalendarRights={(id) =>
           router.push(
-            `/calendar/masters/${invitationSegment(row.id)}/rights?${rightsFocusQuery({ kind: "calendar", teamId: id, group })}` as Href,
+            `/cabinet/people/${invitationSegment(row.id)}/rights?${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
           )
         }
         onOpenArea={(area) =>
           router.push(
-            `/calendar/masters/${invitationSegment(row.id)}/rights?area=${area}&${rightsFocusQuery({ kind: "company" })}` as Href,
+            `/cabinet/people/${invitationSegment(row.id)}/rights?area=${area}&${rightsFocusQuery({ kind: "company" })}` as Href,
           )
         }
         footer={<GradientButton label="Отправить ещё раз" onPress={() => void share()} />}

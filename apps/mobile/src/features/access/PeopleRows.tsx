@@ -19,10 +19,13 @@ type Invitation = Database["public"]["Tables"]["invitations"]["Row"];
 export function MemberRow({
   member,
   tint,
+  sub,
   onPress,
 }: {
   member: CalendarMember;
   tint: string;
+  /** Вторая строка вместо почты — например, его команды. */
+  sub?: string;
   onPress: () => void;
 }) {
   const t = useThemeColors();
@@ -46,7 +49,7 @@ export function MemberRow({
           {member.name}
         </Text>
         <Text style={{ fontSize: 14, color: t.sub }} numberOfLines={1}>
-          {member.email}
+          {sub || member.email}
         </Text>
       </View>
     </Pressable>

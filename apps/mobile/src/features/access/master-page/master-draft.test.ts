@@ -6,10 +6,7 @@ import {
   applyPickedCalendars,
   areaLevel,
   areaWord,
-  calendarAreaLevel,
-  calendarRightsLine,
   clientsRightsLine,
-  calendarsBlockMode,
   copyCalendarLevels,
   dependantResets,
   draftAccessChanges,
@@ -297,13 +294,6 @@ describe("черновик нового мастера", () => {
     assert.equal(invitationRequest({ ...draft, phone: "12" }, [], () => undefined).phone, null);
   });
 
-  test("блок «Календари»: дверь — только там, где она открывается", () => {
-    assert.equal(calendarsBlockMode(0, true), "choose");
-    assert.equal(calendarsBlockMode(0, false), "empty-words");
-    assert.equal(calendarsBlockMode(2, true), "rows-tappable");
-    assert.equal(calendarsBlockMode(1, false), "rows-display");
-  });
-
   test("тронутый черновик спрашивает перед уходом", () => {
     const draft = emptyMasterDraft("team-1");
     assert.equal(isDraftDirty(draft, "team-1"), false);
@@ -432,51 +422,6 @@ describe("карточка ждущего приглашения", () => {
 });
 
 // STORY-087: у мастера в каждом календаре свои права (владелец 23.09).
-describe("права календаря одной строкой", () => {
-  const draftIn = (levels: Record<string, Record<string, AccessLevel>>): MasterDraft => ({
-    ...blankMasterDraft("A"),
-    teamIds: ["A", "B"],
-    calendarLevels: levels,
-  });
-
-  test("у каждого календаря своя строка", () => {
-    const draft = draftIn({
-      A: { "calendar.records": "write", "calendar.create": "write", "record.status": "write", "record.amount": "write", "record.payment": "write", "calendar.day_labels": "write", "finance.operations": "off" },
-      B: { "calendar.records": "read", "calendar.create": "off", "record.status": "read", "record.amount": "read", "record.payment": "read", "calendar.day_labels": "read", "finance.operations": "read" },
-    });
-    assert.equal(calendarRightsLine(REGISTRY, draft, "A"), "Записи: меняет · Деньги: не видит");
-    assert.equal(calendarRightsLine(REGISTRY, draft, "B"), "Записи: видит 5 из 6 · Деньги: видит");
-  });
-
-  test("смешанный раздел называет закрытое словами", () => {
-    const base = { "calendar.records": "write", "calendar.create": "write", "record.status": "write", "record.payment": "write", "calendar.day_labels": "write" } as const;
-    // Закрыта одна сумма — «без суммы».
-    const one = draftIn({ A: { ...base, "record.amount": "off" } });
-    assert.match(calendarRightsLine(REGISTRY, one, "A"), /^Записи: без суммы · /);
-    // Две — обе по имени.
-    const two = draftIn({ A: { ...base, "record.amount": "off", "record.payment": "off" } });
-    assert.match(calendarRightsLine(REGISTRY, two, "A"), /^Записи: без суммы и оплаты · /);
-    // Закрытого нет, меняет не всё.
-    const part = draftIn({ A: { ...base, "record.amount": "read" } });
-    assert.match(calendarRightsLine(REGISTRY, part, "A"), /^Записи: видит, меняет часть · /);
-  });
-
-  test("положение раздела считается только в своём календаре", () => {
-    // Деньги свёрнуты под «Календарём и записями»: без него они скрыты.
-    const draft = draftIn({
-      A: { "calendar.records": "read", "finance.operations": "write" },
-      B: { "calendar.records": "read" },
-    });
-    assert.equal(calendarAreaLevel(REGISTRY, draft, "finance", "A"), "write");
-    assert.equal(calendarAreaLevel(REGISTRY, draft, "finance", "B"), "off");
-  });
-
-  test("раздела без живых календарных блоков в строке нет", () => {
-    const onlyRecords = REGISTRY.filter((block) => block.area !== "finance");
-    assert.doesNotMatch(calendarRightsLine(onlyRecords, draftIn({}), "A"), /Деньги/);
-  });
-});
-
 describe("права «как в том календаре»", () => {
   test("переносятся живые календарные блоки в новый календарь", () => {
     const draft: MasterDraft = {

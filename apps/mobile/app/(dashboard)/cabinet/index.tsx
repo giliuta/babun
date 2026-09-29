@@ -22,7 +22,7 @@
 
 import { ScrollView, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { RefreshCw, Shield } from "lucide-react-native";
+import { RefreshCw, Shield, Users } from "lucide-react-native";
 import { useQueueDepth } from "@babun/shared/sync";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Divider } from "@/components/ui/Divider";
@@ -30,13 +30,14 @@ import { Screen } from "@/components/ui/Screen";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { TYPE } from "@/components/ui/tokens";
 import { AboutRow } from "@/features/cabinet/AboutRow";
 import { ArchiveRow } from "@/features/cabinet/ArchiveRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
 import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole, usePlanAllows } from "@/features/settings/tenant";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useThemeColors } from "@/theme/colors";
 
@@ -44,6 +45,8 @@ export default function CabinetHome() {
   const t = useThemeColors();
   const router = useRouter();
   const { data: role } = useCurrentRole();
+  // Сотрудники — платный тариф, как прежде «Мастера» календаря.
+  const canUseStaff = usePlanAllows("masters");
   const syncDepth = useQueueDepth();
   // Очередь выгрузки видят те, кто правит данные офлайн, — как и прежде.
   const showSync = role === "owner" || role === "dispatcher";
@@ -66,6 +69,22 @@ export default function CabinetHome() {
           <>
             <SectionEyebrow>Компания</SectionEyebrow>
             <SectionCard>
+              {/* СОТРУДНИКИ — ОДИН СПИСОК НА КОМПАНИЮ (владелец 29.09: «страницу
+                  мастера перенесём в кабинет… и полноценно на каждую команду,
+                  что он может делать»). Прежде люди жили в настройках каждого
+                  календаря. Приглашает и ставит права только владелец. */}
+              {canUseStaff ? (
+                <>
+                  <SettingsRow
+                    tile={SETTINGS_TILE.indigo}
+                    icon={Users}
+                    title="Сотрудники"
+                    sub="Права по командам"
+                    onPress={() => router.push("/cabinet/people" as Href)}
+                  />
+                  <Divider inset={48} />
+                </>
+              ) : null}
               <ArchiveRow />
             </SectionCard>
           </>

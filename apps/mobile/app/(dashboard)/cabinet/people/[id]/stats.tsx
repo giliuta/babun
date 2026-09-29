@@ -7,6 +7,6 @@ import { Redirect, useLocalSearchParams, type Href } from "expo-router";
 export default function MasterStatsRedirect() {
   const { id, teams } = useLocalSearchParams<{ id: string; teams?: string }>();
   return (
-    <Redirect href={`/calendar/masters/${id}/visits?teams=${encodeURIComponent(teams ?? "")}` as Href} />
+    <Redirect href={`/cabinet/people/${id}/visits?teams=${encodeURIComponent(teams ?? "")}` as Href} />
   );
 }

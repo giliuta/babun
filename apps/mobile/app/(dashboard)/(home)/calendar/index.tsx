@@ -9,7 +9,6 @@ import {
   Palette,
   Tags,
   Trash2,
-  Users,
   Banknote,
 } from "lucide-react-native";
 import { readTenantPref } from "@/lib/tenant-prefs";
@@ -189,13 +188,11 @@ export default function CalendarSettingsScreen() {
   // которая ведёт в закрытое, хуже отсутствия строки: человек идёт и упирается
   // (канон, правило 10).
   const canUseServices = usePlanAllows("services");
-  const canUseMasters = usePlanAllows("masters");
   // СТРАНИЦА ОТКРЫТА ВСЕМ, СТРОКИ — ПО ДОСТУПУ (владелец 20.09: «я могу зайти
   // туда, но блоков уже внутри шестерёнки не будет… визуал целой страницы мы
   // полностью сохраняем»). Правило и его причины — `settings-rows.ts`.
   const rows = calendarSettingsRows(role, {
     services: canUseServices,
-    masters: canUseMasters,
   });
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -469,21 +466,9 @@ export default function CalendarSettingsScreen() {
                   ПЛИТКА ПОКА НЕЙТРАЛЬНАЯ, как у «Часового пояса» и «Валюты»:
                   заводить новый пигмент словаря ради одной строки — тот самый
                   дрейф, от которого словарь и написан. */}
-              {rows.masters ? (
-                <SectionCard>
-                  <SettingsRow
-                    tile={SETTINGS_TILE.indigo}
-                    icon={Users}
-                    title="Мастера"
-                    sub="Сотрудники и их доступ"
-                    // КАЛЕНДАРЬ ЕДЕТ АДРЕСОМ, как у «Услуг» и «Меток»: «Мастера»
-                    // показывают людей с доступом именно к нему (STORY-081).
-                    onPress={() =>
-                      router.push({ pathname: "/calendar/masters", params: { team: team.id } } as Href)
-                    }
-                  />
-                </SectionCard>
-              ) : null}
+              {/* «МАСТЕРОВ» ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 29.09): сотрудник один на
+                  компанию и живёт в «Кабинет → Сотрудники», права — по командам
+                  на его странице. */}
               {/* «Длительности записи» здесь больше нет (владелец 2026-08-16):
                   длительность даёт УСЛУГА, а не настройка календаря. Дефолт
                   тапа по слоту остался кодовым фолбэком 30 мин. */}

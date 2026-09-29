@@ -289,18 +289,6 @@ export function withLiveTeams(draft: MasterDraft, liveIds: ReadonlySet<string>):
   return { ...draft, teamIds, calendarLevels };
 }
 
-export type CalendarsBlockMode = "choose" | "empty-words" | "rows-tappable" | "rows-display";
-
-/** Блок «Календари» на карточке: дверь выбора — только там, где она
- *  открывается. Карточка сотрудника календари пока только показывает
- *  (прикрепления из приложения нет): серая «Выбрать календари», которая не
- *  откроется никогда, и строки шторки, которые не отзываются, — мёртвые тапы.
- *  Там пусто — словами, выбранное — строками без кнопки. */
-export function calendarsBlockMode(chosenCount: number, canOpen: boolean): CalendarsBlockMode {
-  if (chosenCount === 0) return canOpen ? "choose" : "empty-words";
-  return canOpen ? "rows-tappable" : "rows-display";
-}
-
 /** Должность и цвет живут в приглашении только у мастера без карточки. У
  *  приглашения по существующей карточке их правят в самой карточке (сервер
  *  отказывает `invite:card_fields_on_card`), у диспетчера карточки нет вовсе
@@ -456,34 +444,6 @@ export function areaLevel(
   return seen ?? "off";
 }
 
-/** Положение раздела В ОДНОМ КАЛЕНДАРЕ (STORY-087). Владелец 23.09: «в одном
- *  календаре у него свои доступы, в другом — другие». Строка календаря на
- *  странице сотрудника говорит про СВОЙ календарь, а не «Разное» по всем. */
-/** Блок на своём ПОТОЛКЕ считается «меняет»: у «Услуг» потолок — «Видит»,
- *  у «Новых записей» — «Может». Без этого директор со всем на максимуме
- *  читался бы «меняет часть» (STORY-088, наборы). */
-function asAreaLevel(block: AccessBlock, level: AccessLevel): AccessLevel {
-  return level !== "off" && level === block.levels[block.levels.length - 1] ? "write" : level;
-}
-
-export function calendarAreaLevel(
-  blocks: readonly AccessBlock[],
-  draft: MasterDraft,
-  area: RightsArea,
-  teamId: string,
-): AreaLevel {
-  let seen: AccessLevel | null = null;
-  const shown = visibleLevel(blocks, draft);
-  for (const block of offeredBlocks(blocks)) {
-    if (block.area !== area || block.scope !== "calendar") continue;
-    if (block.ownerOnly || !block.levels.includes("off")) continue;
-    const level = asAreaLevel(block, shown(block, teamId));
-    if (seen === null) seen = level;
-    else if (seen !== level) return "mixed";
-  }
-  return seen ?? "off";
-}
-
 /** ПРАВА «КАК В ТОМ КАЛЕНДАРЕ» (STORY-087): добавили мастеру второй календарь —
  *  одним тапом перенести положения первого, а не выставлять десять строк
  *  заново. Только живые календарные блоки; свёрнутое переносится свёрнутым. */
@@ -497,87 +457,6 @@ export function copyCalendarLevels(
   return offeredBlocks(blocks)
     .filter((block) => block.scope === "calendar")
     .map((block) => ({ block: block.key, team_id: toTeamId, level: shown(block, fromTeamId) }));
-}
-
-/** Разделы, у которых в календаре есть что выставить (живые блоки). */
-export const CALENDAR_AREAS = ["calendar", "finance"] as const satisfies readonly RightsArea[];
-
-/** Короткое имя раздела в строке календаря: «Записи», «Деньги». */
-export const CALENDAR_AREA_WORD: Record<(typeof CALENDAR_AREAS)[number], string> = {
-  calendar: "Записи",
-  finance: "Деньги",
-};
-
-/** Права календаря одной строкой — «Записи: меняет · Деньги: скрыт».
- *  Раздела без живых блоков в строке нет. */
-export function calendarRightsLine(
-  blocks: readonly AccessBlock[],
-  draft: MasterDraft,
-  teamId: string,
-): string {
-  const offered = offeredBlocks(blocks);
-  return CALENDAR_AREAS.filter((area) =>
-    offered.some(
-      (block) =>
-        block.area === area &&
-        block.scope === "calendar" &&
-        !block.ownerOnly &&
-        block.levels.includes("off"),
-    ),
-  )
-    .map((area) => {
-      const level = calendarAreaLevel(blocks, draft, area, teamId);
-      const word =
-        level === "mixed"
-          ? mixedAreaWord(blocks, draft, area, teamId)
-          : LEVEL_WORD[level].toLocaleLowerCase("ru-RU");
-      return `${CALENDAR_AREA_WORD[area]}: ${word}`;
-    })
-    .join(" · ");
-}
-
-/** Родительный падеж блоков записи и денег — для «без клиента и суммы». */
-const BLOCK_GENITIVE: Record<string, string> = {
-  "record.status": "статуса",
-  "record.client": "клиента",
-  "record.object": "объекта",
-  "record.services": "услуг",
-  "record.amount": "суммы",
-  "record.payment": "оплаты",
-  "record.files": "файлов",
-  "finance.operations": "операций",
-  "finance.accounts": "счетов",
-  "finance.debts": "долгов",
-};
-
-/** СМЕШАННЫЙ РАЗДЕЛ — СЛОВАМИ, ЧТО ИМЕННО (аудит 24.09). «Записи: частично»
- *  не отвечало на вопрос владельца «что он видит»: закрыто одно-два — строка
- *  их называет («без клиента», «без клиента и суммы»); закрыто больше —
- *  сколько открыто («видит 3 из 7»); закрытого нет, но меняет не всё —
- *  «видит, меняет часть». */
-export function mixedAreaWord(
-  blocks: readonly AccessBlock[],
-  draft: MasterDraft,
-  area: RightsArea,
-  teamId: string,
-): string {
-  const shown = visibleLevel(blocks, draft);
-  const rows = offeredBlocks(blocks)
-    .filter(
-      (block) =>
-        block.area === area &&
-        block.scope === "calendar" &&
-        !block.ownerOnly &&
-        block.levels.includes("off"),
-    )
-    .map((block) => ({ key: block.key, level: shown(block, teamId) }));
-  const closed = rows.filter((row) => row.level === "off");
-  if (closed.length === 0) {
-    return rows.some((row) => row.level === "write") ? "видит, меняет часть" : "видит";
-  }
-  const named = closed.map((row) => BLOCK_GENITIVE[row.key]);
-  if (closed.length <= 2 && named.every(Boolean)) return `без ${named.join(" и ")}`;
-  return `видит ${rows.length - closed.length} из ${rows.length}`;
 }
 
 /** КЛИЕНТЫ ОДНОЙ СТРОКОЙ (аудит 24.09). «Клиенты — Частично» на карточке не
@@ -736,7 +615,7 @@ export function draftFromInvitation(row: Readonly<Record<string, unknown>>): Mas
   };
 }
 
-/** Ждущее приглашение открывается по `/calendar/masters/invite-<uuid>`.
+/** Ждущее приглашение открывается по `/cabinet/people/invite-<uuid>`.
  *  Двоеточие в сегменте ломает разбор диплинка, поэтому дефис; проверка
  *  строгая, чтобы id карточки мастера не приняли за приглашение. */
 const INVITE_SEGMENT = /^invite-([0-9a-f-]{36})$/;

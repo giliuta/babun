@@ -42,7 +42,7 @@ export default function MasterRoute() {
       return;
     }
     router.replace(
-      (team ? `/calendar/masters?team=${encodeURIComponent(team)}` : "/calendar/masters") as Href,
+      (team ? `/cabinet/people?team=${encodeURIComponent(team)}` : "/cabinet/people") as Href,
     );
   };
   if (params.id === "new") {
@@ -123,7 +123,7 @@ function MasterByCard({
     const home = team || card.team_id || "";
     return (
       <Redirect
-        href={`/calendar/masters/access/${card.user_id}?team=${encodeURIComponent(home)}` as Href}
+        href={`/cabinet/people/access/${card.user_id}?team=${encodeURIComponent(home)}` as Href}
       />
     );
   }

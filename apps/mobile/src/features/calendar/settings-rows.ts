@@ -16,14 +16,14 @@ import { can, type UserRole } from "@/features/settings/role-policy";
 //
 // Сейчас все строки экрана — это настройки КОМПАНИИ и её календаря, поэтому
 // их показывает только владелец. Когда блоки `calendar.settings`,
-// `calendar.day_labels`, `services` и `masters` станут живыми на сервере,
+// `calendar.day_labels` и `services` станут живыми на сервере,
 // сюда придут уровни: строка появится у того, кому её открыли, а страница
 // останется прежней.
 
-/** Тариф компании: две строки экрана живут только на платном. */
+/** Тариф компании: «Услуги» живут только на платном. «Мастеров» здесь
+ *  больше нет — сотрудники в «Кабинет → Сотрудники» (владелец 29.09). */
 export interface CalendarSettingsPlan {
   services: boolean;
-  masters: boolean;
 }
 
 /** Что показывает страница настроек календаря этому человеку. */
@@ -34,7 +34,6 @@ export interface CalendarSettingsRows {
   addCalendar: boolean;
   timezone: boolean;
   currency: boolean;
-  masters: boolean;
   /** «Часы календаря» — видимое окно команды. */
   hours: boolean;
   /** «График команды». */
@@ -64,7 +63,6 @@ export function calendarSettingsRows(
     addCalendar: manage,
     timezone: manage,
     currency: manage,
-    masters: manage && plan.masters,
     hours: manage,
     schedule: manage,
     booking: manage,

@@ -68,21 +68,22 @@ describe("приглашение по карточке без аккаунта",
 
 describe("одна дверь на человека", () => {
   test("карточка с аккаунтом уводит на страницу сотрудника", () => {
-    const route = read("../../../../app/(dashboard)/(home)/calendar/masters/[id]/index.tsx");
+    const route = read("../../../../app/(dashboard)/cabinet/people/[id]/index.tsx");
     assert.match(route, /if \(card\?\.user_id\) \{/);
     assert.match(route, /<Redirect/);
     assert.doesNotMatch(route, /MasterHubScreen/);
-    const list = read("../../../../app/(dashboard)/(home)/calendar/masters/index.tsx");
-    assert.match(list, /item\.master\.user_id\s*\?\s*`\/calendar\/masters\/access\//);
+    const list = read("../../../../app/(dashboard)/cabinet/people/index.tsx");
+    assert.match(list, /item\.master\.user_id\s*\?\s*`\/cabinet\/people\/access\//);
   });
-  test("у каждого календаря своя строка прав, а в «Правах» — только компания", () => {
+  test("у каждой команды своя строка прав, а в «Компании» — только компания", () => {
     const view = read("MasterCardView.tsx");
     assert.match(view, /<EmployeeIdentityBlock \{\.\.\.p\} \/>/);
     assert.match(read("EmployeeIdentityBlock.tsx"), /<SectionCard title="Сотрудник"/);
-    assert.match(view, /<CalendarRightsRow/);
+    assert.match(view, /<EmployeeTeamsBlock/);
+    assert.match(read("EmployeeTeamsBlock.tsx"), /<CalendarRightsRow/);
     assert.match(view, /area !== "calendar" && area !== "finance"/);
     const member = read("MasterMemberCard.tsx");
-    assert.match(member, /calendarLine=\{\(id\) => calendarRightsLine\(blocks, draft, id\)\}/);
+    assert.match(member, /groupLine=\{\(id, group\) => calendarGroupLine\(blocks, draft, id, group\)\}/);
   });
   test("права названы словами про человека", () => {
     const map = read("../access-map.ts");
