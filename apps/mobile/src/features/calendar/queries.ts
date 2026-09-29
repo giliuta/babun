@@ -18,7 +18,7 @@ import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useAllServices } from "@/features/services/queries";
 import { useDataRole } from "@/features/settings/tenant";
-import { accessGate } from "@/features/access/my-access";
+import { accessGate, moneyKey } from "@/features/access/my-access";
 import { useMyAccess } from "@/features/access/queries";
 import { listMasterAppointmentsSafePaged } from "./master-appointments";
 import { useClientsScopeOrNull } from "@/features/clients/company-scope";
@@ -184,17 +184,17 @@ export function useDayExtras() {
   const tenantId = useTenantId();
   const roleQuery = useDataRole();
   const role = roleQuery.data;
-  // Ручные операции дня — часть «Доходов и расходов» (этап 2 доступа): читает
-  // тот, кто смотрит этот блок хотя бы в одном календаре, а не только владелец.
-  const gate = accessGate({
-    role,
-    map: useMyAccess().data,
-    blockKey: "finance.operations",
-    scope: "calendar",
+  // Ручные операции дня — деньги команды (этап 2 доступа): читает тот, кто
+  // видит хотя бы одну сторону — доходы или расходы (срез 2а) — хотя бы в
+  // одном календаре; какие строки ему придут, решает сервер (по стороне).
+  const map = useMyAccess().data;
+  const sees = (["income", "expense"] as const).some((side) => {
+    const gate = accessGate({ role, map, blockKey: moneyKey(map, side), scope: "calendar" });
+    return gate === "read" || gate === "write";
   });
   return useQuery({
     queryKey: dayExtrasQueryKey(tenantId, role),
-    enabled: !!tenantId && roleQuery.isSuccess && (gate === "read" || gate === "write"),
+    enabled: !!tenantId && roleQuery.isSuccess && sees,
     queryFn: () => listDayExtras(supabase, tenantId as string),
   });
 }
@@ -219,16 +219,15 @@ export function useSetDayExtras() {
       dateKey: string;
       extras: DayExtra[];
     }) => {
-      // Менять ручные операции может тот, у кого «Доходы и расходы» в ЭТОМ
-      // календаре — «Меняет»; сервер проверяет то же (`replace_day_extras`).
-      const gate = accessGate({
-        role,
-        map: myAccess,
-        blockKey: "finance.operations",
-        scope: "calendar",
-        teamId,
-      });
-      if (gate !== "write") {
+      // Менять ручные операции может тот, кто пишет хотя бы одну сторону денег
+      // в ЭТОМ календаре; сервер (`replace_day_extras`, срез 2а) пишет только
+      // его стороны, а чужую строку пропускает лишь нетронутой.
+      const writes = (["income", "expense"] as const).some(
+        (side) =>
+          accessGate({ role, map: myAccess, blockKey: moneyKey(myAccess, side), scope: "calendar", teamId }) ===
+          "write",
+      );
+      if (!writes) {
         throw new Error("Менять доходы и расходы в этом календаре вам не открыто.");
       }
       return setDayExtras(supabase, tenantId as string, teamId, dateKey, extras);

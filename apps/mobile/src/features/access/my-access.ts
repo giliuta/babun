@@ -117,6 +117,31 @@ export function moneyKey(map: MemberAccessMap | undefined, side: "income" | "exp
   return key;
 }
 
+/** Можно ли человеку править и удалять эту ручную операцию команды (срез 2а)
+ *  — ровно то, что пустит сервер (политики `finance_transactions_*_income` /
+ *  `_expense`): владелец — любую; сотрудник по стороне денег: «Правит всё» —
+ *  любую строку команды, «Добавляет» — только свою. На старой карте (общий
+ *  `finance.operations`) — как было: «Меняет» правит любой расход, доход —
+ *  никогда. Оплату записи, инвойс, возврат и долг вызывающий отсекает сам:
+ *  их ведут свои двери. */
+export function canEditMoneyRow(input: {
+  role: Role | null | undefined;
+  map: MemberAccessMap | undefined;
+  teamId: string | null | undefined;
+  side: "income" | "expense";
+  createdBy: string | null | undefined;
+  me: string | null | undefined;
+}): boolean {
+  const { role, map, teamId, side, createdBy, me } = input;
+  if (role === "owner" || map?.isOwner) return true;
+  if (!map || !teamId) return false;
+  const key = moneyKey(map, side);
+  const level = map.calendars[teamId]?.[key];
+  if (key === "finance.operations") return side === "expense" && level === "write";
+  if (level === "full") return true;
+  return level === "write" && !!me && createdBy === me;
+}
+
 /** Блоки финансов: понижение любого из них стирает деньги с телефона. */
 export const FINANCE_BLOCK_KEYS: readonly string[] = [
   "finance.income",

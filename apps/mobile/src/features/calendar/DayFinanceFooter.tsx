@@ -27,6 +27,8 @@ export function DayFinanceFooter({
   appointments,
   teamId,
   onTapDay,
+  showIncome = true,
+  showExpense = true,
 }: {
   days: Date[];
   appointments: Appointment[];
@@ -37,6 +39,10 @@ export function DayFinanceFooter({
    *  оплаченное), проп остаётся, чтобы не трогать экран календаря. */
   todayYmd?: string;
   onTapDay?: (d: Date) => void;
+  /** Доходы и расходы — два права (срез 2а): строка стороны, которую человек
+   *  не видит, не рисуется — иначе «Расход €0» читался бы как правда. */
+  showIncome?: boolean;
+  showExpense?: boolean;
 }) {
   const t = useThemeColors();
   const sharedServices = useFinanceServices();
@@ -116,8 +122,12 @@ export function DayFinanceFooter({
           11pt — минимум читаемости iOS (было 9pt, владелец читает деньги
           десятки раз в день). */}
       <View style={{ width: RAIL_W, paddingRight: 6, alignItems: "flex-end", justifyContent: "center" }}>
-        <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Доход</Text>
-        <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Расход</Text>
+        {showIncome ? (
+          <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Доход</Text>
+        ) : null}
+        {showExpense ? (
+          <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Расход</Text>
+        ) : null}
       </View>
       {rows.map(({ d, ymd, income, spent, dateLabel }, i) => {
         return (
@@ -127,7 +137,12 @@ export function DayFinanceFooter({
             // Мишень — во всю высоту полосы: поле полосы тоже нажимает день.
             hitSlop={{ top: 7, bottom: 7 }}
             accessibilityRole="button"
-            accessibilityLabel={`Финансы за ${dateLabel}: доход ${formatEUR(income)}, расход ${formatEUR(spent)}`}
+            accessibilityLabel={`Финансы за ${dateLabel}: ${[
+              showIncome ? `доход ${formatEUR(income)}` : null,
+              showExpense ? `расход ${formatEUR(spent)}` : null,
+            ]
+              .filter(Boolean)
+              .join(", ")}`}
             style={{
               flex: 1,
               alignItems: "center",
@@ -138,20 +153,24 @@ export function DayFinanceFooter({
           >
             {/* €0 — приглушённый t.faint: зелёный/красный только там, где
                 есть реальные деньги (цвет = смысл). */}
-            <Text
-              style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-            >
-              {formatEUR(income)}
-            </Text>
-            <Text
-              style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 ? t.danger : t.faint }}
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-            >
-              {formatEUR(spent)}
-            </Text>
+            {showIncome ? (
+              <Text
+                style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.3}
+              >
+                {formatEUR(income)}
+              </Text>
+            ) : null}
+            {showExpense ? (
+              <Text
+                style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 ? t.danger : t.faint }}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.3}
+              >
+                {formatEUR(spent)}
+              </Text>
+            ) : null}
           </Pressable>
         );
       })}

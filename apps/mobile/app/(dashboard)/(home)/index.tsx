@@ -193,7 +193,7 @@ import {
 } from "@/features/settings/local-settings";
 import { eventTypeIcon } from "@/features/calendar/event-type-icons";
 import { useCurrentRole } from "@/features/settings/tenant";
-import { accessGate } from "@/features/access/my-access";
+import { accessGate, moneyKey } from "@/features/access/my-access";
 import { useMyAccess } from "@/features/access/queries";
 import { haptics } from "@/lib/haptics";
 import {
@@ -839,14 +839,22 @@ export default function CalendarTab() {
   // Полоса «Доход / Расход» под сеткой: право И желание (настройка «Что
   // показывать»). `undefined` — согласие: у тенанта без строки настроек
   // полоса была всегда, и молчание не должно её отбирать.
-  const financeGate = accessGate({
-    role,
-    map: myAccessQuery.data,
-    blockKey: "finance.operations",
-    scope: "calendar",
-    teamId: activeTeamId,
-  });
-  const canViewCompanyFinance = financeGate === "read" || financeGate === "write";
+  // С среза 2а доходы и расходы — два права: полоса показывает ту сторону,
+  // что человек видит; месяц с прибылью — только когда видны обе (прибыль
+  // из одной стороны была бы неправдой).
+  const seesSide = (side: "income" | "expense") => {
+    const gate = accessGate({
+      role,
+      map: myAccessQuery.data,
+      blockKey: moneyKey(myAccessQuery.data, side),
+      scope: "calendar",
+      teamId: activeTeamId,
+    });
+    return gate === "read" || gate === "write";
+  };
+  const seesIncome = seesSide("income");
+  const seesExpense = seesSide("expense");
+  const canViewCompanyFinance = seesIncome || seesExpense;
   const showDayFinance =
     canViewCompanyFinance && calSettings?.showDayFinance !== false;
   // Подсветка чипа своего календаря — см. `onPickOwn`: пока переход смены
@@ -3003,6 +3011,8 @@ export default function CalendarTab() {
               appointments={financeWeekAppts}
               teamId={activeTeamId}
               todayYmd={todayYmd}
+              showIncome={seesIncome}
+              showExpense={seesExpense}
               onTapDay={(d) => setFinModalYmd(formatYMD(d))}
             />
           ) : null}
@@ -3037,6 +3047,8 @@ export default function CalendarTab() {
               appointments={financeFor(dayYmd)}
               teamId={activeTeamId}
               todayYmd={todayYmd}
+              showIncome={seesIncome}
+              showExpense={seesExpense}
               onTapDay={(d) => setFinModalYmd(formatYMD(d))}
             />
           ) : null}
@@ -3053,7 +3065,7 @@ export default function CalendarTab() {
                   financeAppointments={financeAppts}
                   teamId={activeTeamId}
                   todayYmd={todayYmd}
-                  showFinance={canViewCompanyFinance}
+                  showFinance={seesIncome && seesExpense}
                   labelFor={labelFor}
                   holeFor={holeFor}
                   onPickDay={openWeekFromMonth}

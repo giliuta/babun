@@ -43,9 +43,10 @@ import {
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { accessGate } from "@/features/access/my-access";
+import { accessGate, canEditMoneyRow, moneyKey } from "@/features/access/my-access";
 import { useMyAccess } from "@/features/access/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { useSession } from "@/providers/SessionProvider";
 
 // ФИНАНСЫ ДНЯ — ЛИСТ СНИЗУ С ПЛИТКАМИ КАК В «ФИНАНСАХ» (владелец 2026-09-08:
 // «тапаю внизу — снизу поднимается плашка; сверху четыре блока, как в
@@ -114,17 +115,16 @@ export function DayFinanceSheet({
   const { data: categories = [] } = useFinanceCategories();
   const setExtras = useSetDayExtras();
   // «СМОТРИТ» — ЛИСТ ТОТ ЖЕ, ИЗМЕНЕНИЯ ЗАКРЫТЫ (этап 2 доступа; план: кнопка
-  // на месте, серая, причина словами). Уровень — «Доходы и расходы» в ЭТОМ
-  // календаре; сервер проверяет то же, так что серое не врёт.
+  // на месте, серая, причина словами). С среза 2а доходы и расходы — два
+  // права: кнопка и строки открыты по своей стороне денег в ЭТОМ календаре;
+  // сервер проверяет то же, так что серое не врёт.
   const role = useCurrentRole().data;
-  const financeGate = accessGate({
-    role,
-    map: useMyAccess().data,
-    blockKey: "finance.operations",
-    scope: "calendar",
-    teamId,
-  });
-  const canWrite = financeGate === "write";
+  const myAccess = useMyAccess().data;
+  const me = useSession().session?.user.id ?? null;
+  const writesSide = (side: "income" | "expense") =>
+    accessGate({ role, map: myAccess, blockKey: moneyKey(myAccess, side), scope: "calendar", teamId }) === "write";
+  const canWriteIncome = writesSide("income");
+  const canWriteExpense = writesSide("expense");
   const [view, setView] = useState<DayView>("all");
 
   // Лист остаётся смонтированным с dateYmd=null: последний открытый день и
@@ -304,11 +304,17 @@ export function DayFinanceSheet({
       const id = tx.appointment_id;
       return () => openRecord(id);
     }
-    // Сотрудник правит только расходы: доход несёт выданный чек, и его
-    // исправление переписало бы документ клиента. Доходы правит владелец —
-    // сервер отказывает сотруднику ровно так же.
-    if (canWrite && canEditTransaction(tx) && (role === "owner" || tx.type === "expense")) {
-      return () => openOperation(tx, tx.type === "expense" ? "expense" : "income");
+    // Сотрудник правит операцию своей стороны денег (срез 2а): «Правит всё» —
+    // любую строку команды, «Добавляет» — свою; оплату долга ведёт экран
+    // долгов. Сервер отказывает ровно так же — двери, которая кончится
+    // отказом, нет (правило 10).
+    const side = tx.type === "expense" ? "expense" : "income";
+    if (
+      canEditTransaction(tx) &&
+      (role === "owner" || !tx.debt_id) &&
+      canEditMoneyRow({ role, map: myAccess, teamId: tx.team_id ?? teamId, side, createdBy: tx.created_by, me })
+    ) {
+      return () => openOperation(tx, side);
     }
     return undefined;
   };
@@ -341,13 +347,18 @@ export function DayFinanceSheet({
     return { word: "ожидается", amount: debt, color: t.sub };
   };
 
-  const cta: { label: string; onPress: () => void } =
+  const cta: { label: string; onPress: () => void; open: boolean } =
     view === "income"
-      ? { label: "Добавить доход", onPress: () => openOperation(null, "income") }
+      ? { label: "Добавить доход", onPress: () => openOperation(null, "income"), open: canWriteIncome }
       : view === "expense"
-        ? { label: "Добавить расход", onPress: () => openOperation(null, "expense") }
-        : // План дня, «Долг» и «Ожидается» — общая операция.
-          { label: "Добавить операцию", onPress: () => openOperation(null, "expense") };
+        ? { label: "Добавить расход", onPress: () => openOperation(null, "expense"), open: canWriteExpense }
+        : // План дня, «Долг» и «Ожидается» — общая операция: форма открывается
+          // на той стороне, которую он пишет (расход, если пишет обе).
+          {
+            label: "Добавить операцию",
+            onPress: () => openOperation(null, canWriteExpense ? "expense" : "income"),
+            open: canWriteIncome || canWriteExpense,
+          };
 
   const closing = dateYmd == null;
 
@@ -375,12 +386,12 @@ export function DayFinanceSheet({
             pointerEvents={closing ? "none" : "auto"}
             style={{ paddingHorizontal: 16, paddingTop: 8, gap: 6 }}
           >
-            {canWrite ? null : (
+            {cta.open ? null : (
               <Text style={{ fontSize: 13, color: t.sub, textAlign: "center" }}>
                 Только просмотр
               </Text>
             )}
-            <GradientButton label={cta.label} onPress={cta.onPress} disabled={!canWrite} />
+            <GradientButton label={cta.label} onPress={cta.onPress} disabled={!cta.open} />
           </View>
         }
       >
@@ -513,7 +524,9 @@ export function DayFinanceSheet({
                 // УДАЛЕНИЕ — СВАЙПОМ, ПРАВОЙ КРОМКОЙ (канон 9, аудит 24.09):
                 // крестик в строке был четвёртым способом удалить что-то в
                 // продукте и мишенью 36pt рядом с суммой.
-                return teamId && canWrite ? (
+                // Стирает строку своей стороны: сервер пишет только её, а чужую
+                // сторону дня оставляет как была (срез 2а).
+                return teamId && (e.kind === "income" ? canWriteIncome : canWriteExpense) ? (
                   <SwipeRow
                     key={e.id}
                     label="Удалить"

@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { MemberAccessMap } from "./access-map";
+import type { AccessLevel, MemberAccessMap } from "./access-map";
 import {
   accessGate,
   bestCalendarLevel,
   FINANCE_BLOCK_KEYS,
   isFinanceDataKey,
   isNewerAccess,
+  canEditMoneyRow,
   lostAccess,
   moneyKey,
   recordLevelsChanged,
@@ -136,6 +137,40 @@ describe("сторона денег — новый ключ или старый 
   test("карты нет или календарей нет — новый ключ: ворота всё равно закрыты или владелец", () => {
     assert.equal(moneyKey(undefined, "income"), "finance.income");
     assert.equal(moneyKey(map(), "expense"), "finance.expense");
+  });
+});
+
+describe("править ручную операцию — ровно то, что пустит сервер", () => {
+  const ME = "user-me";
+  const edit = (levels: Record<string, AccessLevel>, side: "income" | "expense", createdBy: string | null) =>
+    canEditMoneyRow({ role: "master", map: map({ calendars: { a: levels } }), teamId: "a", side, createdBy, me: ME });
+
+  test("«Правит всё» — любую строку команды, и без автора тоже", () => {
+    assert.equal(edit({ "finance.income": "full" }, "income", "someone"), true);
+    assert.equal(edit({ "finance.income": "full" }, "income", null), true);
+  });
+
+  test("«Добавляет» — только свою; чужую и без автора — нет", () => {
+    assert.equal(edit({ "finance.expense": "write" }, "expense", ME), true);
+    assert.equal(edit({ "finance.expense": "write" }, "expense", "someone"), false);
+    assert.equal(edit({ "finance.expense": "write" }, "expense", null), false);
+  });
+
+  test("«Видит» и чужая сторона — нет", () => {
+    assert.equal(edit({ "finance.income": "read", "finance.expense": "full" }, "income", ME), false);
+  });
+
+  test("старая карта: «Меняет» правит любой расход, доход — никогда", () => {
+    assert.equal(edit({ [OPS]: "write" }, "expense", "someone"), true);
+    assert.equal(edit({ [OPS]: "write" }, "income", ME), false);
+  });
+
+  test("владелец — любую; без календаря сотрудник — ничего", () => {
+    assert.equal(canEditMoneyRow({ role: "owner", map: undefined, teamId: null, side: "income", createdBy: null, me: ME }), true);
+    assert.equal(
+      canEditMoneyRow({ role: "master", map: map({ calendars: { a: { "finance.income": "full" } } }), teamId: null, side: "income", createdBy: null, me: ME }),
+      false,
+    );
   });
 });
 
