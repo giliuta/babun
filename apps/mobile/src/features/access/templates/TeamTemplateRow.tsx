@@ -1,7 +1,6 @@
 import { useRouter, type Href } from "expo-router";
 
 import { NavRow } from "@/components/ui/card-rows";
-import { SectionCard } from "@/components/ui/SectionCard";
 import { chooseOption } from "@/lib/choose";
 import { useThemeColors } from "@/theme/colors";
 
@@ -9,13 +8,13 @@ import type { AccessBlock, AccessLevel } from "../access-map";
 import { useAccessTemplates } from "./queries";
 import { matchedTemplate, type AccessTemplate } from "./templates";
 
-// СТРОКА «ШАБЛОН» НАД ПРАВАМИ КОМАНДЫ (владелец 29.09: «давать разрешение
+// СТРОКА «ШАБЛОН» В «ИТОГЕ» ПРАВ КОМАНДЫ (владелец 29.09: «давать разрешение
 // точечно… с шаблонами»). Говорит, по какому шаблону стоят права в этой
 // команде, или «Свой» — если хоть одну строку правили руками. Тап — выбрать
 // шаблон: положения ложатся КОПИЕЙ, дальше строки ниже правятся как обычно.
 // Шаблонов нет — строка ведёт в «Шаблоны доступа».
 
-export function TeamTemplateBlock({
+export function TeamTemplateRow({
   blocks,
   levelOf,
   onApply,
@@ -45,14 +44,13 @@ export function TeamTemplateBlock({
   };
 
   return (
-    <SectionCard title="Шаблон" padded={false}>
-      <NavRow
-        label="Шаблон"
-        value={templates.length === 0 ? "Создать" : (matched?.name ?? "Свой")}
-        valueColor={templates.length === 0 ? t.accent : undefined}
-        dimmed={busy}
-        onPress={busy ? undefined : () => void pick()}
-      />
-    </SectionCard>
+    <NavRow
+      separated
+      label="Шаблон"
+      value={templates.length === 0 ? "Создать" : (matched?.name ?? "Свой")}
+      valueColor={templates.length === 0 ? t.accent : undefined}
+      dimmed={busy}
+      onPress={busy ? undefined : () => void pick()}
+    />
   );
 }

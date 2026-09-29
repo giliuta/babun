@@ -24,8 +24,7 @@ import {
   type RightsArea,
 } from "./master-draft";
 import { RIGHTS_AREAS, levelWord } from "./rights-rows";
-import type { CalendarGroup } from "./access-summary";
-import { EmployeeTeamsBlock, teamRightsLine } from "./EmployeeTeamsBlock";
+import { EmployeeTeamsBlock } from "./EmployeeTeamsBlock";
 import {
   EmployeeIdentityBlock,
   type EmployeeAccessLine,
@@ -147,9 +146,9 @@ export interface MasterCardViewProps {
   contacts?: EmployeeContacts;
   /** «Заметка сотрудника» — сразу под блоком «Сотрудник». */
   note?: ReactNode;
-  /** Права в календаре по разделам приложения («Календарь», «Запись»,
-   *  «Деньги»). Есть — права стоят одним блоком «Доступ». */
-  groupLine?: (teamId: string, group: CalendarGroup) => string;
+  /** Итог прав человека в команде выжимкой через точку (строка команды).
+   *  Есть — строка команды открывает её права. */
+  teamLine?: (teamId: string) => string;
   /** «Посмотреть его глазами» — строкой в блоке «Доступ». */
   onMirror?: () => void;
   /** Блоки ниже прав: «Работа», «Личное». */
@@ -191,8 +190,8 @@ export function MasterCardView(p: MasterCardViewProps) {
           {p.showCalendars ? (
             <EmployeeTeamsBlock
               teams={chosen}
-              line={p.groupLine ? (id) => teamRightsLine(p.groupLine!, id) : undefined}
-              onOpenTeam={p.groupLine ? p.onOpenCalendarRights : undefined}
+              line={p.teamLine}
+              onOpenTeam={p.teamLine ? p.onOpenCalendarRights : undefined}
               onRemoveTeam={p.onDetachCalendar}
               onAddTeam={openCalendars && anyUnchosen ? openCalendars : undefined}
               onMirror={p.onMirror}

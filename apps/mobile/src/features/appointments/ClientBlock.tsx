@@ -101,7 +101,7 @@ export function ClientBlock({
                 }}
                 numberOfLines={1}
               >
-                {client.phone ?? "без телефона"}
+                {client.phone || "без телефона"}
               </Text>
             </View>
           </Pressable>

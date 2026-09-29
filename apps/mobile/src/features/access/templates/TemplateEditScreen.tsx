@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
@@ -12,9 +14,10 @@ import { useAccessTemplates, useUpdateTemplate } from "./queries";
 import { templateLevel, withTemplateChanges } from "./templates";
 
 // ШАБЛОН ДОСТУПА — ТА ЖЕ СТРАНИЦА, ЧТО ПРАВА КОМАНДЫ (владелец 29.09;
-// AGENTS «одна сущность — одно тело»): блоки «Календарь · Запись · Финансы ·
-// Клиенты», в строке «Не видит · Видит · Меняет». Сверху — имя шаблона.
-// Каждая строка пишется сразу, как права человека; кнопки «Сохранить» нет.
+// AGENTS «одна сущность — одно тело»): «Итог», блоки «Календарь · Запись ·
+// Финансы · Клиенты», строка — право и его ступень, тап — шторка с видом
+// блока. Сверху — имя шаблона. Ступень пишется сразу, как права человека;
+// кнопки «Сохранить» нет.
 
 /** Календарь шаблона: у шаблона его нет, строки команды живут под этим id. */
 const TEMPLATE_TEAM = "template";
@@ -26,6 +29,10 @@ export function TemplateEditScreen({ id, onBack }: { id: string; onBack: () => v
   const blocksQuery = useAccessBlocks();
   const templatesQuery = useAccessTemplates();
   const update = useUpdateTemplate();
+  // Шаблон пишется целым набором положений: две записи в полёте могли бы
+  // прийти на сервер наоборот, и вторая затёрла бы первую. Пока одна
+  // сохраняется, строки и шторка отказывают коротким тиком.
+  const [savingKey, setSavingKey] = useState<string | null>(null);
   const template = templatesQuery.data?.find((t) => t.id === id) ?? null;
   const blocks = blocksQuery.data;
 
@@ -58,13 +65,16 @@ export function TemplateEditScreen({ id, onBack }: { id: string; onBack: () => v
       activeTeamId={TEMPLATE_TEAM}
       onSelectTeam={noop}
       onlyCalendar
-      busyKey={null}
+      busyKey={savingKey}
       levelOf={(block: AccessBlock) => templateLevel(template, block)}
       onPick={(block: AccessBlock, level: AccessLevel) => {
         const changes = levelChanges(blocks, block, level, TEMPLATE_TEAM);
         if (!changes) return;
-        haptics.tap();
-        update.mutate({ id, levels: withTemplateChanges(template, changes) }, { onError: fail });
+        setSavingKey(block.key);
+        update.mutate(
+          { id, levels: withTemplateChanges(template, changes) },
+          { onError: fail, onSettled: () => setSavingKey(null) },
+        );
       }}
       top={
         <SectionCard title="Шаблон" padded={false}>

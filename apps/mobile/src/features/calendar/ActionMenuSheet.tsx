@@ -69,6 +69,12 @@ const LOOK: Record<string, { icon: LucideIcon; color: string }> = {
   "Метка дня": { icon: Bookmark, color: SETTINGS_TILE.teal },
 };
 
+/** Вид пункта меню записи — значок и цвет плитки. Тот же, что в самом меню:
+ *  им рисует пункт и превью прав в шторке права (страница сотрудника). */
+export function actionLook(label: string): { icon: LucideIcon; color: string } | undefined {
+  return LOOK[label];
+}
+
 export function ActionMenuSheet({
   menu,
   onClose,

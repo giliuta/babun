@@ -83,7 +83,7 @@ describe("одна дверь на человека", () => {
     assert.match(read("EmployeeTeamsBlock.tsx"), /<CalendarRightsRow/);
     assert.match(view, /area !== "calendar" && area !== "finance"/);
     const member = read("MasterMemberCard.tsx");
-    assert.match(member, /groupLine=\{\(id, group\) => calendarGroupLine\(blocks, draft, id, group\)\}/);
+    assert.match(member, /teamLine=\{\(id\) => draftTeamBrief\(blocks, draft, id\)\}/);
   });
   test("права названы словами про человека", () => {
     const map = read("../access-map.ts");

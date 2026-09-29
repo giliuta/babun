@@ -9,27 +9,12 @@ import { TYPE } from "@/components/ui/tokens";
 import type { Team } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 
-import { CALENDAR_GROUPS, CALENDAR_GROUP_TITLE, type CalendarGroup } from "./access-summary";
-
 // БЛОК «КОМАНДЫ» НА СТРАНИЦЕ СОТРУДНИКА (владелец 29.09: «страницу мастера
 // перенесём в кабинет… и полноценно на каждую команду, что он может делать,
 // что не может»; «в команде один он может видеть клиентов, в команде три —
 // нет»). Строка на каждую его команду: плитка цвета, имя и сводка прав В ЭТОЙ
 // команде; тап — права команды, свайп — «Убрать» из неё. Внизу — «Добавить в
 // команду» и «Посмотреть его глазами».
-
-/** Сводка прав команды одной строкой: «Календарь: видит 3 из 6 · Запись: без
- *  клиента и цен · Финансы: не видит». Раздел без живых блоков в строку не
- *  идёт. */
-export function teamRightsLine(
-  groupLine: (teamId: string, group: CalendarGroup) => string,
-  teamId: string,
-): string {
-  return CALENDAR_GROUPS.map((group) => ({ group, line: groupLine(teamId, group) }))
-    .filter((row) => row.line !== "")
-    .map((row) => `${CALENDAR_GROUP_TITLE[row.group]}: ${row.line.toLocaleLowerCase("ru-RU")}`)
-    .join(" · ");
-}
 
 export function EmployeeTeamsBlock({
   teams,
@@ -41,8 +26,8 @@ export function EmployeeTeamsBlock({
 }: {
   /** Его команды, первая — домашняя. */
   teams: readonly Team[];
-  /** Сводка прав команды. Нет — строка только с именем (карточка без
-   *  аккаунта: прав у неё ещё нет). */
+  /** Итог прав в команде выжимкой (`draftTeamBrief`). Нет — строка только с
+   *  именем (карточка без аккаунта: прав у неё ещё нет). */
   line?: (teamId: string) => string;
   onOpenTeam?: (teamId: string) => void;
   onRemoveTeam?: (teamId: string) => void;
@@ -126,7 +111,7 @@ function CalendarRightsRow({
           {team.name}
         </Text>
         {line ? (
-          <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, lineHeight: 17, color: t.sub, marginTop: 2 }}>
+          <Text numberOfLines={3} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, lineHeight: 17, color: t.sub, marginTop: 2 }}>
             {line}
           </Text>
         ) : null}

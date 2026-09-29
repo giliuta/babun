@@ -21,7 +21,7 @@ import {
   useSetMemberAccess,
 } from "../queries";
 import { memberRefusal } from "./MasterMemberCard";
-import { TeamTemplateBlock } from "../templates/TeamTemplateBlock";
+import { TeamTemplateRow } from "../templates/TeamTemplateRow";
 import { templateBlocks, templateChanges, type AccessTemplate } from "../templates/templates";
 import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRightsView";
 import {
@@ -155,9 +155,9 @@ export function MemberRights({
 
   return (
     <MasterRightsView
-      top={
+      summaryFooter={
         focusTeam ? (
-          <TeamTemplateBlock
+          <TeamTemplateRow
             blocks={blocks}
             levelOf={(block) => mapLevelOf(block, map, focusTeam)}
             onApply={applyTemplate}

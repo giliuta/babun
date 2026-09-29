@@ -28,7 +28,7 @@ import {
   useSetMemberCalendars,
 } from "../queries";
 import { removalMessage, upcomingWorkCount } from "./removal-impact";
-import { calendarGroupLine } from "./access-summary";
+import { draftTeamBrief } from "../rights-ui/team-sentence";
 import { useAccessTemplates } from "../templates/queries";
 import { templateChanges } from "../templates/templates";
 import { MasterPersonalBlocks, MasterWorkBlock } from "./MasterProfileBlocks";
@@ -406,7 +406,7 @@ export function MasterMemberCard({
         }
         // У КАЖДОГО КАЛЕНДАРЯ СВОИ ПРАВА (владелец 23.09): строка календаря
         // говорит, что человек может в НЁМ, и открывает права этого календаря.
-        groupLine={(id, group) => calendarGroupLine(blocks, draft, id, group)}
+        teamLine={(id) => draftTeamBrief(blocks, draft, id)}
         // «Посмотреть его глазами» — строкой в блоке «Доступ», а не в ⋯.
         onMirror={() =>
           preview({ blocks, draft, name })

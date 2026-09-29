@@ -33,7 +33,7 @@ import {
   toggleTeam,
   type MasterDraft,
 } from "./master-draft";
-import { calendarGroupLine } from "./access-summary";
+import { draftTeamBrief } from "../rights-ui/team-sentence";
 import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, companyAreasOf } from "./rights-rows";
 
@@ -246,7 +246,7 @@ function MasterDraftCard({
         showCalendars={!!blocks}
         onOpenCalendars={() => setCalendarsOpen(true)}
         onDetachCalendar={(id) => updateMasterDraft((currentDraft) => toggleTeam(currentDraft, id, true))}
-        groupLine={blocks ? (id, group) => calendarGroupLine(blocks, draft, id, group) : undefined}
+        teamLine={blocks ? (id) => draftTeamBrief(blocks, draft, id) : undefined}
         onOpenCalendarRights={openCalendarRights}
         footer={
           // Серая кнопка — чего-то не хватает или реестр прав не пришёл — сама

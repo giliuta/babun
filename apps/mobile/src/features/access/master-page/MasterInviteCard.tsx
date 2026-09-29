@@ -36,7 +36,7 @@ import {
   withLiveTeams,
   type MasterDraft,
 } from "./master-draft";
-import { calendarGroupLine } from "./access-summary";
+import { draftTeamBrief } from "../rights-ui/team-sentence";
 import { rightsFocusQuery } from "./rights-focus";
 import { areaLevelsOf, companyAreasOf } from "./rights-rows";
 import { waitSubtitle } from "../invitation-wait";
@@ -263,7 +263,7 @@ export function MasterInviteCard({
         // Как у сотрудника (STORY-087): календари строками со своими правами,
         // клиенты — «Правами в компании» со сводкой словами.
         showCalendars
-        groupLine={(id, group) => calendarGroupLine(blocks, draft, id, group)}
+        teamLine={(id) => draftTeamBrief(blocks, draft, id)}
         onOpenCalendarRights={(id) =>
           router.push(
             `/cabinet/people/${invitationSegment(row.id)}/rights?${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
