@@ -6,7 +6,7 @@ import {
   CalendarRange,
   Globe,
   Briefcase,
-  Palette,
+  ClipboardList,
   Tags,
   Trash2,
 } from "lucide-react-native";
@@ -27,15 +27,11 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { SwitchRow } from "@/components/ui/SwitchRow";
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { useThemeColors } from "@/theme/colors";
-import {
-  useCalendarSettings,
-  useSaveCalendarSettings,
-} from "@/features/settings/local-settings";
+import { useCalendarSettings } from "@/features/settings/local-settings";
 import {
   useCities,
   useTeams,
@@ -144,7 +140,6 @@ export default function CalendarSettingsScreen() {
   const { data: teams = [], isLoading: teamsLoading } = useTeams();
   const { data: schedules = {} } = useAllTeamSchedules();
   const update = useUpdateTeam();
-  const saveSettings = useSaveCalendarSettings();
   const archiveTeam = useCalendarDelete().archive;
   const toast = useToast();
   const [savedTick, setSavedTick] = useState(0);
@@ -202,7 +197,7 @@ export default function CalendarSettingsScreen() {
       hours: rowLevel("calendar.hours"),
     },
   );
-  // ПОДПИСЬ СТРОКИ «ДИЗАЙН» — ЭТОЙ КОМАНДЫ: откуда цвет и сколько блоков.
+  // ПОДПИСЬ СТРОКИ «ЗАПИСИ» — ЭТОЙ КОМАНДЫ: откуда цвет и сколько блоков.
   const bookingBlocks = useBookingBlocks(team?.id ?? null);
   const bookingRule = useAutoColorRule(team?.id ?? null);
   const bookingSub = [
@@ -240,13 +235,6 @@ export default function CalendarSettingsScreen() {
         onError: (e) => notify("Ошибка", e.message),
       },
     );
-  };
-
-  // Эти два переключателя — НАСТРОЙКА КОМПАНИИ, а не календаря: сетку они
-  // меняют во всех сразу. Пишутся тем же instant-commit, что и всё здесь.
-  const patchSettings = (p: Partial<CalendarSettings>) => {
-    if (!settings) return;
-    saveSettings.mutate(p, { onError: (e) => notify("Ошибка", e.message) });
   };
 
   const work = effectiveWorkHours(s);
@@ -516,13 +504,15 @@ export default function CalendarSettingsScreen() {
             <SectionCard>
               <SettingsRow
                 tile={SETTINGS_TILE.blue}
-                icon={Palette}
-                // «ДИЗАЙН», А НЕ «ЗАПИСЬ» (владелец 2026-09-24): одна страница
-                // вида, цвета, блоков записи и события и типов событий.
-                title="Дизайн"
+                icon={ClipboardList}
+                // «ЗАПИСИ», А НЕ «ДИЗАЙН» (владелец 30.09: «дизайн переименуем
+                // в записи клиентов или как-то так»): одна страница вида,
+                // цвета, блоков записи и события, типов событий и «Скрывать
+                // отменённые». Не «Записи клиентов» — там и события.
+                title="Записи"
                 sub={bookingSub}
-                // КАЛЕНДАРЬ ЕДЕТ АДРЕСОМ, как у «Услуг» и «Меток»: «Дизайн» у
-                // каждой команды свой (владелец 24.09).
+                // КАЛЕНДАРЬ ЕДЕТ АДРЕСОМ, как у «Услуг» и «Меток»: «Записи» у
+                // каждой команды свои (владелец 24.09).
                 onPress={() =>
                   router.push({
                     pathname: "/calendar/design",
@@ -606,37 +596,10 @@ export default function CalendarSettingsScreen() {
             </SectionCard>
           ) : null}
 
-          {/* ЧТО ПОКАЗЫВАТЬ — ДВА ТУМБЛЕРА ЗДЕСЬ, А НЕ НА СВОЕЙ СТРАНИЦЕ
-              (владелец 2026-08-27: «саму страницу „что показывать" можем
-              полностью убрать, что там находится — поставим в самый конец, над
-              „удалить календарь"; только коротко, без объяснений»).
-
-              Страница заводилась по образцу клиентской «Что показывать на
-              карточке», чтобы главный экран не превращался в простыню
-              тумблеров. Но тумблеров оказалось ДВА, и целая страница ради двух
-              переключателей — это лишний заход и лишняя дверь: строка «Что
-              показывать · Показываем всё» отвечала на вопрос, которого никто
-              не задавал.
-
-              ПОДПИСИ БЕЗ ПОЯСНЕНИЙ. Прежние («Полоса по дням: сверху доход,
-              снизу расход, тап по дню открывает разбор») описывали то, что
-              видно на самой сетке через секунду после переключения. */}
-          {/* КАЖДЫЙ ТУМБЛЕР — СВОЯ КАРТОЧКА (владелец 2026-08-27: «разделитель
-              между тумблерами сделай не волосинкой, а отдельные блоки»). Они
-              про РАЗНОЕ — деньги и записи, — и волосинка внутри одной карточки
-              склеивала их в один вопрос. */}
-          {/* «Показывать доход и расход», «Метки дня» и «События» — БЕЗ
-              ТУМБЛЕРОВ (владелец 30.09: «давай это вообще удалим… всегда будет
-              открыто»): включены всегда (`ALWAYS_ON_FEATURES`). */}
-          {rows.viewPrefs ? (
-            <SectionCard className="mt-4">
-              <SwitchRow
-                label="Скрывать отменённые"
-                value={!!s.hideCancelled}
-                onChange={(v) => patchSettings({ hideCancelled: v })}
-              />
-            </SectionCard>
-          ) : null}
+          {/* ТУМБЛЕРОВ ВИДА ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 30.09): «Показывать доход
+              и расход», «Метки дня» и «События» включены всегда
+              (`ALWAYS_ON_FEATURES`), «Скрывать отменённые» — у команды на
+              странице «Записи», вкладка «Клиент». */}
           {/* ПОД ПРОВЕРКОЙ `team` НЕ ДЛЯ КРАСОТЫ: карточка печатает `team.name`,
               а при нуле календарей его нет — экран падал бы на первом же кадре.
               Дыру открыл я сам, когда добавлял удаление 27 августа. */}

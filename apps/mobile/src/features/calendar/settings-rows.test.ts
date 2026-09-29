@@ -22,7 +22,6 @@ describe("строки настроек календаря", () => {
       booking: true,
       services: true,
       labels: true,
-      viewPrefs: true,
       remove: true,
       any: true,
     });

@@ -75,9 +75,6 @@ export interface CalendarSettingsRows {
   services: boolean;
   /** «Метки» — метки дня. */
   labels: boolean;
-  /** Тумблеры вида: «Показывать доход и расход», «Скрывать отменённые».
-   *  Настройка КОМПАНИИ (`calendar_settings`), а не устройства. */
-  viewPrefs: boolean;
   /** «Удалить календарь» — последняя строка экрана. */
   remove: boolean;
   /** Ни одной строки: страница остаётся собой — шапка и лента календарей.
@@ -111,7 +108,6 @@ export function calendarSettingsRows(
     booking: manage,
     services: manage && plan.services,
     labels: manage,
-    viewPrefs: manage,
     remove: manage,
   };
   return {

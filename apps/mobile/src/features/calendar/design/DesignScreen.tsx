@@ -21,12 +21,14 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SwitchRow } from "@/components/ui/SwitchRow";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { GUTTER } from "@/components/ui/tokens";
 import { RecordMark } from "@/components/ui/RecordMark";
 import { RowCaption } from "@/components/ui/card-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { haptics } from "@/lib/haptics";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { ColorSheet } from "@/features/appointments/BookingSheets";
 import { useTeams, useUpdateTeam } from "@/features/reference/queries";
@@ -46,9 +48,12 @@ import {
   type BookingBlockId,
   type EventBlockId,
 } from "@/features/appointments/booking-prefs";
-import { usePersonalEventTypes } from "@/features/settings/local-settings";
+import { useCalendarSettings, usePersonalEventTypes } from "@/features/settings/local-settings";
 
-// «ДИЗАЙН» — КАК ВЫГЛЯДИТ И ИЗ ЧЕГО СОСТОИТ ЗАПИСЬ. ТРИ КАРТОЧКИ, ВСЁ ТАПОМ.
+// «ЗАПИСИ» (до 30.09 — «Дизайн») — КАК ВЫГЛЯДИТ И ИЗ ЧЕГО СОСТОИТ ЗАПИСЬ.
+// ТРИ КАРТОЧКИ, ВСЁ ТАПОМ. Владелец 30.09: «дизайн переименуем в записи
+// клиентов или как-то так» — «Записи», потому что на странице и клиенты, и
+// события («Клиент | Событие»).
 //
 // Владелец 2026-09-24, вторым заходом: «продумай каждый кусочек, как лично
 // ты бы сделал; „автоматически“ отдельно я бы не вставлял — вижу, как
@@ -132,6 +137,28 @@ export function DesignScreen() {
   const ordinary = team?.color || fallback;
   const updateTeam = useUpdateTeam();
 
+  // «СКРЫВАТЬ ОТМЕНЁННЫЕ» — ЗДЕСЬ, НА «КЛИЕНТЕ» (владелец 30.09: «скрывать
+  // отменённые закинем именно в блок клиентов»; раньше — последний тумблер
+  // шестерёнки). Пишется в КОМАНДУ (`teams.hide_cancelled`), как всё на этой
+  // странице: календарь и так читает сперва её, а старое значение компании
+  // (`calendar_settings`) — только пока у команды своего нет. Тумблер ставит
+  // явное да/нет, не `null`: «как у компании» отсюда уже не выбрать.
+  const companyHides = !!useCalendarSettings().data?.hideCancelled;
+  const [hidesNow, setHidesNow] = useState<boolean | null>(null);
+  const hidesCancelled = hidesNow ?? team?.hide_cancelled ?? companyHides;
+  const setHidesCancelled = (next: boolean) => {
+    if (!team) return;
+    haptics.tap();
+    setHidesNow(next);
+    updateTeam.mutate(
+      { id: team.id, patch: { hide_cancelled: next } },
+      {
+        onSettled: () => setHidesNow(null),
+        onError: (e) => notify("Ошибка", e.message),
+      },
+    );
+  };
+
   // ПОДСВЕТКА — ТОЛЬКО У ВКЛЮЧЁННОГО БЛОКА (владелец 25.09: «убираю объект —
   // подсветка уходит; то же с оплатой; тогда запись считается заполненной»).
   const situations = COLOR_SITUATIONS.filter((s) =>
@@ -175,7 +202,7 @@ export function DesignScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Дизайн" subtitle={team?.name} />
+      <ScreenHeader title="Записи" subtitle={team?.name} />
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         {/* ПЕРЕКЛЮЧАТЕЛЬ «КЛИЕНТ | СОБЫТИЕ» — НАВЕРХУ И НА ВСЮ СТРАНИЦУ
             (владелец 25.09: «выбираю клиенты — настраиваю всё по клиентам,
@@ -229,6 +256,14 @@ export function DesignScreen() {
               ))}
             </SectionCard>
             <RowCaption text="Цвет, выбранный в самой записи, главнее." />
+
+            <SectionCard className="mt-4">
+              <SwitchRow
+                label="Скрывать отменённые"
+                value={hidesCancelled}
+                onChange={setHidesCancelled}
+              />
+            </SectionCard>
           </>
         ) : (
           <>
