@@ -4,12 +4,14 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Text,
   View,
   type TextInput,
 } from "react-native";
 import { MoreHorizontal } from "lucide-react-native";
 
 import { NavRow } from "@/components/ui/card-rows";
+import { ScopeChips } from "@/components/ui/ScopeChips";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -153,6 +155,37 @@ export interface MasterCardViewProps {
   onMirror?: () => void;
   /** Блоки ниже прав: «Работа», «Личное». */
   children?: ReactNode;
+  /** ЛЕНТА КОМАНД ПОД ШАПКОЙ, КАК В НАСТРОЙКАХ КАЛЕНДАРЯ (владелец 29.09:
+   *  «захожу в календарь команда один, и там полностью все настройки по
+   *  каждому — вот так»). Есть — права выбранной команды стоят прямо на
+   *  странице (`teamRights`), вместо строк команд и карточки «Компания». */
+  teamChips?: {
+    activeId: string | null;
+    onSelect: (teamId: string) => void;
+    /** «Добавить» справа от ленты — в какие команды он входит. */
+    onAdd?: () => void;
+  };
+  /** Права выбранной команды — итог, шаблон, строки по разделам. */
+  teamRights?: ReactNode;
+}
+
+/** «Добавить» справа от ленты команд — тем же словом и видом, что в
+ *  настройках календаря: текстом, без «+» (стандарт «Добавить»). */
+function ChipsAddButton({ onPress }: { onPress: () => void }) {
+  const t = useThemeColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Добавить в команду"
+      style={({ pressed }) => ({ minHeight: 44, justifyContent: "center", opacity: pressed ? 0.5 : 1 })}
+    >
+      <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 15, fontWeight: "600", color: t.accent }}>
+        Добавить
+      </Text>
+    </Pressable>
+  );
 }
 
 export function MasterCardView(p: MasterCardViewProps) {
@@ -170,7 +203,26 @@ export function MasterCardView(p: MasterCardViewProps) {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title={p.title} subtitle={p.subtitle} onBack={p.onBack} right={p.headerRight} />
+      {/* Шов под шапкой один — при ленте его несёт она. */}
+      <ScreenHeader
+        title={p.title}
+        subtitle={p.subtitle}
+        onBack={p.onBack}
+        right={p.headerRight}
+        seam={!p.teamChips}
+      />
+      {p.teamChips ? (
+        <ScopeChips
+          // В ПОРЯДКЕ КОМАНД КОМПАНИИ, как лента настроек календаря: одна и та
+          // же команда стоит на одном месте в обеих лентах.
+          items={p.teams
+            .filter((team) => p.teamIds.includes(team.id))
+            .map((team) => ({ id: team.id, name: team.name, color: team.color }))}
+          activeId={p.teamChips.activeId}
+          onSelect={p.teamChips.onSelect}
+          trailing={p.teamChips.onAdd ? <ChipsAddButton onPress={p.teamChips.onAdd} /> : undefined}
+        />
+      ) : null}
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -187,7 +239,8 @@ export function MasterCardView(p: MasterCardViewProps) {
           {/* КОМАНДЫ — ПРАВА ПО КАЖДОЙ КОМАНДЕ (владелец 29.09): строка на
               команду со сводкой её прав, тап — права этой команды. Карточка
               без аккаунта показывает команды без сводки: прав у неё нет. */}
-          {p.showCalendars ? (
+          {p.teamRights ?? null}
+          {p.showCalendars && !p.teamChips ? (
             <EmployeeTeamsBlock
               teams={chosen}
               line={p.teamLine}
@@ -199,7 +252,7 @@ export function MasterCardView(p: MasterCardViewProps) {
           ) : null}
 
           {/* КОМПАНИЯ — ПРАВА НЕ ПРО КОМАНДУ (клиенты, шаблоны SMS). */}
-          {companyAreas.length > 0 ? (
+          {companyAreas.length > 0 && !p.teamChips ? (
             <SectionCard title="Компания" padded={false}>
               {companyAreas.map((area, i) => {
                 const level = p.areaLevels?.[area];

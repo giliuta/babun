@@ -1,36 +1,13 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 
-import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
-import { memberAccessQueryKey } from "@/lib/company-query-keys";
-import { useTenantId } from "@/lib/tenant";
 
-import {
-  levelOf as mapLevelOf,
-  type AccessBlock,
-  type AccessChange,
-  type AccessLevel,
-  type AccessRefusal,
-  type MemberAccessMap,
-} from "../access-map";
-import {
-  useAccessBlocks,
-  useCompanyMembers,
-  useMemberAccess,
-  useSetMemberAccess,
-} from "../queries";
-import { memberRefusal } from "./MasterMemberCard";
+import { levelOf as mapLevelOf, type AccessRefusal } from "../access-map";
+import { useAccessBlocks, useCompanyMembers, useMemberAccess } from "../queries";
 import { TeamTemplateRow } from "../templates/TeamTemplateRow";
-import { templateBlocks, templateChanges, type AccessTemplate } from "../templates/templates";
 import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRightsView";
-import {
-  MEMBER_REFUSAL_TEXT,
-  draftFromMemberAccess,
-  levelChanges,
-  rightsAreaOf,
-  withMemberChanges,
-} from "./rights-rows";
+import { memberRefusal, useMemberRightsWriter } from "./member-rights-writer";
+import { MEMBER_REFUSAL_TEXT, draftFromMemberAccess, rightsAreaOf } from "./rights-rows";
 import { RightsPlaceholder, activeOf, liveIdsOf, usePreview } from "./rights-page-shared";
 
 // РЕЖИМ «ПРАВА СОТРУДНИКА» — ТРЕТИЙ ИЗ ТРЁХ (черновик, приглашение, человек).
@@ -53,18 +30,13 @@ export function MemberRights({
   focus?: RightsFocus;
   onBack: () => void;
 }) {
-  const toast = useToast();
-  const qc = useQueryClient();
-  const tenantId = useTenantId();
-  const blocksQuery = useAccessBlocks();
+  const blocksQuery = useAccessBlocks({ fresh: true });
   const accessQuery = useMemberAccess(userId);
   const membersQuery = useCompanyMembers();
   const preview = usePreview();
-  const setAccess = useSetMemberAccess(userId);
+  const writer = useMemberRightsWriter(userId, blocksQuery.data);
   const teamsQuery = useTeams();
   const [active, setActive] = useState<string | null>(teamId);
-  /** Какая строка сейчас уезжает на сервер — она одна и пригашена. */
-  const [saving, setSaving] = useState<string | null>(null);
 
   const subtitle = membersQuery.data?.find((member) => member.userId === userId)?.name;
   const failure = blocksQuery.error ?? accessQuery.error;
@@ -102,56 +74,7 @@ export function MemberRights({
   const liveIds = liveIdsOf(teams);
   const visible = map.attachedCalendars.filter((id) => liveIds.has(id));
 
-  const pick = (block: AccessBlock, level: AccessLevel, pickTeam: string | null) => {
-    // Две записи не делят один снимок карты: откат второй вернул бы первую.
-    if (setAccess.isPending) return;
-    // Сбрасываются ВСЕ зависимые, и неживые: их уровень хранится и заработает,
-    // когда блок оживёт (`levelChanges`).
-    const changes = levelChanges(blocks, block, level, pickTeam);
-    if (!changes) return;
-    setSaving(block.key);
-    const key = memberAccessQueryKey(tenantId, userId);
-    const previous = qc.getQueryData<MemberAccessMap>(key);
-    if (previous) qc.setQueryData(key, withMemberChanges(previous, blocks, changes));
-    setAccess.mutate(changes, {
-      onError: (error) => {
-        if (previous) qc.setQueryData(key, previous);
-        toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
-      },
-      onSettled: () => setSaving(null),
-    });
-  };
-
-  // ШАБЛОН — КОПИЕЙ В ЭТУ КОМАНДУ (владелец 29.09). Одна пачка в
-  // `set_member_access`, оптимистично; «Отменить» возвращает прежние положения
-  // тех же строк.
   const focusTeam = focus?.kind === "calendar" ? focus.teamId : null;
-  const applyTemplate = (template: AccessTemplate) => {
-    if (!focusTeam || setAccess.isPending) return;
-    const key = memberAccessQueryKey(tenantId, userId);
-    const previous = qc.getQueryData<MemberAccessMap>(key) ?? map;
-    const undo: AccessChange[] = templateBlocks(blocks).map((block) => ({
-      block: block.key,
-      team_id: focusTeam,
-      level: mapLevelOf(block, previous, focusTeam),
-    }));
-    const changes = templateChanges(blocks, template, focusTeam);
-    qc.setQueryData(key, withMemberChanges(previous, blocks, changes));
-    setAccess.mutate(changes, {
-      onSuccess: () =>
-        toast(`Права по шаблону «${template.name}»`, "success", {
-          label: "Отменить",
-          onPress: () =>
-            setAccess.mutate(undo, {
-              onError: (error) => toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error"),
-            }),
-        }),
-      onError: (error) => {
-        qc.setQueryData(key, previous);
-        toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
-      },
-    });
-  };
 
   return (
     <MasterRightsView
@@ -160,8 +83,8 @@ export function MemberRights({
           <TeamTemplateRow
             blocks={blocks}
             levelOf={(block) => mapLevelOf(block, map, focusTeam)}
-            onApply={applyTemplate}
-            busy={setAccess.isPending}
+            onApply={(template) => writer.applyTemplate(template, focusTeam, map)}
+            busy={writer.pending}
           />
         ) : undefined
       }
@@ -178,8 +101,8 @@ export function MemberRights({
       // 20260915110000): уровень хранится сейчас и заработает, когда блок
       // оживёт, — как на приглашении, иначе выданное там не снять после
       // приёма.
-      busyKey={setAccess.isPending ? saving : null}
-      onPick={pick}
+      busyKey={writer.busyKey}
+      onPick={writer.pick}
       area={rightsAreaOf(area)}
       onPreview={() =>
         preview({

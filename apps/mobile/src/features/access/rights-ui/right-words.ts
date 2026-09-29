@@ -45,6 +45,8 @@ const STEP: Record<string, Words> = {
   "calendar.create": { off: "Не может", write: "Может" },
   "calendar.move": { off: "Не может", write: "Может" },
   "calendar.cancel": { off: "Не может", write: "Может" },
+  // Метка дня (владелец 29.09: «не видит, видит, меняет — другими словами»).
+  "calendar.day_labels": { off: "Скрыта", read: "Только видит", write: "Видит и меняет" },
   "record.team": { read: "Видит", write: "Меняет" },
   "record.label": { off: "Не видит", read: "Видит", write: "Ставит" },
   "record.color": { off: "Не может", write: "Может" },

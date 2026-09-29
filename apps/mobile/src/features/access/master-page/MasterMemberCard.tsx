@@ -6,6 +6,7 @@ import { useRouter, type Href } from "expo-router";
 import { useAppointments } from "@/features/calendar/queries";
 import { useBusinessNow } from "@/features/appointments/business-now";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
@@ -16,11 +17,11 @@ import { useRemoveTenantMember } from "@/features/settings/team-access";
 import { chooseOption } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
+import { useThemeColors } from "@/theme/colors";
 
-import { refusalOf, type AccessRefusal } from "../access-map";
+import { levelOf as mapLevelOf, type AccessBlock, type AccessRefusal } from "../access-map";
 import { waitSheetExit } from "../InviteMemberSheet";
 import {
-  AccessRequestError,
   useAccessBlocks,
   useCompanyMembers,
   useMemberAccess,
@@ -29,6 +30,9 @@ import {
 } from "../queries";
 import { removalMessage, upcomingWorkCount } from "./removal-impact";
 import { draftTeamBrief } from "../rights-ui/team-sentence";
+import { AccessSectionsCard } from "../rights-ui/AccessSectionsCard";
+import { TeamRightsCards } from "../rights-ui/TeamRightsCards";
+import { TeamTemplateRow } from "../templates/TeamTemplateRow";
 import { useAccessTemplates } from "../templates/queries";
 import { templateChanges } from "../templates/templates";
 import { MasterPersonalBlocks, MasterWorkBlock } from "./MasterProfileBlocks";
@@ -37,7 +41,10 @@ import { contactsHolderOf, useMasterProfileWrite } from "./use-profile-write";
 import { rightsFocusQuery } from "./rights-focus";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
-import { usePreview } from "./rights-page-shared";
+import { CALENDAR_GROUPS } from "./access-summary";
+import { activeOf, usePreview } from "./rights-page-shared";
+import { memberRefusal, useMemberRightsWriter } from "./member-rights-writer";
+import { teamLevels, teamSummary, viewSections } from "./rights-view-sections";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import {
   copyCalendarLevels,
@@ -69,9 +76,6 @@ import {
 // Открепление — действие с последствиями, поэтому оно спрашивает подтверждение
 // словами: в откреплённом календаре человек теряет и записи, и деньги.
 
-export const memberRefusal = (error: unknown): AccessRefusal =>
-  error instanceof AccessRequestError ? refusalOf(error) : "other";
-
 export function MasterMemberCard({
   userId,
   teamId,
@@ -81,11 +85,12 @@ export function MasterMemberCard({
   teamId: string | null;
   onBack: () => void;
 }) {
+  const t = useThemeColors();
   const toast = useToast();
   const router = useRouter();
   const qc = useQueryClient();
   const teamsQuery = useTeams();
-  const blocksQuery = useAccessBlocks();
+  const blocksQuery = useAccessBlocks({ fresh: true });
   const accessQuery = useMemberAccess(userId);
   const membersQuery = useCompanyMembers();
   const mastersQuery = useMasters({ includeInactive: true });
@@ -100,6 +105,10 @@ export function MasterMemberCard({
   const preview = usePreview();
   const [nameText, setNameText] = useState<string | null>(null);
   const [calendarsOpen, setCalendarsOpen] = useState(false);
+  // КОМАНДА, ЧЬИ ПРАВА НА СТРАНИЦЕ (лента под шапкой). Первой — та, из
+  // которой открыли; её нет среди его команд — первая из них.
+  const [activeTeam, setActiveTeam] = useState<string | null>(teamId);
+  const writer = useMemberRightsWriter(userId, blocksQuery.data);
   // Кто ждёт, пока лист календарей уедет (`onExited`).
   const afterCalendars = useRef<(() => void) | null>(null);
   const closeCalendarsSheet = () =>
@@ -207,6 +216,8 @@ export function MasterMemberCard({
       // что уже стоят в его первом календаре, — одним тапом, без десяти строк.
       const source = current.find((teamId) => teamNameOf(teamId));
       if (!(await save())) return;
+      // Новая команда сразу выбрана в ленте: её права ставятся прямо здесь.
+      setActiveTeam(id);
       // Стартовые права нового календаря (владелец 24.09): без них человек
       // входил в календарь и не видел в нём даже своей работы.
       const applyStarter = async () => {
@@ -260,11 +271,6 @@ export function MasterMemberCard({
         // «Выставлю сам» и закрытый вопрос — со стартовых прав.
         await applyStarter();
       }
-      if (picked === 1) {
-        router.push(
-          `/cabinet/people/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
-        );
-      }
       return;
     }
     // УБИРАЕМ СРАЗУ, С «ОТМЕНИТЬ» (владелец 22.09: «всё можно вот так вот
@@ -284,6 +290,27 @@ export function MasterMemberCard({
           .catch((error) => toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error")),
     });
   };
+
+  // ПРАВА ВЫБРАННОЙ КОМАНДЫ — ПРЯМО НА СТРАНИЦЕ (владелец 29.09: «захожу в
+  // календарь команда один, и там полностью все настройки по каждому»). Тот
+  // же набор, что был на отдельной странице команды, плюс права компании.
+  // Без команды из адреса — первая в ленте, а она идёт порядком команд.
+  const activeId = activeOf(
+    activeTeam,
+    teams.filter((team) => draft.teamIds.includes(team.id)).map((team) => team.id),
+  );
+  const activeTeamRow = teams.find((team) => team.id === activeId) ?? null;
+  const map = accessQuery.data;
+  const levelOf = (block: AccessBlock, pickTeam: string | null) => mapLevelOf(block, map, pickTeam ?? "");
+  const rightsSectionsNow = viewSections({
+    blocks,
+    levelOf,
+    activeId,
+    onlyCalendar: true,
+    onlyCompany: false,
+    withCompany: true,
+  });
+  const levels = teamLevels(blocks, levelOf, activeId);
 
   const patchCard = (patch: {
     full_name?: string;
@@ -426,6 +453,61 @@ export function MasterMemberCard({
             : undefined
         }
         note={card ? <EmployeeNoteBlock card={card} /> : undefined}
+        teamChips={{
+          activeId,
+          onSelect: setActiveTeam,
+          onAdd: () => {
+            Keyboard.dismiss();
+            setCalendarsOpen(true);
+          },
+        }}
+        teamRights={
+          <>
+          <TeamRightsCards
+            blocks={blocks}
+            sections={[]}
+            levels={levels}
+            summary={activeId ? teamSummary(blocks, levels) : null}
+            summaryFooter={
+              activeId ? (
+                <TeamTemplateRow
+                  blocks={blocks}
+                  levelOf={(block) => mapLevelOf(block, map, activeId)}
+                  onApply={(template) => writer.applyTemplate(template, activeId, map)}
+                  busy={writer.pending}
+                />
+              ) : undefined
+            }
+            sheetSubtitle={(block) =>
+              [name, block.scope === "calendar" ? activeTeamRow?.name : "Вся компания"]
+                .filter(Boolean)
+                .join(" · ") || undefined
+            }
+            teamName={activeTeamRow?.name ?? ""}
+            teamColor={activeTeamRow?.color ?? t.accent}
+            busyKey={writer.busyKey}
+            onPick={(block, level) => writer.pick(block, level, block.scope === "calendar" ? activeId : null)}
+          />
+          {/* ДОСТУП — ПОСТРАНИЧНО (владелец 29.09): строка раздела, тап —
+              страница со всеми его правами в выбранной команде. */}
+          <AccessSectionsCard
+            sections={rightsSectionsNow}
+            onOpen={(section) => {
+              Keyboard.dismiss();
+              const group = CALENDAR_GROUPS.find((each) => each === section.key);
+              const focus =
+                group && activeId
+                  ? rightsFocusQuery({ kind: "calendar", teamId: activeId, group })
+                  : rightsFocusQuery({ kind: "company" });
+              router.push(
+                `/cabinet/people/access/${userId}?team=${encodeURIComponent(activeId ?? teamId ?? "")}&rights=1&${focus}` as Href,
+              );
+            }}
+          />
+          </>
+        }
+        // ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ (канон 7.1): посмотреть, что из этого выйдет.
+        footer={<GradientButton label="Посмотреть его глазами" onPress={() => preview({ blocks, draft, name })} />}
       >
         {card ? (
           <>

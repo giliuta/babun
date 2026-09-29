@@ -76,7 +76,7 @@ function DraftRights({
   onBack: () => void;
 }) {
   const preview = usePreview();
-  const blocksQuery = useAccessBlocks();
+  const blocksQuery = useAccessBlocks({ fresh: true });
   const teamsQuery = useTeams();
   const current = useMasterDraft();
   const [active, setActive] = useState<string | null>(null);
@@ -143,7 +143,7 @@ function InviteRights({
 }) {
   const toast = useToast();
   const preview = usePreview();
-  const blocksQuery = useAccessBlocks();
+  const blocksQuery = useAccessBlocks({ fresh: true });
   const teamsQuery = useTeams();
   const update = useUpdateMasterInvitation();
   const { query, row } = usePendingInvitation(invitationId, onBack);

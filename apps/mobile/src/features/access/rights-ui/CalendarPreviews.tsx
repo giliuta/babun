@@ -8,6 +8,7 @@ import { PRESET_COLOR_VALUES } from "@babun/shared/common/utils/colors";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { ICON } from "@/components/ui/tokens";
 import { actionLook } from "@/features/calendar/ActionMenuSheet";
+import { DateCell } from "@/features/calendar/date-header";
 import { useThemeColors } from "@/theme/colors";
 
 import type { AccessBlock, AccessLevel } from "../access-map";
@@ -32,8 +33,9 @@ function DayGrid({
   event,
 }: {
   color: string;
-  /** Подпись записи — с тем, что из неё видно (`sampleTile`). */
-  tile: SampleTile;
+  /** Подпись записи — с тем, что из неё видно (`sampleTile`); `null` —
+   *  записей на сетке нет вовсе («Записи клиентов: Скрыты»). */
+  tile: SampleTile | null;
   /** Подпись свободного часа, по которому можно создать; нет — час пустой. */
   free?: string;
   event?: "read" | "write";
@@ -51,7 +53,7 @@ function DayGrid({
             {hour}
           </Text>
           <View style={{ flex: 1, borderTopWidth: 1, borderTopColor: t.separator, paddingRight: 10, paddingVertical: 4 }}>
-            {i === 0 ? (
+            {i === 0 && tile ? (
               <View
                 style={{
                   flex: 1,
@@ -156,48 +158,64 @@ export function AppointmentMenuPreview({
 }
 
 /** Три дня недели и метка над первым. */
-function DayLabelPreview({ write }: { write: boolean }) {
-  const t = useThemeColors();
-  const days = [
-    { dow: "ПН", day: "29" },
-    { dow: "ВТ", day: "30" },
-    { dow: "СР", day: "1" },
-  ];
+// Имена меток — общие («Метка 1»), без городов: продукт для любого бизнеса
+// (владелец 29.09: «это SaaS, стандартная — просто „Метка"»).
+const DAY_LABEL = { name: "Метка 1", color: SETTINGS_TILE.teal };
+
+/** Метки команды в выборе — как у него по тапу на число. */
+const DAY_LABEL_CHOICES = [
+  DAY_LABEL,
+  { name: "Метка 2", color: SETTINGS_TILE.orange },
+  { name: "Метка 3", color: SETTINGS_TILE.purple },
+];
+
+/** Три дня шапки: понедельник с меткой и два за ним. Шапка — крупная, как в
+ *  «Дне»: в ней метка названа целиком, а недельная режет имя до 4 букв. */
+const WEEK = [28, 29, 30].map((day) => new Date(2026, 8, day));
+
+/** Подпись над видом метки дня — что с ней у человека на этой ступени. */
+const DAY_LABEL_CAPTION: Record<"hidden" | "read" | "write", string> = {
+  hidden: "Так у него: дни без меток",
+  read: "Так он видит метку дня",
+  write: "Так он ставит метку: тап по числу",
+};
+
+/** МЕТКА ДНЯ ТАК, КАК ЕЁ ВИДИТ СОТРУДНИК (владелец 29.09: «открывается
+ *  шторка, показывается, как это выглядит, этот блок, и что он может с этим
+ *  делать»). Шапка недели — настоящая ячейка календаря (`DateCell`): «Не
+ *  видит» — дни без метки, «Видит» — метка под числом, «Меняет» — под шапкой
+ *  ещё и выбор метки, тот же, что открывается у него по тапу на число. */
+function DayLabelPreview({ level }: { level: "hidden" | "read" | "write" }) {
   return (
-    <Card style={{ marginHorizontal: 16, marginTop: 8, flexDirection: "row", paddingVertical: 10 }}>
-      {days.map((d, i) => (
-        <View key={d.day} style={{ flex: 1, alignItems: "center", gap: 4 }}>
-          <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 11, fontWeight: "600", color: t.faint }}>
-            {d.dow}
-          </Text>
-          <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 20, fontWeight: "700", color: t.ink }}>
-            {d.day}
-          </Text>
-          {i === 0 ? (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-                borderRadius: t.radius.pill,
-                backgroundColor: `${SETTINGS_TILE.teal}24`,
-                borderWidth: write ? 1 : 0,
-                borderColor: SETTINGS_TILE.teal,
-              }}
-            >
-              <Bookmark color={SETTINGS_TILE.teal} size={ICON.xs} strokeWidth={2.2} />
-              <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 12, fontWeight: "600", color: SETTINGS_TILE.teal }}>
-                Лимассол
-              </Text>
-            </View>
-          ) : (
-            <View style={{ height: 22 }} />
-          )}
+    <>
+      <Card style={{ marginHorizontal: 16, marginTop: 8, flexDirection: "row", paddingVertical: 6 }}>
+        {WEEK.map((date, i) => (
+          <DateCell
+            key={date.getDate()}
+            date={date}
+            size="lg"
+            isToday={false}
+            label={i === 0 && level !== "hidden" ? DAY_LABEL : null}
+          />
+        ))}
+      </Card>
+      {level === "write" ? (
+        <View style={{ marginTop: 8 }}>
+          <SelectList>
+            {DAY_LABEL_CHOICES.map((choice, i) => (
+              <SelectRow
+                key={choice.name}
+                icon={Bookmark}
+                title={choice.name}
+                color={choice.color}
+                selected={i === 0}
+                onPress={noop}
+              />
+            ))}
+          </SelectList>
         </View>
-      ))}
-    </Card>
+      ) : null}
+    </>
   );
 }
 
@@ -246,12 +264,20 @@ export function CalendarPreview({
           />
         </PreviewFrame>
       );
-    case "calendar.day_labels":
+    case "calendar.day_labels": {
+      // Закрытая метка — это дни без неё, а не бледный блок: сама шапка
+      // недели у него на месте, пропадает только метка.
+      const level = actions.dayLabels;
       return (
-        <PreviewFrame state={levelState(actions.dayLabels)}>
-          <DayLabelPreview write={actions.dayLabels === "write"} />
+        <PreviewFrame
+          state={level === "hidden" ? "read" : levelState(level)}
+          caption={DAY_LABEL_CAPTION[level]}
+          captionOff={level === "hidden"}
+        >
+          <DayLabelPreview level={level} />
         </PreviewFrame>
       );
+    }
     case "calendar.schedule":
       return (
         <PreviewFrame state={levelState(actions.schedule)}>

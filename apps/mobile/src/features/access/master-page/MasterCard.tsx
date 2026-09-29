@@ -78,7 +78,7 @@ function MasterDraftCard({
   const toast = useToast();
   const router = useRouter();
   const teams = useTeams().data ?? [];
-  const blocksQuery = useAccessBlocks();
+  const blocksQuery = useAccessBlocks({ fresh: true });
   const blocks = blocksQuery.data;
   const create = useCreateMasterInvitation();
   const [calendarsOpen, setCalendarsOpen] = useState(false);

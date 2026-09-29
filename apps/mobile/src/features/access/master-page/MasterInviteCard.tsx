@@ -81,7 +81,7 @@ export function MasterInviteCard({
   const toast = useToast();
   const router = useRouter();
   const teamsQuery = useTeams();
-  const blocksQuery = useAccessBlocks();
+  const blocksQuery = useAccessBlocks({ fresh: true });
   const tenantQuery = useTenant();
   const update = useUpdateMasterInvitation();
   const revoke = useRevokeInvitation();

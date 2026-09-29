@@ -26,7 +26,7 @@ const noop = () => {};
 
 export function TemplateEditScreen({ id, onBack }: { id: string; onBack: () => void }) {
   const toast = useToast();
-  const blocksQuery = useAccessBlocks();
+  const blocksQuery = useAccessBlocks({ fresh: true });
   const templatesQuery = useAccessTemplates();
   const update = useUpdateTemplate();
   // Шаблон пишется целым набором положений: две записи в полёте могли бы

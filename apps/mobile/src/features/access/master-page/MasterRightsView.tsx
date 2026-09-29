@@ -1,40 +1,30 @@
-import { useRef, useState, type ReactNode } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { useRef, type ReactNode } from "react";
+import { ScrollView, View } from "react-native";
 
-import { NavRow } from "@/components/ui/card-rows";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { SectionCard } from "@/components/ui/SectionCard";
-import { haptics } from "@/lib/haptics";
 import type { Team } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 
 import { AREA_TITLE, type AccessBlock, type AccessLevel } from "../access-map";
-import { RightSheet } from "../rights-ui/RightSheet";
-import { isClosedStep, rightTitle, stepDanger, stepWord } from "../rights-ui/right-words";
-import { teamSentence } from "../rights-ui/team-sentence";
-import { CALENDAR_GROUPS, CALENDAR_GROUP_TITLE, inGroup, orderGroupRows } from "./access-summary";
+import { TeamRightsCards } from "../rights-ui/TeamRightsCards";
+import { CALENDAR_GROUP_TITLE, type CalendarGroup } from "./access-summary";
 import type { RightsArea } from "./master-draft";
-import { offeredBlocks } from "./rights-copy";
-import { rightsSections, type LevelReader } from "./rights-rows";
+import type { LevelReader } from "./rights-rows";
 import type { RightsFocus } from "./rights-focus";
+import { teamLevels, teamSummary, viewSections } from "./rights-view-sections";
 
 export type { RightsFocus };
 
 // «ПРАВА» — ОДНА СТРАНИЦА НА ЧЕРНОВИК, ПРИГЛАШЕНИЕ, СОТРУДНИКА И ШАБЛОН.
 //
 // СТРОКИ И ШТОРКА (владелец 29.09: «как в настройках iPhone… по строке
-// поднимается шторка, и сам этот блок визуально в этой шторке сверху»). Строка
-// — право и его ступень словом этого права («Клиент — Видит», «Счета —
-// Управляет»); тап поднимает шторку, где сверху стоит сам блок так, как его
-// увидит сотрудник, а ниже — ступени с пояснением. Сегменты по три положения
-// в каждой строке (так было до 29.09) делали страницу в два экрана высотой.
-//
-// Над разделами у страницы команды — ИТОГ одной-тремя фразами: что он видит,
-// что с клиентами и деньгами, может ли удалять. Кнопки «Сохранить» нет —
+// поднимается шторка, и сам этот блок визуально в этой шторке сверху»).
+// Строки, итог и шторку рисует `TeamRightsCards` — то же тело стоит на
+// главной странице сотрудника под лентой команд. Кнопки «Сохранить» нет —
 // выбранное ложится сразу.
 //
 // СТРОК ТОЛЬКО У ЖИВЫХ БЛОКОВ (STORY-083): пятнадцать из двадцати одного
@@ -50,10 +40,14 @@ export type { RightsFocus };
 export function focusViewProps(
   focus: RightsFocus | undefined,
   teams: readonly Team[],
-): { title?: string; onlyCalendar: boolean; onlyCompany: boolean } {
+): { title?: string; onlyCalendar: boolean; onlyCompany: boolean; group?: CalendarGroup } {
   if (!focus) return { onlyCalendar: false, onlyCompany: false };
   if (focus.kind === "company") {
-    return { title: "Права в компании", onlyCalendar: false, onlyCompany: true };
+    return { title: "Компания", onlyCalendar: false, onlyCompany: true };
+  }
+  // Раздел доступа — его имя в шапке («Календарь»), команда — в подписи.
+  if (focus.group) {
+    return { title: CALENDAR_GROUP_TITLE[focus.group], onlyCalendar: true, onlyCompany: false, group: focus.group };
   }
   const name = teams.find((team) => team.id === focus.teamId)?.name;
   return { title: name ?? "Права", onlyCalendar: true, onlyCompany: false };
@@ -75,9 +69,13 @@ export function MasterRightsView({
   title = "Права",
   onlyCalendar = false,
   onlyCompany = false,
+  group,
   top,
   summaryFooter,
 }: {
+  /** Страница одного раздела доступа («Календарь»): только его права, без
+   *  итога и шаблона — они про команду целиком и живут на её странице. */
+  group?: CalendarGroup;
   /** Над разделами: карточка имени шаблона. */
   top?: ReactNode;
   /** Строка внутри «Итога» под фразой — «Шаблон» у прав команды. */
@@ -109,9 +107,6 @@ export function MasterRightsView({
   const t = useThemeColors();
   const scrollRef = useRef<ScrollView>(null);
   const scrolled = useRef(false);
-  /** Право, чья шторка открыта; держится, пока шторка уезжает. */
-  const [sheetKey, setSheetKey] = useState<string | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
 
   const chips = teamIds
     .map((id) => teams.find((team) => team.id === id))
@@ -130,63 +125,27 @@ export function MasterRightsView({
   const teamName = team?.name ?? title;
   const teamColor = team?.color ?? t.accent;
 
-  const registrySections = rightsSections(blocks, levelOf, onlyCompany ? null : activeId)
-    .map((section) => ({
-      key: section.area as string,
-      area: section.area,
-      title: section.title,
-      rows: section.rows.filter((row) =>
-        onlyCalendar ? row.block.scope === "calendar" : onlyCompany ? row.block.scope !== "calendar" : true,
-      ),
-    }))
-    // Права компании, открытые строкой «Компания», — только свой раздел.
-    .filter((section) => !(onlyCompany && area) || section.area === area);
-  // ПРАВА ОДНОЙ КОМАНДЫ — БЛОКАМИ РАЗДЕЛОВ ПРИЛОЖЕНИЯ (владелец 29.09):
-  // «Календарь», «Запись» (в порядке блоков страницы записи), «Финансы»,
-  // «Клиенты». В реестре первые два — один раздел «Записи».
-  const sections = (
-    onlyCalendar
-      ? CALENDAR_GROUPS.map((group) => ({
-          key: group as string,
-          area: (group === "finance" ? "finance" : group === "clients" ? "clients" : "calendar") as RightsArea,
-          title: CALENDAR_GROUP_TITLE[group],
-          rows: orderGroupRows(
-            group,
-            registrySections
-              .flatMap((section) => section.rows)
-              .filter((row) => inGroup(row.block.key, group)),
-          ),
-        }))
-      : registrySections
-  ).filter((section) => section.rows.length > 0);
+  const sections = viewSections({
+    blocks,
+    levelOf,
+    activeId,
+    onlyCalendar,
+    onlyCompany,
+    area: onlyCompany ? area : undefined,
+    group,
+  });
   const companyTitle = onlyCompany && area ? AREA_TITLE[area] : null;
-
-  // ПОЛОЖЕНИЯ ВСЕХ ЖИВЫХ ПРАВ ЭТОЙ КОМАНДЫ — вид блока в шторке и итог
-  // считаются по ним (свёрнутые зависимые читаются как есть).
-  const live = offeredBlocks(blocks);
-  const levels: Record<string, AccessLevel> = {};
-  for (const block of live) {
-    levels[block.key] = levelOf(block, block.scope === "calendar" ? activeId : null);
-  }
-  const liveKeys = new Set(live.map((block) => block.key));
-  const summary = onlyCalendar ? teamSentence((key) => (liveKeys.has(key) ? levels[key] : undefined)) : null;
-  const sheetBlock = live.find((block) => block.key === sheetKey) ?? null;
-
-  const open = (block: AccessBlock) => {
-    // Две записи не делят один снимок карты. Отказ — вслух: короткий тик в
-    // палец, иначе строка выглядит сломанной, а не занятой.
-    if (busyKey !== null) {
-      haptics.warning();
-      return;
-    }
-    haptics.tap();
-    setSheetKey(block.key);
-    setSheetOpen(true);
-  };
+  const levels = teamLevels(blocks, levelOf, activeId);
+  const summary = onlyCalendar && !group ? teamSummary(blocks, levels) : null;
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title={companyTitle ?? title} subtitle={subtitle} onBack={onBack} seam={!withChips} />
+      <ScreenHeader
+        title={companyTitle ?? title}
+        subtitle={group ? [subtitle, teamName].filter(Boolean).join(" · ") || undefined : subtitle}
+        onBack={onBack}
+        seam={!withChips}
+      />
       {withChips ? (
         <ScopeChips items={chips} activeId={activeId} onSelect={onSelectTeam} />
       ) : null}
@@ -200,44 +159,26 @@ export function MasterRightsView({
       ) : (
         <ScrollView ref={scrollRef} className="flex-1" contentContainerStyle={{ paddingBottom: 48 }}>
           {top ?? null}
-          {summary ? (
-            <SectionCard title="Итог" padded={false}>
-              <Text
-                maxFontSizeMultiplier={1.3}
-                style={{ paddingHorizontal: 16, paddingTop: 2, paddingBottom: 12, fontSize: 15, lineHeight: 21, color: t.ink }}
-              >
-                {summary}
-              </Text>
-              {summaryFooter ?? null}
-            </SectionCard>
-          ) : null}
-          {sections.map((section) => (
-            <View
-              key={section.key}
-              onLayout={(event) => {
-                if (section.area !== area || scrolled.current) return;
-                scrolled.current = true;
-                scrollRef.current?.scrollTo({ y: event.nativeEvent.layout.y, animated: false });
-              }}
-            >
-              <SectionCard title={section.title} padded={false}>
-                {section.rows.map((row, i) => {
-                  const danger = stepDanger(row.block, row.level) !== null;
-                  return (
-                    <NavRow
-                      key={row.block.key}
-                      separated={i > 0}
-                      label={rightTitle(row.block)}
-                      value={stepWord(row.block, row.level, levels)}
-                      valueColor={isClosedStep(row.level) ? t.faint : danger ? t.warning : undefined}
-                      dimmed={busyKey === row.block.key}
-                      onPress={() => open(row.block)}
-                    />
-                  );
-                })}
-              </SectionCard>
-            </View>
-          ))}
+          <TeamRightsCards
+            blocks={blocks}
+            sections={sections}
+            levels={levels}
+            summary={summary}
+            summaryFooter={group ? undefined : summaryFooter}
+            sheetSubtitle={(block) =>
+              [subtitle, block.scope === "calendar" ? teamName : "Вся компания"].filter(Boolean).join(" · ") ||
+              undefined
+            }
+            teamName={teamName}
+            teamColor={teamColor}
+            busyKey={busyKey}
+            onPick={(block, level) => onPick(block, level, block.scope === "calendar" ? activeId : null)}
+            onSectionLayout={(section, y) => {
+              if (section.area !== area || scrolled.current) return;
+              scrolled.current = true;
+              scrollRef.current?.scrollTo({ y, animated: false });
+            }}
+          />
         </ScrollView>
       )}
       {/* ЕДИНСТВЕННОЕ ДЕЙСТВИЕ СТРАНИЦЫ — ВНИЗУ (канон 7.1): посмотреть, что
@@ -247,18 +188,6 @@ export function MasterRightsView({
           <GradientButton label="Посмотреть его глазами" onPress={onPreview} />
         </View>
       ) : null}
-      <RightSheet
-        visible={sheetOpen}
-        block={sheetBlock}
-        blocks={blocks}
-        levels={levels}
-        subtitle={[subtitle, onlyCompany ? null : teamName].filter(Boolean).join(" · ") || undefined}
-        teamName={teamName}
-        teamColor={teamColor}
-        busy={busyKey !== null}
-        onPick={(block, level) => onPick(block, level, block.scope === "calendar" ? activeId : null)}
-        onClose={() => setSheetOpen(false)}
-      />
     </Screen>
   );
 }

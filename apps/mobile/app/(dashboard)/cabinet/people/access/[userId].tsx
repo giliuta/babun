@@ -25,6 +25,8 @@ export default function MemberAccessRoute() {
     calendar?: string | string[];
     /** `company` — права компании (клиенты). */
     scope?: string | string[];
+    /** Раздел доступа («calendar») — страница только его прав. */
+    group?: string | string[];
   }>();
   const userId = first(params.userId);
   const team = first(params.team) || null;
@@ -47,7 +49,7 @@ export default function MemberAccessRoute() {
         userId={userId}
         teamId={team}
         area={first(params.area)}
-        focus={rightsFocusOf(first(params.calendar), first(params.scope))}
+        focus={rightsFocusOf(first(params.calendar), first(params.scope), first(params.group))}
         onBack={back}
       />
     );

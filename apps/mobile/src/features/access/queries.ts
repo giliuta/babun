@@ -92,10 +92,15 @@ function parseMembers(value: unknown): CalendarMember[] {
 }
 
 /** Реестр блоков — общий для всех компаний, меняют его только миграции. */
-export function useAccessBlocks() {
+export function useAccessBlocks({ fresh = false }: { fresh?: boolean } = {}) {
   return useQuery({
     queryKey: accessBlocksQueryKey(),
     staleTime: 5 * 60_000,
+    // СТРАНИЦЫ ПРАВ ЧИТАЮТ РЕЕСТР ПРИ КАЖДОМ ОТКРЫТИИ (владелец 30.09 после
+    // наката «Записей клиентов»: строка новая на сервере, а на экране ещё
+    // пять минут стояла старая «Новые записи»). Запрос в одну маленькую
+    // таблицу; экраны календаря и записи живут на кэше, как прежде.
+    refetchOnMount: fresh ? "always" : true,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("access_blocks")

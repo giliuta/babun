@@ -39,16 +39,32 @@ export const RECORD_ROW_ORDER: readonly string[] = [
   "record.files",
 ];
 
-/** ПРАВА КАЛЕНДАРЯ — ОТ ЧАСТОГО К РЕДКОМУ: что он делает с записями (новые,
- *  перенос, отмена), потом что видит вокруг них (события, метка дня, график). */
+/** ПРАВА КАЛЕНДАРЯ. Метка дня — первой (владелец 29.09: «поставь метку
+ *  первым»), дальше — что он делает с записями (новые, перенос, отмена) и что
+ *  видит вокруг них (события, график). */
 export const CALENDAR_ROW_ORDER: readonly string[] = [
+  "calendar.day_labels",
   "calendar.create",
   "calendar.move",
   "calendar.cancel",
   "calendar.events",
-  "calendar.day_labels",
   "calendar.schedule",
 ];
+
+/** БЛОКИ НА СТРАНИЦЕ РАЗДЕЛА ДОСТУПА (владелец 29.09: «первый блок —
+ *  главное календаря, потом второй блок — свои значения, третий — свои»).
+ *  Карточка со своей шапкой на каждый блок; право, не вошедшее ни в один,
+ *  встаёт последней карточкой без шапки. У раздела без блоков — одна
+ *  карточка без шапки: имя раздела уже в шапке страницы. */
+export interface SectionBlock {
+  key: string;
+  title: string;
+  keys: readonly string[];
+}
+
+export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock[]>> = {
+  calendar: [{ key: "main", title: "Главное", keys: CALENDAR_ROW_ORDER }],
+};
 
 /** Порядок строк раздела: запись — как на её странице, календарь — от
  *  частого к редкому, прочие — реестр. */
