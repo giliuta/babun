@@ -149,7 +149,6 @@ export function MemberRights({
           }),
           name: subtitle ?? "",
           area: rightsAreaOf(area),
-          calendarName: teams.find((team) => team.id === activeOf(active, visible))?.name ?? null,
         })
       }
     />

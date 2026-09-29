@@ -124,8 +124,6 @@ function DraftRights({
           draft,
           name: draft.name,
           area: rightsAreaOf(area),
-          calendarName:
-            teams.find((team) => team.id === activeOf(active, draft.teamIds))?.name ?? null,
         })
       }
     />
@@ -209,8 +207,6 @@ function InviteRights({
           draft,
           name: draft.name,
           area: rightsAreaOf(area),
-          calendarName:
-            teams.find((team) => team.id === activeOf(active, draft.teamIds))?.name ?? null,
         })
       }
     />

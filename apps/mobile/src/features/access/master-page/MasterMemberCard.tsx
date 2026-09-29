@@ -391,7 +391,7 @@ export function MasterMemberCard({
         groupLine={(id, group) => calendarGroupLine(blocks, draft, id, group)}
         // «Посмотреть его глазами» — строкой в блоке «Доступ», а не в ⋯.
         onMirror={() =>
-          preview({ blocks, draft, name, calendarName: teamNameOf(draft.teamIds[0] ?? "") ?? null })
+          preview({ blocks, draft, name })
         }
         areaValues={{ clients: clientsRightsLine(blocks, draft) }}
         onOpenCalendarRights={(id) =>

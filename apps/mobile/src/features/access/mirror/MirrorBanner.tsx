@@ -40,7 +40,6 @@ export function MirrorBanner({ inModal = false }: { inModal?: boolean } = {}) {
   // контекст под корнем уже обнулён шимом (`MirrorInsetShim`), и взять его
   // значило бы прижать плашку к статус-бару.
   const top = inModal ? (initialWindowMetrics?.insets.top ?? insets.top) : insets.top;
-  const where = mirror.calendarName ? ` · ${mirror.calendarName}` : "";
   return (
     <Pressable
       onPress={exit}
@@ -63,7 +62,7 @@ export function MirrorBanner({ inModal = false }: { inModal?: boolean } = {}) {
       <Eye color={t.onAccent} size={18} strokeWidth={2} />
       <View style={{ flex: 1 }}>
         <Text maxFontSizeMultiplier={1.3} style={{ ...TYPE.callout, color: t.onAccent }}>
-          {`Смотрите глазами: ${mirror.name}${where}`}
+          {`Смотрите глазами: ${mirror.name}`}
         </Text>
         <Text
           maxFontSizeMultiplier={1.3}
