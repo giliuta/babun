@@ -1010,8 +1010,16 @@ function FinancesContent() {
       </Pressable>
 
       <View
-        className="h-9 flex-1 flex-row items-center gap-1.5 px-2.5"
-        style={{ borderRadius: t.radius.input, backgroundColor: t.fill }}
+        style={{
+          height: 36,
+          flex: 1,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          paddingHorizontal: 10,
+          borderRadius: t.radius.input,
+          backgroundColor: t.fill,
+        }}
       >
         <Search color={t.faint} size={16} />
         <TextInput
@@ -1047,8 +1055,20 @@ function FinancesContent() {
           editable={access.search}
           clearButtonMode="while-editing"
           maxFontSizeMultiplier={1.3}
-          className="flex-1 text-[15px]"
-          style={{ color: t.ink, paddingVertical: 0 }}
+          // МЕЖСТРОЧНЫЙ ИНТЕРВАЛ ЗАДАН ЯВНО, 18 = родной у 15pt (владелец
+          // 2026-09-29: «поисковик как будто вниз сдвинулся»). Без него поле
+          // получало интервал базовых стилей (1,5 кегля), и однострочное поле
+          // iOS опускает текст ровно на этот излишек: подсказка стояла на
+          // ~8pt ниже лупы, а с классом `text-[15px]` ещё и срезалась снизу.
+          // Проверено на симуляторе: без высоты и без сброса отступов смещение
+          // оставалось, пропало — только от интервала.
+          style={{
+            flex: 1,
+            alignSelf: "stretch",
+            fontSize: 15,
+            lineHeight: 18,
+            color: t.ink,
+          }}
         />
       </View>
 
