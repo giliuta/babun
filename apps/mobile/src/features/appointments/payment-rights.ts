@@ -1,4 +1,4 @@
-import { accessGate } from "@/features/access/my-access";
+import { accessGate, moneyKey } from "@/features/access/my-access";
 import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map";
 import type { UserRole } from "@/features/settings/role-policy";
 
@@ -44,12 +44,13 @@ export function paymentRights(input: PaymentRightsInput): PaymentRights {
     accessGate({ role: role ?? undefined, map, blockKey: "finance.accounts", scope: "calendar", teamId }) ===
     "write";
 
-  // ИСТОРИЯ ПЛАТЕЖЕЙ ЧИТАЕТ ЖУРНАЛ КОМПАНИИ: без «Доходов и расходов» хотя бы
-  // на просмотр сервер строк не отдаст, и значок вёл бы в пустой лист.
+  // ИСТОРИЯ ПЛАТЕЖЕЙ ЧИТАЕТ ЖУРНАЛ КОМПАНИИ: платёж записи — доход, и без
+  // «Доходов» хотя бы на просмотр сервер строк не отдаст, и значок вёл бы в
+  // пустой лист. На старой карте `moneyKey` отдаёт «Доходы и расходы».
   const operations = accessGate({
     role: role ?? undefined,
     map,
-    blockKey: "finance.operations",
+    blockKey: moneyKey(map, "income"),
     scope: "calendar",
     teamId,
   });

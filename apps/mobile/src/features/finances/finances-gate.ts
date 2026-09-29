@@ -1,13 +1,12 @@
 import type { MemberAccessMap } from "@/features/access/access-map";
-import { accessGate } from "@/features/access/my-access";
+import { accessGate, moneyKey } from "@/features/access/my-access";
 import type { UserRole } from "@/features/settings/role-policy";
 
 /**
  * ЧТО РИСУЕТ ВКЛАДКА «ФИНАНСЫ».
  *
- *   • `open`     — сами финансы: владелец, или сотрудник, у которого «Доходы и
- *                  расходы» хотя бы в одном его календаре — «Смотрит» или
- *                  «Меняет»;
+ *   • `open`     — сами финансы: владелец, или сотрудник, у которого «Доходы»
+ *                  или «Расходы» хотя бы в одном его календаре не закрыты;
  *   • `locked`   — та же страница серым и по нулям, лента команд живая
  *                  (`LockedFinances`; владелец 15.09: «не „раздел
  *                  недоступен“ — всё серое, всё по нулям, но переключаться
@@ -32,8 +31,12 @@ export function financesGate(
   map: MemberAccessMap | undefined,
 ): FinancesGate {
   if (!role) return "boundary";
-  const gate = accessGate({ role, map, blockKey: "finance.operations", scope: "calendar" });
-  if (gate === "loading") return "loading";
-  if (gate === "read" || gate === "write") return "open";
+  // Две стороны денег (срез 2а): открывает любая из них. На старой карте
+  // `moneyKey` отдаёт общий `finance.operations`.
+  const gates = (["income", "expense"] as const).map((side) =>
+    accessGate({ role, map, blockKey: moneyKey(map, side), scope: "calendar" }),
+  );
+  if (gates.includes("loading")) return "loading";
+  if (gates.some((gate) => gate === "read" || gate === "write")) return "open";
   return "locked";
 }

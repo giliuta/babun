@@ -6,7 +6,7 @@ import {
   type FinanceTransaction,
 } from "@babun/shared/local/finance/transaction";
 import type { MemberAccessMap } from "@/features/access/access-map";
-import { accessGate, type AccessGate } from "@/features/access/my-access";
+import { accessGate, moneyKey, type AccessGate } from "@/features/access/my-access";
 import type { UserRole } from "@/features/settings/role-policy";
 import { NO_TEAM } from "./accounts-sections";
 import type { HomeView } from "./FinanceOverview";
@@ -21,9 +21,15 @@ import type { HomeView } from "./FinanceOverview";
 //
 // Закон AGENTS.md 10: у человека без права блок либо отсутствует, либо виден
 // только для чтения. Живой кнопки, которую сервер откажет, быть не может —
-// поэтому «Меняет» здесь считается ровно теми же условиями, что и в политиках:
-// расход, без инвойса и возврата, счёт команды своего календаря, долг своего
-// календаря.
+// поэтому правка здесь считается ровно теми же условиями, что и в политиках
+// `finance_transactions` (миграция 20260929235000, срез 2а).
+//
+// ДОХОДЫ И РАСХОДЫ — ДВА ПРАВА (владелец 29.09: «только доходы, но видел все
+// расходы»). У каждой стороны: Не видит · Видит · Добавляет · Правит всё.
+// «Добавляет» правит только свою операцию, «Правит всё» — и чужие. Оплату
+// долга ведёт «Долги: Принимает оплату» сама, без сторон денег. Старая карта
+// (до наката) несёт одну строку `finance.operations`: по ней доход сотрудник
+// не правил вовсе, а любой расход своей команды — правил (`moneyKey`).
 //
 // Владелец ограничений не имеет и карту прав не ждёт: его страница не мигает.
 
@@ -34,7 +40,8 @@ export const VIEW_ONLY_REASON = "Только просмотр";
 
 type AccountLike = Pick<Account, "id" | "scope" | "brigade_id">;
 type DebtLike = Pick<Debt, "id" | "team_id">;
-type FinanceBlock = "finance.operations" | "finance.accounts" | "finance.debts";
+type Side = "income" | "expense";
+type FinanceBlock = string;
 
 export interface FinancePageAccessInput {
   /** `undefined` — роль ещё не пришла; `null` — человека в компании нет. */
@@ -46,6 +53,8 @@ export interface FinancePageAccessInput {
   /** Выключенные функции компании (STORY-088): долги, счета, документы.
    *  Выключенное пропадает у всех, у владельца тоже. */
   disabledFeatures?: readonly string[];
+  /** Кто вошёл: «Добавляет» правит только операции, заведённые им самим. */
+  userId?: string | null;
 }
 
 export interface FinancePageAccess {
@@ -55,7 +64,10 @@ export interface FinancePageAccess {
   /** Что вообще есть в компании (функции компании). Выключенного нет ни
    *  плиткой, ни кнопкой — в отличие от закрытого правом, которое серое. */
   has: { accounts: boolean; debts: boolean; documents: boolean };
-  /** Уровни ВЫБРАННОГО чипа. */
+  /** Уровни ВЫБРАННОГО чипа. `ops` — лучшая из двух сторон денег: по ней
+   *  живут поиск, общий вид и «Прибыль». */
+  income: Level;
+  expense: Level;
   ops: Level;
   accounts: Level;
   debts: Level;
@@ -73,6 +85,8 @@ export interface FinancePageAccess {
   /** Закрытая панель уводит на общий вид, а не показывает пустоту. */
   view: (view: HomeView) => HomeView;
   footer: (view: HomeView) => { enabled: boolean; reason: string | null };
+  /** Новую операцию этой стороны можно завести в выбранном календаре. */
+  canAdd: (side: Side) => boolean;
   balanceVisible: (account: AccountLike) => boolean;
   accountWritable: (account: AccountLike, block: FinanceBlock) => boolean;
   txEditable: (
@@ -115,9 +129,27 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
     return toLevel(accessGate({ role, map, blockKey, scope: "calendar", teamId }));
   };
 
-  const ops = levelIn("finance.operations", scope);
+  const legacy = !owner && moneyKey(map, "income") === "finance.operations";
+  const sideKey = (side: Side): string => moneyKey(map, side);
+  const best = (a: Level, b: Level): Level =>
+    a === "write" || b === "write" ? "write" : a === "read" || b === "read" ? "read" : "locked";
+
+  const income = levelIn(sideKey("income"), scope);
+  const expense = levelIn(sideKey("expense"), scope);
+  const ops = best(income, expense);
   const accounts = levelIn("finance.accounts", scope);
   const debts = levelIn("finance.debts", scope);
+
+  /** «Правит всё» — чужие операции стороны. На старой карте так вёл себя
+   *  «Меняет» у расхода, а доход сотрудник не правил вовсе. */
+  const sideFull = (side: Side, teamId: string | null): boolean => {
+    if (owner) return true;
+    if (!teamId || teamId === NO_TEAM || !map) return false;
+    if (legacy) return side === "expense" && levelIn(sideKey(side), teamId) === "write";
+    return map.calendars[teamId]?.[sideKey(side)] === "full";
+  };
+  const mine = (tx: FinanceTransaction): boolean =>
+    !!input.userId && tx.created_by === input.userId;
 
   const accountWritable = (account: AccountLike, block: FinanceBlock): boolean =>
     owner || levelIn(block, accountCalendar(account)) === "write";
@@ -132,22 +164,43 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
     if (!canEditTransaction(tx)) return false;
     if (owner) return true;
     if (!ready) return false;
-    // Сотруднику сервер отдаёт на правку только расход без инвойса и возврата.
-    if (tx.type !== "expense") return false;
+    // Инвойс, возврат и перевод ведут свои двери; сотруднику строки не правятся.
+    if (tx.type !== "income" && tx.type !== "expense") return false;
     if (tx.invoice_id || tx.refund_of_id) return false;
-    if (levelIn("finance.operations", tx.team_id) !== "write") return false;
-    if (tx.account_id) {
+    // Оплату записи правит только блок «Оплата» — прямой правки нет.
+    if (tx.type === "income" && tx.appointment_id) return false;
+    // Счёт неизвестен экрану — значит он и не виден: решаем «нельзя».
+    const accountOk = (block: FinanceBlock): boolean => {
+      if (!tx.account_id) return true;
       const account = ref?.account ?? null;
-      // Счёт неизвестен экрану — значит он и не виден: решаем «нельзя».
-      if (!account || account.id !== tx.account_id) return false;
-      if (!accountWritable(account, "finance.operations")) return false;
-    }
-    if (tx.debt_id) {
+      return !!account && account.id === tx.account_id && accountWritable(account, block);
+    };
+    const debtOk = (): boolean => {
       const debt = ref?.debt ?? null;
-      if (!debt || debt.id !== tx.debt_id) return false;
-      if (levelIn("finance.debts", debt.team_id) !== "write") return false;
+      return !!debt && debt.id === tx.debt_id && levelIn("finance.debts", debt.team_id) === "write";
+    };
+
+    if (legacy) {
+      // До наката: только расход, по «Доходам и расходам», долг — ещё и «Долгами».
+      if (tx.type !== "expense") return false;
+      if (levelIn("finance.operations", tx.team_id) !== "write") return false;
+      if (!accountOk("finance.operations")) return false;
+      return !tx.debt_id || debtOk();
     }
-    return true;
+
+    if (tx.debt_id) {
+      // Оплата долга — своя, по «Долги: Принимает оплату», без сторон денег.
+      return (
+        mine(tx) &&
+        levelIn("finance.debts", tx.team_id) === "write" &&
+        debtOk() &&
+        accountOk("finance.debts")
+      );
+    }
+    const side: Side = tx.type;
+    if (levelIn(sideKey(side), tx.team_id) !== "write") return false;
+    if (!sideFull(side, tx.team_id) && !mine(tx)) return false;
+    return accountOk(sideKey(side));
   };
 
   const footerLevel = (view: HomeView): Level =>
@@ -161,12 +214,18 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
         ? debts
         : view === "accounts"
           ? accounts
-          : ops;
+          : view === "income"
+            ? income
+            : view === "expense"
+              ? expense
+              : ops;
 
   return {
     ready,
     owner,
     has,
+    income,
+    expense,
     ops,
     accounts,
     debts,
@@ -177,6 +236,7 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
     recordMoney: owner,
     search: ops !== "locked",
     periodLocked: ops === "locked" && accounts === "locked" && debts === "locked",
+    canAdd: (side) => (side === "income" ? income : expense) === "write",
     view: (view) => {
       // Выключенная функция — её вида нет вовсе.
       if (view === "accounts" && !has.accounts) return "all";
@@ -189,9 +249,10 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
       // общий вид — плитка выглядела сломанной. Список документов сотруднику
       // и так не приходит: инвойсы закрыты правилами базы.
       if (view === "debt" && debts === "locked") return "all";
-      if ((view === "income" || view === "expense" || view === "profit") && ops === "locked") {
-        return "all";
-      }
+      if (view === "income" && income === "locked") return "all";
+      if (view === "expense" && expense === "locked") return "all";
+      // Прибыль — доход минус расход: без одной из сторон она была бы выдумкой.
+      if (view === "profit" && (income === "locked" || expense === "locked")) return "all";
       return view;
     },
     footer: (view) => {
@@ -213,7 +274,10 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
       );
     },
     debtEditable,
+    // Оплата долга — «Долги: Принимает оплату» сама; до наката платёж был
+    // операцией журнала и требовал ещё «Доходы и расходы».
     debtPayable: (debt) =>
-      debtEditable(debt) && levelIn("finance.operations", debt.team_id) === "write",
+      debtEditable(debt) &&
+      (!legacy || levelIn("finance.operations", debt.team_id) === "write"),
   };
 }

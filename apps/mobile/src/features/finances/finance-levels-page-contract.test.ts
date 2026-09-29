@@ -23,9 +23,10 @@ describe("экран «Финансы» спрашивает уровень од
   const index = read(INDEX);
 
   test("правило зовётся ровно один раз, ролью и картой прав", () => {
-    // С 24.09 (STORY-088) правило знает и функции компании.
+    // С 24.09 (STORY-088) правило знает и функции компании, с 29.09 (срез 2а)
+    // — кто вошёл: «Добавляет» правит только своё.
     const calls = index.match(
-      /financePageAccess\(\{ role, map: myAccessQuery\.data, scope, disabledFeatures \}\)/g,
+      /financePageAccess\(\{ role, map: myAccessQuery\.data, scope, disabledFeatures, userId, \}\)/g,
     );
     assert.equal(calls?.length, 1);
   });
@@ -59,7 +60,8 @@ describe("экран «Финансы» спрашивает уровень од
     assert.match(index, /showAccounts=\{access\.has\.accounts\}/);
     assert.match(index, /showDebts=\{access\.has\.debts\}/);
     assert.match(index, /lockAccounts=\{access\.accounts === "locked"\}/);
-    assert.match(index, /lockOps=\{access\.ops === "locked"\}/);
+    assert.match(index, /lockIncome=\{access\.income === "locked"\}/);
+    assert.match(index, /lockExpense=\{access\.expense === "locked"\}/);
     assert.match(index, /lockDebts=\{access\.debts === "locked"\}/);
   });
 

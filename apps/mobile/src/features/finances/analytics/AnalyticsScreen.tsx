@@ -18,7 +18,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useThemeColors } from "@/theme/colors";
 import { useMyAccess } from "@/features/access/queries";
-import { bestCalendarLevel } from "@/features/access/my-access";
+import { bestCalendarLevel, moneyKey } from "@/features/access/my-access";
 import { useAppointments, useFinanceServices } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
 import { todayYmd } from "@/features/invoices/format";
@@ -100,11 +100,17 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   const t = useThemeColors();
   const role = useCurrentRole().data;
   const myAccess = useMyAccess().data;
-  const moneyLevel = myAccess ? bestCalendarLevel(myAccess, "finance.operations") : undefined;
+  const moneyLevel = myAccess
+    ? bestCalendarLevel(myAccess, moneyKey(myAccess, "income"))
+    : undefined;
   // ДЕНЬГИ — ПО ФИНАНСОВОМУ ПРАВУ (как было у «Сводки» с 20.09): записи
   // диспетчеру приходят с суммами, и выручка компании не должна утекать мимо
-  // блока «Доходы и расходы».
-  const showMoney = role === "owner" || moneyLevel === "read" || moneyLevel === "write";
+  // блока «Доходы» (выручка — это доход; до наката — «Доходы и расходы»).
+  const showMoney =
+    role === "owner" ||
+    moneyLevel === "read" ||
+    moneyLevel === "write" ||
+    moneyLevel === "full";
 
   const calendarSettings = useCalendarSettings().data;
   const timezone = calendarSettings?.timezone ?? "Europe/Nicosia";

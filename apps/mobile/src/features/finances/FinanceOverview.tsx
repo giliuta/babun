@@ -312,7 +312,8 @@ export function FinanceOverview({
   onTap,
   locked = false,
   lockAccounts = false,
-  lockOps = false,
+  lockIncome = false,
+  lockExpense = false,
   lockDebts = false,
 }: {
   teams: Team[];
@@ -343,7 +344,10 @@ export function FinanceOverview({
    *  Такая плитка серая, по нулям и не нажимается — как при закрытом разделе,
    *  только поодиночке. */
   lockAccounts?: boolean;
-  lockOps?: boolean;
+  /** Стороны денег — два права (срез 2а): «Доход» и «Расход» гаснут
+   *  поодиночке, «Прибыль» — если закрыта хоть одна из них. */
+  lockIncome?: boolean;
+  lockExpense?: boolean;
   lockDebts?: boolean;
 }) {
   const t = useThemeColors();
@@ -444,7 +448,7 @@ export function FinanceOverview({
             value={formatEUR(totals.income)}
             quiet={moneySign(totals.income) === 0}
             active={view === "income"}
-            locked={locked || lockOps}
+            locked={locked || lockIncome}
             onPress={() => onTap("income")}
           />
           {/* МИНУСА ЗДЕСЬ НЕТ (владелец 2026-08-15: «расход и так даёт минус»).
@@ -456,7 +460,7 @@ export function FinanceOverview({
             value={formatEUR(totals.expense)}
             quiet={moneySign(totals.expense) === 0}
             active={view === "expense"}
-            locked={locked || lockOps}
+            locked={locked || lockExpense}
             onPress={() => onTap("expense")}
           />
         </View>
@@ -481,7 +485,7 @@ export function FinanceOverview({
             value={formatEUR(totals.profit)}
             quiet={moneySign(totals.profit) === 0}
             active={view === "profit"}
-            locked={locked || lockOps}
+            locked={locked || lockIncome || lockExpense}
             onPress={() => onTap("profit")}
           />
         </View>

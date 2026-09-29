@@ -136,7 +136,8 @@ export function OperationSheet({
   onClientOpen,
   onRefund,
   refundedTotal = 0,
-  canWrite = true,
+  canWrite: canWriteProp = true,
+  canWriteType,
   onExited,
 }: {
   visible: boolean;
@@ -180,6 +181,10 @@ export function OperationSheet({
    *  причиной, строки удаления нет. По умолчанию `true`: у владельца и у
    *  прежних вызовов форма остаётся прежней. */
   canWrite?: boolean;
+  /** Какую сторону денег человек может завести (доходы и расходы — два
+   *  права, срез 2а). Спрашивается только у НОВОЙ операции: правку и платёж
+   *  по долгу решает `canWrite`. Нет — обе стороны. */
+  canWriteType?: (type: "income" | "expense") => boolean;
   /** Лист полностью ушёл — тому, кто открывал форму поверх своего листа
    *  (разбор дня в календаре), пора вернуть свой. */
   onExited?: () => void;
@@ -220,6 +225,14 @@ export function OperationSheet({
   // tx-detail popup («Создать возврат»): negative amount + refund_of_id
   // capped by the income's remaining sum (web parity).
   const [type, setType] = useState<"income" | "expense">("expense");
+  const typeWritable = (t: "income" | "expense"): boolean =>
+    canWriteType ? canWriteType(t) : true;
+  // Новая операция открывается на стороне, которую человек может завести:
+  // «только расходы» не встречает доходом с погашенной кнопкой.
+  const otherType = defaultType === "income" ? "expense" : "income";
+  const startType =
+    !typeWritable(defaultType) && typeWritable(otherType) ? otherType : defaultType;
+  const canWrite = canWriteProp && (isEdit || !!debtPayment || typeWritable(type));
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [teamId, setTeamId] = useState<string | null>(defaultTeamId ?? null);
@@ -328,7 +341,7 @@ export function OperationSheet({
         clientId: transaction.client_id ?? null,
       });
     } else {
-      setType(defaultType);
+      setType(startType);
       setVatTouched(false);
       // Остаток долга подставлен, но не заперт: отдать можно и часть — тогда
       // долг останется висеть на разницу, как и должен.
@@ -1067,8 +1080,13 @@ export function OperationSheet({
           }}
           // У платежа по долгу направление уже решено самим долгом: «мне
           // должны» гасят доходом, «я должен» — расходом. Переключатель здесь
-          // только называет сторону.
-          disabled={isEdit || !!debtPayment}
+          // только называет сторону. Та же немота, когда человек может
+          // завести лишь одну сторону денег: переключать ему некуда.
+          disabled={
+            isEdit ||
+            !!debtPayment ||
+            !(typeWritable("income") && typeWritable("expense"))
+          }
           style={{ marginHorizontal: GUTTER, marginTop: 12 }}
         />
 

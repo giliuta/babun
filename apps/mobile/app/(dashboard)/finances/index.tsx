@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, Search, Settings, X } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { useSession } from "@/providers/SessionProvider";
 import { GUTTER } from "@/components/ui/tokens";
 import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { accountServesTeam } from "@babun/shared/local/finance/integrity";
@@ -262,7 +263,14 @@ function FinancesContent() {
   // серое, что можно править. Владелец карты прав не ждёт.
   const myAccessQuery = useMyAccess();
   const disabledFeatures = useDisabledFeatures();
-  const access = financePageAccess({ role, map: myAccessQuery.data, scope, disabledFeatures });
+  const userId = useSession().session?.user.id ?? null;
+  const access = financePageAccess({
+    role,
+    map: myAccessQuery.data,
+    scope,
+    disabledFeatures,
+    userId,
+  });
   // Гасим РАЗРЕЗ документов, а не только плитку: в «Документы» приходят и
   // адресом `?view=documents`, и возвратом из записи. Закрытая уровнем панель
   // уходит туда же — на общий вид, а не показывает пустоту.
@@ -584,12 +592,12 @@ function FinancesContent() {
   // что успело приехать до понижения прав.
   const shownTotals = useMemo(
     () => ({
-      income: access.ops === "locked" ? 0 : totals.income,
-      expense: access.ops === "locked" ? 0 : totals.expense,
-      profit: access.ops === "locked" ? 0 : totals.profit,
+      income: access.income === "locked" ? 0 : totals.income,
+      expense: access.expense === "locked" ? 0 : totals.expense,
+      profit: access.income === "locked" || access.expense === "locked" ? 0 : totals.profit,
       debt: access.debts === "locked" ? 0 : totals.debt,
     }),
-    [access.debts, access.ops, totals],
+    [access.debts, access.income, access.expense, totals],
   );
 
   // Σ refunds already issued against each income — caps further refunds.
@@ -1263,7 +1271,8 @@ function FinancesContent() {
           showAccounts={access.has.accounts}
           showDebts={access.has.debts}
           lockAccounts={access.accounts === "locked"}
-          lockOps={access.ops === "locked"}
+          lockIncome={access.income === "locked"}
+          lockExpense={access.expense === "locked"}
           lockDebts={access.debts === "locked"}
           view={view}
           onTap={toggleView}
@@ -1536,17 +1545,26 @@ function FinancesContent() {
         debtPayment={debtPayment}
         businessToday={businessToday}
         transaction={editingTx}
-        // Лист знает только «можно ли писать» — правило живёт на экране: у
-        // сотрудника это свой расход на счёте своей команды, а новая операция
-        // — «Меняет» в выбранном календаре.
+        // Лист знает только «можно ли писать» — правило живёт на экране:
+        // правка — по строке (своя или «Правит всё»), платёж по долгу — по
+        // «Долги: Принимает оплату», новая операция — по своей стороне денег в
+        // выбранном календаре.
         canWrite={
           editingTx
             ? access.txEditable(editingTx, {
                 account: allAccounts.find((a) => a.id === editingTx.account_id) ?? null,
                 debt: debts.find((d) => d.id === editingTx.debt_id) ?? null,
               })
-            : access.ops === "write"
+            : debtPayment
+              ? (() => {
+                  const paid = [editingDebt, ...debts].find(
+                    (d) => d?.id === debtPayment.debtId,
+                  );
+                  return !!paid && access.debtPayable(paid);
+                })()
+              : access.ops === "write"
         }
+        canWriteType={access.canAdd}
         onInvoice={(tx) => {
           setOpOpen(false);
           openTransactionInvoice(tx);
