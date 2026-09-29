@@ -93,7 +93,8 @@ export function SmsRecordBlock({
           </View>
         ))}
         {messages.length === 0 && !answer && !log.isLoading ? <Empty /> : null}
-        <Divider inset={48} />
+        {/* Пока блок грузится, над «Отправить SMS» ничего нет — и черты тоже. */}
+        {messages.length > 0 || answer || !log.isLoading ? <Divider inset={48} /> : null}
         <SettingsRow
           tile="neutral"
           icon={Send}

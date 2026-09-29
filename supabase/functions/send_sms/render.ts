@@ -58,7 +58,7 @@ const SYMBOLS: Record<string, string> = {
   RUB: "₽",
 };
 
-const NB = " ";
+const NB = "\u00a0";
 
 export function formatMoney(value: number, currency?: string | null): string {
   const code = (currency ?? "").trim().toUpperCase();

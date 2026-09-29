@@ -184,6 +184,9 @@ function RootNavigator() {
           babun.app/l/<токен> без входа, поэтому экран живёт вне (auth) и
           (dashboard) — как приглашение. */}
       <Stack.Screen name="l" />
+      {/* «Подтвердить / Отменить» запись (STORY-089): клиент открывает
+          babun.app/r/<токен> из SMS без входа — там же, где «l». */}
+      <Stack.Screen name="r" />
     </Stack>
   );
 }

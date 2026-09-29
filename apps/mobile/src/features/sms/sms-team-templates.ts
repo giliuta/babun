@@ -278,6 +278,9 @@ export const READY_TEMPLATES: readonly (Pick<TemplateDraft, "name" | "body" | "t
   Partial<Pick<TemplateDraft, "hours" | "atTime" | "months">>)[] = [
   { name: "Подтверждение записи", body: "[Имя], вы записаны: [День], [Дата] в [Время]. Ждём вас!", trigger: "created" },
   { name: "Напоминание накануне", body: "[Имя], напоминаем: завтра, [Дата], в [Время] у вас запись.", trigger: "day_before", atTime: "18:00" },
+  // [Ссылка] — страница «Подтвердить / Отменить» (babun.app/r/…): кипрские
+  // номера ответных SMS не принимают. Ссылка есть у каждой записи.
+  { name: "Со ссылкой", body: "[Имя], завтра в [Время] у вас запись. Подтвердить или отменить: [Ссылка]", trigger: "day_before", atTime: "18:00" },
   { name: "За 2 часа", body: "[Имя], через 2 часа, в [Время], мы у вас.", trigger: "before", hours: 2 },
   { name: "Перенос", body: "[Имя], ваша запись перенесена: [День], [Дата] в [Время].", trigger: "rescheduled" },
   { name: "Отмена", body: "[Имя], ваша запись на [Дата] в [Время] отменена.", trigger: "cancelled" },
