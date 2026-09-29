@@ -29,6 +29,8 @@ const TITLE: Record<string, string> = {
   "record.payment": "Оплата",
   "record.status": "Статус и заметка",
   "record.files": "Файлы",
+  "finance.income": "Доходы",
+  "finance.expense": "Расходы",
   "finance.operations": "Доходы и расходы",
   "finance.accounts": "Счета",
   "finance.debts": "Долги",
@@ -54,9 +56,11 @@ const STEP: Record<string, Words> = {
   "record.files": { off: "Не видит", read: "Видит", write: "Добавляет" },
   // «Ведёт» — тем же словом, что в итоге команды («Ведёт доходы и расходы»,
   // «Ведёт своих клиентов»).
+  "finance.income": { off: "Не видит", read: "Видит", write: "Добавляет", full: "Правит всё" },
+  "finance.expense": { off: "Не видит", read: "Видит", write: "Добавляет", full: "Правит всё" },
   "finance.operations": { off: "Не видит", read: "Видит", write: "Ведёт" },
   "finance.accounts": { off: "Не видит", read: "Видит", write: "Управляет" },
-  "finance.debts": { off: "Не видит", read: "Видит", write: "Закрывает" },
+  "finance.debts": { off: "Не видит", read: "Видит", write: "Принимает оплату" },
   clients: { off: "Не видит", read: "Видит", write: "Ведёт" },
   "clients.scope": { own: "Только своих", all: "Всех" },
   "clients.contacts": { off: "Скрыты", read: "Видит" },
@@ -67,8 +71,11 @@ const STEP: Record<string, Words> = {
  *  то, что уносит деньги, данные или записи насовсем. */
 const DANGER: Record<string, Words> = {
   "calendar.cancel": { write: "Сможет удалять записи насовсем" },
+  "finance.income": { full: "Сможет править и удалять чужие доходы" },
+  "finance.expense": { full: "Сможет править и удалять чужие расходы" },
   "finance.operations": { write: "Сможет заводить и править деньги" },
   "finance.accounts": { write: "Сможет переводить деньги между счетами" },
+  "finance.debts": { write: "Сможет удалять долги клиентов" },
   "clients.scope": { all: "Откроется вся база клиентов компании" },
   "clients.contacts": { read: "Сможет звонить и писать клиентам со своего телефона" },
 };
@@ -78,13 +85,31 @@ export function rightTitle(block: Pick<AccessBlock, "key" | "title">): string {
   return TITLE[block.key] ?? block.title;
 }
 
+/** Положения соседних прав той же команды — там, где слово ступени зависит
+ *  от соседа. */
+type Context = Readonly<Record<string, AccessLevel>>;
+
+/** «Счета: Не видит», когда он принимает оплату записи, — это ровно «Только
+ *  при оплате» (владелец 29.09): счёт в оплате виден одним названием, без
+ *  остатков и ленты (`list_payment_accounts_safe`). Отдельной ступени на
+ *  сервере для этого нет — её и не нужно. */
+function paysIntoAccounts(block: Pick<AccessBlock, "key">, level: AccessLevel, context?: Context): boolean {
+  return block.key === "finance.accounts" && level === "off" && context?.["record.payment"] === "write";
+}
+
 /** Слово ступени — на строке справа и крупно в шторке. */
-export function stepWord(block: Pick<AccessBlock, "key" | "levels">, level: AccessLevel): string {
+export function stepWord(
+  block: Pick<AccessBlock, "key" | "levels">,
+  level: AccessLevel,
+  context?: Context,
+): string {
+  if (paysIntoAccounts(block, level, context)) return "Только при оплате";
   return STEP[block.key]?.[level] ?? segmentWord(block.levels, level);
 }
 
 /** Пояснение ступени: что именно человек получит. */
-export function stepHint(block: Pick<AccessBlock, "key">, level: AccessLevel): string {
+export function stepHint(block: Pick<AccessBlock, "key">, level: AccessLevel, context?: Context): string {
+  if (paysIntoAccounts(block, level, context)) return "Остатков не видит, счёт выбирает только в оплате записи";
   return levelSentence(block.key, level);
 }
 

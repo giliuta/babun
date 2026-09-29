@@ -36,7 +36,7 @@ describe("итог прав команды", () => {
   test("стартовый мастер: только смотрит, без клиента и денег, удалять не может", () => {
     assert.equal(
       teamSentence(reader(CLOSED)),
-      "Только смотрит записи команды — без клиента, цен, оплаты и файлов. Базу клиентов не видит. Деньги закрыты. Удалять ничего не может.",
+      "Только смотрит записи команды — без клиента, цен, оплаты и файлов. Базу клиентов не видит. Деньги закрыты. Записи и деньги удалить не может.",
     );
   });
 
@@ -72,15 +72,23 @@ describe("итог прав команды", () => {
     };
     assert.equal(
       teamSentence(reader(levels)),
-      "Видит записи команды полностью. Создаёт и переносит записи, ставит статус. Видит своих клиентов. Принимает оплату и видит долги. Удалять ничего не может.",
+      "Видит записи команды полностью. Создаёт и переносит записи, ставит статус. Видит своих клиентов. Принимает оплату и видит долги. Записи и деньги удалить не может.",
     );
   });
 
-  test("опасное право гасит «Удалять ничего не может»", () => {
+  test("опасное право гасит обещание про удаление", () => {
     const text = teamSentence(reader({ ...CLOSED, "finance.accounts": "write", clients: "write", "clients.scope": "all" }));
     assert.match(text, /Ведёт всех клиентов без телефонов\./);
     assert.match(text, /Управляет счетами\./);
-    assert.doesNotMatch(text, /Удалять ничего/);
+    assert.doesNotMatch(text, /удалить не может/);
+    const riskySets: readonly Record<string, AccessLevel>[] = [
+      { "calendar.cancel": "write" },
+      { "finance.debts": "write" },
+      { "finance.operations": "write" },
+    ];
+    for (const risky of riskySets) {
+      assert.doesNotMatch(teamSentence(reader({ ...CLOSED, ...risky })), /удалить не может/, JSON.stringify(risky));
+    }
   });
 
   test("выжимка для строки команды — главное через точку", () => {
@@ -96,6 +104,34 @@ describe("итог прав команды", () => {
       "Записи не создаёт и не переносит · клиентов не видит · деньги закрыты",
     );
     assert.doesNotMatch(teamBrief(reader(CLOSED)), / ·/, "перед точкой — только неразрывный пробел");
+  });
+
+  describe("доходы и расходы — два права (этап 2)", () => {
+    // Реестр после наката: общего `finance.operations` нет, есть две стороны.
+    const SPLIT: Record<string, AccessLevel | undefined> = {
+      ...CLOSED,
+      "finance.operations": undefined,
+      "finance.income": "off",
+      "finance.expense": "off",
+    };
+    const say = (over: Record<string, AccessLevel>) => teamSentence((key) => ({ ...SPLIT, ...over })[key]);
+
+    test("равные ступени — одной фразой, разные — по стороне", () => {
+      assert.match(say({ "finance.income": "read", "finance.expense": "read" }), /Видит доходы и расходы\./);
+      assert.match(say({ "finance.income": "write", "finance.expense": "read" }), /Добавляет доходы и видит расходы\./);
+      assert.match(say({ "finance.expense": "full" }), /Правит все расходы\./);
+      assert.match(say({}), /Деньги закрыты\./);
+    });
+
+    test("своё удаляет — обещание про чужое; чужое правит — обещания нет", () => {
+      assert.match(say({ "finance.expense": "write" }), /Чужие записи и деньги удалить не может\.$/);
+      assert.doesNotMatch(say({ "finance.income": "full" }), /удалить не может/);
+      assert.match(say({ "finance.income": "read" }), /Записи и деньги удалить не может\.$/);
+    });
+
+    test("долги: оплата долгов — своими словами", () => {
+      assert.match(say({ "finance.debts": "write" }), /Принимает оплату долгов\./);
+    });
   });
 
   test("права клиентов нет в реестре — о клиентах молчит", () => {

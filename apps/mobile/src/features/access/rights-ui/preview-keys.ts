@@ -24,6 +24,8 @@ export const CALENDAR_PREVIEW_KEYS: readonly string[] = [
 ];
 
 export const MONEY_PREVIEW_KEYS: readonly string[] = [
+  "finance.income",
+  "finance.expense",
   "finance.operations",
   "finance.accounts",
   "finance.debts",

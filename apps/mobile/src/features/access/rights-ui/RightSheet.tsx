@@ -95,13 +95,13 @@ export function RightSheet({
               return (
                 <SelectRow
                   key={step}
-                  title={stepWord(block, step)}
+                  title={stepWord(block, step, levels)}
                   selected={step === level}
                   accessibilityRole="radio"
                   subtitle={
                     <View style={{ gap: 2, paddingBottom: 2 }}>
                       <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, lineHeight: 17, color: t.sub }}>
-                        {stepHint(block, step)}
+                        {stepHint(block, step, levels)}
                       </Text>
                       {danger ? (
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>

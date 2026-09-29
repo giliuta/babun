@@ -14,7 +14,7 @@ export interface AccessTemplate {
   position: number;
 }
 
-const LEVELS: readonly AccessLevel[] = ["off", "read", "write", "own", "all"];
+const LEVELS: readonly AccessLevel[] = ["off", "read", "write", "full", "own", "all"];
 
 function isLevel(value: unknown): value is AccessLevel {
   return typeof value === "string" && (LEVELS as readonly string[]).includes(value);

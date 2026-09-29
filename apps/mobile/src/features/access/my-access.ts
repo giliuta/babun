@@ -23,8 +23,9 @@ type Role = "owner" | "dispatcher" | "master";
 export type AccessGate = "loading" | "gone" | "locked" | "read" | "write";
 
 /** Порядок положений доступа. «Из его календарей / Все» — охват, а не доступ:
- *  в ворота не идут и считаются как «скрыт». */
-const RANK: Readonly<Partial<Record<AccessLevel, number>>> = { off: 0, read: 1, write: 2 };
+ *  в ворота не идут и считаются как «скрыт». «Правит всё» — выше «Меняет»:
+ *  воротам это та же запись, а понижение до «Меняет» — понижение. */
+const RANK: Readonly<Partial<Record<AccessLevel, number>>> = { off: 0, read: 1, write: 2, full: 3 };
 
 const rank = (level: AccessLevel | undefined): number =>
   level === undefined ? 0 : (RANK[level] ?? 0);
@@ -101,8 +102,25 @@ export function recordLevelsChanged(
   return false;
 }
 
+/** ДОХОДЫ И РАСХОДЫ — ДВА ПРАВА С ЭТАПА 2 (владелец 29.09: «только доходы, но
+ *  видел все расходы»). До наката их вела одна строка `finance.operations`.
+ *  Карта сервера несёт все живые блоки с умолчаниями, поэтому новый ключ либо
+ *  есть в каждом календаре, либо ни в одном: по нему и видно, какая карта
+ *  пришла. Экран спрашивает сторону денег этим ключом — и работает до наката,
+ *  после него и на телефоне, который карту ещё не перечитал. */
+export function moneyKey(map: MemberAccessMap | undefined, side: "income" | "expense"): string {
+  const key = side === "income" ? "finance.income" : "finance.expense";
+  for (const levels of Object.values(map?.calendars ?? {})) {
+    if (key in levels) return key;
+    if ("finance.operations" in levels) return "finance.operations";
+  }
+  return key;
+}
+
 /** Блоки финансов: понижение любого из них стирает деньги с телефона. */
 export const FINANCE_BLOCK_KEYS: readonly string[] = [
+  "finance.income",
+  "finance.expense",
   "finance.operations",
   "finance.accounts",
   "finance.debts",

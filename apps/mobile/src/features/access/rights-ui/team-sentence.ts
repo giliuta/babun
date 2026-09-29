@@ -53,8 +53,25 @@ interface TeamFacts {
   phonesHidden: boolean;
   /** Что с деньгами: «принимает оплату», «видит долги»… */
   money: string[];
-  /** Есть ли у него хоть одно опасное право. */
+  /** Может удалить чужое: записи, долги, переводы, чужие операции. */
   risky: boolean;
+  /** Может удалить свою операцию («Добавляет» доходы или расходы). */
+  ownDeletes: boolean;
+}
+
+/** Глагол стороны денег по ступени (этап 2). */
+const SIDE_VERB: Partial<Record<AccessLevel, string>> = { read: "видит", write: "добавляет", full: "правит все" };
+
+/** «видит доходы и расходы» одной фразой, если ступени равны, иначе по
+ *  стороне: «видит доходы», «добавляет расходы». */
+function sideWords(income: AccessLevel | undefined, expense: AccessLevel | undefined): string[] {
+  const inVerb = income ? SIDE_VERB[income] : undefined;
+  const exVerb = expense ? SIDE_VERB[expense] : undefined;
+  if (inVerb && inVerb === exVerb) return [`${inVerb} доходы и расходы`];
+  const out: string[] = [];
+  if (inVerb) out.push(`${inVerb} доходы`);
+  if (exVerb) out.push(`${exVerb} расходы`);
+  return out;
 }
 
 function teamFacts(read: LevelRead): TeamFacts {
@@ -71,15 +88,23 @@ function teamFacts(read: LevelRead): TeamFacts {
 
   const money: string[] = [];
   if (is("record.payment", "write")) money.push("принимает оплату");
+  // Доходы и расходы — два права с этапа 2; реестр до наката знает только
+  // общее `finance.operations`, и тогда итог говорит по нему.
   const ops = read("finance.operations");
-  if (ops === "read") money.push("видит доходы и расходы");
-  if (ops === "write") money.push("ведёт доходы и расходы");
+  const income = read("finance.income");
+  const expense = read("finance.expense");
+  if (income !== undefined || expense !== undefined) {
+    money.push(...sideWords(income, expense));
+  } else {
+    if (ops === "read") money.push("видит доходы и расходы");
+    if (ops === "write") money.push("ведёт доходы и расходы");
+  }
   const accounts = read("finance.accounts");
   if (accounts === "read") money.push("видит счета");
   if (accounts === "write") money.push("управляет счетами");
   const debts = read("finance.debts");
   if (debts === "read") money.push("видит долги");
-  if (debts === "write") money.push("закрывает долги");
+  if (debts === "write") money.push("принимает оплату долгов");
 
   return {
     hidden,
@@ -90,7 +115,14 @@ function teamFacts(read: LevelRead): TeamFacts {
     clientsAll: read("clients.scope") === "all",
     phonesHidden: read("clients.contacts") === "off",
     money,
-    risky: is("calendar.cancel", "write") || ops === "write" || accounts === "write",
+    risky:
+      is("calendar.cancel", "write") ||
+      ops === "write" ||
+      accounts === "write" ||
+      debts === "write" ||
+      income === "full" ||
+      expense === "full",
+    ownDeletes: income === "write" || expense === "write",
   };
 }
 
@@ -120,8 +152,9 @@ export function teamSentence(read: LevelRead): string {
   // Деньги: что может с оплатой, операциями, счетами и долгами.
   out.push(f.money.length > 0 ? `${cap(joinRu(f.money))}.` : "Деньги закрыты.");
 
-  // Опасное — отдельной фразой, когда его нет вовсе: это и хотят услышать.
-  if (!f.risky) out.push("Удалять ничего не может.");
+  // Опасное — отдельной фразой, когда его нет: это и хотят услышать. Своя
+  // операция на «Добавляет» удаляется — тогда обещание уже, про чужое.
+  if (!f.risky) out.push(f.ownDeletes ? "Чужие записи и деньги удалить не может." : "Записи и деньги удалить не может.");
 
   return out.join(" ");
 }

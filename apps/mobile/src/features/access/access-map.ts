@@ -11,11 +11,14 @@ import type { Json } from "@babun/shared/db/database.types";
 // Лист без React и без сети: разбор ответа сервера и правила «какое положение
 // у блока» проверяются тестом, а не глазами.
 
-export type AccessLevel = "off" | "read" | "write" | "own" | "all";
+// «Правит всё» (`full`, этап 2 денег, владелец 29.09) — выше «Меняет»: правит и
+// удаляет и чужое в команде. На сервере ступень стоит в конце шкалы
+// (`array['off', 'read', 'write', 'full']`), поэтому прежние ранги не сдвинулись.
+export type AccessLevel = "off" | "read" | "write" | "full" | "own" | "all";
 export type AccessArea = "calendar" | "finance" | "clients" | "company" | "owner";
 export type AccessScope = "calendar" | "company";
 
-const LEVELS: readonly AccessLevel[] = ["off", "read", "write", "own", "all"];
+const LEVELS: readonly AccessLevel[] = ["off", "read", "write", "full", "own", "all"];
 const AREAS: readonly AccessArea[] = ["calendar", "finance", "clients", "company", "owner"];
 
 export interface AccessBlock {
@@ -49,6 +52,7 @@ export const LEVEL_WORD: Record<AccessLevel, string> = {
   off: "Не видит",
   read: "Видит",
   write: "Меняет",
+  full: "Правит всё",
   own: "Из его календарей",
   all: "Все",
 };

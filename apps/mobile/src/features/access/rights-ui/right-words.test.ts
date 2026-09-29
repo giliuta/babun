@@ -24,6 +24,9 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["record.status", ["read", "write"]],
   ["record.files", ["off", "read", "write"]],
   ["finance.operations", ["off", "read", "write"]],
+  // Этап 2 денег: общее «Доходы и расходы» делится на два права.
+  ["finance.income", ["off", "read", "write", "full"]],
+  ["finance.expense", ["off", "read", "write", "full"]],
   ["finance.accounts", ["off", "read", "write"]],
   ["finance.debts", ["off", "read", "write"]],
   ["clients", ["off", "read", "write"]],
@@ -74,5 +77,18 @@ describe("слова строк прав", () => {
     assert.ok(stepDanger(block("finance.accounts", ["off", "read", "write"]), "write"));
     assert.equal(stepDanger(block("record.client", ["off", "read", "write"]), "write"), null);
     assert.equal(stepDanger(block("finance.accounts", ["off", "read", "write"]), "read"), null);
+    const income = block("finance.income", ["off", "read", "write", "full"]);
+    assert.ok(stepDanger(income, "full"), "чужие доходы — опасно");
+    assert.equal(stepDanger(income, "write"), null, "свои доходы — не опасно");
+    assert.ok(stepDanger(block("finance.debts", ["off", "read", "write"]), "write"), "удаление долгов");
+  });
+
+  test("«Счета: Не видит» при приёме оплаты — «Только при оплате»", () => {
+    const accounts = block("finance.accounts", ["off", "read", "write"]);
+    assert.equal(stepWord(accounts, "off", { "record.payment": "write" }), "Только при оплате");
+    assert.match(stepHint(accounts, "off", { "record.payment": "write" }), /только в оплате/);
+    assert.equal(stepWord(accounts, "off", { "record.payment": "read" }), "Не видит");
+    assert.equal(stepWord(accounts, "off"), "Не видит");
+    assert.equal(stepWord(accounts, "read", { "record.payment": "write" }), "Видит");
   });
 });

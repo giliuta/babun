@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { View } from "react-native";
 import { Banknote, CreditCard } from "lucide-react-native";
 
@@ -10,11 +11,23 @@ import { RecordRowView } from "@/features/finances/RecordRow";
 
 import type { AccessLevel } from "../access-map";
 import { PreviewFrame, levelState } from "./PreviewFrame";
-import { SAMPLE_DEBT, SAMPLE_EXPENSE, SAMPLE_INCOME } from "./preview-sample";
+import {
+  SAMPLE_DEBT,
+  SAMPLE_EXPENSE,
+  SAMPLE_EXPENSE_OTHER,
+  SAMPLE_EXPENSE_OWN,
+  SAMPLE_INCOME,
+  SAMPLE_INCOME_OTHER,
+  SAMPLE_INCOME_OWN,
+} from "./preview-sample";
 
 // ВИД ПРАВ ФИНАНСОВ В ШТОРКЕ: строки ленты операций (`RecordRowView` —
 // те же, что на «Финансах»), плитки счетов, строка долга. «Меняет» —
 // появляется действие, которое открывается на странице финансов.
+//
+// Доходы и расходы (этап 2): у открытой строки есть дверь, у закрытой нет.
+// «Добавляет» открывает только свою операцию, «Правит всё» — и чужую;
+// оплата записи в ленте доходов не открывается никогда — её ведёт «Оплата».
 
 const noop = () => {};
 
@@ -30,6 +43,38 @@ function Action({ label }: { label: string }) {
 export function MoneyPreview({ blockKey, level }: { blockKey: string; level: AccessLevel }) {
   const write = level === "write";
   switch (blockKey) {
+    case "finance.income":
+    case "finance.expense": {
+      const income = blockKey === "finance.income";
+      const adds = level === "write" || level === "full";
+      const all = level === "full";
+      const rows = income
+        ? [
+            { row: SAMPLE_INCOME, open: false },
+            { row: SAMPLE_INCOME_OTHER, open: all },
+            { row: SAMPLE_INCOME_OWN, open: adds },
+          ]
+        : [
+            { row: SAMPLE_EXPENSE_OTHER, open: all },
+            { row: SAMPLE_EXPENSE_OWN, open: adds },
+          ];
+      return (
+        <PreviewFrame
+          state={levelState(level)}
+          caption={all ? "Правит всё, и чужое тоже" : adds ? "Добавляет и правит своё" : undefined}
+        >
+          <Card style={{ marginHorizontal: 16, marginTop: 8 }}>
+            {rows.map(({ row, open }, i) => (
+              <Fragment key={row.key}>
+                {i > 0 ? <Divider inset={16} /> : null}
+                <RecordRowView row={row} tone={income ? "income" : "expense"} onPress={open ? noop : undefined} />
+              </Fragment>
+            ))}
+          </Card>
+          {adds ? <Action label={income ? "Добавить доход" : "Добавить расход"} /> : null}
+        </PreviewFrame>
+      );
+    }
     case "finance.operations":
       return (
         <PreviewFrame state={levelState(level)}>

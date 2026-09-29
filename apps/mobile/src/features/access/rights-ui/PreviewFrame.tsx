@@ -26,10 +26,11 @@ const LOOK: Record<PreviewState, { word: string; icon: LucideIcon }> = {
 };
 
 /** Положение права → состояние вида: `off` (и `hidden` правила записи) —
- *  блока нет; `write` — меняет; остальное (`read`, `own`, `all`) — видит. */
+ *  блока нет; `write` и `full` — меняет; остальное (`read`, `own`, `all`) —
+ *  видит. */
 export function levelState(level: string | undefined): PreviewState {
   if (level === undefined || level === "off" || level === "hidden") return "hidden";
-  return level === "write" ? "write" : "read";
+  return level === "write" || level === "full" ? "write" : "read";
 }
 
 export function PreviewFrame({

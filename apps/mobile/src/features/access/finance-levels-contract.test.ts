@@ -532,7 +532,12 @@ describe("owner-only money functions follow levels, and the owner path is byte f
       ],
     ], "replace_day_extras");
     assert.equal(own("replace_day_extras"), expected);
-    assert.equal(latestDefinition("replace_day_extras").file, MIGRATION);
+    // Срез 2а (29.09) разделил «Доходы и расходы» на два права и переписал
+    // эту проверку; его тело сторожит `finance-income-expense-contract.test.ts`.
+    assert.ok(
+      [MIGRATION, "20260929235000_finance_income_expense_levels.sql"].includes(latestDefinition("replace_day_extras").file),
+      "a later migration rewrote replace_day_extras",
+    );
   });
 
   // Живые тела переводов расходятся с файлами миграций (правились в базе), поэтому

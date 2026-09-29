@@ -135,6 +135,8 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "record.color",
     "record.files",
     "calendar.day_labels",
+    "finance.income",
+    "finance.expense",
     "finance.operations",
     "finance.accounts",
     "finance.debts",

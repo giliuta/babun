@@ -228,7 +228,7 @@ export function MasterRightsView({
                       key={row.block.key}
                       separated={i > 0}
                       label={rightTitle(row.block)}
-                      value={stepWord(row.block, row.level)}
+                      value={stepWord(row.block, row.level, levels)}
                       valueColor={isClosedStep(row.level) ? t.faint : danger ? t.warning : undefined}
                       dimmed={busyKey === row.block.key}
                       onPress={() => open(row.block)}

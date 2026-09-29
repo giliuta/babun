@@ -9,6 +9,7 @@ import {
   isFinanceDataKey,
   isNewerAccess,
   lostAccess,
+  moneyKey,
   recordLevelsChanged,
 } from "./my-access";
 
@@ -29,6 +30,8 @@ describe("деньги, которые стираются при понижен�
 
   test("все блоки финансов в списке понижения", () => {
     for (const key of [
+      "finance.income",
+      "finance.expense",
       "finance.operations",
       "finance.accounts",
       "finance.debts",
@@ -104,6 +107,35 @@ describe("ворота блока", () => {
     const m = map({ calendars: { a: { [OPS]: "read" }, b: { [OPS]: "write" }, c: {} } });
     assert.equal(bestCalendarLevel(m, OPS), "write");
     assert.equal(bestCalendarLevel(map(), OPS), undefined);
+  });
+
+  test("«Правит всё» — выше «Меняет»: ворота открыты, понижение до «Меняет» — понижение", () => {
+    const INCOME = "finance.income";
+    const full = map({ calendars: { a: { [INCOME]: "full" }, b: { [INCOME]: "write" } } });
+    assert.equal(accessGate({ role: "master", map: full, blockKey: INCOME, scope: "calendar", teamId: "a" }), "write");
+    assert.equal(bestCalendarLevel(full, INCOME), "full");
+    const lowered = map({ calendars: { a: { [INCOME]: "write" }, b: { [INCOME]: "write" } } });
+    assert.equal(lostAccess(full, lowered, [INCOME]), true);
+    assert.equal(lostAccess(lowered, full, [INCOME]), false);
+  });
+});
+
+describe("сторона денег — новый ключ или старый общий", () => {
+  test("карта после наката — свои ключи доходов и расходов", () => {
+    const m = map({ calendars: { a: { "finance.income": "read", "finance.expense": "full" } } });
+    assert.equal(moneyKey(m, "income"), "finance.income");
+    assert.equal(moneyKey(m, "expense"), "finance.expense");
+  });
+
+  test("карта до наката — общий «Доходы и расходы» за обе стороны", () => {
+    const m = map({ calendars: { a: { [OPS]: "write" } } });
+    assert.equal(moneyKey(m, "income"), OPS);
+    assert.equal(moneyKey(m, "expense"), OPS);
+  });
+
+  test("карты нет или календарей нет — новый ключ: ворота всё равно закрыты или владелец", () => {
+    assert.equal(moneyKey(undefined, "income"), "finance.income");
+    assert.equal(moneyKey(map(), "expense"), "finance.expense");
   });
 });
 

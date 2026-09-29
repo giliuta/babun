@@ -61,6 +61,14 @@ export const SAMPLE_EXPENSE = row({ key: "expense", title: "Фреон R32", sub
 
 export const SAMPLE_DEBT = row({ key: "debt", title: "Иван Смирнов", subtitle: "Заправка фреоном", amount: 80 });
 
+// Ручные операции команды: своя («добавил он») открыта уже на «Добавляет»,
+// чужая («добавили вы») — только на «Правит всё». Оплата записи
+// (`SAMPLE_INCOME`) здесь не правится вовсе: её ведёт блок «Оплата».
+export const SAMPLE_INCOME_OWN = row({ key: "income-own", title: "Продажа фильтра", subtitle: "Добавил он", amount: 40 });
+export const SAMPLE_INCOME_OTHER = row({ key: "income-other", title: "Аренда инструмента", subtitle: "Добавили вы", amount: 60 });
+export const SAMPLE_EXPENSE_OWN = row({ key: "expense-own", title: "Бензин", subtitle: "Добавил он", amount: -25 });
+export const SAMPLE_EXPENSE_OTHER = row({ key: "expense-other", title: "Фреон R32", subtitle: "Добавили вы", amount: -40 });
+
 /** Карта прав сотрудника с положениями ОДНОЙ команды — такой её видит
  *  страница записи. */
 function previewMap(levels: Readonly<Record<string, AccessLevel>>): MemberAccessMap {
