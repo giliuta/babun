@@ -15,6 +15,7 @@ export const RECORD_PREVIEW_KEYS: readonly string[] = [
 ];
 
 export const CALENDAR_PREVIEW_KEYS: readonly string[] = [
+  "calendar.records",
   "calendar.create",
   "calendar.move",
   "calendar.cancel",

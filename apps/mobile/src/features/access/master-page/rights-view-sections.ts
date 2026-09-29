@@ -9,7 +9,7 @@ import {
   orderGroupRows,
   type CalendarGroup,
 } from "./access-summary";
-import type { RightsArea } from "./master-draft";
+import { CREATE_KEY, RECORDS_KEY, recordsRowLevel, type RightsArea } from "./master-draft";
 import { offeredBlocks } from "./rights-copy";
 import { rightsSections, type LevelReader, type RightsRow } from "./rights-rows";
 
@@ -118,6 +118,9 @@ export function teamLevels(
   for (const block of offeredBlocks(blocks)) {
     levels[block.key] = levelOf(block, block.scope === "calendar" ? activeId : null);
   }
+  // Ступень «Записей клиентов» — та же, что на их строке (`recordsRowLevel`).
+  const records = levels[RECORDS_KEY];
+  if (records !== undefined) levels[RECORDS_KEY] = recordsRowLevel(records, levels[CREATE_KEY] ?? "off");
   return levels;
 }
 

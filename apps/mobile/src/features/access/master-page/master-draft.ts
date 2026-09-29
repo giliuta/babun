@@ -145,6 +145,36 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
   clients: ["clients.scope", "clients.contacts"],
 };
 
+/** «ЗАПИСИ КЛИЕНТОВ» ВЕДУТ «НОВЫЕ ЗАПИСИ» (владелец 30.09: «видит он записи,
+ *  не видит вообще записи и может ли создавать запись»). Одна строка на два
+ *  права: `calendar.records` — видит ли он записи команды (его проверяет
+ *  лента записей на сервере), `calendar.create` — создаёт ли новые (его
+ *  проверяет `member_appointment_create`). Строки «Новые записи» отдельно нет. */
+export const RECORDS_KEY = "calendar.records";
+export const CREATE_KEY = "calendar.create";
+
+/** Ступень строки «Записи клиентов» из двух прав: скрыты — «Скрыты»; видит
+ *  и создаёт — «Видит и создаёт»; иначе — «Только видит». */
+export function recordsRowLevel(records: AccessLevel, create: AccessLevel): AccessLevel {
+  if (records === "off") return "off";
+  return create === "write" ? "write" : "read";
+}
+
+/** Что ставится вместе со ступенью блока. У «Записей клиентов» — «Новые
+ *  записи»: «Может» при «Видит и создаёт», иначе «Не может». При «Скрыты» их
+ *  и так сбрасывает свёртка (`dependantResets`): второй раз один блок в набор
+ *  не попадает — сервер такой набор отказывает. */
+export function companionLevels(blockKey: string, level: AccessLevel): Record<string, AccessLevel> {
+  if (blockKey !== RECORDS_KEY || level === "off") return {};
+  return { [CREATE_KEY]: level === "write" ? "write" : "off" };
+}
+
+/** Строка права влита в другую и отдельно не рисуется: «Новые записи» — в
+ *  «Записи клиентов», когда та есть на странице (сервер её проверяет). */
+export function isMergedRow(key: string, offeredKeys: ReadonlySet<string>): boolean {
+  return key === CREATE_KEY && offeredKeys.has(RECORDS_KEY);
+}
+
 /** Главный блок зависимого, `null` — блок ни от кого не зависит. */
 export function parentBlockOf(key: string): string | null {
   for (const [parent, dependants] of Object.entries(DEPENDANT_BLOCKS)) {
@@ -190,6 +220,11 @@ export function withLevel(
   const apply = (levels: Record<string, AccessLevel>) => {
     const next = withoutKeys(levels, drop);
     if (!isDefault) next[block.key] = level;
+    // Спутники — положением прямо в ту же карту; умолчание («off») не храним.
+    for (const [key, companion] of Object.entries(companionLevels(block.key, level))) {
+      if (companion === "off") delete next[key];
+      else next[key] = companion;
+    }
     return next;
   };
 

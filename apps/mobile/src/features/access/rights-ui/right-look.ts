@@ -50,6 +50,7 @@ export interface RightLook {
 }
 
 const LOOK: Record<string, RightLook> = {
+  "calendar.records": { icon: CalendarPlus, tile: SETTINGS_TILE.blue },
   "calendar.create": { icon: CalendarPlus, tile: SETTINGS_TILE.blue },
   "calendar.move": { icon: ArrowRightLeft, tile: SETTINGS_TILE.teal },
   "calendar.cancel": { icon: CalendarX2, tile: SETTINGS_TILE.red },

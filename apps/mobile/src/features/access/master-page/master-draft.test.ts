@@ -171,9 +171,12 @@ describe("черновик нового мастера", () => {
     draft = withLevel(draft, records, "read", "team-2");
     draft = withLevel(draft, operations, "read", "team-2");
     draft = withLevel(draft, services, "write", null);
+    // «Записи клиентов: Видит и создаёт» ставит и «Новые записи: Может»
+    // (владелец 30.09, `companionLevels`).
     assert.deepEqual(draftAccessChanges(REGISTRY, draft), [
       { block: "calendar.records", team_id: "team-1", level: "write" },
       { block: "calendar.records", team_id: "team-2", level: "read" },
+      { block: "calendar.create", team_id: "team-1", level: "write" },
       { block: "finance.operations", team_id: "team-2", level: "read" },
       { block: "services", team_id: null, level: "write" },
     ]);
@@ -280,6 +283,7 @@ describe("черновик нового мастера", () => {
       access: [
         { block: "calendar.records", team_id: "team-2", level: "read" },
         { block: "calendar.records", team_id: "team-1", level: "write" },
+        { block: "calendar.create", team_id: "team-1", level: "write" },
       ],
     });
     const full = invitationRequest(
@@ -386,7 +390,9 @@ describe("карточка ждущего приглашения", () => {
     assert.equal(applied.phone, "+35799111111");
     assert.equal(applied.title, "Мастер");
     assert.deepEqual(applied.teamIds, ["team-1", "team-3"]);
-    assert.deepEqual(applied.calendarLevels, { "team-1": { "calendar.records": "write" } });
+    assert.deepEqual(applied.calendarLevels, {
+      "team-1": { "calendar.records": "write", "calendar.create": "write" },
+    });
   });
 
   test("архивный календарь уходит со страницы и из отправки вместе с уровнями", () => {

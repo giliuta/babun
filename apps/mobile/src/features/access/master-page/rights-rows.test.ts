@@ -56,8 +56,10 @@ const block = (key: string): AccessBlock => {
 const keysOf = (sections: ReturnType<typeof rightsSections>, area: string) =>
   sections.find((section) => section.area === area)?.rows.map((row) => row.block.key) ?? [];
 
+// «Новые записи» своей строки не имеют — они влиты в «Записи клиентов»
+// (владелец 30.09): свёртку их строки проверять нечего, её нет и при
+// открытом главном (отдельный тест ниже).
 const CALENDAR_DEPENDANTS = [
-  "calendar.create",
   "record.status",
   "record.amount",
   "record.payment",
@@ -77,7 +79,7 @@ describe("страница прав — какие строки видны", () 
     assert.deepEqual(keysOf(sections, "finance"), ["finance.operations", "finance.vat"]);
   });
 
-  test("«Календарь и записи» скрыт — пять строк свёрнуты только в этом календаре", () => {
+  test("«Календарь и записи» скрыт — зависимые строки свёрнуты только в этом календаре", () => {
     let draft = toggleTeam(emptyMasterDraft("team-1"), "team-2");
     draft = withLevel(draft, block("calendar.records"), "read", "team-2");
     const levelOf = (b: AccessBlock, teamId: string | null) => draftLevel(b, draft, teamId);
@@ -171,6 +173,9 @@ describe("сотрудник на карточке мастера", () => {
       changes?.map((change) => `${change.block}@${change.team_id}=${change.level}`),
       [
         "calendar.records@team-1=off",
+        // «Новые записи» сбрасываются свёрткой ровно один раз — спутник
+        // «Скрыты» их второй раз в набор не кладёт.
+        "calendar.create@team-1=off",
         ...CALENDAR_DEPENDANTS.map((key) => `${key}@team-1=off`),
         ...FINANCE_CALENDAR_DEPENDANTS.map((key) => `${key}@team-1=off`),
       ],
@@ -179,6 +184,32 @@ describe("сотрудник на карточке мастера", () => {
     assert.deepEqual(levelChanges(REGISTRY, block("clients"), "read", "team-1"), [
       { block: "clients", team_id: null, level: "read" },
     ]);
+  });
+
+  test("«Записи клиентов» ведут «Новые записи»: одна строка, три ступени (владелец 30.09)", () => {
+    const registry = REGISTRY.map((b) => (b.key === "calendar.records" ? { ...b, live: true } : b));
+    const records = registry.find((b) => b.key === "calendar.records");
+    assert.ok(records);
+    const pairs = (level: AccessLevel) =>
+      levelChanges(registry, records, level, "team-1")
+        ?.filter((change) => change.block === "calendar.records" || change.block === "calendar.create")
+        .map((change) => `${change.block}=${change.level}`);
+    assert.deepEqual(pairs("write"), ["calendar.records=write", "calendar.create=write"]);
+    assert.deepEqual(pairs("read"), ["calendar.records=read", "calendar.create=off"]);
+    assert.deepEqual(pairs("off"), ["calendar.records=off", "calendar.create=off"]);
+
+    // Строки «Новые записи» нет, ступень строки «Записи клиентов» — из двух прав.
+    const levels: Record<string, AccessLevel> = { "calendar.records": "write", "calendar.create": "off" };
+    const rowsOf = () =>
+      rightsSections(registry, (b) => levels[b.key] ?? (b.levels[0] as AccessLevel), "team-1")
+        .flatMap((section) => section.rows)
+        .filter((row) => row.block.key.startsWith("calendar.") && row.block.scope === "calendar");
+    assert.equal(rowsOf().some((row) => row.block.key === "calendar.create"), false);
+    assert.equal(rowsOf().find((row) => row.block.key === "calendar.records")?.level, "read");
+    levels["calendar.create"] = "write";
+    assert.equal(rowsOf().find((row) => row.block.key === "calendar.records")?.level, "write");
+    levels["calendar.records"] = "off";
+    assert.equal(rowsOf().find((row) => row.block.key === "calendar.records")?.level, "off");
   });
 
   test("скрытие главного сбрасывает и неживые зависимые — у сотрудника их уровень хранится", () => {

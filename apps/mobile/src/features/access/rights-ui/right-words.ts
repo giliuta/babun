@@ -13,10 +13,11 @@ type Words = Partial<Record<AccessLevel, string>>;
 
 /** Имя строки — короткое: раздел уже назван шапкой («Запись», «Финансы»). */
 const TITLE: Record<string, string> = {
+  "calendar.records": "Записи клиентов",
   "calendar.create": "Новые записи",
   "calendar.move": "Перенос записей",
   "calendar.cancel": "Отмена и удаление",
-  "calendar.events": "События",
+  "calendar.events": "Записи событий",
   "calendar.day_labels": "Метка дня",
   "calendar.schedule": "График команды",
   "record.team": "Команда",
@@ -45,6 +46,12 @@ const STEP: Record<string, Words> = {
   "calendar.create": { off: "Не может", write: "Может" },
   "calendar.move": { off: "Не может", write: "Может" },
   "calendar.cancel": { off: "Не может", write: "Может" },
+  // Записи клиентов (владелец 30.09: «видит он записи, не видит вообще
+  // записи и может ли создавать запись»). «Видит и создаёт» ставит заодно
+  // «Новые записи» (`companionChanges`).
+  "calendar.records": { off: "Скрыты", read: "Только видит", write: "Видит и создаёт" },
+  // События — так же, как записи клиентов (владелец 30.09).
+  "calendar.events": { off: "Скрыты", read: "Только видит", write: "Видит и создаёт" },
   // Метка дня (владелец 29.09: «не видит, видит, меняет — другими словами»).
   "calendar.day_labels": { off: "Скрыта", read: "Только видит", write: "Видит и меняет" },
   "record.team": { read: "Видит", write: "Меняет" },

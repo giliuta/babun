@@ -44,6 +44,7 @@ export const RECORD_ROW_ORDER: readonly string[] = [
  *  видит вокруг них (события, график). */
 export const CALENDAR_ROW_ORDER: readonly string[] = [
   "calendar.day_labels",
+  "calendar.records",
   "calendar.create",
   "calendar.move",
   "calendar.cancel",
@@ -62,8 +63,21 @@ export interface SectionBlock {
   keys: readonly string[];
 }
 
+/** Права блока «Записи» на странице «Календарь». */
+const RECORD_KINDS: readonly string[] = ["calendar.records", "calendar.events"];
+
 export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock[]>> = {
-  calendar: [{ key: "main", title: "Главное", keys: CALENDAR_ROW_ORDER }],
+  calendar: [
+    {
+      key: "main",
+      title: "Главное",
+      keys: CALENDAR_ROW_ORDER.filter((key) => !RECORD_KINDS.includes(key)),
+    },
+    // «Записи клиентов» и «Записи событий» — своим блоком «Записи»
+    // (владелец 30.09: «создай второй блок — „Записи"»; «событие тоже
+    // опускаем в блок „Записи"»).
+    { key: "records", title: "Записи", keys: RECORD_KINDS },
+  ],
 };
 
 /** Порядок строк раздела: запись — как на её странице, календарь — от

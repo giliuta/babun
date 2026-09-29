@@ -9,10 +9,15 @@ import {
 } from "../access-map";
 import { offeredBlocks } from "./rights-copy";
 import {
+  CREATE_KEY,
   MIXED_WORD,
+  RECORDS_KEY,
   areaLevel,
+  companionLevels,
   dependantResets,
   isBlockFolded,
+  isMergedRow,
+  recordsRowLevel,
   type AreaLevel,
   type MasterDraft,
   type RightsArea,
@@ -103,8 +108,15 @@ export function rightsSections(
   // и оживший блок появляется строкой сам.
   const blocks = offeredBlocks(allBlocks);
   const byKey = new Map(blocks.map((block) => [block.key, block]));
+  const offeredKeys = new Set(byKey.keys());
   const read = (block: AccessBlock) =>
     levelOf(block, block.scope === "calendar" ? teamId : null);
+  // «Записи клиентов» говорят и за «Новые записи» (`recordsRowLevel`).
+  const rowLevel = (block: AccessBlock): AccessLevel => {
+    if (block.key !== RECORDS_KEY) return read(block);
+    const create = byKey.get(CREATE_KEY);
+    return recordsRowLevel(read(block), create ? read(create) : "off");
+  };
   return sectionsFor(blocks)
     .map((section) => {
       // Без календаря календарных строк нет: выставить их некуда (сервер
@@ -116,6 +128,7 @@ export function rightsSections(
         ...section.blocks.filter((block) => block.scope !== "calendar"),
       ];
       const rows = ordered
+        .filter((block) => !isMergedRow(block.key, offeredKeys))
         .filter(
           (block) =>
             !isBlockFolded(block.key, (parentKey) => {
@@ -123,7 +136,7 @@ export function rightsSections(
               return parent ? read(parent) : "write";
             }),
         )
-        .map((block) => ({ block, level: read(block) }));
+        .map((block) => ({ block, level: rowLevel(block) }));
       return { area: section.area, title: section.title, rows };
     })
     .filter((section) => section.rows.length > 0);
@@ -156,9 +169,18 @@ export function levelChanges(
   teamId: string | null,
 ): AccessChange[] | null {
   if (block.scope === "calendar" && teamId === null) return null;
+  const teamOf = (scope: AccessBlock["scope"]) => (scope === "calendar" ? teamId : null);
+  // Спутники ступени — «Новые записи» у «Записей клиентов» (`companionLevels`).
+  const companions: AccessChange[] = Object.entries(companionLevels(block.key, level)).flatMap(
+    ([key, companionLevel]) => {
+      const companion = blocks.find((candidate) => candidate.key === key);
+      return companion ? [{ block: key, team_id: teamOf(companion.scope), level: companionLevel }] : [];
+    },
+  );
   return [
-    { block: block.key, team_id: block.scope === "calendar" ? teamId : null, level },
+    { block: block.key, team_id: teamOf(block.scope), level },
     ...dependantResets(blocks, block, level, teamId),
+    ...companions,
   ];
 }
 

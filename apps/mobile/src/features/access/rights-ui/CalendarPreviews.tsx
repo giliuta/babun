@@ -173,6 +173,20 @@ const DAY_LABEL_CHOICES = [
  *  «Дне»: в ней метка названа целиком, а недельная режет имя до 4 букв. */
 const WEEK = [28, 29, 30].map((day) => new Date(2026, 8, day));
 
+/** Подпись над видом записей клиентов — что у него на этой ступени. */
+const RECORDS_CAPTION: Record<"hidden" | "read" | "write", string> = {
+  hidden: "Так у него: день команды пустой",
+  read: "Так он видит записи команды",
+  write: "Так он создаёт запись: тап по свободному времени",
+};
+
+/** Подпись над видом записей событий — что у него на этой ступени. */
+const EVENTS_CAPTION: Record<"hidden" | "read" | "write", string> = {
+  hidden: "Так у него: событий в дне нет",
+  read: "Так он видит события команды",
+  write: "Так он создаёт событие: тап по свободному времени",
+};
+
 /** Подпись над видом метки дня — что с ней у человека на этой ступени. */
 const DAY_LABEL_CAPTION: Record<"hidden" | "read" | "write", string> = {
   hidden: "Так у него: дни без меток",
@@ -235,6 +249,18 @@ export function CalendarPreview({
   // Событие на сетке — если он их видит: сетка в шторке та же, что у него.
   const seenEvent = actions.events === "hidden" ? undefined : actions.events;
   switch (blockKey) {
+    case "calendar.records": {
+      // ЗАПИСИ КЛИЕНТОВ ТАК, КАК ИХ ВИДИТ СОТРУДНИК (30.09): «Скрыты» — день
+      // команды пустой, «Только видит» — запись на сетке, «Видит и создаёт» —
+      // ещё и свободное время, по которому он создаёт запись.
+      const level = levels["calendar.records"] ?? "off";
+      const state = level === "off" ? "hidden" : level === "write" ? "write" : "read";
+      return (
+        <PreviewFrame state={state === "hidden" ? "read" : state} caption={RECORDS_CAPTION[state]} captionOff={state === "hidden"}>
+          <DayGrid color={teamColor} tile={state === "hidden" ? null : tile} free={state === "write" ? "Новая запись" : undefined} />
+        </PreviewFrame>
+      );
+    }
     case "calendar.create":
       return (
         <PreviewFrame state={actions.create ? "can" : "cannot"}>
@@ -253,17 +279,22 @@ export function CalendarPreview({
           <AppointmentMenuPreview color={teamColor} tile={tile} items={["Отменить визит", "Удалить"]} />
         </PreviewFrame>
       );
-    case "calendar.events":
+    case "calendar.events": {
+      // ЗАПИСИ СОБЫТИЙ — ТАК ЖЕ, КАК ЗАПИСИ КЛИЕНТОВ (владелец 30.09): «Скрыты»
+      // — в дне нет события, «Только видит» — обед на сетке, «Видит и
+      // создаёт» — ещё и свободное время под новое событие.
+      const state = actions.events;
       return (
-        <PreviewFrame state={levelState(actions.events)}>
+        <PreviewFrame state={state === "hidden" ? "read" : state} caption={EVENTS_CAPTION[state]} captionOff={state === "hidden"}>
           <DayGrid
             color={teamColor}
             tile={tile}
-            event={actions.events === "write" ? "write" : "read"}
-            free={actions.events === "write" ? "Новое событие" : undefined}
+            event={state === "hidden" ? undefined : state}
+            free={state === "write" ? "Новое событие" : undefined}
           />
         </PreviewFrame>
       );
+    }
     case "calendar.day_labels": {
       // Закрытая метка — это дни без неё, а не бледный блок: сама шапка
       // недели у него на месте, пропадает только метка.
