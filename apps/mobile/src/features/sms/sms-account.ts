@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
@@ -119,6 +119,31 @@ export function useSmsHistory(limit = 50, filter?: { teamId?: string | null; tri
       if (error) throw new Error(error.message);
       return parseSmsHistory(data);
     },
+  });
+}
+
+const HISTORY_PAGE = 100;
+
+/** Вся история страницами: долистал до конца — пришли следующие сто. */
+export function useSmsHistoryPages(teamId: string | null) {
+  const tenantId = useTenantId();
+  const role = useDataRole();
+  return useInfiniteQuery({
+    queryKey: [...smsHistoryKey(tenantId), "pages", teamId],
+    enabled: !!tenantId && role.data === "owner",
+    staleTime: 0,
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => {
+      const { data, error } = await supabase.rpc("sms_history", {
+        p_limit: HISTORY_PAGE,
+        p_before: pageParam ?? undefined,
+        p_team_id: teamId ?? undefined,
+      });
+      if (error) throw new Error(error.message);
+      return parseSmsHistory(data);
+    },
+    getNextPageParam: (last) =>
+      last.length < HISTORY_PAGE ? undefined : (last[last.length - 1]?.createdAt ?? undefined),
   });
 }
 

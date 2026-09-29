@@ -7,11 +7,12 @@ import { useSmsTemplates } from "@/features/settings/sms-templates";
 import { useSmsAccount } from "@/features/sms/sms-account";
 import { euro } from "@/features/sms/sms-words";
 
-// СТРОКА «SMS» В НАСТРОЙКАХ КЛИЕНТОВ (STORY-089). Сначала стояла в Кабинете
-// («собственный кабинет отправки СМС»), владелец 24.09: «давай добавим это
-// в настройки к клиентам» — SMS пишут клиентам, и у настройки одна дверь в
-// её разделе. Страница `/clients/sms`: баланс, отправка через сервис по
-// календарям, автоматические SMS, шаблоны и история.
+// СТРОКА «SMS» В НАСТРОЙКАХ КАЛЕНДАРЯ (STORY-089). Кабинет → настройки
+// клиентов (24.09) → настройки календаря: владелец 29.09 «перенеси SMS в
+// календарь, в настройки — не в клиентах, а в календаре». SMS уходят по
+// записям календаря, и у настройки одна дверь. Страница `/calendar/sms`:
+// баланс, отправка через сервис по командам, автоматические SMS, шаблоны и
+// история.
 //
 // Подпись — живое состояние: баланс и сколько шаблонов готово.
 export function SmsSettingsRow() {
@@ -30,7 +31,7 @@ export function SmsSettingsRow() {
       icon={MessageSquare}
       title="SMS"
       sub={parts.join(" · ")}
-      onPress={() => router.push("/clients/sms" as Href)}
+      onPress={() => router.push("/calendar/sms" as Href)}
     />
   );
 }

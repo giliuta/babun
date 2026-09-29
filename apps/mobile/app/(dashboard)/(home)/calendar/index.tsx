@@ -73,6 +73,7 @@ import {
 } from "@/features/calendar/setting-options";
 import { utcLabel, zoneClock } from "@/features/calendar/device-timezone";
 import { zoneCities } from "@/features/calendar/zone-label";
+import { SmsSettingsRow } from "@/features/sms/SmsSettingsRow";
 
 // ─── «Календарь» — ВСЕ настройки на одном экране ─────────────────────
 // Сюда ведёт шестерёнка. Уровня «/calendar/[teamId]» больше нет: целый экран
@@ -603,6 +604,15 @@ export default function CalendarSettingsScreen() {
                   )
                 }
               />
+            </SectionCard>
+          ) : null}
+          {/* SMS (STORY-089; владелец 29.09: «перенеси SMS в календарь, в
+              настройки — не в клиентах, а в календаре»). Баланс, отправка по
+              командам, автоматические SMS, шаблоны и история — одной дверью.
+              Страница про деньги компании — строка только владельцу. */}
+          {isOwner ? (
+            <SectionCard>
+              <SmsSettingsRow />
             </SectionCard>
           ) : null}
 

@@ -1,4 +1,4 @@
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { formatDateKey, formatDateShortRu } from "@babun/shared/common/utils/date-utils";
 import { useThemeColors } from "@/theme/colors";
 import type { SmsHistoryItem } from "./sms-model";
@@ -8,7 +8,7 @@ import { costWords, isFailure, statusWords, triggerWords } from "./sms-words";
 // второй, итог и цена — справа. Отказ красный: владелец должен увидеть его,
 // не читая каждую строку.
 
-function when(iso: string): string {
+export function when(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
   const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
@@ -19,8 +19,11 @@ export function SmsHistoryRow({
   item,
   showClient = true,
   body,
+  onPress,
 }: {
   item: SmsHistoryItem;
+  /** Тап — сообщение целиком (страница истории). */
+  onPress?: () => void;
   /** Нет — в записи и у клиента: кому, и так ясно; первой строкой — повод. */
   showClient?: boolean;
   /** Текст вместо сохранённого — у ещё не ушедшего: шаблон, заполненный
@@ -37,12 +40,21 @@ export function SmsHistoryRow({
   const waits = item.status === "queued" && item.sendAfter && new Date(item.sendAfter).getTime() > Date.now();
   const status = waits && item.sendAfter ? `Уйдёт ${when(item.sendAfter)}` : statusWords(item.status);
   return (
-    <View
+    <Pressable
       accessible
+      accessibilityRole={onPress ? "button" : undefined}
       accessibilityLabel={[title, meta, status, cost, text]
         .filter(Boolean)
         .join(", ")}
-      style={{ flexDirection: "row", gap: 12, paddingHorizontal: 16, paddingVertical: 12 }}
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        gap: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        opacity: pressed ? 0.6 : 1,
+      })}
     >
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
@@ -63,7 +75,11 @@ export function SmsHistoryRow({
         ) : null}
       </View>
       <View style={{ alignItems: "flex-end" }}>
-        <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 13, fontWeight: "600", color: failed ? t.danger : t.sub }}>
+        <Text maxFontSizeMultiplier={1.2} style={{
+            fontSize: 13,
+            fontWeight: "600",
+            color: failed ? t.danger : item.status === "delivered" ? t.success : waits ? t.warning : t.sub,
+          }}>
           {status}
         </Text>
         {cost ? (
@@ -75,6 +91,6 @@ export function SmsHistoryRow({
           </Text>
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }

@@ -138,7 +138,7 @@ export function SmsTeamScreen() {
             title="Вся история"
             sub={items.length > 0 ? undefined : "Сообщений пока нет"}
             onPress={() =>
-              router.push({ pathname: "/clients/sms-history", params: { teamId } } as unknown as Href)
+              router.push({ pathname: "/calendar/sms-history", params: { teamId } } as unknown as Href)
             }
           />
         </SectionCard>

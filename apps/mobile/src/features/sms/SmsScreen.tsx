@@ -99,8 +99,8 @@ export function SmsScreen() {
 
   const topup = async (cents: number) => {
     try {
-      const back = typeof window !== "undefined" ? `${window.location.origin}/clients/sms` : undefined;
-      const url = await startSmsTopup(cents, back ?? "https://babun.app/clients/sms");
+      const back = typeof window !== "undefined" ? `${window.location.origin}/calendar/sms` : undefined;
+      const url = await startSmsTopup(cents, back ?? "https://babun.app/calendar/sms");
       if (typeof window !== "undefined") window.location.assign(url);
     } catch (e) {
       notify("Оплата не открылась", e instanceof Error ? e.message : undefined);
@@ -213,7 +213,7 @@ export function SmsScreen() {
                       sub={teamSub(team.id)}
                       value={stats.cents > 0 ? euro(stats.cents) : undefined}
                       onPress={() =>
-                        router.push({ pathname: "/clients/sms-team", params: { teamId: team.id } } as unknown as Href)
+                        router.push({ pathname: "/calendar/sms-team", params: { teamId: team.id } } as unknown as Href)
                       }
                     />
                   </View>
@@ -236,7 +236,7 @@ export function SmsScreen() {
                 ? formatCountRu(readyTemplates.length, ["шаблон", "шаблона", "шаблонов"])
                 : "Шаблонов нет"
             }
-            onPress={() => router.push("/clients/sms-templates" as Href)}
+            onPress={() => router.push("/calendar/sms-templates" as Href)}
           />
         </SectionCard>
 
@@ -254,7 +254,7 @@ export function SmsScreen() {
             icon={History}
             title="Вся история"
             sub={(history.data ?? []).length > 0 ? undefined : "Сообщений пока нет"}
-            onPress={() => router.push("/clients/sms-history" as Href)}
+            onPress={() => router.push("/calendar/sms-history" as Href)}
           />
         </SectionCard>
       </ScrollView>

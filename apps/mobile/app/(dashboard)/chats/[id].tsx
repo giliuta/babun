@@ -853,7 +853,7 @@ export default function ChatThreadScreen() {
                   <Pressable
                     onPress={() => {
                       setQrOpen(false);
-                      router.push("/clients/sms-templates" as Href);
+                      router.push("/calendar/sms-templates" as Href);
                     }}
                     accessibilityRole="button"
                     accessibilityLabel="Настроить SMS-шаблоны"
