@@ -103,7 +103,11 @@ export interface WorkSummary {
   total: number;
   done: number;
   cancelled: number;
-  /** Выручка выполненных — как в KPI: полностью возвращённые не в счёт. */
+  /** Выручка — деньги, ПОЛУЧЕННЫЕ по записям периода (кроме отменённых).
+   *  Раньше считались только записи со статусом «Выполнена»: оплату приняли,
+   *  статус не поставили — и страница писала «Выручка €0» при доходе €300
+   *  (аудит 29.09). Сколько получено, решает общее правило записи
+   *  (`getPaidAmount`: аванс плюс оплаты, возврат — ноль). */
   revenue: number;
 }
 
@@ -120,6 +124,7 @@ export function workOfPeriod<R extends WorkRow>(
   teamIds: readonly string[],
   window: { from: string; to: string },
   today: string,
+  received: (row: R) => number,
 ): { summary: WorkSummary; upcoming: WorkDay<R>[]; past: WorkDay<R>[] } {
   const teams = new Set(teamIds);
   const summary: WorkSummary = { total: 0, done: 0, cancelled: 0, revenue: 0 };
@@ -132,12 +137,8 @@ export function workOfPeriod<R extends WorkRow>(
       summary.cancelled += 1;
     } else {
       summary.total += 1;
-      if (row.status === "completed") {
-        summary.done += 1;
-        if (row.payment_status !== "refunded") {
-          summary.revenue += Math.max(0, row.total_amount ?? 0);
-        }
-      }
+      if (row.status === "completed") summary.done += 1;
+      summary.revenue += Math.max(0, received(row));
     }
     const list = byDate.get(row.date) ?? [];
     list.push(row);

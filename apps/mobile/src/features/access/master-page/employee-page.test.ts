@@ -109,19 +109,27 @@ describe("страница «Записи» сотрудника — перио�
       team_id: "A",
       status: "scheduled",
       total_amount: 100,
+      paid: 0,
       ...extra,
     });
     const rows = [
       row("1", "2026-09-02", { status: "completed" }),
       row("2", "2026-09-02", { status: "completed", payment_status: "refunded", time_start: "09:00" }),
-      row("3", "2026-09-25"),
+      // Оплачена, но статус «Выполнена» не поставлен — выручка всё равно есть.
+      row("3", "2026-09-25", { paid: 300 }),
       row("4", "2026-09-26", { status: "cancelled" }),
       row("5", "2026-09-25", { team_id: "B" }),
       row("6", "2026-09-25", { kind: "event" }),
       row("7", "2026-10-01"),
     ];
-    const got = workOfPeriod(rows, ["A"], workWindow("month", new Date(2026, 8, 24)), "2026-09-24");
-    assert.deepEqual(got.summary, { total: 3, done: 2, cancelled: 1, revenue: 100 });
+    const got = workOfPeriod(
+      rows,
+      ["A"],
+      workWindow("month", new Date(2026, 8, 24)),
+      "2026-09-24",
+      (r) => Number(r.paid),
+    );
+    assert.deepEqual(got.summary, { total: 3, done: 2, cancelled: 1, revenue: 300 });
     assert.deepEqual(got.upcoming.map((d) => d.date), ["2026-09-25", "2026-09-26"]);
     assert.deepEqual(got.past.map((d) => d.rows.map((r) => r.id)), [["2", "1"]]);
   });

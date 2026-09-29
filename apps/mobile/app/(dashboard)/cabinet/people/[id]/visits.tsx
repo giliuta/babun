@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { STATUS_LABELS } from "@babun/shared/local/appointments";
+import { STATUS_LABELS, getPaidAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 
@@ -58,7 +58,7 @@ export default function MasterWorkScreen() {
 
   const today = todayYMD();
   const work = useMemo(
-    () => workOfPeriod(appointments, teamIds, workWindow(period, new Date()), today),
+    () => workOfPeriod(appointments, teamIds, workWindow(period, new Date()), today, getPaidAmount),
     [appointments, teamIds, period, today],
   );
 
