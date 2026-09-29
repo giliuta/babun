@@ -33,7 +33,7 @@ const GENITIVE: Record<string, string> = {
   "record.client": "клиента",
   "record.object": "объекта",
   "record.services": "услуг",
-  "record.amount": "суммы",
+  "record.amount": "цен",
   "record.color": "цвета",
   "record.payment": "оплаты",
   "record.files": "файлов",
@@ -41,6 +41,37 @@ const GENITIVE: Record<string, string> = {
   "finance.accounts": "счетов",
   "finance.debts": "долгов",
 };
+
+/** ПРАВА ЗАПИСИ — В ПОРЯДКЕ БЛОКОВ СТРАНИЦЫ ЗАПИСИ (`BOOKING_BLOCKS`:
+ *  команда, метка, время, клиент, объект, услуги, оплата, заметка, файлы).
+ *  Цвет — к метке (оба про вид записи в сетке), цены — сразу под услугами,
+ *  статус со своей заметкой — на месте заметки. Время записи правит
+ *  «Переносить» раздела «Календарь». */
+export const RECORD_ROW_ORDER: readonly string[] = [
+  "record.team",
+  "record.label",
+  "record.color",
+  "record.client",
+  "record.object",
+  "record.services",
+  "record.amount",
+  "record.payment",
+  "record.status",
+  "record.files",
+];
+
+/** Порядок строк раздела: у записи — как на её странице, у прочих — реестр. */
+export function orderGroupRows<T extends { block: { key: string } }>(
+  group: CalendarGroup | undefined,
+  rows: readonly T[],
+): T[] {
+  if (group !== "record") return [...rows];
+  const rank = (key: string) => {
+    const at = RECORD_ROW_ORDER.indexOf(key);
+    return at === -1 ? RECORD_ROW_ORDER.length : at;
+  };
+  return [...rows].sort((a, b) => rank(a.block.key) - rank(b.block.key));
+}
 
 /** Живые календарные блоки группы, в порядке реестра. */
 export function groupBlocks(blocks: readonly AccessBlock[], group: CalendarGroup): AccessBlock[] {

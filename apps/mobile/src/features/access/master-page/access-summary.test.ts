@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { AccessBlock, AccessLevel } from "../access-map";
-import { calendarGroupLine, groupBlocks } from "./access-summary";
+import { calendarGroupLine, groupBlocks, orderGroupRows } from "./access-summary";
 import { blankMasterDraft, type MasterDraft } from "./master-draft";
 
 const block = (key: string, levels: AccessLevel[], live = true): AccessBlock => ({
@@ -68,7 +68,18 @@ describe("сводка блока «Доступ» по разделам", () =>
       "record.amount": "off",
       "record.client": "off",
     });
-    assert.equal(calendarGroupLine(REGISTRY, draft, "A", "record"), "Без клиента и суммы");
+    assert.equal(calendarGroupLine(REGISTRY, draft, "A", "record"), "Без клиента и цен");
+  });
+
+  test("права записи — в порядке страницы записи", () => {
+    const rows = ["record.status", "record.amount", "record.client", "record.services", "record.team"].map(
+      (key) => ({ block: { key } }),
+    );
+    assert.deepEqual(
+      orderGroupRows("record", rows).map((row) => row.block.key),
+      ["record.team", "record.client", "record.services", "record.amount", "record.status"],
+    );
+    assert.deepEqual(orderGroupRows("finance", rows), rows);
   });
 
   test("всё открыто, меняет не всё — «Видит, меняет часть»", () => {

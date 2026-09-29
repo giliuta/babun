@@ -14,7 +14,7 @@ import type { Team } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 
 import { AREA_TITLE, type AccessBlock, type AccessLevel } from "../access-map";
-import { CALENDAR_GROUP_TITLE, type CalendarGroup } from "./access-summary";
+import { CALENDAR_GROUP_TITLE, orderGroupRows, type CalendarGroup } from "./access-summary";
 import type { RightsArea } from "./master-draft";
 import { sectionColumns, segmentSlot } from "./rights-columns";
 import { levelSentence, segmentWord } from "./rights-copy";
@@ -59,6 +59,12 @@ const CALENDAR_SECTION_TITLE: Partial<Record<string, string>> = {
 const SHORT_FINANCE_TITLE: Record<string, string> = {
   "Доходы и расходы": "Операции",
   "Счета и остатки": "Счета",
+  // Под «Услугами» — «Цены» (29.09): «Сумма и услуги» читались вторыми
+  // «Услугами». Статус несёт заметку — так и называется.
+  "Сумма и услуги записи": "Цены",
+  "Статус записи": "Статус и заметка",
+  // «Команда и мастер» ломалась на две строки рядом с сегментом.
+  "Команда и мастер записи": "Команда",
   // Под шапкой «Клиенты» строка «Клиенты» повторяла её; «Телефоны и
   // контакты» ломались на две строки.
   Клиенты: "Карточки",
@@ -161,7 +167,7 @@ export function MasterRightsView({
   const sections = rightsSections(blocks, levelOf, onlyCompany ? null : activeId)
     .map((section) => ({
       ...section,
-      rows: section.rows.filter(
+      rows: orderGroupRows(group, section.rows).filter(
         (row) =>
           (onlyCalendar ? row.block.scope === "calendar" : onlyCompany ? row.block.scope !== "calendar" : true) &&
           (group ? row.block.key.startsWith(`${group}.`) : true),
