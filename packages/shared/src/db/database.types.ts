@@ -4315,6 +4315,10 @@ export type Database = {
         Args: { p_patch: Json; p_team: string }
         Returns: Json
       }
+      member_rename_day_label: {
+        Args: { p_from: string; p_team: string; p_to: string }
+        Returns: number
+      }
       set_default_company: {
         Args: { p_company_id: string }
         Returns: undefined

@@ -1,4 +1,4 @@
-import { CalendarRange, Globe } from "lucide-react-native";
+import { Briefcase, CalendarRange, ClipboardList, Globe, Tags } from "lucide-react-native";
 
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
@@ -63,6 +63,36 @@ export function SettingsPreview({
             icon={CalendarRange}
             title="Часы календаря"
             sub="08:00–20:00"
+            onPress={onPress}
+          />
+        );
+      case "calendar.booking_form":
+        return (
+          <SettingsRow
+            tile={SETTINGS_TILE.blue}
+            icon={ClipboardList}
+            title="Записи"
+            sub="Цвет команды · все блоки"
+            onPress={onPress}
+          />
+        );
+      case "calendar.services":
+        return (
+          <SettingsRow
+            tile={SETTINGS_TILE.blue}
+            icon={Briefcase}
+            title="Услуги"
+            sub="Каталог работ и цены"
+            onPress={onPress}
+          />
+        );
+      case "calendar.labels":
+        return (
+          <SettingsRow
+            tile={SETTINGS_TILE.purple}
+            icon={Tags}
+            title="Метки"
+            sub="Центр, Север, Выезд"
             onPress={onPress}
           />
         );

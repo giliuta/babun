@@ -46,6 +46,18 @@ export function useRenameDayCity() {
   return useMutation({
     mutationFn: async (input: { teamId: string; from: string; to: string }) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
+      // Сотрудник с правом «Метки» разносит новое имя по дням своей
+      // дверью (30.09): права «Метка дня» у него может не быть, а оставить
+      // дни со старым именем нельзя.
+      if (role === "master") {
+        const { error } = await supabase.rpc("member_rename_day_label", {
+          p_team: input.teamId,
+          p_from: input.from,
+          p_to: input.to,
+        });
+        if (error) throw new Error(error.message);
+        return;
+      }
       if (role !== "owner" && role !== "dispatcher") {
         throw new Error("Изменять метки может владелец или диспетчер.");
       }

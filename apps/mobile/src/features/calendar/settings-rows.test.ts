@@ -70,6 +70,15 @@ describe("строки настроек календаря", () => {
     assert.equal(rows.addCalendar, false);
   });
 
+  test("сотрудник: «Записи», «Услуги», «Метки» — по его праву, дверь и на «Только видит»", () => {
+    const rows = calendarSettingsRows("master", PAID, { booking: "read", services: "write", labels: "hidden" });
+    assert.equal(rows.booking, true);
+    assert.equal(rows.services, true);
+    assert.equal(rows.labels, false);
+    // Тариф гасит «Услуги» и сотруднику с правом.
+    assert.equal(calendarSettingsRows("master", FREE, { services: "write" }).services, false);
+  });
+
   test("удаление календаря сотруднику не показывается", () => {
     // Строка «Удалить календарь» — единственная разрушающая на экране;
     // она обязана исчезать вместе с остальными, а не «просто не работать».

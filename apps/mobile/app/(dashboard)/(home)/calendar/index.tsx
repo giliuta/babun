@@ -195,6 +195,9 @@ export default function CalendarSettingsScreen() {
       identity: rowLevel("calendar.identity"),
       timezone: rowLevel("calendar.timezone"),
       hours: rowLevel("calendar.hours"),
+      booking: rowLevel("calendar.booking_form"),
+      services: rowLevel("calendar.services"),
+      labels: rowLevel("calendar.labels"),
     },
   );
   // ПОДПИСЬ СТРОКИ «ЗАПИСИ» — ЭТОЙ КОМАНДЫ: откуда цвет и сколько блоков.

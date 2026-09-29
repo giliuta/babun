@@ -27,9 +27,12 @@ import {
   useReorderServices,
   useAllServices,
   useServices,
+  useServicesPageTable,
   type Service,
   type ServiceInput,
 } from "@/features/services/queries";
+import { useDataRole } from "@/features/settings/tenant";
+import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
 import {
   AppearanceTile,
   appearanceRowFill,
@@ -93,18 +96,27 @@ export default function ServicesScreen() {
 export function ServicesList({ teamId }: { teamId?: string } = {}) {
   const t = useThemeColors();
   const toast = useToast();
-  const servicesQuery = useServices();
+  // СОТРУДНИК ЧИТАЕТ САМУ ТАБЛИЦУ (30.09): его проекция услуг — только
+  // услуги его записей, с нулём вместо цены, а здесь нужен весь прайс
+  // команды. Сервер отдаёт строки тех команд, где «Услуги» ему открыты.
+  const isMaster = useDataRole().data === "master";
+  const pageTable = useServicesPageTable(isMaster);
+  const ownerLive = useServices();
+  const servicesQuery = isMaster ? pageTable : ownerLive;
   const teamsQuery = useTeams();
   const allServices = useMemo(
-    () => servicesQuery.data ?? [],
-    [servicesQuery.data],
+    () =>
+      isMaster
+        ? (pageTable.data ?? []).filter((s) => s.is_active)
+        : ownerLive.data ?? [],
+    [isMaster, pageTable.data, ownerLive.data],
   );
   // Полный справочник, ВКЛЮЧАЯ убранные: `useServices` их фильтрует, и без
   // второго списка вернуть убранную услугу было нечем.
   const everyServiceQuery = useAllServices();
   const everyService = useMemo<Service[]>(
-    () => everyServiceQuery.data ?? [],
-    [everyServiceQuery.data],
+    () => (isMaster ? pageTable.data : everyServiceQuery.data) ?? [],
+    [isMaster, pageTable.data, everyServiceQuery.data],
   );
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const create = useCreateService();
@@ -156,6 +168,10 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
     null;
 
   const activeTeam = teams.find((tm) => tm.id === activeTeamId) ?? null;
+  // «ТОЛЬКО ВИДИТ» — ПРАЙС БЕЗ ПРАВКИ (владелец 30.09): ни кнопки внизу, ни
+  // свайпов, ни ручек, строка не открывает редактор. Владельцу — всегда
+  // правка.
+  const readOnly = useTeamSettingLevel("calendar.services", activeTeamId) !== "write";
   /** Справочник команд ещё не ответил: «команд нет» и «команды не спросили» —
    *  разные вещи, и путать их нельзя ни в кнопке, ни в пустом состоянии. */
   const teamsUnknown = teamsQuery.isLoading;
@@ -198,7 +214,9 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
   const handlePurge = async (svc: Service) => {
     let used = 0;
     try {
-      used = await countUsage(svc.id);
+      // Сотрудник видит не все записи компании — его счёт занизил бы число.
+      // Честнее сказать без числа.
+      used = isMaster ? -1 : await countUsage(svc.id);
     } catch {
       // Счёт не сошёлся — не повод молчать о самом удалении. Предупреждаем
       // без числа: неизвестность здесь хуже завышенной оценки.
@@ -372,7 +390,7 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
               // невидимых. Теперь фильтра нет — скрытые лежат тут же серыми,
               // то есть на экране весь прайс команды целиком, и позиции
               // пишутся полному набору.
-              rangeFor={() => [0, services.length - 1]}
+              rangeFor={(index) => (readOnly ? [index, index] : [0, services.length - 1])}
               onReorder={(ids) => reorder.mutate(ids, { onError: alertError })}
               onDraggingChange={setDragging}
             >
@@ -412,15 +430,15 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
                     // вместе со строкой: скрытая предлагает показать. Так
                     // разрушительное действие живёт на постоянном месте и не
                     // подменяется под пальцем.
-                    label="Удалить"
+                    label={readOnly ? undefined : "Удалить"}
                     color={t.danger}
                     icon={Trash2}
                     accessibilityLabel={`Удалить услугу ${svc.name} навсегда`}
-                    onAction={() => void handlePurge(svc)}
+                    onAction={readOnly ? undefined : () => void handlePurge(svc)}
                     // `fullSwipe` НЕ включён и включён не будет: закон канона —
                     // размашистый свайп не носит разрушительного, а здесь оно
                     // необратимо.
-                    leading={{
+                    leading={readOnly ? undefined : {
                       label: off ? "Показать" : "Скрыть",
                       color: off ? t.success : t.warning,
                       icon: off ? RotateCcw : EyeOff,
@@ -454,12 +472,13 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
                       }}
                     >
                       <Pressable
+                        disabled={readOnly}
                         onPress={() =>
                           setEditing({ mode: "edit", service: svc })
                         }
-                        accessibilityRole="button"
+                        accessibilityRole={readOnly ? "text" : "button"}
                         accessibilityLabel={`${svc.name}, ${price}, ${sub}`}
-                        accessibilityHint="Открыть редактор услуги"
+                        accessibilityHint={readOnly ? undefined : "Открыть редактор услуги"}
                         style={({ pressed }) => ({
                           flex: 1,
                           height: ROW_H,
@@ -534,6 +553,7 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
       {/* НИЖНЯЯ КНОПКА — общий рецепт продукта: «Финансы» так добавляют
           операцию, «Клиенты» — клиента. Она стоит всегда, а не только на
           пустом экране: заводить услуги приходят пачкой. */}
+      {readOnly ? null : (
       <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
         {/* ПРАЙС БЕЗ БРИГАДЫ ВЕДЁТ НЕ В СТЕНУ. Услуга принадлежит ровно одной
             команде, а команд нет у 17 тенантов из 19: человек набирал имя,
@@ -565,6 +585,7 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
           }}
         />
       </View>
+      )}
 
       <ServiceSheet
         editing={editing}

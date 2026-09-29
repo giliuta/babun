@@ -235,13 +235,39 @@ export interface ServiceInput {
   copied_from_service_id?: string | null;
 }
 
+/** ПРАЙС СТРАНИЦЫ «УСЛУГИ» ДЛЯ СОТРУДНИКА (владелец 30.09: «Услуги» в
+ *  «Настройках команды» — «Скрыт · Только видит · Видит и меняет»). Проекция
+ *  мастера (`list_master_services_safe`) для этой страницы не годится: в ней
+ *  только услуги его записей, с нулём вместо цены и минут. Здесь — сама
+ *  таблица: сервер отдаёт строки ровно тех команд, где у него «Услуги» не
+ *  скрыты (`services_select_access`). Владельцу и остальным — `null`: их
+ *  страница читает прежний справочник. */
+export function useServicesPageTable(enabled: boolean) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["services", "settings-page", tenantId] as const,
+    enabled: enabled && !!tenantId,
+    queryFn: async (): Promise<Service[]> => {
+      const { data, error } = await supabase
+        .from("services")
+        .select("*")
+        .eq("tenant_id", tenantId as string)
+        .order("position");
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
+}
+
 export function useCreateService() {
   const tenantId = useTenantId();
   const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: ServiceInput) => {
-      if (role !== "owner") {
+      // Сотрудник — по праву «Услуги» своей команды (30.09): чужую команду
+      // отобьёт политика `services_write_access`.
+      if (role !== "owner" && role !== "master") {
         throw new Error("Создавать услуги может только владелец.");
       }
       const { data, error } = await supabase
@@ -321,7 +347,7 @@ export function useReorderServices() {
   return useMutation({
     mutationFn: async (ids: readonly string[]) => {
       if (!tenantId) throw new Error("Нет активного аккаунта.");
-      if (role !== "owner") {
+      if (role !== "owner" && role !== "master") {
         throw new Error("Менять порядок услуг может только владелец.");
       }
       await Promise.all(

@@ -575,7 +575,9 @@ export function useSavePersonalEventTypes() {
       teamId: string;
     }) => {
       if (!tenantId) throw new Error("Нет активной компании");
-      if (role !== "owner" && role !== "dispatcher") {
+      // Сотрудник — по праву «Записи» своей команды (30.09): чужую команду
+      // отобьёт политика `personal_event_types_write_access`.
+      if (role !== "owner" && role !== "dispatcher" && role !== "master") {
         throw new Error("Роль сотрудника не позволяет менять типы событий.");
       }
       // Заготовок с общими id больше нет (24.09) — перекладывать нечего.

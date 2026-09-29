@@ -41,6 +41,12 @@ export interface CalendarSettingsAccess {
   timezone: RowLevel;
   /** «Часы календаря». */
   hours: RowLevel;
+  /** «Записи» — блоки, цвет, типы событий, «Скрывать отменённые». */
+  booking: RowLevel;
+  /** «Услуги» команды. */
+  services: RowLevel;
+  /** «Метки» команды. */
+  labels: RowLevel;
 }
 
 const NO_ACCESS: CalendarSettingsAccess = {
@@ -48,6 +54,9 @@ const NO_ACCESS: CalendarSettingsAccess = {
   identity: "hidden",
   timezone: "hidden",
   hours: "hidden",
+  booking: "hidden",
+  services: "hidden",
+  labels: "hidden",
 };
 
 /** Что показывает страница настроек календаря этому человеку. */
@@ -71,6 +80,9 @@ export interface CalendarSettingsRows {
   /** «Перерыв после записи» в шторке графика — свойство самой команды;
    *  сотрудник пишет его через `member_update_team`. */
   buffer: boolean;
+  /** «Записи», «Услуги», «Метки» — двери на свои страницы. Дверь открыта и
+   *  на «Только видит»: страница показывает всё, но без правки (её ступень
+   *  страница читает сама). */
   booking: boolean;
   services: boolean;
   /** «Метки» — метки дня. */
@@ -105,9 +117,9 @@ export function calendarSettingsRows(
     // «Видит и меняет» — меняет всё в строке, перерыв после записи тоже
     // (владелец 30.09: «разделения „владелец, директор" не будет»).
     buffer: manage || access.schedule === "write",
-    booking: manage,
-    services: manage && plan.services,
-    labels: manage,
+    booking: shown(access.booking),
+    services: shown(access.services) && plan.services,
+    labels: shown(access.labels),
     remove: manage,
   };
   return {

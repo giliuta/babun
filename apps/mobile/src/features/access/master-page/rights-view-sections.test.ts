@@ -28,6 +28,10 @@ const REGISTRY: AccessBlock[] = [
   block("record.color", ["off", "write"], 37),
   block("calendar.day_labels", ["off", "read", "write"], 60),
   block("calendar.schedule", ["off", "read", "write"], 75),
+  block("calendar.identity", ["off", "read", "write"], 76),
+  block("calendar.booking_form", ["off", "read", "write"], 79),
+  block("calendar.services", ["off", "read", "write"], 80),
+  block("calendar.labels", ["off", "read", "write"], 81),
   block("finance.operations", ["off", "read", "write"], 110),
   block("finance.accounts", ["off", "read", "write"], 120),
 ];
@@ -43,11 +47,20 @@ const page = (group: "calendar" | "finance") =>
   }).map((section) => ({ title: section.title, keys: section.rows.map((row) => row.block.key) }));
 
 describe("страница раздела доступа — блоками владельца", () => {
-  test("«Календарь»: «Главное» с деньгами, «Записи», «Настройки команды» с графиком", () => {
+  test("«Календарь»: «Главное» с деньгами, «Записи», «Настройки команды» — строками шестерёнки", () => {
     assert.deepEqual(page("calendar"), [
       { title: "Главное", keys: ["calendar.day_labels", "finance.operations"] },
       { title: "Записи", keys: ["calendar.records", "calendar.events", "calendar.move", "calendar.cancel"] },
-      { title: "Настройки команды", keys: ["calendar.schedule"] },
+      {
+        title: "Настройки команды",
+        keys: [
+          "calendar.identity",
+          "calendar.schedule",
+          "calendar.booking_form",
+          "calendar.services",
+          "calendar.labels",
+        ],
+      },
     ]);
   });
 

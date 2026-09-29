@@ -41,6 +41,7 @@ import {
   useUpdateCity,
   type City,
 } from "@/features/reference/queries";
+import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
 
 /** Что лист отдаёт наружу при сохранении. Объектом, а не пятью позиционными
  *  аргументами: имя, цвет, дни и заливка — один ответ на один вопрос «какая
@@ -153,10 +154,16 @@ export function LabelsScreen() {
 
   // Обещанные 30 дней истекают здесь: крона нет, а зачистка обязана когда-то
   // случиться. Открытие экрана — тот же момент, где удаляют.
+  // «ТОЛЬКО ВИДИТ» — МЕТКИ БЕЗ ПРАВКИ (владелец 30.09: «Метки» в
+  // «Настройках команды»): ни кнопки внизу, ни свайпов, ни ручек, строка не
+  // открывает редактор. Владельцу — всегда правка.
+  const readOnly = useTeamSettingLevel("calendar.labels", teamId) !== "write";
   const purgeExpired = usePurgeExpiredCities();
   useEffect(() => {
+    // Зачистка — тоже правка: тому, кто только смотрит, она не положена.
+    if (readOnly) return;
     void purgeExpired();
-  }, [purgeExpired]);
+  }, [purgeExpired, readOnly]);
   const dayCities = useMemo(
     () => dayCitiesQuery.data ?? {},
     [dayCitiesQuery.data],
@@ -406,6 +413,7 @@ export function LabelsScreen() {
               rowHeight={ROW_H}
               spaced
               labelFor={(city) => city.name}
+              rangeFor={(index) => (readOnly ? [index, index] : [0, cities.length - 1])}
               // Ручка внутри строки: строка ещё и смахивается влево, а колонка
               // ручки снаружи не уезжает — «Удалить» упиралось бы в неё.
               handleInside
@@ -421,11 +429,11 @@ export function LabelsScreen() {
                 const hidden = !city.is_active && !deleted;
                 return (
                 <SwipeRow
-                  label="Удалить"
+                  label={readOnly ? undefined : "Удалить"}
                   color={t.danger}
                   icon={Trash2}
                   accessibilityLabel={`Удалить метку ${city.name}`}
-                  onAction={() => remove(city)}
+                  onAction={readOnly ? undefined : () => remove(city)}
                   // СЛЕВА — «СКРЫТЬ», КАК У УСЛУГ (владелец 2026-08-29).
                   // Здесь была «Основная» — звезда, ставившая метку фолбэком
                   // на все дни всех команд. Она уходит: то же самое будет
@@ -441,7 +449,7 @@ export function LabelsScreen() {
                   //   удалённая→ «Вернуть»  (снимается пометка на удаление).
                   // Подпись обязана называть то, что произойдёт: до правки
                   // удалённая предлагала «Скрыть», а по нажатию возвращалась.
-                  leading={{
+                  leading={readOnly ? undefined : {
                     label: deleted
                       ? "Вернуть"
                       : hidden
@@ -492,9 +500,10 @@ export function LabelsScreen() {
                     }}
                   >
                   <Pressable
+                    disabled={readOnly}
                     onPress={() => setEditing({ mode: "edit", city })}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Метка ${city.name}, редактировать`}
+                    accessibilityRole={readOnly ? "text" : "button"}
+                    accessibilityLabel={readOnly ? `Метка ${city.name}` : `Метка ${city.name}, редактировать`}
                     style={({ pressed }) => ({
                       flex: 1,
                       height: ROW_H,
@@ -544,12 +553,14 @@ export function LabelsScreen() {
           Кнопка стоит ВСЕГДА, а не только в пустом состоянии: метки заводят
           пачкой, и после первой не должно приходиться доскролливать список,
           чтобы завести вторую. Ровно тот же приём, что на экране услуг. */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
-        <GradientButton
-          label="Добавить метку"
-          onPress={() => setEditing({ mode: "create" })}
-        />
-      </View>
+      {readOnly ? null : (
+        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+          <GradientButton
+            label="Добавить метку"
+            onPress={() => setEditing({ mode: "create" })}
+          />
+        </View>
+      )}
 
       <LabelEditSheet
         editing={editing}

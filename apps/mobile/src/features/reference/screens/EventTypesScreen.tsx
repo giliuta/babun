@@ -18,6 +18,7 @@ import { EventTypeSheet } from "./EventTypeSheet";
 import { useEventTypesEditor } from "./use-event-types-editor";
 import { useLocalSearchParams } from "expo-router";
 import { useTeams } from "@/features/reference/queries";
+import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
 
 // ТИПЫ СОБЫТИЙ — СПРАВОЧНИК ПО ОБЩЕМУ КАНОНУ (владелец 2026-09-08: «в
 // настройках событий надо сделать то же самое, как сделано в услугах или как
@@ -64,6 +65,9 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
     dragging,
     setDragging,
   } = useEventTypesEditor(teamId);
+  // Типы — часть «Записей» (владелец 30.09): «Только видит» — список без
+  // правки, ни кнопки, ни свайпов, ни ручек.
+  const readOnly = useTeamSettingLevel("calendar.booking_form", teamId) !== "write";
 
   return (
     <Screen edges={["top"]}>
@@ -85,7 +89,7 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
           fill
           title="Типов событий пока нет"
           subtitle="Тип называет событие, красит его в календаре и подсказывает длительность."
-          action={{ label: "Добавить тип", onPress: () => setEditing({ mode: "create" }) }}
+          action={readOnly ? undefined : { label: "Добавить тип", onPress: () => setEditing({ mode: "create" }) }}
         />
       ) : (
         <ScrollView
@@ -99,18 +103,19 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
               rowHeight={ROW_H}
               spaced
               labelFor={(type) => type.label}
+              rangeFor={(index) => (readOnly ? [index, index] : [0, types.length - 1])}
               handleInside
               onReorder={reorder}
               onDraggingChange={setDragging}
             >
               {(type, _index, handle) => (
                 <SwipeRow
-                  label="Удалить"
+                  label={readOnly ? undefined : "Удалить"}
                   color={t.danger}
                   icon={Trash2}
                   accessibilityLabel={`Удалить тип ${type.label}`}
-                  onAction={() => remove(type)}
-                  leading={{
+                  onAction={readOnly ? undefined : () => remove(type)}
+                  leading={readOnly ? undefined : {
                     label: type.hidden ? "Показать" : "Скрыть",
                     color: type.hidden ? t.success : t.warning,
                     icon: type.hidden ? RotateCcw : EyeOff,
@@ -133,9 +138,10 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
                     }}
                   >
                     <Pressable
+                      disabled={readOnly}
                       onPress={() => setEditing({ mode: "edit", type })}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Тип ${type.label}, редактировать`}
+                      accessibilityRole={readOnly ? "text" : "button"}
+                      accessibilityLabel={readOnly ? `Тип ${type.label}` : `Тип ${type.label}, редактировать`}
                       style={({ pressed }) => ({
                         flex: 1,
                         height: ROW_H,
@@ -181,7 +187,7 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
       {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА (LOCKED 2026-08-27): типы
           заводят пачкой, и после первого не должно приходиться доскролливать
           список ради второго. Тот же приём, что у меток и услуг. */}
-      {!typesQuery.isLoading && !typesQuery.isError && types.length > 0 ? (
+      {!readOnly && !typesQuery.isLoading && !typesQuery.isError && types.length > 0 ? (
         <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
           <GradientButton
             label="Добавить тип"

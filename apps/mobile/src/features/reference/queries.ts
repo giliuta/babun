@@ -372,7 +372,9 @@ export function useCreateCity() {
       /** Заливать ли колонку дня цветом метки. По умолчанию да. */
       tintDay?: boolean;
     }) => {
-      if (role !== "owner" && role !== "dispatcher") {
+      // Сотрудник — по праву «Метки» своей команды (30.09): его проверяет
+      // политика `cities_write_access`, телефон только не пускает гостя.
+      if (role !== "owner" && role !== "dispatcher" && role !== "master") {
         throw new Error("Добавлять метки может владелец или диспетчер.");
       }
       const { data, error } = await supabase
@@ -409,9 +411,14 @@ function assertCanWriteReference(
   role: ReturnType<typeof useDataRole>["data"],
 ): void {
   if (table === "cities") {
-    if (role === "owner" || role === "dispatcher") return;
+    // Сотрудник — по праву «Метки» своей команды (30.09): строку чужой
+    // команды отобьёт политика `cities_write_access`.
+    if (role === "owner" || role === "dispatcher" || role === "master") return;
     throw new Error("Изменять метки может владелец или диспетчер.");
   }
+  // Услуги сотрудник правит по праву «Услуги» своей команды (30.09): строку
+  // чужой команды отобьёт политика `services_write_access`.
+  if (table === "services" && role === "master") return;
   if (role !== "owner") {
     throw new Error("Изменять этот справочник может только владелец.");
   }

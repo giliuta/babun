@@ -3,6 +3,7 @@ import {
   useSaveCalendarSettings,
 } from "@/features/settings/local-settings";
 import { useRenameDayCity } from "@/features/calendar/day-cities";
+import { useDataRole } from "@/features/settings/tenant";
 
 // КАСКАД ПЕРЕИМЕНОВАНИЯ МЕТКИ. Имя хранится СТРОКОЙ (не id) в днях
 // (`day_cities.city`) и в личных метках веба, поэтому переименование в
@@ -22,6 +23,7 @@ export function useRenameLabelCascade() {
   const renameDays = useRenameDayCity();
   const { data: settings } = useCalendarSettings();
   const saveSettings = useSaveCalendarSettings();
+  const role = useDataRole().data;
 
   const run = async (
     teamId: string,
@@ -50,8 +52,10 @@ export function useRenameLabelCascade() {
     // 2026-08-29 «прошлое не переписывается настройкой»: метка клиента это
     // отметка «где его обслуживали тогда», и переименование справочника её
     // трогать не должно. Старое имя в карточке — правда о прошлом.
+    // Личные метки веба — настройка всей компании, её правит только
+    // владелец; сотрудник с правом «Метки» их не трогает (30.09).
     const personal = settings?.personalLabels ?? [];
-    if (personal.includes(oldName)) {
+    if (role === "owner" && personal.includes(oldName)) {
       try {
         await saveSettings.mutateAsync({
           personalLabels: personal.map((n) => (n === oldName ? newName : n)),

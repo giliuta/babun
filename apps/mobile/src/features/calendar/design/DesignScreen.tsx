@@ -49,6 +49,9 @@ import {
   type EventBlockId,
 } from "@/features/appointments/booking-prefs";
 import { useCalendarSettings, usePersonalEventTypes } from "@/features/settings/local-settings";
+import { useDataRole } from "@/features/settings/tenant";
+import { useMemberUpdateTeam } from "@/features/calendar/mutations";
+import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
 
 // «ЗАПИСИ» (до 30.09 — «Дизайн») — КАК ВЫГЛЯДИТ И ИЗ ЧЕГО СОСТОИТ ЗАПИСЬ.
 // ТРИ КАРТОЧКИ, ВСЁ ТАПОМ. Владелец 30.09: «дизайн переименуем в записи
@@ -103,6 +106,13 @@ export function DesignScreen() {
   const { data: allTeams = [] } = useTeams();
   const team = allTeams.find((x) => x.id === params.team) ?? allTeams[0];
   const teamId = team?.id ?? null;
+  // «ТОЛЬКО ВИДИТ» — СТРАНИЦА БЕЗ ПРАВКИ (владелец 30.09: «Записи» в
+  // «Настройках команды»). Владельцу — всегда правка.
+  const readOnly = useTeamSettingLevel("calendar.booking_form", teamId) !== "write";
+  // Строку команды (её цвет, «Скрывать отменённые») сотрудник пишет своей
+  // дверью `member_update_team` — по тому же праву «Записи».
+  const isMaster = useDataRole().data === "master";
+  const memberUpdateTeam = useMemberUpdateTeam();
 
   // ── цвет ──
   const rule = useAutoColorRule(teamId);
@@ -147,16 +157,18 @@ export function DesignScreen() {
   const [hidesNow, setHidesNow] = useState<boolean | null>(null);
   const hidesCancelled = hidesNow ?? team?.hide_cancelled ?? companyHides;
   const setHidesCancelled = (next: boolean) => {
-    if (!team) return;
+    if (!team || readOnly) return;
     haptics.tap();
     setHidesNow(next);
-    updateTeam.mutate(
-      { id: team.id, patch: { hide_cancelled: next } },
-      {
-        onSettled: () => setHidesNow(null),
-        onError: (e) => notify("Ошибка", e.message),
-      },
-    );
+    const done = {
+      onSettled: () => setHidesNow(null),
+      onError: (e: Error) => notify("Ошибка", e.message),
+    };
+    if (isMaster) {
+      memberUpdateTeam.mutate({ teamId: team.id, patch: { hide_cancelled: next } }, done);
+    } else {
+      updateTeam.mutate({ id: team.id, patch: { hide_cancelled: next } }, done);
+    }
   };
 
   // ПОДСВЕТКА — ТОЛЬКО У ВКЛЮЧЁННОГО БЛОКА (владелец 25.09: «убираю объект —
@@ -168,6 +180,7 @@ export function DesignScreen() {
   // блоки, «Событие» — блоки события и типы; открывается «Клиент».
   const [tab, setTab] = useState<"record" | "event">("record");
   const openColor = (target: ColorTarget) => {
+    if (readOnly) return;
     haptics.tap();
     setEditingColor(target);
   };
@@ -235,6 +248,7 @@ export function DesignScreen() {
                   icon={BLOCK_ICON[block.id] ?? Bookmark}
                   on={recordOn(block.id)}
                   locked={false}
+                  readOnly={readOnly}
                   onToggle={() => toggleRecordBlock.mutate(block.id)}
                 />
               ))}
@@ -251,7 +265,7 @@ export function DesignScreen() {
                   when={row.when}
                   hue={row.hue}
                   separated={i > 0}
-                  onPress={() => openColor(row.id)}
+                  onPress={readOnly ? undefined : () => openColor(row.id)}
                 />
               ))}
             </SectionCard>
@@ -262,6 +276,7 @@ export function DesignScreen() {
                 label="Скрывать отменённые"
                 value={hidesCancelled}
                 onChange={setHidesCancelled}
+                disabled={readOnly}
               />
             </SectionCard>
           </>
@@ -279,6 +294,7 @@ export function DesignScreen() {
                     icon={BLOCK_ICON[block.id] ?? Bookmark}
                     on={!noObjects && eventOn(block.id)}
                     locked={noObjects}
+                    readOnly={readOnly}
                     onToggle={() => toggleEventBlock.mutate(block.id)}
                   />
                 );
@@ -335,7 +351,14 @@ export function DesignScreen() {
           if (!editingColor) return;
           if (editingColor === "filled") {
             if (color && team) {
-              updateTeam.mutate({ id: team.id, patch: { color } });
+              if (isMaster) {
+                memberUpdateTeam.mutate(
+                  { teamId: team.id, patch: { color } },
+                  { onError: (e) => notify("Ошибка", e.message) },
+                );
+              } else {
+                updateTeam.mutate({ id: team.id, patch: { color } });
+              }
               // Записи красятся цветом команды — правило ставим на неё.
               if (rule !== "team") setRule.mutate("team");
             }
@@ -366,13 +389,15 @@ function ColorRow({
   when: string;
   hue: string | null;
   separated: boolean;
-  onPress: () => void;
+  /** Нет — «Только видит»: строка показывает цвет, без двери. */
+  onPress?: () => void;
 }) {
   const t = useThemeColors();
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : "text"}
       accessibilityLabel={`${title}. ${when}${hue ? "" : ". Без цвета"}`}
       style={({ pressed }) => ({
         flexDirection: "row",
@@ -404,7 +429,7 @@ function ColorRow({
           {hue ? when : `${when} · без цвета`}
         </Text>
       </View>
-      <ChevronRight size={18} color={t.faint} strokeWidth={2.2} />
+      {onPress ? <ChevronRight size={18} color={t.faint} strokeWidth={2.2} /> : null}
     </Pressable>
   );
 }
@@ -418,25 +443,28 @@ function BlockCell({
   icon: Icon,
   on,
   locked,
+  readOnly = false,
   onToggle,
 }: {
   label: string;
   icon: LucideIcon;
   on: boolean;
   locked: boolean;
+  /** «Только видит»: блок показан как есть, тап ничего не меняет. */
+  readOnly?: boolean;
   onToggle: () => void;
 }) {
   const t = useThemeColors();
   const tone = locked ? t.faint : on ? t.ink : t.faint;
   return (
     <Pressable
-      disabled={locked}
+      disabled={locked || readOnly}
       onPress={() => {
         haptics.tap();
         onToggle();
       }}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: on, disabled: locked }}
+      accessibilityState={{ checked: on, disabled: locked || readOnly }}
       accessibilityLabel={label}
       style={({ pressed }) => ({
         flexDirection: "row",

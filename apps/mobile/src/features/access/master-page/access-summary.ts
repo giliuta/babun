@@ -98,7 +98,15 @@ export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock
       key: "settings",
       title: "Настройки команды",
       // В порядке строк шестерёнки календаря.
-      keys: ["calendar.identity", "calendar.timezone", "calendar.hours", "calendar.schedule"],
+      keys: [
+        "calendar.identity",
+        "calendar.timezone",
+        "calendar.hours",
+        "calendar.schedule",
+        "calendar.booking_form",
+        "calendar.services",
+        "calendar.labels",
+      ],
     },
   ],
 };
