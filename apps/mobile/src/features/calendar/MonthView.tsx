@@ -303,10 +303,14 @@ export const MonthView = memo(function MonthView({
                       <MoneyRow v={totals.planned} color={t.sub} skipZero />
                       <MoneyRow v={totals.earned} color={t.success} skipZero />
                       <MoneyRow v={totals.spent} color={t.danger} skipZero />
-                      <MoneyRow
-                        v={totals.profit}
-                        color={totals.profit < 0 ? t.danger : t.accent}
-                      />
+                      {/* Прибыль — только когда в дне были деньги (29.09): у дня с
+                          одним планом синий «€0» читался как данные. */}
+                      {totals.earned !== 0 || totals.spent !== 0 ? (
+                        <MoneyRow
+                          v={totals.profit}
+                          color={totals.profit < 0 ? t.danger : t.accent}
+                        />
+                      ) : null}
                     </View>
                   ) : null}
                 </Pressable>
@@ -320,7 +324,7 @@ export const MonthView = memo(function MonthView({
 });
 
 // One line of the in-cell money mini-list. Zero rows are dropped (web
-// parity) — except profit, which always renders when the day has numbers.
+// parity); profit renders when the day had income or expense.
 function MoneyRow({
   v,
   color,

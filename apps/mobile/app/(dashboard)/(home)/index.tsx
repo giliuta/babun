@@ -164,6 +164,7 @@ import {
   type SelfReminder,
 } from "@/features/calendar/reminder-time";
 import { SelfReminderSheet } from "@/features/calendar/SelfReminderSheet";
+import { monthTitle, weekTitle } from "@/features/calendar/header-title";
 import { nextCrewAppointmentStatus } from "@/features/calendar/crew-status";
 import {
   canMutateCalendarAppointment,
@@ -1932,6 +1933,12 @@ export default function CalendarTab() {
             } as Href)
         : undefined,
       settingsLabel: "Типы событий",
+      // Пустая шторка говорит, почему пусто, и куда идти — значок справа.
+      emptyText: !eventTypesOn
+        ? "Тип события выключен в «Дизайне»"
+        : canManageBookings
+          ? "Типов пока нет — заведите их значком справа"
+          : "Типов пока нет",
     });
   };
   const addQuickEvent = (
@@ -2182,11 +2189,11 @@ export default function CalendarTab() {
     });
   };
 
-  const headerTitle = (
-    mode === "week" ? weekDays[3] : mode === "month" ? monthAnchor : day
-  )
-    .toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
-    .replace(/\s*г\.?\s*$/i, "");
+  // Неделя на стыке месяцев называет оба (`header-title.ts`).
+  const headerTitle =
+    mode === "week" && weekDays.length > 0
+      ? weekTitle(weekDays[0], weekDays[weekDays.length - 1])
+      : monthTitle(mode === "month" ? monthAnchor : day);
 
   const isOnToday =
     mode === "month"

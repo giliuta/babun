@@ -47,6 +47,8 @@ export type ActionMenu = {
    *  собрано («Быстрое событие» → «Типы событий»). */
   onSettings?: () => void;
   settingsLabel?: string;
+  /** Строка, когда пунктов нет. */
+  emptyText?: string;
 };
 
 const LOOK: Record<string, { icon: LucideIcon; color: string }> = {
@@ -100,6 +102,7 @@ export function ActionMenuSheet({
       subtitle={shown?.subtitle}
       onSettings={shown?.onSettings}
       settingsLabel={shown?.settingsLabel}
+      emptyText={shown?.emptyText}
       onClose={onClose}
       onExited={() => {
         exiting.current = false;

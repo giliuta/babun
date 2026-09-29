@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Pressable } from "react-native";
+import { Pressable, Text } from "react-native";
 import { Settings2 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
@@ -48,6 +48,7 @@ export function PickerSheet({
   settingsLabel = "Настроить список",
   onClose,
   onExited,
+  emptyText,
 }: {
   visible: boolean;
   title: string;
@@ -65,6 +66,9 @@ export function PickerSheet({
   /** Лист ушёл и его окно снято — отсюда можно поднимать СЛЕДУЮЩУЮ шторку
    *  (iOS не показывает вторую модалку, пока первая не ушла). */
   onExited?: () => void;
+  /** Строка вместо пустого списка — лист не открывается немым (без кнопки:
+   *  действие, если есть, — значок справа в шапке). */
+  emptyText?: string;
 }) {
   const t = useThemeColors();
   // Выбранный пункт ждёт, пока окно листа снимут (см. `onPress` строки).
@@ -139,6 +143,21 @@ export function PickerSheet({
     >
       {/* СТРОКА — ОБЩАЯ. Диалект тот же, что у выбора клиента, объекта и
           метки; галки нет по смыслу жанра: это ДЕЙСТВИЕ, а не значение. */}
+      {items.length === 0 && emptyText ? (
+        <Text
+          maxFontSizeMultiplier={1.3}
+          style={{
+            textAlign: "center",
+            fontSize: 15,
+            color: t.sub,
+            paddingHorizontal: 24,
+            paddingTop: 8,
+            paddingBottom: 20,
+          }}
+        >
+          {emptyText}
+        </Text>
+      ) : null}
       <SelectList>
         {items.map((item) => (
           <SelectRow
