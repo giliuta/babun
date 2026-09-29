@@ -26,18 +26,12 @@ export interface AlertText {
  *  2026-09-15). Куда пропадает счёт, сказано прямо: вниз своего списка,
  *  серым (страницы «Закрытые счета» нет с 2026-09-29), и вернуть его можно
  *  там же. */
-export function hideAccountAlert(
-  name: string,
-  successorName?: string | null,
-): Required<AlertText> {
-  const tail = successorName
-    ? ` Это основной счёт команды — основным станет «${successorName}».`
-    : "";
+export function hideAccountAlert(name: string): Required<AlertText> {
   return {
     title: "Скрыть счёт?",
     message:
       `«${name}» станет серым внизу списка и исчезнет из форм оплаты. `
-      + `Операции и остаток останутся в истории, вернуть счёт — свайпом «Открыть».${tail}`,
+      + "Операции и остаток останутся в истории, вернуть счёт — свайпом «Открыть».",
     confirm: "Скрыть счёт",
   };
 }

@@ -10,7 +10,6 @@ const acc = (over: Partial<ClosableAccount> & { id: string }): ClosableAccount =
   balance: 0,
   has_history: true,
   is_active: true,
-  is_primary: false,
   brigade_id: "t1",
   ...over,
 });
@@ -49,20 +48,10 @@ describe("закрытие счёта", () => {
     });
   });
 
-  test("ноль закрывается, основной переходит живому счёту своей команды", () => {
-    const a = acc({ id: "a", is_primary: true });
-    const otherTeam = acc({ id: "x", brigade_id: "t2" });
-    const closed = acc({ id: "c", is_active: false });
+  test("ноль закрывается — «основного» передавать некому (с 2026-09-29)", () => {
+    const a = acc({ id: "a" });
     const heir = acc({ id: "h" });
-    assert.deepEqual(closeDecision(a, [a, otherTeam, closed, heir]), {
-      kind: "close",
-      successor: heir,
-    });
-    const plain = acc({ id: "p" });
-    assert.deepEqual(closeDecision(plain, [plain, heir]), {
-      kind: "close",
-      successor: null,
-    });
+    assert.deepEqual(closeDecision(a, [a, heir]), { kind: "close" });
   });
 });
 

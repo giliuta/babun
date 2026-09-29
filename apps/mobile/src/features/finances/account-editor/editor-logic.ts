@@ -1,5 +1,5 @@
 import type { Href } from "expo-router";
-import type { ClosableAccount, CloseDecision } from "../close-decision";
+import type { CloseDecision } from "../close-decision";
 
 // ЛИСТ СЧЁТА — ЧИСТЫЕ РЕШЕНИЯ, без экрана.
 //
@@ -67,7 +67,7 @@ export function teamControl(
 export type AnswerStep = "return" | "delete" | "close" | "transfer";
 
 export function stepAfterAnswer(
-  decision: CloseDecision<ClosableAccount>,
+  decision: CloseDecision,
   confirmed: boolean,
 ): AnswerStep {
   if (!confirmed || decision.kind === "explain") return "return";

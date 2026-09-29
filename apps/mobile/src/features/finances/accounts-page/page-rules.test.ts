@@ -17,7 +17,6 @@ function account(patch: Partial<Row> & { id: string }): Row {
     balance: 0,
     has_history: true,
     is_active: true,
-    is_primary: false,
     brigade_id: "t-1",
     ...patch,
   };
@@ -27,22 +26,13 @@ describe("«Скрыть» на странице «Счета»", () => {
   test("счёт без операций и без денег закрывается, а не удаляется", () => {
     const typo = account({ id: "typo", has_history: false });
     const decision = hideDecision(typo, [typo, account({ id: "cash" })]);
-    assert.deepEqual(decision, { kind: "close", successor: null });
+    assert.deepEqual(decision, { kind: "close" });
   });
 
   test("остаток на начало без операций ведёт в перевод, а не в удаление", () => {
     const fresh = account({ id: "safe", has_history: false, balance: 500 });
     const decision = hideDecision(fresh, [fresh, account({ id: "cash" })]);
     assert.deepEqual(decision, { kind: "transfer", direction: "out", amount: 500 });
-  });
-
-  test("основной счёт отдаёт флаг следующему счёту своей команды", () => {
-    const main = account({ id: "main", is_primary: true });
-    const other = account({ id: "other-team", brigade_id: "t-2" });
-    const next = account({ id: "card" });
-    const decision = hideDecision(main, [main, other, next]);
-    assert.equal(decision.kind, "close");
-    assert.equal(decision.kind === "close" ? decision.successor?.id : null, "card");
   });
 
   test("минус без денег в компании — объяснение, а не вопрос", () => {
@@ -64,7 +54,7 @@ describe("«Скрыть» на странице «Счета»", () => {
     ];
     const next = hideDecisionAfterTransfer(before, moved);
     assert.equal(next?.account.id, "cash");
-    assert.deepEqual(next?.decision, { kind: "close", successor: null });
+    assert.deepEqual(next?.decision, { kind: "close" });
   });
 });
 
@@ -105,29 +95,8 @@ describe("команда нового счёта", () => {
 });
 
 describe("тихая метка строки счёта", () => {
-  const row = (patch: Partial<{ is_primary: boolean; show_in_payments: boolean }>) => ({
-    is_primary: false,
-    show_in_payments: true,
-    ...patch,
-  });
-
-  test("основной счёт помечен, когда у команды есть из чего выбирать", () => {
-    assert.equal(accountRowMark(row({ is_primary: true }), 2), "Основной");
-  });
-
-  test("единственный счёт команды метки не получает", () => {
-    assert.equal(accountRowMark(row({ is_primary: true }), 1), null);
-  });
-
-  test("счёт вне оплаты заявок говорит об этом даже основным", () => {
-    assert.equal(
-      accountRowMark(row({ is_primary: true, show_in_payments: false }), 2),
-      "Не в оплате",
-    );
-    assert.equal(accountRowMark(row({ show_in_payments: false }), 1), "Не в оплате");
-  });
-
-  test("обычный счёт молчит", () => {
-    assert.equal(accountRowMark(row({}), 3), null);
+  test("счёт вне оплаты записи говорит об этом; «Основного» больше нет", () => {
+    assert.equal(accountRowMark({ show_in_payments: false }), "Не в оплате");
+    assert.equal(accountRowMark({ show_in_payments: true }), null);
   });
 });

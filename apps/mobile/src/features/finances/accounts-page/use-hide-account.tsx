@@ -93,19 +93,18 @@ export function useHideAccount({
 
   const ask = (
     target: AccountWithBalance,
-    decision: HideDecision<AccountWithBalance>,
+    decision: HideDecision,
   ) => {
     if (decision.kind === "close") {
       const text = hideAccountAlert(
         target.name,
-        decision.successor?.name ?? null,
       );
       confirmThen(
         text.title,
         { message: text.message, confirmLabel: text.confirm, destructive: true },
         () =>
           closeAcc
-            .mutateAsync({ id: target.id, successor: decision.successor })
+            .mutateAsync({ id: target.id })
             .then(
               () => toast(`Счёт «${target.name}» скрыт`),
               (e: unknown) =>

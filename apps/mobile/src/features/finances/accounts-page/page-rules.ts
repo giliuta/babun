@@ -14,8 +14,8 @@ import { routeParam } from "../finance-route";
 // какую команду предложить новому счёту.
 
 /** Ответ на «Скрыть»: всё, что умеет закрытие, кроме удаления. */
-export type HideDecision<A extends ClosableAccount> = Exclude<
-  CloseDecision<A>,
+export type HideDecision = Exclude<
+  CloseDecision,
   { kind: "delete" }
 >;
 
@@ -33,11 +33,11 @@ export type HideDecision<A extends ClosableAccount> = Exclude<
 export function hideDecision<A extends ClosableAccount>(
   account: A,
   accounts: readonly A[],
-): HideDecision<A> {
+): HideDecision {
   const decision = closeDecision<A>({ ...account, has_history: true }, accounts);
   // С историей удаления не бывает; ветка держит тип, а не поведение.
   return decision.kind === "delete"
-    ? { kind: "close", successor: null }
+    ? { kind: "close" }
     : decision;
 }
 
@@ -49,7 +49,7 @@ export function hideDecision<A extends ClosableAccount>(
 export function hideDecisionAfterTransfer<A extends ClosableAccount>(
   before: ClosableAccount,
   fresh: readonly A[] | undefined,
-): { account: A; decision: HideDecision<A> } | null {
+): { account: A; decision: HideDecision } | null {
   const next = closeDecisionAfterTransfer(before, fresh);
   if (!next || !fresh) return null;
   return { account: next.account, decision: hideDecision(next.account, fresh) };
@@ -72,24 +72,13 @@ export function accountEditParam(
 }
 
 /**
- * ТИХАЯ МЕТКА СТРОКИ СЧЁТА — то, что иначе видно только внутри правки.
- *
- * Две настройки счёта меняют его поведение молча: «Основной счёт команды»
- * (туда падают деньги, когда счёт не выбрали руками) и «В оплате записи».
- * Со страницы обе неразличимы: пять одинаковых строк, и чтобы вспомнить,
- * какая касса принимает выручку, приходится открывать каждую.
- *
- * Метка одна на строку, и первой идёт НЕОЖИДАННАЯ: счёт, которого нет в
- * оплате записи, — новость, а «основной» — порядок вещей. У единственного
- * счёта команды «Основной» не печатается: выбирать не из чего, и слово
- * сообщало бы только само себя.
+ * ТИХАЯ МЕТКА СТРОКИ СЧЁТА — то, что иначе видно только внутри правки:
+ * счёт не стоит в оплате записи. «Основного» счёта больше нет (владелец
+ * 2026-09-29): первым в оплате и первым среди касс стоит тот, что выше в
+ * списке, и отдельное слово об этом не нужно.
  */
-export function accountRowMark(
-  account: { is_primary: boolean; show_in_payments: boolean },
-  groupSize: number,
-): string | null {
-  if (!account.show_in_payments) return "Не в оплате";
-  return account.is_primary && groupSize > 1 ? "Основной" : null;
+export function accountRowMark(account: { show_in_payments: boolean }): string | null {
+  return account.show_in_payments ? null : "Не в оплате";
 }
 
 /**

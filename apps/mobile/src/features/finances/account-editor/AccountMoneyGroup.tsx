@@ -5,7 +5,6 @@ import {
   moneySign,
   parseMoneyInputToCents,
 } from "@babun/shared/common/utils/money";
-import { Divider } from "@/components/ui/Divider";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import {
   ActionRow,
@@ -16,7 +15,7 @@ import {
 } from "@/components/ui/card-rows";
 import { notify } from "@/lib/notify";
 import type { Team } from "@/features/reference/queries";
-import { useSetPrimaryAccount, type AccountWithBalance } from "../accounts";
+import type { AccountWithBalance } from "../accounts";
 import { useAccountVatDue } from "../vat-queries";
 import {
   CLOSED_ACCOUNT_OPENING_FROZEN,
@@ -55,7 +54,6 @@ export function AccountMoneyGroup({
   /** Открыть перевод с этого счёта (или на него, если денег нет). */
   onTransfer: () => void;
 }) {
-  const setPrimary = useSetPrimaryAccount();
   // ПЕРЕВОДИТЬ ЕСТЬ КУДА, только если рядом есть другой открытый счёт; у
   // закрытого счёта денег в оборотах нет вовсе.
   const canTransfer =
@@ -96,21 +94,6 @@ export function AccountMoneyGroup({
     && activeTeams.length <= 1
     && activeTeams.some((team) => team.id === account.brigade_id)
   );
-
-  // Основной счёт уникален внутри (тенант, команда); у счетов старой схемы
-  // brigade_id равен NULL, и они образуют свою группу — сравнение по одному
-  // полю покрывает оба случая.
-  const currentPrimary = accounts.find(
-    (a) =>
-      a.is_primary && a.id !== account.id && a.brigade_id === account.brigade_id,
-  );
-  const primaryHint = !account.show_in_payments
-    ? "Основным может быть только счёт, который стоит в оплате записи."
-    : account.is_primary
-      ? "Сюда по умолчанию попадают деньги, если счёт не выбран вручную."
-      : currentPrimary
-        ? `Куда по умолчанию попадают деньги. Сейчас это «${currentPrimary.name}».`
-        : "Куда по умолчанию попадают деньги, если счёт не выбран вручную.";
 
   // ПОДПИСЬ ГОВОРИТ ПОСЛЕДСТВИЕ, А НЕ МЕХАНИКУ, И СЛОВАМИ ПРОДУКТА: «запись» и
   // «оплата», а не «заявка» и «бригадир» старого словаря. Выключенный счёт
@@ -239,41 +222,11 @@ export function AccountMoneyGroup({
           value={account.show_in_payments}
           disabled={!account.is_active || busy}
           onChange={(next) => {
-            // ОСНОВНОЙ ВСЕГДА В ОПЛАТЕ. Спрятанный основной — это «деньги
-            // записи по умолчанию идут туда, куда их положить нельзя»: сервер
-            // молча перешагнёт его, и человек узнает об этом по деньгам.
-            if (!next && account.is_primary) {
-              notify(
-                "Это основной счёт команды",
-                "Сначала сделайте основным другой счёт — сюда по умолчанию "
-                  + "ложатся деньги записи.",
-              );
-              return;
-            }
             void save(
               { show_in_payments: next },
               "Не удалось изменить оплату записи",
             );
           }}
-        />
-        {/* Куда по умолчанию падают деньги. Развязано с порядком плиток:
-            поднять «Карту Ани» повыше для удобства чтения и переадресовать все
-            оплаты команды — разные решения. */}
-        <Divider inset={16} />
-        <SwitchRow
-          label="Основной счёт команды"
-          hint={primaryHint}
-          value={account.is_primary}
-          disabled={
-            !account.is_active
-            || setPrimary.isPending
-            || (!account.show_in_payments && !account.is_primary)
-          }
-          onChange={(next) =>
-            void setPrimary
-              .mutateAsync({ account, primary: next })
-              .catch(alertError("Не удалось сменить основной счёт"))
-          }
         />
       </RowGroup>
     </>

@@ -50,7 +50,7 @@ const FRESH_TIMEOUT_MS = 6000;
 const delay = <T,>(ms: number, value: T) =>
   new Promise<T>((resolve) => setTimeout(() => resolve(value), ms));
 
-type Decision = CloseDecision<AccountWithBalance>;
+type Decision = CloseDecision;
 
 /** Слова вопроса. `null` — это не вопрос, а объяснение: остаток увести некуда. */
 function questionText(target: AccountWithBalance, decision: Decision) {
@@ -58,7 +58,7 @@ function questionText(target: AccountWithBalance, decision: Decision) {
     return deleteAccountAlert(target.name, target.balance);
   }
   if (decision.kind === "close") {
-    return hideAccountAlert(target.name, decision.successor?.name ?? null);
+    return hideAccountAlert(target.name);
   }
   const text = accountNotEmptyAlert(
     target.name,
@@ -153,7 +153,7 @@ export function useCloseFlow({
         }, fail("Не удалось удалить счёт"));
       } else if (decision.kind === "close") {
         void closeAcc
-          .mutateAsync({ id: target.id, successor: decision.successor })
+          .mutateAsync({ id: target.id })
           .then(() => {
             toast(`Счёт «${target.name}» скрыт`);
             finish();

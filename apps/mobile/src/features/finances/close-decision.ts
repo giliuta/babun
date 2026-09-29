@@ -11,14 +11,14 @@ import type { AccountWithBalance } from "./accounts";
 
 export type ClosableAccount = Pick<
   AccountWithBalance,
-  "id" | "balance" | "has_history" | "is_active" | "is_primary" | "brigade_id"
+  "id" | "balance" | "has_history" | "is_active" | "brigade_id"
 >;
 
-export type CloseDecision<A extends ClosableAccount> =
+export type CloseDecision =
   /** Операций не было — счёт удаляется насовсем. */
   | { kind: "delete" }
-  /** Остаток ноль — закрываем; `successor` получит флаг «основной». */
-  | { kind: "close"; successor: A | null }
+  /** Остаток ноль — закрываем. */
+  | { kind: "close" }
   /** Остаток не ноль и его есть куда увести: плюс — ИЗ счёта, минус — В него. */
   | { kind: "transfer"; direction: "out" | "in"; amount: number }
   /** Остаток не ноль, а увести некуда — не вопрос, а объяснение. */
@@ -27,7 +27,7 @@ export type CloseDecision<A extends ClosableAccount> =
 export function closeDecision<A extends ClosableAccount>(
   account: A,
   accounts: readonly A[],
-): CloseDecision<A> {
+): CloseDecision {
   if (!account.has_history) return { kind: "delete" };
   const sign = moneySign(account.balance);
   if (sign !== 0) {
@@ -45,19 +45,10 @@ export function closeDecision<A extends ClosableAccount>(
         }
       : { kind: "explain" };
   }
-  // КОМУ ПЕРЕЙДЁТ «ОСНОВНОЙ», ЕСЛИ ЗАКРЫВАЕМ ИМЕННО ЕГО: следующий живой счёт
-  // той же команды в её же порядке. Некому — `null`, и команда осталась без
-  // основного осознанно, а не молча.
-  const successor =
-    account.is_primary && account.brigade_id
-      ? (accounts.find(
-          (a) =>
-            a.is_active &&
-            a.id !== account.id &&
-            a.brigade_id === account.brigade_id,
-        ) ?? null)
-      : null;
-  return { kind: "close", successor };
+  // «Основного» счёта нет с 2026-09-29 (владелец: «убираю основной») —
+  // передавать при закрытии нечего: первым в оплате становится следующий
+  // счёт по порядку сам собой.
+  return { kind: "close" };
 }
 
 /**
@@ -71,7 +62,7 @@ export function closeDecision<A extends ClosableAccount>(
 export function closeDecisionAfterTransfer<A extends ClosableAccount>(
   before: ClosableAccount,
   fresh: readonly A[] | undefined,
-): { account: A; decision: CloseDecision<A> } | null {
+): { account: A; decision: CloseDecision } | null {
   const account = fresh?.find((a) => a.id === before.id);
   if (!fresh || !account || !account.is_active) return null;
   if (moneySign(account.balance - before.balance) === 0) return null;

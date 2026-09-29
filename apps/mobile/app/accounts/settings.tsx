@@ -278,12 +278,7 @@ export default function AccountsScreen() {
                     <AccountRow
                       account={account}
                       mark={
-                        account.is_active
-                          ? accountRowMark(
-                              account,
-                              group.accounts.filter((a) => a.is_active).length,
-                            )
-                          : "Закрыт"
+                        account.is_active ? accountRowMark(account) : "Закрыт"
                       }
                       handle={handle}
                       onPress={() => setEditor({ open: true, id: account.id })}

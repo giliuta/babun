@@ -10,7 +10,6 @@ import {
   insertAccount,
   listAccounts,
   reopenAccount,
-  setPrimaryAccount,
   softCloseAccount,
   updateAccount,
   type AccountDraft,
@@ -260,8 +259,9 @@ export function useUpdateAccount() {
  * значение здесь не существует, и семь строк не должны ехать семью
  * последовательными запросами.
  *
- * Порядок — это ЧТЕНИЕ. Куда попадут деньги, решает `is_primary`
- * (`useSetPrimaryAccount`), и перетаскивание его не трогает.
+ * Порядок — это и ОПЛАТА (владелец 2026-09-29): выше в списке — первым среди
+ * плиток оплаты и первым среди счетов своего вида, когда оплату записали
+ * способом без выбора счёта.
  */
 export function useReorderAccounts() {
   const qc = useQueryClient();
@@ -331,63 +331,14 @@ export function useCreateTeamAccounts() {
   return useSeedAccounts(TEAM_ACCOUNT_SEEDS, "team");
 }
 
-/**
- * Тумблер «Основной счёт команды» — КУДА ПО УМОЛЧАНИЮ ПАДАЮТ ДЕНЬГИ, и это не
- * порядок строк на экране. Включение проходит сменой (сперва снять флаг с
- * прежнего), выключение — обычной правкой: группа без основного счёта
- * возвращается к сортировке по позиции, то есть к поведению до 2026-08-10.
- */
-export function useSetPrimaryAccount() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return useMutation({
-    ...NEVER_PAUSE,
-    mutationFn: ({
-      account,
-      primary,
-    }: {
-      account: Pick<Account, "id" | "brigade_id">;
-      primary: boolean;
-    }) =>
-      primary
-        ? setPrimaryAccount(supabase, tenantId as string, account)
-        : updateAccount(supabase, account.id, { is_primary: false }),
-    onSuccess: () => invalidateAccounts(qc),
-    meta: { errorHandled: true }, // call sites alert themselves
-  });
-}
-
-/**
- * Закрытие счёта. `successor` — кому передать флаг «основной», если закрываем
- * ИМЕННО ОСНОВНОЙ счёт команды (владелец 2026-09-10, аудит счетов).
- *
- * Почему это важно: `softCloseAccount` снимает `is_primary`, но никому его не
- * отдаёт. Команда оставалась вовсе без основного счёта, и резолверы оплаты
- * молча возвращались к сортировке по позиции — то есть деньги бригадира падали
- * не туда, куда владелец назначал, и сказать ему об этом было некому.
- *
- * Передача идёт вторым запросом, как и обычная смена основного
- * (`setPrimaryAccount`): у продукта нет транзакции на два счёта, и заводить её
- * ради этого шага — отдельное решение. Обрыв между шагами оставляет команду
- * без основного — ровно то состояние, что было ДО правки, и оно чинится одним
- * тумблером в настройках.
- */
+/** Закрытие счёта. «Основного» больше нет (владелец 2026-09-29), и
+ *  передавать при закрытии нечего. */
 export function useSoftCloseAccount() {
-  const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
-    mutationFn: async ({
-      id,
-      successor,
-    }: {
-      id: string;
-      successor?: Pick<Account, "id" | "brigade_id"> | null;
-    }) => {
+    mutationFn: async ({ id }: { id: string }) => {
       await softCloseAccount(supabase, id);
-      if (successor) {
-        await setPrimaryAccount(supabase, tenantId as string, successor);
-      }
     },
     onSuccess: () => invalidateAccounts(qc),
     meta: { errorHandled: true }, // call sites alert themselves

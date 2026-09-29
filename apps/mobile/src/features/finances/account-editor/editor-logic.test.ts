@@ -66,7 +66,7 @@ describe("команда счёта в листе", () => {
 describe("после ответа на вопрос о закрытии", () => {
   test("любой отказ возвращает лист", () => {
     assert.equal(stepAfterAnswer({ kind: "delete" }, false), "return");
-    assert.equal(stepAfterAnswer({ kind: "close", successor: null }, false), "return");
+    assert.equal(stepAfterAnswer({ kind: "close" }, false), "return");
     assert.equal(
       stepAfterAnswer({ kind: "transfer", direction: "out", amount: 5 }, false),
       "return",
@@ -76,7 +76,7 @@ describe("после ответа на вопрос о закрытии", () => 
 
   test("согласие делает то, о чём спрашивали", () => {
     assert.equal(stepAfterAnswer({ kind: "delete" }, true), "delete");
-    assert.equal(stepAfterAnswer({ kind: "close", successor: null }, true), "close");
+    assert.equal(stepAfterAnswer({ kind: "close" }, true), "close");
     assert.equal(
       stepAfterAnswer({ kind: "transfer", direction: "in", amount: 5 }, true),
       "transfer",
