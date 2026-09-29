@@ -3,6 +3,7 @@ import { ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { settingsTeamId } from "@/features/finances/team-settings-lines";
+import { useClosedAccountActions } from "@/features/finances/accounts-page/use-closed-account-actions";
 import { money, moneySign } from "@babun/shared/common/utils/money";
 import { useIsOnline } from "@babun/shared/sync";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
@@ -11,12 +12,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { ReorderList } from "@/components/ui/ReorderList";
-import {
-  NavRow,
-  RowCaption,
-  RowGroup,
-  RowGroupHeader,
-} from "@/components/ui/card-rows";
+import { RowCaption, RowGroupHeader } from "@/components/ui/card-rows";
 import { GUTTER } from "@/components/ui/tokens";
 import { notify } from "@/lib/notify";
 import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
@@ -38,7 +34,6 @@ import {
 } from "@/features/finances/accounts";
 import {
   accountOrderGroups,
-  closedCountValue,
   financeAccountsHref,
   sumAccountBalances,
 } from "@/features/finances/accounts-sections";
@@ -136,15 +131,33 @@ export default function AccountsScreen() {
     () => new Map(teams.map((team) => [team.id, team])),
     [teams],
   );
-  const closedCount = all.filter((account) => !account.is_active).length;
+  // ЗАКРЫТЫЕ — В ТОЙ ЖЕ ГРУППЕ, ВНИЗУ (владелец 2026-09-29: «убери вкладку
+  // „Закрытые счета“»). Как скрытая категория: серая строка под открытыми,
+  // «Открыть» слева, «Удалить» пустого справа. Группа команды держит и те и
+  // другие; итог над группой — только открытые: закрытый счёт не входит ни в
+  // один итог.
+  // Закрытый счёт стёртой или архивной команды не показываем вовсе: деньги
+  // архива в живых финансах не существуют (владелец 2026-09-21), и группа
+  // «Команда удалена» из одних серых строк по €0 — шум.
   const groups = useMemo(
     () =>
       accountOrderGroups({
-        accounts: all.filter((account) => account.is_active),
+        accounts: all.filter(
+          (account) =>
+            account.is_active ||
+            (!!account.brigade_id && !!teamById.get(account.brigade_id)?.is_active),
+        ),
         teams,
-      }),
-    [all, teams],
+      }).map((group) => ({
+        ...group,
+        accounts: [
+          ...group.accounts.filter((account) => account.is_active),
+          ...group.accounts.filter((account) => !account.is_active),
+        ],
+      })),
+    [all, teams, teamById],
   );
+  const closedActions = useClosedAccountActions();
   const hider = useHideAccount({ accounts: all, teamById });
   // ОДНА КОМАНДА ПО АДРЕСУ (`?team=`, владелец 2026-09-24: «настройки
   // финансов по каждой команде»). Из «Настроек финансов» страница приходит на
@@ -238,7 +251,7 @@ export default function AccountsScreen() {
           {/* Пусто — словами, без кнопки (владелец 2026-09-15: «никаких
               кнопок внутри»). Добавить — футером, закрытые — строкой ниже. */}
           {shownGroups.length === 0 ? (
-            <RowCaption text="Открытых счетов нет" />
+            <RowCaption text="Счетов нет" />
           ) : null}
           {shownGroups.map((group) => (
             <View key={group.key} style={{ marginTop: 12 }}>
@@ -248,7 +261,9 @@ export default function AccountsScreen() {
                   счетах»: сумма без подписи читается как чей-то остаток. */}
               <RowGroupHeader
                 title={group.title ?? "На счетах"}
-                value={money(sumAccountBalances(group.accounts))}
+                value={money(
+                  sumAccountBalances(group.accounts.filter((account) => account.is_active)),
+                )}
               />
               {/* ПОРЯДОК — РУЧКОЙ, КАК ВЕЗДЕ (владелец 2026-09-12: «шесть
                   точек справа для передвижения… везде одно и то же»). Каждая
@@ -269,25 +284,36 @@ export default function AccountsScreen() {
                   {(account, _index, handle) => (
                     <AccountRow
                       account={account}
-                      mark={accountRowMark(account, group.accounts.length)}
-                      sub={cashOnHandLine(account, today)}
+                      mark={
+                        account.is_active
+                          ? accountRowMark(
+                              account,
+                              group.accounts.filter((a) => a.is_active).length,
+                            )
+                          : "Закрыт"
+                      }
+                      sub={account.is_active ? cashOnHandLine(account, today) : null}
                       handle={handle}
                       onPress={() => setEditor({ open: true, id: account.id })}
                       onHide={() => hider.hide(account)}
+                      closed={
+                        account.is_active
+                          ? null
+                          : {
+                              onReopen: () => closedActions.openAgain(account),
+                              // Стереть можно только счёт без единой операции:
+                              // историю денег сервер не отдаёт.
+                              onDelete: account.has_history
+                                ? undefined
+                                : () => closedActions.erase(account),
+                            }
+                      }
                     />
                   )}
                 </ReorderList>
               </View>
             </View>
           ))}
-          <RowGroup>
-            <NavRow
-              label="Закрытые счета"
-              // То же слово, что в подписи двери сюда (`accountsDoorLine`).
-              value={closedCountValue(closedCount)}
-              onPress={() => router.push("/accounts/archive")}
-            />
-          </RowGroup>
           {/* ДЕНЬГИ БЕЗ СЧЁТА — СЛОВАМИ, А НЕ МОЛЧАНИЕМ (аудит 2026-09-10).
               Сервер считает операции, у которых счёта нет вовсе, и в остатки
               они не попадают. Одно слово с суммой (вкус владельца

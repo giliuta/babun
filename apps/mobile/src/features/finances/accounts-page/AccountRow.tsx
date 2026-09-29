@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { EyeOff } from "lucide-react-native";
+import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import { money, moneySign } from "@babun/shared/common/utils/money";
 import {
   AppearanceTile,
@@ -25,10 +25,13 @@ export const ACCOUNT_ROW_H = 52;
 // другого места увидеть деньги счёта у этой двери нет. Цифра тихая
 // (моноширинная, вторым цветом): она справка, а не герой строки; минус — долг.
 //
-// ПРАВОЙ КРОМКИ НЕТ. Разрушительного у открытого счёта не бывает вовсе:
-// «Скрыть» никогда не удаляет (`hideDecision`), а стереть пустой счёт можно
-// только из «Закрытых счетов» — правой кромкой там (владелец 2026-09-23:
-// «в архив и потом удалить»).
+// У ОТКРЫТОГО СЧЁТА ПРАВОЙ КРОМКИ НЕТ. Разрушительного у него не бывает
+// вовсе: «Скрыть» никогда не удаляет (`hideDecision`).
+//
+// ЗАКРЫТЫЙ СЧЁТ — ТА ЖЕ СТРОКА, СЕРАЯ, ВНИЗУ СВОЕЙ КОМАНДЫ (владелец
+// 2026-09-29: «убери вкладку „Закрытые счета“»). Как скрытая категория: слева
+// «Открыть», справа «Удалить» — только у пустого, без единой операции
+// (владелец 2026-09-23: «в архив и потом удалить»).
 //
 // Ручка — ВНЕ нажимаемой области, но ВНУТРИ заливки строки: вложенная в
 // `Pressable`, она отдавала бы короткий тап правке, а оставленная без цвета —
@@ -40,6 +43,7 @@ export function AccountRow({
   handle,
   onPress,
   onHide,
+  closed,
 }: {
   account: Pick<
     AccountWithBalance,
@@ -56,6 +60,9 @@ export function AccountRow({
   handle: ReactNode;
   onPress: () => void;
   onHide: () => void;
+  /** Счёт закрыт: строка гаснет, слева «Открыть», справа «Удалить» (если
+   *  стереть его можно). */
+  closed?: { onReopen: () => void; onDelete?: () => void } | null;
 }) {
   const t = useThemeColors();
   const sign = moneySign(account.balance);
@@ -63,15 +70,30 @@ export function AccountRow({
   return (
     <SwipeRow
       // СКРЫТЬ — НА ЛЕВОЙ КРОМКЕ (AGENTS 9, владелец 2026-08-29: «удалить
-      // справа, скрыть слева»). Скрытый счёт падает в «Закрытые счета», откуда
-      // его открывают тем же жестом.
-      leading={{
-        label: "Скрыть",
-        color: t.warning,
-        icon: EyeOff,
-        accessibilityLabel: `Скрыть счёт ${account.name}`,
-        onAction: onHide,
-      }}
+      // справа, скрыть слева»). Скрытый счёт падает вниз своей команды серым,
+      // и там же тем же жестом открывается снова.
+      leading={
+        closed
+          ? {
+              label: "Открыть",
+              color: t.success,
+              icon: RotateCcw,
+              accessibilityLabel: `Открыть счёт ${account.name} снова`,
+              onAction: closed.onReopen,
+            }
+          : {
+              label: "Скрыть",
+              color: t.warning,
+              icon: EyeOff,
+              accessibilityLabel: `Скрыть счёт ${account.name}`,
+              onAction: onHide,
+            }
+      }
+      label={closed?.onDelete ? "Удалить" : undefined}
+      color={t.danger}
+      icon={closed?.onDelete ? Trash2 : undefined}
+      accessibilityLabel={closed?.onDelete ? `Удалить счёт ${account.name}` : undefined}
+      onAction={closed?.onDelete}
     >
       <View
         style={{
@@ -82,19 +104,30 @@ export function AccountRow({
             rest: t.surface,
             pressed: t.pressed,
           }),
+          opacity: closed ? 0.45 : 1,
         }}
       >
         <Pressable
           onPress={onPress}
           accessibilityRole="button"
-          accessibilityLabel={[account.name, sub, mark, amount]
+          accessibilityLabel={[account.name, sub, mark, amount, closed ? "закрыт" : null]
             .filter(Boolean)
             .join(", ")}
           accessibilityHint="Открывает правку счёта"
           // Свайпа для VoiceOver не существует — то же действие ротором.
-          accessibilityActions={[{ name: "hide", label: "Скрыть" }]}
+          accessibilityActions={
+            closed
+              ? [
+                  { name: "reopen", label: "Открыть снова" },
+                  ...(closed.onDelete ? [{ name: "delete", label: "Удалить" }] : []),
+                ]
+              : [{ name: "hide", label: "Скрыть" }]
+          }
           onAccessibilityAction={(event) => {
-            if (event.nativeEvent.actionName === "hide") onHide();
+            const name = event.nativeEvent.actionName;
+            if (name === "hide") onHide();
+            if (name === "reopen") closed?.onReopen();
+            if (name === "delete") closed?.onDelete?.();
           }}
           style={({ pressed }) => ({
             flex: 1,
