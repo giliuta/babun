@@ -1,139 +1,86 @@
-import { ScrollView, View } from "react-native";
+import { useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import {
-  AlarmClock,
-  CalendarClock,
-  CalendarPlus,
-  CalendarX,
-  CircleAlert,
-  CircleCheck,
-  Clock,
-  EyeOff,
-  Hand,
-  Heart,
-  History,
-  Repeat,
-  RotateCcw,
-  Send,
-  Trash2,
-  Wallet,
-  type LucideIcon,
-} from "lucide-react-native";
-import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
-import { Divider } from "@/components/ui/Divider";
+import { EyeOff, RotateCcw, Trash2, Wallet } from "lucide-react-native";
+import { AppearanceTile, appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { ReorderList } from "@/components/ui/ReorderList";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
-import { SwitchRow } from "@/components/ui/SwitchRow";
 import { GUTTER } from "@/components/ui/tokens";
+import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
+  orderTemplates,
   useDeleteTeamTemplate,
-  useSaveSmsSettings,
+  useReorderTeamTemplates,
+  useSaveTeamTemplate,
   useSetTeamTemplateEnabled,
   useSmsAccount,
-  useSmsHistory,
   useTeamTemplates,
   whenWords,
   type SmsTeamTemplate,
-  type SmsWhen,
+  type TemplateDraft,
 } from "./sms-account";
-import { teamStats } from "./sms-model";
-import { SmsHistoryRow } from "./SmsHistoryRow";
-import { balanceWords, euro, monthWords } from "./sms-words";
+import { SmsTemplateSheet } from "./SmsTemplateSheet";
+import { balanceWords, euro } from "./sms-words";
 
-// SMS ОДНОЙ КОМАНДЫ — В НАСТРОЙКАХ КАЛЕНДАРЯ (STORY-089; владелец 29.09:
-// «открываю Команда 1 → SMS — все шаблоны этой команды; Команда 3 —
-// добавляю заново… баланс единый, независимо от команды»).
+// SMS КОМАНДЫ — В НАСТРОЙКАХ КАЛЕНДАРЯ (STORY-089; владелец 29.09: «первый
+// блок — баланс одним блоком, внизу шаблоны… аналитику — в балансе… тут
+// просто сверху баланс, всё сказано, и внизу кнопка „Добавить шаблон“»).
 //
-// Блоки сверху вниз:
-//   • БАЛАНС — общий у компании: одна строка-дверь в Кабинет → SMS, где
-//     пополняют и видят всё;
-//   • ОТПРАВКА — «Отправлять SMS этой команды»;
-//   • ШАБЛОНЫ — строка на шаблон: название и «когда» («Накануне в 18:00»).
-//     Тап — настройка; свайп влево — «Удалить», вправо — «Выключить» /
-//     «Включить» (канон справочников, как у типов событий и меток);
-//   • СЧЁТ МЕСЯЦА — сколько ушло, доставлено, не доставлено;
-//   • ИСТОРИЯ — последние сообщения команды и дверь ко всем.
-// Действие экрана одно — «Добавить шаблон» внизу.
+//   • БАЛАНС — общий у компании, одна строка-дверь в Кабинет → SMS, где
+//     пополнение, отправка по командам, счёт месяца и история;
+//   • ШАБЛОНЫ — справочник по канону меток и типов событий: строка залита
+//     цветом шаблона, значок, имя и «когда»; ручка порядка справа; тап —
+//     правка шторкой; смахнуть влево (правая кромка) — «Удалить», вправо
+//     (левая кромка) — «Скрыть» / «Показать». Скрытый гаснет и уходит вниз:
+//     сам не отправляется и в листе «SMS клиенту» не стоит;
+//   • «Добавить шаблон» — внизу и всегда.
 
-/** Значок «когда» — строка читается глазом раньше, чем словом. */
-const WHEN_ICON: Record<SmsWhen, LucideIcon> = {
-  manual: Hand,
-  created: CalendarPlus,
-  before: AlarmClock,
-  day_before: Clock,
-  rescheduled: CalendarClock,
-  cancelled: CalendarX,
-  after: Heart,
-  repeat: Repeat,
-};
+/** Высота строки — по ней ручка считает перелёт через соседей. */
+const ROW_H = 60;
+
+type Editing = { mode: "create" } | { mode: "edit"; template: SmsTeamTemplate } | null;
 
 export function SmsTeamScreen() {
   const t = useThemeColors();
   const router = useRouter();
+  const toast = useToast();
   const params = useLocalSearchParams<{ team?: string }>();
   const { data: teams = [] } = useTeams();
   const team = teams.find((x) => x.id === params.team) ?? teams[0];
   const teamId = team?.id ?? "";
   const account = useSmsAccount();
-  const save = useSaveSmsSettings();
   const templates = useTeamTemplates(teamId || null);
+  const save = useSaveTeamTemplate();
   const toggle = useSetTeamTemplateEnabled();
   const remove = useDeleteTeamTemplate();
-  const history = useSmsHistory(5, { teamId });
+  const reorder = useReorderTeamTemplates(teamId || null);
+  const [editing, setEditing] = useState<Editing>(null);
+  const [dragging, setDragging] = useState(false);
 
-  const data = account.data;
-  const owner = data?.owner;
-  const subtitle = team?.name;
+  const owner = account.data?.owner;
+  const list = orderTemplates(templates.data ?? []);
+  const loading = account.isLoading || templates.isLoading;
+  const failed = account.isError || templates.isError;
+  const error = account.error ?? templates.error;
 
-  if (account.isLoading || templates.isLoading) {
-    return (
-      <Screen edges={["top"]}>
-        <ScreenHeader title="SMS" subtitle={subtitle} />
-        <EmptyState state="loading" fill />
-      </Screen>
-    );
-  }
-  if (account.isError || templates.isError || !data || !owner || !teamId) {
-    const error = account.error ?? templates.error;
-    return (
-      <Screen edges={["top"]}>
-        <ScreenHeader title="SMS" subtitle={subtitle} />
-        <EmptyState
-          state="error"
-          fill
-          subtitle={error instanceof Error ? error.message : undefined}
-          action={{
-            label: "Повторить",
-            onPress: () => {
-              void account.refetch();
-              void templates.refetch();
-            },
-          }}
-        />
-      </Screen>
-    );
-  }
-
-  const list = templates.data ?? [];
-  const on = data.teamIds.includes(teamId);
-  const stats = teamStats(data, teamId);
-  const items = history.data ?? [];
-
-  const open = (template: SmsTeamTemplate | null) =>
-    router.push({
-      pathname: "/calendar/sms-template",
-      params: template ? { team: teamId, id: template.id } : { team: teamId },
-    } as unknown as Href);
+  const submit = (draft: TemplateDraft) =>
+    save.mutate(draft, {
+      onSuccess: () => {
+        setEditing(null);
+        toast(draft.id ? "Шаблон сохранён" : "Шаблон добавлен", "success");
+      },
+      onError: (e) => notify("Не удалось сохранить", e instanceof Error ? e.message : undefined),
+    });
 
   const drop = (template: SmsTeamTemplate) =>
     confirmThen(
@@ -157,133 +104,144 @@ export function SmsTeamScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="SMS" subtitle={subtitle} />
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
-        <SectionEyebrow>Баланс</SectionEyebrow>
-        <SectionCard>
-          <SettingsRow
-            tile="neutral"
-            icon={Wallet}
-            title="Баланс компании"
-            sub={balanceWords(owner.balanceCents, owner.freeLeft, data.priceCents)}
-            value={euro(owner.balanceCents)}
-            valueQuiet={owner.balanceCents === 0}
-            onPress={() => router.push("/cabinet/sms" as Href)}
-          />
-        </SectionCard>
+      <ScreenHeader title="SMS" subtitle={team?.name} />
 
-        <SectionEyebrow>Отправка</SectionEyebrow>
-        <SectionCard>
-          <SwitchRow
-            label="Отправлять SMS этой команды"
-            hint={data.enabled ? undefined : "Выключено в Кабинете → SMS"}
-            value={on}
-            disabled={!data.enabled}
-            onChange={(next) =>
-              save.mutate(
-                {
-                  team_ids: next ? [...data.teamIds, teamId] : data.teamIds.filter((id) => id !== teamId),
-                },
-                { onError: (e) => notify("Не удалось сохранить", e instanceof Error ? e.message : undefined) },
-              )
-            }
-          />
-        </SectionCard>
+      {loading ? (
+        <EmptyState state="loading" fill />
+      ) : failed || !teamId ? (
+        <EmptyState
+          state="error"
+          fill
+          subtitle={error instanceof Error ? error.message : undefined}
+          action={{
+            label: "Повторить",
+            onPress: () => {
+              void account.refetch();
+              void templates.refetch();
+            },
+          }}
+        />
+      ) : (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }} scrollEnabled={!dragging}>
+          <SectionCard title="Баланс">
+            <SettingsRow
+              tile="neutral"
+              icon={Wallet}
+              title={owner ? euro(owner.balanceCents) : "—"}
+              sub={
+                owner && account.data
+                  ? balanceWords(owner.balanceCents, owner.freeLeft, account.data.priceCents)
+                  : undefined
+              }
+              onPress={() => router.push("/cabinet/sms" as Href)}
+            />
+          </SectionCard>
 
-        <SectionEyebrow>
-          {list.length > 0 ? `Шаблоны · ${list.length}` : "Шаблоны"}
-        </SectionEyebrow>
-        <SectionCard>
-          {list.length === 0 ? (
-            <SettingsRow tile="neutral" icon={Send} title="Шаблонов нет" />
-          ) : (
-            list.map((template, index) => (
-              <View key={template.id}>
-                {index > 0 ? <Divider inset={48} /> : null}
-                <SwipeRow
-                  label="Удалить"
-                  color={t.danger}
-                  icon={Trash2}
-                  accessibilityLabel={`Удалить шаблон ${template.name}`}
-                  onAction={() => drop(template)}
-                  leading={{
-                    label: template.enabled ? "Выключить" : "Включить",
-                    color: template.enabled ? t.warning : t.success,
-                    icon: template.enabled ? EyeOff : RotateCcw,
-                    accessibilityLabel: template.enabled
-                      ? `Выключить шаблон ${template.name}`
-                      : `Включить шаблон ${template.name}`,
-                    onAction: () => flip(template),
-                  }}
-                >
-                  <View style={{ backgroundColor: t.surface, opacity: template.enabled ? 1 : 0.5 }}>
-                    <SettingsRow
-                      tile="neutral"
-                      icon={WHEN_ICON[template.trigger]}
-                      title={template.name}
-                      sub={template.enabled ? whenWords(template) : `Выключен · ${whenWords(template)}`}
-                      onPress={() => open(template)}
-                    />
-                  </View>
-                </SwipeRow>
-              </View>
-            ))
-          )}
-        </SectionCard>
+          <SectionCard title="Шаблоны">
+            {list.length === 0 ? (
+              <Text
+                maxFontSizeMultiplier={1.3}
+                style={{ paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: t.sub }}
+              >
+                Шаблонов пока нет
+              </Text>
+            ) : (
+              <ReorderList
+                items={list}
+                rowHeight={ROW_H}
+                labelFor={(template) => template.name}
+                handleInside
+                onReorder={(ids) =>
+                  reorder.mutate(ids, {
+                    onError: (e) => notify("Не удалось сохранить порядок", e instanceof Error ? e.message : undefined),
+                  })
+                }
+                onDraggingChange={setDragging}
+              >
+                {(template, _index, handle) => (
+                  <SwipeRow
+                    label="Удалить"
+                    color={t.danger}
+                    icon={Trash2}
+                    accessibilityLabel={`Удалить шаблон ${template.name}`}
+                    onAction={() => drop(template)}
+                    leading={{
+                      label: template.enabled ? "Скрыть" : "Показать",
+                      color: template.enabled ? t.warning : t.success,
+                      icon: template.enabled ? EyeOff : RotateCcw,
+                      accessibilityLabel: template.enabled
+                        ? `Скрыть шаблон ${template.name}`
+                        : `Показать шаблон ${template.name}`,
+                      onAction: () => flip(template),
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        opacity: template.enabled ? 1 : 0.45,
+                        backgroundColor: appearanceRowFill(template.color, false, {
+                          rest: t.surface,
+                          pressed: t.pressed,
+                        }),
+                      }}
+                    >
+                      <Pressable
+                        onPress={() => setEditing({ mode: "edit", template })}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Шаблон ${template.name}, ${whenWords(template)}, редактировать`}
+                        style={({ pressed }) => ({
+                          flex: 1,
+                          height: ROW_H,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 12,
+                          paddingLeft: 16,
+                          backgroundColor: pressed ? t.pressed : "transparent",
+                        })}
+                      >
+                        <AppearanceTile color={template.color} icon={template.icon} size={30} />
+                        <View style={{ flex: 1 }}>
+                          <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 16, color: t.ink }}>
+                            {template.name}
+                          </Text>
+                          <Text
+                            numberOfLines={1}
+                            maxFontSizeMultiplier={1.3}
+                            style={{ fontSize: 13, color: t.sub, marginTop: 1 }}
+                          >
+                            {whenWords(template)}
+                            {template.enabled ? "" : " · скрыт"}
+                          </Text>
+                        </View>
+                      </Pressable>
+                      {handle}
+                    </View>
+                  </SwipeRow>
+                )}
+              </ReorderList>
+            )}
+          </SectionCard>
+        </ScrollView>
+      )}
 
-        <SectionEyebrow>{monthWords(new Date())}</SectionEyebrow>
-        <SectionCard>
-          <SettingsRow
-            tile="neutral"
-            icon={Send}
-            title="Отправлено"
-            sub={`${formatCountRu(stats.segments, ["часть", "части", "частей"])} · ${euro(stats.cents)}`}
-            value={`${stats.count} SMS`}
-            valueQuiet={stats.count === 0}
-          />
-          <Divider inset={48} />
-          <SettingsRow
-            tile="neutral"
-            icon={CircleCheck}
-            title="Доставлено"
-            value={String(stats.delivered)}
-            valueQuiet={stats.delivered === 0}
-          />
-          <Divider inset={48} />
-          <SettingsRow
-            tile="neutral"
-            icon={CircleAlert}
-            title="Не доставлено"
-            value={String(stats.failed)}
-            valueColor={stats.failed > 0 ? t.danger : undefined}
-            valueQuiet={stats.failed === 0}
-          />
-        </SectionCard>
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ И ВСЕГДА, как у меток и типов событий. */}
+      {!loading && !failed && teamId ? (
+        <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
+          <GradientButton label="Добавить шаблон" onPress={() => setEditing({ mode: "create" })} />
+        </View>
+      ) : null}
 
-        <SectionEyebrow>История</SectionEyebrow>
-        <SectionCard>
-          {items.map((item, index) => (
-            <View key={item.id}>
-              {index > 0 ? <Divider inset={16} /> : null}
-              <SmsHistoryRow item={item} />
-            </View>
-          ))}
-          {items.length > 0 ? <Divider inset={48} /> : null}
-          <SettingsRow
-            tile="neutral"
-            icon={History}
-            title="Вся история"
-            sub={items.length > 0 ? undefined : "Сообщений пока нет"}
-            onPress={() =>
-              router.push({ pathname: "/calendar/sms-history", params: { teamId } } as unknown as Href)
-            }
-          />
-        </SectionCard>
-      </ScrollView>
-
-      <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
-        <GradientButton label="Добавить шаблон" onPress={() => open(null)} />
-      </View>
+      {teamId ? (
+        <SmsTemplateSheet
+          visible={editing !== null}
+          teamId={teamId}
+          template={editing?.mode === "edit" ? editing.template : null}
+          busy={save.isPending}
+          onClose={() => setEditing(null)}
+          onSubmit={submit}
+        />
+      ) : null}
     </Screen>
   );
 }

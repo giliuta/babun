@@ -29,7 +29,7 @@ import {
 } from "./sms-account";
 import { teamStats } from "./sms-model";
 import { SmsHistoryRow } from "./SmsHistoryRow";
-import { balanceWords, euro } from "./sms-words";
+import { balanceWords, euro, monthWords } from "./sms-words";
 
 // КАБИНЕТ → SMS — ДЕНЬГИ И ОТПРАВКА ВСЕЙ КОМПАНИИ (STORY-089; владелец
 // 29.09: «первое — баланс и пополнение, это всё будет Кабинет SMS… потом
@@ -38,11 +38,13 @@ import { balanceWords, euro } from "./sms-words";
 //
 // Блоки сверху вниз:
 //   • БАЛАНС — сколько денег и примерно сколько SMS, сколько ушло за месяц;
-//   • ОТПРАВКА — общий выключатель «Отправлять через сервис»;
-//   • КОМАНДЫ — строка на команду: отправляет ли, сколько у неё шаблонов,
-//     сколько денег за месяц; тап — SMS этой команды (её шаблоны живут в
-//     настройках календаря);
+//   • ОТПРАВКА — общий выключатель «Отправлять через сервис» и под ним
+//     выключатель каждой команды (подпись — сколько у неё шаблонов);
+//   • МЕСЯЦ — счёт по командам: сколько SMS, доставлено, не доставлено,
+//     деньги; тап — история этой команды;
 //   • ИСТОРИЯ — последние сообщения и дверь ко всем.
+// Шаблоны команды живут в настройках календаря (шестерёнка → SMS); там
+// только баланс и шаблоны — вся аналитика здесь (владелец 29.09).
 //
 // ПОПОЛНЕНИЕ — ТОЛЬКО НА САЙТЕ (владелец 24.09: «чтоб не брал Apple»). В iOS
 // нет ни кнопки, ни ссылки, ни цены — правило App Store о цифровых товарах.
@@ -116,9 +118,14 @@ export function SmsScreen() {
 
   const teamSub = (teamId: string): string => {
     const count = owner.templateCounts[teamId] ?? 0;
-    const templates = count > 0 ? formatCountRu(count, ["шаблон", "шаблона", "шаблонов"]) : "Шаблонов нет";
-    const sends = data.enabled && data.teamIds.includes(teamId);
-    return `${templates} · ${sends ? "Отправляет" : "Не отправляет"}`;
+    return count > 0 ? formatCountRu(count, ["шаблон", "шаблона", "шаблонов"]) : "Шаблонов нет";
+  };
+  /** «12 SMS · доставлено 11 · не доставлено 1». */
+  const statsWords = (s: { count: number; delivered: number; failed: number }): string => {
+    const parts = [`${s.count} SMS`];
+    if (s.delivered > 0) parts.push(`доставлено ${s.delivered}`);
+    if (s.failed > 0) parts.push(`не доставлено ${s.failed}`);
+    return parts.join(" · ");
   };
 
   return (
@@ -162,11 +169,30 @@ export function SmsScreen() {
             value={data.enabled}
             onChange={(enabled) => change({ enabled })}
           />
+          {/* ОТПРАВКА ПО КОМАНДАМ — здесь же, под общим выключателем
+              (владелец 29.09: всё про отправку и счёт — в балансе; в
+              настройках команды — только шаблоны). */}
+          {teams.map((team) => (
+            <View key={team.id}>
+              <Divider inset={16} />
+              <SwitchRow
+                label={team.name}
+                hint={teamSub(team.id)}
+                value={data.enabled && data.teamIds.includes(team.id)}
+                disabled={!data.enabled}
+                onChange={(next) =>
+                  change({
+                    team_ids: next ? [...data.teamIds, team.id] : data.teamIds.filter((id) => id !== team.id),
+                  })
+                }
+              />
+            </View>
+          ))}
         </SectionCard>
 
         {teams.length > 0 ? (
           <>
-            <SectionEyebrow>Команды</SectionEyebrow>
+            <SectionEyebrow>{monthWords(new Date())}</SectionEyebrow>
             <SectionCard>
               {teams.map((team, index) => {
                 const stats = teamStats(data, team.id);
@@ -176,10 +202,11 @@ export function SmsScreen() {
                     <SettingsRow
                       appearance={{ color: team.color, icon: team.icon, fallback: Users }}
                       title={team.name}
-                      sub={teamSub(team.id)}
-                      value={stats.cents > 0 ? euro(stats.cents) : undefined}
+                      sub={statsWords(stats)}
+                      value={euro(stats.cents)}
+                      valueQuiet={stats.cents === 0}
                       onPress={() =>
-                        router.push({ pathname: "/calendar/sms", params: { team: team.id } } as unknown as Href)
+                        router.push({ pathname: "/cabinet/sms-history", params: { teamId: team.id } } as unknown as Href)
                       }
                     />
                   </View>

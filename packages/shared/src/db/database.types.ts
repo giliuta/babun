@@ -5179,6 +5179,10 @@ export type Database = {
         Returns: Json[]
       }
       sms_delete_team_template: { Args: { p_id: string }; Returns: boolean }
+      sms_reorder_team_templates: {
+        Args: { p_ids: string[]; p_team_id: string }
+        Returns: undefined
+      }
       sms_save_settings: { Args: { p: Json }; Returns: Json }
       sms_save_team_template: { Args: { p: Json }; Returns: Json }
       sms_send_manual: {

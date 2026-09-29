@@ -180,6 +180,42 @@ export function useDeleteTeamTemplate() {
   });
 }
 
+/** Порядок шаблонов команды — как лёг список после ручки. Строки встают
+ *  сразу, ответ базы — после. */
+export function useReorderTeamTemplates(teamId: string | null) {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  const changed = useTemplatesChanged();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.rpc("sms_reorder_team_templates", {
+        p_team_id: teamId ?? "",
+        p_ids: ids,
+      });
+      if (error) throw new Error(error.message);
+      return ids;
+    },
+    onMutate: async (ids) => {
+      const key = [...smsTemplatesKey(tenantId), teamId];
+      await qc.cancelQueries({ queryKey: key });
+      const before = qc.getQueryData<SmsTeamTemplate[]>(key);
+      if (before) {
+        const rank = new Map(ids.map((id, index) => [id, index]));
+        qc.setQueryData<SmsTeamTemplate[]>(
+          key,
+          before.map((x) => ({ ...x, position: rank.get(x.id) ?? x.position })),
+        );
+      }
+      return { before };
+    },
+    onError: (_e, _ids, context) => {
+      if (context?.before) qc.setQueryData([...smsTemplatesKey(tenantId), teamId], context.before);
+    },
+    onSettled: changed,
+    meta: { errorHandled: true },
+  });
+}
+
 /** История: вся или одной команды / одного события. */
 export function useSmsHistory(limit = 50, filter?: { teamId?: string | null; trigger?: string | null }) {
   const tenantId = useTenantId();

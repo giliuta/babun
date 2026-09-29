@@ -6,8 +6,7 @@ import {
   draftPayload,
   draftProblem,
   emptyFieldsWarning,
-  fromReady,
-  READY_TEMPLATES,
+  orderTemplates,
   parseTeamTemplates,
   uniqueByBody,
   usesWindow,
@@ -38,6 +37,8 @@ describe("шаблоны SMS команды", () => {
         months: null,
         send_from: 8,
         send_to: 21,
+        color: "#3276FB",
+        icon: "bell",
         enabled: false,
         position: 1,
       },
@@ -48,6 +49,7 @@ describe("шаблоны SMS команды", () => {
     assert.equal(list.length, 2);
     assert.equal(list[0].atTime, "18:00");
     assert.equal(list[0].enabled, false);
+    assert.deepEqual([list[0].color, list[0].icon, list[1].color, list[1].icon], ["#3276FB", "bell", null, null]);
     assert.equal(list[1].trigger, "manual");
     assert.equal(list[1].name, "Шаблон");
     assert.equal(list[1].sendFrom, 8);
@@ -122,13 +124,14 @@ describe("шаблоны SMS команды", () => {
     assert.deepEqual(list.map((x) => x.body), ["A", "B"]);
   });
 
-  test("готовые шаблоны сохраняются как есть и уходят каждому", () => {
-    for (const ready of READY_TEMPLATES) {
-      const draft = fromReady(blankDraft("t1"), ready);
-      assert.equal(draftProblem(draft), null, ready.name);
-      assert.equal(emptyFieldsWarning(draft.body), null, ready.name);
-    }
-    const soon = fromReady(blankDraft("t1"), READY_TEMPLATES.find((x) => x.name === "За 2 часа")!);
-    assert.deepEqual([soon.trigger, soon.hours], ["before", 2]);
+  test("вид уходит в базу; скрытые — в конце списка", () => {
+    const payload = draftPayload(ready({ color: "#FF0000", icon: "bell" }));
+    assert.deepEqual([payload.color, payload.icon], ["#FF0000", "bell"]);
+    const list = orderTemplates([
+      { id: "a", enabled: false, position: 0 },
+      { id: "b", enabled: true, position: 2 },
+      { id: "c", enabled: true, position: 1 },
+    ]);
+    assert.deepEqual(list.map((x) => x.id), ["c", "b", "a"]);
   });
 });

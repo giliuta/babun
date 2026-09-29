@@ -44,6 +44,10 @@ export interface SmsTeamTemplate {
   /** Окно отправки, часы календаря: с `sendFrom` до `sendTo`. */
   sendFrom: number;
   sendTo: number;
+  /** Вид строки — цвет и значок, как у меток и типов событий. */
+  color: string | null;
+  icon: string | null;
+  /** `false` — «Скрыт»: сам не уходит и в листе отправки не предлагается. */
   enabled: boolean;
   position: number;
 }
@@ -68,6 +72,8 @@ export function parseTeamTemplate(raw: unknown): SmsTeamTemplate | null {
     months: int(r.months),
     sendFrom: int(r.send_from) ?? 8,
     sendTo: int(r.send_to) ?? 21,
+    color: typeof r.color === "string" && r.color ? r.color : null,
+    icon: typeof r.icon === "string" && r.icon ? r.icon : null,
     enabled: r.enabled !== false,
     position: int(r.position) ?? 0,
   };
@@ -156,8 +162,13 @@ export interface TemplateDraft {
   months: number | null;
   sendFrom: number;
   sendTo: number;
+  color: string;
+  icon: string | null;
   enabled: boolean;
 }
+
+/** Цвет нового шаблона — первый цвет палитры, как у нового типа события. */
+export const DEFAULT_TEMPLATE_COLOR = "#3276FB";
 
 export function draftOf(t: SmsTeamTemplate): TemplateDraft {
   return {
@@ -171,6 +182,8 @@ export function draftOf(t: SmsTeamTemplate): TemplateDraft {
     months: t.months,
     sendFrom: t.sendFrom,
     sendTo: t.sendTo,
+    color: t.color ?? DEFAULT_TEMPLATE_COLOR,
+    icon: t.icon,
     enabled: t.enabled,
   };
 }
@@ -187,6 +200,8 @@ export function blankDraft(teamId: string): TemplateDraft {
     months: null,
     sendFrom: 8,
     sendTo: 21,
+    color: DEFAULT_TEMPLATE_COLOR,
+    icon: null,
     enabled: true,
   };
 }
@@ -232,6 +247,8 @@ export function draftPayload(d: TemplateDraft): Record<string, unknown> {
     months: d.trigger === "repeat" ? d.months : null,
     send_from: d.sendFrom,
     send_to: d.sendTo,
+    color: d.color,
+    icon: d.icon,
     enabled: d.enabled,
   };
 }
@@ -271,31 +288,8 @@ export function uniqueByBody<T extends { body: string }>(list: readonly T[]): T[
   return out;
 }
 
-/** Готовые шаблоны для нового: тап ставит название, текст и «когда».
- *  Тексты — из полей, которые у записи есть всегда, чтобы SMS уходила
- *  каждому. */
-export const READY_TEMPLATES: readonly (Pick<TemplateDraft, "name" | "body" | "trigger"> &
-  Partial<Pick<TemplateDraft, "hours" | "atTime" | "months">>)[] = [
-  { name: "Подтверждение записи", body: "[Имя], вы записаны: [День], [Дата] в [Время]. Ждём вас!", trigger: "created" },
-  { name: "Напоминание накануне", body: "[Имя], напоминаем: завтра, [Дата], в [Время] у вас запись.", trigger: "day_before", atTime: "18:00" },
-  // [Ссылка] — страница «Подтвердить / Отменить» (babun.app/r/…): кипрские
-  // номера ответных SMS не принимают. Ссылка есть у каждой записи.
-  { name: "Со ссылкой", body: "[Имя], завтра в [Время] у вас запись. Подтвердить или отменить: [Ссылка]", trigger: "day_before", atTime: "18:00" },
-  { name: "За 2 часа", body: "[Имя], через 2 часа, в [Время], мы у вас.", trigger: "before", hours: 2 },
-  { name: "Перенос", body: "[Имя], ваша запись перенесена: [День], [Дата] в [Время].", trigger: "rescheduled" },
-  { name: "Отмена", body: "[Имя], ваша запись на [Дата] в [Время] отменена.", trigger: "cancelled" },
-  { name: "Спасибо", body: "[Имя], спасибо, что выбрали нас! Будем рады видеть снова.", trigger: "after", hours: 2 },
-  { name: "Пора повторить", body: "[Имя], прошло полгода с последнего визита — пора записаться снова.", trigger: "repeat", months: 6 },
-  { name: "Выехал к вам", body: "[Имя], мастер выехал к вам.", trigger: "manual" },
-];
-
-/** Черновик по готовому шаблону — окно и «включён» остаются прежними. */
-export function fromReady(d: TemplateDraft, ready: (typeof READY_TEMPLATES)[number]): TemplateDraft {
-  const base = withTrigger({ ...d, name: ready.name, body: ready.body }, ready.trigger);
-  return {
-    ...base,
-    hours: ready.hours ?? base.hours,
-    atTime: ready.atTime ?? base.atTime,
-    months: ready.months ?? base.months,
-  };
+/** Порядок строк справочника: живые по `position`, скрытые — в конце (канон
+ *  справочников: скрытая строка гаснет и падает вниз, а не исчезает). */
+export function orderTemplates<T extends Pick<SmsTeamTemplate, "enabled" | "position">>(list: readonly T[]): T[] {
+  return [...list].sort((a, b) => Number(!a.enabled) - Number(!b.enabled) || a.position - b.position);
 }
