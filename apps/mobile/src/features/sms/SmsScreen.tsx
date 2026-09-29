@@ -116,9 +116,13 @@ export function SmsScreen() {
     );
   }
 
+  /** «Giliuta · 2 шаблона»; без имени отправителя команда не отправляет —
+   *  подпись говорит это первым. */
   const teamSub = (teamId: string): string => {
     const count = owner.templateCounts[teamId] ?? 0;
-    return count > 0 ? formatCountRu(count, ["шаблон", "шаблона", "шаблонов"]) : "Шаблонов нет";
+    const templates = count > 0 ? formatCountRu(count, ["шаблон", "шаблона", "шаблонов"]) : "Шаблонов нет";
+    const sender = data.senders?.[teamId];
+    return sender ? `${sender} · ${templates}` : `Нет имени отправителя · ${templates}`;
   };
   /** «12 SMS · доставлено 11 · не доставлено 1». */
   const statsWords = (s: { count: number; delivered: number; failed: number }): string => {
@@ -165,7 +169,7 @@ export function SmsScreen() {
             label="Отправлять через сервис"
             // Цена — только на сайте: в iOS-приложении о платном молчим
             // (решение владельца, правило App Store).
-            hint={WEB ? `Отправитель «${owner.sender}» · ${euro(data.priceCents)} за SMS` : `Отправитель «${owner.sender}»`}
+            hint={WEB ? `${euro(data.priceCents)} за SMS` : undefined}
             value={data.enabled}
             onChange={(enabled) => change({ enabled })}
           />

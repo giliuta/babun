@@ -6,6 +6,7 @@ import {
   parseSmsAccount,
   parseSmsHistory,
   parseSmsRecordLog,
+  senderProblem,
   smsErrorText,
   teamStats,
 } from "./sms-model";
@@ -89,6 +90,19 @@ describe("ответ базы", () => {
     assert.equal(log.messages[0]?.templateBody, "Напоминаем [Время]");
     assert.equal(log.messages[0]?.body, null);
     assert.deepEqual(parseSmsRecordLog(null), { templates: [], messages: [], clientAnswer: null, clientAnsweredAt: null });
+  });
+
+  test("имя отправителя: правила операторов и имена команд из ответа", () => {
+    assert.equal(senderProblem("Giliuta"), null);
+    assert.equal(senderProblem("  Giliuta   Cy "), null);
+    assert.equal(senderProblem(""), null, "пусто — снять имя");
+    assert.equal(senderProblem("Гилюта"), "Только латиница, цифры и пробел");
+    assert.equal(senderProblem("Giliuta Service"), "Не длиннее 11 знаков");
+    assert.equal(senderProblem("12345"), "Нужна хотя бы одна буква");
+    const a = parseSmsAccount({ senders: { t1: "Giliuta", t3: "", t4: 7 } });
+    assert.deepEqual(a.senders, { t1: "Giliuta" });
+    assert.equal(smsErrorText(new Error("sms:sender")), "У команды не указано имя отправителя");
+    assert.equal(smsErrorText(new Error("sms:sender_format")), "Имя отправителя: латиница, цифры, до 11 знаков");
   });
 
   test("отказы базы — словами", () => {

@@ -180,6 +180,24 @@ export function useDeleteTeamTemplate() {
   });
 }
 
+/** Имя отправителя команды; пустое — снять. Ответ базы — свежий счёт. */
+export function useSaveTeamSender() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { teamId: string; name: string }) => {
+      const { data, error } = await supabase.rpc("sms_save_team_sender", {
+        p_team_id: input.teamId,
+        p_name: input.name,
+      });
+      if (error) throw new Error(error.message);
+      return parseSmsAccount(data);
+    },
+    onSuccess: (account) => qc.setQueryData(smsAccountKey(tenantId), account),
+    meta: { errorHandled: true },
+  });
+}
+
 /** Порядок шаблонов команды — как лёг список после ручки. Строки встают
  *  сразу, ответ базы — после. */
 export function useReorderTeamTemplates(teamId: string | null) {

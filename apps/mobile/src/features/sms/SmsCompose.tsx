@@ -60,8 +60,10 @@ export function useSmsOptions(name?: string | null): SmsOption[] {
 }
 
 /** Можно ли отсюда отправить через сервис: сервис подключён, владелец
- *  включил отправку, календарь записи среди разрешённых (из карточки без
- *  записи — только владельцу), деньги есть. Решает всё равно база. */
+ *  включил отправку, есть запись, её календарь среди разрешённых и у него
+ *  есть имя отправителя, деньги есть. Без записи — только «С телефона»:
+ *  SMS через сервис подписана именем команды записи (волна 10). Решает всё
+ *  равно база. */
 export function useSmsService(): { available: boolean; priceCents: number; context: SmsContext | null } {
   return useSmsServiceFor(useContext(SmsVarsContext));
 }
@@ -71,13 +73,16 @@ export function useSmsServiceFor(
   context: SmsContext | null,
 ): { available: boolean; priceCents: number; context: SmsContext | null } {
   const account = useSmsAccount().data;
-  const role = useCurrentRole().data;
+  const teamId = context?.teamId;
   const available = Boolean(
     context?.clientId &&
+      context.appointmentId &&
+      teamId &&
       account?.serviceOn &&
       account.enabled &&
       account.canPay &&
-      (context.teamId ? account.teamIds.includes(context.teamId) : role === "owner"),
+      account.teamIds.includes(teamId) &&
+      account.senders?.[teamId],
   );
   return { available, priceCents: account?.priceCents ?? 10, context };
 }

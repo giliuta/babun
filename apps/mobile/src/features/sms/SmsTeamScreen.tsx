@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { EyeOff, RotateCcw, Trash2, Wallet } from "lucide-react-native";
+import { BadgeCheck, EyeOff, RotateCcw, Trash2, Wallet } from "lucide-react-native";
 import { AppearanceTile, appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -29,6 +29,7 @@ import {
   type SmsTeamTemplate,
   type TemplateDraft,
 } from "./sms-account";
+import { SmsSenderSheet } from "./SmsSenderSheet";
 import { SmsTemplateSheet } from "./SmsTemplateSheet";
 import { balanceWords, euro } from "./sms-words";
 
@@ -38,6 +39,8 @@ import { balanceWords, euro } from "./sms-words";
 //
 //   • БАЛАНС — общий у компании, одна строка-дверь в Кабинет → SMS, где
 //     пополнение, отправка по командам, счёт месяца и история;
+//   • ОТПРАВИТЕЛЬ — имя, которым SMS команды подписана у клиента (волна
+//     10); без него команда не отправляет;
 //   • ШАБЛОНЫ — справочник по канону меток и типов событий: строка залита
 //     цветом шаблона, значок, имя и «когда»; ручка порядка справа; тап —
 //     правка шторкой; смахнуть влево (правая кромка) — «Удалить», вправо
@@ -66,8 +69,10 @@ export function SmsTeamScreen() {
   const reorder = useReorderTeamTemplates(teamId || null);
   const [editing, setEditing] = useState<Editing>(null);
   const [dragging, setDragging] = useState(false);
+  const [senderOpen, setSenderOpen] = useState(false);
 
   const owner = account.data?.owner;
+  const sender = (teamId && account.data?.senders?.[teamId]) || null;
   const list = orderTemplates(templates.data ?? []);
   const loading = account.isLoading || templates.isLoading;
   const failed = account.isError || templates.isError;
@@ -134,6 +139,18 @@ export function SmsTeamScreen() {
                   : undefined
               }
               onPress={() => router.push("/cabinet/sms" as Href)}
+            />
+          </SectionCard>
+
+          {/* ИМЯ ОТПРАВИТЕЛЯ — у каждой команды своё (волна 10): так SMS
+              подписана у клиента; без него команда не отправляет. */}
+          <SectionCard title="Отправитель">
+            <SettingsRow
+              tile="neutral"
+              icon={BadgeCheck}
+              title={sender ?? "Имя не указано"}
+              sub={sender ? undefined : "Без него SMS не уходят"}
+              onPress={() => setSenderOpen(true)}
             />
           </SectionCard>
 
@@ -232,6 +249,14 @@ export function SmsTeamScreen() {
         </View>
       ) : null}
 
+      {teamId ? (
+        <SmsSenderSheet
+          visible={senderOpen}
+          teamId={teamId}
+          current={sender}
+          onClose={() => setSenderOpen(false)}
+        />
+      ) : null}
       {teamId ? (
         <SmsTemplateSheet
           visible={editing !== null}

@@ -24,11 +24,13 @@ export interface SmsAccount {
   priceCents: number;
   /** Хватит ли на одну часть. */
   canPay: boolean;
+  /** Имя отправителя каждой команды; без него команда не отправляет.
+   *  Необязательно: ответ, сохранённый в кэше до волны 10, его не несёт. */
+  senders?: Record<string, string>;
   /** Только владельцу. */
   owner: {
     balanceCents: number;
     freeLeft: number;
-    sender: string;
     monthCount: number;
     monthCents: number;
     teams: SmsTeamStats[];
@@ -75,6 +77,27 @@ function counts(v: unknown): Record<string, number> {
   return out;
 }
 
+function names(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const [key, value] of Object.entries(v as Raw)) {
+    if (typeof value === "string" && value.trim()) out[key] = value;
+  }
+  return out;
+}
+
+/** Имя отправителя: до 11 знаков, латиница, цифры и пробел, хотя бы одна
+ *  буква — так его принимают операторы (на Кипре без регистрации). Те же
+ *  правила проверяет база (`sms_save_team_sender`). `null` — годится. */
+export function senderProblem(raw: string): string | null {
+  const name = raw.trim().replace(/\s+/g, " ");
+  if (!name) return null;
+  if (name.length > 11) return "Не длиннее 11 знаков";
+  if (!/^[A-Za-z0-9 ]+$/.test(name)) return "Только латиница, цифры и пробел";
+  if (!/[A-Za-z]/.test(name)) return "Нужна хотя бы одна буква";
+  return null;
+}
+
 export function parseSmsAccount(data: unknown): SmsAccount {
   const r = (data && typeof data === "object" ? data : {}) as Raw;
   const owner = "balance_cents" in r;
@@ -85,11 +108,11 @@ export function parseSmsAccount(data: unknown): SmsAccount {
     teamIds: Array.isArray(r.team_ids) ? r.team_ids.filter((x): x is string => typeof x === "string") : [],
     priceCents: num(r.price_cents, 12),
     canPay: r.can_pay === true,
+    senders: names(r.senders),
     owner: owner
       ? {
           balanceCents: num(r.balance_cents),
           freeLeft: num(r.free_left),
-          sender: str(r.sender) ?? "Babun",
           monthCount: num(month.count),
           monthCents: num(month.cents),
           teams: list(r.teams).map((e) => ({
@@ -161,6 +184,8 @@ export function smsErrorText(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (message.includes("sms:funds")) return "Не хватает баланса SMS";
   if (message.includes("sms:opt_out")) return "Клиент просил не присылать SMS";
+  if (message.includes("sms:sender_format")) return "Имя отправителя: латиница, цифры, до 11 знаков";
+  if (message.includes("sms:sender")) return "У команды не указано имя отправителя";
   if (message.includes("sms:calendar")) return "SMS в этом календаре выключены";
   if (message.includes("sms:disabled")) return "Отправка через сервис выключена";
   if (message.includes("sms:service_off")) return "Сервис SMS ещё не подключён";

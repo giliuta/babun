@@ -5184,6 +5184,10 @@ export type Database = {
         Returns: undefined
       }
       sms_save_settings: { Args: { p: Json }; Returns: Json }
+      sms_save_team_sender: {
+        Args: { p_name: string; p_team_id: string }
+        Returns: Json
+      }
       sms_save_team_template: { Args: { p: Json }; Returns: Json }
       sms_send_manual: {
         Args: {
