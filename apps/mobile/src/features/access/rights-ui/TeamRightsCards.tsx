@@ -9,6 +9,7 @@ import { useThemeColors } from "@/theme/colors";
 
 import type { AccessBlock, AccessLevel } from "../access-map";
 import type { ViewSection } from "../master-page/rights-view-sections";
+import { compositeRow } from "../master-page/composite-rows";
 import { rightLook } from "./right-look";
 import { RightSheet } from "./RightSheet";
 import { isClosedStep, rightTitle, stepDanger, stepWord } from "./right-words";
@@ -64,7 +65,17 @@ export function TeamRightsCards({
   /** Право, чья шторка открыта; держится, пока шторка уезжает. */
   const [sheetKey, setSheetKey] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const sheetBlock = blocks.find((block) => block.key === sheetKey) ?? null;
+  // Строка берётся из карточек, а не из реестра: у «Услуг», «Цен» и «Времени»
+  // свои ступени (`composite-rows`).
+  const sheetRow = sections.flatMap((section) => section.rows).find((row) => row.block.key === sheetKey) ?? null;
+  const sheetBlock = sheetRow?.block ?? blocks.find((block) => block.key === sheetKey) ?? null;
+  const composite = sheetBlock ? compositeRow(sheetBlock.key) : undefined;
+  const previewLevels = composite
+    ? (chosen: AccessLevel) => ({
+        ...levels,
+        ...composite.changesFor(chosen, (key) => levels[key] ?? "off"),
+      })
+    : undefined;
 
   const open = (block: AccessBlock) => {
     // Две записи не делят один снимок карты. Отказ — вслух: короткий тик в
@@ -135,6 +146,9 @@ export function TeamRightsCards({
         teamName={teamName}
         teamColor={teamColor}
         busy={busyKey !== null}
+        rowLevel={composite ? sheetRow?.level : undefined}
+        previewLevels={previewLevels}
+        locked={sheetRow?.locked}
         onPick={onPick}
         onClose={() => setSheetOpen(false)}
       />

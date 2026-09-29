@@ -95,7 +95,7 @@ describe("слова прав", () => {
   test("фраза говорит про последствие, а не повторяет название", () => {
     assert.equal(
       levelSentence("record.amount", "off"),
-      "Записи без денег: ни цены, ни долга",
+      "Цен и суммы не видит — и оплату не принимает",
     );
     assert.equal(
       levelSentence("clients.contacts", "off"),

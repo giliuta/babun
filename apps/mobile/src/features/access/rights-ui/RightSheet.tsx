@@ -34,10 +34,21 @@ export function RightSheet({
   teamName,
   teamColor,
   busy = false,
+  rowLevel,
+  previewLevels,
+  locked,
   onPick,
   onClose,
 }: {
   visible: boolean;
+  /** Ступень строки, если строка — из нескольких прав («Услуги», «Цены»,
+   *  «Время»); нет — положение самого права. */
+  rowLevel?: AccessLevel;
+  /** Положения всех прав при выбранной ступени — чтобы вид сверху показал
+   *  ровно то, что получит сотрудник. Нет — меняется одно право. */
+  previewLevels?: (chosen: AccessLevel) => Readonly<Record<string, AccessLevel>>;
+  /** Строка сейчас не переключается — почему. */
+  locked?: string;
   /** Прошлая ступень ещё сохраняется: вторая запись не ляжет поверх первой. */
   busy?: boolean;
   /** Последнее открытое право — держится и пока шторка уезжает. */
@@ -52,7 +63,7 @@ export function RightSheet({
   onClose: () => void;
 }) {
   const t = useThemeColors();
-  const level = block ? (levels[block.key] ?? block.levels[0] ?? "off") : "off";
+  const level = block ? (rowLevel ?? levels[block.key] ?? block.levels[0] ?? "off") : "off";
   /** Ступень, выбранная в шторке, но ещё не применённая. */
   const [chosen, setChosen] = useState<AccessLevel>(level);
 
@@ -63,11 +74,15 @@ export function RightSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- только на открытии и смене права
   }, [visible, block?.key]);
 
-  const shown: Readonly<Record<string, AccessLevel>> = block ? { ...levels, [block.key]: chosen } : levels;
+  const shown: Readonly<Record<string, AccessLevel>> = !block
+    ? levels
+    : previewLevels
+      ? previewLevels(chosen)
+      : { ...levels, [block.key]: chosen };
 
   const apply = () => {
     if (!block) return;
-    if (chosen === level) {
+    if (chosen === level || locked) {
       onClose();
       return;
     }
@@ -101,6 +116,14 @@ export function RightSheet({
       {block ? (
         <>
           <BlockPreview block={block} blocks={blocks} levels={shown} teamName={teamName} teamColor={teamColor} />
+          {locked ? (
+            <Text
+              maxFontSizeMultiplier={1.3}
+              style={{ paddingHorizontal: 20, paddingTop: 10, fontSize: 14, lineHeight: 19, color: t.sub }}
+            >
+              {locked}
+            </Text>
+          ) : null}
           <SelectList>
             {block.levels.map((step) => {
               const danger = stepDanger(block, step);
@@ -134,6 +157,10 @@ export function RightSheet({
                   }
                   onPress={() => {
                     if (step === chosen) return;
+                    if (locked) {
+                      haptics.warning();
+                      return;
+                    }
                     haptics.tap();
                     setChosen(step);
                   }}

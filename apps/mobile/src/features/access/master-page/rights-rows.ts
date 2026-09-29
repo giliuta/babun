@@ -7,6 +7,13 @@ import {
   type AccessRefusal,
   type MemberAccessMap,
 } from "../access-map";
+import {
+  compositeRow,
+  rowAnchor,
+  rowLevel as compositeLevel,
+  rowLock,
+  withCompositeBlocks,
+} from "./composite-rows";
 import { offeredBlocks } from "./rights-copy";
 import {
   CREATE_KEY,
@@ -69,6 +76,9 @@ export const MEMBER_REFUSAL_TEXT: Record<AccessRefusal, string> = {
 export interface RightsRow {
   block: AccessBlock;
   level: AccessLevel;
+  /** Почему строка стоит и не переключается («Цены видит, пока меняет
+   *  услуги»); нет — переключается. */
+  locked?: string;
 }
 
 export interface RightsSection {
@@ -106,13 +116,22 @@ export function rightsSections(
   // проверяет и не отказывает при записи: владелец ставил положение, видел
   // слово и не получал ничего. Список живых не зашит — он приходит реестром,
   // и оживший блок появляется строкой сам.
-  const blocks = offeredBlocks(allBlocks);
-  const byKey = new Map(blocks.map((block) => [block.key, block]));
+  const offered = offeredBlocks(allBlocks);
+  const byKey = new Map(offered.map((block) => [block.key, block]));
   const offeredKeys = new Set(byKey.keys());
   const read = (block: AccessBlock) =>
     levelOf(block, block.scope === "calendar" ? teamId : null);
+  /** Положение права реестра по ключу; нет такого живого — «закрыто». */
+  const get = (key: string): AccessLevel => {
+    const block = byKey.get(key);
+    return block ? read(block) : "off";
+  };
+  // Строки — блоками записи: у «Услуг», «Цен», «Времени» свои ступени
+  // (`composite-rows`).
+  const blocks = withCompositeBlocks(offered);
   // «Записи клиентов» говорят и за «Новые записи» (`recordsRowLevel`).
-  const rowLevel = (block: AccessBlock): AccessLevel => {
+  const rowLevelOf = (block: AccessBlock): AccessLevel => {
+    if (compositeRow(block.key)) return compositeLevel(block.key, get);
     if (block.key !== RECORDS_KEY) return read(block);
     const create = byKey.get(CREATE_KEY);
     return recordsRowLevel(read(block), create ? read(create) : "off");
@@ -131,12 +150,17 @@ export function rightsSections(
         .filter((block) => !isMergedRow(block.key, offeredKeys))
         .filter(
           (block) =>
-            !isBlockFolded(block.key, (parentKey) => {
+            !isBlockFolded(rowAnchor(block.key), (parentKey) => {
               const parent = byKey.get(parentKey);
               return parent ? read(parent) : "write";
             }),
         )
-        .map((block) => ({ block, level: rowLevel(block) }));
+        .map((block) => {
+          const locked = rowLock(block.key, get);
+          return locked
+            ? { block, level: rowLevelOf(block), locked }
+            : { block, level: rowLevelOf(block) };
+        });
       return { area: section.area, title: section.title, rows };
     })
     .filter((section) => section.rows.length > 0);
@@ -167,8 +191,32 @@ export function levelChanges(
   block: AccessBlock,
   level: AccessLevel,
   teamId: string | null,
+  /** Нынешние положения прав этой команды — строке из нескольких прав
+   *  («Услуги», «Цены», «Время») они решают, что именно меняется. */
+  current?: (key: string) => AccessLevel,
 ): AccessChange[] | null {
   if (block.scope === "calendar" && teamId === null) return null;
+  const composite = compositeRow(block.key);
+  if (composite) {
+    if (!composite.levels.includes(level)) return null;
+    const get = current ?? ((key: string) => blocks.find((b) => b.key === key)?.levels[0] ?? "off");
+    const picked = Object.entries(composite.changesFor(level, get)).flatMap(([key, realLevel]) => {
+      const real = blocks.find((candidate) => candidate.key === key);
+      return real ? blockChanges(blocks, real, realLevel, teamId) : [];
+    });
+    // Ничего не меняется («Цены» при правке услуг) — и на сервер ничего.
+    return picked.length > 0 ? uniqueChanges(picked) : null;
+  }
+  return blockChanges(blocks, block, level, teamId);
+}
+
+/** Одно право реестра: оно само, сброс его зависимых и спутники. */
+function blockChanges(
+  blocks: readonly AccessBlock[],
+  block: AccessBlock,
+  level: AccessLevel,
+  teamId: string | null,
+): AccessChange[] {
   const teamOf = (scope: AccessBlock["scope"]) => (scope === "calendar" ? teamId : null);
   // Спутники ступени — «Новые записи» у «Записей клиентов» (`companionLevels`).
   const companions: AccessChange[] = Object.entries(companionLevels(block.key, level)).flatMap(
@@ -177,11 +225,23 @@ export function levelChanges(
       return companion ? [{ block: key, team_id: teamOf(companion.scope), level: companionLevel }] : [];
     },
   );
-  return [
+  return uniqueChanges([
     { block: block.key, team_id: teamOf(block.scope), level },
     ...dependantResets(blocks, block, level, teamId),
     ...companions,
-  ];
+  ]);
+}
+
+/** Одно право в наборе — один раз (сервер набор с повтором отказывает):
+ *  остаётся первое, то есть то, что выбрано явно, а не сброс вслед за ним. */
+function uniqueChanges(changes: readonly AccessChange[]): AccessChange[] {
+  const seen = new Set<string>();
+  return changes.filter((change) => {
+    const id = `${change.block}@${change.team_id ?? ""}`;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 }
 
 

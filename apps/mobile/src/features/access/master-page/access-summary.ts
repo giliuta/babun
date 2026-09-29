@@ -29,6 +29,7 @@ export const CALENDAR_GROUP_TITLE: Record<CalendarGroup, string> = {
 export const RECORD_ROW_ORDER: readonly string[] = [
   "record.team",
   "record.label",
+  "record.when",
   "record.color",
   "record.client",
   "record.object",

@@ -41,10 +41,16 @@ export function useMemberRightsWriter(userId: string, blocks: readonly AccessBlo
     if (!blocks || setAccess.isPending) return;
     // Сбрасываются ВСЕ зависимые, и неживые: их уровень хранится и заработает,
     // когда блок оживёт (`levelChanges`).
-    const changes = levelChanges(blocks, block, level, teamId);
+    const previous = qc.getQueryData<MemberAccessMap>(key);
+    // Нынешние положения — строке из нескольких прав («Услуги», «Цены»,
+    // «Время»): от них зависит, что именно уйдёт на сервер.
+    const current = (blockKey: string): AccessLevel => {
+      const real = blocks.find((candidate) => candidate.key === blockKey);
+      return real && previous && teamId ? mapLevelOf(real, previous, teamId) : (real?.levels[0] ?? "off");
+    };
+    const changes = levelChanges(blocks, block, level, teamId, current);
     if (!changes) return;
     setSaving(block.key);
-    const previous = qc.getQueryData<MemberAccessMap>(key);
     if (previous) qc.setQueryData(key, withMemberChanges(previous, blocks, changes));
     setAccess.mutate(changes, {
       onError: (error) => {

@@ -115,7 +115,7 @@ function DraftRights({
       onSelectTeam={setActive}
       levelOf={visibleLevel(blocks, draft)}
       onPick={(block, level, teamId) =>
-        updateMasterDraft((currentDraft) => withLevel(currentDraft, block, level, teamId))
+        updateMasterDraft((currentDraft) => withLevel(currentDraft, block, level, teamId, blocks))
       }
       area={rightsAreaOf(area)}
       onPreview={() =>
@@ -181,7 +181,7 @@ function InviteRights({
       onSelectTeam={setActive}
       levelOf={visibleLevel(blocks, draft)}
       onPick={(block, level, teamId) => {
-        const next = withLevel(draft, block, level, teamId);
+        const next = withLevel(draft, block, level, teamId, blocks);
         if (next === draft) return;
         // Приглашение уходит целиком; кэш «Ждут ответа» меняется сразу и
         // возвращается при отказе (`useUpdateMasterInvitation`). Должность и

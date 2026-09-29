@@ -4,6 +4,7 @@
 export const RECORD_PREVIEW_KEYS: readonly string[] = [
   "record.team",
   "record.label",
+  "record.when",
   "record.color",
   "record.client",
   "record.object",

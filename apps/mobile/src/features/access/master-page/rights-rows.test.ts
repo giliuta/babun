@@ -82,6 +82,9 @@ describe("страница прав — какие строки видны", () 
   test("«Календарь и записи» скрыт — зависимые строки свёрнуты только в этом календаре", () => {
     let draft = toggleTeam(emptyMasterDraft("team-1"), "team-2");
     draft = withLevel(draft, block("calendar.records"), "read", "team-2");
+    // Оплата стоит под ценами (30.09): чтобы её строка была видна, цены
+    // открыты.
+    draft = withLevel(draft, block("record.amount"), "read", "team-2");
     const levelOf = (b: AccessBlock, teamId: string | null) => draftLevel(b, draft, teamId);
 
     const hidden = keysOf(rightsSections(REGISTRY, levelOf, "team-1"), "calendar");

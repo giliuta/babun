@@ -68,7 +68,10 @@ export function TemplateEditScreen({ id, onBack }: { id: string; onBack: () => v
       busyKey={savingKey}
       levelOf={(block: AccessBlock) => templateLevel(template, block)}
       onPick={(block: AccessBlock, level: AccessLevel) => {
-        const changes = levelChanges(blocks, block, level, TEMPLATE_TEAM);
+        const changes = levelChanges(blocks, block, level, TEMPLATE_TEAM, (key) => {
+          const real = blocks.find((candidate) => candidate.key === key);
+          return real ? templateLevel(template, real) : "off";
+        });
         if (!changes) return;
         setSavingKey(block.key);
         update.mutate(

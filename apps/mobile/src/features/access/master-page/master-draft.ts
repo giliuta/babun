@@ -5,6 +5,7 @@ import {
   type AccessChange,
   type AccessLevel,
 } from "../access-map";
+import { compositeRow } from "./composite-rows";
 import { offeredBlocks } from "./rights-copy";
 
 // НОВЫЙ МАСТЕР — ЧЕРНОВИК КАРТОЧКИ (владелец 15.09: «„Добавить мастера" —
@@ -126,6 +127,7 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "calendar.events",
     "calendar.schedule",
     "record.status",
+    "record.team",
     "record.client",
     "record.object",
     "record.services",
@@ -149,6 +151,11 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "finance.documents",
   ],
   clients: ["clients.scope", "clients.contacts"],
+  // ЦЕПОЧКА ВНУТРИ ЗАПИСИ (владелец 30.09: «продумай логическую цепочку»):
+  // скрыты услуги — не видно и цен; скрыты цены — оплату не принять, сколько
+  // брать, не видно. Строки сворачиваются, положения сбрасываются.
+  "record.services": ["record.amount", "record.payment"],
+  "record.amount": ["record.payment"],
 };
 
 /** «ЗАПИСИ КЛИЕНТОВ» ВЕДУТ «НОВЫЕ ЗАПИСИ» (владелец 30.09: «видит он записи,
@@ -191,23 +198,22 @@ export function isMergedRow(key: string, offeredKeys: ReadonlySet<string>): bool
   );
 }
 
-/** Главный блок зависимого, `null` — блок ни от кого не зависит. */
-export function parentBlockOf(key: string): string | null {
-  for (const [parent, dependants] of Object.entries(DEPENDANT_BLOCKS)) {
-    if (dependants.includes(key)) return parent;
-  }
-  return null;
+/** Главные блоки зависимого — все, от кого он зависит («Оплата» — от
+ *  «Записей клиентов», «Услуг» и «Цен»). Пусто — ни от кого. */
+export function parentBlocksOf(key: string): string[] {
+  return Object.entries(DEPENDANT_BLOCKS)
+    .filter(([, dependants]) => dependants.includes(key))
+    .map(([parent]) => parent);
 }
 
-/** Строка блока свёрнута: её главный блок скрыт. `parentLevel` — положение
- *  главного в том же календаре (или в компании); один и тот же вопрос задают
- *  и черновик, и карта живого сотрудника. */
+/** Строка блока свёрнута: скрыт хоть один её главный блок. `parentLevel` —
+ *  положение главного в том же календаре (или в компании); один и тот же
+ *  вопрос задают и черновик, и карта живого сотрудника. */
 export function isBlockFolded(
   key: string,
   parentLevel: (parentKey: string) => AccessLevel,
 ): boolean {
-  const parent = parentBlockOf(key);
-  return parent !== null && parentLevel(parent) === "off";
+  return parentBlocksOf(key).some((parent) => parentLevel(parent) === "off");
 }
 
 function withoutKeys(
@@ -224,6 +230,36 @@ function withoutKeys(
  *  Положения, которого у блока нет, не бывает. Умолчание не хранится, а скрытый
  *  главный блок сбрасывает свои зависимые. */
 export function withLevel(
+  draft: MasterDraft,
+  block: AccessBlock,
+  level: AccessLevel,
+  teamId: string | null,
+  /** Реестр — нужен строкам из нескольких прав («Услуги», «Цены», «Время»):
+   *  их ступень раскладывается на права реестра (`composite-rows`). */
+  registry?: readonly AccessBlock[],
+): MasterDraft {
+  // Без реестра — одно право, как раньше; с реестром строка раскладывается
+  // на права, которые за ней стоят.
+  const composite = registry ? compositeRow(block.key) : undefined;
+  if (composite && registry) {
+    if (!composite.levels.includes(level)) return draft;
+    const real = (key: string) => registry.find((candidate) => candidate.key === key);
+    const get = (key: string): AccessLevel => {
+      const found = real(key);
+      return found ? draftLevel(found, draft, teamId) : "off";
+    };
+    let next = draft;
+    for (const [key, realLevel] of Object.entries(composite.changesFor(level, get))) {
+      const found = real(key);
+      if (found) next = applyLevel(next, found, realLevel, teamId);
+    }
+    return next;
+  }
+  return applyLevel(draft, block, level, teamId);
+}
+
+/** Положение одного права реестра в черновике. */
+function applyLevel(
   draft: MasterDraft,
   block: AccessBlock,
   level: AccessLevel,

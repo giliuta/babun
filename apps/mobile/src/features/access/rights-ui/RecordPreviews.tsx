@@ -9,6 +9,7 @@ import { ClientBlock } from "@/features/appointments/ClientBlock";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/PaymentTiles";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
+import { WhenRow } from "@/features/appointments/BookingSummary";
 import { IdentityCard, TeamLabelRow } from "@/features/appointments/TeamLabelRow";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 
@@ -82,6 +83,21 @@ export function RecordPreview({
               onPress={on(rb.label === "write")}
               accessibilityLabel="Метка: Лимассол"
               accessibilityHint="Открывает выбор метки"
+            />
+          </View>
+        </PreviewFrame>
+      );
+    // «Время» видно всегда; переносит — «Перенос записей» (то же право).
+    case "record.when":
+      return (
+        <PreviewFrame state={levelState(rb.when)}>
+          <View className="mx-4 mt-2">
+            <WhenRow
+              date="2026-10-01"
+              timeStart="13:30"
+              timeEnd="16:00"
+              duration={150}
+              onPress={on(rb.when === "write")}
             />
           </View>
         </PreviewFrame>
