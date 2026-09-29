@@ -24,7 +24,6 @@ export function AgendaView({
   sections,
   todayYmd,
   tomorrowYmd,
-  horizonDays,
   clientName,
   serviceSummary,
   onEdit,
@@ -38,14 +37,11 @@ export function AgendaView({
   refreshing,
   onRefresh,
   onCreate,
-  lastBefore,
 }: {
   sections: AgendaSection[];
   /** Business-timezone anchors for the «Сегодня»/«Завтра» headers. */
   todayYmd: string;
   tomorrowYmd: string;
-  /** How far the feed looks ahead — only used for the empty-state copy. */
-  horizonDays: number;
   clientName: (a: Appointment) => string;
   serviceSummary: (a: Appointment) => string;
   onEdit: (a: Appointment) => void;
@@ -74,11 +70,23 @@ export function AgendaView({
    *  исправлять: кнопку создать запись внизу или что-то полезное»). Кому
    *  создавать нельзя — не передаётся. */
   onCreate?: () => void;
-  /** «пт, 26 сентября» — последняя запись до окна ленты, чтобы пустота не
-   *  выглядела как «данных нет». */
-  lastBefore?: string | null;
 }) {
   const t = useThemeColors();
+  // ПУСТОЙ МЕСЯЦ — ЭКРАН, А НЕ СТРОКА ЛЕНТЫ (владелец 2026-09-29: «кнопка
+  // не на своём месте, выше, чем положено»). Внутри ленты пустое состояние
+  // наследовало её отступы — 16 сверху и 96 снизу, — и «Новая запись» стояла
+  // над своим местом. Снаружи ленты кнопка встаёт туда же, где футер у всех
+  // экранов. Слова — одни: месяц уже назван в шапке, а «ближайшие 60 дней» и
+  // «последняя была …» владельцу не нужны.
+  if (sections.length === 0) {
+    return (
+      <EmptyState
+        fill
+        title="Записей нет"
+        action={onCreate ? { label: "Новая запись", onPress: onCreate } : undefined}
+      />
+    );
+  }
   return (
     <View style={{ flex: 1 }}>
     <FlatList
@@ -115,18 +123,6 @@ export function AgendaView({
           t={t}
         />
       )}
-      ListEmptyComponent={
-        <EmptyState
-          fill
-          title="Записей не запланировано"
-          subtitle={
-            lastBefore
-              ? `Ближайшие ${horizonDays} дней пусты\nПоследняя была ${lastBefore}`
-              : `Ближайшие ${horizonDays} дней пусты`
-          }
-          action={onCreate ? { label: "Новая запись", onPress: onCreate } : undefined}
-        />
-      }
     />
       {/* «СПИСОК» — ДЛЯ ПРОСМОТРА (владелец 24.09). Постоянной кнопки
           создания нет; только у пустой ленты — «Новая запись» внизу

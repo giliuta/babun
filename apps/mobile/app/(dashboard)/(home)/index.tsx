@@ -209,7 +209,6 @@ import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { useSession } from "@/providers/SessionProvider";
 
 // Agenda horizon — web AgendaView parity («what's next», not «this month»).
-const AGENDA_HORIZON_DAYS = 60;
 // Персист выбранного вида и команды (mode/teamId) между запусками — ПО
 // КОМПАНИИ — НО НЕ ВСЁ.
 //
@@ -1554,20 +1553,15 @@ export default function CalendarTab() {
     [financeAppts, weekYmds],
   );
 
-  // Agenda — «what's next»: from the selected day forward 60 days
-  // (web AgendaView HORIZON_DAYS), not the cursor month.
-  // Последняя запись ДО окна ленты — подпись пустого «Списка».
-  const agendaLastBefore = useMemo(() => {
-    const startKey = formatYMD(day);
-    let last: string | null = null;
-    for (const a of visibleAppts) {
-      if (a.date < startKey && (!last || a.date > last)) last = a.date;
-    }
-    return last ? humanDay(last) : null;
-  }, [visibleAppts, day]);
+  // «СПИСОК» — ВЕСЬ ВЫБРАННЫЙ МЕСЯЦ (владелец 2026-09-29: «если мы выбираем
+  // сентябрь, значит весь список по сентябрю, не ближайшее»). Шапка называет
+  // месяц, как у недели и месяца; прежние «ближайшие 60 дней» от выбранного
+  // дня путали: шапка говорила одно, лента показывала другое.
   const agendaSections = useMemo(() => {
-    const startKey = formatYMD(day);
-    const endKey = formatYMD(addDays(day, AGENDA_HORIZON_DAYS));
+    const startKey = formatYMD(monthAnchor);
+    const endKey = formatYMD(
+      addDays(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 1), -1),
+    );
     const filtered = visibleAppts
       .filter((a) => a.date >= startKey && a.date <= endKey)
       .sort((a, b) =>
@@ -1582,7 +1576,7 @@ export default function CalendarTab() {
       byDate.set(a.date, arr);
     }
     return [...byDate.entries()].map(([d, data]) => ({ title: d, data }));
-  }, [visibleAppts, day]);
+  }, [visibleAppts, monthAnchor]);
 
   // Тап по свободному слоту / действие из агенды / «Записать» с карточки открывает
   // ОТДЕЛЬНЫЙ экран /book (реальный маршрут, а не шит-модал поверх попапа):
@@ -2198,15 +2192,12 @@ export default function CalendarTab() {
     });
   };
 
-  // Неделя на стыке месяцев называет оба (`header-title.ts`).
-  // «Список» — ближайшие 60 дней, а не месяц (29.09): название говорит, что
-  // в нём.
+  // Неделя на стыке месяцев называет оба (`header-title.ts`). «Список» —
+  // месяц, как и его лента (владелец 2026-09-29).
   const headerTitle =
-    mode === "agenda"
-      ? "Ближайшие"
-      : mode === "week" && weekDays.length > 0
+    mode === "week" && weekDays.length > 0
       ? weekTitle(weekDays[0], weekDays[weekDays.length - 1])
-      : monthTitle(mode === "month" ? monthAnchor : day);
+      : monthTitle(mode === "month" || mode === "agenda" ? monthAnchor : day);
 
   const isOnToday =
     mode === "month"
@@ -2954,7 +2945,6 @@ export default function CalendarTab() {
           sections={agendaSections}
           todayYmd={todayYmd}
           tomorrowYmd={tomorrowYmd}
-          horizonDays={AGENDA_HORIZON_DAYS}
           clientName={clientName}
           serviceSummary={serviceSummaryFor}
           onEdit={openEdit}
@@ -2985,7 +2975,6 @@ export default function CalendarTab() {
                 }
               : undefined
           }
-          lastBefore={agendaLastBefore}
         />
       ) : mode === "week" ? (
         <>
