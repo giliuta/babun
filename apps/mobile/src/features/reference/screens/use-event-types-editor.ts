@@ -48,13 +48,13 @@ export function useEventTypesEditor(teamId: string | null) {
       notify(failure, "Сначала заведите календарь.");
       return;
     }
+    // Шторка закрывается сразу — список уже обновлён оптимистично; отказ
+    // сервера откатывает его и говорит, что не вышло.
     save.mutate(
       { types: next.map((type, i) => ({ ...type, order: i })), removeIds, teamId },
-      {
-        onSuccess: () => done?.(),
-        onError: (e) => notify(failure, e.message),
-      },
+      { onError: (e) => notify(failure, e.message) },
     );
+    done?.();
   };
 
   const submit = (draft: EventTypeDraft) => {

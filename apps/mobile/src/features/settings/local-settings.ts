@@ -629,6 +629,21 @@ export function useSavePersonalEventTypes() {
       }
       return { list: list.map((t) => ({ ...t, teamId })), teamId };
     },
+    // ОПТИМИСТИЧНО (аудит 29.09: «создание типа крутится 4–6 с»): список на
+    // экране меняется сразу, сервер догоняет; отказ возвращает прежний.
+    onMutate: async ({ types, teamId }) => {
+      await qc.cancelQueries({ queryKey: mutationKey });
+      const prev = qc.getQueryData<PersonalEventType[]>(mutationKey);
+      const all = prev ?? [];
+      qc.setQueryData<PersonalEventType[]>(mutationKey, [
+        ...all.filter((t) => t.teamId && t.teamId !== teamId),
+        ...types.map((t) => ({ ...t, teamId })),
+      ]);
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(mutationKey, ctx.prev);
+    },
     onSuccess: ({ list, teamId }) => {
       // Cache writes happen only after every canonical server write succeeds.
       // В кэше справочник ВСЕЙ компании: заменяем типы только этой команды.

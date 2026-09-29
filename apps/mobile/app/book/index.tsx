@@ -3570,6 +3570,8 @@ export default function BookScreen() {
           } as Href)
         }
         settingsLabel="Типы событий"
+        // Пустой справочник — лист не немой (аудит 29.09).
+        emptyText="Типов пока нет — заведите их значком справа"
         onClose={() => setEventTypeSheetOpen(false)}
       />
       <SelfReminderSheet
