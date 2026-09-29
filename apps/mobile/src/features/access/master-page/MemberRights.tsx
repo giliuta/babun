@@ -15,7 +15,7 @@ import {
 } from "../access-map";
 import {
   useAccessBlocks,
-  useCalendarMembers,
+  useCompanyMembers,
   useMemberAccess,
   useSetMemberAccess,
 } from "../queries";
@@ -55,7 +55,7 @@ export function MemberRights({
   const tenantId = useTenantId();
   const blocksQuery = useAccessBlocks();
   const accessQuery = useMemberAccess(userId);
-  const membersQuery = useCalendarMembers(teamId ?? undefined);
+  const membersQuery = useCompanyMembers();
   const preview = usePreview();
   const setAccess = useSetMemberAccess(userId);
   const teamsQuery = useTeams();

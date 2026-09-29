@@ -30,7 +30,7 @@ import { waitSheetExit } from "../InviteMemberSheet";
 import {
   AccessRequestError,
   useAccessBlocks,
-  useCalendarMembers,
+  useCompanyMembers,
   useMemberAccess,
   useSetMemberAccess,
   useSetMemberCalendars,
@@ -102,7 +102,7 @@ export function MasterMemberCard({
   const teamsQuery = useTeams();
   const blocksQuery = useAccessBlocks();
   const accessQuery = useMemberAccess(userId);
-  const membersQuery = useCalendarMembers(teamId ?? undefined);
+  const membersQuery = useCompanyMembers();
   const mastersQuery = useMasters({ includeInactive: true });
   // Записи компании уже греются календарём — счёт берётся из того же кэша.
   const appts = useAppointments();

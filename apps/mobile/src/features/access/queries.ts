@@ -123,6 +123,22 @@ export function useCalendarMembers(teamId: string | undefined) {
   });
 }
 
+/** ВСЕ ЛЮДИ КОМПАНИИ (`list_members` без календаря). Страница сотрудника ищет
+ *  человека по нему самому: поиск в календаре из адреса терял его, когда
+ *  страницу открывали не из календаря (почта пустая, меню «⋯» пропадало). */
+export function useCompanyMembers() {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: calendarMembersQueryKey(tenantId, null),
+    enabled: !!tenantId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_members", {});
+      if (error) throw new AccessRequestError(error);
+      return parseMembers(data);
+    },
+  });
+}
+
 /** Карта прав одного сотрудника глазами владельца. */
 export function useMemberAccess(userId: string | undefined) {
   const tenantId = useTenantId();
