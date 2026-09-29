@@ -64,7 +64,7 @@ export function viewSections({
   // «Календарь», «Запись» (в порядке блоков страницы записи), «Финансы»,
   // «Клиенты». В реестре первые два — один раздел «Записи».
   const calendarRows = registry.flatMap((section) => section.rows);
-  const team: ViewSection[] = CALENDAR_GROUPS.filter((each) => !group || each === group).map((each) => ({
+  const team: ViewSection[] = CALENDAR_GROUPS.map((each) => ({
     key: each as string,
     area: (each === "finance" ? "finance" : each === "clients" ? "clients" : "calendar") as RightsArea,
     title: CALENDAR_GROUP_TITLE[each],
@@ -85,24 +85,39 @@ export function viewSections({
         },
       ]
     : [];
-  if (group) return groupPage(group, team[0]);
-  return [...team, ...company].filter((section) => section.rows.length > 0);
+  if (group) return groupPage(group, team);
+  // Раздел несёт те строки, что стоят на его странице: право, переехавшее
+  // блоком в чужой раздел («Доходы и расходы» — в «Главное» «Календаря»),
+  // и в блоке «Доступ», и на странице шаблона стоит там же.
+  const paged = team.map((section) => ({
+    ...section,
+    rows: groupPage(section.key as CalendarGroup, team).flatMap((part) => part.rows),
+  }));
+  return [...paged, ...company].filter((section) => section.rows.length > 0);
 }
 
-/** Страница одного раздела — его блоками (`SECTION_BLOCKS`). Шапка пустая —
- *  карточка без шапки. */
-function groupPage(group: CalendarGroup, section: ViewSection | undefined): ViewSection[] {
-  if (!section) return [];
+/** Страница одного раздела — его блоками (`SECTION_BLOCKS`). Блок берёт свои
+ *  права из любого раздела и в своём порядке; остальные права раздела —
+ *  последней карточкой без шапки, кроме тех, что увёл блок другого раздела. */
+function groupPage(group: CalendarGroup, sections: readonly ViewSection[]): ViewSection[] {
+  const own = sections.find((section) => section.key === group);
+  if (!own) return [];
+  const pool = sections.flatMap((section) => section.rows);
   const blocks = SECTION_BLOCKS[group] ?? [];
   const parts: ViewSection[] = blocks.map((block) => ({
     key: `${group}.${block.key}`,
-    area: section.area,
+    area: own.area,
     title: block.title,
-    rows: section.rows.filter((row) => block.keys.includes(row.block.key)),
+    rows: block.keys.flatMap((key) => pool.filter((row) => row.block.key === key)),
   }));
   const placed = new Set(parts.flatMap((part) => part.rows.map((row) => row.block.key)));
-  const rest = section.rows.filter((row) => !placed.has(row.block.key));
-  return [...parts, { key: `${group}.rest`, area: section.area, title: "", rows: rest }].filter(
+  const claimed = new Set(
+    Object.entries(SECTION_BLOCKS)
+      .filter(([other]) => other !== group)
+      .flatMap(([, others]) => (others ?? []).flatMap((block) => block.keys)),
+  );
+  const rest = own.rows.filter((row) => !placed.has(row.block.key) && !claimed.has(row.block.key));
+  return [...parts, { key: `${group}.rest`, area: own.area, title: "", rows: rest }].filter(
     (part) => part.rows.length > 0,
   );
 }

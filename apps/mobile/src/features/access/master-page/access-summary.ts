@@ -73,10 +73,19 @@ const RECORD_KINDS: readonly string[] = [
 
 export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock[]>> = {
   calendar: [
+    // Доходы и расходы — в «Главном» (владелец 30.09: «переходим к доход
+    // расход — в главный»): полоса денег под календарём и деньги дня. После
+    // среза 2а это два права — «Доходы» и «Расходы», — место у них то же.
     {
       key: "main",
       title: "Главное",
-      keys: CALENDAR_ROW_ORDER.filter((key) => !RECORD_KINDS.includes(key)),
+      keys: [
+        "calendar.day_labels",
+        "finance.operations",
+        "finance.income",
+        "finance.expense",
+        "calendar.schedule",
+      ],
     },
     // Записи клиентов и событий, перенос и отмена — своим блоком «Записи»
     // (владелец 30.09: «создай второй блок — „Записи"»; «событие тоже

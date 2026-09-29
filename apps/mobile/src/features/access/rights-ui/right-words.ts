@@ -67,7 +67,9 @@ const STEP: Record<string, Words> = {
   // «Ведёт своих клиентов»).
   "finance.income": { off: "Не видит", read: "Видит", write: "Добавляет", full: "Правит всё" },
   "finance.expense": { off: "Не видит", read: "Видит", write: "Добавляет", full: "Правит всё" },
-  "finance.operations": { off: "Не видит", read: "Видит", write: "Ведёт" },
+  // Доходы и расходы в «Главном» «Календаря» (владелец 30.09: «то же самое —
+  // видит, не видит, меняет»).
+  "finance.operations": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
   "finance.accounts": { off: "Не видит", read: "Видит", write: "Управляет" },
   "finance.debts": { off: "Не видит", read: "Видит", write: "Принимает оплату" },
   clients: { off: "Не видит", read: "Видит", write: "Ведёт" },
