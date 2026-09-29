@@ -29,6 +29,8 @@ import {
 } from "../queries";
 import { removalMessage, upcomingWorkCount } from "./removal-impact";
 import { calendarGroupLine } from "./access-summary";
+import { useAccessTemplates } from "../templates/queries";
+import { templateChanges } from "../templates/templates";
 import { MasterPersonalBlocks, MasterWorkBlock } from "./MasterProfileBlocks";
 import { EmployeeNoteBlock } from "./EmployeeNoteBlock";
 import { contactsHolderOf, useMasterProfileWrite } from "./use-profile-write";
@@ -92,6 +94,7 @@ export function MasterMemberCard({
   const businessNow = useBusinessNow();
   const updateMaster = useUpdateMaster();
   const remove = useRemoveTenantMember();
+  const templatesQuery = useAccessTemplates();
   const setCalendars = useSetMemberCalendars(userId);
   const setAccess = useSetMemberAccess(userId);
   const preview = usePreview();
@@ -215,7 +218,10 @@ export function MasterMemberCard({
           toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
         }
       };
-      if (!source) {
+      // ШАБЛОНЫ ДОСТУПА — ПЕРВЫМИ (владелец 29.09): свой набор ставится
+      // копией одним тапом, дальше правится точечно.
+      const templates = templatesQuery.data ?? [];
+      if (!source && templates.length === 0) {
         await applyStarter();
         return;
       }
@@ -223,13 +229,27 @@ export function MasterMemberCard({
       // не показывает: вопрос, поднятый по таймеру, пока лист ещё уезжал,
       // молча терялся (снято 23.09). Ждём `onExited` самого листа.
       await closeCalendarsSheet();
-      const sourceName = teamNameOf(source) ?? "первом календаре";
+      const sourceName = source ? (teamNameOf(source) ?? "первом календаре") : "";
       const targetName = teamNameOf(id) ?? "новом календаре";
-      const picked = await chooseOption(`Права в «${targetName}»`, [
-        { label: `Как в «${sourceName}»` },
+      const answer = await chooseOption(`Права в «${targetName}»`, [
+        ...templates.map((template) => ({ label: `Шаблон «${template.name}»` })),
+        ...(source ? [{ label: `Как в «${sourceName}»` }] : []),
         { label: "Выставлю сам" },
       ]);
-      if (picked === 0) {
+      const template = answer !== null && answer < templates.length ? templates[answer] : undefined;
+      if (template) {
+        try {
+          await setAccess.mutateAsync(templateChanges(blocks, template, id));
+          toast(`Права по шаблону «${template.name}»`);
+        } catch (error) {
+          toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
+        }
+        return;
+      }
+      // Дальше ответы — как прежде: 0 — «Как в …» (если есть), 1 — «Выставлю сам».
+      const rest = answer === null ? null : answer - templates.length;
+      const picked = source ? rest : rest === null ? null : rest + 1;
+      if (picked === 0 && source) {
         try {
           await setAccess.mutateAsync(copyCalendarLevels(blocks, draft, source, id));
           toast(`Права как в «${sourceName}»`);

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
 
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -104,7 +104,10 @@ export function MasterRightsView({
   title = "Права",
   onlyCalendar = false,
   onlyCompany = false,
+  top,
 }: {
+  /** Над разделами: имя шаблона или строка «Шаблон» у прав команды. */
+  top?: ReactNode;
   /** Заголовок: имя календаря, когда страница — права ОДНОГО календаря. */
   title?: string;
   /** Только строки этого календаря, без ленты чипов и без строк компании
@@ -144,8 +147,10 @@ export function MasterRightsView({
   const withChips = chips.length >= 2 && !onlyCalendar && !onlyCompany;
   // Выбранный календарь — только из тех, у кого есть чип: скрытый календарь
   // (архив) правился бы без подписи, а сервер молча снял бы правку.
+  // Страница ОДНОЙ команды (или шаблона) берёт свой календарь как есть: в
+  // шаблоне календаря в ленте нет вовсе.
   const activeId =
-    activeTeamId !== null && chips.some((chip) => chip.id === activeTeamId)
+    activeTeamId !== null && (onlyCalendar || chips.some((chip) => chip.id === activeTeamId))
       ? activeTeamId
       : (chips[0]?.id ?? null);
   const registrySections = rightsSections(blocks, levelOf, onlyCompany ? null : activeId)
@@ -202,6 +207,7 @@ export function MasterRightsView({
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 48 }}
       >
+        {top ?? null}
         {sections.map((section) => (
           <View
             key={section.key}

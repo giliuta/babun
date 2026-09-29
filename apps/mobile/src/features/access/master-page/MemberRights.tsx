@@ -9,6 +9,7 @@ import { useTenantId } from "@/lib/tenant";
 import {
   levelOf as mapLevelOf,
   type AccessBlock,
+  type AccessChange,
   type AccessLevel,
   type AccessRefusal,
   type MemberAccessMap,
@@ -20,6 +21,8 @@ import {
   useSetMemberAccess,
 } from "../queries";
 import { memberRefusal } from "./MasterMemberCard";
+import { TeamTemplateBlock } from "../templates/TeamTemplateBlock";
+import { templateBlocks, templateChanges, type AccessTemplate } from "../templates/templates";
 import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRightsView";
 import {
   MEMBER_REFUSAL_TEXT,
@@ -119,8 +122,49 @@ export function MemberRights({
     });
   };
 
+  // ШАБЛОН — КОПИЕЙ В ЭТУ КОМАНДУ (владелец 29.09). Одна пачка в
+  // `set_member_access`, оптимистично; «Отменить» возвращает прежние положения
+  // тех же строк.
+  const focusTeam = focus?.kind === "calendar" ? focus.teamId : null;
+  const applyTemplate = (template: AccessTemplate) => {
+    if (!focusTeam || setAccess.isPending) return;
+    const key = memberAccessQueryKey(tenantId, userId);
+    const previous = qc.getQueryData<MemberAccessMap>(key) ?? map;
+    const undo: AccessChange[] = templateBlocks(blocks).map((block) => ({
+      block: block.key,
+      team_id: focusTeam,
+      level: mapLevelOf(block, previous, focusTeam),
+    }));
+    const changes = templateChanges(blocks, template, focusTeam);
+    qc.setQueryData(key, withMemberChanges(previous, blocks, changes));
+    setAccess.mutate(changes, {
+      onSuccess: () =>
+        toast(`Права по шаблону «${template.name}»`, "success", {
+          label: "Отменить",
+          onPress: () =>
+            setAccess.mutate(undo, {
+              onError: (error) => toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error"),
+            }),
+        }),
+      onError: (error) => {
+        qc.setQueryData(key, previous);
+        toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
+      },
+    });
+  };
+
   return (
     <MasterRightsView
+      top={
+        focusTeam ? (
+          <TeamTemplateBlock
+            blocks={blocks}
+            levelOf={(block) => mapLevelOf(block, map, focusTeam)}
+            onApply={applyTemplate}
+            busy={setAccess.isPending}
+          />
+        ) : undefined
+      }
       subtitle={subtitle}
       onBack={onBack}
       blocks={blocks}
