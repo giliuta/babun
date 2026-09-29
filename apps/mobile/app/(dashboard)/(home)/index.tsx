@@ -2190,8 +2190,12 @@ export default function CalendarTab() {
   };
 
   // Неделя на стыке месяцев называет оба (`header-title.ts`).
+  // «Список» — ближайшие 60 дней, а не месяц (29.09): название говорит, что
+  // в нём.
   const headerTitle =
-    mode === "week" && weekDays.length > 0
+    mode === "agenda"
+      ? "Ближайшие"
+      : mode === "week" && weekDays.length > 0
       ? weekTitle(weekDays[0], weekDays[weekDays.length - 1])
       : monthTitle(mode === "month" ? monthAnchor : day);
 

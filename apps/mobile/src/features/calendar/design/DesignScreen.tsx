@@ -197,14 +197,17 @@ export function DesignScreen() {
         {tab === "record" ? (
           <>
 
+            {/* ОБЯЗАТЕЛЬНЫЕ — ОДНОЙ СТРОКОЙ СВЕРХУ (29.09): строки с замком
+                растягивали список и спорили с теми, что правда выключаются. */}
             <SectionCard title="Блоки записи">
-              {BOOKING_BLOCKS.map((block) => (
+              <AlwaysLine blocks={BOOKING_BLOCKS} />
+              {BOOKING_BLOCKS.filter((b) => !b.pinned).map((block) => (
                 <BlockCell
                   key={block.id}
                   label={block.label}
                   icon={BLOCK_ICON[block.id] ?? Bookmark}
-                  on={block.pinned ? true : recordOn(block.id)}
-                  locked={!!block.pinned}
+                  on={recordOn(block.id)}
+                  locked={false}
                   onToggle={() => toggleRecordBlock.mutate(block.id)}
                 />
               ))}
@@ -230,7 +233,8 @@ export function DesignScreen() {
         ) : (
           <>
             <SectionCard title="Блоки события">
-              {EVENT_BLOCKS.map((block) => {
+              <AlwaysLine blocks={EVENT_BLOCKS} />
+              {EVENT_BLOCKS.filter((b) => !b.pinned).map((block) => {
                 // Объекта события нет, пока у команды выключены объекты.
                 const noObjects = block.id === "object" && !objectsOn;
                 return (
@@ -238,8 +242,8 @@ export function DesignScreen() {
                     key={block.id}
                     label={block.label}
                     icon={BLOCK_ICON[block.id] ?? Bookmark}
-                    on={block.pinned ? true : !noObjects && eventOn(block.id)}
-                    locked={!!block.pinned || noObjects}
+                    on={!noObjects && eventOn(block.id)}
+                    locked={noObjects}
                     onToggle={() => toggleEventBlock.mutate(block.id)}
                   />
                 );
@@ -423,5 +427,29 @@ function BlockCell({
         <Check size={18} strokeWidth={2.6} color={t.accent} />
       ) : null}
     </Pressable>
+  );
+}
+
+/** «Всегда: команда, время, клиент, услуги» — обязательные блоки формы одной
+ *  тихой строкой над выключаемыми. */
+function AlwaysLine({ blocks }: { blocks: readonly { label: string; pinned?: boolean }[] }) {
+  const t = useThemeColors();
+  const names = blocks.filter((b) => b.pinned).map((b) => b.label.toLowerCase());
+  if (names.length === 0) return null;
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        paddingHorizontal: 16,
+        paddingBottom: 10,
+      }}
+    >
+      <Lock size={14} strokeWidth={2.2} color={t.faint} />
+      <Text maxFontSizeMultiplier={1.3} style={{ flex: 1, fontSize: 14, color: t.sub }}>
+        Всегда: {names.join(", ")}
+      </Text>
+    </View>
   );
 }
