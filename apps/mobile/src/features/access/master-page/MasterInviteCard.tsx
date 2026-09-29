@@ -27,7 +27,6 @@ import { useUpdateMasterInvitation } from "./invitation-api";
 import { invitationRefusalText, isInvitationGone } from "./invitation-contract";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import {
-  clientsRightsLine,
   applyPickedCalendars,
   draftFromInvitation,
   invitationCarriesCardFields,
@@ -39,7 +38,7 @@ import {
 } from "./master-draft";
 import { calendarGroupLine } from "./access-summary";
 import { rightsFocusQuery } from "./rights-focus";
-import { RIGHTS_AREAS, areaLevelsOf, liveAreasOf } from "./rights-rows";
+import { areaLevelsOf, companyAreasOf } from "./rights-rows";
 import { waitSubtitle } from "../invitation-wait";
 
 // ПРИГЛАШЕНИЕ БЕЗ ОТВЕТА — ТА ЖЕ КАРТОЧКА МАСТЕРА (владелец 15.09: всё, что
@@ -259,13 +258,12 @@ export function MasterInviteCard({
         // рисовало все четыре раздела, включая «Календарь» и «Компанию», где
         // нет ни одного живого блока: тап открывал страницу, на которой
         // такого раздела нет вовсе.
-        liveAreas={liveAreasOf(blocks, RIGHTS_AREAS)}
+        liveAreas={companyAreasOf(blocks)}
         areaLevels={areaLevelsOf(blocks, draft)}
         // Как у сотрудника (STORY-087): календари строками со своими правами,
         // клиенты — «Правами в компании» со сводкой словами.
         showCalendars
         groupLine={(id, group) => calendarGroupLine(blocks, draft, id, group)}
-        areaValues={{ clients: clientsRightsLine(blocks, draft) }}
         onOpenCalendarRights={(id) =>
           router.push(
             `/cabinet/people/${invitationSegment(row.id)}/rights?${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,

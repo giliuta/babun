@@ -9,14 +9,21 @@ import { offeredBlocks } from "./rights-copy";
 // перенос, события, метки дня, график), что в ЗАПИСИ (клиент, объект,
 // услуги, оплата…) и что в ФИНАНСАХ. Группа — по началу ключа блока.
 
-export type CalendarGroup = "calendar" | "record" | "finance";
+export type CalendarGroup = "calendar" | "record" | "finance" | "clients";
 
-export const CALENDAR_GROUPS: readonly CalendarGroup[] = ["calendar", "record", "finance"];
+export const CALENDAR_GROUPS: readonly CalendarGroup[] = ["calendar", "record", "finance", "clients"];
+
+/** Блок в разделе: «clients» — сам блок `clients` и его `clients.*`. */
+export function inGroup(key: string, group: CalendarGroup): boolean {
+  return key === group || key.startsWith(`${group}.`);
+}
 
 export const CALENDAR_GROUP_TITLE: Record<CalendarGroup, string> = {
   calendar: "Календарь",
   record: "Запись",
   finance: "Финансы",
+  // С 29.09 клиенты — право команды (миграция `clients_rights_per_team`).
+  clients: "Клиенты",
 };
 
 /** Родительный падеж — для «без клиента и суммы». */
@@ -40,6 +47,8 @@ const GENITIVE: Record<string, string> = {
   "finance.operations": "операций",
   "finance.accounts": "счетов",
   "finance.debts": "долгов",
+  clients: "клиентов",
+  "clients.contacts": "телефонов",
 };
 
 /** ПРАВА ЗАПИСИ — В ПОРЯДКЕ БЛОКОВ СТРАНИЦЫ ЗАПИСИ (`BOOKING_BLOCKS`:
@@ -76,7 +85,7 @@ export function orderGroupRows<T extends { block: { key: string } }>(
 /** Живые календарные блоки группы, в порядке реестра. */
 export function groupBlocks(blocks: readonly AccessBlock[], group: CalendarGroup): AccessBlock[] {
   return offeredBlocks(blocks).filter(
-    (block) => block.scope === "calendar" && !block.ownerOnly && block.key.startsWith(`${group}.`),
+    (block) => block.scope === "calendar" && !block.ownerOnly && inGroup(block.key, group),
   );
 }
 

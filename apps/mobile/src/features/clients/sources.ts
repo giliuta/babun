@@ -10,6 +10,7 @@ import { useMirror } from "@/features/access/mirror/mirror-state";
 import { useMyMemberships } from "@/features/settings/my-memberships";
 import { useMyCalendars } from "@/features/settings/workspaces";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { clientsAccessOf } from "./clients-access";
 import {
   clientsSources,
   type ClientsSources,
@@ -28,15 +29,10 @@ import {
 // клиентом, привязанным к компании (`bind-tenant`): заголовок называет
 // компанию, а ответ по-прежнему даёт членство на сервере.
 
-/** Права клиентов одной компании — из карты прав. */
+/** Права клиентов одной компании — из карты прав (`clientsAccessOf`). */
 function accessOf(map: MemberAccessMap | undefined): CompanyAccess | undefined {
   if (!map) return undefined;
-  return {
-    isOwner: map.isOwner,
-    clients: map.company["clients"],
-    scope: map.company["clients.scope"],
-    contacts: map.company["clients.contacts"],
-  };
+  return { isOwner: map.isOwner, ...clientsAccessOf(map) };
 }
 
 /** Карты прав чужих компаний. Активную сюда не передаём: она уже читается

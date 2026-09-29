@@ -38,17 +38,15 @@ import { CalendarPickerSheet } from "./CalendarPickerSheet";
 import { usePreview } from "./rights-page-shared";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import {
-  clientsRightsLine,
   copyCalendarLevels,
   starterCalendarChanges,
   withLiveTeams,
 } from "./master-draft";
 import {
   MEMBER_REFUSAL_TEXT,
-  RIGHTS_AREAS,
   areaLevelsOf,
+  companyAreasOf,
   draftFromMemberAccess,
-  liveAreasOf,
 } from "./rights-rows";
 
 // СОТРУДНИК — ТА ЖЕ КАРТОЧКА МАСТЕРА (владелец 15.09: «полная карточка
@@ -376,7 +374,7 @@ export function MasterMemberCard({
         Keyboard.dismiss();
         setCalendarsOpen(true);
         }}
-        liveAreas={liveAreasOf(blocks, RIGHTS_AREAS)}
+        liveAreas={companyAreasOf(blocks)}
         showCalendars
         areaLevels={areaLevelsOf(blocks, draft)}
         // Права компании (клиенты) — своей страницей; календарные живут в
@@ -393,7 +391,6 @@ export function MasterMemberCard({
         onMirror={() =>
           preview({ blocks, draft, name })
         }
-        areaValues={{ clients: clientsRightsLine(blocks, draft) }}
         onOpenCalendarRights={(id) =>
           router.push(
             `/cabinet/people/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,

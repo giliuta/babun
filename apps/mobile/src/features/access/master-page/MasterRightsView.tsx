@@ -14,7 +14,7 @@ import type { Team } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 
 import { AREA_TITLE, type AccessBlock, type AccessLevel } from "../access-map";
-import { CALENDAR_GROUPS, CALENDAR_GROUP_TITLE, orderGroupRows } from "./access-summary";
+import { CALENDAR_GROUPS, CALENDAR_GROUP_TITLE, inGroup, orderGroupRows } from "./access-summary";
 import type { RightsArea } from "./master-draft";
 import { sectionColumns, segmentSlot } from "./rights-columns";
 import { levelSentence, segmentWord } from "./rights-copy";
@@ -168,13 +168,13 @@ export function MasterRightsView({
     onlyCalendar
       ? CALENDAR_GROUPS.map((group) => ({
           key: group as string,
-          area: (group === "finance" ? "finance" : "calendar") as RightsArea,
+          area: (group === "finance" ? "finance" : group === "clients" ? "clients" : "calendar") as RightsArea,
           title: CALENDAR_GROUP_TITLE[group],
           rows: orderGroupRows(
             group,
             registrySections
               .flatMap((section) => section.rows)
-              .filter((row) => row.block.key.startsWith(`${group}.`)),
+              .filter((row) => inGroup(row.block.key, group)),
           ),
         }))
       : registrySections

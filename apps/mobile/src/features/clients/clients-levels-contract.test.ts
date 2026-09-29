@@ -48,8 +48,15 @@ function lastDefiner(fn: string): string {
   return last;
 }
 
+// КЛИЕНТЫ ПО КОМАНДАМ (владелец 29.09): правило видимости переписано
+// сознательно — «Клиенты», «Какие клиенты» и «Телефоны» стали правами команды.
+// Сторож теперь держит НОВУЮ миграцию и её условия: видимость, телефоны и
+// правка считаются по командам в паре с «Клиентами» этой же команды.
+const PER_TEAM = "20260929160000_clients_rights_per_team.sql";
+const perTeam = norm(readFileSync(join(MIGRATIONS_DIR, PER_TEAM), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
-  test("правило видимости и окно живут в этой миграции и не переписаны позже", () => {
+  test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of [
       "access_client_ids",
       "access_company_level",
@@ -57,8 +64,22 @@ describe("сервер: клиенты по уровням", () => {
       "client_seen_by_caller",
       "current_user_can_edit_client",
     ]) {
-      assert.equal(lastDefiner(fn), MIGRATION, `${fn} переопределён позже`);
+      assert.equal(lastDefiner(fn), PER_TEAM, `${fn} переопределён позже`);
     }
+  });
+
+  test("по командам: набор, телефоны и правка — в паре с «Клиентами» той же команды", () => {
+    assert.ok(perTeam.includes("return public.access_client_ids_in(public.access_calendars('clients', 'read'));"));
+    assert.ok(
+      perTeam.includes(
+        "from unnest(public.access_calendars('clients', 'read')) as t(team_id) where t.team_id = any(public.access_calendars('clients.contacts', 'read'))",
+      ),
+    );
+    assert.ok(
+      perTeam.includes("else p_client_id = any(public.access_client_ids_in(public.access_calendars('clients', 'write')))"),
+    );
+    assert.ok(perTeam.includes("when (p_client ->> 'id')::uuid = any(public.access_contact_client_ids())"));
+    assert.ok(perTeam.includes("revoke all on function public.access_client_ids_in(text[]) from public, anon, authenticated;"));
   });
 
   // МАСКИРОВКУ МОЖНО ПЕРЕОПРЕДЕЛИТЬ — НО ТОЛЬКО ПРЯЧА НЕ МЕНЬШЕ. STORY-085

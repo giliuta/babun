@@ -25,7 +25,6 @@ import { MasterCardView, type EmailState } from "./MasterCardView";
 import { MasterInviteCard } from "./MasterInviteCard";
 import { MasterMemberCard } from "./MasterMemberCard";
 import {
-  clientsRightsLine,
   draftChangedFrom,
   invitationRequest,
   invitationSegment,
@@ -36,7 +35,7 @@ import {
 } from "./master-draft";
 import { calendarGroupLine } from "./access-summary";
 import { rightsFocusQuery } from "./rights-focus";
-import { RIGHTS_AREAS, areaLevelsOf, liveAreasOf } from "./rights-rows";
+import { RIGHTS_AREAS, areaLevelsOf, companyAreasOf } from "./rights-rows";
 
 // КАРТОЧКА МАСТЕРА — ОДНА НА ТРИ СЛУЧАЯ (владелец 15.09: «„Добавить мастера"
 // должен сразу открывать полную страницу мастера, как добавление клиента»).
@@ -238,7 +237,7 @@ function MasterDraftCard({
         onPhoneEditEnd={checkPhone}
         teams={teams}
         teamIds={draft.teamIds}
-        liveAreas={blocks ? liveAreasOf(blocks, RIGHTS_AREAS) : []}
+        liveAreas={blocks ? companyAreasOf(blocks) : []}
         areaLevels={blocks ? areaLevelsOf(blocks, draft) : null}
         onOpenArea={openArea}
         // Команды нового сотрудника выбираются здесь (29.09: сотрудники живут
@@ -248,7 +247,6 @@ function MasterDraftCard({
         onOpenCalendars={() => setCalendarsOpen(true)}
         onDetachCalendar={(id) => updateMasterDraft((currentDraft) => toggleTeam(currentDraft, id, true))}
         groupLine={blocks ? (id, group) => calendarGroupLine(blocks, draft, id, group) : undefined}
-        areaValues={blocks ? { clients: clientsRightsLine(blocks, draft) } : undefined}
         onOpenCalendarRights={openCalendarRights}
         footer={
           // Серая кнопка — чего-то не хватает или реестр прав не пришёл — сама

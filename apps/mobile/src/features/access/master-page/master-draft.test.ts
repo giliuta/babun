@@ -6,7 +6,6 @@ import {
   applyPickedCalendars,
   areaLevel,
   areaWord,
-  clientsRightsLine,
   copyCalendarLevels,
   dependantResets,
   draftAccessChanges,
@@ -436,25 +435,6 @@ describe("права «как в том календаре»", () => {
     assert.equal(byBlock.get("finance.operations"), "read");
     // Компанейские блоки (клиенты) не трогаются: они одни на все календари.
     assert.equal(byBlock.has("clients"), false);
-  });
-});
-
-describe("клиенты одной строкой", () => {
-  const draftWith = (companyLevels: Record<string, AccessLevel>): MasterDraft => ({
-    ...blankMasterDraft("A"),
-    companyLevels,
-  });
-
-  test("положение, какие клиенты и телефоны", () => {
-    assert.equal(clientsRightsLine(REGISTRY, draftWith({ clients: "off" })), "Не видит");
-    assert.equal(
-      clientsRightsLine(REGISTRY, draftWith({ clients: "write", "clients.scope": "own", "clients.contacts": "read" })),
-      "Меняет · свои",
-    );
-    assert.equal(
-      clientsRightsLine(REGISTRY, draftWith({ clients: "read", "clients.scope": "all", "clients.contacts": "off" })),
-      "Видит · все · без телефонов",
-    );
   });
 });
 

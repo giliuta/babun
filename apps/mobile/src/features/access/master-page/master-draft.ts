@@ -459,25 +459,6 @@ export function copyCalendarLevels(
     .map((block) => ({ block: block.key, team_id: toTeamId, level: shown(block, fromTeamId) }));
 }
 
-/** КЛИЕНТЫ ОДНОЙ СТРОКОЙ (аудит 24.09). «Клиенты — Частично» на карточке не
- *  говорило ничего: теперь строка называет положение базы, какие клиенты и
- *  телефоны — «Меняет · свои · без телефонов». Части, чьих блоков сервер не
- *  держит, в строку не идут. */
-export function clientsRightsLine(blocks: readonly AccessBlock[], draft: MasterDraft): string {
-  const shown = visibleLevel(blocks, draft);
-  const byKey = new Map(offeredBlocks(blocks).map((block) => [block.key, block]));
-  const main = byKey.get("clients");
-  if (!main) return "";
-  const level = shown(main, null);
-  if (level === "off") return LEVEL_WORD.off;
-  const parts = [LEVEL_WORD[level]];
-  const scope = byKey.get("clients.scope");
-  if (scope) parts.push(shown(scope, null) === "all" ? "все" : "свои");
-  const contacts = byKey.get("clients.contacts");
-  if (contacts && shown(contacts, null) === "off") parts.push("без телефонов");
-  return parts.join(" · ");
-}
-
 /** Слово раздела: «Скрыт», «Смотрит», «Меняет» или «Разное». Счётчиков нет. */
 export function areaWord(
   blocks: readonly AccessBlock[],

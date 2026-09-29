@@ -79,14 +79,17 @@ export type LevelReader = (block: AccessBlock, teamId: string | null) => AccessL
  *  (их переключают чипы), потом блоки всей компании — отдельной карточки
  *  «Во всех календарях» нет (замечание судей 15.09). Строка зависимого, чей
  *  главный блок скрыт, свёрнута. */
-/** Разделы, в которых есть хоть один живой блок: только они стоят на карточке
- *  и только в них есть что открывать на странице прав. */
-export function liveAreasOf(
-  allBlocks: readonly AccessBlock[],
-  areas: readonly RightsArea[],
-): RightsArea[] {
-  const live = new Set(offeredBlocks(allBlocks).map((block) => block.area));
-  return areas.filter((area) => live.has(area));
+/** Разделы блока «Компания» на странице сотрудника: те, где есть живой блок
+ *  НА ВСЮ КОМПАНИЮ. Клиенты с 29.09 — права команды и живут в её странице
+ *  (владелец: «в команде один он может видеть клиентов, в команде три —
+ *  нет»), поэтому раздел «Клиенты» из «Компании» ушёл сам. */
+export function companyAreasOf(allBlocks: readonly AccessBlock[]): RightsArea[] {
+  const live = new Set(
+    offeredBlocks(allBlocks)
+      .filter((block) => block.scope === "company")
+      .map((block) => block.area),
+  );
+  return RIGHTS_AREAS.filter((area) => live.has(area));
 }
 
 export function rightsSections(
