@@ -1,13 +1,21 @@
-import { FlatList, Linking, Pressable, RefreshControl, Text, View } from "react-native";
-import type { Appointment } from "@babun/shared/local/appointments";
 import {
-  STATUS_LABELS,
-  getDebtAmount,
-} from "@babun/shared/local/appointments";
+  FlatList,
+  Linking,
+  Pressable,
+  RefreshControl,
+  Text,
+  View,
+} from "react-native";
+import type { Appointment } from "@babun/shared/local/appointments";
+import { STATUS_LABELS, getDebtAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { parseYMD } from "@/features/appointments/helpers";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { BLOCK_FILL, blockSolid, fillRgba } from "@/components/ui/color-contrast";
+import {
+  BLOCK_FILL,
+  blockSolid,
+  fillRgba,
+} from "@/components/ui/color-contrast";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 
 // Agenda («Список») — web AgendaView parity: chronological feed of upcoming
@@ -83,47 +91,52 @@ export function AgendaView({
       <EmptyState
         fill
         title="Записей нет"
-        action={onCreate ? { label: "Новая запись", onPress: onCreate } : undefined}
+        action={
+          onCreate ? { label: "Новая запись", onPress: onCreate } : undefined
+        }
       />
     );
   }
   return (
     <View style={{ flex: 1 }}>
-    <FlatList
-      style={{ flex: 1 }}
-      data={sections}
-      keyExtractor={(s) => s.title}
-      contentContainerStyle={{
-        padding: 16,
-        paddingBottom: 96,
-        gap: 16,
-        flexGrow: 1,
-      }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={t.accent}
-        />
-      }
-      renderItem={({ item }) => (
-        <DaySection
-          section={item}
-          header={headerRu(item.title, todayYmd, tomorrowYmd)}
-          label={labelFor?.(item.title) ?? null}
-          offLabelFor={offLabelFor}
-          hueFor={hueFor}
-          situationFor={situationFor}
-          overdueFor={overdueFor}
-          clientName={clientName}
-          serviceSummary={serviceSummary}
-          onEdit={onEdit}
-          onMenu={onMenu}
-          showAmounts={showAmounts}
-          t={t}
-        />
-      )}
-    />
+      <FlatList
+        style={{ flex: 1 }}
+        data={sections}
+        keyExtractor={(s) => s.title}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: 96,
+          gap: 16,
+          flexGrow: 1,
+        }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={t.accent}
+          />
+        }
+        renderItem={({ item }) => {
+          const label = labelFor?.(item.title) ?? null;
+          return (
+            <DaySection
+              section={item}
+              header={headerRu(item.title, todayYmd, tomorrowYmd, !!label)}
+              label={label}
+              offLabelFor={offLabelFor}
+              hueFor={hueFor}
+              situationFor={situationFor}
+              overdueFor={overdueFor}
+              clientName={clientName}
+              serviceSummary={serviceSummary}
+              onEdit={onEdit}
+              onMenu={onMenu}
+              showAmounts={showAmounts}
+              t={t}
+            />
+          );
+        }}
+      />
       {/* «СПИСОК» — ДЛЯ ПРОСМОТРА (владелец 24.09). Постоянной кнопки
           создания нет; только у пустой ленты — «Новая запись» внизу
           (владелец 29.09). */}
@@ -164,9 +177,7 @@ function DaySection({
   // visit order (web AgendaView). No route optimization (paid quota) — the
   // dispatcher just gets every address pinned in order.
   const addresses = Array.from(
-    new Set(
-      section.data.map((a) => (a.address || "").trim()).filter(Boolean),
-    ),
+    new Set(section.data.map((a) => (a.address || "").trim()).filter(Boolean)),
   );
   const mapsUrl =
     addresses.length > 0
@@ -178,7 +189,14 @@ function DaySection({
   return (
     <View>
       <View className="flex-row items-center justify-between px-2 pb-1">
-        <View className="flex-row items-center" style={{ gap: 6 }}>
+        {/* Левая группа ужимается, а «Маршрут дня» — нет: длинная дата с
+            меткой («ВОСКРЕСЕНЬЕ, 20 СЕНТЯБРЯ · ЛИМАССОЛ») выталкивала ссылку
+            за кромку экрана (аудит 29.09). Ссылка короче — «Маршрут →»: она
+            и так в шапке дня. Если тесно и так, жмётся чип метки. */}
+        <View
+          className="flex-row items-center"
+          style={{ gap: 6, flexShrink: 1, minWidth: 0 }}
+        >
           <Text
             accessibilityRole="header"
             style={{
@@ -196,6 +214,7 @@ function DaySection({
             <View
               className="flex-row items-center rounded-full"
               style={{
+                flexShrink: 1,
                 paddingHorizontal: 6,
                 paddingVertical: 1,
                 backgroundColor: `${label.color}1f`,
@@ -213,6 +232,7 @@ function DaySection({
               <Text
                 numberOfLines={1}
                 style={{
+                  flexShrink: 1,
                   // 11 — пол подписи (аудит 24.09: 10pt был ниже пола).
                   fontSize: 11,
                   fontWeight: "700",
@@ -236,10 +256,15 @@ function DaySection({
             accessibilityRole="link"
             accessibilityLabel={`Маршрут дня, ${addresses.length} адресов`}
             // 44 — минимальная тап-мишень HIG: текст 11pt, мишень — контейнер.
-            style={{ minHeight: 44, justifyContent: "center" }}
+            style={{
+              minHeight: 44,
+              justifyContent: "center",
+              flexShrink: 0,
+              marginLeft: 8,
+            }}
           >
             <Text style={{ fontSize: 11, fontWeight: "600", color: t.accent }}>
-              Маршрут дня →
+              Маршрут →
             </Text>
           </Pressable>
         ) : null}
@@ -328,7 +353,10 @@ function AgendaRow({
       // цвет палитры: у бледных цветов сырой и плотный расходились по тону,
       // и одна запись в «Списке» и «Неделе» была разного цвета. Строка
       // остаётся подсвеченной, а не залитой: в ней абзац текста чернилами.
-      fillRgba(blockSolid(hue), apt.status === "completed" ? 0.102 : BLOCK_FILL);
+      fillRgba(
+        blockSolid(hue),
+        apt.status === "completed" ? 0.102 : BLOCK_FILL,
+      );
 
   // Событие — свой шаблон (web design-keeper #6): title из comment, знак
   // записи слева, превью заметок — иначе событие выглядело как «битая запись»
@@ -371,12 +399,22 @@ function AgendaRow({
           ) : (
             <>
               <Text
-                style={{ fontVariant: ["tabular-nums"], fontSize: 14, fontWeight: "600", color: t.ink }}
+                style={{
+                  fontVariant: ["tabular-nums"],
+                  fontSize: 14,
+                  fontWeight: "600",
+                  color: t.ink,
+                }}
               >
                 {apt.time_start}
               </Text>
               <Text
-                style={{ fontVariant: ["tabular-nums"], marginTop: 2, fontSize: 11, color: t.faint }}
+                style={{
+                  fontVariant: ["tabular-nums"],
+                  marginTop: 2,
+                  fontSize: 11,
+                  color: t.faint,
+                }}
               >
                 {apt.time_end}
               </Text>
@@ -433,7 +471,7 @@ function AgendaRow({
       accessibilityRole="button"
       // Озвучка называет ВСЁ, что напечатано в строке: статус, «не закрыта» и
       // имя дыры видны глазу и обязаны быть слышны.
-      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}, ${STATUS_LABELS[apt.status]}${overdue ? ", не закрыта" : ""}${situation ? `, ${situation.toLowerCase()}` : ""}${offLabel ? `, метка ${offLabel.name}` : ""}, ${formatEUR(total)}`}
+      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}, ${overdue ? "не закрыта" : STATUS_LABELS[apt.status]}${situation ? `, ${situation.toLowerCase()}` : ""}${offLabel ? `, метка ${offLabel.name}` : ""}, ${formatEUR(total)}`}
       style={{
         flexDirection: "row",
         alignItems: "flex-start",
@@ -446,12 +484,22 @@ function AgendaRow({
     >
       <View style={{ width: 56 }}>
         <Text
-          style={{ fontVariant: ["tabular-nums"], fontSize: 14, fontWeight: "600", color: t.ink }}
+          style={{
+            fontVariant: ["tabular-nums"],
+            fontSize: 14,
+            fontWeight: "600",
+            color: t.ink,
+          }}
         >
           {apt.time_start}
         </Text>
         <Text
-          style={{ fontVariant: ["tabular-nums"], marginTop: 2, fontSize: 11, color: t.faint }}
+          style={{
+            fontVariant: ["tabular-nums"],
+            marginTop: 2,
+            fontSize: 11,
+            color: t.faint,
+          }}
         >
           {apt.time_end}
         </Text>
@@ -475,27 +523,27 @@ function AgendaRow({
             закрыта», ситуация, чужая метка), и без сжатия она выталкивала
             сумму справа за кромку карточки. Статус не жмётся — он короткий
             и называет главное. */}
-        <View style={{ marginTop: 2, flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <View
+          style={{
+            marginTop: 2,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
           <Text
             style={{
               fontSize: 11,
-              color: statusColor,
+              color: overdue ? t.warning : statusColor,
               textDecorationLine: cancelled ? "line-through" : "none",
             }}
           >
-            {STATUS_LABELS[apt.status]}
+            {/* НЕ ЗАКРЫТА — СЛОВОМ, ВМЕСТО СТАТУСА. Толщина канта в сетке
+                отвечает на «эта ли висит», но не на «сколько их». А
+                «Запланирована · не закрыта» — два слова об одном и то, что
+                съедало место ситуации (аудит 29.09: «не закры… · Не оплаче…»). */}
+            {overdue ? "Не закрыта" : STATUS_LABELS[apt.status]}
           </Text>
-          {/* НЕ ЗАКРЫТА — СЛОВОМ. Толщина канта в сетке отвечает на «эта ли
-              висит», но не на «сколько их»: в прошлой неделе просрочено почти
-              всё, и все канты становятся 2pt. */}
-          {overdue ? (
-            <Text
-              numberOfLines={1}
-              style={{ flexShrink: 1, fontSize: 11, color: t.warning }}
-            >
-              · не закрыта
-            </Text>
-          ) : null}
           {/* ЧЕГО НЕ ХВАТАЕТ — СЛОВОМ. Цвет один на три ситуации различает их
               слишком слабо для дальтоника (ΔE заливок «нет объекта» и «нет
               услуг» при дейтеранопии — 4.1), а в списке есть место для слова:
@@ -533,7 +581,12 @@ function AgendaRow({
       {showAmounts && total > 0 ? (
         <View style={{ alignItems: "flex-end" }}>
           <Text
-            style={{ fontVariant: ["tabular-nums"], fontSize: 14, fontWeight: "600", color: t.ink }}
+            style={{
+              fontVariant: ["tabular-nums"],
+              fontSize: 14,
+              fontWeight: "600",
+              color: t.ink,
+            }}
           >
             {formatEUR(total)}
           </Text>
@@ -544,10 +597,12 @@ function AgendaRow({
               // просроченный без денег — «долг», янтарём, как в финансах и в
               // записи (владелец: «если долг, то оранжевым»). Красный в
               // продукте — только «не вышло».
-              style={{ fontVariant: ["tabular-nums"],
+              style={{
+                fontVariant: ["tabular-nums"],
                 marginTop: 2,
                 fontSize: 11,
-                color: apt.status === "completed" || overdue ? t.warning : t.sub,
+                color:
+                  apt.status === "completed" || overdue ? t.warning : t.sub,
               }}
             >
               {apt.status === "completed" || overdue
@@ -562,11 +617,18 @@ function AgendaRow({
 }
 
 // «Сегодня» / «Завтра» / «Понедельник, 14 июля» — web formatHeaderRu.
-function headerRu(ymd: string, todayYmd: string, tomorrowYmd: string): string {
+// С меткой дня — «Вс, 20 сентября»: полный день недели плюс «ЛИМАССОЛ» не
+// влезали в строку рядом с «Маршрут →» (аудит 29.09).
+function headerRu(
+  ymd: string,
+  todayYmd: string,
+  tomorrowYmd: string,
+  short = false,
+): string {
   if (ymd === todayYmd) return "Сегодня";
   if (ymd === tomorrowYmd) return "Завтра";
   const s = parseYMD(ymd).toLocaleDateString("ru-RU", {
-    weekday: "long",
+    weekday: short ? "short" : "long",
     day: "numeric",
     month: "long",
   });
