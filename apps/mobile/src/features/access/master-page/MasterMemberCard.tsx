@@ -16,16 +16,8 @@ import { useRemoveTenantMember } from "@/features/settings/team-access";
 import { chooseOption } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
-import { memberAccessQueryKey } from "@/lib/company-query-keys";
-import { useTenantId } from "@/lib/tenant";
 
-import {
-  levelOf as mapLevelOf,
-  refusalOf,
-  type AccessBlock,
-  type AccessRefusal,
-  type MemberAccessMap,
-} from "../access-map";
+import { refusalOf, type AccessRefusal } from "../access-map";
 import { waitSheetExit } from "../InviteMemberSheet";
 import {
   AccessRequestError,
@@ -36,6 +28,7 @@ import {
   useSetMemberCalendars,
 } from "../queries";
 import { removalMessage, upcomingWorkCount } from "./removal-impact";
+import { calendarGroupLine } from "./access-summary";
 import { MasterPersonalBlocks, MasterWorkBlock } from "./MasterProfileBlocks";
 import { EmployeeNoteBlock } from "./EmployeeNoteBlock";
 import { contactsHolderOf, useMasterProfileWrite } from "./use-profile-write";
@@ -57,15 +50,7 @@ import {
   areaLevelsOf,
   draftFromMemberAccess,
   liveAreasOf,
-  withMemberChanges,
 } from "./rights-rows";
-import {
-  PRESETS,
-  matchedPreset,
-  presetChanges,
-  snapshotChanges,
-  type PresetKey,
-} from "./presets";
 
 // СОТРУДНИК — ТА ЖЕ КАРТОЧКА МАСТЕРА (владелец 15.09: «полная карточка
 // мастера»). Раньше тап по человеку в «Мастерах» открывал экран-таблицу прав
@@ -100,7 +85,6 @@ export function MasterMemberCard({
   const toast = useToast();
   const router = useRouter();
   const qc = useQueryClient();
-  const tenantId = useTenantId();
   const teamsQuery = useTeams();
   const blocksQuery = useAccessBlocks();
   const accessQuery = useMemberAccess(userId);
@@ -195,34 +179,6 @@ export function MasterMemberCard({
     new Set(teams.map((team) => team.id)),
   );
 
-  // НАБОР ПРАВ (STORY-088): одна пачка в `set_member_access`, оптимистично;
-  // тост «Отменить» возвращает прежние положения тех же строк.
-  const accessMap: MemberAccessMap = accessQuery.data;
-  const mapLevel = (block: AccessBlock, team: string | null) =>
-    mapLevelOf(block, accessMap, team ?? "");
-  const currentPreset = matchedPreset(blocks, mapLevel, draft.teamIds);
-  const applyPreset = (key: PresetKey) => {
-    if (setAccess.isPending || key === currentPreset) return;
-    const undo = snapshotChanges(blocks, mapLevel, draft.teamIds);
-    const changes = presetChanges(blocks, key, draft.teamIds);
-    const cacheKey = memberAccessQueryKey(tenantId, userId);
-    qc.setQueryData(cacheKey, withMemberChanges(accessMap, blocks, changes));
-    const title = PRESETS.find((preset) => preset.key === key)?.title ?? "";
-    setAccess.mutate(changes, {
-      onSuccess: () =>
-        toast(`Набор «${title}» выставлен`, "success", {
-          label: "Отменить",
-          onPress: () =>
-            setAccess.mutate(undo, {
-              onError: (error) => toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error"),
-            }),
-        }),
-      onError: (error) => {
-        qc.setQueryData(cacheKey, accessMap);
-        toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
-      },
-    });
-  };
 
   /** Прикрепить или открепить календарь. Открепление спрашивает словами: в
    *  этом календаре человек разом теряет и записи, и деньги, и права — их
@@ -336,14 +292,12 @@ export function MasterMemberCard({
   // «Убрать из компании», а не «из календаря»: членство одно на компанию, а
   // открепить от одного календаря приложение ещё не умеет. Слово не обещает
   // меньше, чем будет.
-  // ⋯ — ТО, ЧЕГО НЕТ В БЛОКАХ СТРАНИЦЫ (STORY-087): посмотреть его глазами
-  // (раньше жило только на странице прав), архив карточки и уход из компании.
+  // ⋯ — ТО, ЧЕГО НЕТ В БЛОКАХ СТРАНИЦЫ (STORY-087): архив карточки и уход из
+  // компании. «Посмотреть его глазами» переехало строкой в блок «Доступ».
   const openMenu = async () => {
     if (!member) return;
     Keyboard.dismiss();
-    const homeName = teamNameOf(draft.teamIds[0] ?? "") ?? null;
     const options = [
-      { label: "Посмотреть его глазами", run: () => preview({ blocks, draft, name, calendarName: homeName }) },
       ...(card
         ? [
             {
@@ -436,18 +390,18 @@ export function MasterMemberCard({
         // У КАЖДОГО КАЛЕНДАРЯ СВОИ ПРАВА (владелец 23.09): строка календаря
         // говорит, что человек может в НЁМ, и открывает права этого календаря.
         calendarLine={(id) => calendarRightsLine(blocks, draft, id)}
+        groupLine={(id, group) => calendarGroupLine(blocks, draft, id, group)}
+        // «Посмотреть его глазами» — строкой в блоке «Доступ», а не в ⋯.
+        onMirror={() =>
+          preview({ blocks, draft, name, calendarName: teamNameOf(draft.teamIds[0] ?? "") ?? null })
+        }
         areaValues={{ clients: clientsRightsLine(blocks, draft) }}
-        onOpenCalendarRights={(id) =>
+        onOpenCalendarRights={(id, group) =>
           router.push(
-            `/calendar/masters/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
+            `/calendar/masters/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id, group })}` as Href,
           )
         }
         onDetachCalendar={(id) => void toggleCalendar(id)}
-        preset={
-          draft.teamIds.length > 0
-            ? { value: currentPreset, onPick: applyPreset, busy: setAccess.isPending }
-            : undefined
-        }
         phoneAction={
           identity.phone ? <PhoneChannelButton number={card?.phone ?? member?.phone ?? ""} label={name} /> : undefined
         }

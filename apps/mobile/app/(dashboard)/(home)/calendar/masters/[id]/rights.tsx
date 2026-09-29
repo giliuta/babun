@@ -20,13 +20,14 @@ export default function MasterRightsRoute() {
     area?: string | string[];
     calendar?: string | string[];
     scope?: string | string[];
+    group?: string | string[];
   }>();
   const router = useRouter();
   const team = first(params.team);
   const area = first(params.area);
   const invitationId = invitationIdFromSegment(params.id);
   // Права ОДНОГО календаря или только компании — как у сотрудника (STORY-087).
-  const focus = rightsFocusOf(first(params.calendar), first(params.scope));
+  const focus = rightsFocusOf(first(params.calendar), first(params.scope), first(params.group));
 
   const back = () => {
     if (router.canGoBack()) {

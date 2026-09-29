@@ -15,7 +15,6 @@ import { ChooseRow } from "@/components/ui/ChooseRow";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SelectRow } from "@/components/ui/select-rows";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { AppearanceTile } from "@/components/ui/AppearanceSheet";
@@ -31,12 +30,13 @@ import {
   type RightsArea,
 } from "./master-draft";
 import { RIGHTS_AREAS, levelWord } from "./rights-rows";
+import type { CalendarGroup } from "./access-summary";
+import { EmployeeAccessCard } from "./EmployeeAccessCard";
 import {
   EmployeeIdentityBlock,
   type EmployeeAccessLine,
   type EmployeeContacts,
 } from "./EmployeeIdentityBlock";
-import { PRESETS, presetSentence, type PresetKey } from "./presets";
 
 // КАРТОЧКА МАСТЕРА — ОДНО ТЕЛО НА ТРИ СЛУЧАЯ (владелец 15.09: «„Добавить
 // мастера" — сразу полная страница мастера, как добавление клиента; красиво,
@@ -147,7 +147,7 @@ export interface MasterCardViewProps {
   calendarLine?: (teamId: string) => string;
   /** Слово строки раздела вместо «Частично» — например, «Меняет · свои». */
   areaValues?: Partial<Record<RightsArea, string>>;
-  onOpenCalendarRights?: (teamId: string) => void;
+  onOpenCalendarRights?: (teamId: string, group?: CalendarGroup) => void;
   /** Свайп по календарю — открепить. Нет — свайпа нет. */
   onDetachCalendar?: (teamId: string) => void;
   /** Кнопка в хвосте номера — «Связаться». */
@@ -159,15 +159,14 @@ export interface MasterCardViewProps {
   contacts?: EmployeeContacts;
   /** «Заметка сотрудника» — сразу под блоком «Сотрудник». */
   note?: ReactNode;
+  /** Права в календаре по разделам приложения («Календарь», «Запись»,
+   *  «Деньги»). Есть — права стоят одним блоком «Доступ». */
+  groupLine?: (teamId: string, group: CalendarGroup) => string;
+  /** «Посмотреть его глазами» — строкой в блоке «Доступ». */
+  onMirror?: () => void;
   /** Блоки ниже прав: «Работа», «Личное». */
   children?: ReactNode;
-  /** НАБОР ПРАВ (STORY-088): «Мастер / Старший / Директор» одним тапом.
-   *  `value` — набор, которому соответствуют положения сейчас, `null` — свои.
-   *  Нет пропа — блока нет. */
-  preset?: { value: PresetKey | null; onPick: (key: PresetKey) => void; busy?: boolean };
 }
-
-const PRESET_OPTIONS = PRESETS.map((preset) => ({ value: preset.key, label: preset.title }));
 
 const noop = () => {};
 
@@ -202,32 +201,32 @@ export function MasterCardView(p: MasterCardViewProps) {
           <EmployeeIdentityBlock {...p} />
           {p.note ?? null}
 
-          {/* НАБОР ПРАВ — ОДИН ТАП ВМЕСТО ДВУХ ДЕСЯТКОВ СТРОК (владелец 24.09:
-              «назначить директора… полное предоставление всех прав»). Набор
-              выставляет те же строки, что страница прав, во всех его
-              календарях; дальше каждая правится как обычно, и сегмент гаснет —
-              фраза тогда говорит «Свой набор». */}
-          {p.preset ? (
-            <SectionCard title="Набор прав" padded={false}>
-              <View style={{ paddingHorizontal: 16, paddingTop: 2, paddingBottom: 12, gap: 8 }}>
-                <SegmentedControl<PresetKey | "custom">
-                  options={PRESET_OPTIONS}
-                  value={p.preset.value ?? "custom"}
-                  disabled={p.preset.busy}
-                  onChange={(key) => {
-                    if (key !== "custom") p.preset?.onPick(key);
-                  }}
-                />
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  style={{ fontSize: 13, lineHeight: 18, color: t.sub }}
-                >
-                  {presetSentence(p.preset.value)}
-                </Text>
-              </View>
-            </SectionCard>
-          ) : null}
-
+          {/* ДОСТУП — ОДНИМ БЛОКОМ (этап 1 плана 29.09): набор, календари,
+              права в календаре по разделам приложения и права компании.
+              Три прежних блока остались только у карточки без аккаунта — прав
+              у неё ещё нет, есть только календари. */}
+          {p.groupLine ? (
+            <EmployeeAccessCard
+              calendars={chosen}
+              onOpenCalendars={openCalendars}
+              groupLine={p.groupLine}
+              onOpenCalendarRights={p.onOpenCalendarRights}
+              companyRows={shownAreas
+                .filter((area) => area !== "calendar" && area !== "finance")
+                .map((area) => {
+                  const level = p.areaLevels?.[area];
+                  return {
+                    key: area,
+                    label: AREA_TITLE[area],
+                    value: p.areaValues?.[area] || (level ? levelWord(level) : undefined),
+                    valueColor: level ? levelColor(t, level) : undefined,
+                    onPress: () => p.onOpenArea(area),
+                  };
+                })}
+              onMirror={p.onMirror}
+            />
+          ) : (
+            <>
           {/* КАЛЕНДАРИ — ТЕ ЖЕ СТРОКИ, ЧТО В ШТОРКЕ ВЫБОРА (реестр выбора,
               AGENTS 5.2): пусто — «Выбрать календари», выбрано — строки цвета
               календаря; первый — домашний, без отдельной метки. Где выбора
@@ -349,6 +348,8 @@ export function MasterCardView(p: MasterCardViewProps) {
               })}
             </SectionCard>
           ) : null}
+            </>
+          )}
           {p.children}
         </ScrollView>
 

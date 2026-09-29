@@ -13,7 +13,8 @@ import { haptics } from "@/lib/haptics";
 import type { Team } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 
-import type { AccessBlock, AccessLevel } from "../access-map";
+import { AREA_TITLE, type AccessBlock, type AccessLevel } from "../access-map";
+import { CALENDAR_GROUP_TITLE, type CalendarGroup } from "./access-summary";
 import type { RightsArea } from "./master-draft";
 import { sectionColumns, segmentSlot } from "./rights-columns";
 import { levelSentence, segmentWord } from "./rights-copy";
@@ -79,12 +80,17 @@ export function shortRightsTitle(title: string): string {
 export function focusViewProps(
   focus: RightsFocus | undefined,
   teams: readonly Team[],
-): { title?: string; onlyCalendar: boolean; onlyCompany: boolean } {
+): { title?: string; onlyCalendar: boolean; onlyCompany: boolean; group?: CalendarGroup } {
   if (!focus) return { onlyCalendar: false, onlyCompany: false };
   if (focus.kind === "company") {
     return { title: "Права в компании", onlyCalendar: false, onlyCompany: true };
   }
   const name = teams.find((team) => team.id === focus.teamId)?.name;
+  // Страница раздела: «Запись · Команда 1».
+  if (focus.group) {
+    const section = CALENDAR_GROUP_TITLE[focus.group];
+    return { title: name ? `${section} · ${name}` : section, onlyCalendar: true, onlyCompany: false, group: focus.group };
+  }
   return { title: name ?? "Права", onlyCalendar: true, onlyCompany: false };
 }
 
@@ -104,7 +110,11 @@ export function MasterRightsView({
   title = "Права",
   onlyCalendar = false,
   onlyCompany = false,
+  group,
 }: {
+  /** Только строки этого раздела календаря (`calendar.*`, `record.*`,
+   *  `finance.*`) — страница открыта строкой блока «Доступ». */
+  group?: CalendarGroup;
   /** Заголовок: имя календаря, когда страница — права ОДНОГО календаря. */
   title?: string;
   /** Только строки этого календаря, без ленты чипов и без строк компании
@@ -151,15 +161,21 @@ export function MasterRightsView({
   const sections = rightsSections(blocks, levelOf, onlyCompany ? null : activeId)
     .map((section) => ({
       ...section,
-      rows: section.rows.filter((row) =>
-        onlyCalendar ? row.block.scope === "calendar" : onlyCompany ? row.block.scope !== "calendar" : true,
+      rows: section.rows.filter(
+        (row) =>
+          (onlyCalendar ? row.block.scope === "calendar" : onlyCompany ? row.block.scope !== "calendar" : true) &&
+          (group ? row.block.key.startsWith(`${group}.`) : true),
       ),
     }))
+    // Права компании, открытые строкой «Клиенты» или «Компания», — только
+    // свой раздел (владелец 29.09: «полностью разграничить»).
+    .filter((section) => !(onlyCompany && area) || section.area === area)
     .filter((section) => section.rows.length > 0);
+  const companyTitle = onlyCompany && area ? AREA_TITLE[area] : null;
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} seam={!withChips} />
+      <ScreenHeader title={companyTitle ?? title} subtitle={subtitle} onBack={onBack} seam={!withChips} />
       {withChips ? (
         <ScopeChips items={chips} activeId={activeId} onSelect={onSelectTeam} />
       ) : null}
@@ -188,7 +204,13 @@ export function MasterRightsView({
             }}
           >
             <SectionCard
-              title={onlyCalendar ? (CALENDAR_SECTION_TITLE[section.area] ?? section.title) : section.title}
+              title={
+                group
+                  ? CALENDAR_GROUP_TITLE[group]
+                  : onlyCalendar
+                    ? (CALENDAR_SECTION_TITLE[section.area] ?? section.title)
+                    : section.title
+              }
               padded={false}
             >
               {section.rows.map((row, i) => {

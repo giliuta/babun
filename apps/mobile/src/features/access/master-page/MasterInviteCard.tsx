@@ -35,13 +35,12 @@ import {
   invitationRequest,
   invitationSegment,
   toggleTeam,
-  visibleLevel,
   withLiveTeams,
   type MasterDraft,
 } from "./master-draft";
+import { calendarGroupLine } from "./access-summary";
 import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, liveAreasOf } from "./rights-rows";
-import { matchedPreset, presetDraft } from "./presets";
 import { waitSubtitle } from "../invitation-wait";
 
 // ПРИГЛАШЕНИЕ БЕЗ ОТВЕТА — ТА ЖЕ КАРТОЧКА МАСТЕРА (владелец 15.09: всё, что
@@ -267,20 +266,11 @@ export function MasterInviteCard({
         // клиенты — «Правами в компании» со сводкой словами.
         showCalendars
         calendarLine={(id) => calendarRightsLine(blocks, draft, id)}
-        // Набор уходит в приглашение целиком, как любая строка прав.
-        preset={
-          draft.teamIds.length > 0
-            ? {
-                value: matchedPreset(blocks, visibleLevel(blocks, draft), draft.teamIds),
-                onPick: (key) => commit(presetDraft(draft, blocks, key)),
-                busy: update.isPending,
-              }
-            : undefined
-        }
+        groupLine={(id, group) => calendarGroupLine(blocks, draft, id, group)}
         areaValues={{ clients: clientsRightsLine(blocks, draft) }}
-        onOpenCalendarRights={(id) =>
+        onOpenCalendarRights={(id, group) =>
           router.push(
-            `/calendar/masters/${invitationSegment(row.id)}/rights?${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
+            `/calendar/masters/${invitationSegment(row.id)}/rights?${rightsFocusQuery({ kind: "calendar", teamId: id, group })}` as Href,
           )
         }
         onOpenArea={(area) =>

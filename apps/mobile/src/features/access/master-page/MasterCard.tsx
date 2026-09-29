@@ -33,12 +33,11 @@ import {
   inviteBlockers,
   isDraftDirty,
   toggleTeam,
-  visibleLevel,
   type MasterDraft,
 } from "./master-draft";
+import { calendarGroupLine, type CalendarGroup } from "./access-summary";
 import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, liveAreasOf } from "./rights-rows";
-import { matchedPreset, presetDraft } from "./presets";
 
 // КАРТОЧКА МАСТЕРА — ОДНА НА ТРИ СЛУЧАЯ (владелец 15.09: «„Добавить мастера"
 // должен сразу открывать полную страницу мастера, как добавление клиента»).
@@ -146,9 +145,9 @@ function MasterDraftCard({
     router.push(
       `/calendar/masters/new/rights?area=${area}&team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "company" })}` as Href,
     );
-  const openCalendarRights = (id: string) =>
+  const openCalendarRights = (id: string, group?: CalendarGroup) =>
     router.push(
-      `/calendar/masters/new/rights?team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
+      `/calendar/masters/new/rights?team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "calendar", teamId: id, group })}` as Href,
     );
 
   // СЕРАЯ КНОПКА НЕ МОЛЧИТ И НЕ ОБЪЯСНЯЕТ СЛОВАМИ: тап отзывается вибрацией и
@@ -247,18 +246,9 @@ function MasterDraftCard({
         // он задан тем, откуда позвали, поэтому без «Добавить» и свайпа.
         showCalendars={!!blocks}
         calendarLine={blocks ? (id) => calendarRightsLine(blocks, draft, id) : undefined}
+        groupLine={blocks ? (id, group) => calendarGroupLine(blocks, draft, id, group) : undefined}
         areaValues={blocks ? { clients: clientsRightsLine(blocks, draft) } : undefined}
         onOpenCalendarRights={openCalendarRights}
-        // Набор пишется в сам черновик — уйдёт с «Пригласить» (STORY-088).
-        preset={
-          blocks && draft.teamIds.length > 0
-            ? {
-                value: matchedPreset(blocks, visibleLevel(blocks, draft), draft.teamIds),
-                onPick: (key) =>
-                  updateMasterDraft((currentDraft) => presetDraft(currentDraft, blocks, key)),
-              }
-            : undefined
-        }
         footer={
           // Серая кнопка — чего-то не хватает или реестр прав не пришёл — сама
           // тапов не ловит: их ловит обёртка, чтобы отозваться и повести к
