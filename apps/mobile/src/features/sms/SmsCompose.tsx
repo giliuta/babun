@@ -79,9 +79,7 @@ export function useSmsServiceFor(
       context.appointmentId &&
       teamId &&
       account?.serviceOn &&
-      account.enabled &&
       account.canPay &&
-      account.teamIds.includes(teamId) &&
       account.senders?.[teamId],
   );
   return { available, priceCents: account?.priceCents ?? 10, context };

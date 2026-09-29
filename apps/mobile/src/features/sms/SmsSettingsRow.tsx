@@ -9,14 +9,15 @@ import { useSmsAccount } from "@/features/sms/sms-account";
 // Команда 1 → SMS — все шаблоны этой команды»). Ведёт на SMS той команды,
 // чьи настройки открыты (`?team=`, как «Услуги» и «Метки»).
 //
-// Подпись — живое состояние команды: сколько шаблонов и отправляет ли.
+// Подпись — живое состояние команды: имя отправителя (без него команда
+// молчит) и сколько шаблонов.
 export function SmsSettingsRow({ teamId }: { teamId: string | null }) {
   const router = useRouter();
   const data = useSmsAccount().data;
   const count = teamId ? (data?.owner?.templateCounts[teamId] ?? 0) : 0;
-  const sends = !!teamId && !!data?.enabled && data.teamIds.includes(teamId);
+  const sender = teamId ? data?.senders?.[teamId] : undefined;
   const sub = data
-    ? `${count > 0 ? formatCountRu(count, ["шаблон", "шаблона", "шаблонов"]) : "Шаблонов нет"} · ${sends ? "Отправляет" : "Не отправляет"}`
+    ? `${sender ?? "Нет имени отправителя"} · ${count > 0 ? formatCountRu(count, ["шаблон", "шаблона", "шаблонов"]) : "Шаблонов нет"}`
     : undefined;
 
   return (
