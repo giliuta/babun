@@ -1,13 +1,10 @@
 import { useMemo, useState } from "react";
 import { Keyboard } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { MailCheck, Send } from "lucide-react-native";
 
-import { ChooseRow } from "@/components/ui/ChooseRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { formatPhoneAsYouType } from "@/features/clients/phone";
@@ -31,6 +28,8 @@ import { openMasterDraftFromCard } from "./draft-store";
 import { invitationSegment } from "./master-draft";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import { MasterPersonalBlocks, MasterWorkBlock } from "./MasterProfileBlocks";
+import { EmployeeNoteBlock } from "./EmployeeNoteBlock";
+import { contactsHolderOf, useMasterProfileWrite } from "./use-profile-write";
 
 // МАСТЕР БЕЗ АККАУНТА — ТА ЖЕ СТРАНИЦА (STORY-087). Карточка мастера без входа
 // в CRM законна: владелец ставит его в календарь и сам ведёт записи. Раньше
@@ -52,6 +51,7 @@ export function MasterCardOnly({ cardId, onBack }: { cardId: string; onBack: () 
   const invitations = usePendingInvitations();
   const [nameText, setNameText] = useState<string | null>(null);
   const card = cardQuery.data ?? null;
+  const profileWrite = useMasterProfileWrite(card);
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
 
   // Календари карточки: свой `team_id` и старый состав бригады.
@@ -175,7 +175,6 @@ export function MasterCardOnly({ cardId, onBack }: { cardId: string; onBack: () 
         }
         patch({ phone });
       }}
-      onTitleChange={(value) => patch({ title: value.trim() || null })}
       teams={chosenTeams}
       teamIds={teamIds}
       showCalendars
@@ -183,22 +182,22 @@ export function MasterCardOnly({ cardId, onBack }: { cardId: string; onBack: () 
       areaLevels={null}
       onOpenArea={() => {}}
       phoneAction={card.phone ? <PhoneChannelButton number={card.phone} label={name} /> : undefined}
-    >
-      <SectionCard title="Доступ в CRM" padded={false}>
-        {pending ? (
-          <ChooseRow
-            compact
-            icon={MailCheck}
-            label="Приглашение ждёт ответа"
-            hint={pending.email}
-            onPress={() =>
-              router.push(`/calendar/masters/${invitationSegment(pending.id)}` as Href)
+      // ДОСТУП В CRM — ПЛИТКОЙ ПОД БЛОКОМ «СОТРУДНИК» (владелец 29.09,
+      // вариант 3), а не отдельным блоком: нет доступа — плитка зовёт
+      // пригласить, приглашение ушло — ведёт на него.
+      access={
+        pending
+          ? {
+              state: "pending",
+              sub: pending.email,
+              onPress: () =>
+                router.push(`/calendar/masters/${invitationSegment(pending.id)}` as Href),
             }
-          />
-        ) : (
-          <ChooseRow compact icon={Send} label="Пригласить в CRM" onPress={invite} />
-        )}
-      </SectionCard>
+          : { state: "none", onPress: invite }
+      }
+      contacts={{ holder: contactsHolderOf(profileWrite.profile), update: profileWrite.writeContacts }}
+      note={<EmployeeNoteBlock card={card} />}
+    >
       <MasterWorkBlock card={card} teamIds={teamIds} />
       <MasterPersonalBlocks card={card} />
     </MasterCardView>

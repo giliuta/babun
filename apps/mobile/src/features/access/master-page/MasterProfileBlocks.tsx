@@ -6,19 +6,15 @@ import { FieldRow, NavRow } from "@/components/ui/card-rows";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
-import { useToast } from "@/components/ui/Toast";
 import { useAppointments } from "@/features/calendar/queries";
 import { formatShortDateRu } from "@/features/clients/format";
-import {
-  getMasterProfile,
-  useUpdateMasterProfile,
-  type MasterProfile,
-} from "@/features/reference/master-profile";
+import type { MasterProfile } from "@/features/reference/master-profile";
 import type { Master } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
 import { monthWorkOf, workLine } from "./master-work";
+import { useMasterProfileWrite } from "./use-profile-write";
 
 // БЛОКИ «РАБОТА», «ЛИЧНОЕ» И «БАНК И НАЛОГИ» НА СТРАНИЦЕ СОТРУДНИКА
 // (STORY-087). Раньше они жили на отдельной странице «Информация» старой
@@ -69,24 +65,8 @@ const DATE_TITLE: Record<DateField, string> = {
 /** «Личное» и «Банк и налоги» — поля профиля карточки мастера. */
 export function MasterPersonalBlocks({ card }: { card: Master }) {
   const t = useThemeColors();
-  const toast = useToast();
-  const update = useUpdateMasterProfile();
-  const profile = getMasterProfile(card);
   const [dateOpen, setDateOpen] = useState<DateField | null>(null);
-
-  const write = (patch: MasterProfile) =>
-    update.mutate(
-      { id: card.id, patch },
-      { onError: (error) => toast(error.message || "Не удалось сохранить", "error") },
-    );
-  // Текст: пустое стирает поле — JSON null, а не undefined (тот пропал бы при
-  // сериализации, и правка молча не ушла бы).
-  const writeText = (field: keyof MasterProfile, next: string) => {
-    const trimmed = next.trim();
-    const current = ((profile[field] as string | undefined) ?? "").trim();
-    if (trimmed === current) return;
-    write({ [field]: trimmed || null } as unknown as MasterProfile);
-  };
+  const { profile, write, writeText } = useMasterProfileWrite(card);
   const dateValue = (field: DateField) => (profile[field] as string | undefined) || null;
 
   return (

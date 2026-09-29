@@ -251,13 +251,6 @@ export function MasterInviteCard({
           }
           if ((phone ?? "") !== draft.phone) commit({ ...draft, phone: phone ?? "" });
         }}
-        onTitleChange={
-          cardFields
-            ? (value) => {
-                if (value.trim() !== draft.title) commit({ ...draft, title: value });
-              }
-            : undefined
-        }
         teams={teams}
         teamIds={draft.teamIds}
         onOpenCalendars={() => {

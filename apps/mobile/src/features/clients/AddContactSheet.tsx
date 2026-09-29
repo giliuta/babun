@@ -1,10 +1,10 @@
 import { useRouter } from "expo-router";
 import { Phone } from "lucide-react-native";
-import type { Client } from "@babun/shared/local/clients";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import {
   contactFieldDef,
   type ContactFieldId,
+  type ContactHolder,
 } from "@/features/clients/contact-fields";
 import { useEnabledContactFields } from "@/features/clients/contact-ways";
 import { useReferenceHref } from "@/features/clients/reference-href";
@@ -33,7 +33,7 @@ export function AddContactSheet({
   onExited,
 }: {
   visible: boolean;
-  client: Client;
+  client: ContactHolder;
   onPick: (choice: AddContactChoice) => void;
   onClose: () => void;
   /** Лист ушёл — сюда страница вешает следующую шторку (выбор человека). */

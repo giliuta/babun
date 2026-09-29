@@ -37,6 +37,8 @@ import {
 } from "../queries";
 import { removalMessage, upcomingWorkCount } from "./removal-impact";
 import { MasterPersonalBlocks, MasterWorkBlock } from "./MasterProfileBlocks";
+import { EmployeeNoteBlock } from "./EmployeeNoteBlock";
+import { contactsHolderOf, useMasterProfileWrite } from "./use-profile-write";
 import { rightsFocusQuery } from "./rights-focus";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
@@ -134,6 +136,7 @@ export function MasterMemberCard({
   const member = membersQuery.data?.find((candidate) => candidate.userId === userId) ?? null;
   const card = mastersQuery.data?.find((master) => master.user_id === userId) ?? null;
   const name = card?.full_name || member?.name || "";
+  const profileWrite = useMasterProfileWrite(card);
 
   const back = () => {
     Keyboard.dismiss();
@@ -414,7 +417,6 @@ export function MasterMemberCard({
         }
         patchCard({ phone });
         }}
-        onTitleChange={(value) => patchCard({ title: value.trim() || null })}
         teams={teams}
         teamIds={draft.teamIds}
         onOpenCalendars={() => {
@@ -449,6 +451,12 @@ export function MasterMemberCard({
         phoneAction={
           identity.phone ? <PhoneChannelButton number={card?.phone ?? member?.phone ?? ""} label={name} /> : undefined
         }
+        contacts={
+          card
+            ? { holder: contactsHolderOf(profileWrite.profile), update: profileWrite.writeContacts }
+            : undefined
+        }
+        note={card ? <EmployeeNoteBlock card={card} /> : undefined}
       >
         {card ? (
           <>

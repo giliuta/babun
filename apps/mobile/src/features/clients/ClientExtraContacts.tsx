@@ -8,7 +8,7 @@ import {
   Smartphone,
   type LucideIcon,
 } from "lucide-react-native";
-import type { Client, PhoneEntry } from "@babun/shared/local/clients";
+import type { PhoneEntry } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import {
   dialPrefix,
@@ -25,6 +25,7 @@ import {
 import {
   CONTACT_FIELDS,
   type ContactFieldId,
+  type ContactHolder,
 } from "@/features/clients/contact-fields";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { PickerSheet } from "@/components/ui/PickerSheet";
@@ -72,11 +73,12 @@ export function ClientExtraContacts({
   draft,
   readOnly = false,
   compact = false,
+  inline = false,
 }: {
-  client: Client;
+  client: ContactHolder;
   /** Возвращает false, если запись не удалась: писатель массива номеров по
    *  этому ответу ОТКАТЫВАЕТ оптимистичное значение. */
-  update: (patch: Partial<Client>) => Promise<boolean> | void;
+  update: (patch: Partial<ContactHolder>) => Promise<boolean> | void;
   /** Режим создания: строки пишут на каждый символ (см. `ClientHeaderDraft`). */
   draft: boolean;
   /** Только смотреть: сотрудник без права менять контакты. Строки читаются,
@@ -84,6 +86,9 @@ export function ClientExtraContacts({
   readOnly?: boolean;
   /** Плотные строки — блоки клиента и его людей (владелец 2026-09-21). */
   compact?: boolean;
+  /** Подпись слева, номер справа — строки страницы сотрудника (владелец
+   *  29.09 выбрал там вид «подпись слева, значение справа»). */
+  inline?: boolean;
 }) {
   const t = useThemeColors();
   const country = useDefaultCountry();
@@ -209,8 +214,8 @@ export function ClientExtraContacts({
             tabular
             // Тот же вид И ТОТ ЖЕ РАЗМЕР, что у основного номера (владелец
             // 2026-08-06: «хочу, чтоб всё было одинакового размера»).
-            big
-            stacked
+            big={!inline}
+            stacked={!inline}
             compact={compact}
             // В ЧЕРНОВИКЕ — live: «Готово» читает черновик из замыкания, и
             // коммит по blur до него не долетал — второй номер просто не
@@ -255,8 +260,8 @@ export function ClientExtraContacts({
           separated
           keyboardType="phone-pad"
           tabular
-          big
-          stacked
+          big={!inline}
+          stacked={!inline}
           compact={compact}
           autoFocus
           // БЕЗ live: он писал PATCH на КАЖДЫЙ СИМВОЛ (восемь запросов на
@@ -292,7 +297,7 @@ export function ClientExtraContacts({
             value={shown}
             placeholder={f.placeholder}
             separated
-            stacked
+            stacked={!inline}
             compact={compact}
             keyboardType={f.keyboardType}
             autoCapitalize={f.autoCapitalize}

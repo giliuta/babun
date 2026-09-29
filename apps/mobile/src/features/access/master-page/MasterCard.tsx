@@ -238,7 +238,6 @@ function MasterDraftCard({
           }))
         }
         onPhoneEditEnd={checkPhone}
-        onTitleChange={(title) => update({ title })}
         teams={teams}
         teamIds={draft.teamIds}
         liveAreas={blocks ? liveAreasOf(blocks, RIGHTS_AREAS) : []}

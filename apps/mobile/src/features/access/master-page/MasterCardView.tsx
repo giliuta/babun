@@ -8,11 +8,10 @@ import {
   View,
   type TextInput,
 } from "react-native";
-import { CalendarRange, Check, ChevronRight, MoreHorizontal, UserRound } from "lucide-react-native";
+import { CalendarRange, ChevronRight, MoreHorizontal } from "lucide-react-native";
 
-import { FieldRow, NavRow } from "@/components/ui/card-rows";
+import { NavRow } from "@/components/ui/card-rows";
 import { ChooseRow } from "@/components/ui/ChooseRow";
-import { NameColorField } from "@/components/ui/picker-fields";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -32,6 +31,11 @@ import {
   type RightsArea,
 } from "./master-draft";
 import { RIGHTS_AREAS, levelWord } from "./rights-rows";
+import {
+  EmployeeIdentityBlock,
+  type EmployeeAccessLine,
+  type EmployeeContacts,
+} from "./EmployeeIdentityBlock";
 import { PRESETS, presetSentence, type PresetKey } from "./presets";
 
 // КАРТОЧКА МАСТЕРА — ОДНО ТЕЛО НА ТРИ СЛУЧАЯ (владелец 15.09: «„Добавить
@@ -119,7 +123,6 @@ export interface MasterCardViewProps {
   onEmailEditEnd?: () => void;
   onPhoneChange?: (value: string) => void;
   onPhoneEditEnd?: () => void;
-  onTitleChange?: (value: string) => void;
   teams: readonly Team[];
   teamIds: readonly string[];
   /** Нет — календари только показываются. */
@@ -149,6 +152,13 @@ export interface MasterCardViewProps {
   onDetachCalendar?: (teamId: string) => void;
   /** Кнопка в хвосте номера — «Связаться». */
   phoneAction?: ReactNode;
+  /** Строка «Доступ в CRM» в блоке «Сотрудник». Нет — строки нет. */
+  access?: EmployeeAccessLine;
+  /** Контакты под основным номером и «Добавить контакт». Нет — у человека
+   *  без карточки мастера их писать некуда. */
+  contacts?: EmployeeContacts;
+  /** «Заметка сотрудника» — сразу под блоком «Сотрудник». */
+  note?: ReactNode;
   /** Блоки ниже прав: «Работа», «Личное». */
   children?: ReactNode;
   /** НАБОР ПРАВ (STORY-088): «Мастер / Старший / Директор» одним тапом.
@@ -169,15 +179,12 @@ export function MasterCardView(p: MasterCardViewProps) {
   const shownAreas = p.calendarLine
     ? areas.filter((area) => area !== "calendar" && area !== "finance")
     : areas;
-  const check = <Check color={t.success} size={18} strokeWidth={2.5} />;
   const chosen = p.teamIds
     .map((id) => p.teams.find((team) => team.id === id))
     .filter((team): team is Team => team !== undefined);
   const anyUnchosen = p.teams.some((team) => !p.teamIds.includes(team.id));
-  const danger = p.emailState === "invalid" ? t.danger : undefined;
   const openCalendars = p.onOpenCalendars;
   const calendarsMode = calendarsBlockMode(chosen.length, openCalendars !== undefined);
-  const cardFields = p.editable && (p.cardFieldsEditable ?? true);
 
   return (
     <Screen edges={["top"]}>
@@ -192,102 +199,8 @@ export function MasterCardView(p: MasterCardViewProps) {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
         >
-          {/* ЛИЧНОСТЬ — БЕЗЫМЯННОЙ КАРТОЧКОЙ, КАК У КЛИЕНТА. Плитка у имени —
-              цвет мастера: так он узнаётся в списке и в записях. */}
-          {/* У КАЖДОГО БЛОКА ШАПКА — как у клиента (владелец 22.09: первый блок
-              тоже с именем). */}
-          <SectionCard title="Сотрудник" padded={false}>
-            {p.editable ? (
-              <NameColorField
-                bare
-                // Плотно, как блок «Клиент» (44pt строки под именем).
-                minHeight={52}
-                colorReadOnly={!cardFields}
-                label={null}
-                name={p.identity.name}
-                color={p.identity.color}
-                onNameChange={p.onNameChange ?? noop}
-                onColorChange={p.onColorChange ?? noop}
-                onBlur={p.onNameCommit}
-                fallback={UserRound}
-                placeholder="Имя"
-                autoCapitalize="words"
-                autoFocus={p.autoFocusName}
-                inputRef={p.refs?.name}
-                // Галочка — подсказка черновика «имя есть»; у живого
-                // сотрудника она ничего не говорит.
-                trailing={p.live && p.identity.name.trim() ? check : null}
-              />
-            ) : (
-              <FieldRow
-                stacked
-                hideLabel
-                readOnly
-                big
-                label="Имя"
-                placeholder="Имя"
-                value={p.identity.name}
-                onSave={noop}
-              />
-            )}
-            {p.hideEmail ? null : (
-            <FieldRow
-              compact
-              stacked
-              hideLabel
-              separated
-              label="Почта"
-              placeholder="Почта"
-              value={p.identity.email}
-              live={p.emailEditable}
-              readOnly={!p.emailEditable}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              inputRef={p.refs?.email}
-              inputColor={danger}
-              valueColor={danger}
-              trailing={p.emailState === "valid" ? check : null}
-              onEditEnd={p.onEmailEditEnd}
-              onSave={p.onEmailChange ?? noop}
-            />
-            )}
-            {/* Пустое, которое нельзя заполнить, не показываем: строка без
-                значения и без правки читалась бы сломанным полем. */}
-            {p.editable || p.identity.phone ? (
-              <FieldRow
-              compact
-                stacked
-                hideLabel
-                separated
-                tabular
-                label="Телефон"
-                placeholder="Телефон"
-                value={p.identity.phone}
-                keyboardType="phone-pad"
-                live={p.live && p.editable}
-                readOnly={!p.editable}
-                inputRef={p.refs?.phone}
-                onEditEnd={p.onPhoneEditEnd}
-                onSave={p.onPhoneChange ?? noop}
-                trailing={p.identity.phone ? p.phoneAction : undefined}
-              />
-            ) : null}
-            {cardFields || p.identity.title ? (
-              <FieldRow
-              compact
-                stacked
-                hideLabel
-                separated
-                label="Должность"
-                placeholder="Должность"
-                value={p.identity.title}
-                autoCapitalize="sentences"
-                live={p.live && cardFields}
-                readOnly={!cardFields}
-                onSave={p.onTitleChange ?? noop}
-              />
-            ) : null}
-          </SectionCard>
+          <EmployeeIdentityBlock {...p} />
+          {p.note ?? null}
 
           {/* НАБОР ПРАВ — ОДИН ТАП ВМЕСТО ДВУХ ДЕСЯТКОВ СТРОК (владелец 24.09:
               «назначить директора… полное предоставление всех прав»). Набор
