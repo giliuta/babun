@@ -28,6 +28,12 @@ describe("функции компании", () => {
     expect(featureOfBookingBlock("client")).toBeNull();
   });
 
+  test("метка дня и события включены всегда — «выключено» в базе ничего не прячет (30.09)", () => {
+    expect(isFeatureOn(["day_labels", "events", "debts"], "day_labels")).toBe(true);
+    expect(isFeatureOn(["day_labels", "events", "debts"], "events")).toBe(true);
+    expect(isFeatureOn(["day_labels", "events", "debts"], "debts")).toBe(false);
+  });
+
   test("ключи совпадают со сторожем базы", () => {
     // Список в `calendar_settings_disabled_features_known`
     // (миграция 20260924140000): ключ вне его база не примет. Блоки записи

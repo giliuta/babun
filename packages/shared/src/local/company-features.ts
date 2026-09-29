@@ -77,10 +77,19 @@ export function sanitizeDisabledFeatures(raw: unknown): CompanyFeatureKey[] {
 }
 
 /** Включена ли функция. Пустой или незнакомый список — включено всё. */
+/** ВКЛЮЧЕНЫ ВСЕГДА (владелец 30.09: «метка дня пусть всегда будет открыта…
+ *  события всегда будет открыто»). Тумблеров у них больше нет, и старое
+ *  «выключено» в базе ничего не прячет. */
+export const ALWAYS_ON_FEATURES: ReadonlySet<CompanyFeatureKey> = new Set<CompanyFeatureKey>([
+  "day_labels",
+  "events",
+]);
+
 export function isFeatureOn(
   disabled: readonly string[] | undefined,
   key: CompanyFeatureKey,
 ): boolean {
+  if (ALWAYS_ON_FEATURES.has(key)) return true;
   return !disabled || !disabled.includes(key);
 }
 

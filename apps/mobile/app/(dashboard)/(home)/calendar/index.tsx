@@ -28,7 +28,6 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SwitchRow } from "@/components/ui/SwitchRow";
-import { useFeatureOn, useSetCompanyFeature } from "@/features/settings/company-features";
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { NameColorField } from "@/components/ui/picker-fields";
@@ -173,9 +172,6 @@ export default function CalendarSettingsScreen() {
   // полностью сохраняем»). Правило и его причины — `settings-rows.ts`.
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const dayLabelsOn = useFeatureOn("day_labels");
-  const eventsOn = useFeatureOn("events");
-  const setFeature = useSetCompanyFeature();
 
   const tenantId = useTenantId();
   // Какой календарь настраиваем: параметр из шестерёнки → тот, что открыт в
@@ -629,17 +625,11 @@ export default function CalendarSettingsScreen() {
               между тумблерами сделай не волосинкой, а отдельные блоки»). Они
               про РАЗНОЕ — деньги и записи, — и волосинка внутри одной карточки
               склеивала их в один вопрос. */}
+          {/* «Показывать доход и расход», «Метки дня» и «События» — БЕЗ
+              ТУМБЛЕРОВ (владелец 30.09: «давай это вообще удалим… всегда будет
+              открыто»): включены всегда (`ALWAYS_ON_FEATURES`). */}
           {rows.viewPrefs ? (
             <SectionCard className="mt-4">
-              <SwitchRow
-                label="Показывать доход и расход"
-                value={s.showDayFinance !== false}
-                onChange={(v) => patchSettings({ showDayFinance: v })}
-              />
-            </SectionCard>
-          ) : null}
-          {rows.viewPrefs ? (
-            <SectionCard>
               <SwitchRow
                 label="Скрывать отменённые"
                 value={!!s.hideCancelled}
@@ -647,30 +637,6 @@ export default function CalendarSettingsScreen() {
               />
             </SectionCard>
           ) : null}
-          {/* ФУНКЦИИ КАЛЕНДАРЯ (STORY-088, владелец 24.09: «тумблер — и его
-              не будет ни у кого, даже у владельца»). Выключенные метки дня и
-              события пропадают у всех; данные остаются и вернутся при
-              включении. Функции записи (объект, метка, оплата…) — на своей
-              странице «Запись → Блоки формы». */}
-          {rows.viewPrefs ? (
-            <SectionCard>
-              <SwitchRow
-                label="Метки дня"
-                value={dayLabelsOn}
-                onChange={(v) => setFeature.mutate({ key: "day_labels", on: v })}
-              />
-            </SectionCard>
-          ) : null}
-          {rows.viewPrefs ? (
-            <SectionCard>
-              <SwitchRow
-                label="События"
-                value={eventsOn}
-                onChange={(v) => setFeature.mutate({ key: "events", on: v })}
-              />
-            </SectionCard>
-          ) : null}
-
           {/* ПОД ПРОВЕРКОЙ `team` НЕ ДЛЯ КРАСОТЫ: карточка печатает `team.name`,
               а при нуле календарей его нет — экран падал бы на первом же кадре.
               Дыру открыл я сам, когда добавлял удаление 27 августа. */}

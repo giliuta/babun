@@ -863,8 +863,9 @@ export default function CalendarTab() {
   const seesIncome = seesSide("income");
   const seesExpense = seesSide("expense");
   const canViewCompanyFinance = seesIncome || seesExpense;
-  const showDayFinance =
-    canViewCompanyFinance && calSettings?.showDayFinance !== false;
+  // Полоса денег под календарём — всегда, кому видны деньги (владелец 30.09:
+  // «показывать доход и расход всегда будет открыто»; тумблера больше нет).
+  const showDayFinance = canViewCompanyFinance;
   // Подсветка чипа своего календаря — см. `onPickOwn`: пока переход смены
   // календаря не закоммичен, лента показывает тапнутый чип, а не прежний.
   const [chipTeamId, showChipTeam] = useOptimistic(activeTeamId);
