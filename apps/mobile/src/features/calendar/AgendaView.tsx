@@ -37,6 +37,8 @@ export function AgendaView({
   showAmounts = true,
   refreshing,
   onRefresh,
+  onCreate,
+  lastBefore,
 }: {
   sections: AgendaSection[];
   /** Business-timezone anchors for the «Сегодня»/«Завтра» headers. */
@@ -68,6 +70,13 @@ export function AgendaView({
   showAmounts?: boolean;
   refreshing: boolean;
   onRefresh: () => void;
+  /** Пустая лента — «Новая запись» внизу (владелец 29.09: «пусто — надо
+   *  исправлять: кнопку создать запись внизу или что-то полезное»). Кому
+   *  создавать нельзя — не передаётся. */
+  onCreate?: () => void;
+  /** «пт, 26 сентября» — последняя запись до окна ленты, чтобы пустота не
+   *  выглядела как «данных нет». */
+  lastBefore?: string | null;
 }) {
   const t = useThemeColors();
   return (
@@ -110,14 +119,18 @@ export function AgendaView({
         <EmptyState
           fill
           title="Записей не запланировано"
-          subtitle={`Ближайшие ${horizonDays} дней пусты`}
+          subtitle={
+            lastBefore
+              ? `Ближайшие ${horizonDays} дней пусты\nПоследняя была ${lastBefore}`
+              : `Ближайшие ${horizonDays} дней пусты`
+          }
+          action={onCreate ? { label: "Новая запись", onPress: onCreate } : undefined}
         />
       }
     />
-      {/* «СПИСОК» — ТОЛЬКО ДЛЯ ПРОСМОТРА (владелец 2026-09-24: «список мы
-          оставляем только для просмотра»). Кнопка «Создать запись» внизу
-          отменена: запись заводится одним способом — тапом по свободному
-          времени в сетке, а в ленте слотов нет. */}
+      {/* «СПИСОК» — ДЛЯ ПРОСМОТРА (владелец 24.09). Постоянной кнопки
+          создания нет; только у пустой ленты — «Новая запись» внизу
+          (владелец 29.09). */}
     </View>
   );
 }

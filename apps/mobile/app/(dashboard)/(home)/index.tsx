@@ -1556,6 +1556,15 @@ export default function CalendarTab() {
 
   // Agenda — «what's next»: from the selected day forward 60 days
   // (web AgendaView HORIZON_DAYS), not the cursor month.
+  // Последняя запись ДО окна ленты — подпись пустого «Списка».
+  const agendaLastBefore = useMemo(() => {
+    const startKey = formatYMD(day);
+    let last: string | null = null;
+    for (const a of visibleAppts) {
+      if (a.date < startKey && (!last || a.date > last)) last = a.date;
+    }
+    return last ? humanDay(last) : null;
+  }, [visibleAppts, day]);
   const agendaSections = useMemo(() => {
     const startKey = formatYMD(day);
     const endKey = formatYMD(addDays(day, AGENDA_HORIZON_DAYS));
@@ -2962,6 +2971,21 @@ export default function CalendarTab() {
           showAmounts={!isCrew}
           refreshing={pull.refreshing}
           onRefresh={pull.onRefresh}
+          onCreate={
+            canCreateOnGrid
+              ? () => {
+                  // Ближайшее получасовое время сегодня, а не 10:00, которое
+                  // днём уже прошло.
+                  const next = Math.min(23 * 60 + 30, Math.ceil((nowMinutes + 1) / 30) * 30);
+                  bookAt({
+                    date: todayYmd,
+                    time_start: `${String(Math.floor(next / 60)).padStart(2, "0")}:${String(next % 60).padStart(2, "0")}`,
+                    kind: "work",
+                  });
+                }
+              : undefined
+          }
+          lastBefore={agendaLastBefore}
         />
       ) : mode === "week" ? (
         <>
