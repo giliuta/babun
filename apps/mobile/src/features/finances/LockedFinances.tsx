@@ -136,7 +136,7 @@ export function LockedFinances() {
           onOpenCustom={NOOP}
           totals={ZERO_TOTALS}
           accounts={{ total: 0 }}
-          invoices={{ openCount: 0 }}
+          invoices={{ count: 0 }}
           showDocuments={canUseDocuments}
           view="all"
           onTap={NOOP}

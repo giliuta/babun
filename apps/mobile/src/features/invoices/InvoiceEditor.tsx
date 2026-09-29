@@ -20,6 +20,7 @@ import type { Team } from "@/features/reference/queries";
 import type { Tenant } from "@/features/settings/tenant";
 import { buildInvoiceDocument, type InvoiceDraftSeller } from "./document";
 import { useCompanies, defaultCompany } from "@/features/companies/queries";
+import { companyFilled } from "@/features/companies/company-rules";
 import { useToast } from "@/components/ui/Toast";
 import { applyDiscount, round2 } from "@babun/shared/local/finance/appointment-calc";
 import { inputFromGross } from "@babun/shared/local/finance/vat";
@@ -576,7 +577,16 @@ export function InvoiceEditor({
                   text: `Итог должен совпадать с доходом — ${formatInvoiceMoney(incomeAmount, currency)}`,
                   error: true,
                 }
-              : null;
+              // БЕЗ РЕКВИЗИТОВ ИНВОЙС НЕ ВЫСТАВЛЯЕТСЯ (аудит 2026-09-29:
+              // документ уходил с шапкой «Giliuta» без адреса и VAT-номера).
+              // Ведём туда, где их заполняют: блок «Реквизиты» этой же формы
+              // открывает набор тапом. Пока справочник не доехал — не судим.
+              : companies.data && (!pickedCompany || !companyFilled(pickedCompany))
+                ? {
+                    text: "Заполните реквизиты — тапните блок «Реквизиты» выше",
+                    error: false,
+                  }
+                : null;
 
   const submit = async () => {
     setError(null);

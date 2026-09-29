@@ -7,7 +7,6 @@ import {
 import {
   FORMS_DOCUMENT,
   formatCountRu,
-  pluralRu,
 } from "@babun/shared/common/utils/plural-ru";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useToast } from "@/components/ui/Toast";
@@ -40,8 +39,10 @@ export type HomeView =
   | "profit";
 
 export interface InvoiceTileSummary {
-  /** Сколько документов ждут оплаты — плитка печатает ШТУКИ, а не деньги. */
-  openCount: number;
+  /** Сколько документов (инвойсов и чеков) за период — ровно столько строк
+   *  откроется под плиткой (`usePeriodDocuments`, аудит 2026-09-29). Плитка
+   *  печатает ШТУКИ, а не деньги. */
+  count: number;
 }
 
 export interface AccountTileSummary {
@@ -410,15 +411,10 @@ export function FinanceOverview({
             // боялись, что голый «0» рядом с «€450» в том же ряду прочтётся
             // как сумма. Владелец прочёл иначе: плитка считает ШТУКИ, и ноль
             // штук — такое же число, как три. Бледным его держит `quiet`.
-            value={String(invoices.openCount)}
-            quiet={invoices.openCount === 0}
+            value={String(invoices.count)}
+            quiet={invoices.count === 0}
             active={view === "documents"}
-            // Глагол склоняется вместе с числительным: «1 документ ждёт»,
-            // а не «1 документ ждут».
-            a11yValue={`${formatCountRu(invoices.openCount, FORMS_DOCUMENT)} ${pluralRu(
-              invoices.openCount,
-              ["ждёт", "ждут", "ждут"],
-            )} оплаты`}
+            a11yValue={`${formatCountRu(invoices.count, FORMS_DOCUMENT)} за период`}
             locked={locked}
             onPress={() => onTap("documents")}
           />

@@ -11,11 +11,7 @@ import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finan
 import { accountServesTeam } from "@babun/shared/local/finance/integrity";
 import { accountsTotal } from "@/features/finances/account-ui";
 import { getDebtAmount } from "@babun/shared/local/appointments";
-import {
-  calculateInvoiceSettlement,
-  invoiceInTeamScope,
-  invoicedAppointmentIds,
-} from "@babun/shared/local/finance/invoice-ledger";
+import { invoicedAppointmentIds } from "@babun/shared/local/finance/invoice-ledger";
 import { appointmentMaterialCost } from "@babun/shared/local/finance/appointment-calc";
 import {
   getCurrentCyprusTime,
@@ -48,6 +44,7 @@ import { materialExpenseRows } from "@/features/finances/material-expenses";
 import { useFinanceRoute } from "@/features/finances/use-finance-route";
 import { fallbackScopeUpdate } from "@/features/finances/finance-route";
 import { DocumentsPanel } from "@/features/finances/DocumentsPanel";
+import { usePeriodDocuments } from "@/features/finances/use-period-documents";
 import type { DocumentFilter } from "@/features/finances/documents";
 import { ProfitBreakdown } from "@/features/finances/ProfitBreakdown";
 import { DebtorsList } from "@/features/finances/DebtorsList";
@@ -723,38 +720,25 @@ function FinancesContent() {
     />
   );
 
-  // Плитка «Документы» считает ШТУКИ, а не деньги (владелец 2026-08-11):
-  // сумма к оплате — это обязательство клиента, а не наш остаток, и рядом с
-  // остатком на счетах она читалась как второй кошелёк. `overdue` остался
-  // суммой намеренно: он не печатается, а только решает, красить ли число —
-  // «среди ждущих есть просроченные».
-  // Σ ПРОСРОЧЕННОГО БОЛЬШЕ НЕ СЧИТАЕТСЯ (владелец 2026-08-15: «неоплаченный
-  // документ — ничего страшного, не надо выставлять его якобы красным»). Она
-  // не печаталась нигде и решала ровно один вопрос — красить ли плитку; красной
-  // плитки нет, и вместе с ней ушёл счёт. Само состояние документа названо
-  // словом в его строке.
-  const invoiceSummary = useMemo(() => {
-    let openCount = 0;
-    for (const invoice of scopedInvoices) {
-      // Отменённый (credit-noted) инвойс ничего не ждёт — как и void. Без
-      // этого он двоился с «Долгами»: работа возвращается туда (см.
-      // invoicedAppointments), а плитка продолжала считать его «ждущим».
-      if (invoice.status === "void" || invoice.status === "cancelled") continue;
-      // Срез команды — тем же правилом, что у списка под плиткой
-      // (collectDocuments): бумага БЕЗ хозяина видна в любом срезе. Строгий
-      // `brigade_id !== scope` прятал бесхозный инвойс из этой цифры, а его
-      // работа уже была вычеркнута из «Долгов» как выставленная, — деньги
-      // пропадали из обеих плиток и оставались только в списке.
-      if (!invoiceInTeamScope(invoice, scope)) continue;
-      const settlement = calculateInvoiceSettlement(
-        invoice,
-        invoicePayments[invoice.id] ?? [],
-      );
-      if (settlement.remaining <= 0) continue;
-      openCount += 1;
-    }
-    return { openCount };
-  }, [invoicePayments, scope, scopedInvoices]);
+  // Плитка «Документы» — ШТУКИ (владелец 2026-08-11), и ровно те, что
+  // откроются под ней (аудит 2026-09-29: «Документы 0», а в «Чеках» за тот же
+  // месяц 1 чек — плитка считала только инвойсы, ждущие оплату). Один список
+  // с панелью (`usePeriodDocuments`): число и строки не расходятся.
+  const periodDocuments = usePeriodDocuments({
+    invoices: scopedInvoices,
+    payments: invoicePayments,
+    appointments: scopedAppointments,
+    accounts,
+    clients,
+    clientId: requestedClientId,
+    teamId: scope,
+    period,
+    today: businessToday,
+  });
+  const invoiceSummary = useMemo(
+    () => ({ count: periodDocuments.documents.length }),
+    [periodDocuments.documents.length],
+  );
 
   // Листу перевода нужны сами команды, а не их имена: он подписывает счета
   // командами, и расформированная команда обязана остаться названной.

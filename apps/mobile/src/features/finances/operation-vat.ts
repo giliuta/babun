@@ -44,3 +44,40 @@ export function vatModeForDraft({
   if (chosen) return mode;
   return settingsKnown ? mode : undefined;
 }
+
+/**
+ * РЕЖИМ VAT НОВОЙ ОПЕРАЦИИ ПО УМОЛЧАНИЮ — С УЧЁТОМ НАПРАВЛЕНИЯ ДЕНЕГ (аудит
+ * 2026-09-29: «ввёл €1 — списалось €1,19»).
+ *
+ * Доход «Плюс VAT» — обычное дело: цену назвали без налога, клиент заплатит
+ * сверху. Расход же вводят суммой с чека — тем, что УШЛО со счёта, и «Плюс
+ * VAT» по умолчанию молча списывал больше, чем заплатили. Поэтому у расхода
+ * настройка «Плюс VAT» становится «VAT включён»; нажатая руками клавиша
+ * по-прежнему сильнее умолчания.
+ */
+export function defaultOperationVatMode(
+  settingMode: TxVatMode,
+  kind: "income" | "expense",
+): TxVatMode {
+  return kind === "expense" && settingMode === "exclusive" ? "inclusive" : settingMode;
+}
+
+/** Строка-последствие под клавишами VAT — по направлению денег: у дохода
+ *  деньги «придут на счёт» и «вам остаются», у расхода — «уйдут со счёта».
+ *  `null` — без налога, сказать нечего. */
+export function vatConsequenceLine(
+  kind: "income" | "expense",
+  mode: TxVatMode,
+  amounts: { gross: number; vat: number; net: number },
+  fmt: (n: number) => string,
+): string | null {
+  if (mode === "none") return null;
+  if (mode === "exclusive") {
+    return kind === "expense"
+      ? `Со счёта уйдёт ${fmt(amounts.gross)} · налог ${fmt(amounts.vat)}`
+      : `На счёт придёт ${fmt(amounts.gross)} · налог ${fmt(amounts.vat)}`;
+  }
+  return kind === "expense"
+    ? `Из них налог ${fmt(amounts.vat)} · без налога ${fmt(amounts.net)}`
+    : `Из них налог ${fmt(amounts.vat)} · вам остаётся ${fmt(amounts.net)}`;
+}

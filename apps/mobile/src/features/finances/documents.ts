@@ -1,5 +1,6 @@
 import {
   calculateInvoiceSettlement,
+  invoiceInTeamScope,
   type InvoiceLedger,
   type InvoicePaymentLedger,
 } from "@babun/shared/local/finance/invoice-ledger";
@@ -79,13 +80,7 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
     if (!inPeriod(invoice.issued_on, sources.period)) continue;
     // Инвойс знает свою команду сам. Документ без команды — общий, и его
     // видно в любом срезе (то же правило, что у чека без хозяина).
-    if (
-      sources.teamId &&
-      invoice.brigade_id &&
-      invoice.brigade_id !== sources.teamId
-    ) {
-      continue;
-    }
+    if (!invoiceInTeamScope(invoice, sources.teamId)) continue;
     const settlement = calculateInvoiceSettlement(
       invoice,
       sources.payments[invoice.id] ?? [],

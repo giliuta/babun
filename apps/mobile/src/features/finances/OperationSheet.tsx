@@ -84,7 +84,11 @@ import {
 } from "./queries";
 import { useAccountsWithBalances } from "./accounts";
 import { accountIcon } from "./account-ui";
-import { vatModeForDraft } from "./operation-vat";
+import {
+  defaultOperationVatMode,
+  vatConsequenceLine,
+  vatModeForDraft,
+} from "./operation-vat";
 import {
   operationPatchBaseline,
   operationTransactionPatch,
@@ -552,14 +556,18 @@ export function OperationSheet({
   const vatRateSetting = vat.rate;
   useEffect(() => {
     if (!visible || vatTouched || isEdit) return;
+    // У расхода «Плюс VAT» по умолчанию не ставится (`defaultOperationVatMode`).
     setVatMode(
-      defaultTxVatMode({
-        mode: vatModeSetting,
-        rate: vatRateSetting,
-        exemptionNote: null,
-      }),
+      defaultOperationVatMode(
+        defaultTxVatMode({
+          mode: vatModeSetting,
+          rate: vatRateSetting,
+          exemptionNote: null,
+        }),
+        type,
+      ),
     );
-  }, [visible, vatTouched, isEdit, vatModeSetting, vatRateSetting]);
+  }, [visible, vatTouched, isEdit, vatModeSetting, vatRateSetting, type]);
 
   // СТАВКА ОПЕРАЦИИ — ЕЁ СНИМОК, а не сегодняшняя настройка. Страница НДС
   // обещает: «поднимете ставку завтра — прошлые отчёты не изменятся», и
@@ -1180,9 +1188,8 @@ export function OperationSheet({
                 className="px-4 pb-3 text-[13px]"
                 style={{ color: th.sub, fontVariant: ["tabular-nums"] }}
               >
-                {vatMode === "exclusive"
-                  ? `На счёт придёт ${formatEUR(vatBreakdown.gross)} · налог ${formatEUR(vatBreakdown.vat)}`
-                  : `Из них налог ${formatEUR(vatBreakdown.vat)} · вам остаётся ${formatEUR(vatBreakdown.net)}`}
+                {/* По направлению денег: у расхода они уходят со счёта. */}
+                {vatConsequenceLine(type, vatMode, vatBreakdown, formatEUR)}
               </Text>
             ) : null}
           </SectionCard>
