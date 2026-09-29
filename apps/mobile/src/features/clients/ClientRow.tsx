@@ -16,6 +16,7 @@ import {
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import {
   getAvatarHue,
   getInitials,
@@ -168,6 +169,14 @@ export default function ClientRow({
       ),
     });
   }
+  // Прошедшие записи, которые никто не закрыл, — не визиты, но и не
+  // «нет записей»: человек у нас был (аудит 29.09). Тем же словом, что
+  // календарь, — «не закрыт».
+  const unclosed = stats?.unclosedVisits ?? 0;
+  const unclosedText =
+    unclosed > 0
+      ? `${unclosed} ${countWordRu(unclosed, "визит не закрыт", "визита не закрыты", "визитов не закрыто")}`
+      : null;
   if (cardFields.last) {
     metaLead.push({
       key: "last",
@@ -193,6 +202,17 @@ export default function ClientRow({
             style={{ color: t.accent }}
           >
             {`записан ${formatShortDateRu(stats.nextApt.date)}`}
+          </Text>
+        </View>
+      ) : unclosedText ? (
+        <View className="flex-row items-center gap-1">
+          <Clock color={t.warning} size={12} strokeWidth={2} />
+          <Text
+            maxFontSizeMultiplier={1.3}
+            className="text-[11px]"
+            style={{ color: t.warning }}
+          >
+            {unclosedText}
           </Text>
         </View>
       ) : (
@@ -240,7 +260,9 @@ export default function ClientRow({
     cardFields.last
       ? stats?.lastVisitDate
         ? `последний визит ${formatShortDateRu(stats.lastVisitDate)}`
-        : "нет записей"
+        : stats?.nextApt
+          ? `записан ${formatShortDateRu(stats.nextApt.date)}`
+          : (unclosedText ?? "нет записей")
       : "",
     metaTail,
     client.phone ?? "",
