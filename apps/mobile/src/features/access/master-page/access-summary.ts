@@ -84,13 +84,22 @@ export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock
         "finance.operations",
         "finance.income",
         "finance.expense",
-        "calendar.schedule",
       ],
     },
     // Записи клиентов и событий, перенос и отмена — своим блоком «Записи»
     // (владелец 30.09: «создай второй блок — „Записи"»; «событие тоже
     // опускаем»; «перенос записи и отмена переносим также в записи»).
     { key: "records", title: "Записи", keys: RECORD_KINDS },
+    // НАСТРОЙКИ КОМАНДЫ — по строке на каждую функцию шестерёнки календаря
+    // (владелец 30.09: «может менять часовой пояс, не может график менять и
+    // так далее — полностью все функции, которые в настройках»). Строка
+    // встаёт сюда, когда сервер начинает проверять её право.
+    {
+      key: "settings",
+      title: "Настройки команды",
+      // В порядке строк шестерёнки календаря.
+      keys: ["calendar.identity", "calendar.timezone", "calendar.hours", "calendar.schedule"],
+    },
   ],
 };
 

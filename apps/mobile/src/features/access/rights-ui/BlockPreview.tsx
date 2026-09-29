@@ -7,7 +7,9 @@ import {
   CLIENTS_PREVIEW_KEYS,
   MONEY_PREVIEW_KEYS,
   RECORD_PREVIEW_KEYS,
+  SETTINGS_PREVIEW_KEYS,
 } from "./preview-keys";
+import { SettingsPreview } from "./SettingsPreviews";
 import { RecordPreview } from "./RecordPreviews";
 
 // ВИД БЛОКА В ШТОРКЕ ПРАВА — КАКОЙ ИЗ ВИДОВ РИСОВАТЬ. Права без своего вида
@@ -41,6 +43,16 @@ export function BlockPreview({
   }
   if (CLIENTS_PREVIEW_KEYS.includes(key)) {
     return <ClientsPreview blockKey={key} levels={levels} />;
+  }
+  if (SETTINGS_PREVIEW_KEYS.includes(key)) {
+    return (
+      <SettingsPreview
+        blockKey={key}
+        level={levels[key] ?? block.levels[0] ?? "off"}
+        teamName={teamName}
+        teamColor={teamColor}
+      />
+    );
   }
   return null;
 }

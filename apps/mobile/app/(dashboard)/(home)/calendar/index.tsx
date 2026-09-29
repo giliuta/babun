@@ -59,6 +59,10 @@ import { useCurrency } from "@/features/settings/currency";
 import { moneyName, moneySymbol } from "@babun/shared/common/utils/money";
 import { CurrencySheet } from "@/features/settings/CurrencySheet";
 import { TeamScheduleSheet } from "@/features/calendar/TeamScheduleSheet";
+import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
+import { useMemberUpdateTeam } from "@/features/calendar/mutations";
+import { accessGate } from "@/features/access/my-access";
+import { useMyAccess } from "@/features/access/queries";
 import { confirmThen } from "@/lib/confirm";
 import { useToast } from "@/components/ui/Toast";
 import { notify } from "@/lib/notify";
@@ -189,12 +193,12 @@ export default function CalendarSettingsScreen() {
   // которая ведёт в закрытое, хуже отсутствия строки: человек идёт и упирается
   // (канон, правило 10).
   const canUseServices = usePlanAllows("services");
+  const actionsIn = useCalendarActionsReader();
+  const memberUpdateTeam = useMemberUpdateTeam();
+  const myAccess = useMyAccess().data;
   // СТРАНИЦА ОТКРЫТА ВСЕМ, СТРОКИ — ПО ДОСТУПУ (владелец 20.09: «я могу зайти
   // туда, но блоков уже внутри шестерёнки не будет… визуал целой страницы мы
   // полностью сохраняем»). Правило и его причины — `settings-rows.ts`.
-  const rows = calendarSettingsRows(role, {
-    services: canUseServices,
-  });
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const dayLabelsOn = useFeatureOn("day_labels");
@@ -214,6 +218,22 @@ export default function CalendarSettingsScreen() {
     : undefined;
   const activeId = params.team ?? persisted ?? teams[0]?.id;
   const team = teams.find((x) => x.id === activeId) ?? teams[0];
+  // СТРОКИ — ПО ПРАВАМ ЭТОЙ КОМАНДЫ: сотруднику открываются те, что владелец
+  // выдал в блоке «Настройки команды» (30.09).
+  const rowLevel = (blockKey: string): "hidden" | "read" | "write" => {
+    const gate = accessGate({ role, map: myAccess, blockKey, scope: "calendar", teamId: team?.id ?? null });
+    return gate === "write" ? "write" : gate === "read" ? "read" : "hidden";
+  };
+  const rows = calendarSettingsRows(
+    role,
+    { services: canUseServices },
+    {
+      schedule: actionsIn(team?.id ?? null).schedule,
+      identity: rowLevel("calendar.identity"),
+      timezone: rowLevel("calendar.timezone"),
+      hours: rowLevel("calendar.hours"),
+    },
+  );
   // ПОДПИСЬ СТРОКИ «ДИЗАЙН» — ЭТОЙ КОМАНДЫ: откуда цвет и сколько блоков.
   const bookingBlocks = useBookingBlocks(team?.id ?? null);
   const bookingRule = useAutoColorRule(team?.id ?? null);
@@ -233,6 +253,18 @@ export default function CalendarSettingsScreen() {
   // неподтверждённые дефолты, и правка ушла бы не от той базы.
   const patchTeam = (p: Record<string, unknown>) => {
     if (!team) return;
+    // Сотрудник пишет поле команды своей дверью — сервер пускает его по
+    // праву строки в «Настройках команды» (30.09).
+    if (role === "master") {
+      memberUpdateTeam.mutate(
+        { teamId: team.id, patch: p },
+        {
+          onSuccess: () => setSavedTick(Date.now()),
+          onError: (e) => notify("Ошибка", e.message),
+        },
+      );
+      return;
+    }
     update.mutate(
       { id: team.id, patch: p },
       {
@@ -388,12 +420,17 @@ export default function CalendarSettingsScreen() {
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
           {team ? (
             <>
-              {rows.rename ? (
+              {rows.renameEdit ? (
                 <CalendarIdentityCard
                   key={team.id}
                   team={team}
                   onPatch={patchTeam}
                 />
+              ) : rows.rename ? (
+                // «Название и цвет: Только видит» — имя с цветом, без правки.
+                <SectionCard>
+                  <SettingsRow appearance={{ color: team.color }} title={team.name} sub="Название и цвет" />
+                </SectionCard>
               ) : null}
               {/* ЧАСОВОЙ ПОЯС — СРАЗУ ПОД ИМЕНЕМ КАЛЕНДАРЯ (владелец
                   2026-08-27: «перемести в самый верх… нет, под названием „Мой
@@ -429,7 +466,7 @@ export default function CalendarSettingsScreen() {
                     // «который час». Крупным справа они спорили с названием
                     // настройки и читались как её главный смысл.
                     sub={`${zoneCities(timezone)} · ${utcLabel(timezone)} · ${zoneClock(timezone)}`}
-                    onPress={() => setPicker("tz")}
+                    onPress={rows.timezoneEdit ? () => setPicker("tz") : undefined}
                   />
                 </SectionCard>
               ) : null}
@@ -493,7 +530,7 @@ export default function CalendarSettingsScreen() {
                     icon={CalendarRange}
                     title="Часы календаря"
                     sub={`${formatHm(window.start)}–${formatHm(window.end)}`}
-                    onPress={() => setPicker("view")}
+                    onPress={rows.hoursEdit ? () => setPicker("view") : undefined}
                   />
                 </SectionCard>
               ) : null}
@@ -504,7 +541,9 @@ export default function CalendarSettingsScreen() {
                     icon={CalendarClock}
                     title="График команды"
                     sub={schedText}
-                    onPress={() => setScheduleOpen(true)}
+                    // «Только видит» — строка без двери: график показан,
+                    // правки нет.
+                    onPress={rows.scheduleEdit ? () => setScheduleOpen(true) : undefined}
                   />
                 </SectionCard>
               ) : null}
@@ -836,7 +875,7 @@ export default function CalendarSettingsScreen() {
         // поле означает «как у компании», и печатать вместо него 00:00 —
         // врать про то, что на самом деле стоит между записями.
         buffer={effectiveBuffer(team, settings)}
-        onBufferChange={(minutes) => patchTeam({ buffer_minutes: minutes })}
+        onBufferChange={rows.buffer ? (minutes) => patchTeam({ buffer_minutes: minutes }) : undefined}
         onClose={() => setScheduleOpen(false)}
       />
 

@@ -10,11 +10,16 @@ describe("строки настроек календаря", () => {
     const rows = calendarSettingsRows("owner", PAID);
     assert.deepEqual(rows, {
       rename: true,
+      renameEdit: true,
       addCalendar: true,
       timezone: true,
+      timezoneEdit: true,
       currency: true,
       hours: true,
+      hoursEdit: true,
       schedule: true,
+      scheduleEdit: true,
+      buffer: true,
       booking: true,
       services: true,
       labels: true,
@@ -40,6 +45,33 @@ describe("строки настроек календаря", () => {
       }
     });
   }
+
+  test("сотрудник: строка графика — по его праву в «Настройках команды» (30.09)", () => {
+    const read = calendarSettingsRows("master", PAID, { schedule: "read" });
+    assert.equal(read.schedule, true);
+    assert.equal(read.scheduleEdit, false, "«Только видит» — строка без правки");
+    assert.equal(read.buffer, false);
+    assert.equal(read.any, true);
+    const write = calendarSettingsRows("master", PAID, { schedule: "write" });
+    assert.equal(write.scheduleEdit, true);
+    // «Видит и меняет» — меняет всё в строке, перерыв после записи тоже.
+    assert.equal(write.buffer, true);
+    for (const other of ["rename", "timezone", "currency", "hours", "booking", "labels", "remove"] as const) {
+      assert.equal(write[other], false, `«${other}» сотруднику не открывается правом графика`);
+    }
+  });
+
+  test("сотрудник: название, пояс и часы — по его праву; валюта и удаление — никогда", () => {
+    const rows = calendarSettingsRows("master", PAID, { identity: "write", timezone: "read", hours: "hidden" });
+    assert.equal(rows.rename, true);
+    assert.equal(rows.renameEdit, true);
+    assert.equal(rows.timezone, true);
+    assert.equal(rows.timezoneEdit, false, "«Только видит» — строка без двери");
+    assert.equal(rows.hours, false);
+    assert.equal(rows.currency, false);
+    assert.equal(rows.remove, false);
+    assert.equal(rows.addCalendar, false);
+  });
 
   test("удаление календаря сотруднику не показывается", () => {
     // Строка «Удалить календарь» — единственная разрушающая на экране;

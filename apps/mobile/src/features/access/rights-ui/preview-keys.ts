@@ -34,11 +34,15 @@ export const MONEY_PREVIEW_KEYS: readonly string[] = [
 
 export const CLIENTS_PREVIEW_KEYS: readonly string[] = ["clients", "clients.scope", "clients.contacts"];
 
+/** Строки шестерёнки календаря — вид «как в настройках команды». */
+export const SETTINGS_PREVIEW_KEYS: readonly string[] = ["calendar.identity", "calendar.timezone", "calendar.hours"];
+
 export function hasBlockPreview(key: string): boolean {
   return (
     RECORD_PREVIEW_KEYS.includes(key) ||
     CALENDAR_PREVIEW_KEYS.includes(key) ||
     MONEY_PREVIEW_KEYS.includes(key) ||
-    CLIENTS_PREVIEW_KEYS.includes(key)
+    CLIENTS_PREVIEW_KEYS.includes(key) ||
+    SETTINGS_PREVIEW_KEYS.includes(key)
   );
 }

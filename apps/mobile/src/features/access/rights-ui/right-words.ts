@@ -20,6 +20,9 @@ const TITLE: Record<string, string> = {
   "calendar.events": "Записи событий",
   "calendar.day_labels": "Метка дня",
   "calendar.schedule": "График команды",
+  "calendar.identity": "Название и цвет",
+  "calendar.timezone": "Часовой пояс",
+  "calendar.hours": "Часы календаря",
   "record.team": "Команда",
   "record.label": "Метка",
   "record.color": "Цвет записи",
@@ -52,6 +55,11 @@ const STEP: Record<string, Words> = {
   "calendar.records": { off: "Скрыты", read: "Только видит", write: "Видит и создаёт" },
   // События — так же, как записи клиентов (владелец 30.09).
   "calendar.events": { off: "Скрыты", read: "Только видит", write: "Видит и создаёт" },
+  "calendar.schedule": { off: "Скрыт", read: "Только видит", write: "Видит и меняет" },
+  // Настройки команды (владелец 30.09: «полностью как в шестерёнке»).
+  "calendar.identity": { off: "Скрыто", read: "Только видит", write: "Видит и меняет" },
+  "calendar.timezone": { off: "Скрыт", read: "Только видит", write: "Видит и меняет" },
+  "calendar.hours": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
   // Метка дня (владелец 29.09: «не видит, видит, меняет — другими словами»).
   "calendar.day_labels": { off: "Скрыта", read: "Только видит", write: "Видит и меняет" },
   "record.team": { read: "Видит", write: "Меняет" },

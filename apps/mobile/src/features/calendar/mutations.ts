@@ -349,6 +349,28 @@ export function useMemberCopyAppointment() {
   });
 }
 
+/** НАСТРОЙКИ КОМАНДЫ СОТРУДНИКОМ (владелец 30.09: «даю доступ менять —
+ *  значит он меняет всё в этом блоке»). Строку `teams` пишет только владелец;
+ *  сотрудник меняет поле команды через `member_update_team`, и сервер
+ *  пускает каждое поле по праву его строки в «Настройках команды». */
+export function useMemberUpdateTeam() {
+  const qc = useQueryClient();
+  const refusal = useMemberRefusal();
+  return useMutation({
+    mutationFn: async (input: { teamId: string; patch: Record<string, unknown> }) => {
+      const { error } = await supabase.rpc("member_update_team", {
+        p_team: input.teamId,
+        p_patch: input.patch as Json,
+      });
+      if (error) throw refusal("updateTeam", error.message);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["teams"] });
+    },
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
 export function useDeleteAppointment() {
   const tenantId = useTenantId();
   const role = useCurrentRole().data;

@@ -4311,6 +4311,10 @@ export type Database = {
         Args: { p_appointment_id: string; p_patch: Json }
         Returns: Json
       }
+      member_update_team: {
+        Args: { p_patch: Json; p_team: string }
+        Returns: Json
+      }
       set_default_company: {
         Args: { p_company_id: string }
         Returns: undefined

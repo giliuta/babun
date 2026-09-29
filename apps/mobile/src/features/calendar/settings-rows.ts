@@ -26,18 +26,52 @@ export interface CalendarSettingsPlan {
   services: boolean;
 }
 
+/** ПРАВА СОТРУДНИКА НА СТРОКИ НАСТРОЕК ЭТОЙ КОМАНДЫ (владелец 30.09: блок
+ *  «Настройки команды» на его странице — «может менять часовой пояс, не может
+ *  график менять и так далее»). Строка приходит сюда, когда сервер проверяет
+ *  её право; владелец видит всё и так. */
+type RowLevel = "hidden" | "read" | "write";
+
+export interface CalendarSettingsAccess {
+  /** «График команды»: `read` — строка без двери, `write` — с правкой. */
+  schedule: RowLevel;
+  /** «Название и цвет» — карточка команды. */
+  identity: RowLevel;
+  /** «Часовой пояс». */
+  timezone: RowLevel;
+  /** «Часы календаря». */
+  hours: RowLevel;
+}
+
+const NO_ACCESS: CalendarSettingsAccess = {
+  schedule: "hidden",
+  identity: "hidden",
+  timezone: "hidden",
+  hours: "hidden",
+};
+
 /** Что показывает страница настроек календаря этому человеку. */
 export interface CalendarSettingsRows {
   /** Карточка календаря: имя, цвет, значок. */
   rename: boolean;
+  /** Карточка правится (иначе — строка с именем и цветом без правки). */
+  renameEdit: boolean;
   /** «Добавить» в ленте календарей. */
   addCalendar: boolean;
   timezone: boolean;
+  timezoneEdit: boolean;
   currency: boolean;
   /** «Часы календаря» — видимое окно команды. */
   hours: boolean;
+  hoursEdit: boolean;
   /** «График команды». */
   schedule: boolean;
+  /** «График команды» открывается на правку (иначе строка только
+   *  показывает график). */
+  scheduleEdit: boolean;
+  /** «Перерыв после записи» в шторке графика — свойство самой команды;
+   *  сотрудник пишет его через `member_update_team`. */
+  buffer: boolean;
   booking: boolean;
   services: boolean;
   /** «Метки» — метки дня. */
@@ -56,15 +90,26 @@ export interface CalendarSettingsRows {
 export function calendarSettingsRows(
   role: UserRole | null | undefined,
   plan: CalendarSettingsPlan,
+  given: Partial<CalendarSettingsAccess> = {},
 ): CalendarSettingsRows {
   const manage = can(role, "manage-calendar-settings");
+  const access: CalendarSettingsAccess = { ...NO_ACCESS, ...given };
+  const shown = (level: RowLevel) => manage || level !== "hidden";
+  const edits = (level: RowLevel) => manage || level === "write";
   const rows = {
-    rename: manage,
+    rename: shown(access.identity),
+    renameEdit: edits(access.identity),
     addCalendar: manage,
-    timezone: manage,
+    timezone: shown(access.timezone),
+    timezoneEdit: edits(access.timezone),
     currency: manage,
-    hours: manage,
-    schedule: manage,
+    hours: shown(access.hours),
+    hoursEdit: edits(access.hours),
+    schedule: shown(access.schedule),
+    scheduleEdit: edits(access.schedule),
+    // «Видит и меняет» — меняет всё в строке, перерыв после записи тоже
+    // (владелец 30.09: «разделения „владелец, директор" не будет»).
+    buffer: manage || access.schedule === "write",
     booking: manage,
     services: manage && plan.services,
     labels: manage,

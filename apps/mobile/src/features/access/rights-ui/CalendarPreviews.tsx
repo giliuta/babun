@@ -1,10 +1,11 @@
 import { Text, View } from "react-native";
-import { Bookmark, Trash2 } from "lucide-react-native";
+import { Bookmark, CalendarClock, Trash2 } from "lucide-react-native";
 
 import { Card } from "@/components/ui/Card";
-import { NavRow } from "@/components/ui/card-rows";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { PRESET_COLOR_VALUES } from "@babun/shared/common/utils/colors";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { ICON } from "@/components/ui/tokens";
 import { actionLook } from "@/features/calendar/ActionMenuSheet";
@@ -180,6 +181,13 @@ const RECORDS_CAPTION: Record<"hidden" | "read" | "write", string> = {
   write: "Так он создаёт запись: тап по свободному времени",
 };
 
+/** Подпись над видом графика команды — что у него на этой ступени. */
+const SCHEDULE_CAPTION: Record<"hidden" | "read" | "write", string> = {
+  hidden: "Так у него: графика в настройках нет",
+  read: "Так он видит график — без правки",
+  write: "Так он меняет график команды",
+};
+
 /** Подпись над видом записей событий — что у него на этой ступени. */
 const EVENTS_CAPTION: Record<"hidden" | "read" | "write", string> = {
   hidden: "Так у него: событий в дне нет",
@@ -314,18 +322,24 @@ export function CalendarPreview({
         </PreviewFrame>
       );
     }
-    case "calendar.schedule":
+    case "calendar.schedule": {
+      // ГРАФИК — ТОЙ ЖЕ СТРОКОЙ, ЧТО В НАСТРОЙКАХ КАЛЕНДАРЯ: «Только видит» —
+      // строка без двери, «Видит и меняет» — дверь в график.
+      const state = actions.schedule;
       return (
-        <PreviewFrame state={levelState(actions.schedule)}>
-          <Card style={{ marginHorizontal: 16, marginTop: 8 }}>
-            <NavRow
-              label="График команды"
-              value="Пн–Пт · 9:00–18:00"
-              onPress={actions.schedule === "write" ? noop : undefined}
+        <PreviewFrame state={state} caption={SCHEDULE_CAPTION[state]}>
+          <SectionCard>
+            <SettingsRow
+              tile={SETTINGS_TILE.blue}
+              icon={CalendarClock}
+              title="График команды"
+              sub="Пн–Вс · 10:00–20:00"
+              onPress={state === "write" ? noop : undefined}
             />
-          </Card>
+          </SectionCard>
         </PreviewFrame>
       );
+    }
     default:
       return null;
   }

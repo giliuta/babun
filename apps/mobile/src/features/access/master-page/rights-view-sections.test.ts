@@ -43,10 +43,11 @@ const page = (group: "calendar" | "finance") =>
   }).map((section) => ({ title: section.title, keys: section.rows.map((row) => row.block.key) }));
 
 describe("страница раздела доступа — блоками владельца", () => {
-  test("«Календарь»: «Главное» с деньгами, «Записи» — записи, события, перенос, отмена", () => {
+  test("«Календарь»: «Главное» с деньгами, «Записи», «Настройки команды» с графиком", () => {
     assert.deepEqual(page("calendar"), [
-      { title: "Главное", keys: ["calendar.day_labels", "finance.operations", "calendar.schedule"] },
+      { title: "Главное", keys: ["calendar.day_labels", "finance.operations"] },
       { title: "Записи", keys: ["calendar.records", "calendar.events", "calendar.move", "calendar.cancel"] },
+      { title: "Настройки команды", keys: ["calendar.schedule"] },
     ]);
   });
 

@@ -96,7 +96,10 @@ export function TeamScheduleSheet({
   teamName?: string;
   /** Буфер команды после каждой записи; `null` — «как у компании». */
   buffer?: number | null;
-  onBufferChange: (minutes: number) => void;
+  /** Нет — карточки перерыва нет: тому, кому перерыв команды не открыт.
+   *  Перерыв хранится в самой команде; сотрудник с «График команды: Видит и
+   *  меняет» пишет его своей дверью `member_update_team` (30.09). */
+  onBufferChange?: (minutes: number) => void;
   onClose: () => void;
 }) {
   const t = useThemeColors();
@@ -162,7 +165,7 @@ export function TeamScheduleSheet({
    *  открытии, звал `onChange` — и у команды, которая наследовала перерыв
    *  компании, молча появлялся собственный ноль. */
   const setBuffer = (next: number) => {
-    if (next !== bufferMinutesTotal) onBufferChange(next);
+    if (next !== bufferMinutesTotal) onBufferChange?.(next);
   };
 
   const commit = (next: TeamSchedule) => {
@@ -545,6 +548,7 @@ export function TeamScheduleSheet({
             отвечал только на те вопросы, которые мы придумали за человека.
             Барабан пятиминутками до трёх часов отвечает на любой. Открывается
             тем же тапом по строке, что и часы дня выше. */}
+        {onBufferChange ? (
         <SectionCard>
           <ValueRow
             label="Перерыв после записи"
@@ -569,6 +573,7 @@ export function TeamScheduleSheet({
             </View>
           ) : null}
         </SectionCard>
+        ) : null}
       </View>
     </BottomSheet>
   );
