@@ -321,6 +321,34 @@ export function useUpdateAppointment() {
   });
 }
 
+/** КОПИЯ ЗАПИСИ СОТРУДНИКОМ — ТОЛЬКО В ЕЁ ЖЕ КОМАНДУ (владелец 30.09: «если
+ *  я дал доступ в команду номер один, он может копировать только в этой
+ *  команде»). Команды в вызове нет: сервер ставит копию туда же, где
+ *  оригинал, по праву «Перенос записей» (`member_appointment_copy`). Копия
+ *  делается на сервере с настоящей записи: у сотрудника скрытые поля
+ *  приходят пустыми, и копия с телефона вышла бы без клиента и с нулями. */
+export function useMemberCopyAppointment() {
+  const qc = useQueryClient();
+  const refusal = useMemberRefusal();
+  return useMutation({
+    mutationFn: async (input: { sourceId: string; date: string; timeStart: string; timeEnd: string }) => {
+      const { data, error } = await supabase.rpc("member_appointment_copy", {
+        p_source: input.sourceId,
+        p_date: input.date,
+        p_time_start: input.timeStart,
+        p_time_end: input.timeEnd,
+      });
+      if (error) throw refusal("createAppointment", error.message);
+      const id = (data as { id?: unknown } | null)?.id;
+      return typeof id === "string" ? id : null;
+    },
+    onSuccess: () => {
+      for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });
+    },
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
 export function useDeleteAppointment() {
   const tenantId = useTenantId();
   const role = useCurrentRole().data;

@@ -177,6 +177,8 @@ export function memberWriteRefusal(
   }
   if (/access:field:/.test(message)) return "Это поле меняет только владелец";
   if (/access:client/.test(message)) return "Этот клиент вам недоступен";
+  // Запись не уходит из своей команды (владелец 30.09).
+  if (/access:team_move/.test(message)) return "Запись остаётся в своей команде";
   if (/not found or not in your calendars/.test(message)) {
     return "Запись больше не в ваших календарях";
   }

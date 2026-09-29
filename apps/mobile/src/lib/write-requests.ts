@@ -75,6 +75,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "issue_receipt",
   "location_request_create",
   "location_request_submit",
+  "member_appointment_copy",
   "member_appointment_create",
   "member_appointment_delete",
   "member_appointment_update",

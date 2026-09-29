@@ -4290,6 +4290,15 @@ export type Database = {
       }
       invitation_preview: { Args: { p_token: string }; Returns: Json }
       is_platform_admin: { Args: never; Returns: boolean }
+      member_appointment_copy: {
+        Args: {
+          p_date: string
+          p_source: string
+          p_time_end: string
+          p_time_start: string
+        }
+        Returns: Json
+      }
       member_appointment_create: {
         Args: { p_row: Json }
         Returns: Json

@@ -110,6 +110,11 @@ describe("запись сотрудника — зеркало серверно�
     );
     assert.equal(memberWriteRefusal("access:field:paid_amount", titleOf), "Это поле меняет только владелец");
     assert.equal(memberWriteRefusal("access:client", titleOf), "Этот клиент вам недоступен");
+    // Запись сотрудника не уходит из своей команды (владелец 30.09).
+    assert.equal(
+      memberWriteRefusal("updateAppointment: access:team_move", titleOf),
+      "Запись остаётся в своей команде",
+    );
     assert.equal(memberWriteRefusal("boom", titleOf), null);
   });
 

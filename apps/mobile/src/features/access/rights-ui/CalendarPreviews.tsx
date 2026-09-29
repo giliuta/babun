@@ -270,7 +270,12 @@ export function CalendarPreview({
     case "calendar.move":
       return (
         <PreviewFrame state={actions.move ? "can" : "cannot"}>
-          <AppointmentMenuPreview color={teamColor} tile={tile} items={["Перенести", "Копировать"]} />
+          {/* Всё меню записи по долгому нажатию — одно право (владелец 30.09). */}
+          <AppointmentMenuPreview
+            color={teamColor}
+            tile={tile}
+            items={["Свободное перемещение", "Перенести", "Копировать", "Цвет"]}
+          />
         </PreviewFrame>
       );
     case "calendar.cancel":

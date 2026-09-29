@@ -212,6 +212,32 @@ describe("сотрудник на карточке мастера", () => {
     assert.equal(rowsOf().find((row) => row.block.key === "calendar.records")?.level, "off");
   });
 
+  test("«Перенос записей» ведёт «Цвет записи»: одна строка, всё меню записи (владелец 30.09)", () => {
+    // Два блока меню записи — к общему реестру теста, как в `access_blocks`.
+    const extra = (key: string, position: number): AccessBlock => ({
+      key,
+      area: "calendar",
+      scope: "calendar",
+      levels: ["off", "write"],
+      title: key,
+      ownerOnly: false,
+      live: true,
+      position,
+    });
+    const registry = [...REGISTRY, extra("calendar.move", 26), extra("record.color", 37)];
+    const move = registry.find((b) => b.key === "calendar.move");
+    assert.ok(move);
+    const colorOf = (level: AccessLevel) =>
+      levelChanges(registry, move, level, "team-1")
+        ?.filter((change) => change.block === "record.color")
+        .map((change) => change.level);
+    assert.deepEqual(colorOf("write"), ["write"]);
+    assert.deepEqual(colorOf("off"), ["off"]);
+    const rows = rightsSections(registry, () => "write", "team-1").flatMap((section) => section.rows);
+    assert.equal(rows.some((row) => row.block.key === "record.color"), false, "строки «Цвет записи» нет");
+    assert.equal(rows.some((row) => row.block.key === "calendar.move"), true);
+  });
+
   test("скрытие главного сбрасывает и неживые зависимые — у сотрудника их уровень хранится", () => {
     const registry = REGISTRY.map((b) => (b.key === "calendar.records" ? { ...b, live: true } : b));
     const records = registry.find((b) => b.key === "calendar.records");

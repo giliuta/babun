@@ -152,6 +152,11 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
  *  проверяет `member_appointment_create`). Строки «Новые записи» отдельно нет. */
 export const RECORDS_KEY = "calendar.records";
 export const CREATE_KEY = "calendar.create";
+/** «Перенос записей» ведёт «Цвет записи» (владелец 30.09: «если я перенос
+ *  разрешаю — значит разрешаю свободное перемещение, перенести, копировать,
+ *  цвет»): всё меню записи по долгому нажатию — одно право. */
+export const MOVE_KEY = "calendar.move";
+export const COLOR_KEY = "record.color";
 
 /** Ступень строки «Записи клиентов» из двух прав: скрыты — «Скрыты»; видит
  *  и создаёт — «Видит и создаёт»; иначе — «Только видит». */
@@ -165,14 +170,19 @@ export function recordsRowLevel(records: AccessLevel, create: AccessLevel): Acce
  *  и так сбрасывает свёртка (`dependantResets`): второй раз один блок в набор
  *  не попадает — сервер такой набор отказывает. */
 export function companionLevels(blockKey: string, level: AccessLevel): Record<string, AccessLevel> {
+  if (blockKey === MOVE_KEY) return { [COLOR_KEY]: level === "write" ? "write" : "off" };
   if (blockKey !== RECORDS_KEY || level === "off") return {};
   return { [CREATE_KEY]: level === "write" ? "write" : "off" };
 }
 
 /** Строка права влита в другую и отдельно не рисуется: «Новые записи» — в
- *  «Записи клиентов», когда та есть на странице (сервер её проверяет). */
+ *  «Записи клиентов», «Цвет записи» — в «Перенос записей», когда главная
+ *  строка есть на странице (сервер её проверяет). */
 export function isMergedRow(key: string, offeredKeys: ReadonlySet<string>): boolean {
-  return key === CREATE_KEY && offeredKeys.has(RECORDS_KEY);
+  return (
+    (key === CREATE_KEY && offeredKeys.has(RECORDS_KEY)) ||
+    (key === COLOR_KEY && offeredKeys.has(MOVE_KEY))
+  );
 }
 
 /** Главный блок зависимого, `null` — блок ни от кого не зависит. */

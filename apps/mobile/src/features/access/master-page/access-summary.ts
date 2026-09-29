@@ -46,9 +46,9 @@ export const CALENDAR_ROW_ORDER: readonly string[] = [
   "calendar.day_labels",
   "calendar.records",
   "calendar.create",
+  "calendar.events",
   "calendar.move",
   "calendar.cancel",
-  "calendar.events",
   "calendar.schedule",
 ];
 
@@ -64,7 +64,12 @@ export interface SectionBlock {
 }
 
 /** Права блока «Записи» на странице «Календарь». */
-const RECORD_KINDS: readonly string[] = ["calendar.records", "calendar.events"];
+const RECORD_KINDS: readonly string[] = [
+  "calendar.records",
+  "calendar.events",
+  "calendar.move",
+  "calendar.cancel",
+];
 
 export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock[]>> = {
   calendar: [
@@ -73,9 +78,9 @@ export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock
       title: "Главное",
       keys: CALENDAR_ROW_ORDER.filter((key) => !RECORD_KINDS.includes(key)),
     },
-    // «Записи клиентов» и «Записи событий» — своим блоком «Записи»
+    // Записи клиентов и событий, перенос и отмена — своим блоком «Записи»
     // (владелец 30.09: «создай второй блок — „Записи"»; «событие тоже
-    // опускаем в блок „Записи"»).
+    // опускаем»; «перенос записи и отмена переносим также в записи»).
     { key: "records", title: "Записи", keys: RECORD_KINDS },
   ],
 };

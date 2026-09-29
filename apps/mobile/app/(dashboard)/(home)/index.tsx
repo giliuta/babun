@@ -174,6 +174,7 @@ import { useAppointments } from "@/features/calendar/queries";
 import {
   useCreateAppointment,
   useDeleteAppointment,
+  useMemberCopyAppointment,
   useUpdateAppointment,
 } from "@/features/calendar/mutations";
 import { useToast } from "@/components/ui/Toast";
@@ -387,6 +388,13 @@ export default function CalendarTab() {
     const teamId = newTeam === undefined ? apt.team_id : newTeam;
     const dateMoves = date !== apt.date;
     const teamMoves = teamId !== apt.team_id;
+    // ЗАПИСЬ СОТРУДНИКА НЕ УХОДИТ ИЗ СВОЕЙ КОМАНДЫ (владелец 30.09): он
+    // двигает её по времени и дням, но не в другую команду; сервер такой
+    // перевод отбивает (`access:team_move`).
+    if (isCrew && teamMoves) {
+      toast("Запись остаётся в своей команде", "info");
+      return;
+    }
     if (!canMoveAppointment(apt)) {
       toast(
         isCalendarEvent(apt)
@@ -1736,6 +1744,7 @@ export default function CalendarTab() {
   // вызов падал с TypeError и уносил всё меню записи. Необратимое удаление
   // подтверждается отдельно.
   const createAppt = useCreateAppointment();
+  const memberCopy = useMemberCopyAppointment();
   const deleteAppt = useDeleteAppointment();
 
   const quickStatus = (apt: Appointment, status: Appointment["status"]) => {
@@ -2005,6 +2014,26 @@ export default function CalendarTab() {
   const copyToSlot = (apt: Appointment, dateYmd: string, timeStart: string) => {
     if (rejectOutsideFreeSlots(dateYmd, timeStart)) return;
     setMoving(null);
+    // СОТРУДНИК КОПИРУЕТ НА СЕРВЕРЕ И ТОЛЬКО В ТУ ЖЕ КОМАНДУ (владелец 30.09):
+    // копия встаёт туда же, где оригинал, какой бы чип ни был выбран.
+    if (isCrew) {
+      memberCopy.mutate(
+        {
+          sourceId: apt.id,
+          date: dateYmd,
+          timeStart,
+          timeEnd: addMinutesHM(timeStart, moveWindowMin),
+        },
+        {
+          onSuccess: () => {
+            haptics.success();
+            toast(`Скопировано: ${humanDay(dateYmd)}, ${timeStart}`, "success");
+          },
+          onError: (e) => toast(serverReason(e) ?? "Не удалось скопировать", "error"),
+        },
+      );
+      return;
+    }
     const copy = {
       ...duplicateAppointment(apt),
       id: randomUuid(),
@@ -2104,18 +2133,31 @@ export default function CalendarTab() {
         });
       // ДЕЙСТВИЯ ПО ПРАВАМ (STORY-088): каждое — свой блок в календаре
       // записи; нет права — нет пункта. Своё событие при «События: Меняет»
-      // двигают, красят и удаляют; рабочую запись — по «Переносить»,
-      // «Цвет записи» и «Отменять и удалять». Копии у сотрудника нет: копия
-      // несёт клиента, услуги и суммы, и каждое поле спросило бы своё право.
+      // двигают, красят и удаляют; рабочую запись — по «Перенос записей» и
+      // «Отменять и удалять».
+      //
+      // «ПЕРЕНОС ЗАПИСЕЙ» — ВСЁ МЕНЮ ЗАПИСИ (владелец 30.09: «перенос — значит
+      // свободное перемещение, перенести, копировать, цвет»), и всё — только
+      // внутри команды записи: перенос не меняет её команду, копия
+      // делается на сервере в ту же команду (`member_appointment_copy`).
       const can = actionsIn(apt.team_id ?? null);
       const ownEvent =
         event && can.events === "write" && apt.created_by === session?.user.id;
-      if (
+      const movable =
         apt.status !== "cancelled" &&
         apt.event_all_day !== true &&
-        (event ? ownEvent : can.move)
-      )
-        items.push({ label: "Перенести", run: () => startMove(apt) });
+        (event ? ownEvent : can.move);
+      if (movable && !event)
+        items.push({
+          label: "Свободное перемещение",
+          run: () => {
+            setMoving(null);
+            setEditingApt(apt);
+          },
+        });
+      if (movable) items.push({ label: "Перенести", run: () => startMove(apt) });
+      if (!event && can.move && apt.event_all_day !== true)
+        items.push({ label: "Копировать", run: () => startMove(apt, "copy") });
       if (event ? ownEvent : can.color)
         items.push({ label: "Цвет", run: () => setRecolor(apt) });
       if (!event && can.cancel)
@@ -2522,7 +2564,8 @@ export default function CalendarTab() {
   const moveToSlot = (apt: Appointment, dateYmd: string, timeStart: string) => {
     if (rejectOutsideFreeSlots(dateYmd, timeStart)) return;
     setMoving(null);
-    const toTeam = activeTeamId ?? apt.team_id;
+    // Сотрудник переносит только внутри команды записи (владелец 30.09).
+    const toTeam = isCrew ? apt.team_id : (activeTeamId ?? apt.team_id);
     const teamChanges = toTeam !== apt.team_id;
     if (!teamChanges && apt.date === dateYmd && apt.time_start === timeStart) return;
     const prev = {
