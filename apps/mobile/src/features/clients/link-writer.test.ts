@@ -350,9 +350,11 @@ describe("блок людей есть целиком или его нет", () 
     assert.equal(member({}).links, true);
   });
 
-  test("набор урезан или телефоны скрыты — блока нет", () => {
-    assert.equal(member({ scope: "own" }).links, false);
-    assert.equal(member({ contacts: "off" }).links, false);
+  // С 30.09 людей решает блок «Люди» карточки (`blocks` строки): охват и
+  // телефон больше не прячут весь блок — у людей номера гасит маска сервера.
+  test("набор урезан или телефоны скрыты — блок решает строка клиента", () => {
+    assert.equal(member({ scope: "own" }).links, true);
+    assert.equal(member({ contacts: "off" }).links, true);
   });
 
   test("клиент записи — блока нет: окно мастера связей не отдаёт", () => {

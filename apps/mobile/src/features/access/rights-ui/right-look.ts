@@ -96,6 +96,15 @@ const LOOK: Record<string, RightLook> = {
   clients: { icon: Users, tile: SETTINGS_TILE.blue },
   "clients.scope": { icon: UserCheck, tile: SETTINGS_TILE.teal },
   "clients.contacts": { icon: Phone, tile: SETTINGS_TILE.green },
+  "clients.note": { icon: StickyNote, tile: SETTINGS_TILE.orange },
+  "clients.people": { icon: Users, tile: SETTINGS_TILE.indigo },
+  "clients.objects": { icon: House, tile: SETTINGS_TILE.green },
+  "clients.labels": { icon: Tag, tile: SETTINGS_TILE.purple },
+  "clients.personal": { icon: UserRound, tile: SETTINGS_TILE.blue },
+  "clients.files": { icon: Paperclip, tile: SETTINGS_TILE.indigo },
+  "clients.requisites": { icon: Landmark, tile: SETTINGS_TILE.teal },
+  "clients.history": { icon: CalendarClock, tile: SETTINGS_TILE.blue },
+  "clients.money": { icon: HandCoins, tile: SETTINGS_TILE.orange },
   "company.sms_templates": { icon: MessageSquare, tile: SETTINGS_TILE.green },
 };
 

@@ -53,6 +53,16 @@ const TITLE: Record<string, string> = {
   clients: "Карточки клиентов",
   "clients.scope": "Какие клиенты",
   "clients.contacts": "Телефон и контакты",
+  // Блоки карточки клиента — именами самих блоков карточки.
+  "clients.note": "Заметка",
+  "clients.people": "Люди",
+  "clients.objects": "Объекты",
+  "clients.labels": "Метка и тег",
+  "clients.personal": "Личное",
+  "clients.files": "Файлы",
+  "clients.requisites": "Реквизиты",
+  "clients.history": "История записей",
+  "clients.money": "Долг и деньги",
   "company.sms_templates": "Шаблоны SMS",
 };
 
@@ -115,6 +125,15 @@ const STEP: Record<string, Words> = {
   // Защита базы (владелец 30.09): «Около записи» — умолчание нового человека.
   "clients.scope": { near: "Около записи", own: "Своей команды", all: "Вся база" },
   "clients.contacts": { off: "Скрыт", day: "В день записи", read: "Всегда" },
+  "clients.note": { off: "Скрыта", read: "Только видит", write: "Видит и меняет" },
+  "clients.people": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.objects": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.labels": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.personal": { off: "Скрыто", read: "Только видит", write: "Видит и меняет" },
+  "clients.files": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.requisites": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.history": { off: "Скрыта", read: "Видит" },
+  "clients.money": { off: "Скрыты", read: "Видит" },
 };
 
 /** ОПАСНЫЕ СТУПЕНИ — одна строка предупреждения под пояснением (владелец
@@ -129,6 +148,7 @@ const DANGER: Record<string, Words> = {
   "finance.debts": { write: "Сможет удалять долги клиентов" },
   "clients.scope": { all: "Откроется вся база клиентов компании" },
   "clients.contacts": { read: "Сможет звонить и писать клиентам со своего телефона" },
+  "clients.files": { write: "Сможет удалять файлы клиента" },
 };
 
 /** Имя строки права. */
@@ -148,6 +168,34 @@ function paysIntoAccounts(block: Pick<AccessBlock, "key">, level: AccessLevel, c
   return block.key === "finance.accounts" && level === "off" && context?.["record.payment"] === "write";
 }
 
+/** БЛОК КАРТОЧКИ МЕНЯЕТСЯ ВНУТРИ КАРТОЧКИ (30.09): «Видит и меняет» у блока
+ *  при «Только видит» у «Карточек клиентов» этой команды сервер читает как
+ *  «Только видит» (`access_client_blocks`). Строка показывает то, что человек
+ *  получит, шторка — когда ступень заработает. */
+const CARD_BLOCK_KEYS: ReadonlySet<string> = new Set([
+  "clients.note",
+  "clients.people",
+  "clients.objects",
+  "clients.labels",
+  "clients.personal",
+  "clients.files",
+  "clients.requisites",
+]);
+
+function cappedByCard(block: Pick<AccessBlock, "key">, level: AccessLevel, context?: Context): boolean {
+  return CARD_BLOCK_KEYS.has(block.key) && level === "write" && context !== undefined && context.clients !== "write";
+}
+
+/** Слово ступени НА СТРОКЕ: то, что человек получит на деле. */
+export function rowWord(
+  block: Pick<AccessBlock, "key" | "levels">,
+  level: AccessLevel,
+  context?: Context,
+): string {
+  if (cappedByCard(block, level, context)) return stepWord(block, "read", context);
+  return stepWord(block, level, context);
+}
+
 /** Слово ступени — на строке справа и крупно в шторке. */
 export function stepWord(
   block: Pick<AccessBlock, "key" | "levels">,
@@ -161,6 +209,9 @@ export function stepWord(
 /** Пояснение ступени: что именно человек получит. */
 export function stepHint(block: Pick<AccessBlock, "key">, level: AccessLevel, context?: Context): string {
   if (paysIntoAccounts(block, level, context)) return "Остатков не видит, счёт выбирает только в оплате записи";
+  if (cappedByCard(block, level, context)) {
+    return `${levelSentence(block.key, level)} — когда у «Карточек клиентов» «Видит и меняет»`;
+  }
   return levelSentence(block.key, level);
 }
 

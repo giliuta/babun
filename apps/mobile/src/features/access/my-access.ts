@@ -110,10 +110,23 @@ export function recordLevelsChanged(
 // компании стираются с телефона сразу; поменяли иначе — перечитываются: маска
 // строк и `contacts_hidden` пришли при прежних правах.
 
+const BLOCK_RANK: Readonly<Partial<Record<AccessLevel, number>>> = { off: 0, read: 1, write: 2 };
+
 const CLIENT_RANKS: Readonly<Record<string, Readonly<Partial<Record<AccessLevel, number>>>>> = {
-  clients: { off: 0, read: 1, write: 2 },
+  clients: BLOCK_RANK,
   "clients.scope": { near: 0, own: 1, all: 2 },
   "clients.contacts": { off: 0, day: 1, read: 2 },
+  // Блоки карточки (30.09): закрыли блок — его поля уходят с телефона вместе
+  // со строками, перечитанными уже без них.
+  "clients.note": BLOCK_RANK,
+  "clients.people": BLOCK_RANK,
+  "clients.objects": BLOCK_RANK,
+  "clients.labels": BLOCK_RANK,
+  "clients.personal": BLOCK_RANK,
+  "clients.files": BLOCK_RANK,
+  "clients.requisites": BLOCK_RANK,
+  "clients.history": BLOCK_RANK,
+  "clients.money": BLOCK_RANK,
 };
 
 export type ClientLevelsChange = "same" | "changed" | "narrowed";

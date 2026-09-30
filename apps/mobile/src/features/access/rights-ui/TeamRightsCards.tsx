@@ -12,7 +12,7 @@ import type { ViewSection } from "../master-page/rights-view-sections";
 import { compositeRow } from "../master-page/composite-rows";
 import { rightLook } from "./right-look";
 import { RightSheet } from "./RightSheet";
-import { isClosedStep, rightTitle, stepDanger, stepWord } from "./right-words";
+import { isClosedStep, rightTitle, rowWord, stepDanger } from "./right-words";
 
 // ПРАВА КОМАНДЫ — СТРОКАМИ НАСТРОЕК (владелец 29.09, на настройках календаря:
 // «захожу в календарь команда один, и там полностью все настройки по каждому
@@ -117,7 +117,7 @@ export function TeamRightsCards({
                       // СЛЕВА ПРАВО, СПРАВА ЕГО СТУПЕНЬ (владелец 29.09: «слева
                       // метка дня, справа уже показано, что он видит или не
                       // видит»).
-                      value={stepWord(row.block, row.level, levels)}
+                      value={rowWord(row.block, row.level, levels)}
                       valueQuiet
                       valueColor={closed ? t.faint : danger ? t.warning : t.ink}
                       onPress={() => open(row.block)}

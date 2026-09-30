@@ -1,9 +1,11 @@
 import type { AccessBlock, AccessLevel } from "../access-map";
 import { CalendarPreview } from "./CalendarPreviews";
+import { ClientCardPreview } from "./ClientCardPreviews";
 import { ClientsPreview } from "./ClientsPreviews";
 import { MoneyPreview } from "./MoneyPreviews";
 import {
   CALENDAR_PREVIEW_KEYS,
+  CLIENT_CARD_PREVIEW_KEYS,
   CLIENTS_PREVIEW_KEYS,
   MONEY_PREVIEW_KEYS,
   RECORD_PREVIEW_KEYS,
@@ -43,6 +45,9 @@ export function BlockPreview({
   }
   if (CLIENTS_PREVIEW_KEYS.includes(key)) {
     return <ClientsPreview blockKey={key} levels={levels} />;
+  }
+  if (CLIENT_CARD_PREVIEW_KEYS.includes(key)) {
+    return <ClientCardPreview blockKey={key} levels={levels} />;
   }
   if (SETTINGS_PREVIEW_KEYS.includes(key)) {
     return (

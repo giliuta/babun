@@ -275,6 +275,12 @@ describe("клиенты уходят с телефона, когда права
     assert.equal(clientLevelsChange(undefined, team(base)), "same");
   });
 
+  test("закрыли блок карточки — сужение; открыли — перечитать", () => {
+    const withNote = { ...base, "clients.note": "read" } as const;
+    assert.equal(clientLevelsChange(team(withNote), team({ ...withNote, "clients.note": "off" })), "narrowed");
+    assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.files": "read" })), "changed");
+  });
+
   test("владелец, ставший сотрудником, — сужение", () => {
     assert.equal(clientLevelsChange(map({ isOwner: true }), team(base)), "narrowed");
   });

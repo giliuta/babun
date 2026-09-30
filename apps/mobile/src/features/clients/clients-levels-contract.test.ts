@@ -61,20 +61,80 @@ const perTeam = norm(readFileSync(join(MIGRATIONS_DIR, PER_TEAM), "utf8"));
 const ONE_BY_ONE = "20260930233000_clients_contacts_one_by_one.sql";
 const oneByOne = norm(readFileSync(join(MIGRATIONS_DIR, ONE_BY_ONE), "utf8"));
 
+// БЛОКИ КАРТОЧКИ (владелец 30.09: «страница клиентов по правам — полностью»):
+// у каждого блока карточки своё право в команде; строка сотрудника — маской
+// `client_masked_for_member` по положениям `access_client_blocks`.
+const CARD_BLOCKS = "20260930234000_clients_card_blocks.sql";
+const cardBlocks = norm(readFileSync(join(MIGRATIONS_DIR, CARD_BLOCKS), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
       assert.equal(lastDefiner(fn), PER_TEAM, `${fn} переопределён позже`);
     }
+    for (const fn of ["access_client_ids_in", "access_company_level", "list_master_clients_safe"]) {
+      assert.equal(lastDefiner(fn), ONE_BY_ONE, `${fn} переопределён позже`);
+    }
     for (const fn of [
-      "access_client_ids_in",
-      "access_company_level",
+      "access_client_blocks",
+      "client_masked_for_member",
       "list_member_clients",
-      "list_master_clients_safe",
+      "list_client_members",
       "client_seen_by_caller",
       "member_client_contacts",
+      "update_client_with_tags",
+      "create_client_with_tags",
     ]) {
-      assert.equal(lastDefiner(fn), ONE_BY_ONE, `${fn} переопределён позже`);
+      assert.equal(lastDefiner(fn), CARD_BLOCKS, `${fn} переопределён позже`);
+    }
+  });
+
+  test("блоки карточки: маска — контакты всегда, закрытые блоки пустые, у всех дверей одна", () => {
+    // Маска начинается с контактов — номер не приходит ни при каком блоке.
+    assert.ok(
+      cardBlocks.includes(
+        "select public.client_without_contacts(p_client) || case when coalesce(b.v ->> 'clients.note', 'off') = 'off' then jsonb_build_object('comment', '', 'notes', '[]'::jsonb) else '{}'::jsonb end",
+      ),
+      "маска карточки перестала гасить контакты или заметку",
+    );
+    for (const [block, blank] of [
+      ["clients.objects", "jsonb_build_object('locations', '[]'::jsonb, 'equipment', '[]'::jsonb, 'address', '', 'property_type', '')"],
+      ["clients.labels", "jsonb_build_object('city', '', 'city_manual', false, 'tag_ids', '[]'::jsonb)"],
+      ["clients.requisites", "jsonb_build_object('legal_name', null, 'vat_number', null, 'reg_number', null, 'billing_address', null, 'requisites', '[]'::jsonb)"],
+      ["clients.money", "jsonb_build_object('balance', 0, 'discount', 0)"],
+    ] as const) {
+      assert.ok(
+        cardBlocks.includes(`case when coalesce(b.v ->> '${block}', 'off') = 'off' then ${blank}`),
+        `${block}: закрытый блок больше не пуст`,
+      );
+    }
+    // Все двери чтения — через ту же маску.
+    assert.ok(cardBlocks.includes("else public.client_masked_for_member( p_client, (select b.blocks from public.access_client_blocks() b"));
+    assert.ok(cardBlocks.includes("select public.client_masked_for_member( to_jsonb(c) || jsonb_build_object("));
+    assert.ok(cardBlocks.includes("else public.client_masked_for_member(r.row_json, cb.blocks)"));
+    // «Меняет» блока — только при «Меняет» карточки этой команды.
+    assert.ok(cardBlocks.includes("when l.level = 'write' and tm.card_level = 'write' then 2"));
+    // Помощники не зовутся снаружи.
+    assert.ok(cardBlocks.includes("revoke all on function public.access_client_blocks() from public, anon, authenticated;"));
+    assert.ok(cardBlocks.includes("revoke all on function public.access_block_client_ids(text, text) from public, anon;"));
+  });
+
+  test("блоки карточки: правка отказывает по блоку, файлы — по «Файлам»", () => {
+    for (const group of [
+      "('clients.note', array['comment', 'notes'])",
+      "('clients.people', array['memberships'])",
+      "('clients.objects', array['locations', 'equipment', 'address', 'property_type'])",
+      "('clients.labels', array['city', 'city_manual'])",
+    ]) {
+      assert.ok(cardBlocks.includes(group), `правка: группа ${group} выпала`);
+    }
+    assert.ok(cardBlocks.includes("and coalesce(card_blocks ->> g.block_key, 'off') <> 'write'"));
+    assert.ok(cardBlocks.includes("and p_tag_ids is not null and coalesce(card_blocks ->> 'clients.labels', 'off') <> 'write' then"));
+    for (const policy of [
+      "create policy client_attachments_select_block on public.client_attachments for select to authenticated using ( tenant_id = (select public.current_tenant_id()) and client_id in (select unnest(public.access_block_client_ids('clients.files', 'read'))) );",
+      "create policy client_attachments_delete_block on public.client_attachments for delete to authenticated using ( tenant_id = (select public.current_tenant_id()) and client_id in (select unnest(public.access_block_client_ids('clients.files', 'write'))) );",
+    ]) {
+      assert.ok(cardBlocks.includes(policy), `файлы: ${policy.slice(14, 60)}`);
     }
   });
 
@@ -285,12 +345,15 @@ describe("сервер: клиенты по уровням", () => {
     const start = sql.search(/create or replace function public\.list_client_members\s*\(/i);
     const body = sql.slice(start, sql.indexOf("$function$;", start));
     for (const [rule, why] of [
-      ["not public.access_company('clients', 'read')", "блок «Клиенты» больше не спрашивается"],
-      ["not public.access_company('clients.contacts', 'read')", "люди приходят без права на контакты"],
-      ["public.access_company_level('clients.scope') is distinct from 'all'", "люди приходят при урезанном наборе"],
+      // С 30.09 — по блоку «Люди» карточки-группы; контакты людей гасит маска.
       ["visible := public.access_client_ids();", "набор сотрудника больше не читается"],
       ["if not (p_group_id = any(visible)) then", "карточка-группа не сверяется с набором"],
-      ["public.client_seen_by_caller(", "люди приходят мимо глаз вызывающего"],
+      [
+        "select b.blocks ->> 'clients.people' from public.access_client_blocks() b where b.client_id = p_group_id ), 'off') = 'off' then return;",
+        "люди приходят без права на блок «Люди»",
+      ],
+      ["public.client_masked_for_member(r.row_json, cb.blocks)", "люди приходят мимо маски карточки"],
+      ["and (caller_role = 'owner' or c.id = any(visible))", "люди карточки приходят мимо набора"],
       ["and c.deleted_at is null", "в людях карточки архив и корзина"],
       [
         "and c.memberships @> jsonb_build_array( jsonb_build_object('group_id', p_group_id::text))",
@@ -319,13 +382,18 @@ describe("сервер: клиенты по уровням", () => {
   test("скрытые маской связи сотрудник не запишет обратно", () => {
     const file = lastDefiner("update_client_with_tags");
     const sql = norm(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
-    // С 30.09 (защита базы) — только тот, чей номер открыт сейчас, и только
-    // открыв его дверью: список пришёл с пустыми полями.
+    // С 30.09 (защита базы) — контакты только тот, чей номер открыт сейчас,
+    // и только открыв его дверью. Связи — блок «Люди»: скрыты — в строке их
+    // нет, «Только видит» — записать нельзя, «Меняет» — строка несёт настоящие.
     assert.ok(
       sql.includes(
-        "if p_patch ?| array['phone', 'whatsapp_phone', 'email', 'telegram_username', 'instagram_username', 'phones', 'phone_e164', 'memberships'] then if not (p_client_id = any(public.access_contact_client_ids()) or p_client_id = any(public.access_day_contact_client_ids())) then raise exception 'contacts are hidden for this employee'",
+        "if p_patch ?| array['phone', 'whatsapp_phone', 'email', 'telegram_username', 'instagram_username', 'phones', 'phone_e164'] then if not (p_client_id = any(public.access_contact_client_ids()) or p_client_id = any(public.access_day_contact_client_ids())) then raise exception 'contacts are hidden for this employee'",
       ),
-      `${file}: связи выпали из списка ключей, запрещённых сотруднику без «Телефонов»`,
+      `${file}: контакты правятся без права на номер`,
+    );
+    assert.ok(
+      sql.includes("('clients.people', array['memberships'])"),
+      `${file}: связи выпали из блока «Люди» — пустой массив маски запишется поверх настоящих`,
     );
     assert.ok(
       sql.includes("and v.outcome = 'open' and v.opened_at > now() - interval '12 hours' ) then raise exception 'open the contacts before changing them'"),

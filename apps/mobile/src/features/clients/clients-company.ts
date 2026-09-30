@@ -110,7 +110,11 @@ export function capabilitiesOf(scope: ClientsScope): ClientsCapabilities {
     contacts: scope.contacts,
     money: own,
     book: !record && scope.isActive,
-    files: own && scope.isActive,
+    // Файлы сотруднику — по «Файлам» карточки (30.09): хранилище пускает его
+    // к файлам клиентов, где блок открыт (`access_block_client_ids`); что
+    // именно открыто у клиента, решает `blocks` строки. Компания — активная:
+    // путь в хранилище начинается с неё.
+    files: (own || scope.kind === "member") && scope.isActive,
     // ЛЮДИ КАРТОЧКИ: БЛОК ЕСТЬ ЦЕЛИКОМ ИЛИ ЕГО НЕТ (STORY-086).
     //
     // `list_client_members` отдаёт людей владельцу либо сотруднику, у которого
@@ -123,7 +127,10 @@ export function capabilitiesOf(scope: ClientsScope): ClientsCapabilities {
     // Клиент ЗАПИСИ сюда не проходит сам собой: его окно
     // (`list_master_clients_safe`) связей не отдаёт вовсе, а `everyClient` у
     // него `false` — набор мастера это его заявки, а не база.
-    links: (own || scope.everyClient) && scope.contacts,
+    //
+    // С 30.09 (блоки карточки) людей сервер отдаёт по «Людям» карточки-группы,
+    // а не по «Все + Телефоны»: у сотрудника блок решает `blocks` строки.
+    links: own || scope.kind === "member",
     onlineOnly: !scope.isActive || scope.kind === "member",
     export: own,
   };

@@ -157,7 +157,21 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "finance.debts",
     "finance.documents",
   ],
-  clients: ["clients.scope", "clients.contacts"],
+  // Скрыты «Карточки клиентов» — нет ни охвата, ни номера, ни одного блока
+  // карточки (защита базы 30.09).
+  clients: [
+    "clients.scope",
+    "clients.contacts",
+    "clients.note",
+    "clients.people",
+    "clients.objects",
+    "clients.labels",
+    "clients.personal",
+    "clients.files",
+    "clients.requisites",
+    "clients.history",
+    "clients.money",
+  ],
   // ЦЕПОЧКА ВНУТРИ ЗАПИСИ (владелец 30.09: «продумай логическую цепочку»):
   // скрыты услуги — не видно и цен; скрыты цены — оплату не принять, сколько
   // брать, не видно. Строки сворачиваются, положения сбрасываются.

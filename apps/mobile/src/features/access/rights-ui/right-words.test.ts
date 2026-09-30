@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 
 import type { AccessBlock, AccessLevel } from "../access-map";
 import { hasBlockPreview } from "./preview-keys";
-import { WORDED_KEYS, rightTitle, stepDanger, stepHint, stepWord } from "./right-words";
+import { WORDED_KEYS, rightTitle, rowWord, stepDanger, stepHint, stepWord } from "./right-words";
 
 // Живые права реестра на 29.09 (`access_blocks where live`) — с их лестницами.
 const LIVE: readonly [string, AccessLevel[]][] = [
@@ -30,8 +30,18 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["finance.accounts", ["off", "read", "write"]],
   ["finance.debts", ["off", "read", "write"]],
   ["clients", ["off", "read", "write"]],
-  ["clients.scope", ["own", "all"]],
-  ["clients.contacts", ["off", "read"]],
+  // Защита базы 30.09: «Около записи» и «В день записи», блоки карточки.
+  ["clients.scope", ["near", "own", "all"]],
+  ["clients.contacts", ["off", "day", "read"]],
+  ["clients.note", ["off", "read", "write"]],
+  ["clients.people", ["off", "read", "write"]],
+  ["clients.objects", ["off", "read", "write"]],
+  ["clients.labels", ["off", "read", "write"]],
+  ["clients.personal", ["off", "read", "write"]],
+  ["clients.files", ["off", "read", "write"]],
+  ["clients.requisites", ["off", "read", "write"]],
+  ["clients.history", ["off", "read"]],
+  ["clients.money", ["off", "read"]],
   ["company.sms_templates", ["off", "read", "write"]],
 ];
 
@@ -90,5 +100,23 @@ describe("слова строк прав", () => {
     assert.equal(stepWord(accounts, "off", { "record.payment": "read" }), "Не видит");
     assert.equal(stepWord(accounts, "off"), "Не видит");
     assert.equal(stepWord(accounts, "read", { "record.payment": "write" }), "Видит");
+  });
+});
+
+describe("блоки карточки клиента меняются только внутри карточки (30.09)", () => {
+  const note = { key: "clients.note", levels: ["off", "read", "write"] as const };
+
+  test("«Видит и меняет» при «Карточки клиентов: Только видит» — на строке «Только видит»", () => {
+    assert.equal(rowWord(note, "write", { clients: "read", "clients.note": "write" }), "Только видит");
+    assert.match(stepHint(note, "write", { clients: "read" }), /когда у «Карточек клиентов» «Видит и меняет»/);
+  });
+
+  test("при «Меняет» карточек — как есть; чужие права правило не трогает", () => {
+    assert.equal(rowWord(note, "write", { clients: "write" }), "Видит и меняет");
+    assert.equal(rowWord(note, "read", { clients: "read" }), "Только видит");
+    assert.equal(
+      rowWord({ key: "record.note", levels: ["off", "read", "write"] }, "write", { clients: "read" }),
+      stepWord({ key: "record.note", levels: ["off", "read", "write"] }, "write"),
+    );
   });
 });

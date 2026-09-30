@@ -80,6 +80,18 @@ export interface SectionBlock {
   keys: readonly string[];
 }
 
+/** Блоки карточки клиента — в порядке самой карточки (заметка под
+ *  «Клиентом», люди, объекты, файлы, метка и тег, личное, реквизиты). */
+export const CLIENT_CARD_ROW_ORDER: readonly string[] = [
+  "clients.note",
+  "clients.people",
+  "clients.objects",
+  "clients.files",
+  "clients.labels",
+  "clients.personal",
+  "clients.requisites",
+];
+
 /** Права блока «Записи» на странице «Календарь». */
 const RECORD_KINDS: readonly string[] = [
   "calendar.records",
@@ -91,11 +103,14 @@ const RECORD_KINDS: readonly string[] = [
 export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock[]>> = {
   // «КЛИЕНТЫ» — БЛОКАМИ, КАК «КАЛЕНДАРЬ» (владелец 30.09: «разобраться, как
   // правильно показывать»; защита базы от подрядчика со своей компанией).
-  // «История» встанет, когда её права оживут на сервере.
+  // «Карточка клиента» — по строке на каждый блок карточки, как «Запись
+  // клиента» в «Календаре» (владелец 30.09: «страница клиентов по правам —
+  // полностью, максимум»). Скрыты «Карточки клиентов» — все строки серые.
   clients: [
     { key: "main", title: "Главное", keys: ["clients", "clients.scope"] },
     { key: "contact", title: "Связь", keys: ["clients.contacts"] },
-    { key: "history", title: "История", keys: ["clients.history", "clients.money", "clients.files"] },
+    { key: "card", title: "Карточка клиента", keys: CLIENT_CARD_ROW_ORDER },
+    { key: "history", title: "История и деньги", keys: ["clients.history", "clients.money"] },
   ],
   calendar: [
     // Доходы и расходы — в «Главном» (владелец 30.09: «переходим к доход

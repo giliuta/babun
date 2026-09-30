@@ -42,6 +42,20 @@ export const MONEY_PREVIEW_KEYS: readonly string[] = [
 
 export const CLIENTS_PREVIEW_KEYS: readonly string[] = ["clients", "clients.scope", "clients.contacts"];
 
+/** Блоки карточки клиента (владелец 30.09: «страница клиентов по правам —
+ *  полностью»): вид — сам блок карточки. */
+export const CLIENT_CARD_PREVIEW_KEYS: readonly string[] = [
+  "clients.note",
+  "clients.people",
+  "clients.objects",
+  "clients.labels",
+  "clients.personal",
+  "clients.files",
+  "clients.requisites",
+  "clients.history",
+  "clients.money",
+];
+
 /** Строки шестерёнки календаря — вид «как в настройках команды». */
 export const SETTINGS_PREVIEW_KEYS: readonly string[] = [
   "calendar.identity",
@@ -58,6 +72,7 @@ export function hasBlockPreview(key: string): boolean {
     CALENDAR_PREVIEW_KEYS.includes(key) ||
     MONEY_PREVIEW_KEYS.includes(key) ||
     CLIENTS_PREVIEW_KEYS.includes(key) ||
+    CLIENT_CARD_PREVIEW_KEYS.includes(key) ||
     SETTINGS_PREVIEW_KEYS.includes(key)
   );
 }
