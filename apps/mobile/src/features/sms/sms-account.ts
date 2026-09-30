@@ -198,6 +198,43 @@ export function useSaveTeamSender() {
   });
 }
 
+/** Автопополнение (волна 13): включить — только с сохранённой картой,
+ *  порог и сумма — из готовых. Ответ базы — новый вид страницы. */
+export function useSaveAutotopup() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: { enabled?: boolean; thresholdCents?: number; amountCents?: number }) => {
+      const { data, error } = await supabase.rpc("sms_autotopup_save", {
+        p: {
+          ...(patch.enabled !== undefined ? { enabled: patch.enabled } : null),
+          ...(patch.thresholdCents !== undefined ? { threshold_cents: patch.thresholdCents } : null),
+          ...(patch.amountCents !== undefined ? { amount_cents: patch.amountCents } : null),
+        },
+      });
+      if (error) throw new Error(error.message);
+      return parseSmsAccount(data);
+    },
+    onSuccess: (account) => qc.setQueryData(smsAccountKey(tenantId), account),
+    meta: { errorHandled: true },
+  });
+}
+
+/** Убрать карту: автопополнение выключается, карта больше не списывается. */
+export function useForgetAutotopupCard() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc("sms_autotopup_forget");
+      if (error) throw new Error(error.message);
+      return parseSmsAccount(data);
+    },
+    onSuccess: (account) => qc.setQueryData(smsAccountKey(tenantId), account),
+    meta: { errorHandled: true },
+  });
+}
+
 /** Порядок шаблонов команды — как лёг список после ручки. Строки встают
  *  сразу, ответ базы — после. */
 export function useReorderTeamTemplates(teamId: string | null) {
@@ -415,10 +452,20 @@ export function useSetClientSmsOptOut() {
 /** Суммы пополнения — те же, что знает функция `sms-checkout`. */
 export const TOPUP_AMOUNTS_CENTS = [1000, 2500, 5000, 10000] as const;
 
-/** Оплата на сайте: функция открывает Stripe Checkout и отдаёт адрес. */
-export async function startSmsTopup(amountCents: number, returnUrl: string): Promise<string> {
+/** Оплата на сайте: функция открывает Stripe Checkout и отдаёт адрес.
+ *  `autotopup` — эта оплата ещё и сохраняет карту: дальше баланс сам
+ *  пополняется на ту же сумму, когда падает ниже порога (волна 13). */
+export async function startSmsTopup(
+  amountCents: number,
+  returnUrl: string,
+  autotopup?: { thresholdCents: number },
+): Promise<string> {
   const { data, error } = await supabase.functions.invoke("sms-checkout", {
-    body: { amount_cents: amountCents, return_url: returnUrl },
+    body: {
+      amount_cents: amountCents,
+      return_url: returnUrl,
+      ...(autotopup ? { autotopup: { threshold_cents: autotopup.thresholdCents } } : null),
+    },
   });
   if (error) throw new Error(error.message);
   const url = (data as { url?: string } | null)?.url;

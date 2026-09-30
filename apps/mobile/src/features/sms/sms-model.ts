@@ -27,8 +27,11 @@ export interface SmsAccount {
   /** Имя отправителя каждой команды; без него команда не отправляет.
    *  Необязательно: ответ, сохранённый в кэше до волны 10, его не несёт. */
   senders?: Record<string, string>;
+  /** Отправка компании остановлена сверкой журнала (волна 13). */
+  frozen?: boolean;
   /** Только владельцу. */
   owner: {
+    /** Бывает меньше нуля: возврат или спор по карте после трат — долг. */
     balanceCents: number;
     freeLeft: number;
     monthCount: number;
@@ -36,8 +39,34 @@ export interface SmsAccount {
     teams: SmsTeamStats[];
     /** Сколько шаблонов у каждой команды. */
     templateCounts: Record<string, number>;
+    /** Необязательны: ответ из кэша устройства до волны 13 их не несёт. */
+    autotopup?: SmsAutotopup;
+    /** Открытые тревоги: своей компании и, администратору, всей платформы. */
+    alerts?: SmsAlert[];
   } | null;
 }
+
+/** Автопополнение с сохранённой карты (волна 13). */
+export interface SmsAutotopup {
+  enabled: boolean;
+  thresholdCents: number;
+  amountCents: number;
+  /** «Visa •••• 4242»; нет — карта не сохранена. */
+  card: string | null;
+  /** Почему выключилось само (отказ банка, спор). */
+  error: string | null;
+}
+
+export interface SmsAlert {
+  kind: string;
+  message: string;
+  at: string;
+  /** Тревога своей компании; иначе — платформы или партнёра. */
+  own: boolean;
+}
+
+/** Пороги автопополнения, центы: «когда меньше €5 / €10 / €25». */
+export const AUTOTOPUP_THRESHOLDS_CENTS = [500, 1000, 2500] as const;
 
 export interface SmsHistoryItem {
   id: string;
@@ -98,6 +127,18 @@ export function senderProblem(raw: string): string | null {
   return null;
 }
 
+function parseAutotopup(v: unknown): SmsAutotopup {
+  const r = (v && typeof v === "object" && !Array.isArray(v) ? v : {}) as Raw;
+  const card = str(r.card);
+  return {
+    enabled: r.enabled === true && card !== null,
+    thresholdCents: num(r.threshold_cents, 500),
+    amountCents: num(r.amount_cents, 2500),
+    card,
+    error: str(r.error),
+  };
+}
+
 export function parseSmsAccount(data: unknown): SmsAccount {
   const r = (data && typeof data === "object" ? data : {}) as Raw;
   const owner = "balance_cents" in r;
@@ -109,6 +150,7 @@ export function parseSmsAccount(data: unknown): SmsAccount {
     priceCents: num(r.price_cents, 12),
     canPay: r.can_pay === true,
     senders: names(r.senders),
+    frozen: r.frozen === true,
     owner: owner
       ? {
           balanceCents: num(r.balance_cents),
@@ -124,6 +166,10 @@ export function parseSmsAccount(data: unknown): SmsAccount {
             failed: num(e.failed),
           })),
           templateCounts: counts(r.template_counts),
+          autotopup: parseAutotopup(r.autotopup),
+          alerts: list(r.alerts)
+            .map((e) => ({ kind: String(e.kind ?? ""), message: str(e.message) ?? "", at: String(e.at ?? ""), own: e.own === true }))
+            .filter((a) => a.message !== ""),
         }
       : null,
   };
@@ -187,10 +233,14 @@ export const LOW_BALANCE_SMS = 20;
  *  (сотруднику) или SMS не настроены (ни у одной команды нет имени
  *  отправителя — пугать нечем). Пусто — SMS не уходят вовсе. */
 export function balanceWarning(
-  account: Pick<SmsAccount, "priceCents" | "owner" | "senders"> | null | undefined,
+  account: Pick<SmsAccount, "priceCents" | "owner" | "senders" | "frozen"> | null | undefined,
 ): string | null {
   const owner = account?.owner;
-  if (!owner || !account || Object.keys(account.senders ?? {}).length === 0) return null;
+  if (!owner || !account) return null;
+  // Заморозка и долг — всегда: деньги компании не сошлись или ушли назад.
+  if (account.frozen) return FROZEN_WORDS;
+  if (owner.balanceCents < 0) return "Долг по балансу — SMS не уходят";
+  if (Object.keys(account.senders ?? {}).length === 0) return null;
   const price = Math.max(1, account.priceCents);
   const left = Math.floor(owner.balanceCents / price);
   if (left <= 0) return "Баланс пуст — SMS не уходят";
@@ -198,9 +248,15 @@ export function balanceWarning(
   return null;
 }
 
+/** Отправка остановлена сверкой: баланс не сошёлся с журналом денег. */
+export const FROZEN_WORDS = "Отправка SMS остановлена — проверяем баланс";
+
 /** Слова отказа базы — человеку. */
 export function smsErrorText(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? "");
+  if (message.includes("sms:frozen")) return FROZEN_WORDS;
+  if (message.includes("sms:autotopup_card")) return "Сначала сохраните карту — оплатой с автопополнением";
+  if (message.includes("sms:autotopup_amount")) return "Такой суммы нет";
   if (message.includes("sms:funds")) return "Не хватает баланса SMS";
   if (message.includes("sms:opt_out")) return "Клиент просил не присылать SMS";
   if (message.includes("sms:sender_format")) return "Имя отправителя: латиница, цифры, до 11 знаков";

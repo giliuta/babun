@@ -5185,6 +5185,8 @@ export type Database = {
         Args: { p_appointment_id: string }
         Returns: string
       }
+      sms_autotopup_forget: { Args: never; Returns: Json }
+      sms_autotopup_save: { Args: { p: Json }; Returns: Json }
       sms_for_appointment: {
         Args: { p_appointment_id: string }
         Returns: Json

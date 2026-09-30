@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   applyPatch,
   balanceWarning,
+  FROZEN_WORDS,
   parseSmsAccount,
   parseSmsHistory,
   parseSmsRecordLog,
@@ -114,6 +115,38 @@ describe("ответ базы", () => {
     assert.equal(balanceWarning(acc(1200)), null);
     assert.equal(balanceWarning({ ...acc(0), senders: {} }), null, "SMS не настроены");
     assert.equal(balanceWarning({ ...base, owner: null }), null, "сотруднику баланс не виден");
+  });
+
+  test("деньги волны 13: заморозка, долг, автопополнение, тревоги", () => {
+    const frozen = parseSmsAccount({ frozen: true, balance_cents: 500, price_cents: 12 });
+    assert.equal(frozen.frozen, true);
+    assert.equal(balanceWarning(frozen), FROZEN_WORDS, "заморозка видна и без имён отправителя");
+    const debt = parseSmsAccount({ balance_cents: -500, price_cents: 12 });
+    assert.equal(balanceWarning(debt), "Долг по балансу — SMS не уходят");
+    assert.equal(balanceWords(-500, 0, 12), "долг €5");
+
+    const noCard = parseSmsAccount({ balance_cents: 0, autotopup: { enabled: true, card: null } });
+    assert.equal(noCard.owner?.autotopup?.enabled, false, "без карты автопополнение не включено");
+    const auto = parseSmsAccount({
+      balance_cents: 0,
+      autotopup: { enabled: true, threshold_cents: 1000, amount_cents: 5000, card: "Visa •••• 4242", error: null },
+      alerts: [
+        { kind: "dispute", message: "Спор по оплате", at: "2026-09-30T10:00:00Z", own: true },
+        { kind: "platform_cap", message: "Пауза", at: "2026-09-30T10:01:00Z", own: null },
+        { kind: "empty", message: "" },
+      ],
+    });
+    assert.deepEqual(auto.owner?.autotopup, {
+      enabled: true,
+      thresholdCents: 1000,
+      amountCents: 5000,
+      card: "Visa •••• 4242",
+      error: null,
+    });
+    assert.deepEqual(auto.owner?.alerts?.map((a) => [a.kind, a.own]), [["dispute", true], ["platform_cap", false]]);
+    assert.equal(parseSmsAccount({ frozen: false }).owner, null, "сотруднику ни денег, ни тревог");
+    assert.equal(smsErrorText(new Error("sms:frozen")), FROZEN_WORDS);
+    assert.equal(smsErrorText(new Error("sms:autotopup_card")), "Сначала сохраните карту — оплатой с автопополнением");
   });
 
   test("отказы базы — словами", () => {

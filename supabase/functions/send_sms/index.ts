@@ -6,8 +6,8 @@
 //      возьмут одно сообщение);
 //   2. собирает текст из шаблона и полей записи теми же правилами, что
 //      приложение (`render.ts`); ручное сообщение приходит готовым текстом;
-//   3. считает части SMS (`encoding.ts`) и списывает (`sms_charge`): сначала
-//      бесплатные части, потом баланс; не хватило — сообщение 'blocked';
+//   3. считает части SMS (`encoding.ts`) и списывает с баланса строкой
+//      журнала (`sms_charge`); не хватило — сообщение 'blocked';
 //   4. отдаёт Twilio и пишет итог (`sms_mark`); отказ Twilio возвращает
 //      списанное.
 //
@@ -24,7 +24,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 import { analyzeSmsEncoding } from "./encoding.ts";
 import { renderSms, type SmsRenderVars } from "./render.ts";
 
-const PLATFORM_SENDER = "Babun";
 const BATCH = 20;
 const MAX_BATCHES = 10;
 
@@ -176,6 +175,14 @@ async function deliver(sb: any, tw: Twilio, row: Claimed): Promise<"sent" | "fai
     await mark(sb, row.id, "failed", null, "phone", "Номер без кода страны");
     return "failed";
   }
+  // Подпись — только имя отправителя команды (волна 10: «Babun» больше не
+  // подписывает). Имя сняли, пока SMS ждало очереди, — не отправляем и не
+  // списываем.
+  const sender = row.sender?.trim();
+  if (!sender) {
+    await mark(sb, row.id, "failed", null, "sender", "У команды нет имени отправителя");
+    return "failed";
+  }
   const segments = analyzeSmsEncoding(text).segments;
   const { data: charge, error: chargeError } = await sb.rpc("sms_charge", {
     p_id: row.id,
@@ -189,7 +196,7 @@ async function deliver(sb: any, tw: Twilio, row: Claimed): Promise<"sent" | "fai
   if (charge === "no_funds") return "blocked";
   if (charge !== "free" && charge !== "paid") return "failed";
 
-  const result = await twilioSend(tw, row.sender || PLATFORM_SENDER, to, text);
+  const result = await twilioSend(tw, sender, to, text);
   if (result.ok) {
     await mark(sb, row.id, "sent", result.sid, null, null);
     return "sent";

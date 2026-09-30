@@ -24,6 +24,7 @@ import {
   useSmsHistory,
 } from "./sms-account";
 import { balanceWarning, teamStats } from "./sms-model";
+import { SmsAutotopupCard } from "./SmsAutotopupCard";
 import { SmsHistoryRow } from "./SmsHistoryRow";
 import { balanceWords, euro, monthWords } from "./sms-words";
 
@@ -131,9 +132,16 @@ export function SmsScreen() {
           <View style={{ marginHorizontal: GUTTER, marginTop: 12 }}>
             {/* В iOS — только слова о балансе: ни ссылки, ни упоминания покупки
                 (правило App Store, владелец 24.09). */}
-            <NoticeBar tone="warn" message={warning} />
+            <NoticeBar tone={data.frozen ? "error" : "warn"} message={warning} />
           </View>
         ) : null}
+        {/* ТРЕВОГИ СВЕРКИ (волна 13): расхождение журнала, спор по карте,
+            предохранитель платформы. Администратору платформы — и чужие. */}
+        {(owner.alerts ?? []).slice(0, 3).map((alert) => (
+          <View key={`${alert.kind}-${alert.at}`} style={{ marginHorizontal: GUTTER, marginTop: 12 }}>
+            <NoticeBar tone="error" message={alert.own ? alert.message : `Платформа: ${alert.message}`} />
+          </View>
+        ))}
 
         <SectionCard title="Баланс">
           <SettingsRow
@@ -158,6 +166,8 @@ export function SmsScreen() {
             valueQuiet={owner.monthCents === 0}
           />
         </SectionCard>
+
+        {WEB && owner.autotopup ? <SmsAutotopupCard auto={owner.autotopup} /> : null}
 
         {teams.length > 0 ? (
           <SectionCard title={monthWords(new Date())}>

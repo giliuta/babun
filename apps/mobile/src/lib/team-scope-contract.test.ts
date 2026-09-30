@@ -44,6 +44,9 @@ const EXEMPT: Record<string, string> = {
   master_rating_tokens: "команда через masters",
   tenant_sms_config: "баланс SMS — у компании, календари — списком team_ids",
   sms_topups: "пополнения баланса SMS компании",
+  sms_ledger: "журнал денег SMS — баланс один на компанию",
+  sms_alerts: "тревоги сверки денег SMS — компании или всей платформы",
+  sms_autotopup: "автопополнение баланса SMS компании с её карты",
   access_templates: "шаблоны доступа — владельца компании, ставятся в любую команду копией",
 };
 

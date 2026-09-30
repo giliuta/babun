@@ -184,39 +184,150 @@ async function resolveTenantId(event: Stripe.Event, sbs: any): Promise<string | 
 // 500. Раньше журнал писался первым, а сбой зачисления отвечал 200 — повтор
 // Stripe упирался в «уже обработано», и оплаченные деньги не доходили до
 // баланса никогда.
+//
+// ВОЛНА 13 (владелец 30.09: «защитить, чтобы никто не мог взломать»). Деньги
+// SMS двигают и другие события — каждое через функцию базы, каждое
+// повторяемо без вреда (журнал `sms_ledger` не пустит одну операцию дважды):
+//   • `payment_intent.succeeded` — автопополнение с сохранённой карты (и
+//     тот же платёж оплаты на сайте: второе зачисление — повтор, ноль);
+//   • `checkout.session.completed` с просьбой об автопополнении — карта
+//     сохраняется, автопополнение включается;
+//   • `charge.refunded` — возврат оплаты снимает деньги с баланса
+//     (нарастающим итогом: снимается только новое);
+//   • `charge.dispute.created` / `.closed` (выигран) — спор по карте снимает
+//     деньги и выключает автопополнение, выигрыш возвращает.
+// Платёж не SMS (подписка) функции базы узнают и пропускают.
+
+type Meta = Record<string, string | undefined>;
+
+const idOf = (value: unknown): string | null =>
+  typeof value === "string" ? value : (value as { id?: string } | null)?.id ?? null;
+
+const BRANDS: Record<string, string> = {
+  visa: "Visa",
+  mastercard: "Mastercard",
+  amex: "Amex",
+  discover: "Discover",
+  diners: "Diners",
+  jcb: "JCB",
+  unionpay: "UnionPay",
+  maestro: "Maestro",
+};
+
+/** «Visa •••• 4242» — всё, что приложение знает о карте. */
+function cardLabel(pm: Stripe.PaymentMethod | null): string {
+  if (pm?.type === "card" && pm.card) {
+    return `${BRANDS[pm.card.brand] ?? pm.card.brand} •••• ${pm.card.last4}`;
+  }
+  return pm?.type === "link" ? "Link" : "Карта";
+}
+
 // deno-lint-ignore no-explicit-any
-async function creditSmsTopup(event: Stripe.Event, sbs: any): Promise<"credited" | "replay" | "skip"> {
-  if (
-    event.type !== "checkout.session.completed" &&
-    event.type !== "checkout.session.async_payment_succeeded"
-  ) {
-    return "skip";
-  }
-  const session = event.data.object as Stripe.Checkout.Session;
-  const meta = (session.metadata ?? {}) as Record<string, string | undefined>;
-  if (meta.kind !== "sms_topup") return "skip";
-  if (session.payment_status !== "paid") return "skip";
+async function rpc(sbs: any, name: string, args: Record<string, unknown>): Promise<unknown> {
+  const { data, error } = await sbs.rpc(name, args);
+  if (error) throw error;
+  return data;
+}
 
-  const tenantId = meta.tenant_id;
-  const amountCents = session.amount_total ?? 0;
-  const paymentIntentId =
-    typeof session.payment_intent === "string"
-      ? session.payment_intent
-      : session.payment_intent?.id ?? null;
-  if (!tenantId || amountCents <= 0 || !paymentIntentId) {
-    console.warn("sms topup: incomplete session", session.id);
-    return "skip";
-  }
-
-  const { data, error } = await sbs.rpc("sms_credit_topup", {
+// deno-lint-ignore no-explicit-any
+async function credit(sbs: any, tenantId: string, amountCents: number, sessionId: string | null, intentId: string, pack: string | null) {
+  await rpc(sbs, "sms_credit_topup", {
     p_tenant: tenantId,
     p_amount_cents: amountCents,
-    p_session: session.id,
-    p_payment_intent: paymentIntentId,
-    p_pack: meta.pack_id ?? null,
+    p_session: sessionId,
+    p_payment_intent: intentId,
+    p_pack: pack,
   });
-  if (error) throw error;
-  return data === true ? "credited" : "replay";
+}
+
+// deno-lint-ignore no-explicit-any
+async function smsMoney(event: Stripe.Event, sbs: any, stripe: Stripe): Promise<void> {
+  switch (event.type) {
+    case "checkout.session.completed":
+    case "checkout.session.async_payment_succeeded": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const meta = (session.metadata ?? {}) as Meta;
+      if (meta.kind !== "sms_topup" || session.payment_status !== "paid") return;
+      const tenantId = meta.tenant_id;
+      const amountCents = session.amount_total ?? 0;
+      const intentId = idOf(session.payment_intent);
+      if (!tenantId || amountCents <= 0 || !intentId) {
+        console.warn("sms topup: incomplete session", session.id);
+        return;
+      }
+      await credit(sbs, tenantId, amountCents, session.id, intentId, meta.pack_id ?? null);
+      if (meta.autotopup === "1") {
+        const customer = idOf(session.customer);
+        const intent = await stripe.paymentIntents.retrieve(intentId, { expand: ["payment_method"] });
+        const pm = typeof intent.payment_method === "object" ? intent.payment_method : null;
+        const pmId = idOf(intent.payment_method);
+        if (!customer || !pmId) {
+          console.warn("sms autotopup: card not saved", session.id);
+          return;
+        }
+        await rpc(sbs, "sms_autotopup_card", {
+          p_tenant: tenantId,
+          p_customer: customer,
+          p_payment_method: pmId,
+          p_label: cardLabel(pm),
+          p_threshold: Number(meta.threshold_cents ?? 500),
+          p_amount: amountCents,
+        });
+      }
+      return;
+    }
+    case "payment_intent.succeeded": {
+      const intent = event.data.object as Stripe.PaymentIntent;
+      const meta = (intent.metadata ?? {}) as Meta;
+      if (meta.kind !== "sms_topup" || !meta.tenant_id) return;
+      const amountCents = intent.amount_received ?? 0;
+      if (amountCents <= 0) return;
+      await credit(sbs, meta.tenant_id, amountCents, null, intent.id, meta.pack_id ?? null);
+      return;
+    }
+    case "payment_intent.payment_failed": {
+      const intent = event.data.object as Stripe.PaymentIntent;
+      const meta = (intent.metadata ?? {}) as Meta;
+      if (meta.kind !== "sms_topup" || meta.auto !== "1" || !meta.tenant_id || !meta.attempt) return;
+      await rpc(sbs, "sms_autotopup_result", {
+        p_tenant: meta.tenant_id,
+        p_key: meta.attempt,
+        p_ok: false,
+        p_error: intent.last_payment_error?.message ?? "Банк отклонил списание",
+      });
+      return;
+    }
+    case "charge.refunded": {
+      const charge = event.data.object as Stripe.Charge;
+      const intentId = idOf(charge.payment_intent);
+      if (!intentId) return;
+      await rpc(sbs, "sms_stripe_refund", {
+        p_payment_intent: intentId,
+        p_refunded_total: charge.amount_refunded ?? 0,
+      });
+      return;
+    }
+    case "charge.dispute.created":
+    case "charge.dispute.closed": {
+      const dispute = event.data.object as Stripe.Dispute;
+      let intentId = idOf(dispute.payment_intent);
+      if (!intentId) {
+        const chargeId = idOf(dispute.charge);
+        if (chargeId) intentId = idOf((await stripe.charges.retrieve(chargeId)).payment_intent);
+      }
+      if (!intentId) return;
+      if (event.type === "charge.dispute.closed" && dispute.status !== "won") return;
+      await rpc(sbs, "sms_stripe_dispute", {
+        p_payment_intent: intentId,
+        p_dispute: dispute.id,
+        p_amount: dispute.amount ?? 0,
+        p_won: event.type === "charge.dispute.closed",
+      });
+      return;
+    }
+    default:
+      return;
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -266,13 +377,13 @@ Deno.serve(async (req: Request) => {
   // deno-lint-ignore no-explicit-any
   const sbs = service as any;
 
-  // Пополнение SMS — ДО журнала: оно само идемпотентно, а сбой должен
+  // Деньги SMS — ДО журнала: они сами идемпотентны, а сбой должен
   // вернуть Stripe 5xx, чтобы он прислал событие ещё раз.
   try {
-    await creditSmsTopup(event, sbs);
+    await smsMoney(event, sbs, stripe);
   } catch (err) {
-    console.error("stripe webhook: sms topup credit failed", err);
-    return json(500, { error: "sms topup credit failed" });
+    console.error("stripe webhook: sms money failed", event.type, err);
+    return json(500, { error: "sms money failed" });
   }
 
   // Audit — the UNIQUE on stripe_event_id is the idempotency

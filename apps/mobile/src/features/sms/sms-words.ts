@@ -10,6 +10,8 @@ export const euro = (cents: number): string => money(cents / 100, "EUR");
 /** «≈ 124 SMS» — сколько коротких сообщений влезет в баланс. Кириллица длиннее
  *  одной части стоит дороже — поэтому «≈». */
 export function balanceWords(balanceCents: number, freeLeft: number, priceCents: number): string {
+  // Возврат или спор по карте после трат — долг: его гасит следующее пополнение.
+  if (balanceCents < 0) return `долг ${euro(-balanceCents)}`;
   const paid = priceCents > 0 ? Math.floor(balanceCents / priceCents) : 0;
   const parts = [`≈ ${paid} SMS`];
   if (freeLeft > 0) parts.push(formatCountRu(freeLeft, ["бесплатная", "бесплатные", "бесплатных"]));
