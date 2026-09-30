@@ -207,8 +207,8 @@ export default function AccountsScreen() {
         fallbackHref={financeAccountsHref() as Href}
         // Команду выбрали в «Настройках финансов» — страница её и только её
         // (владелец 2026-09-30: «когда захожу в счета, там не должно быть
-        // переключения команд»). Имя команды — под заголовком.
-        subtitle={teamId ? liveTeams.find((team) => team.id === teamId)?.name : undefined}
+        // переключения команд»). Имя команды называет шапка группы счетов —
+        // второй раз под заголовком оно не повторяется.
       />
       {!hasData && !loadError ? (
         online ? (

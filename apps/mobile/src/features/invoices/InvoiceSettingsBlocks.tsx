@@ -179,7 +179,7 @@ export function InvoiceSettingsBlocks() {
     <SectionCard>
       <View className="px-4 pb-3 pt-3.5">
         <Text className="text-xs" style={{ color: t.sub }}>
-          Следующий счёт получит номер
+          Следующий номер основных реквизитов
         </Text>
         <Text className="mt-1 text-2xl font-bold" style={{ color: t.ink }}>
           {nextNumber.data ?? sample}
