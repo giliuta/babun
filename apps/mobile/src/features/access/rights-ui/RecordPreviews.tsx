@@ -71,8 +71,9 @@ export function RecordPreview({
   const rb = previewRecord(blocks, levels);
   const ev = previewEvent(blocks, levels);
   const on = (write: boolean) => (write ? noop : undefined);
-  // Телефон клиента в записи сервер прячет, когда «Телефоны» закрыты.
-  const phoneOpen = levels["clients.contacts"] === "read";
+  // Телефон клиента в записи сервер прячет, когда «Телефоны» закрыты; «В день
+  // записи» — запись образца сегодняшняя, номер открывается.
+  const phoneOpen = levels["clients.contacts"] === "read" || levels["clients.contacts"] === "day";
 
   switch (blockKey) {
     case "record.team":

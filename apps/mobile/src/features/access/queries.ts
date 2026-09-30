@@ -20,9 +20,12 @@ import {
 import {
   FINANCE_BLOCK_KEYS,
   isFinanceDataKey,
+  clientLevelsChange,
+  isClientDataKey,
   lostAccess,
   recordLevelsChanged,
 } from "./my-access";
+import { forgetRevealedContacts } from "@/features/clients/revealed-contacts";
 
 // ПРАВА СОТРУДНИКА — ДОРОГА К СЕРВЕРУ ПО «КОНТРАКТУ v1.1» (STORY-081).
 //
@@ -193,6 +196,18 @@ export function useMyAccess() {
       const before = qc.getQueryData<MemberAccessMap>(myAccessQueryKey(tenantId));
       if (tenantId && lostAccess(before, next, FINANCE_BLOCK_KEYS)) {
         qc.removeQueries({ predicate: (query) => isFinanceDataKey(query.queryKey, tenantId) });
+      }
+      // КЛИЕНТЫ: сузили — стереть с телефона, поменяли иначе — перечитать
+      // (`clientLevelsChange`, защита базы 30.09).
+      if (tenantId) {
+        const clientsChange = clientLevelsChange(before, next);
+        if (clientsChange === "narrowed") {
+          qc.removeQueries({ predicate: (query) => isClientDataKey(query.queryKey, tenantId) });
+          // Открытые номера живут в памяти, а не в кэше запросов.
+          forgetRevealedContacts();
+        } else if (clientsChange === "changed") {
+          void qc.invalidateQueries({ predicate: (query) => isClientDataKey(query.queryKey, tenantId) });
+        }
       }
       // Строки записей несут маску прежних прав — перечитать (без `await`:
       // волна запросов не должна держать карту прав).

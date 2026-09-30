@@ -55,17 +55,76 @@ function lastDefiner(fn: string): string {
 const PER_TEAM = "20260929160000_clients_rights_per_team.sql";
 const perTeam = norm(readFileSync(join(MIGRATIONS_DIR, PER_TEAM), "utf8"));
 
+// ЗАЩИТА БАЗЫ (владелец 30.09): списки сотрудника контактов не несут никогда,
+// номер — дверью по одному клиенту; «Около записи» и «В день записи». Три
+// функции переписаны сознательно — сторож держит их новые условия.
+const ONE_BY_ONE = "20260930233000_clients_contacts_one_by_one.sql";
+const oneByOne = norm(readFileSync(join(MIGRATIONS_DIR, ONE_BY_ONE), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
-    for (const fn of [
-      "access_client_ids",
-      "access_company_level",
-      "list_member_clients",
-      "client_seen_by_caller",
-      "current_user_can_edit_client",
-    ]) {
+    for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
       assert.equal(lastDefiner(fn), PER_TEAM, `${fn} переопределён позже`);
     }
+    for (const fn of [
+      "access_client_ids_in",
+      "access_company_level",
+      "list_member_clients",
+      "list_master_clients_safe",
+      "client_seen_by_caller",
+      "member_client_contacts",
+    ]) {
+      assert.equal(lastDefiner(fn), ONE_BY_ONE, `${fn} переопределён позже`);
+    }
+  });
+
+  test("защита базы: сотруднику — список без контактов, номер — дверью по одному", () => {
+    // Любой не-владелец — без контактов и денег, в каждой строке.
+    assert.ok(
+      oneByOne.includes(
+        "as $function$ select case when public.current_user_role() = 'owner' then p_client else public.client_without_money(public.client_without_contacts(p_client)) end $function$",
+      ),
+      "client_seen_by_caller снова отдаёт контакты сотруднику",
+    );
+    assert.ok(
+      oneByOne.includes(
+        "return query select public.client_without_money(public.client_without_contacts( to_jsonb(c) ||",
+      ),
+      "list_member_clients снова отдаёт контакты сотруднику",
+    );
+    assert.ok(oneByOne.includes("'phone', '', 'created_at', c.created_at,"), "мастерский список снова несёт номер");
+    // Дверь: клиент вне набора — «не найден»; лимит и журнал.
+    assert.ok(
+      oneByOne.includes(
+        "if not (p_client = any(public.access_client_ids())) then raise exception 'client not found' using errcode = 'P0002';",
+      ),
+    );
+    assert.ok(oneByOne.includes("daily_limit constant integer := 30;"));
+    assert.ok(oneByOne.includes("if opened_day >= daily_limit then state := 'limit';"));
+    assert.ok(oneByOne.includes("revoke all on function public.member_client_contacts(uuid) from public, anon;"));
+  });
+
+  test("защита базы: «Около записи» — только окно записи этой команды, отменённая не открывает", () => {
+    assert.ok(
+      oneByOne.includes(
+        "and a.team_id = any(near_teams) and a.status is distinct from 'cancelled' and a.date between (today - 7)::text and (today + 1)::text",
+      ),
+    );
+    // Условие набора целиком: «вся база», им созданные, команда клиента и её
+    // записи — и больше ничего перед окном.
+    assert.ok(
+      oneByOne.includes(
+        "where c.tenant_id = active_tenant and c.deleted_at is null and ( whole_base or c.created_by = caller or c.team_id = any(team_wide) or exists ( select 1 from public.appointments a where a.tenant_id = active_tenant and a.client_id = c.id and a.team_id = any(team_wide) ) or exists (",
+      ),
+      "условие набора клиентов сотрудника разошлось",
+    );
+    assert.ok(
+      oneByOne.includes(
+        "coalesce(array_agg(s.team_id) filter (where s.level in ('own', 'all')), array[]::text[]), coalesce(array_agg(s.team_id) filter (where s.level not in ('own', 'all')), array[]::text[])",
+      ),
+    );
+    assert.ok(oneByOne.includes("update public.access_blocks set levels = array['near', 'own', 'all'],"));
+    assert.ok(oneByOne.includes("update public.access_blocks set levels = array['off', 'day', 'read'],"));
   });
 
   test("по командам: набор, телефоны и правка — в паре с «Клиентами» той же команды", () => {
@@ -260,11 +319,17 @@ describe("сервер: клиенты по уровням", () => {
   test("скрытые маской связи сотрудник не запишет обратно", () => {
     const file = lastDefiner("update_client_with_tags");
     const sql = norm(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
+    // С 30.09 (защита базы) — только тот, чей номер открыт сейчас, и только
+    // открыв его дверью: список пришёл с пустыми полями.
     assert.ok(
       sql.includes(
-        "if not public.access_company('clients.contacts', 'read') and p_patch ?| array['phone', 'whatsapp_phone', 'email', 'telegram_username', 'instagram_username', 'phones', 'phone_e164', 'memberships'] then",
+        "if p_patch ?| array['phone', 'whatsapp_phone', 'email', 'telegram_username', 'instagram_username', 'phones', 'phone_e164', 'memberships'] then if not (p_client_id = any(public.access_contact_client_ids()) or p_client_id = any(public.access_day_contact_client_ids())) then raise exception 'contacts are hidden for this employee'",
       ),
       `${file}: связи выпали из списка ключей, запрещённых сотруднику без «Телефонов»`,
+    );
+    assert.ok(
+      sql.includes("and v.outcome = 'open' and v.opened_at > now() - interval '12 hours' ) then raise exception 'open the contacts before changing them'"),
+      `${file}: контакты правятся без открытия номера`,
     );
   });
 

@@ -160,6 +160,7 @@ import {
 import { useLocationRequests } from "@/features/clients/location-requests";
 import { useCurrentRole, useTenant } from "@/features/settings/tenant";
 import { SmsComposeProvider } from "@/features/sms/SmsCompose";
+import { useRevealedClient } from "@/features/clients/revealed-contacts";
 import { SmsRecordBlock } from "@/features/sms/SmsRecordBlock";
 import { smsVars } from "@/features/sms/sms-compose";
 import { addressedAs, firstName } from "@/features/clients/sms-name";
@@ -625,6 +626,9 @@ export default function BookScreen() {
     () => clients.find((c) => c.id === clientId) ?? null,
     [clients, clientId],
   );
+  // Номер, открытый сотрудником дверью (защита базы 30.09), — поверх строки
+  // окна: им пишет «С телефона» блок SMS записи.
+  const revealedClient = useRevealedClient(client, tenantIdForFiles);
   // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС» (STORY-077). Пока клиент не ответил, блок
   // объекта показывает строку «Ждём адрес»: диспетчер видит, что адрес уже
   // спрошен, и не спрашивает второй раз. Ответ приезжает объектом сам —
@@ -1700,7 +1704,10 @@ export default function BookScreen() {
           ? { vat_mode: recordVatMode, vat_rate: vatRateInUse }
           : { vat_mode: "none" as const, vat_rate: null }
         : {}),
-      reminder_enabled: reminderOn && Boolean(client?.phone),
+      // У сотрудника номер клиента в записи не приходит (`contacts_hidden`,
+      // 30.09) — напоминание шлёт сервер по карточке, номер ему известен.
+      reminder_enabled:
+        reminderOn && (Boolean(client?.phone) || client?.contacts_hidden !== undefined),
     };
     return patch;
   };
@@ -2909,7 +2916,7 @@ export default function BookScreen() {
               {editing?.id && client && recordSmsContext ? (
                 <SmsRecordBlock
                   context={recordSmsContext}
-                  phone={client.phone_e164 || client.phone || null}
+                  phone={revealedClient?.phone_e164 || revealedClient?.phone || null}
                 />
               ) : null}
 

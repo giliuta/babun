@@ -14,6 +14,10 @@ import { CLIENTS_PREVIEW_KEYS } from "./preview-keys";
 // выбора клиента (`SelectRow` с буквой). «Какие клиенты» меняет, сколько их в
 // списке; «Телефоны» — есть ли номер под именем; «Меняет» — кнопка создания
 // внизу, как у списка клиентов.
+//
+// Защита базы (30.09): «Около записи» — в списке только клиент, у которого
+// запись рядом; «В день записи» — номер есть только у того, чья запись
+// сегодня (первый в образце).
 
 const noop = () => {};
 
@@ -36,11 +40,13 @@ export function ClientsPreview({
 }) {
   const country = useDefaultCountry();
   const base = levels.clients ?? "off";
-  const all = levels["clients.scope"] === "all";
-  const phones = levels["clients.contacts"] === "read";
+  const scope = levels["clients.scope"] ?? "near";
+  const contacts = levels["clients.contacts"] ?? "off";
+  const all = scope === "all";
+  const phones = contacts === "read" || contacts === "day";
   // Карточки закрыты — у зависимых строк («Какие», «Телефоны») показывать
   // нечего: базы у него нет вовсе, и рамка гасит весь список.
-  const people = all ? [...OWN, ...OTHERS] : OWN;
+  const people = all ? [...OWN, ...OTHERS] : scope === "own" ? OWN : OWN.slice(0, 1);
   const state = levelState(base);
   if (!CLIENTS_PREVIEW_KEYS.includes(blockKey)) return null;
   // Зависимые строки говорят своё: список один, а меняют они в нём разное.
@@ -50,11 +56,15 @@ export function ClientsPreview({
       : blockKey === "clients.scope"
         ? all
           ? "Видит всех клиентов компании"
-          : "Видит только своих клиентов"
+          : scope === "own"
+            ? "Видит клиентов своей команды"
+            : "Видит клиента только около его записи"
         : blockKey === "clients.contacts"
-          ? phones
-            ? "Видит номера клиентов"
-            : "Номеров не видит"
+          ? contacts === "read"
+            ? "Открывает номер по одному"
+            : contacts === "day"
+              ? "Номер — только в день записи"
+              : "Номеров не видит"
           : undefined;
   return (
     <PreviewFrame
@@ -71,7 +81,11 @@ export function ClientsPreview({
               key={person.name}
               title={person.name}
               initial={person.name[0]}
-              subtitle={phones ? formatPhoneForDisplay(person.phone, country) : undefined}
+              subtitle={
+                phones && (contacts === "read" || person === OWN[0])
+                  ? formatPhoneForDisplay(person.phone, country)
+                  : undefined
+              }
               onPress={noop}
             />
           ))}

@@ -1,13 +1,18 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { MoreHorizontal, UserRound, X } from "lucide-react-native";
+import { MoreHorizontal, Phone, UserRound, X } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { ChooseRow } from "@/components/ui/ChooseRow";
+import { RowActionButton } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ICON } from "@/components/ui/tokens";
 import { ClientHistoryLine } from "@/features/clients/history-line";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
+import { contactsLocked } from "@/features/clients/member-contacts";
+import { useRevealedClient } from "@/features/clients/revealed-contacts";
+import { useOpenMemberContacts } from "@/features/clients/use-member-contacts";
+import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -28,6 +33,12 @@ import { useThemeColors } from "@/theme/colors";
 // ЧЕГО БЛОК НЕ ЗНАЕТ. Ни записи, ни события, ни чека. Заметку клиента он не
 // пишет сам — её передают готовым узлом (`note`): у записи это поле есть, у
 // чека его нет, и блок не должен выбирать за них.
+//
+// НОМЕР СОТРУДНИКУ — ПО ОДНОМУ (защита базы 30.09). Клиент записи у мастера
+// приходит без контактов (`contacts_hidden`): на месте цифр «•• ••• •••», а
+// прежняя кнопка звонка открывает номер дверью с журналом — как на карточке
+// клиента (`LockedPhoneRow`). «В день записи» — словами, без кнопки; права
+// нет — строки номера нет. У владельца ключа нет — всё как было.
 
 export function ClientBlock({
   client,
@@ -61,15 +72,22 @@ export function ClientBlock({
   note?: ReactNode;
 }) {
   const t = useThemeColors();
+  const tenantId = useTenantId();
+  const { open } = useOpenMemberContacts();
+  // Открытый номер лежит в памяти — поверх строки окна.
+  const shown = useRevealedClient(client, tenantId) ?? null;
   // Отступ правого края: с «X» кнопки стоят теснее, иначе три круга подряд
   // упираются в край карточки.
   const gap = onClear ? "mr-2" : "mr-4";
   // Выбирать некого и нечем: блок без клиента в режиме «смотрит» пуст.
-  if (!client && !onPick) return null;
+  if (!shown && !onPick) return null;
+  const locked = shown ? contactsLocked(shown) : false;
+  const lockedDay = locked && shown?.contacts_hidden === "day";
+  const noPhoneRight = locked && shown?.contacts_hidden === "right";
 
   return (
     <SectionCard title="Клиент">
-      {client ? (
+      {shown ? (
         <View className="flex-row items-center">
           <Pressable
             className="flex-1 flex-row items-center px-4 py-2.5"
@@ -80,41 +98,61 @@ export function ClientBlock({
               haptics.tap();
             }}
             accessibilityRole={onPick ? "button" : "text"}
-            accessibilityLabel={`Клиент: ${client.full_name || "без имени"}. ${
-              summary ?? client.phone ?? "ещё не обслуживали"
+            accessibilityLabel={`Клиент: ${shown.full_name || "без имени"}. ${
+              summary ?? shown.phone ?? "ещё не обслуживали"
             }`}
             accessibilityHint={onPick ? "Открывает выбор клиента" : undefined}
           >
             <View className="flex-1">
               <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
-                {client.full_name || "Без имени"}
+                {shown.full_name || "Без имени"}
               </Text>
               {/* ПОРЯДОК КАК В СПИСКЕ КЛИЕНТОВ: имя, деньги, связь. Раньше
                   история ВЫТЕСНЯЛА телефон — у постоянного клиента номер из
                   записи пропадал вовсе. */}
-              <ClientHistoryLine client={client} stats={stats} />
-              <Text
-                style={{
-                  fontSize: 13,
-                  color: client.phone ? t.sub : t.placeholder,
-                  marginTop: 2,
-                }}
-                numberOfLines={1}
-              >
-                {client.phone || "без телефона"}
-              </Text>
+              <ClientHistoryLine client={shown} stats={stats} />
+              {noPhoneRight ? null : (
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: shown.phone || locked ? t.sub : t.placeholder,
+                    marginTop: 2,
+                  }}
+                  numberOfLines={1}
+                >
+                  {lockedDay
+                    ? "Номер откроется в день записи"
+                    : locked
+                      ? "•• ••• •••"
+                      : shown.phone || "без телефона"}
+                </Text>
+              )}
             </View>
           </Pressable>
-          {client.phone ? (
+          {locked && !lockedDay && !noPhoneRight ? (
+            // Номер ещё не открыт: та же кнопка на том же месте открывает его
+            // (журнал видит владелец), дальше строка — обычная.
+            <View className={`${gap} self-center`}>
+              <RowActionButton
+                icon={Phone}
+                color={t.accent}
+                label="Открыть номер"
+                hint="Каждое открытие видно владельцу"
+                onPress={() => {
+                  if (shown) void open(shown);
+                }}
+              />
+            </View>
+          ) : shown.phone ? (
             // Та же кнопка, что у номера в карточке и в списке: тап звонит,
             // удержание — способы связи; 32pt, как маршрут и «…» (владелец
             // 2026-09-06).
             <View className={`${gap} self-center`}>
               <PhoneChannelButton
-                number={client.phone}
-                telegramUsername={client.telegram_username}
-                label={client.full_name || undefined}
-                teamId={client.team_id ?? null}
+                number={shown.phone}
+                telegramUsername={shown.telegram_username}
+                label={shown.full_name || undefined}
+                teamId={shown.team_id ?? null}
               />
             </View>
           ) : null}
@@ -127,7 +165,7 @@ export function ClientBlock({
               className={`${gap} items-center justify-center self-center rounded-full`}
               style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
               accessibilityRole="button"
-              accessibilityLabel={`Карточка клиента ${client.full_name || "без имени"}`}
+              accessibilityLabel={`Карточка клиента ${shown.full_name || "без имени"}`}
             >
               <MoreHorizontal color={t.body} size={ICON.sm} />
             </Pressable>
@@ -155,7 +193,7 @@ export function ClientBlock({
           onPress={onPick ?? (() => {})}
         />
       )}
-      {client ? note : null}
+      {shown ? note : null}
     </SectionCard>
   );
 }

@@ -35,10 +35,25 @@ describe("права клиентов — из команд", () => {
     const got = clientsAccessOf(
       mapWith({
         A: { clients: "off", "clients.scope": "all", "clients.contacts": "read" },
-        B: { clients: "read" },
+        B: { clients: "read", "clients.scope": "own" },
       }),
     );
     assert.deepEqual(got, { clients: "read", scope: "own", contacts: "off" });
+  });
+
+  test("защита базы: без строки — «Около записи» и телефон скрыт; берётся самое широкое", () => {
+    assert.deepEqual(clientsAccessOf(mapWith({ A: { clients: "read" } })), {
+      clients: "read",
+      scope: "near",
+      contacts: "off",
+    });
+    const got = clientsAccessOf(
+      mapWith({
+        A: { clients: "read", "clients.scope": "near", "clients.contacts": "day" },
+        B: { clients: "read", "clients.scope": "own", "clients.contacts": "off" },
+      }),
+    );
+    assert.deepEqual(got, { clients: "read", scope: "own", contacts: "day" });
   });
 
   test("старый сервер — права на компанию читаются как были", () => {

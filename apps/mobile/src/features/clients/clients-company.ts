@@ -220,7 +220,9 @@ export function memberScope(
     kind: "member",
     role,
     level,
-    contacts: access.contacts === "read",
+    // «В день записи» — строка номера есть; открывается ли номер у этого
+    // клиента, говорит сервер (`contacts_hidden`, дверь `member_client_contacts`).
+    contacts: access.contacts === "read" || access.contacts === "day",
     everyClient: access.scope === "all",
     isActive: tenantId === activeTenantId,
   };

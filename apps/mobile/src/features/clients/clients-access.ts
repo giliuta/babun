@@ -9,8 +9,21 @@ import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map"
 //   • «Все клиенты» — если так хоть в одной команде, где он клиентов видит;
 //   • «Телефоны» — если открыты хоть в одной такой команде.
 // Карта со старого сервера (права на компанию) читается как прежде.
+//
+// ЗАЩИТА БАЗЫ (владелец 30.09): «Какие клиенты» — Около записи · Своей команды ·
+// Вся база, «Телефон» — Скрыт · В день записи · Всегда. Берётся самое широкое
+// среди команд, где он клиентов видит; нет строки — самое узкое, как у
+// сервера-умолчания.
 
 const RANK: Partial<Record<AccessLevel, number>> = { off: 0, read: 1, write: 2 };
+const SCOPE_RANK: Partial<Record<AccessLevel, number>> = { near: 0, own: 1, all: 2 };
+const CONTACTS_RANK: Partial<Record<AccessLevel, number>> = { off: 0, day: 1, read: 2 };
+
+const wider = (
+  ranks: Partial<Record<AccessLevel, number>>,
+  a: AccessLevel,
+  b: AccessLevel | undefined,
+): AccessLevel => (b !== undefined && (ranks[b] ?? -1) > (ranks[a] ?? -1) ? b : a);
 
 export interface ClientsAccessLevels {
   clients?: AccessLevel;
@@ -27,8 +40,8 @@ export function clientsAccessOf(map: MemberAccessMap): ClientsAccessLevels {
     };
   }
   let clients: AccessLevel | undefined;
-  let whole = false;
-  let contacts = false;
+  let scope: AccessLevel = "near";
+  let contacts: AccessLevel = "off";
   let seen = false;
   for (const levels of Object.values(map.calendars)) {
     const level = levels["clients"];
@@ -37,13 +50,9 @@ export function clientsAccessOf(map: MemberAccessMap): ClientsAccessLevels {
     const rank = RANK[level] ?? 0;
     if (clients === undefined || rank > (RANK[clients] ?? 0)) clients = level;
     if (rank < 1) continue;
-    if (levels["clients.scope"] === "all") whole = true;
-    if (levels["clients.contacts"] === "read") contacts = true;
+    scope = wider(SCOPE_RANK, scope, levels["clients.scope"]);
+    contacts = wider(CONTACTS_RANK, contacts, levels["clients.contacts"]);
   }
   if (!seen) return {};
-  return {
-    clients,
-    scope: whole ? "all" : "own",
-    contacts: contacts ? "read" : "off",
-  };
+  return { clients, scope, contacts };
 }

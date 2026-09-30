@@ -9,6 +9,8 @@ import {
   isFinanceDataKey,
   isNewerAccess,
   canEditMoneyRow,
+  clientLevelsChange,
+  isClientDataKey,
   lostAccess,
   moneyKey,
   recordLevelsChanged,
@@ -241,5 +243,39 @@ describe("строки записей перечитываются, когда �
       recordLevelsChanged(base({ "record.amount": "read" }), base({ "record.amount": "read" })),
       false,
     );
+  });
+});
+
+describe("клиенты уходят с телефона, когда права сузили (защита базы 30.09)", () => {
+  const T = "tenant-1";
+  const team = (levels: Record<string, AccessLevel>) => map({ calendars: { A: levels } });
+  const base = { clients: "read", "clients.scope": "own", "clients.contacts": "read" } as const;
+
+  test("ключи клиентов этой компании — да; другой компании и не клиентов — нет", () => {
+    assert.equal(isClientDataKey(["clients", T, "member:read:own:phones"], T), true);
+    assert.equal(isClientDataKey(["client", "c1", T, "member:read:own:phones"], T), true);
+    assert.equal(isClientDataKey(["client-contacts", T, "c1"], T), true);
+    assert.equal(isClientDataKey(["client-members", T, "g1"], T), true);
+    assert.equal(isClientDataKey(["clients", "tenant-2", "x"], T), false);
+    assert.equal(isClientDataKey(["client", "c1", "tenant-2", "x"], T), false);
+    assert.equal(isClientDataKey(["appointments", T, "master"], T), false);
+  });
+
+  test("«Всегда» → «В день записи», «Своей команды» → «Около записи», снятая команда — сужение", () => {
+    assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.contacts": "day" })), "narrowed");
+    assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.scope": "near" })), "narrowed");
+    assert.equal(clientLevelsChange(team(base), team({ ...base, clients: "off" })), "narrowed");
+    assert.equal(clientLevelsChange(team(base), map({ calendars: {} })), "narrowed");
+  });
+
+  test("расширили — перечитать, не стирать; ничего не поменяли и первая загрузка — ничего", () => {
+    assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.scope": "all" })), "changed");
+    assert.equal(clientLevelsChange(team({ ...base, "clients.contacts": "day" }), team(base)), "changed");
+    assert.equal(clientLevelsChange(team(base), team({ ...base, "record.team": "write" })), "same");
+    assert.equal(clientLevelsChange(undefined, team(base)), "same");
+  });
+
+  test("владелец, ставший сотрудником, — сужение", () => {
+    assert.equal(clientLevelsChange(map({ isOwner: true }), team(base)), "narrowed");
   });
 });

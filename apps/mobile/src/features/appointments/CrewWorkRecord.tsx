@@ -18,6 +18,10 @@ import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { formatPhoneForDisplay } from "@/features/clients/phone";
+import { contactsLocked } from "@/features/clients/member-contacts";
+import { useRevealedClient } from "@/features/clients/revealed-contacts";
+import { useOpenMemberContacts } from "@/features/clients/use-member-contacts";
+import { useTenantId } from "@/lib/tenant";
 
 import type { CrewBlocks } from "./crew-blocks";
 import { ActionRow, AmountRow, InfoRow, WorkLineRow } from "./crew-rows";
@@ -83,7 +87,13 @@ export function CrewWorkRecord({
     setStatus(appointment.status);
   }, [appointment.id, appointment.comment, appointment.status]);
 
-  const phone = client?.phone?.trim() ?? "";
+  // НОМЕР — ПО ОДНОМУ (защита базы 30.09): клиент записи приходит без
+  // контактов; строка номера открывает его дверью с журналом, дальше — звонок.
+  const tenantId = useTenantId();
+  const { open: openContacts } = useOpenMemberContacts();
+  const shownClient = useRevealedClient(client, tenantId) ?? null;
+  const phone = shownClient?.phone?.trim() ?? "";
+  const phoneLocked = shownClient ? contactsLocked(shownClient) : false;
   const commentChanged = comment.trim() !== savedComment.trim();
   // Заметка — своё право «Заметка» (30.09): «Видит и меняет» — пишет,
   // «Только видит» — читает, «Скрыта» — заметки нет.
@@ -164,7 +174,24 @@ export function CrewWorkRecord({
       {blocks.client ? (
         <SectionCard title="Клиент">
           <InfoRow label="Имя" value={client?.full_name || "Без имени"} />
-          {phone ? (
+          {phoneLocked && shownClient?.contacts_hidden === "day" ? (
+            <>
+              <Divider inset={16} />
+              <InfoRow label="Телефон" value="Откроется в день записи" />
+            </>
+          ) : phoneLocked && shownClient?.contacts_hidden === null ? (
+            <>
+              <Divider inset={16} />
+              <ActionRow
+                icon={<Phone color={t.accent} size={ICON.sm} />}
+                title="•• ••• •••"
+                subtitle="Открыть номер"
+                onPress={() => {
+                  if (shownClient) void openContacts(shownClient);
+                }}
+              />
+            </>
+          ) : phone ? (
             <>
               <Divider inset={16} />
               <ActionRow

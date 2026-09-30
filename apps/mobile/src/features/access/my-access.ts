@@ -102,6 +102,73 @@ export function recordLevelsChanged(
   return false;
 }
 
+// КЛИЕНТЫ УХОДЯТ С ТЕЛЕФОНА ПРИ СУЖЕНИИ ПРАВ (защита базы, владелец 30.09:
+// «чтоб не пришёл на неделю, не выгрузил базу и не ушёл»). У каждого из трёх
+// прав клиентов своя шкала: «Какие клиенты» — Около записи < Своей команды <
+// Вся база, «Телефон» — Скрыт < В день записи < Всегда. Сузили хоть одно
+// хоть в одной команде (или команду сняли) — клиенты и открытые номера этой
+// компании стираются с телефона сразу; поменяли иначе — перечитываются: маска
+// строк и `contacts_hidden` пришли при прежних правах.
+
+const CLIENT_RANKS: Readonly<Record<string, Readonly<Partial<Record<AccessLevel, number>>>>> = {
+  clients: { off: 0, read: 1, write: 2 },
+  "clients.scope": { near: 0, own: 1, all: 2 },
+  "clients.contacts": { off: 0, day: 1, read: 2 },
+};
+
+export type ClientLevelsChange = "same" | "changed" | "narrowed";
+
+function compareClientLevels(
+  was: Readonly<Record<string, AccessLevel>>,
+  now: Readonly<Record<string, AccessLevel>>,
+): ClientLevelsChange {
+  let changed = false;
+  for (const [key, ranks] of Object.entries(CLIENT_RANKS)) {
+    const a = was[key];
+    const b = now[key];
+    if (a === b) continue;
+    changed = true;
+    const r = (level: AccessLevel | undefined) => (level === undefined ? -1 : (ranks[level] ?? -1));
+    if (r(b) < r(a)) return "narrowed";
+  }
+  return changed ? "changed" : "same";
+}
+
+export function clientLevelsChange(
+  before: MemberAccessMap | undefined,
+  next: MemberAccessMap,
+): ClientLevelsChange {
+  if (!before) return "same";
+  if (before.isOwner && !next.isOwner) return "narrowed";
+  if (before.isOwner || next.isOwner) return before.isOwner === next.isOwner ? "same" : "changed";
+  let result = compareClientLevels(before.company, next.company);
+  if (result === "narrowed") return result;
+  const teams = new Set([...Object.keys(before.calendars), ...Object.keys(next.calendars)]);
+  for (const team of teams) {
+    const step = compareClientLevels(before.calendars[team] ?? {}, next.calendars[team] ?? {});
+    if (step === "narrowed") return step;
+    if (step === "changed") result = "changed";
+  }
+  return result;
+}
+
+/** Первые сегменты ключей, под которыми на телефоне лежат клиенты компании.
+ *  Компания — вторым сегментом; у карточки (`["client", id, tenant, view]`) —
+ *  третьим. `client-contacts` — номера, открытые дверью по одному. */
+export const CLIENT_DATA_HEADS: readonly string[] = [
+  "clients",
+  "client-tags",
+  "client-members",
+  "client-attachments",
+  "client-visit-photos",
+  "client-contacts",
+];
+
+export function isClientDataKey(queryKey: readonly unknown[], tenantId: string): boolean {
+  if (queryKey[0] === "client") return queryKey[2] === tenantId;
+  return CLIENT_DATA_HEADS.includes(String(queryKey[0])) && queryKey[1] === tenantId;
+}
+
 /** ДОХОДЫ И РАСХОДЫ — ДВА ПРАВА С ЭТАПА 2 (владелец 29.09: «только доходы, но
  *  видел все расходы»). До наката их вела одна строка `finance.operations`.
  *  Карта сервера несёт все живые блоки с умолчаниями, поэтому новый ключ либо
