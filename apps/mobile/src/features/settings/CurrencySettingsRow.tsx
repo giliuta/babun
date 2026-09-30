@@ -57,7 +57,9 @@ export function CurrencySettingsRow() {
         tile={SETTINGS_TILE.green}
         icon={Banknote}
         title="Валюта"
-        sub={`${moneyName(currency)} · ${moneySymbol(currency)} · ${currency}`}
+        // Коротко (владелец 30.09 о шестерёнке): «Евро · €» — код EUR
+        // повторял то же, что знак.
+        sub={`${moneyName(currency)} · ${moneySymbol(currency)}`}
         onPress={() => setOpen(true)}
       />
       <CurrencySheet visible={open} onClose={() => setOpen(false)} value={currency} onApply={apply} />

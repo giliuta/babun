@@ -94,7 +94,7 @@ export function LedgerExportRow({ teamId }: { teamId: string | null }) {
         tile={SETTINGS_TILE.green}
         icon={FileSpreadsheet}
         title="Выгрузка для бухгалтера"
-        sub={busy ? "Готовим файл…" : "Операции за период — таблицей CSV"}
+        sub={busy ? "Готовим файл…" : "CSV за период"}
         onPress={() => {
           if (!busy) setOpen(true);
         }}
