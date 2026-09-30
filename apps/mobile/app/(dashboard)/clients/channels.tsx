@@ -1,4 +1,5 @@
 import { ToggleListScreen } from "@/components/ui/ToggleListScreen";
+import { useLocalSearchParams } from "expo-router";
 import {
   contactWayDef,
   isWayOffered,
@@ -23,10 +24,14 @@ import {
 // `contact-ways`.
 
 export default function ClientChannelsScreen() {
-  const order = useWaysOrder();
-  const enabled = useEnabledWays();
-  const toggle = useToggleWay();
-  const reorder = useReorderWays();
+  // Набор КОМАНДЫ из адреса (у каждой команды свои настройки клиентов,
+  // владелец 30.09); без команды — набор компании.
+  const { team } = useLocalSearchParams<{ team?: string }>();
+  const teamId = team || null;
+  const order = useWaysOrder(teamId);
+  const enabled = useEnabledWays(teamId);
+  const toggle = useToggleWay(teamId);
+  const reorder = useReorderWays(teamId);
 
   // ЗВОНОК В СПИСКЕ НЕ СТОИТ (владелец 2026-09-04: «зачем лишний шум
   // создавать — это можно даже не выбирать, оно идёт как стандарт, вообще

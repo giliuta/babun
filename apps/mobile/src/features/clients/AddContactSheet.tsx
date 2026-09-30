@@ -31,6 +31,7 @@ export function AddContactSheet({
   onPick,
   onClose,
   onExited,
+  teamId = null,
 }: {
   visible: boolean;
   client: ContactHolder;
@@ -38,12 +39,15 @@ export function AddContactSheet({
   onClose: () => void;
   /** Лист ушёл — сюда страница вешает следующую шторку (выбор человека). */
   onExited?: () => void;
+  /** Команда клиента — её «Способы связи» (у каждой команды свои, 30.09);
+   *  нет — набор компании. */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
   const router = useRouter();
   // Из записи справочник открывается её сиблингом (см. `useReferenceHref`).
   const channelsHref = useReferenceHref().channels;
-  const enabled = useEnabledContactFields();
+  const enabled = useEnabledContactFields(teamId);
 
   // Номер — всегда первым и всегда доступен: их у клиента может быть сколько
   // угодно, а мессенджер каждого вида ровно один.

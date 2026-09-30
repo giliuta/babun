@@ -17,16 +17,20 @@ export function RouteSheet({
   visible,
   target,
   onClose,
+  teamId = null,
 }: {
   visible: boolean;
   /** Адрес, ссылка или координаты. */
   target: string;
   onClose: () => void;
+  /** Команда клиента — её «Карты для маршрута» (у каждой команды свои,
+   *  30.09); нет — набор компании. */
+  teamId?: string | null;
 }) {
   const router = useRouter();
   // Из записи справочник открывается её сиблингом (см. `useReferenceHref`).
   const mapsHref = useReferenceHref().maps;
-  const enabled = useEnabledMapServices();
+  const enabled = useEnabledMapServices(teamId);
 
   const items: PickerSheetItem[] = routeServices(enabled).map((s) => ({
     id: s.id,

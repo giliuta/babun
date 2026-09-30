@@ -84,9 +84,13 @@ const REASON_TONE: Record<RowReason, "danger" | "warning"> = {
 export function ImportWizardSheet({
   visible,
   onClose,
+  teamId = null,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** Команда, в которую заводятся клиенты (у каждой команды свой импорт,
+   *  владелец 30.09); нет — сервер ставит первую доступную. */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
   const { data: tags = [] } = useClientTags();
@@ -242,6 +246,7 @@ export function ImportWizardSheet({
           rows,
           defaultCountry: country,
           tagId,
+          teamId,
           fileHash: parsed.fileHash,
           fileName,
           startBatchIndex: 0,
@@ -253,7 +258,7 @@ export function ImportWizardSheet({
         setError((e as Error).message || "Ошибка импорта.");
       }
     },
-    [parsed, country, tagId, fileName, importer],
+    [parsed, country, tagId, teamId, fileName, importer],
   );
 
   // Preview «Импортировать» — insert the currently-selected keep set.

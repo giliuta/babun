@@ -165,6 +165,7 @@ export default function ObjectsBlock({
             <ObjectRow
               loc={loc}
               separated={i > 0}
+              teamId={client.team_id ?? null}
               // Заметка стоит ПОД строкой своей плашкой — третьей строкой её
               // печатать больше не надо.
               showNote={!onNote}
@@ -241,6 +242,7 @@ export function ObjectRow({
   lastVisit,
   onPress,
   onLongPress,
+  teamId = null,
 }: {
   loc: Location;
   separated?: boolean;
@@ -266,6 +268,8 @@ export function ObjectRow({
   /** Долгое нажатие по строке — на карточке клиента копирует адрес. Запись и
    *  инвойс его не передают: там строка ведёт свой сценарий выбора. */
   onLongPress?: () => void;
+  /** Команда клиента — её «Карты для маршрута» (у каждой команды свои). */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
   const target = objectTarget(loc);
@@ -379,6 +383,7 @@ export function ObjectRow({
         // квартира карте только мешают.
         address={routeAddress(loc)}
         label={loc.label}
+        teamId={teamId}
       />
 
       {/* Правка объекта — кружок в хвосте, СНАРУЖИ нажимаемой области строки

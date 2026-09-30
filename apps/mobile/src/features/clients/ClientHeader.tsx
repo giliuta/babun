@@ -244,6 +244,7 @@ export default function ClientHeader({
                 number={client.phone}
                 telegramUsername={client.telegram_username}
                 label="основной"
+                teamId={client.team_id ?? null}
               />
             )
           }
@@ -262,6 +263,7 @@ export default function ClientHeader({
           client={client}
           update={update}
           draft={!!draft}
+          teamId={client.team_id ?? null}
           compact
           readOnly={readOnly}
           noCopy={noCopy}

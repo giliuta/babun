@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getStorage } from "@babun/shared/storage";
+import {
+  createEnabledPrefsStore,
+  type EnabledPrefsOptions,
+} from "@/lib/enabled-prefs-core";
 import { useTenantId } from "@/lib/tenant";
 import { useClientsScopeOrNull } from "@/features/clients/company-scope";
 
@@ -33,181 +37,84 @@ function usePrefsTenantId(): string | null {
   return scope?.tenantId ?? activeTenantId;
 }
 
-export function createEnabledPrefs<T extends string>(opts: {
-  /** Префикс ключа в MMKV; к нему приклеивается tenantId. */
-  storageKey: string;
-  /** Ключ кэша react-query. */
-  queryKey: string;
-  /** Все возможные значения в порядке ПО УМОЛЧАНИЮ. */
-  all: readonly T[];
-  /** Что включено, пока никто ничего не настраивал. */
-  defaults: readonly T[];
-  /** Всегда включены и всегда первыми; не выключаются и не двигаются. */
-  pinned?: readonly T[];
-  /** Нужен ли хотя бы один включённый пункт (иначе контрол умрёт). */
-  requireOne?: boolean;
-  /** Пункты, которые СУЩЕСТВОВАЛИ до того, как набор начал помнить, что он
-   *  знает (`:known`). У устройства со старым сохранённым списком новый
-   *  пункт из `defaults` иначе оказался бы выключенным молча — так 2026-09-06
-   *  «Файлы» пропали бы у владельца. Не указано — считается, что старых
-   *  списков с неполным набором нет. */
-  legacyIds?: readonly T[];
-  /** ЧТО ЗАПИСАТЬ, ЕСЛИ СВОЕГО ЕЩЁ НЕТ. Зовётся ровно один раз на тенант —
-   *  когда набор объединяет два прежних (см. `contact-ways`) и молча
-   *  потерять уже настроенное нельзя. `null` — переносить нечего, работают
-   *  обычные `defaults`. */
-  migrate?: (tenantId: string | null) => {
-    enabled?: readonly T[];
-    order?: readonly T[];
-  } | null;
-}) {
-  const { storageKey, queryKey, all, defaults, requireOne } = opts;
-  const pinned = opts.pinned ?? [];
-  const key = (tenantId: string | null) =>
-    tenantId ? `${storageKey}:${tenantId}` : storageKey;
-  const orderKey = (tenantId: string | null) => `${key(tenantId)}:order`;
-  /** Какие пункты набор знал, когда список писали в последний раз. */
-  const knownKey = (tenantId: string | null) => `${key(tenantId)}:known`;
-  const rememberKnown = (tenantId: string | null) => {
-    try {
-      getStorage().set(knownKey(tenantId), [...all]);
-    } catch {
-      // Запись best-effort.
-    }
-  };
-
-  /** Перенос со старых ключей — до первого чтения и только пока своего нет. */
-  const ensureMigrated = (tenantId: string | null) => {
-    if (!opts.migrate) return;
-    try {
-      const storage = getStorage();
-      if (storage.get<string[]>(key(tenantId)) !== undefined) return;
-      const seed = opts.migrate(tenantId);
-      if (!seed) return;
-      if (seed.enabled) storage.set(key(tenantId), [...seed.enabled]);
-      if (seed.order) storage.set(orderKey(tenantId), [...seed.order]);
-    } catch {
-      // Перенос best-effort: без него набор просто встанет на умолчания.
-    }
-  };
-
-  /** Полный порядок всех пунктов: закреплённые сверху, затем сохранённый
-   *  порядок, затем всё, чего в нём ещё нет (новый способ связи в обновлении
-   *  не должен исчезнуть только потому, что порядок сохранён раньше). */
-  const readOrder = (tenantId: string | null): T[] => {
-    ensureMigrated(tenantId);
-    let saved: T[] = [];
-    try {
-      const raw = getStorage().get<string[]>(orderKey(tenantId));
-      if (Array.isArray(raw)) saved = raw.filter((id) => all.includes(id as T)) as T[];
-    } catch {
-      saved = [];
-    }
-    const rest = all.filter((id) => !pinned.includes(id) && !saved.includes(id));
-    return [
-      ...pinned,
-      ...saved.filter((id) => !pinned.includes(id)),
-      ...rest,
-    ];
-  };
-
-  /** Включённые — В ПОРЯДКЕ ПОКАЗА. */
-  const read = (tenantId: string | null): T[] => {
-    ensureMigrated(tenantId);
-    const order = readOrder(tenantId);
-    let enabled: T[];
-    try {
-      const raw = getStorage().get<string[]>(key(tenantId));
-      enabled = Array.isArray(raw)
-        ? (raw.filter((id) => all.includes(id as T)) as T[])
-        : [...defaults];
-      if (enabled.length === 0 && requireOne) enabled = [...defaults];
-    } catch {
-      enabled = [...defaults];
-    }
-    // Пункт, которого набор ещё не знал, когда список сохраняли, — не
-    // «выключен», а «не существовал»: включаем его, если он в `defaults`.
-    let known: T[] | null = null;
-    try {
-      const raw = getStorage().get<string[]>(knownKey(tenantId));
-      known = Array.isArray(raw) ? (raw as T[]) : null;
-    } catch {
-      known = null;
-    }
-    const baseline = known ?? opts.legacyIds ?? all;
-    const introduced = defaults.filter((id) => !baseline.includes(id));
-    // Закреплённое включено всегда, чем бы ни было записано раньше.
-    const withPinned = [...new Set([...pinned, ...enabled, ...introduced])];
-    return order.filter((id) => withPinned.includes(id));
-  };
-
-  const canDisable = (enabled: T[], id: T): boolean => {
-    if (pinned.includes(id)) return false;
-    return !requireOne || !enabled.includes(id) || enabled.length > 1;
-  };
-
-  /** Можно ли перетаскивать этот пункт. Закреплённый стоит первым всегда. */
-  const canMove = (id: T): boolean => !pinned.includes(id);
+export function createEnabledPrefs<T extends string>(opts: EnabledPrefsOptions<T>) {
+  const { queryKey } = opts;
+  const store = createEnabledPrefsStore(opts);
+  const {
+    all,
+    pinned,
+    key,
+    orderKey,
+    rememberKnown,
+    read,
+    readOrder,
+    seedTeam,
+    canDisable,
+    canMove,
+  } = store;
 
   return {
     read,
     readOrder,
     canDisable,
     canMove,
-    /** Включённые, в порядке показа. */
-    use() {
+    /** Включённые, в порядке показа. `teamId` — набор этой команды (пока
+     *  своего нет — набор компании); без него — набор компании. */
+    use(teamId: string | null = null) {
       const tenantId = usePrefsTenantId();
       const { data } = useQuery({
-        queryKey: [queryKey, tenantId],
-        queryFn: () => read(tenantId),
+        queryKey: [queryKey, tenantId, teamId],
+        queryFn: () => read(tenantId, teamId),
         // MMKV читается синхронно — набор известен уже на первом кадре, и
         // тап не может попасть в пустой (=мёртвый) набор.
-        initialData: () => read(tenantId),
+        initialData: () => read(tenantId, teamId),
         staleTime: Infinity,
       });
       return data;
     },
     /** Полный порядок — для страницы настройки (там видно и выключенное). */
-    useOrder() {
+    useOrder(teamId: string | null = null) {
       const tenantId = usePrefsTenantId();
       const { data } = useQuery({
-        queryKey: [queryKey, tenantId, "order"],
-        queryFn: () => readOrder(tenantId),
-        initialData: () => readOrder(tenantId),
+        queryKey: [queryKey, tenantId, teamId, "order"],
+        queryFn: () => readOrder(tenantId, teamId),
+        initialData: () => readOrder(tenantId, teamId),
         staleTime: Infinity,
       });
       return data;
     },
-    useToggle() {
+    useToggle(teamId: string | null = null) {
       const qc = useQueryClient();
       const tenantId = usePrefsTenantId();
       return useMutation<T[], Error, T>({
         // Локальная запись — не должна ждать сети.
         networkMode: "always",
         mutationFn: async (id: T) => {
-          const cur = read(tenantId);
+          seedTeam(tenantId, teamId);
+          const cur = read(tenantId, teamId);
           if (!canDisable(cur, id)) return cur;
           const next = cur.includes(id)
             ? cur.filter((x) => x !== id)
             : [...cur, id];
-          const ordered = readOrder(tenantId).filter((x) => next.includes(x));
+          const ordered = readOrder(tenantId, teamId).filter((x) => next.includes(x));
           try {
-            getStorage().set(key(tenantId), ordered);
+            getStorage().set(key(tenantId, teamId), ordered);
           } catch {
             // Запись best-effort.
           }
-          rememberKnown(tenantId);
+          rememberKnown(tenantId, teamId);
           return ordered;
         },
-        onSuccess: (next) => qc.setQueryData([queryKey, tenantId], next),
+        onSuccess: (next) => qc.setQueryData([queryKey, tenantId, teamId], next),
       });
     },
-    useReorder() {
+    useReorder(teamId: string | null = null) {
       const qc = useQueryClient();
       const tenantId = usePrefsTenantId();
       return useMutation<T[], Error, T[]>({
         networkMode: "always",
         mutationFn: async (next: T[]) => {
+          seedTeam(tenantId, teamId);
           // Закреплённое возвращается в начало, что бы ни прислал экран.
           const ordered = [
             ...pinned,
@@ -218,16 +125,16 @@ export function createEnabledPrefs<T extends string>(opts: {
             ...all.filter((id) => !ordered.includes(id)),
           ];
           try {
-            getStorage().set(orderKey(tenantId), full);
+            getStorage().set(orderKey(tenantId, teamId), full);
           } catch {
             // Запись best-effort.
           }
           return full;
         },
         onSuccess: (full) => {
-          qc.setQueryData([queryKey, tenantId, "order"], full);
+          qc.setQueryData([queryKey, tenantId, teamId, "order"], full);
           // Порядок включённых меняется вместе с общим.
-          qc.setQueryData([queryKey, tenantId], read(tenantId));
+          qc.setQueryData([queryKey, tenantId, teamId], read(tenantId, teamId));
         },
       });
     },

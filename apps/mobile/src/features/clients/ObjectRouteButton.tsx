@@ -20,14 +20,18 @@ export default function ObjectRouteButton({
   mapUrl,
   address,
   label,
+  teamId = null,
 }: {
   mapUrl?: string | null;
   address?: string | null;
   /** Для озвучки: «Маршрут · Дом». */
   label?: string | null;
+  /** Команда клиента — её «Карты для маршрута» (у каждой команды свои,
+   *  30.09); нет — набор компании. */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
-  const enabled = useEnabledMapServices();
+  const enabled = useEnabledMapServices(teamId);
   const [open, setOpen] = useState(false);
   const target = routeTarget(mapUrl, address);
   if (!target) return null;

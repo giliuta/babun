@@ -37,6 +37,7 @@ export default function PhoneChannelButton({
   telegramUsername,
   label,
   smsName,
+  teamId = null,
 }: {
   number: string;
   /** @username клиента — только у основного номера. */
@@ -45,6 +46,9 @@ export default function PhoneChannelButton({
   label?: string;
   /** Чей номер, если не клиента страницы: [Имя] в шаблоне SMS — его. */
   smsName?: string | null;
+  /** Команда клиента — её «Способы связи» (у каждой команды свои, 30.09);
+   *  нет — набор компании. */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -54,7 +58,7 @@ export default function PhoneChannelButton({
   const [smsOpen, setSmsOpen] = useState(false);
   // Шаблоны, заполненные записью или карточкой, где стоит номер (STORY-089).
   const smsOptions = useSmsOptions(smsName);
-  const enabled = useEnabledChannels();
+  const enabled = useEnabledChannels(teamId);
   const country = useDefaultCountry();
   const channels = resolveChannelsForNumber(number, enabled, {
     telegramUsername,

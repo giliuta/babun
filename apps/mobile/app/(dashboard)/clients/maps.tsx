@@ -1,4 +1,5 @@
 import { ToggleListScreen } from "@/components/ui/ToggleListScreen";
+import { useLocalSearchParams } from "expo-router";
 import type { MapService } from "@babun/shared/common/utils/map-links";
 import {
   canDisableMapService,
@@ -13,10 +14,14 @@ import {
 // порядке (первая в списке — первая в выборе).
 
 export default function ClientMapsScreen() {
-  const order = useMapServicesOrder();
-  const enabled = useEnabledMapServices();
-  const toggle = useToggleMapService();
-  const reorder = useReorderMapServices();
+  // Набор КОМАНДЫ из адреса (у каждой команды свои настройки клиентов,
+  // владелец 30.09); без команды — набор компании.
+  const { team } = useLocalSearchParams<{ team?: string }>();
+  const teamId = team || null;
+  const order = useMapServicesOrder(teamId);
+  const enabled = useEnabledMapServices(teamId);
+  const toggle = useToggleMapService(teamId);
+  const reorder = useReorderMapServices(teamId);
 
   const items = order
     .map((id) => {

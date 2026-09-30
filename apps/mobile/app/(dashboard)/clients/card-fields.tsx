@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import { useLocalSearchParams } from "expo-router";
 import { ScrollView, Text, View } from "react-native";
 import { Info } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
@@ -52,8 +53,12 @@ export default function CardFieldsScreenRoute() {
 
 function CardFieldsScreen() {
   const t = useThemeColors();
-  const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields();
-  const toggle = useToggleCardField();
+  // Набор КОМАНДЫ из адреса (у каждой команды свои настройки клиентов,
+  // владелец 30.09); без команды — набор компании.
+  const { team } = useLocalSearchParams<{ team?: string }>();
+  const teamId = team || null;
+  const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields(teamId);
+  const toggle = useToggleCardField(teamId);
 
   return (
     <Screen>

@@ -43,9 +43,7 @@ import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import ClientRow from "@/features/clients/ClientRow";
 import {
   EMPTY_FILTER,
-  resetFilters,
   segmentEvidence,
-  type ActiveToken,
   type ClientsFilter,
 } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
@@ -55,6 +53,7 @@ import {
   clientsOfTeam,
   liveTeamChoice,
   rowTeamLabelId,
+  teamForNewClient,
   toggleTeamChoice,
 } from "@/features/clients/team-scope";
 import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref";
@@ -80,8 +79,8 @@ import {
   useSetClientsSort,
 } from "@/features/clients/sort-pref";
 import {
-  DEFAULT_CARD_FIELDS,
-  useCardFields,
+  useCardFieldsByTeam,
+  type CardFieldPrefs,
 } from "@/features/clients/card-prefs";
 import { ClientActionsSheet } from "@/features/clients/ClientActionsSheet";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
@@ -166,7 +165,6 @@ function ClientsListScreen() {
   const { data: ownAppointments = [] } = useAppointments();
   const { data: ownTeams = [] } = useTeams();
   const { data: cities = [] } = useCities();
-  const { data: cardFields = DEFAULT_CARD_FIELDS } = useCardFields();
   // Сортировка — персистентная настройка списка (первая строка листа
   // «Фильтры»), не фильтр: «Сбросить» её не трогает.
   const { data: sort = "recent" } = useClientsSort();
@@ -264,9 +262,19 @@ function ClientsListScreen() {
     [appointments, teamChoice],
   );
   // Деньги чужой компании сотруднику не приходят вовсе — в строке их нет.
-  const guestCardFields = useMemo(
-    () => ({ ...cardFields, exp: false, inc: false, debt: false }),
-    [cardFields],
+  // «ЧТО ПОКАЗЫВАТЬ НА КАРТОЧКЕ» — У КОМАНДЫ (владелец 30.09): строка
+  // клиента берёт набор СВОЕЙ команды клиента, пока та ничего не меняла —
+  // общий набор.
+  const teamIdList = useMemo(() => teams.map((tm) => tm.id), [teams]);
+  const cardFieldsFor = useCardFieldsByTeam(teamIdList);
+  const guestCardFields = useCallback(
+    (fields: CardFieldPrefs): CardFieldPrefs => ({
+      ...fields,
+      exp: false,
+      inc: false,
+      debt: false,
+    }),
+    [],
   );
 
   // Per-client roll-up (visits / money / debt / last team) — one pass
@@ -338,49 +346,6 @@ function ClientsListScreen() {
       return { ...f, selectedTeams, activeTags, selectedCities };
     });
   }, [teamOptions, cityOptions, tagOptions]);
-
-  const removeToken = (token: ActiveToken) => {
-    if (token.key === "team")
-      setFilter((f) => ({
-        ...f,
-        selectedTeams: f.selectedTeams.filter((x) => x !== token.val),
-      }));
-    else if (token.key === "city")
-      setFilter((f) => ({
-        ...f,
-        selectedCities: f.selectedCities.filter((x) => x !== token.val),
-      }));
-    else if (token.key === "tag")
-      setFilter((f) => ({
-        ...f,
-        activeTags: f.activeTags.filter((x) => x !== token.val),
-      }));
-    else if (token.key === "period") setFilter((f) => ({ ...f, period: null }));
-    else if (token.key === "segment")
-      setFilter((f) => ({
-        ...f,
-        segments: f.segments.filter((x) => x !== token.val),
-      }));
-    else if (token.key === "source")
-      setFilter((f) => ({
-        ...f,
-        sources: f.sources.filter((x) => x !== token.val),
-      }));
-    else if (token.key === "property")
-      setFilter((f) => ({
-        ...f,
-        propertyTypes: f.propertyTypes.filter((x) => x !== token.val),
-      }));
-  };
-
-  // Один сброс на все три кнопки (лист, бар, пустой экран): чистит и
-  // фильтры, и поиск — иначе «Сбросить» на баре оставлял запрос и список
-  // оставался пустым без видимой причины.
-  const resetAll = () => {
-    haptics.tap();
-    setFilter(resetFilters());
-    setQuery("");
-  };
 
   const filtering = result.activeCount > 0 || query.trim().length > 0;
 
@@ -792,7 +757,11 @@ function ClientsListScreen() {
                 teamName={teamName}
                 tags={tags}
                 link={linkLine(clientMemberOf(item, byId))?.text}
-                cardFields={guest ? guestCardFields : cardFields}
+                cardFields={
+                  guest
+                    ? guestCardFields(cardFieldsFor(item.team_id))
+                    : cardFieldsFor(item.team_id)
+                }
                 selectionMode={selecting && !guest}
                 picked={selectedIds.has(item.id)}
                 onPress={() =>
@@ -946,13 +915,17 @@ function ClientsListScreen() {
             : undefined
         }
       />
+      {/* Импорт — в выбранную команду (из «Все» — в первую): у каждой
+          команды свой импорт (владелец 30.09). */}
       <ImportWizardSheet
         visible={importOpen}
         onClose={() => setImportOpen(false)}
+        teamId={teamForNewClient(teamChoice, ownTeams.map((tm) => tm.id))}
       />
       <ContactsImportSheet
         visible={contactsOpen}
         onClose={() => setContactsOpen(false)}
+        teamId={teamForNewClient(teamChoice, ownTeams.map((tm) => tm.id))}
       />
       <BulkSmsSheet
         visible={smsOpen}

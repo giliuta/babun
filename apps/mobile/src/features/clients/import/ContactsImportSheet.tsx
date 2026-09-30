@@ -48,9 +48,13 @@ interface Row {
 export function ContactsImportSheet({
   visible,
   onClose,
+  teamId = null,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** Команда, в которую заводятся клиенты (у каждой команды свой импорт,
+   *  владелец 30.09); нет — сервер ставит первую доступную. */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
   const toast = useToast();
@@ -163,6 +167,7 @@ export function ContactsImportSheet({
           phone: row.phone,
           phone_e164: tryToE164(row.phone, country as CountryCode),
           acquisition_source: "other",
+          team_id: teamId,
         });
         added += 1;
       } catch {

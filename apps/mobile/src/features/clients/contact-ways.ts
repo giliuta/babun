@@ -159,8 +159,8 @@ export const useReorderWays = prefs.useReorder;
 
 /** Что предложить у НОМЕРА: включённые способы, которые умеют звонить/писать
  *  по самому номеру. Порядок — общий порядок набора. */
-export function useEnabledChannels(): ChannelId[] {
-  const ways = useEnabledWays();
+export function useEnabledChannels(teamId: string | null = null): ChannelId[] {
+  const ways = useEnabledWays(teamId);
   return ways.filter((id): id is ChannelId => {
     const def = contactWayDef(id);
     return !!def?.byPhone;
@@ -168,8 +168,8 @@ export function useEnabledChannels(): ChannelId[] {
 }
 
 /** Что предложить по ПЛЮСУ в карточке: включённые способы со своим полем. */
-export function useEnabledContactFields(): ContactFieldId[] {
-  const ways = useEnabledWays();
+export function useEnabledContactFields(teamId: string | null = null): ContactFieldId[] {
+  const ways = useEnabledWays(teamId);
   return ways.filter((id): id is ContactFieldId => {
     const def = contactWayDef(id);
     return !!def?.asField;

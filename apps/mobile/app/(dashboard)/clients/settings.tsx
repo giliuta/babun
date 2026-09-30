@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import {
   Archive,
   Download,
@@ -43,6 +43,10 @@ import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useClientsCapabilities } from "@/features/clients/company-scope";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ScopeChips } from "@/components/ui/ScopeChips";
+import { useTeams } from "@/features/reference/queries";
+import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref";
+import { ALL_TEAMS, clientsOfTeam } from "@/features/clients/team-scope";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { useFeatureOn, useSetCompanyFeature } from "@/features/settings/company-features";
 
@@ -78,7 +82,24 @@ function ClientsSettingsScreen() {
   const requisitesOn = useFeatureOn("client_requisites");
   const filesOn = useFeatureOn("client_files");
   const setFeature = useSetCompanyFeature();
-  const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields();
+  // У КАЖДОЙ КОМАНДЫ СВОИ НАСТРОЙКИ КЛИЕНТОВ (владелец 30.09), как у
+  // настроек календаря: лента команд наверху, строки «Для команды» правят
+  // выбранную. Открывается на команде, выбранной в ленте списка, иначе —
+  // на первой. Справочники, данные и функции — общие на компанию, ниже.
+  const { data: ownTeams = [] } = useTeams();
+  const { data: listTeam } = useClientsTeam(ownTeams[0]?.tenant_id ?? null);
+  const setListTeam = useSetClientsTeam(ownTeams[0]?.tenant_id ?? null);
+  const [pickedTeam, setPickedTeam] = useState<string | null>(null);
+  const teamId =
+    (pickedTeam && ownTeams.some((tm) => tm.id === pickedTeam) ? pickedTeam : null) ??
+    (listTeam && listTeam !== ALL_TEAMS && ownTeams.some((tm) => tm.id === listTeam)
+      ? listTeam
+      : null) ??
+    ownTeams[0]?.id ??
+    null;
+  const teamHref = (pathname: string): Href =>
+    (teamId ? { pathname, params: { team: teamId } } : pathname) as Href;
+  const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields(teamId);
   const clientsQuery = useClients();
   const tagsQuery = useClientTags();
   const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
@@ -89,19 +110,30 @@ function ClientsSettingsScreen() {
     [clients, appointmentsForStats],
   );
   const tags = tagsQuery.data ?? [];
+  // ДАННЫЕ — ТОЖЕ У КОМАНДЫ (владелец 30.09): выгрузка, архив и корзина — её
+  // клиенты (свои и те, кого она обслуживала, как под чипом списка), импорт —
+  // в неё.
+  const teamClients = useMemo(
+    () => (teamId ? clientsOfTeam(clients, teamId, appointmentsForStats) : clients),
+    [clients, teamId, appointmentsForStats],
+  );
   // Карты для маршрута: у кого-то весь навигатор — Google, и Яндекс в листе
   // только удлиняет каждый выезд (владелец 2026-08-02).
-  const mapServices = useEnabledMapServices();
+  const mapServices = useEnabledMapServices(teamId);
   // Чем вообще связываются с клиентом — один набор на кнопку у номера и на
   // плюс в карточке.
-  const enabledWays = useEnabledWays();
+  const enabledWays = useEnabledWays(teamId);
 
   // Возврат на список с nonce-параметром — index открывает нужный шит.
-  const backToList = (param: "openImport" | "openContacts") =>
+  // Импорт идёт в команду, выбранную здесь: список открывается на ней, и
+  // его лист импорта берёт команду из ленты.
+  const backToList = (param: "openImport" | "openContacts") => {
+    if (teamId) setListTeam.mutate(teamId);
     router.navigate({
       pathname: "/clients",
       params: { [param]: String(Date.now()) },
     });
+  };
 
   const exportAll = async () => {
     try {
@@ -109,7 +141,7 @@ function ClientsSettingsScreen() {
         toast("Данные клиентов ещё загружаются", "info");
         return;
       }
-      let exportClients = clients;
+      let exportClients = teamClients;
       let exportTags = tags;
       if (clientsQuery.isError || tagsQuery.isError) {
         const [clientResult, tagResult] = await Promise.all([
@@ -118,7 +150,9 @@ function ClientsSettingsScreen() {
         ]);
         if (clientResult.error) throw clientResult.error;
         if (tagResult.error) throw tagResult.error;
-        exportClients = clientResult.data ?? [];
+        exportClients = teamId
+          ? clientsOfTeam(clientResult.data ?? [], teamId, appointmentsForStats)
+          : (clientResult.data ?? []);
         exportTags = tagResult.data ?? [];
       }
       if (exportClients.length === 0) {
@@ -138,20 +172,32 @@ function ClientsSettingsScreen() {
 
   return (
     <Screen>
-      <ScreenHeader title="Настройки клиентов" />
+      <ScreenHeader
+        title="Настройки клиентов"
+        // Шов несёт лента команд; без неё линию берёт шапка (как в
+        // настройках календаря).
+        seam={!(caps.manage && ownTeams.length > 0)}
+      />
+      {caps.manage && ownTeams.length > 0 ? (
+        <ScopeChips
+          items={ownTeams.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color }))}
+          activeId={teamId}
+          onSelect={setPickedTeam}
+        />
+      ) : null}
       {caps.manage ? (
         <ScrollView
           className="flex-1"
           contentContainerStyle={{ paddingBottom: 24 }}
         >
-            <SectionEyebrow>Отображение</SectionEyebrow>
+            <SectionEyebrow>Для команды</SectionEyebrow>
             <SectionCard>
               <SettingsRow
                 tile={SETTINGS_TILE.blue}
                 icon={Eye}
                 title="Что показывать на карточке"
                 sub={cardFieldsSummary(prefs)}
-                onPress={() => router.push("/clients/card-fields")}
+                onPress={() => router.push(teamHref("/clients/card-fields"))}
               />
               <Divider inset={56} />
               <SettingsRow
@@ -166,7 +212,7 @@ function ClientsSettingsScreen() {
                   .map((id) => contactWayDef(id)?.label)
                   .filter(Boolean)
                   .join(" · ")}
-                onPress={() => router.push("/clients/channels")}
+                onPress={() => router.push(teamHref("/clients/channels"))}
               />
   
               <Divider inset={56} />
@@ -175,7 +221,65 @@ function ClientsSettingsScreen() {
                 icon={Navigation}
                 title="Карты для маршрута"
                 sub={mapServicesSummary(mapServices)}
-                onPress={() => router.push("/clients/maps")}
+                onPress={() => router.push(teamHref("/clients/maps"))}
+              />
+            </SectionCard>
+            <SectionCard>
+              {/* Контакты телефона — первый способ, а не второй: у малого
+                  сервиса база лежит именно там, а CSV требует сначала где-то
+                  собрать таблицу, то есть не сделать никогда. В сборке без
+                  нативного модуля строки нет вовсе. */}
+              {CONTACTS_AVAILABLE ? (
+                <>
+                  <SettingsRow
+                    tile={SETTINGS_TILE.blue}
+                    icon={Smartphone}
+                    title="Из контактов телефона"
+                    sub="Выбрать, кого добавить"
+                    onPress={() => backToList("openContacts")}
+                  />
+                  <Divider inset={56} />
+                </>
+              ) : null}
+              <SettingsRow
+                tile={SETTINGS_TILE.blue}
+                icon={Upload}
+                title="Импорт из CSV"
+                sub="Загрузить клиентов из файла"
+                onPress={() => backToList("openImport")}
+              />
+              <Divider inset={56} />
+              <SettingsRow
+                tile={SETTINGS_TILE.green}
+                icon={Download}
+                title="Выгрузить клиентов"
+                sub={
+                  clientsQuery.isLoading
+                    ? "Загрузка…"
+                    : clientsQuery.isError
+                      ? "Повторить загрузку и выгрузить"
+                      : `${teamClients.length} в CSV`
+                }
+                onPress={() => void exportAll()}
+              />
+              <Divider inset={56} />
+              <SettingsRow
+                tile="neutral"
+                icon={Archive}
+                title="Архив клиентов"
+                sub="Убраны из работы, история цела"
+                onPress={() => router.push(teamHref("/clients/archive"))}
+              />
+              <Divider inset={56} />
+              {/* Две полки рядом и подписаны по-разному: архив — без срока,
+                  корзина — со счётчиком. Иначе «куда он делся» повторится, уже
+                  с двумя одинаковыми на вид дверями. */}
+              <SettingsRow
+                tile={SETTINGS_TILE.red}
+                icon={Trash2}
+                title="Недавно удалённые"
+                sub={`Хранятся ${TRASH_DAYS} дней, потом стираются`}
+                onPress={() => router.push(teamHref("/clients/trash"))}
               />
             </SectionCard>
 
@@ -185,7 +289,11 @@ function ClientsSettingsScreen() {
                 можно делать в клиентах, потом редактировать и исправлять».
                 Экраны справочников общие с Кабинетом — заводить вторые не
                 нужно, нужен вход отсюда, из места, где ими пользуются. */}
-            <SectionEyebrow>Справочники</SectionEyebrow>
+            {/* ВСЁ НИЖЕ — ОДНО НА КОМПАНИЮ: тип объекта принадлежит объекту
+                клиента, а клиент один на все команды (30.09) — разные списки
+                по командам дали бы одному объекту два имени. Теги, данные и
+                функции — решения владельца 24.09. */}
+            <SectionEyebrow>Для всей компании</SectionEyebrow>
             <SectionCard>
               {/* Выключенные у компании объекты уносят и свой справочник. */}
               {objectsOn ? (
@@ -217,71 +325,11 @@ function ClientsSettingsScreen() {
               />
             </SectionCard>
   
-            <SectionEyebrow>Данные</SectionEyebrow>
-            <SectionCard>
-              {/* Контакты телефона — первый способ, а не второй: у малого
-                  сервиса база лежит именно там, а CSV требует сначала где-то
-                  собрать таблицу, то есть не сделать никогда. В сборке без
-                  нативного модуля строки нет вовсе. */}
-              {CONTACTS_AVAILABLE ? (
-                <>
-                  <SettingsRow
-                    tile={SETTINGS_TILE.blue}
-                    icon={Smartphone}
-                    title="Из контактов телефона"
-                    sub="Выбрать, кого добавить"
-                    onPress={() => backToList("openContacts")}
-                  />
-                  <Divider inset={56} />
-                </>
-              ) : null}
-              <SettingsRow
-                tile={SETTINGS_TILE.blue}
-                icon={Upload}
-                title="Импорт из CSV"
-                sub="Загрузить клиентов из файла"
-                onPress={() => backToList("openImport")}
-              />
-              <Divider inset={56} />
-              <SettingsRow
-                tile={SETTINGS_TILE.green}
-                icon={Download}
-                title="Выгрузить всех клиентов"
-                sub={
-                  clientsQuery.isLoading
-                    ? "Загрузка…"
-                    : clientsQuery.isError
-                      ? "Повторить загрузку и выгрузить"
-                      : `${clients.length} в CSV`
-                }
-                onPress={() => void exportAll()}
-              />
-              <Divider inset={56} />
-              <SettingsRow
-                tile="neutral"
-                icon={Archive}
-                title="Архив клиентов"
-                sub="Убраны из работы, история цела"
-                onPress={() => router.push("/clients/archive")}
-              />
-              <Divider inset={56} />
-              {/* Две полки рядом и подписаны по-разному: архив — без срока,
-                  корзина — со счётчиком. Иначе «куда он делся» повторится, уже
-                  с двумя одинаковыми на вид дверями. */}
-              <SettingsRow
-                tile={SETTINGS_TILE.red}
-                icon={Trash2}
-                title="Недавно удалённые"
-                sub={`Хранятся ${TRASH_DAYS} дней, потом стираются`}
-                onPress={() => router.push("/clients/trash")}
-              />
-            </SectionCard>
 
             {/* ФУНКЦИИ КЛИЕНТОВ (STORY-088, владелец 24.09: «тумблер — и его
                 не будет ни у кого, даже у владельца»). Каждый тумблер — своя
                 карточка. Данные выключенной части не стираются. Объекты
                 выключаются там, где их заводят, — «Запись → Блоки формы». */}
-            <SectionEyebrow>Функции</SectionEyebrow>
             <SectionCard>
               <SwitchRow
                 label="Люди и связи"

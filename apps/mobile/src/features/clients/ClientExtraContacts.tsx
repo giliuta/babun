@@ -75,6 +75,7 @@ export function ClientExtraContacts({
   noCopy = false,
   compact = false,
   inline = false,
+  teamId = null,
 }: {
   client: ContactHolder;
   /** Возвращает false, если запись не удалась: писатель массива номеров по
@@ -93,6 +94,8 @@ export function ClientExtraContacts({
   /** Подпись слева, номер справа — строки страницы сотрудника (владелец
    *  29.09 выбрал там вид «подпись слева, значение справа»). */
   inline?: boolean;
+  /** Команда клиента — её «Способы связи» (у каждой команды свои, 30.09). */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
   const country = useDefaultCountry();
@@ -247,7 +250,13 @@ export function ClientExtraContacts({
             // одна в хвосте строки — и промахнуться по ней (аудит
             // 2026-07-27: слоп крестика залезал на зелёную кнопку) больше
             // нечем.
-            trailing={<PhoneChannelButton number={p.number} label={p.label} />}
+            trailing={
+              <PhoneChannelButton
+                number={p.number}
+                label={p.label}
+                teamId={teamId}
+              />
+            }
           />
         ))}
 
@@ -372,6 +381,7 @@ export function ClientExtraContacts({
       <AddContactSheet
         visible={addOpen}
         client={client}
+        teamId={teamId}
         onPick={onPickAdd}
         onClose={() => setAddOpen(false)}
       />

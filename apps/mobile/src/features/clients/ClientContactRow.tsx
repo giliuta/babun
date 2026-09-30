@@ -57,7 +57,8 @@ export default function ClientContactRow({
   onArrived?: () => void;
 }) {
   const router = useRouter();
-  const enabled = useEnabledChannels();
+  // «Способы связи» — команды клиента (у каждой команды свои, 30.09).
+  const enabled = useEnabledChannels(client.team_id ?? null);
   const guardedBook = useGuardedBookingNav();
   const country = useDefaultCountry();
   const chat = resolveChannels(client, enabled, { country }).find(
