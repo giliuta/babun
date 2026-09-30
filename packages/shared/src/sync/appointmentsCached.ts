@@ -145,17 +145,51 @@ export async function listAppointments(
   }
 }
 
-async function revalidateAppointments(
+/** Сверка компании уже идёт — вторая ждёт её, а не запускает свою: каждое
+ *  чтение списка (экран, форма записи, шторка дня) звало свою, и полные
+ *  перезаписи кэша вставали в очередь за блокировкой SQLite, а правки
+ *  записей ждали их все (владелец 2026-09-30: «перенос подлагивает»). */
+const revalidating = new Map<string, Promise<void>>();
+
+function revalidateAppointments(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<void> {
-  try {
-    const changed = await refreshCacheFromSupabase(supabase, tenantId);
-    // Emit only on a real change (loop guard — see revalidate-events).
-    if (changed) emitRevalidated("appointments");
-  } catch {
-    // ignore — cached list already returned
+  const running = revalidating.get(tenantId);
+  if (running) return running;
+  const run = (async () => {
+    try {
+      const changed = await refreshCacheFromSupabase(supabase, tenantId);
+      // Emit only on a real change (loop guard — see revalidate-events).
+      if (changed) emitRevalidated("appointments");
+    } catch {
+      // ignore — cached list already returned
+    } finally {
+      revalidating.delete(tenantId);
+    }
+  })();
+  revalidating.set(tenantId, run);
+  return run;
+}
+
+/** Кэш уже совпадает с сервером строка в строку? Тогда перезаписывать его
+ *  незачем: `cacheReplaceTenant` — эксклюзивная транзакция на весь список
+ *  (удалить всё и вставить по строке), и на каждой сверке без изменений она
+ *  держала SQLite, пока правки записей ждали. Сравнение — полным JSON строки,
+ *  а не только версией: новая сборка может разложить ту же версию строки
+ *  иначе (новое поле), и такой кэш обязан обновиться. Порядок ключей другой —
+ *  считаем «отличается» и перезаписываем: ошибка только в сторону записи. */
+function sameRows(
+  cached: readonly CachedAppointmentData[],
+  fresh: readonly CachedAppointmentData[],
+): boolean {
+  if (cached.length !== fresh.length || fresh.length === 0) return false;
+  const byId = new Map(cached.map((r) => [r.id, r]));
+  for (const row of fresh) {
+    const old = byId.get(row.id);
+    if (!old || JSON.stringify(old) !== JSON.stringify(row)) return false;
   }
+  return true;
 }
 
 /** Refill the cache with the canonical DOMAIN list. `repoListAppointments`
@@ -194,7 +228,9 @@ async function refreshCacheFromSupabase(
   }
   const appts = domain ?? (await repoListAppointments(supabase, tenantId));
   const rows = appts.map((a) => makeCachedRow(a, tenantId));
-  const before = cacheSignature(await safeCacheReadAppointments(tenantId));
+  const cachedRows = await safeCacheReadAppointments(tenantId);
+  if (sameRows(cachedRows, rows)) return false;
+  const before = cacheSignature(cachedRows);
   await cacheReplaceTenant("appointments", tenantId, rows);
   const after = cacheSignature(rows);
   return before !== after;
