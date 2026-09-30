@@ -836,6 +836,8 @@ export interface CreateClientTagInput {
   name: string;
   color: string;
   icon?: string | null;
+  /** Команда тега — у каждой команды свои теги (владелец 30.09). */
+  teamId: string;
 }
 
 export interface UpdateClientTagInput {
@@ -873,13 +875,13 @@ export function useCreateClientTag() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation<ClientTag, Error, CreateClientTagInput>({
-    mutationFn: ({ name, color, icon }) => {
+    mutationFn: ({ name, color, icon, teamId }) => {
       assertCanManageClientTags(scope);
       const normalizedName = name.trim();
       if (!normalizedName) throw new Error("Введите название тега.");
       return createClientTagCached(
         writeClientOf(scope),
-        { name: normalizedName, color, icon: icon ?? null },
+        { name: normalizedName, color, icon: icon ?? null, team_id: teamId },
         scope.tenantId,
         scope.writeOpts,
       );

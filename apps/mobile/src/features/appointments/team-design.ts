@@ -28,7 +28,12 @@ export type TeamBlockKey =
   | "event_client"
   | "event_object"
   | "event_note"
-  | "event_files";
+  | "event_files"
+  // Функции клиентов команды (владелец 30.09: «люди, связи, реквизиты,
+  // файлы — всё закреплено за командой»).
+  | "client_people"
+  | "client_requisites"
+  | "client_files";
 
 export interface TeamDesign {
   rule: RecordColorRule;

@@ -13,6 +13,9 @@ export interface LocationLabel {
    *  правки, вида нет, и подставлять его за пользователя нельзя. */
   color?: string | null;
   icon?: string | null;
+  /** Команда типа (владелец 30.09: «типы объектов закреплены за командой»).
+   *  Пусто — только у строк до миграции 30.09. */
+  teamId?: string | null;
 }
 
 const STORAGE_KEY = "babun2:settings:location-labels";

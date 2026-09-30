@@ -200,8 +200,10 @@ export function useEventBlocks(teamId: string | null | undefined): EventBlockId[
 }
 
 /** Текущий «Дизайн» команды целиком — основа для патча. Без строки —
- *  собирается из настроек компании. */
-function useDesignBase(teamId: string | null | undefined): TeamDesign {
+ *  собирается из настроек компании. Открыт наружу для функций клиентов
+ *  команды (`clients/client-functions.ts`): патч обязан нести те же блоки
+ *  записи, иначе первая же строка команды сбросила бы их. */
+export function useDesignBase(teamId: string | null | undefined): TeamDesign {
   const design = useTeamDesign(teamId);
   const off = useTeamBlocksOff(teamId);
   const settings = useCalendarSettings().data;

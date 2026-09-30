@@ -43,7 +43,7 @@ describe("canonical settings cache contract", () => {
 
   test("settings writes require canonical server confirmation", () => {
     const locationSave = section(
-      "export function useSaveLocationLabels()",
+      "export function useSaveLocationLabels(",
       "// ─── Personal event types",
     );
     assert.doesNotMatch(

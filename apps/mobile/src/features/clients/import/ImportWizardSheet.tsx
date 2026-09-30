@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -93,7 +93,12 @@ export function ImportWizardSheet({
   teamId?: string | null;
 }) {
   const t = useThemeColors();
-  const { data: tags = [] } = useClientTags();
+  // Тег импорта — из тегов команды, в которую идёт импорт (30.09).
+  const { data: allTags = [] } = useClientTags();
+  const tags = useMemo(
+    () => (teamId ? allTags.filter((tag) => !tag.team_id || tag.team_id === teamId) : allTags),
+    [allTags, teamId],
+  );
   const tenantId = useTenantId();
   const importer = useImportRows();
 

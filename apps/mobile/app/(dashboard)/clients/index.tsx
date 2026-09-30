@@ -306,6 +306,25 @@ function ClientsListScreen() {
     return { from: min, to: max };
   }, [teamAppointments]);
 
+  // ТЕГИ В ФИЛЬТРАХ — КОМАНДЫ (владелец 30.09: «теги закреплены за
+  // командой»): под чипом — её теги; без чипа — все, и одинаковые имена
+  // разных команд подписаны командой, иначе две «VIP» не различить.
+  const filterTags = useMemo(() => {
+    if (teamChoice !== ALL_TEAMS) {
+      return tags.filter((tag) => !tag.team_id || tag.team_id === teamChoice);
+    }
+    const byName = new Map<string, number>();
+    for (const tag of tags) {
+      const key = tag.name.trim().toLowerCase();
+      byName.set(key, (byName.get(key) ?? 0) + 1);
+    }
+    return tags.map((tag) => {
+      const shared = (byName.get(tag.name.trim().toLowerCase()) ?? 0) > 1;
+      const teamName = tag.team_id ? teams.find((tm) => tm.id === tag.team_id)?.name : null;
+      return shared && teamName ? { ...tag, name: `${tag.name} · ${teamName}` } : tag;
+    });
+  }, [tags, teams, teamChoice]);
+
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
   // (deps без поиска) — фикс Волны 1 сохранён: клавиши не гоняют
   // localeCompare-компаратор.
@@ -314,7 +333,7 @@ function ClientsListScreen() {
     teamAppointments,
     teams,
     cities,
-    tags,
+    filterTags,
     statsMap,
     sort,
     filter,

@@ -1,3 +1,4 @@
+import { useClientFunctionOn } from "@/features/clients/client-functions";
 import { useFeatureOn } from "@/features/settings/company-features";
 import type { ReactNode } from "react";
 import { Paperclip } from "lucide-react-native";
@@ -91,8 +92,9 @@ export function ClientProfileBlocks({
   const caps = useClientsCapabilities();
   // Функции компании (STORY-088): выключенное — у всех, у владельца тоже.
   const objectsOn = useFeatureOn("objects");
-  const filesOn = useFeatureOn("client_files");
-  const requisitesOn = useFeatureOn("client_requisites");
+  // Файлы и реквизиты — функции КОМАНДЫ клиента (30.09).
+  const filesOn = useClientFunctionOn("client_files", client.team_id);
+  const requisitesOn = useClientFunctionOn("client_requisites", client.team_id);
 
   return (
     <>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -124,7 +124,7 @@ export function ObjectEditSheet({
     ),
   );
 
-  const typeOptions = useObjectTypeOptions(loc?.label);
+  const typeOptions = useObjectTypeOptions(loc?.label, client.team_id ?? null);
 
   // Черновик главной строки и заметки. Заполняем ТОЛЬКО на открытии листа (по
   // locationId, а не по самому объекту): `loc` — новая ссылка после каждого
@@ -252,6 +252,7 @@ export function ObjectEditSheet({
         keyboardShouldPersistTaps="handled"
       >
         <ObjectFields
+          teamId={client.team_id ?? null}
           value={{
             type: loc.label ?? "",
             target,
@@ -290,7 +291,13 @@ export function ObjectEditSheet({
             // он паркуется и возвращается по «назад» (владелец 2026-09-10:
             // «сделай стандарт, как и везде», AGENTS 5.4).
             commitAll();
-            doorway.open(() => router.push(typesHref));
+            doorway.open(() =>
+              router.push(
+                (client.team_id
+                  ? { pathname: typesHref, params: { team: client.team_id } }
+                  : typesHref) as Href,
+              ),
+            );
           }}
         />
 

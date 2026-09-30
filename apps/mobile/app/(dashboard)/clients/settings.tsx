@@ -48,7 +48,11 @@ import { useTeams } from "@/features/reference/queries";
 import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref";
 import { ALL_TEAMS, clientsOfTeam } from "@/features/clients/team-scope";
 import { SwitchRow } from "@/components/ui/SwitchRow";
-import { useFeatureOn, useSetCompanyFeature } from "@/features/settings/company-features";
+import { useFeatureOn } from "@/features/settings/company-features";
+import {
+  useClientFunctionOn,
+  useToggleClientFunction,
+} from "@/features/clients/client-functions";
 
 // v811 — «Настройки клиентов». Открывается шестерёнкой из хедера списка
 // (порт web ClientsSettingsScreen). Группы:
@@ -78,10 +82,6 @@ function ClientsSettingsScreen() {
   // собой, а тело говорит одной строкой.
   const caps = useClientsCapabilities();
   const objectsOn = useFeatureOn("objects");
-  const peopleOn = useFeatureOn("client_people");
-  const requisitesOn = useFeatureOn("client_requisites");
-  const filesOn = useFeatureOn("client_files");
-  const setFeature = useSetCompanyFeature();
   // У КАЖДОЙ КОМАНДЫ СВОИ НАСТРОЙКИ КЛИЕНТОВ (владелец 30.09), как у
   // настроек календаря: лента команд наверху, строки «Для команды» правят
   // выбранную. Открывается на команде, выбранной в ленте списка, иначе —
@@ -99,6 +99,12 @@ function ClientsSettingsScreen() {
     null;
   const teamHref = (pathname: string): Href =>
     (teamId ? { pathname, params: { team: teamId } } : pathname) as Href;
+  // Функции клиентов — у команды (владелец 30.09: «люди, связи, реквизиты,
+  // файлы — всё закреплено за командой»).
+  const peopleOn = useClientFunctionOn("client_people", teamId);
+  const requisitesOn = useClientFunctionOn("client_requisites", teamId);
+  const filesOn = useClientFunctionOn("client_files", teamId);
+  const toggleFunction = useToggleClientFunction(teamId);
   const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields(teamId);
   const clientsQuery = useClients();
   const tagsQuery = useClientTags();
@@ -109,7 +115,12 @@ function ClientsSettingsScreen() {
     () => buildStatsMap(clients, appointmentsForStats),
     [clients, appointmentsForStats],
   );
-  const tags = tagsQuery.data ?? [];
+  const tags = useMemo(() => tagsQuery.data ?? [], [tagsQuery.data]);
+  // Теги — у команды (30.09): счётчик строки — теги выбранной команды.
+  const teamTags = useMemo(
+    () => (teamId ? tags.filter((tag) => !tag.team_id || tag.team_id === teamId) : tags),
+    [tags, teamId],
+  );
   // ДАННЫЕ — ТОЖЕ У КОМАНДЫ (владелец 30.09): выгрузка, архив и корзина — её
   // клиенты (свои и те, кого она обслуживала, как под чипом списка), импорт —
   // в неё.
@@ -190,7 +201,7 @@ function ClientsSettingsScreen() {
           className="flex-1"
           contentContainerStyle={{ paddingBottom: 24 }}
         >
-            <SectionEyebrow>Для команды</SectionEyebrow>
+            <SectionEyebrow>Отображение</SectionEyebrow>
             <SectionCard>
               <SettingsRow
                 tile={SETTINGS_TILE.blue}
@@ -224,6 +235,48 @@ function ClientsSettingsScreen() {
                 onPress={() => router.push(teamHref("/clients/maps"))}
               />
             </SectionCard>
+
+  
+            {/* СПРАВОЧНИКИ — то, из чего собирается карточка: типы объектов
+                («Вилла», «Дом»), метки, теги. Владелец 2026-08-02: «всё, что
+                можно делать в клиентах, потом редактировать и исправлять».
+                Экраны справочников общие с Кабинетом — заводить вторые не
+                нужно, нужен вход отсюда, из места, где ими пользуются. */}
+            {/* С 30.09 ВСЁ ЗДЕСЬ — У КОМАНДЫ, выбранной лентой: владелец —
+                «типы объектов, теги, выгрузка, архив, корзина, люди, связи,
+                реквизиты, файлы — всё закреплено за командой». */}
+            <SectionEyebrow>Справочники</SectionEyebrow>
+            <SectionCard>
+              {/* Выключенные у компании объекты уносят и свой справочник. */}
+              {objectsOn ? (
+                <>
+                  <SettingsRow
+                    tile={SETTINGS_TILE.teal}
+                    icon={Home}
+                    title="Типы объектов"
+                    sub="Вилла, дом, квартира, офис"
+                    onPress={() => router.push(teamHref("/clients/object-types"))}
+                  />
+                  <Divider inset={56} />
+                </>
+              ) : null}
+              <SettingsRow
+                tile={SETTINGS_TILE.purple}
+                icon={Tags}
+                title="Теги клиентов"
+                sub={
+                  tagsQuery.isLoading
+                    ? "Загрузка…"
+                    : tagsQuery.isError
+                      ? "Не удалось загрузить"
+                      : teamTags.length > 0
+                        ? `Создано: ${teamTags.length}`
+                        : "Создать первый тег"
+                }
+                onPress={() => router.push(teamHref("/clients/tags"))}
+              />
+            </SectionCard>
+            <SectionEyebrow>Данные</SectionEyebrow>
             <SectionCard>
               {/* Контакты телефона — первый способ, а не второй: у малого
                   сервиса база лежит именно там, а CSV требует сначала где-то
@@ -282,73 +335,33 @@ function ClientsSettingsScreen() {
                 onPress={() => router.push(teamHref("/clients/trash"))}
               />
             </SectionCard>
-
-  
-            {/* СПРАВОЧНИКИ — то, из чего собирается карточка: типы объектов
-                («Вилла», «Дом»), метки, теги. Владелец 2026-08-02: «всё, что
-                можно делать в клиентах, потом редактировать и исправлять».
-                Экраны справочников общие с Кабинетом — заводить вторые не
-                нужно, нужен вход отсюда, из места, где ими пользуются. */}
-            {/* ВСЁ НИЖЕ — ОДНО НА КОМПАНИЮ: тип объекта принадлежит объекту
-                клиента, а клиент один на все команды (30.09) — разные списки
-                по командам дали бы одному объекту два имени. Теги, данные и
-                функции — решения владельца 24.09. */}
-            <SectionEyebrow>Для всей компании</SectionEyebrow>
-            <SectionCard>
-              {/* Выключенные у компании объекты уносят и свой справочник. */}
-              {objectsOn ? (
-                <>
-                  <SettingsRow
-                    tile={SETTINGS_TILE.teal}
-                    icon={Home}
-                    title="Типы объектов"
-                    sub="Вилла, дом, квартира, офис"
-                    onPress={() => router.push("/clients/object-types")}
-                  />
-                  <Divider inset={56} />
-                </>
-              ) : null}
-              <SettingsRow
-                tile={SETTINGS_TILE.purple}
-                icon={Tags}
-                title="Теги клиентов"
-                sub={
-                  tagsQuery.isLoading
-                    ? "Загрузка…"
-                    : tagsQuery.isError
-                      ? "Не удалось загрузить"
-                      : tags.length > 0
-                        ? `Создано: ${tags.length}`
-                        : "Создать первый тег"
-                }
-                onPress={() => router.push("/clients/tags")}
-              />
-            </SectionCard>
   
 
             {/* ФУНКЦИИ КЛИЕНТОВ (STORY-088, владелец 24.09: «тумблер — и его
                 не будет ни у кого, даже у владельца»). Каждый тумблер — своя
                 карточка. Данные выключенной части не стираются. Объекты
-                выключаются там, где их заводят, — «Запись → Блоки формы». */}
+                выключаются там, где их заводят, — «Запись → Блоки формы».
+                С 30.09 тумблер — у команды, а выключатель компании главнее. */}
+            <SectionEyebrow>Функции</SectionEyebrow>
             <SectionCard>
               <SwitchRow
                 label="Люди и связи"
                 value={peopleOn}
-                onChange={(v) => setFeature.mutate({ key: "client_people", on: v })}
+                onChange={(v) => toggleFunction.mutate({ key: "client_people", on: v })}
               />
             </SectionCard>
             <SectionCard>
               <SwitchRow
                 label="Реквизиты клиента"
                 value={requisitesOn}
-                onChange={(v) => setFeature.mutate({ key: "client_requisites", on: v })}
+                onChange={(v) => toggleFunction.mutate({ key: "client_requisites", on: v })}
               />
             </SectionCard>
             <SectionCard>
               <SwitchRow
                 label="Файлы клиента"
                 value={filesOn}
-                onChange={(v) => setFeature.mutate({ key: "client_files", on: v })}
+                onChange={(v) => toggleFunction.mutate({ key: "client_files", on: v })}
               />
             </SectionCard>
         </ScrollView>

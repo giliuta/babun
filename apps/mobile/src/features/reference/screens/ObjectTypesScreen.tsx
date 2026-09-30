@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
+import { useTeams } from "@/features/reference/queries";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 import {
@@ -68,14 +70,22 @@ interface TypeDraft {
 export function ObjectTypesScreen() {
   const t = useThemeColors();
   const toast = useToast();
+  // ТИПЫ ОБЪЕКТОВ КОМАНДЫ (владелец 30.09: «закреплены за командой»).
+  // Команда едет адресом из настроек клиентов; без неё — первая команда.
+  const { team } = useLocalSearchParams<{ team?: string }>();
+  const { data: ownTeams = [] } = useTeams();
+  const teamId =
+    (team && ownTeams.some((tm) => tm.id === team) ? team : null) ??
+    ownTeams[0]?.id ??
+    null;
   const {
     data: labels = [],
     isLoading,
     isError,
     error,
     refetch,
-  } = useLocationLabels();
-  const save = useSaveLocationLabels();
+  } = useLocationLabels(teamId);
+  const save = useSaveLocationLabels(teamId);
   const { data: clients = [] } = useClients();
   const [editing, setEditing] = useState<Editing | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -112,7 +122,14 @@ export function ObjectTypesScreen() {
   const seedPreset = async () => {
     if (seeding || labels.length > 0) return;
     setSeeding(true);
-    await write(HOME_SERVICE_LABELS_PRESET, "Не удалось добавить стандартные типы");
+    // У каждой команды свои строки: id пресета с командой, иначе вторая
+    // команда столкнулась бы с «Домом» первой.
+    await write(
+      teamId
+        ? HOME_SERVICE_LABELS_PRESET.map((label) => ({ ...label, id: `${label.id}@${teamId}` }))
+        : HOME_SERVICE_LABELS_PRESET,
+      "Не удалось добавить стандартные типы",
+    );
     setSeeding(false);
   };
 

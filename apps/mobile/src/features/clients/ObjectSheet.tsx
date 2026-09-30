@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { AccessibilityInfo, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -53,6 +53,7 @@ export function ObjectSheet({
   onAdded,
   onRequestFromClient,
   onClose,
+  teamId = null,
 }: {
   visible: boolean;
   /** Писатель `locations` — общий с листом правки: свой завёл бы вторую
@@ -73,6 +74,8 @@ export function ObjectSheet({
    *  «Поделиться». Нет — иконки нет (черновик клиента, роль мастера). */
   onRequestFromClient?: () => void;
   onClose: () => void;
+  /** Команда клиента — её «Типы объектов» (у каждой команды свои, 30.09). */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -114,7 +117,7 @@ export function ObjectSheet({
     if (start) setDraft((d) => (d.target.trim() ? d : { ...d, target: start }));
   }, [visible, initialTarget]);
 
-  const typeOptions = useObjectTypeOptions(draft.type);
+  const typeOptions = useObjectTypeOptions(draft.type, teamId);
   // ТИП НЕ ПОДСТАВЛЯЕТСЯ (владелец 2026-09-15: «не сразу „Дом“, а „добавить“…
   // в большинстве заказов мы не знаем, дом это, вилла или квартира»). Новый
   // объект открывается с пустым типом — дверью «Выбрать тип объекта»; выбрать
@@ -219,6 +222,7 @@ export function ObjectSheet({
       >
         <ObjectFields
           addressRef={addressRef}
+          teamId={teamId}
           value={draft}
           typeOptions={typeOptions}
           onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
@@ -229,7 +233,11 @@ export function ObjectSheet({
             // нормально, но «назад» приводил на карточку, а начатый объект
             // приходилось заводить заново. Теперь лист уезжает вниз и
             // возвращается с набранным (`use-sheet-doorway`, AGENTS 5.4).
-            doorway.open(() => router.push(typesHref));
+            doorway.open(() =>
+              router.push(
+                (teamId ? { pathname: typesHref, params: { team: teamId } } : typesHref) as Href,
+              ),
+            );
           }}
           onRequestFromClient={
             onRequestFromClient

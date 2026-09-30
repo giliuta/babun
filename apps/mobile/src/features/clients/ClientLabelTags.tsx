@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { Pressable, View } from "react-native";
 import { Bookmark, Settings2, Tags } from "lucide-react-native";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
@@ -53,6 +53,16 @@ export function ClientLabelTags({
   }, [cities]);
   const [labelOpen, setLabelOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
+  // ТЕГИ — КОМАНДЫ КЛИЕНТА (владелец 30.09: «теги закреплены за командой»).
+  // Предлагаются теги его команды; уже стоящий тег другой команды на плитке
+  // остаётся виден (он берётся из всего каталога ниже).
+  const teamTags = useMemo(
+    () =>
+      client.team_id
+        ? tags.filter((tag) => !tag.team_id || tag.team_id === client.team_id)
+        : tags,
+    [tags, client.team_id],
+  );
 
   const label = client.city.trim();
   const labelColor = cities.find((c) => c.name === label)?.color ?? getAvatarColor(label);
@@ -150,12 +160,17 @@ export function ClientLabelTags({
       />
       <TagPickerSheet
         visible={tagsOpen}
-        tags={tags}
+        tags={teamTags}
         selected={shownTags}
         onPick={pickTag}
         onSettings={() => {
           setTagsOpen(false);
-          router.push("/clients/tags");
+          // Шестерёнка ведёт в теги ТОЙ команды, чьи теги предложены.
+          router.push(
+            client.team_id
+              ? ({ pathname: "/clients/tags", params: { team: client.team_id } } as Href)
+              : ("/clients/tags" as Href),
+          );
         }}
         onClose={() => setTagsOpen(false)}
       />

@@ -63,6 +63,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "accept_invitation_by_id",
   "activate_tenant",
   "apply_location_label_changes",
+  "apply_team_location_label_changes",
   "appointment_link_answer",
   "cancel_appointment_payment",
   "cancel_invoice",

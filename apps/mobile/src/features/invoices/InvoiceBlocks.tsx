@@ -25,6 +25,7 @@ import { accountIcon } from "@/features/finances/account-ui";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import type { Service } from "@/features/services/queries";
 import { useThemeColors } from "@/theme/colors";
+import { useClientFunctionOn } from "@/features/clients/client-functions";
 import { useFeatureOn } from "@/features/settings/company-features";
 import { InvoiceDatesBlock } from "./InvoiceDatesBlock";
 import { InvoiceRequisitesBlock } from "./InvoiceRequisitesBlock";
@@ -149,7 +150,6 @@ export function InvoiceBlocks({
   // Функции компании (STORY-088): выключенные объекты и реквизиты клиента не
   // спрашиваются и в инвойсе — у всех, у владельца тоже.
   const objectsOn = useFeatureOn("objects");
-  const requisitesOn = useFeatureOn("client_requisites");
   const tileWidth = useTileWidth();
   const [sheet, setSheet] = useState<"client" | "services" | "total" | null>(null);
 
@@ -167,6 +167,8 @@ export function InvoiceBlocks({
   );
 
   const client = clients.find((c) => c.id === clientId) ?? null;
+  // Реквизиты клиента — функция его КОМАНДЫ (30.09).
+  const requisitesOn = useClientFunctionOn("client_requisites", client?.team_id);
   // ТОТ ЖЕ БЛОК «КЛИЕНТ», ЧТО В ЗАПИСИ (владелец 2026-09-22: «один единый
   // блок на всё»): сводка визитов и денег под именем, «…» в карточку. Та же
   // карта сводок кормит и шторку. Заметки клиента в инвойсе нет (владелец

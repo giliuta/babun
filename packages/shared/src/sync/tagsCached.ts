@@ -135,7 +135,10 @@ async function refreshCacheFromSupabase(
     icon: tag.icon ?? null,
     position: tag.position ?? 0,
     hidden: tag.hidden ?? false,
-  }));
+    // Команда — только если сервер её назвал: пустая строка у каждого тега
+    // сломала бы сверку «данные не изменились» и гоняла перерисовку.
+    ...(tag.team_id ? { team_id: tag.team_id } : {}),
+  })) as CachedTag[];
   const before = cacheSignature(await safeCacheReadTags(tenantId));
   await cacheReplaceTenant("tags", tenantId, rows);
   const after = cacheSignature(rows);
@@ -153,6 +156,7 @@ function rowToTag(r: CachedTag): ClientTag {
     icon: r.icon ?? null,
     position: r.position ?? 0,
     hidden: r.hidden ?? false,
+    team_id: r.team_id || null,
   };
 }
 
@@ -165,6 +169,8 @@ export async function createClientTag(
     color: string;
     icon?: string | null;
     position?: number;
+    /** Команда тега — обязательна (у каждой команды свои теги, 30.09). */
+    team_id: string;
   },
   tenantId: string,
   opts?: CachedWriteOptions,
@@ -180,6 +186,7 @@ export async function createClientTag(
     icon: input.icon ?? null,
     position: input.position ?? 0,
     hidden: false,
+    team_id: input.team_id,
   };
   const insertOp = {
     table: "tags" as const,
@@ -209,6 +216,7 @@ export async function createClientTag(
         icon: created.icon ?? null,
         position: created.position ?? 0,
         hidden: created.hidden ?? false,
+        team_id: created.team_id ?? input.team_id,
       });
       return created;
     } catch (err) {
@@ -226,6 +234,7 @@ export async function createClientTag(
         icon: input.icon ?? null,
         position: input.position ?? 0,
         hidden: false,
+        team_id: input.team_id,
       };
     }
   }
@@ -239,6 +248,7 @@ export async function createClientTag(
     icon: input.icon ?? null,
     position: input.position ?? 0,
     hidden: false,
+    team_id: input.team_id,
   };
 }
 
@@ -283,6 +293,7 @@ export async function updateClientTag(
         icon: updated.icon ?? null,
         position: updated.position ?? 0,
         hidden: updated.hidden ?? false,
+        team_id: updated.team_id ?? existing?.team_id ?? "",
       });
       return updated;
     } catch (err) {

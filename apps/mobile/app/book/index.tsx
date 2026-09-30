@@ -3341,6 +3341,7 @@ export default function BookScreen() {
         <ObjectSheet
           visible={objectSheet}
           writer={locationWriter}
+          teamId={client.team_id ?? null}
           initialTarget={locationId ? "" : address}
           onRequestFromClient={
             canRequestAddress

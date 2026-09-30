@@ -947,6 +947,7 @@ export type Database = {
           id: string
           name: string
           position: number
+          team_id: string
           tenant_id: string
         }
         Insert: {
@@ -956,6 +957,7 @@ export type Database = {
           id?: string
           name: string
           position?: number
+          team_id: string
           tenant_id: string
         }
         Update: {
@@ -965,6 +967,7 @@ export type Database = {
           id?: string
           name?: string
           position?: number
+          team_id?: string
           tenant_id?: string
         }
         Relationships: [
@@ -2200,6 +2203,7 @@ export type Database = {
           is_active: boolean
           name: string
           position: number
+          team_id: string
           tenant_id: string
           updated_at: string
         }
@@ -2212,6 +2216,7 @@ export type Database = {
           is_active?: boolean
           name: string
           position?: number
+          team_id: string
           tenant_id: string
           updated_at?: string
         }
@@ -2224,6 +2229,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           position?: number
+          team_id?: string
           tenant_id?: string
           updated_at?: string
         }
@@ -4016,6 +4022,29 @@ export type Database = {
           is_active: boolean
           name: string
           position: number
+          team_id: string
+          tenant_id: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "location_labels"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      apply_team_location_label_changes: {
+        Args: { p_labels: Json; p_remove_ids?: Json; p_team_id: string }
+        Returns: {
+          color: string | null
+          created_at: string
+          created_by: string | null
+          icon: string | null
+          id: string
+          is_active: boolean
+          name: string
+          position: number
+          team_id: string
           tenant_id: string
           updated_at: string
         }[]

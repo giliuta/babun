@@ -133,6 +133,7 @@ export function InvoiceObjectBlock({
           <ObjectSheet
             visible={adding}
             writer={writer}
+            teamId={client?.team_id ?? null}
             onAdded={(loc) => {
               setAdded({ ...loc, isPrimary: locations.length === 0 });
               onLocationChange(loc.id);

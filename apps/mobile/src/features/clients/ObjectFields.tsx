@@ -75,9 +75,19 @@ export interface ObjectFieldsValue {
  *  Порядок заморожен: тап по чипу меняет метку объекта, то есть частоты, по
  *  которым словарь строится, и без заморозки чип уезжает из-под пальца через
  *  базу (владелец 2026-07-27: «нажимаю офис — перекладывает на виллу»). */
-export function useObjectTypeOptions(current: string | undefined): string[] {
-  const { data: allClients = [] } = useClients();
-  const { data: labelPresets = [] } = useLocationLabels();
+export function useObjectTypeOptions(
+  current: string | undefined,
+  /** Команда клиента — её «Типы объектов» (у каждой команды свои, 30.09). */
+  teamId: string | null = null,
+): string[] {
+  const { data: everyClient = [] } = useClients();
+  // Типы «из данных» — тоже только клиентов этой команды: иначе в выбор
+  // протекали бы типы соседней команды.
+  const allClients = useMemo(
+    () => (teamId ? everyClient.filter((c) => c.team_id === teamId) : everyClient),
+    [everyClient, teamId],
+  );
+  const { data: labelPresets = [] } = useLocationLabels(teamId);
   const presetNames = useMemo(
     () => labelPresets.map((preset) => preset.name),
     [labelPresets],
@@ -93,6 +103,7 @@ export function ObjectFields({
   onRequestFromClient,
   onCommit,
   addressRef,
+  teamId = null,
 }: {
   value: ObjectFieldsValue;
   typeOptions: string[];
@@ -109,6 +120,8 @@ export function ObjectFields({
   onCommit?: () => void;
   /** Поле адреса — лист нового объекта ставит в него курсор сам. */
   addressRef?: Ref<TextInput>;
+  /** Команда клиента — вид типа из её справочника (30.09). */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
   /** Раскрыта ли карта под адресом. */
@@ -124,7 +137,7 @@ export function ObjectFields({
   // пробелами. Нет записи (тип живёт только в данных) — общий значок сущности
   // и акцент: пустой цвет в справочнике значит «не красить», а не «покрасить
   // во что-нибудь».
-  const { data: labelPresets = [] } = useLocationLabels();
+  const { data: labelPresets = [] } = useLocationLabels(teamId);
   const presetByKey = useMemo(
     () => new Map(labelPresets.map((preset) => [objectTypeKey(preset.name), preset])),
     [labelPresets],

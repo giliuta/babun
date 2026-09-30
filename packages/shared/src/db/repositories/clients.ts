@@ -738,6 +738,7 @@ function rowToTag(r: TagRow): ClientTag {
     icon: r.icon ?? null,
     position: r.position ?? 0,
     hidden: r.hidden ?? false,
+    team_id: r.team_id ?? null,
   };
 }
 
@@ -750,7 +751,14 @@ export async function listClientTags(
 
 export async function createClientTag(
   supabase: DbSupabase,
-  input: { id?: string; name: string; color: string; icon?: string | null },
+  input: {
+    id?: string;
+    name: string;
+    color: string;
+    icon?: string | null;
+    /** Команда тега — обязательна (у каждой команды свои теги, 30.09). */
+    team_id: string;
+  },
   tenantId: string,
 ): Promise<ClientTag> {
   const { data, error } = await supabase
@@ -758,6 +766,7 @@ export async function createClientTag(
     .insert({
       ...(input.id ? { id: input.id } : {}),
       tenant_id: tenantId,
+      team_id: input.team_id,
       name: input.name,
       color: input.color,
       icon: input.icon ?? null,

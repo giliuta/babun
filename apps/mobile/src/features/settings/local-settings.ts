@@ -271,7 +271,25 @@ function rowsToLocationLabels(rows: LocationLabelRow[]): LocationLabel[] {
       name: row.name,
       color: row.color ?? null,
       icon: row.icon ?? null,
+      teamId: row.team_id ?? null,
     }));
+}
+
+/** ТИПЫ ОБЪЕКТОВ КОМАНДЫ (владелец 30.09). Без команды — имена всей
+ *  компании без повторов (у каждой команды своя «Вилла»); строки до миграции
+ *  30.09 команды не знают и видны всем. */
+export function locationLabelsOfTeam(
+  labels: readonly LocationLabel[],
+  teamId: string | null,
+): LocationLabel[] {
+  if (teamId) return labels.filter((label) => !label.teamId || label.teamId === teamId);
+  const seen = new Set<string>();
+  return labels.filter((label) => {
+    const key = label.name.trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function locationLabelsToJson(
@@ -323,7 +341,7 @@ function cacheServerLocationLabels(
   }
 }
 
-export function useLocationLabels() {
+export function useLocationLabels(teamId: string | null = null) {
   const tenantId = useTenantId();
   const roleQuery = useDataRole();
   const role = roleQuery.data;
@@ -331,6 +349,8 @@ export function useLocationLabels() {
     queryKey: ["location-labels", tenantId, role ?? "role-pending"],
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
     staleTime: 5 * 60 * 1000,
+    // Читается вся компания одним ключом, отдаётся — команда.
+    select: (labels: LocationLabel[]) => locationLabelsOfTeam(labels, teamId),
     queryFn: async (): Promise<LocationLabel[]> => {
       const activeTenantId = tenantId as string;
       const cached = loadCachedLocationLabels(activeTenantId);
@@ -380,7 +400,7 @@ export function useLocationLabels() {
   });
 }
 
-export function useSaveLocationLabels() {
+export function useSaveLocationLabels(teamId: string | null = null) {
   const tenantId = useTenantId();
   const role = useDataRole().data;
   const qc = useQueryClient();
@@ -403,18 +423,23 @@ export function useSaveLocationLabels() {
         tenantId,
         role ?? "role-pending",
       ] as const;
-      const previous =
+      const all =
         qc.getQueryData<LocationLabel[]>(cacheKey) ??
         loadCachedLocationLabels(tenantId);
+      // Сравнивается и удаляется — только список ЭТОЙ команды.
+      const previous = teamId ? all.filter((label) => label.teamId === teamId) : all;
       const removeIds = locationLabelRemoveIds(previous, normalized);
       const upserts = positionedLocationLabelUpserts(previous, normalized);
-      const { data, error } = await supabase.rpc(
-        "apply_location_label_changes",
-        {
-          p_labels: locationLabelsToJson(upserts, normalized),
-          p_remove_ids: removeIds,
-        },
-      );
+      const { data, error } = teamId
+        ? await supabase.rpc("apply_team_location_label_changes", {
+            p_team_id: teamId,
+            p_labels: locationLabelsToJson(upserts, normalized),
+            p_remove_ids: removeIds,
+          })
+        : await supabase.rpc("apply_location_label_changes", {
+            p_labels: locationLabelsToJson(upserts, normalized),
+            p_remove_ids: removeIds,
+          });
       if (error) {
         // A missing rolling-deploy RPC is never a successful write. Keeping a
         // device-only edit here used to show “saved”, then lose it on the next
@@ -429,8 +454,12 @@ export function useSaveLocationLabels() {
       const canonical = rowsToLocationLabels(
         (data ?? []) as LocationLabelRow[],
       );
-      cacheServerLocationLabels(tenantId, canonical);
-      return canonical;
+      // Сервер вернул список команды — остальные команды в кэше не трогаем.
+      const merged = teamId
+        ? [...all.filter((label) => label.teamId !== teamId), ...canonical]
+        : canonical;
+      cacheServerLocationLabels(tenantId, merged);
+      return merged;
     },
     onSuccess: (l) =>
       qc.setQueryData(

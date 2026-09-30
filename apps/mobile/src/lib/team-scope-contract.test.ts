@@ -34,8 +34,7 @@ const EXEMPT: Record<string, string> = {
   account_cash_counts: "команда через accounts",
   // Решения владельца 24.09 — едино на компанию (клиенты с 30.09 — у
   // команды полем `team_id`, см. NULLABLE_OK):
-  client_tags: "теги клиентов — едины на компанию",
-  client_tag_assignments: "теги клиентов — едины на компанию",
+  client_tag_assignments: "команда через client_tags (теги — у команды с 30.09)",
   client_attachments: "файлы клиента — у клиента",
   location_requests: "запрос адреса у клиента — у клиента",
   companies: "реквизиты и нумерация инвойсов — едины на компанию",
@@ -56,7 +55,6 @@ const TODO_NO_TEAM: Record<string, string> = {
   finance_category_hidden: "за категориями",
   finance_category_order: "за категориями",
   service_categories: "категории услуг — у команды",
-  location_labels: "типы объектов — у команды",
   tenant_state: "SMS-шаблоны в prototype_state — у команды",
   // event_templates есть в базе, но в миграциях её нет (создана мимо
   // репозитория) — разбор её не видит; снести отдельной миграцией.

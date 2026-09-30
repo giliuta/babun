@@ -171,6 +171,7 @@ export function ClientObjectsSection({
       <ObjectSheet
         visible={objectsOpen}
         writer={locationWriter}
+        teamId={client.team_id ?? null}
         onRequestFromClient={
           canRequestAddress ? () => void requestActions.request(client.id) : undefined
         }

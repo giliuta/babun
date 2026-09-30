@@ -29,7 +29,7 @@
 // Linking sms:, share via RN Share, blacklist toggle via update) — the
 // blocks stay free of screen-level concerns.
 
-import { useFeatureOn } from "@/features/settings/company-features";
+import { useClientFunctionOn } from "@/features/clients/client-functions";
 import { useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -317,7 +317,8 @@ export function ClientDetailScreen() {
   };
   // Люди и связи — функция компании (STORY-088): выключены — нет ни
   // «Людей», ни «Входит в», ни жильцов объекта, ни «Разделить».
-  const peopleOn = useFeatureOn("client_people");
+  // С 30.09 — функция КОМАНДЫ клиента.
+  const peopleOn = useClientFunctionOn("client_people", client?.team_id);
   const people = useClientPeople({
     id,
     // На карточке — первые трое и дверь «Все люди · N» (владелец 22.09).

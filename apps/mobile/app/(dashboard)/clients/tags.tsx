@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import type { ClientTag } from "@babun/shared/local/clients";
@@ -30,6 +31,7 @@ import {
   useUpdateClientTag,
 } from "@/features/clients/queries";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { useTeams } from "@/features/reference/queries";
 
 // ТЕГИ КЛИЕНТОВ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
 //
@@ -70,6 +72,14 @@ function ClientTagsScreen() {
   const t = useThemeColors();
   const toast = useToast();
   const tagsQuery = useClientTags();
+  // ТЕГИ КОМАНДЫ (владелец 30.09: «теги закреплены за командой»). Команда
+  // едет адресом из настроек клиентов; без неё — первая команда.
+  const { team } = useLocalSearchParams<{ team?: string }>();
+  const { data: ownTeams = [] } = useTeams();
+  const teamId =
+    (team && ownTeams.some((tm) => tm.id === team) ? team : null) ??
+    ownTeams[0]?.id ??
+    null;
   const createTag = useCreateClientTag();
   const updateTag = useUpdateClientTag();
   const deleteTag = useDeleteClientTag();
@@ -84,13 +94,16 @@ function ClientTagsScreen() {
   // позиция проставлена миграцией по алфавиту).
   const tags = useMemo(
     () =>
-      [...(tagsQuery.data ?? [])].sort(
+      [...(tagsQuery.data ?? [])]
+        // Тег без команды — только до миграции 30.09; его видят все.
+        .filter((tag) => !tag.team_id || tag.team_id === teamId)
+        .sort(
         (a, b) =>
           Number(a.hidden ?? false) - Number(b.hidden ?? false) ||
           (a.position ?? 0) - (b.position ?? 0) ||
           a.name.localeCompare(b.name, "ru", { sensitivity: "base" }),
       ),
-    [tagsQuery.data],
+    [tagsQuery.data, teamId],
   );
   const busy =
     createTag.isPending || updateTag.isPending || deleteTag.isPending;
@@ -110,10 +123,12 @@ function ClientTagsScreen() {
         });
         toast("Тег обновлён", "success");
       } else {
+        if (!teamId) throw new Error("Сначала заведите календарь.");
         await createTag.mutateAsync({
           name,
           color: draft.color,
           icon: draft.icon,
+          teamId,
         });
         toast("Тег создан", "success");
       }
