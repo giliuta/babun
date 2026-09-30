@@ -1,6 +1,5 @@
 import { AREA_TITLE, type AccessBlock, type AccessLevel } from "../access-map";
 import { isClosedStep, rightTitle } from "../rights-ui/right-words";
-import { teamSentence } from "../rights-ui/team-sentence";
 import {
   CALENDAR_GROUPS,
   CALENDAR_GROUP_TITLE,
@@ -122,8 +121,8 @@ function groupPage(group: CalendarGroup, sections: readonly ViewSection[]): View
   );
 }
 
-/** Положения всех живых прав команды — по ним рисуются вид блока в шторке и
- *  итог (свёрнутые зависимые читаются как есть). */
+/** Положения всех живых прав команды — по ним рисуется вид блока в шторке
+ *  (свёрнутые зависимые читаются как есть). */
 export function teamLevels(
   blocks: readonly AccessBlock[],
   levelOf: LevelReader,
@@ -137,12 +136,6 @@ export function teamLevels(
   const records = levels[RECORDS_KEY];
   if (records !== undefined) levels[RECORDS_KEY] = recordsRowLevel(records, levels[CREATE_KEY] ?? "off");
   return levels;
-}
-
-/** Итог команды одной-тремя фразами — по живым правам. */
-export function teamSummary(blocks: readonly AccessBlock[], levels: Readonly<Record<string, AccessLevel>>): string {
-  const live = new Set(offeredBlocks(blocks).map((block) => block.key));
-  return teamSentence((key) => (live.has(key) ? levels[key] : undefined));
 }
 
 /** Подпись строки раздела в блоке «Доступ» — что в нём открыто, словами

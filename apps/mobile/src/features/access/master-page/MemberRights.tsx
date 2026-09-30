@@ -4,7 +4,6 @@ import { useTeams } from "@/features/reference/queries";
 
 import { levelOf as mapLevelOf, type AccessRefusal } from "../access-map";
 import { useAccessBlocks, useCompanyMembers, useMemberAccess } from "../queries";
-import { TeamTemplateRow } from "../templates/TeamTemplateRow";
 import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRightsView";
 import { memberRefusal, useMemberRightsWriter } from "./member-rights-writer";
 import { MEMBER_REFUSAL_TEXT, draftFromMemberAccess, rightsAreaOf } from "./rights-rows";
@@ -74,20 +73,8 @@ export function MemberRights({
   const liveIds = liveIdsOf(teams);
   const visible = map.attachedCalendars.filter((id) => liveIds.has(id));
 
-  const focusTeam = focus?.kind === "calendar" ? focus.teamId : null;
-
   return (
     <MasterRightsView
-      summaryFooter={
-        focusTeam ? (
-          <TeamTemplateRow
-            blocks={blocks}
-            levelOf={(block) => mapLevelOf(block, map, focusTeam)}
-            onApply={(template) => writer.applyTemplate(template, focusTeam, map)}
-            busy={writer.pending}
-          />
-        ) : undefined
-      }
       subtitle={subtitle}
       onBack={onBack}
       blocks={blocks}

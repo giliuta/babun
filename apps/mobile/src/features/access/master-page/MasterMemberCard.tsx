@@ -31,10 +31,6 @@ import {
 import { removalMessage, upcomingWorkCount } from "./removal-impact";
 import { draftTeamBrief } from "../rights-ui/team-sentence";
 import { AccessSectionsCard } from "../rights-ui/AccessSectionsCard";
-import { TeamRightsCards } from "../rights-ui/TeamRightsCards";
-import { TeamTemplateRow } from "../templates/TeamTemplateRow";
-import { useAccessTemplates } from "../templates/queries";
-import { templateChanges } from "../templates/templates";
 import { MasterPersonalBlocks, MasterWorkBlock } from "./MasterProfileBlocks";
 import { EmployeeNoteBlock } from "./EmployeeNoteBlock";
 import { contactsHolderOf, useMasterProfileWrite } from "./use-profile-write";
@@ -43,8 +39,8 @@ import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
 import { CALENDAR_GROUPS } from "./access-summary";
 import { activeOf, usePreview } from "./rights-page-shared";
-import { memberRefusal, useMemberRightsWriter } from "./member-rights-writer";
-import { teamLevels, teamSummary, viewSections } from "./rights-view-sections";
+import { memberRefusal } from "./member-rights-writer";
+import { viewSections } from "./rights-view-sections";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import {
   copyCalendarLevels,
@@ -99,7 +95,6 @@ export function MasterMemberCard({
   const businessNow = useBusinessNow();
   const updateMaster = useUpdateMaster();
   const remove = useRemoveTenantMember();
-  const templatesQuery = useAccessTemplates();
   const setCalendars = useSetMemberCalendars(userId);
   const setAccess = useSetMemberAccess(userId);
   const preview = usePreview();
@@ -108,7 +103,6 @@ export function MasterMemberCard({
   // КОМАНДА, ЧЬИ ПРАВА НА СТРАНИЦЕ (лента под шапкой). Первой — та, из
   // которой открыли; её нет среди его команд — первая из них.
   const [activeTeam, setActiveTeam] = useState<string | null>(teamId);
-  const writer = useMemberRightsWriter(userId, blocksQuery.data);
   // Кто ждёт, пока лист календарей уедет (`onExited`).
   const afterCalendars = useRef<(() => void) | null>(null);
   const closeCalendarsSheet = () =>
@@ -229,10 +223,9 @@ export function MasterMemberCard({
           toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
         }
       };
-      // ШАБЛОНЫ ДОСТУПА — ПЕРВЫМИ (владелец 29.09): свой набор ставится
-      // копией одним тапом, дальше правится точечно.
-      const templates = templatesQuery.data ?? [];
-      if (!source && templates.length === 0) {
+      // Шаблонов доступа больше нет (владелец 30.09: «этот блок полностью
+      // убери… по сути вот эти шаблоны»): вопрос — «как в …» или сам.
+      if (!source) {
         await applyStarter();
         return;
       }
@@ -243,24 +236,10 @@ export function MasterMemberCard({
       const sourceName = source ? (teamNameOf(source) ?? "первом календаре") : "";
       const targetName = teamNameOf(id) ?? "новом календаре";
       const answer = await chooseOption(`Права в «${targetName}»`, [
-        ...templates.map((template) => ({ label: `Шаблон «${template.name}»` })),
-        ...(source ? [{ label: `Как в «${sourceName}»` }] : []),
+        { label: `Как в «${sourceName}»` },
         { label: "Выставлю сам" },
       ]);
-      const template = answer !== null && answer < templates.length ? templates[answer] : undefined;
-      if (template) {
-        try {
-          await setAccess.mutateAsync(templateChanges(blocks, template, id));
-          toast(`Права по шаблону «${template.name}»`);
-        } catch (error) {
-          toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
-        }
-        return;
-      }
-      // Дальше ответы — как прежде: 0 — «Как в …» (если есть), 1 — «Выставлю сам».
-      const rest = answer === null ? null : answer - templates.length;
-      const picked = source ? rest : rest === null ? null : rest + 1;
-      if (picked === 0 && source) {
+      if (answer === 0) {
         try {
           await setAccess.mutateAsync(copyCalendarLevels(blocks, draft, source, id));
           toast(`Права как в «${sourceName}»`);
@@ -310,7 +289,6 @@ export function MasterMemberCard({
     onlyCompany: false,
     withCompany: true,
   });
-  const levels = teamLevels(blocks, levelOf, activeId);
 
   const patchCard = (patch: {
     full_name?: string;
@@ -462,34 +440,10 @@ export function MasterMemberCard({
           },
         }}
         teamRights={
-          <>
-          <TeamRightsCards
-            blocks={blocks}
-            sections={[]}
-            levels={levels}
-            summary={activeId ? teamSummary(blocks, levels) : null}
-            summaryFooter={
-              activeId ? (
-                <TeamTemplateRow
-                  blocks={blocks}
-                  levelOf={(block) => mapLevelOf(block, map, activeId)}
-                  onApply={(template) => writer.applyTemplate(template, activeId, map)}
-                  busy={writer.pending}
-                />
-              ) : undefined
-            }
-            sheetSubtitle={(block) =>
-              [name, block.scope === "calendar" ? activeTeamRow?.name : "Вся компания"]
-                .filter(Boolean)
-                .join(" · ") || undefined
-            }
-            teamName={activeTeamRow?.name ?? ""}
-            teamColor={activeTeamRow?.color ?? t.accent}
-            busyKey={writer.busyKey}
-            onPick={(block, level) => writer.pick(block, level, block.scope === "calendar" ? activeId : null)}
-          />
-          {/* ДОСТУП — ПОСТРАНИЧНО (владелец 29.09): строка раздела, тап —
-              страница со всеми его правами в выбранной команде. */}
+          // ДОСТУП — ПОСТРАНИЧНО (владелец 29.09): строка раздела, тап —
+          // страница со всеми его правами в выбранной команде. Карточки
+          // «Итог» с «Шаблоном» над ним больше нет (владелец 30.09: «этот
+          // блок полностью убери, он не нужен»).
           <AccessSectionsCard
             sections={rightsSectionsNow}
             onOpen={(section) => {
@@ -504,7 +458,6 @@ export function MasterMemberCard({
               );
             }}
           />
-          </>
         }
         // ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ (канон 7.1): посмотреть, что из этого выйдет.
         footer={<GradientButton label="Посмотреть его глазами" onPress={() => preview({ blocks, draft, name })} />}

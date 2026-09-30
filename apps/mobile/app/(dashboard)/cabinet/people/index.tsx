@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { FlatList, Pressable, Text, TextInput, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { Search, Settings } from "lucide-react-native";
+import { Search } from "lucide-react-native";
 import { getInitials } from "@babun/shared/local/masters";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -169,31 +169,9 @@ export default function MastersScreen() {
 
   return (
     <Screen edges={["top"]}>
-      {/* ⚙ — ШАБЛОНЫ ДОСТУПА: настройка раздела живёт за его шестерёнкой
-          (владелец 14.09). Шаблоны заводит только владелец. */}
-      <ScreenHeader
-        title="Сотрудники"
-        right={
-          isOwner ? (
-            <Pressable
-              onPress={() => router.push("/cabinet/people/templates" as Href)}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel="Шаблоны доступа"
-              style={({ pressed }) => ({
-                width: 44,
-                height: 44,
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: t.radius.card,
-                backgroundColor: pressed ? t.pressed : "transparent",
-              })}
-            >
-              <Settings color={t.sub} size={21} strokeWidth={2} />
-            </Pressable>
-          ) : undefined
-        }
-      />
+      {/* Шестерёнки с шаблонами доступа больше нет (владелец 30.09: «по
+          сути вот эти шаблоны» не нужны). */}
+      <ScreenHeader title="Сотрудники" />
 
       {isLoading || teamsQuery.isLoading || membersQuery.isLoading || invitationsQuery.isLoading ? (
         <EmptyState state="loading" fill />

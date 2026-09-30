@@ -15,7 +15,7 @@ import { CALENDAR_GROUP_TITLE, type CalendarGroup } from "./access-summary";
 import type { RightsArea } from "./master-draft";
 import type { LevelReader } from "./rights-rows";
 import type { RightsFocus } from "./rights-focus";
-import { teamLevels, teamSummary, viewSections } from "./rights-view-sections";
+import { teamLevels, viewSections } from "./rights-view-sections";
 
 export type { RightsFocus };
 
@@ -71,15 +71,11 @@ export function MasterRightsView({
   onlyCompany = false,
   group,
   top,
-  summaryFooter,
 }: {
-  /** Страница одного раздела доступа («Календарь»): только его права, без
-   *  итога и шаблона — они про команду целиком и живут на её странице. */
+  /** Страница одного раздела доступа («Календарь»): только его права. */
   group?: CalendarGroup;
-  /** Над разделами: карточка имени шаблона. */
+  /** Над разделами. */
   top?: ReactNode;
-  /** Строка внутри «Итога» под фразой — «Шаблон» у прав команды. */
-  summaryFooter?: ReactNode;
   /** Заголовок: имя календаря, когда страница — права ОДНОГО календаря. */
   title?: string;
   /** Только строки этого календаря, без ленты чипов и без строк компании
@@ -136,7 +132,6 @@ export function MasterRightsView({
   });
   const companyTitle = onlyCompany && area ? AREA_TITLE[area] : null;
   const levels = teamLevels(blocks, levelOf, activeId);
-  const summary = onlyCalendar && !group ? teamSummary(blocks, levels) : null;
 
   return (
     <Screen edges={["top"]}>
@@ -163,8 +158,6 @@ export function MasterRightsView({
             blocks={blocks}
             sections={sections}
             levels={levels}
-            summary={summary}
-            summaryFooter={group ? undefined : summaryFooter}
             sheetSubtitle={(block) =>
               [subtitle, block.scope === "calendar" ? teamName : "Вся компания"].filter(Boolean).join(" · ") ||
               undefined

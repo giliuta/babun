@@ -1,5 +1,5 @@
-import { Fragment, useState, type ReactNode } from "react";
-import { Text, View } from "react-native";
+import { Fragment, useState } from "react";
+import { View } from "react-native";
 
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -33,8 +33,6 @@ export function TeamRightsCards({
   blocks,
   sections,
   levels,
-  summary,
-  summaryFooter,
   sheetSubtitle,
   teamName,
   teamColor,
@@ -46,10 +44,6 @@ export function TeamRightsCards({
   sections: readonly ViewSection[];
   /** Положения всех живых прав этой команды — с тем, что выбрано сейчас. */
   levels: Readonly<Record<string, AccessLevel>>;
-  /** Итог команды фразой; нет — карточки «Итог» нет. */
-  summary?: string | null;
-  /** Строка под итогом — «Шаблон». */
-  summaryFooter?: ReactNode;
   /** Чьё и где — у права команды «Dmitry · Команда 1», у права на всю
    *  компанию без имени команды: там оно не про неё. */
   sheetSubtitle?: (block: AccessBlock) => string | undefined;
@@ -91,17 +85,6 @@ export function TeamRightsCards({
 
   return (
     <>
-      {summary ? (
-        <SectionCard title="Итог" padded={false}>
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{ paddingHorizontal: 16, paddingTop: 2, paddingBottom: 12, fontSize: 15, lineHeight: 21, color: t.ink }}
-          >
-            {summary}
-          </Text>
-          {summaryFooter ?? null}
-        </SectionCard>
-      ) : null}
       {sections.map((section) => (
         <View
           key={section.key}

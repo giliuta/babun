@@ -15,7 +15,6 @@ import {
   type MemberAccessMap,
 } from "../access-map";
 import { AccessRequestError, useSetMemberAccess } from "../queries";
-import { templateBlocks, templateChanges, type AccessTemplate } from "../templates/templates";
 import { MEMBER_REFUSAL_TEXT, levelChanges, withMemberChanges } from "./rights-rows";
 
 // ЗАПИСЬ ПРАВ СОТРУДНИКА — ОДНА НА ГЛАВНУЮ СТРАНИЦУ И НА СТРАНИЦУ ПРАВ.
@@ -61,38 +60,8 @@ export function useMemberRightsWriter(userId: string, blocks: readonly AccessBlo
     });
   };
 
-  // ШАБЛОН — КОПИЕЙ В ЭТУ КОМАНДУ (владелец 29.09). Одна пачка в
-  // `set_member_access`, оптимистично; «Отменить» возвращает прежние положения
-  // тех же строк.
-  const applyTemplate = (template: AccessTemplate, teamId: string, map: MemberAccessMap) => {
-    if (!blocks || setAccess.isPending) return;
-    const previous = qc.getQueryData<MemberAccessMap>(key) ?? map;
-    const undo: AccessChange[] = templateBlocks(blocks).map((block) => ({
-      block: block.key,
-      team_id: teamId,
-      level: mapLevelOf(block, previous, teamId),
-    }));
-    const changes = templateChanges(blocks, template, teamId);
-    qc.setQueryData(key, withMemberChanges(previous, blocks, changes));
-    setAccess.mutate(changes, {
-      onSuccess: () =>
-        toast(`Права по шаблону «${template.name}»`, "success", {
-          label: "Отменить",
-          onPress: () =>
-            setAccess.mutate(undo, {
-              onError: (error) => toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error"),
-            }),
-        }),
-      onError: (error) => {
-        qc.setQueryData(key, previous);
-        toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
-      },
-    });
-  };
-
   return {
     pick,
-    applyTemplate,
     pending: setAccess.isPending,
     /** Строка, что сейчас сохраняется (`null` — ничего не летит). */
     busyKey: setAccess.isPending ? saving : null,
