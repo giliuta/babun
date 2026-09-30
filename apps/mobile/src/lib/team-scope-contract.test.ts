@@ -31,7 +31,6 @@ const EXEMPT: Record<string, string> = {
   service_variants: "команда через services",
   appointment_photos: "команда через appointments",
   appointment_links: "ссылка «Подтвердить / Отменить» — команда через appointments",
-  account_cash_counts: "команда через accounts",
   // Решения владельца 24.09 — едино на компанию (клиенты с 30.09 — у
   // команды полем `team_id`, см. NULLABLE_OK):
   client_tag_assignments: "команда через client_tags (теги — у команды с 30.09)",
