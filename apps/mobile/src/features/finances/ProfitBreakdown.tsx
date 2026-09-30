@@ -12,21 +12,25 @@ import {
   breakdownIncome,
   type BreakdownRow,
 } from "./breakdown";
-import { IncomeShareDonut } from "./IncomeShareDonut";
 import { PanelHeader } from "./PanelHeader";
 
-// «Разбор прибыли» — port of the web ProfitPanel (bars view): «Что принесло
-// денег» (income by service/category, breakdownIncome resolves an income tx
-// to the linked appointment's service) and «Куда ушёл расход» (expense by
-// category), each row with its ×N operation count and a proportion bar.
+// «Разбор прибыли» — port of the web ProfitPanel (bars view): «Доход»
+// (income by service/category, breakdownIncome resolves an income tx to the
+// linked appointment's service) and «Расход» (expense by category), each row
+// with its ×N operation count and a proportion bar.
 // Цифру самой прибыли печатает переключатель над панелью — второго раза ей
 // здесь не нужно.
 //
-// The web «Доли %» donut (FinancePieChart, the last finance surface with
-// no mobile twin) now sits above the income rows as IncomeShareDonut —
-// share-of-total, where the bars below carry per-row amounts and counts.
-// It renders only with ≥2 positive buckets: one bucket is a full ring
-// that says nothing the total line doesn't already say.
+// ПЕРЕСОБРАНО 2026-09-30 (владелец: «улучшим прибыль — как показывается, что
+// показывается»):
+//   • в шапке — МАРЖА: сама прибыль стоит в плитке, а «хорошая ли она»
+//     говорит доля от дохода — новое, а не повтор;
+//   • кольцо долей снято: его подписи повторяли те же услуги, что полоски
+//     под ним, — одни и те же три строки дважды. Полоски несут и долю, и
+//     сумму, и «×N»;
+//   • строка услуги подписана её материалами («материалы €10») — расход
+//     «Материалы» перестал быть безымянной суммой;
+//   • разделы — словами плиток: «Доход», «Расход».
 export function ProfitBreakdown({
   transactions,
   categories,
@@ -34,6 +38,7 @@ export function ProfitBreakdown({
   appointments,
   materialCost,
   materialAppointmentCount,
+  materialsByService,
   only,
   title = "Прибыль",
   people,
@@ -46,6 +51,9 @@ export function ProfitBreakdown({
   appointments: Appointment[];
   materialCost: number;
   materialAppointmentCount: number;
+  /** Материалы сделанных записей периода по услугам — подпись строки
+   *  дохода (`materialsByService`). */
+  materialsByService?: ReadonlyMap<string, number>;
   /** Только одна половина разбора — у плиток «Доход» и «Расход» «Аналитики». */
   only?: "income" | "expense";
   title?: string;
@@ -78,11 +86,9 @@ export function ProfitBreakdown({
   }, [transactions, categories, materialCost, materialAppointmentCount, people]);
   const income = incomeRows.reduce((s, r) => s + r.amount, 0);
   const expense = expenseRows.reduce((s, r) => s + r.amount, 0);
-  // The donut clamps negatives away (a refund bucket has no share of a
-  // whole), so decide its visibility on the same clamped set it will
-  // actually draw — otherwise one sale + one refund would look like two
-  // buckets and render a pointless full ring.
-  const positiveIncomeBuckets = incomeRows.filter((r) => r.amount > 0).length;
+  // МАРЖА — доля прибыли в доходе, целым процентом. Без дохода её нет:
+  // «−∞ %» ничего не говорит.
+  const margin = income > 0 ? Math.round(((income - expense) / income) * 100) : null;
   const showIncome = only !== "expense";
   const showExpense = only !== "income";
   const empty =
@@ -98,6 +104,7 @@ export function ProfitBreakdown({
         key={`${kind}-${r.id}`}
         name={r.name}
         count={r.count}
+        note={kind === "income" ? materialsNote(materialsByService?.get(r.name)) : undefined}
         value={`${negative ? "−" : ""}${formatEUR(Math.abs(r.amount))}`}
         color={negative ? th.danger : th.success}
         // negative rows (refunds) get no proportion bar
@@ -135,12 +142,29 @@ export function ProfitBreakdown({
           же деньги дважды на одном экране. */}
       {/* У половины разбора своя капс-строка («Что принесло денег») уже
           называет панель — второе имя над ней было бы повтором. */}
-      {only ? null : <PanelHeader title={title} />}
+      {only ? null : (
+        <PanelHeader
+          title={title}
+          right={
+            margin !== null ? (
+              <Text
+                className="text-[13px] font-semibold"
+                style={{
+                  fontVariant: ["tabular-nums"],
+                  color: margin < 0 ? th.danger : th.sub,
+                }}
+              >
+                {`маржа ${margin < 0 ? "−" : ""}${Math.abs(margin)}%`}
+              </Text>
+            ) : undefined
+          }
+        />
+      )}
 
       {showIncome ? (
       <View className="mt-1">
         <BreakdownSectionHeader
-          title="Что принесло денег"
+          title="Доход"
           value={`${income >= 0 ? "" : "−"}${formatEUR(Math.abs(income))}`}
           color={income >= 0 ? th.success : th.danger}
         />
@@ -149,12 +173,7 @@ export function ProfitBreakdown({
             Нет доходов за период
           </Text>
         ) : (
-          <>
-            {positiveIncomeBuckets >= 2 ? (
-              <IncomeShareDonut rows={incomeRows} />
-            ) : null}
-            {incomeRows.map((r) => renderRow(r, income, "income"))}
-          </>
+          incomeRows.map((r) => renderRow(r, income, "income"))
         )}
       </View>
       ) : null}
@@ -163,7 +182,7 @@ export function ProfitBreakdown({
       <View className="mt-1">
         {/* Ноль — без минуса и тише: «−€0» красным читался как долг. */}
         <BreakdownSectionHeader
-          title="Куда ушёл расход"
+          title="Расход"
           value={expense > 0 ? `−${formatEUR(expense)}` : formatEUR(0)}
           color={expense > 0 ? th.danger : th.faint}
         />
@@ -179,6 +198,11 @@ export function ProfitBreakdown({
       {footer}
     </ScrollView>
   );
+}
+
+/** «материалы €10» под услугой; без материалов — ничего. */
+function materialsNote(amount: number | undefined): string | undefined {
+  return amount && amount > 0 ? `материалы ${formatEUR(amount)}` : undefined;
 }
 
 /**

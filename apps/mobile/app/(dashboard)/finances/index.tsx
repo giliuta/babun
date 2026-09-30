@@ -48,6 +48,7 @@ import { DocumentsPanel } from "@/features/finances/DocumentsPanel";
 import { usePeriodDocuments } from "@/features/finances/use-period-documents";
 import type { DocumentFilter } from "@/features/finances/documents";
 import { ProfitBreakdown } from "@/features/finances/ProfitBreakdown";
+import { materialsByService } from "@/features/finances/breakdown";
 import { DebtorsList } from "@/features/finances/DebtorsList";
 import { panelCount } from "@/features/finances/PanelHeader";
 import { RecordRowsPanel } from "@/features/finances/RecordRowsPanel";
@@ -476,9 +477,12 @@ function FinancesContent() {
   const materialSummary = useMemo(() => {
     // Материалы записей — деньги из записей: сотруднику записи приходят с
     // нулями, и такая цифра была бы выдумкой (`access.recordMoney`).
-    if (!access.recordMoney) return { amount: 0, appointmentCount: 0 };
+    if (!access.recordMoney) {
+      return { amount: 0, appointmentCount: 0, byService: new Map<string, number>() };
+    }
     let amount = 0;
     let appointmentCount = 0;
+    const costly: typeof scopedAppointments = [];
     for (const appointment of scopedAppointments) {
       if (appointment.status !== "completed" && appointment.status !== "in_progress") continue;
       if (appointment.date < period.from || appointment.date > period.to) continue;
@@ -487,8 +491,10 @@ function FinancesContent() {
       if (cost <= 0) continue;
       amount += cost;
       appointmentCount += 1;
+      costly.push(appointment);
     }
-    return { amount, appointmentCount };
+    // Те же записи — по услугам: «Прибыль» подписывает услугу её материалами.
+    return { amount, appointmentCount, byService: materialsByService(costly, services) };
   }, [access.recordMoney, period.from, period.to, scope, scopedAppointments, services]);
 
   // ОДНИ И ТЕ ЖЕ ДЕНЬГИ СЧИТАЮТСЯ ОДИН РАЗ.
@@ -1388,6 +1394,7 @@ function FinancesContent() {
             appointments={scopedAppointments}
             materialCost={materialSummary.amount}
             materialAppointmentCount={materialSummary.appointmentCount}
+            materialsByService={materialSummary.byService}
             people={people}
             refreshControl={refreshControl}
           />

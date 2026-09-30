@@ -17,6 +17,7 @@ import {
   breakdownIncome,
   expenseLabel,
   incomeLabel,
+  materialsByService,
 } from "./breakdown";
 
 function tx(
@@ -379,5 +380,46 @@ describe("доход записи — по её услугам", () => {
         ["A/C Cleaning", 90],
       ],
     );
+  });
+});
+
+describe("материалы по услугам (подпись строки дохода, 30.09)", () => {
+  const catalog = [
+    { id: "s-clean", name: "Чистка сплита", cost_per_unit: 5 },
+    { id: "s-gas", name: "Заправка", cost_per_unit: 10 },
+    { id: "s-free", name: "Осмотр", cost_per_unit: 0 },
+  ] as unknown as Service[];
+
+  test("сумма по количеству, имя — снимок строки записи, как у дохода", () => {
+    const a1 = {
+      id: "a-1",
+      services: [
+        { serviceId: "s-clean", serviceName: "Чистка (акция)", quantity: 2, totalPrice: 80 },
+        { serviceId: "s-free", serviceName: "Осмотр", quantity: 1, totalPrice: 0 },
+      ],
+    } as unknown as Appointment;
+    const a2 = {
+      id: "a-2",
+      services: [{ serviceId: "s-gas", serviceName: "", quantity: 1, totalPrice: 60 }],
+    } as unknown as Appointment;
+    const byName = materialsByService([a1, a2], catalog);
+    // Снимок записи сильнее каталога — так же делит доход `serviceSplit`.
+    assert.equal(byName.get("Чистка (акция)"), 10);
+    // Пустое имя снимка — имя каталога.
+    assert.equal(byName.get("Заправка"), 10);
+    // Услуга без материалов подписи не получает.
+    assert.equal(byName.has("Осмотр"), false);
+  });
+
+  test("копейки не набегают при сложении", () => {
+    const service = [{ id: "s", name: "S", cost_per_unit: 0.1 }] as unknown as Service[];
+    const records = [1, 2, 3].map(
+      (n) =>
+        ({
+          id: `a-${n}`,
+          services: [{ serviceId: "s", serviceName: "S", quantity: 1, totalPrice: 10 }],
+        }) as unknown as Appointment,
+    );
+    assert.equal(materialsByService(records, service).get("S"), 0.3);
   });
 });

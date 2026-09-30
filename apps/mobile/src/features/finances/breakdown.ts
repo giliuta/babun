@@ -7,6 +7,7 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Service } from "@/features/services/queries";
+import { appointmentMaterialCostLines } from "@babun/shared/local/finance/appointment-calc";
 import { payeeName, withPayee } from "./category-asks";
 import { incomeDeals } from "./income-deals";
 
@@ -167,6 +168,30 @@ function serviceSplit(
     left -= part;
     return { name: nameOf(l), amount: part / 100 };
   });
+}
+
+/**
+ * МАТЕРИАЛЫ ПО УСЛУГАМ — ТЕМ ЖЕ ИМЕНЕМ, КАКИМ ДОХОД ДЕЛИТСЯ ПО УСЛУГАМ
+ * (владелец 2026-09-30: «улучшим прибыль»). Строка «Материалы −€20» в
+ * расходе не говорила, какая работа их съела; теперь строка услуги в доходе
+ * подписана «материалы €10». Имя — снимок строки записи, как в
+ * `serviceSplit`, иначе каталог: одна услуга не распадается на две строки.
+ * Записи приходят уже отобранными (сделанные, в периоде, в команде) — тем
+ * же отбором, что строка «Материалы» в расходе.
+ */
+export function materialsByService(
+  appointments: readonly Appointment[],
+  services: readonly Service[],
+): Map<string, number> {
+  const cents = new Map<string, number>();
+  for (const a of appointments) {
+    for (const line of appointmentMaterialCostLines(a, services)) {
+      const snapshot = (a.services ?? []).find((l) => l.serviceId === line.serviceId);
+      const name = snapshot?.serviceName?.trim() || line.serviceName;
+      cents.set(name, (cents.get(name) ?? 0) + Math.round(line.totalCost * 100));
+    }
+  }
+  return new Map([...cents].map(([name, c]) => [name, c / 100]));
 }
 
 /** Expense grouped by category/note, sorted by amount desc. */

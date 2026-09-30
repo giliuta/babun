@@ -66,7 +66,11 @@ describe("экран «Финансы» спрашивает уровень од
   });
 
   test("деньги из записей считаются только когда человек их видит", () => {
-    assert.match(index, /if \(!access\.recordMoney\) return \{ amount: 0, appointmentCount: 0 \};/);
+    // Нули — и в сумме, и в разбивке по услугам «Прибыли» (30.09).
+    assert.match(
+      index,
+      /if \(!access\.recordMoney\) \{ return \{ amount: 0, appointmentCount: 0, byService: new Map<string, number>\(\) \}; \}/,
+    );
     assert.match(index, /for \(const a of access\.recordMoney \? scopedAppointments : \[\]\)/);
     assert.match(index, /appointments=\{access\.recordMoney \? scopedAppointments : \[\]\}/);
     assert.match(index, /\.\.\.\(access\.recordMoney \? debtRows\(/);
