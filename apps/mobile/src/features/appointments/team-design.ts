@@ -50,7 +50,7 @@ export interface TeamDesign {
   palette: RecordColorPalette | null;
   fallback: string | null;
   disabledBlocks: TeamBlockKey[];
-  // ВИД КЛИЕНТОВ КОМАНДЫ НА СЕРВЕРЕ (миграция 20260930233000). `null` — команда
+  // ВИД КЛИЕНТОВ КОМАНДЫ НА СЕРВЕРЕ (миграция 20260930232000). `null` — команда
   // на сервере ещё не настраивала: берётся набор с телефона.
   /** Выключенные поля строки списка клиентов. */
   listOff?: string[] | null;
