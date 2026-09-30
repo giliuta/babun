@@ -13,8 +13,8 @@ import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
   AUTOTOPUP_THRESHOLDS_CENTS,
+  openSmsCheckout,
   smsErrorText,
-  startSmsTopup,
   TOPUP_AMOUNTS_CENTS,
   useForgetAutotopupCard,
   useSaveAutotopup,
@@ -22,10 +22,10 @@ import {
 } from "./sms-account";
 import { euro } from "./sms-words";
 
-// АВТОПОПОЛНЕНИЕ БАЛАНСА SMS — ТОЛЬКО НА САЙТЕ (STORY-089, волна 13; владелец
-// 30.09: «чтобы партнёры автоматически пополняли… зачисление на их счёт»).
-// В iOS-приложении этого блока нет: оплата живёт на babun.app (правило App
-// Store, владелец 24.09).
+// АВТОПОПОЛНЕНИЕ БАЛАНСА SMS (STORY-089, волна 13; владелец 30.09: «чтобы
+// партнёры автоматически пополняли… зачисление на их счёт»). Карта
+// сохраняется оплатой на странице Stripe — в приложении она открывается в
+// браузере (владелец 30.09: «оплата отдельной страницей, не через Apple»).
 //
 //   • Карты нет — строка-дверь: выбрать сумму, оплатить её на Stripe, и карта
 //     сохранится; дальше баланс сам пополняется на ту же сумму, когда падает
@@ -48,9 +48,7 @@ export function SmsAutotopupCard({ auto }: { auto: SmsAutotopup }) {
 
   const start = async (cents: number) => {
     try {
-      const back = typeof window !== "undefined" ? `${window.location.origin}/cabinet/sms` : "https://babun.app/cabinet/sms";
-      const url = await startSmsTopup(cents, back, { thresholdCents: auto.thresholdCents });
-      if (typeof window !== "undefined") window.location.assign(url);
+      await openSmsCheckout(cents, { thresholdCents: auto.thresholdCents });
     } catch (e) {
       notify("Оплата не открылась", e instanceof Error ? e.message : undefined);
     }

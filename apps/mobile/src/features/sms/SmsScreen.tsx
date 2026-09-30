@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
-import { Platform, ScrollView, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { AppState, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { CalendarClock, History, Users, Wallet } from "lucide-react-native";
-import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
+import { History, Wallet } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -17,38 +16,33 @@ import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
-import {
-  startSmsTopup,
-  TOPUP_AMOUNTS_CENTS,
-  useSmsAccount,
-  useSmsHistory,
-} from "./sms-account";
-import { balanceWarning, teamStats } from "./sms-model";
+import { openSmsCheckout, TOPUP_AMOUNTS_CENTS, useSmsAccount, useSmsHistory } from "./sms-account";
+import { balanceWarning } from "./sms-model";
 import { SmsAutotopupCard } from "./SmsAutotopupCard";
 import { SmsHistoryRow } from "./SmsHistoryRow";
-import { balanceWords, euro, monthWords } from "./sms-words";
+import { SmsBalanceCard, SmsTariffCard, SmsTeamsTiles } from "./SmsParts";
+import { euro } from "./sms-words";
 
 // КАБИНЕТ → SMS — ДЕНЬГИ И ОТПРАВКА ВСЕЙ КОМПАНИИ (STORY-089; владелец
-// 29.09: «первое — баланс и пополнение, это всё будет Кабинет SMS… потом
-// шаблоны и всё остальное — это уже в другом»; «баланс единый, независимо
-// от команды»).
+// 29.09: «баланс и пополнение — это всё будет Кабинет SMS», «баланс единый,
+// независимо от команды»; 30.09: «переделать в нашем стиле, календари нашей
+// компании… правильные тарифы… кнопка пополнить баланс»).
 //
-// Блоки сверху вниз, название — в шапке самой карточки (канон блоков):
-//   • БАЛАНС — сколько денег и примерно сколько SMS, сколько ушло за месяц;
-//   • МЕСЯЦ — счёт по командам: имя отправителя, сколько SMS, доставлено,
-//     не доставлено, деньги; тап — SMS этой команды;
+// Сверху вниз, название — в шапке карточки (канон блоков):
+//   • БАЛАНС — сумма крупно, «≈ N SMS», месяц в деньгах и штуках;
+//   • КАЛЕНДАРИ — команды компании плитками в своих цветах: SMS за месяц;
+//     тап — SMS команды (шаблоны, имя отправителя);
+//   • АВТОПОПОЛНЕНИЕ — карта и порог;
+//   • ТАРИФ — сколько стоит SMS и что дают пакеты;
 //   • ИСТОРИЯ — последние сообщения и дверь ко всем.
-// Выключателей отправки нет (владелец 29.09: «отправка через сервис — что
-// это, удали вообще блок»): команда отправляет, когда у неё есть имя
-// отправителя, и пока хватает баланса.
-// Шаблоны команды живут в настройках календаря (шестерёнка → SMS); там
-// только баланс и шаблоны — вся аналитика здесь (владелец 29.09).
+// Выключателей отправки нет: команда отправляет, когда у неё есть имя
+// отправителя и хватает баланса.
 //
-// ПОПОЛНЕНИЕ — ТОЛЬКО НА САЙТЕ (владелец 24.09: «чтоб не брал Apple»). В iOS
-// нет ни кнопки, ни ссылки, ни цены — правило App Store о цифровых товарах.
-// В веб-версии «Пополнить баланс» стоит футером — одно действие экрана.
-
-const WEB = Platform.OS === "web";
+// ПОПОЛНЕНИЕ — ОТДЕЛЬНОЙ СТРАНИЦЕЙ ОПЛАТЫ STRIPE, НЕ ЧЕРЕЗ APPLE (владелец
+// 30.09 отменил своё «в приложении ни кнопки» от 24.09: «кнопка должна вести
+// на пополнение через отдельную страницу… просто и легко для клиента»).
+// Внизу «Пополнить баланс» → сумма → страница Stripe; в приложении она
+// открывается в браузере, а по возвращении экран сам перечитывает баланс.
 
 export function SmsScreen() {
   const t = useThemeColors();
@@ -57,8 +51,10 @@ export function SmsScreen() {
   const params = useLocalSearchParams<{ topup?: string }>();
   const account = useSmsAccount();
   const history = useSmsHistory(5);
-  const { data: teams = [] } = useTeams();
+  const { data: allTeams = [] } = useTeams();
+  const teams = allTeams.filter((team) => team.is_active !== false);
   const [topupOpen, setTopupOpen] = useState(false);
+  const awaitingPayment = useRef(false);
 
   // Возврат с оплаты на сайте: Stripe привёл обратно — баланс пересчитает
   // вебхук через секунды, страница перечитывает его.
@@ -73,15 +69,30 @@ export function SmsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.topup]);
 
+  // В приложении оплата — в браузере: вернулись в приложение — перечитать
+  // баланс (вебхук Stripe зачисляет за секунды).
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active" || !awaitingPayment.current) return;
+      awaitingPayment.current = false;
+      toast("Проверяем оплату…", "info");
+      setTimeout(() => void account.refetch(), 2500);
+      setTimeout(() => void account.refetch(), 9000);
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const data = account.data;
   const owner = data?.owner;
 
   const topup = async (cents: number) => {
+    setTopupOpen(false);
     try {
-      const back = typeof window !== "undefined" ? `${window.location.origin}/cabinet/sms` : undefined;
-      const url = await startSmsTopup(cents, back ?? "https://babun.app/cabinet/sms");
-      if (typeof window !== "undefined") window.location.assign(url);
+      awaitingPayment.current = true;
+      await openSmsCheckout(cents);
     } catch (e) {
+      awaitingPayment.current = false;
       notify("Оплата не открылась", e instanceof Error ? e.message : undefined);
     }
   };
@@ -109,16 +120,6 @@ export function SmsScreen() {
   }
 
   const warning = balanceWarning(data);
-  /** «Giliuta · 12 SMS · доставлено 11»; без имени отправителя команда не
-   *  отправляет — подпись говорит это первым. */
-  const teamSub = (teamId: string): string => {
-    const s = teamStats(data, teamId);
-    const sender = data.senders?.[teamId];
-    const parts = [sender ?? "Нет имени отправителя", `${s.count} SMS`];
-    if (s.delivered > 0) parts.push(`доставлено ${s.delivered}`);
-    if (s.failed > 0) parts.push(`не доставлено ${s.failed}`);
-    return parts.join(" · ");
-  };
 
   return (
     <Screen edges={["top"]}>
@@ -130,8 +131,6 @@ export function SmsScreen() {
           </View>
         ) : warning ? (
           <View style={{ marginHorizontal: GUTTER, marginTop: 12 }}>
-            {/* В iOS — только слова о балансе: ни ссылки, ни упоминания покупки
-                (правило App Store, владелец 24.09). */}
             <NoticeBar tone={data.frozen ? "error" : "warn"} message={warning} />
           </View>
         ) : null}
@@ -143,56 +142,13 @@ export function SmsScreen() {
           </View>
         ))}
 
-        <SectionCard title="Баланс">
-          <SettingsRow
-            tile="neutral"
-            icon={Wallet}
-            title={euro(owner.balanceCents)}
-            // Цена — только на сайте: в iOS-приложении о платном молчим
-            // (решение владельца, правило App Store).
-            sub={
-              WEB
-                ? `${balanceWords(owner.balanceCents, owner.freeLeft, data.priceCents)} · ${euro(data.priceCents)} за SMS`
-                : balanceWords(owner.balanceCents, owner.freeLeft, data.priceCents)
-            }
-          />
-          <Divider inset={48} />
-          <SettingsRow
-            tile="neutral"
-            icon={CalendarClock}
-            title="За месяц"
-            sub={formatCountRu(owner.monthCount, ["SMS", "SMS", "SMS"])}
-            value={euro(owner.monthCents)}
-            valueQuiet={owner.monthCents === 0}
-          />
-        </SectionCard>
+        <SmsBalanceCard account={data} />
 
-        {WEB && owner.autotopup ? <SmsAutotopupCard auto={owner.autotopup} /> : null}
+        {teams.length > 0 ? <SmsTeamsTiles account={data} teams={teams} /> : null}
 
-        {teams.length > 0 ? (
-          <SectionCard title={monthWords(new Date())}>
-            {teams.map((team, index) => {
-              const stats = teamStats(data, team.id);
-              return (
-                <View key={team.id}>
-                  {index > 0 ? <Divider inset={48} /> : null}
-                  <SettingsRow
-                    appearance={{ color: team.color, icon: team.icon, fallback: Users }}
-                    title={team.name}
-                    sub={teamSub(team.id)}
-                    value={euro(stats.cents)}
-                    valueQuiet={stats.cents === 0}
-                    // Команда без имени отправителя молчит — тап ведёт туда,
-                    // где имя и шаблоны задаются.
-                    onPress={() =>
-                      router.push({ pathname: "/calendar/sms", params: { team: team.id } } as unknown as Href)
-                    }
-                  />
-                </View>
-              );
-            })}
-          </SectionCard>
-        ) : null}
+        {owner.autotopup ? <SmsAutotopupCard auto={owner.autotopup} /> : null}
+
+        <SmsTariffCard priceCents={data.priceCents} />
 
         <SectionCard title="История">
           {(history.data ?? []).map((item, index) => (
@@ -212,27 +168,26 @@ export function SmsScreen() {
         </SectionCard>
       </ScrollView>
 
-      {WEB ? (
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ: пополнить баланс. */}
+      {data.serviceOn ? (
         <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
           <GradientButton label="Пополнить баланс" onPress={() => setTopupOpen(true)} />
         </View>
       ) : null}
 
-      {WEB ? (
-        <PickerSheet
-          visible={topupOpen}
-          title="Пополнить баланс"
-          items={TOPUP_AMOUNTS_CENTS.map((cents) => ({
-            id: String(cents),
-            label: euro(cents),
-            hint: `≈ ${Math.floor(cents / data.priceCents)} SMS`,
-            icon: Wallet,
-            color: t.accent,
-            onPress: () => void topup(cents),
-          }))}
-          onClose={() => setTopupOpen(false)}
-        />
-      ) : null}
+      <PickerSheet
+        visible={topupOpen}
+        title="Пополнить баланс"
+        items={TOPUP_AMOUNTS_CENTS.map((cents) => ({
+          id: String(cents),
+          label: euro(cents),
+          hint: `≈ ${Math.floor(cents / Math.max(1, data.priceCents))} SMS`,
+          icon: Wallet,
+          color: t.accent,
+          onPress: () => void topup(cents),
+        }))}
+        onClose={() => setTopupOpen(false)}
+      />
     </Screen>
   );
 }

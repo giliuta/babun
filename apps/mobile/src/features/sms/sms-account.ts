@@ -1,3 +1,4 @@
+import { Linking, Platform } from "react-native";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
@@ -451,6 +452,26 @@ export function useSetClientSmsOptOut() {
 
 /** Суммы пополнения — те же, что знает функция `sms-checkout`. */
 export const TOPUP_AMOUNTS_CENTS = [1000, 2500, 5000, 10000] as const;
+
+/** Куда Stripe вернёт человека, платившего из приложения: страница
+ *  «Оплата прошла» на сайте (без входа). */
+export const SMS_PAY_DONE_URL = "https://babun.app/pay/done";
+
+/** ОПЛАТА — ОТДЕЛЬНОЙ СТРАНИЦЕЙ STRIPE, НЕ ЧЕРЕЗ APPLE (владелец 30.09:
+ *  «кнопка должна вести на пополнение через отдельную страницу… оплату
+ *  полноценно, просто и легко для клиента»). На сайте страница открывается в
+ *  той же вкладке и возвращает в Кабинет → SMS; в приложении — в браузере,
+ *  а после возврата экран сам перечитывает баланс. */
+export async function openSmsCheckout(
+  amountCents: number,
+  autotopup?: { thresholdCents: number },
+): Promise<void> {
+  const web = Platform.OS === "web" && typeof window !== "undefined";
+  const back = web ? `${window.location.origin}/cabinet/sms` : SMS_PAY_DONE_URL;
+  const url = await startSmsTopup(amountCents, back, autotopup);
+  if (web) window.location.assign(url);
+  else await Linking.openURL(url);
+}
 
 /** Оплата на сайте: функция открывает Stripe Checkout и отдаёт адрес.
  *  `autotopup` — эта оплата ещё и сохраняет карту: дальше баланс сам

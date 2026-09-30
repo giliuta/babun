@@ -187,6 +187,9 @@ function RootNavigator() {
       {/* «Подтвердить / Отменить» запись (STORY-089): клиент открывает
           babun.app/r/<токен> из SMS без входа — там же, где «l». */}
       <Stack.Screen name="r" />
+      {/* «Оплата прошла» — возврат из Stripe после пополнения SMS из
+          приложения (STORY-089): без входа, как «l» и «r». */}
+      <Stack.Screen name="pay" />
     </Stack>
   );
 }
