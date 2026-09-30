@@ -11,10 +11,12 @@ import {
 import type { PhoneEntry } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import {
+  countryDialCode,
   dialPrefix,
   formatPhoneAsYouType,
   formatPhoneForDisplay,
   isDialOnly,
+  phoneParts,
 } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { FieldRow, RowActionButton } from "@/components/ui/card-rows";
@@ -53,6 +55,13 @@ const EMPTY_PHONES: PhoneEntry[] = [];
 // а не про номер, и у бизнес-клиента их не бывает.
 const EXTRA_LABELS = ["Мобильный", "Рабочий", "Домашний", "WhatsApp", "Другой"];
 
+/** Цифры, набранные без кода, — с кодом строки; свой «+» уважается. */
+function withCode(typed: string, code: string): string {
+  const v = typed.trim();
+  if (!v) return "";
+  return v.startsWith("+") ? v : `${code} ${v}`;
+}
+
 /** Значок подписи — тот же язык, что у остальных листов продукта. */
 const LABEL_ICONS: Record<string, LucideIcon> = {
   Мобильный: Smartphone,
@@ -76,7 +85,12 @@ export function ClientExtraContacts({
   compact = false,
   inline = false,
   teamId = null,
+  column,
 }: {
+  /** Подпись слева колонкой (блок «Клиент», вариант 10, 30.09): номера —
+   *  «Телефон 2», «Телефон 3» без ролей (роли — блок «Люди»), код страны
+   *  тихим серым, мессенджеры — тем же видом. */
+  column?: number;
   client: ContactHolder;
   /** Возвращает false, если запись не удалась: писатель массива номеров по
    *  этому ответу ОТКАТЫВАЕТ оптимистичное значение. */
@@ -206,7 +220,37 @@ export function ClientExtraContacts({
         WhatsApp на другом номере. Ярлык переключается тапом. */}
       {extras
         .filter((p) => p.id !== pending?.id)
-        .map((p) => (
+        .map((p, index) => {
+          if (column !== undefined) {
+            const parts = phoneParts(p.number, country);
+            return (
+              <FieldRow
+                noCopy={noCopy}
+                key={p.id}
+                // БЕЗ РОЛЕЙ (владелец 30.09: «жена — это люди, отдельный
+                // блок»): подпись — порядковый номер, роль в данных не
+                // трогаем и не показываем.
+                label={`Телефон ${index + 2}`}
+                column={column}
+                prefix={parts.code}
+                value={parts.rest}
+                placeholder="Номер"
+                separated
+                keyboardType="phone-pad"
+                tabular
+                live={draft}
+                readOnly={readOnly}
+                onSave={(v) => savePhone(p.id, withCode(v, parts.code), draft)}
+                onLongPress={
+                  !draft && !noCopy && p.number.trim()
+                    ? () => copy(formatPhoneAsYouType(p.number, country))
+                    : undefined
+                }
+                trailing={<PhoneChannelButton number={p.number} teamId={teamId} />}
+              />
+            );
+          }
+          return (
           <FieldRow
             noCopy={noCopy}
             key={p.id}
@@ -258,11 +302,27 @@ export function ClientExtraContacts({
               />
             }
           />
-        ))}
+          );
+        })}
 
       {/* Новый номер: то же поле, но ещё не в данных. Пустым уйдёт — исчезнет
         без следа, с цифрами — станет обычной строкой номера. */}
-      {pending ? (
+      {pending && column !== undefined ? (
+        <FieldRow
+          noCopy={noCopy}
+          label={`Телефон ${extras.filter((p) => p.id !== pending.id).length + 2}`}
+          column={column}
+          prefix={countryDialCode(country)}
+          value=""
+          placeholder="Номер"
+          separated
+          keyboardType="phone-pad"
+          tabular
+          autoFocus
+          onSave={(v) => commitPending(withCode(v, countryDialCode(country)))}
+          onEditEnd={() => setPendingRow(null)}
+        />
+      ) : pending ? (
         <FieldRow
             noCopy={noCopy}
           label={pending.label}
@@ -305,6 +365,46 @@ export function ClientExtraContacts({
         // печатать её каждый раз не нужно.
         const shown = saved || (addingField === f.id ? (f.prefix ?? "") : "");
         const url = f.url(typing?.id === f.id ? typing.value : shown);
+        if (column !== undefined) {
+          // WhatsApp — номер: код страны тем же тихим префиксом.
+          const wa = f.id === "whatsapp" ? phoneParts(saved, country) : null;
+          return (
+            <FieldRow
+              noCopy={noCopy}
+              key={f.id}
+              label={f.label}
+              column={column}
+              prefix={wa?.code}
+              value={wa ? wa.rest : shown}
+              placeholder={f.placeholder}
+              separated
+              keyboardType={f.keyboardType}
+              autoCapitalize={f.autoCapitalize}
+              tabular={f.id === "whatsapp"}
+              readOnly={readOnly}
+              autoFocus={addingField === f.id}
+              onType={(v) => setTyping({ id: f.id, value: wa ? withCode(v, wa.code) : v })}
+              onSave={(v) => update(f.patch(wa ? withCode(v, wa.code) : v))}
+              onEditEnd={() => {
+                setAddingField(null);
+                setTyping(null);
+              }}
+              trailing={
+                url ? (
+                  <RowActionButton
+                    icon={f.icon}
+                    color={f.color}
+                    label={`${f.label} · открыть`}
+                    onPress={() => {
+                      haptics.tap();
+                      void Linking.openURL(url);
+                    }}
+                  />
+                ) : null
+              }
+            />
+          );
+        }
         return (
           <FieldRow
             noCopy={noCopy}

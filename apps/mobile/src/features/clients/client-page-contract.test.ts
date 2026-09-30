@@ -67,13 +67,16 @@ describe("люди карточки — только у сохранённой �
       "блок людей перестал спрашивать право, сервер или первый ответ — «видно, но не всё» либо «пусто, пока несут»",
     );
     assert.match(people(), /const peopleRows = showLinks \?/);
+    assert.doesNotMatch(page(), /memberOf=\{/, "строка «чей он» снова в шапке клиента");
     assert.match(
       page(),
       // Между ними стоит слот заметки клиента (владелец 23.09).
       // «Люди и связи» — функция компании (STORY-088): выключена — ни людей,
       // ни «Входит в».
-      /memberOf=\{peopleOn \? people\.memberOfRows : undefined\}[\s\S]{0,400}?people=\{/,
-      "страница перестала ставить люди и строку «чей он» в шапку",
+      // С 30.09 строка «чей он» живёт в блоке «Люди», а не в шапке клиента
+      // (владелец: «роли в блоке клиента не назначаем»).
+      /people=\{\s*peopleOn && \(people\.peopleRows \|\| people\.onAddPerson \|\| people\.memberOfRows\) \? \(\s*<SectionCard title="Люди">\s*\{people\.memberOfRows\}/,
+      "строка «чей он» ушла из блока «Люди» или вернулась в шапку",
     );
   });
 
@@ -86,7 +89,7 @@ describe("люди карточки — только у сохранённой �
       src,
       // Между строками и дверью стоит «Все люди · N» — перечень длиннее
       // трёх уезжает на свою страницу (владелец 22.09).
-      /<SectionCard title="Люди">\s*\{people\.peopleRows\}[\s\S]{0,500}?\{people\.onAddPerson \? \(\s*<ChooseRow\s+compact\s+icon=\{UserPlus\}\s+label="Добавить человека"\s+onPress=\{people\.onAddPerson\}/,
+      /<SectionCard title="Люди">\s*\{people\.memberOfRows\}\s*\{people\.peopleRows\}[\s\S]{0,500}?\{people\.onAddPerson \? \(\s*<ChooseRow\s+compact\s+icon=\{UserPlus\}\s+label="Добавить человека"\s+onPress=\{people\.onAddPerson\}/,
       "людей снова нет своим блоком с дверью «Добавить человека»",
     );
     assert.match(

@@ -246,3 +246,33 @@ export function composePhone(typed: string, country: CountryCode): string {
   if (s.startsWith("+")) return s;
   return `${countryDialCode(country)} ${s}`;
 }
+
+/** КОД СТРАНЫ ОТДЕЛЬНО, ЦИФРЫ ОТДЕЛЬНО — для показа (владелец 30.09: «код
+ *  страны сдержанно, стильно, без флагов»). Блок «Клиент» печатает код тихим
+ *  серым перед номером: «+357 97 469 998», «+44 7700 900123». Код берётся у
+ *  самого номера; номер без «+» — страны компании. Пусто — код компании и
+ *  пустые цифры (строка нового номера). */
+export function phoneParts(
+  raw: string,
+  home: CountryCode = DEFAULT_COUNTRY,
+): { code: string; rest: string } {
+  const s = (raw ?? "").trim();
+  if (!s) return { code: countryDialCode(home), rest: "" };
+  const parsed = parsePhoneNumberFromString(s, home);
+  const country =
+    parsed?.country ?? (s.startsWith("+") ? phoneCountryOf(s, home) : home);
+  const code = parsed ? `+${parsed.countryCallingCode}` : countryDialCode(country);
+  const digits = s.replace(/\D/g, "");
+  const dial = code.slice(1);
+  const own = s.startsWith("+") && digits.startsWith(dial) ? digits.slice(dial.length) : digits;
+  if (country === "CY") {
+    const grouped = groupCyprusDigits(own);
+    if (grouped) return { code, rest: grouped };
+  }
+  // Международный вид без кода: с кодом впереди национальный «0» лишний
+  // («+44 7700 900123», а не «+44 07700…»).
+  const rest = parsed?.isPossible()
+    ? parsed.formatInternational().replace(/^\+\d+\s*/, "")
+    : new AsYouType(country).input(own);
+  return { code, rest };
+}

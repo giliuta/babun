@@ -26,7 +26,7 @@ import { Check } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import {
   formatPhoneAsYouType,
-  formatPhoneForDisplay,
+  phoneParts,
   tryToE164,
 } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
@@ -41,6 +41,7 @@ import { ClientExtraContacts } from "@/features/clients/ClientExtraContacts";
 import { usePhoneCountry } from "@/features/clients/use-phone-country";
 import { contactsLocked } from "@/features/clients/member-contacts";
 import { LockedPhoneRow } from "@/features/clients/LockedPhoneRow";
+import { CONTACT_COLUMN } from "@/features/clients/contact-column";
 
 /** Режим создания: то, что знает только композер экрана.
  *
@@ -104,7 +105,8 @@ export default function ClientHeader({
   const toast = useToast();
   const country = useDefaultCountry();
   const copy = useCopyValue();
-  const hasExtras = (client.phones?.length ?? 0) > 0;
+  // Код страны отдельно, цифры отдельно — для строки «Телефон».
+  const phone = phoneParts(client.phone, country);
   // Номер сотруднику ещё не открыт (30.09): на месте цифр — замок, правки
   // контактов нет, пока номер не открыт дверью.
   const locked = !draft && contactsLocked(client);
@@ -140,6 +142,8 @@ export default function ClientHeader({
           value={client.full_name}
           placeholder="Имя или компания"
           big
+          // Имя — заголовок блока крупно (вариант 10 владельца, 30.09).
+          title
           stacked
           live={!!draft}
           // Вставку «Мария +357 99…» черновик делит: номер уезжает в телефон,
@@ -183,32 +187,26 @@ export default function ClientHeader({
           <LockedPhoneRow client={client} />
         ) : (
         <FieldRow
-          compact
-          // «Телефон» — ИМЯ ПОЛЯ, а не тип номера: над цифрами оно называло
-          // очевидное. В Контактах Apple слова «телефон» нет вовсе — там сразу
-          // «мобильный»/«рабочий». Здесь подпись появляется, только когда
-          // номеров БОЛЬШЕ ОДНОГО: пока номер один, различать нечего.
-          label={draft ? dial.label : hasExtras ? "Основной" : ""}
-          hideLabel={!draft && !hasExtras}
-          onLabelPress={draft ? dial.openPicker : undefined}
-          // ПОКАЗЫВАЕМ ГРУППАМИ: «+357 97 469 998», а не «+35797469998».
-          // Форматирование жило только в черновике создания, а на сохранённой
-          // карточке номер печатался как лежит в базе — стена из одиннадцати
-          // цифр и была половиной ощущения «некрасиво» (2026-08-06).
-          // Сохранённый номер своей страны — без кода, как его диктуют
-          // («99 000101», владелец 22.09); в черновике — маска ввода.
-          value={
+          // СТРОКА «ТЕЛЕФОН» — ВАРИАНТ 10 ВЛАДЕЛЬЦА (30.09): подпись слева
+          // колонкой, код страны тихим серым, цифры тёмные — «Телефон | +357
+          // 97 469 998». Флагов нет («сдержанно, стильно»). В новом клиенте
+          // код нажимается — выбор страны; печатают только цифры.
+          label="Телефон"
+          column={CONTACT_COLUMN}
+          prefix={
             draft
-              ? dial.value
-              : formatPhoneForDisplay(client.phone, country)
+              ? dial.value.trim().startsWith("+")
+                ? undefined
+                : dial.code
+              : phone.code
           }
-          placeholder="Телефон"
-          readOnly={!draft && !!readOnly}
+          onPrefixPress={draft ? dial.openPicker : undefined}
+          value={draft ? dial.value : phone.rest}
+          placeholder="Номер"
           keyboardType="phone-pad"
           tabular
-          big
-          stacked
           live={!!draft}
+          readOnly={!draft && !!readOnly}
           autoFocus={!!draft && draft.focus !== "name"}
           // Долгое нажатие копирует номер — тем видом, каким он показан.
           // В черновике поле открыто для ввода, и нажатие принадлежит ему.
@@ -227,10 +225,12 @@ export default function ClientHeader({
               dial.onType(v);
               return;
             }
-            const next = v.trim();
-            // Разбираем номер кодом страны КОМПАНИИ: у греческой фирмы «99…»
-            // без «+» — греческий номер, а не кипрский. Номер со своим «+»
+            const typed = v.trim();
+            // Печатают цифры без кода — код строки добавляется сам; свой «+»
             // уважается как есть.
+            const next = typed ? (typed.startsWith("+") ? typed : `${phone.code} ${typed}`) : "";
+            // Разбираем номер кодом страны КОМПАНИИ: у греческой фирмы «99…»
+            // без «+» — греческий номер, а не кипрский.
             const e164 = next ? tryToE164(next, country) : null;
             // Молча отклонять нельзя: строка возвращала прежний номер, и
             // человек не понимал, почему правка «не сохранилась».
@@ -278,6 +278,7 @@ export default function ClientHeader({
           draft={!!draft}
           teamId={client.team_id ?? null}
           compact
+          column={CONTACT_COLUMN}
           readOnly={readOnly || locked}
           noCopy={noCopy}
         />

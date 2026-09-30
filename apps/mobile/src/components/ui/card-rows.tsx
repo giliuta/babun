@@ -269,12 +269,28 @@ export function FieldRow({
   onLongPress,
   noCopy,
   followValue,
+  column,
+  prefix,
+  onPrefixPress,
+  title,
   onSave,
 }: {
+  /** Имя крупным заголовком строки (блок «Клиент», вариант 10). */
+  title?: boolean;
   label: string;
   value: string;
   placeholder: string;
   separated?: boolean;
+  /** ПОДПИСЬ СЛЕВА КОЛОНКОЙ ЭТОЙ ШИРИНЫ (владелец 30.09, блок «Клиент»,
+   *  вариант 10): «Телефон | +357 97 469 998», как «Настройки» iPhone.
+   *  Значение — по левому краю своей колонки, линия между строками — от
+   *  колонки значений. Нет — прежние виды строки. */
+  column?: number;
+  /** Тихий префикс перед значением — код страны: «+357». Не входит в поле
+   *  ввода: печатают только цифры. */
+  prefix?: string;
+  /** Префикс нажимается (новый клиент: сменить страну номера). */
+  onPrefixPress?: () => void;
   /** `decimal-pad` — деньги; `numbers-and-punctuation` — деньги, которые
    *  бывают отрицательными (остаток счёта в долге): минуса на цифровой
    *  клавиатуре нет ни в одной раскладке. */
@@ -389,7 +405,8 @@ export function FieldRow({
   }, [value, editing, followValue]);
 
   const editingNow = !readOnly && (editing || !!live);
-  const valueSize = big ? 17 : 15;
+  const valueSize = title ? 22 : big ? 17 : 15;
+  const valueWeight = title ? "700" : "600";
   // Буквы в номер не попадают НИ ОДНИМ путём — ни вставкой, ни диктовкой,
   // ни внешней клавиатурой. Чистка живёт в примитиве, а не в каждом вызове:
   // забыть её на новой строке-номере невозможно.
@@ -417,6 +434,120 @@ export function FieldRow({
     },
     [],
   );
+
+  if (column !== undefined) {
+    const prefixNode = prefix ? (
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={{ fontSize: 17, color: t.muted, fontVariant: ["tabular-nums"], marginRight: 6 }}
+      >
+        {prefix}
+      </Text>
+    ) : null;
+    return (
+      <View>
+        {separated ? (
+          <View style={{ height: 1, marginLeft: 16 + column, backgroundColor: t.separator }} />
+        ) : null}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            minHeight: 52,
+            paddingLeft: 16,
+            paddingRight: trailing ? 8 : 16,
+            paddingVertical: 6,
+          }}
+        >
+          <Text
+            maxFontSizeMultiplier={1.2}
+            numberOfLines={1}
+            style={{ width: column, fontSize: 15, color: t.caption, paddingRight: 8 }}
+          >
+            {label}
+          </Text>
+          {prefixNode && onPrefixPress && !readOnly ? (
+            <Pressable
+              onPress={onPrefixPress}
+              accessibilityRole="button"
+              accessibilityLabel={`Код страны ${prefix}`}
+              accessibilityHint="Нажмите, чтобы сменить страну"
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 4 }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            >
+              {prefixNode}
+            </Pressable>
+          ) : (
+            prefixNode
+          )}
+          <Pressable
+            onPress={
+              readOnly
+                ? undefined
+                : editingNow
+                  ? () => ownInput.current?.focus()
+                  : () => setEditing(true)
+            }
+            onLongPress={editingNow ? undefined : onLongPress}
+            disabled={!!readOnly && !onLongPress}
+            accessible={!editingNow}
+            accessibilityRole={editingNow ? "none" : readOnly ? "text" : "button"}
+            accessibilityLabel={value ? `${label}, ${prefix ? `${prefix} ` : ""}${value}` : label}
+            accessibilityHint={editingNow || readOnly ? undefined : "Нажмите, чтобы изменить"}
+            style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.6 : 1 })}
+          >
+            {editingNow ? (
+              <TextInput
+                ref={setInput}
+                autoFocus={autoFocus || editing}
+                value={text}
+                onChangeText={(raw) => {
+                  const v = clean(raw);
+                  setText(v);
+                  onType?.(v);
+                  if (live) onSave(v);
+                }}
+                onBlur={commit}
+                onSubmitEditing={commit}
+                blurOnSubmit={!multiline}
+                placeholder={addLabel ?? placeholder}
+                placeholderTextColor={addLabel ? t.accent : t.placeholder}
+                selectionColor={t.accent}
+                keyboardAppearance="light"
+                keyboardType={keyboardType}
+                selectTextOnFocus={selectOnFocus}
+                contextMenuHidden={noCopy}
+                autoCapitalize={autoCapitalize}
+                autoCorrect={false}
+                spellCheck={false}
+                accessibilityLabel={label}
+                maxFontSizeMultiplier={1.2}
+                style={{
+                  padding: 0,
+                  fontSize: 17,
+                  color: inputColor ?? t.ink,
+                  fontVariant: tabular ? ["tabular-nums"] : undefined,
+                }}
+              />
+            ) : (
+              <Text
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={1}
+                style={{
+                  fontSize: 17,
+                  color: value ? (valueColor ?? t.ink) : addLabel ? t.accent : t.placeholder,
+                  fontVariant: tabular ? ["tabular-nums"] : undefined,
+                }}
+              >
+                {value || addLabel || placeholder}
+              </Text>
+            )}
+          </Pressable>
+          {trailing}
+        </View>
+      </View>
+    );
+  }
 
   if (stacked) {
     return (
@@ -568,7 +699,7 @@ export function FieldRow({
               style={{
                 padding: 0,
                 fontSize: valueSize,
-                fontWeight: "600",
+                fontWeight: valueWeight,
                 color: inputColor ?? t.ink,
                 fontVariant: tabular ? ["tabular-nums"] : undefined,
               }}
@@ -579,7 +710,7 @@ export function FieldRow({
               numberOfLines={multiline ? 3 : 1}
               style={{
                 fontSize: valueSize,
-                fontWeight: "600",
+                fontWeight: valueWeight,
                 color: value
                   ? (valueColor ?? t.ink)
                   : addLabel

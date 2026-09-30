@@ -83,9 +83,12 @@ describe("ввод номера: страна подписью, цифры в п
   });
   test("номер нового клиента набирается с выбором страны", () => {
     const header = read("ClientHeader.tsx");
-    assert.match(header, /label=\{draft \? dial\.label/);
-    assert.match(header, /onLabelPress=\{draft \? dial\.openPicker : undefined\}/);
+    // С 30.09 (вариант 10 владельца) страна — не подписью с флагом, а тихим
+    // кодом перед цифрами; тап по коду открывает выбор страны.
+    assert.match(header, /:\s*dial\.code/);
+    assert.match(header, /onPrefixPress=\{draft \? dial\.openPicker : undefined\}/);
     assert.match(header, /dial\.onType\(v\)/);
+    assert.doesNotMatch(header, /countryFlag/);
   });
 });
 

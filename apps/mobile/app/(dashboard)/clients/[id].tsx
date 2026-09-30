@@ -730,7 +730,9 @@ export function ClientDetailScreen() {
           // Без передачи (владелец 30.09): клиента чужой компании не
           // скопировать ни долгим нажатием, ни из поля.
           noCopy={!isDraft && !caps.export}
-          memberOf={peopleOn ? people.memberOfRows : undefined}
+          // «Входит в карточку Павла · жена» — это связь, а связи и роли живут
+          // в блоке «Люди» (владелец 30.09: «роли в блоке клиента не
+          // назначаем»). В шапке клиента — только он сам и его контакты.
           // Заметка клиента — вторым блоком, под «Клиентом» (владелец 23.09:
           // «сначала идёт блок „Клиент", потом заметка клиента»).
           note={
@@ -739,8 +741,9 @@ export function ClientDetailScreen() {
             ) : null
           }
           people={
-            peopleOn && (people.peopleRows || people.onAddPerson) ? (
+            peopleOn && (people.peopleRows || people.onAddPerson || people.memberOfRows) ? (
               <SectionCard title="Люди">
+                {people.memberOfRows}
                 {people.peopleRows}
                 {people.peopleHidden > 0 ? (
                   <NavRow

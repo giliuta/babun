@@ -84,6 +84,8 @@ export function usePhoneCountry({
 
   return {
     label: `${countryFlag(country)} ${COUNTRY_NAMES_RU[country] ?? country} ${countryDialCode(country)}`,
+    /** Код страны номера — тихий префикс строки «Телефон» (30.09). */
+    code: countryDialCode(country),
     value: ownCode ? nationalPart(phone, country) : formatPhoneAsYouType(phone, home),
     onType,
     openPicker: () => {
