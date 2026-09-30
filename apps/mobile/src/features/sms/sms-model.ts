@@ -269,6 +269,26 @@ export function smsErrorText(error: unknown): string {
   return message || "Не удалось отправить";
 }
 
+/** Почему не открылась оплата — словами. `code` — поле `error` ответа
+ *  функции `sms-checkout`; `offline` — запрос не дошёл до сервера. Раньше
+ *  человек видел «Edge Function returned a non-2xx status code». */
+export function checkoutErrorText(code: string | null | undefined, offline = false): string {
+  if (offline) return "Нет связи — проверьте интернет";
+  switch (code) {
+    case "owner_only":
+      return "Пополнять баланс может только владелец";
+    case "bad_amount":
+      return "Такой суммы нет";
+    case "unauthorized":
+      return "Войдите заново";
+    case "stripe_not_configured":
+    case "stripe_failed":
+      return "Оплата сейчас недоступна — попробуйте позже";
+    default:
+      return "Попробуйте ещё раз";
+  }
+}
+
 export type SmsSettingsPatch = Partial<{
   enabled: boolean;
   team_ids: string[];

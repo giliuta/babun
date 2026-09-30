@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   applyPatch,
   balanceWarning,
+  checkoutErrorText,
   FROZEN_WORDS,
   parseSmsAccount,
   parseSmsHistory,
@@ -151,6 +152,15 @@ describe("ответ базы", () => {
     assert.equal(parseSmsAccount({ frozen: false }).owner, null, "сотруднику ни денег, ни тревог");
     assert.equal(smsErrorText(new Error("sms:frozen")), FROZEN_WORDS);
     assert.equal(smsErrorText(new Error("sms:autotopup_card")), "Сначала сохраните карту — оплатой с автопополнением");
+  });
+
+  test("оплата не открылась — словами, без «Edge Function returned…»", () => {
+    assert.equal(checkoutErrorText("stripe_failed"), "Оплата сейчас недоступна — попробуйте позже");
+    assert.equal(checkoutErrorText("stripe_not_configured"), "Оплата сейчас недоступна — попробуйте позже");
+    assert.equal(checkoutErrorText("owner_only"), "Пополнять баланс может только владелец");
+    assert.equal(checkoutErrorText("bad_amount"), "Такой суммы нет");
+    assert.equal(checkoutErrorText(null, true), "Нет связи — проверьте интернет");
+    assert.equal(checkoutErrorText(undefined), "Попробуйте ещё раз");
   });
 
   test("отказы базы — словами", () => {

@@ -6,6 +6,7 @@ import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/features/settings/tenant";
 import {
   applyPatch,
+  checkoutErrorText,
   parseSmsAccount,
   parseSmsHistory,
   parseSmsRecordLog,
@@ -488,8 +489,23 @@ export async function startSmsTopup(
       ...(autotopup ? { autotopup: { threshold_cents: autotopup.thresholdCents } } : null),
     },
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(await checkoutFailure(error));
   const url = (data as { url?: string } | null)?.url;
-  if (!url) throw new Error("Оплата не открылась");
+  if (!url) throw new Error(checkoutErrorText(null));
   return url;
+}
+
+/** Отказ функции оплаты словами: код лежит в теле ответа (`{ error }`),
+ *  а сообщение самого клиента — «Edge Function returned a non-2xx…». */
+async function checkoutFailure(error: unknown): Promise<string> {
+  const e = error as { name?: string; context?: { clone?: () => { json: () => Promise<unknown> } } };
+  if (e.name === "FunctionsFetchError") return checkoutErrorText(null, true);
+  let code: string | null = null;
+  try {
+    const body = (await e.context?.clone?.().json()) as { error?: unknown } | undefined;
+    if (typeof body?.error === "string") code = body.error;
+  } catch {
+    // тело не JSON — общие слова
+  }
+  return checkoutErrorText(code);
 }
