@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import type { Client } from "@babun/shared/local/clients";
 import { useToast } from "@/components/ui/Toast";
 import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useMirror } from "@/features/access/mirror/mirror-state";
 import { memberClientContacts } from "@/features/clients/queries";
 import { rememberContacts } from "@/features/clients/revealed-contacts";
 import { haptics } from "@/lib/haptics";
@@ -19,12 +20,19 @@ export function useOpenMemberContacts() {
   const activeTenantId = useTenantId();
   const tenantId = scope?.tenantId ?? activeTenantId;
   const [busy, setBusy] = useState(false);
+  // «Посмотреть его глазами»: запись из зеркала запрещена, а дверь номера
+  // пишет журнал — не зовём её и говорим, почему.
+  const mirrored = useMirror() !== null;
   // Двойной тап не тратит лимит дважды: второй ждёт первого.
   const inFlight = useRef(false);
 
   const open = useCallback(
     async (client: Pick<Client, "id">): Promise<boolean> => {
       if (!tenantId || inFlight.current) return false;
+      if (mirrored) {
+        toast("В просмотре номер не открывается", "info");
+        return false;
+      }
       inFlight.current = true;
       setBusy(true);
       try {
@@ -54,7 +62,7 @@ export function useOpenMemberContacts() {
         setBusy(false);
       }
     },
-    [scope, tenantId, toast],
+    [scope, tenantId, toast, mirrored],
   );
 
   return { open, busy };

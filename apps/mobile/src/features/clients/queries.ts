@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { Linking } from "react-native";
 import { useMirror } from "@/features/access/mirror/mirror-state";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -74,6 +74,7 @@ import {
 import { masterClientJsonToClient } from "@/features/settings/master-reference";
 import { isPhoneTakenError } from "@/features/clients/client-create-errors";
 import { parseClientBlocks } from "@/features/clients/client-block-access";
+import { mirrorMemberClient } from "@/features/access/mirror/mirror-client";
 import {
   contactsHiddenOf,
   parseMemberContacts,
@@ -326,51 +327,29 @@ export async function listMemberClients(
 // нельзя: непомеченный привязанный клиент выгрузил бы удаление активной
 // компании под заголовком другой.
 
-// ЗЕРКАЛО ГАСИТ КОНТАКТЫ НА КЛИЕНТЕ (STORY-083).
+// ЗЕРКАЛО ДОВОДИТ СТРОКУ ДО ТОЙ, ЧТО ПОЛУЧИЛ БЫ СОТРУДНИК (STORY-083; с
+// 30.09 — по блокам карточки, `mirrorMemberClient`, 015).
 //
 // В предпросмотре строки приходят с сервера по токену ВЛАДЕЛЬЦА, а он видит
-// всё: сервер не знает, что владелец «смотрит чужими глазами». Значит уровень
-// «Телефоны и контакты: Скрыт» в зеркале не сработал бы — и предпросмотр
-// соврал бы ровно там, где владелец боится сильнее всего.
-//
-// Здесь контакты вырезаются теми же полями, что вырезает сервер настоящему
-// сотруднику (`client_without_contacts`). Только для показа: запись из зеркала
-// невозможна — это чужие глаза, а не чужие руки.
-function clientWithoutContacts(row: Client): Client {
-  // ПУСТАЯ СТРОКА, А НЕ `null`. Поля контактов объявлены `string` (кроме
-  // `phone_e164`), и подстановка `null` в них — ложь типу: экран карточки
-  // зовёт `.trim()` на почте и мессенджерах без проверки, и в зеркале это
-  // падало бы у владельца на ровном месте. Гасим тем же значением, каким
-  // рождается пустой клиент.
-  return {
-    ...row,
-    phone: "",
-    phone_e164: null,
-    whatsapp_phone: "",
-    email: "",
-    telegram_username: "",
-    instagram_username: "",
-    phones: [],
-  };
-}
-
-function withoutContacts(rows: Client[]): Client[] {
-  return rows.map(clientWithoutContacts);
-}
-
-/** Тот же покров на ОДНОГО клиента — для карточки. Без него список молчал, а
- *  карточка того же человека показывала телефон, почту и мессенджеры: экран
- *  открывается тем же зеркалом, а `select` у него был свой. */
-function maybeWithoutContacts(client: Client | null | undefined): Client | null {
-  if (!client) return client ?? null;
-  return clientWithoutContacts(client);
-}
+// всё: сервер не знает, что владелец «смотрит чужими глазами». Раньше здесь
+// гасились только контакты; теперь — ещё и поля закрытых блоков, а `blocks` и
+// причина скрытого номера ставятся по карте зеркала, чтобы гейты карточки
+// (`card-access.ts`) показали ровно то, что увидит сотрудник. Только для
+// показа: запись из зеркала невозможна — это чужие глаза, а не чужие руки.
 
 export function useClients() {
   const scope = useQueryScope();
   const tenantId = scope.tenantId;
-  // В зеркале контакты гасит экран: сервер отдал их владельцу.
-  const hideContacts = useMirror() !== null && scope.kind === "member" && !scope.contacts;
+  // В ЗЕРКАЛЕ («Посмотреть его глазами») строки пришли по токену ВЛАДЕЛЬЦА
+  // целиком. Экран доводит их до того, что отдал бы сервер сотруднику:
+  // контакты пустые всегда, поля закрытых блоков пустые, `blocks` и причина
+  // скрытого номера — по карте зеркала (015, 30.09). Иначе владелец видел бы
+  // заметки, объекты и долг, которых сотрудник не получит.
+  const mirrorMap = useMirroredMemberMap(scope.kind);
+  const mirrorRows = useCallback(
+    (rows: Client[]) => (mirrorMap ? rows.map((row) => mirrorMemberClient(row, mirrorMap)) : rows),
+    [mirrorMap],
+  );
   return useQuery({
     // У своей компании и у клиента записи ключ ТОТ ЖЕ, что был, — его греет
     // прогрев компании (`tenant-prefetch-plan`). У работодателя третий
@@ -387,7 +366,7 @@ export function useClients() {
       }
       return listClientsCached(tenantBoundClient(tenantId as string), tenantId as string);
     },
-    select: hideContacts ? withoutContacts : undefined,
+    select: mirrorMap ? mirrorRows : undefined,
   });
 }
 
@@ -395,9 +374,14 @@ export function useClient(id: string) {
   const scope = useQueryScope();
   const tenantId = scope.tenantId;
   const qc = useQueryClient();
-  // Тот же уровень, что и у списка: карточка — это тот же клиент, открытый
-  // крупнее, и прятать контакты только в списке значит не прятать их вовсе.
-  const hideContacts = useMirror() !== null && scope.kind === "member" && !scope.contacts;
+  // Тот же покров зеркала, что у списка: карточка — это тот же клиент,
+  // открытый крупнее, и прятать только в списке значит не прятать вовсе.
+  const mirrorMap = useMirroredMemberMap(scope.kind);
+  const mirrorOne = useCallback(
+    (client: Client | null): Client | null =>
+      client && mirrorMap ? mirrorMemberClient(client, mirrorMap) : client,
+    [mirrorMap],
+  );
   return useQuery({
     queryKey: sourceClientQueryKey(id, tenantId, scope.view),
     enabled: !!tenantId && !!id && scope.ready,
@@ -411,7 +395,7 @@ export function useClient(id: string) {
       // Подстановка берёт строку из КЭША списка, а покров списка живёт в
       // `select` и кэш не меняет: без этого карточка мигала бы настоящим
       // телефоном до ответа сервера.
-      return hideContacts ? (maybeWithoutContacts(found) ?? undefined) : found;
+      return found && mirrorMap ? mirrorMemberClient(found, mirrorMap) : found;
     },
     queryFn: async () => {
       if (scope.kind === "record") {
@@ -441,8 +425,15 @@ export function useClient(id: string) {
         throw error;
       }
     },
-    select: hideContacts ? maybeWithoutContacts : undefined,
+    select: mirrorMap ? mirrorOne : undefined,
   });
+}
+
+/** Карта прав зеркала — только когда владелец смотрит глазами сотрудника на
+ *  клиентов компании-работодателя; иначе `null` и строки как есть. */
+function useMirroredMemberMap(kind: string) {
+  const mirror = useMirror();
+  return mirror && kind === "member" ? mirror.map : null;
 }
 
 /** ПРАВКА КЛИЕНТА ИСТОЧНИКА. Своя компания идёт через кэш и очередь (а когда
