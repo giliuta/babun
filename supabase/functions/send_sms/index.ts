@@ -21,7 +21,7 @@
 // сообщения ждут, пока ключи не появятся.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
-import { analyzeSmsEncoding } from "./encoding.ts";
+import { analyzeSmsEncoding, MAX_SMS_PARTS, stripEmoji } from "./encoding.ts";
 import { renderSms, type SmsRenderVars } from "./render.ts";
 
 const BATCH = 20;
@@ -165,7 +165,9 @@ async function mark(sb: any, id: string, status: "sent" | "failed", sid: string 
 
 // deno-lint-ignore no-explicit-any
 async function deliver(sb: any, tw: Twilio, row: Claimed): Promise<"sent" | "failed" | "blocked"> {
-  const text = row.body?.trim() || renderSms(row.template_body, row.vars ?? {});
+  // Эмодзи клиенту не уходят (владелец 30.09) — даже из старой сборки или
+  // шаблона, сохранённого до запрета: тем же правилом, что режет редактор.
+  const text = stripEmoji(row.body?.trim() || renderSms(row.template_body, row.vars ?? {})).trim();
   if (!text) {
     await mark(sb, row.id, "failed", null, "template", "Шаблон удалён или не заполнился полями записи");
     return "failed";
@@ -184,6 +186,13 @@ async function deliver(sb: any, tw: Twilio, row: Claimed): Promise<"sent" | "fai
     return "failed";
   }
   const segments = analyzeSmsEncoding(text).segments;
+  // Длиннее трёх SMS не отправляем и не списываем: в тарифе «длиннее
+  // нельзя». Редактор до такого не пускает; сюда доходит только текст, который
+  // раздули поля записи (длинный адрес) или старая сборка.
+  if (segments > MAX_SMS_PARTS) {
+    await mark(sb, row.id, "failed", null, "too_long", `Текст длиннее ${MAX_SMS_PARTS} SMS`);
+    return "failed";
+  }
   const { data: charge, error: chargeError } = await sb.rpc("sms_charge", {
     p_id: row.id,
     p_body: text,

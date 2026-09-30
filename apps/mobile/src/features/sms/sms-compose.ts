@@ -1,6 +1,6 @@
 import { money } from "@babun/shared/common/utils/money";
 import { renderTemplate, templateTokenKeys } from "@babun/shared/local/sms-templates";
-import { analyzeSmsEncoding } from "@babun/shared/local/sms-encoding";
+import { analyzeSmsEncoding, MAX_SMS_PARTS, stripEmoji } from "@babun/shared/local/sms-encoding";
 
 // SMS ПО ШАБЛОНУ СО СВОЕГО ТЕЛЕФОНА (STORY-089, волна 1).
 //
@@ -173,14 +173,10 @@ export function smsUrlWithBody(url: string, body: string, os: string): string {
 // тремя строками: до 70 знаков — 1 SMS, до 134 — 2, до 201 — 3; длиннее
 // набрать нельзя. Эмодзи в поле не попадают вовсе.
 
-/** Больше скольких SMS одно сообщение не бывает. */
-export const MAX_SMS_PARTS = 3;
-
-/** Эмодзи и их склейки: знаки вне основной плоскости (пары суррогатов),
- *  значки U+2600–U+27BF, селектор вида и соединитель. */
-const EMOJI = /[\uD800-\uDFFF]|[☀-➿]|️|‍/g;
-
-export const stripEmoji = (text: string): string => text.replace(EMOJI, "");
+// Само правило — в общем счёте частей (`sms-encoding`): его копию у сервера
+// (`send_sms/encoding.ts`) держит тот же тест сверки, и сервер отказывает
+// тексту длиннее трёх SMS, ничего не списав.
+export { MAX_SMS_PARTS, stripEmoji };
 
 /** Сколько SMS займёт текст (как считает Twilio). */
 export const smsPartsOf = (text: string): number => analyzeSmsEncoding(text).segments;

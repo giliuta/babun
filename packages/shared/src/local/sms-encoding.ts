@@ -125,3 +125,15 @@ export function analyzeSmsEncoding(body: string): SmsEncodingInfo {
     remaining,
   };
 }
+
+/** Longest SMS we send: 3 parts (owner 30.09: «3 SMS — длиннее нельзя»).
+ *  The editor stops typing at it; the server refuses a longer text before
+ *  charging anything. */
+export const MAX_SMS_PARTS = 3;
+
+/** Emoji and their glue: surrogate pairs (most emoji), U+2600–U+27BF symbols,
+ *  the VS16 selector and ZWJ. Owner 30.09: «эмодзи мы вообще не будем
+ *  использовать». Letters of any alphabet and € stay. */
+const EMOJI = /[\uD800-\uDFFF]|[\u2600-\u27BF]|\uFE0F|\u200D/g;
+
+export const stripEmoji = (text: string): string => text.replace(EMOJI, "");

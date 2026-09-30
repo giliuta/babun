@@ -3,9 +3,13 @@ import { describe, test } from "node:test";
 
 import { money } from "@babun/shared/common/utils/money";
 import { analyzeSmsEncoding } from "@babun/shared/local/sms-encoding";
-import { analyzeSmsEncoding as serverEncoding } from "../../../../../supabase/functions/send_sms/encoding";
+import {
+  analyzeSmsEncoding as serverEncoding,
+  MAX_SMS_PARTS as SERVER_MAX_PARTS,
+  stripEmoji as serverStripEmoji,
+} from "../../../../../supabase/functions/send_sms/encoding";
 import { formatMoney, renderSms } from "../../../../../supabase/functions/send_sms/render";
-import { fillTemplate, smsVars } from "./sms-compose";
+import { fillTemplate, MAX_SMS_PARTS, smsVars, stripEmoji } from "./sms-compose";
 
 // СЕРВЕР ОБЯЗАН ПИСАТЬ КЛИЕНТУ ТО ЖЕ, ЧТО ВЛАДЕЛЕЦ ВИДИТ В ЛИСТЕ «SMS»
 // (STORY-089). Функция `send_sms` не может импортировать общий код — её
@@ -89,5 +93,21 @@ describe("деньги и части — те же", () => {
     }
     // Эмодзи на стыке частей не рвётся: 66 единиц + эмодзи — уже вторая часть.
     assert.equal(analyzeSmsEncoding("я".repeat(66) + "😀" + "я".repeat(10)).segments, 2);
+  });
+
+  // Сервер режет то же, что редактор: эмодзи клиенту не уходят, а текст
+  // длиннее трёх SMS не отправляется и не списывается (send_sms/deliver).
+  test("эмодзи и предел в 3 SMS — одним правилом", () => {
+    assert.equal(SERVER_MAX_PARTS, MAX_SMS_PARTS);
+    const samples = [
+      "Ждём вас 😀👍 завтра ☀️",
+      "Мастер 👨‍🔧 приедет в 10:00 ✓",
+      "Цена €40, адрес: Пафос — «Tombs of the Kings» №12",
+      "Hello {x} [y] ~ ^ |",
+      "",
+    ];
+    for (const text of samples) assert.equal(serverStripEmoji(text), stripEmoji(text), text);
+    assert.equal(serverStripEmoji("Мастер 👨‍🔧 приедет"), "Мастер  приедет");
+    assert.equal(serverStripEmoji("Цена €40 — «Пафос» №12"), "Цена €40 — «Пафос» №12", "буквы и € остаются");
   });
 });
