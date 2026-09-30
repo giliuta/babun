@@ -37,10 +37,12 @@ const REGISTRY: AccessBlock[] = [
 
 const TEAM = "team-1";
 
-const rowsFor = (levels: Record<string, AccessLevel>) => {
+const allRowsFor = (levels: Record<string, AccessLevel>) => {
   const levelOf = (b: AccessBlock) => levels[b.key] ?? b.levels[0] ?? "off";
   return rightsSections(REGISTRY, levelOf, TEAM).flatMap((section) => section.rows);
 };
+/** Живые строки — серые (главный блок скрыт) не считаются. */
+const rowsFor = (levels: Record<string, AccessLevel>) => allRowsFor(levels).filter((row) => !row.foldedBy);
 const rowOf = (levels: Record<string, AccessLevel>, key: string) =>
   rowsFor(levels).find((row) => row.block.key === key);
 const changesOf = (key: string, level: AccessLevel, levels: Record<string, AccessLevel>) => {
@@ -53,9 +55,13 @@ const asMap = (changes: ReturnType<typeof levelChanges>) =>
   Object.fromEntries((changes ?? []).map((change) => [change.block, change.level]));
 
 describe("цепочка блоков записи", () => {
-  test("«Записи клиентов: Скрыты» — блоков записи нет, даже «Времени»", () => {
+  test("«Записи клиентов: Скрыты» — живых блоков записи нет, все стоят серыми", () => {
     const keys = rowsFor({ "calendar.records": "off" }).map((row) => row.block.key);
     assert.deepEqual(keys, ["calendar.records"]);
+    const grey = allRowsFor({ "calendar.records": "off" }).filter((row) => row.foldedBy);
+    assert.ok(grey.length > 0);
+    assert.ok(grey.every((row) => row.foldedBy === "calendar.records"));
+    assert.ok(grey.some((row) => row.block.key === "record.when"), "«Время» пропало, а не посерело");
   });
 
   test("«Услуги»: три ступени из двух прав", () => {
@@ -69,7 +75,10 @@ describe("цепочка блоков записи", () => {
     assert.deepEqual(rowOf({ ...open, "record.services": "read" }, "record.services")?.block.levels, ["off", "read", "write"]);
   });
 
-  test("скрыты услуги — строк «Цены» и «Оплата» нет; скрыты цены — нет «Оплаты»", () => {
+  test("скрыты услуги — «Цены» и «Оплата» серые; скрыты цены — серая «Оплата»", () => {
+    const grey = allRowsFor({ "calendar.records": "read", "record.amount": "read" }).filter((r) => r.foldedBy);
+    assert.equal(grey.find((r) => r.block.key === "record.amount")?.foldedBy, "record.services");
+    assert.equal(grey.find((r) => r.block.key === "record.payment")?.foldedBy, "record.services");
     const noServices = rowsFor({ "calendar.records": "read", "record.amount": "read", "record.payment": "read" }).map((r) => r.block.key);
     assert.equal(noServices.includes("record.amount"), false);
     assert.equal(noServices.includes("record.payment"), false);

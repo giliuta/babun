@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { AccessBlock, AccessLevel } from "../access-map";
+import { dependantResets } from "./master-draft";
 import { viewSections } from "./rights-view-sections";
 
 // СТРАНИЦЫ РАЗДЕЛОВ ДОСТУПА — БЛОКАМИ (владелец 30.09). Право стоит там, куда
@@ -29,6 +30,7 @@ const REGISTRY: AccessBlock[] = [
   block("record.team", ["read", "write"], 31),
   block("record.note", ["off", "read", "write"], 38),
   block("event.label", ["off", "read", "write"], 61),
+  block("record.label", ["off", "read", "write"], 32),
   block("event.type", ["off", "read", "write"], 64),
   block("calendar.day_labels", ["off", "read", "write"], 60),
   block("calendar.schedule", ["off", "read", "write"], 75),
@@ -48,7 +50,11 @@ const page = (group: "calendar" | "finance" | "record", open: Record<string, Acc
     onlyCalendar: true,
     onlyCompany: false,
     group,
-  }).map((section) => ({ title: section.title, keys: section.rows.map((row) => row.block.key) }));
+  }).map((section) => ({
+    title: section.title,
+    // Живые строки — серые (главный блок скрыт) отдельно не считаются.
+    keys: section.rows.filter((row) => !row.foldedBy).map((row) => row.block.key),
+  })).filter((section) => section.keys.length > 0);
 
 describe("страница раздела доступа — блоками владельца", () => {
   test("«Календарь»: «Главное» с деньгами, «Записи», «Настройки команды» — строками шестерёнки", () => {
@@ -78,6 +84,32 @@ describe("страница раздела доступа — блоками вл
 
   test("отдельного раздела «Запись» больше нет — его блоки в «Календаре»", () => {
     assert.deepEqual(page("record"), []);
+  });
+
+  test("«Метка дня: Скрыта» — метки записи и события серые, открыта — живые", () => {
+    const rows = (open: Record<string, AccessLevel>) =>
+      viewSections({
+        blocks: REGISTRY,
+        levelOf: (b) => open[b.key] ?? (b.levels[0] as AccessLevel),
+        activeId: "team-1",
+        onlyCalendar: true,
+        onlyCompany: false,
+        group: "calendar",
+      }).flatMap((section) => section.rows);
+    const base = { "calendar.records": "read", "calendar.events": "read", "record.label": "read", "event.label": "read" } as const;
+    const hidden = rows({ ...base, "calendar.day_labels": "off" });
+    assert.equal(hidden.find((r) => r.block.key === "record.label")?.foldedBy, "calendar.day_labels");
+    assert.equal(hidden.find((r) => r.block.key === "event.label")?.foldedBy, "calendar.day_labels");
+    const open = rows({ ...base, "calendar.day_labels": "read" });
+    assert.equal(open.find((r) => r.block.key === "record.label")?.foldedBy, undefined);
+  });
+
+  test("скрыли «Метку дня» — метка записи не стирается, откроют — вернётся", () => {
+    const day = REGISTRY.find((b) => b.key === "calendar.day_labels")!;
+    assert.deepEqual(dependantResets(REGISTRY, day, "off", "team-1"), []);
+    // А «Записи клиентов» свои блоки по-прежнему сбрасывают.
+    const records = REGISTRY.find((b) => b.key === "calendar.records")!;
+    assert.ok(dependantResets(REGISTRY, records, "off", "team-1").some((c) => c.block === "record.label"));
   });
 
   test("«Финансы»: «Доходов и расходов» здесь нет — они в «Календаре»", () => {

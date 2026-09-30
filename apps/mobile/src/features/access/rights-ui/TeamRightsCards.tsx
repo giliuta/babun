@@ -64,6 +64,12 @@ export function TeamRightsCards({
   const sheetRow = sections.flatMap((section) => section.rows).find((row) => row.block.key === sheetKey) ?? null;
   const sheetBlock = sheetRow?.block ?? blocks.find((block) => block.key === sheetKey) ?? null;
   const composite = sheetBlock ? compositeRow(sheetBlock.key) : undefined;
+  /** Серая строка — почему не меняется: главный блок скрыт. */
+  const foldedText = (parentKey: string | undefined) => {
+    if (!parentKey) return undefined;
+    const parent = blocks.find((block) => block.key === parentKey);
+    return `Сначала откройте «${parent ? rightTitle(parent) : "главный блок"}»`;
+  };
   const previewLevels = composite
     ? (chosen: AccessLevel) => ({
         ...levels,
@@ -95,12 +101,15 @@ export function TeamRightsCards({
           <SectionCard title={section.title || undefined} padded={false}>
             {section.rows.map((row, i) => {
               const look = rightLook(row.block.key);
-              const closed = isClosedStep(row.level);
+              const folded = !!row.foldedBy;
+              const closed = folded || isClosedStep(row.level);
               const danger = !closed && stepDanger(row.block, row.level) !== null;
               return (
                 <Fragment key={row.block.key}>
                   {i > 0 ? <Divider inset={ROW_SEAM_INSET} /> : null}
-                  <View style={{ opacity: busyKey === row.block.key ? 0.5 : 1 }}>
+                  {/* Серая — главный блок скрыт: видно, что здесь есть и что
+                      стоит, но не меняется, пока его не откроют. */}
+                  <View style={{ opacity: folded ? 0.4 : busyKey === row.block.key ? 0.5 : 1 }}>
                     <SettingsRow
                       tile={look.tile}
                       icon={look.icon}
@@ -131,7 +140,7 @@ export function TeamRightsCards({
         busy={busyKey !== null}
         rowLevel={composite ? sheetRow?.level : undefined}
         previewLevels={previewLevels}
-        locked={sheetRow?.locked}
+        locked={foldedText(sheetRow?.foldedBy) ?? sheetRow?.locked}
         onPick={onPick}
         onClose={() => setSheetOpen(false)}
       />

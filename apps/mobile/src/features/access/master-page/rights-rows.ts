@@ -22,7 +22,7 @@ import {
   areaLevel,
   companionLevels,
   dependantResets,
-  isBlockFolded,
+  parentBlocksOf,
   isMergedRow,
   recordsRowLevel,
   type AreaLevel,
@@ -79,6 +79,12 @@ export interface RightsRow {
   /** Почему строка стоит и не переключается («Цены видит, пока меняет
    *  услуги»); нет — переключается. */
   locked?: string;
+  /** Скрыт главный блок строки — ключ этого блока. Строка стоит серой и не
+   *  меняется, пока его не откроют (владелец 30.09: «если отключаю запись
+   *  клиентам, всё в клиенте становится серым, не могу менять, пока не
+   *  включу»). Раньше такая строка пропадала — и блок «Событие» было не
+   *  найти. */
+  foldedBy?: string;
 }
 
 export interface RightsSection {
@@ -148,18 +154,17 @@ export function rightsSections(
       ];
       const rows = ordered
         .filter((block) => !isMergedRow(block.key, offeredKeys))
-        .filter(
-          (block) =>
-            !isBlockFolded(rowAnchor(block.key), (parentKey) => {
-              const parent = byKey.get(parentKey);
-              return parent ? read(parent) : "write";
-            }),
-        )
-        .map((block) => {
+        .map((block): RightsRow => {
+          // Первый скрытый главный — по порядку `DEPENDANT_BLOCKS`: сперва
+          // «Записи клиентов», потом ближние («Записи событий», «Услуги»).
+          const foldedBy = parentBlocksOf(rowAnchor(block.key)).find((parentKey) => {
+            const parent = byKey.get(parentKey);
+            return parent ? read(parent) === "off" : false;
+          });
+          const row: RightsRow = { block, level: rowLevelOf(block) };
+          if (foldedBy) return { ...row, foldedBy };
           const locked = rowLock(block.key, get);
-          return locked
-            ? { block, level: rowLevelOf(block), locked }
-            : { block, level: rowLevelOf(block) };
+          return locked ? { ...row, locked } : row;
         });
       return { area: section.area, title: section.title, rows };
     })

@@ -232,7 +232,7 @@ describe("блоки события и заметка записи", () => {
   });
 
   test("после миграции: блоки события — по своим правам", () => {
-    const ev = eventBlocks(live(map({ "event.label": "write", "event.type": "read", "event.note": "off" })));
+    const ev = eventBlocks(live(map({ "calendar.day_labels": "read", "event.label": "write", "event.type": "read", "event.note": "off" })));
     assert.equal(ev.label, "write");
     assert.equal(ev.type, "read");
     assert.equal(ev.note, "hidden");
@@ -251,7 +251,7 @@ describe("блоки события и заметка записи", () => {
   });
 
   test("событие меняет только автор, и только открытый блок", () => {
-    const event = eventBlocks(live(map({ "event.label": "write", "event.client": "read", "event.note": "off" })));
+    const event = eventBlocks(live(map({ "calendar.day_labels": "read", "event.label": "write", "event.client": "read", "event.note": "off" })));
     const rb = recordBlocks(live(map({})));
     const mine = bookRights({ isMember: true, kind: "event", isEdit: true, record: rb, event, eventWritable: true });
     assert.equal(mine.editLabel, true);
@@ -261,5 +261,25 @@ describe("блоки события и заметка записи", () => {
     const others = bookRights({ isMember: true, kind: "event", isEdit: true, record: rb, event, eventWritable: false });
     assert.equal(others.editLabel, false);
     assert.equal(others.showLabel, true);
+  });
+});
+
+describe("метка записи и события — под «Меткой дня» (владелец 30.09)", () => {
+  const LIVE_LABELS: typeof REGISTRY = [
+    ...REGISTRY,
+    { key: "event.label", live: true, levels: ["off", "read", "write"] },
+  ];
+  const at2 = (levels: MemberAccessMap) => ({ role: "master", map: levels, registry: LIVE_LABELS, teamId: TEAM }) as const;
+
+  test("день скрыт — метки записи и события нет, что бы ни стояло в них", () => {
+    const hidden = map({ "record.label": "write", "event.label": "write" });
+    assert.equal(recordBlocks(at2(hidden)).label, "hidden");
+    assert.equal(eventBlocks(at2(hidden)).label, "hidden");
+  });
+
+  test("день открыт — метка записи по своему праву", () => {
+    const open = map({ "calendar.day_labels": "read", "record.label": "write", "event.label": "read" });
+    assert.equal(recordBlocks(at2(open)).label, "write");
+    assert.equal(eventBlocks(at2(open)).label, "read");
   });
 });

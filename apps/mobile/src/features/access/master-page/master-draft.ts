@@ -167,7 +167,22 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
   // Сами «Записи событий» стоят под «Записями клиентов», поэтому и блоки
   // события сворачиваются вместе с ними.
   "calendar.events": ["event.label", "event.type", "event.client", "event.object", "event.note", "event.files"],
+  // МЕТКА ЗАПИСИ И СОБЫТИЯ — ПОД «МЕТКОЙ ДНЯ» (владелец 30.09: «на главной
+  // метку скрыл, а в записи клиентов он видит метку — странно выглядит»).
+  // Запись без своей метки показывает метку своего дня (`labelFromDay`):
+  // скрыть день и оставить метку записи — значит показать половину.
+  "calendar.day_labels": ["record.label", "event.label"],
 };
+
+/** Главные, чьи зависимые при скрытии НЕ сбрасываются, а только серые:
+ *  правило держит сервер (`20260930070000_labels_under_day_label`), и
+ *  открыли «Метку дня» — вернулось то, что стояло в метке записи. */
+const KEEPS_DEPENDANTS: ReadonlySet<string> = new Set(["calendar.day_labels"]);
+
+/** Что сбросить вместе со скрытием главного блока. */
+function resetOnHide(parentKey: string): readonly string[] {
+  return KEEPS_DEPENDANTS.has(parentKey) ? [] : (DEPENDANT_BLOCKS[parentKey] ?? []);
+}
 
 /** «ЗАПИСИ КЛИЕНТОВ» ВЕДУТ «НОВЫЕ ЗАПИСИ» (владелец 30.09: «видит он записи,
  *  не видит вообще записи и может ли создавать запись»). Одна строка на два
@@ -278,7 +293,7 @@ function applyLevel(
 ): MasterDraft {
   if (!block.levels.includes(level)) return draft;
   const isDefault = level === defaultLevel(block);
-  const cleared = level === "off" ? (DEPENDANT_BLOCKS[block.key] ?? []) : [];
+  const cleared = level === "off" ? resetOnHide(block.key) : [];
   const drop = isDefault ? [block.key, ...cleared] : cleared;
   const apply = (levels: Record<string, AccessLevel>) => {
     const next = withoutKeys(levels, drop);
@@ -314,7 +329,7 @@ export function dependantResets(
 ): AccessChange[] {
   if (level !== "off") return [];
   const out: AccessChange[] = [];
-  for (const key of DEPENDANT_BLOCKS[block.key] ?? []) {
+  for (const key of resetOnHide(block.key)) {
     const dependant = blocks.find((candidate) => candidate.key === key);
     if (!dependant || dependant.ownerOnly || dependant.area === "owner") continue;
     if (dependant.scope === "calendar" && teamId === null) continue;

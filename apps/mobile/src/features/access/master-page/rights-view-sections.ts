@@ -142,7 +142,8 @@ export function teamLevels(
  *  строк самого раздела: «События, метка дня, график команды». Ничего —
  *  «Всё закрыто»; всё — «Всё открыто». */
 export function sectionBrief(section: Pick<ViewSection, "rows">): string {
-  const open = section.rows.filter((row) => !isClosedStep(row.level));
+  // Серая строка (главный блок скрыт) не открыта, что бы в ней ни стояло.
+  const open = section.rows.filter((row) => !row.foldedBy && !isClosedStep(row.level));
   if (open.length === 0) return "Всё закрыто";
   if (open.length === section.rows.length) return "Всё открыто";
   return open

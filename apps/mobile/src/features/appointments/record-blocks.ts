@@ -180,7 +180,8 @@ export function recordBlocks(input: Input): RecordBlocks {
   const services = level("record.services");
   return {
     team: level("record.team"),
-    label: level("record.label"),
+    // Метка записи — под «Меткой дня» (30.09): день скрыт — метки записи нет.
+    label: read("calendar.day_labels") === "off" ? "hidden" : level("record.label"),
     when: writeOrRead("calendar.move"),
     client: level("record.client"),
     object: level("record.object"),
@@ -228,7 +229,8 @@ export function eventBlocks(input: Input): EventBlocks {
   };
   const filesBefore: RecordLevel = asRecordLevel(read("record.files")) === "hidden" ? "hidden" : "write";
   return {
-    label: level("event.label", "write"),
+    // Метка события — под «Меткой дня» (30.09).
+    label: read("calendar.day_labels") === "off" ? "hidden" : level("event.label", "write"),
     type: level("event.type", "write"),
     client: level("event.client", "read"),
     object: level("event.object", "read"),

@@ -99,6 +99,15 @@ function rowLevel(draft: MasterDraft, key: string): string | null {
   return null;
 }
 
+/** Главный блок, из-за которого строка серая; `null` — строка живая. */
+function rowFoldedBy(draft: MasterDraft, key: string): string | null {
+  const sections = rightsSections(REGISTRY, visibleLevel(REGISTRY, draft), TEAM);
+  for (const section of sections) {
+    for (const row of section.rows) if (row.block.key === key) return row.foldedBy ?? null;
+  }
+  return null;
+}
+
 function sentLevel(draft: MasterDraft, key: string): string | null {
   const change = draftAccessChanges(REGISTRY, draft).find((item) => item.block === key);
   return change ? change.level : null;
@@ -135,9 +144,10 @@ describe("право, выданное владельцем, доходит до
     let draft = draftWith("clients.contacts", "read");
     draft = withLevel(draft, BLOCK.clients as AccessBlock, "off", null);
 
-    // Свёрнутая строка со страницы уходит совсем: право на то, чего человек
-    // не видит, не предлагают.
-    assert.equal(rowLevel(draft, "clients.contacts"), null, "строка страницы");
+    // Свёрнутая строка стоит серой (владелец 30.09) — на умолчании и с
+    // главным блоком, из-за которого не меняется.
+    assert.equal(rowLevel(draft, "clients.contacts"), "off", "строка страницы");
+    assert.equal(rowFoldedBy(draft, "clients.contacts"), "clients", "строка не серая");
     assert.equal(sentLevel(draft, "clients.contacts"), null, "на сервер уходить нечему");
 
 

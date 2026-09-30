@@ -53,8 +53,20 @@ const block = (key: string): AccessBlock => {
   return found;
 };
 
+/** Живые строки раздела — серые (главный блок скрыт) не считаются. */
 const keysOf = (sections: ReturnType<typeof rightsSections>, area: string) =>
-  sections.find((section) => section.area === area)?.rows.map((row) => row.block.key) ?? [];
+  sections
+    .find((section) => section.area === area)
+    ?.rows.filter((row) => !row.foldedBy)
+    .map((row) => row.block.key) ?? [];
+
+/** Серые строки раздела: ключ → главный блок, из-за которого серая. */
+const foldedOf = (sections: ReturnType<typeof rightsSections>, area: string) =>
+  Object.fromEntries(
+    (sections.find((section) => section.area === area)?.rows ?? [])
+      .filter((row) => row.foldedBy)
+      .map((row) => [row.block.key, row.foldedBy]),
+  );
 
 // «Новые записи» своей строки не имеют — они влиты в «Записи клиентов»
 // (владелец 30.09): свёртку их строки проверять нечего, её нет и при
@@ -94,6 +106,11 @@ describe("страница прав — какие строки видны", () 
       assert.equal(shown.includes(key), true, `${key} не виден при открытом главном`);
     }
     assert.deepEqual(hidden, ["calendar.records", "calendar.settings"]);
+    // Свёрнутые не пропадают — стоят серыми (владелец 30.09).
+    const grey = foldedOf(rightsSections(REGISTRY, levelOf, "team-1"), "calendar");
+    for (const key of CALENDAR_DEPENDANTS) {
+      assert.equal(grey[key], "calendar.records", `${key} не серая при скрытых записях`);
+    }
   });
 
   test("«Календарь и записи» скрыт — деньги этого календаря тоже свёрнуты, VAT компании нет", () => {
