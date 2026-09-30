@@ -76,6 +76,10 @@ async function fetchCount(
     .from("appointments")
     .select("id", { count: "exact", head: true })
     .eq("tenant_id", tenantId)
+    // Только записи клиентов: личное событие бесплатно и квоту не тратит —
+    // так же считает сервер (аудит 2026-09-29: «Записи в этом месяце 5», а
+    // аналитика — 4, в число попадало событие).
+    .eq("kind", "work")
     .gte("created_at", monthStart);
   if (error) throw new Error(`Не удалось посчитать записи: ${error.message}`);
   return count ?? 0;
