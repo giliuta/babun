@@ -15,7 +15,12 @@ import { todayYMD } from "@/features/clients/filter";
 import { unpaidVisits } from "@/features/clients/unpaid-visits";
 import { useClient } from "@/features/clients/queries";
 import { buildTimeline, type TimelineEvent } from "@/features/clients/timeline";
-import { archivedVisitTag, visitRowValue } from "@/features/clients/archived-visit";
+import {
+  archivedVisitTag,
+  hasManyLiveTeams,
+  liveVisitTeam,
+  visitRowValue,
+} from "@/features/clients/archived-visit";
 import { useTeams } from "@/features/reference/queries";
 import { useAllServices } from "@/features/services/queries";
 import { haptics } from "@/lib/haptics";
@@ -80,6 +85,13 @@ function ClientVisitsScreen() {
     () => new Map(allTeams.map((team) => [team.id, team])),
     [allTeams],
   );
+  // КТО ОБСЛУЖИВАЛ — ВИДНО В ИСТОРИИ (владелец 30.09): при нескольких командах
+  // дата визита идёт с командой, «6 авг · Команда 3»; время — в самой записи.
+  const manyTeams = hasManyLiveTeams(teamsById);
+  const visitLabel = (date: string, time: string | null | undefined, teamId: string | null | undefined) => {
+    const team = liveVisitTeam(teamId, teamsById, manyTeams);
+    return `${formatShortDateRu(date)}${team ? ` · ${team}` : time ? ` · ${time}` : ""}`;
+  };
 
   const sorted = useMemo(
     () =>
@@ -254,7 +266,7 @@ function ClientVisitsScreen() {
               return (
                 <NavRow
                   key={a.id}
-                  label={`${formatShortDateRu(a.date)}${a.time_start ? ` · ${a.time_start}` : ""}`}
+                  label={visitLabel(a.date, a.time_start, a.team_id)}
                   value={visitRowValue({
                     tag: archivedVisitTag(a.team_id, teamsById),
                     details: [visitValue(a)],
@@ -281,7 +293,7 @@ function ClientVisitsScreen() {
               return (
                 <NavRow
                   key={e.id}
-                  label={`${formatShortDateRu(e.date)}${e.time ? ` · ${e.time}` : ""}`}
+                  label={visitLabel(e.date, e.time, appt?.team_id)}
                   // Значение берём из СОБЫТИЯ ЛЕНТЫ, а не пересобираем из
                   // записи: `buildTimeline` уже разобрал услуги (новый
                   // массив `services` + легаси `service_ids`) и подобрал

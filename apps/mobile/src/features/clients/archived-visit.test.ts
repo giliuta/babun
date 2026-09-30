@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { archivedVisitTag, visitRowValue } from "./archived-visit";
+import {
+  archivedVisitTag,
+  hasManyLiveTeams,
+  liveVisitTeam,
+  visitRowValue,
+} from "./archived-visit";
 
 const teams = new Map([
   ["live", { id: "live", name: "Команда 1", is_active: true }],
@@ -21,6 +26,28 @@ describe("визит архивного календаря называет ко
   // ссылка всё же висит, гадать имя нельзя.
   test("неизвестная команда — молчит", () => {
     assert.equal(archivedVisitTag("unknown", teams), null);
+  });
+});
+
+describe("живой визит называет команду, когда их несколько (30.09)", () => {
+  const two = new Map([
+    ["t1", { id: "t1", name: "Команда 1", is_active: true }],
+    ["t3", { id: "t3", name: "Команда 3", is_active: true }],
+    ["gone", { id: "gone", name: "Команда 2", is_active: false }],
+  ]);
+
+  test("две живые команды — имя команды визита", () => {
+    assert.equal(hasManyLiveTeams(two), true);
+    assert.equal(liveVisitTeam("t3", two, true), "Команда 3");
+  });
+
+  test("архивную называет archivedVisitTag — здесь она молчит", () => {
+    assert.equal(liveVisitTeam("gone", two, true), null);
+  });
+
+  test("одна живая команда — подписи нет", () => {
+    assert.equal(hasManyLiveTeams(teams), false);
+    assert.equal(liveVisitTeam("live", teams, hasManyLiveTeams(teams)), null);
   });
 });
 
