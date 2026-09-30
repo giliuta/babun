@@ -319,6 +319,10 @@ export function ClientDetailScreen() {
   // «Людей», ни «Входит в», ни жильцов объекта, ни «Разделить».
   // С 30.09 — функция КОМАНДЫ клиента.
   const peopleOn = useClientFunctionOn("client_people", client?.team_id);
+  // «Заметка» и «Метка и тег» — блоки, которые команда выключает на
+  // «Карточке клиента» (30.09).
+  const noteOn = useClientFunctionOn("client_note", client?.team_id);
+  const labelsOn = useClientFunctionOn("client_labels", client?.team_id);
   const people = useClientPeople({
     id,
     // На карточке — первые трое и дверь «Все люди · N» (владелец 22.09).
@@ -686,7 +690,11 @@ export function ClientDetailScreen() {
           memberOf={peopleOn ? people.memberOfRows : undefined}
           // Заметка клиента — вторым блоком, под «Клиентом» (владелец 23.09:
           // «сначала идёт блок „Клиент", потом заметка клиента»).
-          note={<NotesBlock client={c} update={update} readOnly={!isDraft && !caps.edit} />}
+          note={
+            noteOn ? (
+              <NotesBlock client={c} update={update} readOnly={!isDraft && !caps.edit} />
+            ) : null
+          }
           people={
             peopleOn && (people.peopleRows || people.onAddPerson) ? (
               <SectionCard title="Люди">
@@ -802,7 +810,9 @@ export function ClientDetailScreen() {
             router.push({ pathname: "/clients/requisites", params: clientSubParams(id, scope) })
           }
           labelTags={
-            <ClientLabelTags client={c} update={update} tags={tags} readOnly={!caps.edit} />
+            labelsOn ? (
+              <ClientLabelTags client={c} update={update} tags={tags} readOnly={!caps.edit} />
+            ) : null
           }
           onDraftFiles={() => onDraftDoor("files")}
           openFilesOnArrive={!isDraft && openOnArrive === "files"}

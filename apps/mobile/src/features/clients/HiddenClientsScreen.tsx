@@ -244,6 +244,12 @@ export function DeletedOn(date: string | null | undefined): string {
   return day ? `удалён ${day}` : "удалён";
 }
 
+/** Подпись дубля: «заведён 8 авг.» — старшую карточку обычно и оставляют. */
+export function CreatedOn(date: string | null | undefined): string {
+  const day = shortDay(date);
+  return day ? `заведён ${day}` : "заведён";
+}
+
 /** Хвост корзины: «через 27 дней» / «сегодня». Считаем по КАЛЕНДАРНЫМ дням,
  *  а не по 24-часовым отрезкам: человек читает «через 3 дня» как «до конца
  *  четверга», а не «через 72 часа». */

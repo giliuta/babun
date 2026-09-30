@@ -2,6 +2,7 @@ import { Compass, Map, MapPin, Navigation } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import type { MapService } from "@babun/shared/common/utils/map-links";
 import { createEnabledPrefs } from "@/lib/enabled-prefs";
+import { teamOrderedSet } from "@/features/clients/team-ordered-set";
 
 // КАРТЫ ДЛЯ МАРШРУТА — какие сервисы вообще предлагать (владелец 2026-08-02:
 // «если человек пользуется только Google Картами — на фига ему каждый раз
@@ -37,10 +38,14 @@ const prefs = createEnabledPrefs<MapService>({
   requireOne: true,
 });
 
-export const useEnabledMapServices = prefs.use;
-export const useMapServicesOrder = prefs.useOrder;
-export const useToggleMapService = prefs.useToggle;
-export const useReorderMapServices = prefs.useReorder;
+// Набор команды — на сервере (`team_design.map_services`, 30.09), телефон —
+// запасной, пока команда на сервере не настраивала.
+const teamSet = teamOrderedSet(prefs, "mapServices");
+
+export const useEnabledMapServices = teamSet.use;
+export const useMapServicesOrder = teamSet.useOrder;
+export const useToggleMapService = teamSet.useToggle;
+export const useReorderMapServices = teamSet.useReorder;
 export const canDisableMapService = prefs.canDisable;
 
 /** Определение карты по id — списки ходят по ПОРЯДКУ ПОЛЬЗОВАТЕЛЯ. */

@@ -4,10 +4,13 @@ import {
   AlertCircle,
   Clock,
   FileText,
+  Home,
   Paperclip,
   Phone,
+  StickyNote,
   Tags,
   TrendingUp,
+  UserRound,
   UsersRound,
   Wallet,
   type LucideIcon,
@@ -39,11 +42,11 @@ import { useFeatureOn } from "@/features/settings/company-features";
 // у «Записей»: обязательное — одной строкой «Всегда: …», выключаемое — строки
 // с галкой.
 //
-//   • «Блоки страницы» — блоки страницы клиента. Люди, файлы и реквизиты
-//     выключаются у всей команды (`team_design`); выключатель компании
-//     (STORY-088) главнее.
-//   • «Строка в списке» — что видно под именем в списке клиентов. Набор
-//     команды; пока хранится на телефоне (`card-prefs`).
+//   • «Блоки страницы» — блоки страницы клиента; «Всегда» только клиент и
+//     история. Выключается у всей команды (`team_design`); у людей, файлов и
+//     реквизитов выключатель компании (STORY-088) главнее.
+//   • «Строка в списке» — что видно под именем в списке клиентов; тоже у
+//     всей команды (`team_design.client_list_off`, 30.09).
 //
 // Команда едет адресом из «Настроек клиентов»; без неё — первая команда.
 
@@ -57,14 +60,14 @@ type PageBlock = {
 // Порядок — порядок страницы клиента (docs/BLOCKS.md §9.1).
 const PAGE_BLOCKS: PageBlock[] = [
   { label: "Клиент", pinned: true },
-  { label: "Заметка", pinned: true },
+  { label: "Заметка", key: "client_note", icon: StickyNote },
   { label: "История", pinned: true },
   { label: "Люди", key: "client_people", icon: UsersRound },
-  { label: "Объекты", pinned: true },
+  { label: "Объекты", key: "client_objects", icon: Home },
   { label: "Файлы", key: "client_files", icon: Paperclip },
   { label: "Реквизиты", key: "client_requisites", icon: FileText },
-  { label: "Метка и тег", pinned: true },
-  { label: "Личное", pinned: true },
+  { label: "Метка и тег", key: "client_labels", icon: Tags },
+  { label: "Личное", key: "client_personal", icon: UserRound },
 ];
 
 // ВЫРУЧКА, А НЕ ПРИБЫЛЬ: «Ожидается» — сумма будущих записей до расходов.
@@ -99,25 +102,29 @@ function ClientCardSettingsScreen() {
   // Объекты выключаются у компании там, где их заводят («Записи»): без них
   // блока нет вовсе — ни галкой, ни во «Всегда».
   const objectsOn = useFeatureOn("objects");
-  const peopleOn = useClientFunctionOn("client_people", teamId);
-  const filesOn = useClientFunctionOn("client_files", teamId);
-  const requisitesOn = useClientFunctionOn("client_requisites", teamId);
+  const functionOn: Record<ClientFunctionKey, boolean> = {
+    client_note: useClientFunctionOn("client_note", teamId),
+    client_people: useClientFunctionOn("client_people", teamId),
+    client_objects: useClientFunctionOn("client_objects", teamId),
+    client_files: useClientFunctionOn("client_files", teamId),
+    client_requisites: useClientFunctionOn("client_requisites", teamId),
+    client_labels: useClientFunctionOn("client_labels", teamId),
+    client_personal: useClientFunctionOn("client_personal", teamId),
+  };
+  // Выключено у всей компании — у команды его не включить: строка гаснет.
   const companyPeople = useFeatureOn("client_people");
   const companyFiles = useFeatureOn("client_files");
   const companyRequisites = useFeatureOn("client_requisites");
-  const toggleFunction = useToggleClientFunction(teamId);
-
-  const functionOn: Record<ClientFunctionKey, boolean> = {
-    client_people: peopleOn,
-    client_files: filesOn,
-    client_requisites: requisitesOn,
-  };
-  // Выключено у всей компании — у команды его не включить: строка гаснет.
   const companyOn: Record<ClientFunctionKey, boolean> = {
+    client_note: true,
     client_people: companyPeople,
+    client_objects: true,
     client_files: companyFiles,
     client_requisites: companyRequisites,
+    client_labels: true,
+    client_personal: true,
   };
+  const toggleFunction = useToggleClientFunction(teamId);
 
   const blocks = PAGE_BLOCKS.filter((b) => objectsOn || b.label !== "Объекты");
 
@@ -163,7 +170,7 @@ function ClientCardSettingsScreen() {
             />
           ))}
         </SectionCard>
-        <RowCaption text="Строка списка пока настраивается на этом телефоне." />
+        <RowCaption text="Выключенное поле пропадает из строки у всей команды." />
       </ScrollView>
     </Screen>
   );

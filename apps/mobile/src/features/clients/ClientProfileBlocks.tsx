@@ -95,10 +95,14 @@ export function ClientProfileBlocks({
   // Файлы и реквизиты — функции КОМАНДЫ клиента (30.09).
   const filesOn = useClientFunctionOn("client_files", client.team_id);
   const requisitesOn = useClientFunctionOn("client_requisites", client.team_id);
+  // «Объекты» и «Личное» команда выключает на «Карточке клиента» (30.09);
+  // объекты ещё и у компании — оба выключателя складываются.
+  const clientObjectsOn = useClientFunctionOn("client_objects", client.team_id);
+  const personalOn = useClientFunctionOn("client_personal", client.team_id);
 
   return (
     <>
-      {objectsOn ? (
+      {objectsOn && clientObjectsOn ? (
       <ClientObjectsSection
         client={client}
         update={update}
@@ -170,7 +174,9 @@ export function ClientProfileBlocks({
         />
       ) : null}
       {labelTags ?? null}
-      <PersonalBlock client={client} update={update} readOnly={!draft && !caps.edit} draft={draft} />
+      {personalOn ? (
+        <PersonalBlock client={client} update={update} readOnly={!draft && !caps.edit} draft={draft} />
+      ) : null}
       {/* Строки «Ещё» больше нет (владелец 2026-08-02: «чтобы внизу
           уменьшить»). Мессенджеры и почта уехали к номерам — их добавляют
           плюсом в блоке контактов; источник — в «Личное», к метке и дню

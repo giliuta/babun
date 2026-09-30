@@ -36,4 +36,10 @@ describe("набор «что предлагать» у команды", () => {
     getStorage().set(`test-set:${TENANT}:team:team-1:order`, ["c", "b", "a"]);
     assert.deepEqual(prefs.readOrder(TENANT, "team-1"), ["c", "b", "a"]);
   });
+
+  test("набор с сервера — по тем же правилам: незнакомое выброшено, новое в конце", () => {
+    const got = prefs.fromServer({ enabled: ["c", "zzz"], order: ["c", "a"] });
+    assert.deepEqual(got, { enabled: ["c"], order: ["c", "a", "b"] });
+    assert.equal(prefs.fromServer(null), null);
+  });
 });

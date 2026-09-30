@@ -17,6 +17,8 @@ import {
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import type { Client } from "@babun/shared/local/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
+import { withServiceDefault } from "@/features/clients/service-default";
+import { useServiceMonthsOf } from "@/features/clients/use-service-default";
 import {
   clientMemberOf,
   clientsById,
@@ -289,14 +291,19 @@ function ClientsListScreen() {
   // Под чипом команды строка, сортировка и фильтры считают ТОЛЬКО её записи.
   // Полная история нужна там, где решается судьба клиента: можно ли его
   // удалить и что уйдёт в выгрузку, — там `allStatsMap`.
+  // «Пора обслужить» — и по интервалу команды клиента у объектов без своего
+  // (владелец 30.09); подстановка живёт только в счёте, не в карточке.
+  const serviceMonthsOf = useServiceMonthsOf();
   const allStatsMap = useMemo(
-    () => buildStatsMap(clients, appointments),
-    [clients, appointments],
+    () => buildStatsMap(withServiceDefault(clients, serviceMonthsOf), appointments),
+    [clients, appointments, serviceMonthsOf],
   );
   const teamStatsMap = useMemo(
     () =>
-      teamChoice === ALL_TEAMS ? null : buildStatsMap(teamClients, teamAppointments),
-    [teamChoice, teamClients, teamAppointments],
+      teamChoice === ALL_TEAMS
+        ? null
+        : buildStatsMap(withServiceDefault(teamClients, serviceMonthsOf), teamAppointments),
+    [teamChoice, teamClients, teamAppointments, serviceMonthsOf],
   );
   const statsMap = teamStatsMap ?? allStatsMap;
 

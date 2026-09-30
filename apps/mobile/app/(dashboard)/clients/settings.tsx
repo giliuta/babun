@@ -3,6 +3,8 @@ import { ScrollView } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import {
   Archive,
+  CalendarClock,
+  Copy,
   Download,
   Eye,
   Home,
@@ -48,7 +50,30 @@ import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref"
 import { ALL_TEAMS, clientsOfTeam } from "@/features/clients/team-scope";
 import { useFeatureOn } from "@/features/settings/company-features";
 import { useLocationLabels } from "@/features/settings/local-settings";
-import { useClientFunctionOn } from "@/features/clients/client-functions";
+import {
+  useClientFunctionOn,
+  type ClientFunctionKey,
+} from "@/features/clients/client-functions";
+import { findDuplicateGroups } from "@/features/clients/duplicate-groups";
+import {
+  SERVICE_MONTH_CHOICES,
+  serviceMonthsLabel,
+} from "@/features/clients/service-default";
+import { useTeamServiceMonths } from "@/features/clients/use-service-default";
+import { PickerSheet } from "@/components/ui/PickerSheet";
+import { useThemeColors } from "@/theme/colors";
+
+// Подпись «Карточки клиента» называет выключенные блоки теми же словами,
+// что строки на её странице.
+const BLOCK_WORDS: [ClientFunctionKey, string][] = [
+  ["client_note", "заметка"],
+  ["client_people", "люди"],
+  ["client_objects", "объекты"],
+  ["client_files", "файлы"],
+  ["client_requisites", "реквизиты"],
+  ["client_labels", "метка и тег"],
+  ["client_personal", "личное"],
+];
 
 // v811 — «Настройки клиентов». Открывается шестерёнкой из хедера списка
 // (порт web ClientsSettingsScreen). Группы:
@@ -72,6 +97,7 @@ export default function ClientsSettingsScreenRoute() {
 function ClientsSettingsScreen() {
   const router = useRouter();
   const toast = useToast();
+  const t = useThemeColors();
   // ХОЗЯЙСТВО БАЗЫ — У ТОГО, ЧЬЯ БАЗА (владелец 20.09: «в клиентах оно
   // открывает в любом случае настройки МОИХ клиентов»). Дверь открыта всем,
   // но у человека без своей компании править здесь нечего: страница остаётся
@@ -97,19 +123,27 @@ function ClientsSettingsScreen() {
     (teamId ? { pathname, params: { team: teamId } } : pathname) as Href;
   // Функции клиентов — у команды (владелец 30.09: «люди, связи, реквизиты,
   // файлы — всё закреплено за командой»).
-  const peopleOn = useClientFunctionOn("client_people", teamId);
-  const requisitesOn = useClientFunctionOn("client_requisites", teamId);
-  const filesOn = useClientFunctionOn("client_files", teamId);
+  const blockOn: Record<ClientFunctionKey, boolean> = {
+    client_note: useClientFunctionOn("client_note", teamId),
+    client_people: useClientFunctionOn("client_people", teamId),
+    client_objects: useClientFunctionOn("client_objects", teamId),
+    client_files: useClientFunctionOn("client_files", teamId),
+    client_requisites: useClientFunctionOn("client_requisites", teamId),
+    client_labels: useClientFunctionOn("client_labels", teamId),
+    client_personal: useClientFunctionOn("client_personal", teamId),
+  };
+  // Объекты, выключенные у компании, в подписи не числятся: их строки на
+  // странице блоков нет вовсе.
+  const offBlocks = BLOCK_WORDS.filter(
+    ([key]) => !blockOn[key] && (key !== "client_objects" || objectsOn),
+  ).map(([, word]) => word);
+  // Интервал обслуживания объектов — у команды (владелец 30.09).
+  const service = useTeamServiceMonths(teamId);
+  const [servicePicker, setServicePicker] = useState(false);
   const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields(teamId);
   // Подпись «Типов объектов» — настоящие типы команды, а не образец.
   const { data: teamObjectTypes = [] } = useLocationLabels(teamId);
   const objectTypeNames = teamObjectTypes.map((label) => label.name);
-  // Подпись строки — что выключено у команды, иначе «Все блоки».
-  const offBlocks = [
-    !peopleOn ? "люди" : null,
-    !filesOn ? "файлы" : null,
-    !requisitesOn ? "реквизиты" : null,
-  ].filter(Boolean);
   const rowFieldsOn = Object.values(prefs).filter(Boolean).length;
   const cardSub = [
     offBlocks.length === 0 ? "Все блоки" : `Без: ${offBlocks.join(", ")}`,
@@ -136,6 +170,15 @@ function ClientsSettingsScreen() {
   const teamClients = useMemo(
     () => (teamId ? clientsOfTeam(clients, teamId, appointmentsForStats) : clients),
     [clients, teamId, appointmentsForStats],
+  );
+  // Дубли — группы с одним номером, где есть карточка команды.
+  const duplicateCount = useMemo(
+    () =>
+      findDuplicateGroups(
+        clients,
+        teamId ? new Set(teamClients.map((c) => c.id)) : undefined,
+      ).length,
+    [clients, teamClients, teamId],
   );
   // Карты для маршрута: у кого-то весь навигатор — Google, и Яндекс в листе
   // только удлиняет каждый выезд (владелец 2026-08-02).
@@ -274,6 +317,16 @@ function ClientsSettingsScreen() {
                     onPress={() => router.push(teamHref("/clients/object-types"))}
                   />
                   <Divider inset={56} />
+                  {/* Раз в сколько месяцев обслуживать объект без своего
+                      интервала: на нём держится фильтр «Пора обслужить». */}
+                  <SettingsRow
+                    tile={SETTINGS_TILE.orange}
+                    icon={CalendarClock}
+                    title="Обслуживание объектов"
+                    sub={serviceMonthsLabel(service.months)}
+                    onPress={() => setServicePicker(true)}
+                  />
+                  <Divider inset={56} />
                 </>
               ) : null}
               <SettingsRow
@@ -333,6 +386,20 @@ function ClientsSettingsScreen() {
               />
               <Divider inset={56} />
               <SettingsRow
+                tile={SETTINGS_TILE.indigo}
+                icon={Copy}
+                title="Дубли"
+                sub={
+                  clientsQuery.isLoading
+                    ? "Загрузка…"
+                    : duplicateCount > 0
+                      ? `Найдено: ${duplicateCount}`
+                      : "Не найдено"
+                }
+                onPress={() => router.push(teamHref("/clients/duplicates"))}
+              />
+              <Divider inset={56} />
+              <SettingsRow
                 tile="neutral"
                 icon={Archive}
                 title="Архив клиентов"
@@ -360,6 +427,24 @@ function ClientsSettingsScreen() {
         // состояний, LOCKED 2026-08-27).
         <EmptyState fill title="Настроек пока нет" />
       )}
+
+      <PickerSheet
+        visible={servicePicker}
+        title="Обслуживание объектов"
+        subtitle="Отсчёт — от последнего визита на объект"
+        selectedId={String(service.months ?? "off")}
+        items={SERVICE_MONTH_CHOICES.map((months) => ({
+          id: String(months ?? "off"),
+          label: serviceMonthsLabel(months),
+          icon: CalendarClock,
+          color: t.accent,
+          onPress: () => {
+            setServicePicker(false);
+            if (months !== service.months) service.set(months);
+          },
+        }))}
+        onClose={() => setServicePicker(false)}
+      />
 
     </Screen>
   );

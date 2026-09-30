@@ -49,6 +49,7 @@ export function createEnabledPrefs<T extends string>(opts: EnabledPrefsOptions<T
     read,
     readOrder,
     seedTeam,
+    fromServer,
     canDisable,
     canMove,
   } = store;
@@ -56,6 +57,7 @@ export function createEnabledPrefs<T extends string>(opts: EnabledPrefsOptions<T
   return {
     read,
     readOrder,
+    fromServer,
     canDisable,
     canMove,
     /** Включённые, в порядке показа. `teamId` — набор этой команды (пока

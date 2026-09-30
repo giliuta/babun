@@ -153,6 +153,25 @@ export function createEnabledPrefsStore<T extends string>(opts: EnabledPrefsOpti
     }
   };
 
+  /** НАБОР С СЕРВЕРА (`team_design`, 30.09) — по тем же правилам, что с
+   *  телефона: закреплённое сверху и включено, незнакомое выброшено, новое из
+   *  обновления встаёт в конец порядка, пустой набор при `requireOne` —
+   *  умолчания. `null` — сервер набор не хранит. */
+  const fromServer = (
+    raw: { enabled?: unknown; order?: unknown } | null | undefined,
+  ): { enabled: T[]; order: T[] } | null => {
+    if (!raw) return null;
+    const known = (v: unknown): T[] =>
+      Array.isArray(v) ? (v.filter((id) => all.includes(id as T)) as T[]) : [];
+    const saved = known(raw.order);
+    const rest = all.filter((id) => !pinned.includes(id) && !saved.includes(id));
+    const order = [...pinned, ...saved.filter((id) => !pinned.includes(id)), ...rest];
+    let enabled = known(raw.enabled);
+    if (enabled.length === 0 && requireOne) enabled = [...defaults];
+    const on = new Set<T>([...pinned, ...enabled]);
+    return { enabled: order.filter((id) => on.has(id)), order };
+  };
+
   const canDisable = (enabled: T[], id: T): boolean => {
     if (pinned.includes(id)) return false;
     return !requireOne || !enabled.includes(id) || enabled.length > 1;
@@ -170,6 +189,7 @@ export function createEnabledPrefsStore<T extends string>(opts: EnabledPrefsOpti
     read,
     readOrder,
     seedTeam,
+    fromServer,
     canDisable,
     canMove,
   };

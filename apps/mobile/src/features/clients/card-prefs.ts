@@ -3,6 +3,12 @@ import { getStorage } from "@babun/shared/storage";
 import { tenantPrefKey } from "@/lib/tenant-prefs";
 import { useTenantId } from "@/lib/tenant";
 import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useDesignBase } from "@/features/appointments/booking-prefs";
+import {
+  useSaveTeamDesign,
+  useTeamDesign,
+  useTeamDesigns,
+} from "@/features/appointments/team-design";
 
 // Волна 2 — «Что показывать на карточке» (v811). Зеркало web
 // lib/client-card-prefs.ts: web хранит в localStorage → на мобиле тот же
@@ -89,16 +95,28 @@ function setCardFields(
 const cardFieldsKey = (teamId: string | null, tenantId: string | null) =>
   ["client-card-fields", tenantId, teamId] as const;
 
+/** НАБОР КОМАНДЫ НА СЕРВЕРЕ (`team_design.client_list_off`, 30.09): владелец
+ *  настроил — у всех людей команды так же. `null` — сервер набор не хранит,
+ *  тогда набор с телефона. */
+function fromServerOff(off: readonly string[] | null | undefined): CardFieldPrefs | null {
+  if (!off) return null;
+  const out = { ...DEFAULT_CARD_FIELDS };
+  for (const f of CARD_FIELDS) out[f] = !off.includes(f);
+  return out;
+}
+
 /** Живые префы полей карточки команды — один query key на команду, так
  *  что тоггл в «Что показывать» мгновенно обновляет список. */
 export function useCardFields(teamId: string | null = null) {
   const tenantId = usePrefsTenantId();
-  return useQuery({
+  const local = useQuery({
     queryKey: cardFieldsKey(teamId, tenantId),
     queryFn: () => getCardFields(teamId, tenantId),
     initialData: () => getCardFields(teamId, tenantId),
     staleTime: Infinity,
   });
+  const server = fromServerOff(useTeamDesign(teamId)?.listOff);
+  return { ...local, data: server ?? local.data };
 }
 
 /** Наборы нескольких команд разом — строки списка берут набор СВОЕЙ команды
@@ -115,9 +133,10 @@ export function useCardFieldsByTeam(teamIds: readonly string[]) {
     })),
   });
   const shared = useCardFields(null).data;
+  const { data: designs } = useTeamDesigns();
   const byTeam = new Map<string, CardFieldPrefs>();
   teamIds.forEach((teamId, i) => {
-    const data = results[i]?.data;
+    const data = fromServerOff(designs?.[teamId]?.listOff) ?? results[i]?.data;
     if (data) byTeam.set(teamId, data);
   });
   return (teamId: string | null | undefined): CardFieldPrefs =>
@@ -127,7 +146,10 @@ export function useCardFieldsByTeam(teamIds: readonly string[]) {
 export function useToggleCardField(teamId: string | null = null) {
   const qc = useQueryClient();
   const tenantId = usePrefsTenantId();
-  return useMutation({
+  const current = useCardFields(teamId).data;
+  const base = useDesignBase(teamId);
+  const saveTeam = useSaveTeamDesign();
+  const local = useMutation({
     // Локальная запись (MMKV) — не должна ждать сети.
     networkMode: "always",
     mutationFn: async (field: CardField) => {
@@ -138,6 +160,19 @@ export function useToggleCardField(teamId: string | null = null) {
     },
     onSuccess: (next) => qc.setQueryData(cardFieldsKey(teamId, tenantId), next),
   });
+  return {
+    isPending: local.isPending || saveTeam.isPending,
+    mutate: (field: CardField) => {
+      // Без команды — прежний набор телефона.
+      if (!teamId) return local.mutate(field);
+      // У команды — на сервер: с текущим набором (сервер или телефон) и правкой.
+      const next = { ...current, [field]: !current[field] };
+      saveTeam.mutate({
+        teamId,
+        next: { ...base, listOff: CARD_FIELDS.filter((f) => !next[f]) },
+      });
+    },
+  };
 }
 
 /** Краткое живое резюме включённых полей (строка в настройках, web

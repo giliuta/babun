@@ -33,13 +33,33 @@ export type TeamBlockKey =
   // файлы — всё закреплено за командой»).
   | "client_people"
   | "client_requisites"
-  | "client_files";
+  | "client_files"
+  | "client_note"
+  | "client_objects"
+  | "client_labels"
+  | "client_personal";
+
+/** Упорядоченный набор «что предлагать»: включённые и полный порядок. */
+export interface TeamOrderedSet {
+  enabled: string[];
+  order: string[];
+}
 
 export interface TeamDesign {
   rule: RecordColorRule;
   palette: RecordColorPalette | null;
   fallback: string | null;
   disabledBlocks: TeamBlockKey[];
+  // ВИД КЛИЕНТОВ КОМАНДЫ НА СЕРВЕРЕ (миграция 20260930233000). `null` — команда
+  // на сервере ещё не настраивала: берётся набор с телефона.
+  /** Выключенные поля строки списка клиентов. */
+  listOff?: string[] | null;
+  /** «Способы связи». */
+  contactWays?: TeamOrderedSet | null;
+  /** «Карты для маршрута». */
+  mapServices?: TeamOrderedSet | null;
+  /** «Пора обслужить» объекта без своего интервала, месяцев. */
+  serviceEveryMonths?: number | null;
 }
 
 type Row = {
@@ -48,6 +68,10 @@ type Row = {
   record_color_palette: RecordColorPalette | null;
   record_color_fallback: string | null;
   disabled_blocks: string[] | null;
+  client_list_off?: string[] | null;
+  contact_ways?: TeamOrderedSet | null;
+  map_services?: TeamOrderedSet | null;
+  service_every_months?: number | null;
 };
 
 // Таблицы ещё нет в сгенерированных типах (database.types.ts отстаёт от
@@ -72,6 +96,10 @@ function toDesign(row: Row): TeamDesign {
     palette: row.record_color_palette ?? null,
     fallback: row.record_color_fallback ?? null,
     disabledBlocks: (row.disabled_blocks ?? []) as TeamBlockKey[],
+    listOff: row.client_list_off ?? null,
+    contactWays: row.contact_ways ?? null,
+    mapServices: row.map_services ?? null,
+    serviceEveryMonths: row.service_every_months ?? null,
   };
 }
 
@@ -102,7 +130,7 @@ export function useTeamDesigns() {
     queryFn: async (): Promise<DesignMap> => {
       const { data, error } = await table()
         .select(
-          "team_id, record_color_rule, record_color_palette, record_color_fallback, disabled_blocks",
+          "team_id, record_color_rule, record_color_palette, record_color_fallback, disabled_blocks, client_list_off, contact_ways, map_services, service_every_months",
         )
         .eq("tenant_id", tenantId as string);
       if (error) {
@@ -146,6 +174,10 @@ export function useSaveTeamDesign() {
           record_color_palette: input.next.palette,
           record_color_fallback: input.next.fallback,
           disabled_blocks: input.next.disabledBlocks,
+          client_list_off: input.next.listOff ?? null,
+          contact_ways: input.next.contactWays ?? null,
+          map_services: input.next.mapServices ?? null,
+          service_every_months: input.next.serviceEveryMonths ?? null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "tenant_id,team_id" },

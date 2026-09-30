@@ -1,4 +1,5 @@
 import { getStorage } from "@babun/shared/storage";
+import { teamOrderedSet } from "@/features/clients/team-ordered-set";
 import type { LucideIcon } from "lucide-react-native";
 import { createEnabledPrefs } from "@/lib/enabled-prefs";
 import {
@@ -150,12 +151,16 @@ const prefs = createEnabledPrefs<ContactWayId>({
   },
 });
 
+// Набор команды — на сервере (`team_design.contact_ways`, 30.09), телефон —
+// запасной, пока команда на сервере не настраивала.
+const teamSet = teamOrderedSet(prefs, "contactWays");
+
 /** Включённые способы В ПОРЯДКЕ ПОКАЗА — для страницы настройки. */
-export const useEnabledWays = prefs.use;
+export const useEnabledWays = teamSet.use;
 /** Полный порядок (включая выключенное) — для страницы настройки. */
-export const useWaysOrder = prefs.useOrder;
-export const useToggleWay = prefs.useToggle;
-export const useReorderWays = prefs.useReorder;
+export const useWaysOrder = teamSet.useOrder;
+export const useToggleWay = teamSet.useToggle;
+export const useReorderWays = teamSet.useReorder;
 
 /** Что предложить у НОМЕРА: включённые способы, которые умеют звонить/писать
  *  по самому номеру. Порядок — общий порядок набора. */
