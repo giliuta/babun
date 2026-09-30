@@ -7,7 +7,6 @@ import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { listClients as listClientsCached } from "@babun/shared/sync/clientsCached";
 import {
-  listMemberClients,
   useCreateClient,
   useUpdateClientById,
 } from "@/features/clients/queries";
@@ -261,15 +260,11 @@ export function useClientDraft(
     if (!tenantId) return null;
     const sameNumber = (list: readonly Client[]) =>
       list.find((c) => (c.phone_e164 ?? tryToE164(c.phone ?? "")) === key) ?? null;
-    // В компании, где человек работает, таблица клиентов ему закрыта — дубль
-    // ищется тем же окном, которым он её читает.
-    if (scope?.kind === "member") {
-      try {
-        return sameNumber(await listMemberClients(tenantBoundClient(tenantId)));
-      } catch {
-        return null;
-      }
-    }
+    // В компании, где человек работает, номеров в его окне нет никогда (30.09:
+    // номер — по одному, дверью): искать дубль нечем, а качать ради этого
+    // весь список — лишний трафик. Арбитр — UNIQUE-индекс базы: его отказ
+    // говорит нейтрально «уже есть у компании» (ниже, `isPhoneTakenError`).
+    if (scope?.kind === "member") return null;
     try {
       return (await findClientByPhoneE164(draftClient, key, tenantId)) ?? null;
     } catch {

@@ -13,6 +13,7 @@ import { SwitchRow } from "@/components/ui/SwitchRow";
 import { GUTTER } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
 
 // ЛИСТ ОДНОГО НАБОРА РЕКВИЗИТОВ — создание и правка одним телом (закон
 // «одна сущность — одно тело»). Четыре поля разом: реквизиты почти всегда
@@ -72,6 +73,7 @@ export function RequisitesSheet({
   onMakeDefault: () => void;
 }) {
   const t = useThemeColors();
+  const canCopy = useClientsCapabilities().export;
   const [form, setForm] = useState<Form>(() => formOf(set));
   const [saving, setSaving] = useState(false);
   // Курсор — в первое пустое поле НА МОМЕНТ ОТКРЫТИЯ: считать его на каждом
@@ -148,6 +150,8 @@ export function RequisitesSheet({
               // Курсор сразу в первое пустое поле: лист открыли, чтобы
               // вписать, а не чтобы посмотреть.
               autoFocus={f.key === focusKey}
+              // Без права выгрузки реквизиты не копируются из поля (30.09).
+              noCopy={!canCopy}
               onSave={(v) => setForm((prev) => ({ ...prev, [f.key]: v }))}
             />
           ))}

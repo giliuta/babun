@@ -18,6 +18,7 @@ import { requisitesLines } from "@/features/clients/client-share";
 import { RequisitesSheet } from "@/features/clients/RequisitesSheet";
 import { useRequisitesWriter } from "@/features/clients/use-requisites-writer";
 import { useThemeColors } from "@/theme/colors";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
 
 // РЕКВИЗИТЫ КЛИЕНТА (STORY-085, владелец 2026-09-21): «реквизиты делаем
 // всегда… инвойс могут просить прямо на клиента с его реквизитами». Блок
@@ -72,6 +73,12 @@ export function RequisitesBlock({
   const shown = limit ? ordered.slice(0, limit) : ordered;
   const rest = ordered.length - shown.length;
   const writer = useRequisitesWriter(sets, update, client.id);
+  // Копирование — вынос из приложения: только с правом выгрузки (владелец
+  // 30.09: «без передачи»; аудит 015).
+  const canCopy = useClientsCapabilities().export;
+  const copySet = (set: ClientRequisites) => {
+    if (canCopy) copy(requisitesLines(set).join("\n"));
+  };
 
   // Лист монтируется заново на каждое открытие (`key`): черновик полей и
   // курсор собираются из набора В МОМЕНТ ОТКРЫТИЯ, а не эффектом после —
@@ -130,7 +137,7 @@ export function RequisitesBlock({
               chevron={false}
               separated={i > 0}
               onPress={() => undefined}
-              onLongPress={() => copy(requisitesLines(set).join("\n"))}
+              onLongPress={() => copySet(set)}
             />
           ))
         : shown.map((set, i) => (
@@ -149,7 +156,7 @@ export function RequisitesBlock({
             onPress={() => openSheet(set.id)}
             // Долгое нажатие копирует набор целиком, построчно — его обычно
             // пересылают в банк или бухгалтеру одним сообщением.
-            onLongPress={() => copy(requisitesLines(set).join("\n"))}
+            onLongPress={() => copySet(set)}
           />
         </SwipeRow>
       ))}

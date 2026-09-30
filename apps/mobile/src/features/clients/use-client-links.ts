@@ -17,6 +17,7 @@ import {
 } from "./queries";
 import { clientFor } from "./sources";
 import { clientMembersQueryKey, linkKeyOf } from "./use-link-writer";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
 
 // СВЯЗИ КЛИЕНТА — ЧТЕНИЕ (STORY-086).
 //
@@ -107,6 +108,11 @@ function linkItemsOf(
         phone: member.phone_e164 || member.phone || null,
         telegramUsername: member.telegram_username || null,
         role: entry.role,
+        // Правка связи пишет memberships ЭТОГО человека — по его праву.
+        editable:
+          !member.blocks ||
+          (clientBlockLevel(member, "clients") === "write" &&
+            clientBlockLevel(member, "clients.people") === "write"),
       });
     }
   }

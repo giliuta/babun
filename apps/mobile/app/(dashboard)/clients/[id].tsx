@@ -118,6 +118,7 @@ import { notify } from "@/lib/notify";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { deliverCreatedClient } from "@/features/appointments/pending-client";
+import { contactsLocked } from "@/features/clients/member-contacts";
 
 // КАРТОЧКА ОТКРЫВАЕТСЯ В КОМПАНИИ СВОЕЙ СТРОКИ (STORY-082): `?tenant=` несёт
 // компанию, ворота решают, чья она, и объявляют источник блокам.
@@ -349,7 +350,15 @@ export function ClientDetailScreen() {
   // «Объединить с дублем» в «⋯» — вся проводка в `use-merge-duplicate.ts`.
   const onMerge = useMergeDuplicate({ client: c, isDraft, canManage: caps.manage, closeMenu: () => setMenuOpen(false) });
   // «Разделить клиента» в «⋯» — вся проводка в `use-split-client.ts`.
-  const split = useSplitClient({ client: c, isDraft, canEdit: caps.edit, canLinks: caps.links && peopleOn, menuOpen });
+  // «Разделить» переносит номера и связи в новую карточку: у сотрудника с
+  // закрытым номером переносить нечего, пункт прятан (аудит 015, 30.09).
+  const split = useSplitClient({
+    client: c,
+    isDraft,
+    canEdit: access.card.edit && !(c && contactsLocked(c)),
+    canLinks: access.people.edit,
+    menuOpen,
+  });
 
   // Shared selectors — memoized so unrelated state changes don't re-scan
   // every appointment. Hooks must run unconditionally, hence the guards
@@ -628,7 +637,8 @@ export function ClientDetailScreen() {
         onToggleBlacklist={onToggleBlacklist}
         onArchive={onArchive}
         onDelete={onDelete}
-        canEdit={caps.edit}
+        // «Напомнить» и правки в «⋯» — по праву на ЭТОГО клиента (30.09).
+        canEdit={access.card.edit}
         canManage={caps.manage}
         onMerge={onMerge}
         onSplit={split.onSplit}

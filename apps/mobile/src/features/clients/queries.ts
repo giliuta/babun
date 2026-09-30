@@ -75,6 +75,7 @@ import { masterClientJsonToClient } from "@/features/settings/master-reference";
 import { isPhoneTakenError } from "@/features/clients/client-create-errors";
 import { parseClientBlocks } from "@/features/clients/client-block-access";
 import { mirrorMemberClient } from "@/features/access/mirror/mirror-client";
+import { refreshRevealedContacts } from "@/features/clients/revealed-contacts";
 import {
   contactsHiddenOf,
   parseMemberContacts,
@@ -461,26 +462,31 @@ async function saveClient(
   return updateClient(writeClientOf(scope), id, patch, tenantId, scope.writeOpts);
 }
 
+/** Ответ правки у сотрудника разбирается общим маппером
+ *  (`atomicWriteResultToClient`) и приходит без `blocks` и причины скрытого
+ *  номера. Держим прежние, иначе до перечитки закрытые блоки на миг
+ *  открылись бы пустыми, а номер — «разблокировался». */
+function keepAccessFields(old: Client | null | undefined, updated: Client): Client {
+  if (!old || !updated) return updated;
+  return {
+    ...updated,
+    ...(updated.blocks || !old.blocks ? {} : { blocks: old.blocks }),
+    ...(updated.contacts_hidden !== undefined || old.contacts_hidden === undefined
+      ? {}
+      : { contacts_hidden: old.contacts_hidden }),
+  };
+}
+
 export function useUpdateClient(id: string) {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (patch: Partial<Client>) => saveClient(scope, id, patch),
     onSuccess: (updated, patch) => {
-      // Ответ правки у сотрудника разбирается общим маппером и может прийти
-      // без `blocks` и причины скрытого номера: держим прежние, иначе до
-      // перечитки карточка на миг решила бы, что всё открыто.
       qc.setQueriesData<Client | null>({ queryKey: ["client", id] }, (old) =>
-        old && updated
-          ? {
-              ...updated,
-              ...(updated.blocks || !old.blocks ? {} : { blocks: old.blocks }),
-              ...(updated.contacts_hidden !== undefined || old.contacts_hidden === undefined
-                ? {}
-                : { contacts_hidden: old.contacts_hidden }),
-            }
-          : updated,
+        keepAccessFields(old, updated),
       );
+      refreshRevealedContacts(scope.tenantId, id, patch);
       // Blocks fire independent mutations (blur saves), so two PATCHes
       // can resolve out of order and the late response would overwrite
       // the newer field. Refetching settles the cache on the server's
@@ -583,7 +589,10 @@ export function useUpdateClientById() {
       return { previous };
     },
     onSuccess: (updated, { id, patch }) => {
-      qc.setQueriesData({ queryKey: ["client", id] }, updated);
+      qc.setQueriesData<Client | null>({ queryKey: ["client", id] }, (old) =>
+        keepAccessFields(old, updated),
+      );
+      refreshRevealedContacts(scope.tenantId, id, patch);
       qc.invalidateQueries({ queryKey: ["client", id] });
       qc.invalidateQueries({ queryKey: ["clients"] });
       // ЧЕЛОВЕК ВИДЕН И В ЧУЖОМ БЛОКЕ «ЛЮДИ» — своим запросом

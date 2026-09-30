@@ -101,7 +101,8 @@ export function ClientProfileBlocks({
         update={update}
         draft={draft}
         readOnly={!a.objects.edit}
-        appointments={appointments}
+        // «был 12 авг» у объекта — история записей: без права её нет.
+        appointments={a.history.show ? appointments : []}
         // НА КАРТОЧКЕ — ПЕРВЫЕ ТРИ И ДВЕРЬ (владелец 22.09: «если у клиента
         // 12 объектов, их надо листать, чтобы добраться до файлов»).
         limit={OBJECTS_ON_CARD}

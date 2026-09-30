@@ -98,6 +98,8 @@ import { useAppointments } from "@/features/calendar/queries";
 import { useCities, useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
+import { statsByBlocks } from "@/features/clients/card-access";
 
 // v811 list card (approved web design, apps/web/.../clients/page.tsx
 // ClientCard): name row (+pin) · money row (grey expected · green income
@@ -305,7 +307,19 @@ function ClientsListScreen() {
         : buildStatsMap(withServiceDefault(teamClients, serviceMonthsOf), teamAppointments),
     [teamChoice, teamClients, teamAppointments, serviceMonthsOf],
   );
-  const statsMap = teamStatsMap ?? allStatsMap;
+  // Деньги и визиты строки — по правам этого клиента (30.09): у сотрудника
+  // сводка из видимых записей не должна показывать то, что закрыто в
+  // карточке, ни в строке, ни в сортировке, ни в фильтрах.
+  const statsMap = useMemo(() => {
+    const base = teamStatsMap ?? allStatsMap;
+    if (!clients.some((c) => c.blocks)) return base;
+    const masked = new Map(base);
+    for (const c of clients) {
+      const s = base.get(c.id);
+      if (s && c.blocks) masked.set(c.id, statsByBlocks(c, s));
+    }
+    return masked;
+  }, [teamStatsMap, allStatsMap, clients]);
 
   // Первая и последняя (не отменённые) записи — сплит периода в фильтрах
   // показывает у «Всего времени» честный охват данных в обе стороны.
@@ -390,6 +404,10 @@ function ClientsListScreen() {
   // выглядеть по-разному в двух местах (раньше здесь был системный Alert).
   const [remindClient, setRemindClient] = useState<Client | null>(null);
   const openRemindMenu = (c: Client) => setRemindClient(c);
+  // «Напомнить» пишет в карточку — по праву на ЭТОГО клиента (30.09): у
+  // сотрудника карточка может быть открыта только на чтение.
+  const canEditClient = (c: Client) =>
+    caps.edit && clientBlockLevel(c, "clients") === "write";
 
   // ЗАПИСАТЬ ПРЯМО ИЗ СПИСКА (свайп вправо и лист действий). Строка уже знает
   // и основной объект, и последнюю команду — те же два поля, что подставляет
@@ -812,7 +830,7 @@ function ClientsListScreen() {
                   openSwipe.current = row;
                 }}
                 onBook={!guest && caps.book ? () => bookFor(item) : undefined}
-                onRemind={!guest && caps.edit ? () => setRemindClient(item) : undefined}
+                onRemind={!guest && canEditClient(item) ? () => setRemindClient(item) : undefined}
                 onArchive={!guest && caps.manage ? () => confirmArchiveOne(item) : undefined}
                 onLongPress={() => {
                   if (guest) return;
@@ -921,7 +939,7 @@ function ClientsListScreen() {
         // база (владелец 30.09: «без передачи»).
         onSelectMany={caps.export ? (c) => enterSelection(c.id) : undefined}
         onTogglePin={caps.manage ? onTogglePin : undefined}
-        onRemind={caps.edit ? openRemindMenu : undefined}
+        onRemind={menuClient && canEditClient(menuClient) ? openRemindMenu : undefined}
         onArchive={caps.manage ? confirmArchiveOne : undefined}
         onDelete={caps.manage ? confirmDeleteOne : undefined}
       />

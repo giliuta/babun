@@ -72,3 +72,30 @@ describe("карточка клиента: блоки по команде и п�
     assert.equal(a.card.edit, true);
   });
 });
+
+import { statsByBlocks } from "./card-access";
+
+describe("сводка клиента по его правам", () => {
+  const stats = {
+    visits: 4, totalSpent: 400, lastVisitDate: "2026-09-20", lastVisitDays: 10,
+    nextApt: { date: "2026-10-03", time: "13:30" }, nextAptDays: 3, medianGapDays: 30,
+    serviceDue: 1, unclosedVisits: 1, debt: 300, expectedRevenue: 80,
+  };
+  test("владелец — как есть", () => {
+    assert.equal(statsByBlocks({}, stats), stats);
+  });
+  test("без «Долг и деньги» — денег нет, визиты остаются", () => {
+    const s = statsByBlocks({ blocks: { clients: "read", "clients.history": "read" } }, stats);
+    assert.equal(s.debt, 0);
+    assert.equal(s.totalSpent, 0);
+    assert.equal(s.expectedRevenue, 0);
+    assert.equal(s.visits, 4);
+  });
+  test("без «Истории записей» — визитов и дат нет", () => {
+    const s = statsByBlocks({ blocks: { clients: "read", "clients.money": "read" } }, stats);
+    assert.equal(s.visits, 0);
+    assert.equal(s.lastVisitDate, "");
+    assert.equal(s.nextApt, null);
+    assert.equal(s.debt, 300);
+  });
+});

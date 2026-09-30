@@ -530,7 +530,9 @@ describe("«Разделить клиента» в «⋯» карточки", ()
     assert.match(hook(), /const onSplit = eligible\s*\?/, "обработчик отдаётся без номеров — пункт висит впустую");
     assert.match(
       page(),
-      /useSplitClient\(\{ client: c, isDraft, canEdit: caps\.edit, canLinks: caps\.links && peopleOn, menuOpen \}\)/,
+      // С 30.09 права — этого клиента (`card-access.ts`), и у закрытого
+      // номера переносить нечего (аудит 015).
+      /useSplitClient\(\{\s*client: c,\s*isDraft,\s*canEdit: access\.card\.edit && !\(c && contactsLocked\(c\)\),\s*canLinks: access\.people\.edit,\s*menuOpen,\s*\}\)/,
       "страница передаёт сплиту не те права",
     );
     assert.match(page(), /onSplit=\{split\.onSplit\}/, "страница не ставит пункт в меню");

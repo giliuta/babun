@@ -14,8 +14,11 @@ import { clientBlockLevel, type ClientCardBlock } from "./client-block-access";
 // «Меняет» у блока работает, только если меняется сама карточка
 // (`clients: write`), — так решает и сервер.
 //
-// Черновик нового клиента — СВОЙ клиент, `blocks` у него нет: блоки как у
-// владельца, их правят все, кто создаёт.
+// Черновик нового клиента в СВОЕЙ компании — блоки как у владельца. У
+// сотрудника в компании работодателя сервер (`create_client_with_tags`) МОЛЧА
+// пишет пустыми блоки без «Меняет» в команде клиента: теги, связи, заметка
+// пропали бы без ошибки. Поэтому черновик сотрудника получает положения из
+// его карты прав (`draftBlocks`) и показывает только блоки с «Меняет».
 
 export type CardBlockKey =
   | "note"
@@ -48,13 +51,18 @@ export function cardAccess({
   caps,
   teamOn,
   draft,
+  draftBlocks,
 }: {
   client: Pick<Client, "blocks"> | null | undefined;
   caps: Caps;
   teamOn: TeamBlocksOn;
   draft: boolean;
+  /** Положения черновика сотрудника по его карте прав (`mirrorClientBlocks`). */
+  draftBlocks?: Readonly<Record<string, string>> | null;
 }): CardAccess {
-  const byRights = !draft && !!client?.blocks;
+  const draftByRights = draft && !!draftBlocks;
+  const byRights = draftByRights || (!draft && !!client?.blocks);
+  const rights = draftByRights ? { blocks: draftBlocks ?? undefined } : client;
   const cardEdit = draft || (caps.edit && clientBlockLevel(client, "clients") === "write");
 
   // `legacy*` — как блок жил до прав по блокам: у владельца и у строк без
@@ -67,7 +75,9 @@ export function cardAccess({
   ): BlockAccess => {
     if (!on) return { show: false, edit: false };
     if (!byRights) return { show: legacyShow, edit: legacyShow && legacyEdit };
-    const level = clientBlockLevel(client, key);
+    const level = clientBlockLevel(rights, key);
+    // В черновике «Видит» показывать нечего — пустое поле без права вписать.
+    if (draftByRights) return { show: level === "write", edit: level === "write" };
     return { show: level !== "hidden", edit: level === "write" && cardEdit };
   };
 
@@ -83,11 +93,52 @@ export function cardAccess({
     files: {
       ...block(teamOn.files, "clients.files", caps.money, caps.edit && caps.files),
       ...(byRights && teamOn.files
-        ? { edit: clientBlockLevel(client, "clients.files") === "write" && cardEdit && caps.files }
+        ? { edit: clientBlockLevel(rights, "clients.files") === "write" && cardEdit && caps.files }
         : {}),
     },
     requisites: block(teamOn.requisites, "clients.requisites", caps.money),
     history: block(true, "clients.history"),
     money: block(true, "clients.money", caps.money, false),
+  };
+}
+
+/** СВОДКА КЛИЕНТА ПО ЕГО ПРАВАМ (аудит 015, 30.09). Сводку считает экран
+ *  из записей, которые сотрудник видит по правам КАЛЕНДАРЯ, — и без маски
+ *  долг, выручка и «был …» пролезли бы в строку списка, сортировку «по
+ *  долгу», фильтр «Должники» и строку истории в записи мимо прав КЛИЕНТА.
+ *  Без «Долг и деньги» — денег нет; без «Истории записей» — визитов и дат нет.
+ *  Строка без `blocks` (владелец) — как есть. */
+export function statsByBlocks<S extends {
+  visits: number;
+  totalSpent: number;
+  lastVisitDate: string;
+  lastVisitDays: number | null;
+  nextApt: unknown;
+  nextAptDays: number | null;
+  medianGapDays: number | null;
+  serviceDue: number;
+  unclosedVisits: number;
+  debt: number;
+  expectedRevenue: number;
+}>(client: Pick<Client, "blocks">, stats: S): S {
+  if (!client.blocks) return stats;
+  const noMoney = clientBlockLevel(client, "clients.money") === "hidden";
+  const noHistory = clientBlockLevel(client, "clients.history") === "hidden";
+  if (!noMoney && !noHistory) return stats;
+  return {
+    ...stats,
+    ...(noMoney ? { totalSpent: 0, debt: 0, expectedRevenue: 0 } : {}),
+    ...(noHistory
+      ? {
+          visits: 0,
+          lastVisitDate: "",
+          lastVisitDays: null,
+          nextApt: null,
+          nextAptDays: null,
+          medianGapDays: null,
+          serviceDue: 0,
+          unclosedVisits: 0,
+        }
+      : {}),
   };
 }

@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react";
 import type { Client } from "@babun/shared/local/clients";
-import { withContacts, type MemberContacts } from "./member-contacts";
+import { contactsAfterPatch, withContacts, type MemberContacts } from "./member-contacts";
 
 // ОТКРЫТЫЕ НОМЕРА — ТОЛЬКО В ПАМЯТИ.
 //
@@ -25,6 +25,20 @@ const emit = () => {
 
 export function rememberContacts(tenantId: string, clientId: string, contacts: MemberContacts): void {
   store.set(keyOf(tenantId, clientId), { contacts, at: Date.now() });
+  emit();
+}
+
+/** Удачная правка контактов открытого клиента — обновить снимок полями
+ *  патча, чтобы он не затирал свежую строку старыми номерами. */
+export function refreshRevealedContacts(
+  tenantId: string | null,
+  clientId: string,
+  patch: Partial<Client>,
+): void {
+  if (!tenantId) return;
+  const entry = store.get(keyOf(tenantId, clientId));
+  if (!entry) return;
+  store.set(keyOf(tenantId, clientId), { ...entry, contacts: contactsAfterPatch(entry.contacts, patch) });
   emit();
 }
 

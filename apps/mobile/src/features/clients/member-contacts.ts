@@ -83,7 +83,31 @@ export function contactsLocked(client: Pick<Client, "contacts_hidden" | "phone">
   return client.contacts_hidden !== undefined && !client.phone.trim();
 }
 
-/** Карточка с открытыми контактами поверх строки окна. */
+/** Карточка с открытыми контактами поверх строки окна. Связи («Входит в»)
+ *  не накладываются: с 30.09 это блок «Люди», и строка сама несёт их по
+ *  праву — старый снимок затирал бы свежие. */
 export function withContacts<T extends Client>(client: T, contacts: MemberContacts): T {
-  return { ...client, ...contacts, contacts_hidden: null };
+  const { memberships: _ignored, ...own } = contacts;
+  return { ...client, ...own, contacts_hidden: null };
+}
+
+const CONTACT_KEYS = [
+  "phone",
+  "phone_e164",
+  "phones",
+  "whatsapp_phone",
+  "email",
+  "telegram_username",
+  "instagram_username",
+] as const;
+
+/** Снимок открытых контактов после удачной правки: поля патча поверх. Иначе
+ *  старый снимок лёг бы на свежую строку, и следующая правка номеров
+ *  (`ClientExtraContacts`) записала бы старые телефоны обратно. */
+export function contactsAfterPatch(contacts: MemberContacts, patch: Partial<Client>): MemberContacts {
+  const next = { ...contacts };
+  for (const key of CONTACT_KEYS) {
+    if (patch[key] !== undefined) (next as Record<string, unknown>)[key] = patch[key];
+  }
+  return next;
 }
