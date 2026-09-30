@@ -167,7 +167,9 @@ async function mark(sb: any, id: string, status: "sent" | "failed", sid: string 
 async function deliver(sb: any, tw: Twilio, row: Claimed): Promise<"sent" | "failed" | "blocked"> {
   // Эмодзи клиенту не уходят (владелец 30.09) — даже из старой сборки или
   // шаблона, сохранённого до запрета: тем же правилом, что режет редактор.
-  const text = stripEmoji(row.body?.trim() || renderSms(row.template_body, row.vars ?? {})).trim();
+  // Шаблон, не заполнившийся полями, даёт null — его ловит проверка ниже.
+  const raw = row.body?.trim() || renderSms(row.template_body, row.vars ?? {});
+  const text = raw ? stripEmoji(raw).trim() : "";
   if (!text) {
     await mark(sb, row.id, "failed", null, "template", "Шаблон удалён или не заполнился полями записи");
     return "failed";
