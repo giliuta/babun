@@ -12,6 +12,7 @@ import { GUTTER } from "@/components/ui/tokens";
 import { SummaryToggle } from "@/features/finances/FinanceOverview";
 import { useTeams } from "@/features/reference/queries";
 import { usePullRefresh } from "@/lib/pull-refresh";
+import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { useSmsHistoryPages } from "./sms-account";
 import { countBuckets, filterHistory, groupByDay, type SmsBucket } from "./sms-history-view";
@@ -32,8 +33,6 @@ import { euro } from "./sms-words";
 //     цена, двери к клиенту и записи; недошедшее — «Отправить ещё раз».
 // Сообщения приходят страницами по сто: долистал до конца — пришли ещё.
 // Плитки и поиск считают то, что уже загружено.
-
-const ALL = "all";
 
 export function SmsHistoryScreen() {
   const t = useThemeColors();
@@ -90,12 +89,17 @@ export function SmsHistoryScreen() {
           «календари — в вся история, там выбор по календарям»). */}
       {teams.length > 0 ? (
         <View style={{ marginBottom: 12 }}>
+          {/* Как в клиентах: ничего не выбрано — видно всё; тап выбирает
+              команду, повторный тап снимает выбор (владелец 30.09). */}
           <ScopeChips
             onCanvas
             seam={false}
-            items={[{ id: ALL, name: "Все" }, ...teams.map((x) => ({ id: x.id, name: x.name, color: x.color }))]}
-            activeId={teamId ?? ALL}
-            onSelect={(id) => setTeamId(id === ALL ? null : id)}
+            items={teams.map((x) => ({ id: x.id, name: x.name, color: x.color }))}
+            activeId={teamId}
+            onSelect={(id) => {
+              haptics.tap();
+              setTeamId((cur) => (cur === id ? null : id));
+            }}
           />
         </View>
       ) : null}
