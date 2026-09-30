@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
-import { Hash } from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
+import { ChevronRight, Hash } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Field } from "@/components/ui/Field";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -29,7 +29,17 @@ export function withSeq(number: string, seq: number): string {
   return number.replace(/(\d+)$/, (tail) => String(seq).padStart(tail.length, "0"));
 }
 
-export function InvoiceNumberRow({ target }: { target: InvoiceNumberTarget }) {
+export function InvoiceNumberRow({
+  target,
+  stacked,
+}: {
+  target: InvoiceNumberTarget;
+  /** СТРОКОЙ ПОЛЯ — подпись сверху, номер под ней (лист реквизитов, владелец
+   *  2026-09-30: «сделай стандартный наш блок с шрифтом»). Соседи по листу —
+   *  поля «Юридическое имя», «IBAN» тем же видом (`FieldRow stacked`), и
+   *  жирный 17-й кегль денежной строки среди них выглядел чужим. */
+  stacked?: boolean;
+}) {
   const t = useThemeColors();
   const save = useSetInvoiceNextNumber();
   const [open, setOpen] = useState(false);
@@ -62,31 +72,75 @@ export function InvoiceNumberRow({ target }: { target: InvoiceNumberTarget }) {
 
   return (
     <>
-      <SettingsRow
-        // Плитка того же вида, что у набора над ней: одна карточка — один ряд
-        // значков.
-        appearance={{ fallback: Hash }}
-        title="Номер"
-        value={next?.number ?? "…"}
-        onPress={() => setOpen(true)}
-      />
+      {stacked ? (
+        <Pressable
+          onPress={() => setOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Следующий номер, ${next?.number ?? "загрузка"}`}
+          accessibilityHint="Нажмите, чтобы изменить"
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            minHeight: 60,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <View style={{ flex: 1 }}>
+            <Text
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
+              style={{ fontSize: 13, fontWeight: "500", color: t.sub, marginBottom: 2 }}
+            >
+              Следующий номер
+            </Text>
+            <Text
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
+              style={{
+                fontSize: 15,
+                fontWeight: "600",
+                color: next ? t.ink : t.faint,
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {next?.number ?? "…"}
+            </Text>
+          </View>
+          {/* Шеврон: строка уводит в шторку, а не правится на месте, как
+              поля над ней. */}
+          <ChevronRight color={t.chevron} size={16} strokeWidth={1.75} />
+        </Pressable>
+      ) : (
+        <SettingsRow
+          // Плитка того же вида, что у набора над ней: одна карточка — один ряд
+          // значков.
+          appearance={{ fallback: Hash }}
+          title="Номер"
+          value={next?.number ?? "…"}
+          onPress={() => setOpen(true)}
+        />
+      )}
 
       <BottomSheet
         visible={open}
         title="Номер инвойса"
         avoidKeyboard
         onClose={() => setOpen(false)}
+        // Кнопка — прямо в подвале: отступ от краёв лист даёт сам, и лишняя
+        // обёртка с 16pt делала кнопку уже поля над ней.
         footer={
-          <View style={{ paddingHorizontal: 16 }}>
-            <GradientButton
-              label="Применить"
-              disabled={!valid || save.isPending}
-              onPress={apply}
-            />
-          </View>
+          <GradientButton
+            label="Применить"
+            disabled={!valid || save.isPending}
+            onPress={apply}
+          />
         }
       >
-        <View style={{ gap: 10 }}>
+        {/* Воздух под подсказкой: без него кнопка подвала прилипала к тексту. */}
+        <View style={{ gap: 10, paddingBottom: 16 }}>
           <Field
             label="Номер этого инвойса"
             value={draft}

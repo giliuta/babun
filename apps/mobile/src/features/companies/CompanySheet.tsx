@@ -325,7 +325,7 @@ function CompanyInvoiceNumber({ companyId }: { companyId: string }) {
   const next = useNextInvoiceSeries(year, companyId).data ?? null;
   return (
     <SectionCard dense title="Инвойс">
-      <InvoiceNumberRow target={{ companyId, year, next }} />
+      <InvoiceNumberRow stacked target={{ companyId, year, next }} />
     </SectionCard>
   );
 }
