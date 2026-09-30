@@ -145,11 +145,20 @@ export function appointmentServiceNames(
  * Считается в центах: сумма десятков строк иначе копит float-пыль.
  */
 export function rowsNet(
-  rows: readonly Pick<RecordRow, "amount" | "tone" | "crossesSlice">[],
+  rows: readonly Pick<RecordRow, "amount" | "tone" | "crossesSlice" | "extras">[],
   countEveryTone = false,
 ): number {
   let cents = 0;
   for (const row of rows) {
+    // Склеенная запись несёт второстепенные деньги в `extras` (доход €135 и
+    // материалы €10 одной работы). Итог дня считал только главную сумму и
+    // терял расход: «€115» вместо €105 (аудит 2026-09-30). Долг — не деньги.
+    if (!countEveryTone) {
+      for (const extra of row.extras ?? []) {
+        if (extra.tone === "expense") cents -= Math.round(Math.abs(extra.amount) * 100);
+        else if (extra.tone === "income") cents += Math.round(Math.abs(extra.amount) * 100);
+      }
+    }
     if (
       !countEveryTone
       && (row.tone === "debt" || (row.tone === "transfer" && !row.crossesSlice))

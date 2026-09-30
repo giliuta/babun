@@ -322,7 +322,9 @@ describe("две стороны денег", () => {
   test("«Видит» расходы и «Добавляет» доходы: кнопка расхода погашена с причиной", () => {
     const access = sides({ "finance.income": "write", "finance.expense": "read" });
     assert.deepEqual(access.footer("expense"), { enabled: false, reason: VIEW_ONLY_REASON });
-    assert.equal(access.view("profit"), "profit");
+    // Прибыль сотруднику закрыта: материалов записей у него нет, и число
+    // вышло бы больше настоящего (аудит 2026-09-30).
+    assert.equal(access.view("profit"), "all");
   });
 
   test("«Правит всё» для ворот — та же запись", () => {

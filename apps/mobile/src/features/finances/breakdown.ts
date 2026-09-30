@@ -184,5 +184,8 @@ export function breakdownExpense(
     row.count += 1;
     map.set(name, row);
   }
-  return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+  // Копейки после сложения: 10.1 + 20.2 даёт 30.299999… (аудит 2026-09-30).
+  return Array.from(map.values())
+    .map((r) => ({ ...r, amount: Math.round(r.amount * 100) / 100 }))
+    .sort((a, b) => b.amount - a.amount);
 }

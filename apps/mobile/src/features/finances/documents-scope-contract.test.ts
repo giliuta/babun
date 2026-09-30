@@ -32,7 +32,11 @@ describe("плитка «Документы» и список под ней — 
   // же списка, что открывается под ней.
   test("плитка печатает длину списка периода, панель берёт тот же список", () => {
     assert.ok(financesScreen.includes("usePeriodDocuments("));
-    assert.match(financesScreen, /count:\s*periodDocuments\.documents\.length/);
+    // Кредит-нота в списке есть, но документом периода не считается (30.09).
+    assert.match(
+      financesScreen,
+      /count:\s*periodDocuments\.documents\.filter\(\(d\) => !d\.creditNote\)\.length/,
+    );
     assert.ok(panel.includes("usePeriodDocuments("));
   });
 

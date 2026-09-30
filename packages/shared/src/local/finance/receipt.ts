@@ -32,6 +32,9 @@ export interface Receipt {
   invoice_id: string | null;
   transaction_id: string | null;
   account_id: string | null;
+  /** Команда чека (NOT NULL в базе с 2026-09-25). Необязательное в типе:
+   *  чеки из кэша старой сборки его не несут. */
+  team_id?: string | null;
   payment_method: string | null;
   status: ReceiptStatus;
   /** Реквизиты сторон НА МОМЕНТ выдачи: переименовали компанию — старый

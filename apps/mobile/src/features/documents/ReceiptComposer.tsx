@@ -33,6 +33,7 @@ import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { useServices, type Service } from "@/features/services/queries";
 import { useCompanies, defaultCompany } from "@/features/companies/queries";
 import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
+import { useTeamVatRate } from "@/features/finances/vat-queries";
 import { companyDetail } from "@/features/companies/company-rules";
 import { useTenant } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
@@ -190,7 +191,9 @@ export function ReceiptComposer({
   // Ставку пишут цифрами в «Итого» и она запоминается для следующих
   // документов (владелец 2026-09-22). Настройки ставки больше не решают, а
   // САМ НАЛОГ по-прежнему включает только человек клавишей VAT.
-  const rememberedRate = useRememberedVatRate();
+  // Не писали ставку на этом телефоне — ставка команды из настроек.
+  const teamVatRate = useTeamVatRate(draft.teamId);
+  const rememberedRate = useRememberedVatRate(teamVatRate);
   const vatRate = draft.vatRate ?? rememberedRate.rate;
   const liveCompanies = (companies.data ?? []).filter((c) => !c.archived_at);
   const company =

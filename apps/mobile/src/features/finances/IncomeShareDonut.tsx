@@ -132,6 +132,10 @@ export function IncomeShareDonut({
   }, [rows, topN, th.accent, th.surface, th.sub]);
 
   const total = slices.reduce((s, r) => s + r.value, 0);
+  // В центре — нетто, как в шапке секции над кольцом: продажи 800 и возвраты
+  // −100 давали «€700» сверху и «€800» в кольце (аудит 2026-09-30). Доли
+  // по-прежнему — от продаж.
+  const net = Math.round(rows.reduce((s, r) => s + r.amount, 0) * 100) / 100;
   if (slices.length === 0 || total === 0) return null;
 
   const percents = percentShares(slices.map((s) => s.value));
@@ -178,7 +182,7 @@ export function IncomeShareDonut({
             style={{ color: th.ink, fontVariant: ["tabular-nums"] }}
             numberOfLines={1}
           >
-            {formatEUR(total)}
+            {`${net < 0 ? "−" : ""}${formatEUR(Math.abs(net))}`}
           </Text>
         </View>
       </View>

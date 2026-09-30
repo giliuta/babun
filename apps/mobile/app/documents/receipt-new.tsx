@@ -21,6 +21,7 @@ import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import { useComposeReceipt } from "@/features/documents/receipts-queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { readRememberedVatRate } from "@/features/finances/remembered-vat-rate";
+import { useTeamVatRate } from "@/features/finances/vat-queries";
 import { useTenantId } from "@/lib/tenant";
 import { useTenant } from "@/features/settings/tenant";
 import { useServices } from "@/features/services/queries";
@@ -70,7 +71,9 @@ export default function NewReceiptScreen() {
   // на бумагу.
   // Та же ставка, что показала шторка «Итого»: написанная руками или
   // запомненная с прошлого документа (`useRememberedVatRate`).
-  const vatRate = draft.vatRate ?? readRememberedVatRate(tenantIdForVat);
+  // Не писали ставку — ставка команды, как в шторке «Итого» составителя.
+  const teamVatRate = useTeamVatRate(draft.teamId);
+  const vatRate = draft.vatRate ?? readRememberedVatRate(tenantIdForVat, teamVatRate);
   // ТЕ ЖЕ ЧИСЛА, ЧТО ПОКАЗАЛА ШТОРКА «ИТОГО», И ТА ЖЕ ФУНКЦИЯ, ЧТО КЛАДЁТ
   // ДЕНЬГИ В ПРОВОДКУ (`applyTxVat`). Налог берётся ТОЛЬКО из выбора
   // человека — настройка компании отвечает за ставку, а не за «включить»

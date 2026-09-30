@@ -236,6 +236,10 @@ export function TransactionPopup({
     (allow?.refund ?? true) &&
     tx.type === "income" &&
     !isAppointmentLedger &&
+    // Оплата долга: возврат её долг не откроет — долг остался бы «закрытым»,
+    // а деньги ушли бы клиенту (аудит 2026-09-30). Такой платёж снимают
+    // удалением, тогда долг снова виден.
+    !tx.debt_id &&
     // Кап неизвестен, пока Σ возвратов не приехала (или упала) — действие
     // не предлагаем, а не гасим молча: строка ниже называет причину.
     !refundTotalsLoading &&
@@ -247,7 +251,7 @@ export function TransactionPopup({
   // кроме самого кап-числа: показываем строку ИМЕННО тогда, когда причина —
   // загрузка или ошибка, а не типы/права/appointment-ledger.
   const refundStatusCaption =
-    (allow?.refund ?? true) && tx.type === "income" && !isAppointmentLedger
+    (allow?.refund ?? true) && tx.type === "income" && !isAppointmentLedger && !tx.debt_id
       ? refundTotalsLoading
         ? "Считаем, сколько уже возвращено…"
         : refundTotalsError

@@ -879,6 +879,8 @@ export function OperationSheet({
     isOwner &&
     !!transaction &&
     transaction.type === "income" &&
+    // Оплата долга возвратом долг не откроет — её снимают удалением.
+    !transaction.debt_id &&
     !!onRefund &&
     // Возврат — тоже запись на закрытый счёт, сервер её не примет.
     !txAccountClosed &&

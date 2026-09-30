@@ -142,7 +142,20 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
     pickedTeam !== null && teams.some((team) => team.id === pickedTeam) ? pickedTeam : null;
 
   const apptsQuery = useAppointments();
-  const appointments = useMemo(() => apptsQuery.data ?? [], [apptsQuery.data]);
+  // АРХИВНЫХ КАЛЕНДАРЕЙ В ЖИВЫХ ЦИФРАХ НЕТ (владелец 2026-09-21): на «всей
+  // компании» их записи и деньги попадали в итоги (аудит 2026-09-30).
+  // Справочник ещё едет — не режем, иначе на кадр всё обнулилось бы.
+  const liveTeam = useMemo(
+    () => (teamsData ? new Set(teamsData.map((team) => team.id)) : null),
+    [teamsData],
+  );
+  const appointments = useMemo(
+    () =>
+      (apptsQuery.data ?? []).filter(
+        (a) => !liveTeam || !a.team_id || liveTeam.has(a.team_id),
+      ),
+    [apptsQuery.data, liveTeam],
+  );
   const clientsData = useClients().data;
   const clientName = useMemo(
     () => new Map((clientsData ?? []).map((c) => [c.id, c.full_name])),
@@ -172,7 +185,13 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   const ledgerFrom = [period.from, prev.from, `${yearFrom}-01-01`].sort()[0];
   const ledgerTo = [period.to, yearEnd < today ? yearEnd : today].sort()[1];
   const ledger = useTransactions(ledgerFrom, ledgerTo, { enabled: showMoney });
-  const txs = useMemo(() => ledger.data ?? [], [ledger.data]);
+  const txs = useMemo(
+    () =>
+      (ledger.data ?? []).filter(
+        (tx) => !liveTeam || !tx.team_id || liveTeam.has(tx.team_id),
+      ),
+    [ledger.data, liveTeam],
+  );
 
   const scope: Scope = useMemo(
     () => ({ from: period.from, to: period.to, today, teamId, accountTeam, nowHm }),

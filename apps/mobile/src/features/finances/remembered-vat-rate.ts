@@ -16,24 +16,33 @@ import { useTenantId } from "@/lib/tenant";
 
 export const vatRateKey = (tenantId: string | null) => `vat.lastRate.${tenantId ?? "none"}`;
 
-export function readRememberedVatRate(tenantId: string | null): number {
+/** Написанная ставка либо `null`, если на этом телефоне её ещё не писали. */
+function readStoredVatRate(tenantId: string | null): number | null {
   const value = getStorage().get<number>(vatRateKey(tenantId));
-  return typeof value === "number" && value >= 0 && value < 100 ? value : 0;
+  return typeof value === "number" && value >= 0 && value < 100 ? value : null;
 }
 
-/** Ставка по умолчанию для нового документа и способ её запомнить. */
-export function useRememberedVatRate(): {
+/** НЕ НАПИСАНА — СТАВКА КОМАНДЫ (аудит 2026-09-30). На новом телефоне
+ *  память пуста, и команда с 19 % в настройках выставляла инвойс по 0 %:
+ *  два телефона — два разных умолчания. Написанная рукой по-прежнему главнее. */
+export function readRememberedVatRate(tenantId: string | null, fallback = 0): number {
+  return readStoredVatRate(tenantId) ?? fallback;
+}
+
+/** Ставка по умолчанию для нового документа и способ её запомнить.
+ *  `fallback` — ставка команды из настроек, пока своей не писали. */
+export function useRememberedVatRate(fallback = 0): {
   rate: number;
   remember: (rate: number) => void;
 } {
   const tenantId = useTenantId();
-  const [rate, setRate] = useState(() => readRememberedVatRate(tenantId));
+  const [stored, setStored] = useState(() => readStoredVatRate(tenantId));
   const remember = useCallback(
     (next: number) => {
-      setRate(next);
+      setStored(next);
       getStorage().set(vatRateKey(tenantId), next);
     },
     [tenantId],
   );
-  return { rate, remember };
+  return { rate: stored ?? fallback, remember };
 }

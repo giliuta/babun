@@ -269,7 +269,8 @@ export function InvoiceEditor({
   // 2026-09-22): ставка документа — его снимок, и сервер берёт присланную.
   // Ставку пишут цифрами в «Итого», и написанная запоминается для следующих
   // документов (`useRememberedVatRate`). У выставленного — своя, из снимка.
-  const rememberedRate = useRememberedVatRate();
+  // Не писали ставку на этом телефоне — ставка команды из настроек.
+  const rememberedRate = useRememberedVatRate(vatForTeam(teamId).rate);
   const [rateOverride, setRateOverride] = useState<number | null>(
     appointmentVat?.rate ?? null,
   );

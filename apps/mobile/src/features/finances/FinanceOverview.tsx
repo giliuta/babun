@@ -147,16 +147,24 @@ export function SummaryToggle({
         style={{ backgroundColor: locked ? t.muted : color }}
       />
       <Text
+        numberOfLines={1}
         className="ml-2 text-sm font-semibold"
-        style={{ color: locked ? t.muted : t.sub }}
+        style={{ color: locked ? t.muted : t.sub, flexShrink: 1 }}
       >
         {label}
       </Text>
+      {/* Пятизначная прибыль с копейками («€12 450,75») на узком экране не
+          влезала рядом с подписью и вылезала за край плитки: сумма ужимается
+          до 80 %, а не рвётся. */}
       <Text
-        className={`ml-auto text-[15px] ${quiet || locked ? "font-semibold" : "font-bold"}`}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+        className={`ml-auto pl-2 text-[15px] ${quiet || locked ? "font-semibold" : "font-bold"}`}
         style={{
           color: locked ? t.muted : quiet ? t.caption : color,
           fontVariant: ["tabular-nums"],
+          flexShrink: 1,
         }}
       >
         {value}
@@ -314,6 +322,7 @@ export function FinanceOverview({
   lockAccounts = false,
   lockIncome = false,
   lockExpense = false,
+  lockProfit = false,
   lockDebts = false,
 }: {
   teams: Team[];
@@ -348,6 +357,8 @@ export function FinanceOverview({
    *  поодиночке, «Прибыль» — если закрыта хоть одна из них. */
   lockIncome?: boolean;
   lockExpense?: boolean;
+  /** Прибыль без материалов записей была бы неверной (сотрудник). */
+  lockProfit?: boolean;
   lockDebts?: boolean;
 }) {
   const t = useThemeColors();
@@ -485,7 +496,7 @@ export function FinanceOverview({
             value={formatEUR(totals.profit)}
             quiet={moneySign(totals.profit) === 0}
             active={view === "profit"}
-            locked={locked || lockIncome || lockExpense}
+            locked={locked || lockIncome || lockExpense || lockProfit}
             onPress={() => onTap("profit")}
           />
         </View>

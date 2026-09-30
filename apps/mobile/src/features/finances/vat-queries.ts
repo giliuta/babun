@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import {
+  effectiveVatSettings,
   summarizeVat,
   type VatMode,
   type VatSettings,
@@ -93,6 +94,20 @@ export function useTeamVatOverrides() {
       }));
     },
   });
+}
+
+/** СТАВКА КОМАНДЫ ИЗ НАСТРОЕК — умолчание для нового документа, пока человек
+ *  не написал свою (`useRememberedVatRate`). 0 — настройка ещё едет или VAT
+ *  выключен. */
+export function useTeamVatRate(teamId: string | null | undefined): number {
+  const vat = useVatSettings().data;
+  const overrides = useTeamVatOverrides().data;
+  const settings = effectiveVatSettings(
+    vat,
+    teamId ? (overrides ?? []).find((o) => o.teamId === teamId) : undefined,
+    null,
+  );
+  return settings.mode === "off" ? 0 : settings.rate;
 }
 
 export function useSaveTeamVat() {

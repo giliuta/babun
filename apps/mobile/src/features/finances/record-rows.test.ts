@@ -554,3 +554,21 @@ describe("визит вне периода ленты", () => {
     assert.equal(row.forDay, undefined);
   });
 });
+
+describe("итог дня со склеенной записью", () => {
+  test("доход записи +135, её материалы −10 и бензин −20 — итог €105", async () => {
+    const { rowsNet: net } = await import("./record-rows");
+    assert.equal(
+      net([
+        { amount: 135, tone: "income", extras: [{ tone: "expense", amount: 10 }] },
+        { amount: -20, tone: "expense" },
+      ]),
+      105,
+    );
+  });
+
+  test("долг в подписи записи в итог не входит", async () => {
+    const { rowsNet: net } = await import("./record-rows");
+    assert.equal(net([{ amount: 50, tone: "income", extras: [{ tone: "debt", amount: 70 }] }]), 50);
+  });
+});

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
 import { debtRemainderCents } from "@babun/shared/local/finance/debt";
-import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
+import { formatEURExact, parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { useToast } from "@/components/ui/Toast";
 import { formatHM } from "@/features/appointments/helpers";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
@@ -178,8 +178,13 @@ export function useDebtDraft({
   // из карточки СНИМАЕТСЯ в долг, а не читается из неё каждый раз.
   const who = (client?.full_name || counterparty).trim();
   const named = who.length > 0;
+  // СУММА НЕ МЕНЬШЕ УЖЕ УПЛАЧЕННОГО (аудит 2026-09-30): долг €900, отдано
+  // €300, правка на €200 давала остаток −€100 — строка молча пропадала, а
+  // переплата нигде не показывалась.
+  const paidCents = Math.round(paid * 100);
+  const belowPaid = !!debt && cents != null && cents > 0 && cents < paidCents;
   const canSave =
-    online && !busy && !!debtTeamId && named && cents != null && cents > 0;
+    online && !busy && !!debtTeamId && named && cents != null && cents > 0 && !belowPaid;
 
   const reason = !online
     ? { text: OFFLINE, error: true }
@@ -189,7 +194,9 @@ export function useDebtDraft({
         ? { text: "Выберите клиента", error: false }
         : cents == null || cents <= 0
           ? { text: "Введите сумму долга", error: false }
-          : null;
+          : belowPaid
+            ? { text: `Уже уплачено ${formatEURExact(paid)} — долг не меньше`, error: true }
+            : null;
 
   // Синхронный засов: `busy` включается только к следующему кадру, и
   // двойной тап успевал записать два одинаковых долга (аудит 2026-09-24) —

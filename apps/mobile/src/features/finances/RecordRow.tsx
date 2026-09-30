@@ -58,7 +58,9 @@ export function RecordRowView({
           ? t.sub
           : t.danger;
   const extraColor = toneColor;
-  const money = toneColor(tone);
+  // Возврат в разрезе «Доход» — деньги, ушедшие клиенту: «−€30» зелёным
+  // читался как приход (плитка и витрина красят его красным).
+  const money = tone === "income" && row.amount < 0 ? t.danger : toneColor(tone);
   // Плюс печатается только у перевода, пересекающего ленту: цвет у него
   // нейтральный, и без знака «€55» на «Карте» не отличить от ушедших €55.
   const sign =

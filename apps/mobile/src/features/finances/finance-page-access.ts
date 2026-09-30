@@ -252,7 +252,14 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
       if (view === "income" && income === "locked") return "all";
       if (view === "expense" && expense === "locked") return "all";
       // Прибыль — доход минус расход: без одной из сторон она была бы выдумкой.
-      if (view === "profit" && (income === "locked" || expense === "locked")) return "all";
+      // И без материалов записей (их деньги сотруднику не приходят) — тоже:
+      // €800 у диспетчера против €500 у владельца (аудит 2026-09-30).
+      if (
+        view === "profit" &&
+        (income === "locked" || expense === "locked" || !owner)
+      ) {
+        return "all";
+      }
       return view;
     },
     footer: (view) => {

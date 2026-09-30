@@ -51,6 +51,7 @@ import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
 import { useInlineNote } from "@/features/appointments/use-inline-note";
 import { useClientNoteField } from "@/features/appointments/use-client-note-field";
 import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
+import { useTeamVatRate } from "@/features/finances/vat-queries";
 import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { randomUuid } from "@babun/shared/sync/uuid";
@@ -487,7 +488,9 @@ export default function BookScreen() {
   // написанная запоминается для следующих документов. «К оплате» записи
   // (`total_amount`) включает налог, а оплата ложится на счёт с выделенным
   // налогом по этой ставке (сервер, миграция 20260922040000).
-  const rememberedVatRate = useRememberedVatRate();
+  // Не писали ставку на этом телефоне — ставка команды из настроек.
+  const teamVatRate = useTeamVatRate(teamId);
+  const rememberedVatRate = useRememberedVatRate(teamVatRate);
   const [recordVatMode, setRecordVatMode] = useState<TxVatMode>("none");
   const [recordVatRate, setRecordVatRate] = useState<number | null>(null);
   // Причина скидки осталась только у старых записей — программу лояльности

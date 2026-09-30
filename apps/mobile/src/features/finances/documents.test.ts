@@ -311,3 +311,37 @@ describe("сегмент и поиск режут уже собранный сп
     assert.equal(filterDocuments(priced, "invoice", "1\u00A0200").length, 1);
   });
 });
+
+describe("кредит-нота в «Документах»", () => {
+  test("называется кредит-нотой, состояние «Сторно», строка погашена", async () => {
+    const { collectDocuments: collect } = await import("./documents");
+    const docs = collect({
+      invoices: [
+        {
+          id: "cn",
+          kind: "credit_note",
+          number: "CN-2026-001",
+          issued_on: "2026-09-10",
+          total: -100,
+          currency: "EUR",
+          status: "issued",
+          client_id: null,
+          client_snapshot: null,
+          team_id: null,
+          due_on: null,
+        } as never,
+      ],
+      payments: {},
+      receipts: [],
+      clientName: () => "Вася",
+      receiptTeamId: () => null,
+      period: { from: "2026-09-01", to: "2026-09-30" },
+      teamId: null,
+      today: "2026-09-30",
+    });
+    assert.equal(docs[0].title, "Кредит-нота CN-2026-001");
+    assert.equal(docs[0].state, "Сторно");
+    assert.equal(docs[0].dead, true);
+    assert.equal(docs[0].creditNote, true);
+  });
+});

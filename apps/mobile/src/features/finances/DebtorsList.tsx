@@ -2,6 +2,7 @@ import { useMemo, type ReactElement } from "react";
 import { Pressable, Text, type RefreshControlProps } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
+import { getDebtAmount } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
 import { DEBT_DIRECTION_LABEL } from "@babun/shared/local/finance/debt";
@@ -146,6 +147,9 @@ export function DebtorsList({
       appointments.some(
         (a) =>
           invoicedAppointmentIds.has(a.id) &&
+          // Только ещё не оплаченные: по оплаченному счёту ничего не «ждёт
+          // оплату», и подпись врала (аудит 2026-09-30).
+          getDebtAmount(a) > 0 &&
           a.date >= fromDate &&
           a.date <= toDate &&
           inTeamScope(a.team_id, teamId),
@@ -251,11 +255,8 @@ export function DebtorsList({
           ? "Работы, на которые выставлен счёт, ждут оплату в «Документах»"
           : undefined
       }
-      emptyAction={
-        movedToInvoices && onOpenDocuments
-          ? { label: "Открыть документы", onPress: onOpenDocuments }
-          : undefined
-      }
+      // Кнопки внутри пустой панели нет (канон «никаких кнопок внутри»,
+      // владелец 15.09): дверь в «Документы» — плитка над списком.
       refreshControl={refreshControl}
       onOpenRecord={openRow}
     />

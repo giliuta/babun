@@ -66,6 +66,9 @@ export function usePeriodDocuments({
   );
   const receiptTeamId = useCallback(
     (receipt: Receipt): string | null =>
+      // Своя команда чека — в самой строке (аудит 2026-09-30): ручной чек на
+      // закрытый счёт своей команды не находил и попадал в каждый чип.
+      receipt.team_id ??
       (receipt.invoice_id ? invoiceTeam.get(receipt.invoice_id) : null) ??
       (receipt.appointment_id
         ? appointmentTeam.get(receipt.appointment_id)
