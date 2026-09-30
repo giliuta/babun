@@ -842,7 +842,7 @@ function ClientsListScreen() {
           }}
           ItemSeparatorComponent={() => (
             <View
-              className="ml-[68px] h-px"
+              className="ml-4 h-px"
               style={{ backgroundColor: t.separator }}
             />
           )}

@@ -17,10 +17,6 @@ import type { Client, ClientTag } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
-import {
-  getAvatarHue,
-  getInitials,
-} from "@babun/shared/common/utils/avatar-color";
 import { haptics } from "@/lib/haptics";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -102,7 +98,6 @@ export default function ClientRow({
   // Одна формула долга на карточку, сортировку и статус «Должники».
   const debt = clientDebt(client, stats);
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
-  const avatarColor = getAvatarHue(client.full_name);
 
   // Порядок долг → доход → ожидается: должник — самый срочный сигнал,
   // читается первым. «долг €450» словом (не голым цветом): золото без
@@ -287,42 +282,25 @@ export default function ClientRow({
             : "Открыть карточку клиента"
         }
         accessibilityState={selectionMode ? { selected: picked } : undefined}
-        className={`min-h-[68px] flex-1 flex-row items-center py-3 pl-4 active:opacity-60 ${phoneDigits && !selectionMode ? "" : "pr-4"}`}
+        className={`min-h-[56px] flex-1 flex-row items-center py-2.5 pl-4 active:opacity-60 ${phoneDigits && !selectionMode ? "" : "pr-4"}`}
       >
+        {/* БЕЗ КРУЖКА С ИНИЦИАЛАМИ (владелец 30.09: «не нравится слева эти
+            кружочки… давай компактнее»). Инициалы по хешу имени не несли
+            смысла и съедали 60pt слева у каждой строки. В режиме выбора слева
+            встаёт только маленькая отметка — ряд почти не сдвигается. */}
         {selectionMode ? (
-          // Чекбокс замещает аватар (web parity) — ряд не разъезжается.
           <View
-            className="h-11 w-11 items-center justify-center rounded-full"
+            className="mr-3 h-6 w-6 items-center justify-center rounded-full"
             style={{
-              backgroundColor: picked ? t.accent : t.fill,
+              backgroundColor: picked ? t.accent : "transparent",
               borderWidth: picked ? 0 : 2,
-              borderColor: t.separator,
+              borderColor: t.separatorStrong,
             }}
           >
-            {picked ? <Check color="#fff" size={20} strokeWidth={3} /> : null}
+            {picked ? <Check color="#fff" size={14} strokeWidth={3} /> : null}
           </View>
-        ) : (
-          // Мягкий аватар: заливка = цвет клиента при ~18%, инициалы —
-          // чёрные (ink). Насыщенный круг был самым громким элементом
-          // экрана и не нёс смысла (просто хеш имени); тихий тон даёт
-          // идентичность, не перебивая имя и деньги. Зелёным на строке
-          // остаётся только кнопка звонка = действие.
-          <View
-            className="h-11 w-11 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${avatarColor}2e` }}
-          >
-            <Text
-              maxFontSizeMultiplier={1.3}
-              className="text-sm font-bold"
-              style={{ color: t.ink }}
-            >
-              {getInitials(client.full_name || "?")}
-            </Text>
-          </View>
-        )}
-        {/* ml-2: аватар16+44+8 = 68 → колонка текста совпадает с инсетом
-            разделителя (ml-[68px]) и DS-инсетом avatar-рядов. */}
-        <View className="ml-2 flex-1">
+        ) : null}
+        <View className="flex-1">
           <View className="flex-row items-center gap-1.5">
             {client.pinned_at ? (
               <Pin color={t.accent} size={12} strokeWidth={2.5} />
@@ -356,22 +334,24 @@ export default function ClientRow({
               видно номер телефона»). Он же — то, по чему ищут: поиск и так
               понимает цифры, но раньше найденный номер нигде не показывался,
               и совпадение приходилось проверять, открывая карточку. */}
-          {cardFields.phone && client.phone.trim() ? (
-            <Text
-              maxFontSizeMultiplier={1.3}
-              numberOfLines={1}
-              className="mt-0.5 text-[13px]"
-              style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
-            >
-              {/* Тот же формат, что на карточке: в базе номера лежат как их
-                  когда-то ввели или как пришли из импорта, и рядом стояли
-                  «+357 97469998» и «+357 97 469998» — два вида одного
-                  номера читаются как два разных человека. */}
-              {formatPhoneForDisplay(client.phone, country)}
-            </Text>
-          ) : null}
-          {figs.length > 0 ? (
-            <View className="mt-1 flex-row items-center gap-2.5">
+          {/* НОМЕР И ДЕНЬГИ — ОДНОЙ СТРОКОЙ (владелец 30.09: «компактнее»):
+              строка клиента в три этажа вместо четырёх. */}
+          {(cardFields.phone && client.phone.trim()) || figs.length > 0 ? (
+            <View className="mt-0.5 flex-row items-center gap-2.5">
+              {cardFields.phone && client.phone.trim() ? (
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  numberOfLines={1}
+                  className="shrink text-[13px]"
+                  style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
+                >
+                  {/* Тот же формат, что на карточке: в базе номера лежат как
+                      их когда-то ввели или как пришли из импорта, и рядом
+                      стояли «+357 97469998» и «+357 97 469998» — два вида
+                      одного номера читаются как два разных человека. */}
+                  {formatPhoneForDisplay(client.phone, country)}
+                </Text>
+              ) : null}
               {figs.map((f) => (
                 <Text
                   maxFontSizeMultiplier={1.3}
