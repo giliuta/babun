@@ -103,6 +103,9 @@ export function rowToAppointment(r: Row): Appointment {
     // пишет дверь `set_appointment_vat_mode`.
     vat_mode: (r.vat_mode ?? null) as Appointment["vat_mode"],
     vat_rate: r.vat_rate == null ? null : Number(r.vat_rate),
+    // Колонка новее сгенерированных типов (миграция 20260930235800); пишет
+    // её только сервер, в запись на сервер она не уходит.
+    material_lines: (r as { material_lines?: unknown }).material_lines ?? null,
     paid_amount:
       r.paid_amount === null || r.paid_amount === undefined
         ? undefined

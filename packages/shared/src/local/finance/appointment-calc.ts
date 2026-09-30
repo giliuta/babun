@@ -13,6 +13,40 @@ import {
 export interface AppointmentMaterialSource {
   service_ids?: unknown;
   services?: unknown;
+  /** Материалы, замороженные сервером при закрытии записи (миграция
+   *  20260930235800): цены дня закрытия. Есть — считаем по ним, а не по
+   *  сегодняшнему справочнику: правка цены химии не переписывает прибыль
+   *  прошлых месяцев. */
+  material_lines?: unknown;
+}
+
+/** Снимок сервера, если он пригоден; `null` — считать по справочнику. */
+function frozenMaterialLines(raw: unknown): AppointmentMaterialCostLine[] | null {
+  if (!Array.isArray(raw)) return null;
+  const lines: AppointmentMaterialCostLine[] = [];
+  for (const item of raw) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) return null;
+    const line = item as Record<string, unknown>;
+    const quantity = Number(line.quantity);
+    const unitCost = Number(line.unitCost);
+    const totalCost = Number(line.totalCost);
+    if (
+      typeof line.serviceId !== "string" ||
+      !Number.isFinite(quantity) ||
+      !Number.isFinite(unitCost) ||
+      !Number.isFinite(totalCost)
+    ) {
+      return null;
+    }
+    lines.push({
+      serviceId: line.serviceId,
+      serviceName: typeof line.serviceName === "string" ? line.serviceName : "Услуга",
+      quantity,
+      unitCost,
+      totalCost,
+    });
+  }
+  return lines;
 }
 
 export interface MaterialCatalogService extends ServiceCostSource {
@@ -37,6 +71,18 @@ function materialQuantity(value: unknown): number {
 /** Material-cost lines use the quantity snapshot saved on an appointment.
  * Old appointments without services[] fall back to one unit per service_id. */
 export function appointmentMaterialCostLines(
+  appointment: AppointmentMaterialSource,
+  services: readonly MaterialCatalogService[],
+): AppointmentMaterialCostLine[] {
+  const frozen = frozenMaterialLines(appointment.material_lines);
+  if (frozen) return frozen;
+  return liveMaterialCostLines(appointment, services);
+}
+
+/** Расчёт по сегодняшнему справочнику. ЗЕРКАЛО СЕРВЕРА: то же правило живёт
+ *  в `appointment_material_lines` (миграция 20260930235800) — меняя одно,
+ *  меняй и другое; общий набор примеров — тест «зеркало сервера». */
+export function liveMaterialCostLines(
   appointment: AppointmentMaterialSource,
   services: readonly MaterialCatalogService[],
 ): AppointmentMaterialCostLine[] {

@@ -208,6 +208,10 @@ export interface Appointment {
    *  счёт с выделенным налогом по этой ставке. Старые 'on' | 'off' пишет
    *  только дверь `set_appointment_vat_mode`. */
   vat_rate?: number | null;
+  /** Материалы по ценам дня закрытия — пишет только сервер
+   *  (`freeze_appointment_materials`); `null` — считать по справочнику
+   *  (`appointmentMaterialCostLines`). */
+  material_lines?: unknown;
   /** Mirror — total actually received so far. The trigger uses
    *  total_amount for the income row; this field lets the UI show
    *  «частично оплачено» (paid_amount < total_amount). */
