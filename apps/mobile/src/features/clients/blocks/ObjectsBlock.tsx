@@ -83,6 +83,7 @@ export default function ObjectsBlock({
   requestsEnabled = false,
   residentsFor,
   lastVisitFor,
+  canCopy = true,
   onNote,
   limit,
   onOpenAll,
@@ -126,6 +127,9 @@ export default function ObjectsBlock({
    *  инвойса пропа нет, и строки «был» там нет: там объект выбирают, а не
    *  вспоминают. */
   lastVisitFor?: (loc: Location) => string | undefined;
+  /** Долгое нажатие копирует адрес. Нет — не копирует: клиент чужой
+   *  компании не выносится из приложения (владелец 30.09). */
+  canCopy?: boolean;
 }) {
   const t = useThemeColors();
   // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС»: пока клиент не ответил, в списке стоит
@@ -169,7 +173,7 @@ export default function ObjectsBlock({
               onPress={onOpen ? () => onOpen(loc.id) : undefined}
               // Долгое нажатие копирует адрес (нет адреса — ссылку на карту):
               // его пересылают бригаде или вставляют в навигатор.
-              onLongPress={objectTarget(loc) ? () => copy(objectTarget(loc)) : undefined}
+              onLongPress={canCopy && objectTarget(loc) ? () => copy(objectTarget(loc)) : undefined}
             />
             {onNote ? (
               <ObjectNote loc={loc} ownerKey={client.id} onSave={onNote} />

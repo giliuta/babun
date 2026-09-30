@@ -267,6 +267,7 @@ export function FieldRow({
   readOnly,
   compact,
   onLongPress,
+  noCopy,
   followValue,
   onSave,
 }: {
@@ -341,6 +342,9 @@ export function FieldRow({
    *  самому полю (лупа, «Вставить»), и отбирать его нельзя. Строке только
    *  для чтения оно тоже доступно: скопировать можно и то, что не правится. */
   onLongPress?: () => void;
+  /** Без системного «Скопировать» в открытом поле: клиент чужой компании не
+   *  выносится из приложения (владелец 30.09). Править значение можно. */
+  noCopy?: boolean;
   /** ЖИВОЕ ПОЛЕ, ЗНАЧЕНИЕ КОТОРОГО ВЛАДЕЛЕЦ ПЕРЕПИСЫВАЕТ ПОСРЕДИ ВВОДА (имя
    *  нового клиента: вставили «Мария +357 99…» — номер уехал в телефон, в
    *  имени осталось «Мария»). Без флага набранный текст сверяется со
@@ -549,6 +553,7 @@ export function FieldRow({
               keyboardAppearance="light"
               keyboardType={keyboardType}
               selectTextOnFocus={selectOnFocus}
+              contextMenuHidden={noCopy}
               autoCapitalize={autoCapitalize}
               // Строка карточки — это ДАННЫЕ (имя, телефон, адрес, ник), а не
               // проза. iOS-автозамена молча переписывала введённое: «Zztest»
@@ -653,6 +658,7 @@ export function FieldRow({
             keyboardAppearance="light"
             keyboardType={keyboardType}
             selectTextOnFocus={selectOnFocus}
+            contextMenuHidden={noCopy}
             autoCapitalize={autoCapitalize}
             // Строка карточки — это ДАННЫЕ (имя, телефон, адрес, ник), а не
             // проза. iOS-автозамена молча переписывала введённое: «Zztest»

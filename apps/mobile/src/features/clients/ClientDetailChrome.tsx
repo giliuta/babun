@@ -38,7 +38,9 @@ interface ClientDetailChromeProps {
   onToggleMenu: () => void;
   onCloseMenu: () => void;
   onRemind: () => void;
-  onShare: () => void;
+  /** Нет — «Поделиться» в меню нет: клиента нельзя вынести из приложения
+   *  (сотрудник, владелец 30.09). */
+  onShare?: () => void;
   onToggleBlacklist: () => void;
   onArchive: () => void;
   onDelete: () => void;
@@ -150,13 +152,17 @@ export function ClientDetailChrome({
                 },
               ]
             : []),
-          {
-            id: "share",
-            label: "Поделиться",
-            icon: Share2,
-            color: t.accent,
-            onPress: onShare,
-          },
+          ...(onShare
+            ? [
+                {
+                  id: "share",
+                  label: "Поделиться",
+                  icon: Share2,
+                  color: t.accent,
+                  onPress: onShare,
+                },
+              ]
+            : []),
           ...(onMerge
             ? [
                 {

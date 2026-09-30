@@ -823,7 +823,9 @@ function ClientsListScreen() {
         // владелец своей компании (сервер у сотрудника их отказывает).
         onBook={caps.book ? bookFor : undefined}
         onClose={() => setMenuClient(null)}
-        onSelectMany={(c) => enterSelection(c.id)}
+        // Выбор нескольких ведёт к экспорту и массовой SMS — только своя
+        // база (владелец 30.09: «без передачи»).
+        onSelectMany={caps.export ? (c) => enterSelection(c.id) : undefined}
         onTogglePin={caps.manage ? onTogglePin : undefined}
         onRemind={caps.edit ? openRemindMenu : undefined}
         onArchive={caps.manage ? confirmArchiveOne : undefined}

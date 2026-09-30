@@ -124,6 +124,7 @@ export function ClientObjectsSection({
         requestsEnabled={canRequestAddress}
         residentsFor={residentsLine}
         lastVisitFor={(loc) => lastVisits.get(loc.id)}
+        canCopy={draft || caps.export}
         onNote={
           canEdit
             ? (id, next) => void locationWriter.patchLocation(id, { note: next || undefined })

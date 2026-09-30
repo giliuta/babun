@@ -609,7 +609,7 @@ export function ClientDetailScreen() {
         onToggleMenu={() => setMenuOpen((open) => !open)}
         onCloseMenu={() => setMenuOpen(false)}
         onRemind={() => void onRemind()}
-        onShare={() => void onShare()}
+        onShare={caps.export ? () => void onShare() : undefined}
         onToggleBlacklist={onToggleBlacklist}
         onArchive={onArchive}
         onDelete={onDelete}
@@ -679,6 +679,9 @@ export function ClientDetailScreen() {
           client={c}
           update={update}
           readOnly={!isDraft && !caps.edit}
+          // Без передачи (владелец 30.09): клиента чужой компании не
+          // скопировать ни долгим нажатием, ни из поля.
+          noCopy={!isDraft && !caps.export}
           memberOf={peopleOn ? people.memberOfRows : undefined}
           // Заметка клиента — вторым блоком, под «Клиентом» (владелец 23.09:
           // «сначала идёт блок „Клиент", потом заметка клиента»).

@@ -82,6 +82,10 @@ interface ClientHeaderProps {
   note?: ReactNode;
   /** Нет права менять карточку — номера только читаются, двери нет. */
   readOnly?: boolean;
+  /** Нельзя вынести клиента из приложения (сотрудник, владелец 30.09): ни
+   *  копирования долгим нажатием, ни «Скопировать» в поле. По умолчанию —
+   *  можно. */
+  noCopy?: boolean;
 }
 
 export default function ClientHeader({
@@ -92,6 +96,7 @@ export default function ClientHeader({
   people,
   note,
   readOnly,
+  noCopy = false,
 }: ClientHeaderProps) {
   const t = useThemeColors();
   const toast = useToast();
@@ -116,6 +121,7 @@ export default function ClientHeader({
           Человек это или компания — владелец не различает (2026-09-21: «в
           имя я буду вписывать компанию»): одно поле на обоих. */}
         <FieldRow
+          noCopy={noCopy}
           label="Имя"
           // КОМПАКТНО (владелец 2026-09-21: «слишком большие блоки»): имя и
           // номер — одна ячейка без подписей и без линии между ними, как
@@ -195,10 +201,11 @@ export default function ClientHeader({
           // Долгое нажатие копирует номер — тем видом, каким он показан.
           // В черновике поле открыто для ввода, и нажатие принадлежит ему.
           onLongPress={
-            !draft && client.phone.trim()
+            !draft && !noCopy && client.phone.trim()
               ? () => copy(formatPhoneAsYouType(client.phone, country))
               : undefined
           }
+          noCopy={noCopy}
           // Телефон — ключ дедупа (phone_e164 + UNIQUE-индекс). Стирание
           // номера у сохранённого клиента уносило и ключ: клиент становился
           // невидимым для защиты от дублей, и его можно было создать заново.
@@ -257,6 +264,7 @@ export default function ClientHeader({
           draft={!!draft}
           compact
           readOnly={readOnly}
+          noCopy={noCopy}
         />
       </SectionCard>
       {draft ? dial.sheet : null}

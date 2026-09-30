@@ -72,6 +72,7 @@ export function ClientExtraContacts({
   update,
   draft,
   readOnly = false,
+  noCopy = false,
   compact = false,
   inline = false,
 }: {
@@ -84,6 +85,9 @@ export function ClientExtraContacts({
   /** Только смотреть: сотрудник без права менять контакты. Строки читаются,
    *  «Добавить» нет — дверь, за которой сервер откажет, не рисуется. */
   readOnly?: boolean;
+  /** Без копирования номеров и ников (владелец 30.09: сотрудник видит
+   *  клиента, но вынести его не может). */
+  noCopy?: boolean;
   /** Плотные строки — блоки клиента и его людей (владелец 2026-09-21). */
   compact?: boolean;
   /** Подпись слева, номер справа — строки страницы сотрудника (владелец
@@ -201,6 +205,7 @@ export function ClientExtraContacts({
         .filter((p) => p.id !== pending?.id)
         .map((p) => (
           <FieldRow
+            noCopy={noCopy}
             key={p.id}
             label={p.label || "Другой"}
             value={
@@ -234,7 +239,7 @@ export function ClientExtraContacts({
             // Долгое нажатие копирует номер, как у основного (в черновике
             // поле открыто для ввода — там нажатие принадлежит ему).
             onLongPress={
-              !draft && p.number.trim()
+              !draft && !noCopy && p.number.trim()
                 ? () => copy(formatPhoneAsYouType(p.number, country))
                 : undefined
             }
@@ -250,6 +255,7 @@ export function ClientExtraContacts({
         без следа, с цифрами — станет обычной строкой номера. */}
       {pending ? (
         <FieldRow
+            noCopy={noCopy}
           label={pending.label}
           // Код страны компании подставлен заранее (владелец 2026-08-06:
           // «чтоб оно автоматически подтягивало +357… если надо исправить —
@@ -292,6 +298,7 @@ export function ClientExtraContacts({
         const url = f.url(typing?.id === f.id ? typing.value : shown);
         return (
           <FieldRow
+            noCopy={noCopy}
             key={f.id}
             label={f.label}
             value={shown}

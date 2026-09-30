@@ -85,6 +85,12 @@ export interface ClientsCapabilities {
   links: boolean;
   /** Правка уходит на сервер сразу; очереди на потом нет. */
   onlineOnly: boolean;
+  /** ВЫНЕСТИ КЛИЕНТА ИЗ ПРИЛОЖЕНИЯ — только своей компании (владелец 30.09:
+   *  «дал права на клиентов Команды 1 — видит, но без передачи: сохранить
+   *  или выгрузить клиента себе не может»). «Поделиться», копирование
+   *  долгим нажатием и из поля, «Выбрать несколько» с экспортом и массовой
+   *  SMS. Позвонить и написать клиенту — можно: это работа, не выгрузка. */
+  export: boolean;
 }
 
 export function capabilitiesOf(scope: ClientsScope): ClientsCapabilities {
@@ -119,6 +125,7 @@ export function capabilitiesOf(scope: ClientsScope): ClientsCapabilities {
     // него `false` — набор мастера это его заявки, а не база.
     links: (own || scope.everyClient) && scope.contacts,
     onlineOnly: !scope.isActive || scope.kind === "member",
+    export: own,
   };
 }
 

@@ -58,6 +58,7 @@ export function useClientsCapabilities(): ClientsCapabilities {
             money: true,
             book: true,
             files: true,
+            export: true,
             links: true,
             onlineOnly: false,
           },

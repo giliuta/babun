@@ -36,7 +36,9 @@ interface ClientActionsSheetProps {
   /** Пункт стоит, только если есть обработчик (STORY-088, волна 4): нет
    *  права — нет и пункта, а не пункт, который кончится отказом. */
   onBook?: (c: Client) => void;
-  onSelectMany: (c: Client) => void;
+  /** Нет — пункта «Выбрать несколько» нет: за ним экспорт и массовая SMS,
+   *  а клиента чужой компании не выносят (владелец 30.09). */
+  onSelectMany?: (c: Client) => void;
   onTogglePin?: (c: Client) => void;
   onRemind?: (c: Client) => void;
   onArchive?: (c: Client) => void;
@@ -89,7 +91,7 @@ export function ClientActionsSheet({
       label: "Выбрать несколько",
       icon: Check,
       color: t.accent,
-      onPress: () => onSelectMany(c),
+      onPress: () => onSelectMany?.(c),
     },
     {
       // Архив и удаление — разные исходы: первый бессрочный и сохраняет
