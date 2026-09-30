@@ -103,7 +103,7 @@ import {
 import ClientContactRow from "@/features/clients/ClientContactRow";
 import { useCurrentRole, useTenant } from "@/features/settings/tenant";
 import { SmsComposeProvider } from "@/features/sms/SmsCompose";
-import { SmsClientBlock } from "@/features/sms/SmsRecordBlock";
+import { SmsClientBlock } from "@/features/sms/SmsClientBlock";
 import { clientSmsVars } from "@/features/sms/client-sms-vars";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { shareText } from "@/features/clients/client-share";
@@ -811,9 +811,10 @@ export function ClientDetailScreen() {
           {...(peopleOn ? people.residents : {})}
         />
 
-        {/* SMS КЛИЕНТУ (STORY-089; владелец 25.09: «история SMS к клиенту»):
-            что ушло, что не дошло, что ждёт утра. Отправка — в кнопке номера. */}
-        {!isDraft ? <SmsClientBlock clientId={c.id} /> : null}
+        {/* SMS КЛИЕНТУ ОДНИМ БЛОКОМ (STORY-089; владелец 30.09): «Присылать
+            SMS», «Имя для SMS» и все сообщения — на какой номер ушло.
+            Отправка — в кнопке номера. */}
+        {!isDraft ? <SmsClientBlock client={c} update={update} readOnly={!caps.edit} /> : null}
       </ScrollView>
 
       {/* ЕДИНСТВЕННОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ, ПОД ПАЛЬЦЕМ, ВНЕ ПРОКРУТКИ.

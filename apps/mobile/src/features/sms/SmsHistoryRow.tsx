@@ -19,9 +19,13 @@ export function SmsHistoryRow({
   item,
   showClient = true,
   body,
+  phone,
   onPress,
 }: {
   item: SmsHistoryItem;
+  /** Номер, на который ушло, — уже в виде для глаза. У клиента номеров
+   *  бывает несколько, и в его истории видно, на какой именно. */
+  phone?: string | null;
   /** Тап — сообщение целиком (страница истории). */
   onPress?: () => void;
   /** Нет — в записи и у клиента: кому, и так ясно; первой строкой — повод. */
@@ -33,7 +37,9 @@ export function SmsHistoryRow({
   const t = useThemeColors();
   const text = item.body ?? body ?? null;
   const title = showClient ? (item.clientName ?? item.toPhone) : triggerWords(item.trigger);
-  const meta = showClient ? `${triggerWords(item.trigger)} · ${when(item.createdAt)}` : when(item.createdAt);
+  const meta = [showClient ? triggerWords(item.trigger) : null, when(item.createdAt), phone || null]
+    .filter(Boolean)
+    .join(" · ");
   const failed = isFailure(item.status);
   const cost = costWords(item);
   // Ждёт своего часа (тихие часы, «Спасибо» через 2 часа) — когда уйдёт.

@@ -1,0 +1,179 @@
+import { useState } from "react";
+import { Text, View } from "react-native";
+import type { Client } from "@babun/shared/local/clients";
+import { NavRow } from "@/components/ui/card-rows";
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Divider } from "@/components/ui/Divider";
+import { Field } from "@/components/ui/Field";
+import { GradientButton } from "@/components/ui/GradientButton";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { SwitchRow } from "@/components/ui/SwitchRow";
+import { useToast } from "@/components/ui/Toast";
+import { useDefaultCountry } from "@/features/clients/default-country";
+import { formatPhoneForDisplay } from "@/features/clients/phone";
+import { firstName } from "@/features/clients/sms-name";
+import { useTeams } from "@/features/reference/queries";
+import { useThemeColors } from "@/theme/colors";
+import { smsErrorText, useClientSms, useSetClientSmsOptOut, type SmsHistoryItem } from "./sms-account";
+import { SmsHistoryRow } from "./SmsHistoryRow";
+import { SmsMessageSheet } from "./SmsMessageSheet";
+
+// БЛОК «SMS» НА СТРАНИЦЕ КЛИЕНТА — ВСЁ ПРО SMS ЭТОМУ КЛИЕНТУ ОДНИМ БЛОКОМ
+// (STORY-089; владелец 30.09: «присылать или не присылать — в едином блоке
+// SMS… вторая строчка — имя для SMS: компания называется RTX, а номер
+// принадлежит Ольге… и история — все SMS по этому клиенту и на какой номер
+// ушло: у клиента бывает два-три-четыре номера»).
+//
+//   • «Присылать SMS» — клиент попросил не писать: сервис ему не пишет ни сам,
+//     ни по кнопке. Своя функция базы, а не правка карточки: флаг нельзя
+//     стереть офлайн-очередью. Тумблер откликается сразу;
+//   • «Имя для SMS» — то, что встаёт в [Имя] (`sms_name`); пусто — первое
+//     слово имени клиента, оно и показано серым;
+//   • сообщения — все, что уходили клиенту: повод, когда, на какой номер,
+//     итог; тап — сообщение целиком.
+
+const HISTORY_LIMIT = 200;
+
+export function SmsClientBlock({
+  client,
+  update,
+  readOnly = false,
+}: {
+  client: Client;
+  update: (patch: Partial<Client>) => Promise<boolean> | void;
+  /** Сотрудник без «Клиенты: Меняет» — строки видны, но не меняются. */
+  readOnly?: boolean;
+}) {
+  const t = useThemeColors();
+  const toast = useToast();
+  const country = useDefaultCountry();
+  const { data: teams = [] } = useTeams();
+  const log = useClientSms(client.id, HISTORY_LIMIT);
+  const optOut = useSetClientSmsOptOut();
+  const [smsOff, setSmsOff] = useState<boolean | null>(null);
+  const [nameOpen, setNameOpen] = useState(false);
+  const [open, setOpen] = useState<SmsHistoryItem | null>(null);
+  const smsBlocked = smsOff ?? client.sms_opt_out === true;
+  const messages = log.data ?? [];
+  const smsName = (client.sms_name ?? "").trim();
+  const fallbackName = firstName(client);
+
+  return (
+    <>
+      <SectionCard title="SMS">
+        <SwitchRow
+          label="Присылать SMS"
+          hint={smsBlocked ? "Клиент просил не писать" : undefined}
+          value={!smsBlocked}
+          disabled={readOnly || optOut.isPending}
+          onChange={(send) => {
+            setSmsOff(!send);
+            optOut.mutate(
+              { clientId: client.id, value: !send },
+              {
+                onError: (e) => {
+                  setSmsOff(null);
+                  toast(smsErrorText(e), "error");
+                },
+              },
+            );
+          }}
+        />
+        <NavRow
+          label="Имя для SMS"
+          value={smsName || null}
+          placeholder={fallbackName || "не указано"}
+          separated
+          onPress={readOnly ? undefined : () => setNameOpen(true)}
+        />
+        {messages.map((item) => (
+          <View key={item.id}>
+            <Divider inset={16} />
+            <SmsHistoryRow
+              item={item}
+              showClient={false}
+              phone={formatPhoneForDisplay(item.toPhone, country)}
+              onPress={() => setOpen(item)}
+            />
+          </View>
+        ))}
+        {messages.length === 0 && !log.isLoading ? (
+          <>
+            <Divider inset={16} />
+            <Text
+              maxFontSizeMultiplier={1.3}
+              style={{ paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: t.sub }}
+            >
+              Сообщений пока нет
+            </Text>
+          </>
+        ) : null}
+      </SectionCard>
+
+      <SmsNameSheet
+        visible={nameOpen}
+        current={smsName}
+        fallback={fallbackName}
+        onClose={() => setNameOpen(false)}
+        onSave={(name) => {
+          setNameOpen(false);
+          void update({ sms_name: name });
+        }}
+      />
+      <SmsMessageSheet
+        item={open}
+        teamName={(teamId) => teams.find((x) => x.id === teamId)?.name ?? null}
+        onClose={() => setOpen(null)}
+      />
+    </>
+  );
+}
+
+/** Правка «Имени для SMS»: одно поле, одно действие. Пусто — снова первое
+ *  слово имени клиента. */
+function SmsNameSheet({
+  visible,
+  current,
+  fallback,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  current: string;
+  fallback: string;
+  onClose: () => void;
+  onSave: (name: string) => void;
+}) {
+  const t = useThemeColors();
+  const [name, setName] = useState(current);
+  const [seeded, setSeeded] = useState(false);
+  if (visible && !seeded) {
+    setSeeded(true);
+    setName(current);
+  }
+  if (!visible && seeded) setSeeded(false);
+
+  return (
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Имя для SMS"
+      avoidKeyboard
+      footer={<GradientButton label="Сохранить" onPress={() => onSave(name.trim())} />}
+    >
+      <Field
+        label="Имя"
+        placeholder={fallback || "Например, Ольга"}
+        value={name}
+        onChangeText={setName}
+        maxLength={60}
+        autoFocus
+        returnKeyType="done"
+        onSubmitEditing={() => onSave(name.trim())}
+      />
+      <Text maxFontSizeMultiplier={1.3} style={{ marginTop: -4, marginBottom: 12, fontSize: 14, lineHeight: 19, color: t.sub }}>
+        {fallback ? `Пусто — «${fallback}»` : "Встаёт в SMS вместо [Имя]"}
+      </Text>
+    </BottomSheet>
+  );
+}

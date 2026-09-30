@@ -6,21 +6,20 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { useThemeColors } from "@/theme/colors";
 import { fillTemplate } from "./sms-compose";
-import { useAppointmentSms, useClientSms } from "./sms-account";
+import { useAppointmentSms } from "./sms-account";
 import type { SmsContext } from "./SmsCompose";
 import { SmsHistoryRow, when } from "./SmsHistoryRow";
 import { SmsSendSheet } from "./SmsSendSheet";
 
-// БЛОК «SMS» — ВНИЗУ ЗАПИСИ И НА СТРАНИЦЕ КЛИЕНТА (STORY-089; владелец
-// 25.09: «история SMS к клиенту… и на записи в самом низу блок — что мы уже
-// отправили ему или не отправили… нажал „Отправить SMS“ — и оно сразу
-// отправляет то, что записал»).
+// БЛОК «SMS» — ВНИЗУ ЗАПИСИ (STORY-089; владелец 25.09: «на записи в самом
+// низу блок — что мы уже отправили ему или не отправили… нажал „Отправить
+// SMS“ — и оно сразу отправляет то, что записал»). Блок клиента — свой,
+// `SmsClientBlock`.
 //
 // Строки — сообщения: повод, когда, итог («Доставлено», «Не доставлено»,
 // «Уйдёт 08:00»), текст. Сверху — ответ клиента по ссылке «Подтвердить /
-// Отменить», если он был. У записи — ещё строка «Отправить SMS»: лист с
-// шаблонами команды записи, первый уже заполнен. У клиента отправка живёт в
-// кнопке номера, как и была; блок там — только история.
+// Отменить», если он был. Внизу — строка «Отправить SMS»: лист с шаблонами
+// команды записи, первый уже заполнен.
 
 /** Ответ клиента по ссылке из SMS — строкой над сообщениями. */
 function ClientAnswer({ answer, at }: { answer: "confirmed" | "cancelled"; at: string | null }) {
@@ -111,21 +110,5 @@ export function SmsRecordBlock({
         onClose={() => setSending(false)}
       />
     </>
-  );
-}
-
-export function SmsClientBlock({ clientId }: { clientId: string }) {
-  const log = useClientSms(clientId);
-  const messages = log.data ?? [];
-  return (
-    <SectionCard title="SMS">
-      {messages.map((item, index) => (
-        <View key={item.id}>
-          {index > 0 ? <Divider inset={16} /> : null}
-          <SmsHistoryRow item={item} showClient={false} />
-        </View>
-      ))}
-      {messages.length === 0 && !log.isLoading ? <Empty /> : null}
-    </SectionCard>
   );
 }

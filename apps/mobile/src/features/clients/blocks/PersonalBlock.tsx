@@ -25,11 +25,7 @@ import {
   type LucideIcon,
 } from "lucide-react-native";
 import { NavRow } from "@/components/ui/card-rows";
-import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SwitchRow } from "@/components/ui/SwitchRow";
-import { useToast } from "@/components/ui/Toast";
-import { smsErrorText, useSetClientSmsOptOut } from "@/features/sms/sms-account";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { formatShortDateRu } from "@/features/clients/format";
@@ -63,13 +59,6 @@ const SOURCE_ICONS: Partial<Record<AcquisitionSource, LucideIcon>> = {
 
 export function PersonalBlock({ client, update, readOnly = false, draft = false }: PersonalBlockProps) {
   const t = useThemeColors();
-  const toast = useToast();
-  // «ПРИСЫЛАТЬ SMS» (STORY-089): клиент попросил не писать — сервис ему не
-  // пишет ни сам, ни по кнопке. Своя функция базы, а не правка карточки:
-  // флаг нельзя стереть офлайн-очередью. Тумблер откликается сразу.
-  const optOut = useSetClientSmsOptOut();
-  const [smsOff, setSmsOff] = useState<boolean | null>(null);
-  const smsBlocked = smsOff ?? client.sms_opt_out === true;
   const [birthdayOpen, setBirthdayOpen] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [referrerOpen, setReferrerOpen] = useState(false);
@@ -130,29 +119,8 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
             }
           />
         ) : null}
-        {!draft ? (
-          <>
-            <Divider inset={16} />
-            <SwitchRow
-              label="Присылать SMS"
-              hint={smsBlocked ? "Клиент просил не писать" : undefined}
-              value={!smsBlocked}
-              disabled={readOnly || optOut.isPending}
-              onChange={(send) => {
-                setSmsOff(!send);
-                optOut.mutate(
-                  { clientId: client.id, value: !send },
-                  {
-                    onError: (e) => {
-                      setSmsOff(null);
-                      toast(smsErrorText(e), "error");
-                    },
-                  },
-                );
-              }}
-            />
-          </>
-        ) : null}
+        {/* «Присылать SMS» и «Имя для SMS» с 30.09 живут в блоке «SMS»
+            (владелец: «присылать или не присылать — в едином блоке SMS»). */}
       </SectionCard>
 
       <PickerSheet
