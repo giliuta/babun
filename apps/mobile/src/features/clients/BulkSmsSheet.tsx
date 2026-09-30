@@ -19,6 +19,7 @@ import { useMemo, useState } from "react";
 import {
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -32,12 +33,26 @@ import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { uniqueByBody, useTeamTemplates } from "@/features/sms/sms-account";
+import { Chip } from "@/components/ui/Chip";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { useToast } from "@/components/ui/Toast";
+import { useTeams } from "@/features/reference/queries";
+import { useCurrentRole } from "@/features/settings/tenant";
+import {
+  smsErrorText,
+  uniqueByBody,
+  useSendSmsBulk,
+  useSmsAccount,
+  useTeamTemplates,
+} from "@/features/sms/sms-account";
+import { euro } from "@/features/sms/sms-words";
+import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import {
   bodyHasNameToken,
   buildBlastSms,
   buildSequentialSms,
+  bulkBodyFor,
   smsDigits,
 } from "./bulk-sms";
 
@@ -60,6 +75,22 @@ export function BulkSmsSheet({
   // Sequential cursor — index of the recipient whose composer opens next.
   const [seqIdx, setSeqIdx] = useState<number | null>(null);
 
+  // ЧЕРЕЗ СЕРВИС (STORY-089, 30.09): рассылка с баланса компании, от одной
+  // выбранной команды — её имя отправителя стоит подписью. Только владельцу
+  // (так решает и база) и только когда у какой-то команды есть имя.
+  const toast = useToast();
+  const role = useCurrentRole().data;
+  const account = useSmsAccount().data;
+  const { data: teams = [] } = useTeams();
+  const bulk = useSendSmsBulk();
+  const senders = account?.senders ?? {};
+  const senderTeams = Object.keys(senders);
+  const canService = role === "owner" && !!account?.serviceOn && senderTeams.length > 0;
+  const [mode, setMode] = useState<"phone" | "service">("phone");
+  const [pickedTeam, setPickedTeam] = useState<string | null>(null);
+  const viaService = canService && mode === "service";
+  const fromTeam = pickedTeam && senders[pickedTeam] ? pickedTeam : (senderTeams[0] ?? null);
+
   const withPhone = useMemo(
     () => recipients.filter((c) => smsDigits(c).length > 0),
     [recipients],
@@ -80,6 +111,42 @@ export function BulkSmsSheet({
   const reset = () => {
     setBody("");
     setSeqIdx(null);
+    setMode("phone");
+  };
+
+  // Платное и необратимое — только после вопроса. Сумма — только в вебе:
+  // в iOS-приложении о цене молчим (правило App Store, владелец 24.09).
+  const sendViaService = () => {
+    if (!fromTeam || !body.trim() || withPhone.length === 0) return;
+    const items = withPhone.map((c) => ({ clientId: c.id, body: bulkBodyFor(body, c) }));
+    const cost = euro(items.length * (account?.priceCents ?? 12));
+    confirmThen(
+      `Отправить ${items.length} ${countWordRu(items.length, "SMS", "SMS", "SMS")} через сервис?`,
+      {
+        message:
+          Platform.OS === "web"
+            ? `От «${senders[fromTeam]}». С баланса спишется от ${cost} — длинные SMS дороже.`
+            : `От «${senders[fromTeam]}». Спишется с баланса SMS.`,
+        confirmLabel: "Отправить",
+      },
+      () =>
+        bulk.mutate(
+          { teamId: fromTeam, items },
+          {
+            onSuccess: (r) => {
+              toast(
+                r.skipped > 0
+                  ? `Отправляется ${r.queued} · пропущено ${r.skipped}`
+                  : `Отправляется ${r.queued} ${countWordRu(r.queued, "SMS", "SMS", "SMS")}`,
+                "success",
+              );
+              onSent();
+              close();
+            },
+            onError: (e) => notify("Рассылка не ушла", smsErrorText(e)),
+          },
+        ),
+    );
   };
   const close = () => {
     reset();
@@ -201,6 +268,36 @@ export function BulkSmsSheet({
         ) : (
           // ── Compose ───────────────────────────────────────────────────
           <ScrollView keyboardShouldPersistTaps="handled">
+            {canService ? (
+              <View className="mb-3">
+                <SegmentedControl
+                  options={[
+                    { value: "phone", label: "С телефона" },
+                    { value: "service", label: "Через сервис" },
+                  ]}
+                  value={mode}
+                  onChange={setMode}
+                />
+              </View>
+            ) : null}
+            {viaService && senderTeams.length > 1 ? (
+              <View className="mb-3">
+                <Text className="mb-1.5 text-xs font-semibold" style={{ color: t.faint }}>
+                  ОТ КОМАНДЫ
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {senderTeams.map((id) => (
+                    <Chip
+                      key={id}
+                      label={`${teams.find((x) => x.id === id)?.name ?? "Команда"} · ${senders[id]}`}
+                      selected={fromTeam === id}
+                      radio
+                      onPress={() => setPickedTeam(id)}
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : null}
             {usableTemplates.length > 0 ? (
               <View className="mb-3">
                 <Text className="mb-1.5 text-xs font-semibold" style={{ color: t.faint }}>
@@ -249,6 +346,17 @@ export function BulkSmsSheet({
               className="min-h-[92px] rounded-[10px] px-3 py-2.5 text-base"
               style={{ backgroundColor: t.fill, color: t.ink, textAlignVertical: "top" }}
             />
+            {viaService ? (
+              <View className="mt-4">
+                <Button
+                  label={`Отправить · ${withPhone.length}`}
+                  onPress={sendViaService}
+                  disabled={!body.trim() || withPhone.length === 0 || !fromTeam || bulk.isPending}
+                  loading={bulk.isPending}
+                />
+              </View>
+            ) : (
+            <>
             <Text className="mt-2 text-[11px] leading-snug" style={{ color: t.faint }}>
               Откроется системное приложение «Сообщения» с текстом — отправку
               подтверждаете там. «Каждому по имени» подставит [Имя] и откроет
@@ -274,6 +382,8 @@ export function BulkSmsSheet({
                 </Text>
               ) : null}
             </View>
+            </>
+            )}
           </ScrollView>
         )}
       </View>

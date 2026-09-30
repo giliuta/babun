@@ -345,6 +345,10 @@ export function useSendSmsViaService() {
       clientId: string | null;
       body: string;
       templateId?: string | null;
+      /** Без записи — команда, от которой SMS: её имя отправителя в подписи. */
+      teamId?: string | null;
+      /** Выбранный номер клиента в E.164; нет — основной. */
+      phone?: string | null;
     }) => {
       const { data, error } = await supabase.rpc("sms_send_manual", {
         // Пустые записи и клиент — законное «нет» для базы: RPC ждёт null,
@@ -353,9 +357,35 @@ export function useSendSmsViaService() {
         p_client_id: input.clientId as string,
         p_body: input.body,
         p_template_id: input.templateId ?? undefined,
+        p_team_id: input.teamId ?? undefined,
+        p_phone: input.phone ?? undefined,
       });
       if (error) throw new Error(error.message);
       return data;
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: smsAccountKey(tenantId) });
+      void qc.invalidateQueries({ queryKey: smsHistoryKey(tenantId) });
+      void qc.invalidateQueries({ queryKey: smsLogKey(tenantId) });
+    },
+    meta: { errorHandled: true },
+  });
+}
+
+/** Массовая рассылка через сервис — от одной команды, у каждого получателя
+ *  свой готовый текст. Ответ — сколько поставлено и сколько пропущено. */
+export function useSendSmsBulk() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { teamId: string; items: { clientId: string; body: string }[] }) => {
+      const { data, error } = await supabase.rpc("sms_send_bulk", {
+        p_team_id: input.teamId,
+        p_items: input.items.map((x) => ({ client_id: x.clientId, body: x.body })) as unknown as Json,
+      });
+      if (error) throw new Error(error.message);
+      const r = (data ?? {}) as { queued?: number; skipped?: number };
+      return { queued: r.queued ?? 0, skipped: r.skipped ?? 0 };
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: smsAccountKey(tenantId) });

@@ -103,6 +103,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "sms_save_settings",
   "sms_save_team_sender",
   "sms_save_team_template",
+  "sms_send_bulk",
   "sms_send_manual",
   "sms_set_team_template_enabled",
   "undo_appointment_payment",

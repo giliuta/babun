@@ -179,6 +179,25 @@ export function parseSmsRecordLog(data: unknown): SmsRecordLog {
 /** Просит ли текст ссылку «Подтвердить / Отменить». */
 export const wantsLink = (body: string | null | undefined): boolean => /\[(Ссылка|Link)\]/u.test(body ?? "");
 
+/** Сколько SMS ещё хватит, пока баланс мал: предупреждать, когда меньше
+ *  этого числа коротких SMS. */
+export const LOW_BALANCE_SMS = 20;
+
+/** Предупреждение о балансе словами; `null` — баланса хватает, он не виден
+ *  (сотруднику) или SMS не настроены (ни у одной команды нет имени
+ *  отправителя — пугать нечем). Пусто — SMS не уходят вовсе. */
+export function balanceWarning(
+  account: Pick<SmsAccount, "priceCents" | "owner" | "senders"> | null | undefined,
+): string | null {
+  const owner = account?.owner;
+  if (!owner || !account || Object.keys(account.senders ?? {}).length === 0) return null;
+  const price = Math.max(1, account.priceCents);
+  const left = Math.floor(owner.balanceCents / price);
+  if (left <= 0) return "Баланс пуст — SMS не уходят";
+  if (left < LOW_BALANCE_SMS) return `Баланс кончается — хватит на ≈ ${left} SMS`;
+  return null;
+}
+
 /** Слова отказа базы — человеку. */
 export function smsErrorText(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? "");

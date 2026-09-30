@@ -3,11 +3,14 @@ import { Linking, Platform, Pressable, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { MessageSquare, Settings2 } from "lucide-react-native";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
+import { Chip } from "@/components/ui/Chip";
+import { FieldLabel } from "@/components/ui/Field";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { analyzeSmsEncoding } from "@babun/shared/local/sms-encoding";
 import { SELECT_SHEET_RATIO, SelectList, SelectRow } from "@/components/ui/select-rows";
+import { useTeams } from "@/features/reference/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -59,30 +62,35 @@ export function useSmsOptions(name?: string | null): SmsOption[] {
   }, [context, name, templates]);
 }
 
-/** Можно ли отсюда отправить через сервис: сервис подключён, владелец
- *  включил отправку, есть запись, её календарь среди разрешённых и у него
- *  есть имя отправителя, деньги есть. Без записи — только «С телефона»:
- *  SMS через сервис подписана именем команды записи (волна 10). Решает всё
- *  равно база. */
-export function useSmsService(): { available: boolean; priceCents: number; context: SmsContext | null } {
+/** Можно ли отсюда отправить через сервис: сервис подключён, баланса
+ *  хватает, и есть команда с именем отправителя — у записи это команда
+ *  записи, без записи — любая команда с именем, её выбирают в листе
+ *  (владелец 30.09: «через какую команду отправка, так и определяется»).
+ *  Решает всё равно база. */
+export function useSmsService(): SmsServiceState {
   return useSmsServiceFor(useContext(SmsVarsContext));
 }
 
+export interface SmsServiceState {
+  available: boolean;
+  priceCents: number;
+  context: SmsContext | null;
+  /** Команды с именем отправителя — от них можно отправить без записи. */
+  senderTeams: string[];
+  /** Имя отправителя каждой команды. */
+  senders: Record<string, string>;
+}
+
 /** То же — для места, которое знает запись само (блок «SMS» записи). */
-export function useSmsServiceFor(
-  context: SmsContext | null,
-): { available: boolean; priceCents: number; context: SmsContext | null } {
+export function useSmsServiceFor(context: SmsContext | null): SmsServiceState {
   const account = useSmsAccount().data;
+  const senders = account?.senders ?? {};
+  const senderTeams = Object.keys(senders);
   const teamId = context?.teamId;
-  const available = Boolean(
-    context?.clientId &&
-      context.appointmentId &&
-      teamId &&
-      account?.serviceOn &&
-      account.canPay &&
-      account.senders?.[teamId],
-  );
-  return { available, priceCents: account?.priceCents ?? 10, context };
+  const ready = Boolean(context?.clientId && account?.serviceOn && account.canPay);
+  const available =
+    ready && (context?.appointmentId ? Boolean(teamId && senders[teamId]) : senderTeams.length > 0);
+  return { available, priceCents: account?.priceCents ?? 10, context, senderTeams, senders };
 }
 
 /** Может ли человек править шаблоны — тогда у листа есть вход в них.
@@ -111,11 +119,15 @@ export function SmsTemplateSheet({
   title,
   url,
   options,
+  phone,
   onClose,
 }: {
   visible: boolean;
   /** Номер, как его диктуют. */
   title: string;
+  /** Этот же номер в E.164 — через сервис SMS уходит ровно на него (у
+   *  клиента номеров бывает несколько). */
+  phone?: string | null;
   /** `sms:` номера без текста. */
   url: string;
   options: readonly SmsOption[];
@@ -132,6 +144,17 @@ export function SmsTemplateSheet({
   // телефон: он бесплатный, и так было до сервиса.
   const [mode, setMode] = useState<"phone" | "service">("phone");
   const viaService = service.available && mode === "service";
+  const { data: teams = [] } = useTeams();
+  // ОТ КАКОЙ КОМАНДЫ (владелец 30.09): у записи — её команда; без записи —
+  // выбранная здесь, её имя отправителя и встанет подписью SMS. По
+  // умолчанию — команда клиента, если у неё есть имя, иначе первая с именем.
+  const fixedTeam = service.context?.appointmentId ? (service.context.teamId ?? null) : null;
+  const [pickedTeam, setPickedTeam] = useState<string | null>(null);
+  const defaultTeam =
+    service.context?.teamId && service.senders[service.context.teamId]
+      ? service.context.teamId
+      : (service.senderTeams[0] ?? null);
+  const fromTeam = fixedTeam ?? pickedTeam ?? defaultTeam;
   const pick = (body: string) => {
     haptics.tap();
     onClose();
@@ -147,6 +170,8 @@ export function SmsTemplateSheet({
         clientId: service.context?.clientId ?? null,
         body: option.text,
         templateId: option.template.id,
+        teamId: fromTeam,
+        phone: phone ?? null,
       },
       {
         onSuccess: () => toast("SMS отправляется", "success"),
@@ -200,6 +225,22 @@ export function SmsTemplateSheet({
             value={mode}
             onChange={setMode}
           />
+        </View>
+      ) : null}
+      {viaService && !fixedTeam && service.senderTeams.length > 1 ? (
+        <View style={{ paddingHorizontal: GUTTER, paddingBottom: 8 }}>
+          <FieldLabel text="От команды" />
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {service.senderTeams.map((id) => (
+              <Chip
+                key={id}
+                label={`${teams.find((x) => x.id === id)?.name ?? "Команда"} · ${service.senders[id]}`}
+                selected={fromTeam === id}
+                radio
+                onPress={() => setPickedTeam(id)}
+              />
+            ))}
+          </View>
         </View>
       ) : null}
       <SelectList>

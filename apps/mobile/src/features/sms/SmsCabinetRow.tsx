@@ -2,7 +2,8 @@ import { useRouter, type Href } from "expo-router";
 import { MessageSquare } from "lucide-react-native";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { useSmsAccount } from "./sms-account";
+import { useThemeColors } from "@/theme/colors";
+import { balanceWarning, useSmsAccount } from "./sms-account";
 import { euro } from "./sms-words";
 
 // СТРОКА «SMS» В КАБИНЕТЕ (STORY-089; владелец 29.09: «баланс и пополнение —
@@ -10,6 +11,7 @@ import { euro } from "./sms-words";
 // «Архив», поэтому живут в Кабинете; шаблоны команд — за шестерёнкой
 // календаря. Справа — баланс.
 export function SmsCabinetRow() {
+  const t = useThemeColors();
   const router = useRouter();
   const data = useSmsAccount().data;
   const owner = data?.owner;
@@ -19,7 +21,9 @@ export function SmsCabinetRow() {
       icon={MessageSquare}
       title="SMS"
       value={owner ? euro(owner.balanceCents) : undefined}
-      valueQuiet={!owner || owner.balanceCents === 0}
+      sub={balanceWarning(data) ?? undefined}
+      valueColor={balanceWarning(data) ? t.warning : undefined}
+      valueQuiet={!owner || (owner.balanceCents === 0 && !balanceWarning(data))}
       onPress={() => router.push("/cabinet/sms" as Href)}
     />
   );

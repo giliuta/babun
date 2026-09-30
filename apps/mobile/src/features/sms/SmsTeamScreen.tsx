@@ -5,6 +5,7 @@ import { BadgeCheck, EyeOff, RotateCcw, Trash2, Wallet } from "lucide-react-nati
 import { AppearanceTile, appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { NoticeBar } from "@/components/ui/NoticeBar";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -18,6 +19,7 @@ import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
+  balanceWarning,
   orderTemplates,
   useDeleteTeamTemplate,
   useReorderTeamTemplates,
@@ -128,6 +130,11 @@ export function SmsTeamScreen() {
         />
       ) : (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }} scrollEnabled={!dragging}>
+          {balanceWarning(account.data) ? (
+            <View style={{ marginHorizontal: GUTTER, marginTop: 12 }}>
+              <NoticeBar tone="warn" message={balanceWarning(account.data) ?? ""} />
+            </View>
+          ) : null}
           <SectionCard title="Баланс">
             <SettingsRow
               tile="neutral"

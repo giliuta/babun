@@ -26,6 +26,7 @@ const TRIGGER_TITLES: Record<string, string> = {
   cancellation: "Отмена",
   thank_you: "Спасибо",
   repeat: "Пора повторить",
+  bulk: "Рассылка",
 };
 
 const MONTHS = [

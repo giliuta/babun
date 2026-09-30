@@ -23,7 +23,7 @@ import {
   useSmsAccount,
   useSmsHistory,
 } from "./sms-account";
-import { teamStats } from "./sms-model";
+import { balanceWarning, teamStats } from "./sms-model";
 import { SmsHistoryRow } from "./SmsHistoryRow";
 import { balanceWords, euro, monthWords } from "./sms-words";
 
@@ -107,6 +107,7 @@ export function SmsScreen() {
     );
   }
 
+  const warning = balanceWarning(data);
   /** «Giliuta · 12 SMS · доставлено 11»; без имени отправителя команда не
    *  отправляет — подпись говорит это первым. */
   const teamSub = (teamId: string): string => {
@@ -125,6 +126,12 @@ export function SmsScreen() {
         {!data.serviceOn ? (
           <View style={{ marginHorizontal: GUTTER, marginTop: 12 }}>
             <NoticeBar tone="info" message="Сервис SMS ещё не подключён" />
+          </View>
+        ) : warning ? (
+          <View style={{ marginHorizontal: GUTTER, marginTop: 12 }}>
+            {/* В iOS — только слова о балансе: ни ссылки, ни упоминания покупки
+                (правило App Store, владелец 24.09). */}
+            <NoticeBar tone="warn" message={warning} />
           </View>
         ) : null}
 

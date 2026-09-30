@@ -5213,11 +5213,14 @@ export type Database = {
         Returns: Json
       }
       sms_save_team_template: { Args: { p: Json }; Returns: Json }
+      sms_send_bulk: { Args: { p_items: Json; p_team_id: string }; Returns: Json }
       sms_send_manual: {
         Args: {
           p_appointment_id: string
           p_body: string
           p_client_id: string
+          p_phone?: string
+          p_team_id?: string
           p_template_id?: string
         }
         Returns: string

@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 
 import {
   applyPatch,
+  balanceWarning,
   parseSmsAccount,
   parseSmsHistory,
   parseSmsRecordLog,
@@ -103,6 +104,16 @@ describe("ответ базы", () => {
     assert.deepEqual(a.senders, { t1: "Giliuta" });
     assert.equal(smsErrorText(new Error("sms:sender")), "У команды не указано имя отправителя");
     assert.equal(smsErrorText(new Error("sms:sender_format")), "Имя отправителя: латиница, цифры, до 11 знаков");
+  });
+
+  test("предупреждение о балансе — только когда SMS настроены", () => {
+    const base = { priceCents: 12, senders: { t1: "Giliuta" } };
+    const acc = (cents: number) => ({ ...base, owner: parseSmsAccount({ balance_cents: cents }).owner });
+    assert.equal(balanceWarning(acc(0)), "Баланс пуст — SMS не уходят");
+    assert.equal(balanceWarning(acc(120)), "Баланс кончается — хватит на ≈ 10 SMS");
+    assert.equal(balanceWarning(acc(1200)), null);
+    assert.equal(balanceWarning({ ...acc(0), senders: {} }), null, "SMS не настроены");
+    assert.equal(balanceWarning({ ...base, owner: null }), null, "сотруднику баланс не виден");
   });
 
   test("отказы базы — словами", () => {

@@ -8,7 +8,7 @@ import {
 import { useEnabledChannels } from "@/features/clients/contact-ways";
 import { RowActionButton } from "@/components/ui/card-rows";
 import { useDefaultCountry } from "@/features/clients/default-country";
-import { formatPhoneForDisplay } from "@/features/clients/phone";
+import { formatPhoneForDisplay, tryToE164 } from "@/features/clients/phone";
 import { useReferenceHref } from "@/features/clients/reference-href";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { SmsTemplateSheet, useSmsOptions } from "@/features/sms/SmsCompose";
@@ -125,6 +125,7 @@ export default function PhoneChannelButton({
           visible={smsOpen}
           title={formatPhoneForDisplay(number, country)}
           url={smsChannel.url}
+          phone={tryToE164(number, country)}
           options={smsOptions}
           onClose={() => setSmsOpen(false)}
         />

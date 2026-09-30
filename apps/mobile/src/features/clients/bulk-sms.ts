@@ -61,16 +61,21 @@ function stripUnresolvedTokens(text: string): string {
     .trim();
 }
 
+/** The ready text for one recipient: [Имя] filled with the client's
+ *  «Имя для SMS» (or the first word of the name), any other token dropped.
+ *  Same text for the phone composer and for sending through the service. */
+export function bulkBodyFor(body: string, client: Client): string {
+  // [Имя] — «Обращение» клиента, а пустое — первое слово имени, как раньше.
+  const name = addressedAs(client, firstName(client));
+  return stripUnresolvedTokens(renderTemplate(body, { Name: name, Имя: name }));
+}
+
 /** Render `body` for one client (fills [Имя]) and return its sms: URL, or
  *  null if the client has no phone. */
 function smsUrlForClient(body: string, client: Client): string | null {
   const digits = smsDigits(client);
   if (!digits) return null;
-  // [Имя] — «Обращение» клиента, а пустое — первое слово имени, как раньше.
-  const name = addressedAs(client, firstName(client));
-  const rendered = renderTemplate(body, { Name: name, Имя: name });
-  const text = stripUnresolvedTokens(rendered);
-  return `sms:${digits}${bodySep()}body=${encodeURIComponent(text)}`;
+  return `sms:${digits}${bodySep()}body=${encodeURIComponent(bulkBodyFor(body, client))}`;
 }
 
 /** Build the SEQUENTIAL plan — one { client, url } per dialable recipient,
