@@ -3,8 +3,10 @@ import { useAccessBlocks, useMyAccess } from "@/features/access/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
 import {
   calendarActions,
+  eventBlocks,
   recordBlocks,
   type CalendarActions,
+  type EventBlocks,
   type RecordBlocks,
 } from "./record-blocks";
 
@@ -18,6 +20,14 @@ export function useRecordBlocks(teamId: string | null): RecordBlocks {
   const map = useMyAccess().data;
   const registry = useAccessBlocks().data;
   return recordBlocks({ role, map, registry, teamId });
+}
+
+/** Блоки события в календаре `teamId` (30.09). */
+export function useEventRights(teamId: string | null): EventBlocks {
+  const role = useCurrentRole().data;
+  const map = useMyAccess().data;
+  const registry = useAccessBlocks().data;
+  return eventBlocks({ role, map, registry, teamId });
 }
 
 /** Действия с записями календаря `teamId` — для сетки, меню и «+». */

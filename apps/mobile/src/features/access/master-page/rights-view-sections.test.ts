@@ -26,6 +26,10 @@ const REGISTRY: AccessBlock[] = [
   block("calendar.move", ["off", "write"], 26),
   block("calendar.cancel", ["off", "write"], 28),
   block("record.color", ["off", "write"], 37),
+  block("record.team", ["read", "write"], 31),
+  block("record.note", ["off", "read", "write"], 38),
+  block("event.label", ["off", "read", "write"], 61),
+  block("event.type", ["off", "read", "write"], 64),
   block("calendar.day_labels", ["off", "read", "write"], 60),
   block("calendar.schedule", ["off", "read", "write"], 75),
   block("calendar.identity", ["off", "read", "write"], 76),
@@ -36,10 +40,10 @@ const REGISTRY: AccessBlock[] = [
   block("finance.accounts", ["off", "read", "write"], 120),
 ];
 
-const page = (group: "calendar" | "finance") =>
+const page = (group: "calendar" | "finance" | "record", open: Record<string, AccessLevel> = {}) =>
   viewSections({
     blocks: REGISTRY,
-    levelOf: (b) => (b.key === "calendar.records" ? "read" : (b.levels[0] as AccessLevel)),
+    levelOf: (b) => open[b.key] ?? (b.key === "calendar.records" ? "read" : (b.levels[0] as AccessLevel)),
     activeId: "team-1",
     onlyCalendar: true,
     onlyCompany: false,
@@ -51,6 +55,9 @@ describe("страница раздела доступа — блоками вл
     assert.deepEqual(page("calendar"), [
       { title: "Главное", keys: ["calendar.day_labels", "finance.operations"] },
       { title: "Записи", keys: ["calendar.records", "calendar.events", "calendar.move", "calendar.cancel"] },
+      // Блоки внутри записи — здесь же (владелец 30.09); события скрыты —
+      // блока «Событие» нет.
+      { title: "Запись клиента", keys: ["record.team", "record.when", "record.note"] },
       {
         title: "Настройки команды",
         keys: [
@@ -62,6 +69,15 @@ describe("страница раздела доступа — блоками вл
         ],
       },
     ]);
+  });
+
+  test("«Записи событий» открыты — блок «Событие» встаёт под «Записью клиента»", () => {
+    const titles = page("calendar", { "calendar.events": "read" }).map((section) => section.title);
+    assert.deepEqual(titles.slice(0, 4), ["Главное", "Записи", "Запись клиента", "Событие"]);
+  });
+
+  test("отдельного раздела «Запись» больше нет — его блоки в «Календаре»", () => {
+    assert.deepEqual(page("record"), []);
   });
 
   test("«Финансы»: «Доходов и расходов» здесь нет — они в «Календаре»", () => {

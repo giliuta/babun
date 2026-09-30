@@ -1,8 +1,10 @@
 import { View } from "react-native";
-import { Banknote, Bookmark, CreditCard, FileText, ImageIcon, Landmark, Paperclip } from "lucide-react-native";
+import { Banknote, Bookmark, CircleCheck, CreditCard, FileText, ImageIcon, Landmark, Paperclip } from "lucide-react-native";
 
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { EventTypeBlock } from "@/features/appointments/EventTypeBlock";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { DocumentPill } from "@/features/appointments/AppointmentFileTiles";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
@@ -20,6 +22,7 @@ import {
   SAMPLE_LOCATION,
   SAMPLE_SERVICES,
   SAMPLE_TOTAL,
+  previewEvent,
   previewRecord,
   sampleTile,
 } from "./preview-sample";
@@ -32,6 +35,17 @@ import { AppointmentMenuPreview } from "./CalendarPreviews";
 // права правки рисуется ровно так, как у него, — без дверей и шевронов.
 
 const noop = () => {};
+
+const SAMPLE_EVENT_TYPE = {
+  id: "preview-type",
+  label: "Совещание",
+  icon: "users",
+  color: "#6366F1",
+  defaultDuration: 60,
+  allDay: false,
+  order: 0,
+  hidden: false,
+};
 
 const NOTE = {
   draft: "Ключ у соседа, код ворот 1234",
@@ -55,6 +69,7 @@ export function RecordPreview({
   teamColor: string;
 }) {
   const rb = previewRecord(blocks, levels);
+  const ev = previewEvent(blocks, levels);
   const on = (write: boolean) => (write ? noop : undefined);
   // Телефон клиента в записи сервер прячет, когда «Телефоны» закрыты.
   const phoneOpen = levels["clients.contacts"] === "read";
@@ -156,9 +171,25 @@ export function RecordPreview({
           <PaymentPreview write={rb.payment === "write"} />
         </PreviewFrame>
       );
+    // Статус виден всегда; меняет — «Видит и меняет». Отмена — «Отмена и
+    // удаление» в «Календаре».
     case "record.status":
       return (
         <PreviewFrame state={levelState(rb.status)}>
+          <SectionCard>
+            <SettingsRow
+              tile={SETTINGS_TILE.orange}
+              icon={CircleCheck}
+              title="Статус"
+              value="Запланирована"
+              onPress={on(rb.status === "write")}
+            />
+          </SectionCard>
+        </PreviewFrame>
+      );
+    case "record.note":
+      return (
+        <PreviewFrame state={levelState(rb.note)}>
           <SectionCard title="Заметка">
             <InlineNoteField
               note={NOTE}
@@ -166,6 +197,71 @@ export function RecordPreview({
               accessibilityLabel="Заметка записи"
               readOnly={rb.note !== "write"}
             />
+          </SectionCard>
+        </PreviewFrame>
+      );
+    // ── БЛОКИ СОБЫТИЯ — те же блоки, что на странице события.
+    case "event.label":
+      return (
+        <PreviewFrame state={levelState(ev.label)}>
+          <View className="mx-4 mt-2" style={{ flexDirection: "row" }}>
+            <IdentityCard
+              icon={Bookmark}
+              color={SETTINGS_TILE.teal}
+              title="Лимассол"
+              onPress={on(ev.label === "write")}
+              accessibilityLabel="Метка: Лимассол"
+              accessibilityHint="Открывает выбор метки"
+            />
+          </View>
+        </PreviewFrame>
+      );
+    case "event.type":
+      return (
+        <PreviewFrame state={levelState(ev.type)}>
+          <EventTypeBlock type={SAMPLE_EVENT_TYPE} onPress={noop} />
+        </PreviewFrame>
+      );
+    case "event.client":
+      return (
+        <PreviewFrame state={levelState(ev.client)}>
+          <ClientBlock
+            client={phoneOpen ? SAMPLE_CLIENT : { ...SAMPLE_CLIENT, phone: "" }}
+            onPick={on(ev.client === "write")}
+          />
+        </PreviewFrame>
+      );
+    case "event.object":
+      return (
+        <PreviewFrame state={levelState(ev.object)}>
+          <SectionCard title="Объект">
+            <ObjectRow loc={SAMPLE_LOCATION} showNote={false} onPress={on(ev.object === "write")} />
+          </SectionCard>
+        </PreviewFrame>
+      );
+    case "event.note":
+      return (
+        <PreviewFrame state={levelState(ev.note)}>
+          <SectionCard title="Заметка">
+            <InlineNoteField
+              note={NOTE}
+              placeholder="Заметка события"
+              accessibilityLabel="Заметка события"
+              readOnly={ev.note !== "write"}
+            />
+          </SectionCard>
+        </PreviewFrame>
+      );
+    case "event.files":
+      return (
+        <PreviewFrame state={levelState(ev.files)}>
+          <SectionCard title="Файлы">
+            <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 10, gap: 8 }}>
+              <DocumentPill icon={ImageIcon} title="Фото на месте" onOpen={noop} />
+            </View>
+            {ev.files === "write" ? (
+              <ChooseRow compact icon={Paperclip} label="Добавить файл" onPress={noop} />
+            ) : null}
           </SectionCard>
         </PreviewFrame>
       );

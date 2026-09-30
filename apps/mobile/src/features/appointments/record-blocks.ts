@@ -35,10 +35,25 @@ export interface RecordBlocks {
   files: RecordLevel;
   /** Статус записи. */
   status: RecordLevel;
-  /** Заметку пишет тот, кто меняет статус (владелец 21.09); читают все. */
+  /** Заметка записи — своё право «Заметка» (30.09). Пока сервер его не
+   *  проверяет — прежнее правило: пишет тот, кто меняет статус, читают все. */
   note: RecordLevel;
   /** Цвет записи: видят все, красит — «Цвет записи». */
   color: RecordLevel;
+}
+
+/** БЛОКИ СОБЫТИЯ (владелец 30.09: «и внутри события — что может видеть, что
+ *  не может, что может редактировать»). Видит — во всех событиях команды;
+ *  меняет — только своё событие при «Записи событий: Видит и создаёт»
+ *  (`bookRights`). Команда и время видны всегда. */
+export interface EventBlocks {
+  label: RecordLevel;
+  /** Тип — название и цвет события. */
+  type: RecordLevel;
+  client: RecordLevel;
+  object: RecordLevel;
+  note: RecordLevel;
+  files: RecordLevel;
 }
 
 /** Что человек может сделать с записями календаря — кнопки сетки и меню. */
@@ -176,8 +191,49 @@ export function recordBlocks(input: Input): RecordBlocks {
     payment: level("record.payment"),
     files: level("record.files"),
     status,
-    note: status === "write" ? "write" : "read",
+    // «Заметка» — своё право с 30.09; неживое — прежнее правило.
+    note: read("record.note") === undefined ? (status === "write" ? "write" : "read") : level("record.note"),
     color: writeOrRead("record.color"),
+  };
+}
+
+const ALL_EVENT: EventBlocks = {
+  label: "write",
+  type: "write",
+  client: "write",
+  object: "write",
+  note: "write",
+  files: "write",
+};
+
+const NO_EVENT: EventBlocks = {
+  label: "hidden",
+  type: "hidden",
+  client: "hidden",
+  object: "hidden",
+  note: "hidden",
+  files: "hidden",
+};
+
+export function eventBlocks(input: Input): EventBlocks {
+  if (isOwnerSide(input)) return ALL_EVENT;
+  const read = calendarReader(input);
+  if (!read) return NO_EVENT;
+  /** Живой блок — по положению; неживой — как было до прав блоков события:
+   *  всё видно, своё событие автор правит, кроме клиента и объекта; файлы
+   *  события — по «Файлам» записи. */
+  const level = (key: string, before: RecordLevel): RecordLevel => {
+    const value = read(key);
+    return value === undefined ? before : asRecordLevel(value);
+  };
+  const filesBefore: RecordLevel = asRecordLevel(read("record.files")) === "hidden" ? "hidden" : "write";
+  return {
+    label: level("event.label", "write"),
+    type: level("event.type", "write"),
+    client: level("event.client", "read"),
+    object: level("event.object", "read"),
+    note: level("event.note", "write"),
+    files: level("event.files", filesBefore),
   };
 }
 
@@ -219,6 +275,14 @@ export interface BookRights {
   editNote: boolean;
   editColor: boolean;
   editEventType: boolean;
+  /** Блок заметки есть (у записи — «Заметка», у события — его «Заметка»). */
+  showNote: boolean;
+  /** Тип события показан. */
+  showType: boolean;
+  /** Блок файлов есть. */
+  showFiles: boolean;
+  /** Файлы добавляются. */
+  editFiles: boolean;
 }
 
 export function bookRights(input: {
@@ -226,6 +290,8 @@ export function bookRights(input: {
   kind: "work" | "event";
   isEdit: boolean;
   record: RecordBlocks;
+  /** Блоки события в его календаре; нет — как было до прав блоков события. */
+  event?: EventBlocks;
   /** Сотрудник может править это событие: своё и «События: Меняет». */
   eventWritable: boolean;
 }): BookRights {
@@ -247,26 +313,46 @@ export function bookRights(input: {
       editNote: true,
       editColor: true,
       editEventType: true,
+      showNote: true,
+      showType: true,
+      showFiles: true,
+      editFiles: true,
     };
   }
   if (kind === "event") {
+    // Блоки события (30.09): видит — по блоку; меняет — своё событие и
+    // только открытый на «Видит и меняет» блок.
+    const ev = input.event ?? {
+      label: "write",
+      type: "write",
+      client: "read",
+      object: "read",
+      note: "write",
+      files: "write",
+    };
+    const edits = (level: RecordLevel) => eventWritable && level === "write";
     return {
       // Календарь новой записи выбран слотом; у сохранённой — не меняется.
       editTeam: !isEdit && eventWritable,
-      showLabel: true,
-      editLabel: eventWritable,
+      showLabel: ev.label !== "hidden",
+      editLabel: edits(ev.label),
       editWhen: eventWritable,
-      showClient: true,
-      editClient: false,
-      showObject: true,
-      editObject: false,
+      showClient: ev.client !== "hidden",
+      editClient: edits(ev.client),
+      showObject: ev.object !== "hidden",
+      editObject: edits(ev.object),
       showServices: false,
       editServices: false,
       editTotal: false,
       showMoney: false,
-      editNote: eventWritable,
-      editColor: eventWritable,
-      editEventType: eventWritable,
+      editNote: edits(ev.note),
+      // Цвет события — цвет его типа.
+      editColor: edits(ev.type),
+      editEventType: edits(ev.type),
+      showNote: ev.note !== "hidden",
+      showType: ev.type !== "hidden",
+      showFiles: ev.files !== "hidden",
+      editFiles: edits(ev.files),
     };
   }
   const w = (level: RecordLevel) => level === "write";
@@ -291,6 +377,10 @@ export function bookRights(input: {
       editNote: true,
       editColor: true,
       editEventType: false,
+      showNote: true,
+      showType: false,
+      showFiles: record.files !== "hidden",
+      editFiles: w(record.files),
     };
   }
   return {
@@ -309,5 +399,9 @@ export function bookRights(input: {
     editNote: w(record.note),
     editColor: w(record.color),
     editEventType: false,
+    showNote: record.note !== "hidden",
+    showType: false,
+    showFiles: record.files !== "hidden",
+    editFiles: w(record.files),
   };
 }

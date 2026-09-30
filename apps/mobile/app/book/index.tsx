@@ -124,7 +124,7 @@ import { useTeamSchedule } from "@/features/reference/team-schedule";
 import { useAppointments } from "@/features/calendar/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useBookingSave } from "@/features/appointments/useBookingSave";
-import { useCalendarActions, useRecordBlocks } from "@/features/appointments/useRecordRights";
+import { useCalendarActions, useEventRights, useRecordBlocks } from "@/features/appointments/useRecordRights";
 import { bookRights } from "@/features/appointments/record-blocks";
 import { changedFields } from "@/features/appointments/member-writes";
 import { useSession } from "@/providers/SessionProvider";
@@ -645,12 +645,14 @@ export default function BookScreen() {
   const sessionUserId = useSession().session?.user.id ?? null;
   const rightsTeamId = isEdit ? (editing?.team_id ?? null) : teamId;
   const recordRights = useRecordBlocks(rightsTeamId);
+  const eventRights = useEventRights(rightsTeamId);
   const calendarRights = useCalendarActions(rightsTeamId);
   const can = bookRights({
     isMember: isMemberView,
     kind,
     isEdit,
     record: recordRights,
+    event: eventRights,
     eventWritable:
       calendarRights.events === "write" &&
       (!isEdit || (editing?.created_by ?? null) === sessionUserId),
@@ -2835,7 +2837,7 @@ export default function BookScreen() {
                   снесено 2026-08-30. Зовётся «заметка записи» (владелец
                   2026-09-04): под клиентом и объектом стоят их заметки, и
                   третье поле обязано сказать, чьё оно. */}
-              {showNote ? (
+              {showNote && can.showNote ? (
               // БЛОК, КАК У СОСЕДЕЙ (владелец 2026-09-06: «заметка записи —
               // такой же блок, как под объектом или клиентом, с таким же
               // названием»). Надпись «Заметка» — та же малая шапка.
@@ -2872,12 +2874,12 @@ export default function BookScreen() {
 
               {/* ФАЙЛЫ ЗАПИСИ (STORY-070): фото, документы; у сохранённой
                   записи — файлам нужен её id. К отменённой не добавляют. */}
-              {showFiles ? (
+              {showFiles && can.showFiles ? (
                 <AppointmentFilesBlock
                   appointmentId={editing?.id ?? null}
                   clientId={editing?.client_id ?? client?.id ?? null}
                   locationId={editing?.location_id ?? locationId ?? null}
-                  canUpload={status !== "cancelled"}
+                  canUpload={status !== "cancelled" && can.editFiles}
                   // Удаляет файлы записи только владелец и диспетчер — сервер
                   // сотруднику откажет, корзину ему не рисуем (аудит 24.09).
                   canDelete={!isMemberView}
@@ -2988,7 +2990,7 @@ export default function BookScreen() {
                   строка-дверь → шторка. Цвет события и есть цвет типа. */}
               {/* Без права править событие тип только читается: пустую дверь
                   «Выбрать тип» не показываем, выбранный — без действия. */}
-              {evShowType && (can.editEventType || eventType) ? (
+              {evShowType && can.showType && (can.editEventType || eventType) ? (
                 <EventTypeBlock
                   type={eventType}
                   onPress={
@@ -3009,7 +3011,7 @@ export default function BookScreen() {
               {/* БЛОК «КЛИЕНТ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ClientBlock.tsx`):
                   его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
                   ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
-              {evShowClient ? (
+              {evShowClient && can.showClient ? (
               <SmsComposeProvider context={recordSmsContext}>
                 <ClientBlock
                   client={client}
@@ -3056,6 +3058,7 @@ export default function BookScreen() {
                   Прежний вольный адрес старого события НЕ ТЕРЯЕТСЯ: пока
                   объект не выбран, он стоит тем же полем и уезжает в патч. */}
               {evShowObject &&
+              can.showObject &&
               (can.editObject || eventLocationEntry || eventAddress.trim()) ? (
               <SectionCard title="Объект">
                 {eventLocationEntry ? (
@@ -3181,7 +3184,7 @@ export default function BookScreen() {
                   заметка записи»). Пустое поле без подсказки читалось как
                   пустое место; имя берётся у сущности — «Заметка события»,
                   как «Заметка клиента» у клиента, — а шапка блока остаётся. */}
-              {evShowNote ? (
+              {evShowNote && can.showNote ? (
               <SectionCard title="Заметка">
                 <InlineNoteField
                   note={{
@@ -3206,12 +3209,12 @@ export default function BookScreen() {
                   это точно такое же, только без услуги и оплаты»). У события
                   без клиента документы не заводятся — их место карточка
                   клиента, — а фото и сканы живут на самом событии. */}
-              {evShowFiles ? (
+              {evShowFiles && can.showFiles ? (
                 <AppointmentFilesBlock
                   appointmentId={editing?.id ?? null}
                   clientId={editing?.client_id ?? client?.id ?? null}
                   locationId={editing?.location_id ?? locationId ?? null}
-                  canUpload={status !== "cancelled"}
+                  canUpload={status !== "cancelled" && can.editFiles}
                   // Удаляет файлы записи только владелец и диспетчер — сервер
                   // сотруднику откажет, корзину ему не рисуем (аудит 24.09).
                   canDelete={!isMemberView}

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map";
-import { bookRights, calendarActions, recordBlocks } from "./record-blocks";
+import { bookRights, calendarActions, eventBlocks, recordBlocks } from "./record-blocks";
 
 const TEAM = "team-1";
 
@@ -209,5 +209,57 @@ describe("страница записи — двери по правам", () =>
     assert.equal(own.editClient || own.editObject || own.editTeam, false);
     const foreign = bookRights({ isMember: true, kind: "event", isEdit: true, record: blocks, eventWritable: false });
     assert.equal(foreign.editWhen || foreign.editNote || foreign.editColor, false);
+  });
+});
+
+// БЛОКИ СОБЫТИЯ И ЗАМЕТКА ЗАПИСИ (владелец 30.09: «внутри записи клиентов и
+// внутри события — что может видеть, что не может, что может
+// редактировать»). До миграции блоки неживые — страница ведёт себя как было.
+describe("блоки события и заметка записи", () => {
+  const EVENT_KEYS = ["event.label", "event.type", "event.client", "event.object", "event.note", "event.files"];
+  const LIVE: typeof REGISTRY = [
+    ...REGISTRY,
+    { key: "record.note", live: true, levels: ["off", "read", "write"] },
+    ...EVENT_KEYS.map((key) => ({ key, live: true, levels: ["off", "read", "write"] as AccessLevel[] })),
+  ];
+  const live = (levels: MemberAccessMap) => ({ role: "master", map: levels, registry: LIVE, teamId: TEAM }) as const;
+
+  test("до миграции: всё видно, клиент и объект события — без правки, заметку пишет тот, кто меняет статус", () => {
+    const ev = eventBlocks(at(DMITRY));
+    assert.deepEqual(ev, { label: "write", type: "write", client: "read", object: "read", note: "write", files: "write" });
+    assert.equal(recordBlocks(at(DMITRY)).note, "write");
+    assert.equal(recordBlocks(at(map({ "record.status": "read" }))).note, "read");
+  });
+
+  test("после миграции: блоки события — по своим правам", () => {
+    const ev = eventBlocks(live(map({ "event.label": "write", "event.type": "read", "event.note": "off" })));
+    assert.equal(ev.label, "write");
+    assert.equal(ev.type, "read");
+    assert.equal(ev.note, "hidden");
+    assert.equal(ev.client, "hidden");
+  });
+
+  test("заметка записи — своё право: статус меняет, а заметку только читает", () => {
+    const rb = recordBlocks(live(map({ "record.status": "write", "record.note": "read" })));
+    assert.equal(rb.status, "write");
+    assert.equal(rb.note, "read");
+    const can = bookRights({ isMember: true, kind: "work", isEdit: true, record: rb, eventWritable: false });
+    assert.equal(can.showNote, true);
+    assert.equal(can.editNote, false);
+    const hidden = recordBlocks(live(map({ "record.note": "off" })));
+    assert.equal(bookRights({ isMember: true, kind: "work", isEdit: true, record: hidden, eventWritable: false }).showNote, false);
+  });
+
+  test("событие меняет только автор, и только открытый блок", () => {
+    const event = eventBlocks(live(map({ "event.label": "write", "event.client": "read", "event.note": "off" })));
+    const rb = recordBlocks(live(map({})));
+    const mine = bookRights({ isMember: true, kind: "event", isEdit: true, record: rb, event, eventWritable: true });
+    assert.equal(mine.editLabel, true);
+    assert.equal(mine.showClient, true);
+    assert.equal(mine.editClient, false);
+    assert.equal(mine.showNote, false);
+    const others = bookRights({ isMember: true, kind: "event", isEdit: true, record: rb, event, eventWritable: false });
+    assert.equal(others.editLabel, false);
+    assert.equal(others.showLabel, true);
   });
 });

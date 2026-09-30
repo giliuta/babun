@@ -125,8 +125,15 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "calendar.move",
     "calendar.cancel",
     "calendar.events",
+    "event.label",
+    "event.type",
+    "event.client",
+    "event.object",
+    "event.note",
+    "event.files",
     "calendar.schedule",
     "record.status",
+    "record.note",
     "record.team",
     "record.client",
     "record.object",
@@ -156,6 +163,10 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
   // брать, не видно. Строки сворачиваются, положения сбрасываются.
   "record.services": ["record.amount", "record.payment"],
   "record.amount": ["record.payment"],
+  // Блоки события — под «Записями событий»: скрыты события — блоков нет.
+  // Сами «Записи событий» стоят под «Записями клиентов», поэтому и блоки
+  // события сворачиваются вместе с ними.
+  "calendar.events": ["event.label", "event.type", "event.client", "event.object", "event.note", "event.files"],
 };
 
 /** «ЗАПИСИ КЛИЕНТОВ» ВЕДУТ «НОВЫЕ ЗАПИСИ» (владелец 30.09: «видит он записи,

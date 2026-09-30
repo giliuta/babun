@@ -3,8 +3,10 @@ import { createBlankClient, type Location } from "@babun/shared/local/clients";
 import type { ServicesBlockLine } from "@/features/appointments/ServicesBlock";
 import {
   calendarActions,
+  eventBlocks,
   recordBlocks,
   type CalendarActions,
+  type EventBlocks,
   type RecordBlocks,
 } from "@/features/appointments/record-blocks";
 import type { RecordRow } from "@/features/finances/record-rows";
@@ -80,6 +82,14 @@ function previewMap(levels: Readonly<Record<string, AccessLevel>>): MemberAccess
     calendars: { [PREVIEW_TEAM]: { ...levels } },
     attachedCalendars: [PREVIEW_TEAM],
   };
+}
+
+/** Блоки события глазами сотрудника с этими положениями. */
+export function previewEvent(
+  blocks: readonly AccessBlock[],
+  levels: Readonly<Record<string, AccessLevel>>,
+): EventBlocks {
+  return eventBlocks({ role: "master", map: previewMap(levels), registry: blocks, teamId: PREVIEW_TEAM });
 }
 
 /** Блоки записи глазами сотрудника с этими положениями. */

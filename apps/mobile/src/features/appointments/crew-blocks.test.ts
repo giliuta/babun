@@ -26,6 +26,7 @@ const MIXED = map({
   "record.services": "read",
   "record.amount": "off",
   "record.payment": "read",
+  "record.note": "read",
 });
 
 describe("карточка записи у команды спрашивает права календаря записи", () => {
@@ -38,7 +39,7 @@ describe("карточка записи у команды спрашивает �
       services: true,
       amount: true,
       payment: "write",
-      note: true,
+      note: "write",
     });
   });
 
@@ -51,7 +52,7 @@ describe("карточка записи у команды спрашивает �
       services: true,
       amount: false,
       payment: "read",
-      note: true,
+      note: "read",
     });
   });
 
@@ -64,7 +65,7 @@ describe("карточка записи у команды спрашивает �
       services: false,
       amount: false,
       payment: "hidden",
-      note: true,
+      note: "hidden",
     });
   });
 
@@ -83,7 +84,7 @@ describe("карточка записи у команды спрашивает �
       services: false,
       amount: false,
       payment: "hidden",
-      note: true,
+      note: "hidden",
     });
     assert.equal(crewBlocks({ role: undefined, map: MIXED, teamId: TEAM }).files, "hidden");
   });
@@ -102,7 +103,7 @@ describe("функции компании сильнее прав", () => {
     assert.equal(blocks.object, false);
     assert.equal(blocks.payment, "hidden");
     assert.equal(blocks.files, "hidden");
-    assert.equal(blocks.note, false);
+    assert.equal(blocks.note, "hidden");
     // Остальное — по правам, как было.
     assert.equal(blocks.status, "write");
     assert.equal(blocks.client, true);

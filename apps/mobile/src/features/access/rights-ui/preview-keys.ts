@@ -12,7 +12,14 @@ export const RECORD_PREVIEW_KEYS: readonly string[] = [
   "record.amount",
   "record.payment",
   "record.status",
+  "record.note",
   "record.files",
+  "event.label",
+  "event.type",
+  "event.client",
+  "event.object",
+  "event.note",
+  "event.files",
 ];
 
 export const CALENDAR_PREVIEW_KEYS: readonly string[] = [

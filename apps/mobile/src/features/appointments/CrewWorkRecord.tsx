@@ -85,9 +85,9 @@ export function CrewWorkRecord({
 
   const phone = client?.phone?.trim() ?? "";
   const commentChanged = comment.trim() !== savedComment.trim();
-  // Заметку пишет тот, кто меняет статус (владелец 21.09: «если статус
-  // меняется — значит он может писать заметку»); остальные её только читают.
-  const canWriteNote = blocks.note && blocks.status === "write";
+  // Заметка — своё право «Заметка» (30.09): «Видит и меняет» — пишет,
+  // «Только видит» — читает, «Скрыта» — заметки нет.
+  const canWriteNote = blocks.note === "write";
 
   const patch = async (next: Partial<Appointment>, success: string) => {
     try {
@@ -280,7 +280,7 @@ export function CrewWorkRecord({
             />
           </View>
         </SectionCard>
-      ) : blocks.note && savedComment.trim() ? (
+      ) : blocks.note !== "hidden" && savedComment.trim() ? (
         <SectionCard title="Заметка команды">
           <Text style={{ padding: 16, fontSize: 15, lineHeight: 21, color: t.ink }}>
             {savedComment.trim()}

@@ -38,9 +38,10 @@ export interface CrewBlocks {
   /** «Оплата в записи»: оплачена ли запись; сколько внесено — только вместе
    *  с «Суммой», это деньги. */
   payment: CrewLevel;
-  /** Заметка записи — функция компании (STORY-088). Выключена — заметки нет
-   *  ни для чтения, ни для записи. */
-  note: boolean;
+  /** Заметка записи — функция компании (STORY-088) и своё право «Заметка»
+   *  (30.09; раньше писал тот, кто меняет статус, и читали все). Функция
+   *  выключена — заметки нет ни у кого. */
+  note: CrewLevel;
 }
 
 function levelOf(gate: AccessGate): CrewLevel {
@@ -81,7 +82,7 @@ export function crewBlocks(input: {
     services: gate("record.services") !== "hidden",
     amount: gate("record.amount") !== "hidden",
     payment: on("record_payment") ? gate("record.payment") : "hidden",
-    note: on("record_note"),
+    note: on("record_note") ? gate("record.note") : "hidden",
   };
 }
 

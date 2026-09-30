@@ -8,8 +8,11 @@ export type CalendarGroup = "calendar" | "record" | "finance" | "clients";
 
 export const CALENDAR_GROUPS: readonly CalendarGroup[] = ["calendar", "record", "finance", "clients"];
 
-/** Блок в разделе: «clients» — сам блок `clients` и его `clients.*`. */
+/** Блок в разделе: «clients» — сам блок `clients` и его `clients.*`.
+ *  Блоки события (`event.*`) — вместе с блоками записи; на странице прав оба
+ *  стоят блоками «Календаря» (`SECTION_BLOCKS.calendar`). */
 export function inGroup(key: string, group: CalendarGroup): boolean {
+  if (group === "record" && key.startsWith("event.")) return true;
   return key === group || key.startsWith(`${group}.`);
 }
 
@@ -37,7 +40,20 @@ export const RECORD_ROW_ORDER: readonly string[] = [
   "record.amount",
   "record.payment",
   "record.status",
+  "record.note",
   "record.files",
+];
+
+/** БЛОКИ СОБЫТИЯ — в порядке страницы события: метка, тип, клиент, объект,
+ *  заметка, файлы. Команда и время видны всегда; двигает событие его автор
+ *  при «Записи событий: Видит и создаёт». */
+export const EVENT_ROW_ORDER: readonly string[] = [
+  "event.label",
+  "event.type",
+  "event.client",
+  "event.object",
+  "event.note",
+  "event.files",
 ];
 
 /** ПРАВА КАЛЕНДАРЯ. Метка дня — первой (владелец 29.09: «поставь метку
@@ -91,6 +107,12 @@ export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock
     // (владелец 30.09: «создай второй блок — „Записи"»; «событие тоже
     // опускаем»; «перенос записи и отмена переносим также в записи»).
     { key: "records", title: "Записи", keys: RECORD_KINDS },
+    // БЛОКИ ВНУТРИ ЗАПИСИ И СОБЫТИЯ — ЗДЕСЬ ЖЕ, ПОД «ЗАПИСЯМИ» (владелец
+    // 30.09: «запись, я думаю, надо перенести в блок „Календарь“»). Скрыты
+    // «Записи клиентов» — блока «Запись клиента» нет; скрыты «Записи
+    // событий» — нет блока «Событие» (`DEPENDANT_BLOCKS`).
+    { key: "record", title: "Запись клиента", keys: RECORD_ROW_ORDER },
+    { key: "event", title: "Событие", keys: EVENT_ROW_ORDER },
     // НАСТРОЙКИ КОМАНДЫ — по строке на каждую функцию шестерёнки календаря
     // (владелец 30.09: «может менять часовой пояс, не может график менять и
     // так далее — полностью все функции, которые в настройках»). Строка
