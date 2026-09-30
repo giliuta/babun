@@ -36,7 +36,7 @@ export function SmsHistoryRow({
 }) {
   const t = useThemeColors();
   const text = item.body ?? body ?? null;
-  const title = showClient ? (item.clientName ?? item.toPhone) : triggerWords(item.trigger);
+  const title = showClient ? (item.clientName ?? (item.toPhone || "SMS")) : triggerWords(item.trigger);
   const meta = [showClient ? triggerWords(item.trigger) : null, when(item.createdAt), phone || null]
     .filter(Boolean)
     .join(" · ");

@@ -95,7 +95,7 @@ export function SmsMessageSheet({
     <BottomSheet
       visible={!!item}
       onClose={onClose}
-      title={m.clientName ?? m.toPhone}
+      title={m.clientName ?? (m.toPhone || "SMS")}
       subtitle={triggerWords(m.trigger)}
       scroll
       footer={canResend ? <Button label="Отправить ещё раз" onPress={resend} /> : undefined}
@@ -143,8 +143,14 @@ export function SmsMessageSheet({
             <Fact title="Команда" value={team} />
           </>
         ) : null}
-        <Divider inset={16} />
-        <Fact title="Номер" value={formatPhoneForDisplay(m.toPhone, country)} />
+        {/* Сотруднику сервер номер не отдаёт (номера — по одному, из карточки):
+            пустой строки «Номер» не рисуем. */}
+        {m.toPhone ? (
+          <>
+            <Divider inset={16} />
+            <Fact title="Номер" value={formatPhoneForDisplay(m.toPhone, country)} />
+          </>
+        ) : null}
         {m.segments ? (
           <>
             <Divider inset={16} />

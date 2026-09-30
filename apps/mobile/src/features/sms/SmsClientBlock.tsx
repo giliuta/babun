@@ -6,6 +6,7 @@ import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { useToast } from "@/components/ui/Toast";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { formatPhoneForDisplay } from "@/features/clients/phone";
 import { firstName } from "@/features/clients/sms-name";
@@ -45,7 +46,9 @@ export function SmsClientBlock({
   const toast = useToast();
   const country = useDefaultCountry();
   const { data: teams = [] } = useTeams();
-  const log = useClientSms(client.id, HISTORY_LIMIT);
+  // Компания карточки: клиент работодателя читается под её заголовком.
+  const cardTenantId = useClientsScopeOrNull()?.tenantId ?? null;
+  const log = useClientSms(client.id, HISTORY_LIMIT, cardTenantId);
   const optOut = useSetClientSmsOptOut();
   const [smsOff, setSmsOff] = useState<boolean | null>(null);
   const [open, setOpen] = useState<SmsHistoryItem | null>(null);
@@ -65,7 +68,7 @@ export function SmsClientBlock({
           onChange={(send) => {
             setSmsOff(!send);
             optOut.mutate(
-              { clientId: client.id, value: !send },
+              { clientId: client.id, value: !send, tenantId: cardTenantId },
               {
                 onError: (e) => {
                   setSmsOff(null);
@@ -93,7 +96,7 @@ export function SmsClientBlock({
             <SmsHistoryRow
               item={item}
               showClient={false}
-              phone={formatPhoneForDisplay(item.toPhone, country)}
+              phone={item.toPhone ? formatPhoneForDisplay(item.toPhone, country) : null}
               onPress={() => setOpen(item)}
             />
           </View>

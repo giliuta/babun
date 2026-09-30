@@ -2,6 +2,7 @@ import { Linking, Platform } from "react-native";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/features/settings/tenant";
 import {
@@ -357,15 +358,24 @@ export function useAppointmentLink(appointmentId: string | null | undefined, ena
   });
 }
 
-/** SMS клиента — блок на странице клиента. */
-export function useClientSms(clientId: string | null | undefined, limit = 20) {
-  const tenantId = useTenantId();
+/** Клиент Supabase компании карточки: вкладка «Клиенты» открывает и
+ *  клиентов компании-работодателя (`?tenant=`), и их SMS читаются и меняются
+ *  под её заголовком, а не под активной компанией устройства. */
+function clientOf(cardTenantId: string | null | undefined, activeTenantId: string | null) {
+  return cardTenantId && cardTenantId !== activeTenantId ? tenantBoundClient(cardTenantId) : supabase;
+}
+
+/** SMS клиента — блок на странице клиента. `cardTenantId` — компания
+ *  карточки; нет — активная. */
+export function useClientSms(clientId: string | null | undefined, limit = 20, cardTenantId?: string | null) {
+  const activeTenantId = useTenantId();
+  const tenantId = cardTenantId ?? activeTenantId;
   return useQuery({
     queryKey: [...smsLogKey(tenantId), "client", clientId, limit],
     enabled: !!tenantId && !!clientId,
     staleTime: 0,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("sms_for_client", {
+      const { data, error } = await clientOf(tenantId, activeTenantId).rpc("sms_for_client", {
         p_client_id: clientId as string,
         p_limit: limit,
       });
@@ -437,9 +447,10 @@ export function useSendSmsBulk() {
 
 export function useSetClientSmsOptOut() {
   const qc = useQueryClient();
+  const activeTenantId = useTenantId();
   return useMutation({
-    mutationFn: async (input: { clientId: string; value: boolean }) => {
-      const { error } = await supabase.rpc("set_client_sms_opt_out", {
+    mutationFn: async (input: { clientId: string; value: boolean; tenantId?: string | null }) => {
+      const { error } = await clientOf(input.tenantId, activeTenantId).rpc("set_client_sms_opt_out", {
         p_client_id: input.clientId,
         p_value: input.value,
       });
