@@ -23,6 +23,9 @@ import {
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { splitNameAndPhone } from "@/features/clients/name-phone-paste";
 import { supabase } from "@/lib/supabase";
+import { useTeams } from "@/features/reference/queries";
+import { liveTeamChoice, teamForNewClient } from "@/features/clients/team-scope";
+import { useClientsTeam } from "@/features/clients/team-pref";
 import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
 import { deliverCreatedClient } from "@/features/appointments/pending-client";
@@ -174,6 +177,12 @@ export function useClientDraft(
     scope && !scope.isActive ? tenantBoundClient(scope.tenantId) : supabase;
   const create = useCreateClient();
   const updateById = useUpdateClientById();
+  // КОМАНДА НОВОГО КЛИЕНТА (30.09) — чип ленты вкладки «Клиенты», из «Все» —
+  // первая команда. Шлём всегда: офлайн-запись умолчания сервера не знает.
+  const { data: savedTeam } = useClientsTeam(tenantId ?? null);
+  const { data: teams = [] } = useTeams();
+  const teamIds = teams.map((team) => team.id);
+  const newClientTeam = teamForNewClient(liveTeamChoice(savedTeam, teamIds), teamIds);
   // Код страны берём из профиля КОМПАНИИ (tenants.country), а не из константы
   // продукта: у кипрской фирмы поле открывается с «+357», у греческой — с
   // «+30». Номер, введённый со своим «+», всё равно уважается как есть.
@@ -430,6 +439,7 @@ export function useClientDraft(
     try {
       const created = await create.mutateAsync({
         ...d,
+        team_id: d.team_id ?? newClientTeam,
         // Без разобранного номера гейт пропускает только пустое поле (клиент
         // со связью) — в нём один код страны, и в базу он уезжает пустым,
         // а не номером «+357».

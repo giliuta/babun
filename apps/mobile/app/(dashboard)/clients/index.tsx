@@ -9,9 +9,9 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-  BarChart3,
   Search,
   Settings,
+  SlidersHorizontal,
   Users,
 } from "lucide-react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -24,6 +24,7 @@ import {
 } from "@babun/shared/local/selectors/client-links";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ScopeChips } from "@/components/ui/ScopeChips";
 import { LoadingBar } from "@/components/ui/LoadingBar";
 import { Spinner } from "@/components/ui/Spinner";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -48,6 +49,15 @@ import {
   type ClientsFilter,
 } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
+import {
+  ALL_TEAMS,
+  appointmentsOfTeam,
+  clientsOfTeam,
+  liveTeamChoice,
+  rowTeamLabelId,
+  toggleTeamChoice,
+} from "@/features/clients/team-scope";
+import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import {
   useClientsCapabilities,
@@ -77,7 +87,6 @@ import { ClientActionsSheet } from "@/features/clients/ClientActionsSheet";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { RemindSheet } from "@/features/clients/RemindSheet";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
-import { ClientsFilterBar } from "@/features/clients/ClientsFilterBar";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
 import { ContactsImportSheet } from "@/features/clients/import/ContactsImportSheet";
@@ -223,6 +232,37 @@ function ClientsListScreen() {
     () => uniqueById([...ownTags, ...guests.list.flatMap((guest) => guest.tags)]),
     [ownTags, guests.list],
   );
+  // ЛЕНТА КОМАНД (владелец 30.09). Клиент принадлежит команде полем карточки
+  // (`team_id`), а не последним визитом. Чипа «Все» нет: ни одна команда не
+  // нажата — видны все; тап включает команду, повторный тап снимает. Выбор
+  // помнится по компании; исчезнувшая команда снимается сама.
+  const { data: savedTeam } = useClientsTeam(scope?.tenantId ?? null);
+  const setSavedTeam = useSetClientsTeam(scope?.tenantId ?? null);
+  const teamChoice = liveTeamChoice(
+    savedTeam,
+    teams.map((tm) => tm.id),
+  );
+  // Команды компаний-партнёров — обводкой: тот же язык, что у ленты
+  // календаря (чужой чип уводит в чужую базу, а не режет свою).
+  const teamChips = useMemo(() => {
+    const own = new Set(ownTeams.map((tm) => tm.id));
+    return teams.map((tm) => ({
+      id: tm.id,
+      name: tm.name,
+      color: tm.color,
+      outline: !own.has(tm.id),
+    }));
+  }, [teams, ownTeams]);
+  // КЛИЕНТ ОДИН НА НЕСКОЛЬКО КОМАНД (см. `team-scope.ts`): под чипом — свои
+  // клиенты команды и те, кого она обслуживала; цифры — по её записям.
+  const teamClients = useMemo(
+    () => clientsOfTeam(clients, teamChoice, appointments),
+    [clients, teamChoice, appointments],
+  );
+  const teamAppointments = useMemo(
+    () => appointmentsOfTeam(appointments, teamChoice),
+    [appointments, teamChoice],
+  );
   // Деньги чужой компании сотруднику не приходят вовсе — в строке их нет.
   const guestCardFields = useMemo(
     () => ({ ...cardFields, exp: false, inc: false, debt: false }),
@@ -231,30 +271,39 @@ function ClientsListScreen() {
 
   // Per-client roll-up (visits / money / debt / last team) — one pass
   // over appointments, shared by the cards, the sort and the filter.
-  const statsMap = useMemo(
+  // Под чипом команды строка, сортировка и фильтры считают ТОЛЬКО её записи.
+  // Полная история нужна там, где решается судьба клиента: можно ли его
+  // удалить и что уйдёт в выгрузку, — там `allStatsMap`.
+  const allStatsMap = useMemo(
     () => buildStatsMap(clients, appointments),
     [clients, appointments],
   );
+  const teamStatsMap = useMemo(
+    () =>
+      teamChoice === ALL_TEAMS ? null : buildStatsMap(teamClients, teamAppointments),
+    [teamChoice, teamClients, teamAppointments],
+  );
+  const statsMap = teamStatsMap ?? allStatsMap;
 
   // Первая и последняя (не отменённые) записи — сплит периода в фильтрах
   // показывает у «Всего времени» честный охват данных в обе стороны.
   const dataSpan = useMemo(() => {
     let min: string | null = null;
     let max: string | null = null;
-    for (const a of appointments) {
+    for (const a of teamAppointments) {
       if (a.status === "cancelled" || !a.date) continue;
       if (!min || a.date < min) min = a.date;
       if (!max || a.date > max) max = a.date;
     }
     return { from: min, to: max };
-  }, [appointments]);
+  }, [teamAppointments]);
 
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
   // (deps без поиска) — фикс Волны 1 сохранён: клавиши не гоняют
   // localeCompare-компаратор.
   const result = useClientFilters(
-    clients,
-    appointments,
+    teamClients,
+    teamAppointments,
     teams,
     cities,
     tags,
@@ -274,7 +323,10 @@ function ClientsListScreen() {
       const teamSet = new Set(teamOptions.map((o) => o.value));
       const tagSet = new Set(tagOptions.map((o) => o.value));
       const citySet = new Set(cityOptions.map((o) => o.value));
-      const selectedTeams = f.selectedTeams.filter((x) => teamSet.has(x));
+      // Строки «Команда» в фильтрах с 30.09 нет — команду выбирает лента.
+      // Забытый вчерашний выбор прятал бы клиентов без видимого токена.
+      void teamSet;
+      const selectedTeams: string[] = [];
       const activeTags = f.activeTags.filter((x) => tagSet.has(x));
       const selectedCities = f.selectedCities.filter((x) => citySet.has(x));
       if (
@@ -356,7 +408,12 @@ function ClientsListScreen() {
       null;
     guardedBook(c, {
       locationId: primary,
-      teamId: statsMap.get(c.id)?.lastTeamId ?? null,
+      // Под чипом — в выбранную команду (её список и открыт); без чипа — в
+      // команду клиента, у клиента без неё — в команду последнего визита.
+      teamId:
+        teamChoice !== ALL_TEAMS
+          ? teamChoice
+          : (c.team_id ?? allStatsMap.get(c.id)?.lastTeamId ?? null),
     });
   };
 
@@ -382,7 +439,7 @@ function ClientsListScreen() {
   // стирается сам. За клиентом с визитами стоит финансовая история — база
   // стереть его не даст, поэтому говорим это ДО действия и предлагаем архив.
   const confirmDeleteOne = (c: Client) => {
-    const stats = statsMap.get(c.id);
+    const stats = allStatsMap.get(c.id);
     // ЛЮБАЯ запись — уже история, даже будущая. База запрещает стирать
     // клиента с заявками (guard_client_hard_delete_history), поэтому такой
     // клиент лёг бы в корзину НАВСЕГДА: счётчик тикает, а ночная очистка
@@ -465,7 +522,7 @@ function ClientsListScreen() {
   const onExport = async () => {
     if (selectedClients.length === 0) return;
     try {
-      const shared = await shareClientsCsv(selectedClients, tags, statsMap);
+      const shared = await shareClientsCsv(selectedClients, tags, allStatsMap);
       if (shared) {
         toast(`CSV выгружен (${selectedClients.length})`, "success");
         exitSelection();
@@ -560,7 +617,9 @@ function ClientsListScreen() {
             paddingHorizontal: 8,
             minHeight: 48,
             backgroundColor: t.surface,
-            borderBottomWidth: 1,
+            // Шов снизу даёт лента команд (как в календаре): две линии
+            // подряд читались бы как случайный зазор.
+            borderBottomWidth: teams.length > 0 ? 0 : 1,
             borderBottomColor: t.separator,
           }}
         >
@@ -606,53 +665,81 @@ function ClientsListScreen() {
               returnKeyType="search"
               clearButtonMode="while-editing"
               maxFontSizeMultiplier={1.3}
-              className="flex-1 text-[15px]"
-              style={{ color: t.ink, paddingVertical: 0 }}
+              // ПОЛЕ РАСТЯНУТО НА ВСЮ ВЫСОТУ ПЛАШКИ. Без этого iOS после
+              // перерисовки ронял подсказку ниже плашки — «Имя, телефон,
+              // адрес» обрезалась снизу (владелец 30.09: «поисковик съехал»).
+              // Не числом: `h-9` плашки — это rem NativeWind, а не 36pt.
+              style={{
+                flex: 1,
+                alignSelf: "stretch",
+                paddingVertical: 0,
+                fontSize: 15,
+                textAlignVertical: "center",
+                color: t.ink,
+              }}
             />
           </View>
 
-          {scope ? (
-            <Pressable
-              onPress={() => router.push(clientsInsightsHref(scope))}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel="Аналитика по клиентам"
-              style={({ pressed }) => ({
-                width: 44,
-                height: 44,
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: t.radius.card,
-                backgroundColor: pressed ? t.pressed : "transparent",
-              })}
-            >
-              <BarChart3 color={t.sub} size={21} strokeWidth={2} />
-            </Pressable>
-          ) : null}
+          {/* ФИЛЬТРЫ — ЗНАЧКОМ СПРАВА (владелец 30.09: «фильтры запихиваем
+              в аналитику, правой вверху»). Строка «Фильтры · N клиентов» под
+              поиском уступила место ленте команд; аналитика — последней
+              строкой шторки. Включённый фильтр — точкой на значке: список
+              не имеет права прятать клиентов молча. */}
+          <Pressable
+            onPress={() => {
+              setInitialFacet(null);
+              setSheetOpen(true);
+            }}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={
+              result.activeCount > 0
+                ? `Фильтры, включено ${result.activeCount}`
+                : "Фильтры"
+            }
+            style={({ pressed }) => ({
+              width: 44,
+              height: 44,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: t.radius.card,
+              backgroundColor: pressed ? t.pressed : "transparent",
+            })}
+          >
+            <SlidersHorizontal
+              color={result.activeCount > 0 ? t.accent : t.sub}
+              size={21}
+              strokeWidth={2}
+            />
+            {result.activeCount > 0 ? (
+              <View
+                style={{
+                  position: "absolute",
+                  top: 9,
+                  right: 8,
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: t.accent,
+                  borderWidth: 1.5,
+                  borderColor: t.surface,
+                }}
+              />
+            ) : null}
+          </Pressable>
         </View>
       )}
 
-      {/* Фильтры прячем в режиме выбора — фокус на наборе. Пока грузим
-          или упали — бара нет: он печатал «Всего 0 клиентов» поверх
-          спиннера и поверх экрана ошибки. */}
-      {!selecting && !isLoading && !error ? (
-        <ClientsFilterBar
-          totalCount={clients.length}
-          foundCount={result.filtered.length}
-          activeCount={result.activeCount}
-          tokens={result.activeTokens}
-          onOpen={() => {
-            setInitialFacet(null);
-            setSheetOpen(true);
+      {/* ЛЕНТА КОМАНД — на месте строки фильтров. В режиме выбора её нет:
+          фокус на наборе. Без команд (компания их не завела) ленты нет. */}
+      {!selecting && teams.length > 0 ? (
+        <ScopeChips
+          items={teamChips}
+          activeId={teamChoice === ALL_TEAMS ? null : teamChoice}
+          onSelect={(id) => {
+            haptics.tap();
+            setSavedTeam.mutate(toggleTeamChoice(teamChoice, id));
           }}
-          onOpenToken={(tok) => {
-            // «Период» — не фасет-попап (у него свои пресеты/колёса):
-            // открываем лист как обычно, остальное — сразу на измерении.
-            setInitialFacet(tok.key === "period" ? null : tok.key);
-            setSheetOpen(true);
-          }}
-          onRemoveToken={removeToken}
-          onReset={resetAll}
         />
       ) : null}
 
@@ -689,8 +776,9 @@ function ClientsListScreen() {
           }}
           renderItem={({ item }) => {
             const stats = statsMap.get(item.id);
-            const teamName = stats?.lastTeamId
-              ? (teams.find((tm) => tm.id === stats.lastTeamId)?.name ?? null)
+            const rowTeamId = rowTeamLabelId(item, teamChoice, stats?.lastTeamId ?? null);
+            const teamName = rowTeamId
+              ? (teams.find((tm) => tm.id === rowTeamId)?.name ?? null)
               : null;
             // ГОСТЬ — клиент компании, где человек работает. Его карточка
             // открывается в ЕГО компании, а жесты своей базы (записать,
@@ -758,7 +846,11 @@ function ClientsListScreen() {
             ) : (
               <EmptyState
                 icon={<Users color={t.faint} size={40} strokeWidth={1.5} />}
-                title="Пока нет клиентов"
+                title={
+                  teamChoice === ALL_TEAMS
+                    ? "Пока нет клиентов"
+                    : "В этой команде пока нет клиентов"
+                }
                 // Подписи здесь нет: канон пустых состояний (LOCKED
                 // 2026-08-27) оставляет объяснения ошибкам. Что делать
                 // дальше, говорит футер — он на месте у всех.
@@ -844,6 +936,15 @@ function ClientsListScreen() {
         onSortChange={(s) => setSort.mutate(s)}
         onChange={setFilter}
         onClose={() => setSheetOpen(false)}
+        hideTeam
+        onAnalytics={
+          scope
+            ? () => {
+                setSheetOpen(false);
+                router.push(clientsInsightsHref(scope));
+              }
+            : undefined
+        }
       />
       <ImportWizardSheet
         visible={importOpen}

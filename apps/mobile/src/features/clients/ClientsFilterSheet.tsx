@@ -17,7 +17,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Check, ChevronDown } from "lucide-react-native";
+import { BarChart3, Check, ChevronDown, ChevronRight } from "lucide-react-native";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import type {
   AcquisitionSource,
@@ -788,6 +788,8 @@ export function ClientsFilterSheet({
   onSortChange,
   onChange,
   onClose,
+  hideTeam = false,
+  onAnalytics,
 }: {
   visible: boolean;
   filter: ClientsFilter;
@@ -807,6 +809,12 @@ export function ClientsFilterSheet({
   onSortChange: (s: SortKey) => void;
   onChange: (f: ClientsFilter) => void;
   onClose: () => void;
+  /** Команду выбирает лента над списком (30.09) — строка «Команда» здесь
+   *  была бы вторым, спорящим с ней фильтром. */
+  hideTeam?: boolean;
+  /** Дверь «Аналитика» последней строкой: значок справа в шапке с 30.09
+   *  открывает фильтры, а аналитика живёт внутри них. */
+  onAnalytics?: () => void;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -1341,7 +1349,7 @@ export function ClientsFilterSheet({
               оставлял дыру в 56pt (gap сверху + снизу). ── */}
           {cityOptions.length > 0 ||
           tagOptions.length > 0 ||
-          teamOptions.length > 0 ? (
+          (!hideTeam && teamOptions.length > 0) ? (
           <View style={{ gap: 12 }}>
             {cityOptions.length > 0 ? (
               <FilterRow
@@ -1359,7 +1367,7 @@ export function ClientsFilterSheet({
                 onPress={() => setOpenFacet("tag")}
               />
             ) : null}
-            {teamOptions.length > 0 ? (
+            {!hideTeam && teamOptions.length > 0 ? (
               <FilterRow
                 name="Команда"
                 value={teamValue}
@@ -1392,6 +1400,38 @@ export function ClientsFilterSheet({
                 />
               ) : null}
             </View>
+          ) : null}
+
+          {/* ── Дверь «Аналитика» — строка, а не кнопка: уводит на свою
+              страницу, как двери настроек. ── */}
+          {onAnalytics ? (
+            <Pressable
+              onPress={() => {
+                haptics.tap();
+                onAnalytics();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Аналитика по клиентам"
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                minHeight: 44,
+                paddingVertical: 8,
+                paddingHorizontal: 16,
+                borderRadius: t.radius.card,
+                backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
+              })}
+            >
+              <BarChart3 color={t.sub} size={18} strokeWidth={2} />
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
+              >
+                Аналитика
+              </Text>
+              <ChevronRight color={t.chevron} size={16} strokeWidth={2.4} />
+            </Pressable>
           ) : null}
         </ScrollView>
 
