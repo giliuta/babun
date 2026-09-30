@@ -23,6 +23,7 @@ import type { Client, ClientNote } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ICON } from "@/components/ui/tokens";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { applyNoteEdit } from "@/features/appointments/client-note-journal";
 import { useInlineNote } from "@/features/appointments/use-inline-note";
@@ -47,6 +48,8 @@ const MAX_LEN = 500;
 
 export default function NotesBlock({ client, update, readOnly = false }: NotesBlockProps) {
   const t = useThemeColors();
+  // Без выноса (30.09): у сотрудника чужой компании меню «Скопировать» нет.
+  const caps = useClientsCapabilities();
   const [earlierOpen, setEarlierOpen] = useState(false);
   const list = client.notes ?? EMPTY_NOTES;
   const imported = (client.comment ?? "").trim();
@@ -108,6 +111,7 @@ export default function NotesBlock({ client, update, readOnly = false }: NotesBl
         accessibilityLabel="Заметка клиента"
         maxLength={MAX_LEN}
         readOnly={readOnly}
+        noCopy={!caps.export}
       />
 
       {earlierCount > 0 ? (

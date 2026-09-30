@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type Ref } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { MapPinned, Send, Tag } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
 import { FieldRow } from "@/components/ui/card-rows";
 import { iconPreset } from "@/components/ui/icon-set";
 import { PickerSheet } from "@/components/ui/PickerSheet";
@@ -124,6 +125,9 @@ export function ObjectFields({
   teamId?: string | null;
 }) {
   const t = useThemeColors();
+  // Без выноса (30.09): у сотрудника чужой компании адрес и заметку объекта
+  // не скопировать.
+  const caps = useClientsCapabilities();
   /** Раскрыта ли карта под адресом. */
   const [mapOpen, setMapOpen] = useState(false);
   /** Поднят ли список типов объекта. */
@@ -243,6 +247,7 @@ export function ObjectFields({
           label="Адрес"
           hideLabel
           big
+          noCopy={!caps.export}
           value={value.target}
           placeholder="Улица и дом или ссылка на карту"
           stacked
@@ -339,6 +344,7 @@ export function ObjectFields({
             value={value.note}
             onChangeText={(v) => onChange({ note: v })}
             onBlur={onCommit}
+            contextMenuHidden={!caps.export}
             multiline
             accessibilityLabel="Заметка объекта"
             // ПОДСКАЗКА НАЗЫВАЕТ ПОЛЕ, А НЕ ОБЪЯСНЯЕТ ПРИМЕРОМ (владелец

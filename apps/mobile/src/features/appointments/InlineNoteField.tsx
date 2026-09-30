@@ -24,6 +24,7 @@ export function InlineNoteField({
   accessibilityLabel,
   maxLength,
   readOnly = false,
+  noCopy = false,
 }: {
   note: Pick<
     ReturnType<typeof useInlineNote<unknown>>,
@@ -37,6 +38,9 @@ export function InlineNoteField({
    *  плашка, но без клавиатуры. Пустую заметку тогда не рисуем вовсе —
    *  поле с подсказкой звало бы печатать там, где печатать нельзя. */
   readOnly?: boolean;
+  /** Без меню «Скопировать» (владелец 30.09: сотрудник видит клиента, но
+   *  вынести его не может). */
+  noCopy?: boolean;
 }) {
   const t = useThemeColors();
   if (readOnly && !note.draft.trim()) return null;
@@ -65,6 +69,7 @@ export function InlineNoteField({
         selectionColor={t.accent}
         multiline
         maxLength={maxLength}
+        contextMenuHidden={noCopy}
         maxFontSizeMultiplier={1.3}
         style={{
           minHeight: 18,

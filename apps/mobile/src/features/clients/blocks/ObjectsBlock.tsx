@@ -6,6 +6,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { NavRow } from "@/components/ui/card-rows";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { useInlineNote } from "@/features/appointments/use-inline-note";
 import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
@@ -65,12 +66,15 @@ function ObjectNote({
     (next, id) => onSave(id, next),
     ownerKey,
   );
+  // Без выноса (30.09): у сотрудника чужой компании меню «Скопировать» нет.
+  const caps = useClientsCapabilities();
   return (
     <InlineNoteField
       note={note}
       placeholder="Заметка объекта"
       accessibilityLabel={`Заметка объекта ${loc.label || loc.address || ""}`.trim()}
       maxLength={500}
+      noCopy={!caps.export}
     />
   );
 }

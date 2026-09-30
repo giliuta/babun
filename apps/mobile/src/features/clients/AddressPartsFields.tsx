@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
 import { haptics } from "@/lib/haptics";
@@ -246,6 +247,8 @@ function DetailBox({
 }) {
   const t = useThemeColors();
   const input = useRef<TextInput>(null);
+  // Без выноса (30.09): у сотрудника чужой компании части адреса не скопировать.
+  const caps = useClientsCapabilities();
   return (
     <Pressable
       onPress={() => input.current?.focus()}
@@ -277,6 +280,7 @@ function DetailBox({
         onChangeText={onChange}
         onBlur={onEditEnd}
         accessibilityLabel={label}
+        contextMenuHidden={!caps.export}
         selectionColor={t.accent}
         keyboardAppearance="light"
         keyboardType={keyboardType}

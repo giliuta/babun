@@ -253,9 +253,16 @@ function ClientsListScreen() {
   }, [teams, ownTeams]);
   // КЛИЕНТ ОДИН НА НЕСКОЛЬКО КОМАНД (см. `team-scope.ts`): под чипом — свои
   // клиенты команды и те, кого она обслуживала; цифры — по её записям.
+  // ГРАНИЦА БАЗ (владелец 30.09 — «чтобы не могли украсть наших клиентов»,
+  // сверено с 015): без чипа — ТОЛЬКО СВОЯ база. Клиенты компании, где
+  // человеку открыли клиентов, — только под её чипом с обводкой и никогда в
+  // одном списке со своими: так их не перепутать и граница видна без слов.
   const teamClients = useMemo(
-    () => clientsOfTeam(clients, teamChoice, appointments),
-    [clients, teamChoice, appointments],
+    () =>
+      teamChoice === ALL_TEAMS
+        ? clients.filter((c) => !guestOf.has(c.id))
+        : clientsOfTeam(clients, teamChoice, appointments),
+    [clients, teamChoice, appointments, guestOf],
   );
   const teamAppointments = useMemo(
     () => appointmentsOfTeam(appointments, teamChoice),
