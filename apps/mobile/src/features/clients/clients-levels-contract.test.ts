@@ -67,13 +67,32 @@ const oneByOne = norm(readFileSync(join(MIGRATIONS_DIR, ONE_BY_ONE), "utf8"));
 const CARD_BLOCKS = "20260930234000_clients_card_blocks.sql";
 const cardBlocks = norm(readFileSync(join(MIGRATIONS_DIR, CARD_BLOCKS), "utf8"));
 
+// ОБХОДНЫЕ ДОРОГИ (аудит 30.09): SMS, чеки, копия записи, старые записи
+// мастера — данные клиента не уходят мимо «номер по одному» и «Около записи».
+const LEAKS = "20260930235950_clients_leak_paths.sql";
+const leaks = norm(readFileSync(join(MIGRATIONS_DIR, LEAKS), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
       assert.equal(lastDefiner(fn), PER_TEAM, `${fn} переопределён позже`);
     }
-    for (const fn of ["access_client_ids_in", "access_company_level", "list_master_clients_safe"]) {
+    for (const fn of ["access_client_ids_in", "access_company_level"]) {
       assert.equal(lastDefiner(fn), ONE_BY_ONE, `${fn} переопределён позже`);
+    }
+    for (const fn of [
+      "list_master_clients_safe",
+      "list_master_appointments_safe",
+      "sms_message_json",
+      "sms_for_client",
+      "sms_send_manual",
+      "sms_appointment_link",
+      "receipts_client_snapshot_no_phone",
+      "member_client_in_team",
+      "member_appointment_copy",
+      "member_appointment_update",
+    ]) {
+      assert.equal(lastDefiner(fn), LEAKS, `${fn} переопределён позже`);
     }
     for (const fn of [
       "access_client_blocks",
@@ -117,6 +136,47 @@ describe("сервер: клиенты по уровням", () => {
     // Помощники не зовутся снаружи.
     assert.ok(cardBlocks.includes("revoke all on function public.access_client_blocks() from public, anon, authenticated;"));
     assert.ok(cardBlocks.includes("revoke all on function public.access_block_client_ids(text, text) from public, anon;"));
+  });
+
+  test("обходные дороги закрыты: SMS, чеки, копия записи, старые записи мастера", () => {
+    assert.ok(leaks.includes("'to_phone', case when p_owner then m.to_phone else '' end,"), "SMS снова отдают номер сотруднику");
+    assert.ok(
+      leaks.includes("if not is_owner and not (p_client_id = any(public.access_client_ids())) then return; end if;"),
+      "история SMS клиента мимо набора",
+    );
+    assert.ok(
+      leaks.includes("if not is_owner and not public.member_client_in_team(v_client, v_team) then raise exception 'sms:rights'"),
+      "SMS любому клиенту компании по uuid",
+    );
+    assert.ok(
+      leaks.includes("if not is_owner and not (v_client = any(public.access_contact_client_ids()) or v_client = any(public.access_day_contact_client_ids())) then raise exception 'sms:phone'"),
+      "выбор номера SMS проверяет угаданный номер",
+    );
+    assert.ok(
+      leaks.includes("and (v_team = any(public.access_calendars('record.client', 'read'))) is not true then raise exception 'sms:rights'"),
+      "ссылка записи без «Клиент в записи»",
+    );
+    // Чек — без телефона клиента: снимок режет триггер, прежние строки вычищены.
+    assert.ok(leaks.includes("new.client_snapshot := new.client_snapshot - 'phone';"), "в чек снова ложится телефон");
+    assert.ok(
+      leaks.includes("create trigger trg_receipts_client_snapshot_no_phone before insert or update on public.receipts for each row execute function public.receipts_client_snapshot_no_phone();"),
+      "триггер чека снят",
+    );
+    assert.ok(leaks.includes("update public.receipts set client_snapshot = client_snapshot - 'phone' where client_snapshot ? 'phone';"));
+    assert.ok(
+      leaks.includes("and a.date between (public.tenant_business_date(public.current_tenant_id()) - 7)::text and (public.tenant_business_date(public.current_tenant_id()) + 1)::text"),
+      "давний клиент команды проходит в запись мимо окна",
+    );
+    assert.ok(
+      leaks.includes("if s.client_id is not null and not public.member_client_in_team(s.client_id, s.team_id) then raise exception 'access:client'"),
+      "копия давней записи возвращает клиента в окно",
+    );
+    assert.ok(
+      leaks.includes("or (a.status is distinct from 'cancelled' and a.date between (me.today - 7)::text and (me.today + 1)::text) as near_ok"),
+      "старые записи мастера показывают давнего клиента",
+    );
+    assert.ok(leaks.includes("else a.team_id = any(me.ev_client_teams) end, false) and w.near_ok as see_client,"));
+    assert.ok(leaks.includes("else a.team_id = any(me.ev_object_teams) end, false) and w.near_ok as see_object,"));
   });
 
   test("блоки карточки: правка отказывает по блоку, файлы — по «Файлам»", () => {
