@@ -93,3 +93,36 @@ describe("findDuplicateCandidates", () => {
     );
   });
 });
+
+// STORY-085: инвойс могут просить на клиента с его реквизитами — клиента
+// находят и по юридическому имени, и по номеру VAT.
+describe("реквизиты клиента в поиске", () => {
+  const company = client("company", {
+    full_name: "Gem Capital",
+    legal_name: "Gem Capital Holdings Ltd",
+    vat_number: "CY10234567X",
+  });
+
+  test("клиент находится по юридическому имени и VAT", () => {
+    assert.equal(matchesClient(company, "Holdings"), true);
+    assert.equal(matchesClient(company, "10234567"), true);
+    assert.equal(matchesClient(company, "Ольга"), false);
+  });
+});
+
+// ЖИЛЬЦЫ НАХОДЯТСЯ ПО ИМЕНИ УПРАВЛЯЮЩЕЙ (владелец 22.09). Слова связи —
+// имя карточки-группы, роль, место — приходят снаружи: у самого клиента
+// лежит только id карточки.
+describe("слова связи в поиске", () => {
+  const ivan = { ...createBlankClient(), full_name: "Иван Петров", phone: "+35799000107" };
+  test("по имени карточки, роли и месту", () => {
+    const words = ["Наталья", "жилец", "Вилла 7"];
+    assert.equal(matchesClient(ivan, "натал", words), true);
+    assert.equal(matchesClient(ivan, "жилец", words), true);
+    assert.equal(matchesClient(ivan, "вилла 7", words), true);
+  });
+  test("без слов связи чужое имя не находит", () => {
+    assert.equal(matchesClient(ivan, "натал"), false);
+    assert.equal(matchesClient(ivan, "натал", ["Мария"]), false);
+  });
+});

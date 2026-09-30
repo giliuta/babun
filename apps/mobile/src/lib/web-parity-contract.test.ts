@@ -32,6 +32,11 @@ const PICKER_ALLOWED = new Set([
   "src/components/ui/DateTimeInput.tsx", // нативная половина DateTimeInput
 ]);
 
+/** Единственное место, где тумблер берут у react-native напрямую. */
+const SWITCH_ALLOWED = new Set([
+  "src/components/ui/SwitchControl.tsx", // нативная половина SwitchControl
+]);
+
 /** Модули, которых в браузере либо нет вовсе, либо они делают другое. Файл
  *  из src/lib, который их трогает, обязан ПОКАЗАТЬ, что про браузер подумали:
  *  ветка по платформе, ветка по DOM — или строка в исключениях ниже. */
@@ -128,6 +133,27 @@ describe("веб-паритет: платформенные API только з�
     );
   });
 
+  test("Switch из react-native берут только в SwitchControl", () => {
+    // react-native-web рисует «материальный» тумблер: бирюзовый кружок,
+    // дорожка в 70% высоты, а у выключенного дорожки нет вовсе. Рядом с
+    // iOS-овским это выглядит как чужая деталь, поэтому облик держит
+    // `SwitchControl` с веб-двойником в пропорциях UISwitch.
+    const offenders = entries
+      .filter(({ id, code }) => {
+        if (SWITCH_ALLOWED.has(id)) return false;
+        return [...code.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']react-native["']/g)].some(
+          ([, specifiers]) => /(?:^|[\s,])Switch(?=$|[\s,])/.test(specifiers),
+        );
+      })
+      .map(({ id }) => id);
+    assert.deepEqual(
+      offenders,
+      [],
+      "в браузере это материальный тумблер, а не iOS-овский; берите " +
+        `SwitchControl из components/ui (строка — SwitchRow). Файлы: ${offenders.join(", ")}`,
+    );
+  });
+
   test("оба примитива держат ОБЕ платформы", () => {
     const notifySrc = readFileSync(join(appRoot, "src/lib/notify.ts"), "utf8");
     const nativePicker = readFileSync(
@@ -147,6 +173,19 @@ describe("веб-паритет: платформенные API только з�
     for (const prop of ["accessibilityLabel", "minuteInterval", "minimumDate", "maximumDate"]) {
       assert.match(webPicker, new RegExp(`\\b${prop}\\??:`), prop);
     }
+  });
+
+  test("веб-двойник тумблера несёт ротору и подпись, и положение", () => {
+    const webSwitch = codeOnly(
+      readFileSync(join(appRoot, "src/components/ui/SwitchControl.web.tsx"), "utf8"),
+    );
+    // react-native-web 0.21 разбирает ТОЛЬКО `aria-*` (`createDOMProps`):
+    // `accessibilityState` до разметки не доезжает вовсе, и диктор читает
+    // «переключатель» без «включено/выключено» — у прежнего `<Switch>`
+    // положение несла сама галочка `<input type="checkbox">`.
+    assert.match(webSwitch, /aria-checked=\{value\}/);
+    assert.match(webSwitch, /accessibilityLabel=\{accessibilityLabel\}/);
+    assert.match(webSwitch, /accessibilityRole="switch"/);
   });
 
   test("веб-двойник не обещает режимов, которых не рисует", () => {

@@ -78,9 +78,10 @@ import { formatHm } from "@/features/calendar/window";
 // ОСОБЫХ ДНЕЙ В ЛИСТЕ НЕТ (владелец 2026-08-17: «убери, мне кажется лучше
 // убрать»). Лист отвечает на один вопрос — «когда эта команда работает по
 // неделе»; конкретные даты — другой вопрос и другая частота, и список из двух
-// строк внизу отбирал у недели место, ничего не объясняя. Модель
-// (`date_overrides`) и страница-редактор `/calendar/[teamId]/date/[date]` живы —
-// у них сейчас нет двери, и это открытый вопрос к владельцу.
+// строк внизу отбирал у недели место, ничего не объясняя. Страница «Особый
+// день» (другие часы на одну дату) снесена 2026-09-24 по слову владельца:
+// выходной на дату — тумблером в шторке метки дня, перерыв — долгим нажатием
+// по свободному месту. `date_overrides` живёт только ради выходного на дату.
 
 export function TeamScheduleSheet({
   visible,
@@ -95,12 +96,15 @@ export function TeamScheduleSheet({
   teamName?: string;
   /** Буфер команды после каждой записи; `null` — «как у компании». */
   buffer?: number | null;
-  onBufferChange: (minutes: number) => void;
+  /** Нет — карточки перерыва нет: тому, кому перерыв команды не открыт.
+   *  Перерыв хранится в самой команде; сотрудник с «График команды: Видит и
+   *  меняет» пишет его своей дверью `member_update_team` (30.09). */
+  onBufferChange?: (minutes: number) => void;
   onClose: () => void;
 }) {
   const t = useThemeColors();
   const { data: settings } = useCalendarSettings();
-  const { data: schedule } = useTeamSchedule(teamId);
+  const { data: schedule, isPending: schedulePending } = useTeamSchedule(teamId);
   const upsert = useUpsertTeamSchedule();
   const [active, setActive] = useState<WeekdayKey>("mon");
   const [bufferOpen, setBufferOpen] = useState(false);
@@ -161,11 +165,15 @@ export function TeamScheduleSheet({
    *  открытии, звал `onChange` — и у команды, которая наследовала перерыв
    *  компании, молча появлялся собственный ноль. */
   const setBuffer = (next: number) => {
-    if (next !== bufferMinutesTotal) onBufferChange(next);
+    if (next !== bufferMinutesTotal) onBufferChange?.(next);
   };
 
   const commit = (next: TeamSchedule) => {
     if (!teamId) return;
+    // Карта графиков ещё не пришла — `base` собран из общих часов, а не из
+    // строки команды. Апсерт ЗАМЕНЯЕТ блоб целиком, и такая правка стёрла бы
+    // на сервере настоящий график: перерывы, особые дни, отпуска.
+    if (schedulePending) return;
     upsert.mutate(
       { teamId, schedule: next },
       { onError: (e) => notify("Ошибка", (e as Error).message) },
@@ -540,6 +548,7 @@ export function TeamScheduleSheet({
             отвечал только на те вопросы, которые мы придумали за человека.
             Барабан пятиминутками до трёх часов отвечает на любой. Открывается
             тем же тапом по строке, что и часы дня выше. */}
+        {onBufferChange ? (
         <SectionCard>
           <ValueRow
             label="Перерыв после записи"
@@ -564,6 +573,7 @@ export function TeamScheduleSheet({
             </View>
           ) : null}
         </SectionCard>
+        ) : null}
       </View>
     </BottomSheet>
   );

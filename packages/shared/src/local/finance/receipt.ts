@@ -8,6 +8,9 @@
 // Документ НЕИЗМЕНЯЕМ. Откатили оплату — чек не исчезает, а гаснет (`void`):
 // номер остаётся занятым, серия без дыр. Дыра в нумерации — первый вопрос
 // любой проверки.
+//
+// С 2026-09-20 выписывается НЕ САМ, а кнопкой (`issue_receipt`), и несёт
+// СВОЙ перечень работ (`lines`) — снимком, как и реквизиты сторон.
 
 export type ReceiptStatus = "issued" | "void";
 
@@ -29,13 +32,31 @@ export interface Receipt {
   invoice_id: string | null;
   transaction_id: string | null;
   account_id: string | null;
+  /** Команда чека (NOT NULL в базе с 2026-09-25). Необязательное в типе:
+   *  чеки из кэша старой сборки его не несут. */
+  team_id?: string | null;
   payment_method: string | null;
   status: ReceiptStatus;
   /** Реквизиты сторон НА МОМЕНТ выдачи: переименовали компанию — старый
    *  документ остаётся с прежним названием, как и положено бумаге. */
   seller_snapshot: Record<string, unknown>;
   client_snapshot: Record<string, unknown> | null;
+  /** Перечень работ НА МОМЕНТ ВЫДАЧИ. `null` — снимка нет: так выглядят чеки,
+   *  выданные до 20.09.2026, и их бумага по-прежнему собирает перечень из
+   *  записи или инвойса за спиной проводки. У новых он свой и не меняется,
+   *  даже если запись потом поправят. */
+  lines: ReceiptLineSnapshot[] | null;
   created_at: string;
+}
+
+/** Строка снимка. Поля ровно те, что чистит серверная `_receipt_lines_
+ *  snapshot`: чужие ключи до документа не доходят. */
+export interface ReceiptLineSnapshot {
+  name: string;
+  qty: number;
+  unit: string | null;
+  unitPrice: number;
+  sum: number;
 }
 
 /** Имя клиента из снимка — карточка могла быть переименована или удалена. */

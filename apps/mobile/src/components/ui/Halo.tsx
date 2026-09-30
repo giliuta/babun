@@ -1,3 +1,4 @@
+import { useId } from "react";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import { useThemeColors } from "@/theme/colors";
 
@@ -17,6 +18,10 @@ export function Halo({
   const t = useThemeColors();
   const op = intensity ?? t.haloOpacity;
   const hue = color ?? t.accentFrom;
+  // Свой id градиента у каждого ореола: на вебе id в SVG общие на страницу, и
+  // жёсткий «screenHalo» у двух ореолов подряд красил второй цветом первого
+  // (найдено сборкой для Claude Design 21.09; тот же приём — у PageWash).
+  const gid = `halo-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   return (
     <Svg
       style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
@@ -25,12 +30,12 @@ export function Halo({
       pointerEvents="none"
     >
       <Defs>
-        <RadialGradient id="screenHalo" cx="50%" cy="0%" r="70%">
+        <RadialGradient id={gid} cx="50%" cy="0%" r="70%">
           <Stop offset="0" stopColor={hue} stopOpacity={op} />
           <Stop offset="1" stopColor={hue} stopOpacity={0} />
         </RadialGradient>
       </Defs>
-      <Rect width="100%" height="100%" fill="url(#screenHalo)" />
+      <Rect width="100%" height="100%" fill={`url(#${gid})`} />
     </Svg>
   );
 }

@@ -33,12 +33,16 @@ interface ClientActionsSheetProps {
   /** null → лист закрыт. */
   client: Client | null;
   onClose: () => void;
-  onBook: (c: Client) => void;
-  onSelectMany: (c: Client) => void;
-  onTogglePin: (c: Client) => void;
-  onRemind: (c: Client) => void;
-  onArchive: (c: Client) => void;
-  onDelete: (c: Client) => void;
+  /** Пункт стоит, только если есть обработчик (STORY-088, волна 4): нет
+   *  права — нет и пункта, а не пункт, который кончится отказом. */
+  onBook?: (c: Client) => void;
+  /** Нет — пункта «Выбрать несколько» нет: за ним экспорт и массовая SMS,
+   *  а клиента чужой компании не выносят (владелец 30.09). */
+  onSelectMany?: (c: Client) => void;
+  onTogglePin?: (c: Client) => void;
+  onRemind?: (c: Client) => void;
+  onArchive?: (c: Client) => void;
+  onDelete?: (c: Client) => void;
 }
 
 export function ClientActionsSheet({
@@ -66,28 +70,28 @@ export function ClientActionsSheet({
       label: "Записать",
       icon: CalendarPlus,
       color: t.accent,
-      onPress: () => onBook(c),
+      onPress: () => onBook?.(c),
     },
     {
       id: "remind",
       label: "Напомнить",
       icon: Bell,
       color: t.warning,
-      onPress: () => onRemind(c),
+      onPress: () => onRemind?.(c),
     },
     {
       id: "pin",
       label: pinned ? "Открепить" : "Закрепить",
       icon: Pin,
       color: t.accent,
-      onPress: () => onTogglePin(c),
+      onPress: () => onTogglePin?.(c),
     },
     {
       id: "select",
       label: "Выбрать несколько",
       icon: Check,
       color: t.accent,
-      onPress: () => onSelectMany(c),
+      onPress: () => onSelectMany?.(c),
     },
     {
       // Архив и удаление — разные исходы: первый бессрочный и сохраняет
@@ -97,22 +101,31 @@ export function ClientActionsSheet({
       label: "В архив",
       icon: Archive,
       color: t.accent,
-      onPress: () => onArchive(c),
+      onPress: () => onArchive?.(c),
     },
     {
       id: "delete",
       label: "Удалить",
       icon: Trash2,
       color: t.danger,
-      onPress: () => onDelete(c),
+      onPress: () => onDelete?.(c),
     },
   ];
+  const offered: Record<string, unknown> = {
+    book: onBook,
+    remind: onRemind,
+    pin: onTogglePin,
+    select: onSelectMany,
+    archive: onArchive,
+    delete: onDelete,
+  };
+  const shownItems = items.filter((item) => offered[item.id] !== undefined);
 
   return (
     <PickerSheet
       visible={client !== null}
       title={c.full_name || c.phone || "Клиент"}
-      items={items}
+      items={shownItems}
       onClose={onClose}
     />
   );

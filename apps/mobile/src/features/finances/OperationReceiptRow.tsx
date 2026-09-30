@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import { Camera, FileText, FileUp, Images, Paperclip, X } from "lucide-react-native";
+import { Camera, FileText, FileUp, Images, X } from "lucide-react-native";
+import { AddRow } from "@/components/ui/AddRow";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { Spinner } from "@/components/ui/Spinner";
 import { useTenantId } from "@/lib/tenant";
@@ -10,9 +11,9 @@ import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
   deleteOperationReceipt,
-  discardOperationReceiptIfOrphan,
   uploadOperationReceipt,
   useSignedReceiptUrl,
+  type ReceiptSession,
 } from "./receipt-upload";
 
 // ДОКУМЕНТ, ПОДТВЕРЖДАЮЩИЙ ОПЕРАЦИЮ.
@@ -28,39 +29,56 @@ export function OperationReceiptRow({
   receiptUrl,
   onPick,
   disabled,
+  session,
 }: {
   receiptUrl: string | null;
   onPick: (path: string | null) => void;
   disabled?: boolean;
+  /** Залитое в этой форме — его чистит сама форма, когда закрыта насовсем
+   *  (`useReceiptSession`). */
+  session: ReceiptSession;
 }) {
   const t = useThemeColors();
   const tenantId = useTenantId();
-  const [busy, setBusy] = useState(false);
+  // Слово над спиннером меняется по фазе: до системного пикера строка не
+  // врёт словом «Загружаем» — там ещё нечего загружать, идёт лишь разрешение
+  // камеры и пауза перед открытием нативного экрана.
+  const [stage, setStage] = useState<"idle" | "opening" | "uploading">("idle");
+  const busy = stage !== "idle";
+  // Синхронный гард поверх стейта (тот же приём, что savingRef в
+  // OperationSheet): `stage` меняется только после ре-рендера, а
+  // сверхбыстрый двойной тап успевал открыть системный пикер дважды.
+  const busyRef = useRef(false);
   // Лист выбора живёт ЗДЕСЬ, а не в корневом хосте (chooseOption): корневой
   // лист рисуется под Modal операции и просто не виден. Вложенный — виден.
   const [pickerOpen, setPickerOpen] = useState(false);
-  // Что залили в этой форме. Снятый ЗДЕСЬ файл стирается из хранилища сразу:
-  // иначе каждая опечатка («не тот чек») оставляла бы мусор навсегда.
-  // Документ уже сохранённой операции не трогаем — он часть истории.
-  const uploadedHere = useRef<Set<string>>(new Set());
-  const unmounted = useRef(false);
-  // Закрытие листа БЕЗ сохранения — тот же случай мусора: файл уже в бакете,
-  // а операция с ним так и не записана. Крестик формы про это не узнает,
-  // поэтому подчищаем на размонтировании; сохранённый файл переживёт чистку —
-  // discardOperationReceiptIfOrphan удаляет только то, на что не ссылается
-  // ни одна операция.
-  useEffect(
-    () => () => {
-      unmounted.current = true;
-      for (const path of uploadedHere.current) {
-        void discardOperationReceiptIfOrphan(path);
-      }
-    },
-    [],
-  );
+  // Что залили в этой форме — живёт у ФОРМЫ (`session`), а не у строки:
+  // лист снимает строку при каждом отъезде, и чистка на размонтировании
+  // стирала файл, который форма ещё держала. Снятый ЗДЕСЬ файл стирается
+  // сразу: иначе каждая опечатка («не тот чек») оставляла бы мусор. Документ
+  // уже сохранённой операции не трогаем — он часть истории.
+  const uploadedHere = session.uploads;
   const signed = useSignedReceiptUrl(receiptUrl);
 
   const attach = async (from: "camera" | "gallery" | "file") => {
+    // «Занято» — С ТАПА, А НЕ С ЗАГРУЗКИ (прогон финансов 2026-09-24). До
+    // открытия системного пикера уходит ~1с (разрешение камеры + пауза ниже),
+    // и всё это время строка молчала — тап читался как не сработавший, и
+    // случался повторный тап, открывавший ВТОРОЙ пикер поверх первого. Гейт
+    // синхронный: `stage` из state успевает включиться только после ре-рендера,
+    // а второй тап в тот же кадр — раньше.
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setStage("opening");
+    // СТРАХОВКА ОТ ВЕЧНОГО «ОТКРЫВАЕМ…». Системный выбор иногда не
+    // открывается вовсе, и его обещание не решается никогда — так строка уже
+    // застревала на «Загружаем документ…». Через 1,5 с после тапа строка
+    // оживает сама; открытый пикер к этому времени и так закрывает экран, а
+    // загрузка снова включит «занято» своим этапом.
+    const unstick = setTimeout(() => {
+      busyRef.current = false;
+      setStage((stage) => (stage === "opening" ? "idle" : stage));
+    }, 1500);
     try {
       if (from === "camera") {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -78,9 +96,6 @@ export function OperationReceiptRow({
       // ничего: тап проваливался в пустоту. 240 мс листа не хватает.
       await new Promise((r) => setTimeout(r, 450));
 
-      // «Занято» включается ТОЛЬКО на загрузку. Раньше оно включалось перед
-      // системным выбором файла, и если тот не открывался, строка навсегда
-      // застревала на «Загружаем документ…».
       const picked =
         from === "camera"
           ? await ImagePicker.launchCameraAsync({
@@ -99,7 +114,9 @@ export function OperationReceiptRow({
       if (picked.canceled) return;
       const asset = picked.assets?.[0];
       if (!asset?.uri) return;
-      setBusy(true);
+      clearTimeout(unstick);
+      busyRef.current = true;
+      setStage("uploading");
       const path = await uploadOperationReceipt(
         {
           uri: asset.uri,
@@ -109,18 +126,16 @@ export function OperationReceiptRow({
         },
         tenantId,
       );
-      // Лист закрыли, пока файл летел: показать и сохранить его уже некому,
-      // а чистка размонтирования прошла до конца загрузки — убираем сами.
-      if (unmounted.current) {
-        void deleteOperationReceipt(path).catch(() => {});
-        return;
-      }
+      // Форма могла уехать, пока файл летел: она держит черновик и получит
+      // файл; не сохранят — сотрёт при окончательном закрытии.
       uploadedHere.current.add(path);
       onPick(path);
     } catch (e) {
       notify("Не удалось приложить документ", (e as Error).message);
     } finally {
-      setBusy(false);
+      clearTimeout(unstick);
+      busyRef.current = false;
+      setStage("idle");
     }
   };
 
@@ -133,7 +148,7 @@ export function OperationReceiptRow({
           maxFontSizeMultiplier={1.3}
           style={{ color: t.sub }}
         >
-          Загружаем документ…
+          {stage === "uploading" ? "Загружаем документ…" : "Открываем…"}
         </Text>
       </View>
     );
@@ -141,7 +156,7 @@ export function OperationReceiptRow({
 
   if (receiptUrl) {
     return (
-      <View className="flex-row items-center gap-3 px-4 py-3">
+      <View className="flex-row items-center gap-3 px-4 py-2">
         <FileText color={t.accent} size={18} strokeWidth={2} />
         <Pressable
           onPress={() => signed && void Linking.openURL(signed)}
@@ -188,33 +203,16 @@ export function OperationReceiptRow({
 
   return (
     <>
-      <Pressable
-        onPress={() => setPickerOpen(true)}
+      {/* СТРОКА «ДОБАВИТЬ» — ТА ЖЕ, ЧТО У ФАЙЛОВ ЗАПИСИ (владелец 2026-09-10:
+          «посмотри, как выполнены файлы в записи, сделай так же»). Здесь была
+          своя строка со скрепкой и подписью «чек, инвойс» — третий диалект
+          одного действия: у объектов и файлов записи это `AddRow`. */}
+      <AddRow
+        label="Добавить"
         disabled={disabled}
-        accessibilityRole="button"
-        accessibilityLabel="Приложить документ к операции"
-        className="min-h-[48px] flex-row items-center gap-2 px-4 py-3"
-        style={({ pressed }) => ({
-          opacity: disabled ? 0.4 : 1,
-          backgroundColor: pressed ? t.pressed : "transparent",
-        })}
-      >
-        <Paperclip color={t.accent} size={18} strokeWidth={2} />
-        <Text
-          className="text-base font-semibold"
-          maxFontSizeMultiplier={1.3}
-          style={{ color: t.accent }}
-        >
-          Приложить документ
-        </Text>
-        <Text
-          className="ml-auto text-xs"
-          maxFontSizeMultiplier={1.3}
-          style={{ color: t.faint }}
-        >
-          чек, инвойс
-        </Text>
-      </Pressable>
+        compact
+        onPress={() => setPickerOpen(true)}
+      />
 
       <PickerSheet
         visible={pickerOpen}

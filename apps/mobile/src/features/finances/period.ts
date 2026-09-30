@@ -15,6 +15,8 @@ export type PeriodKind =
   | "lastweek"
   | "month"
   | "lastmonth"
+  | "quarter"
+  | "lastquarter"
   | "year"
   | "lastyear"
   | "custom";
@@ -40,6 +42,8 @@ export const PERIOD_LABELS: Record<PeriodKind, string> = {
   lastweek: "Прошлая неделя",
   month: "Текущий месяц",
   lastmonth: "Прошлый месяц",
+  quarter: "Текущий квартал",
+  lastquarter: "Прошлый квартал",
   year: "Текущий год",
   lastyear: "Прошлый год",
   custom: "Свой период",
@@ -51,6 +55,9 @@ export const PERIOD_BLOCKS: [PeriodKind, PeriodKind][] = [
   ["today", "yesterday"],
   ["week", "lastweek"],
   ["month", "lastmonth"],
+  // КВАРТАЛ (прогон финансов 2026-09-24): VAT на Кипре сдаётся поквартально,
+  // и собирать квартал руками из трёх месяцев — лишняя работа каждые 90 дней.
+  ["quarter", "lastquarter"],
   ["year", "lastyear"],
 ];
 
@@ -83,6 +90,14 @@ export function presetRange(
       return { from: ymd(new Date(y, m, 1)), to: ymd(new Date(y, m + 1, 0)) };
     case "lastmonth":
       return { from: ymd(new Date(y, m - 1, 1)), to: ymd(new Date(y, m, 0)) };
+    case "quarter": {
+      const q = Math.floor(m / 3) * 3;
+      return { from: ymd(new Date(y, q, 1)), to: ymd(new Date(y, q + 3, 0)) };
+    }
+    case "lastquarter": {
+      const q = Math.floor(m / 3) * 3 - 3;
+      return { from: ymd(new Date(y, q, 1)), to: ymd(new Date(y, q + 3, 0)) };
+    }
     case "year":
       return { from: ymd(new Date(y, 0, 1)), to: ymd(new Date(y, 11, 31)) };
     case "lastyear":
@@ -104,25 +119,6 @@ export function defaultPeriod(base?: Date): Period {
   return makePeriod("month", base);
 }
 
-/**
- * Календарный месяц, в который попадает дата — «Показать июль» на пустой
- * карточке счёта: экран знает, где лежат операции, и предлагает туда уйти.
- *
- * Пресет намеренно `custom`: имя («Прошлый месяц») зависит от сегодняшнего
- * дня, а этот месяц выбран по дате последней операции и завтра может
- * перестать быть прошлым. Словами его назовёт `periodPhrase` — «июль».
- */
-export function monthPeriodOf(dateKey: string): Period {
-  const d = parseYmd(dateKey);
-  const y = d.getFullYear();
-  const m = d.getMonth();
-  return {
-    preset: "custom",
-    from: ymd(new Date(y, m, 1)),
-    to: ymd(new Date(y, m + 1, 0)),
-  };
-}
-
 /** Semantic name for the header's LEFT tap target («Текущий месяц»). */
 export function periodTitle(p: Period): string {
   return PERIOD_LABELS[p.preset];
@@ -135,7 +131,8 @@ function parseYmd(s: string): Date {
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
-function dmyShort(s: string): string {
+/** «22.09.26» — числами, как даты периода в шапке «Финансов». */
+export function dmyShort(s: string): string {
   const d = parseYmd(s);
   return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${String(
     d.getFullYear(),
@@ -154,11 +151,6 @@ const RU_MONTHS_SHORT = [
   "июл", "авг", "сен", "окт", "ноя", "дек",
 ];
 
-const RU_MONTHS = [
-  "январь", "февраль", "март", "апрель", "май", "июнь",
-  "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь",
-];
-
 /** Родительный падеж — «15 августа», а не «15 август». */
 const RU_MONTHS_OF = [
   "января", "февраля", "марта", "апреля", "мая", "июня",
@@ -172,66 +164,6 @@ const RU_MONTHS_OF = [
 export function dayPhrase(ymd: string): string {
   const d = parseYmd(ymd);
   return `${d.getDate()} ${RU_MONTHS_OF[d.getMonth()]}`;
-}
-
-/**
- * Период СЛОВАМИ, как его называет человек: «август», «1–15 августа»,
- * «2026 год». Экран счетов печатает эту фразу дважды и в двух ролях —
- * значением строки «Период» (с большой буквы) и хвостом «Пришло за …» — а
- * период на экране называется ровно один раз, поэтому обе роли обязаны
- * говорить одно и то же слово.
- *
- * Имя пресета («Текущий месяц») тут не годится: «Пришло за текущий месяц»
- * длиннее и не отвечает на вопрос «за какой именно».
- */
-export function periodPhrase(p: Period, now: Date = new Date()): string {
-  const from = parseYmd(p.from);
-  const to = parseYmd(p.to);
-  const sameYear = from.getFullYear() === to.getFullYear();
-
-  // Целый календарный год.
-  if (
-    sameYear
-    && from.getMonth() === 0
-    && from.getDate() === 1
-    && to.getMonth() === 11
-    && to.getDate() === 31
-  ) {
-    return `${from.getFullYear()} год`;
-  }
-
-  // Целый календарный месяц — самый частый случай, и у него есть имя.
-  if (
-    sameYear
-    && from.getMonth() === to.getMonth()
-    && from.getDate() === 1
-    && to.getDate() === new Date(to.getFullYear(), to.getMonth() + 1, 0).getDate()
-  ) {
-    const month = RU_MONTHS[from.getMonth()];
-    return from.getFullYear() === now.getFullYear()
-      ? month
-      : `${month} ${from.getFullYear()}`;
-  }
-
-  if (p.from === p.to) return dayPhrase(p.from);
-  if (sameYear && from.getMonth() === to.getMonth()) {
-    return `${from.getDate()}–${to.getDate()} ${RU_MONTHS_OF[to.getMonth()]}`;
-  }
-  if (sameYear) {
-    return `${from.getDate()} ${RU_MONTHS_OF[from.getMonth()]} – ${to.getDate()} ${
-      RU_MONTHS_OF[to.getMonth()]
-    }`;
-  }
-  // Годы разные — год обязателен у ОБЕИХ границ: «15 декабря – 10 января
-  // 2026» не отличал двухлетний период от двухмесячного.
-  return `${from.getDate()} ${RU_MONTHS_OF[from.getMonth()]} ${from.getFullYear()} – ${
-    to.getDate()
-  } ${RU_MONTHS_OF[to.getMonth()]} ${to.getFullYear()}`;
-}
-
-/** Та же фраза заголовком строки: «Август ›», «1–15 августа ›». */
-export function capitalizeFirst(value: string): string {
-  return value ? value[0].toUpperCase() + value.slice(1) : value;
 }
 
 /** Friendly short range hint for a preset row («1–30 июн», year → «2026»).

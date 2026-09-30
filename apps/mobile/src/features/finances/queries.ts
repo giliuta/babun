@@ -1,9 +1,5 @@
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteTransaction,
   insertTransaction,
@@ -16,36 +12,70 @@ import {
   deleteFinanceCategory,
   insertFinanceCategory,
   setFinanceCategoryHidden,
+  setFinanceCategoryOrder,
   listFinanceCategories,
   updateFinanceCategory,
   type FinanceCategoryPatch,
   type NewFinanceCategory,
 } from "@babun/shared/db/repositories/finance-categories";
+import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import {
+  financeCategoriesQueryKey,
+  ledgerRangeQueryKey as ledgerRangeKey,
+  refundTotalsQueryKey,
+} from "@/lib/company-query-keys";
 import { NEVER_PAUSE } from "./accounts";
-
-/** Ключ среза журнала. Собирается ОДНОЙ функцией, потому что тот же срез
- *  берут и хук, и разовая дозагрузка выписки — разъехавшиеся ключи молча
- *  завели бы две копии одного месяца в кэше. */
-function ledgerRangeKey(
-  tenantId: string | null | undefined,
-  from: string,
-  to: string,
-  teamScope: string[] | null,
-  accountScope: string[] | null,
-) {
-  return ["transactions", tenantId, from, to, teamScope, accountScope];
-}
+import { checkBudgetsAfterWrite } from "./budget-notify";
+import {
+  idsFromKey,
+  idsKey,
+  pickLedgerRows,
+  placeholderWithinTenant,
+} from "./ledger-select";
 
 /**
- * Журнал за период (границы включительно по `occurred_on`), сужаемый до нужных
+ * Журнал ОДНОЙ записи — для истории платежей в блоке оплаты. Отдельный запрос,
+ * а не срез месяца: история открывается из записи, которая может быть за любой
+ * период, и тянуть ради неё весь журнал тенанта незачем.
+ */
+export function useAppointmentLedger(appointmentId: string | null | undefined) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["appointment-ledger", tenantId, appointmentId],
+    enabled: !!tenantId && !!appointmentId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("finance_transactions")
+        .select("*")
+        .eq("tenant_id", tenantId as string)
+        .eq("appointment_id", appointmentId as string)
+        .order("created_at", { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as FinanceTransaction[];
+    },
+  });
+}
+
+// Ключ среза журнала (`ledgerRangeKey`) живёт в `lib/company-query-keys.ts`:
+// тот же срез берут хук и прогрев другой компании — разъехавшиеся ключи молча
+// завели бы две копии одного месяца в кэше.
+
+/**
+ * Журнал за период (границы включительно по `occurred_on`), суженный до нужных
  * команд и/или счетов. Тенант ограничивает RLS.
  *
- * `accountIds` — не оптимизация ради оптимизации: карточка обычной кассы
- * показывает операции ОДНОГО счёта, а тянула месячный срез всего тенанта.
- * Полный срез остаётся там, где он действительно нужен, — у счёта компании,
- * где инкассацию атрибуцирует вторая нога перевода, лежащая на чужом счёте.
+ * КЛЮЧ — ВСЯ КОМПАНИЯ ЗА ПЕРИОД, команды и счета отбирает `select`
+ * (`ledger-select.ts`, тем же правилом, что прежние `.in` на сервере). Тап по
+ * чипу команды раньше заводил новый ключ: экран шёл в сеть и гас, хотя строки
+ * месяца уже лежали в кэше. Теперь тап — это пересчёт на устройстве в том же
+ * кадре. Месяц компании — десятки строк, широкое чтение ничего не стоит.
+ *
+ * Смена ПЕРИОДА по-прежнему держит прошлый срез до прихода нового — экран не
+ * мигает спиннером и не показывает нулевые итоги. Показывать его под новой
+ * подписью нельзя: пока `isPlaceholderData`, экран обязан гасить цифры. И эта
+ * заглушка никогда не берётся из ДРУГОЙ компании (`placeholderWithinTenant`).
  */
 export function useTransactions(
   from: string,
@@ -53,48 +83,34 @@ export function useTransactions(
   options: {
     brigadeIds?: string[];
     accountIds?: string[];
-    /** `false`, пока экран не знает, какой срез ему нужен: запрос не должен
-     *  уехать за полным журналом только потому, что строка счёта ещё не
-     *  приехала. */
+    /** `false`, пока у зовущего нет периода (пустая неделя, лист дня ещё не
+     *  открыт): запрос за пустыми границами никому не нужен. */
     enabled?: boolean;
   } = {},
 ) {
   const tenantId = useTenantId();
-  const teamScope = options.brigadeIds?.length ? options.brigadeIds : null;
-  const accountScope = options.accountIds?.length ? options.accountIds : null;
+  const teamKey = idsKey(options.brigadeIds);
+  const accountKey = idsKey(options.accountIds);
+  // Оба зависят от компании и среза. `select` новой ссылкой — пересчёт отбора
+  // на тап. Заглушка новой ссылкой — потому что react-query 5, увидев ту же
+  // функцию заглушки поверх заглушки, отдаёт прошлый УЖЕ ОТОБРАННЫЙ результат
+  // без `select`: тап по команде во время загрузки периода оставил бы строки
+  // прошлой команды, а полоса под календарём гашения не знает.
+  const { select, placeholderData } = useMemo(
+    () => ({
+      select: (rows: FinanceTransaction[]) =>
+        pickLedgerRows(rows, idsFromKey(teamKey), idsFromKey(accountKey)),
+      placeholderData: placeholderWithinTenant<FinanceTransaction[]>(tenantId),
+    }),
+    [tenantId, teamKey, accountKey],
+  );
   return useQuery({
-    queryKey: ledgerRangeKey(tenantId, from, to, teamScope, accountScope),
+    queryKey: ledgerRangeKey(tenantId, from, to, null, null),
     enabled: !!tenantId && (options.enabled ?? true),
-    // Смена периода/скоупа держит прошлый срез до прихода нового — экран не
-    // мигает полноэкранным спиннером и не показывает нулевые итоги. Показывать
-    // его под НОВОЙ подписью нельзя: пока `isPlaceholderData`, экран обязан
-    // гасить цифры, а не выдавать чужой месяц за свой.
-    placeholderData: keepPreviousData,
-    queryFn: () =>
-      listTransactionsForRange(supabase, tenantId as string, from, to, {
-        ...(teamScope ? { brigadeIds: teamScope } : {}),
-        ...(accountScope ? { accountIds: accountScope } : {}),
-      }),
+    placeholderData,
+    select,
+    queryFn: () => listTransactionsForRange(supabase, tenantId as string, from, to),
   });
-}
-
-/**
- * Разовая дозагрузка ПОЛНОГО среза периода — по нажатию, а не подпиской.
- *
- * Нужна ровно одному месту: выписке по счёту. Её колонке «Корреспондент» нужна
- * ВТОРАЯ нога перевода, а она лежит на чужом счёте и в суженный срез карточки
- * не попадает. Держать ради этой колонки постоянную подписку на журнал всего
- * тенанта — плохой размен: выписку просят раз в месяц, а карточку открывают
- * двадцать раз в день.
- */
-export function useFetchLedgerRange() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return (from: string, to: string) =>
-    qc.fetchQuery({
-      queryKey: ledgerRangeKey(tenantId, from, to, null, null),
-      queryFn: () => listTransactionsForRange(supabase, tenantId as string, from, to),
-    });
 }
 
 // Σ возвратов по каждому исходному доходу (refund_of_id → сумма) — кап для
@@ -107,7 +123,7 @@ export function useFetchLedgerRange() {
 export function useRefundTotals() {
   const tenantId = useTenantId();
   return useQuery({
-    queryKey: ["transactions", tenantId, "refund-totals"],
+    queryKey: refundTotalsQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listRefundTotals(supabase, tenantId as string),
   });
@@ -116,7 +132,7 @@ export function useRefundTotals() {
 export function useFinanceCategories() {
   const tenantId = useTenantId();
   return useQuery({
-    queryKey: ["finance-categories", tenantId],
+    queryKey: financeCategoriesQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listFinanceCategories(supabase, tenantId as string),
   });
@@ -127,15 +143,19 @@ export function useFinanceCategories() {
 // refreshBalances() после каждой мутации). Периодные итоги счетов живут под
 // ["transactions"] — их роняет первая же строка.
 //
-// ["receipts"] здесь не лишний: чеки выписывает СЕРВЕР триггером в момент
-// проводки дохода, правит при редактировании и оживляет при удалении
-// возврата. Открытая панель «Чеки» смонтирована и без инвалидации не
-// узнаёт о документе, который её же empty state обещает «выписывается сам».
+// ["receipts"] здесь не лишний. Сам собой чек больше не рождается (20.09,
+// `receipt_on_demand`), но правка и удаление проводки по-прежнему меняют уже
+// выписанный документ: возврат его гасит, снятие возврата — оживляет.
+// Открытая панель «Чеки» смонтирована и без инвалидации об этом не узнаёт.
 function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["transactions"] });
   qc.invalidateQueries({ queryKey: ["accounts"] });
   qc.invalidateQueries({ queryKey: ["invoices"] });
   qc.invalidateQueries({ queryKey: ["receipts"] });
+  // ["debts"] — остаток долга считается по привязанным операциям, а не
+  // колонкой: платёж, не уронивший этот ключ, оставил бы закрытый долг
+  // висеть в списке до перезапуска приложения.
+  qc.invalidateQueries({ queryKey: ["debts"] });
 }
 
 export function useInsertTransaction() {
@@ -145,18 +165,27 @@ export function useInsertTransaction() {
     ...NEVER_PAUSE,
     mutationFn: (draft: TransactionDraft) =>
       insertTransaction(supabase, tenantId as string, draft),
-    onSuccess: () => invalidateLedger(qc),
+    // Расход мог перевалить бюджет категории — владелец узнаёт сразу
+    // (`budget-notify.ts`).
+    onSuccess: () => {
+      invalidateLedger(qc);
+      checkBudgetsAfterWrite(qc, tenantId);
+    },
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
 export function useUpdateTransaction() {
+  const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: ({ id, patch }: { id: string; patch: Partial<TransactionDraft> }) =>
       updateTransaction(supabase, id, patch),
-    onSuccess: () => invalidateLedger(qc),
+    onSuccess: () => {
+      invalidateLedger(qc);
+      checkBudgetsAfterWrite(qc, tenantId);
+    },
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }
@@ -197,16 +226,26 @@ export function useUpdateCategory() {
   });
 }
 
-/** Скрыть/вернуть категорию в списке этого тенанта. Стандартные строки
- *  нельзя ни переименовать, ни удалить (они общие на весь продукт) — зато
- *  можно убрать из своего списка. */
+/** ПОРЯДОК СПРАВОЧНИКА КАТЕГОРИЙ — у команды (владелец 2026-09-10: «шесть
+ *  точек справа для передвижения… везде это добавь»). Пишем всю пачку разом:
+ *  перетаскивание меняет позиции всех видимых строк команды. */
+export function useReorderFinanceCategories() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderedIds: string[]) =>
+      setFinanceCategoryOrder(supabase, orderedIds),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
+    meta: { errorHandled: true },
+  });
+}
+
+/** Скрыть/вернуть категорию в выборе её команды. */
 export function useSetCategoryHidden() {
-  const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: ({ id, hidden }: { id: string; hidden: boolean }) =>
-      setFinanceCategoryHidden(supabase, tenantId as string, id, hidden),
+      setFinanceCategoryHidden(supabase, id, hidden),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
     meta: { errorHandled: true }, // call sites alert themselves
   });

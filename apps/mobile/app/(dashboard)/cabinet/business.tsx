@@ -280,6 +280,7 @@ export default function BusinessScreen() {
           </SectionCard>
         ) : null}
 
+
         <View className="mx-3 mt-5">
           {readOnly ? (
             <Text

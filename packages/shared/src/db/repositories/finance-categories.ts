@@ -3,12 +3,16 @@
 // Rows with tenant_id IS NULL are global defaults seeded in the
 // 20260517_001 migration; per-tenant rows can override the slug.
 // The list call returns BOTH so the UI can pick whichever is most
-// specific. type ('income' / 'expense') is the primary filter.
+// specific. type ('income' / 'expense' / 'debt') is the primary filter.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
 
-export type FinanceCategoryKind = "income" | "expense";
+// Третий вид — «debt». Владелец 2026-09-10: «под расход свои категории, под
+// доход свои, под долги свои, они не смешиваются»: в списке поставщиков и
+// займов «Бензину» делать нечего.
+export type FinanceCategoryKind = "income" | "expense" | "debt";
+
 
 export interface FinanceCategory {
   id: string;
@@ -18,78 +22,104 @@ export interface FinanceCategory {
   type: FinanceCategoryKind;
   icon: string | null;
   color: string | null;
-  /** Тенант убрал строку из своего списка (finance_category_hidden). */
+  /** Команда, которой принадлежит категория (владелец 2026-09-24: «у каждой
+   *  команды свой тип расходов, свой тип доходов»). `null` — только у
+   *  служебных категорий сервера. */
+  team_id: string | null;
+  /** Команда убрала категорию из выбора; строка остаётся в справочнике. */
   hidden: boolean;
+  /** Что категория спрашивает в операции (владелец 2026-09-24: «зарплата
+   *  смотрит сотрудников, другая прикрепляет клиента»). Флажки независимы:
+   *  у чаевых — и клиент, и мастер. */
+  ask_employee: boolean;
+  ask_client: boolean;
+  /** Без фото чека операцию этой категории не сохранить. */
+  require_receipt: boolean;
+  /** Служебная: ею подписывает деньги сервер («Услуги» оплаты записи,
+   *  «Возврат»). Человек её не выбирает и не видит
+   *  в справочнике. */
+  is_system: boolean;
+  /** Бюджет на месяц (владелец 2026-09-24: «выставить бюджет по категории,
+   *  и она пришлёт уведомление, что перевалил лимит»). `null` — бюджета нет.
+   *  Потраченное считает приложение по журналу месяца. */
+  monthly_budget: number | null;
+  /** Место в списке своей команды (перетаскивание). Ноль — не
+   *  перетаскивали, дальше разводит имя. */
+  position: number;
 }
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["finance_categories"]["Row"];
 
-function rowToCategory(r: Row, hidden = false): FinanceCategory {
+function rowToCategory(r: Row): FinanceCategory {
   return {
     id: r.id,
     tenant_id: r.tenant_id,
+    team_id: r.team_id ?? null,
     slug: r.slug,
     name: r.name,
     type: r.type as FinanceCategoryKind,
     icon: r.icon,
     color: r.color,
-    hidden,
+    hidden: Boolean(r.hidden),
+    position: r.position ?? 0,
+    ask_employee: Boolean(r.ask_employee),
+    ask_client: Boolean(r.ask_client),
+    require_receipt: Boolean(r.require_receipt),
+    is_system: Boolean(r.is_system),
+    monthly_budget: r.monthly_budget == null ? null : Number(r.monthly_budget),
   };
 }
 
-/** Returns ALL categories visible to this tenant — globals + own.
- *  Скрытые тенантом строки приходят с hidden: true, а не пропадают: экран
- *  настроек должен их показать (чтобы вернуть), а выбор — отфильтровать. */
+/** Все категории, видимые этому человеку: служебные сервера и категории
+ *  команд компании (сотруднику RLS отдаёт только его команды). Скрытые
+ *  приходят с `hidden: true`, а не пропадают: справочник должен их показать
+ *  (чтобы вернуть), а выбор — отфильтровать. */
 export async function listFinanceCategories(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<FinanceCategory[]> {
-  const [list, hidden] = await Promise.all([
-    supabase
-      .from("finance_categories")
-      .select("*")
-      .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
-      .order("type", { ascending: true })
-      .order("name", { ascending: true }),
-    supabase
-      .from("finance_category_hidden")
-      .select("category_id")
-      .eq("tenant_id", tenantId),
-  ]);
-  if (list.error) throw new Error(`listFinanceCategories: ${list.error.message}`);
-  if (hidden.error) throw new Error(`listFinanceCategories: ${hidden.error.message}`);
-  const off = new Set((hidden.data ?? []).map((r) => r.category_id));
-  return ((list.data ?? []) as Row[]).map((r) => rowToCategory(r, off.has(r.id)));
+  const { data, error } = await supabase
+    .from("finance_categories")
+    .select("*")
+    .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
+    .order("type", { ascending: true })
+    .order("name", { ascending: true });
+  if (error) throw new Error(`listFinanceCategories: ${error.message}`);
+  // ГОТОВЫЕ ОБЩИЕ КАТЕГОРИИ ВЫВЕДЕНЫ ИЗ ПРОДУКТА (20260924200000): строки в
+  // базе остались, но у компании их больше нет — справочник у каждой свой.
+  return ((data ?? []) as Row[]).filter((r) => !r.retired).map(rowToCategory);
 }
 
-/** Прячет/возвращает категорию в списке этого тенанта. */
+/** Прячет/возвращает категорию в выборе её команды. */
 export async function setFinanceCategoryHidden(
   supabase: DbSupabase,
-  tenantId: string,
   categoryId: string,
   hidden: boolean,
 ): Promise<void> {
-  const { error } = hidden
-    ? await supabase
-        .from("finance_category_hidden")
-        .upsert(
-          { tenant_id: tenantId, category_id: categoryId },
-          { onConflict: "tenant_id,category_id" },
-        )
-    : await supabase
-        .from("finance_category_hidden")
-        .delete()
-        .eq("tenant_id", tenantId)
-        .eq("category_id", categoryId);
-  if (error) throw new Error(error.message);
+  const { data, error } = await supabase
+    .from("finance_categories")
+    .update({ hidden })
+    .eq("id", categoryId)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) {
+    throw new Error(error?.message ?? "Категория не найдена или недоступна");
+  }
 }
 
 export interface NewFinanceCategory {
+  /** Команда категории — обязательна: категория компании без команды не
+   *  существует (`finance_categories_team_required`). */
+  team_id: string;
   name: string;
   type: FinanceCategoryKind;
   icon?: string | null;
   color?: string | null;
+  ask_employee?: boolean;
+  ask_client?: boolean;
+  require_receipt?: boolean;
+  monthly_budget?: number | null;
 }
 
 /** Inserts a tenant-owned category. RLS (finance_categories_write_own)
@@ -105,11 +135,16 @@ export async function insertFinanceCategory(
     .from("finance_categories")
     .insert({
       tenant_id: tenantId,
+      team_id: draft.team_id,
       slug,
       name: draft.name.trim(),
       type: draft.type,
-      icon: draft.icon ?? "🏷️",
+      icon: draft.icon ?? null,
       color: draft.color ?? null,
+      ask_employee: draft.ask_employee ?? false,
+      ask_client: draft.ask_client ?? false,
+      require_receipt: draft.require_receipt ?? false,
+      monthly_budget: draft.monthly_budget ?? null,
     })
     .select("*")
     .single();
@@ -123,6 +158,10 @@ export interface FinanceCategoryPatch {
   name?: string;
   icon?: string | null;
   color?: string | null;
+  ask_employee?: boolean;
+  ask_client?: boolean;
+  require_receipt?: boolean;
+  monthly_budget?: number | null;
 }
 
 /** Updates a tenant-owned category. RLS blocks edits to global defaults
@@ -136,6 +175,10 @@ export async function updateFinanceCategory(
   if (patch.name !== undefined) update.name = patch.name.trim();
   if (patch.icon !== undefined) update.icon = patch.icon;
   if (patch.color !== undefined) update.color = patch.color;
+  if (patch.ask_employee !== undefined) update.ask_employee = patch.ask_employee;
+  if (patch.ask_client !== undefined) update.ask_client = patch.ask_client;
+  if (patch.require_receipt !== undefined) update.require_receipt = patch.require_receipt;
+  if (patch.monthly_budget !== undefined) update.monthly_budget = patch.monthly_budget;
   const { data, error } = await supabase
     .from("finance_categories")
     .update(update)
@@ -162,4 +205,20 @@ export async function deleteFinanceCategory(
   if (error || !data) {
     throw new Error(error?.message ?? "Категория не найдена или недоступна");
   }
+}
+
+/** ПОРЯДОК СПРАВОЧНИКА КОМАНДЫ — РУКОЙ ВЛАДЕЛЬЦА. Позиция — колонка самой
+ *  категории: она и так своя у команды. Пишем всю пачку: перетаскивание меняет
+ *  позиции всех видимых строк. */
+export async function setFinanceCategoryOrder(
+  supabase: DbSupabase,
+  orderedIds: readonly string[],
+): Promise<void> {
+  const results = await Promise.all(
+    orderedIds.map((id, position) =>
+      supabase.from("finance_categories").update({ position }).eq("id", id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw new Error(`setFinanceCategoryOrder: ${failed.error.message}`);
 }

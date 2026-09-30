@@ -92,7 +92,7 @@ export function ValueRow({
         minimumFontScale={0.8}
         style={{
           flexShrink: 0,
-          fontSize: 16,
+          fontSize: 15,
           fontWeight: expanded ? "600" : "400",
           color: expanded ? t.accent : t.ink,
         }}
@@ -107,7 +107,7 @@ export function ValueRow({
         minimumFontScale={0.75}
         style={{
           flexShrink: 1,
-          fontSize: 16,
+          fontSize: 15,
           color: muted ? t.faint : t.ink,
           marginRight: 6,
         }}

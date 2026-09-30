@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type React from "react";
 import { FlatList, RefreshControl, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { Client } from "@babun/shared/local/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
@@ -16,7 +16,8 @@ import { PickerSheet } from "@/components/ui/PickerSheet";
 import { useLastNonNull } from "@/lib/use-last-non-null";
 import { notify } from "@/lib/notify";
 import type { LucideIcon } from "lucide-react-native";
-import { useCardFields, DEFAULT_CARD_FIELDS } from "@/features/clients/card-prefs";
+import { useCardFieldsByTeam } from "@/features/clients/card-prefs";
+import { clientsOfTeam } from "@/features/clients/team-scope";
 import { useClientTags } from "@/features/clients/queries";
 import { useAppointments } from "@/features/calendar/queries";
 import { useTeams } from "@/features/reference/queries";
@@ -69,11 +70,20 @@ export function HiddenClientsScreen({
   const shownMenu = useLastNonNull(menuClient);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const clients = useMemo(() => query.data ?? [], [query.data]);
   const { data: appointments = [] } = useAppointments();
+  // АРХИВ И КОРЗИНА — У КОМАНДЫ (владелец 30.09): из настроек команды полка
+  // открывается с `?team=` и показывает её клиентов — тем же правилом, что
+  // чип списка (свои клиенты и те, кого она обслуживала).
+  const { team } = useLocalSearchParams<{ team?: string }>();
+  const clients = useMemo(
+    () => (team ? clientsOfTeam(query.data ?? [], team, appointments) : (query.data ?? [])),
+    [query.data, team, appointments],
+  );
   const { data: teams = [] } = useTeams();
   const { data: tags = [] } = useClientTags();
-  const cardFields = useCardFields().data ?? DEFAULT_CARD_FIELDS;
+  // Набор полей — команды клиента (у каждой команды свой, 30.09).
+  const teamIds = useMemo(() => teams.map((tm) => tm.id), [teams]);
+  const cardFieldsFor = useCardFieldsByTeam(teamIds);
   // Деньги и визиты считаются ТЕМ ЖЕ селектором, что в рабочем списке:
   // архивный клиент не перестаёт быть должником, и цифра под его именем
   // обязана совпадать с той, что была вчера.
@@ -149,8 +159,9 @@ export function HiddenClientsScreen({
             )}
             renderItem={({ item }) => {
               const stats = statsMap.get(item.id);
-              const teamName = stats?.lastTeamId
-                ? (teams.find((tm) => tm.id === stats.lastTeamId)?.name ?? null)
+              const rowTeamId = item.team_id ?? stats?.lastTeamId ?? null;
+              const teamName = rowTeamId
+                ? (teams.find((tm) => tm.id === rowTeamId)?.name ?? null)
                 : null;
               return (
                 <View style={{ opacity: busyId === item.id ? 0.5 : 1 }}>
@@ -159,7 +170,7 @@ export function HiddenClientsScreen({
                     stats={stats}
                     teamName={teamName}
                     tags={tags}
-                    cardFields={cardFields}
+                    cardFields={cardFieldsFor(item.team_id)}
                     // Место улики статуса занимает срок: на этих полках
                     // главный вопрос — «когда убрали» и «сколько осталось».
                     evidence={caption(item)}

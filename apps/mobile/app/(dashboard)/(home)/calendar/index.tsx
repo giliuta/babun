@@ -6,13 +6,12 @@ import {
   CalendarRange,
   Globe,
   Briefcase,
-  Palette,
+  ClipboardList,
   Tags,
   Trash2,
-  Users,
-  Banknote,
 } from "lucide-react-native";
-import { getStorage } from "@babun/shared/storage";
+import { readTenantPref } from "@/lib/tenant-prefs";
+import { useTenantId } from "@/lib/tenant";
 import {
   AUTO_COLOR_RULES,
   BOOKING_BLOCKS,
@@ -28,18 +27,13 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { SwitchRow } from "@/components/ui/SwitchRow";
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { useThemeColors } from "@/theme/colors";
-import {
-  useCalendarSettings,
-  useSaveCalendarSettings,
-} from "@/features/settings/local-settings";
+import { useCalendarSettings } from "@/features/settings/local-settings";
 import {
   useCities,
-  useDeleteTeam,
   useTeams,
   useUpdateTeam,
 } from "@/features/reference/queries";
@@ -47,13 +41,19 @@ import { useAllTeamSchedules } from "@/features/reference/team-schedule";
 import { SavedIndicator } from "@/features/calendar/SavedIndicator";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { schedulePreview } from "@/features/calendar/schedule-days";
+import { ARCHIVE_CALENDAR_MESSAGE } from "@/features/calendar/calendar-delete";
+import { useCalendarDelete } from "@/features/calendar/useCalendarDelete";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
 import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
-import { useCurrentRole, useUpdateTenant } from "@/features/settings/tenant";
-import { useCurrency } from "@/features/settings/currency";
-import { moneyName, moneySymbol } from "@babun/shared/common/utils/money";
-import { CurrencySheet } from "@/features/settings/CurrencySheet";
+import { calendarSettingsRows } from "@/features/calendar/settings-rows";
+import { useCurrentRole,
+  usePlanAllows,
+} from "@/features/settings/tenant";
 import { TeamScheduleSheet } from "@/features/calendar/TeamScheduleSheet";
+import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
+import { useMemberUpdateTeam } from "@/features/calendar/mutations";
+import { accessGate } from "@/features/access/my-access";
+import { useMyAccess } from "@/features/access/queries";
 import { confirmThen } from "@/lib/confirm";
 import { useToast } from "@/components/ui/Toast";
 import { notify } from "@/lib/notify";
@@ -68,6 +68,7 @@ import {
 } from "@/features/calendar/setting-options";
 import { utcLabel, zoneClock } from "@/features/calendar/device-timezone";
 import { zoneCities } from "@/features/calendar/zone-label";
+import { SmsSettingsRow } from "@/features/sms/SmsSettingsRow";
 
 // ─── «Календарь» — ВСЕ настройки на одном экране ─────────────────────
 // Сюда ведёт шестерёнка. Уровня «/calendar/[teamId]» больше нет: целый экран
@@ -84,7 +85,10 @@ import { zoneCities } from "@/features/calendar/zone-label";
 // (возвращал в календарь вместо настроек). Управление командой живёт в
 // Кабинет → Команды — там ему и место, а этот экран про календарь.
 
-const CAL_VIEW_KEY = "calendar.view";
+/** Ключ, под которым вид календаря лежал ДО переезда настроек на компанию.
+ *  Передаётся в `readTenantPref` третьим аргументом: он забирает старое
+ *  значение один раз и сносит, иначе в день правки у всех сбросился бы вид. */
+const CAL_VIEW_LEGACY_KEY = "calendar.view";
 
 // ИМЯ И ЦВЕТ КАЛЕНДАРЯ ПРАВЯТСЯ ПРЯМО В СТРОКЕ (владелец 2026-08-18: «не хочу,
 // чтоб снизу выплывало — можно было прям сразу так и менять»).
@@ -130,72 +134,81 @@ function CalendarIdentityCard({
 export default function CalendarSettingsScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  // ПОДПИСЬ СТРОКИ «ЗАПИСЬ» — ТА ЖЕ, ЧТО В КАБИНЕТЕ: строка настройки обязана
-  // говорить своё состояние, иначе её открывают, чтобы вспомнить, что в ней
-  // стоит. Два места печатают одно и то же и обязаны не разойтись.
-  const bookingBlocks = useBookingBlocks();
-  const bookingRule = useAutoColorRule();
-  const bookingSub = [
-    AUTO_COLOR_RULES.find((r) => r.id === bookingRule)?.label ?? "Цвет команды",
-    bookingBlocks.length === BOOKING_BLOCKS.length
-      ? "все блоки"
-      : BOOKING_BLOCKS.filter((b) => bookingBlocks.includes(b.id))
-          .map((b) => b.label)
-          .join(" · ") || "ни одного блока",
-  ].join(" · ");
   const params = useLocalSearchParams<{ team?: string }>();
   const settingsQuery = useCalendarSettings();
   const settings = settingsQuery.data;
   const { data: teams = [], isLoading: teamsLoading } = useTeams();
   const { data: schedules = {} } = useAllTeamSchedules();
   const update = useUpdateTeam();
-  const saveSettings = useSaveCalendarSettings();
-  const removeTeam = useDeleteTeam();
+  const archiveTeam = useCalendarDelete().archive;
   const toast = useToast();
   const [savedTick, setSavedTick] = useState(0);
   // Отдельной двери к общим «Рабочим часам» больше нет (владелец 2026-08-17):
   // когда работает команда, отвечает её ГРАФИК — он правится листом снизу.
   // Колонки `work_start_hour/work_end_hour` живы и остаются фолбэком сетки для
   // команды без строки расписания — стандарт 06:00–20:00.
-  const [picker, setPicker] = useState<"view" | "tz" | "currency" | null>(null);
-  // Валюта — настройка ТЕНАНТА (одна на бизнес: `tenants.currency`), но
-  // выбирается здесь, рядом с часовым поясом (владелец 2026-09-06: «добавь в
-  // настройки календаря раздел „валюта“… примерно то же понятие, что часовой
-  // пояс»). Меняет её владелец; остальные видят значение.
-  const currency = useCurrency();
-  const updateTenant = useUpdateTenant();
-  const isOwner = useCurrentRole().data === "owner";
-  const applyCurrency = (code: string) => {
-    if (code === currency) return;
-    updateTenant.mutate(
-      { currency: code },
-      {
-        onSuccess: () => toast(`Валюта: ${moneySymbol(code)} ${moneyName(code)}`, "success"),
-        onError: (error) => {
-          const message = error instanceof Error ? error.message : "";
-          toast(
-            /currency_check|check constraint/i.test(message)
-              ? "База пока принимает пять валют — нужна миграция"
-              : message || "Не удалось сменить валюту",
-            "error",
-          );
-        },
-      },
-    );
-  };
+  const [picker, setPicker] = useState<"view" | "tz" | null>(null);
+  const role = useCurrentRole().data;
+  const isOwner = role === "owner";
   // График команды правится ЛИСТОМ, а не страницей (владелец 2026-08-17):
   // семь дней надо видеть целиком, пока правишь один. См. шапку
   // `TeamScheduleSheet` — там же, почему это исключение из закона «настройка —
   // всегда страница».
+  // БЕЗ ПОДПИСКИ ЭТИХ ДВЕРЕЙ НЕТ. Личный календарь ведёт события и деньги;
+  // прайс и сотрудники — работа с клиентами, и она в платном тарифе. Строка,
+  // которая ведёт в закрытое, хуже отсутствия строки: человек идёт и упирается
+  // (канон, правило 10).
+  const canUseServices = usePlanAllows("services");
+  const actionsIn = useCalendarActionsReader();
+  const memberUpdateTeam = useMemberUpdateTeam();
+  const myAccess = useMyAccess().data;
+  // СТРАНИЦА ОТКРЫТА ВСЕМ, СТРОКИ — ПО ДОСТУПУ (владелец 20.09: «я могу зайти
+  // туда, но блоков уже внутри шестерёнки не будет… визуал целой страницы мы
+  // полностью сохраняем»). Правило и его причины — `settings-rows.ts`.
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
+  const tenantId = useTenantId();
   // Какой календарь настраиваем: параметр из шестерёнки → тот, что открыт в
   // самом календаре (MMKV, тот же ключ) → первый. Экран всегда показывает
   // календарь, в котором человек работает, а не абстрактный «первый».
-  const persisted = getStorage().get<{ teamId?: string | null }>(CAL_VIEW_KEY)?.teamId;
+  const persisted = tenantId
+    ? readTenantPref<{ teamId?: string | null }>(
+        "calendar.view",
+        tenantId,
+        CAL_VIEW_LEGACY_KEY,
+      )?.teamId
+    : undefined;
   const activeId = params.team ?? persisted ?? teams[0]?.id;
   const team = teams.find((x) => x.id === activeId) ?? teams[0];
+  // СТРОКИ — ПО ПРАВАМ ЭТОЙ КОМАНДЫ: сотруднику открываются те, что владелец
+  // выдал в блоке «Настройки команды» (30.09).
+  const rowLevel = (blockKey: string): "hidden" | "read" | "write" => {
+    const gate = accessGate({ role, map: myAccess, blockKey, scope: "calendar", teamId: team?.id ?? null });
+    return gate === "write" ? "write" : gate === "read" ? "read" : "hidden";
+  };
+  const rows = calendarSettingsRows(
+    role,
+    { services: canUseServices },
+    {
+      schedule: actionsIn(team?.id ?? null).schedule,
+      identity: rowLevel("calendar.identity"),
+      timezone: rowLevel("calendar.timezone"),
+      hours: rowLevel("calendar.hours"),
+      booking: rowLevel("calendar.booking_form"),
+      services: rowLevel("calendar.services"),
+      labels: rowLevel("calendar.labels"),
+    },
+  );
+  // ПОДПИСЬ СТРОКИ «ЗАПИСИ» — ЭТОЙ КОМАНДЫ: откуда цвет и сколько блоков.
+  const bookingBlocks = useBookingBlocks(team?.id ?? null);
+  const bookingRule = useAutoColorRule(team?.id ?? null);
+  const bookingSub = [
+    AUTO_COLOR_RULES.find((r) => r.id === bookingRule)?.label ?? "Цвет команды",
+    bookingBlocks.length === BOOKING_BLOCKS.length
+      ? "все блоки"
+      : `${bookingBlocks.length} из ${BOOKING_BLOCKS.length} блоков`,
+  ].join(" · ");
   // Метки ЭТОГО календаря: подпись строки обязана перечислять его собственные.
   const { data: labels = [] } = useCities({ teamId: activeId ?? null });
 
@@ -206,6 +219,18 @@ export default function CalendarSettingsScreen() {
   // неподтверждённые дефолты, и правка ушла бы не от той базы.
   const patchTeam = (p: Record<string, unknown>) => {
     if (!team) return;
+    // Сотрудник пишет поле команды своей дверью — сервер пускает его по
+    // праву строки в «Настройках команды» (30.09).
+    if (role === "master") {
+      memberUpdateTeam.mutate(
+        { teamId: team.id, patch: p },
+        {
+          onSuccess: () => setSavedTick(Date.now()),
+          onError: (e) => notify("Ошибка", e.message),
+        },
+      );
+      return;
+    }
     update.mutate(
       { id: team.id, patch: p },
       {
@@ -213,13 +238,6 @@ export default function CalendarSettingsScreen() {
         onError: (e) => notify("Ошибка", e.message),
       },
     );
-  };
-
-  // Эти два переключателя — НАСТРОЙКА КОМПАНИИ, а не календаря: сетку они
-  // меняют во всех сразу. Пишутся тем же instant-commit, что и всё здесь.
-  const patchSettings = (p: Partial<CalendarSettings>) => {
-    if (!settings) return;
-    saveSettings.mutate(p, { onError: (e) => notify("Ошибка", e.message) });
   };
 
   const work = effectiveWorkHours(s);
@@ -331,7 +349,9 @@ export default function CalendarSettingsScreen() {
         // ТЕКСТОМ, БЕЗ «+»: канон — «действия создания всегда подписаны
         // текстом», и это стережёт контрактный тест (импорт Plus из lucide
         // запрещён). Слово «календарь» в подписи лишнее: лента и так из них.
-        trailing={
+        // Заводит календари владелец: у того, кому настройки не открыты,
+        // лента остаётся лентой его календарей, без действия.
+        trailing={rows.addCalendar ? (
           <Pressable
             onPress={() => setCreateOpen(true)}
             hitSlop={8}
@@ -350,337 +370,350 @@ export default function CalendarSettingsScreen() {
               Добавить
             </Text>
           </Pressable>
-        }
+        ) : undefined}
         // «Все календари разом» здесь нет: настройки правятся у КОНКРЕТНОЙ
         // команды, и лента другого выбора не предлагает.
         onSelect={(id) => router.setParams({ team: id })}
       />
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
-        {team ? (
-          <>
-            <CalendarIdentityCard
-              key={team.id}
-              team={team}
-              onPatch={patchTeam}
-            />
-            {/* ЧАСОВОЙ ПОЯС — СРАЗУ ПОД ИМЕНЕМ КАЛЕНДАРЯ (владелец
-                2026-08-27: «перемести в самый верх… нет, под названием „Мой
-                календарь"»). Он задаёт, что для этого бизнеса значит «сегодня»: от
-                него считаются границы дня в календаре, в финансах и в
-                отчётах. Остальные настройки экрана живут ВНУТРИ суток,
-                которые он определяет, — значит он им предшествует.
-                Настройка У КАЖДОГО КАЛЕНДАРЯ СВОЯ (владелец 2026-08-27):
-                второй календарь может стоять в другой стране, и колонка
-                `teams.timezone` под это была всегда — не было только места,
-                где её выставить. */}
-            <SectionCard>
-              <SettingsRow
-                tile="neutral"
-                icon={Globe}
-                title="Часовой пояс"
-                // Строка печатает РАСПИСКУ, а не имя зоны: город и часы.
-                // Проверить, что продукт считает день правильно, можно за
-                // секунду — сверив это время с часами в статус-баре.
-                // Строка называет пояс ТЕМИ ЖЕ словами, что и барабан, из
-                // которого его выбрали: «Kyiv, Nicosia, Helsinki · UTC+3».
-                // Печатать один город было неправдой — выглядело так, будто
-                // выбран он один, хотя это целая группа.
-                // ВСЁ В ОДНОЙ МЕЛКОЙ СТРОКЕ, через точку: города, смещение,
-                // время (владелец 2026-08-27: «время не надо большими делать,
-                // это лишнее»). Часы здесь не значение строки, а последняя
-                // подробность: строка отвечает на вопрос «какой пояс», а не
-                // «который час». Крупным справа они спорили с названием
-                // настройки и читались как её главный смысл.
-                sub={`${zoneCities(timezone)} · ${utcLabel(timezone)} · ${zoneClock(timezone)}`}
-                onPress={() => setPicker("tz")}
-              />
-            </SectionCard>
-            {/* ВАЛЮТА — СРАЗУ ПОД ПОЯСОМ: обе настройки говорят, в каких
-                единицах бизнес считает день и деньги. Одна на весь бизнес. */}
-            <SectionCard>
-              <SettingsRow
-                tile="neutral"
-                icon={Banknote}
-                title="Валюта"
-                sub={`${moneyName(currency)} · ${moneySymbol(currency)} · ${currency}`}
-                onPress={() => {
-                  if (!isOwner) {
-                    toast("Валюту меняет владелец", "info");
-                    return;
-                  }
-                  setPicker("currency");
-                }}
-              />
-            </SectionCard>
-            {/* «Длительности записи» здесь больше нет (владелец 2026-08-16):
-                длительность даёт УСЛУГА, а не настройка календаря. Дефолт
-                тапа по слоту остался кодовым фолбэком 30 мин. */}
-            {/* ДВА ВОПРОСА ПРО ЧАСЫ СТОЯТ РЯДОМ (владелец 2026-08-17: «часы
-                календаря и рабочие дни и часы поставь вместе»). Раньше они
-                лежали на разных концах экрана, в разных секциях, и человек
-                сравнивал их по памяти.
-                «Часы календаря» — какой отрезок суток ВИДЕН на сетке; настройка
-                общая на все календари, и это сказано в самой строке, а не
-                сноской под карточкой. «График команды» — КОГДА РАБОТАЕТ ЭТА
-                КОМАНДА (дни и часы, правится шторкой снизу).
+      {rows.any ? (
+        <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
+          {team ? (
+            <>
+              {rows.renameEdit ? (
+                <CalendarIdentityCard
+                  key={team.id}
+                  team={team}
+                  onPatch={patchTeam}
+                />
+              ) : rows.rename ? (
+                // «Название и цвет: Только видит» — имя с цветом, без правки.
+                <SectionCard>
+                  <SettingsRow appearance={{ color: team.color }} title={team.name} sub="Название и цвет" />
+                </SectionCard>
+              ) : null}
+              {/* ЧАСОВОЙ ПОЯС — СРАЗУ ПОД ИМЕНЕМ КАЛЕНДАРЯ (владелец
+                  2026-08-27: «перемести в самый верх… нет, под названием „Мой
+                  календарь"»). Он задаёт, что для этого бизнеса значит «сегодня»: от
+                  него считаются границы дня в календаре, в финансах и в
+                  отчётах. Остальные настройки экрана живут ВНУТРИ суток,
+                  которые он определяет, — значит он им предшествует.
+                  Настройка У КАЖДОГО КАЛЕНДАРЯ СВОЯ (владелец 2026-08-27):
+                  второй календарь может стоять в другой стране, и колонка
+                  `teams.timezone` под это была всегда — не было только места,
+                  где её выставить. */}
+              {rows.timezone ? (
+                <SectionCard>
+                  <SettingsRow
+                    // ЦВЕТНАЯ ПЛИТКА, КАК У ВСЕХ ДВЕРЕЙ ЭТОЙ СТРАНИЦЫ (24.09):
+                    // «neutral» — материал денежных экранов (канон SettingsRow),
+                    // здесь он делал три верхние строки чужими. Оранжевый —
+                    // «время и допуски» по словарю плиток.
+                    tile={SETTINGS_TILE.orange}
+                    icon={Globe}
+                    title="Часовой пояс"
+                    // Строка печатает РАСПИСКУ, а не имя зоны: город и часы.
+                    // Проверить, что продукт считает день правильно, можно за
+                    // секунду — сверив это время с часами в статус-баре.
+                    // Строка называет пояс ТЕМИ ЖЕ словами, что и барабан, из
+                    // которого его выбрали: «Kyiv, Nicosia, Helsinki · UTC+3».
+                    // Печатать один город было неправдой — выглядело так, будто
+                    // выбран он один, хотя это целая группа.
+                    // ВСЁ В ОДНОЙ МЕЛКОЙ СТРОКЕ, через точку: города, смещение,
+                    // время (владелец 2026-08-27: «время не надо большими делать,
+                    // это лишнее»). Часы здесь не значение строки, а последняя
+                    // подробность: строка отвечает на вопрос «какой пояс», а не
+                    // «который час». Крупным справа они спорили с названием
+                    // настройки и читались как её главный смысл.
+                    sub={`${zoneCities(timezone)} · ${utcLabel(timezone)} · ${zoneClock(timezone)}`}
+                    onPress={rows.timezoneEdit ? () => setPicker("tz") : undefined}
+                  />
+                </SectionCard>
+              ) : null}
+              {/* ВАЛЮТЫ ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 30.09): она одна на
+                  компанию и живёт в «Настройки финансов → Вся компания». */}
+              {/* МАСТЕРА — СОСТАВ ЭТОГО КАЛЕНДАРЯ, СРАЗУ ПОД ВАЛЮТОЙ (владелец
+                  2026-09-14: «мастера поставь после валюты»). Заглушка «Скоро» стояла с
+                  2026-08-30, пока экрана не было под рукой; 2026-09-10 владелец:
+                  «мастера — окей, перенеси её туда, и это будет основное». Экран
+                  переехал сюда из Кабинета целиком (список, карточка мастера, его
+                  доступ, визиты и статистика) — состав команды это свойство
+                  календаря, а не кабинета, и кабинет владелец разбирает.
 
-                ПОРЯДОК: сперва часы календаря, потом график команды (владелец
-                2026-08-25). Так и читается: сначала настраивают саму сетку — то,
-                на что смотришь каждый день, — а уже потом заполняют её работой
-                конкретной команды. */}
-            <SectionCard className="mt-4">
-              <SettingsRow
-                tile={SETTINGS_TILE.teal}
-                icon={CalendarRange}
-                title="Часы календаря"
-                sub={`${formatHm(window.start)}–${formatHm(window.end)}`}
-                onPress={() => setPicker("view")}
-              />
-            </SectionCard>
+                  Право не изменилось: стек /calendar закрыт капабилити
+                  `manage-calendar-settings`, а она только у владельца — ровно как
+                  весь /cabinet до переезда.
+
+                  ПЛИТКА ПОКА НЕЙТРАЛЬНАЯ, как у «Часового пояса» и «Валюты»:
+                  заводить новый пигмент словаря ради одной строки — тот самый
+                  дрейф, от которого словарь и написан. */}
+              {/* «МАСТЕРОВ» ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 29.09): сотрудник один на
+                  компанию и живёт в «Кабинет → Сотрудники», права — по командам
+                  на его странице. */}
+              {/* «Длительности записи» здесь больше нет (владелец 2026-08-16):
+                  длительность даёт УСЛУГА, а не настройка календаря. Дефолт
+                  тапа по слоту остался кодовым фолбэком 30 мин. */}
+              {/* ДВА ВОПРОСА ПРО ЧАСЫ СТОЯТ РЯДОМ (владелец 2026-08-17: «часы
+                  календаря и рабочие дни и часы поставь вместе»). Раньше они
+                  лежали на разных концах экрана, в разных секциях, и человек
+                  сравнивал их по памяти.
+                  «Часы календаря» — какой отрезок суток ВИДЕН на сетке; настройка
+                  общая на все календари, и это сказано в самой строке, а не
+                  сноской под карточкой. «График команды» — КОГДА РАБОТАЕТ ЭТА
+                  КОМАНДА (дни и часы, правится шторкой снизу).
+
+                  ПОРЯДОК: сперва часы календаря, потом график команды (владелец
+                  2026-08-25). Так и читается: сначала настраивают саму сетку — то,
+                  на что смотришь каждый день, — а уже потом заполняют её работой
+                  конкретной команды. */}
+              {rows.hours ? (
+                <SectionCard className="mt-4">
+                  <SettingsRow
+                    tile={SETTINGS_TILE.teal}
+                    icon={CalendarRange}
+                    title="Часы календаря"
+                    sub={`${formatHm(window.start)}–${formatHm(window.end)}`}
+                    onPress={rows.hoursEdit ? () => setPicker("view") : undefined}
+                  />
+                </SectionCard>
+              ) : null}
+              {rows.schedule ? (
+                <SectionCard>
+                  <SettingsRow
+                    tile={SETTINGS_TILE.blue}
+                    icon={CalendarClock}
+                    title="График команды"
+                    sub={schedText}
+                    // «Только видит» — строка без двери: график показан,
+                    // правки нет.
+                    onPress={rows.scheduleEdit ? () => setScheduleOpen(true) : undefined}
+                  />
+                </SectionCard>
+              ) : null}
+            </>
+          ) : null}
+
+
+          {/* КАК ВЫГЛЯДИТ И ЧТО СПРАШИВАЕТ ЗАПИСЬ (владелец 2026-09-06: «когда я
+              перехожу на шестерёнку в календаре, почему там нет страницы
+              записи»). Шестерёнка настраивает ТО, НА ЧТО СМОТРИШЬ, а цвет блока
+              и набор блоков формы — это ровно оно; держать их только в Кабинете
+              значило отправлять человека в другую вкладку за настройкой того,
+              что у него сейчас перед глазами.
+              Стоит ПЕРЕД справочниками: сперва решают, как запись выглядит и о
+              чём спрашивает, и только потом наполняют её услугами и метками.
+              Настройка одна на фирму, а не на команду, — поэтому команду сюда,
+              в отличие от «Услуг» и «Меток», не передаём. */}
+          {rows.booking ? (
             <SectionCard>
               <SettingsRow
                 tile={SETTINGS_TILE.blue}
-                icon={CalendarClock}
-                title="График команды"
-                sub={schedText}
-                onPress={() => setScheduleOpen(true)}
+                icon={ClipboardList}
+                // «ЗАПИСИ», А НЕ «ДИЗАЙН» (владелец 30.09: «дизайн переименуем
+                // в записи клиентов или как-то так»): одна страница вида,
+                // цвета, блоков записи и события, типов событий и «Скрывать
+                // отменённые». Не «Записи клиентов» — там и события.
+                title="Записи"
+                sub={bookingSub}
+                // КАЛЕНДАРЬ ЕДЕТ АДРЕСОМ, как у «Услуг» и «Меток»: «Записи» у
+                // каждой команды свои (владелец 24.09).
+                onPress={() =>
+                  router.push({
+                    pathname: "/calendar/design",
+                    params: { team: team.id },
+                  } as Href)
+                }
               />
             </SectionCard>
-          </>
-        ) : null}
+          ) : null}
 
-
-        {/* КАК ВЫГЛЯДИТ И ЧТО СПРАШИВАЕТ ЗАПИСЬ (владелец 2026-09-06: «когда я
-            перехожу на шестерёнку в календаре, почему там нет страницы
-            записи»). Шестерёнка настраивает ТО, НА ЧТО СМОТРИШЬ, а цвет блока
-            и набор блоков формы — это ровно оно; держать их только в Кабинете
-            значило отправлять человека в другую вкладку за настройкой того,
-            что у него сейчас перед глазами.
-            Стоит ПЕРЕД справочниками: сперва решают, как запись выглядит и о
-            чём спрашивает, и только потом наполняют её услугами и метками.
-            Настройка одна на фирму, а не на команду, — поэтому команду сюда,
-            в отличие от «Услуг» и «Меток», не передаём. */}
-        <SectionCard>
-          <SettingsRow
-            tile={SETTINGS_TILE.blue}
-            icon={Palette}
-            title="Запись"
-            sub={bookingSub}
-            onPress={() => router.push("/calendar/booking" as Href)}
-          />
-        </SectionCard>
-
-        {/* СПРАВОЧНИКИ КАЛЕНДАРЯ. Метки переехали сюда из настроек клиентов
-            (владелец 2026-08-02: «метки мы не делаем в клиентах — метки
-            должны стоять в настройках календаря»): метка — это про ДЕНЬ и
-            маршрут команды, а карточка клиента её только показывает. */}
-        <SectionCard>
-          {/* Услуги — здесь, потому что именно они дают ДЛИТЕЛЬНОСТЬ записи
-              (настройки «Длительность» на календаре больше нет). Тот же
-              экран, что в Кабинете, второй дверью внутри стека /calendar:
-              наружу этот стек не ведёт (закон навигации). */}
-          <SettingsRow
-            tile={SETTINGS_TILE.blue}
-            icon={Briefcase}
-            title="Услуги"
-            sub="Каталог работ и цены"
-            // Отдаём ТУ команду, чьи настройки открыты: иначе прайс
-            // открывался на чужой, и новая услуга уезжала не туда.
-            onPress={() =>
-              router.push(
-                team?.id
-                  ? ({
-                      pathname: "/calendar/services",
-                      params: { team: team.id },
-                    } as Href)
-                  : ("/calendar/services" as Href),
-              )
-            }
-          />
-        </SectionCard>
-        <SectionCard>
-          <SettingsRow
-            tile={SETTINGS_TILE.purple}
-            icon={Tags}
-            title="Метки"
-            // Подпись показывает СВОИ метки, а не жанр: «Города и районы» врали
-            // про содержимое (владелец 2026-08-17: «туда можно писать что
-            // угодно, это всё метки»).
-            sub={labelsSub}
-            // ОТДАЁМ ТУ КОМАНДУ, ЧЬИ НАСТРОЙКИ ОТКРЫТЫ — как «Услуги» строкой
-            // выше. Без параметра экран меток брал команду из MMKV, то есть
-            // ту, что открыта в САМОМ КАЛЕНДАРЕ, а чип наверху меняет только
-            // `params.team`. Настройки на Команде 3 → «Метки» открывали
-            // Команду 2 (проверено на симуляторе 2026-08-30), и новая метка
-            // уезжала в чужой календарь. Подпись строки при этом показывала
-            // ПРАВИЛЬНЫЕ метки — расхождение видно было только внутри.
-            onPress={() =>
-              router.push(
-                team?.id
-                  ? ({
-                      pathname: "/calendar/labels",
-                      params: { team: team.id },
-                    } as Href)
-                  : ("/calendar/labels" as Href),
-              )
-            }
-          />
-        </SectionCard>
-
-        {/* МАСТЕРА — ЗАГЛУШКА (владелец 2026-08-30: «мастеров перенеси в
-            настройки календаря, через шестерёнку; пока поставь заглушку —
-            там мы будем назначать правила для каждого, кого добавим»).
-
-            Раздел «Команды» в Кабинете снесён в тот же день, и вместе с ним
-            ушёл единственный редактор состава. Строка стоит здесь, потому
-            что состав — свойство ЭТОГО календаря, как его услуги и метки.
-
-            НЕ НАЖИМАЕТСЯ НАМЕРЕННО: за ней пока ничего нет. Живая дверь в
-            пустоту хуже её отсутствия — человек уходит уверенный, что
-            назначил мастера, и узнаёт правду пустым нарядом.
-
-            ПЛИТКА НЕЙТРАЛЬНАЯ. Пигмента «люди» в словаре плиток нет, а
-            заводить его ради строки, которой ещё не существует, — ровно тот
-            дрейф, от которого словарь и написан: цвет заводится осознанно.
-            Появится экран — появится и решение о цвете. */}
-        <SectionCard>
-          <SettingsRow tile="neutral" icon={Users} title="Мастера" value="Скоро" valueQuiet />
-        </SectionCard>
-
-        {/* ЧТО ПОКАЗЫВАТЬ — ДВА ТУМБЛЕРА ЗДЕСЬ, А НЕ НА СВОЕЙ СТРАНИЦЕ
-            (владелец 2026-08-27: «саму страницу „что показывать" можем
-            полностью убрать, что там находится — поставим в самый конец, над
-            „удалить календарь"; только коротко, без объяснений»).
-
-            Страница заводилась по образцу клиентской «Что показывать на
-            карточке», чтобы главный экран не превращался в простыню
-            тумблеров. Но тумблеров оказалось ДВА, и целая страница ради двух
-            переключателей — это лишний заход и лишняя дверь: строка «Что
-            показывать · Показываем всё» отвечала на вопрос, которого никто
-            не задавал.
-
-            ПОДПИСИ БЕЗ ПОЯСНЕНИЙ. Прежние («Полоса по дням: сверху доход,
-            снизу расход, тап по дню открывает разбор») описывали то, что
-            видно на самой сетке через секунду после переключения. */}
-        {/* КАЖДЫЙ ТУМБЛЕР — СВОЯ КАРТОЧКА (владелец 2026-08-27: «разделитель
-            между тумблерами сделай не волосинкой, а отдельные блоки»). Они
-            про РАЗНОЕ — деньги и записи, — и волосинка внутри одной карточки
-            склеивала их в один вопрос. */}
-        <SectionCard className="mt-4">
-          <SwitchRow
-            label="Показывать доход и расход"
-            value={s.showDayFinance !== false}
-            onChange={(v) => patchSettings({ showDayFinance: v })}
-          />
-        </SectionCard>
-        <SectionCard>
-          <SwitchRow
-            label="Скрывать отменённые"
-            value={!!s.hideCancelled}
-            onChange={(v) => patchSettings({ hideCancelled: v })}
-          />
-        </SectionCard>
-
-        {/* ПОД ПРОВЕРКОЙ `team` НЕ ДЛЯ КРАСОТЫ: карточка печатает `team.name`,
-            а при нуле календарей его нет — экран падал бы на первом же кадре.
-            Дыру открыл я сам, когда добавлял удаление 27 августа. */}
-        {team ? (
-          <>
-            {/* УДАЛЕНИЕ КАЛЕНДАРЯ — ПОСЛЕДНЕЙ СТРОКОЙ ЭКРАНА (владелец
-                2026-08-27: «а как удалять команду — вот если я создал, а
-                удалить её как?»). Ответ был: никак. Механизм мягкого
-                удаления лежал написанным (`useRefDelete`), но наружу для
-                команд его не выводили — завести календарь стало можно, а
-                убрать нечем, и после переноса кнопки «Добавить» в ленту эта
-                дыра только расширилась.
-
-                МЯГКОЕ (`is_active=false`), и это не полумера: записи
-                ссылаются на `team_id`, жёсткое удаление порвало бы им ссылку
-                и унесло историю выручки. Календарь пропадает из ленты, его
-                записи остаются в базе.
-
-                ПОСЛЕДНИЙ УДАЛИТЬ НЕЛЬЗЯ. Без единого календаря продукту
-                некуда писать запись, а в ленте не остаётся даже чипа —
-                человек оказался бы в тупике, из которого только создание. */}
-            <SectionCard className="mt-4">
-              <Pressable
-                onPress={() => {
-                  // ПОСЛЕДНИЙ УДАЛИТЬ НЕЛЬЗЯ — и говорится это ПЛАШКОЙ СВЕРХУ,
-                  // как все прочие запреты продукта (владелец 2026-08-27:
-                  // «подсказку убери и вставь её, когда человек нажмёт»).
-                  //
-                  // Кнопка НЕ гасится намеренно. Погашенная кнопка молчит:
-                  // человек видит серое «Удалить календарь» и не знает,
-                  // сломано это или так задумано. Нажимаемая кнопка отвечает
-                  // на его вопрос ровно тогда, когда он его задал, — а
-                  // постоянная строка-объяснение под кнопкой висела на экране
-                  // всё время у всех, включая тех, у кого календарей много.
-                  if (teams.length < 2) {
-                    toast(
-                      // Одна строка и не длиннее: плашка не переносит текст, лишнее
-                      // обрезается многоточием. «Что делать» говорит кнопка.
-                      "Последний календарь удалить нельзя",
-                      "warn",
-                      // Плашка говорит «создайте другой» — здесь же и даёт
-                      // это сделать. Без кнопки человек читает указание,
-                      // закрывает плашку и ищет, чем его выполнить.
-                      { label: "Создать", onPress: () => setCreateOpen(true) },
-                    );
-                    return;
-                  }
-                  confirmThen(
-                    `Удалить календарь «${team.name}»?`,
-                    {
-                      message:
-                        "Он пропадёт из ленты. Записи и деньги останутся в базе — их видно в отчётах.",
-                      confirmLabel: "Удалить",
-                      destructive: true,
-                    },
-                    () =>
-                      removeTeam.mutate(team.id, {
-                        onSuccess: () => {
-                          // Экран смотрел на удалённый календарь: уводим на
-                          // соседний, иначе он показывает настройки того,
-                          // чего уже нет.
-                          const next = teams.find((x) => x.id !== team.id);
-                          router.setParams({ team: next?.id });
-                        },
-                        onError: (e) => notify("Ошибка", e.message),
-                      }),
-                  );
-                }}
-                disabled={removeTeam.isPending}
-                accessibilityRole="button"
-                accessibilityLabel={`Удалить календарь ${team.name}`}
-                className="min-h-[52px] flex-row items-center justify-center gap-2 px-4 py-3.5"
-                style={({ pressed }: { pressed: boolean }) => ({
-                  backgroundColor: pressed ? t.pressed : "transparent",
-                })}
-              >
-                <Trash2 color={t.danger} size={16} strokeWidth={2.2} />
-                <Text style={{ fontSize: 15, fontWeight: "600", color: t.danger }}>
-                  Удалить календарь
-                </Text>
-              </Pressable>
-            </SectionCard>
-          </>
-        ) : null}
-
-        {teams.length === 0 ? (
+          {/* СПРАВОЧНИКИ КАЛЕНДАРЯ. Метки переехали сюда из настроек клиентов
+              (владелец 2026-08-02: «метки мы не делаем в клиентах — метки
+              должны стоять в настройках календаря»): метка — это про ДЕНЬ и
+              маршрут команды, а карточка клиента её только показывает. */}
+          {/* Карточка гаснет ВМЕСТЕ со своей строкой, как у «Мастеров» и
+              «Меток»: пустая `SectionCard` оставляла белую полосу и лишний
+              зазор между «Записью» и «Метками». */}
+          {rows.services ? (
           <SectionCard>
-            <Text
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-                fontSize: 15,
-                color: t.faint,
-              }}
-            >
-              Календарей пока нет — создайте первый на вкладке «Календарь».
-            </Text>
+            {/* Услуги — здесь, потому что именно они дают ДЛИТЕЛЬНОСТЬ записи
+                (настройки «Длительность» на календаре больше нет). Тот же
+                экран, что в Кабинете, второй дверью внутри стека /calendar:
+                наружу этот стек не ведёт (закон навигации). */}
+            <SettingsRow
+              tile={SETTINGS_TILE.blue}
+              icon={Briefcase}
+              title="Услуги"
+              sub="Каталог работ и цены"
+              // Отдаём ТУ команду, чьи настройки открыты: иначе прайс
+              // открывался на чужой, и новая услуга уезжала не туда.
+              onPress={() =>
+                router.push(
+                  team?.id
+                    ? ({
+                        pathname: "/calendar/services",
+                        params: { team: team.id },
+                      } as Href)
+                    : ("/calendar/services" as Href),
+                )
+              }
+            />
           </SectionCard>
-        ) : null}
-      </ScrollView>
+          ) : null}
+          {rows.labels ? (
+            <SectionCard>
+              <SettingsRow
+                tile={SETTINGS_TILE.purple}
+                icon={Tags}
+                title="Метки"
+                // Подпись показывает СВОИ метки, а не жанр: «Города и районы» врали
+                // про содержимое (владелец 2026-08-17: «туда можно писать что
+                // угодно, это всё метки»).
+                sub={labelsSub}
+                // ОТДАЁМ ТУ КОМАНДУ, ЧЬИ НАСТРОЙКИ ОТКРЫТЫ — как «Услуги» строкой
+                // выше. Без параметра экран меток брал команду из MMKV, то есть
+                // ту, что открыта в САМОМ КАЛЕНДАРЕ, а чип наверху меняет только
+                // `params.team`. Настройки на Команде 3 → «Метки» открывали
+                // Команду 2 (проверено на симуляторе 2026-08-30), и новая метка
+                // уезжала в чужой календарь. Подпись строки при этом показывала
+                // ПРАВИЛЬНЫЕ метки — расхождение видно было только внутри.
+                onPress={() =>
+                  router.push(
+                    team?.id
+                      ? ({
+                          pathname: "/calendar/labels",
+                          params: { team: team.id },
+                        } as Href)
+                      : ("/calendar/labels" as Href),
+                  )
+                }
+              />
+            </SectionCard>
+          ) : null}
+          {/* SMS КОМАНДЫ (STORY-089; владелец 29.09: «открываю Команда 1 →
+              SMS — все шаблоны этой команды»). Шаблоны, отправка и история
+              той команды, чьи настройки открыты; баланс компании — Кабинет →
+              SMS. Шаблоны правит владелец — строка только ему. */}
+          {isOwner ? (
+            <SectionCard>
+              <SmsSettingsRow teamId={team?.id ?? null} />
+            </SectionCard>
+          ) : null}
+
+          {/* ТУМБЛЕРОВ ВИДА ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 30.09): «Показывать доход
+              и расход», «Метки дня» и «События» включены всегда
+              (`ALWAYS_ON_FEATURES`), «Скрывать отменённые» — у команды на
+              странице «Записи», вкладка «Клиент». */}
+          {/* ПОД ПРОВЕРКОЙ `team` НЕ ДЛЯ КРАСОТЫ: карточка печатает `team.name`,
+              а при нуле календарей его нет — экран падал бы на первом же кадре.
+              Дыру открыл я сам, когда добавлял удаление 27 августа. */}
+          {team && rows.remove ? (
+            <>
+              {/* УДАЛЕНИЕ КАЛЕНДАРЯ — ПОСЛЕДНЕЙ СТРОКОЙ ЭКРАНА (владелец
+                  2026-08-27: «а как удалять команду — вот если я создал, а
+                  удалить её как?»). Ответ был: никак. Механизм мягкого
+                  удаления лежал написанным (`useRefDelete`), но наружу для
+                  команд его не выводили — завести календарь стало можно, а
+                  убрать нечем, и после переноса кнопки «Добавить» в ленту эта
+                  дыра только расширилась.
+
+                  МЯГКОЕ (`is_active=false`), и это не полумера: записи
+                  ссылаются на `team_id`, жёсткое удаление порвало бы им ссылку
+                  и унесло историю выручки. Календарь пропадает из ленты, его
+                  записи остаются в базе.
+
+                  ПОСЛЕДНИЙ УДАЛИТЬ НЕЛЬЗЯ. Без единого календаря продукту
+                  некуда писать запись, а в ленте не остаётся даже чипа —
+                  человек оказался бы в тупике, из которого только создание. */}
+              <SectionCard className="mt-4">
+                <Pressable
+                  onPress={() => {
+                    // ПОСЛЕДНИЙ УДАЛИТЬ НЕЛЬЗЯ — и говорится это ПЛАШКОЙ СВЕРХУ,
+                    // как все прочие запреты продукта (владелец 2026-08-27:
+                    // «подсказку убери и вставь её, когда человек нажмёт»).
+                    //
+                    // Кнопка НЕ гасится намеренно. Погашенная кнопка молчит:
+                    // человек видит серое «Удалить календарь» и не знает,
+                    // сломано это или так задумано. Нажимаемая кнопка отвечает
+                    // на его вопрос ровно тогда, когда он его задал, — а
+                    // постоянная строка-объяснение под кнопкой висела на экране
+                    // всё время у всех, включая тех, у кого календарей много.
+                    if (teams.length < 2) {
+                      toast(
+                        // Одна строка и не длиннее: плашка не переносит текст, лишнее
+                        // обрезается многоточием. «Что делать» говорит кнопка.
+                        "Последний календарь удалить нельзя",
+                        "warn",
+                        // Плашка говорит «создайте другой» — здесь же и даёт
+                        // это сделать. Без кнопки человек читает указание,
+                        // закрывает плашку и ищет, чем его выполнить.
+                        { label: "Создать", onPress: () => setCreateOpen(true) },
+                      );
+                      return;
+                    }
+                    // «УДАЛИТЬ» УВОДИТ В АРХИВ (владелец 2026-09-21: «удаляешь —
+                    // оно кидается в архив… потом можно удалить с архива»).
+                    // Шаг обратим, поэтому вопрос короткий и без цифр; стереть
+                    // навсегда можно только из Кабинета → «Архив».
+                    confirmThen(
+                      `Удалить календарь «${team.name}»?`,
+                      {
+                        message: ARCHIVE_CALENDAR_MESSAGE,
+                        confirmLabel: "Удалить",
+                        destructive: true,
+                      },
+                      () =>
+                        archiveTeam.mutate(team.id, {
+                          onSuccess: () => {
+                            // Экран смотрел на ушедший календарь: уводим на
+                            // соседний, иначе он показывает настройки того,
+                            // чего в ленте уже нет.
+                            const next = teams.find((x) => x.id !== team.id);
+                            router.setParams({ team: next?.id });
+                          },
+                          onError: (e) => notify("Ошибка", e.message),
+                        }),
+                    );
+                  }}
+                  disabled={archiveTeam.isPending}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Удалить календарь ${team.name}`}
+                  className="min-h-[52px] flex-row items-center justify-center gap-2 px-4 py-3.5"
+                  style={({ pressed }: { pressed: boolean }) => ({
+                    backgroundColor: pressed ? t.pressed : "transparent",
+                  })}
+                >
+                  <Trash2 color={t.danger} size={16} strokeWidth={2.2} />
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: t.danger }}>
+                    Удалить календарь
+                  </Text>
+                </Pressable>
+              </SectionCard>
+            </>
+          ) : null}
+
+          {teams.length === 0 ? (
+            <SectionCard>
+              <Text
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  fontSize: 15,
+                  color: t.faint,
+                }}
+              >
+                {rows.addCalendar
+                  ? "Календарей пока нет — создайте первый на вкладке «Календарь»."
+                  : "Календарей пока нет."}
+              </Text>
+            </SectionCard>
+          ) : null}
+        </ScrollView>
+      ) : (
+        // Строк не открыли ни одной: страница остаётся собой, а тело
+        // говорит одной строкой — без подписи и без кнопки (канон пустых
+        // состояний, LOCKED 2026-08-27).
+        <EmptyState fill title="Настроек пока нет" />
+      )}
 
       <CalendarCreateSheet
         visible={createOpen}
@@ -709,12 +742,6 @@ export default function CalendarSettingsScreen() {
           })
         }
       />
-      <CurrencySheet
-        visible={picker === "currency"}
-        onClose={() => setPicker(null)}
-        value={currency}
-        onApply={applyCurrency}
-      />
       <TimezoneSheet
         visible={picker === "tz"}
         onClose={() => setPicker(null)}
@@ -729,7 +756,7 @@ export default function CalendarSettingsScreen() {
         // поле означает «как у компании», и печатать вместо него 00:00 —
         // врать про то, что на самом деле стоит между записями.
         buffer={effectiveBuffer(team, settings)}
-        onBufferChange={(minutes) => patchTeam({ buffer_minutes: minutes })}
+        onBufferChange={rows.buffer ? (minutes) => patchTeam({ buffer_minutes: minutes }) : undefined}
         onClose={() => setScheduleOpen(false)}
       />
 

@@ -10,12 +10,21 @@ import { useThemeColors } from "@/theme/colors";
 // композера заметок на карточке клиента; в покое одна строка Subhead 13/18,
 // пока печатают — до четырёх. Ни ярлыка, ни значка: чья заметка, говорит
 // подсказка в поле, а карточка — о ком она.
+//
+// ОДИН РАЗМЕР НА ПРОДУКТ (владелец 2026-09-10, вторым заходом: «уменьши
+// заметки, сделай такие заметки, как в клиентах… короче, сделай то же самое,
+// как в клиентах»). Простор события давали пропом `tall` — четыре строки в
+// покое вместо одной; владелец его снял. Прежняя причина «в событиях заметка
+// и есть содержание встречи» проиграла правилу «блок выглядит одинаково
+// везде»: возвращать проп — значит снова развести заметки по диалектам.
 
 export function InlineNoteField({
   note,
   placeholder,
   accessibilityLabel,
   maxLength,
+  readOnly = false,
+  noCopy = false,
 }: {
   note: Pick<
     ReturnType<typeof useInlineNote<unknown>>,
@@ -25,8 +34,16 @@ export function InlineNoteField({
   accessibilityLabel: string;
   /** Тот же предел, что у композера на карточке (500 у заметки клиента). */
   maxLength?: number;
+  /** Права писать нет (STORY-084, одна страница записи для всех): та же
+   *  плашка, но без клавиатуры. Пустую заметку тогда не рисуем вовсе —
+   *  поле с подсказкой звало бы печатать там, где печатать нельзя. */
+  readOnly?: boolean;
+  /** Без меню «Скопировать» (владелец 30.09: сотрудник видит клиента, но
+   *  вынести его не может). */
+  noCopy?: boolean;
 }) {
   const t = useThemeColors();
+  if (readOnly && !note.draft.trim()) return null;
   return (
     <View
       style={{
@@ -43,6 +60,7 @@ export function InlineNoteField({
         keyboardAppearance="light"
         accessibilityLabel={accessibilityLabel}
         value={note.draft}
+        editable={!readOnly}
         onChangeText={note.setDraft}
         onFocus={note.onFocus}
         onBlur={note.onBlur}
@@ -51,10 +69,12 @@ export function InlineNoteField({
         selectionColor={t.accent}
         multiline
         maxLength={maxLength}
+        contextMenuHidden={noCopy}
         maxFontSizeMultiplier={1.3}
         style={{
           minHeight: 18,
           maxHeight: 72,
+          textAlignVertical: "top",
           paddingTop: 0,
           paddingBottom: 0,
           fontSize: 13,

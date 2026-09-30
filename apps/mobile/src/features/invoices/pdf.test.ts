@@ -62,6 +62,8 @@ const client = {
     id: "location-1",
     label: "Дом",
     address: "Основной адрес 5",
+    // Адрес печатается из «Точного адреса» (город заполнен) — владелец 22.09.
+    addressParts: { street: "Основной адрес 5", city: "Лимасол" },
     mapUrl: "",
     isPrimary: true,
   }],
@@ -70,7 +72,8 @@ const client = {
 describe("invoice PDF HTML", () => {
   it("includes legal requisites, recipient, totals and safe escaped lines", () => {
     const html = buildInvoicePdfHtml({
-      invoice,
+      // Адрес получателя — точный адрес ОБЪЕКТА счёта (владелец 2026-09-22).
+      invoice: { ...invoice, location_id: "location-1" },
       tenant,
       client,
       settlement: {
@@ -102,8 +105,11 @@ describe("invoice PDF HTML", () => {
     assert.match(html, /CY00 0000/);
     assert.match(html, /Иван &amp; Мария/);
     assert.match(html, /Основной адрес 5/);
+    // Телефона клиента на бумаге нет (владелец 2026-09-22).
+    assert.doesNotMatch(html, /\+357 111111/);
     assert.match(html, /Сервис &lt;премиум&gt;/);
-    assert.match(html, /Частично оплачен/);
+    // Статуса на бумаге нет (владелец 2026-09-22): он живёт в приложении.
+    assert.doesNotMatch(html, /Частично оплачен/);
     // Способ `transfer` во всём продукте называется «Банк»: «Перевод» —
     // это тип операции между своими счетами, и одно слово на две вещи
     // путало даже нас.
@@ -248,4 +254,13 @@ describe("invoice PDF HTML", () => {
   it("escapes every HTML control character", () => {
     assert.equal(escapeHtml(`<&>\"'`), "&lt;&amp;&gt;&quot;&#039;");
   });
+
+  // ПЕРВЫЙ ЗАХОД ЗЕРКАЛА-СОСТАВИТЕЛЯ (2026-09-20): пустые зоны бумаги в
+  // составителе печатают короткое приглашение акцентным цветом («Логотип»,
+  // «Юр. адрес», «Выбрать клиента», «Срок оплаты», «Комментарий»). Эти слова
+  // живут ТОЛЬКО в `InvoicePaper.tsx` (через `invoicePaperZones`) — сам PDF
+  // рисуется отдельным шаблоном из той же модели `InvoiceDocument` и о
+  // приглашениях не знает вовсе. Документ ниже пуст ровно там, где бумага
+  // предлагает эти слова: без логотипа, без реквизитов продавца, без
+  // клиента, без срока оплаты и без комментария.
 });

@@ -1,26 +1,22 @@
-import { Stack, usePathname } from "expo-router";
-import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { canAccessClientPath } from "@/features/settings/role-policy";
+import { Stack } from "expo-router";
 
+// ГЛАВНЫЙ ЭКРАН ВКЛАДКИ ВСЕГДА ПОД ЛЮБЫМ ЕЁ ЭКРАНОМ (владелец 2026-09-24:
+// «открываю финансы, нажимаю „назад“ — перекидывает на календарь»). Экран
+// вкладки, открытый снаружи — из календаря, из формы, дверью листа, по
+// ссылке, — ложился в стек вкладки ОДИН, без её корня под собой, и «назад»
+// уходил из вкладки на предыдущую. `initialRouteName` кладёт корень вниз
+// при любом входе в стек; сторож — `tab-stack-roots.test.ts`.
+export const unstable_settings = { initialRouteName: "index" };
+
+// ВКЛАДКА «КЛИЕНТЫ» ОТКРЫВАЕТСЯ ВСЕМ (владелец 19.09: «если не подтвердил —
+// всё равно видим клиентов, просто не видим его… вся страница, вся
+// архитектура остаётся»).
+//
+// Здесь стояла граница по роли `operate-clients`: мастер получал на весь
+// экран «Недостаточно прав», хотя своя компания у него могла быть. Теперь
+// решает не роль, а источник — своя компания, компания-работодатель или
+// клиент записи, — и решает это каждый экран вкладки своим
+// `ClientsCompanyRoute` (`features/clients/ClientsCompanyRoute.tsx`).
 export default function ClientsLayout() {
-  const pathname = usePathname();
-  const roleQuery = useCurrentRole();
-  const stack = <Stack screenOptions={{ headerShown: false }} />;
-
-  // Detail-only crew entry point. The screen uses assignment-scoped client,
-  // service and appointment projections; every sibling route stays behind
-  // operate-clients and therefore rejects direct links.
-  if (
-    roleQuery.isSuccess &&
-    canAccessClientPath(roleQuery.data, pathname)
-  ) {
-    return stack;
-  }
-
-  return (
-    <RoleCapabilityBoundary capability="operate-clients" title="Клиенты">
-      {stack}
-    </RoleCapabilityBoundary>
-  );
+  return <Stack screenOptions={{ headerShown: false }} />;
 }

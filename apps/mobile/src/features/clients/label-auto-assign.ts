@@ -13,6 +13,7 @@ import {
   updateClient,
 } from "@babun/shared/sync/clientsCached";
 import { isOnline } from "@babun/shared/sync";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import type { UserRole } from "@/features/settings/tenant";
 import { dayCitiesQueryKey } from "@/features/calendar/day-cities";
 import { clientsQueryKey } from "./queries";
@@ -63,10 +64,13 @@ export async function autoAssignClientLabel(opts: {
     if (!label) return;
 
     // Клиент: сперва кэш списка, иначе SQLite-кэш (работает и оффлайн).
+    // Чтение обёртки — клиентом, привязанным к `tenantId`: её фоновое
+    // перечитывание не имеет права уйти под заголовком компании, в которую
+    // человек успел перейти (разбор над `useClients`). Запись ниже — прежним.
     const list = qc.getQueryData<Client[]>(clientsQueryKey(tenantId, role));
     const client =
       list?.find((c) => c.id === clientId) ??
-      (await listClientsCached(supabase, tenantId)).find(
+      (await listClientsCached(tenantBoundClient(tenantId), tenantId)).find(
         (c) => c.id === clientId,
       );
     if (!client || client.city_manual) return;

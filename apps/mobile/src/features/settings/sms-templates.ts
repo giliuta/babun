@@ -14,7 +14,14 @@ import { debtReminderSms } from "@babun/shared/common/utils/messenger-links";
 import { getStorage } from "@babun/shared/storage";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
+// РОЛЬ ЗДЕСЬ — СВОЯ (`useDataRole`), А НЕ ЗЕРКАЛЬНАЯ. Она входит в КЛЮЧ
+// запроса и в форму чтения: на зеркальной роли каждый вход и выход из
+// режима «его глазами» менял бы ключ, гнал холодную волну запросов, а строки
+// владельца ложились бы под ключ «master» — тот самый, который потом возьмёт
+// настоящий мастер на этом устройстве. Показ решает `useCurrentRole`.
+import { useDataRole } from "@/features/settings/tenant";
+import { accessGate } from "@/features/access/my-access";
+import { useMyAccess } from "@/features/access/queries";
 import {
   isConfirmedNetworkUnavailable,
   isMissingSmsTemplatesContract,
@@ -82,16 +89,25 @@ async function fetchTemplates(): Promise<{
   };
 }
 
+/** Право «Шаблоны SMS» по СВОЕЙ роли (STORY-089): владелец — всегда,
+ *  сотрудник — по строке прав. Сервер проверяет то же самое. */
+function useTemplatesGate() {
+  const role = useDataRole().data;
+  const map = useMyAccess().data;
+  return accessGate({ role, map, blockKey: "company.sms_templates", scope: "company" });
+}
+
 export function useSmsTemplates() {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
+  const gate = useTemplatesGate();
   return useQuery({
     queryKey: ["sms-templates", tenantId, role ?? "role-pending"],
     enabled:
       !!tenantId &&
       roleQuery.isSuccess &&
-      (role === "owner" || role === "dispatcher"),
+      (gate === "read" || gate === "write"),
     queryFn: async (): Promise<SmsTemplate[]> => {
       if (tenantId) {
         try {
@@ -122,12 +138,13 @@ export function useSmsTemplates() {
 
 export function useSaveSmsTemplates() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
+  const gate = useTemplatesGate();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (list: SmsTemplate[]) => {
-      if (role !== "owner" && role !== "dispatcher") {
-        throw new Error("SMS-шаблоны доступны владельцу и диспетчеру.");
+      if (gate !== "write") {
+        throw new Error("Править шаблоны SMS может владелец или тот, кому он открыл их.");
       }
       if (!tenantId) {
         throw new Error("Нет подключения к аккаунту — попробуйте позже");

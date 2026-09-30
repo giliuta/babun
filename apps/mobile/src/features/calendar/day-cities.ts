@@ -7,7 +7,12 @@ import {
 import { dayCityKey, type DayCityMap } from "@babun/shared/local/day-cities";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
+// РОЛЬ ЗДЕСЬ — СВОЯ (`useDataRole`), А НЕ ЗЕРКАЛЬНАЯ. Она входит в КЛЮЧ
+// запроса и в форму чтения: на зеркальной роли каждый вход и выход из
+// режима «его глазами» менял бы ключ, гнал холодную волну запросов, а строки
+// владельца ложились бы под ключ «master» — тот самый, который потом возьмёт
+// настоящий мастер на этом устройстве. Показ решает `useCurrentRole`.
+import { useDataRole, type UserRole } from "@/features/settings/tenant";
 
 // Метки дней («город команды на дату») — web parity STORY-044 day_cities.
 // Shape: Record<"teamId:YYYY-MM-DD", cityName> (shared dayCityKey).
@@ -25,7 +30,7 @@ export function dayCitiesQueryKey(
 
 export function useDayCities() {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   return useQuery({
     queryKey: dayCitiesQueryKey(tenantId, roleQuery.data),
     enabled: !!tenantId && roleQuery.isSuccess && roleQuery.data != null,
@@ -36,11 +41,23 @@ export function useDayCities() {
 /** Каскад переименования метки по всем дням (rename в библиотеке меток). */
 export function useRenameDayCity() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { teamId: string; from: string; to: string }) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
+      // Сотрудник с правом «Метки» разносит новое имя по дням своей
+      // дверью (30.09): права «Метка дня» у него может не быть, а оставить
+      // дни со старым именем нельзя.
+      if (role === "master") {
+        const { error } = await supabase.rpc("member_rename_day_label", {
+          p_team: input.teamId,
+          p_from: input.from,
+          p_to: input.to,
+        });
+        if (error) throw new Error(error.message);
+        return;
+      }
       if (role !== "owner" && role !== "dispatcher") {
         throw new Error("Изменять метки может владелец или диспетчер.");
       }
@@ -56,7 +73,7 @@ export function useRenameDayCity() {
 /** Upsert/clear одной метки (пустой city = снять). */
 export function useSetDayCity() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { teamId: string; date: string; city: string }) => {

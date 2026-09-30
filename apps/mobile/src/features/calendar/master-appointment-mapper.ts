@@ -2,8 +2,10 @@ import type { Json } from "@babun/shared/db/database.types";
 import type {
   Appointment,
   AppointmentKind,
+  AppointmentService,
   AppointmentSource,
   AppointmentStatus,
+  Discount,
   PersonalEventRepeat,
 } from "@babun/shared/local/appointments";
 
@@ -89,6 +91,71 @@ function numberArray(value: Json | undefined): number[] {
     : [];
 }
 
+/** Деньги окна: неотрицательное конечное число, иначе ноль. Окно отдаёт их
+ *  только по уровню «Суммы» и «Оплаты» (STORY-084, волна 4) — при закрытом
+ *  блоке там нули, и ноль же — ответ на мусор. */
+function moneyField(row: JsonRecord, key: string): number {
+  const value = row[key];
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+const PAYMENT_STATUSES = new Set<NonNullable<Appointment["payment_status"]>>([
+  "unpaid",
+  "partial",
+  "paid",
+  "refunded",
+]);
+
+type PaymentStatus = NonNullable<Appointment["payment_status"]>;
+
+function paymentStatusField(row: JsonRecord): PaymentStatus {
+  const value = row.payment_status;
+  if (typeof value !== "string") return "unpaid";
+  const status = value as PaymentStatus;
+  return PAYMENT_STATUSES.has(status) ? status : "unpaid";
+}
+
+function discountOf(value: Json | undefined): Discount | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const type = value.type;
+  const amount = value.value;
+  if ((type !== "fixed" && type !== "percent") || typeof amount !== "number") return undefined;
+  return {
+    type,
+    value: amount,
+    ...(typeof value.reason === "string" ? { reason: value.reason } : {}),
+  };
+}
+
+function finiteOr(value: Json | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+/** Строки работ записи. Без «Суммы» окно присылает их с нулевыми ценами и без
+ *  скидки; строка без услуги отбрасывается, а не роняет весь наряд. */
+function serviceLines(value: Json | undefined): AppointmentService[] {
+  if (!Array.isArray(value)) return [];
+  const lines: AppointmentService[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    if (typeof item.serviceId !== "string" || item.serviceId === "") continue;
+    const discount = discountOf(item.discount);
+    lines.push({
+      serviceId: item.serviceId,
+      quantity: finiteOr(item.quantity, 1),
+      pricePerUnit: finiteOr(item.pricePerUnit, 0),
+      originalPrice: finiteOr(item.originalPrice, 0),
+      totalPrice: finiteOr(item.totalPrice, 0),
+      duration: finiteOr(item.duration, 0),
+      ...(discount ? { discount } : {}),
+      ...(typeof item.serviceName === "string" ? { serviceName: item.serviceName } : {}),
+      ...(typeof item.unit === "string" || item.unit === null ? { unit: item.unit } : {}),
+      ...(typeof item.variantId === "string" ? { variantId: item.variantId } : {}),
+    });
+  }
+  return lines;
+}
+
 function kindField(row: JsonRecord): AppointmentKind {
   const value = stringField(row, "kind") as AppointmentKind;
   if (!KINDS.has(value)) throw new Error("Сервер вернул неизвестный тип заявки");
@@ -132,7 +199,10 @@ function repeatField(value: Json | undefined): PersonalEventRepeat {
   return { kind: "none" };
 }
 
-/** Rebuilds an RPC row and forces every finance field to an inert value. */
+/** Rebuilds an RPC row. РЕШАЕТ СЕРВЕР (STORY-084, волна 4): строки работ,
+ *  итог, скидку, внесённое и статус оплаты окно отдаёт по уровням «Услуг»,
+ *  «Суммы» и «Оплаты» — при закрытом блоке там нули. Историю платежей,
+ *  расходы и переопределения цен окно не отдаёт никогда, и здесь они гаснут. */
 export function masterAppointmentJsonToAppointment(value: Json): Appointment {
   const row = asRecord(value);
   stringField(row, "tenant_id");
@@ -147,18 +217,18 @@ export function masterAppointmentJsonToAppointment(value: Json): Appointment {
     team_id: nullableStringField(row, "team_id"),
     master_id: nullableStringField(row, "master_id"),
     service_ids: stringArray(row.service_ids),
-    total_amount: 0,
-    custom_total: false,
-    discount_amount: 0,
+    total_amount: moneyField(row, "total_amount"),
+    custom_total: row.custom_total === true,
+    discount_amount: moneyField(row, "discount_amount"),
     expenses: [],
     service_price_overrides: {},
     prepaid_amount: 0,
     payments: [],
     payment: null,
-    payment_status: "unpaid",
+    payment_status: paymentStatusField(row),
     payment_method: undefined,
-    paid_amount: 0,
-    services: [],
+    paid_amount: moneyField(row, "paid_amount"),
+    services: serviceLines(row.services),
     global_discount: null,
     total_duration: numberField(row, "total_duration"),
     color_override: nullableStringField(row, "color_override"),

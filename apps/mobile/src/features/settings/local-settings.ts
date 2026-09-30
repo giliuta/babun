@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
 import {
   useMutation,
   useQuery,
@@ -13,17 +13,7 @@ import {
   DEFAULT_CALENDAR_SETTINGS,
   type CalendarSettings,
 } from "@babun/shared/local/calendar-settings";
-import {
-  getCalendarSettings,
-  getOperationalCalendarSettings,
-  updateCalendarSettings,
-} from "@babun/shared/db/repositories/calendar-settings";
-import {
-  loadLoyalty,
-  saveLoyalty,
-  type LoyaltySettings,
-  type LoyaltyTier,
-} from "@babun/shared/local/loyalty";
+import { updateCalendarSettings } from "@babun/shared/db/repositories/calendar-settings";
 import {
   hasLocationLabelsServerSync,
   loadLocationLabels,
@@ -32,7 +22,6 @@ import {
   type LocationLabel,
 } from "@babun/shared/local/location-labels";
 import {
-  SEED_PERSONAL_EVENT_TYPES,
   loadPersonalEventTypes,
   savePersonalEventTypes,
   type PersonalEventType,
@@ -40,7 +29,14 @@ import {
 } from "@babun/shared/local/personal-event-types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
+// РОЛЬ ЗДЕСЬ — СВОЯ (`useDataRole`), А НЕ ЗЕРКАЛЬНАЯ. Она входит в КЛЮЧ
+// запроса и в форму чтения: на зеркальной роли каждый вход и выход из
+// режима «его глазами» менял бы ключ, гнал холодную волну запросов, а строки
+// владельца ложились бы под ключ «master» — тот самый, который потом возьмёт
+// настоящий мастер на этом устройстве. Показ решает `useCurrentRole`.
+import { useDataRole } from "@/features/settings/tenant";
+import { fetchCalendarSettings } from "@/features/settings/company-fetchers";
+import { calendarSettingsQueryKey } from "@/lib/company-query-keys";
 import {
   locationLabelRemoveIds,
   positionedLocationLabelUpserts,
@@ -48,7 +44,6 @@ import {
 import {
   isConfirmedNetworkUnavailable,
   isMissingCalendarSettingsContract,
-  isMissingLoyaltySettingsContract,
   isMissingPersonalEventTypesContract,
   type ServerReadError,
 } from "@/features/settings/server-read-fallback";
@@ -65,8 +60,8 @@ export type { LocationLabel } from "@babun/shared/local/location-labels";
 export type { PersonalEventType } from "@babun/shared/local/personal-event-types";
 
 // Settings live in the canonical Supabase tables (calendar_settings,
-// tenant_loyalty_settings, personal_event_types — same as web), so changes
-// sync across devices. MMKV via the storage seam is only a write-through
+// personal_event_types — same as web), so changes sync across devices.
+// MMKV via the storage seam is only a write-through
 // cache: every successful read/save refreshes it. Reads may fall back for a
 // rolling deployment or a confirmed transport outage; permission and
 // validation errors remain visible to the user, and writes never hide network
@@ -139,28 +134,33 @@ function safeSaveOperationalCalendarSettings(
 
 export function useCalendarSettings() {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
   return useQuery({
-    queryKey: ["calendar-settings", tenantId, role ?? "role-pending"],
+    queryKey: calendarSettingsQueryKey(tenantId, role),
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
     networkMode: "always",
     queryFn: async (): Promise<CalendarSettings> => {
       const activeTenantId = tenantId as string;
       try {
+        if (role !== "master" && role !== "owner" && role !== "dispatcher") {
+          throw new Error("Роль сотрудника ещё не подтверждена.");
+        }
+        const settings = await fetchCalendarSettings(
+          supabase,
+          activeTenantId,
+          role,
+        );
+        // ЗАПИСЬ В MMKV — ЗДЕСЬ, А НЕ В ЧТЕНИИ: хук работает только для активной
+        // компании, а прогрев чужой читает те же настройки через
+        // `fetchCalendarSettings` и кэш устройства не трогает — иначе настройки
+        // компании B легли бы под общий ключ и всплыли у A.
         if (role === "master") {
-          const settings = await getOperationalCalendarSettings(supabase);
-          safeSaveOperationalCalendarSettings(activeTenantId, {
-            ...settings,
-          });
-          return { ...settings };
+          safeSaveOperationalCalendarSettings(activeTenantId, { ...settings });
+        } else {
+          safeSaveCalendarSettings(settings);
         }
-        if (role === "owner" || role === "dispatcher") {
-          const s = await getCalendarSettings(supabase, activeTenantId);
-          safeSaveCalendarSettings(s);
-          return s;
-        }
-        throw new Error("Роль сотрудника ещё не подтверждена.");
+        return settings;
       } catch (error) {
         if (!calendarReadMayUseCache(error)) throw error;
         return role === "master"
@@ -173,7 +173,7 @@ export function useCalendarSettings() {
 
 export function useSaveCalendarSettings() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   const scope = `${tenantId ?? "no-tenant"}:${role ?? "role-pending"}`;
   const queryKey = [
@@ -244,134 +244,6 @@ export function useSaveCalendarSettings() {
   });
 }
 
-// ─── Loyalty (tenant_loyalty_settings, one row per tenant) ───────────
-type LoyaltyRow = Database["public"]["Tables"]["tenant_loyalty_settings"]["Row"];
-
-function safeLoadLoyalty(): LoyaltySettings {
-  try {
-    return loadLoyalty();
-  } catch {
-    return { enabled: false, tiers: [] };
-  }
-}
-
-function safeSaveLoyalty(settings: LoyaltySettings): void {
-  try {
-    saveLoyalty(settings);
-  } catch {
-    // Canonical query data remains usable even if MMKV is unavailable.
-  }
-}
-
-function rowToLoyalty(r: LoyaltyRow): LoyaltySettings {
-  const tiers = Array.isArray(r.tiers)
-    ? (r.tiers as unknown[]).filter(
-        (t): t is LoyaltyTier =>
-          typeof t === "object" &&
-          t !== null &&
-          typeof (t as LoyaltyTier).threshold === "number" &&
-          typeof (t as LoyaltyTier).percent === "number",
-      )
-    : [];
-  return {
-    enabled: r.enabled,
-    tiers: [...tiers].sort((a, b) => a.threshold - b.threshold),
-  };
-}
-
-export function useLoyalty() {
-  const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
-  const role = roleQuery.data;
-  return useQuery({
-    queryKey: ["loyalty", tenantId, role ?? "role-pending"],
-    enabled:
-      !!tenantId &&
-      roleQuery.isSuccess &&
-      (role === "owner" || role === "dispatcher"),
-    networkMode: "always",
-    queryFn: async (): Promise<LoyaltySettings> => {
-      const cached = safeLoadLoyalty();
-      const activeTenantId = tenantId as string;
-      try {
-        const { data, error } = await supabase
-          .from("tenant_loyalty_settings")
-          .select("*")
-          .eq("tenant_id", activeTenantId)
-          .maybeSingle();
-        if (error) throw serverOperationError("useLoyalty", error);
-        if (data) {
-          const settings = rowToLoyalty(data);
-          safeSaveLoyalty(settings);
-          return settings;
-        }
-        // No row yet — the device value seeds the first canonical save.
-        return cached;
-      } catch (error) {
-        const readError = asServerReadError(error);
-        if (
-          isConfirmedNetworkUnavailable(readError) ||
-          isMissingLoyaltySettingsContract(readError)
-        ) {
-          return cached;
-        }
-        throw error;
-      }
-    },
-  });
-}
-
-export function useSaveLoyalty() {
-  const tenantId = useTenantId();
-  const role = useCurrentRole().data;
-  const qc = useQueryClient();
-  const mutationKey = [
-    "loyalty",
-    tenantId,
-    role ?? "role-pending",
-  ] as const;
-  return useMutation({
-    mutationKey,
-    networkMode: "always",
-    mutationFn: async (s: LoyaltySettings) => {
-      if (role !== "owner") {
-        throw new Error("Настраивать программу лояльности может только владелец.");
-      }
-      if (!tenantId) throw new Error("Нет активной компании");
-      const { data, error } = await supabase
-        .from("tenant_loyalty_settings")
-        .upsert(
-          {
-            tenant_id: tenantId,
-            enabled: s.enabled,
-            tiers: s.tiers as unknown as LoyaltyRow["tiers"],
-          },
-          { onConflict: "tenant_id" },
-        )
-        .select("tenant_id")
-        .maybeSingle();
-      if (error) throw serverOperationError("useSaveLoyalty", error);
-      if (!data || data.tenant_id !== tenantId) {
-        throw new Error("Сохранение программы лояльности не подтверждено сервером");
-      }
-      return s;
-    },
-    onSuccess: (s) => {
-      safeSaveLoyalty(s);
-      qc.setQueryData(
-        ["loyalty", tenantId, role ?? "role-pending"],
-        s,
-      );
-    },
-    onSettled: () => {
-      if (qc.isMutating({ mutationKey }) <= 1) {
-        void qc.invalidateQueries({ queryKey: mutationKey });
-      }
-    },
-    meta: { errorHandled: true }, // call sites alert themselves
-  });
-}
-
 // ─── Location labels (location_labels, soft-retained server rows) ────
 type LocationLabelRow = Database["public"]["Tables"]["location_labels"]["Row"];
 
@@ -394,7 +266,30 @@ function rowsToLocationLabels(rows: LocationLabelRow[]): LocationLabel[] {
   return rows
     .filter((row) => row.is_active)
     .sort((a, b) => a.position - b.position)
-    .map((row) => ({ id: row.id, name: row.name }));
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      color: row.color ?? null,
+      icon: row.icon ?? null,
+      teamId: row.team_id ?? null,
+    }));
+}
+
+/** ТИПЫ ОБЪЕКТОВ КОМАНДЫ (владелец 30.09). Без команды — имена всей
+ *  компании без повторов (у каждой команды своя «Вилла»); строки до миграции
+ *  30.09 команды не знают и видны всем. */
+export function locationLabelsOfTeam(
+  labels: readonly LocationLabel[],
+  teamId: string | null,
+): LocationLabel[] {
+  if (teamId) return labels.filter((label) => !label.teamId || label.teamId === teamId);
+  const seen = new Set<string>();
+  return labels.filter((label) => {
+    const key = label.name.trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function locationLabelsToJson(
@@ -409,6 +304,10 @@ function locationLabelsToJson(
       id: label.id,
       name: label.name,
       position: positionById.get(label.id) ?? 0,
+      // Пустое значение отправляем строкой «»: RPC приводит её к NULL. Так
+      // снятие цвета доезжает до базы, а `undefined` просто выпал бы из JSON.
+      color: label.color ?? "",
+      icon: label.icon ?? "",
     }),
   );
 }
@@ -442,14 +341,16 @@ function cacheServerLocationLabels(
   }
 }
 
-export function useLocationLabels() {
+export function useLocationLabels(teamId: string | null = null) {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
   return useQuery({
     queryKey: ["location-labels", tenantId, role ?? "role-pending"],
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
     staleTime: 5 * 60 * 1000,
+    // Читается вся компания одним ключом, отдаётся — команда.
+    select: (labels: LocationLabel[]) => locationLabelsOfTeam(labels, teamId),
     queryFn: async (): Promise<LocationLabel[]> => {
       const activeTenantId = tenantId as string;
       const cached = loadCachedLocationLabels(activeTenantId);
@@ -499,9 +400,9 @@ export function useLocationLabels() {
   });
 }
 
-export function useSaveLocationLabels() {
+export function useSaveLocationLabels(teamId: string | null = null) {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (l: LocationLabel[]) => {
@@ -512,24 +413,33 @@ export function useSaveLocationLabels() {
       const normalized = l.map((label) => ({
         id: label.id.trim(),
         name: label.name.trim(),
+        // Вид едет вместе с именем: без этих двух полей правка цвета и значка
+        // доходила до RPC пустой, и справочник оставался серым.
+        color: label.color ?? null,
+        icon: label.icon ?? null,
       }));
       const cacheKey = [
         "location-labels",
         tenantId,
         role ?? "role-pending",
       ] as const;
-      const previous =
+      const all =
         qc.getQueryData<LocationLabel[]>(cacheKey) ??
         loadCachedLocationLabels(tenantId);
+      // Сравнивается и удаляется — только список ЭТОЙ команды.
+      const previous = teamId ? all.filter((label) => label.teamId === teamId) : all;
       const removeIds = locationLabelRemoveIds(previous, normalized);
       const upserts = positionedLocationLabelUpserts(previous, normalized);
-      const { data, error } = await supabase.rpc(
-        "apply_location_label_changes",
-        {
-          p_labels: locationLabelsToJson(upserts, normalized),
-          p_remove_ids: removeIds,
-        },
-      );
+      const { data, error } = teamId
+        ? await supabase.rpc("apply_team_location_label_changes", {
+            p_team_id: teamId,
+            p_labels: locationLabelsToJson(upserts, normalized),
+            p_remove_ids: removeIds,
+          })
+        : await supabase.rpc("apply_location_label_changes", {
+            p_labels: locationLabelsToJson(upserts, normalized),
+            p_remove_ids: removeIds,
+          });
       if (error) {
         // A missing rolling-deploy RPC is never a successful write. Keeping a
         // device-only edit here used to show “saved”, then lose it on the next
@@ -544,8 +454,12 @@ export function useSaveLocationLabels() {
       const canonical = rowsToLocationLabels(
         (data ?? []) as LocationLabelRow[],
       );
-      cacheServerLocationLabels(tenantId, canonical);
-      return canonical;
+      // Сервер вернул список команды — остальные команды в кэше не трогаем.
+      const merged = teamId
+        ? [...all.filter((label) => label.teamId !== teamId), ...canonical]
+        : canonical;
+      cacheServerLocationLabels(tenantId, merged);
+      return merged;
     },
     onSuccess: (l) =>
       qc.setQueryData(
@@ -563,7 +477,7 @@ function safeLoadPersonalEventTypes(): PersonalEventType[] {
   try {
     return loadPersonalEventTypes();
   } catch {
-    return [...SEED_PERSONAL_EVENT_TYPES];
+    return [];
   }
 }
 
@@ -584,20 +498,41 @@ function rowToEventType(r: EventTypeRow): PersonalEventType {
     defaultDuration: r.default_duration,
     allDay: r.all_day,
     order: r.position,
+    hidden: !r.is_active,
+    ...(r.team_id ? { teamId: r.team_id } : {}),
   };
 }
 
-export function usePersonalEventTypes() {
+/** Типы событий КОМАНДЫ (владелец 24.09: «у каждой команды свои»). Запрос
+ *  несёт справочник всей компании одним ключом, команда — `select`, как у
+ *  меток: смена команды не гонит новый запрос. Тип без команды (старый кэш
+ *  до миграции 20260924233000) виден всем командам, пока не перечитан. */
+export function usePersonalEventTypes(teamId?: string | null) {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
+  const select = useCallback(
+    (list: PersonalEventType[]) =>
+      teamId ? list.filter((type) => !type.teamId || type.teamId === teamId) : list,
+    [teamId],
+  );
   return useQuery({
     queryKey: ["event-types", tenantId, role ?? "role-pending"],
-    enabled:
-      !!tenantId &&
-      roleQuery.isSuccess &&
-      (role === "owner" || role === "dispatcher"),
+    select,
+    // Читают все члены компании; правят владелец и диспетчер (RLS).
+    enabled: !!tenantId && roleQuery.isSuccess && role != null,
     networkMode: "always",
+    // ЛЕНТА ТИПОВ РИСУЕТСЯ СРАЗУ, А НЕ ПОСЛЕ ОТВЕТА СЕРВЕРА (владелец
+    // 2026-09-08: «когда открываю событие, долго прогружается тип события —
+    // оно успевает открыться, а тип не успевает»). Форма события открывается
+    // мгновенно, а этот запрос ждал и роль, и сеть: секунду-полторы на месте
+    // блока стояла пустота, и человек успевал решить, что типов нет.
+    //
+    // Кэш на устройстве держит ровно тот же список (его пишет каждое
+    // успешное сохранение), поэтому он и есть первый кадр. `placeholderData`,
+    // а не `initialData`: запрос всё равно уходит и заменяет список свежим,
+    // просто человек этого не видит.
+    placeholderData: () => safeLoadPersonalEventTypes(),
     queryFn: async (): Promise<PersonalEventType[]> => {
       const cached = safeLoadPersonalEventTypes();
       const activeTenantId = tenantId as string;
@@ -613,8 +548,13 @@ export function usePersonalEventTypes() {
           .order("position");
         if (error) throw serverOperationError("usePersonalEventTypes", error);
         if ((data ?? []).length > 0) {
+          // СКРЫТЫЕ ЕДУТ ВМЕСТЕ С ЖИВЫМИ (владелец 2026-09-08): справочник
+          // показывает их серой строкой и возвращает одним касанием. Форма
+          // события отбирает `!hidden` сама — фильтр в запросе оставил бы
+          // экран настроек без того, чем он управляет. Удалённые (у них своя
+          // колонка `deleted_at`) не приезжают вовсе.
           const list = (data ?? [])
-            .filter((row) => row.is_active)
+            .filter((row) => row.deleted_at == null)
             .map(rowToEventType);
           safeSavePersonalEventTypes(list);
           return list;
@@ -637,7 +577,7 @@ export function usePersonalEventTypes() {
 
 export function useSavePersonalEventTypes() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   const mutationKey = [
     "event-types",
@@ -654,33 +594,23 @@ export function useSavePersonalEventTypes() {
     mutationFn: async ({
       types,
       removeIds = [],
+      teamId,
     }: {
+      /** Типы ОДНОЙ команды — её полный список в порядке показа. */
       types: PersonalEventType[];
       /** Ids the user explicitly deleted in THIS action. */
       removeIds?: string[];
+      /** Команда, чьи это типы. */
+      teamId: string;
     }) => {
       if (!tenantId) throw new Error("Нет активной компании");
-      if (role !== "owner" && role !== "dispatcher") {
+      // Сотрудник — по праву «Записи» своей команды (30.09): чужую команду
+      // отобьёт политика `personal_event_types_write_access`.
+      if (role !== "owner" && role !== "dispatcher" && role !== "master") {
         throw new Error("Роль сотрудника не позволяет менять типы событий.");
       }
-      let list = types;
-      const retiredSeedIds: string[] = [];
-      // The fixed seed ids are identical for every user, while rows are
-      // author-scoped. Re-key deterministically before the first server save.
-      const seedIds = new Set(SEED_PERSONAL_EVENT_TYPES.map((s) => s.id));
-      if (types.some((t) => seedIds.has(t.id))) {
-        const { data: auth, error: authError } = await supabase.auth.getSession();
-        if (authError) {
-          throw serverOperationError("useSavePersonalEventTypes", authError);
-        }
-        const uid = auth.session?.user.id;
-        if (!uid) throw new Error("Сессия пользователя недоступна");
-        list = types.map((t) => {
-          if (!seedIds.has(t.id)) return t;
-          retiredSeedIds.push(t.id);
-          return { ...t, id: `pet-${uid}-${t.id}` };
-        });
-      }
+      // Заготовок с общими id больше нет (24.09) — перекладывать нечего.
+      const list = types;
 
       if (list.length > 0) {
         const { data, error } = await supabase
@@ -695,7 +625,12 @@ export function useSavePersonalEventTypes() {
               default_duration: t.defaultDuration,
               all_day: t.allDay,
               position: i,
-              is_active: true,
+              is_active: !t.hidden,
+              team_id: teamId,
+              // Строка возвращается из удалённых, если её id снова сохранили:
+              // «Показать» у скрытой и повторное заведение того же типа
+              // должны воскрешать одну и ту же запись, а не спорить с ней.
+              deleted_at: null,
             })),
             { onConflict: "tenant_id,id" },
           )
@@ -708,12 +643,12 @@ export function useSavePersonalEventTypes() {
           throw new Error("Сохранение типов событий не подтверждено сервером");
         }
       }
-      // Soft-delete only explicit removals plus this user's retired seed ids.
-      const gone = [...new Set([...removeIds, ...retiredSeedIds])];
+      // Soft-delete only explicit removals.
+      const gone = [...new Set(removeIds)];
       if (gone.length > 0) {
         const { error: deleteError } = await supabase
           .from("personal_event_types")
-          .update({ is_active: false })
+          .update({ is_active: false, deleted_at: new Date().toISOString() })
           .eq("tenant_id", tenantId)
           .in("id", gone);
         if (deleteError) {
@@ -723,12 +658,30 @@ export function useSavePersonalEventTypes() {
           );
         }
       }
-      return list;
+      return { list: list.map((t) => ({ ...t, teamId })), teamId };
     },
-    onSuccess: (types) => {
+    // ОПТИМИСТИЧНО (аудит 29.09: «создание типа крутится 4–6 с»): список на
+    // экране меняется сразу, сервер догоняет; отказ возвращает прежний.
+    onMutate: async ({ types, teamId }) => {
+      await qc.cancelQueries({ queryKey: mutationKey });
+      const prev = qc.getQueryData<PersonalEventType[]>(mutationKey);
+      const all = prev ?? [];
+      qc.setQueryData<PersonalEventType[]>(mutationKey, [
+        ...all.filter((t) => t.teamId && t.teamId !== teamId),
+        ...types.map((t) => ({ ...t, teamId })),
+      ]);
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(mutationKey, ctx.prev);
+    },
+    onSuccess: ({ list, teamId }) => {
       // Cache writes happen only after every canonical server write succeeds.
-      safeSavePersonalEventTypes(types);
-      qc.setQueryData(mutationKey, types);
+      // В кэше справочник ВСЕЙ компании: заменяем типы только этой команды.
+      const all = qc.getQueryData<PersonalEventType[]>(mutationKey) ?? [];
+      const next = [...all.filter((t) => t.teamId && t.teamId !== teamId), ...list];
+      safeSavePersonalEventTypes(next);
+      qc.setQueryData(mutationKey, next);
     },
     onSettled: () => {
       if (qc.isMutating({ mutationKey }) <= 1) {

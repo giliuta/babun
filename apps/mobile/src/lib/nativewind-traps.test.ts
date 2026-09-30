@@ -58,14 +58,27 @@ const TRAPS: { tag: string; danger: RegExp; hint: string }[] = [
 // клиенты, календарь, склад). Они правятся общей уборкой отдельной
 // задачей; пока правило держит только экраны счетов, где деньги
 // пересчитываются чаще всего.
-const TABULAR_SCOPE = [
-  "app/accounts",
-  "src/features/finances/AccountCreateSheet.tsx",
-  "src/features/finances/TransferSheet.tsx",
-];
+// ОБЛАСТЬ РАСШИРЕНА ДО ВСЕГО ПРИЛОЖЕНИЯ (2026-09-10). Прежде тест сторожил
+// только счета и переводы — там долг закрыли раньше, — а в остальном продукте
+// оставалось 31 такое место в 12 файлах: сетка дня, лента списка, шапка
+// календаря, финансы дня, строки инвойса, разрез прибыли, шаблоны. Долг закрыт
+// целиком, и сторожить теперь есть смысл везде: класс, который ничего не
+// делает, не должен вернуться ни в один файл.
+const TABULAR_SCOPE = ["app", "src"];
+
+/** Комментарии — не код. Про эти самые ловушки в файлах написано словами
+ *  («className="tabular-nums" ничего не делает»), и без вычистки тест ловил
+ *  собственные объяснения. Режем блочные комментарии и строчные, начинающиеся
+ *  с начала строки: `//` внутри значения атрибута так не стоит никогда. */
+function withoutComments(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+    .replace(/^[ \t]*\/\/.*$/gm, "");
+}
 
 /** Классы всех `className` файла вместе с номером строки. */
-function classNamesOf(src: string): { cls: string; line: number }[] {
+function classNamesOf(raw: string): { cls: string; line: number }[] {
+  const src = withoutComments(raw);
   const out: { cls: string; line: number }[] = [];
   for (const m of src.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})/g)) {
     out.push({
@@ -112,6 +125,37 @@ describe("ловушки nativewind", () => {
             );
           }
         }
+      }
+    }
+    assert.deepEqual(offenders, []);
+  });
+
+  // КРУПНОЕ ПОЛЕ ВВОДА БЕЗ `lineHeight` ТЕРЯЕТ ВЕРХ ГЛИФОВ.
+  //
+  // В этом стеке TextInput без явного межстрочного интервала получает строку
+  // НИЖЕ своего кегля, и iOS срезает верхнюю половину знаков. На поле суммы
+  // (28pt) «€ 0» рисовалось как «€ ᴗ»; проба подсказкой «0 8 5 X» дала
+  // «ᴜ ȣ Ɔ ʌ» — резало ВСЕ знаки одинаково, а соседний «€» обычным `Text`
+  // при том же кегле оставался цел (2026-09-10).
+  //
+  // Именованный класс (`text-3xl`) несёт интервал с собой, поэтому прежний код
+  // работал случайно; арбитрарный `text-[28px]` и `fontSize` в стиле — нет.
+  // Порог 20pt: мелкие поля живут без интервала годами и ничего не теряют.
+  test("у крупного поля ввода задан lineHeight", () => {
+    const root = join(__dirname, "..", "..");
+    const offenders: string[] = [];
+    for (const file of [...walk(join(root, "src")), ...walk(join(root, "app"))]) {
+      const src = readFileSync(file, "utf8");
+      for (const m of src.matchAll(/<TextInput\b[\s\S]{0,2500}?\/>/g)) {
+        const block = m[0];
+        const size = /fontSize:\s*(\d+)/.exec(block);
+        const big =
+          (size && Number(size[1]) >= 20) || /text-\[(2[0-9]|[3-9][0-9])px\]/.test(block);
+        if (!big || /lineHeight/.test(block)) continue;
+        const line = src.slice(0, m.index).split("\n").length;
+        offenders.push(
+          `${file.replace(root + "/", "")}:${line} — крупное поле без lineHeight: iOS срежет верх глифов`,
+        );
       }
     }
     assert.deepEqual(offenders, []);

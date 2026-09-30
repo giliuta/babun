@@ -1,10 +1,10 @@
 import { useRouter } from "expo-router";
 import { Phone } from "lucide-react-native";
-import type { Client } from "@babun/shared/local/clients";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import {
   contactFieldDef,
   type ContactFieldId,
+  type ContactHolder,
 } from "@/features/clients/contact-fields";
 import { useEnabledContactFields } from "@/features/clients/contact-ways";
 import { useReferenceHref } from "@/features/clients/reference-href";
@@ -19,6 +19,9 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Уже заполненное в листе не показывается: строка такого способа связи и так
 // стоит на карточке, и второй раз его не заводят.
+//
+// ЛЮДЕЙ ЗДЕСЬ НЕТ: у них свой блок «Люди» с дверью «Добавить человека»
+// (владелец 22.09). Этот лист — только способы связи ЭТОГО клиента.
 
 export type AddContactChoice = "phone" | ContactFieldId;
 
@@ -27,17 +30,24 @@ export function AddContactSheet({
   client,
   onPick,
   onClose,
+  onExited,
+  teamId = null,
 }: {
   visible: boolean;
-  client: Client;
+  client: ContactHolder;
   onPick: (choice: AddContactChoice) => void;
   onClose: () => void;
+  /** Лист ушёл — сюда страница вешает следующую шторку (выбор человека). */
+  onExited?: () => void;
+  /** Команда клиента — её «Способы связи» (у каждой команды свои, 30.09);
+   *  нет — набор компании. */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
   const router = useRouter();
   // Из записи справочник открывается её сиблингом (см. `useReferenceHref`).
   const channelsHref = useReferenceHref().channels;
-  const enabled = useEnabledContactFields();
+  const enabled = useEnabledContactFields(teamId);
 
   // Номер — всегда первым и всегда доступен: их у клиента может быть сколько
   // угодно, а мессенджер каждого вида ровно один.
@@ -78,6 +88,7 @@ export function AddContactSheet({
       onSettings={() => router.push(channelsHref)}
       settingsLabel="Способы связи"
       onClose={onClose}
+      onExited={onExited}
     />
   );
 }

@@ -51,6 +51,29 @@ export function formatInvoiceDate(
   }).format(date);
 }
 
+/** Черновик позиции счёта. Числа держим строками, пока поле в фокусе:
+ *  переписывать значение на каждый ввод роняет каретку в конец строки —
+ *  число из строки достают на выходе из поля (`parseDecimal`/`parseMoneyAmount`).
+ *  Тип жил в `InvoiceLineEditor.tsx`; сам компонент нигде не рендерился и
+ *  снесён 2026-09-20 (канон «мёртвое сносится в том же заходе»), тип переехал
+ *  сюда — в общий модуль, который уже читают и форма, и бумага. */
+export interface EditableInvoiceLine {
+  id: string;
+  title: string;
+  /** Что входит в работу. Приезжает из описания услуги и дальше живёт своей
+   *  жизнью: правка в документе прайс не трогает. */
+  description?: string | null;
+  qty: string;
+  /** Единица количества: «4 м» на бумаге. Приезжает из услуги и с этого
+   *  момента принадлежит документу — как и описание. */
+  unit?: string | null;
+  unitPrice: string;
+  /** Услуга прайса, из которой строка. По ней выбор услуг отмечает её и
+   *  держит количество — тот же выбор, что в записи. `null` — строка пришла
+   *  из операции или старого документа и прайсу не принадлежит. */
+  serviceId?: string | null;
+}
+
 export function parseDecimal(value: string): number | null {
   const normalized = value.replace(/\s/g, "").replace(",", ".");
   if (!normalized || !/^\d+(?:\.\d{0,3})?$/.test(normalized)) return null;
@@ -72,7 +95,17 @@ export function parseMoneyAmount(value: string): number | null {
   return cents == null ? null : cents / 100;
 }
 
+/**
+ * РЕЖИМ НДС ДОКУМЕНТА — С САМОГО ДОКУМЕНТА, ПОКА ОН ЕСТЬ.
+ *
+ * С 20260915120000 сервер пишет в `invoices.vat_mode` ровно то, чем посчитал
+ * бумагу. У выписанных раньше колонка пуста — для них режим и приходится
+ * восстанавливать по суммам: к чему ближе сумма строк, к итогу («в цене») или
+ * к нетто («сверху»). Догадка осталась только для них, и она не обязана быть
+ * правдой — поэтому колонка сильнее.
+ */
 export function invoiceVatMode(invoice: InvoiceLedgerWithLines): InvoiceVatMode {
+  if (invoice.vat_mode) return invoice.vat_mode;
   if (invoice.vat_percent <= 0 || invoice.vat_amount <= 0) return "off";
   const lineTotal = invoice.lines.reduce((sum, line) => sum + line.total, 0);
   return Math.abs(lineTotal - invoice.total) < Math.abs(lineTotal - invoice.subtotal_net)

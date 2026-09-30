@@ -9,11 +9,10 @@ import {
   amountProblem,
   blockCaption,
   closesVisit,
-  invoiceOverdue,
-  invoiceSubtitle,
   outstandingCents,
   paidAtLabel,
   paidTileIntent,
+  paymentMath,
   paymentRows,
   recordedToast,
   visitStarted,
@@ -62,6 +61,86 @@ describe("outstanding and amount checks", () => {
   });
   test("refunded record owes nothing", () => {
     assert.equal(outstandingCents(apt({ payment_status: "refunded" })), 0);
+  });
+});
+
+describe("деньги блока считаются по итогу ФОРМЫ", () => {
+  // Владелец 2026-09-12: оплаченная запись (160 из 160), дописал услуги до
+  // €280 — блок продолжал говорить «Оплачено» и гасил все плитки, кроме уже
+  // оплаченной. Остаток брался из базы, а в базе лежит прошлая версия записи.
+  const paidFully = apt({
+    total_amount: 160,
+    paid_amount: 160,
+    payment_status: "paid",
+    payments: [
+      { id: "p1", method: "cash", amount: 160, paid_at: "2026-09-11T08:00:00.000Z" },
+    ],
+  });
+
+  test("дописали услуги — разница становится остатком СРАЗУ, до сохранения", () => {
+    assert.deepEqual(paymentMath(paidFully, 280), {
+      outstanding: 12000,
+      overpaid: 0,
+    });
+  });
+
+  test("итог не трогали — ответ тот же, что по сохранённой записи", () => {
+    assert.deepEqual(paymentMath(paidFully, 160), { outstanding: 0, overpaid: 0 });
+    assert.equal(paymentMath(apt(), 135).outstanding, outstandingCents(apt()));
+  });
+
+  test("опустили итог ниже оплаченного — переплата видна сразу", () => {
+    assert.deepEqual(paymentMath(paidFully, 100), {
+      outstanding: 0,
+      overpaid: 6000,
+    });
+  });
+
+  test("возвращённая запись не должна и не переплачена ни при каком итоге", () => {
+    const refunded = apt({ payment_status: "refunded", paid_amount: 160 });
+    assert.deepEqual(paymentMath(refunded, 280), { outstanding: 0, overpaid: 0 });
+  });
+
+  test("новая запись: остаток равен всему итогу формы, денег ещё нет", () => {
+    assert.deepEqual(paymentMath(null, 47.5), { outstanding: 4750, overpaid: 0 });
+    assert.deepEqual(paymentMath(null, 0), { outstanding: 0, overpaid: 0 });
+  });
+
+  test("пока итог не сохранён, строка просит сохранить, а не объявляет оплату", () => {
+    // Деньги принимает сервер, а он считает долг по СВОЕЙ строке: платёж на
+    // ещё не сохранённый остаток он отобьёт «По заявке нечего оплачивать».
+    const caption = blockCaption({
+      hasTeam: true,
+      hasAppointment: true,
+      visitCompleted: true,
+      outstanding: 12000,
+      rowsCount: 1,
+      amountMode: false,
+      started: true,
+      hasPending: false,
+      outstandingLabel: "€120,00",
+      billUnsaved: true,
+    });
+    assert.deepEqual(caption, {
+      text: "Итог изменился — сохраните запись",
+      tone: "warning",
+    });
+  });
+
+  test("сохранённый итог — обычная жизнь строки: долг называется долгом", () => {
+    const caption = blockCaption({
+      hasTeam: true,
+      hasAppointment: true,
+      visitCompleted: true,
+      outstanding: 12000,
+      rowsCount: 1,
+      amountMode: false,
+      started: true,
+      hasPending: false,
+      outstandingLabel: "€120,00",
+      billUnsaved: false,
+    });
+    assert.deepEqual(caption, { text: "Долг €120,00", tone: "warning" });
   });
   test("input parses to cents and empty/garbage is zero", () => {
     assert.equal(amountCentsFromInput("135"), 13500);
@@ -174,7 +253,9 @@ describe("blockCaption", () => {
   test("amount field open needs no caption; not started, remaining, debt, pending", () => {
     assert.equal(blockCaption({ ...base, amountMode: true }), null);
     assert.equal(blockCaption({ ...base, amountMode: true, started: false }), null);
-    assert.equal(blockCaption({ ...base, started: false })?.text, "До визита: предоплата или инвойс");
+    // Плитки принимают деньги и до визита — подпись называет сумму, а не
+    // отсылает к «предоплате или инвойсу» (владелец 2026-09-24).
+    assert.deepEqual(blockCaption({ ...base, started: false }), { text: "К оплате €135", tone: "neutral" });
     assert.deepEqual(blockCaption({ ...base, rowsCount: 1, outstanding: 3500, outstandingLabel: "€35" }), { text: "Остаток €35", tone: "warning" });
     assert.deepEqual(blockCaption({ ...base, visitCompleted: true }), { text: "Долг €135", tone: "warning" });
     assert.equal(blockCaption({ ...base, hasAppointment: false, hasPending: true })?.text, "Запишется при создании");
@@ -203,13 +284,5 @@ describe("labels", () => {
     assert.equal(recordedToast({ kind: "settlement", amount: 50, already: 0, accountName: "Наличные" }), "Оплачено €50 · Наличные");
     assert.equal(recordedToast({ kind: "prepayment", amount: 50, already: 0, accountName: "Карта" }), "Предоплата €50 · Карта");
     assert.equal(recordedToast({ kind: "settlement", amount: 50, already: 50, accountName: "Наличные" }), "+€50 · Наличные · всего €100");
-  });
-  test("invoiceSubtitle", () => {
-    assert.equal(invoiceSubtitle({ status: "paid", due_on: "2026-09-10", total: 135 }), "Оплачен · €135");
-    assert.equal(invoiceSubtitle({ status: "issued", due_on: null, total: 135 }), "Ждёт оплаты · €135");
-    assert.match(invoiceSubtitle({ status: "issued", due_on: "2026-09-10", total: 135 }, "2026-09-06"), /^Ждёт оплаты до .*10 сентября · €135$/);
-    assert.match(invoiceSubtitle({ status: "issued", due_on: "2026-09-01", total: 135 }, "2026-09-06"), /^Просрочен с .*1 сентября · €135$/);
-    assert.equal(invoiceOverdue({ status: "issued", due_on: "2026-09-01" }, "2026-09-06"), true);
-    assert.equal(invoiceOverdue({ status: "paid", due_on: "2026-09-01" }, "2026-09-06"), false);
   });
 });

@@ -1,3 +1,5 @@
+import { hexToOklch, oklchToHex } from "./oklch";
+
 type RGB = readonly [red: number, green: number, blue: number];
 
 function parseHex(value: string): RGB | null {
@@ -219,6 +221,86 @@ export function edgeColor(hue: string): string {
  *  затемнённый против самой тёмной заливки палитры. */
 export function markColor(token: string): string {
   return deepen(token, [GRID_WORST, fillOver("#4B1D82")]);
+}
+
+// ═══ ПЛОТНЫЙ БЛОК ЗАПИСИ (владелец 2026-09-24, вариант 7) ═══
+//
+// «Мне не нравится, что запись полупрозрачная, видно всё; хочу насыщенный цвет
+// и контраст» — из пяти показанных вживую вариантов владелец выделил чистый
+// цвет (4) и глубокий цвет с белым текстом (5), выбор между ними доверил мне.
+// Вариант 7 взял у четвёртого сам цвет, у пятого — белый текст на каждом блоке:
+// календарь читается одной системой, а не пёстрой смесью чёрных и белых имён.
+//
+// Цвет затемняется ТОЛЬКО по светлоте OKLCH (`oklch.ts`) и ровно до порога,
+// где белое имя читается: янтарь остаётся оранжевым, лаванда — сиреневой. У
+// пятого варианта затемнение к чёрному топило их в коричневый и серый.
+//
+// ПОРОГ 3.3 : 1, А НЕ 4.5. Имя в блоке — 13pt/700, это рубеж «крупного текста»
+// WCAG (14pt жирным → 3 : 1); 3.3 даёт запас сверх него. При 4.5 светлые
+// оттенки палитры (янтарный, небесный, мятный) темнеют до неузнаваемости —
+// ровно то, от чего вариант 5 и уходил. Вторая итерация того же дня
+// (владелец: «насыщенность добавить, контур») опустила порог с 3.6 и подняла
+// сочность на 18 %: цвет ярче, а край блоку даёт контур `blockContour`.
+
+/** Белое имя обязано взять к заливке блока хотя бы это. */
+export const BLOCK_TEXT_MIN = 3.3;
+/** Текст на плотном блоке — белый, всегда. */
+export const BLOCK_TEXT = "#ffffff";
+
+/** Прибавка сочности плотного блока (OKLCH C × это). */
+export const BLOCK_CHROMA = 1.18;
+
+const solidCache = new Map<string, string>();
+
+/** Заливка блока: цвет записи, затемнённый по светлоте OKLCH до порога
+ *  `BLOCK_TEXT_MIN` белого текста. Уже тёмный цвет не трогается. */
+export function blockSolid(hue: string): string {
+  const hit = solidCache.get(hue);
+  if (hit) return hit;
+  const rgb = parseHex(hue);
+  let out = rgb ? toHex(rgb) : hue;
+  const lch = rgb ? hexToOklch(out) : null;
+  if (lch && contrastRatio(BLOCK_TEXT, out) < BLOCK_TEXT_MIN) {
+    const [l0, c, h] = lch;
+    // Сочнее исходного на 18 %: без этого тёмный цвет выглядит пыльным.
+    // Гамут подрежет лишнее, тон при этом держится.
+    for (let l = l0; l > 0.2; l -= 0.005) {
+      out = oklchToHex([l, c * BLOCK_CHROMA, h]);
+      if (contrastRatio(BLOCK_TEXT, out) >= BLOCK_TEXT_MIN) break;
+    }
+  } else if (lch) {
+    // Уже тёмный цвет не темнеет, но сочность получает ту же прибавку —
+    // иначе соседние блоки говорили бы разной насыщенностью. Если белое имя
+    // при этом теряет порог, остаётся исходный цвет.
+    const richer = oklchToHex([lch[0], lch[1] * BLOCK_CHROMA, lch[2]]);
+    if (contrastRatio(BLOCK_TEXT, richer) >= BLOCK_TEXT_MIN) out = richer;
+  }
+  solidCache.set(hue, out);
+  return out;
+}
+
+/** Заливка под пальцем — та же, на ступень глубже. Отклик цветом, а не
+ *  прозрачностью: прозрачность гасила бы и имя. */
+export function blockPressed(hue: string): string {
+  const lch = hexToOklch(blockSolid(hue));
+  if (!lch) return hue;
+  return oklchToHex([Math.max(0.2, lch[0] - 0.07), lch[1], lch[2]]);
+}
+
+/** Контур блока: его же тон, на 0.2 темнее по светлоте OKLCH. Отделяет
+ *  соседние записи и даёт плотной заливке край (вариант 3 второй итерации). */
+export function blockContour(hue: string): string {
+  const lch = hexToOklch(blockSolid(hue));
+  if (!lch) return CANCELLED_EDGE;
+  return oklchToHex([Math.max(0.2, lch[0] - 0.2), lch[1], lch[2]]);
+}
+
+/** Кант просрочки: тот же тон, почти чёрный. На плотной заливке цветной кант
+ *  невидим, а тёмный ободок того же тона читается и сохраняет «чей» блок. */
+export function blockOverdueEdge(hue: string): string {
+  const lch = hexToOklch(blockSolid(hue));
+  if (!lch) return CANCELLED_EDGE;
+  return oklchToHex([0.2, Math.min(lch[1], 0.1), lch[2]]);
 }
 
 /** `rgba()`-строка для анимации заливки: восьмизначный hex Reanimated

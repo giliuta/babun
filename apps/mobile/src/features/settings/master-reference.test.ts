@@ -154,5 +154,6 @@ describe("master reference projections", () => {
     assert.equal(master.phone, "+35799111222");
     assert.deepEqual(master.profile, {});
     assert.equal(master.created_by, null);
+    assert.equal(master.user_id, null);
   });
 });

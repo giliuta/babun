@@ -6,23 +6,22 @@
 // (client-stats selector) and `serviceDue` (service-due selector), then
 // renders the page as ONE STACK OF ROWS (ЗАКОН СТРОКИ, DESIGN-SYSTEM.md):
 //
-//   ClientHeader (имя · телефон · доп. номера) · «Записать»
-//   · Объекты · Заметки и документация · Личное
-//   · Мессенджеры · Личное · О клиенте · Заметки
+//   Клиент (ClientHeader) · Заметка клиента · Люди · История · Объекты
+//   · Файлы · Реквизиты · Метка | Тег · Личное (docs/BLOCKS.md §9.1)
 //
 // СОЗДАНИЕ = ЭТА ЖЕ СТРАНИЦА (решение владельца 2026-07-13, уточнено
 // 2026-07-14): роут /clients/new попадает сюда с id="new" → карточка
 // работает с ЧЕРНОВИКОМ (createBlankClient) через локальный update.
 // Шапка НЕ подменяется формой — это тот же ClientHeader с `draft`:
 // те же поля пустые, телефон с автофокусом и live-дедупом по phone_e164
-// (clients-99 F1.5/F2.7). «Готово» создаёт клиента и router.replace
-// приводит на этот же экран уже с сервера.
+// (clients-99 F1.5/F2.7). «Создать клиента» в футере создаёт его, и
+// router.replace приводит на этот же экран уже с сервера.
 //
 // ЧТО ВИДНО В ЧЕРНОВИКЕ: ВСЯ страница (владелец 2026-07-26: «добавить
 // клиента открывается чётко вся страница, как будет выглядеть в будущем»).
 // Каждое поле этих блоков проходит белый список create_client_with_tags,
-// то есть пишет в тот же объект, который уедет в базу по «Готово».
-// Единственное исключение — «Документация»: путь в хранилище строится по id
+// то есть пишет в тот же объект, который уедет в базу по «Создать клиента».
+// Единственное исключение — блок «Файлы»: путь в хранилище строится по id
 // клиента, которого ещё нет. Действия, которым нужен реальный id
 // («Записать»), не спрятаны, а пригашены с подписью-причиной.
 //
@@ -30,7 +29,7 @@
 // Linking sms:, share via RN Share, blacklist toggle via update) — the
 // blocks stay free of screen-level concerns.
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Linking,
@@ -41,12 +40,23 @@ import {
   Text,
   View,
 } from "react-native";
-import { Archive, ChevronRight, Phone, RotateCcw } from "lucide-react-native";
-import { Stack, useLocalSearchParams, usePathname, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Archive, ChevronRight, Phone, UserPlus } from "lucide-react-native";
+import {
+  Stack,
+  useLocalSearchParams,
+  useNavigation,
+  usePathname,
+  useRouter,
+} from "expo-router";
+import { usePreventRemove } from "@react-navigation/native";
 import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
+import { Button } from "@/components/ui/Button";
+import { ChooseRow } from "@/components/ui/ChooseRow";
+import { NavRow } from "@/components/ui/card-rows";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -59,53 +69,120 @@ import {
   useUpdateClient,
 } from "@/features/clients/queries";
 import { useArchiveWithUndo } from "@/features/clients/archive-undo";
+import { archivedVisitTag } from "@/features/clients/archived-visit";
+import { useTeams } from "@/features/reference/queries";
 import { daysLeft, daysWordRu } from "@/features/clients/HiddenClientsScreen";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { useAllServices } from "@/features/services/queries";
 import ClientHeader from "@/features/clients/ClientHeader";
+import { clientSubParams } from "@/features/clients/clients-company";
+import NotesBlock from "@/features/clients/blocks/NotesBlock";
+import { ClientLabelTags } from "@/features/clients/ClientLabelTags";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
 import { ClientDetailChrome } from "@/features/clients/ClientDetailChrome";
+import { ClientScreenFooter } from "@/features/clients/ClientScreenFooter";
 import { RemindSheet } from "@/features/clients/RemindSheet";
 import { ClientDraftNotice } from "@/features/clients/ClientDraftNotice";
 import { DuplicateNotice } from "@/features/clients/DuplicateNotice";
 import { ClientProfileBlocks } from "@/features/clients/ClientProfileBlocks";
-import { useClientDraft } from "@/features/clients/useClientDraft";
+import {
+  PEOPLE_ON_CARD,
+  useClientPeople,
+} from "@/features/clients/ClientPeopleDoor";
+import { useMergeDuplicate } from "@/features/clients/use-merge-duplicate";
+import { useSplitClient } from "@/features/clients/use-split-client";
+import { parseSplit } from "@/features/clients/split-client";
+import {
+  draftLinkFromParams,
+  useClientDraft,
+  type DraftLinkParams,
+  type DraftOpen,
+} from "@/features/clients/useClientDraft";
 import ClientContactRow from "@/features/clients/ClientContactRow";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { SmsComposeProvider } from "@/features/sms/SmsCompose";
+import { SmsClientBlock } from "@/features/sms/SmsClientBlock";
+import { clientSmsVars } from "@/features/sms/client-sms-vars";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { useRevealedClient } from "@/features/clients/revealed-contacts";
+import { useCardAccess } from "@/features/clients/use-card-access";
+import { useTenantId } from "@/lib/tenant";
+import { shareText } from "@/features/clients/client-share";
+import {
+  useClientsCapabilities,
+  useClientsScopeOrNull,
+} from "@/features/clients/company-scope";
 import { humanDay } from "@/features/appointments/helpers";
 import { notify } from "@/lib/notify";
+import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { deliverCreatedClient } from "@/features/appointments/pending-client";
 
-export default function ClientDetailScreen() {
+// КАРТОЧКА ОТКРЫВАЕТСЯ В КОМПАНИИ СВОЕЙ СТРОКИ (STORY-082): `?tenant=` несёт
+// компанию, ворота решают, чья она, и объявляют источник блокам.
+export default function ClientDetailRoute() {
+  return (
+    <ClientsCompanyRoute kind="card">
+      <ClientDetailScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+/** Тело карточки без ворот: общий адрес `/client` оборачивает его своими —
+ *  там компания всегда календарная. */
+export function ClientDetailScreen() {
   const t = useThemeColors();
+  const insets = useSafeAreaInsets();
   const {
     id,
     name: prefillName,
     phone: prefillPhone,
-  } = useLocalSearchParams<{ id: string; name?: string; phone?: string }>();
+    open: openOnArrive,
+    split: splitParam,
+    ...linkParams
+  } = useLocalSearchParams<{ id: string; open?: string; split?: string } & DraftLinkParams>();
   const router = useRouter();
   const pathname = usePathname();
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
+  const scope = useClientsScopeOrNull();
+  const caps = useClientsCapabilities();
 
   // «new» → черновик без запросов; иначе обычная карточка с сервера.
   const isDraft = id === "new";
-  // Черновик, открытый ПОВЕРХ записи (`/book/client`): «Готово» отдаёт
-  // клиента записи и уходит «назад», а не на карточку созданного. Режим
+  // Связь, с которой черновик открыла дверь «Создать клиента» в шторке людей
+  // (ТЗ, сценарий г-б): она едет адресом и уходит в базу вместе с клиентом.
+  const draftLink = isDraft ? draftLinkFromParams(linkParams) : null;
+  // Черновик, открытый ПОВЕРХ записи (`/book/client`): «Создать клиента»
+  // отдаёт клиента записи и уходит «назад», а не на карточку созданного. Режим
   // читается по маршруту, а не по флагу в памяти: флаг пережил бы уход с
   // экрана и подставил бы следующего клиента, заведённого уже из списка.
-  const forBooking = isDraft && pathname.startsWith("/book");
+  // ОТДАТЬ СОЗДАННОГО ТОМУ, КТО ПОЗВАЛ. Карточка, открытая общим адресом
+  // `/client`, лежит ПОВЕРХ звавшего (запись, шторка долга): «Создать» кладёт id
+  // в ящик и уходит «назад», а не на карточку нового клиента. Открытая своим
+  // маршрутом внутри вкладки «Клиенты» — ведёт себя как обычно.
+  //
+  // Читается по маршруту, а не по флагу в памяти: флаг пережил бы уход с
+  // экрана и подставил бы следующего клиента, заведённого уже из списка.
+  //
+  // ЧЕРНОВИК СО СВЯЗЬЮ ЗВАВШЕМУ НЕ ОТДАЁТСЯ. Его открыла карточка-группа, а
+  // не запись под ней: жилец Натальи, положенный в ящик, подставился бы
+  // записи клиентом. Он возвращается к Наталье (`useClientDraft.save`).
+  const handBack = isDraft && pathname === "/client" && !draftLink;
   const clientQuery = useClient(isDraft ? "" : id);
   const {
-    data: client,
+    data: clientRow,
     isLoading,
     isError: clientFailed,
     error: clientError,
     isRefetching: clientRetrying,
     refetch: retryClient,
   } = clientQuery;
+  // Номер, открытый сотрудником дверью (30.09), — поверх строки окна: сам
+  // список контактов не несёт, открытое живёт только в памяти.
+  const activeTenantId = useTenantId();
+  const client = useRevealedClient(clientRow, scope?.tenantId ?? activeTenantId);
   const updateClient = useUpdateClient(isDraft ? "" : id);
   const archiveWithUndo = useArchiveWithUndo();
   const restoreClient = useRestoreClient();
@@ -143,13 +220,20 @@ export default function ClientDetailScreen() {
     e164,
     isDirty: isDraftDirty,
     canSave,
+    linked: draftLinked,
+    phoneTyped: draftPhoneTyped,
     isSaving,
     onPhoneChange: onDraftPhoneChange,
+    onNameChange: onDraftNameChange,
     save: saveDraft,
+    isSavingNow,
   } = useClientDraft(isDraft, {
-    forBooking,
+    forBooking: handBack,
     name: prefillName,
     phone: prefillPhone,
+    link: draftLink,
+    // «Разделить клиента»: после создания номер уходит из исходной карточки.
+    split: isDraft ? parseSplit(splitParam) : null,
   });
 
   // Единый persist-путь для блоков: черновик — локально, карточка — PATCH.
@@ -168,8 +252,104 @@ export default function ClientDetailScreen() {
     }
   };
 
+  // ПРИЧИНА, ПО КОТОРОЙ КНОПКА ЧЕРНОВИКА ПОГАШЕНА — словами, над ней.
+  // Порядок тот же, что на экране: сперва имя, потом номер, потом дубль.
+  //
+  // Имя дубля стоит ПОСЛЕ двоеточия, в именительном: «у Павла Иванова»
+  // требует склонять чужое имя, а склонять его нечем — «у Павел Иванов»
+  // читалось бы поломкой.
+  const duplicateName = duplicate?.full_name.trim() ?? "";
+  const draftReason = !isDraft
+    ? null
+    : // Номер занят — главная причина: имя дописывать бесполезно, создать
+      // всё равно нельзя (владелец 30.09: «не даёт сдать дубль»).
+      duplicate
+      ? duplicateName
+        ? `Такой номер уже есть: ${duplicateName}`
+        : "Такой номер уже есть"
+      : !draft.full_name.trim()
+      ? "Впишите имя"
+      : e164 === null && (!draftLinked || draftPhoneTyped)
+        ? // Со связью номер необязателен (`draftCanSave`), но начатый и
+          // не разобранный — ошибка набора: его дописывают или стирают.
+          draftLinked
+          ? "Допишите номер или сотрите его"
+          : draftPhoneTyped
+            ? // Цифры есть, а номера нет — проверка страны и длины
+              // (владелец 22.09: «номер должен хоть как-то проверяться»).
+              "Проверьте номер и код страны"
+            : "Нужен номер телефона"
+        : null;
+
   // Объект, который видят блоки (черновик или серверная строка).
   const c: Client | undefined = isDraft ? draft : client ?? undefined;
+
+  // ЛЮДИ КАРТОЧКИ, ЖИЛЬЦЫ, СТРОКА «ЧЕЙ ОН» И ДВЕРЬ СВЯЗИ — одним куском
+  // (`ClientPeopleDoor.tsx`); страница только расставляет их по местам.
+  // ДВЕРЬ БЛОКА В НОВОМ КЛИЕНТЕ (владелец 22.09: «при создании — те же
+  // самые блоки, что у созданного»): «Добавить человека», «Добавить файл»,
+  // «Записать». Всё это живёт у id карточки, которого у черновика нет, — сперва
+  // создать (гейт футера), потом на карточке сразу открыть нужное.
+  // ЛЮБОЙ УХОД ИЗ НАБРАННОГО ЧЕРНОВИКА СПРАШИВАЕТ (аудит 22.09): стрелка,
+  // жест, аппаратная «назад» Android и «Открыть» у найденного дубля. Раньше
+  // спрашивала только стрелка, а остальные пути молча выбрасывали набранное.
+  // Уход после «Создать клиента» и дверей черновика не спрашивает: клиент
+  // уже создан.
+  const navigation = useNavigation();
+  const leavingRef = useRef(false);
+  usePreventRemove(isDraft && isDraftDirty, ({ data }) => {
+    if (leavingRef.current || isSavingNow()) {
+      navigation.dispatch(data.action);
+      return;
+    }
+    confirmThen(
+      "Удалить черновик?",
+      {
+        message: "Введённые данные клиента ещё не сохранены.",
+        confirmLabel: "Удалить черновик",
+        destructive: true,
+      },
+      () => {
+        leavingRef.current = true;
+        navigation.dispatch(data.action);
+      },
+    );
+  });
+  const onDraftDoor = (open: DraftOpen) => {
+    if (!canSave) {
+      haptics.warning();
+      notify(draftReason ?? "Сначала заполните клиента");
+      return;
+    }
+    void saveDraft({ open });
+  };
+  // Люди и связи — функция компании (STORY-088): выключены — нет ни
+  // «Людей», ни «Входит в», ни жильцов объекта, ни «Разделить».
+  // С 30.09 — функция КОМАНДЫ клиента.
+  // С 30.09 каждый блок карточки решают вместе выключатель команды клиента
+  // («Карточка клиента») и права сотрудника по блокам — `card-access.ts`.
+  const access = useCardAccess(c, isDraft);
+  const peopleOn = access.people.show;
+  const noteOn = access.note.show;
+  const labelsOn = access.labels.show;
+  const people = useClientPeople({
+    id,
+    // На карточке — первые трое и дверь «Все люди · N» (владелец 22.09).
+    limit: PEOPLE_ON_CARD,
+    client: c,
+    isDraft,
+    onDraftLinks: (memberships) => updateDraft({ memberships }),
+    // «Человек» в новом клиенте: сперва создать (гейт футера), потом на
+    // карточке сразу «Кто это». Не хватает имени или номера — говорим, чего.
+    onDraftAddPerson: () => onDraftDoor("person"),
+    openPersonOnArrive: !isDraft && openOnArrive === "person",
+    onArrived: () => router.setParams({ open: undefined }),
+    access: access.people,
+  });
+  // «Объединить с дублем» в «⋯» — вся проводка в `use-merge-duplicate.ts`.
+  const onMerge = useMergeDuplicate({ client: c, isDraft, canManage: caps.manage, closeMenu: () => setMenuOpen(false) });
+  // «Разделить клиента» в «⋯» — вся проводка в `use-split-client.ts`.
+  const split = useSplitClient({ client: c, isDraft, canEdit: caps.edit, canLinks: caps.links && peopleOn, menuOpen });
 
   // Shared selectors — memoized so unrelated state changes don't re-scan
   // every appointment. Hooks must run unconditionally, hence the guards
@@ -177,6 +357,28 @@ export default function ClientDetailScreen() {
   const stats = useMemo(
     () => (c ? buildStats(c, appointments) : undefined),
     [c, appointments],
+  );
+
+  // ШАБЛОНЫ SMS ИЗ КАРТОЧКИ (STORY-089): имя, долг и ближайшая запись
+  // клиента — «SMS» у его номера предложит шаблоны, которые ими заполняются.
+  const { data: smsTeams = [] } = useTeams({ includeInactive: true });
+  const companyName = useTenant().data?.name ?? null;
+  const clientSmsContext = useMemo(
+    () =>
+      c
+        ? {
+            clientId: c.id,
+            vars: clientSmsVars({
+              client: c,
+              appointments,
+              teams: smsTeams,
+              company: companyName,
+              debt: access.money.show ? (stats?.debt ?? 0) : null,
+              showMoney: access.money.show,
+            }),
+          }
+        : null,
+    [appointments, c, access.money.show, companyName, smsTeams, stats?.debt],
   );
 
   // heroUnitId больше не нужен: состояния ТО ушли из «Что дальше» в свою
@@ -235,22 +437,24 @@ export default function ClientDetailScreen() {
         <Text className="mb-3 text-sm" style={{ color: t.sub }}>
           Клиент не найден
         </Text>
-        <Pressable
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Назад к списку клиентов"
-          className="min-h-11 justify-center rounded-[10px] px-4 py-2 active:opacity-80"
-          style={{ backgroundColor: t.accent }}
-        >
-          <Text className="font-semibold" style={{ color: t.onAccent }}>
-            ← К списку
-          </Text>
-        </Pressable>
+        {/* КНОПКА ОДНА НА ПРОДУКТ (сведено 2026-09-10): здесь была своя,
+            44pt с радиусом числом. */}
+        <Button label="К списку" onPress={() => router.back()} />
       </Screen>
     );
   }
 
-  if (role === "master") {
+  // КЛИЕНТ СВОЕЙ ЗАПИСИ — СТАРАЯ ДОРОГА МАСТЕРА БЕЗ БАЗЫ. У него карточки в
+  // продукте нет вовсе: он пришёл из своей заявки и видит только то, ради чего
+  // её открыл, — как связаться и какие работы за человеком.
+  //
+  // СОТРУДНИК С «СМОТРИТ» СЮДА НЕ ПОПАДАЕТ (владелец 20.09: «визуал целой
+  // страницы мы полностью сохраняем, а потом просто отключаем, что будет
+  // работать»). Раньше попадал, и вместо карточки клиента ему открывалась
+  // ДРУГАЯ страница — со своим кеглем, своими разделителями и своим языком.
+  // Теперь он видит ту же карточку, только блоки в ней не правятся
+  // (`canEdit`), денег в ней нет и хозяйство базы скрыто.
+  if (scope ? scope.kind === "record" : role === "master") {
     return (
       <MasterClientOperationalView
         client={c}
@@ -306,18 +510,20 @@ export default function ClientDetailScreen() {
 
   const onShare = async () => {
     setMenuOpen(false);
-    const lines = [
-      c.full_name || "Клиент",
-      c.phone || "",
-      c.locations?.find((l) => l.isPrimary)?.address ??
-        c.locations?.[0]?.address ??
-        "",
-    ].filter(Boolean);
+    // Всё, что нужно бригаде: имя, телефон, каждый объект со ссылкой и
+    // заметкой; реквизиты — по тому же праву, что их блок на странице.
     try {
-      await Share.share({ message: lines.join("\n") });
+      await Share.share({ message: shareText(c, { requisites: access.requisites.show }) });
     } catch {
       // user dismissed the share sheet — no-op.
     }
+  };
+
+  // «Закрепить» — тот же патч, что у долгого нажатия в списке
+  // (`onTogglePin` в clients/index.tsx): метка времени или её снятие.
+  const onTogglePin = () => {
+    setMenuOpen(false);
+    void update({ pinned_at: c.pinned_at ? null : new Date().toISOString() });
   };
 
   const onToggleBlacklist = () => {
@@ -325,33 +531,20 @@ export default function ClientDetailScreen() {
     update({ blacklisted: !c.blacklisted });
   };
 
+
   // Страница объекта читает клиента по id — значит в черновике клиент должен
-  // появиться раньше, чем откроется страница. Гейт тот же, что у «Готово»
+  // появиться раньше, чем откроется страница. Гейт тот же, что у футера
   // (имя + телефон). ДОБАВЛЕНИЕ этого шага больше не требует: оно живёт в
   // листе снизу и пишет объект в тот же черновик.
   
-  const onBack = () => {
-    if (!isDraftDirty) {
-      router.back();
-      return;
-    }
-    confirmThen(
-      "Удалить черновик?",
-      {
-        message: "Введённые данные клиента ещё не сохранены.",
-        confirmLabel: "Удалить черновик",
-        destructive: true,
-      },
-      () => router.back(),
-    );
-  };
+  const onBack = () => router.back();
 
   const onArchive = () => {
     setMenuOpen(false);
     confirmThen(
       "Архивировать клиента?",
       {
-        message: "Клиент исчезнет из рабочего списка, но заявки, инвойсы и финансовая история сохранятся. Вернуть его можно сразу — кнопкой «Отменить», а позже в Клиенты › шестерёнка › «Архив клиентов».",
+        message: "Клиент исчезнет из рабочего списка, но записи, инвойсы и финансовая история сохранятся. Вернуть его можно сразу — кнопкой «Отменить», а позже в Клиенты › шестерёнка › «Архив клиентов».",
         confirmLabel: "Архивировать",
         destructive: true,
       },
@@ -415,29 +608,45 @@ export default function ClientDetailScreen() {
   };
 
   return (
-    <>
+    // Все номера страницы — клиента, его людей, доп. номера — предлагают
+    // шаблоны SMS, заполненные этим клиентом (STORY-089).
+    <SmsComposeProvider context={clientSmsContext}>
       <Stack.Screen options={{ gestureEnabled: !isDraftDirty }} />
       <Screen edges={["top"]}>
+      {/* «Готово» из правого верхнего угла снесено: единственное действие
+          черновика стоит внизу, в футере (`ClientScreenFooter`). */}
       <ClientDetailChrome
         draft={isDraft}
-        canSave={canSave}
         saving={isSaving}
         menuOpen={menuOpen}
         blacklisted={c.blacklisted}
         onBack={onBack}
-        onSave={() => void saveDraft()}
         onToggleMenu={() => setMenuOpen((open) => !open)}
         onCloseMenu={() => setMenuOpen(false)}
         onRemind={() => void onRemind()}
-        onShare={() => void onShare()}
+        onShare={caps.export ? () => void onShare() : undefined}
         onToggleBlacklist={onToggleBlacklist}
         onArchive={onArchive}
         onDelete={onDelete}
+        canEdit={caps.edit}
+        canManage={caps.manage}
+        onMerge={onMerge}
+        onSplit={split.onSplit}
+        onMenuExited={split.onMenuExited}
+        pinned={!!c.pinned_at}
+        // Список открывает меню со «Закрепить» только у строк своей компании —
+        // здесь то же право (`manage` = своя компания).
+        onTogglePin={!isDraft && caps.manage ? onTogglePin : undefined}
       />
 
+      {/* ОТСТУП НА ВЫСОТУ ХРОМА. Без него нижние поля страницы уходили под
+          клавиатуру: `padding` меряет расстояние от низа ОКНА, а карточка
+          начинается ниже — на безопасной зоне сверху и своей шапке. Ровно эта
+          ошибка уже ловилась на записи. */}
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={insets.top}
       >
       <ScrollView
         className="flex-1"
@@ -472,6 +681,29 @@ export default function ClientDetailScreen() {
           />
         ) : null}
 
+        {/* «НОМЕР УЖЕ ЕСТЬ» — ТИХОЙ СТРОКОЙ СВЕРХУ (владелец 30.09: «не даёт
+            сдать дубль, сразу плашка сверху», и следом — «не надо вовсю
+            плашку»). Тап — существующий клиент; «Создать клиента» погашена. */}
+        {isDraft ? (
+          <ClientDraftNotice
+            duplicate={duplicate}
+            error={createError}
+            // Из записи дубль не открывают, а ВЫБИРАЮТ: это и есть тот
+            // клиент, ради которого пришли.
+            openLabel={handBack ? "Выбрать" : "Открыть"}
+            onOpenDuplicate={(duplicateId) => {
+              if (handBack) {
+                deliverCreatedClient(duplicateId);
+                // Выбрали существующего — черновик и не нужен.
+                leavingRef.current = true;
+                router.back();
+                return;
+              }
+              router.replace(`/clients/${duplicateId}`);
+            }}
+          />
+        ) : null}
+
         {/* ОДНА карточка-идентичность на оба режима: в черновике те же
             поля пустые (телефон с автофокусом и ✓), «Из контактов» вместо
             бейджей, слот дедупа под номером. */}
@@ -483,45 +715,59 @@ export default function ClientDetailScreen() {
         <ClientHeader
           key={`header-${id}`}
           client={c}
-          stats={stats}
           update={update}
-          // Сводка под номером = вход в историю записей. Записей нет — вести
-          // некуда, и сводка остаётся просто текстом (мёртвых тапов не держим).
-          onOpenHistory={
-            !isDraft && appointments.length > 0
-              ? () => {
-                  router.push({
-                    pathname: "/clients/visits",
-                    params: { clientId: id },
-                  });
-                }
-              : undefined
+          readOnly={!access.card.edit}
+          // Без передачи (владелец 30.09): клиента чужой компании не
+          // скопировать ни долгим нажатием, ни из поля.
+          noCopy={!isDraft && !caps.export}
+          memberOf={peopleOn ? people.memberOfRows : undefined}
+          // Заметка клиента — вторым блоком, под «Клиентом» (владелец 23.09:
+          // «сначала идёт блок „Клиент", потом заметка клиента»).
+          note={
+            noteOn ? (
+              <NotesBlock client={c} update={update} readOnly={!access.note.edit} />
+            ) : null
+          }
+          people={
+            peopleOn && (people.peopleRows || people.onAddPerson) ? (
+              <SectionCard title="Люди">
+                {people.peopleRows}
+                {people.peopleHidden > 0 ? (
+                  <NavRow
+                    label="Все люди"
+                    value={String(people.peopleTotal)}
+                    separated
+                    onPress={() =>
+                      router.push({
+                        pathname: "/clients/people",
+                        params: clientSubParams(id, scope),
+                      })
+                    }
+                  />
+                ) : null}
+                {people.onAddPerson ? (
+                  <ChooseRow
+                    compact
+                    icon={UserPlus}
+                    label="Добавить человека"
+                    onPress={people.onAddPerson}
+                  />
+                ) : null}
+              </SectionCard>
+            ) : null
           }
           draft={
             isDraft
               ? {
                   valid: e164 !== null,
-                  onNameChange: (v) => updateDraft({ full_name: v }),
+                  // Вставка «имя + номер» делится: номер — в телефон.
+                  onNameChange: onDraftNameChange,
                   onPhoneChange: onDraftPhoneChange,
-                  // Телефон уже набран в поиске записи — курсор в имя.
-                  focus: prefillPhone && !prefillName ? "name" : "phone",
-                  footer: (
-                    <ClientDraftNotice
-                      duplicate={duplicate}
-                      error={createError}
-                      // Из записи дубль не открывают, а ВЫБИРАЮТ: это и есть
-                      // тот клиент, ради которого пришли.
-                      openLabel={forBooking ? "Выбрать" : "Открыть"}
-                      onOpenDuplicate={(duplicateId) => {
-                        if (forBooking) {
-                          deliverCreatedClient(duplicateId);
-                          router.back();
-                          return;
-                        }
-                        router.replace(`/clients/${duplicateId}`);
-                      }}
-                    />
-                  ),
+                  // КУРСОР — В ПЕРВОЕ ПУСТОЕ ПОЛЕ СВЕРХУ ВНИЗ (владелец
+                  // 2026-07-26: «сначала имя»; 22.09 по скрину нового клиента:
+                  // курсор стоял в номере под пустым именем, и страница
+                  // начиналась «снизу»). Имя уже пришло из поиска — в номер.
+                  focus: prefillName && !prefillPhone ? "phone" : "name",
                 }
               : undefined
           }
@@ -535,13 +781,34 @@ export default function ClientDetailScreen() {
         {/* Дубли ищутся не только при создании: карточка живёт годами, а
             второй «тот же человек» заводится позже — импортом или звонком с
             другого номера. */}
-        {!isDraft ? <DuplicateNotice client={c} /> : null}
+        {/* Слияние дублей двигает записи через активный календарь — у клиента
+            чужой компании этой дороги нет. */}
+        {!isDraft && caps.manage ? <DuplicateNotice client={c} /> : null}
 
         <ClientContactRow
           client={c}
           stats={stats}
           draft={isDraft}
-          update={update}
+          // «История» и «Долг и деньги» — права сотрудника по блокам.
+          showSummary={access.history.show}
+          showMoney={access.money.show}
+          onDraftBook={() => onDraftDoor("book")}
+          bookOnArrive={!isDraft && openOnArrive === "book"}
+          onArrived={() => router.setParams({ open: undefined })}
+          // Сводка в блоке «История» = вход в перечень записей. Записей нет — вести
+          // некуда, и сводка остаётся просто текстом (мёртвых тапов не держим).
+          // С 30.09 история открыта и сотруднику — по праву «История
+          // записей» этого клиента (`card-access.ts`).
+          onOpenHistory={
+            !isDraft && access.history.show && appointments.length > 0
+              ? () => {
+                  router.push({
+                    pathname: "/clients/visits",
+                    params: clientSubParams(id, scope),
+                  });
+                }
+              : undefined
+          }
         />
 
         <ClientProfileBlocks
@@ -549,10 +816,49 @@ export default function ClientDetailScreen() {
           client={c}
           appointments={appointments}
           draft={isDraft}
-          tags={tags}
           update={update}
+          // Какие блоки видны и правятся — одним ответом (`card-access.ts`).
+          access={access}
+          // Длинные списки — своими страницами, как история записей.
+          onOpenObjects={() =>
+            router.push({ pathname: "/clients/objects", params: clientSubParams(id, scope) })
+          }
+          onOpenRequisites={() =>
+            router.push({ pathname: "/clients/requisites", params: clientSubParams(id, scope) })
+          }
+          labelTags={
+            labelsOn ? (
+              <ClientLabelTags client={c} update={update} tags={tags} readOnly={!access.labels.edit} />
+            ) : null
+          }
+          onDraftFiles={() => onDraftDoor("files")}
+          openFilesOnArrive={!isDraft && openOnArrive === "files"}
+          onArrived={() => router.setParams({ open: undefined })}
+          // ЖИЛЬЦЫ: под объектом на странице — показание, в листе объекта —
+          // строки с ролью и единственная дверь заведения.
+          {...(peopleOn ? people.residents : {})}
         />
+
+        {/* SMS КЛИЕНТУ ОДНИМ БЛОКОМ (STORY-089; владелец 30.09): «Присылать
+            SMS», «Имя для SMS» и все сообщения — на какой номер ушло.
+            Отправка — в кнопке номера. */}
+        {!isDraft ? <SmsClientBlock client={c} update={update} readOnly={!access.card.edit} /> : null}
       </ScrollView>
+
+      {/* ЕДИНСТВЕННОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ, ПОД ПАЛЬЦЕМ, ВНЕ ПРОКРУТКИ.
+          У сохранённой карточки футера НЕТ: контактная база не имеет одного
+          действия, «Записать» понижена самим владельцем до обычной строки, а
+          «Готово», которое ничего не пишет, дублировало бы стрелку «назад». */}
+      {isDraft ? (
+        <ClientScreenFooter
+          label="Создать клиента"
+          reason={draftReason}
+          disabled={!canSave}
+          onPress={() => void saveDraft()}
+          // `/client` открыт поверх записи, вне вкладок — там таб-бара нет.
+          overTabBar={pathname !== "/client"}
+        />
+      ) : null}
       </KeyboardAvoidingView>
 
       <RemindSheet
@@ -562,8 +868,11 @@ export default function ClientDetailScreen() {
         onPick={(reminder_at) => update({ reminder_at })}
         onClose={() => setRemindOpen(false)}
       />
+
+      {people.door}
+      {split.sheet}
     </Screen>
-    </>
+    </SmsComposeProvider>
   );
 }
 
@@ -603,6 +912,9 @@ function ArchivedClientView({
   const history = [...appointments].sort((a, b) =>
     `${b.date}T${b.time_start}`.localeCompare(`${a.date}T${a.time_start}`),
   );
+  // Заявка архивного календаря называет свою команду (`archived-visit.ts`).
+  const { data: allTeams = [] } = useTeams({ includeInactive: true });
+  const teamsById = new Map(allTeams.map((team) => [team.id, team]));
 
   return (
     <Screen edges={["top"]}>
@@ -636,7 +948,7 @@ function ArchivedClientView({
               : archivedLabel
                 ? `В архиве с ${archivedLabel}. `
                 : "В архиве. "}
-            Карточка доступна только для чтения; история заявок и инвойсов сохранена.
+            Карточка доступна только для чтения; история записей и инвойсов сохранена.
           </Text>
         </View>
 
@@ -649,10 +961,10 @@ function ArchivedClientView({
           </View>
         </SectionCard>
 
-        <SectionCard title={`История заявок · ${history.length}`}>
+        <SectionCard title={`История записей · ${history.length}`}>
           {history.length === 0 ? (
             <Text className="px-4 py-4 text-sm" style={{ color: t.sub }}>
-              Заявок нет
+              Записей нет
             </Text>
           ) : (
             history.slice(0, 20).map((appointment, index) => {
@@ -669,7 +981,12 @@ function ArchivedClientView({
                       {humanDay(appointment.date)} · {appointment.time_start}–{appointment.time_end}
                     </Text>
                     <Text className="mt-1 text-xs" style={{ color: t.sub }} numberOfLines={2}>
-                      {names.join(" · ") || STATUS_LABELS[appointment.status] || "Заявка"}
+                      {[
+                        archivedVisitTag(appointment.team_id, teamsById),
+                        names.join(" · ") || STATUS_LABELS[appointment.status] || "Запись",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </Text>
                   </View>
                 </View>
@@ -679,24 +996,14 @@ function ArchivedClientView({
         </SectionCard>
 
         <View className="px-4 pt-5">
-          <Pressable
+          {/* КНОПКА ОДНА НА ПРОДУКТ: была своя, 48pt со значком внутри.
+              Значка у канонической кнопки нет — слово и так называет
+              действие, а спиннер ожидания она умеет сама. */}
+          <Button
+            label="Восстановить клиента"
+            loading={restoring}
             onPress={() => void onRestore()}
-            disabled={restoring}
-            accessibilityRole="button"
-            accessibilityLabel="Восстановить клиента"
-            accessibilityState={{ disabled: restoring }}
-            className="min-h-12 flex-row items-center justify-center gap-2 rounded-[10px] active:opacity-70"
-            style={{ backgroundColor: t.accent, opacity: restoring ? 0.6 : 1 }}
-          >
-            {restoring ? (
-              <Spinner size={20} color={t.onAccent} label="Восстанавливаем" />
-            ) : (
-              <RotateCcw color={t.onAccent} size={18} />
-            )}
-            <Text className="text-[15px] font-semibold" style={{ color: t.onAccent }}>
-              {restoring ? "Восстанавливаем…" : "Восстановить клиента"}
-            </Text>
-          </Pressable>
+          />
         </View>
       </ScrollView>
     </Screen>
@@ -732,7 +1039,7 @@ function MasterClientOperationalView({
             {client.full_name || "Клиент"}
           </Text>
           <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: t.sub }}>
-            Только рабочая информация по назначенным заявкам.
+            Только рабочая информация по назначенным записям.
           </Text>
         </View>
 
@@ -759,7 +1066,7 @@ function MasterClientOperationalView({
           )}
         </SectionCard>
 
-        <SectionCard title="Назначенные заявки">
+        <SectionCard title="Назначенные записи">
           {assigned.length === 0 ? (
             <Text style={{ padding: 16, fontSize: 14, color: t.sub }}>
               Доступных заявок нет

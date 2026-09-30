@@ -1,5 +1,6 @@
 import type { Database, Json } from "@babun/shared/db/database.types";
 import type { Client } from "@babun/shared/local/clients";
+import { contactsHiddenOf } from "@/features/clients/member-contacts";
 
 type Service = Database["public"]["Tables"]["services"]["Row"];
 type Team = Database["public"]["Tables"]["teams"]["Row"];
@@ -75,6 +76,7 @@ function nullableBoolean(row: JsonRecord, key: string): boolean | null {
 export function masterClientJsonToClient(value: Json): Client {
   const row = record(value);
   requiredString(row, "tenant_id");
+  const hidden = contactsHiddenOf(row);
   return {
     id: requiredString(row, "id"),
     full_name: requiredString(row, "full_name"),
@@ -107,6 +109,9 @@ export function masterClientJsonToClient(value: Json): Client {
     deleted_at: null,
     favorite_master_id: null,
     created_at: requiredString(row, "created_at"),
+    // Номер мастеру — по одному, дверью (30.09): список отдаёт пустой
+    // телефон и причину. До миграции ключа нет — прежнее поведение.
+    ...(hidden !== undefined ? { contacts_hidden: hidden } : {}),
   };
 }
 
@@ -120,6 +125,9 @@ export function masterServiceJsonToService(value: Json): Service {
     // Описание мастеру НЕ отдаётся: оно печатается в счёте, а бумаг мастер не
     // выставляет — проекция его и не возвращает.
     description: null,
+    // Вид — не экономика: значок и цвет мастеру нужны, чтобы узнать услугу в
+    // наряде тем же способом, что и все остальные.
+    icon: nullableString(row, "icon"),
     // Команда-владелец нужна мастеру не ради прав, а ради каталога: услуга
     // принадлежит ровно одной команде (2026-08-17).
     team_id: requiredString(row, "team_id"),
@@ -178,6 +186,7 @@ export function dispatcherServiceJsonToService(value: Json): Service {
     team_id: requiredString(row, "team_id"),
     // Диспетчер собирает счёт — описание ему нужно.
     description: nullableString(row, "description"),
+    icon: nullableString(row, "icon"),
     category_id: null,
     name: requiredString(row, "name"),
     price: requiredNumber(row, "price"),
@@ -236,6 +245,7 @@ export function operationalTeamJsonToTeam(value: Json): Team {
     name: requiredString(row, "name"),
     region: nullableString(row, "region"),
     color: nullableString(row, "color"),
+    icon: nullableString(row, "icon"),
     is_active: requiredBoolean(row, "is_active"),
     position: requiredNumber(row, "position"),
     timezone: nullableString(row, "timezone"),
@@ -261,8 +271,8 @@ export function operationalTeamJsonToTeam(value: Json): Team {
   };
 }
 
-/** Booking picker identity for an employee. HR/profile jsonb and creator id
- * are never allowed into a dispatcher/master query cache. */
+/** Booking picker identity for an employee. HR/profile jsonb, creator id and
+ * the card's account id are never allowed into a dispatcher/master query cache. */
 export function operationalMasterJsonToMaster(value: Json): Master {
   const row = record(value);
   return {
@@ -281,6 +291,7 @@ export function operationalMasterJsonToMaster(value: Json): Master {
     created_at: requiredString(row, "created_at"),
     updated_at: requiredString(row, "updated_at"),
     created_by: null,
+    user_id: null,
     profile: {},
   };
 }

@@ -1,25 +1,36 @@
+import { useFeatureOn } from "@/features/settings/company-features";
+import { useRememberedVatRate } from "./remembered-vat-rate";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { DateTimeInput } from "@/components/ui/DateTimeInput";
-import { ChevronRight } from "lucide-react-native";
+import { Text, View } from "react-native";
+import { Tag, User } from "lucide-react-native";
 import type {
   FinanceTransaction,
   PaymentMethod,
 } from "@babun/shared/local/finance/transaction";
-import { BottomSheet } from "@/components/ui/BottomSheet";
+import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
+import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
+import { useReferenceHref } from "@/features/clients/reference-href";
+import { accountEditHref } from "./account-editor/editor-logic";
 import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Chip } from "@/components/ui/Chip";
 import { OperationReceiptRow } from "./OperationReceiptRow";
+import { useReceiptSession } from "./receipt-upload";
+import { AmountBlock } from "./AmountBlock";
+import { CategoryBlock } from "./CategoryBlock";
 import { paymentMethodForAccountKind } from "@/features/appointments/payment";
+import { useIssueReceipt } from "@/features/documents/receipts-queries";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { WhenRow } from "@/features/appointments/BookingSummary";
+import { WhenSheet } from "@/features/appointments/WhenSheet";
+import {
+  PaymentTile,
+  TILE_GAP,
+  useTileWidth,
+} from "@/features/appointments/PaymentTiles";
+
 import {
   applyTxVat,
   defaultTxVatMode,
@@ -32,11 +43,12 @@ import {
   useTeamVatOverrides,
   useVatSettings,
 } from "./vat-queries";
-import { ValuePickerSheet } from "@/components/ui/ValuePickerSheet";
+import { PickerSheet } from "@/components/ui/PickerSheet";
+import { iconPreset } from "@/components/ui/icon-set";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
-import { confirmThen } from "@/lib/confirm";
+import { confirmAction, confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
@@ -49,9 +61,20 @@ import {
   accountServesTeam,
   isPaymentAccountCompatible,
 } from "@babun/shared/local/finance/integrity";
-import { formatHM, formatYMD, parseHM, parseYMD } from "@/features/appointments/helpers";
-import { useRouter } from "expo-router";
-import { useTeams } from "@/features/reference/queries";
+import { formatHM } from "@/features/appointments/helpers";
+import { useRouter, type Href } from "expo-router";
+import { useMasters, useTeams } from "@/features/reference/queries";
+import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
+import {
+  asksOf,
+  categoryInTeam,
+  payeeOptions,
+  pickableCategories,
+} from "./category-asks";
+import { DebtWhoBlock } from "./DebtWhoBlock";
+import { useClientChoice } from "./use-client-choice";
+import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
+import type { Client } from "@babun/shared/local/clients";
 import {
   useDeleteTransaction,
   useFinanceCategories,
@@ -59,7 +82,20 @@ import {
   useUpdateTransaction,
 } from "./queries";
 import { useAccountsWithBalances } from "./accounts";
-import { accountPickerLabel } from "./account-ui";
+import { accountIcon } from "./account-ui";
+import {
+  defaultOperationVatMode,
+  vatConsequenceLine,
+  vatModeForDraft,
+  vatSnapshotForDraft,
+} from "./operation-vat";
+import {
+  operationPatchBaseline,
+  operationTransactionPatch,
+  type OperationPatchBaseline,
+} from "./operation-patch";
+import { operationDraftKey, operationIsDirty } from "./operation-dirty";
+import { useCurrentRole } from "@/features/settings/tenant";
 
 /** Финансы онлайн-only НА ЗАПИСЬ (ТЗ §8): без сети кнопка гасится и называет
  *  причину. Крутящаяся кнопка страшнее отказа — по ней не понять, записалась
@@ -79,18 +115,28 @@ const NO_TEAM_REASON =
 const CLOSED_ACCOUNT_REASON =
   "Счёт этой операции закрыт. Изменить или удалить её можно, когда счёт снова открыт.";
 
+/** Уровень «Смотрит» в деньгах этого календаря: форму открыли прочитать.
+ *  Причина названа до нажатия — серая кнопка без слов читается как поломка. */
+const READ_ONLY_REASON =
+  "Только просмотр — записывать операции в этом календаре вам нельзя.";
+
 export function OperationSheet({
   visible,
   onClose,
   defaultTeamId,
   defaultAccountId,
   defaultType = "expense",
+  defaultDate = null,
   businessToday,
   transaction,
+  debtPayment,
   onInvoice,
   onClientOpen,
   onRefund,
   refundedTotal = 0,
+  canWrite: canWriteProp = true,
+  canWriteType,
+  onExited,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -103,9 +149,23 @@ export function OperationSheet({
    *  десяток), поэтому он и по умолчанию. «Принять оплату» из вкладки чеков
    *  открывает сразу доход: иначе кнопка обещает одно, а форма делает другое. */
   defaultType?: "income" | "expense";
+  /** День НОВОЙ операции, YYYY-MM-DD (разбор дня в календаре открывает форму
+   *  сразу на своём дне). Нет — сегодня по времени бизнеса. */
+  defaultDate?: string | null;
   /** Tenant-local YYYY-MM-DD, shared with the database business-day rules. */
   businessToday: string;
   transaction?: FinanceTransaction | null;
+  /** ПЛАТЁЖ ПО ДОЛГУ. Долг сам по себе не деньги: движением денег становится
+   *  ровно эта операция, поэтому платить по нему нечем, кроме обычной формы.
+   *  Что известно заранее — кому, сколько осталось и в какую сторону, —
+   *  форма не переспрашивает; человеку остаётся счёт. */
+  debtPayment?: {
+    debtId: string;
+    counterparty: string;
+    /** Остаток долга: сумма минус уже уплаченное. */
+    amount: number;
+    clientId: string | null;
+  } | null;
   /** Действия существующей операции — живут внизу той же формы, а не в
    *  отдельной витрине: владелец 2026-08-10 «всё сразу в редакции». */
   onInvoice?: (tx: FinanceTransaction) => void;
@@ -114,8 +174,21 @@ export function OperationSheet({
   /** Сколько уже вернули — по нему прячем «Создать возврат» и не даём
    *  опустить сумму дохода ниже возвращённого. */
   refundedTotal?: number;
+  /** Уровень «Меняет» в деньгах этого календаря (его передаёт экран, который
+   *  форму открыл). `false` — форма только читает: кнопка погашена с
+   *  причиной, строки удаления нет. По умолчанию `true`: у владельца и у
+   *  прежних вызовов форма остаётся прежней. */
+  canWrite?: boolean;
+  /** Какую сторону денег человек может завести (доходы и расходы — два
+   *  права, срез 2а). Спрашивается только у НОВОЙ операции: правку и платёж
+   *  по долгу решает `canWrite`. Нет — обе стороны. */
+  canWriteType?: (type: "income" | "expense") => boolean;
+  /** Лист полностью ушёл — тому, кто открывал форму поверх своего листа
+   *  (разбор дня в календаре), пора вернуть свой. */
+  onExited?: () => void;
 }) {
   const th = useThemeColors();
+  const tileWidth = useTileWidth();
   const online = useIsOnline();
   const { data: categories = [] } = useFinanceCategories();
   const { data: teams = [] } = useTeams();
@@ -126,22 +199,38 @@ export function OperationSheet({
     () => accountsQuery.data ?? [],
     [accountsQuery.data],
   );
-  // `account_balances` owner-only и на отказе БРОСАЕТ. Пустой список счетов из
-  // этого делать нельзя: форма сказала бы «у команды нет активного счёта», то
-  // есть соврала бы про устройство компании вместо того, чтобы назвать сбой.
+  // `account_balances` с уровнями финансов (2026-09-15) отдаёт сотруднику
+  // видимые ему остатки, а на отказе по-прежнему БРОСАЕТ. Пустой список счетов
+  // из этого делать нельзя: форма сказала бы «у команды нет активного счёта»,
+  // то есть соврала бы про устройство компании вместо того, чтобы назвать сбой.
   const accountsFailed =
     accountsQuery.data === undefined && accountsQuery.error !== null;
+  // ВЛАДЕЛЬЧЕСКИЕ ДВЕРИ ЭТОЙ ФОРМЫ. Сотрудник пишет только доход и расход на
+  // счёт своего календаря (уровни финансов, 2026-09-15): бакет чеков,
+  // справочник категорий, настройки счёта, инвойс и возврат сервер отдаёт
+  // только владельцу — живой контрол над запрещённым канон не допускает.
+  const isOwner = useCurrentRole().data === "owner";
+  const documentsOn = useFeatureOn("documents");
   const insert = useInsertTransaction();
   const update = useUpdateTransaction();
   const del = useDeleteTransaction();
   const toast = useToast();
   const isEdit = !!transaction;
+  const issueReceipt = useIssueReceipt();
   const router = useRouter();
 
   // No free-form «Возврат» here — a real refund is created from the
   // tx-detail popup («Создать возврат»): negative amount + refund_of_id
   // capped by the income's remaining sum (web parity).
   const [type, setType] = useState<"income" | "expense">("expense");
+  const typeWritable = (t: "income" | "expense"): boolean =>
+    canWriteType ? canWriteType(t) : true;
+  // Новая операция открывается на стороне, которую человек может завести:
+  // «только расходы» не встречает доходом с погашенной кнопкой.
+  const otherType = defaultType === "income" ? "expense" : "income";
+  const startType =
+    !typeWritable(defaultType) && typeWritable(otherType) ? otherType : defaultType;
+  const canWrite = canWriteProp && (isEdit || !!debtPayment || typeWritable(type));
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [teamId, setTeamId] = useState<string | null>(defaultTeamId ?? null);
@@ -157,6 +246,17 @@ export function OperationSheet({
   // Категория выбирается ЛИСТОМ, а не лентой чипов: категорий бывает два
   // десятка, и половина ленты всегда за краем экрана.
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  /** Получатель выплаты — у категории «Зарплата» (`category-asks.ts`). */
+  const [masterId, setMasterId] = useState<string | null>(null);
+  const [payeePickerOpen, setPayeePickerOpen] = useState(false);
+  /** Клиент операции — у категории, которая прикрепляет клиента. */
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
+  /** День и время меняли руками — тогда их потеря тоже «набранное». */
+  const [whenTouched, setWhenTouched] = useState(false);
+  // Лист шаблонов — тот же вид выбора, что у категории.
+  // Дата и время правятся ТЕМ ЖЕ листом, что у записи.
+  const [whenOpen, setWhenOpen] = useState(false);
   // Три клавиши НДС на самой операции. Владелец 2026-08-09: «не всегда надо
   // указывать НДС — иногда есть оплаты без него, это надо самому
   // регулировать». Пока не тронули руками, режим следует за настройкой
@@ -173,21 +273,33 @@ export function OperationSheet({
   // Идемпотентность вставки: клиентский PK, новый после каждого успеха.
   const [requestId, setRequestId] = useState(randomUuid);
   const savingRef = useRef(false);
+  /** Отложенное до полного ухода листа: см. `remove` и `runAfterExit`. */
+  const afterExit = useRef<(() => void) | null>(null);
 
   // Гидрация ТОЛЬКО по фронту открытия/смене операции: смена businessToday
   // в полночь или фоновый рефетч не должны стирать заполняемую форму.
   const hydratedFor = useRef<string | null>(null);
+  /** Снимок формы в момент открытия — по нему решается, есть ли что терять
+   *  при закрытии свайпом (`operation-dirty.ts`). */
+  const initialDraftKey = useRef<string | null>(null);
+  /** Строка операции, КАКОЙ ОНА БЫЛА при открытии формы, — против неё
+   *  считается патч правки. Не живой проп: список перечитывается, пока форма
+   *  открыта, и снимок «с сервера сейчас» превратил бы чужую свежую правку в
+   *  отличие от формы — и форма затёрла бы её старым значением. */
+  const patchBaseline = useRef<OperationPatchBaseline | null>(null);
   useEffect(() => {
     if (!visible) {
       hydratedFor.current = null;
       return;
     }
-    const key = transaction?.id ?? "new";
+    const key =
+      transaction?.id ?? (debtPayment ? `debt:${debtPayment.debtId}` : "new");
     if (hydratedFor.current === key) return;
     hydratedFor.current = key;
     setRequestId(randomUuid());
     setAccountTouched(false);
     setVatRetouched(false);
+    patchBaseline.current = transaction ? operationPatchBaseline(transaction) : null;
     if (transaction) {
       setType(transaction.type === "income" ? "income" : "expense");
       const txVat: TxVatMode =
@@ -204,37 +316,87 @@ export function OperationSheet({
         ),
       );
       setCategoryId(transaction.category_id ?? null);
+      setMasterId(transaction.master_id ?? null);
+      setWhenTouched(false);
+      setClientId(transaction.client_id ?? null);
       setTeamId(transaction.team_id ?? null);
       setAccountId(transaction.account_id ?? null);
       setDate(transaction.occurred_on);
       setTime(transaction.occurred_time ?? null);
       setNotes(transaction.notes ?? "");
       setReceiptUrl(transaction.receipt_url ?? null);
+      initialDraftKey.current = operationDraftKey({
+        type: transaction.type === "income" ? "income" : "expense",
+        amount: String(
+          inputFromGross(transaction.amount, txVat, Number(transaction.vat_rate ?? 0)),
+        ),
+        categoryId: transaction.category_id ?? null,
+        notes: transaction.notes ?? "",
+        receiptUrl: transaction.receipt_url ?? null,
+        pickedAccountId: null,
+        masterId: transaction.master_id ?? null,
+        clientId: transaction.client_id ?? null,
+      });
     } else {
-      setType(defaultType);
+      setType(startType);
       setVatTouched(false);
-      setAmount("");
+      // Остаток долга подставлен, но не заперт: отдать можно и часть — тогда
+      // долг останется висеть на разницу, как и должен.
+      setAmount(debtPayment ? String(debtPayment.amount) : "");
       setCategoryId(null);
+      setMasterId(null);
+      setClientId(null);
+      setWhenTouched(false);
       setTeamId(defaultTeamId ?? null);
       setAccountId(null);
-      setDate(businessToday);
+      // Разбор дня открывает форму на своём дне; будущее леджер не примет,
+      // поэтому дальше сегодняшнего не уходим.
+      setDate(defaultDate && defaultDate <= businessToday ? defaultDate : businessToday);
       setTime(formatHM(new Date()));
-      setNotes("");
+      setNotes(debtPayment ? `Долг: ${debtPayment.counterparty}` : "");
       setReceiptUrl(null);
+      initialDraftKey.current = operationDraftKey({
+        type: defaultType,
+        amount: debtPayment ? String(debtPayment.amount) : "",
+        categoryId: null,
+        notes: debtPayment ? `Долг: ${debtPayment.counterparty}` : "",
+        receiptUrl: null,
+        pickedAccountId: null,
+        masterId: null,
+        clientId: null,
+      });
     }
     // Hydrate once per opened transaction id (guarded by hydratedFor).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, defaultTeamId, defaultType, transaction?.id, businessToday]);
+  }, [
+    visible,
+    defaultTeamId,
+    defaultType,
+    defaultDate,
+    transaction?.id,
+    businessToday,
+    debtPayment,
+  ]);
 
   const cats = useMemo(
     () =>
-      categories.filter(
-        (c) =>
-          c.type === (type === "expense" ? "expense" : "income") &&
-          (!c.hidden || c.id === categoryId),
+      pickableCategories(
+        categories,
+        type === "expense" ? "expense" : "income",
+        categoryId,
+        teamId,
       ),
-    [categories, type, categoryId],
+    [categories, type, categoryId, teamId],
   );
+  // КАТЕГОРИЯ — У КОМАНДЫ (владелец 2026-09-24). Сменили команду операции —
+  // выбранная категория переходит на такую же у новой команды или снимается:
+  // чужая команда в подписи денег — ошибка, и сервер её не примет. Пока
+  // команды нет, выбор не трогаем: старая строка без команды не теряет
+  // подписи при открытии.
+  useEffect(() => {
+    if (!teamId) return;
+    setCategoryId((current) => categoryInTeam(categories, current, teamId));
+  }, [teamId, categories]);
   // Счета команды операции. Способ оплаты их НЕ фильтрует: он из счёта и
   // выводится — раньше эти два контрола фильтровали друг друга, и человек
   // выбирал одно и то же дважды, сначала «Карта», потом «Карта».
@@ -251,8 +413,15 @@ export function OperationSheet({
     [accounts, teamId],
   );
 
-  const categoryName =
-    categories.find((c) => c.id === categoryId)?.name ?? null;
+  // С уволенными: правка старой выплаты должна показать, кому она ушла.
+  const peopleQuery = useMasters({ includeInactive: true });
+  const clientChoice = useClientChoice();
+  // Файлы, залитые в этой форме: чистит форма, когда закрыта насовсем.
+  const receiptSession = useReceiptSession();
+  useEffect(() => {
+    if (!visible) receiptSession.flush();
+  }, [visible, receiptSession]);
+
   const selectedAccount = useMemo(
     () => accounts.find((a) => a.id === accountId) ?? null,
     [accounts, accountId],
@@ -302,15 +471,22 @@ export function OperationSheet({
   // ДЕЙСТВУЮЩИЙ НАЛОГ ЭТОЙ ОПЕРАЦИИ: счёт → команда → компания.
   const vatSettingsQuery = useVatSettings();
   const teamVatOverrides = useTeamVatOverrides();
-  const vat = effectiveVatSettings(
+  const settingsVat = effectiveVatSettings(
     vatSettingsQuery.data,
     (teamVatOverrides.data ?? []).find((o) => o.teamId === teamId),
     selectedAccount?.vat_mode ?? null,
   );
+  // СТАВКА — КАК В «ИТОГО» ДОКУМЕНТОВ (владелец 2026-09-30: «VAT регулируем
+  // через блок „Итого“, страница VAT не нужна»): написанная последней на
+  // этом телефоне, а пока не писали — ставка команды из прежних настроек.
+  const rememberedVat = useRememberedVatRate(settingsVat.rate);
+  const vat = { ...settingsVat, rate: rememberedVat.rate };
   // КЛАВИШИ ГАСИТ ТОЛЬКО ТУМБЛЕР КОМПАНИИ, А НЕ ПИН СЧЁТА.
   //
-  // Компания с выключенным налогом не должна видеть слово «НДС» вообще — это
-  // правило. А вот «Без НДС», закреплённое ЗА СЧЁТОМ, — это ПРЕДУСТАНОВКА:
+  // ТУМБЛЕРА VAT У КОМПАНИИ БОЛЬШЕ НЕТ (владелец 2026-09-30: «должно быть всё
+  // включено»): клавиши видны, как только известна ставка — её пишут в
+  // «Итого» документа, и она запоминается. Ставки нет — считать нечем, и
+  // клавиш нет. «Без НДС», закреплённое ЗА СЧЁТОМ, — это ПРЕДУСТАНОВКА:
   // настройки счёта прямо обещают «значение подставляется в новую операцию… в
   // самой операции его всегда можно переключить». Пока сюда смотрел
   // эффективный режим, пин счёта прятал секцию целиком — подпись врала, а
@@ -321,8 +497,14 @@ export function OperationSheet({
   // Сервер против этого не возражает: `fill_transaction_vat` уважает и явное
   // 'none', и присланный снимок `vat_amount` — то есть клавиша операции
   // сильнее пина счёта и на записи тоже.
-  const tenantVatOn = (vatSettingsQuery.data?.mode ?? "off") !== "off";
-  const vatVisible = tenantVatOn && vat.rate > 0;
+  // КЛАВИШИ — ТОЛЬКО ТОМУ, КТО ВИДИТ НАСТРОЙКУ НАЛОГА. Сотруднику настройки
+  // НДС не отдаются: «Без НДС» у него вышло бы не выбором, а последствием
+  // отказа чтения — и молча уносило бы налог из операции компании.
+  const vatVisible = isOwner && vat.rate > 0;
+  // Настройки компании И переопределения команд доехали — только тогда режим
+  // формы что-то значит для сервера (`operation-vat.ts`).
+  const vatSettingsKnown =
+    vatSettingsQuery.data !== undefined && teamVatOverrides.data !== undefined;
 
   // Дефолт счёта = счёт команды операции (командный раньше общего). Эффект
   // (а не разовый сет при открытии), потому что счета приезжают асинхронно
@@ -361,14 +543,18 @@ export function OperationSheet({
   const vatRateSetting = vat.rate;
   useEffect(() => {
     if (!visible || vatTouched || isEdit) return;
+    // У расхода «Плюс VAT» по умолчанию не ставится (`defaultOperationVatMode`).
     setVatMode(
-      defaultTxVatMode({
-        mode: vatModeSetting,
-        rate: vatRateSetting,
-        exemptionNote: null,
-      }),
+      defaultOperationVatMode(
+        defaultTxVatMode({
+          mode: vatModeSetting,
+          rate: vatRateSetting,
+          exemptionNote: null,
+        }),
+        type,
+      ),
     );
-  }, [visible, vatTouched, isEdit, vatModeSetting, vatRateSetting]);
+  }, [visible, vatTouched, isEdit, vatModeSetting, vatRateSetting, type]);
 
   // СТАВКА ОПЕРАЦИИ — ЕЁ СНИМОК, а не сегодняшняя настройка. Страница НДС
   // обещает: «поднимете ставку завтра — прошлые отчёты не изменятся», и
@@ -392,10 +578,33 @@ export function OperationSheet({
     amountCents != null &&
     Math.round(refundedTotal * 100) > 0 &&
     Math.round(vatBreakdown.gross * 100) < Math.round(refundedTotal * 100);
+  const doorway = useSheetDoorway();
+  // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
+  const categoriesHref = useReferenceHref().categories;
   const busy = insert.isPending || update.isPending || del.isPending;
   const dateInFuture = date > businessToday;
+  // Категория говорит собой: иконка и цвет из справочника, как у типа события
+  // в записи. Не выбрана — нейтральный ярлычок, а не пустое место.
+  const category = categoryId
+    ? categories.find((c) => c.id === categoryId) ?? null
+    : null;
+  // ЧТО СПРОСИТЬ, РЕШАЕТ КАТЕГОРИЯ (владелец 2026-09-24): сотрудника, клиента,
+  // фото чека — флажками в её настройках, а не по имени.
+  const asks = asksOf(category);
+  // Фото прикладывает владелец: хранилище чеков владельческое, у сотрудника
+  // блока файла нет — требовать от него то, что он приложить не может, нельзя.
+  const receiptMissing = asks.receipt && isOwner && !receiptUrl;
   const canSave =
+    canWrite &&
+    !receiptMissing &&
     amountCents != null &&
+    // КАТЕГОРИЯ ОБЯЗАТЕЛЬНА (владелец 2026-09-10: «чтобы создать операцию,
+    // нужно обязательно выбрать категорию»). Кнопка её не спрашивала, и деньги
+    // без категории выпадали из разбивки — одна такая операция в базе уже
+    // лежит. Снятия повторным тапом у категории нет и не заводим: у типа
+    // события оно законно (событие без типа существует и называется
+    // «Событие»), а расход без категории врёт «Прибыли».
+    !!categoryId &&
     !!teamId &&
     !!accountId &&
     !accountMismatch &&
@@ -408,6 +617,22 @@ export function OperationSheet({
     online &&
     !busy;
   const isExpense = type === "expense";
+  // Значок и цвет категории живут теперь в самом блоке (`CategoryBlock`) —
+  // одном на долг и операцию: две копии этой развилки уже начинали расходиться.
+
+  // ЧТО ПРИКРЕПИТЬ, РЕШАЕТ КАТЕГОРИЯ (владелец 2026-09-24: «зарплата смотрит
+  // сотрудников, другая прикрепляет клиента»). Блок «Кому» или «Клиент» есть
+  // только у категории, которая это прикрепляет: у прочих человеку нечего
+  // выбирать, и лишний блок стоял бы пустым.
+  const askEmployee = asks.employee;
+  const attachClient = asks.client && !debtPayment;
+  const pickedClient = clientId
+    ? ((clientChoice.clients as Client[]).find((c) => c.id === clientId) ?? null)
+    : null;
+  const payees = payeeOptions(peopleQuery.data ?? [], teamId, masterId);
+  const payee = masterId
+    ? (peopleQuery.data ?? []).find((m) => m.id === masterId) ?? null
+    : null;
 
   const save = async () => {
     // Синхронный гард: isPending включается только после ре-рендера,
@@ -451,10 +676,31 @@ export function OperationSheet({
     savingRef.current = true;
     try {
       const breakdown = applyTxVat(amountNum, vatMode, opVatRate);
+      // РЕЖИМ НДС НАЗЫВАЕМ, ТОЛЬКО ЕСЛИ ЕГО ЗНАЕМ (`operation-vat.ts`): пустая
+      // колонка значит «считай сам», а явное 'none' сервер уважает сильнее
+      // настроек компании.
+      const vatModeToSend = vatModeForDraft({
+        mode: vatMode,
+        chosen: vatTouched,
+        canReadSettings: isOwner,
+        settingsKnown: vatSettingsKnown,
+      });
+      const vatSnapshot = vatSnapshotForDraft({
+        mode: vatModeToSend,
+        rate: opVatRate,
+        vat: breakdown.vat,
+        fresh: !isEdit || vatRetouched,
+      });
       const draft = {
         amount: breakdown.gross,
-        vat_mode: vatMode,
+        ...(vatModeToSend ? { vat_mode: vatModeToSend } : {}),
         category_id: categoryId,
+        // Получатель — только у зарплаты: сменили категорию — человек не
+        // остаётся висеть на «Топливе».
+        master_id: askEmployee ? masterId : null,
+        // Клиент — у категории, которая его прикрепляет. У прочих поле не
+        // трогаем: клиент оплаты записи или инвойса остаётся на месте.
+        ...(attachClient ? { client_id: clientId } : {}),
         team_id: teamId,
         account_id: accountId,
         payment_method: payment,
@@ -463,13 +709,41 @@ export function OperationSheet({
         occurred_time: time,
         receipt_url: receiptUrl,
         business_today: businessToday,
+        // Связь с долгом — она и делает операцию его погашением: остаток
+        // считается по привязанным платежам, а не колонкой в долге.
+        ...(debtPayment
+          ? { debt_id: debtPayment.debtId, client_id: debtPayment.clientId }
+          : {}),
       };
       if (isEdit && transaction) {
-        await update.mutateAsync({ id: transaction.id, patch: draft });
+        // ПАТЧ, А НЕ ОВЕРВРАЙТ (аудит финансов 2026-09-24): полный черновик
+        // перезаписывал поля, которых форма не касалась, — правка заметки на
+        // одном устройстве стирала счёт, поменянный секундой раньше на
+        // другом. Вычитаем из черновика то, что совпало со снимком, с
+        // которым форма открылась (`operation-patch.ts`), и шлём остаток.
+        const patch = {
+          ...operationTransactionPatch(
+            draft,
+            patchBaseline.current ?? operationPatchBaseline(transaction),
+          ),
+          ...(vatSnapshot ?? {}),
+        };
+        if (Object.keys(patch).length === 0) {
+          // Нечего сохранять — форма открылась и закрылась без правки:
+          // сеть здесь не нужна вовсе.
+          onClose();
+          return;
+        }
+        await update.mutateAsync({ id: transaction.id, patch });
       } else {
         // request_id стабилен на время попытки: ретрай после потерянного
         // ответа не задваивает деньги (duplicate key = успех в репозитории).
-        await insert.mutateAsync({ type, request_id: requestId, ...draft });
+        await insert.mutateAsync({
+          type,
+          request_id: requestId,
+          ...draft,
+          ...(vatSnapshot ?? {}),
+        });
         setRequestId(randomUuid());
       }
       haptics.success();
@@ -484,51 +758,148 @@ export function OperationSheet({
 
   const remove = () => {
     if (!transaction) return;
-    // Тело — ПОСЛЕДСТВИЕ, а не «нельзя отменить» (правила текстов
+    const target = transaction;
+    // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29): вопрос
+    // рисует хост приложения, а лист — отдельное окно `Modal`. Открытый в тот
+    // же кадр, вопрос получал от iOS «already presenting» и не появлялся
+    // вовсе: кнопка «Удалить» молчала, и это была единственная дверь к откату
+    // денег с экрана (2026-09-08). Сперва уезжаем, спрашиваем по `onExited` —
+    // тем же способом, что «Удалить объект» в листе правки объекта.
+    //
+    // Тело вопроса — ПОСЛЕДСТВИЕ, а не «нельзя отменить» (правила текстов
     // account-alerts): человек решает по тому, что произойдёт с деньгами.
-    confirmThen(
-      "Удалить операцию?",
-      {
-        message: "Операция исчезнет из ленты, остаток счёта пересчитается.",
-        confirmLabel: "Удалить",
-        destructive: true,
-      },
-      async () => {
-        try {
-          await del.mutateAsync(transaction.id);
-          haptics.success();
-          onClose();
-        } catch (e) {
-          notify("Ошибка", (e as Error).message);
-        }
-      },
-    );
+    afterExit.current = () => {
+      confirmThen(
+        "Удалить операцию?",
+        {
+          message: "Операция исчезнет из ленты, остаток счёта пересчитается.",
+          confirmLabel: "Удалить",
+          destructive: true,
+        },
+        async () => {
+          try {
+            await del.mutateAsync(target.id);
+            haptics.success();
+          } catch (e) {
+            notify("Ошибка", (e as Error).message);
+          }
+        },
+      );
+    };
+    onClose();
   };
 
   // Пока мутация в полёте, лист не закрывается ни скримом, ни свайпом:
   // ошибка сохранения должна прилететь в открытую форму, а не поверх уже
   // закрытой ленты, где набранное потеряно.
-  const guardedClose = () => {
-    if (!busy) onClose();
+  //
+  // НАБРАННОЕ НЕ ТЕРЯЕТСЯ МОЛЧА (прогон финансов 2026-09-24): свайп вниз и
+  // тап мимо закрывали форму с суммой и фото чека без слова. Есть что терять —
+  // форма уезжает (из открытого листа iOS вопрос не покажет, закон удаления
+  // выше), звучит «Закрыть без сохранения?»; «Отмена» возвращает форму со
+  // всем набранным.
+  const [askingClose, setAskingClose] = useState(false);
+  const dirty = operationIsDirty(initialDraftKey.current, {
+    type,
+    amount,
+    categoryId,
+    notes,
+    receiptUrl,
+    pickedAccountId: accountTouched ? accountId : null,
+    masterId,
+    clientId,
+    when: whenTouched ? `${date} ${time ?? ""}` : null,
+  });
+  /** Закрыть — или уйти по строке «Ещё» (возврат, инвойс, клиент): набранное
+   *  не пропадает молча ни тем, ни другим путём (аудит 2026-09-24: строки
+   *  «Ещё» закрывали форму мимо вопроса, и правка суммы исчезала). */
+  const guardedClose = (leave?: () => void) => {
+    if (busy) return;
+    if (!dirty) {
+      (leave ?? onClose)();
+      return;
+    }
+    afterExit.current = () => {
+      void confirmAction("Закрыть без сохранения?", {
+        message: "Набранное в операции не сохранится.",
+        confirmLabel: "Закрыть",
+        destructive: true,
+      }).then((ok) => {
+        if (!ok) {
+          // Лист возвращается, когда уехал вопрос: окно поверх уезжающего
+          // iOS не покажет, и форма осталась бы невидимой (прогон 24.09).
+          setTimeout(() => setAskingClose(false), SHEET_EXIT_MS + 350);
+          return;
+        }
+        setAskingClose(false);
+        if (leave) {
+          leave();
+          return;
+        }
+        onClose();
+        // Лист уже снят — хозяин ждёт `onExited` (шторка дня возвращается по
+        // нему); зовём его сами, когда уехал вопрос.
+        setTimeout(() => onExited?.(), SHEET_EXIT_MS + 350);
+      });
+    };
+    setAskingClose(true);
+  };
+
+  /** Что сделать, когда окно листа СНЯТО. Вопрос об удалении живёт здесь: см.
+   *  `remove` и закон `BottomSheet.onExited`. Возвращает `true`, если что-то
+   *  выполнилось, — по нему решается, звать ли `onExited` вызывающего. */
+  const runAfterExit = (): boolean => {
+    const run = afterExit.current;
+    afterExit.current = null;
+    if (!run) return false;
+    run();
+    return true;
   };
 
   // Строки «Ещё»: разделители считаются от реально показанных соседей.
   const showClientRow = !!transaction?.client_id && !!onClientOpen;
-  const showInvoiceRow = transaction?.type === "income" && !!onInvoice;
+  // ДОКУМЕНТЫ И ВОЗВРАТЫ — ВЛАДЕЛЬЧЕСКИЕ (уровни финансов, 2026-09-15):
+  // сотрудник пишет только доход и расход, поэтому этих строк у него нет.
+  // Инвойсы и чеки — функция компании (STORY-088): выключены — строк нет.
+  const showInvoiceRow =
+    documentsOn && isOwner && transaction?.type === "income" && !!onInvoice;
   const showRefundRow =
+    isOwner &&
     !!transaction &&
     transaction.type === "income" &&
+    // Оплата долга возвратом долг не откроет — её снимают удалением.
+    !transaction.debt_id &&
     !!onRefund &&
     // Возврат — тоже запись на закрытый счёт, сервер её не примет.
     !txAccountClosed &&
     // Остаток к возврату — по округлённым центам (moneySign), а не через
     // самодельный эпсилон: сравниваем ровно то, что напечатано.
     moneySign(transaction.amount - refundedTotal) > 0;
+  // Карточка «Ещё» живёт, пока в ней есть хоть одна строка: у сотрудника на
+  // просмотре не остаётся ни одной, и пустая шапка была бы мусором.
+  // ЧЕК ПО УЖЕ ПРИНЯТЫМ ДЕНЬГАМ — ЗДЕСЬ, А НЕ В СОСТАВИТЕЛЕ. Аудит денег
+  // 2026-09-20 поймал ловушку: после снятия автовыписки единственная кнопка
+  // «Выписать чек» вела в составитель, а он ЗАВОДИТ НОВЫЙ ПРИХОД. Человек,
+  // принявший оплату в записи и пришедший за бумагой, записал бы деньги
+  // дважды. Настоящая дорога — отсюда: дверь `issue_receipt` берёт ЭТУ
+  // проводку и ничего нового не создаёт.
+  //
+  // Идемпотентность двери снимает вопрос двойного нажатия: второй раз она
+  // отдаёт тот же документ, второго номера не бывает.
+  const showReceiptRow =
+    documentsOn &&
+    transaction?.type === "income" && !!transaction.client_id && !transaction.refund_of_id;
+  const showMoreCard =
+    showClientRow ||
+    showInvoiceRow ||
+    showReceiptRow ||
+    showRefundRow ||
+    (txAccountClosed ? isOwner : canWrite);
 
   // Причина погашенной кнопки — ровно одна и самая важная. Офлайн и
   // закрытый счёт — закрытые двери (нейтральный цвет), остальное — ошибки
   // ввода.
-  const reason: { text: string; error: boolean } | null = !online
+  const inputReason: { text: string; error: boolean } | null = !online
     ? { text: OFFLINE_OPERATION, error: false }
     : accountsFailed
       ? {
@@ -562,21 +933,65 @@ export function OperationSheet({
                       text: "У этой команды нет активного счёта — заведите его в «Счетах»",
                       error: true,
                     }
-                  : amountCents != null && !teamId
+                  // ПУСТАЯ СУММА ТОЖЕ НАЗЫВАЕТ СЕБЯ. Раньше все причины ниже
+                  // были заперты за `amountCents != null`, и до первой цифры
+                  // лист открывался с погашенной кнопкой и НИ ОДНИМ словом
+                  // рядом — серая кнопка без объяснения читается как поломка
+                  // продукта (тот же закон, по которому лист перевода печатает
+                  // причину всегда, а не после первого символа). Это не ошибка
+                  // ввода, а незаполненное поле, поэтому цвет нейтральный.
+                  : amountCents == null
+                    ? { text: "Введите сумму операции", error: false }
+                    : amountCents != null && !teamId
                     ? { text: NO_TEAM_REASON, error: true }
                     : amountCents != null && !accountId
                       ? {
                           text: "Выберите счёт, на который записать операцию",
                           error: true,
                         }
-                      : null;
+                      : amountCents != null && !categoryId
+                        ? {
+                            text: "Выберите категорию операции",
+                            error: true,
+                          }
+                        : receiptMissing
+                          ? {
+                              text: `Для категории «${category?.name ?? ""}» нужно фото чека`,
+                              error: true,
+                            }
+                          : null;
+  // ТОЛЬКО ПРОСМОТР СИЛЬНЕЕ ПРИЧИН ВВОДА: заполнять форму дальше незачем,
+  // если записать её этому человеку всё равно нельзя.
+  const reason = canWrite
+    ? inputReason
+    : { text: READ_ONLY_REASON, error: false };
 
   return (
     <BottomSheet
       padded={false}
-      visible={visible}
-      onClose={guardedClose}
-      title={isEdit ? "Операция" : "Новая операция"}
+      visible={visible && !doorway.parked && !askingClose}
+      onClose={() => guardedClose()}
+      // ДВА ХОЗЯИНА У ОДНОГО СОБЫТИЯ, И ЗВАТЬ ИХ ВМЕСТЕ НЕЛЬЗЯ (слияние
+      // 2026-09-10). Своё отложенное — это вопрос об удалении, ЧУЖОЕ — возврат
+      // шторки дня. Открытые в один кадр, они дают iOS «already presenting», и
+      // вопрос не появляется вовсе: ровно тот баг, который чинили у «Удалить
+      // операцию» 2026-09-08. Поэтому свой вопрос имеет приоритет, а шторка дня
+      // возвращается только когда спрашивать нечего.
+      //
+      // СЛЕДСТВИЕ, КОТОРОЕ НАДО РЕШИТЬ ХОЗЯИНУ ШТОРКИ ДНЯ: после удаления
+      // операции день сам не открывается. Здесь это выбрано как меньшее зло —
+      // молчащая кнопка удаления хуже незакрывшегося круга.
+      onExited={() => {
+        if (!runAfterExit()) onExited?.();
+      }}
+      title={
+        debtPayment ? "Оплата долга" : isEdit ? "Операция" : "Новая операция"
+      }
+      // Команда не выбирается — она приехала чипом с экрана финансов. Строкой
+      // поля она выглядела нажимаемой; здесь она просто подписана.
+      subtitle={
+        teamId ? (teams.find((t) => t.id === teamId)?.name ?? undefined) : "Компания"
+      }
       scroll
       avoidKeyboard
       maxHeightRatio={0.86}
@@ -598,11 +1013,13 @@ export function OperationSheet({
           ) : null}
           <Button
             label={
-              isEdit
-                ? "Сохранить"
-                : isExpense
-                  ? "Добавить расход"
-                  : "Добавить доход"
+              debtPayment
+                ? "Записать оплату"
+                : isEdit
+                  ? "Сохранить"
+                  : isExpense
+                    ? "Добавить расход"
+                    : "Добавить доход"
             }
             onPress={save}
             disabled={!canSave}
@@ -632,128 +1049,102 @@ export function OperationSheet({
             setType(seg);
             setCategoryId(null);
           }}
-          disabled={isEdit}
+          // У платежа по долгу направление уже решено самим долгом: «мне
+          // должны» гасят доходом, «я должен» — расходом. Переключатель здесь
+          // только называет сторону. Та же немота, когда человек может
+          // завести лишь одну сторону денег: переключать ему некуда.
+          disabled={
+            isEdit ||
+            !!debtPayment ||
+            !(typeWritable("income") && typeWritable("expense"))
+          }
           style={{ marginHorizontal: GUTTER, marginTop: 12 }}
         />
 
-        {/* 2. Команда и дата ОДНОЙ карточкой. Команда не выбирается: она
-            уже выбрана чипом на экране финансов, и второй выбор того же —
-            лишний вопрос. Здесь она просто подписана. */}
-        <SectionCard>
-          <View className="flex-row items-center justify-between px-4 py-2.5">
-            <Text className="text-base" style={{ color: th.sub }}>
-              Команда
-            </Text>
-            <Text
-              className="text-base font-semibold"
-              style={{ color: th.ink }}
-              numberOfLines={1}
-            >
-              {teamId
-                ? (teams.find((t) => t.id === teamId)?.name ?? "Команда")
-                : "Компания"}
-            </Text>
-          </View>
-          <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
-          <View className="flex-row items-center justify-between px-4 py-2.5">
-            <Text className="text-base" style={{ color: th.ink }}>Дата</Text>
-            <DateTimeInput
-              value={parseYMD(date)}
-              maximumDate={parseYMD(businessToday)}
-              mode="date"
-              display="compact"
-              themeVariant="light"
-              locale="ru-RU"
-              onChange={(_, d) => d && setDate(formatYMD(d))}
-            />
-          </View>
-          <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
-          <View className="flex-row items-center justify-between px-4 py-2.5">
-            <Text className="text-base" style={{ color: th.ink }}>Время</Text>
-            {time == null ? (
-              <Pressable
-                onPress={() => setTime(formatHM(new Date()))}
-                accessibilityRole="button"
-                accessibilityLabel="Указать время операции"
-                hitSlop={8}
-                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-              >
-                <Text className="text-base" style={{ color: th.accent }}>Указать</Text>
-              </Pressable>
-            ) : (
-              <DateTimeInput
-                value={parseHM(time)}
-                mode="time"
-                display="compact"
-                minuteInterval={5}
-                themeVariant="light"
-                locale="ru-RU"
-                accessibilityLabel="Время операции"
-                onChange={(_, d) => d && setTime(formatHM(d))}
-              />
-            )}
-          </View>
-        </SectionCard>
+        {/* 2. КОГДА — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ (владелец 2026-09-09: «посмотри
+            по архитектуре, как мы делаем блок время»). Строка «день · время»
+            открывает тот же лист с полосой недель и барабанами, каким
+            назначают визит. Разница одна: у операции время — МОМЕНТ, а не
+            отрезок, поэтому сегмент «Начало | Конец» в листе спрятан.
 
-        {/* 3. Категория — СТРОКА, а не полоса чипов: категорий бывает
-            два десятка, и горизонтальная лента прячет половину за краем.
-            Свои категории заводятся в настройках, и дорога туда лежит
-            внутри выбора — там, где рука уже находится. */}
-        <SectionCard>
-          <Pressable
-            onPress={() => setCategoryPickerOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel={`Категория: ${categoryName ?? "не выбрана"}`}
-            className="min-h-[48px] flex-row items-center px-4 py-2.5"
-            style={({ pressed }) => ({
-              backgroundColor: pressed ? th.pressed : "transparent",
-            })}
-          >
-            <Text className="text-base" style={{ color: th.ink }}>
-              Категория
-            </Text>
-            <View className="ml-auto flex-row items-center gap-1.5">
-              <Text
-                className="text-base"
-                style={{ color: categoryName ? th.ink : th.faint }}
-                numberOfLines={1}
-              >
-                {categoryName ?? "Выбрать"}
-              </Text>
-              <ChevronRight color={th.chevron} size={17} strokeWidth={2.2} />
-            </View>
-          </Pressable>
-        </SectionCard>
+            Здесь стоял системный пикер iOS внутри строки — чужой продукту
+            контрол и второй способ сказать то же самое. */}
+        <WhenRow
+          date={date}
+          timeStart={time ?? formatHM(new Date())}
+          onPress={() => {
+            if (time == null) setTime(formatHM(new Date()));
+            setWhenOpen(true);
+            haptics.tap();
+          }}
+        />
 
-        {/* 4. Сумма */}
-        <SectionCard title="Сумма">
-          <View className="flex-row items-center px-4 py-2.5">
-            <TextInput
-              value={amount}
-              accessibilityLabel="Сумма операции"
-              onChangeText={setAmount}
-              keyboardType="decimal-pad"
-              autoFocus
-              placeholder="0"
-              placeholderTextColor={th.placeholder}
-              selectionColor={th.accent}
-              keyboardAppearance="light"
-              maxFontSizeMultiplier={1.2}
-              className="flex-1 text-3xl font-bold"
-              style={{
-                color: isExpense ? th.danger : th.success,
-                fontVariant: ["tabular-nums"],
+        {/* 3. КАТЕГОРИЯ И 4. СУММА — ТЕ ЖЕ БЛОКИ, ЧТО У ДОЛГА (владелец
+            2026-09-10: «операции сделай так же, как долги — блок категории,
+            блок сумма, ниже заметка, ниже файл; берёшь то, что уже имеем»).
+
+            Были склеены в одну карточку ради компактности, и от блока
+            оставалась строка поля: слово «Категория» слева, серое «Выбрать» в
+            хвосте, сумма без подписи. Блок узнают по шапке и границам раньше,
+            чем читают, — а компактность взята воздухом, а не слиянием. */}
+        <CategoryBlock
+          category={category ?? null}
+          onPress={() => {
+            setCategoryPickerOpen(true);
+            haptics.tap();
+          }}
+        />
+
+        {/* 3a. КОМУ — тот же блок-справочник, что категория: шапка, строка-
+            дверь, выбранный человек его цветом. Необязателен: выплату без
+            имени сервер примет, просто разбор не разделит её по людям. */}
+        {askEmployee ? (
+          <ReferenceBlock
+            dense
+            // Расход — «Кому» ушли деньги; доход — «Сотрудник», кто их принёс.
+            title={isExpense ? "Кому" : "Сотрудник"}
+            emptyIcon={User}
+            emptyLabel="Выбрать сотрудника"
+            emptyHint="Открывает список сотрудников"
+            value={
+              payee
+                ? { name: payee.full_name, color: payee.color ?? null, Icon: User }
+                : null
+            }
+            onPress={() => {
+              setPayeePickerOpen(true);
+              haptics.tap();
+            }}
+          />
+        ) : null}
+
+        {/* 3b. КЛИЕНТ — у категории, которая прикрепляет клиента. Та же
+            строка, что у долга и в записи: имя, вводная, телефон. */}
+        {attachClient ? (
+          <SectionCard title="Клиент" dense>
+            <DebtWhoBlock
+              client={pickedClient}
+              stats={pickedClient ? clientChoice.statsById.get(pickedClient.id) : undefined}
+              counterparty=""
+              onOpenPicker={() => {
+                setClientPickerOpen(true);
+                haptics.tap();
               }}
             />
-            <Text
-              maxFontSizeMultiplier={1.2}
-              className="text-3xl font-bold"
-              style={{ color: th.faint }}
-            >
-              €
-            </Text>
-          </View>
-        </SectionCard>
+          </SectionCard>
+        ) : null}
+
+        {/* КЛАВИАТУРА НЕ ПОДНИМАЕТСЯ САМА (владелец 2026-09-10: «когда я
+            нажимаю „добавить доход“, оно не должно сразу переключаться на
+            клавиатуру»). Автофокус на сумме закрывал половину формы ещё до
+            того, как человек посмотрел на неё: категория, счёт и заметка
+            уезжали под клавиатуру, и первым делом приходилось её убирать. */}
+        <AmountBlock
+          value={amount}
+          onChange={setAmount}
+          accessibilityLabel="Сумма операции"
+          color={isExpense ? th.danger : th.success}
+        />
 
         {/* 4a. НДС — ТРИ КЛАВИШИ НА КАЖДОЙ ОПЕРАЦИИ. Появляются только у тех,
             кто с налогом работает: выключили тумблер компании — слова «НДС» в
@@ -762,7 +1153,7 @@ export function OperationSheet({
             Под клавишами стоит последствие в евро, потому что разница
             между «включён» и «плюсом» — это деньги, а не термин. */}
         {vatVisible ? (
-          <SectionCard title="НДС">
+          <SectionCard title="VAT">
             <View className="flex-row flex-wrap gap-2 px-3 py-3">
               {(["none", "inclusive", "exclusive"] as TxVatMode[]).map(
                 (m) => (
@@ -786,44 +1177,61 @@ export function OperationSheet({
                 className="px-4 pb-3 text-[13px]"
                 style={{ color: th.sub, fontVariant: ["tabular-nums"] }}
               >
-                {vatMode === "exclusive"
-                  ? `На счёт придёт ${formatEUR(vatBreakdown.gross)} · налог ${formatEUR(vatBreakdown.vat)}`
-                  : `Из них налог ${formatEUR(vatBreakdown.vat)} · вам остаётся ${formatEUR(vatBreakdown.net)}`}
+                {/* По направлению денег: у расхода они уходят со счёта. */}
+                {vatConsequenceLine(type, vatMode, vatBreakdown, formatEUR)}
               </Text>
             ) : null}
           </SectionCard>
         ) : null}
 
-        {/* 5. Счёт — только кассы выбранной команды. Способ оплаты
-            выводится из вида счёта: отдельного выбора «нал/карта» здесь
-            нет, он повторял бы кассу. */}
-        {teamAccounts.length > 0 ? (
+        {/* 5. Счёт — ПЛИТКАМИ, КАК В ЗАПИСИ (владелец 2026-09-09: «счёт делаем
+            так же, как в записи клиента: иконки полноценные, наличные или
+            карта»). Лента чипов называла счёт словом; плитка несёт его значок
+            и цвет — те же, что человек задал счёту в финансах, и тот же
+            контрол, которым принимают оплату на записи. */}
+        {accountsFailed ? (
           <SectionCard title="Счёт">
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                gap: 8,
+            <Text className="px-4 py-3 text-sm" style={{ color: th.faint }}>
+              Счета не загрузились. Обновите экран финансов и откройте форму
+              заново.
+            </Text>
+          </SectionCard>
+        ) : teamAccounts.length > 0 ? (
+          <SectionCard title="Счёт">
+            <View
+              className="flex-row flex-wrap"
+              style={{
+                paddingHorizontal: 16,
+                paddingTop: 8,
+                paddingBottom: 10,
+                gap: TILE_GAP,
               }}
             >
               {teamAccounts.map((a) => (
-                <Chip
+                <PaymentTile
                   key={a.id}
-                  label={accountPickerLabel(a)}
-                  radio
+                  icon={accountIcon(a)}
+                  label={a.name}
+                  color={a.color ?? th.ink}
+                  tint={a.color}
+                  width={tileWidth}
+                  // Одной плашкой: значок слева от имени, 44pt (владелец
+                  // 2026-09-15: «компактнее, чтоб иконка была слева»).
+                  compact
+                  // Плитка держит СВОЙ цвет и в покое, и выбранной — им счёт
+                  // и узнают. Radio-семантика: счёт обязателен, повторный тап
+                  // выбор не снимает.
+                  state="idle"
                   selected={accountId === a.id}
-                  // Radio-семантика: «ничего не выбрано» здесь не значение,
-                  // а тупик (счёт обязателен) — повторный тап по выбранному
-                  // чипу выбор не снимает.
+                  disabled={busy}
                   onPress={() => {
                     setAccountTouched(true);
                     setAccountId(a.id);
                   }}
+                  accessibilityLabel={`Счёт: ${a.name}`}
                 />
               ))}
-            </ScrollView>
+            </View>
           </SectionCard>
         ) : (
           <SectionCard title="Счёт">
@@ -835,43 +1243,51 @@ export function OperationSheet({
           </SectionCard>
         )}
 
-        {/* 6. Заметка */}
-        <SectionCard title="Заметка">
-          <TextInput
-            value={notes}
-            accessibilityLabel="Заметка к операции"
-            onChangeText={setNotes}
-            placeholder="Напр. бензин, материалы…"
-            placeholderTextColor={th.placeholder}
-            selectionColor={th.accent}
-            keyboardAppearance="light"
-            className="px-4 py-3 text-base"
-            style={{ color: th.ink }}
+        {/* 6. ЗАМЕТКА. Подсказка НАЗЫВАЕТ поле, а не объясняет примером
+            (владелец 2026-09-10 о заметке долга: «как объяснение не надо, это
+            „например, обещал…“»). Разные подсказки по направлению ушли вместе
+            с примером. */}
+        <SectionCard title="Заметка" dense>
+          <InlineNoteField
+            note={{
+              draft: notes,
+              setDraft: setNotes,
+              onFocus: () => {},
+              onBlur: () => {},
+            }}
+            placeholder="Заметка операции"
+            accessibilityLabel="Заметка операции"
+            maxLength={500}
           />
         </SectionCard>
 
-        {/* 7. Документ, подтверждающий операцию: скан чека или накладная.
-            Бухгалтеру нужна не сумма, а бумага под ней. Стоит ДО действий:
-            документ — поле самой операции, и поля идут подряд. */}
-        <SectionCard title="Документ">
-          <OperationReceiptRow
-            receiptUrl={receiptUrl}
-            onPick={setReceiptUrl}
-            disabled={busy}
-          />
-        </SectionCard>
+        {/* 7. ФАЙЛ — та же строка, что у долга и у файлов записи. Бакет чеков
+            владельческий: у сотрудника выбор файла закончился бы отказом
+            хранилища, поэтому строки у него нет вовсе. */}
+        {isOwner ? (
+          <SectionCard title={asks.receipt ? "Фото чека" : "Файл"} dense>
+            <OperationReceiptRow
+              receiptUrl={receiptUrl}
+              onPick={setReceiptUrl}
+              disabled={busy || !canWrite}
+              session={receiptSession}
+            />
+          </SectionCard>
+        ) : null}
 
         {/* 8. Действия этой операции. Раньше они жили в отдельной витрине,
             и до правки надо было пройти лишний экран. Теперь всё в одной
             форме: открыл — правь, а рядом то, что ещё можно сделать.
             «Удалить» — последняя строка этого же списка: красной кнопки в
             шапке у канонического листа нет. */}
-        {isEdit && transaction ? (
+        {isEdit && transaction && showMoreCard ? (
           <SectionCard title="Ещё">
             {showClientRow ? (
               <ActionRow
                 label="Открыть клиента"
-                onPress={() => onClientOpen?.(transaction.client_id as string)}
+                onPress={() =>
+                  guardedClose(() => onClientOpen?.(transaction.client_id as string))
+                }
               />
             ) : null}
             {showInvoiceRow ? (
@@ -880,28 +1296,51 @@ export function OperationSheet({
                 label={
                   transaction.invoice_id ? "Открыть инвойс" : "Выставить инвойс"
                 }
-                onPress={() => onInvoice?.(transaction)}
+                onPress={() => guardedClose(() => onInvoice?.(transaction))}
+              />
+            ) : null}
+            {showReceiptRow ? (
+              <ActionRow
+                separated={showClientRow || showInvoiceRow}
+                label="Выписать чек"
+                onPress={() => {
+                  issueReceipt.mutate(
+                    { transactionId: transaction.id },
+                    {
+                      onSuccess: (receipt) => toast(`Чек ${receipt.number} выписан`),
+                      onError: (error) =>
+                        toast(
+                          error instanceof Error ? error.message : "Чек не выписан",
+                          "error",
+                        ),
+                    },
+                  );
+                }}
               />
             ) : null}
             {showRefundRow ? (
               <ActionRow
-                separated={showClientRow || showInvoiceRow}
+                separated={showClientRow || showInvoiceRow || showReceiptRow}
                 label="Создать возврат"
-                onPress={() => onRefund?.(transaction)}
+                onPress={() => guardedClose(() => onRefund?.(transaction))}
               />
             ) : null}
             {txAccountClosed && txAccountId ? (
-              // Выход из тупика закрытого счёта: открыть счёт можно только
-              // на его странице, отсюда туда и ведём.
-              <ActionRow
-                separated={showClientRow || showInvoiceRow || showRefundRow}
-                label="Открыть страницу счёта"
-                onPress={() => {
-                  onClose();
-                  router.push(`/accounts/${txAccountId}`);
-                }}
-              />
-            ) : (
+              // Выход из тупика закрытого счёта: «Открыть снова» — в его листе,
+              // а счёт открывает владелец, поэтому и дверь его.
+              isOwner ? (
+                <ActionRow
+                  separated={showClientRow || showInvoiceRow || showRefundRow}
+                  label="Открыть настройки счёта"
+                  onPress={() => {
+                    onClose();
+                    // Переход — когда лист уехал: страница поднимает шторку
+                    // счёта, и поверх уезжающего листа она не появлялась.
+                    setTimeout(() => router.push(accountEditHref(txAccountId)), SHEET_EXIT_MS);
+                  }}
+                />
+              ) : null
+            ) : canWrite ? (
               <ActionRow
                 separated={showClientRow || showInvoiceRow || showRefundRow}
                 tone="danger"
@@ -909,7 +1348,7 @@ export function OperationSheet({
                 dimmed={busy}
                 onPress={remove}
               />
-            )}
+            ) : null}
           </SectionCard>
         ) : null}
       </View>
@@ -917,25 +1356,128 @@ export function OperationSheet({
       {/* Выбор категории — тот же лист, что и везде. Шестерёнка внутри
           ведёт на страницу категорий: свои категории заводятся там, а не
           выдумываются заметкой в поле «Заметка». */}
-      <ValuePickerSheet
+      {/* ВЫБОР КАТЕГОРИИ — ТОТ ЖЕ ЛИСТ, ЧТО «ТИП СОБЫТИЯ» В ЗАПИСИ (владелец
+          2026-09-09). Значок и цвет у категорий лежат в справочнике, а прежний
+          лист рисовал только точку цвета: список читался как столбик слов.
+          Ничего нового не заводим — берём готовый примитив продукта. */}
+      {/* Полоса недель, барабаны и язык — те же, что у записи; сегмент
+          «Начало | Конец» спрятан: у операции время одно. */}
+      <WhenSheet
+        open={whenOpen}
+        onClose={() => setWhenOpen(false)}
+        date={date}
+        timeStart={time ?? formatHM(new Date())}
+        timeEnd={time ?? formatHM(new Date())}
+        allDay={false}
+        allowAllDay={false}
+        singleTime
+        onCommit={(next) => {
+          setDate(next.date);
+          setTime(next.timeStart);
+          setWhenTouched(true);
+        }}
+      />
+      <PickerSheet
         visible={categoryPickerOpen}
         title={isExpense ? "Категория расхода" : "Категория дохода"}
-        options={cats.map((c) => ({
+        // Готовых категорий нет — компания заводит свои (владелец
+        // 2026-09-24). Пустой лист говорит, где их создают.
+        subtitle={
+          cats.length > 0
+            ? undefined
+            : isOwner
+              ? "Категорий нет — создайте их (значок справа)"
+              : "Категорий пока нет"
+        }
+        items={cats.map((c) => ({
           id: c.id,
           label: c.name,
-          color: c.color,
+          // БЕЗ ЭМОДЗИ (владелец 2026-09-10: «переделай категории так же, как
+          // события; эмодзи убираем, это не надо»). В справочнике у категорий
+          // лежат ⛽ 🍔 📦, и лист печатал их вперемешку со значками словаря —
+          // единственное место продукта, где строка выбора выглядела иначе,
+          // чем у команды, метки и типа события. Цвет категории остаётся: он и
+          // различает строки.
+          icon: iconPreset(c.icon) ?? Tag,
+          color: c.color ?? th.accent,
+          onPress: () => setCategoryId(c.id),
         }))}
         selectedId={categoryId}
-        emptyLabel={
-          isExpense
-            ? "Пока нет ни одной категории расходов"
-            : "Пока нет ни одной категории доходов"
+        // Дверь паркует лист операции: иначе страница категорий открывается
+        // ПОД ним и до неё не дотянуться (владелец 2026-09-10). Справочник
+        // категорий владельческий — сотруднику шестерёнки нет.
+        onSettings={
+          isOwner
+            ? () =>
+                doorway.open(() =>
+                  // Команда операции — команда справочника: без неё страница
+                  // открывалась на первой команде (аудит 2026-09-30).
+                  router.push(
+                    // Страница своего вида: «Категории расходов» у расхода.
+                    (teamId
+                      ? `${categoriesHref}?team=${encodeURIComponent(teamId)}&kind=${type}`
+                      : `${categoriesHref}?kind=${type}`) as Href,
+                  ),
+                )
+            : undefined
         }
-        onPick={setCategoryId}
-        onSettings={() => router.push("/cabinet/categories")}
-        settingsLabel="Категории операций"
+        settingsLabel={type === "income" ? "Категории доходов" : "Категории расходов"}
         onClose={() => setCategoryPickerOpen(false)}
+      />
+      <ClientPickerSheet
+        visible={clientPickerOpen}
+        onClose={() => setClientPickerOpen(false)}
+        clients={clientChoice.clients as Client[]}
+        recentIds={clientChoice.recentIds}
+        statsById={clientChoice.statsById}
+        selectedId={clientId}
+        onSelect={(picked) => {
+          setClientId(picked.id);
+          setClientPickerOpen(false);
+        }}
+        onDeselect={() => {
+          setClientId(null);
+          setClientPickerOpen(false);
+        }}
+      />
+      <PickerSheet
+        visible={payeePickerOpen}
+        title={isExpense ? "Кому" : "Сотрудник"}
+        // ПУСТОЙ СПИСОК — СЛОВАМИ (канон пустых состояний): у компании без
+        // сотрудников лист иначе был бы одной шапкой без ответа, что делать.
+        subtitle={
+          payees.length > 0
+            ? undefined
+            : isOwner && teamId
+              ? "Сотрудников нет — добавьте в «Мастерах»"
+              : "Сотрудников нет"
+        }
+        items={payees.map((m) => ({
+          id: m.id,
+          label: m.full_name,
+          hint: m.is_active ? undefined : "Не работает",
+          icon: User,
+          color: m.color ?? th.accent,
+          onPress: () => setMasterId(m.id),
+        }))}
+        selectedId={masterId}
+        // ЛЮДЕЙ БЕРЁМ ИЗ «МАСТЕРОВ» — там же их и заводят. Пустой список у
+        // компании без сотрудников не тупик: ползунки в шапке ведут на
+        // страницу мастеров календаря (тот же приём, что у категорий).
+        onSettings={
+          isOwner && teamId
+            ? () =>
+                doorway.open(() =>
+                  router.push(
+                    "/cabinet/people" as Href,
+                  ),
+                )
+            : undefined
+        }
+        settingsLabel="Сотрудники"
+        onClose={() => setPayeePickerOpen(false)}
       />
     </BottomSheet>
   );
 }
+

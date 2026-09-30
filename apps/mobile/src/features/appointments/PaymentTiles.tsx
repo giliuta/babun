@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { Check, ChevronRight, FileText } from "lucide-react-native";
+import { Check } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { AddRow } from "@/components/ui/AddRow";
 import { GUTTER } from "@/components/ui/tokens";
@@ -9,10 +9,14 @@ import { useThemeColors } from "@/theme/colors";
 // ПЛИТКИ БЛОКА «ОПЛАТА» — только вид (STORY-065, выбор владельца 2026-09-06:
 // «плитки Б2, компактнее; предоплата и инвойс — маленькие иконки справа;
 // сумму в шапке не дублировать»). Логика денег живёт в PaymentBlock.
+// Та же плитка — счёт в форме операции и в панели «Счета» на «Финансах»
+// (владелец 2026-09-15: «как в счёт оплаты»): счёт узнают по плитке всюду.
 
 export const TILE_GAP = 8;
 const TILE_HEIGHT = 48;
 const TILE_HEIGHT_PAID = 56;
+/** Значок в строку с именем: плитка счёта с остатком, но на ряд ниже. */
+const TILE_HEIGHT_COMPACT = 44;
 
 /** Ширина плитки: три в ряд внутри карточки с полями 16. */
 export function useTileWidth(perRow = 3): number {
@@ -30,9 +34,13 @@ export function PaymentTile({
   tint,
   width,
   state,
+  selected,
   amount,
+  amountColor,
+  compact,
   disabled,
   onPress,
+  onLongPress,
   accessibilityLabel,
 }: {
   icon: LucideIcon;
@@ -44,10 +52,26 @@ export function PaymentTile({
   tint?: string | null;
   width: number;
   state: PaymentTileState;
-  /** Полученная на этот счёт сумма (только для `paid`). */
+  /** ВЫБРАН, А НЕ ОПЛАЧЕН. В записи плитка — действие: тап принимает деньги,
+   *  и «выбранного» состояния у неё нет. В форме операции счёт ВЫБИРАЮТ, и
+   *  метка выбора обязана оставить плитке её собственный цвет: перекрашенная
+   *  в акцент, она теряла то, чем счёт узнают (владелец 2026-09-10). */
+  selected?: boolean;
+  /** Сумма под именем: полученная на счёт (`paid`) либо остаток счёта в
+   *  панели «Счета» на «Финансах». */
   amount?: string;
+  /** Цвет суммы вне `paid`: минус — `danger`, ноль — тише живых денег. */
+  amountColor?: string;
+  /** Значок в строку с именем, сумма под ними — 44pt вместо 56. Владелец
+   *  2026-09-15: панель «Счета» — «ещё немножечко компактней», затем форма
+   *  операции и оплата записи — «чтоб иконка была слева… одной плашкой».
+   *  У оплаченной плитки на месте значка галка. */
+  compact?: boolean;
   disabled?: boolean;
   onPress: () => void;
+  /** Долгое нажатие — вторая дверь плитки, если она у места есть (панель
+   *  «Счета»: настройки этого счёта). В оплате записи его нет. */
+  onLongPress?: () => void;
   accessibilityLabel: string;
 }) {
   const t = useThemeColors();
@@ -56,13 +80,32 @@ export function PaymentTile({
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled: Boolean(disabled), selected: pending }}
+      accessibilityState={{
+        disabled: Boolean(disabled),
+        selected: pending || Boolean(selected),
+      }}
+      // Долгое нажатие VoiceOver не делает — то же действие ротором.
+      accessibilityActions={
+        onLongPress ? [{ name: "longpress", label: "Настройки" }] : undefined
+      }
+      onAccessibilityAction={
+        onLongPress
+          ? (event) => {
+              if (event.nativeEvent.actionName === "longpress") onLongPress();
+            }
+          : undefined
+      }
       style={({ pressed }) => ({
         width,
-        height: paid ? TILE_HEIGHT_PAID : TILE_HEIGHT,
+        height: compact
+          ? TILE_HEIGHT_COMPACT
+          : paid || amount
+            ? TILE_HEIGHT_PAID
+            : TILE_HEIGHT,
         borderRadius: t.radius.card,
         backgroundColor: paid
           ? `${t.success}1f`
@@ -71,38 +114,76 @@ export function PaymentTile({
             : tint
               ? `${tint}1a`
               : t.fill,
-        borderWidth: paid || pending ? 1 : 0,
-        borderColor: paid ? t.success : t.accent,
+        borderWidth: paid || pending || selected ? (selected ? 2 : 1) : 0,
+        borderColor: paid ? t.success : selected ? (tint ?? t.accent) : t.accent,
         alignItems: "center",
         justifyContent: "center",
         gap: 2,
         opacity: pressed ? 0.7 : state === "dim" ? 0.35 : 1,
       })}
     >
-      {paid ? (
-        <Check size={16} strokeWidth={2.4} color={t.success} />
+      {compact ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            maxWidth: "100%",
+            paddingHorizontal: 6,
+          }}
+        >
+          {paid ? (
+            <Check size={14} strokeWidth={2.4} color={t.success} />
+          ) : (
+            <Icon size={14} strokeWidth={2} color={pending ? t.accent : color} />
+          )}
+          <Text
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.3}
+            // ДЛИННОЕ ИМЯ СНАЧАЛА УЖИМАЕТСЯ, ПОТОМ РЕЖЕТСЯ (прогон 2026-09-23:
+            // «Revolut Busi…» в трёх плитках на ряд). До 85 % — ещё читается
+            // и не выпадает из ряда соседей.
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+            style={{
+              flexShrink: 1,
+              fontSize: 12,
+              fontWeight: "600",
+              color: paid ? t.successInk : t.ink,
+            }}
+          >
+            {label}
+          </Text>
+        </View>
       ) : (
-        <Icon size={16} strokeWidth={2} color={pending ? t.accent : color} />
-      )}
-      <Text
-        numberOfLines={1}
-        maxFontSizeMultiplier={1.3}
-        style={{
-          fontSize: 12,
-          fontWeight: "600",
-          color: paid ? t.successInk : t.ink,
-          paddingHorizontal: 6,
-        }}
-      >
-        {label}
-      </Text>
-      {paid && amount ? (
+        <>
+        {paid ? (
+          <Check size={16} strokeWidth={2.4} color={t.success} />
+        ) : (
+          <Icon size={16} strokeWidth={2} color={pending ? t.accent : color} />
+        )}
         <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.3}
+          style={{
+            fontSize: 12,
+            fontWeight: "600",
+            color: paid ? t.successInk : t.ink,
+            paddingHorizontal: 6,
+          }}
+        >
+          {label}
+        </Text>
+        </>
+      )}
+      {amount ? (
+        <Text
+          numberOfLines={1}
           maxFontSizeMultiplier={1.3}
           style={{
             fontSize: 12,
             fontWeight: "700",
-            color: t.successInk,
+            color: paid ? t.successInk : (amountColor ?? t.ink),
             fontVariant: ["tabular-nums"],
           }}
         >
@@ -286,37 +367,6 @@ export function QuietLink({
         </Text>
       </Pressable>
     </View>
-  );
-}
-
-/** Строка выставленного инвойса: номер, срок или «Оплачен», сумма. */
-export function InvoiceRow({
-  number,
-  subtitle,
-  onPress,
-}: {
-  number: string;
-  subtitle: string;
-  onPress: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`Инвойс ${number}, открыть`}
-      className="flex-row items-center"
-      style={{ marginHorizontal: 16, marginTop: 4, minHeight: 44, gap: 10 }}
-    >
-      <FileText size={18} strokeWidth={2} color={t.accent} />
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
-          Инвойс {number}
-        </Text>
-        <Text style={{ fontSize: 13, color: t.sub }}>{subtitle}</Text>
-      </View>
-      <ChevronRight size={18} color={t.faint} />
-    </Pressable>
   );
 }
 

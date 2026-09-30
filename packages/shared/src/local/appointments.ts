@@ -197,6 +197,21 @@ export interface Appointment {
    *  импорт). Именно это угадывание и роняло приём денег у команд, у которых
    *  счёта нужного вида не оказалось. */
   payment_account_id?: string | null;
+  /** НДС ЗАПИСИ (2026-09-15, миграция `appointment_vat_choice`): «с НДС» или
+   *  «без НДС» для денег этой записи — сильнее счёта. null — как у счёта,
+   *  команды и компании. Меняется только до первой оплаты и только дверью
+   *  `set_appointment_vat_mode`: в патч записи поле не пишется. */
+  vat_mode?: "on" | "off" | "none" | "inclusive" | "exclusive" | null;
+  /** СТАВКА VAT ЗАПИСИ (22.09, миграция 20260922040000). Вместе с
+   *  `vat_mode` 'exclusive' | 'inclusive' | 'none' — выбор «Итого» записи:
+   *  «К оплате» (`total_amount`) уже включает налог, а оплата ложится на
+   *  счёт с выделенным налогом по этой ставке. Старые 'on' | 'off' пишет
+   *  только дверь `set_appointment_vat_mode`. */
+  vat_rate?: number | null;
+  /** Материалы по ценам дня закрытия — пишет только сервер
+   *  (`freeze_appointment_materials`); `null` — считать по справочнику
+   *  (`appointmentMaterialCostLines`). */
+  material_lines?: unknown;
   /** Mirror — total actually received so far. The trigger uses
    *  total_amount for the income row; this field lets the UI show
    *  «частично оплачено» (paid_amount < total_amount). */
@@ -286,7 +301,7 @@ export function getPaidAmount(apt: Appointment): number {
   if (apt.payment_status === "refunded") return 0;
 
   // Получено СВЕРХ аванса считается по двум источникам и берётся максимум:
-  // леджер payments[] (мобильные пути: buildDebtPaidPatch, close-day) и
+  // леджер payments[] (мобильные пути: buildDebtPaidPatch) и
   // веб-зеркала — payment-объект (нал+карта) либо колонка paid_amount
   // (actualPaid, web appointment-builders) — оба БЕЗ аванса. Именно max,
   // а не «леджер вытесняет зеркала»: у смешанных строк первый мобильный
@@ -416,4 +431,26 @@ export function duplicateAppointment(apt: Appointment): Appointment {
     created_at: now,
     updated_at: now,
   };
+}
+
+// ─── Своя (разовая) услуга ─────────────────────────────────────────────
+// Владелец 2026-09-22: «в „Итого“ справа — добавить ещё одну услугу, не из
+// прайса». Такая строка живёт только в своём документе: у неё нет услуги в
+// справочнике, поэтому id — не uuid прайса, а `custom:<uuid>`. Имя, цена и
+// время (0) едут снимком строки (`serviceName`, `pricePerUnit`, `duration`),
+// и для всех читателей она выглядит как услуга, стёртая из прайса, — такие
+// строки продукт читает давно. Сервер хранит id текстом и не сверяет с прайсом.
+
+export const CUSTOM_SERVICE_PREFIX = "custom:";
+
+export function isCustomServiceId(id: string | null | undefined): boolean {
+  return typeof id === "string" && id.startsWith(CUSTOM_SERVICE_PREFIX);
+}
+
+export function newCustomServiceId(): string {
+  const uuid =
+    typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${CUSTOM_SERVICE_PREFIX}${uuid}`;
 }

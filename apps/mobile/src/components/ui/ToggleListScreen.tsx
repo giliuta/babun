@@ -42,7 +42,7 @@ export interface ToggleListItem {
 /** Тело строки: значок · подпись · галка. Ручка перетаскивания живёт снаружи,
  *  в `ReorderList` — вложенная внутрь, она отдавала короткий тап строке, и
  *  палец «поправил порядок», а пункт молча выключался. */
-function ToggleRow({ item }: { item: ToggleListItem }) {
+export function ToggleRow({ item }: { item: ToggleListItem }) {
   const t = useThemeColors();
   return (
     <Pressable

@@ -7,6 +7,9 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Service } from "@/features/services/queries";
+import { appointmentMaterialCostLines } from "@babun/shared/local/finance/appointment-calc";
+import { payeeName, withPayee } from "./category-asks";
+import { incomeDeals } from "./income-deals";
 
 export interface BreakdownRow {
   /** Stable React key + accessible label (the bucket name). */
@@ -44,12 +47,15 @@ export function incomeLabel(
 export function expenseLabel(
   t: FinanceTransaction,
   categories: FinanceCategory[],
+  /** Сотрудники — чтобы выплата звалась «Зарплата · Даня» и разбор делил
+   *  зарплату по людям (`category-asks.ts`). */
+  people?: readonly { id: string; full_name: string }[],
 ): string {
-  return (
-    (t.category_id && categories.find((c) => c.id === t.category_id)?.name) ||
-    t.notes ||
-    "Прочее"
-  );
+  const category = t.category_id
+    ? categories.find((c) => c.id === t.category_id)?.name
+    : undefined;
+  if (category) return withPayee(category, payeeName(people, t.master_id));
+  return t.notes || "Прочее";
 }
 
 /** Income grouped by service/category, sorted by amount desc. Refunds
@@ -65,6 +71,10 @@ export function breakdownIncome(
   appointments: Appointment[],
 ): BreakdownRow[] {
   const map = new Map<string, BreakdownRow>();
+  /** Визиты (или операции без визита) каждой корзины — «×N» считает их, а не
+   *  платежи: предоплата и доплата одной работы — одна работа (владелец
+   *  2026-09-08: «один визит — одна строка»). */
+  const seen = new Map<string, Set<string>>();
   const bucket = (name: string): BreakdownRow => {
     let row = map.get(name);
     if (!row) {
@@ -73,15 +83,38 @@ export function breakdownIncome(
     }
     return row;
   };
+  // Снятая оплата лежит парой «+50 / −50» — денег не было, и работой она не
+  // считается (тот же отбор, что у плитки и ленты «Доход»).
+  const deals = new Set(incomeDeals(transactions).map((t) => t.id));
+  const addWork = (name: string, work: string) => {
+    const works = seen.get(name) ?? new Set<string>();
+    works.add(work);
+    seen.set(name, works);
+    bucket(name).count = works.size;
+  };
   for (const t of transactions) {
+    if ((t.type === "income" || t.type === "refund") && !deals.has(t.id)) continue;
     if (t.type === "income") {
-      const row = bucket(incomeLabel(t, categories, services, appointments));
-      row.amount += t.amount;
-      row.count += 1;
+      const split = serviceSplit(t, categories, services, appointments);
+      if (split) {
+        for (const part of split) {
+          bucket(part.name).amount += part.amount;
+          addWork(part.name, t.appointment_id ?? t.id);
+        }
+        continue;
+      }
+      const name = incomeLabel(t, categories, services, appointments);
+      bucket(name).amount += t.amount;
+      addWork(name, t.appointment_id ?? t.id);
     } else if (t.type === "refund") {
       const orig = t.refund_of_id
         ? transactions.find((x) => x.id === t.refund_of_id)
         : undefined;
+      const split = orig ? serviceSplit({ ...orig, amount: signedAmount(t) }, categories, services, appointments) : null;
+      if (split) {
+        for (const part of split) bucket(part.name).amount += part.amount;
+        continue;
+      }
       const name = orig
         ? incomeLabel(orig, categories, services, appointments)
         : "Возвраты";
@@ -92,23 +125,92 @@ export function breakdownIncome(
   // were fully refunded brought nothing) — keeping them would render a
   // misleading «+€0 ×N» row. Negative «Возвраты» buckets survive.
   return Array.from(map.values())
+    .map((r) => ({ ...r, amount: Math.round(r.amount * 100) / 100 }))
     .filter((r) => r.amount !== 0)
     .sort((a, b) => b.amount - a.amount);
+}
+
+/**
+ * ДОХОД ЗАПИСИ — ПО ЕЁ УСЛУГАМ (владелец 2026-09-30: «улучши прибыль»).
+ * Оплата записи приходит со служебной категорией сервера «Услуги» (общей на
+ * все компании), и разбор «Что принесло денег» показывал одну корзину
+ * «Услуги ×N» — ни слова о том, какая работа кормит бизнес. Теперь деньги
+ * записи делятся между её услугами пропорционально их сумме в записи: визит
+ * «Клининг €200 + A/C Cleaning €100», оплаченный €300, даёт 200 и 100.
+ * Своя категория компании (например «Чаевые» на записи) сильнее — её выбрал
+ * человек. `null` — делить нечего, работает `incomeLabel`.
+ */
+function serviceSplit(
+  t: FinanceTransaction,
+  categories: FinanceCategory[],
+  services: Service[],
+  appointments: Appointment[],
+): { name: string; amount: number }[] | null {
+  if (!t.appointment_id) return null;
+  if (t.category_id) {
+    const c = categories.find((x) => x.id === t.category_id);
+    // Своя категория компании — выбор человека; служебная общая — нет.
+    if (c && c.tenant_id !== null) return null;
+  }
+  const a = appointments.find((x) => x.id === t.appointment_id);
+  const lines = (a?.services ?? []).filter((l) => l.totalPrice > 0);
+  if (lines.length === 0) return null;
+  const catalog = new Map(services.map((s) => [s.id, s.name]));
+  const nameOf = (l: (typeof lines)[number]) =>
+    l.serviceName?.trim() || catalog.get(l.serviceId) || "Услуга";
+  const total = lines.reduce((sum, l) => sum + l.totalPrice, 0);
+  const cents = Math.round(t.amount * 100);
+  // Делим в центах; остаток от округления — последней строке, чтобы сумма
+  // частей была ровно суммой платежа.
+  let left = cents;
+  return lines.map((l, i) => {
+    const part = i === lines.length - 1 ? left : Math.round((cents * l.totalPrice) / total);
+    left -= part;
+    return { name: nameOf(l), amount: part / 100 };
+  });
+}
+
+/**
+ * МАТЕРИАЛЫ ПО УСЛУГАМ — ТЕМ ЖЕ ИМЕНЕМ, КАКИМ ДОХОД ДЕЛИТСЯ ПО УСЛУГАМ
+ * (владелец 2026-09-30: «улучшим прибыль»). Строка «Материалы −€20» в
+ * расходе не говорила, какая работа их съела; теперь строка услуги в доходе
+ * подписана «материалы €10». Имя — снимок строки записи, как в
+ * `serviceSplit`, иначе каталог: одна услуга не распадается на две строки.
+ * Записи приходят уже отобранными (сделанные, в периоде, в команде) — тем
+ * же отбором, что строка «Материалы» в расходе.
+ */
+export function materialsByService(
+  appointments: readonly Appointment[],
+  services: readonly Service[],
+): Map<string, number> {
+  const cents = new Map<string, number>();
+  for (const a of appointments) {
+    for (const line of appointmentMaterialCostLines(a, services)) {
+      const snapshot = (a.services ?? []).find((l) => l.serviceId === line.serviceId);
+      const name = snapshot?.serviceName?.trim() || line.serviceName;
+      cents.set(name, (cents.get(name) ?? 0) + Math.round(line.totalCost * 100));
+    }
+  }
+  return new Map([...cents].map(([name, c]) => [name, c / 100]));
 }
 
 /** Expense grouped by category/note, sorted by amount desc. */
 export function breakdownExpense(
   transactions: FinanceTransaction[],
   categories: FinanceCategory[],
+  people?: readonly { id: string; full_name: string }[],
 ): BreakdownRow[] {
   const map = new Map<string, BreakdownRow>();
   for (const t of transactions) {
     if (t.type !== "expense") continue;
-    const name = expenseLabel(t, categories);
+    const name = expenseLabel(t, categories, people);
     const row = map.get(name) ?? { id: name, name, amount: 0, count: 0 };
     row.amount += t.amount;
     row.count += 1;
     map.set(name, row);
   }
-  return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+  // Копейки после сложения: 10.1 + 20.2 даёт 30.299999… (аудит 2026-09-30).
+  return Array.from(map.values())
+    .map((r) => ({ ...r, amount: Math.round(r.amount * 100) / 100 }))
+    .sort((a, b) => b.amount - a.amount);
 }

@@ -105,7 +105,7 @@ export function NoticeBar({
         <Text
           numberOfLines={1}
           maxFontSizeMultiplier={1.2}
-          style={{ flex: 1, fontSize: 14, fontWeight: "600", color }}
+          style={{ flex: 1, fontSize: 13, fontWeight: "600", color }}
         >
           {message}
         </Text>

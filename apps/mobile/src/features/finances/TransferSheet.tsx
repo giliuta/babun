@@ -13,6 +13,7 @@ import { transferValidationError } from "@babun/shared/local/finance/integrity";
 import { todayYmd } from "@/features/invoices/format";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { accountIcon } from "./account-ui";
 import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -28,6 +29,7 @@ import { accountDaysOnHand } from "./accounts-sections";
 import { dayPhrase } from "./period";
 import {
   accountOwnerLabel,
+  transferSpansTeams,
   defaultTransferTarget,
   transferGroups,
 } from "./transfer-options";
@@ -66,9 +68,6 @@ import { useTransferWithUndo } from "./transfer-undo";
 // закрыть нижнее, то есть потерять набранное (та же причина, по которой выбор
 // счёта живёт шагом).
 //
-// Задний день может упереться в серверный `guard_closed_day_finance_write` —
-// тогда отказ печатается над кнопкой обычным текстом, как любой другой.
-//
 // Быстрых сумм «10 / 20 / 50 / 100» здесь нет: у команды перевод — это чаще
 // всего вся касса целиком, а не двадцатка. Ту же роль играет чип «Весь остаток».
 //
@@ -96,6 +95,7 @@ export function TransferSheet({
   accounts,
   teamById,
   presetFromId,
+  presetToId,
   presetAmount,
 }: {
   visible: boolean;
@@ -106,6 +106,12 @@ export function TransferSheet({
   teamById: Map<string, Team>;
   /** Источник, с которого пришли (свайп по строке, карточка счёта). */
   presetFromId?: string | null;
+  /** ПОЛУЧАТЕЛЬ ИЗ ВЫЗЫВАЮЩЕГО СЦЕНАРИЯ. Нужен ровно там, где деньги идут В
+   *  счёт, а не из него: счёт в минусе закрыть нельзя, и единственный выход —
+   *  пополнить его с другого (аудит счетов 2026-09-10). Раньше такому счёту
+   *  показывали только текст «сначала проведите приход», и человек шёл искать
+   *  перевод сам, вручную выбирая направление. */
+  presetToId?: string | null;
   /** Сумма из вызывающего сценария («Сдать остаток» при закрытии счёта).
    *  Без неё подставляется весь остаток источника. */
   presetAmount?: number | null;
@@ -153,23 +159,42 @@ export function TransferSheet({
     if (wasVisible.current) return;
     wasVisible.current = true;
     const source = presetFromId ? (accounts.find((a) => a.id === presetFromId) ?? null) : null;
-    const target = source
-      ? defaultTransferTarget({
-          accounts,
-          from: source,
-          remembered: loadLastTransferTarget(source.id),
-        })
+    const preselected = presetToId
+      ? (accounts.find((a) => a.id === presetToId) ?? null)
       : null;
+    // ПОЛУЧАТЕЛЬ НАЗВАН СНАРУЖИ — источник тогда ищем сами: это самый полный
+    // счёт из остальных, то есть тот, с которого перевод вообще возможен.
+    const donor =
+      !source && preselected
+        ? (accounts
+            .filter((a) => a.id !== preselected.id && a.balance > 0)
+            .sort((a, b) => b.balance - a.balance)[0] ?? null)
+        : null;
+    const target = preselected
+      ? preselected
+      : source
+        ? defaultTransferTarget({
+            accounts,
+            from: source,
+            remembered: loadLastTransferTarget(source.id),
+          })
+        : null;
     const preset = presetAmount ?? source?.balance ?? 0;
-    setStep("form");
-    setFromId(source?.id ?? null);
+    // ЛИСТ ОТКРЫВАЕТСЯ НА ПЕРВОМ НЕОТВЕЧЕННОМ ВОПРОСЕ (владелец 2026-09-12:
+    // «давай уменьшаем тапы»). Со строки счёта источник известен — значит,
+    // сразу форма с набранной суммой. Иконкой ⇄ из шапки не известно ничего, и
+    // форма встречала двумя «Выберите счёт» и цифровой клавиатурой под пустой
+    // суммой: три лишних тапа, чтобы добраться до единственного вопроса,
+    // который вообще можно задать первым.
+    setStep(source || donor ? "form" : "from");
+    setFromId(source?.id ?? donor?.id ?? null);
     setSourceLocked(!!source);
     setToId(target?.id ?? null);
     setAmount(moneySign(preset) > 0 ? formatMoneyForInput(preset) : "");
     setNote("");
     setOccurredOn(businessToday);
     setFailure(null);
-  }, [visible, presetFromId, presetAmount, accounts, businessToday]);
+  }, [visible, presetFromId, presetToId, presetAmount, accounts, businessToday]);
 
   const teamName = useMemo(
     () => (id: string | null) => (id ? (teamById.get(id)?.name ?? null) : null),
@@ -178,9 +203,11 @@ export function TransferSheet({
   // ОДНО ПРАВИЛО ИМЕНИ на весь лист: в карточках счёт называется полностью,
   // «Наличка · Команда 2». Условной дописки команды больше нет — в СПИСКЕ её
   // говорит заголовок группы, и там строка остаётся голым именем.
+  const spansTeams = useMemo(() => transferSpansTeams(accounts), [accounts]);
   const label = useMemo(
-    () => (account: AccountWithBalance) => accountOwnerLabel(account, teamName),
-    [teamName],
+    () => (account: AccountWithBalance) =>
+      accountOwnerLabel(account, teamName, spansTeams),
+    [teamName, spansTeams],
   );
   // Порядок списка по-прежнему считается от команды ИСТОЧНИКА: её счета идут
   // первыми — в них сдают и из них переводят чаще всего.
@@ -205,7 +232,7 @@ export function TransferSheet({
   // НИЖНЯЯ ГРАНИЦА БАРАБАНА ДАТЫ: раньше первого движения денег переводить
   // нечего, а у тенанта совсем без истории — начало прошлого месяца. Без пола
   // случайная прокрутка колеса года молча уносила перевод в глубокое прошлое:
-  // серверный guard стережёт только дни, закрытые сверкой.
+  // сервер отбивает только будущие даты.
   const dateFloor = useMemo(() => {
     const firstMovement = accounts
       .map((a) => a.first_tx_on)
@@ -226,6 +253,11 @@ export function TransferSheet({
         ? "Выберите, куда"
         : transferValidationError(from, to, amountNum);
   const canSend = reason === null && !sending;
+  // ПОКА ПЕРЕВОД ЛЕТИТ, ЛИСТ НЕ ЗАКРЫВАЕТСЯ (аудит 2026-09-24): смахнутый в
+  // этот момент лист прятал отказ сервера, и человек думал, что деньги ушли.
+  const closeUnlessSending = () => {
+    if (!sending) onClose();
+  };
 
   /** `request_id` привязан к НАМЕРЕНИЮ, а не к открытию листа: та же пара,
    *  сумма, день и комментарий — тот же ключ и серверный дедуп после
@@ -253,7 +285,22 @@ export function TransferSheet({
         moneySign(next.balance) > 0 ? formatMoneyForInput(next.balance) : "",
       );
     }
-    setStep("form");
+    // ПОЛУЧАТЕЛЬ ПОДСТАВЛЯЕТСЯ ТЕМ ЖЕ ПРАВИЛОМ, ЧТО И ПРИ ВХОДЕ СО СТРОКИ:
+    // прошлый адресат этого источника, а если счёт в паре всего один — он.
+    // Уже выбранного рукой получателя не трогаем: смена источника — не повод
+    // переигрывать чужое решение.
+    let target = to;
+    if (next && !target) {
+      target = defaultTransferTarget({
+        accounts,
+        from: next,
+        remembered: loadLastTransferTarget(next.id),
+      });
+      setToId(target?.id ?? null);
+    }
+    // Подставить нечего — спрашиваем сразу, а не показываем форму с погашенной
+    // кнопкой и надписью «Выберите, куда».
+    setStep(target ? "form" : "to");
     setFailure(null);
   };
 
@@ -308,7 +355,7 @@ export function TransferSheet({
       rememberTransferTarget(from.id, to.id);
       intent.done();
       // Деньги ушли — телефон отвечает тем же тактильным «готово», что и
-      // отмена перевода, и пересчёт кассы: один продукт подтверждает успех
+      // отмена перевода: один продукт подтверждает успех
       // одинаково, чем бы человек ни занимался.
       haptics.success();
       onClose();
@@ -355,12 +402,13 @@ export function TransferSheet({
       <BottomSheet
       padded={false}
         visible={visible}
-        onClose={onClose}
+        onClose={closeUnlessSending}
         title={title}
         footer={
           <View style={{ paddingHorizontal: 20 }}>
             <GradientButton
-              label="Выбрать день"
+              // Слово из словаря AGENTS 5.2: «Выбрать» кнопкой шторки не бывает.
+              label="Применить"
               onPress={() => {
                 setOccurredOn(dateDraft);
                 setStep("form");
@@ -397,8 +445,7 @@ export function TransferSheet({
               color: t.faint,
             }}
           >
-            Вперёд день не ставится: деньги нельзя передать завтра. Если день уже
-            закрыт сверкой, сервер откажет — тогда проведите переводом на сегодня.
+            Вперёд день не ставится: деньги нельзя передать завтра.
           </Text>
         </View>
       </BottomSheet>
@@ -412,7 +459,7 @@ export function TransferSheet({
       <BottomSheet
       padded={false}
         visible={visible}
-        onClose={onClose}
+        onClose={closeUnlessSending}
         title={title}
         scroll
         maxHeightRatio={0.8}
@@ -440,25 +487,34 @@ export function TransferSheet({
               Гасить в списке больше нечего — любая пара счетов допустима. */}
           {groups.map((group) => (
             <View key={group.teamId ?? "orphans"} style={{ marginBottom: 12 }}>
-              <Text
-                maxFontSizeMultiplier={1.3}
-                style={{
-                  marginBottom: 6,
-                  marginHorizontal: 4,
-                  fontSize: 12,
-                  fontWeight: "700",
-                  letterSpacing: 0.6,
-                  textTransform: "uppercase",
-                  color: t.faint,
-                }}
-              >
-                {group.title}
-              </Text>
+              {/* Одна команда на все счета — заголовок называл бы то, из чего
+                  не выбирают (прогон 2026-09-23); та же мера, что у имён. */}
+              {spansTeams ? (
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  style={{
+                    marginBottom: 6,
+                    marginHorizontal: 4,
+                    fontSize: 12,
+                    fontWeight: "700",
+                    letterSpacing: 0.6,
+                    textTransform: "uppercase",
+                    color: t.faint,
+                  }}
+                >
+                  {group.title}
+                </Text>
+              ) : null}
               <ValueOptionList
                 options={group.accounts.map((account) => ({
                   id: account.id,
                   label: account.name,
                   value: money(account.balance, currency),
+                  // ВИД СЧЁТА ЕДЕТ В ВЫБОР. В списке и в карточке счёт
+                  // узнаётся цветом и значком, а в шаге «куда уходят деньги»
+                  // он был голой строкой — единственное место, где вид терялся.
+                  color: account.color,
+                  icon: accountIcon(account),
                 }))}
                 selectedId={step === "from" ? fromId : toId}
                 // «Ничего не выбрано» здесь не значение, а тупик: повторный тап
@@ -505,7 +561,7 @@ export function TransferSheet({
     <BottomSheet
       padded={false}
       visible={visible}
-      onClose={onClose}
+      onClose={closeUnlessSending}
       title={title}
       scroll
       avoidKeyboard
@@ -591,6 +647,9 @@ export function TransferSheet({
                 style={{
                   minWidth: 96,
                   fontSize: 28,
+                  // БЕЗ ИНТЕРВАЛА iOS СРЕЖЕТ ВЕРХ ГЛИФОВ (см. тест ловушек
+                  // nativewind): строка поля выходит ниже кегля.
+                  lineHeight: 36,
                   fontWeight: "700",
                   textAlign: "right",
                   color: amount ? t.ink : t.placeholder,

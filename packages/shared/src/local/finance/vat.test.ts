@@ -224,6 +224,24 @@ describe("действующий НДС: зеркало fill_transaction_vat", (
     expect(defaultTxVatMode(v)).toBe("none");
   });
 
+  test("«С НДС» у счёта берёт режим и ставку команды", () => {
+    expect(
+      effectiveVatSettings(company, { mode: "exclusive", rate: 24 }, "on"),
+    ).toEqual({ mode: "exclusive", rate: 24 });
+  });
+
+  test("«С НДС» у счёта при команде без НДС берёт режим компании", () => {
+    expect(
+      effectiveVatSettings(company, { mode: "off", rate: null }, "on"),
+    ).toEqual({ mode: "inclusive", rate: 19 });
+  });
+
+  test("«С НДС» у счёта не включает налог компании, которая с ним не работает", () => {
+    expect(
+      effectiveVatSettings({ mode: "off", rate: 19 }, undefined, "on").mode,
+    ).toBe("off");
+  });
+
   test("тумблер компании «off» гасит и пины счёта/команды", () => {
     // Канон: «Работаем с НДС» выключен — налога нет во всём продукте, даже
     // если за счётом или командой закреплён свой режим (сервер проверяет

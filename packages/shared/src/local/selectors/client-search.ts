@@ -70,6 +70,17 @@ function clientHaystacks(client: Client): {
   push(client.comment);
   push(client.address);
   push(client.city);
+  // STORY-085: клиент находится по реквизитам — юридическому имени и VAT.
+  // Люди карточки — сами клиенты и находятся своими строками.
+  push(client.legal_name);
+  push(client.vat_number);
+  // …и по ВСЕМ наборам, а не только по основному-зеркалу (аудит 23.09: у
+  // компании два набора, поиск по VAT второго клиента не находил).
+  for (const set of client.requisites ?? []) {
+    push(set.legal_name);
+    push(set.vat_number);
+    push(set.reg_number);
+  }
   for (const note of client.notes ?? []) push(note.text);
   for (const p of client.phones ?? []) {
     push(p.number);
@@ -94,7 +105,16 @@ function clientHaystacks(client: Client): {
   return { normalized, digits };
 }
 
-export function matchesClient(client: Client, rawQuery: string): boolean {
+/** `extra` — чужие слова, по которым клиента тоже находят: имя карточки, в
+ *  которую он входит, его роль и место («Наталья», «жилец», «Вилла 5»).
+ *  Владелец 22.09: жильцов управляющей ищут по её имени — «Наталья» в поиске
+ *  обязана приводить и к ней, и к людям её карточки. Слова приходят снаружи:
+ *  сам клиент знает только id карточки, имя — у списка. */
+export function matchesClient(
+  client: Client,
+  rawQuery: string,
+  extra: readonly string[] = [],
+): boolean {
   const q = rawQuery.trim();
   if (!q) return true;
   const qNorm = normalizeSearchable(q);
@@ -113,6 +133,9 @@ export function matchesClient(client: Client, rawQuery: string): boolean {
   if (qNorm.length === 0) return false;
   for (const s of hay.normalized) {
     if (s.includes(qNorm)) return true;
+  }
+  for (const word of extra) {
+    if (normalizeSearchable(word).includes(qNorm)) return true;
   }
   return false;
 }

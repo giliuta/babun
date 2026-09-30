@@ -26,10 +26,13 @@ import { notify } from "@/lib/notify";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useTenant } from "@/features/settings/tenant";
+import { useFeatureOn } from "@/features/settings/company-features";
 import { humanDay } from "@/features/appointments/helpers";
 import type { Team } from "@/features/reference/queries";
 import { deleteTransferAlert } from "./account-alerts";
 import { refundRemainingCents as refundRemainingCentsOf } from "./refund";
+import { payeeName } from "./category-asks";
+import { randomUuid } from "@babun/shared/sync";
 
 /** Строка-факт витрины: ярлык слева, значение справа. Читается, но не
  *  правится — правка живёт в форме операции. */
@@ -115,35 +118,58 @@ export function TransactionPopup({
   accounts,
   teams,
   categories,
+  people,
   alreadyRefunded = 0,
+  refundTotalsLoading = false,
+  refundTotalsError = false,
   onClose,
   onInvoice,
   onClientOpen,
   onDelete,
   onRefund,
+  allow,
 }: {
   visible: boolean;
   transaction: FinanceTransaction | null;
   accounts: Account[];
   teams: Team[];
   categories: FinanceCategory[];
+  /** Сотрудники — строка «Кому» у выплаты зарплаты. */
+  people?: readonly { id: string; full_name: string }[];
   /** Σ already-refunded for this income — caps the new refund. */
   alreadyRefunded?: number;
+  /** Σ возвратов ещё не приехала (первая загрузка `useRefundTotals`): кап
+   *  неизвестен, поэтому «Создать возврат» прячется консервативно
+   *  (`alreadyRefunded = Infinity`), а строка ниже обязана сказать почему —
+   *  молчание читалось бы как «возврата тут не бывает». */
+  refundTotalsLoading?: boolean;
+  /** Запрос Σ возвратов упал: та же консервативная защита, другое слово. */
+  refundTotalsError?: boolean;
   onClose: () => void;
   onInvoice: (tx: FinanceTransaction) => void;
   onClientOpen: (clientId: string) => void;
   onDelete: (tx: FinanceTransaction) => Promise<void>;
-  onRefund: (tx: FinanceTransaction, amount: number) => Promise<void>;
+  onRefund: (tx: FinanceTransaction, amount: number, requestId: string) => Promise<void>;
+  /** Что этому человеку открыто по уровню (этап 2 доступа). Не передано —
+   *  открыто всё, как было: витрину зовут и с экранов без уровней. Ряд
+   *  действия не рисуется вовсе — «видно, но при нажатии отказ» не бывает. */
+  allow?: { refund?: boolean; invoice?: boolean; remove?: boolean };
 }) {
   const t = useThemeColors();
   const [showRefundForm, setShowRefundForm] = useState(false);
   const [refundAmount, setRefundAmount] = useState("");
+  // Id попытки возврата — один на открытую форму: повтор после потерянного
+  // ответа упирается в тот же id и не проводит возврат второй раз.
+  const [refundRequestId, setRefundRequestId] = useState(randomUuid);
   const [busy, setBusy] = useState(false);
   // Синхронный гард поверх busy: state включается только после ре-рендера,
   // и сверхбыстрый двойной тап «Возврат» успевал записать возврат дважды —
   // тот же класс бага, что savingRef в OperationSheet.
   const savingRef = useRef(false);
+  /** Отложенное до полного ухода листа: вопрос об удалении (см. handleDelete). */
+  const afterExit = useRef<(() => void) | null>(null);
   const currency = useTenant().data?.currency;
+  const documentsOn = useFeatureOn("documents");
   const { data: counterpartAccountId } = useTransferCounterpartAccountId(
     visible ? transaction : null,
   );
@@ -189,10 +215,11 @@ export function TransactionPopup({
       : tx.type === "expense" || tx.type === "refund"
         ? t.danger
         : t.ink;
+  // ПЕРЕВОД БЕЗ ЗНАКА (прогон 2026-09-23): в ленте всех счетов он «€55»,
+  // а карточка того же перевода печатала «−€55» — минус читается как расход.
+  // Деньги переехали; откуда и куда — строки ниже.
   const sign =
-    tx.type === "income" || (tx.type === "transfer" && tx.amount > 0)
-      ? ""
-      : "−";
+    tx.type === "income" || tx.type === "transfer" ? "" : "−";
 
   // Auto rows are the immutable financial mirror of an appointment. They may
   // only be refunded through that appointment; a generic refund here would
@@ -206,13 +233,38 @@ export function TransactionPopup({
   );
   const refundRemaining = refundRemainingCents / 100;
   const canRefund =
-    tx.type === "income" && !isAppointmentLedger && refundRemainingCents > 0;
+    (allow?.refund ?? true) &&
+    tx.type === "income" &&
+    !isAppointmentLedger &&
+    // Оплата долга: возврат её долг не откроет — долг остался бы «закрытым»,
+    // а деньги ушли бы клиенту (аудит 2026-09-30). Такой платёж снимают
+    // удалением, тогда долг снова виден.
+    !tx.debt_id &&
+    // Кап неизвестен, пока Σ возвратов не приехала (или упала) — действие
+    // не предлагаем, а не гасим молча: строка ниже называет причину.
+    !refundTotalsLoading &&
+    !refundTotalsError &&
+    refundRemainingCents > 0;
+  // ПОДПИСЬ ВМЕСТО МОЛЧАНИЯ. «Создать возврат» и так не появится, пока кап не
+  // известен, — но пустое место рядом с доходом читалось бы как «у этой
+  // операции возврата вообще не бывает». Условие то же, что у canRefund,
+  // кроме самого кап-числа: показываем строку ИМЕННО тогда, когда причина —
+  // загрузка или ошибка, а не типы/права/appointment-ledger.
+  const refundStatusCaption =
+    (allow?.refund ?? true) && tx.type === "income" && !isAppointmentLedger && !tx.debt_id
+      ? refundTotalsLoading
+        ? "Считаем, сколько уже возвращено…"
+        : refundTotalsError
+          ? "Не удалось проверить прошлые возвраты — возврат недоступен."
+          : null
+      : null;
   // Перевод УДАЛЯЕТСЯ, но не правится и не возвращается: сервер запрещает
   // редактировать ноги, а onDelete сверху отменяет перевод целиком — обе
   // ноги атомарно по transfer_group_id. Это единственная дверь к отмене
   // перевода с главного экрана.
-  const canDelete = !isAppointmentLedger && !tx.invoice_id;
-  const canInvoice = tx.type === "income";
+  const canDelete = (allow?.remove ?? true) && !isAppointmentLedger && !tx.invoice_id;
+  // «Инвойсы и чеки» выключены у компании (STORY-088) — пункта нет ни у кого.
+  const canInvoice = (allow?.invoice ?? true) && tx.type === "income" && documentsOn;
 
   const refundCents = parseMoneyInputToCents(refundAmount);
   const refundNum = (refundCents ?? 0) / 100;
@@ -228,9 +280,16 @@ export function TransactionPopup({
         ? deleteTransferAlert()
         : {
             title: "Удалить операцию?",
-            message: "Действие нельзя отменить.",
+            // ПОСЛЕДСТВИЕ, А НЕ «НЕЛЬЗЯ ОТМЕНИТЬ» (правила текстов
+            // account-alerts). Слово в слово как в листе операции: один
+            // вопрос об одном действии не должен звучать двумя голосами.
+            message: "Операция исчезнет из ленты, остаток счёта пересчитается.",
             confirm: "Удалить",
           };
+    // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29) — вопрос
+    // рисует хост приложения поверх окна листа, и iOS его не показывает.
+    // Ждём `onExited`; см. тот же приём в OperationSheet.remove.
+    afterExit.current = () => {
     confirmThen(
       text.title,
       {
@@ -239,21 +298,20 @@ export function TransactionPopup({
         destructive: true,
       },
       async () => {
-        if (savingRef.current || busy) return;
+        if (savingRef.current) return;
         savingRef.current = true;
-        setBusy(true);
         try {
           await onDelete(tx);
           haptics.success();
-          onClose();
         } catch (e) {
           notify("Ошибка", (e as Error).message);
         } finally {
           savingRef.current = false;
-          setBusy(false);
         }
       },
     );
+    };
+    onClose();
   };
 
   const handleRefund = async () => {
@@ -261,7 +319,7 @@ export function TransactionPopup({
     savingRef.current = true;
     setBusy(true);
     try {
-      await onRefund(tx, refundNum);
+      await onRefund(tx, refundNum, refundRequestId);
       haptics.success();
       onClose();
     } catch (e) {
@@ -279,17 +337,21 @@ export function TransactionPopup({
     { label: "Дата", value: humanDay(tx.occurred_on) },
   ];
   if (category) metaRows.push({ label: "Категория", value: category.name });
+  const payee = payeeName(people, tx.master_id);
+  if (payee) metaRows.push({ label: "Кому", value: payee });
   // Перевод отвечает «откуда и куда ушли деньги» обеими ногами; пока вторая
   // не найдена — обычная строка «Счёт».
   if (transferLegs) {
-    metaRows.push({
-      label: "Откуда",
-      value: accountDisplayName(transferLegs.from, ownerName(transferLegs.from)),
-    });
-    metaRows.push({
-      label: "Куда",
-      value: accountDisplayName(transferLegs.to, ownerName(transferLegs.to)),
-    });
+    // ВЛАДЕЛЕЦ У ИМЕНИ — ТОЛЬКО КОГДА КОМАНДЫ СТОРОН РАЗНЫЕ (прогон
+    // 2026-09-23): «Наличные · Y&D», «Карта · Y&D» и строкой ниже «Команда
+    // Y&D» — одно слово трижды. Та же мера, что в листе перевода
+    // (`transferSpansTeams`).
+    const acrossTeams =
+      transferLegs.from.brigade_id !== transferLegs.to.brigade_id;
+    const legName = (a: Account) =>
+      acrossTeams ? accountDisplayName(a, ownerName(a)) : a.name;
+    metaRows.push({ label: "Откуда", value: legName(transferLegs.from) });
+    metaRows.push({ label: "Куда", value: legName(transferLegs.to) });
   } else if (account) {
     metaRows.push({ label: "Счёт", value: account.name });
   }
@@ -305,7 +367,7 @@ export function TransactionPopup({
   // налог, а его отсутствие.
   if (tx.vat_amount != null && tx.vat_amount !== 0) {
     metaRows.push({
-      label: "НДС",
+      label: "VAT",
       value: `в т.ч. ${formatEUR(Math.abs(tx.vat_amount))}${
         tx.vat_rate != null ? ` (${tx.vat_rate}%)` : ""
       }`,
@@ -348,6 +410,7 @@ export function TransactionPopup({
       onPress: () => {
         setShowRefundForm(true);
         setRefundAmount(String(refundRemaining));
+        setRefundRequestId(randomUuid());
       },
     });
   }
@@ -366,6 +429,11 @@ export function TransactionPopup({
       // Пока возврат/удаление в полёте, лист не закрывается ни свайпом, ни
       // тапом мимо: Alert об ошибке иначе прилетал поверх пустого экрана.
       onClose={busy ? () => {} : onClose}
+      onExited={() => {
+        const run = afterExit.current;
+        afterExit.current = null;
+        run?.();
+      }}
       title={TX_TYPE_LABEL[tx.type]}
       avoidKeyboard
       scroll
@@ -401,6 +469,19 @@ export function TransactionPopup({
             />
           ))}
         </RowGroup>
+
+        {/* ПОДПИСЬ ВМЕСТО МОЛЧАНИЯ — пока кап возврата не известен (или
+            запрос упал), «Создать возврат» не появляется вовсе; без этой
+            строки пустое место рядом с доходом читалось бы как «возврата тут
+            не бывает». */}
+        {refundStatusCaption ? (
+          <Text
+            className="px-5 pb-1 pt-3 text-center text-[13px]"
+            style={{ color: refundTotalsError ? t.danger : t.sub }}
+          >
+            {refundStatusCaption}
+          </Text>
+        ) : null}
 
         {!showRefundForm ? (
           actions.length > 0 ? (

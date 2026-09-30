@@ -1,15 +1,21 @@
-import { Text as NativeText, Pressable, View, type TextProps } from "react-native";
-import { Check } from "lucide-react-native";
+import { Text as NativeText, View, type TextProps } from "react-native";
+import { Users } from "lucide-react-native";
 import {
   PRESET_COLOR_VALUES,
   colorName,
 } from "@babun/shared/common/utils/colors";
-import { edgeColor } from "@/components/ui/color-contrast";
+import { blockSolid } from "@/components/ui/color-contrast";
 
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { ColorPicker } from "@/components/ui/ColorPicker";
+import { EmptyState } from "@/components/ui/EmptyState";
+import {
+  SELECT_SHEET_RATIO,
+  SelectList,
+  SelectRow,
+} from "@/components/ui/select-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -64,7 +70,7 @@ export function TeamMasterSheet({
       title="Команда"
       padded={false}
       scroll
-      maxHeightRatio={0.5}
+      maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
         <View style={{ paddingHorizontal: SIDE }}>
           <Button label="Применить" onPress={onClose} />
@@ -72,61 +78,40 @@ export function TeamMasterSheet({
       }
     >
       {/* СТРОКА КОМАНДЫ — ТОТ ЖЕ ДИАЛЕКТ, ЧТО У ВЫБОРА КЛИЕНТА И ОБЪЕКТА:
-          52pt на подложке, цвет команды точкой слева, галка у выбранной.
+          52pt на подложке, плитка команды слева, галка у выбранной.
           Пилюли-чипы здесь были единственным местом в продукте, где сущность
           выбирают лентой, — а выбирают её ровно так же, как клиента. */}
-      <View style={{ paddingHorizontal: SIDE, paddingTop: 4, paddingBottom: 12, gap: 8 }}>
+      <SelectList>
         {teams.length > 0 ? (
-          teams.map((team) => {
-            const chosen = teamId === team.id;
-            return (
-              <Pressable
-                key={team.id}
-                onPress={() => onPickTeam(team.id)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: chosen }}
-                accessibilityLabel={`Команда ${team.name}`}
-                style={({ pressed }) => ({
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                  minHeight: 52,
-                  paddingHorizontal: 14,
-                  borderRadius: t.radius.input,
-                  backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
-                })}
-              >
-                <View
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: t.radius.pill,
-                    backgroundColor: team.color ?? t.accent,
-                  }}
-                />
-                <Text
-                  numberOfLines={1}
-                  style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
-                >
-                  {team.name}
-                </Text>
-                {chosen ? (
-                  <Check color={t.accent} size={18} strokeWidth={2.4} />
-                ) : null}
-              </Pressable>
-            );
-          })
+          teams.map((team) => (
+            // СТРОКА — ОБЩАЯ (сведено 2026-09-10). Диалект был тот же, но
+            // разметка своя: точка 10pt вместо кружка сущности и копия
+            // строки. Последняя шторка выбора вне общего примитива.
+            //
+            // ЗНАЧОК И ЦВЕТ — ТЕ ЖЕ, ЧТО У ПЛИТКИ КОМАНДЫ В ФОРМЕ (владелец
+            // 2026-09-15: «выбранное должно показываться так же, как в
+            // шторке — блок с подсветкой и иконкой — во всех»). Здесь стоял
+            // пустой кружок `Circle`, а форма рисовала ту же команду значком
+            // людей: выбрал строку с кружком — получил плитку с людьми. Без
+            // своего цвета — акцент, как у плитки (`team?.color ?? t.accent`).
+            <SelectRow
+              key={team.id}
+              icon={Users}
+              color={team.color ?? t.accent}
+              title={team.name}
+              selected={teamId === team.id}
+              accessibilityRole="radio"
+              accessibilityLabel={`Команда ${team.name}`}
+              onPress={() => onPickTeam(team.id)}
+            />
+          ))
         ) : (
-          <View style={{ paddingVertical: 8 }}>
-            <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
-              Команд пока нет
-            </Text>
-            <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: t.sub }}>
-              Сначала создайте команду в кабинете, затем вернитесь к заявке.
-            </Text>
-          </View>
+          <EmptyState
+            title="Команд пока нет"
+            subtitle="Создайте команду в кабинете и вернитесь к заявке"
+          />
         )}
-      </View>
+      </SelectList>
 
       {/* МАСТЕР — необязательный и редкий выбор (1 запись из 30), поэтому
           лентой чипов под командой, а не вторым списком строк. */}
@@ -165,6 +150,7 @@ export function ColorSheet({
   autoLabel,
   autoColor,
   allowNone = true,
+  commitOnPick = false,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -182,6 +168,12 @@ export function ColorSheet({
   /** Можно ли остаться без цвета. У запасного цвета записи нельзя: он и есть
    *  последняя ступень правила, и «ничего» на его месте — дыра. */
   allowNone?: boolean;
+  /** Тап по цвету — сразу выбор и закрытие, без кнопки (канон 5.2: одиночный
+   *  выбор кнопки не имеет). Так зовут лист из календаря, где за листом нет
+   *  страницы, подсвеченной цветом, и «Применить» лишь делал вид, что
+   *  сохраняет. В форме записи кнопка остаётся: там цвет виден сразу всей
+   *  страницей, а сохраняет его футер формы. */
+  commitOnPick?: boolean;
 }) {
   return (
     <BottomSheet
@@ -190,12 +182,14 @@ export function ColorSheet({
       title={title ?? (isEvent ? "Цвет события" : "Цвет записи")}
       padded={false}
       footer={
+        commitOnPick ? undefined : (
         <View style={{ paddingHorizontal: SIDE }}>
           {/* «ПРИМЕНИТЬ» ВНИЗУ, А НЕ «ГОТОВО» В УГЛУ ШАПКИ (владелец
               2026-09-04). Цвет виден сразу — вся страница за листом уже
               подсвечена им, — поэтому кнопка только закрывает. */}
           <Button label="Применить" onPress={onClose} />
         </View>
+        )
       }
     >
       <View style={{ paddingHorizontal: SIDE, paddingBottom: 8 }}>
@@ -211,11 +205,10 @@ export function ColorSheet({
             label={autoLabel ?? "Автоматически"}
             radio
             variant="tint"
-            // КАНТ, А НЕ СЫРОЙ ПИГМЕНТ: пилюля красит им свою рамку и тинт, а
-            // Ванильный #FFF0BC в полную силу даёт к белому листу 1.14 : 1 —
-            // выбранное состояние на бледном цвете просто исчезало бы.
-            // Кружок рядом остаётся сырым: в нём цвет ВЫБИРАЮТ.
-            color={autoColor ? edgeColor(autoColor) : undefined}
+            // ТОТ ЖЕ ТОН, ЧТО У БЛОКА В КАЛЕНДАРЕ (`blockSolid`): пилюля и
+            // кружок показывают то, что человек получит на сетке, а не сырой
+            // пигмент, который на бледных цветах растворялся в листе.
+            color={autoColor ? blockSolid(autoColor) : undefined}
             // ОБРАЗЕЦ ДЕЙСТВУЮЩЕГО ЦВЕТА ПРЯМО НА КНОПКЕ (владелец 2026-09-05:
             // «выбрал „Автоматически“ — значит подсвечивается тем цветом,
             // который сейчас стоит в автоматическом режиме»). Слово говорило,
@@ -230,11 +223,7 @@ export function ColorSheet({
                     width: 10,
                     height: 10,
                     borderRadius: 5,
-                    backgroundColor: autoColor,
-                    // Волосяной кант тем же затемнением: без него бледный цвет
-                    // растворяется в подложке пилюли и кружка не видно.
-                    borderWidth: 1,
-                    borderColor: edgeColor(autoColor),
+                    backgroundColor: blockSolid(autoColor),
                   }}
                 />
               ) : undefined
@@ -253,10 +242,10 @@ export function ColorSheet({
         </View>
         ) : null}
         <ColorPicker
-          label={null}
           colors={EVENT_COLORS}
           value={value}
           onChange={onPick}
+          tone={blockSolid}
         />
       </View>
     </BottomSheet>

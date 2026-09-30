@@ -21,8 +21,9 @@ import { Pressable, Text, View } from "react-native";
 import { ChevronDown, ChevronUp, X } from "lucide-react-native";
 import type { Client, ClientNote } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
-import { RowGroup } from "@/components/ui/card-rows";
+import { SectionCard } from "@/components/ui/SectionCard";
 import { ICON } from "@/components/ui/tokens";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { applyNoteEdit } from "@/features/appointments/client-note-journal";
 import { useInlineNote } from "@/features/appointments/use-inline-note";
@@ -33,6 +34,9 @@ import { useThemeColors } from "@/theme/colors";
 interface NotesBlockProps {
   client: Client;
   update: (patch: Partial<Client>) => Promise<boolean>;
+  /** Сотрудник без «Клиенты: Меняет»: заметку читает, но не пишет и не
+   *  снимает — сервер правку карточки отказал бы (STORY-088, волна 4). */
+  readOnly?: boolean;
 }
 
 /** Стабильная пустая ссылка: `client.notes ?? []` давал новый массив на
@@ -42,8 +46,10 @@ const EMPTY_NOTES: ClientNote[] = [];
 /** Тот же предел, что у поля на странице записи. */
 const MAX_LEN = 500;
 
-export default function NotesBlock({ client, update }: NotesBlockProps) {
+export default function NotesBlock({ client, update, readOnly = false }: NotesBlockProps) {
   const t = useThemeColors();
+  // Без выноса (30.09): у сотрудника чужой компании меню «Скопировать» нет.
+  const caps = useClientsCapabilities();
   const [earlierOpen, setEarlierOpen] = useState(false);
   const list = client.notes ?? EMPTY_NOTES;
   const imported = (client.comment ?? "").trim();
@@ -94,14 +100,18 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
   const earlier = sorted.slice(1);
   const importedEarlier = sorted.length > 0 ? imported : "";
   const earlierCount = earlier.length + (importedEarlier ? 1 : 0);
+  // Читать нечего и писать нельзя — блока нет, а не шапка над пустотой.
+  if (readOnly && !latest && earlierCount === 0) return null;
 
   return (
-    <RowGroup title="Заметка клиента">
+    <SectionCard title="Заметка клиента">
       <InlineNoteField
         note={note}
         placeholder="Заметка клиента"
         accessibilityLabel="Заметка клиента"
         maxLength={MAX_LEN}
+        readOnly={readOnly}
+        noCopy={!caps.export}
       />
 
       {earlierCount > 0 ? (
@@ -141,10 +151,14 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
         <EarlierRow
           caption="Из импорта"
           text={importedEarlier}
-          onRemove={() => {
-            haptics.tap();
-            void update({ comment: "" });
-          }}
+          onRemove={
+            readOnly
+              ? undefined
+              : () => {
+                  haptics.tap();
+                  void update({ comment: "" });
+                }
+          }
           removeLabel="Удалить импортированную заметку"
         />
       ) : null}
@@ -154,12 +168,12 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
               key={n.id}
               caption={formatNoteDate(n.created_at)}
               text={n.text}
-              onRemove={() => remove(n.id)}
+              onRemove={readOnly ? undefined : () => remove(n.id)}
               removeLabel="Удалить заметку"
             />
           ))
         : null}
-    </RowGroup>
+    </SectionCard>
   );
 }
 
@@ -171,7 +185,8 @@ function EarlierRow({
 }: {
   caption: string;
   text: string;
-  onRemove: () => void;
+  /** Нет — крестика нет: запись журнала только читается. */
+  onRemove?: () => void;
   removeLabel: string;
 }) {
   const t = useThemeColors();
@@ -201,21 +216,25 @@ function EarlierRow({
           {text}
         </Text>
       </View>
-      <Pressable
-        onPress={onRemove}
-        accessibilityRole="button"
-        accessibilityLabel={removeLabel}
-        hitSlop={8}
-        style={({ pressed }) => ({
-          width: 40,
-          minHeight: 40,
-          alignItems: "center",
-          justifyContent: "center",
-          opacity: pressed ? 0.5 : 1,
-        })}
-      >
-        <X color={t.faint} size={16} strokeWidth={2.4} />
-      </Pressable>
+      {onRemove ? (
+        <Pressable
+          onPress={onRemove}
+          accessibilityRole="button"
+          accessibilityLabel={removeLabel}
+          hitSlop={8}
+          style={({ pressed }) => ({
+            width: 40,
+            minHeight: 40,
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: pressed ? 0.5 : 1,
+          })}
+        >
+          <X color={t.faint} size={16} strokeWidth={2.4} />
+        </Pressable>
+      ) : (
+        <View style={{ width: 16 }} />
+      )}
     </View>
   );
 }

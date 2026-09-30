@@ -5,6 +5,8 @@ import {
   chipPad,
   chipTextW,
   chipsThatFit,
+  blockLadder,
+  nameShrinkFits,
   rowsThatFit,
   textRows,
   TEXT_MIN_W,
@@ -115,5 +117,57 @@ describe("чипы «весь день»", () => {
   test("пустой список и нулевая ширина не ломают счёт", () => {
     assert.equal(chipsThatFit(300, 0), 0);
     assert.equal(chipsThatFit(0, 3), 0);
+  });
+});
+
+describe("лестница содержимого блока", () => {
+  const base = { textW: 40, nameWords: 2, hasService: true, hasAddress: true };
+  test("узкий высокий блок: имя в две строки, потом время, услуга, адрес", () => {
+    const l = blockLadder({ ...base, rowsFit: 6 });
+    assert.deepEqual(l, { nameRows: 2, showTime: true, showService: true, showAddress: true, lastRow: "address" });
+  });
+  test("узкий на три строки: имя в две и время", () => {
+    const l = blockLadder({ ...base, rowsFit: 3 });
+    assert.equal(l.nameRows, 2);
+    assert.equal(l.showTime, true);
+    assert.equal(l.showService, false);
+  });
+  test("узкий на две строки: имя одной строкой и время", () => {
+    const l = blockLadder({ ...base, rowsFit: 2 });
+    assert.equal(l.nameRows, 1);
+    assert.equal(l.lastRow, "time");
+  });
+  test("имя из одного слова не делится", () => {
+    assert.equal(blockLadder({ ...base, nameWords: 1, rowsFit: 6 }).nameRows, 1);
+  });
+  test("широкий блок: имя одной строкой, потолка в три строки нет", () => {
+    const l = blockLadder({ ...base, textW: 300, rowsFit: 4 });
+    assert.equal(l.nameRows, 1);
+    assert.equal(l.showAddress, true);
+  });
+  test("нет услуги — адрес встаёт на её место", () => {
+    const l = blockLadder({ ...base, textW: 300, hasService: false, rowsFit: 3 });
+    assert.equal(l.showService, false);
+    assert.equal(l.showAddress, true);
+  });
+  test("самый низкий блок печатает хотя бы имя", () => {
+    assert.equal(blockLadder({ ...base, rowsFit: 0 }).lastRow, "name");
+  });
+});
+
+describe("nameShrinkFits — подгонка имени в узкой карточке", () => {
+  // Колонка недели Pro Max (440pt): ширина 55, паддинг 3 → текст 47.
+  const proMaxText = weekCell(440) - 2 * 3 - 2;
+  test("короткие имена сжимаются и встают целиком", () => {
+    assert.equal(nameShrinkFits("Андрей", proMaxText), true);
+    assert.equal(nameShrinkFits("Перерыв", proMaxText), true);
+    // Две записи рядом отнимают у колонки зазор — «Перерыв» всё равно встаёт.
+    assert.equal(nameShrinkFits("Перерыв", 44), true);
+  });
+  test("длинное имя не ужимается ниже 11pt — остаётся многоточие", () => {
+    assert.equal(nameShrinkFits("Константин", proMaxText), false);
+  });
+  test("нулевая ширина — не сжимаем", () => {
+    assert.equal(nameShrinkFits("А", 0), false);
   });
 });

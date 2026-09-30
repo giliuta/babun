@@ -12,6 +12,7 @@ import {
 } from "@/features/clients/HiddenClientsScreen";
 import { useThemeColors } from "@/theme/colors";
 import { confirmAction } from "@/lib/confirm";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 
 // АРХИВ КЛИЕНТОВ — «больше не работаем, но история нужна».
 //
@@ -19,7 +20,17 @@ import { confirmAction } from "@/lib/confirm";
 // привязанными к нему навсегда. Тем он и отличается от «Недавно удалённых»,
 // где идёт отсчёт.
 
-export default function ClientArchiveScreen() {
+// Экран вкладки «Клиенты»: компанию называет источник, а не роль
+// (STORY-082).
+export default function ClientArchiveScreenRoute() {
+  return (
+    <ClientsCompanyRoute kind="tab">
+      <ClientArchiveScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+function ClientArchiveScreen() {
   const t = useThemeColors();
   const archived = useArchivedClients();
   const restore = useRestoreClient();

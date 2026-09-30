@@ -36,8 +36,43 @@ export interface InvoiceDictionary {
   vatInclusive: string;
   vatExclusive: string;
   netAmount: string;
+  /** Скидка — строкой итогов, а не услугой в таблице (владелец 2026-09-22). */
+  discount: string;
+  /** База налога прямо в его строке: «VAT 19% on €110.00» — отдельная
+   *  строка «сумма после скидки» делала итоги лестницей из пяти сумм. */
+  vatOn: (amount: string) => string;
   vatOf: (percent: string) => string;
   grandTotal: string;
+  /** Регистрационный номер юрлица в строках продавца — как у чека. */
+  regNumber: string;
+  /** Подпись VAT-номера в строках сторон («VAT No.: 60184450X»). */
+  vatNo: string;
+  /** Части точного адреса объекта на бумаге: «Floor 3» / «эт. 3». */
+  addrEntrance: (value: string) => string;
+  addrFloor: (value: string) => string;
+  addrApartment: (value: string) => string;
+  /** Даты под номером в шапке, коротко — как у AirFix #103: «Issued 18/09/2026». */
+  issuedShort: (date: string) => string;
+  dueShort: (date: string) => string;
+  /** Нижний блок бумаги: примечание и реквизиты для оплаты одним блоком. */
+  notesAndPayment: string;
+  /** Номер черновику ещё не выдан: настоящий рождается на сервере в момент
+   *  выставления, и показать угаданный значит однажды показать не тот. */
+  numberPending: string;
+  /** Подпись под реквизитами для оплаты. Жила зашитой по-русски В ДВУХ
+   *  рендерах сразу, и английский счёт просил «указать в назначении
+   *  платежа» русскими словами. */
+  paymentPurpose: (number: string) => string;
+  /** Способ платежа в истории оплат: он приходит кодом, а печатается на
+   *  языке документа. До этого печатался словарём приложения — в английском
+   *  счёте стояло «Банк». */
+  method_cash: string;
+  method_card: string;
+  method_bank: string;
+  method_other: string;
+  /** Подвал выставленного документа. Был зашит по-русски и печатался
+   *  последней строкой английского счёта. */
+  footer: (number: string, currency: string) => string;
   payTo: string;
   bank: string;
   payment: string;
@@ -47,7 +82,6 @@ export interface InvoiceDictionary {
   paymentRow: string;
   refundRow: string;
   notes: string;
-  draftFooter: (number: string) => string;
   /** Только в PDF: шапка-эйбрау, заголовки таблицы платежей и пустое её
    *  состояние. На экранной бумаге этого блока нет. */
   invoiceEyebrow: string;
@@ -83,11 +117,34 @@ const RU: InvoiceDictionary = {
   amount: "Сумма",
   untitled: "Без названия",
   subtotal: "Сумма",
-  vatInclusive: "НДС включён в цены",
-  vatExclusive: "НДС начислен сверху",
-  netAmount: "Без НДС",
-  vatOf: (percent) => `НДС · ${percent}`,
+  // VAT, А НЕ «НДС» (владелец 2026-09-20: «пиши VAT»). Слово отменяет его же
+  // закон от 09.08 и меняется ВЕЗДЕ, где его читает человек: бумага, шторка
+  // «Итого», форма операции. Один документ, говорящий на двух языках про один
+  // налог, читается как два разных налога.
+  // КОРОТКО, КАК НА БУМАГЕ AIRFIX #103 («Tax 19%»), а не фразой: итоги —
+  // столбик цифр, и длинная подпись выдавливала сумму (владелец 22.09).
+  vatInclusive: "в т.ч. VAT",
+  vatExclusive: "VAT",
+  netAmount: "Сумма без VAT",
+  discount: "Скидка",
+  vatOn: (amount) => `с ${amount}`,
+  vatOf: (percent) => `VAT · ${percent}`,
   grandTotal: "К оплате",
+  regNumber: "Рег. №",
+  vatNo: "VAT №",
+  addrEntrance: (value) => `подъезд ${value}`,
+  addrFloor: (value) => `эт. ${value}`,
+  addrApartment: (value) => `кв. ${value}`,
+  issuedShort: (date) => `Выставлен ${date}`,
+  dueShort: (date) => `Оплатить до ${date}`,
+  notesAndPayment: "Примечание и оплата",
+  numberPending: "Номер присвоится при выставлении",
+  paymentPurpose: (number) => `В назначении платежа укажите номер ${number}.`,
+  method_cash: "Наличные",
+  method_card: "Карта",
+  method_bank: "Банк",
+  method_other: "Другое",
+  footer: (number) => `Инвойс ${number}`,
   payTo: "Реквизиты для оплаты",
   bank: "Банк",
   payment: "Оплата",
@@ -97,8 +154,6 @@ const RU: InvoiceDictionary = {
   paymentRow: "Платёж",
   refundRow: "Возврат",
   notes: "Комментарий",
-  draftFooter: (number) =>
-    `Черновик. Номер ${number} закрепится за документом при выставлении.`,
   invoiceEyebrow: "Инвойс",
   paymentsDate: "Дата",
   paymentsOperation: "Операция",
@@ -134,11 +189,28 @@ const EN: InvoiceDictionary = {
   amount: "Amount",
   untitled: "Untitled",
   subtotal: "Subtotal",
-  vatInclusive: "VAT included in prices",
-  vatExclusive: "VAT added on top",
-  netAmount: "Net amount",
+  vatInclusive: "incl. VAT",
+  vatExclusive: "VAT",
+  netAmount: "Subtotal",
+  discount: "Discount",
+  vatOn: (amount) => `on ${amount}`,
   vatOf: (percent) => `VAT · ${percent}`,
-  grandTotal: "Total due",
+  grandTotal: "Total",
+  regNumber: "Reg. No",
+  vatNo: "VAT No.",
+  addrEntrance: (value) => `Entrance ${value}`,
+  addrFloor: (value) => `Floor ${value}`,
+  addrApartment: (value) => `Apt ${value}`,
+  issuedShort: (date) => `Issued ${date}`,
+  dueShort: (date) => `Due ${date}`,
+  notesAndPayment: "Notes & payment instructions",
+  numberPending: "Number will be assigned on issue",
+  paymentPurpose: (number) => `Please quote invoice ${number} as the payment reference.`,
+  method_cash: "Cash",
+  method_card: "Card",
+  method_bank: "Bank transfer",
+  method_other: "Other",
+  footer: (number) => `Inv. ${number}`,
   payTo: "Payment details",
   bank: "Bank",
   payment: "Payment",
@@ -148,8 +220,6 @@ const EN: InvoiceDictionary = {
   paymentRow: "Payment",
   refundRow: "Refund",
   notes: "Notes",
-  draftFooter: (number) =>
-    `Draft. Number ${number} will be assigned when the invoice is issued.`,
   invoiceEyebrow: "Invoice",
   paymentsDate: "Date",
   paymentsOperation: "Operation",

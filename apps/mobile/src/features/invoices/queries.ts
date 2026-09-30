@@ -4,9 +4,7 @@ import {
   issueInvoice,
   listInvoices,
   setInvoiceLanguage,
-  updateInvoice,
   updateInvoiceStatus,
-  type EditInvoiceDraft,
   type IssueInvoiceDraft,
 } from "@babun/shared/db/repositories/invoices";
 import {
@@ -19,6 +17,10 @@ import {
 import type { InvoiceStatus } from "@babun/shared/local/finance/invoice-ledger";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import {
+  invoicePaymentsQueryKey,
+  invoicesQueryKey,
+} from "@/lib/company-query-keys";
 
 /**
  * Счета тенанта — целиком либо СРЕЗОМ ПО КЛИЕНТУ.
@@ -38,7 +40,7 @@ export function useInvoices(filter?: { clientId?: string | null }) {
   return useQuery({
     queryKey: clientId
       ? ["invoices", tenantId, "by-client", clientId]
-      : ["invoices", tenantId],
+      : invoicesQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () =>
       listInvoices(supabase, tenantId as string, clientId ? { clientId } : {}),
@@ -54,29 +56,65 @@ export function useInvoice(id: string | undefined) {
   });
 }
 
+export interface NextInvoiceNumber {
+  seq: number;
+  number: string;
+}
+
 /**
- * Номер, который получит СЛЕДУЮЩИЙ инвойс.
+ * Номер, который получит СЛЕДУЮЩИЙ инвойс этих реквизитов.
  *
  * Считает сервер той же функцией, что и выпуск, — предпросмотр не имеет права
  * показывать один номер, а документ получать другой. Это прогноз: пока человек
  * заполняет форму, коллега может выставить свой счёт, и номер сдвинется.
+ *
+ * Серия живёт на реквизитах (миграция 20260922050000): у каждого набора свой
+ * счётчик, команда в номер не входит. `companyId` пусто — основные реквизиты.
  */
-export function useNextInvoiceNumber(year: number) {
+export function useNextInvoiceSeries(year: number, companyId?: string | null) {
   const tenantId = useTenantId();
   return useQuery({
-    queryKey: ["invoices", tenantId, "next-number", year],
+    queryKey: ["invoices", tenantId, "next-number", year, companyId ?? null],
     enabled: !!tenantId,
     // Свежесть важнее кэша: номер меняется от каждого выставленного счёта.
     staleTime: 0,
-    queryFn: async (): Promise<string | null> => {
-      const { data, error } = await supabase.rpc("next_invoice_number", {
+    queryFn: async (): Promise<NextInvoiceNumber | null> => {
+      const { data, error } = await supabase.rpc("next_company_invoice_number", {
         p_tenant_id: tenantId as string,
+        p_company_id: companyId ?? null,
         p_year: year,
       });
       if (error) throw new Error(error.message);
       const row = Array.isArray(data) ? data[0] : null;
-      return row?.number ?? null;
+      return row ? { seq: row.seq, number: row.number } : null;
     },
+  });
+}
+
+/** Только строка номера — для мест, где счётчик не правят. */
+export function useNextInvoiceNumber(year: number, companyId?: string | null) {
+  const series = useNextInvoiceSeries(year, companyId);
+  return { ...series, data: series.data?.number ?? null };
+}
+
+/**
+ * «Этот инвойс — 104»: ручной номер реквизитов. Следующий выпуск получит его,
+ * а серия дальше пойдёт с 105. Занятый номер сервер отклоняет.
+ */
+export function useSetInvoiceNextNumber() {
+  const tenantId = useTenantId();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { companyId: string; year: number; number: number }) => {
+      const { error } = await supabase.rpc("set_company_invoice_next_number", {
+        p_company_id: input.companyId,
+        p_year: input.year,
+        p_number: input.number,
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: ["invoices", tenantId, "next-number"] }),
   });
 }
 
@@ -122,7 +160,7 @@ export function useCreditNoteLinks() {
 export function useInvoicePayments() {
   const tenantId = useTenantId();
   return useQuery({
-    queryKey: ["invoices", tenantId, "payments"],
+    queryKey: invoicePaymentsQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listInvoicePayments(supabase, tenantId as string),
   });
@@ -155,29 +193,6 @@ export function useIssueInvoice() {
       if (language && language !== "ru") {
         try {
           await setInvoiceLanguage(supabase, invoice.id, language);
-          return { ...invoice, language };
-        } catch {
-          return invoice;
-        }
-      }
-      return invoice;
-    },
-    onSuccess: () => invalidateInvoices(qc),
-    meta: { errorHandled: true },
-  });
-}
-
-export function useEditInvoice(id: string, issuedOn: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      language,
-      ...draft
-    }: EditInvoiceDraft & { language?: "ru" | "en" }) => {
-      const invoice = await updateInvoice(supabase, id, issuedOn, draft);
-      if (language && language !== invoice.language) {
-        try {
-          await setInvoiceLanguage(supabase, id, language);
           return { ...invoice, language };
         } catch {
           return invoice;

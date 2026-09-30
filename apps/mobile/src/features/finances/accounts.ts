@@ -10,17 +10,15 @@ import {
   insertAccount,
   listAccounts,
   reopenAccount,
-  setPrimaryAccount,
   softCloseAccount,
   updateAccount,
   type AccountDraft,
 } from "@babun/shared/db/repositories/accounts";
 import {
-  accountHasLedgerHistory,
   createTransfer,
   deleteTransfer,
   listAccountBalances,
-  listAccountPeriodTotals,
+  type AccountBalanceRow,
   type TransferDraft,
 } from "@babun/shared/db/repositories/finance-transactions";
 import type {
@@ -30,10 +28,19 @@ import type {
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import {
+  accountBalancesQueryKey,
+  accountRowsQueryKey,
+} from "@/lib/company-query-keys";
+import { useTeams } from "@/features/reference/queries";
+import {
   TEAM_ACCOUNT_SEEDS,
   planAccountSeeds,
   type AccountSeed,
 } from "./account-seeds";
+import {
+  archivedCalendarIds,
+  withoutArchivedCalendars,
+} from "./archived-calendar-accounts";
 
 export type { Account } from "@babun/shared/local/finance/account";
 export type AccountWithBalance = Account & {
@@ -63,8 +70,8 @@ function invalidateAccounts(qc: QueryClient): void {
 // и сохраняет набранное, а повтор попадает в серверный дедуп по `request_id`.
 //
 // Стоит на КАЖДОЙ денежной записи продукта, а не только на переводе: закрытие
-// счёта, перестановка строк, сохранение операции и сверка кассы без сети
-// зависали ровно так же.
+// счёта, перестановка строк и сохранение операции без сети зависали ровно так
+// же.
 export const NEVER_PAUSE = { networkMode: "always" } as const;
 
 // Карточки счетов живут дольше денег: имя, вид и порядок меняют раз в
@@ -78,6 +85,31 @@ export interface AccountsWithBalances {
   isLoading: boolean;
   error: Error | null;
   refetch: () => Promise<unknown>;
+}
+
+/**
+ * ДЕНЬГИ БЕЗ СЧЁТА — строка, которую сервер считает специально, а экран
+ * выбрасывал (аудит счетов 2026-09-10).
+ *
+ * `account_balances` возвращает строку с `account_id = null`: это операции, у
+ * которых счёта нет вовсе. `useAccountsWithBalances` раскладывает баланс по
+ * счетам и такую строку отбрасывает — иначе её некуда положить. Пока её никто
+ * не показывал, «Счета» и «Финансы» расходились с реальностью МОЛЧА: сумма на
+ * экране меньше настоящей ровно на эти деньги, и сказать об этом было некому.
+ *
+ * Хук отдаёт ноль, когда всё в порядке (обычный случай), и живое число, когда
+ * такие операции есть, — экран показывает его отдельной строкой, а не
+ * подмешивает в остаток команды: у этих денег команды нет.
+ */
+export function useUnassignedMoney(): number {
+  const tenantId = useTenantId();
+  const balancesQuery = useQuery({
+    queryKey: accountBalancesQueryKey(tenantId),
+    enabled: !!tenantId,
+    queryFn: () => listAccountBalances(supabase, tenantId as string),
+  });
+  const orphan = (balancesQuery.data ?? []).find((b) => !b.account_id);
+  return orphan?.delta ?? 0;
 }
 
 /**
@@ -95,67 +127,79 @@ export interface AccountsWithBalances {
  * честную ошибку — «€0» вместо остатка было бы враньём про деньги.
  */
 export function useAccountsWithBalances(
-  options: { includeInactive?: boolean } = {},
+  options: {
+    includeInactive?: boolean;
+    /** Счета календарей В АРХИВЕ. По умолчанию их нет нигде: деньги ушедшего
+     *  в архив календаря в живых финансах не существуют (владелец
+     *  2026-09-21, `archived-calendar-accounts.ts`). Просит их только архив. */
+    includeArchivedCalendars?: boolean;
+  } = {},
 ): AccountsWithBalances {
   const tenantId = useTenantId();
   const includeInactive = options.includeInactive ?? false;
+  const includeArchived = options.includeArchivedCalendars ?? false;
   const rowsQuery = useQuery({
-    queryKey: ["accounts", tenantId, "rows", includeInactive ? "all" : "active"],
+    queryKey: accountRowsQueryKey(tenantId, includeInactive),
     enabled: !!tenantId,
     staleTime: ACCOUNT_ROWS_STALE_MS,
     queryFn: () =>
       listAccounts(supabase, tenantId as string, { includeInactive }),
   });
   const balancesQuery = useQuery({
-    queryKey: ["accounts", tenantId, "balances"],
+    queryKey: accountBalancesQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listAccountBalances(supabase, tenantId as string),
   });
+  // Справочник целиком, вместе с архивом: иначе не узнать, чей календарь
+  // ушёл. Ключ общий с календарём и лентами — сети обычно нет вовсе.
+  const teamsQuery = useTeams({ includeInactive: true });
 
   const rows = rowsQuery.data;
   const balances = balancesQuery.data;
+  const teams = teamsQuery.data;
+  // ПОКА СПРАВОЧНИК НЕ ПРИШЁЛ, СЧЕТОВ НЕТ ВОВСЕ — а не «все подряд». Иначе
+  // на первом кадре мелькали бы кассы архивного календаря, которых в живых
+  // финансах не существует. Упавший справочник экран денег НЕ запирает:
+  // лучше показать счета без фильтра архива, чем вечную загрузку.
+  const teamsReady = includeArchived || teams !== undefined || teamsQuery.isError;
   const data = useMemo(() => {
-    if (!rows || !balances) return undefined;
-    const byAccount = new Map(
-      balances.filter((b) => b.account_id).map((b) => [b.account_id, b]),
-    );
-    return rows.map((a): AccountWithBalance => {
-      const b = byAccount.get(a.id);
-      return {
-        ...a,
-        balance: a.opening_balance + (b?.delta ?? 0),
-        has_history: b?.has_history ?? false,
-        last_outflow_on: b?.last_outflow_on ?? null,
-        last_tx_on: b?.last_tx_on ?? null,
-        first_tx_on: b?.first_tx_on ?? null,
-      };
-    });
-  }, [rows, balances]);
+    if (!rows || !balances || !teamsReady) return undefined;
+    const merged = mergeAccountBalances(rows, balances);
+    return includeArchived
+      ? merged
+      : withoutArchivedCalendars(merged, archivedCalendarIds(teams ?? []));
+  }, [rows, balances, teams, teamsReady, includeArchived]);
 
   return {
     data,
-    isPending: rowsQuery.isPending || balancesQuery.isPending,
-    isLoading: rowsQuery.isLoading || balancesQuery.isLoading,
+    isPending:
+      rowsQuery.isPending || balancesQuery.isPending || (!teamsReady && teamsQuery.isPending),
+    isLoading:
+      rowsQuery.isLoading || balancesQuery.isLoading || (!teamsReady && teamsQuery.isLoading),
     error: rowsQuery.error ?? balancesQuery.error,
     refetch: () => Promise.all([rowsQuery.refetch(), balancesQuery.refetch()]),
   };
 }
 
-/**
- * Итоги счетов за период (герой экрана, суммы строк). Колонки приходят с
- * сервера УЖЕ СО ЗНАКОМ и только складываются — см. account-period.ts.
- *
- * Ключ намеренно НЕ под ["accounts"]: правка имени счёта не должна ронять
- * периодную сводку, а любая запись в журнал — должна, поэтому префикс общий
- * с остальными деньгами (["transactions"] инвалидируется на каждой записи).
- */
-export function useAccountPeriodTotals(from: string, to: string) {
-  const tenantId = useTenantId();
-  return useQuery({
-    queryKey: ["transactions", tenantId, "account-period-totals", from, to],
-    enabled: !!tenantId && !!from && !!to,
-    queryFn: () =>
-      listAccountPeriodTotals(supabase, tenantId as string, from, to),
+/** Строки счетов + серверные остатки → счета с живым остатком. Одна склейка на
+ *  хук и на чтение из кэша после перевода (закрытие счёта). */
+export function mergeAccountBalances(
+  rows: readonly Account[],
+  balances: readonly AccountBalanceRow[],
+): AccountWithBalance[] {
+  const byAccount = new Map(
+    balances.filter((b) => b.account_id).map((b) => [b.account_id, b]),
+  );
+  return rows.map((a): AccountWithBalance => {
+    const b = byAccount.get(a.id);
+    return {
+      ...a,
+      balance: a.opening_balance + (b?.delta ?? 0),
+      has_history: b?.has_history ?? false,
+      last_outflow_on: b?.last_outflow_on ?? null,
+      last_tx_on: b?.last_tx_on ?? null,
+      first_tx_on: b?.first_tx_on ?? null,
+    };
   });
 }
 
@@ -178,16 +222,6 @@ export function useDeleteAccount() {
     mutationFn: (id: string) => deleteAccount(supabase, id),
     onSuccess: () => invalidateAccounts(qc),
     meta: { errorHandled: true }, // call sites alert themselves
-  });
-}
-
-// Зеркало серверного guard_account_financial_history: настройки счёта
-// глушат правку вида/старта/команды заранее, а не ошибкой после сохранения.
-export function useAccountHasHistory(accountId: string | null) {
-  return useQuery({
-    queryKey: ["accounts", "has-history", accountId],
-    enabled: !!accountId,
-    queryFn: () => accountHasLedgerHistory(supabase, accountId as string),
   });
 }
 
@@ -225,8 +259,9 @@ export function useUpdateAccount() {
  * значение здесь не существует, и семь строк не должны ехать семью
  * последовательными запросами.
  *
- * Порядок — это ЧТЕНИЕ. Куда попадут деньги, решает `is_primary`
- * (`useSetPrimaryAccount`), и перетаскивание его не трогает.
+ * Порядок — это и ОПЛАТА (владелец 2026-09-29): выше в списке — первым среди
+ * плиток оплаты и первым среди счетов своего вида, когда оплату записали
+ * способом без выбора счёта.
  */
 export function useReorderAccounts() {
   const qc = useQueryClient();
@@ -296,37 +331,15 @@ export function useCreateTeamAccounts() {
   return useSeedAccounts(TEAM_ACCOUNT_SEEDS, "team");
 }
 
-/**
- * Тумблер «Основной счёт команды» — КУДА ПО УМОЛЧАНИЮ ПАДАЮТ ДЕНЬГИ, и это не
- * порядок строк на экране. Включение проходит сменой (сперва снять флаг с
- * прежнего), выключение — обычной правкой: группа без основного счёта
- * возвращается к сортировке по позиции, то есть к поведению до 2026-08-10.
- */
-export function useSetPrimaryAccount() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return useMutation({
-    ...NEVER_PAUSE,
-    mutationFn: ({
-      account,
-      primary,
-    }: {
-      account: Pick<Account, "id" | "brigade_id">;
-      primary: boolean;
-    }) =>
-      primary
-        ? setPrimaryAccount(supabase, tenantId as string, account)
-        : updateAccount(supabase, account.id, { is_primary: false }),
-    onSuccess: () => invalidateAccounts(qc),
-    meta: { errorHandled: true }, // call sites alert themselves
-  });
-}
-
+/** Закрытие счёта. «Основного» больше нет (владелец 2026-09-29), и
+ *  передавать при закрытии нечего. */
 export function useSoftCloseAccount() {
   const qc = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
-    mutationFn: (id: string) => softCloseAccount(supabase, id),
+    mutationFn: async ({ id }: { id: string }) => {
+      await softCloseAccount(supabase, id);
+    },
     onSuccess: () => invalidateAccounts(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });

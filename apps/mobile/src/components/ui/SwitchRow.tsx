@@ -1,4 +1,5 @@
-import { Pressable, Switch, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { SwitchControl } from "@/components/ui/SwitchControl";
 import { useThemeColors } from "@/theme/colors";
 
 // Строка-тумблер списка настроек: подпись (+ необязательное пояснение) слева,
@@ -62,7 +63,7 @@ export function SwitchRow({
         importantForAccessibility="no-hide-descendants"
         style={{ flex: 1, paddingRight: 12 }}
       >
-        <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 16, color: disabled ? t.faint : t.ink }}>{label}</Text>
+        <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 15, color: disabled ? t.faint : t.ink }}>{label}</Text>
         {hint ? (
           <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 13, color: t.faint, marginTop: 1 }}>{hint}</Text>
         ) : null}
@@ -70,7 +71,7 @@ export function SwitchRow({
       {/* Тумблер здесь — ПОКАЗАНИЕ, а не цель касания: жест собирает строка.
           Роль и озвучку тоже несёт она, поэтому контрол молчит для ротора. */}
       <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Switch value={value} disabled={disabled} trackColor={{ true: t.accent }} />
+        <SwitchControl value={value} disabled={disabled} />
       </View>
     </Pressable>
   );

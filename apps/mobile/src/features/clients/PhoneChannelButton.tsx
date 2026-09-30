@@ -8,20 +8,23 @@ import {
 import { useEnabledChannels } from "@/features/clients/contact-ways";
 import { RowActionButton } from "@/components/ui/card-rows";
 import { useDefaultCountry } from "@/features/clients/default-country";
+import { formatPhoneForDisplay, tryToE164 } from "@/features/clients/phone";
 import { useReferenceHref } from "@/features/clients/reference-href";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
+import { SmsTemplateSheet, useSmsOptions } from "@/features/sms/SmsCompose";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
-// КНОПКА У КОНКРЕТНОГО НОМЕРА: ТАП ЗВОНИТ, УДЕРЖАНИЕ — СПОСОБЫ СВЯЗИ.
+// КНОПКА У КОНКРЕТНОГО НОМЕРА: ТАП — «СВЯЗАТЬСЯ», УДЕРЖАНИЕ — ЗВОНОК.
 //
-// Владелец 2026-09-06: «когда тапаю на телефончик, показывается, как
-// связаться, и потом я уже выбираю… лучше по-другому: один раз нажму — оно
-// позвонит, а если задержу — откроются способы связи». До этого (2026-08-06)
-// тап открывал лист, а звонок стоял в нём первым пунктом — то есть самое
-// частое действие стоило двух тапов. Теперь оно стоит одного, а лист с
-// WhatsApp, Telegram и SMS никуда не делся — он за удержанием и, для
-// VoiceOver, за действием ротора «Способы связи».
+// Владелец 2026-09-22: «звоночек справа должен открывать, как я хочу
+// связаться». Это разворот его же закона от 2026-09-06 (тап звонил, лист
+// способов был за удержанием): номер ведёт то в WhatsApp, то в Telegram, и
+// угадывать за него способ хуже, чем показать все. Поэтому тап открывает
+// лист «Связаться» в постоянном порядке «Способов связи» (рука запоминает
+// место строки), а удержание — прежний звонок в одно движение. Способ
+// один (включён только звонок) — листа нет, тап сразу звонит: шторка из
+// одной строки — лишний этап.
 //
 // Канал — свойство НОМЕРА, а не клиента (владелец 2026-07-26): у мужа
 // WhatsApp, у жены Viber, и звонить надо ровно на тот номер, у которого
@@ -33,19 +36,29 @@ export default function PhoneChannelButton({
   number,
   telegramUsername,
   label,
+  smsName,
+  teamId = null,
 }: {
   number: string;
   /** @username клиента — только у основного номера. */
   telegramUsername?: string | null;
   /** Для озвучки: «Связаться · Жена». */
   label?: string;
+  /** Чей номер, если не клиента страницы: [Имя] в шаблоне SMS — его. */
+  smsName?: string | null;
+  /** Команда клиента — её «Способы связи» (у каждой команды свои, 30.09);
+   *  нет — набор компании. */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
   const router = useRouter();
   // Из записи справочник открывается её сиблингом (см. `useReferenceHref`).
   const channelsHref = useReferenceHref().channels;
   const [open, setOpen] = useState(false);
-  const enabled = useEnabledChannels();
+  const [smsOpen, setSmsOpen] = useState(false);
+  // Шаблоны, заполненные записью или карточкой, где стоит номер (STORY-089).
+  const smsOptions = useSmsOptions(smsName);
+  const enabled = useEnabledChannels(teamId);
   const country = useDefaultCountry();
   const channels = resolveChannelsForNumber(number, enabled, {
     telegramUsername,
@@ -62,12 +75,23 @@ export default function PhoneChannelButton({
     color: c.color,
     // Все каналы НОМЕРА — внешние ссылки: внутренний чат ведётся с клиентом,
     // а не с номером, и в этот список не попадает (contact-channels.ts).
-    onPress: () => void Linking.openURL(c.url),
+    // «SMS» с шаблонами — второй лист с готовыми текстами; без шаблонов —
+    // пустое сообщение, как раньше.
+    onPress:
+      c.id === "sms" && smsOptions.length > 0
+        ? () => setSmsOpen(true)
+        : () => void Linking.openURL(c.url),
   }));
+  const smsChannel = channels.find((c) => c.id === "sms");
 
   // Звонок отключить нельзя (`optional: false`), так что у разобранного
   // номера он есть всегда; запасной путь — первый канал списка.
   const call = channels.find((c) => c.id === "call") ?? channels[0];
+  const single = channels.length === 1;
+  const dial = () => {
+    haptics.tap();
+    void Linking.openURL(call.url);
+  };
   const openChannels = () => {
     haptics.tap();
     setOpen(true);
@@ -81,24 +105,35 @@ export default function PhoneChannelButton({
         // 2026-09-06): зелёный звонок рядом с синим маршрутом читался как
         // два разных предмета.
         color={t.accent}
-        label={label ? `Позвонить · ${label}` : "Позвонить"}
-        hint="Удерживайте, чтобы выбрать способ связи"
-        onPress={() => void Linking.openURL(call.url)}
-        onLongPress={openChannels}
-        accessibilityActions={[{ name: "channels", label: "Способы связи" }]}
+        label={label ? `Связаться · ${label}` : "Связаться"}
+        hint={single ? undefined : "Удерживайте, чтобы сразу позвонить"}
+        onPress={single ? dial : openChannels}
+        onLongPress={single ? undefined : dial}
+        accessibilityActions={single ? undefined : [{ name: "call", label: "Позвонить" }]}
         onAccessibilityAction={(name) => {
-          if (name === "channels") openChannels();
+          if (name === "call") dial();
         }}
       />
       <PickerSheet
         visible={open}
-        title={number}
+        // Номер — как его диктуют (своя страна без «+357»), а не сырой из базы.
+        title={formatPhoneForDisplay(number, country)}
         items={items}
         // Страница этого же списка — см. AddContactSheet.
         onSettings={() => router.push(channelsHref)}
         settingsLabel="Способы связи"
         onClose={() => setOpen(false)}
       />
+      {smsChannel ? (
+        <SmsTemplateSheet
+          visible={smsOpen}
+          title={formatPhoneForDisplay(number, country)}
+          url={smsChannel.url}
+          phone={tryToE164(number, country)}
+          options={smsOptions}
+          onClose={() => setSmsOpen(false)}
+        />
+      ) : null}
     </>
   );
 }

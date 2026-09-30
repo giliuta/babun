@@ -1,33 +1,21 @@
-import { useMemo, useState } from "react";
-import {
-  Pressable,
-  Text,
-  useWindowDimensions,
-  View,
-  type DimensionValue,
-} from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  interpolateColor,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-  type SharedValue,
-} from "react-native-reanimated";
-import { Check } from "lucide-react-native";
+import { memo, useMemo, useState } from "react";
+import { Pressable, Text, useWindowDimensions, View } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { formatYMD, pad2, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
-import { layoutDay, type PlacedAppt } from "@/features/calendar/layout";
 import {
-  blockEdge,
+  decksFor,
+  layoutDay,
+  type PlacedAppt,
+} from "@/features/calendar/layout";
+import { PickerSheet } from "@/components/ui/PickerSheet";
+import { CalendarClock } from "lucide-react-native";
+import { haptics } from "@/lib/haptics";
+import {
   CANCELLED_BORDER,
   CANCELLED_EDGE,
   useBlockColors,
-  type BlockColors,
 } from "@/features/calendar/status-colors";
 import { isOverdue } from "@/features/calendar/overdue";
 import {
@@ -35,26 +23,21 @@ import {
   chipPad,
   chipTextW,
   chipsThatFit,
-  rowsThatFit,
-  textRows,
   CHIP_GAP,
   TEXT_MIN_W,
 } from "@/features/calendar/block-geometry";
-import {
-  BLOCK_FILL,
-  deepen,
-  fillRgba,
-  markColor,
-} from "@/components/ui/color-contrast";
+import { BLOCK_TEXT, fillRgba } from "@/components/ui/color-contrast";
 import { ZoomableTimeGrid } from "@/features/calendar/zoom";
+import { AppointmentBlock } from "@/features/calendar/AppointmentBlock";
+import { MIN_H, minToHM, pct, RAIL_W } from "@/features/calendar/grid-units";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { DateCell } from "@/features/calendar/date-header";
+import { dayColumnPropsEqual } from "@/features/calendar/grid-memo";
 
-export const RAIL_W = 48;
+export { RAIL_W } from "@/features/calendar/grid-units";
 // Высота полосы шапки дат над сеткой (web DayColumn header h-[64px]) —
 // страницы пейджера позиционируются абсолютно, полосе нужна явная высота.
 export const HEADER_H = 64;
-const GAP = 3;
 
 // ymd ± дни без TZ-сюрпризов (parseYMD → локальная полночь).
 function addDaysYmd(ymd: string, days: number): string {
@@ -91,7 +74,6 @@ const TAP_STEP = 30;
 // «только часовая») — время между часами называет красная капсула «сейчас».
 const HALF_MARK_MIN_H = 52;
 
-const minToHM = (min: number) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
 
 // Per-date work band (minutes since midnight) resolved from team_schedules
 // by the parent via shared getDayScheduleForDate — web DayColumn.tsx:231.
@@ -112,8 +94,6 @@ export type FreeSlotRange = { startMin: number; endMin: number };
 // per-element animated styles and zero React involvement. Pixel-based
 // derivations (tap→time, drag→minutes, text fit) use the committed `hourH`
 // prop, which the pinch updates once per gesture via onZoom.
-const pct = (part: number, total: number): DimensionValue =>
-  `${(part / total) * 100}%`;
 
 // A horizontal band covering [fromMin, toMin] — off-hours wash, past-time
 // wash, buffer bands, breaks. `label` — тихая подпись по центру полосы
@@ -162,9 +142,6 @@ function MinuteBand({
   );
 }
 
-/** Минимальная высота карточки: обвязка 9pt + одна строка текста. Ниже —
- *  блок без текста, только заливка, кант и знаки. */
-const MIN_H = (lineH: number) => 9 + lineH;
 
 // ═══ СОБЫТИЯ «ВЕСЬ ДЕНЬ» — ЧИПЫ В ЗАКРЕПЛЁННОЙ ПОЛОСЕ НАД СЕТКОЙ ═══
 //
@@ -255,14 +232,11 @@ export function AllDayRow({
         ? appointments.slice(0, shown).map((a, i) => {
             const c = blockColors(a);
             const cancelled = a.status === "cancelled";
-            const completed = a.status === "completed";
             const reserve =
               overflow > 0 && i === shown - 1 ? chipOverflowW(overflow) : 0;
             const pad = chipPad(chipW);
             const textW = chipTextW(chipW, reserve);
             const name = clientName(a) || a.comment || "Событие";
-            const fill = (alpha: number) =>
-              fillRgba(cancelled ? t.ink : c.hue, alpha);
             return (
               <Pressable
                 key={a.id}
@@ -284,14 +258,17 @@ export function AllDayRow({
                   justifyContent: "center",
                   paddingHorizontal: pad,
                   borderWidth: 1,
-                  borderColor: cancelled ? CANCELLED_EDGE : c.edge,
+                  borderColor: cancelled ? CANCELLED_EDGE : c.contour,
                   borderStyle: cancelled ? CANCELLED_BORDER : "solid",
                   borderRadius: t.radius.card,
                   borderCurve: "continuous",
                   overflow: "hidden",
-                  backgroundColor: pressed
-                    ? fill(cancelled ? 0.2 : completed ? 0.2588 : 0.4)
-                    : fill(cancelled ? 0.0784 : completed ? 0.102 : BLOCK_FILL),
+                  // Тот же плотный рецепт, что у блока сетки (вариант 7).
+                  backgroundColor: cancelled
+                    ? fillRgba(t.ink, pressed ? 0.2 : 0.0784)
+                    : pressed
+                      ? c.pressed
+                      : c.solid,
                 })}
               >
                 {/* УГЛОВЫХ ЗНАКОВ У ЧИПА НЕТ СОЗНАТЕЛЬНО: «просрочено» к
@@ -304,7 +281,7 @@ export function AllDayRow({
                     ellipsizeMode={textW < 96 ? "clip" : "tail"}
                     maxFontSizeMultiplier={1.3}
                     style={{
-                      color: t.ink,
+                      color: cancelled ? t.ink : BLOCK_TEXT,
                       fontSize: 13,
                       lineHeight: lineH,
                       fontWeight: "700",
@@ -339,7 +316,8 @@ export function AllDayRow({
                       style={{
                         fontSize: 11,
                         fontWeight: "700",
-                        color: onOverflow ? t.accent : t.body,
+                        // «+N» лежит на плотной заливке чипа — белым, как имя.
+                        color: BLOCK_TEXT,
                         fontVariant: ["tabular-nums"],
                       }}
                     >
@@ -355,472 +333,6 @@ export function AllDayRow({
   );
 }
 
-function Block({
-  placed,
-  hourH,
-  laneW,
-  startHour,
-  endHour,
-  stepMinutes,
-  colors,
-  offLabelColor,
-  label,
-  service,
-  address,
-  lineH,
-  overdue = false,
-  onEdit,
-  onMenu,
-  onReschedule,
-}: {
-  placed: PlacedAppt;
-  /** Committed pixels-per-hour — px math (drag snap, text fit) only;
-   *  the on-screen geometry is percent-based and zoom-independent. */
-  hourH: number;
-  laneW: number;
-  startHour: number;
-  endHour: number;
-  stepMinutes: number;
-  colors: BlockColors;
-  /** Цвет чужой метки: точка в правом нижнем углу, затемнённая против
-   *  ЗАЛИВКИ блока. null — метка своя. */
-  offLabelColor: string | null;
-  /** Высота строки текста при текущем системном шрифте. Считается ОДИН раз в
-   *  колонке: `useWindowDimensions` внутри каждого из полутора сотен блоков
-   *  недели стоил бы кадра. */
-  lineH: number;
-  label: string;
-  service: string | null;
-  /** Куда ехать: снимок адреса записи, иначе адрес клиента. null — адреса
-   *  нет, и тогда оранжевый блок «нет объекта» называет дыру пустотой. */
-  address: string | null;
-  /** Запланирована, а время уже прошло — незакрытая работа, то есть
-   *  недополученные деньги. Сигнал ОДИН: кант вдвое толще (2pt против 1). Ни
-   *  своего цвета, ни углового знака у просрочки нет — кант остаётся цветом
-   *  записи, а почему именно так, объяснено в `status-colors`. */
-  overdue?: boolean;
-  onEdit: (a: Appointment) => void;
-  /** Долгое нажатие БЕЗ движения — контекстное меню (web ActionMenuModal);
-   *  с движением — перенос, как раньше. */
-  onMenu?: (a: Appointment) => void;
-  /** Undefined for crew: the block stays tappable but has no drag affordance. */
-  onReschedule?: (a: Appointment, s: string, e: string) => void;
-}) {
-  const t = useThemeColors();
-  const { apt, startMin, endMin, colIndex, colCount } = placed;
-  const ty = useSharedValue(0);
-  const active = useSharedValue(0);
-  /** 0 — покой, 1 — под пальцем. Гонит заливку и лёгкое сжатие. */
-  const press = useSharedValue(0);
-
-  const winStart = startHour * 60;
-  const winEnd = endHour * 60;
-  const totalMin = winEnd - winStart;
-  // Clamp into the visible window (web windowStart/windowEnd semantics):
-  // a block starting before the window pins to the top instead of getting
-  // a negative top and vanishing above the grid.
-  const visStart = Math.max(startMin, winStart);
-  const visEnd = Math.min(endMin, winEnd);
-  const colW = laneW / colCount;
-  const left = colIndex * colW + 1;
-  const width = colW - GAP;
-  const cancelled = apt.status === "cancelled";
-  const completed = apt.status === "completed";
-  // ═══ ГЕОМЕТРИЯ И ЦВЕТ БЛОКА ═══
-  // Всё считается арифметикой от ширины и высоты, а не флагом «компактный»:
-  // блок недели и блок дня — один и тот же блок при разной ширине.
-  const cardH = Math.max(MIN_H(lineH), ((visEnd - visStart) / 60) * hourH) - 2;
-  const pad = width >= 96 ? 6 : 4;
-  // ТОЛЩИНА — ВЕСЬ СИГНАЛ ПРОСРОЧКИ, И ЭТО ЕДИНСТВЕННЫЙ КАНАЛ, КОТОРЫЙ
-  // УСИЛИВАЕТСЯ ПРИ СУЖЕНИИ. Кант 1 → 2pt меняет долю канта в площади плитки:
-  // 21pt (две наложенные записи в Неделе) 13.6 % → 26.4 %, неделя 46pt
-  // 8.7 % → 17.0 %, день 330pt 5.1 % → 10.2 %. То есть канал работает ровно
-  // там, где знака нет (markSize 0 при ширине < 40), и слабеет там, где есть
-  // текст. Геометрия не меняется ни при дейтеранопии, ни при перекраске
-  // палитры владельцем — в отличие от любого оттенка.
-  const bw = overdue ? 2 : 1;
-  const markSize = width >= 96 ? 14 : width >= 40 ? 8 : 0;
-  // Место под знак резервирует ТОЛЬКО выполненная: у просрочки знака нет.
-  // Пока его резервировала и она, просроченный блок недели на экране 393pt
-  // давал textW 22.3 при гейте 24 — то есть был НЕМЫМ, без имени клиента.
-  const markReserve = markSize > 0 && completed ? markSize + 4 : 0;
-  // Внутренняя ширина НЕ зависит от толщины канта: компенсация паддинга ниже
-  // (`pad - (bw - 1)`) гасит лишний кант ровно, поэтому вычитаем 2, а не 2·bw.
-  const textW = width - 2 * pad - 2 - markReserve;
-  // ЧЕСТНЫЙ СЧЁТЧИК СТРОК. Обвязка карточки постоянна и равна 6pt: кант сверху
-  // и снизу плюс вертикальный паддинг (при bw 1 это 2+4, при bw 2 — 4+2).
-  // Значит n строк ФИЗИЧЕСКИ помещаются при cardH ≥ 6 + n·lineH.
-  const rowsFit = rowsThatFit(cardH, lineH);
-  // СТРОКА ЛИБО НАРИСОВАНА ЦЕЛИКОМ, ЛИБО ЕЁ НЕТ. Прежняя формула
-  // `floor((cardH − 9) / lineH) + 1` пускала строку, когда до неё не хватало
-  // почти целой: получасовая запись при обычном зуме (высота 28) получала две
-  // строки на место под одну, и время рисовалось разрезанным пополам обрезкой
-  // карточки. Половина цифры хуже отсутствующей цифры, а время у записи и без
-  // того названо рельсом слева и позицией блока — потому имя и стоит первым.
-  // Единица снизу остаётся: у самого низкого блока имя пытается напечататься
-  // всегда, как было.
-  const lines = textRows(cardH, lineH);
-  // ОТМЕНЁННАЯ ТЕРЯЕТ ЦВЕТ ЗАПИСИ: она никуда не едет и не имеет права
-  // занимать слот палитры. Выполненная гаснет вполовину — сигнал носит
-  // зелёный знак, а не плотность заливки.
-  // ЧЕТВЁРТАЯ СТУПЕНЬ — АДРЕС. «Кто» отвечает имя, «что» — услуга, «когда» —
-  // рельс и высота блока; «куда» не сказано нигде, ни в одном виде календаря,
-  // а у выездной бригады это второй вопрос после времени. Гейт ширины тот же,
-  // что у услуги: в Неделе (textW ≈ 36) и в Дне с тремя наложениями решает
-  // арифметика, а не флаг вида. Когда услуги нет, адрес занимает её строку, а
-  // не требует лишней высоты на пустом месте.
-  const showService = lines >= 3 && textW >= 120 && !!service;
-  const showAddress =
-    !!address && textW >= 120 && rowsFit >= (showService ? 4 : 3);
-  // ТОЧКУ ЧУЖОЙ МЕТКИ ОБХОДИТ ПОСЛЕДНЯЯ СТРОКА, КАКОЙ БЫ ОНА НИ БЫЛА. Точка
-  // лежит абсолютно в правом нижнем углу; раньше отступ был вшит только в
-  // адрес, и на карточке, где последней осталась услуга (или время), её хвост
-  // заезжал под точку.
-  const dotReserve =
-    offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? 12 : 0;
-  const lastRow = showAddress
-    ? "address"
-    : showService
-      ? "service"
-      : lines >= 2
-        ? "time"
-        : "name";
-
-  // КАНТ ЗАБИРАЕТ ТОЛЬКО ОТМЕНЁННАЯ — правило и его гейт в `status-colors`.
-  const edge = blockEdge(colors, apt.status);
-  // РАЗОМКНУТЫЙ КАНТ = РАБОТЫ НЕ БУДЕТ. Кант — единственный слой блока, который
-  // рисуется ВСЕГДА: текста нет при textW < 24 (наложение в Неделе даёт 11),
-  // углового знака нет при ширине < 40. Цвет канта занят категорией, толщина —
-  // просрочкой; свободен ровно стиль линии. Зачёркивание имени, которым отмена
-  // говорила до сих пор, живёт только там, где имя влезает.
-  const edgeStyle = cancelled ? CANCELLED_BORDER : "solid";
-
-  const commit = (translationY: number) => {
-    if (!onReschedule) {
-      ty.value = withSpring(0);
-      return;
-    }
-    const duration = Math.max(15, endMin - startMin);
-    // Base the move on the UNCLAMPED startMin (like moveBy below), not on
-    // the clamped visual top: a block clipped by the visible window
-    // (e.g. 06:30 with startHour=7) must keep its real start, not get
-    // silently pinned to the window edge. The DELTA snaps to gridStep so
-    // an off-grid start keeps its offset — exactly what the a11y actions
-    // do.
-    const step = Math.max(5, Math.min(60, stepMinutes));
-    const deltaMin =
-      Math.round(((translationY / hourH) * 60) / step) * step;
-    let newStart = startMin + deltaMin;
-    // Clamp into the window, but never TIGHTER than where the block
-    // already sits — a clipped block may legitimately stay clipped.
-    const lo = Math.min(startMin, winStart);
-    const hi = Math.max(endMin, winEnd) - duration;
-    newStart = Math.max(lo, Math.min(hi, newStart));
-    if (newStart === startMin) {
-      // Некуда двигать — мягко возвращаем карточку на место.
-      ty.value = withSpring(0);
-      return;
-    }
-    onReschedule(apt, minToHM(newStart), minToHM(newStart + duration));
-    // Оптимистический кеш переписан синхронно внутри onReschedule → база
-    // блока уже на новом слоте. Мгновенный сброс смещения приземляется тем
-    // же кадром — блок остаётся под пальцем. Прежний withSpring(0) 300 мс
-    // вёз карточку к СТАРОМУ слоту и она «дёргалась» после ребейза.
-    ty.value = 0;
-  };
-
-  const moveBy = (deltaMin: number) => {
-    if (!onReschedule) return;
-    const duration = Math.max(15, endMin - startMin);
-    let newStart = startMin + deltaMin;
-    const lo = Math.min(startMin, winStart);
-    const hi = Math.max(endMin, winEnd) - duration;
-    newStart = Math.max(lo, Math.min(hi, newStart));
-    if (newStart === startMin) return;
-    onReschedule(apt, minToHM(newStart), minToHM(newStart + duration));
-  };
-
-  const pan = Gesture.Pan()
-    .activateAfterLongPress(300)
-    .onStart(() => {
-      active.value = withSpring(1);
-    })
-    .onUpdate((e) => {
-      ty.value = e.translationY;
-    })
-    .onEnd((e) => {
-      // Отпустил, не сдвинув (<8px) — это «подержал» → контекстное меню
-      // (web ActionMenuModal). Сдвинул — перенос: сброс ty решает commit
-      // на JS (перенос состоялся → мгновенно, база уже переписана
-      // оптимистически; нет → пружиной домой).
-      if (Math.abs(e.translationY) < 8 && onMenu) {
-        ty.value = withSpring(0);
-        runOnJS(onMenu)(apt);
-      } else {
-        runOnJS(commit)(e.translationY);
-      }
-      active.value = withSpring(0);
-    });
-  // Мгновенный отклик на обычный тап (iOS-подсветка): лёгкое притухание
-  // с onBegin, возврат в onFinalize — раньше блок «молчал» до открытия шита.
-  // maxDuration не задаём: до порога long-press отпускание — всегда тап,
-  // после — pan уже активен и Exclusive отменяет tap сам; явный
-  // maxDuration(250) оставлял мёртвое окно 250–300 мс без реакции.
-  const tap = Gesture.Tap()
-    .onBegin(() => {
-      press.value = withTiming(1, { duration: 90 });
-    })
-    .onFinalize(() => {
-      press.value = withTiming(0, { duration: 150 });
-    })
-    .onEnd(() => runOnJS(onEdit)(apt));
-  // A crew member still gets the useful long-press actions (next status,
-  // call, route), but never enters the drag gesture that the server rejects.
-  const longPress = Gesture.LongPress()
-    .minDuration(300)
-    .onStart(() => {
-      if (onMenu) runOnJS(onMenu)(apt);
-    });
-  const gesture = onReschedule
-    ? Gesture.Exclusive(pan, tap)
-    : onMenu
-      ? Gesture.Exclusive(longPress, tap)
-      : tap;
-
-  // The wrapper owns position + stacking (zIndex must live among siblings);
-  // the card owns the drag transform + shadow, so the wrapper's percent
-  // geometry stays untouched by the gesture springs.
-  // ТЕНЬ ПЕРЕТАСКИВАНИЯ — НА ОБЁРТКЕ. На карточке она рисовалась под
-  // `overflow: "hidden"` и не была видна ни разу.
-  const wrapperStyle = useAnimatedStyle(() => ({
-    zIndex: active.value > 0 ? 20 : 1,
-    shadowColor: "#000",
-    shadowOpacity: active.value * 0.25,
-    shadowRadius: active.value * 8,
-    shadowOffset: { width: 0, height: 3 },
-  }));
-  // ОТКЛИК — ЗАЛИВКОЙ И МАСШТАБОМ, А НЕ ПРОЗРАЧНОСТЬЮ. Прежний `opacity`
-  // гасил и текст, и заставлял iOS рисовать слой offscreen на 21 колонке; к
-  // тому же он перетирал `opacity: 0.55` отменённой, то есть тот сигнал не
-  // работал вовсе. Заливка под пальцем — 40 %: имя и время на ней читаются
-  // (измерено, 5.81 : 1 и 4.85 : 1 в худшем цвете палитры).
-  const fillIdle = fillRgba(
-    cancelled ? t.ink : colors.hue,
-    cancelled ? 0.0784 : completed ? 0.102 : BLOCK_FILL,
-  );
-  const fillPressed = fillRgba(
-    cancelled ? t.ink : colors.hue,
-    cancelled ? 0.2 : completed ? 0.2588 : 0.4,
-  );
-  // У ОТМЕНЁННОЙ ЗАЛИВКА НЕ АНИМИРУЕТСЯ. Разомкнутый кант выбивает вью из
-  // быстрого пути отрисовки, и смена фона заставляла бы iOS перерисовывать
-  // картинку канта каждый кадр нажатия. Отклик у неё остаётся масштабом —
-  // отменённую и не открывают так часто, чтобы платить за это кадрами.
-  const cardStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: ty.value },
-      { scale: (1 + active.value * 0.03) * (1 - press.value * 0.03) },
-    ],
-    backgroundColor: cancelled
-      ? fillIdle
-      : interpolateColor(press.value, [0, 1], [fillIdle, fillPressed]),
-  }));
-
-
-  return (
-    <GestureDetector gesture={gesture}>
-      <Animated.View
-        accessible
-        accessibilityRole="button"
-        // Адрес читается ВСЕГДА: озвучке недоступны ни ширина блока, ни его
-        // высота, и гейты вёрстки для неё не существуют.
-        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}, ${STATUS_LABELS[apt.status]}${overdue ? ", не закрыта" : ""}${address ? `, ${address}` : ""}`}
-        accessibilityActions={
-          onReschedule
-            ? [
-                { name: "activate", label: "Открыть" },
-                { name: "increment", label: `Позже на ${stepMinutes} минут` },
-                { name: "decrement", label: `Раньше на ${stepMinutes} минут` },
-              ]
-            : [{ name: "activate", label: "Открыть" }]
-        }
-        onAccessibilityAction={(e) => {
-          const action = e.nativeEvent.actionName;
-          if (action === "activate") onEdit(apt);
-          else if (onReschedule && action === "increment") moveBy(stepMinutes);
-          else if (onReschedule && action === "decrement") moveBy(-stepMinutes);
-        }}
-        style={[
-          {
-            position: "absolute",
-            left,
-            width,
-            top: pct(visStart - winStart, totalMin),
-            height: pct(visEnd - visStart, totalMin),
-            // 24px wrapper ⇒ 22px card (bottom:2) — the old readable
-            // minimum for micro-appointments at low zoom.
-            minHeight: 24,
-          },
-          wrapperStyle,
-        ]}
-      >
-        <Animated.View
-          style={[
-            {
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              // 2pt дыхания до следующего блока.
-              bottom: 2,
-              // КАНТ ПО ВСЕМУ ПЕРИМЕТРУ ВМЕСТО ЛЕВОГО КОРЕШКА (владелец
-              // 2026-09-05: «когда слева только полосочка — это полная
-              // хрень»). Заливка отвечает за группировку, кант — за
-              // категорию: при 18 % оттенки различаются слишком слабо, чтобы
-              // называть ими сущности, а кант в полную силу разводит те же
-              // пары даже при дальтонизме.
-              borderWidth: bw,
-              borderColor: edge,
-              borderStyle: edgeStyle,
-              // Кант входит в бокс-модель RN: без компенсации толстый кант
-              // просрочки съедал бы строку текста.
-              paddingHorizontal: pad - (bw - 1),
-              paddingVertical: 2 - (bw - 1),
-              borderRadius: t.radius.card,
-              borderCurve: "continuous",
-              overflow: "hidden",
-            },
-            cardStyle,
-          ]}
-        >
-          {/* ЛЕСТНИЦА СОДЕРЖИМОГО: имя → время → услуга → адрес. Имя первым, потому
-              что время уже названо рельсом слева и позицией блока, а имя не
-              выводится ниоткуда. Кегль 13 — типографический пол продукта;
-              девятка, которой неделя набиралась раньше, была нечитаема.
-              Лестница только ДОПИСЫВАЕТСЯ вниз и никогда не переставляется:
-              при щипке глаз не должен терять якорь. */}
-          {lines >= 1 && textW >= 24 ? (
-            <Text
-              style={{
-                color: t.ink,
-                fontSize: 13,
-                lineHeight: lineH,
-                fontWeight: "700",
-                marginRight: Math.max(
-                  markReserve,
-                  lastRow === "name" ? dotReserve : 0,
-                ),
-                textDecorationLine: cancelled ? "line-through" : "none",
-              }}
-              numberOfLines={1}
-              ellipsizeMode={textW < 96 ? "clip" : "tail"}
-              maxFontSizeMultiplier={1.3}
-            >
-              {label}
-            </Text>
-          ) : null}
-          {lines >= 2 && textW >= 24 ? (
-            <Text
-              style={{
-                color: t.body,
-                fontSize: 13,
-                lineHeight: lineH,
-                fontWeight: overdue ? "700" : "500",
-                marginRight: lastRow === "time" ? dotReserve : 0,
-                fontVariant: ["tabular-nums"],
-              }}
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-            >
-              {textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start}
-            </Text>
-          ) : null}
-          {showService ? (
-            <Text
-              style={{
-                color: t.body,
-                fontSize: 13,
-                lineHeight: lineH,
-                marginRight: lastRow === "service" ? dotReserve : 0,
-              }}
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-            >
-              {service}
-            </Text>
-          ) : null}
-          {showAddress ? (
-            <Text
-              style={{
-                color: t.body,
-                fontSize: 13,
-                lineHeight: lineH,
-                marginRight: dotReserve,
-              }}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-              maxFontSizeMultiplier={1.3}
-            >
-              {address}
-            </Text>
-          ) : null}
-
-          {/* УГЛОВОЙ ЗНАК ОДИН И ОДНОЗНАЧНЫЙ: зелёный круг — работа закрыта.
-              Просрочка знака не носит, и причина не в экономии места:
-              markColor(t.warning) = #835400 и markColor(t.success) = #076b48
-              дают друг к другу 1.01 : 1 — на колонке недели, где глиф не
-              рисуется, «выполнено» и «просрочено» были двумя одинаково
-              светлыми кружками, неразличимыми ни для кого. Убрав один из двух,
-              делаем знак односмысленным. Глиф рисуется только на широком
-              блоке: SVG монтирует отдельное дерево на каждый знак, а неделя
-              держит 21 колонку. */}
-          {markSize > 0 && completed ? (
-            <View
-              style={{
-                position: "absolute",
-                top: 2,
-                right: 2,
-                width: markSize,
-                height: markSize,
-                borderRadius: 999,
-                backgroundColor: markColor(t.success),
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {markSize >= 14 ? (
-                <Check color={t.onAccent} size={10} strokeWidth={3} />
-              ) : null}
-            </View>
-          ) : null}
-
-          {/* ЧУЖАЯ МЕТКА — точка в нижнем углу: периметр занят цветом самой
-              записи. Цвет точки затемняется против ЕЁ заливки, а не против
-              сетки: точка лежит на чужом цвете.
-
-              `colors.fill` — НЕПРОЗРАЧНЫЙ композит (см. `BlockColors.fill`).
-              Пока здесь лежала строка с альфой, `deepen` мерил контраст об
-              отброшенную альфу, то есть о полный цвет записи, и топил метку
-              вдвое глубже нужного: зелёная на кобальтовой выходила почти
-              чёрной. */}
-          {offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? (
-            <View
-              style={{
-                position: "absolute",
-                bottom: 2,
-                right: 2,
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: deepen(offLabelColor, [colors.fill]),
-              }}
-            />
-          ) : null}
-        </Animated.View>
-      </Animated.View>
-    </GestureDetector>
-  );
-}
 
 // The fixed hour-label rail on the left of the grid: one flex cell per hour
 // (equal split of the animated grid height), each label riding its cell top.
@@ -876,8 +388,10 @@ export function TimeRail({
         <View key={h} style={{ flex: 1 }}>
           {nearNow(h) ? null : (
             <Text
-              style={[labelStyle, { top: h === startHour ? 0 : -7 }]}
-              className="tabular-nums"
+              style={[
+                labelStyle,
+                { top: h === startHour ? 0 : -7, fontVariant: ["tabular-nums"] },
+              ]}
               maxFontSizeMultiplier={1.3}
             >
               {`${pad2(h % 24)}:00`}
@@ -889,8 +403,7 @@ export function TimeRail({
       <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 0 }}>
         {nearNow(endHour) ? null : (
           <Text
-            style={[labelStyle, { top: -7 }]}
-            className="tabular-nums"
+            style={[labelStyle, { top: -7, fontVariant: ["tabular-nums"] }]}
             maxFontSizeMultiplier={1.3}
           >
             {endHour === 24 ? "24:00" : `${pad2(endHour % 24)}:00`}
@@ -914,9 +427,13 @@ export function TimeRail({
           }}
         >
           <Text
-            className="tabular-nums"
             maxFontSizeMultiplier={1.2}
-            style={{ fontSize: 10, fontWeight: "700", color: t.onAccent }}
+            style={{
+              fontSize: 11,
+              fontWeight: "700",
+              color: t.onAccent,
+              fontVariant: ["tabular-nums"],
+            }}
           >
             {minToHM(nowInWin)}
           </Text>
@@ -936,7 +453,12 @@ export function TimeRail({
 // percent-positioned overlays. The column has NO pixel geometry of its own —
 // it stretches to the animated row height (see zoom module note above), so
 // nothing here renders, measures or animates during a pinch.
-export function DayColumn({
+//
+// `memo` (`dayColumnPropsEqual`): у недели смонтирована двадцать одна колонка,
+// и перерисовка экрана без смены данных колонки не должна их трогать. Полоса
+// графика, записи дня и свободные слоты приходят новыми объектами с тем же
+// содержимым — их сравнение по содержимому объяснено в `grid-memo.ts`.
+export const DayColumn = memo(function DayColumn({
   dateYmd,
   appointments,
   clientName,
@@ -950,6 +472,8 @@ export function DayColumn({
   onEdit,
   onMenu,
   onCreateAt,
+  onSlotLongPress,
+  editingId = null,
   onReschedule,
   canReschedule,
   startHour = DEFAULT_START,
@@ -987,7 +511,18 @@ export function DayColumn({
   onMenu?: (a: Appointment) => void;
   /** Undefined for read-only calendars: empty slots are plain grid cells. */
   onCreateAt?: (dateYmd: string, timeStart: string) => void;
-  onReschedule?: (a: Appointment, newStart: string, newEnd: string) => void;
+  /** Долгое нажатие по свободному времени — быстрое меню («Перерыв»,
+   *  «Метка дня») без формы записи. */
+  onSlotLongPress?: (dateYmd: string, timeStart: string) => void;
+  /** Запись в режиме правки («Двигать и растягивать» из меню записи): только
+   *  у неё палец двигает и тянет за края, и только пока режим включён. */
+  editingId?: string | null;
+  onReschedule?: (
+    a: Appointment,
+    newStart: string,
+    newEnd: string,
+    date?: string,
+  ) => void;
   /** Per-record mutation guard (shared team events are creator-only). */
   canReschedule?: (a: Appointment) => boolean;
   startHour?: number;
@@ -1039,6 +574,9 @@ export function DayColumn({
   const winEndMin = endHour * 60;
   const totalMin = winEndMin - winStartMin;
 
+  // СТОПКИ узкой колонки (Неделя): записи на одно время — одна карточка с
+  // «+N»; тап открывает их списком.
+  const [deckOpen, setDeckOpen] = useState<PlacedAppt[] | null>(null);
   const placements = useMemo(
     () =>
       layoutDay(appointments.filter((a) => a.event_all_day !== true)).filter(
@@ -1046,6 +584,14 @@ export function DayColumn({
       ),
     [appointments, winStartMin, winEndMin],
   );
+
+  const decks = useMemo(() => decksFor(placements, laneW), [placements, laneW]);
+  const openDeck = (apt: Appointment) => {
+    const deck = decks.get(apt.id);
+    if (!deck) return onEdit(apt);
+    haptics.tap();
+    setDeckOpen(deck.members);
+  };
 
   const nowMin =
     isToday && nowMinutes != null && nowMinutes >= winStartMin && nowMinutes <= winEndMin
@@ -1085,8 +631,8 @@ export function DayColumn({
   // верхней кромке окна и кроет колонку целиком одним слоем.
   const workEnd = band ? clampWin(band.endMin) : winStartMin;
 
-  const onSlotPress = (hour: number, locationY: number) => {
-    if (!onCreateAt) return;
+  /** Время под пальцем в ячейке часа, с шагом TAP_STEP. */
+  const slotTime = (hour: number, locationY: number) => {
     // Sub-hour snap by touch position (web handleColumnClick parity):
     // floor to multiples of TAP_STEP, so a tap at 11:27 creates 11:00, at
     // 11:40 → 11:30. Screen-reader activation has no coordinates → whole
@@ -1096,7 +642,11 @@ export function DayColumn({
       60 - step,
       Math.floor(((locationY / hourH) * 60) / step) * step,
     );
-    onCreateAt(dateYmd, minToHM(hour * 60 + Math.max(0, offset)));
+    return minToHM(hour * 60 + Math.max(0, offset));
+  };
+  const onSlotPress = (hour: number, locationY: number) => {
+    if (!onCreateAt) return;
+    onCreateAt(dateYmd, slotTime(hour, locationY));
   };
 
   return (
@@ -1105,6 +655,10 @@ export function DayColumn({
       style={{
         flex: 1,
         position: "relative",
+        // Колонка с записью в свободном перемещении — поверх соседних:
+        // иначе запись, утащенная в соседний день, уходила бы ПОД его белую
+        // колонку и пропадала из-под пальца.
+        zIndex: editingId && appointments.some((a) => a.id === editingId) ? 10 : 0,
         borderLeftWidth: 1,
         borderLeftColor: gridLine,
         // Рабочее поле — чистый белый (Bumpix): серый нерабочих часов и
@@ -1214,6 +768,18 @@ export function DayColumn({
           <Pressable
             key={h}
             onPress={(e) => onSlotPress(h, e?.nativeEvent?.locationY ?? 0)}
+            // ДОЛГОЕ НАЖАТИЕ ПО СВОБОДНОМУ ВРЕМЕНИ (владелец 2026-09-24:
+            // «перерыв — интересная идея»): разметка дня без формы записи.
+            onLongPress={
+              onSlotLongPress
+                ? (e) =>
+                    onSlotLongPress(
+                      dateYmd,
+                      slotTime(h, e?.nativeEvent?.locationY ?? 0),
+                    )
+                : undefined
+            }
+            delayLongPress={400}
             accessibilityRole="button"
             accessibilityLabel={`Создать запись в ${pad2(h)}:00`}
             // В режиме подбора выбор — это кубики. Часы остаются кликабельными
@@ -1380,10 +946,14 @@ export function DayColumn({
       ) : null}
 
       {laneW > 0
-        ? placements.map((p) => (
-            <Block
+        ? placements.map((p) => {
+            const deck = decks.get(p.apt.id);
+            return (
+            <AppointmentBlock
               key={p.apt.id}
               placed={p}
+              deckIndex={deck?.index}
+              deckSize={deck?.size}
               hourH={hourH}
               laneW={laneW}
               startHour={startHour}
@@ -1396,18 +966,36 @@ export function DayColumn({
               address={addressFor ? addressFor(p.apt) : null}
               lineH={lineH}
               onMenu={onMenu}
+              editing={editingId === p.apt.id}
+              dayW={compact && laneW > 0 ? laneW + 1 : undefined}
               overdue={isOverdue(p.apt, todayYmd, isToday ? nowMinutes : null)}
-              onEdit={onEdit}
+              // Тап по стопке — список её записей, а не первая попавшаяся.
+              onEdit={deck ? openDeck : onEdit}
               onReschedule={
                 canReschedule?.(p.apt) === false ? undefined : onReschedule
               }
             />
-          ))
+            );
+          })
         : null}
+
+      <PickerSheet
+        visible={deckOpen != null}
+        title={deckOpen ? `${minToHM(deckOpen[0].startMin)} · ${deckOpen.length} ${deckOpen.length < 5 ? "записи" : "записей"}` : ""}
+        onClose={() => setDeckOpen(null)}
+        items={(deckOpen ?? []).map((p) => ({
+          id: p.apt.id,
+          label: clientName(p.apt) || p.apt.comment || "Запись",
+          hint: `${p.apt.time_start}–${p.apt.time_end}`,
+          icon: CalendarClock,
+          color: blockColors(p.apt).solid,
+          onPress: () => onEdit(p.apt),
+        }))}
+      />
 
     </View>
   );
-}
+}, dayColumnPropsEqual);
 
 // Sticky date header above the day grid — web parity (DayColumn header):
 // the user must always see WHICH day is open. Same visual grammar as the
@@ -1463,7 +1051,9 @@ function DayHeader({
 // Single-day grid: hour rail + a live-paged day column (prev/cur/next dates
 // ride the shared pager axis — swipe drags the neighbouring day in under the
 // finger, web/Bumpix-style). Header pages in lockstep with the column.
-export function DayView({
+//
+// `memo` — по той же причине, что у WeekView: пропсы экран держит стабильными.
+export const DayView = memo(function DayView({
   dateYmd,
   apptsFor,
   todayYmd,
@@ -1475,6 +1065,8 @@ export function DayView({
   onEdit,
   onMenu,
   onCreateAt,
+  onSlotLongPress,
+  editingId = null,
   onReschedule,
   canReschedule,
   onCommitPage,
@@ -1513,7 +1105,18 @@ export function DayView({
   /** Долгое нажатие без движения по блоку — контекстное меню записи. */
   onMenu?: (a: Appointment) => void;
   onCreateAt?: (dateYmd: string, timeStart: string) => void;
-  onReschedule?: (a: Appointment, newStart: string, newEnd: string) => void;
+  /** Долгое нажатие по свободному времени — быстрое меню («Перерыв»,
+   *  «Метка дня») без формы записи. */
+  onSlotLongPress?: (dateYmd: string, timeStart: string) => void;
+  /** Запись в режиме правки («Двигать и растягивать» из меню записи): только
+   *  у неё палец двигает и тянет за края, и только пока режим включён. */
+  editingId?: string | null;
+  onReschedule?: (
+    a: Appointment,
+    newStart: string,
+    newEnd: string,
+    date?: string,
+  ) => void;
   /** Per-record mutation guard (shared team events are creator-only). */
   canReschedule?: (a: Appointment) => boolean;
   /** Палец долистал страницу: родитель сдвигает день на ±1. */
@@ -1541,7 +1144,8 @@ export function DayView({
   /** Buffer after each appointment (team ?? global), minutes. */
   bufferMinutes?: number;
   nowMinutes?: number | null;
-  /** Auto-scroll target on open (settings.scrollOpenHour). */
+  /** Час, на котором календарь открывается: начало графика команды в этот
+   *  день (см. `deriveScrollHour`). */
   scrollToHour?: number;
   /** Метка дня по дате (undefined — у команды нет меток, шапки чистые). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
@@ -1616,6 +1220,7 @@ export function DayView({
       ) : null}
       <ZoomableTimeGrid
         hourHSv={hourHSv}
+        scrollLocked={!!editingId}
         onZoom={onZoom}
         startHour={startHour}
         endHour={endHour}
@@ -1645,6 +1250,8 @@ export function DayView({
                 onEdit={onEdit}
                 onMenu={onMenu}
                 onCreateAt={onCreateAt}
+                onSlotLongPress={onSlotLongPress}
+                editingId={editingId}
                 onReschedule={onReschedule}
                 canReschedule={canReschedule}
                 startHour={startHour}
@@ -1657,7 +1264,9 @@ export function DayView({
                 freeSlots={freeSlotsFor?.(d)}
                 tintColor={labelTintFor?.(d) ?? null}
                 bufferMinutes={bufferMinutes}
-                nowMinutes={nowMinutes}
+                // «Сейчас» — только странице сегодня: соседние страницы его не
+                // читают, а тик раз в минуту перерисовывал бы и их.
+                nowMinutes={d === todayYmd ? nowMinutes : null}
               />
             );
           }}
@@ -1665,4 +1274,4 @@ export function DayView({
       </ZoomableTimeGrid>
     </View>
   );
-}
+});

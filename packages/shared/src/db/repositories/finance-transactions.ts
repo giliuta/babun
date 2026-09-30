@@ -98,7 +98,9 @@ function rowToTx(r: Row): FinanceTransaction {
     vat_amount: r.vat_amount ?? null,
     transfer_group_id: r.transfer_group_id,
     invoice_id: r.invoice_id,
+    debt_id: r.debt_id,
     refund_of_id: r.refund_of_id,
+    reversal_kind: (r.reversal_kind ?? null) as FinanceTransaction["reversal_kind"],
     source: r.source as TransactionSource,
     created_at: r.created_at,
     updated_at: r.updated_at,
@@ -208,65 +210,6 @@ export async function listAccountBalances(
   }));
 }
 
-/**
- * Итоги счёта за период из серверного `account_period_totals`.
- *
- * ВСЕ ДЕНЕЖНЫЕ КОЛОНКИ ПРИХОДЯТ УЖЕ СО ЗНАКОМ: income ≥ 0, expense ≤ 0,
- * refund ≤ 0, transfer_in ≥ 0, transfer_out ≤ 0. Клиент их только
- * СКЛАДЫВАЕТ. Написать «− expense» или «− refund» значит вычесть дважды;
- * контракт закреплён тестом apps/mobile/src/features/finances/account-period.
- */
-export interface AccountPeriodTotals {
-  /** NULL — та же строка «операции без счёта», что и в account_balances. */
-  account_id: string | null;
-  /** Полный остаток на начало периода (opening_balance + всё до p_from). */
-  opening_before: number;
-  income: number;
-  expense: number;
-  refund: number;
-  transfer_in: number;
-  transfer_out: number;
-  /** Подписанная сумма всего, КРОМЕ переводов, — единственная цифра героя. */
-  net: number;
-}
-
-/**
- * Период включает обе границы; даты — строки YYYY-MM-DD по `occurred_on`.
- * Owner-only, как и account_balances: ошибка роли обязана дойти до экрана.
- */
-export async function listAccountPeriodTotals(
-  supabase: DbSupabase,
-  tenantId: string,
-  fromDate: string,
-  toDate: string,
-): Promise<AccountPeriodTotals[]> {
-  const { data, error } = await supabase.rpc("account_period_totals", {
-    p_tenant: tenantId,
-    p_from: fromDate,
-    p_to: toDate,
-  });
-  if (error) throw new Error(error.message || "Не удалось посчитать период");
-  // Тот же пробел генератора, что и в account_balances: все колонки, кроме
-  // account_id, — числа, и пустыми они приходить не должны, но защита от
-  // NULL здесь дешевле, чем NaN в остатке.
-  const rows: Array<
-    { account_id: string | null } & Record<
-      Exclude<keyof AccountPeriodTotals, "account_id">,
-      number | null
-    >
-  > = data ?? [];
-  return rows.map((r) => ({
-    account_id: r.account_id,
-    opening_before: Number(r.opening_before ?? 0),
-    income: Number(r.income ?? 0),
-    expense: Number(r.expense ?? 0),
-    refund: Number(r.refund ?? 0),
-    transfer_in: Number(r.transfer_in ?? 0),
-    transfer_out: Number(r.transfer_out ?? 0),
-    net: Number(r.net ?? 0),
-  }));
-}
-
 /** Does the account carry ANY ledger rows? Mirrors the server-side
  * `guard_account_financial_history` freeze checks: the settings screen uses
  * this to disable kind/opening/brigade edits instead of surfacing a server
@@ -344,7 +287,15 @@ export interface TransactionDraft {
   /** «Без НДС» здесь — не пустое значение, а решение оператора: триггер
    *  обязан его уважать, даже когда у компании налог включён. */
   vat_mode?: "none" | "inclusive" | "exclusive" | null;
+  /** Снимок налога, выбранный человеком (ставка тапом в «Итого»). Едут
+   *  парой: `fill_transaction_vat` сверяет налог с суммой и ставкой и берёт
+   *  их вместо настроек. Пусто — ставку подставит сервер. */
+  vat_rate?: number | null;
+  vat_amount?: number | null;
   invoice_id?: string | null;
+  /** Гасит этот долг. Долг — не деньги; движением денег становится ровно эта
+   *  операция, поэтому платёж живёт в журнале, а не в таблице долгов. */
+  debt_id?: string | null;
   refund_of_id?: string | null;
   /** Клиентский PK строки. Стабилен на время попытки: ретрай после
    *  потерянного ответа или двойной тап упирается в duplicate key,
@@ -379,7 +330,11 @@ export async function insertTransaction(
     occurred_time: draft.occurred_time ?? null,
     receipt_url: draft.receipt_url ?? null,
     vat_mode: draft.vat_mode ?? null,
+    ...(draft.vat_rate != null && draft.vat_amount != null
+      ? { vat_rate: draft.vat_rate, vat_amount: draft.vat_amount }
+      : {}),
     invoice_id: draft.invoice_id ?? null,
+    debt_id: draft.debt_id ?? null,
     refund_of_id: draft.refund_of_id ?? null,
     source: "manual",
   };
@@ -431,6 +386,13 @@ export async function updateTransaction(
   if (patch.occurred_time !== undefined) update.occurred_time = patch.occurred_time;
   if (patch.receipt_url !== undefined) update.receipt_url = patch.receipt_url;
   if (patch.vat_mode !== undefined) update.vat_mode = patch.vat_mode;
+  // Снимок налога — только парой, как на вставке: ставка без суммы сервер
+  // пересобрал бы по настройкам компании.
+  if (patch.vat_rate != null && patch.vat_amount != null) {
+    update.vat_rate = patch.vat_rate;
+    update.vat_amount = patch.vat_amount;
+  }
+  if (patch.debt_id !== undefined) update.debt_id = patch.debt_id;
   const { data, error } = await supabase
     .from("finance_transactions")
     .update(update)

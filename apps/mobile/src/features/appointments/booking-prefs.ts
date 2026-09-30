@@ -1,7 +1,27 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  RecordColorPalette,
+  RecordColorRule,
+} from "@babun/shared/local/calendar-settings";
+import { useEffect } from "react";
+import {
+  featureOfBookingBlock,
+  isFeatureOn,
+} from "@babun/shared/local/company-features";
 import { getStorage } from "@babun/shared/storage";
+import { useDataRole } from "@/features/settings/tenant";
+import { useDisabledFeatures, useSetCompanyFeature } from "@/features/settings/company-features";
 import { useTenantId } from "@/lib/tenant";
-import { createEnabledPrefs } from "@/lib/enabled-prefs";
+import { localBookingCarry } from "./booking-carry";
+import {
+  useSaveTeamDesign,
+  useTeamDesign,
+  type TeamBlockKey,
+  type TeamDesign,
+} from "./team-design";
+import {
+  useCalendarSettings,
+  useSaveCalendarSettings,
+} from "@/features/settings/local-settings";
 import {
   COLOR_SITUATIONS,
   type ColorSituation,
@@ -22,8 +42,7 @@ import {
 // запись перестаёт быть записью — это не настройка вкуса, а определение
 // предмета.
 //
-// Настройка МЕСТНАЯ (MMKV) и по тенанту, как способы связи и карты: это
-// привычка ЭТОГО телефона и ЭТОЙ фирмы, а мастер работает на две.
+// Настройка — КОМПАНИИ (с 24.09, STORY-088): см. `useBookingBlocks` ниже.
 
 export type BookingBlockId =
   | "team"
@@ -44,17 +63,10 @@ export interface BookingBlockDef {
 }
 
 // ПОДПИСЕЙ У СТРОК НЕТ, И ПОЛЯ ПОД НИХ ТОЖЕ (владелец 2026-09-04: «эти
-// подсказки просто ненужные»). Здесь лежало поле `hint` с текстами «куда
-// ехать», «предоплата и долг» — оно не доезжало до экрана ни разу:
-// `ToggleListScreen` подписи не рисует по прямому отказу владельца. Мёртвое
-// поле опаснее пустого: следующий читатель поверит, что подпись где-то есть.
+// подсказки просто ненужные»).
 // ВСЕ БЛОКИ СТРАНИЦЫ, В ПОРЯДКЕ СТРАНИЦЫ (владелец 2026-09-06: «в настройках
 // добавь блок команда, метка, время, клиент, объект, услуга, оплата, заметка,
 // файл»). Команда, время, клиент и услуги закреплены: без них записи нет.
-// «Файлы» закреплены тоже (владелец 2026-09-06: «мне нужен блок файла, чтоб
-// он был всегда — страница создаётся, и он остаётся»): на устройстве, где
-// список блоков сохранили раньше, чем блок появился, он молча стоял
-// выключенным, и у новой записи файлов не было.
 export const BOOKING_BLOCKS: BookingBlockDef[] = [
   { id: "team", label: "Команда", pinned: true },
   { id: "label", label: "Метка" },
@@ -64,24 +76,215 @@ export const BOOKING_BLOCKS: BookingBlockDef[] = [
   { id: "services", label: "Услуги", pinned: true },
   { id: "payment", label: "Оплата" },
   { id: "note", label: "Заметка" },
-  { id: "files", label: "Файлы", pinned: true },
+  { id: "files", label: "Файлы" },
 ];
 
-const blocks = createEnabledPrefs<BookingBlockId>({
-  storageKey: "babun-booking-blocks",
-  queryKey: "booking-blocks",
-  all: BOOKING_BLOCKS.map((b) => b.id),
-  // По умолчанию включено всё: продукт не решает за бизнес, чего ему не надо.
-  defaults: BOOKING_BLOCKS.map((b) => b.id),
-  pinned: BOOKING_BLOCKS.filter((b) => b.pinned).map((b) => b.id),
-  // До 2026-09-06 набор знал только эти четыре; «Файлы» у старых устройств
-  // иначе стартовали бы выключенными.
-  legacyIds: ["object", "label", "payment", "note"],
-});
+// БЛОКИ ЗАПИСИ — ЭТО ФУНКЦИИ КОМПАНИИ (STORY-088, 24.09). Тумблеры «Метка»,
+// «Объект», «Оплата», «Заметка», «Файлы» жили в ТЕЛЕФОНЕ (MMKV
+// `babun-booking-blocks:<tenant>`): выключенный у владельца объект стоял у
+// мастера и на втором телефоне. Теперь блок включён, когда включена его
+// функция компании (`calendar_settings.disabled_features`), — у всех
+// одинаково, и владелец выключает его один раз.
+const LEGACY_KEY = "babun-booking-blocks";
 
-/** Включённые блоки формы записи, в порядке показа. */
-export const useBookingBlocks = blocks.use;
-export const useToggleBookingBlock = blocks.useToggle;
+/** Ключ блока записи в «Дизайне» команды. */
+const RECORD_BLOCK_KEY: Partial<Record<BookingBlockId, TeamBlockKey>> = {
+  label: "record_label",
+  object: "record_object",
+  payment: "record_payment",
+  note: "record_note",
+  files: "record_files",
+};
+
+/** Выключенные блоки «Дизайна» команды; без строки команды — выводятся из
+ *  прежних функций компании (так переезд ничего не ломает). */
+function useTeamBlocksOff(teamId: string | null | undefined): Set<TeamBlockKey> {
+  const design = useTeamDesign(teamId);
+  const disabled = useDisabledFeatures();
+  if (design) return new Set(design.disabledBlocks);
+  const off = new Set<TeamBlockKey>();
+  for (const block of BOOKING_BLOCKS) {
+    const feature = featureOfBookingBlock(block.id);
+    const key = RECORD_BLOCK_KEY[block.id];
+    if (feature && key && !isFeatureOn(disabled, feature)) off.add(key);
+  }
+  return off;
+}
+
+/** Выключенное — ключами функций компании, как их ждут `crewBlocks` и
+ *  финансы дня: функции компании плюс блоки записи ЭТОЙ команды
+ *  (record_object → objects). Одна правда на экран мастера и владельца. */
+export function useRecordFeaturesOff(teamId: string | null | undefined): string[] {
+  const off = useTeamBlocksOff(teamId);
+  const disabled = useDisabledFeatures();
+  const out = new Set<string>(disabled);
+  if (off.has("record_label")) out.add("record_label");
+  if (off.has("record_object")) out.add("objects");
+  if (off.has("record_payment")) out.add("record_payment");
+  if (off.has("record_note")) out.add("record_note");
+  if (off.has("record_files")) out.add("record_files");
+  return [...out];
+}
+
+/** Включённые блоки формы записи КОМАНДЫ, в порядке показа (владелец 24.09:
+ *  «всё отдельно под каждую команду»). Объект — ещё и функция компании
+ *  (объекты клиентов): выключены объекты у компании — блока нет нигде. */
+export function useBookingBlocks(teamId: string | null | undefined): BookingBlockId[] {
+  const off = useTeamBlocksOff(teamId);
+  const disabled = useDisabledFeatures();
+  useCarryLocalBookingBlocks();
+  return BOOKING_BLOCKS.filter((block) => {
+    if (block.pinned) return true;
+    if (block.id === "object" && !isFeatureOn(disabled, "objects")) return false;
+    const key = RECORD_BLOCK_KEY[block.id];
+    return !key || !off.has(key);
+  }).map((block) => block.id);
+}
+
+// ── БЛОКИ СОБЫТИЯ ──
+// Свои, не общие с записью (владелец 24.09: «на странице дизайна — выбор
+// блоков в записи, выбор блоков в событиях»; миграция 20260924230000). Время
+// и команда закреплены: без них события нет. Тип — нет (владелец 24.09:
+// «можно вообще без типа — событие останется как обычная запись с
+// заметкой»). Порядок — как у записи, чтобы на странице «Дизайн» одинаковые
+// блоки стояли напротив друг друга. Объект события включён, только когда у
+// компании вообще есть объекты (`objects`).
+
+export type EventBlockId =
+  | "team"
+  | "type"
+  | "when"
+  | "label"
+  | "client"
+  | "object"
+  | "note"
+  | "files";
+
+export interface EventBlockDef {
+  id: EventBlockId;
+  label: string;
+  pinned?: boolean;
+}
+
+export const EVENT_BLOCKS: EventBlockDef[] = [
+  { id: "team", label: "Команда", pinned: true },
+  { id: "label", label: "Метка" },
+  { id: "when", label: "Время", pinned: true },
+  { id: "client", label: "Клиент" },
+  { id: "object", label: "Объект" },
+  { id: "type", label: "Тип" },
+  { id: "note", label: "Заметка" },
+  { id: "files", label: "Файлы" },
+];
+
+const EVENT_BLOCK_KEY: Partial<Record<EventBlockId, TeamBlockKey>> = {
+  label: "event_label",
+  type: "event_type",
+  client: "event_client",
+  object: "event_object",
+  note: "event_note",
+  files: "event_files",
+};
+
+/** Включённые блоки формы события КОМАНДЫ, в порядке показа. */
+export function useEventBlocks(teamId: string | null | undefined): EventBlockId[] {
+  const off = useTeamBlocksOff(teamId);
+  const disabled = useDisabledFeatures();
+  return EVENT_BLOCKS.filter((block) => {
+    if (block.pinned) return true;
+    // Объекта события нет там, где у компании нет объектов вовсе.
+    if (block.id === "object" && !isFeatureOn(disabled, "objects")) return false;
+    const key = EVENT_BLOCK_KEY[block.id];
+    return !key || !off.has(key);
+  }).map((block) => block.id);
+}
+
+/** Текущий «Дизайн» команды целиком — основа для патча. Без строки —
+ *  собирается из настроек компании. Открыт наружу для функций клиентов
+ *  команды (`clients/client-functions.ts`): патч обязан нести те же блоки
+ *  записи, иначе первая же строка команды сбросила бы их. */
+export function useDesignBase(teamId: string | null | undefined): TeamDesign {
+  const design = useTeamDesign(teamId);
+  const off = useTeamBlocksOff(teamId);
+  const settings = useCalendarSettings().data;
+  return (
+    design ?? {
+      rule: settings?.recordColorRule ?? "team",
+      palette: settings?.recordColorPalette ?? null,
+      fallback: settings?.recordColorFallback ?? null,
+      disabledBlocks: [...off],
+    }
+  );
+}
+
+function useToggleTeamBlock(teamId: string | null | undefined) {
+  const base = useDesignBase(teamId);
+  const save = useSaveTeamDesign();
+  return {
+    ...save,
+    mutate: (key: TeamBlockKey | undefined) => {
+      if (!teamId || !key) return;
+      const off = new Set(base.disabledBlocks);
+      if (off.has(key)) off.delete(key);
+      else off.add(key);
+      save.mutate({ teamId, next: { ...base, disabledBlocks: [...off] } });
+    },
+  };
+}
+
+/** Тумблер блока события команды («Дизайн» → «Блоки», колонка «Событие»). */
+export function useToggleEventBlock(teamId: string | null | undefined) {
+  const t = useToggleTeamBlock(teamId);
+  return { ...t, mutate: (id: EventBlockId) => t.mutate(EVENT_BLOCK_KEY[id]) };
+}
+
+/** Тумблер блока записи команды («Дизайн» → «Блоки», колонка «Клиент»). */
+export function useToggleBookingBlock(teamId: string | null | undefined) {
+  const t = useToggleTeamBlock(teamId);
+  return { ...t, mutate: (id: BookingBlockId) => t.mutate(RECORD_BLOCK_KEY[id]) };
+}
+
+/** ПЕРЕНОС С ТЕЛЕФОНА — ОДИН РАЗ. У владельца, который уже выключил блоки на
+ *  своём телефоне, они не должны молча вернуться: если в компании ещё ничего
+ *  не выключено, а в телефоне выключено — переносим и забываем телефон. */
+let carried = false;
+function useCarryLocalBookingBlocks() {
+  const tenantId = useTenantId();
+  const role = useDataRole().data;
+  const settings = useCalendarSettings();
+  const set = useSaveCalendarSettings();
+  useEffect(() => {
+    if (carried || role !== "owner" || !tenantId || !settings.isSuccess) return;
+    carried = true;
+    const plan = localBookingCarry(
+      readLocal(`${LEGACY_KEY}:${tenantId}`),
+      settings.data?.disabledFeatures ?? [],
+      BOOKING_BLOCKS,
+    );
+    if (plan) set.mutate({ disabledFeatures: plan });
+    clearLocal(tenantId);
+    // Одноразовый перенос: зависимость от `set` лишняя и перезапускала бы его.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, tenantId, settings.isSuccess]);
+}
+
+function readLocal(key: string): string[] | undefined {
+  try {
+    const raw = getStorage().get<string[]>(key);
+    return Array.isArray(raw) ? raw : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function clearLocal(tenantId: string) {
+  try {
+    const storage = getStorage();
+    for (const suffix of ["", ":order", ":known"]) storage.remove(`${LEGACY_KEY}:${tenantId}${suffix}`);
+  } catch {
+    // Кэш телефона — не данные компании: не стёрся — не беда.
+  }
+}
 
 // ЦВЕТ ЗАПИСИ В АВТОМАТИЧЕСКОМ РЕЖИМЕ (владелец 2026-09-05: «разберём
 // полноценно автоматический режим — это надо придумать в настройках и
@@ -95,7 +298,7 @@ export const useToggleBookingBlock = blocks.useToggle;
 // Правило называется вслух и живёт в одном месте: календарь и форма красят
 // запись одинаково, потому что спрашивают его.
 
-export type AutoColorRule = "team" | "label" | "service";
+export type AutoColorRule = RecordColorRule;
 
 export const AUTO_COLOR_RULES: { id: AutoColorRule; label: string }[] = [
   { id: "team", label: "Цвет команды" },
@@ -103,174 +306,97 @@ export const AUTO_COLOR_RULES: { id: AutoColorRule; label: string }[] = [
   { id: "service", label: "Цвет услуги" },
 ];
 
-const RULE_KEY = "babun-booking-auto-color";
-const ruleKey = (tenantId: string | null) =>
-  tenantId ? `${RULE_KEY}:${tenantId}` : RULE_KEY;
-
-function readRule(tenantId: string | null): AutoColorRule {
-  try {
-    // БЕЛЫЙ СПИСОК, А НЕ СРАВНЕНИЕ С ОДНИМ ЗНАЧЕНИЕМ. Пока здесь стояло
-    // `v === "label" ? "label" : "team"`, любое новое правило записывалось бы,
-    // но читалось как «Цвет команды» — и дефект выглядел бы как «настройка не
-    // сохраняется», причём только после перезапуска приложения.
-    const v = getStorage().get<string>(ruleKey(tenantId));
-    return AUTO_COLOR_RULES.some((r) => r.id === v)
-      ? (v as AutoColorRule)
-      : "team";
-  } catch {
-    return "team";
-  }
-}
-
-export function useAutoColorRule(): AutoColorRule {
-  const tenantId = useTenantId();
-  const { data } = useQuery({
-    queryKey: ["booking-auto-color", tenantId],
-    queryFn: () => readRule(tenantId),
-    // MMKV читается синхронно: цвет известен на первом же кадре, иначе шапка
-    // мигала бы командным цветом поверх выбранного правила.
-    initialData: () => readRule(tenantId),
-    staleTime: Infinity,
-  });
-  return data;
-}
-
-export function useSetAutoColorRule() {
-  const qc = useQueryClient();
-  const tenantId = useTenantId();
-  return useMutation<AutoColorRule, Error, AutoColorRule>({
-    // Локальная запись не ждёт сети: в самолёте настройка тоже переключается.
-    networkMode: "always",
-    mutationFn: async (rule) => {
-      try {
-        getStorage().set(ruleKey(tenantId), rule);
-      } catch {
-        // Запись best-effort.
-      }
-      return rule;
-    },
-    onSuccess: (rule) =>
-      qc.setQueryData(["booking-auto-color", tenantId], rule),
-  });
-}
-
-// ЦВЕТОВАЯ ПАЛИТРА ЗАПИСИ — «ЧЕГО НЕ ХВАТАЕТ» (владелец 2026-09-05: «ещё один
-// блок — цветовая палитра; если нет клиента, тогда цвет такой-то, тапаю, могу
-// выбрать любой; если нет объекта — такой-то… чтобы человек один раз настроил,
-// и всё»).
+// ЦВЕТА ЗАПИСИ ЖИВУТ В КОМПАНИИ, А НЕ В ТЕЛЕФОНЕ (2026-09-12).
 //
-// Правило разрешения живёт в `record-color` под тестами; здесь только хранение
-// выбранных цветов. Умолчания сочные и разные: серый — «даже неизвестно, кому
-// едем», оранжевый — «неизвестно куда», жёлтый — «неизвестно что делаем».
-// Дырам полагается бросаться в глаза, иначе сигнала нет.
+// Правило, палитра ситуаций и запасной цвет лежали в MMKV — по ключам
+// `babun-booking-auto-color|palette|fallback-color:<tenant>`, без сервера
+// вовсе. Стоило открыть приложение на двух симуляторах владельца — ОДИН
+// аккаунт, ОДНА компания, ОДИН бандл — и записи оказались выкрашены
+// по-разному. Из того же корня: переустановка стирала настройку, а
+// приглашённый сотрудник получал заводские цвета вместо настроенных.
+//
+// Теперь это поля `calendar_settings` (мигация record_color_settings), и
+// читаются они той же дверью, что остальные настройки компании:
+// `useCalendarSettings` (сервер + офлайн-кэш + роль) и
+// `useSaveCalendarSettings` (патч, только владелец). Своего кэша, своего
+// ключа и своей мутации у цветов больше нет — второй двери к одной настройке
+// не бывает.
+//
+// ЗАВОДСКИЕ ЗНАЧЕНИЯ ЗНАЕТ ЭКРАН, А НЕ ХРАНИЛИЩЕ. В базе `undefined` значит
+// «владелец не выбирал»: только так «сбросить к заводскому» отличимо от
+// «владелец выбрал ровно этот серый».
 
+// ЗАВОДСКИЕ ЦВЕТА — ИЗ НАБОРА (2026-09-24). Прежние #FF9500 / #FFCC00 /
+// #005BD3 в набор не входили: в настройке стояло «Свой · Свой · Свой», выбрать
+// заводской заново было нельзя, а на плотном блоке оранжевый и жёлтый
+// сходились в один янтарь. Морковный и Янтарный разведены по тону и после
+// затемнения блока; серого в наборе нет намеренно, он остаётся заводским
+// нейтральным сигналом. 25.09: «нет клиента» и «нет услуг» сняты, «не
+// оплачено» — рубиновый из набора (деньги, которые должны).
 const SITUATION_DEFAULTS: Record<ColorSituation, string> = {
-  noClient: "#8E8E93",
-  noObject: "#FF9500",
-  noServices: "#FFCC00",
+  unpaid: "#E8145D",
+  noObject: "#DF510F",
 };
 
-const PALETTE_KEY = "babun-booking-palette";
-const paletteKey = (tenantId: string | null) =>
-  tenantId ? `${PALETTE_KEY}:${tenantId}` : PALETTE_KEY;
+const FALLBACK_DEFAULT = "#3276FB";
 
 export type SituationPalette = Record<ColorSituation, string | null>;
 
-function readPalette(tenantId: string | null): SituationPalette {
+function paletteWithDefaults(
+  stored: RecordColorPalette | undefined,
+): SituationPalette {
   const out = { ...SITUATION_DEFAULTS } as SituationPalette;
-  try {
-    const raw = getStorage().get<Record<string, string | null>>(
-      paletteKey(tenantId),
-    );
-    if (raw && typeof raw === "object") {
-      for (const def of COLOR_SITUATIONS) {
-        // `null` — «не красить»; отсутствие ключа — умолчание.
-        if (def.id in raw) out[def.id] = raw[def.id] ?? null;
-      }
-    }
-  } catch {
-    // Хранилище ещё не поднялось — работаем на умолчаниях.
+  if (!stored) return out;
+  for (const def of COLOR_SITUATIONS) {
+    if (def.id in stored) out[def.id] = stored[def.id] ?? null;
   }
   return out;
 }
 
-export function useSituationPalette(): SituationPalette {
-  const tenantId = useTenantId();
-  const { data } = useQuery({
-    queryKey: ["booking-palette", tenantId],
-    queryFn: () => readPalette(tenantId),
-    initialData: () => readPalette(tenantId),
-    staleTime: Infinity,
-  });
-  return data;
+export function useAutoColorRule(teamId: string | null | undefined): AutoColorRule {
+  return useDesignBase(teamId).rule;
 }
 
-// ЗАПАСНОЙ ЦВЕТ — ПОСЛЕДНЯЯ СТУПЕНЬ ПРАВИЛА. Он виден редко: и команда, и
-// метка получают цвет автоматом при создании, — но «ничего» на его месте
-// означало бы блок без цвета, поэтому «Не красить» здесь запрещено.
-// Умолчание — Сапфировый из палитры, а не кобальт продукта: кобальта в
-// справочнике нет, строка настройки не смогла бы назвать его словом.
-const FALLBACK_KEY = "babun-booking-fallback-color";
-const fallbackKey = (tenantId: string | null) =>
-  tenantId ? `${FALLBACK_KEY}:${tenantId}` : FALLBACK_KEY;
-const FALLBACK_DEFAULT = "#005BD3";
-
-function readFallback(tenantId: string | null): string {
-  try {
-    const v = getStorage().get<string>(fallbackKey(tenantId));
-    return typeof v === "string" && v.trim() ? v : FALLBACK_DEFAULT;
-  } catch {
-    return FALLBACK_DEFAULT;
-  }
+export function useSituationPalette(teamId: string | null | undefined): SituationPalette {
+  return paletteWithDefaults(useDesignBase(teamId).palette ?? undefined);
 }
 
-export function useFallbackColor(): string {
-  const tenantId = useTenantId();
-  const { data } = useQuery({
-    queryKey: ["booking-fallback-color", tenantId],
-    queryFn: () => readFallback(tenantId),
-    initialData: () => readFallback(tenantId),
-    staleTime: Infinity,
-  });
-  return data;
+export function useFallbackColor(teamId: string | null | undefined): string {
+  return useDesignBase(teamId).fallback ?? FALLBACK_DEFAULT;
 }
 
-export function useSetFallbackColor() {
-  const qc = useQueryClient();
-  const tenantId = useTenantId();
-  return useMutation<string, Error, string>({
-    networkMode: "always",
-    mutationFn: async (color) => {
-      try {
-        getStorage().set(fallbackKey(tenantId), color);
-      } catch {
-        // Запись best-effort.
-      }
-      return color;
+function useSaveDesign(teamId: string | null | undefined) {
+  const base = useDesignBase(teamId);
+  const save = useSaveTeamDesign();
+  return {
+    save,
+    base,
+    patch: (p: Partial<TeamDesign>) => {
+      if (!teamId) return;
+      save.mutate({ teamId, next: { ...base, ...p } });
     },
-    onSuccess: (color) =>
-      qc.setQueryData(["booking-fallback-color", tenantId], color),
-  });
+  };
 }
 
-export function useSetSituationColor() {
-  const qc = useQueryClient();
-  const tenantId = useTenantId();
-  return useMutation<
-    SituationPalette,
-    Error,
-    { situation: ColorSituation; color: string | null }
-  >({
-    networkMode: "always",
-    mutationFn: async ({ situation, color }) => {
-      const next = { ...readPalette(tenantId), [situation]: color };
-      try {
-        getStorage().set(paletteKey(tenantId), next);
-      } catch {
-        // Запись best-effort.
-      }
-      return next;
+export function useSetAutoColorRule(teamId: string | null | undefined) {
+  const { save, patch } = useSaveDesign(teamId);
+  return { ...save, mutate: (rule: AutoColorRule) => patch({ rule }) };
+}
+
+export function useSetFallbackColor(teamId: string | null | undefined) {
+  const { save, patch } = useSaveDesign(teamId);
+  return { ...save, mutate: (color: string) => patch({ fallback: color || null }) };
+}
+
+export function useSetSituationColor(teamId: string | null | undefined) {
+  const { save, base, patch } = useSaveDesign(teamId);
+  return {
+    ...save,
+    // Патч цвета ОДНОЙ ситуации переписывает палитру целиком — основа то, что
+    // на экране (с заводскими), иначе первая правка стёрла бы соседние.
+    mutate: (input: { situation: ColorSituation; color: string | null }) => {
+      const current = paletteWithDefaults(base.palette ?? undefined);
+      patch({ palette: { ...current, [input.situation]: input.color } });
     },
-    onSuccess: (next) => qc.setQueryData(["booking-palette", tenantId], next),
-  });
+  };
 }

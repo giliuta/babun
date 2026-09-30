@@ -14,10 +14,18 @@ import {
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Service } from "@babun/shared/local/services";
 import { supabase } from "@/lib/supabase";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useAllServices } from "@/features/services/queries";
-import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/features/settings/tenant";
+import { accessGate, moneyKey } from "@/features/access/my-access";
+import { useMyAccess } from "@/features/access/queries";
 import { listMasterAppointmentsSafePaged } from "./master-appointments";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import {
+  appointmentsQueryKey,
+  dayExtrasQueryKey,
+} from "@/lib/company-query-keys";
 
 // PostgREST silently caps every response at 1000 rows (Supabase default
 // max-rows), so an unordered, unlimited listAppointments truncates a busy
@@ -47,7 +55,9 @@ type AnyResult = { data: any[] | null; error: unknown };
 // A client that resolves `from(t).select(cols).eq(col,val)` to ALL pages.
 // The returned object is thenable so both `await client.from()...eq()` and
 // `client.from()...eq().then()` (whatever the caller does) get the full set.
-function pagingClient(): typeof supabase {
+/** Шим постраничного чтения поверх ЛЮБОГО клиента: обычного или привязанного
+ *  к чужой компании (`bind-tenant.ts`) — прогрев читает записи им же. */
+export function pagingClient(base: typeof supabase = supabase): typeof supabase {
   const runAllPages = async (
     table: string,
     columns: string,
@@ -56,7 +66,7 @@ function pagingClient(): typeof supabase {
   ): Promise<AnyResult> => {
     const all: unknown[] = [];
     for (let offset = 0; ; offset += APPT_PAGE_SIZE) {
-      const { data, error } = await ((supabase.from as any)(table)
+      const { data, error } = await ((base.from as any)(table)
         .select(columns)
         .eq(column, value)
         // date alone is not unique — without the id tiebreaker PostgREST
@@ -114,32 +124,52 @@ function pagingClient(): typeof supabase {
 // and paged around the 1000-row cap by threading the shim above in as the
 // wrapper's supabase client. Retained name/signature: useClientAppointments
 // imports this.
+//
+// КЛИЕНТ ПРИВЯЗАН К КОМПАНИИ КЛЮЧА, А НЕ К КОМПАНИИ УСТРОЙСТВА. Обёртка
+// отдаёт снимок SQLite и отпускает фоновое перечитывание, а шим читает
+// страницы одну за другой — по 2–6 с каждую в очереди бесплатного плана.
+// Глобальный клиент берёт заголовок на КАЖДЫЙ запрос: переход посреди чтения
+// отправлял бы вторую страницу под другой компанией, сервер отвечал нулём
+// строк, и `cacheReplaceTenant` стирал остаток записей этой компании с
+// меткой «сервер сказал: пусто». Привязанный клиент несёт заголовок `tenantId`
+// на всех страницах, в том числе у отпущенного перечитывания. У шима нет поля
+// привязки, так что подталкивание очереди выгрузки работает как раньше.
 export async function listAppointmentsPaged(
   tenantId: string,
 ): Promise<Appointment[]> {
-  return listAppointmentsCached(pagingClient(), tenantId);
+  return listAppointmentsCached(pagingClient(tenantBoundClient(tenantId)), tenantId);
 }
 
-export function appointmentsQueryKey(
-  tenantId: string | null,
-  role: UserRole | null | undefined,
-) {
-  return ["appointments", tenantId, role ?? "role-pending"] as const;
-}
+/** Ключ живёт в `lib/company-query-keys.ts`; реэкспорт для тех, кто уже
+ *  импортирует его отсюда (`useClientAppointments`, `label-auto-assign`). */
+export { appointmentsQueryKey };
 
 // All tenant appointments (RLS-scoped) — shared cache key with the per-client
 // hook (which adds a `select` filter on top of the same data).
+// ЗАПИСИ ЧИТАЮТСЯ В КОМПАНИИ ЭКРАНА. В календаре это компания устройства, а
+// на вкладке «Клиенты» — компания её источника (STORY-082): там список и
+// статистика («последний визит», «команда», фильтр по команде) должны быть
+// про ту же компанию, чьи клиенты в списке. Вне вкладки источника нет, и всё
+// работает как раньше.
 export function useAppointments() {
-  const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
-  const role = roleQuery.data;
+  const scope = useClientsScopeOrNull();
+  const activeTenantId = useTenantId();
+  const roleQuery = useDataRole();
+  const tenantId = scope?.tenantId ?? activeTenantId;
+  const role = scope ? scope.role : roleQuery.data;
+  const ready = scope ? true : roleQuery.isSuccess && roleQuery.data != null;
+  const guest = scope?.kind === "member" || scope?.kind === "record";
   return useQuery({
     queryKey: appointmentsQueryKey(tenantId, role),
     // Fail closed: no broad cached list is mounted before the membership role
     // is confirmed. Masters always bypass the SQLite/SWR wrapper.
-    enabled: !!tenantId && roleQuery.isSuccess && role != null,
+    enabled: !!tenantId && ready && role != null,
     queryFn: () => {
-      if (role === "master") return listMasterAppointmentsSafePaged();
+      if (guest || role === "master") {
+        return listMasterAppointmentsSafePaged(
+          scope && !scope.isActive ? tenantBoundClient(tenantId as string) : supabase,
+        );
+      }
       if (role === "owner" || role === "dispatcher") {
         return listAppointmentsPaged(tenantId as string);
       }
@@ -152,11 +182,19 @@ export function useAppointments() {
 // DayExtrasMap shape). Feeds computeDayFinance in the day-finance footer.
 export function useDayExtras() {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
+  // Ручные операции дня — деньги команды (этап 2 доступа): читает тот, кто
+  // видит хотя бы одну сторону — доходы или расходы (срез 2а) — хотя бы в
+  // одном календаре; какие строки ему придут, решает сервер (по стороне).
+  const map = useMyAccess().data;
+  const sees = (["income", "expense"] as const).some((side) => {
+    const gate = accessGate({ role, map, blockKey: moneyKey(map, side), scope: "calendar" });
+    return gate === "read" || gate === "write";
+  });
   return useQuery({
-    queryKey: ["day-extras", tenantId, role ?? "role-pending"],
-    enabled: !!tenantId && roleQuery.isSuccess && role === "owner",
+    queryKey: dayExtrasQueryKey(tenantId, role),
+    enabled: !!tenantId && roleQuery.isSuccess && sees,
     queryFn: () => listDayExtras(supabase, tenantId as string),
   });
 }
@@ -168,7 +206,8 @@ export function useDayExtras() {
 // ТОЛЬКО свой ключ (не всю карту — образец: useUpdateAppointment).
 export function useSetDayExtras() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
+  const myAccess = useMyAccess().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -180,8 +219,16 @@ export function useSetDayExtras() {
       dateKey: string;
       extras: DayExtra[];
     }) => {
-      if (role !== "owner") {
-        throw new Error("Ручные доходы и расходы доступны только владельцу.");
+      // Менять ручные операции может тот, кто пишет хотя бы одну сторону денег
+      // в ЭТОМ календаре; сервер (`replace_day_extras`, срез 2а) пишет только
+      // его стороны, а чужую строку пропускает лишь нетронутой.
+      const writes = (["income", "expense"] as const).some(
+        (side) =>
+          accessGate({ role, map: myAccess, blockKey: moneyKey(myAccess, side), scope: "calendar", teamId }) ===
+          "write",
+      );
+      if (!writes) {
+        throw new Error("Менять доходы и расходы в этом календаре вам не открыто.");
       }
       return setDayExtras(supabase, tenantId as string, teamId, dateKey, extras);
     },

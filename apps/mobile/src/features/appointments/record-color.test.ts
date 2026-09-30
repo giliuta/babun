@@ -1,26 +1,27 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  autoBaseColor,
   recordFilled,
   resolveRecordColor,
   resolveRecordSituation,
   serviceBaseColor,
 } from "./record-color";
 
-const FULL = { client: true, object: true, services: true };
+const FULL = { client: true, object: true, services: true, paid: true };
 const PALETTE = {
-  noClient: "#8E8E93",
+  unpaid: "#E8145D",
   noObject: "#FF9500",
-  noServices: "#FFCC00",
 };
 const COBALT = "#2F6BFF";
+const EMPTY = { client: true, object: false, services: true, paid: false };
 
 describe("resolveRecordColor", () => {
   test("выбранный рукой цвет сильнее всех правил", () => {
     assert.equal(
       resolveRecordColor({
         override: "#AF52DE",
-        filled: { client: false, object: false, services: false },
+        filled: EMPTY,
         base: "#34C759",
         palette: PALETTE,
         fallback: COBALT,
@@ -31,66 +32,47 @@ describe("resolveRecordColor", () => {
 
   test("заполненная запись берёт обычный цвет", () => {
     assert.equal(
-      resolveRecordColor({
-        filled: FULL,
-        base: "#34C759",
-        palette: PALETTE,
-        fallback: COBALT,
-      }),
+      resolveRecordColor({ filled: FULL, base: "#34C759", palette: PALETTE, fallback: COBALT }),
       "#34C759",
     );
   });
 
-  test("первая дыра сверху вниз побеждает следующие", () => {
+  test("долг важнее пустого объекта", () => {
     assert.equal(
-      resolveRecordColor({
-        filled: { client: false, object: false, services: false },
-        base: "#34C759",
-        palette: PALETTE,
-        fallback: COBALT,
-      }),
-      PALETTE.noClient,
+      resolveRecordColor({ filled: EMPTY, base: "#34C759", palette: PALETTE, fallback: COBALT }),
+      PALETTE.unpaid,
     );
     assert.equal(
       resolveRecordColor({
-        filled: { client: true, object: false, services: false },
+        filled: { ...FULL, object: false },
         base: "#34C759",
         palette: PALETTE,
         fallback: COBALT,
       }),
       PALETTE.noObject,
     );
-    assert.equal(
-      resolveRecordColor({
-        filled: { client: true, object: true, services: false },
-        base: "#34C759",
-        palette: PALETTE,
-        fallback: COBALT,
-      }),
-      PALETTE.noServices,
-    );
   });
 
   test("ситуация без своего цвета пропускается, а не гасит остальные", () => {
     assert.equal(
       resolveRecordColor({
-        filled: { client: false, object: false, services: true },
+        filled: EMPTY,
         base: "#34C759",
-        palette: { noClient: null, noObject: "#FF9500" },
+        palette: { unpaid: null, noObject: "#FF9500" },
         fallback: COBALT,
       }),
       "#FF9500",
     );
   });
 
-  test("выключенный блок бизнеса не считается дырой", () => {
-    // У мастера маникюра объекта нет вовсе — это норма, а не пропуск.
+  test("выключенный блок не считается дырой — запись «всё заполнено»", () => {
+    // Выключены «Объект» и «Оплата» — подсветки нет, цвет обычный.
     assert.equal(
       resolveRecordColor({
-        filled: { client: true, object: false, services: true },
+        filled: EMPTY,
         base: "#34C759",
         palette: PALETTE,
-        active: ["noClient", "noServices"],
+        active: [],
         fallback: COBALT,
       }),
       "#34C759",
@@ -99,21 +81,7 @@ describe("resolveRecordColor", () => {
 
   test("нет ни правила, ни обычного цвета — кобальт продукта", () => {
     assert.equal(
-      resolveRecordColor({
-        filled: FULL,
-        base: null,
-        palette: {},
-        fallback: COBALT,
-      }),
-      COBALT,
-    );
-    assert.equal(
-      resolveRecordColor({
-        filled: { client: false, object: true, services: true },
-        base: "   ",
-        palette: { noClient: "  " },
-        fallback: COBALT,
-      }),
+      resolveRecordColor({ filled: FULL, base: null, palette: {}, fallback: COBALT }),
       COBALT,
     );
   });
@@ -121,60 +89,43 @@ describe("resolveRecordColor", () => {
 
 describe("recordFilled", () => {
   test("объект закрыт вписанным адресом, не только ссылкой", () => {
-    // Разовый выезд по звонку в справочник не заводят — и красить его дырой
-    // значит врать.
     assert.equal(recordFilled({ location_id: "loc-1" }).object, true);
     assert.equal(recordFilled({ address: "Лимассол, 1" }).object, true);
     assert.equal(recordFilled({ address: "  " }).object, false);
-    assert.equal(recordFilled({ address: "ул" }).object, false);
     assert.equal(recordFilled({}).object, false);
   });
 
-  test("услуги закрыты снимком строк или вписанной рукой суммой", () => {
-    assert.equal(recordFilled({ service_ids: ["s1"] }).services, true);
-    assert.equal(recordFilled({ services: [{}] }).services, true);
-    assert.equal(recordFilled({ custom_total: true }).services, true);
-    assert.equal(recordFilled({ total_amount: 150 }).services, true);
-    assert.equal(recordFilled({ total_amount: "150" }).services, true);
-    assert.equal(recordFilled({ total_amount: 0 }).services, false);
-    assert.equal(recordFilled({}).services, false);
-  });
-
-  test("клиент — только по ссылке", () => {
-    assert.equal(recordFilled({ client_id: "c1" }).client, true);
-    assert.equal(recordFilled({}).client, false);
+  test("«не оплачено» — только после визита и при долге", () => {
+    const base = { total_amount: 100, payment_status: "unpaid", prepaid_amount: 0 };
+    // Будущая запись долгом не считается.
+    assert.equal(recordFilled({ ...base, date: "2026-10-01" }, "2026-09-25").paid, true);
+    // День прошёл — долг.
+    assert.equal(recordFilled({ ...base, date: "2026-09-20" }, "2026-09-25").paid, false);
+    // Выполнена сегодня — долг.
+    assert.equal(recordFilled({ ...base, date: "2026-09-25", status: "completed" }, "2026-09-25").paid, false);
+    // Оплачено полностью (леджер) — не долг.
+    assert.equal(
+      recordFilled({ ...base, date: "2026-09-20", payments: [{ amount: 100 }] }, "2026-09-25").paid,
+      true,
+    );
+    // Аванс покрыл сумму — не долг.
+    assert.equal(recordFilled({ ...base, date: "2026-09-20", prepaid_amount: 100 }, "2026-09-25").paid, true);
+    // Бесплатный визит — не долг.
+    assert.equal(recordFilled({ total_amount: 0, date: "2026-09-20" }, "2026-09-25").paid, true);
   });
 });
 
 describe("resolveRecordSituation", () => {
   test("называет ту же дыру, что покрасила запись", () => {
-    const palette = { noClient: "#8E8E93", noObject: "#FF9500", noServices: "#FFCC00" };
     assert.equal(
-      resolveRecordSituation({
-        filled: { client: true, object: false, services: false },
-        palette,
-      }),
+      resolveRecordSituation({ filled: { ...FULL, object: false }, palette: PALETTE }),
       "noObject",
     );
   });
 
   test("у записи с выбранным рукой цветом ситуации нет", () => {
     assert.equal(
-      resolveRecordSituation({
-        override: "#AF52DE",
-        filled: { client: false, object: false, services: false },
-        palette: { noClient: "#8E8E93" },
-      }),
-      null,
-    );
-  });
-
-  test("ситуация без цвета не называется", () => {
-    assert.equal(
-      resolveRecordSituation({
-        filled: { client: false, object: true, services: true },
-        palette: { noClient: null },
-      }),
+      resolveRecordSituation({ override: "#AF52DE", filled: EMPTY, palette: PALETTE }),
       null,
     );
   });
@@ -231,5 +182,21 @@ describe("serviceBaseColor", () => {
       ),
       "#FF9500",
     );
+  });
+});
+
+describe("autoBaseColor — обычный цвет по настройке, один для сетки и формы", () => {
+  const colors = { team: "#3276FB", label: "#15A84F", service: "#FDAA1B" };
+  test("правило выбирает свой источник", () => {
+    assert.equal(autoBaseColor("team", colors), "#3276FB");
+    assert.equal(autoBaseColor("label", colors), "#15A84F");
+    assert.equal(autoBaseColor("service", colors), "#FDAA1B");
+  });
+  test("нет своего цвета — цвет команды", () => {
+    assert.equal(autoBaseColor("label", { team: "#3276FB", label: null }), "#3276FB");
+    assert.equal(autoBaseColor("service", { team: "#3276FB", service: "  " }), "#3276FB");
+  });
+  test("нет ничего — null, решает запасной цвет у вызывающего", () => {
+    assert.equal(autoBaseColor("label", {}), null);
   });
 });

@@ -16,6 +16,14 @@
 // cache layer header. Tag membership for a client requires online
 // connectivity to mutate. Decision #2 from G0: full re-pull on each sync.
 
+// ЗАСОВ — ПЕРЕД ОПТИМИСТИЧНОЙ СТРОКОЙ, А НЕ ПЕРЕД ОТПРАВКОЙ.
+//
+// Эти обёртки офлайн-первые: строка ложится в SQLite СРАЗУ, а на сервер
+// уезжает после. В режиме просмотра чужими глазами отправку отобьёт засов
+// (`write-guard.ts`), но местная копия к тому времени уже записана, и откат
+// у неё молчащий — не удался, и в кэше владельца остаётся призрак строки,
+// которой на сервере никогда не было. Поэтому спрашиваем до всего.
+import { assertWritesAllowed } from "./write-guard";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../db/database.types";
 import {
@@ -35,6 +43,8 @@ import {
   type CachedTag,
 } from "../db/cache/sql";
 import { isOnline } from "./network";
+import { OnlineOnlyWriteError } from "./cache-errors";
+import type { CachedWriteOptions } from "./clientsCached";
 import { kickReplayer, MAX_ATTEMPTS } from "./replayer";
 import {
   enqueueOpAndEmit,
@@ -122,7 +132,13 @@ async function refreshCacheFromSupabase(
     tenant_id: tenantId,
     name: tag.name,
     color: tag.color,
-  }));
+    icon: tag.icon ?? null,
+    position: tag.position ?? 0,
+    hidden: tag.hidden ?? false,
+    // Команда — только если сервер её назвал: пустая строка у каждого тега
+    // сломала бы сверку «данные не изменились» и гоняла перерисовку.
+    ...(tag.team_id ? { team_id: tag.team_id } : {}),
+  })) as CachedTag[];
   const before = cacheSignature(await safeCacheReadTags(tenantId));
   await cacheReplaceTenant("tags", tenantId, rows);
   const after = cacheSignature(rows);
@@ -130,22 +146,47 @@ async function refreshCacheFromSupabase(
 }
 
 function rowToTag(r: CachedTag): ClientTag {
-  return { id: r.id, name: r.name, color: r.color };
+  // ВСЕ ПОЛЯ СТРОКИ, А НЕ ТРИ. Читатель кэша возвращал только имя и цвет, и
+  // экран получал тег без значка, порядка и скрытия — при том что в базе они
+  // уже лежали: значок «Проблемного» просто не доезжал до списка.
+  return {
+    id: r.id,
+    name: r.name,
+    color: r.color,
+    icon: r.icon ?? null,
+    position: r.position ?? 0,
+    hidden: r.hidden ?? false,
+    team_id: r.team_id || null,
+  };
 }
 
 // ─── Write ────────────────────────────────────────────────────────
 
 export async function createClientTag(
   supabase: DbSupabase,
-  input: { name: string; color: string },
+  input: {
+    name: string;
+    color: string;
+    icon?: string | null;
+    position?: number;
+    /** Команда тега — обязательна (у каждой команды свои теги, 30.09). */
+    team_id: string;
+  },
   tenantId: string,
+  opts?: CachedWriteOptions,
 ): Promise<ClientTag> {
+  assertWritesAllowed("createClientTag");
+  if (opts?.onlineOnly && !isOnline()) throw new OnlineOnlyWriteError(opts.onlineOnly);
   const id = randomUuid();
   const optimisticRow: CachedTag = {
     id,
     tenant_id: tenantId,
     name: input.name,
     color: input.color,
+    icon: input.icon ?? null,
+    position: input.position ?? 0,
+    hidden: false,
+    team_id: input.team_id,
   };
   const insertOp = {
     table: "tags" as const,
@@ -172,31 +213,60 @@ export async function createClientTag(
         tenant_id: tenantId,
         name: created.name,
         color: created.color,
+        icon: created.icon ?? null,
+        position: created.position ?? 0,
+        hidden: created.hidden ?? false,
+        team_id: created.team_id ?? input.team_id,
       });
       return created;
     } catch (err) {
-      if (!isTransientNetworkError(err)) {
+      if (!isTransientNetworkError(err) || opts?.onlineOnly) {
         await cacheDelete("tags", id).catch(() => {});
         throw err;
       }
       // Network blip — ATOMIC optimistic upsert + enqueue (risk #6).
       await enqueueOpWithCacheUpsertAndEmit(insertOp, "tags", optimisticRow);
       void kickReplayer({ supabase });
-      return { id, name: input.name, color: input.color };
+      return {
+        id,
+        name: input.name,
+        color: input.color,
+        icon: input.icon ?? null,
+        position: input.position ?? 0,
+        hidden: false,
+        team_id: input.team_id,
+      };
     }
   }
 
   // Offline — ATOMIC optimistic upsert + enqueue (risk #6).
   await enqueueOpWithCacheUpsertAndEmit(insertOp, "tags", optimisticRow);
-  return { id, name: input.name, color: input.color };
+  return {
+    id,
+    name: input.name,
+    color: input.color,
+    icon: input.icon ?? null,
+    position: input.position ?? 0,
+    hidden: false,
+    team_id: input.team_id,
+  };
 }
 
 export async function updateClientTag(
   supabase: DbSupabase,
   id: string,
-  patch: { name?: string; color?: string },
+  patch: {
+    name?: string;
+    color?: string;
+    icon?: string | null;
+    position?: number;
+    hidden?: boolean;
+  },
   tenantId: string,
+  opts?: CachedWriteOptions,
 ): Promise<ClientTag> {
+  assertWritesAllowed("updateClientTag");
+  if (opts?.onlineOnly && !isOnline()) throw new OnlineOnlyWriteError(opts.onlineOnly);
   const existing = await readCachedTag(id, tenantId);
   const merged: CachedTag | null = existing
     ? { ...existing, ...patch }
@@ -205,7 +275,8 @@ export async function updateClientTag(
     table: "tags" as const,
     op: "update" as const,
     row_id: id,
-    payload: patch as Record<string, unknown>,
+    // Компания — для гейта очереди (`replayer.ts`), на сервер она не уходит.
+    payload: { ...patch, tenant_id: tenantId } as Record<string, unknown>,
     expected_updated_at: null, // no updated_at column → no detection
   };
 
@@ -219,10 +290,14 @@ export async function updateClientTag(
         tenant_id: tenantId,
         name: updated.name,
         color: updated.color,
+        icon: updated.icon ?? null,
+        position: updated.position ?? 0,
+        hidden: updated.hidden ?? false,
+        team_id: updated.team_id ?? existing?.team_id ?? "",
       });
       return updated;
     } catch (err) {
-      if (!isTransientNetworkError(err)) {
+      if (!isTransientNetworkError(err) || opts?.onlineOnly) {
         if (existing) await cacheUpsert("tags", existing).catch(() => {});
         throw err;
       }
@@ -232,6 +307,9 @@ export async function updateClientTag(
         id,
         name: patch.name ?? existing?.name ?? "",
         color: patch.color ?? existing?.color ?? "",
+        icon: patch.icon ?? existing?.icon ?? null,
+        position: patch.position ?? existing?.position ?? 0,
+        hidden: patch.hidden ?? existing?.hidden ?? false,
       };
     }
   }
@@ -263,7 +341,10 @@ export async function deleteClientTag(
   supabase: DbSupabase,
   id: string,
   tenantId: string,
+  opts?: CachedWriteOptions,
 ): Promise<void> {
+  assertWritesAllowed("deleteClientTag");
+  if (opts?.onlineOnly && !isOnline()) throw new OnlineOnlyWriteError(opts.onlineOnly);
   const existing = await readCachedTag(id, tenantId);
   const deleteOp = {
     table: "tags" as const,
@@ -279,7 +360,7 @@ export async function deleteClientTag(
       await repoDeleteClientTag(supabase, id, tenantId);
       return;
     } catch (err) {
-      if (!isTransientNetworkError(err)) {
+      if (!isTransientNetworkError(err) || opts?.onlineOnly) {
         if (existing) await cacheUpsert("tags", existing).catch(() => {});
         throw err;
       }

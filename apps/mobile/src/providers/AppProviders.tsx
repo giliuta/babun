@@ -1,15 +1,26 @@
 import { useEffect, type ReactNode } from "react";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
 import { queryClient } from "@/lib/query-client";
-import { SessionProvider } from "@/providers/SessionProvider";
+import { supabase } from "@/lib/supabase";
+import { evictCompanyFromDevice } from "@/lib/evict-company";
+import { SessionProvider, useSession } from "@/providers/SessionProvider";
 import { startSyncRuntime } from "@/lib/sync-runtime";
 import { startSyncBridge } from "@/lib/sync-bridge";
 import { useTenantId } from "@/lib/tenant";
+import {
+  FIRST_WARM_DELAY_MS,
+  REWARM_EVERY_MS,
+  warmOtherCompanies,
+} from "@/lib/tenant-prefetch";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { myInvitationsKeyRoot } from "@/features/access/inbox-queries";
+import type { MemberAccessMap } from "@/features/access/access-map";
+import { isNewerAccess } from "@/features/access/my-access";
+import { myAccessQueryKey } from "@/lib/company-query-keys";
 
 /** Mounts the offline-sync replayer subscription for the app lifetime.
  *  Native-only: the replayer drains the SQLite queue via getSql(), which is
@@ -51,6 +62,96 @@ function SyncBridgeMount() {
   return null;
 }
 
+/** Грелка других компаний (`lib/tenant-prefetch.ts`). Заводится после входа
+ *  и после каждого перехода — с отступом, чтобы первый кадр активной
+ *  компании ушёл в сеть первым, — и повторяется по таймеру, пока приложение
+ *  на переднем плане. Переход между компаниями находит их данные в памяти. */
+function WarmCompaniesMount() {
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
+  const tenantId = useTenantId();
+  useEffect(() => {
+    if (!userId || !tenantId) return;
+    const first = setTimeout(() => void warmOtherCompanies(), FIRST_WARM_DELAY_MS);
+    const again = setInterval(() => {
+      if (AppState.currentState === "active") void warmOtherCompanies();
+    }, REWARM_EVERY_MS);
+    return () => {
+      clearTimeout(first);
+      clearInterval(again);
+    };
+  }, [tenantId, userId]);
+  return null;
+}
+
+/** Сигналы доступа человека: приватный канал `access:<user_id>` (этап 0(ж)
+ *  плана доступа). Живёт при ЛЮБОЙ роли и на любой платформе: мастеру, у
+ *  которого нет realtime-моста, сигнал об увольнении нужен не меньше других.
+ *  Слушать канал может только сам человек (политика `realtime.messages`). */
+function AccessSignalsMount() {
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    const channel = supabase.channel(`access:${userId}`, {
+      config: { private: true },
+    });
+    channel.on("broadcast", { event: "membership_removed" }, (message) => {
+      const tenantId = (message.payload as { tenant_id?: unknown } | undefined)
+        ?.tenant_id;
+      if (typeof tenantId === "string") void evictCompanyFromDevice(tenantId);
+    });
+    // ПРИГЛАШЕНИЯ МЕНЯЮТСЯ БЕЗ ПЕРЕЗАПУСКА (006, 14.09): сигнал уходит и
+    // приглашённому, и пригласившему — оба перечитывают свои списки.
+    // Принятое приглашение у пригласившего — это ещё и новый человек
+    // календаря с карточкой мастера (15.09): без них «Мастера» показывали
+    // «Нет мастеров», пока экран не открыть заново.
+    channel.on("broadcast", { event: "invitations_changed" }, (message) => {
+      void queryClient.invalidateQueries({ queryKey: myInvitationsKeyRoot });
+      void queryClient.invalidateQueries({ queryKey: ["tenant-invitations"] });
+      const tenantId = (message.payload as { tenant_id?: unknown } | undefined)
+        ?.tenant_id;
+      if (typeof tenantId === "string") {
+        void queryClient.invalidateQueries({ queryKey: ["calendar-members", tenantId] });
+        void queryClient.invalidateQueries({ queryKey: ["masters", tenantId] });
+      }
+    });
+    // ПРАВА МЕНЯЮТСЯ СРАЗУ (владелец 15.09: «чтоб всё сразу менялось в живом
+    // времени»). Сервер шлёт `access_changed {tenant_id, version}` на каждую
+    // смену уровней и прикрепления; уровней в сигнале нет — телефон
+    // перечитывает свою карту, если номер новее того, что уже есть. Повтор и
+    // запоздавший сигнал ничего не делают.
+    channel.on("broadcast", { event: "access_changed" }, (message) => {
+      const payload = message.payload as { tenant_id?: unknown; version?: unknown } | undefined;
+      const tenantId = payload?.tenant_id;
+      if (typeof tenantId !== "string") return;
+      const key = myAccessQueryKey(tenantId);
+      if (!isNewerAccess(payload?.version, queryClient.getQueryData<MemberAccessMap>(key))) return;
+      void queryClient.invalidateQueries({ queryKey: key });
+    });
+    // Сигнал, пропущенный за время обрыва, broadcast не повторяет: после
+    // переподключения карта перечитывается сама.
+    let dropped = false;
+    void supabase.realtime.setAuth().then(() => {
+      if (cancelled) return;
+      channel.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          if (dropped) void queryClient.invalidateQueries({ queryKey: ["my-access"] });
+          dropped = false;
+        } else if (status === "CLOSED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          dropped = true;
+        }
+      });
+    });
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [userId]);
+  return null;
+}
+
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -59,6 +160,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
           <SessionProvider>
             <SyncRuntimeMount />
             <SyncBridgeMount />
+            <WarmCompaniesMount />
+            <AccessSignalsMount />
             <StatusBar style="dark" />
             {children}
           </SessionProvider>

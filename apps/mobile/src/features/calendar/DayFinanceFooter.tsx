@@ -2,43 +2,62 @@ import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
-import {
-  computeDayFinance,
-  getDayMode,
-} from "@babun/shared/local/finance/day-summary";
 import { getDayExtras } from "@babun/shared/local/day-extras";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { RAIL_W } from "@/features/calendar/DayView";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
+import { dayMoney } from "@/features/calendar/day-money";
+import { useTransactions } from "@/features/finances/queries";
 
 // Thin money strip pinned under the day/week grid — per-day Доход (green) over
 // Расход (red), aligned to the day columns (gutter width = the hour rail).
 //
-// Web parity (web DayFinanceFooter + shared day-summary): «Доход» is
-// contextual — past days show what was actually EARNED (paid), today and
-// future show the day's PLANNED revenue so a booked tomorrow never reads €0.
-// «Расход» comes from computeDayFinance (materials + manual expenses +
-// day extras), never a hardcoded zero.
+// «ДОХОД» — ТОЛЬКО ПРИШЕДШИЕ ДЕНЬГИ, В ЛЮБОЙ ДЕНЬ (владелец 2026-09-24: «при
+// открытии записывает в доход ожидаемую сумму; если не заплатили — это не
+// считается доходом»). Раньше сегодня и будущие дни показывали ПЛАН — сумму
+// записей, оплаченных или нет, — и неоплаченная запись на €135 стояла зелёным
+// «доходом». План дня живёт в шторке дня (тап по столбцу), а полоса под
+// сеткой говорит только о деньгах, которые уже есть.
+//
+// С 2026-09-30 — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО «ФИНАНСЫ» (`day-money.ts`): доход дня —
+// деньги, пришедшие в этот день по леджеру. Раньше полоса брала оплаты
+// записей ЭТОГО дня, и предоплата, внесённая сегодня за завтрашнюю запись,
+// стояла доходом завтра. Расход — расходы леджера и материалы записей дня.
 export function DayFinanceFooter({
   days,
   appointments,
   teamId,
-  todayYmd,
   onTapDay,
+  showIncome = true,
+  showExpense = true,
 }: {
   days: Date[];
   appointments: Appointment[];
   /** Active team filter — day extras are stored per (team, date), so with
    *  no team selected extras are skipped (same as web's personal tab). */
   teamId: string | null;
-  /** Business-timezone today (YYYY-MM-DD) — drives earned vs planned. */
-  todayYmd: string;
+  /** Сегодня в поясе компании. Полоса его больше не читает (доход — только
+   *  оплаченное), проп остаётся, чтобы не трогать экран календаря. */
+  todayYmd?: string;
   onTapDay?: (d: Date) => void;
+  /** Доходы и расходы — два права (срез 2а): строка стороны, которую человек
+   *  не видит, не рисуется — иначе «Расход €0» читался бы как правда. */
+  showIncome?: boolean;
+  showExpense?: boolean;
 }) {
   const t = useThemeColors();
   const sharedServices = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
+  // Леджер видимых дней — источник денег полосы (оплаты записей и ручные
+  // операции одной выборкой, по дате операции).
+  const rangeFrom = days.length > 0 ? formatYMD(days[0]) : "";
+  const rangeTo = days.length > 0 ? formatYMD(days[days.length - 1]) : "";
+  const ledgerQuery = useTransactions(rangeFrom, rangeTo, {
+    brigadeIds: teamId ? [teamId] : undefined,
+    enabled: days.length > 0,
+  });
+  const ledger = ledgerQuery.data;
 
   const byDate = useMemo(() => {
     const m = new Map<string, Appointment[]>();
@@ -50,26 +69,29 @@ export function DayFinanceFooter({
     return m;
   }, [appointments]);
 
-  // computeDayFinance проходит записи+услуги каждого дня — без мемо это
+  // Расчёт дня проходит записи+услуги каждого дня — без мемо это
   // пересчитывалось на каждый кадр зума/пейджинга.
   const rows = useMemo(
     () =>
       days.map((d) => {
         const ymd = formatYMD(d);
-        const totals = computeDayFinance(
-          byDate.get(ymd) ?? [],
-          sharedServices,
-          getDayExtras(extrasMap, teamId, ymd),
-        );
+        const money = dayMoney({
+          ymd,
+          appointments: byDate.get(ymd) ?? [],
+          transactions: ledger ?? [],
+          services: sharedServices,
+          teamId,
+          extras: getDayExtras(extrasMap, teamId, ymd),
+          // Полоса говорит только о пришедшем и ушедшем: долг и план ей не
+          // нужны, «сейчас» для них не важно.
+          businessToday: ymd,
+          nowHm: "00:00",
+        });
         return {
           d,
           ymd,
-          // Past → actually earned; today/future → planned revenue.
-          income:
-            getDayMode(ymd, todayYmd) === "past"
-              ? totals.earned
-              : totals.planned,
-          spent: totals.spent,
+          income: money.income,
+          spent: money.expense,
           // VoiceOver: «пятница, 18 июля», а не сырое YYYY-MM-DD.
           dateLabel: d.toLocaleDateString("ru-RU", {
             weekday: "long",
@@ -78,7 +100,7 @@ export function DayFinanceFooter({
           }),
         };
       }),
-    [days, byDate, sharedServices, extrasMap, teamId, todayYmd],
+    [days, byDate, sharedServices, extrasMap, ledger, teamId],
   );
 
   // САМА ПОЛОСА БОЛЬШЕ НЕ РЕШАЕТ, ПОКАЗЫВАТЬСЯ ЛИ ЕЙ. Здесь стояло «пустая
@@ -96,23 +118,35 @@ export function DayFinanceFooter({
         // В тон линиям сетки над футером — один шов, а не два диалекта.
         borderTopColor: `${t.ink}33`,
         backgroundColor: t.surface,
-        paddingVertical: 4,
+        // 7 + две строки ≈ 44pt мишени у ячейки дня (аудит 24.09: было ~38).
+        paddingVertical: 7,
       }}
     >
       {/* Лейблы — нейтральный t.sub: семантический цвет несут только суммы.
           11pt — минимум читаемости iOS (было 9pt, владелец читает деньги
           десятки раз в день). */}
       <View style={{ width: RAIL_W, paddingRight: 6, alignItems: "flex-end", justifyContent: "center" }}>
-        <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Доход</Text>
-        <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Расход</Text>
+        {showIncome ? (
+          <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Доход</Text>
+        ) : null}
+        {showExpense ? (
+          <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Расход</Text>
+        ) : null}
       </View>
       {rows.map(({ d, ymd, income, spent, dateLabel }, i) => {
         return (
           <Pressable
             key={ymd}
             onPress={() => onTapDay?.(d)}
+            // Мишень — во всю высоту полосы: поле полосы тоже нажимает день.
+            hitSlop={{ top: 7, bottom: 7 }}
             accessibilityRole="button"
-            accessibilityLabel={`Финансы за ${dateLabel}: доход ${formatEUR(income)}, расход ${formatEUR(spent)}`}
+            accessibilityLabel={`Финансы за ${dateLabel}: ${[
+              showIncome ? `доход ${formatEUR(income)}` : null,
+              showExpense ? `расход ${formatEUR(spent)}` : null,
+            ]
+              .filter(Boolean)
+              .join(", ")}`}
             style={{
               flex: 1,
               alignItems: "center",
@@ -123,22 +157,24 @@ export function DayFinanceFooter({
           >
             {/* €0 — приглушённый t.faint: зелёный/красный только там, где
                 есть реальные деньги (цвет = смысл). */}
-            <Text
-              style={{ fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
-              className="tabular-nums"
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-            >
-              {formatEUR(income)}
-            </Text>
-            <Text
-              style={{ fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 ? t.danger : t.faint }}
-              className="tabular-nums"
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-            >
-              {formatEUR(spent)}
-            </Text>
+            {showIncome ? (
+              <Text
+                style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.3}
+              >
+                {formatEUR(income)}
+              </Text>
+            ) : null}
+            {showExpense ? (
+              <Text
+                style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 ? t.danger : t.faint }}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.3}
+              >
+                {formatEUR(spent)}
+              </Text>
+            ) : null}
           </Pressable>
         );
       })}

@@ -10,17 +10,35 @@ import {
 import { getTotalUnread } from "@babun/shared/local/chats";
 import { useThemeColors } from "@/theme/colors";
 import { useChats } from "@/features/chats/store";
+import { useMyInvitations } from "@/features/access/inbox-queries";
 import { useCurrentRole } from "@/features/settings/tenant";
-import { can } from "@/features/settings/role-policy";
+import { MESSAGING_ENABLED, can } from "@/features/settings/role-policy";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { DashboardGate } from "@/lib/DashboardGate";
 
 export default function DashboardLayout() {
   const t = useThemeColors();
   const role = useCurrentRole().data;
-  const canClients = can(role, "operate-clients");
   const canMessages = can(role, "manage-messaging");
-  const canFinances = can(role, "view-finances");
+  // ВКЛАДКИ НЕ ЗАВИСЯТ ОТ ПРАВА, И ЭТО РЕШЕНИЕ ВЛАДЕЛЬЦА (2026-09-13).
+  //
+  // «Команда — это только база данных и разрешения на неё. Перехожу на
+  // команду — всё то же самое остаётся, меняется только база». Раньше
+  // Клиенты и Финансы прятались через `href: null`, когда роль не давала
+  // права, — и при переходе в компанию, где человек лишь смотрит, четыре
+  // вкладки становились двумя. По спецификации это и есть «экран поменялся».
+  //
+  // Теперь ряд вкладок ОДИН на все компании. Право проверяет граница внутри
+  // каждой вкладки (`clients/_layout`, `finances/_layout`, `chats/_layout`):
+  // без права она показывает «появятся, когда владелец откроет доступ» — это
+  // ровно тот «блок виден только для чтения», который допускает правило 10
+  // канона, а не «видно, но при нажатии ошибка».
+  //
+  // Заодно уходит мелькание: пока роль летела с сервера, `can()` отвечал
+  // «нет», и вкладки появлялись через секунду после экрана.
+  //
+  // Чаты — исключение НЕ по праву, а по готовности продукта: пока
+  // `MESSAGING_ENABLED` выключен, вкладки нет ни у кого.
   // Unread badge on the «Чаты» tab icon (web parity: the unread chip in
   // the chats nav title, chats/page.tsx:256–260). Reads the same ["chats"]
   // query the screens mutate, so it updates live.
@@ -28,6 +46,11 @@ export default function DashboardLayout() {
   // hidden tab is a navigation affordance; this query gate is the data guard.
   const { data: chats = [] } = useChats(canMessages);
   const unread = getTotalUnread(chats);
+  // ПРИГЛАШЕНИЯ ЖДУТ ОТВЕТА — КРАСНЫЙ СЧЁТЧИК НА «КАБИНЕТЕ» (владелец 14.09:
+  // «метка над кабинетом, красный значок справа, как в играх»). Вид тот же, что у
+  // счётчика «Чатов», — второй анатомии значка в продукте не заводим.
+  const { data: invitations = [] } = useMyInvitations();
+  const invitationCount = invitations.length;
 
   // Гварды сессии/тенанта живут в DashboardGate — тем же компонентом их
   // переиспользует стек /calendar, который лежит НАД табами.
@@ -87,7 +110,6 @@ export default function DashboardLayout() {
           name="clients"
           options={{
             title: "Клиенты",
-            href: canClients ? "/clients" : null,
             tabBarIcon: ({ color, size, focused }) => (
               <Users color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
             ),
@@ -97,7 +119,7 @@ export default function DashboardLayout() {
           name="chats"
           options={{
             title: "Чаты",
-            href: canMessages ? "/chats" : null,
+            href: MESSAGING_ENABLED ? "/chats" : null,
             tabBarIcon: ({ color, size, focused }) => (
               <MessageCircle color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
             ),
@@ -114,7 +136,6 @@ export default function DashboardLayout() {
           name="finances"
           options={{
             title: "Финансы",
-            href: canFinances ? "/finances" : null,
             tabBarIcon: ({ color, size, focused }) => (
               <Wallet color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
             ),
@@ -124,6 +145,13 @@ export default function DashboardLayout() {
           name="cabinet"
           options={{
             title: "Кабинет",
+            tabBarBadge: invitationCount > 0 ? invitationCount : undefined,
+            tabBarBadgeStyle: {
+              backgroundColor: t.danger,
+              color: t.onAccent,
+              fontSize: 11,
+              fontWeight: "600",
+            },
             tabBarIcon: ({ color, size, focused }) => (
               <LayoutGrid color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
             ),

@@ -1,28 +1,18 @@
 import { useMemo, type ReactElement } from "react";
-import {
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  type RefreshControlProps,
-} from "react-native";
+import { Pressable, Text, type RefreshControlProps } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
-import {
-  getDebtAmount,
-  type Appointment,
-} from "@babun/shared/local/appointments";
+import type { Appointment } from "@babun/shared/local/appointments";
+import { getDebtAmount } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
-import { Card } from "@/components/ui/Card";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { GUTTER } from "@/components/ui/tokens";
+import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
+import { DEBT_DIRECTION_LABEL } from "@babun/shared/local/finance/debt";
 import { useThemeColors } from "@/theme/colors";
-import { renderDebtSms, useSmsTemplates } from "@/features/settings/sms-templates";
-import { humanDay } from "@/features/appointments/helpers";
-import { PanelHeader } from "./PanelHeader";
-import { notify } from "@/lib/notify";
+import { panelCount } from "./PanelHeader";
+import { RecordRowsPanel } from "./RecordRowsPanel";
+import { debtRows, manualDebtRows, mergeDebtRows } from "./debt-rows";
+import type { RecordRow } from "./record-rows";
+import { inTeamScope } from "./team-scope";
+import { financesFrom } from "@/features/appointments/return-to";
 
 // «Долги» panel — port of the web DebtorsList
 // (apps/web/src/components/finance/DebtorsList.tsx): completed-but-unpaid
@@ -32,24 +22,36 @@ import { notify } from "@/lib/notify";
 // paid_amount now round-trip through the repository (W4), but the
 // payments[] ledger stays the source of truth for the owed figure.
 //
-// Цепочка «должник → напомнить»: у строки есть labeled-кнопка «Напомнить»
-// (SMS с суммой; дата визита — только в зашитом фолбэке, кастомный
-// debt-шаблон её не подставляет). Тап по строке открывает САМУ ЗАПИСЬ —
-// долг по канону владельца закрывается в ней, а не в карточке клиента;
-// карточка осталась второй дверью на long-press.
+// СВЯЗЬ С ДОЛЖНИКОМ ЖИВЁТ В ЗАПИСИ, А НЕ В СПИСКЕ (владелец 2026-09-09: «не
+// надо иконку напомнить — я зайду на клиента, оно перекинет меня в запись, и
+// я сам решу, связываться с ним или нет»). Строка отвечает на «кто и сколько»,
+// а звонить или писать — решение, которое принимают, уже открыв запись; SMS о
+// долге по-прежнему собирается в карточке клиента (ClientContactRow).
+//
+// Тап по строке открывает САМУ ЗАПИСЬ — долг по канону владельца закрывается
+// в ней; карточка клиента осталась второй дверью на long-press.
 export function DebtorsList({
   appointments,
   clients,
+  services,
   teamId,
   fromDate,
   toDate,
   todayYmd,
   invoicedAppointmentIds,
+  debts,
+  paidTotals,
+  categories,
+  direction,
+  onDirectionChange,
+  onEditDebt,
   onOpenDocuments,
   refreshControl,
 }: {
   appointments: Appointment[];
   clients: Client[];
+  /** Каталог услуг — строка долга называет работы, за которые не заплатили. */
+  services: readonly { id: string; name: string }[];
   teamId: string | null;
   fromDate: string;
   toDate: string;
@@ -60,64 +62,81 @@ export function DebtorsList({
    *  сидит в двух местах сразу. Набор приходит СВЕРХУ, тот же самый, каким
    *  считает плитка: своя копия правила разъехалась бы на первой же правке. */
   invoicedAppointmentIds: ReadonlySet<string>;
+  /** Долги, заведённые руками: «Вася должен мне €100» без визита и «я должен
+   *  Gree €900» за товар, взятый до оплаты. Стоят в этом же списке той же
+   *  строкой — для человека это один вопрос, кто и сколько должен. */
+  debts: readonly Debt[];
+  /** Σ платежей по каждому ручному долгу: строка показывает ОСТАТОК. */
+  paidTotals: ReadonlyMap<string, number>;
+  /** Справочник — вторая строка ручного долга называет, за что он висит. */
+  categories: readonly { id: string; name: string }[];
+  /** Какую сторону показываем. Владелец 2026-09-10: «там две ступени — я
+   *  должен или мне должны, я могу между ними выбирать». */
+  direction: DebtDirection;
+  onDirectionChange: (next: DebtDirection) => void;
+  /** Ручной долг правят в своей шторке: записи за ним нет, открывать нечего. */
+  onEditDebt: (debtId: string) => void;
   /** Открыть «Документы» — единственная дорога к деньгам, которые ушли отсюда
-   *  под счёт. Без неё пустой экран прячет их молча. */
-  onOpenDocuments: () => void;
+   *  под счёт. Без неё пустой экран прячет их молча. Нет обработчика — нет и
+   *  двери: на бесплатном тарифе документов в продукте не существует, и
+   *  кнопка вела бы в экран, которого нет. */
+  onOpenDocuments?: () => void;
   /** Pull-to-refresh хозяина экрана (U86) — один жест на все панели. */
   refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   const t = useThemeColors();
   const router = useRouter();
-  const { data: smsTemplates = [] } = useSmsTemplates();
-  const rows = useMemo(
+  // ПРАВИЛО ДОЛГА — ОДНО НА ПРОДУКТ (`debtRows`). Здесь жила его копия, и с
+  // появлением долгов в общей ленте копий стало бы две: список под цифрой
+  // обязан сходиться с самой цифрой, а разъезжаются они всегда на правке,
+  // которую сделали в одном месте из двух.
+  const rows = useMemo(() => {
+    // Долг записи бывает ТОЛЬКО входящим: работа сделана, клиент не заплатил.
+    // «Я должен» из визита родиться не может — он всегда заводится руками.
+    const fromRecords =
+      direction === "incoming"
+        ? debtRows(appointments, clients, services, {
+            from: fromDate,
+            to: toDate,
+            today: todayYmd,
+            teamId: teamId ?? null,
+            invoicedAppointmentIds,
+          })
+        : [];
+    const manual = manualDebtRows(
+      debts,
+      paidTotals,
+      { clients, categories },
+      { today: todayYmd, direction },
+    );
+    return mergeDebtRows(fromRecords, manual);
+  }, [
+    appointments,
+    clients,
+    services,
+    fromDate,
+    toDate,
+    todayYmd,
+    teamId,
+    invoicedAppointmentIds,
+    debts,
+    paidTotals,
+    categories,
+    direction,
+  ]);
+
+  // ПОРЯДОК — КАК В ЛЕНТЕ: свежий день сверху, внутри дня свежий час сверху.
+  // Без него дни в секциях выстроились бы в порядке встречи строк.
+  const sorted = useMemo(
     () =>
-      appointments
-        .filter(
-          (a) =>
-            // ТОТ ЖЕ НАБОР, ЧТО В ПЛИТКЕ «ДОЛГИ»: завершённые визиты без
-            // оплаты плюс прошедшие записи, по которым команда не
-            // отчиталась, МИНУС те, на которые выставлен счёт. Иначе список
-            // под цифрой не сходится с самой цифрой — и владелец перестаёт
-            // верить обеим.
-            a.status !== "cancelled" &&
-            (a.status === "completed" || a.date < todayYmd) &&
-            a.date >= fromDate &&
-            a.date <= toDate &&
-            (!teamId || a.team_id === teamId) &&
-            !invoicedAppointmentIds.has(a.id),
-        )
-        .map((a) => {
-          const client = a.client_id
-            ? clients.find((x) => x.id === a.client_id)
-            : undefined;
-          return {
-            id: a.id,
-            teamId: a.team_id,
-            clientId: client?.id ?? null,
-            phone: client?.phone?.trim() || null,
-            name:
-              client?.full_name || a.comment?.trim() || "Без имени",
-            // [Имя] в шаблоне — только реальное имя клиента (не comment /
-            // «Без имени»); пусто, если запись без клиента.
-            firstName: (client?.full_name || "").trim().split(/\s+/)[0] ?? "",
-            owed: getDebtAmount(a),
-            date: a.date,
-            // Не закрыта — время прошло, статус остался «запланирована»:
-            // долг ли это, команда ещё не сказала (STORY-067).
-            unclosed: a.status !== "completed",
-          };
-        })
-        .filter((r) => r.owed > 0)
-        .sort((a, b) => (a.date < b.date ? 1 : -1)),
-    [
-      appointments,
-      clients,
-      teamId,
-      fromDate,
-      toDate,
-      todayYmd,
-      invoicedAppointmentIds,
-    ],
+      [...rows].sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+        const at = a.time ?? "";
+        const bt = b.time ?? "";
+        if (at !== bt) return at < bt ? 1 : -1;
+        return a.key < b.key ? 1 : -1;
+      }),
+    [rows],
   );
 
   // Деньги не пропали — они переехали в «Документы». Говорим об этом ТОЛЬКО
@@ -129,163 +148,118 @@ export function DebtorsList({
       appointments.some(
         (a) =>
           invoicedAppointmentIds.has(a.id) &&
+          // Только ещё не оплаченные: по оплаченному счёту ничего не «ждёт
+          // оплату», и подпись врала (аудит 2026-09-30).
+          getDebtAmount(a) > 0 &&
           a.date >= fromDate &&
           a.date <= toDate &&
-          (!teamId || a.team_id === teamId),
+          inTeamScope(a.team_id, teamId),
       ),
     [appointments, fromDate, invoicedAppointmentIds, teamId, toDate],
   );
 
-  // SMS-напоминание: сумма подставляется всегда; дата визита — только в
-  // зашитом фолбэке debtReminderSms. Кастомный debt-шаблон поддерживает
-  // лишь [Имя]/[Сумма] (см. renderDebtSms) — дата визита в него не идёт.
-  // Диспетчер только жмёт «Отправить» в Сообщениях (iOS: «&body=»,
-  // Android: «?body=») и при желании дописывает текст.
-  const remind = (r: (typeof rows)[number]) => {
-    if (!r.phone) return;
-    const digits = r.phone.replace(/[^\d+]/g, "");
-    const [, mm, dd] = r.date.split("-");
-    const body = encodeURIComponent(
-      renderDebtSms(smsTemplates, {
-        amount: formatEUR(r.owed),
-        name: r.firstName,
-        visitDate: `${dd}.${mm}`,
-      }),
-    );
-    const sep = Platform.OS === "ios" ? "&" : "?";
-    // Без catch тап молчал бы на устройстве, где Сообщений нет (iPad):
-    // openURL реджектится, и человек не понимает, нажалась ли кнопка.
-    Linking.openURL(`sms:${digits}${sep}body=${body}`).catch(() =>
-      notify(
-        "Не удалось открыть Сообщения",
-        "На этом устройстве нельзя отправить SMS.",
-      ),
-    );
-  };
-
   // Долг закрывается В САМОЙ ЗАПИСИ (канон владельца) — тап ведёт туда тем же
   // адресом с «дорогой назад», каким ленту операций водит openAppointment:
   // календарь встаёт на день и команду записи, закрытие возвращает в финансы.
-  const openAppointment = (r: (typeof rows)[number]) => {
+  const openRow = (r: RecordRow) => {
+    // За ручным долгом записи нет — открывать нечего, правят его самого.
+    if (r.debtId) {
+      onEditDebt(r.debtId);
+      return;
+    }
+    // Команда визита нужна адресу: календарь встаёт на её колонку. Строка
+    // приходит из общей панели, поэтому берём её из набора долгов.
+    const teamOfRow = sorted.find((x) => x.key === r.key)?.teamId ?? null;
     router.push(
-      (`/(dashboard)?appointmentId=${r.id}&date=${r.date}` +
-        (r.teamId ? `&teamId=${r.teamId}` : "") +
-        "&from=finances") as Href,
+      (`/(dashboard)?appointmentId=${r.appointmentId ?? r.key}&date=${r.date}` +
+        (teamOfRow ? `&teamId=${teamOfRow}` : "") +
+        // Возврат — в ТОТ ЖЕ разрез: закрыв запись, человек ждёт список
+        // должников, а не общую ленту (см. resolveReturnTo).
+        `&from=${encodeURIComponent(financesFrom("debt", { team: teamId }))}`) as Href,
     );
   };
 
+  // ДВЕ СТОРОНЫ — ДВА СЛОВА СПРАВА В ЭЙБРАУ (владелец 2026-09-10: «маленькими
+  // кнопочками с правой стороны… не надо выделять в кружок, это лишнее; и не
+  // надо назначать цветом — можно просто жирность добавить»).
+  //
+  // Сперва я поставил сюда канонический чип: пилюля с обводкой и цветом
+  // стороны (янтарь / красный). Владелец снял и то и другое, и он прав по
+  // законам самого продукта: цвет здесь означает НАПРАВЛЕНИЕ ДЕНЕГ, а обе
+  // стороны — долги, и красить их разным значило бы обещать, что «я должен» —
+  // это расход. Пилюля же весит как действие, а это всего лишь взгляд на тот
+  // же список. Остаётся самый тихий признак выбора — вес шрифта.
+  const sideButton = (side: DebtDirection) => {
+    const active = direction === side;
+    return (
+      <Pressable
+        key={side}
+        onPress={() => onDirectionChange(side)}
+        accessibilityRole="radio"
+        accessibilityState={{ selected: active }}
+        accessibilityLabel={DEBT_DIRECTION_LABEL[side]}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        // Цель касания — 44pt по высоте: строка сама 32pt + запас сверху и
+        // снизу (аудит 2026-09-24: было ≈37pt при подписи 13pt).
+        style={({ pressed }) => ({
+          minHeight: 32,
+          justifyContent: "center",
+          opacity: pressed ? 0.6 : 1,
+        })}
+      >
+        <Text
+          maxFontSizeMultiplier={1.2}
+          style={{
+            fontSize: 13,
+            fontWeight: active ? "700" : "500",
+            color: active ? t.ink : t.sub,
+          }}
+        >
+          {DEBT_DIRECTION_LABEL[side]}
+        </Text>
+      </Pressable>
+    );
+  };
+
+  const sideChips = (
+    <>
+      {sideButton("incoming")}
+      <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 13, color: t.separator }}>
+        ·
+      </Text>
+      {sideButton("outgoing")}
+    </>
+  );
+
   return (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={{ paddingBottom: 96 }}
+    <RecordRowsPanel
+      // РАЗБИВКА ПО ДНЯМ — КАК У ДОХОДА И РАСХОДА (владелец 2026-09-10: «оно
+      // должно разбиваться по времени и дате, как и всё остальное; не „всего
+      // столько-то“, а каждый долг — то же самое, что доход и расход»). Панель
+      // взята та же: дни с итогом, те же швы, тот же эйбрау. Одно «ВСЕГО»
+      // сверху отвечало на вопрос, которого к списку не задают, — а «когда это
+      // повисло» пряталось в подписи строки.
+      rows={sorted}
+      title={panelCount("Долги", sorted.length)}
+      tone="debt"
+      headerRight={sideChips}
+      // Итог дня складывает долги: список однороден, и без этого над каждым
+      // днём стоял бы ноль.
+      countEveryTone
+      emptyTitle={
+        direction === "incoming"
+          ? "Нет должников за период"
+          : "Вы никому не должны за период"
+      }
+      emptySubtitle={
+        movedToInvoices
+          ? "Работы, на которые выставлен счёт, ждут оплату в «Документах»"
+          : undefined
+      }
+      // Кнопки внутри пустой панели нет (канон «никаких кнопок внутри»,
+      // владелец 15.09): дверь в «Документы» — плитка над списком.
       refreshControl={refreshControl}
-    >
-      {/* Эйбрау — тот же, что у ленты операций: панель обязана называть себя,
-          иначе список должников читается как продолжение сводки. Тело
-          начинается сразу под ним — воздух между именем панели и её строками
-          один на все шесть. */}
-      <PanelHeader title={`Долги · ${rows.length}`} />
-      {rows.length === 0 ? (
-        // Пустое состояние — общее на все панели экрана: своя тихая строчка
-        // внутри карточки выглядела как «карточка сломалась».
-        <EmptyState
-          title="Нет должников за период"
-          subtitle={
-            movedToInvoices
-              ? "Работы, на которые выставлен счёт, ждут оплату в «Документах»"
-              : undefined
-          }
-          action={
-            movedToInvoices
-              ? { label: "Открыть документы", onPress: onOpenDocuments }
-              : undefined
-          }
-        />
-      ) : (
-        <Card style={{ marginHorizontal: GUTTER }}>
-          {[...rows].sort((a, b) => Number(a.unclosed) - Number(b.unclosed)).map((r, i, sorted) => (
-            <View
-              key={r.id}
-              className="min-h-11 flex-row items-stretch"
-              style={
-                i > 0
-                  ? { borderTopWidth: 1, borderTopColor: t.separator }
-                  : undefined
-              }
-            >
-              {/* ГРУППА «НЕ ЗАКРЫТЫ» (STORY-067): сначала выполненные с долгом,
-                  ниже — прошедшие, по которым команда не отчиталась. Подпись
-                  один раз, перед первой такой строкой. */}
-              {r.unclosed && (i === 0 || !sorted[i - 1].unclosed) ? (
-                <View
-                  pointerEvents="none"
-                  style={{ position: "absolute", top: 4, left: 16 }}
-                >
-                  <Text style={{ fontSize: 10, fontWeight: "700", letterSpacing: 0.6, color: t.warning }}>
-                    НЕ ЗАКРЫТЫ
-                  </Text>
-                </View>
-              ) : null}
-              <Pressable
-                onPress={() => openAppointment(r)}
-                onLongPress={
-                  r.clientId
-                    ? () => router.push(`/clients/${r.clientId}`)
-                    : undefined
-                }
-                accessibilityRole="button"
-                accessibilityLabel={`${r.name}, долг ${formatEUR(r.owed)}, открыть запись`}
-                accessibilityHint={
-                  r.clientId
-                    ? "Долгое нажатие открывает карточку клиента"
-                    : undefined
-                }
-                className="min-h-11 min-w-0 flex-1 flex-row items-center gap-3 py-2 pl-4 active:opacity-70"
-              >
-                <View className="min-w-0 flex-1">
-                  <Text
-                    className="text-[15px] font-medium"
-                    style={{ color: t.ink }}
-                    numberOfLines={1}
-                  >
-                    {r.name}
-                  </Text>
-                  <Text className="text-xs" style={{ color: t.faint }}>
-                    {humanDay(r.date)}
-                  </Text>
-                </View>
-                <Text
-                  className="text-[15px] font-bold"
-                  style={{ color: t.warning, fontVariant: ["tabular-nums"] }}
-                >
-                  {formatEUR(r.owed)}
-                </Text>
-              </Pressable>
-              {r.phone ? (
-                <Pressable
-                  onPress={() => remind(r)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Напомнить ${r.name} об оплате по SMS`}
-                  className="min-h-11 justify-center rounded-full px-3 active:opacity-60"
-                  style={{
-                    // `1a` — тот же 10-% тинт акцента, что у выбранных чипов:
-                    // литерал rgba отвязал бы кнопку от бренда при смене accent.
-                    backgroundColor: t.accent + "1a",
-                    marginHorizontal: 8,
-                  }}
-                >
-                  <Text
-                    className="text-[13px] font-semibold"
-                    style={{ color: t.accent }}
-                  >
-                    Напомнить
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ))}
-        </Card>
-      )}
-    </ScrollView>
+      onOpenRecord={openRow}
+    />
   );
 }

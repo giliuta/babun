@@ -1,26 +1,22 @@
-// СЧЕТА ГЛАЗАМИ ЭКРАНА — порядок строк, суммы и подписи в одном месте.
+// СЧЕТА ГЛАЗАМИ ЭКРАНА — порядок строк, группы и подписи в одном месте.
 //
-// РАЗДЕЛЕНИЕ ТОЛЬКО ПО КОМАНДАМ (владелец 2026-08-11: «хочешь посмотреть
-// команду — переключайся»). Экран «Счета» показывает ОДИН плоский список
-// счетов выбранной команды, а цифра над ним равна сумме нарисованных строк:
-// подпись называет ровно то множество, которое видно ниже, и цифру можно
-// проверить пальцем.
+// СЧЕТА ЖИВУТ В ДВУХ МЕСТАХ (владелец 2026-09-15): плитками и лентой операций
+// на «Финансах» и страницей «Счета» (`app/accounts/settings.tsx`) — туда ведут
+// и ползунки панели, и шестерёнка: «чтоб была одна и та же страница». Отсюда
+// ушла лента команд старого списка (`accountsTeamChips`): её читал только
+// снесённый экран. Сумма остатков (`sumAccountBalances`) вернулась 2026-09-22
+// подытогом над группой: страница о деньгах не имеет права молчать, сколько
+// их всего, а складывать две строки глазами человек не обязан.
 //
-// ЧТО УБРАНО 2026-08-11 И ПОЧЕМУ (иначе через месяц это вернут как
-// «забытое»): секции «Счёт компании», «Команда в архиве», «Команда удалена»
-// с подытогами и футерами-объяснялками, инвариант «строки = итог» и разбивка
-// по видам. С 2026-08-15 счёт принадлежит РОВНО ОДНОЙ команде: понятия «счёт
-// нескольких команд» не осталось вовсе, принадлежность решает общий
-// `accountServesTeam` (packages/shared) сравнением одного `brigade_id`, а
-// наследие старой схемы — счета с пустой командой — живёт под псевдо-чипом
-// «Без команды» (см. `NO_TEAM`), пока владелец не раздаст его командам.
+// С 2026-08-15 счёт принадлежит РОВНО ОДНОЙ команде: понятия «счёт нескольких
+// команд» не осталось вовсе, принадлежность решает общий `accountServesTeam`
+// (packages/shared) сравнением одного `brigade_id`, а наследие старой схемы —
+// счета с пустой командой — стоит отдельной группой «Без команды» (см.
+// `NO_TEAM`), пока владелец не раздаст их командам.
 //
-// От секций осталась ровно одна обязанность: деньги архивной и вовсе удалённой
-// команды не имеют права исчезнуть с экрана. Их держит не секция, а ЧИП —
-// см. `accountsTeamChips`.
-//
-// Группировка осталась ровно одна и только для страницы «Порядок счетов»: там
-// она не витрина, а пространство нумерации `position` (тенант + команда).
+// Одна обязанность пережила все переделки: деньги архивной и вовсе удалённой
+// команды не имеют права исчезнуть с экрана. Раньше их держал чип старого
+// списка, теперь — своя группа на странице «Счета» (`accountOrderGroups`).
 
 import type {
   AccountKind,
@@ -28,7 +24,7 @@ import type {
 } from "@babun/shared/local/finance/account";
 import { accountsForTeam } from "@babun/shared/local/finance/integrity";
 import {
-  FORMS_DEN,
+  FORMS_SCHET,
   formatCountRu,
 } from "@babun/shared/common/utils/plural-ru";
 
@@ -51,127 +47,56 @@ export interface SectionTeam {
   is_active: boolean;
 }
 
-/** Виды идут в одном порядке всегда: счета одного вида стоят подряд. */
-const KIND_ORDER: Record<AccountKind, number> = {
-  cash: 0,
-  card: 1,
-  bank: 2,
-  other: 3,
-};
-
 // Локаль ru с `sensitivity: 'base'`: регистр и «ё» не должны рвать порядок
 // одноимённых счетов между рефетчами.
 const byName = new Intl.Collator("ru", { sensitivity: "base" });
 
-/** Деньги сравниваем и складываем ЦЕЛЫМИ ЦЕНТАМИ: `numeric(12,2)` в базе, а
- *  сумма float-ов даёт хвост, из-за которого итог расходился бы со строками
- *  на 0,0000001. */
-const toCents = (value: number): number => Math.round(value * 100);
-
-/** Детерминированный порядок счетов: вид → position → имя. Один на продукт —
- *  список экрана и список в пикере перевода не имеют права разойтись. */
+/**
+ * Детерминированный порядок счетов: position → имя. Один на продукт — плитки
+ * «Финансов», страница «Счета» и пикер перевода не имеют права разойтись.
+ *
+ * ПОРЯДОК ЗАДАЁТ РУКА, А НЕ ВИД СЧЁТА (владелец 2026-09-12: «шесть точек
+ * справа для передвижения… везде одно и то же»). До этого дня первым ключом
+ * стоял вид (наличные → карта → банк → другое), и ручка перетаскивания
+ * работала только внутри своего вида: у команды с одной кассой и одной картой
+ * — а это ровно то, что заводится новой команде, — тянуть было нечего вовсе,
+ * и ручек на экране не появлялось ни одной. Вид и так виден плиткой в строке;
+ * группировать по нему ЕЩЁ И порядком значило отнимать у человека жест ради
+ * структуры, которой на экране не нарисовано.
+ *
+ * `position` нумеруется внутри (тенант, команда), поэтому имя — не украшение,
+ * а честная добивка: в списке, собранном из нескольких команд (пикер
+ * перевода), позиции соседних групп совпадают.
+ */
 export function sortAccountRows<T extends SectionAccount>(
   rows: readonly T[],
 ): T[] {
   return [...rows].sort(
-    (a, b) =>
-      KIND_ORDER[a.kind] - KIND_ORDER[b.kind]
-      || a.position - b.position
-      || byName.compare(a.name, b.name),
+    (a, b) => a.position - b.position || byName.compare(a.name, b.name),
+  );
+}
+
+/**
+ * Подытог группы — в копейках, а не в евро. `0.1 + 0.2` в плавающей точке
+ * даёт `0.30000000000000004`, и подытог страницы мог бы разойтись с плиткой
+ * «Счета» на «Финансах» на цент — а сходиться пальцем они обязаны.
+ */
+export function sumAccountBalances(
+  accounts: readonly { balance: number }[],
+): number {
+  return (
+    accounts.reduce((cents, a) => cents + Math.round(a.balance * 100), 0) / 100
   );
 }
 
 /** Псевдо-команда «Без команды»: под ней стоят счета, оставшиеся без владельца
  *  от старой схемы общего счёта. Не сущность продукта, а способ НЕ ПОТЕРЯТЬ
- *  деньги: как только владелец назначит им команду, чип исчезнет сам. */
+ *  деньги: как только владелец назначит им команду, группа исчезнет сама. */
 export const NO_TEAM = "__no_team__";
 
-/** Чип ленты команд экрана «Счета». */
-export interface AccountsTeamChip {
-  id: string;
-  name: string;
-  color: string | null;
-  /**
-   * Команды нет среди активных: её заархивировали либо строку команды удалили
-   * вовсе (`accounts.brigade_id` — колонка `text` БЕЗ внешнего ключа, и в
-   * проде есть тенант, у которого все активные счета ссылаются на
-   * несуществующие команды). Заводить такой команде НОВЫЕ счета нельзя — её
-   * нет; всё остальное на её счетах работает как обычно.
-   */
-  orphan: boolean;
-}
-
 /**
- * Лента команд экрана: активные команды в порядке справочника, а следом —
- * команды, чьи счета иначе не видно НИГДЕ.
- *
- * Осиротевший чип — это не секция и не предупреждение, а единственный способ
- * добраться до настоящих денег: своего чипа у такой команды нет, а секции
- * «Команда в архиве» и «Команда удалена» убраны 2026-08-11. Без него тенант,
- * все счета которого ссылаются на несуществующие команды, видел бы пустой
- * экран поверх живых остатков и завёл бы дубли.
- */
-export function accountsTeamChips({
-  accounts,
-  teams,
-}: {
-  /** АКТИВНЫЕ счета тенанта: закрытые живут на своей странице. */
-  accounts: readonly SectionAccount[];
-  /** Справочник целиком, вместе с архивными: по нему узнаются имена. */
-  teams: readonly SectionTeam[];
-}): AccountsTeamChip[] {
-  const chips: AccountsTeamChip[] = [];
-  const activeIds = new Set<string>();
-  for (const team of teams) {
-    if (!team.is_active) continue;
-    activeIds.add(team.id);
-    chips.push({
-      id: team.id,
-      name: team.name,
-      color: team.color,
-      orphan: false,
-    });
-  }
-
-  const known = new Map(teams.map((team) => [team.id, team]));
-  const orphans = new Map<string, AccountsTeamChip>();
-  // Порядок осиротевших чипов выводится из того же порядка счетов, что и
-  // список экрана, — значит он детерминирован и не пляшет между рефетчами.
-  let hasOwnerless = false;
-  for (const account of sortAccountRows(accounts)) {
-    // ДЕНЬГИ БЕЗ ХОЗЯИНА ВСЁ РАВНО ВИДНЫ. Счёт без команды остался от старой
-    // схемы «общего счёта»: приписать его команде нельзя (это чужие деньги), а
-    // спрятать — тем более. Для него заводится отдельный чип.
-    if (!account.brigade_id) {
-      hasOwnerless = true;
-      continue;
-    }
-    // Счёт видит активная команда — его деньги уже на экране.
-    if (activeIds.has(account.brigade_id)) continue;
-    if (orphans.has(account.brigade_id)) continue;
-    const team = known.get(account.brigade_id);
-    orphans.set(account.brigade_id, {
-      id: account.brigade_id,
-      name: team?.name ?? "Команда удалена",
-      color: team?.color ?? null,
-      orphan: true,
-    });
-  }
-  if (hasOwnerless) {
-    orphans.set(NO_TEAM, {
-      id: NO_TEAM,
-      name: "Без команды",
-      color: null,
-      orphan: true,
-    });
-  }
-  return [...chips, ...orphans.values()];
-}
-
-/**
- * Счета, которые видит команда: свои плюс те, которыми она пользуется вместе
- * с другими командами. Единственное множество экрана — по нему рисуются
- * строки И считается сумма, поэтому разойтись им негде.
+ * Счета, которые видит команда. Единственное множество панели — по нему
+ * рисуются плитки И считается сумма, поэтому разойтись им негде.
  */
 export function teamAccounts<T extends SectionAccount>(
   accounts: readonly T[],
@@ -183,91 +108,138 @@ export function teamAccounts<T extends SectionAccount>(
   return sortAccountRows(accountsForTeam(accounts, teamId));
 }
 
-/** Σ остатков строк. */
-export function sumAccountBalances(rows: readonly SectionAccount[]): number {
-  let cents = 0;
-  for (const row of rows) cents += toCents(row.balance);
-  return cents / 100;
-}
-
-/** Имя, которое само себя называет командой («Команда 2», «Команда Юга»).
- *  В проде команды зовут и по имени бригадира, и порядковым номером, и второе
- *  слово «команда» перед таким именем — чистое удвоение. */
-export function isSelfNamedTeam(name: string): boolean {
-  return /^\s*(команд|команд)/i.test(name);
-}
-
-/** «Команда Юра» — но не «Команда Команда 2». Одно правило на подпись суммы
- *  экрана, заголовок группы и герой карточки счёта: счёт называется одинаково
- *  там, где на него смотрят, и там, куда по нему проваливаются. */
-export function brigadeTitle(name: string): string {
-  return isSelfNamedTeam(name) ? name : `Команда ${name}`;
-}
-
-/** Группа страницы «Порядок счетов». */
-export interface AccountGroup<T extends SectionAccount = SectionAccount> {
+/** Группа страницы «Счета»: счета одной команды, которые двигаются ручкой
+ *  между собой. */
+export interface AccountOrderGroup<T extends SectionAccount> {
+  /** id команды либо `NO_TEAM` — ключ списка и граница перетаскивания. */
   key: string;
-  /** Обычным регистром: капс рисует `RowGroup`, а VoiceOver читает слова. */
-  title: string;
-  /** Риска слева от заголовка цветом команды. */
-  color: string | null;
-  data: T[];
+  /** Заголовок над группой. `null` — у компании одна команда: называть её
+   *  незачем, других команд нет вовсе. */
+  title: string | null;
+  accounts: T[];
 }
 
 /**
- * Группы страницы «Порядок счетов»: одна группа — одно пространство нумерации
- * `position` (тенант + команда), поэтому тянуть строку можно только внутри
- * своей группы. Счёт БЕЗ команды остался от снесённой схемы общего счёта: у
- * него своё, пустое пространство нумерации, и он идёт последней группой.
+ * Группы страницы «Счета»: активные команды в порядке справочника, а следом —
+ * команды, чьи счета иначе не видно НИГДЕ (критика плана 2026-09-15, блокер 2).
  *
- * Счета архивных и вовсе неразрешимых команд сюда не попадают: делать с ними
- * надо не порядок, а сдать остаток и закрыть.
+ * «Финансы» показывают только живые команды и чип «Без команды»; счёт,
+ * который ссылается на строку команды, которой уже нет, иначе не видно
+ * нигде, поэтому группа у него своя и названа правдой: «Команда удалена».
+ *
+ * СЧЕТА КАЛЕНДАРЕЙ В АРХИВЕ СЮДА НЕ ПРИХОДЯТ ВОВСЕ (владелец 2026-09-21: «в
+ * живых финансах их не существует»). Их отсекает источник —
+ * `useAccountsWithBalances` — а показывает Кабинет → «Архив». Ветка
+ * «· в архиве» ниже осталась честной подписью на случай, если такой счёт всё
+ * же передадут: называть его «удалённым» было бы неправдой.
+ *
+ * ГРУППЫ ПО КОМАНДАМ — ТОЛЬКО КОГДА КОМАНД БОЛЬШЕ ОДНОЙ. У компании с одной
+ * командой заголовок над её же счетами — удвоение. Но при двух командах имя
+ * стоит даже над единственной группой: иначе не видно, чьи это счета, а
+ * вторая команда без счетов рядом ничего не подсказывает.
+ *
+ * Перетаскивание ограничено группой по той же причине, что и нумерация
+ * `position`: порядок живёт внутри команды, и строка чужой команды между
+ * ними ничего не значит.
+ *
+ * Команда без открытых счетов группы не получает: двигать там нечего, а
+ * пустой заголовок — это шум, а не информация.
  */
 export function accountOrderGroups<T extends SectionAccount>({
   accounts,
   teams,
 }: {
+  /** ОТКРЫТЫЕ счета тенанта: закрытые живут на своей странице. */
   accounts: readonly T[];
+  /** Справочник целиком, вместе с архивными: по нему узнаются имена. */
   teams: readonly SectionTeam[];
-}): AccountGroup<T>[] {
-  // Ключ — ровно тот, по которому нумеруется `position`. Читаем ТОЛЬКО
-  // `brigade_id`: `scope` — мёртвая колонка, и счёт с непустой командой, но
-  // чужим охватом вырывался здесь из группы своей команды, хотя на «Счетах», в
-  // переводе и в архиве стоял под её чипом.
-  const byOwner = new Map<string, T[]>();
-  for (const account of accounts) {
-    const owner = account.brigade_id ?? "";
-    const list = byOwner.get(owner);
-    if (list) list.push(account);
-    else byOwner.set(owner, [account]);
-  }
-
-  const groups: AccountGroup<T>[] = [];
+}): AccountOrderGroup<T>[] {
+  const groups: AccountOrderGroup<T>[] = [];
+  const activeIds = new Set<string>();
   for (const team of teams) {
     if (!team.is_active) continue;
-    const rows = byOwner.get(team.id);
-    if (!rows || rows.length === 0) continue;
+    activeIds.add(team.id);
+    const rows = teamAccounts(accounts, team.id);
+    if (rows.length > 0) {
+      groups.push({ key: team.id, title: team.name, accounts: rows });
+    }
+  }
+  const liveCount = groups.length;
+
+  const known = new Map(teams.map((team) => [team.id, team]));
+  const orphanIds: string[] = [];
+  let hasOwnerless = false;
+  // Порядок осиротевших групп выводится из порядка их счетов — значит он
+  // детерминирован и не пляшет между рефетчами.
+  for (const account of sortAccountRows(accounts)) {
+    if (!account.brigade_id) {
+      hasOwnerless = true;
+      continue;
+    }
+    if (activeIds.has(account.brigade_id)) continue;
+    if (orphanIds.includes(account.brigade_id)) continue;
+    orphanIds.push(account.brigade_id);
+  }
+  for (const id of orphanIds) {
+    const team = known.get(id);
     groups.push({
-      key: `team:${team.id}`,
-      title: brigadeTitle(team.name),
-      color: team.color,
-      data: sortAccountRows(rows),
+      key: id,
+      title: team ? `${team.name} · в архиве` : "Команда удалена",
+      accounts: teamAccounts(accounts, id),
+    });
+  }
+  if (hasOwnerless) {
+    groups.push({
+      key: NO_TEAM,
+      title: "Без команды",
+      accounts: teamAccounts(accounts, NO_TEAM),
     });
   }
 
-  const ownerless = byOwner.get("");
-  if (ownerless && ownerless.length > 0) {
-    groups.push({
-      // Ключ — про пространство нумерации, а не про текст: он и остаётся.
-      key: "shared",
-      // Одно имя на весь продукт: чип на «Счетах», группа перевода и архив
-      // называют этот счёт так же.
-      title: "Без команды",
-      color: null,
-      data: sortAccountRows(ownerless),
-    });
+  // Имя единственной команды компании над её же счетами — удвоение. Архивная
+  // или бесхозная группа своё имя держит всегда: оно и есть новость.
+  if (groups.length === 1 && liveCount === 1 && activeIds.size === 1) {
+    groups[0] = { ...groups[0], title: null };
   }
   return groups;
+}
+
+/**
+ * Адрес счетов команды на «Финансах». Одна строка на все двери — редирект
+ * старого `/accounts`, тост «календарю созданы счета», провал автосчетов и
+ * инвойс без счёта: разойдись они в имени параметра, одна из дверей молча
+ * открывала бы чужую команду.
+ */
+export function financeAccountsHref(teamId?: string | null): string {
+  const base = "/finances?view=accounts";
+  return teamId ? `${base}&team=${encodeURIComponent(teamId)}` : base;
+}
+
+/**
+ * Сколько счетов закрыто — одним словом на обе соседние страницы: подпись
+ * двери «Счета» и значение строки «Закрытые счета» за ней. Были три записи
+ * одного числа («Закрытые счета · 2», «Закрытых нет», «2 счёта»). Ноль —
+ * словом: «0» рядом с деньгами читается как сумма.
+ */
+export function closedCountValue(closedCount: number): string {
+  return closedCount > 0 ? String(closedCount) : "нет";
+}
+
+/**
+ * Подпись двери «Счета» в настройках финансов — числа, а не перечень того, что
+ * за дверью (вкус владельца 2026-09-06: одно слово с числом). `undefined` —
+ * счета ещё не доехали: число не выдумываем, называем, что за дверью.
+ */
+export function accountsDoorLine(
+  openCount: number | undefined,
+  closedCount: number | undefined,
+): string {
+  if (openCount === undefined || closedCount === undefined) {
+    return "Остатки, порядок, закрытые";
+  }
+  const open =
+    openCount > 0 ? formatCountRu(openCount, FORMS_SCHET) : "Открытых нет";
+  return `${open} · закрытых ${closedCountValue(closedCount)}`;
 }
 
 /** Дни между двумя `YYYY-MM-DD`. `null` — дата нечитаема. */
@@ -303,44 +275,4 @@ export function accountDaysOnHand(
 ): number | null {
   const since = account.last_outflow_on ?? account.first_tx_on;
   return since ? daysBetweenYmd(since, today) : null;
-}
-
-/** Порог «давно»: сверка старше двух недель — уже вопрос, а не рутина.
- *  Одно число на весь продукт: список, карточка счёта и закрытие дня обязаны
- *  считать кассу несверенной в один и тот же день. */
-const CASH_COUNT_STALE_DAYS = 14;
-
-// ПОДПИСЬ СТРОКИ СЧЁТА СНЯТА С ПРОДУКТА (владелец 2026-08-17: «касса — на
-// руках 21 день, что это за хуйня… убирайте подсказки, просто счёт»). Ладдер
-// «не сверяли / на руках / отвечает / пользуются» жил здесь и печатался в
-// списке счетов и в панели финансов. Возраст остатка и давность сверки
-// остались там, где ими и занимаются: на самой странице счёта, строкой
-// «Пересчитать».
-
-/**
- * Янтарная правда о сверке кассы — первый приоритет подписи строки и вторая
- * подпись героя карточки счёта. `null` — сказать нечего: сверка свежая, дата
- * неизвестна либо касса просто молодая.
- *
- * «Ни разу не сверяли» печатается ТОЛЬКО когда по счёту БЫЛИ операции и с
- * первой прошло больше порога: иначе заведённая утром касса кричала бы в день
- * своего рождения, а требование пересчитать пустую кассу учит игнорировать
- * янтарь вообще.
- */
-export function cashCountAlert(
-  lastCountedOn: string | null | undefined,
-  firstTxOn: string | null,
-  today: string,
-): string | null {
-  if (lastCountedOn === undefined) return null;
-  if (lastCountedOn === null) {
-    const age = firstTxOn ? daysBetweenYmd(firstTxOn, today) : null;
-    return age !== null && age > CASH_COUNT_STALE_DAYS
-      ? "Ни разу не сверяли"
-      : null;
-  }
-  const days = daysBetweenYmd(lastCountedOn, today);
-  return days !== null && days > CASH_COUNT_STALE_DAYS
-    ? `Не сверяли ${formatCountRu(days, FORMS_DEN)}`
-    : null;
 }

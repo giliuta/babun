@@ -32,11 +32,18 @@
 // the cache stores that — nothing to preserve here. The photo viewer
 // fetches blobs on demand (online-only), matching web + the repo contract.
 
+// ЗАСОВ — ПЕРЕД ОПТИМИСТИЧНОЙ СТРОКОЙ, А НЕ ПЕРЕД ОТПРАВКОЙ.
+//
+// Эти обёртки офлайн-первые: строка ложится в SQLite СРАЗУ, а на сервер
+// уезжает после. В режиме просмотра чужими глазами отправку отобьёт засов
+// (`write-guard.ts`), но местная копия к тому времени уже записана, и откат
+// у неё молчащий — не удался, и в кэше владельца остаётся призрак строки,
+// которой на сервере никогда не было. Поэтому спрашиваем до всего.
+import { assertWritesAllowed } from "./write-guard";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../db/database.types";
 import {
   listAppointments as repoListAppointments,
-  getAppointment as repoGetAppointment,
   createAppointment as repoCreateAppointment,
   updateAppointment as repoUpdateAppointment,
   deleteAppointment as repoDeleteAppointment,
@@ -50,6 +57,7 @@ import {
   cacheGetOne,
   hasAuthoritativeTenantSnapshot,
   dequeueAll,
+  hasQueuedOps,
   type CachedAppointment,
   type CachedAppointmentData,
 } from "../db/cache/sql";
@@ -137,17 +145,51 @@ export async function listAppointments(
   }
 }
 
-async function revalidateAppointments(
+/** Сверка компании уже идёт — вторая ждёт её, а не запускает свою: каждое
+ *  чтение списка (экран, форма записи, шторка дня) звало свою, и полные
+ *  перезаписи кэша вставали в очередь за блокировкой SQLite, а правки
+ *  записей ждали их все (владелец 2026-09-30: «перенос подлагивает»). */
+const revalidating = new Map<string, Promise<void>>();
+
+function revalidateAppointments(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<void> {
-  try {
-    const changed = await refreshCacheFromSupabase(supabase, tenantId);
-    // Emit only on a real change (loop guard — see revalidate-events).
-    if (changed) emitRevalidated("appointments");
-  } catch {
-    // ignore — cached list already returned
+  const running = revalidating.get(tenantId);
+  if (running) return running;
+  const run = (async () => {
+    try {
+      const changed = await refreshCacheFromSupabase(supabase, tenantId);
+      // Emit only on a real change (loop guard — see revalidate-events).
+      if (changed) emitRevalidated("appointments");
+    } catch {
+      // ignore — cached list already returned
+    } finally {
+      revalidating.delete(tenantId);
+    }
+  })();
+  revalidating.set(tenantId, run);
+  return run;
+}
+
+/** Кэш уже совпадает с сервером строка в строку? Тогда перезаписывать его
+ *  незачем: `cacheReplaceTenant` — эксклюзивная транзакция на весь список
+ *  (удалить всё и вставить по строке), и на каждой сверке без изменений она
+ *  держала SQLite, пока правки записей ждали. Сравнение — полным JSON строки,
+ *  а не только версией: новая сборка может разложить ту же версию строки
+ *  иначе (новое поле), и такой кэш обязан обновиться. Порядок ключей другой —
+ *  считаем «отличается» и перезаписываем: ошибка только в сторону записи. */
+function sameRows(
+  cached: readonly CachedAppointmentData[],
+  fresh: readonly CachedAppointmentData[],
+): boolean {
+  if (cached.length !== fresh.length || fresh.length === 0) return false;
+  const byId = new Map(cached.map((r) => [r.id, r]));
+  for (const row of fresh) {
+    const old = byId.get(row.id);
+    if (!old || JSON.stringify(old) !== JSON.stringify(row)) return false;
   }
+  return true;
 }
 
 /** Refill the cache with the canonical DOMAIN list. `repoListAppointments`
@@ -186,7 +228,9 @@ async function refreshCacheFromSupabase(
   }
   const appts = domain ?? (await repoListAppointments(supabase, tenantId));
   const rows = appts.map((a) => makeCachedRow(a, tenantId));
-  const before = cacheSignature(await safeCacheReadAppointments(tenantId));
+  const cachedRows = await safeCacheReadAppointments(tenantId);
+  if (sameRows(cachedRows, rows)) return false;
+  const before = cacheSignature(cachedRows);
   await cacheReplaceTenant("appointments", tenantId, rows);
   const after = cacheSignature(rows);
   return before !== after;
@@ -219,6 +263,7 @@ export async function createAppointment(
   input: Appointment,
   tenantId: string,
 ): Promise<Appointment> {
+  assertWritesAllowed("createAppointment");
   const id = input.id || randomUuid();
   const nowIso = new Date().toISOString();
   // Two projections (rule 4):
@@ -257,7 +302,10 @@ export async function createAppointment(
           /* ignore — cache may not have stored the optimistic row */
         }
       }
-      await refetchAndCacheOne(supabase, created.id, tenantId);
+      // Строка из ответа вставки — уже каноническая (`select("*")` после
+      // всех BEFORE-триггеров; AFTER-триггеры записи её не переписывают).
+      // Второй GET той же строки стоил лишней поездки на каждом создании.
+      await cacheUpsert("appointments", makeCachedRow(created, tenantId));
       return created;
     } catch (err) {
       // Семантический отказ сервера (RLS/constraint) при живой сети —
@@ -285,6 +333,7 @@ export async function updateAppointment(
   patch: Partial<Appointment>,
   tenantId: string,
 ): Promise<Appointment> {
+  assertWritesAllowed("updateAppointment");
   const existing = await readCachedAppointment(id, tenantId);
   const expectedUpdatedAt = existing?.updated_at ?? null;
 
@@ -313,11 +362,16 @@ export async function updateAppointment(
     table: "appointments" as const,
     op: "update" as const,
     row_id: id,
-    payload: patchToRow(patch) as Record<string, unknown>,
+    // Компания — для гейта очереди (`replayer.ts`), на сервер она не уходит.
+    payload: { ...patchToRow(patch), tenant_id: tenantId } as Record<string, unknown>,
     expected_updated_at: expectedUpdatedAt,
   };
 
-  if (isOnline()) {
+  // ПОРЯДОК ПРАВОК ОДНОЙ ЗАПИСИ — ПОРЯДОК ЖЕСТОВ. Если по записи уже
+  // лежат неотправленные правки (прошлая упала на сбое сети), новая встаёт
+  // В ОЧЕРЕДЬ за ними, а не идёт в сеть напрямую: иначе очередь дошлёт
+  // старую правку ПОСЛЕ свежей и перезапишет её.
+  if (isOnline() && !(await hasQueuedOps("appointments", id))) {
     // Online: standalone optimistic upsert (no queued op to pair with).
     if (merged) await cacheUpsert("appointments", merged);
     try {
@@ -327,7 +381,10 @@ export async function updateAppointment(
         patch,
         tenantId,
       );
-      await refetchAndCacheOne(supabase, id, tenantId);
+      // Ответ правки — каноническая строка (`update().select("*")`): второй
+      // GET той же записи был второй поездкой на каждом переносе блока, и
+      // перенос «подлагивал, как будто сервер тормозит» (владелец 30.09).
+      await cacheUpsert("appointments", makeCachedRow(updated, tenantId));
       return updated;
     } catch (err) {
       // RLS/constraint/business-rule failures will never succeed on replay.
@@ -343,8 +400,10 @@ export async function updateAppointment(
     }
   }
 
-  // Offline — ATOMIC with the optimistic row when cached (risk #6).
+  // Offline — или в сети, но за старыми правками этой записи: ATOMIC with
+  // the optimistic row when cached (risk #6). В сети очередь пинаем сразу.
   await enqueueUpdate(updateOp, merged);
+  if (isOnline()) void kickReplayer({ supabase });
   return { ...toDomain(existing), ...patch, id } as Appointment;
 }
 
@@ -373,6 +432,7 @@ export async function deleteAppointment(
   id: string,
   tenantId: string,
 ): Promise<void> {
+  assertWritesAllowed("deleteAppointment");
   // v452 — non-UUID ids are local orphans (the row never made it to
   // Supabase because an earlier insert failed). Skip the network + queue
   // entirely so we don't keep re-enqueueing dead ops — a standalone
@@ -392,7 +452,9 @@ export async function deleteAppointment(
     expected_updated_at: null,
   };
 
-  if (isOnline()) {
+  // Удаление тоже встаёт за неотправленными правками этой записи: иначе
+  // поздняя правка догонит уже удалённую запись.
+  if (isOnline() && !(await hasQueuedOps("appointments", id))) {
     await cacheDelete("appointments", id); // optimistic (standalone online)
     try {
       await repoDeleteAppointment(supabase, id, tenantId);
@@ -409,8 +471,9 @@ export async function deleteAppointment(
     }
   }
 
-  // Offline — ATOMIC optimistic delete + enqueue (risk #6).
+  // Offline — или за старыми правками: ATOMIC optimistic delete + enqueue.
   await enqueueOpWithCacheDeleteAndEmit(deleteOp, "appointments", id);
+  if (isOnline()) void kickReplayer({ supabase });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -438,17 +501,15 @@ async function readCachedAppointment(
   }
 }
 
-/** After a successful server write, refresh the cache with the CANONICAL
- *  domain row via `repoGetAppointment` (maps every jsonb column to its
- *  domain shape + carries the server's updated_at). */
-async function refetchAndCacheOne(
-  supabase: DbSupabase,
-  id: string,
+/** СТРОКА С СЕРВЕРА — В КЭШ ТЕЛЕФОНА. Для записей, которые меняет RPC
+ *  (оплата, снятие оплаты): RPC кэш SQLite не трогает, и следующее чтение
+ *  списка возвращало прежнюю строку — плитка «оплачено» мигала обратно в
+ *  «не оплачено», пока фоновая сверка не приносила новую. */
+export async function cacheServerAppointment(
+  appointment: Appointment,
   tenantId: string,
 ): Promise<void> {
-  const appt = await repoGetAppointment(supabase, id, tenantId).catch(() => null);
-  if (!appt) return;
-  await cacheUpsert("appointments", makeCachedRow(appt, tenantId));
+  await cacheUpsert("appointments", makeCachedRow(appointment, tenantId));
 }
 
 function makeServerRow(
@@ -501,10 +562,14 @@ function makeServerRow(
     // БЕЗ ЭТОЙ СТРОКИ офлайн-реплей молча терял бы выбранный счёт, и деньги
     // ложились бы на угаданный — ровно то, от чего мы уходим.
     payment_account_id: input.payment_account_id ?? null,
+    // НДС записи — выбор «Итого» (режим + ставка): без этих строк офлайн-
+    // реплей терял бы налог, и оплата легла бы на счёт по настройкам.
+    vat_mode: input.vat_mode ?? null,
+    vat_rate: input.vat_rate ?? null,
     paid_amount: input.paid_amount ?? 0,
     // STORY-055 — created_by is filled server-side by the BEFORE
     // INSERT trigger; the optimistic cache row carries null and gets
-    // rewritten on refetchAndCacheOne after the real insert.
+    // rewritten from the insert's returned row after the real insert.
     created_by: null,
     created_at: input.created_at ?? nowIso,
     updated_at: nowIso,
@@ -532,6 +597,8 @@ function patchToRow(patch: Partial<Appointment>): Partial<CachedAppointment> {
   if (patch.kind !== undefined) out.kind = patch.kind;
   if (patch.status !== undefined) out.status = patch.status;
   if (patch.total_amount !== undefined) out.total_amount = patch.total_amount;
+  if (patch.vat_mode !== undefined) out.vat_mode = patch.vat_mode;
+  if (patch.vat_rate !== undefined) out.vat_rate = patch.vat_rate;
   if (patch.custom_total !== undefined) out.custom_total = patch.custom_total;
   if (patch.discount_amount !== undefined) out.discount_amount = patch.discount_amount;
   if (patch.prepaid_amount !== undefined) out.prepaid_amount = patch.prepaid_amount;

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -15,6 +15,7 @@ import {
   FileUp,
   X,
 } from "lucide-react-native";
+import { MirrorBanner } from "@/features/access/mirror/MirrorBanner";
 import { Screen } from "@/components/ui/Screen";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -83,12 +84,21 @@ const REASON_TONE: Record<RowReason, "danger" | "warning"> = {
 export function ImportWizardSheet({
   visible,
   onClose,
+  teamId = null,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** Команда, в которую заводятся клиенты (у каждой команды свой импорт,
+   *  владелец 30.09); нет — сервер ставит первую доступную. */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
-  const { data: tags = [] } = useClientTags();
+  // Тег импорта — из тегов команды, в которую идёт импорт (30.09).
+  const { data: allTags = [] } = useClientTags();
+  const tags = useMemo(
+    () => (teamId ? allTags.filter((tag) => !tag.team_id || tag.team_id === teamId) : allTags),
+    [allTags, teamId],
+  );
   const tenantId = useTenantId();
   const importer = useImportRows();
 
@@ -241,6 +251,7 @@ export function ImportWizardSheet({
           rows,
           defaultCountry: country,
           tagId,
+          teamId,
           fileHash: parsed.fileHash,
           fileName,
           startBatchIndex: 0,
@@ -252,7 +263,7 @@ export function ImportWizardSheet({
         setError((e as Error).message || "Ошибка импорта.");
       }
     },
-    [parsed, country, tagId, fileName, importer],
+    [parsed, country, tagId, teamId, fileName, importer],
   );
 
   // Preview «Импортировать» — insert the currently-selected keep set.
@@ -312,6 +323,8 @@ export function ImportWizardSheet({
       presentationStyle="pageSheet"
       onRequestClose={close}
     >
+      {/* `pageSheet` закрывает почти весь экран вместе с корневой плашкой. */}
+      <MirrorBanner inModal />
       <Screen>
         <WizardHeader
           subtitle={STEP_SUB[step]}

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Pressable, View } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import type { Appointment } from "@babun/shared/local/appointments";
@@ -38,7 +39,12 @@ function addDays(d: Date, n: number) {
 // drags the neighbouring week in under the finger). Reuses DayColumn so the
 // block/gridline/now-line rendering is identical to the day view.
 // The finance footer is rendered by the parent (under both this and DayView).
-export function WeekView({
+//
+// `memo`: экран календаря перерисовывается на каждый флаг запроса и на тап по
+// чипу, а данные недели при этом те же. Пропсы экран держит стабильными
+// (`gridProps` в useMemo, обработчики через useLatestHandler) — иначе memo
+// здесь мёртв.
+export const WeekView = memo(function WeekView({
   days,
   apptsFor,
   clientName,
@@ -50,6 +56,8 @@ export function WeekView({
   onEdit,
   onMenu,
   onCreateAt,
+  onSlotLongPress,
+  editingId = null,
   onReschedule,
   canReschedule,
   onPickDay,
@@ -89,7 +97,13 @@ export function WeekView({
   onMenu?: (a: Appointment) => void;
   /** Undefined for crew: empty slots and blocks are read-only. */
   onCreateAt?: (dateYmd: string, timeStart: string) => void;
-  onReschedule?: (a: Appointment, s: string, e: string) => void;
+  /** Долгое нажатие по свободному времени — быстрое меню («Перерыв»,
+   *  «Метка дня») без формы записи. */
+  onSlotLongPress?: (dateYmd: string, timeStart: string) => void;
+  /** Запись в режиме правки («Двигать и растягивать» из меню записи): только
+   *  у неё палец двигает и тянет за края, и только пока режим включён. */
+  editingId?: string | null;
+  onReschedule?: (a: Appointment, s: string, e: string, date?: string) => void;
   /** Per-record mutation guard (shared team events are creator-only). */
   canReschedule?: (a: Appointment) => boolean;
   /** Долгий тап по шапке даты — открыть её Днём. */
@@ -214,6 +228,7 @@ export function WeekView({
       {/* grid */}
       <ZoomableTimeGrid
         hourHSv={hourHSv}
+        scrollLocked={!!editingId}
         onZoom={onZoom}
         startHour={startHour ?? 0}
         endHour={endHour ?? 24}
@@ -249,6 +264,8 @@ export function WeekView({
                     onEdit={onEdit}
                     onMenu={onMenu}
                     onCreateAt={onCreateAt}
+                    onSlotLongPress={onSlotLongPress}
+                    editingId={editingId}
                     onReschedule={onReschedule}
                     canReschedule={canReschedule}
                     startHour={startHour}
@@ -261,7 +278,10 @@ export function WeekView({
                     freeSlots={freeSlotsFor?.(ymd)}
                     tintColor={labelTintFor?.(ymd) ?? null}
                     bufferMinutes={bufferMinutes}
-                    nowMinutes={nowMinutes}
+                    // «Сейчас» нужно только колонке сегодня (DayColumn без
+                    // isToday его не читает). Отдавать его всем — значит
+                    // раз в минуту перерисовывать двадцать одну колонку.
+                    nowMinutes={sameDay(d, today) ? nowMinutes : null}
                   />
                 );
               })}
@@ -271,7 +291,7 @@ export function WeekView({
       </ZoomableTimeGrid>
     </View>
   );
-}
+});
 
 // Одна страница полосы шапок: 7 ячеек DateCell. Семантика (редизайн
 // 2026-07-16 v2, по владельцу): тап = попап метки дня (когда метки есть,

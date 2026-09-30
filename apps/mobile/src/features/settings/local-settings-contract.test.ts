@@ -18,16 +18,9 @@ function section(start: string, end?: string): string {
 }
 
 describe("canonical settings cache contract", () => {
-  test("loyalty reads hide only transport or rolling-contract failures", () => {
-    const read = section("export function useLoyalty()", "export function useSaveLoyalty()");
-    assert.match(read, /isConfirmedNetworkUnavailable\(readError\)/);
-    assert.match(read, /isMissingLoyaltySettingsContract\(readError\)/);
-    assert.match(read, /throw error;/);
-  });
-
   test("personal event reads hide only transport or rolling-contract failures", () => {
     const read = section(
-      "export function usePersonalEventTypes()",
+      "export function usePersonalEventTypes(teamId?: string | null)",
       "export function useSavePersonalEventTypes()",
     );
     assert.match(read, /isConfirmedNetworkUnavailable\(readError\)/);
@@ -35,18 +28,7 @@ describe("canonical settings cache contract", () => {
     assert.match(read, /throw error;/);
   });
 
-  test("loyalty and personal caches are written only after server success", () => {
-    const loyaltySave = section(
-      "export function useSaveLoyalty()",
-      "// ─── Location labels",
-    );
-    const loyaltyBeforeSuccess = loyaltySave.slice(
-      0,
-      loyaltySave.indexOf("onSuccess:"),
-    );
-    assert.doesNotMatch(loyaltyBeforeSuccess, /\bsaveLoyalty\(/);
-    assert.match(loyaltySave, /onSuccess:[\s\S]*safeSaveLoyalty\(/);
-
+  test("personal cache is written only after server success", () => {
     const personalSave = section("export function useSavePersonalEventTypes()");
     const personalBeforeSuccess = personalSave.slice(
       0,
@@ -60,15 +42,8 @@ describe("canonical settings cache contract", () => {
   });
 
   test("settings writes require canonical server confirmation", () => {
-    const loyaltySave = section(
-      "export function useSaveLoyalty()",
-      "// ─── Location labels",
-    );
-    assert.match(loyaltySave, /\.select\("tenant_id"\)/);
-    assert.match(loyaltySave, /Сохранение программы лояльности не подтверждено сервером/);
-
     const locationSave = section(
-      "export function useSaveLocationLabels()",
+      "export function useSaveLocationLabels(",
       "// ─── Personal event types",
     );
     assert.doesNotMatch(

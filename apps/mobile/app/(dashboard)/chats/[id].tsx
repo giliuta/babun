@@ -41,6 +41,7 @@ import {
   QUICK_REPLIES,
 } from "@babun/shared/common/utils/quick-replies";
 import { renderTemplate } from "@babun/shared/local/sms-templates";
+import { addressedAs } from "@/features/clients/sms-name";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -50,7 +51,7 @@ import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useClients, useCreateClient } from "@/features/clients/queries";
 import { tryToE164 } from "@/features/clients/phone";
-import { useSmsTemplates } from "@/features/settings/sms-templates";
+import { uniqueByBody, useTeamTemplates } from "@/features/sms/sms-account";
 import { useTenant } from "@/features/settings/tenant";
 import { notify } from "@/lib/notify";
 import { chooseOption } from "@/lib/choose";
@@ -244,7 +245,10 @@ export default function ChatThreadScreen() {
   const togglePin = useTogglePin();
   const setStatus = useSetChatStatus();
   const createClient = useCreateClient();
-  const { data: smsTemplates = [] } = useSmsTemplates();
+  // Шаблоны SMS живут у команд (STORY-089, 29.09): в чате — все команды,
+  // которые человек видит, одинаковый текст — одной строкой.
+  const { data: teamTemplates = [] } = useTeamTemplates(null);
+  const smsTemplates = useMemo(() => uniqueByBody(teamTemplates), [teamTemplates]);
   const { data: tenant } = useTenant();
 
   const [draft, setDraft] = useState("");
@@ -319,14 +323,23 @@ export default function ChatThreadScreen() {
   // value in a chat context and stay literal — renderTemplate keeps
   // unresolved tokens visible so the operator fills them before send.
   const smsInserts = useMemo(() => {
-    const name = (linkedClient?.full_name || chat?.contact_name || "").trim();
+    // «Обращение» клиента первым (строка в «Личном»); пустое — как раньше.
+    const name = addressedAs(
+      linkedClient,
+      linkedClient?.full_name || chat?.contact_name || "",
+    );
     const vars: Record<string, string> = {};
     if (name) vars.Name = name;
     if (tenant?.name) vars.Company = tenant.name;
     return smsTemplates
       .filter((tpl) => tpl.enabled)
       .map((tpl) => ({ ...tpl, rendered: renderTemplate(tpl.body, vars) }));
-  }, [smsTemplates, linkedClient?.full_name, chat?.contact_name, tenant?.name]);
+  }, [
+    smsTemplates,
+    linkedClient,
+    chat?.contact_name,
+    tenant?.name,
+  ]);
 
   const copyMessage = useCallback(
     (m: ChatMessage) => {
@@ -843,7 +856,7 @@ export default function ChatThreadScreen() {
                   <Pressable
                     onPress={() => {
                       setQrOpen(false);
-                      router.push("/cabinet/sms-templates" as Href);
+                      router.push("/calendar/sms" as Href);
                     }}
                     accessibilityRole="button"
                     accessibilityLabel="Настроить SMS-шаблоны"

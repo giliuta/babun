@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactElement } from "react";
+import { useMemo, useState, type ReactElement } from "react";
 import {
   Pressable,
   SectionList,
@@ -18,13 +18,12 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useThemeColors } from "@/theme/colors";
 import { humanDay } from "@/features/appointments/helpers";
-import { useReceipts } from "@/features/documents/receipts-queries";
 import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import type { AccountWithBalance } from "./accounts";
 import { PanelHeader } from "./PanelHeader";
 import type { Period } from "./period";
+import { usePeriodDocuments } from "./use-period-documents";
 import {
-  collectDocuments,
   filterDocuments,
   type DocumentFilter,
   type FinanceDocument,
@@ -54,6 +53,7 @@ export function DocumentsPanel({
   period,
   today,
   query,
+  canIssue = true,
   filter,
   onFilterChange,
   onOpen,
@@ -75,6 +75,10 @@ export function DocumentsPanel({
   /** Выбранный вид документа. Живёт НА ЭКРАНЕ, а не здесь: от него зависит
    *  главная кнопка внизу («Выставить инвойс» / «Принять оплату»), а она вне
    *  панели. */
+  /** Может ли человек выставить документ. Нет — пустая панель не обещает
+   *  кнопку, которой у него нет (владелец 20.09: плашка «Документы» остаётся
+   *  и без доступа, но внутри просто ничего не показывается). */
+  canIssue?: boolean;
   filter: DocumentFilter;
   onFilterChange: (filter: DocumentFilter) => void;
   onOpen: (href: string) => void;
@@ -82,74 +86,22 @@ export function DocumentsPanel({
   refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   const t = useThemeColors();
-  // Чеки нужны ТОЛЬКО этой панели — и грузятся вместе с ней: пока её не
-  // открыли, экран денег не тратит на них сетевой запрос.
-  const receiptsQuery = useReceipts(clientId ? { clientId } : undefined);
+  // Список документов периода — общий с плиткой «Документы» на «Финансах»
+  // (`usePeriodDocuments`): число на плитке и строки здесь из одного места.
+  const { documents, receipts, receiptsQuery } = usePeriodDocuments({
+    invoices,
+    payments,
+    appointments,
+    accounts,
+    clients,
+    clientId,
+    teamId,
+    period,
+    today,
+  });
   // Открытый чек. Своей страницы у него нет: документ неизменяем, и всё, что с
   // ним делают, — смотрят и высылают (владелец: «не надо лишних страниц»).
   const [openReceipt, setOpenReceipt] = useState<Receipt | null>(null);
-
-  const clientName = useMemo(
-    () => new Map(clients.map((c) => [c.id, c.full_name])),
-    [clients],
-  );
-  // Команды у чека в базе нет вовсе — её знает то, за что он выдан: инвойс
-  // (у него есть brigade_id), запись (team_id) и, для ручного прихода, счёт,
-  // на который легли деньги. Счёт нескольких команд не называет ни одну и
-  // потому в карту не попадает.
-  const invoiceTeam = useMemo(
-    () => new Map(invoices.map((i) => [i.id, i.brigade_id])),
-    [invoices],
-  );
-  const appointmentTeam = useMemo(
-    () => new Map(appointments.map((a) => [a.id, a.team_id])),
-    [appointments],
-  );
-  const accountTeam = useMemo(
-    () =>
-      new Map(
-        accounts
-          .filter((a) => a.scope === "team" && a.brigade_id)
-          .map((a) => [a.id, a.brigade_id]),
-      ),
-    [accounts],
-  );
-  const receiptTeamId = useCallback(
-    (receipt: Receipt): string | null =>
-      (receipt.invoice_id ? invoiceTeam.get(receipt.invoice_id) : null) ??
-      (receipt.appointment_id
-        ? appointmentTeam.get(receipt.appointment_id)
-        : null) ??
-      (receipt.account_id ? accountTeam.get(receipt.account_id) : null) ??
-      null,
-    [accountTeam, appointmentTeam, invoiceTeam],
-  );
-
-  const receipts = receiptsQuery.data;
-  const documents = useMemo(
-    () =>
-      collectDocuments({
-        invoices,
-        payments,
-        receipts: receipts ?? [],
-        clientName: (id) => (id ? (clientName.get(id) ?? null) : null),
-        receiptTeamId,
-        period: { from: period.from, to: period.to },
-        teamId,
-        today,
-      }),
-    [
-      clientName,
-      invoices,
-      payments,
-      period.from,
-      period.to,
-      receiptTeamId,
-      receipts,
-      teamId,
-      today,
-    ],
-  );
   const rows = useMemo(
     () => filterDocuments(documents, filter, query),
     [documents, filter, query],
@@ -185,7 +137,12 @@ export function DocumentsPanel({
           грузятся: он не фильтр списка, а выбор вида документа — от него
           зависит кнопка внизу экрана. Спрятать его значит спрятать и её. */}
       <SegmentedControl
-        options={SEGMENTS}
+        // Число в каждой вкладке (аудит 2026-09-29): плитка «Документы» —
+        // сумма вкладок, и без чисел «16» над одним инвойсом читалось ошибкой.
+        options={SEGMENTS.map((segment) => ({
+          ...segment,
+          label: `${segment.label} ${documents.filter((d) => d.kind === segment.value).length}`,
+        }))}
         value={filter}
         onChange={onFilterChange}
         style={{ marginHorizontal: 16, marginBottom: 8 }}
@@ -277,8 +234,19 @@ export function DocumentsPanel({
               searching
                 ? "Искали среди документов выбранного периода"
                 : filter === "invoice"
-                  ? "Инвойс выставляется кнопкой внизу — по записи или отдельно"
-                  : "Чек выписывается сам, как только вы примете оплату от клиента"
+                  // Тому, кто документы не выставляет, подпись не нужна:
+                  // она называла бы кнопку, которой у него нет. Канон пустых
+                  // состояний (LOCKED 2026-08-27) оставляет объяснения ошибкам.
+                  ? canIssue
+                    ? "Инвойс выставляется кнопкой внизу — по записи или отдельно"
+                    : undefined
+                  : canIssue
+                    ? // ПРО «ПО ПРИНЯТОЙ ОПЛАТЕ» ЗДЕСЬ НЕ ГОВОРИМ, ПОКА ТАКОЙ КНОПКИ НЕТ.
+                      // Единственная кнопка ведёт в составитель, а он ЗАВОДИТ
+                      // НОВЫЙ ПРИХОД: человек, принявший оплату в записи и
+                      // поверивший подсказке, записал бы деньги дважды.
+                      "Чек выписывается кнопкой внизу: клиент, услуги, счёт"
+                    : undefined
             }
           />
         }

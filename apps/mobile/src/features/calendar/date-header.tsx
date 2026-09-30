@@ -19,6 +19,7 @@
 // «Выбранного дня» в Неделе нет: тап по дате открывает попап метки,
 // долгий тап проваливается в День (см. WeekHeaderRow).
 import { Text, View } from "react-native";
+import { blockSolid } from "@/components/ui/color-contrast";
 import { LabelTag } from "@/components/ui/LabelTag";
 import { useThemeColors } from "@/theme/colors";
 
@@ -86,9 +87,8 @@ export function DateCell({
           {dow}
         </Text>
         <Text
-          className="tabular-nums"
           maxFontSizeMultiplier={1.2}
-          style={{
+          style={{ fontVariant: ["tabular-nums"],
             height: 28,
             fontSize: 24,
             lineHeight: 28,
@@ -105,6 +105,23 @@ export function DateCell({
             <LabelTag color={label.color} text={label.name} lg />
           ) : null}
         </View>
+      {/* ПОЛОСКА МЕТКИ ДНЯ ПО ВЕРХУ КОЛОНКИ (вариант B, 24.09): день с меткой
+          узнаётся боковым зрением, не читая корешок. Тон — как у плотного
+          блока записи (`blockSolid`), чтобы бледная метка не терялась. */}
+      {label && !dayOff ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: 3,
+            right: 3,
+            bottom: 0,
+            height: 3,
+            borderRadius: 999,
+            backgroundColor: blockSolid(label.color),
+          }}
+        />
+      ) : null}
       </View>
     );
   }
@@ -125,8 +142,8 @@ export function DateCell({
         <Text
           maxFontSizeMultiplier={1.2}
           style={{
-            height: 13,
-            fontSize: 10,
+            height: 14,
+            fontSize: 11,
             fontWeight: "600",
             letterSpacing: 0.5,
             textTransform: "uppercase",
@@ -136,9 +153,8 @@ export function DateCell({
           {dow}
         </Text>
         <Text
-          className="tabular-nums"
           maxFontSizeMultiplier={1.2}
-          style={{
+          style={{ fontVariant: ["tabular-nums"],
             height: 27,
             fontSize: 22,
             lineHeight: 27,
@@ -160,13 +176,12 @@ export function DateCell({
       </View>
       {count > 0 ? (
         <Text
-          className="tabular-nums"
           maxFontSizeMultiplier={1.2}
-          style={{
+          style={{ fontVariant: ["tabular-nums"],
             position: "absolute",
             top: 2,
             right: 4,
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: "600",
             color: isToday ? t.accent : t.faint,
           }}
@@ -174,6 +189,23 @@ export function DateCell({
           {count}
         </Text>
       ) : null}
+    {/* ПОЛОСКА МЕТКИ ДНЯ ПО ВЕРХУ КОЛОНКИ (вариант B, 24.09): день с меткой
+        узнаётся боковым зрением, не читая корешок. Тон — как у плотного
+        блока записи (`blockSolid`), чтобы бледная метка не терялась. */}
+    {label && !dayOff ? (
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          left: 3,
+          right: 3,
+          bottom: 0,
+          height: 3,
+          borderRadius: 999,
+          backgroundColor: blockSolid(label.color),
+        }}
+      />
+    ) : null}
     </View>
   );
 }

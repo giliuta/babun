@@ -27,6 +27,14 @@ import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
 export type ContactFieldId = "telegram" | "instagram" | "whatsapp" | "email";
 
+/** Whose contacts these are: a client card, or an employee page that keeps
+ *  the same fields in its profile. Rows and the «Добавить» sheet only need
+ *  these five. */
+export type ContactHolder = Pick<
+  Client,
+  "phones" | "whatsapp_phone" | "telegram_username" | "instagram_username" | "email"
+>;
+
 export interface ContactFieldDef {
   id: ContactFieldId;
   /** Ярлык строки и подпись пункта в листе «Добавить». */
@@ -40,9 +48,9 @@ export interface ContactFieldDef {
    *  «@artem_test» это уже другой логин на вид. */
   autoCapitalize?: "none";
   /** Что показывать в строке ("" — поля у клиента нет). */
-  display: (client: Client) => string;
+  display: (client: ContactHolder) => string;
   /** Патч клиента для введённого значения. */
-  patch: (value: string) => Partial<Client>;
+  patch: (value: string) => Partial<ContactHolder>;
   /** Приставка, которая уже стоит в пустом поле («@»), как «+357» у
    *  телефона. Стереть её можно — это обычный текст. */
   prefix?: string;

@@ -68,3 +68,39 @@ describe("единица измерения строки счёта", () => {
     ).toThrow("Единица измерения слишком длинная");
   });
 });
+
+describe("invoice discount line", () => {
+  it("passes one flagged negative line through with its flag", () => {
+    expect(
+      validateInvoiceDraft({
+        ...draft,
+        lines: [
+          { title: "Услуга", qty: 1, unit_price: 50 },
+          { title: "Скидка", qty: 1, unit_price: -5, discount: true },
+        ],
+      })[1],
+    ).toEqual({
+      title: "Скидка",
+      qty: 1,
+      unit_price: -5,
+      description: null,
+      unit: null,
+      discount: true,
+    });
+  });
+
+  it("still rejects a negative price without the flag", () => {
+    expect(() =>
+      validateInvoiceDraft({ ...draft, lines: [{ title: "X", qty: 1, unit_price: -5 }] }),
+    ).toThrow();
+  });
+
+  it("rejects a discount with quantity other than one", () => {
+    expect(() =>
+      validateInvoiceDraft({
+        ...draft,
+        lines: [{ title: "Скидка", qty: 2, unit_price: -5, discount: true }],
+      }),
+    ).toThrow("Некорректная скидка");
+  });
+});

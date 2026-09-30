@@ -10,7 +10,9 @@ import { formatInvoiceMoney } from "@/features/invoices/format";
 import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
 import { useReceipts } from "@/features/documents/receipts-queries";
 
-// «Документы клиента» — дверь из карточки клиента (DocumentationBlock) к его
+// «Документы клиента» — бывшая дверь карточки клиента («Счета и чеки» в
+// снятой 22.09 «Документации»; теперь бумаги клиента стоят плашками в его
+// блоке «Файлы») к его
 // бумагам: инвойсам и чекам. Бумаги ВСЕЙ компании живут не здесь, а в панели
 // «Документы» на «Финансах» (канон 2026-08-12: только Инвойсы|Чеки) — этот
 // экран остаётся до переезда карточки клиента на неё. Без clientId он
@@ -67,7 +69,13 @@ export default function DocumentsScreen() {
                   : "Все оплачены"
             }
             onPress={() =>
-              router.push(clientId ? `/invoices?clientId=${clientId}` : "/invoices")
+              // Инвойсы живут в «Финансах» → «Документы» (владелец 22.09);
+              // отдельный список `/invoices` снесён как вторая дверь.
+              router.push(
+                clientId
+                  ? `/finances?view=documents&clientId=${clientId}`
+                  : "/finances?view=documents",
+              )
             }
           />
           {/* Чеки выписываются сами при каждом приёме денег (триггер
@@ -94,7 +102,7 @@ export default function DocumentsScreen() {
               а не дверь, пока договоров нет. */}
           <NavRow label="Договоры" placeholder="Скоро" separated dimmed />
         </RowGroup>
-        <RowCaption text="Чек выписывается сам при каждом приёме денег — по записи и по инвойсу. Договоры привяжутся к клиентам и записям — следующий шаг." />
+        <RowCaption text="Чек выписывается кнопкой в «Финансах». Договоры привяжутся к клиентам и записям — следующий шаг." />
       </ScrollView>
     </Screen>
   );

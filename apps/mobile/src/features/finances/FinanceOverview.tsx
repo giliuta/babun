@@ -7,9 +7,10 @@ import {
 import {
   FORMS_DOCUMENT,
   formatCountRu,
-  pluralRu,
 } from "@babun/shared/common/utils/plural-ru";
 import { ScopeChips } from "@/components/ui/ScopeChips";
+import { useToast } from "@/components/ui/Toast";
+import { useCalendarChips } from "@/features/settings/workspaces";
 import { useThemeColors } from "@/theme/colors";
 import type { Team } from "@/features/reference/queries";
 import { periodDates, periodTitle, type Period } from "./period";
@@ -38,8 +39,10 @@ export type HomeView =
   | "profit";
 
 export interface InvoiceTileSummary {
-  /** Сколько документов ждут оплаты — плитка печатает ШТУКИ, а не деньги. */
-  openCount: number;
+  /** Сколько документов (инвойсов и чеков) за период — ровно столько строк
+   *  откроется под плиткой (`usePeriodDocuments`, аудит 2026-09-29). Плитка
+   *  печатает ШТУКИ, а не деньги. */
+  count: number;
 }
 
 export interface AccountTileSummary {
@@ -70,57 +73,228 @@ export interface OverviewTotals {
  * Тинт остаётся ровно за ВЫБРАННЫМ состоянием: раньше он стоял у половины
  * строк просто так и потому ничего не значил.
  */
-function SummaryToggle({
+export function SummaryToggle({
   label,
   color,
   value,
+  quiet,
   a11yValue,
   active,
+  locked = false,
   onPress,
 }: {
   label: string;
-  /** Цвет смысла строки: им красятся точка и значение. */
+  /** Цвет смысла строки: им красится точка, а значение — когда оно не ноль. */
   color: string;
   value: string;
+  /** НОЛЬ ТИШЕ ЖИВЫХ ДЕНЕГ — тот же закон, что у строки счёта в списке
+   *  (`SettingsRow.valueQuiet`). Пять нулей, набранных в полную силу своими
+   *  цветами, превращали сводку в ровный шаблон: глаз обегал зелёное,
+   *  красное, янтарное и синее и не находил единственное живое число.
+   *  Красный «€0» у расхода вдобавок врал прямо цветом — красное в этом
+   *  продукте значит «деньги ушли». Точка при этом остаётся цветной: она
+   *  называет строку, а не сумму. */
+  quiet?: boolean;
   /** Что значит число, если само по себе оно немое: «3» на плитке документов
    *  это «три документа ждут оплаты», и вслух строка обязана сказать это. */
   a11yValue?: string;
   active: boolean;
+  /** ДЕНЕГ ЗА СТРОКОЙ ЭТОМУ ЧЕЛОВЕКУ НЕ ПОКАЗЫВАЮТ (владелец 15.09: «доход
+   *  серым, расход серым, долги серым, прибыль серым»). Точка, ярлык и
+   *  значение — одним серым, строка не нажимается. Цвет смысла здесь соврал
+   *  бы: зелёная точка у «Дохода» обещает деньги, которых экран не считал. */
+  locked?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
   return (
     <Pressable
       onPress={onPress}
+      disabled={locked}
       accessibilityRole="button"
-      accessibilityState={{ expanded: active }}
-      accessibilityLabel={`${label}: ${a11yValue ?? value}`}
-      className="flex-1 flex-row items-center rounded-[10px] px-3.5 active:opacity-70"
+      accessibilityState={{ expanded: active, disabled: locked }}
+      // Закрытая строка не называет сумму вслух: «Доход: €0» прозвучал бы
+      // фактом о деньгах, а их здесь просто не показывают.
+      accessibilityLabel={`${label}: ${locked ? "нет доступа" : (a11yValue ?? value)}`}
+      // Строка 38pt + зазор 6pt между рядами: цель касания добирает до 44
+      // за счёт зазора, вид не меняется (тот же приём, что у Chip).
+      hitSlop={{ top: 3, bottom: 3 }}
+      className="flex-row items-center rounded-[10px] px-3.5 active:opacity-70"
       style={{
+        // РОВНО ПОЛОВИНА РЯДА, А НЕ «СКОЛЬКО ПОПРОСИТ СОДЕРЖИМОЕ». Ширину
+        // задаёт сетка, а не длина подписи: иначе «Счета | Документы» едут
+        // относительно «Доход | Расход» — на узком экране совпадали, на
+        // широком разъезжались на 12pt (поймано владельцем 20.09 на Pro Max,
+        // измерено по пикселям: 572 и 646 против 609 и 609 у соседних рядов).
+        // Базис нулевой и `minWidth: 0` — длинная подпись ужимается внутри
+        // своей половины, а не отбирает место у соседней плитки.
+        flexBasis: 0,
+        flexGrow: 1,
+        flexShrink: 1,
+        minWidth: 0,
         minHeight: 38,
         // `1a` — тот же тинт, что у выбранного чипа: 10% цвета читается как
         // подсветка, но не спорит со значением, набранным тем же цветом.
         // Тинта ХВАТАЕТ: цветная рамка была третьей грамматикой выбора на
         // продукт (у Chip — заливка, у оттиск-рядов — углубление материала), и
         // 1.5px контур нигде больше не встречался.
-        backgroundColor: active ? color + "1a" : t.surface,
+        backgroundColor: active && !locked ? color + "1a" : t.surface,
         borderCurve: "continuous",
       }}
     >
       <View
         className="h-1.5 w-1.5 rounded-full"
-        style={{ backgroundColor: color }}
+        style={{ backgroundColor: locked ? t.muted : color }}
       />
-      <Text className="ml-2 text-sm font-semibold" style={{ color: t.sub }}>
+      <Text
+        numberOfLines={1}
+        className="ml-2 text-sm font-semibold"
+        style={{ color: locked ? t.muted : t.sub, flexShrink: 1 }}
+      >
         {label}
       </Text>
+      {/* Пятизначная прибыль с копейками («€12 450,75») на узком экране не
+          влезала рядом с подписью и вылезала за край плитки: сумма ужимается
+          до 80 %, а не рвётся. */}
       <Text
-        className="ml-auto text-[15px] font-bold"
-        style={{ color, fontVariant: ["tabular-nums"] }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+        className={`ml-auto pl-2 text-[15px] ${quiet || locked ? "font-semibold" : "font-bold"}`}
+        style={{
+          color: locked ? t.muted : quiet ? t.caption : color,
+          fontVariant: ["tabular-nums"],
+          flexShrink: 1,
+        }}
       >
         {value}
       </Text>
     </Pressable>
+  );
+}
+
+/**
+ * ЛЕНТА КОМАНД И СТРОКА ПЕРИОДА — ШАПКА ДЕНЕЖНЫХ ЭКРАНОВ. Одна вёрстка на
+ * «Финансы» и «Аналитику» (владелец 2026-09-24: «всю нашу настройку, которую
+ * мы использовали в финансах, такую же используй в аналитике»): две копии
+ * разошлись бы на первой правке отступа.
+ */
+export function ScopePeriodBar({
+  teams,
+  scopeTeamId,
+  onScopeChange,
+  period,
+  onOpenPresets,
+  onOpenCustom,
+  locked = false,
+  deselectable = false,
+}: {
+  teams: Team[];
+  scopeTeamId: string | null;
+  onScopeChange: (id: string | null) => void;
+  period: Period;
+  onOpenPresets: () => void;
+  onOpenCustom: () => void;
+  locked?: boolean;
+  /** Повторный тап по выбранной команде снимает выбор — `null`, вся
+   *  компания. ТОЛЬКО у «Аналитики» (владелец 2026-09-24: «без кнопки „Все
+   *  команды“ — сразу показывает все, а выделяю ту команду, которую хочу
+   *  посмотреть»). На «Финансах» выбор не снимается: деньги там всегда чьи-то
+   *  (закон 2026-08-10), а итог компании — ровно вопрос аналитики. */
+  deselectable?: boolean;
+}) {
+  const t = useThemeColors();
+  const toast = useToast();
+  const calendarChips = useCalendarChips({
+    own: teams,
+    onPickOwn: onScopeChange,
+    onSwitchError: (message) => toast(message, "error"),
+  });
+
+  return (
+    <>
+      {/* ОДНА ЛЕНТА НА ПРОДУКТ (`ScopeChips`, DESIGN-SYSTEM.md §5). Здесь
+          лежала своя копия того же контрола: те же пилюли, но со своими
+          отступами и без подводки к выбранному чипу — команда, доехавшая
+          позже, оставалась обрезанной за правым краем именно на финансах.
+          Шва нет: ряд периода ниже рисует свою верхнюю границу, и две линии
+          подряд читаются как случайный зазор.
+
+          Чипа «Все» лента не показывает вовсе (владелец 2026-08-10/08-11):
+          деньги в продукте всегда чьи-то, а итог по компании живёт в сводках
+          Кабинета. Общий чип показывал сумму, за которую никто не отвечает. */}
+      {/* КАЛЕНДАРИ ДРУГИХ КОМПАНИЙ СТОЯТ В ТОМ ЖЕ РЯДУ (владелец 2026-09-12:
+          «в финансах соответственно то же самое»). Правила ленты — общие с
+          календарём, одним телом (`useCalendarChips`): что считать чужим, как
+          склеен идентификатор и что делает тап. Две копии этих правил разошлись
+          бы на первой же правке, и деньги разъехались бы с расписанием. */}
+      <ScopeChips
+        items={calendarChips.items}
+        // Пока идёт переход в другую компанию, подсвечен выбранный чип, а не
+        // прежний: касание обязано отвечать сразу.
+        activeId={calendarChips.pendingId ?? scopeTeamId}
+        seam={false}
+        onSelect={(id) =>
+          deselectable && id === scopeTeamId ? onScopeChange(null) : calendarChips.pick(id)
+        }
+      />
+
+      {/* period row — NAME opens the preset list, DATES open the wheels.
+          У закрытых финансов ряд серый и глухой: месяц назван, а выбирать
+          период не для чего — денег за ним не покажут. */}
+      <View
+        className="flex-row items-center justify-between px-4"
+        style={{
+          backgroundColor: t.surface,
+          borderTopWidth: 1,
+          borderTopColor: t.separator,
+          borderBottomWidth: 1,
+          borderBottomColor: t.separator,
+          minHeight: 38,
+        }}
+      >
+        <Pressable
+          onPress={onOpenPresets}
+          disabled={locked}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Период: ${periodTitle(period)}`}
+          accessibilityState={{ disabled: locked }}
+          className="flex-row items-center gap-1 py-2 active:opacity-60"
+        >
+          <Text
+            className="text-[15px] font-semibold"
+            style={{ color: locked ? t.muted : t.ink }}
+          >
+            {periodTitle(period)}
+          </Text>
+          <ChevronDown
+            color={locked ? t.muted : t.faint}
+            size={14}
+            strokeWidth={2.6}
+          />
+        </Pressable>
+        <Pressable
+          onPress={onOpenCustom}
+          disabled={locked}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Выбрать диапазон дат"
+          accessibilityState={{ disabled: locked }}
+          className="py-2 active:opacity-60"
+        >
+          <Text
+            className="text-[15px] font-bold"
+            style={{
+              color: locked ? t.muted : t.ink,
+              fontVariant: ["tabular-nums"],
+            }}
+          >
+            {periodDates(period)}
+          </Text>
+        </Pressable>
+      </View>
+    </>
   );
 }
 
@@ -139,8 +313,17 @@ export function FinanceOverview({
   totals,
   accounts,
   invoices,
+  showDocuments = true,
+  showAccounts = true,
+  showDebts = true,
   view,
   onTap,
+  locked = false,
+  lockAccounts = false,
+  lockIncome = false,
+  lockExpense = false,
+  lockProfit = false,
+  lockDebts = false,
 }: {
   teams: Team[];
   scopeTeamId: string | null;
@@ -151,8 +334,32 @@ export function FinanceOverview({
   totals: OverviewTotals;
   accounts: AccountTileSummary;
   invoices: InvoiceTileSummary;
+  /** Документы есть в тарифе. Нет — плитки нет ВОВСЕ (канон: без права блок
+   *  не показывается либо только читается; «видно, но при нажатии ошибка» в
+   *  продукте не бывает). «Счета» занимают ряд целиком. */
+  showDocuments?: boolean;
+  /** Функции компании (STORY-088): выключенные счета и долги — без плиток. */
+  showAccounts?: boolean;
+  showDebts?: boolean;
   view: HomeView;
   onTap: (v: HomeView) => void;
+  /** ФИНАНСЫ ЭТОЙ КОМПАНИИ ЧЕЛОВЕКУ ЗАКРЫТЫ (`LockedFinances`, владелец 15.09:
+   *  «всё серое, всё по нулям, но переключаться можно»). Период и плитки
+   *  серые и не нажимаются; лента команд остаётся живой — по ней уходят в
+   *  компанию, где деньги этого человека есть. */
+  locked?: boolean;
+  /** ЗАКРЫТ ОТДЕЛЬНЫЙ БЛОК, а не весь раздел (уровни доступа, этап 2): человек
+   *  видит «Доходы и расходы» этой команды, но не видит её счета или долги.
+   *  Такая плитка серая, по нулям и не нажимается — как при закрытом разделе,
+   *  только поодиночке. */
+  lockAccounts?: boolean;
+  /** Стороны денег — два права (срез 2а): «Доход» и «Расход» гаснут
+   *  поодиночке, «Прибыль» — если закрыта хоть одна из них. */
+  lockIncome?: boolean;
+  lockExpense?: boolean;
+  /** Прибыль без материалов записей была бы неверной (сотрудник). */
+  lockProfit?: boolean;
+  lockDebts?: boolean;
 }) {
   const t = useThemeColors();
 
@@ -164,67 +371,15 @@ export function FinanceOverview({
 
   return (
     <View>
-      {/* ОДНА ЛЕНТА НА ПРОДУКТ (`ScopeChips`, DESIGN-SYSTEM.md §5). Здесь
-          лежала своя копия того же контрола: те же пилюли, но со своими
-          отступами и без подводки к выбранному чипу — команда, доехавшая
-          позже, оставалась обрезанной за правым краем именно на финансах.
-          Шва нет: ряд периода ниже рисует свою верхнюю границу, и две линии
-          подряд читаются как случайный зазор.
-
-          Чипа «Все» лента не показывает вовсе (владелец 2026-08-10/08-11):
-          деньги в продукте всегда чьи-то, а итог по компании живёт в сводках
-          Кабинета. Общий чип показывал сумму, за которую никто не отвечает. */}
-      <ScopeChips
-        items={teams.map((team) => ({
-          id: team.id,
-          name: team.name,
-          color: team.color,
-        }))}
-        activeId={scopeTeamId}
-        seam={false}
-        onSelect={onScopeChange}
+      <ScopePeriodBar
+        teams={teams}
+        scopeTeamId={scopeTeamId}
+        onScopeChange={onScopeChange}
+        period={period}
+        onOpenPresets={onOpenPresets}
+        onOpenCustom={onOpenCustom}
+        locked={locked}
       />
-
-      {/* period row — NAME opens the preset list, DATES open the wheels */}
-      <View
-        className="flex-row items-center justify-between px-4"
-        style={{
-          backgroundColor: t.surface,
-          borderTopWidth: 1,
-          borderTopColor: t.separator,
-          borderBottomWidth: 1,
-          borderBottomColor: t.separator,
-          minHeight: 38,
-        }}
-      >
-        <Pressable
-          onPress={onOpenPresets}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`Период: ${periodTitle(period)}`}
-          className="flex-row items-center gap-1 py-2 active:opacity-60"
-        >
-          <Text className="text-[15px] font-semibold" style={{ color: t.ink }}>
-            {periodTitle(period)}
-          </Text>
-          <ChevronDown color={t.faint} size={14} strokeWidth={2.6} />
-        </Pressable>
-        <Pressable
-          onPress={onOpenCustom}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Выбрать диапазон дат"
-          className="py-2 active:opacity-60"
-        >
-          <Text
-            className="text-[15px] font-bold"
-            style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
-          >
-            {periodDates(period)}
-          </Text>
-        </Pressable>
-      </View>
-
       {/* overview cards */}
       <View className="px-4 pb-2 pt-2" style={{ gap: 6 }}>
         {/* Счета | Документы — ТОТ ЖЕ РЯД, ЧТО И СВОДКА (владелец 2026-08-11:
@@ -239,14 +394,19 @@ export function FinanceOverview({
             Точка у счетов и документов чернильная: остаток на счетах — не
             приход и не расход, у него нет знака, а документ и вовсе не деньги;
             красить их в зелёное значило бы назвать это доходом. */}
+        {showAccounts || showDocuments ? (
         <View className="flex-row" style={{ gap: 6 }}>
+          {showAccounts ? (
           <SummaryToggle
             label={accountsTitle}
             color={t.ink}
             value={formatEUR(accounts.total)}
+            quiet={moneySign(accounts.total) === 0}
             active={view === "accounts"}
+            locked={locked || lockAccounts}
             onPress={() => onTap("accounts")}
           />
+          ) : null}
           {/* ДОКУМЕНТ — НЕ ДЕНЬГИ (владелец 2026-08-11: «какой смысл в
               документах евро показывать»). Здесь стояла сумма к оплате, и
               рядом с остатком на счетах она читалась как второй кошелёк, хотя
@@ -257,20 +417,25 @@ export function FinanceOverview({
               краснела на просрочку и превращала обычный рабочий счёт в тревогу;
               состояние документа названо словом в самой его строке
               («Просрочен»), и этого достаточно. */}
+          {showDocuments ? (
           <SummaryToggle
             label="Документы"
             color={t.ink}
-            value={String(invoices.openCount)}
+            // НОЛЬ ДОКУМЕНТОВ — ЦИФРОЙ (владелец 2026-09-20: «в документах
+            // написано „нет“, а надо нолик поставить»). Здесь стояло слово:
+            // боялись, что голый «0» рядом с «€450» в том же ряду прочтётся
+            // как сумма. Владелец прочёл иначе: плитка считает ШТУКИ, и ноль
+            // штук — такое же число, как три. Бледным его держит `quiet`.
+            value={String(invoices.count)}
+            quiet={invoices.count === 0}
             active={view === "documents"}
-            // Глагол склоняется вместе с числительным: «1 документ ждёт»,
-            // а не «1 документ ждут».
-            a11yValue={`${formatCountRu(invoices.openCount, FORMS_DOCUMENT)} ${pluralRu(
-              invoices.openCount,
-              ["ждёт", "ждут", "ждут"],
-            )} оплаты`}
+            a11yValue={`${formatCountRu(invoices.count, FORMS_DOCUMENT)} за период`}
+            locked={locked}
             onPress={() => onTap("documents")}
           />
+          ) : null}
         </View>
+        ) : null}
 
         {/* ПЕРЕКЛЮЧАТЕЛИ — ОДИН ОБЪЕКТ (владелец 2026-08-11: «компактно,
             чтоб всё было в одном стиле»). Раньше они разъезжались втроём: доход
@@ -292,7 +457,9 @@ export function FinanceOverview({
             label="Доход"
             color={moneySign(totals.income) < 0 ? t.danger : t.success}
             value={formatEUR(totals.income)}
+            quiet={moneySign(totals.income) === 0}
             active={view === "income"}
+            locked={locked || lockIncome}
             onPress={() => onTap("income")}
           />
           {/* МИНУСА ЗДЕСЬ НЕТ (владелец 2026-08-15: «расход и так даёт минус»).
@@ -302,26 +469,34 @@ export function FinanceOverview({
             label="Расход"
             color={t.danger}
             value={formatEUR(totals.expense)}
+            quiet={moneySign(totals.expense) === 0}
             active={view === "expense"}
+            locked={locked || lockExpense}
             onPress={() => onTap("expense")}
           />
         </View>
 
         <View className="flex-row" style={{ gap: 6 }}>
+          {showDebts ? (
           <SummaryToggle
             label="Долги"
             color={t.warning}
             value={formatEUR(totals.debt)}
+            quiet={moneySign(totals.debt) === 0}
             active={view === "debt"}
+            locked={locked || lockDebts}
             onPress={() => onTap("debt")}
           />
+          ) : null}
           {/* Минус печатает сам форматтер — по округлённым центам, а не по
               сырому знаку: убыток в 0,4 цента иначе показывал «−€0». */}
           <SummaryToggle
             label="Прибыль"
             color={t.brandAccent}
             value={formatEUR(totals.profit)}
+            quiet={moneySign(totals.profit) === 0}
             active={view === "profit"}
+            locked={locked || lockIncome || lockExpense || lockProfit}
             onPress={() => onTap("profit")}
           />
         </View>

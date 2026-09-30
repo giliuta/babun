@@ -56,6 +56,8 @@ export interface ImportRowsArgs {
   defaultCountry: CountryCode;
   /** Optional tag applied to every imported client. */
   tagId?: string | null;
+  /** Команда, в которую заводятся клиенты (30.09). */
+  teamId?: string | null;
   /** File metadata for the resume record. */
   fileHash: string;
   fileName: string;
@@ -112,6 +114,7 @@ export function useImportRows() {
         rows,
         defaultCountry,
         tagId,
+        teamId = null,
         fileHash,
         fileName,
         startBatchIndex = 0,
@@ -148,7 +151,7 @@ export function useImportRows() {
           batch.map((r) => {
             const id = importClientId(tenantId, fileHash, r.source);
             return createImportClient(
-              rowToClient(r, defaultCountry, tagId, id),
+              { ...rowToClient(r, defaultCountry, tagId, id), team_id: teamId },
               tagId,
               tenantId,
             );

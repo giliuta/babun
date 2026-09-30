@@ -51,6 +51,14 @@
 // lives in the repo (online) and the replayer can't diff assignments, so
 // offline + patch carrying tag_ids → strip + toast.
 
+// ЗАСОВ — ПЕРЕД ОПТИМИСТИЧНОЙ СТРОКОЙ, А НЕ ПЕРЕД ОТПРАВКОЙ.
+//
+// Эти обёртки офлайн-первые: строка ложится в SQLite СРАЗУ, а на сервер
+// уезжает после. В режиме просмотра чужими глазами отправку отобьёт засов
+// (`write-guard.ts`), но местная копия к тому времени уже записана, и откат
+// у неё молчащий — не удался, и в кэше владельца остаётся призрак строки,
+// которой на сервере никогда не было. Поэтому спрашиваем до всего.
+import { assertWritesAllowed } from "./write-guard";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../db/database.types";
 import {
@@ -83,7 +91,7 @@ import {
 } from "./queue-events";
 import { emitRevalidated, cacheSignature } from "./revalidate-events";
 import { randomUuid } from "./uuid";
-import { ColdOfflineCacheMissError } from "./cache-errors";
+import { ColdOfflineCacheMissError, OnlineOnlyWriteError } from "./cache-errors";
 
 type DbSupabase = SupabaseClient<Database>;
 
@@ -111,6 +119,27 @@ function isTransientNetworkError(err: unknown): boolean {
   return /failed to fetch|load failed|network request failed|network error|fetch failed|timed? ?out|socket|econn|abort|bad gateway|service unavailable|gateway time|\b50[234]\b/i.test(
     message,
   );
+}
+
+/** Опции записи. ЗАПИСЬ В НЕАКТИВНУЮ КОМПАНИЮ — ТОЛЬКО ОНЛАЙН: очередь
+ *  выгружается под активной компанией, и отложенная операция уехала бы под
+ *  чужим заголовком. `onlineOnly` — это текст отказа: экран знает, о чьих
+ *  клиентах речь, и говорит это человеку словами. */
+export interface CachedWriteOptions {
+  onlineOnly?: string;
+}
+
+/** Отказ ДО оптимистичной записи: кэш и очередь не трогаются вовсе. */
+function refuseOfflineWrite(opts: CachedWriteOptions | undefined): void {
+  if (opts?.onlineOnly && !isOnline()) {
+    throw new OnlineOnlyWriteError(opts.onlineOnly);
+  }
+}
+
+/** Сетевой сбой посреди записи в неактивную компанию: в очередь такая
+ *  операция не ложится — откат и тот же честный отказ. */
+function refuseQueueing(opts: CachedWriteOptions | undefined): boolean {
+  return !!opts?.onlineOnly;
 }
 
 // ─── Read ─────────────────────────────────────────────────────────
@@ -282,7 +311,10 @@ export async function createClient(
   supabase: DbSupabase,
   input: Client,
   tenantId: string,
+  opts?: CachedWriteOptions,
 ): Promise<Client> {
+  assertWritesAllowed("createClient");
+  refuseOfflineWrite(opts);
   // Client-generated UUID so optimistic UI has a stable key from
   // the start. Supabase's gen_random_uuid will respect the supplied
   // id (PK insert), and our queued op carries the same id so the
@@ -324,6 +356,11 @@ export async function createClient(
         await cacheDelete("clients", id).catch(() => {});
         throw err;
       }
+      // Запись в неактивную компанию в очередь не ложится: откат и отказ.
+      if (refuseQueueing(opts)) {
+        await cacheDelete("clients", id).catch(() => {});
+        throw err;
+      }
       // Network blip mid-flight — fall through to queue. ATOMIC (risk #6):
       // the optimistic row + the queued op land in one exclusive tx so a
       // crash between them can't strand one without the other.
@@ -345,7 +382,10 @@ export async function updateClient(
   id: string,
   patch: Partial<Client>,
   tenantId: string,
+  opts?: CachedWriteOptions,
 ): Promise<Client> {
+  assertWritesAllowed("updateClient");
+  refuseOfflineWrite(opts);
   // Snapshot existing cached row for conflict-detection sentinel.
   const existing = await readCachedClient(id, tenantId);
   const expectedUpdatedAt = existing?.updated_at ?? null;
@@ -383,7 +423,8 @@ export async function updateClient(
     table: "clients" as const,
     op: "update" as const,
     row_id: id,
-    payload: patchToRow(scrubbedPatch) as Record<string, unknown>,
+    // Компания — для гейта очереди (`replayer.ts`), на сервер она не уходит.
+    payload: { ...patchToRow(scrubbedPatch), tenant_id: tenantId } as Record<string, unknown>,
     expected_updated_at: expectedUpdatedAt,
   };
 
@@ -401,6 +442,10 @@ export async function updateClient(
       return updated;
     } catch (err) {
       if (!isTransientNetworkError(err)) {
+        if (existing) await cacheUpsert("clients", existing).catch(() => {});
+        throw err;
+      }
+      if (refuseQueueing(opts)) {
         if (existing) await cacheUpsert("clients", existing).catch(() => {});
         throw err;
       }
@@ -458,7 +503,10 @@ export async function archiveClient(
   tenantId: string,
   /** Когда стереть навсегда. null — архив без срока. */
   purgeAt: string | null = null,
+  opts?: CachedWriteOptions,
 ): Promise<void> {
+  assertWritesAllowed("archiveClient");
+  refuseOfflineWrite(opts);
   const existing = await readCachedClient(id, tenantId);
   const archivedAt = new Date().toISOString();
   // updated_at НЕ трогаем: это сторожок LWW, он принадлежит серверу. Своя
@@ -471,7 +519,7 @@ export async function archiveClient(
     table: "clients" as const,
     op: "update" as const,
     row_id: id,
-    payload: { deleted_at: archivedAt, purge_at: purgeAt },
+    payload: { deleted_at: archivedAt, purge_at: purgeAt, tenant_id: tenantId },
     expected_updated_at: existing?.updated_at ?? null,
   };
   const queue = () =>
@@ -485,7 +533,7 @@ export async function archiveClient(
       await repoSoftDeleteClient(supabase, id, tenantId, purgeAt);
       return;
     } catch (err) {
-      if (!isTransientNetworkError(err)) {
+      if (!isTransientNetworkError(err) || refuseQueueing(opts)) {
         if (existing) await cacheUpsert("clients", existing).catch(() => {});
         throw err;
       }
@@ -505,7 +553,10 @@ export async function restoreClient(
   supabase: DbSupabase,
   client: Client,
   tenantId: string,
+  opts?: CachedWriteOptions,
 ): Promise<void> {
+  assertWritesAllowed("restoreClient");
+  refuseOfflineWrite(opts);
   const restoredAt = new Date().toISOString();
   // Возврат снимает ОБА признака невидимости разом: клиент из корзины
   // возвращается в работу, а не в архив «на полпути».
@@ -518,7 +569,7 @@ export async function restoreClient(
     table: "clients" as const,
     op: "update" as const,
     row_id: client.id,
-    payload: { deleted_at: null, purge_at: null },
+    payload: { deleted_at: null, purge_at: null, tenant_id: tenantId },
     expected_updated_at: null,
   };
 
@@ -529,7 +580,7 @@ export async function restoreClient(
       await refetchAndCacheOne(supabase, client.id, tenantId);
       return;
     } catch (err) {
-      if (!isTransientNetworkError(err)) {
+      if (!isTransientNetworkError(err) || refuseQueueing(opts)) {
         await cacheDelete("clients", client.id).catch(() => {});
         throw err;
       }
@@ -554,7 +605,10 @@ export async function deleteClient(
   supabase: DbSupabase,
   id: string,
   tenantId: string,
+  opts?: CachedWriteOptions,
 ): Promise<void> {
+  assertWritesAllowed("deleteClient");
+  refuseOfflineWrite(opts);
   const existing = await readCachedClient(id, tenantId);
   const deleteOp = {
     table: "clients" as const,
@@ -570,7 +624,7 @@ export async function deleteClient(
       await repoDeleteClient(supabase, id, tenantId);
       return;
     } catch (err) {
-      if (!isTransientNetworkError(err)) {
+      if (!isTransientNetworkError(err) || refuseQueueing(opts)) {
         if (existing) await cacheUpsert("clients", existing).catch(() => {});
         throw err;
       }
@@ -708,6 +762,18 @@ function makeServerRow(
     tenant_id: tenantId,
     full_name: input.full_name ?? "",
     phone: input.phone ?? "",
+    // STORY-085 — те же поля, что у онлайн-записи (`clientToInsert`): офлайн-
+    // очередь, забывшая поле, стирает его при повторной отправке.
+    legal_name: input.legal_name ?? null,
+    vat_number: input.vat_number ?? null,
+    reg_number: input.reg_number ?? null,
+    billing_address: input.billing_address ?? null,
+    // Наборы реквизитов — целым массивом, как связи ниже.
+    requisites: (input.requisites ?? []) as unknown as CachedClient["requisites"],
+    // Связи едут целым массивом: третий ключ `location_id` (STORY-086) внутри
+    // jsonb, перечислять ключи здесь нельзя — забытый ключ офлайн-очередь
+    // стёрла бы при отправке, а перечень пришлось бы держать в двух местах.
+    memberships: (input.memberships ?? []) as unknown as CachedClient["memberships"],
     whatsapp_phone: input.whatsapp_phone ?? "",
     email: input.email ?? "",
     sms_name: input.sms_name ?? "",
@@ -729,6 +795,8 @@ function makeServerRow(
     property_type: input.property_type ?? "",
     birthday: input.birthday ?? "",
     blacklisted: input.blacklisted ?? false,
+    // Отказ от SMS правится своей функцией базы; новый клиент его не несёт.
+    sms_opt_out: input.sms_opt_out ?? false,
     pinned_at: input.pinned_at ?? null,
     reminder_at: input.reminder_at ?? null,
     phones: (input.phones ?? []) as unknown as CachedClient["phones"],
@@ -740,6 +808,9 @@ function makeServerRow(
     deleted_at: input.deleted_at ?? null,
     purge_at: input.purge_at ?? null,
     favorite_master_id: input.favorite_master_id ?? null,
+    // Команда клиента (30.09): прямой офлайн-INSERT умолчания сервера не
+    // знает, поэтому форма всегда присылает команду сама.
+    team_id: input.team_id ?? null,
     created_at: input.created_at ?? nowIso,
     updated_at: nowIso,
   };
@@ -751,6 +822,12 @@ function patchToRow(patch: Partial<Client>): Partial<CachedClient> {
   const out: Partial<CachedClient> = {};
   if (patch.full_name !== undefined) out.full_name = patch.full_name;
   if (patch.phone !== undefined) out.phone = patch.phone;
+  if (patch.legal_name !== undefined) out.legal_name = patch.legal_name ?? null;
+  if (patch.vat_number !== undefined) out.vat_number = patch.vat_number ?? null;
+  if (patch.reg_number !== undefined) out.reg_number = patch.reg_number ?? null;
+  if (patch.billing_address !== undefined) out.billing_address = patch.billing_address ?? null;
+  if (patch.requisites !== undefined) out.requisites = patch.requisites as unknown as CachedClient["requisites"];
+  if (patch.memberships !== undefined) out.memberships = patch.memberships as unknown as CachedClient["memberships"];
   if (patch.whatsapp_phone !== undefined) out.whatsapp_phone = patch.whatsapp_phone;
   if (patch.email !== undefined) out.email = patch.email;
   if (patch.sms_name !== undefined) out.sms_name = patch.sms_name;

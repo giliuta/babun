@@ -37,12 +37,57 @@ describe("mobile create quota integration", () => {
   test("sync runtime and tenant-switch lifetime are tenant-scoped", () => {
     const runtime = source("src/lib/sync-runtime.ts");
     const providers = source("src/providers/AppProviders.tsx");
+    // Транзакция смены компании ПЕРЕЕХАЛА из приёма приглашения в
+    // `switch-tenant.ts` (2026-09-12): её же зовёт переключатель контуров, а
+    // двух способов менять компанию не бывает. Проверяем там, где она живёт
+    // теперь, и отдельно — что приглашение не завело себе вторую копию.
+    const switching = source("src/features/settings/switch-tenant.ts");
     const invitations = source("src/features/settings/invitations.ts");
 
     assert.match(runtime, /startSyncRuntime\(tenantId:\s*string\)/);
     assert.match(runtime, /tenantId:\s*opts\.tenantId/);
     assert.match(providers, /startSyncRuntime\(tenantId\)/);
     assert.match(providers, /\[role, tenantId\]/);
-    assert.match(invitations, /if \(!switched\) \{\s*resumeRuntime\(\)/);
+
+    // КОМПАНИЯ МЕНЯЕТСЯ БЕЗ СЕТИ, И ПОРЯДОК ЗДЕСЬ СТОРОЖИТ СМЫСЛ.
+    //
+    // Прежние строки караулили механику, которой больше нет: паузу
+    // синхронизации, `refreshSession` и сверку «сессия не переключилась».
+    // Всё трое существовали потому, что активная компания жила в токене и
+    // менялась двумя поездками на сервер. Теперь компанию называет заголовок
+    // запроса, а сервер подтверждает её членством — ждать нечего, и паузы не
+    // нужны: местный кэш не сносится, а строки в нём разложены по компаниям.
+    //
+    // Сторожим то, что осталось важным:
+    ordered(switching, "setActiveTenantId", "await wipeTenantScopedData");
+    assert.match(switching, /keepLocalCache:\s*true/);
+    // Очередь замирает ДО смены заголовка: заголовок — окружение запроса, и
+    // выгрузка, начатая в прежней компании, дошлёт остаток уже в новую.
+    ordered(switching, "pauseSyncRuntimeForTenantSwitch", "setActiveTenantId");
+    assert.match(switching, /if \(!switched\) resumeRuntime\(\)/);
+    // `resetQueries()` ВОЗВРАЩАЕТ волну перезапросов: ждать её значит держать
+    // переход, пока каждый экран не сходит в сеть. Волну уже запускает
+    // `wipeFastStores`, не дожидаясь, — второй здесь быть не должно.
+    assert.ok(
+      !/await queryClient\.resetQueries\(\)/.test(switching),
+      "ожидание resetQueries возвращает переходу полную перезагрузку экрана",
+    );
+    // `activate_tenant` живёт, но ТОЛЬКО в фоне: стоит вернуть его на путь
+    // экрана — и пять секунд ожидания возвращаются вместе с ним.
+    assert.match(switching, /scheduleClaimCatchUp\(userId, tenantId\)/);
+    assert.ok(
+      !/await scheduleClaimCatchUp\(|await settleClaimDebt\(/.test(switching),
+      "догоняющий claim не должен задерживать экран — он долг, а не ожидание",
+    );
+    // Переход не ходит за личностью в сеть: после часа офлайна `getSession`
+    // отвечает пустой сессией, а переходу сеть не нужна.
+    assert.match(switching, /const userId = getActiveUserId\(\)/);
+    // Скобка открыта, а закрыта или нет — неважно: сторож про то, что
+    // приглашение зовёт ОБЩИЙ переход, а не про его аргументы.
+    assert.match(invitations, /await switchTenant\(tenantId[,)]/);
+    assert.ok(
+      !invitations.includes("activate_tenant"),
+      "приглашение не должно звать activate_tenant напрямую — только switchTenant",
+    );
   });
 });

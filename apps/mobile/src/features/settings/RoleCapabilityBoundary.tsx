@@ -1,10 +1,12 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useRouter, type Href } from "expo-router";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { signOutAndWipe } from "@/lib/auth-clear";
-import { can, ROLE_LABELS, type AppCapability } from "./role-policy";
+import { evictCompanyFromDevice } from "@/lib/evict-company";
+import { useTenantId } from "@/lib/tenant";
+import { can, type AppCapability } from "./role-policy";
 import { useCurrentRole } from "./tenant";
 
 /**
@@ -40,6 +42,15 @@ export function RoleCapabilityBoundary({
   // членства приезжает ОТВЕТОМ сервера, а не его отсутствием, и следующий
   // успешный опрос закроет раздел сам.
   const role = roleQuery.data;
+  const tenantId = useTenantId();
+
+  // СЕРВЕР СКАЗАЛ «НЕ СОСТОИТ» — ДАННЫЕ ЭТОЙ КОМПАНИИ УХОДЯТ С ТЕЛЕФОНА (этап 0(ж)
+  // плана доступа). Это путь телефона, который в момент увольнения был выключен
+  // и сигнал `membership_removed` не услышал. Стирание само ещё раз спрашивает
+  // сервер и уводит в другую компанию, если она есть.
+  useEffect(() => {
+    if (role === null && tenantId) void evictCompanyFromDevice(tenantId);
+  }, [role, tenantId]);
 
   if (role === undefined) {
     if (roleQuery.isError) {
@@ -97,8 +108,8 @@ export function RoleCapabilityBoundary({
         <ScreenHeader title="Недостаточно прав" />
         <EmptyState
           fill
-          title="Этот раздел недоступен для вашей роли"
-          subtitle={`Ваша роль — ${ROLE_LABELS[role].toLowerCase()}. Доступные рабочие разделы остались без изменений.`}
+          title="Этот раздел вам недоступен"
+          subtitle="Доступ к нему открывает владелец компании."
           action={{ label: "Вернуться", onPress: () => router.replace(fallbackHref) }}
         />
       </Screen>

@@ -1,261 +1,216 @@
 import { Image, Text, View } from "react-native";
-import type { InvoiceDocument } from "./document";
+import type { DocumentParty, InvoiceDocument } from "./document";
 
-// ЗЕРКАЛО ИНВОЙСА — ТА ЖЕ БУМАГА, ЧТО УЙДЁТ КЛИЕНТУ.
+// БУМАГА ИНВОЙСА — ТА ЖЕ, ЧТО УЙДЁТ КЛИЕНТУ.
 //
-// Владелец 2026-08-10: «зеркало инвойса, чтобы можно было сразу редактировать
-// и смотреть». Рисуем из той же модели, что и PDF (document.ts): человек видит
-// документ, а не «примерно как будет».
+// Рисуем из той же модели, что и PDF (`document.ts` → `pdf.ts`): человек видит
+// документ, а не «примерно как будет». Контракт-тест держит оба рендера в
+// одном порядке блоков.
 //
-// Почему это не сплит-экран: на телефоне 402pt половина ширины не вмещает ни
-// форму, ни документ. Телефонные редакторы инвойсов (FreshBooks, Invoice
-// Simple, Wave) все до одного показывают документ ОТДЕЛЬНЫМ режимом, и кнопка
-// отправки живёт именно на нём — человек физически видит то, что отправляет.
+// ВИД — КАК У НАСТОЯЩЕГО ИНВОЙСА AIRFIX #103 (владелец 2026-09-22: «вот так у
+// нас выглядит инвойс… нужно сделать примерно точно такую»):
+//   • шапка: логотип слева, справа крупно INVOICE, номер и даты коротко;
+//   • две колонки сторон: FROM и BILL TO, адрес строками;
+//   • таблица в рамке с серой шапкой, валюта в названиях колонок;
+//   • итоги столбиком справа, итог в рамке;
+//   • внизу одним блоком «Notes & payment instructions» и номер документа.
+// Прежние карточки дат, плашка «Оплата» со статусом и длинный подвал ушли:
+// на бумаге их не было, и они делали документ похожим на экран приложения.
 //
-// Лист рисуем в пропорции А4 по ширине экрана: шрифты мелкие намеренно, это
-// документ, а не интерфейс. Читать его будут на PDF, здесь — узнавать.
+// Тап-зон у бумаги больше нет: правят блоки формы, а бумага показывает итог
+// (режим «Документ»-редактор снят вместе с переключателем 22.09).
 
+/** Цвета бумаги — свои, не темы приложения: документ белый всегда. */
 const PAPER = {
   ink: "#111827",
-  body: "#475569",
-  muted: "#64748b",
-  faint: "#94a3b8",
-  line: "#e8edf3",
-  border: "#e2e8f0",
-  fill: "#f6f8fb",
-  accent: "#3157a4",
-  accentFill: "#eef3ff",
-  green: "#16794b",
-  red: "#b42318",
-};
+  body: "#374151",
+  muted: "#6b7280",
+  line: "#e5e7eb",
+  head: "#f3f4f6",
+  green: "#047857",
+  red: "#b91c1c",
+} as const;
+
+const COL = { qty: 44, price: 74, amount: 84 } as const;
 
 export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
+  // СТАТУСА НА БУМАГЕ НЕТ (владелец 2026-09-22: «что такое Draft под
+  // датой?»). Бумага уходит клиенту и в министерство; «черновик», «оплачен»,
+  // «просрочен» — состояние в приложении, а не часть документа. Превью
+  // печатается ровно той бумагой, какой документ выйдет.
   return (
     <View
       style={{
         backgroundColor: "#ffffff",
-        borderRadius: 10,
-        paddingHorizontal: 18,
-        paddingVertical: 20,
+        borderRadius: 6,
+        paddingHorizontal: 20,
+        paddingTop: 16,
+        paddingBottom: 16,
         borderWidth: 1,
-        borderColor: PAPER.border,
+        borderColor: PAPER.line,
         // Тень листа: документ должен читаться как бумага, лежащая на экране.
         boxShadow: "0 8px 24px rgba(15, 23, 42, 0.10)",
       }}
     >
-      {/* Шапка: кто выставил — слева, что за документ — справа. */}
-      <View style={{ flexDirection: "row", gap: 16 }}>
+      {/* Шапка: логотип слева, что за документ — справа. */}
+      <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
         <View style={{ flex: 1 }}>
           {doc.logoUrl ? (
             <Image
               source={{ uri: doc.logoUrl }}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
-              style={{ width: 120, height: 40, marginBottom: 8 }}
+              style={{ width: 64, height: 64 }}
             />
           ) : null}
-          <Text style={{ fontSize: 15, fontWeight: "800", color: PAPER.ink }}>
-            {doc.seller.name}
-          </Text>
-          {doc.seller.lines.map((line) => (
-            <Text key={line} style={{ fontSize: 10, color: PAPER.body, marginTop: 1 }}>
-              {line}
-            </Text>
-          ))}
         </View>
         <View style={{ alignItems: "flex-end" }}>
-          <Text style={{ fontSize: 8, fontWeight: "700", letterSpacing: 1, color: PAPER.muted }}>
+          <Text style={{ fontSize: 20, fontWeight: "800", color: PAPER.ink, letterSpacing: 0.3 }}>
             {doc.dict.invoice}
           </Text>
-          <Text
-            style={{ fontSize: 18, fontWeight: "800", color: PAPER.ink, marginTop: 2 }}
-          >
-            {doc.number}
+          <Text style={{ fontSize: 10, color: PAPER.muted, marginTop: 4 }}>{doc.number}</Text>
+          <Text style={{ fontSize: 10, color: PAPER.muted, marginTop: 1 }}>
+            {doc.dict.issuedShort(doc.issuedShort)}
           </Text>
-          <View
-            style={{
-              marginTop: 4,
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-              borderRadius: 999,
-              backgroundColor: PAPER.accentFill,
-            }}
-          >
-            <Text style={{ fontSize: 9, fontWeight: "700", color: PAPER.accent }}>
-              {doc.statusLabel}
+          {doc.dueShort ? (
+            <Text style={{ fontSize: 10, color: PAPER.muted, marginTop: 1 }}>
+              {doc.dict.dueShort(doc.dueShort)}
             </Text>
-          </View>
+          ) : null}
         </View>
       </View>
 
-      <Party title={doc.dict.recipient} party={doc.client} />
-
-      <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-        <Boxed label={doc.dict.issuedOn} value={doc.issuedOn} />
-        <Boxed label={doc.dict.dueOn} value={doc.dueOn} />
+      {/* Стороны: кто выставил и кому. */}
+      <View style={{ flexDirection: "row", gap: 16, marginTop: 14 }}>
+        <PartyColumn title={doc.dict.seller} party={doc.seller} />
+        <PartyColumn title={doc.dict.recipient} party={doc.client} />
       </View>
 
-      {/* Позиции */}
-      <View style={{ marginTop: 16 }}>
-        <View
-          style={{
-            flexDirection: "row",
-            paddingBottom: 6,
-            borderBottomWidth: 1,
-            borderBottomColor: "#cbd5e1",
-          }}
-        >
-          <Text style={[headCell, { flex: 1 }]}>{doc.dict.lineTitle}</Text>
-          <Text style={[headCell, { width: 62, textAlign: "right" }]}>{doc.dict.qty}</Text>
-          <Text style={[headCell, { width: 66, textAlign: "right" }]}>{doc.dict.price}</Text>
-          <Text style={[headCell, { width: 74, textAlign: "right" }]}>{doc.dict.amount}</Text>
+      {/* Позиции — таблицей в рамке. */}
+      <View
+        style={{
+          marginTop: 18,
+          borderWidth: 1,
+          borderColor: PAPER.line,
+        }}
+      >
+        <View style={{ flexDirection: "row", backgroundColor: PAPER.head }}>
+          <Text style={[head, { flex: 1, textAlign: "left" }]}>{doc.dict.lineTitle}</Text>
+          <Text style={[head, { width: COL.qty }]}>{doc.dict.qty}</Text>
+          <Text style={[head, { width: COL.price }]}>
+            {doc.dict.price}, {doc.currency}
+          </Text>
+          <Text style={[head, { width: COL.amount }]}>
+            {doc.dict.amount}, {doc.currency}
+          </Text>
         </View>
         {doc.lines.length === 0 ? (
-          <Text style={{ fontSize: 11, color: PAPER.faint, paddingVertical: 10 }}>
+          <Text style={{ fontSize: 10, color: PAPER.muted, padding: 8 }}>
             {doc.dict.linesEmpty}
           </Text>
         ) : (
           doc.lines.map((line, index) => (
             <View
               key={`${line.title}-${index}`}
-              style={{
-                flexDirection: "row",
-                alignItems: "flex-start",
-                paddingVertical: 8,
-                borderBottomWidth: 1,
-                borderBottomColor: PAPER.line,
-              }}
+              style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: PAPER.line }}
             >
-              <View style={{ flex: 1, paddingRight: 8 }}>
+              <View style={{ flex: 1, paddingHorizontal: 8, paddingVertical: 7 }}>
                 <Text style={{ fontSize: 11, fontWeight: "600", color: PAPER.ink }}>
                   {line.title || doc.dict.untitled}
                 </Text>
-                {/* ЧТО ВХОДИТ В РАБОТУ — второй строкой, приглушённо. Тот же
-                    приём, что у подробностей платежа ниже, и та же пара с
-                    `pdf.ts`: оба рендера правятся вместе. */}
                 {line.description ? (
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      lineHeight: 14,
-                      color: PAPER.faint,
-                      marginTop: 2,
-                    }}
-                  >
+                  <Text style={{ fontSize: 9, lineHeight: 13, color: PAPER.muted, marginTop: 2 }}>
                     {line.description}
                   </Text>
                 ) : null}
               </View>
-              <Text
-                numberOfLines={1}
-                // Колонка выросла с 42 до 62: с 2026-08-25 она печатает не
-                // голое число, а «4 м» — единицу, которую раньше вписывали
-                // руками в название позиции.
-                style={[cell, { width: 62 }]}
-              >
+              <Text numberOfLines={1} style={[cell, { width: COL.qty }]}>
                 {line.qty}
               </Text>
-              <Text style={[cell, { width: 66 }]}>{line.unitPrice}</Text>
-              <Text style={[cell, { width: 74, fontWeight: "700", color: PAPER.ink }]}>
-                {line.total}
-              </Text>
+              <Text style={[cell, { width: COL.price }]}>{line.unitPrice}</Text>
+              <Text style={[cell, { width: COL.amount }]}>{line.total}</Text>
             </View>
           ))
         )}
       </View>
 
-      {/* Итоги — прижаты вправо, как на бумаге. */}
-      <View style={{ alignItems: "flex-end", marginTop: 14 }}>
-        <View
-          style={{
-            minWidth: 210,
-            padding: 12,
-            borderRadius: 10,
-            backgroundColor: PAPER.fill,
-          }}
-        >
-          {doc.totals.map((total, index) => (
-            <View
-              key={`${total.label}-${index}`}
+      {/* Итоги — столбиком справа под колонкой сумм, без клеток: строки
+          тонкие, в рамке только итог (владелец 2026-09-22: «всё как будто
+          на лапе стоит — сделай компактнее»). */}
+      <View style={{ alignItems: "flex-end", marginTop: 6 }}>
+        {doc.totals.map((total, index) => (
+          <View
+            key={`${total.label}-${index}`}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginTop: total.grand ? 6 : 0,
+            }}
+          >
+            <Text
               style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                gap: 14,
-                paddingVertical: 3,
-                marginTop: total.grand ? 6 : 0,
-                paddingTop: total.grand ? 8 : 3,
-                borderTopWidth: total.grand ? 1 : 0,
-                borderTopColor: "#d9e0e9",
+                fontSize: total.grand ? 12 : 10,
+                fontWeight: total.grand ? "700" : "400",
+                color: total.grand ? PAPER.ink : PAPER.body,
+                textAlign: "right",
+                paddingVertical: total.grand ? 6 : 2,
+                paddingHorizontal: 8,
               }}
             >
-              <Text
-                style={{
-                  fontSize: total.grand ? 13 : 11,
-                  fontWeight: total.grand ? "800" : "400",
-                  color: total.grand ? PAPER.ink : PAPER.body,
-                  flexShrink: 1,
-                }}
-              >
-                {total.label}
-              </Text>
-              <Text
-                style={{
-                  fontSize: total.grand ? 13 : 11,
-                  fontWeight: total.grand ? "800" : "700",
-                  color: PAPER.ink,
-                }}
-              >
-                {total.value}
-              </Text>
-            </View>
-          ))}
-        </View>
+              {total.label}
+            </Text>
+            <Text
+              style={{
+                width: COL.amount,
+                fontSize: total.grand ? 12 : 10,
+                fontWeight: total.grand ? "700" : "600",
+                color: PAPER.ink,
+                textAlign: "right",
+                paddingVertical: total.grand ? 6 : 2,
+                paddingHorizontal: 8,
+                borderWidth: total.grand ? 1 : 0,
+                borderColor: PAPER.line,
+              }}
+            >
+              {total.value}
+            </Text>
+          </View>
+        ))}
       </View>
 
-      {doc.payTo.length > 0 ? (
-        <Section title={doc.dict.payTo}>
-          {doc.payTo.map((line) => (
-            <Text key={line} style={{ fontSize: 11, color: PAPER.body, marginTop: 1 }}>
+      {doc.payTo.length > 0 || doc.notes ? (
+        <View style={{ marginTop: 16 }}>
+          <Text style={eyebrow}>{doc.dict.notesAndPayment}</Text>
+          {[...doc.payTo, ...(doc.notes ? [doc.notes] : [])].map((line, index) => (
+            <Text key={`${line}-${index}`} style={{ fontSize: 10, color: PAPER.body, marginTop: 3 }}>
               {line}
             </Text>
           ))}
-          <Text style={{ fontSize: 10, color: PAPER.muted, marginTop: 4 }}>
-            В назначении платежа укажите {doc.number}.
-          </Text>
-        </Section>
+        </View>
       ) : null}
 
-      {doc.settlement.length > 0 ? (
-        <Section title={doc.dict.payment}>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Boxed label={doc.dict.status} value={doc.statusLabel} />
-            {doc.settlement.map((metric) => (
-              <Boxed key={metric.label} label={metric.label} value={metric.value} />
-            ))}
-          </View>
+      {/* История оплат — только у документа, по которому уже платили. */}
+      {doc.payments.length > 0 ? (
+        <View style={{ marginTop: 16 }}>
+          <Text style={eyebrow}>{doc.dict.payment}</Text>
           {doc.payments.map((payment, index) => (
             <View
               key={`${payment.date}-${index}`}
               style={{
                 flexDirection: "row",
-                alignItems: "flex-start",
-                paddingVertical: 7,
+                paddingVertical: 5,
                 borderBottomWidth: 1,
                 borderBottomColor: PAPER.line,
               }}
             >
-              <Text style={{ width: 76, fontSize: 11, color: PAPER.body }}>{payment.date}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, color: PAPER.ink }}>{payment.title}</Text>
-                {payment.details ? (
-                  <Text style={{ fontSize: 9, color: PAPER.muted, marginTop: 1 }}>
-                    {payment.details}
-                  </Text>
-                ) : null}
-              </View>
+              <Text style={{ width: 72, fontSize: 10, color: PAPER.body }}>{payment.date}</Text>
+              <Text style={{ flex: 1, fontSize: 10, color: PAPER.ink }}>
+                {payment.title}
+                {payment.details ? ` · ${payment.details}` : ""}
+              </Text>
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: "700",
                   color: payment.refund ? PAPER.red : PAPER.green,
                 }}
@@ -264,61 +219,25 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
               </Text>
             </View>
           ))}
-        </Section>
+        </View>
       ) : null}
 
-      {doc.notes ? (
-        <Section title={doc.dict.notes}>
-          <View
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              borderLeftWidth: 3,
-              borderLeftColor: "#9db4e2",
-              borderRadius: 10,
-              backgroundColor: PAPER.fill,
-            }}
-          >
-            <Text style={{ fontSize: 11, color: "#334155" }}>{doc.notes}</Text>
-          </View>
-        </Section>
-      ) : null}
-
-      <Text
-        style={{
-          marginTop: 18,
-          paddingTop: 10,
-          borderTopWidth: 1,
-          borderTopColor: PAPER.border,
-          fontSize: 9,
-          color: PAPER.faint,
-        }}
-      >
+      <Text style={{ marginTop: 20, fontSize: 8, color: PAPER.muted, textAlign: "right" }}>
         {doc.footer}
       </Text>
     </View>
   );
 }
 
-function Party({ title, party }: { title: string; party: InvoiceDocument["client"] }) {
+function PartyColumn({ title, party }: { title: string; party: DocumentParty }) {
   return (
-    <View
-      style={{
-        marginTop: 16,
-        padding: 12,
-        borderWidth: 1,
-        borderColor: PAPER.border,
-        borderRadius: 10,
-      }}
-    >
-      <Text style={{ fontSize: 8, fontWeight: "700", letterSpacing: 0.8, color: PAPER.muted }}>
-        {title.toUpperCase()}
-      </Text>
-      <Text style={{ fontSize: 12, fontWeight: "700", color: PAPER.ink, marginTop: 5 }}>
+    <View style={{ flex: 1 }}>
+      <Text style={eyebrow}>{title}</Text>
+      <Text style={{ fontSize: 12, fontWeight: "700", color: PAPER.ink, marginTop: 4 }}>
         {party.name}
       </Text>
-      {party.lines.map((line) => (
-        <Text key={line} style={{ fontSize: 11, color: PAPER.body, marginTop: 1 }}>
+      {party.lines.map((line, index) => (
+        <Text key={`${line}-${index}`} style={{ fontSize: 10, color: PAPER.body, marginTop: 2 }}>
           {line}
         </Text>
       ))}
@@ -326,47 +245,27 @@ function Party({ title, party }: { title: string; party: InvoiceDocument["client
   );
 }
 
-function Boxed({ label, value }: { label: string; value: string }) {
-  return (
-    <View
-      style={{
-        flex: 1,
-        paddingHorizontal: 11,
-        paddingVertical: 9,
-        borderWidth: 1,
-        borderColor: PAPER.border,
-        borderRadius: 10,
-      }}
-    >
-      <Text style={{ fontSize: 9, color: PAPER.muted }}>{label}</Text>
-      <Text style={{ fontSize: 12, fontWeight: "700", color: PAPER.ink, marginTop: 2 }}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={{ marginTop: 18 }}>
-      <Text style={{ fontSize: 12, fontWeight: "700", color: PAPER.ink, marginBottom: 8 }}>
-        {title}
-      </Text>
-      {children}
-    </View>
-  );
-}
-
-const headCell = {
+const eyebrow = {
   fontSize: 8,
   fontWeight: "700" as const,
-  letterSpacing: 0.4,
-  color: PAPER.muted,
+  letterSpacing: 0.6,
   textTransform: "uppercase" as const,
+  color: PAPER.body,
+};
+
+const head = {
+  fontSize: 9,
+  fontWeight: "600" as const,
+  color: PAPER.ink,
+  textAlign: "right" as const,
+  paddingHorizontal: 8,
+  paddingVertical: 7,
 };
 
 const cell = {
-  fontSize: 11,
+  fontSize: 10,
   color: PAPER.body,
   textAlign: "right" as const,
+  paddingHorizontal: 8,
+  paddingVertical: 7,
 };

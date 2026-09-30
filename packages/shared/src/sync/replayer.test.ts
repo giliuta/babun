@@ -29,6 +29,7 @@ import {
 } from "../db/cache/sql";
 import {
   __resetReplayerForTests,
+  BOUND_TENANT_FIELD,
   kickReplayer,
   setReplayerDefaults,
   type QuotaGate,
@@ -470,6 +471,56 @@ describe("replayer — LWW update", () => {
   });
 });
 
+describe("replayer — порядок правок одной строки", () => {
+  test("правка упала — следующие правки той же строки ждут, чужие строки уходят", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "15:00" },
+      expected_updated_at: null,
+    });
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "14:30" },
+      expected_updated_at: null,
+    });
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_B,
+      payload: { comment: "другая запись" },
+      expected_updated_at: null,
+    });
+    let firstA = true;
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update" && rec.filters.id === UUID_A && firstA) {
+        firstA = false;
+        return { data: null, error: { status: 504, message: "Gateway Timeout" } };
+      }
+      return { data: [{ id: rec.filters.id }], error: null };
+    });
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    const sentA = calls.filter((c) => c.op === "update" && c.filters.id === UUID_A);
+    // Свежая правка A не обогнала упавшую старую.
+    expect(sentA.map((c) => (c.payload as { time_end?: string }).time_end)).toEqual([
+      "15:00",
+    ]);
+    // Запись B от чужого сбоя не страдает.
+    expect(calls.some((c) => c.op === "update" && c.filters.id === UUID_B)).toBe(true);
+    // Обе правки A остались в очереди — в прежнем порядке.
+    const left = (await dequeueAll()).filter((o) => o.row_id === UUID_A);
+    expect(left.map((o) => (o.payload as { time_end?: string }).time_end)).toEqual([
+      "15:00",
+      "14:30",
+    ]);
+  });
+});
+
 describe("replayer — injected quota gate", () => {
   test("host defaults protect wrapper kicks that provide only supabase", async () => {
     await enqueueOp({
@@ -566,5 +617,438 @@ describe("replayer — delete", () => {
     await kickReplayer({ supabase: asSupabase(client) });
     expect(calls[0]).toMatchObject({ op: "delete" });
     expect(await queueDepth()).toBe(0);
+  });
+});
+
+// ─── Гейт по компании ─────────────────────────────────────────────────
+// Очередь ПЕРЕЖИВАЕТ переход в другую компанию, поэтому в ней лежат операции,
+// поставленные под другой. Вставку сервер отобьёт сам (`with check`), а вот
+// удаление отбить нечем: под чужой компанией оно не найдёт строку, вернёт ноль
+// строк БЕЗ ошибки — и операция уйдёт из очереди как выполненная. Человек
+// удалил запись, очередь пуста, запись на месте. Эти тесты держат гейт.
+
+describe("replayer — гейт по компании", () => {
+  const ДРУГАЯ = "22222222-2222-2222-2222-222222222222";
+
+  test("удаление ЧУЖОЙ компании не уходит на сервер и остаётся в очереди", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: ДРУГАЯ },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    await kickReplayer({ supabase: asSupabase(client), tenantId: TENANT });
+
+    expect(calls).toHaveLength(0);
+    expect(await queueDepth()).toBe(1);
+  });
+
+  test("операция БЕЗ компании не выгружается, пока гейт включён", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    await kickReplayer({ supabase: asSupabase(client), tenantId: TENANT });
+
+    // Отправить её значило бы отдать серверу решать, в какую компанию писать.
+    expect(calls).toHaveLength(0);
+    expect(await queueDepth()).toBe(1);
+  });
+
+  test("смена компании ПОСРЕДИ слива обрывает его, остаток ждёт", async () => {
+    for (const id of [UUID_A, UUID_B]) {
+      await enqueueOp({
+        table: "clients",
+        op: "delete",
+        row_id: id,
+        payload: { id, tenant_id: TENANT },
+        expected_updated_at: null,
+      });
+    }
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    // Живое чтение. Компанию спрашивают трижды за операцию и ещё раз на гейт
+    // слива: 1 — гейт, 2 — начало круга по первой, 3 — перед её отправкой,
+    // 4 — начало круга по второй. Первая обязана доехать целиком, ко второй
+    // человек уже в другой компании.
+    let читаний = 0;
+    const currentTenantId = (): string | null => {
+      читаний += 1;
+      return читаний >= 4 ? ДРУГАЯ : TENANT;
+    };
+
+    await kickReplayer({ supabase: asSupabase(client), currentTenantId });
+
+    expect(calls.filter((c) => c.op === "delete")).toHaveLength(1);
+    expect(await queueDepth()).toBe(1);
+  });
+
+  test("без гейта вовсе поведение прежнее — операция без компании уходит", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(calls.filter((c) => c.op === "delete")).toHaveLength(1);
+    expect(await queueDepth()).toBe(0);
+  });
+});
+
+// ─── Правки без компании в теле (до 24.09) ────────────────────────────
+// Гейт 12.09 молча пропускал правку без компании на каждом круге: она не
+// уходила и не падала, а пока в очереди висит правка записи, перечитка
+// записей с сервера не идёт — календарь телефона замирал, и оплата, принятая
+// сервером, на экране оставалась «не оплачено» (владелец 2026-09-24).
+
+describe("replayer — правки без компании в теле", () => {
+  test("компания берётся из строки кэша, правка уходит, в SET компании нет", async () => {
+    await cacheUpsert("clients", {
+      id: UUID_A,
+      tenant_id: TENANT,
+      updated_at: "2026-01-01T00:00:00.000Z",
+    } as unknown as CachedClient);
+    await enqueueOp({
+      table: "clients",
+      op: "update",
+      row_id: UUID_A,
+      payload: { full_name: "Mine" },
+      expected_updated_at: "2026-01-01T00:00:00.000Z",
+    });
+    const { client, calls } = makeFakeSupabase((rec) =>
+      rec.op === "update" ? { data: [{ id: UUID_A }], error: null } : { data: null, error: null },
+    );
+
+    await kickReplayer({ supabase: asSupabase(client), tenantId: TENANT });
+
+    expect(calls.filter((c) => c.op === "update")).toHaveLength(1);
+    expect(await queueDepth()).toBe(0);
+  });
+
+  test("строку правили после — побеждает сервер: силой не пишем, кэш берёт строку сервера", async () => {
+    await cacheUpsert("clients", {
+      id: UUID_A,
+      tenant_id: TENANT,
+      full_name: "Old",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    } as unknown as CachedClient);
+    await enqueueOp({
+      table: "clients",
+      op: "update",
+      row_id: UUID_A,
+      payload: { full_name: "Stale" },
+      expected_updated_at: "2026-01-01T00:00:00.000Z",
+    });
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update") return { data: [], error: null }; // конфликт
+      if (rec.op === "select") {
+        return {
+          data: {
+            id: UUID_A,
+            tenant_id: TENANT,
+            full_name: "Server",
+            updated_at: "2026-09-24T11:06:21.000Z",
+          },
+          error: null,
+        };
+      }
+      return { data: null, error: null };
+    });
+    let conflicts = 0;
+
+    await kickReplayer({
+      supabase: asSupabase(client),
+      tenantId: TENANT,
+      onConflict: () => {
+        conflicts += 1;
+      },
+    });
+
+    // Одна условная правка, без силовой второй.
+    expect(calls.filter((c) => c.op === "update")).toHaveLength(1);
+    expect(conflicts).toBe(0);
+    expect(await queueDepth()).toBe(0);
+    const cached = await cacheGetOne<CachedClient>("clients", UUID_A);
+    expect(cached?.updated_at).toBe("2026-09-24T11:06:21.000Z");
+  });
+
+  test("компанию узнать неоткуда — операция в «не удалось», очередь её больше не ждёт", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_B,
+      payload: { status: "completed" },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    await kickReplayer({ supabase: asSupabase(client), tenantId: TENANT });
+
+    expect(calls).toHaveLength(0);
+    const [op] = await dequeueAll();
+    expect(op?.attempts).toBeGreaterThanOrEqual(3);
+    expect(op?.last_error).toContain("без компании");
+  });
+
+  test("новая правка несёт компанию для гейта, но не шлёт её колонкой", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_C,
+      payload: { status: "completed", tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    await kickReplayer({ supabase: asSupabase(client), tenantId: TENANT });
+
+    const update = calls.find((c) => c.op === "update");
+    expect(update?.payload).toEqual({ status: "completed" });
+    expect(await queueDepth()).toBe(0);
+  });
+});
+
+// ─── Удаление отчитывается строками ───────────────────────────────────
+// `delete()` без `select()` возвращает ошибку только когда сервер ОТВЕТИЛ
+// ошибкой. «Политика не дала удалить» ошибкой не считается: под RLS строка
+// просто не находится. Ноль затронутых строк приезжал как успех — операция
+// уходила из очереди, а запись оставалась жить. С правами по календарям
+// (`view` без `edit_all`) этот случай стал обычным, а не экзотикой.
+
+describe("replayer — удаление отчитывается строками", () => {
+  test("строка удалена — успех, лишней проверки не делаем", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase((rec) =>
+      rec.op === "delete"
+        ? { data: [{ id: UUID_A }], error: null }
+        : { data: null, error: null },
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(calls.filter((c) => c.op === "select")).toHaveLength(0);
+    expect(await queueDepth()).toBe(0);
+  });
+
+  test("ноль строк и строки не видно — идемпотентно, это успех", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    // Удалили с другого устройства: удалять нечего и видеть нечего.
+    const { client } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    // Тревоги быть не должно: два устройства у одного человека — норма.
+    expect(await queueDepth()).toBe(0);
+  });
+
+  test("ноль строк, а строка ВИДНА — сервер отказал, операция остаётся", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client } = makeFakeSupabase((rec) =>
+      rec.op === "delete"
+        ? { data: [], error: null }
+        : { data: { id: UUID_A }, error: null },
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    const left = await dequeueAll();
+    expect(left).toHaveLength(1);
+    expect(left[0].attempts).toBe(1);
+    expect(left[0].last_error ?? "").toContain("нет прав");
+  });
+
+  test("ноль строк, а проверка видимости упала — операцию не снимаем", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    // Обрыв сети на чтении — не «строки не видно»: гадать нельзя.
+    const { client } = makeFakeSupabase((rec) =>
+      rec.op === "delete"
+        ? { data: [], error: null }
+        : { data: null, error: { message: "network down" } },
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    const left = await dequeueAll();
+    expect(left).toHaveLength(1);
+    expect(left[0].last_error ?? "").toContain("network down");
+  });
+});
+
+// ─── Правка, которую сервер не дал применить ──────────────────────────
+// Ноль строк у ПРИНУДИТЕЛЬНОЙ правки так же двусмыслен, как у удаления:
+// строку удалили на другом устройстве — или она видна, но сервер отказал в
+// праве её менять (`view` без `edit_all`). Раньше оба случая уходили из
+// очереди с тостом «Применены ваши изменения»: человеку сообщали об успехе,
+// а его правка молча пропадала.
+
+describe("replayer — правка, которую сервер не дал применить", () => {
+  const enqueueStaleUpdate = () =>
+    enqueueOp({
+      table: "clients",
+      op: "update",
+      row_id: UUID_A,
+      payload: { full_name: "Mine" },
+      expected_updated_at: "2026-01-01T00:00:00.000Z",
+    });
+  // Первая правка (с `updated_at`) — ноль строк; принудительная
+  // (`maybeSingle`) — пусто; чтение видимости — по сценарию теста.
+  const refusedUpdate = (visibility: Result) =>
+    makeFakeSupabase((rec) => {
+      if (rec.op === "update") {
+        return rec.usedMaybeSingle
+          ? { data: null, error: null }
+          : { data: [], error: null };
+      }
+      return visibility;
+    });
+
+  test("строки не видно — операция снята, «применено» не пишется", async () => {
+    await enqueueStaleUpdate();
+    const { client } = refusedUpdate({ data: null, error: null });
+
+    let toast = "";
+    await kickReplayer({
+      supabase: asSupabase(client),
+      onConflict: (m) => {
+        toast = m;
+      },
+    });
+
+    expect(toast).toBe("");
+    expect(await queueDepth()).toBe(0);
+  });
+
+  test("строка ВИДНА — сервер отказал, операция остаётся с причиной", async () => {
+    await enqueueStaleUpdate();
+    const { client } = refusedUpdate({ data: { id: UUID_A }, error: null });
+
+    let toast = "";
+    await kickReplayer({
+      supabase: asSupabase(client),
+      onConflict: (m) => {
+        toast = m;
+      },
+    });
+
+    expect(toast).toBe("");
+    const left = await dequeueAll();
+    expect(left).toHaveLength(1);
+    expect(left[0].attempts).toBe(1);
+    expect(left[0].last_error ?? "").toContain("нет прав");
+  });
+
+  test("проверка видимости сама упала — операцию не снимаем", async () => {
+    await enqueueStaleUpdate();
+    const { client } = refusedUpdate({
+      data: null,
+      error: { message: "network down" },
+    });
+
+    let toast = "";
+    await kickReplayer({
+      supabase: asSupabase(client),
+      onConflict: (m) => {
+        toast = m;
+      },
+    });
+
+    expect(toast).toBe("");
+    const left = await dequeueAll();
+    expect(left).toHaveLength(1);
+    expect(left[0].last_error ?? "").toContain("network down");
+  });
+});
+
+// ─── Гейт держит и уже начатую операцию ────────────────────────────────
+// Между проверкой в начале круга и самой отправкой лежат ДВА ожидания: откат
+// попытки (до тридцати секунд) и сторож тарифа. За тридцать секунд человек
+// успевает сменить компанию, и операция уйдёт под чужим заголовком. Проверка
+// в начале нужна, чтобы не НАЧИНАТЬ; эта — чтобы не ДОотправить начатое.
+
+describe("replayer — гейт перепроверяется перед отправкой", () => {
+  test("компания сменилась после проверки — операция не уходит", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    // Чтения: 1 — гейт слива, 2 — начало круга, 3 — перед самой отправкой.
+    let читаний = 0;
+    const currentTenantId = (): string | null => {
+      читаний += 1;
+      return читаний >= 3 ? "33333333-3333-3333-3333-333333333333" : TENANT;
+    };
+
+    await kickReplayer({ supabase: asSupabase(client), currentTenantId });
+
+    expect(calls).toHaveLength(0);
+    expect(await queueDepth()).toBe(1);
+  });
+});
+
+// ─── Привязанным клиентом очередь не сливается ─────────────────────────
+// Прогрев чужих компаний ходит клиентом с прибитым заголовком. Операция
+// АКТИВНОЙ компании, ушедшая под чужим заголовком, у вставки будет отбита
+// сервером — а удаление вернёт ноль строк, что честно читается как «удалять
+// нечего», и работа тихо пропадёт.
+
+describe("replayer — привязанный к компании клиент", () => {
+  test("через него не сливается ничего, очередь цела", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+    // Клиент объявляет себя привязанным — пусть даже к ТОЙ ЖЕ компании.
+    (client as Record<string, unknown>)[BOUND_TENANT_FIELD] = TENANT;
+
+    await kickReplayer({ supabase: asSupabase(client), tenantId: TENANT });
+
+    expect(calls).toHaveLength(0);
+    expect(await queueDepth()).toBe(1);
   });
 });

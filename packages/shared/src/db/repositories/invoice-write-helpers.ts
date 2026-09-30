@@ -62,7 +62,19 @@ export function validateInvoiceDraft(draft: {
     if (!Number.isFinite(line.qty) || line.qty <= 0 || line.qty > 100_000) {
       throw new Error(`Некорректное количество: ${title}`);
     }
-    if (
+    if (line.discount) {
+      // Скидка: одна строка, количество 1, цена меньше нуля — то же правило,
+      // что у сервера (`issue_invoice`, миграция 20260922030000).
+      if (
+        line.qty !== 1 ||
+        !Number.isFinite(line.unit_price) ||
+        line.unit_price >= 0 ||
+        line.unit_price < -999_999_999 ||
+        exactMoneyAmountToCents(-line.unit_price) == null
+      ) {
+        throw new Error("Некорректная скидка");
+      }
+    } else if (
       !Number.isFinite(line.unit_price) ||
       line.unit_price < 0 ||
       line.unit_price > 999_999_999 ||
@@ -86,7 +98,14 @@ export function validateInvoiceDraft(draft: {
     if (unit && unit.length > 16) {
       throw new Error(`Единица измерения слишком длинная: ${title}`);
     }
-    return { title, qty, unit_price: unitPrice, description, unit };
+    return {
+      title,
+      qty,
+      unit_price: unitPrice,
+      description,
+      unit,
+      ...(line.discount ? { discount: true } : {}),
+    };
   });
 }
 

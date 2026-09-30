@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
 import { haptics } from "@/lib/haptics";
@@ -19,6 +20,11 @@ import { useThemeColors } from "@/theme/colors";
 // мастеру нужнее названия комплекса. Все поля `live`: черновик держит лист.
 
 export const ADDRESS_DETAILS_LABEL = "Точный адрес";
+/** ЧТО ВНУТРИ — СКАЗАНО НА ЗАКРЫТОЙ СТРОКЕ (аудит листа объекта 2026-09-09).
+ *  Пустая строка «Точный адрес ›» не отвечала на единственный вопрос, который
+ *  у неё возникает: а что там? Человек, вписавший «Karpathou 9, кв. 5» одной
+ *  строкой, так и не узнавал, что для квартиры есть своё поле. */
+const ADDRESS_DETAILS_HINT = "подъезд, этаж, квартира";
 
 const SHORT: { key: keyof AddressParts; label: string }[] = [
   { key: "entrance", label: "Подъезд" },
@@ -29,15 +35,67 @@ const SHORT: { key: keyof AddressParts; label: string }[] = [
 export function AddressDetailsToggle({
   open,
   summary,
+  variant = "row",
   onToggle,
 }: {
   open: boolean;
   /** Что уже заполнено — подпись свёрнутой строки (см. composeDetails). */
   summary: string;
+  /** `link` — маленькая синяя строка внутри карточки адреса (владелец
+   *  2026-09-09: «потом маленькая такая кнопочка синеньким — „точный
+   *  адрес“»). Полноразмерная строка на 48pt весила столько же, сколько сам
+   *  адрес, хотя это его уточнение. `row` — прежняя строка: она осталась на
+   *  публичной странице, где по ней тапает клиент с телефона. */
+  variant?: "row" | "link";
   onToggle: () => void;
 }) {
   const t = useThemeColors();
   const Chevron = open ? ChevronUp : ChevronDown;
+  if (variant === "link") {
+    return (
+      <Pressable
+        onPress={() => {
+          haptics.tap();
+          onToggle();
+        }}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={
+          summary ? `${ADDRESS_DETAILS_LABEL}: ${summary}` : ADDRESS_DETAILS_LABEL
+        }
+        style={({ pressed }) => ({
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          minHeight: 40,
+          paddingHorizontal: 16,
+          borderTopWidth: 1,
+          borderTopColor: t.separator,
+          opacity: pressed ? 0.5 : 1,
+        })}
+      >
+        <Text
+          maxFontSizeMultiplier={1.2}
+          style={{ fontSize: 14, fontWeight: "500", color: t.accent }}
+        >
+          {ADDRESS_DETAILS_LABEL}
+        </Text>
+        {!open && summary ? (
+          <Text
+            maxFontSizeMultiplier={1.2}
+            numberOfLines={1}
+            ellipsizeMode="head"
+            style={{ flex: 1, fontSize: 13, color: t.sub }}
+          >
+            {summary}
+          </Text>
+        ) : (
+          <View style={{ flex: 1 }} />
+        )}
+        <Chevron color={t.accent} size={14} strokeWidth={2.4} />
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       onPress={() => {
@@ -74,11 +132,11 @@ export function AddressDetailsToggle({
           flex: 1,
           textAlign: "right",
           fontSize: 15,
-          fontWeight: "500",
-          color: t.ink,
+          fontWeight: summary ? "500" : "400",
+          color: summary ? t.ink : t.placeholder,
         }}
       >
-        {open ? "" : summary}
+        {open ? "" : summary || ADDRESS_DETAILS_HINT}
       </Text>
       <Chevron color={t.chevron} size={17} strokeWidth={2.2} />
     </Pressable>
@@ -189,6 +247,8 @@ function DetailBox({
 }) {
   const t = useThemeColors();
   const input = useRef<TextInput>(null);
+  // Без выноса (30.09): у сотрудника чужой компании части адреса не скопировать.
+  const caps = useClientsCapabilities();
   return (
     <Pressable
       onPress={() => input.current?.focus()}
@@ -220,6 +280,7 @@ function DetailBox({
         onChangeText={onChange}
         onBlur={onEditEnd}
         accessibilityLabel={label}
+        contextMenuHidden={!caps.export}
         selectionColor={t.accent}
         keyboardAppearance="light"
         keyboardType={keyboardType}

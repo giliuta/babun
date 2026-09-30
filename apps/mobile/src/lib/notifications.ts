@@ -182,6 +182,48 @@ function isStoredNotification(value: unknown): value is StoredNotification {
   );
 }
 
+// СНИМОК РЕЕСТРА ДЛЯ КАБИНЕТА («Уведомления», 2026-09-15). Одна ссылка до
+// следующей записи: `useSyncExternalStore` сравнивает снимки по ссылке, и без
+// кэша перерисовывал бы экран на каждом рендере. Реестр пишет только
+// `writeRegistry` — сброс снимка и оповещение живут в ней.
+export interface ScheduledBabunNotification {
+  logicalId: string;
+  ownerKey: string;
+  fireAt: number;
+  title: string | null;
+  subtitle: string | null;
+  body: string | null;
+  data: Record<string, unknown>;
+}
+
+let registrySnapshot: readonly ScheduledBabunNotification[] | null = null;
+const registryListeners = new Set<() => void>();
+
+export function subscribeBabunNotificationRegistry(
+  listener: () => void,
+): () => void {
+  registryListeners.add(listener);
+  return () => {
+    registryListeners.delete(listener);
+  };
+}
+
+export function babunNotificationRegistrySnapshot(): readonly ScheduledBabunNotification[] {
+  if (!registrySnapshot) {
+    registrySnapshot = readRegistry().map((item) => ({
+      logicalId: item.logicalId,
+      ownerKey: item.ownerKey,
+      fireAt: item.fireAt,
+      title: typeof item.content.title === "string" ? item.content.title : null,
+      subtitle:
+        typeof item.content.subtitle === "string" ? item.content.subtitle : null,
+      body: typeof item.content.body === "string" ? item.content.body : null,
+      data: cleanContentData(item.content.data),
+    }));
+  }
+  return registrySnapshot;
+}
+
 function readRegistry(): StoredNotification[] {
   const raw = getStorage().get<unknown>(NOTIFICATION_REGISTRY_KEY);
   if (!Array.isArray(raw)) return [];
@@ -191,9 +233,11 @@ function readRegistry(): StoredNotification[] {
 function writeRegistry(items: readonly StoredNotification[]): void {
   if (items.length === 0) {
     getStorage().remove(NOTIFICATION_REGISTRY_KEY);
-    return;
+  } else {
+    getStorage().set(NOTIFICATION_REGISTRY_KEY, items);
   }
-  getStorage().set(NOTIFICATION_REGISTRY_KEY, items);
+  registrySnapshot = null;
+  for (const listener of registryListeners) listener();
 }
 
 function retainedRegistry(

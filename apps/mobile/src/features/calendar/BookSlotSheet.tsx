@@ -1,3 +1,4 @@
+import { useFeatureOn } from "@/features/settings/company-features";
 import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import Animated, {
@@ -5,7 +6,6 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import {
@@ -17,6 +17,7 @@ import {
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { pad2, parseYMD } from "@/features/appointments/helpers";
+import { usePlanAllows } from "@/features/settings/tenant";
 import type { WorkBand } from "@/features/calendar/DayView";
 
 // Тап по пустому слоту сетки → этот лист (веб-паритет слот-попапа
@@ -88,6 +89,8 @@ export function BookSlotSheet({
   bandFor,
   onClose,
   onPick,
+  canWork = true,
+  canEvent = true,
 }: {
   /** Тапнутый слот; null = лист закрыт. */
   slot: SlotDraft | null;
@@ -97,9 +100,16 @@ export function BookSlotSheet({
   onClose: () => void;
   /** Выбор дороги создания — родитель закрывает лист и открывает /book. */
   onPick: (kind: "work" | "event", slot: SlotDraft) => void;
+  /** Права сотрудника в этом календаре (STORY-088): «Новые записи» и
+   *  «События: Меняет». Нет права — нет и кнопки, а не кнопка с отказом. */
+  canWork?: boolean;
+  canEvent?: boolean;
 }) {
   const t = useThemeColors();
-  const insets = useSafeAreaInsets();
+  // Записывать клиентов умеет платный тариф. Бесплатный личный календарь
+  // ведёт события и деньги — этого достаточно для своей жизни и недостаточно
+  // для чужих клиентов (владелец 2026-09-12).
+  const canBookClients = usePlanAllows("book-clients");
   const [draft, setDraft] = useState<SlotDraft | null>(slot);
 
   // Появление/затухание сигнала — только opacity, ничего не едет (закон
@@ -180,6 +190,7 @@ export function BookSlotSheet({
     prevOffRef.current = captionOn;
   }, [captionOn, slot, draft]);
 
+  const eventsOn = useFeatureOn("events");
   const pick = (kind: "work" | "event") => {
     // Одноразово: лист остаётся тапабельным 240 мс анимации закрытия, и
     // быстрый двойной тап открывал бы /book дважды (стопка экранов).
@@ -192,28 +203,80 @@ export function BookSlotSheet({
   const voSuffix = captionOn ? ", вне рабочих часов" : undefined;
 
   return (
-    <BottomSheet padded={false} visible={slot != null} onClose={onClose}
+    // АНАТОМИЯ ЛИСТА — КАНОНОМ (аудит 24.09): дата — шапкой через `title`
+    // (она же зона жеста «потянуть вниз», как у всех листов), две дороги —
+    // в `footer`, вне тела. Вид прежний: та же дата по центру 17/600, те же
+    // две кнопки внизу, отступ под home-индикатор даёт сам футер.
+    //
+    // Дата выбрана самим тапом — по центру шапки, не в колесе. Времени в
+    // шапке нет: его в 26pt показывает само колесо. Шапка никогда не
+    // тонируется — проблема не в дате, а в часе.
+    <BottomSheet
+      padded={false}
+      visible={slot != null}
+      onClose={onClose}
+      title={draft ? dateLabel(draft.date) : undefined}
+      footer={
+        draft ? (
+          <View className="px-5" style={{ paddingTop: 6 }}>
+          {/* ДВЕ ДОРОГИ СОЗДАНИЯ — ОДНА ГЕОМЕТРИЯ, РАЗНАЯ ЗАЛИВКА (владелец
+                2026-09-10: «зачем — надо сводить всё к одному, чтобы событие
+                было тоже такое же, как клиент», а увидев обе залитыми —
+                «сделай, как было: у „События“ белый фон; кнопку оставь такую
+                же, просто фон белый»).
+
+                Сводили ГЕОМЕТРИЮ, а не вес: у «События» был радиус 999 против
+                10 у «Клиента» — пилюля стояла ровно над прямоугольником в одном
+                листе. Радиус, высота (52) и кегль (17/600) теперь одни на обе,
+                расходится только заливка: «Клиент» — залитая главная дорога,
+                «Событие» — второй вид на белом. Так лист называет главное, не
+                заставляя читать подписи.
+
+                Никогда не тонируются и не блокируются — вне часов запись
+                разрешена, сигнал уже сказан колесом и подписью. */}
+            <View style={{ gap: 10 }}>
+              {/* БЕЗ ПОДПИСКИ КНОПКИ «КЛИЕНТ» НЕТ ВОВСЕ, А НЕ «ЕСТЬ, НО РУГАЕТСЯ».
+                  Канон, правило 10: человек без права либо не видит блок, либо
+                  видит его только для чтения; третьего («видно, но при нажатии
+                  ошибка») не бывает. Строка ниже называет закрытое и МОЛЧИТ ПРО
+                  ДЕНЬГИ: ни цены, ни ссылки, ни «оплатите на сайте» — на этом
+                  стоит основание, по которому приложение живёт в App Store без
+                  встроенных покупок. Тариф решает не здесь: настоящий запрет —
+                  триггер `enforce_plan_limits` в базе. */}
+              {/* События выключены у компании (STORY-088) — второй дороги нет. */}
+              {eventsOn && canEvent ? (
+                <Button
+                  label="Событие"
+                  variant={canBookClients && canWork ? "secondary" : "primary"}
+                  accessibilityHint="Откроет новое событие на выбранное время"
+                  onPress={() => pick("event")}
+                />
+              ) : null}
+              {!canWork ? null : canBookClients ? (
+                <Button
+                  label="Клиент"
+                  accessibilityHint="Откроет новую запись клиенту на выбранное время"
+                  onPress={() => pick("work")}
+                />
+              ) : (
+                <Text
+                  style={{
+                    color: t.faint,
+                    fontSize: 13,
+                    textAlign: "center",
+                    paddingHorizontal: 8,
+                  }}
+                >
+                  Запись клиента — в другом тарифе
+                </Text>
+              )}
+            </View>
+          </View>
+        ) : undefined
+      }
     >
       {draft ? (
-        <View
-          className="px-5 pt-1"
-          // Канон нижнего отступа листов (ClientsFilterSheet): home-индикатор
-          // не срезает кнопки, на устройствах без него — честные 24.
-          style={{ paddingBottom: Math.max(insets.bottom, 16) + 8 }}
-        >
-          {/* Дата выбрана самим тапом — по центру шапки, не в колесе.
-              Времени здесь нет: его в 26pt показывает само колесо, живой
-              дубликат в шапке тикал бы на периферии. Шапка никогда не
-              тонируется — проблема не в дате, а в часе. */}
-          <Text
-            accessibilityRole="header"
-            maxFontSizeMultiplier={1.2}
-            className="text-[17px] font-semibold"
-            style={{ color: t.ink, textAlign: "center" }}
-          >
-            {dateLabel(draft.date)}
-          </Text>
-
+        <View className="px-5">
           {/* Колесо только времени, минуты — по 5. Амбер-полоса лежит ПОД
               колонками и хеарлайнами: структура остаётся чернилами. */}
           <View className="flex-row items-center justify-center py-3">
@@ -244,25 +307,6 @@ export function BookSlotSheet({
                 accessibilityValueSuffix={voSuffix}
               />
             </View>
-          </View>
-
-          <View style={{ height: 6 }} />
-
-          {/* Две дороги создания стопкой (веб-паритет): Клиент — главная.
-              Никогда не тонируются и не блокируются — вне часов запись
-              разрешена, сигнал уже сказан колесом и подписью. */}
-          <View style={{ gap: 10 }}>
-            <Button
-              label="Событие"
-              variant="secondary"
-              accessibilityHint="Откроет новое событие на выбранное время"
-              onPress={() => pick("event")}
-            />
-            <Button
-              label="Клиент"
-              accessibilityHint="Откроет новую запись клиенту на выбранное время"
-              onPress={() => pick("work")}
-            />
           </View>
         </View>
       ) : null}

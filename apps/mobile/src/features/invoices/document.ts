@@ -1,16 +1,15 @@
-import type { Client } from "@babun/shared/local/clients";
-import { paymentMethodLabel } from "@babun/shared/local/finance/transaction";
+import type { Client, Location } from "@babun/shared/local/clients";
 import {
   invoiceDisplayStatus,
   invoiceLineTotal,
   type InvoiceLedgerWithLines,
+  type InvoiceObjectAddressParts,
   type InvoicePaymentLedger,
   type InvoiceSettlement,
 } from "@babun/shared/local/finance/invoice-ledger";
 import type { Tenant } from "@/features/settings/tenant";
 import {
   formatInvoiceDate,
-  formatInvoiceMoney,
   invoiceVatMode,
 } from "./format";
 import {
@@ -70,6 +69,17 @@ export interface InvoiceDocument {
   client: DocumentParty;
   issuedOn: string;
   dueOn: string;
+  /** ЕСТЬ ЛИ СРОК ВООБЩЕ. `dueOn` строкой пустым НЕ БЫВАЕТ: когда срока нет,
+   *  там стоит слово «Не указан» — и проверка `doc.dueOn ? …` в сообщении
+   *  клиенту была мертва, поэтому в WhatsApp всегда уходило «Оплатить до:
+   *  Не указан». Флаг отвечает на вопрос, на который строка ответить не
+   *  может. */
+  dueOnKnown: boolean;
+  /** Коротко под номером: «18/09/2026» (en-GB) или «18.09.2026». */
+  issuedShort: string;
+  dueShort: string | null;
+  /** Валюта — в шапке колонок таблицы: «Price, EUR», как у AirFix #103. */
+  currency: string;
   lines: DocumentLine[];
   totals: DocumentTotal[];
   /** Реквизиты для оплаты — печатаются отдельным блоком под итогом. */
@@ -106,6 +116,22 @@ export interface InvoiceDocumentDraft {
   notes: string;
 }
 
+/** Набор реквизитов, которым ПОДПИШЕТСЯ документ. Ровно те поля, что кладёт
+ *  в снимок серверная `build_seller_snapshot`, — чтобы черновик показывал то
+ *  же, что напечатает выставленный. */
+export interface InvoiceDraftSeller {
+  name: string;
+  legal_name: string | null;
+  business_address: string | null;
+  vat_number: string | null;
+  reg_number: string | null;
+  iban: string | null;
+  bank_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  logo_url: string | null;
+}
+
 interface BaseInput {
   tenant?: Tenant;
   client?: Client;
@@ -119,10 +145,26 @@ export interface IssuedDocumentInput extends BaseInput {
   payments: readonly InvoicePaymentLedger[];
   accountNames?: ReadonlyMap<string, string>;
   businessToday?: string;
+  /** ТОЛЬКО ПРЕВЬЮ НЕСОХРАНЁННОЙ ПРАВКИ, и больше ничего.
+   *
+   *  Выставленный документ печатает СВОЙ снимок продавца — он заморожен, и
+   *  это главный закон бумаги. Но пока черновик правят, человек может
+   *  выбрать другой набор реквизитов: сервер пересоберёт снимок при
+   *  сохранении, а зеркало обязано показать то, что получится. Передаёт это
+   *  ТОЛЬКО форма правки; витрина `/invoices/[id]` не передаёт ничего и
+   *  печатает снимок как есть. */
+  sellerPreview?: InvoiceDraftSeller | null;
 }
 
 export interface DraftDocumentInput extends BaseInput {
   draft: InvoiceDocumentDraft;
+  /** ЧЕМ ЧЕРНОВИК ПОДПИШЕТСЯ. Без него превью печатало реквизиты арендатора,
+   *  а сервер подписывал выбранным набором (`resolve_company_id`): человек
+   *  подтверждал кнопкой одну бумагу, клиент получал другую. */
+  company?: InvoiceDraftSeller | null;
+  /** Объект, под который выписан счёт: его ТОЧНЫЙ адрес — единственный адрес
+   *  получателя на бумаге (владелец 2026-09-22). */
+  location?: Location | null;
 }
 
 export function buildInvoiceDocument(
@@ -140,10 +182,28 @@ function issuedDocument({
   accountNames,
   businessToday,
   language,
+  sellerPreview,
 }: IssuedDocumentInput): InvoiceDocument {
   const dict = invoiceDictionary(language);
   const displayStatus = invoiceDisplayStatus(invoice, businessToday, settlement);
-  const seller = invoice.seller_snapshot;
+  // Превью несохранённой правки сильнее снимка — но только когда его передали
+  // (см. `sellerPreview`).
+  const seller = sellerPreview
+    ? {
+        legal_name: sellerPreview.legal_name,
+        name: sellerPreview.name,
+        display_name: sellerPreview.name,
+        address: sellerPreview.business_address,
+        business_address: sellerPreview.business_address,
+        vat_number: sellerPreview.vat_number,
+        reg_number: sellerPreview.reg_number,
+        contact_email: sellerPreview.contact_email,
+        contact_phone: sellerPreview.contact_phone,
+        iban: sellerPreview.iban,
+        bank_name: sellerPreview.bank_name,
+        logo_url: sellerPreview.logo_url,
+      }
+    : invoice.seller_snapshot;
   const recipient = invoice.client_snapshot;
   // Снимок — это ВЕСЬ юридический источник, включая поля, намеренно пустые на
   // момент выставления. Дополнять его живым профилем нельзя: переименовали
@@ -167,36 +227,59 @@ function issuedDocument({
     logoUrl: clean(seller?.logo_url) || clean(tenant?.logo_url) || null,
     seller: {
       name: sellerName,
+      // ПОРЯДОК — КАК В ШАПКЕ AIRFIX #103 (владелец 2026-09-22): номера, связь,
+      // и адрес ПОСЛЕДНИМ, строками — так, как его набрали в реквизитах.
+      // РЕГ. НОМЕР ПЕЧАТАЕТ И ЧЕК (`receipt-document.ts`): два документа
+      // одной фирмы не имеют права представлять её по-разному.
       lines: compact([
-        seller
-          ? firstNonEmpty(seller.address, seller.business_address)
-          : firstNonEmpty(tenant?.business_address, joinParts(tenant?.address, tenant?.city)),
-        prefixed("VAT", seller ? clean(seller.vat_number) : clean(tenant?.vat_number)),
-        seller ? clean(seller.contact_email) : clean(tenant?.contact_email),
+        prefixed(dict.vatNo, seller ? clean(seller.vat_number) : clean(tenant?.vat_number)),
+        prefixed(dict.regNumber, seller ? clean(seller.reg_number) : ""),
         seller ? clean(seller.contact_phone) : clean(tenant?.contact_phone),
+        seller ? clean(seller.contact_email) : clean(tenant?.contact_email),
+        ...addressLines(
+          seller
+            ? firstNonEmpty(seller.address, seller.business_address)
+            : firstNonEmpty(tenant?.business_address, joinParts(tenant?.address, tenant?.city)),
+        ),
       ]),
     },
-    client: {
-      name: (recipient ? clean(recipient.full_name) : clean(client?.full_name))
-        || dict.recipientMissing,
-      lines: compact([
-        recipient
-          ? firstNonEmpty(recipient.primary_address, recipient.address)
-          : client
-            ? primaryClientAddress(client)
-            : "",
-        recipient ? clean(recipient.email) : clean(client?.email),
-        recipient ? clean(recipient.phone) : clean(client?.phone),
-      ]),
-    },
+    // ПОЛУЧАТЕЛЬ (владелец 2026-09-22): юрназвание и реквизиты — из карточки
+    // клиента, телефона на бумаге нет, адрес — только точный адрес ОБЪЕКТА
+    // счёта. Снимок старше объектов (`object` нет вовсе) печатает свой адрес
+    // как раньше: выставленный документ не переписывается задним числом.
+    client: recipient
+      ? {
+          name: firstNonEmpty(recipient.legal_name, recipient.full_name)
+            || dict.recipientMissing,
+          lines: compact([
+            prefixed(dict.vatNo, clean(recipient.vat_number)),
+            prefixed(dict.regNumber, clean(recipient.reg_number)),
+            clean(recipient.email),
+            ...(recipient.object === undefined
+              ? addressLines(firstNonEmpty(recipient.primary_address, recipient.address))
+              : objectAddressLines(recipient.object?.address_parts, dict)),
+          ]),
+        }
+      : clientParty(
+          client,
+          client?.locations.find((loc) => loc.id === invoice.location_id) ?? null,
+          dict,
+        ),
     issuedOn: formatInvoiceDate(invoice.issued_on, dict.locale, dict.notSet),
     dueOn: formatInvoiceDate(invoice.due_on, dict.locale, dict.notSet),
-    lines: invoice.lines.map((line) => ({
+    dueOnKnown: !!invoice.due_on,
+    issuedShort: shortDate(invoice.issued_on, dict.locale),
+    dueShort: invoice.due_on ? shortDate(invoice.due_on, dict.locale) : null,
+    currency: invoice.currency,
+    // СКИДКА — НЕ УСЛУГА (владелец 2026-09-22: «дискаунт вынести, а не как
+    // услугу»). На сервере она строка с отрицательной ценой; на бумаге её
+    // строки в таблице нет — она стоит в итогах под «Subtotal».
+    lines: invoice.lines.filter((line) => line.unit_price >= 0).map((line) => ({
       title: line.title,
       description: line.description?.trim() || null,
       qty: formatQty(line.qty, line.unit, dict.locale),
-      unitPrice: formatInvoiceMoney(line.unit_price, invoice.currency, dict.locale),
-      total: formatInvoiceMoney(line.total, invoice.currency, dict.locale),
+      unitPrice: paperMoney(line.unit_price, invoice.currency, dict.locale),
+      total: paperMoney(line.total, invoice.currency, dict.locale),
     })),
     totals: totalRows({
       dict,
@@ -206,6 +289,7 @@ function issuedDocument({
       vatPercent: invoice.vat_percent,
       vatMode,
       total: invoice.total,
+      discount: splitDiscount(invoice.lines.map((line) => line.total)),
     }),
     payTo: compact([
       prefixed("IBAN", seller ? clean(seller.iban) : clean(tenant?.iban)),
@@ -214,71 +298,116 @@ function issuedDocument({
     settlement: [
       {
         label: dict.paid,
-        value: formatInvoiceMoney(settlement.paid, invoice.currency, dict.locale),
+        value: paperMoney(settlement.paid, invoice.currency, dict.locale),
       },
       {
         label: dict.remaining,
-        value: formatInvoiceMoney(settlement.remaining, invoice.currency, dict.locale),
+        value: paperMoney(settlement.remaining, invoice.currency, dict.locale),
       },
     ],
     payments: payments.map((payment) => {
       const account = payment.account_id ? accountNames?.get(payment.account_id) : undefined;
-      const method = paymentMethodLabel(payment.payment_method);
+      const method = methodLabel(dict, payment.payment_method);
       const refund = payment.type === "refund";
       return {
-        date: formatInvoiceDate(payment.occurred_on),
+        // ИСТОРИЯ ПЛАТЕЖЕЙ — НА ЯЗЫКЕ БУМАГИ, А НЕ ПРИЛОЖЕНИЯ. Без локали
+        // английский счёт печатал «21 июля 2026 г.», «€1 234,50» и «Банк»
+        // посреди `Payment` и `Outstanding`.
+        date: formatInvoiceDate(payment.occurred_on, dict.locale, dict.notSet),
         title: refund ? dict.refundRow : dict.paymentRow,
         details: [account, method].filter(Boolean).join(" · "),
-        amount: `${refund ? "−" : ""}${formatInvoiceMoney(Math.abs(payment.amount), invoice.currency)}`,
+        amount: `${refund ? "−" : ""}${paperMoney(Math.abs(payment.amount), invoice.currency, dict.locale)}`,
         refund,
       };
     }),
     notes: clean(invoice.notes),
-    footer: `Документ сформирован из данных инвойса ${invoice.number}. Валюта: ${invoice.currency}.`,
+    footer: dict.footer(invoice.number, invoice.currency),
   };
+}
+
+/** Способ платежа НА ЯЗЫКЕ БУМАГИ. Общий `paymentMethodLabel` остаётся для
+ *  экранов приложения: их читает владелец, и там всегда русский. */
+function methodLabel(dict: InvoiceDictionary, method: string | null): string {
+  switch (method) {
+    case "cash":
+      return dict.method_cash;
+    case "card":
+      return dict.method_card;
+    // КЛЮЧ СПОСОБА — `transfer`, А НЕ «bank». Слово глоссария «Банк» стоит на
+    // коде `transfer` (`PAYMENT_METHOD_LABEL`), и свой ключ здесь молча
+    // превратил бы банковский платёж в «Другое».
+    case "transfer":
+      return dict.method_bank;
+    case null:
+    case undefined:
+      return "";
+    default:
+      return dict.method_other;
+  }
 }
 
 function draftDocument({
   draft,
   tenant,
   client,
+  company,
+  location,
   language,
 }: DraftDocumentInput): InvoiceDocument {
   const dict = invoiceDictionary(language);
   return {
-    number: draft.number,
+    // НОМЕРА У ЧЕРНОВИКА МОЖЕТ НЕ БЫТЬ ВОВСЕ (предпросмотр ещё грузится или
+    // сети нет). Говорим об этом НА ЯЗЫКЕ БУМАГИ: раньше сюда зашивали
+    // русскую фразу, и она вставала в английский документ 18-м кеглем.
+    number: draft.number || dict.numberPending,
     draft: true,
     dict,
     statusLabel: dict.draft,
-    logoUrl: clean(tenant?.logo_url) || null,
+    // ПОРЯДОК ТОТ ЖЕ, ЧТО У СЕРВЕРА (`build_seller_snapshot`): логотип и
+    // реквизиты берутся у ВЫБРАННОГО набора, арендатор — только запасной.
+    // Иначе превью и выставленный документ говорят разное.
+    logoUrl: clean(company?.logo_url) || clean(tenant?.logo_url) || null,
     seller: {
-      name: firstNonEmpty(tenant?.legal_name, tenant?.name) || dict.sellerMissing,
-      lines: compact([
-        firstNonEmpty(tenant?.business_address, joinParts(tenant?.address, tenant?.city)),
-        prefixed("VAT", clean(tenant?.vat_number)),
-        clean(tenant?.contact_email),
-        clean(tenant?.contact_phone),
-      ]),
+      name:
+        (company ? firstNonEmpty(company.legal_name, company.name) : "")
+        || firstNonEmpty(tenant?.legal_name, tenant?.name)
+        || dict.sellerMissing,
+      // Порядок — тот же, что у выставленного (см. `issuedDocument`).
+      lines: company
+        ? compact([
+            prefixed(dict.vatNo, clean(company.vat_number)),
+            prefixed(dict.regNumber, clean(company.reg_number)),
+            firstNonEmpty(company.contact_phone, tenant?.contact_phone),
+            firstNonEmpty(company.contact_email, tenant?.contact_email),
+            ...addressLines(
+              firstNonEmpty(company.business_address, joinParts(tenant?.address, tenant?.city)),
+            ),
+          ])
+        : compact([
+            prefixed(dict.vatNo, clean(tenant?.vat_number)),
+            clean(tenant?.contact_phone),
+            clean(tenant?.contact_email),
+            ...addressLines(
+              firstNonEmpty(tenant?.business_address, joinParts(tenant?.address, tenant?.city)),
+            ),
+          ]),
     },
-    client: {
-      name: clean(client?.full_name) || dict.recipientMissing,
-      lines: compact([
-        client ? primaryClientAddress(client) : "",
-        clean(client?.email),
-        clean(client?.phone),
-      ]),
-    },
+    client: clientParty(client, location ?? null, dict),
     issuedOn: formatInvoiceDate(draft.issuedOn, dict.locale, dict.notSet),
     dueOn: formatInvoiceDate(draft.dueOn, dict.locale, dict.notSet),
-    lines: draft.lines.map((line) => ({
+    dueOnKnown: !!draft.dueOn,
+    issuedShort: shortDate(draft.issuedOn, dict.locale),
+    dueShort: draft.dueOn ? shortDate(draft.dueOn, dict.locale) : null,
+    currency: draft.currency,
+    lines: draft.lines.filter((line) => line.unitPrice >= 0).map((line) => ({
       title: line.title,
       description: line.description?.trim() || null,
       qty: formatQty(line.qty, line.unit, dict.locale),
-      unitPrice: formatInvoiceMoney(line.unitPrice, draft.currency, dict.locale),
+      unitPrice: paperMoney(line.unitPrice, draft.currency, dict.locale),
       // ОДИН СЧЁТ НА ВЕСЬ ПРОДУКТ: своё `round2(qty * price)` в double
       // печатало в строке 3,01 там, где итог документа (и сервер) говорят
       // 3,02 — на одном экране два разных числа за одну и ту же позицию.
-      total: formatInvoiceMoney(
+      total: paperMoney(
         invoiceLineTotal(line.qty, line.unitPrice),
         draft.currency,
         dict.locale,
@@ -292,17 +421,30 @@ function draftDocument({
       vatPercent: draft.vatPercent,
       vatMode: draft.vatMode,
       total: draft.total,
+      discount: splitDiscount(
+        draft.lines.map((line) => invoiceLineTotal(line.qty, line.unitPrice)),
+      ),
     }),
     payTo: compact([
-      prefixed("IBAN", clean(tenant?.iban)),
-      prefixed(dict.bank, clean(tenant?.bank_name)),
+      prefixed("IBAN", company ? clean(company.iban) : clean(tenant?.iban)),
+      prefixed(dict.bank, company ? clean(company.bank_name) : clean(tenant?.bank_name)),
     ]),
     // У черновика платить ещё нечего — блок оплаты не печатаем вовсе.
     settlement: [],
     payments: [],
     notes: clean(draft.notes),
-    footer: dict.draftFooter(draft.number),
+    // ПРЕВЬЮ = БУМАГА, КАКОЙ ОНА ВЫЙДЕТ (владелец 2026-09-22 не понял
+    // «Draft. Number … will be assigned…»): подвал тот же, что у выставленной.
+    footer: draft.number ? dict.footer(draft.number, draft.currency) : dict.numberPending,
   };
+}
+
+/** Сумма услуг и скидка документа: скидка — строки с минусом. */
+function splitDiscount(lineTotals: readonly number[]): { services: number; amount: number } | null {
+  const discount = lineTotals.filter((total) => total < 0).reduce((sum, total) => sum - total, 0);
+  if (discount <= 0) return null;
+  const services = lineTotals.filter((total) => total >= 0).reduce((sum, total) => sum + total, 0);
+  return { services: Math.round(services * 100) / 100, amount: Math.round(discount * 100) / 100 };
 }
 
 function totalRows(input: {
@@ -313,7 +455,36 @@ function totalRows(input: {
   vatPercent: number;
   vatMode: "off" | "inclusive" | "exclusive";
   total: number;
+  discount?: { services: number; amount: number } | null;
 }): DocumentTotal[] {
+  // СО СКИДКОЙ: «Subtotal» — сумма услуг, «Discount» — минусом, дальше
+  // налог и итог, как в «Итого» записи (скидка, потом VAT). Четыре строки,
+  // не пять: база налога «сверху» — в строке налога («VAT 19% on €110.00»),
+  // владелец 2026-09-22: «очень много разных сумм, человек запутается».
+  if (input.discount) {
+    const { dict, discount } = input;
+    const money = (value: number) => paperMoney(value, input.currency, dict.locale);
+    const hasVat = input.vatMode !== "off" && input.vatAmount > 0;
+    const vatLabel =
+      input.vatMode === "inclusive" ? dict.vatInclusive : dict.vatExclusive;
+    return [
+      { label: dict.subtotal, value: money(discount.services) },
+      { label: dict.discount, value: money(-discount.amount) },
+      ...(hasVat
+        ? [
+            {
+              label:
+                `${vatLabel} ${formatPercent(input.vatPercent, dict.locale)}` +
+                (input.vatMode === "exclusive"
+                  ? ` ${dict.vatOn(money(input.subtotalNet))}`
+                  : ""),
+              value: money(input.vatAmount),
+            },
+          ]
+        : []),
+      { label: dict.grandTotal, value: money(input.total), grand: true },
+    ];
+  }
   // Документ БЕЗ НАЛОГА не должен говорить о налоге дважды («Без НДС» и снова
   // «Без НДС · €0») — это выглядело как ошибка счёта. Строка налога появляется
   // только там, где налог есть.
@@ -322,11 +493,11 @@ function totalRows(input: {
     return [
       {
         label: dict.subtotal,
-        value: formatInvoiceMoney(input.subtotalNet, input.currency, dict.locale),
+        value: paperMoney(input.subtotalNet, input.currency, dict.locale),
       },
       {
         label: dict.grandTotal,
-        value: formatInvoiceMoney(input.total, input.currency, dict.locale),
+        value: paperMoney(input.total, input.currency, dict.locale),
         grand: true,
       },
     ];
@@ -337,24 +508,111 @@ function totalRows(input: {
   return [
     {
       label: dict.netAmount,
-      value: formatInvoiceMoney(input.subtotalNet, input.currency, dict.locale),
+      value: paperMoney(input.subtotalNet, input.currency, dict.locale),
     },
     {
-      label: `${vatLabel} · ${formatPercent(input.vatPercent, dict.locale)}`,
-      value: formatInvoiceMoney(input.vatAmount, input.currency, dict.locale),
+      label: `${vatLabel} ${formatPercent(input.vatPercent, dict.locale)}`,
+      value: paperMoney(input.vatAmount, input.currency, dict.locale),
     },
     {
       label: dict.grandTotal,
-      value: formatInvoiceMoney(input.total, input.currency, dict.locale),
+      value: paperMoney(input.total, input.currency, dict.locale),
       grand: true,
     },
   ];
 }
 
-function primaryClientAddress(client: Client): string {
-  const primary = client.locations.find((location) => location.isPrimary)
-    ?? client.locations.find((location) => clean(location.address));
-  return clean(primary?.address) || joinParts(client.address, client.city);
+/** Получатель черновика — те же правила, что у снимка сервера
+ *  (`build_invoice_client_snapshot_with_object`). */
+function clientParty(
+  client: Client | undefined,
+  location: Location | null,
+  dict: InvoiceDictionary,
+): DocumentParty {
+  // Реквизиты клиента заводит карточка клиента (сессия 012); читаем их
+  // структурно, чтобы бумага не зависела от того, когда поля лягут в тип.
+  const requisites = client as
+    | (Client & { legal_name?: string | null; vat_number?: string | null; reg_number?: string | null })
+    | undefined;
+  return {
+    name: firstNonEmpty(requisites?.legal_name, client?.full_name) || dict.recipientMissing,
+    lines: compact([
+      prefixed(dict.vatNo, clean(requisites?.vat_number)),
+      prefixed(dict.regNumber, clean(requisites?.reg_number)),
+      clean(client?.email),
+      ...(hasExactAddress(location?.addressParts)
+        ? objectAddressLines(location?.addressParts ?? null, dict)
+        : []),
+    ]),
+  };
+}
+
+/** АДРЕС НА ИНВОЙС — ТОЛЬКО ИЗ «ТОЧНОГО АДРЕСА» (владелец 2026-09-22: «если
+ *  пишем в точный адрес — в инвойсе адрес есть, а обычный адрес не
+ *  выставляется»). Главная строка объекта хранится как `street`; адрес
+ *  печатается, когда заполнено хоть одно поле блока «Точный адрес». То же
+ *  правило у сервера (`invoice_object_snapshot`, миграция 20260922090000). */
+export function hasExactAddress(
+  parts: InvoiceObjectAddressParts | null | undefined,
+): boolean {
+  return (["complex", "entrance", "floor", "apartment", "city", "zip"] as const)
+    .some((key) => clean(parts?.[key]) !== "");
+}
+
+/** ТОЧНЫЙ АДРЕС ОБЪЕКТА строками бумаги: «Makariou 12, Sunny Court» /
+ *  «Floor 3, Apt 5» / «Limassol 4000». Без «где» (улицы, комплекса или
+ *  города) адреса нет вовсе — как у сервера: «эт. 3, кв. 5» никуда не ведёт. */
+export function objectAddressLines(
+  parts: InvoiceObjectAddressParts | null | undefined,
+  dict: InvoiceDictionary,
+): string[] {
+  const part = (key: keyof InvoiceObjectAddressParts) => clean(parts?.[key]);
+  if (!part("street") && !part("complex") && !part("city")) return [];
+  return compact([
+    [part("street"), part("complex")].filter(Boolean).join(", "),
+    [
+      part("entrance") ? dict.addrEntrance(part("entrance")) : "",
+      part("floor") ? dict.addrFloor(part("floor")) : "",
+      part("apartment") ? dict.addrApartment(part("apartment")) : "",
+    ].filter(Boolean).join(", "),
+    [part("city"), part("zip")].filter(Boolean).join(" "),
+  ]);
+}
+
+/** Адрес так, как его набрали: перенос строки в реквизитах — перенос на
+ *  бумаге (лист реквизитов это обещает подписью под полем). */
+function addressLines(value: string): string[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+/** ДЕНЬГИ НА БУМАГЕ — ВСЕГДА С КОПЕЙКАМИ: «€50.00», как на инвойсе AirFix
+ *  #103. Экраны приложения печатают «€50» (`formatInvoiceMoney`) — там это
+ *  стиль продукта, а в документе клиенту круглая сумма без копеек читается
+ *  как незаполненная колонка. */
+function paperMoney(value: number, currency = "EUR", locale = "ru-RU"): string {
+  if (!Number.isFinite(value)) return "—";
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+/** «18/09/2026» для en-GB, «18.09.2026» для ru-RU — как в шапке #103. */
+function shortDate(ymd: string | null, locale: string): string {
+  if (!ymd) return "";
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return ymd;
+  return new Intl.DateTimeFormat(locale, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(y, m - 1, d)));
 }
 
 function prefixed(label: string, value: string): string {
@@ -387,7 +645,7 @@ function clean(value: string | null | undefined): string {
  *  Единица берётся из СТРОКИ СЧЁТА, а не из прайса: выставленный документ
  *  заморожен, и смена единицы у услуги через месяц не переписывает бумагу,
  *  которую клиент уже получил. */
-function formatQty(
+export function formatQty(
   value: number,
   unit?: string | null,
   locale = "ru-RU",

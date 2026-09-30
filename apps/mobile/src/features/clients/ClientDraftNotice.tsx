@@ -1,13 +1,22 @@
 import { Pressable, Text, View } from "react-native";
+import { ChevronRight, PhoneOff } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
+import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+
+// «НОМЕР УЖЕ ЕСТЬ» — ТИХОЙ СТРОКОЙ НАД БЛОКОМ «КЛИЕНТ».
+//
+// Владелец 30.09: «если находит дубль — не даёт сдать, сразу плашка сверху»;
+// в тот же вечер, увидев карточку-плашку: «очень жёсткая, не надо вовсю
+// плашку». Поэтому одна строка без подложки: значок, кто владеет номером,
+// шеврон. Тап — существующий клиент (из записи — выбрать его); «Создать
+// клиента» погашена, а почему — говорит подпись над ней.
 
 interface ClientDraftNoticeProps {
   duplicate: Client | null;
   error: string | null;
   onOpenDuplicate: (id: string) => void;
-  /** Что делает кнопка у найденного дубля. На карточке — «Открыть» его;
-   *  из записи — «Выбрать» его в запись (карточку там не открывают). */
+  /** Из записи дубль ВЫБИРАЮТ, а не открывают. */
   openLabel?: string;
 }
 
@@ -19,60 +28,41 @@ export function ClientDraftNotice({
 }: ClientDraftNoticeProps) {
   const t = useThemeColors();
   if (!duplicate && !error) return null;
-  return (
+  const name = duplicate?.full_name.trim() || "у другого клиента";
+
+  const line = (
     <View
-      className="mt-2 border-t pt-2.5"
-      style={{ borderColor: t.separator }}
       accessibilityRole="alert"
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        paddingHorizontal: GUTTER + 4,
+        paddingTop: 10,
+        paddingBottom: 2,
+      }}
     >
-      {duplicate ? (
-        <>
-          <Text
-            className="pb-2 text-[11px] font-semibold uppercase tracking-wider"
-            style={{ color: t.sub }}
-          >
-            Похоже, такой уже есть
-          </Text>
-          <View className="flex-row items-center gap-3">
-            <View className="flex-1">
-              <Text
-                className="text-sm font-semibold"
-                style={{ color: t.ink }}
-                numberOfLines={1}
-              >
-                {duplicate.full_name || duplicate.phone || "Клиент"}
-              </Text>
-              <Text className="text-xs" style={{ color: t.sub }} numberOfLines={1}>
-                {[duplicate.phone, duplicate.city].filter(Boolean).join(" · ")}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => onOpenDuplicate(duplicate.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`${openLabel} существующего клиента`}
-              className="min-h-11 justify-center rounded-[10px] px-3.5 active:opacity-80"
-              style={{ backgroundColor: t.accent }}
-            >
-              <Text className="text-sm font-semibold" style={{ color: t.onAccent }}>
-                {openLabel}
-              </Text>
-            </Pressable>
-          </View>
-          {/* Подпись врала: она обещала, что повторное «Готово» создаст
-              второго клиента, тогда как владелец это правило ОТМЕНИЛ (два
-              клиента на одном номере невозможны) и save() при найденном
-              дубле просто ничего не делает. Говорим, как есть. */}
-          <Text className="pt-2 text-[11px]" style={{ color: t.faint }}>
-            Сохранить нельзя: номер занят. Откройте существующего клиента или
-            измените номер.
-          </Text>
-        </>
-      ) : null}
-      {error ? (
-        <Text className={`text-sm ${duplicate ? "pt-2" : ""}`} style={{ color: t.danger }}>
-          {error}
-        </Text>
-      ) : null}
+      <PhoneOff color={duplicate ? t.warning : t.danger} size={15} strokeWidth={2} />
+      <Text
+        maxFontSizeMultiplier={1.3}
+        numberOfLines={1}
+        style={{ flex: 1, fontSize: 13, color: duplicate ? t.warning : t.danger }}
+      >
+        {duplicate ? `Номер уже есть — ${name}` : error}
+      </Text>
+      {duplicate ? <ChevronRight color={t.warning} size={15} strokeWidth={2} /> : null}
     </View>
+  );
+
+  if (!duplicate) return line;
+  return (
+    <Pressable
+      onPress={() => onOpenDuplicate(duplicate.id)}
+      accessibilityRole="button"
+      accessibilityLabel={`${openLabel} клиента ${name}`}
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+    >
+      {line}
+    </Pressable>
   );
 }

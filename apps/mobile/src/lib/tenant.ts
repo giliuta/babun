@@ -1,7 +1,12 @@
+import { useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getStorage } from "@babun/shared/storage";
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
+import {
+  getActiveTenantId,
+  subscribeActiveTenant,
+} from "@/lib/active-tenant";
 import { useSession } from "@/providers/SessionProvider";
 
 // Tenant resolution + onboarding gate — mobile port of the web logic in
@@ -63,6 +68,22 @@ function stampOnboarded(tenantId: string): void {
   writeCache(onboardedStampKey(tenantId), "1");
 }
 
+/** Тот же штамп, но снаружи — для перехода в другую компанию.
+ *
+ *  Гейт умеет отвечать без сети, когда компания уже помечена пройденной, и
+ *  ровно этого знания ему не хватало после перехода: он заново спрашивал
+ *  сервер «а онбординг пройден?» — с таймаутом и повтором, сразу после смены
+ *  токена, — и держал экран «Открываем компанию» ТРИДЦАТЬ СЕКУНД при пяти
+ *  секундах самой транзакции (замер 2026-09-12).
+ *
+ *  Ставить его имеет право только тот, кто получил ФАКТ от сервера:
+ *  `activate_tenant` возвращает `onboarded` из `tenants.onboarded_at`. Догадка
+ *  («раз есть календари — значит прошла») однажды провела бы человека мимо
+ *  мастера настройки его собственной компании. */
+export function markTenantOnboarded(tenantId: string): void {
+  stampOnboarded(tenantId);
+}
+
 // ---------------------------------------------------------------------------
 // Bounded gate queries: supabase-js has no fetch timeout on RN, and the root
 // navigator holds the splash screen while the gate is "loading" — a hung
@@ -110,12 +131,27 @@ const tenantMembershipKey = (userId: string | null) =>
 function useTenantResolution() {
   const { session } = useSession();
   const userId = session?.user.id ?? null;
+  // ВЫБОР ЭТОГО УСТРОЙСТВА ГЛАВНЕЕ CLAIM'А В ТОКЕНЕ, И ЭТО НЕ ПРОИЗВОЛ.
+  //
+  // Именно его клиент шлёт серверу заголовком, и именно по нему сервер строит
+  // ответ. Если экран будет считать компанию по токену, а сервер — по
+  // заголовку, продукт разъедется сам с собой: подписи скажут одно, данные
+  // покажут другое. Claim в токене догоняет в фоне (`switch-tenant.ts`), и
+  // пока он догоняет, правда — здесь.
+  const storedTenantId = useSyncExternalStore(
+    subscribeActiveTenant,
+    getActiveTenantId,
+    getActiveTenantId,
+  );
+  const deviceTenantId = userId ? storedTenantId : null;
   const jwtTenantId =
     (session?.user.app_metadata as { tenant_id?: string } | undefined)
       ?.tenant_id ?? null;
   const cachedTenantId =
-    userId && !jwtTenantId ? readCache(tenantIdCacheKey(userId)) : null;
-  const knownTenantId = jwtTenantId ?? cachedTenantId;
+    userId && !deviceTenantId && !jwtTenantId
+      ? readCache(tenantIdCacheKey(userId))
+      : null;
+  const knownTenantId = deviceTenantId ?? jwtTenantId ?? cachedTenantId;
 
   const membership = useQuery({
     queryKey: tenantMembershipKey(userId),
@@ -148,7 +184,7 @@ function useTenantResolution() {
     tenantId: knownTenantId ?? membership.data ?? null,
     /** true → the id came from the MMKV cache, not the JWT: a CONFIRMED
      *  missing tenants row means the cache is dead and must be dropped. */
-    tenantIdFromCache: !jwtTenantId && !!cachedTenantId,
+    tenantIdFromCache: !deviceTenantId && !jwtTenantId && !!cachedTenantId,
     membership,
   };
 }

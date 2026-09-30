@@ -15,7 +15,6 @@ import {
 } from "@/features/invoices/InvoiceEditor";
 import {
   useIssueInvoice,
-  useNextInvoiceNumber,
 } from "@/features/invoices/queries";
 import { useTeams } from "@/features/reference/queries";
 import { useTenant } from "@/features/settings/tenant";
@@ -54,13 +53,6 @@ export default function NewInvoiceScreen() {
   const teamVat = useTeamVatOverrides();
   const businessToday = todayYmd(
     calendarSettings.data?.timezone ?? "Europe/Nicosia",
-  );
-  // Год для серии номера — от ДАТЫ ВЫСТАВЛЕНИЯ (редактор сообщает её сюда),
-  // а не от часов устройства: в новогоднюю ночь и при датировании другим
-  // годом человек видел номер чужой серии.
-  const [issuedOn, setIssuedOn] = useState<string | null>(null);
-  const nextNumber = useNextInvoiceNumber(
-    Number((issuedOn ?? businessToday).slice(0, 4)),
   );
   const requestId = useRef(randomUuid()).current;
 
@@ -106,7 +98,9 @@ export default function NewInvoiceScreen() {
   // комментарий — это работа на минуту, и «‹» стирала её без вопроса.
   const [dirty, setDirty] = useState(false);
   const leave = () =>
-    router.canGoBack() ? router.back() : router.replace("/invoices" as Href);
+    router.canGoBack()
+      ? router.back()
+      : router.replace("/finances?view=documents" as Href);
   const back = () => {
     if (!dirty) {
       leave();
@@ -159,7 +153,6 @@ export default function NewInvoiceScreen() {
               null,
             )
           }
-          onIssuedOnChange={setIssuedOn}
           onDirtyChange={setDirty}
           clients={clients.data ?? []}
           appointments={appointments.data ?? []}
@@ -168,7 +161,6 @@ export default function NewInvoiceScreen() {
           teams={teams.data ?? []}
           businessToday={businessToday}
           tenant={tenant.data}
-          nextNumber={nextNumber.data ?? undefined}
           submitting={issue.isPending}
           onSubmit={submit}
         />

@@ -24,3 +24,32 @@ export function isColdOfflineCacheMissError(
     (error as { code?: unknown }).code === COLD_OFFLINE_CACHE_MISS
   );
 }
+
+export const ONLINE_ONLY_WRITE = "ONLINE_ONLY_WRITE" as const;
+
+/**
+ * Запись в компанию, которая сейчас НЕ открыта в календаре. Очереди для неё
+ * нет: выгрузка идёт под активной компанией, и такая операция уехала бы под
+ * чужим заголовком — вставку сервер отобьёт, а удаление вернёт ноль строк и
+ * прочитается как «удалять нечего», то есть работа пропадёт молча. Поэтому
+ * отказ выдаётся ДО оптимистичной записи, а текст приходит от экрана: он
+ * знает, о чьих клиентах речь.
+ */
+export class OnlineOnlyWriteError extends Error {
+  readonly code = ONLINE_ONLY_WRITE;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "OnlineOnlyWriteError";
+  }
+}
+
+export function isOnlineOnlyWriteError(
+  error: unknown,
+): error is OnlineOnlyWriteError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === ONLINE_ONLY_WRITE
+  );
+}

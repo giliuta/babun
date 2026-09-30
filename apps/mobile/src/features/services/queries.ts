@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import {
   useMutation,
   useQuery,
@@ -7,7 +8,11 @@ import type { Database, Json } from "@babun/shared/db/database.types";
 import { generateId } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { allServicesQueryKey } from "@/lib/company-query-keys";
+import { pickLiveServices } from "@/features/reference/reference-select";
+import { useDataRole, type UserRole } from "@/features/settings/tenant";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import {
   dispatcherServiceJsonToService,
   masterServiceJsonToService,
@@ -33,14 +38,17 @@ function isMissingProjectionRpc(error: {
   return error.code === "PGRST202" || /could not find the function/i.test(error.message ?? "");
 }
 
-async function listMasterServices(tenantId: string): Promise<Service[]> {
-  const { data, error } = await supabase.rpc("list_master_services_safe");
+export async function listMasterServices(
+  client: typeof supabase,
+  tenantId: string,
+): Promise<Service[]> {
+  const { data, error } = await client.rpc("list_master_services_safe");
   if (!error) return (data ?? []).map(masterServiceJsonToService);
   if (!isMissingProjectionRpc(error)) throw new Error(error.message);
 
   // Rolling-deploy fallback against the older member-wide RLS policy. The
   // explicit projection prevents service economics from crossing the wire.
-  const fallback = await supabase
+  const fallback = await client
     .from("services")
     .select("id, tenant_id, name, color")
     .eq("tenant_id", tenantId)
@@ -52,14 +60,15 @@ async function listMasterServices(tenantId: string): Promise<Service[]> {
   );
 }
 
-async function listDispatcherServices(tenantId: string): Promise<Service[]> {
-  const { data, error } = await supabase.rpc(
-    "list_dispatcher_services_safe",
-  );
+export async function listDispatcherServices(
+  client: typeof supabase,
+  tenantId: string,
+): Promise<Service[]> {
+  const { data, error } = await client.rpc("list_dispatcher_services_safe");
   if (!error) return (data ?? []).map(dispatcherServiceJsonToService);
   if (!isMissingProjectionRpc(error)) throw new Error(error.message);
 
-  const fallback = await supabase
+  const fallback = await client
     .from("services")
     .select(
       "id, tenant_id, team_id, name, color, description, price, duration_minutes, cost_per_unit, cost_tiers, price_tiers, duration_tiers, bulk_threshold, bulk_price, is_active, position, created_at, updated_at",
@@ -73,29 +82,45 @@ async function listDispatcherServices(tenantId: string): Promise<Service[]> {
   );
 }
 
+/** Чтение услуг ЧИСТОЙ функцией: клиент — параметром, чтобы прогрев чужой
+ *  компании читал их клиентом, привязанным к ней. `archived` — с убранными
+ *  (для чтения прошлого) или только живые (для выбора). Роль важна: мастеру и
+ *  диспетчеру отдаются проекции, прячущие экономику. */
+export async function fetchServices(
+  client: typeof supabase,
+  tenantId: string,
+  role: UserRole,
+  opts: { archived: boolean },
+): Promise<Service[]> {
+  if (role === "master") return listMasterServices(client, tenantId);
+  if (role === "dispatcher") return listDispatcherServices(client, tenantId);
+  let q = client.from("services").select("*").eq("tenant_id", tenantId);
+  if (!opts.archived) q = q.eq("is_active", true);
+  const { data, error } = await q.order("position");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Каталог ВЫБОРА — живые услуги. Читает тот же ключ, что и полный справочник
+ *  (`useAllServices`), и отбирает живые у себя (владелец 15.09: «переключение
+ *  без задержки»): два ключа за одной таблицей давали два запроса в каждой
+ *  волне после смены компании. Отбор повторяет сервер ровно — `is_active`
+ *  фильтровал только путь владельца, проекции мастера и диспетчера одни и те же
+ *  (`pickLiveServices`). */
 export function useServices() {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
+  const selectLive = useCallback((rows: Service[]) => pickLiveServices(rows, role), [role]);
   return useQuery({
-    queryKey: ["services", tenantId, role ?? "role-pending"],
+    queryKey: allServicesQueryKey(tenantId, role),
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
-    queryFn: async () => {
-      if (role === "master") {
-        return listMasterServices(tenantId as string);
-      }
-      if (role === "dispatcher") {
-        return listDispatcherServices(tenantId as string);
-      }
-      const { data, error } = await supabase
-        .from("services")
-        .select("*")
-        .eq("tenant_id", tenantId as string)
-        .eq("is_active", true)
-        .order("position");
-      if (error) throw new Error(error.message);
-      return data;
-    },
+    staleTime: 5 * 60_000,
+    queryFn: () =>
+      fetchServices(supabase, tenantId as string, role as UserRole, {
+        archived: true,
+      }),
+    select: selectLive,
   });
 }
 
@@ -115,24 +140,26 @@ export function useServices() {
  *  и обходить их нельзя — поэтому для них возвращается ровно то же, что и в
  *  `useServices` (их проекции и так не фильтруют по активности иначе). */
 export function useAllServices() {
-  const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
-  const role = roleQuery.data;
+  // ЧИТАЕТСЯ В КОМПАНИИ ЭКРАНА. Аналитика клиентов открывается из вкладки
+  // «Клиенты», а та в «Команде 1» показывает СВОЮ компанию (STORY-082): с
+  // активной компанией устройства «Топ услуг» остался бы без имён — работы
+  // одной компании, справочник другой. Вне вкладки источника нет, и всё
+  // работает как раньше.
+  const scope = useClientsScopeOrNull();
+  const activeTenantId = useTenantId();
+  const roleQuery = useDataRole();
+  const tenantId = scope?.tenantId ?? activeTenantId;
+  const role = scope ? scope.role : roleQuery.data;
+  const ready = scope ? true : roleQuery.isSuccess && roleQuery.data != null;
+  const client = scope && !scope.isActive ? tenantBoundClient(scope.tenantId) : supabase;
   return useQuery({
-    queryKey: ["services", "with-archived", tenantId, role ?? "role-pending"],
-    enabled: !!tenantId && roleQuery.isSuccess && role != null,
+    queryKey: allServicesQueryKey(tenantId, role),
+    enabled: !!tenantId && ready && role != null,
     staleTime: 5 * 60_000,
-    queryFn: async () => {
-      if (role === "master") return listMasterServices(tenantId as string);
-      if (role === "dispatcher") return listDispatcherServices(tenantId as string);
-      const { data, error } = await supabase
-        .from("services")
-        .select("*")
-        .eq("tenant_id", tenantId as string)
-        .order("position");
-      if (error) throw new Error(error.message);
-      return data;
-    },
+    queryFn: () =>
+      fetchServices(client, tenantId as string, role as UserRole, {
+        archived: true,
+      }),
   });
 }
 
@@ -147,6 +174,8 @@ export interface ServiceInput {
    *  точка в каталоге выбора и подстановка в цвет записи, когда человек не
    *  выбрал свой. Без читателя цвет заводить нельзя — так он и был убран. */
   color?: string;
+  /** Значок услуги из общего словаря — вторая половина вида (2026-09-10). */
+  icon?: string | null;
   /** КАТЕГОРИИ У УСЛУГИ НЕТ (владелец 2026-08-17): `category_id` жива ради
    *  легаси-веба, продукт её не пишет — категория была коробкой ради коробки,
    *  ноль строк у всех тенантов за пять месяцев.
@@ -206,13 +235,39 @@ export interface ServiceInput {
   copied_from_service_id?: string | null;
 }
 
+/** ПРАЙС СТРАНИЦЫ «УСЛУГИ» ДЛЯ СОТРУДНИКА (владелец 30.09: «Услуги» в
+ *  «Настройках команды» — «Скрыт · Только видит · Видит и меняет»). Проекция
+ *  мастера (`list_master_services_safe`) для этой страницы не годится: в ней
+ *  только услуги его записей, с нулём вместо цены и минут. Здесь — сама
+ *  таблица: сервер отдаёт строки ровно тех команд, где у него «Услуги» не
+ *  скрыты (`services_select_access`). Владельцу и остальным — `null`: их
+ *  страница читает прежний справочник. */
+export function useServicesPageTable(enabled: boolean) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["services", "settings-page", tenantId] as const,
+    enabled: enabled && !!tenantId,
+    queryFn: async (): Promise<Service[]> => {
+      const { data, error } = await supabase
+        .from("services")
+        .select("*")
+        .eq("tenant_id", tenantId as string)
+        .order("position");
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
+}
+
 export function useCreateService() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: ServiceInput) => {
-      if (role !== "owner") {
+      // Сотрудник — по праву «Услуги» своей команды (30.09): чужую команду
+      // отобьёт политика `services_write_access`.
+      if (role !== "owner" && role !== "master") {
         throw new Error("Создавать услуги может только владелец.");
       }
       const { data, error } = await supabase
@@ -225,6 +280,7 @@ export function useCreateService() {
           price: input.price,
           duration_minutes: input.duration_minutes,
           ...(input.color ? { color: input.color } : {}),
+          ...(input.icon !== undefined ? { icon: input.icon } : {}),
           ...(input.description !== undefined
             ? { description: input.description }
             : {}),
@@ -286,12 +342,12 @@ export function useCreateService() {
  */
 export function useReorderServices() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (ids: readonly string[]) => {
       if (!tenantId) throw new Error("Нет активного аккаунта.");
-      if (role !== "owner") {
+      if (role !== "owner" && role !== "master") {
         throw new Error("Менять порядок услуг может только владелец.");
       }
       await Promise.all(

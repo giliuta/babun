@@ -30,8 +30,30 @@ const DEDUPE = ["react", "react-dom"].map((name) => [
   path.dirname(require.resolve(`${name}/package.json`, { paths: [projectRoot] })),
 ]);
 
+// СБОРКА БЛОКОВ ДЛЯ CLAUDE DESIGN (`BABUN_DS_WEB=1`, отдельный сервер сборки,
+// см. `ds-web/`). Блоки собираются тем же Metro, что и веб-версия, но React и
+// ReactDOM берутся у страницы (`window.React`): карточки и дизайны Claude
+// Design рендерит их React, и второй экземпляр внутри бандла сломал бы хуки.
+// Без переменной — ровно прежнее поведение: приложение этих подмен не видит.
+const DS_WEB_SHIMS =
+  process.env.BABUN_DS_WEB === "1"
+    ? {
+        react: "react.js",
+        "react/jsx-runtime": "react-jsx-runtime.js",
+        "react/jsx-dev-runtime": "react-jsx-runtime.js",
+        "react-dom": "react-dom.js",
+        "react-dom/client": "react-dom.js",
+        // Навигации приложения в дизайне нет — пустышки (см. shims/expo-router.js).
+        "expo-router": "expo-router.js",
+      }
+    : null;
+
 const previous = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  const shim = DS_WEB_SHIMS?.[moduleName];
+  if (shim) {
+    return { type: "sourceFile", filePath: path.join(projectRoot, "ds-web", "shims", shim) };
+  }
   for (const [name, dir] of DEDUPE) {
     if (moduleName === name || moduleName.startsWith(`${name}/`)) {
       return context.resolveRequest(context, dir + moduleName.slice(name.length), platform);

@@ -15,14 +15,25 @@ export function locationLabelRemoveIds(
     .map((label) => label.id);
 }
 
-/** New or explicitly renamed rows are the only rows an action may upsert. */
+/** Что именно сравнивается, когда решаем «строка изменилась». ИМЯ И ВИД: с
+ *  2026-09-10 у типа объекта есть цвет и значок, и сравнение по одному имени
+ *  молча теряло их — правка вида уходила в ноль строк на запись, лист
+ *  закрывался «успешно», а в базе оставалось пусто. */
+function labelFingerprint(label: LocationLabel): string {
+  return [label.name, label.color ?? "", label.icon ?? ""].join("\u0000");
+}
+
+/** New rows and rows whose name or look changed are the only rows an action
+ *  may upsert. */
 export function locationLabelUpserts(
   previous: readonly LocationLabel[],
   next: readonly LocationLabel[],
 ): LocationLabel[] {
-  const previousById = new Map(previous.map((label) => [label.id, label.name]));
+  const previousById = new Map(
+    previous.map((label) => [label.id, labelFingerprint(label)]),
+  );
   return next.filter(
-    (label) => previousById.get(label.id) !== label.name,
+    (label) => previousById.get(label.id) !== labelFingerprint(label),
   );
 }
 

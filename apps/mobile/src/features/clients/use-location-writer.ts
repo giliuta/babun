@@ -40,7 +40,8 @@ export function useLocationWriter(
     (next: Location[]) => update({ locations: next }),
     [update],
   );
-  const { apply } = useJsonArrayWriter<Location>(locations, write, ownerKey);
+  // Поле — чтобы карточка и страница «Все объекты» писали ОДНОЙ очередью.
+  const { apply } = useJsonArrayWriter<Location>(locations, write, ownerKey, "locations");
 
   const patchLocation = useCallback(
     (

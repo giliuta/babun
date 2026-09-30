@@ -19,6 +19,10 @@ import {
 export type InvoiceStatus = "issued" | "paid" | "void" | "cancelled";
 export type InvoiceDisplayStatus = InvoiceStatus | "partial" | "overdue";
 export type InvoiceVatMode = "off" | "inclusive" | "exclusive";
+/** Бумага бывает двух видов: сам счёт и сторно к нему. Кредит-нота живёт в той
+ *  же таблице и несёт заявку и клиента своего инвойса — поэтому витрины обязаны
+ *  различать их по виду, а не по сумме. */
+export type InvoiceKind = "invoice" | "credit_note";
 
 export interface InvoiceLineDraft {
   title: string;
@@ -31,6 +35,10 @@ export interface InvoiceLineDraft {
   /** Единица количества на бумаге: «4 м». Приезжает из услуги и дальше живёт
    *  СВОЕЙ жизнью — как и описание: правка в счёте прайс не трогает. */
   unit?: string | null;
+  /** СКИДКА ДОКУМЕНТА — одна строка: количество 1, цена меньше нуля
+   *  (владелец 2026-09-22: «можно выдавать скидку, как в записи»). Сервер
+   *  принимает отрицательную цену только с этим флагом. */
+  discount?: boolean;
 }
 
 export interface InvoiceTotals {
@@ -74,6 +82,11 @@ export interface InvoiceSellerSnapshot {
   display_name: string | null;
   legal_name: string | null;
   vat_number: string | null;
+  /** Регистрационный номер юрлица. Его печатает чек, и с 2026-09-21 обязан
+   *  печатать инвойс: два документа одной фирмы не имеют права представлять
+   *  её по-разному. `null` у документов, выписанных до справочника
+   *  реквизитов — тогда его просто не записывали. */
+  reg_number?: string | null;
   business_address: string | null;
   address: string | null;
   city: string | null;
@@ -100,8 +113,34 @@ export interface InvoiceClientSnapshot {
   address: string | null;
   city: string | null;
   primary_address: string | null;
+  /** Реквизиты клиента — из его карточки («Информация о клиенте»).
+   *  Необязательные: фикстуры, написанные до их разбора, их не знают. */
+  legal_name?: string | null;
+  vat_number?: string | null;
+  reg_number?: string | null;
+  /** ОБЪЕКТ СЧЁТА (миграция 20260922060000). `undefined` — снимок старше
+   *  объектов; `null` — объект не выбран; адрес на бумагу — только
+   *  `address_parts` (точный адрес), иначе адреса нет вовсе. */
+  object?: InvoiceObjectSnapshot | null;
   archived: boolean;
   deleted_at: string | null;
+}
+
+/** Точный адрес объекта: части, из которых бумага собирает строку. */
+export interface InvoiceObjectAddressParts {
+  street?: string;
+  complex?: string;
+  entrance?: string;
+  floor?: string;
+  apartment?: string;
+  city?: string;
+  zip?: string;
+}
+
+export interface InvoiceObjectSnapshot {
+  id: string | null;
+  label: string | null;
+  address_parts: InvoiceObjectAddressParts | null;
 }
 
 export interface InvoiceLedger {
@@ -115,6 +154,19 @@ export interface InvoiceLedger {
   client_id: string | null;
   appointment_id: string | null;
   brigade_id: string | null;
+  /** Реквизиты, которыми подписан документ (ссылка на `companies`, миграция
+   *  20260921000000). Печать всё равно берёт замороженный `seller_snapshot` —
+   *  это поле лишь метка «чем подписали»; у счетов до неё стоит `null`.
+   *  Необязательное — как `kind` и `vat_mode` выше — по той же причине:
+   *  написанные до миграции фикстуры и тесты его не знают. */
+  company_id?: string | null;
+  /** Счёт, куда клиенту предложено заплатить (ссылка на `accounts`) —
+   *  подсказка платежу, а не сам платёж: фактическую оплату несёт
+   *  `payment_id`, который проставляет `record_invoice_payment`.
+   *  Необязательное по той же причине, что и `company_id` выше. */
+  account_id?: string | null;
+  /** Объект клиента, под который выписан счёт (миграция 20260922060000). */
+  location_id?: string | null;
   subtotal_net: number;
   vat_percent: number;
   vat_amount: number;
@@ -125,6 +177,15 @@ export interface InvoiceLedger {
    *  и вчерашняя бумага не переписывается от сегодняшней настройки. */
   language: string;
   status: InvoiceStatus;
+  /** Вид документа. Необязательное поле: офлайн-фикстуры, написанные до того,
+   *  как колонку начали маппить, его не знают, и отсутствие значит «инвойс». */
+  kind?: InvoiceKind;
+  /** Инвойс, который сторнирует эта кредит-нота. */
+  credit_note_of_id?: string | null;
+  /** Режим НДС, КОТОРЫМ ДОКУМЕНТ ПОСЧИТАН (колонка с 20260915120000): сервер
+   *  пишет ровно то, чем считал. У выписанных раньше пусто — их режим
+   *  восстанавливают по суммам, а не выдумывают (`invoiceVatMode`). */
+  vat_mode?: InvoiceVatMode | null;
   pdf_url: string | null;
   notes: string | null;
   created_at: string;
@@ -284,6 +345,32 @@ export function invoiceInTeamScope(
   return invoice.brigade_id === teamId;
 }
 
+/**
+ * ЗАЯВКИ, НА КОТОРЫЕ УЖЕ ВЫСТАВЛЕН ЖИВОЙ СЧЁТ. Их деньги считает плитка
+ * «Документы», и в «Долгах» они были бы посчитаны второй раз.
+ *
+ * Правило одно на продукт, потому что им считают и цифра, и список под ней
+ * (плитка «Долги», лента долгов, `DebtorsList`): спорить о том, выставлен ли
+ * счёт, витрины не имеют права — раньше одна показывала «Долги €0», а другая
+ * должника на €250. Из набора выпадают:
+ *   • аннулированный (`void`) и отменённый кредит-нотой (`cancelled`) — они
+ *     ничего не ждут, и работа возвращается в долги;
+ *   • сама кредит-нота: она несёт заявку своего инвойса, а статус у неё
+ *     «выставлена», то есть после отмены она продолжала вычёркивать работу.
+ */
+export function invoicedAppointmentIds(
+  invoices: readonly Pick<InvoiceLedger, "appointment_id" | "status" | "kind">[],
+): Set<string> {
+  const ids = new Set<string>();
+  for (const invoice of invoices) {
+    if (!invoice.appointment_id) continue;
+    if (invoice.kind === "credit_note") continue;
+    if (invoice.status === "void" || invoice.status === "cancelled") continue;
+    ids.add(invoice.appointment_id);
+  }
+  return ids;
+}
+
 /** `overdue` is a view state: the database keeps the legal status `issued`. */
 export function invoiceDisplayStatus(
   invoice: Pick<InvoiceLedger, "status" | "due_on">,
@@ -331,18 +418,21 @@ export function calculateInvoiceSettlement(
   const rawPaid = round2(Math.max(0, recognizedIncome - refunded));
   const paid = round2(Math.min(invoice.total, rawPaid));
   const overpaid = round2(Math.max(0, rawPaid - invoice.total));
-  const remaining =
-    invoice.status === "void"
-      ? 0
-      : round2(Math.max(0, invoice.total - paid));
+  // ЗАКРЫТАЯ БУМАГА ДЕНЕГ НЕ ЖДЁТ. «Аннулирован» — ошибочный документ;
+  // «отменён» — сторнированный кредит-нотой, и сервер отменяет инвойс только
+  // когда у нас по нему ничего не осталось (`cancel_invoice`: доходы минус
+  // возвраты). Пока `cancelled` считался открытым, отменённый счёт показывал
+  // остаток, попадал в «ждут оплату» и звал принять по нему деньги.
+  const closed = invoice.status === "void" || invoice.status === "cancelled";
+  const remaining = closed ? 0 : round2(Math.max(0, invoice.total - paid));
   return {
     income,
     refunded,
     paid,
     remaining,
     overpaid,
-    isPartial: invoice.status !== "void" && paid > 0 && remaining > 0,
-    isPaid: invoice.status !== "void" && remaining <= 0,
+    isPartial: !closed && paid > 0 && remaining > 0,
+    isPaid: !closed && remaining <= 0,
   };
 }
 
@@ -396,6 +486,12 @@ export function parseInvoiceSellerSnapshot(
     display_name: stringValue(row.display_name),
     legal_name: stringValue(row.legal_name),
     vat_number: stringValue(row.vat_number),
+    // РАЗБОР — ЭТО ТОЖЕ ПЕЧАТЬ. Сервер клал `reg_number` и `logo_url` в
+    // снимок, а разбор их не читал: поля физически не доезжали до бумаги, и
+    // документ печатал СЕГОДНЯШНИЙ логотип арендатора вместо того, с которым
+    // его выслали.
+    reg_number: stringValue(row.reg_number),
+    logo_url: stringValue(row.logo_url),
     business_address: stringValue(row.business_address),
     address: stringValue(row.address),
     city: stringValue(row.city),
@@ -424,9 +520,28 @@ export function parseInvoiceClientSnapshot(
     address: stringValue(row.address),
     city: stringValue(row.city),
     primary_address: stringValue(row.primary_address),
+    legal_name: stringValue(row.legal_name),
+    vat_number: stringValue(row.vat_number),
+    reg_number: stringValue(row.reg_number),
+    ...("object" in row ? { object: parseInvoiceObjectSnapshot(row.object) } : {}),
     archived: row.archived === true,
     deleted_at: stringValue(row.deleted_at),
   };
+}
+
+function parseInvoiceObjectSnapshot(value: unknown): InvoiceObjectSnapshot | null {
+  const row = asObject(value);
+  if (!row) return null;
+  const partsRow = asObject(row.address_parts);
+  let parts: InvoiceObjectAddressParts | null = null;
+  if (partsRow) {
+    parts = {};
+    for (const key of ["street", "complex", "entrance", "floor", "apartment", "city", "zip"] as const) {
+      const part = stringValue(partsRow[key]);
+      if (part) parts[key] = part;
+    }
+  }
+  return { id: stringValue(row.id), label: stringValue(row.label), address_parts: parts };
 }
 
 function localDateKey(date: Date): string {

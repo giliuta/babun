@@ -20,7 +20,6 @@ import { useSession } from "@/providers/SessionProvider";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import {
-  signOutAndWipe,
   signOutScopeAndWipe,
   wipeTenantScopedData,
 } from "@/lib/auth-clear";
@@ -74,18 +73,6 @@ export default function AccountScreen() {
           <PasswordSection email={u?.email ?? null} />
           <DevicesSection />
           <DangerZoneSection email={u?.email ?? ""} />
-
-          <View className="mx-3 mt-6">
-            <Button
-              label="Выйти"
-              variant="secondary"
-              tone="danger"
-              // Same intentional-logout path as the cabinet hub: a bare
-              // signOut() would keep all tenant data in MMKV on a shared
-              // device (bare SIGNED_OUT events deliberately never wipe).
-              onPress={() => void signOutAndWipe()}
-            />
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
@@ -94,6 +81,7 @@ export default function AccountScreen() {
 
 // ─── Смена пароля (web SecuritySection / PasswordBlock) ──────────────
 function PasswordSection({ email }: { email: string | null }) {
+  const t = useThemeColors();
   const toast = useToast();
   const [currentPwd, setCurrentPwd] = useState("");
   const [pwd, setPwd] = useState("");
@@ -109,6 +97,19 @@ function PasswordSection({ email }: { email: string | null }) {
     confirm === pwd &&
     !samePwd &&
     !saving;
+  // ПОГАШЕННАЯ КНОПКА НАЗЫВАЕТ ПРИЧИНУ (закон продукта). Короткий пароль,
+  // совпадение с текущим и расхождение подтверждения уже подписаны у своих
+  // полей; молчали только ПУСТЫЕ поля — и прежде всего «текущий пароль»:
+  // человек набирал новый дважды, а кнопка оставалась серой без единого слова.
+  //
+  // ОДНОЙ СТРОКОЙ И НЕ ЭХОМ ПОДСКАЗОК. Пошаговое «Введите текущий пароль»
+  // дословно повторяло плейсхолдер поля строкой выше — одна фраза дважды на
+  // одном экране. Поля и так называют себя; кнопке нужно сказать только, что
+  // заполнено не всё.
+  const hint =
+    !saving && (!currentPwd || !pwd || !confirm)
+      ? "Заполните все три поля"
+      : null;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -181,6 +182,14 @@ function PasswordSection({ email }: { email: string | null }) {
         textContentType="newPassword"
         error={mismatch ? "Пароли не совпадают" : null}
       />
+      {hint ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          style={{ marginBottom: 8, fontSize: 13, lineHeight: 18, color: t.sub }}
+        >
+          {hint}
+        </Text>
+      ) : null}
       <Button
         label="Сменить пароль"
         onPress={() => void submit()}

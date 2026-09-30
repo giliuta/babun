@@ -45,6 +45,7 @@ import { rowToClient } from "../db/repositories/clients";
 // Go through the emit-wrappers so the OfflineIndicator badge updates the
 // moment the replayer succeeds/fails an op, instead of waiting for the 5-s
 // safety poll.
+import { writesBlocked } from "./write-guard";
 import {
   removeOpAndEmit as removeOp,
   bumpAttemptAndEmit as bumpAttempt,
@@ -108,6 +109,13 @@ export interface ReplayerOptions {
    *  rather than being discarded — the wipe on the next clean switch removes
    *  them. */
   tenantId?: string;
+  /** ЖИВОЕ чтение активной компании. `tenantId` — снимок, снятый при запуске
+   *  рантайма, и он врёт ровно в тот момент, когда это опаснее всего: компания
+   *  теперь свойство УСТРОЙСТВА и меняется без перезапуска, а заголовок
+   *  компании обёртка `fetch` ставит в момент ОТПРАВКИ. Значит остаток уже
+   *  начатого слива уедет с новым заголовком, о котором снимок не знает.
+   *  Отсутствует — работает прежний снимок. */
+  currentTenantId?: () => string | null;
   /** OPTIONAL quota gate — see QuotaGate. Absent = no gating. */
   quota?: QuotaGate;
   /** Called after the drain completes (success or error) so the UI
@@ -179,32 +187,124 @@ export async function kickReplayer(opts: ReplayerOptions): Promise<void> {
   }
 }
 
+/** Активная компания: живое чтение, если хост его дал, иначе прежний снимок. */
+function readTenantId(opts: ReplayerOptions): string | null {
+  return opts.currentTenantId?.() ?? opts.tenantId ?? null;
+}
+
+/** ПОЛЕ, КОТОРЫМ КЛИЕНТ ОБЪЯВЛЯЕТ СЕБЯ ПРИВЯЗАННЫМ К ОДНОЙ КОМПАНИИ.
+ *
+ *  Прогрев чужих компаний ходит клиентом, которому заголовок компании прибит
+ *  намертво. Такой клиент не имеет права попасть в выгрузку: операция АКТИВНОЙ
+ *  компании, отправленная под чужим заголовком, у вставки будет отбита
+ *  сервером, а вот УДАЛЕНИЕ вернёт ноль строк — и это честно прочитается как
+ *  «удалять нечего», после чего операция уйдёт из очереди. Тихая потеря
+ *  работы.
+ *
+ *  Договор простой: привязанный клиент ОБЪЯВЛЯЕТ свою компанию этим полем, а
+ *  выгрузка отказывается через него работать. Заслон стоит с обеих сторон —
+ *  тот, кто создаёт такой клиент, следит, чтобы он не доехал сюда; выгрузка
+ *  не верит этому на слово. Одной стороны мало: обёртки кэша зовут выгрузку
+ *  напрямую, и достаточно одного нового места. */
+export const BOUND_TENANT_FIELD = "__babunBoundTenantId";
+
+function boundTenantOf(supabase: DbSupabase): string | null {
+  const value = (supabase as unknown as Record<string, unknown>)[
+    BOUND_TENANT_FIELD
+  ];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 async function drain(opts: ReplayerOptions): Promise<void> {
   const ops = await dequeueAll(); // sorted by created_at ASC via index
   if (ops.length === 0) return;
 
+  // Компания, под которой слив НАЧАЛСЯ. Сверяется с живой перед каждой
+  // операцией: переход посреди слива обязан его прервать, а не дописать
+  // остаток уже в другую компанию.
+  const gateTenantId = readTenantId(opts);
+
+  // ПРИВЯЗАННЫМ КЛИЕНТОМ НЕ СЛИВАЕМ ВОВСЕ. Не «пропускаем чужие операции», а
+  // выходим целиком: такой клиент отправит ЛЮБУЮ операцию под своим
+  // заголовком, в том числе операцию активной компании, которая гейт проходит
+  // честно. Fail-closed: клиент объявил себя привязанным — значит он не для
+  // выгрузки, даже если привязан к той же компании.
+  if (boundTenantOf(opts.supabase)) return;
+
+  // ПОКА ИДЁТ ПРОСМОТР ЧУЖИМИ ГЛАЗАМИ, ОЧЕРЕДЬ НЕ ТРОГАЕМ. Засов отбивает
+  // отправку, а слив этого не знает: каждая операция получила бы отказ,
+  // трижды (`MAX_ATTEMPTS`) — и вся несохранённая офлайн-работа владельца
+  // легла бы «ждать ручного повтора» из-за одного перехода Wi-Fi↔LTE за
+  // полминуты предпросмотра. Выходим целиком, как при привязанном клиенте:
+  // операции остаются в очереди и уедут, когда просмотр кончится.
+  if (writesBlocked()) return;
+
+  // СТРОКИ, ЧЬЯ ПРАВКА УПАЛА В ЭТОМ ПРОХОДЕ. Следующие правки той же строки
+  // ждут следующего прохода: уйди они сейчас, упавшая старая правка
+  // долетела бы ПОСЛЕ них и перезаписала свежую (24.09: растяжка 14:30→15:00
+  // на 504, возврат к 14:30 — и в базе снова 15:00). Порядок жестов по одной
+  // строке — закон; разные строки друг друга не держат.
+  const heldRows = new Set<string>();
+  const rowKey = (o: QueuedOp) => `${o.table}:${o.row_id}`;
+
   for (const op of ops) {
+    let legacyUpdate = false;
+    if (heldRows.has(rowKey(op))) continue;
     if (op.attempts >= MAX_ATTEMPTS) {
       // Already failed permanently — leave in queue so the UI can
       // show the manual-retry button. Manual retry resets attempts.
       continue;
     }
 
-    // offline-plan risk #1 (second half) — tenant gate. If an active
-    // tenant is supplied and this op belongs to a DIFFERENT tenant, do
-    // NOT drain it under the current session (it would replay onto the
-    // server with the wrong tenant's auth). Leave it in the queue — the
-    // cacheClearAll wipe on a clean tenant switch is what removes it. No
-    // gate (tenantId unset) → skip this check entirely (behaviour as
-    // before). We read the tenant off the payload the wrapper enqueued.
-    if (opts.tenantId) {
-      const payloadTenant = (op.payload as { tenant_id?: unknown })?.tenant_id;
+    // ГЕЙТ ПО КОМПАНИИ. Очередь ПЕРЕЖИВАЕТ переход в другую компанию —
+    // переход бережёт местный кэш, — поэтому здесь лежат операции, поставленные
+    // под другой компанией, и слить их под текущей нельзя.
+    //
+    // Чем это кончается, если не удержать. Вставку сервер отобьёт: у каждой
+    // стоит `with check (tenant_id = current_tenant_id())`. А вот УДАЛЕНИЕ
+    // отбить нечем — под чужой компанией оно просто не найдёт строку, вернёт
+    // ноль строк БЕЗ ошибки, и операция уйдёт из очереди как выполненная.
+    // Человек удалил запись, очередь пуста, запись на месте.
+    if (gateTenantId) {
+      const liveTenantId = readTenantId(opts);
+      if (liveTenantId !== gateTenantId) {
+        // Компания сменилась ПОСРЕДИ слива. Дальше не идём вовсе: остаток
+        // сольёт следующий kick — уже под новой компанией и под её заголовком.
+        break;
+      }
+
+      let payloadTenant = (op.payload as { tenant_id?: unknown })?.tenant_id;
       if (
-        typeof payloadTenant === "string" &&
-        payloadTenant !== opts.tenantId
+        (typeof payloadTenant !== "string" || payloadTenant.length === 0)
+        && op.op === "update"
       ) {
+        // ПРАВКИ, ПОСТАВЛЕННЫЕ ДО 24.09, КОМПАНИИ В ТЕЛЕ НЕ НЕСУТ. Обёртки
+        // клали её во вставку и удаление, а в правку — нет, и гейт 12.09
+        // молча пропускал такую операцию на каждом круге: она не уходила,
+        // не падала и держала очередь. Держала буквально: пока в очереди
+        // висит правка записи, перечитка записей с сервера не идёт вовсе
+        // (`appointmentsCached`), и календарь телефона замирал — оплата,
+        // принятая сервером, на экране оставалась «не оплачено» (владелец
+        // 2026-09-24: «оплата у клиента не записывается»). Компания такой
+        // правки — компания самой строки в кэше.
+        const cached = await cacheGetOne(op.table as CachedTable, op.row_id).catch(
+          () => null,
+        );
+        payloadTenant = (cached as { tenant_id?: unknown } | null)?.tenant_id;
+        legacyUpdate = true;
+      }
+      if (typeof payloadTenant !== "string" || payloadTenant.length === 0) {
+        // ОПЕРАЦИЯ БЕЗ КОМПАНИИ НЕ ВЫГРУЖАЕТСЯ ВОВСЕ: отправить её — значит
+        // отдать серверу решать, в какую компанию писать, а он возьмёт
+        // ТЕКУЩУЮ. Но и молча лежать ей нельзя — молчаливый пропуск держал
+        // очередь вечно. Она уходит в «не удалось» с причиной: видна в
+        // очереди, там её удаляют руками, и перечитка больше не ждёт её.
+        const msg = "Операция без компании — отправлять её некуда";
+        await markOpPermanentlyFailedAndEmit(op.id, msg);
+        opts.onPermanentFailure?.({ ...op, attempts: MAX_ATTEMPTS, last_error: msg });
         continue;
       }
+      if (payloadTenant !== liveTenantId) continue;
     }
 
     // v452 — fail-fast for non-UUID row_ids targeting uuid id
@@ -259,8 +359,15 @@ async function drain(opts: ReplayerOptions): Promise<void> {
       }
     }
 
+    // ПЕРЕПРОВЕРКА ПЕРЕД САМОЙ ОТПРАВКОЙ. Между проверкой наверху и этой
+    // строкой прошли ДВА ожидания: откат попытки (до тридцати секунд) и
+    // сторож тарифа. За тридцать секунд человек успевает сменить компанию —
+    // и тогда операция уйдёт под чужим заголовком. Проверка наверху нужна,
+    // чтобы не начинать; эта — чтобы не доотправить начатое.
+    if (gateTenantId && readTenantId(opts) !== gateTenantId) break;
+
     try {
-      const conflict = await dispatch(opts.supabase, op);
+      const conflict = await dispatch(opts.supabase, op, legacyUpdate);
       if (conflict) {
         opts.onConflict?.(
           "Запись была обновлена на другом устройстве. Применены ваши изменения.",
@@ -269,6 +376,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
       await removeOp(op.id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      heldRows.add(rowKey(op));
       await bumpAttempt(op.id, msg);
       // If we just exceeded the cap, surface to UI once.
       if (op.attempts + 1 >= MAX_ATTEMPTS) {
@@ -293,6 +401,10 @@ async function drain(opts: ReplayerOptions): Promise<void> {
 async function dispatch(
   supabase: DbSupabase,
   op: QueuedOp,
+  /** Правка старого образца (без компании в теле, см. гейт в `drain`). Она
+   *  пролежала в очереди часы и дни, и строку за это время правили — при
+   *  конфликте побеждает сервер, а не она. */
+  serverWinsOnConflict = false,
 ): Promise<boolean> {
   // The repositories accept the row shapes already; payloads are
   // pre-shaped at enqueue time so dispatch is mostly a relay. We
@@ -305,11 +417,30 @@ async function dispatch(
   const tableName = tableForOp(op.table);
 
   if (op.op === "delete") {
-    const { error } = await supabase
+    // УДАЛЕНИЕ ОТЧИТЫВАЕТСЯ СТРОКАМИ, А НЕ МОЛЧАНИЕМ. Без `select()` ответ
+    // несёт ошибку только когда сервер ОТВЕТИЛ ошибкой, а «политика не дала
+    // удалить» ошибкой не считается: под RLS строка просто не находится, и
+    // ноль затронутых строк приезжал сюда как успех. Операция уходила из
+    // очереди, человек видел пустую очередь — и запись на месте.
+    const { data: deleted, error } = await supabase
       .from(tableName)
       .delete()
-      .eq("id", op.row_id);
+      .eq("id", op.row_id)
+      .select("id");
     if (error) throw new Error(`replay delete: ${error.message}`);
+    if (Array.isArray(deleted) && deleted.length > 0) return false;
+
+    // НОЛЬ СТРОК ДВУСМЫСЛЕН, и разрешает его только проверка видимости:
+    //   • строки не видно — её уже удалили с другого устройства или её
+    //     никогда не было. Удаление идемпотентно, это УСПЕХ, и поднимать
+    //     тревогу здесь нельзя: два устройства у одного человека — норма,
+    //     а не авария.
+    //   • строка ВИДНА — сервер отказал именно в удалении. Это про права, а
+    //     не про гонку: `view` без `edit_all` выглядит ровно так, и с
+    //     правами по календарям этот случай стал обычным.
+    if (await rowStillVisible(supabase, tableName, op.row_id)) {
+      throw new Error("Сервер не дал удалить эту запись: нет прав на неё.");
+    }
     return false;
   }
 
@@ -466,10 +597,15 @@ async function dispatch(
   // PostgrestFilterBuilder so we can chain `.eq("updated_at", ...)`
   // without per-table type narrowing. The replayer is intentionally
   // generic across cached tables.
+  // КОМПАНИЯ В ТЕЛЕ ПРАВКИ — ДЛЯ ГЕЙТА, А НЕ ДЛЯ СЕРВЕРА. Правка компанию
+  // строки не меняет никогда: колонку из SET убираем.
+  const { tenant_id: _tenantForGate, ...updatePayload } = op.payload as Record<string, unknown>;
+  void _tenantForGate;
+
   if (op.expected_updated_at) {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const filter = (
-      supabase.from(tableName).update(op.payload as any) as any
+      supabase.from(tableName).update(updatePayload as any) as any
     )
       .eq("id", op.row_id)
       .eq("updated_at", op.expected_updated_at)
@@ -479,6 +615,31 @@ async function dispatch(
     if (error) throw new Error(`replay update: ${error.message}`);
     if (data && data.length > 0) return false; // matched cleanly
 
+    if (serverWinsOnConflict) {
+      // Строку правили после того, как эта правка встала в очередь. Старая
+      // правка поверх новой затёрла бы свежие изменения (время, услуги),
+      // поэтому операция снимается, а кэш берёт строку сервера.
+      const { data: fresh, error: freshErr } = await supabase
+        .from(tableName)
+        .select()
+        .eq("id", op.row_id)
+        .maybeSingle();
+      if (freshErr) throw new Error(`replay refresh: ${freshErr.message}`);
+      if (fresh) {
+        const row = fresh as Record<string, unknown>;
+        if (op.table === "clients" && row.deleted_at != null) {
+          await cacheDelete("clients", op.row_id);
+        } else {
+          const prevCached =
+            op.table === "clients"
+              ? await cacheGetOne<CachedClientData>("clients", op.row_id).catch(() => null)
+              : null;
+          await cacheUpsert(op.table as CachedTable, toCachedRow(op.table, row, prevCached));
+        }
+      }
+      return false;
+    }
+
     // 0 rows → conflict. Retry without updated_at filter and re-fetch
     // the canonical server row (now carrying the new updated_at) so
     // the cache stays consistent. Without this re-fetch, IDB would
@@ -486,7 +647,7 @@ async function dispatch(
     // next edit.
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const forceFilter = (
-      supabase.from(tableName).update(op.payload as any) as any
+      supabase.from(tableName).update(updatePayload as any) as any
     )
       .eq("id", op.row_id)
       .select()
@@ -528,11 +689,22 @@ async function dispatch(
         toCachedRow(op.table, forced, prevCached),
       );
     }
-    // forced === null → 0 rows: the update is unappliable (row gone /
-    // not writable for this user). DROP the op (return true) instead of
-    // looping forever — a permanently-stuck op blocks the whole queue.
-    // The local cache self-heals on the next full refetch (foreground
-    // revalidate / realtime onResync re-pulls the canonical rows).
+    // forced === null → 0 rows, и это НЕ конфликт: правку не применили вовсе.
+    // Раньше операция уходила с `true`, то есть с тостом «Применены ваши
+    // изменения», — человеку сообщали об успехе, а правка пропадала. Разводим
+    // тем же чтением видимости, что у удаления:
+    //   • строки не видно — её удалили на другом устройстве. Применять некуда:
+    //     операцию снимаем МОЛЧА (зависшая держала бы очередь), кэш догонит
+    //     следующая полная перечитка (foreground revalidate / onResync);
+    //   • строка ВИДНА — сервер отказал в правке, это права (`view` без
+    //     `edit_all`). Операция остаётся с причиной и по исчерпании попыток
+    //     уходит в `onPermanentFailure`, а не в ложное «применено».
+    if (!forced) {
+      if (await rowStillVisible(supabase, tableName, op.row_id)) {
+        throw new Error("Сервер не дал изменить эту запись: нет прав на неё.");
+      }
+      return false;
+    }
     return true;
   }
 
@@ -541,10 +713,29 @@ async function dispatch(
   const { error: plainErr } = await supabase
     .from(tableName)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update(op.payload as any)
+    .update(updatePayload as any)
     .eq("id", op.row_id);
   if (plainErr) throw new Error(`replay update (plain): ${plainErr.message}`);
   return false;
+}
+
+/** НОЛЬ СТРОК ДВУСМЫСЛЕН, и разрешает его только чтение видимости: строки не
+ *  видно — её удалили с другого устройства (или не было), строка ВИДНА —
+ *  сервер отказал именно в этой операции. Ошибка самого чтения — не «не
+ *  видно»: гадать нельзя, операция остаётся до следующей попытки, иначе обрыв
+ *  сети молча выбросил бы правку или удаление. */
+async function rowStillVisible(
+  supabase: DbSupabase,
+  tableName: ReturnType<typeof tableForOp>,
+  rowId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from(tableName)
+    .select("id")
+    .eq("id", rowId)
+    .maybeSingle();
+  if (error) throw new Error(`replay visibility check: ${error.message}`);
+  return data != null;
 }
 
 function tableForOp(t: QueuedOp["table"]): "clients" | "appointments" | "client_tags" {

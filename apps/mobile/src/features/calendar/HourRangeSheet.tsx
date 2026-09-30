@@ -40,6 +40,7 @@ export function HourRangeSheet({
   visible,
   title,
   value,
+  allowEndOfDay,
   onClose,
   onApply,
 }: {
@@ -47,6 +48,9 @@ export function HourRangeSheet({
   title: string;
   /** Текущая пара — читается буквально, включая минуты. */
   value: HourRangeValue;
+  /** Конец умеет быть 24:00 — это про ОКНО календаря. У смены и у перерыва
+   *  конец приходится на час суток, а не на их конец. */
+  allowEndOfDay?: boolean;
   onClose: () => void;
   onApply: (v: {
     start: number;
@@ -137,6 +141,7 @@ export function HourRangeSheet({
           end={end}
           onChangeStart={changeStart}
           onChangeEnd={changeEnd}
+          allowEndOfDay={allowEndOfDay}
         />
       </View>
     </BottomSheet>

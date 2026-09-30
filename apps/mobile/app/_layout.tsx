@@ -7,6 +7,8 @@ import { router, Stack, type ErrorBoundaryProps } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { AppProviders } from "@/providers/AppProviders";
+import { MirrorProvider } from "@/features/access/mirror/mirror-state";
+import { MirrorBanner, MirrorInsetShim } from "@/features/access/mirror/MirrorBanner";
 import { useSession } from "@/providers/SessionProvider";
 import { ChoiceSheetHost } from "@/components/ui/ChoiceSheet";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -163,6 +165,11 @@ function RootNavigator() {
           Настройки же (/calendar/*) переехали ВНУТРЬ вкладки «Календарь»
           (app/(dashboard)/(home)), чтобы бар из-под них не исчезал. */}
       <Stack.Screen name="book" />
+      {/* Общие экраны, открытые ПОВЕРХ позвавшего: карточка клиента и её
+          справочники. Экран один на продукт (те же файлы, что во вкладке
+          «Клиенты»), здесь у него только второй адрес — чтобы «назад»
+          возвращало ровно тому, кто позвал (см. app/(shared)/_layout.tsx). */}
+      <Stack.Screen name="(shared)" />
       {/* Финансовые документы открываются поверх табов и сами fail-closed
           проверяют роль владельца в app/invoices/_layout.tsx. */}
       <Stack.Screen name="invoices" />
@@ -177,6 +184,12 @@ function RootNavigator() {
           babun.app/l/<токен> без входа, поэтому экран живёт вне (auth) и
           (dashboard) — как приглашение. */}
       <Stack.Screen name="l" />
+      {/* «Подтвердить / Отменить» запись (STORY-089): клиент открывает
+          babun.app/r/<токен> из SMS без входа — там же, где «l». */}
+      <Stack.Screen name="r" />
+      {/* «Оплата прошла» — возврат из Stripe после пополнения SMS из
+          приложения (STORY-089): без входа, как «l» и «r». */}
+      <Stack.Screen name="pay" />
     </Stack>
   );
 }
@@ -184,13 +197,28 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <AppProviders>
+      {/* РЕЖИМ «ЕГО ГЛАЗАМИ» — НАД ВСЕМ ПРИЛОЖЕНИЕМ: пока он включён, права и
+          роль отвечают за сотрудника, и это должно действовать в любом экране,
+          включая границы разделов (`access/mirror/mirror-state.tsx`). */}
+      <MirrorProvider>
       <ToastProvider>
         {/* Хост выбора «что сделать»: любой chooseOption() рисуется нижним
             листом, а не системным попапом посередине. */}
         <ChoiceSheetHost>
-          <RootNavigator />
+          {/* ПЛАШКА РЕЖИМА — НАД ВСЕМИ МАРШРУТАМИ, А НЕ ТОЛЬКО НАД ВКЛАДКАМИ.
+              Стояла она внутри `(dashboard)`, и экраны-соседи — запись,
+              карточка клиента по ссылке, счета, документы — оставались в
+              режиме без единого признака и без выхода: владелец не понимал,
+              почему приложение перестало сохранять. */}
+          <View style={{ flex: 1 }}>
+            <MirrorBanner />
+            <MirrorInsetShim>
+              <RootNavigator />
+            </MirrorInsetShim>
+          </View>
         </ChoiceSheetHost>
       </ToastProvider>
+      </MirrorProvider>
     </AppProviders>
   );
 }

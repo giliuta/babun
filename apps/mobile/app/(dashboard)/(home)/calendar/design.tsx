@@ -1,0 +1,4 @@
+// «Записи» (до 30.09 — «Дизайн») — одна страница вида и состава записи и
+// события (владелец 2026-09-24). Тело — в features, маршрут календаря только
+// дверь; адрес `/calendar/design` прежний.
+export { DesignScreen as default } from "@/features/calendar/design/DesignScreen";

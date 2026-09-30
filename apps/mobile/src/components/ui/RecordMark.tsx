@@ -1,19 +1,30 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
 import {
-  BLOCK_FILL,
+  BLOCK_TEXT,
+  blockContour,
+  blockSolid,
   CANCELLED_BORDER,
   CANCELLED_EDGE,
-  edgeColor,
-  fillRgba,
 } from "@/components/ui/color-contrast";
 import { useThemeColors } from "@/theme/colors";
 
+/** БЛИК ПЛОТНОГО БЛОКА — ОДИН НА СЕТКУ И ЗНАК: высота плёнки от верха и её
+ *  белизна. Восемь тонких плёнок по 2.3 % до глубины 52 % (24.09): три
+ *  плёнки по 5–7 % давали на широкой карточке три заметные полосы, ровно по
+ *  строкам текста. Сила сверху та же (≈17 %), ступень глазом не видна.
+ *  Копия в знаке однажды уже отстала от сетки — поэтому константа здесь, а
+ *  блок календаря её импортирует. */
+export const BLOCK_GLASS: readonly (readonly [`${number}%`, number])[] = [
+  6.5, 13, 19.5, 26, 32.5, 39, 45.5, 52,
+].map((h) => [`${h}%` as const, 0.023] as const);
+
 // ЗНАК ЗАПИСИ — МИНИАТЮРА БЛОКА КАЛЕНДАРЯ, А НЕ ОБРАЗЕЦ ПИГМЕНТА.
 //
-// Здесь живёт весь облик блока, который зависит от цвета записи: заливка 18 %,
-// кант в полную силу (`edgeColor` затемняет цвет ровно до порога 3 : 1), радиус
-// 10 и разомкнутый контур у отменённой. Добавили блоку новый слой, зависящий от
+// Здесь живёт весь облик блока, который зависит от цвета записи: плотная
+// заливка (`blockSolid` — цвет, затемнённый по светлоте до читаемого белого
+// имени; владелец 2026-09-24, вариант 7), радиус и разомкнутый контур у
+// отменённой. Текст внутри красит `recordMarkText` — тот же, что в сетке. Добавили блоку новый слой, зависящий от
 // цвета, — добавьте его и сюда, иначе настройка снова начнёт врать.
 //
 // ПОЧЕМУ КРУЖОК ПИГМЕНТА НЕ ГОДИЛСЯ. Он показывал единственный канал, которого
@@ -25,8 +36,8 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Общий у сетки и у знака РЕЦЕПТ, а не компонент: блок сетки — это
 // `Animated.View` с жестами, `interpolateColor` и процентной геометрией,
-// переиспользовать его нельзя. От расхождения защищают одно место для альфы
-// (`BLOCK_FILL`) и гейт в `color-contrast.test.ts`.
+// переиспользовать его нельзя. От расхождения защищают одно место рецепта
+// (`blockSolid`) и гейт в `color-contrast.test.ts`.
 //
 // 28pt — НЕ УПРОЩЕНИЕ, А ЧЕСТНАЯ ШИРИНА. По арифметике блока при ширине 28
 // textW = 28 − 2·pad(4) − 2 = 18 < 24, то есть настоящий блок такой ширины
@@ -66,20 +77,49 @@ export function RecordMark({
         backgroundColor: cancelled
           ? `${t.ink}14`
           : hue
-            ? fillRgba(hue, BLOCK_FILL)
+            ? blockSolid(hue)
             : "transparent",
         borderWidth: 1,
         borderColor: cancelled
           ? CANCELLED_EDGE
           : hue
-            ? edgeColor(hue)
+            ? blockContour(hue)
             : t.separator,
         borderStyle: cancelled ? CANCELLED_BORDER : "solid",
+        overflow: "hidden",
       }}
     >
+      {/* Тот же блик, что у блока в сетке (вариант 5): образец не имеет
+          права выглядеть площе, чем то, что он обещает. */}
+      {hue && !cancelled
+        ? BLOCK_GLASS.map(([h, a]) => (
+            <View
+              key={h}
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                height: h,
+                backgroundColor: `rgba(255,255,255,${a})`,
+              }}
+            />
+          ))
+        : null}
       {children}
     </View>
   );
+}
+
+/** Цвет текста внутри знака: белый на плотной заливке, чернила там, где
+ *  заливки нет («не красить») или запись отменена. */
+export function recordMarkText(
+  hue: string | null,
+  ink: string,
+  cancelled = false,
+): string {
+  return hue && !cancelled ? BLOCK_TEXT : ink;
 }
 
 export default RecordMark;

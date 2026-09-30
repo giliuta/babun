@@ -8,9 +8,7 @@ import {
   Pressable,
   ScrollView,
   Text as NativeText,
-  TextInput as NativeTextInput,
   View,
-  type TextInputProps,
   type TextProps,
 } from "react-native";
 import {
@@ -24,13 +22,11 @@ import { usePreventRemove } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AlertTriangle,
+  Bell,
+  BellRing,
   MapPin,
-  MoreHorizontal,
   UserRound,
   Users,
-  Tag,
-  X,
-  Briefcase,
 } from "lucide-react-native";
 import type {
   Appointment,
@@ -38,22 +34,25 @@ import type {
   Discount,
   PersonalEventRepeat,
 } from "@babun/shared/local/appointments";
+import { isCustomServiceId, newCustomServiceId } from "@babun/shared/local/appointments";
 import {
 } from "@babun/shared/local/appointments";
 import {
   locationAddressForBooking,
   type Client,
-  type ClientNote,
   type Location,
 } from "@babun/shared/local/clients";
 import { Spinner } from "@/components/ui/Spinner";
+import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
-import { LabelSheet } from "@/features/appointments/LabelSheet";
-import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
+import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
 import { useInlineNote } from "@/features/appointments/use-inline-note";
-import { applyNoteEdit } from "@/features/appointments/client-note-journal";
+import { useClientNoteField } from "@/features/appointments/use-client-note-field";
+import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
+import { useTeamVatRate } from "@/features/finances/vat-queries";
+import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
@@ -63,8 +62,6 @@ import {
   findOverlap,
 } from "@babun/shared/common/utils/appointment-overlap";
 import { getDayScheduleForDate } from "@babun/shared/local/schedule";
-import { tierForVisits } from "@babun/shared/local/loyalty";
-import { formatEURExact } from "@babun/shared/common/utils/money";
 import { colorName } from "@babun/shared/common/utils/colors";
 import {
   getCurrentCyprusTime,
@@ -77,21 +74,31 @@ import { Screen } from "@/components/ui/Screen";
 import { Halo } from "@/components/ui/Halo";
 import { tintOver } from "@/components/ui/color-contrast";
 import { PageWash } from "@/features/appointments/PageWash";
+import { resolveReturnTo } from "@/features/appointments/return-to";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
-import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
-import { AddRow } from "@/components/ui/AddRow";
-import { ColorDot } from "@/components/ui/picker-fields";
 import { useToast } from "@/components/ui/Toast";
+import { SelfReminderSheet } from "@/features/calendar/SelfReminderSheet";
+import {
+  getSelfReminder,
+  setSelfReminder,
+} from "@/features/calendar/reminders";
+import {
+  selfReminderLabel,
+  type SelfReminder,
+} from "@/features/calendar/reminder-time";
 import { resolveCalendarDayLabel } from "@/features/calendar/day-label";
+import { useFeatureOn } from "@/features/settings/company-features";
 import { useDayCities } from "@/features/calendar/day-cities";
 import {
   useAutoColorRule,
   useBookingBlocks,
+  useEventBlocks,
   useFallbackColor,
   useSituationPalette,
 } from "@/features/appointments/booking-prefs";
 import {
+  autoBaseColor,
   COLOR_SITUATIONS,
   recordFilled,
   resolveRecordColor,
@@ -118,13 +125,18 @@ import { useTeamSchedule } from "@/features/reference/team-schedule";
 import { useAppointments } from "@/features/calendar/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useBookingSave } from "@/features/appointments/useBookingSave";
+import { useCalendarActions, useEventRights, useRecordBlocks } from "@/features/appointments/useRecordRights";
+import { bookRights } from "@/features/appointments/record-blocks";
+import { changedFields } from "@/features/appointments/member-writes";
+import { useSession } from "@/providers/SessionProvider";
 import {
   useCalendarSettings,
-  useLoyalty,
   usePersonalEventTypes,
 } from "@/features/settings/local-settings";
 import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
+import { EventTypeBlock } from "@/features/appointments/EventTypeBlock";
+import { eventTypeIcon } from "@/features/calendar/event-type-icons";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { FieldRow } from "@/components/ui/card-rows";
 import { PickerSheet } from "@/components/ui/PickerSheet";
@@ -146,26 +158,27 @@ import {
   type LocationRequest,
 } from "@/features/clients/location-request-link";
 import { useLocationRequests } from "@/features/clients/location-requests";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { SmsComposeProvider } from "@/features/sms/SmsCompose";
+import { useRevealedClient } from "@/features/clients/revealed-contacts";
+import { SmsRecordBlock } from "@/features/sms/SmsRecordBlock";
+import { smsVars } from "@/features/sms/sms-compose";
+import { addressedAs, firstName } from "@/features/clients/sms-name";
 import {
-  ClientHistoryLine,
   clientHistoryText,
 } from "@/features/clients/history-line";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
-import {
-  TeamLabelRow,
-  TotalRow,
-  WhenRow,
-} from "@/features/appointments/BookingSummary";
+import { WhenRow } from "@/features/appointments/BookingSummary";
+import { TeamLabelRow } from "@/features/appointments/TeamLabelRow";
+import { ClientBlock } from "@/features/appointments/ClientBlock";
+import { ServicesBlock } from "@/features/appointments/ServicesBlock";
 import { TotalSheet } from "@/features/appointments/TotalSheet";
-import { QtyBadge } from "@/features/appointments/QtyBadge";
 import {
   ColorSheet,
   TeamMasterSheet,
 } from "@/features/appointments/BookingSheets";
 import {
-  ClientPicker,
   ServicePicker,
 } from "@/features/appointments/BookingPickers";
 import {
@@ -192,18 +205,6 @@ function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   );
 }
 
-function TextInput({
-  maxFontSizeMultiplier = 1.3,
-  ...props
-}: TextInputProps) {
-  return (
-    <NativeTextInput
-      maxFontSizeMultiplier={maxFontSizeMultiplier}
-      {...props}
-    />
-  );
-}
-
 // СПИСКА СТАТУСОВ ЗДЕСЬ БОЛЬШЕ НЕТ (2026-08-30). Руками статус не ставят:
 // он выводится из состояния записи и говорит ЦВЕТОМ — «не хватает данных»,
 // «готова», «денег нет», «закрыто» (решение владельца о светофоре). Само
@@ -225,7 +226,6 @@ function TextInput({
 // У цифровой клавиатуры нет клавиши возврата — даём панель «Готово» (iOS).
 const EMPTY_LOCATIONS: Location[] = [];
 const EMPTY_REQUESTS: LocationRequest[] = [];
-const EMPTY_NOTES: ClientNote[] = [];
 /** Пауза перед первым листом цепочки: столько уезжает попап слота, из
  *  которого сюда пришли. Меньше — и лист подаётся поверх закрывающегося окна,
  *  то есть не появляется вовсе. */
@@ -292,26 +292,7 @@ export default function BookScreen() {
   const keyboardShown = useKeyboardShown();
   const toast = useToast();
   const { data: dayCities = {} } = useDayCities();
-  // КАКИЕ БЛОКИ НУЖНЫ ЭТОМУ БИЗНЕСУ (Кабинет → «Запись», владелец 2026-09-05:
-  // «для бьюти-мастеров объект не нужен — можем вообще его убрать»).
-  const blocks = useBookingBlocks();
-  const showObject = blocks.includes("object");
-  const showLabelBlock = blocks.includes("label");
-  const showPayment = blocks.includes("payment");
-  const showNote = blocks.includes("note");
-  const showFiles = blocks.includes("files");
-  // Чем красить запись, когда цвет не выбирали руками, и какими цветами
-  // говорить о незаполненном (Кабинет → «Запись»).
-  const autoColorRule = useAutoColorRule();
-  const situationPalette = useSituationPalette();
-  const fallbackColor = useFallbackColor();
-  const activeSituations = useMemo<ColorSituation[]>(
-    () =>
-      COLOR_SITUATIONS.map((s) => s.id).filter(
-        (id) => id !== "noObject" || showObject,
-      ),
-    [showObject],
-  );
+  const dayLabelsOn = useFeatureOn("day_labels");
   const params = useLocalSearchParams<{
     date?: string;
     time_start?: string;
@@ -323,19 +304,59 @@ export default function BookScreen() {
     /** Правка существующей записи. Та же страница, тот же порядок полей —
      *  других форм записи в продукте нет (STORY-064). */
     appointmentId?: string;
+    /** Откуда пришли открывать запись: «finances», «finances:<разрез>»,
+     *  «invoice:<id>». Словарь дорог — `resolveReturnTo`. */
+    from?: string;
   }>();
+  const [teamId, setTeamId] = useState<string | null>(
+    first(params.teamId) ?? null,
+  );
+  // КАКИЕ БЛОКИ НУЖНЫ ЭТОМУ БИЗНЕСУ (Кабинет → «Запись», владелец 2026-09-05:
+  // «для бьюти-мастеров объект не нужен — можем вообще его убрать»).
+  const blocks = useBookingBlocks(teamId);
+  const showObject = blocks.includes("object");
+  const showLabelBlock = blocks.includes("label");
+  const showPayment = blocks.includes("payment");
+  const showNote = blocks.includes("note");
+  const showFiles = blocks.includes("files");
+  // БЛОКИ СОБЫТИЯ — СВОИ (владелец 24.09, «Дизайн» → «Блоки события»): у
+  // события заметка или объект включаются отдельно от записи.
+  const eventBlocks = useEventBlocks(teamId);
+  const evShowLabel = eventBlocks.includes("label");
+  // Тип у события необязателен: выключен — событие как запись с заметкой.
+  const evShowType = eventBlocks.includes("type");
+  const evShowClient = eventBlocks.includes("client");
+  const evShowObject = eventBlocks.includes("object");
+  const evShowNote = eventBlocks.includes("note");
+  const evShowFiles = eventBlocks.includes("files");
+  // Чем красить запись, когда цвет не выбирали руками, и какими цветами
+  // говорить о незаполненном (Кабинет → «Запись»).
+  const autoColorRule = useAutoColorRule(teamId);
+  const situationPalette = useSituationPalette(teamId);
+  const fallbackColor = useFallbackColor(teamId);
+  const activeSituations = useMemo<ColorSituation[]>(
+    () =>
+      // Подсветка — только у включённых блоков (владелец 25.09).
+      COLOR_SITUATIONS.map((s) => s.id).filter((id) =>
+        id === "noObject" ? showObject : showPayment,
+      ),
+    [showObject, showPayment],
+  );
 
   // ── справочные данные (кеш уже тёплый — календарь грузит те же ключи) ──
   const teamsQuery = useTeams();
+  // Весь справочник, с архивом — только чтобы назвать календарь записи,
+  // ушедшей в архив. Ключ общий с `teamsQuery`: сети это не добавляет.
+  const { data: allTeams = [] } = useTeams({ includeInactive: true });
   const mastersQuery = useMasters();
   const servicesQuery = useServices();
   // Услуга типа «варианты» продаётся выбором объёма работ, а не количеством:
   // трёхкомнатная квартира — это не «три раза комната».
   const clientsQuery = useClients();
   const appointmentsQuery = useAppointments();
-  const loyaltyQuery = useLoyalty();
   const calendarSettingsQuery = useCalendarSettings();
-  const eventTypesQuery = usePersonalEventTypes();
+  // Типы событий ЭТОЙ команды (владелец 24.09).
+  const eventTypesQuery = usePersonalEventTypes(teamId);
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const masters = useMemo(() => mastersQuery.data ?? [], [mastersQuery.data]);
   const services = useMemo(() => servicesQuery.data ?? [], [servicesQuery.data]);
@@ -350,12 +371,7 @@ export default function BookScreen() {
     () => buildStatsMap(clientsQuery.data ?? [], allAppts),
     [clientsQuery.data, allAppts],
   );
-  const loyalty = loyaltyQuery.data;
   const calendarSettings = calendarSettingsQuery.data;
-  const eventTypes = useMemo(
-    () => eventTypesQuery.data ?? [],
-    [eventTypesQuery.data],
-  );
   // Создание заявки и весь его хвост (закрытие напоминания, синхронизация
   // push события, тосты, хаптика) живут в общем хуке — на нём же строится
   // шторка «Записать» с карточки клиента, чтобы путь создания остался один.
@@ -405,6 +421,12 @@ export default function BookScreen() {
   // рисует календарь: кеш уже тёплый, отдельный запрос завёл бы вторую
   // правду о той же записи.
   const editId = first(params.appointmentId) ?? null;
+  // НАПОМНИТЬ СЕБЕ — колокольчик в шапке (владелец 24.09). Правило личное и
+  // лежит на телефоне (`reminders.ts`), а не в записи.
+  const [selfReminder, setSelfReminderRule] = useState<SelfReminder | null>(
+    () => (editId ? getSelfReminder(editId) : null),
+  );
+  const [reminderSheetOpen, setReminderSheetOpen] = useState(false);
   const isEdit = editId != null;
   const editing = useMemo(
     () => (editId ? allAppts.find((a) => a.id === editId) ?? null : null),
@@ -437,12 +459,15 @@ export default function BookScreen() {
     addMinutesHM(first(params.time_start) ?? "10:00", 60),
   );
   const [durationTouched, setDurationTouched] = useState(false);
+  // ДЛИТЕЛЬНОСТЬ, ВЫБРАННАЯ РУКАМИ, СИЛЬНЕЕ ДЛИТЕЛЬНОСТИ ТИПА (владелец
+  // 2026-09-08: «тип события — это стандарт, но если в событии я выбираю
+  // время, скажем, тридцать минут, то главнее эти тридцать минут»).
+  // Отдельный флаг от `durationTouched`: тот взводит и сам выбор типа —
+  // иначе второй тип уже не смог бы поставить свою длительность.
+  const [durationByHand, setDurationByHand] = useState(false);
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [overrides, setOverrides] = useState<Record<string, ServiceOverride>>(
     {},
-  );
-  const [teamId, setTeamId] = useState<string | null>(
-    first(params.teamId) ?? null,
   );
   const teamScheduleQuery = useTeamSchedule(teamId ?? undefined);
   // Метки принадлежат команде — те же, что предлагаются её дню.
@@ -458,6 +483,19 @@ export default function BookScreen() {
     null,
   );
   const [discountValue, setDiscountValue] = useState("");
+  // VAT ЗАПИСИ — В «ИТОГО», КАК У ЧЕКА И ИНВОЙСА (владелец 2026-09-22:
+  // «скидка, всё высчитывается, потом VAT начисляется; к счёту привязывается —
+  // заходят деньги туда плюсом VAT»). Режим — клавишей VAT, ставка — цифрами,
+  // написанная запоминается для следующих документов. «К оплате» записи
+  // (`total_amount`) включает налог, а оплата ложится на счёт с выделенным
+  // налогом по этой ставке (сервер, миграция 20260922040000).
+  // Не писали ставку на этом телефоне — ставка команды из настроек.
+  const teamVatRate = useTeamVatRate(teamId);
+  const rememberedVatRate = useRememberedVatRate(teamVatRate);
+  const [recordVatMode, setRecordVatMode] = useState<TxVatMode>("none");
+  const [recordVatRate, setRecordVatRate] = useState<number | null>(null);
+  // Причина скидки осталась только у старых записей — программу лояльности
+  // сняли 20.09 по слову владельца, и её больше никто не выставляет сам.
   const [discountReason, setDiscountReason] = useState<string | null>(null);
   const [status, setStatus] = useState<AppointmentStatus>("scheduled");
   const [comment, setComment] = useState("");
@@ -466,6 +504,14 @@ export default function BookScreen() {
   const [eventTitle, setEventTitle] = useState("");
   const [eventColor, setEventColor] = useState<string | null>(null);
   const [eventTypeId, setEventTypeId] = useState<string | null>(null);
+  // СКРЫТЫЕ ТИПЫ ФОРМЕ НЕ ПРЕДЛАГАЮТСЯ. Запрос отдаёт их вместе с живыми —
+  // ими управляет справочник, — а лента выбора показывает только живые. Тип
+  // уже выбранного события остаётся видимым, даже если его скрыли после:
+  // иначе правка молча меняла бы тип на «нет типа».
+  const eventTypes = useMemo(() => {
+    const all = eventTypesQuery.data ?? [];
+    return all.filter((type) => !type.hidden || type.id === eventTypeId);
+  }, [eventTypesQuery.data, eventTypeId]);
   const [eventNotes, setEventNotes] = useState("");
   const [eventAddress, setEventAddress] = useState("");
   const [eventUrl, setEventUrl] = useState("");
@@ -487,7 +533,9 @@ export default function BookScreen() {
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [whenOpen, setWhenOpen] = useState(false);
   const [teamSheetOpen, setTeamSheetOpen] = useState(false);
-  // Событие: команда («Личное» + команды) и тип — листами выбора.
+  // Событие: команда («Личное» + команды) и ТИП — оба листом выбора. Тип до
+  // 2026-09-10 выбирался лентой плиток прямо в форме; владелец свёл его к
+  // архитектуре категории: блок со шапкой + каноническая шторка.
   const [eventTeamSheetOpen, setEventTeamSheetOpen] = useState(false);
   const [eventTypeSheetOpen, setEventTypeSheetOpen] = useState(false);
   const [colorSheetOpen, setColorSheetOpen] = useState(false);
@@ -578,6 +626,9 @@ export default function BookScreen() {
     () => clients.find((c) => c.id === clientId) ?? null,
     [clients, clientId],
   );
+  // Номер, открытый сотрудником дверью (защита базы 30.09), — поверх строки
+  // окна: им пишет «С телефона» блок SMS записи.
+  const revealedClient = useRevealedClient(client, tenantIdForFiles);
   // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС» (STORY-077). Пока клиент не ответил, блок
   // объекта показывает строку «Ждём адрес»: диспетчер видит, что адрес уже
   // спрошен, и не спрашивает второй раз. Ответ приезжает объектом сам —
@@ -592,6 +643,27 @@ export default function BookScreen() {
   const requestActions = useLocationRequestActions();
   const viewerRole = useCurrentRole().data;
   const canRequestAddress = viewerRole === "owner" || viewerRole === "dispatcher";
+  // ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ, ДВЕРИ ПО ПРАВАМ (STORY-088, владелец
+  // 21.09: «визуал идентичный… даёшь просто разрешение на блоки»). Владельцу
+  // `bookRights` отдаёт всё; сотруднику — по блокам календаря записи. Сервер
+  // проверяет то же самое поле за полем, поэтому погашенная дверь здесь —
+  // не украшение, а честный ответ заранее.
+  const isMemberView = viewerRole === "master";
+  const sessionUserId = useSession().session?.user.id ?? null;
+  const rightsTeamId = isEdit ? (editing?.team_id ?? null) : teamId;
+  const recordRights = useRecordBlocks(rightsTeamId);
+  const eventRights = useEventRights(rightsTeamId);
+  const calendarRights = useCalendarActions(rightsTeamId);
+  const can = bookRights({
+    isMember: isMemberView,
+    kind,
+    isEdit,
+    record: recordRights,
+    event: eventRights,
+    eventWritable:
+      calendarRights.events === "write" &&
+      (!isEdit || (editing?.created_by ?? null) === sessionUserId),
+  });
   // ОБЪЕКТ, ДОБАВЛЕННЫЙ ОТСЮДА, ВИДЕН СРАЗУ. Список клиентов после записи
   // только инвалидируется, и с полсекунды `client.locations` не знает о новом
   // объекте: блок мигал «Выбрать объект», а сохранение в эту щель писало
@@ -612,6 +684,40 @@ export default function BookScreen() {
   }, [client, serverLocations, addedLocation]);
   const selectedLocation =
     clientLocations.find((l) => l.id === locationId) ?? null;
+
+  // ОБЪЕКТ СОБЫТИЯ ВЫБИРАЕТСЯ БЕЗ КЛИЕНТА (владелец 2026-09-08: «в записи мы
+  // сначала должны выбрать клиента, потом объект; в событии мы можем
+  // выбирать отдельно объект, отдельно клиента»).
+  //
+  // Объект в базе принадлежит клиенту — он лежит в его `locations`, своей
+  // таблицы у него нет. Поэтому «без клиента» здесь значит не «объект-сирота»,
+  // а «не спрашиваем клиента, чтобы показать объекты»: событие выбирает из
+  // объектов ВСЕХ клиентов, а чей объект — говорит подписью в листе. Клиент
+  // события при этом остаётся своим полем и может быть пустым или другим.
+  const eventLocationPool = useMemo(() => {
+    const rows: { loc: Location; ownerId: string; ownerName: string }[] = [];
+    for (const candidate of clients) {
+      // У клиента, выбранного в форме, берём список с только что добавленным
+      // объектом — он ещё не приехал с сервера (см. `addedLocation`).
+      const list =
+        client && candidate.id === client.id
+          ? clientLocations
+          : candidate.locations ?? EMPTY_LOCATIONS;
+      for (const loc of list) {
+        rows.push({
+          loc,
+          ownerId: candidate.id,
+          ownerName: candidate.full_name || "Без имени",
+        });
+      }
+    }
+    return rows;
+  }, [clients, client, clientLocations]);
+  const eventLocationEntry =
+    eventLocationPool.find((row) => row.loc.id === locationId) ?? null;
+  const eventLocationOwner = eventLocationEntry
+    ? clients.find((c) => c.id === eventLocationEntry.ownerId) ?? null
+    : null;
   // Объект удалили листом правки или убрали «✕» сразу после добавления —
   // выбор снимается, адрес-снимок пустеет: id удалённого в запись не едет.
   const forgetLocation = (id: string) => {
@@ -621,20 +727,6 @@ export default function BookScreen() {
       setAddress("");
     }
   };
-  // Последняя заметка клиента — в поле под клиентом. Журнал на карточке
-  // хранит новые первыми, но сортируем по дате: порядок массива — не закон.
-  // Импортированный `comment` (CSV) — та же заметка, показываем, если
-  // журнала ещё нет (как на карточке).
-  const latestClientNoteEntry = useMemo(() => {
-    if (!client) return null;
-    const newest = [...(client.notes ?? [])].sort((a, b) =>
-      b.created_at.localeCompare(a.created_at),
-    )[0];
-    if (newest) return { id: newest.id, text: newest.text };
-    const imported = (client.comment ?? "").trim();
-    return imported ? { id: null, text: imported } : null;
-  }, [client]);
-  const latestClientNote = latestClientNoteEntry?.text ?? "";
 
   // ═══ МЕТКА КЛИЕНТА ПРОТИВ МЕТКИ ДНЯ ═══
   //
@@ -655,7 +747,16 @@ export default function BookScreen() {
   //
   // МОЛЧИТ, КОГДА МЕТКИ СОВПАЛИ: сообщать «вы записываете клиента туда же,
   // куда и всегда» — это шум, который научит не читать плашки вовсе.
-  const team = teams.find((tm) => tm.id === teamId) ?? null;
+  // ЗАПИСЬ АРХИВНОГО КАЛЕНДАРЯ — ТОЛЬКО ДЛЯ ПРОСМОТРА (владелец 2026-09-21:
+  // «можно посмотреть запись… но оно всё в архиве, то есть уже удалено»). Её
+  // открывают из карточки клиента; календаря в живом списке нет, поэтому имя,
+  // цвет и часовой пояс берутся из архива. Ни сохранить, ни принять оплату в
+  // архив нельзя — деньги архивного календаря в живых финансах не существуют.
+  const archivedTeam = isEdit
+    ? allTeams.find((tm) => tm.id === teamId && !tm.is_active) ?? null
+    : null;
+  const archivedRecord = archivedTeam !== null;
+  const team = teams.find((tm) => tm.id === teamId) ?? archivedTeam;
   const clientLabel = (client?.city ?? "").trim();
   // МЕТКА ДНЯ — РОВНО ТА, ЧТО СТОИТ НА ДНЕ В КАЛЕНДАРЕ. Здесь звался
   // `resolveDayLabel` из shared: он знает только про ЯВНО поставленную метку
@@ -678,8 +779,9 @@ export default function BookScreen() {
         dateYmd: date,
         todayYmd,
         fallbackColor: t.faint,
+        off: !dayLabelsOn,
       }),
-    [dayCities, teamCities, teamId, date, todayYmd, t.faint],
+    [dayCities, teamCities, teamId, date, todayYmd, t.faint, dayLabelsOn],
   );
   const dayLabel = dayLabelResolved?.name ?? null;
   // Новая запись надевает метку дня сама и меняет её вслед за днём и
@@ -741,8 +843,8 @@ export default function BookScreen() {
   // ═══ ГИДРАЦИЯ ПРАВКИ ═══
   //
   // Один раз, когда запись доехала из кеша. Дальше страница живёт обычной
-  // жизнью: все умные дефолты ниже (команда, префилл клиента, лояльность,
-  // авто-конец) выключены в режиме правки — им нечего доопределять, а
+  // жизнью: все умные дефолты ниже (команда, префилл клиента, авто-конец)
+  // выключены в режиме правки — им нечего доопределять, а
   // затереть сохранённое они могут.
   //
   // ЗАМОК СТРОК ОБЯЗАТЕЛЕН. Сохранённая строка отдаёт числа того дня, когда
@@ -804,6 +906,12 @@ export default function BookScreen() {
       editing.global_discount ? String(editing.global_discount.value) : "",
     );
     setDiscountReason(editing.global_discount?.reason ?? null);
+    setRecordVatMode(
+      editing.vat_mode === "inclusive" || editing.vat_mode === "exclusive"
+        ? editing.vat_mode
+        : "none",
+    );
+    setRecordVatRate(editing.vat_rate ?? null);
     setStatus(editing.status);
     setReminderOn(editing.reminder_enabled);
     setColorOverride(editing.color_override ?? null);
@@ -951,11 +1059,76 @@ export default function BookScreen() {
     };
   }, [discountType, discountValue, discountReason]);
 
+  // ПЕРЕВОД «УСЛУГА ЗАПИСИ → СТРОКА БЛОКА» — ОДИН НА ЭКРАН. Его читают и блок
+  // «Услуги», и шторка «Итого»; две копии этого перевода разъехались бы на
+  // первой же правке — имя строки в одном месте бралось бы из снимка, в другом
+  // из сегодняшнего прайса.
+  const serviceLines = useMemo(
+    () =>
+      selectedServices.map((line) => ({
+        id: line.serviceId,
+        name: line.serviceName ?? nameById.get(line.serviceId) ?? "Услуга удалена",
+        // Вторая строка у записи — длительность работы.
+        // У своей строки времени нет — второй строки тоже.
+        subtitle: isCustomServiceId(line.serviceId) ? null : durationLabel(line.duration),
+        qty: line.quantity,
+        unit: line.unit ?? catalog.get(line.serviceId)?.unit ?? null,
+        pricePerUnit: line.pricePerUnit,
+        total: line.totalPrice,
+        // Своя строка: имя правится в «Итого».
+        ...(isCustomServiceId(line.serviceId) ? { editableName: line.serviceName ?? "" } : {}),
+      })),
+    [catalog, nameById, selectedServices],
+  );
+
   const discountAmount = globalDiscountAmount(selectedServices, globalDiscount);
-  const automaticTotal = Math.max(0, computedTotal - discountAmount);
+  /** Услуги минус скидка — то, с чего считается налог. */
+  const beforeVat = Math.max(0, computedTotal - discountAmount);
+  const vatRateInUse = recordVatRate ?? rememberedVatRate.rate;
+  // «К оплате» — после налога. Ставка 0 и «без налога» — та же сумма.
+  const automaticTotal =
+    recordVatMode !== "none" && vatRateInUse > 0
+      ? applyTxVat(beforeVat, recordVatMode, vatRateInUse).gross
+      : beforeVat;
   const effectiveTotal = customTotal
     ? parseMoneyInput(totalDraft)
     : automaticTotal;
+
+  // ЧТО ПОДСТАВИТ ШАБЛОН SMS ИЗ ЭТОЙ ЗАПИСИ (STORY-089): «SMS» у номера
+  // клиента открывает шаблоны, заполненные ровно тем, что на экране. Сумму
+  // берёт только тот, кому деньги записи видны, — иначе SMS показала бы ему
+  // цену, которую страница прячет.
+  const companyName = useTenant().data?.name ?? null;
+  const recordSmsVars = useMemo(
+    () =>
+      client
+        ? smsVars({
+            name: addressedAs(client, firstName(client)),
+            date,
+            time: timeStart,
+            calendar: team?.name ?? null,
+            services: serviceLines.map((line) => line.name),
+            address,
+            total: can.showMoney ? effectiveTotal : null,
+            company: companyName,
+          })
+        : null,
+    [address, can.showMoney, client, companyName, date, effectiveTotal, serviceLines, team?.name, timeStart],
+  );
+  // Сервису нужны ещё запись, клиент и календарь: SMS через сервис владелец
+  // разрешает по календарям (STORY-089, волна 2).
+  const recordSmsContext = useMemo(
+    () =>
+      recordSmsVars
+        ? {
+            vars: recordSmsVars,
+            appointmentId: editing?.id ?? null,
+            clientId: client?.id ?? null,
+            teamId: teamId ?? null,
+          }
+        : null,
+    [client?.id, editing?.id, recordSmsVars, teamId],
+  );
 
   // Keep the editable total in sync with catalog pricing until the operator
   // explicitly changes it. A manual amount then stays stable while services
@@ -980,44 +1153,20 @@ export default function BookScreen() {
     setTimeEnd(addMinutesHM(timeStart, grow));
   }, [timeStart, computedDuration, durationTouched, slotFallback, hydrated]);
 
-  // ── лояльность показана, не спрятана: авто-скидка по числу визитов ──
-  //
-  // ТОЛЬКО ПРИ СОЗДАНИИ. В сохранённой записи скидка — уже принятое решение,
-  // о котором договорились с клиентом. Пересчитать её при открытии значит
-  // молча уценить чужую запись и включить ложное «есть несохранённое».
-  const loyaltyAppliedRef = useRef(false);
-  useEffect(() => {
-    if (isEdit) return;
-    if (kind !== "work" || !client || !loyalty) return;
-    // ручная скидка всегда побеждает; авто-скидка заменяет только себя.
-    // Считаем по ВПИСАННОМУ: тип теперь лишь единица измерения.
-    if (parseMoneyInput(discountValue) > 0 && !loyaltyAppliedRef.current) return;
-    const visits = allAppts.filter(
-      (a) => a.client_id === client.id && a.status === "completed",
-    ).length;
-    const tier = tierForVisits(visits, loyalty);
-    if (tier) {
-      setDiscountType("percent");
-      setDiscountValue(String(tier.percent));
-      setDiscountReason(tier.label);
-      loyaltyAppliedRef.current = true;
-    } else if (loyaltyAppliedRef.current) {
-      setDiscountType(null);
-      setDiscountValue("");
-      setDiscountReason(null);
-      loyaltyAppliedRef.current = false;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, loyalty, kind]);
-
   // ── пересечение по команде на выбранный день (warn, not block) ──
   const dayTeamAppts = useMemo(
     () =>
       allAppts.filter((a) => a.date === date && a.team_id === teamId),
     [allAppts, date, teamId],
   );
+  // ПРЕДУПРЕЖДЕНИЕ — ПРО КОМАНДУ, А НЕ ПРО ЖАНР (сведено 2026-09-10). Обе
+  // проверки были жёстко заперты на `kind === "work"`, и командное событие —
+  // «выезд в офис» бригадой — не предупреждало ни о двойном бронировании, ни
+  // о нерабочем дне: те же люди в то же время, но форма молчала. Личное
+  // событие молчит по-прежнему: у него нет команды, с чьим днём столкнуться,
+  // и `teamId` там null.
   const overlap = useMemo(() => {
-    if (kind !== "work" || !teamId) return null;
+    if (!teamId) return null;
     return findOverlap(
       {
         id: "book-draft",
@@ -1029,9 +1178,9 @@ export default function BookScreen() {
       } as unknown as Appointment,
       dayTeamAppts,
     );
-  }, [kind, teamId, date, timeStart, timeEnd, dayTeamAppts]);
+  }, [teamId, date, timeStart, timeEnd, dayTeamAppts]);
   const timeWarning = useMemo(() => {
-    if (kind !== "work" || !teamId) return null;
+    if (!teamId) return null;
     const startMinutes = absoluteMinutes(timeStart) ?? 0;
     const endMinutes = absoluteMinutes(timeEnd) ?? 0;
     const schedule = teamScheduleQuery.data;
@@ -1103,7 +1252,6 @@ export default function BookScreen() {
     teams,
     date,
     dayTeamAppts,
-    kind,
     teamId,
     teamScheduleQuery.data,
     timeEnd,
@@ -1140,9 +1288,6 @@ export default function BookScreen() {
       haptics.tap();
       return;
     }
-    // НЕ сбрасываем loyaltyAppliedRef здесь: сброс заставлял эффект принять
-    // авто-скидку прошлого клиента за ручную (discountType && !ref → return) и
-    // перенести её на нового. Эффект сам пересчитает лояльность по clientId.
     const prefill = resolveBookingClientPrefill(c);
     // Continuity: команда по ПОСЛЕДНЕМУ визиту клиента, а не глобально-последняя.
     // Иначе любимый мастер клиента отсеивается как «не из той команды».
@@ -1196,30 +1341,52 @@ export default function BookScreen() {
 
   // КАРТОЧКА КЛИЕНТА ПОВЕРХ ЗАПИСИ (владелец 2026-09-04: «при тапе на клиента
   // должна открываться карточка клиента»). Тот же приём, что у создания
-  // клиента: маршрут корневого стека `/book/client`, а не вкладка «Клиенты»,
+  // клиента: общий маршрут `/client` над табами, а не вкладка «Клиенты»,
   // — иначе поверх записи ляжет вторая копия табов и «назад» уведёт на
   // календарь, потеряв набранное. Запись остаётся смонтированной под
   // карточкой, «назад» возвращает ровно в неё.
   const openClientCard = () => {
     if (!clientId) return;
     haptics.tap();
-    router.push({ pathname: "/book/client", params: { id: clientId } });
+    router.push({ pathname: "/client", params: { id: clientId } });
   };
 
   const pickLocation = (id: string) => {
     setLocationId(id);
-    const loc = clientLocations.find((l) => l.id === id);
+    // У события объект берётся из общего пула (он может принадлежать не
+    // выбранному клиенту), у записи — только из объектов её клиента.
+    const loc =
+      (kind === "event"
+        ? eventLocationPool.find((row) => row.loc.id === id)?.loc
+        : clientLocations.find((l) => l.id === id)) ?? null;
     if (loc) {
       setAddress(locationAddressForBooking(loc));
-      // У события объект клиента — подсказка адресу: строка заполняется
-      // адресом объекта, но остаётся адресом ЭТОГО события.
+      // Адрес-снимок события: объект могут удалить, а куда ехали — видно.
       if (kind === "event") setEventAddress(locationAddressForBooking(loc));
     }
     haptics.tap();
   };
 
+  // «ДОБАВИТЬ ОБЪЕКТ» У СОБЫТИЯ. Выбрать объект можно без клиента, а вот
+  // ЗАВЕСТИ новый — нет: своей таблицы у объекта нет, он лежит в `locations`
+  // клиента. Поэтому строка не пропадает и не превращается в отговорку
+  // «сначала выберите клиента» — она сама открывает выбор клиента и говорит,
+  // зачем он понадобился.
+  const openEventObjectAdd = () => {
+    haptics.tap();
+    if (!client) {
+      toast("Объект заводится клиенту — выберите клиента");
+      setClientPickerOpen(true);
+      return;
+    }
+    setObjectSheet(true);
+  };
+  // Правка объекта пишет в карточку его ВЛАДЕЛЬЦА: у события это может быть
+  // не тот клиент, что стоит в форме.
+  const objectEditClient = kind === "event" ? eventLocationOwner : client;
+
   // КЛИЕНТ, ЗАВЕДЁННЫЙ РАДИ ЭТОЙ ЗАПИСИ. Карточка нового клиента открывается
-  // ПОВЕРХ формы (`/book/client`), после «Готово» кладёт id в ящик и уходит
+  // ПОВЕРХ формы (`/client`), после «Готово» кладёт id в ящик и уходит
   // «назад»; форма забирает его, получив фокус. Дальше — тот же `pickClient`,
   // что и тап по списку: объект, любимый мастер, цепочка услуг. Список
   // клиентов может ещё ехать после инвалидации — держим id, пока созданный
@@ -1265,6 +1432,26 @@ export default function BookScreen() {
     clientId,
   );
 
+  // Писатель объектов ВЛАДЕЛЬЦА выбранного объекта. У события объект может
+  // принадлежать не тому клиенту, что стоит в форме (или клиента нет вовсе),
+  // а заметка объекта («код ворот») обязана лечь в его собственную карточку —
+  // не в карточку случайного клиента этого события.
+  const updateOwnerPatch = async (patch: Partial<Client>) => {
+    const ownerId = eventLocationOwner?.id;
+    if (!ownerId) return false;
+    try {
+      await updateClient.mutateAsync({ id: ownerId, patch });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const eventLocationWriter = useLocationWriter(
+    eventLocationOwner?.locations ?? EMPTY_LOCATIONS,
+    updateOwnerPatch,
+    eventLocationOwner?.id ?? null,
+  );
+
   // ═══ ЗАМЕТКА КЛИЕНТА И ЗАМЕТКА ОБЪЕКТА — ПОЛЯМИ ПРЯМО В ФОРМЕ ═══
   //
   // Владелец 2026-09-04: «не надо тапать „добавить заметку“ — мини-блок, куда
@@ -1281,48 +1468,26 @@ export default function BookScreen() {
   // в журнал — ОДНИМ патчем вместе с журналом, как на карточке чистит её «✕».
   // Два патча подряд (журнал и отдельно comment) в офлайн-кэше затирали друг
   // другу колонку (ревью 2026-09-04).
-  const migrateImportedComment =
-    !!client &&
-    (client.notes ?? []).length === 0 &&
-    (client.comment ?? "").trim() !== "";
-  const notesWriter = useJsonArrayWriter<ClientNote>(
-    client?.notes ?? EMPTY_NOTES,
-    (next) =>
-      updateClientPatch(
-        migrateImportedComment ? { notes: next, comment: "" } : { notes: next },
-      ),
-    clientId,
-  );
-  // Поле привязано к КОНКРЕТНОЙ записи журнала (ключ — её id): стёр — снялась
-  // именно она; набрал заново после стирания — родилась новая, а не
-  // переписалась соседняя. Ключ `null` — записи ещё нет.
-  const writeClientNote = (next: string, boundId: string | null) => {
-    if (!client) return;
-    let createdId: string | null = null;
-    void notesWriter.apply((all) => {
-      const edited = applyNoteEdit(all, next, boundId, () => ({
-        id: randomUuid(),
-        created_at: new Date().toISOString(),
-      }));
-      createdId = edited.createdId;
-      return edited.notes;
-    });
-    return createdId ?? undefined;
-  };
   const writeObjectNote = (next: string, boundId: string | null) => {
     if (!boundId) return;
     void locationWriter.patchLocation(boundId, { note: next || undefined });
   };
-  const clientNote = useInlineNote<string | null>(
-    latestClientNote,
-    latestClientNoteEntry?.id ?? null,
-    writeClientNote,
-    clientId,
-  );
+  // Логика поля — общий хук: тот же блок «Клиент» ставят инвойс и чек.
+  const clientNote = useClientNoteField(client);
   const objectNote = useInlineNote<string | null>(
     selectedLocation?.note ?? "",
     locationId,
     writeObjectNote,
+    locationId,
+  );
+  const writeEventObjectNote = (next: string, boundId: string | null) => {
+    if (!boundId) return;
+    void eventLocationWriter.patchLocation(boundId, { note: next || undefined });
+  };
+  const eventObjectNote = useInlineNote<string | null>(
+    eventLocationEntry?.loc.note ?? "",
+    locationId,
+    writeEventObjectNote,
     locationId,
   );
 
@@ -1335,6 +1500,46 @@ export default function BookScreen() {
   // ЦЕНА УСЛУГИ В ЭТОЙ ЗАПИСИ. Ноль законен: бывает «сделали бесплатно».
   const setLinePrice = (id: string, price: number) => {
     setOverrides((p) => ({ ...p, [id]: { ...p[id], price: Math.max(0, price) } }));
+  };
+  // СВОЯ СТРОКА ЗАПИСИ (владелец 2026-09-22: «в „Итого“ справа — добавить
+  // ещё одну услугу»). Не из прайса: имя, цена и время 0 держит замок
+  // снимка (`locked`), как у сохранённой строки, — `buildServices` читает
+  // их оттуда, каталог ей не нужен.
+  const addCustomLine = () => {
+    const id = newCustomServiceId();
+    setServiceIds((p) => [...p, id]);
+    setOverrides((p) => ({
+      ...p,
+      [id]: {
+        qty: 1,
+        price: 0,
+        locked: { pricePerUnit: 0, originalPrice: 0, duration: 0, serviceName: "", unit: null },
+      },
+    }));
+  };
+  const setLineName = (id: string, name: string) => {
+    setOverrides((p) => {
+      const current = p[id];
+      if (!current?.locked) return p;
+      return { ...p, [id]: { ...current, locked: { ...current.locked, serviceName: name } } };
+    });
+  };
+  /** Убрать свою строку — свайпом в «Итого». */
+  const removeCustomLine = (id: string) => {
+    setServiceIds((p) => p.filter((x) => x !== id));
+  };
+  // СВОЯ СТРОКА БЕЗ НАЗВАНИЯ УХОДИТ САМА (владелец 2026-09-22: «стираем имя
+  // услуги — и она удаляется»).
+  const closeTotalSheet = () => {
+    const empty = new Set(
+      selectedServices
+        .filter(
+          (line) => isCustomServiceId(line.serviceId) && !(line.serviceName ?? "").trim(),
+        )
+        .map((line) => line.serviceId),
+    );
+    if (empty.size > 0) setServiceIds((p) => p.filter((id) => !empty.has(id)));
+    setTotalSheetOpen(false);
   };
   const setQty = (id: string, qty: number) => {
     if (qty < 1) {
@@ -1352,7 +1557,6 @@ export default function BookScreen() {
   const eventType = eventTypeId
     ? eventTypes.find((candidate) => candidate.id === eventTypeId) ?? null
     : null;
-  const eventTypeLabel = eventType?.label ?? (eventTitle.trim() || null);
   // Прежнее событие, чьё название совпадает с типом, узнаёт свой тип само.
   useEffect(() => {
     if (kind !== "event" || eventTypeId || !eventTitle.trim()) return;
@@ -1369,13 +1573,42 @@ export default function BookScreen() {
     setEventTypeId(preset.id);
     setEventTitle(preset.label);
     setEventColor(preset.color);
-    // «Весь день», повтор и напоминание с формы сняты (владелец 2026-09-06:
-    // «убрать совсем»): длительность типа ставит конец от того же начала.
-    const start = timeStart === "00:00" ? "10:00" : timeStart;
-    setTimeStart(start);
-    setTimeEnd(addMinutesHM(start, preset.defaultDuration));
-    setDurationTouched(true);
+    // Длительность типа — СТАНДАРТ, а не приказ: если человек уже выбрал
+    // время сам, тип красит и называет событие, но время не трогает.
+    if (!durationByHand) {
+      const start = timeStart === "00:00" ? "10:00" : timeStart;
+      setTimeStart(start);
+      setTimeEnd(addMinutesHM(start, preset.defaultDuration));
+      setDurationTouched(true);
+    }
     haptics.tap();
+  };
+
+  // ПОВТОРНЫЙ ТАП СНИМАЕТ ТИП (владелец 2026-09-10: «когда я выбрал тип
+  // события, я могу ещё раз нажать на него и оно отменится»; и, увидев в
+  // шторке строку «Без типа», — «убери кнопку „без типа“, и я могу тапнуть
+  // ещё раз на тот тип, который выбрал, и он тогда отменяется, сделаем так»).
+  // Так снятие живёт ТАМ ЖЕ, где выбор: палец возвращается к той же строке, а
+  // список не растёт на служебную строку, которой в других шторках нет.
+  //
+  // Событие без типа законно и было законно всегда: кнопка его не требует, а
+  // называется такое событие словом «Событие». Не было только выхода — выбрав
+  // тип один раз, снять его было нечем.
+  //
+  // НАЗВАНИЕ УХОДИТ ВМЕСТЕ С ТИПОМ. `eventTitle` — снимок имени типа, а эффект
+  // выше узнаёт тип по совпадению имени: оставь название — и тип вернётся сам
+  // в следующем же кадре.
+  //
+  // ЦВЕТ: доставшийся от типа уходит с ним, выбранный рукой остаётся. Отличаем
+  // их сравнением с цветом самого типа — другого следа «руки» у события нет.
+  const clearEventType = () => {
+    const preset = eventTypes.find((candidate) => candidate.id === eventTypeId);
+    haptics.tap();
+    setEventTypeId(null);
+    setEventTitle("");
+    setEventColor((current) =>
+      preset && current === preset.color ? null : current,
+    );
   };
 
   // ── сохранение (тот же контракт, что старый шит) ──
@@ -1384,8 +1617,14 @@ export default function BookScreen() {
       // Одна строка «адрес или ссылка»: ссылка — в event_url, текст — в
       // address. Адрес события — его собственный, не объект из базы
       // (владелец 2026-09-06: «просто адрес, фиксируется только на событии»).
-      const place = eventAddress.trim();
-      const placeIsUrl = isLikelyUrl(place);
+      // Выбран объект — адрес-снимок берётся у него; нет объекта — остаётся
+      // прежний вольный адрес события (у старых событий он единственное, что
+      // говорит, куда ехать, и терять его нельзя).
+      const eventLoc = eventLocationEntry?.loc ?? null;
+      const place = eventLoc
+        ? locationAddressForBooking(eventLoc)
+        : eventAddress.trim();
+      const placeIsUrl = !eventLoc && isLikelyUrl(place);
       return {
         kind: "event",
         date,
@@ -1409,10 +1648,14 @@ export default function BookScreen() {
         comment: (eventType?.label ?? eventTitle.trim()) || "Событие",
         address: placeIsUrl ? "" : place,
         color_override: eventColor,
-        // Клиент и объект у события необязательны и независимы; объект без
-        // клиента не бывает — без клиента остаётся только адрес.
+        // Метка события — та же метка выезда, что у записи: null значит «как
+        // у дня» (владелец 2026-09-08: «тип справа вверху переделай на метку,
+        // как в клиентах»).
+        city,
+        // Клиент и объект у события необязательны и НЕЗАВИСИМЫ: объект может
+        // принадлежать другому клиенту или стоять вовсе без клиента события.
         client_id: clientId,
-        location_id: clientId ? locationId : null,
+        location_id: locationId,
         service_ids: [],
         services: [],
         total_amount: 0,
@@ -1454,7 +1697,17 @@ export default function BookScreen() {
       city,
       global_discount: globalDiscount,
       discount_amount: discountAmount,
-      reminder_enabled: reminderOn && Boolean(client?.phone),
+      // Налог пишется только у рабочей записи с расчётной суммой: у старой
+      // «своей суммы» его не выбирали, и тихо навешивать нельзя.
+      ...(kind === "work" && !customTotal
+        ? recordVatMode !== "none" && vatRateInUse > 0
+          ? { vat_mode: recordVatMode, vat_rate: vatRateInUse }
+          : { vat_mode: "none" as const, vat_rate: null }
+        : {}),
+      // У сотрудника номер клиента в записи не приходит (`contacts_hidden`,
+      // 30.09) — напоминание шлёт сервер по карточке, номер ему известен.
+      reminder_enabled:
+        reminderOn && (Boolean(client?.phone) || client?.contacts_hidden !== undefined),
     };
     return patch;
   };
@@ -1492,17 +1745,16 @@ export default function BookScreen() {
           { label: "услуги", query: servicesQuery },
           { label: "клиентов", query: clientsQuery },
           { label: "календарь", query: appointmentsQuery },
-          { label: "программу лояльности", query: loyaltyQuery },
           { label: "настройки календаря", query: calendarSettingsQuery },
           ...(teamId
             ? [{ label: "график команды", query: teamScheduleQuery }]
             : []),
         ] as const);
   // Только БАЗОВЫЕ справочники гейтят экран: без них нельзя собрать валидную
-  // запись (команды; для работы ещё клиенты). Всё остальное (услуги/лояльность/
-  // график/настройки/типы/календарь) — необязательное: его сбой не блокирует
+  // запись (команды; для работы ещё клиенты). Всё остальное (услуги/график/
+  // настройки/типы/календарь) — необязательное: его сбой не блокирует
   // создание простой записи, а лишь даёт деградацию (пустой список/без
-  // лояльности/без предупреждения о наложении).
+  // предупреждения о наложении).
   const essentialQueries =
     kind === "event"
       ? ([
@@ -1575,6 +1827,11 @@ export default function BookScreen() {
     ({ query }) =>
       query.isError && !essentialQueries.some((e) => e.query === query),
   );
+  // ЗАПИСЬ КЛИЕНТА = КЛИЕНТ + УСЛУГА (владелец 25.09: «нельзя сохранить
+  // запись без клиента — без клиента это событие; после клиента нельзя
+  // сохранить без услуги»). «Сохранить» остаётся нажимаемым и говорит
+  // сверху, чего не хватает.
+  const hasService = serviceIds.length > 0;
   const canSave =
     timeEnd > timeStart &&
     !failedReference &&
@@ -1582,6 +1839,7 @@ export default function BookScreen() {
     (kind === "event"
       ? teamId == null || hasValidTeam
       : clientId != null &&
+        hasService &&
         hasValidTeam &&
         workSelectionValid);
   const bookingBusy = booking.isPending || updateMut.isPending;
@@ -1600,8 +1858,12 @@ export default function BookScreen() {
         // ошибки оплаты — иначе предоплата-ошибка маскирует «Выберите клиента».
         clientId == null
         ? "Выберите клиента"
+      : !hasService
+        ? "Выберите услугу"
       : !hasValidTeam
-        ? "Выберите команду"
+        ? archivedRecord
+          ? "Календарь в архиве — запись только для просмотра"
+          : "Выберите команду"
       : !workSelectionValid
         ? "Проверьте услуги и мастера для этой команды"
         : "Проверьте услуги и мастера для этой команды";
@@ -1626,14 +1888,16 @@ export default function BookScreen() {
   const timeMovedHere =
     openedAtRef.current != null &&
     (openedAtRef.current.date !== date || openedAtRef.current.time !== timeStart);
+  // ОДНО ПРЕДУПРЕЖДЕНИЕ НА ОБА ЖАНРА (сведено 2026-09-10): считается от
+  // КОМАНДЫ, а не от «записи». Слово про пересечение называет, с чем именно
+  // столкнулись — у события это может быть и запись клиента, и другое
+  // событие той же команды.
   const workWarning =
-    kind === "work"
-      ? overlap != null
-        ? "Пересекается с записью этой команды"
-        : timeMovedHere
-          ? timeWarning
-          : null
-      : null;
+    overlap != null
+      ? "Пересекается с работой этой команды"
+      : timeMovedHere
+        ? timeWarning
+        : null;
   useEffect(() => {
     if (!canSave && !bookingBusy && !referencesPending) {
       AccessibilityInfo.announceForAccessibility(missingHint);
@@ -1646,10 +1910,53 @@ export default function BookScreen() {
 
   // A notification/deep link can open /book without a navigation history.
   // In that case router.back() is a dead action; return to the calendar tab.
+  //
+  // ДОРОГА НАЗАД СИЛЬНЕЕ ИСТОРИИ (2026-09-08). Запись из денег открывают через
+  // календарь, поэтому стек — «финансы → календарь → запись», и слепой
+  // `router.back()` клал человека на календарь. Если пришли с меткой `from`,
+  // уходим по ней, а не по истории.
   const leaveBook = () => {
     bypassGuardRef.current = true;
+    const returnTo = resolveReturnTo(params.from);
+    if (returnTo) {
+      router.replace(returnTo as Href);
+      return;
+    }
     if (router.canGoBack()) router.back();
     else router.replace("/");
+  };
+
+  // Итог постановки пуша — одной строкой, теми же словами, что меню записи.
+  const reminderToast = (
+    res: Awaited<ReturnType<typeof setSelfReminder>>,
+    rule: SelfReminder | null,
+  ) => {
+    if (res === "cleared") toast("Напоминание снято", "info");
+    else if (res === "scheduled" && rule) {
+      const l = selfReminderLabel(rule);
+      toast(`Напомню ${l.charAt(0).toLowerCase()}${l.slice(1)}`);
+    } else if (res === "denied") toast("Разрешите уведомления в Настройках", "error");
+    else if (res === "past") toast("Это время уже прошло", "info");
+    else if (res === "deferred")
+      toast("Напоминание в очереди — установится, когда на iPhone освободится место", "info");
+    else if (res === "capacity")
+      toast("Очередь напоминаний переполнена", "error");
+    else if (res === "unavailable") toast("Появится после обновления приложения", "info");
+  };
+
+  const pickSelfReminder = (rule: SelfReminder | null) => {
+    setSelfReminderRule(rule);
+    setReminderSheetOpen(false);
+    // У сохранённой записи пуш ставится сразу — это не поле записи, его не
+    // надо «сохранять»; у новой — после создания, когда появится id.
+    if (isEdit && editing) {
+      void setSelfReminder(
+        { ...editing, date, time_start: timeStart },
+        rule,
+        team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
+        client?.full_name,
+      ).then((res) => reminderToast(res, rule));
+    }
   };
 
   const save = async () => {
@@ -1666,7 +1973,19 @@ export default function BookScreen() {
         // Правка идёт мимо useBookingSave: тот хук — про РОЖДЕНИЕ заявки и
         // её хвост (гашение напоминания ТО, постановка push события). У
         // существующей записи этот хвост уже отработал в день создания.
-        await updateMut.mutateAsync({ id: editId, patch: buildPatch() });
+        // Сотрудник шлёт только изменённое: каждое поле в двери сервера
+        // требует своего права, и нетронутый клиент в патче стоил бы отказа
+        // тому, у кого нет «Клиент: Меняет». Снимок — та же подпись, что
+        // считает «есть несохранённое».
+        const patch = isMemberView
+          ? changedFields(
+              editBaselineRef.current
+                ? (JSON.parse(editBaselineRef.current) as Partial<Appointment>)
+                : (editing ?? {}),
+              buildPatch(),
+            )
+          : buildPatch();
+        await updateMut.mutateAsync({ id: editId, patch });
         toast("Изменения сохранены", "success");
         haptics.success();
       } else {
@@ -1678,35 +1997,54 @@ export default function BookScreen() {
           timezone:
             team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
         });
+        if (selfReminder) {
+          void setSelfReminder(
+            created,
+            selfReminder,
+            team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
+            client?.full_name,
+          ).then((res) => reminderToast(res, selfReminder));
+        }
+        // ОПЛАТА И ФАЙЛЫ НОВОЙ ЗАПИСИ — ПОСЛЕ ЗАКРЫТИЯ ФОРМЫ (владелец
+        // 2026-09-30: «должно всё мгновенно»). Запись уже есть; форма ждала
+        // ещё проводку денег (~1,5 с на сервере) и загрузку каждого файла.
+        // Теперь они уходят вслед, а если сорвутся — скажут словами, как и
+        // раньше: вводить заново нечего, запись сохранена.
         if (pendingPayment && created.kind === "work") {
           // Деньги новой записи ждали её id — уходят тем же событием, что
           // тап по счёту у существующей записи (STORY-065).
-          try {
-            await recordPayment.mutateAsync({
+          // `mutateAsync`, а не `mutate` с onError: форма к ответу уже
+          // закрыта, и отклики вызова у снятого наблюдателя не звучат —
+          // обещание же отвечает всегда.
+          void recordPayment
+            .mutateAsync({
               appointmentId: created.id,
               accountId: pendingPayment.accountId,
               amount: pendingPayment.amount,
               requestId: randomUuid(),
               kind: pendingPayment.kind,
               closeVisit: pendingPayment.kind === "settlement",
-            });
-          } catch (e) {
-            notify("Запись создана, оплата не записана", (e as Error).message);
-          }
+            })
+            .catch((e) =>
+              notify("Запись создана, оплата не записана", (e as Error).message),
+            );
         }
         if (pendingFiles.length > 0 && tenantIdForFiles) {
           // Файлы новой записи — тем же путём, что «Добавить» у сохранённой.
-          const failed = await uploadPendingFiles({
+          void uploadPendingFiles({
             tenantId: tenantIdForFiles,
             appointmentId: created.id,
             clientId: created.client_id ?? null,
             locationId: created.location_id ?? null,
             files: pendingFiles,
             queryClient: queryClientForFiles,
-          });
-          if (failed.length > 0) {
-            notify("Запись создана, файлы не загружены", failed.join(", "));
-          }
+          })
+            .then((failed) => {
+              if (failed.length > 0) {
+                notify("Запись создана, файлы не загружены", failed.join(", "));
+              }
+            })
+            .catch((e) => notify("Запись создана, файлы не загружены", (e as Error).message));
         }
       }
       leaveBook();
@@ -1744,7 +2082,8 @@ export default function BookScreen() {
   // Заметки клиента и объекта — тоже «введённое»: диалог «Введённое не
   // сохранится» обязан говорить правду, поэтому их черновики считаются здесь
   // и выбрасываются по явному «Закрыть» (см. `discardNotes`).
-  const notesDirty = clientNote.dirty || objectNote.dirty;
+  const notesDirty =
+    clientNote.dirty || objectNote.dirty || eventObjectNote.dirty;
   const dirty = isEdit
     ? notesDirty ||
       (editBaselineRef.current != null && editSignature !== editBaselineRef.current)
@@ -1752,7 +2091,18 @@ export default function BookScreen() {
     // внутри формы больше нечем, и при создании `kind !== initialKind`
     // ложно всегда.
     : (kind === "event"
-      ? eventTitle.trim().length > 0 ||
+      // СОБЫТИЕ СЧИТАЕТ ТО ЖЕ, ЧТО И ЗАПИСЬ (аудит 2026-09-10). Список
+      // события отставал от списка записи: выбранный клиент, выбранный
+      // объект, выбранный тип, прикреплённые файлы и заметка объекта в него
+      // не входили. Значит «Отмена» и системный свайп назад уходили МОЛЧА —
+      // без вопроса «Введённое не сохранится», — и выбранный клиент с
+      // фотографиями пропадал вместе с формой.
+      ? notesDirty ||
+        clientId != null ||
+        locationId != null ||
+        eventTypeId != null ||
+        pendingFiles.length > 0 ||
+        eventTitle.trim().length > 0 ||
         eventNotes.trim().length > 0 ||
         eventAddress.trim().length > 0 ||
         eventUrl.trim().length > 0 ||
@@ -1762,7 +2112,8 @@ export default function BookScreen() {
         allDay ||
         dateTouchedRef.current ||
         durationTouched
-      : clientId != null ||
+      : notesDirty ||
+        clientId != null ||
         serviceIds.length > 0 ||
         comment.trim().length > 0 ||
         address.trim().length > 0 ||
@@ -1770,6 +2121,7 @@ export default function BookScreen() {
         // Скидкой считается ВПИСАННОЕ, а не выбранная валюта: переключить
         // «€ | %» и ничего не набрать — не значит тронуть запись.
         parseMoneyInput(discountValue) > 0 ||
+        recordVatMode !== "none" ||
         status !== "scheduled" ||
         reminderOn ||
         pendingPayment != null ||
@@ -1839,39 +2191,44 @@ export default function BookScreen() {
   // записи, и им красится всё; без него — цвет, который ДЕЙСТВОВАЛ БЫ, и его
   // показывает кнопка «Автоматически» в листе. Иначе выбор идёт вслепую:
   // слово обещает, что цвет подставят, и умалчивает какой.
+  const autoBase = autoBaseColor(autoColorRule, {
+    team: team?.color,
+    label: teamCities.find((c) => c.name === effectiveLabel)?.color,
+    // Источник — живой черновик, поэтому шапка перекрашивается прямо в момент
+    // выбора услуги, а кнопка «Автоматически» в листе цвета показывает то, что
+    // встанет в сетке.
+    service: serviceBaseColor(
+      { service_ids: serviceIds },
+      (id) => serviceColorById.get(id),
+    ),
+  });
   const identityFor = (override: string | null) =>
     kind === "work"
       ? resolveRecordColor({
           override,
-          filled: recordFilled({
-            client_id: clientId,
-            location_id: locationId,
-            address,
-            service_ids: serviceIds,
-            custom_total: customTotal,
-            total_amount: effectiveTotal,
-          }),
-          base:
-            autoColorRule === "label"
-              ? teamCities.find((c) => c.name === effectiveLabel)?.color ??
-                team?.color ??
-                null
-              : autoColorRule === "service"
-                ? // Источник — живой черновик, поэтому шапка перекрашивается
-                  // прямо в момент выбора услуги, а кнопка «Автоматически» в
-                  // листе цвета показывает то, что встанет в сетке.
-                  serviceBaseColor(
-                    { service_ids: serviceIds },
-                    (id) => serviceColorById.get(id),
-                  ) ??
-                  team?.color ??
-                  null
-                : team?.color ?? null,
+          filled: recordFilled(
+            {
+              // Деньги — у сохранённой записи (леджер, аванс, статус оплаты).
+              ...(editing ?? {}),
+              kind: "work",
+              date,
+              client_id: clientId,
+              location_id: locationId,
+              address,
+              service_ids: serviceIds,
+              custom_total: customTotal,
+              total_amount: effectiveTotal,
+            },
+            todayYmd,
+          ),
+          base: autoBase,
           palette: situationPalette,
           active: activeSituations,
           fallback: fallbackColor,
         })
-      : override ?? team?.color ?? t.accent;
+      : // Событие: без палитры «чего не хватает», но по тому же правилу, что
+        // и сетка (`autoBaseColor`), — иначе цвет формы и блока расходился.
+        override ?? autoBase ?? t.accent;
   const identityC = identityFor(picked);
   /** Что подставится, если руками не выбирать. */
   const identityAuto = identityFor(null);
@@ -2051,14 +2408,50 @@ export default function BookScreen() {
           >
             {title}
           </Text>
-          <View style={{ minWidth: 72, alignItems: "flex-end" }}>
+          <View
+            style={{
+              minWidth: 72,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: 2,
+            }}
+          >
+            {/* КОЛОКОЛЬЧИК — НАПОМНИТЬ СЕБЕ (владелец 24.09: «вверху справа
+                рядом с выбором цвета, и на клиенте, и на событии»). Стоит
+                напоминание — звонящий колокольчик акцентом. */}
+            <Pressable
+              onPress={() => {
+                haptics.tap();
+                setReminderSheetOpen(true);
+              }}
+              hitSlop={6}
+              style={{ minWidth: 40, minHeight: 44, alignItems: "center", justifyContent: "center" }}
+              accessibilityRole="button"
+              accessibilityLabel={
+                selfReminder
+                  ? `Напоминание: ${selfReminderLabel(selfReminder)}`
+                  : "Напомнить себе"
+              }
+            >
+              {selfReminder ? (
+                <BellRing size={22} strokeWidth={2.2} color={t.accent} />
+              ) : (
+                <Bell size={22} strokeWidth={2} color={t.body} />
+              )}
+            </Pressable>
             {/* Подписанный контрол цвета (не Done-слот): swatch + «Цвет» —
                 самоочевидная кнопка, единственный коммит — градиент снизу. */}
             <Pressable
-              onPress={() => {
-                setColorSheetOpen(true);
-                haptics.tap();
-              }}
+              onPress={
+                can.editColor
+                  ? () => {
+                      setColorSheetOpen(true);
+                      haptics.tap();
+                    }
+                  : undefined
+              }
+              disabled={!can.editColor}
               hitSlop={8}
               className="items-center justify-center rounded-[10px] px-1.5"
               style={{ minHeight: 44 }}
@@ -2163,7 +2556,13 @@ export default function BookScreen() {
                   этого выезда (владелец 2026-09-04: «можем совместить команду
                   и метку в одно, а время поставить блоком ниже»). */}
               <TeamLabelRow
-                teamName={team?.name ?? "Команда"}
+                teamName={
+                  team
+                    ? archivedRecord
+                      ? `${team.name} · в архиве`
+                      : team.name
+                    : "Команда"
+                }
                 teamColor={team?.color ?? t.accent}
                 masterName={
                   masterId
@@ -2175,15 +2574,25 @@ export default function BookScreen() {
                   teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
                 }
                 labelFromDay={city == null}
-                showLabel={showLabelBlock}
-                onEditTeam={() => {
-                  setTeamSheetOpen(true);
-                  haptics.tap();
-                }}
-                onEditLabel={() => {
-                  setLabelSheetOpen(true);
-                  haptics.tap();
-                }}
+                showLabel={showLabelBlock && can.showLabel}
+                onEditTeam={
+                  can.editTeam
+                    ? () => {
+                        // Из архива запись не переносят: она только для просмотра.
+                        if (archivedRecord) return;
+                        setTeamSheetOpen(true);
+                        haptics.tap();
+                      }
+                    : undefined
+                }
+                onEditLabel={
+                  can.editLabel
+                    ? () => {
+                        setLabelSheetOpen(true);
+                        haptics.tap();
+                      }
+                    : undefined
+                }
               />
 
               {/* КОГДА — своим блоком ниже; предупреждения о времени живут
@@ -2196,10 +2605,14 @@ export default function BookScreen() {
                 // заданный руками, докет иначе игнорировал.
                 duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
                 warning={workWarning}
-                onPress={() => {
-                  setWhenOpen(true);
-                  haptics.tap();
-                }}
+                onPress={
+                  can.editWhen
+                    ? () => {
+                        setWhenOpen(true);
+                        haptics.tap();
+                      }
+                    : undefined
+                }
               />
 
               {/* КЛИЕНТ — ПЕРВЫЙ БЛОК И САМ ПО СЕБЕ (владелец 2026-08-31:
@@ -2220,85 +2633,28 @@ export default function BookScreen() {
                   выбор (клиент, объект, услуга), а всё, что ведёт вглубь,
                   живёт кружком в хвосте. Стрелки справа больше нет ни у
                   клиента, ни у объекта. */}
-              <SectionCard title="Клиент">
-                {client ? (
-                  <View className="flex-row items-center">
-                    <Pressable
-                      className="flex-1 flex-row items-center px-4 py-2.5"
-                      onPress={() => {
-                        setClientPickerOpen(true);
-                        haptics.tap();
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Клиент: ${client.full_name || "без имени"}. ${
-                        clientHistory ?? client.phone ?? "ещё не обслуживали"
-                      }`}
-                      accessibilityHint="Открывает выбор клиента"
-                    >
-                      <View className="flex-1">
-                        <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
-                          {client.full_name || "Без имени"}
-                        </Text>
-                        {/* ПОРЯДОК КАК В СПИСКЕ КЛИЕНТОВ: имя, деньги, связь.
-                            Раньше история ВЫТЕСНЯЛА телефон — у постоянного
-                            клиента номер из записи пропадал вовсе. */}
-                        <ClientHistoryLine client={client} stats={clientStats} />
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color: client.phone ? t.sub : t.placeholder,
-                            marginTop: 2,
-                          }}
-                          numberOfLines={1}
-                        >
-                          {client.phone ?? "без телефона"}
-                        </Text>
-                      </View>
-                    </Pressable>
-                    {client.phone ? (
-                      // Та же кнопка, что у номера в карточке и в списке: тап
-                      // звонит, удержание — способы связи; 32pt, как маршрут
-                      // и «…» (владелец 2026-09-06).
-                      <View className="mr-4 self-center">
-                        <PhoneChannelButton
-                          number={client.phone}
-                          telegramUsername={client.telegram_username}
-                          label={client.full_name || undefined}
-                        />
-                      </View>
-                    ) : null}
-                    {/* «…» — карточка клиента: телефоны, объекты, история,
-                        долг. Снаружи нажимаемой области строки, иначе
-                        VoiceOver склеит их в один элемент. */}
-                    <Pressable
-                      onPress={openClientCard}
-                      className="mr-4 items-center justify-center self-center rounded-full"
-                      style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Карточка клиента ${client.full_name || "без имени"}`}
-                    >
-                      <MoreHorizontal color={t.body} size={ICON.sm} />
-                    </Pressable>
-                  </View>
-                ) : (
-                  <ChooseRow
-                    icon={UserRound}
-                    label="Выбрать клиента"
-                    hint="Открывает поиск по имени или телефону"
-                    onPress={() => setClientPickerOpen(true)}
-                  />
-                )}
-                {/* ЗАМЕТКА КЛИЕНТА — мини-блок под клиентом, пишет в клиента
-                    (см. `writeClientNote`). */}
-                {client ? (
-                  <InlineNoteField
-                    note={clientNote}
-                    placeholder="Заметка клиента"
-                    accessibilityLabel="Заметка клиента"
-                    maxLength={500}
-                  />
-                ) : null}
-              </SectionCard>
+              {/* БЛОК «КЛИЕНТ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ClientBlock.tsx`):
+                  его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
+                  ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
+              {can.showClient ? (
+              <SmsComposeProvider context={recordSmsContext}>
+                <ClientBlock
+                  client={client}
+                  stats={clientStats}
+                  summary={clientHistory}
+                  onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
+                  onOpenCard={openClientCard}
+                  note={
+                    <InlineNoteField
+                      note={clientNote}
+                      placeholder="Заметка клиента"
+                      accessibilityLabel="Заметка клиента"
+                      maxLength={500}
+                    />
+                  }
+                />
+              </SmsComposeProvider>
+              ) : null}
 
               {/* ОБЪЕКТ — ВТОРОЙ БЛОК, И ОН СТОИТ ВСЕГДА (владелец: «хочу,
                   чтоб был зафиксированный блок, и он никуда не девался и не
@@ -2310,7 +2666,9 @@ export default function BookScreen() {
                   сперва «можно добавить объект без клиента», потом — «объект
                   есть, а клиента нет, это очень странно, не та архитектура».
                   Верно второе: объект принадлежит клиенту. */}
-              {showObject ? (
+              {/* Объект без права менять и без выбранного — смотреть нечего:
+                  блока нет, а не пригашенная дверь «Добавить объект». */}
+              {showObject && can.showObject && (can.editObject || selectedLocation) ? (
               <SectionCard title="Объект">
                 {client ? (
                   // БЕЗ ВЕРХНЕГО ВОЛОСКА: он шёл сразу под заголовком «ОБЪЕКТ»
@@ -2336,14 +2694,22 @@ export default function BookScreen() {
                         <ObjectRow
                           loc={selectedLocation}
                           showNote={false}
-                          onMore={() => {
-                            setObjectEdit(true);
-                            haptics.tap();
-                          }}
-                          onPress={() => {
-                            setObjectPicker(true);
-                            haptics.tap();
-                          }}
+                          onMore={
+                            can.editObject
+                              ? () => {
+                                  setObjectEdit(true);
+                                  haptics.tap();
+                                }
+                              : undefined
+                          }
+                          onPress={
+                            can.editObject
+                              ? () => {
+                                  setObjectPicker(true);
+                                  haptics.tap();
+                                }
+                              : undefined
+                          }
                         />
                         {/* ЗАМЕТКА ОБЪЕКТА — «код ворот», «ключ у соседей»:
                             мини-блок пишет прямо в объект (см. `writeObjectNote`),
@@ -2354,7 +2720,7 @@ export default function BookScreen() {
                           accessibilityLabel="Заметка объекта"
                         />
                       </>
-                    ) : clientLocations.length > 0 ? (
+                    ) : clientLocations.length > 0 && can.editObject ? (
                       /* Объекты есть, но ни один не выбран (снят после
                          удаления или запись сохранена с разовым адресом): та
                          же строка-дверь, что «Выбрать клиента».
@@ -2399,25 +2765,46 @@ export default function BookScreen() {
                       : null}
 
                     {/* У клиента без единого объекта выбирать нечего — первый
-                        заводится прямо отсюда, листом добавления. */}
-                    {clientLocations.length === 0 ? (
-                      <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-                        <AddRow
+                        заводится прямо отсюда, листом добавления.
+
+                        ТА ЖЕ ДВЕРЬ, ЧТО У КЛИЕНТА, ОБЪЕКТА И УСЛУГИ (владелец
+                        2026-09-09: «почему тут изменилась архитектура, если
+                        она должна быть другой — как у нас принято»). Здесь
+                        стоял `AddRow`: без кружка со значком и с волоском
+                        сверху. Пока над ним были строки объектов, волосок их
+                        разделял; у клиента без объектов он оказывался прямо
+                        под надписью «ОБЪЕКТ», а голая синяя строка — рядом с
+                        «Выбрать услугу», у которой кружок есть. Один вопрос —
+                        одна дверь: `ChooseRow`, как у соседей. */}
+                    {clientLocations.length === 0 && can.editObject ? (
+                      <View
+                        style={{
+                          borderTopWidth: pendingRequests.length > 0 ? 1 : 0,
+                          borderTopColor: t.separator,
+                        }}
+                      >
+                        <ChooseRow
+                          icon={MapPin}
                           label="Добавить объект"
+                          hint="Заводит первый объект клиента"
                           onPress={() => setObjectSheet(true)}
                         />
                       </View>
                     ) : null}
                   </View>
                 ) : (
-                  <View className="px-4 py-3">
-                    <Text
-                      maxFontSizeMultiplier={1.3}
-                      style={{ fontSize: 15, color: t.placeholder }}
-                    >
-                      Сначала выберите клиента
-                    </Text>
-                  </View>
+                  /* ДВЕРЬ СТОИТ НА МЕСТЕ И ПРИГАШЕНА (владелец 2026-09-08).
+                     Фраза «Сначала выберите клиента» отвечала на вопрос,
+                     которого человек не задавал, и меняла высоту блока; серая
+                     строка «Добавить объект» говорит то же самое собой — она
+                     тут, но пока не нажимается. */
+                  <ChooseRow
+                    icon={MapPin}
+                    label="Добавить объект"
+                    hint="Станет доступно после выбора клиента"
+                    disabled
+                    onPress={() => {}}
+                  />
                 )}
               </SectionCard>
 
@@ -2428,148 +2815,28 @@ export default function BookScreen() {
                   стоит в блоке строкой «Итого»; называть её ещё и в шапке
                   значило объявлять два предмета там, где предмет один: набор
                   работ, у которого есть цена. */}
-              <SectionCard title="Услуги">
-                {serviceIds.length === 0 ? (
-                  <>
-                    {/* ТА ЖЕ ДВЕРЬ, ЧТО У КЛИЕНТА И ОБЪЕКТА (аудит 2026-09-06):
-                        три пустых состояния формы отвечают на один вопрос и
-                        выглядят одинаково. */}
-                    <ChooseRow
-                      icon={Briefcase}
-                      label="Выбрать услугу"
-                      hint="Открывает список услуг"
-                      onPress={() => setServicePickerOpen(true)}
-                    />
-                    <TotalRow
-                      total={effectiveTotal}
-                      custom={customTotal}
-                      discountAmount={discountAmount}
-                      discountReason={discountReason}
-                      onPress={() => {
-                        setTotalSheetOpen(true);
-                        haptics.tap();
-                      }}
-                    />
-                  </>
-                ) : (
-                  <>
-                    {selectedServices.map((line, index) => {
-                      // СТРОКА ЖИВЁТ БЕЗ КАТАЛОГА. Раньше здесь стоял
-                      // `catalog.get(id) ?? return null`, и у сохранённой
-                      // записи строки просто исчезали с экрана, когда услугу
-                      // убирали из прайса: сумма в «Итого» оставалась, а
-                      // работы, за которые её взяли, было не видно. Имя,
-                      // единицу и длительность держит снимок строки.
-                      const svc = catalog.get(line.serviceId);
-                      const lineName =
-                        line.serviceName ??
-                        nameById.get(line.serviceId) ??
-                        "Услуга удалена";
-                      return (
-                        <View
-                          key={line.serviceId}
-                          // Волосок — МЕЖДУ строками, не под шапкой «УСЛУГИ»:
-                          // у остальных карточек под надписью линии нет.
-                          style={{ borderTopWidth: index > 0 ? 1 : 0, borderTopColor: t.separator }}
-                        >
-                        {/* ТАП ПО УСЛУГЕ ОТКРЫВАЕТ СПИСОК УСЛУГ ЗАНОВО (владелец
-                            2026-09-04: «„Добавить услугу“ убираем; тапаю по
-                            выбранной услуге — открывается список»). Та же
-                            грамматика, что у клиента и объекта: строка выбранного
-                            и есть дверь к выбору. Степпер и цена внутри строки
-                            ловят свои касания сами. */}
-                        <Pressable
-                          className="flex-row items-center px-4 py-2.5"
-                          onPress={() => {
-                            setServicePickerOpen(true);
-                            haptics.tap();
-                          }}
-                          style={({ pressed }) => ({
-                            backgroundColor: pressed ? t.pressed : "transparent",
-                          })}
-                          accessibilityRole="button"
-                          accessibilityLabel={`${lineName}, ${durationLabel(line.duration)}, ${formatEURExact(line.totalPrice)}`}
-                          accessibilityHint="Открывает выбор услуг"
-                        >
-                          {/* ЦВЕТ УСЛУГИ СТОИТ И ЗДЕСЬ (владелец 2026-09-04:
-                              «цвет услуги должен быть также в услуге»): в
-                              списке выбора он есть, а в самой записи услуги
-                              стояли безымянными строками. Точки выстроены
-                              столбиком — список читается сверху вниз одним
-                              взглядом. */}
-                          <ColorDot value={svc?.color ?? null} size={10} />
-                          <View className="flex-1 pl-2.5 pr-2">
-                            <Text style={{ fontSize: 15, color: t.ink }}>{lineName}</Text>
-                            <Text style={{ fontSize: 13, color: t.placeholder, marginTop: 1 }}>
-                              {durationLabel(line.duration)}
-                            </Text>
-                          </View>
-                          {/* СКОЛЬКО РАЗ ВЗЯЛИ — ОТТИСКОМ «×3» (владелец
-                              2026-09-04, выбрал из четырёх вариантов на
-                              экране сравнения). Стрелок вверх/вниз больше
-                              нет: количество набирают тапами в списке услуг,
-                              который открывает эта же строка. */}
-                          <QtyBadge
-                            qty={line.quantity}
-                            unit={line.unit ?? svc?.unit ?? null}
-                          />
-                          {/* ЦЕНА ЗА ОДНУ — МЕЛКО, МЕЖДУ КОЛИЧЕСТВОМ И СУММОЙ
-                              (владелец 2026-09-07: «посередине количество,
-                              потом цена за штуку маленькими цифрами, правее
-                              общая сумма за услугу»). Столбец стоит всегда,
-                              чтобы строки читались таблицей. */}
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              color: t.sub,
-                              minWidth: 44,
-                              marginLeft: 8,
-                              textAlign: "right",
-                              fontVariant: ["tabular-nums"],
-                            }}
-                          >
-                            {formatEURExact(line.pricePerUnit)}
-                          </Text>
-                          <Text
-                            style={{
-                              fontSize: 15,
-                              fontWeight: "600",
-                              color: t.ink,
-                              minWidth: 56,
-                              marginLeft: 8,
-                              textAlign: "right",
-                              fontVariant: ["tabular-nums"],
-                            }}
-                          >
-                            {formatEURExact(line.totalPrice)}
-                          </Text>
-                        </Pressable>
-                        </View>
-                      );
-                    })}
-                    {/* ИТОГ — ДВЕРЬ, А НЕ ПОЛЕ (владелец 2026-09-04: «когда я
-                        открываю „Итого“, открывается шторка, где прописаны
-                        каждая услуга, количество их, и там же скидки»).
-                        Скидка называется прямо в строке: видно, почему сумма
-                        меньше суммы услуг. */}
-                    <TotalRow
-                      total={effectiveTotal}
-                      custom={customTotal}
-                      discountAmount={discountAmount}
-                      discountReason={discountReason}
-                      onPress={() => {
-                        setTotalSheetOpen(true);
-                        haptics.tap();
-                      }}
-                    />
-                  </>
-                )}
-              </SectionCard>
+              {/* БЛОК «УСЛУГИ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ServicesBlock.tsx`):
+                  его же ставит составитель чека — владелец 2026-09-20 попросил там
+                  «такой же блок, как в записи», а вторая копия разметки назавтра
+                  разошлась бы с первой. Вид не менялся ни на пиксель. */}
+              {can.showServices ? (
+                <ServicesBlock
+                  lines={serviceLines}
+                  total={effectiveTotal}
+                  custom={customTotal}
+                  discountAmount={discountAmount}
+                  onPickServices={can.editServices ? () => setServicePickerOpen(true) : undefined}
+                  onOpenTotal={can.editTotal ? () => setTotalSheetOpen(true) : undefined}
+                  showMoney={can.showMoney}
+                />
+              ) : null}
 
               {/* Оплата — сразу после «Итого»: плитки счетов команды, тап
                   пишет деньги сразу (STORY-065). Выключается в Кабинет →
                   «Запись»: не всякий бизнес принимает деньги в записи. */}
-              {showPayment ? (
+              {/* В архив деньги не принимаются: у архивного календаря счетов в
+                  живых финансах нет, а блок пишет оплату сразу, мимо «Сохранить». */}
+              {showPayment && !archivedRecord ? (
                 <PaymentBlock
                   appointment={editing}
                   teamId={teamId}
@@ -2591,7 +2858,7 @@ export default function BookScreen() {
                   снесено 2026-08-30. Зовётся «заметка записи» (владелец
                   2026-09-04): под клиентом и объектом стоят их заметки, и
                   третье поле обязано сказать, чьё оно. */}
-              {showNote ? (
+              {showNote && can.showNote ? (
               // БЛОК, КАК У СОСЕДЕЙ (владелец 2026-09-06: «заметка записи —
               // такой же блок, как под объектом или клиентом, с таким же
               // названием»). Надпись «Заметка» — та же малая шапка.
@@ -2613,22 +2880,43 @@ export default function BookScreen() {
                       ),
                     onBlur: () => {},
                   }}
-                  placeholder="Детали, пожелания, что взять с собой"
+                  // ПОДСКАЗКА НАЗЫВАЕТ ПОЛЕ, А НЕ ОБЪЯСНЯЕТ ПРИМЕРОМ
+                  // (владелец 2026-09-10, четвёртый раз за день — после
+                  // заметок долга, операции и объекта): «убери „детали,
+                  // пожелания, что взять с собой“, вставь просто „заметка
+                  // записи“». Инструкция в пустом поле читается как уже
+                  // введённый текст.
+                  placeholder="Заметка записи"
                   accessibilityLabel="Заметка записи"
+                  readOnly={!can.editNote}
                 />
               </SectionCard>
               ) : null}
 
               {/* ФАЙЛЫ ЗАПИСИ (STORY-070): фото, документы; у сохранённой
                   записи — файлам нужен её id. К отменённой не добавляют. */}
-              {showFiles ? (
+              {showFiles && can.showFiles ? (
                 <AppointmentFilesBlock
                   appointmentId={editing?.id ?? null}
                   clientId={editing?.client_id ?? client?.id ?? null}
                   locationId={editing?.location_id ?? locationId ?? null}
-                  canUpload={status !== "cancelled"}
+                  canUpload={status !== "cancelled" && can.editFiles}
+                  // Удаляет файлы записи только владелец и диспетчер — сервер
+                  // сотруднику откажет, корзину ему не рисуем (аудит 24.09).
+                  canDelete={!isMemberView}
                   pending={pendingFiles}
                   onPendingChange={setPendingFiles}
+                />
+              ) : null}
+
+              {/* SMS ЗАПИСИ (STORY-089; владелец 25.09: «на записи в самом низу
+                  блок — что мы уже отправили ему или не отправили… нажал
+                  „Отправить SMS“ — и оно сразу отправляет то, что записал»).
+                  Только у сохранённой записи с клиентом: SMS — о ней. */}
+              {editing?.id && client && recordSmsContext ? (
+                <SmsRecordBlock
+                  context={recordSmsContext}
+                  phone={revealedClient?.phone_e164 || revealedClient?.phone || null}
                 />
               ) : null}
 
@@ -2651,36 +2939,54 @@ export default function BookScreen() {
                   было сказано неверно. Источник и SMS-переключатель живы во
                   ВТОРОЙ форме записи (`AppointmentSheet`), которой правят
                   существующую запись, — снос здесь сделал работу наполовину.
-                  Скидка же осталась и на этом экране: её начисляет программа
-                  лояльности, и она печатается в итогах. Но ТОЛЬКО при
-                  создании: при правке лояльность молчит (`if (isEdit) return`),
-                  а ручного поля больше нет — у сохранённой записи скидку из
-                  этой формы теперь не изменить и не снять. */}
+                  Скидка же осталась и на этом экране — её вписывают рукой в
+                  шторке «Итого», а не в этом блоке: он по-прежнему не
+                  показывает и не меняет скидку. Автоскидку по числу визитов
+                  сняли 20.09 по слову владельца. */}
             </>
           ) : (
             /* ── Событие ── */
             <>
-              {/* ТА ЖЕ ЛЕСТНИЦА, ЧТО У ЗАПИСИ (владелец 2026-09-06): команда и
-                  тип одной строкой, время, клиент, объект, заметка. Без услуг
-                  и оплаты, без названия («событие называется типом»), без
-                  «весь день», повтора и напоминания («убрать совсем»).
-                  «Личное» — событие без команды, как и было. */}
+              {/* ТА ЖЕ ЛЕСТНИЦА, ЧТО У ЗАПИСИ: команда и метка одной строкой,
+                  время, ТИП, клиент, объект, заметка, файлы. Без услуг и
+                  оплаты, без названия («событие называется типом»), без
+                  «весь день», повтора и напоминания.
+                  «Личное» — событие без команды, как и было.
+
+                  ВТОРАЯ ПЛИТКА ШАПКИ — МЕТКА, А НЕ ТИП (владелец 2026-09-08:
+                  «вот этот вот тип, что справа вверху, переделай его на метку,
+                  как в клиентах, а ниже под временем сделаем новый блок —
+                  тип события»). Пока тип стоял здесь, у нового события это
+                  был серый кружок со словом «Тип» — самое тихое место экрана
+                  на месте, где у записи горит метка выезда. Метка у события и
+                  у записи теперь одна и та же вещь: та же библиотека Кабинета,
+                  тот же лист, та же колонка `city`. */}
               <TeamLabelRow
                 teamName={teamId == null ? "Личное" : team?.name ?? "Команда"}
                 teamColor={teamId == null ? t.accent : team?.color ?? t.accent}
-                label={eventTypeLabel}
-                labelColor={eventType?.color ?? null}
-                labelIcon={Tag}
-                labelPlaceholder="Тип"
-                showLabel
-                onEditTeam={() => {
-                  setEventTeamSheetOpen(true);
-                  haptics.tap();
-                }}
-                onEditLabel={() => {
-                  setEventTypeSheetOpen(true);
-                  haptics.tap();
-                }}
+                teamIcon={teamId == null ? UserRound : Users}
+                label={effectiveLabel}
+                labelColor={
+                  teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
+                }
+                labelFromDay={city == null}
+                showLabel={evShowLabel && can.showLabel}
+                onEditTeam={
+                  can.editTeam
+                    ? () => {
+                        setEventTeamSheetOpen(true);
+                        haptics.tap();
+                      }
+                    : undefined
+                }
+                onEditLabel={
+                  can.editLabel
+                    ? () => {
+                        setLabelSheetOpen(true);
+                        haptics.tap();
+                      }
+                    : undefined
+                }
               />
 
               <WhenRow
@@ -2688,135 +2994,255 @@ export default function BookScreen() {
                 timeStart={timeStart}
                 timeEnd={timeEnd}
                 duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
-                warning={null}
-                onPress={() => {
-                  setWhenOpen(true);
-                  haptics.tap();
-                }}
+                warning={workWarning}
+                onPress={
+                  can.editWhen
+                    ? () => {
+                        setWhenOpen(true);
+                        haptics.tap();
+                      }
+                    : undefined
+                }
               />
+              {/* ТИП СОБЫТИЯ — ПОД ВРЕМЕНЕМ (владелец 2026-09-06 завёл его
+                  здесь; 2026-09-08 я поднял блок выше, и владелец вернул:
+                  «нет, я неправильно объяснил — опусти на один блок ниже,
+                  время обратно»). Тот же блок, что «Категория» в финансах:
+                  строка-дверь → шторка. Цвет события и есть цвет типа. */}
+              {/* Без права править событие тип только читается: пустую дверь
+                  «Выбрать тип» не показываем, выбранный — без действия. */}
+              {evShowType && can.showType && (can.editEventType || eventType) ? (
+                <EventTypeBlock
+                  type={eventType}
+                  onPress={
+                    can.editEventType
+                      ? () => {
+                          setEventTypeSheetOpen(true);
+                          haptics.tap();
+                        }
+                      : () => {}
+                  }
+                />
+              ) : null}
+
 
               {/* КЛИЕНТ — НЕОБЯЗАТЕЛЕН: событие бывает и без человека, поэтому
                   у выбранного есть «убрать» — лист выбора пустого варианта не
                   предлагает. */}
-              <SectionCard title="Клиент">
-                {client ? (
-                  <View className="flex-row items-center">
-                    <Pressable
-                      className="flex-1 flex-row items-center px-4 py-2.5"
-                      onPress={() => {
-                        setClientPickerOpen(true);
-                        haptics.tap();
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Клиент: ${client.full_name || "без имени"}`}
-                      accessibilityHint="Открывает выбор клиента"
-                    >
-                      <View className="flex-1">
-                        <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
-                          {client.full_name || "Без имени"}
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color: client.phone ? t.sub : t.placeholder,
-                            marginTop: 2,
-                          }}
-                          numberOfLines={1}
-                        >
-                          {client.phone ?? "без телефона"}
-                        </Text>
-                      </View>
-                    </Pressable>
-                    {client.phone ? (
-                      <View className="mr-2 self-center">
-                        <PhoneChannelButton
-                          number={client.phone}
-                          telegramUsername={client.telegram_username}
-                          label={client.full_name || undefined}
-                        />
-                      </View>
+              {/* БЛОК «КЛИЕНТ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ClientBlock.tsx`):
+                  его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
+                  ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
+              {evShowClient && can.showClient ? (
+              <SmsComposeProvider context={recordSmsContext}>
+                <ClientBlock
+                  client={client}
+                  stats={clientStats}
+                  summary={clientHistory}
+                  onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
+                  onOpenCard={openClientCard}
+                  onClear={
+                    can.editClient
+                      ? () => {
+                          setClientId(null);
+                          setLocationId(null);
+                        }
+                      : undefined
+                  }
+                  note={
+                    <InlineNoteField
+                      note={clientNote}
+                      placeholder="Заметка клиента"
+                      accessibilityLabel="Заметка клиента"
+                      maxLength={500}
+                    />
+                  }
+                />
+              </SmsComposeProvider>
+              ) : null}
+
+              {/* ОБЪЕКТ — ТОТ ЖЕ, ЧТО В КЛИЕНТАХ, ОДИН В ОДИН (владелец
+                  2026-09-08: «объект надо сделать точно такой же вид объекта,
+                  как мы делали в клиентах, один в один; только тут другое — в
+                  событии можно добавить объект, не выбирая клиента»).
+
+                  Раньше здесь стояло поле «Адрес или ссылка на карту»: у
+                  события был свой вольный адрес, не из базы. Он не знал ни
+                  кода ворот, ни маршрута, ни того, что на этот же дом ездят
+                  записями. Теперь событие берёт НАСТОЯЩИЙ объект — ту же
+                  строку `ObjectRow`, что на карточке клиента и в записи.
+
+                  БЕЗ КЛИЕНТА ВЫБОР РАБОТАЕТ: список — объекты всех клиентов,
+                  чей объект, сказано подписью в листе. Заводится новый объект
+                  всё-таки клиенту (своей таблицы у объекта нет), поэтому
+                  «Добавить объект» без клиента сперва спрашивает клиента.
+
+                  Прежний вольный адрес старого события НЕ ТЕРЯЕТСЯ: пока
+                  объект не выбран, он стоит тем же полем и уезжает в патч. */}
+              {evShowObject &&
+              can.showObject &&
+              (can.editObject || eventLocationEntry || eventAddress.trim()) ? (
+              <SectionCard title="Объект">
+                {eventLocationEntry ? (
+                  <>
+                    <ObjectRow
+                      loc={eventLocationEntry.loc}
+                      showNote={false}
+                      onMore={
+                        can.editObject
+                          ? () => {
+                              setObjectEdit(true);
+                              haptics.tap();
+                            }
+                          : undefined
+                      }
+                      onPress={
+                        can.editObject
+                          ? () => {
+                              setObjectPicker(true);
+                              haptics.tap();
+                            }
+                          : undefined
+                      }
+                    />
+                    {/* Чей объект — строкой под ним, когда это не клиент
+                        события: иначе «Дом» ничего не говорит о том, куда
+                        едут. */}
+                    {eventLocationEntry.ownerId !== clientId ? (
+                      <Text
+                        maxFontSizeMultiplier={1.2}
+                        style={{
+                          paddingHorizontal: 16,
+                          paddingBottom: 8,
+                          fontSize: 13,
+                          color: t.faint,
+                        }}
+                      >
+                        {`Объект клиента: ${eventLocationEntry.ownerName}`}
+                      </Text>
                     ) : null}
-                    <Pressable
-                      onPress={openClientCard}
-                      className="mr-2 items-center justify-center self-center rounded-full"
-                      style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Карточка клиента ${client.full_name || "без имени"}`}
-                    >
-                      <MoreHorizontal color={t.body} size={ICON.sm} />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => {
-                        setClientId(null);
-                        setLocationId(null);
-                        haptics.tap();
-                      }}
-                      className="mr-4 items-center justify-center self-center rounded-full"
-                      style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Убрать клиента"
-                    >
-                      <X color={t.body} size={ICON.sm} />
-                    </Pressable>
-                  </View>
+                    <InlineNoteField
+                      note={eventObjectNote}
+                      placeholder="Заметка объекта"
+                      accessibilityLabel="Заметка объекта"
+                    />
+                  </>
                 ) : (
-                  <ChooseRow
-                    icon={UserRound}
-                    label="Выбрать клиента"
-                    hint="Открывает поиск по имени или телефону"
-                    onPress={() => setClientPickerOpen(true)}
-                  />
+                  <>
+                    {/* «ЖДЁМ АДРЕС» — И У СОБЫТИЯ (сведено 2026-09-10). Ссылка
+                        клиенту уже отправлена, ответа ещё нет — в записи об
+                        этом говорила строка, а событие молчало: та же ссылка,
+                        тот же клиент, но узнать о ней было негде. */}
+                    {pendingRequests.map((request, i) => (
+                      <LocationRequestRow
+                        key={request.id}
+                        request={request}
+                        separated={i > 0}
+                        onPress={() => void requestActions.menu(request)}
+                      />
+                    ))}
+                    {/* Вольный адрес прежнего события — только пока объекта
+                        нет: у нового события поля не будет вовсе. */}
+                    {eventAddress.trim() ? (
+                      <FieldRow
+                        label="Адрес"
+                        hideLabel
+                        value={eventAddress}
+                        placeholder="Адрес или ссылка на карту"
+                        stacked
+                        multiline
+                        live
+                        onSave={setEventAddress}
+                      />
+                    ) : null}
+                    {/* ОДНА КНОПКА, А НЕ ДВЕ (владелец 2026-09-08: «ты
+                        неправильно сделал объект — „выбрать объект“ или
+                        „добавить объект“ это неправильно, идёт одна кнопка;
+                        посмотри, как сделано в клиентах»). «Добавить объект»
+                        живёт в футере листа выбора — там, куда идут, когда
+                        нужного объекта нет. Пустой справочник — единственный
+                        случай, когда выбирать нечего и дверь сразу ведёт к
+                        добавлению. */}
+                    <View
+                      style={{
+                        borderTopWidth: eventAddress.trim() ? 1 : 0,
+                        borderTopColor: t.separator,
+                      }}
+                    >
+                      {eventLocationPool.length > 0 ? (
+                        <ChooseRow
+                          icon={MapPin}
+                          label="Выбрать объект"
+                          hint="Открывает объекты клиентов"
+                          onPress={() => {
+                            setObjectPicker(true);
+                            haptics.tap();
+                          }}
+                        />
+                      ) : (
+                        <ChooseRow
+                          icon={MapPin}
+                          label="Добавить объект"
+                          hint="Заводит первый объект"
+                          onPress={openEventObjectAdd}
+                        />
+                      )}
+                    </View>
+                  </>
                 )}
               </SectionCard>
+              ) : null}
 
-              {/* ОБЪЕКТ — АДРЕС СОБЫТИЯ (владелец 2026-09-06: «просто адрес,
-                  не из базы; фиксируется только на этом событии»). Объект
-                  клиента — подсказка: строка ниже подставляет его адрес. */}
-              <SectionCard title="Объект">
-                <FieldRow
-                  label="Адрес"
-                  hideLabel
-                  value={eventAddress}
-                  placeholder="Адрес или ссылка на карту"
-                  stacked
-                  multiline
-                  live
-                  onSave={setEventAddress}
-                />
-                {client && clientLocations.length > 0 ? (
-                  <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-                    <ChooseRow
-                      icon={MapPin}
-                      label="Объект клиента"
-                      hint="Подставляет адрес объекта клиента"
-                      onPress={() => {
-                        setObjectPicker(true);
-                        haptics.tap();
-                      }}
-                    />
-                  </View>
-                ) : null}
-              </SectionCard>
+              {/* ЗАМЕТКА СОБЫТИЯ — ТО ЖЕ ПОЛЕ, ЧТО ЗАМЕТКА КЛИЕНТА, ЦЕЛИКОМ
+                  (владелец 2026-09-10, вторым заходом: «уменьши заметки,
+                  сделай такие заметки, как в клиентах… короче, сделай то же
+                  самое, как в клиентах»). Первый заход сделал общим только
+                  материал — плашку `t.fill`, кегль 13/18, отступы, — а высоту
+                  оставил свою (`tall`, четыре строки вместо одной) по просьбе
+                  2026-09-08 «дай заметке события больше места». Полумера и
+                  вернулась вопросом: одинаково — значит и по высоте.
 
-              {/* ЗАМЕТКА — БОЛЬШАЯ, ПОСЛЕДНЕЙ. */}
+                  ПОДСКАЗКА НАЗЫВАЕТ ПОЛЕ (та же просьба: «добавь в подсказку
+                  заметка записи»). Пустое поле без подсказки читалось как
+                  пустое место; имя берётся у сущности — «Заметка события»,
+                  как «Заметка клиента» у клиента, — а шапка блока остаётся. */}
+              {evShowNote && can.showNote ? (
               <SectionCard title="Заметка">
-                <TextInput
-                  keyboardAppearance="light"
-                  accessibilityLabel="Заметка события"
-                  value={eventNotes}
-                  onChangeText={setEventNotes}
-                  placeholder="Заметка"
-                  placeholderTextColor={t.placeholder}
-                  multiline
-                  className="px-4 py-3"
-                  style={{
-                    minHeight: 120,
-                    fontSize: 15,
-                    color: t.ink,
-                    textAlignVertical: "top",
+                <InlineNoteField
+                  note={{
+                    draft: eventNotes,
+                    setDraft: setEventNotes,
+                    onFocus: () =>
+                      setTimeout(
+                        () => scrollRef.current?.scrollToEnd({ animated: true }),
+                        KEYBOARD_SETTLE_MS,
+                      ),
+                    onBlur: () => {},
                   }}
+                  placeholder="Заметка события"
+                  accessibilityLabel="Заметка события"
+                  readOnly={!can.editNote}
                 />
               </SectionCard>
+              ) : null}
+
+              {/* ФАЙЛЫ СОБЫТИЯ — ТОТ ЖЕ БЛОК, ЧТО У ЗАПИСИ (владелец
+                  2026-09-08: «сделай блок добавления файлов; по сути событие
+                  это точно такое же, только без услуги и оплаты»). У события
+                  без клиента документы не заводятся — их место карточка
+                  клиента, — а фото и сканы живут на самом событии. */}
+              {evShowFiles && can.showFiles ? (
+                <AppointmentFilesBlock
+                  appointmentId={editing?.id ?? null}
+                  clientId={editing?.client_id ?? client?.id ?? null}
+                  locationId={editing?.location_id ?? locationId ?? null}
+                  canUpload={status !== "cancelled" && can.editFiles}
+                  // Удаляет файлы записи только владелец и диспетчер — сервер
+                  // сотруднику откажет, корзину ему не рисуем (аудит 24.09).
+                  canDelete={!isMemberView}
+                  pending={pendingFiles}
+                  onPendingChange={setPendingFiles}
+                />
+              ) : null}
             </>
           )}
         </ScrollView>
@@ -2866,6 +3292,12 @@ export default function BookScreen() {
           }
           onPress={save}
           disabled={!canSave || bookingBusy}
+          // Серая кнопка отвечает плашкой сверху: «Выберите клиента»,
+          // «Выберите услугу» — что мешает сохранить.
+          onDisabledPress={() => {
+            haptics.warning();
+            toast(missingHint, "info");
+          }}
           loading={bookingBusy}
         />
         </View>
@@ -2894,7 +3326,12 @@ export default function BookScreen() {
           // услуга по-прежнему обязана удлинить запись.
           const before = minutesBetweenHM(timeStart, timeEnd);
           const after = minutesBetweenHM(next.timeStart, next.timeEnd);
-          if (next.allDay || after !== before) setDurationTouched(true);
+          if (next.allDay || after !== before) {
+            setDurationTouched(true);
+            // Рука человека на длительности — с этого момента тип её не
+            // перебивает (см. `durationByHand`).
+            setDurationByHand(true);
+          }
         }}
         onClose={() => setWhenOpen(false)}
       />
@@ -2910,9 +3347,8 @@ export default function BookScreen() {
       {client ? (
         <ObjectSheet
           visible={objectSheet}
-          client={client}
-          update={updateClientPatch}
           writer={locationWriter}
+          teamId={client.team_id ?? null}
           initialTarget={locationId ? "" : address}
           onRequestFromClient={
             canRequestAddress
@@ -2931,41 +3367,83 @@ export default function BookScreen() {
           onClose={() => setObjectSheet(false)}
         />
       ) : null}
-      {client ? (
-        <>
-          {/* Выбор/замена объекта; «Добавить объект» в его футере открывает
-              лист добавления, когда этот уже уехал. */}
-          <ObjectPickerSheet
-            visible={objectPicker}
-            locations={clientLocations}
-            selectedId={locationId}
-            onSelect={(loc) => pickLocation(loc.id)}
-            onAdd={() => setObjectSheet(true)}
-            onClose={() => setObjectPicker(false)}
-          />
-          {/* Правка выбранного объекта — тем же листом, что на карточке. */}
-          <ObjectEditSheet
-            visible={objectEdit}
-            client={client}
-            locationId={objectEdit ? locationId : null}
-            writer={locationWriter}
-            onDeleted={forgetLocation}
-            onClose={() => setObjectEdit(false)}
-          />
-        </>
+      {/* Выбор/замена объекта; «Добавить объект» в его футере открывает лист
+          добавления, когда этот уже уехал. У записи список — объекты её
+          клиента; у события — объекты ВСЕХ клиентов, и чей объект, сказано
+          третьей строкой (владелец 2026-09-08). */}
+      <ObjectPickerSheet
+        visible={objectPicker}
+        locations={
+          kind === "event"
+            ? eventLocationPool.map((row) => row.loc)
+            : clientLocations
+        }
+        selectedId={locationId}
+        ownerNameFor={
+          kind === "event"
+            ? (loc) =>
+                eventLocationPool.find((row) => row.loc.id === loc.id)?.ownerName ??
+                null
+            : undefined
+        }
+        onSelect={(loc) => pickLocation(loc.id)}
+        onDeselect={() => {
+          setLocationId(null);
+          haptics.tap();
+        }}
+        onAdd={kind === "event" ? openEventObjectAdd : () => setObjectSheet(true)}
+        onClose={() => setObjectPicker(false)}
+      />
+      {/* Правка выбранного объекта — тем же листом, что на карточке, и тем же
+          писателем, что у его владельца. */}
+      {objectEditClient ? (
+        <ObjectEditSheet
+          visible={objectEdit}
+          client={objectEditClient}
+          locationId={objectEdit ? locationId : null}
+          writer={kind === "event" ? eventLocationWriter : locationWriter}
+          onRequestFromClient={
+            canRequestAddress && objectEditClient
+              ? () => void requestActions.request(objectEditClient.id)
+              : undefined
+          }
+          onDeleted={forgetLocation}
+          onClose={() => setObjectEdit(false)}
+        />
       ) : null}
-      <ClientPicker
-        statsById={statsById}
+      {/* ОДНА ШТОРКА КЛИЕНТА НА ПРОДУКТ (2026-09-10). Здесь стояла её вторая
+          копия из `BookingPickers`; вся разница — недавние наверх, вводная о
+          человеке и создание из набранного — стала пропами общей шторки. */}
+      <ClientPickerSheet
         visible={clientPickerOpen}
+        statsById={statsById}
+        clients={clients}
+        recentIds={recentClientIds}
+        selectedId={clientId}
+        onSelect={(pickedClient) => {
+          pickClient(pickedClient);
+          setClientPickerOpen(false);
+        }}
+        // ПОВТОРНЫЙ ТАП ПО ВЫБРАННОМУ СНИМАЕТ ЕГО (владелец 2026-09-22).
+        // Объект уходит вместе с клиентом: чужому он не принадлежит.
+        onDeselect={() => {
+          setClientId(null);
+          setLocationId(null);
+          setClientPickerOpen(false);
+        }}
+        // СОЗДАНИЕ — ТОЛЬКО КАРТОЧКОЙ КЛИЕНТА, И ОНА ОТКРЫВАЕТСЯ ПОВЕРХ
+        // ЗАПИСИ (`/client`, 2026-09-03): быстрое создание одним тапом
+        // заводило клиента с именем без телефона или наоборот. Набранное в
+        // поиске уезжает в карточку параметром.
+        onCreate={(prefill) =>
+          router.push({
+            pathname: "/client",
+            params: { id: "new", ...prefill },
+          })
+        }
         onClose={() => setClientPickerOpen(false)}
         onExited={() => {
           if (chainStep === "clientClosing") setChainStep("services");
-        }}
-        clients={clients}
-        recentIds={recentClientIds}
-        onPick={(pickedClient) => {
-          pickClient(pickedClient);
-          setClientPickerOpen(false);
         }}
       />
       <ServicePicker
@@ -2976,6 +3454,8 @@ export default function BookScreen() {
         // Каталог знает день записи: услуга, которую по вторникам не делают,
         // уезжает вниз списка под свою подпись.
         date={date}
+        // И команду записи: дверь «Добавить услугу» открывает её прайс.
+        teamId={teamId}
         onToggle={toggleService}
         quantities={Object.fromEntries(
           serviceIds.map((id) => [id, overrides[id]?.qty ?? 1]),
@@ -3002,31 +3482,45 @@ export default function BookScreen() {
           или процентах, итог. Открывается строкой «Итого». */}
       <TotalSheet
         visible={totalSheetOpen}
-        onClose={() => setTotalSheetOpen(false)}
-        lines={selectedServices}
-        nameFor={(line) =>
-          line.serviceName ?? nameById.get(line.serviceId) ?? "Услуга удалена"
-        }
-        colorFor={(line) => catalog.get(line.serviceId)?.color ?? null}
+        onClose={closeTotalSheet}
+        lines={serviceLines}
         onQtyChange={setQty}
+        onAddLine={kind === "work" ? addCustomLine : undefined}
+        onNameChange={setLineName}
+        onRemoveLine={removeCustomLine}
         // ЦЕНА ПРАВИТСЯ У СТРОКИ, А НЕ У ИТОГА (владелец 2026-09-04). Пишем в
         // `overrides` — снимок ЭТОЙ записи; прайс команды не трогается.
         onPriceChange={setLinePrice}
-        servicesTotal={computedTotal}
         // «Без скидки» больше не выбирают: ноль в поле и есть её отсутствие,
         // а переключатель говорит только, ЧЕМ считать вписанное.
-        discountKind={discountType ?? "fixed"}
-        discountValue={discountValue}
-        discountAmount={discountAmount}
-        discountReason={discountReason}
-        onDiscountKindChange={setDiscountType}
-        onDiscountValueChange={setDiscountValue}
-        total={effectiveTotal}
+        discount={{
+          kind: discountType ?? "fixed",
+          value: discountValue,
+          onKindChange: setDiscountType,
+          onValueChange: setDiscountValue,
+        }}
+        // До налога: шторка сама считает из этой суммы строку скидки (сумма
+        // строк − это число) и налог — как у чека и инвойса.
+        total={customTotal ? effectiveTotal : beforeVat}
         customTotal={customTotal}
         onResetTotal={() => setCustomTotal(false)}
+        vat={
+          kind === "work" && !customTotal
+            ? {
+                mode: recordVatMode,
+                rate: vatRateInUse,
+                onModeChange: setRecordVatMode,
+                onRateChange: (rate) => {
+                  setRecordVatRate(rate);
+                  rememberedVatRate.remember(rate);
+                },
+              }
+            : undefined
+        }
       />
-      <LabelSheet
+      <LabelPickerSheet
         visible={labelSheetOpen}
+        title={kind === "event" ? "Метка события" : "Метка записи"}
         options={teamCities.map((c) => ({ name: c.name, color: c.color ?? t.accent }))}
         // ВЫБРАНА ТА, ЧТО ДЕЙСТВУЕТ СЕЙЧАС — своя либо взятая у дня (владелец
         // 2026-09-04: «открываем метку, там уже автоматически выбрана метка,
@@ -3043,6 +3537,8 @@ export default function BookScreen() {
       <PickerSheet
         visible={eventTeamSheetOpen}
         title="Команда"
+        // Отмечена текущая, «Личное» тоже — как в листе команды записи.
+        selectedId={teamId ?? "personal"}
         items={[
           {
             id: "personal",
@@ -3067,25 +3563,48 @@ export default function BookScreen() {
         ]}
         onClose={() => setEventTeamSheetOpen(false)}
       />
+      {/* ВЫБОР ТИПА — ТОТ ЖЕ ЛИСТ, ЧТО У КАТЕГОРИИ ОПЕРАЦИИ (владелец
+          2026-09-10: «тип события выбирается точно так же, как категория»).
+          Строка — значок и цвет типа, тихая подпись — длительность, которую
+          тип поставит, и она одна на все строки: «Тап снимает тип» у
+          выбранной владелец забраковал («это бред») — галка и без слов
+          говорит, что строка выбрана. ТАП ПО ВЫБРАННОЙ СНИМАЕТ ТИП; служебной
+          строки «Без типа» в списке нет — снятие живёт там же, где выбор. Дверь в справочник — значок настроек
+          в шапке листа: тем же сиблингом формы, а не экраном чужой вкладки,
+          иначе «назад» уводит на календарь и теряет набранное событие
+          (владелец 2026-09-08: «нажимаю назад — оно вылетает»). */}
       <PickerSheet
         visible={eventTypeSheetOpen}
         title="Тип события"
-        items={eventTypes.map((preset) => ({
-          id: preset.id,
-          label: preset.label,
-          icon: Tag,
-          color: preset.color,
-          onPress: () => {
-            applyEventType(preset.id);
-            setEventTypeSheetOpen(false);
-          },
+        selectedId={eventTypeId}
+        items={eventTypes.map((type) => ({
+          id: type.id,
+          label: type.label,
+          icon: eventTypeIcon(type.icon),
+          color: type.color,
+          hint: `${durationLabel(type.defaultDuration)} по умолчанию`,
+          onPress:
+            type.id === eventTypeId
+              ? clearEventType
+              : () => applyEventType(type.id),
         }))}
-        onSettings={() => {
-          setEventTypeSheetOpen(false);
-          router.push("/cabinet/event-types" as Href);
-        }}
-        settingsLabel="Настроить типы событий"
+        onSettings={() =>
+          router.push({
+            pathname: "/event-types",
+            params: teamId ? { team: teamId } : {},
+          } as Href)
+        }
+        settingsLabel="Типы событий"
+        // Пустой справочник — лист не немой (аудит 29.09).
+        emptyText="Типов пока нет — заведите их значком справа"
         onClose={() => setEventTypeSheetOpen(false)}
+      />
+      <SelfReminderSheet
+        visible={reminderSheetOpen}
+        value={selfReminder}
+        subtitle={`${kind === "event" ? "Событие" : "Запись"} · ${date.split("-").reverse().slice(0, 2).join(".")}, ${timeStart}`}
+        onPick={pickSelfReminder}
+        onClose={() => setReminderSheetOpen(false)}
       />
       <ColorSheet
         visible={colorSheetOpen}

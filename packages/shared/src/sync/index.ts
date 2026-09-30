@@ -61,6 +61,7 @@ export {
 
 export {
   startRealtimeTenantSync,
+  type RealtimeChange,
   type RealtimeTenantSyncOptions,
 } from "./realtime";
 

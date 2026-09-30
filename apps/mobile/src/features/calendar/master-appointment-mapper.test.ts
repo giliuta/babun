@@ -46,7 +46,10 @@ function rpcRow(overrides: Record<string, Json> = {}): Json {
 }
 
 describe("master appointment RPC mapper", () => {
-  test("keeps operational fields but discards every raw finance value", () => {
+  // ДЕНЬГИ РЕШАЕТ СЕРВЕР (STORY-084, волна 4): строки работ, итог, скидку,
+  // внесённое и статус оплаты окно отдаёт по уровням «Услуг», «Суммы» и
+  // «Оплаты». Историю платежей, расходы и переопределения цен — никогда.
+  test("passes level-gated money through and discards what the window never sends", () => {
     const appointment = masterAppointmentJsonToAppointment(
       rpcRow({
         total_amount: 980,
@@ -75,19 +78,71 @@ describe("master appointment RPC mapper", () => {
     assert.equal(appointment.status, "in_progress");
     assert.equal(appointment.comment, "Позвонить за 15 минут");
     assert.deepEqual(appointment.service_ids, ["service-1"]);
-    assert.equal(appointment.total_amount, 0);
-    assert.equal(appointment.custom_total, false);
-    assert.equal(appointment.discount_amount, 0);
+    // По уровню — как прислал сервер.
+    assert.equal(appointment.total_amount, 980);
+    assert.equal(appointment.custom_total, true);
+    assert.equal(appointment.discount_amount, 80);
+    assert.equal(appointment.paid_amount, 700);
+    assert.equal(appointment.payment_status, "paid");
+    assert.deepEqual(appointment.services, [
+      {
+        serviceId: "service-1",
+        quantity: 1,
+        pricePerUnit: 980,
+        originalPrice: 0,
+        totalPrice: 0,
+        duration: 0,
+      },
+    ]);
+    // Никогда не из окна.
     assert.equal(appointment.prepaid_amount, 0);
-    assert.equal(appointment.paid_amount, 0);
-    assert.equal(appointment.payment_status, "unpaid");
     assert.equal(appointment.payment_method, undefined);
     assert.deepEqual(appointment.payments, []);
     assert.equal(appointment.payment, null);
     assert.deepEqual(appointment.expenses, []);
-    assert.deepEqual(appointment.services, []);
     assert.deepEqual(appointment.service_price_overrides, {});
     assert.equal(appointment.global_discount, null);
+  });
+
+  test("closed blocks and junk read as zero, not as a crash", () => {
+    const appointment = masterAppointmentJsonToAppointment(
+      rpcRow({
+        total_amount: -5,
+        discount_amount: "80",
+        paid_amount: Number.NaN,
+        payment_status: "stolen",
+        services: [
+          { serviceName: "Без услуги" },
+          "мусор",
+          {
+            serviceId: "service-2",
+            serviceName: "Клининг",
+            quantity: 4,
+            unit: null,
+            duration: 120,
+            pricePerUnit: 0,
+            originalPrice: 0,
+            totalPrice: 0,
+          },
+        ],
+      }),
+    );
+    assert.equal(appointment.total_amount, 0);
+    assert.equal(appointment.discount_amount, 0);
+    assert.equal(appointment.paid_amount, 0);
+    assert.equal(appointment.payment_status, "unpaid");
+    assert.deepEqual(appointment.services, [
+      {
+        serviceId: "service-2",
+        quantity: 4,
+        pricePerUnit: 0,
+        originalPrice: 0,
+        totalPrice: 0,
+        duration: 120,
+        serviceName: "Клининг",
+        unit: null,
+      },
+    ]);
   });
 
   test("fails closed on an unscoped or malformed row", () => {

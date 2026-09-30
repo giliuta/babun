@@ -521,6 +521,22 @@ export async function dequeueAll(): Promise<QueuedOp[]> {
   return rows.map(queueRowToOp);
 }
 
+/** Есть ли в очереди НЕОТПРАВЛЕННЫЕ правки этой строки. Прямая запись в
+ *  сеть мимо них обгоняет их: старая правка долетит ПОСЛЕ свежей и
+ *  перезапишет её (поймано 24.09: растяжка 14:30→15:00 легла в очередь на
+ *  504, возврат к 14:30 ушёл напрямую, потом очередь дослала 15:00). */
+export async function hasQueuedOps(
+  table: CachedTable,
+  rowId: string,
+): Promise<boolean> {
+  const sql = await ready();
+  const row = await sql.getFirstAsync<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM sync_queue WHERE table_name = ? AND row_id = ?",
+    [table, rowId],
+  );
+  return (row?.n ?? 0) > 0;
+}
+
 export async function removeOp(id: number): Promise<void> {
   const sql = await ready();
   await sql.runAsync("DELETE FROM sync_queue WHERE id = ?", [id]);

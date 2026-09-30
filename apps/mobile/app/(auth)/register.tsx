@@ -17,6 +17,7 @@ import { mapAuthError } from "@/components/auth/authErrors";
 import { useAuthTheme } from "@/components/auth/theme";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/notify";
+import { invitationSignupErrorMessage } from "@/features/settings/invitation-flow";
 import { getPendingInvitationToken } from "@/features/settings/pending-invitation";
 
 // «Создать аккаунт» — name/email/password inline (chained return key).
@@ -74,7 +75,13 @@ export default function RegisterScreen() {
       },
     });
     if (e) {
-      setError(mapAuthError(e, "signup"));
+      // With an invitation token GoTrue hides the trigger's refusal behind a
+      // generic database error — name the invitation instead of a bare
+      // «Не удалось создать аккаунт».
+      setError(
+        (pendingInviteToken && invitationSignupErrorMessage(e.message)) ||
+          mapAuthError(e, "signup"),
+      );
       setLoading(false);
       return;
     }

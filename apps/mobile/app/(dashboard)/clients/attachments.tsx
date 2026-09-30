@@ -1,17 +1,16 @@
 import { useState } from "react";
 import { Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { Camera, FileText, Image as ImageIcon, Paperclip, X } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Spinner } from "@/components/ui/Spinner";
 import { PickerSheet } from "@/components/ui/PickerSheet";
-import { RowCaption } from "@/components/ui/card-rows";
+import { NavRow, RowCaption } from "@/components/ui/card-rows";
 import {
   formatBytes,
   getSignedUrl,
@@ -22,6 +21,8 @@ import {
   type ClientAttachment,
 } from "@/features/clients/card-attachments";
 import { useClient } from "@/features/clients/queries";
+import { useReceipts } from "@/features/documents/receipts-queries";
+import { useInvoices } from "@/features/invoices/queries";
 import { useClientAppointments } from "@/features/clients/appointments";
 import {
   KIND_LABEL,
@@ -33,12 +34,15 @@ import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { useCardAccess } from "@/features/clients/use-card-access";
 
 // ДОКУМЕНТАЦИЯ КЛИЕНТА — ПОЛНОЦЕННАЯ СТРАНИЦА (владелец 2026-08-03: «вложения
 // надо исправлять — полноценно открывается страница, где вся документация о
 // клиенте: все документы, все чеки, все инвойсы, все фотографии»).
 //
-// На карточке от блока осталась ОДНА строка «Документация» в блоке заметок:
+// Дверь сюда — строка «Все файлы» блока «Файлы» на карточке (22.09; до того —
+// строка «Документация»). Раньше на карточке
 // действия («+ Фото или файл», «+ Снять фото») занимали место постоянно, а
 // самих файлов при этом не показывали — сетка миниатюр ютилась под ними.
 //
@@ -54,11 +58,36 @@ function dateRu(iso: string): string {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
-export default function ClientAttachmentsScreen() {
+// Экран вкладки «Клиенты»: компанию называет источник, а не роль
+// (STORY-082).
+export default function ClientAttachmentsScreenRoute() {
+  return (
+    <ClientsCompanyRoute kind="card">
+      <ClientAttachmentsScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+function ClientAttachmentsScreen() {
   const t = useThemeColors();
   const { clientId } = useLocalSearchParams<{ clientId: string }>();
+  const router = useRouter();
+  // СЧЕТА И ЧЕКИ КЛИЕНТА — чтобы страница не говорила «пусто», когда дверь
+  // в карточке обещала шесть (снято 23.09 на Артёме: файлов ноль, чеков и
+  // инвойсов шесть). Аннулированные не считаем — как блок на карточке.
+  const invoicesQuery = useInvoices(clientId ? { clientId } : undefined);
+  const receiptsQuery = useReceipts(clientId ? { clientId } : undefined);
   const id = clientId ?? "";
   const { data: client } = useClient(id);
+  // С 30.09 страница открыта и сотруднику — по праву «Файлы» этого клиента;
+  // инвойсы и чеки — по праву «Долг и деньги» (`card-access.ts`).
+  const access = useCardAccess(client, false);
+  const canChange = access.files.edit;
+  const docsCount = !access.money.show
+    ? 0
+    : (invoicesQuery.data ?? []).filter(
+      (inv) => inv.status !== "void" && inv.status !== "cancelled" && inv.kind !== "credit_note",
+    ).length + (receiptsQuery.data ?? []).filter((r) => r.status !== "void").length;
   // Откуда файл: «из записи 12 мар». Запись могла быть удалена — тогда
   // appointment_id уже NULL (ON DELETE SET NULL), и подписи просто нет.
   const { data: appointments = [] } = useClientAppointments(id);
@@ -198,9 +227,10 @@ export default function ClientAttachmentsScreen() {
   return (
     <Screen>
       <ScreenHeader
-        title="Документация"
+        title="Файлы"
         subtitle={client?.full_name || undefined}
         right={
+          !canChange ? undefined : (
           <Pressable
             onPress={() => {
               haptics.tap();
@@ -220,15 +250,16 @@ export default function ClientAttachmentsScreen() {
                 называется, а не рисуется значком). */}
             <Text
               maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 16, fontWeight: "600", color: t.accent }}
+              style={{ fontSize: 17, fontWeight: "600", color: t.accent }}
             >
               Добавить
             </Text>
           </Pressable>
+          )
         }
       />
 
-      {isLoading ? (
+      {!access.files.show ? null : isLoading ? (
         <EmptyState state="loading" fill />
       ) : isError ? (
         <EmptyState
@@ -237,13 +268,10 @@ export default function ClientAttachmentsScreen() {
           subtitle="Не удалось загрузить файлы."
           action={{ label: "Повторить", onPress: () => void refetch() }}
         />
-      ) : items.length === 0 && visitPhotos.length === 0 ? (
-        <EmptyState
-          fill
-          title="Пока пусто"
-          subtitle="Договоры, счета и чеки — здесь. Фото «до/после» с выездов попадают сюда сами, как только команда снимет их в записи."
-          action={{ label: "Добавить файл", onPress: () => setAddOpen(true) }}
-        />
+      ) : items.length === 0 && visitPhotos.length === 0 && docsCount === 0 ? (
+        // ПУСТО — ОДНИМ СЛОВОМ (закон 15.09: пустые состояния — только слова,
+        // без кнопок и объяснений). «Добавить» уже стоит в шапке.
+        <EmptyState fill title="Файлов нет" />
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
           {upload.isPending ? (
@@ -255,14 +283,13 @@ export default function ClientAttachmentsScreen() {
 
           {photos.length > 0 ? (
             <>
-              <SectionEyebrow>Фотографии</SectionEyebrow>
-              <SectionCard padded>
+              <SectionCard title="Фотографии" padded>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {photos.map((a) => (
                     <Pressable
                       key={a.id}
                       onPress={() => void open(a)}
-                      onLongPress={() => confirmDelete(a)}
+                      onLongPress={canChange ? () => confirmDelete(a) : undefined}
                       accessibilityRole="imagebutton"
                       accessibilityLabel={a.filename}
                       accessibilityHint="Открыть; удерживайте, чтобы удалить"
@@ -309,8 +336,7 @@ export default function ClientAttachmentsScreen() {
 
           {visitPhotos.length > 0 ? (
             <>
-              <SectionEyebrow>С выездов</SectionEyebrow>
-              <SectionCard padded>
+              <SectionCard title="С выездов" padded>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {visitPhotos.map((p: VisitPhoto) => (
                     <Pressable
@@ -352,8 +378,7 @@ export default function ClientAttachmentsScreen() {
 
           {docs.length > 0 ? (
             <>
-              <SectionEyebrow>Документы</SectionEyebrow>
-              <SectionCard>
+              <SectionCard title="Документы">
                 {docs.map((a, i) => (
                   <Pressable
                     key={a.id}
@@ -402,12 +427,13 @@ export default function ClientAttachmentsScreen() {
                     </View>
                     {opening === a.id ? (
                       <Spinner size={16} label="Открываем" />
-                    ) : (
+                    ) : !canChange ? null : (
                       <Pressable
                         onPress={() => confirmDelete(a)}
                         accessibilityRole="button"
                         accessibilityLabel={`Удалить ${a.filename}`}
-                        hitSlop={10}
+                        // 16 + 14×2 = 44: разрушительное рядом с тапом по строке.
+                        hitSlop={14}
                         style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
                       >
                         <X color={t.faint} size={16} strokeWidth={2.2} />
@@ -415,6 +441,26 @@ export default function ClientAttachmentsScreen() {
                     )}
                   </Pressable>
                 ))}
+              </SectionCard>
+            </>
+          ) : null}
+
+          {/* СЧЕТА И ЧЕКИ — ЗДЕСЬ, А НЕ ВТОРОЙ ДВЕРЬЮ В КАРТОЧКЕ (владелец
+              22.09: «этот „Счета и чеки“ — для чего он нужен?»). Карточка
+              ведёт сюда одной строкой «Все файлы», а документы, которые CRM
+              выписала сама, открываются отсюда: они не файлы, но лежат про
+              того же клиента. */}
+          {clientId ? (
+            <>
+              <SectionCard title="Выдано клиенту">
+                <NavRow
+                  label="Инвойсы и чеки"
+                  value={docsCount > 0 ? String(docsCount) : "нет"}
+                  onPress={() => {
+                    haptics.tap();
+                    router.push({ pathname: "/documents", params: { clientId } });
+                  }}
+                />
               </SectionCard>
             </>
           ) : null}
@@ -437,14 +483,14 @@ export default function ClientAttachmentsScreen() {
             id: "camera",
             label: "Снять фото",
             icon: Camera,
-            color: "#1F7A44",
+            color: t.success,
             onPress: () => void shoot(),
           },
           {
             id: "file",
             label: "Файл или документ",
             icon: Paperclip,
-            color: "#5b6678",
+            color: t.sub,
             onPress: () => void pickDocument(),
           },
         ]}

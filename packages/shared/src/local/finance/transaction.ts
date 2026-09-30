@@ -44,6 +44,8 @@ export function paymentMethodLabel(method: string | null | undefined): string {
   return PAYMENT_METHOD_LABEL[method as PaymentMethod] ?? method;
 }
 
+export type ReversalKind = "not_received" | "client_refund";
+
 export interface FinanceTransaction {
   id: string;
   tenant_id: string;
@@ -76,7 +78,15 @@ export interface FinanceTransaction {
   receipt_url: string | null; // storage path in `receipts` bucket
   transfer_group_id: string | null;
   invoice_id: string | null;
+  /** Долг, который гасит эта операция. Платёж по долгу — обычная строка
+   *  журнала: сам долг деньгами не является и в прибыль не входит. */
+  debt_id: string | null;
   refund_of_id: string | null;
+  /** ПОЧЕМУ МИНУС. Оба случая лежат в леджере типом `refund`, но означают
+   *  разное: `not_received` — оплату сняли, деньги так и не пришли (работа
+   *  уходит в долг); `client_refund` — деньги вернули клиенту. Разными
+   *  словами их называет UI, поэтому поле доезжает до клиента. */
+  reversal_kind: ReversalKind | null;
   source: TransactionSource;
   created_at: string;
   updated_at: string;
@@ -102,34 +112,19 @@ export function isExpense(t: FinanceTransaction): boolean {
   return t.type === "expense";
 }
 
-/** Штамп, которым `record_cash_count` подписывает свою коррекцию:
- *  «Пересчёт кассы DD.MM.YYYY[ · комментарий]». Ссылка сверки
- *  (`account_cash_counts.transaction_id`) живёт в другой таблице и со строкой
- *  операции не приезжает — штамп заметки остаётся единственным признаком,
- *  различимым по самой строке. */
-const CASH_COUNT_STAMP = /^Пересчёт кассы \d{2}\.\d{2}\.\d{4}(?: · |$)/;
-
-/** Коррекция пересчёта кассы. Пишется сервером как обычный manual
- *  income/expense, но она — пара к строке сверки: изменить сумму значит
- *  развести леджер с `account_cash_counts.delta`, и история сверок соврёт. */
-export function isCashCountCorrection(tx: FinanceTransaction): boolean {
-  return tx.source === "manual" && CASH_COUNT_STAMP.test(tx.notes ?? "");
-}
-
 /**
  * Можно ли править операцию прямо в её форме.
  *
- * Нельзя троим: проводке, рождённой записью (`source === "auto"`) — она меняется
- * в самой записи, иначе деньги разъедутся с работой; операции, привязанной к
- * инвойсу — её меняет документ; и коррекции пересчёта кассы — её родила сверка,
- * и правка суммы сделала бы сверку лгущей. Всё остальное человек правит там же,
- * где видит.
+ * Нельзя двоим: проводке, рождённой записью (`source === "auto"`) — она
+ * меняется в самой записи, иначе деньги разъедутся с работой; и операции,
+ * привязанной к инвойсу — её меняет документ. Всё остальное человек правит
+ * там же, где видит. (Третьей была коррекция пересчёта кассы — пересчёт
+ * удалён 30.09 по слову владельца, миграция 20260930235900.)
  */
 export function canEditTransaction(tx: FinanceTransaction): boolean {
   return (
     tx.source !== "auto" &&
     !tx.invoice_id &&
-    (tx.type === "income" || tx.type === "expense") &&
-    !isCashCountCorrection(tx)
+    (tx.type === "income" || tx.type === "expense")
   );
 }

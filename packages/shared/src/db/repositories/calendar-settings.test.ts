@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  getCalendarSettings,
   getOperationalCalendarSettings,
   updateCalendarSettings,
 } from "./calendar-settings";
@@ -34,23 +35,63 @@ describe("operational calendar settings repository", () => {
     expect(settings).toEqual({
       startHour: 7,
       endHour: 23,
-      // Минуты окна у мастерского среза пока нулевые: их нет в сигнатуре
-      // `read_operational_calendar_settings_safe`, и проекция честно ставит 0,
-      // а не выдумывает значение. Рельс мастера встаёт на целый час.
+      // Строка старого вида (без минут, цветов и функций) — проекция ставит
+      // честные умолчания, а не выдумывает значения.
       startMinute: 0,
       endMinute: 0,
-      gridStep: 15,
-      weekStart: "sunday",
       timezone: "Asia/Dubai",
       bufferMinutes: 20,
       hideCancelled: true,
-      allowOvertime: true,
+      showDayFinance: true,
       workStartHour: 8,
       workEndHour: 19,
-      scrollOpenHour: 8,
+      disabledFeatures: [],
     });
     expect(settings).not.toHaveProperty("personalLabels");
     expect(settings).not.toHaveProperty("personalDefaultLabel");
+    // СНЕСЁННЫЕ НАСТРОЙКИ НЕ ВОСКРЕСАЮТ ЧЕРЕЗ СЕРВЕР. Колонки в базе остались
+    // (`not null default`), и RPC их по-прежнему отдаёт — видно по
+    // OPERATIONAL_ROW выше. Проекция обязана их игнорировать, иначе поле
+    // вернётся в модель через заднюю дверь и снова начнёт обещать настройку,
+    // которой нет (владелец 2026-09-10: сетка всегда 30, неделя всегда с
+    // понедельника, «за пределами часов» — предупреждением, а не флагом).
+    expect(settings).not.toHaveProperty("gridStep");
+    expect(settings).not.toHaveProperty("weekStart");
+    expect(settings).not.toHaveProperty("allowOvertime");
+    expect(settings).not.toHaveProperty("scrollOpenHour");
+  });
+
+  // STORY-088: с 24.09 RPC отдаёт сотруднику цвета записи, «Доход и расход»
+  // и функции компании — без них у мастера были заводские цвета, а в его
+  // записи стояли выключенные у компании блоки.
+  test("цвета, полоса денег и функции компании доходят до сотрудника", async () => {
+    const supabase = {
+      rpc() {
+        return Promise.resolve({
+          data: [
+            {
+              ...OPERATIONAL_ROW,
+              show_day_finance: false,
+              record_color_rule: "label",
+              record_color_palette: { unpaid: "#112233" },
+              record_color_fallback: "#445566",
+              disabled_features: ["objects", "nonsense", "objects", "debts"],
+              booking_block_order: ["team", "when", "client"],
+            },
+          ],
+          error: null,
+        });
+      },
+    };
+
+    const settings = await getOperationalCalendarSettings(supabase as never);
+
+    expect(settings.showDayFinance).toBe(false);
+    expect(settings.recordColorRule).toBe("label");
+    expect(settings.recordColorFallback).toBe("#445566");
+    // Незнакомый ключ и повтор выброшены — выключить ими нечего.
+    expect(settings.disabledFeatures).toEqual(["objects", "debts"]);
+    expect(settings.bookingBlockOrder).toEqual(["team", "when", "client"]);
   });
 
   // КОНТРАКТ НА ДЕНЬ, КОГДА RPC НАУЧИТСЯ МИНУТАМ. Фолбэк `?? 0` обязан
@@ -131,6 +172,144 @@ describe("operational calendar settings repository", () => {
     expect(upserts[0]).toMatchObject({
       tenant_id: "tenant-1",
       work_start_hour: 8,
+    });
+  });
+
+  // ЦВЕТА ЗАПИСИ ПЕРЕЕХАЛИ С ТЕЛЕФОНА В КОМПАНИЮ (2026-09-12). Строка базы
+  // приходит какой угодно — поэтому маппер обязан не пропустить ни чужой ключ,
+  // ни «синий» вместо hex: цвет уезжает прямо в стиль и в измеритель
+  // контраста, и мусор делает блок прозрачным молча.
+  test("цвета записи доезжают с сервера, а мусор отсекается", async () => {
+    const supabase = {
+      from() {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  maybeSingle() {
+                    return Promise.resolve({
+                      data: {
+                        start_hour: 0,
+                        end_hour: 24,
+                        timezone: "Europe/Nicosia",
+                        buffer_minutes: 0,
+                        hide_cancelled: false,
+                        record_color_rule: "label",
+                        record_color_palette: {
+                          unpaid: "#112233",
+                          noObject: "синий",
+                          noClient: "#ffffff",
+                          somethingElse: "#ffffff",
+                        },
+                        record_color_fallback: "rgba(0,0,0,0.5)",
+                      },
+                      error: null,
+                    });
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const settings = await getCalendarSettings(supabase as never, "tenant-1");
+
+    expect(settings.recordColorRule).toBe("label");
+    expect(settings.recordColorPalette).toEqual({
+      unpaid: "#112233",
+      // Не hex — значит «ситуация не красит», а не «покрасим чем попало».
+      noObject: null,
+    });
+    // Снятые случаи (25.09) и чужие ключи не переживают маппер.
+    expect(settings.recordColorPalette).not.toHaveProperty("noClient");
+    // Чужой ключ в палитре не переживает маппер.
+    expect(settings.recordColorPalette).not.toHaveProperty("somethingElse");
+    // Запасной цвет с альфой — тот самый случай, ради которого писалась
+    // проверка: `rgba(...)` ломает и стиль, и измеритель.
+    expect(settings.recordColorFallback).toBeUndefined();
+  });
+
+  test("правило-самозванец не доезжает до модели", async () => {
+    const supabase = {
+      from() {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  maybeSingle() {
+                    return Promise.resolve({
+                      data: {
+                        start_hour: 0,
+                        end_hour: 24,
+                        timezone: "Europe/Nicosia",
+                        buffer_minutes: 0,
+                        hide_cancelled: false,
+                        record_color_rule: "rainbow",
+                      },
+                      error: null,
+                    });
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const settings = await getCalendarSettings(supabase as never, "tenant-1");
+
+    expect(settings.recordColorRule).toBeUndefined();
+  });
+
+  // «СБРОСИТЬ К ЗАВОДСКОМУ» ОБЯЗАНО БЫТЬ ВЫРАЗИМЫМ. Пустая палитра и пустой
+  // запасной цвет пишутся именно NULL: иначе колонка навсегда осталась бы с
+  // последним выбором, и кнопки «как было» не существовало бы.
+  test("пустая палитра и пустой запасной цвет пишутся как NULL", async () => {
+    const upserts: Record<string, unknown>[] = [];
+    const supabase = {
+      from() {
+        return {
+          upsert(value: Record<string, unknown>) {
+            upserts.push(value);
+            return {
+              select() {
+                return {
+                  single() {
+                    return Promise.resolve({
+                      data: {
+                        start_hour: 0,
+                        end_hour: 24,
+                        timezone: "Europe/Nicosia",
+                        buffer_minutes: 0,
+                        hide_cancelled: false,
+                      },
+                      error: null,
+                    });
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await updateCalendarSettings(supabase as never, "tenant-1", {
+      recordColorRule: "service",
+      recordColorPalette: {},
+      recordColorFallback: "",
+    });
+
+    expect(upserts[0]).toMatchObject({
+      tenant_id: "tenant-1",
+      record_color_rule: "service",
+      record_color_palette: null,
+      record_color_fallback: null,
     });
   });
 });

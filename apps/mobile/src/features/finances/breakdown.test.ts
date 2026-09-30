@@ -17,6 +17,7 @@ import {
   breakdownIncome,
   expenseLabel,
   incomeLabel,
+  materialsByService,
 } from "./breakdown";
 
 function tx(
@@ -29,10 +30,12 @@ function tx(
   return {
     tenant_id: "t",
     currency: "EUR",
+    reversal_kind: null,
     category_id: null,
     account_id: "acc-1",
     appointment_id: null,
     appointment_payment_kind: null,
+    debt_id: null,
     client_id: null,
     team_id: null,
     master_id: null,
@@ -65,6 +68,13 @@ const CATEGORIES: FinanceCategory[] = [
     icon: null,
     color: null,
     hidden: false,
+    position: 0,
+    ask_employee: false,
+    ask_client: false,
+    require_receipt: false,
+    is_system: false,
+    monthly_budget: null,
+    team_id: "t1",
   },
   {
     id: "cat-service",
@@ -75,6 +85,13 @@ const CATEGORIES: FinanceCategory[] = [
     icon: null,
     color: null,
     hidden: false,
+    position: 0,
+    ask_employee: false,
+    ask_client: false,
+    require_receipt: false,
+    is_system: false,
+    monthly_budget: null,
+    team_id: "t1",
   },
 ];
 
@@ -148,8 +165,25 @@ describe("breakdownIncome — возвраты неттятся в свою ус
       SERVICES,
       APPOINTMENTS,
     );
+    // Предоплата и доплата одного визита — одна работа (×1), а не два платежа.
     assert.deepEqual(rows, [
-      { id: "Чистка сплита", name: "Чистка сплита", amount: 150, count: 2 },
+      { id: "Чистка сплита", name: "Чистка сплита", amount: 150, count: 1 },
+    ]);
+  });
+
+  test("снятая оплата (пара +50 / −50) — не работа и не деньги", () => {
+    const rows = breakdownIncome(
+      [
+        tx({ id: "i1", type: "income", amount: 120, appointment_id: "a-1" }),
+        tx({ id: "i2", type: "income", amount: 50, appointment_id: "a-1" }),
+        tx({ id: "r2", type: "refund", amount: -50, refund_of_id: "i2" }),
+      ],
+      CATEGORIES,
+      SERVICES,
+      APPOINTMENTS,
+    );
+    assert.deepEqual(rows, [
+      { id: "Чистка сплита", name: "Чистка сплита", amount: 120, count: 1 },
     ]);
   });
 
@@ -233,6 +267,30 @@ describe("breakdownExpense — группировка по категории/з
       { id: "фреон", name: "фреон", amount: 40, count: 1 },
     ]);
   });
+
+  test("зарплата делится по людям, без получателя — общей строкой", () => {
+    const rows = breakdownExpense(
+      [
+        tx({ id: "s1", type: "expense", amount: 500, category_id: "cat-fuel", master_id: "m1" }),
+        tx({ id: "s2", type: "expense", amount: 300, category_id: "cat-fuel", master_id: "m2" }),
+        tx({ id: "s3", type: "expense", amount: 200, category_id: "cat-fuel", master_id: "m1" }),
+        tx({ id: "s4", type: "expense", amount: 50, category_id: "cat-fuel" }),
+      ],
+      CATEGORIES,
+      [
+        { id: "m1", full_name: "Даня" },
+        { id: "m2", full_name: "Дима" },
+      ],
+    );
+    assert.deepEqual(
+      rows.map((r) => [r.name, r.amount, r.count]),
+      [
+        ["Бензин · Даня", 700, 2],
+        ["Бензин · Дима", 300, 1],
+        ["Бензин", 50, 1],
+      ],
+    );
+  });
 });
 
 describe("секции сходятся с «Прибылью»", () => {
@@ -253,5 +311,115 @@ describe("секции сходятся с «Прибылью»", () => {
       .filter((x) => x.type !== "transfer")
       .reduce((s, x) => s + signedAmount(x), 0);
     assert.equal(incomeTotal - expenseTotal, profit);
+  });
+});
+
+describe("доход записи — по её услугам", () => {
+  const SERVER_SERVICES = { id: "srv-cat", name: "Услуги", type: "income", tenant_id: null } as unknown as FinanceCategory;
+  const TIPS = { id: "tips", name: "Чаевые", type: "income", tenant_id: "t" } as unknown as FinanceCategory;
+  const visit = {
+    id: "v1",
+    service_ids: [],
+    services: [
+      { serviceId: "s1", serviceName: "Клининг", quantity: 1, pricePerUnit: 200, originalPrice: 200, totalPrice: 200, duration: 60 },
+      { serviceId: "s2", serviceName: "A/C Cleaning", quantity: 1, pricePerUnit: 100, originalPrice: 100, totalPrice: 100, duration: 30 },
+    ],
+  } as unknown as Appointment;
+
+  test("служебная «Услуги» делится между услугами визита по их сумме", () => {
+    const rows = breakdownIncome(
+      [tx({ id: "p", type: "income", amount: 150, appointment_id: "v1", category_id: "srv-cat" })],
+      [SERVER_SERVICES],
+      [],
+      [visit],
+    );
+    assert.deepEqual(
+      rows.map((r) => [r.name, r.amount, r.count]),
+      [
+        ["Клининг", 100, 1],
+        ["A/C Cleaning", 50, 1],
+      ],
+    );
+    assert.equal(rows.reduce((s, r) => s + r.amount, 0), 150);
+  });
+
+  test("копейки не теряются: сумма частей = платёж", () => {
+    const rows = breakdownIncome(
+      [tx({ id: "p", type: "income", amount: 100, appointment_id: "v1", category_id: "srv-cat" })],
+      [SERVER_SERVICES],
+      [],
+      [visit],
+    );
+    assert.equal(Math.round(rows.reduce((s, r) => s + r.amount, 0) * 100), 10000);
+  });
+
+  test("своя категория компании сильнее разбивки", () => {
+    const rows = breakdownIncome(
+      [tx({ id: "p", type: "income", amount: 20, appointment_id: "v1", category_id: "tips" })],
+      [TIPS],
+      [],
+      [visit],
+    );
+    assert.deepEqual(rows.map((r) => r.name), ["Чаевые"]);
+  });
+
+  test("частичный возврат уходит в те же услуги", () => {
+    const rows = breakdownIncome(
+      [
+        tx({ id: "p", type: "income", amount: 300, appointment_id: "v1", category_id: "srv-cat" }),
+        tx({ id: "r", type: "refund", amount: -30, refund_of_id: "p", appointment_id: "v1", category_id: "srv-cat" }),
+      ],
+      [SERVER_SERVICES],
+      [],
+      [visit],
+    );
+    assert.deepEqual(
+      rows.map((r) => [r.name, r.amount]),
+      [
+        ["Клининг", 180],
+        ["A/C Cleaning", 90],
+      ],
+    );
+  });
+});
+
+describe("материалы по услугам (подпись строки дохода, 30.09)", () => {
+  const catalog = [
+    { id: "s-clean", name: "Чистка сплита", cost_per_unit: 5 },
+    { id: "s-gas", name: "Заправка", cost_per_unit: 10 },
+    { id: "s-free", name: "Осмотр", cost_per_unit: 0 },
+  ] as unknown as Service[];
+
+  test("сумма по количеству, имя — снимок строки записи, как у дохода", () => {
+    const a1 = {
+      id: "a-1",
+      services: [
+        { serviceId: "s-clean", serviceName: "Чистка (акция)", quantity: 2, totalPrice: 80 },
+        { serviceId: "s-free", serviceName: "Осмотр", quantity: 1, totalPrice: 0 },
+      ],
+    } as unknown as Appointment;
+    const a2 = {
+      id: "a-2",
+      services: [{ serviceId: "s-gas", serviceName: "", quantity: 1, totalPrice: 60 }],
+    } as unknown as Appointment;
+    const byName = materialsByService([a1, a2], catalog);
+    // Снимок записи сильнее каталога — так же делит доход `serviceSplit`.
+    assert.equal(byName.get("Чистка (акция)"), 10);
+    // Пустое имя снимка — имя каталога.
+    assert.equal(byName.get("Заправка"), 10);
+    // Услуга без материалов подписи не получает.
+    assert.equal(byName.has("Осмотр"), false);
+  });
+
+  test("копейки не набегают при сложении", () => {
+    const service = [{ id: "s", name: "S", cost_per_unit: 0.1 }] as unknown as Service[];
+    const records = [1, 2, 3].map(
+      (n) =>
+        ({
+          id: `a-${n}`,
+          services: [{ serviceId: "s", serviceName: "S", quantity: 1, totalPrice: 10 }],
+        }) as unknown as Appointment,
+    );
+    assert.equal(materialsByService(records, service).get("S"), 0.3);
   });
 });

@@ -1,5 +1,13 @@
-import { Stack } from "expo-router";
+import { Redirect, Stack, usePathname } from "expo-router";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Screen } from "@/components/ui/Screen";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { useMyAccess } from "@/features/access/queries";
+import { LockedFinances } from "@/features/finances/LockedFinances";
+import { financesGate } from "@/features/finances/finances-gate";
+import { useBudgetWatch } from "@/features/finances/use-category-budget";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
+import { useCurrentRole } from "@/features/settings/tenant";
 
 // Раздел «Финансы» — ОДНА вкладка со стеком внутри, как «Клиенты».
 //
@@ -13,7 +21,81 @@ import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBounda
 // налоговые ставки и денежные настройки любой ролью: гейт корня к соседним
 // экранам стека отношения не имеет. Одна граница на каталог закрывает и те,
 // что появятся здесь завтра.
+//
+// БЕЗ ДОСТУПА К ФИНАНСАМ — СЕРАЯ СТРАНИЦА, А НЕ ГРАНИЦА (владелец 15.09: «если
+// я перехожу в финансы — не „раздел недоступен“; всё серое, всё по нулям, но
+// переключаться можно»). Она встаёт вместо ВСЕГО стека, поэтому и диплинк
+// `/finances/vat` у такого человека приходит на неё, а не на ставки. Спиннер
+// роли, «нет связи» и уход из компании по-прежнему решает граница
+// (`financesGate` → `boundary`).
+//
+// ОТКРЫВАЕТ УРОВЕНЬ, А НЕ РОЛЬ (этап 2, владелец 15.09: «чтоб всё сразу
+// менялось в живом времени»). Сотрудник с «Доходами и расходами» получает
+// финансы без роли владельца, а смена его прав приходит сигналом и
+// перерисовывает ворота сразу. Граница роли остаётся только владельцу — у
+// сотрудника её роль закрыла бы то, что открыл уровень.
+// ГЛАВНЫЙ ЭКРАН ВКЛАДКИ ВСЕГДА ПОД ЛЮБЫМ ЕЁ ЭКРАНОМ (владелец 2026-09-24:
+// «открываю финансы, нажимаю „назад“ — перекидывает на календарь»). Экран
+// вкладки, открытый снаружи — из календаря, из формы, дверью листа, по
+// ссылке, — ложился в стек вкладки ОДИН, без её корня под собой, и «назад»
+// уходил из вкладки на предыдущую. `initialRouteName` кладёт корень вниз
+// при любом входе в стек; сторож — `tab-stack-roots.test.ts`.
+export const unstable_settings = { initialRouteName: "index" };
+
+/** Экраны каталога, которые в срезе 1 остаются ВЛАДЕЛЬЧЕСКИМИ: денежные
+ *  настройки, НДС компании и команды, список документов. Уровни их не
+ *  открывают, поэтому сотруднику они не «недоступны», а просто не существуют —
+ *  диплинк приходит на сами «Финансы». */
+const OWNER_ONLY_PATHS = [
+  // «/finances/settings» отсюда УШЛА (владелец 20.09: «я могу зайти туда, но
+  // блоков уже внутри шестерёнки не будет»). Страница открыта всем, а строки
+  // на ней показывает `finances/settings-rows.ts`; вторые ступени — ставки,
+  // бланк счёта и список документов — остаются владельческими: к ним ведут
+  // строки, которых у сотрудника нет. Справочники категорий и шаблонов —
+  // тоже (запись в них владельческая): по прямой ссылке сотрудник видел бы
+  // кнопки, каждая из которых отказывает (аудит 2026-09-24).
+  "/finances/categories",
+  "/finances/requisites",
+  "/finances/invoice-blank",
+];
+
 export default function FinancesLayout() {
+  const role = useCurrentRole().data;
+  const accessQuery = useMyAccess();
+  const pathname = usePathname();
+  const gate = financesGate(role, accessQuery.data);
+  // Бюджеты категорий: пока раздел открыт, владелец узнаёт о перевале лимита
+  // и по расходам с чужих телефонов (`use-category-budget.ts`).
+  useBudgetWatch();
+
+  if (gate === "locked") return <LockedFinances />;
+
+  if (gate === "loading") {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Финансы" />
+        {accessQuery.isError ? (
+          <EmptyState
+            state="error"
+            fill
+            title="Нет связи с сервером"
+            subtitle="Права подтвердим, как только появится интернет."
+            action={{ label: "Повторить", onPress: () => void accessQuery.refetch() }}
+          />
+        ) : (
+          <EmptyState state="loading" fill />
+        )}
+      </Screen>
+    );
+  }
+
+  if (gate === "open" && role !== "owner") {
+    if (OWNER_ONLY_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) {
+      return <Redirect href="/finances" />;
+    }
+    return <Stack screenOptions={{ headerShown: false }} />;
+  }
+
   return (
     <RoleCapabilityBoundary capability="view-finances" title="Финансы">
       <Stack screenOptions={{ headerShown: false }} />

@@ -1,5 +1,6 @@
 import {
   calculateInvoiceSettlement,
+  invoiceInTeamScope,
   type InvoiceLedger,
   type InvoicePaymentLedger,
 } from "@babun/shared/local/finance/invoice-ledger";
@@ -43,6 +44,8 @@ export interface FinanceDocument {
   /** Документ аннулирован или отменён. Из списка он не пропадает: номер занят,
    *  и проверяющий обязан видеть, почему. Строка гаснет, а не исчезает. */
   dead: boolean;
+  /** Кредит-нота: в списке видна, в числе документов плитки не считается. */
+  creditNote?: boolean;
   /** Предсобранная строка поиска: номер, клиент, сумма. Собирается один раз на
    *  документ, а не на каждую нажатую букву. */
   search: string;
@@ -79,13 +82,7 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
     if (!inPeriod(invoice.issued_on, sources.period)) continue;
     // Инвойс знает свою команду сам. Документ без команды — общий, и его
     // видно в любом срезе (то же правило, что у чека без хозяина).
-    if (
-      sources.teamId &&
-      invoice.brigade_id &&
-      invoice.brigade_id !== sources.teamId
-    ) {
-      continue;
-    }
+    if (!invoiceInTeamScope(invoice, sources.teamId)) continue;
     const settlement = calculateInvoiceSettlement(
       invoice,
       sources.payments[invoice.id] ?? [],
@@ -101,6 +98,25 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
       invoice.client_snapshot?.full_name?.trim() ||
       sources.clientName(invoice.client_id) ||
       "Без клиента";
+    // КРЕДИТ-НОТА — СТОРНО ОТМЕНЁННОГО СЧЁТА, А НЕ СЧЁТ К ОПЛАТЕ (аудит
+    // 2026-09-30): «Инвойс CN-2026-001 −€100 · Оплачен» читался как второй
+    // оплаченный инвойс. Своё имя и слово, строка гаснет — как у отменённого.
+    if (invoice.kind === "credit_note") {
+      docs.push({
+        id: invoice.id,
+        kind: "invoice",
+        title: `Кредит-нота ${invoice.number}`,
+        clientName,
+        date: invoice.issued_on,
+        amount: invoice.total,
+        currency: invoice.currency,
+        state: "Сторно",
+        dead: true,
+        creditNote: true,
+        search: searchKey(invoice.number, clientName, invoice.total),
+      });
+      continue;
+    }
     docs.push({
       id: invoice.id,
       kind: "invoice",

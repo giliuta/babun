@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from "react-native";
+import type { ReactNode } from "react";
 import { Settings2 } from "lucide-react-native";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -14,20 +15,40 @@ import { useThemeColors } from "@/theme/colors";
  * Вёрстка здесь ровно одна, потому что панелей шесть: счета, документы, доход,
  * расход, долги и прибыль обязаны выглядеть одним объектом, а не шестью.
  */
+/**
+ * «Записи · 12», но просто «Записи», когда их нет.
+ *
+ * НОЛЬ В СЧЁТЧИКЕ НЕ СЧИТАЕТ, А ПОВТОРЯЕТ. Над пустым списком стояло
+ * «ЗАПИСИ · 0», а под ним — «Нет операций за период»: одна и та же мысль
+ * дважды, и цифра в ней означала отсутствие. Так это уже делает экран «Не
+ * закрыто»; здесь правило становится общим для всех шести панелей.
+ */
+export function panelCount(label: string, count: number): string {
+  return count > 0 ? `${label} · ${count}` : label;
+}
+
 export function PanelHeader({
   title,
-  onReset,
+  right,
   onSettings,
   settingsLabel,
 }: {
   title: string;
-  /** «Все» — снять разрез и вернуть полную ленту. Есть только там, где разрез
-   *  что-то прячет: панель, показывающая всё, сбрасывать не от чего. */
-  onReset?: () => void;
-  /** Шестерёнка-ползунки справа — дверь в НАСТРОЙКИ этой панели (владелец
-   *  2026-08-15: «справа поставь эти две палочки с кружочками, как в клиентах,
-   *  и оно переводит в настройку счетов»). Тот же глиф `Settings2`, что в шапке
-   *  страницы счетов и у клиентов: один значок — одно значение на весь продукт. */
+  /** Что стоит СПРАВА в эйбрау: у долгов это две кнопки сторон (владелец
+   *  2026-09-10: «сделай это маленькими кнопочками с правой стороны»).
+   *  Полноширинный сегмент над списком занимал строку экрана ради выбора из
+   *  двух слов. */
+  right?: ReactNode;
+  // «ВСЕ» СНЯТО (прогон финансов 2026-09-24): второй тап по плитке и так
+  // возвращает полную ленту — та же вторая дверь к одному жесту, что владелец
+  // убрал у «Счетов» 2026-09-15.
+  /** Ползунки справа — дверь в НАСТРОЙКИ того, что панель показывает (глиф
+   *  владельца 2026-08-15: «две палочки с кружочками, как в клиентах»). У
+   *  «Счетов» это страница «Счета»: порядок, скрытие и правка каждого счёта
+   *  (владелец 2026-09-15: «справа сделай строчки»). Лента выбранного счёта
+   *  значка не несёт: в счёт входят через ту же страницу. Тот же `Settings2`,
+   *  что у клиентов: один значок — одно значение на весь продукт. Зона
+   *  нажатия — 44pt: высота строки и `hitSlop`. */
   onSettings?: () => void;
   /** Что именно настраивают — для озвучки. Без неё VoiceOver слышит «кнопка». */
   settingsLabel?: string;
@@ -43,18 +64,7 @@ export function PanelHeader({
       >
         {title}
       </Text>
-      {onReset ? (
-        <Pressable
-          onPress={onReset}
-          accessibilityRole="button"
-          accessibilityLabel="Показать все операции"
-          className="ml-auto min-h-11 justify-center px-2 active:opacity-60"
-        >
-          <Text className="text-[13px] font-semibold" style={{ color: t.accent }}>
-            Все
-          </Text>
-        </Pressable>
-      ) : null}
+      {right ? <View className="ml-auto flex-row items-center gap-1.5">{right}</View> : null}
       {onSettings ? (
         <Pressable
           onPress={onSettings}
@@ -63,7 +73,7 @@ export function PanelHeader({
           hitSlop={8}
           // `ml-auto` только когда слева ничего не заняло место: два элемента
           // с ним разъехались бы по краям и оставили дыру посередине.
-          className={`${onReset ? "" : "ml-auto"} min-h-11 justify-center pl-3 active:opacity-60`}
+          className={`${right ? "" : "ml-auto"} min-h-11 justify-center pl-3 active:opacity-60`}
         >
           <Settings2 color={t.sub} size={ICON.sm} strokeWidth={2} />
         </Pressable>

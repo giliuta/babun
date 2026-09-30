@@ -5,6 +5,23 @@
 
 export type MasterRole = "admin" | "dispatcher" | "lead" | "helper";
 
+/** Extra phone row — structurally the client's `PhoneEntry` (kept local:
+ *  `clients.ts` imports this module, a back-import would be a cycle). */
+export interface MasterPhoneEntry {
+  id: string;
+  number: string;
+  label: string;
+  name?: string;
+}
+
+export interface MasterExtraContacts {
+  phones?: MasterPhoneEntry[];
+  whatsapp_phone?: string;
+  telegram_username?: string;
+  instagram_username?: string;
+  email?: string;
+}
+
 // Sprint 027 — the permission surface grew from 9 to ~25 flags to
 // support a real SaaS onboarding (lead working only in their brigade
 // must not see finances or other brigades). Grouped into five
@@ -104,6 +121,13 @@ export interface Master {
   /** Free-text ("Пафос, ул. Posidonos 12"). No structure needed yet. */
   address?: string;
 
+  /** Extra contacts under the main phone — the same shape the client card
+   *  keeps (second numbers, messengers, a personal email), so the employee
+   *  page reuses the client's contact rows and «Добавить контакт» sheet. */
+  contacts?: MasterExtraContacts;
+  /** «Заметка сотрудника» — one free-text note, written by the owner. */
+  note?: string;
+
   // Employment.
   /** YYYY-MM-DD */
   hire_date?: string;
@@ -195,7 +219,8 @@ export interface Team {
   /** Sprint 033 Phase I28 — default duration (minutes) when the
    *  dispatcher taps an empty calendar slot on this brigade's
    *  column to create a blank appointment. Undefined = fall back
-   *  to global calendarSettings.gridStep. */
+   *  to 30 minutes — шаг сетки в продукте один и не настраивается
+   *  (владелец 2026-09-10). */
   default_slot_minutes?: number;
   /** Sprint 033 Phase I39 — per-brigade overrides of the global
    *  «Поведение календаря». Undefined = inherit from global

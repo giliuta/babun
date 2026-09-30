@@ -3,13 +3,27 @@ import { GradientButton } from "./GradientButton";
 import { useThemeColors } from "@/theme/colors";
 import { Spinner } from "@/components/ui/Spinner";
 
-type Variant = "primary" | "secondary";
-type Tone = "default" | "danger";
+type Variant = "primary" | "secondary" | "filled";
+type Tone = "default" | "danger" | "success";
 
 // App-wide button — «Halo Cobalt» (apps/mobile/docs/DESIGN-SYSTEM.md).
-// primary → cobalt gradient pill (halo sheen + press dip).
-// secondary → clean outline pill on surface; tone="danger" tints the label
+// primary → cobalt gradient (halo sheen + press dip).
+// secondary → clean outline on surface; tone="danger" tints the label
 // (e.g. «Выйти») without shouting.
+// filled → ЗАЛИТЫЙ СЕМАНТИЧЕСКИЙ ВИД (DS §5, решение владельца 2026-08-27:
+//   «та же геометрия, меняется только заливка»). Обещан каноном давно, а
+//   построен 2026-09-10: до этого на его месте жили ДЕСЯТЬ самописных кнопок
+//   в шести геометриях — 44/48/52pt, радиусы 999, 10 и литеральные, кегли
+//   14/15/16/17, — и каждая красилась своей рукой. Заливку выбирает `tone`:
+//   красная у разрушительного, зелёная у денег принятых, кобальтовая иначе.
+//   Цвет продолжает ЗНАЧИТЬ, а не украшать (принцип №1).
+//
+// ОДИН РАДИУС НА ОБА ВИДА (владелец 2026-09-10: «у нас квадратная кнопка
+// „Клиент", круглая „Событие" — зачем, надо сводить всё к одному»). Второй
+// вид держал `pill` (999) и стоял пилюлей ровно над прямоугольной главной
+// кнопкой в одном и том же листе (BookSlotSheet). Закон LOCKED 2026-08-22
+// («любое скругление одинаково во всём продукте») не знает исключения для
+// кнопки, поэтому здесь тот же `radius.card`, что и у GradientButton.
 export function Button({
   label,
   onPress,
@@ -44,6 +58,51 @@ export function Button({
   }
 
   const isDisabled = disabled || loading;
+
+  if (variant === "filled") {
+    const fill =
+      tone === "danger" ? t.danger : tone === "success" ? t.success : t.accent;
+    return (
+      <Pressable
+        onPress={isDisabled ? undefined : onPress}
+        disabled={isDisabled}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityHint={accessibilityHint}
+        accessibilityState={{ disabled: isDisabled, busy: !!loading }}
+        style={({ pressed }) => ({
+          minHeight: 52,
+          paddingVertical: 14,
+          paddingHorizontal: 20,
+          borderRadius: t.radius.card,
+          borderCurve: "continuous",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: isDisabled ? t.disabledFill : fill,
+          opacity: pressed ? 0.85 : 1,
+        })}
+      >
+        {loading ? (
+          <Spinner size={18} color={t.onAccent} label="Сохраняем" />
+        ) : (
+          <Text
+            maxFontSizeMultiplier={1.3}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            style={{
+              fontSize: 17,
+              fontWeight: "600",
+              color: isDisabled ? t.sub : t.onAccent,
+            }}
+          >
+            {label}
+          </Text>
+        )}
+      </Pressable>
+    );
+  }
+
   const tint = tone === "danger" ? t.danger : t.ink;
   return (
     <Pressable
@@ -58,7 +117,7 @@ export function Button({
         // GradientButton / PillButton — same recipe).
         minHeight: 52,
         paddingVertical: 14,
-        borderRadius: t.radius.pill,
+        borderRadius: t.radius.card,
         alignItems: "center",
         justifyContent: "center",
         borderWidth: 1,

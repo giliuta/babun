@@ -56,3 +56,16 @@ describe("location label explicit removals", () => {
     );
   });
 });
+
+describe("вид типа объекта", () => {
+  test("считает изменённой строку, у которой поменялся только цвет", () => {
+    const previous = [{ id: "home", name: "Дом", color: null, icon: null }];
+    const next = [{ id: "home", name: "Дом", color: "#3276FB", icon: "house" }];
+    assert.deepEqual(locationLabelUpserts(previous, next), next);
+  });
+
+  test("не трогает строку, у которой не поменялось ничего", () => {
+    const rows = [{ id: "home", name: "Дом", color: "#3276FB", icon: "house" }];
+    assert.deepEqual(locationLabelUpserts(rows, rows), []);
+  });
+});

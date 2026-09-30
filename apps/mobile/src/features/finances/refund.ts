@@ -39,6 +39,9 @@ export function buildRefundDraft(
   tx: FinanceTransaction,
   amount: number,
   businessToday: string,
+  /** Id попытки — один на открытую форму возврата. Новый на каждый тап
+   *  задваивал возврат после потерянного ответа (аудит 2026-09-24). */
+  requestId: string = randomUuid(),
 ): TransactionDraft {
   return {
     type: "refund",
@@ -61,6 +64,6 @@ export function buildRefundDraft(
     // Стабильный PK попытки: ретрай после потерянного ответа упирается в
     // duplicate key и трактуется как успех — возврат не задваивается
     // (паттерн request_id операций и переводов).
-    request_id: randomUuid(),
+    request_id: requestId,
   };
 }

@@ -1,25 +1,31 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
-import { queryClient } from "@/lib/query-client";
-import { wipeTenantScopedData } from "@/lib/auth-clear";
-import { pauseSyncBridgeForTenantSwitch } from "@/lib/sync-bridge";
-import { pauseSyncRuntimeForTenantSwitch } from "@/lib/sync-runtime";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
+import { switchTenant } from "./switch-tenant";
 import {
   clearPendingInvitationToken,
   getPendingInvitationToken,
   pendingInvitationQueryKey,
 } from "./pending-invitation";
 import {
+  InvitationGoneError,
   invitationErrorMessage,
+  isGoneInvitationMessage,
   isInvitableRole,
   isInvitationToken,
+  seededInvitationRole,
   type InvitationState,
   type InvitableRole,
 } from "./invitation-flow";
 
 export interface InvitationPreview {
   tenantName: string;
+  /** Календарь, в который зовут. `null` — приглашение старой формы, без
+   *  календаря: человек войдёт по роли. Показываем ровно то, что приглашение
+   *  на самом деле даёт: назвать одну компанию, когда права выдаются на один
+   *  её календарь, значит пообещать больше, чем будет. */
+  teamName: string | null;
   role: InvitableRole;
   emailHint: string;
   expiresAt: string;
@@ -48,6 +54,7 @@ function parsePreview(value: Json | null): InvitationPreview {
   }
   return {
     tenantName: row.tenant_name,
+    teamName: typeof row.team_name === "string" ? row.team_name : null,
     role: row.role,
     emailHint: row.email_hint,
     expiresAt: row.expires_at,
@@ -74,19 +81,48 @@ export function useInvitationPreview(token: string | null) {
       const { data, error } = await supabase.rpc("invitation_preview", {
         p_token: token,
       });
-      if (error) throw new Error(invitationErrorMessage(error.message));
+      // «Такого приглашения нет» — ответ сервера, а не обрыв: экран забудет
+      // запомненную ссылку и перестанет открываться при каждом входе.
+      if (error) {
+        const text = invitationErrorMessage(error.message);
+        throw isGoneInvitationMessage(error.message) ? new InvitationGoneError(text) : new Error(text);
+      }
       if (data == null) {
-        throw new Error("Приглашение не найдено или ссылка повреждена.");
+        throw new InvitationGoneError("Приглашение не найдено или ссылка повреждена.");
       }
       return parsePreview(data);
     },
   });
 }
 
+/** Роль в только что принятой компании — у сервера, под заголовком ИМЕННО этой
+ *  компании (привязанный клиент), а не того, куда смотрит устройство сейчас.
+ *  `undefined` — сервер не ответил, `null` — человек в компании не состоит.
+ *  Ждём недолго: приглашение уже принято, а крутилка на экране идёт. */
+const ROLE_READ_TIMEOUT_MS = 4_000;
+
+async function readRoleInCompany(tenantId: string): Promise<unknown> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const { data, error } = await Promise.race([
+      tenantBoundClient(tenantId).rpc("current_user_role"),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("timeout")), ROLE_READ_TIMEOUT_MS);
+      }),
+    ]);
+    return error ? undefined : data;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Accept membership, switch the JWT-bound active tenant, and erase every
  * previous-tenant cache before navigation can expose the new workspace. */
 export async function acceptAndActivateInvitation(
   token: string,
+  previewRole?: InvitableRole,
 ): Promise<string> {
   if (!isInvitationToken(token)) throw new Error("Некорректная ссылка");
 
@@ -100,47 +136,39 @@ export async function acceptAndActivateInvitation(
     );
   }
 
-  const resumeOldBridge = pauseSyncBridgeForTenantSwitch();
-  const resumeRuntime = pauseSyncRuntimeForTenantSwitch();
-  let switched = false;
-  try {
-    // First wipe removes old offline operations before the active JWT changes.
-    await wipeTenantScopedData();
+  // Само переключение — общая транзакция `switchTenant`: её же зовёт
+  // переключатель контуров. Приём приглашения от обычного перехода отличается
+  // ровно одним — до него надо принять приглашение, после него погасить
+  // сохранённый токен. Держать здесь вторую копию шагов значило бы завести
+  // второй способ менять компанию, и они разошлись бы на первой же правке.
+  //
+  // `onboarded: true` — ФАКТ, а не догадка, и его знает сама эта строка:
+  // `accept_invitation` отказывает, пока у компании пуст `onboarded_at`
+  // («finish company setup before inviting employees»). Значит приглашение
+  // ПРИНЯТО ⟹ компания настроена.
+  //
+  // Без этого человек, впервые входящий в чужую компанию, видел бы гейт
+  // «Открываем компанию»: факт онбординга приезжает с догоняющим claim'ом, а
+  // тот ушёл в фон ради мгновенного перехода — то есть к первому кадру ответа
+  // ещё нет. Ленте контуров факт приходит заранее из `list_my_calendars`; у
+  // приглашения такой ленты ещё нет вовсе, оно первое.
+  //
+  // РОЛЬ ЕДЕТ ВМЕСТЕ С ПЕРЕХОДОМ (этап 0(ж) плана доступа). Без неё первый
+  // кадр новой компании — граница прав с крутилкой на весь экран, пока роль
+  // летит на сервер. Лента контуров роль знает заранее; у приглашения её
+  // спрашиваем здесь, пока крутилка приёма ещё на экране.
+  await activateAcceptedInvitation(tenantId, previewRole);
+  await clearPendingInvitationToken(token);
+  return tenantId;
+}
 
-    const { error: activateError } = await supabase.rpc("activate_tenant", {
-      p_tenant_id: tenantId,
-    });
-    if (activateError) {
-      throw new Error(invitationErrorMessage(activateError.message));
-    }
-
-    const { data: refreshed, error: refreshError } =
-      await supabase.auth.refreshSession();
-    if (refreshError || !refreshed.session) {
-      throw new Error("Не удалось обновить вход. Проверьте интернет и повторите.");
-    }
-
-    const activeTenant = (
-      refreshed.session.user.app_metadata as { tenant_id?: unknown }
-    ).tenant_id;
-    if (activeTenant !== tenantId) {
-      throw new Error("Сессия не переключилась на приглашённую компанию.");
-    }
-
-    // Catch an old in-flight revalidation that may have completed after the
-    // first wipe, then leave every query stale for the fresh tenant.
-    await wipeTenantScopedData();
-    await queryClient.invalidateQueries();
-    await clearPendingInvitationToken(token);
-    switched = true;
-    return tenantId;
-  } finally {
-    if (!switched) {
-      resumeRuntime();
-      resumeOldBridge();
-    }
-    // On success SessionProvider observes TOKEN_REFRESHED and remounts both
-    // sync lifetimes with the new tenant id; resuming either old-tenant
-    // lifetime would be unsafe.
-  }
+/** Принятое приглашение → роль в новой компании → переход. ОДНО ТЕЛО на приём
+ *  по ссылке и по id из карточки над календарём (STORY-081): второй способ
+ *  менять компанию разошёлся бы с первым на первой же правке. */
+export async function activateAcceptedInvitation(
+  tenantId: string,
+  previewRole?: InvitableRole,
+): Promise<void> {
+  const role = seededInvitationRole(await readRoleInCompany(tenantId), previewRole);
+  await switchTenant(tenantId, { onboarded: true, role });
 }

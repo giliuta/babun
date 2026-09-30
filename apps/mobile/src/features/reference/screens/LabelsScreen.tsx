@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { getStorage } from "@babun/shared/storage";
+import { readTenantPref } from "@/lib/tenant-prefs";
+import { useTenantId } from "@/lib/tenant";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { EyeOff, MapPin, RotateCcw, Trash2, X } from "lucide-react-native";
+import { Bookmark, EyeOff, RotateCcw, Trash2, X } from "lucide-react-native";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { FieldLabel } from "@/components/ui/Field";
 
+import {
+  AppearanceTile,
+  appearanceRowFill,
+} from "@/components/ui/AppearanceSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { GUTTER } from "@/components/ui/tokens";
@@ -36,6 +41,7 @@ import {
   useUpdateCity,
   type City,
 } from "@/features/reference/queries";
+import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
 
 /** Что лист отдаёт наружу при сохранении. Объектом, а не пятью позиционными
  *  аргументами: имя, цвет, дни и заливка — один ответ на один вопрос «какая
@@ -100,9 +106,15 @@ export function LabelsScreen() {
   // экрана настроек). Абстрактной «первой» здесь быть не может: человек
   // правит метки того календаря, в котором работает.
   const params = useLocalSearchParams<{ team?: string }>();
-  const persistedTeam = getStorage().get<{ teamId?: string | null }>(
-    "calendar.view",
-  )?.teamId;
+  const tenantId = useTenantId();
+  const persistedTeam = tenantId
+    ? readTenantPref<{ teamId?: string | null }>(
+        "calendar.view",
+        tenantId,
+        // Ключ до переезда настроек на компанию; забирается один раз.
+        "calendar.view",
+      )?.teamId
+    : undefined;
   const t = useThemeColors();
   const toast = useToast();
   const teamsQuery = useTeams();
@@ -142,10 +154,16 @@ export function LabelsScreen() {
 
   // Обещанные 30 дней истекают здесь: крона нет, а зачистка обязана когда-то
   // случиться. Открытие экрана — тот же момент, где удаляют.
+  // «ТОЛЬКО ВИДИТ» — МЕТКИ БЕЗ ПРАВКИ (владелец 30.09: «Метки» в
+  // «Настройках команды»): ни кнопки внизу, ни свайпов, ни ручек, строка не
+  // открывает редактор. Владельцу — всегда правка.
+  const readOnly = useTeamSettingLevel("calendar.labels", teamId) !== "write";
   const purgeExpired = usePurgeExpiredCities();
   useEffect(() => {
+    // Зачистка — тоже правка: тому, кто только смотрит, она не положена.
+    if (readOnly) return;
     void purgeExpired();
-  }, [purgeExpired]);
+  }, [purgeExpired, readOnly]);
   const dayCities = useMemo(
     () => dayCitiesQuery.data ?? {},
     [dayCitiesQuery.data],
@@ -368,7 +386,7 @@ export function LabelsScreen() {
       ) : cities.length === 0 ? (
         <EmptyState
           fill
-          icon={<MapPin color={t.accent} size={28} />}
+          icon={<Bookmark color={t.accent} size={28} />}
           title="Меток пока нет"
         />
       ) : (
@@ -395,6 +413,7 @@ export function LabelsScreen() {
               rowHeight={ROW_H}
               spaced
               labelFor={(city) => city.name}
+              rangeFor={(index) => (readOnly ? [index, index] : [0, cities.length - 1])}
               // Ручка внутри строки: строка ещё и смахивается влево, а колонка
               // ручки снаружи не уезжает — «Удалить» упиралось бы в неё.
               handleInside
@@ -410,11 +429,11 @@ export function LabelsScreen() {
                 const hidden = !city.is_active && !deleted;
                 return (
                 <SwipeRow
-                  label="Удалить"
+                  label={readOnly ? undefined : "Удалить"}
                   color={t.danger}
                   icon={Trash2}
                   accessibilityLabel={`Удалить метку ${city.name}`}
-                  onAction={() => remove(city)}
+                  onAction={readOnly ? undefined : () => remove(city)}
                   // СЛЕВА — «СКРЫТЬ», КАК У УСЛУГ (владелец 2026-08-29).
                   // Здесь была «Основная» — звезда, ставившая метку фолбэком
                   // на все дни всех команд. Она уходит: то же самое будет
@@ -430,7 +449,7 @@ export function LabelsScreen() {
                   //   удалённая→ «Вернуть»  (снимается пометка на удаление).
                   // Подпись обязана называть то, что произойдёт: до правки
                   // удалённая предлагала «Скрыть», а по нажатию возвращалась.
-                  leading={{
+                  leading={readOnly ? undefined : {
                     label: deleted
                       ? "Вернуть"
                       : hidden
@@ -474,29 +493,34 @@ export function LabelsScreen() {
                       alignItems: "center",
                       // Скрытая не исчезает и не кричит — просто тише живых.
                       opacity: deleted ? 0.3 : hidden ? 0.45 : 1,
-                      backgroundColor: t.surface,
+                      backgroundColor: appearanceRowFill(city.color, false, {
+                        rest: t.surface,
+                        pressed: t.pressed,
+                      }),
                     }}
                   >
                   <Pressable
+                    disabled={readOnly}
                     onPress={() => setEditing({ mode: "edit", city })}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Метка ${city.name}, редактировать`}
+                    accessibilityRole={readOnly ? "text" : "button"}
+                    accessibilityLabel={readOnly ? `Метка ${city.name}` : `Метка ${city.name}, редактировать`}
                     style={({ pressed }) => ({
                       flex: 1,
                       height: ROW_H,
                       flexDirection: "row",
                       alignItems: "center",
                       paddingLeft: 16,
-                      backgroundColor: pressed ? t.pressed : t.surface,
+                      // Заливку держит вся строка (см. выше); здесь остаётся
+                      // только отклик на палец.
+                      backgroundColor: pressed ? t.pressed : "transparent",
                     })}
                   >
-                    <View
-                      style={{
-                        height: 12,
-                        width: 12,
-                        borderRadius: 6,
-                        backgroundColor: city.color ?? FALLBACK_COLOR,
-                      }}
+                    {/* ПЛИТКА ВИДА — как у тега, категории, услуги и типа
+                        объекта. Точка 12pt была единственным пятном цвета в
+                        продукте, которое не умеет показать значок. */}
+                    <AppearanceTile
+                      color={city.color ?? FALLBACK_COLOR}
+                      size={28}
                     />
                     <Text
                       numberOfLines={1}
@@ -529,14 +553,16 @@ export function LabelsScreen() {
           Кнопка стоит ВСЕГДА, а не только в пустом состоянии: метки заводят
           пачкой, и после первой не должно приходиться доскролливать список,
           чтобы завести вторую. Ровно тот же приём, что на экране услуг. */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
-        <GradientButton
-          label="Добавить метку"
-          onPress={() => setEditing({ mode: "create" })}
-        />
-      </View>
+      {readOnly ? null : (
+        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+          <GradientButton
+            label="Добавить метку"
+            onPress={() => setEditing({ mode: "create" })}
+          />
+        </View>
+      )}
 
-      <LabelSheet
+      <LabelEditSheet
         editing={editing}
         takenBy={takenBy}
         daysOff={companyDaysOff}
@@ -549,7 +575,7 @@ export function LabelsScreen() {
   );
 }
 
-function LabelSheet({
+function LabelEditSheet({
   editing,
   takenBy,
   daysOff,

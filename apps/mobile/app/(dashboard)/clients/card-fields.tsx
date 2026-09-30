@@ -1,121 +1,176 @@
-import { Fragment } from "react";
-import { ScrollView, Switch, Text, View } from "react-native";
-import { Info } from "lucide-react-native";
+import { useLocalSearchParams } from "expo-router";
+import { ScrollView } from "react-native";
+import {
+  AlertCircle,
+  Clock,
+  FileText,
+  Home,
+  Paperclip,
+  Phone,
+  StickyNote,
+  Tags,
+  TrendingUp,
+  UserRound,
+  UsersRound,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { Divider } from "@/components/ui/Divider";
-import { useThemeColors, type ThemeColors } from "@/theme/colors";
+import { RowCaption } from "@/components/ui/card-rows";
+import { AlwaysLine, BlockCell } from "@/components/ui/block-toggles";
 import {
   DEFAULT_CARD_FIELDS,
   useCardFields,
   useToggleCardField,
   type CardField,
 } from "@/features/clients/card-prefs";
+import {
+  useClientFunctionOn,
+  useToggleClientFunction,
+  type ClientFunctionKey,
+} from "@/features/clients/client-functions";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { useTeams } from "@/features/reference/queries";
+import { useFeatureOn } from "@/features/settings/company-features";
 
-// v811 — «Что показывать на карточке». Вложенный экран под «Настройками
-// клиентов» (порт web CardFieldsScreen). Тоггл пишет в MMKV и обновляет
-// query — карточки списка меняются сразу. Имя всегда видно (замок).
+// «КАРТОЧКА КЛИЕНТА» — ИЗ ЧЕГО СОБРАН КЛИЕНТ У КОМАНДЫ (владелец 30.09:
+// «название „что показывать на карточке“ неправильно — сделай то же самое,
+// как это выглядит у нас в записи клиентов в календаре»). Та же анатомия, что
+// у «Записей»: обязательное — одной строкой «Всегда: …», выключаемое — строки
+// с галкой.
+//
+//   • «Блоки страницы» — блоки страницы клиента; «Всегда» только клиент и
+//     история. Выключается у всей команды (`team_design`); у людей, файлов и
+//     реквизитов выключатель компании (STORY-088) главнее.
+//   • «Строка в списке» — что видно под именем в списке клиентов; тоже у
+//     всей команды (`team_design.client_list_off`, 30.09).
+//
+// Команда едет адресом из «Настроек клиентов»; без неё — первая команда.
 
-interface FieldRow {
-  /** null = всегда включённая строка «Имя клиента». */
-  field: CardField | null;
+type PageBlock = {
   label: string;
-  sub?: string;
-  dot: (t: ThemeColors) => string;
-}
+  pinned?: boolean;
+  key?: ClientFunctionKey;
+  icon?: LucideIcon;
+};
 
-// v811 gold — тот же литерал, что и на карточке (долг).
-const ROWS: FieldRow[] = [
-  { field: null, label: "Имя клиента", sub: "всегда видно", dot: (t) => t.faint },
-  { field: "phone", label: "Телефон", sub: "под именем", dot: (t) => t.faint },
-    // ВЫРУЧКА, А НЕ ПРИБЫЛЬ: expectedRevenue — сумма будущих записей до
-  // вычета расходов. Слово «прибыль» обещало заработок и завышало ожидания.
-  { field: "exp", label: "Ожидается", sub: "сумма будущих записей", dot: (t) => t.sub },
-  { field: "inc", label: "Доход", sub: "зелёный", dot: (t) => t.success },
-  { field: "debt", label: "Долг", sub: "жёлтый", dot: (t) => t.warning },
-  { field: "last", label: "Последняя запись", dot: (t) => t.faint },
-  { field: "meta", label: "Команда, метка, теги", dot: (t) => t.faint },
+// Порядок — порядок страницы клиента (docs/BLOCKS.md §9.1).
+const PAGE_BLOCKS: PageBlock[] = [
+  { label: "Клиент", pinned: true },
+  { label: "Заметка", key: "client_note", icon: StickyNote },
+  { label: "История", pinned: true },
+  { label: "Люди", key: "client_people", icon: UsersRound },
+  { label: "Объекты", key: "client_objects", icon: Home },
+  { label: "Файлы", key: "client_files", icon: Paperclip },
+  { label: "Реквизиты", key: "client_requisites", icon: FileText },
+  { label: "Метка и тег", key: "client_labels", icon: Tags },
+  { label: "Личное", key: "client_personal", icon: UserRound },
 ];
 
-export default function CardFieldsScreen() {
-  const t = useThemeColors();
-  const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields();
-  const toggle = useToggleCardField();
+// ВЫРУЧКА, А НЕ ПРИБЫЛЬ: «Ожидается» — сумма будущих записей до расходов.
+const ROW_FIELDS: { field: CardField; label: string; icon: LucideIcon }[] = [
+  { field: "phone", label: "Телефон", icon: Phone },
+  { field: "exp", label: "Ожидается", icon: TrendingUp },
+  { field: "inc", label: "Доход", icon: Wallet },
+  { field: "debt", label: "Долг", icon: AlertCircle },
+  { field: "last", label: "Последняя запись", icon: Clock },
+  { field: "meta", label: "Команда, метка, теги", icon: Tags },
+];
+
+// Экран вкладки «Клиенты»: компанию называет источник, а не роль
+// (STORY-082).
+export default function ClientCardSettingsRoute() {
+  return (
+    <ClientsCompanyRoute kind="tab">
+      <ClientCardSettingsScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+function ClientCardSettingsScreen() {
+  const { team } = useLocalSearchParams<{ team?: string }>();
+  const { data: ownTeams = [] } = useTeams();
+  const teamRow =
+    (team ? ownTeams.find((tm) => tm.id === team) : undefined) ?? ownTeams[0] ?? null;
+  const teamId = teamRow?.id ?? null;
+  const caps = useClientsCapabilities();
+  const readOnly = !caps.manage;
+
+  // Объекты выключаются у компании там, где их заводят («Записи»): без них
+  // блока нет вовсе — ни галкой, ни во «Всегда».
+  const objectsOn = useFeatureOn("objects");
+  const functionOn: Record<ClientFunctionKey, boolean> = {
+    client_note: useClientFunctionOn("client_note", teamId),
+    client_people: useClientFunctionOn("client_people", teamId),
+    client_objects: useClientFunctionOn("client_objects", teamId),
+    client_files: useClientFunctionOn("client_files", teamId),
+    client_requisites: useClientFunctionOn("client_requisites", teamId),
+    client_labels: useClientFunctionOn("client_labels", teamId),
+    client_personal: useClientFunctionOn("client_personal", teamId),
+  };
+  // Выключено у всей компании — у команды его не включить: строка гаснет.
+  const companyPeople = useFeatureOn("client_people");
+  const companyFiles = useFeatureOn("client_files");
+  const companyRequisites = useFeatureOn("client_requisites");
+  const companyOn: Record<ClientFunctionKey, boolean> = {
+    client_note: true,
+    client_people: companyPeople,
+    client_objects: true,
+    client_files: companyFiles,
+    client_requisites: companyRequisites,
+    client_labels: true,
+    client_personal: true,
+  };
+  const toggleFunction = useToggleClientFunction(teamId);
+
+  const blocks = PAGE_BLOCKS.filter((b) => objectsOn || b.label !== "Объекты");
+
+  const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields(teamId);
+  const toggleField = useToggleCardField(teamId);
 
   return (
-    <Screen>
-      <ScreenHeader title="Что показывать" />
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
-        <Text
-          style={{
-            paddingHorizontal: 20,
-            paddingTop: 20,
-            paddingBottom: 4,
-            fontSize: 11,
-            fontWeight: "700",
-            letterSpacing: 0.6,
-            textTransform: "uppercase",
-            color: t.faint,
-          }}
-        >
-          Поля карточки
-        </Text>
-        <SectionCard>
-          {ROWS.map((r, i) => {
-            const locked = r.field === null;
-            const on = r.field === null ? true : prefs[r.field];
-            return (
-              <Fragment key={r.label}>
-                {i > 0 ? <Divider inset={44} /> : null}
-                <View className="min-h-[50px] flex-row items-center gap-3 px-4 py-2">
-                  <View
-                    style={{
-                      width: 9,
-                      height: 9,
-                      borderRadius: 5,
-                      backgroundColor: r.dot(t),
-                    }}
-                  />
-                  <View className="flex-1">
-                    <Text className="text-[15px]" style={{ color: t.ink }}>
-                      {r.label}
-                    </Text>
-                    {r.sub ? (
-                      <Text className="mt-px text-xs" style={{ color: t.faint }}>
-                        {r.sub}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Switch
-                    value={on}
-                    disabled={locked}
-                    onValueChange={() => {
-                      if (locked || !r.field) return;
-                      toggle.mutate(r.field);
-                    }}
-                    accessibilityLabel={r.label}
-                    style={locked ? { opacity: 0.45 } : undefined}
-                  />
-                </View>
-              </Fragment>
-            );
-          })}
+    <Screen edges={["top"]}>
+      <ScreenHeader title="Карточка клиента" subtitle={teamRow?.name} />
+      <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+        <SectionCard title="Блоки страницы">
+          <AlwaysLine blocks={blocks} />
+          {blocks
+            .filter((b) => !b.pinned && b.key)
+            .map((b) => {
+              const key = b.key as ClientFunctionKey;
+              return (
+                <BlockCell
+                  key={key}
+                  label={b.label}
+                  icon={b.icon ?? FileText}
+                  on={functionOn[key]}
+                  locked={!companyOn[key]}
+                  readOnly={readOnly}
+                  onToggle={() => toggleFunction.mutate({ key, on: !functionOn[key] })}
+                />
+              );
+            })}
         </SectionCard>
+        <RowCaption text="Выключенный блок пропадает у всей команды. Данные остаются." />
 
-        <View
-          className="mx-3 mt-4 flex-row items-start gap-2 rounded-[10px] px-3.5 py-3"
-          style={{ backgroundColor: `${t.accent}14` }}
-        >
-          <Info color={t.accent} size={16} strokeWidth={2.2} />
-          <Text
-            className="flex-1 text-[13px] leading-snug"
-            style={{ color: t.accent }}
-          >
-            Выключи поле — оно сразу пропадёт с карточек в списке. Имя всегда
-            видно.
-          </Text>
-        </View>
+        <SectionCard title="Строка в списке">
+          <AlwaysLine blocks={[{ label: "Имя", pinned: true }]} />
+          {ROW_FIELDS.map((f) => (
+            <BlockCell
+              key={f.field}
+              label={f.label}
+              icon={f.icon}
+              on={prefs[f.field]}
+              locked={false}
+              readOnly={false}
+              onToggle={() => toggleField.mutate(f.field)}
+            />
+          ))}
+        </SectionCard>
+        <RowCaption text="Выключенное поле пропадает из строки у всей команды." />
       </ScrollView>
     </Screen>
   );

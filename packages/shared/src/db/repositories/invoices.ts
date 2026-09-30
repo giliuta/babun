@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
 import { rpcArgs } from "../rpc-args";
 import type {
+  InvoiceKind,
   InvoiceLedger,
   InvoiceLedgerWithLines,
   InvoiceLineLedger,
@@ -42,17 +43,20 @@ export interface IssueInvoiceDraft {
   lines: InvoiceLineDraft[];
   notes?: string | null;
   link_to_tx_id?: string | null;
-}
-
-export interface EditInvoiceDraft {
-  due_on?: string | null;
-  client_id?: string | null;
-  appointment_id?: string | null;
-  brigade_id?: string | null;
-  vat_mode: InvoiceVatMode;
-  vat_percent: number;
-  lines: InvoiceLineDraft[];
-  notes?: string | null;
+  /** Выбранные реквизиты (`companies.id`). Не задано — сервер сам подставит
+   *  основные реквизиты компании (`resolve_company_id`), поэтому контрольное
+   *  чтение сверяет это поле только когда черновик его явно задал. */
+  company_id?: string | null;
+  /** Счёт, куда клиенту предложено заплатить (`accounts.id`) — подсказка
+   *  платежу, а не сам платёж. Сервер его не подставляет по умолчанию. */
+  account_id?: string | null;
+  /** Объект клиента (id элемента `clients.locations`, миграция
+   *  20260922060000). Не задан у счёта из записи — сервер берёт её объект. */
+  location_id?: string | null;
+  /** Набор реквизитов клиента (id элемента `clients.requisites`, миграция
+   *  20260922100000). Не задан — основной; чужой или удалённый сервер
+   *  сводит к основному. */
+  client_requisites_id?: string | null;
 }
 
 function rowToInvoice(r: Row): InvoiceLedger {
@@ -68,12 +72,21 @@ function rowToInvoice(r: Row): InvoiceLedger {
     client_id: r.client_id,
     appointment_id: r.appointment_id,
     brigade_id: r.brigade_id,
+    company_id: r.company_id,
+    account_id: r.account_id,
+    location_id: r.location_id ?? null,
     subtotal_net: Number(r.subtotal_net ?? 0),
     vat_percent: Number(r.vat_percent ?? 19),
     vat_amount: Number(r.vat_amount ?? 0),
     total: Number(r.total ?? 0),
     currency: r.currency,
     status: r.status as InvoiceStatus,
+    // ВИД И РЕЖИМ НДС — С САМОГО ДОКУМЕНТА. Без вида витрины отличали сторно
+    // от счёта по минусовой сумме и отдельным запросом связей, а режим НДС
+    // угадывали по суммам, хотя сервер его теперь пишет.
+    kind: (r.kind as InvoiceKind | null) ?? "invoice",
+    credit_note_of_id: r.credit_note_of_id,
+    vat_mode: (r.vat_mode as InvoiceVatMode | null) ?? null,
     pdf_url: r.pdf_url,
     notes: r.notes,
     created_at: r.created_at,
@@ -162,9 +175,19 @@ export async function issueInvoice(
         unit: line.unit ?? null,
         qty: line.qty,
         unit_price: line.unit_price,
+        ...(line.discount ? { discount: true } : {}),
       })),
       p_notes: draft.notes?.trim() || null,
       p_link_to_tx_id: draft.link_to_tx_id ?? null,
+      p_company_id: draft.company_id ?? null,
+      p_account_id: draft.account_id ?? null,
+      p_location_id: draft.location_id ?? null,
+      // Только когда выбран НЕосновной набор: без выбора сигнатура вызова та
+      // же, что до миграции 20260922100000, и счёт выставляется на базе,
+      // где её ещё нет.
+      ...(draft.client_requisites_id
+        ? { p_client_requisites_id: draft.client_requisites_id }
+        : {}),
     }),
   );
   if (error || !data || data.id !== draft.request_id || data.tenant_id !== tenantId) {
@@ -186,6 +209,8 @@ export async function issueInvoice(
     notes: draft.notes ?? null,
     vatMode: draft.vat_mode,
     vatPercent: draft.vat_percent,
+    companyId: draft.company_id ?? null,
+    accountId: draft.account_id ?? null,
     allowResolvedReferences: !!draft.link_to_tx_id,
   });
   return saved;
@@ -254,59 +279,6 @@ export async function setInvoiceLanguage(
   if (error) throw new Error(`setInvoiceLanguage: ${error.message}`);
 }
 
-/** Edit an unpaid invoice atomically under the database invoice-row lock. */
-export async function updateInvoice(
-  supabase: DbSupabase,
-  id: string,
-  issuedOn: string,
-  draft: EditInvoiceDraft,
-): Promise<InvoiceLedgerWithLines> {
-  const lines = validateInvoiceDraft({ ...draft, issued_on: issuedOn });
-  const totals = calculateInvoiceTotals(lines, draft.vat_mode, draft.vat_percent);
-  assertInvoiceTotal(totals.total);
-  const { data, error } = await supabase.rpc(
-    "update_invoice_draft",
-    rpcArgs<"update_invoice_draft">({
-      p_invoice_id: id,
-      p_due_on: draft.due_on ?? null,
-      p_client_id: draft.client_id ?? null,
-      p_appointment_id: draft.appointment_id ?? null,
-      p_brigade_id: draft.brigade_id ?? null,
-      p_vat_mode: draft.vat_mode,
-      p_vat_percent: draft.vat_percent,
-      p_lines: lines.map((line) => ({
-        title: line.title,
-        description: line.description ?? null,
-        unit: line.unit ?? null,
-        qty: line.qty,
-        unit_price: line.unit_price,
-      })),
-      p_notes: draft.notes?.trim() || null,
-    }),
-  );
-  if (error || !data || data.id !== id || data.status !== "issued") {
-    throw new Error(
-      `updateInvoice: ${error?.message ?? "сохранение не подтверждено сервером"}`,
-    );
-  }
-  const saved = await getInvoice(supabase, id);
-  if (!saved) {
-    throw new Error("Инвойс сохранён, но контрольное чтение не подтверждено");
-  }
-  assertInvoiceControlRead(saved, lines, totals, {
-    issuedOn,
-    dueOn: draft.due_on ?? null,
-    clientId: draft.client_id ?? null,
-    appointmentId: draft.appointment_id ?? null,
-    brigadeId: draft.brigade_id ?? null,
-    notes: draft.notes ?? null,
-    vatMode: draft.vat_mode,
-    vatPercent: draft.vat_percent,
-    allowResolvedReferences: false,
-  });
-  return saved;
-}
-
 function assertInvoiceControlRead(
   saved: InvoiceLedgerWithLines,
   lines: InvoiceLineDraft[],
@@ -320,6 +292,11 @@ function assertInvoiceControlRead(
     notes: string | null;
     vatMode: InvoiceVatMode;
     vatPercent: number;
+    // Необязательны, потому что `null` здесь значит «человек не выбирал»:
+    // сервер тогда подставляет ОСНОВНОЙ набор реквизитов (`resolve_company_id`),
+    // и сверять `null` с подставленным нельзя — сверка пропускается, см. ниже.
+    companyId?: string | null;
+    accountId?: string | null;
     allowResolvedReferences: boolean;
   },
 ): void {
@@ -341,6 +318,13 @@ function assertInvoiceControlRead(
     : saved.client_id === expected.clientId &&
       saved.appointment_id === expected.appointmentId &&
       saved.brigade_id === expected.brigadeId;
+  // РЕКВИЗИТЫ И СЧЁТ СВЕРЯЮТСЯ, ТОЛЬКО КОГДА ЧЕРНОВИК ИХ ВЫБРАЛ. `null`
+  // здесь не значит «пусто в базе»: сервер вправе подставить основной набор
+  // реквизитов сам (`resolve_company_id`), и сверка `null` с подставленным
+  // значением ложно уронила бы правильно выставленный счёт.
+  const requisitesMatch =
+    (expected.companyId == null || saved.company_id === expected.companyId) &&
+    (expected.accountId == null || saved.account_id === expected.accountId);
   const linesMatch =
     saved.lines.length === lines.length &&
     saved.lines.every((line, index) => {
@@ -366,7 +350,7 @@ function assertInvoiceControlRead(
         );
     });
 
-  if (!headerMatches || !referencesMatch || !linesMatch) {
+  if (!headerMatches || !referencesMatch || !requisitesMatch || !linesMatch) {
     throw new Error(
       "Контрольное чтение инвойса не совпало с отправленным документом",
     );

@@ -36,6 +36,19 @@ describe("booking team invariants", () => {
     );
   });
 
+  test("своя строка записи переживает смену команды", () => {
+    assert.deepEqual(
+      reconcileBookingSelection({
+        teamId: "blue",
+        serviceIds: ["red-only", "custom:1", "blue-only"],
+        masterId: null,
+        services,
+        masters: [],
+      }).serviceIds,
+      ["custom:1", "blue-only"],
+    );
+  });
+
   test("unassigned operational master is valid for any real team", () => {
     assert.equal(
       reconcileBookingSelection({

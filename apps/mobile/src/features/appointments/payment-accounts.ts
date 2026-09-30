@@ -2,13 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import type { AccountKind, AccountScope } from "@babun/shared/local/finance/account";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { paymentAccountsQueryKey } from "@/lib/company-query-keys";
+import { sortPaymentAccounts } from "./payment-accounts-order";
 
 // СЧЕТА, ДОСТУПНЫЕ ДЛЯ ПРИЁМА ДЕНЕГ ПО ЭТОЙ ЗАЯВКЕ.
 //
 // Отдельный RPC, а не обычный список счетов: тот owner-only и несёт балансы.
 // Здесь нужен ровно набор «куда можно положить» — без сумм, зато видимый
-// всем, кто принимает деньги. Порядок задаёт сервер: сначала счета своей
-// команды, потом общие; человек тапает первый попавшийся правильный.
+// всем, кто принимает деньги. Порядок плиток — ручка на странице «Счета»
+// (см. queryFn ниже).
 
 // Значок и цвет — те же, что человек выбрал счёту в финансах: проекция
 // `list_payment_accounts_safe` отдаёт их с 2026-08-15, и плитки блока «Оплата»
@@ -25,11 +27,14 @@ export interface PaymentAccountOption {
   position: number;
 }
 
-export function useTeamPaymentAccounts(teamId: string | null | undefined) {
-  const tenantId = useTenantId();
-  return useQuery({
-    queryKey: ["payment-accounts", tenantId, teamId ?? "no-team"],
-    enabled: !!tenantId && !!teamId,
+/** Один запрос на продукт, отдельно от хука: ключ и RPC живут в одном месте,
+ *  и вторая копия не разойдётся с первой на ближайшей же правке. */
+export function paymentAccountsQuery(
+  tenantId: string | null,
+  teamId: string | null | undefined,
+) {
+  return {
+    queryKey: paymentAccountsQueryKey(tenantId, teamId),
     // Набор счетов меняется раз в месяцы, а спрашивают его на каждом
     // открытии записи — держим свежим 5 минут. Правки счетов эти пять минут
     // не ждут: каждая мутация счёта сбрасывает ключ (см. invalidateAccounts
@@ -42,5 +47,19 @@ export function useTeamPaymentAccounts(teamId: string | null | undefined) {
       if (error) throw new Error(error.message);
       return (data ?? []) as unknown as PaymentAccountOption[];
     },
+  };
+}
+
+export function useTeamPaymentAccounts(teamId: string | null | undefined) {
+  const tenantId = useTenantId();
+  return useQuery({
+    ...paymentAccountsQuery(tenantId, teamId),
+    select: sortPaymentAccounts,
+    enabled: !!tenantId && !!teamId,
+    // НЕ ЗАГРУЗИЛОСЬ — ПРОБУЕМ СНОВА, ПОКА ЭКРАН ОТКРЫТ (владелец 2026-09-24:
+    // «оплата у клиента не записывается»). Обрыв связи на открытии записи
+    // оставлял запрос в ошибке на все пять минут свежести: плиток не было, и
+    // тапать было не во что, пока запись не откроют заново.
+    refetchInterval: (query) => (query.state.status === "error" ? 5_000 : false),
   });
 }

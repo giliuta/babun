@@ -15,11 +15,39 @@ import {
 } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
+import {
+  citiesQueryKey,
+  mastersQueryKey,
+  teamsQueryKey,
+} from "@/lib/company-query-keys";
+import { useDataRole, type UserRole } from "@/features/settings/tenant";
+import { useMirror } from "@/features/access/mirror/mirror-state";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
+
 import {
   operationalMasterJsonToMaster,
   operationalTeamJsonToTeam,
 } from "@/features/settings/master-reference";
+import { pickLiveTeams, pickTeamLabels } from "./reference-select";
+
+// СПРАВОЧНИКИ ЧИТАЮТСЯ В КОМПАНИИ ЭКРАНА. Вкладка «Клиенты» открывается в
+// своей компании, даже когда в календаре стоит чужая (STORY-082), и команды
+// с метками ей нужны СВОИ — иначе в фильтре «Команда» рядом встают команды
+// двух компаний. Вне вкладки источника нет, и всё как раньше — активная
+// компания устройства.
+function useReferenceCompany() {
+  const scope = useClientsScopeOrNull();
+  const activeTenantId = useTenantId();
+  const roleQuery = useDataRole();
+  const tenantId = scope?.tenantId ?? activeTenantId;
+  return {
+    tenantId,
+    role: scope ? scope.role : roleQuery.data,
+    ready: scope ? true : roleQuery.isSuccess && roleQuery.data != null,
+    client: scope && !scope.isActive ? tenantBoundClient(scope.tenantId) : supabase,
+  };
+}
 
 type Tables = Database["public"]["Tables"];
 export type Team = Tables["teams"]["Row"];
@@ -54,35 +82,60 @@ export function teamCities(t: Team): string[] {
 // (accounts.brigade_id может указывать на soft-deleted команду; список
 // счетов обязан показать её имя, а не прочерк). Пикеры/фильтры зовут
 // без опции и видят только активные.
+/** Чтение команд ЧИСТОЙ функцией: клиент — параметром, чтобы прогрев чужой
+ *  компании читал их клиентом, привязанным к ней. Хук ниже зовёт её обычным. */
+export async function fetchTeams(
+  client: typeof supabase,
+  tenantId: string,
+  role: UserRole,
+  includeInactive: boolean,
+): Promise<Team[]> {
+  if (role === "dispatcher" || role === "master") {
+    const { data, error } = await client.rpc("list_operational_teams_safe");
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []).map(operationalTeamJsonToTeam);
+    return includeInactive ? rows : rows.filter((row) => row.is_active);
+  }
+  if (role !== "owner") throw new Error("Нет доступа к календарям");
+  let q = client.from("teams").select("*").eq("tenant_id", tenantId);
+  if (!includeInactive) q = q.eq("is_active", true);
+  const { data, error } = await q.order("position");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export function useTeams(opts?: { includeInactive?: boolean }) {
-  const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
-  const role = roleQuery.data;
+  const { tenantId, role, ready, client } = useReferenceCompany();
   const includeInactive = !!opts?.includeInactive;
-  return useQuery({
-    queryKey: includeInactive
-      ? ["teams", tenantId, role ?? "role-pending", "all"]
-      : ["teams", tenantId, role ?? "role-pending"],
-    enabled: !!tenantId && roleQuery.isSuccess && role != null,
-    queryFn: async () => {
-      if (role === "dispatcher" || role === "master") {
-        const { data, error } = await supabase.rpc(
-          "list_operational_teams_safe",
-        );
-        if (error) throw new Error(error.message);
-        const rows = (data ?? []).map(operationalTeamJsonToTeam);
-        return includeInactive ? rows : rows.filter((row) => row.is_active);
-      }
-      if (role !== "owner") throw new Error("Нет доступа к календарям");
-      let q = supabase
-        .from("teams")
-        .select("*")
-        .eq("tenant_id", tenantId as string);
-      if (!includeInactive) q = q.eq("is_active", true);
-      const { data, error } = await q.order("position");
-      if (error) throw new Error(error.message);
-      return data;
+  // ЗЕРКАЛО ПОКАЗЫВАЕТ ТОЛЬКО ЕГО КАЛЕНДАРИ. Список приходит по токену
+  // ВЛАДЕЛЬЦА, то есть полный: в предпросмотре лента показывала команды, к
+  // которым человек не прикреплён вовсе (замечено глазами 20.09), — а
+  // настоящему сотруднику сервер отдаёт только его.
+  const mirror = useMirror();
+  const attached =
+    mirror && mirror.map.tenantId === tenantId
+      ? new Set(mirror.map.attachedCalendars)
+      : null;
+  const select = useCallback(
+    (rows: Team[]) => {
+      const live = includeInactive ? rows : pickLiveTeams(rows);
+      return attached ? live.filter((team) => attached.has(team.id)) : live;
     },
+    // Набор прикреплений меняется вместе с режимом; строка — чтобы новый
+    // Set каждого рендера не пересобирал `select` впустую.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [includeInactive, attached ? [...attached].sort().join(",") : null],
+  );
+  return useQuery({
+    // ОДИН ЗАПРОС НА ОБА ВАРИАНТА (2026-09-15). Календарь зовёт хук и так, и
+    // с архивом — это были два запроса за одной таблицей в каждой волне после
+    // перехода. Читаем полный список, активные отбираются на устройстве тем же
+    // условием, что стояло в запросе (`reference-select.ts`, с тестом).
+    queryKey: teamsQueryKey(tenantId, role, true),
+    enabled: !!tenantId && ready && role != null,
+    queryFn: () =>
+      fetchTeams(client, tenantId as string, role as UserRole, true),
+    select,
   });
 }
 
@@ -92,7 +145,7 @@ export function useTeams(opts?: { includeInactive?: boolean }) {
 // edit. Keyed by id → its own cache entry, invalidated by the ["teams"] wipe.
 export function useTeam(id: string | undefined) {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   return useQuery({
     queryKey: ["teams", tenantId, roleQuery.data ?? "role-pending", "one", id],
     enabled: !!tenantId && !!id && roleQuery.isSuccess && roleQuery.data === "owner",
@@ -111,7 +164,7 @@ export function useTeam(id: string | undefined) {
 
 export function useCreateTeam() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
@@ -152,42 +205,45 @@ export function useCreateTeam() {
 // ─── Masters ─────────────────────────────────────────────────────────
 // `includeInactive` — список мастеров показывает архив (иначе «Вернуть из
 // архива» в хабе недостижим); пикеры зовут без опции (паттерн useTeams).
+/** Чтение мастеров ЧИСТОЙ функцией (см. `fetchTeams`): прогрев чужой компании
+ *  зовёт её клиентом, привязанным к той компании (`bind-tenant.ts`). */
+export async function fetchMasters(
+  client: typeof supabase,
+  tenantId: string,
+  role: UserRole,
+  includeInactive: boolean,
+): Promise<Master[]> {
+  if (role === "dispatcher" || role === "master") {
+    const { data, error } = await client.rpc("list_operational_masters_safe");
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []).map(operationalMasterJsonToMaster);
+    return includeInactive ? rows : rows.filter((row) => row.is_active);
+  }
+  if (role !== "owner") throw new Error("Нет доступа к сотрудникам");
+  let q = client.from("masters").select("*").eq("tenant_id", tenantId);
+  if (!includeInactive) q = q.eq("is_active", true);
+  const { data, error } = await q.order("position");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export function useMasters(opts?: { includeInactive?: boolean }) {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
   const includeInactive = !!opts?.includeInactive;
   return useQuery({
-    queryKey: includeInactive
-      ? ["masters", tenantId, role ?? "role-pending", "all"]
-      : ["masters", tenantId, role ?? "role-pending"],
+    queryKey: mastersQueryKey(tenantId, role, includeInactive),
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
-    queryFn: async () => {
-      if (role === "dispatcher" || role === "master") {
-        const { data, error } = await supabase.rpc(
-          "list_operational_masters_safe",
-        );
-        if (error) throw new Error(error.message);
-        const rows = (data ?? []).map(operationalMasterJsonToMaster);
-        return includeInactive ? rows : rows.filter((row) => row.is_active);
-      }
-      if (role !== "owner") throw new Error("Нет доступа к сотрудникам");
-      let q = supabase
-        .from("masters")
-        .select("*")
-        .eq("tenant_id", tenantId as string);
-      if (!includeInactive) q = q.eq("is_active", true);
-      const { data, error } = await q.order("position");
-      if (error) throw new Error(error.message);
-      return data;
-    },
+    queryFn: () =>
+      fetchMasters(supabase, tenantId as string, role as UserRole, includeInactive),
   });
 }
 
 // Single-master read for the master hub. See useTeam for the by-id rationale.
 export function useMaster(id: string | undefined) {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   return useQuery({
     queryKey: ["masters", tenantId, roleQuery.data ?? "role-pending", "one", id],
     enabled: !!tenantId && !!id && roleQuery.isSuccess && roleQuery.data === "owner",
@@ -206,7 +262,7 @@ export function useMaster(id: string | undefined) {
 
 export function useCreateMaster() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
@@ -260,32 +316,47 @@ export function useCities(opts?: {
   includeInactive?: boolean;
   teamId?: string | null;
 }) {
-  const tenantId = useTenantId();
+  const { tenantId, client } = useReferenceCompany();
   const includeInactive = !!opts?.includeInactive;
   const teamId = opts?.teamId ?? null;
+  // КЛЮЧ — ВЕСЬ СПРАВОЧНИК КОМПАНИИ, КОМАНДА — `select` (2026-09-15). Ключ по
+  // команде означал запрос на каждый первый тап по календарю, и сетка ждала
+  // его скелетом. Отбор повторяет `.eq("team_id")` из `fetchCities` точь-в-точь
+  // (`reference-select.ts`, с тестом); RLS меток и так отдаёт всю компанию.
+  const select = useCallback(
+    (rows: City[]) => pickTeamLabels(rows, teamId),
+    [teamId],
+  );
   return useQuery({
-    queryKey: ["cities", tenantId, includeInactive ? "all" : "live", teamId],
+    queryKey: citiesQueryKey(tenantId, includeInactive, null),
     enabled: !!tenantId,
-    queryFn: async () => {
-      let q = supabase
-        .from("cities")
-        .select("*")
-        .eq("tenant_id", tenantId as string);
-      if (!includeInactive) q = q.eq("is_active", true);
-      // Метка принадлежит команде: без её id вернётся весь справочник
-      // тенанта — так читают экраны, которым нужно НАЗВАТЬ метку прошлого
-      // дня, а не предложить её к выбору.
-      if (teamId) q = q.eq("team_id", teamId);
-      const { data, error } = await q.order("position");
-      if (error) throw new Error(error.message);
-      return data;
-    },
+    queryFn: () =>
+      fetchCities(client, tenantId as string, includeInactive, null),
+    select,
   });
+}
+
+/** Чтение городов ЧИСТОЙ функцией (см. `fetchTeams`). */
+export async function fetchCities(
+  client: typeof supabase,
+  tenantId: string,
+  includeInactive: boolean,
+  teamId: string | null,
+): Promise<City[]> {
+  let q = client.from("cities").select("*").eq("tenant_id", tenantId);
+  if (!includeInactive) q = q.eq("is_active", true);
+  // Метка принадлежит команде: без её id вернётся весь справочник
+  // тенанта — так читают экраны, которым нужно НАЗВАТЬ метку прошлого
+  // дня, а не предложить её к выбору.
+  if (teamId) q = q.eq("team_id", teamId);
+  const { data, error } = await q.order("position");
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export function useCreateCity() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     // `color` — v492 labels: custom tags («Германия», «День ног») get a
@@ -301,7 +372,9 @@ export function useCreateCity() {
       /** Заливать ли колонку дня цветом метки. По умолчанию да. */
       tintDay?: boolean;
     }) => {
-      if (role !== "owner" && role !== "dispatcher") {
+      // Сотрудник — по праву «Метки» своей команды (30.09): его проверяет
+      // политика `cities_write_access`, телефон только не пускает гостя.
+      if (role !== "owner" && role !== "dispatcher" && role !== "master") {
         throw new Error("Добавлять метки может владелец или диспетчер.");
       }
       const { data, error } = await supabase
@@ -335,12 +408,17 @@ type RefUpdate<Table extends RefTable> = Tables[Table]["Update"];
 
 function assertCanWriteReference(
   table: RefTable,
-  role: ReturnType<typeof useCurrentRole>["data"],
+  role: ReturnType<typeof useDataRole>["data"],
 ): void {
   if (table === "cities") {
-    if (role === "owner" || role === "dispatcher") return;
+    // Сотрудник — по праву «Метки» своей команды (30.09): строку чужой
+    // команды отобьёт политика `cities_write_access`.
+    if (role === "owner" || role === "dispatcher" || role === "master") return;
     throw new Error("Изменять метки может владелец или диспетчер.");
   }
+  // Услуги сотрудник правит по праву «Услуги» своей команды (30.09): строку
+  // чужой команды отобьёт политика `services_write_access`.
+  if (table === "services" && role === "master") return;
   if (role !== "owner") {
     throw new Error("Изменять этот справочник может только владелец.");
   }
@@ -411,7 +489,7 @@ async function updateRefRow<Table extends RefTable>(args: {
 
 function useRefUpdate<Table extends RefTable>(table: Table) {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -432,7 +510,7 @@ function useRefUpdate<Table extends RefTable>(table: Table) {
 
 function useRefDelete(table: RefTable) {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
@@ -453,12 +531,8 @@ function useRefDelete(table: RefTable) {
 export const useUpdateTeam = () => useRefUpdate("teams");
 export const useUpdateMaster = () => useRefUpdate("masters");
 export const useDeleteMaster = () => useRefDelete("masters");
-// Удаление КАЛЕНДАРЯ. Механизм лежал написанным с самого начала, но наружу
-// его не выводили: завести календарь было можно, убрать — нечем (владелец
-// 2026-08-27: «а как удалять команду, вот если я создал, а удалить её как»).
-// Оно мягкое (`is_active=false`): записи ссылаются на `team_id`, и жёсткое
-// удаление порвало бы им ссылку. Строка из базы не уходит, из ленты — да.
-export const useDeleteTeam = () => useRefDelete("teams");
+// Удаления КАЛЕНДАРЯ здесь больше нет. С 2026-09-21 оно в два шага — в архив и
+// стереть из архива — и живёт целиком в `features/calendar/useCalendarDelete`.
 export const useUpdateCity = () => useRefUpdate("cities");
 
 /**
@@ -470,7 +544,7 @@ export const useUpdateCity = () => useRefUpdate("cities");
  */
 export function useReorderCities() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (ids: readonly string[]) => {
@@ -560,7 +634,7 @@ export function useServiceUsageCount() {
 export function usePurgeService() {
   const qc = useQueryClient();
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   return useMutation({
     mutationFn: async (id: string) => {
       if (!tenantId) throw new Error("Нет активного аккаунта.");
@@ -618,7 +692,7 @@ function deriveLeadHelperIds(
 
 export function useUpdateTeamMembers() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -677,7 +751,7 @@ export function useUpdateTeamMembers() {
 // all tenant teams, in-loop per affected team (rare, gated behind delete).
 export function useRemoveMasterFromTeams() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({

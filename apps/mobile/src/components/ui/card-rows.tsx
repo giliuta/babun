@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import {
   ChevronRight,
@@ -207,7 +207,14 @@ export function RowGroup({
   footer,
   children,
 }: {
-  /** Капс-надпись над группой; без неё группа безымянная. */
+  /** Капс-надпись НАД группой; без неё группа безымянная.
+   *
+   *  НЕ ДЛЯ ИМЕНОВАННОГО БЛОКА ЭКРАНА (2026-09-10). Блок с именем — это
+   *  `SectionCard`: подпись внутри белого, там же справа её команда. Именно
+   *  из-за выбора между этими двумя примитивами карточка клиента и страница
+   *  записи рисовали один и тот же блок двумя способами. За `RowGroup`
+   *  осталась его настоящая работа — секция с подытогом справа и пояснением
+   *  под ней («БРИГАДА ЮРА … €1 050»), то есть финансы. */
   title?: string;
   /** Риска 2×16 слева от заголовка цветом сущности (цвет команды). Связывает
    *  секцию с выбранным наверху чипом быстрее, чем прочитанное слово. */
@@ -255,6 +262,13 @@ export function FieldRow({
   addLabel,
   onEditEnd,
   onType,
+  inputRef,
+  inputColor,
+  readOnly,
+  compact,
+  onLongPress,
+  noCopy,
+  followValue,
   onSave,
 }: {
   label: string;
@@ -272,8 +286,9 @@ export function FieldRow({
     | "decimal-pad"
     | "numbers-and-punctuation";
   /** «none» для @username и почты: клавиатура иначе пишет «@Artem_test» с
-   *  заглавной, и в данных остаётся искажённый логин. */
-  autoCapitalize?: "none" | "sentences" | "words";
+   *  заглавной, и в данных остаётся искажённый логин. «characters» — для
+   *  номеров из букв и цифр (VAT, регистрационный). */
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
   autoFocus?: boolean;
   live?: boolean;
   multiline?: boolean;
@@ -306,6 +321,37 @@ export function FieldRow({
    *  у которых хвост зависит от набранного: значок «открыть Telegram» обязан
    *  появиться, пока логин печатают, а не после ухода со строки. */
   onType?: (v: string) => void;
+  /** Поле ввода наружу: серая главная кнопка ведёт курсор к первому
+   *  незаполненному полю (карточка нового мастера, 15.09). Поле смонтировано
+   *  всегда только у `live` — у обычной строки ссылка пуста до правки. */
+  inputRef?: Ref<TextInput>;
+  /** Цвет набираемого текста: почта, не прошедшая проверку, краснеет прямо в
+   *  поле. `valueColor` красит только показанное значение, не ввод. */
+  inputColor?: string;
+  /** Значение только показывается: почта приглашения — адрес, на который оно
+   *  выписано, и сменить её значит позвать другого человека. */
+  readOnly?: boolean;
+  /** ПЛОТНАЯ СТРОКА (владелец 2026-09-21 о блоках клиента и его людей:
+   *  «слишком большие блоки… сделай компактно»). Только у `stacked`: строка
+   *  держит 44 точки вместо 60 — минимум Apple, — а подпись над значением
+   *  мельче. Несколько таких строк без линий между ними читаются одной
+   *  ячейкой, как контакт в iPhone: имя, под ним номер. */
+  compact?: boolean;
+  /** Долгое нажатие по строке (карточка клиента: «скопировать значение»).
+   *  Работает только вне ввода — в открытом поле долгое нажатие принадлежит
+   *  самому полю (лупа, «Вставить»), и отбирать его нельзя. Строке только
+   *  для чтения оно тоже доступно: скопировать можно и то, что не правится. */
+  onLongPress?: () => void;
+  /** Без системного «Скопировать» в открытом поле: клиент чужой компании не
+   *  выносится из приложения (владелец 30.09). Править значение можно. */
+  noCopy?: boolean;
+  /** ЖИВОЕ ПОЛЕ, ЗНАЧЕНИЕ КОТОРОГО ВЛАДЕЛЕЦ ПЕРЕПИСЫВАЕТ ПОСРЕДИ ВВОДА (имя
+   *  нового клиента: вставили «Мария +357 99…» — номер уехал в телефон, в
+   *  имени осталось «Мария»). Без флага набранный текст сверяется со
+   *  значением только после ухода с поля, и вставка висела бы в имени до
+   *  blur, а следующая буква вернула бы номер обратно. Не включать у полей с
+   *  форматированием на лету (номер): текст прыгал бы под пальцем. */
+  followValue?: boolean;
   onSave: (v: string) => void;
 }) {
   // ЧИСЛО ВЫДЕЛЯЕТСЯ ЦЕЛИКОМ ПРИ ФОКУСЕ — иначе правка «135» на «140» даёт
@@ -329,12 +375,20 @@ export function FieldRow({
   // номер» приходилось тапать по полю ВТОРОЙ раз, чтобы появилась
   // клавиатура.
   const [editing, setEditing] = useState(!!autoFocus);
+  // Своя ссылка на поле — чтобы тап по строке мог поставить в него курсор;
+  // пришедшая пропом (`inputRef`) получает то же поле.
+  const ownInput = useRef<TextInput | null>(null);
+  const setInput = (node: TextInput | null) => {
+    ownInput.current = node;
+    if (typeof inputRef === "function") inputRef(node);
+    else if (inputRef) (inputRef as { current: TextInput | null }).current = node;
+  };
   const [text, setText] = useState(value);
   useEffect(() => {
-    if (!editing) setText(value);
-  }, [value, editing]);
+    if (!editing || followValue) setText(value);
+  }, [value, editing, followValue]);
 
-  const editingNow = editing || !!live;
+  const editingNow = !readOnly && (editing || !!live);
   const valueSize = big ? 17 : 15;
   // Буквы в номер не попадают НИ ОДНИМ путём — ни вставкой, ни диктовкой,
   // ни внешней клавиатурой. Чистка живёт в примитиве, а не в каждом вызове:
@@ -371,9 +425,9 @@ export function FieldRow({
           flexDirection: "row",
           alignItems: "center",
           gap: 12,
-          minHeight: 60,
+          minHeight: compact ? 44 : 60,
           paddingHorizontal: 16,
-          paddingVertical: 10,
+          paddingVertical: compact ? 4 : 10,
           borderTopWidth: separated ? 1 : 0,
           borderTopColor: t.separator,
         }}
@@ -385,17 +439,30 @@ export function FieldRow({
             (кнопка связи, ✕) остаётся СНАРУЖИ: вложенный в нажимаемую
             область он склеивается со строкой для VoiceOver. */}
         <Pressable
-          onPress={editingNow ? undefined : () => setEditing(true)}
-          disabled={editingNow}
+          // В ЖИВОМ ВВОДЕ (`live`: новый клиент, лист реквизитов) поле уже
+          // смонтировано, и строка раньше была ВЫКЛЮЧЕНА: курсор ставился
+          // только точным попаданием в само значение, а тап по подписи над ним
+          // («VAT номер») не делал ничего — цифры уходили в прошлое поле
+          // (найдено прогоном нового клиента 22.09). Теперь тап по любой части
+          // строки ставит курсор в её поле.
+          onPress={
+            readOnly
+              ? undefined
+              : editingNow
+                ? () => ownInput.current?.focus()
+                : () => setEditing(true)
+          }
+          onLongPress={editingNow ? undefined : onLongPress}
+          disabled={!!readOnly && !onLongPress}
           // В РЕЖИМЕ ПРАВКИ контейнер перестаёт быть элементом доступности:
           // иначе он склеивает TextInput внутрь себя, и VoiceOver не может
           // войти в поле — клиента становится нельзя создать вслепую.
           accessible={!editingNow}
-          accessibilityRole={editingNow ? "none" : "button"}
+          accessibilityRole={editingNow ? "none" : readOnly ? "text" : "button"}
           // Запятая, а не двоеточие: VoiceOver даёт паузу, и строка читается
           // «Мобильный, +357 …», а не как «поле: значение».
           accessibilityLabel={value ? `${label}, ${value}` : label}
-          accessibilityHint={editingNow ? undefined : "Нажмите, чтобы изменить"}
+          accessibilityHint={editingNow || readOnly ? undefined : "Нажмите, чтобы изменить"}
           // Смена подписи вложена в строку и потому недоступна VoiceOver:
           // отдаём её действием ротора, не разбивая строку на две остановки.
           accessibilityActions={
@@ -434,10 +501,10 @@ export function FieldRow({
                 maxFontSizeMultiplier={1.2}
                 numberOfLines={1}
                 style={{
-                  fontSize: 13,
+                  fontSize: compact ? 12 : 13,
                   fontWeight: "500",
                   color: t.sub,
-                  marginBottom: 2,
+                  marginBottom: compact ? 0 : 2,
                 }}
               >
                 {label}
@@ -463,7 +530,8 @@ export function FieldRow({
           })()}
           {editingNow ? (
             <TextInput
-              autoFocus={autoFocus ?? editing}
+              ref={setInput}
+              autoFocus={autoFocus || editing}
               value={text}
               onChangeText={(raw) => {
                 const v = clean(raw);
@@ -485,6 +553,7 @@ export function FieldRow({
               keyboardAppearance="light"
               keyboardType={keyboardType}
               selectTextOnFocus={selectOnFocus}
+              contextMenuHidden={noCopy}
               autoCapitalize={autoCapitalize}
               // Строка карточки — это ДАННЫЕ (имя, телефон, адрес, ник), а не
               // проза. iOS-автозамена молча переписывала введённое: «Zztest»
@@ -500,7 +569,7 @@ export function FieldRow({
                 padding: 0,
                 fontSize: valueSize,
                 fontWeight: "600",
-                color: t.ink,
+                color: inputColor ?? t.ink,
                 fontVariant: tabular ? ["tabular-nums"] : undefined,
               }}
             />
@@ -571,7 +640,8 @@ export function FieldRow({
       <View style={{ flex: 1, alignItems: "flex-end" }}>
         {editingNow ? (
           <TextInput
-            autoFocus={autoFocus ?? editing}
+            ref={setInput}
+            autoFocus={autoFocus || editing}
             value={text}
             onChangeText={(raw) => {
               const v = clean(raw);
@@ -588,6 +658,7 @@ export function FieldRow({
             keyboardAppearance="light"
             keyboardType={keyboardType}
             selectTextOnFocus={selectOnFocus}
+            contextMenuHidden={noCopy}
             autoCapitalize={autoCapitalize}
             // Строка карточки — это ДАННЫЕ (имя, телефон, адрес, ник), а не
             // проза. iOS-автозамена молча переписывала введённое: «Zztest»
@@ -604,14 +675,15 @@ export function FieldRow({
               textAlign: "right",
               fontSize: 15,
               fontWeight: "500",
-              color: t.ink,
+              color: inputColor ?? t.ink,
               paddingVertical: 4,
               fontVariant: tabular ? ["tabular-nums"] : undefined,
             }}
           />
         ) : (
           <Pressable
-            onPress={() => setEditing(true)}
+            onPress={readOnly ? undefined : () => setEditing(true)}
+            disabled={!!readOnly}
             accessibilityRole="button"
             accessibilityLabel={value ? `${label}: ${value}` : label}
             accessibilityHint="Нажмите, чтобы изменить"
@@ -1032,7 +1104,7 @@ export function RowCaption({
         marginHorizontal: 16,
         marginTop: 6,
         // Пояснение приглушается РАЗМЕРОМ, а не серостью (закон 2026-07-27).
-        fontSize: 12,
+        fontSize: 13,
         color:
           tone === "danger" ? t.danger : tone === "warning" ? t.warning : t.sub,
       }}

@@ -4,15 +4,38 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { notificationsForWipe } from "./wipe-plan";
+
 const here = dirname(fileURLToPath(import.meta.url));
 
 describe("notification privacy contract", () => {
-  test("clears native notifications before tenant-scoped caches", () => {
+  test("ВЫХОД ИЗ АККАУНТА: нативные гаснут ДО кэшей, и список тоже уходит", () => {
     const source = readFileSync(resolve(here, "auth-clear.ts"), "utf8");
+    // ЭТО ЕДИНСТВЕННОЕ, РАДИ ЧЕГО КОНТРАКТ ПИСАЛСЯ: на устройстве может
+    // оказаться ДРУГОЙ человек, и имена чужих клиентов не имеют права остаться
+    // на локскрине. Гасить надо ДО того, как уйдут кэши, иначе между двумя
+    // шагами остаётся окно.
     assert.match(
       source,
-      /await clearAllBabunNotifications\(\);[\s\S]*wipeFastStores\(\)/,
+      /await clearAllBabunNotifications\(\);[\s\S]*wipeFastStores\(/,
     );
+  });
+
+  test("ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ уведомления НЕ трогает", () => {
+    // Требование снято ОСОЗНАННО, и это не ослабление приватности: человек тот
+    // же и состоит в обеих компаниях. Напоминание про клиента одной фирмы,
+    // пришедшее пока он смотрит другую, — его собственное напоминание.
+    //
+    // Стоило оно двух вещей: 272 мс из 981 мс перехода (три нативных вызова в
+    // общей очереди планировщика) и снятых с расписания напоминаний ОБЕИХ
+    // компаний, которые возвращались только у той, чьи данные потом
+    // загрузились.
+    //
+    // Проверяется РЕШЕНИЕМ, а не текстом файла: правило вынесено в лист
+    // `wipe-plan.ts` именно для того, чтобы его можно было вызвать в тесте.
+    assert.equal(notificationsForWipe({ keepLocalCache: true }), "none");
+    assert.equal(notificationsForWipe({ keepLocalCache: false }), "clear");
+    assert.equal(notificationsForWipe({}), "clear");
   });
 
   test("suspends native PII delivery for every signed-out startup without erasing transient state", () => {

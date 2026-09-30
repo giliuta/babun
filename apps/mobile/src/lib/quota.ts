@@ -76,9 +76,28 @@ async function fetchCount(
     .from("appointments")
     .select("id", { count: "exact", head: true })
     .eq("tenant_id", tenantId)
+    // Только записи клиентов: личное событие бесплатно и квоту не тратит —
+    // так же считает сервер (аудит 2026-09-29: «Записи в этом месяце 5», а
+    // аналитика — 4, в число попадало событие).
+    .eq("kind", "work")
     .gte("created_at", monthStart);
   if (error) throw new Error(`Не удалось посчитать записи: ${error.message}`);
   return count ?? 0;
+}
+
+/** Сколько использовано и какой лимит — для строки тарифа в Кабинете. Те же
+ *  чтения, что у проверки перед созданием: цифры на экране и отказ сервера
+ *  не могут разойтись. */
+export async function fetchQuotaUsage(
+  client: DbSupabase,
+  tenantId: string,
+  kind: MobileQuotaKind,
+): Promise<{ limit: number; current: number }> {
+  const [limit, current] = await Promise.all([
+    fetchQuota(client, tenantId, kind),
+    fetchCount(client, tenantId, kind),
+  ]);
+  return { limit, current };
 }
 
 export async function fetchRemainingQuota(

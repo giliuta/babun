@@ -26,6 +26,7 @@ import {
   type QuotaGate,
 } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
+import { getActiveTenantId } from "@/lib/active-tenant";
 import { notify } from "./notify";
 import { queryClient } from "@/lib/query-client";
 import { quotaGate } from "@/lib/quota-gate";
@@ -39,6 +40,10 @@ function buildReplayerOptions(
   return {
     supabase,
     tenantId,
+    // Снимок выше остаётся ради хостов без устройства-носителя компании, но
+    // решает ЖИВОЕ чтение: компания теперь свойство устройства и меняется без
+    // перезапуска рантайма.
+    currentTenantId: getActiveTenantId,
     quota,
     onConflict: (msg: string) => {
       notify("Конфликт синхронизации", msg);
@@ -76,6 +81,7 @@ export function startSyncRuntime(tenantId: string): () => void {
   // quota checks or permanent-failure feedback.
   setReplayerDefaults({
     tenantId: opts.tenantId,
+    currentTenantId: opts.currentTenantId,
     quota: opts.quota,
     onConflict: opts.onConflict,
     onChanged: opts.onChanged,
@@ -121,7 +127,12 @@ export function pauseSyncRuntimeForTenantSwitch(): () => void {
   unsubscribe = null;
   started = false;
   activeTenantId = null;
-  setReplayerDefaults(null);
+  // ПАУЗА ГАСИТ ВЫГРУЗКУ, НО НЕ ГЕЙТ. Обнуление умолчаний целиком снимало и
+  // проверку компании: обёртки кэша зовут `kickReplayer` НАПРЯМУЮ, и такой
+  // заход посреди паузы сливал очередь вообще без проверок — ровно в ту
+  // минуту, когда компания меняется. Живое чтение компании умолчаний не
+  // требует: оно смотрит на устройство, а не на рантайм.
+  setReplayerDefaults({ currentTenantId: getActiveTenantId });
   setSyncToast(() => {});
   return () => {
     if (wasStarted && previousTenantId && !started) {

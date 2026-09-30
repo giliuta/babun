@@ -1,4 +1,4 @@
-import { Text, View } from "react-native";
+import { Text } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
@@ -81,15 +81,21 @@ export function ClientHistoryLine({
   if (parts.length === 0) return null;
   const color = (tone: HistoryPart["tone"]) =>
     tone === "debt" ? t.warning : tone === "income" ? t.success : t.sub;
+  // ОДНА СТРОКА ТЕКСТА С ЦВЕТНЫМИ КУСКАМИ, А НЕ РЯД ОТДЕЛЬНЫХ ТЕКСТОВ
+  // (владелец 2026-09-14: «визуальный баг, оно залезло на кнопку»). Ряд кусков
+  // не умеет ни сжиматься, ни ставить многоточие: «долг €598 · 4 визита · €150
+  // · визит 11 авг» уезжал под кружки звонка и «…» в блоке «Клиент». Вложенный
+  // текст режется многоточием ровно по ширине колонки — как телефон строкой ниже.
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
+    <Text
+      numberOfLines={1}
+      maxFontSizeMultiplier={1.3}
+      style={{ fontSize: size, color: t.sub }}
+    >
       {parts.map((part, i) => (
         <Text
           key={part.key}
-          numberOfLines={1}
-          maxFontSizeMultiplier={1.3}
           style={{
-            fontSize: size,
             fontWeight: part.tone === "plain" ? "400" : "600",
             color: color(part.tone),
           }}
@@ -98,7 +104,7 @@ export function ClientHistoryLine({
           {part.text}
         </Text>
       ))}
-    </View>
+    </Text>
   );
 }
 

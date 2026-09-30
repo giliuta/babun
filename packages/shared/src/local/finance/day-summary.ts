@@ -41,6 +41,12 @@ export interface DayFinanceTotals {
 const isClosable = (a: Appointment) =>
   a.status === "completed" || a.status === "in_progress";
 
+/** Запись, которая ещё может принести деньги: не отменена и не возвращена.
+ *  Один предикат и на сумму «Ожидается», и на её список в разборе дня. */
+export const isPlannedRecord = (
+  a: Pick<Appointment, "status" | "payment_status">,
+): boolean => a.status !== "cancelled" && a.payment_status !== "refunded";
+
 /**
  * Compute the day's finance totals.
  *
@@ -54,9 +60,15 @@ export function computeDayFinance(
   services: Service[],
   extras: DayExtra[],
 ): DayFinanceTotals {
-  const earnedFromAppts = appointments
-    .filter(isClosable)
-    .reduce((sum, a) => sum + getPaidAmount(a), 0);
+  // ПРИШЕДШИЕ ДЕНЬГИ — С ЛЮБОЙ ЗАПИСИ, А НЕ ТОЛЬКО С ВЫПОЛНЕННОЙ (владелец
+  // 2026-09-24: «если не заплатили — это не доход», и наоборот: заплатили —
+  // доход). Раньше считались только завершённые записи, и предоплата €255 по
+  // ещё запланированному визиту в кассе была, а в «Доходе» дня — нет, хотя
+  // «Финансы» её показывали. Полный возврат `getPaidAmount` сам сводит к нулю.
+  const earnedFromAppts = appointments.reduce(
+    (sum, a) => sum + getPaidAmount(a),
+    0,
+  );
 
   const materialCost = appointments
     .filter(isClosable)
@@ -71,10 +83,7 @@ export function computeDayFinance(
   );
 
   const planned = appointments
-    .filter(
-      (a) =>
-        a.status !== "cancelled" && a.payment_status !== "refunded",
-    )
+    .filter(isPlannedRecord)
     .reduce((sum, a) => sum + a.total_amount, 0);
 
   const extrasSum = sumExtras(extras);
@@ -122,7 +131,7 @@ export function computeDayFinance(
 }
 
 // ─── Day mode (drives the finance modal layout) ─────────────────────
-// By date, not by data: past day shows the closed-day P&L, today shows
+// By date, not by data: past day shows that day's P&L, today shows
 // progress, future shows the plan. Both keys must be YYYY-MM-DD so the
 // lexicographic compare matches chronological order.
 export type DayMode = "future" | "today" | "past";

@@ -1,3 +1,4 @@
+import { isCustomServiceId } from "../appointments";
 import type { Appointment } from "../appointments";
 import { lineTotal, subtotal } from "./appointment-calc";
 import { invoiceLineTotal } from "./invoice-ledger";
@@ -48,6 +49,9 @@ export interface GeneratedInvoiceLine {
   /** Единица количества: «4 м» в колонке «Кол-во». Едет из услуги и с этого
    *  момента принадлежит документу. */
   unit?: string | null;
+  /** Услуга прайса, из которой строка. Выбор услуг в инвойсе отмечает её
+   *  так же, как в записи (владелец 2026-09-22: «тот же блок услуг»). */
+  serviceId?: string | null;
 }
 
 export interface GeneratedInvoiceDraft {
@@ -188,11 +192,12 @@ function buildLines(
         // У свёрнутой строки количество равно единице — подписывать «1 м»
         // нечего, слово уже стоит в названии.
         unit: null,
+        serviceId: priceListId(service.serviceId),
       });
       printed = round2(printed + want);
       return;
     }
-    lines.push({ title, qty, unitPrice, description, unit });
+    lines.push({ title, qty, unitPrice, description, unit, serviceId: priceListId(service.serviceId) });
     printed = round2(printed + actual);
   });
 
@@ -220,4 +225,10 @@ export { addDaysYmd };
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/** Услуга прайса, из которой строка. Своя строка записи (`custom:…`) прайса
+ *  не знает — в инвойсе она тоже своя: правится в «Итого», а не выбором. */
+function priceListId(id: string | null | undefined): string | null {
+  return id && !isCustomServiceId(id) ? id : null;
 }

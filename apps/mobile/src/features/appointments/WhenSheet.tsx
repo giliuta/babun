@@ -91,6 +91,7 @@ export function WhenSheet({
   timeEnd,
   allDay,
   allowAllDay = true,
+  singleTime = false,
   onCommit,
 }: {
   open: boolean;
@@ -100,6 +101,11 @@ export function WhenSheet({
   timeEnd: string;
   allDay: boolean;
   allowAllDay?: boolean;
+  /** У ОПЕРАЦИИ ВРЕМЯ ОДНО. Деньги случились в момент, а не длились отрезок:
+   *  сегмент «Начало | Конец» и барабаны конца для неё — контрол, который
+   *  ничем не управляет. Полоса недель, барабаны и язык листа при этом те же,
+   *  что у записи (владелец 2026-09-09: блоки операции — как в записи). */
+  singleTime?: boolean;
   onCommit: (next: Draft) => void;
 }) {
   const t = useThemeColors();
@@ -311,6 +317,7 @@ export function WhenSheet({
           <TimeRangePicker
             start={{ hour: sh, minute: sm }}
             end={{ hour: eh, minute: em }}
+            singleSide={singleTime}
             onChangeStart={patchStart}
             onChangeEnd={patchEnd}
             // Запись кончается часом суток, а не их концом: 24:00 у неё не

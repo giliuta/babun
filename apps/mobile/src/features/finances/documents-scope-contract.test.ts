@@ -17,12 +17,33 @@ const financesScreen = readFileSync(
   "utf8",
 );
 
-describe("срез команды у плитки «Документы»", () => {
-  test("плитка зовёт общее правило invoiceInTeamScope", () => {
-    assert.ok(financesScreen.includes("invoiceInTeamScope(invoice, scope)"));
+const panel = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), "DocumentsPanel.tsx"),
+  "utf8",
+);
+const documentsRule = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), "documents.ts"),
+  "utf8",
+);
+
+describe("плитка «Документы» и список под ней — один источник", () => {
+  // Аудит 2026-09-29: плитка «Документы 0», а в «Чеках» за тот же месяц 1 чек —
+  // плитка считала только инвойсы, ждущие оплату. Теперь число — длина того
+  // же списка, что открывается под ней.
+  test("плитка печатает длину списка периода, панель берёт тот же список", () => {
+    assert.ok(financesScreen.includes("usePeriodDocuments("));
+    // Кредит-нота в списке есть, но документом периода не считается (30.09).
+    assert.match(
+      financesScreen,
+      /count:\s*periodDocuments\.documents\.filter\(\(d\) => !d\.creditNote\)\.length/,
+    );
+    assert.ok(panel.includes("usePeriodDocuments("));
   });
 
-  test("строгое сравнение, прятавшее бумагу без команды, не вернулось", () => {
+  test("список режет команду общим правилом invoiceInTeamScope", () => {
+    assert.ok(documentsRule.includes("invoiceInTeamScope(invoice, sources.teamId)"));
+    // Строгое сравнение, прятавшее бумагу без команды, не вернулось.
     assert.doesNotMatch(financesScreen, /invoice\.brigade_id\s*!==\s*scope/);
+    assert.doesNotMatch(documentsRule, /invoice\.brigade_id\s*!==\s*sources\.teamId/);
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -9,16 +9,24 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-  BarChart3,
   Search,
   Settings,
+  SlidersHorizontal,
   Users,
 } from "lucide-react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import type { Client } from "@babun/shared/local/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
+import { withServiceDefault } from "@/features/clients/service-default";
+import { useServiceMonthsOf } from "@/features/clients/use-service-default";
+import {
+  clientMemberOf,
+  clientsById,
+  linkLine,
+} from "@babun/shared/local/selectors/client-links";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ScopeChips } from "@/components/ui/ScopeChips";
 import { LoadingBar } from "@/components/ui/LoadingBar";
 import { Spinner } from "@/components/ui/Spinner";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -37,12 +45,33 @@ import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import ClientRow from "@/features/clients/ClientRow";
 import {
   EMPTY_FILTER,
-  resetFilters,
   segmentEvidence,
-  type ActiveToken,
   type ClientsFilter,
 } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
+import {
+  ALL_TEAMS,
+  appointmentsOfTeam,
+  clientsOfTeam,
+  liveTeamChoice,
+  rowTeamLabelId,
+  teamForNewClient,
+  toggleTeamChoice,
+} from "@/features/clients/team-scope";
+import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import {
+  useClientsCapabilities,
+  useClientsScopeOrNull,
+} from "@/features/clients/company-scope";
+import { useClientsSources } from "@/features/clients/sources";
+import { useGuestSources } from "@/features/clients/guest-sources";
+import {
+  clientCardHref,
+  clientsInsightsHref,
+  clientsSettingsHref,
+  type ClientsScope,
+} from "@/features/clients/clients-company";
 import {
   loadDayFilter,
   saveDayFilter,
@@ -52,14 +81,13 @@ import {
   useSetClientsSort,
 } from "@/features/clients/sort-pref";
 import {
-  DEFAULT_CARD_FIELDS,
-  useCardFields,
+  useCardFieldsByTeam,
+  type CardFieldPrefs,
 } from "@/features/clients/card-prefs";
 import { ClientActionsSheet } from "@/features/clients/ClientActionsSheet";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { RemindSheet } from "@/features/clients/RemindSheet";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
-import { ClientsFilterBar } from "@/features/clients/ClientsFilterBar";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
 import { ContactsImportSheet } from "@/features/clients/import/ContactsImportSheet";
@@ -68,7 +96,6 @@ import { BulkSmsSheet } from "@/features/clients/BulkSmsSheet";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useAppointments } from "@/features/calendar/queries";
 import { useCities, useTeams } from "@/features/reference/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -84,11 +111,33 @@ import { useThemeColors } from "@/theme/colors";
 // СВАЙПЫ (2026-08-06): вправо — «Записать», влево — «Напомнить» и «В архив».
 // Телефон для них не нужен; в режиме выбора свайпы отключены целиком.
 
-export default function ClientsListScreen() {
+// ОБЩАЯ СТРАНИЦА (STORY-082): ворота говорят, чья это компания, экран
+// склеивает её список с клиентами компаний, где человеку их открыли.
+export default function ClientsListRoute() {
+  return (
+    <ClientsCompanyRoute kind="tab">
+      <ClientsListScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+/** Склейка без дублей: первая строка с этим id побеждает (своя компания
+ *  идёт первой). */
+function uniqueById<T extends { id: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const row of rows) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    out.push(row);
+  }
+  return out;
+}
+
+function ClientsListScreen() {
   const t = useThemeColors();
   const router = useRouter();
   const toast = useToast();
-  const { data: role } = useCurrentRole();
   // Экран настроек возвращается сюда с nonce-параметром:
   // «Импорт из CSV» → openImport.
   const params = useLocalSearchParams<{
@@ -96,15 +145,28 @@ export default function ClientsListScreen() {
     /** «Из контактов телефона» → openContacts. */
     openContacts?: string;
   }>();
+  const scope = useClientsScopeOrNull();
+  const caps = useClientsCapabilities();
+  const sources = useClientsSources();
+  // Гости — компании, где человеку открыли клиентов; своя читается обычными
+  // хуками вкладки (у них источник из контекста).
+  const guestScopes = useMemo(
+    () => sources.list.filter((source) => source.tenantId !== scope?.tenantId),
+    [sources.list, scope?.tenantId],
+  );
+  const guests = useGuestSources(guestScopes);
   const { data, isLoading, isRefetching, refetch, error } = useClients();
   // Контрол обновления отражает ЖЕСТ, а не любое дообновление: иначе список
   // сам уезжал вниз с застывшей системной вертушкой.
-  const pull = usePullRefresh(refetch);
-  const { data: tags = [] } = useClientTags();
-  const { data: appointments = [] } = useAppointments();
-  const { data: teams = [] } = useTeams();
+  const refreshAll = useCallback(
+    () => Promise.all([refetch(), guests.refetch()]),
+    [refetch, guests],
+  );
+  const pull = usePullRefresh(refreshAll);
+  const { data: ownTags = [] } = useClientTags();
+  const { data: ownAppointments = [] } = useAppointments();
+  const { data: ownTeams = [] } = useTeams();
   const { data: cities = [] } = useCities();
-  const { data: cardFields = DEFAULT_CARD_FIELDS } = useCardFields();
   // Сортировка — персистентная настройка списка (первая строка листа
   // «Фильтры»), не фильтр: «Сбросить» её не трогает.
   const { data: sort = "recent" } = useClientsSort();
@@ -138,37 +200,154 @@ export default function ClientsListScreen() {
     if (params.openImport) setImportOpen(true);
   }, [params.openImport, params.openContacts]);
 
-  const clients = useMemo(() => data ?? [], [data]);
+  // ОДИН СПИСОК ИЗ НЕСКОЛЬКИХ КОМПАНИЙ. Строка знает свою компанию: по ней
+  // открывается карточка и по ней решается, что со строкой можно.
+  const clients = useMemo(
+    () => uniqueById([...(data ?? []), ...guests.list.flatMap((guest) => guest.clients)]),
+    [data, guests.list],
+  );
+  // Карта карточек для строки связи «жилец · Наталья · Вилла 5» — одна на
+  // список, а не по строке: строк сотни, и каждая спрашивает её заново.
+  const byId = useMemo(() => clientsById(clients), [clients]);
+  const guestOf = useMemo(() => {
+    const byClient = new Map<string, ClientsScope>();
+    for (const guest of guests.list) {
+      for (const client of guest.clients) byClient.set(client.id, guest.scope);
+    }
+    return byClient;
+  }, [guests.list]);
+  const appointments = useMemo(
+    () => uniqueById([...ownAppointments, ...guests.list.flatMap((guest) => guest.appointments)]),
+    [ownAppointments, guests.list],
+  );
+  // Склейка справочников идёт ПО ИДЕНТИФИКАТОРУ: одна и та же компания может
+  // прийти и своим хуком, и гостевым источником (её календарь открыт), а два
+  // одинаковых ключа в списке — это и предупреждение React, и две одинаковые
+  // строки в фильтре.
+  const teams = useMemo(
+    () => uniqueById([...ownTeams, ...guests.list.flatMap((guest) => guest.teams)]),
+    [ownTeams, guests.list],
+  );
+  const tags = useMemo(
+    () => uniqueById([...ownTags, ...guests.list.flatMap((guest) => guest.tags)]),
+    [ownTags, guests.list],
+  );
+  // ЛЕНТА КОМАНД (владелец 30.09). Клиент принадлежит команде полем карточки
+  // (`team_id`), а не последним визитом. Чипа «Все» нет: ни одна команда не
+  // нажата — видны все; тап включает команду, повторный тап снимает. Выбор
+  // помнится по компании; исчезнувшая команда снимается сама.
+  const { data: savedTeam } = useClientsTeam(scope?.tenantId ?? null);
+  const setSavedTeam = useSetClientsTeam(scope?.tenantId ?? null);
+  const teamChoice = liveTeamChoice(
+    savedTeam,
+    teams.map((tm) => tm.id),
+  );
+  // Команды компаний-партнёров — обводкой: тот же язык, что у ленты
+  // календаря (чужой чип уводит в чужую базу, а не режет свою).
+  const teamChips = useMemo(() => {
+    const own = new Set(ownTeams.map((tm) => tm.id));
+    return teams.map((tm) => ({
+      id: tm.id,
+      name: tm.name,
+      color: tm.color,
+      outline: !own.has(tm.id),
+    }));
+  }, [teams, ownTeams]);
+  // КЛИЕНТ ОДИН НА НЕСКОЛЬКО КОМАНД (см. `team-scope.ts`): под чипом — свои
+  // клиенты команды и те, кого она обслуживала; цифры — по её записям.
+  // ГРАНИЦА БАЗ (владелец 30.09 — «чтобы не могли украсть наших клиентов»,
+  // сверено с 015): без чипа — ТОЛЬКО СВОЯ база. Клиенты компании, где
+  // человеку открыли клиентов, — только под её чипом с обводкой и никогда в
+  // одном списке со своими: так их не перепутать и граница видна без слов.
+  const teamClients = useMemo(
+    () =>
+      teamChoice === ALL_TEAMS
+        ? clients.filter((c) => !guestOf.has(c.id))
+        : clientsOfTeam(clients, teamChoice, appointments),
+    [clients, teamChoice, appointments, guestOf],
+  );
+  const teamAppointments = useMemo(
+    () => appointmentsOfTeam(appointments, teamChoice),
+    [appointments, teamChoice],
+  );
+  // Деньги чужой компании сотруднику не приходят вовсе — в строке их нет.
+  // «ЧТО ПОКАЗЫВАТЬ НА КАРТОЧКЕ» — У КОМАНДЫ (владелец 30.09): строка
+  // клиента берёт набор СВОЕЙ команды клиента, пока та ничего не меняла —
+  // общий набор.
+  const teamIdList = useMemo(() => teams.map((tm) => tm.id), [teams]);
+  const cardFieldsFor = useCardFieldsByTeam(teamIdList);
+  const guestCardFields = useCallback(
+    (fields: CardFieldPrefs): CardFieldPrefs => ({
+      ...fields,
+      exp: false,
+      inc: false,
+      debt: false,
+    }),
+    [],
+  );
 
   // Per-client roll-up (visits / money / debt / last team) — one pass
   // over appointments, shared by the cards, the sort and the filter.
-  const statsMap = useMemo(
-    () => buildStatsMap(clients, appointments),
-    [clients, appointments],
+  // Под чипом команды строка, сортировка и фильтры считают ТОЛЬКО её записи.
+  // Полная история нужна там, где решается судьба клиента: можно ли его
+  // удалить и что уйдёт в выгрузку, — там `allStatsMap`.
+  // «Пора обслужить» — и по интервалу команды клиента у объектов без своего
+  // (владелец 30.09); подстановка живёт только в счёте, не в карточке.
+  const serviceMonthsOf = useServiceMonthsOf();
+  const allStatsMap = useMemo(
+    () => buildStatsMap(withServiceDefault(clients, serviceMonthsOf), appointments),
+    [clients, appointments, serviceMonthsOf],
   );
+  const teamStatsMap = useMemo(
+    () =>
+      teamChoice === ALL_TEAMS
+        ? null
+        : buildStatsMap(withServiceDefault(teamClients, serviceMonthsOf), teamAppointments),
+    [teamChoice, teamClients, teamAppointments, serviceMonthsOf],
+  );
+  const statsMap = teamStatsMap ?? allStatsMap;
 
   // Первая и последняя (не отменённые) записи — сплит периода в фильтрах
   // показывает у «Всего времени» честный охват данных в обе стороны.
   const dataSpan = useMemo(() => {
     let min: string | null = null;
     let max: string | null = null;
-    for (const a of appointments) {
+    for (const a of teamAppointments) {
       if (a.status === "cancelled" || !a.date) continue;
       if (!min || a.date < min) min = a.date;
       if (!max || a.date > max) max = a.date;
     }
     return { from: min, to: max };
-  }, [appointments]);
+  }, [teamAppointments]);
+
+  // ТЕГИ В ФИЛЬТРАХ — КОМАНДЫ (владелец 30.09: «теги закреплены за
+  // командой»): под чипом — её теги; без чипа — все, и одинаковые имена
+  // разных команд подписаны командой, иначе две «VIP» не различить.
+  const filterTags = useMemo(() => {
+    if (teamChoice !== ALL_TEAMS) {
+      return tags.filter((tag) => !tag.team_id || tag.team_id === teamChoice);
+    }
+    const byName = new Map<string, number>();
+    for (const tag of tags) {
+      const key = tag.name.trim().toLowerCase();
+      byName.set(key, (byName.get(key) ?? 0) + 1);
+    }
+    return tags.map((tag) => {
+      const shared = (byName.get(tag.name.trim().toLowerCase()) ?? 0) > 1;
+      const teamName = tag.team_id ? teams.find((tm) => tm.id === tag.team_id)?.name : null;
+      return shared && teamName ? { ...tag, name: `${tag.name} · ${teamName}` } : tag;
+    });
+  }, [tags, teams, teamChoice]);
 
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
   // (deps без поиска) — фикс Волны 1 сохранён: клавиши не гоняют
   // localeCompare-компаратор.
   const result = useClientFilters(
-    clients,
-    appointments,
+    teamClients,
+    teamAppointments,
     teams,
     cities,
-    tags,
+    filterTags,
     statsMap,
     sort,
     filter,
@@ -185,7 +364,10 @@ export default function ClientsListScreen() {
       const teamSet = new Set(teamOptions.map((o) => o.value));
       const tagSet = new Set(tagOptions.map((o) => o.value));
       const citySet = new Set(cityOptions.map((o) => o.value));
-      const selectedTeams = f.selectedTeams.filter((x) => teamSet.has(x));
+      // Строки «Команда» в фильтрах с 30.09 нет — команду выбирает лента.
+      // Забытый вчерашний выбор прятал бы клиентов без видимого токена.
+      void teamSet;
+      const selectedTeams: string[] = [];
       const activeTags = f.activeTags.filter((x) => tagSet.has(x));
       const selectedCities = f.selectedCities.filter((x) => citySet.has(x));
       if (
@@ -197,49 +379,6 @@ export default function ClientsListScreen() {
       return { ...f, selectedTeams, activeTags, selectedCities };
     });
   }, [teamOptions, cityOptions, tagOptions]);
-
-  const removeToken = (token: ActiveToken) => {
-    if (token.key === "team")
-      setFilter((f) => ({
-        ...f,
-        selectedTeams: f.selectedTeams.filter((x) => x !== token.val),
-      }));
-    else if (token.key === "city")
-      setFilter((f) => ({
-        ...f,
-        selectedCities: f.selectedCities.filter((x) => x !== token.val),
-      }));
-    else if (token.key === "tag")
-      setFilter((f) => ({
-        ...f,
-        activeTags: f.activeTags.filter((x) => x !== token.val),
-      }));
-    else if (token.key === "period") setFilter((f) => ({ ...f, period: null }));
-    else if (token.key === "segment")
-      setFilter((f) => ({
-        ...f,
-        segments: f.segments.filter((x) => x !== token.val),
-      }));
-    else if (token.key === "source")
-      setFilter((f) => ({
-        ...f,
-        sources: f.sources.filter((x) => x !== token.val),
-      }));
-    else if (token.key === "property")
-      setFilter((f) => ({
-        ...f,
-        propertyTypes: f.propertyTypes.filter((x) => x !== token.val),
-      }));
-  };
-
-  // Один сброс на все три кнопки (лист, бар, пустой экран): чистит и
-  // фильтры, и поиск — иначе «Сбросить» на баре оставлял запрос и список
-  // оставался пустым без видимой причины.
-  const resetAll = () => {
-    haptics.tap();
-    setFilter(resetFilters());
-    setQuery("");
-  };
 
   const filtering = result.activeCount > 0 || query.trim().length > 0;
 
@@ -267,7 +406,12 @@ export default function ClientsListScreen() {
       null;
     guardedBook(c, {
       locationId: primary,
-      teamId: statsMap.get(c.id)?.lastTeamId ?? null,
+      // Под чипом — в выбранную команду (её список и открыт); без чипа — в
+      // команду клиента, у клиента без неё — в команду последнего визита.
+      teamId:
+        teamChoice !== ALL_TEAMS
+          ? teamChoice
+          : (c.team_id ?? allStatsMap.get(c.id)?.lastTeamId ?? null),
     });
   };
 
@@ -293,7 +437,7 @@ export default function ClientsListScreen() {
   // стирается сам. За клиентом с визитами стоит финансовая история — база
   // стереть его не даст, поэтому говорим это ДО действия и предлагаем архив.
   const confirmDeleteOne = (c: Client) => {
-    const stats = statsMap.get(c.id);
+    const stats = allStatsMap.get(c.id);
     // ЛЮБАЯ запись — уже история, даже будущая. База запрещает стирать
     // клиента с заявками (guard_client_hard_delete_history), поэтому такой
     // клиент лёг бы в корзину НАВСЕГДА: счётчик тикает, а ночная очистка
@@ -376,7 +520,7 @@ export default function ClientsListScreen() {
   const onExport = async () => {
     if (selectedClients.length === 0) return;
     try {
-      const shared = await shareClientsCsv(selectedClients, tags, statsMap);
+      const shared = await shareClientsCsv(selectedClients, tags, allStatsMap);
       if (shared) {
         toast(`CSV выгружен (${selectedClients.length})`, "success");
         exitSelection();
@@ -471,12 +615,14 @@ export default function ClientsListScreen() {
             paddingHorizontal: 8,
             minHeight: 48,
             backgroundColor: t.surface,
-            borderBottomWidth: 1,
+            // Шов снизу даёт лента команд (как в календаре): две линии
+            // подряд читались бы как случайный зазор.
+            borderBottomWidth: teams.length > 0 ? 0 : 1,
             borderBottomColor: t.separator,
           }}
         >
           <Pressable
-            onPress={() => router.push("/clients/settings")}
+            onPress={() => router.push(clientsSettingsHref())}
             hitSlop={6}
             accessibilityRole="button"
             accessibilityLabel="Настройки клиентов"
@@ -517,53 +663,81 @@ export default function ClientsListScreen() {
               returnKeyType="search"
               clearButtonMode="while-editing"
               maxFontSizeMultiplier={1.3}
-              className="flex-1 text-[15px]"
-              style={{ color: t.ink, paddingVertical: 0 }}
+              // ПОЛЕ РАСТЯНУТО НА ВСЮ ВЫСОТУ ПЛАШКИ. Без этого iOS после
+              // перерисовки ронял подсказку ниже плашки — «Имя, телефон,
+              // адрес» обрезалась снизу (владелец 30.09: «поисковик съехал»).
+              // Не числом: `h-9` плашки — это rem NativeWind, а не 36pt.
+              style={{
+                flex: 1,
+                alignSelf: "stretch",
+                paddingVertical: 0,
+                fontSize: 15,
+                textAlignVertical: "center",
+                color: t.ink,
+              }}
             />
           </View>
 
-          {role === "owner" ? (
-            <Pressable
-              onPress={() => router.push("/cabinet/insights")}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel="Аналитика по клиентам"
-              style={({ pressed }) => ({
-                width: 44,
-                height: 44,
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: t.radius.card,
-                backgroundColor: pressed ? t.pressed : "transparent",
-              })}
-            >
-              <BarChart3 color={t.sub} size={21} strokeWidth={2} />
-            </Pressable>
-          ) : null}
+          {/* ФИЛЬТРЫ — ЗНАЧКОМ СПРАВА (владелец 30.09: «фильтры запихиваем
+              в аналитику, правой вверху»). Строка «Фильтры · N клиентов» под
+              поиском уступила место ленте команд; аналитика — последней
+              строкой шторки. Включённый фильтр — точкой на значке: список
+              не имеет права прятать клиентов молча. */}
+          <Pressable
+            onPress={() => {
+              setInitialFacet(null);
+              setSheetOpen(true);
+            }}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={
+              result.activeCount > 0
+                ? `Фильтры, включено ${result.activeCount}`
+                : "Фильтры"
+            }
+            style={({ pressed }) => ({
+              width: 44,
+              height: 44,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: t.radius.card,
+              backgroundColor: pressed ? t.pressed : "transparent",
+            })}
+          >
+            <SlidersHorizontal
+              color={result.activeCount > 0 ? t.accent : t.sub}
+              size={21}
+              strokeWidth={2}
+            />
+            {result.activeCount > 0 ? (
+              <View
+                style={{
+                  position: "absolute",
+                  top: 9,
+                  right: 8,
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: t.accent,
+                  borderWidth: 1.5,
+                  borderColor: t.surface,
+                }}
+              />
+            ) : null}
+          </Pressable>
         </View>
       )}
 
-      {/* Фильтры прячем в режиме выбора — фокус на наборе. Пока грузим
-          или упали — бара нет: он печатал «Всего 0 клиентов» поверх
-          спиннера и поверх экрана ошибки. */}
-      {!selecting && !isLoading && !error ? (
-        <ClientsFilterBar
-          totalCount={clients.length}
-          foundCount={result.filtered.length}
-          activeCount={result.activeCount}
-          tokens={result.activeTokens}
-          onOpen={() => {
-            setInitialFacet(null);
-            setSheetOpen(true);
+      {/* ЛЕНТА КОМАНД — на месте строки фильтров. В режиме выбора её нет:
+          фокус на наборе. Без команд (компания их не завела) ленты нет. */}
+      {!selecting && teams.length > 0 ? (
+        <ScopeChips
+          items={teamChips}
+          activeId={teamChoice === ALL_TEAMS ? null : teamChoice}
+          onSelect={(id) => {
+            haptics.tap();
+            setSavedTeam.mutate(toggleTeamChoice(teamChoice, id));
           }}
-          onOpenToken={(tok) => {
-            // «Период» — не фасет-попап (у него свои пресеты/колёса):
-            // открываем лист как обычно, остальное — сразу на измерении.
-            setInitialFacet(tok.key === "period" ? null : tok.key);
-            setSheetOpen(true);
-          }}
-          onRemoveToken={removeToken}
-          onReset={resetAll}
         />
       ) : null}
 
@@ -600,22 +774,35 @@ export default function ClientsListScreen() {
           }}
           renderItem={({ item }) => {
             const stats = statsMap.get(item.id);
-            const teamName = stats?.lastTeamId
-              ? (teams.find((tm) => tm.id === stats.lastTeamId)?.name ?? null)
+            const rowTeamId = rowTeamLabelId(item, teamChoice, stats?.lastTeamId ?? null);
+            const teamName = rowTeamId
+              ? (teams.find((tm) => tm.id === rowTeamId)?.name ?? null)
               : null;
+            // ГОСТЬ — клиент компании, где человек работает. Его карточка
+            // открывается в ЕГО компании, а жесты своей базы (записать,
+            // напомнить, архив) и массовый выбор к нему не относятся: это
+            // хозяйство владельца той компании.
+            const guest = guestOf.get(item.id);
             return (
               <ClientRow
                 client={item}
                 stats={stats}
                 teamName={teamName}
                 tags={tags}
-                cardFields={cardFields}
-                selectionMode={selecting}
+                link={linkLine(clientMemberOf(item, byId))?.text}
+                cardFields={
+                  guest
+                    ? guestCardFields(cardFieldsFor(item.team_id))
+                    : cardFieldsFor(item.team_id)
+                }
+                selectionMode={selecting && !guest}
                 picked={selectedIds.has(item.id)}
                 onPress={() =>
-                  selecting
-                    ? toggleId(item.id)
-                    : router.push(`/clients/${item.id}`)
+                  guest
+                    ? router.push(clientCardHref(item.id, guest.tenantId))
+                    : selecting
+                      ? toggleId(item.id)
+                      : router.push(`/clients/${item.id}`)
                 }
                 evidence={segmentEvidence(item, filter.segments, stats)}
                 onSwipeOpen={(row) => {
@@ -624,12 +811,14 @@ export default function ClientsListScreen() {
                   }
                   openSwipe.current = row;
                 }}
-                onBook={() => bookFor(item)}
-                onRemind={() => setRemindClient(item)}
-                onArchive={() => confirmArchiveOne(item)}
-                onLongPress={() =>
-                  selecting ? toggleId(item.id) : setMenuClient(item)
-                }
+                onBook={!guest && caps.book ? () => bookFor(item) : undefined}
+                onRemind={!guest && caps.edit ? () => setRemindClient(item) : undefined}
+                onArchive={!guest && caps.manage ? () => confirmArchiveOne(item) : undefined}
+                onLongPress={() => {
+                  if (guest) return;
+                  if (selecting) toggleId(item.id);
+                  else setMenuClient(item);
+                }}
               />
             );
           }}
@@ -655,23 +844,18 @@ export default function ClientsListScreen() {
               <EmptyState
                 title="Ничего не найдено"
                 subtitle="Измените запрос или сбросьте фильтры"
-                action={{
-                  label: "Сбросить",
-                  onPress: () => {
-                    setQuery("");
-                    setFilter(resetFilters());
-                  },
-                }}
               />
             ) : (
               <EmptyState
                 icon={<Users color={t.faint} size={40} strokeWidth={1.5} />}
-                title="Пока нет клиентов"
-                subtitle="Телефон — и клиент в базе, остальное добавите на карточке"
-                action={{
-                  label: "Добавить клиента",
-                  onPress: () => router.push("/clients/new"),
-                }}
+                title={
+                  teamChoice === ALL_TEAMS
+                    ? "Пока нет клиентов"
+                    : "В этой команде пока нет клиентов"
+                }
+                // Подписи здесь нет: канон пустых состояний (LOCKED
+                // 2026-08-27) оставляет объяснения ошибкам. Что делать
+                // дальше, говорит футер — он на месте у всех.
               />
             )
           }
@@ -680,22 +864,34 @@ export default function ClientsListScreen() {
       )}
 
       {/* В режиме выбора — нижняя панель массовых действий; вне выбора —
-          полноценная кнопка создания внизу (стандарт «Добавить»: как
-          «Добавить операцию» в Финансах, вместо отдельной иконки в шапке). */}
+          полноценная кнопка создания внизу, вместо отдельной иконки в шапке.
+
+          «СОЗДАТЬ КЛИЕНТА», А НЕ «ДОБАВИТЬ» (владелец 2026-09-10: «тут кнопка
+          должна быть „создать клиента", как и в шторке»). Одно и то же
+          действие звалось двумя словами: лист выбора клиента говорит
+          «Создать клиента», чат говорит «Создать клиента», а вкладка говорила
+          «Добавить». «Добавить …» в продукте значит «дописать строку в
+          список» — счёт, услугу, номер; человека же заводят, и заводят его
+          одной и той же дверью откуда угодно. */}
       {selecting ? (
         <BulkActionBar
           count={pickedCount}
           onSms={() => setSmsOpen(true)}
           onExport={onExport}
-          onArchive={onArchive}
+          onArchive={caps.manage ? onArchive : undefined}
         />
       ) : (
+        // КНОПКА НА СВОЁМ МЕСТЕ И СЕРАЯ, как в «Финансах» (владелец 20.09:
+        // «визуал целой страницы мы полностью сохраняем, а потом просто
+        // отключаем, что будет работать, а что нет»). Исчезающий футер менял
+        // рост страницы вместе с правами.
         <View
           style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}
         >
           <GradientButton
-            label="Добавить клиента"
+            label="Создать клиента"
             onPress={() => router.push("/clients/new")}
+            disabled={!caps.create}
           />
         </View>
       )}
@@ -716,13 +912,18 @@ export default function ClientsListScreen() {
       />
       <ClientActionsSheet
         client={menuClient}
-        onBook={bookFor}
+        // Те же права, что у свайпов строки: записать — «можно записать»,
+        // напомнить — «меняет карточку», закрепить, архив и удаление —
+        // владелец своей компании (сервер у сотрудника их отказывает).
+        onBook={caps.book ? bookFor : undefined}
         onClose={() => setMenuClient(null)}
-        onSelectMany={(c) => enterSelection(c.id)}
-        onTogglePin={onTogglePin}
-        onRemind={openRemindMenu}
-        onArchive={confirmArchiveOne}
-        onDelete={confirmDeleteOne}
+        // Выбор нескольких ведёт к экспорту и массовой SMS — только своя
+        // база (владелец 30.09: «без передачи»).
+        onSelectMany={caps.export ? (c) => enterSelection(c.id) : undefined}
+        onTogglePin={caps.manage ? onTogglePin : undefined}
+        onRemind={caps.edit ? openRemindMenu : undefined}
+        onArchive={caps.manage ? confirmArchiveOne : undefined}
+        onDelete={caps.manage ? confirmDeleteOne : undefined}
       />
       <ClientsFilterSheet
         visible={sheetOpen}
@@ -737,14 +938,27 @@ export default function ClientsListScreen() {
         onSortChange={(s) => setSort.mutate(s)}
         onChange={setFilter}
         onClose={() => setSheetOpen(false)}
+        hideTeam
+        onAnalytics={
+          scope
+            ? () => {
+                setSheetOpen(false);
+                router.push(clientsInsightsHref(scope));
+              }
+            : undefined
+        }
       />
+      {/* Импорт — в выбранную команду (из «Все» — в первую): у каждой
+          команды свой импорт (владелец 30.09). */}
       <ImportWizardSheet
         visible={importOpen}
         onClose={() => setImportOpen(false)}
+        teamId={teamForNewClient(teamChoice, ownTeams.map((tm) => tm.id))}
       />
       <ContactsImportSheet
         visible={contactsOpen}
         onClose={() => setContactsOpen(false)}
+        teamId={teamForNewClient(teamChoice, ownTeams.map((tm) => tm.id))}
       />
       <BulkSmsSheet
         visible={smsOpen}

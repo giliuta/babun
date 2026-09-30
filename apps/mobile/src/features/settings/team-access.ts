@@ -8,15 +8,8 @@ import {
   normalizeInvitationEmail,
   type InvitableRole,
 } from "./invitation-flow";
-import { isUserRole, type UserRole } from "./role-policy";
 
-type MemberRow = Database["public"]["Tables"]["tenant_members"]["Row"];
 type InvitationRow = Database["public"]["Tables"]["invitations"]["Row"];
-
-export type TenantMember = Omit<MemberRow, "role"> & {
-  role: UserRole;
-  master_id: string | null;
-};
 
 export interface CreatedInvitation {
   id: string;
@@ -49,38 +42,12 @@ function parseCreatedInvitation(value: Json | null): CreatedInvitation {
   return row as unknown as CreatedInvitation;
 }
 
-function requireRole(value: unknown): UserRole {
-  if (!isUserRole(value)) throw new Error("Неизвестная роль сотрудника");
-  return value;
-}
-
 async function requireOwner(): Promise<void> {
   const { data, error } = await supabase.rpc("current_user_role");
   if (error) throw new Error(error.message);
   if (data !== "owner") {
     throw new Error("Управлять доступом может только владелец.");
   }
-}
-
-export function useTenantMembers() {
-  const tenantId = useTenantId();
-  return useQuery({
-    queryKey: ["tenant-members", tenantId],
-    enabled: !!tenantId,
-    queryFn: async (): Promise<TenantMember[]> => {
-      const { data, error } = await supabase
-        .from("tenant_members")
-        .select("*")
-        .eq("tenant_id", tenantId as string)
-        .order("joined_at");
-      if (error) throw new Error(error.message);
-      return data.map((row) => ({
-        ...row,
-        role: requireRole(row.role),
-        master_id: typeof row.master_id === "string" ? row.master_id : null,
-      }));
-    },
-  });
 }
 
 export function usePendingInvitations() {
@@ -109,58 +76,41 @@ export function useCreateInvitation() {
       email,
       role,
       masterId,
+      teamId,
+      fullName,
+      phone,
     }: {
       email: string;
       role: InvitableRole;
       masterId: string | null;
+      /** Календарь, в который зовут. `null` — приглашение без календаря:
+       *  человек войдёт по роли, строк прав ему не запишется. */
+      teamId?: string | null;
+      /** Мини-карточка человека (владелец 15.09): имя и телефон в E.164
+       *  необязательны; при приёме сервер кладёт их в карточку мастера. */
+      fullName?: string | null;
+      phone?: string | null;
     }): Promise<CreatedInvitation> => {
       await requireOwner();
-      if (role === "master" && !masterId) {
+      // В календарь мастера зовут по почте и без карточки («Мастера → Добавить
+      // мастера», STORY-081); карточку требует только приглашение без календаря.
+      if (role === "master" && !masterId && !teamId) {
         throw new Error("Для мастера выберите карточку сотрудника.");
       }
+      const name = fullName?.trim();
       const { data, error } = await supabase.rpc("create_invitation", {
         p_email: normalizeInvitationEmail(email),
         p_role: role,
         ...(role === "master" && masterId ? { p_master_id: masterId } : {}),
+        ...(teamId ? { p_team_id: teamId } : {}),
+        ...(name ? { p_full_name: name } : {}),
+        ...(phone ? { p_phone: phone } : {}),
       });
       if (error) throw new Error(error.message);
       return parseCreatedInvitation(data);
     },
     onSuccess: () =>
       void qc.invalidateQueries({ queryKey: ["tenant-invitations"] }),
-    meta: { errorHandled: true },
-  });
-}
-
-export function useUpdateTenantMember() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      userId,
-      role,
-      masterId,
-    }: {
-      userId: string;
-      role: UserRole;
-      masterId: string | null;
-    }) => {
-      if (!tenantId) throw new Error("Нет активной компании");
-      await requireOwner();
-      const { data, error } = await supabase
-        .from("tenant_members")
-        .update({ role, master_id: masterId })
-        .eq("tenant_id", tenantId)
-        .eq("user_id", userId)
-        .select("user_id")
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      if (!data) throw new Error("Сотрудник не найден или доступ запрещён");
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["tenant-members"] });
-      void qc.invalidateQueries({ queryKey: ["current-role"] });
-    },
     meta: { errorHandled: true },
   });
 }

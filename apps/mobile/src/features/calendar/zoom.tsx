@@ -57,6 +57,7 @@ export function ZoomableTimeGrid({
   endHour,
   scrollToHour,
   pageGesture,
+  scrollLocked = false,
   children,
 }: {
   hourHSv: SharedValue<number>;
@@ -65,11 +66,14 @@ export function ZoomableTimeGrid({
   onZoom?: (next: number) => void;
   startHour: number;
   endHour: number;
-  /** Auto-scroll target on open (settings.scrollOpenHour). */
+  /** Час, на котором календарь открывается: начало графика команды. */
   scrollToHour?: number;
   /** Горизонтальный pan пейджера периода (см. pager.tsx) — компонуется
    *  Race'ом с пинчем: один палец вбок = листание, два = зум. */
   pageGesture?: PanGesture;
+  /** Запись в режиме правки («Двигать и растягивать»): прокрутка стоит, чтобы
+   *  палец на записи двигал её, а не сетку. */
+  scrollLocked?: boolean;
   children: ReactNode;
 }) {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -98,7 +102,7 @@ export function ZoomableTimeGrid({
     [],
   );
 
-  // Открывающий скролл к scrollOpenHour выполняется ПОСЛЕ первого layout
+  // Открывающий скролл к часу графика выполняется ПОСЛЕ первого layout
   // (см. onLayout ниже): до него зум-пол мог поднять hourHSv выше дефолта,
   // и посчитанный заранее y промахивался на сотни px (аудит). Смена
   // настройки после маунта докручивает через этот эффект.
@@ -256,6 +260,7 @@ export function ZoomableTimeGrid({
           // часом читалась как баг.
           bounces={false}
           overScrollMode="never"
+          scrollEnabled={!scrollLocked}
           contentContainerStyle={{
             paddingTop: PAD_TOP,
             paddingBottom: PAD_BOTTOM,

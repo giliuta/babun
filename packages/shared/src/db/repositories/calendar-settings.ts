@@ -16,13 +16,34 @@ import type {
   CalendarSettings,
   OperationalCalendarSettings,
 } from "../../local/calendar-settings";
+import { sanitizeDisabledFeatures } from "../../local/company-features";
 import {
   DEFAULT_CALENDAR_SETTINGS,
+  sanitizeRecordColorSettings,
   toOperationalCalendarSettings,
 } from "../../local/calendar-settings";
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["calendar_settings"]["Row"];
+
+/** Колонки цвета записи. Сгенерированный `database.types.ts` отстал от базы
+ *  (в нём нет ни `start_minute`, ни `show_day_finance`, ни этих трёх), и
+ *  соседние поля здесь читаются через `as any`. Для новых — узкий тип: канон
+ *  запрещает `any`, а делать вид, что колонок нет, нельзя. Уйдёт сам, когда
+ *  типы перегенерируют. */
+type RecordColorColumns = {
+  record_color_rule: string | null;
+  record_color_palette: unknown;
+  record_color_fallback: string | null;
+};
+/** Функции компании и порядок блоков записи (миграция 20260924140000). */
+type FeatureColumns = {
+  disabled_features: string[] | null;
+  booking_block_order: string[] | null;
+};
+
+const blockOrderOf = (raw: unknown): string[] | undefined =>
+  Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : undefined;
 type OperationalRow =
   Database["public"]["Functions"]["read_operational_calendar_settings_safe"]["Returns"][number];
 
@@ -48,7 +69,6 @@ function repositoryError(
 function rowToSettings(r: Row): CalendarSettings {
   // Validate grid_step at the type boundary — the DB check constraint
   // already restricts to 15/30/60, so the cast is safe.
-  const grid = r.grid_step as 15 | 30 | 60;
   // v493 — personal_labels round-trip. Old rows (pre-migration
   // 20260513_001) lack the column; the typed Row may not even have
   // it. Read defensively via an indexed cast so the repo still works
@@ -79,12 +99,9 @@ function rowToSettings(r: Row): CalendarSettings {
     startMinute: (r as any).start_minute ?? 0,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     endMinute: (r as any).end_minute ?? 0,
-    gridStep: grid,
-    weekStart: r.week_start as "monday" | "sunday",
     timezone: r.timezone,
     bufferMinutes: r.buffer_minutes,
     hideCancelled: r.hide_cancelled,
-    allowOvertime: r.allow_overtime,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     showDayFinance: (r as any).show_day_finance ?? true,
     // v449 — round-trip work / scroll-open hours through Supabase.
@@ -98,10 +115,17 @@ function rowToSettings(r: Row): CalendarSettings {
     workStartHour: (r as any).work_start_hour ?? undefined,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     workEndHour: (r as any).work_end_hour ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    scrollOpenHour: (r as any).scroll_open_hour ?? undefined,
     personalLabels,
     personalDefaultLabel,
+    ...sanitizeRecordColorSettings({
+      rule: (r as Row & Partial<RecordColorColumns>).record_color_rule,
+      palette: (r as Row & Partial<RecordColorColumns>).record_color_palette,
+      fallback: (r as Row & Partial<RecordColorColumns>).record_color_fallback,
+    }),
+    disabledFeatures: sanitizeDisabledFeatures(
+      (r as Row & Partial<FeatureColumns>).disabled_features,
+    ),
+    bookingBlockOrder: blockOrderOf((r as Row & Partial<FeatureColumns>).booking_block_order),
   };
 }
 
@@ -150,19 +174,31 @@ export async function getOperationalCalendarSettings(
     startMinute: (row as any).start_minute ?? 0,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     endMinute: (row as any).end_minute ?? 0,
-    gridStep: row.grid_step as 15 | 30 | 60,
-    weekStart: row.week_start as "monday" | "sunday",
     timezone: row.timezone,
     bufferMinutes: row.buffer_minutes,
     hideCancelled: row.hide_cancelled,
-    allowOvertime: row.allow_overtime,
     // `showDayFinance` здесь НЕТ намеренно: полоса «Доход / Расход» — surface
     // владельца (гейт `role === "owner"`), и мастерской проекции она не нужна
     // ни для чего. Тест `maps the safe RPC without introducing private
     // settings` ловит любую попытку протащить сюда лишнее поле — он и поймал.
     workStartHour: row.work_start_hour ?? undefined,
     workEndHour: row.work_end_hour ?? undefined,
-    scrollOpenHour: row.scroll_open_hour ?? undefined,
+    // С 24.09 (STORY-088) функция отдаёт сотруднику и это: без него у
+    // мастера были заводские цвета записи, полоса денег не слушала
+    // настройку, а выключенные у компании блоки стояли в его записи.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    showDayFinance: (row as any).show_day_finance ?? true,
+    ...sanitizeRecordColorSettings({
+      rule: (row as OperationalRow & Partial<RecordColorColumns>).record_color_rule,
+      palette: (row as OperationalRow & Partial<RecordColorColumns>).record_color_palette,
+      fallback: (row as OperationalRow & Partial<RecordColorColumns>).record_color_fallback,
+    }),
+    disabledFeatures: sanitizeDisabledFeatures(
+      (row as OperationalRow & Partial<FeatureColumns>).disabled_features,
+    ),
+    bookingBlockOrder: blockOrderOf(
+      (row as OperationalRow & Partial<FeatureColumns>).booking_block_order,
+    ),
   };
 }
 
@@ -185,15 +221,12 @@ export async function updateCalendarSettings(
   if (patch.endMinute !== undefined)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (insert as any).end_minute = patch.endMinute;
-  if (patch.gridStep !== undefined) insert.grid_step = patch.gridStep;
-  if (patch.weekStart !== undefined) insert.week_start = patch.weekStart;
   if (patch.timezone !== undefined) insert.timezone = patch.timezone;
   if (patch.bufferMinutes !== undefined) insert.buffer_minutes = patch.bufferMinutes;
   if (patch.hideCancelled !== undefined) insert.hide_cancelled = patch.hideCancelled;
   if (patch.showDayFinance !== undefined)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (insert as any).show_day_finance = patch.showDayFinance;
-  if (patch.allowOvertime !== undefined) insert.allow_overtime = patch.allowOvertime;
   // Cast through any — see rowToSettings comment for context.
   if (patch.workStartHour !== undefined)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -201,9 +234,6 @@ export async function updateCalendarSettings(
   if (patch.workEndHour !== undefined)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (insert as any).work_end_hour = patch.workEndHour;
-  if (patch.scrollOpenHour !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (insert as any).scroll_open_hour = patch.scrollOpenHour;
   // v493 — round-trip personalLabels / personalDefaultLabel. Written
   // through an indexed cast since older builds of `database.types`
   // may not have the columns yet.
@@ -222,6 +252,35 @@ export async function updateCalendarSettings(
         ? patch.personalDefaultLabel
         : null;
   }
+  // ЦВЕТА ЗАПИСИ. `undefined` в патче значит «не трогаем», а `null` в колонке —
+  // «владелец не выбирал, действуют заводские». Поэтому пустая палитра и
+  // пустой запасной цвет пишутся именно NULL: иначе «сбросить к заводскому»
+  // было бы невозможно выразить.
+  const colorInsert = insert as typeof insert & Partial<RecordColorColumns>;
+  if (patch.recordColorRule !== undefined) {
+    colorInsert.record_color_rule = patch.recordColorRule ?? "team";
+  }
+  if (patch.recordColorPalette !== undefined) {
+    colorInsert.record_color_palette =
+      patch.recordColorPalette && Object.keys(patch.recordColorPalette).length > 0
+        ? patch.recordColorPalette
+        : null;
+  }
+  if (patch.recordColorFallback !== undefined) {
+    colorInsert.record_color_fallback = patch.recordColorFallback || null;
+  }
+
+  const featureInsert = insert as typeof insert & Partial<FeatureColumns>;
+  if (patch.disabledFeatures !== undefined) {
+    featureInsert.disabled_features = sanitizeDisabledFeatures(patch.disabledFeatures);
+  }
+  if (patch.bookingBlockOrder !== undefined) {
+    featureInsert.booking_block_order =
+      patch.bookingBlockOrder && patch.bookingBlockOrder.length > 0
+        ? patch.bookingBlockOrder
+        : null;
+  }
+
   const { data, error } = await supabase
     .from("calendar_settings")
     .upsert(insert, { onConflict: "tenant_id" })

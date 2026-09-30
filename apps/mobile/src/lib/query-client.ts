@@ -6,7 +6,26 @@ import {
   focusManager,
   onlineManager,
 } from "@tanstack/react-query";
+import { isWritesBlockedError } from "@babun/shared/sync/write-guard";
 import { notify } from "./notify";
+import { getActiveTenantId } from "./active-tenant";
+import {
+  deferredTenantId,
+  knownTenantIds,
+  refetchOnMountPolicy,
+  staleTimeFor,
+  type FreshnessContext,
+} from "./switch-revalidate-plan";
+
+/** Кто сейчас активен и кого дообновляет очередь — читается на каждое решение
+ *  о свежести: оба значения меняются переходом, а не рендером. */
+function freshnessContext(): FreshnessContext {
+  return {
+    activeTenantId: getActiveTenantId(),
+    deferredTenantId: deferredTenantId(),
+    knownTenantIds: knownTenantIds(),
+  };
+}
 
 // Client-side data layer (replaces Next.js RSC server loads). Sits on top of
 // the @babun/shared repositories; Phase 2 wires offline cache + sync under it.
@@ -40,8 +59,18 @@ export const queryClient = new QueryClient({
   //     user would get TWO stacked alerts: this generic one plus the
   //     screen's specific one.
   mutationCache: new MutationCache({
-    onError: (_error, _variables, _context, mutation) => {
+    onError: (error, _variables, _context, mutation) => {
       if (mutation.options.onError || mutation.meta?.errorHandled) return;
+      // ОТБИТАЯ ЗАПИСЬ — НЕ ПОЛОМКА СВЯЗИ. В режиме «его глазами» приложение
+      // не пишет намеренно, и «проверьте соединение» отправило бы человека
+      // чинить исправную сеть.
+      if (isWritesBlockedError(error)) {
+        // Формулировка ОДНА и живёт в самой ошибке: экраны со своим разбором
+        // печатают `error.message`, и две разные фразы про одно и то же
+        // читались бы как две разные беды.
+        notify("Это просмотр", (error as Error).message);
+        return;
+      }
       // Через notify, а не Alert.alert: на вебе последний — пустая
       // функция, и эта сетка ловила бы ошибки в полной тишине.
       notify(
@@ -52,7 +81,36 @@ export const queryClient = new QueryClient({
   }),
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
+      // СВЕЖЕСТЬ РЕШАЕТ ВОЗРАСТ ДАННЫХ И ТО, ЧЬЯ ЭТО КОМПАНИЯ.
+      //
+      // Ключ компании, где человек работает, свеж минуту; ключ компании, куда
+      // он только что перешёл, — пока её тихо дообновляет очередь, — и ключи
+      // других его компаний свежи десять минут; ключ без компании — прежние
+      // 30 с. Функцией, потому что календарь переход не размонтирует: у его
+      // запросов меняется ключ, а на смене ключа react-query спрашивает только
+      // `staleTime`. Правила и тесты — `switch-revalidate-plan.ts`.
+      staleTime: (query) => staleTimeFor(query.queryKey, freshnessContext()),
+      // Для экранов со своим коротким `staleTime`: пока компанию дообновляет
+      // очередь, монтирование не уходит в сеть за тем, что она перечитает.
+      refetchOnMount: (query) =>
+        refetchOnMountPolicy(
+          query.state,
+          query.queryKey,
+          freshnessContext(),
+          Date.now(),
+        ),
+      // ТЁПЛЫЙ КЭШ ЖИВЁТ СУТКИ, А НЕ ПЯТЬ МИНУТ.
+      //
+      // Переход между компаниями бережёт запросы покидаемой компании, чтобы
+      // возврат был мгновенным. Но `gcTime` по умолчанию — пять минут: запрос
+      // без наблюдателя (а у покинутой компании их нет) уходит в мусор ровно
+      // через столько. То есть «второй переход тёплый» было правдой только
+      // внутри пятиминутного окна — дольше отсидел в другой компании, и
+      // возврат снова холодный. Нашла панель проектирования 2026-09-13.
+      //
+      // Сутки — потому что смена суток и так перерисовывает календарь, а
+      // память двух компаний владельца это единицы мегабайт.
+      gcTime: 24 * 60 * 60 * 1000,
       retry: 2,
       // With focusManager on AppState this means: foregrounding the app
       // refetches queries that went stale in the background.

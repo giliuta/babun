@@ -40,3 +40,13 @@ verify_jwt = false
 # unauthenticated — the per-user URL is itself the secret.
 [functions.calendar-ics]
 verify_jwt = false
+
+# SMS balance top-up on the website (STORY-089): the signed-in owner opens
+# a Stripe Checkout session. Credit happens only in stripe-webhook.
+[functions.sms-checkout]
+verify_jwt = true
+
+# SMS balance auto top-up from the saved card (STORY-089, wave 13): called
+# by pg_net (sms_autotopup_wake) with x-cron-secret from edge_cron_secrets.
+[functions.sms-autotopup]
+verify_jwt = false

@@ -25,7 +25,9 @@ export function CalendarHeader({
   /** Hide the today button when the view is already on today. */
   isOnToday: boolean;
   onModeChange: (m: CalMode) => void;
-  onGear?: () => void;
+  /** Шестерёнка есть ВСЕГДА (владелец 20.09): проп обязателен, чтобы закон
+   *  держал тип, а не память вызывающего. */
+  onGear: () => void;
   onTitlePress: () => void;
   onToday: () => void;
 }) {
@@ -43,8 +45,7 @@ export function CalendarHeader({
         backgroundColor: t.surface,
       }}
     >
-      {onGear ? (
-        <Pressable
+      <Pressable
           onPress={onGear}
           hitSlop={6}
           accessibilityRole="button"
@@ -59,8 +60,7 @@ export function CalendarHeader({
           })}
         >
           <Settings color={t.sub} size={21} strokeWidth={2} />
-        </Pressable>
-      ) : null}
+      </Pressable>
 
       <Pressable
         onPress={onTitlePress}
@@ -118,14 +118,13 @@ export function CalendarHeader({
               like the iOS Calendar icon; the clock-variant crowded the digit. */}
           <Calendar color={t.accent} size={22} strokeWidth={2} />
           <Text
-            style={{
+            style={{ fontVariant: ["tabular-nums"],
               position: "absolute",
               fontSize: 10,
               fontWeight: "800",
               color: t.accent,
               transform: [{ translateY: 3.5 }],
             }}
-            className="tabular-nums"
           >
             {todayNumber}
           </Text>
