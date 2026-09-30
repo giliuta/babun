@@ -250,6 +250,7 @@ export function rowToClient(r: ClientRow): Client {
     deleted_at: r.deleted_at ?? null,
     purge_at: r.purge_at ?? null,
     favorite_master_id: r.favorite_master_id ?? null,
+    team_id: r.team_id ?? null,
 
     created_at: r.created_at,
   };
@@ -309,6 +310,8 @@ function clientToInsert(c: Client, tenantId: string): ClientInsert {
     deleted_at: c.deleted_at ?? null,
     purge_at: c.purge_at ?? null,
     favorite_master_id: c.favorite_master_id ?? null,
+    // Команда — только выбранная: пусто решает сервер (первая доступная).
+    ...(c.team_id ? { team_id: c.team_id } : {}),
 
     // Preserve the moment the form was created. If empty (legacy or
     // hand-built objects) fall back to DB default `now()`.

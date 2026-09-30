@@ -32,8 +32,8 @@ const EXEMPT: Record<string, string> = {
   appointment_photos: "команда через appointments",
   appointment_links: "ссылка «Подтвердить / Отменить» — команда через appointments",
   account_cash_counts: "команда через accounts",
-  // Решения владельца 24.09 — едино на компанию:
-  clients: "клиенты — единая база компании, по командам только сортируются",
+  // Решения владельца 24.09 — едино на компанию (клиенты с 30.09 — у
+  // команды полем `team_id`, см. NULLABLE_OK):
   client_tags: "теги клиентов — едины на компанию",
   client_tag_assignments: "теги клиентов — едины на компанию",
   client_attachments: "файлы клиента — у клиента",
@@ -67,6 +67,8 @@ const NULLABLE_OK: Record<string, string> = {
   "appointments.team_id": "пусто = личное событие создателя",
   "member_access.team_id": "пусто = блок уровня компании (шаблоны SMS); клиенты с 29.09 — у команды",
   "invitations.team_id": "устарела, канон — team_ids[]",
+  "clients.team_id":
+    "владелец 30.09: клиент — у команды; пусто только у компании без команд, удаление команды гасит поле (on delete set null)",
   "finance_categories.team_id":
     "пусто — только у служебных категорий сервера (tenant_id is null); у категорий компании команду держит CHECK finance_categories_team_required",
 };

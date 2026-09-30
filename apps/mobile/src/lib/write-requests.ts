@@ -90,6 +90,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "reset_appointment_payment",
   "set_appointment_prepayment",
   "set_client_sms_opt_out",
+  "set_client_team",
   // Живёт в ещё не накатанной миграции `20260920200000_companies_registry`:
   // волатильность спросить не у кого, а дело её — ставить умолчание.
   "set_company_invoice_next_number",

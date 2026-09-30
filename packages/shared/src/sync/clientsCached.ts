@@ -808,6 +808,9 @@ function makeServerRow(
     deleted_at: input.deleted_at ?? null,
     purge_at: input.purge_at ?? null,
     favorite_master_id: input.favorite_master_id ?? null,
+    // Команда клиента (30.09): прямой офлайн-INSERT умолчания сервера не
+    // знает, поэтому форма всегда присылает команду сама.
+    team_id: input.team_id ?? null,
     created_at: input.created_at ?? nowIso,
     updated_at: nowIso,
   };

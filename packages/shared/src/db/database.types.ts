@@ -1089,6 +1089,7 @@ export type Database = {
           reminder_at: string | null
           sms_name: string
           sms_opt_out: boolean
+          team_id: string | null
           telegram_username: string
           tenant_id: string
           updated_at: string
@@ -1133,6 +1134,7 @@ export type Database = {
           reminder_at?: string | null
           sms_name?: string
           sms_opt_out?: boolean
+          team_id?: string | null
           telegram_username?: string
           tenant_id: string
           updated_at?: string
@@ -1177,6 +1179,7 @@ export type Database = {
           reminder_at?: string | null
           sms_name?: string
           sms_opt_out?: boolean
+          team_id?: string | null
           telegram_username?: string
           tenant_id?: string
           updated_at?: string
@@ -5172,6 +5175,10 @@ export type Database = {
       set_client_sms_opt_out: {
         Args: { p_client_id: string; p_value: boolean }
         Returns: boolean
+      }
+      set_client_team: {
+        Args: { p_client_id: string; p_team_id: string }
+        Returns: undefined
       }
       sms_account: { Args: never; Returns: Json }
       sms_appointment_link: {
