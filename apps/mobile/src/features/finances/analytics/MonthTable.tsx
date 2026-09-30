@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from "react-native";
+import { useMoney } from "@/features/settings/currency";
 import { money } from "@babun/shared/common/utils/money";
 import { useThemeColors } from "@/theme/colors";
 import type { MonthRow } from "./analytics-math";
@@ -28,6 +29,8 @@ export function MonthTable({
   onOpen: (row: MonthRow) => void;
 }) {
   const t = useThemeColors();
+  // Знак валюты компании, а не «€» гвоздём (аудит 2026-09-30).
+  const currencySymbol = useMoney().symbol;
   const cell = (text: string, color: string, bold = false) => (
     <Text
       numberOfLines={1}
@@ -59,9 +62,9 @@ export function MonthTable({
     <View>
       <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingVertical: 8 }}>
         <Text style={{ width: 72, fontSize: 12, fontWeight: "700", color: t.caption }}>Месяц</Text>
-        {head("Доходы €")}
-        {head("Расходы €")}
-        {head("Прибыль €")}
+        {head(`Доходы ${currencySymbol}`)}
+        {head(`Расходы ${currencySymbol}`)}
+        {head(`Прибыль ${currencySymbol}`)}
       </View>
       {[...rows].reverse().map((r) => (
         <Pressable

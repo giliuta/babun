@@ -142,7 +142,16 @@ export function RequisitesScreen() {
       () =>
         void (async () => {
           try {
-            await handOverDefault(company);
+            // Единственные основные реквизиты не удаляются — тем же правилом,
+            // что скрытие: документу было бы нечем подписаться (аудит
+            // 2026-09-30, удаление этот ответ пропускало).
+            if (!(await handOverDefault(company))) {
+              notify(
+                "Это единственные рабочие реквизиты",
+                "Документу нечем будет подписаться. Сначала добавьте другие.",
+              );
+              return;
+            }
             await del.mutateAsync(company.id);
             toast("Реквизиты удалены");
           } catch (error) {

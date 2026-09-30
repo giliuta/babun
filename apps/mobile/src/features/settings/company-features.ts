@@ -30,9 +30,16 @@ export function useSetCompanyFeature() {
   const save = useSaveCalendarSettings();
   return {
     ...save,
-    mutate: (input: { key: CompanyFeatureKey; on: boolean }) =>
-      save.mutate({
-        disabledFeatures: withFeature(settings.data?.disabledFeatures, input.key, input.on),
-      }),
+    mutate: (
+      input: { key: CompanyFeatureKey; on: boolean },
+      // Сбой тумблера говорит словами у вызывающего (аудит 2026-09-30).
+      options?: { onError?: (error: unknown) => void },
+    ) =>
+      save.mutate(
+        {
+          disabledFeatures: withFeature(settings.data?.disabledFeatures, input.key, input.on),
+        },
+        options?.onError ? { onError: options.onError } : undefined,
+      ),
   };
 }

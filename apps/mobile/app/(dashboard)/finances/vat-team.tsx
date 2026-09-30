@@ -144,7 +144,9 @@ export default function TeamVatSettingsScreen() {
     {
       value: "off",
       label: VAT_MODE_LABELS.off,
-      hint: "Клавиш VAT в операциях команды нет",
+      // Клавиши в операции остаются (налог можно поставить вручную), по
+      // умолчанию — без налога. Прежнее «клавиш нет» было неправдой.
+      hint: "Операции команды — без налога",
     },
   ];
   const teamMode: VatMode = override?.mode ?? v.mode;
@@ -222,7 +224,9 @@ export default function TeamVatSettingsScreen() {
           haptics.tap();
           // Режим пишется команде вместе с действующей ставкой: команда,
           // которую ещё не настраивали, получает свои значения целиком.
-          commit({ mode: choice, rate: override?.rate ?? v.rate });
+          // Нулевую ставку компании не переносим: своя ставка 0 гасит клавиши
+          // VAT в операциях (аудит 2026-09-30) — лучше «как у компании».
+          commit({ mode: choice, rate: override?.rate ?? (v.rate > 0 ? v.rate : null) });
         }}
         onClose={() => setModeSheetOpen(false)}
       />

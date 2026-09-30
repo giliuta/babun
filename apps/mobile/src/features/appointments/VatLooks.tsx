@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useMoney } from "@/features/settings/currency";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
@@ -63,6 +64,8 @@ export function ServicesRow({
   afterDiscount: number;
 }) {
   const t = useThemeColors();
+  // Знак скидки в деньгах — валюта компании, а не «€» гвоздём.
+  const currencySymbol = useMoney().symbol;
   return (
     <Row>
       {/* Слова «Услуги» здесь нет: колонка уже подписана в шапке, а строку
@@ -95,7 +98,7 @@ export function ServicesRow({
             fontVariant: ["tabular-nums"],
           }}
         />
-        <Unit>{percent ? "%" : "€"}</Unit>
+        <Unit>{percent ? "%" : currencySymbol}</Unit>
       </Rate>
       {/* ПРОЦЕНТ — И СРАЗУ В ЕВРО (владелец 20.09: «если выбираю процент и
           пишу процент, то правее от процента пишется в евро»). В колонке та

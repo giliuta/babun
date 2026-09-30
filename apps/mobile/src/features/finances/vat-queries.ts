@@ -56,6 +56,9 @@ export function useSaveVatSettings() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
+    // Каждый вызов говорит об ошибке сам (`onError`): без метки глобальный
+    // обработчик добавлял второе окно поверх (аудит 2026-09-30).
+    meta: { errorHandled: true },
     mutationFn: async (patch: Partial<Pick<VatSettings, "mode" | "rate">>) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
       const { error } = await supabase
@@ -114,6 +117,9 @@ export function useSaveTeamVat() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
+    // Каждый вызов говорит об ошибке сам (`onError`): без метки глобальный
+    // обработчик добавлял второе окно поверх (аудит 2026-09-30).
+    meta: { errorHandled: true },
     mutationFn: async (input: TeamVatOverride) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
       // Пустое переопределение — это «наследовать компанию», а не «нули».
@@ -162,7 +168,11 @@ export const VAT_MODE_LABELS: Record<VatMode, string> = {
  *  проваливаться внутрь ради проверки. */
 export function vatSummaryLine(v: VatSettings | undefined): string {
   if (!v) return "Загрузка…";
-  if (v.mode === "off") return "Выключен";
+  if (v.mode === "off") return "Без VAT";
+  // Налог включён, а ставки нет: клавиш VAT в операциях не будет, и строка
+  // «VAT включён · 0%» молчала о том, что настройка не закончена (аудит
+  // 2026-09-30). Говорим, чего не хватает.
+  if (!(v.rate > 0)) return "Укажите ставку";
   return `${VAT_MODE_LABELS[v.mode]} · ${v.rate}%`;
 }
 

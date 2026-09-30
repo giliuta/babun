@@ -440,7 +440,15 @@ export function OperationSheet({
   const applyTemplate = (tpl: (typeof sheetTemplates)[number]) => {
     setType(tpl.kind);
     setAmount(formatMoneyForInput(Number(tpl.amount)));
-    setCategoryId(tpl.category_id);
+    // Категория шаблона — только если её сейчас можно выбрать в этой команде:
+    // скрытая или чужая подставлялась молча и так и сохранялась (аудит
+    // 2026-09-30). Нет — выбор пуст, и форма попросит категорию.
+    const tplCategory = tpl.category_id
+      ? pickableCategories(categories, tpl.kind, null, teamId).find(
+          (c) => c.id === tpl.category_id,
+        )
+      : undefined;
+    setCategoryId(tplCategory ? tplCategory.id : null);
     if (tpl.master_id) setMasterId(tpl.master_id);
     // Счёт шаблона — только если он ещё открыт и обслуживает эту команду;
     // иначе остаётся счёт по умолчанию, а не пустой выбор.
@@ -1439,10 +1447,19 @@ export function OperationSheet({
         // категорий владельческий — сотруднику шестерёнки нет.
         onSettings={
           isOwner
-            ? () => doorway.open(() => router.push(categoriesHref))
+            ? () =>
+                doorway.open(() =>
+                  // Команда операции — команда справочника: без неё страница
+                  // открывалась на первой команде (аудит 2026-09-30).
+                  router.push(
+                    (teamId
+                      ? `${categoriesHref}?team=${encodeURIComponent(teamId)}`
+                      : categoriesHref) as Href,
+                  ),
+                )
             : undefined
         }
-        settingsLabel="Категории операций"
+        settingsLabel="Категории и бюджеты"
         onClose={() => setCategoryPickerOpen(false)}
       />
       <ClientPickerSheet
@@ -1512,7 +1529,13 @@ export function OperationSheet({
         // Шестерёнка — на страницу шаблонов, паркуя лист операции (та же
         // дверь, что у категорий).
         onSettings={() =>
-          doorway.open(() => router.push("/finances/templates"))
+          doorway.open(() =>
+            router.push(
+              (teamId
+                ? `/finances/templates?team=${encodeURIComponent(teamId)}`
+                : "/finances/templates") as Href,
+            ),
+          )
         }
         settingsLabel="Шаблоны операций"
         onClose={() => setTemplatePickerOpen(false)}

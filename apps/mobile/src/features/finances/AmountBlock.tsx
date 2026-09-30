@@ -1,6 +1,7 @@
 import { Text, TextInput, View } from "react-native";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useThemeColors } from "@/theme/colors";
+import { useMoney } from "@/features/settings/currency";
 
 // БЛОК СУММЫ — ОДИН НА ВСЕ ФОРМЫ ДЕНЕГ (владелец 2026-09-10: «там просто ноль
 // показан; сверху подпись „сумма“, чтобы было понимание, что это такое», и
@@ -32,6 +33,7 @@ export function AmountBlock({
   hint?: { text: string; error?: boolean } | null;
 }) {
   const t = useThemeColors();
+  const currencySymbol = useMoney().symbol;
   return (
     <SectionCard title={title} dense>
       {/* КЕГЛЬ — САМИМ СТИЛЕМ, А НЕ КЛАССОМ, И БЕЗ ФИКСИРОВАННОЙ ВЫСОТЫ.
@@ -50,7 +52,8 @@ export function AmountBlock({
           maxFontSizeMultiplier={1.2}
           style={{ fontSize: 28, fontWeight: "700", color: t.faint }}
         >
-          €
+          {/* Знак валюты компании, а не «€» гвоздём (аудит 2026-09-30). */}
+          {currencySymbol}
         </Text>
         <TextInput
           value={value}

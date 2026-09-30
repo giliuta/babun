@@ -23,7 +23,7 @@ import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { AmountBlock } from "./AmountBlock";
 import { CategoryBlock } from "./CategoryBlock";
 import { DebtWhoBlock } from "./DebtWhoBlock";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { formatHM } from "@/features/appointments/helpers";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -397,7 +397,15 @@ export function DebtSheet({
         }))}
         selectedId={categoryId}
         // Та же дверь и та же парковка, что у листа операции.
-        onSettings={() => doorway.open(() => router.push(categoriesHref))}
+        onSettings={() =>
+          doorway.open(() =>
+            router.push(
+              (debtTeamId
+                ? `${categoriesHref}?team=${encodeURIComponent(debtTeamId)}`
+                : categoriesHref) as Href,
+            ),
+          )
+        }
         settingsLabel="Категории долгов"
         onClose={() => setCategoryOpen(false)}
       />

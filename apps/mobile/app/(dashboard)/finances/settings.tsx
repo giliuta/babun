@@ -34,6 +34,8 @@ import {
   teamTemplatesLine,
 } from "@/features/finances/team-settings-lines";
 import { notify } from "@/lib/notify";
+import { getStorage } from "@babun/shared/storage";
+import { useTenantId } from "@/lib/tenant";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { accountsDoorLine } from "@/features/finances/accounts-sections";
 import { useCurrentRole, useTenant, type Tenant } from "@/features/settings/tenant";
@@ -95,6 +97,7 @@ function invoiceLine(tenant: Tenant | undefined, nextNumber?: string | null): st
 export default function FinanceSettingsScreen() {
   const router = useRouter();
   const vat = useVatSettings();
+  const tenantIdForVat = useTenantId();
   const saveVat = useSaveVatSettings();
   const vatOverrides = useTeamVatOverrides();
   const tenant = useTenant();
@@ -105,6 +108,16 @@ export default function FinanceSettingsScreen() {
   const accountsOn = useFeatureOn("accounts");
   const documentsOn = useFeatureOn("documents");
   const vatOn = !!vat.data && vat.data.mode !== "off";
+  // Тумблер функции при сбое откатывался молча (аудит 2026-09-30).
+  const featureFailed = (e: unknown) =>
+    notify("Не удалось сохранить", e instanceof Error ? e.message : String(e));
+  const vatModeKey = `vat.lastMode.${tenantIdForVat ?? "none"}`;
+  const lastVatMode = (): "inclusive" | "exclusive" => {
+    const stored = getStorage().get<string>(vatModeKey);
+    return stored === "exclusive" ? "exclusive" : "inclusive";
+  };
+  const rememberVatMode = (mode: "inclusive" | "exclusive") =>
+    getStorage().set(vatModeKey, mode);
   const setFeature = useSetCompanyFeature();
   // Выключенная функция уносит и свою дверь в настройки.
   const base = financeSettingsRows(useCurrentRole().data);
@@ -189,7 +202,13 @@ export default function FinanceSettingsScreen() {
                       tile={SETTINGS_TILE.purple}
                       icon={Tags}
                       title="Категории и бюджеты"
-                      sub={teamCategoriesLine(categoriesQuery.data ?? [], teamId)}
+                      // Пока категории едут — без подписи: «Пока нет — создайте
+                      // свои» на загрузке звало создать то, что уже есть.
+                      sub={
+                        categoriesQuery.data
+                          ? teamCategoriesLine(categoriesQuery.data, teamId)
+                          : undefined
+                      }
                       onPress={() => router.push(withTeam("/finances/categories"))}
                     />
                   </>
@@ -282,21 +301,21 @@ export default function FinanceSettingsScreen() {
                 <SwitchRow
                   label="Долги"
                   value={debtsOn}
-                  onChange={(v) => setFeature.mutate({ key: "debts", on: v })}
+                  onChange={(v) => setFeature.mutate({ key: "debts", on: v }, { onError: featureFailed })}
                 />
               </SectionCard>
               <SectionCard>
                 <SwitchRow
                   label="Счета и переводы"
                   value={accountsOn}
-                  onChange={(v) => setFeature.mutate({ key: "accounts", on: v })}
+                  onChange={(v) => setFeature.mutate({ key: "accounts", on: v }, { onError: featureFailed })}
                 />
               </SectionCard>
               <SectionCard>
                 <SwitchRow
                   label="Инвойсы и чеки"
                   value={documentsOn}
-                  onChange={(v) => setFeature.mutate({ key: "documents", on: v })}
+                  onChange={(v) => setFeature.mutate({ key: "documents", on: v }, { onError: featureFailed })}
                 />
               </SectionCard>
               {/* VAT — тот же выключатель, что стоял на его странице
@@ -309,8 +328,15 @@ export default function FinanceSettingsScreen() {
                     value={vatOn}
                     onChange={(on) =>
                       saveVat.mutate(
-                        { mode: on ? "inclusive" : "off" },
+                        // Включили снова — тем режимом, каким работали до
+                        // выключения («плюсом» не сбрасывается в «в цене»).
+                        { mode: on ? lastVatMode() : "off" },
                         {
+                          onSuccess: () => {
+                            if (!on && vat.data && vat.data.mode !== "off") {
+                              rememberVatMode(vat.data.mode);
+                            }
+                          },
                           onError: (e) =>
                             notify("Не удалось сохранить", (e as Error).message),
                         },

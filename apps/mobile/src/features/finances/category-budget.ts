@@ -26,6 +26,7 @@ export interface BudgetCategory {
   monthly_budget: number | null;
   hidden?: boolean;
   is_system?: boolean;
+  team_id?: string | null;
 }
 
 export interface BudgetLedgerRow {
@@ -55,7 +56,15 @@ export function monthOf(ymd: string): { from: string; to: string; key: string } 
 
 /** Есть ли у категории действующий бюджет. Бюджет бывает только у расхода. */
 export function hasBudget(c: BudgetCategory): c is BudgetCategory & { monthly_budget: number } {
-  return c.type === "expense" && !c.is_system && c.monthly_budget != null && c.monthly_budget > 0;
+  // Скрытая категория не считается: в справочнике и в двери у неё бюджета
+  // «нет», а уведомления продолжали приходить (аудит 2026-09-30).
+  return (
+    c.type === "expense" &&
+    !c.is_system &&
+    !c.hidden &&
+    c.monthly_budget != null &&
+    c.monthly_budget > 0
+  );
 }
 
 /** Потрачено за месяц по категориям. Сумма расхода в журнале положительна,
@@ -131,9 +140,18 @@ export function budgetAlerts(
   seen: BudgetSeen,
   monthKey: string,
   fmt: (n: number) => string,
+  /** Имена команд: одноимённые категории двух команд («Топливо») в тексте
+   *  уведомления называют свою команду — иначе два пуша читались одинаково. */
+  teamNames?: ReadonlyMap<string, string>,
 ): { notices: BudgetNotice[]; next: BudgetSeen } {
   const notices: BudgetNotice[] = [];
   const next: BudgetSeen = {};
+  const budgeted = categories.filter(hasBudget);
+  const label = (c: BudgetCategory): string => {
+    const twin = budgeted.some((o) => o.id !== c.id && o.name === c.name);
+    const team = c.team_id ? teamNames?.get(c.team_id) : undefined;
+    return twin && team ? `${c.name} · ${team}` : c.name;
+  };
   for (const c of categories) {
     if (!hasBudget(c)) continue;
     const key = `${c.id}:${monthKey}`;
@@ -144,7 +162,7 @@ export function budgetAlerts(
       notices.push({
         categoryId: c.id,
         level,
-        ...budgetNoticeText(c.name, spent, c.monthly_budget, level, fmt),
+        ...budgetNoticeText(label(c), spent, c.monthly_budget, level, fmt),
       });
     }
     if (level !== 0) next[key] = level;

@@ -8,6 +8,8 @@ import { supabase } from "@/lib/supabase";
 import {
   currentRoleQueryKey,
   financeCategoriesQueryKey,
+  calendarSettingsQueryKey,
+  teamsQueryKey,
 } from "@/lib/company-query-keys";
 import { todayYmd } from "@/features/invoices/format";
 import {
@@ -102,6 +104,7 @@ export function runBudgetAlerts(
   categories: readonly FinanceCategory[],
   spend: ReadonlyMap<string, number>,
   monthKey: string,
+  teamNames?: ReadonlyMap<string, string>,
 ): Promise<void> {
   return enqueue(async () => {
     const { notices, next } = budgetAlerts(
@@ -110,6 +113,7 @@ export function runBudgetAlerts(
       readSeen(tenantId),
       monthKey,
       (n) => money(n),
+      teamNames,
     );
     writeSeen(tenantId, next);
     for (const n of notices) await presentNow(n.title, n.body);
@@ -128,13 +132,22 @@ export function checkBudgetsAfterWrite(
     qc.getQueryData<FinanceCategory[]>(financeCategoriesQueryKey(tenantId)) ?? [];
   const budgeted = categories.filter(hasBudget);
   if (budgeted.length === 0) return;
-  const month = monthOf(todayYmd());
+  // Месяц — по часам компании, как у сторожа на экране
+  // (`use-category-budget.ts`): около полуночи телефон в другом поясе считал
+  // соседний месяц и переписывал «уже сообщено» (аудит 2026-09-30).
+  const tz = qc.getQueryData<{ timezone?: string }>(
+    calendarSettingsQueryKey(tenantId, "owner"),
+  )?.timezone;
+  const month = monthOf(todayYmd(tz ?? "Europe/Nicosia"));
+  const teams =
+    qc.getQueryData<{ id: string; name: string }[]>(teamsQueryKey(tenantId, "owner", true)) ?? [];
+  const teamNames = new Map(teams.map((team) => [team.id, team.name]));
   void listTransactionsForRange(supabase, tenantId, month.from, month.to, {
     types: ["expense"],
     categoryIds: budgeted.map((c) => c.id),
   })
     .then((rows) =>
-      runBudgetAlerts(tenantId, categories, monthSpendByCategory(rows), month.key),
+      runBudgetAlerts(tenantId, categories, monthSpendByCategory(rows), month.key, teamNames),
     )
     .catch(() => {});
 }

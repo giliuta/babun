@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { useTeams } from "@/features/reference/queries";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import { money } from "@babun/shared/common/utils/money";
 import { useTenantId } from "@/lib/tenant";
@@ -64,8 +65,13 @@ export function useBudgetWatch(): void {
   const categories = useFinanceCategories().data;
   const anyBudget = owner && !!categories?.some(hasBudget);
   const { month, spend } = useBudgetMonth(anyBudget);
+  const teamsData = useTeams({ includeInactive: true }).data;
+  const teamNames = useMemo(
+    () => new Map((teamsData ?? []).map((team) => [team.id, team.name])),
+    [teamsData],
+  );
   useEffect(() => {
     if (!tenantId || !anyBudget || !spend || !categories) return;
-    void runBudgetAlerts(tenantId, categories, spend, month.key);
-  }, [tenantId, anyBudget, spend, categories, month.key]);
+    void runBudgetAlerts(tenantId, categories, spend, month.key, teamNames);
+  }, [tenantId, anyBudget, spend, categories, month.key, teamNames]);
 }

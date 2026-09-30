@@ -91,3 +91,37 @@ describe("бюджет категории", () => {
     assert.equal(parseBudgetInput("1.234"), undefined);
   });
 });
+
+describe("бюджеты: скрытые и одноимённые", () => {
+  test("скрытая категория не шлёт уведомлений", async () => {
+    const { budgetAlerts: alerts } = await import("./category-budget");
+    const { notices } = alerts(
+      [{ id: "c1", name: "Топливо", type: "expense", monthly_budget: 100, hidden: true }],
+      new Map([["c1", 150]]),
+      {},
+      "2026-09",
+      (n) => `€${n}`,
+    );
+    assert.equal(notices.length, 0);
+  });
+
+  test("два «Топлива» в разных командах называют свою команду", async () => {
+    const { budgetAlerts: alerts } = await import("./category-budget");
+    const { notices } = alerts(
+      [
+        { id: "c1", name: "Топливо", type: "expense", monthly_budget: 100, team_id: "t1" },
+        { id: "c2", name: "Топливо", type: "expense", monthly_budget: 100, team_id: "t2" },
+      ],
+      new Map([["c1", 150]]),
+      {},
+      "2026-09",
+      (n) => `€${n}`,
+      new Map([
+        ["t1", "Команда 1"],
+        ["t2", "Команда 3"],
+      ]),
+    );
+    assert.equal(notices.length, 1);
+    assert.match(notices[0].title, /Топливо · Команда 1/);
+  });
+});

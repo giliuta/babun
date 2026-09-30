@@ -4,6 +4,7 @@ import { Banknote } from "lucide-react-native";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useToast } from "@/components/ui/Toast";
+import { confirmThen } from "@/lib/confirm";
 import { moneyName, moneySymbol } from "@babun/shared/common/utils/money";
 
 import { CurrencySheet } from "./CurrencySheet";
@@ -24,18 +25,27 @@ export function CurrencySettingsRow() {
 
   const apply = (code: string) => {
     if (code === currency) return;
+    // СМЕНА ВАЛЮТЫ СУММ НЕ ПЕРЕСЧИТЫВАЕТ (аудит 2026-09-30): €300 станут
+    // «$300». Спрашиваем словами до записи — отменить её сама по себе
+    // нельзя, только выбрать валюту обратно.
+    confirmThen(
+      `Валюта: ${moneySymbol(code)} ${moneyName(code)}?`,
+      {
+        message: "Все суммы останутся теми же числами — пересчёта по курсу нет.",
+        confirmLabel: "Сменить",
+      },
+      () => save(code),
+    );
+  };
+
+  const save = (code: string) => {
     updateTenant.mutate(
       { currency: code },
       {
         onSuccess: () => toast(`Валюта: ${moneySymbol(code)} ${moneyName(code)}`, "success"),
         onError: (error) => {
           const message = error instanceof Error ? error.message : "";
-          toast(
-            /currency_check|check constraint/i.test(message)
-              ? "База пока принимает пять валют — нужна миграция"
-              : message || "Не удалось сменить валюту",
-            "error",
-          );
+          toast(message || "Не удалось сменить валюту", "error");
         },
       },
     );

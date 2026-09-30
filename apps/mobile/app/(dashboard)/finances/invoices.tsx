@@ -144,7 +144,7 @@ export default function InvoiceSettingsScreen() {
           <Row
             label="Срок оплаты"
             hint={
-              Number(dueDays) === 0
+              dueDays.trim() !== "" && Number(dueDays) === 0
                 ? "Оплата по факту: срок — день выставления"
                 : "Дней после выставления, потом счёт станет просроченным"
             }
@@ -153,6 +153,12 @@ export default function InvoiceSettingsScreen() {
             placeholder="7"
             keyboardType="number-pad"
             onCommit={() => {
+              // Стёртое поле — не «0 дней»: Number("") = 0 молча записывал
+              // «оплата по факту» (аудит 2026-09-30). Пусто — вернуть как было.
+              if (dueDays.trim() === "") {
+                setDueDays(String(data.invoice_due_days ?? 7));
+                return;
+              }
               const value = Number(dueDays);
               if (!Number.isInteger(value) || value < 0 || value > 365) {
                 notify("Срок не подходит", "Введите целое число от 0 до 365.");
