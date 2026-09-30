@@ -38,12 +38,8 @@ export function usePhoneCountry({
   home: CountryCode;
   onChange: (full: string) => void;
 }) {
-  const t = useThemeColors();
   const [country, setCountry] = useState<CountryCode>(() => phoneCountryOf(phone, home));
   const [open, setOpen] = useState(false);
-  // ПОИСК ПО СПИСКУ: стран 29, и «Великобритания» ищется быстрее набором,
-  // чем глазами. Ищем и по названию, и по коду («44»).
-  const [q, setQ] = useState("");
   const dialDigits = countryDialCode(country).slice(1);
   const digits = phone.replace(/\D/g, "");
   // Номер набран своим «+» и код ещё не дописан (или это код другой
@@ -93,46 +89,73 @@ export function usePhoneCountry({
       setOpen(true);
     },
     sheet: (
-      <BottomSheet
+      <CountryPickerSheet
         visible={open}
+        selected={country}
+        onPick={pick}
         onClose={() => setOpen(false)}
-        onExited={() => setQ("")}
-        title="Код страны"
-        padded={false}
-        scroll
-        maxHeightRatio={SELECT_SHEET_RATIO}
-      >
-        <SelectSearch
-          value={q}
-          onChange={setQ}
-          placeholder="Страна или код"
-          accessibilityLabel="Поиск страны"
-          onClear={() => setQ("")}
-          autoCapitalize="words"
-        />
-        <SelectList>
-          {SUPPORTED_COUNTRIES.filter((code) => {
-            const needle = q.trim().toLowerCase().replace(/^\+/, "");
-            if (!needle) return true;
-            const name = (COUNTRY_NAMES_RU[code] ?? code).toLowerCase();
-            return name.includes(needle) || countryDialCode(code).slice(1).startsWith(needle);
-          }).map((code) => (
-            <SelectRow
-              key={code}
-              icon={countryFlag(code)}
-              color={t.accent}
-              title={COUNTRY_NAMES_RU[code] ?? code}
-              hint={countryDialCode(code)}
-              selected={code === country}
-              onPress={() => {
-                haptics.tap();
-                pick(code);
-                setOpen(false);
-              }}
-            />
-          ))}
-        </SelectList>
-      </BottomSheet>
+      />
     ),
   };
+}
+
+/** ШТОРКА «КОД СТРАНЫ» — одна на всё: номер нового клиента, основной номер
+ *  карточки и её доп. номера (тап по коду «+357» перед цифрами, 30.09). */
+export function CountryPickerSheet({
+  visible,
+  selected,
+  onPick,
+  onClose,
+}: {
+  visible: boolean;
+  selected: CountryCode | null;
+  onPick: (code: CountryCode) => void;
+  onClose: () => void;
+}) {
+  const t = useThemeColors();
+  // ПОИСК ПО СПИСКУ: стран 29, и «Великобритания» ищется быстрее набором,
+  // чем глазами. Ищем и по названию, и по коду («44»).
+  const [q, setQ] = useState("");
+  return (
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      onExited={() => setQ("")}
+      title="Код страны"
+      padded={false}
+      scroll
+      maxHeightRatio={SELECT_SHEET_RATIO}
+    >
+      <SelectSearch
+        value={q}
+        onChange={setQ}
+        placeholder="Страна или код"
+        accessibilityLabel="Поиск страны"
+        onClear={() => setQ("")}
+        autoCapitalize="words"
+      />
+      <SelectList>
+        {SUPPORTED_COUNTRIES.filter((code) => {
+          const needle = q.trim().toLowerCase().replace(/^\+/, "");
+          if (!needle) return true;
+          const name = (COUNTRY_NAMES_RU[code] ?? code).toLowerCase();
+          return name.includes(needle) || countryDialCode(code).slice(1).startsWith(needle);
+        }).map((code) => (
+          <SelectRow
+            key={code}
+            icon={countryFlag(code)}
+            color={t.accent}
+            title={COUNTRY_NAMES_RU[code] ?? code}
+            hint={countryDialCode(code)}
+            selected={code === selected}
+            onPress={() => {
+              haptics.tap();
+              onPick(code);
+              onClose();
+            }}
+          />
+        ))}
+      </SelectList>
+    </BottomSheet>
+  );
 }

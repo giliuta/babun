@@ -23,6 +23,7 @@ export function LockedPhoneRow({ client }: { client: Client }) {
     <FieldRow
       label="Телефон"
       column={CONTACT_COLUMN}
+      separated
       value={day ? "Откроется в день записи" : "•• ••• •••"}
       placeholder="Телефон"
       readOnly

@@ -524,6 +524,8 @@ export function FieldRow({
                 style={{
                   padding: 0,
                   fontSize: 17,
+                  // `big` в колонке — имя: жирнее соседних значений.
+                  fontWeight: big ? "600" : "400",
                   color: inputColor ?? t.ink,
                   fontVariant: tabular ? ["tabular-nums"] : undefined,
                 }}
@@ -534,6 +536,7 @@ export function FieldRow({
                 numberOfLines={1}
                 style={{
                   fontSize: 17,
+                  fontWeight: big ? "600" : "400",
                   color: value ? (valueColor ?? t.ink) : addLabel ? t.accent : t.placeholder,
                   fontVariant: tabular ? ["tabular-nums"] : undefined,
                 }}

@@ -86,7 +86,9 @@ describe("ввод номера: страна подписью, цифры в п
     // С 30.09 (вариант 10 владельца) страна — не подписью с флагом, а тихим
     // кодом перед цифрами; тап по коду открывает выбор страны.
     assert.match(header, /:\s*dial\.code/);
-    assert.match(header, /onPrefixPress=\{draft \? dial\.openPicker : undefined\}/);
+    // Тап по коду меняет страну и в новом клиенте, и на карточке (30.09).
+    assert.match(header, /onPrefixPress=\{draft \|\| !readOnly \? dial\.openPicker : undefined\}/);
+    assert.match(read("ClientExtraContacts.tsx"), /onPrefixPress=\{readOnly \? undefined : \(\) => setCodeFor\(p\)\}/);
     assert.match(header, /dial\.onType\(v\)/);
     assert.doesNotMatch(header, /countryFlag/);
   });
@@ -95,6 +97,7 @@ describe("ввод номера: страна подписью, цифры в п
 describe("шторка кода страны", () => {
   test("ищет по названию и по коду", () => {
     const hook = read("use-phone-country.tsx");
+    assert.match(hook, /export function CountryPickerSheet/);
     assert.match(hook, /<SelectSearch/);
     assert.match(hook, /name\.includes\(needle\) \|\| countryDialCode\(code\)\.slice\(1\)\.startsWith\(needle\)/);
   });

@@ -114,7 +114,21 @@ export default function ClientHeader({
   const dial = usePhoneCountry({
     phone: client.phone,
     home: country,
-    onChange: (full) => draft?.onPhoneChange(full),
+    onChange: (full) => {
+      if (draft) {
+        draft.onPhoneChange(full);
+        return;
+      }
+      // Карточка: страну сменили в шторке — номер переписывается тем же
+      // путём, что правка строки (ключ дедупа вместе с ним).
+      const e164 = full ? tryToE164(full, country) : null;
+      if (!e164) {
+        haptics.warning();
+        toast("Номер не распознан — проверьте код страны", "error");
+        return;
+      }
+      update({ phone: full, phone_e164: e164 });
+    },
   });
 
   return (
@@ -132,19 +146,14 @@ export default function ClientHeader({
           // Карточку только видят (право «Карточки клиентов: Видит») — имя
           // не правится.
           readOnly={!draft && !!readOnly}
+          // ОДНОЙ КОЛОНКОЙ С КОНТАКТАМИ (владелец 30.09: «если написал
+          // „Телефон“ — слева имя, ниже телефон, как можно проще»): «Имя |
+          // Артем», «Телефон | +357 …». Имя жирнее — это сам человек.
           label="Имя"
-          // КОМПАКТНО (владелец 2026-09-21: «слишком большие блоки»): имя и
-          // номер — одна ячейка без подписей и без линии между ними, как
-          // контакт в iPhone. Подсказка пустого поля называет его: сюда же
-          // вписывают и компанию.
-          hideLabel
-          compact
+          column={CONTACT_COLUMN}
+          big
           value={client.full_name}
           placeholder="Имя или компания"
-          // Имя — тем же размером, что номер, но жирнее: владелец 30.09 после
-          // варианта 10 — «слишком большие буквы, должно быть компактно».
-          big
-          stacked
           live={!!draft}
           // Вставку «Мария +357 99…» черновик делит: номер уезжает в телефон,
           // и поле должно сразу показать, что в имени осталось только имя.
@@ -193,6 +202,7 @@ export default function ClientHeader({
           // код нажимается — выбор страны; печатают только цифры.
           label="Телефон"
           column={CONTACT_COLUMN}
+          separated
           prefix={
             draft
               ? dial.value.trim().startsWith("+")
@@ -200,7 +210,9 @@ export default function ClientHeader({
                 : dial.code
               : phone.code
           }
-          onPrefixPress={draft ? dial.openPicker : undefined}
+          // Код страны меняется тапом по нему — и в новом клиенте, и на
+          // карточке (владелец 30.09: «а как менять код страны?»).
+          onPrefixPress={draft || !readOnly ? dial.openPicker : undefined}
           value={draft ? dial.value : phone.rest}
           placeholder="Номер"
           keyboardType="phone-pad"
@@ -283,7 +295,7 @@ export default function ClientHeader({
           noCopy={noCopy}
         />
       </SectionCard>
-      {draft ? dial.sheet : null}
+      {dial.sheet}
 
       {/* ЛЮДИ — СВОИМ БЛОКОМ СРАЗУ ПОД КЛИЕНТОМ (владелец 22.09: «давай
           сделаем отдельным блоком добавления человека»). Пункт «Человек» в

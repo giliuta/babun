@@ -10,9 +10,14 @@ import {
 } from "lucide-react-native";
 import type { PhoneEntry } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
+import type { CountryCode } from "libphonenumber-js";
+import { CountryPickerSheet } from "@/features/clients/use-phone-country";
 import {
+  composePhone,
   countryDialCode,
   dialPrefix,
+  nationalPart,
+  phoneCountryOf,
   formatPhoneAsYouType,
   formatPhoneForDisplay,
   isDialOnly,
@@ -213,6 +218,14 @@ export function ClientExtraContacts({
    *  значками, что «Добавить» и «Как связаться» (единый дизайн списков).
    *  Перебор по кругу требовал до пяти тапов и не показывал, что есть. */
   const [labelFor, setLabelFor] = useState<PhoneEntry | null>(null);
+  /** Номер, у которого сейчас выбирают страну (тап по «+357»). */
+  const [codeFor, setCodeFor] = useState<PhoneEntry | null>(null);
+  const pickCode = (next: CountryCode) => {
+    if (!codeFor) return;
+    const from = phoneCountryOf(codeFor.number, country);
+    const national = nationalPart(codeFor.number, from);
+    if (national) patchPhone(codeFor.id, { number: composePhone(national, next) });
+  };
 
   return (
     <>
@@ -233,6 +246,8 @@ export function ClientExtraContacts({
                 label={`Телефон ${index + 2}`}
                 column={column}
                 prefix={parts.code}
+                // Тап по коду — выбрать страну этого номера (30.09).
+                onPrefixPress={readOnly ? undefined : () => setCodeFor(p)}
                 value={parts.rest}
                 placeholder="Номер"
                 separated
@@ -462,6 +477,13 @@ export function ClientExtraContacts({
         />
       )}
 
+
+      <CountryPickerSheet
+        visible={codeFor !== null}
+        selected={codeFor ? phoneCountryOf(codeFor.number, country) : null}
+        onPick={pickCode}
+        onClose={() => setCodeFor(null)}
+      />
 
       <PickerSheet
         visible={labelFor !== null}
