@@ -1,5 +1,6 @@
 import { money } from "@babun/shared/common/utils/money";
 import { renderTemplate, templateTokenKeys } from "@babun/shared/local/sms-templates";
+import { analyzeSmsEncoding } from "@babun/shared/local/sms-encoding";
 
 // SMS ПО ШАБЛОНУ СО СВОЕГО ТЕЛЕФОНА (STORY-089, волна 1).
 //
@@ -165,4 +166,29 @@ export function smsOptions<T extends SmsTemplateLike>(templates: readonly T[], v
 export function smsUrlWithBody(url: string, body: string, os: string): string {
   if (!body) return url;
   return `${url}${os === "ios" ? "&" : "?"}body=${encodeURIComponent(body)}`;
+}
+
+// ЛИМИТ СООБЩЕНИЯ И БЕЗ ЭМОДЗИ (владелец 30.09: «эмодзи мы вообще не будем
+// использовать… давай сделаем просто лимиты по сообщению»). Тариф понятен
+// тремя строками: до 70 знаков — 1 SMS, до 134 — 2, до 201 — 3; длиннее
+// набрать нельзя. Эмодзи в поле не попадают вовсе.
+
+/** Больше скольких SMS одно сообщение не бывает. */
+export const MAX_SMS_PARTS = 3;
+
+/** Эмодзи и их склейки: знаки вне основной плоскости (пары суррогатов),
+ *  значки U+2600–U+27BF, селектор вида и соединитель. */
+const EMOJI = /[\uD800-\uDFFF]|[☀-➿]|️|‍/g;
+
+export const stripEmoji = (text: string): string => text.replace(EMOJI, "");
+
+/** Сколько SMS займёт текст (как считает Twilio). */
+export const smsPartsOf = (text: string): number => analyzeSmsEncoding(text).segments;
+
+/** Правка поля SMS: без эмодзи, а сверх лимита — остаётся прежний текст.
+ *  `measure` — текст, по которому считать части (у шаблона — с подставленными
+ *  полями). */
+export function acceptSmsInput(next: string, prev: string, measure: (text: string) => string = (x) => x): string {
+  const clean = stripEmoji(next);
+  return smsPartsOf(measure(clean)) > MAX_SMS_PARTS && clean.length > prev.length ? prev : clean;
 }

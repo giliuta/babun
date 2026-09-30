@@ -86,7 +86,9 @@ export function SmsHistoryScreen() {
         />
       </View>
 
-      {teams.length > 1 ? (
+      {/* Выбор по календарям — всегда, даже при одном (владелец 30.09:
+          «календари — в вся история, там выбор по календарям»). */}
+      {teams.length > 0 ? (
         <View style={{ marginBottom: 12 }}>
           <ScopeChips
             onCanvas

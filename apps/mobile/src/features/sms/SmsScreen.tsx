@@ -13,14 +13,12 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
-import { useTeams } from "@/features/reference/queries";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { openSmsCheckout, TOPUP_AMOUNTS_CENTS, useSmsAccount, useSmsHistory } from "./sms-account";
 import { balanceWarning } from "./sms-model";
-import { SmsAutotopupCard } from "./SmsAutotopupCard";
 import { SmsHistoryRow } from "./SmsHistoryRow";
-import { SmsBalanceCard, SmsTariffCard, SmsTeamsTiles } from "./SmsParts";
+import { SmsBalanceCard, SmsTariffCard } from "./SmsParts";
 import { euro } from "./sms-words";
 
 // КАБИНЕТ → SMS — ДЕНЬГИ И ОТПРАВКА ВСЕЙ КОМПАНИИ (STORY-089; владелец
@@ -30,11 +28,9 @@ import { euro } from "./sms-words";
 //
 // Сверху вниз, название — в шапке карточки (канон блоков):
 //   • БАЛАНС — сумма крупно, «≈ N SMS», месяц в деньгах и штуках;
-//   • КАЛЕНДАРИ — команды компании плитками в своих цветах: SMS за месяц;
-//     тап — SMS команды (шаблоны, имя отправителя);
-//   • АВТОПОПОЛНЕНИЕ — карта и порог;
-//   • ТАРИФ — сколько стоит SMS и что дают пакеты;
-//   • ИСТОРИЯ — последние сообщения и дверь ко всем.
+//   • ТАРИФ — лимиты по длине (1, 2, 3 SMS) и что дают пакеты;
+//   • ИСТОРИЯ — последние сообщения и дверь ко всем; календари — там
+//     выбором (владелец 30.09: «календари запихни в всю историю»).
 // Выключателей отправки нет: команда отправляет, когда у неё есть имя
 // отправителя и хватает баланса.
 //
@@ -51,8 +47,6 @@ export function SmsScreen() {
   const params = useLocalSearchParams<{ topup?: string }>();
   const account = useSmsAccount();
   const history = useSmsHistory(5);
-  const { data: allTeams = [] } = useTeams();
-  const teams = allTeams.filter((team) => team.is_active !== false);
   const [topupOpen, setTopupOpen] = useState(false);
   const awaitingPayment = useRef(false);
 
@@ -125,13 +119,15 @@ export function SmsScreen() {
     <Screen edges={["top"]}>
       <ScreenHeader title="SMS" />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
+        {/* Плашки нет (владелец 30.09: «баланс ноль и так видно»): «Пополните
+            баланс» — строкой под суммой. Плашка — только заморозка сверкой. */}
         {!data.serviceOn ? (
           <View style={{ marginHorizontal: GUTTER, marginTop: 12 }}>
             <NoticeBar tone="info" message="Сервис SMS ещё не подключён" />
           </View>
-        ) : warning ? (
+        ) : data.frozen && warning ? (
           <View style={{ marginHorizontal: GUTTER, marginTop: 12 }}>
-            <NoticeBar tone={data.frozen ? "error" : "warn"} message={warning} />
+            <NoticeBar tone="error" message={warning} />
           </View>
         ) : null}
         {/* ТРЕВОГИ СВЕРКИ (волна 13): расхождение журнала, спор по карте,
@@ -143,10 +139,6 @@ export function SmsScreen() {
         ))}
 
         <SmsBalanceCard account={data} />
-
-        {teams.length > 0 ? <SmsTeamsTiles account={data} teams={teams} /> : null}
-
-        {owner.autotopup ? <SmsAutotopupCard auto={owner.autotopup} /> : null}
 
         <SmsTariffCard priceCents={data.priceCents} />
 

@@ -110,11 +110,12 @@ describe("ответ базы", () => {
     assert.equal(smsErrorText(new Error("sms:limit")), "На сегодня предел SMS сотрудника исчерпан");
   });
 
-  test("предупреждение о балансе — только когда SMS настроены", () => {
+  test("предупреждение о балансе — ниже €5 и только когда SMS настроены", () => {
     const base = { priceCents: 12, senders: { t1: "Giliuta" } };
     const acc = (cents: number) => ({ ...base, owner: parseSmsAccount({ balance_cents: cents }).owner });
-    assert.equal(balanceWarning(acc(0)), "Баланс пуст — SMS не уходят");
-    assert.equal(balanceWarning(acc(120)), "Баланс кончается — хватит на ≈ 10 SMS");
+    assert.equal(balanceWarning(acc(0)), "Пополните баланс");
+    assert.equal(balanceWarning(acc(499)), "Пополните баланс");
+    assert.equal(balanceWarning(acc(500)), null);
     assert.equal(balanceWarning(acc(1200)), null);
     assert.equal(balanceWarning({ ...acc(0), senders: {} }), null, "SMS не настроены");
     assert.equal(balanceWarning({ ...base, owner: null }), null, "сотруднику баланс не виден");

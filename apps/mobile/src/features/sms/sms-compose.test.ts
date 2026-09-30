@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { SmsTemplate } from "@babun/shared/local/sms-templates";
-import { fillTemplate, smsOptions, smsUrlWithBody, smsVars } from "./sms-compose";
+import { acceptSmsInput, fillTemplate, MAX_SMS_PARTS, smsOptions, smsPartsOf, smsUrlWithBody, smsVars, stripEmoji } from "./sms-compose";
 
 const tpl = (id: string, body: string, enabled = true): SmsTemplate => ({
   id,
@@ -92,5 +92,29 @@ describe("ссылка на «Сообщения»", () => {
 
   test("без текста — голая ссылка", () => {
     assert.equal(smsUrlWithBody("sms:+35799123456", "", "ios"), "sms:+35799123456");
+  });
+});
+
+describe("лимит сообщения и без эмодзи (владелец 30.09)", () => {
+  test("эмодзи в поле не попадают", () => {
+    assert.equal(stripEmoji("Ждём вас 😀👍 завтра ☀️"), "Ждём вас  завтра ");
+    assert.equal(acceptSmsInput("Привет 😀", "Привет "), "Привет ");
+  });
+
+  test("до 3 SMS — пишется, сверх — прежний текст; стирать можно всегда", () => {
+    const at201 = "я".repeat(201);
+    assert.equal(smsPartsOf(at201), MAX_SMS_PARTS);
+    assert.equal(acceptSmsInput(at201, "я".repeat(200)), at201);
+    assert.equal(acceptSmsInput(at201 + "я", at201), at201, "202-й знак не встаёт");
+    const over = "я".repeat(250);
+    assert.equal(acceptSmsInput("я".repeat(249), over), "я".repeat(249), "лишнее стирается");
+    assert.equal(smsPartsOf("я".repeat(70)), 1);
+    assert.equal(smsPartsOf("я".repeat(134)), 2);
+  });
+
+  test("шаблон меряется с подставленными полями", () => {
+    const measure = (x: string) => x.replace("[Имя]", "Александра");
+    const base = "я".repeat(195);
+    assert.equal(acceptSmsInput(base + "[Имя]", base, measure), base, "с именем вышло бы 205 знаков");
   });
 });

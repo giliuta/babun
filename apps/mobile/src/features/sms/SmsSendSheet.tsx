@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
-import { fillTemplate } from "./sms-compose";
+import { acceptSmsInput, fillTemplate } from "./sms-compose";
 import {
   smsErrorText,
   useAppointmentLink,
@@ -172,7 +172,7 @@ export function SmsSendSheet({
         <TextInput
           value={text}
           onChangeText={(next) => {
-            setText(next);
+            setText(acceptSmsInput(next, text));
             setPicked(null);
           }}
           placeholder="Текст SMS"

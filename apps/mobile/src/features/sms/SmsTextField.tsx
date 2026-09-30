@@ -6,7 +6,7 @@ import { formatDateKey } from "@babun/shared/common/utils/date-utils";
 import { Chip } from "@/components/ui/Chip";
 import { FieldLabel } from "@/components/ui/Field";
 import { useThemeColors } from "@/theme/colors";
-import { smsVars } from "./sms-compose";
+import { acceptSmsInput, MAX_SMS_PARTS, smsVars } from "./sms-compose";
 
 // ТЕКСТ SMS — ОДНО ПОЛЕ (STORY-089): текст шаблона команды пишется здесь,
 // в настройке шаблона.
@@ -69,7 +69,8 @@ export function SmsTextField({
           <FieldLabel text="Текст" />
           <TextInput
             value={value}
-            onChangeText={onChange}
+            // Без эмодзи и не длиннее 3 SMS с подставленными полями.
+            onChangeText={(next) => onChange(acceptSmsInput(next, value, (x) => renderTemplate(x, sample)))}
             onSelectionChange={(e) => setCursor(e.nativeEvent.selection.start)}
             placeholder="Текст SMS"
             placeholderTextColor={t.placeholder}
@@ -103,7 +104,7 @@ export function SmsTextField({
                 fontVariant: ["tabular-nums"],
               }}
             >
-              {`${encoding.length} знаков · ${encoding.segments} SMS`}
+              {`${encoding.length} знаков · ${encoding.segments} SMS${encoding.segments >= MAX_SMS_PARTS ? " — предел" : ""}`}
             </Text>
           ) : null}
         </View>
@@ -147,7 +148,7 @@ export function SmsTextField({
               maxFontSizeMultiplier={1.2}
               style={{ marginTop: 6, fontSize: 13, color: multipart ? t.warning : t.sub, fontVariant: ["tabular-nums"] }}
             >
-              {`${encoding.length} знаков · ${encoding.segments} SMS`}
+              {`${encoding.length} знаков · ${encoding.segments} SMS${encoding.segments >= MAX_SMS_PARTS ? " — предел" : ""}`}
             </Text>
           ) : null}
         </View>

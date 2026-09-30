@@ -46,6 +46,7 @@ import {
   useTeamTemplates,
 } from "@/features/sms/sms-account";
 import { euro } from "@/features/sms/sms-words";
+import { acceptSmsInput } from "@/features/sms/sms-compose";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import {
@@ -336,7 +337,7 @@ export function BulkSmsSheet({
           <TextInput
             value={body}
             accessibilityLabel="Текст SMS"
-              onChangeText={setBody}
+              onChangeText={(next) => setBody(acceptSmsInput(next, body))}
               placeholder="Текст сообщения… можно вставить [Имя]"
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}

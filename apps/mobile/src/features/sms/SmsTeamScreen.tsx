@@ -5,7 +5,6 @@ import { BadgeCheck, EyeOff, RotateCcw, Trash2, Wallet } from "lucide-react-nati
 import { AppearanceTile, appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { NoticeBar } from "@/components/ui/NoticeBar";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -130,21 +129,19 @@ export function SmsTeamScreen() {
         />
       ) : (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }} scrollEnabled={!dragging}>
-          {balanceWarning(account.data) ? (
-            <View style={{ marginHorizontal: GUTTER, marginTop: 12 }}>
-              <NoticeBar tone="warn" message={balanceWarning(account.data) ?? ""} />
-            </View>
-          ) : null}
           <SectionCard title="Баланс">
             <SettingsRow
               tile="neutral"
               icon={Wallet}
               title={owner ? euro(owner.balanceCents) : "—"}
+              // Ниже €5 — «Пополните баланс» строкой, без плашки (владелец 30.09).
               sub={
-                owner && account.data
+                balanceWarning(account.data) ??
+                (owner && account.data
                   ? balanceWords(owner.balanceCents, owner.freeLeft, account.data.priceCents)
-                  : undefined
+                  : undefined)
               }
+              subColor={balanceWarning(account.data) ? t.warning : undefined}
               onPress={() => router.push("/cabinet/sms" as Href)}
             />
           </SectionCard>

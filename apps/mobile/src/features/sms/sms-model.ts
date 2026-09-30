@@ -225,9 +225,9 @@ export function parseSmsRecordLog(data: unknown): SmsRecordLog {
 /** Просит ли текст ссылку «Подтвердить / Отменить». */
 export const wantsLink = (body: string | null | undefined): boolean => /\[(Ссылка|Link)\]/u.test(body ?? "");
 
-/** Сколько SMS ещё хватит, пока баланс мал: предупреждать, когда меньше
- *  этого числа коротких SMS. */
-export const LOW_BALANCE_SMS = 20;
+/** Ниже этой суммы — «Пополните баланс» (владелец 30.09: «просто
+ *  предупреждение на пяти — пополните баланс»). Центы. */
+export const LOW_BALANCE_CENTS = 500;
 
 /** Предупреждение о балансе словами; `null` — баланса хватает, он не виден
  *  (сотруднику) или SMS не настроены (ни у одной команды нет имени
@@ -241,11 +241,7 @@ export function balanceWarning(
   if (account.frozen) return FROZEN_WORDS;
   if (owner.balanceCents < 0) return "Долг по балансу — SMS не уходят";
   if (Object.keys(account.senders ?? {}).length === 0) return null;
-  const price = Math.max(1, account.priceCents);
-  const left = Math.floor(owner.balanceCents / price);
-  if (left <= 0) return "Баланс пуст — SMS не уходят";
-  if (left < LOW_BALANCE_SMS) return `Баланс кончается — хватит на ≈ ${left} SMS`;
-  return null;
+  return owner.balanceCents < LOW_BALANCE_CENTS ? "Пополните баланс" : null;
 }
 
 /** Отправка остановлена сверкой: баланс не сошёлся с журналом денег. */
