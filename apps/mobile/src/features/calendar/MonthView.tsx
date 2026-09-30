@@ -2,12 +2,11 @@ import { memo, useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
-import {
-  computeDayFinance,
-  type DayFinanceTotals,
-} from "@babun/shared/local/finance/day-summary";
 import { getDayExtras } from "@babun/shared/local/day-extras";
+import { formatHM } from "@/features/appointments/helpers";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
+import { dayMoney, type DayMoney } from "@/features/calendar/day-money";
+import { useTransactions } from "@/features/finances/queries";
 import {
   isWeekendColumn,
   weekdayIndex,
@@ -103,34 +102,51 @@ export const MonthView = memo(function MonthView({
   const services = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
 
-  // Финансы всех дней одной мемоизацией (аудит: computeDayFinance гонялся
-  // по 42 клеткам в каждом рендере). Дни без записей, но с ручными
-  // операциями (extras) тоже попадают в карту.
+  // ДЕНЬГИ КЛЕТКИ — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО ПОЛОСА НЕДЕЛИ И «ФИНАНСЫ»
+  // (`day-money.ts`, 2026-09-30): доход — пришедшее в этот день по леджеру,
+  // а не оплаты записей дня; месяц раньше леджера не видел вовсе, и ручная
+  // операция с вкладки «Финансы» в клетке не стояла.
+  const todayStr = todayYmd ?? ymd(new Date());
+  const ledgerQuery = useTransactions(ymd(cells[0]), ymd(cells[cells.length - 1]), {
+    brigadeIds: teamId ? [teamId] : undefined,
+    enabled: showFinance,
+  });
+  const ledger = ledgerQuery.isPlaceholderData ? undefined : ledgerQuery.data;
+
+  // Финансы всех дней одной мемоизацией (аудит: расчёт гонялся по 42
+  // клеткам в каждом рендере). Дни без записей, но с операциями леджера или
+  // ручными операциями (extras) тоже попадают в карту.
   const totalsByDay = useMemo(() => {
-    const m = new Map<string, DayFinanceTotals>();
-    if (!showFinance) return new Map<string, DayFinanceTotals>();
+    const m = new Map<string, DayMoney>();
+    if (!showFinance) return m;
     const dates = new Set(financeByDay.keys());
+    for (const tx of ledger ?? []) dates.add(tx.occurred_on);
     if (teamId) {
       const prefix = `${teamId}:`;
       for (const k of Object.keys(extrasMap)) {
         if (k.startsWith(prefix)) dates.add(k.slice(prefix.length));
       }
     }
+    const nowHm = formatHM(new Date());
     for (const date of dates) {
       m.set(
         date,
-        computeDayFinance(
-          financeByDay.get(date) ?? [],
+        dayMoney({
+          ymd: date,
+          appointments: financeByDay.get(date) ?? [],
+          transactions: ledger ?? [],
           services,
-          getDayExtras(extrasMap, teamId, date),
-        ),
+          teamId,
+          extras: getDayExtras(extrasMap, teamId, date),
+          businessToday: todayStr,
+          nowHm,
+        }),
       );
     }
     return m;
-  }, [financeByDay, services, extrasMap, teamId, showFinance]);
+  }, [financeByDay, ledger, services, extrasMap, teamId, showFinance, todayStr]);
 
   const t = useThemeColors();
-  const todayStr = todayYmd ?? ymd(new Date());
 
   return (
     <View style={{ flex: 1, backgroundColor: t.surface }}>
@@ -298,14 +314,21 @@ export const MonthView = memo(function MonthView({
                       </View>
                     ) : null}
                   </View>
-                  {totals?.hasAny ? (
+                  {totals &&
+                  (totals.planned !== 0 ||
+                    totals.debt !== 0 ||
+                    totals.income !== 0 ||
+                    totals.expense !== 0) ? (
                     <View className="mt-0.5 w-full">
+                      {/* Серым — ещё ожидается, янтарём — долг прошедших
+                          записей: план в прошлом стал долгом, а не пропал. */}
                       <MoneyRow v={totals.planned} color={t.sub} skipZero />
-                      <MoneyRow v={totals.earned} color={t.success} skipZero />
-                      <MoneyRow v={totals.spent} color={t.danger} skipZero />
+                      <MoneyRow v={totals.debt} color={t.warning} skipZero />
+                      <MoneyRow v={totals.income} color={t.success} skipZero />
+                      <MoneyRow v={totals.expense} color={t.danger} skipZero />
                       {/* Прибыль — только когда в дне были деньги (29.09): у дня с
                           одним планом синий «€0» читался как данные. */}
-                      {totals.earned !== 0 || totals.spent !== 0 ? (
+                      {totals.income !== 0 || totals.expense !== 0 ? (
                         <MoneyRow
                           v={totals.profit}
                           color={totals.profit < 0 ? t.danger : t.accent}

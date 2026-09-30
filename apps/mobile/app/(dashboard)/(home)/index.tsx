@@ -1542,6 +1542,16 @@ export default function CalendarTab() {
     (ymd: string) => financeByDate.get(ymd) ?? [],
     [financeByDate],
   );
+  // Запись по id — для строк леджера, чья запись в другом дне (предоплата
+  // сегодня за завтра): разбор дня называет её услугами и её днём.
+  const financeById = useMemo(
+    () => new Map(financeAppts.map((a) => [a.id, a])),
+    [financeAppts],
+  );
+  const findFinanceRecord = useCallback(
+    (id: string) => financeById.get(id),
+    [financeById],
+  );
 
   const dayYmd = formatYMD(day);
   // Резолвер «записи дня» для страниц пейджера (prev/cur/next день или
@@ -3164,6 +3174,7 @@ export default function CalendarTab() {
           onEditAppointment={openEdit}
           // После формы операции человек возвращается в разбор того же дня.
           onReopen={(ymd) => setFinModalYmd(ymd)}
+          findRecord={findFinanceRecord}
         />
       ) : null}
 

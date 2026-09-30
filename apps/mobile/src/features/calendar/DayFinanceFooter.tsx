@@ -2,13 +2,12 @@ import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
-import { computeDayFinance } from "@babun/shared/local/finance/day-summary";
 import { getDayExtras } from "@babun/shared/local/day-extras";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { RAIL_W } from "@/features/calendar/DayView";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
-import { ledgerExtrasByDay } from "@/features/calendar/day-ledger";
+import { dayMoney } from "@/features/calendar/day-money";
 import { useTransactions } from "@/features/finances/queries";
 
 // Thin money strip pinned under the day/week grid — per-day Доход (green) over
@@ -20,8 +19,11 @@ import { useTransactions } from "@/features/finances/queries";
 // записей, оплаченных или нет, — и неоплаченная запись на €135 стояла зелёным
 // «доходом». План дня живёт в шторке дня (тап по столбцу), а полоса под
 // сеткой говорит только о деньгах, которые уже есть.
-// «Расход» comes from computeDayFinance (materials + manual expenses +
-// day extras), never a hardcoded zero.
+//
+// С 2026-09-30 — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО «ФИНАНСЫ» (`day-money.ts`): доход дня —
+// деньги, пришедшие в этот день по леджеру. Раньше полоса брала оплаты
+// записей ЭТОГО дня, и предоплата, внесённая сегодня за завтрашнюю запись,
+// стояла доходом завтра. Расход — расходы леджера и материалы записей дня.
 export function DayFinanceFooter({
   days,
   appointments,
@@ -47,20 +49,15 @@ export function DayFinanceFooter({
   const t = useThemeColors();
   const sharedServices = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
-  // Ручные проводки леджера за видимые дни: чаевые и заправка, добавленные
-  // на вкладке «Финансы», обязаны стоять и здесь (владелец 2026-09-07:
-  // «чтобы доход/расход внизу заработал»). Авто-проводки записей не нужны —
-  // их деньги computeDayFinance считает по самим записям.
+  // Леджер видимых дней — источник денег полосы (оплаты записей и ручные
+  // операции одной выборкой, по дате операции).
   const rangeFrom = days.length > 0 ? formatYMD(days[0]) : "";
   const rangeTo = days.length > 0 ? formatYMD(days[days.length - 1]) : "";
   const ledgerQuery = useTransactions(rangeFrom, rangeTo, {
     brigadeIds: teamId ? [teamId] : undefined,
     enabled: days.length > 0,
   });
-  const ledgerExtras = useMemo(
-    () => ledgerExtrasByDay(ledgerQuery.data ?? []),
-    [ledgerQuery.data],
-  );
+  const ledger = ledgerQuery.data;
 
   const byDate = useMemo(() => {
     const m = new Map<string, Appointment[]>();
@@ -72,22 +69,29 @@ export function DayFinanceFooter({
     return m;
   }, [appointments]);
 
-  // computeDayFinance проходит записи+услуги каждого дня — без мемо это
+  // Расчёт дня проходит записи+услуги каждого дня — без мемо это
   // пересчитывалось на каждый кадр зума/пейджинга.
   const rows = useMemo(
     () =>
       days.map((d) => {
         const ymd = formatYMD(d);
-        const totals = computeDayFinance(
-          byDate.get(ymd) ?? [],
-          sharedServices,
-          [...getDayExtras(extrasMap, teamId, ymd), ...(ledgerExtras.get(ymd) ?? [])],
-        );
+        const money = dayMoney({
+          ymd,
+          appointments: byDate.get(ymd) ?? [],
+          transactions: ledger ?? [],
+          services: sharedServices,
+          teamId,
+          extras: getDayExtras(extrasMap, teamId, ymd),
+          // Полоса говорит только о пришедшем и ушедшем: долг и план ей не
+          // нужны, «сейчас» для них не важно.
+          businessToday: ymd,
+          nowHm: "00:00",
+        });
         return {
           d,
           ymd,
-          income: totals.earned,
-          spent: totals.spent,
+          income: money.income,
+          spent: money.expense,
           // VoiceOver: «пятница, 18 июля», а не сырое YYYY-MM-DD.
           dateLabel: d.toLocaleDateString("ru-RU", {
             weekday: "long",
@@ -96,7 +100,7 @@ export function DayFinanceFooter({
           }),
         };
       }),
-    [days, byDate, sharedServices, extrasMap, ledgerExtras, teamId],
+    [days, byDate, sharedServices, extrasMap, ledger, teamId],
   );
 
   // САМА ПОЛОСА БОЛЬШЕ НЕ РЕШАЕТ, ПОКАЗЫВАТЬСЯ ЛИ ЕЙ. Здесь стояло «пустая
