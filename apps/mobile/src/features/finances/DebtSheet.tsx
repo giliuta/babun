@@ -401,8 +401,8 @@ export function DebtSheet({
           doorway.open(() =>
             router.push(
               (debtTeamId
-                ? `${categoriesHref}?team=${encodeURIComponent(debtTeamId)}`
-                : categoriesHref) as Href,
+                ? `${categoriesHref}?team=${encodeURIComponent(debtTeamId)}&kind=debt`
+                : `${categoriesHref}?kind=debt`) as Href,
             ),
           )
         }

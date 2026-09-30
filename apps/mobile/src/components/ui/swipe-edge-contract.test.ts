@@ -210,7 +210,6 @@ describe("кромки свайпа", () => {
     // же правила, а не своим фильтром — иначе скрытая и чужая команда
     // вернутся в выбор в одном из трёх мест.
     for (const [file, hint] of [
-      ["app/(dashboard)/cabinet/templates.tsx", "шаблоны операций"],
       ["src/features/finances/use-debt-draft.ts", "долги"],
     ] as const) {
       const src = readFileSync(join(app, file), "utf8");

@@ -145,7 +145,20 @@ export default function CategoriesScreen() {
   // Третья ступень — долги (владелец 2026-09-10: «под расход свои категории,
   // под доход свои, под долги свои, они не смешиваются»). В списке
   // поставщиков и займов «Бензину» делать нечего.
-  const [type, setType] = useState<FinanceCategoryKind>("expense");
+  // ОТДЕЛЬНАЯ СТРАНИЦА НА ВИД (владелец 2026-09-30: «категории отдельными
+  // страницами — доходы, расходы, долги»). Настройки финансов открывают
+  // `?kind=` — вид закреплён, переключателя нет. Без него (старые двери) —
+  // прежний переключатель.
+  const { kind: kindParam, team: pinnedTeam } = useLocalSearchParams<{
+    kind?: string;
+    team?: string;
+  }>();
+  const fixedKind: FinanceCategoryKind | null =
+    kindParam === "income" || kindParam === "expense" || kindParam === "debt"
+      ? kindParam
+      : null;
+  const [pickedType, setType] = useState<FinanceCategoryKind>("expense");
+  const type = fixedKind ?? pickedType;
   const [open, setOpen] = useState(false);
   // Правка своей категории (rename/цвет) — раньше единственным «редактором»
   // был деструктивный обход «удалить+создать», обнулявший category_id у
@@ -354,10 +367,25 @@ export default function CategoriesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Категории" seam={teams.length === 0} />
+      <ScreenHeader
+        title={
+          fixedKind === "income"
+            ? "Категории доходов"
+            : fixedKind === "expense"
+              ? "Категории расходов"
+              : fixedKind === "debt"
+                ? "Категории долгов"
+                : "Категории"
+        }
+        // Команда закреплена адресом — её имя под заголовком, ленты нет.
+        subtitle={pinnedTeam ? teams.find((team) => team.id === teamId)?.name : undefined}
+        seam={teams.length === 0 || !!pinnedTeam}
+      />
 
-      {/* КОМАНДЫ — ТА ЖЕ ЛЕНТА, ЧТО В НАСТРОЙКАХ КАЛЕНДАРЯ И ФИНАНСОВ. */}
-      {teams.length > 0 ? (
+      {/* КОМАНДЫ — ТА ЖЕ ЛЕНТА, ЧТО В НАСТРОЙКАХ КАЛЕНДАРЯ И ФИНАНСОВ. Пришли
+          из настроек своей команды — страница её и только её (владелец
+          2026-09-30: «перешёл в команду один — настройки чётко под неё»). */}
+      {teams.length > 0 && !pinnedTeam ? (
         <ScopeChips
           items={teams}
           activeId={teamId}
@@ -365,16 +393,18 @@ export default function CategoriesScreen() {
         />
       ) : null}
 
-      <SegmentedControl
-        options={[
-          { value: "expense", label: "Расходы", color: th.danger },
-          { value: "income", label: "Доходы", color: th.success },
-          { value: "debt", label: "Долги", color: th.warning },
-        ]}
-        value={type}
-        onChange={setType}
-        style={{ marginHorizontal: 16, marginTop: 12 }}
-      />
+      {fixedKind ? null : (
+        <SegmentedControl
+          options={[
+            { value: "expense", label: "Расходы", color: th.danger },
+            { value: "income", label: "Доходы", color: th.success },
+            { value: "debt", label: "Долги", color: th.warning },
+          ]}
+          value={type}
+          onChange={setType}
+          style={{ marginHorizontal: 16, marginTop: 12 }}
+        />
+      )}
 
       {isLoading ? (
         <EmptyState state="loading" fill />

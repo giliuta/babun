@@ -1,11 +1,10 @@
 import { ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
+  ArrowDownLeft,
+  ArrowUpRight,
   Building2,
-  FileText,
-  Percent,
-  Receipt,
-  Tags,
+  Handshake,
   Wallet,
 } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
@@ -18,90 +17,48 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { useFeatureOn, useSetCompanyFeature } from "@/features/settings/company-features";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import {
-  useSaveVatSettings,
-  useTeamVatOverrides,
-  useVatSettings,
-  vatSummaryLine,
-} from "@/features/finances/vat-queries";
-import { effectiveVatSettings } from "@babun/shared/local/finance/vat";
+import { useSaveVatSettings, useVatSettings } from "@/features/finances/vat-queries";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useTeams } from "@/features/reference/queries";
-import { useFinanceTemplates } from "@/features/finances/templates-queries";
 import {
   settingsTeamId,
-  teamCategoriesLine,
-  teamTemplatesLine,
+  teamCategoryKindLine,
 } from "@/features/finances/team-settings-lines";
 import { notify } from "@/lib/notify";
 import { getStorage } from "@babun/shared/storage";
 import { useTenantId } from "@/lib/tenant";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { accountsDoorLine } from "@/features/finances/accounts-sections";
-import { useCurrentRole, useTenant, type Tenant } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { financeSettingsRows } from "@/features/finances/settings-rows";
 import { LedgerExportRow } from "@/features/finances/LedgerExportRow";
 import { CurrencySettingsRow } from "@/features/settings/CurrencySettingsRow";
 import { useFinanceCategories } from "@/features/finances/queries";
-import { formatInvoiceNumber } from "@/features/invoices/numbering";
-import { useNextInvoiceNumber } from "@/features/invoices/queries";
 
-/** Подпись строки: как будет выглядеть счёт, не проваливаясь внутрь — номер и
- *  главное решение генератора (строками или одной позицией).
- *
- *  НОМЕР БЕРЁТСЯ ОТТУДА ЖЕ, ОТКУДА ЕГО БЕРЁТ ВНУТРЕННЯЯ СТРАНИЦА (RPC
- *  `next_invoice_number`). Локальный `invoice_next_number` — это только
- *  «продолжить с номера», заданное руками: сервер гасит его после первого
- *  выпуска, и строка вечно показывала бы «INV-2026-001», пока внутренняя
- *  страница называет настоящий следующий номер. Два соседних экрана не имеют
- *  права называть разные номера одного документа. Образец из формата —
- *  запасной путь, когда RPC ещё не ответил или телефон офлайн. */
-function invoiceLine(tenant: Tenant | undefined, nextNumber?: string | null): string {
-  if (!tenant) return "Загрузка…";
-  const sample = nextNumber ?? formatInvoiceNumber({
-    prefix: tenant.invoice_prefix || "INV",
-    year: new Date().getFullYear(),
-    seq: tenant.invoice_next_number ?? 1,
-    padding: tenant.invoice_number_padding,
-    yearlyReset: tenant.invoice_number_yearly_reset,
-  });
-  const lines =
-    tenant.invoice_line_source === "total" ? "одной строкой" : "услуги строками";
-  const due =
-    tenant.invoice_due_days === 0
-      ? "оплата по факту"
-      : `срок ${tenant.invoice_due_days} дн.`;
-  return `${sample} · ${lines} · ${due}`;
-}
+// НАСТРОЙКИ ФИНАНСОВ — ПО КОМАНДЕ (владелец 2026-09-30: «перешёл сверху в
+// команду один — и это полностью настройки чётко под команду один»).
+//
+// Сверху лента команд. Под ней — только выбранная команда: её счета (страница
+// без своей ленты — команда уже выбрана), её категории доходов, расходов и
+// долгов отдельными страницами и выгрузка её операций бухгалтеру.
+//
+// Ниже — «Общие»: валюта (одна на весь аккаунт) и реквизиты — общий список,
+// номер инвойса живёт за каждым набором реквизитов, там же бланк счёта
+// («Счета клиентам» переехали туда).
+//
+// Последним — функции: выключенное пропадает у всех, вместе с дверями.
+//
+// УБРАНО 30.09 по слову владельца: «Шаблоны операций» («не понимаю, что это,
+// нужно ли вообще» — убрать совсем) и дверь VAT (ставку регулируем в «Итого»
+// документа, она запоминается; страница не нужна).
 
-// НАСТРОЙКИ ФИНАНСОВ — ПО КОМАНДЕ (владелец 2026-09-24: «надо сделать
-// качественные настройки в финансах по каждой команде»; «у нас всё отдельно
-// под каждую команду»).
-//
-// Устроено как настройки календаря: сверху лента команд, под ней — деньги
-// ВЫБРАННОЙ команды (её счета, её категории и бюджеты, её шаблоны, её VAT).
-// Ниже — то, что владелец оставил единым на компанию: бланк счёта клиенту,
-// реквизиты (нумерация документов одна на компанию) и выгрузка бухгалтеру.
-// Последним — функции: выключенное пропадает у всех, вместе со своими
-// дверями.
-//
-// VAT — ФУНКЦИЯ, А НЕ ДВЕРЬ (владелец 2026-09-24: «VAT уже там по идее не
-// нужен»). Не работаешь с налогом — один тумблер в «Функциях», и ни одной
-// строки про VAT на странице нет. Работаешь — у каждой команды свой режим и
-// ставка в её блоке денег.
-//
-// Было: шестерёнка открывала системный Alert с шестью строками — против
-// закона продукта («настройка — всегда полноценная страница, лист — только
-// действие»).
+type CategoryKind = "income" | "expense" | "debt";
 
 export default function FinanceSettingsScreen() {
   const router = useRouter();
   const vat = useVatSettings();
   const tenantIdForVat = useTenantId();
   const saveVat = useSaveVatSettings();
-  const vatOverrides = useTeamVatOverrides();
-  const tenant = useTenant();
-  const nextNumber = useNextInvoiceNumber(new Date().getFullYear());
   // СТРАНИЦА ОТКРЫТА ВСЕМ, СТРОКИ — ПО ДОСТУПУ (владелец 20.09). Правило и
   // его причины — `features/finances/settings-rows.ts`.
   const debtsOn = useFeatureOn("debts");
@@ -124,16 +81,16 @@ export default function FinanceSettingsScreen() {
   const rows = {
     ...base,
     accounts: base.accounts && accountsOn,
-    vat: base.vat && vatOn,
-    invoices: base.invoices && documentsOn,
     requisites: base.requisites && documentsOn,
   };
 
   const { team: teamParam } = useLocalSearchParams<{ team?: string }>();
   const teams = useTeams().data ?? [];
   const teamId = settingsTeamId(teams, teamParam);
-  const withTeam = (path: string, key = "team") =>
-    (teamId ? `${path}?${key}=${encodeURIComponent(teamId)}` : path) as Href;
+  const withTeam = (path: string, extra?: string) =>
+    (teamId
+      ? `${path}?team=${encodeURIComponent(teamId)}${extra ? `&${extra}` : ""}`
+      : `${path}${extra ? `?${extra}` : ""}`) as Href;
 
   // Полный список ради двух чисел — сколько счетов открыто и закрыто. Кэш
   // общий со страницей «Счета», так что дверь и страница не назовут разные
@@ -141,25 +98,29 @@ export default function FinanceSettingsScreen() {
   const accounts = useAccountsWithBalances({ includeInactive: true });
   const teamAccounts = (accounts.data ?? []).filter((a) => a.brigade_id === teamId);
   const categoriesQuery = useFinanceCategories();
-  const templatesQuery = useFinanceTemplates();
-  const teamTemplates = (templatesQuery.data ?? []).filter(
-    (tpl) => tpl.brigade_id === teamId,
-  ).length;
-  const teamVat = effectiveVatSettings(
-    vat.data,
-    (vatOverrides.data ?? []).find((o) => o.teamId === teamId) ?? null,
-    null,
-  );
 
-  const teamGroup = rows.accounts || rows.categories || rows.templates || rows.vat;
-  const companyGroup = rows.currency || rows.invoices || rows.requisites || rows.templates;
+  // КАТЕГОРИИ — ОТДЕЛЬНОЙ СТРАНИЦЕЙ НА ВИД (владелец 2026-09-30). Долги —
+  // только когда функция «Долги» включена.
+  const categoryDoors: { kind: CategoryKind; title: string; icon: typeof Wallet }[] = [
+    { kind: "income", title: "Категории доходов", icon: ArrowDownLeft },
+    { kind: "expense", title: "Категории расходов", icon: ArrowUpRight },
+    ...(debtsOn
+      ? [{ kind: "debt" as const, title: "Категории долгов", icon: Handshake }]
+      : []),
+  ];
+  const categoryLine = (kind: CategoryKind): string | undefined =>
+    // Пока категории едут — без подписи: «Пока нет» на загрузке врало бы.
+    categoriesQuery.data ? teamCategoryKindLine(categoriesQuery.data, teamId, kind) : undefined;
+
+  const teamGroup = rows.accounts || rows.categories || rows.moneyGroup;
+  const commonGroup = rows.currency || rows.requisites;
 
   return (
     <Screen edges={["top"]}>
       {/* Шов под шапкой один — его несёт лента команд. */}
       <ScreenHeader title="Настройки финансов" seam={teams.length === 0} />
       {/* КОМАНДЫ СВЕРХУ, КАК В НАСТРОЙКАХ КАЛЕНДАРЯ: выбрана ровно одна —
-          деньги правятся у конкретной команды. */}
+          всё ниже неё — её. */}
       {rows.any && teams.length > 0 ? (
         <ScopeChips
           items={teams}
@@ -171,14 +132,13 @@ export default function FinanceSettingsScreen() {
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
           {teamGroup && teamId ? (
             <>
-              <SectionEyebrow>Деньги команды</SectionEyebrow>
+              <SectionEyebrow>
+                {teams.find((team) => team.id === teamId)?.name ?? "Команда"}
+              </SectionEyebrow>
               <SectionCard>
-                {/* «СЧЕТА» — ТА ЖЕ СТРАНИЦА, ЧТО ЗА ПОЛЗУНКАМИ ПАНЕЛИ (владелец
-                    2026-09-15): остатки, порядок, скрытие, «Добавить счёт» и
-                    закрытые счета — всё там; здесь она открывается на этой
-                    команде. РАЗДЕЛИТЕЛЬ ПРИНАДЛЕЖИТ СВОЕЙ СТРОКЕ и живёт под её
-                    же условием: иначе погашенная строка оставляет висеть
-                    волосинку. */}
+                {/* «СЧЕТА» — ТА ЖЕ СТРАНИЦА, ЧТО ЗА ПОЛЗУНКАМИ ПАНЕЛИ: остатки,
+                    порядок, скрытие, «Добавить счёт»; открывается на этой
+                    команде и своей ленты команд не несёт. */}
                 {rows.accounts ? (
                   <SettingsRow
                     tile={SETTINGS_TILE.blue}
@@ -195,95 +155,49 @@ export default function FinanceSettingsScreen() {
                     onPress={() => router.push(withTeam("/accounts/settings"))}
                   />
                 ) : null}
-                {rows.categories ? (
-                  <>
-                    {rows.accounts ? <Divider inset={56} /> : null}
-                    <SettingsRow
-                      tile={SETTINGS_TILE.purple}
-                      icon={Tags}
-                      title="Категории и бюджеты"
-                      // Пока категории едут — без подписи: «Пока нет — создайте
-                      // свои» на загрузке звало создать то, что уже есть.
-                      sub={
-                        categoriesQuery.data
-                          ? teamCategoriesLine(categoriesQuery.data, teamId)
-                          : undefined
-                      }
-                      onPress={() => router.push(withTeam("/finances/categories"))}
-                    />
-                  </>
-                ) : null}
-                {rows.templates ? (
+                {rows.categories
+                  ? categoryDoors.map((door, index) => (
+                      <SettingsDoor
+                        key={door.kind}
+                        separated={rows.accounts || index > 0}
+                        title={door.title}
+                        icon={door.icon}
+                        sub={categoryLine(door.kind)}
+                        onPress={() =>
+                          router.push(withTeam("/finances/categories", `kind=${door.kind}`))
+                        }
+                      />
+                    ))
+                  : null}
+                {/* ВЫГРУЗКА — ТОЛЬКО ЭТОЙ КОМАНДЫ (владелец 2026-09-30). */}
+                {rows.moneyGroup ? (
                   <>
                     {rows.accounts || rows.categories ? <Divider inset={56} /> : null}
-                    <SettingsRow
-                      tile={SETTINGS_TILE.teal}
-                      icon={Receipt}
-                      title="Шаблоны операций"
-                      sub={teamTemplatesLine(teamTemplates)}
-                      onPress={() => router.push(withTeam("/finances/templates"))}
-                    />
-                  </>
-                ) : null}
-                {rows.vat ? (
-                  <>
-                    {rows.accounts || rows.categories || rows.templates ? (
-                      <Divider inset={56} />
-                    ) : null}
-                    <SettingsRow
-                      tile={SETTINGS_TILE.red}
-                      icon={Percent}
-                      title="VAT"
-                      sub={vatSummaryLine(teamVat)}
-                      onPress={() => router.push(withTeam("/finances/vat-team", "teamId"))}
-                    />
+                    <LedgerExportRow teamId={teamId} />
                   </>
                 ) : null}
               </SectionCard>
             </>
           ) : null}
 
-          {companyGroup ? (
+          {commonGroup ? (
             <>
-              {/* ЕДИНОЕ НА КОМПАНИЮ (владелец 2026-09-24): реквизиты и
-                  нумерация документов одни на все команды — у налоговой один
-                  продавец и одна нумерация. Выгрузка бухгалтеру — тоже по всей
-                  компании. */}
-              <SectionEyebrow>Вся компания</SectionEyebrow>
+              {/* ОБЩЕЕ НА ВЕСЬ АККАУНТ (владелец 2026-09-30): валюта одна для
+                  всего; реквизиты — общий список, номер инвойса за каждым
+                  набором. */}
+              <SectionEyebrow>Общие</SectionEyebrow>
               <SectionCard>
-                {/* ВАЛЮТА — ПЕРВОЙ (владелец 30.09: «валюту — в настройки
-                    финансов»): в чём компания считает все деньги. */}
                 {rows.currency ? <CurrencySettingsRow /> : null}
-                {rows.invoices ? (
-                  <>
-                  {rows.currency ? <Divider inset={56} /> : null}
-                  <SettingsRow
-                    tile={SETTINGS_TILE.blue}
-                    icon={FileText}
-                    title="Счета клиентам"
-                    sub={invoiceLine(tenant.data, nextNumber.data)}
-                    onPress={() => router.push("/finances/invoices")}
-                  />
-                  </>
-                ) : null}
                 {rows.requisites ? (
                   <>
-                    {rows.invoices || rows.currency ? <Divider inset={56} /> : null}
+                    {rows.currency ? <Divider inset={56} /> : null}
                     <SettingsRow
-                      // Цветная плитка, как у соседей (прогон 2026-09-23): голый
-                      // глиф в ряду плиток читался как строка другого рода.
                       tile={SETTINGS_TILE.green}
                       icon={Building2}
                       title="Реквизиты"
-                      sub="Чем подписаны чеки и инвойсы"
+                      sub="Номер инвойса и бланк счёта"
                       onPress={() => router.push("/finances/requisites")}
                     />
-                  </>
-                ) : null}
-                {rows.templates ? (
-                  <>
-                    {rows.currency || rows.invoices || rows.requisites ? <Divider inset={56} /> : null}
-                    <LedgerExportRow />
                   </>
                 ) : null}
               </SectionCard>
@@ -318,9 +232,8 @@ export default function FinanceSettingsScreen() {
                   onChange={(v) => setFeature.mutate({ key: "documents", on: v }, { onError: featureFailed })}
                 />
               </SectionCard>
-              {/* VAT — тот же выключатель, что стоял на его странице
-                  («Работаем с VAT»): выключен — налог нигде не спрашивается и
-                  не считается; включён — режим и ставка у каждой команды. */}
+              {/* VAT — выключатель налога на весь аккаунт. Ставку и режим
+                  документа решает «Итого» (владелец 2026-09-30). */}
               {vat.data ? (
                 <SectionCard>
                   <SwitchRow
@@ -355,5 +268,34 @@ export default function FinanceSettingsScreen() {
         <EmptyState fill title="Настроек пока нет" />
       )}
     </Screen>
+  );
+}
+
+/** Дверь категорий одного вида — фиолетовая плитка справочника; разделитель
+ *  принадлежит своей строке и живёт под её условием. */
+function SettingsDoor({
+  separated,
+  title,
+  icon,
+  sub,
+  onPress,
+}: {
+  separated: boolean;
+  title: string;
+  icon: typeof Wallet;
+  sub?: string;
+  onPress: () => void;
+}) {
+  return (
+    <>
+      {separated ? <Divider inset={56} /> : null}
+      <SettingsRow
+        tile={SETTINGS_TILE.purple}
+        icon={icon}
+        title={title}
+        sub={sub}
+        onPress={onPress}
+      />
+    </>
   );
 }

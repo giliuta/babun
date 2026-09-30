@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { InvoiceSettingsBlocks } from "@/features/invoices/InvoiceSettingsBlocks";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Building2, EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import { AppearanceTile, appearanceRowFill } from "@/components/ui/AppearanceSheet";
@@ -195,6 +196,9 @@ export function RequisitesScreen() {
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: 12 }}
           scrollEnabled={!dragging}
+          // Поля бланка ниже списка: тап по соседнему полю не должен сначала
+          // прятать клавиатуру.
+          keyboardShouldPersistTaps="handled"
         >
           <View style={{ marginHorizontal: GUTTER }}>
             <ReorderList
@@ -278,6 +282,10 @@ export function RequisitesScreen() {
               )}
             </ReorderList>
           </View>
+          {/* БЛАНК ИНВОЙСА — ЗДЕСЬ ЖЕ (владелец 2026-09-30): «Счета клиентам»
+              переехали в реквизиты. Номер — у каждого набора (его карточка),
+              ниже — общее для всех бланков. */}
+          {readOnly ? null : <InvoiceSettingsBlocks />}
         </ScrollView>
       )}
 

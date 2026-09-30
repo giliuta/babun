@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { pickLedgerRows } from "./ledger-select";
 import { CalendarRange, FileSpreadsheet } from "lucide-react-native";
 import { listTransactionsForRange } from "@babun/shared/db/repositories/finance-transactions";
 import { PickerSheet } from "@/components/ui/PickerSheet";
@@ -32,7 +33,10 @@ const PERIODS: PeriodKind[] = [
   "year",
 ];
 
-export function LedgerExportRow() {
+/** ВЫГРУЗКА — ПО КОМАНДЕ (владелец 2026-09-30: «выгрузка закрепляется только
+ *  под команду, не под все»). `teamId` — команда, открытая в «Настройках
+ *  финансов»: в файл идут только её операции, имя команды — в заголовке. */
+export function LedgerExportRow({ teamId }: { teamId: string | null }) {
   const t = useThemeColors();
   const toast = useToast();
   const tenantId = useTenantId();
@@ -52,7 +56,11 @@ export function LedgerExportRow() {
     setBusy(true);
     try {
       const { from, to } = presetRange(kind);
-      const transactions = await listTransactionsForRange(supabase, tenantId, from, to);
+      const all = await listTransactionsForRange(supabase, tenantId, from, to);
+      const transactions = teamId ? pickLedgerRows(all, [teamId], []) : all;
+      const teamName = teamId
+        ? (teams.data ?? []).find((team) => team.id === teamId)?.name
+        : undefined;
       if (transactions.length === 0) {
         toast(`За «${PERIOD_LABELS[kind].toLowerCase()}» операций нет`);
         return;
@@ -68,7 +76,7 @@ export function LedgerExportRow() {
         },
         from,
         to,
-        title: `${PERIOD_LABELS[kind]} · ${presetHint(kind)}`,
+        title: [teamName, PERIOD_LABELS[kind], presetHint(kind)].filter(Boolean).join(" · "),
       });
     } catch (e) {
       toast(

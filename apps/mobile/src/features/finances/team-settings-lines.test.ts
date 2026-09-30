@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { settingsTeamId, teamCategoriesLine, teamTemplatesLine } from "./team-settings-lines";
+import { settingsTeamId, teamCategoriesLine, teamCategoryKindLine } from "./team-settings-lines";
 
 let n = 0;
 const cat = (over: Record<string, unknown>) =>
@@ -32,10 +32,21 @@ describe("настройки финансов команды — подписи 
     assert.equal(teamCategoriesLine(list, "B"), "Расход 1 · 1 бюджет");
     assert.equal(teamCategoriesLine(list, "C"), "Пока нет — создайте свои");
   });
+});
 
-  test("шаблоны: число или зачем они", () => {
-    assert.equal(teamTemplatesLine(0), "Повторяющиеся расходы в один тап");
-    assert.equal(teamTemplatesLine(3), "3 шаблона");
-    assert.equal(teamTemplatesLine(5), "5 шаблонов");
+describe("двери страниц категорий по виду", () => {
+  const cat = (over: Record<string, unknown>) =>
+    ({ id: String(Math.random()), name: "x", type: "expense", team_id: "A", hidden: false, is_system: false, monthly_budget: null, ...over }) as never;
+  test("число категорий вида у команды и бюджеты у расхода", () => {
+    const list = [
+      cat({ type: "expense", monthly_budget: 100 }),
+      cat({ type: "expense" }),
+      cat({ type: "expense", hidden: true }),
+      cat({ type: "income" }),
+      cat({ type: "income", team_id: "B" }),
+    ];
+    assert.equal(teamCategoryKindLine(list, "A", "expense"), "2 категории · 1 бюджет");
+    assert.equal(teamCategoryKindLine(list, "A", "income"), "1 категория");
+    assert.equal(teamCategoryKindLine(list, "A", "debt"), "Пока нет");
   });
 });

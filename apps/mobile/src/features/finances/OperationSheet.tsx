@@ -1,7 +1,8 @@
 import { useFeatureOn } from "@/features/settings/company-features";
+import { useRememberedVatRate } from "./remembered-vat-rate";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import { Repeat, Tag, User } from "lucide-react-native";
+import { Text, View } from "react-native";
+import { Tag, User } from "lucide-react-native";
 import type {
   FinanceTransaction,
   PaymentMethod,
@@ -52,8 +53,6 @@ import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
   formatEURExact as formatEUR,
-  formatMoneyForInput,
-  money,
   moneySign,
   parseMoneyInputToCents,
 } from "@babun/shared/common/utils/money";
@@ -94,9 +93,7 @@ import {
   operationTransactionPatch,
   type OperationPatchBaseline,
 } from "./operation-patch";
-import { useFinanceTemplates } from "./templates-queries";
 import { operationDraftKey, operationIsDirty } from "./operation-dirty";
-import { templatesForSheet } from "./template-apply";
 import { useCurrentRole } from "@/features/settings/tenant";
 
 /** Финансы онлайн-only НА ЗАПИСЬ (ТЗ §8): без сети кнопка гасится и называет
@@ -257,7 +254,6 @@ export function OperationSheet({
   /** День и время меняли руками — тогда их потеря тоже «набранное». */
   const [whenTouched, setWhenTouched] = useState(false);
   // Лист шаблонов — тот же вид выбора, что у категории.
-  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   // Дата и время правятся ТЕМ ЖЕ листом, что у записи.
   const [whenOpen, setWhenOpen] = useState(false);
   // Три клавиши НДС на самой операции. Владелец 2026-08-09: «не всегда надо
@@ -416,13 +412,6 @@ export function OperationSheet({
     [accounts, teamId],
   );
 
-  // ШАБЛОНЫ — ЗНАЧКОМ В ШАПКЕ, А НЕ ПОЛОСОЙ (прогон финансов 2026-09-24).
-  // 09.08 владелец снял полосу шаблонов с формы: «встречали первыми и занимали
-  // место под то, чем пользуются раз в месяц». Страница «Шаблоны операций»
-  // при этом осталась и обещала «в один тап» — а тапнуть шаблон было негде.
-  // Значок места не занимает и есть только у новой операции владельца, когда
-  // для этой команды есть хоть один шаблон.
-  const templatesQuery = useFinanceTemplates();
   // С уволенными: правка старой выплаты должна показать, кому она ушла.
   const peopleQuery = useMasters({ includeInactive: true });
   const clientChoice = useClientChoice();
@@ -431,36 +420,6 @@ export function OperationSheet({
   useEffect(() => {
     if (!visible) receiptSession.flush();
   }, [visible, receiptSession]);
-  const sheetTemplates = useMemo(
-    () => templatesForSheet(templatesQuery.data ?? [], teamId),
-    [templatesQuery.data, teamId],
-  );
-  const showTemplates =
-    isOwner && !isEdit && !debtPayment && sheetTemplates.length > 0;
-  const applyTemplate = (tpl: (typeof sheetTemplates)[number]) => {
-    setType(tpl.kind);
-    setAmount(formatMoneyForInput(Number(tpl.amount)));
-    // Категория шаблона — только если её сейчас можно выбрать в этой команде:
-    // скрытая или чужая подставлялась молча и так и сохранялась (аудит
-    // 2026-09-30). Нет — выбор пуст, и форма попросит категорию.
-    const tplCategory = tpl.category_id
-      ? pickableCategories(categories, tpl.kind, null, teamId).find(
-          (c) => c.id === tpl.category_id,
-        )
-      : undefined;
-    setCategoryId(tplCategory ? tplCategory.id : null);
-    if (tpl.master_id) setMasterId(tpl.master_id);
-    // Счёт шаблона — только если он ещё открыт и обслуживает эту команду;
-    // иначе остаётся счёт по умолчанию, а не пустой выбор.
-    if (tpl.account_id && teamAccounts.some((acc) => acc.id === tpl.account_id)) {
-      setAccountId(tpl.account_id);
-      setAccountTouched(true);
-    }
-    // Имя шаблона — заметкой, если своей нет: в ленте строка скажет
-    // «Аренда», а не только категорию.
-    setNotes((current) => (current.trim() ? current : tpl.name));
-    haptics.tap();
-  };
 
   const selectedAccount = useMemo(
     () => accounts.find((a) => a.id === accountId) ?? null,
@@ -511,11 +470,16 @@ export function OperationSheet({
   // ДЕЙСТВУЮЩИЙ НАЛОГ ЭТОЙ ОПЕРАЦИИ: счёт → команда → компания.
   const vatSettingsQuery = useVatSettings();
   const teamVatOverrides = useTeamVatOverrides();
-  const vat = effectiveVatSettings(
+  const settingsVat = effectiveVatSettings(
     vatSettingsQuery.data,
     (teamVatOverrides.data ?? []).find((o) => o.teamId === teamId),
     selectedAccount?.vat_mode ?? null,
   );
+  // СТАВКА — КАК В «ИТОГО» ДОКУМЕНТОВ (владелец 2026-09-30: «VAT регулируем
+  // через блок „Итого“, страница VAT не нужна»): написанная последней на
+  // этом телефоне, а пока не писали — ставка команды из прежних настроек.
+  const rememberedVat = useRememberedVatRate(settingsVat.rate);
+  const vat = { ...settingsVat, rate: rememberedVat.rate };
   // КЛАВИШИ ГАСИТ ТОЛЬКО ТУМБЛЕР КОМПАНИИ, А НЕ ПИН СЧЁТА.
   //
   // Компания с выключенным налогом не должна видеть слово «НДС» вообще — это
@@ -1012,25 +976,6 @@ export function OperationSheet({
       subtitle={
         teamId ? (teams.find((t) => t.id === teamId)?.name ?? undefined) : "Компания"
       }
-      headerAction={
-        showTemplates ? (
-          <Pressable
-            onPress={() => setTemplatePickerOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Шаблоны операций"
-            hitSlop={8}
-            style={({ pressed }) => ({
-              width: 36,
-              height: 36,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Repeat size={20} strokeWidth={2} color={th.accent} />
-          </Pressable>
-        ) : undefined
-      }
       scroll
       avoidKeyboard
       maxHeightRatio={0.86}
@@ -1452,14 +1397,15 @@ export function OperationSheet({
                   // Команда операции — команда справочника: без неё страница
                   // открывалась на первой команде (аудит 2026-09-30).
                   router.push(
+                    // Страница своего вида: «Категории расходов» у расхода.
                     (teamId
-                      ? `${categoriesHref}?team=${encodeURIComponent(teamId)}`
-                      : categoriesHref) as Href,
+                      ? `${categoriesHref}?team=${encodeURIComponent(teamId)}&kind=${type}`
+                      : `${categoriesHref}?kind=${type}`) as Href,
                   ),
                 )
             : undefined
         }
-        settingsLabel="Категории и бюджеты"
+        settingsLabel={type === "income" ? "Категории доходов" : "Категории расходов"}
         onClose={() => setCategoryPickerOpen(false)}
       />
       <ClientPickerSheet
@@ -1514,31 +1460,6 @@ export function OperationSheet({
         }
         settingsLabel="Сотрудники"
         onClose={() => setPayeePickerOpen(false)}
-      />
-      <PickerSheet
-        visible={templatePickerOpen}
-        title="Шаблоны"
-        items={sheetTemplates.map((tpl) => ({
-          id: tpl.id,
-          label: tpl.name,
-          icon: Repeat,
-          color: tpl.kind === "expense" ? th.danger : th.success,
-          hint: `${tpl.kind === "expense" ? "Расход" : "Доход"} · ${money(Number(tpl.amount))}`,
-          onPress: () => applyTemplate(tpl),
-        }))}
-        // Шестерёнка — на страницу шаблонов, паркуя лист операции (та же
-        // дверь, что у категорий).
-        onSettings={() =>
-          doorway.open(() =>
-            router.push(
-              (teamId
-                ? `/finances/templates?team=${encodeURIComponent(teamId)}`
-                : "/finances/templates") as Href,
-            ),
-          )
-        }
-        settingsLabel="Шаблоны операций"
-        onClose={() => setTemplatePickerOpen(false)}
       />
     </BottomSheet>
   );

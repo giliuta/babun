@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { ScopeChips } from "@/components/ui/ScopeChips";
+import { useLocalSearchParams, type Href } from "expo-router";
 import { settingsTeamId } from "@/features/finances/team-settings-lines";
 import { useClosedAccountActions } from "@/features/finances/accounts-page/use-closed-account-actions";
 import { money, moneySign } from "@babun/shared/common/utils/money";
@@ -68,7 +67,6 @@ import { useTeams } from "@/features/reference/queries";
 const EDIT_AFTER_PUSH_MS = SHEET_EXIT_MS + 350;
 
 export default function AccountsScreen() {
-  const router = useRouter();
   const online = useIsOnline();
   // Полный список: закрытые нужны счётчику двери в архив и шторке правки.
   const accountsQuery = useAccountsWithBalances({ includeInactive: true });
@@ -207,15 +205,11 @@ export default function AccountsScreen() {
         // сюда и заходят, а не на календарь, куда примитив уводит пустую
         // историю.
         fallbackHref={financeAccountsHref() as Href}
-        seam={!teamId}
+        // Команду выбрали в «Настройках финансов» — страница её и только её
+        // (владелец 2026-09-30: «когда захожу в счета, там не должно быть
+        // переключения команд»). Имя команды — под заголовком.
+        subtitle={teamId ? liveTeams.find((team) => team.id === teamId)?.name : undefined}
       />
-      {teamId ? (
-        <ScopeChips
-          items={liveTeams}
-          activeId={teamId}
-          onSelect={(id) => router.setParams({ team: id })}
-        />
-      ) : null}
       {!hasData && !loadError ? (
         online ? (
           <EmptyState state="loading" fill title="Загружаем счета" />

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { InvoiceNumberRow } from "@/features/invoices/InvoiceNumberRow";
+import { useNextInvoiceSeries } from "@/features/invoices/queries";
 import { ScrollView, View } from "react-native";
 import { Building2 } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -292,6 +294,12 @@ export function CompanySheet({
           не снимают — без основных документу нечем подписаться. Снимаются они
           сами, когда основными делают другие. Раньше здесь стояло слово «Да»
           синим на месте переключателя. */}
+        {/* НОМЕР ИНВОЙСА — ЗА РЕКВИЗИТАМИ (владелец 2026-09-30: «в реквизитах
+            пишем номер инвойса — за реквизитами сохраняется нумерация»).
+            Серия живёт на наборе (миграция 20260922050000): следующий номер
+            этих реквизитов и правка «этот инвойс — 104». */}
+        {company ? <CompanyInvoiceNumber companyId={company.id} /> : null}
+
         {company ? (
           <SectionCard dense>
             <SwitchRow
@@ -307,5 +315,15 @@ export function CompanySheet({
         ) : null}
       </ScrollView>
     </BottomSheet>
+  );
+}
+
+function CompanyInvoiceNumber({ companyId }: { companyId: string }) {
+  const year = new Date().getFullYear();
+  const next = useNextInvoiceSeries(year, companyId).data ?? null;
+  return (
+    <SectionCard dense title="Инвойс">
+      <InvoiceNumberRow target={{ companyId, year, next }} />
+    </SectionCard>
   );
 }

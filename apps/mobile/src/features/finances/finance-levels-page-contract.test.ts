@@ -99,7 +99,9 @@ describe("двери и подписи по уровню", () => {
     // в нём остались и что «/finances/settings» в него не вернулась. Точное
     // перечисление краснело на КАЖДОЙ новой владельческой странице — так
     // 21.09 оно упало на «/finances/requisites», хотя инвариант цел.
-    for (const path of ["/finances/vat", "/finances/vat-team", "/finances/invoices"]) {
+    // Страницы VAT и «Счета клиентам» сняты 30.09 (VAT — в «Итого», бланк —
+    // в «Реквизитах»); владельческими остаются справочники.
+    for (const path of ["/finances/categories", "/finances/requisites"]) {
       assert.match(
         layout,
         new RegExp(`OWNER_ONLY_PATHS = \\[[^\\]]*"${path.replace(/\//g, "\\/")}"`),

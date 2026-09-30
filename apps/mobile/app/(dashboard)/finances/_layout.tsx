@@ -55,10 +55,6 @@ const OWNER_ONLY_PATHS = [
   // тоже (запись в них владельческая): по прямой ссылке сотрудник видел бы
   // кнопки, каждая из которых отказывает (аудит 2026-09-24).
   "/finances/categories",
-  "/finances/templates",
-  "/finances/vat",
-  "/finances/vat-team",
-  "/finances/invoices",
   "/finances/requisites",
 ];
 
