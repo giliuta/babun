@@ -51,8 +51,11 @@ export interface RecordRow {
   accounts?: readonly RowAccount[];
   /** СКОЛЬКО. Нетто разреза: все проводки визита сложены со своим знаком. */
   amount: number;
-  /** КОГДА. Дата визита (у ручной — дата операции), YYYY-MM-DD. */
+  /** КОГДА. Дата визита (у ручной — дата операции), YYYY-MM-DD. Визит вне
+   *  периода ленты — дата денег, а день визита уходит в `forDay`. */
   date: string;
+  /** День визита, если он вне периода ленты: «предоплата за 1 октября». */
+  forDay?: string;
   /** Время визита или операции, HH:MM. `null` — времени нет. */
   time: string | null;
   /** Сколько проводок сложилось в строку. 1 — складывать было нечего. */
@@ -107,6 +110,11 @@ export interface RecordRowRefs {
   accounts?: readonly { id: string; name: string }[];
   /** Сотрудники — получатель выплаты в заголовке: «Зарплата · Даня». */
   people?: readonly { id: string; full_name: string }[];
+  /** ПЕРИОД ЛЕНТЫ (владелец 2026-09-30: «операция подтягивается
+   *  неправильно»). Визит за его границей — предоплата сегодня за запись
+   *  завтра — вставал днём визита, и в сентябрьской ленте появлялся заголовок
+   *  «1 октября». Такая строка стоит днём, когда пришли деньги. */
+  window?: { from: string; to: string };
 }
 
 /** Имена услуг визита. Снимок в записи сильнее каталога: услугу могли
@@ -272,9 +280,16 @@ export function recordRows(
       existing.amount += signedAmount(tx);
       existing.count += 1;
       recordAccounts.get(apt.id)?.add(tx.account_id);
+      // Визит вне периода: строка — в последний день денег.
+      if (existing.forDay && tx.occurred_on > existing.date) {
+        existing.date = tx.occurred_on;
+        existing.time = tx.occurred_time;
+      }
       continue;
     }
     recordAccounts.set(apt.id, new Set([tx.account_id]));
+    const outside =
+      !!refs.window && (apt.date < refs.window.from || apt.date > refs.window.to);
     const row: RecordRow = {
       key: apt.id,
       appointmentId: apt.id,
@@ -283,9 +298,15 @@ export function recordRows(
       services: appointmentServiceNames(apt, catalog),
       amount: signedAmount(tx),
       // Время визита, а не проводки: деньги по записи могли записать вечером,
-      // но в списке работ строка стоит там, где стояла работа.
-      date: apt.date,
-      time: apt.time_start ? apt.time_start.slice(0, 5) : tx.occurred_time,
+      // но в списке работ строка стоит там, где стояла работа. Работа вне
+      // периода ленты — строка стоит днём денег и называет день работы.
+      date: outside ? tx.occurred_on : apt.date,
+      time: outside
+        ? tx.occurred_time
+        : apt.time_start
+          ? apt.time_start.slice(0, 5)
+          : tx.occurred_time,
+      ...(outside ? { forDay: apt.date } : {}),
       count: 1,
     };
     byRecord.set(apt.id, row);
@@ -333,15 +354,27 @@ export function servicesLine(services: readonly string[]): string {
  *  Перечень услуг длинный и узнаётся по первому слову, счёт — одно-два
  *  коротких имени. */
 export function whatLine(
-  row: Pick<RecordRow, "time" | "services" | "subtitle" | "accounts">,
+  row: Pick<RecordRow, "time" | "services" | "subtitle" | "accounts" | "forDay">,
 ): string {
   return [
     row.time,
     accountsLine(row.accounts),
+    row.forDay ? `за ${dayMonth(row.forDay)}` : "",
     row.subtitle || servicesLine(row.services),
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+const MONTHS_GEN = [
+  "января", "февраля", "марта", "апреля", "мая", "июня",
+  "июля", "августа", "сентября", "октября", "ноября", "декабря",
+];
+
+/** «1 октября» из YYYY-MM-DD — без часового пояса, строкой. */
+function dayMonth(ymd: string): string {
+  const [, m, d] = ymd.split("-").map(Number);
+  return m && d ? `${d} ${MONTHS_GEN[m - 1]}` : ymd;
 }
 
 /** Лента ОДНОГО выбранного счёта имени счёта в строках не повторяет: оно уже

@@ -161,10 +161,11 @@ export function ProfitBreakdown({
 
       {showExpense ? (
       <View className="mt-1">
+        {/* Ноль — без минуса и тише: «−€0» красным читался как долг. */}
         <BreakdownSectionHeader
           title="Куда ушёл расход"
-          value={`−${formatEUR(expense)}`}
-          color={th.danger}
+          value={expense > 0 ? `−${formatEUR(expense)}` : formatEUR(0)}
+          color={expense > 0 ? th.danger : th.faint}
         />
         {expenseRows.length === 0 ? (
           <Text className="px-4 py-1.5 text-[13px]" style={{ color: th.faint }}>

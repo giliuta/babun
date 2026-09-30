@@ -493,3 +493,64 @@ describe("mergeByRecord", () => {
     );
   });
 });
+
+describe("визит вне периода ленты", () => {
+  test("предоплата 30.09 за запись 1.10 — строка 30.09, «за 1 октября»", async () => {
+    const { recordRows: build, whatLine: line } = await import("./record-rows");
+    const [row] = build(
+      [
+        {
+          id: "p1",
+          type: "income",
+          amount: 20,
+          source: "auto",
+          appointment_id: "a1",
+          account_id: null,
+          occurred_on: "2026-09-30",
+          occurred_time: null,
+        } as never,
+      ],
+      {
+        appointments: [
+          { id: "a1", date: "2026-10-01", time_start: "13:30", client_id: null, services: [], service_ids: [] } as never,
+        ],
+        clients: [],
+        services: [],
+        categories: [],
+        window: { from: "2026-09-01", to: "2026-09-30" },
+      },
+    );
+    assert.equal(row.date, "2026-09-30");
+    assert.equal(row.forDay, "2026-10-01");
+    assert.match(line(row), /за 1 октября/);
+  });
+
+  test("визит внутри периода — день визита, как прежде", async () => {
+    const { recordRows: build } = await import("./record-rows");
+    const [row] = build(
+      [
+        {
+          id: "p1",
+          type: "income",
+          amount: 300,
+          source: "auto",
+          appointment_id: "a1",
+          account_id: null,
+          occurred_on: "2026-09-19",
+          occurred_time: null,
+        } as never,
+      ],
+      {
+        appointments: [
+          { id: "a1", date: "2026-09-20", time_start: "15:30", client_id: null, services: [], service_ids: [] } as never,
+        ],
+        clients: [],
+        services: [],
+        categories: [],
+        window: { from: "2026-09-01", to: "2026-09-30" },
+      },
+    );
+    assert.equal(row.date, "2026-09-20");
+    assert.equal(row.forDay, undefined);
+  });
+});

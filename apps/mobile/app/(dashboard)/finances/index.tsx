@@ -800,8 +800,10 @@ function FinancesContent() {
       categories,
       accounts: sortAccountRows(allAccounts),
       people,
+      // Визит вне периода (предоплата сегодня за завтра) — строка днём денег.
+      window: { from: period.from, to: period.to },
     }),
-    [scopedAppointments, clients, services, categories, allAccounts, people],
+    [scopedAppointments, clients, services, categories, allAccounts, people, period.from, period.to],
   );
 
   const blockRows = useMemo(() => {
@@ -899,8 +901,18 @@ function FinancesContent() {
     categories,
   ]);
 
-  const toggleView = (v: HomeView) =>
+  const toggleView = (v: HomeView) => {
+    // «Документы» открываются там, где что-то есть: единственный чек месяца
+    // прятался за пустой вкладкой «Инвойсы 0» (аудит 2026-09-30).
+    if (v === "documents" && view !== "documents") {
+      const docs = periodDocuments.documents;
+      const has = (kind: DocumentFilter) => docs.some((d) => d.kind === kind);
+      if (!has(docFilter) && docs.length > 0) {
+        setDocFilter(has("invoice") ? "invoice" : "receipt");
+      }
+    }
     setView((prev) => (prev === v ? "all" : v));
+  };
 
   // Real refund (web handleRefund): драфт собирает общий buildRefundDraft —
   // с наследованием НДС-снимка исходника.

@@ -109,12 +109,17 @@ export function RecordRowsPanel({
         >
           {humanDay(section.title)}
         </Text>
-        <Text
-          className="text-xs font-semibold"
-          style={{ color: dayColor, fontVariant: ["tabular-nums"] }}
-        >
-          {formatEUR(section.net)}
-        </Text>
+        {/* День без пришедших и ушедших денег (одни долги, перевод между
+            своими счетами) итога не печатает: серый «€0» над долгом €200
+            читался как «денег ноль при долге» — число без смысла. */}
+        {netSign === 0 && !countEveryTone ? null : (
+          <Text
+            className="text-xs font-semibold"
+            style={{ color: dayColor, fontVariant: ["tabular-nums"] }}
+          >
+            {formatEUR(section.net)}
+          </Text>
+        )}
       </View>
     );
   };
