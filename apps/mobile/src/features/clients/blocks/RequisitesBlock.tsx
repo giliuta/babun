@@ -49,9 +49,13 @@ export function RequisitesBlock({
   limit,
   onOpenAll,
   bare,
+  readOnly = false,
 }: {
   client: Client;
   draft: boolean;
+  /** Только видит (право блока «Реквизиты», 30.09): наборы читаются и
+   *  копируются, но не правятся, не удаляются и не заводятся. */
+  readOnly?: boolean;
   update: (patch: Partial<Client>) => Promise<boolean>;
   /** Сколько наборов показывать; без него — все (своя страница). */
   limit?: number;
@@ -111,9 +115,25 @@ export function RequisitesBlock({
     });
   };
 
+  // Только видит и смотреть нечего — блока нет (недоступное просто
+  // отсутствует, владелец 20.09).
+  if (readOnly && ordered.length === 0) return null;
+
   return (
     <SectionCard title={bare ? undefined : "Реквизиты"}>
-      {shown.map((set, i) => (
+      {readOnly
+        ? shown.map((set, i) => (
+            <RequisitesRow
+              key={set.id}
+              set={set}
+              markDefault={sets.length > 1}
+              chevron={false}
+              separated={i > 0}
+              onPress={() => undefined}
+              onLongPress={() => copy(requisitesLines(set).join("\n"))}
+            />
+          ))
+        : shown.map((set, i) => (
         <SwipeRow
           key={set.id}
           label="Удалить"
@@ -143,9 +163,11 @@ export function RequisitesBlock({
           onPress={onOpenAll}
         />
       ) : null}
-      <ChooseRow compact icon={Building2} label="Добавить реквизиты" onPress={() => openSheet(null)} />
+      {readOnly ? null : (
+        <ChooseRow compact icon={Building2} label="Добавить реквизиты" onPress={() => openSheet(null)} />
+      )}
 
-      {sheet ? (
+      {sheet && !readOnly ? (
         <RequisitesSheet
           key={sheet.key}
           // Набор удалили под открытым листом (реалтайм, второе устройство) —

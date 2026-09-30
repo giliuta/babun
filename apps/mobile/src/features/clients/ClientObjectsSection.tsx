@@ -40,7 +40,10 @@ export function ClientObjectsSection({
   onOpenResident,
   onResidentRole,
   onRemoveResident,
+  readOnly = false,
 }: {
+  /** Только видит (право блока «Объекты», 30.09): без правки и дверей. */
+  readOnly?: boolean;
   client: Client;
   update: (patch: Partial<Client>) => Promise<boolean>;
   draft: boolean;
@@ -86,7 +89,9 @@ export function ClientObjectsSection({
   // Черновик нового клиента правит тот, кто его заводит; сохранённого —
   // по праву «Клиенты: Меняет» в этой компании.
   const caps = useClientsCapabilities();
-  const canEdit = draft || caps.edit;
+  // Право блока «Объекты» (30.09) может погасить правку и там, где карточка
+  // правится; без него — как было.
+  const canEdit = !readOnly && (draft || caps.edit);
   const requestActions = useLocationRequestActions();
 
   // ЧЕЙ ЛИСТ ОТКРЫТ — ДЕРЖИМ ДО КОНЦА АНИМАЦИИ ЗАКРЫТИЯ. Сам лист так же

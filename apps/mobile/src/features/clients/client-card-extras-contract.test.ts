@@ -72,7 +72,7 @@ describe("метка и тег — плитками перед «Личным»"
     // Владелец 22.09: «это не должно быть на первой странице» — плитки уехали
     // вниз, к «Личному».
     // С 30.09 «Личное» команда может выключить — плитки всё равно перед ним.
-    assert.match(read("ClientProfileBlocks.tsx"), /\{labelTags \?\? null\}\s*\{personalOn \? \(\s*<PersonalBlock/);
+    assert.match(read("ClientProfileBlocks.tsx"), /\{labelTags \?\? null\}\s*\{a\.personal\.show \? \(\s*<PersonalBlock/);
     assert.doesNotMatch(read("ClientHeader.tsx"), /identity/);
   });
 });
@@ -121,7 +121,7 @@ describe("заметки: клиента — наверху, объекта — 
     assert.match(
       page,
       // С 30.09 блок «Заметка» команда выключает на «Карточке клиента».
-      /note=\{\s*noteOn \? \(\s*<NotesBlock client=\{c\} update=\{update\} readOnly=\{!isDraft && !caps\.edit\} \/>\s*\) : null\s*\}/,
+      /note=\{\s*noteOn \? \(\s*<NotesBlock client=\{c\} update=\{update\} readOnly=\{!access\.note\.edit\} \/>\s*\) : null\s*\}/,
     );
     assert.match(read("ClientHeader.tsx"), /\{note \?\? null\}\s*\{people \?\? null\}/);
     assert.doesNotMatch(read("ClientProfileBlocks.tsx"), /<NotesBlock/);

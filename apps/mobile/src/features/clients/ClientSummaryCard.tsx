@@ -36,9 +36,12 @@ export function ClientSummaryCard({
   client,
   stats,
   onOpenHistory,
+  showMoney,
 }: {
   client: Client;
   stats: ClientStats | undefined;
+  /** Право «Долг и деньги» у этого клиента (30.09); нет — `caps.money`. */
+  showMoney?: boolean;
   /** Открыть историю записей. Не задан — сводка остаётся просто текстом
    *  (черновик, клиент без единой записи). */
   onOpenHistory?: () => void;
@@ -55,7 +58,8 @@ export function ClientSummaryCard({
   // и «потрачено» у сотрудника считались бы из сумм, которые сервер отдал
   // ему по блокам записи, — неполная цифра хуже никакой. Визиты и «был …»
   // остаются: это история, а не деньги.
-  const money = useClientsCapabilities().money;
+  const capsMoney = useClientsCapabilities().money;
+  const money = showMoney ?? capsMoney;
   const debtAmount = money ? clientDebt(client, stats) : 0;
   const debt = debtAmount > 0 ? formatEUR(debtAmount) : null;
   // «Напомнить» (card-actions) пишет reminder_at — строка делает дату

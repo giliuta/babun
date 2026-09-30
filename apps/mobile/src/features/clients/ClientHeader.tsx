@@ -127,6 +127,9 @@ export default function ClientHeader({
           имя я буду вписывать компанию»): одно поле на обоих. */}
         <FieldRow
           noCopy={noCopy}
+          // Карточку только видят (право «Карточки клиентов: Видит») — имя
+          // не правится.
+          readOnly={!draft && !!readOnly}
           label="Имя"
           // КОМПАКТНО (владелец 2026-09-21: «слишком большие блоки»): имя и
           // номер — одна ячейка без подписей и без линии между ними, как
@@ -200,6 +203,7 @@ export default function ClientHeader({
               : formatPhoneForDisplay(client.phone, country)
           }
           placeholder="Телефон"
+          readOnly={!draft && !!readOnly}
           keyboardType="phone-pad"
           tabular
           big

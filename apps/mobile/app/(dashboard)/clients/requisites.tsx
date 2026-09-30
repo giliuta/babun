@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { RequisitesBlock } from "@/features/clients/blocks/RequisitesBlock";
 import { useClient, useUpdateClient } from "@/features/clients/queries";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { useCardAccess } from "@/features/clients/use-card-access";
 
 // ВСЕ РЕКВИЗИТЫ КЛИЕНТА — СВОЯ СТРАНИЦА (владелец 22.09: «то же самое можно
 // сделать с реквизитами — если их будет много»). На карточке видны основной
@@ -14,10 +15,13 @@ import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 //
 // Блок тот же, что на карточке: листы правки, свайп «Удалить» и выбор
 // основного живут в одном месте.
+//
+// С 30.09 страница открыта и сотруднику — по праву «Реквизиты» этого
+// клиента (`card-access.ts`): «Видит» — только читать, «Скрыт» — пусто.
 
 export default function ClientRequisitesScreenRoute() {
   return (
-    <ClientsCompanyRoute kind="card-sub">
+    <ClientsCompanyRoute kind="card">
       <ClientRequisitesScreen />
     </ClientsCompanyRoute>
   );
@@ -28,6 +32,7 @@ function ClientRequisitesScreen() {
   const id = clientId ?? "";
   const { data: client, isLoading } = useClient(id);
   const updateClient = useUpdateClient(id);
+  const access = useCardAccess(client, false);
   const update = async (patch: Partial<Client>) => {
     try {
       await updateClient.mutateAsync(patch);
@@ -42,9 +47,15 @@ function ClientRequisitesScreen() {
       <ScreenHeader title="Реквизиты" subtitle={client?.full_name ?? undefined} />
       {isLoading || !client ? (
         <EmptyState state="loading" fill />
-      ) : (
+      ) : !access.requisites.show ? null : (
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-          <RequisitesBlock client={client} draft={false} update={update} bare />
+          <RequisitesBlock
+            client={client}
+            draft={false}
+            update={update}
+            bare
+            readOnly={!access.requisites.edit}
+          />
         </ScrollView>
       )}
     </Screen>

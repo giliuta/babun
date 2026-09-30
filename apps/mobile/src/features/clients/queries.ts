@@ -73,6 +73,7 @@ import {
 } from "./clients-company";
 import { masterClientJsonToClient } from "@/features/settings/master-reference";
 import { isPhoneTakenError } from "@/features/clients/client-create-errors";
+import { parseClientBlocks } from "@/features/clients/client-block-access";
 import {
   contactsHiddenOf,
   parseMemberContacts,
@@ -252,12 +253,15 @@ export function memberClientJsonToClient(row: unknown): Client {
   // Почему номера нет (30.09): у строки сотрудника ключ есть всегда, у
   // владельца его нет — и карточка ведёт себя по-прежнему.
   const hidden = contactsHiddenOf(record);
+  // Права по блокам карточки (015, 30.09): нет ключа — владелец.
+  const blocks = parseClientBlocks((record as { blocks?: unknown }).blocks);
   return {
     ...rowToClient(record),
     tag_ids: Array.isArray(record.tag_ids)
       ? record.tag_ids.filter((id): id is string => typeof id === "string")
       : [],
     ...(hidden !== undefined ? { contacts_hidden: hidden } : {}),
+    ...(blocks ? { blocks } : {}),
   };
 }
 
@@ -472,7 +476,20 @@ export function useUpdateClient(id: string) {
   return useMutation({
     mutationFn: (patch: Partial<Client>) => saveClient(scope, id, patch),
     onSuccess: (updated, patch) => {
-      qc.setQueriesData({ queryKey: ["client", id] }, updated);
+      // Ответ правки у сотрудника разбирается общим маппером и может прийти
+      // без `blocks` и причины скрытого номера: держим прежние, иначе до
+      // перечитки карточка на миг решила бы, что всё открыто.
+      qc.setQueriesData<Client | null>({ queryKey: ["client", id] }, (old) =>
+        old && updated
+          ? {
+              ...updated,
+              ...(updated.blocks || !old.blocks ? {} : { blocks: old.blocks }),
+              ...(updated.contacts_hidden !== undefined || old.contacts_hidden === undefined
+                ? {}
+                : { contacts_hidden: old.contacts_hidden }),
+            }
+          : updated,
+      );
       // Blocks fire independent mutations (blur saves), so two PATCHes
       // can resolve out of order and the late response would overwrite
       // the newer field. Refetching settles the cache on the server's

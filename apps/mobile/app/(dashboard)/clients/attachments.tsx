@@ -35,6 +35,7 @@ import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { useCardAccess } from "@/features/clients/use-card-access";
 
 // ДОКУМЕНТАЦИЯ КЛИЕНТА — ПОЛНОЦЕННАЯ СТРАНИЦА (владелец 2026-08-03: «вложения
 // надо исправлять — полноценно открывается страница, где вся документация о
@@ -61,7 +62,7 @@ function dateRu(iso: string): string {
 // (STORY-082).
 export default function ClientAttachmentsScreenRoute() {
   return (
-    <ClientsCompanyRoute kind="card-sub">
+    <ClientsCompanyRoute kind="card">
       <ClientAttachmentsScreen />
     </ClientsCompanyRoute>
   );
@@ -76,12 +77,17 @@ function ClientAttachmentsScreen() {
   // инвойсов шесть). Аннулированные не считаем — как блок на карточке.
   const invoicesQuery = useInvoices(clientId ? { clientId } : undefined);
   const receiptsQuery = useReceipts(clientId ? { clientId } : undefined);
-  const docsCount =
-    (invoicesQuery.data ?? []).filter(
-      (inv) => inv.status !== "void" && inv.status !== "cancelled" && inv.kind !== "credit_note",
-    ).length + (receiptsQuery.data ?? []).filter((r) => r.status !== "void").length;
   const id = clientId ?? "";
   const { data: client } = useClient(id);
+  // С 30.09 страница открыта и сотруднику — по праву «Файлы» этого клиента;
+  // инвойсы и чеки — по праву «Долг и деньги» (`card-access.ts`).
+  const access = useCardAccess(client, false);
+  const canChange = access.files.edit;
+  const docsCount = !access.money.show
+    ? 0
+    : (invoicesQuery.data ?? []).filter(
+      (inv) => inv.status !== "void" && inv.status !== "cancelled" && inv.kind !== "credit_note",
+    ).length + (receiptsQuery.data ?? []).filter((r) => r.status !== "void").length;
   // Откуда файл: «из записи 12 мар». Запись могла быть удалена — тогда
   // appointment_id уже NULL (ON DELETE SET NULL), и подписи просто нет.
   const { data: appointments = [] } = useClientAppointments(id);
@@ -224,6 +230,7 @@ function ClientAttachmentsScreen() {
         title="Файлы"
         subtitle={client?.full_name || undefined}
         right={
+          !canChange ? undefined : (
           <Pressable
             onPress={() => {
               haptics.tap();
@@ -248,10 +255,11 @@ function ClientAttachmentsScreen() {
               Добавить
             </Text>
           </Pressable>
+          )
         }
       />
 
-      {isLoading ? (
+      {!access.files.show ? null : isLoading ? (
         <EmptyState state="loading" fill />
       ) : isError ? (
         <EmptyState
@@ -281,7 +289,7 @@ function ClientAttachmentsScreen() {
                     <Pressable
                       key={a.id}
                       onPress={() => void open(a)}
-                      onLongPress={() => confirmDelete(a)}
+                      onLongPress={canChange ? () => confirmDelete(a) : undefined}
                       accessibilityRole="imagebutton"
                       accessibilityLabel={a.filename}
                       accessibilityHint="Открыть; удерживайте, чтобы удалить"
@@ -419,7 +427,7 @@ function ClientAttachmentsScreen() {
                     </View>
                     {opening === a.id ? (
                       <Spinner size={16} label="Открываем" />
-                    ) : (
+                    ) : !canChange ? null : (
                       <Pressable
                         onPress={() => confirmDelete(a)}
                         accessibilityRole="button"

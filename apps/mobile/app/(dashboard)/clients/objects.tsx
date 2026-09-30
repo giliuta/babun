@@ -9,6 +9,7 @@ import { useClientAppointments } from "@/features/clients/appointments";
 import { useClient, useUpdateClient } from "@/features/clients/queries";
 import { useClientPeople } from "@/features/clients/ClientPeopleDoor";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { useCardAccess } from "@/features/clients/use-card-access";
 
 // ВСЕ ОБЪЕКТЫ КЛИЕНТА — СВОЯ СТРАНИЦА (владелец 22.09: «блок объекты —
 // нажимаю, и открывается страница, где все объекты… если у клиента 12
@@ -46,6 +47,9 @@ function ClientObjectsScreen() {
   };
   // Жильцы объектов — та же проводка, что на карточке: строки, роли и дверь
   // заведения живут в одном месте (`ClientPeopleDoor`).
+  // Права блоков этого клиента (30.09): «Объекты» и «Люди» — видно ли и
+  // правится ли, как на карточке.
+  const access = useCardAccess(client, false);
   const people = useClientPeople({
     id,
     client: client ?? undefined,
@@ -53,6 +57,7 @@ function ClientObjectsScreen() {
     // Страница открывается только у сохранённого клиента — черновика здесь
     // нет, и связи пишет обычный писатель.
     onDraftLinks: () => {},
+    access: access.people,
   });
 
   return (
@@ -60,12 +65,13 @@ function ClientObjectsScreen() {
       <ScreenHeader title="Объекты" subtitle={client?.full_name ?? undefined} />
       {isLoading || !client ? (
         <EmptyState state="loading" fill />
-      ) : (
+      ) : !access.objects.show ? null : (
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
           <ClientObjectsSection
             client={client}
             update={update}
             draft={false}
+            readOnly={!access.objects.edit}
             appointments={appointments}
             bare
             {...people.residents}

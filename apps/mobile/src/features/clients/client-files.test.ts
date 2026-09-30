@@ -117,7 +117,7 @@ describe("у клиента тот же блок «Файлы», что у за�
 
   test("страница ставит блок «Файлы»; в черновике — только его дверь", () => {
     assert.match(profile(), /import ClientFilesBlock from "@\/features\/clients\/blocks\/ClientFilesBlock"/);
-    assert.match(profile(), /\{!draft && showDocuments && filesOn \? \(\s*<ClientFilesBlock\s/);
+    assert.match(profile(), /\{!draft && a\.files\.show \? \(\s*<ClientFilesBlock\s/);
     assert.match(block(), /<SectionCard title="Файлы">/);
   });
 
@@ -142,6 +142,9 @@ describe("у клиента тот же блок «Файлы», что у за�
     assert.match(block(), /useUploadAttachments\(clientId\)/);
     assert.doesNotMatch(block(), /useUploadAttachments\(clientId, /);
     assert.match(block(), /\{canChange \? \([\s\S]{0,120}<ChooseRow[\s\S]{0,80}label="Добавить файл"/);
-    assert.match(profile(), /canChange=\{caps\.edit && caps\.files\}/);
+    // С 30.09 право считает `card-access.ts`: у владельца — прежнее «менять
+    // карточку и хранилище видит компанию», у сотрудника — «Файлы: Меняет».
+    assert.match(profile(), /canChange=\{a\.files\.edit\}/);
+    assert.match(read("card-access.ts"), /caps\.edit && caps\.files/);
   });
 });

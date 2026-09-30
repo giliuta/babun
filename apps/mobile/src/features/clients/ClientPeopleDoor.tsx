@@ -117,7 +117,11 @@ export function useClientPeople({
   openPersonOnArrive,
   onArrived,
   limit,
+  access,
 }: {
+  /** Права на блок «Люди» у этого клиента (`card-access.ts`): видно ли и
+   *  правится ли. Нет — прежние права компании (`caps.links` / `caps.edit`). */
+  access?: { show: boolean; edit: boolean };
   /** id из маршрута: перечень людей спрашивается сразу, не дожидаясь строки. */
   id: string;
   /** Черновик или серверная строка; `undefined` — ещё не приехала. */
@@ -141,7 +145,12 @@ export function useClientPeople({
   const router = useRouter();
   const pathname = usePathname();
   const scope = useClientsScopeOrNull();
-  const caps = useClientsCapabilities();
+  const baseCaps = useClientsCapabilities();
+  // Права блока «Люди» (30.09) подменяют прежние `links`/`edit` для этого
+  // клиента; без них — как было.
+  const caps = access
+    ? { ...baseCaps, links: access.show, edit: access.edit }
+    : baseCaps;
   // ЛЮДИ КАРТОЧКИ приезжают ОТДЕЛЬНЫМ запросом: связь живёт у члена, и в
   // строке самой карточки её нет. У черновика id ещё не существует, а без
   // права (`caps.links`: вся база и её контакты) сервер всё равно ответит

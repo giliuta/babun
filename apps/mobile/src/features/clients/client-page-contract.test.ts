@@ -620,10 +620,10 @@ describe("блок «История»", () => {
   // Сводка и «Записать» — один блок с шапкой, а не две безымянные карточки.
   test("сводка и «Записать» стоят в блоке «История»", () => {
     const row = read("ClientContactRow.tsx");
-    assert.match(row, /<SectionCard title="История">\s*<ClientSummaryCard/);
+    assert.match(row, /<SectionCard title="История">\s*\{showSummary \? \(\s*<ClientSummaryCard/);
     assert.match(row, /label="Записать"/);
     assert.doesNotMatch(read("ClientHeader.tsx"), /<ClientSummaryCard/);
-    assert.match(page(), /<ClientContactRow[\s\S]{0,600}onOpenHistory=\{/);
+    assert.match(page(), /<ClientContactRow[\s\S]{0,900}onOpenHistory=\{/);
   });
 });
 
@@ -632,7 +632,7 @@ describe("новый клиент — те же блоки", () => {
   // Файл и запись живут у id карточки: дверь сперва создаёт её, потом
   // открывает нужное уже на ней.
   test("«Файлы» и «История» стоят и в черновике", () => {
-    assert.match(read("ClientProfileBlocks.tsx"), /draft && showDocuments[^\n]*onDraftFiles \? \(\s*<SectionCard title="Файлы">/);
+    assert.match(read("ClientProfileBlocks.tsx"), /draft && a\.files\.show[^\n]*onDraftFiles \? \(\s*<SectionCard title="Файлы">/);
     assert.match(read("ClientContactRow.tsx"), /if \(draft\) \{\s*return onDraftBook \? \(\s*<SectionCard title="История">/);
   });
   test("двери черновика создают карточку и открывают своё", () => {

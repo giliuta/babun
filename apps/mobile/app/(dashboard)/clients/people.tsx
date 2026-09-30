@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useClient } from "@/features/clients/queries";
 import { useClientPeople } from "@/features/clients/ClientPeopleDoor";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { useCardAccess } from "@/features/clients/use-card-access";
 
 // ВСЕ ЛЮДИ КАРТОЧКИ — СВОЯ СТРАНИЦА (владелец 22.09: «то же самое можно
 // сделать с людьми — как история: нажимаю и открывается страница»). На
@@ -32,12 +33,15 @@ function ClientPeopleScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string }>();
   const id = clientId ?? "";
   const { data: client, isLoading } = useClient(id);
+  // Права блока «Люди» этого клиента (30.09), как на карточке.
+  const access = useCardAccess(client, false);
   const people = useClientPeople({
     id,
     client: client ?? undefined,
     isDraft: false,
     // Черновика здесь нет: страница открывается только у сохранённого.
     onDraftLinks: () => {},
+    access: access.people,
   });
 
   return (

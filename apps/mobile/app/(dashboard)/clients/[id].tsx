@@ -29,7 +29,6 @@
 // Linking sms:, share via RN Share, blacklist toggle via update) — the
 // blocks stay free of screen-level concerns.
 
-import { useClientFunctionOn } from "@/features/clients/client-functions";
 import { useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -107,6 +106,7 @@ import { SmsClientBlock } from "@/features/sms/SmsClientBlock";
 import { clientSmsVars } from "@/features/sms/client-sms-vars";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useRevealedClient } from "@/features/clients/revealed-contacts";
+import { useCardAccess } from "@/features/clients/use-card-access";
 import { useTenantId } from "@/lib/tenant";
 import { shareText } from "@/features/clients/client-share";
 import {
@@ -326,11 +326,12 @@ export function ClientDetailScreen() {
   // Люди и связи — функция компании (STORY-088): выключены — нет ни
   // «Людей», ни «Входит в», ни жильцов объекта, ни «Разделить».
   // С 30.09 — функция КОМАНДЫ клиента.
-  const peopleOn = useClientFunctionOn("client_people", client?.team_id);
-  // «Заметка» и «Метка и тег» — блоки, которые команда выключает на
-  // «Карточке клиента» (30.09).
-  const noteOn = useClientFunctionOn("client_note", client?.team_id);
-  const labelsOn = useClientFunctionOn("client_labels", client?.team_id);
+  // С 30.09 каждый блок карточки решают вместе выключатель команды клиента
+  // («Карточка клиента») и права сотрудника по блокам — `card-access.ts`.
+  const access = useCardAccess(c, isDraft);
+  const peopleOn = access.people.show;
+  const noteOn = access.note.show;
+  const labelsOn = access.labels.show;
   const people = useClientPeople({
     id,
     // На карточке — первые трое и дверь «Все люди · N» (владелец 22.09).
@@ -343,6 +344,7 @@ export function ClientDetailScreen() {
     onDraftAddPerson: () => onDraftDoor("person"),
     openPersonOnArrive: !isDraft && openOnArrive === "person",
     onArrived: () => router.setParams({ open: undefined }),
+    access: access.people,
   });
   // «Объединить с дублем» в «⋯» — вся проводка в `use-merge-duplicate.ts`.
   const onMerge = useMergeDuplicate({ client: c, isDraft, canManage: caps.manage, closeMenu: () => setMenuOpen(false) });
@@ -371,12 +373,12 @@ export function ClientDetailScreen() {
               appointments,
               teams: smsTeams,
               company: companyName,
-              debt: caps.money ? (stats?.debt ?? 0) : null,
-              showMoney: caps.money,
+              debt: access.money.show ? (stats?.debt ?? 0) : null,
+              showMoney: access.money.show,
             }),
           }
         : null,
-    [appointments, c, caps.money, companyName, smsTeams, stats?.debt],
+    [appointments, c, access.money.show, companyName, smsTeams, stats?.debt],
   );
 
   // heroUnitId больше не нужен: состояния ТО ушли из «Что дальше» в свою
@@ -511,7 +513,7 @@ export function ClientDetailScreen() {
     // Всё, что нужно бригаде: имя, телефон, каждый объект со ссылкой и
     // заметкой; реквизиты — по тому же праву, что их блок на странице.
     try {
-      await Share.share({ message: shareText(c, { requisites: caps.money }) });
+      await Share.share({ message: shareText(c, { requisites: access.requisites.show }) });
     } catch {
       // user dismissed the share sheet — no-op.
     }
@@ -714,7 +716,7 @@ export function ClientDetailScreen() {
           key={`header-${id}`}
           client={c}
           update={update}
-          readOnly={!isDraft && !caps.edit}
+          readOnly={!access.card.edit}
           // Без передачи (владелец 30.09): клиента чужой компании не
           // скопировать ни долгим нажатием, ни из поля.
           noCopy={!isDraft && !caps.export}
@@ -723,7 +725,7 @@ export function ClientDetailScreen() {
           // «сначала идёт блок „Клиент", потом заметка клиента»).
           note={
             noteOn ? (
-              <NotesBlock client={c} update={update} readOnly={!isDraft && !caps.edit} />
+              <NotesBlock client={c} update={update} readOnly={!access.note.edit} />
             ) : null
           }
           people={
@@ -787,15 +789,18 @@ export function ClientDetailScreen() {
           client={c}
           stats={stats}
           draft={isDraft}
+          // «История» и «Долг и деньги» — права сотрудника по блокам.
+          showSummary={access.history.show}
+          showMoney={access.money.show}
           onDraftBook={() => onDraftDoor("book")}
           bookOnArrive={!isDraft && openOnArrive === "book"}
           onArrived={() => router.setParams({ open: undefined })}
           // Сводка в блоке «История» = вход в перечень записей. Записей нет — вести
           // некуда, и сводка остаётся просто текстом (мёртвых тапов не держим).
-          // Визиты — история СВОЕЙ компании (`card-sub`): у клиента
-          // работодателя такой двери нет, и шеврон не ведёт в отказ.
+          // С 30.09 история открыта и сотруднику — по праву «История
+          // записей» этого клиента (`card-access.ts`).
           onOpenHistory={
-            !isDraft && caps.manage && appointments.length > 0
+            !isDraft && access.history.show && appointments.length > 0
               ? () => {
                   router.push({
                     pathname: "/clients/visits",
@@ -812,8 +817,8 @@ export function ClientDetailScreen() {
           appointments={appointments}
           draft={isDraft}
           update={update}
-          // Инвойсы и чеки — деньги компании: у клиента работодателя их нет.
-          showDocuments={caps.money}
+          // Какие блоки видны и правятся — одним ответом (`card-access.ts`).
+          access={access}
           // Длинные списки — своими страницами, как история записей.
           onOpenObjects={() =>
             router.push({ pathname: "/clients/objects", params: clientSubParams(id, scope) })
@@ -823,7 +828,7 @@ export function ClientDetailScreen() {
           }
           labelTags={
             labelsOn ? (
-              <ClientLabelTags client={c} update={update} tags={tags} readOnly={!caps.edit} />
+              <ClientLabelTags client={c} update={update} tags={tags} readOnly={!access.labels.edit} />
             ) : null
           }
           onDraftFiles={() => onDraftDoor("files")}
@@ -837,7 +842,7 @@ export function ClientDetailScreen() {
         {/* SMS КЛИЕНТУ ОДНИМ БЛОКОМ (STORY-089; владелец 30.09): «Присылать
             SMS», «Имя для SMS» и все сообщения — на какой номер ушло.
             Отправка — в кнопке номера. */}
-        {!isDraft ? <SmsClientBlock client={c} update={update} readOnly={!caps.edit} /> : null}
+        {!isDraft ? <SmsClientBlock client={c} update={update} readOnly={!access.card.edit} /> : null}
       </ScrollView>
 
       {/* ЕДИНСТВЕННОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ, ПОД ПАЛЬЦЕМ, ВНЕ ПРОКРУТКИ.

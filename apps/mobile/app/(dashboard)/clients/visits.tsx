@@ -26,6 +26,7 @@ import { useAllServices } from "@/features/services/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { useCardAccess } from "@/features/clients/use-card-access";
 
 // ИСТОРИЯ ЗАПИСЕЙ — полноценная страница (владелец 2026-07-26: «должна быть
 // просто история записей: нажимаю — и там абсолютно все записи по этому
@@ -52,7 +53,7 @@ function yearOf(date: string): string {
 // (STORY-082).
 export default function ClientVisitsScreenRoute() {
   return (
-    <ClientsCompanyRoute kind="card-sub">
+    <ClientsCompanyRoute kind="card">
       <ClientVisitsScreen />
     </ClientsCompanyRoute>
   );
@@ -65,8 +66,12 @@ function ClientVisitsScreen() {
     clientId: string;
     unpaid?: string;
   }>();
-  const unpaidOnly = unpaid === "1";
   const { data: client } = useClient(clientId ?? "");
+  // С 30.09 история открыта и сотруднику — по праву «История записей» этого
+  // клиента; суммы и долг — по праву «Долг и деньги» (`card-access.ts`).
+  const access = useCardAccess(client, false);
+  const showMoney = access.money.show;
+  const unpaidOnly = unpaid === "1" && showMoney;
   const { data: appointments = [], isLoading } = useClientAppointments(
     clientId ?? "",
   );
@@ -186,6 +191,7 @@ function ClientVisitsScreen() {
   };
 
   const money = (a: Appointment) => {
+    if (!showMoney) return a.status === "cancelled" ? { text: "отменён", color: t.faint } : null;
     const owed = getDebtAmount(a);
     if (owed > 0) return { text: `долг ${formatEUR(owed)}`, color: t.warning };
     if (a.status === "cancelled")
@@ -230,6 +236,7 @@ function ClientVisitsScreen() {
           ) : undefined
         }
       />
+      {!access.history.show ? null : (
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         {isLoading ? (
           <View className="items-center py-10">
@@ -252,10 +259,14 @@ function ClientVisitsScreen() {
         {/* Итог сверху — то, ради чего историю чаще всего и открывают. */}
         {!unpaidOnly && done.length > 0 ? (
           <RowCaption
-            text={`${done.length} ${visitsWord(done.length)} · заплачено ${formatEUR(spent)}${
-              debt > 0 ? ` · долг ${formatEUR(debt)}` : ""
-            }`}
-            tone={debt > 0 ? "warning" : "quiet"}
+            text={
+              showMoney
+                ? `${done.length} ${visitsWord(done.length)} · заплачено ${formatEUR(spent)}${
+                    debt > 0 ? ` · долг ${formatEUR(debt)}` : ""
+                  }`
+                : `${done.length} ${visitsWord(done.length)}`
+            }
+            tone={showMoney && debt > 0 ? "warning" : "quiet"}
           />
         ) : null}
 
@@ -323,6 +334,7 @@ function ClientVisitsScreen() {
 
         <View style={{ height: 8 }} />
       </ScrollView>
+      )}
 
       {/* Запись открывается СТРАНИЦЕЙ /book (STORY-064): назад — сюда же, в
           историю визитов. */}

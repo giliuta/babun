@@ -43,9 +43,16 @@ export default function ClientContactRow({
   onDraftBook,
   bookOnArrive,
   onArrived,
+  showSummary = true,
+  showMoney,
 }: {
   client: Client;
   stats: ClientStats | undefined;
+  /** Право «История записей» (30.09): нет — сводки визитов нет, «Записать»
+   *  остаётся (запись — право календаря). */
+  showSummary?: boolean;
+  /** Право «Долг и деньги» (30.09); нет — `caps.money`. */
+  showMoney?: boolean;
   /** Черновик: строка видна, но записывать ещё некого. */
   draft?: boolean;
   /** Открыть историю записей; нет — сводка просто текст. */
@@ -101,11 +108,14 @@ export default function ClientContactRow({
 
   return (
     <SectionCard title="История">
-        <ClientSummaryCard
-          client={client}
-          stats={stats}
-          onOpenHistory={onOpenHistory}
-        />
+        {showSummary ? (
+          <ClientSummaryCard
+            client={client}
+            stats={stats}
+            onOpenHistory={onOpenHistory}
+            showMoney={showMoney}
+          />
+        ) : null}
         <ChooseRow
           compact
           icon={CalendarPlus}

@@ -73,10 +73,13 @@ export default function ClientFilesBlock({
   canChange,
   openOnArrive,
   onArrived,
+  showMoney = true,
 }: {
   clientId: string;
   /** Добавлять и удалять вложения. Без права — только смотреть. */
   canChange: boolean;
+  /** Инвойсы и чеки — деньги: без права «Долг и деньги» их в блоке нет. */
+  showMoney?: boolean;
   /** Карточку создали из черновика ради файла — сразу открыть лист. */
   openOnArrive?: boolean;
   onArrived?: () => void;
@@ -122,10 +125,10 @@ export default function ClientFilesBlock({
         attachments: attachments.data?.items ?? [],
         visitPhotos: visitPhotos.data ?? [],
         // Инвойсы и чеки — функция компании (STORY-088).
-        invoices: documentsOn ? (invoices.data ?? []) : [],
-        receipts: documentsOn ? (receipts.data ?? []) : [],
+        invoices: documentsOn && showMoney ? (invoices.data ?? []) : [],
+        receipts: documentsOn && showMoney ? (receipts.data ?? []) : [],
       }),
-    [attachments.data, visitPhotos.data, invoices.data, receipts.data, documentsOn],
+    [attachments.data, visitPhotos.data, invoices.data, receipts.data, documentsOn, showMoney],
   );
   const mediaBusy = uploadMedia.isPending;
   const docBusy = uploadDocs.isPending;

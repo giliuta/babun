@@ -1,5 +1,5 @@
-import { useClientFunctionOn } from "@/features/clients/client-functions";
-import { useFeatureOn } from "@/features/settings/company-features";
+import type { CardAccess } from "@/features/clients/card-access";
+import { useCardAccess } from "@/features/clients/use-card-access";
 import type { ReactNode } from "react";
 import { Paperclip } from "lucide-react-native";
 import { ChooseRow } from "@/components/ui/ChooseRow";
@@ -12,7 +12,6 @@ import {
   REQUISITES_ON_CARD,
   RequisitesBlock,
 } from "@/features/clients/blocks/RequisitesBlock";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
 import ClientFilesBlock from "@/features/clients/blocks/ClientFilesBlock";
 import { PersonalBlock } from "@/features/clients/blocks/PersonalBlock";
 import { RowCaption } from "@/components/ui/card-rows";
@@ -24,9 +23,9 @@ interface ClientProfileBlocksProps {
   appointments: readonly Appointment[];
   draft: boolean;
   update: (patch: Partial<Client>) => Promise<boolean>;
-  /** Инвойсы и чеки клиента. У клиента компании, где человек только
-   *  работает, их нет: это деньги той компании (STORY-082). */
-  showDocuments?: boolean;
+  /** Какие блоки видны и правятся (`card-access.ts`); страница уже спросила.
+   *  Нет — блоки спросят сами тем же хуком. */
+  access?: CardAccess;
   /** ЖИЛЬЦЫ ОБЪЕКТА ОДНОЙ СТРОКОЙ — показание под объектом на странице
    *  («Мария Спиру · жилец, Андреас · жилец»). Считает страница: связи живут
    *  у людей, а не в карточке-группе, и приезжают они отдельным запросом.
@@ -75,7 +74,7 @@ export function ClientProfileBlocks({
   appointments,
   draft,
   update,
-  showDocuments = true,
+  access,
   residentsLine,
   residentsAt,
   onAddResident,
@@ -89,24 +88,19 @@ export function ClientProfileBlocks({
   onArrived,
   labelTags,
 }: ClientProfileBlocksProps) {
-  const caps = useClientsCapabilities();
-  // Функции компании (STORY-088): выключенное — у всех, у владельца тоже.
-  const objectsOn = useFeatureOn("objects");
-  // Файлы и реквизиты — функции КОМАНДЫ клиента (30.09).
-  const filesOn = useClientFunctionOn("client_files", client.team_id);
-  const requisitesOn = useClientFunctionOn("client_requisites", client.team_id);
-  // «Объекты» и «Личное» команда выключает на «Карточке клиента» (30.09);
-  // объекты ещё и у компании — оба выключателя складываются.
-  const clientObjectsOn = useClientFunctionOn("client_objects", client.team_id);
-  const personalOn = useClientFunctionOn("client_personal", client.team_id);
+  // Что видно и что правится — страница уже спросила (`card-access.ts`):
+  // выключатель команды клиента, права сотрудника по блокам, права компании.
+  const fallback = useCardAccess(client, draft);
+  const a = access ?? fallback;
 
   return (
     <>
-      {objectsOn && clientObjectsOn ? (
+      {a.objects.show ? (
       <ClientObjectsSection
         client={client}
         update={update}
         draft={draft}
+        readOnly={!a.objects.edit}
         appointments={appointments}
         // НА КАРТОЧКЕ — ПЕРВЫЕ ТРИ И ДВЕРЬ (владелец 22.09: «если у клиента
         // 12 объектов, их надо листать, чтобы добраться до файлов»).
@@ -144,10 +138,11 @@ export function ClientProfileBlocks({
           хранятся файлы»). В черновике его нет: путь в хранилище строится по
           id клиента, которого ещё нет. Добавлять — только с правом менять
           карточку и там, где хранилище видит компанию (`caps.files`). */}
-      {!draft && showDocuments && filesOn ? (
+      {!draft && a.files.show ? (
         <ClientFilesBlock
           clientId={client.id}
-          canChange={caps.edit && caps.files}
+          canChange={a.files.edit}
+          showMoney={a.money.show}
           openOnArrive={openFilesOnArrive}
           onArrived={onArrived}
         />
@@ -155,7 +150,7 @@ export function ClientProfileBlocks({
       {/* В НОВОМ КЛИЕНТЕ — ТОТ ЖЕ БЛОК (владелец 22.09: «при создании — те
           же самые блоки»). Файл кладётся по id клиента, поэтому «Добавить»
           сперва создаёт карточку, а лист открывается уже на ней. */}
-      {draft && showDocuments && filesOn && caps.edit && caps.files && onDraftFiles ? (
+      {draft && a.files.show && a.files.edit && onDraftFiles ? (
         <SectionCard title="Файлы">
           <ChooseRow compact icon={Paperclip} label="Добавить файл" onPress={onDraftFiles} />
         </SectionCard>
@@ -164,18 +159,19 @@ export function ClientProfileBlocks({
           2026-09-21: «инвойс могут просить прямо на клиента с его
           реквизитами»). Только владельцу: это получатель на инвойсе, документы
           и деньги (STORY-085). */}
-      {caps.money && requisitesOn ? (
+      {a.requisites.show ? (
         <RequisitesBlock
           client={client}
           draft={draft}
           update={update}
+          readOnly={!a.requisites.edit}
           limit={REQUISITES_ON_CARD}
           onOpenAll={onOpenRequisites}
         />
       ) : null}
       {labelTags ?? null}
-      {personalOn ? (
-        <PersonalBlock client={client} update={update} readOnly={!draft && !caps.edit} draft={draft} />
+      {a.personal.show ? (
+        <PersonalBlock client={client} update={update} readOnly={!a.personal.edit} draft={draft} />
       ) : null}
       {/* Строки «Ещё» больше нет (владелец 2026-08-02: «чтобы внизу
           уменьшить»). Мессенджеры и почта уехали к номерам — их добавляют
