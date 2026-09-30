@@ -72,6 +72,7 @@ import {
   type ClientsScope,
 } from "./clients-company";
 import { masterClientJsonToClient } from "@/features/settings/master-reference";
+import { isPhoneTakenError } from "@/features/clients/client-create-errors";
 import {
   contactsHiddenOf,
   parseMemberContacts,
@@ -488,6 +489,12 @@ export function useUpdateClient(id: string) {
       }
     },
     onError: (e) => {
+      // Номер сменили на занятый: арбитр — UNIQUE-индекс базы. Сырой текст
+      // Postgres человеку не показываем (владелец 30.09: дубль не заводится).
+      if (isPhoneTakenError(e)) {
+        notify("Этот номер уже зарегистрирован", "Он у другого клиента — сохранить нельзя.");
+        return;
+      }
       // The blocks keep edits in local drafts and never read isError —
       // without this a failed save is silently lost until remount.
       notify(

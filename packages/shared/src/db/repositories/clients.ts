@@ -724,8 +724,26 @@ export async function findClientByPhoneE164(
     .is("deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(`findClientByPhoneE164: ${error.message}`);
-  if (!row) return null;
-  return { ...rowToClient(row), tag_ids: [] };
+  if (row) return { ...rowToClient(row), tag_ids: [] };
+  // СТАРЫЕ КАРТОЧКИ БЕЗ phone_e164 (заведены до мая–июня 2026). Их не видит
+  // ни это сравнение, ни UNIQUE-индекс — так в базу и прошёл второй «Артем»
+  // на том же номере (владелец 30.09: «не давать сдать дубль»). Таких строк
+  // единицы: читаем их и сверяем хвост номера в 8 цифр — тот же ключ, что у
+  // слияния и плашки дубля.
+  const tail = phoneE164.replace(/\D/g, "").slice(-8);
+  if (tail.length < 8) return null;
+  const { data: legacy, error: legacyError } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .is("phone_e164", null)
+    .is("deleted_at", null)
+    .neq("phone", "");
+  if (legacyError) throw new Error(`findClientByPhoneE164: ${legacyError.message}`);
+  const hit = (legacy ?? []).find(
+    (r) => (r.phone ?? "").replace(/\D/g, "").slice(-8) === tail,
+  );
+  return hit ? { ...rowToClient(hit), tag_ids: [] } : null;
 }
 
 // ─── Tag CRUD ──────────────────────────────────────────────────

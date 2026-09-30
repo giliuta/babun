@@ -4,7 +4,6 @@ import { useRouter, type Href } from "expo-router";
 import {
   Archive,
   CalendarClock,
-  Copy,
   Download,
   Eye,
   Home,
@@ -54,7 +53,6 @@ import {
   useClientFunctionOn,
   type ClientFunctionKey,
 } from "@/features/clients/client-functions";
-import { findDuplicateGroups } from "@/features/clients/duplicate-groups";
 import {
   SERVICE_MONTH_CHOICES,
   serviceMonthsLabel,
@@ -171,15 +169,7 @@ function ClientsSettingsScreen() {
     () => (teamId ? clientsOfTeam(clients, teamId, appointmentsForStats) : clients),
     [clients, teamId, appointmentsForStats],
   );
-  // Дубли — группы с одним номером, где есть карточка команды.
-  const duplicateCount = useMemo(
-    () =>
-      findDuplicateGroups(
-        clients,
-        teamId ? new Set(teamClients.map((c) => c.id)) : undefined,
-      ).length,
-    [clients, teamClients, teamId],
-  );
+
   // Карты для маршрута: у кого-то весь навигатор — Google, и Яндекс в листе
   // только удлиняет каждый выезд (владелец 2026-08-02).
   const mapServices = useEnabledMapServices(teamId);
@@ -383,20 +373,6 @@ function ClientsSettingsScreen() {
                       : `${teamClients.length} в CSV`
                 }
                 onPress={() => void exportAll()}
-              />
-              <Divider inset={56} />
-              <SettingsRow
-                tile={SETTINGS_TILE.indigo}
-                icon={Copy}
-                title="Дубли"
-                sub={
-                  clientsQuery.isLoading
-                    ? "Загрузка…"
-                    : duplicateCount > 0
-                      ? `Найдено: ${duplicateCount}`
-                      : "Не найдено"
-                }
-                onPress={() => router.push(teamHref("/clients/duplicates"))}
               />
               <Divider inset={56} />
               <SettingsRow

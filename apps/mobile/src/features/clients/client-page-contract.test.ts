@@ -642,3 +642,21 @@ describe("новый клиент — те же блоки", () => {
     assert.match(page(), /openOnArrive === "book"/);
   });
 });
+
+describe("дубль номера не заводится — плашка сверху", () => {
+  // Владелец 30.09: «если находит дубль — не даёт сдать, сразу плашка сверху,
+  // что этот телефон уже зарегистрирован; лучше, чем страница „Дубли“».
+  test("плашка стоит над блоком «Клиент», а не в слоте под номером", () => {
+    const src = page();
+    const notice = src.indexOf("<ClientDraftNotice");
+    assert.notEqual(notice, -1, "плашка дубля пропала со страницы");
+    assert.ok(notice < src.indexOf("<ClientHeader"), "плашка дубля снова под номером");
+    assert.doesNotMatch(src, /footer: \(\s*<ClientDraftNotice/);
+  });
+  test("страницы «Дубли» больше нет", () => {
+    assert.doesNotMatch(read("../../../app/(dashboard)/clients/settings.tsx"), /clients\/duplicates/);
+  });
+  test("создать при найденном дубле нельзя", () => {
+    assert.match(read("useClientDraft.ts"), /gate\.duplicate/);
+  });
+});

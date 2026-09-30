@@ -261,7 +261,13 @@ export function ClientDetailScreen() {
   const duplicateName = duplicate?.full_name.trim() ?? "";
   const draftReason = !isDraft
     ? null
-    : !draft.full_name.trim()
+    : // Номер занят — главная причина: имя дописывать бесполезно, создать
+      // всё равно нельзя (владелец 30.09: «не даёт сдать дубль»).
+      duplicate
+      ? duplicateName
+        ? `Такой номер уже есть: ${duplicateName}`
+        : "Такой номер уже есть"
+      : !draft.full_name.trim()
       ? "Впишите имя"
       : e164 === null && (!draftLinked || draftPhoneTyped)
         ? // Со связью номер необязателен (`draftCanSave`), но начатый и
@@ -273,11 +279,7 @@ export function ClientDetailScreen() {
               // (владелец 22.09: «номер должен хоть как-то проверяться»).
               "Проверьте номер и код страны"
             : "Нужен номер телефона"
-        : duplicate
-          ? duplicateName
-            ? `Такой номер уже есть: ${duplicateName}`
-            : "Такой номер уже есть"
-          : null;
+        : null;
 
   // Объект, который видят блоки (черновик или серверная строка).
   const c: Client | undefined = isDraft ? draft : client ?? undefined;
@@ -677,6 +679,29 @@ export function ClientDetailScreen() {
           />
         ) : null}
 
+        {/* «НОМЕР УЖЕ ЕСТЬ» — ТИХОЙ СТРОКОЙ СВЕРХУ (владелец 30.09: «не даёт
+            сдать дубль, сразу плашка сверху», и следом — «не надо вовсю
+            плашку»). Тап — существующий клиент; «Создать клиента» погашена. */}
+        {isDraft ? (
+          <ClientDraftNotice
+            duplicate={duplicate}
+            error={createError}
+            // Из записи дубль не открывают, а ВЫБИРАЮТ: это и есть тот
+            // клиент, ради которого пришли.
+            openLabel={handBack ? "Выбрать" : "Открыть"}
+            onOpenDuplicate={(duplicateId) => {
+              if (handBack) {
+                deliverCreatedClient(duplicateId);
+                // Выбрали существующего — черновик и не нужен.
+                leavingRef.current = true;
+                router.back();
+                return;
+              }
+              router.replace(`/clients/${duplicateId}`);
+            }}
+          />
+        ) : null}
+
         {/* ОДНА карточка-идентичность на оба режима: в черновике те же
             поля пустые (телефон с автофокусом и ✓), «Из контактов» вместо
             бейджей, слот дедупа под номером. */}
@@ -741,25 +766,6 @@ export function ClientDetailScreen() {
                   // курсор стоял в номере под пустым именем, и страница
                   // начиналась «снизу»). Имя уже пришло из поиска — в номер.
                   focus: prefillName && !prefillPhone ? "phone" : "name",
-                  footer: (
-                    <ClientDraftNotice
-                      duplicate={duplicate}
-                      error={createError}
-                      // Из записи дубль не открывают, а ВЫБИРАЮТ: это и есть
-                      // тот клиент, ради которого пришли.
-                      openLabel={handBack ? "Выбрать" : "Открыть"}
-                      onOpenDuplicate={(duplicateId) => {
-                        if (handBack) {
-                          deliverCreatedClient(duplicateId);
-                          // Выбрали существующего — черновик и не нужен.
-                          leavingRef.current = true;
-                          router.back();
-                          return;
-                        }
-                        router.replace(`/clients/${duplicateId}`);
-                      }}
-                    />
-                  ),
                 }
               : undefined
           }
