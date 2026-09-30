@@ -99,3 +99,96 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap): Client
     blocks,
   } as Client;
 }
+
+// ─── КАКИЕ КЛИЕНТЫ В ЕГО НАБОРЕ (проверка глазами 30.09) ─────────────────────
+//
+// Маска выше гасит поля, но строк не убирает: по токену владельца сервер
+// отдаёт всю базу, и «Около записи» в зеркале показывало десять клиентов, а
+// настоящий сотрудник получал двух. Набор считается тем же правилом, что
+// `access_client_ids_in` на сервере, по командам, где открыты «Карточки
+// клиентов»:
+//   · «Вся база» хоть в одной — вся база;
+//   · «Своей команды» — клиенты команды и её записей за всё время;
+//   · «Около записи» — запись команды от недели назад до завтра, отменённая
+//     окна не открывает;
+//   · кого завёл сам — видит всегда.
+
+export interface MirrorScopeTeams {
+  /** Команды с открытыми «Карточками клиентов». */
+  open: string[];
+  /** «Своей команды» и «Вся база». */
+  teamWide: string[];
+  /** «Около записи» (и неизвестное — как на сервере). */
+  near: string[];
+  whole: boolean;
+}
+
+export function mirrorScopeTeams(map: MemberAccessMap): MirrorScopeTeams {
+  const open = Object.entries(map.calendars).filter(([, levels]) => (RANK[levels.clients ?? "off"] ?? 0) >= 1);
+  const out: MirrorScopeTeams = { open: [], teamWide: [], near: [], whole: false };
+  for (const [teamId, levels] of open) {
+    const scope = levels["clients.scope"];
+    out.open.push(teamId);
+    if (scope === "own" || scope === "all") out.teamWide.push(teamId);
+    else out.near.push(teamId);
+    if (scope === "all") out.whole = true;
+  }
+  return out;
+}
+
+export interface MirrorClientScope {
+  whole: boolean;
+  /** Команды, чьи клиенты видны целиком. */
+  teamWide: ReadonlySet<string>;
+  /** Открытые записью или авторством. */
+  ids: ReadonlySet<string>;
+}
+
+export interface MirrorScopeAppointment {
+  client_id: string | null;
+  team_id: string | null;
+  date: string | null;
+  status: string | null;
+}
+
+/** День `YYYY-MM-DD` со сдвигом — календарной арифметикой, без часовых поясов. */
+export function shiftDay(day: string, days: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+export function mirrorClientScope(
+  teams: MirrorScopeTeams,
+  input: {
+    appointments: readonly MirrorScopeAppointment[];
+    /** Клиенты, которых он завёл сам (пусто, пока человек не в компании). */
+    createdBy: readonly string[];
+    /** Рабочий день компании (`tenant_business_date`). */
+    today: string;
+  },
+): MirrorClientScope {
+  const empty: MirrorClientScope = { whole: false, teamWide: new Set(), ids: new Set() };
+  if (teams.open.length === 0) return empty;
+  if (teams.whole) return { ...empty, whole: true };
+  const teamWide = new Set(teams.teamWide);
+  const near = new Set(teams.near);
+  const from = shiftDay(input.today, -7);
+  const to = shiftDay(input.today, 1);
+  const ids = new Set(input.createdBy);
+  for (const a of input.appointments) {
+    if (!a.client_id || !a.team_id) continue;
+    if (teamWide.has(a.team_id)) {
+      ids.add(a.client_id);
+      continue;
+    }
+    if (!near.has(a.team_id) || a.status === "cancelled" || !a.date) continue;
+    if (a.date >= from && a.date <= to) ids.add(a.client_id);
+  }
+  return { whole: false, teamWide, ids };
+}
+
+export function inMirrorScope(client: Pick<Client, "id" | "team_id">, scope: MirrorClientScope): boolean {
+  if (scope.whole) return true;
+  if (client.team_id && scope.teamWide.has(client.team_id)) return true;
+  return scope.ids.has(client.id);
+}

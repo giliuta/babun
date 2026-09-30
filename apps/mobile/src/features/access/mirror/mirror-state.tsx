@@ -40,6 +40,9 @@ import type { UserRole } from "@/features/settings/role-policy";
 export interface MirrorState {
   /** Кого показываем. Имя — для плашки. */
   name: string;
+  /** Его id, если он уже в компании: «завёл сам — видит всегда» (набор
+   *  клиентов зеркала). У черновика и приглашения — `null`. */
+  userId: string | null;
   /** Роль этого человека в компании: в зеркале владельцем он не бывает. */
   role: UserRole;
   /** Его карта прав — та же форма, что у `my_access_map`. */

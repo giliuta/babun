@@ -10,6 +10,7 @@ import { useUpdateMasterInvitation } from "./invitation-api";
 import { invitationRefusalText, isInvitationGone } from "./invitation-contract";
 import { usePendingInvitation } from "./MasterInviteCard";
 import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRightsView";
+import { previewAreaOf } from "./rights-focus";
 import { MemberRights } from "./MemberRights";
 import { RightsPlaceholder, activeOf, liveIdsOf, usePreview } from "./rights-page-shared";
 import {
@@ -123,7 +124,7 @@ function DraftRights({
           blocks,
           draft,
           name: draft.name,
-          area: rightsAreaOf(area),
+          area: previewAreaOf(rightsAreaOf(area), focus),
         })
       }
     />
@@ -206,7 +207,7 @@ function InviteRights({
           blocks,
           draft,
           name: draft.name,
-          area: rightsAreaOf(area),
+          area: previewAreaOf(rightsAreaOf(area), focus),
         })
       }
     />

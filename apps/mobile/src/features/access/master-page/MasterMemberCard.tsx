@@ -414,7 +414,7 @@ export function MasterMemberCard({
         teamLine={(id) => draftTeamBrief(blocks, draft, id)}
         // «Посмотреть его глазами» — строкой в блоке «Доступ», а не в ⋯.
         onMirror={() =>
-          preview({ blocks, draft, name })
+          preview({ blocks, draft, name, userId })
         }
         onOpenCalendarRights={(id) =>
           router.push(
@@ -460,7 +460,7 @@ export function MasterMemberCard({
           />
         }
         // ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ (канон 7.1): посмотреть, что из этого выйдет.
-        footer={<GradientButton label="Посмотреть его глазами" onPress={() => preview({ blocks, draft, name })} />}
+        footer={<GradientButton label="Посмотреть его глазами" onPress={() => preview({ blocks, draft, name, userId })} />}
       >
         {card ? (
           <>

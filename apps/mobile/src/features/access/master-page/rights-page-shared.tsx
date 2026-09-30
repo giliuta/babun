@@ -35,10 +35,13 @@ export function usePreview() {
     name: string;
     /** Раздел, который владелец только что настраивал. */
     area?: RightsArea;
+    /** Сотрудник, уже вошедший в компанию; у черновика и приглашения нет. */
+    userId?: string | null;
   }) => {
     if (!tenantId || !input.blocks) return;
     const state = {
       name: input.name.trim() || "сотрудник",
+      userId: input.userId ?? null,
       role: "master" as const,
       map: mirrorMapOf(tenantId, input.blocks, input.draft),
     };

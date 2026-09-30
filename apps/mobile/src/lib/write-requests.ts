@@ -53,6 +53,9 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "sms_team_templates",
   "tenant_quota_appointments_month",
   "tenant_quota_clients",
+  // Рабочий день компании — окно «Около записи» в зеркале (015, 30.09):
+  // `provolatile = 's'` спрошено у базы 30.09.
+  "tenant_business_date",
 ]);
 
 /** Функции, которые пишут: `provolatile = 'v'`. Перечислены явно, хотя

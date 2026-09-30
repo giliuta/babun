@@ -74,7 +74,8 @@ import {
 import { masterClientJsonToClient } from "@/features/settings/master-reference";
 import { isPhoneTakenError } from "@/features/clients/client-create-errors";
 import { parseClientBlocks } from "@/features/clients/client-block-access";
-import { mirrorMemberClient } from "@/features/access/mirror/mirror-client";
+import { inMirrorScope, mirrorMemberClient } from "@/features/access/mirror/mirror-client";
+import { useMirrorClientScope } from "@/features/access/mirror/use-mirror-client-scope";
 import { refreshRevealedContacts } from "@/features/clients/revealed-contacts";
 import {
   contactsHiddenOf,
@@ -347,9 +348,18 @@ export function useClients() {
   // скрытого номера — по карте зеркала (015, 30.09). Иначе владелец видел бы
   // заметки, объекты и долг, которых сотрудник не получит.
   const mirrorMap = useMirroredMemberMap(scope.kind);
+  // И только ЕГО клиенты: по токену владельца сервер отдаёт всю базу, а
+  // сотрудник получает набор «Какие клиенты» (проверка глазами 30.09 —
+  // десять строк вместо двух). Пока набор едет — пусто, а не вся база.
+  const mirrorScope = useMirrorClientScope(mirrorMap);
   const mirrorRows = useCallback(
-    (rows: Client[]) => (mirrorMap ? rows.map((row) => mirrorMemberClient(row, mirrorMap)) : rows),
-    [mirrorMap],
+    (rows: Client[]) =>
+      mirrorMap
+        ? rows
+            .filter((row) => mirrorScope !== undefined && inMirrorScope(row, mirrorScope))
+            .map((row) => mirrorMemberClient(row, mirrorMap))
+        : rows,
+    [mirrorMap, mirrorScope],
   );
   return useQuery({
     // У своей компании и у клиента записи ключ ТОТ ЖЕ, что был, — его греет
@@ -378,10 +388,15 @@ export function useClient(id: string) {
   // Тот же покров зеркала, что у списка: карточка — это тот же клиент,
   // открытый крупнее, и прятать только в списке значит не прятать вовсе.
   const mirrorMap = useMirroredMemberMap(scope.kind);
+  // Клиент вне его набора сотруднику не приходит вовсе — и в зеркале тоже.
+  const mirrorScope = useMirrorClientScope(mirrorMap);
   const mirrorOne = useCallback(
-    (client: Client | null): Client | null =>
-      client && mirrorMap ? mirrorMemberClient(client, mirrorMap) : client,
-    [mirrorMap],
+    (client: Client | null): Client | null => {
+      if (!client || !mirrorMap) return client;
+      if (mirrorScope && !inMirrorScope(client, mirrorScope)) return null;
+      return mirrorMemberClient(client, mirrorMap);
+    },
+    [mirrorMap, mirrorScope],
   );
   return useQuery({
     queryKey: sourceClientQueryKey(id, tenantId, scope.view),
@@ -396,7 +411,7 @@ export function useClient(id: string) {
       // Подстановка берёт строку из КЭША списка, а покров списка живёт в
       // `select` и кэш не меняет: без этого карточка мигала бы настоящим
       // телефоном до ответа сервера.
-      return found && mirrorMap ? mirrorMemberClient(found, mirrorMap) : found;
+      return found && mirrorMap ? mirrorOne(found) : found;
     },
     queryFn: async () => {
       if (scope.kind === "record") {

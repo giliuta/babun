@@ -3,7 +3,14 @@ import { describe, test } from "node:test";
 
 import type { Client } from "@babun/shared/local/clients";
 import type { MemberAccessMap } from "../access-map";
-import { mirrorClientBlocks, mirrorMemberClient } from "./mirror-client";
+import {
+  inMirrorScope,
+  mirrorClientBlocks,
+  mirrorClientScope,
+  mirrorMemberClient,
+  mirrorScopeTeams,
+  shiftDay,
+} from "./mirror-client";
 
 const map = (calendars: MemberAccessMap["calendars"]): MemberAccessMap => ({
   tenantId: "t",
@@ -63,5 +70,62 @@ describe("зеркало: строка клиента глазами сотру�
     const m = map({ A: { clients: "write", "clients.note": "off" }, B: { clients: "write", "clients.note": "write" } });
     assert.equal(mirrorClientBlocks({ team_id: "A" }, m)["clients.note"], "off");
     assert.equal(mirrorClientBlocks({ team_id: "Z" }, m)["clients.note"], "write");
+  });
+});
+
+describe("зеркало: какие клиенты в его наборе (как `access_client_ids_in`)", () => {
+  const TODAY = "2026-09-30";
+  const appt = (client_id: string, team_id: string, date: string, status = "scheduled") => ({
+    client_id,
+    team_id,
+    date,
+    status,
+  });
+  const ids = (m: MemberAccessMap, input: Partial<Parameters<typeof mirrorClientScope>[1]> = {}) => {
+    const scope = mirrorClientScope(mirrorScopeTeams(m), {
+      appointments: [],
+      createdBy: [],
+      today: TODAY,
+      ...input,
+    });
+    return ["c1", "c2", "c3", "c4"].filter((id) =>
+      inMirrorScope({ id, team_id: id === "c4" ? "A" : "Z" }, scope),
+    );
+  };
+
+  test("«Около записи» — неделя назад и завтра; отменённая и чужая команда окна не открывают", () => {
+    const m = map({ A: { clients: "read" } });
+    const appointments = [
+      appt("c1", "A", "2026-09-23"),
+      appt("c2", "A", "2026-10-01"),
+      appt("c3", "A", "2026-10-02"),
+      appt("c3", "A", "2026-09-22"),
+      appt("c4", "A", "2026-09-30", "cancelled"),
+      appt("c4", "B", "2026-09-30"),
+    ];
+    assert.deepEqual(ids(m, { appointments }), ["c1", "c2"]);
+  });
+
+  test("«Своей команды» — клиенты команды и её записи за всё время", () => {
+    const m = map({ A: { clients: "read", "clients.scope": "own" } });
+    assert.deepEqual(ids(m, { appointments: [appt("c2", "A", "2020-01-01", "cancelled")] }), ["c2", "c4"]);
+  });
+
+  test("«Вся база» хоть в одной команде — вся база", () => {
+    const m = map({ A: { clients: "read" }, B: { clients: "read", "clients.scope": "all" } });
+    assert.deepEqual(ids(m), ["c1", "c2", "c3", "c4"]);
+  });
+
+  test("завёл сам — видит всегда; карточки закрыты везде — никого", () => {
+    assert.deepEqual(ids(map({ A: { clients: "read" } }), { createdBy: ["c3"] }), ["c3"]);
+    assert.deepEqual(
+      ids(map({ A: { clients: "off", "clients.scope": "all" } }), { createdBy: ["c3"] }),
+      [],
+    );
+  });
+
+  test("день сдвигается календарём, через конец месяца", () => {
+    assert.equal(shiftDay("2026-09-30", 1), "2026-10-01");
+    assert.equal(shiftDay("2026-03-01", -7), "2026-02-22");
   });
 });

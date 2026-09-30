@@ -100,93 +100,67 @@ export function ClientDetailChrome({
     Keyboard.dismiss();
     run();
   };
-  return (
-    <>
-      {/* ОБЩАЯ ШАПКА ПРОДУКТА (владелец 22.09: «„Новый клиент“ должен
-          вписываться по такому же размеру и архитектуре, как у нас везде —
-          посередине»). Своя шапка держала заголовок слева и 16-м кеглем. */}
-      <ScreenHeader
-        title={draft ? "Новый клиент" : "Клиент"}
-        // Пока идёт запись, «назад» молчит: уход посреди сохранения терял бы
-        // правку, которую строка ещё не донесла.
-        onBack={saving ? () => {} : withCommit(onBack)}
-        right={
-          draft ? null : (
-            <Pressable
-              onPress={onToggleMenu}
-              disabled={saving}
-              className="h-11 w-11 items-center justify-center rounded-[10px] active:opacity-60"
-              accessibilityRole="button"
-              accessibilityLabel="Действия с клиентом"
-              accessibilityState={{ expanded: menuOpen, disabled: saving, busy: saving }}
-            >
-              <MoreHorizontal color={t.body} size={22} />
-            </Pressable>
-          )
-        }
-      />
-
-      <PickerSheet
-        visible={menuOpen}
-        title="Клиент"
-        items={[
-          ...(canEdit
-            ? [
-                {
-                  id: "remind",
-                  label: "Напомнить",
-                  icon: Bell,
-                  color: t.accent,
-                  onPress: onRemind,
-                },
-              ]
-            : []),
-          ...(onTogglePin
-            ? [
-                {
-                  id: "pin",
-                  label: pinned ? "Открепить" : "Закрепить",
-                  icon: Pin,
-                  color: t.accent,
-                  onPress: onTogglePin,
-                },
-              ]
-            : []),
-          ...(onShare
-            ? [
-                {
-                  id: "share",
-                  label: "Поделиться",
-                  icon: Share2,
-                  color: t.accent,
-                  onPress: onShare,
-                },
-              ]
-            : []),
-          ...(onMerge
-            ? [
-                {
-                  id: "merge",
-                  label: "Объединить с дублем",
-                  icon: Merge,
-                  color: t.accent,
-                  onPress: onMerge,
-                },
-              ]
-            : []),
-          ...(onSplit
-            ? [
-                {
-                  id: "split",
-                  label: "Разделить клиента",
-                  icon: Split,
-                  color: t.accent,
-                  onPress: onSplit,
-                },
-              ]
-            : []),
-          ...(canManage
-            ? [
+  // Пункты — по праву на этого клиента. Нет ни одного (карточка «Только
+  // видит» чужого клиента) — нет и «⋯»: пустая шторка с одним заголовком
+  // была дверью в никуда (проверка глазами 30.09).
+  const items = [
+    ...(canEdit
+      ? [
+          {
+            id: "remind",
+            label: "Напомнить",
+            icon: Bell,
+            color: t.accent,
+            onPress: onRemind,
+          },
+        ]
+      : []),
+    ...(onTogglePin
+      ? [
+          {
+            id: "pin",
+            label: pinned ? "Открепить" : "Закрепить",
+            icon: Pin,
+            color: t.accent,
+            onPress: onTogglePin,
+          },
+        ]
+      : []),
+    ...(onShare
+      ? [
+          {
+            id: "share",
+            label: "Поделиться",
+            icon: Share2,
+            color: t.accent,
+            onPress: onShare,
+          },
+        ]
+      : []),
+    ...(onMerge
+      ? [
+          {
+            id: "merge",
+            label: "Объединить с дублем",
+            icon: Merge,
+            color: t.accent,
+            onPress: onMerge,
+          },
+        ]
+      : []),
+    ...(onSplit
+      ? [
+          {
+            id: "split",
+            label: "Разделить клиента",
+            icon: Split,
+            color: t.accent,
+            onPress: onSplit,
+          },
+        ]
+      : []),
+    ...(canManage
+      ? [
           {
             id: "blacklist",
             label: blacklisted ? "Убрать из чёрного списка" : "В чёрный список",
@@ -212,9 +186,39 @@ export function ClientDetailChrome({
             color: t.danger,
             onPress: onDelete,
           },
-              ]
-            : []),
-        ]}
+        ]
+      : []),
+  ];
+  return (
+    <>
+      {/* ОБЩАЯ ШАПКА ПРОДУКТА (владелец 22.09: «„Новый клиент“ должен
+          вписываться по такому же размеру и архитектуре, как у нас везде —
+          посередине»). Своя шапка держала заголовок слева и 16-м кеглем. */}
+      <ScreenHeader
+        title={draft ? "Новый клиент" : "Клиент"}
+        // Пока идёт запись, «назад» молчит: уход посреди сохранения терял бы
+        // правку, которую строка ещё не донесла.
+        onBack={saving ? () => {} : withCommit(onBack)}
+        right={
+          draft || items.length === 0 ? null : (
+            <Pressable
+              onPress={onToggleMenu}
+              disabled={saving}
+              className="h-11 w-11 items-center justify-center rounded-[10px] active:opacity-60"
+              accessibilityRole="button"
+              accessibilityLabel="Действия с клиентом"
+              accessibilityState={{ expanded: menuOpen, disabled: saving, busy: saving }}
+            >
+              <MoreHorizontal color={t.body} size={22} />
+            </Pressable>
+          )
+        }
+      />
+
+      <PickerSheet
+        visible={menuOpen}
+        title="Клиент"
+        items={items}
         onClose={onCloseMenu}
         onExited={onMenuExited}
       />

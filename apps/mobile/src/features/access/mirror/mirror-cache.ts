@@ -14,6 +14,8 @@
 /** Ключ, заведённый зеркалом: его после выхода из режима стирают. */
 export function isMirrorClientKey(key: readonly unknown[]): boolean {
   const head = key[0];
+  // Набор клиентов зеркала (`use-mirror-client-scope.ts`) живёт только в режиме.
+  if (head === "mirror-client-scope") return true;
   // ["clients", tenantId, view] и ["client-tags", tenantId, view]
   if (head === "clients" || head === "client-tags") return isMemberView(key[2]);
   // ["client", id, tenantId, view]

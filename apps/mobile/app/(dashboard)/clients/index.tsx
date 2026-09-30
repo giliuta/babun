@@ -835,7 +835,9 @@ function ClientsListScreen() {
                 onLongPress={() => {
                   if (guest) return;
                   if (selecting) toggleId(item.id);
-                  else setMenuClient(item);
+                  // Меню — те же права, что у `ClientActionsSheet` ниже; ни
+                  // одного — нет и пустой шторки (проверка глазами 30.09).
+                  else if (caps.book || caps.export || caps.manage || canEditClient(item)) setMenuClient(item);
                 }}
               />
             );

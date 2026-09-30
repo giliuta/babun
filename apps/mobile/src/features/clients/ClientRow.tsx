@@ -26,6 +26,7 @@ import { formatPhoneForDisplay } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import type { CardFieldPrefs } from "@/features/clients/card-prefs";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
 
 // СТРОКА КЛИЕНТА — ОДНА НА ВСЕ СПИСКИ.
 //
@@ -172,7 +173,10 @@ export default function ClientRow({
     unclosed > 0
       ? `${unclosed} ${countWordRu(unclosed, "визит не закрыт", "визита не закрыты", "визитов не закрыто")}`
       : null;
-  if (cardFields.last) {
+  // «Историю записей» ему закрыли — строки о визитах нет вовсе: «нет
+  // записей» у клиента, который был вчера, — неправда (проверка глазами 30.09).
+  const showLast = cardFields.last && clientBlockLevel(client, "clients.history") !== "hidden";
+  if (showLast) {
     metaLead.push({
       key: "last",
       node: stats?.lastVisitDate ? (
@@ -252,7 +256,7 @@ export default function ClientRow({
     cardFields.inc && income > 0 ? `доход ${formatEUR(income)}` : "",
     cardFields.exp && exp > 0 ? `ожидается ${formatEUR(exp)}` : "",
     reminder ? `напоминание ${reminder.label}` : "",
-    cardFields.last
+    showLast
       ? stats?.lastVisitDate
         ? `последний визит ${formatShortDateRu(stats.lastVisitDate)}`
         : stats?.nextApt

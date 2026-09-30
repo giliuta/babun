@@ -5,6 +5,7 @@ import { useTeams } from "@/features/reference/queries";
 import { levelOf as mapLevelOf, type AccessRefusal } from "../access-map";
 import { useAccessBlocks, useCompanyMembers, useMemberAccess } from "../queries";
 import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRightsView";
+import { previewAreaOf } from "./rights-focus";
 import { memberRefusal, useMemberRightsWriter } from "./member-rights-writer";
 import { MEMBER_REFUSAL_TEXT, draftFromMemberAccess, rightsAreaOf } from "./rights-rows";
 import { RightsPlaceholder, activeOf, liveIdsOf, usePreview } from "./rights-page-shared";
@@ -102,7 +103,8 @@ export function MemberRights({
             color: null,
           }),
           name: subtitle ?? "",
-          area: rightsAreaOf(area),
+          area: previewAreaOf(rightsAreaOf(area), focus),
+          userId,
         })
       }
     />

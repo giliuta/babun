@@ -28,6 +28,10 @@ describe("что стирать после выхода из зеркала", ()
     );
   });
 
+  test("набор клиентов зеркала — стирается", () => {
+    assert.equal(isMirrorClientKey(["mirror-client-scope", TENANT, "user-7", "{}"]), true);
+  });
+
   test("свои ключи не трогаем", () => {
     assert.equal(isMirrorClientKey(clientsQueryKey(TENANT, "owner")), false);
     assert.equal(isMirrorClientKey(sourceClientsQueryKey(TENANT, "own")), false);
