@@ -153,6 +153,10 @@ Deno.serve(async (request: Request) => {
     "payment_intent_data[metadata][kind]": "sms_topup",
     "payment_intent_data[metadata][tenant_id]": tenantId,
     "payment_intent_data[metadata][pack_id]": pack,
+    "payment_intent_data[metadata][amount_cents]": String(amount),
+    // Только евро: пересчёт в местную валюту покупателя дал бы вебхуку
+    // сумму в чужих «центах».
+    "adaptive_pricing[enabled]": "false",
     success_url: `${back}?topup=paid`,
     cancel_url: `${back}?topup=cancelled`,
   });
@@ -170,6 +174,9 @@ Deno.serve(async (request: Request) => {
     if (typeof customer === "string" && customer) form.set("customer", customer);
     else form.set("customer_creation", "always");
     form.set("payment_intent_data[setup_future_usage]", "off_session");
+    // Для автопополнения — только карта (с Apple Pay / Google Pay): отложенные
+    // способы вроде SEPA подтверждаются днями, и списание пошло бы вслепую.
+    form.set("payment_method_types[0]", "card");
     form.set("metadata[autotopup]", "1");
     form.set("metadata[threshold_cents]", String(threshold));
   }

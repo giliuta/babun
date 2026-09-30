@@ -171,16 +171,26 @@ Deno.serve(async (request: Request) => {
       continue;
     }
     if (result.ok) {
-      if (result.settled) {
-        const { error: creditError } = await sb.rpc("sms_credit_topup", {
-          p_tenant: row.tenant_id,
-          p_amount_cents: result.amount,
-          p_session: null,
-          p_payment_intent: result.id,
-          p_pack: `auto-eur${Math.round(row.amount_cents / 100)}`,
-        });
-        // Не зачислилось здесь — зачислит вебхук тем же платежом.
-        if (creditError) console.error("sms-autotopup: credit failed", row.tenant_id, creditError.message);
+      // Банк ещё думает — попытка остаётся «в пути»: итог поставит вебхук
+      // (`payment_intent.succeeded` / `.payment_failed`), повтор тем же ключом
+      // второго списания не сделает.
+      if (!result.settled) {
+        counts.retry += 1;
+        continue;
+      }
+      const { error: creditError } = await sb.rpc("sms_credit_topup", {
+        p_tenant: row.tenant_id,
+        p_amount_cents: result.amount,
+        p_session: null,
+        p_payment_intent: result.id,
+        p_pack: `auto-eur${Math.round(row.amount_cents / 100)}`,
+      });
+      // Не зачислилось — попытку не закрываем: через 30 минут повтор тем же
+      // ключом вернёт тот же платёж и зачислит его (одна строка журнала).
+      if (creditError) {
+        console.error("sms-autotopup: credit failed", row.tenant_id, creditError.message);
+        counts.retry += 1;
+        continue;
       }
       await sb.rpc("sms_autotopup_result", { p_tenant: row.tenant_id, p_key: row.idem_key, p_ok: true, p_error: null });
       counts.charged += 1;

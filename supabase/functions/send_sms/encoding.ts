@@ -36,6 +36,21 @@ function detectEncoding(body: string): SmsEncoding {
   return "gsm7";
 }
 
+/** Parts of a long UCS-2 message: 67 UTF-16 units each, and a surrogate
+ *  pair (emoji) never splits across two parts — the carrier moves it whole. */
+function ucs2Parts(body: string): number {
+  let parts = 1;
+  let used = 0;
+  for (const ch of body) {
+    if (used + ch.length > MULTI_UCS2) {
+      parts += 1;
+      used = 0;
+    }
+    used += ch.length;
+  }
+  return parts;
+}
+
 function gsm7Weight(body: string): number {
   let w = 0;
   for (const ch of body) {
@@ -50,7 +65,7 @@ export function analyzeSmsEncoding(body: string): SmsEncodingInfo {
   const weight =
     encoding === "gsm7"
       ? gsm7Weight(body)
-      : Array.from(body).length;
+      : body.length; // UTF-16 units: an emoji is 2, exactly as Twilio bills
   const singleLimit = encoding === "gsm7" ? SINGLE_GSM7 : SINGLE_UCS2;
   const multipartLimit = encoding === "gsm7" ? MULTI_GSM7 : MULTI_UCS2;
 
@@ -63,7 +78,7 @@ export function analyzeSmsEncoding(body: string): SmsEncodingInfo {
     segments = 1;
     perSegmentCap = singleLimit;
   } else {
-    segments = Math.ceil(weight / multipartLimit);
+    segments = encoding === "ucs2" ? ucs2Parts(body) : Math.ceil(weight / multipartLimit);
     perSegmentCap = multipartLimit;
   }
 

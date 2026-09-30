@@ -89,7 +89,9 @@ export function SmsAutotopupCard({ auto }: { auto: SmsAutotopup }) {
           <>
             <SwitchRow
               label="Автопополнение"
-              hint={`${euro(auto.amountCents)}, когда меньше ${euro(auto.thresholdCents)}`}
+              // Включено — порог и сумма видны строками ниже; выключено —
+              // подпись говорит, что включится.
+              hint={auto.enabled ? undefined : `${euro(auto.amountCents)}, когда меньше ${euro(auto.thresholdCents)}`}
               value={auto.enabled}
               disabled={save.isPending}
               onChange={(enabled) => patch({ enabled })}
@@ -128,7 +130,7 @@ export function SmsAutotopupCard({ auto }: { auto: SmsAutotopup }) {
             tile="neutral"
             icon={RefreshCw}
             title="Выключено"
-            sub="Оплатите с сохранением карты — дальше баланс пополнится сам"
+            sub="Сохранить карту при оплате"
             onPress={() => setPicking("start")}
           />
         )}

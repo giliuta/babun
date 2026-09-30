@@ -80,4 +80,14 @@ describe("деньги и части — те же", () => {
       assert.deepEqual(serverEncoding(text), analyzeSmsEncoding(text), text);
     }
   });
+
+  test("эмодзи — две единицы UTF-16, как считает Twilio (и база: sms_min_segments)", () => {
+    for (const [count, parts] of [[35, 1], [36, 2], [70, 3]] as const) {
+      const text = "😀".repeat(count);
+      assert.equal(analyzeSmsEncoding(text).segments, parts, `${count} эмодзи`);
+      assert.deepEqual(serverEncoding(text), analyzeSmsEncoding(text));
+    }
+    // Эмодзи на стыке частей не рвётся: 66 единиц + эмодзи — уже вторая часть.
+    assert.equal(analyzeSmsEncoding("я".repeat(66) + "😀" + "я".repeat(10)).segments, 2);
+  });
 });

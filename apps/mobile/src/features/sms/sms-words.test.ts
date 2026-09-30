@@ -105,6 +105,9 @@ describe("ответ базы", () => {
     assert.deepEqual(a.senders, { t1: "Giliuta" });
     assert.equal(smsErrorText(new Error("sms:sender")), "У команды не указано имя отправителя");
     assert.equal(smsErrorText(new Error("sms:sender_format")), "Имя отправителя: латиница, цифры, до 11 знаков");
+    assert.equal(smsErrorText(new Error("sms:sender_taken")), "Это имя занято — выберите другое");
+    assert.equal(smsErrorText(new Error("sms:country")), "На номера этой страны SMS не отправляются");
+    assert.equal(smsErrorText(new Error("sms:limit")), "На сегодня предел SMS сотрудника исчерпан");
   });
 
   test("предупреждение о балансе — только когда SMS настроены", () => {

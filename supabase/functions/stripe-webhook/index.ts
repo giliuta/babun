@@ -194,8 +194,11 @@ async function resolveTenantId(event: Stripe.Event, sbs: any): Promise<string | 
 //     сохраняется, автопополнение включается;
 //   • `charge.refunded` — возврат оплаты снимает деньги с баланса
 //     (нарастающим итогом: снимается только новое);
-//   • `charge.dispute.created` / `.closed` (выигран) — спор по карте снимает
-//     деньги и выключает автопополнение, выигрыш возвращает.
+//   • `charge.dispute.created` — спор (и запрос банка) выключает
+//     автопополнение и забывает карту; `charge.dispute.funds_withdrawn` —
+//     банк забрал деньги, снимаем; `.funds_reinstated` — вернул, возвращаем.
+// Только евро и только сумма пакета — иначе тревога и ничего не двигаем
+// (волна 13.1, находки проверки безопасности).
 // Платёж не SMS (подписка) функции базы узнают и пропускают.
 
 type Meta = Record<string, string | undefined>;
@@ -229,6 +232,19 @@ async function rpc(sbs: any, name: string, args: Record<string, unknown>): Promi
   return data;
 }
 
+/** Деньги SMS — только евро (пакеты в евро; пересчёт Stripe в местную
+ *  валюту дал бы в «центах» чужие числа). Не евро — тревога, не зачисляем. */
+// deno-lint-ignore no-explicit-any
+async function euroOnly(sbs: any, tenantId: string | null, currency: string | null | undefined, what: string): Promise<boolean> {
+  if ((currency ?? "").toLowerCase() === "eur") return true;
+  await rpc(sbs, "sms_alert", {
+    p_tenant: tenantId,
+    p_kind: "currency",
+    p_message: `${what}: валюта ${currency ?? "?"} вместо EUR — деньги не тронуты`,
+  });
+  return false;
+}
+
 // deno-lint-ignore no-explicit-any
 async function credit(sbs: any, tenantId: string, amountCents: number, sessionId: string | null, intentId: string, pack: string | null) {
   await rpc(sbs, "sms_credit_topup", {
@@ -255,6 +271,16 @@ async function smsMoney(event: Stripe.Event, sbs: any, stripe: Stripe): Promise<
         console.warn("sms topup: incomplete session", session.id);
         return;
       }
+      if (!(await euroOnly(sbs, tenantId, session.currency, `Оплата ${intentId}`))) return;
+      // Сумма — ровно та, что выбрана на сайте (пакет): иначе тревога.
+      if (meta.amount_cents && Number(meta.amount_cents) !== amountCents) {
+        await rpc(sbs, "sms_alert", {
+          p_tenant: tenantId,
+          p_kind: "topup_amount",
+          p_message: `Оплата ${intentId}: ${amountCents} ц. вместо ${meta.amount_cents} — не зачислена`,
+        });
+        return;
+      }
       await credit(sbs, tenantId, amountCents, session.id, intentId, meta.pack_id ?? null);
       if (meta.autotopup === "1") {
         const customer = idOf(session.customer);
@@ -265,8 +291,11 @@ async function smsMoney(event: Stripe.Event, sbs: any, stripe: Stripe): Promise<
           console.warn("sms autotopup: card not saved", session.id);
           return;
         }
+        // Одна оплата — одно сохранение карты: повтор сигнала (или «Resend»
+        // в Stripe) не вернёт карту, которую владелец убрал.
         await rpc(sbs, "sms_autotopup_card", {
           p_tenant: tenantId,
+          p_session: session.id,
           p_customer: customer,
           p_payment_method: pmId,
           p_label: cardLabel(pm),
@@ -282,7 +311,26 @@ async function smsMoney(event: Stripe.Event, sbs: any, stripe: Stripe): Promise<
       if (meta.kind !== "sms_topup" || !meta.tenant_id) return;
       const amountCents = intent.amount_received ?? 0;
       if (amountCents <= 0) return;
+      if (!(await euroOnly(sbs, meta.tenant_id, intent.currency, `Оплата ${intent.id}`))) return;
+      if (meta.amount_cents && Number(meta.amount_cents) !== amountCents) {
+        await rpc(sbs, "sms_alert", {
+          p_tenant: meta.tenant_id,
+          p_kind: "topup_amount",
+          p_message: `Оплата ${intent.id}: ${amountCents} ц. вместо ${meta.amount_cents} — не зачислена`,
+        });
+        return;
+      }
       await credit(sbs, meta.tenant_id, amountCents, null, intent.id, meta.pack_id ?? null);
+      // Автопополнение, которое банк подтвердил не сразу («processing»): итог
+      // попытки ставит этот сигнал.
+      if (meta.auto === "1" && meta.attempt) {
+        await rpc(sbs, "sms_autotopup_result", {
+          p_tenant: meta.tenant_id,
+          p_key: meta.attempt,
+          p_ok: true,
+          p_error: null,
+        });
+      }
       return;
     }
     case "payment_intent.payment_failed": {
@@ -301,14 +349,19 @@ async function smsMoney(event: Stripe.Event, sbs: any, stripe: Stripe): Promise<
       const charge = event.data.object as Stripe.Charge;
       const intentId = idOf(charge.payment_intent);
       if (!intentId) return;
+      if (!(await euroOnly(sbs, null, charge.currency, `Возврат по ${intentId}`))) return;
       await rpc(sbs, "sms_stripe_refund", {
         p_payment_intent: intentId,
         p_refunded_total: charge.amount_refunded ?? 0,
       });
       return;
     }
+    // Спор — по деньгам банка: открыт (в том числе запрос без списания) —
+    // только выключить автопополнение и забыть карту; деньги снимаются,
+    // когда банк их забрал, и возвращаются, когда вернул.
     case "charge.dispute.created":
-    case "charge.dispute.closed": {
+    case "charge.dispute.funds_withdrawn":
+    case "charge.dispute.funds_reinstated": {
       const dispute = event.data.object as Stripe.Dispute;
       let intentId = idOf(dispute.payment_intent);
       if (!intentId) {
@@ -316,12 +369,17 @@ async function smsMoney(event: Stripe.Event, sbs: any, stripe: Stripe): Promise<
         if (chargeId) intentId = idOf((await stripe.charges.retrieve(chargeId)).payment_intent);
       }
       if (!intentId) return;
-      if (event.type === "charge.dispute.closed" && dispute.status !== "won") return;
+      const phase = event.type === "charge.dispute.created"
+        ? "opened"
+        : event.type === "charge.dispute.funds_withdrawn"
+        ? "withdrawn"
+        : "reinstated";
+      if (phase !== "opened" && !(await euroOnly(sbs, null, dispute.currency, `Спор по ${intentId}`))) return;
       await rpc(sbs, "sms_stripe_dispute", {
         p_payment_intent: intentId,
         p_dispute: dispute.id,
         p_amount: dispute.amount ?? 0,
-        p_won: event.type === "charge.dispute.closed",
+        p_phase: phase,
       });
       return;
     }
