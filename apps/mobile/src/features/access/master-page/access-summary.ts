@@ -89,6 +89,14 @@ const RECORD_KINDS: readonly string[] = [
 ];
 
 export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock[]>> = {
+  // «КЛИЕНТЫ» — БЛОКАМИ, КАК «КАЛЕНДАРЬ» (владелец 30.09: «разобраться, как
+  // правильно показывать»; защита базы от подрядчика со своей компанией).
+  // «История» встанет, когда её права оживут на сервере.
+  clients: [
+    { key: "main", title: "Главное", keys: ["clients", "clients.scope"] },
+    { key: "contact", title: "Связь", keys: ["clients.contacts"] },
+    { key: "history", title: "История", keys: ["clients.history", "clients.money", "clients.files"] },
+  ],
   calendar: [
     // Доходы и расходы — в «Главном» (владелец 30.09: «переходим к доход
     // расход — в главный»): полоса денег под календарём и деньги дня. После

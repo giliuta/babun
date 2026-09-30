@@ -52,7 +52,7 @@ const TITLE: Record<string, string> = {
   "finance.debts": "Долги",
   clients: "Карточки клиентов",
   "clients.scope": "Какие клиенты",
-  "clients.contacts": "Телефоны",
+  "clients.contacts": "Телефон и контакты",
   "company.sms_templates": "Шаблоны SMS",
 };
 
@@ -107,9 +107,11 @@ const STEP: Record<string, Words> = {
   "finance.operations": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
   "finance.accounts": { off: "Не видит", read: "Видит", write: "Управляет" },
   "finance.debts": { off: "Не видит", read: "Видит", write: "Принимает оплату" },
-  clients: { off: "Не видит", read: "Видит", write: "Ведёт" },
-  "clients.scope": { own: "Только своих", all: "Всех" },
-  "clients.contacts": { off: "Скрыты", read: "Видит" },
+  // КЛИЕНТЫ — ТЕМИ ЖЕ СЛОВАМИ, ЧТО «КАЛЕНДАРЬ» (владелец 30.09: страница
+  // «Клиенты» — так же, блоками).
+  clients: { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.scope": { own: "Своей команды", all: "Вся база" },
+  "clients.contacts": { off: "Скрыт", read: "Видит" },
 };
 
 /** ОПАСНЫЕ СТУПЕНИ — одна строка предупреждения под пояснением (владелец
