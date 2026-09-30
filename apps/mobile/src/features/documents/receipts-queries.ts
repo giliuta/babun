@@ -19,6 +19,9 @@ import { useTenantId } from "@/lib/tenant";
 // Владелец это отменил: «чек не сразу выписывается — мы выписываем его
 // только тогда, когда нажмём кнопку». Отсюда и мутации ниже.
 
+/** Сколько чеков читать за один заход: предел PostgREST — тысяча строк. */
+const RECEIPTS_PAGE = 1000;
+
 export function useReceipts(filter?: {
   clientId?: string | null;
   appointmentId?: string | null;
@@ -33,17 +36,28 @@ export function useReceipts(filter?: {
     queryKey: ["receipts", tenantId, clientId, appointmentId],
     enabled: !!tenantId && filter?.enabled !== false,
     queryFn: async (): Promise<Receipt[]> => {
-      let q = supabase
-        .from("receipts")
-        .select("*")
-        .eq("tenant_id", tenantId as string)
-        .order("year", { ascending: false })
-        .order("seq", { ascending: false });
-      if (clientId) q = q.eq("client_id", clientId);
-      if (appointmentId) q = q.eq("appointment_id", appointmentId);
-      const { data, error } = await q;
-      if (error) throw new Error(error.message);
-      return (data ?? []) as unknown as Receipt[];
+      // ПОСТРАНИЧНО (аудит финансов 2026-09-30): PostgREST отдаёт не больше
+      // тысячи строк за ответ, и тысяча первый чек молча не попадал ни в
+      // «Документы», ни в поиск. Порядок однозначный — с `id` последним
+      // ключом, — иначе соседние страницы теряли бы и повторяли строки.
+      const rows: Receipt[] = [];
+      for (let from = 0; ; from += RECEIPTS_PAGE) {
+        let q = supabase
+          .from("receipts")
+          .select("*")
+          .eq("tenant_id", tenantId as string)
+          .order("year", { ascending: false })
+          .order("seq", { ascending: false })
+          .order("id", { ascending: true });
+        if (clientId) q = q.eq("client_id", clientId);
+        if (appointmentId) q = q.eq("appointment_id", appointmentId);
+        const { data, error } = await q.range(from, from + RECEIPTS_PAGE - 1);
+        if (error) throw new Error(error.message);
+        const page = (data ?? []) as unknown as Receipt[];
+        rows.push(...page);
+        if (page.length < RECEIPTS_PAGE) break;
+      }
+      return rows;
     },
   });
 }
