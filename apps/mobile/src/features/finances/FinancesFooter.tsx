@@ -9,7 +9,6 @@ import type { Team } from "@/features/reference/queries";
 import { AccountEditorSheet } from "./account-editor/AccountEditorSheet";
 import type { AccountWithBalance } from "./accounts";
 import { accountsFooterAction, TRANSFER_NEEDS_SECOND } from "./accounts-footer";
-import type { DocumentFilter } from "./documents";
 import type { HomeView } from "./FinanceOverview";
 import { TransferSheet } from "./TransferSheet";
 
@@ -37,14 +36,12 @@ import { TransferSheet } from "./TransferSheet";
 // команда — та, что выбрана чипом; всё остальное шторка грузит сама.
 export function FinancesFooter({
   view,
-  docFilter,
   debtSide,
   teamById,
   teamId,
   accounts,
   shownAccounts,
   selectedAccountId,
-  onIssueReceipt,
   onIssueInvoice,
   onAddDebt,
   onAddOperation,
@@ -52,7 +49,6 @@ export function FinancesFooter({
   reason = null,
 }: {
   view: HomeView;
-  docFilter: DocumentFilter;
   debtSide: DebtDirection;
   /** Все команды, включая расформированные: лист перевода подписывает ими
    *  счета, и старая команда обязана остаться названной. */
@@ -66,7 +62,6 @@ export function FinancesFooter({
   /** Счета на плитках — выбор считается, только если он виден. */
   shownAccounts: readonly AccountWithBalance[];
   selectedAccountId: string | null;
-  onIssueReceipt: () => void;
   onIssueInvoice: () => void;
   onAddDebt: () => void;
   onAddOperation: () => void;
@@ -116,19 +111,12 @@ export function FinancesFooter({
           onPress={() => setCreateOpen(true)}
         />
       )
-    ) : view === "documents" && docFilter === "receipt" ? (
-      // ЧЕК ВЫПИСЫВАЕТСЯ КНОПКОЙ (владелец 2026-09-20: «чек не сразу
-      // выписывается — мы выписываем его только тогда, когда нажмём кнопку
-      // „Выписать чек“»). До этого дня его выдавал сервер триггером в миг
-      // приёма денег, выписывать было нечего, и кнопка честно уводила в
-      // «Долги» — туда, где деньги принимают. Теперь она открывает
-      // составитель: бумага, в которой чек собирают тапом — клиент, дата,
-      // услуги из каталога, скидка и налог.
-      //
-      // Чек, собранный здесь, ВСЕГДА записывает приход на выбранный счёт
-      // (см. `useComposeReceipt`): бумага без денег была бы подделкой.
-      <GradientButton label="Выписать чек" disabled={!enabled} onPress={onIssueReceipt} />
     ) : view === "documents" ? (
+      // ОТДЕЛЬНОГО ЧЕКА НЕТ (владелец 2026-09-30: «отдельно чеки пока что не
+      // делай»): чек выписывается только на оплату инвойса, на его странице.
+      // Поэтому и под «Чеками» главное действие — «Выставить инвойс».
+      // Составитель отдельного чека (`/documents/receipt-new`) остался в коде,
+      // но двери к нему нет.
       <GradientButton label="Выставить инвойс" disabled={!enabled} onPress={onIssueInvoice} />
     ) : view === "debt" ? (
       // ДОЛГ — СВОЯ СУЩНОСТЬ, И ЗАВОДИТСЯ ОН СВОЕЙ ШТОРКОЙ (владелец

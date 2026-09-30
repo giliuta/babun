@@ -53,6 +53,10 @@ import {
 } from "@/features/invoices/queries";
 import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+import { useIssueReceipt, useReceipts } from "@/features/documents/receipts-queries";
+import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
+import type { Receipt } from "@babun/shared/local/finance/receipt";
+import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -91,6 +95,15 @@ export default function InvoiceDetailScreen() {
   const [accountCreateOpen, setAccountCreateOpen] = useState(false);
   const [refundTarget, setRefundTarget] = useState<InvoicePaymentLedger | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  // ЧЕК — ТОЛЬКО У ИНВОЙСА (владелец 2026-09-30: «отдельно чеки пока что не
+  // делай; чек можно выставить на выставленный инвойс — на оплату, принятую
+  // по нему»). Инвойс оплачен — внизу «Выписать чек», выписанный чек стоит
+  // блоком на странице и открывается листом.
+  const receiptsQuery = useReceipts({ invoiceId: id, enabled: !!id });
+  const issueReceipt = useIssueReceipt();
+  const toast = useToast();
+  const [openReceipt, setOpenReceipt] = useState<Receipt | null>(null);
+  const [issuing, setIssuing] = useState(false);
   const businessToday = todayYmd(calendarSettings?.timezone ?? "Europe/Nicosia");
 
   const client = useMemo(
@@ -121,6 +134,36 @@ export default function InvoiceDetailScreen() {
     [accounts, invoice.data?.brigade_id],
   );
   const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts]);
+  const receipts = useMemo(() => receiptsQuery.data ?? [], [receiptsQuery.data]);
+  // Платежи, по которым чек ещё не выписан. Возвращённый целиком чека не
+  // получает — сервер откажет («оформлен полный возврат»).
+  const paymentsWithoutReceipt = useMemo(() => {
+    const withReceipt = new Set(receipts.map((r) => r.transaction_id));
+    return payments.filter(
+      (p) =>
+        p.type === "income" &&
+        !withReceipt.has(p.id) &&
+        calculateInvoicePaymentRefundable(p, payments) > 0,
+    );
+  }, [payments, receipts]);
+
+  const issueReceipts = async () => {
+    if (issuing) return;
+    setIssuing(true);
+    try {
+      // Чек — на каждый платёж без чека: обычно он один, при доплатах —
+      // по одному на каждую.
+      for (const payment of paymentsWithoutReceipt) {
+        const receipt = await issueReceipt.mutateAsync({ transactionId: payment.id });
+        haptics.success();
+        toast(`Чек ${receipt.number} выписан`);
+      }
+    } catch (error) {
+      notify("Чек не выписан", error instanceof Error ? error.message : undefined);
+    } finally {
+      setIssuing(false);
+    }
+  };
 
   const shareInvoice = async () => {
     // Итоги — часть документа, а не украшение: без них сообщение не собрать,
@@ -537,6 +580,46 @@ export default function InvoiceDetailScreen() {
             })}
           </SectionCard>
         ) : null}
+
+        {/* ЧЕК ИНВОЙСА — закреплён за его оплатой; тап открывает чек. */}
+        {!isCreditNote && receipts.length > 0 ? (
+          <SectionCard title="Чек">
+            {receipts.map((receipt, index) => (
+              <View key={receipt.id}>
+                {index > 0 ? <Divider inset={16} /> : null}
+                <Pressable
+                  onPress={() => setOpenReceipt(receipt)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Чек ${receipt.number}, открыть`}
+                  className="flex-row items-center px-4 py-3 active:opacity-60"
+                >
+                  <View className="flex-1 pr-3">
+                    <Text className="text-[15px] font-medium" style={{ color: t.ink }}>
+                      {`Чек ${receipt.number}`}
+                    </Text>
+                    <Text className="mt-0.5 text-xs" style={{ color: t.sub }}>
+                      {[
+                        formatInvoiceDate(receipt.issued_on),
+                        receipt.status === "void" ? "аннулирован" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </Text>
+                  </View>
+                  <Text
+                    className="text-base font-semibold"
+                    style={{
+                      color: receipt.status === "void" ? t.faint : t.ink,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {formatInvoiceMoney(receipt.amount, row.currency)}
+                  </Text>
+                </Pressable>
+              </View>
+            ))}
+          </SectionCard>
+        ) : null}
       </ScrollView>
 
       {/* ДЕЙСТВИЕ ЭКРАНА ОДНО И ЖИВЁТ ВНИЗУ (AGENTS: главное действие — в
@@ -550,6 +633,19 @@ export default function InvoiceDetailScreen() {
             label={`${settlement.paid > 0 ? "Добавить платёж" : "Принять оплату"} · ${formatInvoiceMoney(settlement.remaining, row.currency)}`}
             onPress={openPayment}
           />
+        </View>
+      ) : !isCreditNote &&
+        row.status !== "void" &&
+        row.status !== "cancelled" &&
+        receiptsQuery.isSuccess &&
+        paymentsWithoutReceipt.length > 0 ? (
+        // Оплачен — главное действие экрана становится «Выписать чек»: чек
+        // рождается кнопкой, а не сам (владелец 2026-09-20).
+        <View
+          className="px-4 pb-7 pt-3"
+          style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
+        >
+          <Button label="Выписать чек" loading={issuing} onPress={() => void issueReceipts()} />
         </View>
       ) : null}
 
@@ -584,6 +680,17 @@ export default function InvoiceDetailScreen() {
         }}
         onClose={() => setRefundTarget(null)}
       />
+      <ReceiptSheet
+        receipt={openReceipt}
+        appointment={appointment ?? null}
+        accountName={openReceipt?.account_id ? (accountById.get(openReceipt.account_id) ?? null) : null}
+        onClose={() => setOpenReceipt(null)}
+        // Дверь «к инвойсу» из листа ведёт на эту же страницу — лист просто
+        // закрывается.
+        onOpen={(href) => {
+          if (href !== `/invoices/${id}`) router.push(href as Href);
+        }}
+      />
       <AccountEditorSheet
         visible={accountCreateOpen}
         accountId={null}
@@ -615,10 +722,12 @@ function PaymentHistoryRow({
 }) {
   const t = useThemeColors();
   const isRefund = payment.type === "refund";
+  const method = paymentMethodLabel(payment.payment_method) || null;
   const meta = [
     formatInvoiceDate(payment.occurred_on),
     accountName || "Счёт не указан",
-    paymentMethodLabel(payment.payment_method) || null,
+    // Счёт «Наличные» и способ «Наличные» — одно слово дважды подряд.
+    method && method !== accountName ? method : null,
     payment.type === "income" && refundable <= 0 ? "возвращён полностью" : null,
     refundInAppointment
       ? onOpenAppointment

@@ -1534,22 +1534,12 @@ function FinancesContent() {
       {/* Главное действие экрана и листы счетов — `FinancesFooter`. */}
       <FinancesFooter
         view={view}
-        docFilter={docFilter}
         debtSide={debtSide}
         teamById={teamByIdAll}
         teamId={scope === NO_TEAM ? null : scope}
         accounts={accounts}
         shownAccounts={scopedAccounts}
         selectedAccountId={view === "accounts" ? accountId : null}
-        onIssueReceipt={() =>
-          // Команда чипа едет с собой: чек выписывают в той команде,
-          // которую человек сейчас смотрит, и кассы в нём — её.
-          pushOnce(
-            scope && scope !== NO_TEAM
-              ? `/documents/receipt-new?teamId=${encodeURIComponent(scope)}`
-              : "/documents/receipt-new",
-          )
-        }
         // Команда чипа — команда счёта (ставка VAT, касса, «Документы» этой
         // команды); без неё инвойс уходил первой команде (аудит 2026-09-30).
         onIssueInvoice={() =>

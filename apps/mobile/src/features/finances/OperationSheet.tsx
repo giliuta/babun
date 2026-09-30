@@ -19,7 +19,6 @@ import { useReceiptSession } from "./receipt-upload";
 import { AmountBlock } from "./AmountBlock";
 import { CategoryBlock } from "./CategoryBlock";
 import { paymentMethodForAccountKind } from "@/features/appointments/payment";
-import { useIssueReceipt } from "@/features/documents/receipts-queries";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
@@ -216,7 +215,6 @@ export function OperationSheet({
   const del = useDeleteTransaction();
   const toast = useToast();
   const isEdit = !!transaction;
-  const issueReceipt = useIssueReceipt();
   const router = useRouter();
 
   // No free-form «Возврат» here — a real refund is created from the
@@ -877,22 +875,12 @@ export function OperationSheet({
     moneySign(transaction.amount - refundedTotal) > 0;
   // Карточка «Ещё» живёт, пока в ней есть хоть одна строка: у сотрудника на
   // просмотре не остаётся ни одной, и пустая шапка была бы мусором.
-  // ЧЕК ПО УЖЕ ПРИНЯТЫМ ДЕНЬГАМ — ЗДЕСЬ, А НЕ В СОСТАВИТЕЛЕ. Аудит денег
-  // 2026-09-20 поймал ловушку: после снятия автовыписки единственная кнопка
-  // «Выписать чек» вела в составитель, а он ЗАВОДИТ НОВЫЙ ПРИХОД. Человек,
-  // принявший оплату в записи и пришедший за бумагой, записал бы деньги
-  // дважды. Настоящая дорога — отсюда: дверь `issue_receipt` берёт ЭТУ
-  // проводку и ничего нового не создаёт.
-  //
-  // Идемпотентность двери снимает вопрос двойного нажатия: второй раз она
-  // отдаёт тот же документ, второго номера не бывает.
-  const showReceiptRow =
-    documentsOn &&
-    transaction?.type === "income" && !!transaction.client_id && !transaction.refund_of_id;
+  // «ВЫПИСАТЬ ЧЕК» ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 2026-09-30: «отдельно чеки
+  // пока что не делай»): чек выписывается только на оплату инвойса — на его
+  // странице (`app/invoices/[id].tsx`).
   const showMoreCard =
     showClientRow ||
     showInvoiceRow ||
-    showReceiptRow ||
     showRefundRow ||
     (txAccountClosed ? isOwner : canWrite);
 
@@ -1299,28 +1287,9 @@ export function OperationSheet({
                 onPress={() => guardedClose(() => onInvoice?.(transaction))}
               />
             ) : null}
-            {showReceiptRow ? (
-              <ActionRow
-                separated={showClientRow || showInvoiceRow}
-                label="Выписать чек"
-                onPress={() => {
-                  issueReceipt.mutate(
-                    { transactionId: transaction.id },
-                    {
-                      onSuccess: (receipt) => toast(`Чек ${receipt.number} выписан`),
-                      onError: (error) =>
-                        toast(
-                          error instanceof Error ? error.message : "Чек не выписан",
-                          "error",
-                        ),
-                    },
-                  );
-                }}
-              />
-            ) : null}
             {showRefundRow ? (
               <ActionRow
-                separated={showClientRow || showInvoiceRow || showReceiptRow}
+                separated={showClientRow || showInvoiceRow}
                 label="Создать возврат"
                 onPress={() => guardedClose(() => onRefund?.(transaction))}
               />

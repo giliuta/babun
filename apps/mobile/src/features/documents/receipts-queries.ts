@@ -25,6 +25,9 @@ const RECEIPTS_PAGE = 1000;
 export function useReceipts(filter?: {
   clientId?: string | null;
   appointmentId?: string | null;
+  /** Чеки платежей одного инвойса — его страница (чек бывает только у
+   *  инвойса, владелец 2026-09-30). */
+  invoiceId?: string | null;
   /** Не спрашивать вовсе (у новой записи чеков нет — без этого флага пустой
    *  фильтр по записи тянул бы ВСЕ чеки тенанта). */
   enabled?: boolean;
@@ -32,8 +35,9 @@ export function useReceipts(filter?: {
   const tenantId = useTenantId();
   const clientId = filter?.clientId ?? null;
   const appointmentId = filter?.appointmentId ?? null;
+  const invoiceId = filter?.invoiceId ?? null;
   return useQuery({
-    queryKey: ["receipts", tenantId, clientId, appointmentId],
+    queryKey: ["receipts", tenantId, clientId, appointmentId, invoiceId],
     enabled: !!tenantId && filter?.enabled !== false,
     queryFn: async (): Promise<Receipt[]> => {
       // ПОСТРАНИЧНО (аудит финансов 2026-09-30): PostgREST отдаёт не больше
@@ -51,6 +55,7 @@ export function useReceipts(filter?: {
           .order("id", { ascending: true });
         if (clientId) q = q.eq("client_id", clientId);
         if (appointmentId) q = q.eq("appointment_id", appointmentId);
+        if (invoiceId) q = q.eq("invoice_id", invoiceId);
         const { data, error } = await q.range(from, from + RECEIPTS_PAGE - 1);
         if (error) throw new Error(error.message);
         const page = (data ?? []) as unknown as Receipt[];
