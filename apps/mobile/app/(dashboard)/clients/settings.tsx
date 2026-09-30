@@ -24,7 +24,6 @@ import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
 import { useToast } from "@/components/ui/Toast";
 import {
-  cardFieldsSummary,
   DEFAULT_CARD_FIELDS,
   useCardFields,
 } from "@/features/clients/card-prefs";
@@ -47,12 +46,9 @@ import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useTeams } from "@/features/reference/queries";
 import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref";
 import { ALL_TEAMS, clientsOfTeam } from "@/features/clients/team-scope";
-import { SwitchRow } from "@/components/ui/SwitchRow";
 import { useFeatureOn } from "@/features/settings/company-features";
-import {
-  useClientFunctionOn,
-  useToggleClientFunction,
-} from "@/features/clients/client-functions";
+import { useLocationLabels } from "@/features/settings/local-settings";
+import { useClientFunctionOn } from "@/features/clients/client-functions";
 
 // v811 — «Настройки клиентов». Открывается шестерёнкой из хедера списка
 // (порт web ClientsSettingsScreen). Группы:
@@ -104,8 +100,21 @@ function ClientsSettingsScreen() {
   const peopleOn = useClientFunctionOn("client_people", teamId);
   const requisitesOn = useClientFunctionOn("client_requisites", teamId);
   const filesOn = useClientFunctionOn("client_files", teamId);
-  const toggleFunction = useToggleClientFunction(teamId);
   const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields(teamId);
+  // Подпись «Типов объектов» — настоящие типы команды, а не образец.
+  const { data: teamObjectTypes = [] } = useLocationLabels(teamId);
+  const objectTypeNames = teamObjectTypes.map((label) => label.name);
+  // Подпись строки — что выключено у команды, иначе «Все блоки».
+  const offBlocks = [
+    !peopleOn ? "люди" : null,
+    !filesOn ? "файлы" : null,
+    !requisitesOn ? "реквизиты" : null,
+  ].filter(Boolean);
+  const rowFieldsOn = Object.values(prefs).filter(Boolean).length;
+  const cardSub = [
+    offBlocks.length === 0 ? "Все блоки" : `Без: ${offBlocks.join(", ")}`,
+    `в строке ${rowFieldsOn} из ${Object.keys(prefs).length}`,
+  ].join(" · ");
   const clientsQuery = useClients();
   const tagsQuery = useClientTags();
   const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
@@ -206,8 +215,11 @@ function ClientsSettingsScreen() {
               <SettingsRow
                 tile={SETTINGS_TILE.blue}
                 icon={Eye}
-                title="Что показывать на карточке"
-                sub={cardFieldsSummary(prefs)}
+                // «КАРТОЧКА КЛИЕНТА», А НЕ «ЧТО ПОКАЗЫВАТЬ» (владелец 30.09:
+                // «сделай то же самое, как в записи»): блоки страницы клиента
+                // и строка списка — одна страница, как «Записи».
+                title="Карточка клиента"
+                sub={cardSub}
                 onPress={() => router.push(teamHref("/clients/card-fields"))}
               />
               <Divider inset={56} />
@@ -254,7 +266,11 @@ function ClientsSettingsScreen() {
                     tile={SETTINGS_TILE.teal}
                     icon={Home}
                     title="Типы объектов"
-                    sub="Вилла, дом, квартира, офис"
+                    sub={
+                      objectTypeNames.length > 0
+                        ? objectTypeNames.join(", ")
+                        : "Добавить первый тип"
+                    }
                     onPress={() => router.push(teamHref("/clients/object-types"))}
                   />
                   <Divider inset={56} />
@@ -337,33 +353,6 @@ function ClientsSettingsScreen() {
             </SectionCard>
   
 
-            {/* ФУНКЦИИ КЛИЕНТОВ (STORY-088, владелец 24.09: «тумблер — и его
-                не будет ни у кого, даже у владельца»). Каждый тумблер — своя
-                карточка. Данные выключенной части не стираются. Объекты
-                выключаются там, где их заводят, — «Запись → Блоки формы».
-                С 30.09 тумблер — у команды, а выключатель компании главнее. */}
-            <SectionEyebrow>Функции</SectionEyebrow>
-            <SectionCard>
-              <SwitchRow
-                label="Люди и связи"
-                value={peopleOn}
-                onChange={(v) => toggleFunction.mutate({ key: "client_people", on: v })}
-              />
-            </SectionCard>
-            <SectionCard>
-              <SwitchRow
-                label="Реквизиты клиента"
-                value={requisitesOn}
-                onChange={(v) => toggleFunction.mutate({ key: "client_requisites", on: v })}
-              />
-            </SectionCard>
-            <SectionCard>
-              <SwitchRow
-                label="Файлы клиента"
-                value={filesOn}
-                onChange={(v) => toggleFunction.mutate({ key: "client_files", on: v })}
-              />
-            </SectionCard>
         </ScrollView>
       ) : (
         // Строк не открыли ни одной: страница остаётся собой, а тело
