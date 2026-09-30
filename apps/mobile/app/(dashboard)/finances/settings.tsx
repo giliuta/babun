@@ -1,10 +1,10 @@
 import { ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
   Building2,
-  Handshake,
+  HandCoins,
+  NotebookPen,
+  ReceiptText,
   Wallet,
 } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
@@ -72,10 +72,21 @@ export default function FinanceSettingsScreen() {
   const categoriesQuery = useFinanceCategories();
 
   // КАТЕГОРИИ — ОТДЕЛЬНОЙ СТРАНИЦЕЙ НА ВИД (владелец 2026-09-30).
-  const categoryDoors: { kind: CategoryKind; title: string; icon: typeof Wallet }[] = [
-    { kind: "income", title: "Категории доходов", icon: ArrowDownLeft },
-    { kind: "expense", title: "Категории расходов", icon: ArrowUpRight },
-    { kind: "debt", title: "Категории долгов", icon: Handshake },
+  //
+  // ЗНАЧКИ — ПО СМЫСЛУ ДЕНЕГ (владелец 30.09: «значки вот эти переделай»).
+  // Были три фиолетовые стрелки и рукопожатие: одинаковые пятна, которые не
+  // говорили, где доход, а где расход. Теперь цвет — тот же, что у плиток
+  // главной «Финансов» (доход зелёный, расход красный, долги янтарные), а
+  // глиф — сам предмет: монеты в руку, чек (строками, без знака валюты — у Receipt там «$»), тетрадь долгов.
+  const categoryDoors: {
+    kind: CategoryKind;
+    title: string;
+    icon: typeof Wallet;
+    tile: string;
+  }[] = [
+    { kind: "income", title: "Категории доходов", icon: HandCoins, tile: SETTINGS_TILE.green },
+    { kind: "expense", title: "Категории расходов", icon: ReceiptText, tile: SETTINGS_TILE.red },
+    { kind: "debt", title: "Категории долгов", icon: NotebookPen, tile: SETTINGS_TILE.yellow },
   ];
   const categoryLine = (kind: CategoryKind): string | undefined =>
     // Пока категории едут — без подписи: «Пока нет» на загрузке врало бы.
@@ -131,6 +142,7 @@ export default function FinanceSettingsScreen() {
                         separated={rows.accounts || index > 0}
                         title={door.title}
                         icon={door.icon}
+                        tile={door.tile}
                         sub={categoryLine(door.kind)}
                         onPress={() =>
                           router.push(withTeam("/finances/categories", `kind=${door.kind}`))
@@ -184,18 +196,20 @@ export default function FinanceSettingsScreen() {
   );
 }
 
-/** Дверь категорий одного вида — фиолетовая плитка справочника; разделитель
+/** Дверь категорий одного вида — плитка цвета своих денег; разделитель
  *  принадлежит своей строке и живёт под её условием. */
 function SettingsDoor({
   separated,
   title,
   icon,
+  tile,
   sub,
   onPress,
 }: {
   separated: boolean;
   title: string;
   icon: typeof Wallet;
+  tile: string;
   sub?: string;
   onPress: () => void;
 }) {
@@ -203,7 +217,7 @@ function SettingsDoor({
     <>
       {separated ? <Divider inset={56} /> : null}
       <SettingsRow
-        tile={SETTINGS_TILE.purple}
+        tile={tile}
         icon={icon}
         title={title}
         sub={sub}
