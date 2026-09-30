@@ -74,7 +74,7 @@ import {
 import { masterClientJsonToClient } from "@/features/settings/master-reference";
 import { isPhoneTakenError } from "@/features/clients/client-create-errors";
 import { parseClientBlocks } from "@/features/clients/client-block-access";
-import { inMirrorScope, mirrorMemberClient } from "@/features/access/mirror/mirror-client";
+import { inMirrorView, mirrorMemberClient } from "@/features/access/mirror/mirror-client";
 import { useMirrorClientScope } from "@/features/access/mirror/use-mirror-client-scope";
 import { refreshRevealedContacts } from "@/features/clients/revealed-contacts";
 import {
@@ -356,8 +356,8 @@ export function useClients() {
     (rows: Client[]) =>
       mirrorMap
         ? rows
-            .filter((row) => mirrorScope !== undefined && inMirrorScope(row, mirrorScope))
-            .map((row) => mirrorMemberClient(row, mirrorMap))
+            .filter((row) => mirrorScope !== undefined && inMirrorView(row, mirrorScope))
+            .map((row) => mirrorMemberClient(row, mirrorMap, mirrorScope))
         : rows,
     [mirrorMap, mirrorScope],
   );
@@ -393,8 +393,8 @@ export function useClient(id: string) {
   const mirrorOne = useCallback(
     (client: Client | null): Client | null => {
       if (!client || !mirrorMap) return client;
-      if (mirrorScope && !inMirrorScope(client, mirrorScope)) return null;
-      return mirrorMemberClient(client, mirrorMap);
+      if (mirrorScope && !inMirrorView(client, mirrorScope)) return null;
+      return mirrorMemberClient(client, mirrorMap, mirrorScope);
     },
     [mirrorMap, mirrorScope],
   );

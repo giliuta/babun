@@ -11,10 +11,10 @@ import type { AccessLevel, MemberAccessMap } from "../access-map";
 // маска собирается из карты прав зеркала, иначе предпросмотр показал бы
 // владельцу как «видно» то, чего человек не получит.
 //
-// Положения — по командам, где у человека открыты «Карточки клиентов»:
-// команда клиента, если она среди них, иначе самое широкое по ним (сервер
-// берёт самое широкое по командам, через которые клиент виден). «В день
-// записи» без записей под рукой — как «откроется в день записи».
+// Положения — самые широкие по командам, через которые клиент виден
+// (`mirrorView` ниже, как сервер). Пока набор не приехал (черновик нового
+// клиента, первые кадры) — команда клиента, если она среди открытых, иначе
+// самое широкое по ним.
 
 const CARD_KEYS = [
   "clients.note",
@@ -33,7 +33,11 @@ const CONTACTS_RANK: Partial<Record<AccessLevel, number>> = { off: 0, day: 1, re
 
 type TeamLevels = Readonly<Record<string, AccessLevel>>;
 
-function teamsFor(client: Pick<Client, "team_id">, map: MemberAccessMap): TeamLevels[] {
+function teamsFor(client: Pick<Client, "team_id"> & { id?: string }, map: MemberAccessMap, view?: MirrorView): TeamLevels[] {
+  // С набором — ровно команды, через которые клиент виден (как сервер).
+  if (view && client.id) {
+    return teamsSeeing({ id: client.id, team_id: client.team_id }, view).map((teamId) => map.calendars[teamId] ?? {});
+  }
   const open = Object.entries(map.calendars).filter(([, levels]) => (RANK[levels.clients ?? "off"] ?? 0) >= 1);
   const own = open.find(([teamId]) => teamId === client.team_id);
   return own ? [own[1]] : open.map(([, levels]) => levels);
@@ -41,11 +45,12 @@ function teamsFor(client: Pick<Client, "team_id">, map: MemberAccessMap): TeamLe
 
 /** Положения блоков карточки у клиента — как `access_client_blocks`. */
 export function mirrorClientBlocks(
-  client: Pick<Client, "team_id">,
+  client: Pick<Client, "team_id"> & { id?: string },
   map: MemberAccessMap,
+  view?: MirrorView,
 ): Record<string, "off" | "read" | "write"> {
   const word = (rank: number) => (rank >= 2 ? "write" : rank === 1 ? "read" : "off");
-  const teams = teamsFor(client, map);
+  const teams = teamsFor(client, map, view);
   const out: Record<string, "off" | "read" | "write"> = {};
   let card = 0;
   for (const levels of teams) card = Math.max(card, levels.clients === "write" ? 2 : 1);
@@ -62,17 +67,23 @@ export function mirrorClientBlocks(
   return out;
 }
 
-function mirrorContactsHidden(client: Pick<Client, "team_id">, map: MemberAccessMap): "day" | "right" | null {
+function mirrorContactsHidden(
+  client: Pick<Client, "id" | "team_id">,
+  map: MemberAccessMap,
+  view?: MirrorView,
+): "day" | "right" | null {
   let best = 0;
-  for (const levels of teamsFor(client, map)) {
+  for (const levels of teamsFor(client, map, view)) {
     best = Math.max(best, CONTACTS_RANK[levels["clients.contacts"] ?? "off"] ?? 0);
   }
+  // «В день записи» и запись сегодня — номер открыт, как у сервера.
+  if (best === 1 && view?.dayToday.has(client.id)) return null;
   return best >= 2 ? null : best === 1 ? "day" : "right";
 }
 
 /** Строка клиента, какой её получил бы сотрудник с этой картой прав. */
-export function mirrorMemberClient(client: Client, map: MemberAccessMap): Client {
-  const blocks = mirrorClientBlocks(client, map);
+export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: MirrorView): Client {
+  const blocks = mirrorClientBlocks(client, map, view);
   const off = (key: string) => blocks[key] !== "read" && blocks[key] !== "write";
   return {
     ...client,
@@ -95,7 +106,7 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap): Client
       ? { legal_name: null, vat_number: null, reg_number: null, billing_address: null, requisites: [] }
       : {}),
     ...(off("clients.money") ? { balance: 0, discount: 0 } : {}),
-    contacts_hidden: mirrorContactsHidden(client, map),
+    contacts_hidden: mirrorContactsHidden(client, map, view),
     blocks,
   } as Client;
 }
@@ -105,44 +116,18 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap): Client
 // Маска выше гасит поля, но строк не убирает: по токену владельца сервер
 // отдаёт всю базу, и «Около записи» в зеркале показывало десять клиентов, а
 // настоящий сотрудник получал двух. Набор считается тем же правилом, что
-// `access_client_ids_in` на сервере, по командам, где открыты «Карточки
-// клиентов»:
-//   · «Вся база» хоть в одной — вся база;
+// `access_client_ids_in` на сервере, И ПО КАЖДОЙ КОМАНДЕ ОТДЕЛЬНО: блоки
+// клиента сервер берёт самыми широкими по командам, ЧЕРЕЗ КОТОРЫЕ клиент
+// виден (`access_client_blocks`), а номер — по «Телефону» тех же команд
+// (`access_contact_client_ids`, `access_day_contact_client_ids`). Правило
+// команды:
+//   · «Вся база» — вся база;
 //   · «Своей команды» — клиенты команды и её записей за всё время;
 //   · «Около записи» — запись команды от недели назад до завтра, отменённая
 //     окна не открывает;
 //   · кого завёл сам — видит всегда.
 
-export interface MirrorScopeTeams {
-  /** Команды с открытыми «Карточками клиентов». */
-  open: string[];
-  /** «Своей команды» и «Вся база». */
-  teamWide: string[];
-  /** «Около записи» (и неизвестное — как на сервере). */
-  near: string[];
-  whole: boolean;
-}
-
-export function mirrorScopeTeams(map: MemberAccessMap): MirrorScopeTeams {
-  const open = Object.entries(map.calendars).filter(([, levels]) => (RANK[levels.clients ?? "off"] ?? 0) >= 1);
-  const out: MirrorScopeTeams = { open: [], teamWide: [], near: [], whole: false };
-  for (const [teamId, levels] of open) {
-    const scope = levels["clients.scope"];
-    out.open.push(teamId);
-    if (scope === "own" || scope === "all") out.teamWide.push(teamId);
-    else out.near.push(teamId);
-    if (scope === "all") out.whole = true;
-  }
-  return out;
-}
-
-export interface MirrorClientScope {
-  whole: boolean;
-  /** Команды, чьи клиенты видны целиком. */
-  teamWide: ReadonlySet<string>;
-  /** Открытые записью или авторством. */
-  ids: ReadonlySet<string>;
-}
+const SCOPE_RANK: Partial<Record<AccessLevel, number>> = { near: 0, own: 1, all: 2 };
 
 export interface MirrorScopeAppointment {
   client_id: string | null;
@@ -151,44 +136,83 @@ export interface MirrorScopeAppointment {
   status: string | null;
 }
 
+export interface MirrorClientData {
+  /** Записи команд с открытыми карточками: окно у всех, всё время у «Своей команды». */
+  appointments: readonly MirrorScopeAppointment[];
+  /** Клиенты, которых он завёл сам (пусто, пока человек не в компании). */
+  createdBy: readonly string[];
+  /** Рабочий день компании (`tenant_business_date`). */
+  today: string;
+}
+
+/** Команды с открытыми «Карточками клиентов» и их «Какие клиенты». */
+export function mirrorOpenTeams(map: MemberAccessMap): { teamId: string; scope: "near" | "own" | "all" }[] {
+  return Object.entries(map.calendars)
+    .filter(([, levels]) => (RANK[levels.clients ?? "off"] ?? 0) >= 1)
+    .map(([teamId, levels]) => {
+      // Неизвестное — «Около записи», как на сервере.
+      const rank = SCOPE_RANK[levels["clients.scope"] ?? "near"] ?? 0;
+      return { teamId, scope: rank === 2 ? "all" : rank === 1 ? "own" : "near" };
+    });
+}
+
+/** Набор одной команды: `null` — вся база, иначе id клиентов и «своя» команда. */
+interface TeamScope {
+  whole: boolean;
+  ownTeam: string | null;
+  ids: ReadonlySet<string>;
+}
+
+export interface MirrorView {
+  teams: ReadonlyMap<string, TeamScope>;
+  /** Запись СЕГОДНЯ в команде с «В день записи» — номер открыт. */
+  dayToday: ReadonlySet<string>;
+}
+
 /** День `YYYY-MM-DD` со сдвигом — календарной арифметикой, без часовых поясов. */
 export function shiftDay(day: string, days: number): string {
   const [y, m, d] = day.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
-export function mirrorClientScope(
-  teams: MirrorScopeTeams,
-  input: {
-    appointments: readonly MirrorScopeAppointment[];
-    /** Клиенты, которых он завёл сам (пусто, пока человек не в компании). */
-    createdBy: readonly string[];
-    /** Рабочий день компании (`tenant_business_date`). */
-    today: string;
-  },
-): MirrorClientScope {
-  const empty: MirrorClientScope = { whole: false, teamWide: new Set(), ids: new Set() };
-  if (teams.open.length === 0) return empty;
-  if (teams.whole) return { ...empty, whole: true };
-  const teamWide = new Set(teams.teamWide);
-  const near = new Set(teams.near);
-  const from = shiftDay(input.today, -7);
-  const to = shiftDay(input.today, 1);
-  const ids = new Set(input.createdBy);
-  for (const a of input.appointments) {
-    if (!a.client_id || !a.team_id) continue;
-    if (teamWide.has(a.team_id)) {
-      ids.add(a.client_id);
-      continue;
+export function mirrorView(map: MemberAccessMap, data: MirrorClientData): MirrorView {
+  const from = shiftDay(data.today, -7);
+  const to = shiftDay(data.today, 1);
+  const teams = new Map<string, TeamScope>();
+  for (const { teamId, scope } of mirrorOpenTeams(map)) {
+    const ids = new Set(data.createdBy);
+    if (scope !== "all") {
+      for (const a of data.appointments) {
+        if (!a.client_id || a.team_id !== teamId) continue;
+        if (scope === "own") ids.add(a.client_id);
+        else if (a.status !== "cancelled" && a.date && a.date >= from && a.date <= to) ids.add(a.client_id);
+      }
     }
-    if (!near.has(a.team_id) || a.status === "cancelled" || !a.date) continue;
-    if (a.date >= from && a.date <= to) ids.add(a.client_id);
+    teams.set(teamId, { whole: scope === "all", ownTeam: scope === "near" ? null : teamId, ids });
   }
-  return { whole: false, teamWide, ids };
+  const dayTeams = new Set(
+    [...teams.keys()].filter((teamId) => map.calendars[teamId]?.["clients.contacts"] === "day"),
+  );
+  const dayToday = new Set<string>();
+  for (const a of data.appointments) {
+    if (a.client_id && a.team_id && dayTeams.has(a.team_id) && a.status !== "cancelled" && a.date === data.today) {
+      dayToday.add(a.client_id);
+    }
+  }
+  return { teams, dayToday };
 }
 
-export function inMirrorScope(client: Pick<Client, "id" | "team_id">, scope: MirrorClientScope): boolean {
-  if (scope.whole) return true;
-  if (client.team_id && scope.teamWide.has(client.team_id)) return true;
-  return scope.ids.has(client.id);
+/** Команды, через которые клиент виден. */
+function teamsSeeing(client: Pick<Client, "id" | "team_id">, view: MirrorView): string[] {
+  const out: string[] = [];
+  for (const [teamId, scope] of view.teams) {
+    if (scope.whole || (client.team_id && client.team_id === scope.ownTeam) || scope.ids.has(client.id)) {
+      out.push(teamId);
+    }
+  }
+  return out;
+}
+
+export function inMirrorView(client: Pick<Client, "id" | "team_id">, view: MirrorView): boolean {
+  return teamsSeeing(client, view).length > 0;
 }

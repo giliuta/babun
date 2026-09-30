@@ -4,12 +4,12 @@ import { describe, test } from "node:test";
 import type { Client } from "@babun/shared/local/clients";
 import type { MemberAccessMap } from "../access-map";
 import {
-  inMirrorScope,
+  inMirrorView,
   mirrorClientBlocks,
-  mirrorClientScope,
   mirrorMemberClient,
-  mirrorScopeTeams,
+  mirrorView,
   shiftDay,
+  type MirrorClientData,
 } from "./mirror-client";
 
 const map = (calendars: MemberAccessMap["calendars"]): MemberAccessMap => ({
@@ -81,16 +81,17 @@ describe("зеркало: какие клиенты в его наборе (ка
     date,
     status,
   });
-  const ids = (m: MemberAccessMap, input: Partial<Parameters<typeof mirrorClientScope>[1]> = {}) => {
-    const scope = mirrorClientScope(mirrorScopeTeams(m), {
-      appointments: [],
-      createdBy: [],
-      today: TODAY,
-      ...input,
-    });
-    return ["c1", "c2", "c3", "c4"].filter((id) =>
-      inMirrorScope({ id, team_id: id === "c4" ? "A" : "Z" }, scope),
-    );
+  const data = (input: Partial<MirrorClientData> = {}): MirrorClientData => ({
+    appointments: [],
+    createdBy: [],
+    today: TODAY,
+    ...input,
+  });
+  // c4 — клиент команды A, остальные — команды Z.
+  const row = (id: string) => ({ id, team_id: id === "c4" ? "A" : "Z" });
+  const ids = (m: MemberAccessMap, input: Partial<MirrorClientData> = {}) => {
+    const view = mirrorView(m, data(input));
+    return ["c1", "c2", "c3", "c4"].filter((id) => inMirrorView(row(id), view));
   };
 
   test("«Около записи» — неделя назад и завтра; отменённая и чужая команда окна не открывают", () => {
@@ -122,6 +123,41 @@ describe("зеркало: какие клиенты в его наборе (ка
       ids(map({ A: { clients: "off", "clients.scope": "all" } }), { createdBy: ["c3"] }),
       [],
     );
+  });
+
+  test("блоки — самые широкие по командам, ЧЕРЕЗ КОТОРЫЕ клиент виден", () => {
+    // Вся база в A без заметки; в B заметка открыта, но c1 в окне B нет.
+    const m = map({
+      A: { clients: "read", "clients.scope": "all" },
+      B: { clients: "read", "clients.note": "read" },
+    });
+    const view = mirrorView(m, data({ appointments: [appt("c2", "B", TODAY)] }));
+    assert.equal(mirrorClientBlocks(row("c1"), m, view)["clients.note"], "off");
+    assert.equal(mirrorClientBlocks(row("c2"), m, view)["clients.note"], "read");
+  });
+
+  test("номер: «Всегда» — только в наборе своей команды; «В день записи» — запись сегодня", () => {
+    const m = map({
+      A: { clients: "read", "clients.scope": "all" },
+      B: { clients: "read", "clients.contacts": "read" },
+      C: { clients: "read", "clients.contacts": "day" },
+    });
+    const view = mirrorView(
+      m,
+      data({
+        appointments: [
+          appt("c2", "B", "2026-09-25"),
+          appt("c3", "C", TODAY),
+          appt("c4", "C", "2026-10-01"),
+        ],
+      }),
+    );
+    const hidden = (id: string) =>
+      mirrorMemberClient({ ...client, ...row(id) } as Client, m, view).contacts_hidden;
+    assert.equal(hidden("c1"), "right", "виден только через «Вся база» без телефонов");
+    assert.equal(hidden("c2"), null, "в окне команды с «Всегда»");
+    assert.equal(hidden("c3"), null, "запись сегодня в команде «В день записи»");
+    assert.equal(hidden("c4"), "day", "запись завтра — номер откроется в день записи");
   });
 
   test("день сдвигается календарём, через конец месяца", () => {

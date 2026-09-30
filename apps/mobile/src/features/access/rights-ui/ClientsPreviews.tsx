@@ -3,8 +3,6 @@ import { View } from "react-native";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
-import { formatPhoneForDisplay } from "@/features/clients/phone";
-import { useDefaultCountry } from "@/features/clients/default-country";
 
 import type { AccessLevel } from "../access-map";
 import { PreviewFrame, levelState } from "./PreviewFrame";
@@ -16,19 +14,24 @@ import { CLIENTS_PREVIEW_KEYS } from "./preview-keys";
 // создания внизу, «Только видит» — та же серая, как у списка клиентов.
 //
 // Защита базы (30.09): «Около записи» — в списке только клиент, у которого
-// запись рядом; «В день записи» — номер есть только у того, чья запись
-// сегодня (первый в образце).
+// запись рядом. Цифр в списке у сотрудника нет НИКОГДА — номер открывается
+// тапом, по одному (`LockedPhoneRow`), поэтому и здесь вместо цифр точки:
+// «Всегда» — у всех, «В день записи» — у того, чья запись сегодня (первый в
+// образце), у остальных — «В день записи».
 
 const noop = () => {};
 
+/** Номер, который ещё не открыли, — как на его карточке. */
+const LOCKED_NUMBER = "•• ••• •••";
+
 const OWN = [
-  { name: "Анна Петрова", phone: "+35799123456" },
-  { name: "Иван Смирнов", phone: "+35797654321" },
+  { name: "Анна Петрова" },
+  { name: "Иван Смирнов" },
 ];
 
 const OTHERS = [
-  { name: "Мария Спиру", phone: "+35796112233" },
-  { name: "Георгиос Андреу", phone: "+35799887766" },
+  { name: "Мария Спиру" },
+  { name: "Георгиос Андреу" },
 ];
 
 export function ClientsPreview({
@@ -38,7 +41,6 @@ export function ClientsPreview({
   blockKey: string;
   levels: Readonly<Record<string, AccessLevel>>;
 }) {
-  const country = useDefaultCountry();
   const base = levels.clients ?? "off";
   const scope = levels["clients.scope"] ?? "near";
   const contacts = levels["clients.contacts"] ?? "off";
@@ -82,9 +84,11 @@ export function ClientsPreview({
               title={person.name}
               initial={person.name[0]}
               subtitle={
-                phones && (contacts === "read" || person === OWN[0])
-                  ? formatPhoneForDisplay(person.phone, country)
-                  : undefined
+                !phones
+                  ? undefined
+                  : contacts === "read" || person === OWN[0]
+                    ? LOCKED_NUMBER
+                    : "В день записи"
               }
               onPress={noop}
             />
