@@ -19,13 +19,18 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 
-/** Суммы пополнения, центы EUR. Любая другая сумма — отказ. */
-const PACKS: Record<number, string> = {
-  1000: "eur10",
-  2500: "eur25",
-  5000: "eur50",
-  10000: "eur100",
-};
+/** Сумма пополнения — любая целыми евро от €5 до €500 (владелец 30.09:
+ *  «вписываю туда сумму и нажимаю оплатить»). Те же пределы держит база
+ *  (`sms_topup_min_cents` / `sms_topup_max_cents`, `sms_credit_topup`): сумму
+ *  вне их вебхук не зачислит. Метка оплаты — «eur30». */
+const MIN_CENTS = 500;
+const MAX_CENTS = 50000;
+
+function packOf(amount: number): string | null {
+  if (!Number.isInteger(amount) || amount % 100 !== 0) return null;
+  if (amount < MIN_CENTS || amount > MAX_CENTS) return null;
+  return `eur${amount / 100}`;
+}
 
 /** Куда можно вернуть человека после оплаты. */
 const RETURN_ORIGINS = [
@@ -135,7 +140,7 @@ Deno.serve(async (request: Request) => {
     // пустое тело — ниже отказ по сумме
   }
   const amount = Number(body.amount_cents);
-  const pack = PACKS[amount];
+  const pack = packOf(amount);
   if (!pack) return json(400, { error: "bad_amount" });
   const back = safeReturn(body.return_url);
 

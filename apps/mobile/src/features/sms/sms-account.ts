@@ -462,9 +462,6 @@ export function useSetClientSmsOptOut() {
   });
 }
 
-/** Суммы пополнения — те же, что знает функция `sms-checkout`. */
-export const TOPUP_AMOUNTS_CENTS = [1000, 2500, 5000, 10000] as const;
-
 /** Куда Stripe вернёт человека, платившего из приложения: страница
  *  «Оплата прошла» на сайте (без входа). */
 export const SMS_PAY_DONE_URL = "https://babun.app/pay/done";

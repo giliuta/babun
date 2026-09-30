@@ -269,6 +269,31 @@ export function smsErrorText(error: unknown): string {
   return message || "Не удалось отправить";
 }
 
+/** Пополнение — любая сумма целыми евро от €5 до €500 (владелец 30.09:
+ *  «открывается шторка, я вписываю сумму и нажимаю оплатить»). Те же пределы
+ *  у функции `sms-checkout` и у базы (`sms_topup_min_cents` /
+ *  `sms_topup_max_cents`). Центы. */
+export const TOPUP_MIN_CENTS = 500;
+export const TOPUP_MAX_CENTS = 50000;
+
+/** Текст поля «Сумма» → центы; `null` — пусто или не число. Запятая и точка
+ *  равноправны, пробелы не мешают («1 000»). */
+export function parseTopupEuros(text: string): number | null {
+  const clean = text.replace(/\s/g, "").replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(clean)) return null;
+  return Math.round(Number(clean) * 100);
+}
+
+/** Почему такую сумму не оплатить; `null` — можно. */
+export function topupProblem(text: string): string | null {
+  if (!text.trim()) return null;
+  const cents = parseTopupEuros(text);
+  if (cents == null) return "Введите сумму";
+  if (cents % 100 !== 0) return "Только целые евро";
+  if (cents < TOPUP_MIN_CENTS || cents > TOPUP_MAX_CENTS) return "От €5 до €500";
+  return null;
+}
+
 /** Почему не открылась оплата — словами. `code` — поле `error` ответа
  *  функции `sms-checkout`; `offline` — запрос не дошёл до сервера. Раньше
  *  человек видел «Edge Function returned a non-2xx status code». */

@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { AppState, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { History, Wallet } from "lucide-react-native";
+import { History } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { NoticeBar } from "@/components/ui/NoticeBar";
-import { PickerSheet } from "@/components/ui/PickerSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -14,12 +13,11 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { notify } from "@/lib/notify";
-import { useThemeColors } from "@/theme/colors";
-import { openSmsCheckout, TOPUP_AMOUNTS_CENTS, useSmsAccount, useSmsHistory } from "./sms-account";
+import { openSmsCheckout, useSmsAccount, useSmsHistory } from "./sms-account";
 import { balanceWarning } from "./sms-model";
 import { SmsHistoryRow } from "./SmsHistoryRow";
 import { SmsBalanceCard, SmsTariffCard } from "./SmsParts";
-import { euro } from "./sms-words";
+import { SmsTopupSheet } from "./SmsTopupSheet";
 
 // КАБИНЕТ → SMS — ДЕНЬГИ И ОТПРАВКА ВСЕЙ КОМПАНИИ (STORY-089; владелец
 // 29.09: «баланс и пополнение — это всё будет Кабинет SMS», «баланс единый,
@@ -41,7 +39,6 @@ import { euro } from "./sms-words";
 // открывается в браузере, а по возвращении экран сам перечитывает баланс.
 
 export function SmsScreen() {
-  const t = useThemeColors();
   const router = useRouter();
   const toast = useToast();
   const params = useLocalSearchParams<{ topup?: string }>();
@@ -167,18 +164,11 @@ export function SmsScreen() {
         </View>
       ) : null}
 
-      <PickerSheet
+      <SmsTopupSheet
         visible={topupOpen}
-        title="Пополнить баланс"
-        items={TOPUP_AMOUNTS_CENTS.map((cents) => ({
-          id: String(cents),
-          label: euro(cents),
-          hint: `≈ ${Math.floor(cents / Math.max(1, data.priceCents))} SMS`,
-          icon: Wallet,
-          color: t.accent,
-          onPress: () => void topup(cents),
-        }))}
+        priceCents={data.priceCents}
         onClose={() => setTopupOpen(false)}
+        onPay={(cents) => void topup(cents)}
       />
     </Screen>
   );

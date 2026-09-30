@@ -20,7 +20,7 @@ import { euro } from "./sms-words";
 //   полную сумму… сколько им нужно»).
 
 /** «5 SMS» — число со словом (склонение делает formatCountRu). */
-const smsCount = (n: number): string => formatCountRu(n, ["SMS", "SMS", "SMS"]);
+export const smsCount = (n: number): string => formatCountRu(n, ["SMS", "SMS", "SMS"]);
 
 /** Баланс — компактно (владелец 30.09): сумма и «≈ N SMS» слева, месяц
  *  справа. Ниже €5 — «Пополните баланс» цветом предупреждения. */
