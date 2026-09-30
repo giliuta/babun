@@ -41,6 +41,7 @@ import {
   type PaymentRow,
 } from "./payment-draft";
 import { useCancelPayment, useRecordPayment } from "./payment-mutations";
+import { optimisticCancelPayment, optimisticRecordPayment } from "./payment-optimistic";
 import {
   ModeIconButton,
   NoAccountsNotice,
@@ -183,22 +184,28 @@ export function PaymentBlock({
   const problem = amountProblem(amountCents, outstanding);
   const acceptsMoney = outstanding > 0 && !billUnsaved && canTakeMoney;
 
+  // СНЯТИЕ И ПРИЁМ — ПО ТАПУ, А НЕ ПО ОТВЕТУ (владелец 2026-09-30: «должно
+  // всё мгновенно»): запись в кэше меняется сразу так, как её поменяет
+  // сервер (`payment-optimistic.ts`), отклик и слова — тоже сразу. Ответ
+  // только подменяет строку канонической; отказ возвращает прежнюю и говорит
+  // почему.
   const runCancel = (
-    appointmentId: string,
+    source: Appointment,
     paymentId: string,
     accountName: string,
     amount: number,
   ) => {
+    const optimistic = optimisticCancelPayment(source, paymentId);
+    haptics.success();
+    onAppointmentChanged(optimistic);
+    toast(`Оплата ${formatEURExact(amount)} снята · ${accountName}`, "info");
     cancel.mutate(
-      { appointmentId, paymentId, requestId: randomUuid() },
+      { appointmentId: source.id, paymentId, requestId: randomUuid(), optimistic },
       {
-        onSuccess: (fresh) => {
-          haptics.success();
-          onAppointmentChanged(fresh);
-          toast(`Оплата ${formatEURExact(amount)} снята · ${accountName}`, "info");
-        },
+        onSuccess: (fresh) => onAppointmentChanged(fresh),
         onError: (error) => {
           haptics.error();
+          onAppointmentChanged(source);
           toast(error instanceof Error ? error.message : "Не удалось снять оплату", "error");
         },
       },
@@ -242,21 +249,39 @@ export function PaymentBlock({
       kind,
       businessNow(),
     );
+    const source = appointment;
+    const optimistic = optimisticRecordPayment(source, {
+      requestId,
+      amount,
+      accountId: account.id,
+      accountKind: account.kind,
+      kind,
+      closeVisit,
+      paidAt: new Date().toISOString(),
+    });
+    haptics.success();
+    onAppointmentChanged(optimistic);
+    setPartText(null);
+    toast(
+      recordedToast({ kind, amount, already, accountName: account.name }),
+      "success",
+      { label: "Снять", onPress: () => runCancel(optimistic, requestId, account.name, amount) },
+    );
     record.mutate(
-      { appointmentId: appointment.id, accountId: account.id, amount, requestId, kind, closeVisit },
       {
-        onSuccess: (fresh) => {
-          haptics.success();
-          onAppointmentChanged(fresh);
-          setPartText(null);
-          toast(
-            recordedToast({ kind, amount, already, accountName: account.name }),
-            "success",
-            { label: "Снять", onPress: () => runCancel(fresh.id, requestId, account.name, amount) },
-          );
-        },
+        appointmentId: source.id,
+        accountId: account.id,
+        amount,
+        requestId,
+        kind,
+        closeVisit,
+        optimistic,
+      },
+      {
+        onSuccess: (fresh) => onAppointmentChanged(fresh),
         onError: (error) => {
           haptics.error();
+          onAppointmentChanged(source);
           toast(error instanceof Error ? error.message : "Не удалось записать оплату", "error");
         },
       },
@@ -289,7 +314,7 @@ export function PaymentBlock({
     if (index == null) return;
     const row = cancellable[index];
     if (!row) return;
-    runCancel(appointment.id, row.id, account.name, row.amount);
+    runCancel(appointment, row.id, account.name, row.amount);
   };
 
   // Поле открывается ПУСТЫМ: вся сумма — это тап по плитке без поля, а сюда
@@ -436,7 +461,10 @@ export function PaymentBlock({
             const paid = accountRowsForTile.reduce((sum, row) => sum + row.amount, 0);
             const isPaid = paid > 0;
             const isPending = pending?.accountId === account.id;
-            const state = isPaid ? "paid" : isPending ? "pending" : !acceptsMoney || busy ? "dim" : "idle";
+            // Пока сервер подтверждает платёж, плитки не гаснут: деньги уже
+            // стоят на своей плитке, и серый всплеск всего ряда читался как
+            // «думает». Повторный тап всё равно не пройдёт — `disabled`.
+            const state = isPaid ? "paid" : isPending ? "pending" : !acceptsMoney ? "dim" : "idle";
             return (
               <PaymentTile
                 key={account.id}

@@ -175,7 +175,7 @@ import {
   useCreateAppointment,
   useDeleteAppointment,
   useMemberCopyAppointment,
-  useUpdateAppointment,
+  useQuietUpdateAppointment,
 } from "@/features/calendar/mutations";
 import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
@@ -332,7 +332,9 @@ export default function CalendarTab() {
   );
   // «Первый день недели» — общая настройка; правит Неделю, Месяц и мини-
   // календарь одинаково (до этого понедельник был зашит в каждом из трёх).
-  const updateAppt = useUpdateAppointment();
+  // Без подписки на состояние мутации: экран её не читает, а каждый шаг
+  // (ожидание → успех) перерисовывал бы весь календарь на переносе.
+  const updateAppt = useQuietUpdateAppointment();
   const createTeam = useCreateTeam();
   const seedFirstCalendarAccounts = useCreateTeamAccounts();
   const toast = useToast();

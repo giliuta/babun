@@ -37,6 +37,21 @@ import {
   resyncAfterClaim,
   subscribeClaimSettled,
 } from "@/lib/claim-resync-plan";
+import { isKnownChange } from "@/lib/own-writes";
+
+/** Строки записей во всех списках кэша — версия каждой (`updated_at`). */
+function* cachedAppointmentRows(
+  qc: QueryClient,
+): Generator<{ id: string; updated_at?: string | null }> {
+  for (const [, data] of qc.getQueriesData<unknown>({ queryKey: ["appointments"] })) {
+    if (!Array.isArray(data)) continue;
+    for (const row of data) {
+      if (row && typeof row === "object" && "id" in row) {
+        yield row as { id: string; updated_at?: string | null };
+      }
+    }
+  }
+}
 
 // Cache-table vocab (clients / appointments / tags) → the react-query key the
 // mobile hooks register. Tags live under "client-tags" (features/clients/
@@ -95,7 +110,12 @@ export function startSyncBridge(
     const unsubRealtime = startRealtimeTenantSync({
       supabase,
       tenantId,
-      onChange: (table) => invalidate(qc, table),
+      // Эхо своей правки (перенос, оплата) — не новость: полная перечитка
+      // календаря после каждого жеста и была «подлагиванием» (own-writes.ts).
+      onChange: (table, change) => {
+        if (table === "appointments" && isKnownChange(change, cachedAppointmentRows(qc))) return;
+        invalidate(qc, table);
+      },
       onResync: (table) => invalidate(qc, table),
     });
     // 3. Claim caught up — realtime of this tenant was blind until now and a

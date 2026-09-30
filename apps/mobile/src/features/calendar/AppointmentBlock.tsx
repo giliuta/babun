@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -260,6 +260,40 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // говорила до сих пор, живёт только там, где имя влезает.
   const edgeStyle = cancelled ? CANCELLED_BORDER : "solid";
 
+  // ПРИЗЕМЛЕНИЕ БЕЗ РЫВКА (владелец 2026-09-30: «свободное перемещение
+  // подлагивает»). Перенос уходит в кэш не в тот же кадр, что отпускание:
+  // мутация кладёт новое время через микрозадачи и таймер уведомлений. Пока
+  // смещение сбрасывалось сразу после `onReschedule`, блок на кадр-два
+  // возвращался на СТАРОЕ место и только потом прыгал на новое. Теперь
+  // смещение держится, пока место блока не сменится (эффект ниже), а если
+  // перенос так и не приземлился (отказ, тот же слот), — пружиной домой.
+  const landing = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const awaitLanding = () => {
+    if (landing.current) clearTimeout(landing.current);
+    landing.current = setTimeout(() => {
+      landing.current = null;
+      ty.value = withSpring(0);
+      tx.value = withSpring(0);
+      topPx.value = withSpring(0);
+      botPx.value = withSpring(0);
+    }, 1500);
+  };
+  useLayoutEffect(() => {
+    if (!landing.current) return;
+    clearTimeout(landing.current);
+    landing.current = null;
+    ty.value = 0;
+    tx.value = 0;
+    topPx.value = 0;
+    botPx.value = 0;
+  }, [startMin, endMin, apt.date, ty, tx, topPx, botPx]);
+  useEffect(
+    () => () => {
+      if (landing.current) clearTimeout(landing.current);
+    },
+    [],
+  );
+
   const commit = (translationY: number, dayDelta = 0) => {
     if (!onReschedule) {
       ty.value = withSpring(0);
@@ -292,11 +326,8 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       minToHM(newStart + duration),
       dayDelta === 0 ? undefined : shiftYmd(apt.date, dayDelta),
     );
-    // Оптимистический кеш переписан синхронно внутри onReschedule → база
-    // блока уже на новом слоте. Мгновенный сброс смещения приземляется тем
-    // же кадром — блок остаётся под пальцем.
-    ty.value = 0;
-    tx.value = 0;
+    // Смещение сбросит приземление — когда блок встанет на новый слот.
+    awaitLanding();
   };
 
   const moveBy = (deltaMin: number) => {
@@ -347,10 +378,8 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       return;
     }
     onReschedule(apt, minToHM(ns), minToHM(ne));
-    // Оптимистический кэш уже перерисовал блок новой высоты — смещения
-    // сбрасываются тем же кадром, без пружины назад.
-    topPx.value = 0;
-    botPx.value = 0;
+    // Края сбросит приземление — когда блок встанет в новую высоту.
+    awaitLanding();
   };
 
   const pan = Gesture.Pan()

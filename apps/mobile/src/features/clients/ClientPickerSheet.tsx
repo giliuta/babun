@@ -41,6 +41,10 @@ import { formatPhoneForDisplay } from "@/features/clients/phone";
 // (`select-rows`): заголовок в жесте грабера → поиск → строки 52pt → кнопка в
 // футере вне прокрутки.
 
+/** Один сравниватель на модуль: `localeCompare(…, "ru")` в Hermes заводит
+ *  новый коллатор на КАЖДОЕ сравнение — сортировка базы была заметной. */
+const byName = new Intl.Collator("ru");
+
 export function ClientPickerSheet({
   visible,
   title = "Клиент",
@@ -152,9 +156,7 @@ export function ClientPickerSheet({
     const query = q.trim();
     if (query) return pool.filter((c) => matchesClient(c, query));
     if (!recentIds?.length) {
-      return [...pool].sort((a, b) =>
-        (a.full_name || "").localeCompare(b.full_name || "", "ru"),
-      );
+      return [...pool].sort((a, b) => byName.compare(a.full_name || "", b.full_name || ""));
     }
     const byId = new Map(pool.map((c) => [c.id, c]));
     const recent = recentIds
@@ -163,7 +165,7 @@ export function ClientPickerSheet({
     const seen = new Set(recent.map((c) => c.id));
     const others = pool
       .filter((c) => !seen.has(c.id))
-      .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || "", "ru"));
+      .sort((a, b) => byName.compare(a.full_name || "", b.full_name || ""));
     return [...recent, ...others];
   }, [pool, q, recentIds]);
 

@@ -1,4 +1,5 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type UseMutationOptions } from "@tanstack/react-query";
+import { useQuietMutation } from "@/lib/quiet-mutation";
 // STORY-062 slice 4 — appointment writes go through the offline-aware cache
 // wrappers (same 3-table scope the web caches) instead of the repo directly.
 // The wrapper owns the sqlite optimistic write + online/offline branch
@@ -13,6 +14,7 @@ import {
   updateAppointment,
 } from "@babun/shared/sync/appointmentsCached";
 import { isOnline, randomUuid } from "@babun/shared/sync";
+import { markOwnWrite, OWN_WRITE_IN_FLIGHT_MS, OWN_WRITE_SETTLE_MS } from "@/lib/own-writes";
 import {
   listPhotoPaths,
   removePhotoBlobs,
@@ -195,12 +197,18 @@ export function useCreateAppointment() {
   });
 }
 
-export function useUpdateAppointment() {
+/** Правки записи в пути: id → сколько. Ответ сервера кладётся в список,
+ *  только если за этой правкой не летит следующая той же записи — иначе
+ *  ответ первого переноса откатывал блок со второго места на первое и
+ *  обратно (два переноса подряд — «подлагивает»). */
+const inFlightEdits = new Map<string, number>();
+
+function useUpdateAppointmentOptions() {
   const tenantId = useTenantId();
   const role = useCurrentRole().data;
   const qc = useQueryClient();
   const refusal = useMemberRefusal();
-  return useMutation({
+  return {
     mutationFn: async ({
       id,
       patch,
@@ -231,9 +239,14 @@ export function useUpdateAppointment() {
     },
     // Optimistic: patch the cached list immediately so a drag-rescheduled
     // block lands on its new slot without waiting for the server round-trip.
-    onMutate: async ({ id, patch }) => {
+    // ПАТЧ — ДО ОТМЕНЫ ЧТЕНИЯ, БЕЗ await: `await cancelQueries` откладывал
+    // новое место блока ещё на поездку по очереди задач. Отмена после
+    // `setQueryData` безопасна — откат летящего чтения возвращает кэш к
+    // состоянию последней ручной записи, то есть к нашему патчу.
+    onMutate: ({ id, patch }) => {
+      inFlightEdits.set(id, (inFlightEdits.get(id) ?? 0) + 1);
+      markOwnWrite(id, OWN_WRITE_IN_FLIGHT_MS);
       const key = appointmentsQueryKey(tenantId, role);
-      await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<Appointment[]>(key);
       if (previous) {
         qc.setQueryData<Appointment[]>(
@@ -241,9 +254,16 @@ export function useUpdateAppointment() {
           previous.map((a) => (a.id === id ? { ...a, ...patch } : a)),
         );
       }
+      void qc.cancelQueries({ queryKey: key });
       // Снапшот только своей записи: откат целым списком стирал бы
       // оптимистичный патч параллельной мутации соседней записи.
       return { prevRecord: previous?.find((a) => a.id === id) };
+    },
+    onSettled: (_data, _err, { id }) => {
+      markOwnWrite(id, OWN_WRITE_SETTLE_MS);
+      const left = (inFlightEdits.get(id) ?? 1) - 1;
+      if (left > 0) inFlightEdits.set(id, left);
+      else inFlightEdits.delete(id);
     },
     onError: (_err, { id }, ctx) => {
       const prevRecord = ctx?.prevRecord;
@@ -262,10 +282,23 @@ export function useUpdateAppointment() {
       // помечаются устаревшими без немедленного похода в сеть.
       const placeOnly = Object.keys(patch).every((k) => PLACE_FIELDS.has(k));
       if (placeOnly && data && typeof data === "object" && "id" in data) {
-        qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
-          cur?.map((a) => (a.id === id ? { ...a, ...(data as Appointment) } : a)),
-        );
-        qc.invalidateQueries({ queryKey: ["appointments"], refetchType: "none" });
+        const listKey = appointmentsQueryKey(tenantId, role);
+        // Следующая правка этой записи уже в пути — её оптимистичное место
+        // главнее этого ответа (её собственный ответ придёт следом).
+        if ((inFlightEdits.get(id) ?? 0) <= 1) {
+          qc.setQueryData<Appointment[]>(listKey, (cur) =>
+            cur?.map((a) => (a.id === id ? { ...a, ...(data as Appointment) } : a)),
+          );
+        }
+        // Сам список свеж — ответ уже в нём. Устаревшими помечаются только
+        // ДРУГИЕ ключи записей: пометка списка заставляла следующий экран
+        // (форму записи) перечитать весь календарь на открытии.
+        const listHash = JSON.stringify(listKey);
+        qc.invalidateQueries({
+          queryKey: ["appointments"],
+          refetchType: "none",
+          predicate: (q) => JSON.stringify(q.queryKey) !== listHash,
+        });
       } else {
         qc.invalidateQueries({ queryKey: ["appointments"] });
       }
@@ -318,7 +351,22 @@ export function useUpdateAppointment() {
         }
       }
     },
-  });
+  } satisfies UseMutationOptions<unknown, Error, UpdateAppointmentVars, { prevRecord?: Appointment }>;
+}
+
+type UpdateAppointmentVars = { id: string; patch: Partial<Appointment> };
+
+export function useUpdateAppointment() {
+  return useMutation(useUpdateAppointmentOptions());
+}
+
+/** ТА ЖЕ ПРАВКА ЗАПИСИ — БЕЗ ПЕРЕРИСОВКИ ЗОВУЩЕГО (владелец 2026-09-30:
+ *  «перемещение подлагивает»). `useMutation` перерисовывает экран на каждом
+ *  шаге мутации (ожидание → успех), а экран календаря — три тысячи строк, и
+ *  её состояние он не читает: только зовёт `mutate`. Отклики каждого вызова
+ *  (`onSuccess`/`onError`) работают как прежде. */
+export function useQuietUpdateAppointment() {
+  return useQuietMutation(useUpdateAppointmentOptions());
 }
 
 /** КОПИЯ ЗАПИСИ СОТРУДНИКОМ — ТОЛЬКО В ЕЁ ЖЕ КОМАНДУ (владелец 30.09: «если

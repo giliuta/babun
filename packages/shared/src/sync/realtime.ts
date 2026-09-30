@@ -42,6 +42,15 @@ const TABLE_MAP: ReadonlyArray<{ dbTable: string; cacheTable: CachedTable }> = [
   { dbTable: "client_tags", cacheTable: "tags" },
 ];
 
+/** Что изменилось — ровно столько, сколько нужно мосту, чтобы узнать эхо
+ *  собственной правки. Строку целиком мост не берёт: маски сотрудника
+ *  накладывает серверное окно, а не событие. */
+export interface RealtimeChange {
+  event: "INSERT" | "UPDATE" | "DELETE" | string;
+  id: string | null;
+  updatedAt: string | null;
+}
+
 export interface RealtimeTenantSyncOptions {
   supabase: DbSupabase;
   /** Active tenant. Null → the function no-ops and returns a no-op unsub
@@ -49,7 +58,7 @@ export interface RealtimeTenantSyncOptions {
   tenantId: string | null;
   /** Fired on any INSERT/UPDATE/DELETE for a subscribed table. The bridge
    *  invalidates the matching query key + refreshes the SQLite cache. */
-  onChange: (table: CachedTable) => void;
+  onChange: (table: CachedTable, change?: RealtimeChange) => void;
   /** Fired after a reconnect (channel dropped then re-subscribed). The bridge
    *  does a full re-read to backfill events missed during the gap. Optional —
    *  defaults to `onChange` (a plain invalidate is a safe superset). */
@@ -88,9 +97,18 @@ export function startRealtimeTenantSync(
           table: dbTable,
           filter: `tenant_id=eq.${tenantId}`,
         },
-        () => {
-          // We don't inspect the payload: any change → re-read the table.
-          onChange(cacheTable);
+        (payload: {
+          eventType?: string;
+          new?: { id?: string; updated_at?: string } | null;
+          old?: { id?: string } | null;
+        }) => {
+          // Any change → the bridge re-reads the table, unless it recognises
+          // the echo of this phone's own write (id + updated_at already cached).
+          onChange(cacheTable, {
+            event: payload?.eventType ?? "*",
+            id: payload?.new?.id ?? payload?.old?.id ?? null,
+            updatedAt: payload?.new?.updated_at ?? null,
+          });
         },
       )
       .subscribe((status: string) => {

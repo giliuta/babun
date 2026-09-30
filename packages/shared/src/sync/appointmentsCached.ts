@@ -44,7 +44,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../db/database.types";
 import {
   listAppointments as repoListAppointments,
-  getAppointment as repoGetAppointment,
   createAppointment as repoCreateAppointment,
   updateAppointment as repoUpdateAppointment,
   deleteAppointment as repoDeleteAppointment,
@@ -267,7 +266,10 @@ export async function createAppointment(
           /* ignore — cache may not have stored the optimistic row */
         }
       }
-      await refetchAndCacheOne(supabase, created.id, tenantId);
+      // Строка из ответа вставки — уже каноническая (`select("*")` после
+      // всех BEFORE-триггеров; AFTER-триггеры записи её не переписывают).
+      // Второй GET той же строки стоил лишней поездки на каждом создании.
+      await cacheUpsert("appointments", makeCachedRow(created, tenantId));
       return created;
     } catch (err) {
       // Семантический отказ сервера (RLS/constraint) при живой сети —
@@ -343,7 +345,10 @@ export async function updateAppointment(
         patch,
         tenantId,
       );
-      await refetchAndCacheOne(supabase, id, tenantId);
+      // Ответ правки — каноническая строка (`update().select("*")`): второй
+      // GET той же записи был второй поездкой на каждом переносе блока, и
+      // перенос «подлагивал, как будто сервер тормозит» (владелец 30.09).
+      await cacheUpsert("appointments", makeCachedRow(updated, tenantId));
       return updated;
     } catch (err) {
       // RLS/constraint/business-rule failures will never succeed on replay.
@@ -460,17 +465,15 @@ async function readCachedAppointment(
   }
 }
 
-/** After a successful server write, refresh the cache with the CANONICAL
- *  domain row via `repoGetAppointment` (maps every jsonb column to its
- *  domain shape + carries the server's updated_at). */
-async function refetchAndCacheOne(
-  supabase: DbSupabase,
-  id: string,
+/** СТРОКА С СЕРВЕРА — В КЭШ ТЕЛЕФОНА. Для записей, которые меняет RPC
+ *  (оплата, снятие оплаты): RPC кэш SQLite не трогает, и следующее чтение
+ *  списка возвращало прежнюю строку — плитка «оплачено» мигала обратно в
+ *  «не оплачено», пока фоновая сверка не приносила новую. */
+export async function cacheServerAppointment(
+  appointment: Appointment,
   tenantId: string,
 ): Promise<void> {
-  const appt = await repoGetAppointment(supabase, id, tenantId).catch(() => null);
-  if (!appt) return;
-  await cacheUpsert("appointments", makeCachedRow(appt, tenantId));
+  await cacheUpsert("appointments", makeCachedRow(appointment, tenantId));
 }
 
 function makeServerRow(
@@ -530,7 +533,7 @@ function makeServerRow(
     paid_amount: input.paid_amount ?? 0,
     // STORY-055 — created_by is filled server-side by the BEFORE
     // INSERT trigger; the optimistic cache row carries null and gets
-    // rewritten on refetchAndCacheOne after the real insert.
+    // rewritten from the insert's returned row after the real insert.
     created_by: null,
     created_at: input.created_at ?? nowIso,
     updated_at: nowIso,

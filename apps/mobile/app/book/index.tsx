@@ -1995,35 +1995,46 @@ export default function BookScreen() {
             client?.full_name,
           ).then((res) => reminderToast(res, selfReminder));
         }
+        // ОПЛАТА И ФАЙЛЫ НОВОЙ ЗАПИСИ — ПОСЛЕ ЗАКРЫТИЯ ФОРМЫ (владелец
+        // 2026-09-30: «должно всё мгновенно»). Запись уже есть; форма ждала
+        // ещё проводку денег (~1,5 с на сервере) и загрузку каждого файла.
+        // Теперь они уходят вслед, а если сорвутся — скажут словами, как и
+        // раньше: вводить заново нечего, запись сохранена.
         if (pendingPayment && created.kind === "work") {
           // Деньги новой записи ждали её id — уходят тем же событием, что
           // тап по счёту у существующей записи (STORY-065).
-          try {
-            await recordPayment.mutateAsync({
+          // `mutateAsync`, а не `mutate` с onError: форма к ответу уже
+          // закрыта, и отклики вызова у снятого наблюдателя не звучат —
+          // обещание же отвечает всегда.
+          void recordPayment
+            .mutateAsync({
               appointmentId: created.id,
               accountId: pendingPayment.accountId,
               amount: pendingPayment.amount,
               requestId: randomUuid(),
               kind: pendingPayment.kind,
               closeVisit: pendingPayment.kind === "settlement",
-            });
-          } catch (e) {
-            notify("Запись создана, оплата не записана", (e as Error).message);
-          }
+            })
+            .catch((e) =>
+              notify("Запись создана, оплата не записана", (e as Error).message),
+            );
         }
         if (pendingFiles.length > 0 && tenantIdForFiles) {
           // Файлы новой записи — тем же путём, что «Добавить» у сохранённой.
-          const failed = await uploadPendingFiles({
+          void uploadPendingFiles({
             tenantId: tenantIdForFiles,
             appointmentId: created.id,
             clientId: created.client_id ?? null,
             locationId: created.location_id ?? null,
             files: pendingFiles,
             queryClient: queryClientForFiles,
-          });
-          if (failed.length > 0) {
-            notify("Запись создана, файлы не загружены", failed.join(", "));
-          }
+          })
+            .then((failed) => {
+              if (failed.length > 0) {
+                notify("Запись создана, файлы не загружены", failed.join(", "));
+              }
+            })
+            .catch((e) => notify("Запись создана, файлы не загружены", (e as Error).message));
         }
       }
       leaveBook();

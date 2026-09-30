@@ -5,6 +5,9 @@ import {
   recordAppointmentPayment,
   type AppointmentPaymentKind,
 } from "@babun/shared/db/repositories/appointment-payments";
+import { cacheServerAppointment } from "@babun/shared/sync/appointmentsCached";
+import { accountBalancesQueryKey } from "@/lib/company-query-keys";
+import { markOwnWrite, OWN_WRITE_IN_FLIGHT_MS, OWN_WRITE_SETTLE_MS } from "@/lib/own-writes";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole } from "@/features/settings/tenant";
@@ -19,15 +22,16 @@ import { NEVER_PAUSE } from "@/features/finances/accounts";
 //
 // `requestId` придумывает ТАП, а не мутация: один и тот же id на все повторы
 // одного нажатия делает запись идемпотентной на сервере.
-
-const MONEY_QUERY_KEYS: readonly (readonly string[])[] = [
-  ["appointments"],
-  ["transactions"],
-  ["clients"],
-  ["accounts"],
-  ["invoices"],
-  ["receipts"],
-];
+//
+// МГНОВЕННО (владелец 2026-09-30: «нажимаю оплату — тупит с задержкой»).
+// 1. Тап кладёт в кэш запись такой, какой её сделает сервер
+//    (`payment-optimistic.ts`) — плитка «оплачено» загорается сразу.
+// 2. Ответ сервера заменяет её канонической строкой — И В SQLite ТОЖЕ: RPC
+//    кэш телефона не трогал, и следующее чтение списка возвращало старую
+//    строку («оплачено → не оплачено → оплачено»).
+// 3. Перечитываются только деньги, которые платёж меняет: журнал, остатки
+//    счетов, история платежей записи и чеки. Раньше после каждого тапа
+//    перечитывались ВСЕ записи, клиенты и инвойсы компании разом.
 
 function useSettleFreshAppointment() {
   const qc = useQueryClient();
@@ -37,9 +41,40 @@ function useSettleFreshAppointment() {
     qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
       cur?.map((a) => (a.id === fresh.id ? fresh : a)),
     );
-    for (const key of MONEY_QUERY_KEYS) {
-      qc.invalidateQueries({ queryKey: [...key] });
-    }
+    if (tenantId) void cacheServerAppointment(fresh, tenantId).catch(() => {});
+    void qc.invalidateQueries({ queryKey: ["transactions"] });
+    void qc.invalidateQueries({ queryKey: ["appointment-ledger"] });
+    void qc.invalidateQueries({ queryKey: accountBalancesQueryKey(tenantId) });
+    void qc.invalidateQueries({ queryKey: ["receipts"] });
+  };
+}
+
+/** Тап — в кэш сразу; отказ сервера — прежняя запись назад. */
+function useOptimisticPatch() {
+  const qc = useQueryClient();
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
+  const key = appointmentsQueryKey(tenantId, role);
+  return {
+    apply: (optimistic: Appointment | undefined): { previous?: Appointment } => {
+      if (!optimistic) return {};
+      const previous = qc
+        .getQueryData<Appointment[]>(key)
+        ?.find((a) => a.id === optimistic.id);
+      // Летящее чтение списка не должно затереть мгновенную запись.
+      void qc.cancelQueries({ queryKey: key });
+      qc.setQueryData<Appointment[]>(key, (cur) =>
+        cur?.map((a) => (a.id === optimistic.id ? optimistic : a)),
+      );
+      return { previous };
+    },
+    revert: (context: { previous?: Appointment } | undefined): void => {
+      const previous = context?.previous;
+      if (!previous) return;
+      qc.setQueryData<Appointment[]>(key, (cur) =>
+        cur?.map((a) => (a.id === previous.id ? previous : a)),
+      );
+    },
   };
 }
 
@@ -51,12 +86,21 @@ export interface RecordPaymentVars {
   requestId: string;
   kind?: AppointmentPaymentKind;
   closeVisit?: boolean;
+  /** Запись такой, какой её сделает сервер, — в кэш по тапу. */
+  optimistic?: Appointment;
 }
 
 export function useRecordPayment() {
   const settle = useSettleFreshAppointment();
+  const patch = useOptimisticPatch();
   return useMutation({
     ...NEVER_PAUSE,
+    onMutate: (vars: RecordPaymentVars) => {
+      markOwnWrite(vars.appointmentId, OWN_WRITE_IN_FLIGHT_MS);
+      return patch.apply(vars.optimistic);
+    },
+    onError: (_error, _vars, context) => patch.revert(context),
+    onSettled: (_data, _error, vars) => markOwnWrite(vars.appointmentId, OWN_WRITE_SETTLE_MS),
     mutationFn: (vars: RecordPaymentVars) =>
       recordAppointmentPayment(supabase, {
         appointmentId: vars.appointmentId,
@@ -75,14 +119,26 @@ export interface CancelPaymentVars {
   appointmentId: string;
   paymentId: string;
   requestId: string;
+  optimistic?: Appointment;
 }
 
 export function useCancelPayment() {
   const settle = useSettleFreshAppointment();
+  const patch = useOptimisticPatch();
   return useMutation({
     ...NEVER_PAUSE,
+    onMutate: (vars: CancelPaymentVars) => {
+      markOwnWrite(vars.appointmentId, OWN_WRITE_IN_FLIGHT_MS);
+      return patch.apply(vars.optimistic);
+    },
+    onError: (_error, _vars, context) => patch.revert(context),
+    onSettled: (_data, _error, vars) => markOwnWrite(vars.appointmentId, OWN_WRITE_SETTLE_MS),
     mutationFn: (vars: CancelPaymentVars) =>
-      cancelAppointmentPayment(supabase, vars),
+      cancelAppointmentPayment(supabase, {
+        appointmentId: vars.appointmentId,
+        paymentId: vars.paymentId,
+        requestId: vars.requestId,
+      }),
     onSuccess: settle,
   });
 }
