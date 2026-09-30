@@ -2,6 +2,7 @@ import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { getStorage } from "@babun/shared/storage";
 import { cacheClearAll } from "@babun/shared/db/cache/sql";
 import { queryClient } from "@/lib/query-client";
+import { forgetRevealedContacts } from "@/features/clients/revealed-contacts";
 import { notify } from "./notify";
 import { supabase } from "@/lib/supabase";
 import {
@@ -101,6 +102,9 @@ function wipeFastStores(
     if (TENANT_PREFIXES.some((p) => key.startsWith(p))) storage.remove(key);
   }
   if (!keepSubscribers) {
+    // Номера, открытые сотрудником дверью, живут только в памяти — и на
+    // выходе уходят вместе с остальным (30.09).
+    forgetRevealedContacts();
     queryClient.clear();
     return;
   }

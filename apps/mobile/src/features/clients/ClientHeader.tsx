@@ -39,6 +39,8 @@ import { useThemeColors } from "@/theme/colors";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { ClientExtraContacts } from "@/features/clients/ClientExtraContacts";
 import { usePhoneCountry } from "@/features/clients/use-phone-country";
+import { contactsLocked } from "@/features/clients/member-contacts";
+import { LockedPhoneRow } from "@/features/clients/LockedPhoneRow";
 
 /** Режим создания: то, что знает только композер экрана.
  *
@@ -103,6 +105,9 @@ export default function ClientHeader({
   const country = useDefaultCountry();
   const copy = useCopyValue();
   const hasExtras = (client.phones?.length ?? 0) > 0;
+  // Номер сотруднику ещё не открыт (30.09): на месте цифр — замок, правки
+  // контактов нет, пока номер не открыт дверью.
+  const locked = !draft && contactsLocked(client);
   // Новый клиент: страна номера — подписью над полем, цифры — в поле.
   const dial = usePhoneCountry({
     phone: client.phone,
@@ -171,6 +176,9 @@ export default function ClientHeader({
           подпись вправо от номера (2026-08-06) сделала блок пустым и
           нечитаемым — владелец: «стало ещё хуже, просто номера и всё».
           Вид блока переосмысливается отдельно. */}
+        {locked ? (
+          <LockedPhoneRow client={client} />
+        ) : (
         <FieldRow
           compact
           // «Телефон» — ИМЯ ПОЛЯ, а не тип номера: над цифрами оно называло
@@ -249,6 +257,7 @@ export default function ClientHeader({
             )
           }
         />
+        )}
 
         {/* Слот черновика: дедуп «Похоже, такой уже есть» / ошибка создания.
           Стоит сразу под номером — там же, где его причина. */}
@@ -265,7 +274,7 @@ export default function ClientHeader({
           draft={!!draft}
           teamId={client.team_id ?? null}
           compact
-          readOnly={readOnly}
+          readOnly={readOnly || locked}
           noCopy={noCopy}
         />
       </SectionCard>

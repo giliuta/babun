@@ -80,6 +80,9 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "member_appointment_create",
   "member_appointment_delete",
   "member_appointment_update",
+  // Открытие номера пишет журнал и тратит лимит (миграция
+  // 20260930233000_clients_contacts_one_by_one, 015): в просмотре — нельзя.
+  "member_client_contacts",
   "member_update_team",
   "member_rename_day_label",
   "patch_master_profile",

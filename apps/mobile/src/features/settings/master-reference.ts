@@ -1,5 +1,6 @@
 import type { Database, Json } from "@babun/shared/db/database.types";
 import type { Client } from "@babun/shared/local/clients";
+import { contactsHiddenOf } from "@/features/clients/member-contacts";
 
 type Service = Database["public"]["Tables"]["services"]["Row"];
 type Team = Database["public"]["Tables"]["teams"]["Row"];
@@ -75,6 +76,7 @@ function nullableBoolean(row: JsonRecord, key: string): boolean | null {
 export function masterClientJsonToClient(value: Json): Client {
   const row = record(value);
   requiredString(row, "tenant_id");
+  const hidden = contactsHiddenOf(row);
   return {
     id: requiredString(row, "id"),
     full_name: requiredString(row, "full_name"),
@@ -107,6 +109,9 @@ export function masterClientJsonToClient(value: Json): Client {
     deleted_at: null,
     favorite_master_id: null,
     created_at: requiredString(row, "created_at"),
+    // Номер мастеру — по одному, дверью (30.09): список отдаёт пустой
+    // телефон и причину. До миграции ключа нет — прежнее поведение.
+    ...(hidden !== undefined ? { contacts_hidden: hidden } : {}),
   };
 }
 

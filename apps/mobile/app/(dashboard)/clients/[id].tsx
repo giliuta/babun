@@ -106,6 +106,8 @@ import { SmsComposeProvider } from "@/features/sms/SmsCompose";
 import { SmsClientBlock } from "@/features/sms/SmsClientBlock";
 import { clientSmsVars } from "@/features/sms/client-sms-vars";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { useRevealedClient } from "@/features/clients/revealed-contacts";
+import { useTenantId } from "@/lib/tenant";
 import { shareText } from "@/features/clients/client-share";
 import {
   useClientsCapabilities,
@@ -170,13 +172,17 @@ export function ClientDetailScreen() {
   const handBack = isDraft && pathname === "/client" && !draftLink;
   const clientQuery = useClient(isDraft ? "" : id);
   const {
-    data: client,
+    data: clientRow,
     isLoading,
     isError: clientFailed,
     error: clientError,
     isRefetching: clientRetrying,
     refetch: retryClient,
   } = clientQuery;
+  // Номер, открытый сотрудником дверью (30.09), — поверх строки окна: сам
+  // список контактов не несёт, открытое живёт только в памяти.
+  const activeTenantId = useTenantId();
+  const client = useRevealedClient(clientRow, scope?.tenantId ?? activeTenantId);
   const updateClient = useUpdateClient(isDraft ? "" : id);
   const archiveWithUndo = useArchiveWithUndo();
   const restoreClient = useRestoreClient();

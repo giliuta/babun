@@ -72,6 +72,11 @@ import {
   type ClientsScope,
 } from "./clients-company";
 import { masterClientJsonToClient } from "@/features/settings/master-reference";
+import {
+  contactsHiddenOf,
+  parseMemberContacts,
+  type MemberContactsAnswer,
+} from "@/features/clients/member-contacts";
 import { isConfirmedNetworkUnavailable } from "@/features/settings/server-read-fallback";
 import {
   cancelClientReminder,
@@ -243,12 +248,38 @@ type RpcWithMemberClients = {
  *  такое же окно, и второй разборщик разошёлся бы с этим на первом же поле. */
 export function memberClientJsonToClient(row: unknown): Client {
   const record = row as Parameters<typeof rowToClient>[0] & { tag_ids?: unknown };
+  // Почему номера нет (30.09): у строки сотрудника ключ есть всегда, у
+  // владельца его нет — и карточка ведёт себя по-прежнему.
+  const hidden = contactsHiddenOf(record);
   return {
     ...rowToClient(record),
     tag_ids: Array.isArray(record.tag_ids)
       ? record.tag_ids.filter((id): id is string => typeof id === "string")
       : [],
+    ...(hidden !== undefined ? { contacts_hidden: hidden } : {}),
   };
+}
+
+type RpcWithMemberContacts = {
+  rpc: (
+    name: "member_client_contacts",
+    args: { p_client: string },
+  ) => PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>;
+};
+
+/** НОМЕР ОДНОГО КЛИЕНТА — ДВЕРЬЮ (015 + 014, 30.09). Пишет в журнал и
+ *  тратит дневной лимит: звать только по действию человека (тап по
+ *  звонку), не при открытии карточки, и не класть в офлайн-очередь. Отказ
+ *  — ответом (`day` / `right` / `limit`), ошибка — только «клиента нет в
+ *  наборе» и «не член компании». */
+export async function memberClientContacts(
+  client: typeof supabase,
+  clientId: string,
+): Promise<MemberContactsAnswer> {
+  const rpc = client as unknown as RpcWithMemberContacts;
+  const { data, error } = await rpc.rpc("member_client_contacts", { p_client: clientId });
+  if (error) throw new Error(`memberClientContacts: ${error.message}`);
+  return parseMemberContacts(data);
 }
 
 /** КЛИЕНТЫ КОМПАНИИ-РАБОТОДАТЕЛЯ — ТОЛЬКО ОКНОМ СЕРВЕРА.
