@@ -229,9 +229,12 @@ describe("экран «Финансы»: гашение, обновление и
     // компании.
     assert.match(
       source,
-      /useTransactions\( period\.from, period\.to, scope === NO_TEAM \? orphanAccounts\.length > 0 \? \{ accountIds: orphanAccounts\.map\(\(account\) => account\.id\), \} : \{ brigadeIds: \[NO_TEAM\] \} : \{ brigadeIds: scope \? \[scope\] : undefined \}, \)/,
+      /const ledgerFilter = scope === NO_TEAM \? orphanAccounts\.length > 0 \? \{ accountIds: orphanAccounts\.map\(\(account\) => account\.id\), \} : \{ brigadeIds: \[NO_TEAM\] \} : \{ brigadeIds: scope \? \[scope\] : undefined \};/,
       "чип «Без команды»: при сиротах — срез по их счетам, без сирот — ноль строк, а не журнал всей компании",
     );
+    // Тот же отбор — у текущего периода и у прошлого в «Прибыли» (30.09).
+    assert.match(source, /useTransactions\(period\.from, period\.to, ledgerFilter\)/);
+    assert.match(source, /useTransactions\(prevRange\.from, prevRange\.to, \{ \.\.\.ledgerFilter, enabled: compareOn, \}\)/);
     assert.doesNotMatch(source, /accountIds: orphanAccounts\.map\([^)]*\)[^}]*enabled:/);
   });
 });

@@ -13,7 +13,6 @@ import { accountServesTeam } from "@babun/shared/local/finance/integrity";
 import { accountsTotal } from "@/features/finances/account-ui";
 import { getDebtAmount } from "@babun/shared/local/appointments";
 import { invoicedAppointmentIds } from "@babun/shared/local/finance/invoice-ledger";
-import { appointmentMaterialCost } from "@babun/shared/local/finance/appointment-calc";
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
@@ -49,6 +48,8 @@ import { usePeriodDocuments } from "@/features/finances/use-period-documents";
 import type { DocumentFilter } from "@/features/finances/documents";
 import { ProfitBreakdown } from "@/features/finances/ProfitBreakdown";
 import { materialsByService } from "@/features/finances/breakdown";
+import { periodMaterials, periodMoney } from "@/features/finances/profit-compare";
+import { previousPeriod } from "@/features/finances/analytics/analytics-math";
 import { DebtorsList } from "@/features/finances/DebtorsList";
 import { panelCount } from "@/features/finances/PanelHeader";
 import { RecordRowsPanel } from "@/features/finances/RecordRowsPanel";
@@ -420,9 +421,8 @@ function FinancesContent() {
     [invoices, requestedClientId],
   );
 
-  const transactionsQuery = useTransactions(
-    period.from,
-    period.to,
+  // Отбор журнала под чип — один на текущий и прошлый период («Прибыль»).
+  const ledgerFilter =
     scope === NO_TEAM
       ? orphanAccounts.length > 0
         ? {
@@ -436,8 +436,8 @@ function FinancesContent() {
           // компании теперь почти всегда в кэше: `enabled: false` больше
           // ничего не прятал бы, и чип показал бы журнал всей компании.
           { brigadeIds: [NO_TEAM] }
-      : { brigadeIds: scope ? [scope] : undefined },
-  );
+      : { brigadeIds: scope ? [scope] : undefined };
+  const transactionsQuery = useTransactions(period.from, period.to, ledgerFilter);
   const txs = useMemo(
     () => transactionsQuery.data ?? [],
     [transactionsQuery.data],
@@ -480,22 +480,78 @@ function FinancesContent() {
     if (!access.recordMoney) {
       return { amount: 0, appointmentCount: 0, byService: new Map<string, number>() };
     }
-    let amount = 0;
-    let appointmentCount = 0;
-    const costly: typeof scopedAppointments = [];
-    for (const appointment of scopedAppointments) {
-      if (appointment.status !== "completed" && appointment.status !== "in_progress") continue;
-      if (appointment.date < period.from || appointment.date > period.to) continue;
-      if (!inTeamScope(appointment.team_id, scope)) continue;
-      const cost = appointmentMaterialCost(appointment, services);
-      if (cost <= 0) continue;
-      amount += cost;
-      appointmentCount += 1;
-      costly.push(appointment);
-    }
+    const { amount, appointmentCount, costly } = periodMaterials(
+      scopedAppointments,
+      services,
+      { from: period.from, to: period.to, scope },
+      true,
+    );
     // Те же записи — по услугам: «Прибыль» подписывает услугу её материалами.
     return { amount, appointmentCount, byService: materialsByService(costly, services) };
   }, [access.recordMoney, period.from, period.to, scope, scopedAppointments, services]);
+
+  // «ПРИБЫЛЬ» К ПРОШЛОМУ ПЕРИОДУ — только пока открыта панель прибыли
+  // (владелец 30.09: «аналитику такую — только в прибыли»; `profit-compare.ts`).
+  // Запрос тот же, что у текущего периода: журнал компании за диапазон одним
+  // ключом, отбор чипа и строки без команды — теми же правилами.
+  const compareOn = view === "profit";
+  const prevRange = useMemo(
+    () => previousPeriod(period.from, period.to, businessToday),
+    [period.from, period.to, businessToday],
+  );
+  const prevTeamQuery = useTransactions(prevRange.from, prevRange.to, {
+    ...ledgerFilter,
+    enabled: compareOn,
+  });
+  const prevCompanyQuery = useTransactions(prevRange.from, prevRange.to, {
+    enabled: compareOn,
+  });
+  const profitBefore = useMemo(() => {
+    // Заглушка — это данные ДРУГОГО диапазона: «было» из неё было бы ложью.
+    if (
+      !compareOn ||
+      !prevTeamQuery.data ||
+      !prevCompanyQuery.data ||
+      prevTeamQuery.isPlaceholderData ||
+      prevCompanyQuery.isPlaceholderData
+    ) {
+      return null;
+    }
+    const rows = withTeamlessRows(
+      prevTeamQuery.data,
+      teamlessLedgerRows(prevCompanyQuery.data, scope, accountTeam),
+    );
+    const transactions = requestedClientId
+      ? rows.filter((transaction) => transaction.client_id === requestedClientId)
+      : rows;
+    const materials = periodMaterials(
+      scopedAppointments,
+      services,
+      { from: prevRange.from, to: prevRange.to, scope },
+      access.recordMoney,
+    );
+    return {
+      ...periodMoney(transactions, materials.amount),
+      from: prevRange.from,
+      to: prevRange.to,
+      transactions,
+      materialCost: materials.amount,
+    };
+  }, [
+    compareOn,
+    prevTeamQuery.data,
+    prevTeamQuery.isPlaceholderData,
+    prevCompanyQuery.data,
+    prevCompanyQuery.isPlaceholderData,
+    scope,
+    accountTeam,
+    requestedClientId,
+    scopedAppointments,
+    services,
+    prevRange.from,
+    prevRange.to,
+    access.recordMoney,
+  ]);
 
   // ОДНИ И ТЕ ЖЕ ДЕНЬГИ СЧИТАЮТСЯ ОДИН РАЗ.
   //
@@ -1395,6 +1451,7 @@ function FinancesContent() {
             materialCost={materialSummary.amount}
             materialAppointmentCount={materialSummary.appointmentCount}
             materialsByService={materialSummary.byService}
+            compare={profitBefore}
             people={people}
             refreshControl={refreshControl}
           />

@@ -13,6 +13,8 @@ import {
   type BreakdownRow,
 } from "./breakdown";
 import { PanelHeader } from "./PanelHeader";
+import { dmyShort } from "./period";
+import { changeOf } from "./profit-compare";
 
 // «Разбор прибыли» — port of the web ProfitPanel (bars view): «Доход»
 // (income by service/category, breakdownIncome resolves an income tx to the
@@ -30,7 +32,11 @@ import { PanelHeader } from "./PanelHeader";
 //     сумму, и «×N»;
 //   • строка услуги подписана её материалами («материалы €10») — расход
 //     «Материалы» перестал быть безымянной суммой;
-//   • разделы — словами плиток: «Доход», «Расход».
+//   • разделы — словами плиток: «Доход», «Расход»;
+//   • К ПРОШЛОМУ ПЕРИОДУ — только здесь, не на плитках (владелец: «аналитику
+//     такую — только в прибыли»): блок «прибыль / доход / расход — было и
+//     стало» и изменение у каждой услуги и статьи расхода. Строка без пары в
+//     прошлом периоде изменения не несёт: «+∞ %» ничего не говорит.
 export function ProfitBreakdown({
   transactions,
   categories,
@@ -39,6 +45,7 @@ export function ProfitBreakdown({
   materialCost,
   materialAppointmentCount,
   materialsByService,
+  compare,
   only,
   title = "Прибыль",
   people,
@@ -54,6 +61,16 @@ export function ProfitBreakdown({
   /** Материалы сделанных записей периода по услугам — подпись строки
    *  дохода (`materialsByService`). */
   materialsByService?: ReadonlyMap<string, number>;
+  /** Прошлый период — только у «Прибыли» «Финансов». `null` — ещё едет. */
+  compare?: {
+    from: string;
+    to: string;
+    income: number;
+    expense: number;
+    profit: number;
+    transactions: FinanceTransaction[];
+    materialCost: number;
+  } | null;
   /** Только одна половина разбора — у плиток «Доход» и «Расход» «Аналитики». */
   only?: "income" | "expense";
   title?: string;
@@ -89,6 +106,33 @@ export function ProfitBreakdown({
   // МАРЖА — доля прибыли в доходе, целым процентом. Без дохода её нет:
   // «−∞ %» ничего не говорит.
   const margin = income > 0 ? Math.round(((income - expense) / income) * 100) : null;
+  const profit = Math.round((income - expense) * 100) / 100;
+
+  // Прошлый период по тем же корзинам — изменение у каждой строки.
+  const before = useMemo(() => {
+    if (!compare) return null;
+    const incomeBefore = new Map(
+      breakdownIncome(compare.transactions, categories, services, appointments).map(
+        (r) => [r.name, r.amount] as const,
+      ),
+    );
+    const expenseBefore = new Map(
+      breakdownExpense(compare.transactions, categories, people).map(
+        (r) => [r.name, r.amount] as const,
+      ),
+    );
+    if (compare.materialCost > 0) {
+      expenseBefore.set("Материалы", (expenseBefore.get("Материалы") ?? 0) + compare.materialCost);
+    }
+    return { income: incomeBefore, expense: expenseBefore };
+  }, [compare, categories, services, appointments, people]);
+  const deltaFor = (now: number, was: number | undefined, goodUp: boolean) => {
+    if (was === undefined) return undefined;
+    const change = changeOf(now, was, goodUp);
+    return change
+      ? { text: change.text, color: change.good ? th.success : th.danger }
+      : undefined;
+  };
   const showIncome = only !== "expense";
   const showExpense = only !== "income";
   const empty =
@@ -105,6 +149,11 @@ export function ProfitBreakdown({
         name={r.name}
         count={r.count}
         note={kind === "income" ? materialsNote(materialsByService?.get(r.name)) : undefined}
+        delta={deltaFor(
+          r.amount,
+          before?.[kind].get(r.name),
+          kind === "income",
+        )}
         value={`${negative ? "−" : ""}${formatEUR(Math.abs(r.amount))}`}
         color={negative ? th.danger : th.success}
         // negative rows (refunds) get no proportion bar
@@ -161,6 +210,38 @@ export function ProfitBreakdown({
         />
       )}
 
+      {/* К ПРОШЛОМУ ПЕРИОДУ — было, стало и изменение. Прибыль первой: панель
+          о ней. Полоска — сейчас против большего из двух. */}
+      {/* Прошлый период без денег — сравнивать не с чем: три «было €0»
+          только занимали экран. */}
+      {!only && compare && (compare.income !== 0 || compare.expense !== 0) ? (
+        <View className="mt-1">
+          <BreakdownSectionHeader
+            title={`К прошлому периоду · ${dmyShort(compare.from).slice(0, 5)}–${dmyShort(compare.to)}`}
+          />
+          {(
+            [
+              { key: "profit", name: "Прибыль", now: profit, was: compare.profit, color: th.brandAccent, goodUp: true },
+              { key: "income", name: "Доход", now: income, was: compare.income, color: th.success, goodUp: true },
+              { key: "expense", name: "Расход", now: expense, was: compare.expense, color: th.danger, goodUp: false },
+            ] as const
+          ).map((c) => (
+            <BreakdownBarRow
+              key={c.key}
+              name={c.name}
+              count={0}
+              note={`было ${signedEUR(c.was, c.key === "expense")}`}
+              value={signedEUR(c.now, c.key === "expense")}
+              color={c.now < 0 ? th.danger : c.color}
+              delta={deltaFor(c.now, c.was, c.goodUp)}
+              share={
+                Math.max(c.now, c.was) > 0 ? Math.max(0, c.now) / Math.max(c.now, c.was) : 0
+              }
+            />
+          ))}
+        </View>
+      ) : null}
+
       {showIncome ? (
       <View className="mt-1">
         <BreakdownSectionHeader
@@ -198,6 +279,12 @@ export function ProfitBreakdown({
       {footer}
     </ScrollView>
   );
+}
+
+/** Сумма со знаком: расход — «−€20», отрицательная прибыль — «−€50». */
+function signedEUR(amount: number, outflow: boolean): string {
+  const negative = outflow ? amount > 0 : amount < 0;
+  return `${negative ? "−" : ""}${formatEUR(Math.abs(amount))}`;
 }
 
 /** «материалы €10» под услугой; без материалов — ничего. */
