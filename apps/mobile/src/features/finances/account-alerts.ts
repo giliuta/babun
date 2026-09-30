@@ -26,15 +26,21 @@ export interface AlertText {
  *  2026-09-15). Куда пропадает счёт, сказано прямо: вниз своего списка,
  *  серым (страницы «Закрытые счета» нет с 2026-09-29), и вернуть его можно
  *  там же. */
-export function hideAccountAlert(name: string): Required<AlertText> {
+export function hideAccountAlert(name: string, lastOfTeam = false): Required<AlertText> {
   return {
     title: "Скрыть счёт?",
     message:
       `«${name}» станет серым внизу списка и исчезнет из форм оплаты. `
-      + "Операции и остаток останутся в истории, вернуть счёт — свайпом «Открыть».",
+      + "Операции и остаток останутся в истории, вернуть счёт — свайпом «Открыть»."
+      + (lastOfTeam ? LAST_OF_TEAM : ""),
     confirm: "Скрыть счёт",
   };
 }
+
+/** Хвост вопроса у последнего открытого счёта команды (`isLastOpenOfTeam`). */
+const LAST_OF_TEAM =
+  "\n\nЭто последний открытый счёт команды: оплату записи и новые операции "
+  + "команды принять будет некуда, пока не откроете этот или не заведёте новый.";
 
 /**
  * Жёсткое удаление: счёт без единой операции. Слово «навсегда» обязательно.
@@ -46,16 +52,18 @@ export function hideAccountAlert(name: string): Required<AlertText> {
 export function deleteAccountAlert(
   name: string,
   balance = 0,
+  lastOfTeam = false,
 ): Required<AlertText> {
   const hasMoney = moneySign(balance) !== 0;
   return {
     title: "Удалить счёт?",
-    message: hasMoney
+    message: (hasMoney
       ? `По «${name}» не прошло ни одной операции, но на нём записано `
         + `${money(balance)}. Удаляем насовсем — эта сумма исчезнет и из `
         + "«Всего денег». Восстановить будет нечего."
       : `По «${name}» не прошло ни одной операции — удаляем насовсем, `
-        + "восстановить будет нечего.",
+        + "восстановить будет нечего.")
+      + (lastOfTeam ? LAST_OF_TEAM : ""),
     confirm: "Удалить счёт",
   };
 }

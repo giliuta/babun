@@ -17,8 +17,10 @@ import { NO_TEAM } from "./accounts-sections";
 // Закрытого набора знаков хватает для того, ради чего сторож заводился: в
 // запрос не уедет ни пробел, ни кавычка, ни «&».
 //
-// Команда и счёт осмысленны только у «Счетов»: у дохода или долгов чип
-// команды живёт своей жизнью, и адрес его не переставляет.
+// Счёт осмыслен только у «Счетов». КОМАНДА — У ЛЮБОГО РАЗРЕЗА (аудит
+// 2026-09-30): возврат из записи несёт команду чипа, и без неё пересозданная
+// вкладка вставала на первую команду. Адрес с одной командой — это разрез
+// «Все» этой команды.
 
 /** Разрезы, которые вкладка умеет восстановить из адреса. Список шире, чем в
  *  `resolveReturnTo`: оттуда приходят только те, из которых открывают запись
@@ -63,13 +65,15 @@ const isView = (value: string): value is HomeView => VIEWS.has(value);
 
 export function financeRoute(params: FinanceRouteParams): FinanceRoute | null {
   const view = routeParam(params.view);
-  if (!view || !isView(view)) return null;
-  if (view !== "accounts") return { view, team: null, account: null };
-  const team = routeParam(params.team);
+  const rawTeam = routeParam(params.team);
+  const team = rawTeam && TEAM_ID.test(rawTeam) ? rawTeam : null;
+  if (!view) return team ? { view: "all", team, account: null } : null;
+  if (!isView(view)) return null;
+  if (view !== "accounts") return { view, team, account: null };
   const account = routeParam(params.account);
   return {
     view,
-    team: team && TEAM_ID.test(team) ? team : null,
+    team,
     account: account && UUID.test(account) ? account : null,
   };
 }

@@ -21,7 +21,7 @@ import {
   hideDecision,
   hideDecisionAfterTransfer,
 } from "../accounts-page/page-rules";
-import { closeDecision, type CloseDecision } from "../close-decision";
+import { closeDecision, isLastOpenOfTeam, type CloseDecision } from "../close-decision";
 import { stepAfterAnswer } from "./editor-logic";
 import type { AlertError } from "./types";
 
@@ -53,12 +53,19 @@ const delay = <T,>(ms: number, value: T) =>
 type Decision = CloseDecision;
 
 /** Слова вопроса. `null` — это не вопрос, а объяснение: остаток увести некуда. */
-function questionText(target: AccountWithBalance, decision: Decision) {
+function questionText(
+  target: AccountWithBalance,
+  decision: Decision,
+  accounts: readonly AccountWithBalance[] = [],
+) {
+  // Последний открытый счёт команды — вопрос говорит, что команда останется
+  // без счёта (аудит 2026-09-30).
+  const last = isLastOpenOfTeam(target, accounts);
   if (decision.kind === "delete") {
-    return deleteAccountAlert(target.name, target.balance);
+    return deleteAccountAlert(target.name, target.balance, last);
   }
   if (decision.kind === "close") {
-    return hideAccountAlert(target.name);
+    return hideAccountAlert(target.name, last);
   }
   const text = accountNotEmptyAlert(
     target.name,
@@ -101,6 +108,8 @@ export function useCloseFlow({
   } | null>(null);
   /** Что спросить, когда лист уехал. */
   const afterExit = useRef<(() => void) | null>(null);
+  /** Счета на момент тапа — чтобы вопрос знал, последний ли это счёт команды. */
+  const knownAccounts = useRef<readonly AccountWithBalance[]>([]);
   /** Перевод затеян РАДИ ЗАКРЫТИЯ: счёт в момент вопроса. */
   const closingFrom = useRef<AccountWithBalance | null>(null);
   // ЭКРАН МОГЛИ ПОКИНУТЬ, ПОКА ЖДАЛИ ОСТАТКИ: вопрос всплыл бы над чужим
@@ -129,7 +138,7 @@ export function useCloseFlow({
   };
 
   const ask = (target: AccountWithBalance, decision: Decision) => {
-    const text = questionText(target, decision);
+    const text = questionText(target, decision, knownAccounts.current);
     if (!text) {
       // Лист уже уехал (вопрос после перевода): объяснение — системный алерт,
       // а лист под ним поднять нельзя, поэтому разговор на этом кончается.
@@ -178,10 +187,11 @@ export function useCloseFlow({
     account: AccountWithBalance,
     accounts: readonly AccountWithBalance[],
   ) => {
+    knownAccounts.current = accounts;
     const decision: Decision = account.is_active
       ? hideDecision(account, accounts)
       : closeDecision(account, accounts);
-    if (!questionText(account, decision)) {
+    if (!questionText(account, decision, accounts)) {
       // Объяснение без вопроса: системный алерт встаёт поверх листа, и лист
       // уезжать не должен.
       explain(account);

@@ -15,9 +15,18 @@ const SEED_TEAM = "team_north";
 const ACCOUNT = "7f0e2c1a-3b4d-4e5f-8a9b-0c1d2e3f4a5b";
 
 describe("financeRoute", () => {
-  test("без разреза адрес ничего не переставляет", () => {
+  test("без разреза и команды адрес ничего не переставляет", () => {
     assert.equal(financeRoute({}), null);
-    assert.equal(financeRoute({ team: TEAM, account: ACCOUNT }), null);
+    assert.equal(financeRoute({ account: ACCOUNT }), null);
+  });
+
+  test("возврат из записи с ленты «Все» несёт только команду (30.09)", () => {
+    assert.deepEqual(financeRoute({ team: TEAM, account: ACCOUNT }), {
+      view: "all",
+      team: TEAM,
+      account: null,
+    });
+    assert.equal(financeRoute({ team: "a'b" }), null);
   });
 
   test("незнакомый разрез отбрасывается", () => {
@@ -64,11 +73,12 @@ describe("financeRoute", () => {
     );
   });
 
-  test("команда и счёт у других разрезов не читаются", () => {
+  test("команда — у любого разреза, счёт — только у «Счетов» (30.09)", () => {
     assert.deepEqual(
       financeRoute({ view: "income", team: TEAM, account: ACCOUNT }),
-      { view: "income", team: null, account: null },
+      { view: "income", team: TEAM, account: null },
     );
+    assert.equal(financeRoute({ view: "debt", team: "x y" })?.team, null);
   });
 
   test("повтор ключа в адресе даёт массив — берётся первое", () => {

@@ -12,6 +12,7 @@ import { RecordRowsPanel } from "./RecordRowsPanel";
 import { debtRows, manualDebtRows, mergeDebtRows } from "./debt-rows";
 import type { RecordRow } from "./record-rows";
 import { inTeamScope } from "./team-scope";
+import { financesFrom } from "@/features/appointments/return-to";
 
 // «Долги» panel — port of the web DebtorsList
 // (apps/web/src/components/finance/DebtorsList.tsx): completed-but-unpaid
@@ -174,7 +175,7 @@ export function DebtorsList({
         (teamOfRow ? `&teamId=${teamOfRow}` : "") +
         // Возврат — в ТОТ ЖЕ разрез: закрыв запись, человек ждёт список
         // должников, а не общую ленту (см. resolveReturnTo).
-        "&from=finances:debt") as Href,
+        `&from=${encodeURIComponent(financesFrom("debt", { team: teamId }))}`) as Href,
     );
   };
 

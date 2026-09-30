@@ -21,6 +21,7 @@ import { useReceiptAppointment } from "./receipts-queries";
 import { buildReceiptShareText } from "./receipt-text";
 import { shareHtmlAsPdf } from "./share-pdf";
 import { notify } from "@/lib/notify";
+import { financesFrom } from "@/features/appointments/return-to";
 
 // ЧЕК ОТКРЫВАЕТСЯ ЛИСТОМ, А НЕ ЭКРАНОМ (владелец 2026-08-12: «если я нажимаю
 // на чек — там полностью вся информация, запись, клиент… напрямую на клиента
@@ -214,7 +215,8 @@ export function ReceiptSheet({
                 leave(
                   `/(dashboard)?appointmentId=${appointment.id}&date=${appointment.date}` +
                     (appointment.team_id ? `&teamId=${appointment.team_id}` : "") +
-                    "&from=finances",
+                    // Команда чипа — команда чека: из неё его и открыли.
+                    `&from=${encodeURIComponent(financesFrom(null, { team: appointment.team_id }))}`,
                 )
               }
             />

@@ -3,8 +3,10 @@ import { describe, test } from "node:test";
 import {
   closeDecision,
   closeDecisionAfterTransfer,
+  isLastOpenOfTeam,
   type ClosableAccount,
 } from "./close-decision";
+import { deleteAccountAlert, hideAccountAlert } from "./account-alerts";
 
 const acc = (over: Partial<ClosableAccount> & { id: string }): ClosableAccount => ({
   balance: 0,
@@ -97,5 +99,28 @@ describe("вопрос после перевода ради закрытия", (
       closeDecisionAfterTransfer(before, [acc({ id: "a", is_active: false })]),
       null,
     );
+  });
+});
+
+describe("последний открытый счёт команды (30.09)", () => {
+  test("один открытый у команды — последний; закрытые и чужие не в счёт", () => {
+    const cash = acc({ id: "cash" });
+    const closed = acc({ id: "old", is_active: false });
+    const other = acc({ id: "card", brigade_id: "t2" });
+    assert.equal(isLastOpenOfTeam(cash, [cash, closed, other]), true);
+    assert.equal(isLastOpenOfTeam(cash, [cash, acc({ id: "card2" })]), false);
+  });
+
+  test("сирота без команды и уже закрытый — не «последние»", () => {
+    const orphan = acc({ id: "o", brigade_id: null });
+    assert.equal(isLastOpenOfTeam(orphan, [orphan]), false);
+    const closed = acc({ id: "c", is_active: false });
+    assert.equal(isLastOpenOfTeam(closed, [closed]), false);
+  });
+
+  test("вопрос говорит, что команда останется без счёта", () => {
+    assert.match(hideAccountAlert("Наличные", true).message, /последний открытый счёт команды/);
+    assert.doesNotMatch(hideAccountAlert("Наличные").message, /последний/);
+    assert.match(deleteAccountAlert("Карта", 0, true).message, /последний открытый счёт команды/);
   });
 });

@@ -16,6 +16,7 @@ import {
 import { sortAccountRows } from "../accounts-sections";
 import { TransferSheet } from "../TransferSheet";
 import { freshAccounts } from "./fresh-accounts";
+import { isLastOpenOfTeam } from "../close-decision";
 import {
   hideDecision,
   hideDecisionAfterTransfer,
@@ -96,9 +97,7 @@ export function useHideAccount({
     decision: HideDecision,
   ) => {
     if (decision.kind === "close") {
-      const text = hideAccountAlert(
-        target.name,
-      );
+      const text = hideAccountAlert(target.name, isLastOpenOfTeam(target, accounts));
       confirmThen(
         text.title,
         { message: text.message, confirmLabel: text.confirm, destructive: true },

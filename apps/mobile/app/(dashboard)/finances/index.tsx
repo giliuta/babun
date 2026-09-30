@@ -97,6 +97,7 @@ import { todayYmd } from "@/features/invoices/format";
 import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
 import { useInvoiceNavigation } from "@/features/invoices/navigation";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+import { financesFrom } from "@/features/appointments/return-to";
 
 /** Разрезы, в которых поиск из шапки фильтрует ПОКАЗАННОЕ. У «Счетов»,
  *  «Долгов» и «Прибыли» строк поиска нет вовсе, поэтому первая же буква
@@ -1031,17 +1032,17 @@ function FinancesContent() {
     // иначе возврат выбрал бы счёт, которого человек не видел.
     const shownAccount =
       view === "accounts" && scopedAccounts.some((a) => a.id === accountId)
-        ? `:${accountId}`
-        : "";
+        ? accountId
+        : null;
     pushOnce(
       `/(dashboard)?appointmentId=${target.id}&date=${target.date}` +
         (target.team_id ? `&teamId=${target.team_id}` : "") +
         // Дорога назад: закрыв запись, человек возвращается в ленту денег, а не
         // остаётся в календаре (владелец 2026-08-15) — и в ТОТ ЖЕ разрез, из
         // которого ушёл: вкладка пересоздаётся, и «Доход» сбрасывался на «Все».
-        (view === "all"
-          ? "&from=finances"
-          : `&from=finances:${view}${shownAccount}`),
+        // И в ту же команду чипа (аудит 2026-09-30): без неё вкладка вставала
+        // на первую команду.
+        `&from=${encodeURIComponent(financesFrom(view, { account: shownAccount, team: scope }))}`,
     );
     return true;
   };

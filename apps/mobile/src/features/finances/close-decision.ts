@@ -24,6 +24,23 @@ export type CloseDecision =
   /** Остаток не ноль, а увести некуда — не вопрос, а объяснение. */
   | { kind: "explain" };
 
+/**
+ * ПОСЛЕДНИЙ ОТКРЫТЫЙ СЧЁТ КОМАНДЫ (аудит финансов 2026-09-30). Закрыв его,
+ * команда остаётся без единого счёта: оплату записи и новую операцию этой
+ * команды принять будет некуда. Закрыть можно — это обратимо, — но вопрос
+ * обязан сказать об этом. Счёт без команды (сирота старой схемы) — не
+ * «последний»: у него нет команды, которой он служит.
+ */
+export function isLastOpenOfTeam<A extends ClosableAccount>(
+  account: A,
+  accounts: readonly A[],
+): boolean {
+  if (!account.brigade_id || !account.is_active) return false;
+  return !accounts.some(
+    (a) => a.id !== account.id && a.is_active && a.brigade_id === account.brigade_id,
+  );
+}
+
 export function closeDecision<A extends ClosableAccount>(
   account: A,
   accounts: readonly A[],
