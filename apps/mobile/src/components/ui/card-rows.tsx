@@ -272,11 +272,8 @@ export function FieldRow({
   column,
   prefix,
   onPrefixPress,
-  title,
   onSave,
 }: {
-  /** Имя крупным заголовком строки (блок «Клиент», вариант 10). */
-  title?: boolean;
   label: string;
   value: string;
   placeholder: string;
@@ -405,8 +402,8 @@ export function FieldRow({
   }, [value, editing, followValue]);
 
   const editingNow = !readOnly && (editing || !!live);
-  const valueSize = title ? 22 : big ? 17 : 15;
-  const valueWeight = title ? "700" : "600";
+  const valueSize = big ? 17 : 15;
+  const valueWeight = "600";
   // Буквы в номер не попадают НИ ОДНИМ путём — ни вставкой, ни диктовкой,
   // ни внешней клавиатурой. Чистка живёт в примитиве, а не в каждом вызове:
   // забыть её на новой строке-номере невозможно.
@@ -453,10 +450,12 @@ export function FieldRow({
           style={{
             flexDirection: "row",
             alignItems: "center",
-            minHeight: 52,
+            // Плотно, как строка имени (владелец 30.09: «компактно»): 44 —
+            // минимум Apple под палец.
+            minHeight: 44,
             paddingLeft: 16,
             paddingRight: trailing ? 8 : 16,
-            paddingVertical: 6,
+            paddingVertical: 2,
           }}
         >
           <Text
