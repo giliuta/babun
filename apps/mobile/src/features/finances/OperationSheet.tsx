@@ -87,6 +87,7 @@ import {
   defaultOperationVatMode,
   vatConsequenceLine,
   vatModeForDraft,
+  vatSnapshotForDraft,
 } from "./operation-vat";
 import {
   operationPatchBaseline,
@@ -482,8 +483,10 @@ export function OperationSheet({
   const vat = { ...settingsVat, rate: rememberedVat.rate };
   // КЛАВИШИ ГАСИТ ТОЛЬКО ТУМБЛЕР КОМПАНИИ, А НЕ ПИН СЧЁТА.
   //
-  // Компания с выключенным налогом не должна видеть слово «НДС» вообще — это
-  // правило. А вот «Без НДС», закреплённое ЗА СЧЁТОМ, — это ПРЕДУСТАНОВКА:
+  // ТУМБЛЕРА VAT У КОМПАНИИ БОЛЬШЕ НЕТ (владелец 2026-09-30: «должно быть всё
+  // включено»): клавиши видны, как только известна ставка — её пишут в
+  // «Итого» документа, и она запоминается. Ставки нет — считать нечем, и
+  // клавиш нет. «Без НДС», закреплённое ЗА СЧЁТОМ, — это ПРЕДУСТАНОВКА:
   // настройки счёта прямо обещают «значение подставляется в новую операцию… в
   // самой операции его всегда можно переключить». Пока сюда смотрел
   // эффективный режим, пин счёта прятал секцию целиком — подпись врала, а
@@ -494,11 +497,10 @@ export function OperationSheet({
   // Сервер против этого не возражает: `fill_transaction_vat` уважает и явное
   // 'none', и присланный снимок `vat_amount` — то есть клавиша операции
   // сильнее пина счёта и на записи тоже.
-  const tenantVatOn = (vatSettingsQuery.data?.mode ?? "off") !== "off";
   // КЛАВИШИ — ТОЛЬКО ТОМУ, КТО ВИДИТ НАСТРОЙКУ НАЛОГА. Сотруднику настройки
   // НДС не отдаются: «Без НДС» у него вышло бы не выбором, а последствием
   // отказа чтения — и молча уносило бы налог из операции компании.
-  const vatVisible = isOwner && tenantVatOn && vat.rate > 0;
+  const vatVisible = isOwner && vat.rate > 0;
   // Настройки компании И переопределения команд доехали — только тогда режим
   // формы что-то значит для сервера (`operation-vat.ts`).
   const vatSettingsKnown =
@@ -683,6 +685,12 @@ export function OperationSheet({
         canReadSettings: isOwner,
         settingsKnown: vatSettingsKnown,
       });
+      const vatSnapshot = vatSnapshotForDraft({
+        mode: vatModeToSend,
+        rate: opVatRate,
+        vat: breakdown.vat,
+        fresh: !isEdit || vatRetouched,
+      });
       const draft = {
         amount: breakdown.gross,
         ...(vatModeToSend ? { vat_mode: vatModeToSend } : {}),
@@ -713,10 +721,13 @@ export function OperationSheet({
         // одном устройстве стирала счёт, поменянный секундой раньше на
         // другом. Вычитаем из черновика то, что совпало со снимком, с
         // которым форма открылась (`operation-patch.ts`), и шлём остаток.
-        const patch = operationTransactionPatch(
-          draft,
-          patchBaseline.current ?? operationPatchBaseline(transaction),
-        );
+        const patch = {
+          ...operationTransactionPatch(
+            draft,
+            patchBaseline.current ?? operationPatchBaseline(transaction),
+          ),
+          ...(vatSnapshot ?? {}),
+        };
         if (Object.keys(patch).length === 0) {
           // Нечего сохранять — форма открылась и закрылась без правки:
           // сеть здесь не нужна вовсе.
@@ -727,7 +738,12 @@ export function OperationSheet({
       } else {
         // request_id стабилен на время попытки: ретрай после потерянного
         // ответа не задваивает деньги (duplicate key = успех в репозитории).
-        await insert.mutateAsync({ type, request_id: requestId, ...draft });
+        await insert.mutateAsync({
+          type,
+          request_id: requestId,
+          ...draft,
+          ...(vatSnapshot ?? {}),
+        });
         setRequestId(randomUuid());
       }
       haptics.success();

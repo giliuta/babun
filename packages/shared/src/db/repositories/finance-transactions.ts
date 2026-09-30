@@ -386,6 +386,12 @@ export async function updateTransaction(
   if (patch.occurred_time !== undefined) update.occurred_time = patch.occurred_time;
   if (patch.receipt_url !== undefined) update.receipt_url = patch.receipt_url;
   if (patch.vat_mode !== undefined) update.vat_mode = patch.vat_mode;
+  // Снимок налога — только парой, как на вставке: ставка без суммы сервер
+  // пересобрал бы по настройкам компании.
+  if (patch.vat_rate != null && patch.vat_amount != null) {
+    update.vat_rate = patch.vat_rate;
+    update.vat_amount = patch.vat_amount;
+  }
   if (patch.debt_id !== undefined) update.debt_id = patch.debt_id;
   const { data, error } = await supabase
     .from("finance_transactions")

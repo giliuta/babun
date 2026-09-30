@@ -29,9 +29,16 @@ describe("функции компании", () => {
   });
 
   test("метка дня и события включены всегда — «выключено» в базе ничего не прячет (30.09)", () => {
-    expect(isFeatureOn(["day_labels", "events", "debts"], "day_labels")).toBe(true);
-    expect(isFeatureOn(["day_labels", "events", "debts"], "events")).toBe(true);
-    expect(isFeatureOn(["day_labels", "events", "debts"], "debts")).toBe(false);
+    expect(isFeatureOn(["day_labels", "events", "objects"], "day_labels")).toBe(true);
+    expect(isFeatureOn(["day_labels", "events", "objects"], "events")).toBe(true);
+    expect(isFeatureOn(["day_labels", "events", "objects"], "objects")).toBe(false);
+  });
+
+  test("деньги включены всегда — долги, счета, инвойсы и чеки (30.09)", () => {
+    const off = ["debts", "accounts", "documents"];
+    expect(isFeatureOn(off, "debts")).toBe(true);
+    expect(isFeatureOn(off, "accounts")).toBe(true);
+    expect(isFeatureOn(off, "documents")).toBe(true);
   });
 
   test("ключи совпадают со сторожем базы", () => {

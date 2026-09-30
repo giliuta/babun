@@ -100,8 +100,10 @@ export function useTeamVatOverrides() {
 }
 
 /** СТАВКА КОМАНДЫ ИЗ НАСТРОЕК — умолчание для нового документа, пока человек
- *  не написал свою (`useRememberedVatRate`). 0 — настройка ещё едет или VAT
- *  выключен. */
+ *  не написал свою (`useRememberedVatRate`). 0 — настройка ещё едет или
+ *  ставки нет. Режим компании не гасит ставку: тумблера VAT больше нет
+ *  (владелец 2026-09-30: «должно быть всё включено»), налог выбирают клавишей
+ *  в самом документе. */
 export function useTeamVatRate(teamId: string | null | undefined): number {
   const vat = useVatSettings().data;
   const overrides = useTeamVatOverrides().data;
@@ -110,7 +112,7 @@ export function useTeamVatRate(teamId: string | null | undefined): number {
     teamId ? (overrides ?? []).find((o) => o.teamId === teamId) : undefined,
     null,
   );
-  return settings.mode === "off" ? 0 : settings.rate;
+  return settings.rate > 0 ? settings.rate : 0;
 }
 
 export function useSaveTeamVat() {

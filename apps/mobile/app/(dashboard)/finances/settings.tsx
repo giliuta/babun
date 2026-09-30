@@ -14,19 +14,13 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { SwitchRow } from "@/components/ui/SwitchRow";
-import { useFeatureOn, useSetCompanyFeature } from "@/features/settings/company-features";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { useSaveVatSettings, useVatSettings } from "@/features/finances/vat-queries";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useTeams } from "@/features/reference/queries";
 import {
   settingsTeamId,
   teamCategoryKindLine,
 } from "@/features/finances/team-settings-lines";
-import { notify } from "@/lib/notify";
-import { getStorage } from "@babun/shared/storage";
-import { useTenantId } from "@/lib/tenant";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { accountsDoorLine } from "@/features/finances/accounts-sections";
 import { useCurrentRole } from "@/features/settings/tenant";
@@ -46,43 +40,21 @@ import { useFinanceCategories } from "@/features/finances/queries";
 // номер инвойса живёт за каждым набором реквизитов, там же бланк счёта
 // («Счета клиентам» переехали туда).
 //
-// Последним — функции: выключенное пропадает у всех, вместе с дверями.
-//
 // УБРАНО 30.09 по слову владельца: «Шаблоны операций» («не понимаю, что это,
-// нужно ли вообще» — убрать совсем) и дверь VAT (ставку регулируем в «Итого»
-// документа, она запоминается; страница не нужна).
+// нужно ли вообще» — убрать совсем), дверь VAT (ставку регулируем в «Итого»
+// документа, она запоминается; страница не нужна) и блок «Функции» с
+// тумблерами долгов, счетов, документов и VAT («это мы полностью удаляем, у
+// нас должно быть всё включено»): эти функции теперь всегда включены
+// (`ALWAYS_ON_FEATURES`), а VAT выбирается клавишами в самой операции и в
+// «Итого» документа.
 
 type CategoryKind = "income" | "expense" | "debt";
 
 export default function FinanceSettingsScreen() {
   const router = useRouter();
-  const vat = useVatSettings();
-  const tenantIdForVat = useTenantId();
-  const saveVat = useSaveVatSettings();
   // СТРАНИЦА ОТКРЫТА ВСЕМ, СТРОКИ — ПО ДОСТУПУ (владелец 20.09). Правило и
   // его причины — `features/finances/settings-rows.ts`.
-  const debtsOn = useFeatureOn("debts");
-  const accountsOn = useFeatureOn("accounts");
-  const documentsOn = useFeatureOn("documents");
-  const vatOn = !!vat.data && vat.data.mode !== "off";
-  // Тумблер функции при сбое откатывался молча (аудит 2026-09-30).
-  const featureFailed = (e: unknown) =>
-    notify("Не удалось сохранить", e instanceof Error ? e.message : String(e));
-  const vatModeKey = `vat.lastMode.${tenantIdForVat ?? "none"}`;
-  const lastVatMode = (): "inclusive" | "exclusive" => {
-    const stored = getStorage().get<string>(vatModeKey);
-    return stored === "exclusive" ? "exclusive" : "inclusive";
-  };
-  const rememberVatMode = (mode: "inclusive" | "exclusive") =>
-    getStorage().set(vatModeKey, mode);
-  const setFeature = useSetCompanyFeature();
-  // Выключенная функция уносит и свою дверь в настройки.
-  const base = financeSettingsRows(useCurrentRole().data);
-  const rows = {
-    ...base,
-    accounts: base.accounts && accountsOn,
-    requisites: base.requisites && documentsOn,
-  };
+  const rows = financeSettingsRows(useCurrentRole().data);
 
   const { team: teamParam } = useLocalSearchParams<{ team?: string }>();
   const teams = useTeams().data ?? [];
@@ -99,14 +71,11 @@ export default function FinanceSettingsScreen() {
   const teamAccounts = (accounts.data ?? []).filter((a) => a.brigade_id === teamId);
   const categoriesQuery = useFinanceCategories();
 
-  // КАТЕГОРИИ — ОТДЕЛЬНОЙ СТРАНИЦЕЙ НА ВИД (владелец 2026-09-30). Долги —
-  // только когда функция «Долги» включена.
+  // КАТЕГОРИИ — ОТДЕЛЬНОЙ СТРАНИЦЕЙ НА ВИД (владелец 2026-09-30).
   const categoryDoors: { kind: CategoryKind; title: string; icon: typeof Wallet }[] = [
     { kind: "income", title: "Категории доходов", icon: ArrowDownLeft },
     { kind: "expense", title: "Категории расходов", icon: ArrowUpRight },
-    ...(debtsOn
-      ? [{ kind: "debt" as const, title: "Категории долгов", icon: Handshake }]
-      : []),
+    { kind: "debt", title: "Категории долгов", icon: Handshake },
   ];
   const categoryLine = (kind: CategoryKind): string | undefined =>
     // Пока категории едут — без подписи: «Пока нет» на загрузке врало бы.
@@ -204,62 +173,6 @@ export default function FinanceSettingsScreen() {
             </>
           ) : null}
 
-          {/* ФУНКЦИИ ДЕНЕГ (STORY-088, владелец 24.09: «тумблер — и его не
-              будет ни у кого, даже у владельца»). Каждый тумблер — своя
-              карточка, как в настройках календаря. Данные выключенной функции
-              не стираются. */}
-          {base.moneyGroup ? (
-            <>
-              <SectionEyebrow>Функции</SectionEyebrow>
-              <SectionCard>
-                <SwitchRow
-                  label="Долги"
-                  value={debtsOn}
-                  onChange={(v) => setFeature.mutate({ key: "debts", on: v }, { onError: featureFailed })}
-                />
-              </SectionCard>
-              <SectionCard>
-                <SwitchRow
-                  label="Счета и переводы"
-                  value={accountsOn}
-                  onChange={(v) => setFeature.mutate({ key: "accounts", on: v }, { onError: featureFailed })}
-                />
-              </SectionCard>
-              <SectionCard>
-                <SwitchRow
-                  label="Инвойсы и чеки"
-                  value={documentsOn}
-                  onChange={(v) => setFeature.mutate({ key: "documents", on: v }, { onError: featureFailed })}
-                />
-              </SectionCard>
-              {/* VAT — выключатель налога на весь аккаунт. Ставку и режим
-                  документа решает «Итого» (владелец 2026-09-30). */}
-              {vat.data ? (
-                <SectionCard>
-                  <SwitchRow
-                    label="VAT"
-                    value={vatOn}
-                    onChange={(on) =>
-                      saveVat.mutate(
-                        // Включили снова — тем режимом, каким работали до
-                        // выключения («плюсом» не сбрасывается в «в цене»).
-                        { mode: on ? lastVatMode() : "off" },
-                        {
-                          onSuccess: () => {
-                            if (!on && vat.data && vat.data.mode !== "off") {
-                              rememberVatMode(vat.data.mode);
-                            }
-                          },
-                          onError: (e) =>
-                            notify("Не удалось сохранить", (e as Error).message),
-                        },
-                      )
-                    }
-                  />
-                </SectionCard>
-              ) : null}
-            </>
-          ) : null}
         </ScrollView>
       ) : (
         // Строк не открыли ни одной: страница остаётся собой, а тело

@@ -4,7 +4,9 @@ import {
   defaultOperationVatMode,
   vatConsequenceLine,
   vatModeForDraft,
+  vatSnapshotForDraft,
 } from "./operation-vat";
+import { applyTxVat } from "@babun/shared/local/finance/vat";
 
 // Здесь решается, ляжет ли операция компании с НДС без налога. Сервер уважает
 // явное «Без НДС» сильнее настроек, поэтому форма обязана молчать, когда
@@ -84,5 +86,33 @@ describe("VAT по направлению денег (аудит 2026-09-29)", (
     assert.equal(vatConsequenceLine("expense", "inclusive", b, fmt), "Из них налог €0.19 · без налога €1");
     assert.equal(vatConsequenceLine("income", "inclusive", b, fmt), "Из них налог €0.19 · вам остаётся €1");
     assert.equal(vatConsequenceLine("income", "none", b, fmt), null);
+  });
+});
+
+describe("снимок налога операции (30.09)", () => {
+  test("новая операция с налогом везёт ставку формы и налог той же разбивки", () => {
+    // Память «Итого» — 5 %, а настройка компании могла бы сказать 19 % или
+    // «выключено»: сервер обязан получить то, что человек видел под клавишами.
+    const breakdown = applyTxVat(100, "exclusive", 5);
+    assert.deepEqual(
+      vatSnapshotForDraft({ mode: "exclusive", rate: 5, vat: breakdown.vat, fresh: true }),
+      { vat_rate: 5, vat_amount: breakdown.vat },
+    );
+    // Налог выделен из брутто так же, как у `fill_transaction_vat`.
+    assert.equal(breakdown.gross, 105);
+    assert.equal(breakdown.vat, 5);
+  });
+
+  test("без налога, без ставки или без названного режима — молчим", () => {
+    assert.equal(vatSnapshotForDraft({ mode: "none", rate: 19, vat: 0, fresh: true }), null);
+    assert.equal(vatSnapshotForDraft({ mode: "inclusive", rate: 0, vat: 0, fresh: true }), null);
+    assert.equal(vatSnapshotForDraft({ mode: undefined, rate: 19, vat: 3.19, fresh: true }), null);
+  });
+
+  test("правка без нового нажатия клавиши ставку строки не трогает", () => {
+    assert.equal(
+      vatSnapshotForDraft({ mode: "inclusive", rate: 19, vat: 3.19, fresh: false }),
+      null,
+    );
   });
 });
