@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { InvoiceSettingsBlocks } from "@/features/invoices/InvoiceSettingsBlocks";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Building2, EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
+import { usePathname, useRouter, type Href } from "expo-router";
+import { Building2, EyeOff, RotateCcw, Settings, Trash2 } from "lucide-react-native";
+import { useNextInvoiceNumber } from "@/features/invoices/queries";
 import { AppearanceTile, appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -16,7 +17,7 @@ import { notify } from "@/lib/notify";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { CompanySheet } from "./CompanySheet";
-import { companyDetail, defaultHeir } from "./company-rules";
+import { companyDetail, companyFilled, defaultHeir } from "./company-rules";
 import {
   useArchiveCompany,
   useCompanies,
@@ -63,6 +64,14 @@ import {
 //
 // Чек и инвойс печатают продавца из своего снимка, поэтому ни скрытие, ни
 // удаление выданную бумагу не меняют.
+//
+// ПЕРЕСОБРАНО 2026-09-30 (владелец: «страницу реквизитов — по нашей
+// архитектуре, как теги и услуги; шаблон реквизитов — тот блок, что
+// вставляем в инвойс; может быть несколько»). На странице — ТОЛЬКО список
+// наборов и кнопка внизу. Справа в строке — номер следующего инвойса этого
+// набора (нумерация живёт за реквизитами), как цена в прайсе услуг. Бланк,
+// общий для всех наборов, — за шестерёнкой в шапке («Бланк инвойса»); под
+// списком его больше нет.
 
 /** Высота строки: по ней перетаскивание считает перелёт через соседей. Та же,
  *  что у типов событий и меток. */
@@ -83,6 +92,12 @@ export function RequisitesScreen() {
   const role = useCurrentRole().data;
   // Пока роль грузится, владелец не должен видеть мигание «только чтение».
   const readOnly = role !== undefined && role !== "owner";
+  const router = useRouter();
+  // Шестерёнка ведёт на бланк тем же адресом, каким пришли сюда: из вкладки
+  // «Финансы» — внутри неё, из документа — поверх него (`(shared)`).
+  const blankHref = (usePathname().startsWith("/finances")
+    ? "/finances/invoice-blank"
+    : "/invoice-blank") as Href;
 
   // Видимые сверху, скрытые под ними — тем же порядком, что у меток и услуг.
   const rows = useMemo(() => {
@@ -172,7 +187,30 @@ export function RequisitesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Реквизиты" />
+      <ScreenHeader
+        title="Реквизиты"
+        right={
+          readOnly ? null : (
+            <Pressable
+              onPress={() => router.push(blankHref)}
+              accessibilityRole="button"
+              accessibilityLabel="Бланк инвойса"
+              hitSlop={8}
+              style={({ pressed }) => ({
+                width: 44,
+                height: 44,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: t.radius.card,
+                backgroundColor: pressed ? t.pressed : "transparent",
+              })}
+            >
+              {/* Та же шестерёнка, что у раздела «Финансы». */}
+              <Settings color={t.sub} size={21} strokeWidth={2} />
+            </Pressable>
+          )
+        }
+      />
 
       {companies.isLoading ? (
         <EmptyState state="loading" fill />
@@ -196,9 +234,6 @@ export function RequisitesScreen() {
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: 12 }}
           scrollEnabled={!dragging}
-          // Поля бланка ниже списка: тап по соседнему полю не должен сначала
-          // прятать клавиатуру.
-          keyboardShouldPersistTaps="handled"
         >
           <View style={{ marginHorizontal: GUTTER }}>
             <ReorderList
@@ -270,11 +305,22 @@ export function RequisitesScreen() {
                         <Text
                           numberOfLines={1}
                           maxFontSizeMultiplier={1.3}
-                          style={{ fontSize: 13, color: t.sub, marginTop: 1 }}
+                          // Незаполненный набор — цветом предупреждения, как в
+                          // блоке «Реквизиты» инвойса: документу нечего
+                          // напечатать о продавце.
+                          style={{
+                            fontSize: 13,
+                            color: companyFilled(company) ? t.sub : t.warning,
+                            marginTop: 1,
+                          }}
                         >
                           {companyDetail(company)}
                         </Text>
                       </View>
+                      {/* НОМЕР СЛЕДУЮЩЕГО ИНВОЙСА НАБОРА — справа, как цена в
+                          прайсе услуг: нумерация живёт за реквизитами. У
+                          скрытого набора номера нет — им не выставляют. */}
+                      {company.archived_at ? null : <NextNumber companyId={company.id} />}
                     </Pressable>
                     {readOnly ? null : handle}
                   </View>
@@ -282,10 +328,6 @@ export function RequisitesScreen() {
               )}
             </ReorderList>
           </View>
-          {/* БЛАНК ИНВОЙСА — ЗДЕСЬ ЖЕ (владелец 2026-09-30): «Счета клиентам»
-              переехали в реквизиты. Номер — у каждого набора (его карточка),
-              ниже — общее для всех бланков. */}
-          {readOnly ? null : <InvoiceSettingsBlocks />}
         </ScrollView>
       )}
 
@@ -331,5 +373,27 @@ export function RequisitesScreen() {
         }
       />
     </Screen>
+  );
+}
+
+/** Номер, который получит следующий инвойс этих реквизитов. */
+function NextNumber({ companyId }: { companyId: string }) {
+  const t = useThemeColors();
+  const number = useNextInvoiceNumber(new Date().getFullYear(), companyId).data;
+  if (!number) return null;
+  return (
+    <Text
+      numberOfLines={1}
+      maxFontSizeMultiplier={1.3}
+      style={{
+        fontSize: 15,
+        fontWeight: "600",
+        color: t.body,
+        fontVariant: ["tabular-nums"],
+        paddingRight: 4,
+      }}
+    >
+      {number}
+    </Text>
   );
 }

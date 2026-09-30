@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Text, TextInput, View } from "react-native";
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { useToast } from "@/components/ui/Toast";
@@ -21,6 +20,10 @@ import { notify } from "@/lib/notify";
 // Поле «Продолжить с номера» снято: после первого инвойса набора сервер его
 // не читает (серия живёт на реквизитах), и правка ничего не меняла. Номер
 // «этот инвойс — 104» правится в карточке реквизитов.
+//
+// БЛОКИ — С ШАПКОЙ ВНУТРИ, как в карточке реквизитов (`CompanySheet`) и в
+// записи: подпись над карточкой была старым видом раздела и на соседних
+// страницах уже не встречается.
 //
 // ЭТО ТОЛЬКО ДЕФОЛТЫ. Выставленный счёт хранит свои строки, свой срок и свою
 // приписку: поменяли настройку — старые документы не переписываются.
@@ -76,9 +79,8 @@ export function InvoiceSettingsBlocks() {
 
   return (
     <>
-    <SectionEyebrow>Что подставлять в новый счёт</SectionEyebrow>
-    <SectionCard>
-      <View className="px-4 pb-1 pt-3.5">
+    <SectionCard title="Новый счёт">
+      <View className="px-4 pb-1 pt-2">
         <Text className="text-base" style={{ color: t.ink }}>
           Строки счёта по записи
         </Text>
@@ -150,8 +152,7 @@ export function InvoiceSettingsBlocks() {
       />
     </SectionCard>
 
-    <SectionEyebrow>Приписка внизу счёта</SectionEyebrow>
-    <SectionCard>
+    <SectionCard title="Приписка внизу">
       <TextInput
         value={footer}
         onChangeText={setFooter}
@@ -166,18 +167,16 @@ export function InvoiceSettingsBlocks() {
         placeholderTextColor={t.placeholder}
         keyboardAppearance="light"
         accessibilityLabel="Приписка внизу счёта"
-        className="px-4 py-3 text-[15px]"
+        className="px-4 pb-3 pt-1 text-[15px]"
         style={{ color: t.ink, minHeight: 88, textAlignVertical: "top" }}
       />
     </SectionCard>
     <Text className="mx-4 mt-1.5 text-xs" style={{ color: t.sub }}>
-      Подставляется в каждый новый счёт и правится прямо в нём. Уже
-      выставленные документы не меняются.
+      Правится и в самом счёте. Выставленные счета не меняются.
     </Text>
 
-    <SectionEyebrow>Номер документа</SectionEyebrow>
-    <SectionCard>
-      <View className="px-4 pb-3 pt-3.5">
+    <SectionCard title="Номер">
+      <View className="px-4 pb-3 pt-2">
         <Text className="text-xs" style={{ color: t.sub }}>
           Следующий номер основных реквизитов
         </Text>
@@ -225,12 +224,6 @@ export function InvoiceSettingsBlocks() {
         onChange={(on) => save({ invoice_number_yearly_reset: on })}
       />
     </SectionCard>
-    <Text className="mx-4 mt-1.5 text-xs" style={{ color: t.sub }}>
-      Закон требует одного: номер последовательный и однозначно определяет
-      документ. Пропуски допустимы — поэтому аннулированный счёт сохраняет
-      свой номер.
-    </Text>
-
     </>
   );
 }

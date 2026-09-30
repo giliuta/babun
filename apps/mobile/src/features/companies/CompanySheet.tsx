@@ -232,6 +232,8 @@ export function CompanySheet({
           называется в выборе; на бумагу идёт юридическое имя ниже. */}
         <View style={{ marginHorizontal: GUTTER }}>
           <NameColorField
+            // Шапка у поля, как у названия услуги: каждый блок листа назван.
+            label="Название"
             name={draft.name}
             onNameChange={(name) => set({ name })}
             color={draft.color}

@@ -56,6 +56,7 @@ const OWNER_ONLY_PATHS = [
   // кнопки, каждая из которых отказывает (аудит 2026-09-24).
   "/finances/categories",
   "/finances/requisites",
+  "/finances/invoice-blank",
 ];
 
 export default function FinancesLayout() {

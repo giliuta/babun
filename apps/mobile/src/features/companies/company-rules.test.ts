@@ -48,7 +48,7 @@ describe("companyDetail", () => {
       companyDetail({ ...row, business_address: "Charalampou Mouskou, 20\n8010, Paphos" }),
       "Charalampou Mouskou, 20",
     );
-    assert.equal(companyDetail(row), "Реквизиты не заполнены");
+    assert.equal(companyDetail(row), "Не заполнены");
   });
 
   test("a hidden set says so", () => {

@@ -19,7 +19,9 @@ export function companyDetail(company: Described): string {
       .filter(Boolean)
       .join(" · ") ||
     firstLine(company.business_address) ||
-    "Реквизиты не заполнены";
+    // Коротко: рядом стоит имя набора, а справа в списке — номер инвойса, и
+    // «Основные · Реквизиты не заполнены» обрезалось на полуслове.
+    "Не заполнены";
   const lead = company.is_default ? `Основные · ${paper}` : paper;
   return company.archived_at ? `${lead} · скрыты` : lead;
 }
