@@ -16,7 +16,6 @@ import {
 } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { haptics } from "@/lib/haptics";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -26,6 +25,7 @@ import { useDefaultCountry } from "@/features/clients/default-country";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import type { CardFieldPrefs } from "@/features/clients/card-prefs";
 import { clientBlockLevel } from "@/features/clients/client-block-access";
+import { visitMark } from "@/features/clients/visit-mark";
 
 // СТРОКА КЛИЕНТА — ОДНА НА ВСЕ СПИСКИ.
 //
@@ -84,59 +84,20 @@ export default function ClientRow({
   // доход, ожидается — со страницы клиентов»). Долг и доход — на странице
   // клиента; отбор «Должники» в фильтрах остаётся.
 
-  // Мета — ОДНА строка с эллипсисом: [🔔 напоминание] · [🕐 посл. визит] ·
-  // команда · город · теги (первые 2 + «+N»). Иконки-сигналы (напоминание,
-  // визит) идут ведущими и не сжимаются; хвост (команда/город/теги) —
-  // единый обрезаемый текст, чтобы ряд не пух в 3 строки и ничего не
-  // наезжало. Напоминание не гейтится тогглами: сигнал, поставленный
-  // руками, — красный, когда пора (сегодня/прошло), серый — когда впереди.
-  const metaLead: { key: string; node: React.ReactNode }[] = [];
-  // УЛИКА ВЫБРАННОГО СТАТУСА — первой: список, собранный фильтром, должен
-  // сам объяснять, за что сюда попал каждый человек (владелец 2026-08-07:
-  // «как убеждаться, что это правильные статусы»).
-  if (evidence) {
-    metaLead.push({
-      key: "evidence",
-      node: (
-        <Text
-          maxFontSizeMultiplier={1.3}
-          numberOfLines={1}
-          className="text-[11px] font-semibold"
-          // Полные чернила: доказательство статуса не может быть бледнее
-          // справочного хвоста меты (город, команда, теги) — иначе главное
-          // на строке тише второстепенного.
-          style={{ color: t.ink }}
-        >
-          {evidence}
-        </Text>
-      ),
-    });
-  }
-  // Прошедшие записи, которые никто не закрыл, — не визиты, но и не
-  // «нет записей»: человек у нас был (аудит 29.09). Тем же словом, что
-  // календарь, — «не закрыт».
-  const unclosed = stats?.unclosedVisits ?? 0;
-  const unclosedText =
-    unclosed > 0
-      ? `${unclosed} ${countWordRu(unclosed, "визит не закрыт", "визита не закрыты", "визитов не закрыто")}`
-      : null;
-  // «Историю записей» ему закрыли — строки о визитах нет вовсе: «нет
-  // записей» у клиента, который был вчера, — неправда (проверка глазами 30.09).
+  // УЛИКА ВЫБРАННОГО СТАТУСА — своей строкой под датой, только когда она
+  // есть: в архиве и корзине это срок («удалится через 27 дн.»).
+  // «Историю записей» ему закрыли — даты нет вовсе: «нет записей» у клиента,
+  // который был вчера, — неправда (проверка глазами 30.09).
   const showLast = cardFields.last && clientBlockLevel(client, "clients.history") !== "hidden";
-  // ЗАПИСИ КЛИЕНТА — ИНФОРМАЦИОННОЙ СТРОКОЙ НАД НОМЕРОМ (владелец 01.10:
-  // «дата над номером телефона, информационная»). До 01.10 дата стояла
-  // колонкой справа рядом с суммами; суммы ушли, и дата встала в одну строку
-  // со всем, что говорит о записях: последний визит — серым, первая запись
-  // впереди — акцентом, незакрытый визит — жёлтым, «нет записей» — бледным.
-  const visitLine: { text: string; color: string; icon: typeof Clock | null } | null = !showLast
-    ? null
-    : stats?.lastVisitDate
-      ? { text: formatShortDateRu(stats.lastVisitDate), color: t.sub, icon: Clock }
-      : stats?.nextApt
-        ? { text: formatShortDateRu(stats.nextApt.date), color: t.accent, icon: CalendarClock }
-        : unclosedText
-          ? { text: unclosedText, color: t.warning, icon: Clock }
-          : { text: "нет записей", color: t.faint, icon: null };
+  // ДАТА — ОДНА, РЯДОМ С НОМЕРОМ, И ЦВЕТОМ (владелец 01.10, вариант 3:
+  // «номер и запись одной строкой»): последний визит синим — деньги с него
+  // получены; не закрыт — жёлтым, как долг; визитов не было, но записан
+  // вперёд — серым; записей нет — ничего. Правило — `visit-mark.ts`.
+  const mark = showLast ? visitMark(stats) : null;
+  const markColor =
+    mark?.kind === "unclosed" ? t.warning : mark?.kind === "ahead" ? t.sub : t.accent;
+  const MarkIcon = mark?.kind === "ahead" ? CalendarClock : Clock;
+  const phoneShown = cardFields.phone && client.phone.trim() !== "";
 
   // VoiceOver: строка зачитывает реально показанные бизнес-сигналы в
   // порядке экрана, а не только имя+телефон.
@@ -144,15 +105,16 @@ export default function ClientRow({
     client.full_name || "Без имени",
     client.pinned_at ? "закреплён" : "",
     client.blacklisted ? "чёрный список" : "",
-    // Номер, потом записи — в порядке строки на экране.
+    // Номер, потом дата — в порядке строки на экране.
     client.phone ?? "",
-    showLast
-      ? stats?.lastVisitDate
-        ? `последний визит ${formatShortDateRu(stats.lastVisitDate)}`
-        : stats?.nextApt
-          ? `записан ${formatShortDateRu(stats.nextApt.date)}`
-          : (unclosedText ?? "нет записей")
-      : "",
+    !mark
+      ? ""
+      : mark.kind === "unclosed"
+        ? `визит ${formatShortDateRu(mark.date)} не закрыт`
+        : mark.kind === "ahead"
+          ? `записан ${formatShortDateRu(mark.date)}`
+          : `последний визит ${formatShortDateRu(mark.date)}`,
+    evidence ?? "",
   ]
     .filter(Boolean)
     .join(". ");
@@ -212,59 +174,53 @@ export default function ClientRow({
               {client.full_name || "Без имени"}
             </Text>
           </View>
-          {/* НОМЕР ПОД ИМЕНЕМ (владелец 2026-08-06: «хочу, чтоб сразу было
-              видно номер телефона»). Он же — то, по чему ищут: поиск и так
-              понимает цифры, но раньше найденный номер нигде не показывался,
-              и совпадение приходилось проверять, открывая карточку. */}
-          {cardFields.phone && client.phone.trim() ? (
-            <Text
-              maxFontSizeMultiplier={1.3}
-              numberOfLines={1}
-              className="mt-0.5 text-[13px]"
-              style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
-            >
-              {/* Тот же формат, что на карточке: в базе номера лежат как их
-                  когда-то ввели или как пришли из импорта, и рядом стояли
-                  «+357 97469998» и «+357 97 469998» — два вида одного номера
-                  читаются как два разных человека. */}
-              {formatPhoneForDisplay(client.phone, country)}
-            </Text>
-          ) : null}
-          {/* ПОСЛЕДНЯЯ ЗАПИСЬ — ПОД НОМЕРОМ, И ВСЁ (владелец 01.10: «компактно:
-              имя, ниже номер телефона, ниже последняя запись… команду, метку,
-              теги убрать»). Рядом, через точку, — только то, что человек
-              поставил сам или выбрал фильтром: напоминание и улика статуса. */}
-          {visitLine || metaLead.length > 0 ? (
+          {/* НОМЕР И ДАТА ОДНОЙ СТРОКОЙ ПОД ИМЕНЕМ (владелец 01.10, вариант 3).
+              Номер — то, по чему ищут (2026-08-06: «хочу, чтоб сразу было
+              видно номер телефона»), в том же виде, что на карточке: в базе
+              номера лежат как их когда-то ввели, и «+357 97469998» рядом с
+              «+357 97 469998» читались как два разных человека. */}
+          {phoneShown || mark ? (
             <View className="mt-0.5 flex-row items-center">
-              {visitLine ? (
-                <View className="flex-row items-center gap-1">
-                  {visitLine.icon ? (
-                    <visitLine.icon color={visitLine.color} size={12} strokeWidth={2} />
-                  ) : null}
+              {phoneShown ? (
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  numberOfLines={1}
+                  style={{ fontSize: 14, color: t.sub, fontVariant: ["tabular-nums"] }}
+                >
+                  {formatPhoneForDisplay(client.phone, country)}
+                </Text>
+              ) : null}
+              {phoneShown && mark ? (
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  style={{ marginHorizontal: 6, fontSize: 13, color: t.faint }}
+                >
+                  ·
+                </Text>
+              ) : null}
+              {mark ? (
+                <View className="shrink flex-row items-center gap-1">
+                  <MarkIcon color={markColor} size={12} strokeWidth={2} />
                   <Text
                     maxFontSizeMultiplier={1.3}
                     numberOfLines={1}
-                    style={{ fontSize: 12, color: visitLine.color, fontVariant: ["tabular-nums"] }}
+                    style={{ fontSize: 13, color: markColor, fontVariant: ["tabular-nums"] }}
                   >
-                    {visitLine.text}
+                    {formatShortDateRu(mark.date)}
                   </Text>
                 </View>
               ) : null}
-              {metaLead.map((seg, i) => (
-                <View key={seg.key} className="flex-row items-center">
-                  {i > 0 || visitLine ? (
-                    <Text
-                      maxFontSizeMultiplier={1.3}
-                      className="mx-[5px] text-[11px]"
-                      style={{ color: t.faint }}
-                    >
-                      ·
-                    </Text>
-                  ) : null}
-                  {seg.node}
-                </View>
-              ))}
             </View>
+          ) : null}
+          {evidence ? (
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              className="mt-0.5 text-[11px] font-semibold"
+              style={{ color: t.ink }}
+            >
+              {evidence}
+            </Text>
           ) : null}
         </View>
       </Pressable>

@@ -60,6 +60,10 @@ export interface ClientStats {
    *  Календарь это состояние знает и красит янтарём; список клиентов до
    *  сих пор не знал (аудит 2026-08-07). */
   unclosedVisits: number;
+  /** YYYY-MM-DD самого позднего ПРОШЕДШЕГО НЕЗАКРЫТОГО визита, или "".
+   *  Строка списка красит дату последнего визита жёлтым, если последним был
+   *  именно такой (владелец 01.10: «последний визит не закрыт — жёлтым»). */
+  lastUnclosedDate: string;
   /** Неполученные деньги: завершённые визиты с недоплатой ПЛЮС прошедшие
    *  записи, по которым команда не отчиталась, — для владельца это одно и
    *  то же «нам не заплатили». */
@@ -88,6 +92,7 @@ const EMPTY_STATS: ClientStats = {
   medianGapDays: null,
   serviceDue: 0,
   unclosedVisits: 0,
+  lastUnclosedDate: "",
   debt: 0,
   expectedRevenue: 0,
   lastTeamId: null,
@@ -197,6 +202,7 @@ export function buildStats(
   /** Последний завершённый визит НА КАЖДЫЙ объект — для срока обслуживания. */
   const lastByLocation = new Map<string, string>();
   let unclosedVisits = 0;
+  let lastUnclosedDate = "";
   const today = todayKey();
 
   for (const a of apts) {
@@ -255,7 +261,10 @@ export function buildStats(
       a.status === "scheduled" || a.status === "in_progress";
     // Прошедшая и незакрытая — не «следующая» и не визит. Считаем отдельно:
     // это работа, повисшая без денег.
-    if (upcoming && a.date && a.date < today) unclosedVisits += 1;
+    if (upcoming && a.date && a.date < today) {
+      unclosedVisits += 1;
+      if (a.date > lastUnclosedDate) lastUnclosedDate = a.date;
+    }
     if (upcoming && a.date >= today) {
       expectedRevenue += a.total_amount ?? 0;
       const cur = nextApt;
@@ -293,6 +302,7 @@ export function buildStats(
     medianGapDays,
     serviceDue,
     unclosedVisits,
+    lastUnclosedDate,
     ageDays: 0,
     birthdayInDays: null,
   });
