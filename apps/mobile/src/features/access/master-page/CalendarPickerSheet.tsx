@@ -36,7 +36,8 @@ export function CalendarPickerSheet({
       visible={visible}
       onClose={onClose}
       onExited={onExited}
-      title="Календари"
+      // «Команды» — тем же словом, что блок и «Добавить в команду» (01.10).
+      title="Команды"
       padded={false}
       scroll
       maxHeightRatio={SELECT_SHEET_RATIO}
@@ -63,7 +64,7 @@ export function CalendarPickerSheet({
             />
           ))
         ) : (
-          <EmptyState title="В компании пока нет календарей" />
+          <EmptyState title="В компании пока нет команд" />
         )}
       </SelectList>
     </BottomSheet>

@@ -83,7 +83,12 @@ const TEAM = "team-1";
 const TENANT = "tenant-1";
 
 function draftWith(key: string, level: string): MasterDraft {
-  const base = { ...emptyMasterDraft(TEAM), teamIds: [TEAM] };
+  // Записи команды скрыты, как в заготовке до 01.10: проверки ниже про свёртку
+  // под закрытым главным правом.
+  const starter = { ...emptyMasterDraft(TEAM), teamIds: [TEAM] };
+  const records = BLOCK["calendar.records"];
+  assert.ok(records, "в реестре нет «Записей клиентов»");
+  const base = withLevel(starter, records, "off", TEAM);
   const block = BLOCK[key];
   assert.ok(block, `в реестре нет блока ${key}`);
   const teamId = block.scope === "calendar" ? TEAM : null;

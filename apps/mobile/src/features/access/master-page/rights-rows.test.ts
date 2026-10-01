@@ -93,6 +93,7 @@ describe("страница прав — какие строки видны", () 
 
   test("«Календарь и записи» скрыт — зависимые строки свёрнуты только в этом календаре", () => {
     let draft = toggleTeam(emptyMasterDraft("team-1"), "team-2");
+    draft = withLevel(draft, block("calendar.records"), "off", "team-1");
     draft = withLevel(draft, block("calendar.records"), "read", "team-2");
     // Оплата стоит под ценами (30.09): чтобы её строка была видна, цены
     // открыты.
@@ -115,6 +116,7 @@ describe("страница прав — какие строки видны", () 
 
   test("«Календарь и записи» скрыт — деньги этого календаря тоже свёрнуты, VAT компании нет", () => {
     let draft = toggleTeam(emptyMasterDraft("team-1"), "team-2");
+    draft = withLevel(draft, block("calendar.records"), "off", "team-1");
     draft = withLevel(draft, block("calendar.records"), "read", "team-2");
     const levelOf = (b: AccessBlock, teamId: string | null) => draftLevel(b, draft, teamId);
     assert.deepEqual(keysOf(rightsSections(REGISTRY, levelOf, "team-1"), "finance"), ["finance.vat"]);

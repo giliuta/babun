@@ -33,9 +33,9 @@ import {
   toggleTeam,
   type MasterDraft,
 } from "./master-draft";
-import { draftTeamBrief } from "../rights-ui/team-sentence";
 import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, companyAreasOf } from "./rights-rows";
+import { useDraftTeamAccess } from "./draft-team-access";
 
 // КАРТОЧКА МАСТЕРА — ОДНА НА ТРИ СЛУЧАЯ (владелец 15.09: «„Добавить мастера"
 // должен сразу открывать полную страницу мастера, как добавление клиента»).
@@ -143,10 +143,15 @@ function MasterDraftCard({
     router.push(
       `/cabinet/people/new/rights?area=${area}&team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "company" })}` as Href,
     );
-  const openCalendarRights = (id: string) =>
-    router.push(
-      `/cabinet/people/new/rights?team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
-    );
+  // Лента команд и «Доступ» — как у сотрудника (01.10).
+  const access = useDraftTeamAccess({
+    blocks,
+    draft,
+    teams,
+    initialTeam: teamId,
+    rightsHref: `/cabinet/people/new/rights?team=${encodeURIComponent(teamId ?? "")}`,
+    onAdd: () => setCalendarsOpen(true),
+  });
 
   // СЕРАЯ КНОПКА НЕ МОЛЧИТ И НЕ ОБЪЯСНЯЕТ СЛОВАМИ: тап отзывается вибрацией и
   // ведёт к первому, чего не хватает, — в порядке полей на странице.
@@ -240,14 +245,11 @@ function MasterDraftCard({
         liveAreas={blocks ? companyAreasOf(blocks) : []}
         areaLevels={blocks ? areaLevelsOf(blocks, draft) : null}
         onOpenArea={openArea}
-        // Команды нового сотрудника выбираются здесь (29.09: сотрудники живут
-        // в Кабинете, команды из адреса больше нет): «Добавить в команду» и
-        // свайп «Убрать», как у сотрудника.
-        showCalendars={!!blocks}
+        // Команды — лентой, права выбранной — «Доступом» разделами, как у
+        // сотрудника (01.10). «Добавить» справа от ленты — шторка команд.
         onOpenCalendars={() => setCalendarsOpen(true)}
-        onDetachCalendar={(id) => updateMasterDraft((currentDraft) => toggleTeam(currentDraft, id, true))}
-        teamLine={blocks ? (id) => draftTeamBrief(blocks, draft, id) : undefined}
-        onOpenCalendarRights={openCalendarRights}
+        teamChips={blocks ? access.teamChips : undefined}
+        teamRights={access.teamRights}
         footer={
           // Серая кнопка — чего-то не хватает или реестр прав не пришёл — сама
           // тапов не ловит: их ловит обёртка, чтобы отозваться и повести к
@@ -268,7 +270,11 @@ function MasterDraftCard({
         visible={calendarsOpen}
         teams={teams}
         selected={draft.teamIds}
-        onToggle={(id) => updateMasterDraft((currentDraft) => toggleTeam(currentDraft, id, true))}
+        onToggle={(id) => {
+          // Добавленная команда сразу выбрана в ленте: её права — здесь же.
+          if (!draft.teamIds.includes(id)) access.select(id);
+          updateMasterDraft((currentDraft) => toggleTeam(currentDraft, id, true));
+        }}
         onClose={() => setCalendarsOpen(false)}
       />
     </>

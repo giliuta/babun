@@ -131,6 +131,14 @@ export function teamSentence(read: LevelRead): string {
   const f = teamFacts(read);
   const out: string[] = [];
 
+  // «Записи клиентов: Скрыты» — записей команды у него нет вовсе (01.10:
+  // строка говорила «только смотрит записи» при закрытых записях).
+  if (read("calendar.records") === "off") {
+    out.push("Записей команды не видит.");
+    out.push(f.money.length > 0 ? `${cap(joinRu(f.money))}.` : "Деньги закрыты.");
+    return out.join(" ");
+  }
+
   // Записи: видит всегда (он прикреплён к команде); без чего — и что делает.
   if (f.allHidden) {
     out.push("Видит у записей команды только время и статус.");
@@ -163,7 +171,8 @@ export function teamSentence(read: LevelRead): string {
 export function teamBrief(read: LevelRead): string {
   const f = teamFacts(read);
   const parts: string[] = [];
-  if (f.acts.length > 0) parts.push(f.acts.join(", "));
+  if (read("calendar.records") === "off") parts.push("записей не видит");
+  else if (f.acts.length > 0) parts.push(f.acts.join(", "));
   else parts.push(f.edits ? "записи не создаёт и не переносит" : "только смотрит записи");
   if (f.clients === "off") parts.push("клиентов не видит");
   else if (f.clients !== undefined) {

@@ -157,9 +157,11 @@ describe("черновик нового мастера", () => {
     draft = toggleTeam(draft, "team-2");
     assert.deepEqual(draft.teamIds, ["team-1", "team-2"]);
     assert.equal(draftLevel(records, draft, "team-2"), "off");
+    // «Записи клиентов» уходят и на «Скрыты» (01.10): приём засевает им
+    // «Видит», и молчание превратилось бы в «Видит».
     assert.deepEqual(
       draftAccessChanges(REGISTRY, draft).filter((change) => change.team_id === "team-2"),
-      [],
+      [{ block: "calendar.records", team_id: "team-2", level: "off" }],
     );
   });
 
@@ -220,7 +222,10 @@ describe("черновик нового мастера", () => {
         { block: "clients.contacts", team_id: null, level: "read" },
       ],
     });
-    assert.deepEqual(draftAccessChanges(REGISTRY, draft), []);
+    // Свёрнутое не уходит; уходит только явное «Записи клиентов: Скрыты».
+    assert.deepEqual(draftAccessChanges(REGISTRY, draft), [
+      { block: "calendar.records", team_id: "team-1", level: "off" },
+    ]);
     assert.equal(areaWord(REGISTRY, draft, "calendar"), "Не видит");
     assert.equal(areaWord(REGISTRY, draft, "clients"), "Не видит");
     const parentLevel = (key: string) => draftLevel(byKey(key), draft, "team-1");
@@ -463,6 +468,8 @@ describe("стартовые права нового календаря (вла�
     // В тестовом реестре живы «Статус» и «Метка дня»: остальные заготовки
     // сервер бы отверг, и в изменения они не идут.
     assert.deepEqual(starterCalendarChanges(REGISTRY, "B"), [
+      // Записи команды — «Видит», как засевает сервер (01.10).
+      { block: "calendar.records", team_id: "B", level: "read" },
       { block: "record.status", team_id: "B", level: "read" },
       { block: "calendar.day_labels", team_id: "B", level: "read" },
     ]);

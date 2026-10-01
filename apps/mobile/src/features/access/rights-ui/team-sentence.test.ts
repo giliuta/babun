@@ -106,6 +106,13 @@ describe("итог прав команды", () => {
     assert.doesNotMatch(teamBrief(reader(CLOSED)), / ·/, "перед точкой — только неразрывный пробел");
   });
 
+  test("«Записи клиентов: Скрыты» — итог так и говорит (01.10)", () => {
+    const hidden = { ...CLOSED, "calendar.records": "off" as AccessLevel };
+    assert.match(teamBrief(reader(hidden)), /^Записей не видит/);
+    assert.equal(teamSentence(reader(hidden)), "Записей команды не видит. Деньги закрыты.");
+    assert.match(teamBrief(reader({ ...CLOSED, "calendar.records": "read" })), /^Только смотрит записи/);
+  });
+
   describe("доходы и расходы — два права (этап 2)", () => {
     // Реестр после наката: общего `finance.operations` нет, есть две стороны.
     const SPLIT: Record<string, AccessLevel | undefined> = {

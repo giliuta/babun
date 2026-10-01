@@ -46,6 +46,10 @@ export type RightsArea = Exclude<AccessArea, "owner">;
  *  календаря, а не умолчание реестра: у живого сотрудника страница читает
  *  то, что лежит на сервере, и не может показать «Видит» там, где «Не видит». */
 export const STARTER_CALENDAR_LEVELS: Readonly<Record<string, AccessLevel>> = {
+  // Записи команды видит — так их засевает и сервер при приёме приглашения
+  // (`seed_records_level`); без этой строки черновик показывал «Скрыты», а
+  // человек приходил с «Видит» (01.10).
+  "calendar.records": "read",
   "record.status": "read",
   "record.object": "read",
   "record.services": "read",
@@ -631,7 +635,9 @@ export function draftAccessChanges(
     const targets = block.scope === "calendar" ? teamIds : [null];
     for (const teamId of targets) {
       const level = shown(block, teamId);
-      if (level === defaultLevel(block)) continue;
+      // «Записи клиентов» уходят всегда: приём засевает им «Видит», и
+      // «Скрыты» без явной строки молча превратилось бы в «Видит» (01.10).
+      if (level === defaultLevel(block) && block.key !== RECORDS_KEY) continue;
       out.push({ block: block.key, team_id: teamId, level });
     }
   }

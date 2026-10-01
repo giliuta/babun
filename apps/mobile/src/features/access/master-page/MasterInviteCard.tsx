@@ -28,6 +28,7 @@ import { invitationRefusalText, isInvitationGone } from "./invitation-contract";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import {
   applyPickedCalendars,
+  blankMasterDraft,
   draftFromInvitation,
   invitationCarriesCardFields,
   invitationRequest,
@@ -36,8 +37,8 @@ import {
   withLiveTeams,
   type MasterDraft,
 } from "./master-draft";
-import { draftTeamBrief } from "../rights-ui/team-sentence";
 import { rightsFocusQuery } from "./rights-focus";
+import { useDraftTeamAccess } from "./draft-team-access";
 import { areaLevelsOf, companyAreasOf } from "./rights-rows";
 import { waitSubtitle } from "../invitation-wait";
 
@@ -105,6 +106,18 @@ export function MasterInviteCard({
         : null,
     [row, teams],
   );
+  // Лента команд и «Доступ» — как у сотрудника (01.10). Хук — до раннего
+  // выхода: пока приглашение едет, читает пустую заготовку.
+  const access = useDraftTeamAccess({
+    blocks,
+    draft: draft ?? blankMasterDraft(null),
+    teams: teams ?? [],
+    initialTeam: null,
+    rightsHref: `/cabinet/people/${invitationSegment(invitationId)}/rights`,
+    onAdd: () => {
+      if (draft) setSheetTeamIds(draft.teamIds);
+    },
+  });
 
   const back = () => {
     Keyboard.dismiss();
@@ -260,15 +273,10 @@ export function MasterInviteCard({
         // такого раздела нет вовсе.
         liveAreas={companyAreasOf(blocks)}
         areaLevels={areaLevelsOf(blocks, draft)}
-        // Как у сотрудника (STORY-087): календари строками со своими правами,
-        // клиенты — «Правами в компании» со сводкой словами.
-        showCalendars
-        teamLine={(id) => draftTeamBrief(blocks, draft, id)}
-        onOpenCalendarRights={(id) =>
-          router.push(
-            `/cabinet/people/${invitationSegment(row.id)}/rights?${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
-          )
-        }
+        // Как у сотрудника (01.10): команды лентой, права выбранной —
+        // «Доступом» разделами.
+        teamChips={access.teamChips}
+        teamRights={access.teamRights}
         onOpenArea={(area) =>
           router.push(
             `/cabinet/people/${invitationSegment(row.id)}/rights?area=${area}&${rightsFocusQuery({ kind: "company" })}` as Href,
@@ -282,11 +290,12 @@ export function MasterInviteCard({
         selected={sheetTeamIds ?? draft.teamIds}
         // `toggleTeam` — только ради порядка и снятия id; остальное черновика
         // здесь не копится.
-        onToggle={(id) =>
+        onToggle={(id) => {
+          if (!(sheetTeamIds ?? draft.teamIds).includes(id)) access.select(id);
           setSheetTeamIds(
             (current) => toggleTeam({ ...draft, teamIds: current ?? draft.teamIds }, id).teamIds,
-          )
-        }
+          );
+        }}
         onClose={closeCalendars}
       />
     </>
