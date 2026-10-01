@@ -3,7 +3,6 @@ import { describe, test } from "node:test";
 import {
   BLOCK_TEXT,
   BLOCK_TEXT_MIN,
-  blockOverdueEdge,
   blockPressed,
   blockSolid,
   contrastRatio,
@@ -63,16 +62,6 @@ describe("плотный блок записи", () => {
       assert.ok(
         contrastRatio(BLOCK_TEXT, pressed) > contrastRatio(BLOCK_TEXT, idle),
         value,
-      );
-    }
-  });
-
-  test("ободок просрочки виден на своей заливке", () => {
-    for (const { value } of PRESET_COLORS) {
-      const edge = blockOverdueEdge(value);
-      assert.ok(
-        contrastRatio(edge, blockSolid(value)) >= 1.8,
-        `${value}: ${contrastRatio(edge, blockSolid(value)).toFixed(2)}`,
       );
     }
   });

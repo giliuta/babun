@@ -3,7 +3,6 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { useThemeColors } from "@/theme/colors";
 import {
   blockContour,
-  blockOverdueEdge,
   blockPressed,
   blockSolid,
   CANCELLED_EDGE,
@@ -94,8 +93,6 @@ export type BlockColors = {
   pressed: string;
   /** Контур блока: тот же тон на 0.2 темнее по светлоте. */
   contour: string;
-  /** Кант просрочки на плотном блоке: тот же тон почти чёрным. */
-  overdueEdge: string;
 };
 
 const cache = new Map<string, BlockColors>();
@@ -115,7 +112,6 @@ export function blockColorsFor(hue: string): BlockColors {
     solid: blockSolid(hue),
     pressed: blockPressed(hue),
     contour: blockContour(hue),
-    overdueEdge: blockOverdueEdge(hue),
   };
   cache.set(hue, out);
   return out;
@@ -146,16 +142,15 @@ export function useBlockColors(
 
 /** Кант блока по статусу. Отдельной функцией, потому что кант — единственный
  *  канал КАТЕГОРИИ, и право забрать его есть ровно у одного состояния: у
- *  отменённой, которой никуда не ехать. */
-export function blockEdge(
-  colors: BlockColors,
-  status: Appointment["status"],
-  overdue = false,
-): string {
+ *  отменённой, которой никуда не ехать.
+ *
+ *  Почти чёрного канта просрочки больше нет (владелец 2026-10-01: «чёрная
+ *  окантовка не должна быть, это некрасиво»): незакрытая запись говорит
+ *  жирным временем, а кант у неё — контур своего тона, как у всех. */
+export function blockEdge(colors: BlockColors, status: Appointment["status"]): string {
   if (status === "cancelled") return CANCELLED_EDGE;
-  // Кант плотного блока — контур его же тона, темнее заливки; просрочка —
-  // почти чёрным тоном и на точку толще (толщина — в DayView).
-  return overdue ? colors.overdueEdge : colors.contour;
+  // Кант плотного блока — контур его же тона, темнее заливки.
+  return colors.contour;
 }
 
 /** Заливка блока поверх названной подложки — для измерений и тестов. */

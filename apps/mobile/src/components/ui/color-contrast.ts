@@ -295,14 +295,6 @@ export function blockContour(hue: string): string {
   return oklchToHex([Math.max(0.2, lch[0] - 0.2), lch[1], lch[2]]);
 }
 
-/** Кант просрочки: тот же тон, почти чёрный. На плотной заливке цветной кант
- *  невидим, а тёмный ободок того же тона читается и сохраняет «чей» блок. */
-export function blockOverdueEdge(hue: string): string {
-  const lch = hexToOklch(blockSolid(hue));
-  if (!lch) return CANCELLED_EDGE;
-  return oklchToHex([0.2, Math.min(lch[1], 0.1), lch[2]]);
-}
-
 /** `rgba()`-строка для анимации заливки: восьмизначный hex Reanimated
  *  разбирает не везде, а `interpolateColor` по rgba работает всегда. */
 export function fillRgba(hue: string, alpha: number): string {
