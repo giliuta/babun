@@ -1090,10 +1090,10 @@ export function OperationSheet({
           <ReferenceBlock
             dense
             // Расход — «Кому» ушли деньги; доход — «Сотрудник», кто их принёс.
-            title={isExpense ? "Кому" : "Сотрудник"}
+            title={isExpense ? "Кому" : "Партнёр"}
             emptyIcon={User}
-            emptyLabel="Выбрать сотрудника"
-            emptyHint="Открывает список сотрудников"
+            emptyLabel="Выбрать партнёра"
+            emptyHint="Открывает список партнёров"
             value={
               payee
                 ? { name: payee.full_name, color: payee.color ?? null, Icon: User }
@@ -1411,15 +1411,15 @@ export function OperationSheet({
       />
       <PickerSheet
         visible={payeePickerOpen}
-        title={isExpense ? "Кому" : "Сотрудник"}
+        title={isExpense ? "Кому" : "Партнёр"}
         // ПУСТОЙ СПИСОК — СЛОВАМИ (канон пустых состояний): у компании без
         // сотрудников лист иначе был бы одной шапкой без ответа, что делать.
         subtitle={
           payees.length > 0
             ? undefined
             : isOwner && teamId
-              ? "Сотрудников нет — добавьте в «Мастерах»"
-              : "Сотрудников нет"
+              ? "Партнёров нет — пригласите в «Кабинет → Партнёры»"
+              : "Партнёров нет"
         }
         items={payees.map((m) => ({
           id: m.id,
@@ -1443,7 +1443,7 @@ export function OperationSheet({
                 )
             : undefined
         }
-        settingsLabel="Сотрудники"
+        settingsLabel="Партнёры"
         onClose={() => setPayeePickerOpen(false)}
       />
     </BottomSheet>

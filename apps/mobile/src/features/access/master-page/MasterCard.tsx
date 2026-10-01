@@ -209,7 +209,7 @@ function MasterDraftCard({
     <>
       <Stack.Screen options={{ gestureEnabled: !dirty && !create.isPending }} />
       <MasterCardView
-        title={masterId ? "Пригласить в CRM" : "Новый сотрудник"}
+        title={masterId ? "Пригласить в CRM" : "Новый партнёр"}
         subtitle={masterId ? draft.name.trim() || undefined : undefined}
         onBack={leave}
         identity={draft}

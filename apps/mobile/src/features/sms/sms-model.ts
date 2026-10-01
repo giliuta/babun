@@ -258,7 +258,7 @@ export function smsErrorText(error: unknown): string {
   if (message.includes("sms:sender_format")) return "Имя отправителя: латиница, цифры, до 11 знаков";
   if (message.includes("sms:sender_taken")) return "Это имя занято — выберите другое";
   if (message.includes("sms:country")) return "На номера этой страны SMS не отправляются";
-  if (message.includes("sms:limit")) return "На сегодня предел SMS сотрудника исчерпан";
+  if (message.includes("sms:limit")) return "На сегодня предел SMS партнёра исчерпан";
   if (message.includes("sms:sender")) return "У команды не указано имя отправителя";
   if (message.includes("sms:calendar")) return "SMS в этом календаре выключены";
   if (message.includes("sms:disabled")) return "Отправка через сервис выключена";

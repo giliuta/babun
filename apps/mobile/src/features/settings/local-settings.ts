@@ -144,7 +144,7 @@ export function useCalendarSettings() {
       const activeTenantId = tenantId as string;
       try {
         if (role !== "master" && role !== "owner" && role !== "dispatcher") {
-          throw new Error("Роль сотрудника ещё не подтверждена.");
+          throw new Error("Роль в компании ещё не подтверждена.");
         }
         const settings = await fetchCalendarSettings(
           supabase,
@@ -607,7 +607,7 @@ export function useSavePersonalEventTypes() {
       // Сотрудник — по праву «Записи» своей команды (30.09): чужую команду
       // отобьёт политика `personal_event_types_write_access`.
       if (role !== "owner" && role !== "dispatcher" && role !== "master") {
-        throw new Error("Роль сотрудника не позволяет менять типы событий.");
+        throw new Error("Ваша роль не позволяет менять типы событий.");
       }
       // Заготовок с общими id больше нет (24.09) — перекладывать нечего.
       const list = types;

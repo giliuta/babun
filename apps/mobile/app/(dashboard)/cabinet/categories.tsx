@@ -582,7 +582,7 @@ export default function CategoriesScreen() {
           {attachable ? (
             <SectionCard title="В операции спрашивать" dense>
               <SwitchRow
-                label="Сотрудника"
+                label="Партнёра"
                 hint="Кому выплата или кто принёс: зарплата, аванс, подотчёт"
                 value={asks.employee}
                 onChange={(v) => setAsks((a) => ({ ...a, employee: v }))}

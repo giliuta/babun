@@ -95,7 +95,7 @@ export function useCreateInvitation() {
       // В календарь мастера зовут по почте и без карточки («Мастера → Добавить
       // мастера», STORY-081); карточку требует только приглашение без календаря.
       if (role === "master" && !masterId && !teamId) {
-        throw new Error("Для мастера выберите карточку сотрудника.");
+        throw new Error("Для мастера выберите карточку партнёра.");
       }
       const name = fullName?.trim();
       const { data, error } = await supabase.rpc("create_invitation", {
@@ -134,7 +134,7 @@ export function useRemoveTenantMember() {
         .select("user_id")
         .maybeSingle();
       if (error) throw new Error(error.message);
-      if (!data) throw new Error("Сотрудник не найден или доступ запрещён");
+      if (!data) throw new Error("Партнёр не найден или доступ запрещён");
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["tenant-members"] }),
     meta: { errorHandled: true },

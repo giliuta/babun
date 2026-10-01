@@ -1741,7 +1741,7 @@ export default function BookScreen() {
         ] as const)
       : ([
           { label: "команды", query: teamsQuery },
-          { label: "сотрудников", query: mastersQuery },
+          { label: "партнёров", query: mastersQuery },
           { label: "услуги", query: servicesQuery },
           { label: "клиентов", query: clientsQuery },
           { label: "календарь", query: appointmentsQuery },

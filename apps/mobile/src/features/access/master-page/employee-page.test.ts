@@ -78,7 +78,7 @@ describe("одна дверь на человека", () => {
   test("у каждой команды своя строка прав, а в «Компании» — только компания", () => {
     const view = read("MasterCardView.tsx");
     assert.match(view, /<EmployeeIdentityBlock \{\.\.\.p\} \/>/);
-    assert.match(read("EmployeeIdentityBlock.tsx"), /<SectionCard title="Сотрудник"/);
+    assert.match(read("EmployeeIdentityBlock.tsx"), /<SectionCard title="Партнёр"/);
     assert.match(view, /<EmployeeTeamsBlock/);
     assert.match(read("EmployeeTeamsBlock.tsx"), /<CalendarRightsRow/);
     assert.match(view, /area !== "calendar" && area !== "finance"/);

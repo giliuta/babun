@@ -61,7 +61,7 @@ const TEAM_CHECKLIST: readonly { emoji: string; title: string; body: string }[] 
   {
     emoji: "👥",
     title: "Соберите команду",
-    body: "Календарь → шестерёнка → «Мастера» — пригласите сотрудников по почте их аккаунтов.",
+    body: "Кабинет → «Партнёры» — пригласите партнёров по почте их аккаунтов в Babun.",
   },
   {
     emoji: "🧰",

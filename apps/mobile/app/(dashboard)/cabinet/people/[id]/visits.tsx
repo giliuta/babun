@@ -82,7 +82,7 @@ export default function MasterWorkScreen() {
     return (
       <Screen edges={["top"]}>
         <ScreenHeader title="Записи" />
-        <EmptyState fill title="Сотрудник не найден" />
+        <EmptyState fill title="Партнёр не найден" />
       </Screen>
     );
   }

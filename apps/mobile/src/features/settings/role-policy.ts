@@ -30,7 +30,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
-  owner: "Полный доступ к компании, сотрудникам и финансам.",
+  owner: "Полный доступ к компании, партнёрам и финансам.",
   dispatcher: "Клиенты, записи и рабочая коммуникация без финансов и опасных настроек.",
   master: "Рабочий график и разрешённые действия внутри назначенных заявок.",
 };

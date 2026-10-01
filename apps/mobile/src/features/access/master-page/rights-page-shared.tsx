@@ -46,7 +46,7 @@ export function usePreview() {
   }) => {
     if (!tenantId || !input.blocks) return;
     const state = {
-      name: input.name.trim() || "сотрудник",
+      name: input.name.trim() || "партнёр",
       userId: input.userId ?? null,
       // Вся цепочка «Кабинета» — чтобы «назад» после выхода шёл как раньше;
       // не прочиталась — хотя бы эта страница.

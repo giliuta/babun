@@ -82,7 +82,7 @@ const isArea = (value: unknown): value is AccessArea =>
   typeof value === "string" && (AREAS as readonly string[]).includes(value);
 
 const BAD_BLOCKS = "Сервер вернул некорректный список прав";
-const BAD_MAP = "Сервер вернул некорректные права сотрудника";
+const BAD_MAP = "Сервер вернул некорректные права партнёра";
 
 /** Строки `access_blocks` → блоки по порядку `position`. Блок с незнакомой
  *  областью или положением — ошибка сервера, а не «пропустить молча»: иначе

@@ -171,7 +171,7 @@ export default function MastersScreen() {
     <Screen edges={["top"]}>
       {/* Шестерёнки с шаблонами доступа больше нет (владелец 30.09: «по
           сути вот эти шаблоны» не нужны). */}
-      <ScreenHeader title="Сотрудники" />
+      <ScreenHeader title="Партнёры" />
 
       {isLoading || teamsQuery.isLoading || membersQuery.isLoading || invitationsQuery.isLoading ? (
         <EmptyState state="loading" fill />
@@ -277,7 +277,7 @@ export default function MastersScreen() {
             membersFailed ? null : (
               <EmptyState
                 fill
-                title={search.trim() ? "Ничего не найдено" : "Сотрудников пока нет"}
+                title={search.trim() ? "Ничего не найдено" : "Партнёров пока нет"}
                 subtitle={search.trim() ? "Измените имя, телефон или email в поиске." : undefined}
               />
             )
@@ -300,7 +300,7 @@ export default function MastersScreen() {
       {isOwner ? (
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
           <GradientButton
-            label="Пригласить сотрудника"
+            label="Пригласить партнёра"
             onPress={() => {
               openMasterDraft(null);
               router.push("/cabinet/people/new" as Href);

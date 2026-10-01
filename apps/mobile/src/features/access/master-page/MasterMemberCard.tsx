@@ -144,7 +144,7 @@ export function MasterMemberCard({
         : null;
     return (
       <Screen edges={["top"]}>
-        <ScreenHeader title={name || "Сотрудник"} onBack={back} />
+        <ScreenHeader title={name || "Партнёр"} onBack={back} />
         {refusal ? (
           <EmptyState
             state="error"
@@ -379,11 +379,11 @@ export function MasterMemberCard({
   return (
     <>
       <MasterCardView
-        title={name || member?.email || "Сотрудник"}
+        title={name || member?.email || "Партнёр"}
         onBack={back}
         headerRight={
         member && isStaff ? (
-          <HeaderMenuButton label="Действия с сотрудником" onPress={() => void openMenu()} />
+          <HeaderMenuButton label="Действия с партнёром" onPress={() => void openMenu()} />
         ) : undefined
         }
         identity={identity}

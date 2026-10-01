@@ -110,7 +110,7 @@ describe("ответ базы", () => {
     assert.equal(smsErrorText(new Error("sms:sender_format")), "Имя отправителя: латиница, цифры, до 11 знаков");
     assert.equal(smsErrorText(new Error("sms:sender_taken")), "Это имя занято — выберите другое");
     assert.equal(smsErrorText(new Error("sms:country")), "На номера этой страны SMS не отправляются");
-    assert.equal(smsErrorText(new Error("sms:limit")), "На сегодня предел SMS сотрудника исчерпан");
+    assert.equal(smsErrorText(new Error("sms:limit")), "На сегодня предел SMS партнёра исчерпан");
   });
 
   test("предупреждение о балансе — ниже €5 и только когда SMS настроены", () => {

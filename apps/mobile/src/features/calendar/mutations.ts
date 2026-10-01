@@ -124,7 +124,7 @@ export function useCreateAppointment() {
         return { ...stamped, status: "scheduled" } as Appointment;
       }
       if (role !== "owner" && role !== "dispatcher") {
-        throw new Error("Роль сотрудника ещё не подтверждена.");
+        throw new Error("Роль в компании ещё не подтверждена.");
       }
       await preflightQuotaForCreate(
         supabase,
@@ -233,7 +233,7 @@ function useUpdateAppointmentOptions() {
         return data;
       }
       if (role !== "owner" && role !== "dispatcher") {
-        throw new Error("Роль сотрудника ещё не подтверждена.");
+        throw new Error("Роль в компании ещё не подтверждена.");
       }
       return updateAppointment(supabase, id, patch, tenantId as string);
     },
@@ -427,7 +427,7 @@ export function useDeleteAppointment() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (role !== "owner" && role !== "dispatcher" && role !== "master") {
-        throw new Error("Роль сотрудника ещё не подтверждена.");
+        throw new Error("Роль в компании ещё не подтверждена.");
       }
       // ФАЙЛЫ ЗАПИСИ: строки appointment_photos уходят каскадом вместе с
       // записью, а блобы в хранилище — нет (2026-09-07: в бакете лежали

@@ -82,7 +82,7 @@ export default function CabinetHome() {
                   <SettingsRow
                     tile={SETTINGS_TILE.indigo}
                     icon={Users}
-                    title="Сотрудники"
+                    title="Партнёры"
                     sub="Права по командам"
                     onPress={() => router.push("/cabinet/people" as Href)}
                   />

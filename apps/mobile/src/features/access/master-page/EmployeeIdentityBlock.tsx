@@ -79,7 +79,7 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
 
   return (
     <>
-      <SectionCard title="Сотрудник" padded={false}>
+      <SectionCard title="Партнёр" padded={false}>
         {p.editable ? (
           <NameColorField
             bare

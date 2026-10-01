@@ -219,7 +219,7 @@ export async function fetchMasters(
     const rows = (data ?? []).map(operationalMasterJsonToMaster);
     return includeInactive ? rows : rows.filter((row) => row.is_active);
   }
-  if (role !== "owner") throw new Error("Нет доступа к сотрудникам");
+  if (role !== "owner") throw new Error("Нет доступа к партнёрам");
   let q = client.from("masters").select("*").eq("tenant_id", tenantId);
   if (!includeInactive) q = q.eq("is_active", true);
   const { data, error } = await q.order("position");
@@ -278,7 +278,7 @@ export function useCreateMaster() {
       account_status?: string;
     }) => {
       if (role !== "owner") {
-        throw new Error("Добавлять сотрудников может только владелец.");
+        throw new Error("Приглашать партнёров может только владелец.");
       }
       const { data, error } = await supabase
         .from("masters")
@@ -828,7 +828,7 @@ export function useRemoveMasterFromTeams() {
         if (error) throw new Error(error.message);
         if (!data) {
           throw new Error(
-            `Команда «${team.name}» уже изменилась. Повторите удаление сотрудника.`,
+            `Команда «${team.name}» уже изменилась. Повторите удаление партнёра.`,
           );
         }
       }

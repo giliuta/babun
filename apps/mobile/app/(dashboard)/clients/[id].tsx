@@ -407,7 +407,7 @@ export function ClientDetailScreen() {
         <ClientDataNotice
           fullScreen
           title="Доступ не подтверждён"
-          message="Не удалось проверить роль сотрудника. Повторите попытку."
+          message="Не удалось проверить вашу роль в компании. Повторите попытку."
           onRetry={() => void roleQuery.refetch()}
           retrying={roleQuery.isRefetching}
         />

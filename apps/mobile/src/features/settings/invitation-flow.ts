@@ -44,7 +44,7 @@ export function invitationErrorMessage(message: string): string {
     return "Выберите календарь, в который зовёте мастера.";
   }
   if (/finish company setup|company setup is incomplete/i.test(message)) {
-    return "Сначала завершите настройку компании, затем пригласите сотрудника.";
+    return "Сначала завершите настройку компании, затем пригласите партнёра.";
   }
   // Принять приглашение можно только с подтверждённой почтой (миграция
   // 20260924120000): иначе его забрал бы любой, кто занял адрес сотрудника.
@@ -75,7 +75,7 @@ export function invitationErrorMessage(message: string): string {
   // Должность и цвет приглашения по существующей карточке сервер не хранит:
   // они правятся в самой карточке (`invite:card_fields_on_card`).
   if (/belong to the linked employee card/i.test(message)) {
-    return "Должность и цвет меняются в карточке сотрудника.";
+    return "Должность и цвет меняются в карточке партнёра.";
   }
   // Отказы общей проверки прав (`access_validate_changes`) приходят русской
   // строкой базы. Архив там не проверяется — его раньше отказывает
@@ -113,7 +113,7 @@ export function invitationErrorMessage(message: string): string {
     return "Это приглашение уже использовано.";
   }
   if (/employee card (is unavailable|already linked)/i.test(message)) {
-    return "Карточка сотрудника уже привязана к другому аккаунту. Попросите владельца выбрать другую.";
+    return "Карточка партнёра уже привязана к другому аккаунту. Попросите владельца выбрать другую.";
   }
   if (/not found|invalid token|Некорректная ссылка/i.test(message)) {
     return "Приглашение не найдено или ссылка повреждена.";
