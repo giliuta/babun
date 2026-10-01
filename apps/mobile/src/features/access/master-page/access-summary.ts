@@ -6,7 +6,9 @@
 
 export type CalendarGroup = "calendar" | "record" | "finance" | "clients";
 
-export const CALENDAR_GROUPS: readonly CalendarGroup[] = ["calendar", "record", "finance", "clients"];
+// Порядок разделов — слово владельца 01.10: «Календарь, Клиенты, Финансы,
+// Компания».
+export const CALENDAR_GROUPS: readonly CalendarGroup[] = ["calendar", "record", "clients", "finance"];
 
 /** Блок в разделе: «clients» — сам блок `clients` и его `clients.*`.
  *  Блоки события (`event.*`) — вместе с блоками записи; на странице прав оба

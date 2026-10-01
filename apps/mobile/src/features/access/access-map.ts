@@ -193,8 +193,12 @@ export function sectionsFor(blocks: readonly AccessBlock[]): AccessSection[] {
     }
     section.blocks.push(block);
   }
-  return sections;
+  // Порядок разделов — слово владельца 01.10: «Календарь, Клиенты, Финансы,
+  // Компания»; реестр сервера ставит финансы раньше клиентов.
+  return sections.sort((a, b) => SECTION_ORDER.indexOf(a.area) - SECTION_ORDER.indexOf(b.area));
 }
+
+const SECTION_ORDER: readonly AccessArea[] = ["calendar", "clients", "finance", "company", "owner"];
 
 export interface AccessChange {
   block: string;

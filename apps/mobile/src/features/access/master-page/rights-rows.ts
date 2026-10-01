@@ -31,7 +31,8 @@ import {
 } from "./master-draft";
 
 /** Разделы прав на карточке и на странице — в порядке реестра. */
-export const RIGHTS_AREAS: readonly RightsArea[] = ["calendar", "finance", "clients", "company"];
+/** Порядок разделов — слово владельца 01.10: «Календарь, Клиенты, Финансы, Компания». */
+export const RIGHTS_AREAS: readonly RightsArea[] = ["calendar", "clients", "finance", "company"];
 
 /** `?area=` из адреса — только знакомый раздел, иначе страница открывается
  *  сверху. */

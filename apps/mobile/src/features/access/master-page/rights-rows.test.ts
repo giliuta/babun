@@ -156,7 +156,7 @@ describe("страница прав — какие строки видны", () 
     const sections = rightsSections(REGISTRY, () => "write", "team-1");
     assert.deepEqual(
       sections.map((section) => section.area),
-      ["calendar", "finance", "clients", "company"],
+      ["calendar", "clients", "finance", "company"],
     );
     assert.equal(
       sections.some((section) => section.rows.some((row) => row.block.ownerOnly)),

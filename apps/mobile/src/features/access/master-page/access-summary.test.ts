@@ -8,7 +8,7 @@ describe("разделы прав команды", () => {
     assert.equal(inGroup("clients", "clients"), true);
     assert.equal(inGroup("clients.scope", "clients"), true);
     assert.equal(inGroup("calendar.create", "record"), false);
-    assert.deepEqual(CALENDAR_GROUPS, ["calendar", "record", "finance", "clients"]);
+    assert.deepEqual(CALENDAR_GROUPS, ["calendar", "record", "clients", "finance"], "порядок владельца 01.10");
   });
 
   test("права записи — в порядке страницы записи", () => {
