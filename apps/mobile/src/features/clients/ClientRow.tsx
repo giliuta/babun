@@ -14,13 +14,13 @@ import {
   Clock,
   Pin,
 } from "lucide-react-native";
-import type { Client, ClientTag } from "@babun/shared/local/clients";
+import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { haptics } from "@/lib/haptics";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { formatShortDateRu, reminderBadge } from "@/features/clients/format";
+import { formatShortDateRu } from "@/features/clients/format";
 import { formatPhoneForDisplay } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
@@ -38,8 +38,6 @@ import { clientBlockLevel } from "@/features/clients/client-block-access";
 export default function ClientRow({
   client,
   stats,
-  teamName,
-  tags,
   cardFields,
   evidence,
   selectionMode,
@@ -51,17 +49,14 @@ export default function ClientRow({
   onArchive,
   onSwipeOpen,
   trailing,
-  link,
 }: {
   client: Client;
   stats: ClientStats | undefined;
-  teamName: string | null;
-  tags: ClientTag[];
   cardFields: CardFieldPrefs;
   /** Почему этот человек попал в выбранный статус («не был 87 дн.»).
    *  Печатается первым в мете — доказательство должно попадаться на глаза
    *  раньше справочных полей. */
-  evidence: string | null;
+  evidence?: string | null;
   selectionMode: boolean;
   picked: boolean;
   onPress: () => void;
@@ -79,16 +74,6 @@ export default function ClientRow({
   onSwipeOpen?: (row: SwipeableMethods | null) => void;
   /** Хвост строки ВМЕСТО кнопки связи: «через 27 дней» в корзине. */
   trailing?: React.ReactNode;
-  /** Чей это человек — «жена · Павел Иванов» (STORY-086). Второй строкой,
-   *  сразу под именем: звонит Екатерина — по строке видно, чья она.
-   *
-   *  Строка приходит ГОТОВОЙ, из общего построителя `linkLine`
-   *  (`selectors/client-links.ts`) — того же, что печатает `MemberOfLine` на
-   *  карточке и `linkFor` в шторке выбора. Считать её здесь нельзя: строке
-   *  видно одного клиента, а связь названа именем ДРУГОЙ карточки, и список
-   *  разрешает их один раз на все строки. Связей бывает несколько — что
-   *  показать одной строкой, решает тот же построитель (первую и « +N»). */
-  link?: string;
 }) {
   const t = useThemeColors();
   const country = useDefaultCountry();
@@ -105,7 +90,6 @@ export default function ClientRow({
   // единый обрезаемый текст, чтобы ряд не пух в 3 строки и ничего не
   // наезжало. Напоминание не гейтится тогглами: сигнал, поставленный
   // руками, — красный, когда пора (сегодня/прошло), серый — когда впереди.
-  const reminder = reminderBadge(client.reminder_at);
   const metaLead: { key: string; node: React.ReactNode }[] = [];
   // УЛИКА ВЫБРАННОГО СТАТУСА — первой: список, собранный фильтром, должен
   // сам объяснять, за что сюда попал каждый человек (владелец 2026-08-07:
@@ -125,27 +109,6 @@ export default function ClientRow({
         >
           {evidence}
         </Text>
-      ),
-    });
-  }
-  if (reminder) {
-    metaLead.push({
-      key: "reminder",
-      node: (
-        <View className="flex-row items-center gap-1">
-          <Bell
-            color={reminder.due ? t.danger : t.sub}
-            size={12}
-            strokeWidth={2}
-          />
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className={`text-[11px] ${reminder.due ? "font-semibold" : ""}`}
-            style={{ color: reminder.due ? t.danger : t.ink }}
-          >
-            {reminder.label}
-          </Text>
-        </View>
       ),
     });
   }
@@ -174,34 +137,15 @@ export default function ClientRow({
         : unclosedText
           ? { text: unclosedText, color: t.warning, icon: Clock }
           : { text: "нет записей", color: t.faint, icon: null };
-  const tagNames = cardFields.meta
-    ? (client.tag_ids
-        .map((tid) => tags.find((x) => x.id === tid)?.name)
-        .filter(Boolean) as string[])
-    : [];
-  let metaTail = "";
-  if (cardFields.meta) {
-    const parts: string[] = [];
-    if (teamName) parts.push(teamName);
-    const city = (client.city ?? "").trim();
-    if (city) parts.push(city);
-    parts.push(...tagNames.slice(0, 2));
-    if (tagNames.length > 2) parts.push(`+${tagNames.length - 2}`);
-    metaTail = parts.join(" · ");
-  }
 
   // VoiceOver: строка зачитывает реально показанные бизнес-сигналы в
   // порядке экрана, а не только имя+телефон.
   const a11yLabel = [
     client.full_name || "Без имени",
-    // Связь зачитывается сразу за именем — там же, где она и нарисована.
-    // Без неё VoiceOver называл Екатерину просто «Екатерина», а глазами в
-    // этот момент видно «жена · Павел Иванов»: строка и её озвучка говорили
-    // разное.
-    link ?? "",
     client.pinned_at ? "закреплён" : "",
     client.blacklisted ? "чёрный список" : "",
-    reminder ? `напоминание ${reminder.label}` : "",
+    // Номер, потом записи — в порядке строки на экране.
+    client.phone ?? "",
     showLast
       ? stats?.lastVisitDate
         ? `последний визит ${formatShortDateRu(stats.lastVisitDate)}`
@@ -209,8 +153,6 @@ export default function ClientRow({
           ? `записан ${formatShortDateRu(stats.nextApt.date)}`
           : (unclosedText ?? "нет записей")
       : "",
-    metaTail,
-    client.phone ?? "",
   ]
     .filter(Boolean)
     .join(". ");
@@ -270,30 +212,6 @@ export default function ClientRow({
               {client.full_name || "Без имени"}
             </Text>
           </View>
-          {link ? (
-            <Text
-              maxFontSizeMultiplier={1.3}
-              numberOfLines={1}
-              className="mt-0.5 text-[13px]"
-              style={{ color: t.sub }}
-            >
-              {link}
-            </Text>
-          ) : null}
-          {visitLine ? (
-            <View className="mt-0.5 flex-row items-center gap-1">
-              {visitLine.icon ? (
-                <visitLine.icon color={visitLine.color} size={12} strokeWidth={2} />
-              ) : null}
-              <Text
-                maxFontSizeMultiplier={1.3}
-                numberOfLines={1}
-                style={{ fontSize: 12, color: visitLine.color, fontVariant: ["tabular-nums"] }}
-              >
-                {visitLine.text}
-              </Text>
-            </View>
-          ) : null}
           {/* НОМЕР ПОД ИМЕНЕМ (владелец 2026-08-06: «хочу, чтоб сразу было
               видно номер телефона»). Он же — то, по чему ищут: поиск и так
               понимает цифры, но раньше найденный номер нигде не показывался,
@@ -312,11 +230,29 @@ export default function ClientRow({
               {formatPhoneForDisplay(client.phone, country)}
             </Text>
           ) : null}
-          {metaLead.length > 0 || metaTail ? (
+          {/* ПОСЛЕДНЯЯ ЗАПИСЬ — ПОД НОМЕРОМ, И ВСЁ (владелец 01.10: «компактно:
+              имя, ниже номер телефона, ниже последняя запись… команду, метку,
+              теги убрать»). Рядом, через точку, — только то, что человек
+              поставил сам или выбрал фильтром: напоминание и улика статуса. */}
+          {visitLine || metaLead.length > 0 ? (
             <View className="mt-0.5 flex-row items-center">
+              {visitLine ? (
+                <View className="flex-row items-center gap-1">
+                  {visitLine.icon ? (
+                    <visitLine.icon color={visitLine.color} size={12} strokeWidth={2} />
+                  ) : null}
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    numberOfLines={1}
+                    style={{ fontSize: 12, color: visitLine.color, fontVariant: ["tabular-nums"] }}
+                  >
+                    {visitLine.text}
+                  </Text>
+                </View>
+              ) : null}
               {metaLead.map((seg, i) => (
                 <View key={seg.key} className="flex-row items-center">
-                  {i > 0 ? (
+                  {i > 0 || visitLine ? (
                     <Text
                       maxFontSizeMultiplier={1.3}
                       className="mx-[5px] text-[11px]"
@@ -328,27 +264,6 @@ export default function ClientRow({
                   {seg.node}
                 </View>
               ))}
-              {metaTail ? (
-                <View className="flex-1 flex-row items-center">
-                  {metaLead.length > 0 ? (
-                    <Text
-                      maxFontSizeMultiplier={1.3}
-                      className="mx-[5px] text-[11px]"
-                      style={{ color: t.faint }}
-                    >
-                      ·
-                    </Text>
-                  ) : null}
-                  <Text
-                    maxFontSizeMultiplier={1.3}
-                    numberOfLines={1}
-                    className="flex-1 text-[11px]"
-                    style={{ color: t.ink }}
-                  >
-                    {metaTail}
-                  </Text>
-                </View>
-              ) : null}
             </View>
           ) : null}
         </View>

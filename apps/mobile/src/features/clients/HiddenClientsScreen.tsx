@@ -18,7 +18,6 @@ import { notify } from "@/lib/notify";
 import type { LucideIcon } from "lucide-react-native";
 import { useCardFieldsByTeam } from "@/features/clients/card-prefs";
 import { clientsOfTeam } from "@/features/clients/team-scope";
-import { useClientTags } from "@/features/clients/queries";
 import { useAppointments } from "@/features/calendar/queries";
 import { useTeams } from "@/features/reference/queries";
 import { usePullRefresh } from "@/lib/pull-refresh";
@@ -80,7 +79,6 @@ export function HiddenClientsScreen({
     [query.data, team, appointments],
   );
   const { data: teams = [] } = useTeams();
-  const { data: tags = [] } = useClientTags();
   // Набор полей — команды клиента (у каждой команды свой, 30.09).
   const teamIds = useMemo(() => teams.map((tm) => tm.id), [teams]);
   const cardFieldsFor = useCardFieldsByTeam(teamIds);
@@ -159,17 +157,11 @@ export function HiddenClientsScreen({
             )}
             renderItem={({ item }) => {
               const stats = statsMap.get(item.id);
-              const rowTeamId = item.team_id ?? stats?.lastTeamId ?? null;
-              const teamName = rowTeamId
-                ? (teams.find((tm) => tm.id === rowTeamId)?.name ?? null)
-                : null;
               return (
                 <View style={{ opacity: busyId === item.id ? 0.5 : 1 }}>
                   <ClientRow
                     client={item}
                     stats={stats}
-                    teamName={teamName}
-                    tags={tags}
                     cardFields={cardFieldsFor(item.team_id)}
                     // Место улики статуса занимает срок: на этих полках
                     // главный вопрос — «когда убрали» и «сколько осталось».

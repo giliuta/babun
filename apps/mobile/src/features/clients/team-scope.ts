@@ -71,19 +71,6 @@ export function clientsOfTeam<T extends Pick<Client, "id" | "team_id">>(
   return clients.filter((c) => c.team_id === choice || served.has(c.id));
 }
 
-/** Какую команду подписать в строке клиента. Без чипа — его свою. Под чипом
- *  — только если своя у него ДРУГАЯ: «клиент Команды 1, которого обслуживала
- *  Команда 3» должен читаться, а подпись выбранной команды у всех подряд —
- *  шум. */
-export function rowTeamLabelId(
-  client: Pick<Client, "team_id">,
-  choice: ClientsTeamChoice,
-  fallbackTeamId: string | null = null,
-): string | null {
-  if (choice === ALL_TEAMS) return client.team_id ?? fallbackTeamId;
-  return client.team_id && client.team_id !== choice ? client.team_id : null;
-}
-
 /** Команда нового клиента: выбранная в ленте, иначе первая команда.
  *  Прямая офлайн-запись умолчания сервера не знает, поэтому пусто уходит
  *  только у компании без команд. */

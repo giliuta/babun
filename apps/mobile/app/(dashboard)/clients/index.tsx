@@ -19,11 +19,6 @@ import type { Client } from "@babun/shared/local/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { withServiceDefault } from "@/features/clients/service-default";
 import { useServiceMonthsOf } from "@/features/clients/use-service-default";
-import {
-  clientMemberOf,
-  clientsById,
-  linkLine,
-} from "@babun/shared/local/selectors/client-links";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ScopeChips } from "@/components/ui/ScopeChips";
@@ -45,7 +40,6 @@ import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import ClientRow from "@/features/clients/ClientRow";
 import {
   EMPTY_FILTER,
-  segmentEvidence,
   type ClientsFilter,
 } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
@@ -54,7 +48,6 @@ import {
   appointmentsOfTeam,
   clientsOfTeam,
   liveTeamChoice,
-  rowTeamLabelId,
   teamForNewClient,
   toggleTeamChoice,
 } from "@/features/clients/team-scope";
@@ -207,9 +200,6 @@ function ClientsListScreen() {
     () => uniqueById([...(data ?? []), ...guests.list.flatMap((guest) => guest.clients)]),
     [data, guests.list],
   );
-  // Карта карточек для строки связи «жилец · Наталья · Вилла 5» — одна на
-  // список, а не по строке: строк сотни, и каждая спрашивает её заново.
-  const byId = useMemo(() => clientsById(clients), [clients]);
   const guestOf = useMemo(() => {
     const byClient = new Map<string, ClientsScope>();
     for (const guest of guests.list) {
@@ -789,10 +779,6 @@ function ClientsListScreen() {
           }}
           renderItem={({ item }) => {
             const stats = statsMap.get(item.id);
-            const rowTeamId = rowTeamLabelId(item, teamChoice, stats?.lastTeamId ?? null);
-            const teamName = rowTeamId
-              ? (teams.find((tm) => tm.id === rowTeamId)?.name ?? null)
-              : null;
             // ГОСТЬ — клиент компании, где человек работает. Его карточка
             // открывается в ЕГО компании, а жесты своей базы (записать,
             // напомнить, архив) и массовый выбор к нему не относятся: это
@@ -802,9 +788,6 @@ function ClientsListScreen() {
               <ClientRow
                 client={item}
                 stats={stats}
-                teamName={teamName}
-                tags={tags}
-                link={linkLine(clientMemberOf(item, byId))?.text}
                 cardFields={cardFieldsFor(item.team_id)}
                 selectionMode={selecting && !guest}
                 picked={selectedIds.has(item.id)}
@@ -819,7 +802,6 @@ function ClientsListScreen() {
                         ? router.push(clientCardHref(item.id, guest.tenantId))
                         : router.push(`/clients/${item.id}`)
                 }
-                evidence={segmentEvidence(item, filter.segments, stats)}
                 onSwipeOpen={(row) => {
                   if (openSwipe.current && openSwipe.current !== row) {
                     openSwipe.current.close();

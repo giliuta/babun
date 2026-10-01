@@ -71,7 +71,6 @@ const PAGE_BLOCKS: PageBlock[] = [
 const ROW_FIELDS: { field: CardField; label: string; icon: LucideIcon }[] = [
   { field: "phone", label: "Телефон", icon: Phone },
   { field: "last", label: "Последняя запись", icon: Clock },
-  { field: "meta", label: "Команда, метка, теги", icon: Tags },
 ];
 
 // Экран вкладки «Клиенты»: компанию называет источник, а не роль

@@ -86,14 +86,16 @@ describe("зеркало: строка клиента глазами сотру�
   test("«Открывает карточку: не может» — блоков страницы нет, строка списка остаётся", () => {
     const row = mirrorMemberClient(
       client,
-      map({ A: { clients: "write", "clients.note": "write", "clients.labels": "read" } }),
+      map({ A: { clients: "write", "clients.note": "write", "clients.labels": "read", "clients.history": "read" } }),
     );
     assert.equal(row.blocks?.["clients.open"], "off");
     assert.equal(row.blocks?.["clients.note"], "off");
     assert.equal(row.comment, "");
-    // Метка и теги стоят и в строке списка — их держит своё право.
-    assert.equal(row.blocks?.["clients.labels"], "read");
-    assert.equal(row.city, "Лимассол");
+    // Метки и тегов в строке списка нет с 01.10 — они блок страницы.
+    assert.equal(row.blocks?.["clients.labels"], "off");
+    assert.equal(row.city, "");
+    // Последняя запись стоит в строке — её держит своё право.
+    assert.equal(row.blocks?.["clients.history"], "read");
   });
 });
 

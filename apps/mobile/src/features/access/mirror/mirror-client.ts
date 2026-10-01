@@ -38,6 +38,7 @@ const PAGE_ONLY_KEYS: ReadonlySet<string> = new Set([
   "clients.files",
   "clients.requisites",
   "clients.money",
+  "clients.labels",
 ]);
 
 const RANK: Partial<Record<AccessLevel, number>> = { off: 0, read: 1, write: 2 };

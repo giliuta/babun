@@ -5,7 +5,6 @@ import {
   ALL_TEAMS,
   appointmentsOfTeam,
   clientsOfTeam,
-  rowTeamLabelId,
   liveTeamChoice,
   teamForNewClient,
   toggleTeamChoice,
@@ -41,13 +40,6 @@ describe("лента команд во вкладке «Клиенты»", () =>
     const apts = [{ team_id: "team-1" }, { team_id: "team-3" }, { team_id: null }];
     assert.equal(appointmentsOfTeam(apts, "team-3").length, 1);
     assert.equal(appointmentsOfTeam(apts, ALL_TEAMS).length, 3);
-  });
-
-  test("подпись команды в строке: без чипа — своя, под чипом — только чужая", () => {
-    assert.equal(rowTeamLabelId({ team_id: "team-1" }, ALL_TEAMS), "team-1");
-    assert.equal(rowTeamLabelId({ team_id: null }, ALL_TEAMS, "team-3"), "team-3");
-    assert.equal(rowTeamLabelId({ team_id: "team-1" }, "team-1"), null);
-    assert.equal(rowTeamLabelId({ team_id: "team-1" }, "team-3"), "team-1");
   });
 
   test("сохранённая, но исчезнувшая команда возвращает ленту на «Все»", () => {
