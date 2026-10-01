@@ -72,7 +72,7 @@ function ClientVisitsScreen() {
   const access = useCardAccess(client, false);
   const showMoney = access.money.show;
   const unpaidOnly = unpaid === "1" && showMoney;
-  const { data: appointments = [], isLoading } = useClientAppointments(
+  const { data: appointments = [], isLoading, historyOnly } = useClientAppointments(
     clientId ?? "",
   );
   // Прошлые визиты — чтение: имя убранной услуги обязано пережить её.
@@ -285,7 +285,7 @@ function ClientVisitsScreen() {
                   })}
                   valueColor={m?.color}
                   separated={i > 0}
-                  onPress={() => open(a)}
+                  onPress={historyOnly.has(a.id) ? undefined : () => open(a)}
                 />
               );
             })}
@@ -325,7 +325,7 @@ function ClientVisitsScreen() {
                   }
                   dimmed={e.cancelled}
                   separated={i > 0}
-                  onPress={appt ? () => open(appt) : undefined}
+                  onPress={appt && !historyOnly.has(appt.id) ? () => open(appt) : undefined}
                 />
               );
             })}

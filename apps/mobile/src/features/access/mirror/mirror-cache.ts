@@ -16,6 +16,8 @@ export function isMirrorClientKey(key: readonly unknown[]): boolean {
   const head = key[0];
   // Набор клиентов зеркала (`use-mirror-client-scope.ts`) живёт только в режиме.
   if (head === "mirror-client-scope") return true;
+  // История записей, прочитанная в режиме токеном владельца (`use-member-history.ts`).
+  if (head === "member-client-history") return key[3] === "mirror";
   // ["clients", tenantId, view] и ["client-tags", tenantId, view]
   if (head === "clients" || head === "client-tags") return isMemberView(key[2]);
   // ["client", id, tenantId, view]

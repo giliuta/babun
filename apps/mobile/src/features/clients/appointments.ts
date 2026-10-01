@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Appointment } from "@babun/shared/local/appointments";
 import {
@@ -15,6 +15,9 @@ import { useDataRole } from "@/features/settings/tenant";
 import { useTenantId } from "@/lib/tenant";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useClientsScopeOrNull } from "./company-scope";
+import { withClientHistory } from "./member-history";
+import { useMemberClientHistory } from "./use-member-history";
+import { useClient } from "./queries";
 
 // Appointments for a single client — TanStack Query on top of the shared
 // Supabase repository (port-as-is). The repo has no per-client list helper,
@@ -47,7 +50,13 @@ export function useClientAppointments(clientId: string) {
     (all: Appointment[]) => all.filter((a) => a.client_id === clientId),
     [clientId],
   );
-  return useQuery({
+  // «ИСТОРИЯ ЗАПИСЕЙ» (01.10): у сотрудника календарь открывает клиента записи
+  // только около записи, а прошлые визиты клиента приходят дверью сервера
+  // по праву «История записей» (`member-history.ts`). Строка клиента — для
+  // маски в «его глазами».
+  const client = useClient(clientId).data;
+  const history = useMemberClientHistory(scope, client ? [client] : undefined);
+  const query = useQuery({
     queryKey: appointmentsQueryKey(tenantId, role),
     enabled: !!tenantId && !!clientId && ready && role != null,
     queryFn: () => {
@@ -65,4 +74,16 @@ export function useClientAppointments(clientId: string) {
     },
     select,
   });
+  const own = useMemo(() => history.filter((row) => row.client_id === clientId), [history, clientId]);
+  const data = useMemo(
+    () => (query.data || own.length > 0 ? withClientHistory(query.data ?? [], own) : undefined),
+    [query.data, own],
+  );
+  // Визиты, которых нет в его календаре: страница записи их не откроет —
+  // строка истории для них без двери.
+  const historyOnly = useMemo(() => {
+    const inCalendar = new Set((query.data ?? []).map((row) => row.id));
+    return new Set(own.filter((row) => !inCalendar.has(row.id)).map((row) => row.id));
+  }, [query.data, own]);
+  return { ...query, data, historyOnly };
 }

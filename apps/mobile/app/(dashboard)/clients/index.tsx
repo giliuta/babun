@@ -66,6 +66,8 @@ import {
 } from "@/features/clients/company-scope";
 import { useClientsSources } from "@/features/clients/sources";
 import { useGuestSources } from "@/features/clients/guest-sources";
+import { withClientHistory } from "@/features/clients/member-history";
+import { useMemberClientHistory } from "@/features/clients/use-member-history";
 import {
   clientCardHref,
   clientsInsightsHref,
@@ -218,9 +220,16 @@ function ClientsListScreen() {
     }
     return byClient;
   }, [guests.list]);
+  // У сотрудника визиты клиентов — ещё и «Историей записей» (01.10):
+  // календарь открывает клиента записи только около записи.
+  const ownHistory = useMemberClientHistory(scope, data);
   const appointments = useMemo(
-    () => uniqueById([...ownAppointments, ...guests.list.flatMap((guest) => guest.appointments)]),
-    [ownAppointments, guests.list],
+    () =>
+      uniqueById([
+        ...withClientHistory(ownAppointments, ownHistory),
+        ...guests.list.flatMap((guest) => guest.appointments),
+      ]),
+    [ownAppointments, ownHistory, guests.list],
   );
   // Склейка справочников идёт ПО ИДЕНТИФИКАТОРУ: одна и та же компания может
   // прийти и своим хуком, и гостевым источником (её календарь открыт), а два
