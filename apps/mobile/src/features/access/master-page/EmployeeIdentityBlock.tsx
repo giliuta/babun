@@ -12,7 +12,7 @@ import { useThemeColors } from "@/theme/colors";
 
 import type { MasterCardViewProps } from "./MasterCardView";
 
-// БЛОК «СОТРУДНИК» (владелец 29.09 выбрал вариант 3 из трёх — после того как
+// БЛОК «ПАРТНЁР» (владелец 29.09 выбрал вариант 3 из трёх — после того как
 // посмотрел вариант 2 вживую: «немного не нравится»). Как блок «Клиент»:
 // имя с плиткой вида · номер со «Связаться» · почта · контакты и «Добавить
 // контакт». Должности нет (владелец 29.09: «какой в ней смысл» — она нигде
@@ -53,6 +53,7 @@ type IdentityProps = Pick<
   | "cardFieldsEditable"
   | "emailEditable"
   | "hideEmail"
+  | "emailOnly"
   | "autoFocusName"
   | "emailState"
   | "refs"
@@ -76,6 +77,34 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
   const check = <Check color={t.success} size={18} strokeWidth={2.5} />;
   const danger = p.emailState === "invalid" ? t.danger : undefined;
   const access = p.access ? ACCESS_TILE[p.access.state] : null;
+
+  // Новый партнёр и ждущее приглашение — только почта (01.10): имя и
+  // телефон он ведёт сам в своём профиле.
+  if (p.emailOnly) {
+    return (
+      <SectionCard title="Партнёр" padded={false}>
+        <FieldRow
+          stacked
+          hideLabel
+          big
+          label="Почта"
+          placeholder="Почта"
+          value={p.identity.email}
+          live={p.emailEditable}
+          readOnly={!p.emailEditable}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoFocus={p.emailEditable && p.autoFocusName}
+          inputRef={p.refs?.email}
+          inputColor={danger}
+          valueColor={danger}
+          trailing={p.emailState === "valid" ? check : null}
+          onEditEnd={p.onEmailEditEnd}
+          onSave={p.onEmailChange ?? noop}
+        />
+      </SectionCard>
+    );
+  }
 
   return (
     <>

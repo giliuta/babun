@@ -249,6 +249,9 @@ export function MasterInviteCard({
         editable
         cardFieldsEditable={cardFields}
         emailEditable={false}
+        // Партнёр — по почте (01.10): имя и телефон придут из его профиля.
+        // Приглашение по старой карточке без аккаунта показывает её имя.
+        emailOnly={!row.master_id}
         emailState="plain"
         onNameChange={setNameText}
         onNameCommit={commitName}

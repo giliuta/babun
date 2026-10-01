@@ -108,6 +108,11 @@ export interface MasterCardViewProps {
   emailEditable: boolean;
   /** Строки почты нет — у мастера без аккаунта её нет вовсе. */
   hideEmail?: boolean;
+  /** ПАРТНЁР ПРИГЛАШАЕТСЯ ПО ПОЧТЕ — И ТОЛЬКО (владелец 01.10: «да, давай
+   *  так и сделаем — по почте»). Имя и телефон — его, из профиля в Babun:
+   *  сервер берёт их при приёме (`attach_invited_master_card`). В блоке
+   *  «Партнёр» — одна строка почты. */
+  emailOnly?: boolean;
   autoFocusName?: boolean;
   emailState: EmailState;
   refs?: { name: InputRef; email: InputRef; phone: InputRef };

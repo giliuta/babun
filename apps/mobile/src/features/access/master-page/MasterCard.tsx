@@ -171,7 +171,7 @@ function MasterDraftCard({
       setCalendarsOpen(true);
       return;
     }
-    const target = first === "name" ? nameRef : first === "email" ? emailRef : phoneRef;
+    const target = first === "email" ? emailRef : phoneRef;
     target.current?.focus();
   };
 
@@ -217,7 +217,9 @@ function MasterDraftCard({
         editable
         cardFieldsEditable={!masterId}
         emailEditable
-        // По карточке имя уже есть — курсор сразу в почту.
+        // Новый партнёр — только почта (01.10); по старой карточке без
+        // аккаунта имя уже есть, блок прежний.
+        emailOnly={!masterId}
         autoFocusName={!masterId}
         emailState={emailState}
         refs={{ name: nameRef, email: emailRef, phone: phoneRef }}

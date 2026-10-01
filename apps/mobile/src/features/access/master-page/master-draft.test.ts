@@ -253,13 +253,9 @@ describe("черновик нового мастера", () => {
     assert.deepEqual(dependantResets(REGISTRY, byKey("services"), "off", null), []);
   });
 
-  test("до «Пригласить» нужны имя, почта и календарь; телефон — только если набран", () => {
-    assert.deepEqual(inviteBlockers(blankMasterDraft(null), checks), [
-      "name",
-      "email",
-      "calendar",
-    ]);
-    const filled = { ...blankMasterDraft("team-1"), name: "Dmitry", email: "d@airfix.cy" };
+  test("до «Пригласить» нужны почта и команда; имени не нужно (партнёр, 01.10)", () => {
+    assert.deepEqual(inviteBlockers(blankMasterDraft(null), checks), ["email", "calendar"]);
+    const filled = { ...blankMasterDraft("team-1"), email: "d@airfix.cy" };
     assert.deepEqual(inviteBlockers(filled, checks), []);
     assert.deepEqual(inviteBlockers({ ...filled, phone: "12" }, checks), ["phone"]);
   });

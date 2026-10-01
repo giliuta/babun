@@ -431,7 +431,7 @@ export function invitationCarriesCardFields(row: Readonly<Record<string, unknown
   return row.role === "master" && (row.master_id === null || row.master_id === undefined);
 }
 
-export type InviteBlocker = "name" | "email" | "phone" | "calendar";
+export type InviteBlocker = "email" | "phone" | "calendar";
 
 /** Чего не хватает до «Пригласить» — в порядке полей на странице: серая
  *  кнопка по тапу ведёт к первому. Набранный в телефон мусор — повод
@@ -444,7 +444,8 @@ export function inviteBlockers(
   },
 ): InviteBlocker[] {
   const out: InviteBlocker[] = [];
-  if (!draft.name.trim()) out.push("name");
+  // Имя не нужно (01.10): партнёр — со своим аккаунтом, имя и телефон
+  // приходят из его профиля при приёме.
   if (!checks.isEmail(draft.email)) out.push("email");
   if (draft.phone.trim() && !checks.isPhone(draft.phone)) out.push("phone");
   if (draft.teamIds.length === 0) out.push("calendar");
