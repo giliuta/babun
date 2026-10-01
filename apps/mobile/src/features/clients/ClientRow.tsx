@@ -15,12 +15,10 @@ import {
 } from "lucide-react-native";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import { formatEUR } from "@babun/shared/common/utils/money";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { haptics } from "@/lib/haptics";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { clientDebt } from "@/features/clients/filter";
 import { formatShortDateRu, reminderBadge } from "@/features/clients/format";
 import { formatPhoneForDisplay } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
@@ -94,27 +92,11 @@ export default function ClientRow({
   const t = useThemeColors();
   const country = useDefaultCountry();
   const swipeRef = useRef<SwipeableMethods | null>(null);
-  const exp = Math.round(stats?.expectedRevenue ?? 0);
-  const income = Math.round(stats?.totalSpent ?? 0);
-  // Одна формула долга на карточку, сортировку и статус «Должники».
-  const debt = clientDebt(client, stats);
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
 
-  // Порядок долг → доход → ожидается: должник — самый срочный сигнал,
-  // читается первым. С 1.10 — БЕЗ СЛОВА «долг» (владелец: «жёлтым просто
-  // показывается как долг, мы ж не пишем на зелёном „доход“»): суммы стоят
-  // своей колонкой справа и различаются цветом; озвучка слово сохраняет.
-  const figs: { key: string; text: string; color: string }[] = [];
-  if (cardFields.debt && debt > 0)
-    figs.push({
-      key: "debt",
-      text: formatEUR(debt),
-      color: t.warning,
-    });
-  if (cardFields.inc && income > 0)
-    figs.push({ key: "inc", text: formatEUR(income), color: t.success });
-  if (cardFields.exp && exp > 0)
-    figs.push({ key: "exp", text: formatEUR(exp), color: t.sub });
+  // ДЕНЕГ В СТРОКЕ НЕТ (владелец 01.10: «уберём полностью этот блок — долг,
+  // доход, ожидается — со страницы клиентов»). Долг и доход — на странице
+  // клиента; отбор «Должники» в фильтрах остаётся.
 
   // Мета — ОДНА строка с эллипсисом: [🔔 напоминание] · [🕐 посл. визит] ·
   // команда · город · теги (первые 2 + «+N»). Иконки-сигналы (напоминание,
@@ -240,9 +222,6 @@ export default function ClientRow({
     link ?? "",
     client.pinned_at ? "закреплён" : "",
     client.blacklisted ? "чёрный список" : "",
-    cardFields.debt && debt > 0 ? `долг ${formatEUR(debt)}` : "",
-    cardFields.inc && income > 0 ? `доход ${formatEUR(income)}` : "",
-    cardFields.exp && exp > 0 ? `ожидается ${formatEUR(exp)}` : "",
     reminder ? `напоминание ${reminder.label}` : "",
     showLast
       ? stats?.lastVisitDate
@@ -380,35 +359,17 @@ export default function ClientRow({
             </View>
           ) : null}
         </View>
-        {/* КОЛОНКА СПРАВА (владелец 1.10): дата последней записи и суммы —
-            каждая на своём месте, по правому краю, ровно друг под другом от
-            строки к строке. Слов нет — долг жёлтым, доход зелёным. */}
-        {rightDate || figs.length > 0 ? (
+        {/* КОЛОНКА СПРАВА (владелец 1.10): дата последней записи — на своём
+            месте, по правому краю, ровно друг под другом от строки к строке. */}
+        {rightDate ? (
           <View style={{ alignItems: "flex-end", marginLeft: 12, gap: 1 }}>
-            {rightDate ? (
-              <Text
-                maxFontSizeMultiplier={1.3}
-                numberOfLines={1}
-                style={{ fontSize: 12, color: rightDate.color, fontVariant: ["tabular-nums"] }}
-              >
-                {rightDate.text}
-              </Text>
-            ) : null}
-            {figs.map((f) => (
-              <Text
-                maxFontSizeMultiplier={1.3}
-                key={f.key}
-                numberOfLines={1}
-                style={{
-                  fontSize: 15,
-                  fontWeight: "600",
-                  color: f.color,
-                  fontVariant: ["tabular-nums"],
-                }}
-              >
-                {f.text}
-              </Text>
-            ))}
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              style={{ fontSize: 12, color: rightDate.color, fontVariant: ["tabular-nums"] }}
+            >
+              {rightDate.text}
+            </Text>
           </View>
         ) : null}
       </Pressable>

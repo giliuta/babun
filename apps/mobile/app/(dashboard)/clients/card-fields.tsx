@@ -1,7 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 import { ScrollView } from "react-native";
 import {
-  AlertCircle,
   Clock,
   FileText,
   Home,
@@ -9,10 +8,8 @@ import {
   Phone,
   StickyNote,
   Tags,
-  TrendingUp,
   UserRound,
   UsersRound,
-  Wallet,
   type LucideIcon,
 } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
@@ -70,12 +67,9 @@ const PAGE_BLOCKS: PageBlock[] = [
   { label: "Личное", key: "client_personal", icon: UserRound },
 ];
 
-// ВЫРУЧКА, А НЕ ПРИБЫЛЬ: «Ожидается» — сумма будущих записей до расходов.
+// Денег в строке нет (владелец 01.10) — они на странице клиента.
 const ROW_FIELDS: { field: CardField; label: string; icon: LucideIcon }[] = [
   { field: "phone", label: "Телефон", icon: Phone },
-  { field: "exp", label: "Ожидается", icon: TrendingUp },
-  { field: "inc", label: "Доход", icon: Wallet },
-  { field: "debt", label: "Долг", icon: AlertCircle },
   { field: "last", label: "Последняя запись", icon: Clock },
   { field: "meta", label: "Команда, метка, теги", icon: Tags },
 ];

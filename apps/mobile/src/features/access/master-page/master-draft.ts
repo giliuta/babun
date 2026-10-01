@@ -191,6 +191,7 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "clients.personal",
     "clients.files",
     "clients.requisites",
+    "clients.money",
   ],
   // ЦЕПОЧКА ВНУТРИ ЗАПИСИ (владелец 30.09: «продумай логическую цепочку»):
   // скрыты услуги — не видно и цен; скрыты цены — оплату не принять, сколько

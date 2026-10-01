@@ -82,10 +82,7 @@ import {
   useClientsSort,
   useSetClientsSort,
 } from "@/features/clients/sort-pref";
-import {
-  useCardFieldsByTeam,
-  type CardFieldPrefs,
-} from "@/features/clients/card-prefs";
+import { useCardFieldsByTeam } from "@/features/clients/card-prefs";
 import { ClientActionsSheet } from "@/features/clients/ClientActionsSheet";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { RemindSheet } from "@/features/clients/RemindSheet";
@@ -287,15 +284,6 @@ function ClientsListScreen() {
   // общий набор.
   const teamIdList = useMemo(() => teams.map((tm) => tm.id), [teams]);
   const cardFieldsFor = useCardFieldsByTeam(teamIdList);
-  const guestCardFields = useCallback(
-    (fields: CardFieldPrefs): CardFieldPrefs => ({
-      ...fields,
-      exp: false,
-      inc: false,
-      debt: false,
-    }),
-    [],
-  );
 
   // Per-client roll-up (visits / money / debt / last team) — one pass
   // over appointments, shared by the cards, the sort and the filter.
@@ -817,11 +805,7 @@ function ClientsListScreen() {
                 teamName={teamName}
                 tags={tags}
                 link={linkLine(clientMemberOf(item, byId))?.text}
-                cardFields={
-                  guest
-                    ? guestCardFields(cardFieldsFor(item.team_id))
-                    : cardFieldsFor(item.team_id)
-                }
+                cardFields={cardFieldsFor(item.team_id)}
                 selectionMode={selecting && !guest}
                 picked={selectedIds.has(item.id)}
                 onPress={() =>

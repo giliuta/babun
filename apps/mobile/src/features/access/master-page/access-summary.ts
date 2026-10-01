@@ -83,8 +83,8 @@ export interface SectionBlock {
 }
 
 /** Блоки страницы клиента — в порядке самой страницы (заметка под
- *  «Клиентом», люди, объекты, файлы, личное, реквизиты). Метка и тег стоят и
- *  в строке списка — они в «Главном» (01.10). */
+ *  «Клиентом», люди, объекты, файлы, личное, реквизиты, долг и деньги).
+ *  Метка и тег стоят и в строке списка — они в «Главном» (01.10). */
 export const CLIENT_CARD_ROW_ORDER: readonly string[] = [
   "clients.note",
   "clients.people",
@@ -92,6 +92,7 @@ export const CLIENT_CARD_ROW_ORDER: readonly string[] = [
   "clients.files",
   "clients.personal",
   "clients.requisites",
+  "clients.money",
 ];
 
 /** Права блока «Записи» на странице «Календарь». */
@@ -113,8 +114,9 @@ export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock
     // видеть на карточке клиентов сразу, когда открывает: последняя запись,
     // номер телефона… может ли он переходить в это»): база, какие клиенты,
     // переход на страницу клиента и всё, что стоит в строке списка, — номер,
-    // последняя запись, деньги, метка и теги. Последней — дверь на клиента
-    // из записи календаря («отдельный заход»).
+    // последняя запись, метка и теги. Денег в строке нет (01.10) — «Долг и
+    // деньги» в «Карточке клиента». Последней — дверь на клиента из записи
+    // календаря («отдельный заход»).
     {
       key: "main",
       title: "Главное",
@@ -124,7 +126,6 @@ export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock
         "clients.open",
         "clients.contacts",
         "clients.history",
-        "clients.money",
         "clients.labels",
         "clients.from_record",
       ],

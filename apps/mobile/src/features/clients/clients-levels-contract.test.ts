@@ -121,10 +121,11 @@ describe("сервер: клиенты по уровням", () => {
     assert.ok(openCard.includes("select tm.team_id, 'clients.open'::text, case when tm.open_level = 'write' then 2 else 0 end"));
     // «Меняет» блока — по-прежнему только при «Меняет» базы этой команды.
     assert.ok(openCard.includes("when l.level = 'write' and tm.card_level = 'write' then 2"));
-    // Метка, последняя запись и деньги стоят в строке списка — не гаснут.
+    // Метка и последняя запись стоят в строке списка — не гаснут; денег в
+    // строке нет (01.10) — они блок страницы.
     assert.ok(
       openCard.includes(
-        "page_only constant text[] := array[ 'clients.note', 'clients.people', 'clients.objects', 'clients.personal', 'clients.files', 'clients.requisites' ];",
+        "page_only constant text[] := array[ 'clients.note', 'clients.people', 'clients.objects', 'clients.personal', 'clients.files', 'clients.requisites', 'clients.money' ];",
       ),
     );
     // Клиент записи — только из команды, где открыт переход из записи, и
