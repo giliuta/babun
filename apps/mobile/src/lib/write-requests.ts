@@ -73,6 +73,8 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "appointment_link_answer",
   "cancel_appointment_payment",
   "cancel_invoice",
+  // Тарифы (миграция 20261001183700, 015): рабочие команды и пробный период.
+  "choose_working_teams",
   "create_client_with_tags",
   "create_invitation",
   "decline_invitation",
@@ -117,6 +119,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "sms_send_bulk",
   "sms_send_manual",
   "sms_set_team_template_enabled",
+  "start_trial",
   "undo_appointment_payment",
   "update_client_with_tags",
   "update_invoice_draft",

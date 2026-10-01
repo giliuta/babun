@@ -10,7 +10,7 @@
 // подпись с живым состоянием, а не пояснение:
 //   • карта человека → «Профиль»;
 //   • МОИ КОМПАНИИ — приглашения и компании, где он состоит (роль, календари);
-//   • КОМПАНИЯ — «SMS» и «Архив» (только владельцу). SMS — баланс,
+//   • КОМПАНИЯ — «Тариф», «Партнёры», «SMS» и «Архив» (только владельцу). SMS — баланс,
 //     пополнение и отправка всей компании (владелец 2026-09-29: «баланс и
 //     пополнение — это всё будет Кабинет SMS»); шаблоны команд — за
 //     шестерёнкой календаря. Архив — удалённые календари, откуда их
@@ -41,6 +41,8 @@ import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
 import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
+import { TariffRow } from "@/features/tariffs/TariffRow";
 import { useCurrentRole, usePlanAllows } from "@/features/settings/tenant";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useThemeColors } from "@/theme/colors";
@@ -49,8 +51,8 @@ export default function CabinetHome() {
   const t = useThemeColors();
   const router = useRouter();
   const { data: role } = useCurrentRole();
-  // Сотрудники — платный тариф, как прежде «Мастера» календаря.
-  const canUseStaff = usePlanAllows("masters");
+  // Партнёры — с тарифа «Про» (владелец 01.10).
+  const canUsePartners = usePlanAllows("partners");
   const syncDepth = useQueueDepth();
   // Очередь выгрузки видят те, кто правит данные офлайн, — как и прежде.
   const showSync = role === "owner" || role === "dispatcher";
@@ -77,18 +79,21 @@ export default function CabinetHome() {
                   мастера перенесём в кабинет… и полноценно на каждую команду,
                   что он может делать»). Прежде люди жили в настройках каждого
                   календаря. Приглашает и ставит права только владелец. */}
-              {canUseStaff ? (
-                <>
-                  <SettingsRow
-                    tile={SETTINGS_TILE.indigo}
-                    icon={Users}
-                    title="Партнёры"
-                    sub="Права по командам"
-                    onPress={() => router.push("/cabinet/people" as Href)}
-                  />
-                  <Divider inset={48} />
-                </>
-              ) : null}
+              {/* ТАРИФ — ПЕРВЫМ (владелец 01.10: «выбор тарифа — в кабинете»).
+                  Партнёры открываются с «Про»: до того строка серая, тап
+                  поднимает плашку «Нужно изменить тариф». */}
+              <TariffRow />
+              <Divider inset={48} />
+              <TariffLocked locked={!canUsePartners}>
+                <SettingsRow
+                  tile={SETTINGS_TILE.indigo}
+                  icon={Users}
+                  title="Партнёры"
+                  sub="Права по командам"
+                  onPress={() => router.push("/cabinet/people" as Href)}
+                />
+              </TariffLocked>
+              <Divider inset={48} />
               <SmsCabinetRow />
               <Divider inset={48} />
               <ArchiveRow />

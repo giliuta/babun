@@ -1,3 +1,4 @@
+import { tierAllows, tierOf, type TierFeature } from "@/features/tariffs/tiers";
 import { isMessagingReady } from "@/features/chats/readiness";
 
 export const USER_ROLES = ["owner", "dispatcher", "master"] as const;
@@ -195,21 +196,9 @@ export function cabinetScreenRole(
 // то, чего нельзя, но проверка живёт в базе — иначе любой другой путь (deep
 // link, старая сборка, офлайн-очередь) обходит замок. Канон, правило 10.
 
-export type PlanCapability =
-  | "book-clients"
-  | "services"
-  | "masters"
-  | "documents";
-
-/** Что бесплатный уровень НЕ умеет. Перечислено закрытое, а не открытое:
- *  новая функция продукта по умолчанию бесплатна, и закрывать её — отдельное
- *  осознанное решение, а не следствие забытой строки в списке. */
-const FREE_PLAN_CLOSED: ReadonlySet<PlanCapability> = new Set<PlanCapability>([
-  "book-clients",
-  "services",
-  "masters",
-  "documents",
-]);
+/** Возможность, которую открывает тариф (с 01.10 — «Соло · Про · Макс»,
+ *  `features/tariffs/tiers.ts`). */
+export type PlanCapability = TierFeature;
 
 /** Действующий тариф: ручная выдача (`plan_override`) всегда сильнее
  *  оплаченного. Повторяет `public.tenant_effective_plan` — если правило
@@ -235,8 +224,7 @@ export function planAllows(
   plan: string | null | undefined,
   capability: PlanCapability,
 ): boolean {
-  if (plan !== "free") return true;
-  return !FREE_PLAN_CLOSED.has(capability);
+  return tierAllows(tierOf({ plan }), capability);
 }
 
 /** Единственная дверь: действие разрешено, только если его пускают И роль,

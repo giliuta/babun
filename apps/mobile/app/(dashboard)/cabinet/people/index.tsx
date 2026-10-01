@@ -13,6 +13,8 @@ import { readableForeground } from "@/theme/readable-color";
 import { useMasters, useTeams, type Master } from "@/features/reference/queries";
 import { usePendingInvitations } from "@/features/settings/team-access";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { canAddPartner } from "@/features/tariffs/tiers";
+import { useTariff, useTariffNudge } from "@/features/tariffs/use-tariff";
 import { refusalOf } from "@/features/access/access-map";
 import { calendarCards } from "@/features/access/masters-list";
 import { openMasterDraft } from "@/features/access/master-page/draft-store";
@@ -127,6 +129,9 @@ export default function MastersScreen() {
     if (!needle) return calendarInvitations;
     return calendarInvitations.filter((inv) => normalizeSearch(inv.email).includes(needle));
   }, [calendarInvitations, search]);
+
+  const tariff = useTariff();
+  const nudgeTariff = useTariffNudge();
 
   const hasAnyone = allMasters.length > 0 || staff.length > 0 || calendarInvitations.length > 0;
 
@@ -301,6 +306,10 @@ export default function MastersScreen() {
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
           <GradientButton
             label="Пригласить партнёра"
+            // ЛИМИТ ТАРИФА (01.10): Про — до 5 партнёров, Макс — до 50; люди и
+            // ждущие приглашения. Сверх — кнопка серая, тап поднимает плашку.
+            disabled={!canAddPartner(tariff.state.tier, staff.length + new Set(calendarInvitations.map((inv) => inv.email.toLowerCase())).size)}
+            onDisabledPress={nudgeTariff}
             onPress={() => {
               openMasterDraft(null);
               router.push("/cabinet/people/new" as Href);

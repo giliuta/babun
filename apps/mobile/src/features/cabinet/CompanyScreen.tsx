@@ -10,7 +10,8 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { effectivePlan, ROLE_LABELS } from "@/features/settings/role-policy";
+import { ROLE_LABELS } from "@/features/settings/role-policy";
+import { tierLine, tierOf, trialLeft } from "@/features/tariffs/tiers";
 import { useTenant } from "@/features/settings/tenant";
 import {
   useMyCalendars,
@@ -23,7 +24,6 @@ import { useTenantId } from "@/lib/tenant";
 import {
   grantsSummary,
   groupMemberships,
-  planLabel,
   quotaLine,
 } from "./companies";
 
@@ -136,7 +136,7 @@ export function CompanyScreen() {
                 tile="neutral"
                 icon={BadgeCheck}
                 title="Тариф"
-                sub={planLabel(effectivePlan(tenant.data))}
+                sub={tierLine(tierOf(tenant.data), trialLeft(tenant.data))}
               />
               <Divider inset={56} />
               <QuotaRow tenantId={company.tenantId} kind="clients" title="Клиенты" />

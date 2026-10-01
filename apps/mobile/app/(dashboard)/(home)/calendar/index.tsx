@@ -69,6 +69,9 @@ import {
 import { utcLabel, zoneClock } from "@/features/calendar/device-timezone";
 import { zoneCities } from "@/features/calendar/zone-label";
 import { SmsSettingsRow } from "@/features/sms/SmsSettingsRow";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
+import { canAddTeam } from "@/features/tariffs/tiers";
+import { useTariff, useTariffNudge } from "@/features/tariffs/use-tariff";
 
 // ─── «Календарь» — ВСЕ настройки на одном экране ─────────────────────
 // Сюда ведёт шестерёнка. Уровня «/calendar/[teamId]» больше нет: целый экран
@@ -138,6 +141,9 @@ export default function CalendarSettingsScreen() {
   const settingsQuery = useCalendarSettings();
   const settings = settingsQuery.data;
   const { data: teams = [], isLoading: teamsLoading } = useTeams();
+  const tariffTier = useTariff().state.tier;
+  const nudgeTariff = useTariffNudge();
+  const canNewTeam = canAddTeam(tariffTier, teams.length);
   const { data: schedules = {} } = useAllTeamSchedules();
   const update = useUpdateTeam();
   const archiveTeam = useCalendarDelete().archive;
@@ -353,14 +359,16 @@ export default function CalendarSettingsScreen() {
         // лента остаётся лентой его календарей, без действия.
         trailing={rows.addCalendar ? (
           <Pressable
-            onPress={() => setCreateOpen(true)}
+            // ЛИМИТ КОМАНД ТАРИФА (01.10): Соло — одна, Про — 5, Макс — 50.
+            // Сверх — «Добавить» серое, тап поднимает плашку про тариф.
+            onPress={() => (canNewTeam ? setCreateOpen(true) : nudgeTariff())}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Добавить календарь"
             style={({ pressed }: { pressed: boolean }) => ({
               minHeight: 44,
               justifyContent: "center",
-              opacity: pressed ? 0.5 : 1,
+              opacity: !canNewTeam ? 0.4 : pressed ? 0.5 : 1,
             })}
           >
             <Text
@@ -539,6 +547,7 @@ export default function CalendarSettingsScreen() {
                 (настройки «Длительность» на календаре больше нет). Тот же
                 экран, что в Кабинете, второй дверью внутри стека /calendar:
                 наружу этот стек не ведёт (закон навигации). */}
+            <TariffLocked locked={rows.servicesLocked}>
             <SettingsRow
               tile={SETTINGS_TILE.blue}
               icon={Briefcase}
@@ -557,6 +566,7 @@ export default function CalendarSettingsScreen() {
                 )
               }
             />
+            </TariffLocked>
           </SectionCard>
           ) : null}
           {rows.labels ? (

@@ -21,15 +21,17 @@ describe("строки настроек календаря", () => {
       buffer: true,
       booking: true,
       services: true,
+      servicesLocked: false,
       labels: true,
       remove: true,
       any: true,
     });
   });
 
-  test("тариф гасит только «Услуги»", () => {
+  test("без тарифа серые только «Услуги»", () => {
     const rows = calendarSettingsRows("owner", FREE);
-    assert.equal(rows.services, false);
+    assert.equal(rows.services, true);
+    assert.equal(rows.servicesLocked, true);
     assert.equal(rows.timezone, true);
     assert.equal(rows.any, true);
   });
@@ -39,6 +41,7 @@ describe("строки настроек календаря", () => {
       const rows = calendarSettingsRows(role, PAID);
       assert.equal(rows.any, false);
       for (const [name, shown] of Object.entries(rows)) {
+        if (name === "servicesLocked") continue;
         assert.equal(shown, false, `${role} не должен видеть «${name}»`);
       }
     });
@@ -75,8 +78,11 @@ describe("строки настроек календаря", () => {
     assert.equal(rows.booking, true);
     assert.equal(rows.services, true);
     assert.equal(rows.labels, false);
-    // Тариф гасит «Услуги» и сотруднику с правом.
-    assert.equal(calendarSettingsRows("master", FREE, { services: "write" }).services, false);
+    // Без тарифа «Услуги» на месте, но серые — и сотруднику с правом.
+    const free = calendarSettingsRows("master", FREE, { services: "write" });
+    assert.equal(free.services, true);
+    assert.equal(free.servicesLocked, true);
+    assert.equal(rows.servicesLocked, false);
   });
 
   test("удаление календаря сотруднику не показывается", () => {
