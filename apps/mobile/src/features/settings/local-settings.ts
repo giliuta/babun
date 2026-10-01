@@ -35,6 +35,7 @@ import { useTenantId } from "@/lib/tenant";
 // владельца ложились бы под ключ «master» — тот самый, который потом возьмёт
 // настоящий мастер на этом устройстве. Показ решает `useCurrentRole`.
 import { useDataRole } from "@/features/settings/tenant";
+import { useScopeCompany } from "@/features/clients/company-scope";
 import { fetchCalendarSettings } from "@/features/settings/company-fetchers";
 import { calendarSettingsQueryKey } from "@/lib/company-query-keys";
 import {
@@ -342,19 +343,20 @@ function cacheServerLocationLabels(
 }
 
 export function useLocationLabels(teamId: string | null = null) {
-  const tenantId = useTenantId();
-  const roleQuery = useDataRole();
-  const role = roleQuery.data;
+  // КОМПАНИЯ ЭКРАНА, А НЕ КАЛЕНДАРЯ (01.10): типы объектов команды
+  // работодателя партнёр видит и правит из своей вкладки «Клиенты».
+  const { tenantId, client, role, foreign } = useScopeCompany();
   return useQuery({
     queryKey: ["location-labels", tenantId, role ?? "role-pending"],
-    enabled: !!tenantId && roleQuery.isSuccess && role != null,
+    enabled: !!tenantId && role != null,
     staleTime: 5 * 60 * 1000,
     // Читается вся компания одним ключом, отдаётся — команда.
     select: (labels: LocationLabel[]) => locationLabelsOfTeam(labels, teamId),
     queryFn: async (): Promise<LocationLabel[]> => {
       const activeTenantId = tenantId as string;
-      const cached = loadCachedLocationLabels(activeTenantId);
-      const { data, error } = await supabase
+      // Чужая компания на диск не ложится: ни читаем, ни пишем её кэш.
+      const cached = foreign ? [] : loadCachedLocationLabels(activeTenantId);
+      const { data, error } = await client
         .from("location_labels")
         .select("*")
         .eq("tenant_id", activeTenantId)
@@ -376,6 +378,7 @@ export function useLocationLabels(teamId: string | null = null) {
       // One-time rolling-deploy import. A previously server-synced empty list
       // is authoritative and must never resurrect stale device rows.
       if (
+        !foreign &&
         labels.length === 0 &&
         cached.length > 0 &&
         role === "owner" &&
@@ -394,15 +397,14 @@ export function useLocationLabels(teamId: string | null = null) {
         );
       }
 
-      cacheServerLocationLabels(activeTenantId, labels);
+      if (!foreign) cacheServerLocationLabels(activeTenantId, labels);
       return labels;
     },
   });
 }
 
 export function useSaveLocationLabels(teamId: string | null = null) {
-  const tenantId = useTenantId();
-  const role = useDataRole().data;
+  const { tenantId, client, role, foreign } = useScopeCompany();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (l: LocationLabel[]) => {
@@ -428,18 +430,18 @@ export function useSaveLocationLabels(teamId: string | null = null) {
       ] as const;
       const all =
         qc.getQueryData<LocationLabel[]>(cacheKey) ??
-        loadCachedLocationLabels(tenantId);
+        (foreign ? [] : loadCachedLocationLabels(tenantId));
       // Сравнивается и удаляется — только список ЭТОЙ команды.
       const previous = teamId ? all.filter((label) => label.teamId === teamId) : all;
       const removeIds = locationLabelRemoveIds(previous, normalized);
       const upserts = positionedLocationLabelUpserts(previous, normalized);
       const { data, error } = teamId
-        ? await supabase.rpc("apply_team_location_label_changes", {
+        ? await client.rpc("apply_team_location_label_changes", {
             p_team_id: teamId,
             p_labels: locationLabelsToJson(upserts, normalized),
             p_remove_ids: removeIds,
           })
-        : await supabase.rpc("apply_location_label_changes", {
+        : await client.rpc("apply_location_label_changes", {
             p_labels: locationLabelsToJson(upserts, normalized),
             p_remove_ids: removeIds,
           });
@@ -461,7 +463,7 @@ export function useSaveLocationLabels(teamId: string | null = null) {
       const merged = teamId
         ? [...all.filter((label) => label.teamId !== teamId), ...canonical]
         : canonical;
-      cacheServerLocationLabels(tenantId, merged);
+      if (!foreign) cacheServerLocationLabels(tenantId, merged);
       return merged;
     },
     onSuccess: (l) =>

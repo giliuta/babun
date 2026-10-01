@@ -1,4 +1,9 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { supabase } from "@/lib/supabase";
+import { useTenantId } from "@/lib/tenant";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
+import { useDataRole } from "@/features/settings/tenant";
+import type { UserRole } from "@/features/settings/role-policy";
 import {
   capabilitiesOf,
   type ClientsCapabilities,
@@ -64,4 +69,31 @@ export function useClientsCapabilities(): ClientsCapabilities {
           },
     [scope],
   );
+}
+
+/** КОМПАНИЯ, В КОТОРОЙ ЭКРАН ВКЛАДКИ ЧИТАЕТ И ПИШЕТ (01.10). Источник экрана,
+ *  а вне вкладки — компания, открытая в календаре. Партнёр со своей компанией
+ *  правит настройки команд работодателя, не переключая календарь, а владелец
+ *  — свои, пока в календаре открыта чужая: запросы идут клиентом,
+ *  привязанным к этой компании (`bind-tenant`), а не активным. */
+export function useScopeCompany(): {
+  tenantId: string | null;
+  client: typeof supabase;
+  /** Роль человека в этой компании; `undefined` — ещё едет. */
+  role: UserRole | null | undefined;
+  /** Компания не открыта в календаре: кэш её на диск не ложится. */
+  foreign: boolean;
+} {
+  const scope = useClientsScopeOrNull();
+  const activeTenantId = useTenantId();
+  const activeRole = useDataRole().data;
+  if (scope && scope.tenantId !== activeTenantId) {
+    return {
+      tenantId: scope.tenantId,
+      client: tenantBoundClient(scope.tenantId),
+      role: scope.role,
+      foreign: true,
+    };
+  }
+  return { tenantId: activeTenantId, client: supabase, role: activeRole, foreign: false };
 }

@@ -33,10 +33,9 @@ const ALL = (level: ClientSettingLevel): ClientSettingLevels =>
 export interface ClientSettingsInput {
   /** Источник вкладки — СВОЯ компания: хозяйство целиком. */
   own: boolean;
-  /** Источник — компания, где человек партнёр, и она открыта в календаре.
-   *  Настройки команды читаются и пишутся активной компанией; чужую,
-   *  не открытую, этот экран не правит. */
-  activeMember: boolean;
+  /** Источник — компания, где человек партнёр. Открыта ли она в календаре,
+   *  не важно: экран читает и пишет её привязанным клиентом (01.10). */
+  member: boolean;
   role: "owner" | "dispatcher" | "master" | null | undefined;
   map: MemberAccessMap | undefined;
   teamId: string | null;
@@ -47,7 +46,7 @@ export function clientSettingLevels(input: ClientSettingsInput): ClientSettingLe
   if (input.own) return ALL("write");
   // Права по блокам — у партнёра (роль `master`); прочим ролям, как и в
   // «Настройках команды», строк нет.
-  if (!input.activeMember || input.role !== "master" || !input.teamId) return ALL("hidden");
+  if (!input.member || input.role !== "master" || !input.teamId) return ALL("hidden");
   const levels = ALL("hidden");
   for (const row of ROWS) {
     const gate = accessGate({

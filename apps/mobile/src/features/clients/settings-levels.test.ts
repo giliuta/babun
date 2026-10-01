@@ -25,7 +25,7 @@ const map = (levels: Record<string, Record<string, "off" | "read" | "write">>): 
 
 const partner = (over: Partial<ClientSettingsInput>): ClientSettingsInput => ({
   own: false,
-  activeMember: true,
+  member: true,
   role: "master",
   map: map({
     [TEAM]: { "clients.settings_ways": "write", "clients.settings_tags": "read" },
@@ -36,7 +36,7 @@ const partner = (over: Partial<ClientSettingsInput>): ClientSettingsInput => ({
 
 describe("строки шестерёнки клиентов", () => {
   test("своя компания — всё правится, карта не нужна", () => {
-    const levels = clientSettingLevels({ own: true, activeMember: false, role: "owner", map: undefined, teamId: null });
+    const levels = clientSettingLevels({ own: true, member: false, role: "owner", map: undefined, teamId: null });
     assert.deepEqual(Object.values(levels), ["write", "write", "write", "write", "write"]);
   });
 
@@ -55,8 +55,8 @@ describe("строки шестерёнки клиентов", () => {
     assert.equal(anyClientSetting(levels), false);
   });
 
-  test("компания не открыта в календаре — строк нет: правка шла бы не туда", () => {
-    assert.equal(anyClientSetting(clientSettingLevels(partner({ activeMember: false }))), false);
+  test("не партнёр этой компании — строк нет", () => {
+    assert.equal(anyClientSetting(clientSettingLevels(partner({ member: false }))), false);
   });
 
   test("карта прав ещё едет — строк нет, а не «всё открыто»", () => {

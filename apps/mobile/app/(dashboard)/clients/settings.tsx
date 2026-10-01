@@ -41,7 +41,16 @@ import { useClients, useClientTags } from "@/features/clients/queries";
 import { useAppointments } from "@/features/calendar/queries";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
+import {
+  ClientsScopeProvider,
+  useClientsCapabilities,
+  useClientsScopeOrNull,
+} from "@/features/clients/company-scope";
+import type { ClientsScope } from "@/features/clients/clients-company";
+import { useAccessMaps, useClientsSources } from "@/features/clients/sources";
+import { useGuestSources } from "@/features/clients/guest-sources";
+import { useMyAccess } from "@/features/access/queries";
+import { useTenantId } from "@/lib/tenant";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useTeams } from "@/features/reference/queries";
@@ -59,7 +68,7 @@ import {
 } from "@/features/clients/service-default";
 import { useTeamServiceMonths } from "@/features/clients/use-service-default";
 import { PickerSheet } from "@/components/ui/PickerSheet";
-import { anyClientSetting } from "@/features/clients/settings-levels";
+import { anyClientSetting, clientSettingLevels } from "@/features/clients/settings-levels";
 import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings";
 import { useThemeColors } from "@/theme/colors";
 
@@ -95,41 +104,106 @@ export default function ClientsSettingsScreenRoute() {
 }
 
 function ClientsSettingsScreen() {
+  const activeTenantId = useTenantId();
+  const routeScope = useClientsScopeOrNull();
+  const caps = useClientsCapabilities();
+  // У КАЖДОЙ КОМАНДЫ СВОИ НАСТРОЙКИ КЛИЕНТОВ (владелец 30.09), как у
+  // настроек календаря: лента команд наверху, строки правят выбранную.
+  // ЛЕНТА — СВОИ КОМАНДЫ И КОМАНДЫ РАБОТОДАТЕЛЕЙ (01.10): партнёр со своей
+  // компанией видел здесь только её; теперь рядом стоят команды, где ему
+  // открыли хоть одну строку «Настроек клиентов», — тем же чипом, что свои.
+  // Всё под лентой читается и пишется в компании выбранной команды.
+  const { data: ownTeams = [] } = useTeams();
+  const { data: listTeam } = useClientsTeam(ownTeams[0]?.tenant_id ?? null);
+  const sources = useClientsSources();
+  const memberScopes = useMemo(
+    () => sources.list.filter((source) => source.kind === "member"),
+    [sources.list],
+  );
+  const guests = useGuestSources(memberScopes);
+  const activeMap = useMyAccess().data;
+  const foreignIds = useMemo(
+    () => memberScopes.map((s) => s.tenantId).filter((id) => id !== activeTenantId),
+    [memberScopes, activeTenantId],
+  );
+  const foreignMaps = useAccessMaps(foreignIds);
+  const ribbon = useMemo(() => {
+    const out: { id: string; name: string; color: string | null; scope: ClientsScope }[] = [];
+    if (caps.manage && routeScope) {
+      for (const tm of ownTeams) out.push({ id: tm.id, name: tm.name, color: tm.color, scope: routeScope });
+    }
+    for (const guest of guests.list) {
+      const map =
+        guest.scope.tenantId === activeTenantId ? activeMap : foreignMaps.get(guest.scope.tenantId);
+      for (const tm of guest.teams) {
+        const levels = clientSettingLevels({
+          own: false,
+          member: true,
+          role: guest.scope.role,
+          map,
+          teamId: tm.id,
+        });
+        if (anyClientSetting(levels)) {
+          out.push({ id: tm.id, name: tm.name, color: tm.color ?? null, scope: guest.scope });
+        }
+      }
+    }
+    return out;
+  }, [caps.manage, routeScope, ownTeams, guests.list, activeTenantId, activeMap, foreignMaps]);
+  const [pickedTeam, setPickedTeam] = useState<string | null>(null);
+  const entry =
+    ribbon.find((tm) => tm.id === pickedTeam) ??
+    (listTeam && listTeam !== ALL_TEAMS ? ribbon.find((tm) => tm.id === listTeam) : undefined) ??
+    ribbon[0] ??
+    null;
+
+  return (
+    <Screen>
+      <ScreenHeader
+        title="Настройки клиентов"
+        // Шов несёт лента команд; без неё линию берёт шапка (как в
+        // настройках календаря).
+        seam={!entry}
+      />
+      {entry ? (
+        <ScopeChips
+          items={ribbon.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color }))}
+          activeId={entry.id}
+          onSelect={setPickedTeam}
+        />
+      ) : null}
+      {entry ? (
+        // Компания выбранной команды — источник тела: хуки настроек читают и
+        // пишут её, а подстраницы уносят её в адресе.
+        <ClientsScopeProvider scope={entry.scope}>
+          <SettingsBody
+            key={entry.id}
+            teamId={entry.id}
+            tenantParam={entry.scope.tenantId !== routeScope?.tenantId ? entry.scope.tenantId : null}
+          />
+        </ClientsScopeProvider>
+      ) : (
+        // Строк не открыли ни одной: страница остаётся собой, а тело
+        // говорит одной строкой — без подписи и без кнопки (канон пустых
+        // состояний, LOCKED 2026-08-27).
+        <EmptyState fill title="Настроек пока нет" />
+      )}
+    </Screen>
+  );
+}
+
+function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: string | null }) {
   const router = useRouter();
   const toast = useToast();
   const t = useThemeColors();
-  // ХОЗЯЙСТВО БАЗЫ — У ТОГО, ЧЬЯ БАЗА (владелец 20.09: «в клиентах оно
-  // открывает в любом случае настройки МОИХ клиентов»). Дверь открыта всем,
-  // но у человека без своей компании править здесь нечего: страница остаётся
-  // собой, а тело говорит одной строкой.
+  // ХОЗЯЙСТВО БАЗЫ («Данные») — только своей компании (владелец 20.09).
   const caps = useClientsCapabilities();
   const objectsOn = useFeatureOn("objects");
-  // У КАЖДОЙ КОМАНДЫ СВОИ НАСТРОЙКИ КЛИЕНТОВ (владелец 30.09), как у
-  // настроек календаря: лента команд наверху, строки «Для команды» правят
-  // выбранную. Открывается на команде, выбранной в ленте списка, иначе —
-  // на первой. Справочники, данные и функции — общие на компанию, ниже.
   const { data: ownTeams = [] } = useTeams();
-  const { data: listTeam } = useClientsTeam(ownTeams[0]?.tenant_id ?? null);
   const setListTeam = useSetClientsTeam(ownTeams[0]?.tenant_id ?? null);
-  const [pickedTeam, setPickedTeam] = useState<string | null>(null);
-  // ПАРТНЁРУ — КОМАНДЫ, ГДЕ ЕМУ ОТКРЫЛИ ХОТЬ ОДНУ СТРОКУ (владелец 01.10:
-  // «в настройках он может редактировать или не может редактировать»), как
-  // «Настройки команды» в календаре. Владельцу своей компании — все.
-  const levelsOf = useClientSettingLevelsOf();
-  const ribbonTeams = caps.manage
-    ? ownTeams
-    : ownTeams.filter((tm) => anyClientSetting(levelsOf(tm.id)));
-  const teamId =
-    (pickedTeam && ribbonTeams.some((tm) => tm.id === pickedTeam) ? pickedTeam : null) ??
-    (listTeam && listTeam !== ALL_TEAMS && ribbonTeams.some((tm) => tm.id === listTeam)
-      ? listTeam
-      : null) ??
-    ribbonTeams[0]?.id ??
-    null;
-  const levels = levelsOf(teamId);
-  const shows = ribbonTeams.length > 0 && anyClientSetting(levels);
+  const levels = useClientSettingLevelsOf()(teamId);
   const teamHref = (pathname: string): Href =>
-    (teamId ? { pathname, params: { team: teamId } } : pathname) as Href;
+    ({ pathname, params: tenantParam ? { team: teamId, tenant: tenantParam } : { team: teamId } }) as Href;
   // Функции клиентов — у команды (владелец 30.09: «люди, связи, реквизиты,
   // файлы — всё закреплено за командой»).
   const blockOn: Record<ClientFunctionKey, boolean> = {
@@ -235,21 +309,8 @@ function ClientsSettingsScreen() {
   };
 
   return (
-    <Screen>
-      <ScreenHeader
-        title="Настройки клиентов"
-        // Шов несёт лента команд; без неё линию берёт шапка (как в
-        // настройках календаря).
-        seam={!shows}
-      />
-      {shows ? (
-        <ScopeChips
-          items={ribbonTeams.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color }))}
-          activeId={teamId}
-          onSelect={setPickedTeam}
-        />
-      ) : null}
-      {shows ? (
+    <>
+      {anyClientSetting(levels) ? (
         <ScrollView
           className="flex-1"
           contentContainerStyle={{ paddingBottom: 24 }}
@@ -261,6 +322,7 @@ function ClientsSettingsScreen() {
             rows={[
               levels.card !== "hidden" ? (
                 <SettingsRow
+                  key="card"
                   tile={SETTINGS_TILE.blue}
                   icon={Eye}
                   // «КАРТОЧКА КЛИЕНТА», А НЕ «ЧТО ПОКАЗЫВАТЬ» (владелец 30.09:
@@ -273,6 +335,7 @@ function ClientsSettingsScreen() {
               ) : null,
               levels.ways !== "hidden" ? (
                 <SettingsRow
+                  key="ways"
                   tile={SETTINGS_TILE.green}
                   icon={MessageCircle}
                   title="Способы связи"
@@ -290,6 +353,7 @@ function ClientsSettingsScreen() {
               ) : null,
               levels.maps !== "hidden" ? (
                 <SettingsRow
+                  key="maps"
                   tile={SETTINGS_TILE.blue}
                   icon={Navigation}
                   title="Карты для маршрута"
@@ -312,6 +376,7 @@ function ClientsSettingsScreen() {
             rows={[
               objectsOn && levels.objects !== "hidden" ? (
                 <SettingsRow
+                  key="objects"
                   tile={SETTINGS_TILE.teal}
                   icon={Home}
                   title="Типы объектов"
@@ -328,6 +393,7 @@ function ClientsSettingsScreen() {
               // же, что у типов объектов; «Только видит» — значение без двери.
               objectsOn && levels.objects !== "hidden" ? (
                 <SettingsRow
+                  key="service"
                   tile={SETTINGS_TILE.orange}
                   icon={CalendarClock}
                   title="Обслуживание объектов"
@@ -337,6 +403,7 @@ function ClientsSettingsScreen() {
               ) : null,
               levels.tags !== "hidden" ? (
                 <SettingsRow
+                  key="tags"
                   tile={SETTINGS_TILE.purple}
                   icon={Tags}
                   title="Теги клиентов"
@@ -369,6 +436,7 @@ function ClientsSettingsScreen() {
                 // сборке без нативного модуля строки нет вовсе.
                 CONTACTS_AVAILABLE ? (
                   <SettingsRow
+                    key="contacts"
                     tile={SETTINGS_TILE.blue}
                     icon={Smartphone}
                     title="Из контактов телефона"
@@ -377,6 +445,7 @@ function ClientsSettingsScreen() {
                   />
                 ) : null,
                 <SettingsRow
+                  key="import"
                   tile={SETTINGS_TILE.blue}
                   icon={Upload}
                   title="Импорт из CSV"
@@ -384,6 +453,7 @@ function ClientsSettingsScreen() {
                   onPress={() => backToList("openImport")}
                 />,
                 <SettingsRow
+                  key="export"
                   tile={SETTINGS_TILE.green}
                   icon={Download}
                   title="Выгрузить клиентов"
@@ -397,6 +467,7 @@ function ClientsSettingsScreen() {
                   onPress={() => void exportAll()}
                 />,
                 <SettingsRow
+                  key="archive"
                   tile="neutral"
                   icon={Archive}
                   title="Архив клиентов"
@@ -407,6 +478,7 @@ function ClientsSettingsScreen() {
                 // корзина — со счётчиком. Иначе «куда он делся» повторится,
                 // уже с двумя одинаковыми на вид дверями.
                 <SettingsRow
+                  key="trash"
                   tile={SETTINGS_TILE.red}
                   icon={Trash2}
                   title="Недавно удалённые"
@@ -442,7 +514,7 @@ function ClientsSettingsScreen() {
         onClose={() => setServicePicker(false)}
       />
 
-    </Screen>
+    </>
   );
 }
 

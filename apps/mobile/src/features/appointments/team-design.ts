@@ -7,8 +7,7 @@ import type {
 import { getStorage } from "@babun/shared/storage";
 import { changedDesignColumns, designColumns } from "./team-design-columns";
 import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
-import { useDataRole } from "@/features/settings/tenant";
+import { useScopeCompany } from "@/features/clients/company-scope";
 
 // «ДИЗАЙН» КОМАНДЫ (владелец 2026-09-24: «всё отдельно под каждую команду»;
 // миграция 20260924233000_team_design). Одна строка `team_design` на команду:
@@ -92,8 +91,10 @@ type Query = {
     };
   };
 };
-const table = () =>
-  (supabase as unknown as { from: (t: string) => Query }).from("team_design");
+/** Таблица — клиентом компании экрана: у партнёра и у владельца с чужим
+ *  календарём это привязанный клиент (`useScopeCompany`). */
+const table = (client: typeof supabase) =>
+  (client as unknown as { from: (t: string) => Query }).from("team_design");
 
 const cacheKey = (tenantId: string) => `babun-team-design:${tenantId}`;
 
@@ -128,15 +129,17 @@ export function teamDesignQueryKey(tenantId: string | null) {
 
 /** Все «Дизайны» команд компании: teamId → настройки. */
 export function useTeamDesigns() {
-  const tenantId = useTenantId();
-  const roleQuery = useDataRole();
+  // КОМПАНИЯ ЭКРАНА, А НЕ КАЛЕНДАРЯ (01.10): настройки клиентов команды
+  // работодателя партнёр правит из своей вкладки, не переключая календарь.
+  // Вне вкладки «Клиенты» это та же активная компания, что и раньше.
+  const { tenantId, client, role, foreign } = useScopeCompany();
   return useQuery({
     queryKey: teamDesignQueryKey(tenantId),
-    enabled: !!tenantId && roleQuery.isSuccess && roleQuery.data != null,
+    enabled: !!tenantId && role != null,
     networkMode: "always",
-    placeholderData: () => readCache(tenantId),
+    placeholderData: () => (foreign ? undefined : readCache(tenantId)),
     queryFn: async (): Promise<DesignMap> => {
-      const { data, error } = await table()
+      const { data, error } = await table(client)
         .select(
           "team_id, record_color_rule, record_color_palette, record_color_fallback, disabled_blocks, client_list_off, contact_ways, map_services, service_every_months",
         )
@@ -144,14 +147,17 @@ export function useTeamDesigns() {
       if (error) {
         // Таблицы ещё нет (миграция не накачена) или нет сети — живём на
         // кэше, а без него на настройках компании.
-        return readCache(tenantId) ?? {};
+        return (foreign ? undefined : readCache(tenantId)) ?? {};
       }
       const map: DesignMap = {};
       for (const row of data ?? []) map[row.team_id] = toDesign(row);
-      try {
-        getStorage().set(cacheKey(tenantId as string), map);
-      } catch {
-        /* кэш не обязателен */
+      // Чужая компания на диск не ложится — только в памяти.
+      if (!foreign) {
+        try {
+          getStorage().set(cacheKey(tenantId as string), map);
+        } catch {
+          /* кэш не обязателен */
+        }
       }
       return map;
     },
@@ -167,7 +173,7 @@ export function useTeamDesign(teamId: string | null | undefined): TeamDesign | n
 
 /** Правка «Дизайна» команды — патчем, мгновенно на экране (владелец). */
 export function useSaveTeamDesign() {
-  const tenantId = useTenantId();
+  const { tenantId, client, foreign } = useScopeCompany();
   const qc = useQueryClient();
   const key = teamDesignQueryKey(tenantId);
   // Что было на экране у команды перед правкой: `onMutate` идёт раньше
@@ -184,7 +190,7 @@ export function useSaveTeamDesign() {
         // Строка на сервере есть — уходят только изменённые колонки.
         const patch = changedDesignColumns(was, input.next);
         if (Object.keys(patch).length === 0) return input;
-        const { error } = await table()
+        const { error } = await table(client)
           .update({ ...patch, ...stamp })
           .eq("tenant_id", tenantId)
           .eq("team_id", input.teamId);
@@ -192,7 +198,7 @@ export function useSaveTeamDesign() {
         return input;
       }
       // Строки ещё нет — первая правка команды заводит её целиком.
-      const { error } = await table().upsert(
+      const { error } = await table(client).upsert(
         { tenant_id: tenantId, team_id: input.teamId, ...designColumns(input.next), ...stamp },
         { onConflict: "tenant_id,team_id" },
       );
@@ -211,7 +217,7 @@ export function useSaveTeamDesign() {
     },
     onSuccess: () => {
       const map = qc.getQueryData<DesignMap>(key);
-      if (map && tenantId) {
+      if (map && tenantId && !foreign) {
         try {
           getStorage().set(cacheKey(tenantId), map);
         } catch {

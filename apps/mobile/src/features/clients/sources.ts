@@ -37,7 +37,7 @@ function accessOf(map: MemberAccessMap | undefined): CompanyAccess | undefined {
 
 /** Карты прав чужих компаний. Активную сюда не передаём: она уже читается
  *  приложением, и второй читатель под тем же ключом лишний. */
-function useAccessMaps(tenantIds: readonly string[]): Map<string, MemberAccessMap | undefined> {
+export function useAccessMaps(tenantIds: readonly string[]): Map<string, MemberAccessMap | undefined> {
   const results = useQueries({
     queries: tenantIds.map((tenantId) => ({
       queryKey: myAccessQueryKey(tenantId),
@@ -60,6 +60,19 @@ function useAccessMaps(tenantIds: readonly string[]): Map<string, MemberAccessMa
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- сборка идёт по времени ответов, а не по массиву результатов
   }, [ids, stamps]);
+}
+
+/** Карта прав человека в ОДНОЙ компании (01.10, шестерёнка клиентов по
+ *  командам работодателя). Открытая в календаре — та же, что у приложения
+ *  (`useMyAccess`, зеркало её подменяет); чужая — тем же ключом и клиентом,
+ *  привязанным к компании, что источники вкладки выше. */
+export function useAccessMapOf(tenantId: string | null): MemberAccessMap | undefined {
+  const activeTenantId = useTenantId();
+  const activeMap = useMyAccess().data;
+  const foreign = !!tenantId && tenantId !== activeTenantId;
+  const maps = useAccessMaps(foreign && tenantId ? [tenantId] : []);
+  if (!tenantId) return undefined;
+  return foreign ? maps.get(tenantId) : activeMap;
 }
 
 /** Что показывает вкладка «Клиенты»: своя компания и компании, где человеку

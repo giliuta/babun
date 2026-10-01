@@ -1,6 +1,4 @@
 import { useCallback } from "react";
-import { useMyAccess } from "@/features/access/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
 import { useClientsCapabilities, useClientsScopeOrNull } from "./company-scope";
 import {
   clientSettingLevels,
@@ -8,22 +6,25 @@ import {
   type ClientSettingLevels,
   type ClientSettingRow,
 } from "./settings-levels";
+import { useAccessMapOf } from "./sources";
 
-// ЖИВОЙ СЛОЙ НАД `settings-levels.ts`: источник вкладки, роль и карта прав
-// активной компании. Вне вкладки (Кабинет) источника нет — там, как и раньше,
-// экран владельца, и всё открыто.
+// ЖИВОЙ СЛОЙ НАД `settings-levels.ts`: источник вкладки, роль в нём и карта
+// прав ЕГО компании (01.10 — не только открытой в календаре: партнёр со
+// своей компанией правит настройки команд работодателя из своей вкладки).
+// Вне вкладки (Кабинет) источника нет — там, как и раньше, экран владельца,
+// и всё открыто.
 
-/** Положения строк шестерёнки для любой команды — лента спрашивает каждую. */
+/** Положения строк шестерёнки для любой команды компании экрана. */
 export function useClientSettingLevelsOf(): (teamId: string | null) => ClientSettingLevels {
   const caps = useClientsCapabilities();
   const scope = useClientsScopeOrNull();
-  const role = useCurrentRole().data;
-  const map = useMyAccess().data;
+  const map = useAccessMapOf(scope?.kind === "member" ? scope.tenantId : null);
   const own = caps.manage;
-  const activeMember = scope?.kind === "member" && scope.isActive;
+  const member = scope?.kind === "member";
+  const role = scope?.role;
   return useCallback(
-    (teamId: string | null) => clientSettingLevels({ own, activeMember, role, map, teamId }),
-    [own, activeMember, role, map],
+    (teamId: string | null) => clientSettingLevels({ own, member, role, map, teamId }),
+    [own, member, role, map],
   );
 }
 
