@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import type React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -34,6 +34,10 @@ import { visitMark } from "@/features/clients/visit-mark";
 // визита. Владелец 2026-08-08: «чтоб выглядело как клиент полноценный с
 // историей». По закону «один дизайн на все списки» вёрстка живёт здесь, а
 // экраны отличаются только тем, ЧТО показывают и что делают жесты.
+
+/** Ширина места номера в строке: «+357 99 999 999» и «+7 916 123 45 67»
+ *  шрифтом 14 с моноширинными цифрами — и запас до даты. */
+const PHONE_COLUMN = 138;
 
 export default function ClientRow({
   client,
@@ -98,6 +102,10 @@ export default function ClientRow({
     mark?.kind === "unclosed" ? t.warning : mark?.kind === "ahead" ? t.sub : t.accent;
   const MarkIcon = mark?.kind === "ahead" ? CalendarClock : Clock;
   const phoneShown = cardFields.phone && client.phone.trim() !== "";
+  // Место номера — под самый длинный номер при крупном тексте телефона
+  // (ограничен тем же 1.3, что и сами строки).
+  const { fontScale } = useWindowDimensions();
+  const phoneColumn = Math.round(PHONE_COLUMN * Math.min(fontScale, 1.3));
 
   // VoiceOver: строка зачитывает реально показанные бизнес-сигналы в
   // порядке экрана, а не только имя+телефон.
@@ -179,25 +187,25 @@ export default function ClientRow({
               видно номер телефона»), в том же виде, что на карточке: в базе
               номера лежат как их когда-то ввели, и «+357 97469998» рядом с
               «+357 97 469998» читались как два разных человека. */}
+          {/* НОМЕР И ДАТА — КОЛОНКАМИ (владелец 01.10: «чёткий столбик…
+              специальное место для визита, для номера и для имени, чтобы
+              дата не прыгала слева направо»). У номера место одной ширины
+              под самый длинный номер («+357 99 999 999», «+7 916 123 45 67»),
+              дата начинается за ним в одной точке у каждой строки — даже у
+              клиента без номера. */}
           {phoneShown || mark ? (
             <View className="mt-0.5 flex-row items-center">
-              {phoneShown ? (
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  numberOfLines={1}
-                  style={{ fontSize: 14, color: t.sub, fontVariant: ["tabular-nums"] }}
-                >
-                  {formatPhoneForDisplay(client.phone, country)}
-                </Text>
-              ) : null}
-              {phoneShown && mark ? (
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  style={{ marginHorizontal: 6, fontSize: 13, color: t.faint }}
-                >
-                  ·
-                </Text>
-              ) : null}
+              <View style={{ width: phoneColumn }}>
+                {phoneShown ? (
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    numberOfLines={1}
+                    style={{ fontSize: 14, color: t.sub, fontVariant: ["tabular-nums"] }}
+                  >
+                    {formatPhoneForDisplay(client.phone, country)}
+                  </Text>
+                ) : null}
+              </View>
               {mark ? (
                 <View className="shrink flex-row items-center gap-1">
                   <MarkIcon color={markColor} size={12} strokeWidth={2} />
