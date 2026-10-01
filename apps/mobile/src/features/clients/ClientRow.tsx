@@ -8,6 +8,7 @@ import {
   Archive,
   Ban,
   Bell,
+  CalendarClock,
   CalendarPlus,
   Check,
   Clock,
@@ -159,42 +160,20 @@ export default function ClientRow({
   // «Историю записей» ему закрыли — строки о визитах нет вовсе: «нет
   // записей» у клиента, который был вчера, — неправда (проверка глазами 30.09).
   const showLast = cardFields.last && clientBlockLevel(client, "clients.history") !== "hidden";
-  // ДАТА — СВОИМ МЕСТОМ В КОЛОНКЕ СПРАВА (владелец 1.10: «в одном месте,
-  // где должно находиться это чётко»): последний визит серым, а если визитов
-  // не было, но человек записан, — дата записи акцентом. В мете остаются
-  // только слова: «не закрыт» и «нет записей».
-  const rightDate = !showLast
+  // ЗАПИСИ КЛИЕНТА — ИНФОРМАЦИОННОЙ СТРОКОЙ НАД НОМЕРОМ (владелец 01.10:
+  // «дата над номером телефона, информационная»). До 01.10 дата стояла
+  // колонкой справа рядом с суммами; суммы ушли, и дата встала в одну строку
+  // со всем, что говорит о записях: последний визит — серым, первая запись
+  // впереди — акцентом, незакрытый визит — жёлтым, «нет записей» — бледным.
+  const visitLine: { text: string; color: string; icon: typeof Clock | null } | null = !showLast
     ? null
     : stats?.lastVisitDate
-      ? { text: formatShortDateRu(stats.lastVisitDate), color: t.sub }
+      ? { text: formatShortDateRu(stats.lastVisitDate), color: t.sub, icon: Clock }
       : stats?.nextApt
-        ? { text: formatShortDateRu(stats.nextApt.date), color: t.accent }
-        : null;
-  if (showLast && !rightDate) {
-    metaLead.push({
-      key: "last",
-      node: unclosedText ? (
-        <View className="flex-row items-center gap-1">
-          <Clock color={t.warning} size={12} strokeWidth={2} />
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="text-[11px]"
-            style={{ color: t.warning }}
-          >
-            {unclosedText}
-          </Text>
-        </View>
-      ) : (
-        <Text
-          maxFontSizeMultiplier={1.3}
-          className="text-[11px]"
-          style={{ color: t.faint }}
-        >
-          нет записей
-        </Text>
-      ),
-    });
-  }
+        ? { text: formatShortDateRu(stats.nextApt.date), color: t.accent, icon: CalendarClock }
+        : unclosedText
+          ? { text: unclosedText, color: t.warning, icon: Clock }
+          : { text: "нет записей", color: t.faint, icon: null };
   const tagNames = cardFields.meta
     ? (client.tag_ids
         .map((tid) => tags.find((x) => x.id === tid)?.name)
@@ -301,6 +280,20 @@ export default function ClientRow({
               {link}
             </Text>
           ) : null}
+          {visitLine ? (
+            <View className="mt-0.5 flex-row items-center gap-1">
+              {visitLine.icon ? (
+                <visitLine.icon color={visitLine.color} size={12} strokeWidth={2} />
+              ) : null}
+              <Text
+                maxFontSizeMultiplier={1.3}
+                numberOfLines={1}
+                style={{ fontSize: 12, color: visitLine.color, fontVariant: ["tabular-nums"] }}
+              >
+                {visitLine.text}
+              </Text>
+            </View>
+          ) : null}
           {/* НОМЕР ПОД ИМЕНЕМ (владелец 2026-08-06: «хочу, чтоб сразу было
               видно номер телефона»). Он же — то, по чему ищут: поиск и так
               понимает цифры, но раньше найденный номер нигде не показывался,
@@ -359,19 +352,6 @@ export default function ClientRow({
             </View>
           ) : null}
         </View>
-        {/* КОЛОНКА СПРАВА (владелец 1.10): дата последней записи — на своём
-            месте, по правому краю, ровно друг под другом от строки к строке. */}
-        {rightDate ? (
-          <View style={{ alignItems: "flex-end", marginLeft: 12, gap: 1 }}>
-            <Text
-              maxFontSizeMultiplier={1.3}
-              numberOfLines={1}
-              style={{ fontSize: 12, color: rightDate.color, fontVariant: ["tabular-nums"] }}
-            >
-              {rightDate.text}
-            </Text>
-          </View>
-        ) : null}
       </Pressable>
       {/* ТАП ЗВОНИТ, УДЕРЖАНИЕ — СПОСОБЫ СВЯЗИ (владелец 2026-09-06): та же
           кнопка и тот же лист, что у номера в карточке и в записи. С
