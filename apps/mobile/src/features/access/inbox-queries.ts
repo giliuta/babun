@@ -4,6 +4,8 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { invitationErrorMessage } from "@/features/settings/invitation-flow";
 import { activateAcceptedInvitation } from "@/features/settings/invitations";
+import { myCalendarsQueryKey } from "@/features/settings/my-calendars-key";
+import { getActiveTenantId } from "@/lib/active-tenant";
 
 import { isInvitationGone, parseMyInvitations, type IncomingInvitation } from "./invitation-inbox";
 import { AccessRequestError } from "./queries";
@@ -31,8 +33,10 @@ export function useMyInvitations() {
   });
 }
 
-/** Принять: членство и права — на сервере, переход в компанию — тем же шагом,
- *  что у приёма по ссылке (`activateAcceptedInvitation`). */
+/** Принять: членство и права — на сервере. ПЕРЕХОДА НЕТ (владелец 01.10:
+ *  «добавление просто в команды и всё… переключаться точно не надо»):
+ *  команды компании просто встают в ленту календаря. Переход — только у
+ *  того, кому стоять негде (своей компании на устройстве нет). */
 export function useAcceptInvitation() {
   const qc = useQueryClient();
   return useMutation({
@@ -43,10 +47,14 @@ export function useAcceptInvitation() {
       if (error || !tenantId) {
         throw new Error(invitationErrorMessage(error?.message ?? "invitation not found"));
       }
-      await activateAcceptedInvitation(tenantId, invitation.role);
+      if (!getActiveTenantId()) await activateAcceptedInvitation(tenantId, invitation.role);
       return tenantId;
     },
-    onSettled: () => void qc.invalidateQueries({ queryKey: myInvitationsKeyRoot }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: myInvitationsKeyRoot });
+      // Лента календаря — список «мои календари»: новые команды встают в неё.
+      void qc.invalidateQueries({ queryKey: myCalendarsQueryKey });
+    },
     meta: { errorHandled: true },
   });
 }
