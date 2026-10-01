@@ -65,6 +65,12 @@ const TITLE: Record<string, string> = {
   "clients.requisites": "Реквизиты",
   "clients.history": "История записей",
   "clients.money": "Долг и деньги",
+  // Настройки клиентов — именами строк шестерёнки клиентов (владелец 01.10).
+  "clients.settings_card": "Карточка клиента",
+  "clients.settings_ways": "Способы связи",
+  "clients.settings_maps": "Карты для маршрута",
+  "clients.settings_objects": "Типы объектов",
+  "clients.settings_tags": "Теги клиентов",
   "company.sms_templates": "Шаблоны SMS",
 };
 
@@ -136,6 +142,13 @@ const STEP: Record<string, Words> = {
   "clients.requisites": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
   "clients.history": { off: "Скрыта", read: "Видит" },
   "clients.money": { off: "Скрыты", read: "Видит" },
+  // Настройки клиентов — как «Настройки команды» (владелец 01.10: «в
+  // настройках он может редактировать или не может редактировать»).
+  "clients.settings_card": { off: "Скрыта", read: "Только видит", write: "Видит и меняет" },
+  "clients.settings_ways": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.settings_maps": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.settings_objects": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.settings_tags": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
 };
 
 /** ОПАСНЫЕ СТУПЕНИ — одна строка предупреждения под пояснением (владелец
@@ -151,6 +164,7 @@ const DANGER: Record<string, Words> = {
   "clients.scope": { all: "Откроется вся база клиентов компании" },
   "clients.contacts": { read: "Сможет звонить и писать клиентам со своего телефона" },
   "clients.files": { write: "Сможет удалять файлы клиента" },
+  "clients.settings_tags": { write: "Сможет удалять теги у всех клиентов команды" },
 };
 
 /** Имя строки права. */

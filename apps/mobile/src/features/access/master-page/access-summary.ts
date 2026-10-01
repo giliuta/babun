@@ -113,6 +113,21 @@ export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock
     { key: "contact", title: "Связь", keys: ["clients.contacts"] },
     { key: "card", title: "Карточка клиента", keys: CLIENT_CARD_ROW_ORDER },
     { key: "history", title: "История и деньги", keys: ["clients.history", "clients.money"] },
+    // НАСТРОЙКИ КЛИЕНТОВ — по строке на каждую строку шестерёнки клиентов
+    // (владелец 01.10: «в настройках он может редактировать или не может…
+    // как форма записи — поблочно»), как «Настройки команды» у календаря.
+    {
+      key: "settings",
+      title: "Настройки клиентов",
+      // В порядке строк шестерёнки клиентов.
+      keys: [
+        "clients.settings_card",
+        "clients.settings_ways",
+        "clients.settings_maps",
+        "clients.settings_objects",
+        "clients.settings_tags",
+      ],
+    },
   ],
   calendar: [
     // Доходы и расходы — в «Главном» (владелец 30.09: «переходим к доход

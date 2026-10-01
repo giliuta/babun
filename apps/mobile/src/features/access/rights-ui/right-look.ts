@@ -18,7 +18,9 @@ import {
   HandCoins,
   House,
   Landmark,
+  MessageCircle,
   MessageSquare,
+  Navigation,
   Palette,
   Paperclip,
   PenLine,
@@ -105,6 +107,12 @@ const LOOK: Record<string, RightLook> = {
   "clients.requisites": { icon: Landmark, tile: SETTINGS_TILE.teal },
   "clients.history": { icon: CalendarClock, tile: SETTINGS_TILE.blue },
   "clients.money": { icon: HandCoins, tile: SETTINGS_TILE.orange },
+  // Настройки клиентов — те же значки и цвета, что у строк шестерёнки клиентов.
+  "clients.settings_card": { icon: Eye, tile: SETTINGS_TILE.blue },
+  "clients.settings_ways": { icon: MessageCircle, tile: SETTINGS_TILE.green },
+  "clients.settings_maps": { icon: Navigation, tile: SETTINGS_TILE.blue },
+  "clients.settings_objects": { icon: House, tile: SETTINGS_TILE.teal },
+  "clients.settings_tags": { icon: Tags, tile: SETTINGS_TILE.purple },
   "company.sms_templates": { icon: MessageSquare, tile: SETTINGS_TILE.green },
 };
 

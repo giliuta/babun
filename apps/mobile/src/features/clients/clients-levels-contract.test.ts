@@ -612,10 +612,24 @@ describe("экраны: вкладка «Клиенты» открывается
       "card-fields.tsx",
       "visits.tsx",
       "attachments.tsx",
+      "channels.tsx",
+      "maps.tsx",
+      "object-types.tsx",
     ]) {
       const source = read(file);
-      assert.ok(source.includes("<ClientsCompanyRoute"), `${file} открывается мимо ворот источника`);
+      // Подстраницы шестерёнки идут через дверь права своей строки — она
+      // сама стоит на воротах источника (проверка ниже).
+      assert.ok(
+        source.includes("<ClientsCompanyRoute") || source.includes("<ClientSettingsRoute"),
+        `${file} открывается мимо ворот источника`,
+      );
     }
+  });
+
+  test("дверь права строки шестерёнки стоит на воротах источника", () => {
+    const door = readFileSync(resolve(here, "ClientSettingsRoute.tsx"), "utf8");
+    assert.match(door, /<ClientsCompanyRoute kind="tab">/);
+    assert.match(door, /level === "hidden"/, "«Скрыты» открывались бы адресом");
   });
 
   test("общий адрес из записи держит компанию календаря", () => {

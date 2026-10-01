@@ -31,8 +31,8 @@ import {
   useToggleClientFunction,
   type ClientFunctionKey,
 } from "@/features/clients/client-functions";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
-import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
+import { useClientSettingLevel } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
 import { useFeatureOn } from "@/features/settings/company-features";
 
@@ -84,9 +84,9 @@ const ROW_FIELDS: { field: CardField; label: string; icon: LucideIcon }[] = [
 // (STORY-082).
 export default function ClientCardSettingsRoute() {
   return (
-    <ClientsCompanyRoute kind="tab">
+    <ClientSettingsRoute row="card">
       <ClientCardSettingsScreen />
-    </ClientsCompanyRoute>
+    </ClientSettingsRoute>
   );
 }
 
@@ -96,8 +96,9 @@ function ClientCardSettingsScreen() {
   const teamRow =
     (team ? ownTeams.find((tm) => tm.id === team) : undefined) ?? ownTeams[0] ?? null;
   const teamId = teamRow?.id ?? null;
-  const caps = useClientsCapabilities();
-  const readOnly = !caps.manage;
+  // «Только видит» (владелец 01.10) — галки стоят, но не переключаются; и
+  // блоки страницы, и строка списка — одно право «Карточки клиента».
+  const readOnly = useClientSettingLevel("card", teamId) !== "write";
 
   // Объекты выключаются у компании там, где их заводят («Записи»): без них
   // блока нет вовсе — ни галкой, ни во «Всегда».
@@ -165,7 +166,7 @@ function ClientCardSettingsScreen() {
               icon={f.icon}
               on={prefs[f.field]}
               locked={false}
-              readOnly={false}
+              readOnly={readOnly}
               onToggle={() => toggleField.mutate(f.field)}
             />
           ))}

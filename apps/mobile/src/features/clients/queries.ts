@@ -926,6 +926,13 @@ export interface UpdateClientTagInput {
 function assertCanManageClientTags(
   scope: QueryScope,
 ): asserts scope is QueryScope & { tenantId: string } {
+  // ПАРТНЁР ПРАВИТ ТЕГИ КОМАНДЫ ПО ПРАВУ «ТЕГИ КЛИЕНТОВ» (владелец 01.10).
+  // Какой команды — решает сервер политикой `client_tags_write_settings`;
+  // здесь только не мешаем ему ответить.
+  if (scope.kind === "member") {
+    if (!scope.tenantId) throw new Error("Нет активного тенанта");
+    return;
+  }
   assertOwnCompany(scope, "Управлять тегами");
   if (scope.role !== "owner" && scope.role !== "dispatcher") {
     throw new Error("Управлять тегами может владелец или диспетчер.");

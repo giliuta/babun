@@ -36,6 +36,10 @@ export interface ToggleListItem {
   locked?: boolean;
   /** Приписка, объясняющая замок: «всегда», «нужна хотя бы одна». */
   lockedNote?: string;
+  /** «Только видит» (права партнёра, 01.10): галка стоит как есть, тап не
+   *  переключает, но подпись не гаснет — это не запрет пункта, а чужая
+   *  настройка, которую человек читает. */
+  readOnly?: boolean;
   onToggle: () => void;
 }
 
@@ -47,13 +51,13 @@ export function ToggleRow({ item }: { item: ToggleListItem }) {
   return (
     <Pressable
       onPress={() => {
-        if (item.locked) return;
+        if (item.locked || item.readOnly) return;
         haptics.tap();
         item.onToggle();
       }}
-      disabled={item.locked}
+      disabled={item.locked || item.readOnly}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: item.checked, disabled: !!item.locked }}
+      accessibilityState={{ checked: item.checked, disabled: !!(item.locked || item.readOnly) }}
       accessibilityLabel={item.label}
       style={({ pressed }) => ({
         flex: 1,

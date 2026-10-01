@@ -407,7 +407,10 @@ export function useSaveLocationLabels(teamId: string | null = null) {
   return useMutation({
     mutationFn: async (l: LocationLabel[]) => {
       if (!tenantId) throw new Error("Нет активной компании");
-      if (role !== "owner") {
+      // ПАРТНЁР ПРАВИТ ТИПЫ СВОЕЙ КОМАНДЫ ПО ПРАВУ «ТИПЫ ОБЪЕКТОВ» (владелец
+      // 01.10): решает сервер (`apply_team_location_label_changes`). Общий
+      // справочник компании без команды — по-прежнему только владельцу.
+      if (role !== "owner" && !(teamId && role === "master")) {
         throw new Error("Настраивать типы объектов может только владелец.");
       }
       const normalized = l.map((label) => ({

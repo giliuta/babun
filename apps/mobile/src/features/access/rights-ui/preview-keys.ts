@@ -64,6 +64,12 @@ export const SETTINGS_PREVIEW_KEYS: readonly string[] = [
   "calendar.booking_form",
   "calendar.services",
   "calendar.labels",
+  // Строки шестерёнки клиентов (владелец 01.10) — тот же вид строки.
+  "clients.settings_card",
+  "clients.settings_ways",
+  "clients.settings_maps",
+  "clients.settings_objects",
+  "clients.settings_tags",
 ];
 
 export function hasBlockPreview(key: string): boolean {

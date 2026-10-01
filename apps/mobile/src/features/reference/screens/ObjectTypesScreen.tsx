@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
+import { useClientSettingLevel } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
@@ -78,6 +79,10 @@ export function ObjectTypesScreen() {
     (team && ownTeams.some((tm) => tm.id === team) ? team : null) ??
     ownTeams[0]?.id ??
     null;
+  // «ТОЛЬКО ВИДИТ» (права партнёра, владелец 01.10): ни кнопки внизу, ни
+  // свайпов, ни ручек, строка не открывает редактор. Вне вкладки «Клиенты»
+  // (Кабинет, запись) — как и раньше, правка.
+  const readOnly = useClientSettingLevel("objects", teamId) !== "write";
   const {
     data: labels = [],
     isLoading,
@@ -220,10 +225,14 @@ export function ObjectTypesScreen() {
         <EmptyState
           fill
           title="Типов пока нет"
-          action={{
-            label: seeding ? "Добавляем…" : "Добавить стандартные",
-            onPress: () => void seedPreset(),
-          }}
+          action={
+            readOnly
+              ? undefined
+              : {
+                  label: seeding ? "Добавляем…" : "Добавить стандартные",
+                  onPress: () => void seedPreset(),
+                }
+          }
         />
       ) : (
         <ScrollView
@@ -237,6 +246,7 @@ export function ObjectTypesScreen() {
               rowHeight={ROW_H}
               spaced
               labelFor={(label) => label.name}
+              rangeFor={(index) => (readOnly ? [index, index] : [0, labels.length - 1])}
               // Ручка внутри строки: строка ещё и смахивается влево, а колонка
               // ручки снаружи не уезжает — «Удалить» упиралось бы в неё.
               handleInside
@@ -245,11 +255,11 @@ export function ObjectTypesScreen() {
             >
               {(label, _index, handle) => (
                 <SwipeRow
-                  label="Удалить"
+                  label={readOnly ? undefined : "Удалить"}
                   color={t.danger}
                   icon={Trash2}
                   accessibilityLabel={`Удалить тип ${label.name}`}
-                  onAction={() => remove(label)}
+                  onAction={readOnly ? undefined : () => remove(label)}
                 >
                   <View
                     style={{
@@ -262,9 +272,10 @@ export function ObjectTypesScreen() {
                     }}
                   >
                     <Pressable
+                      disabled={readOnly}
                       onPress={() => setEditing({ mode: "edit", label })}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Тип ${label.name}, переименовать`}
+                      accessibilityRole={readOnly ? "text" : "button"}
+                      accessibilityLabel={readOnly ? `Тип ${label.name}` : `Тип ${label.name}, переименовать`}
                       style={({ pressed }) => ({
                         flex: 1,
                         height: ROW_H,
@@ -310,7 +321,7 @@ export function ObjectTypesScreen() {
       {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА (LOCKED 2026-08-27): типы
           заводят пачкой, и после первого не должно приходиться доскролливать
           список ради второго. Тот же приём, что у меток и услуг. */}
-      {!isLoading && !isError && labels.length > 0 ? (
+      {!readOnly && !isLoading && !isError && labels.length > 0 ? (
         <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
           <GradientButton
             label="Добавить тип"

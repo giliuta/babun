@@ -30,7 +30,8 @@ import {
   useSetClientTagHidden,
   useUpdateClientTag,
 } from "@/features/clients/queries";
-import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
+import { useClientSettingLevel } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
 
 // ТЕГИ КЛИЕНТОВ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
@@ -62,9 +63,9 @@ type Editing = { mode: "create" } | { mode: "edit"; tag: ClientTag };
 // (STORY-082).
 export default function ClientTagsScreenRoute() {
   return (
-    <ClientsCompanyRoute kind="tab">
+    <ClientSettingsRoute row="tags">
       <ClientTagsScreen />
-    </ClientsCompanyRoute>
+    </ClientSettingsRoute>
   );
 }
 
@@ -80,6 +81,9 @@ function ClientTagsScreen() {
     (team && ownTeams.some((tm) => tm.id === team) ? team : null) ??
     ownTeams[0]?.id ??
     null;
+  // «ТОЛЬКО ВИДИТ» (владелец 01.10, как метки в «Настройках команды»): ни
+  // кнопки внизу, ни свайпов, ни ручек, строка не открывает редактор.
+  const readOnly = useClientSettingLevel("tags", teamId) !== "write";
   const createTag = useCreateClientTag();
   const updateTag = useUpdateClientTag();
   const deleteTag = useDeleteClientTag();
@@ -214,10 +218,14 @@ function ClientTagsScreen() {
         <EmptyState
           fill
           title="Тегов пока нет"
-          action={{
-            label: "Добавить тег",
-            onPress: () => setEditing({ mode: "create" }),
-          }}
+          action={
+            readOnly
+              ? undefined
+              : {
+                  label: "Добавить тег",
+                  onPress: () => setEditing({ mode: "create" }),
+                }
+          }
         />
       ) : (
         <ScrollView
@@ -231,6 +239,7 @@ function ClientTagsScreen() {
               rowHeight={ROW_H}
               spaced
               labelFor={(tag) => tag.name}
+              rangeFor={(index) => (readOnly ? [index, index] : [0, tags.length - 1])}
               // Ручка ВНУТРИ строки: строка ещё и смахивается, а колонка ручки
               // снаружи не уезжает — «Удалить» упиралось бы в неё.
               handleInside
@@ -239,15 +248,15 @@ function ClientTagsScreen() {
             >
               {(tag, _index, handle) => (
                 <SwipeRow
-                  label="Удалить"
+                  label={readOnly ? undefined : "Удалить"}
                   color={t.danger}
                   icon={Trash2}
                   accessibilityLabel={`Удалить тег ${tag.name}`}
-                  onAction={() => remove(tag)}
+                  onAction={readOnly ? undefined : () => remove(tag)}
                   // ЛЕВАЯ КРОМКА — СОСТОЯНИЕ, ПРАВАЯ — РАЗРУШЕНИЕ. Закон общий
                   // для всех справочников и держится тестом
                   // `swipe-edge-contract.test.ts`.
-                  leading={{
+                  leading={readOnly ? undefined : {
                     label: tag.hidden ? "Показать" : "Скрыть",
                     color: tag.hidden ? t.success : t.warning,
                     icon: tag.hidden ? RotateCcw : EyeOff,
@@ -269,9 +278,10 @@ function ClientTagsScreen() {
                     }}
                   >
                     <Pressable
+                      disabled={readOnly}
                       onPress={() => setEditing({ mode: "edit", tag })}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Тег ${tag.name}, переименовать`}
+                      accessibilityRole={readOnly ? "text" : "button"}
+                      accessibilityLabel={readOnly ? `Тег ${tag.name}` : `Тег ${tag.name}, переименовать`}
                       accessibilityHint="Открывает название, цвет и значок"
                       style={({ pressed }) => ({
                         flex: 1,
@@ -314,7 +324,7 @@ function ClientTagsScreen() {
         </ScrollView>
       )}
 
-      {!tagsQuery.isLoading && !tagsQuery.isError && tags.length > 0 ? (
+      {!readOnly && !tagsQuery.isLoading && !tagsQuery.isError && tags.length > 0 ? (
         <View
           style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}
         >
