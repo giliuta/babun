@@ -22,6 +22,16 @@ export type ClientCardBlock =
 
 export type ClientBlockLevel = "hidden" | "read" | "write";
 
+/** ОТКРЫВАЕТ ЛИ ОН СТРАНИЦУ КЛИЕНТА (владелец 01.10, «Открывает карточку»).
+ *  Сервер кладёт в `blocks` ключ `clients.open`: «off» — строка списка есть,
+ *  а перехода на страницу нет (блоки страницы он и так отдаёт пустыми). Нет
+ *  ключа — своя база или сервер до наката: переход есть, как раньше. */
+export function canOpenClientCard(
+  client: { blocks?: Readonly<Record<string, string>> | null } | null | undefined,
+): boolean {
+  return client?.blocks?.["clients.open"] !== "off";
+}
+
 /** Положение блока карточки у клиента. */
 export function clientBlockLevel(
   client: { blocks?: Readonly<Record<string, string>> | null } | null | undefined,

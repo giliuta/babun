@@ -72,6 +72,12 @@ const cardBlocks = norm(readFileSync(join(MIGRATIONS_DIR, CARD_BLOCKS), "utf8"))
 const LEAKS = "20260930235950_clients_leak_paths.sql";
 const leaks = norm(readFileSync(join(MIGRATIONS_DIR, LEAKS), "utf8"));
 
+// «ГЛАВНОЕ» КЛИЕНТОВ (владелец 01.10): «Открывает карточку» гасит блоки
+// страницы клиента, «Карточка из записи» — окно клиента записи. Обе функции
+// переписаны сознательно — сторож держит их новые условия.
+const OPEN_CARD = "20261001161500_clients_open_card_rights.sql";
+const openCard = norm(readFileSync(join(MIGRATIONS_DIR, OPEN_CARD), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
@@ -81,7 +87,6 @@ describe("сервер: клиенты по уровням", () => {
       assert.equal(lastDefiner(fn), ONE_BY_ONE, `${fn} переопределён позже`);
     }
     for (const fn of [
-      "list_master_clients_safe",
       "list_master_appointments_safe",
       "sms_message_json",
       "sms_for_client",
@@ -95,7 +100,6 @@ describe("сервер: клиенты по уровням", () => {
       assert.equal(lastDefiner(fn), LEAKS, `${fn} переопределён позже`);
     }
     for (const fn of [
-      "access_client_blocks",
       "client_masked_for_member",
       "list_member_clients",
       "list_client_members",
@@ -106,6 +110,30 @@ describe("сервер: клиенты по уровням", () => {
     ]) {
       assert.equal(lastDefiner(fn), CARD_BLOCKS, `${fn} переопределён позже`);
     }
+    for (const fn of ["access_client_blocks", "list_master_clients_safe"]) {
+      assert.equal(lastDefiner(fn), OPEN_CARD, `${fn} переопределён позже`);
+    }
+  });
+
+  test("«Открывает карточку» и «Карточка из записи» — условия на сервере", () => {
+    // Блоки страницы без «Открывает карточку» гаснут; ключ едет в `blocks`.
+    assert.ok(openCard.includes("when k.block_key = any(page_only) and tm.open_level is distinct from 'write' then 0"));
+    assert.ok(openCard.includes("select tm.team_id, 'clients.open'::text, case when tm.open_level = 'write' then 2 else 0 end"));
+    // «Меняет» блока — по-прежнему только при «Меняет» базы этой команды.
+    assert.ok(openCard.includes("when l.level = 'write' and tm.card_level = 'write' then 2"));
+    // Метка, последняя запись и деньги стоят в строке списка — не гаснут.
+    assert.ok(
+      openCard.includes(
+        "page_only constant text[] := array[ 'clients.note', 'clients.people', 'clients.objects', 'clients.personal', 'clients.files', 'clients.requisites' ];",
+      ),
+    );
+    // Клиент записи — только из команды, где открыт переход из записи, и
+    // «Около записи» осталось на месте.
+    assert.ok(openCard.includes("and a.team_id = any(ct.ids) and a.team_id = any(ct.door_ids)"));
+    assert.ok(openCard.includes("and a.date between (cs.today - 7)::text and (cs.today + 1)::text"));
+    // У тех, кто уже работает, ничего не пропадает.
+    assert.ok(openCard.includes("'clients.open', mc.team_id, 'write'"));
+    assert.ok(openCard.includes("'clients.from_record', mc.team_id, 'write'"));
   });
 
   test("блоки карточки: маска — контакты всегда, закрытые блоки пустые, у всех дверей одна", () => {

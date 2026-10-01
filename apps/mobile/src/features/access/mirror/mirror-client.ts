@@ -28,6 +28,17 @@ const CARD_KEYS = [
   "clients.money",
 ] as const;
 
+/** Блоки, которые есть только НА СТРАНИЦЕ клиента: без «Открывает карточку»
+ *  сервер отдаёт их пустыми (`access_client_blocks`, 01.10). */
+const PAGE_ONLY_KEYS: ReadonlySet<string> = new Set([
+  "clients.note",
+  "clients.people",
+  "clients.objects",
+  "clients.personal",
+  "clients.files",
+  "clients.requisites",
+]);
+
 const RANK: Partial<Record<AccessLevel, number>> = { off: 0, read: 1, write: 2 };
 const CONTACTS_RANK: Partial<Record<AccessLevel, number>> = { off: 0, day: 1, read: 2 };
 
@@ -55,9 +66,13 @@ export function mirrorClientBlocks(
   let card = 0;
   for (const levels of teams) card = Math.max(card, levels.clients === "write" ? 2 : 1);
   out.clients = word(teams.length === 0 ? 0 : card);
+  let open = 0;
+  for (const levels of teams) open = Math.max(open, levels["clients.open"] === "write" ? 2 : 0);
+  out["clients.open"] = word(open);
   for (const key of CARD_KEYS) {
     let best = 0;
     for (const levels of teams) {
+      if (PAGE_ONLY_KEYS.has(key) && levels["clients.open"] !== "write") continue;
       const own = RANK[levels[key] ?? "off"] ?? 0;
       const rank = own === 2 && levels.clients !== "write" ? 1 : own;
       best = Math.max(best, rank);

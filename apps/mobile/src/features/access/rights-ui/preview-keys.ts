@@ -40,7 +40,13 @@ export const MONEY_PREVIEW_KEYS: readonly string[] = [
   "finance.debts",
 ];
 
-export const CLIENTS_PREVIEW_KEYS: readonly string[] = ["clients", "clients.scope", "clients.contacts"];
+export const CLIENTS_PREVIEW_KEYS: readonly string[] = [
+  "clients",
+  "clients.scope",
+  "clients.contacts",
+  "clients.open",
+  "clients.from_record",
+];
 
 /** Блоки карточки клиента (владелец 30.09: «страница клиентов по правам —
  *  полностью»): вид — сам блок карточки. */

@@ -57,7 +57,15 @@ describe("зеркало: строка клиента глазами сотру�
   test("открытое остаётся; «Меняет» блока при «Только видит» карточки — «Видит»", () => {
     const row = mirrorMemberClient(
       client,
-      map({ A: { clients: "read", "clients.note": "write", "clients.labels": "read", "clients.contacts": "day" } }),
+      map({
+        A: {
+          clients: "read",
+          "clients.open": "write",
+          "clients.note": "write",
+          "clients.labels": "read",
+          "clients.contacts": "day",
+        },
+      }),
     );
     assert.equal(row.comment, "Код 12");
     assert.equal(row.city, "Лимассол");
@@ -67,9 +75,25 @@ describe("зеркало: строка клиента глазами сотру�
   });
 
   test("команда клиента решает; нет её — самое широкое по командам", () => {
-    const m = map({ A: { clients: "write", "clients.note": "off" }, B: { clients: "write", "clients.note": "write" } });
+    const m = map({
+      A: { clients: "write", "clients.note": "off" },
+      B: { clients: "write", "clients.open": "write", "clients.note": "write" },
+    });
     assert.equal(mirrorClientBlocks({ team_id: "A" }, m)["clients.note"], "off");
     assert.equal(mirrorClientBlocks({ team_id: "Z" }, m)["clients.note"], "write");
+  });
+
+  test("«Открывает карточку: не может» — блоков страницы нет, строка списка остаётся", () => {
+    const row = mirrorMemberClient(
+      client,
+      map({ A: { clients: "write", "clients.note": "write", "clients.labels": "read" } }),
+    );
+    assert.equal(row.blocks?.["clients.open"], "off");
+    assert.equal(row.blocks?.["clients.note"], "off");
+    assert.equal(row.comment, "");
+    // Метка и теги стоят и в строке списка — их держит своё право.
+    assert.equal(row.blocks?.["clients.labels"], "read");
+    assert.equal(row.city, "Лимассол");
   });
 });
 
@@ -129,7 +153,7 @@ describe("зеркало: какие клиенты в его наборе (ка
     // Вся база в A без заметки; в B заметка открыта, но c1 в окне B нет.
     const m = map({
       A: { clients: "read", "clients.scope": "all" },
-      B: { clients: "read", "clients.note": "read" },
+      B: { clients: "read", "clients.open": "write", "clients.note": "read" },
     });
     const view = mirrorView(m, data({ appointments: [appt("c2", "B", TODAY)] }));
     assert.equal(mirrorClientBlocks(row("c1"), m, view)["clients.note"], "off");

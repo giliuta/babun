@@ -1,9 +1,11 @@
+import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   RecordColorPalette,
   RecordColorRule,
 } from "@babun/shared/local/calendar-settings";
 import { getStorage } from "@babun/shared/storage";
+import { changedDesignColumns, designColumns } from "./team-design-columns";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/features/settings/tenant";
@@ -84,6 +86,11 @@ type Query = {
     row: Record<string, unknown>,
     opts: { onConflict: string },
   ) => Promise<{ error: { message: string } | null }>;
+  update: (row: Record<string, unknown>) => {
+    eq: (col: string, v: string) => {
+      eq: (col: string, v: string) => Promise<{ error: { message: string } | null }>;
+    };
+  };
 };
 const table = () =>
   (supabase as unknown as { from: (t: string) => Query }).from("team_design");
@@ -104,6 +111,7 @@ function toDesign(row: Row): TeamDesign {
 }
 
 type DesignMap = Record<string, TeamDesign>;
+
 
 function readCache(tenantId: string | null): DesignMap | undefined {
   if (!tenantId) return undefined;
@@ -162,24 +170,30 @@ export function useSaveTeamDesign() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   const key = teamDesignQueryKey(tenantId);
+  // Что было на экране у команды перед правкой: `onMutate` идёт раньше
+  // записи и успевает положить сюда снимок до своей оптимистичной подмены.
+  const before = useRef(new Map<string, TeamDesign | null>());
   return useMutation({
     networkMode: "always",
     mutationFn: async (input: { teamId: string; next: TeamDesign }) => {
       if (!tenantId) throw new Error("Нет активной компании");
+      const was = before.current.get(input.teamId) ?? null;
+      before.current.delete(input.teamId);
+      const stamp = { updated_at: new Date().toISOString() };
+      if (was) {
+        // Строка на сервере есть — уходят только изменённые колонки.
+        const patch = changedDesignColumns(was, input.next);
+        if (Object.keys(patch).length === 0) return input;
+        const { error } = await table()
+          .update({ ...patch, ...stamp })
+          .eq("tenant_id", tenantId)
+          .eq("team_id", input.teamId);
+        if (error) throw new Error(error.message);
+        return input;
+      }
+      // Строки ещё нет — первая правка команды заводит её целиком.
       const { error } = await table().upsert(
-        {
-          tenant_id: tenantId,
-          team_id: input.teamId,
-          record_color_rule: input.next.rule,
-          record_color_palette: input.next.palette,
-          record_color_fallback: input.next.fallback,
-          disabled_blocks: input.next.disabledBlocks,
-          client_list_off: input.next.listOff ?? null,
-          contact_ways: input.next.contactWays ?? null,
-          map_services: input.next.mapServices ?? null,
-          service_every_months: input.next.serviceEveryMonths ?? null,
-          updated_at: new Date().toISOString(),
-        },
+        { tenant_id: tenantId, team_id: input.teamId, ...designColumns(input.next), ...stamp },
         { onConflict: "tenant_id,team_id" },
       );
       if (error) throw new Error(error.message);
@@ -188,6 +202,7 @@ export function useSaveTeamDesign() {
     onMutate: async ({ teamId, next }) => {
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<DesignMap>(key);
+      before.current.set(teamId, prev?.[teamId] ?? null);
       qc.setQueryData<DesignMap>(key, { ...(prev ?? {}), [teamId]: next });
       return { prev };
     },

@@ -165,6 +165,7 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
   // карточки (защита базы 30.09).
   clients: [
     "clients.scope",
+    "clients.open",
     "clients.contacts",
     "clients.note",
     "clients.people",
@@ -180,6 +181,16 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "clients.settings_maps",
     "clients.settings_objects",
     "clients.settings_tags",
+  ],
+  // «НЕ ОТКРЫВАЕТ КАРТОЧКУ» (01.10) — блоков страницы клиента у него нет:
+  // сервер отдаёт их пустыми, строки сворачиваются.
+  "clients.open": [
+    "clients.note",
+    "clients.people",
+    "clients.objects",
+    "clients.personal",
+    "clients.files",
+    "clients.requisites",
   ],
   // ЦЕПОЧКА ВНУТРИ ЗАПИСИ (владелец 30.09: «продумай логическую цепочку»):
   // скрыты услуги — не видно и цен; скрыты цены — оплату не принять, сколько

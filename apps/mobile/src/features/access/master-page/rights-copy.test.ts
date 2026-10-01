@@ -39,7 +39,7 @@ const REGISTRY: AccessBlock[] = [
   block({ key: "finance.debts", area: "finance", scope: "calendar", title: "Долги" }),
   block({ key: "finance.documents", area: "finance", scope: "calendar", live: false, title: "Инвойсы и чеки" }),
   block({ key: "clients", title: "Клиенты" }),
-  block({ key: "clients.scope", levels: ["own", "all"], title: "Какие клиенты" }),
+  block({ key: "clients.scope", levels: ["near", "own"], title: "Какие клиенты" }),
   block({ key: "clients.contacts", levels: ["off", "read"], title: "Телефоны и контакты" }),
   block({ key: "services", area: "company", live: false, title: "Услуги и цены" }),
   block({ key: "masters", area: "company", live: false, title: "Мастера" }),

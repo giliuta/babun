@@ -1,8 +1,10 @@
 import { View } from "react-native";
+import { ChevronRight } from "lucide-react-native";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
+import { useThemeColors } from "@/theme/colors";
 
 import type { AccessLevel } from "../access-map";
 import { PreviewFrame, levelState } from "./PreviewFrame";
@@ -29,11 +31,6 @@ const OWN = [
   { name: "Иван Смирнов" },
 ];
 
-const OTHERS = [
-  { name: "Мария Спиру" },
-  { name: "Георгиос Андреу" },
-];
-
 export function ClientsPreview({
   blockKey,
   levels,
@@ -41,14 +38,19 @@ export function ClientsPreview({
   blockKey: string;
   levels: Readonly<Record<string, AccessLevel>>;
 }) {
+  const t = useThemeColors();
   const base = levels.clients ?? "off";
   const scope = levels["clients.scope"] ?? "near";
   const contacts = levels["clients.contacts"] ?? "off";
-  const all = scope === "all";
   const phones = contacts === "read" || contacts === "day";
+  // Переход на страницу клиента — шеврон строки (как в его списке).
+  const opens =
+    blockKey === "clients.from_record"
+      ? levels["clients.from_record"] === "write"
+      : levels["clients.open"] === "write";
   // Карточки закрыты — у зависимых строк («Какие», «Телефоны») показывать
   // нечего: базы у него нет вовсе, и рамка гасит весь список.
-  const people = all ? [...OWN, ...OTHERS] : scope === "own" ? OWN : OWN.slice(0, 1);
+  const people = scope === "own" ? OWN : OWN.slice(0, 1);
   const state = levelState(base);
   if (!CLIENTS_PREVIEW_KEYS.includes(blockKey)) return null;
   // Зависимые строки говорят своё: список один, а меняют они в нём разное.
@@ -56,18 +58,24 @@ export function ClientsPreview({
     state === "hidden"
       ? undefined
       : blockKey === "clients.scope"
-        ? all
-          ? "Видит всех клиентов компании"
-          : scope === "own"
-            ? "Видит клиентов своей команды"
-            : "Видит клиента только около его записи"
+        ? scope === "own"
+          ? "Видит клиентов своей команды"
+          : "Видит клиента только около его записи"
         : blockKey === "clients.contacts"
           ? contacts === "read"
             ? "Открывает номер по одному"
             : contacts === "day"
               ? "Номер — только в день записи"
               : "Номеров не видит"
-          : undefined;
+          : blockKey === "clients.open"
+            ? opens
+              ? "Тапом открывает страницу клиента"
+              : "Только строка — страница не открывается"
+            : blockKey === "clients.from_record"
+              ? opens
+                ? "Из записи открывает страницу клиента"
+                : "Из записи страница клиента не открывается"
+              : undefined;
   return (
     <PreviewFrame
       state={state}
@@ -89,6 +97,13 @@ export function ClientsPreview({
                   : contacts === "read" || person === OWN[0]
                     ? LOCKED_NUMBER
                     : "В день записи"
+              }
+              // Переход есть — шеврон справа, как у двери; нет — строка без
+              // него: имя видно, а проходить некуда.
+              trailing={
+                (blockKey === "clients.open" || blockKey === "clients.from_record") && opens ? (
+                  <ChevronRight color={t.faint} size={18} />
+                ) : undefined
               }
               onPress={noop}
             />

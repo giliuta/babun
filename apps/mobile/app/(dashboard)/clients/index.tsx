@@ -100,7 +100,7 @@ import { useAppointments } from "@/features/calendar/queries";
 import { useCities, useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { clientBlockLevel } from "@/features/clients/client-block-access";
+import { canOpenClientCard, clientBlockLevel } from "@/features/clients/client-block-access";
 import { statsByBlocks } from "@/features/clients/card-access";
 
 // v811 list card (approved web design, apps/web/.../clients/page.tsx
@@ -825,11 +825,15 @@ function ClientsListScreen() {
                 selectionMode={selecting && !guest}
                 picked={selectedIds.has(item.id)}
                 onPress={() =>
-                  guest
-                    ? router.push(clientCardHref(item.id, guest.tenantId))
-                    : selecting
-                      ? toggleId(item.id)
-                      : router.push(`/clients/${item.id}`)
+                  selecting && !guest
+                    ? toggleId(item.id)
+                    : // «ОТКРЫВАЕТ КАРТОЧКУ: НЕ МОЖЕТ» (владелец 01.10) —
+                      // строка есть, перехода нет.
+                      !canOpenClientCard(item)
+                      ? undefined
+                      : guest
+                        ? router.push(clientCardHref(item.id, guest.tenantId))
+                        : router.push(`/clients/${item.id}`)
                 }
                 evidence={segmentEvidence(item, filter.segments, stats)}
                 onSwipeOpen={(row) => {
