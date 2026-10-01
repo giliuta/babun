@@ -101,13 +101,14 @@ export default function ClientRow({
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
 
   // Порядок долг → доход → ожидается: должник — самый срочный сигнал,
-  // читается первым. «долг €450» словом (не голым цветом): золото без
-  // подписи в списке не читается, должника ищут по слову, не по памяти.
+  // читается первым. С 1.10 — БЕЗ СЛОВА «долг» (владелец: «жёлтым просто
+  // показывается как долг, мы ж не пишем на зелёном „доход“»): суммы стоят
+  // своей колонкой справа и различаются цветом; озвучка слово сохраняет.
   const figs: { key: string; text: string; color: string }[] = [];
   if (cardFields.debt && debt > 0)
     figs.push({
       key: "debt",
-      text: `долг ${formatEUR(debt)}`,
+      text: formatEUR(debt),
       color: t.warning,
     });
   if (cardFields.inc && income > 0)
@@ -176,34 +177,21 @@ export default function ClientRow({
   // «Историю записей» ему закрыли — строки о визитах нет вовсе: «нет
   // записей» у клиента, который был вчера, — неправда (проверка глазами 30.09).
   const showLast = cardFields.last && clientBlockLevel(client, "clients.history") !== "hidden";
-  if (showLast) {
+  // ДАТА — СВОИМ МЕСТОМ В КОЛОНКЕ СПРАВА (владелец 1.10: «в одном месте,
+  // где должно находиться это чётко»): последний визит серым, а если визитов
+  // не было, но человек записан, — дата записи акцентом. В мете остаются
+  // только слова: «не закрыт» и «нет записей».
+  const rightDate = !showLast
+    ? null
+    : stats?.lastVisitDate
+      ? { text: formatShortDateRu(stats.lastVisitDate), color: t.sub }
+      : stats?.nextApt
+        ? { text: formatShortDateRu(stats.nextApt.date), color: t.accent }
+        : null;
+  if (showLast && !rightDate) {
     metaLead.push({
       key: "last",
-      node: stats?.lastVisitDate ? (
-        <View className="flex-row items-center gap-1">
-          <Clock color={t.sub} size={12} strokeWidth={2} />
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="text-[11px]"
-            style={{ color: t.ink }}
-          >
-            {formatShortDateRu(stats.lastVisitDate)}
-          </Text>
-        </View>
-      ) : stats?.nextApt ? (
-        // Визитов ещё не было, но человек ЗАПИСАН — «нет записей» было
-        // прямой ложью в самый нужный момент.
-        <View className="flex-row items-center gap-1">
-          <Clock color={t.accent} size={12} strokeWidth={2} />
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="text-[11px]"
-            style={{ color: t.accent }}
-          >
-            {`записан ${formatShortDateRu(stats.nextApt.date)}`}
-          </Text>
-        </View>
-      ) : unclosedText ? (
+      node: unclosedText ? (
         <View className="flex-row items-center gap-1">
           <Clock color={t.warning} size={12} strokeWidth={2} />
           <Text
@@ -338,35 +326,19 @@ export default function ClientRow({
               видно номер телефона»). Он же — то, по чему ищут: поиск и так
               понимает цифры, но раньше найденный номер нигде не показывался,
               и совпадение приходилось проверять, открывая карточку. */}
-          {/* НОМЕР И ДЕНЬГИ — ОДНОЙ СТРОКОЙ (владелец 30.09: «компактнее»):
-              строка клиента в три этажа вместо четырёх. */}
-          {(cardFields.phone && client.phone.trim()) || figs.length > 0 ? (
-            <View className="mt-0.5 flex-row items-center gap-2.5">
-              {cardFields.phone && client.phone.trim() ? (
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  numberOfLines={1}
-                  className="shrink text-[13px]"
-                  style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
-                >
-                  {/* Тот же формат, что на карточке: в базе номера лежат как
-                      их когда-то ввели или как пришли из импорта, и рядом
-                      стояли «+357 97469998» и «+357 97 469998» — два вида
-                      одного номера читаются как два разных человека. */}
-                  {formatPhoneForDisplay(client.phone, country)}
-                </Text>
-              ) : null}
-              {figs.map((f) => (
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  key={f.key}
-                  className="text-[13px] font-semibold"
-                  style={{ color: f.color, fontVariant: ["tabular-nums"] }}
-                >
-                  {f.text}
-                </Text>
-              ))}
-            </View>
+          {cardFields.phone && client.phone.trim() ? (
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              className="mt-0.5 text-[13px]"
+              style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
+            >
+              {/* Тот же формат, что на карточке: в базе номера лежат как их
+                  когда-то ввели или как пришли из импорта, и рядом стояли
+                  «+357 97469998» и «+357 97 469998» — два вида одного номера
+                  читаются как два разных человека. */}
+              {formatPhoneForDisplay(client.phone, country)}
+            </Text>
           ) : null}
           {metaLead.length > 0 || metaTail ? (
             <View className="mt-0.5 flex-row items-center">
@@ -408,6 +380,37 @@ export default function ClientRow({
             </View>
           ) : null}
         </View>
+        {/* КОЛОНКА СПРАВА (владелец 1.10): дата последней записи и суммы —
+            каждая на своём месте, по правому краю, ровно друг под другом от
+            строки к строке. Слов нет — долг жёлтым, доход зелёным. */}
+        {rightDate || figs.length > 0 ? (
+          <View style={{ alignItems: "flex-end", marginLeft: 12, gap: 1 }}>
+            {rightDate ? (
+              <Text
+                maxFontSizeMultiplier={1.3}
+                numberOfLines={1}
+                style={{ fontSize: 12, color: rightDate.color, fontVariant: ["tabular-nums"] }}
+              >
+                {rightDate.text}
+              </Text>
+            ) : null}
+            {figs.map((f) => (
+              <Text
+                maxFontSizeMultiplier={1.3}
+                key={f.key}
+                numberOfLines={1}
+                style={{
+                  fontSize: 15,
+                  fontWeight: "600",
+                  color: f.color,
+                  fontVariant: ["tabular-nums"],
+                }}
+              >
+                {f.text}
+              </Text>
+            ))}
+          </View>
+        ) : null}
       </Pressable>
       {/* ТАП ЗВОНИТ, УДЕРЖАНИЕ — СПОСОБЫ СВЯЗИ (владелец 2026-09-06): та же
           кнопка и тот же лист, что у номера в карточке и в записи. С
