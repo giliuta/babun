@@ -268,6 +268,8 @@ export function operationalTeamJsonToTeam(value: Json): Team {
     lead_id: null,
     lead_ids: [],
     helper_ids: [],
+    // Юрлицо команды — дело документов владельца (STORY-101).
+    legal_entity_id: null,
   };
 }
 

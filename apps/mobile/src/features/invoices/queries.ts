@@ -4,7 +4,6 @@ import {
   issueInvoice,
   listInvoices,
   setInvoiceLanguage,
-  updateInvoiceStatus,
   type IssueInvoiceDraft,
 } from "@babun/shared/db/repositories/invoices";
 import {
@@ -14,7 +13,6 @@ import {
   type RecordInvoicePaymentDraft,
   type RefundInvoicePaymentDraft,
 } from "@babun/shared/db/repositories/invoice-payments";
-import type { InvoiceStatus } from "@babun/shared/local/finance/invoice-ledger";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import {
@@ -59,17 +57,21 @@ export function useInvoice(id: string | undefined) {
 export interface NextInvoiceNumber {
   seq: number;
   number: string;
+  /** Можно ли задать старт серии: владелец, и в серии года ещё нет ни
+   *  одного инвойса. Потом номер двигает только выпуск. */
+  canSetStart: boolean;
 }
 
 /**
- * Номер, который получит СЛЕДУЮЩИЙ инвойс этих реквизитов.
+ * Номер, который получит СЛЕДУЮЩИЙ инвойс этого юрлица.
  *
- * Считает сервер той же функцией, что и выпуск, — предпросмотр не имеет права
- * показывать один номер, а документ получать другой. Это прогноз: пока человек
+ * Считает сервер по той же серии, из которой выпуск берёт номер
+ * (`document_sequences`, STORY-101): предпросмотр не имеет права показывать
+ * один номер, а документ получать другой. Это прогноз — пока человек
  * заполняет форму, коллега может выставить свой счёт, и номер сдвинется.
  *
- * Серия живёт на реквизитах (миграция 20260922050000): у каждого набора свой
- * счётчик, команда в номер не входит. `companyId` пусто — основные реквизиты.
+ * Серия — у юрлица: у каждого свои INV, REC и CN, команда в номер не входит.
+ * `companyId` пусто — основное юрлицо.
  */
 export function useNextInvoiceSeries(year: number, companyId?: string | null) {
   const tenantId = useTenantId();
@@ -79,14 +81,16 @@ export function useNextInvoiceSeries(year: number, companyId?: string | null) {
     // Свежесть важнее кэша: номер меняется от каждого выставленного счёта.
     staleTime: 0,
     queryFn: async (): Promise<NextInvoiceNumber | null> => {
-      const { data, error } = await supabase.rpc("next_company_invoice_number", {
-        p_tenant_id: tenantId as string,
-        p_company_id: companyId ?? null,
+      const { data, error } = await supabase.rpc("peek_document_number", {
+        p_legal_entity_id: companyId ?? null,
+        p_doc_type: "invoice",
         p_year: year,
       });
       if (error) throw new Error(error.message);
       const row = Array.isArray(data) ? data[0] : null;
-      return row ? { seq: row.seq, number: row.number } : null;
+      return row
+        ? { seq: row.seq, number: row.number, canSetStart: row.can_set_start }
+        : null;
     },
   });
 }
@@ -98,18 +102,21 @@ export function useNextInvoiceNumber(year: number, companyId?: string | null) {
 }
 
 /**
- * «Этот инвойс — 104»: ручной номер реквизитов. Следующий выпуск получит его,
- * а серия дальше пойдёт с 105. Занятый номер сервер отклоняет.
+ * «Первый инвойс — 104»: старт серии при переходе из прежней программы.
+ * Сервер принимает его, только пока в серии года нет ни одного инвойса —
+ * дальше номер двигает лишь выпуск (перескок дал бы дыру в серии, а закон
+ * о VAT требует сплошную нумерацию).
  */
 export function useSetInvoiceNextNumber() {
   const tenantId = useTenantId();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: { companyId: string; year: number; number: number }) => {
-      const { error } = await supabase.rpc("set_company_invoice_next_number", {
-        p_company_id: input.companyId,
+      const { error } = await supabase.rpc("set_document_series_start", {
+        p_legal_entity_id: input.companyId,
+        p_doc_type: "invoice",
         p_year: input.year,
-        p_number: input.number,
+        p_next_number: input.number,
       });
       if (error) throw new Error(error.message);
     },
@@ -200,16 +207,6 @@ export function useIssueInvoice() {
       }
       return invoice;
     },
-    onSuccess: () => invalidateInvoices(qc),
-    meta: { errorHandled: true },
-  });
-}
-
-export function useSetInvoiceStatus(id: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (status: InvoiceStatus) =>
-      updateInvoiceStatus(supabase, id, status),
     onSuccess: () => invalidateInvoices(qc),
     meta: { errorHandled: true },
   });

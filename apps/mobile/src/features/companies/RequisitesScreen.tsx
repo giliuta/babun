@@ -15,10 +15,12 @@ import { useToast } from "@/components/ui/Toast";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { CompanySheet } from "./CompanySheet";
 import { companyDetail, companyFilled, defaultHeir } from "./company-rules";
 import {
+  companyHasDocuments,
   useArchiveCompany,
   useCompanies,
   useDeleteCompany,
@@ -85,6 +87,7 @@ export function RequisitesScreen() {
   const makeDefault = useMakeDefaultCompany();
   const archive = useArchiveCompany();
   const del = useDeleteCompany();
+  const tenantId = useTenantId();
   const reorder = useReorderCompanies();
   const [editing, setEditing] = useState<Company | null>(null);
   const [open, setOpen] = useState(false);
@@ -149,15 +152,25 @@ export function RequisitesScreen() {
     confirmThen(
       "Удалить реквизиты?",
       {
-        // ПРАВДА, А НЕ ПУГАЛКА: выданные чек и инвойс держат продавца своим
-        // снимком и печатаются как раньше.
-        message: `«${company.name}» исчезнет из выбора. Уже выданные чеки и инвойсы не изменятся.`,
+        // ПРАВДА, А НЕ ПУГАЛКА: удаляется только набор без документов, и
+        // выданным бумагам удалять нечего (STORY-101).
+        message: `«${company.name}» исчезнет из выбора.`,
         confirmLabel: "Удалить",
         destructive: true,
       },
       () =>
         void (async () => {
           try {
+            // Юрлицо с документами держит их серию номеров — только скрыть.
+            // Спрашиваем раньше передачи умолчания: отказ после неё оставил
+            // бы основным другой набор (STORY-101).
+            if (tenantId && (await companyHasDocuments(tenantId, company.id))) {
+              notify(
+                "Реквизиты с документами не удаляются",
+                "Выпущенные инвойсы и чеки держат их серию номеров. Их можно скрыть.",
+              );
+              return;
+            }
             // Единственные основные реквизиты не удаляются — тем же правилом,
             // что скрытие: документу было бы нечем подписаться (аудит
             // 2026-09-30, удаление этот ответ пропускало).

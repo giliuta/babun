@@ -215,11 +215,9 @@ export interface InvoiceLedgerWithLines extends InvoiceLedger {
   lines: InvoiceLineLedger[];
 }
 
-// `formatInvoiceNumber` здесь БОЛЬШЕ НЕ ЖИВЁТ (U49): жёсткие «3 знака,
-// всегда год» спорили с настраиваемой нумерацией тенанта. Номер собирает
-// единственная живая формула — apps/mobile/src/features/invoices/numbering.ts
-// (prefix/padding/yearlyReset из настроек), а выпущенному документу номер
-// выдаёт сервер (next_invoice_number / issue_invoice).
+// Номер документа клиент НЕ собирает: его выдаёт сервер из серии юрлица при
+// выпуске (`next_document_number`, STORY-101), а предпросмотр берётся у
+// сервера же (`peek_document_number`) — одна формула, один источник.
 
 /**
  * Split a gross total into net + VAT. Cyprus standard is 19%. We treat

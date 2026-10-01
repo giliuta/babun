@@ -13,10 +13,13 @@ import { useSetInvoiceNextNumber, type NextInvoiceNumber } from "./queries";
 //
 // Владелец 2026-09-22: «я могу вручную выбрать номер, и оно автоматически
 // должно продолжаться с выбранного: пишу номер этого инвойса 104 — следующий
-// 105-й, и неважно, с какой командой … запоминается на реквизиты». Серия живёт
-// на наборе реквизитов (миграция 20260922050000), поэтому и строка — в их
-// блоке: сменил набор — видишь его номер. Тап — шторка с одним полем, цифры
-// номера; «Применить» пишет счётчик набора, занятый номер сервер отклоняет.
+// 105-й … запоминается на реквизиты». Серия живёт на юрлице, поэтому и строка
+// — в его блоке: сменил набор — видишь его номер.
+//
+// С 2026-10-01 (STORY-101, закон о VAT Кипра: сплошная нумерация без дыр)
+// номер задаётся только СТАРТОМ серии — пока в году у юрлица нет ни одного
+// инвойса (переход из прежней программы). Дальше номер двигает лишь выпуск,
+// и строка становится просто строкой: без шеврона и без шторки.
 
 export interface InvoiceNumberTarget {
   companyId: string;
@@ -45,6 +48,8 @@ export function InvoiceNumberRow({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const next = target.next;
+  // Шторка — только пока серию можно начать; иначе строка показывает номер.
+  const editable = next?.canSetStart === true;
 
   // Поле открывается ПУСТЫМ, нынешний номер — подсказкой: цифры поверх
   // подставленной «1» давали «1104» вместо «104».
@@ -74,10 +79,11 @@ export function InvoiceNumberRow({
     <>
       {stacked ? (
         <Pressable
-          onPress={() => setOpen(true)}
-          accessibilityRole="button"
+          onPress={editable ? () => setOpen(true) : undefined}
+          disabled={!editable}
+          accessibilityRole={editable ? "button" : "text"}
           accessibilityLabel={`Следующий номер, ${next?.number ?? "загрузка"}`}
-          accessibilityHint="Нажмите, чтобы изменить"
+          accessibilityHint={editable ? "Нажмите, чтобы изменить" : undefined}
           style={({ pressed }) => ({
             flexDirection: "row",
             alignItems: "center",
@@ -110,8 +116,8 @@ export function InvoiceNumberRow({
             </Text>
           </View>
           {/* Шеврон: строка уводит в шторку, а не правится на месте, как
-              поля над ней. */}
-          <ChevronRight color={t.chevron} size={16} strokeWidth={1.75} />
+              поля над ней. Нет шторки — нет и шеврона. */}
+          {editable ? <ChevronRight color={t.chevron} size={16} strokeWidth={1.75} /> : null}
         </Pressable>
       ) : (
         <SettingsRow
@@ -120,7 +126,7 @@ export function InvoiceNumberRow({
           appearance={{ fallback: Hash }}
           title="Номер"
           value={next?.number ?? "…"}
-          onPress={() => setOpen(true)}
+          onPress={editable ? () => setOpen(true) : undefined}
         />
       )}
 
@@ -142,7 +148,7 @@ export function InvoiceNumberRow({
         {/* Воздух под подсказкой: без него кнопка подвала прилипала к тексту. */}
         <View style={{ gap: 10, paddingBottom: 16 }}>
           <Field
-            label="Номер этого инвойса"
+            label="Номер первого инвойса"
             value={draft}
             onChangeText={(text) => setDraft(text.replace(/\D/g, "").slice(0, 6))}
             placeholder={next ? String(next.seq) : "104"}
@@ -153,7 +159,7 @@ export function InvoiceNumberRow({
           />
           <Text style={{ fontSize: 13, color: t.sub }}>
             {next && valid && typed != null
-              ? `${withSeq(next.number, typed)}, следующий — ${withSeq(next.number, typed + 1)}. Серия общая для всех команд этих реквизитов.`
+              ? `${withSeq(next.number, typed)}, следующий — ${withSeq(next.number, typed + 1)}. Номер задаётся до первого инвойса года.`
               : "Цифры номера. Следующие инвойсы продолжат с него."}
           </Text>
         </View>

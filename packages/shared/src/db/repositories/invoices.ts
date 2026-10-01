@@ -239,24 +239,6 @@ export async function getInvoice(
   };
 }
 
-export async function updateInvoiceStatus(
-  supabase: DbSupabase,
-  id: string,
-  status: InvoiceStatus,
-): Promise<void> {
-  if (status !== "void") {
-    throw new Error("Статус оплаты изменяется только подтверждённым платежом");
-  }
-  const { data, error } = await supabase.rpc("void_invoice", {
-    p_invoice_id: id,
-  });
-  if (error || !data || data.id !== id || data.status !== "void") {
-    throw new Error(
-      `updateInvoiceStatus: ${error?.message ?? "аннулирование не подтверждено сервером"}`,
-    );
-  }
-}
-
 /**
  * ЯЗЫК БУМАГИ — ОТДЕЛЬНОЙ ЗАПИСЬЮ, И ЭТО СОЗНАТЕЛЬНО.
  *

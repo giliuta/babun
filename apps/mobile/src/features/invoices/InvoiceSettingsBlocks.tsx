@@ -3,12 +3,9 @@ import { Text, TextInput, View } from "react-native";
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { SwitchRow } from "@/components/ui/SwitchRow";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
 import { useTenant, useUpdateTenant } from "@/features/settings/tenant";
-import { useNextInvoiceNumber } from "@/features/invoices/queries";
-import { formatInvoiceNumber } from "@/features/invoices/numbering";
 import { notify } from "@/lib/notify";
 
 // БЛАНК ИНВОЙСА — НА СТРАНИЦЕ «РЕКВИЗИТЫ» (владелец 2026-09-30: «реквизиты
@@ -17,9 +14,10 @@ import { notify } from "@/lib/notify";
 // реквизитов (в его карточке), а здесь то, что одно на все бланки: что
 // подставлять в новый счёт, приписка и вид номера.
 //
-// Поле «Продолжить с номера» снято: после первого инвойса набора сервер его
-// не читает (серия живёт на реквизитах), и правка ничего не меняла. Номер
-// «этот инвойс — 104» правится в карточке реквизитов.
+// Блок «Номер» (буквы, знаков в номере, «заново каждый год») снят 2026-10-01
+// (STORY-101): серия — у юрлица, свои INV, REC и CN, год в номере всегда (закон
+// о VAT Кипра), а буквы и разрядность серии — свойство юрлица. Старт серии
+// («первый инвойс — 104») задаётся в карточке реквизитов.
 //
 // БЛОКИ — С ШАПКОЙ ВНУТРИ, как в карточке реквизитов (`CompanySheet`) и в
 // записи: подпись над карточкой была старым видом раздела и на соседних
@@ -38,18 +36,13 @@ export function InvoiceSettingsBlocks() {
   const toast = useToast();
   const tenant = useTenant();
   const update = useUpdateTenant();
-  const nextNumber = useNextInvoiceNumber(new Date().getFullYear());
 
-  const [prefix, setPrefix] = useState("");
-  const [padding, setPadding] = useState("3");
   const [dueDays, setDueDays] = useState("7");
   const [lineTitle, setLineTitle] = useState("");
   const [footer, setFooter] = useState("");
 
   useEffect(() => {
     if (!tenant.data) return;
-    setPrefix(tenant.data.invoice_prefix || "INV");
-    setPadding(String(tenant.data.invoice_number_padding || 3));
     setDueDays(String(tenant.data.invoice_due_days ?? 7));
     setLineTitle(tenant.data.invoice_default_line_title || "Услуги");
     setFooter(tenant.data.invoice_footer_note ?? "");
@@ -58,24 +51,12 @@ export function InvoiceSettingsBlocks() {
   if (!tenant.data) return null;
 
   const data = tenant.data;
-  const yearlyReset = data.invoice_number_yearly_reset;
   const lineSource = data.invoice_line_source === "total" ? "total" : "services";
   const save = (patch: Parameters<typeof update.mutate>[0]) =>
     update.mutate(patch, {
       onSuccess: () => toast("Сохранено", "success"),
       onError: (e) => notify("Не удалось сохранить", (e as Error).message),
     });
-
-  const paddingValue = Math.min(8, Math.max(1, Number(padding) || 3));
-  // Образец собирается той же формулой, что и сервер: человек должен видеть
-  // именно тот номер, который получит документ.
-  const sample = formatInvoiceNumber({
-    prefix: prefix.trim() || "INV",
-    year: new Date().getFullYear(),
-    seq: 1,
-    padding: paddingValue,
-    yearlyReset,
-  });
 
   return (
     <>
@@ -174,56 +155,6 @@ export function InvoiceSettingsBlocks() {
     <Text className="mx-4 mt-1.5 text-xs" style={{ color: t.sub }}>
       Правится и в самом счёте. Выставленные счета не меняются.
     </Text>
-
-    <SectionCard title="Номер">
-      <View className="px-4 pb-3 pt-2">
-        <Text className="text-xs" style={{ color: t.sub }}>
-          Следующий номер основных реквизитов
-        </Text>
-        <Text className="mt-1 text-2xl font-bold" style={{ color: t.ink }}>
-          {nextNumber.data ?? sample}
-        </Text>
-      </View>
-      <Divider inset={16} />
-      <Row
-        label="Буквы"
-        value={prefix}
-        onChangeText={setPrefix}
-        placeholder="INV"
-        autoCapitalize="characters"
-        onCommit={() => {
-          const clean = prefix.trim().toUpperCase();
-          if (!clean || clean === data.invoice_prefix) return;
-          setPrefix(clean);
-          save({ invoice_prefix: clean });
-        }}
-      />
-      <Divider inset={16} />
-      <Row
-        label="Знаков в номере"
-        value={padding}
-        onChangeText={setPadding}
-        placeholder="3"
-        keyboardType="number-pad"
-        hint="3 → 001, 5 → 00001"
-        onCommit={() => {
-          if (paddingValue === data.invoice_number_padding) return;
-          setPadding(String(paddingValue));
-          save({ invoice_number_padding: paddingValue });
-        }}
-      />
-      <Divider inset={16} />
-      <SwitchRow
-        label="Начинать нумерацию заново каждый год"
-        hint={
-          yearlyReset
-            ? "В номере стоит год, счётчик обнуляется 1 января"
-            : "Сквозная нумерация: года в номере нет, счётчик не обнуляется"
-        }
-        value={yearlyReset}
-        onChange={(on) => save({ invoice_number_yearly_reset: on })}
-      />
-    </SectionCard>
     </>
   );
 }
@@ -234,7 +165,6 @@ function Row({
   placeholder,
   hint,
   keyboardType,
-  autoCapitalize,
   wide,
   onChangeText,
   onCommit,
@@ -244,7 +174,6 @@ function Row({
   placeholder: string;
   hint?: string;
   keyboardType?: "number-pad";
-  autoCapitalize?: "characters";
   /** Текстовое значение длиннее числа — поле забирает половину строки. */
   wide?: boolean;
   onChangeText: (value: string) => void;
@@ -271,7 +200,6 @@ function Row({
         placeholder={placeholder}
         placeholderTextColor={t.placeholder}
         keyboardType={keyboardType}
-        autoCapitalize={autoCapitalize}
         keyboardAppearance="light"
         accessibilityLabel={label}
         className="rounded-[10px] px-3 py-2 text-[15px] font-semibold"

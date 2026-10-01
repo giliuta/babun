@@ -49,7 +49,6 @@ import {
   useInvoices,
   useRecordInvoicePayment,
   useRefundInvoicePayment,
-  useSetInvoiceStatus,
 } from "@/features/invoices/queries";
 import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
@@ -87,7 +86,6 @@ export default function InvoiceDetailScreen() {
     () => new Map((invoicesQuery.data ?? []).map((item) => [item.id, item.number])),
     [invoicesQuery.data],
   );
-  const setStatus = useSetInvoiceStatus(id);
   const pay = useRecordInvoicePayment(id);
   const refund = useRefundInvoicePayment(id);
   const cancel = useCancelInvoice(id);
@@ -222,11 +220,6 @@ export default function InvoiceDetailScreen() {
     }
   };
 
-  const runVoid = () =>
-    setStatus.mutate("void", {
-      onError: (error) => notify("Ошибка", error.message),
-    });
-
   const runCreditNote = () =>
     cancel.mutate(undefined, {
       onSuccess: (note) => {
@@ -237,20 +230,14 @@ export default function InvoiceDetailScreen() {
       onError: (error) => notify("Инвойс не отменён", error.message),
     });
 
-  // ОТКАЗ ОТ ИНВОЙСА — ОДНА ДВЕРЬ (владелец 2026-09-12).
+  // ОТКАЗ ОТ ИНВОЙСА — ОДНА ДВЕРЬ И ОДИН ПУТЬ.
   //
-  // Рядом стояли две красные кнопки: «Отменить инвойс» и «Аннулировать
-  // инвойс». По-русски это одно и то же слово дважды, а последствия разные —
-  // и разницу было видно только внутри подтверждения, то есть после того, как
-  // человек уже выбрал. Владелец выбрал: кнопка одна, выбор в подтверждении.
-  //
-  // КАНОННЫЙ ОТКАЗ (ТЗ 2026-08-09) — кредит-нота: сервер выпускает встречный
-  // документ на ту же сумму, инвойс получает статус «Отменён», у клиента
-  // остаются оба. Он возможен всегда и потому стоит первым.
-  //
-  // Аннулирование предлагается ТОЛЬКО пока по инвойсу ничего не получено: это
-  // путь для ошибочной бумаги, выставленной минуту назад, и оставлять след
-  // кредит-нотой там нечему.
+  // Владелец 2026-09-12 оставил одну красную кнопку, а выбор «кредит-нота или
+  // аннулирование» — в подтверждении. С 2026-10-01 (STORY-101, закон о VAT
+  // Кипра) выпущенный документ отменяется ТОЛЬКО кредит-нотой: номер инвойса
+  // уже в серии, и тихое «аннулировано» оставило бы в ней документ без
+  // встречной бумаги. Сервер «void» без кредит-ноты больше не принимает, и
+  // экран его не предлагает.
   const cancelInvoice = async () => {
     // Кнопка живёт только под загруженным документом; guard — на случай
     // вызова не с неё (ротор VoiceOver).
@@ -271,19 +258,15 @@ export default function InvoiceDetailScreen() {
     }
     const index = await chooseOption(
       "Отменить инвойс?",
-      [
-        { label: "Выпустить кредит-ноту", destructive: true },
-        { label: "Аннулировать — документ ошибочный", destructive: true },
-      ],
+      // Одна кнопка рядом с «Отмена» — слово короткое, иначе обрезается.
+      [{ label: "Кредит-нота", destructive: true }],
       {
         message:
           "Кредит-нота — встречный документ на ту же сумму: у клиента остаются"
-          + " оба, и отказ виден в истории. Аннулирование оставляет инвойс в"
-          + " истории, но он перестаёт ждать оплату и не попадает в документы.",
+          + " оба, и отказ виден в истории.",
       },
     );
     if (index === 0) runCreditNote();
-    if (index === 1) runVoid();
   };
 
   const loading =

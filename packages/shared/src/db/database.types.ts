@@ -980,78 +980,6 @@ export type Database = {
           },
         ]
       }
-      companies: {
-        Row: {
-          archived_at: string | null
-          bank_name: string | null
-          business_address: string | null
-          color: string | null
-          contact_email: string | null
-          contact_phone: string | null
-          created_at: string
-          iban: string | null
-          icon: string | null
-          invoice_next_number: number | null
-          invoice_next_year: number | null
-          id: string
-          is_default: boolean
-          legal_name: string | null
-          logo_url: string | null
-          name: string
-          position: number
-          reg_number: string | null
-          tenant_id: string
-          updated_at: string
-          vat_number: string | null
-        }
-        Insert: {
-          archived_at?: string | null
-          bank_name?: string | null
-          business_address?: string | null
-          color?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
-          created_at?: string
-          iban?: string | null
-          icon?: string | null
-          invoice_next_number?: number | null
-          invoice_next_year?: number | null
-          id?: string
-          is_default?: boolean
-          legal_name?: string | null
-          logo_url?: string | null
-          name: string
-          position?: number
-          reg_number?: string | null
-          tenant_id: string
-          updated_at?: string
-          vat_number?: string | null
-        }
-        Update: {
-          archived_at?: string | null
-          bank_name?: string | null
-          business_address?: string | null
-          color?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
-          created_at?: string
-          iban?: string | null
-          icon?: string | null
-          invoice_next_number?: number | null
-          invoice_next_year?: number | null
-          id?: string
-          is_default?: boolean
-          legal_name?: string | null
-          logo_url?: string | null
-          name?: string
-          position?: number
-          reg_number?: string | null
-          tenant_id?: string
-          updated_at?: string
-          vat_number?: string | null
-        }
-        Relationships: []
-      }
       clients: {
         Row: {
           acquisition_source: string
@@ -2067,7 +1995,7 @@ export type Database = {
           client_id: string | null
           client_requisites_id: string | null
           client_snapshot: Json | null
-          company_id: string | null
+          company_id: string
           created_at: string
           created_by: string | null
           credit_note_of_id: string | null
@@ -2192,6 +2120,84 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      legal_entities: {
+        Row: {
+          archived_at: string | null
+          bank_name: string | null
+          business_address: string | null
+          color: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          credit_note_prefix: string
+          iban: string | null
+          icon: string | null
+          id: string
+          invoice_prefix: string
+          is_default: boolean
+          legal_name: string | null
+          logo_url: string | null
+          name: string
+          number_padding: number
+          position: number
+          receipt_prefix: string
+          reg_number: string | null
+          tenant_id: string
+          updated_at: string
+          vat_number: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          bank_name?: string | null
+          business_address?: string | null
+          color?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          credit_note_prefix?: string
+          iban?: string | null
+          icon?: string | null
+          id?: string
+          invoice_prefix?: string
+          is_default?: boolean
+          legal_name?: string | null
+          logo_url?: string | null
+          name: string
+          number_padding?: number
+          position?: number
+          receipt_prefix?: string
+          reg_number?: string | null
+          tenant_id: string
+          updated_at?: string
+          vat_number?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          bank_name?: string | null
+          business_address?: string | null
+          color?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          credit_note_prefix?: string
+          iban?: string | null
+          icon?: string | null
+          id?: string
+          invoice_prefix?: string
+          is_default?: boolean
+          legal_name?: string | null
+          logo_url?: string | null
+          name?: string
+          number_padding?: number
+          position?: number
+          receipt_prefix?: string
+          reg_number?: string | null
+          tenant_id?: string
+          updated_at?: string
+          vat_number?: string | null
+        }
+        Relationships: []
       }
       location_labels: {
         Row: {
@@ -2741,6 +2747,7 @@ export type Database = {
           appointment_id: string | null
           client_id: string | null
           client_snapshot: Json | null
+          company_id: string
           created_at: string
           currency: string
           id: string
@@ -2765,6 +2772,7 @@ export type Database = {
           appointment_id?: string | null
           client_id?: string | null
           client_snapshot?: Json | null
+          company_id?: string
           created_at?: string
           currency?: string
           id?: string
@@ -2789,6 +2797,7 @@ export type Database = {
           appointment_id?: string | null
           client_id?: string | null
           client_snapshot?: Json | null
+          company_id?: string
           created_at?: string
           currency?: string
           id?: string
@@ -3439,6 +3448,7 @@ export type Database = {
           id: string
           is_active: boolean
           lead_id: string | null
+          legal_entity_id: string | null
           lead_ids: Json
           members: Json
           name: string
@@ -3469,6 +3479,7 @@ export type Database = {
           id: string
           is_active?: boolean
           lead_id?: string | null
+          legal_entity_id?: string | null
           lead_ids?: Json
           members?: Json
           name: string
@@ -3499,6 +3510,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           lead_id?: string | null
+          legal_entity_id?: string | null
           lead_ids?: Json
           members?: Json
           name?: string
@@ -4290,16 +4302,6 @@ export type Database = {
           vat_rate: number
         }[]
       }
-      format_invoice_number: {
-        Args: {
-          p_padding: number
-          p_prefix: string
-          p_seq: number
-          p_year: number
-          p_yearly_reset: boolean
-        }
-        Returns: string
-      }
       grant_invitation_calendar: {
         Args: {
           p_invitation: Database["public"]["Tables"]["invitations"]["Row"]
@@ -4350,6 +4352,14 @@ export type Database = {
       member_rename_day_label: {
         Args: { p_from: string; p_team: string; p_to: string }
         Returns: number
+      }
+      peek_document_number: {
+        Args: { p_doc_type: string; p_legal_entity_id: string | null; p_year: number }
+        Returns: {
+          can_set_start: boolean
+          number: string
+          seq: number
+        }[]
       }
       set_default_company: {
         Args: { p_company_id: string }
@@ -4491,20 +4501,6 @@ export type Database = {
       }
       my_access_map: { Args: never; Returns: Json }
       my_invitations: { Args: never; Returns: Json }
-      next_company_invoice_number: {
-        Args: { p_company_id: string | null; p_tenant_id: string; p_year: number }
-        Returns: {
-          number: string
-          seq: number
-        }[]
-      }
-      next_invoice_number: {
-        Args: { p_tenant_id: string; p_year: number }
-        Returns: {
-          number: string
-          seq: number
-        }[]
-      }
       normalize_client_tag_ids: {
         Args: { p_tag_ids: string[]; p_tenant_id: string }
         Returns: string[]
@@ -4988,9 +4984,18 @@ export type Database = {
         Args: { p_appointment_id: string; p_vat_mode: string | null }
         Returns: Database["public"]["Tables"]["appointments"]["Row"]
       }
-      set_company_invoice_next_number: {
-        Args: { p_company_id: string; p_number: number; p_year: number }
-        Returns: Database["public"]["Tables"]["companies"]["Row"]
+      set_document_series_start: {
+        Args: {
+          p_doc_type: string
+          p_legal_entity_id: string
+          p_next_number: number
+          p_year: number
+        }
+        Returns: {
+          can_set_start: boolean
+          number: string
+          seq: number
+        }[]
       }
       set_member_access: {
         Args: { p_changes: Json; p_user_id: string }
