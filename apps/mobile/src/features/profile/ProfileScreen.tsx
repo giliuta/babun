@@ -4,7 +4,9 @@ import { FieldRow, RowGroup } from "@/components/ui/card-rows";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { TYPE } from "@/components/ui/tokens";
-import { formatPhoneAsYouType } from "@/features/clients/phone";
+import { CONTACT_COLUMN } from "@/features/clients/contact-column";
+import { useDefaultCountry } from "@/features/clients/default-country";
+import { usePhoneCodeField } from "@/features/clients/use-phone-country";
 import { notify } from "@/lib/notify";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
@@ -26,46 +28,56 @@ export function ProfileScreen() {
     const { error } = await supabase.auth.updateUser({ data });
     if (error) notify("Не удалось сохранить", error.message);
   };
+  // КОД СТРАНЫ — ТИХИМ ПРЕФИКСОМ, ЦИФРЫ — В ПОЛЕ (владелец 01.10: «обязательно
+  // код страны — выбирать код, потом писать номер»), как номер клиента.
+  const phoneField = usePhoneCodeField({
+    phone: profile.phone ?? "",
+    home: useDefaultCountry(),
+    onSave: (full) => {
+      const phone = phoneToSave(full);
+      if (phone === undefined) {
+        notify("Проверьте номер", "Номер не похож на телефон. Проверьте код страны и цифры.");
+        return;
+      }
+      void save({ phone, phone_verified: false });
+    },
+  });
 
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title="Профиль" />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <RowGroup>
+          {/* ПОДПИСЬ СЛЕВА КОЛОНКОЙ, КАК В БЛОКЕ «КЛИЕНТ» (01.10): в этой
+              раскладке у номера стоит тихий код страны, который меняется
+              тапом. */}
           <FieldRow
-            stacked
-            big
             label="Имя"
+            column={CONTACT_COLUMN}
             value={profile.name}
             placeholder="Имя"
-            addLabel="Добавить имя"
             autoCapitalize="words"
             onSave={(value) => void save({ full_name: value })}
           />
           <FieldRow
-            stacked
-            big
             separated
             label="Телефон"
-            value={profile.phone ? formatPhoneAsYouType(profile.phone) : ""}
-            placeholder="Телефон"
-            addLabel="Добавить телефон"
+            column={CONTACT_COLUMN}
+            tabular
+            prefix={phoneField.prefix}
+            onPrefixPress={phoneField.onPrefixPress}
+            value={phoneField.value}
+            placeholder="Номер"
             keyboardType="phone-pad"
             trailing={
               profile.phone && !profile.phoneVerified ? (
                 <Text style={{ ...TYPE.subhead, color: t.caption }}>не подтверждён</Text>
               ) : null
             }
-            onSave={(value) => {
-              const phone = phoneToSave(value);
-              if (phone === undefined) {
-                notify("Проверьте номер", "Номер не похож на телефон. Введите его с кодом страны.");
-                return;
-              }
-              void save({ phone, phone_verified: false });
-            }}
+            onSave={phoneField.onSave}
           />
         </RowGroup>
+        {phoneField.sheet}
       </ScrollView>
     </Screen>
   );

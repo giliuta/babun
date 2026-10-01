@@ -16,6 +16,7 @@ import {
   formatPhoneAsYouType,
   nationalPart,
   phoneCountryOf,
+  phoneParts,
 } from "@/features/clients/phone";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -93,6 +94,53 @@ export function usePhoneCountry({
         visible={open}
         selected={country}
         onPick={pick}
+        onClose={() => setOpen(false)}
+      />
+    ),
+  };
+}
+
+/** ПОЛЕ СОХРАНЁННОГО НОМЕРА С КОДОМ СТРАНЫ (владелец 01.10: «обязательно код
+ *  страны — надо выбирать код, потом писать номер»). Для строк `FieldRow`
+ *  вне карточки клиента — профиль, контакты компании: код стоит тихим
+ *  префиксом и меняется тапом, в поле — только цифры; в данные уходит полный
+ *  номер «+357 99887766». Пустое поле начинается со страны компании или с
+ *  той, что выбрали тапом по коду до первых цифр. */
+export function usePhoneCodeField({
+  phone,
+  home,
+  onSave,
+}: {
+  /** Полный номер, как он сохранён. */
+  phone: string;
+  home: CountryCode;
+  onSave: (full: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  // Страна, выбранная, пока цифр ещё нет: номеру не из чего её взять.
+  const [picked, setPicked] = useState<CountryCode | null>(null);
+  const country = phone.trim() ? phoneCountryOf(phone, home) : (picked ?? home);
+  const parts = phoneParts(phone, country);
+  return {
+    prefix: phone.trim() ? parts.code : countryDialCode(country),
+    onPrefixPress: () => {
+      haptics.tap();
+      setOpen(true);
+    },
+    value: parts.rest,
+    onSave: (typed: string) => {
+      const s = typed.trim();
+      onSave(s ? composePhone(s, country) : "");
+    },
+    sheet: (
+      <CountryPickerSheet
+        visible={open}
+        selected={country}
+        onPick={(next) => {
+          const national = nationalPart(phone, country);
+          if (national) onSave(composePhone(national, next));
+          else setPicked(next);
+        }}
         onClose={() => setOpen(false)}
       />
     ),
