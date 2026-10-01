@@ -14,6 +14,7 @@ import { useCalendarChips } from "@/features/settings/workspaces";
 import { useThemeColors } from "@/theme/colors";
 import type { Team } from "@/features/reference/queries";
 import { periodDates, periodTitle, type Period } from "./period";
+import { useTariffNudge } from "@/features/tariffs/use-tariff";
 
 /**
  * Какую панель раскрывает сводка. Страниц среди них больше нет.
@@ -81,8 +82,11 @@ export function SummaryToggle({
   a11yValue,
   active,
   locked = false,
+  dimmed = false,
   onPress,
 }: {
+  /** Серая, но нажимается — закрыто тарифом: тап поднимает плашку (1.10). */
+  dimmed?: boolean;
   label: string;
   /** Цвет смысла строки: им красится точка, а значение — когда оно не ноль. */
   color: string;
@@ -133,6 +137,7 @@ export function SummaryToggle({
         flexShrink: 1,
         minWidth: 0,
         minHeight: 38,
+        opacity: dimmed ? 0.4 : 1,
         // `1a` — тот же тинт, что у выбранного чипа: 10% цвета читается как
         // подсветка, но не спорит со значением, набранным тем же цветом.
         // Тинта ХВАТАЕТ: цветная рамка была третьей грамматикой выбора на
@@ -314,6 +319,7 @@ export function FinanceOverview({
   accounts,
   invoices,
   showDocuments = true,
+  documentsTariffLocked = false,
   showAccounts = true,
   showDebts = true,
   view,
@@ -334,10 +340,13 @@ export function FinanceOverview({
   totals: OverviewTotals;
   accounts: AccountTileSummary;
   invoices: InvoiceTileSummary;
-  /** Документы есть в тарифе. Нет — плитки нет ВОВСЕ (канон: без права блок
-   *  не показывается либо только читается; «видно, но при нажатии ошибка» в
-   *  продукте не бывает). «Счета» занимают ряд целиком. */
+  /** Документы видны этому человеку (право «Документы»). Нет — плитки нет:
+   *  «Счета» занимают ряд целиком. */
   showDocuments?: boolean;
+  /** Документов нет в ТАРИФЕ — плитка на месте, но серая, тап поднимает
+   *  плашку «Нужно изменить тариф» (владелец 1.10: «всё видно, новое
+   *  серым»). */
+  documentsTariffLocked?: boolean;
   /** Функции компании (STORY-088): выключенные счета и долги — без плиток. */
   showAccounts?: boolean;
   showDebts?: boolean;
@@ -361,6 +370,7 @@ export function FinanceOverview({
   lockProfit?: boolean;
   lockDebts?: boolean;
 }) {
+  const tariffNudge = useTariffNudge();
   const t = useThemeColors();
 
   // ПРОСТО «СЧЕТА» (владелец 2026-08-11). Уточнение «команды» было нужно, пока
@@ -431,7 +441,10 @@ export function FinanceOverview({
             active={view === "documents"}
             a11yValue={`${formatCountRu(invoices.count, FORMS_DOCUMENT)} за период`}
             locked={locked}
-            onPress={() => onTap("documents")}
+            // Нет в тарифе — плитка на месте и серая, тап поднимает плашку
+            // «Нужно изменить тариф». Без обёртки: она ломала сетку ряда.
+            dimmed={documentsTariffLocked}
+            onPress={documentsTariffLocked ? tariffNudge : () => onTap("documents")}
           />
           ) : null}
         </View>

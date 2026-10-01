@@ -92,6 +92,8 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { canOpenClientCard, clientBlockLevel } from "@/features/clients/client-block-access";
 import { statsByBlocks } from "@/features/clients/card-access";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
+import { usePlanAllows } from "@/features/settings/tenant";
 
 // v811 list card (approved web design, apps/web/.../clients/page.tsx
 // ClientCard): name row (+pin) · money row (grey expected · green income
@@ -385,6 +387,7 @@ function ClientsListScreen() {
   // выглядеть по-разному в двух местах (раньше здесь был системный Alert).
   const [remindClient, setRemindClient] = useState<Client | null>(null);
   const openRemindMenu = (c: Client) => setRemindClient(c);
+  const clientsInPlan = usePlanAllows("clients");
   // «Напомнить» пишет в карточку — по праву на ЭТОГО клиента (30.09): у
   // сотрудника карточка может быть открыта только на чтение.
   const canEditClient = (c: Client) =>
@@ -886,11 +889,17 @@ function ClientsListScreen() {
         <View
           style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}
         >
-          <GradientButton
-            label="Создать клиента"
-            onPress={() => router.push("/clients/new")}
-            disabled={!caps.create}
-          />
+          {/* ТАРИФ БЕЗ КЛИЕНТОВ — КНОПКА СЕРАЯ, а не спрятана (владелец 1.10:
+              «всё видно, новое серым»): тап поднимает плашку «Нужно изменить
+              тариф». Партнёр без своего тарифа видит общий список, но своего
+              клиента не заведёт — сервер отбил бы его на сохранении. */}
+          <TariffLocked locked={!clientsInPlan}>
+            <GradientButton
+              label="Создать клиента"
+              onPress={() => router.push("/clients/new")}
+              disabled={!caps.create}
+            />
+          </TariffLocked>
         </View>
       )}
 

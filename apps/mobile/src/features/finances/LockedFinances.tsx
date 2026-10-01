@@ -137,7 +137,7 @@ export function LockedFinances() {
           totals={ZERO_TOTALS}
           accounts={{ total: 0 }}
           invoices={{ count: 0 }}
-          showDocuments={canUseDocuments}
+          documentsTariffLocked={!canUseDocuments}
           view="all"
           onTap={NOOP}
           locked

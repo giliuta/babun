@@ -1369,7 +1369,8 @@ function FinancesContent() {
           totals={shownTotals}
           accounts={access.accounts === "locked" ? { total: 0 } : accountsSummary}
           invoices={invoiceSummary}
-          showDocuments={canUseDocuments && access.has.documents}
+          showDocuments={access.has.documents}
+          documentsTariffLocked={!canUseDocuments}
           showAccounts={access.has.accounts}
           showDebts={access.has.debts}
           lockAccounts={access.accounts === "locked"}

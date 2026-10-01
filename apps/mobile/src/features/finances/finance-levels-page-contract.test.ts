@@ -53,10 +53,11 @@ describe("экран «Финансы» спрашивает уровень од
     assert.match(index, /accounts=\{access\.accounts === "locked" \? \{ total: 0 \} : accountsSummary\}/);
     // ПЛАШКА «ДОКУМЕНТЫ» ОСТАЁТСЯ БЕЗ ДОСТУПА (владелец 20.09: «всё равно
     // остаётся плашка „Документы“, и там просто не показываются документы»).
-    // Тариф её по-прежнему убирает: без оплаченных документов их в продукте
-    // нет вовсе, и «Счета» занимают ряд целиком.
-    // Выключенная функция компании (STORY-088) убирает плитку так же, как тариф.
-    assert.match(index, /showDocuments=\{canUseDocuments && access\.has\.documents\}/);
+    // С 1.10 тариф её НЕ убирает (владелец: «всё видно, новое серым»):
+    // плитка на месте, серая, тап — плашка «Нужно изменить тариф».
+    // Выключенная функция компании (STORY-088) по-прежнему убирает плитку.
+    assert.match(index, /showDocuments=\{access\.has\.documents\}/);
+    assert.match(index, /documentsTariffLocked=\{!canUseDocuments\}/);
     assert.match(index, /showAccounts=\{access\.has\.accounts\}/);
     assert.match(index, /showDebts=\{access\.has\.debts\}/);
     assert.match(index, /lockAccounts=\{access\.accounts === "locked"\}/);
