@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { Keyboard, Text, View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { Chip } from "@/components/ui/Chip";
@@ -13,12 +13,12 @@ import {
   DAY_BEFORE_TIMES,
   draftOf,
   draftProblem,
-  emptyFieldsWarning,
   HOURS_AFTER,
   HOURS_BEFORE,
   hoursChip,
   REPEAT_MONTHS,
   SMS_WHEN,
+  templateWarnings,
   usesWindow,
   WHEN_LABELS,
   whenWords,
@@ -41,9 +41,11 @@ import { SmsTextField } from "./SmsTextField";
 //   • имя, цвет и значок одной строкой (`NameColorField`);
 //   • «Когда отправлять» — восемь вариантов фишками, видны сразу, ставятся
 //     одним тапом; под выбранным — его срок теми же фишками; у
-//     автоматического — окно «можно отправлять с … до …»; итог словами;
-//   • текст: поле, «Вставить», «Клиент увидит», части; предупреждение, если
-//     в тексте поле, которого у записи может не быть.
+//     автоматического — окно «можно отправлять с … до …» и итог словами;
+//     выбор убирает клавиатуру названия;
+//   • текст: поле, «Вставить», «Клиент увидит», части; предупреждения с
+//     учётом «когда» (`templateWarnings`): пустое поле записи, поля записи у
+//     ручного шаблона, ссылка подтверждения после визита.
 
 function Chips<T extends string | number>({
   label,
@@ -68,7 +70,11 @@ function Chips<T extends string | number>({
             label={words(option)}
             selected={value === option}
             radio
-            onPress={() => onPick(option)}
+            onPress={() => {
+              // Выбор — не ввод: клавиатура названия закрывала полшторки.
+              Keyboard.dismiss();
+              onPick(option);
+            }}
           />
         ))}
       </View>
@@ -108,7 +114,7 @@ export function SmsTemplateSheet({
 
   const set = (patch: Partial<TemplateDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const problem = draftProblem(draft);
-  const warning = emptyFieldsWarning(draft.body);
+  const warnings = templateWarnings(draft);
 
   return (
     <BottomSheet
@@ -144,6 +150,7 @@ export function SmsTemplateSheet({
         icon={draft.icon}
         onIconChange={(icon) => set({ icon })}
         maxLength={60}
+        placeholder="Название шаблона"
         autoFocus={!template}
       />
 
@@ -156,7 +163,10 @@ export function SmsTemplateSheet({
               label={WHEN_LABELS[when]}
               selected={draft.trigger === when}
               radio
-              onPress={() => setDraft((d) => withTrigger(d, when))}
+              onPress={() => {
+                Keyboard.dismiss();
+                setDraft((d) => withTrigger(d, when));
+              }}
             />
           ))}
         </View>
@@ -216,22 +226,27 @@ export function SmsTemplateSheet({
           </>
         ) : null}
 
-        <Text
-          maxFontSizeMultiplier={1.3}
-          style={{ marginTop: 14, marginBottom: 16, fontSize: 15, lineHeight: 21, fontWeight: "600", color: t.ink }}
-        >
-          {usesWindow(draft.trigger)
-            ? `${whenWords(draft)}, ${windowWords(draft.sendFrom, draft.sendTo).toLowerCase()}`
-            : whenWords(draft)}
-        </Text>
+        {/* Итог словами — только у автоматического: у ручного он повторял бы
+            фишку «Вручную». */}
+        {usesWindow(draft.trigger) || draft.trigger === "day_before" ? (
+          <Text
+            maxFontSizeMultiplier={1.3}
+            style={{ marginTop: 14, fontSize: 15, lineHeight: 21, fontWeight: "600", color: t.ink }}
+          >
+            {usesWindow(draft.trigger)
+              ? `${whenWords(draft)}, ${windowWords(draft.sendFrom, draft.sendTo).toLowerCase()}`
+              : whenWords(draft)}
+          </Text>
+        ) : null}
+        <View style={{ height: 16 }} />
       </View>
 
       <SmsTextField value={draft.body} onChange={(body) => set({ body })} />
-      {warning ? (
-        <Text maxFontSizeMultiplier={1.3} style={{ marginBottom: 8, fontSize: 14, lineHeight: 19, color: t.warning }}>
+      {warnings.map((warning) => (
+        <Text key={warning} maxFontSizeMultiplier={1.3} style={{ marginBottom: 8, fontSize: 14, lineHeight: 19, color: t.warning }}>
           {warning}
         </Text>
-      ) : null}
+      ))}
     </BottomSheet>
   );
 }

@@ -274,6 +274,31 @@ export function emptyFieldsWarning(body: string): string | null {
   return `Если у записи нет ${list}, SMS не уйдёт`;
 }
 
+/** Поля записи: у SMS без записи (карточка клиента, рассылка) их берут из
+ *  ближайшей будущей записи клиента, а нет её — шаблон не предлагается. */
+const VISIT_FIELDS = new Set(["Day", "Date", "Time", "Master", "Service", "Address", "Price"]);
+
+/** Когда ссылка «Подтвердить / отменить» уже ни к чему: визит отменён или
+ *  прошёл. */
+const AFTER_VISIT: ReadonlySet<SmsWhen> = new Set(["cancelled", "after", "repeat"]);
+
+/** Что владелец должен знать о шаблоне, чтобы он уходил как задумано, —
+ *  с учётом «когда отправлять»; пусто — ничего. Владелец 01.10: «чтобы
+ *  правильно применялась… правильные настройки». */
+export function templateWarnings(d: Pick<TemplateDraft, "body" | "trigger">): string[] {
+  const keys = templateTokenKeys(d.body);
+  const out: string[] = [];
+  const empty = emptyFieldsWarning(d.body);
+  if (empty) out.push(empty);
+  if (d.trigger === "manual" && keys.some((key) => VISIT_FIELDS.has(key))) {
+    out.push("Без записи шаблон предложится, только если у клиента есть будущая запись");
+  }
+  if (AFTER_VISIT.has(d.trigger) && keys.includes("Link")) {
+    out.push("Ссылка «Подтвердить / отменить» нужна до визита, а не после");
+  }
+  return out;
+}
+
 /** Шаблоны списком «без повторов»: одинаковый текст у двух команд — одна
  *  строка (лист у номера клиента без записи видит все команды). */
 export function uniqueByBody<T extends { body: string }>(list: readonly T[]): T[] {
