@@ -6,6 +6,7 @@ import { LargeSecureStore } from "@/lib/secure-store";
 import { getActiveTenantId } from "@/lib/active-tenant";
 import { applyTenantHeader } from "@/lib/tenant-header";
 import { isWriteRequest } from "@/lib/write-requests";
+import { isAuthRequest, retryableAuthResponse } from "@/lib/auth-fetch";
 import { WritesBlockedError, writesBlocked } from "@babun/shared/sync/write-guard";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -63,6 +64,16 @@ function fetchWithActiveTenant(
     new Headers(init?.headers ?? {}),
     getActiveTenantId(),
   );
+
+  // ВХОД ПОТОЛКА НЕ ИМЕЕТ, А ЕГО 409 — ВРЕМЕННЫЙ ОТКАЗ (01.10, `auth-fetch.ts`).
+  // Оборванное обновление токена оставалось в очереди лежащего сервера, и
+  // после подъёма очередь выкинула людей из аккаунта.
+  if (isAuthRequest(requestUrl(input))) {
+    const target = requestUrl(input);
+    return fetch(input, { ...init, headers }).then((response) =>
+      retryableAuthResponse(target, response),
+    );
+  }
 
   // Свой сигнал НЕ отменяет чужой: если вызывающий уже дал `signal`
   // (react-query умеет отменять запросы), оставляем его хозяином — два
