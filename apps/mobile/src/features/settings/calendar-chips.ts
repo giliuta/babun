@@ -16,10 +16,6 @@ export interface CalendarChip {
   id: string;
   name: string;
   color?: string | null;
-  /** Чип чужой компании — рисуется обводкой, а не заливкой. Поле объявлено
-   *  здесь, а не дописывается к объекту молча: лента его читает, и тип обязан
-   *  об этом знать. */
-  outline?: boolean;
 }
 
 /** Ровно то, что ленте нужно от календаря человека, — не весь `MyCalendar`. */
@@ -74,7 +70,6 @@ export function composeCalendarChips(input: {
       id: `${FOREIGN_PREFIX}${c.tenantId}:${c.teamId}`,
       name: c.teamName,
       color: c.teamColor,
-      outline: true,
     });
     byTenant.set(c.tenantName, chips);
   }

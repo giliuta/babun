@@ -240,17 +240,12 @@ function ClientsListScreen() {
     savedTeam,
     teams.map((tm) => tm.id),
   );
-  // Команды компаний-партнёров — обводкой: тот же язык, что у ленты
-  // календаря (чужой чип уводит в чужую базу, а не режет свою).
-  const teamChips = useMemo(() => {
-    const own = new Set(ownTeams.map((tm) => tm.id));
-    return teams.map((tm) => ({
-      id: tm.id,
-      name: tm.name,
-      color: tm.color,
-      outline: !own.has(tm.id),
-    }));
-  }, [teams, ownTeams]);
+  // Команды компаний-партнёров — ТЕМ ЖЕ ЧИПОМ, что свои (владелец 1.10: «как
+  // будто все команды его»): граница баз держится данными, а не видом.
+  const teamChips = useMemo(
+    () => teams.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color })),
+    [teams],
+  );
   // КЛИЕНТ ОДИН НА НЕСКОЛЬКО КОМАНД (см. `team-scope.ts`): под чипом — свои
   // клиенты команды и те, кого она обслуживала; цифры — по её записям.
   // ГРАНИЦА БАЗ (владелец 30.09 — «чтобы не могли украсть наших клиентов»,
