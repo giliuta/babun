@@ -92,45 +92,56 @@ export function ClientLabelTags({
   // Тег один (22.09); у старых карточек их бывает больше — видно первый.
   const tagsTitle = chosen[0]?.name ?? null;
 
+  // ПУСТАЯ ПЛИТКА ТОЛЬКО ДЛЯ ТОГО, КТО МОЖЕТ ЕЁ ЗАПОЛНИТЬ (владелец 01.10).
+  // «Только видит» и значения нет — плитка-приглашение была бы кнопкой в
+  // никуда: её нет, а обе пустые — нет и ряда.
+  const showLabel = !readOnly || !!label;
+  const showTag = !readOnly || !!tagsTitle;
+  if (!showLabel && !showTag) return null;
+
   return (
     <>
       {/* Края — по карточкам страницы (`GUTTER`), а не по шапке записи:
           здесь плитки стоят между блоками, и лишние 2 точки были видны. */}
       <View style={{ flexDirection: "row", gap: 8, marginHorizontal: GUTTER, marginTop: 8 }}>
-        <IdentityCard
-          icon={Bookmark}
-          color={label ? labelColor : t.accent}
-          title={label || "Метка"}
-          sub={labelAuto ? "по записи" : undefined}
-          muted={!label}
-          quiet={labelAuto}
-          onPress={
-            readOnly
-              ? undefined
-              : () => {
-                  haptics.tap();
-                  setLabelOpen(true);
-                }
-          }
-          accessibilityLabel={label ? `Метка: ${label}${labelAuto ? ", по записи" : ""}` : "Метка не выбрана"}
-          accessibilityHint="Открывает выбор метки"
-        />
-        <IdentityCard
-          icon={Tags}
-          color={chosen[0]?.color || t.accent}
-          title={tagsTitle ?? "Тег"}
-          muted={!tagsTitle}
-          onPress={
-            readOnly
-              ? undefined
-              : () => {
-                  haptics.tap();
-                  setTagsOpen(true);
-                }
-          }
-          accessibilityLabel={tagsTitle ? `Тег: ${tagsTitle}` : "Тег не выбран"}
-          accessibilityHint="Открывает выбор тега"
-        />
+        {showLabel ? (
+          <IdentityCard
+            icon={Bookmark}
+            color={label ? labelColor : t.accent}
+            title={label || "Метка"}
+            sub={labelAuto ? "по записи" : undefined}
+            muted={!label}
+            quiet={labelAuto}
+            onPress={
+              readOnly
+                ? undefined
+                : () => {
+                    haptics.tap();
+                    setLabelOpen(true);
+                  }
+            }
+            accessibilityLabel={label ? `Метка: ${label}${labelAuto ? ", по записи" : ""}` : "Метка не выбрана"}
+            accessibilityHint="Открывает выбор метки"
+          />
+        ) : null}
+        {showTag ? (
+          <IdentityCard
+            icon={Tags}
+            color={chosen[0]?.color || t.accent}
+            title={tagsTitle ?? "Тег"}
+            muted={!tagsTitle}
+            onPress={
+              readOnly
+                ? undefined
+                : () => {
+                    haptics.tap();
+                    setTagsOpen(true);
+                  }
+            }
+            accessibilityLabel={tagsTitle ? `Тег: ${tagsTitle}` : "Тег не выбран"}
+            accessibilityHint="Открывает выбор тега"
+          />
+        ) : null}
       </View>
 
       <LabelPickerSheet
