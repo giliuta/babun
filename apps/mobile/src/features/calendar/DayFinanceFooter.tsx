@@ -8,7 +8,7 @@ import { useThemeColors } from "@/theme/colors";
 import { RAIL_W } from "@/features/calendar/DayView";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 import { dayMoney } from "@/features/calendar/day-money";
-import { useTransactions } from "@/features/finances/queries";
+import { useAppointmentsLedger, useTransactions } from "@/features/finances/queries";
 
 // Thin money strip pinned under the day/week grid — per-day Доход (green) over
 // Расход (red), aligned to the day columns (gutter width = the hour rail).
@@ -20,10 +20,11 @@ import { useTransactions } from "@/features/finances/queries";
 // «доходом». План дня живёт в шторке дня (тап по столбцу), а полоса под
 // сеткой говорит только о деньгах, которые уже есть.
 //
-// С 2026-09-30 — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО «ФИНАНСЫ» (`day-money.ts`): доход дня —
-// деньги, пришедшие в этот день по леджеру. Раньше полоса брала оплаты
-// записей ЭТОГО дня, и предоплата, внесённая сегодня за завтрашнюю запись,
-// стояла доходом завтра. Расход — расходы леджера и материалы записей дня.
+// ДЕНЬГИ ЗАПИСИ — В ДНЕ ЗАПИСИ (владелец 2026-10-01, правило в
+// `day-money.ts`): предоплата, внесённая сегодня за завтрашнюю запись, стоит
+// доходом завтра и переезжает вместе с записью; операция без записи (доход
+// или расход с категорией) — в своём дне. Расход — расходы журнала тем же
+// правилом и материалы записей дня.
 export function DayFinanceFooter({
   days,
   appointments,
@@ -49,15 +50,23 @@ export function DayFinanceFooter({
   const t = useThemeColors();
   const sharedServices = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
-  // Леджер видимых дней — источник денег полосы (оплаты записей и ручные
-  // операции одной выборкой, по дате операции).
+  // Журнал видимых дней — операции без записи по дню операции.
   const rangeFrom = days.length > 0 ? formatYMD(days[0]) : "";
   const rangeTo = days.length > 0 ? formatYMD(days[days.length - 1]) : "";
   const ledgerQuery = useTransactions(rangeFrom, rangeTo, {
     brigadeIds: teamId ? [teamId] : undefined,
     enabled: days.length > 0,
   });
-  const ledger = ledgerQuery.data;
+  // Операции видимых записей — в любой день внесения (предоплата неделей
+  // раньше тоже стоит в дне записи).
+  const recordsLedger = useAppointmentsLedger(
+    useMemo(() => appointments.map((a) => a.id), [appointments]),
+    { enabled: days.length > 0 },
+  ).data;
+  const ledger = useMemo(
+    () => [...(ledgerQuery.data ?? []), ...(recordsLedger ?? [])],
+    [ledgerQuery.data, recordsLedger],
+  );
 
   const byDate = useMemo(() => {
     const m = new Map<string, Appointment[]>();
@@ -78,7 +87,7 @@ export function DayFinanceFooter({
         const money = dayMoney({
           ymd,
           appointments: byDate.get(ymd) ?? [],
-          transactions: ledger ?? [],
+          transactions: ledger,
           services: sharedServices,
           teamId,
           extras: getDayExtras(extrasMap, teamId, ymd),

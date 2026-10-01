@@ -4,6 +4,7 @@ import {
   deleteTransaction,
   insertTransaction,
   listRefundTotals,
+  listTransactionsForAppointments,
   listTransactionsForRange,
   updateTransaction,
   type TransactionDraft,
@@ -110,6 +111,34 @@ export function useTransactions(
     placeholderData,
     select,
     queryFn: () => listTransactionsForRange(supabase, tenantId as string, from, to),
+  });
+}
+
+/**
+ * Операции, привязанные к записям, — в любой день внесения. Календарь ставит
+ * деньги записи в день записи (владелец 2026-10-01), и полосе недели, клетке
+ * месяца и шторке дня нужны и те, что внесены раньше видимых дней.
+ *
+ * Ключ — под общим префиксом `["transactions", компания]`: оплата, возврат и
+ * правка операции сбрасывают и его. Id в ключе отсортированы — перестановка
+ * записей на экране нового запроса не заводит.
+ */
+export function useAppointmentsLedger(
+  appointmentIds: readonly string[],
+  options: { enabled?: boolean } = {},
+) {
+  const tenantId = useTenantId();
+  const key = useMemo(() => [...new Set(appointmentIds)].sort().join(","), [appointmentIds]);
+  const placeholderData = useMemo(
+    () => placeholderWithinTenant<FinanceTransaction[]>(tenantId),
+    [tenantId],
+  );
+  return useQuery({
+    queryKey: ["transactions", tenantId, "by-appointments", key],
+    enabled: !!tenantId && key.length > 0 && (options.enabled ?? true),
+    placeholderData,
+    queryFn: () =>
+      listTransactionsForAppointments(supabase, tenantId as string, key.split(",")),
   });
 }
 

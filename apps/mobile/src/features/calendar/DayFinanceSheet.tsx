@@ -36,6 +36,7 @@ import { accountRowsQueryKey } from "@/lib/company-query-keys";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import {
+  useAppointmentsLedger,
   useFinanceCategories,
   useTransactions,
 } from "@/features/finances/queries";
@@ -151,21 +152,30 @@ export function DayFinanceSheet({
     brigadeIds: teamId ? [teamId] : undefined,
     enabled: shownYmd != null,
   });
-  // keepPreviousData подсовывает прошлый день под новыми плитками — режем
-  // строго по дню, как это делает ledgerExtrasForDay для цифр.
+  // Операции записей дня — в любой день внесения: предоплата за запись
+  // стоит в дне записи (владелец 2026-10-01, правило в `day-money.ts`).
+  const recordsTxQuery = useAppointmentsLedger(
+    useMemo(() => appts.map((a) => a.id), [appts]),
+    { enabled: shownYmd != null },
+  );
+  // Обе выборки вместе; к дню строки относит `dayMoney` — и прошлый день,
+  // подсунутый keepPreviousData, туда не попадёт.
   const dayTx = useMemo(
-    () => (txQuery.data ?? []).filter((tx) => tx.occurred_on === ymd),
-    [txQuery.data, ymd],
+    () => [...(txQuery.data ?? []), ...(recordsTxQuery.data ?? [])],
+    [txQuery.data, recordsTxQuery.data],
   );
   const ledgerLoading =
-    (txQuery.isPending && txQuery.data === undefined) || txQuery.isPlaceholderData;
+    (txQuery.isPending && txQuery.data === undefined) ||
+    txQuery.isPlaceholderData ||
+    recordsTxQuery.isPlaceholderData;
 
   const legacyExtras = useMemo(
     () => (shownYmd ? getDayExtras(extrasMap, teamId, shownYmd) : []),
     [extrasMap, teamId, shownYmd],
   );
-  // ДЕНЬГИ ДНЯ — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО ПОЛОСА ПОД СЕТКОЙ И «ФИНАНСЫ»
-  // (`day-money.ts`): доход — пришедшее в этот день, события — не деньги.
+  // ДЕНЬГИ ДНЯ — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО ПОЛОСА ПОД СЕТКОЙ (`day-money.ts`):
+  // деньги записи — в дне записи, операция без записи — в своём дне, события —
+  // не деньги.
   const money = useMemo(
     () =>
       dayMoney({

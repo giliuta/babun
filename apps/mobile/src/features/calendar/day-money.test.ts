@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
-import { dayMoney, isMoneyRecord, moneyByAccount } from "./day-money";
+import { dayMoney, isMoneyRecord, moneyByAccount, moneyOfDay } from "./day-money";
 
-// ДЕНЬГИ ДНЯ В КАЛЕНДАРЕ = «ФИНАНСЫ» ЗА ТОТ ЖЕ ДЕНЬ. Главный случай — живой
-// баг 30.09: предоплата €20 внесена сегодня (30.09) за запись на 1.10.
+// ДЕНЬГИ ЗАПИСИ — В ДНЕ ЗАПИСИ (владелец 2026-10-01). Живой случай: предоплата
+// €20 внесена 30.09 за запись на 1.10 — полоса показывала её в среду, где
+// записи нет. Операция без записи (доход/расход с категорией) — в своём дне.
 
 const TODAY = "2026-09-30";
 const TOMORROW = "2026-10-01";
@@ -60,7 +61,7 @@ const run = (
     nowHm,
   });
 
-describe("доход дня — деньги, пришедшие в этот день", () => {
+describe("доход дня — деньги записи в дне записи", () => {
   const record = appt({ id: "a1", prepaid_amount: 20 });
   const prepay = tx({
     id: "p1",
@@ -71,14 +72,48 @@ describe("доход дня — деньги, пришедшие в этот д�
     occurred_on: TODAY,
   });
 
-  test("предоплата сегодня за завтра — доход сегодня, не завтра", () => {
+  test("предоплата сегодня за завтра — доход завтра, в дне записи", () => {
     const today = run(TODAY, [record], [prepay]);
-    assert.equal(today.income, 20);
-    assert.deepEqual(today.incomeRows.map((r) => r.id), ["p1"]);
+    assert.equal(today.income, 0);
+    assert.equal(today.incomeRows.length, 0);
 
     const tomorrow = run(TOMORROW, [record], [prepay]);
-    assert.equal(tomorrow.income, 0);
-    assert.equal(tomorrow.incomeRows.length, 0);
+    assert.equal(tomorrow.income, 20);
+    assert.deepEqual(tomorrow.incomeRows.map((r) => r.id), ["p1"]);
+  });
+
+  test("перенесли запись — деньги переехали вместе с ней", () => {
+    const moved = { ...record, date: "2026-10-02" } as Appointment;
+    assert.equal(run(TOMORROW, [moved], [prepay]).income, 0);
+    assert.equal(run("2026-10-02", [moved], [prepay]).income, 20);
+  });
+
+  test("запись не в этом дне — её денег здесь нет, даже внесённых сегодня", () => {
+    // Запись в другой неделе: её нет среди записей экрана.
+    assert.equal(run(TODAY, [], [prepay]).income, 0);
+  });
+
+  test("операция без записи — в своём дне", () => {
+    const manual = tx({ id: "m1", type: "income", amount: 70, occurred_on: TODAY });
+    const fuel = tx({ id: "e1", type: "expense", amount: -15, occurred_on: TODAY });
+    const today = run(TODAY, [record], [manual, fuel, prepay]);
+    assert.equal(today.income, 70);
+    assert.equal(today.expense, 15);
+    assert.equal(run(TOMORROW, [record], [manual, fuel, prepay]).income, 20);
+  });
+
+  test("строка из двух выборок (журнал дней и операции записей) — один раз", () => {
+    assert.equal(run(TOMORROW, [record], [prepay, prepay]).income, 20);
+    assert.deepEqual(
+      moneyOfDay(TOMORROW, [record], [prepay, prepay]).map((r) => r.id),
+      ["p1"],
+    );
+  });
+
+  test("отменённая запись с предоплатой — деньги в её дне, не в дне внесения", () => {
+    const cancelled = { ...record, status: "cancelled" } as Appointment;
+    assert.equal(run(TOMORROW, [cancelled], [prepay]).income, 20);
+    assert.equal(run(TODAY, [cancelled], [prepay]).income, 0);
   });
 
   test("«Ожидается» — остаток, а не вся сумма записи", () => {

@@ -153,6 +153,41 @@ export async function listTransactionsForRange(
   return rows.map(rowToTx);
 }
 
+/** Сколько id записей уходит в один запрос: 150 uuid — около 5,6 КБ адреса. */
+const APPOINTMENT_IDS_PER_REQUEST = 150;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Все операции, привязанные к этим записям, — в какой бы день их ни внесли.
+ *
+ * Календарь ставит деньги записи в день САМОЙ ЗАПИСИ (владелец 2026-10-01:
+ * «передвинул запись — всё сдвигается и считается в этот день»), а
+ * предоплату за неё могли внести неделей раньше: выборка журнала по дате
+ * операции её бы не нашла. Не-uuid id (повтор серии, ещё не сохранённая
+ * копия) в базу не уходят — `in` на колонке uuid упал бы целиком.
+ */
+export async function listTransactionsForAppointments(
+  supabase: DbSupabase,
+  tenantId: string,
+  appointmentIds: readonly string[],
+): Promise<FinanceTransaction[]> {
+  const ids = [...new Set(appointmentIds.filter((id) => UUID.test(id)))];
+  const rows: Row[] = [];
+  for (let i = 0; i < ids.length; i += APPOINTMENT_IDS_PER_REQUEST) {
+    const { data, error } = await supabase
+      .from("finance_transactions")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .in("appointment_id", ids.slice(i, i + APPOINTMENT_IDS_PER_REQUEST))
+      .order("occurred_on", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (error) throw new Error(`listTransactionsForAppointments: ${error.message}`);
+    rows.push(...((data ?? []) as Row[]));
+  }
+  return rows.map(rowToTx);
+}
+
 /** Строка серверного агрегата `account_balances` — одна на счёт тенанта плюс
  *  одна «ничья». */
 export interface AccountBalanceRow {

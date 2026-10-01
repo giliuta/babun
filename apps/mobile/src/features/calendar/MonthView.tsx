@@ -6,7 +6,7 @@ import { getDayExtras } from "@babun/shared/local/day-extras";
 import { formatHM } from "@/features/appointments/helpers";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 import { dayMoney, type DayMoney } from "@/features/calendar/day-money";
-import { useTransactions } from "@/features/finances/queries";
+import { useAppointmentsLedger, useTransactions } from "@/features/finances/queries";
 import {
   isWeekendColumn,
   weekdayIndex,
@@ -102,16 +102,33 @@ export const MonthView = memo(function MonthView({
   const services = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
 
-  // ДЕНЬГИ КЛЕТКИ — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО ПОЛОСА НЕДЕЛИ И «ФИНАНСЫ»
-  // (`day-money.ts`, 2026-09-30): доход — пришедшее в этот день по леджеру,
-  // а не оплаты записей дня; месяц раньше леджера не видел вовсе, и ручная
-  // операция с вкладки «Финансы» в клетке не стояла.
+  // ДЕНЬГИ КЛЕТКИ — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО ПОЛОСА НЕДЕЛИ (`day-money.ts`):
+  // деньги записи — в дне записи (владелец 2026-10-01), операция без записи —
+  // в дне операции.
   const todayStr = todayYmd ?? ymd(new Date());
   const ledgerQuery = useTransactions(ymd(cells[0]), ymd(cells[cells.length - 1]), {
     brigadeIds: teamId ? [teamId] : undefined,
     enabled: showFinance,
   });
-  const ledger = ledgerQuery.isPlaceholderData ? undefined : ledgerQuery.data;
+  // Только записи клеток месяца: денежный набор экрана бывает шире.
+  const recordIds = useMemo(() => {
+    const from = ymd(cells[0]);
+    const to = ymd(cells[cells.length - 1]);
+    return financeAppointments.filter((a) => a.date >= from && a.date <= to).map((a) => a.id);
+  }, [financeAppointments, cells]);
+  const recordsLedgerQuery = useAppointmentsLedger(recordIds, { enabled: showFinance });
+  const ledger = useMemo(
+    () =>
+      ledgerQuery.isPlaceholderData || recordsLedgerQuery.isPlaceholderData
+        ? undefined
+        : [...(ledgerQuery.data ?? []), ...(recordsLedgerQuery.data ?? [])],
+    [
+      ledgerQuery.isPlaceholderData,
+      ledgerQuery.data,
+      recordsLedgerQuery.isPlaceholderData,
+      recordsLedgerQuery.data,
+    ],
+  );
 
   // Финансы всех дней одной мемоизацией (аудит: расчёт гонялся по 42
   // клеткам в каждом рендере). Дни без записей, но с операциями леджера или
@@ -120,7 +137,8 @@ export const MonthView = memo(function MonthView({
     const m = new Map<string, DayMoney>();
     if (!showFinance) return m;
     const dates = new Set(financeByDay.keys());
-    for (const tx of ledger ?? []) dates.add(tx.occurred_on);
+    // Дни записей уже в наборе; операция без записи добавляет свой день.
+    for (const tx of ledger ?? []) if (!tx.appointment_id) dates.add(tx.occurred_on);
     if (teamId) {
       const prefix = `${teamId}:`;
       for (const k of Object.keys(extrasMap)) {
