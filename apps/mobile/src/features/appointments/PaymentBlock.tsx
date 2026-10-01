@@ -50,6 +50,7 @@ import {
   TILE_GAP,
   useTileWidth,
 } from "./PaymentTiles";
+import { useTariffNudge } from "@/features/tariffs/use-tariff";
 
 // БЛОК «ОПЛАТА» (STORY-065). Тап по счёту — деньги получены и записаны СРАЗУ
 // (владелец 2026-09-06: без черновика); визит закрывается, если начался.
@@ -378,14 +379,17 @@ export function PaymentBlock({
   // что выписывать, история платежей пуста. Три мёртвых тапа — и полоса в
   // сорок точек, в которой нет ни слова, только они, прижатые вправо.
   const canSplit = outstanding > 0 && canTakeMoney;
-  // ДОКУМЕНТОВ НА БЕСПЛАТНОМ ТАРИФЕ НЕТ ВОВСЕ: `enforce_plan_limits` отобьёт
-  // вставку инвойса, а канон запрещает живой контрол над запрещённым —
-  // значка «Инвойс» просто нет. Уже выписанный документ открыть можно: он
-  // существует, и прятать дорогу к нему значило бы потерять бумагу.
+  // ТАРИФ БЕЗ ДОКУМЕНТОВ — ЗНАЧОК СЕРЫЙ, А НЕ ПРОПАДАЕТ (владелец 1.10:
+  // «закончилась подписка — всё видно, новое серым»). У аккаунта, чей тариф
+  // кончился, остались записи с неоплаченным остатком: значок «Инвойс» на
+  // месте, тап поднимает плашку «Нужно изменить тариф» вместо выписки
+  // (`enforce_plan_limits` её всё равно отбил бы). Уже выписанный документ
+  // открывается как раньше — бумагу не теряем.
   // Инвойсы — функция компании (STORY-088): выключены — иконки нет, даже у
   // уже выставленного (он открывается из «Файлов», когда функцию вернут).
-  const canInvoice =
-    documentsOn && (Boolean(invoice) || (outstanding > 0 && canUseDocuments));
+  const canInvoice = documentsOn && (Boolean(invoice) || outstanding > 0);
+  const invoiceTariffLocked = !invoice && !canUseDocuments;
+  const tariffNudge = useTariffNudge();
   const hasHistory = canSeeHistory && rows.length > 0;
   const anyAction = Boolean(teamId) && (canSplit || canInvoice || hasHistory);
   // Строка состояния нужна, когда ей ЕСТЬ ЧТО СКАЗАТЬ: подпись, поле суммы или
@@ -422,7 +426,13 @@ export function PaymentBlock({
                 <ModeIconButton icon={Split} label={started ? "Часть суммы" : "Предоплата"} active={amountMode} onPress={handleAmountToggle} />
               ) : null}
               {canInvoice ? (
-                <ModeIconButton icon={FileText} label="Инвойс" active={Boolean(invoice)} onPress={handleInvoice} />
+                <ModeIconButton
+                  icon={FileText}
+                  label="Инвойс"
+                  active={Boolean(invoice)}
+                  dimmed={invoiceTariffLocked}
+                  onPress={invoiceTariffLocked ? tariffNudge : handleInvoice}
+                />
               ) : null}
               {hasHistory ? (
                 <ModeIconButton icon={History} label="История платежей" onPress={() => setHistoryOpen(true)} />
