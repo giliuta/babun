@@ -248,16 +248,15 @@ function ClientsListScreen() {
   );
   // КЛИЕНТ ОДИН НА НЕСКОЛЬКО КОМАНД (см. `team-scope.ts`): под чипом — свои
   // клиенты команды и те, кого она обслуживала; цифры — по её записям.
-  // ГРАНИЦА БАЗ (владелец 30.09 — «чтобы не могли украсть наших клиентов»,
-  // сверено с 015): без чипа — ТОЛЬКО СВОЯ база. Клиенты компании, где
-  // человеку открыли клиентов, — только под её чипом с обводкой и никогда в
-  // одном списке со своими: так их не перепутать и граница видна без слов.
+  // БЕЗ ЧИПА — ОБЩИЙ СПИСОК ВСЕХ КОМАНД (владелец 1.10: «когда нет выбора
+  // команды — сразу все три команды, общий список; выбираю свою — только мои
+  // клиенты; хочу разделить — разделяю»). Это отмена правила 30.09 «без чипа
+  // — только своя база»: клиенты партнёра стоят в общем списке, но их строки
+  // по-прежнему такие, какими их отдал сервер (без номеров и денег по
+  // правам), а выбрать их для выгрузки и рассылки нельзя (`selectable`).
   const teamClients = useMemo(
-    () =>
-      teamChoice === ALL_TEAMS
-        ? clients.filter((c) => !guestOf.has(c.id))
-        : clientsOfTeam(clients, teamChoice, appointments),
-    [clients, teamChoice, appointments, guestOf],
+    () => (teamChoice === ALL_TEAMS ? clients : clientsOfTeam(clients, teamChoice, appointments)),
+    [clients, teamChoice, appointments],
   );
   const teamAppointments = useMemo(
     () => appointmentsOfTeam(appointments, teamChoice),
@@ -482,7 +481,12 @@ function ClientsListScreen() {
     });
 
   // ── Bulk-mode helpers ─────────────────────────────────────────────
-  const visible = result.filtered; // «Выбрать всё» = всё, что сейчас в списке
+  // «Выбрать всё» = всё СВОЁ, что сейчас в списке: клиенты партнёра в общем
+  // списке видны, но в выгрузку, рассылку и архив не попадают никогда.
+  const visible = useMemo(
+    () => result.filtered.filter((c) => !guestOf.has(c.id)),
+    [result.filtered, guestOf],
+  );
   // Считаем ВИДИМЫХ выбранных: массовое действие работает по ним же,
   // а selectedIds может помнить исчезнувших из выдачи.
   const pickedCount = visible.reduce(
@@ -513,8 +517,8 @@ function ClientsListScreen() {
   // Массовые действия — строго по ВИДИМОМУ списку: если фильтр изменился
   // после выбора, «Архивировать 12» не должно задеть невидимых.
   const selectedClients = useMemo(
-    () => result.filtered.filter((c) => selectedIds.has(c.id)),
-    [result.filtered, selectedIds],
+    () => visible.filter((c) => selectedIds.has(c.id)),
+    [visible, selectedIds],
   );
 
   const onExport = async () => {

@@ -666,3 +666,18 @@ describe("дубль номера не заводится — плашка св�
     assert.match(read("useClientDraft.ts"), /gate\.duplicate/);
   });
 });
+
+describe("общий список без чипа — все команды, но выбрать можно только своих", () => {
+  // Владелец 1.10: «когда нет выбора команды — сразу все три команды, общий
+  // список». Клиенты партнёра видны, но в выгрузку, рассылку и архив не
+  // попадают: «Выбрать всё» и массовые действия считают только свою базу.
+  const list = () => read("../../../app/(dashboard)/clients/index.tsx");
+  test("без чипа — весь склеенный список", () => {
+    assert.match(list(), /teamChoice === ALL_TEAMS \? clients : clientsOfTeam\(/);
+  });
+  test("выбор и массовые действия — только своя база", () => {
+    assert.match(list(), /const visible = useMemo\(\s*\(\) => result\.filtered\.filter\(\(c\) => !guestOf\.has\(c\.id\)\)/);
+    assert.match(list(), /const selectedClients = useMemo\(\s*\(\) => visible\.filter\(/);
+    assert.match(list(), /selectionMode=\{selecting && !guest\}/);
+  });
+});
