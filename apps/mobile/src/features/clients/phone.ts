@@ -165,11 +165,12 @@ export function formatPhoneAsYouType(
  *  Пустой номер → undefined (флагу нечего показывать). Один хелпер на
  *  оба режима карточки клиента: черновик и сохранённая строка. */
 
-/** НОМЕР ДЛЯ ГЛАЗ (владелец 22.09: «как правильно писать номер»). Правило
- *  libphonenumber, своей маски нет: номер своей страны — как его диктуют,
- *  без кода («99 000101» на Кипре), чужой — с «+кодом» («+7 916 123-45-67»),
- *  чтобы мастер сразу видел иностранца. Набору это не мешает — звонок идёт
- *  по разобранному номеру. Неразбираемое — как ввели. */
+/** НОМЕР ДЛЯ ГЛАЗ — ВСЕГДА С КОДОМ СТРАНЫ (владелец 01.10: «обязательно
+ *  код страны, он вставляется везде… под именем начинается +357 — тот код
+ *  страны, который выбран в самом клиенте»). До 01.10 номер своей страны
+ *  печатался без кода («99 000 101»), теперь — «+357 99 000 101»; чужой —
+ *  как и раньше, «+7 916 123 45 67». `home` нужен только номеру, записанному
+ *  без «+»: им такой номер и разбирается. Неразбираемое — как ввели. */
 export function formatPhoneForDisplay(
   raw: string,
   home: CountryCode = DEFAULT_COUNTRY,
@@ -180,11 +181,9 @@ export function formatPhoneForDisplay(
   if (!parsed || !parsed.isPossible()) return s;
   if (parsed.country === "CY") {
     const grouped = groupCyprusDigits(String(parsed.nationalNumber));
-    if (grouped) return home === "CY" ? grouped : `+357 ${grouped}`;
+    if (grouped) return `+357 ${grouped}`;
   }
-  return parsed.country === home
-    ? parsed.formatNational()
-    : parsed.formatInternational();
+  return parsed.formatInternational();
 }
 
 // ─── ВВОД НОМЕРА: СТРАНА ОТДЕЛЬНО, ЦИФРЫ ОТДЕЛЬНО (владелец 22.09: «сделать

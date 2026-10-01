@@ -20,10 +20,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
 
 describe("номер для глаз", () => {
-  test("своя страна — без кода, как диктуют", () => {
-    assert.equal(formatPhoneForDisplay("+35799000101", "CY"), "99 000 101");
-    assert.equal(formatPhoneForDisplay("99000101", "CY"), "99 000 101");
-    assert.equal(formatPhoneForDisplay("+357 97 469998", "CY"), "97 469 998");
+  test("своя страна — тоже с кодом (владелец 01.10: «обязательно код страны»)", () => {
+    assert.equal(formatPhoneForDisplay("+35799000101", "CY"), "+357 99 000 101");
+    assert.equal(formatPhoneForDisplay("99000101", "CY"), "+357 99 000 101");
+    assert.equal(formatPhoneForDisplay("+357 97 469998", "CY"), "+357 97 469 998");
   });
   test("кипрский номер у компании другой страны — с кодом, теми же группами", () => {
     assert.equal(formatPhoneForDisplay("+35799000101", "GB"), "+357 99 000 101");
