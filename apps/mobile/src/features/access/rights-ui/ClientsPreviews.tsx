@@ -1,5 +1,5 @@
 import { Text, View } from "react-native";
-import { Ban, Bell, ChevronRight, Trash2, type LucideIcon } from "lucide-react-native";
+import { Ban, Bell, CalendarPlus, Check, ChevronRight, Share2, Trash2, type LucideIcon } from "lucide-react-native";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -41,7 +41,7 @@ const OWN = [
 ];
 
 /** Пункты меню клиента — тем же видом, что в его меню (`ClientActionsSheet`). */
-type MenuItem = { label: string; icon: LucideIcon; tone: "warning" | "danger" };
+type MenuItem = { label: string; icon: LucideIcon; tone: "accent" | "warning" | "danger" };
 
 /** Клиент и меню, открытое долгим нажатием на него (владелец 03.10: «добавь
  *  картинку того, когда оно открывается»), — как «Перенос записей» в
@@ -74,7 +74,7 @@ function ClientMenuPreview({ items, phones }: { items: readonly MenuItem[]; phon
               key={item.label}
               title={item.label}
               icon={item.icon}
-              color={item.tone === "danger" ? t.danger : t.warning}
+              color={item.tone === "danger" ? t.danger : item.tone === "warning" ? t.warning : t.accent}
               onPress={noop}
             />
           ))}
@@ -84,10 +84,14 @@ function ClientMenuPreview({ items, phones }: { items: readonly MenuItem[]; phon
   );
 }
 
-/** «Меню клиента» — напоминание и чёрный список; «Удаление клиента» —
- *  удаление (03.10). */
+/** «Меню клиента» — всё меню, кроме «Удалить» (владелец 03.10), в его
+ *  порядке; «Записать» — только с правом «Новые записи» (ниже).
+ *  «Удаление клиента» — удаление. */
+const BOOK_ITEM: MenuItem = { label: "Записать", icon: CalendarPlus, tone: "accent" };
 const MENU_ITEMS: Readonly<Record<string, readonly MenuItem[]>> = {
   "clients.menu": [
+    { label: "Поделиться", icon: Share2, tone: "accent" },
+    { label: "Выбрать несколько", icon: Check, tone: "accent" },
     { label: "Напомнить", icon: Bell, tone: "warning" },
     { label: "В чёрный список", icon: Ban, tone: "danger" },
   ],
@@ -133,7 +137,15 @@ export function ClientsPreview({
                 : "«Удалить» в меню клиента нет"
         }
       >
-        <ClientMenuPreview items={menuItems} phones={phones} />
+        <ClientMenuPreview
+          // «Если нет разрешения на запись — этого и не будет» (03.10).
+          items={
+            blockKey === "clients.menu" && levels["calendar.create"] === "write"
+              ? [BOOK_ITEM, ...menuItems]
+              : menuItems
+          }
+          phones={phones}
+        />
       </PreviewFrame>
     );
   }

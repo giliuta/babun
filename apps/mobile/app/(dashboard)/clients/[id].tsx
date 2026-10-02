@@ -102,7 +102,9 @@ import {
   type DraftOpen,
 } from "@/features/clients/useClientDraft";
 import ClientContactRow from "@/features/clients/ClientContactRow";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { useCurrentRole, usePlanAllows, useTenant } from "@/features/settings/tenant";
+import { useGuardedBookingNav } from "@/features/clients/card-booking";
+import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { SmsComposeProvider } from "@/features/sms/SmsCompose";
 import { SmsClientBlock } from "@/features/sms/SmsClientBlock";
 import { clientSmsVars } from "@/features/sms/client-sms-vars";
@@ -189,6 +191,11 @@ export function ClientDetailScreen() {
   const updateClient = useUpdateClient(isDraft ? "" : id);
   const deleteWithUndo = useDeleteWithUndo();
   const trashAsPartner = useTrashClientAsPartner();
+  // «Записать» в «⋯» (03.10) — тем же гейтом, что строка «Записать» блока
+  // «История», и только с правом «Новые записи» в команде клиента.
+  const guardedBook = useGuardedBookingNav();
+  const calendarActionsFor = useCalendarActionsReader();
+  const bookInPlan = usePlanAllows("book-clients");
   const restoreClient = useRestoreClient();
   const appointmentsQuery = useClientAppointments(isDraft ? "" : id);
   const {
@@ -544,12 +551,32 @@ export function ClientDetailScreen() {
   
   const onBack = () => router.back();
 
-  // МЕНЮ КЛИЕНТА ПАРТНЁРА (владелец 03.10): «Меню клиента» — «Напомнить» и
-  // «В чёрный список», «Удаление клиента» — «Удалить»; своими дверями сервера.
+  // МЕНЮ КЛИЕНТА ПАРТНЁРА (владелец 03.10): «Меню клиента» — всё меню, кроме
+  // «Удалить»: Записать, Поделиться, Напомнить, В чёрный список; «Удаление
+  // клиента» — «Удалить». Своими дверями сервера.
   const partnerMenu =
     !isDraft && scope?.kind === "member" && clientBlockLevel(c, "clients.menu") === "write";
   const partnerDelete =
     !isDraft && scope?.kind === "member" && clientBlockLevel(c, "clients.delete") === "write";
+
+  // «Записать» — первым в «⋯» (03.10). Нет права записи в команде клиента —
+  // нет и пункта (владелец: «если нет разрешения на запись — этого и не
+  // будет»).
+  const bookTeam = c.team_id ?? stats?.lastTeamId ?? null;
+  const onBookFromMenu =
+    !isDraft &&
+    caps.book &&
+    (scope?.kind === "member" ? partnerMenu : bookInPlan) &&
+    calendarActionsFor(bookTeam).create
+      ? () => {
+          setMenuOpen(false);
+          guardedBook(c, {
+            locationId:
+              c.locations?.find((l) => l.isPrimary)?.id ?? c.locations?.[0]?.id ?? null,
+            teamId: stats?.lastTeamId ?? null,
+          });
+        }
+      : undefined;
 
   // УДАЛИТЬ — ОДНО ДЕЙСТВИЕ (владелец 03.10: «понятия „в архив" не будет»).
   // Клиент уходит в «Удалённые клиенты». Без истории он сотрётся через 30
@@ -624,7 +651,9 @@ export function ClientDetailScreen() {
         onToggleMenu={() => setMenuOpen((open) => !open)}
         onCloseMenu={() => setMenuOpen(false)}
         onRemind={() => void onRemind()}
-        onShare={caps.export ? () => void onShare() : undefined}
+        onBook={onBookFromMenu}
+        // «Поделиться» — своя база; партнёру — с «Меню клиента» (03.10).
+        onShare={caps.export || partnerMenu ? () => void onShare() : undefined}
         onToggleBlacklist={onToggleBlacklist}
         onDelete={onDelete}
         // Меню то же, что у долгого нажатия в списке (03.10): имя сверху.

@@ -38,14 +38,14 @@ export function clientMenuItems(
     handlers.onBook
       ? { id: "book", label: "Записать", icon: CalendarPlus, color: t.accent, onPress: handlers.onBook }
       : null,
-    handlers.onRemind
-      ? { id: "remind", label: "Напомнить", icon: Bell, color: t.warning, onPress: handlers.onRemind }
-      : null,
     handlers.onShare
       ? { id: "share", label: "Поделиться", icon: Share2, color: t.accent, onPress: handlers.onShare }
       : null,
     handlers.onSelectMany
       ? { id: "select", label: "Выбрать несколько", icon: Check, color: t.accent, onPress: handlers.onSelectMany }
+      : null,
+    handlers.onRemind
+      ? { id: "remind", label: "Напомнить", icon: Bell, color: t.warning, onPress: handlers.onRemind }
       : null,
     handlers.onMerge
       ? { id: "merge", label: "Объединить с дублем", icon: Merge, color: t.accent, onPress: handlers.onMerge }

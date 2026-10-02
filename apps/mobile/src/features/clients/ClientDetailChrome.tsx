@@ -30,6 +30,8 @@ interface ClientDetailChromeProps {
   onToggleMenu: () => void;
   onCloseMenu: () => void;
   onRemind: () => void;
+  /** «Записать» — первым в меню (владелец 03.10); нет — права записи нет. */
+  onBook?: () => void;
   /** Нет — «Поделиться» в меню нет: клиента нельзя вынести из приложения
    *  (сотрудник, владелец 30.09). */
   onShare?: () => void;
@@ -64,6 +66,7 @@ export function ClientDetailChrome({
   onToggleMenu,
   onCloseMenu,
   onRemind,
+  onBook,
   onShare,
   onToggleBlacklist,
   onDelete,
@@ -86,6 +89,7 @@ export function ClientDetailChrome({
   // видит» чужого клиента) — нет и «⋯»: пустая шторка с одним заголовком
   // была дверью в никуда (проверка глазами 30.09).
   const items = clientMenuItems(t, blacklisted, {
+    onBook,
     onRemind: canEdit ? onRemind : undefined,
     onShare,
     onMerge,

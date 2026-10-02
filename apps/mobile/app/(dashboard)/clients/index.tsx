@@ -82,6 +82,7 @@ import {
 import { useCardFieldsByTeam } from "@/features/clients/card-prefs";
 import { ClientActionsSheet } from "@/features/clients/ClientActionsSheet";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
+import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { RemindSheet } from "@/features/clients/RemindSheet";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
@@ -405,6 +406,15 @@ function ClientsListScreen() {
     c.blocks ? partnerMenu(c) : caps.edit && clientBlockLevel(c, "clients") === "write";
   // «Удалить»: своя база — владелец, партнёр — «Удаление клиента».
   const canDeleteClient = (c: Client) => (c.blocks ? partnerDelete(c) : caps.manage);
+  // «Поделиться» и «Выбрать несколько»: своя база — «можно вынести»,
+  // партнёр — «Меню клиента» (владелец 03.10: «всё меню, кроме „Удалить"»).
+  const canExportClient = (c: Client) => (c.blocks ? partnerMenu(c) : caps.export);
+  // «Записать» — только с правом «Новые записи» в команде записи (03.10:
+  // «если нет разрешения на запись — этого и не будет»); партнёру ещё и с
+  // «Меню клиента».
+  const calendarActionsFor = useCalendarActionsReader();
+  const canBookClient = (c: Client) =>
+    caps.book && (!c.blocks || partnerMenu(c)) && calendarActionsFor(bookTeamOf(c)).create;
   const trashAsPartner = useTrashClientAsPartner();
   // Удаление партнёра — своей дверью сервера; вернуть может владелец.
   const confirmPartnerDelete = (c: Client) => {
@@ -433,6 +443,12 @@ function ClientsListScreen() {
   // соседнюю.
   const openSwipe = useRef<SwipeableMethods | null>(null);
   const guardedBook = useGuardedBookingNav();
+  // Команда записи: под чипом — выбранная (её список и открыт); без чипа —
+  // команда клиента, у клиента без неё — команда последнего визита.
+  const bookTeamOf = (c: Client) =>
+    teamChoice !== ALL_TEAMS
+      ? teamChoice
+      : (c.team_id ?? allStatsMap.get(c.id)?.lastTeamId ?? null);
   const bookFor = (c: Client) => {
     const primary =
       (c.locations ?? []).find((l) => l.isPrimary)?.id ??
@@ -440,12 +456,7 @@ function ClientsListScreen() {
       null;
     guardedBook(c, {
       locationId: primary,
-      // Под чипом — в выбранную команду (её список и открыт); без чипа — в
-      // команду клиента, у клиента без неё — в команду последнего визита.
-      teamId:
-        teamChoice !== ALL_TEAMS
-          ? teamChoice
-          : (c.team_id ?? allStatsMap.get(c.id)?.lastTeamId ?? null),
+      teamId: bookTeamOf(c),
     });
   };
 
@@ -941,14 +952,13 @@ function ClientsListScreen() {
         // записать — «можно записать», напомнить и чёрный список — «меняет
         // карточку» / «Меню клиента», удалить — владелец своей компании /
         // «Удаление клиента».
-        onBook={caps.book ? bookFor : undefined}
+        onBook={menuClient && canBookClient(menuClient) ? bookFor : undefined}
         onClose={() => setMenuClient(null)}
-        // Выбор нескольких ведёт к экспорту и массовой SMS — только своя
-        // база (владелец 30.09: «без передачи»).
-        onSelectMany={caps.export ? (c) => enterSelection(c.id) : undefined}
+        // Выбор нескольких ведёт к экспорту и массовой SMS: своя база — по
+        // «можно вынести», партнёр — по «Меню клиента» (03.10).
+        onSelectMany={menuClient && canExportClient(menuClient) ? (c) => enterSelection(c.id) : undefined}
         onRemind={menuClient && canEditClient(menuClient) ? openRemindMenu : undefined}
-        // «Поделиться» — только своя база: клиента партнёр не выносит (30.09).
-        onShare={caps.export && menuClient && !menuClient.blocks ? (c) => void onShareClient(c) : undefined}
+        onShare={menuClient && canExportClient(menuClient) ? (c) => void onShareClient(c) : undefined}
         onToggleBlacklist={menuClient && canEditClient(menuClient) ? onToggleBlacklist : undefined}
         onDelete={menuClient && canDeleteClient(menuClient) ? confirmDeleteOne : undefined}
       />
