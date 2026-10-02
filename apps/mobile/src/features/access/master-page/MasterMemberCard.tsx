@@ -38,7 +38,6 @@ import { rightsFocusQuery } from "./rights-focus";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
 import { CALENDAR_GROUPS } from "./access-summary";
-import { ContactJournalBlock } from "./ContactJournalBlock";
 import { activeOf, usePreview } from "./rights-page-shared";
 import { memberRefusal } from "./member-rights-writer";
 import { viewSections } from "./rights-view-sections";
@@ -46,7 +45,6 @@ import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import {
   copyCalendarLevels,
   starterCalendarChanges,
-  visibleLevel,
   withLiveTeams,
 } from "./master-draft";
 import {
@@ -183,13 +181,6 @@ export function MasterMemberCard({
     draftFromMemberAccess(accessQuery.data, identity),
     new Set(teams.map((team) => team.id)),
   );
-  // Блок «Клиент» открыт хоть в одной команде — номер он открывает (02.10),
-  // и блок «Номера клиентов» нужен и пустым: «Пока не открывал».
-  const contactsBlock = blocks?.find((block) => block.key === "clients.client");
-  const contactsOpen =
-    !!blocks &&
-    !!contactsBlock &&
-    draft.teamIds.some((id) => visibleLevel(blocks, draft)(contactsBlock, id) !== "off");
 
 
   /** Прикрепить или открепить календарь. Открепление спрашивает словами: в
@@ -474,8 +465,8 @@ export function MasterMemberCard({
         {card ? (
           <>
             <MasterWorkBlock card={card} teamIds={draft.teamIds} />
-            {/* Кому и когда он открывал номера (защита базы 30.09). */}
-            <ContactJournalBlock userId={userId} contactsOpen={contactsOpen} />
+            {/* Журнала «Номера клиентов» больше нет (03.10): номер приходит
+                целиком с блоком «Клиент», открытий по одному не бывает. */}
             <MasterPersonalBlocks card={card} />
           </>
         ) : null}

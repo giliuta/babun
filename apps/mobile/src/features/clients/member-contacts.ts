@@ -78,9 +78,12 @@ export function parseMemberContacts(raw: unknown): MemberContactsAnswer {
   };
 }
 
-/** Номер закрыт: строка сотрудника, и открытых контактов в ней нет. */
+/** Номер закрыт правом: «Скрыт» у блока «Клиент» (`right`) или «в день
+ *  записи» (`day`). С 03.10 открытый номер приходит в строке целиком
+ *  (владелец: «видит клиента — видит номер и звонит, точки не надо»), и
+ *  `null` с пустым номером — просто клиент без номера, а не замок. */
 export function contactsLocked(client: Pick<Client, "contacts_hidden" | "phone">): boolean {
-  return client.contacts_hidden !== undefined && !client.phone.trim();
+  return client.contacts_hidden === "right" || client.contacts_hidden === "day";
 }
 
 /** Карточка с открытыми контактами поверх строки окна. Связи («Входит в»)

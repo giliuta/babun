@@ -74,7 +74,8 @@ describe("зеркало: строка клиента глазами сотру�
     assert.equal(row.blocks?.["clients.note"], "write");
     assert.equal(row.blocks?.clients, "read");
     assert.equal(row.contacts_hidden, null);
-    assert.equal(row.phone, "");
+    // 03.10: «Клиент: Видит» — номер целиком, без двери и точек.
+    assert.equal(row.phone, "+35799000000");
   });
 
   test("команда клиента решает; нет её — самое широкое по командам", () => {

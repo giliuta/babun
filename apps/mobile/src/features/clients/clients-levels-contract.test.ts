@@ -116,6 +116,11 @@ const createMenu = norm(readFileSync(join(MIGRATIONS_DIR, CREATE_MENU), "utf8"))
 const DELETE_RIGHT = "20261003004100_clients_delete_right_no_archive.sql";
 const deleteRight = norm(readFileSync(join(MIGRATIONS_DIR, DELETE_RIGHT), "utf8"));
 
+// НОМЕР — СРАЗУ (владелец 03.10): «Клиент: Видит» отдаёт контакты целиком,
+// без двери и точек; «Скрыт» — без контактов.
+const PHONE_OPEN = "20261003010500_clients_phone_open_with_client_block.sql";
+const phoneOpen = norm(readFileSync(join(MIGRATIONS_DIR, PHONE_OPEN), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
@@ -127,16 +132,11 @@ describe("сервер: клиенты по уровням", () => {
     for (const fn of ["create_client_with_tags"]) {
       assert.equal(lastDefiner(fn), CREATE_MENU, `${fn} переопределён позже`);
     }
-    for (const fn of [
-      "member_trash_client",
-      "access_client_blocks",
-      "update_client_with_tags",
-      "client_history_never_purges",
-    ]) {
+    for (const fn of ["member_trash_client", "access_client_blocks", "client_history_never_purges"]) {
       assert.equal(lastDefiner(fn), DELETE_RIGHT, `${fn} переопределён позже`);
     }
-    for (const fn of ["list_master_clients_safe"]) {
-      assert.equal(lastDefiner(fn), TEAM_BASE, `${fn} переопределён позже`);
+    for (const fn of ["update_client_with_tags", "client_masked_for_member", "list_master_clients_safe"]) {
+      assert.equal(lastDefiner(fn), PHONE_OPEN, `${fn} переопределён позже`);
     }
     for (const fn of [
       "access_contact_client_ids",
@@ -159,7 +159,6 @@ describe("сервер: клиенты по уровням", () => {
       assert.equal(lastDefiner(fn), LEAKS, `${fn} переопределён позже`);
     }
     for (const fn of [
-      "client_masked_for_member",
       "list_member_clients",
       "list_client_members",
       "client_seen_by_caller",
@@ -235,6 +234,23 @@ describe("сервер: клиенты по уровням", () => {
     );
     assert.ok(deleteRight.includes("before insert or update of purge_at on public.clients for each row execute function public.client_history_never_purges();"));
     assert.ok(deleteRight.includes("revoke all on function public.client_history_never_purges() from public, anon, authenticated;"));
+  });
+
+  test("номер — сразу по блоку «Клиент», без двери и точек (03.10)", () => {
+    // Маска: «Скрыт» — без контактов, «Видит» — строка целиком.
+    assert.ok(
+      phoneOpen.includes(
+        "select case when coalesce(b.v ->> 'clients.client', 'off') = 'off' then public.client_without_contacts(p_client) else p_client end",
+      ),
+    );
+    // Связи — только своим блоком, даже когда контакты открыты.
+    assert.ok(
+      phoneOpen.includes(
+        "|| case when coalesce(b.v ->> 'clients.people', 'off') = 'off' then jsonb_build_object('memberships', '[]'::jsonb)",
+      ),
+    );
+    // Выбор клиента мастера — номер у тех же клиентов.
+    assert.ok(phoneOpen.includes("'phone', case when c.id = any(cs.open_ids) then c.phone else '' end,"));
   });
 
   test("«Клиент», «История», «SMS» — свои права; номер и SMS с карточки — по ним", () => {
@@ -670,23 +686,19 @@ describe("сервер: клиенты по уровням", () => {
   test("скрытые маской связи сотрудник не запишет обратно", () => {
     const file = lastDefiner("update_client_with_tags");
     const sql = norm(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
-    // С 02.10 номера, имя и мессенджеры — база: правит их только
-    // «Редактирует», а номера — только открыв их дверью (судят по значению —
-    // пустые номера маски поверх настоящих не лягут). Связи — блок «Люди»:
-    // скрыты — в строке их нет, «Только видит» — записать нельзя, «Меняет» —
-    // строка несёт настоящие.
+    // С 02.10 номера, имя и мессенджеры — блок «Клиент»: правит их только
+    // «Меняет» (судят по значению). С 03.10 номер приходит целиком тому, кто
+    // блок видит, поэтому «сначала открой дверью» снято — пустых номеров
+    // маски поверх настоящих больше нет. Связи — блок «Люди»: скрыты — в
+    // строке их нет, «Только видит» — записать нельзя, «Меняет» — строка
+    // несёт настоящие.
     assert.ok(
       sql.includes(
         "where (to_jsonb(next_row) -> f.field) is distinct from (to_jsonb(current_row) -> f.field) ) then raise exception 'this block of the client card is closed for this employee' using errcode = '42501', hint = 'block:clients.client';",
       ),
       `${file}: партнёр без «Клиент: Меняет» правит имя или номера клиента`,
     );
-    assert.ok(
-      sql.includes(
-        "and v.outcome = 'open' and v.opened_at > now() - interval '12 hours' ) then raise exception 'open the contacts before changing them'",
-      ),
-      `${file}: номера правятся без открытия — пустые затрут настоящие`,
-    );
+    assert.ok(!sql.includes("open the contacts before changing them"), `${file}: вернулась дверь номера в правке`);
     assert.ok(
       sql.includes("('clients.people', array['memberships'])"),
       `${file}: связи выпали из блока «Люди» — пустой массив маски запишется поверх настоящих`,

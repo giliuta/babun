@@ -17,9 +17,8 @@ import { CLIENTS_PREVIEW_KEYS } from "./preview-keys";
 // и переход на страницу (02.10: «Телефон» и «Открывает карточку» убраны).
 //
 // Защита базы (30.09, окно — 02.10): «2 недели» и «Месяц» — в списке только
-// клиент, у которого запись в этом окне до или после сегодня. Цифр в списке
-// у партнёра нет НИКОГДА — номер открывается тапом, по одному
-// (`LockedPhoneRow`), поэтому и здесь вместо цифр точки.
+// клиент, у которого запись в этом окне до или после сегодня. Номер — с
+// блоком «Клиент» целиком (03.10, владелец: «точки не надо»).
 
 const noop = () => {};
 
@@ -32,8 +31,8 @@ const SCOPE_SPAN: Readonly<Record<string, string>> = {
   half: "Запись за полгода до или после",
 };
 
-/** Номер, который ещё не открыли, — как на его карточке. */
-const LOCKED_NUMBER = "•• ••• •••";
+/** Номер образца — открыт целиком, как в его списке (03.10). */
+const SAMPLE_NUMBER = "+357 99 123 456";
 
 const OWN = [
   { name: "Анна Петрова" },
@@ -56,7 +55,7 @@ function ClientMenuPreview({ items, phones }: { items: readonly MenuItem[]; phon
           <SelectRow
             title={person.name}
             initial={person.name[0]}
-            subtitle={phones ? LOCKED_NUMBER : undefined}
+            subtitle={phones ? SAMPLE_NUMBER : undefined}
             onPress={noop}
           />
         </SelectList>
@@ -176,7 +175,7 @@ export function ClientsPreview({
               key={person.name}
               title={person.name}
               initial={person.name[0]}
-              subtitle={phones ? LOCKED_NUMBER : undefined}
+              subtitle={phones ? SAMPLE_NUMBER : undefined}
               // Переход есть — шеврон справа, как у двери; нет — строка без
               // него: имя видно, а проходить некуда.
               trailing={

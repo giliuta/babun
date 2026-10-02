@@ -79,14 +79,19 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: 
   const off = (key: string) => blocks[key] !== "read" && blocks[key] !== "write";
   return {
     ...client,
-    // Контактов в строке сотрудника нет никогда — номер открывает дверь.
-    phone: "",
-    phone_e164: null,
-    whatsapp_phone: "",
-    email: "",
-    telegram_username: "",
-    instagram_username: "",
-    phones: [],
+    // Номер — блок «Клиент» (03.10, `client_masked_for_member`): «Видит» —
+    // контакты целиком, «Скрыт» — без контактов. Точек и двери больше нет.
+    ...(off("clients.client")
+      ? {
+          phone: "",
+          phone_e164: null,
+          whatsapp_phone: "",
+          email: "",
+          telegram_username: "",
+          instagram_username: "",
+          phones: [],
+        }
+      : {}),
     ...(off("clients.people") ? { memberships: [] } : {}),
     ...(off("clients.note") ? { comment: "", notes: [] } : {}),
     ...(off("clients.objects") ? { locations: [], equipment: [], address: "", property_type: "" } : {}),

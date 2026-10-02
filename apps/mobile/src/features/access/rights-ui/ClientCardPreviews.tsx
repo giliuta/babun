@@ -72,7 +72,7 @@ export function ClientCardPreview({
             <SelectList>
               <SelectRow title="Анна Петрова" initial="А" onPress={noop} />
               {own !== "off" ? (
-                <SelectRow icon={Phone} color={SETTINGS_TILE.green} title="Телефон" subtitle="•• ••• •••" onPress={noop} />
+                <SelectRow icon={Phone} color={SETTINGS_TILE.green} title="Телефон" subtitle="+357 99 123 456" onPress={noop} />
               ) : null}
             </SelectList>
           </SectionCard>
