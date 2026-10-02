@@ -134,6 +134,13 @@ export function PaymentBlock({
     takeMoney: canTakeMoney,
   } = usePaymentRights(teamId);
   const canUseDocuments = usePlanAllows("documents");
+  // БЕЗ ТАРИФА ЗАПИСИ КЛИЕНТОВ — ТОЛЬКО ДЛЯ ПРОСМОТРА (владелец 2.10: «люди 14
+  // дней бесплатно насоздают клиентов, потом будут переносить»). Сервер
+  // отказывает в правке записи (`plan:book-clients`); здесь плитки и «Часть
+  // суммы» серые, а тап поднимает плашку «Нужно изменить тариф» вместо
+  // отказа после поездки на сервер. Полученные деньги видны как были.
+  const bookingInPlan = usePlanAllows("book-clients");
+  const tariffNudge = useTariffNudge();
 
   const invoice = useMemo(
     () =>
@@ -183,7 +190,7 @@ export function PaymentBlock({
       : "prepayment";
   const amountCents = amountMode ? amountCentsFromInput(partText) : outstanding;
   const problem = amountProblem(amountCents, outstanding);
-  const acceptsMoney = outstanding > 0 && !billUnsaved && canTakeMoney;
+  const acceptsMoney = outstanding > 0 && !billUnsaved && canTakeMoney && bookingInPlan;
 
   // СНЯТИЕ И ПРИЁМ — ПО ТАПУ, А НЕ ПО ОТВЕТУ (владелец 2026-09-30: «должно
   // всё мгновенно»): запись в кэше меняется сразу так, как её поменяет
@@ -215,6 +222,10 @@ export function PaymentBlock({
 
   const handleTileTap = (account: PaymentAccountOption) => {
     if (outstanding <= 0 || busy) return;
+    if (!bookingInPlan) {
+      tariffNudge();
+      return;
+    }
     if (!canTakeMoney) {
       haptics.warning();
       toast(NO_PAYMENT_RIGHT, "info");
@@ -293,6 +304,10 @@ export function PaymentBlock({
     account: PaymentAccountOption,
     accountRowsForTile: PaymentRow[],
   ) => {
+    if (!bookingInPlan) {
+      tariffNudge();
+      return;
+    }
     // Снять оплату — тоже запись денег: то же право, что у приёма.
     if (!canTakeMoney) {
       haptics.warning();
@@ -321,6 +336,10 @@ export function PaymentBlock({
   // Поле открывается ПУСТЫМ: вся сумма — это тап по плитке без поля, а сюда
   // приходят за другой суммой, и стирать подставленный итог было бы лишним.
   const handleAmountToggle = () => {
+    if (!bookingInPlan) {
+      tariffNudge();
+      return;
+    }
     if (outstanding <= 0 && !amountMode) {
       haptics.warning();
       return;
@@ -389,7 +408,6 @@ export function PaymentBlock({
   // уже выставленного (он открывается из «Файлов», когда функцию вернут).
   const canInvoice = documentsOn && (Boolean(invoice) || outstanding > 0);
   const invoiceTariffLocked = !invoice && !canUseDocuments;
-  const tariffNudge = useTariffNudge();
   const hasHistory = canSeeHistory && rows.length > 0;
   const anyAction = Boolean(teamId) && (canSplit || canInvoice || hasHistory);
   // Строка состояния нужна, когда ей ЕСТЬ ЧТО СКАЗАТЬ: подпись, поле суммы или
@@ -423,7 +441,13 @@ export function PaymentBlock({
           anyAction ? (
             <>
               {canSplit ? (
-                <ModeIconButton icon={Split} label={started ? "Часть суммы" : "Предоплата"} active={amountMode} onPress={handleAmountToggle} />
+                <ModeIconButton
+                  icon={Split}
+                  label={started ? "Часть суммы" : "Предоплата"}
+                  active={amountMode}
+                  dimmed={!bookingInPlan}
+                  onPress={handleAmountToggle}
+                />
               ) : null}
               {canInvoice ? (
                 <ModeIconButton
