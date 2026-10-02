@@ -407,3 +407,26 @@ export function bookRights(input: {
     editFiles: w(record.files),
   };
 }
+
+/** ЗАПИСЬ КЛИЕНТА БЕЗ ТАРИФА — ТОЛЬКО ДЛЯ ПРОСМОТРА (владелец 02.10: «без
+ *  тарифа нельзя добавлять объекты, услугу применить нельзя, менять нельзя
+ *  ничего в целом на клиентах»). Видно то же, что и с тарифом; ни одна
+ *  правка не нажимается — тот же вид, что у партнёра с «Только видит»:
+ *  пустой блок (объект не выбран) уходит, заполненный стоит без двери.
+ *  Сервер держит то же (`tenant_free_readonly_guard`). */
+export function readOnlyBookRights(rights: BookRights): BookRights {
+  return {
+    ...rights,
+    editTeam: false,
+    editLabel: false,
+    editWhen: false,
+    editClient: false,
+    editObject: false,
+    editServices: false,
+    editTotal: false,
+    editNote: false,
+    editColor: false,
+    editEventType: false,
+    editFiles: false,
+  };
+}

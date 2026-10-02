@@ -234,6 +234,10 @@ export function AppointmentFilesBlock({
     removeDoc.mutate(doc, { onSuccess: () => toast("Документ удалён", "info") });
   };
 
+  // Добавлять нельзя и файлов нет — блока нет: пустая шапка «Файлы» ничего
+  // не говорит (партнёр «Только видит», запись клиента без тарифа, 02.10).
+  if (!canUpload && !hasTiles) return null;
+
   return (
     <>
       <SectionCard title="Файлы">

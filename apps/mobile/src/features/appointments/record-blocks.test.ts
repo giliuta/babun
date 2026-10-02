@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map";
-import { bookRights, calendarActions, eventBlocks, recordBlocks } from "./record-blocks";
+import { bookRights, calendarActions, eventBlocks, readOnlyBookRights, recordBlocks } from "./record-blocks";
 
 const TEAM = "team-1";
 
@@ -281,5 +281,22 @@ describe("метка записи и события — под «Меткой д
     const open = map({ "calendar.day_labels": "read", "record.label": "write", "event.label": "read" });
     assert.equal(recordBlocks(at2(open)).label, "write");
     assert.equal(eventBlocks(at2(open)).label, "read");
+  });
+});
+
+describe("запись клиента без тарифа (02.10)", () => {
+  test("видно всё, что и с тарифом, а ни одна правка не нажимается", () => {
+    const owner = bookRights({
+      isMember: false,
+      kind: "work",
+      isEdit: true,
+      record: recordBlocks({ role: "owner", map: undefined, registry: undefined, teamId: TEAM }),
+      eventWritable: true,
+    });
+    const frozen = readOnlyBookRights(owner);
+    for (const [key, value] of Object.entries(frozen)) {
+      if (key.startsWith("edit")) assert.equal(value, false, `${key} должен быть закрыт`);
+      else assert.equal(value, owner[key as keyof typeof owner], `${key} — как с тарифом`);
+    }
   });
 });

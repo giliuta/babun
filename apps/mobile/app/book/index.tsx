@@ -127,7 +127,7 @@ import { useAppointments } from "@/features/calendar/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useBookingSave } from "@/features/appointments/useBookingSave";
 import { useCalendarActions, useEventRights, useRecordBlocks } from "@/features/appointments/useRecordRights";
-import { bookRights } from "@/features/appointments/record-blocks";
+import { bookRights, readOnlyBookRights } from "@/features/appointments/record-blocks";
 import { changedFields } from "@/features/appointments/member-writes";
 import { useSession } from "@/providers/SessionProvider";
 import {
@@ -663,7 +663,7 @@ export default function BookScreen() {
   const recordRights = useRecordBlocks(rightsTeamId);
   const eventRights = useEventRights(rightsTeamId);
   const calendarRights = useCalendarActions(rightsTeamId);
-  const can = bookRights({
+  const rights = bookRights({
     isMember: isMemberView,
     kind,
     isEdit,
@@ -673,6 +673,9 @@ export default function BookScreen() {
       calendarRights.events === "write" &&
       (!isEdit || (editing?.created_by ?? null) === sessionUserId),
   });
+  // Без тарифа запись клиента только смотрят: объект, услуги, клиент,
+  // время — без дверей (владелец 02.10, `readOnlyBookRights`).
+  const can = kind === "work" && !workInPlan ? readOnlyBookRights(rights) : rights;
   // ОБЪЕКТ, ДОБАВЛЕННЫЙ ОТСЮДА, ВИДЕН СРАЗУ. Список клиентов после записи
   // только инвалидируется, и с полсекунды `client.locations` не знает о новом
   // объекте: блок мигал «Выбрать объект», а сохранение в эту щель писало
@@ -2882,7 +2885,9 @@ export default function BookScreen() {
                   снесено 2026-08-30. Зовётся «заметка записи» (владелец
                   2026-09-04): под клиентом и объектом стоят их заметки, и
                   третье поле обязано сказать, чьё оно. */}
-              {showNote && can.showNote ? (
+              {/* Править нельзя и заметки нет — блока нет: пустая шапка
+                  «Заметка» ничего не говорит (02.10). */}
+              {showNote && can.showNote && (can.editNote || comment.trim()) ? (
               // БЛОК, КАК У СОСЕДЕЙ (владелец 2026-09-06: «заметка записи —
               // такой же блок, как под объектом или клиентом, с таким же
               // названием»). Надпись «Заметка» — та же малая шапка.
