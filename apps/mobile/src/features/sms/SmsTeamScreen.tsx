@@ -22,16 +22,13 @@ import {
   orderTemplates,
   useDeleteTeamTemplate,
   useReorderTeamTemplates,
-  useSaveTeamTemplate,
   useSetTeamTemplateEnabled,
   useSmsAccount,
   useTeamTemplates,
   whenWords,
   type SmsTeamTemplate,
-  type TemplateDraft,
 } from "./sms-account";
 import { SmsSenderSheet } from "./SmsSenderSheet";
-import { SmsTemplateSheet } from "./SmsTemplateSheet";
 import { balanceWords, euro } from "./sms-words";
 
 // SMS КОМАНДЫ — В НАСТРОЙКАХ КАЛЕНДАРЯ (STORY-089; владелец 29.09: «первый
@@ -44,15 +41,13 @@ import { balanceWords, euro } from "./sms-words";
 //     10); без него команда не отправляет;
 //   • ШАБЛОНЫ — справочник по канону меток и типов событий: строка залита
 //     цветом шаблона, значок, имя и «когда»; ручка порядка справа; тап —
-//     правка шторкой; смахнуть влево (правая кромка) — «Удалить», вправо
+//     страница шаблона (02.10, была шторка); смахнуть влево (правая кромка) — «Удалить», вправо
 //     (левая кромка) — «Скрыть» / «Показать». Скрытый гаснет и уходит вниз:
 //     сам не отправляется и в листе «SMS клиенту» не стоит;
 //   • «Добавить шаблон» — внизу и всегда.
 
 /** Высота строки — по ней ручка считает перелёт через соседей. */
 const ROW_H = 60;
-
-type Editing = { mode: "create" } | { mode: "edit"; template: SmsTeamTemplate } | null;
 
 export function SmsTeamScreen() {
   const t = useThemeColors();
@@ -64,11 +59,9 @@ export function SmsTeamScreen() {
   const teamId = team?.id ?? "";
   const account = useSmsAccount();
   const templates = useTeamTemplates(teamId || null);
-  const save = useSaveTeamTemplate();
   const toggle = useSetTeamTemplateEnabled();
   const remove = useDeleteTeamTemplate();
   const reorder = useReorderTeamTemplates(teamId || null);
-  const [editing, setEditing] = useState<Editing>(null);
   const [dragging, setDragging] = useState(false);
   const [senderOpen, setSenderOpen] = useState(false);
 
@@ -79,14 +72,10 @@ export function SmsTeamScreen() {
   const failed = account.isError || templates.isError;
   const error = account.error ?? templates.error;
 
-  const submit = (draft: TemplateDraft) =>
-    save.mutate(draft, {
-      onSuccess: () => {
-        setEditing(null);
-        toast(draft.id ? "Шаблон сохранён" : "Шаблон добавлен", "success");
-      },
-      onError: (e) => notify("Не удалось сохранить", e instanceof Error ? e.message : undefined),
-    });
+  // Шаблон — своя страница блоками (02.10): выбор «когда» и сроки открываются
+  // шторками, а две шторки в одном кадре iOS не показывает.
+  const openTemplate = (id: string | null) =>
+    router.push({ pathname: "/calendar/sms-template", params: id ? { team: teamId, id } : { team: teamId } } as unknown as Href);
 
   const drop = (template: SmsTeamTemplate) =>
     confirmThen(
@@ -208,7 +197,7 @@ export function SmsTeamScreen() {
                       }}
                     >
                       <Pressable
-                        onPress={() => setEditing({ mode: "edit", template })}
+                        onPress={() => openTemplate(template.id)}
                         accessibilityRole="button"
                         accessibilityLabel={`Шаблон ${template.name}, ${whenWords(template)}, редактировать`}
                         style={({ pressed }) => ({
@@ -249,7 +238,7 @@ export function SmsTeamScreen() {
       {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ И ВСЕГДА, как у меток и типов событий. */}
       {!loading && !failed && teamId ? (
         <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
-          <GradientButton label="Добавить шаблон" onPress={() => setEditing({ mode: "create" })} />
+          <GradientButton label="Добавить шаблон" onPress={() => openTemplate(null)} />
         </View>
       ) : null}
 
@@ -259,16 +248,6 @@ export function SmsTeamScreen() {
           teamId={teamId}
           current={sender}
           onClose={() => setSenderOpen(false)}
-        />
-      ) : null}
-      {teamId ? (
-        <SmsTemplateSheet
-          visible={editing !== null}
-          teamId={teamId}
-          template={editing?.mode === "edit" ? editing.template : null}
-          busy={save.isPending}
-          onClose={() => setEditing(null)}
-          onSubmit={submit}
         />
       ) : null}
     </Screen>
