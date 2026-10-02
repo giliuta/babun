@@ -146,13 +146,21 @@ describe("заметки: клиента — наверху, объекта — 
 describe("длинные списки — своей страницей", () => {
   // Владелец 22.09: «нажимаю объекты — открывается страница, где все объекты;
   // если их 12, до файлов не долистаешь».
-  test("на карточке первые три объекта и дверь «Все объекты»", () => {
+  // 03.10: «видно только последний объект — обслуженный или добавленный;
+  // нажимаю — страница со всеми».
+  test("на карточке один объект, тап по нему — страница всех", () => {
     const section = read("ClientObjectsSection.tsx");
-    assert.match(section, /export const OBJECTS_ON_CARD = 3;/);
-    assert.match(read("ClientProfileBlocks.tsx"), /limit=\{OBJECTS_ON_CARD\}/);
+    assert.match(section, /cardObjectId\(client\.locations \?\? EMPTY_LOCATIONS, lastVisits\)/);
+    assert.match(read("ClientProfileBlocks.tsx"), /single=\{!draft\}/);
     const objects = read("blocks/ObjectsBlock.tsx");
+    assert.match(objects, /single \? onOpenAll : onOpen \? \(\) => onOpen\(loc\.id\) : undefined/);
+    // «Все объекты» остаются у списка с пределом.
     assert.match(objects, /rest > 0 && onOpenAll \?/);
-    assert.match(objects, /label="Все объекты"/);
+  });
+  test("на странице объектов «Добавить объект» — кнопкой внизу", () => {
+    const page = read("../../../app/(dashboard)/clients/objects.tsx");
+    assert.match(page, /<GradientButton label="Добавить объект" onPress=\{\(\) => setAdding\(true\)\} \/>/);
+    assert.match(page, /onAddingChange=\{setAdding\}/);
   });
   test("страница всех объектов собрана тем же куском", () => {
     const page = read("../../../app/(dashboard)/clients/objects.tsx");

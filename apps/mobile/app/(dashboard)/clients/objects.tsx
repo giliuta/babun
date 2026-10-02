@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { ScrollView } from "react-native";
+import { ScrollView, View } from "react-native";
+import { GradientButton } from "@/components/ui/GradientButton";
 import type { Client } from "@babun/shared/local/clients";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -19,6 +21,10 @@ import { useCardAccess } from "@/features/clients/use-card-access";
 //
 // Блок собирает ТОТ ЖЕ компонент, что на карточке (`ClientObjectsSection`):
 // листы правки и добавления, жильцы, заметки объектов — всё одно и то же.
+//
+// 03.10: на карточке — один объект, тап по нему — сюда. Здесь тап по объекту
+// — лист правки, а «Добавить объект» — кнопкой внизу, как «Записать клиента»
+// в истории: на одном уровне с кнопками соседних экранов.
 
 export default function ClientObjectsScreenRoute() {
   return (
@@ -50,6 +56,7 @@ function ClientObjectsScreen() {
   // Права блоков этого клиента (30.09): «Объекты» и «Люди» — видно ли и
   // правится ли, как на карточке.
   const access = useCardAccess(client, false);
+  const [adding, setAdding] = useState(false);
   const people = useClientPeople({
     id,
     client: client ?? undefined,
@@ -61,7 +68,8 @@ function ClientObjectsScreen() {
   });
 
   return (
-    <Screen>
+    // Нижнюю зону держит таб-бар — кнопка на уровне соседних экранов.
+    <Screen edges={["top"]}>
       <ScreenHeader title="Объекты" subtitle={client?.full_name ?? undefined} />
       {isLoading || !client ? (
         <EmptyState state="loading" fill />
@@ -74,10 +82,17 @@ function ClientObjectsScreen() {
             readOnly={!access.objects.edit}
             appointments={appointments}
             bare
+            adding={adding}
+            onAddingChange={setAdding}
             {...people.residents}
           />
         </ScrollView>
       )}
+      {client && access.objects.show && access.objects.edit ? (
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+          <GradientButton label="Добавить объект" onPress={() => setAdding(true)} />
+        </View>
+      ) : null}
       {people.door}
     </Screen>
   );

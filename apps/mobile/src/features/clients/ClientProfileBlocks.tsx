@@ -6,7 +6,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
 import type { ClientLinkItem } from "@/features/clients/blocks/ClientLinksBlock";
-import { ClientObjectsSection, OBJECTS_ON_CARD } from "@/features/clients/ClientObjectsSection";
+import { ClientObjectsSection } from "@/features/clients/ClientObjectsSection";
 import {
   REQUISITES_ON_CARD,
   RequisitesBlock,
@@ -97,9 +97,10 @@ export function ClientProfileBlocks({
         readOnly={!a.objects.edit}
         // «был 12 авг» у объекта — история записей: без права её нет.
         appointments={a.history.show ? appointments : []}
-        // НА КАРТОЧКЕ — ПЕРВЫЕ ТРИ И ДВЕРЬ (владелец 22.09: «если у клиента
-        // 12 объектов, их надо листать, чтобы добраться до файлов»).
-        limit={OBJECTS_ON_CARD}
+        // НА КАРТОЧКЕ — ОДИН ОБЪЕКТ (владелец 03.10: «видно только последний —
+        // обслуженный или добавленный; нажимаю — страница со всеми»). У
+        // черновика страницы нет — там список целиком.
+        single={!draft}
         onOpenAll={onOpenObjects}
         residentsLine={residentsLine}
         residentsAt={residentsAt}

@@ -92,8 +92,14 @@ export default function ObjectsBlock({
   limit,
   onOpenAll,
   bare,
+  only,
 }: {
   client: Client;
+  /** КАРТОЧКА — ОДИН ОБЪЕКТ (владелец 03.10: «видно только последний —
+   *  обслуженный или добавленный; нажимаю — открывается страница со всеми»).
+   *  Показывается только он; тап по нему — страница объектов (`onOpenAll`),
+   *  без свайпа и плашки заметки. Объектов нет — дверь «Добавить объект». */
+  only?: string | null;
   /** На своей странице шапки у блока нет: название уже в заголовке экрана. */
   bare?: boolean;
   /** Сколько строк показывать; больше — за дверью «Все объекты · N». */
@@ -155,8 +161,13 @@ export default function ObjectsBlock({
     [client.locations],
   );
 
-  const shown = limit ? ordered.slice(0, limit) : ordered;
-  const rest = ordered.length - shown.length;
+  const single = only !== undefined;
+  const shown = single
+    ? ordered.filter((loc) => loc.id === only)
+    : limit
+      ? ordered.slice(0, limit)
+      : ordered;
+  const rest = single ? 0 : ordered.length - shown.length;
   // Без объектов и без права добавлять смотреть нечего: блока нет, а не
   // пустая карточка с одной шапкой.
   if (ordered.length === 0 && shownRequests.length === 0 && !onAdd) return null;
@@ -172,22 +183,24 @@ export default function ObjectsBlock({
               teamId={client.team_id ?? null}
               // Заметка стоит ПОД строкой своей плашкой — третьей строкой её
               // печатать больше не надо.
-              showNote={!onNote}
+              showNote={single || !onNote}
               residents={residentsFor?.(loc)}
               lastVisit={lastVisitFor?.(loc)}
-              onPress={onOpen ? () => onOpen(loc.id) : undefined}
+              onPress={
+                single ? onOpenAll : onOpen ? () => onOpen(loc.id) : undefined
+              }
               // Долгое нажатие копирует адрес (нет адреса — ссылку на карту):
               // его пересылают бригаде или вставляют в навигатор.
               onLongPress={canCopy && objectTarget(loc) ? () => copy(objectTarget(loc)) : undefined}
             />
-            {onNote ? (
+            {onNote && !single ? (
               <ObjectNote loc={loc} ownerKey={client.id} onSave={onNote} />
             ) : null}
           </>
         );
         // Без права удалять свайпа нет вовсе: жест, который кончится отказом
         // сервера, хуже отсутствующего.
-        return onDelete ? (
+        return onDelete && !single ? (
           <SwipeRow
             key={loc.id}
             label="Удалить"
@@ -227,7 +240,9 @@ export default function ObjectsBlock({
           без кружка со значком и с волоском сверху. Владелец 2026-09-09,
           поймав это на записи: «почему тут изменилась архитектура, если она
           должна быть другой — как у нас принято». Один вопрос — одна дверь. */}
-      {onAdd ? <ChooseRow compact icon={MapPin} label="Добавить объект" onPress={onAdd} /> : null}
+      {onAdd && !(single && ordered.length > 0) ? (
+        <ChooseRow compact icon={MapPin} label="Добавить объект" onPress={onAdd} />
+      ) : null}
     </SectionCard>
   );
 }

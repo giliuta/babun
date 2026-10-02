@@ -7,7 +7,7 @@ import { useLastNonNull } from "@/lib/use-last-non-null";
 import ObjectsBlock from "@/features/clients/blocks/ObjectsBlock";
 import { useLocationRequestActions } from "@/features/clients/location-request-actions";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
-import { lastVisitByObject } from "@/features/clients/object-last-visit";
+import { cardObjectId, lastVisitByObject } from "@/features/clients/object-last-visit";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { useCurrentRole } from "@/features/settings/tenant";
@@ -17,14 +17,14 @@ import { useClientsCapabilities } from "@/features/clients/company-scope";
 // нажимаю, и открывается страница, где все объекты… если у клиента 12
 // объектов, их не пролистаешь до файлов»).
 //
-// На КАРТОЧКЕ блок показывает первые строки и дверь «Все объекты · N»; на
-// СВОЕЙ СТРАНИЦЕ (`/clients/objects`) — весь список. Код один: два экземпляра
-// разошлись бы на первой же правке, как когда-то разошлись две формы записи.
+// На КАРТОЧКЕ блок показывает ОДИН объект — обслуженный последним или
+// последний добавленный (владелец 03.10: «три объекта растягивают страницу»),
+// тап по нему — СВОЯ СТРАНИЦА (`/clients/objects`) со всеми; там тап по
+// объекту — лист правки, внизу — «Добавить объект». Код один: два
+// экземпляра разошлись бы на первой же правке, как когда-то две формы записи.
 
 const EMPTY_LOCATIONS: Location[] = [];
 
-/** Сколько объектов показывает карточка; остальные — за дверью «Все объекты». */
-export const OBJECTS_ON_CARD = 3;
 
 export function ClientObjectsSection({
   client,
@@ -34,6 +34,9 @@ export function ClientObjectsSection({
   limit,
   onOpenAll,
   bare,
+  single,
+  adding,
+  onAddingChange,
   residentsLine,
   residentsAt,
   onAddResident,
@@ -54,6 +57,12 @@ export function ClientObjectsSection({
   onOpenAll?: () => void;
   /** Своя страница: название уже в заголовке экрана, шапки у блока нет. */
   bare?: boolean;
+  /** Карточка: один объект, тап — страница всех (03.10). */
+  single?: boolean;
+  /** Лист добавления открывает кнопка ВНЕ блока (футер страницы объектов):
+   *  тогда строки «Добавить объект» в блоке нет, а лист — по этому флагу. */
+  adding?: boolean;
+  onAddingChange?: (open: boolean) => void;
   residentsLine?: (loc: Location) => string | undefined;
   residentsAt?: (loc: Location) => readonly ClientLinkItem[];
   onAddResident?: (loc: Location) => void;
@@ -61,7 +70,10 @@ export function ClientObjectsSection({
   onResidentRole?: (item: ClientLinkItem, role: string) => void;
   onRemoveResident?: (item: ClientLinkItem) => void;
 }) {
-  const [objectsOpen, setObjectsOpen] = useState(false);
+  const [ownAdding, setOwnAdding] = useState(false);
+  const footerAdd = onAddingChange !== undefined;
+  const objectsOpen = footerAdd ? !!adding : ownAdding;
+  const setObjectsOpen = footerAdd ? onAddingChange : setOwnAdding;
   // Правка объекта — лист, а не страница (владелец 2026-08-06). Страницы
   // /clients/object и /clients/unit удалены вместе с уровнем «Информация».
   // Правка и удаление — ОДИН лист с двумя настроениями: два экземпляра
@@ -114,6 +126,10 @@ export function ClientObjectsSection({
   // «БЫЛ 12 АВГ» У КАЖДОГО ОБЪЕКТА — из тех же записей клиента, что уже
   // пришли на страницу: отдельного запроса нет.
   const lastVisits = useMemo(() => lastVisitByObject(appointments), [appointments]);
+  const cardId = useMemo(
+    () => (single ? cardObjectId(client.locations ?? EMPTY_LOCATIONS, lastVisits) : undefined),
+    [single, client.locations, lastVisits],
+  );
 
 
   return (
@@ -125,7 +141,7 @@ export function ClientObjectsSection({
         // откажет. Раньше у «Видит» стояли и «Добавить», и свайп, и лист.
         onOpen={canEdit ? (id) => setSheet({ id }) : undefined}
         onDelete={canEdit ? (loc) => setSheet({ id: loc.id, askDelete: true }) : undefined}
-        onAdd={canEdit ? () => setObjectsOpen(true) : undefined}
+        onAdd={canEdit && !footerAdd ? () => setObjectsOpen(true) : undefined}
         requestsEnabled={canRequestAddress}
         residentsFor={residentsLine}
         lastVisitFor={(loc) => lastVisits.get(loc.id)}
@@ -138,6 +154,7 @@ export function ClientObjectsSection({
         limit={limit}
         onOpenAll={onOpenAll}
         bare={bare}
+        only={single ? cardId : undefined}
       />
       {/* Свайп по строке открывает тот же лист сразу с вопросом об удалении —
           подтверждение и запись остаются в одном месте. */}
