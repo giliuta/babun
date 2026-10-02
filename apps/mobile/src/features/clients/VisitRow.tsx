@@ -2,15 +2,15 @@ import { Text, View, useWindowDimensions } from "react-native";
 import { CalendarCheck, CalendarClock, CalendarX2, type LucideIcon } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { SelectRow } from "@/components/ui/select-rows";
-import { humanDay } from "@/features/appointments/helpers";
+import { humanDayYear } from "@/features/appointments/helpers";
 import { visitStatus, type VisitStatusKind } from "@/features/clients/visit-status";
 import { useRecordColor } from "@/features/clients/use-record-color";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 
 // ЗАПИСЬ КЛИЕНТА — ОТДЕЛЬНОЙ ПЛАШКОЙ, КАК ТЕГИ И МЕТКИ (владелец 03.10:
 // «полноценные блоки отдельные друг от друга, красивые, компактные — типа
-// такого плана», показав список тегов). Это наш `SelectRow`: плашка залита
-// тинтом цвета записи, слева плитка тем же цветом со значком; цвет — тот
+// такого плана», показав список тегов). Это наш `SelectRow`: плашка белая
+// («заливку фона не надо»), слева плитка цветом записи со значком; цвет — тот
 // же, что у блока записи в календаре (`useRecordColor`).
 //   · ДАТА — НЕ В ПЛАШКЕ, А ЗАГОЛОВКОМ НАД НЕЙ, как дни в «Финансах»
 //     (владелец 03.10: «разделитель даты — перед плашкой, как в финансах»),
@@ -20,10 +20,9 @@ import { useThemeColors, type ThemeColors } from "@/theme/colors";
 //     оплачено — зелёным, долг — янтарём, впереди — кобальтом.
 // Плашки стоят в `SelectList` — с воздухом между ними, без швов.
 
-/** «чт, 1 октября 2026» — день с годом всегда. */
+/** «чт, 1 октября 2026» — день с годом всегда (общий `humanDayYear`). */
 export function visitDay(ymd: string): string {
-  const year = ymd.slice(0, 4);
-  return `${humanDay(ymd)} ${year}`;
+  return humanDayYear(ymd);
 }
 
 /** Заголовок дня над плашками — тем же шрифтом и местом, что день в
@@ -95,6 +94,8 @@ export function VisitRow({
     <SelectRow
       icon={statusIcon(status.kind)}
       color={hue}
+      // Фон — белый, цвет записи — только у плитки (владелец 03.10).
+      plain
       title={teamName || "Запись"}
       subtitle={time || undefined}
       accessibilityLabel={[visitDay(a.date), time, teamName, status.label].filter(Boolean).join(", ")}

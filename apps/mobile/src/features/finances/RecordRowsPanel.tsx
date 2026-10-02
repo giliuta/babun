@@ -7,7 +7,7 @@ import {
 } from "@babun/shared/common/utils/money";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useThemeColors } from "@/theme/colors";
-import { humanDay } from "@/features/appointments/helpers";
+import { humanDayYear } from "@/features/appointments/helpers";
 import { PanelHeader } from "./PanelHeader";
 import { RecordRowView, type RecordRowTone } from "./RecordRow";
 import { rowsNet, type RecordRow } from "./record-rows";
@@ -107,7 +107,8 @@ export function RecordRowsPanel({
           className="text-xs font-semibold uppercase tracking-wider"
           style={{ color: t.sub }}
         >
-          {humanDay(section.title)}
+          {/* С годом — разделитель дня (владелец 03.10). */}
+          {humanDayYear(section.title)}
         </Text>
         {/* День без пришедших и ушедших денег (одни долги, перевод между
             своими счетами) итога не печатает: серый «€0» над долгом €200

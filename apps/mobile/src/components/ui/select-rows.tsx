@@ -148,6 +148,7 @@ export function SelectRow({
   accessibilityLabel,
   accessibilityHint,
   accessibilityRole = "button",
+  plain = false,
   onPress,
 }: {
   /** Имя сущности — главная строка. */
@@ -183,6 +184,10 @@ export function SelectRow({
    *  когда выбранное стало строкой шторки 2026-09-15). */
   accessibilityHint?: string;
   accessibilityRole?: "button" | "radio" | "checkbox";
+  /** БЕЛАЯ ПЛАШКА: цвет сущности — только у плитки, фон строки — белый
+   *  (история клиента, владелец 03.10: «заливку фона не надо, белый фон, а
+   *  иконка цветная»). По умолчанию — тинт цвета, как у тегов и меток. */
+  plain?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
@@ -239,9 +244,11 @@ export function SelectRow({
             : `${t.accent}14`
           : pressed
             ? t.rowFillPressed
-            : color
-              ? `${color}14`
-              : t.rowFill,
+            : plain
+              ? t.surface
+              : color
+                ? `${color}14`
+                : t.rowFill,
       })}
     >
       {hasTile ? (

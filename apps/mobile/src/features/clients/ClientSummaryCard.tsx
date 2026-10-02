@@ -1,11 +1,11 @@
 import { useMemo } from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { todayYMD } from "@/features/clients/filter";
 import { useClientsCapabilities } from "@/features/clients/company-scope";
 import { useTeams } from "@/features/reference/queries";
 import { VisitDayHeader, VisitRow } from "@/features/clients/VisitRow";
-import { SelectList } from "@/components/ui/select-rows";
+
 import { useThemeColors } from "@/theme/colors";
 
 // МАЛЕНЬКАЯ КАРТОЧКА ПОД НОМЕРОМ (владелец 2026-07-26). Не строки-факты, а
@@ -58,10 +58,12 @@ export function ClientSummaryCard({
     );
   }
   return (
-    // Тот же день и та же плашка, что в «Истории».
+    // Тот же день и та же плашка, что в «Истории». Внутри блока плашка без
+    // боковых полей списка: плитка встаёт на одну линию с датой над ней
+    // (владелец 03.10: «иконка как будто съехала вправо — сделай ровно»).
     <>
       <VisitDayHeader date={lastRecord.date} />
-      <SelectList>
+      <View style={{ paddingHorizontal: 2, paddingBottom: 6 }}>
       <VisitRow
         appointment={lastRecord}
         team={lastRecord.team_id ? teamsById.get(lastRecord.team_id) : undefined}
@@ -69,7 +71,7 @@ export function ClientSummaryCard({
         showMoney={money}
         onPress={onOpenHistory}
       />
-      </SelectList>
+      </View>
     </>
   );
 }

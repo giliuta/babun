@@ -21,7 +21,7 @@ import { SwipeRow } from "@/components/ui/SwipeRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { PaymentTile, TILE_GAP } from "@/features/appointments/PaymentTiles";
-import { formatHM, humanDay } from "@/features/appointments/helpers";
+import { formatHM, humanDay, humanDayYear } from "@/features/appointments/helpers";
 import { dayMoney, moneyByAccount } from "@/features/calendar/day-money";
 import {
   useDayExtras,
@@ -547,7 +547,7 @@ export function DayFinanceSheet({
           {listLoading ? (
             <EmptyState state="loading" />
           ) : listEmpty ? null : (
-            <RowGroup title={humanDay(ymd)}>
+            <RowGroup title={humanDayYear(ymd)}>
               {view === "all"
                 ? dayPlan.map((item, i) =>
                     item.record ? (

@@ -230,3 +230,14 @@ export function humanDay(ymd: string): string {
   if (Number.isNaN(d.getTime())) return ymd;
   return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
+
+// «чт, 1 октября 2026» — РАЗДЕЛИТЕЛЬ ДНЯ В СПИСКАХ, с годом всегда (владелец
+// 03.10: «в финансах тоже поставь год, как в истории, — везде, где так
+// показано; год — только в таких моментах»). Строки и подписи остаются без
+// года (`humanDay`).
+export function humanDayYear(ymd: string): string {
+  if (!ymd) return "—";
+  const d = parseYMD(ymd);
+  if (Number.isNaN(d.getTime())) return ymd;
+  return `${humanDay(ymd)} ${d.getFullYear()}`;
+}

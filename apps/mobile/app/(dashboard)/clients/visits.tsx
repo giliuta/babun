@@ -1,5 +1,5 @@
 import { Fragment, useMemo } from "react";
-import { Pressable, ScrollView, Text } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount } from "@babun/shared/local/appointments";
@@ -11,7 +11,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { RowCaption } from "@/components/ui/card-rows";
 import { SelectList } from "@/components/ui/select-rows";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
-import { ClientScreenFooter } from "@/features/clients/ClientScreenFooter";
+import { GradientButton } from "@/components/ui/GradientButton";
 import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { useClientsCapabilities, useClientsScopeOrNull } from "@/features/clients/company-scope";
 import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
@@ -160,7 +160,9 @@ function ClientVisitsScreen() {
 
 
   return (
-    <Screen>
+    // Нижнюю зону держит таб-бар — как у списка клиентов: иначе кнопка
+    // внизу стояла на ~34pt выше, чем на соседних экранах (владелец 03.10).
+    <Screen edges={["top"]}>
       {/* ФИЛЬТР НАЗВАН В ШАПКЕ и снимается там же словом «Все» — как разрез
           ленты в «Финансах» (PanelHeader). */}
       <ScreenHeader
@@ -228,18 +230,21 @@ function ClientVisitsScreen() {
       )}
       {/* «Записать клиента» — внизу, на месте главного действия страницы. */}
       {client && access.history.show ? (
-        <ClientScreenFooter
-          label="Записать клиента"
-          disabled={!canBook}
-          onPress={() =>
-            guardedBook(client, {
-              locationId:
-                client.locations?.find((l) => l.isPrimary)?.id ?? client.locations?.[0]?.id ?? null,
-              teamId: bookTeam,
-            })
-          }
-          overTabBar
-        />
+        // Тот же футер, что «Создать клиента» в списке: те же отступы,
+        // та же высота — кнопки экранов стоят на одном уровне.
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+          <GradientButton
+            label="Записать клиента"
+            disabled={!canBook}
+            onPress={() =>
+              guardedBook(client, {
+                locationId:
+                  client.locations?.find((l) => l.isPrimary)?.id ?? client.locations?.[0]?.id ?? null,
+                teamId: bookTeam,
+              })
+            }
+          />
+        </View>
       ) : null}
     </Screen>
   );

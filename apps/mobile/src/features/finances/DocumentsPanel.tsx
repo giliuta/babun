@@ -17,7 +17,7 @@ import type { Client } from "@babun/shared/local/clients";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useThemeColors } from "@/theme/colors";
-import { humanDay } from "@/features/appointments/helpers";
+import { humanDayYear } from "@/features/appointments/helpers";
 import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import type { AccountWithBalance } from "./accounts";
 import { PanelHeader } from "./PanelHeader";
@@ -197,7 +197,7 @@ export function DocumentsPanel({
               className="text-xs font-semibold uppercase tracking-wider"
               style={{ color: t.sub }}
             >
-              {humanDay(section.title)}
+              {humanDayYear(section.title)}
             </Text>
           </View>
         )}
