@@ -29,7 +29,10 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["finance.expense", ["off", "read", "write", "full"]],
   ["finance.accounts", ["off", "read", "write"]],
   ["finance.debts", ["off", "read", "write"]],
-  ["clients", ["off", "read", "write"]],
+  ["clients", ["off", "read"]],
+  // «Создание клиента» и «Меню клиента» (02.10) — «Может / Не может».
+  ["clients.create", ["off", "write"]],
+  ["clients.menu", ["off", "write"]],
   // Защита базы: «Ограничение по времени» (02.10), блоки карточки.
   // «Открывает карточку», «Телефон», «История записей» и «Карточка из
   // записи» убраны 02.10 — их даёт база.

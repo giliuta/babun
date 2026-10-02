@@ -66,10 +66,12 @@ import {
   useClient,
   useClientTags,
   useRestoreClient,
+  useArchiveClientAsPartner,
   useTrashClientAsPartner,
   useUpdateClient,
 } from "@/features/clients/queries";
 import { useArchiveWithUndo } from "@/features/clients/archive-undo";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { archivedVisitTag } from "@/features/clients/archived-visit";
 import { useTeams } from "@/features/reference/queries";
 import { daysLeft, daysWordRu } from "@/features/clients/HiddenClientsScreen";
@@ -188,6 +190,7 @@ export function ClientDetailScreen() {
   const updateClient = useUpdateClient(isDraft ? "" : id);
   const archiveWithUndo = useArchiveWithUndo();
   const trashAsPartner = useTrashClientAsPartner();
+  const archiveAsPartner = useArchiveClientAsPartner();
   const restoreClient = useRestoreClient();
   const appointmentsQuery = useClientAppointments(isDraft ? "" : id);
   const {
@@ -550,8 +553,32 @@ export function ClientDetailScreen() {
   
   const onBack = () => router.back();
 
+  // «МЕНЮ КЛИЕНТА: МОЖЕТ» (владелец 02.10) — партнёр в «⋯» напоминает,
+  // закрепляет, убирает в архив и удаляет; своими дверями сервера.
+  const partnerMenu =
+    !isDraft && scope?.kind === "member" && clientBlockLevel(c, "clients.menu") === "write";
+
   const onArchive = () => {
     setMenuOpen(false);
+    if (!caps.manage) {
+      confirmThen(
+        "Архивировать клиента?",
+        {
+          message: `${c.full_name || "Клиент"} исчезнет из клиентов команды, история сохранится. Вернуть его может владелец.`,
+          confirmLabel: "Архивировать",
+          destructive: true,
+        },
+        async () => {
+          try {
+            await archiveAsPartner.mutateAsync(c.id);
+            router.back();
+          } catch (e) {
+            notify("Не удалось архивировать", (e as Error).message);
+          }
+        },
+      );
+      return;
+    }
     confirmThen(
       "Архивировать клиента?",
       {
@@ -662,19 +689,18 @@ export function ClientDetailScreen() {
         onToggleBlacklist={onToggleBlacklist}
         onArchive={onArchive}
         onDelete={onDelete}
-        // «Напомнить» и правки в «⋯» — по праву на ЭТОГО клиента (30.09).
-        canEdit={access.card.edit}
+        // «Напомнить» в «⋯» — у партнёра по «Меню клиента» (02.10).
+        canEdit={scope?.kind === "member" ? partnerMenu : access.card.edit}
         canManage={caps.manage}
-        // Партнёр с «Редактирует» у базы удаляет клиента (02.10); архив и
+        // Партнёр с «Меню клиента: Может» убирает в архив и удаляет (02.10);
         // чёрный список — хозяйство владельца.
-        canDelete={!caps.manage && access.card.edit && scope?.kind === "member"}
+        canDelete={!caps.manage && partnerMenu}
         onMerge={onMerge}
         onSplit={split.onSplit}
         onMenuExited={split.onMenuExited}
         pinned={!!c.pinned_at}
-        // Список открывает меню со «Закрепить» только у строк своей компании —
-        // здесь то же право (`manage` = своя компания).
-        onTogglePin={!isDraft && caps.manage ? onTogglePin : undefined}
+        // «Закрепить» — своя компания или партнёр с «Меню клиента» (02.10).
+        onTogglePin={!isDraft && (caps.manage || partnerMenu) ? onTogglePin : undefined}
       />
 
       {/* ОТСТУП НА ВЫСОТУ ХРОМА. Без него нижние поля страницы уходили под

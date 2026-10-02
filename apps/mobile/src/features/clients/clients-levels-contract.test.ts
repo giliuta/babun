@@ -106,6 +106,11 @@ const limits = norm(readFileSync(join(MIGRATIONS_DIR, LIMITS), "utf8"));
 const CLIENT_BLOCKS = "20261003001200_clients_card_blocks_client_history_sms.sql";
 const clientBlocks = norm(readFileSync(join(MIGRATIONS_DIR, CLIENT_BLOCKS), "utf8"));
 
+// «ГЛАВНОЕ» (владелец 02.10): база — Скрыта / Видит; «Создание клиента» и
+// «Меню клиента» — свои права «Не может / Может».
+const CREATE_MENU = "20261003002400_clients_create_and_menu_rights.sql";
+const createMenu = norm(readFileSync(join(MIGRATIONS_DIR, CREATE_MENU), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
@@ -114,16 +119,20 @@ describe("сервер: клиенты по уровням", () => {
     for (const fn of ["access_company_level"]) {
       assert.equal(lastDefiner(fn), BASE_READ, `${fn} переопределён позже`);
     }
-    for (const fn of ["member_trash_client"]) {
-      assert.equal(lastDefiner(fn), THREE_LEVELS, `${fn} переопределён позже`);
+    for (const fn of [
+      "member_trash_client",
+      "member_archive_client",
+      "access_client_blocks",
+      "update_client_with_tags",
+      "create_client_with_tags",
+    ]) {
+      assert.equal(lastDefiner(fn), CREATE_MENU, `${fn} переопределён позже`);
     }
     for (const fn of ["list_master_clients_safe"]) {
       assert.equal(lastDefiner(fn), TEAM_BASE, `${fn} переопределён позже`);
     }
     for (const fn of [
-      "access_client_blocks",
       "access_contact_client_ids",
-      "update_client_with_tags",
       "sms_for_client",
       "sms_send_manual",
       "set_client_sms_opt_out",
@@ -148,7 +157,6 @@ describe("сервер: клиенты по уровням", () => {
       "list_client_members",
       "client_seen_by_caller",
       "member_client_contacts",
-      "create_client_with_tags",
     ]) {
       assert.equal(lastDefiner(fn), CARD_BLOCKS, `${fn} переопределён позже`);
     }
@@ -181,6 +189,22 @@ describe("сервер: клиенты по уровням", () => {
       assert.ok(teamBase.includes(`delete from public.member_access where block = '${key}';`), key);
       assert.ok(teamBase.includes(`delete from public.access_blocks where key = '${key}';`), key);
     }
+  });
+
+  test("«Главное»: база Скрыта / Видит, «Создание клиента» и «Меню клиента» — свои права", () => {
+    assert.ok(createMenu.includes("update public.access_blocks set levels = array['off', 'read'] where key = 'clients';"));
+    assert.ok(createMenu.includes("update public.member_access set level = 'read' where block = 'clients' and level = 'write';"));
+    for (const key of ["clients.create", "clients.menu"]) {
+      assert.ok(createMenu.includes(`('${key}', 'clients', 'calendar', array['off', 'write'],`), key);
+    }
+    // Создание — по своему праву, команда — из тех, где он может заводить.
+    assert.ok(createMenu.includes("or cardinality(public.access_calendars('clients.create', 'write')) > 0) then"));
+    assert.ok(createMenu.includes("hint = 'block:clients.create'"));
+    assert.ok(!createMenu.includes("access_company('clients', 'write')"));
+    // Архив, корзина, закрепление и напоминание — «Меню клиента».
+    assert.ok(createMenu.includes("select b.blocks ->> 'clients.menu' into base_level"));
+    assert.ok(createMenu.includes("('clients.menu', array['reminder_at', 'pinned_at'])"));
+    assert.ok(createMenu.includes("revoke all on function public.member_archive_client(uuid) from public, anon;"));
   });
 
   test("«Клиент», «История», «SMS» — свои права; номер и SMS с карточки — по ним", () => {

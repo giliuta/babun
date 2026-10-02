@@ -43,6 +43,8 @@ export const MONEY_PREVIEW_KEYS: readonly string[] = [
 export const CLIENTS_PREVIEW_KEYS: readonly string[] = [
   "clients",
   "clients.scope",
+  "clients.create",
+  "clients.menu",
 ];
 
 /** Блоки карточки клиента (владелец 30.09: «страница клиентов по правам —

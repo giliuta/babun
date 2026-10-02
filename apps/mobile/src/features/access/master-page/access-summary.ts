@@ -128,6 +128,8 @@ export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock
       keys: [
         "clients",
         "clients.scope",
+        "clients.create",
+        "clients.menu",
       ],
     },
     // Блоки, которые есть только на странице клиента.

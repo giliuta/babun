@@ -34,10 +34,10 @@ export function ClientsScopeProvider({
   // Значение меняется только вместе с самим источником: иначе каждое
   // перерисовывание вкладки роняло бы кэш карточки. Поля разобраны по одному
   // намеренно — объект источника собирается заново на каждый рендер ворот.
-  const { tenantId, tenantName, kind, role, level, contacts, everyClient, isActive } = scope;
+  const { tenantId, tenantName, kind, role, level, contacts, everyClient, isActive, create } = scope;
   const value = useMemo<ClientsScope>(
-    () => ({ tenantId, tenantName, kind, role, level, contacts, everyClient, isActive }),
-    [tenantId, tenantName, kind, role, level, contacts, everyClient, isActive],
+    () => ({ tenantId, tenantName, kind, role, level, contacts, everyClient, isActive, create }),
+    [tenantId, tenantName, kind, role, level, contacts, everyClient, isActive, create],
   );
   return <ClientsScopeContext.Provider value={value}>{children}</ClientsScopeContext.Provider>;
 }

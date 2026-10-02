@@ -165,6 +165,8 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
   // карточки (защита базы 30.09).
   clients: [
     "clients.scope",
+    "clients.create",
+    "clients.menu",
     "clients.note",
     "clients.people",
     "clients.objects",

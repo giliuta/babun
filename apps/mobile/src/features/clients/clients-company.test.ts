@@ -150,6 +150,7 @@ describe("компания работодателя как источник", ()
       contacts: true,
       everyClient: false,
       isActive: true,
+      create: false,
     });
   });
 

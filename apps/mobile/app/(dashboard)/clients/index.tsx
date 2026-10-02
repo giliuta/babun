@@ -31,8 +31,10 @@ import { usePullRefresh } from "@/lib/pull-refresh";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import {
+  useArchiveClientAsPartner,
   useClients,
   useClientTags,
+  useTrashClientAsPartner,
   useUpdateClientById,
 } from "@/features/clients/queries";
 import { useArchiveWithUndo } from "@/features/clients/archive-undo";
@@ -388,10 +390,35 @@ function ClientsListScreen() {
   const [remindClient, setRemindClient] = useState<Client | null>(null);
   const openRemindMenu = (c: Client) => setRemindClient(c);
   const clientsInPlan = usePlanAllows("clients");
-  // «Напомнить» пишет в карточку — по праву на ЭТОГО клиента (30.09): у
-  // сотрудника карточка может быть открыта только на чтение.
+  // «МЕНЮ КЛИЕНТА» (владелец 02.10: «зажимаю на клиенте — открывается
+  // менюшка… может или не может, как „Переносить" в календаре»). У строки
+  // партнёра (`blocks`) — его право на ЭТОГО клиента; своя база — как была.
+  const partnerMenu = (c: Client) => !!c.blocks && clientBlockLevel(c, "clients.menu") === "write";
+  // «Напомнить» — то же меню: своя база по праву карточки, партнёр — по
+  // «Меню клиента».
   const canEditClient = (c: Client) =>
-    caps.edit && clientBlockLevel(c, "clients") === "write";
+    c.blocks ? partnerMenu(c) : caps.edit && clientBlockLevel(c, "clients") === "write";
+  const archiveAsPartner = useArchiveClientAsPartner();
+  const trashAsPartner = useTrashClientAsPartner();
+  // Архив и удаление партнёра — своими дверями сервера: без записей клиент
+  // уходит в корзину, с записями — в архив; вернуть может владелец.
+  const confirmPartnerRemove = (c: Client, archive: boolean) => {
+    confirmThen(
+      archive ? "Архивировать клиента?" : "Удалить клиента?",
+      {
+        message: `${c.full_name || "Клиент"} исчезнет из клиентов команды. Вернуть его может владелец.`,
+        confirmLabel: archive ? "Архивировать" : "Удалить",
+        destructive: true,
+      },
+      async () => {
+        try {
+          await (archive ? archiveAsPartner : trashAsPartner).mutateAsync(c.id);
+        } catch (e) {
+          notify(archive ? "Не удалось архивировать" : "Не удалось удалить", (e as Error).message);
+        }
+      },
+    );
+  };
 
   // ЗАПИСАТЬ ПРЯМО ИЗ СПИСКА (свайп вправо и лист действий). Строка уже знает
   // и основной объект, и последнюю команду — те же два поля, что подставляет
@@ -810,13 +837,23 @@ function ClientsListScreen() {
                 }}
                 onBook={!guest && caps.book ? () => bookFor(item) : undefined}
                 onRemind={!guest && canEditClient(item) ? () => setRemindClient(item) : undefined}
-                onArchive={!guest && caps.manage ? () => confirmArchiveOne(item) : undefined}
+                onArchive={
+                  guest
+                    ? undefined
+                    : caps.manage
+                      ? () => confirmArchiveOne(item)
+                      : partnerMenu(item)
+                        ? () => confirmPartnerRemove(item, true)
+                        : undefined
+                }
                 onLongPress={() => {
                   if (guest) return;
                   if (selecting) toggleId(item.id);
                   // Меню — те же права, что у `ClientActionsSheet` ниже; ни
                   // одного — нет и пустой шторки (проверка глазами 30.09).
-                  else if (caps.book || caps.export || caps.manage || canEditClient(item)) setMenuClient(item);
+                  // Партнёру — только с «Меню клиента: Может» (02.10).
+                  else if (item.blocks ? partnerMenu(item) : caps.book || caps.export || caps.manage || canEditClient(item))
+                    setMenuClient(item);
                 }}
               />
             );
@@ -925,10 +962,22 @@ function ClientsListScreen() {
         // Выбор нескольких ведёт к экспорту и массовой SMS — только своя
         // база (владелец 30.09: «без передачи»).
         onSelectMany={caps.export ? (c) => enterSelection(c.id) : undefined}
-        onTogglePin={caps.manage ? onTogglePin : undefined}
+        onTogglePin={caps.manage || (menuClient && partnerMenu(menuClient)) ? onTogglePin : undefined}
         onRemind={menuClient && canEditClient(menuClient) ? openRemindMenu : undefined}
-        onArchive={caps.manage ? confirmArchiveOne : undefined}
-        onDelete={caps.manage ? confirmDeleteOne : undefined}
+        onArchive={
+          caps.manage
+            ? confirmArchiveOne
+            : menuClient && partnerMenu(menuClient)
+              ? (c: Client) => confirmPartnerRemove(c, true)
+              : undefined
+        }
+        onDelete={
+          caps.manage
+            ? confirmDeleteOne
+            : menuClient && partnerMenu(menuClient)
+              ? (c: Client) => confirmPartnerRemove(c, false)
+              : undefined
+        }
       />
       <ClientsFilterSheet
         visible={sheetOpen}

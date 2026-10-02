@@ -39,6 +39,8 @@ export interface CompanyAccess {
   scope?: string;
   /** «read» — телефоны видны. */
   contacts?: string;
+  /** «write» — «Создание клиента: Может» (02.10). */
+  create?: string;
 }
 
 export type ClientsCompanyKind = "own" | "member" | "record";
@@ -58,6 +60,8 @@ export interface ClientsScope {
   everyClient: boolean;
   /** Компания открыта в календаре: чтения и записи идут обычным клиентом. */
   isActive: boolean;
+  /** Партнёр: «Создание клиента: Может» хоть в одной команде (02.10). */
+  create?: boolean;
 }
 
 /** Что разрешено в этом источнике. Одно место на весь экран: строка списка,
@@ -105,7 +109,8 @@ export function capabilitiesOf(scope: ClientsScope): ClientsCapabilities {
     // давно написана (`useCreateClient`, ветка `member`). Фраза права при
     // этом обещала ровно это — «Заводит клиентов и правит их карточки»
     // (найдено зеркалом 20.09).
-    create: !record && scope.level === "write",
+    // Заводит клиентов своя база и партнёр с «Созданием клиента» (02.10).
+    create: !record && (scope.level === "write" || (scope.kind === "member" && !!scope.create)),
     // Правка карточки у партнёра — по блокам (02.10): база у него только
     // «Видит», а блок с «Меняет» правится. Что именно — решает `blocks`
     // строки (`card-access.ts`), имя и номера остаются владельцу.
@@ -235,6 +240,7 @@ export function memberScope(
     contacts: access.contacts === "read" || access.contacts === "day",
     everyClient: access.scope === "all",
     isActive: tenantId === activeTenantId,
+    create: access.create === "write",
   };
 }
 

@@ -616,6 +616,33 @@ export function useTrashClientAsPartner() {
   });
 }
 
+/** ПАРТНЁР С «МЕНЮ КЛИЕНТА: МОЖЕТ» УБИРАЕТ КЛИЕНТА В АРХИВ (02.10) — своей
+ *  дверью `member_archive_client`: история цела, вернуть может владелец. */
+export function useArchiveClientAsPartner() {
+  const scope = useQueryScope();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Дверь новее сгенерированных типов базы — вызов через узкий тип.
+      const db = writeClientOf(scope) as unknown as {
+        rpc: (name: "member_archive_client", args: { p_client_id: string }) => PromiseLike<{
+          error: { message: string } | null;
+        }>;
+      };
+      const { error } = await db.rpc("member_archive_client", { p_client_id: id });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: (_d, id) => {
+      qc.setQueriesData<Client[]>({ queryKey: ["clients"] }, (list) =>
+        Array.isArray(list) ? list.filter((c) => c.id !== id) : list,
+      );
+      void qc.invalidateQueries({ queryKey: ["clients"] });
+      void qc.invalidateQueries({ queryKey: ["client", id] });
+    },
+    meta: { errorHandled: true }, // caller messages the refusal itself
+  });
+}
+
 export function useUpdateClientById() {
   const scope = useQueryScope();
   const qc = useQueryClient();

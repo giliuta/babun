@@ -27,6 +27,9 @@ export interface ClientsAccessLevels {
   clients?: AccessLevel;
   scope?: AccessLevel;
   contacts?: AccessLevel;
+  /** «Создание клиента» (02.10): «Может» хоть в одной команде, где он видит
+   *  клиентов. */
+  create?: AccessLevel;
 }
 
 export function clientsAccessOf(map: MemberAccessMap): ClientsAccessLevels {
@@ -35,6 +38,7 @@ export function clientsAccessOf(map: MemberAccessMap): ClientsAccessLevels {
       clients: map.company["clients"],
       scope: map.company["clients.scope"],
       contacts: map.company["clients.client"] === "read" || map.company["clients.client"] === "write" ? "read" : "off",
+      create: map.company["clients.create"] === "write" ? "write" : "off",
     };
   }
   let clients: AccessLevel | undefined;
@@ -42,6 +46,7 @@ export function clientsAccessOf(map: MemberAccessMap): ClientsAccessLevels {
   // Номер — по блоку «Клиент» (02.10): открыт хоть в одной команде, где он
   // видит клиентов.
   let contacts: AccessLevel = "off";
+  let create: AccessLevel = "off";
   let seen = false;
   for (const levels of Object.values(map.calendars)) {
     const level = levels["clients"];
@@ -53,7 +58,8 @@ export function clientsAccessOf(map: MemberAccessMap): ClientsAccessLevels {
     scope = wider(SCOPE_RANK, scope, levels["clients.scope"]);
     const client = levels["clients.client"];
     if (client === "read" || client === "write") contacts = "read";
+    if (levels["clients.create"] === "write") create = "write";
   }
   if (!seen) return {};
-  return { clients, scope, contacts };
+  return { clients, scope, contacts, create };
 }

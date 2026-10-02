@@ -50,9 +50,10 @@ export function ClientsPreview({
   const t = useThemeColors();
   const base = levels.clients ?? "off";
   const scope = levels["clients.scope"] ?? "week";
-  // Номер и переход на страницу даёт сама база (02.10: «Телефон» и
-  // «Открывает карточку» убраны): видит клиента — открывает его и номер.
-  const phones = base !== "off";
+  // Номер — блок «Клиент» карточки (02.10), переход на страницу — сама база.
+  const phones = levels["clients.client"] === "read" || levels["clients.client"] === "write";
+  const canCreate = levels["clients.create"] === "write";
+  const canMenu = levels["clients.menu"] === "write";
   // Переход на страницу клиента — шеврон строки (как в его списке).
   const opens = base !== "off";
   // База закрыта — у зависимой строки «Ограничение по времени» показывать
@@ -68,7 +69,15 @@ export function ClientsPreview({
         ? scope === "own"
           ? "Видит всех клиентов команды"
           : `Видит клиента команды, если ${(SCOPE_SPAN[scope] ?? SCOPE_SPAN.week).toLowerCase()}`
-        : undefined;
+        : blockKey === "clients.create"
+          ? canCreate
+            ? "Кнопка «Создать клиента» работает"
+            : "Кнопка «Создать клиента» серая"
+          : blockKey === "clients.menu"
+            ? canMenu
+              ? "Долгое нажатие: Напомнить, Закрепить, В архив, Удалить"
+              : "Долгое нажатие на клиента ничего не открывает"
+            : undefined;
   return (
     <PreviewFrame
       state={state}
@@ -99,7 +108,7 @@ export function ClientsPreview({
       {/* Кнопка на своём месте и серая, как на его вкладке (владелец 20.09:
           «визуал страницы сохраняем, потом отключаем»). */}
       <View style={{ marginHorizontal: 16, marginTop: 8 }}>
-        <Button variant="secondary" label="Создать клиента" onPress={noop} disabled={base !== "write"} />
+        <Button variant="secondary" label="Создать клиента" onPress={noop} disabled={!canCreate} />
       </View>
     </PreviewFrame>
   );

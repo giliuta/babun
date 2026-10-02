@@ -104,6 +104,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "set_client_sms_opt_out",
   "set_client_team",
   "member_trash_client",
+  "member_archive_client",
   "set_default_company",
   // STORY-101: старт серии документов юрлица (миграция 20261001001000).
   "set_document_series_start",
