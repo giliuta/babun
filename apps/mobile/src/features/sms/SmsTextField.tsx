@@ -17,12 +17,13 @@ import { useTenant } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { acceptSmsInput, MAX_SMS_PARTS, smsVars } from "./sms-compose";
 
-// ТЕКСТ ШАБЛОНА SMS — ДВА БЛОКА ШТОРКИ ШАБЛОНА (STORY-089, 02.10).
-//   • «Текст» — поле, под ним сколько знаков и SMS, и дверь «Вставить поле»:
-//     шторка выбора с «Применить» (как «Когда отправлять», владелец 03.10),
-//     у каждого поля значок, цвет и пример; поле встаёт туда, где курсор. Ряда фишек больше нет
-//     (владелец 02.10: «вот это тоже нужно как-то изменить»);
-//   • «Клиент увидит» — текст с подставленным примером.
+// ТЕКСТ ШАБЛОНА SMS — БЛОК ШТОРКИ ШАБЛОНА (STORY-089, 02.10).
+// Поле, под ним сколько знаков и SMS, и дверь «Вставить поле»: шторка выбора
+// с «Применить» (как «Когда отправлять», владелец 03.10); у каждого поля
+// значок, цвет и имя — без примера под ним; поле встаёт туда, где курсор.
+// Ряда фишек больше нет (владелец 02.10: «вот это тоже нужно как-то
+// изменить»), блока «Клиент увидит» и подсказок тоже (03.10: «не надо, и так
+// понятно… не ставь вообще подсказки»).
 
 /** Значок и цвет поля — в шторке «Вставить поле». */
 const TOKEN_LOOK: Record<string, { icon: LucideIcon; color: string }> = {
@@ -44,12 +45,10 @@ const TOKEN_LOOK: Record<string, { icon: LucideIcon; color: string }> = {
  *  отмечает, «Применить» вставляет. */
 function InsertFieldSheet({
   visible,
-  example,
   onClose,
   onApply,
 }: {
   visible: boolean;
-  example: (token: string) => string | undefined;
   onClose: () => void;
   onApply: (token: string) => void;
 }) {
@@ -90,7 +89,6 @@ function InsertFieldSheet({
               icon={look.icon}
               color={look.color}
               title={label}
-              hint={example(token)}
               selected={picked === token}
               accessibilityRole="radio"
               onPress={() => {
@@ -105,8 +103,8 @@ function InsertFieldSheet({
   );
 }
 
-/** Пример для «Клиент увидит»: завтрашняя запись — так текст читается
- *  так же, как клиент прочтёт его в жизни. */
+/** Пример записи — по нему считается, сколько SMS выйдет с подставленными
+ *  полями: завтрашняя запись, как клиент прочтёт её в жизни. */
 function sampleVars(company: string) {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -214,37 +212,9 @@ export function SmsTextBlock({ value, onChange }: { value: string; onChange: (ne
 
       <InsertFieldSheet
         visible={insertOpen}
-        example={(token) => renderTemplate(token, sample) || undefined}
         onClose={() => setInsertOpen(false)}
         onApply={insert}
       />
     </>
-  );
-}
-
-export function SmsPreviewBlock({ value, warnings }: { value: string; warnings: readonly string[] }) {
-  const t = useThemeColors();
-  const { preview } = useSmsPreview(value);
-  if (!preview && warnings.length === 0) return null;
-  return (
-    <SectionCard title="Клиент увидит">
-      {preview ? (
-        <Text
-          maxFontSizeMultiplier={1.3}
-          style={{ paddingHorizontal: 16, paddingTop: 2, paddingBottom: warnings.length ? 6 : 12, fontSize: 15, lineHeight: 21, color: t.ink }}
-        >
-          {preview}
-        </Text>
-      ) : null}
-      {warnings.map((warning) => (
-        <Text
-          key={warning}
-          maxFontSizeMultiplier={1.3}
-          style={{ paddingHorizontal: 16, paddingBottom: 10, fontSize: 13, lineHeight: 18, color: t.warning }}
-        >
-          {warning}
-        </Text>
-      ))}
-    </SectionCard>
   );
 }

@@ -23,7 +23,6 @@ import {
   draftProblem,
   hoursChip,
   SMS_WHEN,
-  templateWarnings,
   usesWindow,
   WHEN_LABELS,
   whenWords,
@@ -33,7 +32,7 @@ import {
   type TemplateDraft,
 } from "./sms-team-templates";
 import { SmsTermSheet, type SmsTermKind } from "./SmsTermSheet";
-import { SmsPreviewBlock, SmsTextBlock } from "./SmsTextField";
+import { SmsTextBlock } from "./SmsTextField";
 
 // ШАБЛОН SMS — ШТОРКА БЛОКАМИ, КАК «НОВЫЙ ОБЪЕКТ» (STORY-089; владелец 03.10:
 // «зачем отдельная страница — давай шторка… топаю ещё раз на выбор, как
@@ -51,19 +50,22 @@ import { SmsPreviewBlock, SmsTextBlock } from "./SmsTextField";
 //   • СРОК — строки со значением справа (`ValueRow`): «за сколько», «во
 //     сколько», «через сколько» и «окно отправки»; тап — барабан в своей
 //     шторке (`SmsTermSheet`). У ручного шаблона блока нет;
-//   • ТЕКСТ — поле, счёт знаков и SMS, дверь «Вставить поле» (своя шторка);
-//   • КЛИЕНТ УВИДИТ — пример и предупреждения;
+//   • ТЕКСТ — поле, счёт знаков и SMS, дверь «Вставить поле» (своя шторка).
+//     Блока «Клиент увидит» и подсказок нет (владелец 03.10: «не надо, и так
+//     понятно… не ставь вообще подсказки»);
 //   • «Создать» / «Сохранить» — футер листа, одна кнопка.
 
-const WHEN_LOOK: Record<SmsWhen, { icon: LucideIcon; color: string; hint: string }> = {
-  manual: { icon: Hand, color: SETTINGS_TILE.blue, hint: "Отправляете сами из записи или карточки" },
-  created: { icon: CalendarPlus, color: SETTINGS_TILE.green, hint: "Сразу, как запись создана" },
-  before: { icon: Bell, color: SETTINGS_TILE.orange, hint: "За часы или дни до начала" },
-  day_before: { icon: CalendarClock, color: SETTINGS_TILE.indigo, hint: "Накануне визита в выбранное время" },
-  rescheduled: { icon: CalendarSync, color: SETTINGS_TILE.teal, hint: "Когда запись перенесли" },
-  cancelled: { icon: CalendarX, color: SETTINGS_TILE.red, hint: "Когда запись отменили" },
-  after: { icon: CalendarCheck, color: SETTINGS_TILE.green, hint: "Через часы после выполненной работы" },
-  repeat: { icon: Repeat, color: SETTINGS_TILE.purple, hint: "Через месяцы — пора снова на обслуживание" },
+// Строки — только имя, значок и цвет: подсказок под именем нет (владелец
+// 03.10: «не ставь вообще подсказки»).
+const WHEN_LOOK: Record<SmsWhen, { icon: LucideIcon; color: string }> = {
+  manual: { icon: Hand, color: SETTINGS_TILE.blue },
+  created: { icon: CalendarPlus, color: SETTINGS_TILE.green },
+  before: { icon: Bell, color: SETTINGS_TILE.orange },
+  day_before: { icon: CalendarClock, color: SETTINGS_TILE.indigo },
+  rescheduled: { icon: CalendarSync, color: SETTINGS_TILE.teal },
+  cancelled: { icon: CalendarX, color: SETTINGS_TILE.red },
+  after: { icon: CalendarCheck, color: SETTINGS_TILE.green },
+  repeat: { icon: Repeat, color: SETTINGS_TILE.purple },
 };
 
 /** «КОГДА ОТПРАВЛЯТЬ» — шторка выбора с «Применить» (владелец 03.10:
@@ -115,7 +117,6 @@ function SmsWhenSheet({
             icon={WHEN_LOOK[when].icon}
             color={WHEN_LOOK[when].color}
             title={WHEN_LABELS[when]}
-            hint={WHEN_LOOK[when].hint}
             selected={picked === when}
             accessibilityRole="radio"
             onPress={() => {
@@ -169,7 +170,6 @@ export function SmsTemplateSheet({
 
   const set = (patch: Partial<TemplateDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const problem = draftProblem(draft);
-  const warnings = templateWarnings(draft);
   const look = WHEN_LOOK[draft.trigger];
   const auto = draft.trigger !== "manual";
   const whenLine = usesWindow(draft.trigger)
@@ -290,7 +290,6 @@ export function SmsTemplateSheet({
         ) : null}
 
         <SmsTextBlock value={draft.body} onChange={(body) => set({ body })} />
-        <SmsPreviewBlock value={draft.body} warnings={warnings} />
 
         {/* Шторки дверей — внутри листа: лист в листе iOS показывает, а
             соседний — нет. */}
