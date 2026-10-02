@@ -189,31 +189,14 @@ function paysIntoAccounts(block: Pick<AccessBlock, "key">, level: AccessLevel, c
   return block.key === "finance.accounts" && level === "off" && context?.["record.payment"] === "write";
 }
 
-/** БЛОК КАРТОЧКИ МЕНЯЕТСЯ ВНУТРИ КАРТОЧКИ (30.09): «Видит и меняет» у блока
- *  при «Только видит» у «Карточек клиентов» этой команды сервер читает как
- *  «Только видит» (`access_client_blocks`). Строка показывает то, что человек
- *  получит, шторка — когда ступень заработает. */
-const CARD_BLOCK_KEYS: ReadonlySet<string> = new Set([
-  "clients.note",
-  "clients.people",
-  "clients.objects",
-  "clients.labels",
-  "clients.personal",
-  "clients.files",
-  "clients.requisites",
-]);
-
-function cappedByCard(block: Pick<AccessBlock, "key">, level: AccessLevel, context?: Context): boolean {
-  return CARD_BLOCK_KEYS.has(block.key) && level === "write" && context !== undefined && context.clients !== "write";
-}
-
 /** Слово ступени НА СТРОКЕ: то, что человек получит на деле. */
 export function rowWord(
   block: Pick<AccessBlock, "key" | "levels">,
   level: AccessLevel,
   context?: Context,
 ): string {
-  if (cappedByCard(block, level, context)) return stepWord(block, "read", context);
+  // С 02.10 «Меняет» блока карточки работает своим правом, без «Меняет» у
+  // базы, — на строке ступень как есть.
   return stepWord(block, level, context);
 }
 
@@ -230,9 +213,6 @@ export function stepWord(
 /** Пояснение ступени: что именно человек получит. */
 export function stepHint(block: Pick<AccessBlock, "key">, level: AccessLevel, context?: Context): string {
   if (paysIntoAccounts(block, level, context)) return "Остатков не видит, счёт выбирает только в оплате записи";
-  if (cappedByCard(block, level, context)) {
-    return `${levelSentence(block.key, level)} — когда у «Карточек клиентов» «Видит и меняет»`;
-  }
   return levelSentence(block.key, level);
 }
 

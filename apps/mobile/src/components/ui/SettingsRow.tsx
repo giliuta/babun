@@ -55,6 +55,7 @@ export function SettingsRow({
   valueColor,
   valueQuiet,
   stacked,
+  titleLines,
   a11yLabel,
   a11yActions,
   onA11yAction,
@@ -102,6 +103,10 @@ export function SettingsRow({
    *  Нужна на крупном системном шрифте (fontScale > 1.35) — в одну строку
    *  название и сумма там уже не помещаются и сумма обрезается первой. */
   stacked?: boolean;
+  /** Сколько строк может занять название. По умолчанию одна (в стопке — две).
+   *  Длинное имя права («Ограничение по времени», 02.10) рядом со ступенью
+   *  переносится, а не обрезается многоточием. */
+  titleLines?: number;
   /** Готовая озвучка строки целиком («Карта Юры, отвечает Юра, остаток €410»),
    *  когда собранная из title/sub/value фраза звучит как перечисление. */
   a11yLabel?: string;
@@ -182,7 +187,7 @@ export function SettingsRow({
   const titleNode = (
     <Text
       maxFontSizeMultiplier={scale}
-      numberOfLines={lines}
+      numberOfLines={titleLines ?? lines}
       style={{
         flex: grow,
         fontSize: 17,

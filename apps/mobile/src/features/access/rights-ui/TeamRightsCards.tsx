@@ -114,6 +114,8 @@ export function TeamRightsCards({
                       tile={look.tile}
                       icon={look.icon}
                       title={rightTitle(row.block)}
+                      // Длинное имя права переносится, а не режется (02.10).
+                      titleLines={2}
                       // СЛЕВА ПРАВО, СПРАВА ЕГО СТУПЕНЬ (владелец 29.09: «слева
                       // метка дня, справа уже показано, что он видит или не
                       // видит»).

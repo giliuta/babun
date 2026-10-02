@@ -103,12 +103,12 @@ describe("слова строк прав", () => {
   });
 });
 
-describe("блоки карточки клиента меняются только внутри карточки (30.09)", () => {
+describe("блок карточки клиента правится своим правом (02.10)", () => {
   const note = { key: "clients.note", levels: ["off", "read", "write"] as const };
 
-  test("«Видит и меняет» при «Карточки клиентов: Только видит» — на строке «Только видит»", () => {
-    assert.equal(rowWord(note, "write", { clients: "read", "clients.note": "write" }), "Только видит");
-    assert.match(stepHint(note, "write", { clients: "read" }), /когда у «Карточек клиентов» «Видит и меняет»/);
+  test("«Видит и меняет» при «Базе клиентов: Только видит» — на строке как есть", () => {
+    assert.equal(rowWord(note, "write", { clients: "read", "clients.note": "write" }), "Видит и меняет");
+    assert.doesNotMatch(stepHint(note, "write", { clients: "read" }), /когда у/);
   });
 
   test("при «Меняет» карточек — как есть; чужие права правило не трогает", () => {
