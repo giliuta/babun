@@ -33,6 +33,13 @@ export function visitStatus(
 ): VisitStatus {
   if (a.status === "cancelled") return { kind: "cancelled", text: "Отменена" };
   if (a.payment_status === "refunded") return { kind: "refunded", text: "Возврат" };
+  const total = a.total_amount ?? 0;
+  const sum = (word: string) => (showMoney && total > 0 ? `${word} ${formatEUR(total)}` : word);
+  // ДЕНЬГИ ГОВОРЯТ ПЕРВЫМИ (владелец 03.10: «что значит „не закрыта“ и 300
+  // серыми?» — запись оплатили предоплатой, а выполненной не отметили).
+  // Состояние справа — про деньги, сумма — в том же слове, а не серой
+  // загадкой под ним. Оплачено целиком — «Оплачено €300», даже если работу
+  // ещё не отметили выполненной.
   const owed = appointmentDebt(a, today);
   if (owed > 0) {
     return showMoney
@@ -41,14 +48,13 @@ export function visitStatus(
         ? { kind: "done", text: "Выполнена" }
         : { kind: "unclosed", text: "Не закрыта" };
   }
+  if (showMoney && total > 0 && getDebtAmount(a) <= 0 && getPaidAmount(a) > 0) {
+    return { kind: "paid", text: sum("Оплачено") };
+  }
   if (a.status !== "completed") {
     return a.date >= today
-      ? { kind: "ahead", text: "Ожидается" }
+      ? { kind: "ahead", text: sum("Ожидается") }
       : { kind: "unclosed", text: "Не закрыта" };
-  }
-  const total = a.total_amount ?? 0;
-  if (showMoney && total > 0 && getDebtAmount(a) <= 0 && getPaidAmount(a) > 0) {
-    return { kind: "paid", text: "Оплачено" };
   }
   return { kind: "done", text: "Выполнена" };
 }

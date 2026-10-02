@@ -19,13 +19,13 @@ const appt = (extra: Partial<Appointment>): Appointment =>
 
 describe("состояние записи в истории — одним словом справа (03.10)", () => {
   test("оплачено, долг, ожидается, отменена", () => {
-    assert.deepEqual(visitStatus(appt({}), TODAY, true), { kind: "paid", text: "Оплачено" });
+    assert.equal(visitStatus(appt({}), TODAY, true).kind, "paid");
+    assert.match(visitStatus(appt({}), TODAY, true).text, /^Оплачено €/);
     assert.equal(visitStatus(appt({ paid_amount: 70, payment_status: "partial" }), TODAY, true).kind, "debt");
     assert.match(visitStatus(appt({ paid_amount: 70, payment_status: "partial" }), TODAY, true).text, /^Долг /);
-    assert.deepEqual(
-      visitStatus(appt({ date: "2026-10-04", status: "scheduled", paid_amount: 0, payment_status: "unpaid" }), TODAY, true),
-      { kind: "ahead", text: "Ожидается" },
-    );
+    const ahead = visitStatus(appt({ date: "2026-10-04", status: "scheduled", paid_amount: 0, payment_status: "unpaid" }), TODAY, true);
+    assert.equal(ahead.kind, "ahead");
+    assert.match(ahead.text, /^Ожидается €/);
     assert.equal(visitStatus(appt({ status: "cancelled" }), TODAY, true).kind, "cancelled");
   });
 
@@ -35,6 +35,11 @@ describe("состояние записи в истории — одним сл�
       visitStatus(appt({ status: "scheduled", total_amount: 0, paid_amount: 0, payment_status: "unpaid" }), TODAY, true).kind,
       "unclosed",
     );
+  });
+
+  test("оплачено предоплатой, но не отмечена выполненной — «Оплачено», а не «Не закрыта» (03.10)", () => {
+    const prepaid = appt({ status: "scheduled", paid_amount: 0, prepaid_amount: 100, payment_status: "paid" });
+    assert.equal(visitStatus(prepaid, TODAY, true).kind, "paid");
   });
 
   test("без права «Долг и деньги» — без сумм, словами о работе", () => {

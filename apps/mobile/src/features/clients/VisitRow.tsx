@@ -7,7 +7,6 @@ import {
   type LucideIcon,
 } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { formatEUR } from "@babun/shared/common/utils/money";
 import { Card } from "@/components/ui/Card";
 import { humanDay } from "@/features/appointments/helpers";
 import { visitStatus, type VisitStatusKind } from "@/features/clients/visit-status";
@@ -23,7 +22,7 @@ import { useThemeColors, type ThemeColors } from "@/theme/colors";
 // своей рамки нет, рамка — у блока). Слева плитка цветом записи — тем же,
 // что у её блока в календаре (`useRecordColor`, правило `record-color`); значок
 // говорит о самой записи (выполнена, впереди, отменена). В середине — день,
-// время и команда; справа — состояние своим цветом и сумма тише.
+// время и команда; справа — состояние своим цветом, с суммой в том же слове.
 
 /** Цвет состояния — тем же языком, что метка визита в списке клиентов:
  *  оплачено — зелёным, долг и незакрытая — янтарём, впереди — кобальтом. */
@@ -82,16 +81,13 @@ export function VisitRow({
   const teamName = team ? (team.is_active ? team.name : `${team.name} · в архиве`) : "";
   const time = a.time_start ? a.time_start.slice(0, 5) : "";
   const sub = [time, teamName].filter(Boolean).join(" · ");
-  const total = a.total_amount ?? 0;
-  // Сумма — тише, под словом состояния; у долга она уже в самом слове.
-  const amount = showMoney && total > 0 && status.kind !== "debt" && status.kind !== "cancelled" ? formatEUR(total) : null;
   const day = humanDay(a.date);
   const body = (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? "button" : undefined}
-      accessibilityLabel={[day, sub, status.text, amount].filter(Boolean).join(", ")}
+      accessibilityLabel={[day, sub, status.text].filter(Boolean).join(", ")}
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
@@ -135,20 +131,15 @@ export function VisitRow({
           </Text>
         ) : null}
       </View>
-      <View style={{ alignItems: "flex-end", gap: 2 }}>
-        <Text
-          maxFontSizeMultiplier={1.3}
-          numberOfLines={1}
-          style={{ fontSize: 15, fontWeight: "600", color: statusColor(status.kind, t), fontVariant: ["tabular-nums"] }}
-        >
-          {status.text}
-        </Text>
-        {amount ? (
-          <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 13, color: t.sub, fontVariant: ["tabular-nums"] }}>
-            {amount}
-          </Text>
-        ) : null}
-      </View>
+      {/* Состояние — про деньги, сумма в том же слове («Оплачено €300»,
+          «Ожидается €50», «Долг €30»); серой суммы под ним больше нет. */}
+      <Text
+        maxFontSizeMultiplier={1.3}
+        numberOfLines={1}
+        style={{ fontSize: 15, fontWeight: "600", color: statusColor(status.kind, t), fontVariant: ["tabular-nums"] }}
+      >
+        {status.text}
+      </Text>
       {onPress ? <ChevronRight color={t.chevron} size={18} strokeWidth={2.2} /> : null}
     </Pressable>
   );
