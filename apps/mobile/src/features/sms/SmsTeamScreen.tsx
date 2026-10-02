@@ -29,6 +29,7 @@ import {
   type SmsTeamTemplate,
 } from "./sms-account";
 import { SmsSenderSheet } from "./SmsSenderSheet";
+import { SmsTemplateSheet } from "./SmsTemplateSheet";
 import { balanceWords, euro } from "./sms-words";
 
 // SMS КОМАНДЫ — В НАСТРОЙКАХ КАЛЕНДАРЯ (STORY-089; владелец 29.09: «первый
@@ -41,13 +42,15 @@ import { balanceWords, euro } from "./sms-words";
 //     10); без него команда не отправляет;
 //   • ШАБЛОНЫ — справочник по канону меток и типов событий: строка залита
 //     цветом шаблона, значок, имя и «когда»; ручка порядка справа; тап —
-//     страница шаблона (02.10, была шторка); смахнуть влево (правая кромка) — «Удалить», вправо
+//     шторка шаблона (03.10, снова шторка — как объекты); смахнуть влево (правая кромка) — «Удалить», вправо
 //     (левая кромка) — «Скрыть» / «Показать». Скрытый гаснет и уходит вниз:
 //     сам не отправляется и в листе «SMS клиенту» не стоит;
 //   • «Добавить шаблон» — внизу и всегда.
 
 /** Высота строки — по ней ручка считает перелёт через соседей. */
 const ROW_H = 60;
+
+type Editing = { mode: "create" } | { mode: "edit"; template: SmsTeamTemplate } | null;
 
 export function SmsTeamScreen() {
   const t = useThemeColors();
@@ -64,6 +67,7 @@ export function SmsTeamScreen() {
   const reorder = useReorderTeamTemplates(teamId || null);
   const [dragging, setDragging] = useState(false);
   const [senderOpen, setSenderOpen] = useState(false);
+  const [editing, setEditing] = useState<Editing>(null);
 
   const owner = account.data?.owner;
   const sender = (teamId && account.data?.senders?.[teamId]) || null;
@@ -72,10 +76,10 @@ export function SmsTeamScreen() {
   const failed = account.isError || templates.isError;
   const error = account.error ?? templates.error;
 
-  // Шаблон — своя страница блоками (02.10): выбор «когда» и сроки открываются
-  // шторками, а две шторки в одном кадре iOS не показывает.
-  const openTemplate = (id: string | null) =>
-    router.push({ pathname: "/calendar/sms-template", params: id ? { team: teamId, id } : { team: teamId } } as unknown as Href);
+  // Шаблон — шторка блоками (03.10, была страница): двери внутри открывают
+  // свои шторки поверх неё, как «Тип объекта» в листе объекта.
+  const openTemplate = (template: SmsTeamTemplate | null) =>
+    setEditing(template ? { mode: "edit", template } : { mode: "create" });
 
   const drop = (template: SmsTeamTemplate) =>
     confirmThen(
@@ -197,7 +201,7 @@ export function SmsTeamScreen() {
                       }}
                     >
                       <Pressable
-                        onPress={() => openTemplate(template.id)}
+                        onPress={() => openTemplate(template)}
                         accessibilityRole="button"
                         accessibilityLabel={`Шаблон ${template.name}, ${whenWords(template)}, редактировать`}
                         style={({ pressed }) => ({
@@ -248,6 +252,15 @@ export function SmsTeamScreen() {
           teamId={teamId}
           current={sender}
           onClose={() => setSenderOpen(false)}
+        />
+      ) : null}
+      {teamId ? (
+        <SmsTemplateSheet
+          visible={editing !== null}
+          teamId={teamId}
+          teamName={team?.name}
+          template={editing?.mode === "edit" ? editing.template : null}
+          onClose={() => setEditing(null)}
         />
       ) : null}
     </Screen>

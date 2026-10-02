@@ -1,26 +1,22 @@
 import { useState } from "react";
 import { Keyboard, ScrollView, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
 import type { LucideIcon } from "lucide-react-native";
 import { Bell, CalendarCheck, CalendarClock, CalendarPlus, CalendarSync, CalendarX, Hand, Repeat } from "lucide-react-native";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
-import { Screen } from "@/components/ui/Screen";
-import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { ValueRow } from "@/components/ui/ValueRow";
-import { useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
-import { useSaveTeamTemplate, useTeamTemplates } from "./sms-account";
+import { useThemeColors } from "@/theme/colors";
+import { useSaveTeamTemplate, type SmsTeamTemplate } from "./sms-account";
 import {
   blankDraft,
   draftOf,
@@ -39,13 +35,14 @@ import {
 import { SmsTermSheet, type SmsTermKind } from "./SmsTermSheet";
 import { SmsPreviewBlock, SmsTextBlock } from "./SmsTextField";
 
-// ШАБЛОН SMS — СТРАНИЦА БЛОКАМИ (STORY-089; владелец 02.10: «продумай
-// полностью дизайн… соблюдая нашу архитектуру и наш дизайн»).
+// ШАБЛОН SMS — ШТОРКА БЛОКАМИ, КАК «НОВЫЙ ОБЪЕКТ» (STORY-089; владелец 03.10:
+// «зачем отдельная страница — давай шторка… топаю ещё раз на выбор, как
+// отправлять, и открывается ещё одна шторка… как объекты: выбор типа объекта»).
 //
-// Почему страница, а не шторка. Выбор «когда» и сроки по канону открываются
-// своей шторкой (AGENTS.md 5.2 — шторка выбора, 5.1 — барабан листом), а две
-// шторки в одном кадре iOS не показывает. Поэтому шаблон собран как запись:
-// блоки с шапкой, в каждом дверь, по двери — стандартная шторка.
+// Тело — язык страницы на прохладном фоне (как `ObjectSheet`): блоки с шапкой,
+// в блоке дверь, по двери — своя шторка поверх этой. Лист в листе законен:
+// так из листа объекта открывается «Тип объекта», из операции — категория.
+// Вложенные шторки живут ВНУТРИ тела листа — иначе iOS не покажет вторую.
 //
 //   • ШАБЛОН — имя, цвет и значок одной строкой (`NameColorField`);
 //   • КОГДА ОТПРАВЛЯТЬ — `ReferenceBlock`, как тип события: выбранный вариант
@@ -54,9 +51,9 @@ import { SmsPreviewBlock, SmsTextBlock } from "./SmsTextField";
 //   • СРОК — строки со значением справа (`ValueRow`): «за сколько», «во
 //     сколько», «через сколько» и «окно отправки»; тап — барабан в своей
 //     шторке (`SmsTermSheet`). У ручного шаблона блока нет;
-//   • ТЕКСТ — поле, счёт знаков и SMS, дверь «Вставить поле»;
+//   • ТЕКСТ — поле, счёт знаков и SMS, дверь «Вставить поле» (своя шторка);
 //   • КЛИЕНТ УВИДИТ — пример и предупреждения;
-//   • «Создать» / «Сохранить» — внизу, одна кнопка экрана.
+//   • «Создать» / «Сохранить» — футер листа, одна кнопка.
 
 const WHEN_LOOK: Record<SmsWhen, { icon: LucideIcon; color: string; hint: string }> = {
   manual: { icon: Hand, color: SETTINGS_TILE.blue, hint: "Отправляете сами из записи или карточки" },
@@ -141,23 +138,31 @@ function hoursValue(h: number | null): string {
   return days ? hoursChip(h) : `${h} ч`;
 }
 
-export function SmsTemplateScreen() {
-  const router = useRouter();
+export function SmsTemplateSheet({
+  visible,
+  teamId,
+  teamName,
+  template,
+  onClose,
+}: {
+  visible: boolean;
+  teamId: string;
+  teamName?: string;
+  /** Что правим; `null` — новый шаблон. */
+  template: SmsTeamTemplate | null;
+  onClose: () => void;
+}) {
+  const t = useThemeColors();
   const toast = useToast();
-  const params = useLocalSearchParams<{ team?: string; id?: string }>();
-  const teamId = params.team ?? "";
-  const { data: teams = [] } = useTeams();
-  const teamName = teams.find((x) => x.id === teamId)?.name;
-  const templates = useTeamTemplates(teamId || null);
-  const template = params.id ? (templates.data ?? []).find((x) => x.id === params.id) ?? null : null;
   const save = useSaveTeamTemplate();
 
   const [draft, setDraft] = useState<TemplateDraft>(() => blankDraft(teamId));
-  // Черновик берётся у шаблона один раз — когда он пришёл из базы.
-  const [seeded, setSeeded] = useState<string | null>(params.id ? null : "create");
-  if (template && seeded !== template.id) {
-    setSeeded(template.id);
-    setDraft(draftOf(template));
+  // Черновик — заново на каждое открытие: из шаблона или пустой.
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  const key = !visible ? null : template ? template.id : "create";
+  if (key !== seededFor) {
+    setSeededFor(key);
+    if (key) setDraft(template ? draftOf(template) : blankDraft(teamId));
   }
   const [whenOpen, setWhenOpen] = useState(false);
   const [term, setTerm] = useState<SmsTermKind | null>(null);
@@ -170,53 +175,82 @@ export function SmsTemplateScreen() {
   const whenLine = usesWindow(draft.trigger)
     ? `${whenWords(draft)} · ${windowWords(draft.sendFrom, draft.sendTo).toLowerCase()}`
     : whenWords(draft);
-
-  const submit = () =>
-    save.mutate(draft, {
-      onSuccess: () => {
-        toast(draft.id ? "Шаблон сохранён" : "Шаблон добавлен", "success");
-        router.back();
-      },
-      onError: (e) => notify("Не удалось сохранить", e instanceof Error ? e.message : undefined),
-    });
-
-  const title = params.id ? "Шаблон SMS" : "Новый шаблон";
-  if (params.id && !template) {
-    return (
-      <Screen edges={["top"]}>
-        <ScreenHeader title={title} subtitle={teamName} />
-        <EmptyState
-          state={templates.isLoading ? "loading" : templates.isError ? "error" : "empty"}
-          title={templates.isLoading || templates.isError ? undefined : "Шаблон удалён"}
-          fill
-        />
-      </Screen>
-    );
-  }
-
   const termKind: SmsTermKind | null =
     draft.trigger === "before" || draft.trigger === "after" || draft.trigger === "day_before" || draft.trigger === "repeat"
       ? draft.trigger
       : null;
 
+  const openTerm = (kind: SmsTermKind) => {
+    Keyboard.dismiss();
+    setTerm(kind);
+  };
+
+  const submit = () =>
+    save.mutate(draft, {
+      onSuccess: () => {
+        toast(draft.id ? "Шаблон сохранён" : "Шаблон добавлен", "success");
+        onClose();
+      },
+      onError: (e) => notify("Не удалось сохранить", e instanceof Error ? e.message : undefined),
+    });
+
   return (
-    <Screen edges={["top"]}>
-      <ScreenHeader title={title} subtitle={teamName} />
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title={template ? "Шаблон SMS" : "Новый шаблон"}
+      subtitle={teamName}
+      padded={false}
+      maxHeightRatio={0.92}
+      avoidKeyboard
+      footer={
+        <View
+          style={{
+            paddingHorizontal: GUTTER,
+            paddingTop: 10,
+            borderTopWidth: 1,
+            borderTopColor: t.separator,
+          }}
+        >
+          <GradientButton
+            label={template ? "Сохранить" : "Создать"}
+            onPress={submit}
+            disabled={!!problem || save.isPending}
+            loading={save.isPending}
+            // Серая кнопка отвечает плашкой — что мешает сохранить.
+            onDisabledPress={
+              problem
+                ? () => {
+                    haptics.warning();
+                    toast(problem, "info");
+                  }
+                : undefined
+            }
+          />
+        </View>
+      }
+    >
+      {/* Тело — язык страницы (блоки на прохладном фоне), как у листа объекта.
+          Паддинги только через contentContainerStyle — className на ScrollView
+          NativeWind молча роняет. */}
+      <ScrollView
+        style={{ flexShrink: 1, backgroundColor: t.canvas }}
+        contentContainerStyle={{ paddingBottom: 12 }}
+        keyboardShouldPersistTaps="handled"
+      >
         <SectionCard title="Шаблон">
-            <NameColorField
-              bare
-              label={null}
-              name={draft.name}
-              onNameChange={(name) => set({ name })}
-              color={draft.color}
-              onColorChange={(color) => set({ color })}
-              icon={draft.icon}
-              onIconChange={(icon) => set({ icon })}
-              maxLength={60}
-              placeholder="Название шаблона"
-              autoFocus={!params.id}
-            />
+          <NameColorField
+            bare
+            label={null}
+            name={draft.name}
+            onNameChange={(name) => set({ name })}
+            color={draft.color}
+            onColorChange={(color) => set({ color })}
+            icon={draft.icon}
+            onIconChange={(icon) => set({ icon })}
+            maxLength={60}
+            placeholder="Название шаблона"
+          />
         </SectionCard>
 
         <ReferenceBlock
@@ -233,23 +267,23 @@ export function SmsTemplateScreen() {
         {auto && (termKind || usesWindow(draft.trigger)) ? (
           <SectionCard title="Срок">
             {draft.trigger === "before" ? (
-              <ValueRow label="За сколько до визита" value={hoursValue(draft.hours)} onPress={() => setTerm("before")} />
+              <ValueRow label="За сколько до визита" value={hoursValue(draft.hours)} onPress={() => openTerm("before")} />
             ) : null}
             {draft.trigger === "after" ? (
-              <ValueRow label="Через сколько после" value={hoursValue(draft.hours)} onPress={() => setTerm("after")} />
+              <ValueRow label="Через сколько после" value={hoursValue(draft.hours)} onPress={() => openTerm("after")} />
             ) : null}
             {draft.trigger === "day_before" ? (
-              <ValueRow label="Накануне в" value={draft.atTime ?? "18:00"} onPress={() => setTerm("day_before")} />
+              <ValueRow label="Накануне в" value={draft.atTime ?? "18:00"} onPress={() => openTerm("day_before")} />
             ) : null}
             {draft.trigger === "repeat" ? (
-              <ValueRow label="Через" value={`${draft.months ?? 6} мес`} onPress={() => setTerm("repeat")} />
+              <ValueRow label="Через" value={`${draft.months ?? 6} мес`} onPress={() => openTerm("repeat")} />
             ) : null}
             {usesWindow(draft.trigger) ? (
               <ValueRow
                 label="Окно отправки"
                 value={windowWords(draft.sendFrom, draft.sendTo)}
                 separated={!!termKind}
-                onPress={() => setTerm("window")}
+                onPress={() => openTerm("window")}
               />
             ) : null}
           </SectionCard>
@@ -257,35 +291,17 @@ export function SmsTemplateScreen() {
 
         <SmsTextBlock value={draft.body} onChange={(body) => set({ body })} />
         <SmsPreviewBlock value={draft.body} warnings={warnings} />
-      </ScrollView>
 
-      <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
-        <GradientButton
-          label={params.id ? "Сохранить" : "Создать"}
-          onPress={submit}
-          disabled={!!problem || save.isPending}
-          loading={save.isPending}
-          // Серая кнопка отвечает плашкой — что мешает сохранить.
-          onDisabledPress={
-            problem
-              ? () => {
-                  haptics.warning();
-                  toast(problem, "info");
-                }
-              : undefined
-          }
+        {/* Шторки дверей — внутри листа: лист в листе iOS показывает, а
+            соседний — нет. */}
+        <SmsWhenSheet
+          visible={whenOpen}
+          value={draft.trigger}
+          onClose={() => setWhenOpen(false)}
+          onApply={(when) => setDraft((d) => (d.trigger === when ? d : withTrigger(d, when)))}
         />
-      </View>
-
-      <SmsWhenSheet
-        visible={whenOpen}
-        value={draft.trigger}
-        onClose={() => setWhenOpen(false)}
-        onApply={(when) => setDraft((d) => (d.trigger === when ? d : withTrigger(d, when)))}
-      />
-      <SmsTermSheet kind={term} value={draft} onClose={() => setTerm(null)} onApply={(patch) => set(patch)} />
-    </Screen>
+        <SmsTermSheet kind={term} value={draft} onClose={() => setTerm(null)} onApply={(patch) => set(patch)} />
+      </ScrollView>
+    </BottomSheet>
   );
 }
-
-export default SmsTemplateScreen;
