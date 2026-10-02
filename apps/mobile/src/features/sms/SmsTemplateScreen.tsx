@@ -6,7 +6,9 @@ import { Bell, CalendarCheck, CalendarClock, CalendarPlus, CalendarSync, Calenda
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { NameColorField } from "@/components/ui/picker-fields";
-import { PickerSheet } from "@/components/ui/PickerSheet";
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Button } from "@/components/ui/Button";
+import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -48,7 +50,7 @@ import { SmsPreviewBlock, SmsTextBlock } from "./SmsTextField";
 //   • ШАБЛОН — имя, цвет и значок одной строкой (`NameColorField`);
 //   • КОГДА ОТПРАВЛЯТЬ — `ReferenceBlock`, как тип события: выбранный вариант
 //     плиткой со значком и цветом, под именем — срок и окно словами; тап —
-//     шторка выбора из восьми вариантов (`PickerSheet`);
+//     шторка выбора из восьми вариантов с «Применить» (`SmsWhenSheet`);
 //   • СРОК — строки со значением справа (`ValueRow`): «за сколько», «во
 //     сколько», «через сколько» и «окно отправки»; тап — барабан в своей
 //     шторке (`SmsTermSheet`). У ручного шаблона блока нет;
@@ -66,6 +68,69 @@ const WHEN_LOOK: Record<SmsWhen, { icon: LucideIcon; color: string; hint: string
   after: { icon: CalendarCheck, color: SETTINGS_TILE.green, hint: "Через часы после выполненной работы" },
   repeat: { icon: Repeat, color: SETTINGS_TILE.purple, hint: "Через месяцы — пора снова на обслуживание" },
 };
+
+/** «КОГДА ОТПРАВЛЯТЬ» — шторка выбора с «Применить» (владелец 03.10:
+ *  «отрегулировать шторку… чтоб появилась кнопка применить»). Тап отмечает
+ *  вариант, кнопка применяет; шторка высотой во все восемь строк, чтобы
+ *  последние не уходили за край. */
+function SmsWhenSheet({
+  visible,
+  value,
+  onClose,
+  onApply,
+}: {
+  visible: boolean;
+  value: SmsWhen;
+  onClose: () => void;
+  onApply: (when: SmsWhen) => void;
+}) {
+  const [picked, setPicked] = useState<SmsWhen>(value);
+  // Отметка — заново на каждое открытие: закрыли без «Применить» — выбор не живёт.
+  const [wasVisible, setWasVisible] = useState(false);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) setPicked(value);
+  }
+  return (
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Когда отправлять"
+      padded={false}
+      scroll
+      maxHeightRatio={0.9}
+      footer={
+        <View style={{ paddingHorizontal: GUTTER }}>
+          <Button
+            label="Применить"
+            onPress={() => {
+              onApply(picked);
+              onClose();
+            }}
+          />
+        </View>
+      }
+    >
+      <SelectList>
+        {SMS_WHEN.map((when) => (
+          <SelectRow
+            key={when}
+            icon={WHEN_LOOK[when].icon}
+            color={WHEN_LOOK[when].color}
+            title={WHEN_LABELS[when]}
+            hint={WHEN_LOOK[when].hint}
+            selected={picked === when}
+            accessibilityRole="radio"
+            onPress={() => {
+              haptics.tap();
+              setPicked(when);
+            }}
+          />
+        ))}
+      </SelectList>
+    </BottomSheet>
+  );
+}
 
 /** Срок словами в строке: «24 ч», «2 дня 3 ч». */
 function hoursValue(h: number | null): string {
@@ -212,19 +277,11 @@ export function SmsTemplateScreen() {
         />
       </View>
 
-      <PickerSheet
+      <SmsWhenSheet
         visible={whenOpen}
-        title="Когда отправлять"
-        selectedId={draft.trigger}
-        items={SMS_WHEN.map((when) => ({
-          id: when,
-          label: WHEN_LABELS[when],
-          icon: WHEN_LOOK[when].icon,
-          color: WHEN_LOOK[when].color,
-          hint: WHEN_LOOK[when].hint,
-          onPress: () => setDraft((d) => withTrigger(d, when)),
-        }))}
+        value={draft.trigger}
         onClose={() => setWhenOpen(false)}
+        onApply={(when) => setDraft((d) => (d.trigger === when ? d : withTrigger(d, when)))}
       />
       <SmsTermSheet kind={term} value={draft} onClose={() => setTerm(null)} onApply={(patch) => set(patch)} />
     </Screen>

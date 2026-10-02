@@ -6,16 +6,21 @@ import { analyzeSmsEncoding } from "@babun/shared/local/sms-encoding";
 import { AVAILABLE_TOKENS, renderTemplate } from "@babun/shared/local/sms-templates";
 import { formatDateKey } from "@babun/shared/common/utils/date-utils";
 import { ChooseRow } from "@/components/ui/ChooseRow";
-import { PickerSheet } from "@/components/ui/PickerSheet";
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Button } from "@/components/ui/Button";
+import { SelectList, SelectRow } from "@/components/ui/select-rows";
+import { GUTTER } from "@/components/ui/tokens";
+import { haptics } from "@/lib/haptics";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { useTenant } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { acceptSmsInput, MAX_SMS_PARTS, smsVars } from "./sms-compose";
 
 // ТЕКСТ ШАБЛОНА SMS — ДВА БЛОКА СТРАНИЦЫ ШАБЛОНА (STORY-089, 02.10).
 //   • «Текст» — поле, под ним сколько знаков и SMS, и дверь «Вставить поле»:
-//     шторка выбора (`PickerSheet`) с полями записи, у каждого свой значок и
-//     цвет; поле встаёт туда, где стоит курсор. Ряда фишек больше нет
+//     шторка выбора с «Применить» (как «Когда отправлять», владелец 03.10),
+//     у каждого поля значок, цвет и пример; поле встаёт туда, где курсор. Ряда фишек больше нет
 //     (владелец 02.10: «вот это тоже нужно как-то изменить»);
 //   • «Клиент увидит» — текст с подставленным примером.
 
@@ -34,9 +39,75 @@ const TOKEN_LOOK: Record<string, { icon: LucideIcon; color: string }> = {
   "[Ссылка]": { icon: Link, color: SETTINGS_TILE.purple },
 };
 
+/** «ВСТАВИТЬ ПОЛЕ» — та же шторка, что «Когда отправлять» (владелец 03.10:
+ *  «это то же самое, но сделай более аккуратно»): все поля видны, тап
+ *  отмечает, «Применить» вставляет. */
+function InsertFieldSheet({
+  visible,
+  example,
+  onClose,
+  onApply,
+}: {
+  visible: boolean;
+  example: (token: string) => string | undefined;
+  onClose: () => void;
+  onApply: (token: string) => void;
+}) {
+  const [picked, setPicked] = useState<string | null>(null);
+  const [wasVisible, setWasVisible] = useState(false);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) setPicked(null);
+  }
+  return (
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Вставить поле"
+      padded={false}
+      scroll
+      maxHeightRatio={0.9}
+      footer={
+        <View style={{ paddingHorizontal: GUTTER }}>
+          <Button
+            label="Применить"
+            disabled={!picked}
+            onPress={() => {
+              if (!picked) return;
+              onApply(picked);
+              onClose();
+            }}
+          />
+        </View>
+      }
+    >
+      <SelectList>
+        {AVAILABLE_TOKENS.map(({ token, label }) => {
+          const look = TOKEN_LOOK[token] ?? { icon: Braces, color: SETTINGS_TILE.blue };
+          return (
+            <SelectRow
+              key={token}
+              icon={look.icon}
+              color={look.color}
+              title={label}
+              hint={example(token)}
+              selected={picked === token}
+              accessibilityRole="radio"
+              onPress={() => {
+                haptics.tap();
+                setPicked(token);
+              }}
+            />
+          );
+        })}
+      </SelectList>
+    </BottomSheet>
+  );
+}
+
 /** Пример для «Клиент увидит»: завтрашняя запись — так текст читается
  *  так же, как клиент прочтёт его в жизни. */
-function sampleVars() {
+function sampleVars(company: string) {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   return smsVars({
@@ -48,14 +119,16 @@ function sampleVars() {
     address: "Лимассол, Arch. Makariou 5",
     total: 80,
     debt: 40,
-    company: "Компания",
+    company,
     link: "babun.app/r/Ab3dE5fG7hJ9",
   });
 }
 
 /** Текст с подставленным примером и его счёт частей. */
 export function useSmsPreview(value: string) {
-  const sample = useMemo(sampleVars, []);
+  // Имя своей компании — пример «Компания» читался как пустое поле.
+  const company = useTenant().data?.name?.trim() || "Ваша компания";
+  const sample = useMemo(() => sampleVars(company), [company]);
   const preview = value.trim() ? renderTemplate(value, sample) : "";
   return { sample, preview, encoding: analyzeSmsEncoding(preview) };
 }
@@ -139,21 +212,11 @@ export function SmsTextBlock({ value, onChange }: { value: string; onChange: (ne
         />
       </SectionCard>
 
-      <PickerSheet
+      <InsertFieldSheet
         visible={insertOpen}
-        title="Вставить поле"
-        items={AVAILABLE_TOKENS.map(({ token, label }) => {
-          const look = TOKEN_LOOK[token] ?? { icon: Braces, color: SETTINGS_TILE.blue };
-          return {
-            id: token,
-            label,
-            icon: look.icon,
-            color: look.color,
-            hint: renderTemplate(token, sample) || undefined,
-            onPress: () => insert(token),
-          };
-        })}
+        example={(token) => renderTemplate(token, sample) || undefined}
         onClose={() => setInsertOpen(false)}
+        onApply={insert}
       />
     </>
   );
