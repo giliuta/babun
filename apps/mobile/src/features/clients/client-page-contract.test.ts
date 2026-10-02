@@ -627,11 +627,14 @@ describe("первый блок карточки — с именем", () => {
 
 describe("блок «История»", () => {
   // Владелец 22.09: визиты и деньги — это история; тап — полный перечень.
-  // Сводка и «Записать» — один блок с шапкой, а не две безымянные карточки.
-  test("сводка и «Записать» стоят в блоке «История»", () => {
+  // 03.10: «Записать» из блока убрана — лицо блока последняя запись, тап по
+  // ней — история со всеми записями.
+  test("в блоке «История» — последняя запись и вход в историю, без «Записать»", () => {
     const row = read("ClientContactRow.tsx");
     assert.match(row, /<SectionCard title="История">\s*\{showSummary \? \(\s*<ClientSummaryCard/);
-    assert.match(row, /label="Записать"/);
+    assert.doesNotMatch(row, /label="Записать"/);
+    assert.match(row, /lastRecord=\{lastRecord\}/);
+    assert.match(read("ClientSummaryCard.tsx"), /<SummaryRow\s*onPress=\{onOpenHistory\}/);
     assert.doesNotMatch(read("ClientHeader.tsx"), /<ClientSummaryCard/);
     assert.match(page(), /<ClientContactRow[\s\S]{0,900}onOpenHistory=\{/);
   });
@@ -643,13 +646,12 @@ describe("новый клиент — те же блоки", () => {
   // открывает нужное уже на ней.
   test("«Файлы» и «История» стоят и в черновике", () => {
     assert.match(read("ClientProfileBlocks.tsx"), /draft && a\.files\.show[^\n]*onDraftFiles \? \(\s*<SectionCard title="Файлы">/);
-    assert.match(read("ClientContactRow.tsx"), /if \(draft\) \{\s*return onDraftBook \? \(\s*<SectionCard title="История">/);
+    // «История» черновика — словами: записей у него ещё нет (03.10).
+    assert.match(read("ClientContactRow.tsx"), /if \(draft\) \{\s*return \(\s*<SectionCard title="История">/);
   });
   test("двери черновика создают карточку и открывают своё", () => {
     assert.match(page(), /onDraftFiles=\{\(\) => onDraftDoor\("files"\)\}/);
-    assert.match(page(), /onDraftBook=\{\(\) => onDraftDoor\("book"\)\}/);
     assert.match(page(), /openOnArrive === "files"/);
-    assert.match(page(), /openOnArrive === "book"/);
   });
 });
 

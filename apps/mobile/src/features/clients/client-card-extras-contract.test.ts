@@ -41,8 +41,11 @@ describe("«Обращение» со страницы убрано", () => {
 describe("долг ведёт в «Неоплаченные»", () => {
   test("сводка при долге открывает историю с unpaid=1", () => {
     const card = read("ClientSummaryCard.tsx");
-    assert.match(card, /debt\s*\?\s*\(\)\s*=>\s*router\.push\(/);
+    // Долг — своей строкой сверху блока, и ведёт она в «Неоплаченные» (03.10:
+    // лицо блока — последняя запись, а долг остаётся дверью к «за что»).
+    assert.match(card, /const openUnpaid = onOpenHistory\s*\?\s*\(\)\s*=>\s*router\.push\(/);
     assert.match(card, /unpaid: "1"/);
+    assert.match(card, /\{debt \? \(\s*<SummaryRow\s*onPress=\{openUnpaid\}/);
   });
 
   test("история читает unpaid=1 и отбирает правилом долга", () => {

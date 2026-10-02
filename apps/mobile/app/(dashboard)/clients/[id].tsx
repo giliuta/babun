@@ -824,9 +824,7 @@ export function ClientDetailScreen() {
           // «История» и «Долг и деньги» — права сотрудника по блокам.
           showSummary={access.history.show}
           showMoney={access.money.show}
-          onDraftBook={() => onDraftDoor("book")}
-          bookOnArrive={!isDraft && openOnArrive === "book"}
-          onArrived={() => router.setParams({ open: undefined })}
+          appointments={appointments}
           // Сводка в блоке «История» = вход в перечень записей. Записей нет — вести
           // некуда, и сводка остаётся просто текстом (мёртвых тапов не держим).
           // С 30.09 история открыта и сотруднику — по праву «История
