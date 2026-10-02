@@ -1,11 +1,15 @@
 import { View } from "react-native";
 import {
   Bookmark,
+  CalendarCheck,
   FileText,
   ImageIcon,
   Landmark,
+  MessageSquare,
   Paperclip,
+  Phone,
   ReceiptText,
+  Send,
   Tag,
   UserPlus,
   Wallet,
@@ -57,6 +61,51 @@ export function ClientCardPreview({
   const state = levelState(level);
 
   switch (blockKey) {
+    // Блоки «Клиент», «История», «SMS» (02.10) — как на странице клиента.
+    case "clients.client":
+      return (
+        <PreviewFrame
+          state={levelState(card === "off" ? "off" : own === "off" ? "read" : own)}
+          caption={card === "off" ? undefined : own === "off" ? "Только имя — номера нет" : undefined}
+        >
+          <SectionCard title="Клиент">
+            <SelectList>
+              <SelectRow title="Анна Петрова" initial="А" onPress={noop} />
+              {own !== "off" ? (
+                <SelectRow icon={Phone} color={SETTINGS_TILE.green} title="Телефон" subtitle="•• ••• •••" onPress={noop} />
+              ) : null}
+            </SelectList>
+          </SectionCard>
+        </PreviewFrame>
+      );
+    case "clients.history":
+      return (
+        <PreviewFrame state={state}>
+          <SectionCard title="История">
+            <SelectList>
+              <SelectRow icon={CalendarCheck} color={SETTINGS_TILE.blue} title="12 сентября" subtitle="Чистка кондиционера" onPress={noop} />
+              <SelectRow icon={CalendarCheck} color={SETTINGS_TILE.blue} title="3 августа" subtitle="Ремонт" onPress={noop} />
+            </SelectList>
+          </SectionCard>
+        </PreviewFrame>
+      );
+    case "clients.sms":
+      return (
+        <PreviewFrame state={state}>
+          <SectionCard title="SMS">
+            <SelectList>
+              <SelectRow
+                icon={MessageSquare}
+                color={SETTINGS_TILE.green}
+                title="Напоминание о записи"
+                subtitle="Доставлено · 12 сентября"
+                onPress={noop}
+              />
+            </SelectList>
+            {write ? <ChooseRow compact icon={Send} label="Отправить SMS" onPress={noop} /> : null}
+          </SectionCard>
+        </PreviewFrame>
+      );
     case "clients.note":
       return (
         <PreviewFrame state={state}>

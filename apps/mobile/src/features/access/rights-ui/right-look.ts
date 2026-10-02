@@ -10,6 +10,7 @@ import {
   CalendarPlus,
   CalendarX2,
   CircleCheck,
+  Contact,
   ClipboardList,
   Clock,
   CreditCard,
@@ -105,6 +106,10 @@ const LOOK: Record<string, RightLook> = {
   "clients.files": { icon: Paperclip, tile: SETTINGS_TILE.indigo },
   "clients.requisites": { icon: Landmark, tile: SETTINGS_TILE.teal },
   "clients.money": { icon: HandCoins, tile: SETTINGS_TILE.orange },
+  // Блоки «Клиент», «История», «SMS» (02.10) — как на странице клиента.
+  "clients.client": { icon: Contact, tile: SETTINGS_TILE.blue },
+  "clients.history": { icon: CalendarClock, tile: SETTINGS_TILE.blue },
+  "clients.sms": { icon: MessageSquare, tile: SETTINGS_TILE.green },
   // Настройки клиентов — те же значки и цвета, что у строк шестерёнки клиентов.
   "clients.settings_card": { icon: Eye, tile: SETTINGS_TILE.blue },
   "clients.settings_ways": { icon: MessageCircle, tile: SETTINGS_TILE.green },

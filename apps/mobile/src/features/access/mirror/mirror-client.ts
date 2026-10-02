@@ -17,6 +17,7 @@ import type { AccessLevel, MemberAccessMap } from "../access-map";
 // самое широкое по ним.
 
 const CARD_KEYS = [
+  "clients.client",
   "clients.note",
   "clients.people",
   "clients.objects",
@@ -25,6 +26,8 @@ const CARD_KEYS = [
   "clients.files",
   "clients.requisites",
   "clients.money",
+  "clients.history",
+  "clients.sms",
 ] as const;
 
 const RANK: Partial<Record<AccessLevel, number>> = { off: 0, read: 1, write: 2 };
@@ -61,19 +64,13 @@ export function mirrorClientBlocks(
     }
     out[key] = word(best);
   }
-  // История записей — вместе с клиентом (02.10: «История записей» убрано).
-  out["clients.history"] = word(teams.length === 0 ? 0 : 1);
   return out;
 }
 
-/** Номер открыт у каждого клиента, которого он видит (02.10: «Телефон»
- *  убран — его даёт «База клиентов»), как `access_contact_client_ids`. */
-function mirrorContactsHidden(
-  client: Pick<Client, "id" | "team_id">,
-  map: MemberAccessMap,
-  view?: MirrorView,
-): "right" | null {
-  return teamsFor(client, map, view).length > 0 ? null : "right";
+/** Номер открыт, когда блок «Клиент» он видит (02.10), как
+ *  `access_contact_client_ids`. */
+function mirrorContactsHidden(blocks: Readonly<Record<string, string>>): "right" | null {
+  return blocks["clients.client"] === "read" || blocks["clients.client"] === "write" ? null : "right";
 }
 
 /** Строка клиента, какой её получил бы сотрудник с этой картой прав. */
@@ -101,7 +98,7 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: 
       ? { legal_name: null, vat_number: null, reg_number: null, billing_address: null, requisites: [] }
       : {}),
     ...(off("clients.money") ? { balance: 0, discount: 0 } : {}),
-    contacts_hidden: mirrorContactsHidden(client, map, view),
+    contacts_hidden: mirrorContactsHidden(blocks),
     blocks,
   } as Client;
 }

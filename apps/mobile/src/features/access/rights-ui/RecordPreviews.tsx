@@ -71,9 +71,8 @@ export function RecordPreview({
   const rb = previewRecord(blocks, levels);
   const ev = previewEvent(blocks, levels);
   const on = (write: boolean) => (write ? noop : undefined);
-  // Телефон клиента в записи открыт тому, кому видна база клиентов (02.10:
-  // «Телефон» убран — его даёт «База клиентов»).
-  const phoneOpen = levels.clients === "read" || levels.clients === "write";
+  // Телефон клиента в записи — по блоку «Клиент» карточки (02.10).
+  const phoneOpen = levels["clients.client"] === "read" || levels["clients.client"] === "write";
 
   switch (blockKey) {
     case "record.team":

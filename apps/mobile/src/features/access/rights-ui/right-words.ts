@@ -66,6 +66,11 @@ const TITLE: Record<string, string> = {
   "clients.files": "Файлы",
   "clients.requisites": "Реквизиты",
   "clients.money": "Долг и деньги",
+  // Блоки страницы клиента (владелец 02.10: «чётко по блокам… история… в
+  // конце SMS»).
+  "clients.client": "Клиент",
+  "clients.history": "История",
+  "clients.sms": "SMS",
   // Настройки клиентов — именами строк шестерёнки клиентов (владелец 01.10).
   "clients.settings_card": "Карточка клиента",
   "clients.settings_ways": "Способы связи",
@@ -156,6 +161,9 @@ const STEP: Record<string, Words> = {
   "clients.files": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
   "clients.requisites": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
   "clients.money": { off: "Скрыты", read: "Видит" },
+  "clients.client": { off: "Скрыт", read: "Только видит", write: "Видит и меняет" },
+  "clients.history": { off: "Скрыта", read: "Видит" },
+  "clients.sms": { off: "Скрыты", read: "Только видит", write: "Видит и отправляет" },
   // Настройки клиентов — как «Настройки команды» (владелец 01.10: «в
   // настройках он может редактировать или не может редактировать»).
   "clients.settings_card": { off: "Скрыта", read: "Только видит", write: "Видит и меняет" },
@@ -176,6 +184,7 @@ const DANGER: Record<string, Words> = {
   "finance.accounts": { write: "Сможет переводить деньги между счетами" },
   "finance.debts": { write: "Сможет удалять долги клиентов" },
   clients: { write: "Сможет удалять клиентов команды" },
+  "clients.sms": { write: "Сможет отправлять SMS клиентам — за счёт баланса" },
   "clients.files": { write: "Сможет удалять файлы клиента" },
   "clients.settings_tags": { write: "Сможет удалять теги у всех клиентов команды" },
 };

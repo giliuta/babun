@@ -82,18 +82,23 @@ export interface SectionBlock {
   keys: readonly string[];
 }
 
-/** Блоки страницы клиента — в порядке самой страницы (заметка под
- *  «Клиентом», люди, объекты, файлы, метка и тег, личное, реквизиты, долг и
- *  деньги). В строке списка с 01.10 только имя, номер и последняя запись. */
+/** Блоки страницы клиента — в порядке самой страницы: Клиент, Заметка, Люди,
+ *  История (и долг с деньгами в ней), Объекты, Файлы, Реквизиты, Метка и тег,
+ *  Личное, SMS. В строке списка с 01.10 только имя, номер и последняя запись. */
 export const CLIENT_CARD_ROW_ORDER: readonly string[] = [
+  // В ПОРЯДКЕ БЛОКОВ СТРАНИЦЫ КЛИЕНТА (владелец 02.10: «первая по блокам —
+  // клиент, люди, заметка… история… в конце SMS»).
+  "clients.client",
   "clients.note",
   "clients.people",
+  "clients.history",
+  "clients.money",
   "clients.objects",
   "clients.files",
+  "clients.requisites",
   "clients.labels",
   "clients.personal",
-  "clients.requisites",
-  "clients.money",
+  "clients.sms",
 ];
 
 /** Права блока «Записи» на странице «Календарь». */

@@ -101,6 +101,11 @@ const teamBase = norm(readFileSync(join(MIGRATIONS_DIR, TEAM_BASE), "utf8"));
 const LIMITS = "20261002235930_clients_limits_steps.sql";
 const limits = norm(readFileSync(join(MIGRATIONS_DIR, LIMITS), "utf8"));
 
+// «КАРТОЧКА КЛИЕНТА» ПО БЛОКАМ СТРАНИЦЫ (владелец 02.10): «Клиент», «История»,
+// «SMS» — свои права; номер — по «Клиенту», SMS с карточки — по «SMS».
+const CLIENT_BLOCKS = "20261003001200_clients_card_blocks_client_history_sms.sql";
+const clientBlocks = norm(readFileSync(join(MIGRATIONS_DIR, CLIENT_BLOCKS), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
@@ -109,18 +114,26 @@ describe("сервер: клиенты по уровням", () => {
     for (const fn of ["access_company_level"]) {
       assert.equal(lastDefiner(fn), BASE_READ, `${fn} переопределён позже`);
     }
-    for (const fn of ["update_client_with_tags", "access_contact_client_ids", "member_trash_client"]) {
+    for (const fn of ["member_trash_client"]) {
       assert.equal(lastDefiner(fn), THREE_LEVELS, `${fn} переопределён позже`);
     }
-    for (const fn of ["access_client_blocks", "list_master_clients_safe"]) {
+    for (const fn of ["list_master_clients_safe"]) {
       assert.equal(lastDefiner(fn), TEAM_BASE, `${fn} переопределён позже`);
+    }
+    for (const fn of [
+      "access_client_blocks",
+      "access_contact_client_ids",
+      "update_client_with_tags",
+      "sms_for_client",
+      "sms_send_manual",
+      "set_client_sms_opt_out",
+    ]) {
+      assert.equal(lastDefiner(fn), CLIENT_BLOCKS, `${fn} переопределён позже`);
     }
     assert.equal(lastDefiner("access_client_ids_in"), LIMITS, "access_client_ids_in переопределён позже");
     for (const fn of [
       "list_master_appointments_safe",
       "sms_message_json",
-      "sms_for_client",
-      "sms_send_manual",
       "sms_appointment_link",
       "receipts_client_snapshot_no_phone",
       "member_client_in_team",
@@ -168,6 +181,30 @@ describe("сервер: клиенты по уровням", () => {
       assert.ok(teamBase.includes(`delete from public.member_access where block = '${key}';`), key);
       assert.ok(teamBase.includes(`delete from public.access_blocks where key = '${key}';`), key);
     }
+  });
+
+  test("«Клиент», «История», «SMS» — свои права; номер и SMS с карточки — по ним", () => {
+    for (const key of ["clients.client", "clients.history", "clients.sms"]) {
+      assert.ok(clientBlocks.includes(`('${key}', 'clients', 'calendar', array[`), key);
+    }
+    // Тем, кто уже работает, — то, что они видели.
+    assert.ok(
+      clientBlocks.includes(
+        "case when b.block = 'clients.client' and ma.level = 'write' then 'write' else 'read' end from public.member_access ma cross join (values ('clients.client'), ('clients.history'), ('clients.sms')) as b(block) where ma.block = 'clients'",
+      ),
+    );
+    assert.ok(clientBlocks.includes("'clients.client', 'clients.note', 'clients.people', 'clients.history',"));
+    assert.ok(!clientBlocks.includes("'clients.history'::text, 1"), "история снова гарантирована мимо права");
+    assert.ok(clientBlocks.includes("then public.access_block_client_ids('clients.client', 'read')"));
+    assert.ok(clientBlocks.includes("hint = 'block:clients.client'"));
+    assert.ok(clientBlocks.includes("('clients.sms', array['sms_name'])"));
+    assert.ok(clientBlocks.includes("if not is_owner and not (p_client_id = any(public.access_block_client_ids('clients.sms', 'read'))) then return;"));
+    assert.ok(
+      clientBlocks.includes(
+        "if not is_owner and p_appointment_id is null and not (v_client = any(public.access_block_client_ids('clients.sms', 'write'))) then raise exception 'sms:rights'",
+      ),
+    );
+    assert.ok(clientBlocks.includes("or p_client_id = any(public.access_block_client_ids('clients.sms', 'write'))"));
   });
 
   test("«Ограничения» — шесть шагов, окно по записи своей команды, умолчание «Неделя»", () => {
@@ -586,9 +623,9 @@ describe("сервер: клиенты по уровням", () => {
     // строка несёт настоящие.
     assert.ok(
       sql.includes(
-        "where (to_jsonb(next_row) -> f.field) is distinct from (to_jsonb(current_row) -> f.field) ) then raise exception 'only the owner or an employee who edits the client base changes it'",
+        "where (to_jsonb(next_row) -> f.field) is distinct from (to_jsonb(current_row) -> f.field) ) then raise exception 'this block of the client card is closed for this employee' using errcode = '42501', hint = 'block:clients.client';",
       ),
-      `${file}: партнёр без «Редактирует» правит имя или номера клиента`,
+      `${file}: партнёр без «Клиент: Меняет» правит имя или номера клиента`,
     );
     assert.ok(
       sql.includes(

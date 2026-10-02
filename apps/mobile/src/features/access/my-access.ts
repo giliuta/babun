@@ -126,6 +126,9 @@ const CLIENT_RANKS: Readonly<Record<string, Readonly<Partial<Record<AccessLevel,
   "clients.files": BLOCK_RANK,
   "clients.requisites": BLOCK_RANK,
   "clients.money": BLOCK_RANK,
+  "clients.client": BLOCK_RANK,
+  "clients.history": BLOCK_RANK,
+  "clients.sms": BLOCK_RANK,
 };
 
 export type ClientLevelsChange = "same" | "changed" | "narrowed";

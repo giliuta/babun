@@ -50,9 +50,8 @@ describe("зеркало: строка клиента глазами сотру�
     assert.equal(row.legal_name, null);
     assert.equal(row.balance, 0);
     assert.deepEqual(row.memberships, []);
-    // Номер открыт у каждого видимого клиента (02.10: «Телефон» убран); в
-    // строке его нет всё равно — его открывает дверь.
-    assert.equal(row.contacts_hidden, null);
+    // «Клиент» скрыт (02.10) — номера нет.
+    assert.equal(row.contacts_hidden, "right");
     assert.equal(row.blocks?.clients, "read");
     assert.equal(row.blocks?.["clients.note"], "off");
   });
@@ -66,7 +65,7 @@ describe("зеркало: строка клиента глазами сотру�
           "clients.open": "write",
           "clients.note": "write",
           "clients.labels": "read",
-          "clients.contacts": "day",
+          "clients.client": "read",
         },
       }),
     );
@@ -173,18 +172,19 @@ describe("зеркало: какие клиенты в его наборе (ка
 
   test("блоки и история — по команде клиента", () => {
     const m = map({
-      A: { clients: "read", "clients.scope": "own" },
+      A: { clients: "read", "clients.scope": "own", "clients.history": "read" },
       Z: { clients: "read", "clients.scope": "own", "clients.note": "read" },
     });
     const view = mirrorView(m, data());
     assert.equal(mirrorClientBlocks(row("c1"), m, view)["clients.note"], "off");
     assert.equal(mirrorClientBlocks(row("c4"), m, view)["clients.note"], "read");
-    // «История записей» убрана (02.10): видит клиента — видит и историю.
+    // «История» — своим правом команды клиента (02.10).
     assert.equal(mirrorClientBlocks(row("c1"), m, view)["clients.history"], "read");
+    assert.equal(mirrorClientBlocks(row("c4"), m, view)["clients.history"], "off");
   });
 
-  test("номер — у каждого клиента в его наборе, вне набора — закрыт (02.10)", () => {
-    const m = map({ A: { clients: "read" } });
+  test("номер — у клиента в его наборе с «Клиент: Видит», вне набора — закрыт (02.10)", () => {
+    const m = map({ A: { clients: "read", "clients.client": "read" } });
     const view = mirrorView(m, data({ appointments: [appt("c2", "A", "2026-09-25")] }));
     const hidden = (id: string) =>
       mirrorMemberClient({ ...client, ...row(id) } as Client, m, view).contacts_hidden;

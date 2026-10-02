@@ -32,7 +32,8 @@ export type CardBlockKey =
   | "files"
   | "requisites"
   | "history"
-  | "money";
+  | "money"
+  | "sms";
 
 export interface BlockAccess {
   show: boolean;
@@ -66,7 +67,14 @@ export function cardAccess({
   const draftByRights = draft && !!draftBlocks;
   const byRights = draftByRights || (!draft && !!client?.blocks);
   const rights = draftByRights ? { blocks: draftBlocks ?? undefined } : client;
-  const cardEdit = draft || (caps.edit && clientBlockLevel(client, "clients") === "write");
+  // Имя, номер и мессенджеры — блок «Клиент» (02.10: «Скрыт / Видит /
+  // Меняет»); у строк без `blocks` (владелец) — как раньше.
+  const cardEdit =
+    draft ||
+    (caps.edit &&
+      (byRights
+        ? clientBlockLevel(rights, "clients.client") === "write"
+        : clientBlockLevel(client, "clients") === "write"));
 
   // `legacy*` — как блок жил до прав по блокам: у владельца и у строк без
   // `blocks` поведение не меняется ни на пиксель.
@@ -102,6 +110,9 @@ export function cardAccess({
     requisites: block(teamOn.requisites, "clients.requisites", caps.money),
     history: block(true, "clients.history"),
     money: block(true, "clients.money", caps.money, false),
+    // SMS клиента — свой блок (02.10): «Видит» — история, «Меняет» —
+    // отправка с карточки, «Присылать SMS» и имя для SMS.
+    sms: block(true, "clients.sms"),
   };
 }
 

@@ -642,7 +642,9 @@ export function ClientDetailScreen() {
   return (
     // Все номера страницы — клиента, его людей, доп. номера — предлагают
     // шаблоны SMS, заполненные этим клиентом (STORY-089).
-    <SmsComposeProvider context={clientSmsContext}>
+    // Шаблоны и отправка с платформы — по блоку «SMS: Меняет» (02.10); без
+    // него номер пишет со своего телефона, как раньше.
+    <SmsComposeProvider context={access.sms.edit ? clientSmsContext : null}>
       <Stack.Screen options={{ gestureEnabled: !isDraftDirty }} />
       <Screen edges={["top"]}>
       {/* «Готово» из правого верхнего угла снесено: единственное действие
@@ -881,7 +883,9 @@ export function ClientDetailScreen() {
         {/* SMS КЛИЕНТУ ОДНИМ БЛОКОМ (STORY-089; владелец 30.09): «Присылать
             SMS», «Имя для SMS» и все сообщения — на какой номер ушло.
             Отправка — в кнопке номера. */}
-        {!isDraft ? <SmsClientBlock client={c} update={update} readOnly={!access.card.edit} /> : null}
+        {!isDraft && access.sms.show ? (
+          <SmsClientBlock client={c} update={update} readOnly={!access.sms.edit} />
+        ) : null}
       </ScrollView>
 
       {/* ЕДИНСТВЕННОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ, ПОД ПАЛЬЦЕМ, ВНЕ ПРОКРУТКИ.
