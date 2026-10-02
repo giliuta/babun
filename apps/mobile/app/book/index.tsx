@@ -160,8 +160,6 @@ import {
 } from "@/features/clients/location-request-link";
 import { useLocationRequests } from "@/features/clients/location-requests";
 import { useCurrentRole, usePlanAllows, useTenant } from "@/features/settings/tenant";
-import { accessGate } from "@/features/access/my-access";
-import { useMyAccess } from "@/features/access/queries";
 import { SmsComposeProvider } from "@/features/sms/SmsCompose";
 import { useRevealedClient } from "@/features/clients/revealed-contacts";
 import { SmsRecordBlock } from "@/features/sms/SmsRecordBlock";
@@ -1357,20 +1355,8 @@ export default function BookScreen() {
   // — иначе поверх записи ляжет вторая копия табов и «назад» уведёт на
   // календарь, потеряв набранное. Запись остаётся смонтированной под
   // карточкой, «назад» возвращает ровно в неё.
-  // «КАРТОЧКА ИЗ ЗАПИСИ» (владелец 01.10: «переход с записи в клиента —
-  // разрешение добавляем или нет»). У партнёра дверь — по праву команды
-  // записи; сервер без права клиента записи не отдаёт
-  // (`list_master_clients_safe`). Владельцу и диспетчеру — как раньше.
-  const recordAccessMap = useMyAccess().data;
-  const canOpenFromRecord =
-    viewerRole !== "master" ||
-    accessGate({
-      role: viewerRole,
-      map: recordAccessMap,
-      blockKey: "clients.from_record",
-      scope: "calendar",
-      teamId: teamId ?? null,
-    }) === "write";
+  // «Карточка из записи» как право убрано (владелец 02.10: «запись он
+  // всегда может открывать, если он её видит») — дверь открыта всем.
   const openClientCard = () => {
     if (!clientId) return;
     haptics.tap();
@@ -2670,7 +2656,7 @@ export default function BookScreen() {
                   stats={clientStats}
                   summary={clientHistory}
                   onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
-                  onOpenCard={canOpenFromRecord ? openClientCard : undefined}
+                  onOpenCard={openClientCard}
                   note={
                     <InlineNoteField
                       note={clientNote}
@@ -3068,7 +3054,7 @@ export default function BookScreen() {
                   stats={clientStats}
                   summary={clientHistory}
                   onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
-                  onOpenCard={canOpenFromRecord ? openClientCard : undefined}
+                  onOpenCard={openClientCard}
                   onClear={
                     can.editClient
                       ? () => {

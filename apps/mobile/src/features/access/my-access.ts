@@ -124,7 +124,6 @@ const CLIENT_RANKS: Readonly<Record<string, Readonly<Partial<Record<AccessLevel,
   "clients.personal": BLOCK_RANK,
   "clients.files": BLOCK_RANK,
   "clients.requisites": BLOCK_RANK,
-  "clients.history": BLOCK_RANK,
   "clients.money": BLOCK_RANK,
 };
 

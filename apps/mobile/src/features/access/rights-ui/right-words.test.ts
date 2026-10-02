@@ -30,10 +30,10 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["finance.accounts", ["off", "read", "write"]],
   ["finance.debts", ["off", "read", "write"]],
   ["clients", ["off", "read", "write"]],
-  // Защита базы: окно «Какие клиенты» (02.10), блоки карточки. «Открывает
-  // карточку» и «Телефон» убраны 02.10 — их даёт база.
+  // Защита базы: «Ограничение по времени» (02.10), блоки карточки.
+  // «Открывает карточку», «Телефон», «История записей» и «Карточка из
+  // записи» убраны 02.10 — их даёт база.
   ["clients.scope", ["near", "month", "own"]],
-  ["clients.from_record", ["off", "write"]],
   ["clients.note", ["off", "read", "write"]],
   ["clients.people", ["off", "read", "write"]],
   ["clients.objects", ["off", "read", "write"]],
@@ -41,7 +41,6 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["clients.personal", ["off", "read", "write"]],
   ["clients.files", ["off", "read", "write"]],
   ["clients.requisites", ["off", "read", "write"]],
-  ["clients.history", ["off", "read"]],
   ["clients.money", ["off", "read"]],
   ["company.sms_templates", ["off", "read", "write"]],
 ];

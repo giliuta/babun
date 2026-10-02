@@ -3,7 +3,6 @@ import {
   Bookmark,
   Briefcase,
   Building2,
-  CalendarCheck2,
   CalendarClock,
   CalendarRange,
   CalendarDays,
@@ -97,7 +96,6 @@ const LOOK: Record<string, RightLook> = {
   "finance.debts": { icon: HandCoins, tile: SETTINGS_TILE.orange },
   clients: { icon: Users, tile: SETTINGS_TILE.blue },
   "clients.scope": { icon: UserCheck, tile: SETTINGS_TILE.teal },
-  "clients.from_record": { icon: CalendarCheck2, tile: SETTINGS_TILE.indigo },
   "clients.note": { icon: StickyNote, tile: SETTINGS_TILE.orange },
   "clients.people": { icon: Users, tile: SETTINGS_TILE.indigo },
   "clients.objects": { icon: House, tile: SETTINGS_TILE.green },
@@ -105,7 +103,6 @@ const LOOK: Record<string, RightLook> = {
   "clients.personal": { icon: UserRound, tile: SETTINGS_TILE.blue },
   "clients.files": { icon: Paperclip, tile: SETTINGS_TILE.indigo },
   "clients.requisites": { icon: Landmark, tile: SETTINGS_TILE.teal },
-  "clients.history": { icon: CalendarClock, tile: SETTINGS_TILE.blue },
   "clients.money": { icon: HandCoins, tile: SETTINGS_TILE.orange },
   // Настройки клиентов — те же значки и цвета, что у строк шестерёнки клиентов.
   "clients.settings_card": { icon: Eye, tile: SETTINGS_TILE.blue },

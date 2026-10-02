@@ -39,8 +39,8 @@ const REGISTRY: AccessBlock[] = [
   block({ key: "finance.debts", area: "finance", scope: "calendar", title: "Долги" }),
   block({ key: "finance.documents", area: "finance", scope: "calendar", live: false, title: "Инвойсы и чеки" }),
   block({ key: "clients", title: "Клиенты" }),
-  block({ key: "clients.scope", levels: ["near", "month", "own"], title: "Какие клиенты" }),
-  block({ key: "clients.history", levels: ["off", "read"], title: "История записей" }),
+  block({ key: "clients.scope", levels: ["near", "month", "own"], title: "Ограничение по времени" }),
+  block({ key: "clients.money", levels: ["off", "read"], title: "Долг и деньги" }),
   block({ key: "services", area: "company", live: false, title: "Услуги и цены" }),
   block({ key: "masters", area: "company", live: false, title: "Мастера" }),
   block({ key: "company.currency", area: "company", levels: ["read", "write"], live: false, title: "Валюта" }),
@@ -64,8 +64,6 @@ const REGISTRY: AccessBlock[] = [
   block({ key: "finance.invoicing", area: "finance", live: false, title: "Счета клиентам" }),
   block({ key: "clients.filters", live: false, title: "Фильтры клиентов" }),
   block({ key: "clients.share", live: false, title: "Делиться клиентами" }),
-  block({ key: "clients.money", levels: ["off", "read"], live: false, title: "Долг и визиты клиента" }),
-  block({ key: "clients.history", levels: ["off", "read"], live: false, title: "История записей клиента" }),
   block({ key: "clients.files", live: false, title: "Файлы клиента" }),
   block({ key: "clients.archive", live: false, title: "Архив и корзина" }),
   block({ key: "clients.merge", levels: ["off", "write"], live: false, title: "Объединять дубли" }),
@@ -98,8 +96,8 @@ describe("слова прав", () => {
       "Цен и суммы не видит — и оплату не принимает",
     );
     assert.equal(
-      levelSentence("clients.history", "off"),
-      "Прошлых записей клиента не видит",
+      levelSentence("clients.money", "off"),
+      "Долг, инвойсы и чеки клиента скрыты",
     );
   });
 
@@ -129,7 +127,7 @@ describe("слова прав", () => {
         "finance.debts",
         "clients",
         "clients.scope",
-        "clients.history",
+        "clients.money",
       ],
     );
   });

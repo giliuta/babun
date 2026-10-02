@@ -45,10 +45,9 @@ export function ClientsPreview({
   // «Открывает карточку» убраны): видит клиента — открывает его и номер.
   const phones = base !== "off";
   // Переход на страницу клиента — шеврон строки (как в его списке).
-  const opens =
-    blockKey === "clients.from_record" ? levels["clients.from_record"] === "write" : base !== "off";
-  // База закрыта — у зависимой строки «Какие клиенты» показывать нечего: базы
-  // у него нет вовсе, и рамка гасит весь список.
+  const opens = base !== "off";
+  // База закрыта — у зависимой строки «Ограничение по времени» показывать
+  // нечего: базы у него нет вовсе, и рамка гасит весь список.
   const people = scope === "near" ? OWN.slice(0, 1) : OWN;
   const state = levelState(base);
   if (!CLIENTS_PREVIEW_KEYS.includes(blockKey)) return null;
@@ -58,15 +57,11 @@ export function ClientsPreview({
       ? undefined
       : blockKey === "clients.scope"
         ? scope === "own"
-          ? "Видит клиентов своей команды"
+          ? "Видит всех клиентов команды"
           : scope === "month"
-            ? "Видит клиента за месяц до и после записи"
-            : "Видит клиента за 2 недели до и после записи"
-        : blockKey === "clients.from_record"
-          ? opens
-            ? "Из записи открывает страницу клиента"
-            : "Из записи страница клиента не открывается"
-          : undefined;
+            ? "Видит клиента команды за месяц до и после записи"
+            : "Видит клиента команды за 2 недели до и после записи"
+        : undefined;
   return (
     <PreviewFrame
       state={state}
@@ -85,7 +80,7 @@ export function ClientsPreview({
               // Переход есть — шеврон справа, как у двери; нет — строка без
               // него: имя видно, а проходить некуда.
               trailing={
-                (blockKey === "clients" || blockKey === "clients.from_record") && opens ? (
+                blockKey === "clients" && opens ? (
                   <ChevronRight color={t.faint} size={18} />
                 ) : undefined
               }

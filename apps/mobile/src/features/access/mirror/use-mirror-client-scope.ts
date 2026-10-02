@@ -12,9 +12,9 @@ import {
 } from "./mirror-client";
 import { useMirror } from "./mirror-state";
 
-// НАБОР КЛИЕНТОВ ЗЕРКАЛА — ИЗ БАЗЫ, А НЕ ИЗ КЭША КАЛЕНДАРЯ. Окно записи
-// (месяц назад — месяц вперёд, 02.10) читается у всех его команд: из него же
-// «2 недели», «Месяц» и номер «В день записи»; всё время — только у «Своей команды».
+// НАБОР КЛИЕНТОВ ЗЕРКАЛА — ИЗ БАЗЫ, А НЕ ИЗ КЭША КАЛЕНДАРЯ. Видны только
+// клиенты его команд (02.10); записи (месяц назад — месяц вперёд) читаются у
+// команд с «Ограничением по времени» — из них «2 недели» и «Месяц».
 // Кэш календаря держит то, что открывали, и набор по нему гулял бы от
 // прокрутки. Читает токен владельца: ему таблицы открыты, писать нечего.
 //
@@ -47,7 +47,7 @@ export function useMirrorClientScope(map: MemberAccessMap | null): MirrorView | 
   const userId = useMirror()?.userId ?? null;
   const teams = map ? mirrorOpenTeams(map) : null;
   const query = useQuery({
-    // Номер «В день записи» тоже решает набор — уровни «Телефона» в ключе.
+    // Набор решают уровни команд — карта прав в ключе.
     queryKey: [
       "mirror-client-scope",
       map?.tenantId ?? "",
@@ -58,56 +58,29 @@ export function useMirrorClientScope(map: MemberAccessMap | null): MirrorView | 
     queryFn: async (): Promise<MirrorView> => {
       const accessMap = map as MemberAccessMap;
       const tenantId = accessMap.tenantId;
-      const open = (teams as NonNullable<typeof teams>).map((team) => team.teamId);
-      const own = (teams as NonNullable<typeof teams>)
-        .filter((team) => team.scope === "own")
+      // Видны только клиенты команды (02.10); записи нужны лишь командам с
+      // «Ограничением по времени» — «Без ограничения» решает сама команда клиента.
+      const windowed = (teams as NonNullable<typeof teams>)
+        .filter((team) => team.scope === "near" || team.scope === "month")
         .map((team) => team.teamId);
+      if (windowed.length === 0) return mirrorView(accessMap, { appointments: [], today: "" });
       const db = tenantBoundClient(tenantId);
       const day = await db.rpc("tenant_business_date", { p_tenant_id: tenantId });
       if (day.error || !day.data) throw new Error(`mirrorClientScope: ${day.error?.message ?? "нет даты"}`);
       const today = day.data;
-      const columns = "client_id, team_id, date, status";
-      const [window, wide, mine] = await Promise.all([
-        readAll((from, to) =>
-          db
-            .from("appointments")
-            .select(columns)
-            .eq("tenant_id", tenantId)
-            .in("team_id", open)
-            .gte("date", shiftMonth(today, -1))
-            .lte("date", shiftMonth(today, 1))
-            .not("client_id", "is", null)
-            .order("id")
-            .range(from, to) as unknown as Page,
-        ),
-        own.length === 0
-          ? Promise.resolve([])
-          : readAll((from, to) =>
-              db
-                .from("appointments")
-                .select(columns)
-                .eq("tenant_id", tenantId)
-                .in("team_id", own)
-                .not("client_id", "is", null)
-                .order("id")
-                .range(from, to) as unknown as Page,
-            ),
-        userId
-          ? db
-              .from("clients")
-              .select("id")
-              .eq("tenant_id", tenantId)
-              // `created_by` в сгенерированных типах пока нет — фильтр строкой.
-              .filter("created_by", "eq", userId)
-              .is("deleted_at", null)
-          : Promise.resolve({ data: [] as { id: string }[], error: null }),
-      ]);
-      if (mine.error) throw new Error(`mirrorClientScope: ${mine.error.message}`);
-      return mirrorView(accessMap, {
-        appointments: [...window, ...wide],
-        createdBy: (mine.data ?? []).map((row) => row.id),
-        today,
-      });
+      const appointments = await readAll((from, to) =>
+        db
+          .from("appointments")
+          .select("client_id, team_id, date, status")
+          .eq("tenant_id", tenantId)
+          .in("team_id", windowed)
+          .gte("date", shiftMonth(today, -1))
+          .lte("date", shiftMonth(today, 1))
+          .not("client_id", "is", null)
+          .order("id")
+          .range(from, to) as unknown as Page,
+      );
+      return mirrorView(accessMap, { appointments, today });
     },
   });
   if (map && teams && teams.length === 0) return EMPTY_VIEW;

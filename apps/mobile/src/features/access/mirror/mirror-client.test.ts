@@ -111,26 +111,27 @@ describe("зеркало: какие клиенты в его наборе (ка
   });
   const data = (input: Partial<MirrorClientData> = {}): MirrorClientData => ({
     appointments: [],
-    createdBy: [],
     today: TODAY,
     ...input,
   });
-  // c4 — клиент команды A, остальные — команды Z.
-  const row = (id: string) => ({ id, team_id: id === "c4" ? "A" : "Z" });
+  // c1–c3 — клиенты команды A, c4 — команды Z.
+  const row = (id: string) => ({ id, team_id: id === "c4" ? "Z" : "A" });
   const ids = (m: MemberAccessMap, input: Partial<MirrorClientData> = {}) => {
     const view = mirrorView(m, data(input));
     return ["c1", "c2", "c3", "c4"].filter((id) => inMirrorView(row(id), view));
   };
 
-  test("«2 недели» — две недели назад и вперёд; отменённая и чужая команда окна не открывают", () => {
+  test("«2 недели» — запись своей команды две недели назад и вперёд; отменённая и чужая команда окна не открывают", () => {
     const m = map({ A: { clients: "read" } });
     const appointments = [
       appt("c1", "A", "2026-09-16"),
       appt("c2", "A", "2026-10-14"),
       appt("c3", "A", "2026-10-15"),
       appt("c3", "A", "2026-09-15"),
-      appt("c4", "A", "2026-09-30", "cancelled"),
-      appt("c4", "B", "2026-09-30"),
+      appt("c3", "A", "2026-09-30", "cancelled"),
+      appt("c3", "B", "2026-09-30"),
+      // c4 — клиент чужой команды: запись в A его в набор не приводит (02.10).
+      appt("c4", "A", "2026-09-30"),
     ];
     assert.deepEqual(ids(m, { appointments }), ["c1", "c2"]);
   });
@@ -149,38 +150,30 @@ describe("зеркало: какие клиенты в его наборе (ка
     assert.equal(shiftMonth("2026-12-15", 1), "2027-01-15");
   });
 
-  test("«Своей команды» — клиенты команды и её записи за всё время", () => {
+  test("«Без ограничения» — все клиенты команды и только они (02.10)", () => {
     const m = map({ A: { clients: "read", "clients.scope": "own" } });
-    assert.deepEqual(ids(m, { appointments: [appt("c2", "A", "2020-01-01", "cancelled")] }), ["c2", "c4"]);
+    assert.deepEqual(ids(m, { appointments: [appt("c4", "A", "2026-09-30")] }), ["c1", "c2", "c3"]);
   });
 
-  test("«Вся база» хоть в одной команде — вся база", () => {
-    const m = map({ A: { clients: "read" }, B: { clients: "read", "clients.scope": "all" } });
-    assert.deepEqual(ids(m), ["c1", "c2", "c3", "c4"]);
+  test("база закрыта — никого", () => {
+    assert.deepEqual(ids(map({ A: { clients: "off", "clients.scope": "own" } })), []);
   });
 
-  test("завёл сам — видит всегда; карточки закрыты везде — никого", () => {
-    assert.deepEqual(ids(map({ A: { clients: "read" } }), { createdBy: ["c3"] }), ["c3"]);
-    assert.deepEqual(
-      ids(map({ A: { clients: "off", "clients.scope": "all" } }), { createdBy: ["c3"] }),
-      [],
-    );
-  });
-
-  test("блоки — самые широкие по командам, ЧЕРЕЗ КОТОРЫЕ клиент виден", () => {
-    // Вся база в A без заметки; в B заметка открыта, но c1 в окне B нет.
+  test("блоки и история — по команде клиента", () => {
     const m = map({
-      A: { clients: "read", "clients.scope": "all" },
-      B: { clients: "read", "clients.note": "read" },
+      A: { clients: "read", "clients.scope": "own" },
+      Z: { clients: "read", "clients.scope": "own", "clients.note": "read" },
     });
-    const view = mirrorView(m, data({ appointments: [appt("c2", "B", TODAY)] }));
+    const view = mirrorView(m, data());
     assert.equal(mirrorClientBlocks(row("c1"), m, view)["clients.note"], "off");
-    assert.equal(mirrorClientBlocks(row("c2"), m, view)["clients.note"], "read");
+    assert.equal(mirrorClientBlocks(row("c4"), m, view)["clients.note"], "read");
+    // «История записей» убрана (02.10): видит клиента — видит и историю.
+    assert.equal(mirrorClientBlocks(row("c1"), m, view)["clients.history"], "read");
   });
 
   test("номер — у каждого клиента в его наборе, вне набора — закрыт (02.10)", () => {
-    const m = map({ B: { clients: "read" } });
-    const view = mirrorView(m, data({ appointments: [appt("c2", "B", "2026-09-25")] }));
+    const m = map({ A: { clients: "read" } });
+    const view = mirrorView(m, data({ appointments: [appt("c2", "A", "2026-09-25")] }));
     const hidden = (id: string) =>
       mirrorMemberClient({ ...client, ...row(id) } as Client, m, view).contacts_hidden;
     assert.equal(hidden("c2"), null, "в окне команды — номер открывается");

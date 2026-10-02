@@ -1,7 +1,6 @@
 import { View } from "react-native";
 import {
   Bookmark,
-  CalendarCheck,
   FileText,
   ImageIcon,
   Landmark,
@@ -150,17 +149,6 @@ export function ClientCardPreview({
                 subtitle="VAT CY10000000X · Лимассол"
                 onPress={noop}
               />
-            </SelectList>
-          </SectionCard>
-        </PreviewFrame>
-      );
-    case "clients.history":
-      return (
-        <PreviewFrame state={state}>
-          <SectionCard title="История">
-            <SelectList>
-              <SelectRow icon={CalendarCheck} color={SETTINGS_TILE.blue} title="12 сентября" subtitle="Чистка кондиционера" onPress={noop} />
-              <SelectRow icon={CalendarCheck} color={SETTINGS_TILE.blue} title="3 августа" subtitle="Ремонт" onPress={noop} />
             </SelectList>
           </SectionCard>
         </PreviewFrame>

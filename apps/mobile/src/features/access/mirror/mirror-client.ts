@@ -24,7 +24,6 @@ const CARD_KEYS = [
   "clients.personal",
   "clients.files",
   "clients.requisites",
-  "clients.history",
   "clients.money",
 ] as const;
 
@@ -62,6 +61,8 @@ export function mirrorClientBlocks(
     }
     out[key] = word(best);
   }
+  // История записей — вместе с клиентом (02.10: «История записей» убрано).
+  out["clients.history"] = word(teams.length === 0 ? 0 : 1);
   return out;
 }
 
@@ -113,13 +114,13 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: 
 // `access_client_ids_in` на сервере, И ПО КАЖДОЙ КОМАНДЕ ОТДЕЛЬНО: блоки
 // клиента сервер берёт самыми широкими по командам, ЧЕРЕЗ КОТОРЫЕ клиент
 // виден (`access_client_blocks`), а номер открыт у каждого видимого клиента
-// (`access_contact_client_ids`, 02.10). Правило команды:
-//   · «Вся база» — вся база;
-//   · «Своей команды» — клиенты команды и её записей за всё время;
-//   · «Месяц» — запись команды от месяца назад до месяца вперёд, «2 недели» —
-//     от двух недель назад до двух недель вперёд (02.10); отменённая окна не
-//     открывает;
-//   · кого завёл сам — видит всегда.
+// (`access_contact_client_ids`, 02.10). Видны ТОЛЬКО клиенты, закреплённые
+// за командой (владелец 02.10: «только база клиентов, которая закреплена за
+// командой»), а «Ограничение по времени» сужает их:
+//   · «Без ограничения» — все клиенты команды;
+//   · «Месяц» / «2 недели» — у клиента есть запись этой команды от месяца /
+//     двух недель назад до месяца / двух недель вперёд; отменённая окна не
+//     открывает.
 
 const SCOPE_RANK: Partial<Record<AccessLevel, number>> = { near: 0, month: 1, own: 2, all: 3 };
 const SCOPES = ["near", "month", "own", "all"] as const;
@@ -133,15 +134,13 @@ export interface MirrorScopeAppointment {
 }
 
 export interface MirrorClientData {
-  /** Записи команд с открытыми карточками: окно у всех, всё время у «Своей команды». */
+  /** Записи команд с «Ограничением по времени» — в пределах месяца от сегодня. */
   appointments: readonly MirrorScopeAppointment[];
-  /** Клиенты, которых он завёл сам (пусто, пока человек не в компании). */
-  createdBy: readonly string[];
   /** Рабочий день компании (`tenant_business_date`). */
   today: string;
 }
 
-/** Команды с открытыми «Карточками клиентов» и их «Какие клиенты». */
+/** Команды с открытой «Базой клиентов» и их «Ограничение по времени». */
 export function mirrorOpenTeams(map: MemberAccessMap): { teamId: string; scope: MirrorScope }[] {
   return Object.entries(map.calendars)
     .filter(([, levels]) => (RANK[levels.clients ?? "off"] ?? 0) >= 1)
@@ -152,11 +151,10 @@ export function mirrorOpenTeams(map: MemberAccessMap): { teamId: string; scope: 
     });
 }
 
-/** Набор одной команды: `null` — вся база, иначе id клиентов и «своя» команда. */
+/** Набор одной команды: её клиенты; `ids` — те, у кого запись в окне, `null` —
+ *  без ограничения по времени. */
 interface TeamScope {
-  whole: boolean;
-  ownTeam: string | null;
-  ids: ReadonlySet<string>;
+  ids: ReadonlySet<string> | null;
 }
 
 export interface MirrorView {
@@ -185,29 +183,27 @@ export function mirrorView(map: MemberAccessMap, data: MirrorClientData): Mirror
   };
   const teams = new Map<string, TeamScope>();
   for (const { teamId, scope } of mirrorOpenTeams(map)) {
-    const ids = new Set(data.createdBy);
-    if (scope !== "all") {
-      for (const a of data.appointments) {
-        if (!a.client_id || a.team_id !== teamId) continue;
-        const window = windows[scope];
-        if (!window) ids.add(a.client_id);
-        else if (a.status !== "cancelled" && a.date && a.date >= window[0] && a.date <= window[1]) ids.add(a.client_id);
-      }
+    const window = windows[scope];
+    if (!window) {
+      teams.set(teamId, { ids: null });
+      continue;
     }
-    teams.set(teamId, { whole: scope === "all", ownTeam: windows[scope] ? null : teamId, ids });
+    const ids = new Set<string>();
+    for (const a of data.appointments) {
+      if (!a.client_id || a.team_id !== teamId || a.status === "cancelled" || !a.date) continue;
+      if (a.date >= window[0] && a.date <= window[1]) ids.add(a.client_id);
+    }
+    teams.set(teamId, { ids });
   }
   return { teams };
 }
 
-/** Команды, через которые клиент виден. */
+/** Команда, через которую клиент виден: его собственная, если она открыта и
+ *  клиент проходит её «Ограничение по времени». */
 function teamsSeeing(client: Pick<Client, "id" | "team_id">, view: MirrorView): string[] {
-  const out: string[] = [];
-  for (const [teamId, scope] of view.teams) {
-    if (scope.whole || (client.team_id && client.team_id === scope.ownTeam) || scope.ids.has(client.id)) {
-      out.push(teamId);
-    }
-  }
-  return out;
+  const scope = client.team_id ? view.teams.get(client.team_id) : undefined;
+  if (!scope || !client.team_id) return [];
+  return scope.ids === null || scope.ids.has(client.id) ? [client.team_id] : [];
 }
 
 export function inMirrorView(client: Pick<Client, "id" | "team_id">, view: MirrorView): boolean {

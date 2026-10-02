@@ -90,16 +90,25 @@ const baseRead = norm(readFileSync(join(MIGRATIONS_DIR, BASE_READ), "utf8"));
 const THREE_LEVELS = "20261002235300_clients_base_three_levels.sql";
 const threeLevels = norm(readFileSync(join(MIGRATIONS_DIR, THREE_LEVELS), "utf8"));
 
+// БАЗА — ТОЛЬКО КЛИЕНТЫ КОМАНДЫ (владелец 02.10): «Ограничение по времени»
+// (бывшее «Какие клиенты») сужает их; «История записей» и «Карточка из
+// записи» убраны — их даёт база и видимая запись.
+const TEAM_BASE = "20261002235800_clients_team_base_time_limit.sql";
+const teamBase = norm(readFileSync(join(MIGRATIONS_DIR, TEAM_BASE), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
       assert.equal(lastDefiner(fn), PER_TEAM, `${fn} переопределён позже`);
     }
-    for (const fn of ["access_client_ids_in", "access_company_level"]) {
+    for (const fn of ["access_company_level"]) {
       assert.equal(lastDefiner(fn), BASE_READ, `${fn} переопределён позже`);
     }
-    for (const fn of ["access_client_blocks", "update_client_with_tags", "access_contact_client_ids", "member_trash_client"]) {
+    for (const fn of ["update_client_with_tags", "access_contact_client_ids", "member_trash_client"]) {
       assert.equal(lastDefiner(fn), THREE_LEVELS, `${fn} переопределён позже`);
+    }
+    for (const fn of ["access_client_ids_in", "access_client_blocks", "list_master_clients_safe"]) {
+      assert.equal(lastDefiner(fn), TEAM_BASE, `${fn} переопределён позже`);
     }
     for (const fn of [
       "list_master_appointments_safe",
@@ -124,12 +133,38 @@ describe("сервер: клиенты по уровням", () => {
     ]) {
       assert.equal(lastDefiner(fn), CARD_BLOCKS, `${fn} переопределён позже`);
     }
-    for (const fn of ["list_master_clients_safe"]) {
-      assert.equal(lastDefiner(fn), OPEN_CARD, `${fn} переопределён позже`);
+  });
+
+  test("база — только клиенты команды; «Ограничение по времени» едет с днём", () => {
+    // Только клиент с командой из открытых — ни «завёл сам», ни записи чужой команды.
+    assert.ok(teamBase.includes("c.team_id = any(team_wide)"));
+    const idsBody = teamBase.slice(
+      teamBase.indexOf("create or replace function public.access_client_ids_in"),
+      teamBase.indexOf("$function$;", teamBase.indexOf("create or replace function public.access_client_ids_in")),
+    );
+    assert.ok(idsBody.length > 0 && !idsBody.includes("created_by"), "в набор снова пускает «завёл сам»");
+    for (const [teams, window] of [
+      ["month_teams", "a.date between (today - interval '1 month')::date::text and (today + interval '1 month')::date::text"],
+      ["near_teams", "a.date between (today - 14)::text and (today + 14)::text"],
+    ] as const) {
+      assert.ok(
+        teamBase.includes(
+          `c.team_id = any(${teams}) and exists ( select 1 from public.appointments a where a.tenant_id = active_tenant and a.client_id = c.id and a.team_id = c.team_id and a.status is distinct from 'cancelled' and ${window}`,
+        ),
+        teams,
+      );
+    }
+    assert.ok(teamBase.includes("update public.access_blocks set title_ru = 'Ограничение по времени' where key = 'clients.scope';"));
+    // «История записей» — вместе с клиентом; «Карточка из записи» — без двери.
+    assert.ok(teamBase.includes("select tm.team_id, 'clients.history'::text, 1 from teams tm"));
+    assert.ok(!teamBase.includes("door_ids"));
+    for (const key of ["clients.history", "clients.from_record"]) {
+      assert.ok(teamBase.includes(`delete from public.member_access where block = '${key}';`), key);
+      assert.ok(teamBase.includes(`delete from public.access_blocks where key = '${key}';`), key);
     }
   });
 
-  test("окно «Какие клиенты» едет с днём: 2 недели, месяц, своей команды", () => {
+  test("окно «Какие клиенты» едет с днём: 2 недели, месяц, своей команды (BASE_READ)", () => {
     assert.ok(baseRead.includes("update public.access_blocks set levels = array['near', 'month', 'own'] where key = 'clients.scope';"));
     // «2 недели» и «Месяц» до и после записи; отменённая окна не открывает.
     assert.ok(
@@ -160,6 +195,8 @@ describe("сервер: клиенты по уровням", () => {
     );
     // Блоки страницы не гаснут без «Открывает карточку»; «Меняет» блока — своим правом.
     assert.ok(!threeLevels.includes("open_level"));
+    assert.ok(!teamBase.includes("open_level"));
+    assert.ok(teamBase.includes("when l.level = 'write' then 2 when l.level in ('read', 'write') then 1"));
     assert.ok(threeLevels.includes("when l.level = 'write' then 2 when l.level in ('read', 'write') then 1"));
     assert.ok(!threeLevels.includes("when l.level = 'write' and tm.card_level = 'write' then 2"));
     // Правка — только видимого клиента, вход по «Видит»; база — по «Редактирует».

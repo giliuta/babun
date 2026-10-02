@@ -56,7 +56,7 @@ const REGISTRY: AccessBlock[] = (
     ["finance.vat", "finance", "company", ["off", "read", "write"], "VAT", false, false, 175],
     ["clients", "clients", "company", ["off", "read", "write"], "Клиенты", false, true, 210],
     ["clients.scope", "clients", "company", ["own", "all"], "Какие клиенты", false, true, 220],
-    ["clients.history", "clients", "company", ["off", "read"], "История записей", false, true, 230],
+    ["clients.money", "clients", "company", ["off", "read"], "Долг и деньги", false, true, 230],
     ["services", "company", "company", ["off", "read", "write"], "Услуги и цены", false, false, 310],
     ["masters", "company", "company", ["off", "read", "write"], "Мастера", false, false, 320],
     ["company.currency", "company", "company", ["read", "write"], "Валюта", false, false, 330],
@@ -143,24 +143,24 @@ describe("право, выданное владельцем, доходит до
     assert.equal(map.calendars[TEAM]?.["finance.operations"], "write", "зеркало");
   });
 
-  test("скрытые клиенты гасят историю записей во всех пяти местах сразу", () => {
-    // Живой родитель — свёртка обязана работать: «История записей» без
+  test("скрытые клиенты гасят «Долг и деньги» во всех пяти местах сразу", () => {
+    // Живой родитель — свёртка обязана работать: «Долг и деньги» без
     // «Клиентов» — это право на то, чего человек не видит.
-    let draft = draftWith("clients.history", "read");
+    let draft = draftWith("clients.money", "read");
     draft = withLevel(draft, BLOCK.clients as AccessBlock, "off", null);
 
     // Свёрнутая строка стоит серой (владелец 30.09) — на умолчании и с
     // главным блоком, из-за которого не меняется.
-    assert.equal(rowLevel(draft, "clients.history"), "off", "строка страницы");
-    assert.equal(rowFoldedBy(draft, "clients.history"), "clients", "строка не серая");
-    assert.equal(sentLevel(draft, "clients.history"), null, "на сервер уходить нечему");
+    assert.equal(rowLevel(draft, "clients.money"), "off", "строка страницы");
+    assert.equal(rowFoldedBy(draft, "clients.money"), "clients", "строка не серая");
+    assert.equal(sentLevel(draft, "clients.money"), null, "на сервер уходить нечему");
 
 
     const map = mirrorMapOf(TENANT, REGISTRY, draft);
     assert.notEqual(
-      map.company["clients.history"],
+      map.company["clients.money"],
       "read",
-      "зеркало открывает историю, которой на сервере не будет",
+      "зеркало открывает деньги, которых на сервере не будет",
     );
   });
 
@@ -176,7 +176,7 @@ describe("право, выданное владельцем, доходит до
       "на странице стоит блок, которого сервер не проверяет",
     );
     // И живые при этом не потерялись: раздел «Клиенты» на месте целиком.
-    for (const key of ["clients", "clients.scope", "clients.history"]) {
+    for (const key of ["clients", "clients.scope", "clients.money"]) {
       assert.ok(keys.includes(key), `живой блок ${key} пропал со страницы`);
     }
   });
