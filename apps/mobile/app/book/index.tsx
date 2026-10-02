@@ -1123,17 +1123,23 @@ export default function BookScreen() {
   );
   // Сервису нужны ещё запись, клиент и календарь: SMS через сервис владелец
   // разрешает по календарям (STORY-089, волна 2).
+  //
+  // КЛИЕНТ СМЕНЁН, НО НЕ СОХРАНЁН (03.10) — SMS уходит клиенту на экране, без
+  // записи: сервер берёт клиента из СОХРАНЁННОЙ записи, и номер нового он
+  // отбивал как чужой («sms:phone»). Сохранят — SMS снова о записи.
+  const smsAppointmentId =
+    editing?.id && client?.id && client.id === editing.client_id ? editing.id : null;
   const recordSmsContext = useMemo(
     () =>
       recordSmsVars
         ? {
             vars: recordSmsVars,
-            appointmentId: editing?.id ?? null,
+            appointmentId: smsAppointmentId,
             clientId: client?.id ?? null,
             teamId: teamId ?? null,
           }
         : null,
-    [client?.id, editing?.id, recordSmsVars, teamId],
+    [client?.id, smsAppointmentId, recordSmsVars, teamId],
   );
 
   // Keep the editable total in sync with catalog pricing until the operator
@@ -2927,8 +2933,8 @@ export default function BookScreen() {
                   блок — что мы уже отправили ему или не отправили»). С 03.10 —
                   только история её нынешнему клиенту; отправка — у трубки
                   клиента. Только у сохранённой записи с клиентом. */}
-              {editing?.id && client && recordSmsContext ? (
-                <SmsRecordBlock context={recordSmsContext} />
+              {editing?.id && client ? (
+                <SmsRecordBlock appointmentId={editing.id} clientId={client.id} />
               ) : null}
 
               {/* ОТМЕНЫ И УДАЛЕНИЯ НА СТРАНИЦЕ НЕТ (владелец 2026-09-06: «этот

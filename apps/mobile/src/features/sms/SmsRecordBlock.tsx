@@ -6,7 +6,6 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { useTeams } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 import { useAppointmentSms, type SmsHistoryItem } from "./sms-account";
-import type { SmsContext } from "./SmsCompose";
 import { SmsHistoryRow, when } from "./SmsHistoryRow";
 import { SmsMessageSheet } from "./SmsMessageSheet";
 
@@ -59,15 +58,17 @@ function Empty() {
 }
 
 export function SmsRecordBlock({
-  context,
+  appointmentId,
+  clientId,
 }: {
-  /** Поля записи, её id, клиент и календарь. */
-  context: SmsContext;
+  /** Сохранённая запись: её SMS. */
+  appointmentId: string;
+  /** Клиент на экране — сменили и не сохранили, всё равно его SMS. */
+  clientId: string | null;
 }) {
-  const log = useAppointmentSms(context.appointmentId);
+  const log = useAppointmentSms(appointmentId);
   const { data: teams = [] } = useTeams();
   const [open, setOpen] = useState<SmsHistoryItem | null>(null);
-  const clientId = context.clientId ?? null;
   // Только нынешнему клиенту записи; у старых строк без клиента — как было.
   const messages = (log.data?.messages ?? []).filter((m) => !m.clientId || m.clientId === clientId);
   const answer = log.data?.clientAnswer ?? null;
