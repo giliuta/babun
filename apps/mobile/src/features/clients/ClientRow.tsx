@@ -97,6 +97,11 @@ export default function ClientRow({
     mark?.kind === "unclosed" ? t.warning : mark?.kind === "ahead" ? t.sub : t.accent;
   const MarkIcon = mark?.kind === "ahead" ? CalendarClock : Clock;
   const phoneShown = cardFields.phone && client.phone.trim() !== "";
+  // НОМЕР ПАРТНЁРА ЗАКРЫТ, НО ОТКРЫВАЕТСЯ (блок «Клиент: Видит», 02.10): в
+  // строке — точки, как на его карточке (`LockedPhoneRow`) и в шторке права;
+  // цифры — на карточке, по одному. Пустое место читалось как «номера нет»
+  // (владелец 03.10, «его глазами»).
+  const phoneLocked = cardFields.phone && client.contacts_hidden === null && client.phone.trim() === "";
   // Место номера — под самый длинный номер при крупном тексте телефона
   // (ограничен тем же 1.3, что и сами строки).
   const { fontScale } = useWindowDimensions();
@@ -184,7 +189,7 @@ export default function ClientRow({
               под самый длинный номер («+357 99 999 999», «+7 916 123 45 67»),
               дата начинается за ним в одной точке у каждой строки — даже у
               клиента без номера. */}
-          {phoneShown || mark ? (
+          {phoneShown || phoneLocked || mark ? (
             <View className="mt-0.5 flex-row items-center">
               <View style={{ width: phoneColumn }}>
                 {phoneShown ? (
@@ -194,6 +199,14 @@ export default function ClientRow({
                     style={{ fontSize: 14, color: t.sub, fontVariant: ["tabular-nums"] }}
                   >
                     {formatPhoneForDisplay(client.phone, country)}
+                  </Text>
+                ) : phoneLocked ? (
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    numberOfLines={1}
+                    style={{ fontSize: 14, color: t.faint }}
+                  >
+                    •• ••• •••
                   </Text>
                 ) : null}
               </View>

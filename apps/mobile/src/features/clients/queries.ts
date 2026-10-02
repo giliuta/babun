@@ -66,6 +66,7 @@ import { useClientsScopeOrNull } from "./company-scope";
 import {
   activeCompanyScope,
   capabilitiesOf,
+  memberScope,
   offlineForeignWriteMessage,
   viewKeyOf,
   type ClientsCompanyKind,
@@ -74,6 +75,7 @@ import {
 import { masterClientJsonToClient } from "@/features/settings/master-reference";
 import { isPhoneTakenError } from "@/features/clients/client-create-errors";
 import { parseClientBlocks } from "@/features/clients/client-block-access";
+import { clientsAccessOf } from "@/features/clients/clients-access";
 import { inMirrorView, mirrorMemberClient } from "@/features/access/mirror/mirror-client";
 import { useMirrorClientScope } from "@/features/access/mirror/use-mirror-client-scope";
 import { refreshRevealedContacts } from "@/features/clients/revealed-contacts";
@@ -159,7 +161,23 @@ function useQueryScope(): QueryScope {
   const activeTenantId = useTenantId();
   const roleQuery = useCurrentRole();
   const activeRole = roleQuery.data;
+  const mirror = useMirror();
   if (scope) return scopeOf(scope);
+  // ЗЕРКАЛО ВНЕ ВКЛАДКИ (выбор клиента в записи и календаре). Дверь мастера
+  // (`list_master_clients_safe`) по токену владельца отдаёт пусто — в
+  // «его глазами» выбор клиента был пуст (владелец 03.10). Источник — тот
+  // же, что собирает вкладка «Клиенты» в зеркале: он партнёр этой компании,
+  // а строки доводит до его прав покров зеркала (`useMirroredMemberMap`).
+  if (mirror && activeTenantId) {
+    const mirrored = memberScope(
+      activeTenantId,
+      mirror.role,
+      { isOwner: false, ...clientsAccessOf(mirror.map) },
+      new Map(),
+      activeTenantId,
+    );
+    if (mirrored) return scopeOf(mirrored);
+  }
   return {
     tenantId: activeTenantId,
     role: activeRole,

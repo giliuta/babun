@@ -174,18 +174,30 @@ export function shiftDay(day: string, days: number): string {
 
 export function mirrorView(map: MemberAccessMap, data: MirrorClientData): MirrorView {
   // Окно едет вместе с днём (02.10): «2 недели» и «Месяц» до и после записи.
-  const windows: Partial<Record<MirrorScope, readonly [string, string]>> = {
-    week: [shiftDay(data.today, -7), shiftDay(data.today, 7)],
-    near: [shiftDay(data.today, -14), shiftDay(data.today, 14)],
-    month: [shiftMonth(data.today, -1), shiftMonth(data.today, 1)],
-    quarter: [shiftMonth(data.today, -3), shiftMonth(data.today, 3)],
-    half: [shiftMonth(data.today, -6), shiftMonth(data.today, 6)],
-  };
+  // Окна считаются, только когда день известен: у человека, у которого все
+  // команды «Без ограничения», дня нет вовсе, и сдвиг пустой строки бросал
+  // «Date value out of bounds» — набор не считался, и список в зеркале был
+  // пуст (владелец 03.10: «почему „Пока нет клиентов"»).
+  const windows: Partial<Record<MirrorScope, readonly [string, string]>> = data.today
+    ? {
+        week: [shiftDay(data.today, -7), shiftDay(data.today, 7)],
+        near: [shiftDay(data.today, -14), shiftDay(data.today, 14)],
+        month: [shiftMonth(data.today, -1), shiftMonth(data.today, 1)],
+        quarter: [shiftMonth(data.today, -3), shiftMonth(data.today, 3)],
+        half: [shiftMonth(data.today, -6), shiftMonth(data.today, 6)],
+      }
+    : {};
   const teams = new Map<string, TeamScope>();
   for (const { teamId, scope } of mirrorOpenTeams(map)) {
+    // «Без ограничения» — вся команда; окно без дня — никого (закрыто, а не
+    // распахнуто).
+    if (scope === "own" || scope === "all") {
+      teams.set(teamId, { ids: null });
+      continue;
+    }
     const window = windows[scope];
     if (!window) {
-      teams.set(teamId, { ids: null });
+      teams.set(teamId, { ids: new Set() });
       continue;
     }
     const ids = new Set<string>();

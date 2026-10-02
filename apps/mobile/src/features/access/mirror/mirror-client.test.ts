@@ -166,6 +166,15 @@ describe("зеркало: какие клиенты в его наборе (ка
     assert.deepEqual(ids(m, { appointments: [appt("c4", "A", "2026-09-30")] }), ["c1", "c2", "c3"]);
   });
 
+  test("«Без ограничения» без дня — как хук и зовёт: набор считается, не падает (03.10)", () => {
+    // Хук не читает день, когда окон нет; раньше сдвиг пустой строки бросал
+    // «Date value out of bounds», и список зеркала был пуст.
+    const m = map({ A: { clients: "read", "clients.scope": "own" } });
+    assert.deepEqual(ids(m, { today: "" }), ["c1", "c2", "c3"]);
+    // Окно без дня — закрыто, а не распахнуто.
+    assert.deepEqual(ids(map({ A: { clients: "read", "clients.scope": "week" } }), { today: "" }), []);
+  });
+
   test("база закрыта — никого", () => {
     assert.deepEqual(ids(map({ A: { clients: "off", "clients.scope": "own" } })), []);
   });

@@ -105,7 +105,7 @@ export async function fetchTeams(
 }
 
 export function useTeams(opts?: { includeInactive?: boolean }) {
-  const { tenantId, role, ready, client } = useReferenceCompany();
+  const { tenantId, role: companyRole, ready, client } = useReferenceCompany();
   const includeInactive = !!opts?.includeInactive;
   // ЗЕРКАЛО ПОКАЗЫВАЕТ ТОЛЬКО ЕГО КАЛЕНДАРИ. Список приходит по токену
   // ВЛАДЕЛЬЦА, то есть полный: в предпросмотре лента показывала команды, к
@@ -126,6 +126,12 @@ export function useTeams(opts?: { includeInactive?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [includeInactive, attached ? [...attached].sort().join(",") : null],
   );
+  // ДАННЫЕ ЗЕРКАЛА ЧИТАЕТ ВЛАДЕЛЕЦ («права его, данные ваши»). Дверь команд
+  // сотрудника (`list_operational_teams_safe`) по токену владельца отдаёт
+  // пусто — в зеркале у партнёра не было ни одной команды, а с ними и
+  // клиентов (владелец 03.10). Список берётся владельческий и режется по его
+  // прикреплениям выше.
+  const role: UserRole | null | undefined = attached ? "owner" : companyRole;
   return useQuery({
     // ОДИН ЗАПРОС НА ОБА ВАРИАНТА (2026-09-15). Календарь зовёт хук и так, и
     // с архивом — это были два запроса за одной таблицей в каждой волне после
