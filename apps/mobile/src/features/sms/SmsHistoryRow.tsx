@@ -48,7 +48,10 @@ export function SmsHistoryRow({
     : compact
       ? (item.templateName ?? (item.trigger === "manual" ? "SMS" : triggerWords(item.trigger)))
       : triggerWords(item.trigger);
-  const meta = [showClient ? triggerWords(item.trigger) : null, when(item.createdAt), phone || null]
+  // В общей истории (кому — заголовком) повод уступает имени шаблона, если
+  // строка короткая: «За день · 3 окт, 00:50».
+  const reason = compact ? (item.templateName ?? triggerWords(item.trigger)) : triggerWords(item.trigger);
+  const meta = [showClient ? reason : null, when(item.createdAt), phone || null]
     .filter(Boolean)
     .join(" · ");
   const failed = isFailure(item.status);

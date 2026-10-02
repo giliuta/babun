@@ -12,12 +12,14 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
+import { useTeams } from "@/features/reference/queries";
 import { usePlanAllows } from "@/features/settings/tenant";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { notify } from "@/lib/notify";
-import { openSmsCheckout, useSmsAccount, useSmsHistory } from "./sms-account";
+import { openSmsCheckout, useSmsAccount, useSmsHistory, type SmsHistoryItem } from "./sms-account";
 import { balanceWarning } from "./sms-model";
 import { SmsHistoryRow } from "./SmsHistoryRow";
+import { SmsMessageSheet } from "./SmsMessageSheet";
 import { SmsBalanceCard, SmsTariffCard } from "./SmsParts";
 import { SmsTopupSheet } from "./SmsTopupSheet";
 
@@ -50,6 +52,10 @@ export function SmsScreen() {
   const account = useSmsAccount();
   const history = useSmsHistory(5);
   const [topupOpen, setTopupOpen] = useState(false);
+  // Тап по строке истории — тот же лист сообщения, что в записи и у клиента
+  // (владелец 03.10: «такую же шторку — везде»).
+  const [open, setOpen] = useState<SmsHistoryItem | null>(null);
+  const { data: teams = [] } = useTeams();
   const awaitingPayment = useRef(false);
 
   // Возврат с оплаты на сайте: Stripe привёл обратно — баланс пересчитает
@@ -148,7 +154,7 @@ export function SmsScreen() {
           {(history.data ?? []).map((item, index) => (
             <View key={item.id}>
               {index > 0 ? <Divider inset={16} /> : null}
-              <SmsHistoryRow item={item} />
+              <SmsHistoryRow item={item} compact onPress={() => setOpen(item)} />
             </View>
           ))}
           {(history.data ?? []).length > 0 ? <Divider inset={48} /> : null}
@@ -179,6 +185,11 @@ export function SmsScreen() {
         priceCents={data.priceCents}
         onClose={() => setTopupOpen(false)}
         onPay={(cents) => void topup(cents)}
+      />
+      <SmsMessageSheet
+        item={open}
+        teamName={(teamId) => teams.find((x) => x.id === teamId)?.name ?? null}
+        onClose={() => setOpen(null)}
       />
     </Screen>
   );
