@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { MoreHorizontal, Phone, UserRound, X } from "lucide-react-native";
+import { Phone, UserRound, X } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { ChooseRow } from "@/components/ui/ChooseRow";
@@ -27,8 +27,12 @@ import { useThemeColors } from "@/theme/colors";
 // «не надо создавать с нуля что-то новое, копируй то, что мы уже создали».
 // Третьей копии заводить было нельзя, поэтому блок стал компонентом, а обе
 // прежние копии — его вызовами. Вид не менялся: порядок строк (имя → вводная
-// о человеке → телефон), кнопка связи, «…» в карточку и «X» перенесены
-// дословно.
+// о человеке → телефон), кнопка связи и «X» перенесены дословно.
+//
+// КАРТОЧКА КЛИЕНТА — ДОЛГИМ НАЖАТИЕМ (владелец 03.10: «убери эти три точки…
+// чтобы зайти в карточку клиента — зажать на клиента, а если один раз нажать —
+// выбор клиента»). Кружка «…» в хвосте строки больше нет: тап по клиенту —
+// выбор, удержание — карточка (VoiceOver — действием «Карточка клиента»).
 //
 // ЧЕГО БЛОК НЕ ЗНАЕТ. Ни записи, ни события, ни чека. Заметку клиента он не
 // пишет сам — её передают готовым узлом (`note`): у записи это поле есть, у
@@ -62,7 +66,7 @@ export function ClientBlock({
    *  для всех, блок по праву). Звонок и карточка при этом остаются: это
    *  дорога к человеку, а не правка записи. */
   onPick?: () => void;
-  /** Нет — кружка «…» нет: карточку клиента человеку не открыть. */
+  /** Удержание строки — карточка клиента. Нет — карточку человеку не открыть. */
   onOpenCard?: () => void;
   /** «X» — снять выбранного. Нет обработчика — нет и кнопки: у записи клиента
    *  меняют выбором другого, а не пустотой. */
@@ -91,17 +95,40 @@ export function ClientBlock({
         <View className="flex-row items-center">
           <Pressable
             className="flex-1 flex-row items-center px-4 py-2.5"
-            disabled={!onPick}
-            onPress={() => {
-              if (!onPick) return;
-              onPick();
-              haptics.tap();
-            }}
-            accessibilityRole={onPick ? "button" : "text"}
+            disabled={!onPick && !onOpenCard}
+            onPress={
+              onPick
+                ? () => {
+                    onPick();
+                    haptics.tap();
+                  }
+                : undefined
+            }
+            onLongPress={
+              onOpenCard
+                ? () => {
+                    haptics.tap();
+                    onOpenCard();
+                  }
+                : undefined
+            }
+            accessibilityRole={onPick || onOpenCard ? "button" : "text"}
             accessibilityLabel={`Клиент: ${shown.full_name || "без имени"}. ${
               summary ?? shown.phone ?? "ещё не обслуживали"
             }`}
-            accessibilityHint={onPick ? "Открывает выбор клиента" : undefined}
+            accessibilityHint={
+              onPick && onOpenCard
+                ? "Открывает выбор клиента; удерживайте — карточка клиента"
+                : onPick
+                  ? "Открывает выбор клиента"
+                  : onOpenCard
+                    ? "Удерживайте — карточка клиента"
+                    : undefined
+            }
+            accessibilityActions={onOpenCard ? [{ name: "longpress", label: "Карточка клиента" }] : undefined}
+            onAccessibilityAction={(event) => {
+              if (event.nativeEvent.actionName === "longpress") onOpenCard?.();
+            }}
           >
             <View className="flex-1">
               <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
@@ -155,20 +182,6 @@ export function ClientBlock({
                 teamId={shown.team_id ?? null}
               />
             </View>
-          ) : null}
-          {/* «…» — карточка клиента: телефоны, объекты, история, долг.
-              Снаружи нажимаемой области строки, иначе VoiceOver склеит их в
-              один элемент. */}
-          {onOpenCard ? (
-            <Pressable
-              onPress={onOpenCard}
-              className={`${gap} items-center justify-center self-center rounded-full`}
-              style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
-              accessibilityRole="button"
-              accessibilityLabel={`Карточка клиента ${shown.full_name || "без имени"}`}
-            >
-              <MoreHorizontal color={t.body} size={ICON.sm} />
-            </Pressable>
           ) : null}
           {onClear ? (
             <Pressable
