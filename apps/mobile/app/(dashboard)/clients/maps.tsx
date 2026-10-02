@@ -2,6 +2,7 @@ import { ToggleListScreen } from "@/components/ui/ToggleListScreen";
 import { useLocalSearchParams } from "expo-router";
 import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
 import { useClientSettingLevel } from "@/features/clients/use-client-settings";
+import { useTeams } from "@/features/reference/queries";
 import type { MapService } from "@babun/shared/common/utils/map-links";
 import {
   canDisableMapService,
@@ -29,6 +30,8 @@ function ClientMapsScreen() {
   // владелец 30.09); без команды — набор компании.
   const { team } = useLocalSearchParams<{ team?: string }>();
   const teamId = team || null;
+  const { data: ownTeams = [] } = useTeams();
+  const teamName = ownTeams.find((tm) => tm.id === teamId)?.name;
   // «Только видит»: галки и порядок как есть, без правки.
   const readOnly = useClientSettingLevel("maps", teamId) !== "write";
   const order = useMapServicesOrder(teamId);
@@ -59,6 +62,7 @@ function ClientMapsScreen() {
   return (
     <ToggleListScreen
       title="Карты для маршрута"
+      subtitle={teamName}
       sections={[
         { items, onReorder: readOnly ? undefined : (ids) => reorder.mutate(ids as MapService[]) },
       ]}

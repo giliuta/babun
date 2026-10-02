@@ -80,7 +80,7 @@ export default function ClientRow({
   trailing?: React.ReactNode;
 }) {
   const t = useThemeColors();
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(client.team_id ?? null);
   const swipeRef = useRef<SwipeableMethods | null>(null);
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
 

@@ -2,6 +2,7 @@ import { ToggleListScreen } from "@/components/ui/ToggleListScreen";
 import { useLocalSearchParams } from "expo-router";
 import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
 import { useClientSettingLevel } from "@/features/clients/use-client-settings";
+import { useTeams } from "@/features/reference/queries";
 import {
   contactWayDef,
   isWayOffered,
@@ -39,6 +40,8 @@ function ClientChannelsScreen() {
   // владелец 30.09); без команды — набор компании.
   const { team } = useLocalSearchParams<{ team?: string }>();
   const teamId = team || null;
+  const { data: ownTeams = [] } = useTeams();
+  const teamName = ownTeams.find((tm) => tm.id === teamId)?.name;
   // «Только видит»: галки и порядок как есть, без правки.
   const readOnly = useClientSettingLevel("ways", teamId) !== "write";
   const order = useWaysOrder(teamId);
@@ -72,7 +75,9 @@ function ClientChannelsScreen() {
 
   return (
     <ToggleListScreen
-      title="Способы связи"
+      // «Связь» — как строка шестерёнки (02.10, «настройки по функциям»).
+      title="Связь"
+      subtitle={teamName}
       sections={[
         { items, onReorder: readOnly ? undefined : (ids) => reorder.mutate(ids as ContactWayId[]) },
       ]}

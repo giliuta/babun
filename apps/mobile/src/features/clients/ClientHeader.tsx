@@ -103,7 +103,7 @@ export default function ClientHeader({
 }: ClientHeaderProps) {
   const t = useThemeColors();
   const toast = useToast();
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(client.team_id ?? null);
   const copy = useCopyValue();
   // Код страны отдельно, цифры отдельно — для строки «Телефон».
   const phone = phoneParts(client.phone, country);

@@ -44,7 +44,7 @@ export function SmsClientBlock({
 }) {
   const t = useThemeColors();
   const toast = useToast();
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(client.team_id ?? null);
   const { data: teams = [] } = useTeams();
   // Компания карточки: клиент работодателя читается под её заголовком.
   const cardTenantId = useClientsScopeOrNull()?.tenantId ?? null;

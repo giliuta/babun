@@ -644,6 +644,8 @@ describe("экраны: вкладка «Клиенты» открывается
       "channels.tsx",
       "maps.tsx",
       "object-types.tsx",
+      "objects-settings.tsx",
+      "tags.tsx",
     ]) {
       const source = read(file);
       // Подстраницы шестерёнки идут через дверь права своей строки — она
@@ -658,7 +660,9 @@ describe("экраны: вкладка «Клиенты» открывается
   test("дверь права строки шестерёнки стоит на воротах источника", () => {
     const door = readFileSync(resolve(here, "ClientSettingsRoute.tsx"), "utf8");
     assert.match(door, /<ClientsCompanyRoute kind="tab">/);
-    assert.match(door, /level === "hidden"/, "«Скрыты» открывались бы адресом");
+    // Страница нескольких строк («Объекты», 02.10) закрыта, только если
+    // скрыты все её строки.
+    assert.match(door, /rows\.every\(\(key\) => levels\[key\] === "hidden"\)/, "«Скрыты» открывались бы адресом");
   });
 
   test("общий адрес из записи держит компанию календаря", () => {

@@ -70,7 +70,7 @@ export default function ClientContactRow({
   // «Способы связи» — команды клиента (у каждой команды свои, 30.09).
   const enabled = useEnabledChannels(client.team_id ?? null);
   const guardedBook = useGuardedBookingNav();
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(client.team_id ?? null);
   const chat = resolveChannels(client, enabled, { country }).find(
     (c) => c.id === "chat",
   );

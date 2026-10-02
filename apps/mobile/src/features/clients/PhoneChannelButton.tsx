@@ -59,7 +59,7 @@ export default function PhoneChannelButton({
   // Шаблоны, заполненные записью или карточкой, где стоит номер (STORY-089).
   const smsOptions = useSmsOptions(smsName);
   const enabled = useEnabledChannels(teamId);
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(teamId);
   const channels = resolveChannelsForNumber(number, enabled, {
     telegramUsername,
     country,

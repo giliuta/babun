@@ -58,7 +58,7 @@ export function ContactsImportSheet({
 }) {
   const t = useThemeColors();
   const toast = useToast();
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(teamId);
   const { data: clients = [] } = useClients();
   const create = useCreateClient();
 

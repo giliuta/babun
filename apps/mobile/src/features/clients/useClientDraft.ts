@@ -185,7 +185,7 @@ export function useClientDraft(
   // Код страны берём из профиля КОМПАНИИ (tenants.country), а не из константы
   // продукта: у кипрской фирмы поле открывается с «+357», у греческой — с
   // «+30». Номер, введённый со своим «+», всё равно уважается как есть.
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(newClientTeam);
   const dial = countryDialCode(country);
   const [draft, setDraft] = useState<Client>(() =>
     createBlankClient({

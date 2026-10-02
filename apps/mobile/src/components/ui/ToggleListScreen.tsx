@@ -171,9 +171,12 @@ function Section({
 // касанием, а прочитанная один раз подсказка потом просто занимает экран.
 export function ToggleListScreen({
   title,
+  subtitle,
   sections,
 }: {
   title: string;
+  /** Чей это набор — имя команды (настройки клиентов у каждой команды свои). */
+  subtitle?: string;
   sections: ToggleListSection[];
 }) {
   // Пока строку тянут, список не должен уезжать под пальцем.
@@ -181,7 +184,7 @@ export function ToggleListScreen({
 
   return (
     <Screen>
-      <ScreenHeader title={title} />
+      <ScreenHeader title={title} subtitle={subtitle} />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}

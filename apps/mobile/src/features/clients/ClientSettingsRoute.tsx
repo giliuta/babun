@@ -4,7 +4,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ClientsCompanyRoute } from "./ClientsCompanyRoute";
 import type { ClientSettingRow } from "./settings-levels";
-import { useClientSettingLevel } from "./use-client-settings";
+import { useClientSettingLevelsOf } from "./use-client-settings";
 
 // ПОДСТРАНИЦА ШЕСТЕРЁНКИ КЛИЕНТОВ — ЗА ПРАВОМ СВОЕЙ СТРОКИ (владелец 01.10).
 // Строки «Скрыты» на шестерёнке нет, но адрес подстраницы живёт и без неё —
@@ -16,7 +16,9 @@ export function ClientSettingsRoute({
   row,
   children,
 }: {
-  row: ClientSettingRow;
+  /** Право строки; страница нескольких строк («Объекты»: тумблер, типы,
+   *  карты) открыта, если открыта хоть одна. */
+  row: ClientSettingRow | readonly ClientSettingRow[];
   children: ReactNode;
 }) {
   return (
@@ -26,10 +28,17 @@ export function ClientSettingsRoute({
   );
 }
 
-function SettingDoor({ row, children }: { row: ClientSettingRow; children: ReactNode }) {
+function SettingDoor({
+  row,
+  children,
+}: {
+  row: ClientSettingRow | readonly ClientSettingRow[];
+  children: ReactNode;
+}) {
   const { team } = useLocalSearchParams<{ team?: string }>();
-  const level = useClientSettingLevel(row, team || null);
-  if (level === "hidden") {
+  const levels = useClientSettingLevelsOf()(team || null);
+  const rows: readonly ClientSettingRow[] = typeof row === "string" ? [row] : row;
+  if (rows.every((key) => levels[key] === "hidden")) {
     // Те же слова, что у пустой шестерёнки: страница остаётся собой.
     return (
       <Screen edges={["top"]}>

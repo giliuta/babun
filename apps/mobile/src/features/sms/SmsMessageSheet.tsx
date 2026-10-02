@@ -61,7 +61,7 @@ export function SmsMessageSheet({
   const router = useRouter();
   const toast = useToast();
   const send = useSendSmsViaService();
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(item?.teamId ?? null);
   const smsInPlan = usePlanAllows("sms");
   // Закрытый лист дорисовывает последнее сообщение, пока уезжает вниз.
   const [shown, setShown] = useState<SmsHistoryItem | null>(item);

@@ -74,7 +74,7 @@ export function CrewWorkRecord({
   onOpenClient: (clientId: string) => void;
 }) {
   const t = useThemeColors();
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(appointment.team_id ?? null);
   const toast = useToast();
   const update = useUpdateAppointment();
   const [comment, setComment] = useState(appointment.comment ?? "");

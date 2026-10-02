@@ -117,7 +117,7 @@ export function ClientExtraContacts({
   teamId?: string | null;
 }) {
   const t = useThemeColors();
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(teamId);
   const copy = useCopyValue();
 
   const extras = client.phones ?? EMPTY_PHONES;

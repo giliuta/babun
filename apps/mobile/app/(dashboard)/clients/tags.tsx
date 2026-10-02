@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
+import { EyeOff, RotateCcw, Tags, Trash2 } from "lucide-react-native";
 import type { ClientTag } from "@babun/shared/local/clients";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
@@ -31,7 +31,11 @@ import {
   useUpdateClientTag,
 } from "@/features/clients/queries";
 import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
-import { useClientSettingLevel } from "@/features/clients/use-client-settings";
+import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings";
+import { useClientFunctionOn, useToggleClientFunction } from "@/features/clients/client-functions";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useTeams } from "@/features/reference/queries";
 
 // ТЕГИ КЛИЕНТОВ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
@@ -63,7 +67,7 @@ type Editing = { mode: "create" } | { mode: "edit"; tag: ClientTag };
 // (STORY-082).
 export default function ClientTagsScreenRoute() {
   return (
-    <ClientSettingsRoute row="tags">
+    <ClientSettingsRoute row={["tags", "card"]}>
       <ClientTagsScreen />
     </ClientSettingsRoute>
   );
@@ -83,7 +87,15 @@ function ClientTagsScreen() {
     null;
   // «ТОЛЬКО ВИДИТ» (владелец 01.10, как метки в «Настройках команды»): ни
   // кнопки внизу, ни свайпов, ни ручек, строка не открывает редактор.
-  const readOnly = useClientSettingLevel("tags", teamId) !== "write";
+  const levels = useClientSettingLevelsOf()(teamId);
+  const readOnly = levels.tags !== "write";
+  const showTags = levels.tags !== "hidden";
+  // «МЕТКА И ТЕГ» — ОДНА ФУНКЦИЯ КАРТОЧКИ (владелец 02.10, «настройки по
+  // функциям»): есть ли блок на странице клиента — здесь же, над тегами.
+  // Право тумблера — «Карточка клиента».
+  const labelsOn = useClientFunctionOn("client_labels", teamId);
+  const toggleLabels = useToggleClientFunction(teamId);
+  const teamName = ownTeams.find((tm) => tm.id === teamId)?.name;
   const createTag = useCreateClientTag();
   const updateTag = useUpdateClientTag();
   const deleteTag = useDeleteClientTag();
@@ -196,9 +208,27 @@ function ClientTagsScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Теги клиентов" />
+      <ScreenHeader title="Метка и тег" subtitle={teamName} />
 
-      {tagsQuery.isLoading ? (
+      {levels.card !== "hidden" ? (
+        <SectionCard>
+          <SettingsRow
+            tile={SETTINGS_TILE.purple}
+            icon={Tags}
+            title="Метка и тег в карточке"
+            sub={labelsOn ? "Блок на странице клиента" : "Блока нет, данные остаются"}
+            toggle={{
+              value: labelsOn,
+              onChange: (on) => toggleLabels.mutate({ key: "client_labels", on }),
+              disabled: levels.card !== "write",
+            }}
+          />
+        </SectionCard>
+      ) : null}
+
+      {!showTags ? (
+        <View style={{ flex: 1 }} />
+      ) : tagsQuery.isLoading ? (
         <EmptyState state="loading" fill />
       ) : tagsQuery.isError ? (
         <EmptyState

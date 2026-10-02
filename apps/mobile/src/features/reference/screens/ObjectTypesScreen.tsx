@@ -210,7 +210,7 @@ export function ObjectTypesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Типы объектов" />
+      <ScreenHeader title="Типы объектов" subtitle={ownTeams.find((tm) => tm.id === teamId)?.name} />
 
       {isLoading ? (
         <EmptyState state="loading" fill />

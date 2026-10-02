@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { RecordMark } from "./RecordMark";
 import { AppearanceTile, appearanceRowFill } from "./AppearanceSheet";
+import { SwitchControl } from "./SwitchControl";
 
 // СТРОКА-ДВЕРЬ С ПЛИТКОЙ — ОДНА НА ВЕСЬ ПРОДУКТ.
 //
@@ -59,6 +60,7 @@ export function SettingsRow({
   onA11yAction,
   onPress,
   onLongPress,
+  toggle,
 }: {
   /** Цвет заливки плитки (глиф внутри — белый) либо `"neutral"`: голый глиф
    *  чернилами, без диска. По умолчанию нейтральная — цвет заводится
@@ -121,6 +123,11 @@ export function SettingsRow({
    *  строка, живущая только в долгом нажатии, недостижима ни для VoiceOver,
    *  ни для Voice Control. */
   onLongPress?: () => void;
+  /** ТУМБЛЕР ВМЕСТО ШЕВРОНА — функция, у которой два положения («Заметка»
+   *  в карточке клиента: есть или нет, 02.10). Строка та же — плитка,
+   *  название, подпись; нажимается вся, как `SwitchRow`. `disabled` —
+   *  «Только видит»: положение видно, не переключается. */
+  toggle?: { value: boolean; onChange: (value: boolean) => void; disabled?: boolean };
 }) {
   const t = useThemeColors();
   const neutral = tile === "neutral";
@@ -263,6 +270,28 @@ export function SettingsRow({
       {valueNode}
     </>
   );
+
+  if (toggle) {
+    const off = !!toggle.disabled;
+    return (
+      <Pressable
+        onPress={off ? undefined : () => toggle.onChange(!toggle.value)}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: toggle.value, disabled: off }}
+        accessibilityLabel={label}
+        style={({ pressed }) => ({
+          ...layout,
+          backgroundColor: pressed && !off ? t.pressed : "transparent",
+        })}
+      >
+        {body}
+        {/* Показание, а не цель касания: жест и озвучку несёт строка. */}
+        <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <SwitchControl value={toggle.value} disabled={off} />
+        </View>
+      </Pressable>
+    );
+  }
 
   // ЗАГЛУШКА: та же строка, но без роли кнопки, отклика на касание и шеврона.
   // Шеврон обещает, что за строкой что-то есть, — обещать нечего.

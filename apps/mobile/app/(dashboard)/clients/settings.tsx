@@ -3,16 +3,20 @@ import { ScrollView } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import {
   Archive,
-  CalendarClock,
   Download,
   Eye,
+  FileText,
   Home,
   MessageCircle,
   Navigation,
-  Tags,
+  Paperclip,
   Smartphone,
+  StickyNote,
+  Tags,
   Trash2,
   Upload,
+  UserRound,
+  UsersRound,
 } from "lucide-react-native";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { Screen } from "@/components/ui/Screen";
@@ -30,6 +34,7 @@ import {
 } from "@/features/clients/card-prefs";
 import {
   contactWayDef,
+  isWayOffered,
   useEnabledWays,
 } from "@/features/clients/contact-ways";
 import {
@@ -60,38 +65,27 @@ import { useFeatureOn } from "@/features/settings/company-features";
 import { useLocationLabels } from "@/features/settings/local-settings";
 import {
   useClientFunctionOn,
+  useToggleClientFunction,
   type ClientFunctionKey,
 } from "@/features/clients/client-functions";
-import {
-  SERVICE_MONTH_CHOICES,
-  serviceMonthsLabel,
-} from "@/features/clients/service-default";
+import { serviceMonthsLabel } from "@/features/clients/service-default";
 import { useTeamServiceMonths } from "@/features/clients/use-service-default";
-import { PickerSheet } from "@/components/ui/PickerSheet";
+import {
+  labelsSummary,
+  listRowSummary,
+  objectsSummary,
+} from "@/features/clients/settings-summary";
 import { anyClientSetting, clientSettingLevels } from "@/features/clients/settings-levels";
 import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings";
-import { useThemeColors } from "@/theme/colors";
 
-// Подпись «Карточки клиента» называет выключенные блоки теми же словами,
-// что строки на её странице.
-const BLOCK_WORDS: [ClientFunctionKey, string][] = [
-  ["client_note", "заметка"],
-  ["client_people", "люди"],
-  ["client_objects", "объекты"],
-  ["client_files", "файлы"],
-  ["client_requisites", "реквизиты"],
-  ["client_labels", "метка и тег"],
-  ["client_personal", "личное"],
-];
-
-// v811 — «Настройки клиентов». Открывается шестерёнкой из хедера списка
-// (порт web ClientsSettingsScreen). Группы:
-//   • Отображение — Что показывать (live card-fields) · Теги клиентов.
-//     Сортировка ЗДЕСЬ НЕ живёт: она первая строка листа «Фильтры»
-//     (решение владельца 2026-07-25), персист в sort-pref.ts.
-//   • Данные — Импорт CSV (мастер ImportWizardSheet: выбор файла →
-//     маппинг колонок → превью+валидация → импорт с прогрессом/резюмом).
-//     Экспорт CSV выполняется через системный share sheet.
+// «НАСТРОЙКИ КЛИЕНТОВ» — шестерёнка списка клиентов. С 02.10 разложены ПО
+// ФУНКЦИЯМ КАРТОЧКИ (владелец: «чтоб оно разделялось всё по функциям»):
+//   • Клиент — строка в списке, связь, заметка, личное;
+//   • Объекты — блок, типы, обслуживание и карты одной страницей;
+//   • Карточка — метка и тег, люди, файлы, реквизиты;
+//   • Данные — импорт, выгрузка, архив и корзина (только своей базы).
+// Сортировка ЗДЕСЬ НЕ живёт: она первая строка листа «Фильтры» (решение
+// владельца 2026-07-25).
 
 // Экран вкладки «Клиенты»: компанию называет источник, а не роль
 // (STORY-082).
@@ -195,10 +189,13 @@ function ClientsSettingsScreen() {
 function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: string | null }) {
   const router = useRouter();
   const toast = useToast();
-  const t = useThemeColors();
   // ХОЗЯЙСТВО БАЗЫ («Данные») — только своей компании (владелец 20.09).
   const caps = useClientsCapabilities();
   const objectsOn = useFeatureOn("objects");
+  // Выключено у всей компании (STORY-088) — строки функции нет вовсе.
+  const companyPeople = useFeatureOn("client_people");
+  const companyFiles = useFeatureOn("client_files");
+  const companyRequisites = useFeatureOn("client_requisites");
   const { data: ownTeams = [] } = useTeams();
   const setListTeam = useSetClientsTeam(ownTeams[0]?.tenant_id ?? null);
   const levels = useClientSettingLevelsOf()(teamId);
@@ -215,23 +212,18 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
     client_labels: useClientFunctionOn("client_labels", teamId),
     client_personal: useClientFunctionOn("client_personal", teamId),
   };
-  // Объекты, выключенные у компании, в подписи не числятся: их строки на
-  // странице блоков нет вовсе.
-  const offBlocks = BLOCK_WORDS.filter(
-    ([key]) => !blockOn[key] && (key !== "client_objects" || objectsOn),
-  ).map(([, word]) => word);
-  // Интервал обслуживания объектов — у команды (владелец 30.09).
+  const toggleFunction = useToggleClientFunction(teamId);
+  // Тумблер функции — право «Карточки клиента»: «Скрыты» — строки нет,
+  // «Только видит» — положение видно, не переключается.
+  const showCard = levels.card !== "hidden";
+  const functionToggle = (key: ClientFunctionKey) => ({
+    value: blockOn[key],
+    onChange: (on: boolean) => toggleFunction.mutate({ key, on }),
+    disabled: levels.card !== "write",
+  });
   const service = useTeamServiceMonths(teamId);
-  const [servicePicker, setServicePicker] = useState(false);
   const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields(teamId);
-  // Подпись «Типов объектов» — настоящие типы команды, а не образец.
   const { data: teamObjectTypes = [] } = useLocationLabels(teamId);
-  const objectTypeNames = teamObjectTypes.map((label) => label.name);
-  const rowFieldsOn = Object.values(prefs).filter(Boolean).length;
-  const cardSub = [
-    offBlocks.length === 0 ? "Все блоки" : `Без: ${offBlocks.join(", ")}`,
-    `в строке ${rowFieldsOn} из ${Object.keys(prefs).length}`,
-  ].join(" · ");
   const clientsQuery = useClients();
   const tagsQuery = useClientTags();
   const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
@@ -258,9 +250,15 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
   // Карты для маршрута: у кого-то весь навигатор — Google, и Яндекс в листе
   // только удлиняет каждый выезд (владелец 2026-08-02).
   const mapServices = useEnabledMapServices(teamId);
-  // Чем вообще связываются с клиентом — один набор на кнопку у номера и на
-  // плюс в карточке.
+  // Чем связываются с клиентом. Звонок в настройке не стоит (владелец
+  // 04.09: «идёт как стандарт») — и в подписи его нет.
   const enabledWays = useEnabledWays(teamId);
+  const waysSub = enabledWays
+    .filter((id) => isWayOffered(id))
+    .map((id) => contactWayDef(id))
+    .filter((def) => def && def.optional !== false)
+    .map((def) => def?.label)
+    .join(" · ");
 
   // Возврат на список с nonce-параметром — index открывает нужный шит.
   // Импорт идёт в команду, выбранную здесь: список открывается на ней, и
@@ -308,6 +306,13 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
     }
   };
 
+  // «Объекты» — одна дверь на всё про объекты (02.10): блок, типы, срок,
+  // карты. Выключенные у компании объекты уносят и строку; карты тогда —
+  // отдельной строкой у клиента (маршрут по адресу клиента остаётся).
+  const objectsRow =
+    objectsOn && (showCard || levels.objects !== "hidden" || levels.maps !== "hidden");
+  const mapsRowAlone = !objectsOn && levels.maps !== "hidden";
+
   return (
     <>
       {anyClientSetting(levels) ? (
@@ -315,21 +320,21 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
           className="flex-1"
           contentContainerStyle={{ paddingBottom: 24 }}
         >
-          {/* СТРОКА — ПО ЕЁ ПРАВУ В ЭТОЙ КОМАНДЕ (владелец 01.10): «Скрыты» —
-              строки нет, «Только видит» — страница открывается без правки. */}
+          {/* НАСТРОЙКИ ПО ФУНКЦИЯМ КАРТОЧКИ (владелец 02.10: «чтоб оно
+              разделялось всё по функциям»). Каждая функция клиента — своя
+              строка: два положения — тумблером, больше — дверью на свою
+              страницу. Строка — по её праву в этой команде (01.10):
+              «Скрыты» — строки нет, «Только видит» — без правки. */}
           <SettingsGroup
-            title="Отображение"
+            title="Клиент"
             rows={[
-              levels.card !== "hidden" ? (
+              showCard ? (
                 <SettingsRow
-                  key="card"
+                  key="row"
                   tile={SETTINGS_TILE.blue}
                   icon={Eye}
-                  // «КАРТОЧКА КЛИЕНТА», А НЕ «ЧТО ПОКАЗЫВАТЬ» (владелец 30.09:
-                  // «сделай то же самое, как в записи»): блоки страницы клиента
-                  // и строка списка — одна страница, как «Записи».
-                  title="Карточка клиента"
-                  sub={cardSub}
+                  title="Строка в списке"
+                  sub={listRowSummary(prefs)}
                   onPress={() => router.push(teamHref("/clients/card-fields"))}
                 />
               ) : null,
@@ -338,20 +343,12 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
                   key="ways"
                   tile={SETTINGS_TILE.green}
                   icon={MessageCircle}
-                  title="Способы связи"
-                  // НАБОР ОДИН, И ПОДПИСЬ ОДНА (владелец 2026-09-04: «зачем
-                  // „можно добавить в карточку“ или „у номера“ — немного
-                  // странно»). Раньше строка складывала два списка —
-                  // перечисление каналов и счётчик полей — и читалась как каша
-                  // из двух настроек.
-                  sub={enabledWays
-                    .map((id) => contactWayDef(id)?.label)
-                    .filter(Boolean)
-                    .join(" · ")}
+                  title="Связь"
+                  sub={waysSub || "Только звонок"}
                   onPress={() => router.push(teamHref("/clients/channels"))}
                 />
               ) : null,
-              levels.maps !== "hidden" ? (
+              mapsRowAlone ? (
                 <SettingsRow
                   key="maps"
                   tile={SETTINGS_TILE.blue}
@@ -361,64 +358,91 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
                   onPress={() => router.push(teamHref("/clients/maps"))}
                 />
               ) : null,
+              showCard ? (
+                <SettingsRow
+                  key="note"
+                  tile={SETTINGS_TILE.yellow}
+                  icon={StickyNote}
+                  title="Заметка"
+                  toggle={functionToggle("client_note")}
+                />
+              ) : null,
+              showCard ? (
+                <SettingsRow
+                  key="personal"
+                  tile={SETTINGS_TILE.indigo}
+                  icon={UserRound}
+                  title="Личное"
+                  sub="День рождения, источник"
+                  toggle={functionToggle("client_personal")}
+                />
+              ) : null,
             ]}
           />
 
-          {/* СПРАВОЧНИКИ — то, из чего собирается карточка: типы объектов
-              («Вилла», «Дом»), теги. Владелец 2026-08-02: «всё, что можно
-              делать в клиентах, потом редактировать и исправлять». Экраны
-              справочников общие с Кабинетом — заводить вторые не нужно, нужен
-              вход отсюда, из места, где ими пользуются. С 30.09 всё здесь —
-              у команды, выбранной лентой. Выключенные у компании объекты
-              уносят и свой справочник. */}
-          <SettingsGroup
-            title="Справочники"
-            rows={[
-              objectsOn && levels.objects !== "hidden" ? (
+          {objectsRow ? (
+            <SettingsGroup
+              title="Объекты"
+              rows={[
                 <SettingsRow
                   key="objects"
                   tile={SETTINGS_TILE.teal}
                   icon={Home}
-                  title="Типы объектов"
-                  sub={
-                    objectTypeNames.length > 0
-                      ? objectTypeNames.join(", ")
-                      : "Добавить первый тип"
-                  }
-                  onPress={() => router.push(teamHref("/clients/object-types"))}
-                />
-              ) : null,
-              // Раз в сколько месяцев обслуживать объект без своего
-              // интервала: на нём держится фильтр «Пора обслужить». Право то
-              // же, что у типов объектов; «Только видит» — значение без двери.
-              objectsOn && levels.objects !== "hidden" ? (
+                  title="Объекты"
+                  sub={objectsSummary({
+                    on: blockOn.client_objects,
+                    types: teamObjectTypes.map((label) => label.name),
+                    service: serviceMonthsLabel(service.months),
+                    maps: levels.maps !== "hidden" ? mapServicesSummary(mapServices) : "",
+                  })}
+                  onPress={() => router.push(teamHref("/clients/objects-settings"))}
+                />,
+              ]}
+            />
+          ) : null}
+
+          <SettingsGroup
+            title="Карточка"
+            rows={[
+              showCard || levels.tags !== "hidden" ? (
                 <SettingsRow
-                  key="service"
-                  tile={SETTINGS_TILE.orange}
-                  icon={CalendarClock}
-                  title="Обслуживание объектов"
-                  sub={serviceMonthsLabel(service.months)}
-                  onPress={levels.objects === "write" ? () => setServicePicker(true) : undefined}
-                />
-              ) : null,
-              levels.tags !== "hidden" ? (
-                <SettingsRow
-                  key="tags"
+                  key="labels"
                   tile={SETTINGS_TILE.purple}
                   icon={Tags}
-                  title="Теги клиентов"
+                  title="Метка и тег"
                   sub={
                     tagsQuery.isLoading
                       ? "Загрузка…"
-                      : tagsQuery.isError
-                        ? "Не удалось загрузить"
-                        : teamTags.length > 0
-                          ? `Создано: ${teamTags.length}`
-                          : levels.tags === "write"
-                            ? "Создать первый тег"
-                            : "Тегов пока нет"
+                      : labelsSummary(blockOn.client_labels, teamTags.length)
                   }
                   onPress={() => router.push(teamHref("/clients/tags"))}
+                />
+              ) : null,
+              showCard && companyPeople ? (
+                <SettingsRow
+                  key="people"
+                  tile={SETTINGS_TILE.blue}
+                  icon={UsersRound}
+                  title="Люди"
+                  toggle={functionToggle("client_people")}
+                />
+              ) : null,
+              showCard && companyFiles ? (
+                <SettingsRow
+                  key="files"
+                  tile={SETTINGS_TILE.orange}
+                  icon={Paperclip}
+                  title="Файлы"
+                  toggle={functionToggle("client_files")}
+                />
+              ) : null,
+              showCard && companyRequisites ? (
+                <SettingsRow
+                  key="requisites"
+                  tile={SETTINGS_TILE.teal}
+                  icon={FileText}
+                  title="Реквизиты"
+                  toggle={functionToggle("client_requisites")}
                 />
               ) : null,
             ]}
@@ -495,25 +519,6 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
         // состояний, LOCKED 2026-08-27).
         <EmptyState fill title="Настроек пока нет" />
       )}
-
-      <PickerSheet
-        visible={servicePicker}
-        title="Обслуживание объектов"
-        subtitle="Отсчёт — от последнего визита на объект"
-        selectedId={String(service.months ?? "off")}
-        items={SERVICE_MONTH_CHOICES.map((months) => ({
-          id: String(months ?? "off"),
-          label: serviceMonthsLabel(months),
-          icon: CalendarClock,
-          color: t.accent,
-          onPress: () => {
-            setServicePicker(false);
-            if (months !== service.months) service.set(months);
-          },
-        }))}
-        onClose={() => setServicePicker(false)}
-      />
-
     </>
   );
 }

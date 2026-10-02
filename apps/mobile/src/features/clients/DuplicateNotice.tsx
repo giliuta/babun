@@ -99,7 +99,7 @@ export function useDuplicateOf(client: Client | null | undefined): string | null
 
 export function DuplicateNotice({ client }: { client: Client }) {
   const t = useThemeColors();
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(client.team_id ?? null);
   const dup = useDuplicateHit(client);
   if (!dup) return null;
 
