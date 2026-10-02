@@ -106,6 +106,7 @@ import {
   type ColorSituation,
 } from "@/features/appointments/record-color";
 import { haptics } from "@/lib/haptics";
+import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -158,7 +159,7 @@ import {
   type LocationRequest,
 } from "@/features/clients/location-request-link";
 import { useLocationRequests } from "@/features/clients/location-requests";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { useCurrentRole, usePlanAllows, useTenant } from "@/features/settings/tenant";
 import { accessGate } from "@/features/access/my-access";
 import { useMyAccess } from "@/features/access/queries";
 import { SmsComposeProvider } from "@/features/sms/SmsCompose";
@@ -293,6 +294,12 @@ export default function BookScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const keyboardShown = useKeyboardShown();
   const toast = useToast();
+  // БЕЗ ТАРИФА ЗАПИСЬ КЛИЕНТА ТОЛЬКО СМОТРЯТ (владелец 02.10: «раньше
+  // создавал записи — могу надавать наперёд и добавлять туда клиентов»).
+  // Страница открывается, «Сохранить» серая, тап — плашка про тариф; сервер
+  // держит то же (`tenant_free_readonly_guard`).
+  const workInPlan = usePlanAllows("book-clients");
+  const nudgeTariff = useTariffNudge();
   const { data: dayCities = {} } = useDayCities();
   const dayLabelsOn = useFeatureOn("day_labels");
   const params = useLocalSearchParams<{
@@ -1859,6 +1866,7 @@ export default function BookScreen() {
         hasValidTeam &&
         workSelectionValid);
   const bookingBusy = booking.isPending || updateMut.isPending;
+  const workLocked = kind === "work" && !workInPlan;
   const missingHint = bookingBusy
     ? "Сохраняем…"
     : failedReference
@@ -3280,7 +3288,7 @@ export default function BookScreen() {
         >
         {/* Причина, почему кнопка ещё не активна — всегда видна над CTA
             (раньше disabled-кнопка молчала, и весь missingHint был мёртв). */}
-        {!canSave && !bookingBusy ? (
+        {!workLocked && !canSave && !bookingBusy ? (
           <Text
             accessibilityLiveRegion="polite"
             style={{
@@ -3307,10 +3315,15 @@ export default function BookScreen() {
                 : "Создать запись"
           }
           onPress={save}
-          disabled={!canSave || bookingBusy}
+          disabled={workLocked || !canSave || bookingBusy}
           // Серая кнопка отвечает плашкой сверху: «Выберите клиента»,
-          // «Выберите услугу» — что мешает сохранить.
+          // «Выберите услугу» — что мешает сохранить; без тарифа — «Нужно
+          // изменить тариф».
           onDisabledPress={() => {
+            if (workLocked) {
+              nudgeTariff();
+              return;
+            }
             haptics.warning();
             toast(missingHint, "info");
           }}

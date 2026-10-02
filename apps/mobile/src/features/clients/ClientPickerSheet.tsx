@@ -23,6 +23,8 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { formatPhoneForDisplay } from "@/features/clients/phone";
+import { usePlanAllows } from "@/features/settings/tenant";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
 
 // ВЫБОР КЛИЕНТА — ОДНА ШТОРКА НА ВЕСЬ ПРОДУКТ (владелец 2026-09-10: «если я
 // прошу „выбрать клиента", архитектура этой шторки должна быть везде
@@ -187,6 +189,7 @@ export function ClientPickerSheet({
    *  Найденный по номеру дубль — не создание, а выбор: два клиента на одном
    *  номере невозможны. */
   const typedName = q.trim();
+  const clientsInPlan = usePlanAllows("clients");
   const createLabel = duplicate
     ? `Выбрать «${duplicate.full_name || duplicate.phone || typedName}»`
     : typedName
@@ -238,8 +241,14 @@ export function ClientPickerSheet({
                 Строка ушла, а кнопка называет набранное сама: видно, кого
                 именно заведут, и найденный по номеру дубль она выбирает, а не
                 заводит второй раз. */}
+            {/* БЕЗ ТАРИФА НОВОГО КЛИЕНТА НЕ ЗАВЕСТИ НИ ОТКУДА (владелец 02.10:
+                «нажимаю на клиента — там „Создать клиента“, и можно создать
+                любого»). Кнопка серая, тап — плашка про тариф; найденного по
+                номеру выбрать можно — это не создание. */}
             {onCreate ? (
-              <Button label={createLabel} onPress={create} />
+              <TariffLocked locked={!duplicate && !clientsInPlan} beforeNudge={close}>
+                <Button label={createLabel} onPress={create} />
+              </TariffLocked>
             ) : null}
             {onClear && selectedId ? (
               <Button

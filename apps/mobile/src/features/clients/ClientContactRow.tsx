@@ -11,6 +11,9 @@ import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ClientSummaryCard } from "@/features/clients/ClientSummaryCard";
 import { haptics } from "@/lib/haptics";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { usePlanAllows } from "@/features/settings/tenant";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
 
 // ДЕЙСТВИЯ УРОВНЯ ЧЕЛОВЕКА — строками, а не кружками.
 //
@@ -82,6 +85,8 @@ export default function ClientContactRow({
       locationId: primaryLocationId,
       teamId: stats?.lastTeamId ?? null,
     });
+  const scope = useClientsScopeOrNull();
+  const bookLocked = !usePlanAllows("book-clients") && scope?.kind !== "member";
   // Карточку создали из черновика ради записи — форма открывается сама.
   const bookRef = useRef(book);
   bookRef.current = book;
@@ -116,12 +121,17 @@ export default function ClientContactRow({
             showMoney={showMoney}
           />
         ) : null}
-        <ChooseRow
-          compact
-          icon={CalendarPlus}
-          label="Записать"
-          onPress={book}
-        />
+        {/* Без тарифа своя база только смотрит (02.10): «Записать» серая,
+            тап — плашка про тариф. Чужая база партнёра — по тарифу её
+            владельца, решает сервер. */}
+        <TariffLocked locked={bookLocked}>
+          <ChooseRow
+            compact
+            icon={CalendarPlus}
+            label="Записать"
+            onPress={book}
+          />
+        </TariffLocked>
         {/* Строки «Как в прошлый раз» здесь больше нет (владелец 2026-09-07:
             «это в клиентах не надо»). Повтор прошлого визита — дело формы
             записи, а не карточки. */}
