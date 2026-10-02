@@ -97,8 +97,6 @@ export default function ClientContactRow({
     <SectionCard title="История">
         {showSummary ? (
           <ClientSummaryCard
-            client={client}
-            stats={stats}
             lastRecord={lastRecord}
             onOpenHistory={onOpenHistory}
             showMoney={showMoney}

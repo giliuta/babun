@@ -634,7 +634,9 @@ describe("блок «История»", () => {
     assert.match(row, /<SectionCard title="История">\s*\{showSummary \? \(\s*<ClientSummaryCard/);
     assert.doesNotMatch(row, /label="Записать"/);
     assert.match(row, /lastRecord=\{lastRecord\}/);
-    assert.match(read("ClientSummaryCard.tsx"), /<SummaryRow\s*onPress=\{onOpenHistory\}/);
+    // Строка последней записи — та же `VisitRow`, что в «Истории» (03.10).
+    assert.match(read("ClientSummaryCard.tsx"), /<VisitRow[\s\S]{0,240}onPress=\{onOpenHistory\}/);
+    assert.match(read("../../../app/(dashboard)/clients/visits.tsx"), /<VisitRow/);
     assert.doesNotMatch(read("ClientHeader.tsx"), /<ClientSummaryCard/);
     assert.match(page(), /<ClientContactRow[\s\S]{0,900}onOpenHistory=\{/);
   });

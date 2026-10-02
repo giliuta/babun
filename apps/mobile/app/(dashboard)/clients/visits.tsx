@@ -1,7 +1,6 @@
 import { useMemo } from "react";
-import { FlatList, Pressable, Text, View, useWindowDimensions } from "react-native";
+import { FlatList, Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { ChevronRight } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
@@ -10,15 +9,15 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { RowCaption } from "@/components/ui/card-rows";
-import { formatShortDateRu, visitsWord } from "@/features/clients/format";
+import { visitsWord } from "@/features/clients/format";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { todayYMD } from "@/features/clients/filter";
 import { unpaidVisits } from "@/features/clients/unpaid-visits";
 import { useClient } from "@/features/clients/queries";
-import { visitStatus, type VisitStatusKind } from "@/features/clients/visit-status";
+import { VisitRow, visitTeamName } from "@/features/clients/VisitRow";
 import { useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
-import { useThemeColors, type ThemeColors } from "@/theme/colors";
+import { useThemeColors } from "@/theme/colors";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useCardAccess } from "@/features/clients/use-card-access";
 
@@ -43,26 +42,7 @@ import { useCardAccess } from "@/features/clients/use-card-access";
 // даты пишется сам, когда он не текущий («12 мар ’25»). Заметки клиента
 // в историю записей не входят — они в блоке «Заметка» карточки.
 
-/** Цвет состояния — тем же языком, что метка визита в списке клиентов:
- *  оплачено — зелёным, долг и незакрытая — янтарём, впереди — кобальтом. */
-function statusColor(kind: VisitStatusKind, t: ThemeColors): string {
-  switch (kind) {
-    case "paid":
-      return t.success;
-    case "debt":
-    case "unclosed":
-      return t.warning;
-    case "ahead":
-      return t.accent;
-    case "cancelled":
-      return t.faint;
-    default:
-      return t.sub;
-  }
-}
-
-/** Место даты — под самую длинную («30 сен ’25») при крупном тексте. */
-const DATE_COLUMN = 92;
+// Строка — `VisitRow`: та же, что последняя запись на карточке.
 
 // Экран вкладки «Клиенты»: компанию называет источник, а не роль
 // (STORY-082).
@@ -77,8 +57,6 @@ export default function ClientVisitsScreenRoute() {
 function ClientVisitsScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  const { fontScale } = useWindowDimensions();
-  const dateColumn = Math.round(DATE_COLUMN * Math.min(fontScale, 1.3));
   // `unpaid=1` — вход из сводки по «Долг €…»: только неоплаченные записи.
   const { clientId, unpaid } = useLocalSearchParams<{
     clientId: string;
@@ -152,11 +130,6 @@ function ClientVisitsScreen() {
     router.push(`/book?appointmentId=${a.id}` as Href);
   };
 
-  const teamName = (teamId: string | null | undefined) => {
-    const team = teamId ? teamsById.get(teamId) : undefined;
-    if (!team) return "";
-    return team.is_active ? team.name : `${team.name} · в архиве`;
-  };
 
   return (
     <Screen>
@@ -214,59 +187,15 @@ function ClientVisitsScreen() {
           ItemSeparatorComponent={() => (
             <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
           )}
-          renderItem={({ item: a }) => {
-            const status = visitStatus(a, today, showMoney);
-            const tappable = !historyOnly.has(a.id);
-            const date = formatShortDateRu(a.date);
-            const team = teamName(a.team_id);
-            return (
-              <Pressable
-                onPress={tappable ? () => open(a) : undefined}
-                disabled={!tappable}
-                accessibilityRole={tappable ? "button" : undefined}
-                accessibilityLabel={[date, team, status.text].filter(Boolean).join(", ")}
-                className="min-h-[56px] flex-row items-center py-2.5 pl-4 pr-3 active:opacity-60"
-                style={{ opacity: status.kind === "cancelled" ? 0.55 : 1 }}
-              >
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  numberOfLines={1}
-                  style={{
-                    width: dateColumn,
-                    fontSize: 16,
-                    fontWeight: "600",
-                    color: t.ink,
-                    fontVariant: ["tabular-nums"],
-                  }}
-                >
-                  {date}
-                </Text>
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  numberOfLines={1}
-                  style={{ flex: 1, fontSize: 15, color: t.body }}
-                >
-                  {team}
-                </Text>
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  numberOfLines={1}
-                  style={{
-                    marginLeft: 8,
-                    fontSize: 15,
-                    fontWeight: "600",
-                    color: statusColor(status.kind, t),
-                    fontVariant: ["tabular-nums"],
-                  }}
-                >
-                  {status.text}
-                </Text>
-                <View style={{ width: 22, alignItems: "flex-end" }}>
-                  {tappable ? <ChevronRight color={t.chevron} size={18} strokeWidth={2.2} /> : null}
-                </View>
-              </Pressable>
-            );
-          }}
+          renderItem={({ item: a }) => (
+            <VisitRow
+              appointment={a}
+              team={visitTeamName(a.team_id, teamsById)}
+              today={today}
+              showMoney={showMoney}
+              onPress={historyOnly.has(a.id) ? undefined : () => open(a)}
+            />
+          )}
         />
       )}
     </Screen>
