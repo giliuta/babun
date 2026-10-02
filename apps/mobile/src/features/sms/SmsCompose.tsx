@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/Toast";
 import { analyzeSmsEncoding } from "@babun/shared/local/sms-encoding";
 import { SELECT_SHEET_RATIO, SelectList, SelectRow } from "@/components/ui/select-rows";
 import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole, usePlanAllows } from "@/features/settings/tenant";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { smsOptions, smsUrlWithBody, type SmsOption, type SmsVars } from "./sms-compose";
@@ -87,7 +87,10 @@ export function useSmsServiceFor(context: SmsContext | null): SmsServiceState {
   const senders = account?.senders ?? {};
   const senderTeams = Object.keys(senders);
   const teamId = context?.teamId;
-  const ready = Boolean(context?.clientId && account?.serviceOn && account.canPay);
+  // Без тарифа SMS сервиса нет (02.10, SMS — с «Соло»); с телефона — как
+  // звонок, это не наш сервис.
+  const smsInPlan = usePlanAllows("sms");
+  const ready = Boolean(smsInPlan && context?.clientId && account?.serviceOn && account.canPay);
   const available =
     ready && (context?.appointmentId ? Boolean(teamId && senders[teamId]) : senderTeams.length > 0);
   return { available, priceCents: account?.priceCents ?? 10, context, senderTeams, senders };

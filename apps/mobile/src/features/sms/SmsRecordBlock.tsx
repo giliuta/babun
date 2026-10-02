@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { usePlanAllows } from "@/features/settings/tenant";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import { Text, View } from "react-native";
 import { CircleCheck, CircleX, Send } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
@@ -65,6 +67,7 @@ export function SmsRecordBlock({
   phone: string | null;
 }) {
   const log = useAppointmentSms(context.appointmentId);
+  const smsInPlan = usePlanAllows("sms");
   const [sending, setSending] = useState(false);
   const messages = log.data?.messages ?? [];
   const templates = log.data?.templates ?? [];
@@ -94,13 +97,16 @@ export function SmsRecordBlock({
         {messages.length === 0 && !answer && !log.isLoading ? <Empty /> : null}
         {/* Пока блок грузится, над «Отправить SMS» ничего нет — и черты тоже. */}
         {messages.length > 0 || answer || !log.isLoading ? <Divider inset={48} /> : null}
-        <SettingsRow
-          tile="neutral"
-          icon={Send}
-          title="Отправить SMS"
-          sub={preview ?? undefined}
-          onPress={() => setSending(true)}
-        />
+        {/* Без тарифа — серая, тап — плашка про тариф (02.10). */}
+        <TariffLocked locked={!smsInPlan}>
+          <SettingsRow
+            tile="neutral"
+            icon={Send}
+            title="Отправить SMS"
+            sub={preview ?? undefined}
+            onPress={() => setSending(true)}
+          />
+        </TariffLocked>
       </SectionCard>
       <SmsSendSheet
         visible={sending}

@@ -14,6 +14,8 @@ import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Archive, MessageSquare, Share2 } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
+import { usePlanAllows } from "@/features/settings/tenant";
+import { useTariffNudge } from "@/features/tariffs/use-tariff";
 
 export function BulkActionBar({
   count,
@@ -31,6 +33,9 @@ export function BulkActionBar({
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
   const disabled = count === 0;
+  // Без тарифа рассылки нет (02.10): «SMS» серое, тап — плашка про тариф.
+  const smsLocked = !usePlanAllows("sms");
+  const nudgeTariff = useTariffNudge();
 
   return (
     <View
@@ -43,11 +48,11 @@ export function BulkActionBar({
     >
       <BarButton
         label="SMS"
-        icon={<MessageSquare color={disabled ? t.faint : t.accent} size={20} strokeWidth={2} />}
-        color={t.accent}
+        icon={<MessageSquare color={disabled || smsLocked ? t.faint : t.accent} size={20} strokeWidth={2} />}
+        color={smsLocked ? t.faint : t.accent}
         disabled={disabled}
         count={count}
-        onPress={onSms}
+        onPress={smsLocked ? nudgeTariff : onSms}
       />
       <BarButton
         label="Экспорт"

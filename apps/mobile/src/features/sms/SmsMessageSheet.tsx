@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { Divider } from "@/components/ui/Divider";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { useToast } from "@/components/ui/Toast";
+import { usePlanAllows } from "@/features/settings/tenant";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import { notify } from "@/lib/notify";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { formatPhoneForDisplay } from "@/features/clients/phone";
@@ -60,6 +62,7 @@ export function SmsMessageSheet({
   const toast = useToast();
   const send = useSendSmsViaService();
   const country = useDefaultCountry();
+  const smsInPlan = usePlanAllows("sms");
   // Закрытый лист дорисовывает последнее сообщение, пока уезжает вниз.
   const [shown, setShown] = useState<SmsHistoryItem | null>(item);
   if (item && item !== shown) setShown(item);
@@ -98,7 +101,13 @@ export function SmsMessageSheet({
       title={m.clientName ?? (m.toPhone || "SMS")}
       subtitle={triggerWords(m.trigger)}
       scroll
-      footer={canResend ? <Button label="Отправить ещё раз" onPress={resend} /> : undefined}
+      footer={
+        canResend ? (
+          <TariffLocked locked={!smsInPlan} beforeNudge={onClose}>
+            <Button label="Отправить ещё раз" onPress={resend} />
+          </TariffLocked>
+        ) : undefined
+      }
     >
       {text ? (
         <View

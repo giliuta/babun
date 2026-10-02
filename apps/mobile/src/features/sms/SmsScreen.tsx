@@ -12,6 +12,8 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
+import { usePlanAllows } from "@/features/settings/tenant";
+import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { notify } from "@/lib/notify";
 import { openSmsCheckout, useSmsAccount, useSmsHistory } from "./sms-account";
 import { balanceWarning } from "./sms-model";
@@ -41,6 +43,9 @@ import { SmsTopupSheet } from "./SmsTopupSheet";
 export function SmsScreen() {
   const router = useRouter();
   const toast = useToast();
+  // Без тарифа SMS нет (02.10) — и пополнять нечего: кнопка серая.
+  const smsInPlan = usePlanAllows("sms");
+  const nudgeTariff = useTariffNudge();
   const params = useLocalSearchParams<{ topup?: string }>();
   const account = useSmsAccount();
   const history = useSmsHistory(5);
@@ -160,7 +165,12 @@ export function SmsScreen() {
       {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ: пополнить баланс. */}
       {data.serviceOn ? (
         <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
-          <GradientButton label="Пополнить баланс" onPress={() => setTopupOpen(true)} />
+          <GradientButton
+            label="Пополнить баланс"
+            disabled={!smsInPlan}
+            onDisabledPress={nudgeTariff}
+            onPress={() => setTopupOpen(true)}
+          />
         </View>
       ) : null}
 
