@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { MapPin, MoreHorizontal, UserRound } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { Card } from "@/components/ui/Card";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { NavRow } from "@/components/ui/card-rows";
@@ -171,6 +172,62 @@ export default function ObjectsBlock({
   // Без объектов и без права добавлять смотреть нечего: блока нет, а не
   // пустая карточка с одной шапкой.
   if (ordered.length === 0 && shownRequests.length === 0 && !onAdd) return null;
+
+  // СВОЯ СТРАНИЦА — КАЖДЫЙ ОБЪЕКТ ОТДЕЛЬНОЙ КАРТОЧКОЙ (владелец 03.10:
+  // «компактно и раздели их между собой» — как записи в «Истории»). Строка
+  // та же `ObjectRow`; заметка — её третьей строкой, правится в листе
+  // объекта: поле заметки под каждым объектом растягивало страницу.
+  if (bare) {
+    return (
+      <View style={{ gap: 10, paddingTop: 4 }}>
+        {shown.map((loc) => {
+          const row = (
+            <ObjectRow
+              loc={loc}
+              teamId={client.team_id ?? null}
+              residents={residentsFor?.(loc)}
+              lastVisit={lastVisitFor?.(loc)}
+              onPress={onOpen ? () => onOpen(loc.id) : undefined}
+              onLongPress={canCopy && objectTarget(loc) ? () => copy(objectTarget(loc)) : undefined}
+            />
+          );
+          return (
+            <Card key={loc.id} style={{ marginHorizontal: 16 }}>
+              {onDelete ? (
+                <SwipeRow
+                  label="Удалить"
+                  color={t.danger}
+                  onAction={() => onDelete(loc)}
+                  accessibilityLabel={`Удалить объект ${loc.label || ""}`.trim()}
+                >
+                  {row}
+                </SwipeRow>
+              ) : (
+                row
+              )}
+            </Card>
+          );
+        })}
+        {shownRequests.length > 0 ? (
+          <Card style={{ marginHorizontal: 16 }}>
+            {shownRequests.map((request, i) => (
+              <LocationRequestRow
+                key={request.id}
+                request={request}
+                separated={i > 0}
+                onPress={() => void requestActions.menu(request)}
+              />
+            ))}
+          </Card>
+        ) : null}
+        {onAdd ? (
+          <Card style={{ marginHorizontal: 16 }}>
+            <ChooseRow compact icon={MapPin} label="Добавить объект" onPress={onAdd} />
+          </Card>
+        ) : null}
+      </View>
+    );
+  }
 
   return (
     <SectionCard title={bare ? undefined : "Объекты"}>
