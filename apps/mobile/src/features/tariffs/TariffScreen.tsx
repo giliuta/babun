@@ -52,7 +52,8 @@ export function TariffScreen() {
   // Выбор человека; пока не выбирал — действующий тариф (профиль может
   // приехать после первого кадра).
   const [picked, setPicked] = useState<Exclude<Tier, "free"> | null>(null);
-  const selected = picked ?? current ?? "solo";
+  // Выдан навсегда — выбирать нечего: выделен свой тариф, а не прошлый тап.
+  const selected = state.forever ? (current ?? "max") : (picked ?? current ?? "solo");
 
   // Вернулся из браузера (оплата, управление подпиской) — перечитать тариф.
   useEffect(() => {
