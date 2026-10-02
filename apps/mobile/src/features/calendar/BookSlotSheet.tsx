@@ -245,7 +245,10 @@ export function BookSlotSheet({
               {eventsOn && canEvent ? (
                 <Button
                   label="Событие"
-                  variant={canBookClients && canWork ? "secondary" : "primary"}
+                  // Вид не зависит от тарифа (владелец 02.10: «всё должно
+                  // оставаться точно так же»): без тарифа «Клиент» серый,
+                  // «Событие» — прежнее белое.
+                  variant={canWork ? "secondary" : "primary"}
                   accessibilityHint="Откроет новое событие на выбранное время"
                   onPress={() => pick("event")}
                 />

@@ -41,9 +41,8 @@ import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
 import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
-import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import { TariffRow } from "@/features/tariffs/TariffRow";
-import { useCurrentRole, usePlanAllows } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useThemeColors } from "@/theme/colors";
 
@@ -51,8 +50,6 @@ export default function CabinetHome() {
   const t = useThemeColors();
   const router = useRouter();
   const { data: role } = useCurrentRole();
-  // Партнёры — с тарифа «Про» (владелец 01.10).
-  const canUsePartners = usePlanAllows("partners");
   const syncDepth = useQueueDepth();
   // Очередь выгрузки видят те, кто правит данные офлайн, — как и прежде.
   const showSync = role === "owner" || role === "dispatcher";
@@ -80,19 +77,18 @@ export default function CabinetHome() {
                   что он может делать»). Прежде люди жили в настройках каждого
                   календаря. Приглашает и ставит права только владелец. */}
               {/* ТАРИФ — ПЕРВЫМ (владелец 01.10: «выбор тарифа — в кабинете»).
-                  Партнёры открываются с «Про»: до того строка серая, тап
-                  поднимает плашку «Нужно изменить тариф». */}
+                  Страницы тариф не закрывает (владелец 02.10: «всё
+                  открывается, блокируются только кнопки»): «Партнёры»
+                  открыты всегда, серая там только «Пригласить партнёра». */}
               <TariffRow />
               <Divider inset={48} />
-              <TariffLocked locked={!canUsePartners}>
-                <SettingsRow
-                  tile={SETTINGS_TILE.indigo}
-                  icon={Users}
-                  title="Партнёры"
-                  sub="Права по командам"
-                  onPress={() => router.push("/cabinet/people" as Href)}
-                />
-              </TariffLocked>
+              <SettingsRow
+                tile={SETTINGS_TILE.indigo}
+                icon={Users}
+                title="Партнёры"
+                sub="Права по командам"
+                onPress={() => router.push("/cabinet/people" as Href)}
+              />
               <Divider inset={48} />
               <SmsCabinetRow />
               <Divider inset={48} />

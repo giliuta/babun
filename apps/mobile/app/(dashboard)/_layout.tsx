@@ -11,9 +11,7 @@ import { getTotalUnread } from "@babun/shared/local/chats";
 import { useThemeColors } from "@/theme/colors";
 import { useChats } from "@/features/chats/store";
 import { useMyInvitations } from "@/features/access/inbox-queries";
-import { useCurrentRole, usePlanAllows } from "@/features/settings/tenant";
-import { useMyMemberships } from "@/features/settings/my-memberships";
-import { useTariffNudge } from "@/features/tariffs/use-tariff";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { MESSAGING_ENABLED, can } from "@/features/settings/role-policy";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { DashboardGate } from "@/lib/DashboardGate";
@@ -53,14 +51,6 @@ export default function DashboardLayout() {
   // счётчика «Чатов», — второй анатомии значка в продукте не заводим.
   const { data: invitations = [] } = useMyInvitations();
   const invitationCount = invitations.length;
-  // «КЛИЕНТЫ» БЕЗ ТАРИФА — СЕРЫМ (владелец 01.10): вкладка на месте, тап
-  // поднимает плашку «Нужно изменить тариф». Партнёр, которому хозяин чужой
-  // команды открыл клиентов, работает по тарифу хозяина — вкладка живая.
-  const clientsAllowed = usePlanAllows("clients");
-  const memberships = useMyMemberships().data;
-  const clientsLocked =
-    !clientsAllowed && !(memberships ?? []).some((membership) => membership.role !== "owner");
-  const nudgeTariff = useTariffNudge();
 
   // Гварды сессии/тенанта живут в DashboardGate — тем же компонентом их
   // переиспользует стек /calendar, который лежит НАД табами.
@@ -118,16 +108,8 @@ export default function DashboardLayout() {
         />
         <Tabs.Screen
           name="clients"
-          listeners={{
-            tabPress: (event) => {
-              if (!clientsLocked) return;
-              event.preventDefault();
-              nudgeTariff();
-            },
-          }}
           options={{
             title: "Клиенты",
-            tabBarItemStyle: clientsLocked ? { opacity: 0.4 } : undefined,
             tabBarIcon: ({ color, size, focused }) => (
               <Users color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
             ),
