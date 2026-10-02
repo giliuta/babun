@@ -121,6 +121,12 @@ const deleteRight = norm(readFileSync(join(MIGRATIONS_DIR, DELETE_RIGHT), "utf8"
 const PHONE_OPEN = "20261003010500_clients_phone_open_with_client_block.sql";
 const phoneOpen = norm(readFileSync(join(MIGRATIONS_DIR, PHONE_OPEN), "utf8"));
 
+// СТРОКА ИСТОРИИ SMS ЗНАЕТ КЛИЕНТА И ШАБЛОН (STORY-089, 03.10): «SMS
+// фиксируются за клиентом», в строке — имя шаблона. Номер и деньги — по-прежнему
+// только владельцу (защита `LEAKS`), это сторожит тест ниже.
+const SMS_JSON = "20261003013700_sms_message_client_and_template.sql";
+const smsJson = norm(readFileSync(join(MIGRATIONS_DIR, SMS_JSON), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
@@ -149,7 +155,6 @@ describe("сервер: клиенты по уровням", () => {
     assert.equal(lastDefiner("access_client_ids_in"), LIMITS, "access_client_ids_in переопределён позже");
     for (const fn of [
       "list_master_appointments_safe",
-      "sms_message_json",
       "sms_appointment_link",
       "receipts_client_snapshot_no_phone",
       "member_client_in_team",
@@ -158,6 +163,7 @@ describe("сервер: клиенты по уровням", () => {
     ]) {
       assert.equal(lastDefiner(fn), LEAKS, `${fn} переопределён позже`);
     }
+    assert.equal(lastDefiner("sms_message_json"), SMS_JSON, "sms_message_json переопределён позже");
     for (const fn of [
       "list_member_clients",
       "list_client_members",
@@ -384,6 +390,9 @@ describe("сервер: клиенты по уровням", () => {
 
   test("обходные дороги закрыты: SMS, чеки, копия записи, старые записи мастера", () => {
     assert.ok(leaks.includes("'to_phone', case when p_owner then m.to_phone else '' end,"), "SMS снова отдают номер сотруднику");
+    // Строку истории переписала миграция «клиент и шаблон» (03.10) — маска та же.
+    assert.ok(smsJson.includes("'to_phone', case when p_owner then m.to_phone else '' end,"), "SMS снова отдают номер сотруднику");
+    assert.ok(smsJson.includes("'cost_cents', case when p_owner then m.cost_cents else 0 end,"), "SMS снова отдают цену сотруднику");
     assert.ok(
       leaks.includes("if not is_owner and not (p_client_id = any(public.access_client_ids())) then return; end if;"),
       "история SMS клиента мимо набора",

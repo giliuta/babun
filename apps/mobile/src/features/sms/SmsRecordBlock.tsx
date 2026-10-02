@@ -92,6 +92,7 @@ export function SmsRecordBlock({
       <SmsMessageSheet
         item={open}
         teamName={(teamId) => teams.find((x) => x.id === teamId)?.name ?? null}
+        from="record"
         onClose={() => setOpen(null)}
       />
     </>

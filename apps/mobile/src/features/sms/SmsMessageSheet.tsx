@@ -50,10 +50,14 @@ function Fact({ title, value, color }: { title: string; value: string; color?: s
 export function SmsMessageSheet({
   item,
   teamName,
+  from,
   onClose,
 }: {
   /** Открытое сообщение; `null` — лист закрыт. */
   item: SmsHistoryItem | null;
+  /** Откуда открыли: из записи дверей нет (клиент и запись — тут же), из
+   *  карточки клиента — только «Запись». Нет — страница истории, обе. */
+  from?: "record" | "client";
   teamName: (teamId: string | null) => string | null;
   onClose: () => void;
 }) {
@@ -77,6 +81,8 @@ export function SmsMessageSheet({
   const cost = costWords(m);
   const team = teamName(m.teamId);
   const canResend = bucket === "failed" && !!m.body && !!m.clientId;
+  const clientDoor = !!m.clientId && from === undefined;
+  const recordDoor = !!m.appointmentId && from !== "record";
 
   const go = (href: Href) => {
     onClose();
@@ -98,8 +104,10 @@ export function SmsMessageSheet({
     <BottomSheet
       visible={!!item}
       onClose={onClose}
-      title={m.clientName ?? (m.toPhone || "SMS")}
-      subtitle={triggerWords(m.trigger)}
+      title={m.clientName ?? (m.toPhone ? formatPhoneForDisplay(m.toPhone, country) : "SMS")}
+      // Шаблон, по которому ушло (владелец 03.10: «название шаблона»); нет —
+      // повод.
+      subtitle={m.templateName ?? triggerWords(m.trigger)}
       scroll
       footer={
         canResend ? (
@@ -174,7 +182,7 @@ export function SmsMessageSheet({
         ) : null}
       </View>
 
-      {m.clientId || m.appointmentId ? (
+      {clientDoor || recordDoor ? (
         <View
           style={{
             marginBottom: 8,
@@ -184,7 +192,7 @@ export function SmsMessageSheet({
             overflow: "hidden",
           }}
         >
-          {m.clientId ? (
+          {clientDoor ? (
             <SettingsRow
               tile="neutral"
               icon={User}
@@ -193,8 +201,8 @@ export function SmsMessageSheet({
               onPress={() => go(`/clients/${m.clientId}` as Href)}
             />
           ) : null}
-          {m.clientId && m.appointmentId ? <Divider inset={48} /> : null}
-          {m.appointmentId ? (
+          {clientDoor && recordDoor ? <Divider inset={48} /> : null}
+          {recordDoor ? (
             <SettingsRow
               tile="neutral"
               icon={CalendarDays}
