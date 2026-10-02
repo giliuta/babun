@@ -11,12 +11,7 @@ import { useDefaultCountry } from "@/features/clients/default-country";
 import { formatPhoneForDisplay } from "@/features/clients/phone";
 import { firstName } from "@/features/clients/sms-name";
 import { useTeams } from "@/features/reference/queries";
-import { SettingsRow } from "@/components/ui/SettingsRow";
-import { usePlanAllows } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
-import { Send } from "lucide-react-native";
-import { useSmsComposeContext } from "./SmsCompose";
-import { SmsSendSheet } from "./SmsSendSheet";
 import { smsErrorText, useClientSms, useSetClientSmsOptOut, type SmsHistoryItem } from "./sms-account";
 import { SmsHistoryRow } from "./SmsHistoryRow";
 import { SmsMessageSheet } from "./SmsMessageSheet";
@@ -32,8 +27,10 @@ import { SmsMessageSheet } from "./SmsMessageSheet";
 //     стереть офлайн-очередью. Тумблер откликается сразу;
 //   • «Имя для SMS» — то, что встаёт в [Имя] (`sms_name`), пишется прямо в
 //     строке; пусто — первое слово имени клиента, оно и показано серым;
-//   • сообщения — все, что уходили клиенту: повод, когда, на какой номер,
-//     итог; тап — сообщение целиком.
+//   • сообщения — все, что уходили клиенту, коротко: шаблон, когда, на какой
+//     номер, итог; тап — сообщение целиком. Кнопки «Отправить SMS» нет
+//     (владелец 03.10: «SMS отправляется исключительно, если нажать на трубку
+//     клиента… внизу просто история»).
 
 const HISTORY_LIMIT = 200;
 
@@ -57,10 +54,6 @@ export function SmsClientBlock({
   const optOut = useSetClientSmsOptOut();
   const [smsOff, setSmsOff] = useState<boolean | null>(null);
   const [open, setOpen] = useState<SmsHistoryItem | null>(null);
-  const [sending, setSending] = useState(false);
-  const smsContext = useSmsComposeContext();
-  const smsInPlan = usePlanAllows("sms");
-  const phone = client.phone_e164 || client.phone || null;
   const smsBlocked = smsOff ?? client.sms_opt_out === true;
   const messages = log.data ?? [];
   const smsName = (client.sms_name ?? "").trim();
@@ -105,6 +98,7 @@ export function SmsClientBlock({
             <SmsHistoryRow
               item={item}
               showClient={false}
+              compact
               phone={item.toPhone ? formatPhoneForDisplay(item.toPhone, country) : null}
               onPress={() => setOpen(item)}
             />
@@ -121,25 +115,7 @@ export function SmsClientBlock({
             </Text>
           </>
         ) : null}
-        {/* ОТПРАВИТЬ SMS — та же шторка, что у записи и у номера (владелец
-            03.10: «везде функция одна и та же»). Без прав на SMS, без тарифа
-            или у клиента, просившего не писать, строки нет. */}
-        {smsContext && !readOnly && !smsBlocked && smsInPlan && phone ? (
-          <>
-            <Divider inset={48} />
-            <SettingsRow tile="neutral" icon={Send} title="Отправить SMS" onPress={() => setSending(true)} />
-          </>
-        ) : null}
       </SectionCard>
-
-      {smsContext ? (
-        <SmsSendSheet
-          visible={sending}
-          context={{ ...smsContext, teamId: smsContext.teamId ?? client.team_id ?? null }}
-          phone={phone}
-          onClose={() => setSending(false)}
-        />
-      ) : null}
 
       <SmsMessageSheet
         item={open}

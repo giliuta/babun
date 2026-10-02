@@ -7,6 +7,10 @@ import { costWords, isFailure, statusWords, triggerWords } from "./sms-words";
 // СТРОКА ИСТОРИИ SMS (STORY-089): кому и когда — первой строкой, текст —
 // второй, итог и цена — справа. Отказ красный: владелец должен увидеть его,
 // не читая каждую строку.
+//
+// КОРОТКАЯ — В ЗАПИСИ И У КЛИЕНТА (владелец 03.10: «не нужно там полноценно
+// переписывать эту SMS… отправленное SMS — просто дата, время»): шаблон, когда
+// и итог, без текста; тап — сообщение целиком.
 
 export function when(iso: string): string {
   const date = new Date(iso);
@@ -20,9 +24,12 @@ export function SmsHistoryRow({
   showClient = true,
   body,
   phone,
+  compact = false,
   onPress,
 }: {
   item: SmsHistoryItem;
+  /** Без текста: имя шаблона, когда, итог (запись и карточка клиента). */
+  compact?: boolean;
   /** Номер, на который ушло, — уже в виде для глаза. У клиента номеров
    *  бывает несколько, и в его истории видно, на какой именно. */
   phone?: string | null;
@@ -35,8 +42,12 @@ export function SmsHistoryRow({
   body?: string | null;
 }) {
   const t = useThemeColors();
-  const text = item.body ?? body ?? null;
-  const title = showClient ? (item.clientName ?? (item.toPhone || "SMS")) : triggerWords(item.trigger);
+  const text = compact ? null : (item.body ?? body ?? null);
+  const title = showClient
+    ? (item.clientName ?? (item.toPhone || "SMS"))
+    : compact
+      ? (item.templateName ?? (item.trigger === "manual" ? "SMS" : triggerWords(item.trigger)))
+      : triggerWords(item.trigger);
   const meta = [showClient ? triggerWords(item.trigger) : null, when(item.createdAt), phone || null]
     .filter(Boolean)
     .join(" · ");

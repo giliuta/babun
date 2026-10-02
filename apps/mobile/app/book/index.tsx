@@ -161,7 +161,6 @@ import {
 import { useLocationRequests } from "@/features/clients/location-requests";
 import { useCurrentRole, usePlanAllows, useTenant } from "@/features/settings/tenant";
 import { SmsComposeProvider } from "@/features/sms/SmsCompose";
-import { useRevealedClient } from "@/features/clients/revealed-contacts";
 import { SmsRecordBlock } from "@/features/sms/SmsRecordBlock";
 import { smsVars } from "@/features/sms/sms-compose";
 import { addressedAs, firstName } from "@/features/clients/sms-name";
@@ -633,9 +632,6 @@ export default function BookScreen() {
     () => clients.find((c) => c.id === clientId) ?? null,
     [clients, clientId],
   );
-  // Номер, открытый сотрудником дверью (защита базы 30.09), — поверх строки
-  // окна: им пишет «С телефона» блок SMS записи.
-  const revealedClient = useRevealedClient(client, tenantIdForFiles);
   // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС» (STORY-077). Пока клиент не ответил, блок
   // объекта показывает строку «Ждём адрес»: диспетчер видит, что адрес уже
   // спрошен, и не спрашивает второй раз. Ответ приезжает объектом сам —
@@ -2925,14 +2921,11 @@ export default function BookScreen() {
               ) : null}
 
               {/* SMS ЗАПИСИ (STORY-089; владелец 25.09: «на записи в самом низу
-                  блок — что мы уже отправили ему или не отправили… нажал
-                  „Отправить SMS“ — и оно сразу отправляет то, что записал»).
-                  Только у сохранённой записи с клиентом: SMS — о ней. */}
+                  блок — что мы уже отправили ему или не отправили»). С 03.10 —
+                  только история её нынешнему клиенту; отправка — у трубки
+                  клиента. Только у сохранённой записи с клиентом. */}
               {editing?.id && client && recordSmsContext ? (
-                <SmsRecordBlock
-                  context={recordSmsContext}
-                  phone={revealedClient?.phone_e164 || revealedClient?.phone || null}
-                />
+                <SmsRecordBlock context={recordSmsContext} />
               ) : null}
 
               {/* ОТМЕНЫ И УДАЛЕНИЯ НА СТРАНИЦЕ НЕТ (владелец 2026-09-06: «этот
