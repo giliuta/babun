@@ -3,7 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Bell, ChevronRight } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { STATUS_LABELS, getDebtAmount } from "@babun/shared/local/appointments";
+
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
@@ -17,6 +17,8 @@ import {
   type VisitTeamRow,
 } from "@/features/clients/archived-visit";
 import { recordServiceNames } from "@/features/clients/last-record";
+import { visitStatus, type VisitStatusKind } from "@/features/clients/visit-status";
+import { todayYMD } from "@/features/clients/filter";
 import { useAllServices } from "@/features/services/queries";
 import { useTeams } from "@/features/reference/queries";
 import { clientSubParams } from "@/features/clients/clients-company";
@@ -134,8 +136,9 @@ export function ClientSummaryCard({
           separated={!!debt || !!badge}
           label={`История записей · последняя: ${record.when}${record.what ? ` · ${record.what}` : ""}`}
         >
-          {/* КОГДА — первой строкой и чернилами; ЧТО и КТО — второй, тише;
-              деньги и состояние — справа, своим цветом, как в истории. */}
+          {/* КОГДА — первой строкой и чернилами; состояние справа — тем же
+              словом и цветом, что в истории записей («Ожидается», «Долг €30»,
+              «Оплачено»); ЧТО делали — второй строкой, тише. */}
           <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
             <Text
               maxFontSizeMultiplier={1.3}
@@ -144,23 +147,18 @@ export function ClientSummaryCard({
             >
               {record.when}
             </Text>
-            {record.money ? (
-              <Text
-                maxFontSizeMultiplier={1.3}
-                style={{ fontSize: 15, fontWeight: "600", color: record.money.color, fontVariant: ["tabular-nums"] }}
-              >
-                {record.money.text}
-              </Text>
-            ) : null}
+            <Text
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 15, fontWeight: "600", color: record.statusColor, fontVariant: ["tabular-nums"] }}
+            >
+              {record.status}
+            </Text>
           </View>
           {record.what ? (
             <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={{ fontSize: 14, color: t.body }}>
               {record.what}
             </Text>
           ) : null}
-          <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={{ fontSize: 13, color: record.stateColor }}>
-            {record.state}
-          </Text>
         </SummaryRow>
       ) : (
         // Записей нет — словами, без кнопки (владелец 15.09).
@@ -219,6 +217,15 @@ function SummaryRow({
   );
 }
 
+/** Цвет состояния — тот же, что в истории записей. */
+function statusColor(kind: VisitStatusKind, t: ReturnType<typeof useThemeColors>): string {
+  if (kind === "paid") return t.success;
+  if (kind === "debt" || kind === "unclosed") return t.warning;
+  if (kind === "ahead") return t.accent;
+  if (kind === "cancelled") return t.faint;
+  return t.sub;
+}
+
 /** Запись словами — те же части, что у строки истории записей. */
 function describeRecord(
   a: Appointment,
@@ -229,24 +236,15 @@ function describeRecord(
     t: ReturnType<typeof useThemeColors>;
   },
 ) {
-  const { t } = ctx;
   const team =
     archivedVisitTag(a.team_id, ctx.teamsById) ??
     liveVisitTeam(a.team_id, ctx.teamsById, hasManyLiveTeams(ctx.teamsById));
-  const when = [humanDay(a.date), a.time_start?.slice(0, 5), team].filter(Boolean).join(" · ");
+  // День и время — первой строкой (не режутся); команда — со второй, перед
+  // услугами: длинное имя команды обрезало строку «когда» (проверка глазами).
+  const when = [humanDay(a.date), a.time_start?.slice(0, 5)].filter(Boolean).join(" · ");
   const services = recordServiceNames(a, ctx.serviceName);
   const note = (a.comment ?? "").trim();
-  const what = services.length > 0 ? services.join(", ") : note;
-  const owed = getDebtAmount(a);
-  const moneyText =
-    !ctx.money || a.status === "cancelled"
-      ? null
-      : owed > 0
-        ? { text: `долг ${formatEUR(owed)}`, color: t.warning }
-        : (a.total_amount ?? 0) > 0
-          ? { text: formatEUR(a.total_amount), color: t.sub }
-          : null;
-  const stateColor =
-    a.status === "cancelled" ? t.faint : a.status === "completed" ? t.success : t.accent;
-  return { when, what, money: moneyText, state: STATUS_LABELS[a.status] ?? "Запись", stateColor };
+  const what = [team, services.length > 0 ? services.join(", ") : note].filter(Boolean).join(" · ");
+  const status = visitStatus(a, todayYMD(), ctx.money);
+  return { when, what, status: status.text, statusColor: statusColor(status.kind, ctx.t) };
 }
