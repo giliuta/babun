@@ -125,6 +125,7 @@ import { effectiveBuffer } from "@/features/calendar/setting-options";
 import { useTeamSchedule } from "@/features/reference/team-schedule";
 import { useAppointments } from "@/features/calendar/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
+import { serverReason } from "@/features/calendar/server-reason";
 import { useBookingSave } from "@/features/appointments/useBookingSave";
 import { useCalendarActions, useEventRights, useRecordBlocks } from "@/features/appointments/useRecordRights";
 import { bookRights, readOnlyBookRights } from "@/features/appointments/record-blocks";
@@ -1357,6 +1358,22 @@ export default function BookScreen() {
   // карточкой, «назад» возвращает ровно в неё.
   // «Карточка из записи» как право убрано (владелец 02.10: «запись он
   // всегда может открывать, если он её видит») — дверь открыта всем.
+  // КЛИЕНТ ЗАПИСИ С ОПЛАТОЙ НЕ МЕНЯЕТСЯ (владелец 03.10: «если оплачено за
+  // одним клиентом — потом нельзя менять клиента… поставил Артёма, он оплатил
+  // наличными, а потом я поменял на другого — максимально странно»). Тап по
+  // клиенту не открывает выбор, а говорит почему; снятая оплата клиента не
+  // держит. То же правило у сервера (`protect_paid_appointment_finance`).
+  const moneyHoldsClient =
+    !!editing && ((editing.prepaid_amount ?? 0) > 0 || (editing.paid_amount ?? 0) > 0);
+  const pickClientOrRefuse = () => {
+    if (moneyHoldsClient) {
+      haptics.warning();
+      toast("Клиента не сменить: по записи есть оплата. Сначала снимите оплату", "info");
+      return;
+    }
+    setClientPickerOpen(true);
+  };
+
   const openClientCard = () => {
     if (!clientId) return;
     haptics.tap();
@@ -2063,7 +2080,8 @@ export default function BookScreen() {
       leaveBook();
     } catch (e) {
       haptics.error();
-      notify("Ошибка", (e as Error).message);
+      // Причина сервера словами, без «updateAppointment:» (03.10).
+      notify("Не удалось сохранить", serverReason(e) ?? (e as Error).message);
     }
   };
 
@@ -2658,7 +2676,7 @@ export default function BookScreen() {
                   client={client}
                   stats={clientStats}
                   summary={clientHistory}
-                  onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
+                  onPick={can.editClient ? pickClientOrRefuse : undefined}
                   onOpenCard={openClientCard}
                   note={
                     <InlineNoteField
@@ -3053,7 +3071,7 @@ export default function BookScreen() {
                   client={client}
                   stats={clientStats}
                   summary={clientHistory}
-                  onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
+                  onPick={can.editClient ? pickClientOrRefuse : undefined}
                   onOpenCard={openClientCard}
                   onClear={
                     can.editClient
