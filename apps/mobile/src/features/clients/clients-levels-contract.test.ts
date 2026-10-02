@@ -127,6 +127,11 @@ const phoneOpen = norm(readFileSync(join(MIGRATIONS_DIR, PHONE_OPEN), "utf8"));
 const SMS_JSON = "20261003013700_sms_message_client_and_template.sql";
 const smsJson = norm(readFileSync(join(MIGRATIONS_DIR, SMS_JSON), "utf8"));
 
+// SMS ИЗ ЗАПИСИ — КЛИЕНТУ НА ЭКРАНЕ (03.10): клиент сменён и не сохранён — SMS
+// ему и всё равно о записи. Охрана клиента сотрудника и номера — та же.
+const SMS_SEND = "20261003022700_sms_send_manual_record_client_on_screen.sql";
+const smsSend = norm(readFileSync(join(MIGRATIONS_DIR, SMS_SEND), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
@@ -147,7 +152,6 @@ describe("сервер: клиенты по уровням", () => {
     for (const fn of [
       "access_contact_client_ids",
       "sms_for_client",
-      "sms_send_manual",
       "set_client_sms_opt_out",
     ]) {
       assert.equal(lastDefiner(fn), CLIENT_BLOCKS, `${fn} переопределён позже`);
@@ -164,6 +168,7 @@ describe("сервер: клиенты по уровням", () => {
       assert.equal(lastDefiner(fn), LEAKS, `${fn} переопределён позже`);
     }
     assert.equal(lastDefiner("sms_message_json"), SMS_JSON, "sms_message_json переопределён позже");
+    assert.equal(lastDefiner("sms_send_manual"), SMS_SEND, "sms_send_manual переопределён позже");
     for (const fn of [
       "list_member_clients",
       "list_client_members",
@@ -405,6 +410,16 @@ describe("сервер: клиенты по уровням", () => {
       leaks.includes("if not is_owner and not (v_client = any(public.access_contact_client_ids()) or v_client = any(public.access_day_contact_client_ids())) then raise exception 'sms:phone'"),
       "выбор номера SMS проверяет угаданный номер",
     );
+    // Отправку переписала миграция «клиент на экране» (03.10) — охрана та же.
+    for (const guard of [
+      "if not is_owner and not public.member_client_in_team(v_client, v_team) then raise exception 'sms:rights'",
+      "if not is_owner and not (v_client = any(public.access_contact_client_ids()) or v_client = any(public.access_day_contact_client_ids())) then raise exception 'sms:phone'",
+      "if not public.sms_client_owns_phone(v_client, p_phone) then raise exception 'sms:phone'",
+      "if not is_owner and p_appointment_id is null and not (v_client = any(public.access_block_client_ids('clients.sms', 'write'))) then raise exception 'sms:rights'",
+      "where cl.id = v_client and cl.tenant_id = v_tenant;",
+    ]) {
+      assert.ok(smsSend.includes(guard), `отправка SMS потеряла охрану: ${guard}`);
+    }
     assert.ok(
       leaks.includes("and (v_team = any(public.access_calendars('record.client', 'read'))) is not true then raise exception 'sms:rights'"),
       "ссылка записи без «Клиент в записи»",

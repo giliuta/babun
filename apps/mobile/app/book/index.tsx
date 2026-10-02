@@ -1124,22 +1124,20 @@ export default function BookScreen() {
   // Сервису нужны ещё запись, клиент и календарь: SMS через сервис владелец
   // разрешает по календарям (STORY-089, волна 2).
   //
-  // КЛИЕНТ СМЕНЁН, НО НЕ СОХРАНЁН (03.10) — SMS уходит клиенту на экране, без
-  // записи: сервер берёт клиента из СОХРАНЁННОЙ записи, и номер нового он
-  // отбивал как чужой («sms:phone»). Сохранят — SMS снова о записи.
-  const smsAppointmentId =
-    editing?.id && client?.id && client.id === editing.client_id ? editing.id : null;
+  // КЛИЕНТ СМЕНЁН, НО НЕ СОХРАНЁН (03.10) — SMS всё равно о записи: сервер
+  // шлёт клиенту на экране (`sms_send_manual` берёт присланного клиента, а не
+  // сохранённого), и SMS ложится в блок SMS этой записи.
   const recordSmsContext = useMemo(
     () =>
       recordSmsVars
         ? {
             vars: recordSmsVars,
-            appointmentId: smsAppointmentId,
+            appointmentId: editing?.id ?? null,
             clientId: client?.id ?? null,
             teamId: teamId ?? null,
           }
         : null,
-    [client?.id, smsAppointmentId, recordSmsVars, teamId],
+    [client?.id, editing?.id, recordSmsVars, teamId],
   );
 
   // Keep the editable total in sync with catalog pricing until the operator
