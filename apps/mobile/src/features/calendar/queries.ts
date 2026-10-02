@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listAppointments as listAppointmentsCached } from "@babun/shared/sync/appointmentsCached";
+import { READ_ONLY_VIEW_FIELD } from "@babun/shared/sync/replayer";
 import {
   listDayExtras,
   setDayExtras,
@@ -94,6 +95,11 @@ export function pagingClient(base: typeof supabase = supabase): typeof supabase 
   };
 
   return {
+    // ВИД ТОЛЬКО ДЛЯ ЧТЕНИЯ: обёртка подталкивает выгрузку очереди тем
+    // клиентом, что ей дали, а писать шиму нечем — выгрузка пойдёт клиентом
+    // хоста (`READ_ONLY_VIEW_FIELD`, 03.10: правка записи падала «update is
+    // not a function» и откатывалась).
+    [READ_ONLY_VIEW_FIELD]: true,
     from: (table: string) => ({
       select: (columns: string) => ({
         // Thenable + explicit throw-guards for every builder method the shim
@@ -132,8 +138,9 @@ export function pagingClient(base: typeof supabase = supabase): typeof supabase 
 // отправлял бы вторую страницу под другой компанией, сервер отвечал нулём
 // строк, и `cacheReplaceTenant` стирал остаток записей этой компании с
 // меткой «сервер сказал: пусто». Привязанный клиент несёт заголовок `tenantId`
-// на всех страницах, в том числе у отпущенного перечитывания. У шима нет поля
-// привязки, так что подталкивание очереди выгрузки работает как раньше.
+// на всех страницах, в том числе у отпущенного перечитывания. Сам шим —
+// вид только для чтения: подталкивание очереди выгрузки им сливается
+// настоящим клиентом хоста (`writeClient` умолчаний реплеера).
 export async function listAppointmentsPaged(
   tenantId: string,
 ): Promise<Appointment[]> {

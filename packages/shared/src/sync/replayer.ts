@@ -128,6 +128,10 @@ export interface ReplayerOptions {
   /** Called when an op fails MAX_ATTEMPTS times. UI surfaces a
    *  retry-able warning in the sidebar / SyncQueuePanel. */
   onPermanentFailure?: (op: QueuedOp) => void;
+  /** Настоящий клиент хоста. Им идёт выгрузка, когда звавший дал ВИД ТОЛЬКО
+   *  ДЛЯ ЧТЕНИЯ (`READ_ONLY_VIEW_FIELD`); нет — такой заход ничего не
+   *  выгружает. Хост кладёт его в умолчания (`setReplayerDefaults`). */
+  writeClient?: DbSupabase;
 }
 
 let draining = false;
@@ -160,8 +164,28 @@ export function setReplayerDefaults(
   replayerDefaults = defaults ? { ...defaults } : {};
 }
 
-function withReplayerDefaults(opts: ReplayerOptions): ReplayerOptions {
-  return { ...replayerDefaults, ...opts, supabase: opts.supabase };
+/** ПОЛЕ, КОТОРЫМ КЛИЕНТ ОБЪЯВЛЯЕТ СЕБЯ ВИДОМ ТОЛЬКО ДЛЯ ЧТЕНИЯ.
+ *
+ *  Шим постраничного чтения календаря (`pagingClient`) отдаётся обёртке
+ *  `listAppointments` вместо клиента, и её фоновое перечитывание, увидев
+ *  ждущие операции, подталкивает выгрузку ЭТИМ ЖЕ клиентом. А у шима
+ *  `from()` умеет только `select`: выгрузка правки падала «update is not a
+ *  function», операция после трёх попыток ложилась навсегда, и правка
+ *  пропадала (владелец 03.10: сменил клиента записи — через десять секунд
+ *  вернулся прежний). Вид объявляет себя этим полем, и выгрузка идёт
+ *  настоящим клиентом хоста (`writeClient`), а без него не идёт вовсе. */
+export const READ_ONLY_VIEW_FIELD = "__babunReadOnlyView";
+
+function isReadOnlyView(supabase: DbSupabase): boolean {
+  return (supabase as unknown as Record<string, unknown>)[READ_ONLY_VIEW_FIELD] === true;
+}
+
+/** Опции слива с умолчаниями хоста; `null` — сливать нечем (звавший дал
+ *  вид только для чтения, а клиента хоста нет). */
+function withReplayerDefaults(opts: ReplayerOptions): ReplayerOptions | null {
+  const merged = { ...replayerDefaults, ...opts };
+  const supabase = isReadOnlyView(opts.supabase) ? merged.writeClient : opts.supabase;
+  return supabase ? { ...merged, supabase } : null;
 }
 
 /** Public trigger — call from `online` listener, onResync, manual
@@ -169,6 +193,7 @@ function withReplayerDefaults(opts: ReplayerOptions): ReplayerOptions {
  *  and self-coalescing. */
 export async function kickReplayer(opts: ReplayerOptions): Promise<void> {
   const effectiveOpts = withReplayerDefaults(opts);
+  if (!effectiveOpts) return;
   if (draining) {
     pendingFollowup = true;
     return;

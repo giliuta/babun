@@ -31,6 +31,7 @@ import {
   __resetReplayerForTests,
   BOUND_TENANT_FIELD,
   kickReplayer,
+  READ_ONLY_VIEW_FIELD,
   setReplayerDefaults,
   type QuotaGate,
 } from "./replayer";
@@ -1050,5 +1051,60 @@ describe("replayer — привязанный к компании клиент",
 
     expect(calls).toHaveLength(0);
     expect(await queueDepth()).toBe(1);
+  });
+});
+
+// ─── Вид только для чтения подталкивает, сливает клиент хоста ──────────
+// Шим постраничного календаря отдаётся обёртке `listAppointments` вместо
+// клиента, и её фоновое перечитывание подталкивает выгрузку им же. У шима
+// `from()` умеет только `select` — правка записи падала «update is not a
+// function» и после трёх попыток пропадала (владелец 03.10: сменил клиента
+// записи, через десять секунд вернулся прежний).
+
+describe("replayer — вид только для чтения", () => {
+  /** Шим под видом клиента: только `select`, как `pagingClient`. */
+  const readOnlyView = () => ({
+    [READ_ONLY_VIEW_FIELD]: true,
+    from: () => ({ select: () => ({}) }),
+  });
+
+  const queueClientChange = () =>
+    enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { client_id: UUID_B, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+
+  test("без клиента хоста — ничего не сливает и не портит, очередь цела", async () => {
+    await queueClientChange();
+    let permFailed = false;
+
+    await kickReplayer({
+      supabase: asSupabase(readOnlyView()),
+      tenantId: TENANT,
+      onPermanentFailure: () => {
+        permFailed = true;
+      },
+    });
+
+    expect(permFailed).toBe(false);
+    const remaining = await dequeueAll();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].attempts).toBe(0);
+  });
+
+  test("с клиентом хоста в умолчаниях — правка уходит им", async () => {
+    await queueClientChange();
+    const { client, calls } = makeFakeSupabase((rec) =>
+      rec.op === "update" ? { data: [{ id: UUID_A }], error: null } : { data: null, error: null },
+    );
+    setReplayerDefaults({ writeClient: asSupabase(client) });
+
+    await kickReplayer({ supabase: asSupabase(readOnlyView()), tenantId: TENANT });
+
+    expect(await queueDepth()).toBe(0);
+    expect(calls.some((c) => c.table === "appointments" && c.op === "update")).toBe(true);
   });
 });

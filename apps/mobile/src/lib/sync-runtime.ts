@@ -86,6 +86,9 @@ export function startSyncRuntime(tenantId: string): () => void {
     onConflict: opts.onConflict,
     onChanged: opts.onChanged,
     onPermanentFailure: opts.onPermanentFailure,
+    // Вид только для чтения (шим постраничного календаря) подталкивает
+    // выгрузку собой — сливается она этим, настоящим клиентом (03.10).
+    writeClient: supabase,
   });
   // The clients wrapper intentionally refuses junction-table tag edits while
   // offline. Its warning adapter used to remain the default no-op on mobile,
