@@ -1,6 +1,5 @@
 import type { CardAccess } from "@/features/clients/card-access";
 import { useCardAccess } from "@/features/clients/use-card-access";
-import type { ReactNode } from "react";
 import { Paperclip } from "lucide-react-native";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -49,10 +48,6 @@ interface ClientProfileBlocksProps {
   /** Карточку только что создали ради файла — сразу открыть лист. */
   openFilesOnArrive?: boolean;
   onArrived?: () => void;
-  /** Метка и тег плитками — стоят ПЕРЕД «Личным» (владелец 22.09: «это не
-   *  должно быть на первой странице»). Собирает страница: ей видно каталог
-   *  тегов и право менять. */
-  labelTags?: ReactNode;
 }
 
 // БЛОКИ КАРТОЧКИ — НА `SectionCard`, КАК НА СТРАНИЦЕ ЗАПИСИ (владелец
@@ -86,7 +81,6 @@ export function ClientProfileBlocks({
   onDraftFiles,
   openFilesOnArrive,
   onArrived,
-  labelTags,
 }: ClientProfileBlocksProps) {
   // Что видно и что правится — страница уже спросила (`card-access.ts`):
   // выключатель команды клиента, права сотрудника по блокам, права компании.
@@ -170,7 +164,6 @@ export function ClientProfileBlocks({
           onOpenAll={onOpenRequisites}
         />
       ) : null}
-      {labelTags ?? null}
       {a.personal.show ? (
         <PersonalBlock client={client} update={update} readOnly={!a.personal.edit} draft={draft} />
       ) : null}

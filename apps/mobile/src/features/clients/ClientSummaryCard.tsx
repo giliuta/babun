@@ -4,7 +4,8 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { todayYMD } from "@/features/clients/filter";
 import { useClientsCapabilities } from "@/features/clients/company-scope";
 import { useTeams } from "@/features/reference/queries";
-import { VisitRow } from "@/features/clients/VisitRow";
+import { VisitDayHeader, VisitRow } from "@/features/clients/VisitRow";
+import { SelectList } from "@/components/ui/select-rows";
 import { useThemeColors } from "@/theme/colors";
 
 // МАЛЕНЬКАЯ КАРТОЧКА ПОД НОМЕРОМ (владелец 2026-07-26). Не строки-факты, а
@@ -57,14 +58,18 @@ export function ClientSummaryCard({
     );
   }
   return (
-    <VisitRow
-      appointment={lastRecord}
-      team={lastRecord.team_id ? teamsById.get(lastRecord.team_id) : undefined}
-      today={todayYMD()}
-      showMoney={money}
-      // Рамка — у блока «История», своей у строки нет.
-      framed={false}
-      onPress={onOpenHistory}
-    />
+    // Тот же день и та же плашка, что в «Истории».
+    <>
+      <VisitDayHeader date={lastRecord.date} />
+      <SelectList>
+      <VisitRow
+        appointment={lastRecord}
+        team={lastRecord.team_id ? teamsById.get(lastRecord.team_id) : undefined}
+        today={todayYMD()}
+        showMoney={money}
+        onPress={onOpenHistory}
+      />
+      </SelectList>
+    </>
   );
 }

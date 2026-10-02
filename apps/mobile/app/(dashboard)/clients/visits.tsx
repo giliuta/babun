@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { Fragment, useMemo } from "react";
+import { Pressable, ScrollView, Text } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount } from "@babun/shared/local/appointments";
@@ -9,12 +9,19 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { RowCaption } from "@/components/ui/card-rows";
+import { SelectList } from "@/components/ui/select-rows";
+import { useGuardedBookingNav } from "@/features/clients/card-booking";
+import { ClientScreenFooter } from "@/features/clients/ClientScreenFooter";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
+import { useClientsCapabilities, useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
+import { usePlanAllows } from "@/features/settings/tenant";
 import { visitsWord } from "@/features/clients/format";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { todayYMD } from "@/features/clients/filter";
 import { unpaidVisits } from "@/features/clients/unpaid-visits";
 import { useClient } from "@/features/clients/queries";
-import { VisitRow } from "@/features/clients/VisitRow";
+import { VisitDayHeader, VisitRow } from "@/features/clients/VisitRow";
 import { useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -33,12 +40,14 @@ import { useCardAccess } from "@/features/clients/use-card-access";
 // в историю, а второй «назад» — к клиенту. Раньше тап уводил в таб
 // «Календарь», и возврат выбрасывал человека туда же.
 //
-// ОДНИМ СПИСКОМ, КАЖДАЯ ЗАПИСЬ — БЛОКОМ (владелец 03.10: «блоков „Впереди“
-// и „2026“ не надо — полностью поэтапно вниз списком»; затем: «не
-// разделитель-волосок, а полноценный блок записи: иконка цветом записи,
-// долг или оплачено, какая команда»). Блок — `VisitRow`, тот же, что
-// последняя запись на карточке. Услуги не пишутся. Заметки клиента в
-// историю записей не входят — они в блоке «Заметка» карточки.
+// ОДНИМ СПИСКОМ, ОТДЕЛЬНЫМИ ПЛАШКАМИ (владелец 03.10: «блоков „Впереди“ и
+// „2026“ не надо — полностью поэтапно вниз списком»; «полноценные блоки,
+// отдельные друг от друга, красивые, компактные» — как список тегов).
+// Плашка — `VisitRow` (наш `SelectRow`) в `SelectList`.
+// Услуги не пишутся; заметки клиента — в блоке «Заметка» карточки.
+//
+// ВНИЗУ — «ЗАПИСАТЬ КЛИЕНТА» (владелец 03.10): та же дверь, что «Записать» в
+// «⋯» карточки, с тем же правом «Новые записи».
 
 // Строка — `VisitRow`: та же, что последняя запись на карточке.
 
@@ -103,6 +112,13 @@ function ClientVisitsScreen() {
     [appointments, unpaidOnly, unpaidIds],
   );
 
+  // Записи одного дня — под одним заголовком, дни — от свежих к старым.
+  const days = useMemo(() => {
+    const byDay = new Map<string, Appointment[]>();
+    for (const a of rows) byDay.set(a.date, [...(byDay.get(a.date) ?? []), a]);
+    return [...byDay.entries()];
+  }, [rows]);
+
   // Итог сверху — то, ради чего историю чаще всего и открывают.
   const done = appointments.filter((a) => a.status === "completed");
   const spent = done.reduce(
@@ -120,6 +136,20 @@ function ClientVisitsScreen() {
           }`
         : `${done.length} ${visitsWord(done.length)}`
       : null;
+
+  // «ЗАПИСАТЬ КЛИЕНТА» — тем же правом, что «Записать» в «⋯» карточки:
+  // «Новые записи» в команде записи; партнёру — ещё и «Меню клиента».
+  const guardedBook = useGuardedBookingNav();
+  const calendarActionsFor = useCalendarActionsReader();
+  const caps = useClientsCapabilities();
+  const scope = useClientsScopeOrNull();
+  const bookInPlan = usePlanAllows("book-clients");
+  const bookTeam = client?.team_id ?? rows.find((a) => a.team_id)?.team_id ?? null;
+  const canBook =
+    !!client &&
+    caps.book &&
+    (scope?.kind === "member" ? clientBlockLevel(client, "clients.menu") === "write" : bookInPlan) &&
+    calendarActionsFor(bookTeam).create;
 
   // Запись открывается ПОВЕРХ истории, а не через таб «Календарь»
   // (владелец 2026-07-26): «назад» — сюда, ещё раз «назад» — в клиента.
@@ -168,33 +198,49 @@ function ClientVisitsScreen() {
       ) : rows.length === 0 ? (
         <EmptyState fill title={unpaidOnly ? "Неоплаченных записей нет" : "Записей пока нет"} />
       ) : (
-        <FlatList
-          data={rows}
-          keyExtractor={(a) => a.id}
-          contentContainerStyle={{ paddingTop: 8, paddingBottom: 32 }}
-          ListHeaderComponent={
-            caption ? (
-              <View style={{ paddingBottom: 10 }}>
-                <RowCaption
-                  text={caption}
-                  tone={unpaidOnly || (showMoney && unpaidList.total > 0) ? "warning" : "quiet"}
-                />
-              </View>
-            ) : null
-          }
-          // Каждая запись — отдельным блоком с воздухом между ними (03.10).
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-          renderItem={({ item: a }) => (
-            <VisitRow
-              appointment={a}
-              team={a.team_id ? teamsById.get(a.team_id) : undefined}
-              today={today}
-              showMoney={showMoney}
-              onPress={historyOnly.has(a.id) ? undefined : () => open(a)}
+        <ScrollView contentContainerStyle={{ paddingTop: 4, paddingBottom: 24 }}>
+          {caption ? (
+            <RowCaption
+              text={caption}
+              tone={unpaidOnly || (showMoney && unpaidList.total > 0) ? "warning" : "quiet"}
             />
-          )}
-        />
+          ) : null}
+          {/* День — заголовком над своими плашками, как в «Финансах»;
+              плашки — отдельные, с воздухом между ними, как список тегов. */}
+          {days.map(([date, list]) => (
+            <Fragment key={date}>
+              <VisitDayHeader date={date} />
+              <SelectList>
+                {list.map((a) => (
+                  <VisitRow
+                    key={a.id}
+                    appointment={a}
+                    team={a.team_id ? teamsById.get(a.team_id) : undefined}
+                    today={today}
+                    showMoney={showMoney}
+                    onPress={historyOnly.has(a.id) ? undefined : () => open(a)}
+                  />
+                ))}
+              </SelectList>
+            </Fragment>
+          ))}
+        </ScrollView>
       )}
+      {/* «Записать клиента» — внизу, на месте главного действия страницы. */}
+      {client && access.history.show ? (
+        <ClientScreenFooter
+          label="Записать клиента"
+          disabled={!canBook}
+          onPress={() =>
+            guardedBook(client, {
+              locationId:
+                client.locations?.find((l) => l.isPrimary)?.id ?? client.locations?.[0]?.id ?? null,
+              teamId: bookTeam,
+            })
+          }
+          overTabBar
+        />
+      ) : null}
     </Screen>
   );
 }

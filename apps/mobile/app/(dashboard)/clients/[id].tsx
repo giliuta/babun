@@ -741,6 +741,13 @@ export function ClientDetailScreen() {
             без ключа локальное состояние строк переживает смену клиента:
             набранный, но не сохранённый номер закоммитился бы в ДРУГОГО
             клиента при уходе фокуса. */}
+        {/* МЕТКА И ТЕГ — САМЫМ ВЕРХОМ, ПЕРЕД БЛОКОМ «КЛИЕНТ» (владелец 03.10:
+            «метку и тег поставим в самый верх перед блоком „Клиент“»; 22.09
+            они уезжали вниз, к «Личному»). */}
+        {labelsOn ? (
+          <ClientLabelTags client={c} update={update} tags={tags} readOnly={!access.labels.edit} />
+        ) : null}
+
         <ClientHeader
           key={`header-${id}`}
           client={c}
@@ -855,11 +862,6 @@ export function ClientDetailScreen() {
           }
           onOpenRequisites={() =>
             router.push({ pathname: "/clients/requisites", params: clientSubParams(id, scope) })
-          }
-          labelTags={
-            labelsOn ? (
-              <ClientLabelTags client={c} update={update} tags={tags} readOnly={!access.labels.edit} />
-            ) : null
           }
           onDraftFiles={() => onDraftDoor("files")}
           openFilesOnArrive={!isDraft && openOnArrive === "files"}

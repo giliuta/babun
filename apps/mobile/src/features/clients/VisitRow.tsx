@@ -1,53 +1,67 @@
-import { Pressable, Text, View } from "react-native";
-import {
-  CalendarCheck,
-  CalendarClock,
-  CalendarX2,
-  ChevronRight,
-  type LucideIcon,
-} from "lucide-react-native";
+import { Text, View, useWindowDimensions } from "react-native";
+import { CalendarCheck, CalendarClock, CalendarX2, type LucideIcon } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { Card } from "@/components/ui/Card";
+import { SelectRow } from "@/components/ui/select-rows";
 import { humanDay } from "@/features/appointments/helpers";
 import { visitStatus, type VisitStatusKind } from "@/features/clients/visit-status";
 import { useRecordColor } from "@/features/clients/use-record-color";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 
-// ЗАПИСЬ КЛИЕНТА — БЛОКОМ (владелец 03.10: «не разделитель-волосок, а
-// полноценный блок записи: иконка цветом этой записи, долг или оплачено,
-// какая команда сделала — информативный, красивый блок»).
-//
-// Одна и та же запись в двух местах: в «Истории» — каждая отдельной
-// карточкой, на карточке клиента — последняя, внутри блока «История» (там
-// своей рамки нет, рамка — у блока). Слева плитка цветом записи — тем же,
-// что у её блока в календаре (`useRecordColor`, правило `record-color`); значок
-// говорит о самой записи (выполнена, впереди, отменена). В середине — день,
-// время и команда; справа — состояние своим цветом, с суммой в том же слове.
+// ЗАПИСЬ КЛИЕНТА — ОТДЕЛЬНОЙ ПЛАШКОЙ, КАК ТЕГИ И МЕТКИ (владелец 03.10:
+// «полноценные блоки отдельные друг от друга, красивые, компактные — типа
+// такого плана», показав список тегов). Это наш `SelectRow`: плашка залита
+// тинтом цвета записи, слева плитка тем же цветом со значком; цвет — тот
+// же, что у блока записи в календаре (`useRecordColor`).
+//   · ДАТА — НЕ В ПЛАШКЕ, А ЗАГОЛОВКОМ НАД НЕЙ, как дни в «Финансах»
+//     (владелец 03.10: «разделитель даты — перед плашкой, как в финансах»),
+//     с годом («ЧТ, 1 ОКТЯБРЯ 2026»: клиент бывает прошлогодний);
+//   · название — команда, подпись — время;
+//   · справа — только число своим цветом, в столбике одной ширины:
+//     оплачено — зелёным, долг — янтарём, впереди — кобальтом.
+// Плашки стоят в `SelectList` — с воздухом между ними, без швов.
 
-/** Цвет состояния — тем же языком, что метка визита в списке клиентов:
- *  оплачено — зелёным, долг и незакрытая — янтарём, впереди — кобальтом. */
-function statusColor(kind: VisitStatusKind, t: ThemeColors): string {
-  switch (kind) {
-    case "paid":
-      return t.success;
-    case "debt":
-    case "unclosed":
-      return t.warning;
-    case "ahead":
-      return t.accent;
-    case "cancelled":
-      return t.faint;
-    default:
-      return t.sub;
-  }
+/** «чт, 1 октября 2026» — день с годом всегда. */
+export function visitDay(ymd: string): string {
+  const year = ymd.slice(0, 4);
+  return `${humanDay(ymd)} ${year}`;
+}
+
+/** Заголовок дня над плашками — тем же шрифтом и местом, что день в
+ *  «Финансах» (`RecordRowsPanel`). */
+export function VisitDayHeader({ date }: { date: string }) {
+  const t = useThemeColors();
+  return (
+    <View className="px-4 pb-1.5 pt-3">
+      <Text
+        maxFontSizeMultiplier={1.3}
+        className="text-xs font-semibold uppercase tracking-wider"
+        style={{ color: t.sub }}
+      >
+        {visitDay(date)}
+      </Text>
+    </View>
+  );
+}
+
+/** Цвет числа — тем же языком, что метка визита в списке клиентов. */
+function amountColor(kind: VisitStatusKind, t: ThemeColors): string {
+  if (kind === "paid") return t.success;
+  if (kind === "debt") return t.warning;
+  if (kind === "ahead") return t.accent;
+  return t.faint;
 }
 
 /** Значок — о самой записи: впереди, отменена или уже была. */
 function statusIcon(kind: VisitStatusKind): LucideIcon {
-  if (kind === "ahead" || kind === "unclosed") return CalendarClock;
+  if (kind === "ahead") return CalendarClock;
   if (kind === "cancelled") return CalendarX2;
   return CalendarCheck;
 }
+
+/** Столбик числа — под «€1 250» при крупном тексте: числа стоят ровно. */
+const AMOUNT_COLUMN = 64;
+
+const noop = () => {};
 
 export interface VisitTeam {
   name: string;
@@ -60,88 +74,50 @@ export function VisitRow({
   team,
   today,
   showMoney,
-  framed = true,
   onPress,
 }: {
   appointment: Appointment;
   /** Команда записи из справочника с архивом; нет — без подписи команды. */
   team: VisitTeam | undefined;
   today: string;
-  /** Право «Долг и деньги»: нет — состояние без сумм. */
+  /** Право «Долг и деньги»: нет — числа нет. */
   showMoney: boolean;
-  /** Своя карточка (в «Истории»); `false` — внутри блока карточки клиента. */
-  framed?: boolean;
-  /** Нет — блок показание, без шеврона. */
+  /** Нет — плашка показание (запись открыть нельзя). */
   onPress?: () => void;
 }) {
   const t = useThemeColors();
+  const { fontScale } = useWindowDimensions();
   const status = visitStatus(a, today, showMoney);
-  const Icon = statusIcon(status.kind);
-  const tile = useRecordColor(a, team?.color, today) || t.accent;
+  const hue = useRecordColor(a, team?.color, today) || t.accent;
   const teamName = team ? (team.is_active ? team.name : `${team.name} · в архиве`) : "";
   const time = a.time_start ? a.time_start.slice(0, 5) : "";
-  const sub = [time, teamName].filter(Boolean).join(" · ");
-  const day = humanDay(a.date);
-  const body = (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole={onPress ? "button" : undefined}
-      accessibilityLabel={[day, sub, status.text].filter(Boolean).join(", ")}
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingVertical: 12,
-        paddingLeft: 14,
-        paddingRight: 10,
-        minHeight: 64,
-        backgroundColor: pressed && onPress ? t.pressed : "transparent",
-        opacity: status.kind === "cancelled" ? 0.6 : 1,
-      })}
-    >
-      <View
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 10,
-          borderCurve: "continuous",
-          backgroundColor: tile,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Icon color="#fff" size={20} strokeWidth={2.2} />
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text
-          maxFontSizeMultiplier={1.3}
-          numberOfLines={1}
-          style={{ fontSize: 16, fontWeight: "600", color: t.ink }}
-        >
-          {day}
-        </Text>
-        {sub ? (
-          <Text
-            maxFontSizeMultiplier={1.3}
-            numberOfLines={1}
-            style={{ fontSize: 14, color: t.sub, fontVariant: ["tabular-nums"] }}
-          >
-            {sub}
-          </Text>
-        ) : null}
-      </View>
-      {/* Состояние — про деньги, сумма в том же слове («Оплачено €300»,
-          «Ожидается €50», «Долг €30»); серой суммы под ним больше нет. */}
-      <Text
-        maxFontSizeMultiplier={1.3}
-        numberOfLines={1}
-        style={{ fontSize: 15, fontWeight: "600", color: statusColor(status.kind, t), fontVariant: ["tabular-nums"] }}
-      >
-        {status.text}
-      </Text>
-      {onPress ? <ChevronRight color={t.chevron} size={18} strokeWidth={2.2} /> : null}
-    </Pressable>
+  return (
+    <SelectRow
+      icon={statusIcon(status.kind)}
+      color={hue}
+      title={teamName || "Запись"}
+      subtitle={time || undefined}
+      accessibilityLabel={[visitDay(a.date), time, teamName, status.label].filter(Boolean).join(", ")}
+      onPress={onPress ?? noop}
+      trailing={
+        showMoney ? (
+          <View style={{ minWidth: Math.round(AMOUNT_COLUMN * Math.min(fontScale, 1.3)), alignItems: "flex-end" }}>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              style={{
+                fontSize: 15,
+                fontWeight: "700",
+                color: amountColor(status.kind, t),
+                fontVariant: ["tabular-nums"],
+                textDecorationLine: status.kind === "cancelled" ? "line-through" : "none",
+              }}
+            >
+              {status.text}
+            </Text>
+          </View>
+        ) : undefined
+      }
+    />
   );
-  return framed ? <Card style={{ marginHorizontal: 16 }}>{body}</Card> : body;
 }

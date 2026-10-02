@@ -69,13 +69,14 @@ describe("метка и тег — плитками перед «Личным»"
     assert.match(tiles(), /sub=\{labelAuto \? "по записи" : undefined\}/);
     assert.match(tiles(), /onPick=\{\(name\) => update\(\{ city: name, city_manual: true \}\)\}/);
   });
-  test("плитки стоят перед «Личным», а не в шапке", () => {
+  test("плитки стоят самым верхом, перед блоком «Клиент» (03.10)", () => {
     const personal = read("blocks/PersonalBlock.tsx");
     assert.doesNotMatch(personal, /label="Метка"|label="Теги"/);
-    // Владелец 22.09: «это не должно быть на первой странице» — плитки уехали
-    // вниз, к «Личному».
-    // С 30.09 «Личное» команда может выключить — плитки всё равно перед ним.
-    assert.match(read("ClientProfileBlocks.tsx"), /\{labelTags \?\? null\}\s*\{a\.personal\.show \? \(\s*<PersonalBlock/);
+    // Владелец 03.10: «метку и тег поставим в самый верх перед блоком
+    // „Клиент“» (22.09 они уезжали вниз, к «Личному»).
+    const page = read("../../../app/(dashboard)/clients/[id].tsx");
+    assert.match(page, /<ClientLabelTags[\s\S]{0,400}<ClientHeader/);
+    assert.doesNotMatch(read("ClientProfileBlocks.tsx"), /labelTags/);
     assert.doesNotMatch(read("ClientHeader.tsx"), /identity/);
   });
 });
