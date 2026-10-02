@@ -107,11 +107,14 @@ export function useMergeDuplicate({
       for (const a of moving) {
         await updateAppt.mutateAsync({ id: a.id, patch: { client_id: primary.id } });
       }
-      // 3. Дубль — в архив, не в удаление. Архивация отчитывается числами, а
+      // 3. Дубль — в «Удалённые клиенты» (архива с 03.10 нет): визиты уже
+      //    у основной, и без истории он сотрётся через 30 дней; оставшиеся
+      //    за ним инвойсы или деньги база не даст стереть сама
+      //    (`client_history_never_purges`). Мутация отчитывается числами, а
       //    не исключением: без проверки живой дубль сошёл бы за успех.
-      const res = await archive.mutateAsync({ ids: [dupRow.id] });
+      const res = await archive.mutateAsync({ ids: [dupRow.id], trash: true });
       if (res.failed > 0 || res.archived === 0) {
-        throw new Error("Карточка объединена, но дубль не ушёл в архив");
+        throw new Error("Карточка объединена, но дубль не удалился");
       }
       haptics.success();
       toast("Объединили");

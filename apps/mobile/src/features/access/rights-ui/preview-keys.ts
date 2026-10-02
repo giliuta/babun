@@ -45,6 +45,7 @@ export const CLIENTS_PREVIEW_KEYS: readonly string[] = [
   "clients.scope",
   "clients.create",
   "clients.menu",
+  "clients.delete",
 ];
 
 /** Блоки карточки клиента (владелец 30.09: «страница клиентов по правам —

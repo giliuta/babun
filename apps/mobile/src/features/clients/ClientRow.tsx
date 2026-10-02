@@ -5,14 +5,12 @@ import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import {
-  Archive,
   Ban,
   Bell,
   CalendarClock,
-  CalendarPlus,
   Check,
   Clock,
-  Pin,
+  Trash2,
 } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
@@ -48,9 +46,8 @@ export default function ClientRow({
   picked,
   onPress,
   onLongPress,
-  onBook,
   onRemind,
-  onArchive,
+  onDelete,
   onSwipeOpen,
   trailing,
 }: {
@@ -65,15 +62,13 @@ export default function ClientRow({
   picked: boolean;
   onPress: () => void;
   onLongPress: () => void;
-  /** Свайп вправо: открыть запись для этого клиента. Жесты НЕОБЯЗАТЕЛЬНЫ:
-   *  в архиве и корзине глаголы другие («Восстановить», «Стереть»), и
-   *  привычный флик «убери» там означал бы не то. Без обработчиков строка
-   *  просто не оборачивается в свайп. */
-  onBook?: () => void;
-  /** Свайп влево: лист «Напомнить». */
+  /** Свайп вправо: лист «Напомнить». Жесты НЕОБЯЗАТЕЛЬНЫ: в корзине
+   *  глаголы другие («Восстановить», «Стереть»), и привычный флик «убери»
+   *  там означал бы не то. Без обработчика стороны нет; без обоих строка
+   *  не оборачивается в свайп. */
   onRemind?: () => void;
-  /** Свайп влево: архив (спрашивает подтверждение сам). */
-  onArchive?: () => void;
+  /** Свайп влево: «Удалить» (спрашивает подтверждение сам). */
+  onDelete?: () => void;
   /** Открылся свайп этой строки — список закрывает предыдущий. */
   onSwipeOpen?: (row: SwipeableMethods | null) => void;
   /** Хвост строки ВМЕСТО кнопки связи: «через 27 дней» в корзине. */
@@ -111,7 +106,6 @@ export default function ClientRow({
   // порядке экрана, а не только имя+телефон.
   const a11yLabel = [
     client.full_name || "Без имени",
-    client.pinned_at ? "закреплён" : "",
     client.blacklisted ? "чёрный список" : "",
     // Номер, потом дата — в порядке строки на экране.
     client.phone ?? "",
@@ -164,9 +158,6 @@ export default function ClientRow({
         ) : null}
         <View className="flex-1">
           <View className="flex-row items-center gap-1.5">
-            {client.pinned_at ? (
-              <Pin color={t.accent} size={12} strokeWidth={2.5} />
-            ) : null}
             {/* Чёрный список: в списке забаненный клиент был НЕОТЛИЧИМ от
                 обычного (маркер жил только на карточке) — мастер мог
                 позвонить и записать того, кого владелец занёс. */}
@@ -262,15 +253,16 @@ export default function ClientRow({
   // Хуже: свайп ВЛЕВО — то место, где во всех приложениях iPhone лежит
   // «Удалить». Заученный флик «убери» звонил клиенту, а звонок не отменить.
   //
-  // СТАЛО, по закону направления (он же в соседних «Чатах»):
-  //   вправо = продвинуть  → «Записать»
-  //   влево  = отложить/убрать → «Напомнить» + «Архив»
-  // Связи в жестах нет вовсе: она в зелёной кнопке — единственной
-  // поверхности, которая читает настройку «Способы связи» и её порядок.
-  // Свайп больше не зависит от наличия телефона: ни один из глаголов номера
-  // не требует (раньше у клиента без номера жеста не было совсем).
-  // Без глаголов свайпа (архив, корзина) строка остаётся просто строкой.
-  if (selectionMode || !onBook || !onRemind || !onArchive) return row;
+  // СТАЛО (владелец 03.10: «„Записать" убираем, туда — „Напомнить",
+  // вправо — соответственно „Удалить"; архива не будет»):
+  //   вправо = отложить → «Напомнить»
+  //   влево  = убрать   → «Удалить», там же, где во всех приложениях iPhone
+  // «Записать» осталась в меню долгого нажатия. Связи в жестах нет вовсе:
+  // она в зелёной кнопке — единственной поверхности, которая читает
+  // настройку «Способы связи» и её порядок. Свайп не зависит от наличия
+  // телефона: ни один из глаголов номера не требует.
+  // Без глаголов свайпа (корзина, нет прав) строка остаётся просто строкой.
+  if (selectionMode || (!onRemind && !onDelete)) return row;
   const closeSwipe = () => swipeRef.current?.close();
   return (
     <ReanimatedSwipeable
@@ -289,74 +281,60 @@ export default function ClientRow({
         haptics.tap();
         onSwipeOpen?.(swipeRef.current);
       }}
-      renderLeftActions={() => (
-        <Pressable
-          onPress={() => {
-            closeSwipe();
-            haptics.tap();
-            onBook();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`Записать — ${client.full_name || client.phone}`}
-          className="w-[88px] items-center justify-center gap-1"
-          style={{ backgroundColor: t.accent }}
-        >
-          <CalendarPlus color="#fff" size={ICON.sm} />
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="text-[11px] font-semibold"
-            style={{ color: "#fff" }}
-          >
-            Записать
-          </Text>
-        </Pressable>
-      )}
-      renderRightActions={() => (
-        <View className="flex-row">
-          <Pressable
-            onPress={() => {
-              closeSwipe();
-              haptics.tap();
-              onRemind();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`Напомнить — ${client.full_name || client.phone}`}
-            className="w-[88px] items-center justify-center gap-1"
-            style={{ backgroundColor: t.warning }}
-          >
-            <Bell color="#fff" size={ICON.sm} />
-            <Text
-              maxFontSizeMultiplier={1.3}
-              className="text-[11px] font-semibold"
-              style={{ color: "#fff" }}
-            >
-              Напомнить
-            </Text>
-          </Pressable>
-          {/* Архив спрашивает подтверждение (см. confirmArchiveOne) — поэтому
-              он допустим у пальца, а полного свайпа здесь нет вовсе. */}
-          <Pressable
-            onPress={() => {
-              closeSwipe();
-              haptics.warning();
-              onArchive();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`В архив — ${client.full_name || client.phone}`}
-            className="w-[88px] items-center justify-center gap-1"
-            style={{ backgroundColor: t.danger }}
-          >
-            <Archive color="#fff" size={ICON.sm} />
-            <Text
-              maxFontSizeMultiplier={1.3}
-              className="text-[11px] font-semibold"
-              style={{ color: "#fff" }}
-            >
-              В архив
-            </Text>
-          </Pressable>
-        </View>
-      )}
+      renderLeftActions={
+        onRemind
+          ? () => (
+              <Pressable
+                onPress={() => {
+                  closeSwipe();
+                  haptics.tap();
+                  onRemind();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Напомнить — ${client.full_name || client.phone}`}
+                className="w-[88px] items-center justify-center gap-1"
+                style={{ backgroundColor: t.warning }}
+              >
+                <Bell color="#fff" size={ICON.sm} />
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  className="text-[11px] font-semibold"
+                  style={{ color: "#fff" }}
+                >
+                  Напомнить
+                </Text>
+              </Pressable>
+            )
+          : undefined
+      }
+      renderRightActions={
+        onDelete
+          ? () => (
+              // Удаление спрашивает подтверждение само — поэтому оно допустимо
+              // у пальца, а полного свайпа здесь нет вовсе.
+              <Pressable
+                onPress={() => {
+                  closeSwipe();
+                  haptics.warning();
+                  onDelete();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Удалить — ${client.full_name || client.phone}`}
+                className="w-[88px] items-center justify-center gap-1"
+                style={{ backgroundColor: t.danger }}
+              >
+                <Trash2 color="#fff" size={ICON.sm} />
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  className="text-[11px] font-semibold"
+                  style={{ color: "#fff" }}
+                >
+                  Удалить
+                </Text>
+              </Pressable>
+            )
+          : undefined
+      }
     >
       {row}
     </ReanimatedSwipeable>

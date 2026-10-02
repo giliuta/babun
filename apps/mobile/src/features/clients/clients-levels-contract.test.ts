@@ -111,6 +111,11 @@ const clientBlocks = norm(readFileSync(join(MIGRATIONS_DIR, CLIENT_BLOCKS), "utf
 const CREATE_MENU = "20261003002400_clients_create_and_menu_rights.sql";
 const createMenu = norm(readFileSync(join(MIGRATIONS_DIR, CREATE_MENU), "utf8"));
 
+// «УДАЛЕНИЕ КЛИЕНТА» — СВОИМ ПРАВОМ, АРХИВА НЕТ (владелец 03.10): удаление
+// одно, клиенту с историей база срок стирания не ставит.
+const DELETE_RIGHT = "20261003004100_clients_delete_right_no_archive.sql";
+const deleteRight = norm(readFileSync(join(MIGRATIONS_DIR, DELETE_RIGHT), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
@@ -119,14 +124,16 @@ describe("сервер: клиенты по уровням", () => {
     for (const fn of ["access_company_level"]) {
       assert.equal(lastDefiner(fn), BASE_READ, `${fn} переопределён позже`);
     }
+    for (const fn of ["create_client_with_tags"]) {
+      assert.equal(lastDefiner(fn), CREATE_MENU, `${fn} переопределён позже`);
+    }
     for (const fn of [
       "member_trash_client",
-      "member_archive_client",
       "access_client_blocks",
       "update_client_with_tags",
-      "create_client_with_tags",
+      "client_history_never_purges",
     ]) {
-      assert.equal(lastDefiner(fn), CREATE_MENU, `${fn} переопределён позже`);
+      assert.equal(lastDefiner(fn), DELETE_RIGHT, `${fn} переопределён позже`);
     }
     for (const fn of ["list_master_clients_safe"]) {
       assert.equal(lastDefiner(fn), TEAM_BASE, `${fn} переопределён позже`);
@@ -205,6 +212,29 @@ describe("сервер: клиенты по уровням", () => {
     assert.ok(createMenu.includes("select b.blocks ->> 'clients.menu' into base_level"));
     assert.ok(createMenu.includes("('clients.menu', array['reminder_at', 'pinned_at'])"));
     assert.ok(createMenu.includes("revoke all on function public.member_archive_client(uuid) from public, anon;"));
+  });
+
+  test("«Удаление клиента» — своё право; «Меню клиента» — напоминание и чёрный список; архива нет", () => {
+    assert.ok(deleteRight.includes("('clients.delete', 'clients', 'calendar', array['off', 'write'], 'Удаление клиента', false, true,"));
+    // Удаляет партнёр по своему праву, а не по меню.
+    assert.ok(deleteRight.includes("select b.blocks ->> 'clients.delete' into base_level"));
+    assert.ok(deleteRight.includes("hint = 'block:clients.delete'"));
+    assert.ok(!deleteRight.includes("select b.blocks ->> 'clients.menu' into base_level"));
+    assert.ok(deleteRight.includes("'clients.personal', 'clients.money', 'clients.sms', 'clients.menu', 'clients.delete' ];"));
+    // Чёрный список — из списка владельца в «Меню клиента».
+    assert.ok(deleteRight.includes("('clients.menu', array['reminder_at', 'pinned_at', 'blacklisted'])"));
+    assert.ok(deleteRight.includes("if p_patch ?| array['deleted_at', 'balance', 'discount', 'favorite_master_id'] then"));
+    // Архива нет: дверь снята и нигде позже не появляется.
+    assert.ok(deleteRight.includes("drop function if exists public.member_archive_client(uuid);"));
+    assert.equal(lastDefiner("member_archive_client"), CREATE_MENU, "дверь архива вернулась");
+    // Клиенту с историей срок стирания не ставится — правилом базы.
+    assert.ok(
+      deleteRight.includes(
+        "if new.purge_at is not null and ( exists (select 1 from public.appointments a where a.client_id = new.id) or exists (select 1 from public.invoices i where i.client_id = new.id) or exists (select 1 from public.finance_transactions f where f.client_id = new.id) ) then new.purge_at := null;",
+      ),
+    );
+    assert.ok(deleteRight.includes("before insert or update of purge_at on public.clients for each row execute function public.client_history_never_purges();"));
+    assert.ok(deleteRight.includes("revoke all on function public.client_history_never_purges() from public, anon, authenticated;"));
   });
 
   test("«Клиент», «История», «SMS» — свои права; номер и SMS с карточки — по ним", () => {
@@ -807,7 +837,6 @@ describe("экраны: вкладка «Клиенты» открывается
     for (const file of [
       "index.tsx",
       "[id].tsx",
-      "archive.tsx",
       "trash.tsx",
       "tags.tsx",
       "settings.tsx",

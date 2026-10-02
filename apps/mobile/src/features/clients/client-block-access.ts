@@ -21,7 +21,8 @@ export type ClientCardBlock =
   | "clients.history"
   | "clients.money"
   | "clients.sms"
-  | "clients.menu";
+  | "clients.menu"
+  | "clients.delete";
 
 export type ClientBlockLevel = "hidden" | "read" | "write";
 

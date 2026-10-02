@@ -3,6 +3,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  Share,
   Text,
   TextInput,
   View,
@@ -31,16 +32,17 @@ import { usePullRefresh } from "@/lib/pull-refresh";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import {
-  useArchiveClientAsPartner,
   useClients,
   useClientTags,
   useTrashClientAsPartner,
   useUpdateClientById,
 } from "@/features/clients/queries";
-import { useArchiveWithUndo } from "@/features/clients/archive-undo";
+import { useDeleteWithUndo } from "@/features/clients/delete-undo";
+import { shareText } from "@/features/clients/client-share";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import ClientRow from "@/features/clients/ClientRow";
 import {
+  DEFAULT_SORT,
   EMPTY_FILTER,
   type ClientsFilter,
 } from "@/features/clients/filter";
@@ -167,9 +169,9 @@ function ClientsListScreen() {
   const { data: cities = [] } = useCities();
   // Сортировка — персистентная настройка списка (первая строка листа
   // «Фильтры»), не фильтр: «Сбросить» её не трогает.
-  const { data: sort = "recent" } = useClientsSort();
+  const { data: sort = DEFAULT_SORT } = useClientsSort();
   const setSort = useSetClientsSort();
-  const archiveWithUndo = useArchiveWithUndo();
+  const deleteWithUndo = useDeleteWithUndo();
   const updateById = useUpdateClientById();
   const [query, setQuery] = useState("");
   // Набор живёт до конца дня: звонок/SMS выбрасывают из приложения, и
@@ -391,30 +393,33 @@ function ClientsListScreen() {
   const openRemindMenu = (c: Client) => setRemindClient(c);
   const clientsInPlan = usePlanAllows("clients");
   // «МЕНЮ КЛИЕНТА» (владелец 02.10: «зажимаю на клиенте — открывается
-  // менюшка… может или не может, как „Переносить" в календаре»). У строки
-  // партнёра (`blocks`) — его право на ЭТОГО клиента; своя база — как была.
+  // менюшка… может или не может, как „Переносить" в календаре»; 03.10 — в нём
+  // «Напомнить» и «В чёрный список»). У строки партнёра (`blocks`) — его
+  // право на ЭТОГО клиента; своя база — как была.
   const partnerMenu = (c: Client) => !!c.blocks && clientBlockLevel(c, "clients.menu") === "write";
-  // «Напомнить» — то же меню: своя база по праву карточки, партнёр — по
-  // «Меню клиента».
+  // «Удаление клиента» (03.10) — своим правом, как «Отмена и удаление».
+  const partnerDelete = (c: Client) => !!c.blocks && clientBlockLevel(c, "clients.delete") === "write";
+  // «Напомнить» и «В чёрный список»: своя база по праву карточки, партнёр —
+  // по «Меню клиента».
   const canEditClient = (c: Client) =>
     c.blocks ? partnerMenu(c) : caps.edit && clientBlockLevel(c, "clients") === "write";
-  const archiveAsPartner = useArchiveClientAsPartner();
+  // «Удалить»: своя база — владелец, партнёр — «Удаление клиента».
+  const canDeleteClient = (c: Client) => (c.blocks ? partnerDelete(c) : caps.manage);
   const trashAsPartner = useTrashClientAsPartner();
-  // Архив и удаление партнёра — своими дверями сервера: без записей клиент
-  // уходит в корзину, с записями — в архив; вернуть может владелец.
-  const confirmPartnerRemove = (c: Client, archive: boolean) => {
+  // Удаление партнёра — своей дверью сервера; вернуть может владелец.
+  const confirmPartnerDelete = (c: Client) => {
     confirmThen(
-      archive ? "Архивировать клиента?" : "Удалить клиента?",
+      "Удалить клиента?",
       {
         message: `${c.full_name || "Клиент"} исчезнет из клиентов команды. Вернуть его может владелец.`,
-        confirmLabel: archive ? "Архивировать" : "Удалить",
+        confirmLabel: "Удалить",
         destructive: true,
       },
       async () => {
         try {
-          await (archive ? archiveAsPartner : trashAsPartner).mutateAsync(c.id);
+          await trashAsPartner.mutateAsync(c.id);
         } catch (e) {
-          notify(archive ? "Не удалось архивировать" : "Не удалось удалить", (e as Error).message);
+          notify("Не удалось удалить", (e as Error).message);
         }
       },
     );
@@ -444,59 +449,35 @@ function ClientsListScreen() {
     });
   };
 
-  const confirmArchiveOne = (c: Client) => {
-    confirmThen(
-      "Архивировать клиента?",
-      {
-        message: `${c.full_name || "Клиент"} исчезнет из рабочего списка. Вся история сохранится; вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке, «Архив клиентов».`,
-        confirmLabel: "Архивировать",
-        destructive: true,
-      },
-      async () => {
-        try {
-          await archiveWithUndo([c]);
-        } catch (e) {
-          notify("Не удалось архивировать", (e as Error).message);
-        }
-      },
-    );
-  };
-
-  // УДАЛИТЬ ≠ АРХИВ: клиент едет в «Недавно удалённые» и через 30 дней
-  // стирается сам. За клиентом с визитами стоит финансовая история — база
-  // стереть его не даст, поэтому говорим это ДО действия и предлагаем архив.
+  // УДАЛИТЬ — ОДНО ДЕЙСТВИЕ (владелец 03.10: «понятия „в архив" не будет —
+  // удалить»). Клиент уходит в «Удалённые клиенты». Без истории он сотрётся
+  // через 30 дней; клиенту с визитами и деньгами база срок снимает сама
+  // (`client_history_never_purges`) — его история в отчётах. Слова
+  // подтверждения поэтому зависят от истории.
   const confirmDeleteOne = (c: Client) => {
+    if (c.blocks) {
+      confirmPartnerDelete(c);
+      return;
+    }
     const stats = allStatsMap.get(c.id);
-    // ЛЮБАЯ запись — уже история, даже будущая. База запрещает стирать
-    // клиента с заявками (guard_client_hard_delete_history), поэтому такой
-    // клиент лёг бы в корзину НАВСЕГДА: счётчик тикает, а ночная очистка
-    // его пропускает — он застревает между полками.
+    // ЛЮБАЯ запись — уже история, даже будущая.
     const hasHistory =
       (stats?.visits ?? 0) > 0 ||
       (stats?.totalSpent ?? 0) > 0 ||
       (stats?.unclosedVisits ?? 0) > 0 ||
       stats?.nextApt != null;
-    if (hasHistory) {
-      confirmThen(
-        "Этого клиента нельзя удалить",
-        {
-          message: "За этим клиентом есть визиты и деньги — они останутся в отчётах и должны быть к кому-то привязаны. Такого клиента убирают в архив: из списка он исчезнет, история сохранится.",
-          confirmLabel: "В архив",
-        },
-        () => confirmArchiveOne(c),
-      );
-      return;
-    }
     confirmThen(
       "Удалить клиента?",
       {
-        message: `${c.full_name || "Клиент"} переедет в «Недавно удалённые» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — в шестерёнке.`,
+        message: hasHistory
+          ? `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно в шестерёнке.`
+          : `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — в шестерёнке.`,
         confirmLabel: "Удалить",
         destructive: true,
       },
       async () => {
         try {
-          await archiveWithUndo([c], true);
+          await deleteWithUndo([c]);
         } catch (e) {
           notify("Не удалось удалить", (e as Error).message);
         }
@@ -504,11 +485,17 @@ function ClientsListScreen() {
     );
   };
 
-  const onTogglePin = (c: Client) =>
-    updateById.mutate({
-      id: c.id,
-      patch: { pinned_at: c.pinned_at ? null : new Date().toISOString() },
-    });
+  const onToggleBlacklist = (c: Client) =>
+    updateById.mutate({ id: c.id, patch: { blacklisted: !c.blacklisted } });
+
+  // «Поделиться» — тот же текст, что из «⋯» карточки (`shareText`).
+  const onShareClient = async (c: Client) => {
+    try {
+      await Share.share({ message: shareText(c, { requisites: true }) });
+    } catch {
+      // user dismissed the share sheet — no-op.
+    }
+  };
 
   // ── Bulk-mode helpers ─────────────────────────────────────────────
   // «Выбрать всё» = всё СВОЁ, что сейчас в списке: клиенты партнёра в общем
@@ -545,7 +532,7 @@ function ClientsListScreen() {
     setSelectedIds(allSelected ? new Set() : new Set(visible.map((c) => c.id)));
 
   // Массовые действия — строго по ВИДИМОМУ списку: если фильтр изменился
-  // после выбора, «Архивировать 12» не должно задеть невидимых.
+  // после выбора, «Удалить 12» не должно задеть невидимых.
   const selectedClients = useMemo(
     () => visible.filter((c) => selectedIds.has(c.id)),
     [visible, selectedIds],
@@ -564,33 +551,32 @@ function ClientsListScreen() {
     }
   };
 
-  const onArchive = () => {
+  const onBulkDelete = () => {
     const n = selectedClients.length;
     if (n === 0) return;
     const word = countWordRu(n, "клиента", "клиента", "клиентов");
     confirmThen(
-      `Архивировать ${n} ${word}?`,
+      `Удалить ${n} ${word}?`,
       {
-        message: "Клиенты исчезнут из рабочего списка. Заявки, инвойсы и финансовая история сохранятся; вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке, «Архив клиентов».",
-        confirmLabel: "Архивировать",
+        message: `Клиенты уйдут в «Удалённые клиенты». Кто без записей и денег — сотрётся через ${TRASH_DAYS} дней, у остальных история останется в отчётах. Вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке.`,
+        confirmLabel: "Удалить",
         destructive: true,
       },
       async () => {
         try {
           // Итог (в т.ч. частичный) и кнопка отмены — в одном тосте;
-          // здесь остаётся только случай «не уехал никто».
-          const { archived, failed } =
-            await archiveWithUndo(selectedClients);
+          // здесь остаётся только случай «не удалился никто».
+          const { archived, failed } = await deleteWithUndo(selectedClients);
           if (archived === 0) {
             notify(
-              "Не удалось архивировать",
-              `Ни один из ${failed} клиентов не архивирован. Проверьте соединение и попробуйте ещё раз.`,
+              "Не удалось удалить",
+              `Ни один из ${failed} клиентов не удалён. Проверьте соединение и попробуйте ещё раз.`,
             );
             return;
           }
           exitSelection();
         } catch (e) {
-          notify("Не удалось архивировать", (e as Error).message);
+          notify("Не удалось удалить", (e as Error).message);
         }
       },
     );
@@ -835,24 +821,21 @@ function ClientsListScreen() {
                   }
                   openSwipe.current = row;
                 }}
-                onBook={!guest && caps.book ? () => bookFor(item) : undefined}
+                // Свайп (владелец 03.10): вправо — «Напомнить», влево —
+                // «Удалить»; «Записать» — в меню долгого нажатия.
                 onRemind={!guest && canEditClient(item) ? () => setRemindClient(item) : undefined}
-                onArchive={
-                  guest
-                    ? undefined
-                    : caps.manage
-                      ? () => confirmArchiveOne(item)
-                      : partnerMenu(item)
-                        ? () => confirmPartnerRemove(item, true)
-                        : undefined
-                }
+                onDelete={!guest && canDeleteClient(item) ? () => confirmDeleteOne(item) : undefined}
                 onLongPress={() => {
                   if (guest) return;
                   if (selecting) toggleId(item.id);
                   // Меню — те же права, что у `ClientActionsSheet` ниже; ни
                   // одного — нет и пустой шторки (проверка глазами 30.09).
-                  // Партнёру — только с «Меню клиента: Может» (02.10).
-                  else if (item.blocks ? partnerMenu(item) : caps.book || caps.export || caps.manage || canEditClient(item))
+                  // Партнёру — с «Меню клиента» или «Удаление клиента» (03.10).
+                  else if (
+                    item.blocks
+                      ? partnerMenu(item) || partnerDelete(item)
+                      : caps.book || caps.export || caps.manage || canEditClient(item)
+                  )
                     setMenuClient(item);
                 }}
               />
@@ -914,7 +897,7 @@ function ClientsListScreen() {
           count={pickedCount}
           onSms={() => setSmsOpen(true)}
           onExport={onExport}
-          onArchive={caps.manage ? onArchive : undefined}
+          onDelete={caps.manage ? onBulkDelete : undefined}
         />
       ) : (
         // КНОПКА НА СВОЁМ МЕСТЕ И СЕРАЯ, как в «Финансах» (владелец 20.09:
@@ -954,30 +937,20 @@ function ClientsListScreen() {
       />
       <ClientActionsSheet
         client={menuClient}
-        // Те же права, что у свайпов строки: записать — «можно записать»,
-        // напомнить — «меняет карточку», закрепить, архив и удаление —
-        // владелец своей компании (сервер у сотрудника их отказывает).
+        // Те же пункты, что в «⋯» карточки (`clientMenuItems`, 03.10):
+        // записать — «можно записать», напомнить и чёрный список — «меняет
+        // карточку» / «Меню клиента», удалить — владелец своей компании /
+        // «Удаление клиента».
         onBook={caps.book ? bookFor : undefined}
         onClose={() => setMenuClient(null)}
         // Выбор нескольких ведёт к экспорту и массовой SMS — только своя
         // база (владелец 30.09: «без передачи»).
         onSelectMany={caps.export ? (c) => enterSelection(c.id) : undefined}
-        onTogglePin={caps.manage || (menuClient && partnerMenu(menuClient)) ? onTogglePin : undefined}
         onRemind={menuClient && canEditClient(menuClient) ? openRemindMenu : undefined}
-        onArchive={
-          caps.manage
-            ? confirmArchiveOne
-            : menuClient && partnerMenu(menuClient)
-              ? (c: Client) => confirmPartnerRemove(c, true)
-              : undefined
-        }
-        onDelete={
-          caps.manage
-            ? confirmDeleteOne
-            : menuClient && partnerMenu(menuClient)
-              ? (c: Client) => confirmPartnerRemove(c, false)
-              : undefined
-        }
+        // «Поделиться» — только своя база: клиента партнёр не выносит (30.09).
+        onShare={caps.export && menuClient && !menuClient.blocks ? (c) => void onShareClient(c) : undefined}
+        onToggleBlacklist={menuClient && canEditClient(menuClient) ? onToggleBlacklist : undefined}
+        onDelete={menuClient && canDeleteClient(menuClient) ? confirmDeleteOne : undefined}
       />
       <ClientsFilterSheet
         visible={sheetOpen}

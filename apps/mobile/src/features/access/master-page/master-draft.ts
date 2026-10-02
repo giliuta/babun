@@ -167,6 +167,7 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "clients.scope",
     "clients.create",
     "clients.menu",
+    "clients.delete",
     "clients.note",
     "clients.people",
     "clients.objects",

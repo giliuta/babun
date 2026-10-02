@@ -46,24 +46,29 @@ export const SORT_LABELS_LONG: Record<SortKey, string> = {
   // + эта ось = самые дорогие предстоящие работы сверху. Подпись НЕ
   // обещает «за период» — expectedRevenue суммирует все будущие записи.
   expected: "Ожидается",
-  name: "Имя (А–Я)",
+  // Слово владельца (03.10): «по алфавитному порядку всё должно идти».
+  name: "По алфавиту",
 };
 
+/** СОРТИРОВКА ПО УМОЛЧАНИЮ — по алфавиту (владелец 03.10: «в фильтрах это
+ *  будет как стандарт, выбран сразу»). Было «Недавний визит». */
+export const DEFAULT_SORT: SortKey = "name";
+
 export const SORT_ORDER: SortKey[] = [
+  "name",
   "recent",
   "stale",
   "debt",
   "revenue",
   "expected",
-  "name",
 ];
 
-/** Смысловые группы рядов попапа (волосок между блоками): время · деньги
- *  · алфавит. */
+/** Смысловые группы рядов попапа (волосок между блоками): алфавит —
+ *  первым, он же умолчание · время · деньги. */
 export const SORT_BLOCKS: SortKey[][] = [
+  ["name"],
   ["recent", "stale"],
   ["debt", "revenue", "expected"],
-  ["name"],
 ];
 
 /** ДОЛГ КЛИЕНТА — ОДНА ФОРМУЛА НА ВЕСЬ ПРОДУКТ: недоплата по ЗАВЕРШЁННЫМ
@@ -95,9 +100,10 @@ export function clientDebt(_c: Client, s: ClientStats | undefined): number {
  *  обслуженного сегодня (ISO-время created_at длиннее и «больше» голой
  *  даты) и печатал «Недавний визит» над карточкой без визитов.
  *
- *  Тай-брейкеры: закреплённые → есть значение → значение → свежесть
- *  визита → добавлен → имя → закреплён когда → id (детерминизм: список
- *  пересобирается после каждого синка, «дрожь» порядка была бы видна). */
+ *  Тай-брейкеры: есть значение → значение → свежесть визита → добавлен →
+ *  имя → id (детерминизм: список пересобирается после каждого синка,
+ *  «дрожь» порядка была бы видна). Закреплённых сверху нет: закрепления у
+ *  клиентов больше нет (владелец 03.10). */
 export function sortClients(
   clients: Client[],
   statsMap: Map<string, ClientStats>,
@@ -124,15 +130,14 @@ export function sortClients(
       has = num > 0 ? 1 : 0;
     } else {
       // Имя — тоже ось: безымянный клиент не имеет значения и уходит в
-      // хвост, а не встаёт первым в «Имя (А–Я)».
+      // хвост, а не встаёт первым в «По алфавиту».
       has = c.full_name.trim() ? 1 : 0;
     }
-    return { c, pinned: c.pinned_at ? 1 : 0, pinnedAt: c.pinned_at ?? "", has, num, str, last };
+    return { c, has, num, str, last };
   });
   // ISO-даты и uuid сравниваем строками напрямую — коллатор нужен только
   // именам (он на порядок дороже и на датах бессмыслен).
   rows.sort((a, b) => {
-    if (a.pinned !== b.pinned) return b.pinned - a.pinned;
     if (a.has !== b.has) return b.has - a.has;
     if (a.has) {
       if (sort === "recent") {
@@ -156,7 +161,6 @@ export function sortClients(
       return a.c.created_at < b.c.created_at ? 1 : -1;
     const byName = collator.compare(a.c.full_name, b.c.full_name);
     if (byName !== 0) return byName;
-    if (a.pinnedAt !== b.pinnedAt) return a.pinnedAt < b.pinnedAt ? 1 : -1;
     return a.c.id < b.c.id ? -1 : a.c.id > b.c.id ? 1 : 0;
   });
   return rows.map((r) => r.c);

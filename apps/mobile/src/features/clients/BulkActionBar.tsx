@@ -4,7 +4,8 @@
 //
 //   · SMS      → opens BulkSmsSheet (template picker + blast/sequential)
 //   · Экспорт  → CSV of the selection via the OS share sheet (bulk-export)
-//   · Архив    → reversible soft archive after a native confirm
+//   · Удалить  → «Удалённые клиенты» after a native confirm, with undo
+//                (owner 03.10: no client archive any more)
 //
 // Disabled-not-hidden when nothing is picked, so the bar never reflows. The
 // SMS/Export/Delete plumbing lives in the parent (index.tsx) — this is a
@@ -12,7 +13,7 @@
 
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Archive, MessageSquare, Share2 } from "lucide-react-native";
+import { MessageSquare, Share2, Trash2 } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { usePlanAllows } from "@/features/settings/tenant";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
@@ -21,14 +22,14 @@ export function BulkActionBar({
   count,
   onSms,
   onExport,
-  onArchive,
+  onDelete,
 }: {
   count: number;
   onSms: () => void;
   onExport: () => void;
-  /** Нет — кнопки «Архив» нет: архивирует владелец своей компании, у
-   *  сотрудника сервер запись откажет (STORY-088, волна 4). */
-  onArchive?: () => void;
+  /** Нет — кнопки «Удалить» нет: массово удаляет владелец своей компании,
+   *  у партнёра сервер запись откажет (STORY-088, волна 4). */
+  onDelete?: () => void;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -62,14 +63,14 @@ export function BulkActionBar({
         count={count}
         onPress={onExport}
       />
-      {onArchive ? (
+      {onDelete ? (
         <BarButton
-          label="Архив"
-          icon={<Archive color={disabled ? t.faint : t.danger} size={20} strokeWidth={2} />}
+          label="Удалить"
+          icon={<Trash2 color={disabled ? t.faint : t.danger} size={20} strokeWidth={2} />}
           color={t.danger}
           disabled={disabled}
           count={count}
-          onPress={onArchive}
+          onPress={onDelete}
         />
       ) : null}
     </View>

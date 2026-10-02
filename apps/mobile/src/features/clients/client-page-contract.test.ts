@@ -462,10 +462,13 @@ describe("«Объединить с дублем» в «⋯» карточки",
       "страница передаёт слиянию не то право",
     );
     assert.match(page(), /onMerge=\{onMerge\}/, "страница не ставит пункт в меню");
+    // Меню одно на долгое нажатие и «⋯» (03.10): пункт рисует общий
+    // `clientMenuItems`, и только с обработчиком.
+    assert.match(read("ClientDetailChrome.tsx"), /clientMenuItems\(t, blacklisted, \{[^}]*\bonMerge,/);
     assert.match(
-      read("ClientDetailChrome.tsx"),
-      /\.\.\.\(onMerge\s*\?\s*\[/,
-      "хром рисует пункт без обработчика",
+      read("client-menu-items.ts"),
+      /handlers\.onMerge\s*\?\s*\{\s*id: "merge"/,
+      "меню рисует пункт без обработчика",
     );
   });
 
@@ -489,18 +492,18 @@ describe("«Объединить с дублем» в «⋯» карточки",
     );
   });
 
-  test("порядок: патч основной → записи дубля → архив дубля", () => {
+  test("порядок: патч основной → записи дубля → удаление дубля", () => {
     const src = merge();
     const body = src.slice(src.indexOf("const merge = async"), src.indexOf("return () => {"));
     const patch = body.indexOf("await updateById.mutateAsync({ id: primary.id, patch })");
     const appts = body.indexOf("await updateAppt.mutateAsync({ id: a.id, patch: { client_id: primary.id } })");
-    const archive = body.indexOf("await archive.mutateAsync({ ids: [dupRow.id] })");
+    const archive = body.indexOf("await archive.mutateAsync({ ids: [dupRow.id], trash: true })");
     assert.ok(patch > -1 && appts > -1 && archive > -1, "шаг слияния пропал");
     assert.ok(patch < appts && appts < archive, "порядок слияния сломан");
     assert.match(
       body,
-      /if \(res\.failed > 0 \|\| res\.archived === 0\) \{\s*throw new Error\("Карточка объединена, но дубль не ушёл в архив"\);/,
-      "неудача архива снова сходит за успех",
+      /if \(res\.failed > 0 \|\| res\.archived === 0\) \{\s*throw new Error\("Карточка объединена, но дубль не удалился"\);/,
+      "неудача удаления дубля снова сходит за успех",
     );
     assert.match(body, /if \(running\.current\) return;\s*running\.current = true;/, "двойной тап снова сливает дважды");
   });
@@ -540,10 +543,11 @@ describe("«Разделить клиента» в «⋯» карточки", ()
       "страница передаёт сплиту не те права",
     );
     assert.match(page(), /onSplit=\{split\.onSplit\}/, "страница не ставит пункт в меню");
+    assert.match(read("ClientDetailChrome.tsx"), /clientMenuItems\(t, blacklisted, \{[^}]*\bonSplit,/);
     assert.match(
-      read("ClientDetailChrome.tsx"),
-      /\.\.\.\(onSplit\s*\?\s*\[\s*\{\s*id: "split",\s*label: "Разделить клиента"/,
-      "хром рисует пункт без обработчика",
+      read("client-menu-items.ts"),
+      /handlers\.onSplit\s*\?\s*\{\s*id: "split",\s*label: "Разделить клиента"/,
+      "меню рисует пункт без обработчика",
     );
   });
 

@@ -587,10 +587,10 @@ export function useSetClientTeam() {
   });
 }
 
-/** ПАРТНЁР С «РЕДАКТИРУЕТ» УБИРАЕТ КЛИЕНТА (владелец 02.10: «может
- *  редактировать — удалять клиентов, менять»). Своей дверью
- *  `member_trash_client`: без записей клиент едет в корзину на 30 дней, с
- *  записями — в архив (историю база не сотрёт). Вернуть может владелец. */
+/** ПАРТНЁР С «УДАЛЕНИЕ КЛИЕНТА: МОЖЕТ» УДАЛЯЕТ КЛИЕНТА (владелец 03.10).
+ *  Своей дверью `member_trash_client`: клиент уходит в «Удалённые клиенты»;
+ *  без истории он сотрётся через 30 дней, с историей — лежит там, пока
+ *  владелец его не вернёт. */
 export function useTrashClientAsPartner() {
   const scope = useQueryScope();
   const qc = useQueryClient();
@@ -603,33 +603,6 @@ export function useTrashClientAsPartner() {
         }>;
       };
       const { error } = await db.rpc("member_trash_client", { p_client_id: id });
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: (_d, id) => {
-      qc.setQueriesData<Client[]>({ queryKey: ["clients"] }, (list) =>
-        Array.isArray(list) ? list.filter((c) => c.id !== id) : list,
-      );
-      void qc.invalidateQueries({ queryKey: ["clients"] });
-      void qc.invalidateQueries({ queryKey: ["client", id] });
-    },
-    meta: { errorHandled: true }, // caller messages the refusal itself
-  });
-}
-
-/** ПАРТНЁР С «МЕНЮ КЛИЕНТА: МОЖЕТ» УБИРАЕТ КЛИЕНТА В АРХИВ (02.10) — своей
- *  дверью `member_archive_client`: история цела, вернуть может владелец. */
-export function useArchiveClientAsPartner() {
-  const scope = useQueryScope();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      // Дверь новее сгенерированных типов базы — вызов через узкий тип.
-      const db = writeClientOf(scope) as unknown as {
-        rpc: (name: "member_archive_client", args: { p_client_id: string }) => PromiseLike<{
-          error: { message: string } | null;
-        }>;
-      };
-      const { error } = await db.rpc("member_archive_client", { p_client_id: id });
       if (error) throw new Error(error.message);
     },
     onSuccess: (_d, id) => {
@@ -766,9 +739,10 @@ export interface ArchiveClientsResult {
   archivedIds: string[];
 }
 
-/** `trash: true` — клиент едет в «Недавно удалённые» со сроком 30 дней;
- *  иначе в архив без срока. Одна мутация на обе полки: разница между ними
- *  и в базе ровно одна — проставлен ли `purge_at`. */
+/** `trash: true` — клиент уходит в «Удалённые клиенты» со сроком 30 дней;
+ *  иначе без срока (дубль после слияния). Клиенту с историей база срок
+ *  снимает сама (`client_history_never_purges`, 03.10): архива как полки у
+ *  клиентов больше нет — экран один. */
 export interface ArchiveClientsInput {
   ids: string[];
   trash?: boolean;
@@ -785,7 +759,7 @@ export function useArchiveClients() {
       assertOwnCompany(scope, "Убирать клиентов из работы");
       const tenantId = scope.tenantId;
       if (scope.role !== "owner" && scope.role !== "dispatcher") {
-        throw new Error("Архивировать клиентов может владелец или диспетчер.");
+        throw new Error("Удалять клиентов может владелец или диспетчер.");
       }
       // Один срок на весь заход: клиенты, удалённые одним действием, должны
       // и стереться вместе, а не расползтись по секундам.
@@ -834,19 +808,18 @@ export function useArchiveClients() {
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
-      void qc.invalidateQueries({ queryKey: ["archived-clients"] });
       void qc.invalidateQueries({ queryKey: ["trashed-clients"] });
     },
     meta: { errorHandled: true }, // caller messages the partial result itself
   });
 }
 
-/** Архив и корзина ЧИТАЮТСЯ ИЗ КЭША (как рабочий список), а не напрямую с
+/** Удалённые ЧИТАЮТСЯ ИЗ КЭША (как рабочий список), а не напрямую с
  *  сервера. Прямое чтение было дырой: архивация, ушедшая в очередь, делала
  *  клиента невидимым везде — из списка его убрали, а сервер ещё считал
  *  живым, и экран архива о нём не знал. */
 function useHiddenClients(
-  key: "archived-clients" | "trashed-clients",
+  key: "trashed-clients",
   read: (client: typeof supabase, tenantId: string) => Promise<Client[]>,
 ) {
   const scope = useQueryScope();
@@ -864,14 +837,19 @@ function useHiddenClients(
   });
 }
 
-/** Архив: убраны из работы бессрочно. */
-export function useArchivedClients() {
-  return useHiddenClients("archived-clients", listArchivedCached);
-}
-
-/** «Недавно удалённые»: сотрутся по своему сроку. */
+/** «Удалённые клиенты» — ОДНА ПОЛКА (владелец 03.10: архива нет): и те, кто
+ *  сотрётся по сроку, и клиенты с историей без срока; свежие удаления —
+ *  сверху. */
 export function useTrashedClients() {
-  return useHiddenClients("trashed-clients", listTrashedCached);
+  return useHiddenClients("trashed-clients", async (client, tenantId) => {
+    const [dated, kept] = await Promise.all([
+      listTrashedCached(client, tenantId),
+      listArchivedCached(client, tenantId),
+    ]);
+    return [...dated, ...kept].sort((a, b) =>
+      (b.deleted_at ?? "").localeCompare(a.deleted_at ?? ""),
+    );
+  });
 }
 
 export function useRestoreClient() {
@@ -888,7 +866,6 @@ export function useRestoreClient() {
     },
     onSuccess: (restored, client) => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
-      void qc.invalidateQueries({ queryKey: ["archived-clients"] });
       void qc.invalidateQueries({ queryKey: ["trashed-clients"] });
       void qc.invalidateQueries({ queryKey: ["client", client.id] });
       if (restored.reminder_at) syncClientReminderWithFeedback(restored);
@@ -918,7 +895,7 @@ export function useDeleteClientForever() {
         const text = (e as Error).message ?? "";
         if (/history|истори/i.test(text)) {
           throw new Error(
-            "У клиента есть заявки или деньги — стереть его нельзя. Такой клиент живёт в архиве.",
+            "У клиента есть записи или деньги — стереть его нельзя: история остаётся в отчётах.",
           );
         }
         throw e;
@@ -927,7 +904,6 @@ export function useDeleteClientForever() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
       void qc.invalidateQueries({ queryKey: ["trashed-clients"] });
-      void qc.invalidateQueries({ queryKey: ["archived-clients"] });
     },
     meta: { errorHandled: true },
   });

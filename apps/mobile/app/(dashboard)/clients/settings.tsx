@@ -2,7 +2,6 @@ import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { ScrollView } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import {
-  Archive,
   Download,
   Eye,
   FileText,
@@ -448,8 +447,8 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
             ]}
           />
 
-          {/* ДАННЫЕ — ХОЗЯЙСТВО СВОЕЙ БАЗЫ: импорт, выгрузка, архив и
-              корзина. Партнёру их нет (выгрузка — «без передачи», 30.09). */}
+          {/* ДАННЫЕ — ХОЗЯЙСТВО СВОЕЙ БАЗЫ: импорт, выгрузка и удалённые.
+              Партнёру их нет (выгрузка — «без передачи», 30.09). */}
           {caps.manage ? (
             <SettingsGroup
               title="Данные"
@@ -490,23 +489,15 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
                   }
                   onPress={() => void exportAll()}
                 />,
-                <SettingsRow
-                  key="archive"
-                  tile="neutral"
-                  icon={Archive}
-                  title="Архив клиентов"
-                  sub="Убраны из работы, история цела"
-                  onPress={() => router.push(teamHref("/clients/archive"))}
-                />,
-                // Две полки рядом и подписаны по-разному: архив — без срока,
-                // корзина — со счётчиком. Иначе «куда он делся» повторится,
-                // уже с двумя одинаковыми на вид дверями.
+                // ОДНА ПОЛКА (владелец 03.10: «понятия „в архив" не будет —
+                // удалить»). Без записей и денег клиент стирается через
+                // срок; с историей — лежит здесь, пока его не вернут.
                 <SettingsRow
                   key="trash"
                   tile={SETTINGS_TILE.red}
                   icon={Trash2}
-                  title="Недавно удалённые"
-                  sub={`Хранятся ${TRASH_DAYS} дней, потом стираются`}
+                  title="Удалённые клиенты"
+                  sub={`Без истории стираются через ${TRASH_DAYS} дней`}
                   onPress={() => router.push(teamHref("/clients/trash"))}
                 />,
               ]}

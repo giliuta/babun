@@ -1,18 +1,10 @@
 import { Keyboard, Pressable } from "react-native";
-import {
-  Archive,
-  Ban,
-  Bell,
-  Merge,
-  MoreHorizontal,
-  Pin,
-  Share2,
-  Split,
-  Trash2,
-} from "lucide-react-native";
+import { MoreHorizontal } from "lucide-react-native";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useThemeColors } from "@/theme/colors";
+
+import { clientMenuItems } from "./client-menu-items";
 
 // ХРОМ КАРТОЧКИ КЛИЕНТА — «НАЗАД», ЗАГОЛОВОК И «⋯».
 //
@@ -42,16 +34,12 @@ interface ClientDetailChromeProps {
    *  (сотрудник, владелец 30.09). */
   onShare?: () => void;
   onToggleBlacklist: () => void;
-  onArchive: () => void;
   onDelete: () => void;
-  /** Карточка правится: без этого в меню нет «Напомнить». */
+  /** Заголовок меню — имя клиента, как у долгого нажатия в списке. */
+  menuTitle?: string;
+  /** «Напомнить» и «В чёрный список» — «Меню клиента» (владелец 03.10). */
   canEdit?: boolean;
-  /** Хозяйство базы — чёрный список, архив, удаление. У клиента компании,
-   *  где человек только работает, этих строк нет: пометки общие для всей
-   *  компании, и ведёт их её владелец. */
-  canManage?: boolean;
-  /** «В архив» и «Удалить» без остального хозяйства — партнёр с «Меню
-   *  клиента: Может» (владелец 02.10); чёрный список — по-прежнему владелец. */
+  /** «Удалить» — «Удаление клиента» (владелец 03.10). */
   canDelete?: boolean;
   /** «Объединить с дублем». Пункт есть, только когда страница его передала:
    *  заглушки без действия в меню не бывает. Когда слить нельзя (у дубля есть
@@ -65,13 +53,6 @@ interface ClientDetailChromeProps {
   /** Меню ушло и его окно снято — отсюда поднимается следующая шторка
    *  (iOS не показывает вторую модалку, пока первая не ушла). */
   onMenuExited?: () => void;
-  /** Клиент закреплён наверху списка (`pinned_at`). */
-  pinned?: boolean;
-  /** «Закрепить / Открепить» — то же, что в долгом нажатии по строке списка
-   *  (`ClientActionsSheet`), и тем же писателем. Пункт есть, только когда
-   *  страница его передала: а передаёт она его по тому же праву, по какому
-   *  список открывает своё меню. */
-  onTogglePin?: () => void;
 }
 
 export function ClientDetailChrome({
@@ -85,16 +66,13 @@ export function ClientDetailChrome({
   onRemind,
   onShare,
   onToggleBlacklist,
-  onArchive,
   onDelete,
+  menuTitle,
   canEdit = true,
-  canManage = true,
   canDelete = false,
   onMerge,
   onSplit,
   onMenuExited,
-  pinned = false,
-  onTogglePin,
 }: ClientDetailChromeProps) {
   const t = useThemeColors();
   // Кнопки хедера живут ВЫШЕ прокрутки с полями и фокус у поля не забирают:
@@ -107,109 +85,14 @@ export function ClientDetailChrome({
   // Пункты — по праву на этого клиента. Нет ни одного (карточка «Только
   // видит» чужого клиента) — нет и «⋯»: пустая шторка с одним заголовком
   // была дверью в никуда (проверка глазами 30.09).
-  const items = [
-    ...(canEdit
-      ? [
-          {
-            id: "remind",
-            label: "Напомнить",
-            icon: Bell,
-            color: t.accent,
-            onPress: onRemind,
-          },
-        ]
-      : []),
-    ...(onTogglePin
-      ? [
-          {
-            id: "pin",
-            label: pinned ? "Открепить" : "Закрепить",
-            icon: Pin,
-            color: t.accent,
-            onPress: onTogglePin,
-          },
-        ]
-      : []),
-    ...(onShare
-      ? [
-          {
-            id: "share",
-            label: "Поделиться",
-            icon: Share2,
-            color: t.accent,
-            onPress: onShare,
-          },
-        ]
-      : []),
-    ...(onMerge
-      ? [
-          {
-            id: "merge",
-            label: "Объединить с дублем",
-            icon: Merge,
-            color: t.accent,
-            onPress: onMerge,
-          },
-        ]
-      : []),
-    ...(onSplit
-      ? [
-          {
-            id: "split",
-            label: "Разделить клиента",
-            icon: Split,
-            color: t.accent,
-            onPress: onSplit,
-          },
-        ]
-      : []),
-    ...(canManage
-      ? [
-          {
-            id: "blacklist",
-            label: blacklisted ? "Убрать из чёрного списка" : "В чёрный список",
-            icon: Ban,
-            color: blacklisted ? t.accent : t.danger,
-            onPress: onToggleBlacklist,
-          },
-          {
-            // ДВА РАЗНЫХ ИСХОДА, а не один с разной силой. Архив — «больше
-            // не работаем, история цела, срока нет». Удаление — корзина на
-            // 30 дней и потом насовсем. Раньше был только архив, и удалить
-            // клиента, заведённого по ошибке, было нечем.
-            id: "archive",
-            label: "В архив",
-            icon: Archive,
-            color: t.accent,
-            onPress: onArchive,
-          },
-          {
-            id: "delete",
-            label: "Удалить",
-            icon: Trash2,
-            color: t.danger,
-            onPress: onDelete,
-          },
-        ]
-      : canDelete
-        ? [
-            {
-              id: "archive",
-              label: "В архив",
-              icon: Archive,
-              color: t.accent,
-              onPress: onArchive,
-            },
-            {
-              id: "delete",
-              label: "Удалить",
-              icon: Trash2,
-              color: t.danger,
-              onPress: onDelete,
-            },
-          ]
-        : []),
-  ];
+  const items = clientMenuItems(t, blacklisted, {
+    onRemind: canEdit ? onRemind : undefined,
+    onShare,
+    onMerge,
+    onSplit,
+    onToggleBlacklist: canEdit ? onToggleBlacklist : undefined,
+    onDelete: canDelete ? onDelete : undefined,
+  });
   return (
     <>
       {/* ОБЩАЯ ШАПКА ПРОДУКТА (владелец 22.09: «„Новый клиент“ должен
@@ -238,7 +121,7 @@ export function ClientDetailChrome({
 
       <PickerSheet
         visible={menuOpen}
-        title="Клиент"
+        title={menuTitle || "Клиент"}
         items={items}
         onClose={onCloseMenu}
         onExited={onMenuExited}

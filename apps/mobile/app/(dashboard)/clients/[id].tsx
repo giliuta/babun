@@ -41,7 +41,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Archive, ChevronRight, Phone, UserPlus } from "lucide-react-native";
+import { ChevronRight, Phone, Trash2, UserPlus } from "lucide-react-native";
 import {
   Stack,
   useLocalSearchParams,
@@ -66,11 +66,10 @@ import {
   useClient,
   useClientTags,
   useRestoreClient,
-  useArchiveClientAsPartner,
   useTrashClientAsPartner,
   useUpdateClient,
 } from "@/features/clients/queries";
-import { useArchiveWithUndo } from "@/features/clients/archive-undo";
+import { useDeleteWithUndo } from "@/features/clients/delete-undo";
 import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { archivedVisitTag } from "@/features/clients/archived-visit";
 import { useTeams } from "@/features/reference/queries";
@@ -188,9 +187,8 @@ export function ClientDetailScreen() {
   const activeTenantId = useTenantId();
   const client = useRevealedClient(clientRow, scope?.tenantId ?? activeTenantId);
   const updateClient = useUpdateClient(isDraft ? "" : id);
-  const archiveWithUndo = useArchiveWithUndo();
+  const deleteWithUndo = useDeleteWithUndo();
   const trashAsPartner = useTrashClientAsPartner();
-  const archiveAsPartner = useArchiveClientAsPartner();
   const restoreClient = useRestoreClient();
   const appointmentsQuery = useClientAppointments(isDraft ? "" : id);
   const {
@@ -533,13 +531,6 @@ export function ClientDetailScreen() {
     }
   };
 
-  // «Закрепить» — тот же патч, что у долгого нажатия в списке
-  // (`onTogglePin` в clients/index.tsx): метка времени или её снятие.
-  const onTogglePin = () => {
-    setMenuOpen(false);
-    void update({ pinned_at: c.pinned_at ? null : new Date().toISOString() });
-  };
-
   const onToggleBlacklist = () => {
     setMenuOpen(false);
     update({ blacklisted: !c.blacklisted });
@@ -553,62 +544,22 @@ export function ClientDetailScreen() {
   
   const onBack = () => router.back();
 
-  // «МЕНЮ КЛИЕНТА: МОЖЕТ» (владелец 02.10) — партнёр в «⋯» напоминает,
-  // закрепляет, убирает в архив и удаляет; своими дверями сервера.
+  // МЕНЮ КЛИЕНТА ПАРТНЁРА (владелец 03.10): «Меню клиента» — «Напомнить» и
+  // «В чёрный список», «Удаление клиента» — «Удалить»; своими дверями сервера.
   const partnerMenu =
     !isDraft && scope?.kind === "member" && clientBlockLevel(c, "clients.menu") === "write";
+  const partnerDelete =
+    !isDraft && scope?.kind === "member" && clientBlockLevel(c, "clients.delete") === "write";
 
-  const onArchive = () => {
-    setMenuOpen(false);
-    if (!caps.manage) {
-      confirmThen(
-        "Архивировать клиента?",
-        {
-          message: `${c.full_name || "Клиент"} исчезнет из клиентов команды, история сохранится. Вернуть его может владелец.`,
-          confirmLabel: "Архивировать",
-          destructive: true,
-        },
-        async () => {
-          try {
-            await archiveAsPartner.mutateAsync(c.id);
-            router.back();
-          } catch (e) {
-            notify("Не удалось архивировать", (e as Error).message);
-          }
-        },
-      );
-      return;
-    }
-    confirmThen(
-      "Архивировать клиента?",
-      {
-        message: "Клиент исчезнет из рабочего списка, но записи, инвойсы и финансовая история сохранятся. Вернуть его можно сразу — кнопкой «Отменить», а позже в Клиенты › шестерёнка › «Архив клиентов».",
-        confirmLabel: "Архивировать",
-        destructive: true,
-      },
-      async () => {
-        try {
-          // Экран закрывается, поэтому «Отменить» живёт в тосте: он
-          // глобальный и переживает уход с карточки.
-          const res = await archiveWithUndo([c]);
-          if (res.archived > 0) router.back();
-        } catch (e) {
-          notify("Не удалось архивировать", (e as Error).message);
-        }
-      },
-    );
-  };
-
-  // УДАЛИТЬ — не то же, что архив. Клиент едет в «Недавно удалённые» и
-  // через 30 дней стирается насовсем.
-  //
-  // Но за клиентом с визитами стоит финансовая история, и база стереть его
-  // не даст (guard_client_hard_delete_history). Честнее сказать это ДО
-  // действия и предложить архив, чем дать нажать и показать ошибку.
+  // УДАЛИТЬ — ОДНО ДЕЙСТВИЕ (владелец 03.10: «понятия „в архив" не будет»).
+  // Клиент уходит в «Удалённые клиенты». Без истории он сотрётся через 30
+  // дней; за клиентом с визитами стоит финансовая история, и база снимает
+  // ему срок сама (`client_history_never_purges`) — он лежит там, пока его не
+  // вернут. Поэтому слова подтверждения зависят от истории.
   const onDelete = () => {
     setMenuOpen(false);
-    // ПАРТНЁР С «РЕДАКТИРУЕТ» (владелец 02.10) — своей дверью: сервер сам
-    // решает, корзина или архив (с записями — архив), вернуть может владелец.
+    // Партнёр с «Удаление клиента: Может» — своей дверью, вернуть может
+    // владелец.
     if (!caps.manage) {
       confirmThen(
         "Удалить клиента?",
@@ -628,36 +579,24 @@ export function ClientDetailScreen() {
       );
       return;
     }
-    // ЛЮБАЯ запись — уже история, даже будущая. База запрещает стирать
-    // клиента с заявками (guard_client_hard_delete_history), поэтому такой
-    // клиент лёг бы в корзину НАВСЕГДА: счётчик тикает, а ночная очистка
-    // его пропускает — он застревает между полками.
+    // ЛЮБАЯ запись — уже история, даже будущая.
     const hasHistory =
       (stats?.visits ?? 0) > 0 ||
       (stats?.totalSpent ?? 0) > 0 ||
       (stats?.unclosedVisits ?? 0) > 0 ||
       stats?.nextApt != null;
-    if (hasHistory) {
-      confirmThen(
-        "Этого клиента нельзя удалить",
-        {
-          message: "За этим клиентом есть визиты и деньги — они останутся в отчётах и должны быть к кому-то привязаны. Такого клиента убирают в архив: из списка он исчезнет, история сохранится.",
-          confirmLabel: "В архив",
-        },
-        onArchive,
-      );
-      return;
-    }
     confirmThen(
       "Удалить клиента?",
       {
-        message: `${c.full_name || "Клиент"} переедет в «Недавно удалённые» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — там же, в шестерёнке.`,
+        message: hasHistory
+          ? `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно там же, в шестерёнке.`
+          : `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — там же, в шестерёнке.`,
         confirmLabel: "Удалить",
         destructive: true,
       },
       async () => {
         try {
-          const res = await archiveWithUndo([c], true);
+          const res = await deleteWithUndo([c]);
           if (res.archived > 0) router.back();
         } catch (e) {
           notify("Не удалось удалить", (e as Error).message);
@@ -687,20 +626,17 @@ export function ClientDetailScreen() {
         onRemind={() => void onRemind()}
         onShare={caps.export ? () => void onShare() : undefined}
         onToggleBlacklist={onToggleBlacklist}
-        onArchive={onArchive}
         onDelete={onDelete}
-        // «Напомнить» в «⋯» — у партнёра по «Меню клиента» (02.10).
+        // Меню то же, что у долгого нажатия в списке (03.10): имя сверху.
+        menuTitle={c.full_name || c.phone || "Клиент"}
+        // «Напомнить» и «В чёрный список» — своя база по праву карточки,
+        // партнёр — по «Меню клиента».
         canEdit={scope?.kind === "member" ? partnerMenu : access.card.edit}
-        canManage={caps.manage}
-        // Партнёр с «Меню клиента: Может» убирает в архив и удаляет (02.10);
-        // чёрный список — хозяйство владельца.
-        canDelete={!caps.manage && partnerMenu}
+        // «Удалить» — своя база у владельца, партнёр — «Удаление клиента».
+        canDelete={caps.manage || partnerDelete}
         onMerge={onMerge}
         onSplit={split.onSplit}
         onMenuExited={split.onMenuExited}
-        pinned={!!c.pinned_at}
-        // «Закрепить» — своя компания или партнёр с «Меню клиента» (02.10).
-        onTogglePin={!isDraft && (caps.manage || partnerMenu) ? onTogglePin : undefined}
       />
 
       {/* ОТСТУП НА ВЫСОТУ ХРОМА. Без него нижние поля страницы уходили под
@@ -961,13 +897,9 @@ function ArchivedClientView({
   onRestore: () => Promise<void>;
 }) {
   const t = useThemeColors();
-  // КОРЗИНА И АРХИВ — РАЗНЫЕ ПОЛКИ, и карточка обязана их различать.
-  // Раньше она смотрела только на deleted_at и писала «В архиве» клиенту,
-  // которого владелец только что удалил: страница противоречила экрану, с
-  // которого на неё пришли, и умалчивала главное — что через N дней его
-  // сотрут.
-  const trashed = !!client.purge_at;
-  const daysToPurge = trashed ? daysLeft(client.purge_at) : null;
+  // УДАЛЁННЫЙ КЛИЕНТ (архива с 03.10 нет). Срок есть — страница говорит,
+  // когда его сотрут; нет (у клиента история) — только когда удалён.
+  const daysToPurge = client.purge_at ? daysLeft(client.purge_at) : null;
   const archivedAt = client.deleted_at ? new Date(client.deleted_at) : null;
   const archivedLabel =
     archivedAt && !Number.isNaN(archivedAt.getTime())
@@ -987,14 +919,14 @@ function ArchivedClientView({
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title={trashed ? "Удалённый клиент" : "Архивный клиент"} onBack={onBack} />
+      <ScreenHeader title="Удалённый клиент" onBack={onBack} />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <View className="items-center px-5 pb-5 pt-5">
           <View
             className="h-14 w-14 items-center justify-center rounded-[10px]"
             style={{ backgroundColor: t.fill }}
           >
-            <Archive color={t.sub} size={26} />
+            <Trash2 color={t.sub} size={26} />
           </View>
           <Text
             className="mt-3 text-center text-2xl font-bold"
@@ -1006,17 +938,13 @@ function ArchivedClientView({
             className="mt-1 text-center text-[13px] leading-5"
             style={{ color: t.sub }}
           >
-            {trashed
-              ? `${archivedLabel ? `Удалён ${archivedLabel}. ` : "Удалён. "}${
-                  daysToPurge === null
-                    ? ""
-                    : daysToPurge <= 0
-                      ? "Будет стёрт сегодня. "
-                      : `Будет стёрт через ${daysToPurge} ${daysWordRu(daysToPurge)}. `
-                }`
-              : archivedLabel
-                ? `В архиве с ${archivedLabel}. `
-                : "В архиве. "}
+            {`${archivedLabel ? `Удалён ${archivedLabel}. ` : "Удалён. "}${
+              daysToPurge === null
+                ? ""
+                : daysToPurge <= 0
+                  ? "Будет стёрт сегодня. "
+                  : `Будет стёрт через ${daysToPurge} ${daysWordRu(daysToPurge)}. `
+            }`}
             Карточка доступна только для чтения; история записей и инвойсов сохранена.
           </Text>
         </View>

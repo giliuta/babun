@@ -1,5 +1,5 @@
-import { View } from "react-native";
-import { ChevronRight } from "lucide-react-native";
+import { Text, View } from "react-native";
+import { Ban, Bell, ChevronRight, Trash2, type LucideIcon } from "lucide-react-native";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -40,6 +40,60 @@ const OWN = [
   { name: "Иван Смирнов" },
 ];
 
+/** Пункты меню клиента — тем же видом, что в его меню (`ClientActionsSheet`). */
+type MenuItem = { label: string; icon: LucideIcon; tone: "warning" | "danger" };
+
+/** Клиент и меню, открытое долгим нажатием на него (владелец 03.10: «добавь
+ *  картинку того, когда оно открывается»), — как «Перенос записей» в
+ *  календаре. */
+function ClientMenuPreview({ items, phones }: { items: readonly MenuItem[]; phones: boolean }) {
+  const t = useThemeColors();
+  const person = OWN[0];
+  return (
+    <View>
+      <Card style={{ marginHorizontal: 16, marginTop: 8, paddingVertical: 8 }}>
+        <SelectList>
+          <SelectRow
+            title={person.name}
+            initial={person.name[0]}
+            subtitle={phones ? LOCKED_NUMBER : undefined}
+            onPress={noop}
+          />
+        </SelectList>
+      </Card>
+      <Card style={{ marginHorizontal: 16, marginTop: 8, paddingTop: 10, paddingBottom: 8 }}>
+        <Text
+          maxFontSizeMultiplier={1.2}
+          style={{ textAlign: "center", fontSize: 13, fontWeight: "600", color: t.sub, marginBottom: 4 }}
+        >
+          {person.name}
+        </Text>
+        <SelectList>
+          {items.map((item) => (
+            <SelectRow
+              key={item.label}
+              title={item.label}
+              icon={item.icon}
+              color={item.tone === "danger" ? t.danger : t.warning}
+              onPress={noop}
+            />
+          ))}
+        </SelectList>
+      </Card>
+    </View>
+  );
+}
+
+/** «Меню клиента» — напоминание и чёрный список; «Удаление клиента» —
+ *  удаление (03.10). */
+const MENU_ITEMS: Readonly<Record<string, readonly MenuItem[]>> = {
+  "clients.menu": [
+    { label: "Напомнить", icon: Bell, tone: "warning" },
+    { label: "В чёрный список", icon: Ban, tone: "danger" },
+  ],
+  "clients.delete": [{ label: "Удалить", icon: Trash2, tone: "danger" }],
+};
+
 export function ClientsPreview({
   blockKey,
   levels,
@@ -53,7 +107,6 @@ export function ClientsPreview({
   // Номер — блок «Клиент» карточки (02.10), переход на страницу — сама база.
   const phones = levels["clients.client"] === "read" || levels["clients.client"] === "write";
   const canCreate = levels["clients.create"] === "write";
-  const canMenu = levels["clients.menu"] === "write";
   // Переход на страницу клиента — шеврон строки (как в его списке).
   const opens = base !== "off";
   // База закрыта — у зависимой строки «Ограничение по времени» показывать
@@ -61,6 +114,29 @@ export function ClientsPreview({
   const people = scope === "week" || scope === "near" ? OWN.slice(0, 1) : OWN;
   const state = levelState(base);
   if (!CLIENTS_PREVIEW_KEYS.includes(blockKey)) return null;
+  const menuItems = MENU_ITEMS[blockKey];
+  if (menuItems) {
+    // Меню открывается долгим нажатием и «⋯» — «Может» ставит пункт в меню.
+    const can = levels[blockKey] === "write";
+    return (
+      <PreviewFrame
+        state={state === "hidden" ? "hidden" : can ? "can" : "cannot"}
+        caption={
+          state === "hidden"
+            ? undefined
+            : blockKey === "clients.menu"
+              ? can
+                ? "Долгое нажатие и «⋯» в карточке"
+                : "Этих пунктов в меню клиента нет"
+              : can
+                ? "Меню, «⋯» в карточке и свайп влево"
+                : "«Удалить» в меню клиента нет"
+        }
+      >
+        <ClientMenuPreview items={menuItems} phones={phones} />
+      </PreviewFrame>
+    );
+  }
   // Зависимые строки говорят своё: список один, а меняют они в нём разное.
   const caption =
     state === "hidden"
@@ -73,11 +149,7 @@ export function ClientsPreview({
           ? canCreate
             ? "Кнопка «Создать клиента» работает"
             : "Кнопка «Создать клиента» серая"
-          : blockKey === "clients.menu"
-            ? canMenu
-              ? "Долгое нажатие: Напомнить, Закрепить, В архив, Удалить"
-              : "Долгое нажатие на клиента ничего не открывает"
-            : undefined;
+          : undefined;
   return (
     <PreviewFrame
       state={state}

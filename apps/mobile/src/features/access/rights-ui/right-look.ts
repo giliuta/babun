@@ -34,6 +34,7 @@ import {
   StickyNote,
   Tag,
   Tags,
+  Trash2,
   TrendingDown,
   TrendingUp,
   UserCheck,
@@ -103,6 +104,7 @@ const LOOK: Record<string, RightLook> = {
   // «Создание клиента» и «Меню клиента» (02.10).
   "clients.create": { icon: UserPlus, tile: SETTINGS_TILE.green },
   "clients.menu": { icon: Ellipsis, tile: SETTINGS_TILE.indigo },
+  "clients.delete": { icon: Trash2, tile: SETTINGS_TILE.red },
   "clients.note": { icon: StickyNote, tile: SETTINGS_TILE.orange },
   "clients.people": { icon: Users, tile: SETTINGS_TILE.indigo },
   "clients.objects": { icon: House, tile: SETTINGS_TILE.green },
