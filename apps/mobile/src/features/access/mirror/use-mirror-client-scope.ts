@@ -13,8 +13,8 @@ import {
 import { useMirror } from "./mirror-state";
 
 // НАБОР КЛИЕНТОВ ЗЕРКАЛА — ИЗ БАЗЫ, А НЕ ИЗ КЭША КАЛЕНДАРЯ. Видны только
-// клиенты его команд (02.10); записи (месяц назад — месяц вперёд) читаются у
-// команд с «Ограничением по времени» — из них «2 недели» и «Месяц».
+// клиенты его команд (02.10); записи (полгода назад — полгода вперёд) читаются
+// у команд с «Ограничениями» — из них окна от недели до полугода.
 // Кэш календаря держит то, что открывали, и набор по нему гулял бы от
 // прокрутки. Читает токен владельца: ему таблицы открыты, писать нечего.
 //
@@ -61,7 +61,7 @@ export function useMirrorClientScope(map: MemberAccessMap | null): MirrorView | 
       // Видны только клиенты команды (02.10); записи нужны лишь командам с
       // «Ограничением по времени» — «Без ограничения» решает сама команда клиента.
       const windowed = (teams as NonNullable<typeof teams>)
-        .filter((team) => team.scope === "near" || team.scope === "month")
+        .filter((team) => team.scope !== "own" && team.scope !== "all")
         .map((team) => team.teamId);
       if (windowed.length === 0) return mirrorView(accessMap, { appointments: [], today: "" });
       const db = tenantBoundClient(tenantId);
@@ -74,8 +74,8 @@ export function useMirrorClientScope(map: MemberAccessMap | null): MirrorView | 
           .select("client_id, team_id, date, status")
           .eq("tenant_id", tenantId)
           .in("team_id", windowed)
-          .gte("date", shiftMonth(today, -1))
-          .lte("date", shiftMonth(today, 1))
+          .gte("date", shiftMonth(today, -6))
+          .lte("date", shiftMonth(today, 6))
           .not("client_id", "is", null)
           .order("id")
           .range(from, to) as unknown as Page,

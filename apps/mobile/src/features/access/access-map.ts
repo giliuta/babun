@@ -19,11 +19,36 @@ import type { Json } from "@babun/shared/db/database.types";
 // базы клиентов (владелец 30.09, окно — 02.10): охват «Какие клиенты» уже
 // «Своей команды», телефон — только в день записи. Сервер их в ранг
 // `access_calendars` не ставит.
-export type AccessLevel = "off" | "read" | "write" | "full" | "own" | "all" | "near" | "month" | "day";
+export type AccessLevel =
+  | "off"
+  | "read"
+  | "write"
+  | "full"
+  | "own"
+  | "all"
+  | "week"
+  | "near"
+  | "month"
+  | "quarter"
+  | "half"
+  | "day";
 export type AccessArea = "calendar" | "finance" | "clients" | "company" | "owner";
 export type AccessScope = "calendar" | "company";
 
-const LEVELS: readonly AccessLevel[] = ["off", "read", "write", "full", "own", "all", "near", "month", "day"];
+const LEVELS: readonly AccessLevel[] = [
+  "off",
+  "read",
+  "write",
+  "full",
+  "own",
+  "all",
+  "week",
+  "near",
+  "month",
+  "quarter",
+  "half",
+  "day",
+];
 const AREAS: readonly AccessArea[] = ["calendar", "finance", "clients", "company", "owner"];
 
 export interface AccessBlock {
@@ -60,8 +85,11 @@ export const LEVEL_WORD: Record<AccessLevel, string> = {
   full: "Правит всё",
   own: "Из его календарей",
   all: "Все",
+  week: "Неделя",
   near: "2 недели",
   month: "Месяц",
+  quarter: "3 месяца",
+  half: "Полгода",
   day: "В день записи",
 };
 

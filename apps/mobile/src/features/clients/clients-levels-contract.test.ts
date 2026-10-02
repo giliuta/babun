@@ -96,6 +96,11 @@ const threeLevels = norm(readFileSync(join(MIGRATIONS_DIR, THREE_LEVELS), "utf8"
 const TEAM_BASE = "20261002235800_clients_team_base_time_limit.sql";
 const teamBase = norm(readFileSync(join(MIGRATIONS_DIR, TEAM_BASE), "utf8"));
 
+// «ОГРАНИЧЕНИЯ» — ШЕСТЬ ШАГОВ (владелец 02.10, вариант 1): Неделя · 2 недели ·
+// Месяц · 3 месяца · Полгода · Без ограничения; умолчание — «Неделя».
+const LIMITS = "20261002235930_clients_limits_steps.sql";
+const limits = norm(readFileSync(join(MIGRATIONS_DIR, LIMITS), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
@@ -107,9 +112,10 @@ describe("сервер: клиенты по уровням", () => {
     for (const fn of ["update_client_with_tags", "access_contact_client_ids", "member_trash_client"]) {
       assert.equal(lastDefiner(fn), THREE_LEVELS, `${fn} переопределён позже`);
     }
-    for (const fn of ["access_client_ids_in", "access_client_blocks", "list_master_clients_safe"]) {
+    for (const fn of ["access_client_blocks", "list_master_clients_safe"]) {
       assert.equal(lastDefiner(fn), TEAM_BASE, `${fn} переопределён позже`);
     }
+    assert.equal(lastDefiner("access_client_ids_in"), LIMITS, "access_client_ids_in переопределён позже");
     for (const fn of [
       "list_master_appointments_safe",
       "sms_message_json",
@@ -162,6 +168,26 @@ describe("сервер: клиенты по уровням", () => {
       assert.ok(teamBase.includes(`delete from public.member_access where block = '${key}';`), key);
       assert.ok(teamBase.includes(`delete from public.access_blocks where key = '${key}';`), key);
     }
+  });
+
+  test("«Ограничения» — шесть шагов, окно по записи своей команды, умолчание «Неделя»", () => {
+    assert.ok(
+      limits.includes(
+        "update public.access_blocks set levels = array['week', 'near', 'month', 'quarter', 'half', 'own'], title_ru = 'Ограничения' where key = 'clients.scope';",
+      ),
+    );
+    assert.ok(limits.includes("coalesce(public.access_team_level(active_tenant, caller, 'clients.scope', t.team_id), 'week') as level"));
+    assert.ok(
+      limits.includes(
+        "case lv.level when 'near' then interval '14 days' when 'month' then interval '1 month' when 'quarter' then interval '3 months' when 'half' then interval '6 months' else interval '7 days' end as span",
+      ),
+    );
+    // Только клиент своей команды и запись этой же команды; отменённая окна не открывает.
+    assert.ok(limits.includes("c.team_id in (select lv.team_id from lv where lv.level in ('own', 'all'))"));
+    assert.ok(limits.includes("and a.team_id = w.team_id where w.team_id = c.team_id and a.status is distinct from 'cancelled'"));
+    assert.ok(limits.includes("and a.date between (today - w.span)::date::text and (today + w.span)::date::text"));
+    const idsBody = limits.slice(limits.indexOf("create or replace function public.access_client_ids_in"));
+    assert.ok(!idsBody.includes("created_by"), "в набор снова пускает «завёл сам»");
   });
 
   test("окно «Какие клиенты» едет с днём: 2 недели, месяц, своей команды (BASE_READ)", () => {

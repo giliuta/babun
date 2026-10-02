@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CalendarRange,
   CalendarDays,
+  Infinity as InfinityIcon,
   CalendarPlus,
   CalendarX2,
   CircleCheck,
@@ -145,10 +146,14 @@ const STEP_LOOK: Partial<Record<AccessLevel, RightLook>> = {
   read: { icon: Eye, tile: SETTINGS_TILE.blue },
   write: { icon: PencilLine, tile: SETTINGS_TILE.green },
   full: { icon: ShieldAlert, tile: SETTINGS_TILE.orange },
-  own: { icon: UserRound, tile: SETTINGS_TILE.blue },
+  // «Без ограничения» у «Ограничений» (02.10) — бесконечность.
+  own: { icon: InfinityIcon, tile: SETTINGS_TILE.blue },
   all: { icon: Users, tile: SETTINGS_TILE.green },
+  week: { icon: CalendarClock, tile: SETTINGS_TILE.teal },
   near: { icon: CalendarClock, tile: SETTINGS_TILE.teal },
-  month: { icon: CalendarRange, tile: SETTINGS_TILE.teal },
+  month: { icon: CalendarDays, tile: SETTINGS_TILE.teal },
+  quarter: { icon: CalendarRange, tile: SETTINGS_TILE.teal },
+  half: { icon: CalendarRange, tile: SETTINGS_TILE.teal },
   day: { icon: CalendarDays, tile: SETTINGS_TILE.teal },
 };
 

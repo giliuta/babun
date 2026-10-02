@@ -15,7 +15,7 @@ import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map"
 // видит; нет строки — самое узкое, как у сервера-умолчания.
 
 const RANK: Partial<Record<AccessLevel, number>> = { off: 0, read: 1, write: 2 };
-const SCOPE_RANK: Partial<Record<AccessLevel, number>> = { near: 0, month: 1, own: 2, all: 3 };
+const SCOPE_RANK: Partial<Record<AccessLevel, number>> = { week: 0, near: 1, month: 2, quarter: 3, half: 4, own: 5, all: 6 };
 /** Номер — вместе с базой (02.10: «Телефон» убран): видит клиентов — открывает
  *  их номера по одному. */
 const contactsOf = (clients: AccessLevel | undefined): AccessLevel =>
@@ -42,7 +42,7 @@ export function clientsAccessOf(map: MemberAccessMap): ClientsAccessLevels {
     };
   }
   let clients: AccessLevel | undefined;
-  let scope: AccessLevel = "near";
+  let scope: AccessLevel = "week";
   let seen = false;
   for (const levels of Object.values(map.calendars)) {
     const level = levels["clients"];

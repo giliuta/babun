@@ -23,6 +23,15 @@ import { CLIENTS_PREVIEW_KEYS } from "./preview-keys";
 
 const noop = () => {};
 
+/** Окно «Ограничений» словами (вариант 1 владельца, 02.10). */
+const SCOPE_SPAN: Readonly<Record<string, string>> = {
+  week: "Запись за неделю до или после",
+  near: "Запись за две недели до или после",
+  month: "Запись за месяц до или после",
+  quarter: "Запись за три месяца до или после",
+  half: "Запись за полгода до или после",
+};
+
 /** Номер, который ещё не открыли, — как на его карточке. */
 const LOCKED_NUMBER = "•• ••• •••";
 
@@ -40,7 +49,7 @@ export function ClientsPreview({
 }) {
   const t = useThemeColors();
   const base = levels.clients ?? "off";
-  const scope = levels["clients.scope"] ?? "near";
+  const scope = levels["clients.scope"] ?? "week";
   // Номер и переход на страницу даёт сама база (02.10: «Телефон» и
   // «Открывает карточку» убраны): видит клиента — открывает его и номер.
   const phones = base !== "off";
@@ -48,7 +57,7 @@ export function ClientsPreview({
   const opens = base !== "off";
   // База закрыта — у зависимой строки «Ограничение по времени» показывать
   // нечего: базы у него нет вовсе, и рамка гасит весь список.
-  const people = scope === "near" ? OWN.slice(0, 1) : OWN;
+  const people = scope === "week" || scope === "near" ? OWN.slice(0, 1) : OWN;
   const state = levelState(base);
   if (!CLIENTS_PREVIEW_KEYS.includes(blockKey)) return null;
   // Зависимые строки говорят своё: список один, а меняют они в нём разное.
@@ -58,9 +67,7 @@ export function ClientsPreview({
       : blockKey === "clients.scope"
         ? scope === "own"
           ? "Видит всех клиентов команды"
-          : scope === "month"
-            ? "Видит клиента команды за месяц до и после записи"
-            : "Видит клиента команды за 2 недели до и после записи"
+          : `Видит клиента команды, если ${(SCOPE_SPAN[scope] ?? SCOPE_SPAN.week).toLowerCase()}`
         : undefined;
   return (
     <PreviewFrame

@@ -41,10 +41,10 @@ describe("права клиентов — из команд", () => {
     assert.deepEqual(got, { clients: "read", scope: "own", contacts: "read" });
   });
 
-  test("защита базы: без строки — «2 недели»; берётся самое широкое; без базы номера нет", () => {
+  test("защита базы: без строки — «Неделя»; берётся самое широкое; без базы номера нет", () => {
     assert.deepEqual(clientsAccessOf(mapWith({ A: { clients: "read" } })), {
       clients: "read",
-      scope: "near",
+      scope: "week",
       contacts: "read",
     });
     const got = clientsAccessOf(
@@ -56,7 +56,7 @@ describe("права клиентов — из команд", () => {
     assert.deepEqual(got, { clients: "read", scope: "month", contacts: "read" });
     assert.deepEqual(clientsAccessOf(mapWith({ A: { clients: "off" } })), {
       clients: "off",
-      scope: "near",
+      scope: "week",
       contacts: "off",
     });
   });

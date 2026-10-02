@@ -121,8 +121,20 @@ describe("зеркало: какие клиенты в его наборе (ка
     return ["c1", "c2", "c3", "c4"].filter((id) => inMirrorView(row(id), view));
   };
 
-  test("«2 недели» — запись своей команды две недели назад и вперёд; отменённая и чужая команда окна не открывают", () => {
+  test("без строки — «Неделя»: запись своей команды неделю назад и вперёд", () => {
     const m = map({ A: { clients: "read" } });
+    const appointments = [appt("c1", "A", "2026-09-23"), appt("c2", "A", "2026-10-07"), appt("c3", "A", "2026-10-08")];
+    assert.deepEqual(ids(m, { appointments }), ["c1", "c2"]);
+  });
+
+  test("«3 месяца» и «Полгода» — по календарю", () => {
+    const appointments = [appt("c1", "A", "2026-12-30"), appt("c2", "A", "2027-03-30"), appt("c3", "A", "2027-03-31")];
+    assert.deepEqual(ids(map({ A: { clients: "read", "clients.scope": "quarter" } }), { appointments }), ["c1"]);
+    assert.deepEqual(ids(map({ A: { clients: "read", "clients.scope": "half" } }), { appointments }), ["c1", "c2"]);
+  });
+
+  test("«2 недели» — запись своей команды две недели назад и вперёд; отменённая и чужая команда окна не открывают", () => {
+    const m = map({ A: { clients: "read", "clients.scope": "near" } });
     const appointments = [
       appt("c1", "A", "2026-09-16"),
       appt("c2", "A", "2026-10-14"),

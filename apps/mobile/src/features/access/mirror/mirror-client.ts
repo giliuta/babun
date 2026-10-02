@@ -118,12 +118,12 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: 
 // за командой (владелец 02.10: «только база клиентов, которая закреплена за
 // командой»), а «Ограничение по времени» сужает их:
 //   · «Без ограничения» — все клиенты команды;
-//   · «Месяц» / «2 недели» — у клиента есть запись этой команды от месяца /
-//     двух недель назад до месяца / двух недель вперёд; отменённая окна не
-//     открывает.
+//   · «Неделя», «2 недели», «Месяц», «3 месяца», «Полгода» — у клиента есть
+//     запись этой команды не дальше этого срока до или после сегодня;
+//     отменённая окна не открывает.
 
-const SCOPE_RANK: Partial<Record<AccessLevel, number>> = { near: 0, month: 1, own: 2, all: 3 };
-const SCOPES = ["near", "month", "own", "all"] as const;
+const SCOPE_RANK: Partial<Record<AccessLevel, number>> = { week: 0, near: 1, month: 2, quarter: 3, half: 4, own: 5, all: 6 };
+const SCOPES = ["week", "near", "month", "quarter", "half", "own", "all"] as const;
 type MirrorScope = (typeof SCOPES)[number];
 
 export interface MirrorScopeAppointment {
@@ -134,7 +134,7 @@ export interface MirrorScopeAppointment {
 }
 
 export interface MirrorClientData {
-  /** Записи команд с «Ограничением по времени» — в пределах месяца от сегодня. */
+  /** Записи команд с «Ограничениями» — в пределах полугода от сегодня. */
   appointments: readonly MirrorScopeAppointment[];
   /** Рабочий день компании (`tenant_business_date`). */
   today: string;
@@ -145,9 +145,9 @@ export function mirrorOpenTeams(map: MemberAccessMap): { teamId: string; scope: 
   return Object.entries(map.calendars)
     .filter(([, levels]) => (RANK[levels.clients ?? "off"] ?? 0) >= 1)
     .map(([teamId, levels]) => {
-      // Неизвестное — «2 недели», как на сервере.
-      const rank = SCOPE_RANK[levels["clients.scope"] ?? "near"] ?? 0;
-      return { teamId, scope: SCOPES[rank] ?? "near" };
+      // Неизвестное — «Неделя», самое узкое, как на сервере.
+      const rank = SCOPE_RANK[levels["clients.scope"] ?? "week"] ?? 0;
+      return { teamId, scope: SCOPES[rank] ?? "week" };
     });
 }
 
@@ -178,8 +178,11 @@ export function shiftDay(day: string, days: number): string {
 export function mirrorView(map: MemberAccessMap, data: MirrorClientData): MirrorView {
   // Окно едет вместе с днём (02.10): «2 недели» и «Месяц» до и после записи.
   const windows: Partial<Record<MirrorScope, readonly [string, string]>> = {
+    week: [shiftDay(data.today, -7), shiftDay(data.today, 7)],
     near: [shiftDay(data.today, -14), shiftDay(data.today, 14)],
     month: [shiftMonth(data.today, -1), shiftMonth(data.today, 1)],
+    quarter: [shiftMonth(data.today, -3), shiftMonth(data.today, 3)],
+    half: [shiftMonth(data.today, -6), shiftMonth(data.today, 6)],
   };
   const teams = new Map<string, TeamScope>();
   for (const { teamId, scope } of mirrorOpenTeams(map)) {
