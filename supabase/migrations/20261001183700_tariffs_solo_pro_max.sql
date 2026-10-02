@@ -508,3 +508,97 @@ $function$;
 revoke execute on function public.tenant_tier_limit(uuid, text) from public, anon, authenticated;
 revoke execute on function public.team_is_working(uuid, text) from public, anon, authenticated;
 revoke execute on function public.tenant_effective_plan(uuid) from public, anon;
+
+-- ── 11. Подписка кончилась — партнёры видят, но не меняют ──────────────────
+-- Владелец 01.10: «всё видно, новое серым; партнёры в командах владельца
+-- видят, но не меняют». Тариф без партнёров (нет тарифа, Соло) — любой
+-- партнёр аккаунта только смотрит: запись, клиенты, деньги, график и
+-- настройки команды не пишутся ни дверью, ни напрямую. Сторож стоит
+-- триггером на самих таблицах, поэтому его не обойти ни одной дорогой
+-- (`member_*`, политики таблиц, старая сборка). Владелец, сервер и cron (без
+-- JWT) не задеты; журналы чтения (открытый номер клиента) — тоже: их таблиц
+-- в списке нет.
+create or replace function public.tenant_partner_writes_guard()
+ returns trigger
+ language plpgsql
+ security definer
+ set search_path to 'public'
+as $function$
+declare
+  v_uid uuid := auth.uid();
+  v_tenant uuid;
+  v_role text;
+begin
+  if tg_op = 'DELETE' then
+    v_tenant := old.tenant_id;
+  else
+    v_tenant := new.tenant_id;
+  end if;
+  if v_uid is not null and v_tenant is not null then
+    select tm.role into v_role
+      from public.tenant_members tm
+     where tm.tenant_id = v_tenant
+       and tm.user_id = v_uid;
+    if v_role is not null and v_role <> 'owner'
+       and public.tenant_tier_limit(v_tenant, 'partners') = 0 then
+      raise exception 'Тариф владельца команды закончился — можно только смотреть'
+        using errcode = 'P0001', hint = 'plan:partner-frozen';
+    end if;
+  end if;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$function$;
+
+revoke execute on function public.tenant_partner_writes_guard() from public, anon;
+
+do $do$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'appointments', 'appointment_photos', 'clients', 'client_attachments',
+    'client_tag_assignments', 'client_tags', 'location_labels', 'day_cities',
+    'day_extras', 'debts', 'finance_transactions', 'invoices', 'receipts',
+    'team_schedules', 'team_design', 'services', 'service_variants',
+    'equipment', 'teams', 'cities'
+  ] loop
+    execute format('drop trigger if exists %I on public.%I', t || '_partner_writes_guard', t);
+    execute format(
+      'create trigger %I before insert or update or delete on public.%I '
+      'for each row execute function public.tenant_partner_writes_guard()',
+      t || '_partner_writes_guard', t
+    );
+  end loop;
+end
+$do$;
+
+-- ── 12. Сколько партнёров у аккаунта — для смены тарифа ────────────────────
+-- Понижение тарифа при лишних партнёрах — отказ «сначала уберите лишних»
+-- (`tariff-checkout`). Те же люди, что считает дверь приглашения: участники
+-- кроме владельца и ждущие приглашения. Только служебному ключу.
+create or replace function public.tariff_partner_count(p_tenant uuid)
+ returns integer
+ language sql
+ stable security definer
+ set search_path to 'public'
+as $function$
+  select count(*)::integer
+    from (
+      select m.user_id::text
+        from public.tenant_members m
+       where m.tenant_id = p_tenant
+         and m.role <> 'owner'
+      union
+      select lower(i.email)
+        from public.invitations i
+       where i.tenant_id = p_tenant
+         and i.accepted_at is null
+         and i.expires_at > now()
+    ) people
+$function$;
+
+revoke execute on function public.tariff_partner_count(uuid) from public, anon, authenticated;
+grant execute on function public.tariff_partner_count(uuid) to service_role;

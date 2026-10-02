@@ -217,15 +217,17 @@ export interface TariffState {
 }
 
 /** Одно действие страницы «Тариф» — в футере. Пробный — пока его не было и
- *  ничего не оплачено; дальше — оплата выбранного. На своём оплаченном и на
- *  выданном навсегда кнопки нет. */
+ *  ничего не оплачено; дальше — оплата выбранного; подписка уже есть —
+ *  переход на выбранный тариф в ней же. На своём оплаченном и на выданном
+ *  навсегда кнопки нет. */
 export function tariffAction(
   state: TariffState,
   selected: Exclude<Tier, "free">,
-): { kind: "trial" | "pay"; label: string } | null {
+): { kind: "trial" | "pay" | "change"; label: string } | null {
   if (state.forever) return null;
   if (state.paid && state.tier === selected) return null;
-  if (!state.paid && !state.trial && !state.trialUsed) {
+  if (state.paid) return { kind: "change", label: `Перейти на ${NAMES[selected]}` };
+  if (!state.trial && !state.trialUsed) {
     return { kind: "trial", label: "Попробовать 14 дней" };
   }
   const card = TIER_CARDS.find((item) => item.tier === selected);

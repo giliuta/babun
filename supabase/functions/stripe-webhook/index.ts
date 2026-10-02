@@ -20,8 +20,16 @@
 // on billing_events.stripe_event_id, so whichever handler sees an event
 // first wins and the other one no-ops on 23505.
 //
-// Required secrets: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
-// STRIPE_PRICE_PRO, STRIPE_PRICE_BUSINESS, plus the service key.
+// Required secrets: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, plus the
+// service key. STRIPE_PRICE_PRO / STRIPE_PRICE_BUSINESS — only for the old
+// Pro/Business prices, if any subscription still runs on them.
+//
+// ТАРИФЫ «СОЛО · ПРО · МАКС» (01.10). Подписку оформляет `tariff-checkout`;
+// тариф подписки — метка её цены (`metadata.tier`, `lookup_key`
+// babun_<tier>_<period>), аккаунт — метка самой подписки
+// (`metadata.tenant_id`). В Stripe у этого вебхука должны быть включены
+// события `customer.subscription.created/updated/deleted`,
+// `invoice.payment_succeeded/failed` и `checkout.session.completed`.
 //
 // PORTING NOTES vs the Next route:
 //   * `constructEvent` → `constructEventAsync`. Deno has no Node crypto
@@ -64,7 +72,7 @@ function serviceClient() {
   });
 }
 
-type Tier = "free" | "pro" | "business";
+type Tier = "free" | "solo" | "pro" | "max";
 type SubStatus =
   | "active"
   | "trialing"
@@ -74,16 +82,23 @@ type SubStatus =
 
 interface ReconcileFields {
   plan?: Tier;
+  stripe_customer_id?: string;
   subscription_status?: SubStatus | null;
   stripe_subscription_id?: string | null;
   trial_ends_at?: string | null;
   current_period_end?: string | null;
 }
 
-function priceIdToTier(priceId: string | undefined): Tier {
-  if (!priceId) return "free";
-  if (priceId === Deno.env.get("STRIPE_PRICE_PRO")) return "pro";
-  if (priceId === Deno.env.get("STRIPE_PRICE_BUSINESS")) return "business";
+function priceToTier(price: Stripe.Price | undefined): Tier {
+  if (!price) return "free";
+  // Цены тарифов заводит `tariff-checkout` — с меткой тарифа.
+  const meta = price.metadata?.tier;
+  if (meta === "solo" || meta === "pro" || meta === "max") return meta;
+  const lookup = /^babun_(solo|pro|max)_/.exec(price.lookup_key ?? "");
+  if (lookup) return lookup[1] as Tier;
+  // Старые цены Pro/Business (до 01.10): Business теперь — Макс.
+  if (price.id === Deno.env.get("STRIPE_PRICE_PRO")) return "pro";
+  if (price.id === Deno.env.get("STRIPE_PRICE_BUSINESS")) return "max";
   // Unknown price — fall back to free so a typo'd secret never grants a
   // paid tier.
   return "free";
@@ -115,8 +130,9 @@ function computeUpdate(event: Stripe.Event): ReconcileFields | null {
     case "customer.subscription.created":
     case "customer.subscription.updated": {
       const sub = event.data.object as Stripe.Subscription;
+      const item = sub.items?.data?.[0];
       const update: ReconcileFields = {
-        plan: priceIdToTier(sub.items?.data?.[0]?.price?.id),
+        plan: priceToTier(item?.price),
         subscription_status: mapSubscriptionStatus(sub.status),
         stripe_subscription_id: sub.id,
       };
@@ -124,14 +140,26 @@ function computeUpdate(event: Stripe.Event): ReconcileFields | null {
         current_period_end?: number | null;
         trial_end?: number | null;
       };
-      if (typeof withPeriod.current_period_end === "number") {
-        update.current_period_end = unixToIso(withPeriod.current_period_end);
+      // Новые версии API держат конец периода у позиции подписки.
+      const periodEnd =
+        withPeriod.current_period_end ??
+        (item as unknown as { current_period_end?: number | null } | undefined)?.current_period_end;
+      if (typeof periodEnd === "number") {
+        update.current_period_end = unixToIso(periodEnd);
       }
       update.trial_ends_at =
         typeof withPeriod.trial_end === "number"
           ? unixToIso(withPeriod.trial_end)
           : null;
       return update;
+    }
+    // Оплата тарифа на странице Stripe: запомнить клиента Stripe аккаунта —
+    // по нему находятся события подписки без меток.
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const customer = idOf(session.customer);
+      if (session.mode !== "subscription" || session.metadata?.kind !== "tariff" || !customer) return null;
+      return { stripe_customer_id: customer };
     }
     case "customer.subscription.deleted":
       return {
@@ -157,6 +185,9 @@ async function resolveTenantId(event: Stripe.Event, sbs: any): Promise<string | 
   const data = event.data.object as unknown as Record<string, unknown>;
   const clientRef = data.client_reference_id;
   if (typeof clientRef === "string" && clientRef) return clientRef;
+  // Подписка тарифа несёт аккаунт в метке (`tariff-checkout`).
+  const metaTenant = (data.metadata as Record<string, unknown> | undefined)?.tenant_id;
+  if (typeof metaTenant === "string" && metaTenant) return metaTenant;
 
   const customer = data.customer;
   if (typeof customer === "string" && customer) {

@@ -98,27 +98,76 @@ export function useChooseWorkingTeams() {
 
 const TARIFF_PAY_DONE_URL = "https://babun.app/pay/done";
 
-/** Оплата тарифа — на странице Stripe в браузере (не через Apple). Функция
- *  `tariff-checkout` открывает подписку и отдаёт адрес; пока её нет на
- *  сервере, человек слышит это словами, а не «ошибка 404». */
-export async function openTariffCheckout(tier: Exclude<Tier, "free">): Promise<void> {
-  const web = Platform.OS === "web" && typeof window !== "undefined";
-  const back = web ? `${window.location.origin}/cabinet/tariff` : TARIFF_PAY_DONE_URL;
-  const { data, error } = await supabase.functions.invoke("tariff-checkout", {
-    body: { tier, period: "month", return_url: back },
-  });
-  if (error) {
-    const status = (error as { context?: { status?: number } }).context?.status;
-    if (status === 404) throw new Error("Оплата тарифа скоро появится — пока работает пробный период");
-    if ((error as { name?: string }).name === "FunctionsFetchError") {
-      throw new Error("Нет связи с сервером оплаты. Проверьте интернет");
-    }
-    throw new Error("Не получилось открыть оплату. Попробуйте ещё раз");
+/** Ответы `tariff-checkout` словами владельца. */
+const CHECKOUT_REFUSALS: Record<string, string> = {
+  stripe_not_configured: "Оплата тарифа скоро появится — пока работает пробный период",
+  too_many_partners: "Сначала уберите лишних партнёров — в этом тарифе их меньше",
+  forever: "Ваш тариф выдан навсегда — платить не нужно",
+  no_subscription: "Подписки ещё нет — сначала оплатите тариф",
+  portal_not_configured: "Управление подпиской ещё не включено — напишите нам",
+  owner_only: "Тариф меняет владелец аккаунта",
+};
+
+/** Отказ функции: код лежит в теле ответа (`{ error }`), а сообщение самого
+ *  клиента — «Edge Function returned a non-2xx…». */
+async function checkoutRefusal(error: unknown): Promise<Error> {
+  const e = error as {
+    name?: string;
+    context?: { status?: number; clone?: () => { json: () => Promise<unknown> } };
+  };
+  if (e.name === "FunctionsFetchError") return new Error("Нет связи с сервером оплаты. Проверьте интернет");
+  if (e.context?.status === 404) return new Error(CHECKOUT_REFUSALS.stripe_not_configured);
+  try {
+    const body = (await e.context?.clone?.().json()) as { error?: unknown } | undefined;
+    const code = typeof body?.error === "string" ? body.error : null;
+    if (code && CHECKOUT_REFUSALS[code]) return new Error(CHECKOUT_REFUSALS[code]);
+  } catch {
+    // тело не читается — общий ответ ниже
   }
-  const url = (data as { url?: string } | null)?.url;
-  if (!url) throw new Error("Не получилось открыть оплату. Попробуйте ещё раз");
+  return new Error("Не получилось открыть оплату. Попробуйте ещё раз");
+}
+
+function returnUrl(): { web: boolean; back: string } {
+  const web = Platform.OS === "web" && typeof window !== "undefined";
+  return { web, back: web ? `${window.location.origin}/cabinet/tariff` : TARIFF_PAY_DONE_URL };
+}
+
+async function openPage(url: string, web: boolean): Promise<void> {
   if (web) window.location.assign(url);
   else await Linking.openURL(url);
+}
+
+/** Оплата тарифа — на странице Stripe в браузере (не через Apple). Подписки
+ *  нет — открывается оплата; есть — сервер меняет в ней тариф и отвечает
+ *  `changed` (тариф придёт вебхуком через несколько секунд). */
+export async function openTariffCheckout(
+  tier: Exclude<Tier, "free">,
+): Promise<"opened" | "changed" | "same"> {
+  const { web, back } = returnUrl();
+  const { data, error } = await supabase.functions.invoke("tariff-checkout", {
+    body: { action: "checkout", tier, period: "month", return_url: back },
+  });
+  if (error) throw await checkoutRefusal(error);
+  const reply = (data ?? {}) as { url?: string; changed?: boolean };
+  if (reply.url) {
+    await openPage(reply.url, web);
+    return "opened";
+  }
+  if (reply.changed === true) return "changed";
+  if (reply.changed === false) return "same";
+  throw new Error("Не получилось открыть оплату. Попробуйте ещё раз");
+}
+
+/** «Управление подпиской» — страница Stripe: карта, счета, отмена. */
+export async function openTariffPortal(): Promise<void> {
+  const { web, back } = returnUrl();
+  const { data, error } = await supabase.functions.invoke("tariff-checkout", {
+    body: { action: "portal", return_url: back },
+  });
+  if (error) throw await checkoutRefusal(error);
+  const url = (data as { url?: string } | null)?.url;
+  if (!url) throw new Error("Не получилось открыть оплату. Попробуйте ещё раз");
+  await openPage(url, web);
 }
 
 /** ПЛАШКА «НУЖНО ИЗМЕНИТЬ ТАРИФ» (владелец 01.10): закрытое тарифом видно

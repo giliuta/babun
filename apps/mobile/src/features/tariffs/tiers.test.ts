@@ -131,7 +131,7 @@ describe("действие страницы «Тариф»", () => {
   test("свой оплаченный и выданный навсегда — без кнопки", () => {
     const paid = { ...fresh, tier: "pro" as const, paid: true, trialUsed: true };
     assert.equal(tariffAction(paid, "pro"), null);
-    assert.equal(tariffAction(paid, "max")?.kind, "pay");
+    assert.deepEqual(tariffAction(paid, "max"), { kind: "change", label: "Перейти на Макс" });
     assert.equal(tariffAction({ ...paid, tier: "max", forever: true }, "solo"), null);
     assert.equal(tariffStatus({ ...paid, forever: true }), "Навсегда");
   });
