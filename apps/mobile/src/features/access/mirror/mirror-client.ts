@@ -75,9 +75,8 @@ export function mirrorClientBlocks(
     let best = 0;
     for (const levels of teams) {
       if (PAGE_ONLY_KEYS.has(key) && levels["clients.open"] !== "write") continue;
-      const own = RANK[levels[key] ?? "off"] ?? 0;
-      const rank = own === 2 && levels.clients !== "write" ? 1 : own;
-      best = Math.max(best, rank);
+      // «Меняет» блока — своим правом, без «Меняет» у базы (02.10).
+      best = Math.max(best, RANK[levels[key] ?? "off"] ?? 0);
     }
     out[key] = word(best);
   }
@@ -140,11 +139,14 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: 
 // команды:
 //   · «Вся база» — вся база;
 //   · «Своей команды» — клиенты команды и её записей за всё время;
-//   · «Около записи» — запись команды от недели назад до завтра, отменённая
-//     окна не открывает;
+//   · «Месяц» — запись команды от месяца назад до месяца вперёд, «2 недели» —
+//     от двух недель назад до двух недель вперёд (02.10); отменённая окна не
+//     открывает;
 //   · кого завёл сам — видит всегда.
 
-const SCOPE_RANK: Partial<Record<AccessLevel, number>> = { near: 0, own: 1, all: 2 };
+const SCOPE_RANK: Partial<Record<AccessLevel, number>> = { near: 0, month: 1, own: 2, all: 3 };
+const SCOPES = ["near", "month", "own", "all"] as const;
+type MirrorScope = (typeof SCOPES)[number];
 
 export interface MirrorScopeAppointment {
   client_id: string | null;
@@ -163,13 +165,13 @@ export interface MirrorClientData {
 }
 
 /** Команды с открытыми «Карточками клиентов» и их «Какие клиенты». */
-export function mirrorOpenTeams(map: MemberAccessMap): { teamId: string; scope: "near" | "own" | "all" }[] {
+export function mirrorOpenTeams(map: MemberAccessMap): { teamId: string; scope: MirrorScope }[] {
   return Object.entries(map.calendars)
     .filter(([, levels]) => (RANK[levels.clients ?? "off"] ?? 0) >= 1)
     .map(([teamId, levels]) => {
-      // Неизвестное — «Около записи», как на сервере.
+      // Неизвестное — «2 недели», как на сервере.
       const rank = SCOPE_RANK[levels["clients.scope"] ?? "near"] ?? 0;
-      return { teamId, scope: rank === 2 ? "all" : rank === 1 ? "own" : "near" };
+      return { teamId, scope: SCOPES[rank] ?? "near" };
     });
 }
 
@@ -186,6 +188,14 @@ export interface MirrorView {
   dayToday: ReadonlySet<string>;
 }
 
+/** Сдвиг на месяцы — как `date ± interval '1 month'` в Postgres: 31 марта
+ *  минус месяц — 28 (29) февраля, а не 3 марта. */
+export function shiftMonth(day: string, months: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m - 1 + months + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 1 + months, Math.min(d, last))).toISOString().slice(0, 10);
+}
+
 /** День `YYYY-MM-DD` со сдвигом — календарной арифметикой, без часовых поясов. */
 export function shiftDay(day: string, days: number): string {
   const [y, m, d] = day.split("-").map(Number);
@@ -193,19 +203,23 @@ export function shiftDay(day: string, days: number): string {
 }
 
 export function mirrorView(map: MemberAccessMap, data: MirrorClientData): MirrorView {
-  const from = shiftDay(data.today, -7);
-  const to = shiftDay(data.today, 1);
+  // Окно едет вместе с днём (02.10): «2 недели» и «Месяц» до и после записи.
+  const windows: Partial<Record<MirrorScope, readonly [string, string]>> = {
+    near: [shiftDay(data.today, -14), shiftDay(data.today, 14)],
+    month: [shiftMonth(data.today, -1), shiftMonth(data.today, 1)],
+  };
   const teams = new Map<string, TeamScope>();
   for (const { teamId, scope } of mirrorOpenTeams(map)) {
     const ids = new Set(data.createdBy);
     if (scope !== "all") {
       for (const a of data.appointments) {
         if (!a.client_id || a.team_id !== teamId) continue;
-        if (scope === "own") ids.add(a.client_id);
-        else if (a.status !== "cancelled" && a.date && a.date >= from && a.date <= to) ids.add(a.client_id);
+        const window = windows[scope];
+        if (!window) ids.add(a.client_id);
+        else if (a.status !== "cancelled" && a.date && a.date >= window[0] && a.date <= window[1]) ids.add(a.client_id);
       }
     }
-    teams.set(teamId, { whole: scope === "all", ownTeam: scope === "near" ? null : teamId, ids });
+    teams.set(teamId, { whole: scope === "all", ownTeam: windows[scope] ? null : teamId, ids });
   }
   const dayTeams = new Set(
     [...teams.keys()].filter((teamId) => map.calendars[teamId]?.["clients.contacts"] === "day"),

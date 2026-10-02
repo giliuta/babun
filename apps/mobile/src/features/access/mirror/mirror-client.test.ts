@@ -9,6 +9,7 @@ import {
   mirrorMemberClient,
   mirrorView,
   shiftDay,
+  shiftMonth,
   type MirrorClientData,
 } from "./mirror-client";
 
@@ -54,7 +55,7 @@ describe("зеркало: строка клиента глазами сотру�
     assert.equal(row.blocks?.["clients.note"], "off");
   });
 
-  test("открытое остаётся; «Меняет» блока при «Только видит» карточки — «Видит»", () => {
+  test("открытое остаётся; «Меняет» блока — своим правом при «Только видит» базы (02.10)", () => {
     const row = mirrorMemberClient(
       client,
       map({
@@ -69,7 +70,8 @@ describe("зеркало: строка клиента глазами сотру�
     );
     assert.equal(row.comment, "Код 12");
     assert.equal(row.city, "Лимассол");
-    assert.equal(row.blocks?.["clients.note"], "read");
+    assert.equal(row.blocks?.["clients.note"], "write");
+    assert.equal(row.blocks?.clients, "read");
     assert.equal(row.contacts_hidden, "day");
     assert.equal(row.phone, "");
   });
@@ -120,17 +122,31 @@ describe("зеркало: какие клиенты в его наборе (ка
     return ["c1", "c2", "c3", "c4"].filter((id) => inMirrorView(row(id), view));
   };
 
-  test("«Около записи» — неделя назад и завтра; отменённая и чужая команда окна не открывают", () => {
+  test("«2 недели» — две недели назад и вперёд; отменённая и чужая команда окна не открывают", () => {
     const m = map({ A: { clients: "read" } });
     const appointments = [
-      appt("c1", "A", "2026-09-23"),
-      appt("c2", "A", "2026-10-01"),
-      appt("c3", "A", "2026-10-02"),
-      appt("c3", "A", "2026-09-22"),
+      appt("c1", "A", "2026-09-16"),
+      appt("c2", "A", "2026-10-14"),
+      appt("c3", "A", "2026-10-15"),
+      appt("c3", "A", "2026-09-15"),
       appt("c4", "A", "2026-09-30", "cancelled"),
       appt("c4", "B", "2026-09-30"),
     ];
     assert.deepEqual(ids(m, { appointments }), ["c1", "c2"]);
+  });
+
+  test("«Месяц» — месяц назад и вперёд, по календарю, как `interval '1 month'`", () => {
+    const m = map({ A: { clients: "read", "clients.scope": "month" } });
+    const appointments = [
+      appt("c1", "A", "2026-08-30"),
+      appt("c2", "A", "2026-10-30"),
+      appt("c3", "A", "2026-10-31"),
+      appt("c3", "A", "2026-08-29"),
+    ];
+    assert.deepEqual(ids(m, { appointments }), ["c1", "c2"]);
+    assert.equal(shiftMonth("2026-03-31", -1), "2026-02-28");
+    assert.equal(shiftMonth("2028-03-31", -1), "2028-02-29");
+    assert.equal(shiftMonth("2026-12-15", 1), "2027-01-15");
   });
 
   test("«Своей команды» — клиенты команды и её записи за всё время", () => {

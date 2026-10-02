@@ -29,9 +29,9 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["finance.expense", ["off", "read", "write", "full"]],
   ["finance.accounts", ["off", "read", "write"]],
   ["finance.debts", ["off", "read", "write"]],
-  ["clients", ["off", "read", "write"]],
+  ["clients", ["off", "read"]],
   // Защита базы 30.09: «Около записи» и «В день записи», блоки карточки.
-  ["clients.scope", ["near", "own"]],
+  ["clients.scope", ["near", "month", "own"]],
   ["clients.open", ["off", "write"]],
   ["clients.from_record", ["off", "write"]],
   ["clients.contacts", ["off", "day", "read"]],

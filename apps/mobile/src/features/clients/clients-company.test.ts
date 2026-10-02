@@ -303,11 +303,13 @@ describe("что можно в источнике", () => {
     assert.equal(caps.book, false);
   });
 
-  test("работодатель «Смотрит» без телефонов — ни правки, ни контактов", () => {
+  test("работодатель «Смотрит» без телефонов — клиентов не заводит, контактов нет, блоки — по правам", () => {
     const caps = capabilitiesOf(
       memberScope(GILIUTA, "master", access({ clients: "read", contacts: "off" }), NAMES, GILIUTA)!,
     );
-    assert.equal(caps.edit, false);
+    // Правка карточки — по блокам (02.10): что именно, решает `blocks` строки.
+    assert.equal(caps.edit, true);
+    assert.equal(caps.create, false);
     assert.equal(caps.contacts, false);
   });
 });

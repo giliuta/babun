@@ -15,14 +15,15 @@ import type { Json } from "@babun/shared/db/database.types";
 // удаляет и чужое в команде. На сервере ступень стоит в конце шкалы
 // (`array['off', 'read', 'write', 'full']`), поэтому прежние ранги не сдвинулись.
 //
-// «Около записи» (`near`) и «В день записи» (`day`) — защита базы клиентов
-// (владелец 30.09): охват «Какие клиенты» уже «Своей команды», телефон —
-// только в день записи. Сервер их в ранг `access_calendars` не ставит.
-export type AccessLevel = "off" | "read" | "write" | "full" | "own" | "all" | "near" | "day";
+// «2 недели» (`near`), «Месяц» (`month`) и «В день записи» (`day`) — защита
+// базы клиентов (владелец 30.09, окно — 02.10): охват «Какие клиенты» уже
+// «Своей команды», телефон — только в день записи. Сервер их в ранг
+// `access_calendars` не ставит.
+export type AccessLevel = "off" | "read" | "write" | "full" | "own" | "all" | "near" | "month" | "day";
 export type AccessArea = "calendar" | "finance" | "clients" | "company" | "owner";
 export type AccessScope = "calendar" | "company";
 
-const LEVELS: readonly AccessLevel[] = ["off", "read", "write", "full", "own", "all", "near", "day"];
+const LEVELS: readonly AccessLevel[] = ["off", "read", "write", "full", "own", "all", "near", "month", "day"];
 const AREAS: readonly AccessArea[] = ["calendar", "finance", "clients", "company", "owner"];
 
 export interface AccessBlock {
@@ -59,7 +60,8 @@ export const LEVEL_WORD: Record<AccessLevel, string> = {
   full: "Правит всё",
   own: "Из его календарей",
   all: "Все",
-  near: "Около записи",
+  near: "2 недели",
+  month: "Месяц",
   day: "В день записи",
 };
 

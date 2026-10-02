@@ -106,7 +106,10 @@ export function capabilitiesOf(scope: ClientsScope): ClientsCapabilities {
     // этом обещала ровно это — «Заводит клиентов и правит их карточки»
     // (найдено зеркалом 20.09).
     create: !record && scope.level === "write",
-    edit: !record && scope.level === "write",
+    // Правка карточки у партнёра — по блокам (02.10): база у него только
+    // «Видит», а блок с «Меняет» правится. Что именно — решает `blocks`
+    // строки (`card-access.ts`), имя и номера остаются владельцу.
+    edit: !record && (scope.level === "write" || scope.kind === "member"),
     contacts: scope.contacts,
     money: own,
     book: !record && scope.isActive,

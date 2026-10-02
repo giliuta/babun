@@ -109,10 +109,8 @@ function linkItemsOf(
         telegramUsername: member.telegram_username || null,
         role: entry.role,
         // Правка связи пишет memberships ЭТОГО человека — по его праву.
-        editable:
-          !member.blocks ||
-          (clientBlockLevel(member, "clients") === "write" &&
-            clientBlockLevel(member, "clients.people") === "write"),
+        // «Меняет» блока «Люди» — своим правом, без «Меняет» у базы (02.10).
+        editable: !member.blocks || clientBlockLevel(member, "clients.people") === "write",
       });
     }
   }

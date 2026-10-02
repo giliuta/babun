@@ -44,10 +44,11 @@ describe("карточка клиента: блоки по команде и п�
     assert.deepEqual(a.requisites, { show: false, edit: false });
   });
 
-  test("«Меняет» у блока без «Меняет» у карточки — только чтение", () => {
-    const client = { blocks: { clients: "read", "clients.objects": "write" } };
+  test("«Меняет» у блока при «Только видит» базы — блок правится, имя и номер нет (02.10)", () => {
+    const client = { blocks: { clients: "read", "clients.objects": "write", "clients.note": "read" } };
     const a = cardAccess({ client, caps: MEMBER, teamOn: ALL_ON, draft: false });
-    assert.deepEqual(a.objects, { show: true, edit: false });
+    assert.deepEqual(a.objects, { show: true, edit: true });
+    assert.deepEqual(a.note, { show: true, edit: false });
     assert.equal(a.card.edit, false);
   });
 

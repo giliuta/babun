@@ -155,6 +155,7 @@ const STEP_LOOK: Partial<Record<AccessLevel, RightLook>> = {
   own: { icon: UserRound, tile: SETTINGS_TILE.blue },
   all: { icon: Users, tile: SETTINGS_TILE.green },
   near: { icon: CalendarClock, tile: SETTINGS_TILE.teal },
+  month: { icon: CalendarRange, tile: SETTINGS_TILE.teal },
   day: { icon: CalendarDays, tile: SETTINGS_TILE.teal },
 };
 

@@ -11,8 +11,11 @@ import { clientBlockLevel, type ClientCardBlock } from "./client-block-access";
 //     закрытых блоков приходят пустыми) — «Скрыт» / «Видит» / «Меняет»;
 //   • прежние права компании (`caps`) — для строк без `blocks`: у владельца
 //     и до наката миграции всё ведёт себя как раньше.
-// «Меняет» у блока работает, только если меняется сама карточка
-// (`clients: write`), — так решает и сервер.
+// «Меняет» у блока работает само по себе (владелец 02.10: «если поставлено
+// „Меняет" — может редактировать полноценно объекты и всё, что нужно»), а
+// база — имя, номера, команда — у сотрудника только «Видит»: её правит
+// владелец. Так решает и сервер (`access_client_blocks`,
+// `update_client_with_tags`).
 //
 // Черновик нового клиента в СВОЕЙ компании — блоки как у владельца. У
 // сотрудника в компании работодателя сервер (`create_client_with_tags`) МОЛЧА
@@ -78,7 +81,7 @@ export function cardAccess({
     const level = clientBlockLevel(rights, key);
     // В черновике «Видит» показывать нечего — пустое поле без права вписать.
     if (draftByRights) return { show: level === "write", edit: level === "write" };
-    return { show: level !== "hidden", edit: level === "write" && cardEdit };
+    return { show: level !== "hidden", edit: level === "write" };
   };
 
   return {
@@ -93,7 +96,7 @@ export function cardAccess({
     files: {
       ...block(teamOn.files, "clients.files", caps.money, caps.edit && caps.files),
       ...(byRights && teamOn.files
-        ? { edit: clientBlockLevel(rights, "clients.files") === "write" && cardEdit && caps.files }
+        ? { edit: clientBlockLevel(rights, "clients.files") === "write" && caps.files }
         : {}),
     },
     requisites: block(teamOn.requisites, "clients.requisites", caps.money),

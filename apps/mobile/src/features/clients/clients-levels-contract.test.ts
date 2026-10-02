@@ -78,13 +78,19 @@ const leaks = norm(readFileSync(join(MIGRATIONS_DIR, LEAKS), "utf8"));
 const OPEN_CARD = "20261001161500_clients_open_card_rights.sql";
 const openCard = norm(readFileSync(join(MIGRATIONS_DIR, OPEN_CARD), "utf8"));
 
+// «БАЗА КЛИЕНТОВ» — «СКРЫТА» ИЛИ «ТОЛЬКО ВИДИТ» (владелец 02.10): окно
+// «2 недели» / «Месяц» едет с днём, блок карточки с «Меняет» правится сам,
+// база (имя, номера) — только владельцу. Функции переписаны сознательно.
+const BASE_READ = "20261002233700_clients_base_read_window.sql";
+const baseRead = norm(readFileSync(join(MIGRATIONS_DIR, BASE_READ), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
       assert.equal(lastDefiner(fn), PER_TEAM, `${fn} переопределён позже`);
     }
-    for (const fn of ["access_client_ids_in", "access_company_level"]) {
-      assert.equal(lastDefiner(fn), ONE_BY_ONE, `${fn} переопределён позже`);
+    for (const fn of ["access_client_ids_in", "access_company_level", "access_client_blocks", "update_client_with_tags"]) {
+      assert.equal(lastDefiner(fn), BASE_READ, `${fn} переопределён позже`);
     }
     for (const fn of [
       "list_master_appointments_safe",
@@ -105,26 +111,52 @@ describe("сервер: клиенты по уровням", () => {
       "list_client_members",
       "client_seen_by_caller",
       "member_client_contacts",
-      "update_client_with_tags",
       "create_client_with_tags",
     ]) {
       assert.equal(lastDefiner(fn), CARD_BLOCKS, `${fn} переопределён позже`);
     }
-    for (const fn of ["access_client_blocks", "list_master_clients_safe"]) {
+    for (const fn of ["list_master_clients_safe"]) {
       assert.equal(lastDefiner(fn), OPEN_CARD, `${fn} переопределён позже`);
     }
   });
 
+  test("база — «Скрыта» или «Только видит», окно едет с днём, блок правится своим правом", () => {
+    assert.ok(baseRead.includes("update public.member_access set level = 'read' where block = 'clients' and level = 'write';"));
+    assert.ok(baseRead.includes("update public.access_blocks set levels = array['off', 'read'] where key = 'clients';"));
+    assert.ok(baseRead.includes("update public.access_blocks set levels = array['near', 'month', 'own'] where key = 'clients.scope';"));
+    // «2 недели» и «Месяц» до и после записи; отменённая окна не открывает.
+    assert.ok(
+      baseRead.includes(
+        "and a.team_id = any(near_teams) and a.status is distinct from 'cancelled' and a.date between (today - 14)::text and (today + 14)::text",
+      ),
+    );
+    assert.ok(
+      baseRead.includes(
+        "and a.team_id = any(month_teams) and a.status is distinct from 'cancelled' and a.date between (today - interval '1 month')::date::text and (today + interval '1 month')::date::text",
+      ),
+    );
+    assert.ok(baseRead.includes("when 'month' = any(scope_levels) then 'month'"));
+    // «Меняет» блока — своим правом, без «Меняет» у базы.
+    assert.ok(baseRead.includes("when l.level = 'write' then 2 when l.level in ('read', 'write') then 1"));
+    assert.ok(!baseRead.includes("when l.level = 'write' and tm.card_level = 'write' then 2"));
+    // Правка — только видимого клиента, вход по «Видит».
+    assert.ok(baseRead.includes("or not (active_role = 'owner' or public.access_company('clients', 'read')) then"));
+    assert.ok(
+      baseRead.includes(
+        "and (p_client_id = any(public.access_client_ids_in(public.access_calendars('clients', 'read')))) is not true then raise exception 'client not found'",
+      ),
+    );
+  });
+
   test("«Открывает карточку» и «Карточка из записи» — условия на сервере", () => {
-    // Блоки страницы без «Открывает карточку» гаснут; ключ едет в `blocks`.
-    assert.ok(openCard.includes("when k.block_key = any(page_only) and tm.open_level is distinct from 'write' then 0"));
-    assert.ok(openCard.includes("select tm.team_id, 'clients.open'::text, case when tm.open_level = 'write' then 2 else 0 end"));
-    // «Меняет» блока — по-прежнему только при «Меняет» базы этой команды.
-    assert.ok(openCard.includes("when l.level = 'write' and tm.card_level = 'write' then 2"));
+    // Блоки страницы без «Открывает карточку» гаснут; ключ едет в `blocks`
+    // (`access_client_blocks` с 02.10 живёт в миграции «база — только видит»).
+    assert.ok(baseRead.includes("when k.block_key = any(page_only) and tm.open_level is distinct from 'write' then 0"));
+    assert.ok(baseRead.includes("select tm.team_id, 'clients.open'::text, case when tm.open_level = 'write' then 2 else 0 end"));
     // Последняя запись стоит в строке списка — не гаснет; денег, метки и
     // тегов в строке нет (01.10) — они блоки страницы.
     assert.ok(
-      openCard.includes(
+      baseRead.includes(
         "page_only constant text[] := array[ 'clients.note', 'clients.people', 'clients.objects', 'clients.personal', 'clients.files', 'clients.requisites', 'clients.money', 'clients.labels' ];",
       ),
     );
@@ -160,8 +192,6 @@ describe("сервер: клиенты по уровням", () => {
     assert.ok(cardBlocks.includes("else public.client_masked_for_member( p_client, (select b.blocks from public.access_client_blocks() b"));
     assert.ok(cardBlocks.includes("select public.client_masked_for_member( to_jsonb(c) || jsonb_build_object("));
     assert.ok(cardBlocks.includes("else public.client_masked_for_member(r.row_json, cb.blocks)"));
-    // «Меняет» блока — только при «Меняет» карточки этой команды.
-    assert.ok(cardBlocks.includes("when l.level = 'write' and tm.card_level = 'write' then 2"));
     // Помощники не зовутся снаружи.
     assert.ok(cardBlocks.includes("revoke all on function public.access_client_blocks() from public, anon, authenticated;"));
     assert.ok(cardBlocks.includes("revoke all on function public.access_block_client_ids(text, text) from public, anon;"));
@@ -471,22 +501,19 @@ describe("сервер: клиенты по уровням", () => {
   test("скрытые маской связи сотрудник не запишет обратно", () => {
     const file = lastDefiner("update_client_with_tags");
     const sql = norm(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
-    // С 30.09 (защита базы) — контакты только тот, чей номер открыт сейчас,
-    // и только открыв его дверью. Связи — блок «Люди»: скрыты — в строке их
-    // нет, «Только видит» — записать нельзя, «Меняет» — строка несёт настоящие.
+    // С 02.10 номера, имя и мессенджеры — база: сотрудник их не меняет вовсе
+    // (судят по значению — пустые номера маски поверх настоящих не лягут).
+    // Связи — блок «Люди»: скрыты — в строке их нет, «Только видит» —
+    // записать нельзя, «Меняет» — строка несёт настоящие.
     assert.ok(
       sql.includes(
-        "if p_patch ?| array['phone', 'whatsapp_phone', 'email', 'telegram_username', 'instagram_username', 'phones', 'phone_e164'] then if not (p_client_id = any(public.access_contact_client_ids()) or p_client_id = any(public.access_day_contact_client_ids())) then raise exception 'contacts are hidden for this employee'",
+        "from unnest(array['full_name', 'phone', 'whatsapp_phone', 'email', 'sms_name', 'telegram_username', 'instagram_username', 'phones', 'phone_e164', 'avatar_url', 'reminder_at']) as f(field) where (to_jsonb(next_row) -> f.field) is distinct from (to_jsonb(current_row) -> f.field) ) then raise exception 'only the owner changes the client base'",
       ),
-      `${file}: контакты правятся без права на номер`,
+      `${file}: сотрудник правит имя или номера клиента`,
     );
     assert.ok(
       sql.includes("('clients.people', array['memberships'])"),
       `${file}: связи выпали из блока «Люди» — пустой массив маски запишется поверх настоящих`,
-    );
-    assert.ok(
-      sql.includes("and v.outcome = 'open' and v.opened_at > now() - interval '12 hours' ) then raise exception 'open the contacts before changing them'"),
-      `${file}: контакты правятся без открытия номера`,
     );
   });
 

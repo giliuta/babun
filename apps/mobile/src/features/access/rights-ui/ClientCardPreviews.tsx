@@ -29,8 +29,8 @@ import { SAMPLE_LOCATION } from "./preview-sample";
 // ВИД БЛОКОВ КАРТОЧКИ КЛИЕНТА В ШТОРКЕ ПРАВА (владелец 30.09: «страница
 // клиентов по правам — полностью»). Те же куски, что на карточке и в записи
 // (`InlineNoteField`, `ObjectRow`, плитки метки и тега, файлы), с примерными
-// данными. «Меняет» блока работает только при «Меняет» у «Карточек клиентов»
-// этой команды — так и рисуем: карточка только видит — блок без дверей.
+// данными. «Меняет» блока работает само по себе (02.10): у базы партнёра
+// только «Видит», а блок с «Меняет» правится — так и рисуем.
 
 const noop = () => {};
 
@@ -52,7 +52,7 @@ export function ClientCardPreview({
   const card = levels.clients ?? "off";
   const own = levels[blockKey] ?? "off";
   // Карточки закрыты — блоков у него нет вовсе.
-  const level: AccessLevel = card === "off" ? "off" : own === "write" && card !== "write" ? "read" : own;
+  const level: AccessLevel = card === "off" ? "off" : own;
   const write = level === "write";
   const on = write ? noop : undefined;
   const state = levelState(level);

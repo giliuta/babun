@@ -10,13 +10,13 @@ import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map"
 //   • «Телефоны» — если открыты хоть в одной такой команде.
 // Карта со старого сервера (права на компанию) читается как прежде.
 //
-// ЗАЩИТА БАЗЫ (владелец 30.09): «Какие клиенты» — Около записи · Своей команды ·
-// Вся база, «Телефон» — Скрыт · В день записи · Всегда. Берётся самое широкое
+// ЗАЩИТА БАЗЫ (владелец 30.09): «Какие клиенты» — 2 недели · Месяц · Своей
+// команды · Вся база, «Телефон» — Скрыт · В день записи · Всегда. Берётся самое широкое
 // среди команд, где он клиентов видит; нет строки — самое узкое, как у
 // сервера-умолчания.
 
 const RANK: Partial<Record<AccessLevel, number>> = { off: 0, read: 1, write: 2 };
-const SCOPE_RANK: Partial<Record<AccessLevel, number>> = { near: 0, own: 1, all: 2 };
+const SCOPE_RANK: Partial<Record<AccessLevel, number>> = { near: 0, month: 1, own: 2, all: 3 };
 const CONTACTS_RANK: Partial<Record<AccessLevel, number>> = { off: 0, day: 1, read: 2 };
 
 const wider = (
