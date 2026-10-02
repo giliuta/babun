@@ -11,14 +11,14 @@ const mapWith = (
   ({ tenantId: "t", isOwner: false, company, calendars, attachedCalendars: Object.keys(calendars) }) as unknown as MemberAccessMap;
 
 describe("права клиентов — из команд", () => {
-  test("видит в одной команде, не видит в другой — видит; свои; без телефонов", () => {
+  test("видит в одной команде, не видит в другой — видит; свои; номер — вместе с базой (02.10)", () => {
     const got = clientsAccessOf(
       mapWith({
-        A: { clients: "read", "clients.scope": "own", "clients.contacts": "off" },
+        A: { clients: "read", "clients.scope": "own" },
         B: { clients: "off" },
       }),
     );
-    assert.deepEqual(got, { clients: "read", scope: "own", contacts: "off" });
+    assert.deepEqual(got, { clients: "read", scope: "own", contacts: "read" });
   });
 
   test("меняет хоть в одной — меняет; «все» и телефоны из команды, где видит", () => {
@@ -34,26 +34,31 @@ describe("права клиентов — из команд", () => {
   test("«все» в команде, где клиенты закрыты, не считается", () => {
     const got = clientsAccessOf(
       mapWith({
-        A: { clients: "off", "clients.scope": "all", "clients.contacts": "read" },
+        A: { clients: "off", "clients.scope": "all" },
         B: { clients: "read", "clients.scope": "own" },
       }),
     );
-    assert.deepEqual(got, { clients: "read", scope: "own", contacts: "off" });
+    assert.deepEqual(got, { clients: "read", scope: "own", contacts: "read" });
   });
 
-  test("защита базы: без строки — «Около записи» и телефон скрыт; берётся самое широкое", () => {
+  test("защита базы: без строки — «2 недели»; берётся самое широкое; без базы номера нет", () => {
     assert.deepEqual(clientsAccessOf(mapWith({ A: { clients: "read" } })), {
       clients: "read",
       scope: "near",
-      contacts: "off",
+      contacts: "read",
     });
     const got = clientsAccessOf(
       mapWith({
-        A: { clients: "read", "clients.scope": "near", "clients.contacts": "day" },
-        B: { clients: "read", "clients.scope": "own", "clients.contacts": "off" },
+        A: { clients: "read", "clients.scope": "near" },
+        B: { clients: "read", "clients.scope": "month" },
       }),
     );
-    assert.deepEqual(got, { clients: "read", scope: "own", contacts: "day" });
+    assert.deepEqual(got, { clients: "read", scope: "month", contacts: "read" });
+    assert.deepEqual(clientsAccessOf(mapWith({ A: { clients: "off" } })), {
+      clients: "off",
+      scope: "near",
+      contacts: "off",
+    });
   });
 
   test("старый сервер — права на компанию читаются как были", () => {

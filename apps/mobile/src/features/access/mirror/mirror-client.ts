@@ -28,21 +28,7 @@ const CARD_KEYS = [
   "clients.money",
 ] as const;
 
-/** Блоки, которые есть только НА СТРАНИЦЕ клиента: без «Открывает карточку»
- *  сервер отдаёт их пустыми (`access_client_blocks`, 01.10). */
-const PAGE_ONLY_KEYS: ReadonlySet<string> = new Set([
-  "clients.note",
-  "clients.people",
-  "clients.objects",
-  "clients.personal",
-  "clients.files",
-  "clients.requisites",
-  "clients.money",
-  "clients.labels",
-]);
-
 const RANK: Partial<Record<AccessLevel, number>> = { off: 0, read: 1, write: 2 };
-const CONTACTS_RANK: Partial<Record<AccessLevel, number>> = { off: 0, day: 1, read: 2 };
 
 type TeamLevels = Readonly<Record<string, AccessLevel>>;
 
@@ -68,13 +54,9 @@ export function mirrorClientBlocks(
   let card = 0;
   for (const levels of teams) card = Math.max(card, levels.clients === "write" ? 2 : 1);
   out.clients = word(teams.length === 0 ? 0 : card);
-  let open = 0;
-  for (const levels of teams) open = Math.max(open, levels["clients.open"] === "write" ? 2 : 0);
-  out["clients.open"] = word(open);
   for (const key of CARD_KEYS) {
     let best = 0;
     for (const levels of teams) {
-      if (PAGE_ONLY_KEYS.has(key) && levels["clients.open"] !== "write") continue;
       // «Меняет» блока — своим правом, без «Меняет» у базы (02.10).
       best = Math.max(best, RANK[levels[key] ?? "off"] ?? 0);
     }
@@ -83,18 +65,14 @@ export function mirrorClientBlocks(
   return out;
 }
 
+/** Номер открыт у каждого клиента, которого он видит (02.10: «Телефон»
+ *  убран — его даёт «База клиентов»), как `access_contact_client_ids`. */
 function mirrorContactsHidden(
   client: Pick<Client, "id" | "team_id">,
   map: MemberAccessMap,
   view?: MirrorView,
-): "day" | "right" | null {
-  let best = 0;
-  for (const levels of teamsFor(client, map, view)) {
-    best = Math.max(best, CONTACTS_RANK[levels["clients.contacts"] ?? "off"] ?? 0);
-  }
-  // «В день записи» и запись сегодня — номер открыт, как у сервера.
-  if (best === 1 && view?.dayToday.has(client.id)) return null;
-  return best >= 2 ? null : best === 1 ? "day" : "right";
+): "right" | null {
+  return teamsFor(client, map, view).length > 0 ? null : "right";
 }
 
 /** Строка клиента, какой её получил бы сотрудник с этой картой прав. */
@@ -134,9 +112,8 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: 
 // настоящий сотрудник получал двух. Набор считается тем же правилом, что
 // `access_client_ids_in` на сервере, И ПО КАЖДОЙ КОМАНДЕ ОТДЕЛЬНО: блоки
 // клиента сервер берёт самыми широкими по командам, ЧЕРЕЗ КОТОРЫЕ клиент
-// виден (`access_client_blocks`), а номер — по «Телефону» тех же команд
-// (`access_contact_client_ids`, `access_day_contact_client_ids`). Правило
-// команды:
+// виден (`access_client_blocks`), а номер открыт у каждого видимого клиента
+// (`access_contact_client_ids`, 02.10). Правило команды:
 //   · «Вся база» — вся база;
 //   · «Своей команды» — клиенты команды и её записей за всё время;
 //   · «Месяц» — запись команды от месяца назад до месяца вперёд, «2 недели» —
@@ -184,8 +161,6 @@ interface TeamScope {
 
 export interface MirrorView {
   teams: ReadonlyMap<string, TeamScope>;
-  /** Запись СЕГОДНЯ в команде с «В день записи» — номер открыт. */
-  dayToday: ReadonlySet<string>;
 }
 
 /** Сдвиг на месяцы — как `date ± interval '1 month'` в Postgres: 31 марта
@@ -221,16 +196,7 @@ export function mirrorView(map: MemberAccessMap, data: MirrorClientData): Mirror
     }
     teams.set(teamId, { whole: scope === "all", ownTeam: windows[scope] ? null : teamId, ids });
   }
-  const dayTeams = new Set(
-    [...teams.keys()].filter((teamId) => map.calendars[teamId]?.["clients.contacts"] === "day"),
-  );
-  const dayToday = new Set<string>();
-  for (const a of data.appointments) {
-    if (a.client_id && a.team_id && dayTeams.has(a.team_id) && a.status !== "cancelled" && a.date === data.today) {
-      dayToday.add(a.client_id);
-    }
-  }
-  return { teams, dayToday };
+  return { teams };
 }
 
 /** Команды, через которые клиент виден. */

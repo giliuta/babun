@@ -50,7 +50,9 @@ describe("зеркало: строка клиента глазами сотру�
     assert.equal(row.legal_name, null);
     assert.equal(row.balance, 0);
     assert.deepEqual(row.memberships, []);
-    assert.equal(row.contacts_hidden, "right");
+    // Номер открыт у каждого видимого клиента (02.10: «Телефон» убран); в
+    // строке его нет всё равно — его открывает дверь.
+    assert.equal(row.contacts_hidden, null);
     assert.equal(row.blocks?.clients, "read");
     assert.equal(row.blocks?.["clients.note"], "off");
   });
@@ -72,7 +74,7 @@ describe("зеркало: строка клиента глазами сотру�
     assert.equal(row.city, "Лимассол");
     assert.equal(row.blocks?.["clients.note"], "write");
     assert.equal(row.blocks?.clients, "read");
-    assert.equal(row.contacts_hidden, "day");
+    assert.equal(row.contacts_hidden, null);
     assert.equal(row.phone, "");
   });
 
@@ -85,19 +87,17 @@ describe("зеркало: строка клиента глазами сотру�
     assert.equal(mirrorClientBlocks({ team_id: "Z" }, m)["clients.note"], "write");
   });
 
-  test("«Открывает карточку: не может» — блоков страницы нет, строка списка остаётся", () => {
+  test("«Открывает карточку» убрано (02.10) — блоки страницы по своим правам, ключа нет", () => {
     const row = mirrorMemberClient(
       client,
       map({ A: { clients: "write", "clients.note": "write", "clients.labels": "read", "clients.history": "read" } }),
     );
-    assert.equal(row.blocks?.["clients.open"], "off");
-    assert.equal(row.blocks?.["clients.note"], "off");
-    assert.equal(row.comment, "");
-    // Метки и тегов в строке списка нет с 01.10 — они блок страницы.
-    assert.equal(row.blocks?.["clients.labels"], "off");
-    assert.equal(row.city, "");
-    // Последняя запись стоит в строке — её держит своё право.
+    assert.equal(row.blocks?.["clients.open"], undefined);
+    assert.equal(row.blocks?.["clients.note"], "write");
+    assert.equal(row.comment, "Код 12");
+    assert.equal(row.blocks?.["clients.labels"], "read");
     assert.equal(row.blocks?.["clients.history"], "read");
+    assert.equal(row.blocks?.clients, "write");
   });
 });
 
@@ -171,35 +171,20 @@ describe("зеркало: какие клиенты в его наборе (ка
     // Вся база в A без заметки; в B заметка открыта, но c1 в окне B нет.
     const m = map({
       A: { clients: "read", "clients.scope": "all" },
-      B: { clients: "read", "clients.open": "write", "clients.note": "read" },
+      B: { clients: "read", "clients.note": "read" },
     });
     const view = mirrorView(m, data({ appointments: [appt("c2", "B", TODAY)] }));
     assert.equal(mirrorClientBlocks(row("c1"), m, view)["clients.note"], "off");
     assert.equal(mirrorClientBlocks(row("c2"), m, view)["clients.note"], "read");
   });
 
-  test("номер: «Всегда» — только в наборе своей команды; «В день записи» — запись сегодня", () => {
-    const m = map({
-      A: { clients: "read", "clients.scope": "all" },
-      B: { clients: "read", "clients.contacts": "read" },
-      C: { clients: "read", "clients.contacts": "day" },
-    });
-    const view = mirrorView(
-      m,
-      data({
-        appointments: [
-          appt("c2", "B", "2026-09-25"),
-          appt("c3", "C", TODAY),
-          appt("c4", "C", "2026-10-01"),
-        ],
-      }),
-    );
+  test("номер — у каждого клиента в его наборе, вне набора — закрыт (02.10)", () => {
+    const m = map({ B: { clients: "read" } });
+    const view = mirrorView(m, data({ appointments: [appt("c2", "B", "2026-09-25")] }));
     const hidden = (id: string) =>
       mirrorMemberClient({ ...client, ...row(id) } as Client, m, view).contacts_hidden;
-    assert.equal(hidden("c1"), "right", "виден только через «Вся база» без телефонов");
-    assert.equal(hidden("c2"), null, "в окне команды с «Всегда»");
-    assert.equal(hidden("c3"), null, "запись сегодня в команде «В день записи»");
-    assert.equal(hidden("c4"), "day", "запись завтра — номер откроется в день записи");
+    assert.equal(hidden("c2"), null, "в окне команды — номер открывается");
+    assert.equal(hidden("c1"), "right", "вне набора — номера нет");
   });
 
   test("день сдвигается календарём, через конец месяца", () => {

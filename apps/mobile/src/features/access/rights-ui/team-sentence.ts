@@ -50,7 +50,6 @@ interface TeamFacts {
   /** Клиенты: `undefined` — права нет в реестре. */
   clients: AccessLevel | undefined;
   clientsAll: boolean;
-  phonesHidden: boolean;
   /** Что с деньгами: «принимает оплату», «видит долги»… */
   money: string[];
   /** Может удалить чужое: записи, долги, переводы, чужие операции. */
@@ -113,7 +112,6 @@ function teamFacts(read: LevelRead): TeamFacts {
     edits: RECORD_EDITS.some((key) => is(key, "write")),
     clients: read("clients"),
     clientsAll: read("clients.scope") === "all",
-    phonesHidden: read("clients.contacts") === "off",
     money,
     risky:
       is("calendar.cancel", "write") ||
@@ -154,7 +152,7 @@ export function teamSentence(read: LevelRead): string {
     out.push("Базу клиентов не видит.");
   } else if (f.clients !== undefined) {
     const whom = f.clientsAll ? "всех клиентов" : "своих клиентов";
-    out.push(`${f.clients === "write" ? "Ведёт" : "Видит"} ${whom}${f.phonesHidden ? " без телефонов" : ""}.`);
+    out.push(`${f.clients === "write" ? "Ведёт" : "Видит"} ${whom}.`);
   }
 
   // Деньги: что может с оплатой, операциями, счетами и долгами.

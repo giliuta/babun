@@ -29,12 +29,11 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["finance.expense", ["off", "read", "write", "full"]],
   ["finance.accounts", ["off", "read", "write"]],
   ["finance.debts", ["off", "read", "write"]],
-  ["clients", ["off", "read"]],
-  // Защита базы 30.09: «Около записи» и «В день записи», блоки карточки.
+  ["clients", ["off", "read", "write"]],
+  // Защита базы: окно «Какие клиенты» (02.10), блоки карточки. «Открывает
+  // карточку» и «Телефон» убраны 02.10 — их даёт база.
   ["clients.scope", ["near", "month", "own"]],
-  ["clients.open", ["off", "write"]],
   ["clients.from_record", ["off", "write"]],
-  ["clients.contacts", ["off", "day", "read"]],
   ["clients.note", ["off", "read", "write"]],
   ["clients.people", ["off", "read", "write"]],
   ["clients.objects", ["off", "read", "write"]],

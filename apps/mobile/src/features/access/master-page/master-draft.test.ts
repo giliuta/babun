@@ -46,7 +46,7 @@ const REGISTRY: AccessBlock[] = (
     ["finance.vat", "finance", "company", OFF_READ_WRITE, 175],
     ["clients", "clients", "company", OFF_READ_WRITE, 210],
     ["clients.scope", "clients", "company", ["own", "all"], 220],
-    ["clients.contacts", "clients", "company", ["off", "read"], 230],
+    ["clients.history", "clients", "company", ["off", "read"], 230],
     ["services", "company", "company", OFF_READ_WRITE, 310],
     ["company.currency", "company", "company", ["read", "write"], 330],
     ["owner.access", "owner", "company", ["off"], 410],
@@ -208,7 +208,7 @@ describe("черновик нового мастера", () => {
 
     let clients = withLevel(blankMasterDraft("team-1"), byKey("clients"), "read", null);
     clients = withLevel(clients, byKey("clients.scope"), "all", null);
-    clients = withLevel(clients, byKey("clients.contacts"), "read", null);
+    clients = withLevel(clients, byKey("clients.history"), "read", null);
     clients = withLevel(clients, byKey("clients"), "off", null);
     assert.deepEqual(clients.companyLevels, {});
   });
@@ -219,7 +219,7 @@ describe("черновик нового мастера", () => {
       team_id: "team-1",
       access_changes: [
         { block: "calendar.create", team_id: "team-1", level: "write" },
-        { block: "clients.contacts", team_id: null, level: "read" },
+        { block: "clients.history", team_id: null, level: "read" },
       ],
     });
     // Свёрнутое не уходит; уходит только явное «Записи клиентов: Скрыты».
@@ -236,7 +236,7 @@ describe("черновик нового мастера", () => {
   test("живому сотруднику скрытие главного блока сбрасывает зависимые на умолчание", () => {
     assert.deepEqual(dependantResets(REGISTRY, byKey("clients"), "off", null), [
       { block: "clients.scope", team_id: null, level: "own" },
-      { block: "clients.contacts", team_id: null, level: "off" },
+      { block: "clients.history", team_id: null, level: "off" },
     ]);
     assert.deepEqual(
       dependantResets(REGISTRY, byKey("calendar.records"), "off", "team-1").map((c) => c.block),

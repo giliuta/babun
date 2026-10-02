@@ -90,7 +90,7 @@ import { useAppointments } from "@/features/calendar/queries";
 import { useCities, useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { canOpenClientCard, clientBlockLevel } from "@/features/clients/client-block-access";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { statsByBlocks } from "@/features/clients/card-access";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import { usePlanAllows } from "@/features/settings/tenant";
@@ -796,13 +796,11 @@ function ClientsListScreen() {
                 onPress={() =>
                   selecting && !guest
                     ? toggleId(item.id)
-                    : // «ОТКРЫВАЕТ КАРТОЧКУ: НЕ МОЖЕТ» (владелец 01.10) —
-                      // строка есть, перехода нет.
-                      !canOpenClientCard(item)
-                      ? undefined
-                      : guest
-                        ? router.push(clientCardHref(item.id, guest.tenantId))
-                        : router.push(`/clients/${item.id}`)
+                    : // Видит клиента — открывает его страницу (владелец 02.10:
+                      // «Открывает карточку» убрано).
+                      guest
+                      ? router.push(clientCardHref(item.id, guest.tenantId))
+                      : router.push(`/clients/${item.id}`)
                 }
                 onSwipeOpen={(row) => {
                   if (openSwipe.current && openSwipe.current !== row) {

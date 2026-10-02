@@ -38,9 +38,9 @@ const REGISTRY: AccessBlock[] = [
   block({ key: "finance.accounts", area: "finance", scope: "calendar", title: "Счета и остатки" }),
   block({ key: "finance.debts", area: "finance", scope: "calendar", title: "Долги" }),
   block({ key: "finance.documents", area: "finance", scope: "calendar", live: false, title: "Инвойсы и чеки" }),
-  block({ key: "clients", levels: ["off", "read"], title: "Клиенты" }),
+  block({ key: "clients", title: "Клиенты" }),
   block({ key: "clients.scope", levels: ["near", "month", "own"], title: "Какие клиенты" }),
-  block({ key: "clients.contacts", levels: ["off", "read"], title: "Телефоны и контакты" }),
+  block({ key: "clients.history", levels: ["off", "read"], title: "История записей" }),
   block({ key: "services", area: "company", live: false, title: "Услуги и цены" }),
   block({ key: "masters", area: "company", live: false, title: "Мастера" }),
   block({ key: "company.currency", area: "company", levels: ["read", "write"], live: false, title: "Валюта" }),
@@ -98,8 +98,8 @@ describe("слова прав", () => {
       "Цен и суммы не видит — и оплату не принимает",
     );
     assert.equal(
-      levelSentence("clients.contacts", "off"),
-      "Номера и мессенджеров не видит",
+      levelSentence("clients.history", "off"),
+      "Прошлых записей клиента не видит",
     );
   });
 
@@ -129,7 +129,7 @@ describe("слова прав", () => {
         "finance.debts",
         "clients",
         "clients.scope",
-        "clients.contacts",
+        "clients.history",
       ],
     );
   });

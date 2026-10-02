@@ -12,14 +12,14 @@ import { CLIENTS_PREVIEW_KEYS } from "./preview-keys";
 
 // ВИД ПРАВ КЛИЕНТОВ В ШТОРКЕ: список клиентов теми же строками, что шторка
 // выбора клиента (`SelectRow` с буквой). «Какие клиенты» меняет, сколько их в
-// списке; «Телефоны» — есть ли номер под именем; «Меняет» — живая кнопка
-// создания внизу, «Только видит» — та же серая, как у списка клиентов.
+// списке; «Редактирует» — живая кнопка создания внизу, «Только видит» — та
+// же серая, как у списка клиентов. Видит клиентов — есть и номер под именем,
+// и переход на страницу (02.10: «Телефон» и «Открывает карточку» убраны).
 //
 // Защита базы (30.09, окно — 02.10): «2 недели» и «Месяц» — в списке только
-// клиент, у которого запись в этом окне до или после сегодня. Цифр в списке у сотрудника нет НИКОГДА — номер открывается
-// тапом, по одному (`LockedPhoneRow`), поэтому и здесь вместо цифр точки:
-// «Всегда» — у всех, «В день записи» — у того, чья запись сегодня (первый в
-// образце), у остальных — «В день записи».
+// клиент, у которого запись в этом окне до или после сегодня. Цифр в списке
+// у партнёра нет НИКОГДА — номер открывается тапом, по одному
+// (`LockedPhoneRow`), поэтому и здесь вместо цифр точки.
 
 const noop = () => {};
 
@@ -41,15 +41,14 @@ export function ClientsPreview({
   const t = useThemeColors();
   const base = levels.clients ?? "off";
   const scope = levels["clients.scope"] ?? "near";
-  const contacts = levels["clients.contacts"] ?? "off";
-  const phones = contacts === "read" || contacts === "day";
+  // Номер и переход на страницу даёт сама база (02.10: «Телефон» и
+  // «Открывает карточку» убраны): видит клиента — открывает его и номер.
+  const phones = base !== "off";
   // Переход на страницу клиента — шеврон строки (как в его списке).
   const opens =
-    blockKey === "clients.from_record"
-      ? levels["clients.from_record"] === "write"
-      : levels["clients.open"] === "write";
-  // Карточки закрыты — у зависимых строк («Какие», «Телефоны») показывать
-  // нечего: базы у него нет вовсе, и рамка гасит весь список.
+    blockKey === "clients.from_record" ? levels["clients.from_record"] === "write" : base !== "off";
+  // База закрыта — у зависимой строки «Какие клиенты» показывать нечего: базы
+  // у него нет вовсе, и рамка гасит весь список.
   const people = scope === "near" ? OWN.slice(0, 1) : OWN;
   const state = levelState(base);
   if (!CLIENTS_PREVIEW_KEYS.includes(blockKey)) return null;
@@ -63,26 +62,15 @@ export function ClientsPreview({
           : scope === "month"
             ? "Видит клиента за месяц до и после записи"
             : "Видит клиента за 2 недели до и после записи"
-        : blockKey === "clients.contacts"
-          ? contacts === "read"
-            ? "Открывает номер по одному"
-            : contacts === "day"
-              ? "Номер — только в день записи"
-              : "Номеров не видит"
-          : blockKey === "clients.open"
-            ? opens
-              ? "Тапом открывает страницу клиента"
-              : "Только строка — страница не открывается"
-            : blockKey === "clients.from_record"
-              ? opens
-                ? "Из записи открывает страницу клиента"
-                : "Из записи страница клиента не открывается"
-              : undefined;
+        : blockKey === "clients.from_record"
+          ? opens
+            ? "Из записи открывает страницу клиента"
+            : "Из записи страница клиента не открывается"
+          : undefined;
   return (
     <PreviewFrame
       state={state}
       caption={caption}
-      captionOff={blockKey === "clients.contacts" && !phones}
     >
       <Card style={{ marginHorizontal: 16, marginTop: 8, paddingVertical: 8 }}>
         <SelectList>
@@ -93,17 +81,11 @@ export function ClientsPreview({
               key={person.name}
               title={person.name}
               initial={person.name[0]}
-              subtitle={
-                !phones
-                  ? undefined
-                  : contacts === "read" || person === OWN[0]
-                    ? LOCKED_NUMBER
-                    : "В день записи"
-              }
+              subtitle={phones ? LOCKED_NUMBER : undefined}
               // Переход есть — шеврон справа, как у двери; нет — строка без
               // него: имя видно, а проходить некуда.
               trailing={
-                (blockKey === "clients.open" || blockKey === "clients.from_record") && opens ? (
+                (blockKey === "clients" || blockKey === "clients.from_record") && opens ? (
                   <ChevronRight color={t.faint} size={18} />
                 ) : undefined
               }

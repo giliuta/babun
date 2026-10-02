@@ -249,7 +249,7 @@ describe("строки записей перечитываются, когда �
 describe("клиенты уходят с телефона, когда права сузили (защита базы 30.09)", () => {
   const T = "tenant-1";
   const team = (levels: Record<string, AccessLevel>) => map({ calendars: { A: levels } });
-  const base = { clients: "read", "clients.scope": "own", "clients.contacts": "read" } as const;
+  const base = { clients: "read", "clients.scope": "own" } as const;
 
   test("ключи клиентов этой компании — да; другой компании и не клиентов — нет", () => {
     assert.equal(isClientDataKey(["clients", T, "member:read:own:phones"], T), true);
@@ -261,8 +261,9 @@ describe("клиенты уходят с телефона, когда права
     assert.equal(isClientDataKey(["appointments", T, "master"], T), false);
   });
 
-  test("«Всегда» → «В день записи», «Своей команды» → «Около записи», снятая команда — сужение", () => {
-    assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.contacts": "day" })), "narrowed");
+  test("«Своей команды» → «Месяц» → «2 недели», снятая команда — сужение", () => {
+    assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.scope": "month" })), "narrowed");
+    assert.equal(clientLevelsChange(team({ ...base, "clients.scope": "month" }), team({ ...base, "clients.scope": "near" })), "narrowed");
     assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.scope": "near" })), "narrowed");
     assert.equal(clientLevelsChange(team(base), team({ ...base, clients: "off" })), "narrowed");
     assert.equal(clientLevelsChange(team(base), map({ calendars: {} })), "narrowed");
@@ -270,7 +271,7 @@ describe("клиенты уходят с телефона, когда права
 
   test("расширили — перечитать, не стирать; ничего не поменяли и первая загрузка — ничего", () => {
     assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.scope": "all" })), "changed");
-    assert.equal(clientLevelsChange(team({ ...base, "clients.contacts": "day" }), team(base)), "changed");
+    assert.equal(clientLevelsChange(team({ ...base, "clients.scope": "month" }), team(base)), "changed");
     assert.equal(clientLevelsChange(team(base), team({ ...base, "record.team": "write" })), "same");
     assert.equal(clientLevelsChange(undefined, team(base)), "same");
   });

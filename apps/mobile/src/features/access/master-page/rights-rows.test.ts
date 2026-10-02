@@ -31,7 +31,7 @@ const REGISTRY: AccessBlock[] = (
     ["finance.vat", "finance", "company", OFF_READ_WRITE, 175],
     ["clients", "clients", "company", OFF_READ_WRITE, 210],
     ["clients.scope", "clients", "company", ["own", "all"], 220],
-    ["clients.contacts", "clients", "company", ["off", "read"], 230],
+    ["clients.history", "clients", "company", ["off", "read"], 230],
     ["services", "company", "company", OFF_READ_WRITE, 310],
     ["company.currency", "company", "company", ["read", "write"], 330],
     ["owner.access", "owner", "company", ["off"], 410],
@@ -126,7 +126,7 @@ describe("страница прав — какие строки видны", () 
     ]);
   });
 
-  test("«Клиенты» скрыты — «Какие клиенты» и «Телефоны» свёрнуты", () => {
+  test("«Клиенты» скрыты — «Какие клиенты» и «История записей» свёрнуты", () => {
     const draft = emptyMasterDraft("team-1");
     const levelOf = (b: AccessBlock, teamId: string | null) => draftLevel(b, draft, teamId);
     assert.deepEqual(keysOf(rightsSections(REGISTRY, levelOf, "team-1"), "clients"), ["clients"]);
@@ -136,7 +136,7 @@ describe("страница прав — какие строки видны", () 
     assert.deepEqual(keysOf(rightsSections(REGISTRY, openLevel, "team-1"), "clients"), [
       "clients",
       "clients.scope",
-      "clients.contacts",
+      "clients.history",
     ]);
   });
 

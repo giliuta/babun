@@ -66,6 +66,7 @@ import {
   useClient,
   useClientTags,
   useRestoreClient,
+  useTrashClientAsPartner,
   useUpdateClient,
 } from "@/features/clients/queries";
 import { useArchiveWithUndo } from "@/features/clients/archive-undo";
@@ -186,6 +187,7 @@ export function ClientDetailScreen() {
   const client = useRevealedClient(clientRow, scope?.tenantId ?? activeTenantId);
   const updateClient = useUpdateClient(isDraft ? "" : id);
   const archiveWithUndo = useArchiveWithUndo();
+  const trashAsPartner = useTrashClientAsPartner();
   const restoreClient = useRestoreClient();
   const appointmentsQuery = useClientAppointments(isDraft ? "" : id);
   const {
@@ -578,6 +580,27 @@ export function ClientDetailScreen() {
   // действия и предложить архив, чем дать нажать и показать ошибку.
   const onDelete = () => {
     setMenuOpen(false);
+    // ПАРТНЁР С «РЕДАКТИРУЕТ» (владелец 02.10) — своей дверью: сервер сам
+    // решает, корзина или архив (с записями — архив), вернуть может владелец.
+    if (!caps.manage) {
+      confirmThen(
+        "Удалить клиента?",
+        {
+          message: `${c.full_name || "Клиент"} исчезнет из клиентов команды. Вернуть его может владелец.`,
+          confirmLabel: "Удалить",
+          destructive: true,
+        },
+        async () => {
+          try {
+            await trashAsPartner.mutateAsync(c.id);
+            router.back();
+          } catch (e) {
+            notify("Не удалось удалить", (e as Error).message);
+          }
+        },
+      );
+      return;
+    }
     // ЛЮБАЯ запись — уже история, даже будущая. База запрещает стирать
     // клиента с заявками (guard_client_hard_delete_history), поэтому такой
     // клиент лёг бы в корзину НАВСЕГДА: счётчик тикает, а ночная очистка
@@ -640,6 +663,9 @@ export function ClientDetailScreen() {
         // «Напомнить» и правки в «⋯» — по праву на ЭТОГО клиента (30.09).
         canEdit={access.card.edit}
         canManage={caps.manage}
+        // Партнёр с «Редактирует» у базы удаляет клиента (02.10); архив и
+        // чёрный список — хозяйство владельца.
+        canDelete={!caps.manage && access.card.edit && scope?.kind === "member"}
         onMerge={onMerge}
         onSplit={split.onSplit}
         onMenuExited={split.onMenuExited}

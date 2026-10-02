@@ -78,7 +78,7 @@ describe("итог прав команды", () => {
 
   test("опасное право гасит обещание про удаление", () => {
     const text = teamSentence(reader({ ...CLOSED, "finance.accounts": "write", clients: "write", "clients.scope": "all" }));
-    assert.match(text, /Ведёт всех клиентов без телефонов\./);
+    assert.match(text, /Ведёт всех клиентов\./);
     assert.match(text, /Управляет счетами\./);
     assert.doesNotMatch(text, /удалить не может/);
     const riskySets: readonly Record<string, AccessLevel>[] = [

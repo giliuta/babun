@@ -183,9 +183,10 @@ export function MasterMemberCard({
     draftFromMemberAccess(accessQuery.data, identity),
     new Set(teams.map((team) => team.id)),
   );
-  // «Телефон» открыт хоть в одной команде — блок «Номера клиентов» нужен и
-  // пустым: «Пока не открывал».
-  const contactsBlock = blocks?.find((block) => block.key === "clients.contacts");
+  // База клиентов открыта хоть в одной команде — номер он открывает (02.10:
+  // «Телефон» убран), и блок «Номера клиентов» нужен и пустым: «Пока не
+  // открывал».
+  const contactsBlock = blocks?.find((block) => block.key === "clients");
   const contactsOpen =
     !!blocks &&
     !!contactsBlock &&

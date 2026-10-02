@@ -587,6 +587,35 @@ export function useSetClientTeam() {
   });
 }
 
+/** ПАРТНЁР С «РЕДАКТИРУЕТ» УБИРАЕТ КЛИЕНТА (владелец 02.10: «может
+ *  редактировать — удалять клиентов, менять»). Своей дверью
+ *  `member_trash_client`: без записей клиент едет в корзину на 30 дней, с
+ *  записями — в архив (историю база не сотрёт). Вернуть может владелец. */
+export function useTrashClientAsPartner() {
+  const scope = useQueryScope();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Дверь новее сгенерированных типов базы — вызов через узкий тип.
+      const db = writeClientOf(scope) as unknown as {
+        rpc: (name: "member_trash_client", args: { p_client_id: string }) => PromiseLike<{
+          error: { message: string } | null;
+        }>;
+      };
+      const { error } = await db.rpc("member_trash_client", { p_client_id: id });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: (_d, id) => {
+      qc.setQueriesData<Client[]>({ queryKey: ["clients"] }, (list) =>
+        Array.isArray(list) ? list.filter((c) => c.id !== id) : list,
+      );
+      void qc.invalidateQueries({ queryKey: ["clients"] });
+      void qc.invalidateQueries({ queryKey: ["client", id] });
+    },
+    meta: { errorHandled: true }, // caller messages the refusal itself
+  });
+}
+
 export function useUpdateClientById() {
   const scope = useQueryScope();
   const qc = useQueryClient();

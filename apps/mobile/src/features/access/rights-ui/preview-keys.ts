@@ -43,8 +43,6 @@ export const MONEY_PREVIEW_KEYS: readonly string[] = [
 export const CLIENTS_PREVIEW_KEYS: readonly string[] = [
   "clients",
   "clients.scope",
-  "clients.contacts",
-  "clients.open",
   "clients.from_record",
 ];
 

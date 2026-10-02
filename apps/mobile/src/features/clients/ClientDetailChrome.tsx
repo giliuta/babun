@@ -50,6 +50,9 @@ interface ClientDetailChromeProps {
    *  где человек только работает, этих строк нет: пометки общие для всей
    *  компании, и ведёт их её владелец. */
   canManage?: boolean;
+  /** «Удалить» без остального хозяйства — партнёр с «Редактирует» у базы
+   *  (владелец 02.10): убрать клиента может, архив и чёрный список — нет. */
+  canDelete?: boolean;
   /** «Объединить с дублем». Пункт есть, только когда страница его передала:
    *  заглушки без действия в меню не бывает. Когда слить нельзя (у дубля есть
    *  люди — `mergeBlocker`), страница всё равно передаёт обработчик и
@@ -86,6 +89,7 @@ export function ClientDetailChrome({
   onDelete,
   canEdit = true,
   canManage = true,
+  canDelete = false,
   onMerge,
   onSplit,
   onMenuExited,
@@ -187,7 +191,17 @@ export function ClientDetailChrome({
             onPress: onDelete,
           },
         ]
-      : []),
+      : canDelete
+        ? [
+            {
+              id: "delete",
+              label: "Удалить",
+              icon: Trash2,
+              color: t.danger,
+              onPress: onDelete,
+            },
+          ]
+        : []),
   ];
   return (
     <>

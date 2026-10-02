@@ -24,7 +24,7 @@ import { useMirror } from "./mirror-state";
 const PAGE = 1000;
 
 /** Ни одной команды с карточками — набор пуст и без запроса. */
-const EMPTY_VIEW: MirrorView = { teams: new Map(), dayToday: new Set() };
+const EMPTY_VIEW: MirrorView = { teams: new Map() };
 
 type Page = PromiseLike<{
   data: MirrorScopeAppointment[] | null;
