@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { MapPin, MoreHorizontal, UserRound } from "lucide-react-native";
+import { House, MapPin, MoreHorizontal, UserRound } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Card } from "@/components/ui/Card";
@@ -23,6 +23,8 @@ import { formatShortDateRu } from "@/features/clients/format";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useCopyValue } from "@/lib/copy-value";
+import { AppearanceTile } from "@/components/ui/AppearanceSheet";
+import { useLocationLabels } from "@/features/settings/local-settings";
 
 // ОБЪЕКТЫ на карточке клиента.
 //
@@ -152,6 +154,9 @@ export default function ObjectsBlock({
   const requestActions = useLocationRequestActions();
   const copy = useCopyValue();
   const shownRequests = useMemo(() => visibleLocationRequests(requests), [requests]);
+  // Вид типа объекта (цвет и значок, Кабинет → «Типы объектов»).
+  const { data: labelPresets = [] } = useLocationLabels(client.team_id ?? null);
+  const typeLook = (loc: Location) => labelPresets.find((l) => l.name === loc.label);
   // Основной первым: при записи подставляется он, и в списке он должен
   // читаться первым. Бейджа «основной» нет — порядок и есть признак.
   const ordered = useMemo(
@@ -174,23 +179,34 @@ export default function ObjectsBlock({
   if (ordered.length === 0 && shownRequests.length === 0 && !onAdd) return null;
 
   // СВОЯ СТРАНИЦА — КАЖДЫЙ ОБЪЕКТ ОТДЕЛЬНОЙ КАРТОЧКОЙ (владелец 03.10:
-  // «компактно и раздели их между собой» — как записи в «Истории»). Строка
-  // та же `ObjectRow`; заметка — её третьей строкой, правится в листе
-  // объекта: поле заметки под каждым объектом растягивало страницу.
+  // «компактно и раздели их между собой»; выбран вариант 1): слева плитка
+  // вида типа объекта, справа маршрут, под строкой — заметка, которую правят
+  // прямо здесь («мне нужны заметки, чтобы быстро редактировать»).
   if (bare) {
     return (
       <View style={{ gap: 10, paddingTop: 4 }}>
         {shown.map((loc) => {
+          const type = typeLook(loc);
+          // ПЛИТКА ВИДА ТИПА ОБЪЕКТА (владелец 03.10, вариант 1: «прикольно, что
+          // от типа объекта меняются иконка и цвет»).
+          const tile = (
+            <AppearanceTile color={type?.color ?? null} icon={type?.icon ?? null} fallback={House} size={34} />
+          );
           const row = (
             <ObjectRow
               loc={loc}
               teamId={client.team_id ?? null}
+              tile={tile}
+              // Заметка правится прямо здесь — третьей строкой её не печатаем.
+              showNote={!onNote}
               residents={residentsFor?.(loc)}
               lastVisit={lastVisitFor?.(loc)}
               onPress={onOpen ? () => onOpen(loc.id) : undefined}
               onLongPress={canCopy && objectTarget(loc) ? () => copy(objectTarget(loc)) : undefined}
             />
           );
+          // Заметка правится прямо здесь, в серой плашке (вариант 1, 03.10).
+          const note = onNote ? <ObjectNote loc={loc} ownerKey={client.id} onSave={onNote} /> : null;
           return (
             <Card key={loc.id} style={{ marginHorizontal: 16 }}>
               {onDelete ? (
@@ -205,6 +221,7 @@ export default function ObjectsBlock({
               ) : (
                 row
               )}
+              {note}
             </Card>
           );
         })}
@@ -238,6 +255,17 @@ export default function ObjectsBlock({
               loc={loc}
               separated={i > 0}
               teamId={client.team_id ?? null}
+              // На карточке — тот же объект, что на странице: с плиткой вида.
+              tile={
+                single ? (
+                  <AppearanceTile
+                    color={typeLook(loc)?.color ?? null}
+                    icon={typeLook(loc)?.icon ?? null}
+                    fallback={House}
+                    size={34}
+                  />
+                ) : undefined
+              }
               // Заметка стоит ПОД строкой своей плашкой — третьей строкой её
               // печатать больше не надо.
               showNote={single || !onNote}
@@ -319,8 +347,11 @@ export function ObjectRow({
   onPress,
   onLongPress,
   teamId = null,
+  tile,
 }: {
   loc: Location;
+  /** Плитка вида типа объекта слева (страница объектов, 03.10). */
+  tile?: ReactNode;
   separated?: boolean;
   /** Кружок «…» в хвосте строки — правка ЭТОГО объекта (форма записи, где
    *  сам тап по строке меняет объект). Стрелки справа нет нигде: владелец
@@ -403,11 +434,15 @@ export function ObjectRow({
           opacity: pressed && onPress ? 0.6 : 1,
         })}
       >
+        {tile ? <View style={{ marginRight: 4 }}>{tile}</View> : null}
         <View style={{ flex: 1 }}>
+          {/* ТИП — МЕЛКО И СЕРЫМ, АДРЕС — КРУПНО И ЧЁРНЫМ (владелец 03.10:
+              «тип объекта маленьким серым, а адрес — чёрным, полноценно»):
+              едут по адресу, тип — подпись к нему. */}
           <Text
             maxFontSizeMultiplier={1.2}
             numberOfLines={1}
-            style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
+            style={{ fontSize: 13, color: t.sub }}
           >
             {loc.label || "Объект"}
           </Text>
@@ -415,8 +450,9 @@ export function ObjectRow({
             maxFontSizeMultiplier={1.2}
             numberOfLines={1}
             style={{
-              fontSize: 13,
-              color: target ? t.body : t.faint,
+              fontSize: 15,
+              fontWeight: target ? "600" : "400",
+              color: target ? t.ink : t.faint,
             }}
           >
             {target || "адрес не указан"}
