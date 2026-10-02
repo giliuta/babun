@@ -14,7 +14,7 @@ import { useClientAppointments } from "@/features/clients/appointments";
 import { todayYMD } from "@/features/clients/filter";
 import { unpaidVisits } from "@/features/clients/unpaid-visits";
 import { useClient } from "@/features/clients/queries";
-import { VisitRow, visitTeamName } from "@/features/clients/VisitRow";
+import { VisitRow } from "@/features/clients/VisitRow";
 import { useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -33,14 +33,12 @@ import { useCardAccess } from "@/features/clients/use-card-access";
 // в историю, а второй «назад» — к клиенту. Раньше тап уводил в таб
 // «Календарь», и возврат выбрасывал человека туда же.
 //
-// РОВНЫЕ СТОЛБЦЫ, ОДНИМ СПИСКОМ (владелец 03.10: «в нашем стиле, чётко
-// ровные столбики: дата, команда, которая выполнила, услуги не пишем;
-// справа — оплачено, ожидается или долг висит; блоков „Впереди“ и „2026“
-// не надо — полностью поэтапно вниз списком»). Строка — как строка в
-// списке клиентов: без карточек, волосок между строками, столбец даты одной
-// ширины, чтобы команда начиналась в одной точке у каждой строки. Год у
-// даты пишется сам, когда он не текущий («12 мар ’25»). Заметки клиента
-// в историю записей не входят — они в блоке «Заметка» карточки.
+// ОДНИМ СПИСКОМ, КАЖДАЯ ЗАПИСЬ — БЛОКОМ (владелец 03.10: «блоков „Впереди“
+// и „2026“ не надо — полностью поэтапно вниз списком»; затем: «не
+// разделитель-волосок, а полноценный блок записи: иконка цветом записи,
+// долг или оплачено, какая команда»). Блок — `VisitRow`, тот же, что
+// последняя запись на карточке. Услуги не пишутся. Заметки клиента в
+// историю записей не входят — они в блоке «Заметка» карточки.
 
 // Строка — `VisitRow`: та же, что последняя запись на карточке.
 
@@ -173,10 +171,10 @@ function ClientVisitsScreen() {
         <FlatList
           data={rows}
           keyExtractor={(a) => a.id}
-          contentContainerStyle={{ paddingBottom: 32 }}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 32 }}
           ListHeaderComponent={
             caption ? (
-              <View style={{ paddingBottom: 6 }}>
+              <View style={{ paddingBottom: 10 }}>
                 <RowCaption
                   text={caption}
                   tone={unpaidOnly || (showMoney && unpaidList.total > 0) ? "warning" : "quiet"}
@@ -184,13 +182,12 @@ function ClientVisitsScreen() {
               </View>
             ) : null
           }
-          ItemSeparatorComponent={() => (
-            <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
-          )}
+          // Каждая запись — отдельным блоком с воздухом между ними (03.10).
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           renderItem={({ item: a }) => (
             <VisitRow
               appointment={a}
-              team={visitTeamName(a.team_id, teamsById)}
+              team={a.team_id ? teamsById.get(a.team_id) : undefined}
               today={today}
               showMoney={showMoney}
               onPress={historyOnly.has(a.id) ? undefined : () => open(a)}

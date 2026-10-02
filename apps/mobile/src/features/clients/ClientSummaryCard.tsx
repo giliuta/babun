@@ -4,7 +4,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { todayYMD } from "@/features/clients/filter";
 import { useClientsCapabilities } from "@/features/clients/company-scope";
 import { useTeams } from "@/features/reference/queries";
-import { VisitRow, visitTeamName } from "@/features/clients/VisitRow";
+import { VisitRow } from "@/features/clients/VisitRow";
 import { useThemeColors } from "@/theme/colors";
 
 // МАЛЕНЬКАЯ КАРТОЧКА ПОД НОМЕРОМ (владелец 2026-07-26). Не строки-факты, а
@@ -59,9 +59,11 @@ export function ClientSummaryCard({
   return (
     <VisitRow
       appointment={lastRecord}
-      team={visitTeamName(lastRecord.team_id, teamsById)}
+      team={lastRecord.team_id ? teamsById.get(lastRecord.team_id) : undefined}
       today={todayYMD()}
       showMoney={money}
+      // Рамка — у блока «История», своей у строки нет.
+      framed={false}
       onPress={onOpenHistory}
     />
   );

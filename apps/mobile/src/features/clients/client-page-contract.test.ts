@@ -635,7 +635,7 @@ describe("блок «История»", () => {
     assert.doesNotMatch(row, /label="Записать"/);
     assert.match(row, /lastRecord=\{lastRecord\}/);
     // Строка последней записи — та же `VisitRow`, что в «Истории» (03.10).
-    assert.match(read("ClientSummaryCard.tsx"), /<VisitRow[\s\S]{0,240}onPress=\{onOpenHistory\}/);
+    assert.match(read("ClientSummaryCard.tsx"), /<VisitRow[\s\S]{0,400}onPress=\{onOpenHistory\}/);
     assert.match(read("../../../app/(dashboard)/clients/visits.tsx"), /<VisitRow/);
     assert.doesNotMatch(read("ClientHeader.tsx"), /<ClientSummaryCard/);
     assert.match(page(), /<ClientContactRow[\s\S]{0,900}onOpenHistory=\{/);
