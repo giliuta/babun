@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
 import { Platform, Text, TextInput, View } from "react-native";
+import { MessageSquareText, PenLine, Users } from "lucide-react-native";
 import { smsUrl } from "@babun/shared/common/utils/messenger-links";
 import { analyzeSmsEncoding } from "@babun/shared/local/sms-encoding";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
-import { Chip } from "@/components/ui/Chip";
-import { FieldLabel } from "@/components/ui/Field";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { iconPreset } from "@/components/ui/icon-set";
+import { SelectList, SelectRow } from "@/components/ui/select-rows";
+import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
+import { useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
@@ -16,87 +18,117 @@ import {
   smsErrorText,
   useAppointmentLink,
   useSendSmsViaService,
+  useTeamTemplates,
   wantsLink,
   type SmsTeamTemplate,
 } from "./sms-account";
 import { openSms, useSmsServiceFor, type SmsContext } from "./SmsCompose";
 import { priceOf } from "./sms-words";
 
-// «ОТПРАВИТЬ SMS» ИЗ ЗАПИСИ (STORY-089; владелец 25.09: «зашёл в запись,
-// нажал кнопку „Отправить SMS“ — и оно сразу отправляет то, что записал…
-// вручную»).
+// «ОТПРАВИТЬ SMS» — ОДНА ШТОРКА НА ВЕСЬ ПРОДУКТ (STORY-089; владелец 03.10:
+// «нажимаю SMS — можно выбрать сразу шаблон… открывается уже готовый текст,
+// который можно редактировать… и напрямую нажимаю „Отправить“… везде функция
+// одна и та же… внизу „Своё SMS“ — можно написать что угодно»).
 //
-// Лист открывается уже с готовым текстом: первый шаблон команды записи,
-// заполненный её полями. Рядом — остальные шаблоны команды (владелец 29.09:
-// «написал шаблон — отправил клиенту»), тап заменяет текст; текст можно
-// поправить рукой. Шаблон с полем, которого у записи нет, не предлагается.
-// [Ссылка] — ссылка «Подтвердить / Отменить» этой записи: её выдаёт база,
-// пока она не пришла, такой шаблон в выборе не стоит. Одно действие внизу:
-//   • сервис подключён и календарь разрешён — «Отправить» уходит сразу,
-//     с баланса компании;
-//   • иначе (или выбрано «С телефона») — «Сообщения» с этим текстом.
-// Второй тап — сам лист: текст виден ДО отправки, платная SMS не уходит
-// от случайного касания.
+// Её открывают: «SMS» у номера клиента (лист «Связаться»), строка «Отправить
+// SMS» в блоке SMS записи и карточки клиента, «SMS» в меню записи календаря.
+//
+// Два шага в одной шторке (две шторки разом iOS не показывает):
+//   1. ШАБЛОНЫ — шаблоны команды строками (значок и цвет шаблона, под именем
+//      — готовый текст с полями клиента и записи); шаблон, которому не
+//      хватает данных («нет записи»), погашен; внизу «Своё SMS»;
+//   2. ТЕКСТ — сверху выбранный шаблон (тап — вернуться к шаблонам), «От
+//      команды» (если без записи и команд с отправителем несколько), поле с
+//      готовым текстом — правится; внизу «Отправить».
+// Сервис недоступен (нет тарифа, баланса или имени отправителя) — та же
+// кнопка открывает «Сообщения» телефона с этим текстом.
 
-type Mode = "service" | "phone";
+type Step = "pick" | "compose" | "team";
 
-const MODES = [
-  { value: "service", label: "Через сервис" },
-  { value: "phone", label: "С телефона" },
-] as const;
+const CUSTOM = "custom";
 
 export function SmsSendSheet({
   visible,
   context,
   phone,
-  templates,
+  templates: given,
+  name,
   onClose,
 }: {
   visible: boolean;
   context: SmsContext;
-  /** Номер клиента — для «С телефона». */
+  /** Номер клиента: через сервис SMS уходит на него, «Сообщения» — тоже. */
   phone: string | null;
-  /** Включённые шаблоны команды записи (ещё с полями). */
-  templates: readonly SmsTeamTemplate[];
+  /** Шаблоны команды записи, если позвавший их уже знает; нет — шаблоны
+   *  команды отправителя. */
+  templates?: readonly SmsTeamTemplate[];
+  /** Чей номер, если не самого клиента: [Имя] — его имя. */
+  name?: string | null;
   onClose: () => void;
 }) {
   const t = useThemeColors();
   const toast = useToast();
   const send = useSendSmsViaService();
   const service = useSmsServiceFor(context);
+  const { data: teams = [] } = useTeams();
+
+  // ОТ КАКОЙ КОМАНДЫ (владелец 30.09): у записи — её команда; без записи —
+  // команда клиента, если у неё есть имя отправителя, иначе первая с именем.
+  const fixedTeam = context.appointmentId ? (context.teamId ?? null) : null;
+  const [pickedTeam, setPickedTeam] = useState<string | null>(null);
+  const defaultTeam =
+    context.teamId && service.senders[context.teamId] ? context.teamId : (service.senderTeams[0] ?? context.teamId ?? null);
+  const fromTeam = fixedTeam ?? pickedTeam ?? defaultTeam;
+  const fetched = useTeamTemplates(given ? null : fromTeam).data;
+  const templates = given ?? fetched ?? [];
+
   const needsLink = templates.some((tpl) => wantsLink(tpl.body));
   const link = useAppointmentLink(context.appointmentId, visible && needsLink).data ?? null;
 
-  // Выбор: шаблоны команды, которые заполнились полями записи.
-  const choices = useMemo(() => {
-    const vars = link ? { ...context.vars, Link: link } : context.vars;
-    const out: { id: string; name: string; text: string }[] = [];
-    for (const tpl of templates) {
-      if (!tpl.enabled || !tpl.body.trim()) continue;
-      const text = fillTemplate(tpl.body, vars);
-      if (text) out.push({ id: tpl.id, name: tpl.name, text });
+  // Шаблоны строками: текст, заполненный полями клиента и записи, либо null —
+  // данных не хватает (шаблон с датой у клиента без записи).
+  const rows = useMemo(() => {
+    const vars = { ...context.vars, ...(link ? { Link: link } : null) };
+    if (name !== undefined) {
+      const first = (name ?? "").trim().split(/\s+/)[0] ?? "";
+      if (first) vars.Name = first;
+      else delete vars.Name;
     }
-    return out;
-  }, [context.vars, link, templates]);
+    return templates
+      .filter((tpl) => tpl.enabled && tpl.body.trim())
+      .map((tpl) => ({ template: tpl, text: fillTemplate(tpl.body, vars) }));
+  }, [context.vars, link, name, templates]);
 
-  const [picked, setPicked] = useState<string | null>(null);
+  const [step, setStep] = useState<Step>("pick");
+  const [picked, setPicked] = useState<string>(CUSTOM);
   const [text, setText] = useState("");
-  const [mode, setMode] = useState<Mode>("service");
-  // Черновик — один раз на открытие: пока лист открыт, текстом владеет поле.
-  const [seeded, setSeeded] = useState(false);
-  if (visible && !seeded) {
-    setSeeded(true);
-    setPicked(choices[0]?.id ?? null);
-    setText(choices[0]?.text ?? "");
-    setMode(service.available ? "service" : "phone");
+  // Каждое открытие — с шаблонов: прошлый черновик не живёт.
+  const [wasVisible, setWasVisible] = useState(false);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) {
+      setStep("pick");
+      setPicked(CUSTOM);
+      setText("");
+      setPickedTeam(null);
+    }
   }
-  if (!visible && seeded) setSeeded(false);
 
-  const viaService = service.available && mode === "service";
+  const chosen = rows.find((row) => row.template.id === picked) ?? null;
   const url = smsUrl(phone);
   const encoding = analyzeSmsEncoding(text);
   const body = text.trim();
+  const viaService = service.available;
   const canSend = body.length > 0 && (viaService || !!url);
+  const senderName = fromTeam ? service.senders[fromTeam] : null;
+  const teamName = (id: string | null) => teams.find((x) => x.id === id)?.name ?? "Команда";
+
+  const open = (id: string, filled: string) => {
+    haptics.tap();
+    setPicked(id);
+    setText(filled);
+    setStep("compose");
+  };
 
   const submit = () => {
     haptics.tap();
@@ -107,7 +139,9 @@ export function SmsSendSheet({
           appointmentId: context.appointmentId ?? null,
           clientId: context.clientId ?? null,
           body,
-          templateId: picked,
+          templateId: chosen?.template.id ?? null,
+          teamId: fromTeam,
+          phone,
         },
         {
           onSuccess: () => toast("SMS отправляется", "success"),
@@ -119,103 +153,133 @@ export function SmsSendSheet({
     if (url) setTimeout(() => openSms(url, body), SHEET_EXIT_MS);
   };
 
-  const price =
-    viaService && body
-      ? Platform.OS === "web"
-        ? ` · ${priceOf(encoding.segments, service.priceCents)}`
-        : ""
-      : "";
+  const price = viaService && body && Platform.OS === "web" ? ` · ${priceOf(encoding.segments, service.priceCents)}` : "";
 
   return (
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="SMS клиенту"
+      title={step === "pick" ? "SMS" : step === "team" ? "От команды" : chosen ? chosen.template.name : "Своё SMS"}
+      subtitle={step === "pick" && senderName ? `от ${senderName}` : undefined}
+      padded={false}
       avoidKeyboard
       scroll
+      maxHeightRatio={0.9}
       footer={
-        <Button
-          label={viaService ? "Отправить" : "Открыть в Сообщениях"}
-          onPress={submit}
-          disabled={!canSend}
-        />
+        step === "compose" ? (
+          <View style={{ paddingHorizontal: GUTTER }}>
+            <Button label={viaService ? "Отправить" : "Открыть в Сообщениях"} onPress={submit} disabled={!canSend} />
+          </View>
+        ) : undefined
       }
     >
-      {service.available ? (
-        <View style={{ marginBottom: 16 }}>
-          <SegmentedControl options={MODES} value={mode} onChange={setMode} />
-        </View>
+      {step === "pick" ? (
+        <SelectList>
+          {rows.map(({ template, text: filled }) => (
+            <SelectRow
+              key={template.id}
+              icon={iconPreset(template.icon) ?? MessageSquareText}
+              color={template.color ?? undefined}
+              title={template.name}
+              subtitle={filled ?? "Не хватает данных записи"}
+              disabled={!filled}
+              onPress={() => (filled ? open(template.id, filled) : undefined)}
+            />
+          ))}
+          <SelectRow icon={PenLine} title="Своё SMS" subtitle="Написать любой текст" onPress={() => open(CUSTOM, "")} />
+        </SelectList>
       ) : null}
 
-      {choices.length > 1 ? (
-        <View style={{ marginBottom: 16 }}>
-          <FieldLabel text="Текст" />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {choices.map((choice) => (
-              <Chip
-                key={choice.id}
-                label={choice.name}
-                selected={picked === choice.id}
-                radio
+      {step === "team" ? (
+        <SelectList>
+          {service.senderTeams.map((id) => (
+            <SelectRow
+              key={id}
+              icon={Users}
+              color={teams.find((x) => x.id === id)?.color ?? undefined}
+              title={teamName(id)}
+              subtitle={`Подпись: ${service.senders[id]}`}
+              selected={fromTeam === id}
+              accessibilityRole="radio"
+              onPress={() => {
+                haptics.tap();
+                setPickedTeam(id);
+                setStep("compose");
+              }}
+            />
+          ))}
+        </SelectList>
+      ) : null}
+
+      {step === "compose" ? (
+        <>
+          <SelectList>
+            <SelectRow
+              icon={chosen ? (iconPreset(chosen.template.icon) ?? MessageSquareText) : PenLine}
+              color={chosen?.template.color ?? undefined}
+              title={chosen ? chosen.template.name : "Своё SMS"}
+              subtitle="Другой шаблон"
+              accessibilityHint="Вернуться к шаблонам"
+              onPress={() => {
+                haptics.tap();
+                setStep("pick");
+              }}
+            />
+            {viaService && !fixedTeam && service.senderTeams.length > 1 ? (
+              <SelectRow
+                icon={Users}
+                color={teams.find((x) => x.id === fromTeam)?.color ?? undefined}
+                title={`От команды · ${teamName(fromTeam)}`}
+                subtitle={senderName ? `Подпись: ${senderName}` : undefined}
                 onPress={() => {
-                  setPicked(choice.id);
-                  setText(choice.text);
+                  haptics.tap();
+                  setStep("team");
                 }}
               />
-            ))}
+            ) : null}
+          </SelectList>
+          <View style={{ paddingHorizontal: GUTTER, paddingBottom: 12 }}>
+            <TextInput
+              value={text}
+              onChangeText={(next) => setText(acceptSmsInput(next, text))}
+              placeholder="Текст SMS"
+              placeholderTextColor={t.placeholder}
+              selectionColor={t.accent}
+              keyboardAppearance="light"
+              multiline
+              autoFocus={!chosen}
+              maxLength={1000}
+              accessibilityLabel="Текст SMS"
+              maxFontSizeMultiplier={1.3}
+              style={{
+                minHeight: 120,
+                maxHeight: 220,
+                paddingHorizontal: 14,
+                paddingTop: 12,
+                paddingBottom: 12,
+                fontSize: 16,
+                lineHeight: 22,
+                color: t.ink,
+                textAlignVertical: "top",
+                borderRadius: t.radius.input,
+                borderCurve: "continuous",
+                backgroundColor: t.fill,
+              }}
+            />
+            <Text
+              maxFontSizeMultiplier={1.2}
+              style={{ marginTop: 6, fontSize: 13, color: encoding.segments > 1 ? t.warning : t.sub, fontVariant: ["tabular-nums"] }}
+            >
+              {body ? `${encoding.length} знаков · ${encoding.segments} SMS${price}` : "До 70 знаков — 1 SMS"}
+            </Text>
+            {!viaService ? (
+              <Text maxFontSizeMultiplier={1.2} style={{ marginTop: 4, fontSize: 13, color: t.sub }}>
+                {url ? "Отправится с вашего телефона" : "У клиента нет номера"}
+              </Text>
+            ) : null}
           </View>
-        </View>
+        </>
       ) : null}
-
-      <View style={{ marginBottom: 8 }}>
-        {choices.length > 1 ? null : <FieldLabel text="Текст" />}
-        <TextInput
-          value={text}
-          onChangeText={(next) => {
-            setText(acceptSmsInput(next, text));
-            setPicked(null);
-          }}
-          placeholder="Текст SMS"
-          placeholderTextColor={t.placeholder}
-          selectionColor={t.accent}
-          keyboardAppearance="light"
-          multiline
-          maxLength={1000}
-          accessibilityLabel="Текст SMS"
-          style={{
-            minHeight: 112,
-            paddingHorizontal: 16,
-            paddingTop: 12,
-            paddingBottom: 12,
-            fontSize: 15,
-            lineHeight: 21,
-            color: t.ink,
-            textAlignVertical: "top",
-            borderRadius: t.radius.input,
-            borderCurve: "continuous",
-            borderWidth: 1,
-            borderColor: t.separator,
-          }}
-        />
-        {body ? (
-          <Text
-            maxFontSizeMultiplier={1.2}
-            style={{
-              marginTop: 6,
-              fontSize: 13,
-              color: encoding.segments > 1 ? t.warning : t.sub,
-              fontVariant: ["tabular-nums"],
-            }}
-          >
-            {`${encoding.length} знаков · ${encoding.segments} SMS${price}`}
-          </Text>
-        ) : null}
-        {!viaService && !url ? (
-          <Text maxFontSizeMultiplier={1.2} style={{ marginTop: 6, fontSize: 13, color: t.sub }}>
-            У клиента нет номера
-          </Text>
-        ) : null}
-      </View>
     </BottomSheet>
   );
 }

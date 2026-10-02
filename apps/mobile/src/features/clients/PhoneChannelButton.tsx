@@ -11,7 +11,8 @@ import { useDefaultCountry } from "@/features/clients/default-country";
 import { formatPhoneForDisplay, tryToE164 } from "@/features/clients/phone";
 import { useReferenceHref } from "@/features/clients/reference-href";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
-import { SmsTemplateSheet, useSmsOptions } from "@/features/sms/SmsCompose";
+import { useSmsComposeContext } from "@/features/sms/SmsCompose";
+import { SmsSendSheet } from "@/features/sms/SmsSendSheet";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -56,8 +57,9 @@ export default function PhoneChannelButton({
   const channelsHref = useReferenceHref().channels;
   const [open, setOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
-  // Шаблоны, заполненные записью или карточкой, где стоит номер (STORY-089).
-  const smsOptions = useSmsOptions(smsName);
+  // Где стоит номер — запись или карточка: её поля встанут в шаблоны SMS
+  // (STORY-089). Нет контекста (список клиентов) — «Сообщения» телефона.
+  const smsContext = useSmsComposeContext();
   const enabled = useEnabledChannels(teamId);
   const country = useDefaultCountry(teamId);
   const channels = resolveChannelsForNumber(number, enabled, {
@@ -75,14 +77,13 @@ export default function PhoneChannelButton({
     color: c.color,
     // Все каналы НОМЕРА — внешние ссылки: внутренний чат ведётся с клиентом,
     // а не с номером, и в этот список не попадает (contact-channels.ts).
-    // «SMS» с шаблонами — второй лист с готовыми текстами; без шаблонов —
-    // пустое сообщение, как раньше.
+    // «SMS» — общая шторка отправки (владелец 03.10): шаблоны → готовый
+    // текст → «Отправить»; внизу «Своё SMS».
     onPress:
-      c.id === "sms" && smsOptions.length > 0
+      c.id === "sms" && smsContext
         ? () => setSmsOpen(true)
         : () => void Linking.openURL(c.url),
   }));
-  const smsChannel = channels.find((c) => c.id === "sms");
 
   // Звонок отключить нельзя (`optional: false`), так что у разобранного
   // номера он есть всегда; запасной путь — первый канал списка.
@@ -124,13 +125,13 @@ export default function PhoneChannelButton({
         settingsLabel="Способы связи"
         onClose={() => setOpen(false)}
       />
-      {smsChannel ? (
-        <SmsTemplateSheet
+      {smsContext ? (
+        <SmsSendSheet
           visible={smsOpen}
-          title={formatPhoneForDisplay(number, country)}
-          url={smsChannel.url}
-          phone={tryToE164(number, country)}
-          options={smsOptions}
+          // Без записи — от команды клиента (её «Способы связи» уже здесь).
+          context={{ ...smsContext, teamId: smsContext.teamId ?? teamId }}
+          phone={tryToE164(number, country) ?? number}
+          name={smsName}
           onClose={() => setSmsOpen(false)}
         />
       ) : null}

@@ -1,22 +1,8 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { Linking, Platform, Pressable, Text, View } from "react-native";
-import { useRouter, type Href } from "expo-router";
-import { MessageSquare, Settings2 } from "lucide-react-native";
-import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
-import { Chip } from "@/components/ui/Chip";
-import { FieldLabel } from "@/components/ui/Field";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { GUTTER } from "@/components/ui/tokens";
-import { useToast } from "@/components/ui/Toast";
-import { analyzeSmsEncoding } from "@babun/shared/local/sms-encoding";
-import { SELECT_SHEET_RATIO, SelectList, SelectRow } from "@/components/ui/select-rows";
-import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole, usePlanAllows } from "@/features/settings/tenant";
-import { haptics } from "@/lib/haptics";
-import { useThemeColors } from "@/theme/colors";
-import { smsOptions, smsUrlWithBody, type SmsOption, type SmsVars } from "./sms-compose";
-import { smsErrorText, uniqueByBody, useSendSmsViaService, useSmsAccount, useTeamTemplates } from "./sms-account";
-import { priceOf } from "./sms-words";
+import { createContext, useContext, type ReactNode } from "react";
+import { Linking, Platform } from "react-native";
+import { usePlanAllows } from "@/features/settings/tenant";
+import { smsUrlWithBody, type SmsVars } from "./sms-compose";
+import { useSmsAccount } from "./sms-account";
 
 // ЧТО ПОДСТАВЛЯТЬ В ШАБЛОН — ОТ ТОГО, ГДЕ НАЖАЛИ «SMS» (STORY-089, волна 1).
 //
@@ -40,37 +26,14 @@ export function SmsComposeProvider({ context, children }: { context: SmsContext 
   return <SmsVarsContext.Provider value={context}>{children}</SmsVarsContext.Provider>;
 }
 
-/** Шаблоны, готовые к отправке с этого места: у записи — шаблоны её
- *  команды, у карточки без записи — всех команд, которые человек видит
- *  (одинаковый текст — одной строкой). Пусто — когда подставлять нечего
- *  или шаблонов нет. Какие команды видны — решает база.
- *
- *  `name` — чей это номер, если не самого клиента страницы: у строки
- *  человека («Екатерина · бухгалтер») [Имя] — её имя, а не клиента. */
-export function useSmsOptions(name?: string | null): SmsOption[] {
-  const context = useContext(SmsVarsContext);
-  const templates = useTeamTemplates(context?.teamId ?? null).data;
-  return useMemo(() => {
-    if (!context || !templates) return [];
-    const vars: SmsVars = { ...context.vars };
-    if (name !== undefined) {
-      const first = (name ?? "").trim().split(/\s+/)[0] ?? "";
-      if (first) vars.Name = first;
-      else delete vars.Name;
-    }
-    return smsOptions(uniqueByBody(templates), vars);
-  }, [context, name, templates]);
+/** Где нажали «SMS» — контекст, положенный страницей (карточка клиента,
+ *  запись); `null` — номер без контекста (список клиентов). */
+export function useSmsComposeContext(): SmsContext | null {
+  return useContext(SmsVarsContext);
 }
 
 /** Можно ли отсюда отправить через сервис: сервис подключён, баланса
- *  хватает, и есть команда с именем отправителя — у записи это команда
- *  записи, без записи — любая команда с именем, её выбирают в листе
- *  (владелец 30.09: «через какую команду отправка, так и определяется»).
- *  Решает всё равно база. */
-export function useSmsService(): SmsServiceState {
-  return useSmsServiceFor(useContext(SmsVarsContext));
-}
-
+ *  хватает, и есть команда с именем отправителя. Решает всё равно база. */
 export interface SmsServiceState {
   available: boolean;
   priceCents: number;
@@ -96,228 +59,7 @@ export function useSmsServiceFor(context: SmsContext | null): SmsServiceState {
   return { available, priceCents: account?.priceCents ?? 10, context, senderTeams, senders };
 }
 
-/** Может ли человек править шаблоны — тогда у листа есть вход в них.
- *  Шаблоны команд правит только владелец (`sms_save_team_template`). */
-export function useCanEditSmsTemplates(): boolean {
-  return useCurrentRole().data === "owner";
-}
-
-/** Цена отправки до нажатия. В iOS-приложении о деньгах сервиса молчим
- *  (решение владельца, правило App Store) — там число частей: «2 SMS»;
- *  евро — на сайте. */
-function servicePrice(segments: number, priceCents: number): string {
-  return Platform.OS === "web" ? priceOf(segments, priceCents) : `${Math.max(1, segments)} SMS`;
-}
-
 /** Открыть «Сообщения» на номер с готовым текстом. */
 export function openSms(url: string, body: string): void {
   void Linking.openURL(smsUrlWithBody(url, body, Platform.OS));
-}
-
-/** ЛИСТ «SMS»: шаблоны, заполненные записью, и пустое сообщение.
- *  Текст виден целиком ДО нажатия (владелец: «ответ виден, один тап»); тап —
- *  «Сообщения» с этим текстом, отправляет человек сам. */
-export function SmsTemplateSheet({
-  visible,
-  title,
-  url,
-  options,
-  phone,
-  onClose,
-}: {
-  visible: boolean;
-  /** Номер, как его диктуют. */
-  title: string;
-  /** Этот же номер в E.164 — через сервис SMS уходит ровно на него (у
-   *  клиента номеров бывает несколько). */
-  phone?: string | null;
-  /** `sms:` номера без текста. */
-  url: string;
-  options: readonly SmsOption[];
-  onClose: () => void;
-}) {
-  const t = useThemeColors();
-  const router = useRouter();
-  const toast = useToast();
-  const canEdit = useCanEditSmsTemplates();
-  const service = useSmsService();
-  const send = useSendSmsViaService();
-  // ДВА ПУТИ ОДНОГО ТЕКСТА (STORY-089): «С телефона» открывает «Сообщения»,
-  // «Через сервис» отправляет сам и списывает с баланса. Путь по умолчанию —
-  // телефон: он бесплатный, и так было до сервиса.
-  const [mode, setMode] = useState<"phone" | "service">("phone");
-  const viaService = service.available && mode === "service";
-  const { data: teams = [] } = useTeams();
-  // ОТ КАКОЙ КОМАНДЫ (владелец 30.09): у записи — её команда; без записи —
-  // выбранная здесь, её имя отправителя и встанет подписью SMS. По
-  // умолчанию — команда клиента, если у неё есть имя, иначе первая с именем.
-  const fixedTeam = service.context?.appointmentId ? (service.context.teamId ?? null) : null;
-  const [pickedTeam, setPickedTeam] = useState<string | null>(null);
-  const defaultTeam =
-    service.context?.teamId && service.senders[service.context.teamId]
-      ? service.context.teamId
-      : (service.senderTeams[0] ?? null);
-  const fromTeam = fixedTeam ?? pickedTeam ?? defaultTeam;
-  const pick = (body: string) => {
-    haptics.tap();
-    onClose();
-    // Системное окно «Сообщений» ждёт, пока лист уедет, — как у всех шторок.
-    setTimeout(() => openSms(url, body), SHEET_EXIT_MS);
-  };
-  const sendViaService = (option: SmsOption) => {
-    haptics.tap();
-    onClose();
-    send.mutate(
-      {
-        appointmentId: service.context?.appointmentId ?? null,
-        clientId: service.context?.clientId ?? null,
-        body: option.text,
-        templateId: option.template.id,
-        teamId: fromTeam,
-        phone: phone ?? null,
-      },
-      {
-        onSuccess: () => toast("SMS отправляется", "success"),
-        onError: (e) => toast(smsErrorText(e), "error"),
-      },
-    );
-  };
-  return (
-    <BottomSheet
-      padded={false}
-      visible={visible}
-      onClose={onClose}
-      maxHeightRatio={SELECT_SHEET_RATIO}
-      scroll
-      title="SMS"
-      subtitle={title}
-      headerAction={
-        canEdit ? (
-          <Pressable
-            onPress={() => {
-              haptics.tap();
-              onClose();
-              const teamId = service.context?.teamId;
-              router.push(
-                (teamId ? { pathname: "/calendar/sms", params: { team: teamId } } : "/calendar/sms") as Href,
-              );
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Шаблоны SMS"
-            hitSlop={10}
-            style={({ pressed }) => ({
-              width: 32,
-              height: 32,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: pressed ? 0.5 : 1,
-            })}
-          >
-            <Settings2 color={t.sub} size={20} strokeWidth={2} />
-          </Pressable>
-        ) : undefined
-      }
-    >
-      {service.available ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingBottom: 8 }}>
-          <SegmentedControl
-            options={[
-              { value: "phone", label: "С телефона" },
-              { value: "service", label: "Через сервис" },
-            ]}
-            value={mode}
-            onChange={setMode}
-          />
-        </View>
-      ) : null}
-      {viaService && !fixedTeam && service.senderTeams.length > 1 ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingBottom: 8 }}>
-          <FieldLabel text="От команды" />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {service.senderTeams.map((id) => (
-              <Chip
-                key={id}
-                label={`${teams.find((x) => x.id === id)?.name ?? "Команда"} · ${service.senders[id]}`}
-                selected={fromTeam === id}
-                radio
-                onPress={() => setPickedTeam(id)}
-              />
-            ))}
-          </View>
-        </View>
-      ) : null}
-      <SelectList>
-        {options.map((option) => (
-          <TemplateRow
-            key={option.template.id}
-            option={option}
-            price={viaService ? servicePrice(analyzeSmsEncoding(option.text).segments, service.priceCents) : undefined}
-            onPress={() => (viaService ? sendViaService(option) : pick(option.text))}
-          />
-        ))}
-        {/* Своё сообщение пишется в «Сообщениях» — через сервис уходит
-            только готовый текст шаблона, который человек видит здесь. */}
-        {!viaService ? (
-          <SelectRow
-            icon={MessageSquare}
-            title="Своё сообщение"
-            onPress={() => pick("")}
-          />
-        ) : null}
-      </SelectList>
-    </BottomSheet>
-  );
-}
-
-/** Строка шаблона: имя и ГОТОВЫЙ текст целиком. Общая `SelectRow` держит
- *  однострочную высоту 52 без полей — многострочный текст прижимался к её
- *  краю; здесь строка того же вида, но с полями под абзац. */
-function TemplateRow({
-  option,
-  price,
-  onPress,
-}: {
-  option: SmsOption;
-  /** Цена через сервис — видна до нажатия, потому что тап сразу отправляет. */
-  price?: string;
-  onPress: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${option.template.name}${price ? `, отправить за ${price}` : ""}: ${option.text}`}
-      style={({ pressed }) => ({
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        borderRadius: t.radius.input,
-        backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
-      })}
-    >
-      <View style={{ flexDirection: "row", alignItems: "baseline", gap: 12 }}>
-        <Text
-          numberOfLines={1}
-          maxFontSizeMultiplier={1.3}
-          style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
-        >
-          {option.template.name}
-        </Text>
-        {price ? (
-          <Text
-            maxFontSizeMultiplier={1.2}
-            style={{ fontSize: 14, fontWeight: "600", color: t.accent, fontVariant: ["tabular-nums"] }}
-          >
-            {price}
-          </Text>
-        ) : null}
-      </View>
-      <Text
-        maxFontSizeMultiplier={1.3}
-        style={{ marginTop: 4, fontSize: 14, lineHeight: 19, color: t.body }}
-      >
-        {option.text}
-      </Text>
-    </Pressable>
-  );
 }
