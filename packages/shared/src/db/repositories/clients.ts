@@ -738,6 +738,12 @@ export async function restoreClient(
     .eq("tenant_id", tenantId)
     .select("id")
     .single();
+  // Номер у клиента уникален среди живых (`clients_tenant_phone_e164_idx`):
+  // пока этот лежал в «Удалённых», его номер мог достаться новому клиенту.
+  // Говорим словами, а не «duplicate key value violates…» (аудит 03.10).
+  if (error?.code === "23505") {
+    throw new Error("Его номер уже у другого клиента — вернуть нельзя, пока номер занят");
+  }
   if (error) throw new Error(`restoreClient: ${error.message}`);
   if (data.id !== id) throw new Error("restoreClient: клиент не найден");
 }

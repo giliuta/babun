@@ -888,6 +888,12 @@ export function useRestoreClient() {
       void qc.invalidateQueries({ queryKey: ["client", client.id] });
       if (restored.reminder_at) syncClientReminderWithFeedback(restored);
     },
+    // Отказ — тоже повод перечитать: список «Удалённых» показывает правду
+    // сервера, а не оптимистичный шаг (аудит 03.10).
+    onError: (_error, client) => {
+      void qc.invalidateQueries({ queryKey: ["trashed-clients"] });
+      void qc.invalidateQueries({ queryKey: ["client", client.id] });
+    },
     meta: { errorHandled: true },
   });
 }

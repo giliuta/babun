@@ -572,6 +572,10 @@ export async function restoreClient(
   };
 
   if (isOnline()) {
+    // Строка, какой она была до возврата: отказ сервера кладёт её обратно.
+    const before = await cacheGetOne<CachedClientData>("clients", client.id, tenantId).catch(
+      () => null,
+    );
     await cacheUpsert("clients", cachedRow);
     try {
       await repoRestoreClient(supabase, client.id, tenantId);
@@ -579,7 +583,12 @@ export async function restoreClient(
       return;
     } catch (err) {
       if (!isTransientNetworkError(err) || refuseQueueing(opts)) {
-        await cacheDelete("clients", client.id).catch(() => {});
+        // ОТКАЗ — НЕ «КЛИЕНТА НЕТ» (аудит 03.10). Раньше строку из кэша
+        // удаляли, и отвергнутый возврат (номер уже занят другим клиентом)
+        // уносил клиента и из «Удалённых» до следующего чтения. Теперь она
+        // возвращается такой, какой была.
+        if (before) await cacheUpsert("clients", before).catch(() => {});
+        else await cacheDelete("clients", client.id).catch(() => {});
         throw err;
       }
       await enqueueOpWithCacheUpsertAndEmit(

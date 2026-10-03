@@ -455,6 +455,38 @@ describe("clients cache-of-domain", () => {
     expect(await listTrashedClients(stubSupabase, TENANT)).toEqual([]);
   });
 
+  test("отказ возврата (номер занят) оставляет клиента в «Удалённых» и говорит словами (аудит 03.10)", async () => {
+    const client = createBlankClient({ id: CLIENT_ID, full_name: "Номер занят" });
+    await createClient(stubSupabase, client, TENANT);
+    await archiveClient(stubSupabase, CLIENT_ID, TENANT, "2026-09-07T10:00:00.000Z");
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    setNetwork(new OnlineNetwork());
+    const taken = { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } };
+    const server = {
+      from() {
+        const chain: Record<string, unknown> = {};
+        chain.update = () => chain;
+        chain.eq = () => chain;
+        chain.select = () => chain;
+        chain.single = () => Promise.resolve(taken);
+        return chain;
+      },
+    };
+
+    await expect(
+      restoreClient(
+        server as never,
+        { ...client, deleted_at: "2026-08-08T10:00:00.000Z", purge_at: "2026-09-07T10:00:00.000Z" },
+        TENANT,
+      ),
+    ).rejects.toThrow("Его номер уже у другого клиента");
+
+    const cached = await cacheRead<Record<string, unknown>>("clients", TENANT);
+    expect(cached.map((row) => row.id)).toEqual([CLIENT_ID]);
+    expect(cached[0]!.deleted_at).not.toBeNull();
+    expect(await dequeueAll()).toEqual([]);
+  });
+
   test("online semantic update rejection rolls back cache and is never queued", async () => {
     await createClient(
       stubSupabase,
