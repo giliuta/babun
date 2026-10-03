@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
@@ -100,8 +100,12 @@ export function MiniCalendar({
     .replace(/\s*г\.?\s*$/i, "");
 
   // 44 — минимальная тап-мишень HIG: раньше 40pt-ячейки были единственным
-  // суб-минимальным контролом всего джампера.
-  const CELL = 44;
+  // суб-минимальным контролом всего джампера. Но на экране 320 (iPhone SE
+  // первого поколения, «Увеличенный» вид экрана) окно 7×44 + поля уходило
+  // за правый край: обрезались «Вс» и стрелка следующего месяца (повторный
+  // аудит 03.10). Там ячейка ужимается ровно настолько, чтобы окно влезло.
+  const { width: screenW } = useWindowDimensions();
+  const CELL = Math.min(44, Math.floor((screenW - 24 - 26 - 2) / 7));
   // Шесть рядов всегда: в месяце бывает 5 или 6 недель, и без фиксации
   // попап дёргался бы по высоте на каждом свайпе.
   const GRID_H = 6 * CELL;

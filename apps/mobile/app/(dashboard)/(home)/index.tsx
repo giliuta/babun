@@ -18,7 +18,7 @@ import {
   type Href,
 } from "expo-router";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
-import { Ban, Bell } from "lucide-react-native";
+import { Ban } from "lucide-react-native";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -1091,11 +1091,17 @@ export default function CalendarTab() {
       seedYmdRef.current = "";
       return;
     }
+    // ПОКА ПОЯС НЕ ИЗВЕСТЕН, «СЕГОДНЯ» — КИПРСКОЕ, И ПЕРЕПРИВЯЗКА ЖДЁТ
+    // (повторный аудит 03.10). Срабатывая по нему, она выключалась навсегда:
+    // у компании в Берлине в 23:30 календарь вставал на ЗАВТРА по Кипру и
+    // уже не возвращался, когда пояс приезжал.
+    // Пояс календаря — у его команды, иначе общий: ждём обоих ответов.
+    if (teamsPending || calSettingsQuery.isPending) return;
     if (todayYmd !== seed) {
       seedYmdRef.current = "";
       setDay(startOfDay(parseYMD(todayYmd)));
     }
-  }, [todayYmd, day]);
+  }, [todayYmd, day, teamsPending, calSettingsQuery.isPending]);
 
   useEffect(() => {
     const clearParams = () =>
@@ -1567,12 +1573,28 @@ export default function CalendarTab() {
   // События — функция компании (STORY-088): выключены — их нет в сетке ни у
   // кого; данные не стираются.
   const eventsOn = useFeatureOn("events");
+  // «ЕГО ГЛАЗАМИ» — РОВНО ТО, ЧТО ОТДАСТ ЕМУ СЕРВЕР (повторный аудит 03.10).
+  // Записи в зеркале читаются токеном владельца, то есть ВСЕ: личные события
+  // владельца без команды и события команд, где у сотрудника «События:
+  // Скрыт», стояли в его календаре. Режем тем же правилом, что сервер
+  // (`list_master_appointments_safe`): без команды — нет, «Записи клиентов:
+  // Скрыты» — нет ничего, событие — только при «Событиях: Видит».
+  const mirrorSees = useCallback(
+    (a: Appointment) => {
+      if (a.team_id == null) return false;
+      const can = actionsIn(a.team_id);
+      if (can.records === "hidden") return false;
+      return a.kind === "work" || can.events !== "hidden";
+    },
+    [actionsIn],
+  );
   const byTeam = useCallback(
     (a: Appointment) =>
       inTeamCal(a) &&
       (!hideCancelled || a.status !== "cancelled") &&
-      (eventsOn || a.kind !== "event"),
-    [inTeamCal, hideCancelled, eventsOn],
+      (eventsOn || a.kind !== "event") &&
+      (!mirror || mirrorSees(a)),
+    [inTeamCal, hideCancelled, eventsOn, mirror, mirrorSees],
   );
 
   // Web parity (dashboard/page.tsx, STORY-091): recurring seeds expand into
@@ -2517,8 +2539,11 @@ export default function CalendarTab() {
       ? weekTitle(weekDays[0], weekDays[weekDays.length - 1])
       : monthTitle(mode === "month" || mode === "agenda" ? monthAnchor : day);
 
+  // «Список» живёт месяцем, как и «Месяц» (повторный аудит 03.10): по дню
+  // кнопка «Сегодня» появлялась в текущем месяце, а тап по ней только прятал
+  // её — лента никуда не ехала.
   const isOnToday =
-    mode === "month"
+    mode === "month" || mode === "agenda"
       ? monthAnchor.getFullYear() === now.getFullYear() &&
         monthAnchor.getMonth() === now.getMonth()
       : mode === "week"

@@ -12,6 +12,7 @@ const REGISTRY: { key: string; live: boolean; levels: AccessLevel[] }[] = [
   { key: "calendar.create", live: true, levels: ["off", "write"] },
   { key: "calendar.move", live: true, levels: ["off", "write"] },
   { key: "calendar.cancel", live: true, levels: ["off", "write"] },
+  { key: "calendar.records", live: true, levels: ["off", "read", "write"] },
   { key: "calendar.events", live: true, levels: ["off", "read", "write"] },
   { key: "calendar.day_labels", live: true, levels: ["off", "read", "write"] },
   { key: "calendar.schedule", live: true, levels: ["off", "read", "write"] },
@@ -41,6 +42,8 @@ function map(levels: Record<string, AccessLevel>): MemberAccessMap {
 
 /** Dmitry на боевой 24.09 после засева. */
 const DMITRY = map({
+  // Записи команды видит — так их засевает сервер при приёме приглашения.
+  "calendar.records": "read",
   "calendar.create": "write",
   "calendar.events": "read",
   "calendar.day_labels": "write",
@@ -67,6 +70,7 @@ describe("страница записи — одна для всех, блоки
       cancel: true,
       color: true,
       status: true,
+      records: "write",
       events: "write",
       dayLabels: "write",
       schedule: "write",
@@ -152,13 +156,14 @@ describe("страница записи — одна для всех, блоки
       cancel: false,
       color: false,
       status: true,
+      records: "read",
       events: "read",
       dayLabels: "write",
       schedule: "read",
     });
     assert.deepEqual(
       calendarActions(at(map({ "calendar.move": "write", "calendar.cancel": "write", "calendar.events": "write" }))),
-      { create: false, move: true, cancel: true, color: false, status: false, events: "write", dayLabels: "hidden", schedule: "hidden" },
+      { create: false, move: true, cancel: true, color: false, status: false, records: "hidden", events: "write", dayLabels: "hidden", schedule: "hidden" },
     );
   });
 

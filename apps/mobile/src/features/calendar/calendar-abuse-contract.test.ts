@@ -195,4 +195,21 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(src, /pathname: "\/calendar\/labels",\s*params: activeTeamId \? \{ team: activeTeamId \} : \{\},/);
     assert.match(src, /onGear=\{\(\) => pushBookOnce\(/);
   });
+
+  test("«его глазами» — только то, что отдал бы ему сервер", () => {
+    const src = screen();
+    assert.match(src, /if \(a\.team_id == null\) return false;\s*const can = actionsIn\(a\.team_id\);\s*if \(can\.records === "hidden"\) return false;\s*return a\.kind === "work" \|\| can\.events !== "hidden";/);
+    assert.match(src, /\(eventsOn \|\| a\.kind !== "event"\) &&\s*\(!mirror \|\| mirrorSees\(a\)\),/);
+  });
+
+  test("«сегодня» по поясу команды ждёт пояса, а «Сегодня» в Списке — по месяцу", () => {
+    const src = screen();
+    assert.match(src, /if \(teamsPending \|\| calSettingsQuery\.isPending\) return;\s*if \(todayYmd !== seed\)/);
+    assert.match(src, /const isOnToday =\s*mode === "month" \|\| mode === "agenda"/);
+  });
+
+  test("окошко дат влезает в экран 320", () => {
+    const mini = readFileSync(resolve(here, "MiniCalendar.tsx"), "utf8");
+    assert.match(mini, /const CELL = Math\.min\(44, Math\.floor\(\(screenW - 24 - 26 - 2\) \/ 7\)\);/);
+  });
 });
