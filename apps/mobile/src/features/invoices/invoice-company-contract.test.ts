@@ -21,3 +21,11 @@ describe("реквизиты инвойса", () => {
     assert.match(editor(), /useNextInvoiceSeries\(issuedYear, pickedCompany\?\.id \?\? companyId\)/);
   });
 });
+
+describe("дата нового инвойса (аудит 03.10)", () => {
+  test("не раньше сегодня: прошлый визит не рождает документ просроченным", () => {
+    const src = editor();
+    assert.match(src, /const firstIssuedOn = sourceIssuedOn > businessToday \? sourceIssuedOn : businessToday;/);
+    assert.match(src, /useState<string \| null>\(\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*addDaysYmd\(firstIssuedOn, Math\.max\(0, generator\.dueDays\)\),/);
+  });
+});

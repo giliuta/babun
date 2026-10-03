@@ -209,15 +209,19 @@ export function InvoiceEditor({
 
   // Future issue dates remain intentionally available (the server permits
   // scheduled documents), but a new document always starts on tenant today.
-  // Счёт по записи датируется днём визита — как и раньше, но теперь эту дату
-  // называет генератор, а не параметр в адресе.
-  const firstIssuedOn =
-    seed?.issuedOn ?? prefill?.issuedOn ?? businessToday;
+  //
+  // ДАТА ВЫСТАВЛЕНИЯ — НЕ РАНЬШЕ СЕГОДНЯ (аудит 03.10). Счёт по прошлому визиту
+  // (или по деньгам, принятым раньше) датировался днём визита: срок оплаты
+  // считался от него, и документ рождался «Просрочен», а номер вставал после
+  // уже выданных, но с датой раньше их — серия шла не по датам. Визит в
+  // будущем остаётся своей датой; руками дату по-прежнему можно сменить.
+  const sourceIssuedOn = seed?.issuedOn ?? prefill?.issuedOn ?? businessToday;
+  const firstIssuedOn = sourceIssuedOn > businessToday ? sourceIssuedOn : businessToday;
   const [issuedOn, setIssuedOn] = useState(firstIssuedOn);
   const [dueOn, setDueOn] = useState<string | null>(
-    // Срок — из настроек компании, а не зашитая неделя (владелец 2026-08-15).
-    seed?.dueOn ??
-      addDaysYmd(firstIssuedOn, Math.max(0, generator.dueDays)),
+    // Срок — из настроек компании, а не зашитая неделя (владелец 2026-08-15),
+    // и считается от даты выставления, а не от визита.
+    addDaysYmd(firstIssuedOn, Math.max(0, generator.dueDays)),
   );
   // Общая на «Правку» (строка-дверь) и «Документ» (барабан бумаги): смена
   // даты выставления подтягивает «Оплатить до», если та уже оказалась раньше.
