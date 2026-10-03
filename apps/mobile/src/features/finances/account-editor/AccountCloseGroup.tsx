@@ -1,14 +1,14 @@
 import { View } from "react-native";
-import { Eye, EyeOff, Trash2 } from "lucide-react-native";
+import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectRow } from "@/components/ui/select-rows";
 import { useThemeColors } from "@/theme/colors";
-import { useReopenAccount, type AccountWithBalance } from "../accounts";
-import type { AlertError } from "./types";
+import type { AccountWithBalance } from "../accounts";
+import { useClosedAccountActions } from "../accounts-page/use-closed-account-actions";
 
 // ПОСЛЕДНЯЯ ГРУППА ЛИСТА — ТЕ ЖЕ ДВА СЛОВА, ЧТО У СВАЙПОВ СТРОКИ:
 //   • открытый счёт — «Скрыть счёт» (серым вниз списка) и «Удалить счёт»;
-//   • закрытый — «Открыть счёт снова» и «Удалить счёт».
+//   • скрытый — «Открыть счёт» и «Удалить счёт».
 // «Удалить» уводит в «Удалённые счета» на 30 дней, как клиентов (владелец
 // 03.10); счёт с операциями там лежит без срока и возвращается оттуда же.
 //
@@ -18,17 +18,15 @@ export function AccountCloseGroup({
   account,
   onHide,
   onDelete,
-  alertError,
 }: {
   account: AccountWithBalance;
   /** «Скрыть счёт» — начать разговор о скрытии. */
   onHide: () => void;
   /** «Удалить счёт» — начать разговор об удалении в «Удалённые счета». */
   onDelete: () => void;
-  alertError: AlertError;
 }) {
   const t = useThemeColors();
-  const reopenAcc = useReopenAccount();
+  const { openAgain } = useClosedAccountActions();
   // Плашки, как во всей шторке (вариант 1, 03.10); объяснений под ними нет —
   // всё нужное говорит вопрос, который задаёт само действие
   // (`use-close-flow`): остаток, перевод, «насовсем».
@@ -61,19 +59,16 @@ export function AccountCloseGroup({
     <>
       <SectionCard dense>
         <View style={blockBody}>
-          {/* ЗАКРЫТЫЙ СЧЁТ ОТКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, без вопроса: действие
-              обратимо, и лист остаётся на месте. */}
+          {/* СКРЫТЫЙ СЧЁТ ОТКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, без вопроса: действие
+              обратимо, и лист остаётся на месте. Значок, цвет и тост «Счёт
+              открыт · Отменить» — те же, что у свайпа «Открыть»
+              (`useClosedAccountActions`): одно действие говорит одинаково. */}
           <SelectRow
-            icon={Eye}
-            color={t.accent}
+            icon={RotateCcw}
+            color={t.success}
             plain
-            title="Открыть счёт снова"
-            disabled={reopenAcc.isPending}
-            onPress={() =>
-              void reopenAcc
-                .mutateAsync(account.id)
-                .catch(alertError("Не удалось открыть счёт"))
-            }
+            title="Открыть счёт"
+            onPress={() => openAgain(account)}
           />
         </View>
       </SectionCard>

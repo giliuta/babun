@@ -24,6 +24,7 @@ export function AccountNameCard({
       <NameColorField
         bare
         label={null}
+        placeholder="Название счёта"
         name={account.name}
         maxLength={ACCOUNT_NAME_MAX}
         onNameChange={(name) => stage({ name })}

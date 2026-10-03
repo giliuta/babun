@@ -391,7 +391,7 @@ export function NoAccountsNotice({
           : "У команды нет счёта. Попросите владельца завести его в финансах."}
       </Text>
       {canCreate ? (
-        <AddRow label="Создать счёт" onPress={onCreate} />
+        <AddRow label="Добавить счёт" onPress={onCreate} />
       ) : (
         <View style={{ height: 12 }} />
       )}

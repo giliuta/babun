@@ -312,6 +312,10 @@ export function NameColorField({
             minHeight: 48,
             paddingRight: trailing ? 12 : 16,
             paddingVertical: 12,
+            // ПОДСКАЗКА НА ОДНОЙ ЛИНИИ С ПЛИТКОЙ. Без явной высоты строки iOS
+            // садит пустое поле с подсказкой на 8pt ниже значка, а набранное
+            // имя — по центру (видно на «Новом счёте» 03.10).
+            lineHeight: bare ? 22 : 20,
             fontSize: bare ? 17 : 16,
             fontWeight: bare ? "600" : "400",
             color: t.ink,

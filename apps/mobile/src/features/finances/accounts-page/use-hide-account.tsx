@@ -163,7 +163,7 @@ export function useHideAccount({
               (e: unknown) =>
                 toast(
                   isOnline()
-                    ? `Не удалось закрыть счёт: ${reason(e)}`
+                    ? `Не удалось скрыть счёт: ${reason(e)}`
                     : OFFLINE_ACCOUNT_EDIT,
                   "error",
                 ),

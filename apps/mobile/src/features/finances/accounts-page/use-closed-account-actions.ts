@@ -35,7 +35,7 @@ export function useClosedAccountActions() {
                 onPress: () =>
                   close.mutate({ id: account.id }, {
                     onError: (e) =>
-                      toast(`Не удалось закрыть счёт: ${e.message}`, "error"),
+                      toast(`Не удалось скрыть счёт: ${e.message}`, "error"),
                   }),
               },
         ),

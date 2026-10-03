@@ -22,9 +22,9 @@ export function StatementPaper({ doc }: { doc: StatementDocument }) {
         borderWidth: 1,
         borderColor: PAPER.border,
         boxShadow: t.cardShadow,
-        paddingHorizontal: 22,
-        paddingTop: 24,
-        paddingBottom: 20,
+        paddingHorizontal: 26,
+        paddingTop: 26,
+        paddingBottom: 22,
       }}
     >
       <Text

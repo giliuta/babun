@@ -40,7 +40,7 @@ import { useCloseFlow } from "./use-close-flow";
 // записи» копятся черновиком и уходят на сервер одной правкой; закрыть лист с
 // черновиком — только после вопроса. Действия («Перевести», «Выписка»,
 // «Скрыть», «Удалить») — сразу, это не настройки; черновик они не трогают.
-// Закрытый счёт открывается тем же листом — с «Открыть счёт снова».
+// Скрытый счёт открывается тем же листом — с «Открыть счёт».
 export function EditAccountSheet({
   visible,
   accountId,
@@ -149,7 +149,7 @@ export function EditAccountSheet({
         // Имени в шапке нет: оно стоит первой строкой листа, и одно и то же
         // слово дважды в одном кадре — шум.
         title="Настройки счёта"
-        subtitle={account && !account.is_active ? "Счёт закрыт" : undefined}
+        subtitle={account && !account.is_active ? "Счёт скрыт" : undefined}
         maxHeightRatio={ACCOUNT_SHEET_RATIO}
         avoidKeyboard
         onExited={() => {
@@ -161,17 +161,16 @@ export function EditAccountSheet({
           }
         }}
         footer={
-          account ? (
-            // Лист без полей (`padded={false}`): отступ у кнопки свой — та же
-            // ширина, что у кнопок внизу страниц.
-            <View style={{ paddingHorizontal: GUTTER, paddingTop: 8 }}>
-              <GradientButton
-                label="Применить"
-                disabled={!dirty || update.isPending}
-                onPress={() => void apply()}
-              />
-            </View>
-          ) : undefined
+          // Лист без полей (`padded={false}`): отступ у кнопки свой — та же
+          // ширина, что у кнопок внизу страниц. Кнопка на месте всегда — и
+          // пока счёт грузится, и без сети: лист не меняет высоту.
+          <View style={{ paddingHorizontal: GUTTER, paddingTop: 8 }}>
+            <GradientButton
+              label="Применить"
+              disabled={!account || !dirty || update.isPending}
+              onPress={() => void apply()}
+            />
+          </View>
         }
       >
         {/* Тело — язык страницы (группы строк на прохладном фоне): лист
@@ -196,7 +195,6 @@ export function EditAccountSheet({
                 account={account}
                 onHide={() => flow.start(account, accounts, "hide")}
                 onDelete={() => flow.start(account, accounts, "trash")}
-                alertError={alertError}
               />
             </>
           ) : (

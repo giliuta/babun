@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { settingsTeamId } from "@/features/finances/team-settings-lines";
@@ -13,7 +13,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectRow } from "@/components/ui/select-rows";
-import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { RowCaption, RowGroupHeader } from "@/components/ui/card-rows";
 import { GUTTER } from "@/components/ui/tokens";
@@ -291,7 +290,7 @@ export default function AccountsScreen() {
                     <AccountRow
                       account={account}
                       mark={
-                        account.is_active ? accountRowMark(account) : "Закрыт"
+                        account.is_active ? accountRowMark(account) : "Скрыт"
                       }
                       handle={handle}
                       onPress={() => setEditor({ open: true, id: account.id })}
@@ -321,18 +320,15 @@ export default function AccountsScreen() {
                 <View style={{ paddingHorizontal: 2, paddingVertical: 2 }}>
                   <SelectRow
                     icon={Trash2}
-                    color={SETTINGS_TILE.red}
+                    color={t.danger}
                     plain
                     title="Удалённые счета"
+                    value={String(deletedCount)}
+                    accessibilityLabel={`Удалённые счета: ${deletedCount}`}
                     onPress={() =>
                       router.push(
                         (teamId ? `/accounts/trash?team=${encodeURIComponent(teamId)}` : "/accounts/trash") as Href,
                       )
-                    }
-                    trailing={
-                      <Text style={{ fontSize: 15, color: t.sub, fontVariant: ["tabular-nums"] }}>
-                        {deletedCount}
-                      </Text>
                     }
                   />
                 </View>
@@ -356,6 +352,9 @@ export default function AccountsScreen() {
         visible={editor.open}
         accountId={editor.id}
         presetTeamId={teamId ?? presetTeamFor(teams)}
+        // Страница на команде (`?team=`) — новый счёт ей, без выбора. На
+        // общей странице всех команд команду выбирают в листе.
+        teamLocked={teamId != null}
         onClose={() => setEditor((current) => ({ ...current, open: false }))}
       />
       {hider.sheet}

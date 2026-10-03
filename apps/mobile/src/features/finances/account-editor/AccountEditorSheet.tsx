@@ -27,6 +27,7 @@ export function AccountEditorSheet({
   visible,
   accountId,
   presetTeamId,
+  teamLocked,
   onClose,
   onCreated,
 }: {
@@ -35,6 +36,9 @@ export function AccountEditorSheet({
   accountId: string | null;
   /** Команда по умолчанию для нового счёта (чип «Финансов»). */
   presetTeamId?: string | null;
+  /** Экран стоит на команде — новый счёт ей и без выбора. По умолчанию — да,
+   *  когда команду передали (запись, инвойс, «Финансы» команды). */
+  teamLocked?: boolean;
   onClose: () => void;
   /** Новый счёт создан. */
   onCreated?: (id: string) => void;
@@ -61,6 +65,7 @@ export function AccountEditorSheet({
     <CreateAccountSheet
       visible={visible}
       presetTeamId={presetTeamId ?? null}
+      teamLocked={teamLocked ?? presetTeamId != null}
       onClose={onClose}
       onCreated={onCreated}
     />

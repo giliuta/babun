@@ -56,7 +56,7 @@ export default function AccountStatementRoute() {
       )}
       <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
         <GradientButton
-          label="Поделиться"
+          label="Поделиться PDF"
           loading={sharing}
           disabled={!statement.doc}
           onPress={() => void share()}

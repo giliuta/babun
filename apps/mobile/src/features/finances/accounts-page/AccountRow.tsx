@@ -62,7 +62,7 @@ export function AccountRow({
   onHide: () => void;
   /** «Удалить» — в «Удалённые счета». */
   onDelete: () => void;
-  /** Счёт закрыт: строка гаснет, слева «Открыть». */
+  /** Счёт скрыт: строка гаснет, слева «Открыть». */
   closed?: { onReopen: () => void } | null;
 }) {
   const t = useThemeColors();
