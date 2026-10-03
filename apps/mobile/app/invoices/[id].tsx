@@ -105,7 +105,6 @@ export default function InvoiceDetailScreen() {
   // делай; чек можно выставить на выставленный инвойс — на оплату, принятую
   // по нему»). Инвойс оплачен — внизу «Выписать чек», выписанный чек стоит
   // блоком на странице и открывается листом.
-  const receiptsQuery = useReceipts({ invoiceId: id, enabled: !!id });
   const issueReceipt = useIssueReceipt();
   const toast = useToast();
   const [openReceipt, setOpenReceipt] = useState<Receipt | null>(null);
@@ -118,6 +117,12 @@ export default function InvoiceDetailScreen() {
   );
   const appointment = appointments.find((item) => item.id === invoice.data?.appointment_id);
   const payments = useMemo(() => paymentRows.data?.[id] ?? [], [id, paymentRows.data]);
+  // Чеки инвойса — и его, и выписанные на его платежи раньше него.
+  const incomeIds = useMemo(
+    () => payments.filter((p) => p.type === "income").map((p) => p.id),
+    [payments],
+  );
+  const receiptsQuery = useReceipts({ invoiceId: id, transactionIds: incomeIds, enabled: !!id });
   const settlement = useMemo(
     () => invoice.data ? calculateInvoiceSettlement(invoice.data, payments) : null,
     [invoice.data, payments],

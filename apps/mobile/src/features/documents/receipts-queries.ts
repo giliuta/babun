@@ -28,6 +28,12 @@ export function useReceipts(filter?: {
   /** Чеки платежей одного инвойса — его страница (чек бывает только у
    *  инвойса, владелец 2026-09-30). */
   invoiceId?: string | null;
+  /** …и чеки на ЕГО ПЛАТЕЖИ, выписанные до того, как у денег появился
+   *  инвойс (аудит 03.10): такой чек несёт `transaction_id`, а `invoice_id`
+   *  у него пуст — выпуск инвойса по доходу чек к себе не привязывает. Без
+   *  этого чек на странице инвойса не появлялся, «Выписать чек» стоял
+   *  навсегда, а сервер на нажатие возвращал старый чек. */
+  transactionIds?: readonly string[];
   /** Не спрашивать вовсе (у новой записи чеков нет — без этого флага пустой
    *  фильтр по записи тянул бы ВСЕ чеки тенанта). */
   enabled?: boolean;
@@ -36,8 +42,9 @@ export function useReceipts(filter?: {
   const clientId = filter?.clientId ?? null;
   const appointmentId = filter?.appointmentId ?? null;
   const invoiceId = filter?.invoiceId ?? null;
+  const transactionIds = [...(filter?.transactionIds ?? [])].sort();
   return useQuery({
-    queryKey: ["receipts", tenantId, clientId, appointmentId, invoiceId],
+    queryKey: ["receipts", tenantId, clientId, appointmentId, invoiceId, transactionIds.join(",")],
     enabled: !!tenantId && filter?.enabled !== false,
     queryFn: async (): Promise<Receipt[]> => {
       // ПОСТРАНИЧНО (аудит финансов 2026-09-30): PostgREST отдаёт не больше
@@ -55,7 +62,11 @@ export function useReceipts(filter?: {
           .order("id", { ascending: true });
         if (clientId) q = q.eq("client_id", clientId);
         if (appointmentId) q = q.eq("appointment_id", appointmentId);
-        if (invoiceId) q = q.eq("invoice_id", invoiceId);
+        if (invoiceId && transactionIds.length > 0) {
+          q = q.or(`invoice_id.eq.${invoiceId},transaction_id.in.(${transactionIds.join(",")})`);
+        } else if (invoiceId) {
+          q = q.eq("invoice_id", invoiceId);
+        }
         const { data, error } = await q.range(from, from + RECEIPTS_PAGE - 1);
         if (error) throw new Error(error.message);
         const page = (data ?? []) as unknown as Receipt[];
