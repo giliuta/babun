@@ -3423,6 +3423,9 @@ export default function BookScreen() {
           2026-09-03. */}
       {client ? (
         <ObjectSheet
+          // Черновик листа — у ЭТОГО клиента: сменили клиента, и адрес,
+          // набранный для прежнего, ушёл бы в объекты нового (аудит 03.10).
+          key={client.id}
           visible={objectSheet}
           writer={locationWriter}
           teamId={client.team_id ?? null}

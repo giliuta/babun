@@ -131,7 +131,11 @@ export function InvoiceObjectBlock({
             onAdd={() => setAdding(true)}
             onClose={() => setPicker(false)}
           />
+          {/* Черновик листа доживает до следующего открытия — но только у
+              ЭТОГО клиента: сменили клиента, и набранный адрес прежнего ушёл
+              бы в объекты нового (аудит 2026-10-03). */}
           <ObjectSheet
+            key={client.id}
             visible={adding}
             writer={writer}
             teamId={client?.team_id ?? null}
