@@ -62,6 +62,7 @@ import {
   findOverlap,
 } from "@babun/shared/common/utils/appointment-overlap";
 import { draftSlot } from "@/features/appointments/draft-slot";
+import { withBaselineStatus } from "@/features/appointments/edit-baseline";
 import { getDayScheduleForDate } from "@babun/shared/local/schedule";
 import { colorName } from "@babun/shared/common/utils/colors";
 import {
@@ -2873,7 +2874,13 @@ export default function BookScreen() {
                     // знать об этом, иначе «Сохранить» вернул бы старый статус,
                     // а «Отмена» спросила бы про несохранённые изменения.
                     setStatus(fresh.status);
-                    editBaselineRef.current = null;
+                    // Снимок «как в базе» узнаёт тот же статус — и только
+                    // его: обнулённый, он снимался заново вместе с
+                    // несохранёнными правками (`edit-baseline.ts`).
+                    editBaselineRef.current = withBaselineStatus(
+                      editBaselineRef.current,
+                      fresh.status,
+                    );
                   }}
                 />
               ) : null}
