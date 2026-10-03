@@ -295,6 +295,13 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     [],
   );
 
+  // КОНЕЦ ЗАПИСИ — НЕ ПОЗЖЕ 23:59 (аудит 2026-10-03). «24:00» у записи не
+  // бывает (форма записи и `addMinutesHM` останавливаются на 23:59), а
+  // перенос в последний слот дня и растяжка до края писали «24:00»: длина
+  // такой записи считалась нулём, «Перенести»/«Копировать» брали окно не той
+  // длины, и сегодняшняя неоплаченная запись не становилась долгом.
+  const endHM = (min: number) => minToHM(Math.min(min, 23 * 60 + 59));
+
   const commit = (translationY: number, dayDelta = 0) => {
     if (!onReschedule) {
       ty.value = withSpring(0);
@@ -324,7 +331,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     onReschedule(
       apt,
       minToHM(newStart),
-      minToHM(newStart + duration),
+      endHM(newStart + duration),
       dayDelta === 0 ? undefined : shiftYmd(apt.date, dayDelta),
     );
     // Смещение сбросит приземление — когда блок встанет на новый слот.
@@ -339,7 +346,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     const hi = Math.max(endMin, winEnd) - duration;
     newStart = Math.max(lo, Math.min(hi, newStart));
     if (newStart === startMin) return;
-    onReschedule(apt, minToHM(newStart), minToHM(newStart + duration));
+    onReschedule(apt, minToHM(newStart), endHM(newStart + duration));
   };
 
   // ═══ РАСТЯЖКА ЗА КРАЙ (владелец 2026-09-24: «запись растягивать по
@@ -360,7 +367,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     haptics.tap();
     const s0 = edge === "top" ? startMin + steps * resizeStep : startMin;
     const e0 = edge === "bottom" ? endMin + steps * resizeStep : endMin;
-    setLiveStart(`${minToHM(s0)}–${minToHM(e0)}`);
+    setLiveStart(`${minToHM(s0)}–${endHM(e0)}`);
   };
   const commitResize = (edge: "top" | "bottom", steps: number) => {
     setLiveStart(null);
@@ -378,7 +385,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       reset();
       return;
     }
-    onReschedule(apt, minToHM(ns), minToHM(ne));
+    onReschedule(apt, minToHM(ns), endHM(ne));
     // Края сбросит приземление — когда блок встанет в новую высоту.
     awaitLanding();
   };
