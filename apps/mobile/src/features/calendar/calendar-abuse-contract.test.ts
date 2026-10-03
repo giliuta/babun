@@ -136,6 +136,13 @@ describe("повторный аудит календаря 03.10", () => {
     assert.doesNotMatch(zoom, /scrollEnabled=\{!scrollLocked\}/);
   });
 
+  test("перенос пальцем внутри недели не перекручивает сетку", () => {
+    assert.match(
+      screen(),
+      /if \(dateMoves && !\(mode === "week" && weekYmds\.includes\(date\)\)\) \{\s*setDay\(startOfDay\(parseYMD\(date\)\)\);/,
+    );
+  });
+
   test("тост, показанный во время угасания прошлого, не стирается", () => {
     const toastSrc = readFileSync(resolve(here, "../../components/ui/Toast.tsx"), "utf8");
     assert.match(toastSrc, /\.start\(\(\{ finished \}\) => \{\s*if \(finished\) setToast\(null\);/);

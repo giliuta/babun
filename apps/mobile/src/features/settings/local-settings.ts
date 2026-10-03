@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 import type { Database, Json } from "@babun/shared/db/database.types";
 import {
+  hasStoredCalendarSettings,
   loadCalendarSettings,
   loadOperationalCalendarSettings,
   saveCalendarSettings,
@@ -104,6 +105,14 @@ function safeLoadCalendarSettings(): CalendarSettings {
   }
 }
 
+function safeHasStoredCalendarSettings(): boolean {
+  try {
+    return hasStoredCalendarSettings();
+  } catch {
+    return false;
+  }
+}
+
 function safeSaveCalendarSettings(settings: CalendarSettings): void {
   try {
     saveCalendarSettings(settings);
@@ -156,17 +165,18 @@ export function useCalendarSettings() {
         // компании, а прогрев чужой читает те же настройки через
         // `fetchCalendarSettings` и кэш устройства не трогает — иначе настройки
         // компании B легли бы под общий ключ и всплыли у A.
-        if (role === "master") {
-          safeSaveOperationalCalendarSettings(activeTenantId, { ...settings });
-        } else {
-          safeSaveCalendarSettings(settings);
-        }
+        // Копия по компании — у всех ролей: полная копия владельца лежит под
+        // общим ключом, и переход в другую компанию её стирает. Без неё
+        // компания, открытая без сети после перехода, рисовалась с заводскими
+        // настройками — окно 00–24, отменённые видны (повторный аудит 03.10).
+        safeSaveOperationalCalendarSettings(activeTenantId, { ...settings });
+        if (role !== "master") safeSaveCalendarSettings(settings);
         return settings;
       } catch (error) {
         if (!calendarReadMayUseCache(error)) throw error;
-        return role === "master"
-          ? safeLoadOperationalCalendarSettings(activeTenantId)
-          : safeLoadCalendarSettings();
+        return role !== "master" && safeHasStoredCalendarSettings()
+          ? safeLoadCalendarSettings()
+          : safeLoadOperationalCalendarSettings(activeTenantId);
       }
     },
   });

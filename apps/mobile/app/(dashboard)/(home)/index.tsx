@@ -547,8 +547,13 @@ export default function CalendarTab() {
       ...(teamMoves ? { team_id: teamId } : {}),
     };
     // Запись ушла за видимую неделю («вправо сильно — перелистнёт») —
-    // календарь едет за ней, чтобы она осталась перед глазами.
-    if (dateMoves) setDay(startOfDay(parseYMD(date)));
+    // календарь едет за ней, чтобы она осталась перед глазами. ТОЛЬКО ЗА
+    // неделю (повторный аудит 03.10): внутри недели смена выбранного дня
+    // перекручивала сетку к часу открытия того дня — запись уходила с экрана
+    // посреди правки.
+    if (dateMoves && !(mode === "week" && weekYmds.includes(date))) {
+      setDay(startOfDay(parseYMD(date)));
+    }
     if (editingApt?.id === apt.id) setEditingApt(moved);
     updateAppt.mutate(
       { id: apt.id, patch },
