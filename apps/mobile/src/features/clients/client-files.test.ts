@@ -157,3 +157,19 @@ describe("«Файлы» — как «История»: последний на 
     assert.match(row(), /image=\{image\}/);
   });
 });
+
+describe("«Файлы» записи — перечнем плашками, как у клиента (03.10)", () => {
+  const record = () => read("../appointments/AppointmentFilesBlock.tsx");
+  test("та же лента и та же плашка; квадратов и пилюль нет", () => {
+    assert.match(record(), /clientFileTimeline\(\{/);
+    assert.match(record(), /<ClientFileRow[\s\S]{0,80}inRecord/);
+    assert.doesNotMatch(record(), /<PhotoTile|<DocumentPill|<PendingTile/);
+  });
+  test("своё — свайп «Удалить» с вопросом; дверь — «Добавить файл»", () => {
+    assert.match(record(), /confirmThen\(\s*"Удалить файл\?"/);
+    assert.match(record(), /<ChooseRow[\s\S]{0,80}label="Добавить файл"/);
+  });
+  test("у видео в плашке значок, а не пустой снимок", () => {
+    assert.match(read("ClientFileRow.tsx"), /image = video \? undefined : entry\.item\.url \|\| undefined;/);
+  });
+});
