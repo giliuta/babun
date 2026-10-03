@@ -1,5 +1,5 @@
 import { Text, View } from "react-native";
-import { ArrowLeftRight, Banknote, FileSpreadsheet } from "lucide-react-native";
+import { ArrowLeftRight, Banknote, FileSpreadsheet, Wallet } from "lucide-react-native";
 import { money, moneySign } from "@babun/shared/common/utils/money";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectRow } from "@/components/ui/select-rows";
@@ -10,10 +10,12 @@ import type { AccountWithBalance } from "../accounts";
 import { useAccountVatDue } from "../vat-queries";
 import type { StageAccount } from "./types";
 
+const noop = () => {};
+
 // ШТОРКА СЧЁТА — КАЖДОЕ ДЕЛО СВОИМ БЛОКОМ (владелец 03.10, третий заход:
 // «блок „На счёте", справа общая сумма, и эти две плитки; „Перевести" — в
 // другой блок; и вообще раздельно можно все эти блоки»):
-//   • «На счёте» — подпись слева, общая сумма справа и под ней «(в т.ч.
+//   • «На счёте» — плашка со значком, общая сумма справа и под ней «(в т.ч.
 //     VAT …)»: сумма одна, VAT лежит внутри неё;
 //   • «Перевести», «В оплате записи», «Выписка» — каждый своим блоком.
 // Строки «Команда» нет: шторку открывают со страницы счетов этой команды
@@ -53,61 +55,50 @@ export function AccountMoneyGroup({
   return (
     <>
       {/* «НА СЧЁТЕ» — ОДНА ОБЩАЯ СУММА, VAT — В СКОБКАХ ВНУТРИ НЕЁ (владелец
-          03.10, четвёртый заход: «на счёте 320, и в эти 320 входит VAT —
-          просто в скобках, не отдельно VAT и отдельно сумма без VAT, а
-          полноценно общая сумма, но в ней лежит VAT»). Нет налога — нет и
-          скобок. Шапка собрана внутри блока, а не пропом общего
-          `SectionCard`: примитив общий для всех сессий. */}
+          03.10: «на счёте 320, и в эти 320 входит VAT — просто в скобках, не
+          отдельно VAT и отдельно сумма без VAT»). Плашка — та же, что у
+          соседних блоков («вернуть в хороший дизайн, чтоб соответствовало»):
+          значок, слово, сумма справа и под ней «(в т.ч. VAT …)». Нет налога —
+          нет и скобок. На счёте — факт, а не поле: остаток меняют операции. */}
       <SectionCard dense>
-        <View
-          accessible
-          accessibilityLabel={
-            moneySign(vatDue) !== 0
-              ? `На счёте ${money(account.balance)}, в том числе VAT ${money(vatDue)}`
-              : `На счёте ${money(account.balance)}`
-          }
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            paddingHorizontal: 16,
-            paddingVertical: 12,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 11,
-              fontWeight: "700",
-              letterSpacing: 0.6,
-              textTransform: "uppercase",
-              color: t.faint,
-            }}
-          >
-            На счёте
-          </Text>
-          <View style={{ alignItems: "flex-end" }}>
-            <Text
-              maxFontSizeMultiplier={1.3}
-              numberOfLines={1}
-              style={{
-                fontSize: 22,
-                fontWeight: "800",
-                color: moneySign(account.balance) < 0 ? t.danger : t.ink,
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {money(account.balance)}
-            </Text>
-            {moneySign(vatDue) !== 0 ? (
-              <Text
-                maxFontSizeMultiplier={1.3}
-                numberOfLines={1}
-                style={{ marginTop: 1, fontSize: 13, color: t.sub, fontVariant: ["tabular-nums"] }}
-              >
-                {`(в т.ч. VAT ${money(vatDue)})`}
-              </Text>
-            ) : null}
-          </View>
+        <View style={blockBody}>
+          <SelectRow
+            icon={Wallet}
+            color={SETTINGS_TILE.green}
+            plain
+            title="На счёте"
+            onPress={noop}
+            accessibilityLabel={
+              moneySign(vatDue) !== 0
+                ? `На счёте ${money(account.balance)}, в том числе VAT ${money(vatDue)}`
+                : `На счёте ${money(account.balance)}`
+            }
+            trailing={
+              <View style={{ alignItems: "flex-end" }}>
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  numberOfLines={1}
+                  style={{
+                    fontSize: 15,
+                    fontWeight: "700",
+                    color: moneySign(account.balance) < 0 ? t.danger : t.ink,
+                    fontVariant: ["tabular-nums"],
+                  }}
+                >
+                  {money(account.balance)}
+                </Text>
+                {moneySign(vatDue) !== 0 ? (
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    numberOfLines={1}
+                    style={{ fontSize: 13, color: t.sub, fontVariant: ["tabular-nums"] }}
+                  >
+                    {`(в т.ч. VAT ${money(vatDue)})`}
+                  </Text>
+                ) : null}
+              </View>
+            }
+          />
         </View>
       </SectionCard>
 
