@@ -17,6 +17,7 @@ import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
 
 import { groupByMonth, paymentSub, paymentValue, type TariffPayment } from "./tariff-payments";
+import { useAccountGate, useAccountName, useAccountScope } from "./account-scope";
 import { useTariffPayments } from "./use-tariff-payments";
 
 // «ОПЛАТЫ ТАРИФА» (Кабинет, владелец 03.10: «оплаты тарифа — да, надо»).
@@ -29,7 +30,9 @@ import { useTariffPayments } from "./use-tariff-payments";
 // стоит и при пустой истории: подписка могла оформиться раньше, чем вебхук
 // начал записывать события, и тогда управлять ей всё равно нужно.
 //
-// Видит только владелец аккаунта (политика таблицы): остальным — слова.
+// Видит владелец аккаунта и партнёр с правом «Оплаты тарифа» (04.10, из
+// блока аккаунта, который пригласил: шапка называет аккаунт); остальным —
+// слова. Управлять подпиской — только владелец.
 
 // Вшитый отступ разделителя нейтральной строки: поле 16 + глиф 20 + зазор 12.
 const NEUTRAL_ROW_INSET = 48;
@@ -46,6 +49,10 @@ async function openReceipt(url: string): Promise<void> {
 export function TariffPaymentsScreen() {
   const t = useThemeColors();
   const role = useDataRole();
+  const scope = useAccountScope();
+  const owner = scope.role === "owner";
+  const gate = useAccountGate("cabinet.tariff_payments");
+  const accountName = useAccountName();
   const payments = useTariffPayments();
   const pull = usePullRefresh(payments.refetch);
   const opening = useRef(false);
@@ -106,7 +113,9 @@ export function TariffPaymentsScreen() {
         />
       );
     }
-    if (role.data !== "owner") return <EmptyState fill title="Оплаты видит владелец аккаунта" />;
+    if (!owner && gate !== "read" && gate !== "write") {
+      return gate === "loading" ? <EmptyState state="loading" fill /> : <EmptyState fill title="Оплаты видит владелец аккаунта" />;
+    }
     if (payments.isPending) return <EmptyState state="loading" fill />;
     if (payments.isError) {
       const words = loadErrorWords(payments.error, {
@@ -130,7 +139,7 @@ export function TariffPaymentsScreen() {
           <RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColor={t.accent} />
         }
       >
-        {!hasSubscription && months.length === 0 ? null : (
+        {!owner || (!hasSubscription && months.length === 0) ? null : (
           <SectionCard>
             <SettingsRow
               tile={SETTINGS_TILE.blue}
@@ -161,7 +170,7 @@ export function TariffPaymentsScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Оплаты тарифа" />
+      <ScreenHeader title="Оплаты тарифа" subtitle={!owner || scope.foreign ? (accountName ?? undefined) : undefined} />
       {renderBody()}
     </Screen>
   );

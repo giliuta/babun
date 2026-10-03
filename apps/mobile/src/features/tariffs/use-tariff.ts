@@ -4,7 +4,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
 import { useToast } from "@/components/ui/Toast";
 import { supabase } from "@/lib/supabase";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { useAccountProfile } from "@/features/cabinet/account-scope";
+import { useCurrentRole } from "@/features/settings/tenant";
+import { TENANT_HEADER } from "@/lib/tenant-header";
 import { tierOf, trialLeft, trialUsed, type TariffState, type Tier } from "./tiers";
 
 // ТАРИФ АККАУНТА — ЖИВОЙ СЛОЙ НАД ЧИСТЫМ `tiers.ts`.
@@ -31,7 +33,9 @@ interface TariffProfile {
 }
 
 export function useTariff() {
-  const tenant = useTenant();
+  // Тариф АККАУНТА СТРАНИЦЫ (04.10): в блоке пригласившего аккаунта в
+  // Кабинете — его тариф, а не того, что открыт на телефоне.
+  const tenant = useAccountProfile();
   const profile = (tenant.data ?? null) as TariffProfile | null;
   const state: TariffState = {
     tier: tierOf(profile),
@@ -107,6 +111,7 @@ const CHECKOUT_REFUSALS: Record<string, string> = {
   no_subscription: "Подписки ещё нет — сначала оплатите тариф",
   portal_not_configured: "Управление подпиской ещё не включено — напишите нам",
   owner_only: "Тариф меняет владелец аккаунта",
+  owner_only_change: "Сменить тариф в действующей подписке может только владелец аккаунта",
 };
 
 /** Отказ функции: код лежит в теле ответа (`{ error }`), а сообщение самого
@@ -143,10 +148,14 @@ async function openPage(url: string, web: boolean): Promise<void> {
  *  `changed` (тариф придёт вебхуком через несколько секунд). */
 export async function openTariffCheckout(
   tier: Exclude<Tier, "free">,
+  /** Аккаунт, ЗА КОТОРЫЙ платят (блок аккаунта в Кабинете), — явно, а не
+   *  тот, что открыт на телефоне (04.10). */
+  tenantId?: string | null,
 ): Promise<"opened" | "changed" | "same"> {
   const { web, back } = returnUrl();
   const { data, error } = await supabase.functions.invoke("tariff-checkout", {
     body: { action: "checkout", tier, period: "month", return_url: back },
+    ...(tenantId ? { headers: { [TENANT_HEADER]: tenantId } } : null),
   });
   if (error) throw await checkoutRefusal(error);
   const reply = (data ?? {}) as { url?: string; changed?: boolean };

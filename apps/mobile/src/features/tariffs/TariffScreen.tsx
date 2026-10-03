@@ -12,12 +12,15 @@ import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { useToast } from "@/components/ui/Toast";
 import { GUTTER, TYPE } from "@/components/ui/tokens";
+import { useAccountGate, useAccountName, useAccountScope } from "@/features/cabinet/account-scope";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useTeams } from "@/features/reference/queries";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
   TIER_CARDS,
   TIER_LIMITS,
+  partnerTariffAction,
   tariffAction,
   tariffStatus,
   tierName,
@@ -39,12 +42,22 @@ import { openTariffCheckout, openTariffPortal, useStartTrial, useTariff } from "
 //
 // Тариф после оплаты приходит вебхуком Stripe: вернулся из браузера —
 // профиль перечитывается.
+//
+// ТАРИФ АККАУНТА, КОТОРЫЙ ПРИГЛАСИЛ (04.10): из блока аккаунта в Кабинете
+// страница открыта партнёру с правом «Тариф» — шапка называет аккаунт.
+// «Видит» — только что действует; «Оплачивает» — кнопка «Оплатить … за
+// <аккаунт>», пока подписки нет. Пробный, смена тарифа, рабочие команды и
+// управление подпиской — у владельца.
 
 export function TariffScreen() {
   const router = useRouter();
   const toast = useToast();
   const qc = useQueryClient();
   const { state, periodEnd, workingChosen } = useTariff();
+  const scope = useAccountScope();
+  const owner = scope.role === "owner";
+  const gate = useAccountGate("cabinet.tariff");
+  const accountName = useAccountName();
   const { data: teams = [] } = useTeams();
   const startTrial = useStartTrial();
   const [paying, setPaying] = useState(false);
@@ -65,9 +78,16 @@ export function TariffScreen() {
 
   const live = teams.filter((team) => team.is_active !== false);
   const limit = state.tier ? TIER_LIMITS[state.tier].teams : live.length;
-  const overLimit = live.length > limit;
+  // Рабочие команды выбирает владелец — и только своего, открытого аккаунта.
+  const overLimit = owner && !scope.foreign && live.length > limit;
   const working = workingTeamIds(live, state.tier, workingChosen);
-  const action = tariffAction(state, selected);
+  const action = owner
+    ? tariffAction(state, selected)
+    : gate === "write"
+      ? partnerTariffAction(state, selected, accountName)
+      : null;
+  // Выбирать тариф есть смысл тому, кто может за него заплатить.
+  const canPick = !state.forever && (owner || gate === "write");
 
   const run = async () => {
     if (!action) return;
@@ -82,7 +102,7 @@ export function TariffScreen() {
     }
     setPaying(true);
     try {
-      const result = await openTariffCheckout(selected);
+      const result = await openTariffCheckout(selected, scope.foreign ? scope.tenantId : null);
       if (result === "changed") {
         toast(`Тариф меняется на «${tierName(selected)}»`, "success");
         // Тариф пишет вебхук Stripe — через пару секунд.
@@ -107,9 +127,24 @@ export function TariffScreen() {
     }
   };
 
+  // Без права «Тариф» страница пуста — сюда ведёт только старая ссылка.
+  if (!owner && gate !== "read" && gate !== "write") {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Тариф" subtitle={accountName ?? undefined} />
+        <EmptyState
+          fill
+          state={gate === "loading" ? "loading" : undefined}
+          title={gate === "loading" ? undefined : "Тариф скрыт"}
+        />
+      </Screen>
+    );
+  }
+
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Тариф" />
+      {/* Чужой аккаунт — его имя в шапке: платят за него, а не за свой. */}
+      <ScreenHeader title="Тариф" subtitle={!owner || scope.foreign ? (accountName ?? undefined) : undefined} />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         <SectionCard>
           <SettingsRow
@@ -130,7 +165,7 @@ export function TariffScreen() {
               />
             </>
           ) : null}
-          {state.paid && !state.forever ? (
+          {owner && state.paid && !state.forever ? (
             <>
               <Divider inset={48} />
               <SettingsRow
@@ -157,7 +192,7 @@ export function TariffScreen() {
                 : null
             }
             // Выдан навсегда — выбирать нечего: ни пробного, ни оплаты.
-            onPress={state.forever ? undefined : () => setPicked(card.tier)}
+            onPress={canPick ? () => setPicked(card.tier) : undefined}
           />
         ))}
       </ScrollView>

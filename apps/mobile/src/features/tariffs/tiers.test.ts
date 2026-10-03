@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   canAddPartner,
   canAddTeam,
+  partnerTariffAction,
   tierAllows,
   tierLine,
   tierOf,
@@ -140,5 +141,27 @@ describe("действие страницы «Тариф»", () => {
     const paid = { ...fresh, tier: "pro" as const, paid: true, trialUsed: true };
     assert.equal(tariffStatus({ ...paid, pastDue: true }, "2026-11-03T00:00:00Z"), "Оплата не прошла — обновите карту");
     assert.match(tariffStatus(paid, "2026-11-03T00:00:00Z"), /^Оплачен до 03\.11$/);
+  });
+});
+
+// ПАРТНЁР С «ТАРИФ: ОПЛАЧИВАЕТ» (владелец 04.10): платит за аккаунт, который
+// пригласил, — кнопкой с его именем, — и только пока подписки нет.
+describe("оплата тарифа партнёром", () => {
+  const fresh: TariffState = { tier: "free", paid: false, forever: false, trial: null, trialUsed: false };
+
+  test("подписки нет — «Оплатить … за <аккаунт>», без пробного", () => {
+    assert.deepEqual(partnerTariffAction(fresh, "pro", "Giliuta"), {
+      kind: "pay",
+      label: "Оплатить €29.99 в месяц за Giliuta",
+    });
+    const trial = { ...fresh, tier: "pro" as const, trial: { tier: "pro" as const, days: 3 }, trialUsed: true };
+    assert.equal(partnerTariffAction(trial, "solo", "Giliuta")?.label, "Оплатить €6.99 в месяц за Giliuta");
+    assert.equal(partnerTariffAction(fresh, "max", null)?.label, "Оплатить €59.99 в месяц");
+  });
+
+  test("подписка есть или тариф навсегда — кнопки нет: смена тарифа — у владельца", () => {
+    const paid = { ...fresh, tier: "pro" as const, paid: true, trialUsed: true };
+    assert.equal(partnerTariffAction(paid, "max", "Giliuta"), null);
+    assert.equal(partnerTariffAction({ ...fresh, tier: "max", forever: true }, "solo", "Giliuta"), null);
   });
 });

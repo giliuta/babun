@@ -21,6 +21,7 @@ import {
   HandCoins,
   House,
   Landmark,
+  LayoutGrid,
   Megaphone,
   MessageCircle,
   MessageSquare,
@@ -47,6 +48,8 @@ import {
   FileText,
   NotebookPen,
   PiggyBank,
+  BadgeCheck,
+  Receipt,
   type LucideIcon,
 } from "lucide-react-native";
 
@@ -145,6 +148,10 @@ const LOOK: Record<string, RightLook> = {
   "clients.settings_tags": { icon: Tags, tile: SETTINGS_TILE.purple },
   "clients.settings_sources": { icon: Megaphone, tile: SETTINGS_TILE.orange },
   "company.sms_templates": { icon: MessageSquare, tile: SETTINGS_TILE.green },
+  // Кабинет (04.10) — значками строк Кабинета.
+  "cabinet.tariff": { icon: BadgeCheck, tile: SETTINGS_TILE.blue },
+  "cabinet.tariff_payments": { icon: Receipt, tile: SETTINGS_TILE.blue },
+  "cabinet.sms": { icon: MessageSquare, tile: SETTINGS_TILE.green },
 };
 
 /** Право, которого ещё нет в словаре (реестр живёт на сервере и может
@@ -163,7 +170,8 @@ const SECTION_LOOK: Record<string, RightLook> = {
   record: { icon: ClipboardList, tile: SETTINGS_TILE.teal },
   finance: { icon: Wallet, tile: SETTINGS_TILE.green },
   clients: { icon: Users, tile: SETTINGS_TILE.indigo },
-  company: { icon: Building2, tile: SETTINGS_TILE.orange },
+  // «Кабинет» (04.10) — значком вкладки «Кабинет».
+  company: { icon: LayoutGrid, tile: SETTINGS_TILE.orange },
 };
 
 export function sectionLook(key: string): RightLook {

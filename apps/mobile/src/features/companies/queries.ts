@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Database } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { useAccountScope } from "@/features/cabinet/account-scope";
 
 // ЮРЛИЦА КОМПАНИИ — СПРАВОЧНИК, КАК УСЛУГИ.
 //
@@ -34,12 +35,14 @@ export type CompanyDraft = Omit<
 export const companiesQueryKey = (tenantId: string | null) => ["companies", tenantId];
 
 export function useCompanies() {
-  const tenantId = useTenantId();
+  // Наборы АККАУНТА СТРАНИЦЫ (04.10): в блоке пригласившего аккаунта в
+  // Кабинете — его реквизиты; вне Кабинета — открытого на телефоне, как было.
+  const { tenantId, client } = useAccountScope();
   return useQuery({
     queryKey: companiesQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: async (): Promise<Company[]> => {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from("legal_entities")
         .select("*")
         .eq("tenant_id", tenantId as string)

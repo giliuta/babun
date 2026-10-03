@@ -9,12 +9,15 @@
 // Состав — то, что принадлежит человеку и этому телефону, и у каждой строки
 // подпись с живым состоянием, а не пояснение:
 //   • карта человека → «Профиль»;
-//   • МОИ КОМПАНИИ — приглашения и компании, где он состоит (роль, календари);
+//   • ПРИГЛАШЕНИЯ и под ними — БЛОК КАЖДОГО АККАУНТА, КОТОРЫЙ ПРИГЛАСИЛ
+//     (владелец 04.10): шапка — его имя, строки — его команды и то, что он
+//     открыл правами «Кабинета» (тариф, оплаты, SMS, реквизиты); страницы
+//     открываются и платят за этот аккаунт (`InvitedAccounts`);
 //   • КОМАНДЫ (не «Компания»: у владельца нет компаний, есть аккаунт и его
 //     команды — 01.10; «Аккаунт» — уже имя секции входа ниже) — «Тариф», «Оплаты тарифа», «Партнёры», «История изменений»,
 //     «Реквизиты» (03.10, из шестерёнки «Финансов»: «единый блок на все
 //     компании»), «SMS», «Выгрузка данных» и «Архив» (только владельцу;
-//     «Реквизиты» видит и партнёр с их правом). История — кто что
+//     партнёр видит реквизиты в блоке пригласившего аккаунта). История — кто что
 //     менял во всех календарях; выгрузка — только своих команд. SMS — баланс,
 //     пополнение и отправка всей компании (владелец 2026-09-29: «баланс и
 //     пополнение — это всё будет Кабинет SMS»); шаблоны команд — за
@@ -45,6 +48,7 @@ import { AboutRow } from "@/features/cabinet/AboutRow";
 import { ArchiveRow } from "@/features/cabinet/ArchiveRow";
 import { CabinetRequisitesRow } from "@/features/cabinet/CabinetRequisitesRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
+import { InvitedAccounts } from "@/features/cabinet/InvitedAccounts";
 import { HistoryRow } from "@/features/cabinet/HistoryRow";
 import { DataExportRow } from "@/features/cabinet/DataExportRow";
 import { HelpRow } from "@/features/cabinet/HelpRow";
@@ -55,7 +59,6 @@ import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
 import { TariffRow } from "@/features/tariffs/TariffRow";
 import { useCurrentRole } from "@/features/settings/tenant";
-import { useFinanceSettingLevel } from "@/features/finances/use-finance-settings";
 import { confirmAndSignOut } from "@/lib/auth-clear";
 import { useThemeColors } from "@/theme/colors";
 
@@ -66,9 +69,6 @@ export default function CabinetHome() {
   const syncDepth = useQueueDepth();
   // Очередь выгрузки видят те, кто правит данные офлайн, — как и прежде.
   const showSync = role === "owner" || role === "dispatcher";
-  // Партнёр с «Реквизиты: Только видит» открывает их тоже отсюда.
-  const requisitesLevel = useFinanceSettingLevel("requisites", null);
-  const partnerRequisites = role !== "owner" && requisitesLevel !== "hidden";
 
   return (
     <Screen>
@@ -80,6 +80,10 @@ export default function CabinetHome() {
         <PersonCard onPress={() => router.push("/cabinet/profile" as Href)} />
 
         <CompaniesSection />
+
+        {/* АККАУНТЫ, КОТОРЫЕ ПРИГЛАСИЛИ (04.10): по блоку на каждый — его
+            команды и то, что он открыл правами «Кабинета». */}
+        <InvitedAccounts />
 
         {/* АРХИВ — ТОЛЬКО ВЛАДЕЛЬЦУ: в архив календарь уводит он, и только
             он может вернуть его или стереть. Экран `/cabinet/archive` закрыт
@@ -124,13 +128,6 @@ export default function CabinetHome() {
               <DataExportRow />
               <Divider inset={48} />
               <ArchiveRow />
-            </SectionCard>
-          </>
-        ) : partnerRequisites ? (
-          <>
-            <SectionEyebrow>Команды</SectionEyebrow>
-            <SectionCard>
-              <CabinetRequisitesRow />
             </SectionCard>
           </>
         ) : null}

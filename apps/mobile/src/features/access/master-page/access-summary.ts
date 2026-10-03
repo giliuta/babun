@@ -139,13 +139,28 @@ export const FINANCE_SETTINGS_BLOCKS: readonly SectionBlock[] = [
       "finance.settings_categories_debts",
     ],
   },
-  {
-    key: "documents",
-    title: "Документы",
-    keys: ["finance.settings_requisites"],
-  },
+  // «Реквизиты» ушли из шестерёнки в Кабинет (03.10) — их право теперь в
+  // разделе «Кабинет» (`CABINET_ROW_ORDER`).
   { key: "general", title: "Общие", keys: ["finance.settings_currency"] },
 ];
+
+/** РАЗДЕЛ «КАБИНЕТ» (владелец 04.10: «можем дать доступ к кабинету —
+ *  реквизиты, тариф, SMS, оплата»): права аккаунта в порядке строк Кабинета.
+ *  Право, которого нет в списке, встаёт после них. */
+export const CABINET_ROW_ORDER: readonly string[] = [
+  "cabinet.tariff",
+  "cabinet.tariff_payments",
+  "cabinet.sms",
+  "finance.settings_requisites",
+];
+
+export function orderCabinetRows<T extends { block: { key: string } }>(rows: readonly T[]): T[] {
+  const rank = (key: string) => {
+    const at = CABINET_ROW_ORDER.indexOf(key);
+    return at === -1 ? CABINET_ROW_ORDER.length : at;
+  };
+  return [...rows].sort((a, b) => rank(a.block.key) - rank(b.block.key));
+}
 
 /** Все строки шестерёнки «Финансов» по порядку её блоков. */
 export const FINANCE_SETTINGS_ROW_ORDER: readonly string[] = FINANCE_SETTINGS_BLOCKS.flatMap(

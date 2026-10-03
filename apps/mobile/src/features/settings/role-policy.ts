@@ -111,8 +111,14 @@ const INSIGHTS_ROUTE = "/cabinet/insights";
 // (`FinanceSettingsRoute`), а данные — политика `legal_entities`.
 const REQUISITES_ROUTE = "/cabinet/requisites";
 
+/** Страницы Кабинета за аккаунт (`?tenant=`, блок аккаунта, 04.10). */
+const ACCOUNT_CABINET_ROUTES = ["/cabinet/tariff", "/cabinet/payments", "/cabinet/sms"] as const;
+
 const DISPATCHER_CABINET_ROUTES = new Set([
   "/cabinet",
+  // Тариф, оплаты и SMS аккаунта, который пригласил (04.10): страница
+  // сама решает по праву «Тариф» / «Оплаты тарифа» / «SMS».
+  ...ACCOUNT_CABINET_ROUTES,
   INSIGHTS_ROUTE,
   "/cabinet/account",
   "/cabinet/business",
@@ -125,6 +131,9 @@ const DISPATCHER_CABINET_ROUTES = new Set([
 
 const MASTER_CABINET_ROUTES = new Set([
   "/cabinet",
+  // Тариф, оплаты и SMS аккаунта, который пригласил (04.10): страница
+  // сама решает по праву «Тариф» / «Оплаты тарифа» / «SMS».
+  ...ACCOUNT_CABINET_ROUTES,
   INSIGHTS_ROUTE,
   "/cabinet/account",
   "/cabinet/business",

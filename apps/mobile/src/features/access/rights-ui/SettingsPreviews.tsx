@@ -1,7 +1,6 @@
 import {
   Banknote,
   Briefcase,
-  Building2,
   HandCoins,
   NotebookPen,
   ReceiptText,
@@ -219,16 +218,6 @@ export function SettingsPreview({
       case "finance.settings_currency":
         return (
           <SettingsRow tile={SETTINGS_TILE.green} icon={Banknote} title="Валюта" sub="EUR · €" onPress={onPress} />
-        );
-      case "finance.settings_requisites":
-        return (
-          <SettingsRow
-            tile={SETTINGS_TILE.green}
-            icon={Building2}
-            title="Реквизиты"
-            sub="1 набор · следующий INV-0013"
-            onPress={onPress}
-          />
         );
       default:
         return null;

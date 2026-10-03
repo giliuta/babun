@@ -236,6 +236,22 @@ export function tariffAction(
   return { kind: "pay", label: card ? `Оплатить ${card.monthly} в месяц` : "Оплатить" };
 }
 
+/** ДЕЙСТВИЕ ПАРТНЁРА С «ТАРИФ: ОПЛАЧИВАЕТ» (владелец 04.10: «чтоб кто-то
+ *  тоже мог оплачивать, но зафиксировано за нашей командой»). Партнёр только
+ *  оформляет и оплачивает тариф аккаунта, пока подписки нет: пробный,
+ *  смену тарифа в живой подписке и выданный навсегда решает владелец. Имя
+ *  аккаунта — в самой кнопке, чтобы не спутать со своим. */
+export function partnerTariffAction(
+  state: TariffState,
+  selected: Exclude<Tier, "free">,
+  accountName: string | null,
+): { kind: "pay"; label: string } | null {
+  if (state.forever || state.paid) return null;
+  const card = TIER_CARDS.find((item) => item.tier === selected);
+  const pay = card ? `Оплатить ${card.monthly} в месяц` : "Оплатить";
+  return { kind: "pay", label: accountName ? `${pay} за ${accountName}` : pay };
+}
+
 /** Подпись текущего тарифа на странице: живое состояние, не пояснение. */
 export function tariffStatus(state: TariffState, periodEnd?: string | null): string {
   if (state.forever) return "Навсегда";

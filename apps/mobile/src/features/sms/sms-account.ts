@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/features/settings/tenant";
+import { useAccountScope } from "@/features/cabinet/account-scope";
+import { TENANT_HEADER } from "@/lib/tenant-header";
 import {
   applyPatch,
   checkoutErrorText,
@@ -43,13 +45,14 @@ export const smsLogKey = (tenantId: string | null) => ["sms-log", tenantId];
 export const smsTemplatesKey = (tenantId: string | null) => ["sms-team-templates", tenantId];
 
 export function useSmsAccount() {
-  const tenantId = useTenantId();
-  const role = useDataRole();
+  // Баланс АККАУНТА СТРАНИЦЫ (04.10): в блоке пригласившего аккаунта —
+  // его, а не того, что открыт на телефоне.
+  const { tenantId, client, role } = useAccountScope();
   return useQuery({
     queryKey: smsAccountKey(tenantId),
-    enabled: !!tenantId && role.isSuccess && role.data != null,
+    enabled: !!tenantId && role != null,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("sms_account");
+      const { data, error } = await client.rpc("sms_account");
       if (error) throw new Error(error.message);
       return parseSmsAccount(data);
     },
@@ -283,15 +286,16 @@ export function useReorderTeamTemplates(teamId: string | null) {
 
 /** История: вся или одной команды / одного события. */
 export function useSmsHistory(limit = 50, filter?: { teamId?: string | null; trigger?: string | null }) {
-  const tenantId = useTenantId();
-  const role = useDataRole();
+  // История сообщений — только владельцу ЭТОГО аккаунта: партнёр с правом
+  // «SMS» видит баланс, но не переписку с клиентами (04.10).
+  const { tenantId, client, role } = useAccountScope();
   const teamId = filter?.teamId ?? null;
   const trigger = filter?.trigger ?? null;
   return useQuery({
     queryKey: [...smsHistoryKey(tenantId), limit, teamId, trigger],
-    enabled: !!tenantId && role.data === "owner",
+    enabled: !!tenantId && role === "owner",
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("sms_history", {
+      const { data, error } = await client.rpc("sms_history", {
         p_limit: limit,
         p_team_id: teamId ?? undefined,
         p_trigger: trigger ?? undefined,
@@ -503,10 +507,13 @@ export const SMS_PAY_DONE_URL = "https://babun.app/pay/done";
 export async function openSmsCheckout(
   amountCents: number,
   autotopup?: { thresholdCents: number },
+  /** Аккаунт, ЧЕЙ баланс пополняют (блок аккаунта в Кабинете), — явно, а не
+   *  тот, что открыт на телефоне (04.10). */
+  tenantId?: string | null,
 ): Promise<void> {
   const web = Platform.OS === "web" && typeof window !== "undefined";
   const back = web ? `${window.location.origin}/cabinet/sms` : SMS_PAY_DONE_URL;
-  const url = await startSmsTopup(amountCents, back, autotopup);
+  const url = await startSmsTopup(amountCents, back, autotopup, tenantId);
   if (web) window.location.assign(url);
   else await Linking.openURL(url);
 }
@@ -518,6 +525,7 @@ export async function startSmsTopup(
   amountCents: number,
   returnUrl: string,
   autotopup?: { thresholdCents: number },
+  tenantId?: string | null,
 ): Promise<string> {
   const { data, error } = await supabase.functions.invoke("sms-checkout", {
     body: {
@@ -525,6 +533,7 @@ export async function startSmsTopup(
       return_url: returnUrl,
       ...(autotopup ? { autotopup: { threshold_cents: autotopup.thresholdCents } } : null),
     },
+    ...(tenantId ? { headers: { [TENANT_HEADER]: tenantId } } : null),
   });
   if (error) throw new Error(await checkoutFailure(error));
   const url = (data as { url?: string } | null)?.url;

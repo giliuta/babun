@@ -14,7 +14,7 @@ import { useToast } from "@/components/ui/Toast";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useCurrentRole } from "@/features/settings/tenant";
-import { useTenantId } from "@/lib/tenant";
+import { useAccountScope } from "@/features/cabinet/account-scope";
 import { useThemeColors } from "@/theme/colors";
 import { CompanySheet } from "./CompanySheet";
 import { companyDetail, companyFilled, defaultHeir } from "./company-rules";
@@ -86,12 +86,16 @@ export function RequisitesScreen() {
   const makeDefault = useMakeDefaultCompany();
   const archive = useArchiveCompany();
   const del = useDeleteCompany();
-  const tenantId = useTenantId();
+  // Аккаунт страницы (04.10): из блока пригласившего аккаунта в Кабинете —
+  // его наборы и его роль, правка — только владельцу этого аккаунта.
+  const scope = useAccountScope();
+  const tenantId = scope.tenantId;
   const reorder = useReorderCompanies();
   const [editing, setEditing] = useState<Company | null>(null);
   const [open, setOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const role = useCurrentRole().data;
+  const mirrorRole = useCurrentRole().data;
+  const role = scope.foreign ? scope.role : mirrorRole;
   // Пока роль грузится, владелец не должен видеть мигание «только чтение».
   const readOnly = role !== undefined && role !== "owner";
 
@@ -304,8 +308,10 @@ export function RequisitesScreen() {
                       </View>
                       {/* НОМЕР СЛЕДУЮЩЕГО ИНВОЙСА НАБОРА — справа, как цена в
                           прайсе услуг: нумерация живёт за реквизитами. У
-                          скрытого набора номера нет — им не выставляют. */}
-                      {company.archived_at ? null : <NextNumber companyId={company.id} />}
+                          скрытого набора номера нет — им не выставляют. Номер
+                          серии читается в аккаунте, открытом на телефоне, —
+                          у чужого аккаунта (04.10) он был бы не его. */}
+                      {company.archived_at || scope.foreign ? null : <NextNumber companyId={company.id} />}
                     </Pressable>
                     {readOnly ? null : handle}
                   </View>

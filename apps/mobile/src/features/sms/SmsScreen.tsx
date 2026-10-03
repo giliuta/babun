@@ -13,7 +13,8 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
-import { usePlanAllows } from "@/features/settings/tenant";
+import { useAccountGate, useAccountName, useAccountProfile, useAccountScope } from "@/features/cabinet/account-scope";
+import { tierAllows, tierOf } from "@/features/tariffs/tiers";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { notify } from "@/lib/notify";
 import { openSmsCheckout, useSmsAccount, useSmsHistory, type SmsHistoryItem } from "./sms-account";
@@ -42,12 +43,23 @@ import { tDynamic } from "@babun/shared/i18n/runtime";
 // на пополнение через отдельную страницу… просто и легко для клиента»).
 // Внизу «Пополнить баланс» → сумма → страница Stripe; в приложении она
 // открывается в браузере, а по возвращении экран сам перечитывает баланс.
+//
+// БАЛАНС АККАУНТА, КОТОРЫЙ ПРИГЛАСИЛ (04.10): из блока аккаунта в Кабинете
+// страница открыта партнёру с правом «SMS» — шапка и кнопка называют
+// аккаунт («Пополнить баланс Giliuta»), платят за него. «Видит» — баланс и
+// месяц; «Пополняет» — ещё и кнопка. Истории сообщений (переписки с
+// клиентами) партнёру здесь нет.
 
 export function SmsScreen() {
   const router = useRouter();
   const toast = useToast();
-  // Без тарифа SMS нет (02.10) — и пополнять нечего: кнопка серая.
-  const smsInPlan = usePlanAllows("sms");
+  const scope = useAccountScope();
+  const ownerOfAccount = scope.role === "owner";
+  const gate = useAccountGate("cabinet.sms");
+  const accountName = useAccountName();
+  // Без тарифа SMS нет (02.10) — и пополнять нечего: кнопка серая. Тариф —
+  // аккаунта страницы.
+  const smsInPlan = tierAllows(tierOf(useAccountProfile().data), "sms");
   const nudgeTariff = useTariffNudge();
   const params = useLocalSearchParams<{ topup?: string }>();
   const account = useSmsAccount();
@@ -93,17 +105,30 @@ export function SmsScreen() {
     setTopupOpen(false);
     try {
       awaitingPayment.current = true;
-      await openSmsCheckout(cents);
+      await openSmsCheckout(cents, undefined, scope.foreign ? scope.tenantId : null);
     } catch (e) {
       awaitingPayment.current = false;
       notify("Оплата не открылась", e instanceof Error ? e.message : undefined);
     }
   };
 
+  const subtitle = !ownerOfAccount || scope.foreign ? (accountName ?? undefined) : undefined;
+  const canTopUp = ownerOfAccount || gate === "write";
+
+  // Без права «SMS» страница пуста — сюда ведёт только старая ссылка.
+  if (!ownerOfAccount && gate !== "read" && gate !== "write") {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="SMS" subtitle={subtitle} />
+        <EmptyState fill state={gate === "loading" ? "loading" : undefined} title={gate === "loading" ? undefined : "SMS скрыты"} />
+      </Screen>
+    );
+  }
+
   if (account.isLoading) {
     return (
       <Screen edges={["top"]}>
-        <ScreenHeader title="SMS" />
+        <ScreenHeader title="SMS" subtitle={subtitle} />
         <EmptyState state="loading" fill />
       </Screen>
     );
@@ -111,7 +136,7 @@ export function SmsScreen() {
   if (account.isError || !data || !owner) {
     return (
       <Screen edges={["top"]}>
-        <ScreenHeader title="SMS" />
+        <ScreenHeader title="SMS" subtitle={subtitle} />
         <EmptyState
           state="error"
           fill
@@ -126,7 +151,7 @@ export function SmsScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="SMS" />
+      <ScreenHeader title="SMS" subtitle={subtitle} />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Плашки нет (владелец 30.09: «баланс ноль и так видно»): «Пополните
             баланс» — строкой под суммой. Плашка — только заморозка сверкой. */}
@@ -151,29 +176,32 @@ export function SmsScreen() {
 
         <SmsTariffCard priceCents={data.priceCents} />
 
-        <SectionCard title="История">
-          {(history.data ?? []).map((item, index) => (
-            <View key={item.id}>
-              {index > 0 ? <Divider inset={16} /> : null}
-              <SmsHistoryRow item={item} compact onPress={() => setOpen(item)} />
-            </View>
-          ))}
-          {(history.data ?? []).length > 0 ? <Divider inset={48} /> : null}
-          <SettingsRow
-            tile="neutral"
-            icon={History}
-            title="Вся история"
-            sub={(history.data ?? []).length > 0 ? undefined : "Сообщений пока нет"}
-            onPress={() => router.push("/cabinet/sms-history" as Href)}
-          />
-        </SectionCard>
+        {/* Переписка с клиентами — владельцу аккаунта (04.10). */}
+        {ownerOfAccount ? (
+          <SectionCard title="История">
+            {(history.data ?? []).map((item, index) => (
+              <View key={item.id}>
+                {index > 0 ? <Divider inset={16} /> : null}
+                <SmsHistoryRow item={item} compact onPress={() => setOpen(item)} />
+              </View>
+            ))}
+            {(history.data ?? []).length > 0 ? <Divider inset={48} /> : null}
+            <SettingsRow
+              tile="neutral"
+              icon={History}
+              title="Вся история"
+              sub={(history.data ?? []).length > 0 ? undefined : "Сообщений пока нет"}
+              onPress={() => router.push("/cabinet/sms-history" as Href)}
+            />
+          </SectionCard>
+        ) : null}
       </ScrollView>
 
       {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ: пополнить баланс. */}
-      {data.serviceOn ? (
+      {data.serviceOn && canTopUp ? (
         <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
           <GradientButton
-            label="Пополнить баланс"
+            label={subtitle ? `Пополнить баланс ${subtitle}` : "Пополнить баланс"}
             disabled={!smsInPlan}
             onDisabledPress={nudgeTariff}
             onPress={() => setTopupOpen(true)}

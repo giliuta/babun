@@ -21,7 +21,11 @@
 // встают «только смотреть», рабочие владелец выбирает в «Тариф».
 //
 // Кто зовёт: владелец аккаунта (JWT + `x-babun-tenant`); аккаунт и роль
-// отвечает сама база (`current_tenant_id`, `current_user_role`).
+// отвечает сама база (`current_tenant_id`, `current_user_role`). Партнёр с
+// правом «Тариф: Оплачивает» (`cabinet.tariff`, владелец 04.10) только
+// оформляет и оплачивает тариф, пока подписки нет: сменить тариф в живой
+// подписке и открыть «Управление подпиской» — списания с карты владельца —
+// может лишь сам владелец. Имя аккаунта стоит на странице оплаты.
 // Секреты: STRIPE_SECRET_KEY (заводит владелец) и служебный ключ проекта.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
@@ -176,12 +180,14 @@ Deno.serve(async (request: Request) => {
     global: { headers },
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  const [{ data: tenantId }, { data: role }, { data: userData }] = await Promise.all([
+  const [{ data: tenantId }, { data: role }, { data: userData }, { data: canPay }] = await Promise.all([
     asUser.rpc("current_tenant_id"),
     asUser.rpc("current_user_role"),
     asUser.auth.getUser(auth.slice("Bearer ".length)),
+    asUser.rpc("access_company", { p_block: "cabinet.tariff", p_min: "write" }),
   ]);
-  if (typeof tenantId !== "string" || role !== "owner") return json(403, { error: "owner_only" });
+  const owner = role === "owner";
+  if (typeof tenantId !== "string" || (!owner && canPay !== true)) return json(403, { error: "owner_only" });
 
   const service = serviceClient();
   if (!service) return json(503, { error: "service_role_unavailable" });
@@ -204,6 +210,7 @@ Deno.serve(async (request: Request) => {
 
   try {
     if (action === "portal") {
+      if (!owner) return json(403, { error: "owner_only" });
       if (!tenant.stripe_customer_id) return json(409, { error: "no_subscription" });
       try {
         const portal = await stripe(stripeKey, "POST", "billing_portal/sessions", {
@@ -229,6 +236,8 @@ Deno.serve(async (request: Request) => {
 
     // ПОДПИСКА УЖЕ ЕСТЬ — МЕНЯЕМ В НЕЙ ТАРИФ, А НЕ ЗАВОДИМ ВТОРУЮ.
     if (live && tenant.stripe_subscription_id) {
+      // Смена тарифа в живой подписке спишет разницу с карты владельца.
+      if (!owner) return json(409, { error: "owner_only_change" });
       const { data: people } = await service.rpc("tariff_partner_count", { p_tenant: tenantId });
       if (typeof people === "number" && people > PARTNERS[tier]) {
         return json(409, { error: "too_many_partners", limit: PARTNERS[tier] });
@@ -271,7 +280,8 @@ Deno.serve(async (request: Request) => {
       if (typeof smsCustomer === "string" && smsCustomer) customer = smsCustomer;
     }
     if (!customer) {
-      const email = userData?.user?.email;
+      // Почта клиента Stripe — владельца: партнёр платит, но аккаунт не его.
+      const email = owner ? userData?.user?.email : undefined;
       const created = await stripe(stripeKey, "POST", "customers", {
         name: String(tenant.name ?? ""),
         ...(email ? { email } : {}),
@@ -296,6 +306,8 @@ Deno.serve(async (request: Request) => {
       "subscription_data[metadata][tier]": tier,
       success_url: `${back}?tariff=paid`,
       cancel_url: `${back}?tariff=cancelled`,
+      // За какой аккаунт платят — прямо на странице оплаты (04.10).
+      "custom_text[submit][message]": `Тариф аккаунта «${String(tenant.name ?? "").trim() || "Babun"}»`,
     };
     // Идёт свой пробный — списание с его последнего дня (Stripe требует
     // запас не меньше двух суток; ближе к концу — платим сразу).

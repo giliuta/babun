@@ -69,7 +69,9 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
     // Подписка — только оплаченный не «навсегда»; на пробном и без тарифа
     // дверь вела в «Подписки ещё нет» (аудит Кабинета 03.10).
     assert.match(screen, /const hasSubscription = tariffState\.paid && !tariffState\.forever;/);
-    assert.match(screen, /\{!hasSubscription && months\.length === 0 \? null : \(/);
+    // Дверь — только владельцу: партнёр с «Оплатами тарифа» (04.10) видит
+    // оплаты, но подпиской не управляет.
+    assert.match(screen, /\{!owner \|\| \(!hasSubscription && months\.length === 0\) \? null : \(/);
   });
 
   test("SMS из карточки: «ближайшая запись» — по часам бизнеса", () => {

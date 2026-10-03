@@ -87,8 +87,16 @@ export const SETTINGS_PREVIEW_KEYS: readonly string[] = [
   "finance.settings_categories_income",
   "finance.settings_categories_expense",
   "finance.settings_categories_debts",
-  "finance.settings_requisites",
   "finance.settings_currency",
+];
+
+/** Права «Кабинета» (04.10) — строкой блока аккаунта в Кабинете партнёра.
+ *  «Реквизиты» — здесь же: их строка живёт в Кабинете с 03.10. */
+export const CABINET_PREVIEW_KEYS: readonly string[] = [
+  "cabinet.tariff",
+  "cabinet.tariff_payments",
+  "cabinet.sms",
+  "finance.settings_requisites",
 ];
 
 /** «Ограничения» записей и финансов (03.10) — общий вид сроков. */
@@ -102,6 +110,7 @@ export function hasBlockPreview(key: string): boolean {
     MONEY_PREVIEW_KEYS.includes(key) ||
     CLIENTS_PREVIEW_KEYS.includes(key) ||
     CLIENT_CARD_PREVIEW_KEYS.includes(key) ||
-    SETTINGS_PREVIEW_KEYS.includes(key)
+    SETTINGS_PREVIEW_KEYS.includes(key) ||
+    CABINET_PREVIEW_KEYS.includes(key)
   );
 }

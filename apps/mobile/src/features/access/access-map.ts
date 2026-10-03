@@ -98,7 +98,9 @@ export const AREA_TITLE: Record<Exclude<AccessArea, "owner">, string> = {
   calendar: "Календарь",
   finance: "Финансы",
   clients: "Клиенты",
-  company: "Компания",
+  // Права аккаунта — тариф, оплаты, SMS, реквизиты (04.10): раздел зовётся
+  // как место, где они живут у человека, — «Кабинет».
+  company: "Кабинет",
 };
 
 type Row = Record<string, unknown>;

@@ -44,7 +44,8 @@ const REGISTRY: AccessBlock[] = [
   block("finance.debts", ["off", "read", "write"], 130),
   block("finance.documents", ["off", "read", "write"], 140),
   block("finance.profit", ["off", "read"], 150),
-  block("finance.settings_requisites", ["off", "read", "write"], 165),
+  // «Реквизиты» — право аккаунта (как в базе): на странице команды его нет.
+  { ...block("finance.settings_requisites", ["off", "read"], 165), scope: "company" },
   block("finance.settings_accounts", ["off", "read", "write"], 160),
   block("finance.settings_trash", ["off", "read", "write"], 161),
   block("finance.settings_categories_income", ["off", "read", "write"], 162),
@@ -145,11 +146,11 @@ describe("страница раздела доступа — блоками вл
           "finance.settings_categories_debts",
         ],
       },
-      { title: "Документы", keys: ["finance.settings_requisites"] },
+      // «Реквизиты» с 04.10 — в разделе «Кабинет», не в шестерёнке.
     ]);
   });
 
-  test("права на всю компанию из шестерёнки — в «Настройках финансов» команды, а не в «Компании»", () => {
+  test("право шестерёнки на весь аккаунт — в «Настройках финансов» команды; «Реквизиты» — в «Кабинете» (04.10)", () => {
     const company = (key: string, position: number): AccessBlock => ({
       ...block(key, ["off", "read"], position),
       scope: "company",
@@ -184,8 +185,7 @@ describe("страница раздела доступа — блоками вл
             ["finance.settings_categories_debts", "off"],
           ],
         ],
-        // Положение компании — без команды, а не «закрыто» в команде.
-        ["Документы", [["finance.settings_requisites", "read"]]],
+        // Положение аккаунта — без команды, а не «закрыто» в команде.
         ["Общие", [["finance.settings_currency", "read"]]],
       ],
     );
@@ -197,6 +197,38 @@ describe("страница раздела доступа — блоками вл
       onlyCompany: false,
       withCompany: true,
     }).find((section) => section.key === "company");
-    assert.deepEqual(card?.rows.map((row) => row.block.key), ["company.services"]);
+    // «Кабинет»: строки Кабинета по порядку, прочее — после них.
+    assert.equal(card?.title, "Кабинет");
+    assert.deepEqual(card?.rows.map((row) => row.block.key), ["finance.settings_requisites", "company.services"]);
+    // Страница «Кабинета» — одной карточкой, вместе с «Реквизитами» из финансов.
+    const cabinet = viewSections({ blocks, levelOf, activeId: "team-1", onlyCalendar: false, onlyCompany: true, area: "company" });
+    assert.deepEqual(
+      cabinet.map((section) => [section.title, section.rows.map((row) => row.block.key)]),
+      [["", ["finance.settings_requisites", "company.services"]]],
+    );
+  });
+
+  test("«Кабинет» — тариф, оплаты, SMS, реквизиты в порядке строк Кабинета (04.10)", () => {
+    const account = (key: string, area: AccessBlock["area"], position: number, levels: AccessLevel[]): AccessBlock => ({
+      ...block(key, levels, position),
+      area,
+      scope: "company",
+    });
+    const blocks = [
+      account("finance.settings_requisites", "finance", 156, ["off", "read"]),
+      account("cabinet.sms", "company", 373, ["off", "read", "write"]),
+      account("cabinet.tariff", "company", 371, ["off", "read", "write"]),
+      account("cabinet.tariff_payments", "company", 372, ["off", "read"]),
+    ];
+    const sections = viewSections({
+      blocks,
+      levelOf: () => "read",
+      activeId: null,
+      onlyCalendar: false,
+      onlyCompany: true,
+    });
+    assert.deepEqual(sections.map((section) => section.rows.map((row) => row.block.key)), [
+      ["cabinet.tariff", "cabinet.tariff_payments", "cabinet.sms", "finance.settings_requisites"],
+    ]);
   });
 });

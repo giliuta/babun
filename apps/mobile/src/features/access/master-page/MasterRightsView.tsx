@@ -43,7 +43,7 @@ export function focusViewProps(
 ): { title?: string; onlyCalendar: boolean; onlyCompany: boolean; group?: CalendarGroup } {
   if (!focus) return { onlyCalendar: false, onlyCompany: false };
   if (focus.kind === "company") {
-    return { title: "Компания", onlyCalendar: false, onlyCompany: true };
+    return { title: AREA_TITLE.company, onlyCalendar: false, onlyCompany: true };
   }
   // Раздел доступа — его имя в шапке («Календарь»), команда — в подписи.
   if (focus.group) {
@@ -159,7 +159,7 @@ export function MasterRightsView({
             sections={sections}
             levels={levels}
             sheetSubtitle={(block) =>
-              [subtitle, block.scope === "calendar" ? teamName : "Вся компания"].filter(Boolean).join(" · ") ||
+              [subtitle, block.scope === "calendar" ? teamName : "Весь аккаунт"].filter(Boolean).join(" · ") ||
               undefined
             }
             teamName={teamName}

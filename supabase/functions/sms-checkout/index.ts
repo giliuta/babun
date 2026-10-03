@@ -5,8 +5,12 @@
 // ТОЛЬКО веб-версия (babun.app): в iOS-приложении нет ни кнопки, ни ссылки на
 // оплату — правило Apple о цифровых товарах.
 //
-// Что делает: проверяет, что зовёт владелец активной компании, и открывает
-// Stripe Checkout на выбранную сумму. Деньги зачисляет не эта функция, а
+// Что делает: проверяет, что зовёт владелец аккаунта — или партнёр с правом
+// «SMS: Пополняет» (`cabinet.sms`, владелец 04.10: «чтоб кто-то тоже мог
+// оплачивать, но зафиксировано за нашей командой»), — и открывает Stripe
+// Checkout на выбранную сумму. Аккаунт — из заголовка `x-babun-tenant`:
+// Кабинет ставит его из блока аккаунта, а не из открытого календаря, и имя
+// аккаунта стоит в строке оплаты на странице Stripe. Деньги зачисляет не эта функция, а
 // вебхук `stripe-webhook` по факту оплаты (`sms_credit_topup`), — отсюда
 // баланс не меняется никак.
 //
@@ -125,13 +129,17 @@ Deno.serve(async (request: Request) => {
     global: { headers },
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  const [{ data: tenantId }, { data: role }] = await Promise.all([
+  const [{ data: tenantId }, { data: role }, { data: canTopUp }, { data: profile }] = await Promise.all([
     asUser.rpc("current_tenant_id"),
     asUser.rpc("current_user_role"),
+    asUser.rpc("access_company", { p_block: "cabinet.sms", p_min: "write" }),
+    asUser.rpc("current_tenant_profile_safe"),
   ]);
-  if (typeof tenantId !== "string" || role !== "owner") {
+  // Владелец — всегда; партнёр — при «SMS: Пополняет» в ЭТОМ аккаунте.
+  if (typeof tenantId !== "string" || (role !== "owner" && canTopUp !== true)) {
     return json(403, { error: "owner_only" });
   }
+  const accountName = String((profile as { name?: unknown } | null)?.name ?? "").trim();
 
   let body: Record<string, unknown> = {};
   try {
@@ -149,7 +157,8 @@ Deno.serve(async (request: Request) => {
     "line_items[0][quantity]": "1",
     "line_items[0][price_data][currency]": "eur",
     "line_items[0][price_data][unit_amount]": String(amount),
-    "line_items[0][price_data][product_data][name]": "Баланс SMS · Babun",
+    // Чей баланс — прямо в строке оплаты: партнёр не спутает со своим.
+    "line_items[0][price_data][product_data][name]": accountName ? `Баланс SMS · ${accountName}` : "Баланс SMS · Babun",
     client_reference_id: tenantId,
     "metadata[kind]": "sms_topup",
     "metadata[tenant_id]": tenantId,
@@ -171,6 +180,8 @@ Deno.serve(async (request: Request) => {
   // живёт в Stripe; у нас — только её клиент, способ оплаты и «Visa •••• 4242».
   const auto = body.autotopup && typeof body.autotopup === "object" ? (body.autotopup as Record<string, unknown>) : null;
   if (auto) {
+    // Автопополнение сохраняет карту на аккаунт — это делает только владелец.
+    if (role !== "owner") return json(403, { error: "owner_only" });
     const threshold = Number(auto.threshold_cents);
     if (!THRESHOLDS.includes(threshold)) return json(400, { error: "bad_threshold" });
     const service = serviceClient();

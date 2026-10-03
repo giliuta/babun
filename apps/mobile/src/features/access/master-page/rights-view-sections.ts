@@ -5,6 +5,7 @@ import {
   CALENDAR_GROUP_TITLE,
   SECTION_BLOCKS,
   inGroup,
+  orderCabinetRows,
   orderGroupRows,
   type CalendarGroup,
 } from "./access-summary";
@@ -47,11 +48,11 @@ export function viewSections({
   /** Страница ОДНОГО раздела доступа («Календарь»): только его карточка. */
   group?: CalendarGroup;
 }): ViewSection[] {
-  // ПРАВА НА ВСЮ КОМПАНИЮ, КОТОРЫЕ СТОЯТ В БЛОКЕ РАЗДЕЛА («Валюта» и
-  // «Реквизиты» — строки шестерёнки «Финансов», владелец 03.10: «права =
-  // строки шестерёнки»). На странице команды они стоят в своём блоке — там,
-  // где их видит человек, — а из карточки «Компания» уходят, чтобы одно право
-  // не стояло дважды. Положение у них одно на всю компанию: строка читает и
+  // ПРАВА НА ВСЮ КОМПАНИЮ, КОТОРЫЕ СТОЯТ В БЛОКЕ РАЗДЕЛА («Валюта» — строка
+  // шестерёнки «Финансов», владелец 03.10: «права = строки шестерёнки»). На
+  // странице команды они стоят в своём блоке — там, где их видит человек, — а
+  // из раздела «Кабинет» уходят, чтобы одно право не стояло дважды.
+  // «Реквизиты» с 04.10 — в «Кабинете», где их строка и живёт. Положение у них одно на всю компанию: строка читает и
   // пишет его без команды (`blockChanges` → `team_id: null`).
   const claimed = claimedKeys();
   const registry = rightsSections(blocks, levelOf, onlyCompany ? null : activeId)
@@ -66,9 +67,17 @@ export function viewSections({
             ? row.block.scope !== "calendar" && !claimed.has(row.block.key)
             : true,
       ),
-    }))
-    // Права компании, открытые строкой «Компания», — только свой раздел.
-    .filter((section) => !(onlyCompany && area) || section.area === area);
+    }));
+  // РАЗДЕЛ «КАБИНЕТ» (04.10) — одной карточкой: права аккаунта из разных
+  // разделов реестра («Реквизиты» числятся за финансами) стоят вместе, в
+  // порядке строк Кабинета.
+  if (onlyCompany) {
+    const rows = orderCabinetRows(registry.flatMap((section) => section.rows));
+    // Карточка одна — без шапки: имя раздела уже в шапке страницы.
+    return rows.length > 0 && (!area || area === "company")
+      ? [{ key: "company", area: "company", title: "", rows }]
+      : [];
+  }
   if (!onlyCalendar) return registry.filter((section) => section.rows.length > 0);
   // ПРАВА ОДНОЙ КОМАНДЫ — БЛОКАМИ РАЗДЕЛОВ ПРИЛОЖЕНИЯ (владелец 29.09):
   // «Календарь», «Запись» (в порядке блоков страницы записи), «Финансы»,
@@ -89,9 +98,11 @@ export function viewSections({
           key: "company",
           area: "company",
           title: AREA_TITLE.company,
-          rows: rightsSections(blocks, levelOf, null)
-            .flatMap((section) => section.rows)
-            .filter((row) => row.block.scope !== "calendar" && !claimed.has(row.block.key)),
+          rows: orderCabinetRows(
+            rightsSections(blocks, levelOf, null)
+              .flatMap((section) => section.rows)
+              .filter((row) => row.block.scope !== "calendar" && !claimed.has(row.block.key)),
+          ),
         },
       ]
     : [];

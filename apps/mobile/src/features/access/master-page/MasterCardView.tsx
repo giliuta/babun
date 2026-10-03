@@ -256,9 +256,10 @@ export function MasterCardView(p: MasterCardViewProps) {
             />
           ) : null}
 
-          {/* КОМПАНИЯ — ПРАВА НЕ ПРО КОМАНДУ (клиенты, шаблоны SMS). */}
+          {/* АККАУНТ — ПРАВА НЕ ПРО КОМАНДУ: раздел «Кабинет» (тариф, оплаты,
+              SMS, реквизиты — 04.10). */}
           {companyAreas.length > 0 && !p.teamChips ? (
-            <SectionCard title="Компания" padded={false}>
+            <SectionCard title="Аккаунт" padded={false}>
               {companyAreas.map((area, i) => {
                 const level = p.areaLevels?.[area];
                 return (
