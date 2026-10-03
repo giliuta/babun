@@ -17,8 +17,11 @@ describe("реквизиты инвойса", () => {
     assert.match(editor(), /company_id: owner \? \(companyId \?\? pickedCompany\?\.id \?\? null\) : null,/);
   });
 
-  test("номер превью — из серии тех же реквизитов", () => {
-    assert.match(editor(), /useNextInvoiceSeries\(issuedYear, owner \? \(pickedCompany\?\.id \?\? companyId\) : null\)/);
+  test("номер превью — из серии тех же реквизитов; партнёру не спрашивается", () => {
+    assert.match(
+      editor(),
+      /useNextInvoiceSeries\(issuedYear, owner \? \(pickedCompany\?\.id \?\? companyId\) : null, owner\)/,
+    );
   });
 });
 

@@ -464,7 +464,9 @@ export function InvoiceEditor({
   // 20260922050000): сменил набор или год — сервер считает заново.
   const issuedYear = Number(issuedOn.slice(0, 4));
   // Партнёр — серия юрлица команды: её назовёт сервер по пустому набору.
-  const series = useNextInvoiceSeries(issuedYear, owner ? (pickedCompany?.id ?? companyId) : null);
+  // Партнёру номер не спрашиваем: реквизиты документа выбирает сервер по
+  // команде (у неё могут быть свои), а основная серия дала бы чужой номер.
+  const series = useNextInvoiceSeries(issuedYear, owner ? (pickedCompany?.id ?? companyId) : null, owner);
   const nextNumber = series.data?.number ?? undefined;
   const paperSeller: InvoiceDraftSeller | null = useMemo(() => {
     const picked = pickedCompany;
