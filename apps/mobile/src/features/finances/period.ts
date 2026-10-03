@@ -139,11 +139,11 @@ export function dmyShort(s: string): string {
   ).slice(2)}`;
 }
 
-/** Exact dates for the header's RIGHT tap target («01.06.26 – 30.06.26»). */
+/** Точные даты справа в шапке периода («01.06.26 – 30.06.26»). ВСЕГДА
+ *  ДВЕ ДАТЫ, даже у одного дня (владелец 03.10: «сегодня — 03.10.26 –
+ *  03.10.26, это же даты»): шапка не меняет вид от периода к периоду. */
 export function periodDates(p: Period): string {
-  return p.from === p.to
-    ? dmyShort(p.from)
-    : `${dmyShort(p.from)} – ${dmyShort(p.to)}`;
+  return `${dmyShort(p.from)} – ${dmyShort(p.to)}`;
 }
 
 const RU_MONTHS_SHORT = [
