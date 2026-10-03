@@ -36,6 +36,8 @@ const client = {
   legal_name: "Ltd",
   balance: 30,
   memberships: [{ group_id: "g" }],
+  avatar_url: "a.jpg",
+  sms_name: "Аня",
 } as unknown as Client;
 
 describe("зеркало: строка клиента глазами сотрудника", () => {
@@ -76,6 +78,25 @@ describe("зеркало: строка клиента глазами сотру�
     assert.equal(row.contacts_hidden, null);
     // 03.10: «Клиент: Видит» — номер целиком, без двери и точек.
     assert.equal(row.phone, "+35799000000");
+  });
+
+  test("«Метка» и «Тег» — два права; закрытый «Клиент» прячет фото, имя для SMS — по «SMS» (03.10)", () => {
+    const labelsOnly = mirrorMemberClient(client, map({ A: { clients: "read", "clients.labels": "read" } }));
+    assert.equal(labelsOnly.city, "Лимассол");
+    assert.deepEqual(labelsOnly.tag_ids, []);
+    assert.equal(labelsOnly.avatar_url, null);
+    assert.equal(labelsOnly.sms_name, "");
+    const tagsAndSms = mirrorMemberClient(
+      client,
+      map({ A: { clients: "read", "clients.tags": "read", "clients.sms": "read" } }),
+    );
+    assert.equal(tagsAndSms.city, "");
+    assert.deepEqual(tagsAndSms.tag_ids, ["t1"]);
+    assert.equal(tagsAndSms.sms_name, "Аня");
+    // Деньги — за «Историей»: открыта история — открыт и долг.
+    assert.equal(tagsAndSms.balance, 0);
+    const history = mirrorMemberClient(client, map({ A: { clients: "read", "clients.history": "read" } }));
+    assert.equal(history.balance, 30);
   });
 
   test("команда клиента решает; нет её — самое широкое по командам", () => {

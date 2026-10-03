@@ -242,17 +242,6 @@ export function ClientCardPreview({
           </SectionCard>
         </PreviewFrame>
       );
-    case "clients.money":
-      return (
-        <PreviewFrame state={state}>
-          <SectionCard title="Долг и деньги">
-            <SelectList>
-              <SelectRow icon={Wallet} color={SETTINGS_TILE.orange} title="Долг" value="€30" onPress={noop} />
-              <SelectRow icon={ReceiptText} color={SETTINGS_TILE.green} title="Чек 12" value="€120" onPress={noop} />
-            </SelectList>
-          </SectionCard>
-        </PreviewFrame>
-      );
     default:
       return null;
   }

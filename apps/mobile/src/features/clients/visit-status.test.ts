@@ -61,7 +61,7 @@ describe("число записи в истории — правильным ц�
     assert.equal(visitStatus(prepaid, TODAY, true).kind, "paid");
   });
 
-  test("без права «Долг и деньги» — чисел нет", () => {
+  test("без «Истории» (деньги идут за ней) — чисел нет", () => {
     assert.equal(visitStatus(appt({}), TODAY, false).text, "");
     assert.equal(visitStatus(appt({ paid_amount: 0, payment_status: "unpaid" }), TODAY, false).text, "");
   });

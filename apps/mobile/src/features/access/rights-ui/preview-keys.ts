@@ -59,7 +59,6 @@ export const CLIENT_CARD_PREVIEW_KEYS: readonly string[] = [
   "clients.personal",
   "clients.files",
   "clients.requisites",
-  "clients.money",
   "clients.client",
   "clients.history",
   "clients.sms",

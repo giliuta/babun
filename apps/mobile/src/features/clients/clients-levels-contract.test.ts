@@ -134,6 +134,13 @@ const smsJson = norm(readFileSync(join(MIGRATIONS_DIR, SMS_JSON), "utf8"));
 const SMS_SEND = "20261003120713_member_security_gaps.sql";
 const smsSend = norm(readFileSync(join(MIGRATIONS_DIR, SMS_SEND), "utf8"));
 
+// ДЫРЫ ПОСЛЕ АУДИТА 03.10 и СЛОВО ВЛАДЕЛЬЦА 03.10: «завёл сам» — в наборе
+// своей команды; «Метка» и «Тег» — два права; «Долг и деньги» ушли в
+// «Историю», у неё три положения («Скрыта» · «Своя команда» · «Все команды»).
+// Тела взяты из базы и дополнены — сторож держит новые условия.
+const GAPS = "20261003133700_clients_rights_gaps.sql";
+const gaps = norm(readFileSync(join(MIGRATIONS_DIR, GAPS), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
@@ -142,14 +149,21 @@ describe("сервер: клиенты по уровням", () => {
     for (const fn of ["access_company_level"]) {
       assert.equal(lastDefiner(fn), BASE_READ, `${fn} переопределён позже`);
     }
-    for (const fn of ["create_client_with_tags"]) {
-      assert.equal(lastDefiner(fn), CREATE_MENU, `${fn} переопределён позже`);
-    }
-    for (const fn of ["member_trash_client", "access_client_blocks", "client_history_never_purges"]) {
+    for (const fn of ["member_trash_client", "client_history_never_purges"]) {
       assert.equal(lastDefiner(fn), DELETE_RIGHT, `${fn} переопределён позже`);
     }
-    for (const fn of ["update_client_with_tags", "client_masked_for_member", "list_master_clients_safe"]) {
+    for (const fn of ["list_master_clients_safe"]) {
       assert.equal(lastDefiner(fn), PHONE_OPEN, `${fn} переопределён позже`);
+    }
+    for (const fn of [
+      "access_client_ids_in",
+      "access_client_blocks",
+      "client_masked_for_member",
+      "create_client_with_tags",
+      "update_client_with_tags",
+      "member_client_history",
+    ]) {
+      assert.equal(lastDefiner(fn), GAPS, `${fn} переопределён позже`);
     }
     for (const fn of [
       "access_contact_client_ids",
@@ -158,7 +172,6 @@ describe("сервер: клиенты по уровням", () => {
     ]) {
       assert.equal(lastDefiner(fn), CLIENT_BLOCKS, `${fn} переопределён позже`);
     }
-    assert.equal(lastDefiner("access_client_ids_in"), LIMITS, "access_client_ids_in переопределён позже");
     for (const fn of [
       "list_master_appointments_safe",
       "sms_appointment_link",
@@ -179,6 +192,41 @@ describe("сервер: клиенты по уровням", () => {
     ]) {
       assert.equal(lastDefiner(fn), CARD_BLOCKS, `${fn} переопределён позже`);
     }
+  });
+
+  test("03.10: «завёл сам» в наборе своей команды; «Метка» и «Тег» — два права; деньги — за «Историей» (GAPS)", () => {
+    // Набор — прежнее правило команды и окна; «завёл сам» — только в командах набора.
+    const idsBody = gaps.slice(
+      gaps.indexOf("CREATE OR REPLACE FUNCTION public.access_client_ids_in"),
+      gaps.indexOf("$function$;", gaps.indexOf("CREATE OR REPLACE FUNCTION public.access_client_ids_in")),
+    );
+    assert.ok(idsBody.includes("c.team_id in (select lv.team_id from lv where lv.level in ('own', 'all'))"));
+    assert.ok(idsBody.includes("and a.date between (today - w.span)::date::text and (today + w.span)::date::text"));
+    assert.ok(idsBody.includes("or (c.created_by = caller and c.team_id in (select lv.team_id from lv))"));
+    // «Тег» — своё право: в блоках клиента, в маске, в правке и создании.
+    assert.ok(gaps.includes("insert into public.access_blocks (key, area, scope, levels, title_ru, owner_only, live, enforced_by, position) select 'clients.tags', 'clients', 'calendar', array['off', 'read', 'write'], 'Тег',"));
+    assert.ok(gaps.includes("select ma.tenant_id, ma.user_id, 'clients.tags', ma.team_id, ma.level, ma.set_by, ma.set_at from public.member_access ma where ma.block = 'clients.labels'"));
+    assert.ok(gaps.includes("'clients.tags' ];"));
+    assert.ok(gaps.includes("|| case when coalesce(b.v ->> 'clients.tags', 'off') = 'off' then jsonb_build_object('tag_ids', '[]'::jsonb) else '{}'::jsonb end"));
+    assert.ok(gaps.includes("and coalesce(card_blocks ->> 'clients.tags', 'off') <> 'write' then denied_block := 'clients.tags';"));
+    assert.ok(gaps.includes("if public.access_team_level(active_tenant_id, auth.uid(), 'clients.tags', input_row.team_id) is distinct from 'write' then"));
+    // Закрытый «Клиент» прячет и фото.
+    assert.ok(gaps.includes("then public.client_without_contacts(p_client) || jsonb_build_object('avatar_url', null)"));
+    // «Долг и деньги» упразднено: ключа нет ни в реестре, ни в блоках клиента.
+    assert.ok(gaps.includes("delete from public.member_access where block = 'clients.money';"));
+    assert.ok(gaps.includes("delete from public.access_blocks where key = 'clients.money';"));
+    const blocksBody = gaps.slice(
+      gaps.indexOf("CREATE OR REPLACE FUNCTION public.access_client_blocks"),
+      gaps.indexOf("$function$;", gaps.indexOf("CREATE OR REPLACE FUNCTION public.access_client_blocks")),
+    );
+    assert.ok(blocksBody.length > 0 && !blocksBody.includes("'clients.money'"), "блоки клиента снова знают «Долг и деньги»");
+    assert.ok(gaps.includes("|| case when coalesce(b.v ->> 'clients.history', 'off') = 'off' then jsonb_build_object('balance', 0, 'discount', 0) else '{}'::jsonb end"));
+    // «История»: три положения; кто видел — получает «Все команды».
+    assert.ok(gaps.includes("update public.member_access set level = 'write' where block = 'clients.history' and level = 'read';"));
+    assert.ok(gaps.includes("cb.blocks ->> 'clients.history' in ('read', 'write') as see_money"));
+    assert.ok(gaps.includes("cb.blocks ->> 'clients.history' = 'write' as all_teams"));
+    assert.ok(gaps.includes("select public.access_calendars('clients.history', 'read') as ids"));
+    assert.ok(gaps.includes("and (h.all_teams or a.team_id = any(ht.ids))"));
   });
 
   test("база — только клиенты команды; «Ограничение по времени» едет с днём", () => {

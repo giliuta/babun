@@ -30,7 +30,6 @@ describe("карточка клиента: блоки по команде и п�
         "clients.note": "read",
         "clients.objects": "write",
         "clients.personal": "off",
-        "clients.money": "off",
         "clients.history": "read",
       },
     };
@@ -38,8 +37,17 @@ describe("карточка клиента: блоки по команде и п�
     assert.deepEqual(a.note, { show: true, edit: false });
     assert.deepEqual(a.objects, { show: true, edit: true });
     assert.deepEqual(a.personal, { show: false, edit: false });
-    assert.equal(a.money.show, false);
     assert.equal(a.history.show, true);
+    // Деньги идут вместе с «Историей» (03.10): видит историю — видит и долг.
+    assert.deepEqual(a.money, { show: true, edit: false });
+    const noHistory = cardAccess({
+      client: { blocks: { ...client.blocks, "clients.history": "off" } },
+      caps: MEMBER,
+      teamOn: ALL_ON,
+      draft: false,
+    });
+    assert.equal(noHistory.history.show, false);
+    assert.equal(noHistory.money.show, false);
     // Ключа нет — блок скрыт (сервер отдаёт только открытое).
     assert.deepEqual(a.requisites, { show: false, edit: false });
   });
@@ -85,18 +93,22 @@ describe("сводка клиента по его правам", () => {
   test("владелец — как есть", () => {
     assert.equal(statsByBlocks({}, stats), stats);
   });
-  test("без «Долг и деньги» — денег нет, визиты остаются", () => {
-    const s = statsByBlocks({ blocks: { clients: "read", "clients.history": "read" } }, stats);
-    assert.equal(s.debt, 0);
-    assert.equal(s.totalSpent, 0);
-    assert.equal(s.expectedRevenue, 0);
-    assert.equal(s.visits, 4);
+  test("с «Историей» — и визиты, и деньги (деньги идут вместе с ней, 03.10)", () => {
+    for (const level of ["read", "write"]) {
+      const s = statsByBlocks({ blocks: { clients: "read", "clients.history": level } }, stats);
+      assert.equal(s.debt, 300, level);
+      assert.equal(s.totalSpent, 400, level);
+      assert.equal(s.expectedRevenue, 80, level);
+      assert.equal(s.visits, 4, level);
+    }
   });
-  test("без «Истории записей» — визитов и дат нет", () => {
-    const s = statsByBlocks({ blocks: { clients: "read", "clients.money": "read" } }, stats);
+  test("без «Истории записей» — ни визитов и дат, ни денег", () => {
+    const s = statsByBlocks({ blocks: { clients: "read", "clients.history": "off" } }, stats);
     assert.equal(s.visits, 0);
     assert.equal(s.lastVisitDate, "");
     assert.equal(s.nextApt, null);
-    assert.equal(s.debt, 300);
+    assert.equal(s.debt, 0);
+    assert.equal(s.totalSpent, 0);
+    assert.equal(s.expectedRevenue, 0);
   });
 });

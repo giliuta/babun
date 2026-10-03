@@ -41,8 +41,8 @@ describe("«История записей» сотрудника (01.10)", () =>
     assert.deepEqual(withClientHistory(calendar, []), calendar);
   });
 
-  test("без «Долг и деньги» — нулевые суммы и цены; без «Объекты» — без объекта; заметки — никогда", () => {
-    const masked = maskHistoryRow(row("a"), withBlocks({ "clients.history": "read" }));
+  test("без «Истории» — нулевые суммы и цены; без «Объекты» — без объекта; заметки — никогда", () => {
+    const masked = maskHistoryRow(row("a"), withBlocks({ "clients.history": "off" }));
     assert.equal(masked.total_amount, 0);
     assert.equal(masked.paid_amount, 0);
     assert.equal(masked.payment_status, "unpaid");
@@ -51,8 +51,11 @@ describe("«История записей» сотрудника (01.10)", () =>
     assert.equal(masked.comment, "");
     assert.equal(masked.address, "");
     assert.equal(masked.city, null);
-    const open = maskHistoryRow(row("a"), withBlocks({ "clients.money": "read", "clients.objects": "read" }));
+    // Деньги идут вместе с «Историей» (03.10): отдельного права нет.
+    const open = maskHistoryRow(row("a"), withBlocks({ "clients.history": "read", "clients.objects": "read" }));
     assert.equal(open.total_amount, 120);
+    assert.equal(open.paid_amount, 120);
+    assert.equal(open.payment_status, "paid");
     assert.equal(open.services[0].totalPrice, 120);
     assert.equal(open.location_id, "loc-1");
     assert.equal(open.comment, "", "заметка записи — право календаря");
@@ -65,5 +68,20 @@ describe("«История записей» сотрудника (01.10)", () =>
     ]);
     const all = [row("a"), row("b", { client_id: "c2" }), row("c", { client_id: "c3" }), row("d", { kind: "event" })];
     assert.deepEqual(mirrorHistory(all, clients).map((r) => r.id), ["a"]);
+  });
+
+  test("«его глазами»: «Своя команда» — только записи его команд, «Все команды» — все", () => {
+    const all = [
+      row("own", { team_id: "t1" }),
+      row("other", { team_id: "t2" }),
+      row("none", { team_id: null }),
+    ];
+    const own = new Set(["t1"]);
+    const read = new Map([["c1", withBlocks({ "clients.history": "read" })]]);
+    assert.deepEqual(mirrorHistory(all, read, own).map((r) => r.id), ["own"]);
+    const write = new Map([["c1", withBlocks({ "clients.history": "write" })]]);
+    assert.deepEqual(mirrorHistory(all, write, own).map((r) => r.id), ["own", "other", "none"]);
+    const off = new Map([["c1", withBlocks({ "clients.history": "off" })]]);
+    assert.deepEqual(mirrorHistory(all, off, own), []);
   });
 });

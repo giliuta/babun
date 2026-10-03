@@ -32,7 +32,7 @@ export function useClientFiles(clientId: string, showMoney: boolean) {
   const attachments = useClientAttachments(clientId);
   const visitPhotos = useClientVisitPhotos(clientId, appointmentIds);
   // Инвойсы и чеки — функция компании (STORY-088) и деньги: без права
-  // «Долг и деньги» их в ленте нет.
+  // «История» (деньги клиента идут за ней, 03.10) их в ленте нет.
   const documentsOn = useFeatureOn("documents");
   const invoices = useInvoices({ clientId });
   const receipts = useReceipts({ clientId });

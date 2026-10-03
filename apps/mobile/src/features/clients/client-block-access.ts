@@ -20,7 +20,6 @@ export type ClientCardBlock =
   | "clients.files"
   | "clients.requisites"
   | "clients.history"
-  | "clients.money"
   | "clients.sms"
   | "clients.menu"
   | "clients.delete";

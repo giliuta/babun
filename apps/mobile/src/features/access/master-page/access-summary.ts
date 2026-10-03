@@ -96,7 +96,6 @@ export const CLIENT_CARD_ROW_ORDER: readonly string[] = [
   "clients.note",
   "clients.people",
   "clients.history",
-  "clients.money",
   "clients.objects",
   "clients.files",
   "clients.requisites",

@@ -26,7 +26,6 @@ const CARD_KEYS = [
   "clients.personal",
   "clients.files",
   "clients.requisites",
-  "clients.money",
   "clients.history",
   "clients.sms",
   // «Меню клиента» и «Удаление клиента» (03.10): без них «его глазами»
@@ -95,6 +94,9 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: 
           telegram_username: "",
           instagram_username: "",
           phones: [],
+          // Фото — тоже «Клиент»; имя для SMS остаётся при открытом «SMS».
+          avatar_url: null,
+          ...(off("clients.sms") ? { sms_name: "" } : {}),
         }
       : {}),
     ...(off("clients.people") ? { memberships: [] } : {}),
@@ -108,7 +110,8 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: 
     ...(off("clients.requisites")
       ? { legal_name: null, vat_number: null, reg_number: null, billing_address: null, requisites: [] }
       : {}),
-    ...(off("clients.money") ? { balance: 0, discount: 0 } : {}),
+    // Деньги клиента — вместе с «Историей» (03.10).
+    ...(off("clients.history") ? { balance: 0, discount: 0 } : {}),
     contacts_hidden: mirrorContactsHidden(blocks),
     blocks,
   } as Client;

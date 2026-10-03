@@ -113,7 +113,10 @@ export function cardAccess({
     },
     requisites: block(teamOn.requisites, "clients.requisites", caps.money),
     history: block(true, "clients.history"),
-    money: block(true, "clients.money", caps.money, false),
+    // ДЕНЬГИ ИДУТ ВМЕСТЕ С «ИСТОРИЕЙ» (владелец 03.10: «если разрешаю
+    // историю — он в любом случае может увидеть и долг, и деньги»). Отдельного
+    // права «Долг и деньги» больше нет; у своей базы — как было (`caps.money`).
+    money: block(true, "clients.history", caps.money, false),
     // SMS клиента — свой блок (02.10): «Видит» — история, «Меняет» —
     // отправка с карточки, «Присылать SMS» и имя для SMS.
     sms: block(true, "clients.sms"),
@@ -124,7 +127,7 @@ export function cardAccess({
  *  из записей, которые сотрудник видит по правам КАЛЕНДАРЯ, — и без маски
  *  долг, выручка и «был …» пролезли бы в строку списка, сортировку «по
  *  долгу», фильтр «Должники» и строку истории в записи мимо прав КЛИЕНТА.
- *  Без «Долг и деньги» — денег нет; без «Истории записей» — визитов и дат нет.
+ *  Без «Истории» — ни денег (03.10: «Долг и деньги» ушли в неё), ни визитов и дат.
  *  Строка без `blocks` (владелец) — как есть. */
 export function statsByBlocks<S extends {
   visits: number;
@@ -139,8 +142,9 @@ export function statsByBlocks<S extends {
   expectedRevenue: number;
 }>(client: Pick<Client, "blocks">, stats: S): S {
   if (!client.blocks) return stats;
-  const noMoney = clientBlockLevel(client, "clients.money") === "hidden";
+  // Деньги — вместе с «Историей» (03.10).
   const noHistory = clientBlockLevel(client, "clients.history") === "hidden";
+  const noMoney = noHistory;
   if (!noMoney && !noHistory) return stats;
   return {
     ...stats,

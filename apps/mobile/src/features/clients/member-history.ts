@@ -33,10 +33,11 @@ export function withClientHistory(
   return out;
 }
 
-/** Строка истории, какой её отдал бы сервер: суммы — при «Долг и деньги»,
+/** Строка истории, какой её отдал бы сервер: суммы — при «Истории» (с 03.10
+ *  деньги идут вместе с ней, отдельного права «Долг и деньги» нет),
  *  объект — при «Объекты», заметки и адреса записи — никогда. */
 export function maskHistoryRow(row: Appointment, client: Pick<Client, "blocks">): Appointment {
-  const money = clientBlockLevel(client, "clients.money") !== "hidden";
+  const money = clientBlockLevel(client, "clients.history") !== "hidden";
   const objects = clientBlockLevel(client, "clients.objects") !== "hidden";
   return {
     ...row,
@@ -74,16 +75,26 @@ export function maskHistoryRow(row: Appointment, client: Pick<Client, "blocks">)
 }
 
 /** «Его глазами»: из всех записей компании (токен владельца) — история
- *  клиентов из его набора, у которых «История записей» открыта. */
+ *  клиентов из его набора, у которых «История записей» открыта.
+ *
+ *  ТРИ ПОЛОЖЕНИЯ «ИСТОРИИ» (владелец 03.10: «может видеть только своей
+ *  командой, или если клиент был у другой команды — может зайти и
+ *  посмотреть запись у другой команды»): «Своя команда» (read) — только
+ *  записи команд, где у него открыта история (`ownTeams`); «Все команды»
+ *  (write) — все записи клиента. Так же решает сервер (`member_client_history`). */
 export function mirrorHistory(
   all: readonly Appointment[],
   clients: ReadonlyMap<string, Pick<Client, "blocks">>,
+  ownTeams?: ReadonlySet<string>,
 ): Appointment[] {
   const out: Appointment[] = [];
   for (const row of all) {
     if (row.kind !== "work" || !row.client_id) continue;
     const client = clients.get(row.client_id);
-    if (!client || clientBlockLevel(client, "clients.history") === "hidden") continue;
+    if (!client) continue;
+    const level = clientBlockLevel(client, "clients.history");
+    if (level === "hidden") continue;
+    if (level === "read" && ownTeams && !(row.team_id && ownTeams.has(row.team_id))) continue;
     out.push(maskHistoryRow(row, client));
   }
   return out;

@@ -43,10 +43,14 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["clients.people", ["off", "read", "write"]],
   ["clients.objects", ["off", "read", "write"]],
   ["clients.labels", ["off", "read", "write"]],
+  // «Метка и тег» разделены (03.10): «Тег» — своё право.
+  ["clients.tags", ["off", "read", "write"]],
   ["clients.personal", ["off", "read", "write"]],
   ["clients.files", ["off", "read", "write"]],
   ["clients.requisites", ["off", "read", "write"]],
-  ["clients.money", ["off", "read"]],
+  // «Долг и деньги» снято 03.10 — деньги идут с «Историей», у неё три
+  // положения: «Скрыта / Своя команда / Все команды».
+  ["clients.history", ["off", "read", "write"]],
   ["company.sms_templates", ["off", "read", "write"]],
 ];
 

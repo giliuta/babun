@@ -40,7 +40,9 @@ const REGISTRY: AccessBlock[] = [
   block({ key: "finance.documents", area: "finance", scope: "calendar", live: false, title: "Инвойсы и чеки" }),
   block({ key: "clients", levels: ["off", "read"], title: "Клиенты" }),
   block({ key: "clients.scope", levels: ["near", "month", "own"], title: "Ограничение по времени" }),
-  block({ key: "clients.money", levels: ["off", "read"], title: "Долг и деньги" }),
+  // «Долг и деньги» снято 03.10: деньги идут вместе с «Историей», у которой
+  // три положения — «Скрыта / Своя команда / Все команды».
+  block({ key: "clients.history", levels: ["off", "read", "write"], title: "История" }),
   block({ key: "services", area: "company", live: false, title: "Услуги и цены" }),
   block({ key: "masters", area: "company", live: false, title: "Мастера" }),
   block({ key: "company.currency", area: "company", levels: ["read", "write"], live: false, title: "Валюта" }),
@@ -96,9 +98,12 @@ describe("слова прав", () => {
       "Цен и суммы не видит — и оплату не принимает",
     );
     assert.equal(
-      levelSentence("clients.money", "off"),
-      "Долг и чеки клиента скрыты",
+      levelSentence("clients.history", "off"),
+      "Историю записей на карточке клиента не видит",
     );
+    // Деньги — вместе с историей (03.10): фраза говорит, что с ней приходят суммы и долг.
+    assert.match(levelSentence("clients.history", "read"), /своих командах.*суммами и долгом/);
+    assert.match(levelSentence("clients.history", "write"), /других команд.*суммами и долгом/);
   });
 
   test("незнакомый блок не роняет экран и не врёт", () => {
@@ -127,7 +132,7 @@ describe("слова прав", () => {
         "finance.debts",
         "clients",
         "clients.scope",
-        "clients.money",
+        "clients.history",
       ],
     );
   });

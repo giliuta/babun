@@ -49,7 +49,16 @@ export function useMemberClientHistory(
   scope: ClientsScope | null | undefined,
   clients: readonly Client[] | undefined,
 ): Appointment[] {
-  const mirrored = useMirror() !== null;
+  const mirror = useMirror();
+  const mirrored = mirror !== null;
+  // Команды, где у него открыта «История», — для положения «Своя команда».
+  const ownTeamsKey = mirror
+    ? Object.entries(mirror.map.calendars)
+        .filter(([, levels]) => levels["clients.history"] === "read" || levels["clients.history"] === "write")
+        .map(([teamId]) => teamId)
+        .sort()
+        .join(",")
+    : "";
   const member = scope?.kind === "member";
   const query = useQuery({
     queryKey: memberHistoryQueryKey(scope?.tenantId ?? "", scope ? viewKeyOf(scope) : "", mirrored),
@@ -63,6 +72,10 @@ export function useMemberClientHistory(
   return useMemo(() => {
     if (!member || !query.data) return [];
     if (!mirrored) return query.data;
-    return mirrorHistory(query.data, new Map((clients ?? []).map((client) => [client.id, client])));
-  }, [member, mirrored, query.data, clients]);
+    return mirrorHistory(
+      query.data,
+      new Map((clients ?? []).map((client) => [client.id, client])),
+      new Set(ownTeamsKey ? ownTeamsKey.split(",") : []),
+    );
+  }, [member, mirrored, query.data, clients, ownTeamsKey]);
 }

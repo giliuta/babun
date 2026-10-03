@@ -71,7 +71,6 @@ const TITLE: Record<string, string> = {
   "clients.personal": "Личное",
   "clients.files": "Файлы",
   "clients.requisites": "Реквизиты",
-  "clients.money": "Долг и деньги",
   // Блоки страницы клиента (владелец 02.10: «чётко по блокам… история… в
   // конце SMS»).
   "clients.client": "Клиент",
@@ -166,9 +165,9 @@ const STEP: Record<string, Words> = {
   "clients.personal": { off: "Скрыто", read: "Только видит", write: "Видит и меняет" },
   "clients.files": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
   "clients.requisites": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
-  "clients.money": { off: "Скрыты", read: "Видит" },
   "clients.client": { off: "Скрыт", read: "Только видит", write: "Видит и меняет" },
-  "clients.history": { off: "Скрыта", read: "Видит" },
+  // Три положения (владелец 03.10): записи своих команд или всех.
+  "clients.history": { off: "Скрыта", read: "Своя команда", write: "Все команды" },
   "clients.sms": { off: "Скрыты", read: "Только видит", write: "Видит и отправляет" },
   // Настройки клиентов — как «Настройки команды» (владелец 01.10: «в
   // настройках он может редактировать или не может редактировать»).

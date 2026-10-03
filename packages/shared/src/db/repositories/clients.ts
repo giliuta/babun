@@ -375,12 +375,13 @@ const CLIENT_BLOCK_TITLES: Record<string, string> = {
   "clients.note": "Заметка",
   "clients.people": "Люди",
   "clients.objects": "Объекты",
-  "clients.labels": "Метка и тег",
+  // 03.10: «Метка» и «Тег» — два права; «Долг и деньги» ушли в «Историю».
+  "clients.labels": "Метка",
+  "clients.tags": "Тег",
   "clients.personal": "Личное",
   "clients.files": "Файлы",
   "clients.requisites": "Реквизиты",
-  "clients.history": "История записей",
-  "clients.money": "Долг и деньги",
+  "clients.history": "История",
 };
 
 /** ОТКАЗ СЕРВЕРА СЛОВАМИ (аудит 015, 30.09). Права по блокам отвечают 42501
@@ -391,6 +392,8 @@ const CLIENT_BLOCK_TITLES: Record<string, string> = {
 export function clientWriteRefusal(error: PostgrestErrorLike): string | null {
   const hint = error.hint ?? "";
   if (hint === "access:contacts_closed") return "Сначала откройте номер";
+  // 03.10: партнёр ставит только теги команды клиента.
+  if (hint === "client:tag_other_team") return "Тег другой команды этому клиенту не поставить";
   if (hint.startsWith("block:")) {
     const title = CLIENT_BLOCK_TITLES[hint.slice("block:".length)];
     return title ? `Нет права менять «${title}»` : "Нет права на это изменение";
