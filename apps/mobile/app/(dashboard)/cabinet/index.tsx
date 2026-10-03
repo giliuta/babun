@@ -10,8 +10,9 @@
 // подпись с живым состоянием, а не пояснение:
 //   • карта человека → «Профиль»;
 //   • МОИ КОМПАНИИ — приглашения и компании, где он состоит (роль, календари);
-//   • КОМПАНИЯ — «Тариф», «Партнёры», «История изменений», «SMS» и «Архив»
-//     (только владельцу). История — кто что менял во всех календарях. SMS — баланс,
+//   • КОМПАНИЯ — «Тариф», «Оплаты тарифа», «Партнёры», «История изменений»,
+//     «SMS», «Выгрузка данных» и «Архив» (только владельцу). История — кто что
+//     менял во всех календарях; выгрузка — только своих команд. SMS — баланс,
 //     пополнение и отправка всей компании (владелец 2026-09-29: «баланс и
 //     пополнение — это всё будет Кабинет SMS»); шаблоны команд — за
 //     шестерёнкой календаря. Архив — удалённые календари, откуда их
@@ -19,7 +20,7 @@
 //     место хранения — и поставил их сюда сам владелец (2026-09-21: «архив
 //     засунь в Кабинет»);
 //   • ЭТОТ ТЕЛЕФОН — уведомления и синхронизация;
-//   • АККАУНТ — вход и безопасность, «О приложении» (там же версия, поэтому
+//   • АККАУНТ — вход и безопасность, «Помощь», «О приложении» (там же версия, поэтому
 //     отдельной подписи версии внизу нет);
 //   • выход только с этого устройства.
 // Новую настройку раздела сюда не добавлять — её место за шестерёнкой.
@@ -40,6 +41,9 @@ import { AboutRow } from "@/features/cabinet/AboutRow";
 import { ArchiveRow } from "@/features/cabinet/ArchiveRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
 import { HistoryRow } from "@/features/cabinet/HistoryRow";
+import { DataExportRow } from "@/features/cabinet/DataExportRow";
+import { HelpRow } from "@/features/cabinet/HelpRow";
+import { TariffPaymentsRow } from "@/features/cabinet/TariffPaymentsRow";
 import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
@@ -84,6 +88,9 @@ export default function CabinetHome() {
                   открыты всегда, серая там только «Пригласить партнёра». */}
               <TariffRow />
               <Divider inset={48} />
+              {/* ОПЛАТЫ ТАРИФА (владелец 03.10) — платежи за подписку и чеки. */}
+              <TariffPaymentsRow />
+              <Divider inset={48} />
               <SettingsRow
                 tile={SETTINGS_TILE.indigo}
                 icon={Users}
@@ -97,6 +104,10 @@ export default function CabinetHome() {
               <HistoryRow />
               <Divider inset={48} />
               <SmsCabinetRow />
+              <Divider inset={48} />
+              {/* ВЫГРУЗКА ДАННЫХ (владелец 03.10: «только из своих личных
+                  команд») — клиенты, записи и финансы своего аккаунта. */}
+              <DataExportRow />
               <Divider inset={48} />
               <ArchiveRow />
             </SectionCard>
@@ -135,6 +146,9 @@ export default function CabinetHome() {
             sub="Пароль, устройства, удаление аккаунта"
             onPress={() => router.push("/cabinet/account")}
           />
+          <Divider inset={48} />
+          {/* ПОМОЩЬ (владелец 03.10) — частые вопросы и связь с поддержкой. */}
+          <HelpRow />
           <Divider inset={48} />
           <AboutRow />
         </SectionCard>
