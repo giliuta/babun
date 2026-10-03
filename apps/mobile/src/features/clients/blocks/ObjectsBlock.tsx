@@ -26,7 +26,7 @@ import { useCopyValue } from "@/lib/copy-value";
 import { AppearanceTile } from "@/components/ui/AppearanceSheet";
 import { PICKER_RADIUS } from "@/components/ui/picker-grid";
 import { useLocationLabels } from "@/features/settings/local-settings";
-import { objectTypeKey } from "@/features/clients/object-types";
+import { findObjectType } from "@/features/clients/object-types";
 
 // ОБЪЕКТЫ на карточке клиента.
 //
@@ -408,17 +408,17 @@ export function ObjectRow({
   // ТИП ОБЪЕКТА — ТОЛЬКО ЗНАЧКОМ (владелец 03.10: «слово не пишем — тип
   // обозначает иконка: цвет и значок из „Типов объектов“; типа нет — домик»).
   const { data: labelPresets = [] } = useLocationLabels(teamId);
-  const typed = !!loc.label?.trim();
-  const type = typed
-    ? labelPresets.find((l) => objectTypeKey(l.name) === objectTypeKey(loc.label))
-    : undefined;
+  // Тип — только из справочника команды (владелец 03.10: типы каждый
+  // заводит сам). Метка удалённого типа объект не красит: он без типа.
+  const type = findObjectType(labelPresets, loc.label);
+  const typed = !!type;
   // Адрес двумя строками: улица и дом — чёрным, уточнение — мелко серым.
   const lines = addressLines(loc);
   // ТИП СЛОВОМ — ПЕРВЫМ ВО ВТОРОЙ СТРОКЕ (владелец 03.10, вторым заходом:
   // «тип объекта всё-таки надо где-то писать словами — полезная функция»).
   // Плитка слева говорит цветом и значком, слово — «Офис · подъезд 4 ·
   // эт. 3»; своей строки ему не дали — строка объекта не растёт.
-  const typeWord = typed ? loc.label.trim() : "";
+  const typeWord = type ? type.name : "";
   const note = showNote ? (loc.note ?? "").trim() : "";
   const people = (residents ?? "").trim();
   // «БЫЛ 12 АВГ» ДЕЛИТ ТРЕТЬЮ СТРОКУ С ЗАМЕТКОЙ через «·» — формат тот же,
@@ -448,7 +448,7 @@ export function ObjectRow({
         accessible
         accessibilityRole={onPress ? "button" : "text"}
         accessibilityLabel={[
-          loc.label || "Объект",
+          type?.name || "Объект",
           primary ? "основной" : "",
           target,
           visited,

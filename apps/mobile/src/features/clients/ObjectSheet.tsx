@@ -117,7 +117,7 @@ export function ObjectSheet({
     if (start) setDraft((d) => (d.target.trim() ? d : { ...d, target: start }));
   }, [visible, initialTarget]);
 
-  const typeOptions = useObjectTypeOptions(draft.type, teamId);
+  const typeOptions = useObjectTypeOptions(teamId);
   // ТИП НЕ ПОДСТАВЛЯЕТСЯ (владелец 2026-09-15: «не сразу „Дом“, а „добавить“…
   // в большинстве заказов мы не знаем, дом это, вилла или квартира»). Новый
   // объект открывается с пустым типом — дверью «Выбрать тип объекта»; выбрать

@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import { View } from "react-native";
-import { MapPin } from "lucide-react-native";
+import { House, Tag } from "lucide-react-native";
 import type { Location } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
@@ -10,7 +10,10 @@ import {
   SelectList,
   SelectRow,
 } from "@/components/ui/select-rows";
-import { objectTarget } from "@/features/clients/object-address";
+import { iconPreset } from "@/components/ui/icon-set";
+import { addressLines } from "@/features/clients/object-address";
+import { findObjectType } from "@/features/clients/object-types";
+import { useLocationLabels } from "@/features/settings/local-settings";
 
 // ВЫБОР ОБЪЕКТА ДЛЯ ЗАПИСИ — лист, как выбор клиента (владелец 2026-09-03:
 // «мы тапаем на клиента — открывается выбор клиента; то же самое объект:
@@ -58,6 +61,8 @@ export function ObjectPickerSheet({
   onClose: () => void;
 }) {
   const afterExit = useRef<(() => void) | null>(null);
+  // Типы компании целиком: событие выбирает объекты разных команд.
+  const { data: labelPresets = [] } = useLocationLabels(null);
   const ordered = useMemo(
     () =>
       [...locations].sort(
@@ -93,20 +98,25 @@ export function ObjectPickerSheet({
     >
       <SelectList>
         {ordered.map((loc) => {
-          const target = objectTarget(loc);
-          // Тип не выбран — в заголовке адрес, без слова «Объект» (03.10).
-          const label = loc.label || target || "Адрес не указан";
+          // КАК СТРОКА ОБЪЕКТА (03.10): в заголовке адрес, под ним тип словом
+          // и точный адрес; плитка — вид типа, без типа — домик. Тип — только
+          // заведённый в справочнике: метка удалённого типа объект не красит.
+          const type = findObjectType(labelPresets, loc.label);
+          const lines = addressLines(loc);
+          const title = lines.main || "Адрес не указан";
+          const subtitle = [type?.name, lines.detail].filter(Boolean).join(" · ");
           const owner = ownerNameFor?.(loc) ?? null;
           const chosen = loc.id === selectedId;
           return (
             <SelectRow
               key={loc.id}
-              icon={MapPin}
-              title={label}
-              subtitle={loc.label ? target || "адрес не указан" : undefined}
+              icon={type ? (iconPreset(type.icon) ?? Tag) : House}
+              color={type?.color ?? undefined}
+              title={title}
+              subtitle={subtitle || undefined}
               hint={owner || undefined}
               selected={chosen}
-              accessibilityLabel={[label, loc.label ? target : null, owner].filter(Boolean).join(", ")}
+              accessibilityLabel={[title, subtitle, owner].filter(Boolean).join(", ")}
               onPress={() => {
                 if (onDeselect && chosen) onDeselect();
                 else onSelect(loc);

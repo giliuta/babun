@@ -112,7 +112,7 @@ export function ObjectEditSheet({
     ),
   );
 
-  const typeOptions = useObjectTypeOptions(loc?.label, client.team_id ?? null);
+  const typeOptions = useObjectTypeOptions(client.team_id ?? null);
 
   // Черновик главной строки и заметки. Заполняем ТОЛЬКО на открытии листа (по
   // locationId, а не по самому объекту): `loc` — новая ссылка после каждого

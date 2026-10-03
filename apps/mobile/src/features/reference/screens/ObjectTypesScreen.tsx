@@ -6,7 +6,6 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 import {
   generateLocationLabelId,
-  HOME_SERVICE_LABELS_PRESET,
   type LocationLabel,
 } from "@babun/shared/local/location-labels";
 import { Screen } from "@/components/ui/Screen";
@@ -94,7 +93,6 @@ export function ObjectTypesScreen() {
   const { data: clients = [] } = useClients();
   const [editing, setEditing] = useState<Editing | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [seeding, setSeeding] = useState(false);
 
   // Сколько объектов уже носят это имя — чтобы вопрос об удалении говорил
   // правду, а не пугал вообще.
@@ -118,24 +116,6 @@ export function ObjectTypesScreen() {
       notify(failure, e instanceof Error ? e.message : "Повторите попытку.");
       return false;
     }
-  };
-
-  // СТАНДАРТНЫЙ НАБОР ЗАВОДИТСЯ САМ (владелец 2026-08-02: «типы объектов
-  // должны быть уже добавлены — дом, квартира, офис, как теги»). Пресет
-  // пишется ОДИН РАЗ и только в пустой справочник: дальше это обычные записи,
-  // которые переименуют или удалят.
-  const seedPreset = async () => {
-    if (seeding || labels.length > 0) return;
-    setSeeding(true);
-    // У каждой команды свои строки: id пресета с командой, иначе вторая
-    // команда столкнулась бы с «Домом» первой.
-    await write(
-      teamId
-        ? HOME_SERVICE_LABELS_PRESET.map((label) => ({ ...label, id: `${label.id}@${teamId}` }))
-        : HOME_SERVICE_LABELS_PRESET,
-      "Не удалось добавить стандартные типы",
-    );
-    setSeeding(false);
   };
 
   const duplicate = (name: string, exceptId?: string) =>
@@ -225,13 +205,13 @@ export function ObjectTypesScreen() {
         <EmptyState
           fill
           title="Типов пока нет"
+          // ГОТОВОГО НАБОРА НЕТ (владелец 03.10: «типов не должно быть
+          // изначально — каждый человек сам создаёт свой тип объекта»).
+          // Кнопка пустого списка — та же «Добавить тип», что внизу у полного.
           action={
             readOnly
               ? undefined
-              : {
-                  label: seeding ? "Добавляем…" : "Добавить стандартные",
-                  onPress: () => void seedPreset(),
-                }
+              : { label: "Добавить тип", onPress: () => setEditing({ mode: "create" }) }
           }
         />
       ) : (

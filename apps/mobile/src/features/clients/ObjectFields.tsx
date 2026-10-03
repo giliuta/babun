@@ -27,10 +27,9 @@ import { geocodeAddress } from "@/features/clients/geocode";
 import { isLikelyUrl, parseAddress } from "@babun/shared/common/utils/map-links";
 import {
   objectTypeKey,
+  objectTypeVocabulary,
   snapObjectType,
-  useFrozenObjectTypes,
 } from "@/features/clients/object-types";
-import { useClients } from "@/features/clients/queries";
 import { useLocationLabels } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -77,23 +76,16 @@ export interface ObjectFieldsValue {
  *  которым словарь строится, и без заморозки чип уезжает из-под пальца через
  *  базу (владелец 2026-07-27: «нажимаю офис — перекладывает на виллу»). */
 export function useObjectTypeOptions(
-  current: string | undefined,
   /** Команда клиента — её «Типы объектов» (у каждой команды свои, 30.09). */
   teamId: string | null = null,
 ): string[] {
-  const { data: everyClient = [] } = useClients();
-  // Типы «из данных» — тоже только клиентов этой команды: иначе в выбор
-  // протекали бы типы соседней команды.
-  const allClients = useMemo(
-    () => (teamId ? everyClient.filter((c) => c.team_id === teamId) : everyClient),
-    [everyClient, teamId],
-  );
+  // ТОЛЬКО СПРАВОЧНИК КОМАНДЫ (владелец 03.10: «каждый сам создаёт свой
+  // тип»): ни стандартного набора, ни типов, подсмотренных на объектах.
   const { data: labelPresets = [] } = useLocationLabels(teamId);
-  const presetNames = useMemo(
-    () => labelPresets.map((preset) => preset.name),
+  return useMemo(
+    () => objectTypeVocabulary(labelPresets.map((preset) => preset.name)),
     [labelPresets],
   );
-  return useFrozenObjectTypes(allClients, presetNames, current);
 }
 
 export function ObjectFields({
@@ -205,10 +197,12 @@ export function ObjectFields({
         emptyIcon={Tag}
         emptyLabel="Выбрать тип объекта"
         emptyHint="Открывает список типов объектов"
+        // Метка без типа в справочнике (тип удалили) — «не выбрано»: объект
+        // без типа, как и в строке объекта (`findObjectType`).
         value={
-          value.type.trim()
+          typePreset
             ? {
-                name: value.type,
+                name: typePreset.name,
                 color: typePreset?.color ?? null,
                 Icon: iconPreset(typePreset?.icon),
               }
@@ -385,7 +379,9 @@ export function ObjectFields({
       <PickerSheet
         visible={typeSheetOpen}
         title="Тип объекта"
-        selectedId={value.type.trim() || null}
+        selectedId={typePreset?.name ?? null}
+        // Справочник пуст — так и говорим; завести тип — значком справа.
+        emptyText="Типов объектов пока нет — добавьте свой значком справа"
         items={typeOptions.map((name) => ({
           id: name,
           label: name,
@@ -397,7 +393,7 @@ export function ObjectFields({
           // значение можно не иметь.
           onPress: () => {
             onChange({
-              type: name === value.type ? "" : snapObjectType(name, typeOptions),
+              type: name === typePreset?.name ? "" : snapObjectType(name, typeOptions),
             });
             onCommit?.();
           },
