@@ -128,3 +128,14 @@ export async function shareLedgerCsv(input: {
     dialogTitle: `Операции · ${input.title}`,
   });
 }
+
+/** ВЫПИСКА СЧЁТА (владелец 03.10, шторка счёта): все операции этого счёта —
+ *  доходы, расходы, возвраты и его ноги переводов, от новых к старым не
+ *  переставляя (порядок — как пришёл из базы). Тот же файл, что «Выгрузка
+ *  для бухгалтера», только по одному счёту и за всё время. */
+export function accountStatementRows<R extends { account_id: string | null }>(
+  all: readonly R[],
+  accountId: string,
+): R[] {
+  return all.filter((row) => row.account_id === accountId);
+}

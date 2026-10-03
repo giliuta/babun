@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { RowGroup } from "@/components/ui/card-rows";
+import { SectionCard } from "@/components/ui/SectionCard";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { notify } from "@/lib/notify";
 import type { AccountWithBalance } from "../accounts";
@@ -82,8 +82,10 @@ export function AccountNameCard({
     });
   };
 
+  // Первый блок шторки (вариант 1, владелец 03.10): слева плитка — цвет и
+  // значок, справа название, правится прямо здесь.
   return (
-    <RowGroup>
+    <SectionCard dense>
       <NameColorField
         bare
         label={null}
@@ -112,6 +114,6 @@ export function AccountNameCard({
         // Без своего значка (или со старым эмодзи) плитка рисует глиф типа.
         fallback={accountIcon(account)}
       />
-    </RowGroup>
+    </SectionCard>
   );
 }

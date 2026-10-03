@@ -1,5 +1,8 @@
-import { money, moneySign } from "@babun/shared/common/utils/money";
-import { ActionRow, RowCaption, RowGroup } from "@/components/ui/card-rows";
+import { View } from "react-native";
+import { Eye, EyeOff, Trash2 } from "lucide-react-native";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { SelectRow } from "@/components/ui/select-rows";
+import { useThemeColors } from "@/theme/colors";
 import { useReopenAccount, type AccountWithBalance } from "../accounts";
 import type { AlertError } from "./types";
 
@@ -27,63 +30,47 @@ export function AccountCloseGroup({
   onCloseAccount: () => void;
   alertError: AlertError;
 }) {
+  const t = useThemeColors();
   const reopenAcc = useReopenAccount();
   const hasHistory = account.has_history;
-  const hasBalance = moneySign(account.balance) !== 0;
+  // Плашки, как во всей шторке (вариант 1, 03.10); объяснений под ними нет —
+  // всё нужное говорит вопрос, который задаёт само действие
+  // (`use-close-flow`): остаток, перевод, «насовсем».
+  const blockBody = { paddingHorizontal: 2, paddingTop: 2, paddingBottom: 4, gap: 2 } as const;
 
   if (account.is_active) {
     return (
-      <>
-        <RowGroup>
-          <ActionRow label="Скрыть счёт" tone="danger" onPress={onCloseAccount} />
-        </RowGroup>
-        <RowCaption
-          tone={hasBalance ? "warning" : "quiet"}
-          text={
-            hasBalance
-              ? `Сейчас на счёте ${money(account.balance)} — сначала `
-                + "переведите остаток на другой счёт или спишите операцией."
-              : "Счёт станет серым внизу списка и исчезнет из оплаты. История "
-                + "сохранится; вернуть счёт или стереть пустой можно там же."
-          }
-        />
-      </>
+      <SectionCard dense>
+        <View style={blockBody}>
+          <SelectRow icon={EyeOff} color={t.danger} plain title="Скрыть счёт" onPress={onCloseAccount} />
+        </View>
+      </SectionCard>
     );
   }
 
   return (
-    <>
-      <RowGroup>
+    <SectionCard dense>
+      <View style={blockBody}>
         {/* ЗАКРЫТЫЙ СЧЁТ ОТКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, без вопроса: действие
-            обратимо, и лист остаётся на месте — дальше счёт правится как
-            любой другой. */}
-        <ActionRow
-          label="Открыть счёт снова"
-          dimmed={reopenAcc.isPending}
+            обратимо, и лист остаётся на месте. */}
+        <SelectRow
+          icon={Eye}
+          color={t.accent}
+          plain
+          title="Открыть счёт снова"
+          disabled={reopenAcc.isPending}
           onPress={() =>
             void reopenAcc
               .mutateAsync(account.id)
               .catch(alertError("Не удалось открыть счёт"))
           }
         />
+        {/* Стереть можно только пустой: операции держат доход и отчёты
+            (сервер: `finance_transactions → accounts on delete restrict`). */}
         {!hasHistory ? (
-          <ActionRow
-            label="Удалить счёт"
-            tone="danger"
-            separated
-            onPress={onCloseAccount}
-          />
+          <SelectRow icon={Trash2} color={t.danger} plain title="Удалить счёт" onPress={onCloseAccount} />
         ) : null}
-      </RowGroup>
-      <RowCaption
-        text={
-          hasHistory
-            ? "По счёту есть операции — стереть его нельзя: они держат доход "
-              + "и отчёты. В итоги и оплату закрытый счёт не входит."
-            : "Операций по счёту не было, поэтому он удаляется насовсем. "
-              + "Восстановить будет нельзя."
-        }
-      />
-    </>
+      </View>
+    </SectionCard>
   );
 }
