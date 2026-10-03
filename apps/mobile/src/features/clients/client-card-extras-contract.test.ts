@@ -174,8 +174,10 @@ describe("люди и реквизиты — тоже своими страни�
   // Владелец 22.09: «то же самое можно сделать с людьми и с реквизитами».
   test("на карточке первые строки и дверь «Все …»", () => {
     assert.match(read("ClientPeopleDoor.tsx"), /export const PEOPLE_ON_CARD = 3;/);
-    assert.match(read("blocks/RequisitesBlock.tsx"), /export const REQUISITES_ON_CARD = 2;/);
-    assert.match(read("blocks/RequisitesBlock.tsx"), /label="Все реквизиты"/);
+    // Реквизиты с 03.10 — как «История»: на карточке один набор, основной,
+    // тап по нему — страница всех (двери «Все реквизиты» нет).
+    assert.match(read("blocks/RequisitesBlock.tsx"), /const shown = single \? ordered\.slice\(0, 1\) : ordered;/);
+    assert.match(read("ClientProfileBlocks.tsx"), /onOpenAll=\{draft \? undefined : onOpenRequisites\}/);
     const page = read("../../../app/(dashboard)/clients/[id].tsx");
     assert.match(page, /label="Все люди"/);
     assert.match(page, /limit: PEOPLE_ON_CARD/);
@@ -219,7 +221,8 @@ describe("аудит 23.09 — то, что чинили", () => {
   });
   test("на своей странице блок без второй шапки", () => {
     assert.match(read("blocks/ObjectsBlock.tsx"), /<SectionCard title=\{bare \? undefined : "Объекты"\}>/);
-    assert.match(read("blocks/RequisitesBlock.tsx"), /<SectionCard title=\{bare \? undefined : "Реквизиты"\}>/);
+    // Своя страница реквизитов (03.10) — плашки без карточки и шапки.
+    assert.match(read("blocks/RequisitesBlock.tsx"), /if \(bare\) \{\s*return \(\s*<>/);
   });
 });
 

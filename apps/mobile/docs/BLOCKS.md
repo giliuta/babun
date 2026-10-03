@@ -635,7 +635,7 @@
 | «История» | `src/features/clients/ClientContactRow.tsx` | сводка `src/features/clients/ClientSummaryCard.tsx` (визиты · сумма · был · команда; при долге — в «Неоплаченные») · дверь «Записать» |
 | «Объекты» | `src/features/clients/ClientObjectsSection.tsx` + `src/features/clients/blocks/ObjectsBlock.tsx` | `ObjectRow` · мини-заметка объекта под строкой · «Все объекты · N» → `clients/objects.tsx` · дверь «Добавить объект» (курсор сразу в адрес) |
 | «Файлы» | `src/features/clients/blocks/ClientFilesBlock.tsx` | последний файл под заголовком дня (`ClientFileRow`) → `clients/attachments.tsx`: лента по дням, инвойсы и чеки в ней же · пустой блок — дверь «Добавить файл» |
-| «Реквизиты» | `src/features/clients/blocks/RequisitesBlock.tsx` | наборы (`RequisitesRow` без шеврона, свайп «Удалить» + «Отменить») · «Все реквизиты · N» → `clients/requisites.tsx` · дверь «Добавить реквизиты» → `src/features/clients/RequisitesSheet.tsx` |
+| «Реквизиты» | `src/features/clients/blocks/RequisitesBlock.tsx` | основной набор плашкой (`SelectRow plain`, плитка-здание акцентом) → `clients/requisites.tsx`: каждый набор плашкой, тап — `src/features/clients/RequisitesSheet.tsx`, удержание — скопировать, свайп «Удалить» + «Отменить», футер «Добавить реквизиты» · пустой блок — дверь «Добавить реквизиты» |
 | «Метка \| Тег» | `src/features/clients/ClientLabelTags.tsx` | две `IdentityCard` из шапки записи; метка «по записи» — пришла сама (`src/features/clients/label-auto-assign.ts`); тег один, как метка; шестерёнки в шторках ведут в справочники |
 | «Личное» | `src/features/clients/blocks/PersonalBlock.tsx` | День рождения · Источник · Кто привёл (при «Рекомендации») |
 

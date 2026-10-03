@@ -151,6 +151,7 @@ export function SelectRow({
   plain = false,
   image,
   onPress,
+  onLongPress,
 }: {
   /** Имя сущности — главная строка. */
   title: string;
@@ -193,6 +194,8 @@ export function SelectRow({
    *  (файлы клиента, владелец 03.10: фото узнают глазами, а не по слову). */
   image?: string;
   onPress: () => void;
+  /** Удержание — второе действие строки (реквизиты: скопировать набор). */
+  onLongPress?: () => void;
 }) {
   const t = useThemeColors();
   const hasTile = Boolean(Icon || initial || image);
@@ -212,6 +215,7 @@ export function SelectRow({
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       disabled={disabled}
       accessibilityRole={accessibilityRole}
       accessibilityState={

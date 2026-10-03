@@ -7,10 +7,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
 import type { ClientLinkItem } from "@/features/clients/blocks/ClientLinksBlock";
 import { ClientObjectsSection } from "@/features/clients/ClientObjectsSection";
-import {
-  REQUISITES_ON_CARD,
-  RequisitesBlock,
-} from "@/features/clients/blocks/RequisitesBlock";
+import { RequisitesBlock } from "@/features/clients/blocks/RequisitesBlock";
 import ClientFilesBlock from "@/features/clients/blocks/ClientFilesBlock";
 import { PersonalBlock } from "@/features/clients/blocks/PersonalBlock";
 import { RowCaption } from "@/components/ui/card-rows";
@@ -161,8 +158,10 @@ export function ClientProfileBlocks({
           draft={draft}
           update={update}
           readOnly={!a.requisites.edit}
-          limit={REQUISITES_ON_CARD}
-          onOpenAll={onOpenRequisites}
+          // Один набор — основной; тап — страница всех (03.10, как «История»).
+          single={!draft}
+          // У черновика своей страницы ещё нет: набор правится листом.
+          onOpenAll={draft ? undefined : onOpenRequisites}
         />
       ) : null}
       {a.personal.show ? (

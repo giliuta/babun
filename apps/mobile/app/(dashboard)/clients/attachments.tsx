@@ -173,6 +173,7 @@ function ClientAttachmentsScreen() {
                   return own && canChange ? (
                     <SwipeRow
                       key={`${entry.type}-${entry.item.id}`}
+                      radius={t.radius.input}
                       label="Удалить"
                       color={t.danger}
                       onAction={() => confirmDelete(entry.item)}
