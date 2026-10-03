@@ -33,6 +33,7 @@ import { useClients } from "@/features/clients/queries";
 import { accountIcon } from "@/features/finances/account-ui";
 import { SummaryToggle } from "@/features/finances/FinanceOverview";
 import { OperationSheet } from "@/features/finances/OperationSheet";
+import { awaitingAnswer } from "@/features/finances/ledger-select";
 import { accountRowsQueryKey } from "@/lib/company-query-keys";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
@@ -171,13 +172,17 @@ export function DayFinanceSheet({
   // Обе выборки вместе; к дню строки относит `dayMoney` — и прошлый день,
   // подсунутый keepPreviousData, туда не попадёт.
   const dayTx = useMemo(
-    () => [...(txQuery.data ?? []), ...(recordsTxQuery.data ?? [])],
-    [txQuery.data, recordsTxQuery.data],
+    () => [
+      ...(txQuery.data ?? []),
+      ...(recordsTxQuery.isPlaceholderData ? [] : recordsTxQuery.data ?? []),
+    ],
+    [txQuery.data, recordsTxQuery.isPlaceholderData, recordsTxQuery.data],
   );
-  const ledgerLoading =
-    (txQuery.isPending && txQuery.data === undefined) ||
-    txQuery.isPlaceholderData ||
-    recordsTxQuery.isPlaceholderData;
+  // Загрузка — пока ответ в пути (`awaitingAnswer`). По одному
+  // `isPlaceholderData` день БЕЗ ЗАПИСЕЙ, открытый после дня с записями,
+  // крутил загрузку вечно: запрос по записям у него выключен, а заглушку
+  // прошлого дня react-query держит и выключенному (повторный аудит 03.10).
+  const ledgerLoading = awaitingAnswer(txQuery) || awaitingAnswer(recordsTxQuery);
 
   const legacyExtras = useMemo(
     () => (shownYmd ? getDayExtras(extrasMap, teamId, shownYmd) : []),

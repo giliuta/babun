@@ -9,6 +9,7 @@ import { RAIL_W } from "@/features/calendar/DayView";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 import { dayMoney } from "@/features/calendar/day-money";
 import { useAppointmentsLedger, useTransactions } from "@/features/finances/queries";
+import { awaitingAnswer } from "@/features/finances/ledger-select";
 
 // Thin money strip pinned under the day/week grid — per-day Доход (green) over
 // Расход (red), aligned to the day columns (gutter width = the hour rail).
@@ -68,12 +69,10 @@ export function DayFinanceFooter({
   // в пути, запрос отдаёт заглушкой строки ПРОШЛОГО периода, и дни новой
   // недели секунду стояли «Доход €0» — у среды с оплатой €131 тоже. Ноль
   // здесь — утверждение о деньгах; пока ответа нет, в клетке прочерк.
-  // Только пока запрос в пути: у недели без записей запрос по записям
-  // выключен, а заглушку прошлой недели react-query показывает и выключенному
-  // — полоса стояла бы прочерками навсегда.
-  const unknown = (q: { isPlaceholderData: boolean; isPending: boolean; fetchStatus: string }) =>
-    q.fetchStatus !== "idle" && (q.isPlaceholderData || q.isPending);
-  const settling = unknown(ledgerQuery) || unknown(recordsLedgerQuery);
+  // Только пока запрос в пути (`awaitingAnswer`): у недели без записей
+  // запрос по записям выключен, а заглушку прошлой недели react-query
+  // показывает и выключенному — полоса стояла бы прочерками навсегда.
+  const settling = awaitingAnswer(ledgerQuery) || awaitingAnswer(recordsLedgerQuery);
   const ledger = useMemo(
     () => [...(ledgerQuery.data ?? []), ...(recordsLedger ?? [])],
     [ledgerQuery.data, recordsLedger],

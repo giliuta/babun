@@ -90,3 +90,22 @@ export function placeholderWithinTenant<T>(
   return (prev, prevQuery) =>
     tenantId && prevQuery?.queryKey[1] === tenantId ? prev : undefined;
 }
+
+/**
+ * ОТВЕТА ДЛЯ ЭТОГО КЛЮЧА ЕЩЁ НЕТ — И ОН В ПУТИ.
+ *
+ * Одного `isPlaceholderData` мало: react-query v5 показывает заглушку и
+ * ВЫКЛЮЧЕННОМУ запросу (`enabled: false` — например, у дня без записей
+ * пустой список номеров), и такой запрос «грузится» вечно (повторный аудит
+ * 03.10): шторка «Финансы дня» у дня без записей крутила загрузку без конца,
+ * полоса под сеткой стояла прочерками, клетки месяца теряли операции без
+ * записи. «В пути» — пока запрос идёт или ждёт сети (`fetchStatus` не
+ * `idle`), а показана заглушка или ответа нет вовсе.
+ */
+export function awaitingAnswer(q: {
+  isPlaceholderData: boolean;
+  isPending: boolean;
+  fetchStatus: string;
+}): boolean {
+  return q.fetchStatus !== "idle" && (q.isPlaceholderData || q.isPending);
+}

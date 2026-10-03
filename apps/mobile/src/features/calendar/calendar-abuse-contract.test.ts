@@ -245,9 +245,9 @@ describe("повторный аудит календаря 03.10", () => {
   test("полоса денег под сеткой не выдаёт заглушку прошлой недели за «€0»", () => {
     const footer = readFileSync(resolve(here, "DayFinanceFooter.tsx"), "utf8");
     // Только пока запрос в пути: выключенный запрос (неделя без записей) с
-    // заглушкой прошлой недели иначе держал прочерки навсегда.
-    assert.match(footer, /q\.fetchStatus !== "idle" && \(q\.isPlaceholderData \|\| q\.isPending\)/);
-    assert.match(footer, /const settling = unknown\(ledgerQuery\) \|\| unknown\(recordsLedgerQuery\);/);
+    // заглушкой прошлой недели иначе держал прочерки навсегда. Само правило —
+    // `awaitingAnswer` под юнит-тестом в `ledger-select.test.ts`.
+    assert.match(footer, /const settling = awaitingAnswer\(ledgerQuery\) \|\| awaitingAnswer\(recordsLedgerQuery\);/);
     assert.match(footer, /\{settling \? "—" : formatEUR\(income\)\}/);
     assert.match(footer, /\{settling \? "—" : formatEUR\(spent\)\}/);
   });
@@ -265,5 +265,14 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(block, /: freeTitle\s*\? \{ name: freeTitle, color: titleColor \?\? null, Icon: Tag \}/);
     const book = readFileSync(resolve(here, "../../../app/book/index.tsx"), "utf8");
     assert.match(book, /<EventTypeBlock\s*type=\{eventType\}\s*title=\{eventTitle\}\s*titleColor=\{eventColor\}/);
+  });
+
+  test("день и месяц без записей не «грузятся» вечно на заглушке выключенного запроса", () => {
+    const sheet = readFileSync(resolve(here, "DayFinanceSheet.tsx"), "utf8");
+    assert.match(sheet, /const ledgerLoading = awaitingAnswer\(txQuery\) \|\| awaitingAnswer\(recordsTxQuery\);/);
+    assert.doesNotMatch(sheet, /recordsTxQuery\.isPlaceholderData;/);
+    const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
+    assert.match(month, /const recordsAwaiting = awaitingAnswer\(recordsLedgerQuery\);/);
+    assert.match(month, /ledgerAwaiting \|\| recordsAwaiting\s*\? undefined/);
   });
 });

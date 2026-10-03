@@ -7,6 +7,7 @@ import { formatHM } from "@/features/appointments/helpers";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 import { dayMoney, type DayMoney } from "@/features/calendar/day-money";
 import { useAppointmentsLedger, useTransactions } from "@/features/finances/queries";
+import { awaitingAnswer } from "@/features/finances/ledger-select";
 import {
   isWeekendColumn,
   weekdayIndex,
@@ -121,13 +122,23 @@ export const MonthView = memo(function MonthView({
     return financeAppointments.filter((a) => a.date >= from && a.date <= to).map((a) => a.id);
   }, [financeAppointments, cells]);
   const recordsLedgerQuery = useAppointmentsLedger(recordIds, { enabled: showFinance });
+  // Чужой период не выдаём за свой, пока свой в пути. У месяца без записей
+  // запрос по записям выключен и держит заглушку вечно — по одному
+  // `isPlaceholderData` клетки такого месяца теряли и операции без записи
+  // (повторный аудит 03.10); строки заглушки — чужих номеров, в счёт не идут.
+  const ledgerAwaiting = awaitingAnswer(ledgerQuery);
+  const recordsAwaiting = awaitingAnswer(recordsLedgerQuery);
   const ledger = useMemo(
     () =>
-      ledgerQuery.isPlaceholderData || recordsLedgerQuery.isPlaceholderData
+      ledgerAwaiting || recordsAwaiting
         ? undefined
-        : [...(ledgerQuery.data ?? []), ...(recordsLedgerQuery.data ?? [])],
+        : [
+            ...(ledgerQuery.data ?? []),
+            ...(recordsLedgerQuery.isPlaceholderData ? [] : recordsLedgerQuery.data ?? []),
+          ],
     [
-      ledgerQuery.isPlaceholderData,
+      ledgerAwaiting,
+      recordsAwaiting,
       ledgerQuery.data,
       recordsLedgerQuery.isPlaceholderData,
       recordsLedgerQuery.data,
