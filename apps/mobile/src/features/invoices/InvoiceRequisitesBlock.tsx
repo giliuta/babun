@@ -79,6 +79,10 @@ export function InvoiceRequisitesBlock({
           sub={company ? companyDetail(company) : "Добавьте, чем подписывать инвойс"}
           subColor={empty ? t.warning : undefined}
           onPress={open}
+          // ДОЛГОЕ НАЖАТИЕ — ПРАВКА ЭТОГО НАБОРА (владелец 2026-10-03:
+          // «задерживаю — редактирование, тапнул — выбор другого»). Не заведён
+          // ни один — заводим новый.
+          onLongPress={() => edit(company ?? null)}
         />
         {number ? <InvoiceNumberRow target={number} /> : null}
       </SectionCard>
