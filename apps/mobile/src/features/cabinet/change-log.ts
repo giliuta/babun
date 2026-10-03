@@ -55,6 +55,11 @@ const NOUNS: Record<string, Noun> = {
   personal_event_types: { word: "Тип события", gender: "m" },
   team_design: { word: "Настройки записей", gender: "pl" },
   team_schedules: { word: "График", gender: "m" },
+  day_cities: { word: "Метка дня", gender: "f" },
+  calendar_settings: { word: "Настройки календаря", gender: "pl" },
+  legal_entities: { word: "Реквизиты", gender: "pl" },
+  sms_team_templates: { word: "Шаблон SMS", gender: "m" },
+  masters: { word: "Карточка партнёра", gender: "f" },
 };
 
 const TX_NOUNS: Record<string, Noun> = {
@@ -88,6 +93,12 @@ export function changeTitle(row: Pick<ChangeLogRow, "entity" | "meta" | "action"
       return row.action === "delete" ? "Доступ к календарю закрыт" : "Доступ к календарю открыт";
     case "tenant_members":
       return row.action === "insert" ? "Партнёр добавлен" : row.action === "delete" ? "Партнёр удалён" : "Партнёр изменён";
+    case "client_tag_assignments":
+      return row.action === "delete" ? "Тег снят" : "Тег поставлен";
+    case "client_attachments":
+      return row.action === "delete" ? "Файл удалён" : row.action === "insert" ? "Файл добавлен" : "Файл изменён";
+    case "appointment_photos":
+      return row.action === "delete" ? "Фото удалено" : row.action === "insert" ? "Фото добавлено" : "Фото изменено";
     case "invitations":
       if (row.action === "insert") return "Приглашение отправлено";
       if (row.action === "delete") return "Приглашение отозвано";
@@ -113,7 +124,14 @@ export function changeSubject(row: Pick<ChangeLogRow, "entity" | "label" | "meta
   const meta = row.meta ?? {};
   const parts: string[] = [];
   if (row.label) parts.push(row.label);
-  if (row.entity === "appointments") {
+  if (row.entity === "client_tag_assignments" && meta.tag) parts.push(String(meta.tag));
+  if (row.entity === "client_attachments" && meta.client) parts.push(String(meta.client));
+  if (row.entity === "day_cities" && meta.date) parts.push(shortDate(meta.date));
+  if (row.entity === "member_access" && meta.block_title) {
+    const level = LEVEL_WORDS[String(meta.level ?? "")];
+    parts.push(level ? `${String(meta.block_title)}: ${level}` : String(meta.block_title));
+  }
+  if (row.entity === "appointments" || row.entity === "appointment_photos") {
     const when = [meta.date ? shortDate(meta.date) : "", meta.time ? String(meta.time) : ""]
       .filter(Boolean)
       .join(", ");
@@ -289,15 +307,49 @@ const PAYMENT_METHOD_WORDS: Record<string, string> = {
   bank: "перевод",
 };
 
+/** Уровни прав — словами страницы прав. */
+const LEVEL_WORDS: Record<string, string> = {
+  off: "скрыт",
+  read: "только видит",
+  write: "видит и меняет",
+  full: "полный доступ",
+};
+
+/** Английские значения полей — словами продукта (проверка 03.10: в истории
+ *  было «Уровень read → write», «Статус issued → void»). */
+const VALUE_WORDS: Record<string, Record<string, string>> = {
+  level: LEVEL_WORDS,
+  vat_mode: { none: "без VAT", inclusive: "VAT включён", exclusive: "плюс VAT" },
+  kind: {
+    cash: "наличные",
+    bank: "банк",
+    card: "карта",
+    work: "запись",
+    event: "событие",
+    personal: "личное",
+    invoice: "инвойс",
+    credit_note: "кредит-нота",
+  },
+  role: { owner: "владелец", master: "партнёр", dispatcher: "диспетчер", admin: "администратор" },
+  language: { ru: "русский", en: "английский", el: "греческий", uk: "украинский" },
+  direction: { in: "мне должны", out: "я должен" },
+  type: { income: "доход", expense: "расход", transfer: "перевод", refund: "возврат" },
+  invoice_status: { draft: "черновик", issued: "выставлен", paid: "оплачен", partial: "частично", void: "аннулирован", cancelled: "отменён" },
+};
+
 const MONEY_FIELDS = new Set(["amount", "total_amount", "total", "paid_amount", "prepaid_amount", "discount_amount", "price"]);
 
 function fieldValue(field: string, value: unknown): string | null {
   if (value === null || value === undefined || value === "") return "—";
   if (field.endsWith("_id") || (field.endsWith("_at") && field !== "reminder_at")) return null;
   if (typeof value === "boolean") return value ? "да" : "нет";
-  if (field === "status") return STATUS_WORDS[String(value)] ?? String(value);
+  if (field === "status") {
+    return STATUS_WORDS[String(value)] ?? VALUE_WORDS.invoice_status[String(value)] ?? String(value);
+  }
   if (field === "payment_status") return PAYMENT_STATUS_WORDS[String(value)] ?? String(value);
   if (field === "payment_method") return PAYMENT_METHOD_WORDS[String(value)] ?? String(value);
+  const words = VALUE_WORDS[field];
+  if (words && String(value) in words) return words[String(value)];
   if (MONEY_FIELDS.has(field)) {
     const n = Number(value);
     return Number.isFinite(n) ? money(n) : String(value);
@@ -429,6 +481,9 @@ const MONEY_ENTITIES = new Set(["finance_transactions", "debts", "invoices", "re
 const PEOPLE_ENTITIES = new Set(["member_access", "member_calendars", "tenant_members", "invitations"]);
 
 export function changeKind(row: Pick<ChangeLogRow, "entity" | "meta">): ChangeKind {
+  if (row.entity === "appointment_photos") return "records";
+  if (row.entity === "client_tag_assignments" || row.entity === "client_attachments") return "clients";
+  if (row.entity === "masters") return "people";
   if (row.entity === "appointments") {
     return row.meta?.kind === "event" || row.meta?.kind === "personal" ? "events" : "records";
   }
@@ -457,18 +512,23 @@ export const HISTORY_PERIODS: { value: HistoryPeriod; label: string }[] = [
 
 /** Границы периода по часам телефона: с какого момента и до какого. */
 export function periodRange(period: HistoryPeriod, now: Date = new Date()): { from: string | null; to: string | null } {
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  const day = 24 * 60 * 60 * 1000;
+  // Календарными днями, а не «минус 24 часа»: в ночь перехода на зимнее время
+  // (25.10) сутки длятся 25 часов, и вычитание сдвигало границу на час.
+  const dayStart = (back: number) => {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - back);
+    return d.toISOString();
+  };
   switch (period) {
     case "today":
-      return { from: start.toISOString(), to: null };
+      return { from: dayStart(0), to: null };
     case "yesterday":
-      return { from: new Date(start.getTime() - day).toISOString(), to: start.toISOString() };
+      return { from: dayStart(1), to: dayStart(0) };
     case "week":
-      return { from: new Date(start.getTime() - 6 * day).toISOString(), to: null };
+      return { from: dayStart(6), to: null };
     case "month":
-      return { from: new Date(start.getTime() - 29 * day).toISOString(), to: null };
+      return { from: dayStart(29), to: null };
     default:
       return { from: null, to: null };
   }
@@ -550,6 +610,10 @@ export function collapseBursts(rows: readonly ChangeLogRow[]): ChangeLogItem[] {
       last.row.actor_id === row.actor_id &&
       last.row.entity === row.entity &&
       last.row.action === row.action &&
+      // Одна команда и один вид предмета: событие и записи, доход и расход в
+      // одну «×3» не склеиваются (проверка 03.10).
+      last.row.team_id === row.team_id &&
+      entityNoun(last.row).word === entityNoun(row).word &&
       (row.entity !== "member_access" || last.row.label === row.label) &&
       (row.action !== "update" || row.entity === "member_access") &&
       Math.abs(Date.parse(last.row.created_at) - Date.parse(row.created_at)) <= BURST_MS;
@@ -581,7 +645,11 @@ export function changeTarget(row: Pick<ChangeLogRow, "entity" | "entity_id" | "a
   | { kind: "client"; id: string }
   | null {
   if (!row.entity_id || row.action === "delete") return null;
-  if (row.entity === "appointments") return { kind: "appointment", id: row.entity_id };
-  if (row.entity === "clients") return { kind: "client", id: row.entity_id };
+  if (row.entity === "appointments" || row.entity === "appointment_photos") {
+    return { kind: "appointment", id: row.entity_id };
+  }
+  if (row.entity === "clients" || row.entity === "client_tag_assignments") {
+    return { kind: "client", id: row.entity_id };
+  }
   return null;
 }

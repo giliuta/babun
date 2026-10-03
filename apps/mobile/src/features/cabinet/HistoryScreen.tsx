@@ -118,7 +118,8 @@ export function HistoryScreen() {
   const router = useRouter();
   const { session } = useSession();
   const me = session?.user?.id ?? null;
-  const { data: teams = [] } = useTeams();
+  // С архивными: строка о команде, которую потом удалили, всё равно знает её имя.
+  const { data: teams = [] } = useTeams({ includeInactive: true });
   const { data: members = [] } = useCompanyMembers();
   const [period, setPeriod] = useState<HistoryPeriod>("all");
   const [filter, setFilter] = useState<HistoryFilter>(EMPTY_HISTORY_FILTER);
@@ -149,7 +150,10 @@ export function HistoryScreen() {
     return [...out].map(([value, label]) => ({ value, label, color: "" }));
   }, [members, me, rows]);
   const teamOptions = useMemo(() => {
-    const out = teams.map((x) => ({ value: x.id, label: x.name, color: x.color ?? "" }));
+    const seen = new Set(rows.map((r) => r.team_id));
+    const out = teams
+      .filter((x) => x.is_active || seen.has(x.id))
+      .map((x) => ({ value: x.id, label: x.name, color: x.color ?? "" }));
     if (rows.some((r) => r.team_id == null)) out.push({ value: "none", label: "Без команды", color: "" });
     return out;
   }, [teams, rows]);
@@ -281,6 +285,16 @@ export function HistoryScreen() {
               />
             </View>
           )}
+          ListFooterComponent={
+            log.data?.capped ? (
+              <Text
+                maxFontSizeMultiplier={1.3}
+                style={{ paddingHorizontal: GUTTER + 4, paddingTop: 16, fontSize: 13, color: t.sub }}
+              >
+                Показаны последние 3000 изменений — более ранние откроет период
+              </Text>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState title={rows.length === 0 ? "Изменений пока нет" : "Ничего не найдено"} />
           }

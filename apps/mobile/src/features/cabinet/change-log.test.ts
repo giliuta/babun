@@ -121,6 +121,15 @@ describe("история изменений — пачки", () => {
     const c = row({ entity: "clients", action: "insert", actor_id: "u2", created_at: "2026-10-03T11:50:00Z" });
     assert.equal(collapseBursts([a, b, c]).length, 3);
   });
+
+  test("разные команды и разные предметы одной таблицы — не пачка", () => {
+    const work = row({ entity: "clients", action: "insert", label: "А" });
+    const other = row({ entity: "clients", action: "insert", label: "Б", team_id: "team-2" });
+    assert.equal(collapseBursts([work, other]).length, 2);
+    const income = row({ entity: "finance_transactions", action: "delete", meta: { type: "income" } });
+    const expense = row({ entity: "finance_transactions", action: "delete", meta: { type: "expense" } });
+    assert.equal(collapseBursts([income, expense]).length, 2);
+  });
 });
 
 describe("история изменений — списки и подробности", () => {
@@ -193,5 +202,32 @@ describe("история изменений — фильтры", () => {
     assert.equal(new Date(yesterday.from as string).getDate(), 2);
     assert.equal(yesterday.to, today.from);
     assert.deepEqual(periodRange("all", now), { from: null, to: null });
+  });
+
+  test("период — календарными днями, а не по 24 часа (переход времени 25.10)", () => {
+    const now = new Date(2026, 9, 26, 10, 0, 0);
+    const week = new Date(periodRange("week", now).from as string);
+    assert.deepEqual([week.getDate(), week.getHours(), week.getMinutes()], [20, 0, 0]);
+    const yesterday = new Date(periodRange("yesterday", now).from as string);
+    assert.deepEqual([yesterday.getDate(), yesterday.getHours()], [25, 0]);
+  });
+
+  test("новые предметы журнала: вид, заголовок и дверь", () => {
+    const tag = row({ entity: "client_tag_assignments", action: "insert", entity_id: "c1", label: "Артем", meta: { tag: "VIP" } });
+    assert.equal(changeKind(tag), "clients");
+    assert.equal(changeTitle(tag), "Тег поставлен");
+    assert.deepEqual(changeTarget(tag), { kind: "client", id: "c1" });
+    const photo = row({ entity: "appointment_photos", action: "insert", entity_id: "a9" });
+    assert.equal(changeKind(photo), "records");
+    assert.deepEqual(changeTarget(photo), { kind: "appointment", id: "a9" });
+    assert.equal(changeKind(row({ entity: "masters" })), "people");
+    assert.equal(changeKind(row({ entity: "day_cities" })), "settings");
+  });
+
+  test("значения словами: уровень права и статус инвойса", () => {
+    assert.equal(describeField("level", ["read", "write"]), "Уровень только видит → видит и меняет");
+    const status = describeField("status", ["issued", "paid"]) ?? "";
+    assert.match(status, /→/);
+    assert.doesNotMatch(status, /issued|paid/);
   });
 });
