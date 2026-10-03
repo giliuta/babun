@@ -584,6 +584,13 @@ export function OperationSheet({
     refundsKnown &&
     Math.round(refundedTotal * 100) > 0 &&
     Math.round(vatBreakdown.gross * 100) < Math.round(refundedTotal * 100);
+  // ДОХОД С ВОЗВРАТОМ ДЕРЖИТ СВОЙ СЧЁТ (аудит 2026-10-03). Возврат лежит на
+  // счёте дохода, а сервер смену счёта у такого дохода не останавливает:
+  // доход уезжал на «Карту», возврат оставался в «Наличных» — касса в минусе,
+  // правило «возврат — по исходному счёту» нарушено. Пока возвраты не
+  // загрузились — тоже не меняем: неизвестно, есть ли они.
+  const refundHoldsAccount =
+    isEdit && type === "income" && (!refundsKnown || refundedTotal > 0);
   const lowersWhileRefundsUnknown =
     isEdit &&
     type === "income" &&
@@ -779,6 +786,17 @@ export function OperationSheet({
 
   const remove = () => {
     if (!transaction) return;
+    // Доход с возвратом сервер удалить не даст («Системные поля финансовой
+    // операции нельзя изменять» — каскад трогает возврат). Говорим причину
+    // словами до вопроса (аудит 2026-10-03).
+    if (transaction.type === "income" && refundsKnown && refundedTotal > 0) {
+      haptics.warning();
+      notify(
+        "Удалить нельзя",
+        `По этому доходу уже возвращено ${formatEUR(refundedTotal)} — сначала удалите возврат.`,
+      );
+      return;
+    }
     const target = transaction;
     // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29): вопрос
     // рисует хост приложения, а лист — отдельное окно `Modal`. Открытый в тот
@@ -1241,6 +1259,20 @@ export function OperationSheet({
                   selected={accountId === a.id}
                   disabled={busy}
                   onPress={() => {
+                    if (
+                      refundHoldsAccount &&
+                      transaction?.account_id &&
+                      a.id !== transaction.account_id
+                    ) {
+                      haptics.warning();
+                      notify(
+                        "Счёт не сменить",
+                        refundsKnown
+                          ? "По этому доходу есть возврат — он лежит на этом счёте. Сначала удалите возврат."
+                          : "Возвраты по доходу ещё загружаются — счёт можно сменить, когда они придут.",
+                      );
+                      return;
+                    }
                     setAccountTouched(true);
                     setAccountId(a.id);
                   }}

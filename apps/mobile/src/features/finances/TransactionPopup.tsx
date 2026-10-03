@@ -272,6 +272,14 @@ export function TransactionPopup({
     refundCents != null && refundCents <= refundRemainingCents;
 
   const handleDelete = () => {
+    // Доход с возвратом сервер удалить не даст — причина словами до вопроса,
+    // а не «Системные поля финансовой операции нельзя изменять» после
+    // (аудит 2026-10-03).
+    if (tx.type === "income" && Number.isFinite(alreadyRefunded) && alreadyRefunded > 0) {
+      haptics.warning();
+      notify("Удалить нельзя", "По этому доходу есть возврат — сначала удалите возврат.");
+      return;
+    }
     // У перевода — свой текст (общий на продукт, account-alerts): человек
     // должен понимать, что отменяет ПЕРЕВОД ЦЕЛИКОМ — исчезнут обе операции,
     // а не одна строка ленты.
