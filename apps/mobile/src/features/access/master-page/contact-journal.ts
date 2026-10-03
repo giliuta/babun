@@ -1,3 +1,5 @@
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
+
 // ЖУРНАЛ ОТКРЫТИЙ НОМЕРОВ НА СТРАНИЦЕ СОТРУДНИКА (защита базы 30.09).
 //
 // Каждый тап сотрудника по номеру клиента сервер записывает
@@ -63,6 +65,6 @@ export function outcomeWord(outcome: ContactOutcome): string | null {
 export function alertWords(alert: ContactAlert): string {
   if (alert.kind === "limit") return `Упёрся в лимит ${DAILY_CONTACTS_LIMIT} в сутки`;
   const n = alert.clients_count;
-  const word = n % 10 === 1 && n % 100 !== 11 ? "номер" : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? "номера" : "номеров";
-  return `${n} ${word} за час`;
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return `${n} ${pluralRu(n, ["номер", "номера", "номеров"])} за час`;
 }

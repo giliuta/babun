@@ -1,3 +1,5 @@
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
+
 // «РАБОТА» СОТРУДНИКА — СВОДКА МЕСЯЦА (STORY-087). Лист без React: счёт
 // проверяется тестом.
 //
@@ -45,12 +47,8 @@ const MONTHS_PREP = [
 ];
 
 function recordsWord(n: number): string {
-  const tens = n % 100;
-  const ones = n % 10;
-  if (tens >= 11 && tens <= 14) return "записей";
-  if (ones === 1) return "запись";
-  if (ones >= 2 && ones <= 4) return "записи";
-  return "записей";
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return pluralRu(n, ["запись", "записи", "записей"]);
 }
 
 /** «7 записей в сентябре · 5 выполнено»; пусто — «в сентябре нет». */

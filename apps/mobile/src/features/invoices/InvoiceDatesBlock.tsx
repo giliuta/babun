@@ -8,6 +8,7 @@ import { WhenRow } from "@/features/appointments/BookingSummary";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { dmyShort } from "@/features/finances/period";
 import { useThemeColors } from "@/theme/colors";
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
 // ДАТЫ ИНВОЙСА — ПО АРХИТЕКТУРЕ «КОГДА» ЗАПИСИ.
 //
@@ -30,14 +31,8 @@ function daysBetween(from: string, to: string): number {
 
 function daysLabel(days: number): string {
   if (days <= 0) return "в день выставления";
-  const mod10 = days % 10;
-  const mod100 = days % 100;
-  const word =
-    mod10 === 1 && mod100 !== 11
-      ? "день"
-      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
-        ? "дня"
-        : "дней";
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  const word = pluralRu(days, ["день", "дня", "дней"]);
   return `${days} ${word}`;
 }
 

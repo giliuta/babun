@@ -1,3 +1,5 @@
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
+
 // ТАРИФЫ «СОЛО · ПРО · МАКС» (владелец 01.10) — ЧИСТЫЙ СЛОЙ.
 //
 //   • без тарифа — свой календарь («Личный»), события, свои финансы;
@@ -172,11 +174,8 @@ export function tierLine(tier: Tier | null, trial: { days: number } | null): str
 }
 
 function daysWord(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "день";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "дня";
-  return "дней";
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return pluralRu(n, ["день", "дня", "дней"]);
 }
 
 /** Какие команды работают при этом тарифе — то же правило, что

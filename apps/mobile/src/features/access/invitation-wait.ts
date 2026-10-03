@@ -1,3 +1,5 @@
+import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
+
 // «ЖДЁТ ОТВЕТА» — СКОЛЬКО ИМЕННО ЖДЁТ.
 //
 // Приглашение живёт семь дней и молчало об этом: в списке стояло «Ждёт
@@ -32,12 +34,8 @@ export function invitationWait(expiresAt: string, now: Date): InvitationWait {
 
 /** «1 день», «2 дня», «5 дней» — русский счёт без библиотек. */
 function dayWord(days: number): string {
-  const tens = days % 100;
-  const ones = days % 10;
-  if (tens >= 11 && tens <= 14) return `${days} дней`;
-  if (ones === 1) return `${days} день`;
-  if (ones >= 2 && ones <= 4) return `${days} дня`;
-  return `${days} дней`;
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return formatCountRu(days, ["день", "дня", "дней"]);
 }
 
 /** Подпись строки: «ждёт ответа · осталось 3 дня». Срок неизвестен — прежнее

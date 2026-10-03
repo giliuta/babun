@@ -1,4 +1,5 @@
 import type { CardField } from "./card-prefs";
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
 // ПОДПИСИ СТРОК ШЕСТЕРЁНКИ «КЛИЕНТОВ» — чистые, без React (владелец 02.10:
 // «настройки клиентов — по функциям»). Подпись — живое состояние, а не
@@ -31,8 +32,6 @@ export function blocksSummary(off: string[]): string {
 /** «Теги»: сколько тегов у команды. */
 export function tagsSummary(tags: number): string {
   if (tags === 0) return "Тегов пока нет";
-  const mod10 = tags % 10;
-  const mod100 = tags % 100;
-  const word = mod10 === 1 && mod100 !== 11 ? "тег" : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? "тега" : "тегов";
-  return `${tags} ${word}`;
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return `${tags} ${pluralRu(tags, ["тег", "тега", "тегов"])}`;
 }

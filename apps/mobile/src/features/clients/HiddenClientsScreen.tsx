@@ -24,6 +24,7 @@ import { useAppointments } from "@/features/calendar/queries";
 import { useTeams } from "@/features/reference/queries";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
 // ЭКРАН УБРАННЫХ КЛИЕНТОВ. Полок было две — архив и корзина; с 03.10 одна,
 // «Удалённые клиенты» (владелец: «понятия „в архив" не будет»). Вёрстка
@@ -265,9 +266,6 @@ export function daysLeft(purgeAt: string | null | undefined): number | null {
 }
 
 export function daysWordRu(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "день";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "дня";
-  return "дней";
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return pluralRu(n, ["день", "дня", "дней"]);
 }

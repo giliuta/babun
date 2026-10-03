@@ -52,6 +52,7 @@ import {
   loadResumeState,
   type ImportResumeState,
 } from "./resume";
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
 // Upload guardrails — web parity (UploadStep.tsx).
 const MAX_BYTES = 10 * 1024 * 1024; // 10 МБ
@@ -1114,11 +1115,8 @@ function ResultStep({
 
 /** «строка / строки / строк» for the error line. */
 function countRowsRu(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "строка";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "строки";
-  return "строк";
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return pluralRu(n, ["строка", "строки", "строк"]);
 }
 
 // ─── Shared bits ────────────────────────────────────────────────────────

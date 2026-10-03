@@ -1,3 +1,5 @@
+import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
+
 // «УБРАТЬ ИЗ КОМПАНИИ» — С ЦИФРОЙ, А НЕ ВСЛЕПУЮ.
 //
 // Вопрос называл последствие словами («доступ пропадёт сразу»), но молчал о
@@ -51,10 +53,6 @@ export function removalMessage(upcoming: number): string {
 
 /** «1 запись», «2 записи», «5 записей» — русский счёт без библиотек. */
 function workWord(count: number): string {
-  const tens = count % 100;
-  const ones = count % 10;
-  if (tens >= 11 && tens <= 14) return `${count} записей`;
-  if (ones === 1) return `${count} запись`;
-  if (ones >= 2 && ones <= 4) return `${count} записи`;
-  return `${count} записей`;
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return formatCountRu(count, ["запись", "записи", "записей"]);
 }
