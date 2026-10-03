@@ -207,6 +207,10 @@ export function DebtSheet({
           ]}
           value={direction}
           onChange={(next) => setDirection(next as DebtDirection)}
+          // По долгу уже платили — направление закреплено (проверка 03.10):
+          // приход по «мне должны» после переворота гасил бы НАШ долг.
+          // Сервер держит ту же границу (`debts_direction_locked`).
+          disabled={isEdit && paid > 0}
           style={{ marginHorizontal: GUTTER, marginTop: 8 }}
         />
 

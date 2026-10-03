@@ -7,6 +7,7 @@ import {
   exportDialogTitle,
   exportFilename,
   financeTeamFilter,
+  paidOf,
   serviceNames,
   sourceName,
   transactionsToCsv,
@@ -56,6 +57,10 @@ const appointment = (over: Partial<AppointmentExportRow>): AppointmentExportRow 
   services: [],
   total_amount: 120,
   paid_amount: 60.5,
+  prepaid_amount: 0,
+  payment_status: "partial",
+  payments: [],
+  payment: null,
   address: "ул. Ленина 5",
   comment: "",
   event_notes: "",
@@ -444,5 +449,24 @@ describe("файл", () => {
 
   test("заголовок окна «Поделиться» — слово, дата, число строк", () => {
     assert.equal(exportDialogTitle("clients", "2026-10-03", 128), "Клиенты 2026-10-03 (128)");
+  });
+});
+
+describe("выгрузка — «Оплачено» общей формулой (проверка 03.10)", () => {
+  test("аванс без доплаты — не ноль", () => {
+    const csv = appointmentsToCsv(
+      [appointment({ paid_amount: 0, prepaid_amount: 255, payment_status: "paid", total_amount: 255 })],
+      { teams: TEAMS, clients: new Map(), services: new Map() },
+    );
+    assert.match(csv, /255,00/);
+  });
+  test("полный возврат — ноль, даже если колонка хранит сумму", () => {
+    assert.equal(paidOf(appointment({ paid_amount: 120, payment_status: "refunded" })), 0);
+  });
+  test("аванс плюс доплата из леджера", () => {
+    assert.equal(
+      paidOf(appointment({ paid_amount: 0, prepaid_amount: 50, payment_status: "partial", payments: [{ amount: 30 }] as never })),
+      80,
+    );
   });
 });

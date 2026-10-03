@@ -1,5 +1,5 @@
 import type { Database, Json } from "@babun/shared/db/database.types";
-import { STATUS_LABELS } from "@babun/shared/local/appointments";
+import { STATUS_LABELS, getPaidAmount, type Appointment } from "@babun/shared/local/appointments";
 import { ACQUISITION_LABELS } from "@babun/shared/local/clients";
 import { TX_TYPE_LABEL } from "@babun/shared/local/finance/transaction";
 import { csvAmount } from "@/features/finances/ledger-export";
@@ -57,6 +57,10 @@ export type AppointmentExportRow = Pick<
   | "services"
   | "total_amount"
   | "paid_amount"
+  | "prepaid_amount"
+  | "payment_status"
+  | "payments"
+  | "payment"
   | "address"
   | "comment"
   | "event_notes"
@@ -166,7 +170,7 @@ export function clientsToCsv(
       csvTextCell(nameOf(refs.teams, c.team_id)),
       csvTextCell(c.city),
       csvTextCell(sourceName(c.acquisition_source, c.team_id, refs.sources)),
-      csvCell(c.birthday),
+      csvTextCell(c.birthday),
       csvTextCell(c.comment),
       csvCell(dateOnly(c.created_at)),
     ]);
@@ -214,6 +218,18 @@ export function serviceNames(services: Json, catalog: Names): string {
   return names.join(", ");
 }
 
+
+/** Получено по записи — общей формулой `getPaidAmount` (аванс + доплата,
+ *  возврат — ноль). Строка выгрузки несёт только нужные ей колонки. */
+export function paidOf(a: AppointmentExportRow): number {
+  return getPaidAmount({
+    ...a,
+    payments: Array.isArray(a.payments) ? a.payments : [],
+    payment: a.payment && typeof a.payment === "object" ? a.payment : null,
+    prepaid_amount: Number(a.prepaid_amount ?? 0),
+    paid_amount: a.paid_amount == null ? null : Number(a.paid_amount),
+  } as unknown as Appointment);
+}
 export function appointmentsToCsv(
   appointments: readonly AppointmentExportRow[],
   refs: { teams: Names; clients: Names; services: Names },
@@ -243,7 +259,10 @@ export function appointmentsToCsv(
       csvTextCell(serviceNames(a.services, refs.services)),
       // У личного события денег нет: «0,00» в каждой строке обеда — шум.
       csvAmount(isWork ? a.total_amount : null),
-      csvAmount(isWork ? a.paid_amount : null),
+      // «Оплачено» — та же формула, что в записи и долгах: аванс плюс
+      // доплата, полный возврат — ноль (проверка системы 03.10: голая
+      // колонка paid_amount не знала аванса и писала «0,00» оплаченным).
+      csvAmount(isWork ? paidOf(a) : null),
       csvTextCell(a.address),
       csvTextCell(note),
     ]);

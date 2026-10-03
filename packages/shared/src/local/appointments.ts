@@ -316,7 +316,14 @@ export function getPaidAmount(apt: Appointment): number {
     : (apt.payment_status ?? "unpaid") !== "unpaid"
       ? apt.paid_amount ?? 0
       : 0;
-  return apt.prepaid_amount + Math.max(ledger, mirror);
+  return cents(apt.prepaid_amount + Math.max(ledger, mirror));
+}
+
+/** До цента. Аванс 4,76 + платёж 7,14 во float — 11.899999…, и долг
+ *  оплаченной записи выходил 1.8e-15: строка «€0» в «Долгах», в долгах дня и
+ *  у клиента (проверка системы 03.10). Деньги в продукте живут в центах. */
+function cents(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 export function getDebtAmount(apt: Appointment): number {
@@ -324,7 +331,7 @@ export function getDebtAmount(apt: Appointment): number {
   // visit remains in history with the explicit «Возврат» status; collecting
   // it again requires a new payment lifecycle, not a derived balance.
   if (apt.payment_status === "refunded") return 0;
-  return Math.max(0, apt.total_amount - getPaidAmount(apt));
+  return Math.max(0, cents(apt.total_amount - getPaidAmount(apt)));
 }
 
 export function isFullyPaid(apt: Appointment): boolean {

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { NEVER_PAUSE } from "@/features/finances/accounts";
 import {
   getInvoice,
   issueInvoice,
@@ -111,6 +112,7 @@ export function useSetInvoiceNextNumber() {
   const tenantId = useTenantId();
   const queryClient = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (input: { companyId: string; year: number; number: number }) => {
       const { error } = await supabase.rpc("set_document_series_start", {
         p_legal_entity_id: input.companyId,
@@ -188,6 +190,7 @@ function invalidateInvoices(qc: ReturnType<typeof useQueryClient>) {
 export function useSetInvoiceLanguage(id: string) {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (language: "ru" | "en") => setInvoiceLanguage(supabase, id, language),
     onSuccess: () => invalidateInvoices(qc),
     meta: { errorHandled: true },
@@ -198,6 +201,7 @@ export function useIssueInvoice() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     // ЯЗЫК ПИШЕТСЯ ВТОРЫМ ШАГОМ И НЕ ВАЛИТ ВЫСТАВЛЕНИЕ. Серверная функция
     // `issue_invoice` его не принимает (добавить параметр — значит создать
     // перегрузку рядом со старой), а язык не деньги: если запись не прошла,
@@ -237,6 +241,7 @@ export function useIssueInvoice() {
 export function useCancelInvoice(id: string) {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (reason?: string) => {
       const { data, error } = await supabase.rpc("cancel_invoice", {
         p_invoice_id: id,
@@ -253,6 +258,7 @@ export function useCancelInvoice(id: string) {
 export function useRecordInvoicePayment(invoiceId: string) {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (draft: RecordInvoicePaymentDraft) =>
       recordInvoicePayment(supabase, invoiceId, draft),
     onSuccess: () => {
@@ -266,6 +272,7 @@ export function useRecordInvoicePayment(invoiceId: string) {
 export function useRefundInvoicePayment(invoiceId: string) {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: ({
       paymentId,
       draft,

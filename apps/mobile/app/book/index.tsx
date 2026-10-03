@@ -52,7 +52,7 @@ import { useInlineNote } from "@/features/appointments/use-inline-note";
 import { useClientNoteField } from "@/features/appointments/use-client-note-field";
 import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { useTeamVatRate } from "@/features/finances/vat-queries";
-import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
+import { applyTxVat, round2, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
@@ -1092,17 +1092,18 @@ export default function BookScreen() {
   );
 
   const discountAmount = globalDiscountAmount(selectedServices, globalDiscount);
-  /** Услуги минус скидка — то, с чего считается налог. */
-  const beforeVat = Math.max(0, computedTotal - discountAmount);
+  /** Услуги минус скидка — то, с чего считается налог. До цента: сумма
+   *  float-ов (10,01 + 12,50 = 22.509999…, 16 € − 7 % = 14.879999…) уходила
+   *  на сервер с хвостом, и он отказывал «Укажите не больше двух знаков после
+   *  запятой» (проверка системы 03.10). */
+  const beforeVat = round2(Math.max(0, computedTotal - discountAmount));
   const vatRateInUse = recordVatRate ?? rememberedVatRate.rate;
   // «К оплате» — после налога. Ставка 0 и «без налога» — та же сумма.
   const automaticTotal =
     recordVatMode !== "none" && vatRateInUse > 0
-      ? applyTxVat(beforeVat, recordVatMode, vatRateInUse).gross
+      ? round2(applyTxVat(beforeVat, recordVatMode, vatRateInUse).gross)
       : beforeVat;
-  const effectiveTotal = customTotal
-    ? parseMoneyInput(totalDraft)
-    : automaticTotal;
+  const effectiveTotal = round2(customTotal ? parseMoneyInput(totalDraft) : automaticTotal);
 
   // ЧТО ПОДСТАВИТ ШАБЛОН SMS ИЗ ЭТОЙ ЗАПИСИ (STORY-089): «SMS» у номера
   // клиента открывает шаблоны, заполненные ровно тем, что на экране. Сумму

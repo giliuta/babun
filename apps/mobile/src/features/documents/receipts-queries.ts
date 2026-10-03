@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { NEVER_PAUSE } from "@/features/finances/accounts";
 import { getAppointment } from "@babun/shared/db/repositories/appointments";
 import type { TransactionDraft } from "@babun/shared/db/repositories/finance-transactions";
 import type { Json } from "@babun/shared/db/database.types";
@@ -108,6 +109,7 @@ export function useReceiptAppointment(id: string | null | undefined) {
 export function useIssueReceipt() {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async ({
       transactionId,
       lines,
@@ -156,6 +158,7 @@ export function useComposeReceipt() {
   const insert = useInsertTransaction();
   const issue = useIssueReceipt();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async ({
       draft,
       lines,
