@@ -108,6 +108,8 @@ import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
 import { useInvoiceNavigation } from "@/features/invoices/navigation";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { financesFrom } from "@/features/appointments/return-to";
+import { formatHM } from "@/features/appointments/helpers";
+import { isPastRecord } from "@/features/calendar/day-ledger";
 
 /** Разрезы, в которых поиск из шапки фильтрует ПОКАЗАННОЕ. У «Счетов»,
  *  «Долгов» и «Прибыли» строк поиска нет вовсе, поэтому первая же буква
@@ -177,6 +179,7 @@ function FinancesContent() {
     ? getCurrentTimeInZone(businessTimezone)
     : getCurrentCyprusTime();
   const businessToday = todayYmd(businessTimezone);
+  const businessNowHm = formatHM(businessNow);
 
   const periodTimezoneRef = useRef<string | null>(
     calendarSettingsQuery.isSuccess ? businessTimezone : null,
@@ -663,9 +666,10 @@ function FinancesContent() {
       // которой бригадир не отчитался, — для владельца это одни и те же
       // неполученные деньги: «всё равно нужно принимать решение по клиенту»
       // (2026-08-09). Отдельная строка «Не закрыто» делила одно надвое.
-      const past = a.date < businessToday && a.status !== "cancelled";
-      if (a.status !== "completed" && !past) continue;
+      // Прошла — по часам компании, как в календаре: сегодняшняя запись,
+      // чьё время кончилось, уже долг (повторный аудит 03.10).
       if (a.status === "cancelled") continue;
+      if (!isPastRecord(a, businessToday, businessNowHm)) continue;
       // Долги — за выбранный период, как список под плиткой (владелец 03.10).
       if (a.date < period.from || a.date > period.to) continue;
       // Тем же правилом, что лента долгов (`debtRows`): на «Без команды»
@@ -691,6 +695,7 @@ function FinancesContent() {
     scopedAppointments,
     invoicedAppointments,
     businessToday,
+    businessNowHm,
     period.from,
     period.to,
     scope,
@@ -990,6 +995,7 @@ function FinancesContent() {
                   from: period.from,
                   to: period.to,
                   today: businessToday,
+                  nowHm: businessNowHm,
                   teamId: scope,
                   invoicedAppointmentIds: invoicedAppointments,
                 })
@@ -1041,6 +1047,7 @@ function FinancesContent() {
     period.from,
     period.to,
     businessToday,
+    businessNowHm,
     scope,
     invoicedAppointments,
     debts,
@@ -1556,6 +1563,7 @@ function FinancesContent() {
             fromDate={period.from}
             toDate={period.to}
             todayYmd={businessToday}
+            nowHm={businessNowHm}
             invoicedAppointmentIds={invoicedAppointments}
             debts={debts}
             paidTotals={debtPaid}

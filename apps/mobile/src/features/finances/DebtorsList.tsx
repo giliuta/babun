@@ -38,6 +38,7 @@ export function DebtorsList({
   fromDate,
   toDate,
   todayYmd,
+  nowHm,
   invoicedAppointmentIds,
   debts,
   paidTotals,
@@ -57,6 +58,8 @@ export function DebtorsList({
   toDate: string;
   /** Сегодня по времени бизнеса — граница «уже прошло». */
   todayYmd: string;
+  /** Сейчас по часам компании — сегодняшняя прошедшая запись тоже долг. */
+  nowHm?: string;
   /** Работы, на которые уже выставлен живой счёт. Их деньги ждут в
    *  «Документах», и здесь их считать нельзя — иначе одна и та же сотня евро
    *  сидит в двух местах сразу. Набор приходит СВЕРХУ, тот же самый, каким
@@ -99,6 +102,7 @@ export function DebtorsList({
             from: fromDate,
             to: toDate,
             today: todayYmd,
+            nowHm,
             teamId: teamId ?? null,
             invoicedAppointmentIds,
           })
@@ -117,6 +121,7 @@ export function DebtorsList({
     fromDate,
     toDate,
     todayYmd,
+    nowHm,
     teamId,
     invoicedAppointmentIds,
     debts,

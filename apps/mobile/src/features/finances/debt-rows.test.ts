@@ -57,6 +57,14 @@ describe("debtRows", () => {
     assert.equal(row.unclosed, false);
   });
 
+  test("сегодняшняя запись, чьё время кончилось, — долг, как в календаре (повторный аудит 03.10)", () => {
+    const today = appt({ id: "t-today", status: "scheduled", date: "2026-09-09", time_start: "13:00", time_end: "14:30" });
+    assert.equal(debtRows([today], clients, services, win({ nowHm: "15:00" })).length, 1);
+    assert.equal(debtRows([today], clients, services, win({ nowHm: "14:00" })).length, 0);
+    // Без часов — как раньше: сегодняшняя запись ещё не долг.
+    assert.equal(debtRows([today], clients, services, win()).length, 0);
+  });
+
   test("оплаченный визит долгом не считается", () => {
     assert.equal(
       debtRows(
