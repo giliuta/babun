@@ -691,7 +691,6 @@ export function TransferSheet({
             setFailure(null);
           }}
           accessibilityLabel="Сумма перевода"
-          color={t.ink}
           selectOnFocus
           action={
             showRemainder

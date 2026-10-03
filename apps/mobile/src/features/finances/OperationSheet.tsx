@@ -1172,7 +1172,6 @@ export function OperationSheet({
           value={amount}
           onChange={setAmount}
           accessibilityLabel="Сумма операции"
-          color={isExpense ? th.danger : th.success}
           action={
             vatVisible
               ? {

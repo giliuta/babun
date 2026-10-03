@@ -282,7 +282,6 @@ export function CategoryEditorSheet({
             title="Бюджет в месяц"
             value={budgetText}
             onChange={setBudgetText}
-            color={th.danger}
             accessibilityLabel="Бюджет в месяц"
             hint={
               budget === undefined
