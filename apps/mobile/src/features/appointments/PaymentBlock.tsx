@@ -118,8 +118,9 @@ export function PaymentBlock({
     // ни разу не загруженный запрос в «pending», и слова мигали бы.
     errorUpdateCount: accountsFailures,
   } = useTeamPaymentAccounts(teamId);
-  const record = useRecordPayment();
-  const cancel = useCancelPayment();
+  // Одна очередь на деньги записи: «Снять» в тосте ждёт ответа оплаты.
+  const record = useRecordPayment(appointment?.id);
+  const cancel = useCancelPayment(appointment?.id);
   const invoicesQuery = useInvoices();
   const creditLinks = useCreditNoteLinks();
   const [partText, setPartText] = useState<string | null>(null);
