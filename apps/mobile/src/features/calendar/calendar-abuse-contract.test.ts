@@ -130,6 +130,12 @@ describe("повторный аудит календаря 03.10", () => {
     assert.doesNotMatch(src, /created_by === session\?\.user\.id/);
   });
 
+  test("в «Свободном перемещении» сетка не едет — запрет в том же свойстве, что и щипок", () => {
+    const zoom = readFileSync(resolve(here, "zoom.tsx"), "utf8");
+    assert.match(zoom, /scrollEnabled: !pinching\.value && !lockedSv\.value,/);
+    assert.doesNotMatch(zoom, /scrollEnabled=\{!scrollLocked\}/);
+  });
+
   test("тост, показанный во время угасания прошлого, не стирается", () => {
     const toastSrc = readFileSync(resolve(here, "../../components/ui/Toast.tsx"), "utf8");
     assert.match(toastSrc, /\.start\(\(\{ finished \}\) => \{\s*if \(finished\) setToast\(null\);/);
