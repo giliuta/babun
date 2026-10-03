@@ -48,4 +48,9 @@ describe("объект для карточки — один (03.10)", () => {
     assert.equal(cardObjectId(locs, new Map()), "office");
     assert.equal(cardObjectId([], new Map()), null);
   });
+  test("основной важнее обслуженного: карточка = то, что подставит запись", () => {
+    const withPrimary = [{ id: "dom", isPrimary: true }, { id: "flat" }, { id: "office" }];
+    const visits = new Map([["flat", "2026-09-20"]]);
+    assert.equal(cardObjectId(withPrimary, visits), "dom");
+  });
 });

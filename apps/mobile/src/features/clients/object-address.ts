@@ -120,14 +120,16 @@ export function composeAddress(
 
 /** АДРЕС ДВУМЯ СТРОКАМИ (владелец 03.10: «основной адрес — чёрным, а точный —
  *  маленькими буковками под ним, серым»). Главная — улица и дом; уточнение —
- *  комплекс, подъезд, этаж, квартира, город и индекс. Без частей — строка
+ *  улица места, подъезд, этаж, квартира и город, через «·», как в свёрнутом
+ *  «Точном адресе» листа. ИНДЕКСА В СТРОКЕ НЕТ: он для почты, мастеру на
+ *  выезде не нужен, а строка с ним обрезалась на городе. Без частей — строка
  *  адреса как есть (или ссылка на карту), уточнения нет. */
 export function addressLines(
   loc: { address?: string | null; mapUrl?: string | null; addressParts?: AddressParts | null } | null | undefined,
 ): { main: string; detail: string } {
   const clean = cleanAddressParts(loc?.addressParts);
   if (clean?.street) {
-    const rest = composeAddress({ ...clean, street: undefined });
+    const rest = composeDetails({ ...clean, street: undefined, zip: undefined });
     return { main: clean.street, detail: rest };
   }
   return { main: objectTarget(loc), detail: "" };

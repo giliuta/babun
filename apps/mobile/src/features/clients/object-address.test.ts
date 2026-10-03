@@ -251,7 +251,13 @@ describe("адрес двумя строками (03.10)", () => {
         address: "x",
         addressParts: { street: "Makariou 12", complex: "Sea View", floor: "3", apartment: "12", city: "Limassol" },
       }),
-      { main: "Makariou 12", detail: "Sea View, эт. 3, кв. 12, Limassol" },
+      { main: "Makariou 12", detail: "Sea View · эт. 3 · кв. 12 · Limassol" },
+    );
+  });
+  test("индекса в уточнении нет — строка не режется на городе", () => {
+    assert.deepEqual(
+      addressLines({ addressParts: { street: "Makariou 12", entrance: "4", city: "Limassol", zip: "4000" } }),
+      { main: "Makariou 12", detail: "подъезд 4 · Limassol" },
     );
   });
   test("без частей — строка как есть, уточнения нет; без адреса — ссылка", () => {

@@ -197,6 +197,10 @@ export function ObjectFields({
           В шапке блока они держались потому, что лента не оставляла им места
           внутри; ленты нет — причина исчезла. */}
       <ReferenceBlock
+        // ФОРМА В ШТОРКЕ — плотно (владелец 03.10: «тип объекта выпадает из
+        // размера»). Вид выбранного — тот же, что у категории (закон 15.09
+        // «как в шторке… и так во всех»); тише только воздух.
+        dense
         title="Тип объекта"
         emptyIcon={Tag}
         emptyLabel="Выбрать тип объекта"
@@ -217,6 +221,7 @@ export function ObjectFields({
       />
 
       <SectionCard
+        dense
         title="Адрес"
         action={[
           {
@@ -226,6 +231,8 @@ export function ObjectFields({
             // их URL-схемы односторонние. Поэтому карта своя.
             label: "Выбрать точку на карте",
             icon: MapPinned,
+            // Синим, как кнопка маршрута у объекта (владелец 03.10).
+            accent: true,
             onPress: () => setMapOpen((v) => !v),
           },
           ...(onRequestFromClient
@@ -233,6 +240,7 @@ export function ObjectFields({
                 {
                   label: "Попросить адрес у клиента",
                   icon: Send,
+                  accent: true,
                   onPress: onRequestFromClient,
                 },
               ]
@@ -334,7 +342,7 @@ export function ObjectFields({
       {/* ЗАМЕТКА — ПОЛЕМ-ПОДЛОЖКОЙ (владелец 2026-09-07: «мне нравились старые
           заметки»). Тот же вид, что у заметок на странице записи; поле открыто
           сразу, без кнопки «добавить» (владелец 2026-09-04). */}
-      <SectionCard title="Заметка">
+      <SectionCard dense title="Заметка">
         <View style={{ paddingHorizontal: 12, paddingBottom: 10, paddingTop: 2 }}>
           <TextInput
             value={value.note}

@@ -8,6 +8,9 @@ import { useThemeColors } from "@/theme/colors";
 interface SectionCardAction {
   label: string;
   icon?: LucideIcon;
+  /** Значок акцентом — действие над содержимым блока (точка на карте, запрос
+   *  адреса), а не дверь в настройки: та остаётся серой. */
+  accent?: boolean;
   onPress: () => void;
 }
 
@@ -98,8 +101,9 @@ export function SectionCard({
                   position: "absolute",
                   right: 16,
                   // Значок 20pt по центру подписи (11pt, строка ~13):
-                  // 10 сверху у шапки минус половина разницы высот.
-                  top: 6,
+                  // 10 сверху у шапки минус половина разницы высот; в плотной
+                  // шапке сверху 6 — значок на те же 4 выше.
+                  top: dense ? 2 : 6,
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 16,
@@ -115,7 +119,7 @@ export function SectionCard({
                     style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
                   >
                     {item.icon ? (
-                      <item.icon color={t.sub} size={20} strokeWidth={2} />
+                      <item.icon color={item.accent ? t.accent : t.sub} size={20} strokeWidth={2} />
                     ) : (
                       <Text
                         style={{ fontSize: 13, fontWeight: "500", color: t.accent }}

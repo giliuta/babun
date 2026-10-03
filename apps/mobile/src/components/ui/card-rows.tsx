@@ -6,6 +6,7 @@ import {
   type LucideIcon,
 } from "lucide-react-native";
 import { Chip } from "@/components/ui/Chip";
+import { IconCircle } from "@/components/ui/IconCircle";
 import { GUTTER } from "@/components/ui/tokens";
 import { sanitizePhoneInput } from "@/lib/phone-input";
 import { useThemeColors } from "@/theme/colors";
@@ -992,10 +993,14 @@ export function RowActionButton({
           ? (e) => onAccessibilityAction(e.nativeEvent.actionName)
           : undefined
       }
+      // 28 + 8 с каждой стороны = 44pt зоны касания.
       hitSlop={8}
       style={({ pressed }) => ({
-        width: 32,
-        height: 32,
+        // 28 — РАЗМЕР ПЛИТКИ СТРОКИ (`SelectRow`, плитка объекта): кружок
+        // маршрута стоит в одной строке с плиткой объекта, и владелец 03.10
+        // сравнивает значки рядом — 32 против 28 читалось «разного размера».
+        width: 28,
+        height: 28,
         // Круг: w === h. Круг не может стать прямоугольником — это
         // геометрическое исключение из закона одного радиуса.
         borderRadius: 999,
@@ -1017,12 +1022,17 @@ export function RowActionButton({
 export function ActionRow({
   label,
   tone = "accent",
+  icon,
   separated,
   dimmed,
   onPress,
 }: {
   label: string;
   tone?: "accent" | "danger";
+  /** Значок в кружке слева — та же голова строки, что у двери `ChooseRow`
+   *  (владелец 03.10: «Сделать основным» голым словом в блоке выпадало).
+   *  Шеврона нет: строка делает, а не ведёт. */
+  icon?: LucideIcon;
   separated?: boolean;
   dimmed?: boolean;
   onPress: () => void;
@@ -1046,10 +1056,13 @@ export function ActionRow({
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >
+      {icon ? <IconCircle icon={icon} size={30} /> : null}
       <Text
         maxFontSizeMultiplier={1.2}
         style={{
-          fontSize: 15,
+          marginLeft: icon ? 12 : 0,
+          // Со значком — размер двери `ChooseRow`: рядом они одной высоты.
+          fontSize: icon ? 17 : 15,
           fontWeight: "600",
           color: tone === "danger" ? t.danger : t.accent,
         }}

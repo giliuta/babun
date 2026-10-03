@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
-import { House, MapPin, MoreHorizontal, Tag, UserRound } from "lucide-react-native";
+import { House, MapPin, MoreHorizontal, Star, Tag, UserRound } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Card } from "@/components/ui/Card";
@@ -222,6 +222,7 @@ export default function ObjectsBlock({
             <ObjectRow
               loc={loc}
               teamId={client.team_id ?? null}
+              primary={ordered.length > 1 && !!loc.isPrimary}
               // Заметка правится прямо здесь — третьей строкой её не печатаем.
               showNote={!onNote}
               residents={residentsFor?.(loc)}
@@ -280,6 +281,7 @@ export default function ObjectsBlock({
               loc={loc}
               separated={i > 0}
               teamId={client.team_id ?? null}
+              primary={!single && ordered.length > 1 && !!loc.isPrimary}
               // Заметка стоит ПОД строкой своей плашкой — третьей строкой её
               // печатать больше не надо.
               showNote={!onNote}
@@ -363,10 +365,15 @@ export function ObjectRow({
   onPress,
   onLongPress,
   longPressLabel,
+  primary = false,
   teamId = null,
 }: {
   loc: Location;
   separated?: boolean;
+  /** Звёздочка у адреса — это основной объект, его подставит запись
+   *  (владелец 03.10). Ставят только там, где объектов несколько: у
+   *  единственного звезда ничего не различает. */
+  primary?: boolean;
   /** Кружок «…» в хвосте строки — правка ЭТОГО объекта (форма записи, где
    *  сам тап по строке меняет объект). Стрелки справа нет нигде: владелец
    *  2026-09-04 — «эти стрелочки убираем, ставим красивую иконку, при тапе на
@@ -407,6 +414,11 @@ export function ObjectRow({
     : undefined;
   // Адрес двумя строками: улица и дом — чёрным, уточнение — мелко серым.
   const lines = addressLines(loc);
+  // ТИП СЛОВОМ — ПЕРВЫМ ВО ВТОРОЙ СТРОКЕ (владелец 03.10, вторым заходом:
+  // «тип объекта всё-таки надо где-то писать словами — полезная функция»).
+  // Плитка слева говорит цветом и значком, слово — «Офис · подъезд 4 ·
+  // эт. 3»; своей строки ему не дали — строка объекта не растёт.
+  const typeWord = typed ? loc.label.trim() : "";
   const note = showNote ? (loc.note ?? "").trim() : "";
   const people = (residents ?? "").trim();
   // «БЫЛ 12 АВГ» ДЕЛИТ ТРЕТЬЮ СТРОКУ С ЗАМЕТКОЙ через «·» — формат тот же,
@@ -437,6 +449,7 @@ export function ObjectRow({
         accessibilityRole={onPress ? "button" : "text"}
         accessibilityLabel={[
           loc.label || "Объект",
+          primary ? "основной" : "",
           target,
           visited,
           note,
@@ -476,23 +489,38 @@ export function ObjectRow({
           {/* АДРЕС — ГЛАВНАЯ СТРОКА (владелец 03.10): едут по адресу, тип
               объекта говорит плитка слева. Улица и дом — чёрным, точный адрес
               (комплекс, подъезд, этаж, квартира, город) — под ним мелко серым. */}
-          <Text
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-            style={{
-              fontSize: 15,
-              fontWeight: lines.main ? "500" : "400",
-              color: lines.main ? t.ink : t.faint,
-            }}
-          >
-            {lines.main || "адрес не указан"}
-          </Text>
-          {lines.detail ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Text
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
+              style={{
+                flexShrink: 1,
+                fontSize: 15,
+                fontWeight: lines.main ? "500" : "400",
+                color: lines.main ? t.ink : t.faint,
+              }}
+            >
+              {lines.main || "адрес не указан"}
+            </Text>
+            {primary ? (
+              <Star
+                color={t.accent}
+                fill={t.accent}
+                size={12}
+                strokeWidth={2}
+              />
+            ) : null}
+          </View>
+          {typeWord || lines.detail ? (
             <Text
               maxFontSizeMultiplier={1.2}
               numberOfLines={1}
               style={{ fontSize: 13, color: t.sub }}
             >
+              {typeWord ? (
+                <Text style={{ fontWeight: "600", color: t.body }}>{typeWord}</Text>
+              ) : null}
+              {typeWord && lines.detail ? " · " : ""}
               {lines.detail}
             </Text>
           ) : null}

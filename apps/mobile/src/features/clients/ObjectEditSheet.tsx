@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Star } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
@@ -289,9 +290,12 @@ export function ObjectEditSheet({
             стандартно в архитектуре»). Разрушительное живёт на кромке строки
             объекта в карточке и там же переспрашивает; `confirmDelete` цел —
             именно его зовёт свайп, приходя сюда с `askDelete`. */}
+        {/* ОСНОВНОЙ — СО ЗВЁЗДОЧКОЙ (владелец 03.10): та же звезда стоит у
+            основного объекта в списке, и строка не висит голым словом. */}
         {!loc.isPrimary ? (
-          <SectionCard>
+          <SectionCard dense>
             <ActionRow
+              icon={Star}
               label="Сделать основным"
               onPress={() => {
                 haptics.tap();
