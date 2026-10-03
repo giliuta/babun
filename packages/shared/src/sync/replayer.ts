@@ -125,6 +125,23 @@ export function touchesGuardedAppointmentFields(
   );
 }
 
+/** Компания устройства сменилась ПОСРЕДИ отправки операции (аудит 03.10).
+ *  Заголовок компании берётся в момент каждого запроса: силовая правка и
+ *  проверка видимости после смены ушли бы под чужим заголовком, нашли бы
+ *  ноль строк — и операция снималась бы как «строку удалили». Такая
+ *  операция остаётся в очереди без попытки в счёт и уйдёт в своей
+ *  компании. */
+class TenantSwitchedMidway extends Error {
+  constructor() {
+    super("Компания сменилась посреди отправки — операция подождёт свою компанию");
+    this.name = "TenantSwitchedMidway";
+  }
+}
+
+function assertTenantStill(tenantStill?: () => boolean): void {
+  if (tenantStill && !tenantStill()) throw new TenantSwitchedMidway();
+}
+
 /** Сообщение, когда правка статуса или денег уступила серверу. */
 export const GUARDED_CONFLICT_MESSAGE =
   "Запись изменилась на другом устройстве, и ваша правка статуса или оплаты не применена. Откройте запись и сделайте это ещё раз.";
@@ -491,11 +508,17 @@ async function drain(opts: ReplayerOptions): Promise<void> {
         ? { ...op, expected_updated_at: carried.to }
         : op;
     try {
-      const conflict = await dispatch(opts.supabase, sendOp, legacyUpdate, (to) => {
-        if (op.expected_updated_at) {
-          sentinels.set(rowKey(op), { from: op.expected_updated_at, to });
-        }
-      });
+      const conflict = await dispatch(
+        opts.supabase,
+        sendOp,
+        legacyUpdate,
+        (to) => {
+          if (op.expected_updated_at) {
+            sentinels.set(rowKey(op), { from: op.expected_updated_at, to });
+          }
+        },
+        gateTenantId ? () => readTenantId(opts) === gateTenantId : undefined,
+      );
       if (conflict === "server-won") {
         opts.onConflict?.(GUARDED_CONFLICT_MESSAGE);
       } else if (conflict) {
@@ -505,6 +528,9 @@ async function drain(opts: ReplayerOptions): Promise<void> {
       }
       await removeOp(op.id);
     } catch (err) {
+      // Сменилась компания — не ошибка операции: попытку не считаем, слив
+      // обрываем, как это делает проверка перед отправкой.
+      if (err instanceof TenantSwitchedMidway) break;
       const msg = err instanceof Error ? err.message : String(err);
       heldRows.add(rowKey(op));
       await bumpAttempt(op.id, msg);
@@ -539,6 +565,8 @@ async function dispatch(
   serverWinsOnConflict = false,
   /** Правка легла чисто, и у строки теперь новое `updated_at`. */
   onApplied?: (updatedAt: string) => void,
+  /** Компания устройства всё ещё та, под которой начат слив. */
+  tenantStill?: () => boolean,
 ): Promise<boolean | "server-won"> {
   // The repositories accept the row shapes already; payloads are
   // pre-shaped at enqueue time so dispatch is mostly a relay. We
@@ -563,6 +591,7 @@ async function dispatch(
       .select("id");
     if (error) throw new Error(`replay delete: ${error.message}`);
     if (Array.isArray(deleted) && deleted.length > 0) return false;
+    assertTenantStill(tenantStill);
 
     // НОЛЬ СТРОК ДВУСМЫСЛЕН, и разрешает его только проверка видимости:
     //   • строки не видно — её уже удалили с другого устройства или её
@@ -759,6 +788,7 @@ async function dispatch(
       return false;
     }
 
+    assertTenantStill(tenantStill);
     const guarded = touchesGuardedAppointmentFields(op.table, updatePayload);
     if (serverWinsOnConflict || guarded) {
       // Строку правили после того, как эта правка встала в очередь. Старая
@@ -789,6 +819,7 @@ async function dispatch(
       return guarded && fresh ? "server-won" : false;
     }
 
+    assertTenantStill(tenantStill);
     // 0 rows → conflict. Retry without updated_at filter and re-fetch
     // the canonical server row (now carrying the new updated_at) so
     // the cache stays consistent. Without this re-fetch, IDB would
@@ -849,6 +880,7 @@ async function dispatch(
     //     `edit_all`). Операция остаётся с причиной и по исчерпании попыток
     //     уходит в `onPermanentFailure`, а не в ложное «применено».
     if (!forced) {
+      assertTenantStill(tenantStill);
       if (await rowStillVisible(supabase, tableName, op.row_id)) {
         throw new Error("Сервер не дал изменить эту запись: нет прав на неё.");
       }

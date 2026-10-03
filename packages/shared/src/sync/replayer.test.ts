@@ -896,20 +896,50 @@ describe("replayer — гейт по компании", () => {
     }
     const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
 
-    // Живое чтение. Компанию спрашивают трижды за операцию и ещё раз на гейт
-    // слива: 1 — гейт, 2 — начало круга по первой, 3 — перед её отправкой,
-    // 4 — начало круга по второй. Первая обязана доехать целиком, ко второй
+    // Живое чтение. Компанию спрашивают на гейт слива и по ходу операции:
+    // 1 — гейт, 2 — начало круга по первой, 3 — перед её отправкой, 4 — после
+    // двусмысленного «ноль строк», перед проверкой видимости (аудит 03.10),
+    // 5 — начало круга по второй. Первая обязана доехать целиком, ко второй
     // человек уже в другой компании.
     let читаний = 0;
     const currentTenantId = (): string | null => {
       читаний += 1;
-      return читаний >= 4 ? ДРУГАЯ : TENANT;
+      return читаний >= 5 ? ДРУГАЯ : TENANT;
     };
 
     await kickReplayer({ supabase: asSupabase(client), currentTenantId });
 
     expect(calls.filter((c) => c.op === "delete")).toHaveLength(1);
     expect(await queueDepth()).toBe(1);
+  });
+
+  test("компания сменилась между условной правкой и силовой — операция ждёт, попытка не в счёт (аудит 03.10)", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "update",
+      row_id: UUID_A,
+      payload: { full_name: "Моя", tenant_id: TENANT },
+      expected_updated_at: "2026-01-01T00:00:00.000Z",
+    });
+    let switched = false;
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update") {
+        // Условная правка нашла ноль строк, и в этот миг человек тапнул
+        // команду другой компании.
+        switched = true;
+        return { data: [], error: null };
+      }
+      return { data: null, error: null };
+    });
+    const currentTenantId = (): string | null => (switched ? ДРУГАЯ : TENANT);
+
+    await kickReplayer({ supabase: asSupabase(client), currentTenantId });
+
+    // Ни силовой правки, ни проверки видимости под чужим заголовком.
+    expect(calls.filter((c) => c.op === "update")).toHaveLength(1);
+    expect(calls.filter((c) => c.op === "select")).toHaveLength(0);
+    const [left] = await dequeueAll();
+    expect(left?.attempts).toBe(0);
   });
 
   test("без гейта вовсе поведение прежнее — операция без компании уходит", async () => {
