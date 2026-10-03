@@ -1,9 +1,15 @@
-import { useState } from "react";
-import { ScrollView } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { Building2, FileText, Wallet } from "lucide-react-native";
+import {
+  Building2,
+  ChevronRight,
+  FileText,
+  HandCoins,
+  NotebookPen,
+  ReceiptText,
+  Wallet,
+} from "lucide-react-native";
 import type { FinanceCategoryKind } from "@babun/shared/db/repositories/finance-categories";
-import { money } from "@babun/shared/common/utils/money";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -11,29 +17,25 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { SelectRow } from "@/components/ui/select-rows";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useTeams } from "@/features/reference/queries";
 import {
   invoicesDoorLine,
   requisitesDoorLine,
   settingsTeamId,
+  teamCategoryKindCount,
 } from "@/features/finances/team-settings-lines";
 import { useCompanies } from "@/features/companies/queries";
 import { useNextInvoiceNumber } from "@/features/invoices/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { accountsDoorLine } from "@/features/finances/accounts-sections";
 import { useCurrentRole, useTenant } from "@/features/settings/tenant";
-import { useCurrency } from "@/features/settings/currency";
+import { useThemeColors } from "@/theme/colors";
 import { financeSettingsRows } from "@/features/finances/settings-rows";
 import { LedgerExportRow } from "@/features/finances/LedgerExportRow";
 import { CurrencySettingsRow } from "@/features/settings/CurrencySettingsRow";
 import { useFinanceCategories } from "@/features/finances/queries";
-import { useCategoryMonthSpend } from "@/features/finances/use-category-budget";
-import { CategoryKindBlock } from "@/features/finances/CategoryKindBlock";
-import {
-  CategoryEditorSheet,
-  type CategoryEditorTarget,
-} from "@/features/finances/CategoryEditorSheet";
 
 // НАСТРОЙКИ ФИНАНСОВ — ПО КОМАНДЕ (владелец 2026-09-30: «перешёл сверху в
 // команду один — и это полностью настройки чётко под команду один»).
@@ -61,22 +63,29 @@ import {
 // «Итого» документа.
 //
 // ВИД 03.10 (владелец: «разделите категории — доход, расход, долги, — но не
-// так, как сейчас, это ужасно»; выбран вариант 2): у каждого вида свой блок с
-// самими категориями (`CategoryKindBlock`) — тап правит категорию шторкой
-// поверх шестерёнки, «+» заводит новую, «Ещё N» ведёт на страницу вида.
+// так, как сейчас, это ужасно»). Блоки с самими категориями внутри он отверг
+// («почему так сложно — просто три группы»): блок «Категории» — три плашки
+// «Доходы / Расходы / Долги», каждая ведёт на свою страницу, где внизу
+// «Добавить категорию».
 // Блок команды назван «Деньги» — имя команды уже стоит в ленте над ним. Бланк
 // инвойса вышел из-за шестерёнки «Реквизитов» сюда дверью «Инвойсы», рядом с
 // «Реквизитами» в блоке «Документы»: у настройки одна дверь в её разделе.
 
 
-const KINDS: { kind: FinanceCategoryKind; title: string }[] = [
-  { kind: "income", title: "Доходы" },
-  { kind: "expense", title: "Расходы" },
-  { kind: "debt", title: "Долги" },
+const KINDS: {
+  kind: FinanceCategoryKind;
+  title: string;
+  icon: typeof Wallet;
+  tile: string;
+}[] = [
+  { kind: "income", title: "Доходы", icon: HandCoins, tile: SETTINGS_TILE.green },
+  { kind: "expense", title: "Расходы", icon: ReceiptText, tile: SETTINGS_TILE.red },
+  { kind: "debt", title: "Долги", icon: NotebookPen, tile: SETTINGS_TILE.yellow },
 ];
 
 export default function FinanceSettingsScreen() {
   const router = useRouter();
+  const t = useThemeColors();
   // СТРАНИЦА ОТКРЫТА ВСЕМ, СТРОКИ — ПО ДОСТУПУ (владелец 20.09). Правило и
   // его причины — `features/finances/settings-rows.ts`.
   const rows = financeSettingsRows(useCurrentRole().data);
@@ -95,16 +104,10 @@ export default function FinanceSettingsScreen() {
   const accounts = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
   const teamAccounts = (accounts.data ?? []).filter((a) => a.brigade_id === teamId);
   const categoriesQuery = useFinanceCategories();
-  const teamCategories = (categoriesQuery.data ?? []).filter((c) => c.team_id === teamId);
-  // Траты месяца — для бюджета у плашек расхода, тем же запросом, что страница.
-  const spend = useCategoryMonthSpend(rows.categories);
-  const currency = useCurrency();
-  const fmt = (n: number) => money(n, currency);
   const companies = useCompanies();
   const nextInvoice = useNextInvoiceNumber(new Date().getFullYear()).data;
   const liveSets = (companies.data ?? []).filter((c) => !c.archived_at).length;
   const tenant = useTenant().data;
-  const [editor, setEditor] = useState<CategoryEditorTarget | null>(null);
 
   const teamGroup = rows.accounts || rows.moneyGroup;
   const documentsGroup = rows.requisites || rows.invoices;
@@ -155,23 +158,34 @@ export default function FinanceSettingsScreen() {
             </SectionCard>
           ) : null}
 
-          {/* КАТЕГОРИИ КОМАНДЫ — ПО БЛОКУ НА ВИД (владелец 03.10, вариант 2).
-              Пока список едет, блоков нет: «Пока нет» на загрузке врало бы. */}
-          {rows.categories && teamId && categoriesQuery.data
-            ? KINDS.map(({ kind, title }) => (
-                <CategoryKindBlock
-                  key={kind}
-                  title={title}
-                  kind={kind}
-                  categories={teamCategories.filter((c) => c.type === kind)}
-                  spend={spend}
-                  fmt={fmt}
-                  onEdit={(category) => setEditor({ mode: "edit", category })}
-                  onAdd={() => setEditor({ mode: "create", kind, teamId })}
-                  onOpenAll={() => router.push(withTeam("/finances/categories", `kind=${kind}`))}
-                />
-              ))
-            : null}
+          {/* КАТЕГОРИИ — ТРИ ПЛАШКИ (владелец 03.10: «просто три группы, назови
+              блок „Категории“: доходы, расходы, долги; каждая — переход на
+              свою страницу, там кнопка создать категорию»). Число справа —
+              сколько живых категорий вида у команды; пока список едет — без
+              числа: «0» на загрузке врал бы. */}
+          {rows.categories && teamId ? (
+            <SectionCard title="Категории">
+              <View style={{ paddingHorizontal: 10, paddingTop: 2, paddingBottom: 8 }}>
+                {KINDS.map(({ kind, title, icon, tile }) => (
+                  <SelectRow
+                    key={kind}
+                    plain
+                    icon={icon}
+                    color={tile}
+                    title={title}
+                    value={
+                      categoriesQuery.data
+                        ? String(teamCategoryKindCount(categoriesQuery.data, teamId, kind))
+                        : undefined
+                    }
+                    accessibilityHint="Открывает страницу категорий"
+                    trailing={<ChevronRight color={t.faint} size={18} strokeWidth={2.2} />}
+                    onPress={() => router.push(withTeam("/finances/categories", `kind=${kind}`))}
+                  />
+                ))}
+              </View>
+            </SectionCard>
+          ) : null}
 
           {/* ДОКУМЕНТЫ — ОДНО НА ВЕСЬ АККАУНТ: реквизиты (номер инвойса за
               каждым набором) и бланк инвойса — что подставлять в новый счёт. */}
@@ -214,7 +228,6 @@ export default function FinanceSettingsScreen() {
         // состояний, LOCKED 2026-08-27).
         <EmptyState fill title="Настроек пока нет" />
       )}
-      <CategoryEditorSheet target={editor} onClose={() => setEditor(null)} />
     </Screen>
   );
 }
