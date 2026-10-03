@@ -14,6 +14,8 @@ import { useTeams } from "@/features/reference/queries";
 import { useDataRole } from "@/features/settings/tenant";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
+import { writeErrorWords } from "@/lib/connection-words";
+import { isHumanText } from "@babun/shared/i18n/runtime";
 import type { ExportKind } from "./data-export";
 import { useDataExport } from "./use-data-export";
 
@@ -116,7 +118,10 @@ function ExportDoors({ teamId }: { teamId: string | null }) {
     if (busy) return;
     haptics.tap();
     run(kind).catch((error: unknown) => {
-      notify("Не удалось выгрузить", error instanceof Error ? error.message : undefined);
+      // Обрыв — «Нет связи с сервером», а не «Клиенты: TypeError: Network
+      // request failed» (аудит Кабинета 03.10).
+      const words = writeErrorWords(error, { failed: "Не удалось выгрузить", notDone: "Файл не собран" });
+      notify(words.title, isHumanText(words.subtitle) ? words.subtitle : "Повторите попытку.");
     });
   };
 

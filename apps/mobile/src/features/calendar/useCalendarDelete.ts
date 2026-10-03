@@ -4,6 +4,7 @@ import { listInvoices } from "@babun/shared/db/repositories/invoices";
 import { useUpdateTeam } from "@/features/reference/queries";
 import { accountRowsQueryKey, invoicesQueryKey } from "@/lib/company-query-keys";
 import { supabase } from "@/lib/supabase";
+import { NEVER_PAUSE } from "@/features/finances/accounts";
 import { useTenantId } from "@/lib/tenant";
 import {
   calendarDeleteImpact,
@@ -51,13 +52,20 @@ export function useCalendarDelete() {
   const setActive = (teamId: string, isActive: boolean) =>
     updateTeam.mutateAsync({ id: teamId, patch: { is_active: isActive } });
 
+  // БЕЗ СЕТИ — ОТКАЗ, А НЕ ТИХАЯ ПАУЗА (аудит Кабинета 03.10). Сеть у
+  // react-query привязана к NetInfo: без неё действие вставало на паузу,
+  // лист закрывался — и ни тоста, ни ошибки; вопрос «Удалить навсегда?»
+  // всплывал сам, когда связь возвращалась. `NEVER_PAUSE` — сразу в сеть,
+  // обрыв приходит ошибкой и говорится словами.
   const archive = useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (teamId: string) => setActive(teamId, false),
     onSuccess: refreshEverything,
     meta: { errorHandled: true },
   });
 
   const restore = useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (teamId: string) => setActive(teamId, true),
     onSuccess: refreshEverything,
     meta: { errorHandled: true },
@@ -78,16 +86,22 @@ export function useCalendarDelete() {
         // С удалёнными: сервер сотрёт и их, и вопрос обязан их сосчитать.
         queryKey: accountRowsQueryKey(tenantId, true, true),
         queryFn: () => listAccounts(supabase, tenantId, { includeInactive: true, includeDeleted: true }),
+        // Цифра необратимого вопроса — свежая, не из кэша минутной давности.
+        staleTime: 0,
+        networkMode: "always",
       }),
       qc.fetchQuery({
         queryKey: invoicesQueryKey(tenantId),
         queryFn: () => listInvoices(supabase, tenantId, {}),
+        staleTime: 0,
+        networkMode: "always",
       }),
     ]);
     return calendarDeleteImpact({ teamId, appointments, accounts, documents });
   };
 
   const erase = useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (teamId: string) => {
       const client = supabase as unknown as RpcWithDeleteCalendar;
       const { error } = await client.rpc("delete_calendar", { p_team_id: teamId });

@@ -14,6 +14,7 @@ import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { useTeams } from "@/features/reference/queries";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
+import { writeErrorWords } from "@/lib/connection-words";
 import { useThemeColors } from "@/theme/colors";
 import {
   archivedCalendarCaption,
@@ -69,11 +70,19 @@ export function CalendarArchiveScreen() {
   const bringBack = (calendar: ArchivedCalendar) =>
     restore.mutate(calendar.id, {
       onSuccess: () => toast(`«${calendar.name}» снова в ленте`, "success"),
-      onError: (e) => notify("Ошибка", e.message),
+      onError: (e) => {
+        const words = writeErrorWords(e, { failed: "Не удалось вернуть", notDone: "Календарь остался в архиве" });
+        notify(words.title, words.subtitle);
+      },
     });
 
-  const eraseForever = (calendar: ArchivedCalendar) =>
-    measure(calendar.id, appointmentsQuery.data ?? [])
+  // Пока считается цена стирания, второй тап не задаёт второй вопрос: два
+  // вопроса подряд давали второе стирание с «Календарь не найден».
+  const [measuring, setMeasuring] = useState(false);
+  const eraseForever = (calendar: ArchivedCalendar) => {
+    if (measuring || erase.isPending) return;
+    setMeasuring(true);
+    return measure(calendar.id, appointmentsQuery.data ?? [])
       .then((impact) =>
         confirmThen(
           `Удалить «${calendar.name}» навсегда?`,
@@ -85,13 +94,22 @@ export function CalendarArchiveScreen() {
           () =>
             erase.mutate(calendar.id, {
               onSuccess: () => toast(`«${calendar.name}» удалён навсегда`, "success"),
-              onError: (e) => notify("Ошибка", e.message),
+              onError: (e) => {
+                const words = writeErrorWords(e, { failed: "Не удалось удалить", notDone: "Календарь не удалён" });
+                notify(words.title, words.subtitle);
+              },
             }),
         ),
       )
-      .catch((e: unknown) =>
-        notify("Ошибка", e instanceof Error ? e.message : "Не удалось посчитать, что удалится"),
-      );
+      .catch((e: unknown) => {
+        const words = writeErrorWords(e, {
+          failed: "Не удалось посчитать, что удалится",
+          notDone: "Календарь не удалён",
+        });
+        notify(words.title, words.subtitle);
+      })
+      .finally(() => setMeasuring(false));
+  };
 
   const loading = teamsQuery.isPending || appointmentsQuery.isPending || accountsQuery.isPending;
   const error = teamsQuery.error ?? appointmentsQuery.error ?? accountsQuery.error;

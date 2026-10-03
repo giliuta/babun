@@ -53,7 +53,9 @@ async function readAll<T>(
   const out: T[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await page(from, from + PAGE_SIZE - 1);
-    if (error) throw new Error(`${label}: ${error.message}`);
+    // Исходная ошибка с её кодом и статусом, а не склейка «Клиенты: …»:
+    // экран узнаёт по ней обрыв и говорит «Нет связи с сервером».
+    if (error) throw Object.assign(new Error(error.message), { status: (error as { status?: number }).status, code: (error as { code?: string }).code, label });
     const rows = data ?? [];
     out.push(...rows);
     if (rows.length < PAGE_SIZE) return out;
@@ -61,7 +63,7 @@ async function readAll<T>(
 }
 
 const CLIENT_COLUMNS =
-  "id, full_name, phone, email, team_id, city, acquisition_source, birthday, comment, created_at";
+  "id, full_name, phone, email, team_id, city, acquisition_source, birthday, comment, notes, created_at";
 const APPOINTMENT_COLUMNS =
   "id, date, time_start, time_end, kind, team_id, client_id, status, services, total_amount, paid_amount, prepaid_amount, payment_status, payments, payment, address, comment, event_notes";
 const TRANSACTION_COLUMNS =

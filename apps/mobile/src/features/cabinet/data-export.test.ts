@@ -41,6 +41,7 @@ const client = (over: Partial<ClientExportRow>): ClientExportRow => ({
   acquisition_source: "unknown",
   birthday: "1990-05-17",
   comment: "",
+  notes: [],
   created_at: "2026-09-10T21:30:00+00:00",
   ...over,
 });
@@ -107,7 +108,8 @@ describe("выгрузка клиентов", () => {
       "",
       "1990-05-17",
       "",
-      "2026-09-10",
+      // День создания — по часам телефона (21:30 UTC на Кипре уже 11-е).
+      dateStamp(new Date("2026-09-10T21:30:00+00:00")),
     ]);
   });
 
@@ -125,6 +127,23 @@ describe("выгрузка клиентов", () => {
   test("«;» и кавычки в заметке экранируются, строка остаётся одной ячейкой", () => {
     const [, row] = lines(clientsToCsv([client({ comment: 'звонить "после" 18;00' })], refs));
     assert.ok(row.includes('"звонить ""после"" 18;00"'));
+  });
+
+  test("заметки из карточки попадают в файл — все, по порядку (аудит Кабинета 03.10)", () => {
+    // С 06.09 заметки живут списком `notes[]`; выгрузка читала одно старое
+    // `comment` и печатала пустую ячейку.
+    const notes = [
+      { id: "n2", text: "ключ под ковриком", created_at: "2026-10-02T10:00:00Z" },
+      { id: "n1", text: "звонить после 18", created_at: "2026-09-01T10:00:00Z" },
+    ];
+    const csv = clientsToCsv([client({ notes })], refs);
+    assert.ok(csv.includes('"звонить после 18\nключ под ковриком"'), csv);
+    // Текст импорта — первым, если заметкой не повторён.
+    const both = clientsToCsv([client({ comment: "из CSV", notes })], refs);
+    assert.ok(both.includes('"из CSV\nзвонить после 18\nключ под ковриком"'), both);
+    // Пустой список и пустое старое поле — пустая ячейка.
+    const [, row] = lines(clientsToCsv([client({})], refs));
+    assert.ok(row.includes(";;"), row);
   });
 
   test("перевод строки в заметке не рвёт запись", () => {

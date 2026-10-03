@@ -41,6 +41,7 @@ export type ClientExportRow = Pick<
   | "acquisition_source"
   | "birthday"
   | "comment"
+  | "notes"
   | "created_at"
 >;
 
@@ -104,9 +105,22 @@ function word(dictionary: Readonly<Record<string, string>>, key: string): string
   return Object.prototype.hasOwnProperty.call(dictionary, key) ? dictionary[key] : key;
 }
 
-/** `2026-09-24T10:00:00+00:00` → `2026-09-24`. */
-function dateOnly(iso: string | null | undefined): string {
-  return iso ? iso.slice(0, 10) : "";
+/** ЗАМЕТКА КЛИЕНТА — ВСЕ ЕГО ЗАМЕТКИ (аудит Кабинета 03.10). С 06.09 они
+ *  живут списком `notes[]`; старое поле `comment` держит только текст из
+ *  импорта. Выгрузка читала одно `comment`, и всё, что набрано в карточке
+ *  или в записи, уходило пустой ячейкой. Порядок — как писали, каждая
+ *  заметка своей строкой; текст импорта, если он не повторён заметкой, —
+ *  первым. */
+export function clientNotesText(c: Pick<ClientExportRow, "comment" | "notes">): string {
+  const list = Array.isArray(c.notes) ? (c.notes as unknown[]) : [];
+  const texts = list
+    .map((n) => (n && typeof n === "object" ? (n as { text?: unknown; created_at?: unknown }) : {}))
+    .filter((n): n is { text: string; created_at?: unknown } => typeof n.text === "string" && n.text.trim() !== "")
+    .sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")))
+    .map((n) => n.text.trim());
+  const legacy = (c.comment ?? "").trim();
+  if (legacy && !texts.includes(legacy)) texts.unshift(legacy);
+  return texts.join("\n");
 }
 
 /** `14:30:00` → `14:30`. */
@@ -171,8 +185,11 @@ export function clientsToCsv(
       csvTextCell(c.city),
       csvTextCell(sourceName(c.acquisition_source, c.team_id, refs.sources)),
       csvTextCell(c.birthday),
-      csvTextCell(c.comment),
-      csvCell(dateOnly(c.created_at)),
+      csvTextCell(clientNotesText(c)),
+      // День создания — по часам телефона, как дата в имени файла: срез
+      // строки давал UTC, и клиент, заведённый в 01:30 на Кипре, числился
+      // вчерашним (аудит Кабинета 03.10).
+      csvCell(c.created_at ? dateStamp(new Date(c.created_at)) : ""),
     ]);
   }
   return csvDocument(rows);
