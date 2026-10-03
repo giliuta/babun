@@ -208,17 +208,18 @@ export function PaymentBlock({
     haptics.success();
     onAppointmentChanged(optimistic);
     toast(`Оплата ${formatEURExact(amount)} снята · ${accountName}`, "info");
-    cancel.mutate(
-      { appointmentId: source.id, paymentId, requestId: randomUuid(), optimistic },
-      {
-        onSuccess: (fresh) => onAppointmentChanged(fresh),
-        onError: (error) => {
-          haptics.error();
-          onAppointmentChanged(source);
-          toast(error instanceof Error ? error.message : "Не удалось снять оплату", "error");
-        },
-      },
-    );
+    // `mutateAsync`, а не `mutate` с откликами: ушёл со страницы — отклики
+    // вызова у снятого наблюдателя молчат, и отказ сервера пропадал без слова
+    // (аудит 2026-10-03). Обещание отвечает всегда — так же, как у оплаты
+    // новой записи в `book/index.tsx`.
+    cancel
+      .mutateAsync({ appointmentId: source.id, paymentId, requestId: randomUuid(), optimistic })
+      .then((fresh) => onAppointmentChanged(fresh))
+      .catch((error: unknown) => {
+        haptics.error();
+        onAppointmentChanged(source);
+        toast(error instanceof Error ? error.message : "Не удалось снять оплату", "error");
+      });
   };
 
   const handleTileTap = (account: PaymentAccountOption) => {
@@ -285,8 +286,9 @@ export function PaymentBlock({
       "success",
       { label: "Снять", onPress: () => runCancel(optimistic, requestId, account.name, amount) },
     );
-    record.mutate(
-      {
+    // Ответ — обещанием, как у снятия выше: отказ слышен и после ухода.
+    record
+      .mutateAsync({
         appointmentId: source.id,
         accountId: account.id,
         amount,
@@ -294,16 +296,13 @@ export function PaymentBlock({
         kind,
         closeVisit,
         optimistic,
-      },
-      {
-        onSuccess: (fresh) => onAppointmentChanged(fresh),
-        onError: (error) => {
-          haptics.error();
-          onAppointmentChanged(source);
-          toast(error instanceof Error ? error.message : "Не удалось записать оплату", "error");
-        },
-      },
-    );
+      })
+      .then((fresh) => onAppointmentChanged(fresh))
+      .catch((error: unknown) => {
+        haptics.error();
+        onAppointmentChanged(source);
+        toast(error instanceof Error ? error.message : "Не удалось записать оплату", "error");
+      });
   };
 
   const handlePaidTileTap = async (
