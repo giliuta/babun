@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { MessageSquareText, Settings2, Users } from "lucide-react-native";
 import { smsUrl } from "@babun/shared/common/utils/messenger-links";
+import { analyzeSmsEncoding } from "@babun/shared/local/sms-encoding";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { iconPreset } from "@/components/ui/icon-set";
@@ -14,7 +15,7 @@ import { useCurrentRole } from "@/features/settings/tenant";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
-import { fillTemplate } from "./sms-compose";
+import { acceptSmsInput, fillTemplate, MAX_SMS_PARTS } from "./sms-compose";
 import {
   smsErrorText,
   useAppointmentLink,
@@ -34,14 +35,18 @@ import { openSms, useSmsServiceFor, type SmsContext } from "./SmsCompose";
 //     текст с полями клиента и записи. Тап отмечает шаблон галкой; шаблон,
 //     которому не хватает данных («нет записи»), погашен. «Своего SMS» нет —
 //     «чтоб случайно не тыкали».
+//   • Под шаблонами — ТЕКСТ отмеченного шаблона полем: правится сразу, уходит
+//     ровно то, что в поле (владелец 03.10: «обязательно превью шаблона,
+//     которое я могу сразу редактировать, и только потом отправка»).
 //   • Справа в шапке — «палочки с кружочками»: шаблоны команды (владелец:
 //     «справа поставить, чтоб сразу переходила в шаблоны»). Страница — общим
 //     адресом над табами (`/sms-templates`): «назад» вернёт в запись.
 //   • Внизу — ДВЕ ДОРОГИ (владелец 03.10: «кто не хочет платно — со своего
-//     телефона… две кнопки: через свой номер или через номер компании»):
-//     «Отправить от <имя отправителя>» — через сервис, с баланса; «Со своего
-//     телефона» — «Сообщения» телефона с готовым текстом, бесплатно. Сервиса
-//     нет (тариф, баланс, имя отправителя) — остаётся одна вторая.
+//     телефона… две кнопки… снизу синяя „Отправить от“, сверху — через
+//     телефон»): «Со своего телефона» — «Сообщения» телефона с этим текстом,
+//     бесплатно; под ней «Отправить от <имя отправителя>» — через сервис, с
+//     баланса. Сервиса нет (тариф, баланс, имя отправителя) — остаётся одна
+//     «Со своего телефона», синей.
 //   • «От команды» — строкой над шаблонами, только без записи и когда команд с
 //     именем отправителя несколько (владелец 30.09).
 
@@ -101,6 +106,9 @@ export function SmsSendSheet({
 
   const [choosingTeam, setChoosingTeam] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
+  // Текст в поле — шаблон, заполненный полями, и правки поверх него.
+  const [text, setText] = useState("");
+  const scrollRef = useRef<ScrollView | null>(null);
   // Каждое открытие — без отметки: прошлый выбор не живёт.
   const [wasVisible, setWasVisible] = useState(false);
   if (visible !== wasVisible) {
@@ -108,12 +116,14 @@ export function SmsSendSheet({
     if (visible) {
       setChoosingTeam(false);
       setPicked(null);
+      setText("");
       setPickedTeam(null);
     }
   }
 
   const chosen = rows.find((row) => row.template.id === picked && row.text) ?? null;
-  const body = chosen?.text?.trim() ?? "";
+  const body = chosen ? text.trim() : "";
+  const encoding = analyzeSmsEncoding(text);
   const url = smsUrl(phone);
   const viaService = service.available;
   const senderName = fromTeam ? service.senders[fromTeam] : null;
@@ -166,6 +176,8 @@ export function SmsSendSheet({
       subtitle={!choosingTeam && viaService && senderName ? `от ${senderName}` : undefined}
       padded={false}
       scroll
+      scrollRef={scrollRef}
+      avoidKeyboard
       maxHeightRatio={0.9}
       headerAction={
         canEditTemplates && !choosingTeam ? (
@@ -189,19 +201,19 @@ export function SmsSendSheet({
       footer={
         choosingTeam ? undefined : (
           <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
-            {viaService ? (
-              <Button
-                label={senderName ? `Отправить от ${senderName}` : "Отправить"}
-                onPress={sendFromCompany}
-                disabled={!chosen}
-              />
-            ) : null}
             {url ? (
               <Button
                 label="Со своего телефона"
                 variant={viaService ? "secondary" : "primary"}
                 onPress={sendFromPhone}
-                disabled={!chosen}
+                disabled={!body}
+              />
+            ) : null}
+            {viaService ? (
+              <Button
+                label={senderName ? `Отправить от ${senderName}` : "Отправить"}
+                onPress={sendFromCompany}
+                disabled={!body}
               />
             ) : null}
           </View>
@@ -221,7 +233,10 @@ export function SmsSendSheet({
               accessibilityRole="radio"
               onPress={() => {
                 haptics.tap();
-                if (id !== fromTeam) setPicked(null);
+                if (id !== fromTeam) {
+                  setPicked(null);
+                  setText("");
+                }
                 setPickedTeam(id);
                 setChoosingTeam(false);
               }}
@@ -255,6 +270,9 @@ export function SmsSendSheet({
                 if (!text) return;
                 haptics.tap();
                 setPicked(template.id);
+                setText(text);
+                // Поле текста — под шаблонами: докручиваем к нему.
+                setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
               }}
             />
           ))}
@@ -265,6 +283,50 @@ export function SmsSendSheet({
           ) : null}
         </SelectList>
       )}
+      {!choosingTeam && chosen ? (
+        <View style={{ paddingHorizontal: GUTTER, paddingTop: 4, paddingBottom: 12 }}>
+          <TextInput
+            value={text}
+            // Без эмодзи и не длиннее 3 SMS — то же правило, что у шаблона.
+            onChangeText={(next) => setText(acceptSmsInput(next, text))}
+            placeholder="Текст SMS"
+            placeholderTextColor={t.placeholder}
+            selectionColor={t.accent}
+            keyboardAppearance="light"
+            multiline
+            maxLength={1000}
+            accessibilityLabel="Текст SMS"
+            maxFontSizeMultiplier={1.3}
+            style={{
+              minHeight: 110,
+              maxHeight: 220,
+              paddingHorizontal: 14,
+              paddingTop: 12,
+              paddingBottom: 12,
+              fontSize: 16,
+              lineHeight: 22,
+              color: t.ink,
+              textAlignVertical: "top",
+              borderRadius: t.radius.input,
+              borderCurve: "continuous",
+              backgroundColor: t.fill,
+            }}
+          />
+          <Text
+            maxFontSizeMultiplier={1.2}
+            style={{
+              marginTop: 6,
+              fontSize: 13,
+              color: encoding.segments > 1 ? t.warning : t.sub,
+              fontVariant: ["tabular-nums"],
+            }}
+          >
+            {body
+              ? `${encoding.length} знаков · ${encoding.segments} SMS${encoding.segments >= MAX_SMS_PARTS ? " — предел" : ""}`
+              : "Текст пустой"}
+          </Text>
+        </View>
+      ) : null}
     </BottomSheet>
   );
 }
