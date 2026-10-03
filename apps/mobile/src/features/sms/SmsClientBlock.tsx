@@ -156,12 +156,15 @@ export function SmsClientBlock({
                   height: 36,
                   justifyContent: "center",
                   paddingHorizontal: 12,
+                  // МЯГКАЯ АКЦЕНТНАЯ ПЛАШКА, А НЕ СЕРОЕ ПОЛЕ (владелец 03.10:
+                  // «серенькое — немного не то»): серое с серым именем
+                  // читалось пустым и выключенным. Тот же тон, что «Ещё N».
                   borderRadius: t.radius.input,
-                  backgroundColor: t.fill,
+                  backgroundColor: `${t.accent}14`,
                 }}
               >
                 {readOnly ? (
-                  <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 15, color: smsName ? t.ink : t.placeholder, textAlign: "right" }}>
+                  <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 15, fontWeight: "600", color: t.accent, textAlign: "right" }}>
                     {smsName || fallbackName}
                   </Text>
                 ) : (
@@ -169,7 +172,9 @@ export function SmsClientBlock({
                     ref={nameRef}
                     value={nameDraft ?? smsName}
                     placeholder={fallbackName || "Имя"}
-                    placeholderTextColor={t.placeholder}
+                    // Подставленное имя — то, что и уйдёт в SMS: тем же цветом,
+                    // что заданное, а не серой «пустотой».
+                    placeholderTextColor={fallbackName ? t.accent : t.placeholder}
                     selectionColor={t.accent}
                     onFocus={() => setNameDraft(smsName)}
                     onChangeText={setNameDraft}
@@ -180,7 +185,7 @@ export function SmsClientBlock({
                     autoCorrect={false}
                     accessibilityLabel="Имя для SMS"
                     maxFontSizeMultiplier={1.3}
-                    style={{ fontSize: 15, color: t.ink, textAlign: "right", padding: 0 }}
+                    style={{ fontSize: 15, fontWeight: "600", color: t.accent, textAlign: "right", padding: 0 }}
                   />
                 )}
               </View>
