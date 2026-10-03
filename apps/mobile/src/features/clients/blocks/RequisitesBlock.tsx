@@ -8,8 +8,6 @@ import {
   requisitesNumbersLine,
 } from "@babun/shared/local/client-requisites";
 import { ChooseRow } from "@/components/ui/ChooseRow";
-import { GUTTER } from "@/components/ui/tokens";
-import { IdentityCard } from "@/features/appointments/TeamLabelRow";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { useToast } from "@/components/ui/Toast";
 import { SwipeRow } from "@/components/ui/SwipeRow";
@@ -200,53 +198,22 @@ export function RequisitesBlock({
   // отсутствует, владелец 20.09).
   if (readOnly && ordered.length === 0) return null;
 
+  // КАРТОЧКА — ОДИН НАБОР, ОСНОВНОЙ (владелец 03.10, как «История» и
+  // «Файлы»): плашкой под шапкой блока, тап — страница всех наборов. Пусто —
+  // дверь «Добавить реквизиты», как «Добавить объект».
   // «Ещё N» — наборов сверх показанного основного (03.10).
   const more = single && onOpenAll ? moreLabel(ordered.length) : null;
-
-  // КАРТОЧКА — ПЛИТКОЙ, КАК «ЛИЧНОЕ» ПОД НЕЙ (владелец 03.10: «реквизиты
-  // тоже поправляй» — сразу после «день рождения и источник — как метка и
-  // тег»). Тот же `IdentityCard` во всю ширину: основной набор — юр. имя,
-  // под ним «VAT · Рег.» и «ещё N»; тап — страница всех наборов. Пусто —
-  // плитка «Реквизиты», тап открывает лист нового набора.
-  if (single) {
-    const main = shown[0] ?? null;
-    const legal = (main?.legal_name ?? "").trim();
-    const sub = main
-      ? [requisitesNumbersLine(main), more?.toLowerCase()].filter(Boolean).join(" · ")
-      : "";
-    return (
-      <>
-        <View style={{ flexDirection: "row", marginHorizontal: GUTTER, marginTop: 8 }}>
-          <IdentityCard
-            icon={Building2}
-            color={t.accent}
-            title={main ? legal || "Реквизиты" : "Реквизиты"}
-            sub={sub || undefined}
-            muted={!main}
-            onPress={
-              main
-                ? onOpenAll ?? (readOnly ? undefined : () => openSheet(main.id))
-                : readOnly
-                  ? undefined
-                  : () => openSheet(null)
-            }
-            accessibilityLabel={main ? ["Реквизиты", legal, sub].filter(Boolean).join(", ") : "Реквизиты не добавлены"}
-            accessibilityHint={main ? "Открывает все реквизиты клиента" : "Открывает добавление реквизитов"}
-          />
-        </View>
-        {sheetNode}
-      </>
-    );
-  }
-
-  // ЧЕРНОВИК — строками в блоке: своей страницы у нового клиента ещё нет.
   return (
-    <SectionCard title="Реквизиты">
+    <SectionCard
+      title="Реквизиты"
+      action={more && onOpenAll ? { label: more, pill: true, onPress: onOpenAll } : undefined}
+    >
       {shown.map((set) => (
         <View key={set.id} style={{ paddingHorizontal: 2, paddingTop: 2, paddingBottom: 6 }}>
           <RequisitesPlaque
             set={set}
             markDefault={false}
+            withAddress={false}
             onPress={onOpenAll ?? (readOnly ? () => undefined : () => openSheet(set.id))}
             onLongPress={() => copySet(set)}
           />
@@ -268,11 +235,16 @@ export function RequisitesBlock({
 function RequisitesPlaque({
   set,
   markDefault,
+  withAddress = true,
   onPress,
   onLongPress,
 }: {
   set: ClientRequisites;
   markDefault: boolean;
+  /** Адрес третьей строкой — на странице всех наборов. На карточке плашка в
+   *  две строки, как запись, объект и файл соседних блоков (владелец 03.10:
+   *  «реквизиты — как объекты, файлы или история»). */
+  withAddress?: boolean;
   onPress: () => void;
   onLongPress: () => void;
 }) {
@@ -291,7 +263,7 @@ function RequisitesPlaque({
       plain
       title={legal || "Юридическое имя не указано"}
       subtitle={numbers || undefined}
-      hint={address || undefined}
+      hint={withAddress && address ? address : undefined}
       accessibilityLabel={["Реквизиты", legal, numbers, address].filter(Boolean).join(", ")}
       accessibilityHint="Открывает реквизиты; удерживайте, чтобы скопировать"
       onPress={onPress}

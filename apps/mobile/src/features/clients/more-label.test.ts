@@ -16,8 +16,8 @@ describe("«Ещё N» в шапке блока карточки (03.10)", () =>
     assert.equal(moreLabel(12), "Ещё 11");
   });
 
-  test("плашка стоит у «Истории», «Объектов» и «Файлов»", () => {
-    for (const file of ["ClientContactRow.tsx", "blocks/ObjectsBlock.tsx", "blocks/ClientFilesBlock.tsx"]) {
+  test("плашка стоит у «Истории», «Объектов», «Файлов» и «Реквизитов»", () => {
+    for (const file of ["ClientContactRow.tsx", "blocks/ObjectsBlock.tsx", "blocks/ClientFilesBlock.tsx", "blocks/RequisitesBlock.tsx"]) {
       assert.match(read(file), /pill: true/, `${file}: нет плашки «Ещё N»`);
       assert.match(read(file), /moreLabel\(/, `${file}: счёт не по общему правилу`);
     }
@@ -55,13 +55,5 @@ describe("«Личное» — плитками, как «Метка | Тег» 
     assert.doesNotMatch(personal, /<NavRow|<SectionCard/);
     // Пустую плитку «Только видит» не показываем — заполнить её нельзя.
     assert.match(personal, /const showBirthday = !readOnly \|\| !!birthday;/);
-  });
-});
-
-describe("«Реквизиты» на карточке — плиткой, как «Личное» (03.10)", () => {
-  test("основной набор — `IdentityCard` во всю ширину; «ещё N» — в подписи", () => {
-    const block = read("blocks/RequisitesBlock.tsx");
-    assert.match(block, /if \(single\) \{[\s\S]{0,1200}<IdentityCard\s+icon=\{Building2\}/);
-    assert.match(block, /\[requisitesNumbersLine\(main\), more\?\.toLowerCase\(\)\]/);
   });
 });
