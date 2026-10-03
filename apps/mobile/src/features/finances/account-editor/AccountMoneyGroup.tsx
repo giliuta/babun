@@ -11,12 +11,16 @@ import { useAccountVatDue } from "../vat-queries";
 import type { StageAccount } from "./types";
 
 const noop = () => {};
+/** Колонка суммы счёта: «€12 345,67» жирным 15pt. */
+const SUM_COL_W = 92;
+/** Колонка VAT левее суммы: «VAT €1 234,56» серым 13pt. */
+const VAT_COL_W = 104;
 
 // ШТОРКА СЧЁТА — КАЖДОЕ ДЕЛО СВОИМ БЛОКОМ (владелец 03.10, третий заход:
 // «блок „На счёте", справа общая сумма, и эти две плитки; „Перевести" — в
 // другой блок; и вообще раздельно можно все эти блоки»):
-//   • «На счёте» — плашка со значком, общая сумма справа и под ней «(в т.ч.
-//     VAT …)»: сумма одна, VAT лежит внутри неё;
+//   • «На счёте» — плашка со значком, справа серым «VAT …» и общая сумма:
+//     сумма одна, VAT лежит внутри неё;
 //   • «Перевести», «В оплате записи», «Выписка» — каждый своим блоком.
 // Строки «Команда» нет: шторку открывают со страницы счетов этой команды
 // («зачем писать команда команда один»). «Остатка на начало» тоже нет («что
@@ -54,12 +58,12 @@ export function AccountMoneyGroup({
 
   return (
     <>
-      {/* «НА СЧЁТЕ» — ОДНА ОБЩАЯ СУММА, VAT — В СКОБКАХ ВНУТРИ НЕЁ (владелец
-          03.10: «на счёте 320, и в эти 320 входит VAT — просто в скобках, не
-          отдельно VAT и отдельно сумма без VAT»). Плашка — та же, что у
-          соседних блоков («вернуть в хороший дизайн, чтоб соответствовало»):
-          значок, слово, сумма справа и под ней «(в т.ч. VAT …)». Нет налога —
-          нет и скобок. На счёте — факт, а не поле: остаток меняют операции. */}
+      {/* «НА СЧЁТЕ» — ОДНА ОБЩАЯ СУММА, VAT ЛЕЖИТ ВНУТРИ НЕЁ (владелец 03.10:
+          «в эти 320 входит VAT, не отдельно VAT и отдельно сумма без VAT»).
+          Плашка — та же, что у соседних блоков («вернуть в хороший дизайн»):
+          значок, слово, справа серым «VAT …» и жирная сумма — вариант 3 из
+          четырёх показанных. Нет налога — нет и VAT. На счёте — факт, а не
+          поле: остаток меняют операции. */}
       <SectionCard dense>
         <View style={blockBody}>
           <SelectRow
@@ -74,11 +78,29 @@ export function AccountMoneyGroup({
                 : `На счёте ${money(account.balance)}`
             }
             trailing={
-              <View style={{ alignItems: "flex-end" }}>
+              // ДВЕ КОЛОНКИ ПОСТОЯННОЙ ШИРИНЫ (владелец 03.10 выбрал вариант 3
+              // — «серым перед суммой» — и попросил «чётко ряд для суммы VAT,
+              // чтоб не дёргался слева направо»): «VAT …» всегда начинается с
+              // одного места, сумма счёта всегда прижата к правому краю, у
+              // какого счёта лист ни открой.
+              <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+                {moneySign(vatDue) !== 0 ? (
+                  <Text
+                    maxFontSizeMultiplier={1.15}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    style={{ width: VAT_COL_W, fontSize: 13, color: t.sub, fontVariant: ["tabular-nums"] }}
+                  >
+                    {`VAT ${money(vatDue)}`}
+                  </Text>
+                ) : null}
                 <Text
-                  maxFontSizeMultiplier={1.3}
+                  maxFontSizeMultiplier={1.15}
                   numberOfLines={1}
+                  adjustsFontSizeToFit
                   style={{
+                    width: SUM_COL_W,
+                    textAlign: "right",
                     fontSize: 15,
                     fontWeight: "700",
                     color: moneySign(account.balance) < 0 ? t.danger : t.ink,
@@ -87,15 +109,6 @@ export function AccountMoneyGroup({
                 >
                   {money(account.balance)}
                 </Text>
-                {moneySign(vatDue) !== 0 ? (
-                  <Text
-                    maxFontSizeMultiplier={1.3}
-                    numberOfLines={1}
-                    style={{ fontSize: 13, color: t.sub, fontVariant: ["tabular-nums"] }}
-                  >
-                    {`(в т.ч. VAT ${money(vatDue)})`}
-                  </Text>
-                ) : null}
               </View>
             }
           />
