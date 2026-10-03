@@ -22,6 +22,7 @@ import { ChevronDown, ChevronUp, X } from "lucide-react-native";
 import type { Client, ClientNote } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { useToast } from "@/components/ui/Toast";
 import { ICON } from "@/components/ui/tokens";
 import { useClientsCapabilities } from "@/features/clients/company-scope";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
@@ -48,6 +49,7 @@ const MAX_LEN = 500;
 
 export default function NotesBlock({ client, update, readOnly = false }: NotesBlockProps) {
   const t = useThemeColors();
+  const toast = useToast();
   // Без выноса (30.09): у сотрудника чужой компании меню «Скопировать» нет.
   const caps = useClientsCapabilities();
   const [earlierOpen, setEarlierOpen] = useState(false);
@@ -90,9 +92,29 @@ export default function NotesBlock({ client, update, readOnly = false }: NotesBl
     client.id,
   );
 
+  // КРЕСТИК УБИРАЕТ СРАЗУ — И С «ОТМЕНИТЬ» (аудит 2026-10-03), как у
+  // реквизитов и связей рядом: запись журнала уходила одним тапом без следа,
+  // а крестик стоит в самой строке и задевается на ходу. Вернуть — та же
+  // запись с тем же id и датой.
   const remove = (id: string) => {
     haptics.tap();
+    const gone = list.find((n) => n.id === id);
     void notes.apply((all) => all.filter((n) => n.id !== id));
+    if (!gone) return;
+    toast("Заметка удалена", "success", {
+      label: "Отменить",
+      onPress: () =>
+        void notes.apply((all) => (all.some((n) => n.id === gone.id) ? all : [...all, gone])),
+    });
+  };
+  const removeImported = () => {
+    haptics.tap();
+    const text = imported;
+    void update({ comment: "" });
+    toast("Заметка удалена", "success", {
+      label: "Отменить",
+      onPress: () => void update({ comment: text }),
+    });
   };
 
   // «Ранее» — всё, что не в поле: старые записи журнала и импортированная
@@ -154,10 +176,7 @@ export default function NotesBlock({ client, update, readOnly = false }: NotesBl
           onRemove={
             readOnly
               ? undefined
-              : () => {
-                  haptics.tap();
-                  void update({ comment: "" });
-                }
+              : removeImported
           }
           removeLabel="Удалить импортированную заметку"
         />
