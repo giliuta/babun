@@ -965,6 +965,11 @@ export const DayColumn = memo(function DayColumn({
 
       {laneW > 0
         ? placements.map((p) => {
+            // ОТМЕНЁННАЯ В РЕЖИМЕ ВЫБОРА ВРЕМЕНИ НЕ РИСУЕТСЯ (прогон 03.10).
+            // Время она не держит — под ней лежит зелёный кубик, а карточка
+            // ложилась сверху: зачёркнутое имя и «11:00» кубика читались одно
+            // поверх другого, и тап по кубику открывал отменённую запись.
+            if (freeSlots !== undefined && p.apt.status === "cancelled") return null;
             const deck = decks.get(p.apt.id);
             return (
             <AppointmentBlock
