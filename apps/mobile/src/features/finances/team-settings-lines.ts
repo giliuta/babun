@@ -19,6 +19,16 @@ export function settingsTeamId(
   return teams[0]?.id ?? null;
 }
 
+/** ДВЕРЬ «СЧЕТА: ПОРЯДОК И НАСТРОЙКИ» НАД ПЛИТКАМИ СЧЕТОВ (владелец 03.10:
+ *  «открываю счета команды и жму настройки — вижу счета именно той
+ *  команды»). Выбрана команда — страница открывается на ней одной (`?team=`);
+ *  «Без команды» и «все» — страница всех счетов, как раньше. */
+export function accountsSettingsHref(teamId: string | null, noTeam: string): string {
+  return teamId && teamId !== noTeam
+    ? `/accounts/settings?team=${encodeURIComponent(teamId)}`
+    : "/accounts/settings";
+}
+
 /** «Расход 5 · доход 2 · 1 бюджет» — категории команды и сколько у них
  *  бюджетов. Скрытые и служебные не считаются. */
 export function teamCategoriesLine(

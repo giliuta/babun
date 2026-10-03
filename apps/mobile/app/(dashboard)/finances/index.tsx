@@ -1499,6 +1499,8 @@ function FinancesContent() {
             onOpenRecord={openRecordRow}
             refreshControl={refreshControl}
             canOpenSettings={access.settings}
+            // Настройки — на счетах выбранной команды (владелец 03.10).
+            teamId={scope}
           />
         ) : view === "documents" ? (
           <DocumentsPanel

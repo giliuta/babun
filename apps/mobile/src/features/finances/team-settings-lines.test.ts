@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  accountsSettingsHref,
   requisitesDoorLine,
   settingsTeamId,
   teamCategoriesLine,
@@ -74,5 +75,15 @@ describe("шестерёнка финансов — числа и подписи
     assert.equal(requisitesDoorLine(1, "INV-2026-106"), "1 набор · INV-2026-106");
     assert.equal(requisitesDoorLine(3, null), "3 набора");
     assert.equal(requisitesDoorLine(0, "INV-2026-001"), "Пока нет");
+  });
+});
+
+describe("дверь настроек над счетами — счета выбранной команды (03.10)", () => {
+  test("команда выбрана — страница на ней одной", () => {
+    assert.equal(accountsSettingsHref("team-1", "__no_team__"), "/accounts/settings?team=team-1");
+  });
+  test("«Без команды» и все счета — страница всех счетов", () => {
+    assert.equal(accountsSettingsHref("__no_team__", "__no_team__"), "/accounts/settings");
+    assert.equal(accountsSettingsHref(null, "__no_team__"), "/accounts/settings");
   });
 });
