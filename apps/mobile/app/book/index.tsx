@@ -56,6 +56,7 @@ import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
+import { useClientFunctionOn } from "@/features/clients/client-functions";
 import { globalDiscountAmount } from "@babun/shared/local/finance/appointment-calc";
 import {
   findBufferClash,
@@ -1501,6 +1502,10 @@ export default function BookScreen() {
   };
   // Логика поля — общий хук: тот же блок «Клиент» ставят инвойс и чек.
   const clientNote = useClientNoteField(client);
+  // ЗАМЕТКА КЛИЕНТА — ЗА ВЫКЛЮЧАТЕЛЕМ «БЛОКОВ КЛИЕНТОВ» (владелец 03.10:
+  // «убрать заметку — она убирается и на карточке клиента, и в записи»).
+  // Команда — та же, что у карточки: клиента; без неё — команда записи.
+  const clientNoteOn = useClientFunctionOn("client_note", client?.team_id ?? teamId);
   // КАРТОЧКУ КЛИЕНТА ОТСЮДА МОЖНО ПРАВИТЬ? (аудит прав 03.10). Мастер вне
   // вкладки «Клиенты» видит «клиента записи» — заметка клиента, заметка и
   // правка объекта, «Добавить объект» пишут в карточку и всегда получали
@@ -2710,13 +2715,15 @@ export default function BookScreen() {
                   onPick={can.editClient ? pickClientOrRefuse : undefined}
                   onOpenCard={openClientCard}
                   note={
-                    <InlineNoteField
-                      note={clientNote}
-                      placeholder="Заметка клиента"
-                      accessibilityLabel="Заметка клиента"
-                      maxLength={500}
-                      readOnly={!clientWritable}
-                    />
+                    clientNoteOn ? (
+                      <InlineNoteField
+                        note={clientNote}
+                        placeholder="Заметка клиента"
+                        accessibilityLabel="Заметка клиента"
+                        maxLength={500}
+                        readOnly={!clientWritable}
+                      />
+                    ) : undefined
                   }
                 />
               </SmsComposeProvider>
@@ -3125,13 +3132,15 @@ export default function BookScreen() {
                       : undefined
                   }
                   note={
-                    <InlineNoteField
-                      note={clientNote}
-                      placeholder="Заметка клиента"
-                      accessibilityLabel="Заметка клиента"
-                      maxLength={500}
-                      readOnly={!clientWritable}
-                    />
+                    clientNoteOn ? (
+                      <InlineNoteField
+                        note={clientNote}
+                        placeholder="Заметка клиента"
+                        accessibilityLabel="Заметка клиента"
+                        maxLength={500}
+                        readOnly={!clientWritable}
+                      />
+                    ) : undefined
                   }
                 />
               </SmsComposeProvider>
