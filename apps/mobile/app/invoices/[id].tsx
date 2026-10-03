@@ -49,6 +49,7 @@ import {
   useInvoices,
   useRecordInvoicePayment,
   useRefundInvoicePayment,
+  useSetInvoiceLanguage,
 } from "@/features/invoices/queries";
 import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
@@ -95,6 +96,7 @@ export default function InvoiceDetailScreen() {
   const pay = useRecordInvoicePayment(id);
   const refund = useRefundInvoicePayment(id);
   const cancel = useCancelInvoice(id);
+  const setLanguage = useSetInvoiceLanguage(id);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [accountCreateOpen, setAccountCreateOpen] = useState(false);
   const [refundTarget, setRefundTarget] = useState<InvoicePaymentLedger | null>(null);
@@ -411,16 +413,32 @@ export default function InvoiceDetailScreen() {
     creditNote,
   });
   const canCancel = !isCreditNote && row.status === "issued";
+  // ЯЗЫК БУМАГИ — ПУНКТОМ МЕНЮ (аудит 03.10): переключателя на документе не
+  // было, хотя выставление обещало «переключается одним тапом», и счёт с
+  // несохранившимся английским уходил клиенту русским.
+  const paperEnglish = row.language === "en";
+  const switchLanguage = () =>
+    setLanguage.mutate(paperEnglish ? "ru" : "en", {
+      onSuccess: () => haptics.success(),
+      onError: (error) => notify("Язык не сменился", error.message),
+    });
   const openMenu = async () => {
-    const options = [
-      { label: "Поделиться PDF" },
-      { label: "Поделиться текстом" },
-      ...(canCancel ? [{ label: "Отменить инвойс", destructive: true }] : []),
+    const actions = [
+      { label: "Поделиться PDF", run: () => void sharePdf() },
+      { label: "Поделиться текстом", run: () => void shareInvoice() },
+      {
+        label: paperEnglish ? "Бумага на русском" : "Бумага на английском",
+        run: switchLanguage,
+      },
+      ...(canCancel
+        ? [{ label: "Отменить инвойс", destructive: true, run: () => void cancelInvoice() }]
+        : []),
     ];
-    const index = await chooseOption(row.number, options);
-    if (index === 0) void sharePdf();
-    if (index === 1) void shareInvoice();
-    if (index === 2) void cancelInvoice();
+    const index = await chooseOption(
+      row.number,
+      actions.map(({ label, destructive }) => ({ label, destructive })),
+    );
+    if (index !== null && index >= 0) actions[index]?.run();
   };
 
   return (

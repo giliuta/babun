@@ -22,6 +22,7 @@ import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { todayYmd } from "@/features/invoices/format";
 import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import {
   effectiveVatSettings,
   useTeamVatOverrides,
@@ -92,6 +93,14 @@ export default function NewInvoiceScreen() {
 
   const submit = async (value: InvoiceEditorValue) => {
     const invoice = await issue.mutateAsync({ ...value, request_id: requestId });
+    // Язык не записался (сеть моргнула дважды) — сказать, а не молчать: иначе
+    // клиенту ушла бы русская бумага вместо утверждённой английской.
+    if (value.language && invoice.language !== value.language) {
+      notify(
+        "Инвойс выставлен, язык бумаги не сохранился",
+        "Документ пока на русском. Переключите язык в «⋯» на странице инвойса.",
+      );
+    }
     // Выставлен — черновика больше нет, уход без вопроса.
     leavingRef.current = true;
     router.replace(`/invoices/${invoice.id}` as Href);

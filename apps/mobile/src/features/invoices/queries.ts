@@ -182,6 +182,18 @@ function invalidateInvoices(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["receipts"] });
 }
 
+/** ЯЗЫК БУМАГИ ВЫСТАВЛЕННОГО ДОКУМЕНТА — пункт «⋯» на его странице (аудит
+ *  03.10). Сторож оплаченного счёта язык не проверяет: клиент попросил
+ *  английский уже после выставления — законная просьба; цифры не меняются. */
+export function useSetInvoiceLanguage(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (language: "ru" | "en") => setInvoiceLanguage(supabase, id, language),
+    onSuccess: () => invalidateInvoices(qc),
+    meta: { errorHandled: true },
+  });
+}
+
 export function useIssueInvoice() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
@@ -189,8 +201,11 @@ export function useIssueInvoice() {
     // ЯЗЫК ПИШЕТСЯ ВТОРЫМ ШАГОМ И НЕ ВАЛИТ ВЫСТАВЛЕНИЕ. Серверная функция
     // `issue_invoice` его не принимает (добавить параметр — значит создать
     // перегрузку рядом со старой), а язык не деньги: если запись не прошла,
-    // счёт остаётся русским и переключается на документе одним тапом.
-    // Ронять из-за этого выставленный документ было бы куда хуже.
+    // счёт остаётся русским и переключается в «⋯» документа
+    // (`useSetInvoiceLanguage`). Ронять из-за этого выставленный документ было
+    // бы куда хуже — но и молчать нельзя (аудит 03.10): вернувшийся документ
+    // несёт язык, который реально записан, и экран говорит о расхождении.
+    // Вторая попытка — на случай одного моргания сети.
     mutationFn: async ({
       language,
       ...draft
@@ -198,11 +213,13 @@ export function useIssueInvoice() {
       if (!tenantId) throw new Error("Нет активного тенанта");
       const invoice = await issueInvoice(supabase, tenantId, draft);
       if (language && language !== "ru") {
-        try {
-          await setInvoiceLanguage(supabase, invoice.id, language);
-          return { ...invoice, language };
-        } catch {
-          return invoice;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            await setInvoiceLanguage(supabase, invoice.id, language);
+            return { ...invoice, language };
+          } catch {
+            if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 800));
+          }
         }
       }
       return invoice;
