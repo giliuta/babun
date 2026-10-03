@@ -1,10 +1,13 @@
-import { Redirect, Stack, usePathname } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useMyAccess } from "@/features/access/queries";
 import { LockedFinances } from "@/features/finances/LockedFinances";
 import { financesGate } from "@/features/finances/finances-gate";
+import { anyFinanceSetting } from "@/features/finances/settings-levels";
+import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-settings";
+import { useTeams } from "@/features/reference/queries";
 import { useBudgetWatch } from "@/features/finances/use-category-budget";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { useCurrentRole } from "@/features/settings/tenant";
@@ -42,35 +45,39 @@ import { useCurrentRole } from "@/features/settings/tenant";
 // при любом входе в стек; сторож — `tab-stack-roots.test.ts`.
 export const unstable_settings = { initialRouteName: "index" };
 
-/** Экраны каталога, которые в срезе 1 остаются ВЛАДЕЛЬЧЕСКИМИ: денежные
- *  настройки, НДС компании и команды, список документов. Уровни их не
- *  открывают, поэтому сотруднику они не «недоступны», а просто не существуют —
- *  диплинк приходит на сами «Финансы». */
-const OWNER_ONLY_PATHS = [
-  // «/finances/settings» отсюда УШЛА (владелец 20.09: «я могу зайти туда, но
-  // блоков уже внутри шестерёнки не будет»). Страница открыта всем, а строки
-  // на ней показывает `finances/settings-rows.ts`; вторые ступени — ставки,
-  // бланк счёта и список документов — остаются владельческими: к ним ведут
-  // строки, которых у сотрудника нет. Справочники категорий и шаблонов —
-  // тоже (запись в них владельческая): по прямой ссылке сотрудник видел бы
-  // кнопки, каждая из которых отказывает (аудит 2026-09-24).
+/** Шестерёнка «Финансов» и её подстраницы. С 03.10 у каждой строки своё
+ *  право (`settings-levels.ts`), а подстраницу закрывает дверь её строки
+ *  (`FinanceSettingsRoute`) — прежний список «только владельцу» снят. */
+const SETTINGS_PATHS = [
+  "/finances/settings",
   "/finances/categories",
   "/finances/requisites",
   "/finances/invoice-blank",
-  // «Удалённые операции» (03.10): дверь — строка шестерёнки владельца.
   "/finances/deleted",
 ];
+
+const onPath = (pathname: string, paths: readonly string[]) =>
+  paths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 
 export default function FinancesLayout() {
   const role = useCurrentRole().data;
   const accessQuery = useMyAccess();
   const pathname = usePathname();
   const gate = financesGate(role, accessQuery.data);
+  const levelsOf = useFinanceSettingLevelsOf();
+  const teams = useTeams().data ?? [];
+  const anySetting =
+    anyFinanceSetting(levelsOf(null)) || teams.some((team) => anyFinanceSetting(levelsOf(team.id)));
   // Бюджеты категорий: пока раздел открыт, владелец узнаёт о перевале лимита
   // и по расходам с чужих телефонов (`use-category-budget.ts`).
   useBudgetWatch();
 
-  if (gate === "locked") return <LockedFinances />;
+  // ШЕСТЕРЁНКА — НЕ ДЕНЬГИ: у партнёра без «Доходов» и «Расходов» бывают
+  // открытые строки настроек (категории, счета). Серая страница вставала
+  // вместо всего стека, и её же шестерёнка вела обратно на неё — петля.
+  if (gate === "locked" && !(onPath(pathname, SETTINGS_PATHS) && anySetting)) {
+    return <LockedFinances />;
+  }
 
   if (gate === "loading") {
     return (
@@ -91,10 +98,7 @@ export default function FinancesLayout() {
     );
   }
 
-  if (gate === "open" && role !== "owner") {
-    if (OWNER_ONLY_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) {
-      return <Redirect href="/finances" />;
-    }
+  if ((gate === "open" || gate === "locked") && role !== "owner") {
     return <Stack screenOptions={{ headerShown: false }} />;
   }
 

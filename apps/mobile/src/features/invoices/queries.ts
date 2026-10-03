@@ -74,11 +74,13 @@ export interface NextInvoiceNumber {
  * Серия — у юрлица: у каждого свои INV, REC и CN, команда в номер не входит.
  * `companyId` пусто — основное юрлицо.
  */
-export function useNextInvoiceSeries(year: number, companyId?: string | null) {
+export function useNextInvoiceSeries(year: number, companyId?: string | null, enabled = true) {
   const tenantId = useTenantId();
   return useQuery({
     queryKey: ["invoices", tenantId, "next-number", year, companyId ?? null],
-    enabled: !!tenantId,
+    // Партнёру без «Документы: Выставляет» сервер номер не показывает
+    // (`peek_document_number` отказывает) — такой экран не спрашивает.
+    enabled: !!tenantId && enabled,
     // Свежесть важнее кэша: номер меняется от каждого выставленного счёта.
     staleTime: 0,
     queryFn: async (): Promise<NextInvoiceNumber | null> => {
@@ -97,8 +99,8 @@ export function useNextInvoiceSeries(year: number, companyId?: string | null) {
 }
 
 /** Только строка номера — для мест, где счётчик не правят. */
-export function useNextInvoiceNumber(year: number, companyId?: string | null) {
-  const series = useNextInvoiceSeries(year, companyId);
+export function useNextInvoiceNumber(year: number, companyId?: string | null, enabled = true) {
+  const series = useNextInvoiceSeries(year, companyId, enabled);
   return { ...series, data: series.data?.number ?? null };
 }
 

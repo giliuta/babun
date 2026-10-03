@@ -38,7 +38,7 @@ describe("экран «Финансы» спрашивает уровень од
   test("шестерёнка денежных настроек серая и глухая", () => {
     // ДВЕРЬ ОТКРЫТА ВСЕМ (владелец 20.09): шестерёнка больше не серая и не
     // глухая — страница за ней сама показывает только доступные строки
-    // (`finances/settings-rows.ts`). Сторож следит, чтобы её снова не закрыли.
+    // (`finances/settings-levels.ts`). Сторож следит, чтобы её снова не закрыли.
     assert.doesNotMatch(index, /disabled=\{!access\.settings\}/);
     assert.doesNotMatch(index, /accessibilityState=\{\{ disabled: !access\.settings \}\}/);
     assert.match(index, /<Settings color=\{t\.sub\} size=\{21\}/);
@@ -93,27 +93,24 @@ describe("экран «Финансы» спрашивает уровень од
 });
 
 describe("двери и подписи по уровню", () => {
-  test("НДС, бланк счёта и список документов сотруднику не открываются ссылкой", () => {
+  test("подстраницы шестерёнки открываются правом своей строки, а не ролью", () => {
     const layout = read("../../../app/(dashboard)/finances/_layout.tsx");
-    // «/finances/settings» ушла из списка (владелец 20.09: «я могу зайти
-    // туда, но блоков уже внутри шестерёнки не будет»): страница открыта, а
-    // строки на ней показывает `finances/settings-rows.ts`. Вторые ступени
-    // остались владельческими — к ним ведут строки, которых у сотрудника нет.
-    assert.doesNotMatch(layout, /OWNER_ONLY_PATHS = \[[^\]]*"\/finances\/settings"/);
-    // СПИСОК ЗАКРЫТ НЕ ПОИМЁННО, А ПРАВИЛОМ: сторожим, что три прежние двери
-    // в нём остались и что «/finances/settings» в него не вернулась. Точное
-    // перечисление краснело на КАЖДОЙ новой владельческой странице — так
-    // 21.09 оно упало на «/finances/requisites», хотя инвариант цел.
-    // Страницы VAT и «Счета клиентам» сняты 30.09 (VAT — в «Итого», бланк —
-    // в «Реквизитах»); владельческими остаются справочники.
-    for (const path of ["/finances/categories", "/finances/requisites"]) {
-      assert.match(
-        layout,
-        new RegExp(`OWNER_ONLY_PATHS = \\[[^\\]]*"${path.replace(/\//g, "\\/")}"`),
-        `${path} пропала из владельческих`,
-      );
+    // ДО 03.10 подстраницы шестерёнки были «только владельцу» поимённым
+    // списком. С правами строк шестерёнки (миграция 20261003235500) список
+    // снят: каждую подстраницу закрывает дверь её строки
+    // (`FinanceSettingsRoute`), а сама шестерёнка не прячется за серой
+    // страницей у партнёра без «Доходов» и «Расходов».
+    assert.doesNotMatch(layout, /OWNER_ONLY_PATHS/);
+    assert.match(layout, /onPath\(pathname, SETTINGS_PATHS\) && anySetting/);
+    for (const [file, row] of [
+      ["categories.tsx", "row=\\{row\\}"],
+      ["requisites.tsx", 'row="requisites"'],
+      ["invoice-blank.tsx", 'row="invoices"'],
+      ["deleted.tsx", 'row="trash"'],
+    ] as const) {
+      const route = read(`../../../app/(dashboard)/finances/${file}`);
+      assert.match(route, new RegExp(`<FinanceSettingsRoute ${row}`), `${file} без двери своей строки`);
     }
-    assert.match(layout, /if \(OWNER_ONLY_PATHS\.some\(\(path\) => pathname === path \|\| pathname\.startsWith\(`\$\{path\}\/`\)\)\) \{ return <Redirect href="\/finances" \/>; \}/);
   });
 
   test("футер гаснет и называет причину словами", () => {

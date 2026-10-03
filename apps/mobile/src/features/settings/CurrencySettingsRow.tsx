@@ -17,7 +17,13 @@ import { useUpdateTenant } from "./tenant";
 // компания». Раньше жила в шестерёнке календаря рядом с часовым поясом
 // (06.09), теперь — там, где деньги.
 
-export function CurrencySettingsRow() {
+export function CurrencySettingsRow({
+  readOnly = false,
+}: {
+  /** Партнёр с «Валюта: Только видит» — строка без шторки: валюта одна на
+   *  аккаунт, менять её может только владелец (`tenants_update_owner`). */
+  readOnly?: boolean;
+} = {}) {
   const toast = useToast();
   const currency = useCurrency();
   const updateTenant = useUpdateTenant();
@@ -60,7 +66,7 @@ export function CurrencySettingsRow() {
         // Коротко (владелец 30.09 о шестерёнке): «Евро · €» — код EUR
         // повторял то же, что знак.
         sub={`${moneyName(currency)} · ${moneySymbol(currency)}`}
-        onPress={() => setOpen(true)}
+        onPress={readOnly ? undefined : () => setOpen(true)}
       />
       <CurrencySheet visible={open} onClose={() => setOpen(false)} value={currency} onApply={apply} />
     </>

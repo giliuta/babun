@@ -1156,7 +1156,7 @@ function FinancesContent() {
         // уже внутри шестерёнки не будет»). Раньше у сотрудника шестерёнка
         // была серой и глухой — визуал шапки менялся вместе с правами.
         // Страница за ней показывает то, что человеку открыто, и ничего, если
-        // не открыто ничего (`finances/settings-rows.ts`).
+        // не открыто ничего (`finances/settings-levels.ts`).
         hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel="Настройки финансов"

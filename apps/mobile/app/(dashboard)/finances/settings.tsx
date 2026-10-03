@@ -31,7 +31,12 @@ import { useNextInvoiceNumber } from "@/features/invoices/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { accountsDoorLine } from "@/features/finances/accounts-sections";
 import { useCurrentRole, useTenant } from "@/features/settings/tenant";
-import { financeSettingsRows } from "@/features/finances/settings-rows";
+import {
+  CATEGORY_KIND_ROW,
+  anyFinanceSetting,
+  type FinanceSettingRow,
+} from "@/features/finances/settings-levels";
+import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-settings";
 import { LedgerExportRow } from "@/features/finances/LedgerExportRow";
 import { CurrencySettingsRow } from "@/features/settings/CurrencySettingsRow";
 import { useFinanceCategories } from "@/features/finances/queries";
@@ -86,13 +91,21 @@ const KINDS: {
 
 export default function FinanceSettingsScreen() {
   const router = useRouter();
-  // СТРАНИЦА ОТКРЫТА ВСЕМ, СТРОКИ — ПО ДОСТУПУ (владелец 20.09). Правило и
-  // его причины — `features/finances/settings-rows.ts`.
-  const rows = financeSettingsRows(useCurrentRole().data);
+  // СТРАНИЦА ОТКРЫТА ВСЕМ, СТРОКИ — ПО ПРАВАМ (владелец 20.09; у каждой
+  // строки шестерёнки своё право — 03.10). Правило и его причины —
+  // `features/finances/settings-levels.ts`: «Скрыты» — строки нет, «Только
+  // видит» — строка ведёт на страницу без правки, «Видит и меняет» — правит.
+  const owner = useCurrentRole().data === "owner";
+  const levelsOf = useFinanceSettingLevelsOf();
 
   const { team: teamParam } = useLocalSearchParams<{ team?: string }>();
-  const teams = useTeams().data ?? [];
+  const allTeams = useTeams().data ?? [];
+  // В ленте — команды, где у человека открыта хоть одна строка (у владельца —
+  // все), как в шестерёнке клиентов.
+  const teams = owner ? allTeams : allTeams.filter((team) => anyFinanceSetting(levelsOf(team.id)));
   const teamId = settingsTeamId(teams, teamParam);
+  const levels = levelsOf(teamId);
+  const shown = (row: FinanceSettingRow) => levels[row] !== "hidden";
   const withTeam = (path: string, extra?: string) =>
     (teamId
       ? `${path}?team=${encodeURIComponent(teamId)}${extra ? `&${extra}` : ""}`
@@ -106,12 +119,22 @@ export default function FinanceSettingsScreen() {
   const categoriesQuery = useFinanceCategories();
   const deletedOperations = useDeletedOperations();
   const companies = useCompanies();
-  const nextInvoice = useNextInvoiceNumber(new Date().getFullYear()).data;
+  // Номер следующего инвойса сервер показывает владельцу и тому, кто сам
+  // выставляет инвойсы; партнёр «Реквизитов» видит наборы без номера.
+  const nextInvoice = useNextInvoiceNumber(new Date().getFullYear(), undefined, owner).data;
   const liveSets = (companies.data ?? []).filter((c) => !c.archived_at).length;
   const tenant = useTenant().data;
 
-  const teamGroup = rows.accounts || rows.moneyGroup;
-  const documentsGroup = rows.requisites || rows.invoices;
+  // «Выгрузка» — действие, а не страница: строка есть только у «Выгружает».
+  const money = {
+    accounts: shown("accounts"),
+    export: levels.export === "write",
+    trash: shown("trash"),
+  };
+  const moneyGroup = teamId !== null && (money.accounts || money.export || money.trash);
+  const categoryKinds = teamId ? KINDS.filter(({ kind }) => shown(CATEGORY_KIND_ROW[kind])) : [];
+  const documentsGroup = shown("requisites") || shown("invoices");
+  const any = moneyGroup || categoryKinds.length > 0 || documentsGroup || shown("currency");
 
   return (
     <Screen edges={["top"]}>
@@ -119,21 +142,21 @@ export default function FinanceSettingsScreen() {
       <ScreenHeader title="Настройки финансов" seam={teams.length === 0} />
       {/* КОМАНДЫ СВЕРХУ, КАК В НАСТРОЙКАХ КАЛЕНДАРЯ: выбрана ровно одна —
           всё ниже неё — её. */}
-      {rows.any && teams.length > 0 ? (
+      {any && teams.length > 0 ? (
         <ScopeChips
           items={teams}
           activeId={teamId}
           onSelect={(id) => router.setParams({ team: id })}
         />
       ) : null}
-      {rows.any ? (
+      {any ? (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
-          {teamGroup && teamId ? (
+          {moneyGroup ? (
             <SectionCard title="Деньги">
               {/* «СЧЕТА» — ТА ЖЕ СТРАНИЦА, ЧТО ЗА ПОЛЗУНКАМИ ПАНЕЛИ: остатки,
                   порядок, скрытие, «Добавить счёт»; открывается на этой
                   команде и своей ленты команд не несёт. */}
-              {rows.accounts ? (
+              {money.accounts ? (
                 <SettingsRow
                   tile={SETTINGS_TILE.blue}
                   icon={Wallet}
@@ -150,18 +173,18 @@ export default function FinanceSettingsScreen() {
                 />
               ) : null}
               {/* ВЫГРУЗКА — ТОЛЬКО ЭТОЙ КОМАНДЫ (владелец 2026-09-30). */}
-              {rows.moneyGroup ? (
+              {money.export ? (
                 <>
-                  {rows.accounts ? <Divider inset={56} /> : null}
+                  {money.accounts ? <Divider inset={56} /> : null}
                   <LedgerExportRow teamId={teamId} />
                 </>
               ) : null}
               {/* «УДАЛЁННЫЕ ОПЕРАЦИИ» (владелец 03.10) — ящик этой команды:
                   30 дней, «Вернуть». Вид — как «Удалённые клиенты» в
                   шестерёнке клиентов. */}
-              {rows.deletedOperations ? (
+              {money.trash ? (
                 <>
-                  <Divider inset={56} />
+                  {money.accounts || money.export ? <Divider inset={56} /> : null}
                   <SettingsRow
                     tile={SETTINGS_TILE.red}
                     icon={Trash2}
@@ -184,9 +207,9 @@ export default function FinanceSettingsScreen() {
               (владелец 03.10: «обычный блок, как все: доходы, расходы, долги»).
               Каждая ведёт на свою страницу вида, там внизу «Добавить
               категорию». Подпись — сколько категорий у команды. */}
-          {rows.categories && teamId ? (
+          {categoryKinds.length > 0 ? (
             <SectionCard title="Категории">
-              {KINDS.map(({ kind, title, icon, tile }, index) => (
+              {categoryKinds.map(({ kind, title, icon, tile }, index) => (
                 <View key={kind}>
                   {index > 0 ? <Divider inset={56} /> : null}
                   <SettingsRow
@@ -209,7 +232,7 @@ export default function FinanceSettingsScreen() {
               каждым набором) и бланк инвойса — что подставлять в новый счёт. */}
           {documentsGroup ? (
             <SectionCard title="Документы">
-              {rows.requisites ? (
+              {shown("requisites") ? (
                 <SettingsRow
                   tile={SETTINGS_TILE.green}
                   icon={Building2}
@@ -218,9 +241,9 @@ export default function FinanceSettingsScreen() {
                   onPress={() => router.push("/finances/requisites")}
                 />
               ) : null}
-              {rows.invoices ? (
+              {shown("invoices") ? (
                 <>
-                  {rows.requisites ? <Divider inset={56} /> : null}
+                  {shown("requisites") ? <Divider inset={56} /> : null}
                   <SettingsRow
                     tile={SETTINGS_TILE.blue}
                     icon={FileText}
@@ -234,9 +257,9 @@ export default function FinanceSettingsScreen() {
           ) : null}
 
           {/* ВАЛЮТА — ОДНА НА ВЕСЬ АККАУНТ (владелец 2026-09-30). */}
-          {rows.currency ? (
+          {shown("currency") ? (
             <SectionCard title="Общие">
-              <CurrencySettingsRow />
+              <CurrencySettingsRow readOnly={levels.currency !== "write"} />
             </SectionCard>
           ) : null}
         </ScrollView>
