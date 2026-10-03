@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { CalendarClock, Clock, Phone, UserRound, X } from "lucide-react-native";
+import { Phone, UserRound, X } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { ChooseRow } from "@/components/ui/ChooseRow";
@@ -9,9 +9,9 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { ICON } from "@/components/ui/tokens";
 import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { useDefaultCountry } from "@/features/clients/default-country";
-import { formatShortDateRu } from "@/features/clients/format";
 import { formatPhoneForDisplay } from "@/features/clients/phone";
 import { visitMark } from "@/features/clients/visit-mark";
+import { VisitDate, visitMarkWords } from "@/features/clients/VisitDate";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { contactsLocked } from "@/features/clients/member-contacts";
 import { useRevealedClient } from "@/features/clients/revealed-contacts";
@@ -97,15 +97,7 @@ export function ClientBlock({
   // Дата — как в списке клиентов; «Историю записей» закрыли — даты нет.
   const mark =
     shown && clientBlockLevel(shown, "clients.history") !== "hidden" ? visitMark(stats) : null;
-  const markColor = mark?.kind === "unclosed" ? t.warning : mark?.kind === "ahead" ? t.sub : t.accent;
-  const MarkIcon = mark?.kind === "ahead" ? CalendarClock : Clock;
-  const markWords = !mark
-    ? null
-    : mark.kind === "unclosed"
-      ? `визит ${formatShortDateRu(mark.date)} не закрыт`
-      : mark.kind === "ahead"
-        ? `записан ${formatShortDateRu(mark.date)}`
-        : `последний визит ${formatShortDateRu(mark.date)}`;
+  const markWords = mark ? visitMarkWords(mark) : null;
 
   return (
     <SectionCard title="Клиент">
@@ -175,18 +167,7 @@ export function ClientBlock({
                             : "без телефона"}
                     </Text>
                   )}
-                  {mark ? (
-                    <View className="shrink flex-row items-center gap-1">
-                      <MarkIcon color={markColor} size={12} strokeWidth={2} />
-                      <Text
-                        maxFontSizeMultiplier={1.3}
-                        numberOfLines={1}
-                        style={{ fontSize: 13, color: markColor, fontVariant: ["tabular-nums"] }}
-                      >
-                        {formatShortDateRu(mark.date)}
-                      </Text>
-                    </View>
-                  ) : null}
+                  {mark ? <VisitDate mark={mark} /> : null}
                 </View>
               )}
             </View>

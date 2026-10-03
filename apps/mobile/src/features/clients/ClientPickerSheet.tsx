@@ -13,7 +13,9 @@ import {
   SelectRow,
   SelectSearch,
 } from "@/components/ui/select-rows";
-import { ClientHistoryLine, clientHistoryText } from "@/features/clients/history-line";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
+import { visitMark, type VisitMark } from "@/features/clients/visit-mark";
+import { VisitDate, visitMarkWords } from "@/features/clients/VisitDate";
 import {
   buildQuickClientDraft,
   findQuickClientDuplicate,
@@ -46,6 +48,42 @@ import { TariffLocked } from "@/features/tariffs/TariffLocked";
 /** Один сравниватель на модуль: `localeCompare(…, "ru")` в Hermes заводит
  *  новый коллатор на КАЖДОЕ сравнение — сортировка базы была заметной. */
 const byName = new Intl.Collator("ru");
+
+/** Дата визита строки — та же, что в списке клиентов; «Историю записей»
+ *  закрыли — даты нет. */
+function pickerMark(client: Client, stats: ClientStats | undefined): VisitMark | null {
+  return clientBlockLevel(client, "clients.history") !== "hidden" ? visitMark(stats) : null;
+}
+
+/** Номер и дата визита одной строкой — как под именем в списке клиентов. */
+function ClientPhoneVisit({
+  client,
+  stats,
+  country,
+}: {
+  client: Client;
+  stats: ClientStats | undefined;
+  country: Parameters<typeof formatPhoneForDisplay>[1];
+}) {
+  const t = useThemeColors();
+  const mark = pickerMark(client, stats);
+  const phone = client.phone?.trim() ? formatPhoneForDisplay(client.phone, country) : null;
+  if (!phone && !mark) return null;
+  return (
+    <View className="mt-0.5 flex-row items-center" style={{ gap: 12 }}>
+      {phone ? (
+        <Text
+          maxFontSizeMultiplier={1.3}
+          numberOfLines={1}
+          style={{ fontSize: 14, color: t.sub, fontVariant: ["tabular-nums"] }}
+        >
+          {phone}
+        </Text>
+      ) : null}
+      {mark ? <VisitDate mark={mark} /> : null}
+    </View>
+  );
+}
 
 export function ClientPickerSheet({
   visible,
@@ -281,13 +319,14 @@ export function ClientPickerSheet({
             <SelectRow
               key={c.id}
               title={c.full_name || "Без имени"}
+              // СТРОКА — КАК В СПИСКЕ КЛИЕНТОВ (владелец 03.10: «тут тоже не
+              // нужно показывать долг, „два визита“… и кругляшки с именем —
+              // мы нигде их не используем»): имя, под ним номер и дата визита
+              // цветом (`VisitDate`). Без кружка с буквой.
               subtitle={
-                statsById || linkFor?.(c) ? (
-                  <>
-                    {statsById ? (
-                      <ClientHistoryLine client={c} stats={statsById.get(c.id)} size={12} />
-                    ) : null}
-                    {linkFor?.(c) ? (
+                <>
+                  <ClientPhoneVisit client={c} stats={statsById?.get(c.id)} country={country} />
+                  {linkFor?.(c) ? (
                       <Text
                         numberOfLines={1}
                         maxFontSizeMultiplier={1.3}
@@ -296,17 +335,17 @@ export function ClientPickerSheet({
                         {linkFor(c)}
                       </Text>
                     ) : null}
-                  </>
-                ) : undefined
+                </>
               }
-              hint={c.phone ? formatPhoneForDisplay(c.phone, country) : undefined}
-              initial={c.full_name || "?"}
               selected={c.id === selectedId}
               accessibilityLabel={[
                 c.full_name || "Без имени",
                 c.phone,
                 linkFor?.(c) ?? "",
-                statsById ? clientHistoryText(c, statsById.get(c.id)) : "",
+                (() => {
+                  const mark = pickerMark(c, statsById?.get(c.id));
+                  return mark ? visitMarkWords(mark) : "";
+                })(),
               ]
                 .filter(Boolean)
                 .join(", ")}

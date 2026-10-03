@@ -191,7 +191,7 @@
 ```tsx
 <ClientPickerSheet
   visible={clientPickerOpen}
-  statsById={statsById}          // вводная о человеке в строке; без неё строка короче
+  statsById={statsById}          // дата визита в строке (как в списке клиентов); без неё — только номер
   recentIds={recentClientIds}    // недавние наверх
   selectedId={client?.id}
   excludeId={self?.id}           // «кто привёл»: себя не предлагать
