@@ -1544,6 +1544,9 @@ function FinancesContent() {
             teamId={scope}
             fromDate={DEBTS_SINCE}
             toDate={period.to}
+            // Остаток без нижней границы — старые долги под подписью
+            // «С прошлых периодов» (владелец 03.10).
+            periodFrom={period.from}
             todayYmd={businessToday}
             invoicedAppointmentIds={invoicedAppointments}
             debts={debts}

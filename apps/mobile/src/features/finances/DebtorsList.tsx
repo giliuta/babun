@@ -47,6 +47,7 @@ export function DebtorsList({
   onEditDebt,
   onOpenDocuments,
   refreshControl,
+  periodFrom,
 }: {
   appointments: Appointment[];
   clients: Client[];
@@ -83,6 +84,8 @@ export function DebtorsList({
   onOpenDocuments?: () => void;
   /** Pull-to-refresh хозяина экрана (U86) — один жест на все панели. */
   refreshControl?: ReactElement<RefreshControlProps>;
+  /** Начало выбранного периода: долги старше — под «С прошлых периодов». */
+  periodFrom?: string;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -260,6 +263,7 @@ export function DebtorsList({
       // владелец 15.09): дверь в «Документы» — плитка над списком.
       refreshControl={refreshControl}
       onOpenRecord={openRow}
+      periodFrom={periodFrom}
     />
   );
 }

@@ -537,3 +537,14 @@ export function mergeByRecord(rows: readonly RecordRow[]): RecordRow[] {
     return a.key < b.key ? 1 : -1;
   });
 }
+
+/** ПЕРВЫЙ ДЕНЬ «С ПРОШЛЫХ ПЕРИОДОВ» (владелец 03.10: «текущий месяц, а в
+ *  долгах — сентябрь»). Долг — остаток, а не поток: неоплаченная работа
+ *  27 сентября 1 октября не исчезает. Чтобы это читалось, над первым днём
+ *  раньше начала периода встаёт подпись. Дни идут от новых к старым; `null` —
+ *  все долги внутри периода (подписи нет). */
+export function firstEarlierDay(days: readonly string[], periodFrom: string | null | undefined): string | null {
+  if (!periodFrom) return null;
+  return days.find((day) => day < periodFrom) ?? null;
+}
+

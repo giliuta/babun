@@ -1,6 +1,5 @@
 import { useMemo, useState, type ReactElement } from "react";
 import {
-  Pressable,
   SectionList,
   Text,
   View,
@@ -14,7 +13,9 @@ import type {
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
+import { Receipt as ReceiptIcon, ReceiptText } from "lucide-react-native";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SELECT_SIDE, SelectRow } from "@/components/ui/select-rows";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useThemeColors } from "@/theme/colors";
 import { humanDayYear } from "@/features/appointments/helpers";
@@ -202,11 +203,10 @@ export function DocumentsPanel({
         // расходах и доходах»). Ровно та же шапка, что у ленты операций: дата
         // прописью, капсом, на цвете холста. Итога дня здесь нет намеренно —
         // инвойс и чек по одним деньгам сложились бы в двойную сумму.
+        // День — подписью над плашками, как в «Истории» и «Файлах» клиента
+        // (владелец 03.10, вариант 2).
         renderSectionHeader={({ section }) => (
-          <View
-            className="flex-row items-center px-4 py-1.5"
-            style={{ backgroundColor: t.canvas }}
-          >
+          <View className="flex-row items-center px-4 pb-1.5 pt-3">
             <Text
               className="text-xs font-semibold uppercase tracking-wider"
               style={{ color: t.sub }}
@@ -216,24 +216,25 @@ export function DocumentsPanel({
           </View>
         )}
         ListHeaderComponent={header}
-        ItemSeparatorComponent={() => (
-          <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
-        )}
+        // Плашки — с воздухом между ними, без швов.
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         renderItem={({ item }) => (
-          <DocumentRow
-            document={item}
-            onPress={() => {
-              // Инвойс — документ, который правят (сумма, срок, оплата), и он
-              // открывается своей страницей. Чек править нечем: он открывается
-              // листом прямо здесь.
-              if (item.kind === "invoice") {
-                onOpen(`/invoices/${item.id}`);
-                return;
-              }
-              const receipt = receiptById.get(item.id);
-              if (receipt) setOpenReceipt(receipt);
-            }}
-          />
+          <View style={{ paddingHorizontal: SELECT_SIDE }}>
+            <DocumentRow
+              document={item}
+              onPress={() => {
+                // Инвойс — документ, который правят (сумма, срок, оплата), и он
+                // открывается своей страницей. Чек править нечем: он открывается
+                // листом прямо здесь.
+                if (item.kind === "invoice") {
+                  onOpen(`/invoices/${item.id}`);
+                  return;
+                }
+                const receipt = receiptById.get(item.id);
+                if (receipt) setOpenReceipt(receipt);
+              }}
+            />
+          </View>
         )}
         ListEmptyComponent={
           <EmptyState
@@ -244,23 +245,12 @@ export function DocumentsPanel({
                   ? "Инвойсов за период нет"
                   : "Чеков за период нет"
             }
+            // ПУСТО — ОДНОЙ СТРОКОЙ (закон 15.09, владелец 03.10): кнопка
+            // внизу и так говорит, как выставить документ.
             subtitle={
               searching
                 ? "Искали среди документов выбранного периода"
-                : filter === "invoice"
-                  // Тому, кто документы не выставляет, подпись не нужна:
-                  // она называла бы кнопку, которой у него нет. Канон пустых
-                  // состояний (LOCKED 2026-08-27) оставляет объяснения ошибкам.
-                  ? canIssue
-                    ? "Инвойс выставляется кнопкой внизу — по записи или отдельно"
-                    : undefined
-                  : canIssue
-                    ? // ПРО «ПО ПРИНЯТОЙ ОПЛАТЕ» ЗДЕСЬ НЕ ГОВОРИМ, ПОКА ТАКОЙ КНОПКИ НЕТ.
-                      // Единственная кнопка ведёт в составитель, а он ЗАВОДИТ
-                      // НОВЫЙ ПРИХОД: человек, принявший оплату в записи и
-                      // поверивший подсказке, записал бы деньги дважды.
-                      "Чек выписывается кнопкой внизу: клиент, услуги, счёт"
-                    : undefined
+                : undefined
             }
           />
         }
@@ -283,8 +273,10 @@ export function DocumentsPanel({
   );
 }
 
-/** Строка документа: слева тип, номер и кому выдан, справа сумма и состояние.
- *  Состояние молчит у выданного чека — он ничего не ждёт. */
+/** ДОКУМЕНТ — ПЛАШКОЙ, КАК ФАЙЛ КЛИЕНТА (владелец 03.10, вариант 2): слева
+ *  плитка инвойса или чека, номер — названием, кому выдан — подписью;
+ *  справа сумма и состояние словом. Погашенный документ гаснет, но стоит:
+ *  номер занят, и проверяющий должен видеть почему. */
 function DocumentRow({
   document,
   onPress,
@@ -293,63 +285,54 @@ function DocumentRow({
   onPress: () => void;
 }) {
   const t = useThemeColors();
+  const invoice = document.kind === "invoice";
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={[
-        document.title,
-        document.clientName,
-        money(document.amount, document.currency),
-        document.state,
-      ]
-        .filter(Boolean)
-        .join(", ")}
-      className="flex-row items-center gap-3 px-4 py-2.5 active:opacity-60"
-      style={{
-        backgroundColor: t.surface,
-        minHeight: 60,
-        // Погашенный документ не прячется: номер занят, и проверяющий должен
-        // видеть, почему. Он гаснет — ровно как в ленте чеков.
-        opacity: document.dead ? 0.55 : 1,
-      }}
-    >
-      <View className="min-w-0 flex-1">
-        <Text
-          className="text-[15px] font-semibold"
-          style={{ color: t.ink }}
-          numberOfLines={1}
-        >
-          {document.title}
-        </Text>
-        {/* Даты здесь нет: её называет заголовок дня над строкой. Повторять её
-            в каждой строке — то же самое, что писать год в каждой ячейке
-            календаря. */}
-        <Text
-          className="mt-0.5 text-[13px]"
-          style={{ color: t.sub }}
-          numberOfLines={1}
-        >
-          {document.clientName}
-        </Text>
-      </View>
-      <View className="items-end">
-        <Text
-          className="text-[15px] font-bold"
-          style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
-        >
-          {money(document.amount, document.currency)}
-        </Text>
-        {/* СОСТОЯНИЕ ГОВОРИТ СЛОВОМ, А НЕ ЦВЕТОМ (владелец 2026-08-15:
-            «неоплаченный документ — ничего страшного, не надо выставлять его
-            якобы красным»). «Просрочен» краснело и превращало обычный
-            неоплаченный счёт в тревогу; само слово сказано, и этого хватает. */}
-        {document.state ? (
-          <Text className="mt-0.5 text-xs" style={{ color: t.caption }}>
-            {document.state}
-          </Text>
-        ) : null}
-      </View>
-    </Pressable>
+    <View style={{ opacity: document.dead ? 0.55 : 1 }}>
+      <SelectRow
+        icon={invoice ? ReceiptIcon : ReceiptText}
+        // Чек — деньги уже пришли (зелёный, как на карточке клиента);
+        // инвойс — документ к оплате (акцент).
+        color={invoice ? t.accent : t.success}
+        plain
+        title={document.title}
+        // Даты здесь нет: её называет заголовок дня над плашкой.
+        subtitle={document.clientName || undefined}
+        accessibilityLabel={[
+          document.title,
+          document.clientName,
+          money(document.amount, document.currency),
+          document.state,
+        ]
+          .filter(Boolean)
+          .join(", ")}
+        onPress={onPress}
+        trailing={
+          <View style={{ alignItems: "flex-end", flexShrink: 0 }}>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              style={{
+                fontSize: 15,
+                fontWeight: "700",
+                color: t.ink,
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {money(document.amount, document.currency)}
+            </Text>
+            {/* СОСТОЯНИЕ ГОВОРИТ СЛОВОМ, А НЕ ЦВЕТОМ (владелец 2026-08-15:
+                «неоплаченный документ — ничего страшного»). */}
+            {document.state ? (
+              <Text
+                maxFontSizeMultiplier={1.3}
+                style={{ fontSize: 13, color: t.caption }}
+              >
+                {document.state}
+              </Text>
+            ) : null}
+          </View>
+        }
+      />
+    </View>
   );
 }

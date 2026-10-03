@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import {
+  firstEarlierDay,
   accountsLine,
   debtAge,
   mergeByRecord,
@@ -572,3 +573,19 @@ describe("итог дня со склеенной записью", () => {
     assert.equal(net([{ amount: 50, tone: "income", extras: [{ tone: "debt", amount: 70 }] }]), 50);
   });
 });
+
+describe("долги: подпись «С прошлых периодов» (владелец 03.10)", () => {
+  test("над первым днём раньше начала периода", () => {
+    assert.equal(firstEarlierDay(["2026-10-01", "2026-09-25", "2026-09-17"], "2026-10-01"), "2026-09-25");
+  });
+  test("все долги в периоде — подписи нет", () => {
+    assert.equal(firstEarlierDay(["2026-10-03", "2026-10-01"], "2026-10-01"), null);
+  });
+  test("все долги старше периода — подпись над первым же днём", () => {
+    assert.equal(firstEarlierDay(["2026-09-25"], "2026-10-01"), "2026-09-25");
+  });
+  test("без начала периода — подписи нет", () => {
+    assert.equal(firstEarlierDay(["2026-09-25"], null), null);
+  });
+});
+
