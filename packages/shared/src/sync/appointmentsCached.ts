@@ -58,6 +58,7 @@ import {
   cacheReplaceTenant,
   cacheGetOne,
   hasAuthoritativeTenantSnapshot,
+  cacheLocalWriteSeq,
   dequeueAll,
   hasQueuedOps,
   hasStuckQueuedOps,
@@ -135,8 +136,11 @@ export async function listAppointments(
   // device that has never synced appointments. The authoritative marker
   // written by cacheReplaceTenant disambiguates those states below.
   try {
+    // Счётчик — ДО запроса: правка, легшая в кэш, пока список ехал, старше
+    // снимка не бывает (`cacheLocalWriteSeq`).
+    const writeSeq = cacheLocalWriteSeq("appointments");
     const fresh = await repoListAppointments(supabase, tenantId);
-    await refreshCacheFromSupabase(supabase, tenantId, fresh).catch(() => {});
+    await refreshCacheFromSupabase(supabase, tenantId, fresh, writeSeq).catch(() => {});
     return fresh;
   } catch (err) {
     // Online/server errors always reach the UI. Offline may return [] only
@@ -158,6 +162,9 @@ export async function listAppointments(
  *  перезаписи кэша вставали в очередь за блокировкой SQLite, а правки
  *  записей ждали их все (владелец 2026-09-30: «перенос подлагивает»). */
 const revalidating = new Map<string, Promise<void>>();
+/** Сверка, чью замену отменила свежая локальная правка: ждущие чтения
+ *  получили старый снимок, поэтому сразу за ней идёт ещё одна. */
+const staleRevalidation = new Set<string>();
 
 function revalidateAppointments(
   supabase: DbSupabase,
@@ -174,6 +181,10 @@ function revalidateAppointments(
       // ignore — cached list already returned
     } finally {
       revalidating.delete(tenantId);
+      // Снимок оказался старше правки — сверяем снова, уже после неё.
+      if (staleRevalidation.delete(tenantId)) {
+        void revalidateAppointments(supabase, tenantId);
+      }
     }
   })();
   revalidating.set(tenantId, run);
@@ -213,7 +224,10 @@ async function refreshCacheFromSupabase(
   supabase: DbSupabase,
   tenantId: string,
   domain?: Appointment[],
+  /** Счётчик локальных записей, снятый до запроса `domain` (холодный путь). */
+  writeSeqAtFetch?: number,
 ): Promise<boolean> {
+  const writeSeq = writeSeqAtFetch ?? cacheLocalWriteSeq("appointments");
   // Гонка выхода в онлайн: пока в очереди висят ещё реплеящиеся
   // appointment-опы, авторитарный cacheReplaceTenant стёр бы
   // офлайн-созданную запись раньше, чем реплеер долил её на сервер
@@ -258,7 +272,13 @@ async function refreshCacheFromSupabase(
   }
   if (sameRows(cachedRows, rows)) return false;
   const before = cacheSignature(cachedRows);
-  await cacheReplaceTenant("appointments", tenantId, rows);
+  const replaced = await cacheReplaceTenant("appointments", tenantId, rows, {
+    unlessLocalWriteSince: writeSeq,
+  });
+  if (!replaced) {
+    staleRevalidation.add(tenantId);
+    return false;
+  }
   const after = cacheSignature(rows);
   return before !== after;
 }

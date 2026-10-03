@@ -112,6 +112,29 @@ async function ready(): Promise<SqlAdapter> {
  *  re-migrates. Never called in production. */
 export function __resetCacheForTests(): void {
   migratePromise = null;
+  localWriteSeq.clear();
+}
+
+// ─── Local-write sequence (guard for authoritative resync) ────────────
+// АВТОРИТЕТНАЯ СВЕРКА НЕ СТИРАЕТ ПРАВКУ, ЛЕГШУЮ ВО ВРЕМЯ ЕЁ ЗАПРОСА (03.10).
+// Сверка календаря качает снимок сервера секундами (1–6 с на слабой связи),
+// а потом целиком заменяет им кэш компании. Перенос или новая запись,
+// записанные в кэш за эти секунды, в снимке ещё старые или их нет вовсе — и
+// замена возвращала запись на прежнее место до следующей сверки, а
+// следующая правка уходила со старым `updated_at` («Запись изменилась на
+// другом устройстве»). Счётчик растёт В НАЧАЛЕ каждой локальной записи
+// (до первого await), сверка запоминает его до запроса и сверяет внутри
+// эксклюзивной транзакции замены: начатая раньше правка отменяет замену,
+// начатая позже ляжет после неё и останется.
+const localWriteSeq = new Map<CachedTable, number>();
+
+function bumpLocalWrite(table: CachedTable): void {
+  localWriteSeq.set(table, (localWriteSeq.get(table) ?? 0) + 1);
+}
+
+/** Сколько раз приложение само писало в таблицу кэша — не сверкой. */
+export function cacheLocalWriteSeq(table: CachedTable): number {
+  return localWriteSeq.get(table) ?? 0;
 }
 
 // ─── Table-name guard ────────────────────────────────────────────────
@@ -210,6 +233,7 @@ export async function cacheUpsert<T extends CachedRow>(
   table: CachedTable,
   row: T,
 ): Promise<void> {
+  bumpLocalWrite(table);
   const sql = await ready();
   await upsertRow(sql, table, row);
 }
@@ -275,6 +299,7 @@ export async function cacheDelete(
   table: CachedTable,
   id: string,
 ): Promise<void> {
+  bumpLocalWrite(table);
   const sql = await ready();
   await deleteRow(sql, table, id);
 }
@@ -296,6 +321,7 @@ export async function cacheBulkUpsert<T extends CachedRow>(
   rows: T[],
 ): Promise<void> {
   if (rows.length === 0) return;
+  bumpLocalWrite(table);
   const sql = await ready();
   // Exclusive: a bulk resync (reconnect / cold-cache fill) writes many
   // rows; an interleaved optimistic single-row write must not land inside
@@ -322,9 +348,23 @@ export async function cacheReplaceTenant<T extends CachedRow>(
   table: CachedTable,
   tenantId: string,
   rows: T[],
-): Promise<void> {
+  opts?: {
+    /** Счётчик `cacheLocalWriteSeq(table)`, снятый ДО запроса снимка. Если
+     *  с тех пор приложение писало в таблицу, замена не делается: снимок
+     *  старше правки. Ответ `false` — «не заменено, сверьте ещё раз». */
+    unlessLocalWriteSince?: number;
+  },
+): Promise<boolean> {
   const sql = await ready();
+  let skipped = false;
   await sql.withExclusiveTransactionAsync(async (txn) => {
+    if (
+      opts?.unlessLocalWriteSince !== undefined &&
+      cacheLocalWriteSeq(table) !== opts.unlessLocalWriteSince
+    ) {
+      skipped = true;
+      return;
+    }
     await txn.runAsync(
       `DELETE FROM ${tableName(table)} WHERE tenant_id = ?`,
       [tenantId],
@@ -346,6 +386,7 @@ export async function cacheReplaceTenant<T extends CachedRow>(
       [authoritativeSnapshotKey(table, tenantId), "1", Date.now()],
     );
   });
+  return !skipped;
 }
 
 /** True after at least one authoritative server snapshot, including []. */
@@ -472,6 +513,7 @@ export async function enqueueOpWithCacheUpsert<T extends CachedRow>(
   table: CachedTable,
   row: T,
 ): Promise<void> {
+  bumpLocalWrite(table);
   const sql = await ready();
   await sql.withExclusiveTransactionAsync(async (txn) => {
     await upsertRow(txn, table, row);
@@ -489,6 +531,7 @@ export async function enqueueOpWithCacheDelete(
   table: CachedTable,
   id: string,
 ): Promise<void> {
+  bumpLocalWrite(table);
   const sql = await ready();
   await sql.withExclusiveTransactionAsync(async (txn) => {
     await deleteRow(txn, table, id);
