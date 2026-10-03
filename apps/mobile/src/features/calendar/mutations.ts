@@ -490,7 +490,14 @@ export function useDeleteAppointment() {
       }
       if (paths.length > 0) void removePhotoBlobs(supabase, paths);
     },
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
+      // СЕТКА ТЕРЯЕТ БЛОК ВМЕСТЕ С ТОСТОМ (повторный аудит 03.10, на
+      // симуляторе). Список ждал перечитывания: тост «Событие удалено» уже
+      // висел, а блок стоял на сетке ещё секунду-две — будто удаление не
+      // прошло. Сервер подтвердил — запись уходит из списка сразу.
+      qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
+        cur?.filter((a) => a.id !== id),
+      );
       for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });
     },
     meta: { errorHandled: true }, // call sites alert themselves

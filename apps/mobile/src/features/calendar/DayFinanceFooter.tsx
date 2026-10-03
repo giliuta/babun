@@ -72,7 +72,15 @@ export function DayFinanceFooter({
   // Только пока запрос в пути (`awaitingAnswer`): у недели без записей
   // запрос по записям выключен, а заглушку прошлой недели react-query
   // показывает и выключенному — полоса стояла бы прочерками навсегда.
-  const settling = awaitingAnswer(ledgerQuery) || awaitingAnswer(recordsLedgerQuery);
+  //
+  // Прочерк — по смене ПЕРИОДА, а не по каждому перечитыванию операций
+  // записей: создание события или перенос записи меняют список номеров, и вся
+  // неделя на секунду уходила в прочерки. Строки операций записей несут номер
+  // записи, к дню их относит `dayMoney` — заглушка с прежним списком верна для
+  // всех прежних записей. Прочерк от них — только когда ответа нет вовсе.
+  const settling =
+    awaitingAnswer(ledgerQuery) ||
+    (awaitingAnswer(recordsLedgerQuery) && !recordsLedgerQuery.isPlaceholderData);
   const ledger = useMemo(
     () => [...(ledgerQuery.data ?? []), ...(recordsLedger ?? [])],
     [ledgerQuery.data, recordsLedger],

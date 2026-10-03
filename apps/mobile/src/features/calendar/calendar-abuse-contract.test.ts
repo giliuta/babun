@@ -247,7 +247,10 @@ describe("повторный аудит календаря 03.10", () => {
     // Только пока запрос в пути: выключенный запрос (неделя без записей) с
     // заглушкой прошлой недели иначе держал прочерки навсегда. Само правило —
     // `awaitingAnswer` под юнит-тестом в `ledger-select.test.ts`.
-    assert.match(footer, /const settling = awaitingAnswer\(ledgerQuery\) \|\| awaitingAnswer\(recordsLedgerQuery\);/);
+    assert.match(
+      footer,
+      /const settling =\s*awaitingAnswer\(ledgerQuery\) \|\|\s*\(awaitingAnswer\(recordsLedgerQuery\) && !recordsLedgerQuery\.isPlaceholderData\);/,
+    );
     assert.match(footer, /\{settling \? "—" : formatEUR\(income\)\}/);
     assert.match(footer, /\{settling \? "—" : formatEUR\(spent\)\}/);
   });
@@ -341,5 +344,11 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(picker, /if \(query\) return rankClientMatches\(pool\.filter\(\(c\) => matchesClient\(c, query\)\), query\);/);
     const list = readFileSync(resolve(here, "../clients/useClientFilters.ts"), "utf8");
     assert.match(list, /return rankClientMatches\(hits, search\);/);
+  });
+
+  test("удалённая запись уходит с сетки вместе с тостом, а не после перечитывания", () => {
+    const src = readFileSync(resolve(here, "mutations.ts"), "utf8");
+    const del = src.slice(src.indexOf("export function useDeleteAppointment"), src.indexOf("export function useUndoAppointmentPayment"));
+    assert.match(del, /onSuccess: \(_data, id\) => \{[\s\S]*?cur\?\.filter\(\(a\) => a\.id !== id\)/);
   });
 });
