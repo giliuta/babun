@@ -63,11 +63,13 @@ export function AccountRow({
    *  52 pt — шаг перетаскивания не меняется. */
   sub?: string | null;
   handle: ReactNode;
-  onPress: () => void;
-  /** «Скрыть» ⇄ «Показать» (скрытый счёт — только здесь, владелец 03.10). */
-  onHide: () => void;
-  /** «Удалить» — в «Удалённые счета». */
-  onDelete: () => void;
+  /** Нет — строка только показывает («Счета: Только видит», 03.10). */
+  onPress?: () => void;
+  /** «Скрыть» ⇄ «Показать» (скрытый счёт — только здесь, владелец 03.10).
+   *  Нет — левой кромки нет: скрывает только владелец. */
+  onHide?: () => void;
+  /** «Удалить» — в «Удалённые счета». Нет — правой кромки нет. */
+  onDelete?: () => void;
   /** Счёт скрыт: левая кромка — «Показать». */
   hidden?: boolean;
   /** Счёт скрыт: строка гаснет, слева «Открыть». */
@@ -82,7 +84,9 @@ export function AccountRow({
       // справа, скрыть слева»). Скрытый счёт падает вниз своей команды серым,
       // и там же тем же жестом открывается снова.
       leading={
-        closed
+        !onHide && !closed
+          ? undefined
+          : closed
           ? {
               label: "Открыть",
               color: t.success,
@@ -96,20 +100,20 @@ export function AccountRow({
                 color: t.accent,
                 icon: Eye,
                 accessibilityLabel: `Показать счёт ${account.name}`,
-                onAction: onHide,
+                onAction: () => onHide?.(),
               }
             : {
                 label: "Скрыть",
                 color: t.warning,
                 icon: EyeOff,
                 accessibilityLabel: `Скрыть счёт ${account.name}`,
-                onAction: onHide,
+                onAction: () => onHide?.(),
               }
       }
-      label="Удалить"
+      label={onDelete ? "Удалить" : undefined}
       color={t.danger}
-      icon={Trash2}
-      accessibilityLabel={`Удалить счёт ${account.name}`}
+      icon={onDelete ? Trash2 : undefined}
+      accessibilityLabel={onDelete ? `Удалить счёт ${account.name}` : undefined}
       onAction={onDelete}
     >
       <View
@@ -126,23 +130,26 @@ export function AccountRow({
       >
         <Pressable
           onPress={onPress}
-          accessibilityRole="button"
+          disabled={!onPress}
+          accessibilityRole={onPress ? "button" : undefined}
           accessibilityLabel={[account.name, sub, mark, amount, closed ? "закрыт" : null]
             .filter(Boolean)
             .join(", ")}
-          accessibilityHint="Открывает правку счёта"
+          accessibilityHint={onPress ? "Открывает правку счёта" : undefined}
           // Свайпа для VoiceOver не существует — то же действие ротором.
           accessibilityActions={[
-            closed
-              ? { name: "reopen", label: "Открыть снова" }
-              : { name: "hide", label: hidden ? "Показать" : "Скрыть" },
-            { name: "delete", label: "Удалить" },
+            ...(closed
+              ? [{ name: "reopen", label: "Открыть снова" }]
+              : onHide
+                ? [{ name: "hide", label: hidden ? "Показать" : "Скрыть" }]
+                : []),
+            ...(onDelete ? [{ name: "delete", label: "Удалить" }] : []),
           ]}
           onAccessibilityAction={(event) => {
             const name = event.nativeEvent.actionName;
-            if (name === "hide") onHide();
+            if (name === "hide") onHide?.();
             if (name === "reopen") closed?.onReopen();
-            if (name === "delete") onDelete();
+            if (name === "delete") onDelete?.();
           }}
           style={({ pressed }) => ({
             flex: 1,
