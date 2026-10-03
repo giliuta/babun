@@ -900,6 +900,8 @@ export default function CalendarTab() {
     [appts],
   );
   const apptsRef = useRef(appts);
+  /** Имя клиента записи для сверки пушей «себе» — функция объявлена ниже. */
+  const clientNameRef = useRef<(a: Appointment) => string>(() => "");
   apptsRef.current = appts;
   useEffect(() => {
     if (
@@ -924,7 +926,14 @@ export default function CalendarTab() {
       void reconcileEventAppointmentReminders(list, tzFor).catch(() => {});
       // Пуши «себе» (колокольчик) пересчитываются от свежих дат: перенесли
       // запись — напоминание переехало, отменили — снято.
-      void reconcileSelfReminders(list, tzFor).catch(() => {});
+      // С ИМЕНЕМ КЛИЕНТА (аудит 2026-10-03): «Напомнить» ставится с именем,
+      // а сверка без третьего аргумента пересобирала тот же пуш без него —
+      // через секунду после любой правки в календаре имя из пуша пропадало.
+      void reconcileSelfReminders(
+        list,
+        tzFor,
+        (a) => clientNameRef.current(a) || undefined,
+      ).catch(() => {});
     }, 1000);
     return () => clearTimeout(timer);
   }, [
@@ -1113,6 +1122,7 @@ export default function CalendarTab() {
       a.client_id && !isCalendarEvent(a) ? nameById.get(a.client_id) ?? "" : "",
     [nameById],
   );
+  clientNameRef.current = clientName;
   // КУДА ЕХАТЬ — ЧЕТВЁРТАЯ СТРОКА БЛОКА. То же правило, по которому «Маршрут»
   // в контекстном меню собирает ссылку на карты: снимок адреса записи, иначе
   // адрес клиента. Разовый выезд по звонку объекта в справочнике не имеет, и
