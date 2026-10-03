@@ -15,13 +15,11 @@ const owner = (over: Partial<ClientSettingsDoorInput> = {}): ClientSettingsDoorI
   owner: true,
   member: false,
   teamKnown: true,
-  sharedRoute: false,
-  operatesClients: true,
   ...over,
 });
 
 const partner = (over: Partial<ClientSettingsDoorInput> = {}): ClientSettingsDoorInput =>
-  owner({ tenantId: "employer", owner: false, member: true, operatesClients: false, ...over });
+  owner({ tenantId: "employer", owner: false, member: true, ...over });
 
 describe("шестерёнка листов «Связаться», «Добавить», «Маршрут»", () => {
   test("адрес несёт команду и компанию набора", () => {
@@ -60,9 +58,15 @@ describe("шестерёнка листов «Связаться», «Добав
     });
   });
 
-  test("общий адрес над табами — только роли, которую он пускает", () => {
-    const shared = { pathname: "/maps", sharedRoute: true } as const;
-    assert.equal(clientSettingsDoor(partner(shared)), null);
+  // 03.10: общий адрес стоит на тех же воротах строки, что вкладочный
+  // (`ClientSettingsRoute`), — роль календаря его больше не закрывает.
+  test("общий адрес из записи — по той же строке, что вкладка", () => {
+    const shared = { pathname: "/maps" } as const;
+    assert.deepEqual(clientSettingsDoor(partner({ ...shared, level: "read" })), {
+      pathname: "/maps",
+      params: { team: "team-1", tenant: "employer" },
+    });
+    assert.equal(clientSettingsDoor(partner({ ...shared, level: "hidden" })), null);
     assert.deepEqual(clientSettingsDoor(owner(shared)), {
       pathname: "/maps",
       params: { team: "team-1", tenant: "own" },

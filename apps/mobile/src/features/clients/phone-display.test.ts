@@ -50,6 +50,21 @@ describe("кнопка связи у номера", () => {
   test("заголовок листа — номер для глаз, а не сырой из базы", () => {
     assert.match(button(), /title=\{formatPhoneForDisplay\(number, country\)\}/);
   });
+  // 03.10: строка работодателя в общем списке жила в компании экрана — лист
+  // читал набор телефона, а шестерёнки не было вовсе.
+  test("клиент другой компании — набор и шестерёнка его компании", () => {
+    assert.match(
+      button(),
+      /<ClientsScopeProvider scope=\{source\}>\s*<ChannelButton \{\.\.\.props\} \/>/,
+      "кнопка не встаёт в компанию клиента",
+    );
+    assert.match(read("ClientRow.tsx"), /<PhoneChannelButton[^>]*source=\{source\}/, "строка не передаёт компанию кнопке");
+    assert.match(
+      read("../../../app/(dashboard)/clients/index.tsx"),
+      /<ClientRow[^>]*source=\{guest\}/,
+      "список не передаёт строке компанию работодателя",
+    );
+  });
 });
 
 describe("кипрский номер группами 2 · 3 · 3 (аудит 29.09)", () => {

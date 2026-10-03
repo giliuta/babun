@@ -22,6 +22,7 @@ import { formatPhoneForDisplay } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import type { CardFieldPrefs } from "@/features/clients/card-prefs";
+import type { ClientsScope } from "@/features/clients/clients-company";
 import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { visitMark } from "@/features/clients/visit-mark";
 
@@ -50,6 +51,7 @@ export default function ClientRow({
   onDelete,
   onSwipeOpen,
   trailing,
+  source,
 }: {
   client: Client;
   stats: ClientStats | undefined;
@@ -73,6 +75,9 @@ export default function ClientRow({
   onSwipeOpen?: (row: SwipeableMethods | null) => void;
   /** Хвост строки ВМЕСТО кнопки связи: «через 27 дней» в корзине. */
   trailing?: React.ReactNode;
+  /** Компания клиента, если она не компания экрана (строка работодателя в
+   *  общем списке): кнопка связи читает набор и шестерёнку её (03.10). */
+  source?: ClientsScope;
 }) {
   const t = useThemeColors();
   const country = useDefaultCountry(client.team_id ?? null);
@@ -237,6 +242,7 @@ export default function ClientRow({
             telegramUsername={client.telegram_username}
             label={client.full_name || undefined}
             teamId={client.team_id ?? null}
+            source={source}
           />
         </View>
       ) : null}

@@ -1,10 +1,9 @@
 import type { Href } from "expo-router";
 import { useTenantId } from "@/lib/tenant";
 import { useTeams } from "@/features/reference/queries";
-import { can } from "@/features/settings/role-policy";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { useClientsScopeOrNull } from "./company-scope";
-import { useInClientsTab, useReferenceHref } from "./reference-href";
+import { useReferenceHref } from "./reference-href";
 import { clientSettingsDoor } from "./settings-door";
 import { useClientSettingLevelsOf } from "./use-client-settings";
 
@@ -16,11 +15,11 @@ import { useClientSettingLevelsOf } from "./use-client-settings";
  *  (`maps`): адрес подстраницы с командой и компанией, `null` — двери нет. */
 export function useClientSettingsDoor(row: "ways" | "maps", teamId: string | null): Href | null {
   const refs = useReferenceHref();
-  const inClientsTab = useInClientsTab();
   const scope = useClientsScopeOrNull();
   const activeTenantId = useTenantId();
-  // Роль календаря — та, что пускает на общий адрес (`RoleCapabilityBoundary`);
-  // в зеркале — его, а не владельца.
+  // Вне вкладки источника нет: владелец ли — по роли календаря (в зеркале —
+  // его, а не владельца). Общий адрес над табами стоит на тех же воротах
+  // строки, что вкладочный (`settings-door.ts`), — своей проверки роли нет.
   const viewRole = useCurrentRole().data;
   const level = useClientSettingLevelsOf()(teamId)[row];
   // Команды компании набора (`useTeams` читает источник экрана). Архивная
@@ -34,8 +33,6 @@ export function useClientSettingsDoor(row: "ways" | "maps", teamId: string | nul
     owner: (scope ? scope.role : viewRole) === "owner",
     member: scope?.kind === "member",
     teamKnown: !teamId || (teams ?? []).some((tm) => tm.id === teamId),
-    sharedRoute: !inClientsTab,
-    operatesClients: can(viewRole, "operate-clients"),
   });
   return door as Href | null;
 }

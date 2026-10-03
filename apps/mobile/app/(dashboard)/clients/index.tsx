@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   FlatList,
   Pressable,
@@ -38,7 +38,7 @@ import {
 import { useClientSources } from "@/features/clients/acquisition-sources";
 import type { ClientSource } from "@/features/clients/acquisition-source";
 import { useDeleteWithUndo } from "@/features/clients/delete-undo";
-import { shareText } from "@/features/clients/client-share";
+import { shareText, type ShareTextOptions } from "@/features/clients/client-share";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import ClientRow from "@/features/clients/ClientRow";
 import {
@@ -58,9 +58,11 @@ import {
 import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import {
+  ClientsScopeProvider,
   useClientsCapabilities,
   useClientsScopeOrNull,
 } from "@/features/clients/company-scope";
+import { useLastNonNull } from "@/lib/use-last-non-null";
 import { useClientsSources } from "@/features/clients/sources";
 import { useGuestSources } from "@/features/clients/guest-sources";
 import { withClientHistory } from "@/features/clients/member-history";
@@ -87,8 +89,7 @@ import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { RemindSheet } from "@/features/clients/RemindSheet";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
-import { useFeatureOn } from "@/features/settings/company-features";
-import { loadErrorWords } from "@/lib/connection-words";
+import { loadErrorWords, writeErrorWords } from "@/lib/connection-words";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
 import { ContactsImportSheet } from "@/features/clients/import/ContactsImportSheet";
@@ -99,7 +100,6 @@ import { useAppointments } from "@/features/calendar/queries";
 import { useCities, useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { statsByBlocks } from "@/features/clients/card-access";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import { usePlanAllows } from "@/features/settings/tenant";
@@ -140,6 +140,16 @@ function uniqueById<T extends { id: string }>(rows: T[]): T[] {
 }
 
 const NO_SOURCES: ClientSource[] = [];
+
+/** Поддерево в компании строки. Источник у вкладки есть всегда (ворота
+ *  открывают экран только с ним), так что обёртка не пропадает и лист не
+ *  пересобирается посреди выезда. */
+function RowScope({ scope, children }: { scope: ClientsScope | null; children: ReactNode }) {
+  return scope ? <ClientsScopeProvider scope={scope}>{children}</ClientsScopeProvider> : <>{children}</>;
+}
+
+/** Слова неудачи удаления одного клиента (`writeErrorWords`). */
+const CLIENT_NOT_DELETED = { failed: "Не удалось удалить", notDone: "Клиент не удалён" };
 
 function ClientsListScreen() {
   const t = useThemeColors();
@@ -428,7 +438,9 @@ function ClientsListScreen() {
           // своей: там такого клиента нет.
           await trashAsPartner.mutateAsync({ id: c.id, source: guestOf.get(c.id) });
         } catch (e) {
-          notify("Не удалось удалить", (e as Error).message);
+          // Обрыв — словами, а не «TypeError: Network request failed» (03.10).
+          const words = writeErrorWords(e, CLIENT_NOT_DELETED);
+          notify(words.title, words.subtitle);
         }
       },
     );
@@ -485,6 +497,11 @@ function ClientsListScreen() {
   const menuActions = menuClient
     ? rowActionsOf(menuClient, false, calendarActionsFor(bookTeamOf(menuClient)).create)
     : null;
+  // КОМПАНИЯ ЛИСТА — КОМПАНИЯ СТРОКИ (03.10): его хуки (реквизиты для
+  // «Поделиться») читают её. Последняя держится, пока лист уезжает, — как и
+  // сам клиент листа.
+  const menuScope =
+    useLastNonNull(menuClient ? (guestOf.get(menuClient.id) ?? scope) : null) ?? scope;
 
   // УДАЛИТЬ — ОДНО ДЕЙСТВИЕ (владелец 03.10: «понятия „в архив" не будет —
   // удалить»). Клиент уходит в «Удалённые клиенты». Без истории он сотрётся
@@ -516,7 +533,8 @@ function ClientsListScreen() {
         try {
           await deleteWithUndo([c]);
         } catch (e) {
-          notify("Не удалось удалить", (e as Error).message);
+          const words = writeErrorWords(e, CLIENT_NOT_DELETED);
+          notify(words.title, words.subtitle);
         }
       },
     );
@@ -529,14 +547,12 @@ function ClientsListScreen() {
 
   // «Поделиться» — тот же текст, что из «⋯» карточки (`shareText`). Реквизиты
   // в нём — только когда их видно (аудит 03.10: из списка они уходили всегда,
-  // даже при скрытом блоке «Реквизиты»).
-  const requisitesOn = useFeatureOn("client_requisites");
-  const onShareClient = async (c: Client) => {
-    const requisites =
-      requisitesOn &&
-      (c.blocks ? clientBlockLevel(c, "clients.requisites") !== "hidden" : caps.money);
+  // даже при скрытом блоке «Реквизиты»). Видно ли — решает лист меню в
+  // компании строки (`menuScope` ниже): у клиента работодателя выключатели
+  // его компании и команды, а не своей.
+  const onShareClient = async (c: Client, opts: ShareTextOptions) => {
     try {
-      await Share.share({ message: shareText(c, { requisites }) });
+      await Share.share({ message: shareText(c, opts) });
     } catch {
       // user dismissed the share sheet — no-op.
     }
@@ -621,7 +637,11 @@ function ClientsListScreen() {
           }
           exitSelection();
         } catch (e) {
-          notify("Не удалось удалить", (e as Error).message);
+          const words = writeErrorWords(e, {
+            failed: "Не удалось удалить",
+            notDone: "Клиенты не удалены",
+          });
+          notify(words.title, words.subtitle);
         }
       },
     );
@@ -853,6 +873,9 @@ function ClientsListScreen() {
                 client={item}
                 stats={stats}
                 cardFields={cardFieldsFor(item.team_id)}
+                // «Связаться» клиента работодателя — набор и шестерёнка его
+                // компании, а не своей (03.10).
+                source={guest}
                 selectionMode={selecting && !guest}
                 picked={selectedIds.has(item.id)}
                 onPress={() =>
@@ -979,23 +1002,27 @@ function ClientsListScreen() {
         }}
         onClose={() => setRemindClient(null)}
       />
-      <ClientActionsSheet
-        client={menuClient}
-        // Те же пункты, что в «⋯» карточки (`clientMenuItems`, 03.10):
-        // записать — «можно записать», напомнить и чёрный список — «меняет
-        // карточку» / «Меню клиента», удалить — владелец своей компании /
-        // «Удаление клиента».
-        onBook={menuActions?.book ? bookFor : undefined}
-        onClose={() => setMenuClient(null)}
-        // Выбор нескольких ведёт к экспорту и массовой SMS: своя база — по
-        // «можно вынести», партнёр — по «Меню клиента» (03.10); строки
-        // работодателя в выбор не попадают вовсе.
-        onSelectMany={menuActions?.selectMany ? (c) => enterSelection(c.id) : undefined}
-        onRemind={menuActions?.remind ? openRemindMenu : undefined}
-        onShare={menuActions?.share ? (c) => void onShareClient(c) : undefined}
-        onToggleBlacklist={menuActions?.blacklist ? onToggleBlacklist : undefined}
-        onDelete={menuActions?.remove ? confirmDeleteOne : undefined}
-      />
+      {/* Лист — в компании строки (`menuScope`): реквизиты «Поделиться»
+          клиента работодателя — по его выключателям, а не своим (03.10). */}
+      <RowScope scope={menuScope}>
+        <ClientActionsSheet
+          client={menuClient}
+          // Те же пункты, что в «⋯» карточки (`clientMenuItems`, 03.10):
+          // записать — «можно записать», напомнить и чёрный список — «меняет
+          // карточку» / «Меню клиента», удалить — владелец своей компании /
+          // «Удаление клиента».
+          onBook={menuActions?.book ? bookFor : undefined}
+          onClose={() => setMenuClient(null)}
+          // Выбор нескольких ведёт к экспорту и массовой SMS: своя база — по
+          // «можно вынести», партнёр — по «Меню клиента» (03.10); строки
+          // работодателя в выбор не попадают вовсе.
+          onSelectMany={menuActions?.selectMany ? (c) => enterSelection(c.id) : undefined}
+          onRemind={menuActions?.remind ? openRemindMenu : undefined}
+          onShare={menuActions?.share ? (c, opts) => void onShareClient(c, opts) : undefined}
+          onToggleBlacklist={menuActions?.blacklist ? onToggleBlacklist : undefined}
+          onDelete={menuActions?.remove ? confirmDeleteOne : undefined}
+        />
+      </RowScope>
       <ClientsFilterSheet
         visible={sheetOpen}
         filter={filter}

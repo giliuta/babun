@@ -120,6 +120,7 @@ import {
 } from "@/features/clients/company-scope";
 import { humanDay } from "@/features/appointments/helpers";
 import { notify } from "@/lib/notify";
+import { writeErrorWords } from "@/lib/connection-words";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { deliverCreatedClient } from "@/features/appointments/pending-client";
@@ -616,7 +617,9 @@ export function ClientDetailScreen() {
             await trashAsPartner.mutateAsync(c.id);
             router.back();
           } catch (e) {
-            notify("Не удалось удалить", (e as Error).message);
+            // Обрыв — словами, а не «TypeError: Network request failed» (03.10).
+            const words = writeErrorWords(e, { failed: "Не удалось удалить", notDone: "Клиент не удалён" });
+            notify(words.title, words.subtitle);
           }
         },
       );
@@ -642,7 +645,8 @@ export function ClientDetailScreen() {
           const res = await deleteWithUndo([c]);
           if (res.archived > 0) router.back();
         } catch (e) {
-          notify("Не удалось удалить", (e as Error).message);
+          const words = writeErrorWords(e, { failed: "Не удалось удалить", notDone: "Клиент не удалён" });
+          notify(words.title, words.subtitle);
         }
       },
     );

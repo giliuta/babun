@@ -1,13 +1,7 @@
-import ClientMapsScreen from "../(dashboard)/clients/maps";
-import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
-
 // «Карты для маршрута», открытые ИЗ ЗАПИСИ — сиблинг записи, а не маршрут
 // вкладки «Клиенты»: иначе «назад» уводит из записи и теряет набранное
-// (см. `features/clients/reference-href.ts`). Экран тот же.
-export default function BookMapsScreen() {
-  return (
-    <RoleCapabilityBoundary capability="operate-clients" title="Карты">
-      <ClientMapsScreen />
-    </RoleCapabilityBoundary>
-  );
-}
+// (см. `features/clients/reference-href.ts`). Экран тот же — и ворота те же:
+// строка «Карты» в компании и команде из адреса (`ClientSettingsRoute`).
+// Границы по роли календаря здесь нет (03.10): партнёр с открытой строкой
+// упирался в стену, хотя вкладка его пускала.
+export { default } from "../(dashboard)/clients/maps";

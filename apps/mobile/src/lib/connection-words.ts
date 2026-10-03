@@ -27,3 +27,17 @@ export function loadErrorWords(
   const message = error instanceof Error ? error.message : "";
   return { title: what.failed, subtitle: message || "Повторите попытку." };
 }
+
+/** То же для ДЕЙСТВИЯ (удалить, сохранить): обрыв — «Нет связи с сервером» и
+ *  что именно не сделано, отказ сервера — своим текстом под словом неудачи.
+ *  Под «Не удалось удалить» стояло «TypeError: Network request failed»
+ *  (03.10, удаление клиента работодателя без сети). */
+export function writeErrorWords(
+  error: unknown,
+  what: { failed: string; notDone: string },
+): { title: string; subtitle: string } {
+  return loadErrorWords(error, {
+    failed: what.failed,
+    later: `${what.notDone}. Повторите, когда связь вернётся.`,
+  });
+}

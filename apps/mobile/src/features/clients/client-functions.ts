@@ -1,5 +1,5 @@
 import { isFeatureOn, type CompanyFeatureKey } from "@babun/shared/local/company-features";
-import { useDisabledFeatures } from "@/features/settings/company-features";
+import { useScopeDisabledFeatures } from "@/features/settings/company-features";
 import { useDesignBase } from "@/features/appointments/booking-prefs";
 import { useSaveTeamDesign, useTeamDesign } from "@/features/appointments/team-design";
 
@@ -34,8 +34,9 @@ export function useClientFunctionOn(
   teamId: string | null | undefined,
 ): boolean {
   // Выключатель компании есть только у трёх ключей; «Заметку» и прочие
-  // компания не выключает.
-  const disabled = useDisabledFeatures();
+  // компания не выключает. Компания — та же, что у «Дизайна» команды ниже:
+  // компания экрана (у строки работодателя — его, 03.10).
+  const disabled = useScopeDisabledFeatures();
   const companyOn =
     !COMPANY_KEYS.has(key) || isFeatureOn(disabled, key as CompanyFeatureKey);
   const design = useTeamDesign(teamId);

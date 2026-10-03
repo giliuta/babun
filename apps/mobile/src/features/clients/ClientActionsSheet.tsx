@@ -4,6 +4,8 @@ import { useLastNonNull } from "@/lib/use-last-non-null";
 import { useThemeColors } from "@/theme/colors";
 
 import { clientMenuItems } from "./client-menu-items";
+import type { ShareTextOptions } from "./client-share";
+import { useCardAccess } from "./use-card-access";
 
 // МЕНЮ КЛИЕНТА по long-press в списке.
 //
@@ -35,8 +37,10 @@ interface ClientActionsSheetProps {
    *  а клиента чужой компании не выносят (владелец 30.09). */
   onSelectMany?: (c: Client) => void;
   onRemind?: (c: Client) => void;
-  /** Нет — «Поделиться» нет: клиента нельзя вынести (партнёр, 30.09). */
-  onShare?: (c: Client) => void;
+  /** Нет — «Поделиться» нет: клиента нельзя вынести (партнёр, 30.09).
+   *  `opts.requisites` — реквизиты видны так же, как на карточке, в компании
+   *  ЛИСТА: вызывающий оборачивает лист источником строки (03.10). */
+  onShare?: (c: Client, opts: ShareTextOptions) => void;
   onToggleBlacklist?: (c: Client) => void;
   onDelete?: (c: Client) => void;
 }
@@ -56,13 +60,18 @@ export function ClientActionsSheet({
   // закрытии размонтировал лист в том же кадре, и вся выездная анимация
   // BottomSheet не проигрывалась — панель просто исчезала.
   const shown = useLastNonNull(client);
+  // «ПОДЕЛИТЬСЯ» — ТОТ ЖЕ ТЕКСТ, ЧТО ИЗ «⋯» КАРТОЧКИ (аудит 03.10): реквизиты
+  // уходят, только когда блок «Реквизиты» виден на карточке — выключатели
+  // компании и команды клиента и права строки. Компания — источник вокруг
+  // листа: у строки работодателя это его компания, а не своя.
+  const requisites = useCardAccess(shown, false).requisites.show;
   if (!shown) return null;
 
   const c = shown;
   const items = clientMenuItems(t, Boolean(c.blacklisted), {
     onBook: onBook && (() => onBook(c)),
     onRemind: onRemind && (() => onRemind(c)),
-    onShare: onShare && (() => onShare(c)),
+    onShare: onShare && (() => onShare(c, { requisites })),
     onSelectMany: onSelectMany && (() => onSelectMany(c)),
     onToggleBlacklist: onToggleBlacklist && (() => onToggleBlacklist(c)),
     onDelete: onDelete && (() => onDelete(c)),

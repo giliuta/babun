@@ -691,3 +691,20 @@ describe("общий список без чипа — все команды, н�
     assert.match(list(), /selectionMode=\{selecting && !guest\}/);
   });
 });
+
+// «ПОДЕЛИТЬСЯ» КЛИЕНТОМ РАБОТОДАТЕЛЯ — В ЕГО КОМПАНИИ (03.10). Реквизиты в
+// текст из списка шли по выключателю СВОЕЙ компании: лист меню стоял под
+// источником экрана, а флаг считался `useFeatureOn` открытой в календаре.
+describe("«Поделиться» из списка — реквизиты как на карточке, в компании строки", () => {
+  const list = () => read("../../../app/(dashboard)/clients/index.tsx");
+  test("лист меню стоит в компании строки", () => {
+    assert.match(list(), /useLastNonNull\(menuClient \? \(guestOf\.get\(menuClient\.id\) \?\? scope\) : null\)/);
+    assert.match(list(), /<RowScope scope=\{menuScope\}>\s*<ClientActionsSheet/);
+    assert.doesNotMatch(list(), /useFeatureOn\("client_requisites"\)/, "реквизиты снова по выключателю своей компании");
+  });
+  test("реквизиты — блок карточки в компании листа", () => {
+    assert.match(read("ClientActionsSheet.tsx"), /useCardAccess\(shown, false\)\.requisites\.show/);
+    // Выключатель компании — той же компании, что «Дизайн» команды.
+    assert.match(read("client-functions.ts"), /const disabled = useScopeDisabledFeatures\(\);/);
+  });
+});

@@ -10,6 +10,13 @@ import type { ClientSettingLevel } from "./settings-levels";
 // (`teamHref` в `clients/settings.tsx`), а строки, закрытой человеку, в листе
 // нет вовсе: дверь в «Настроек пока нет» — тот же мёртвый контрол.
 //
+// ОБЩИЙ АДРЕС НАД ТАБАМИ — НА ТЕХ ЖЕ ВОРОТАХ (03.10). `/channels` и `/maps`
+// из записи — тот же экран вкладки вместе с его дверью права строки
+// (`ClientSettingsRoute`: строка в компании и команде из адреса). Граница по
+// роли календаря над ними отсекала партнёра даже с открытой строкой, а лист
+// поэтому прятал ему шестерёнку; теперь оба адреса решает одно положение
+// строки.
+//
 // Правило без React: его читают три листа и тест.
 
 export interface ClientSettingsDoorInput {
@@ -28,10 +35,6 @@ export interface ClientSettingsDoorInput {
   member: boolean;
   /** Команда есть среди команд компании набора. */
   teamKnown: boolean;
-  /** Адрес общий (экран над табами) — он стоит за ролью «operate-clients». */
-  sharedRoute: boolean;
-  /** Роль календаря пускает на общий адрес. */
-  operatesClients: boolean;
 }
 
 export interface ClientSettingsHref {
@@ -49,8 +52,6 @@ export function clientSettingsDoor(input: ClientSettingsDoorInput): ClientSettin
   // Команда чужой компании (гость в общем списке клиентов): набор лежит не
   // там, куда указал бы адрес, — правка ушла бы не в ту компанию.
   if (input.teamId && !input.teamKnown) return null;
-  // Над табами подстраница за ролью календаря: мастер упёрся бы в стену.
-  if (input.sharedRoute && !input.operatesClients) return null;
   const params: ClientSettingsHref["params"] = {};
   if (input.teamId) params.team = input.teamId;
   // Компания — всегда, когда известна. Основную вкладка открывает и по её

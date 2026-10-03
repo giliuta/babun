@@ -633,6 +633,9 @@ export function useTrashClientAsPartner() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
+    // Без сети удаление не ждёт молча, чтобы сработать потом, когда его уже
+    // не ждут: отказ сразу, словами «Нет связи с сервером» (03.10).
+    networkMode: "always",
     mutationFn: async (target: string | ClientWriteTarget) => {
       const { id, source } = typeof target === "string" ? { id: target, source: undefined } : target;
       // Дверь новее сгенерированных типов базы — вызов через узкий тип.

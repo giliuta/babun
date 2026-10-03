@@ -10,6 +10,8 @@ import { RowActionButton } from "@/components/ui/card-rows";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { formatPhoneForDisplay, tryToE164 } from "@/features/clients/phone";
 import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
+import { ClientsScopeProvider } from "@/features/clients/company-scope";
+import type { ClientsScope } from "@/features/clients/clients-company";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { useSmsComposeContext } from "@/features/sms/SmsCompose";
 import { SmsSendSheet } from "@/features/sms/SmsSendSheet";
@@ -33,13 +35,7 @@ import { useThemeColors } from "@/theme/colors";
 // свой номер. Лист — ТОТ ЖЕ, что у «Добавить» (владелец 2026-08-02):
 // значок канала слева, шестерёнка в углу ведёт в настройки способов связи.
 
-export default function PhoneChannelButton({
-  number,
-  telegramUsername,
-  label,
-  smsName,
-  teamId = null,
-}: {
+interface ChannelButtonProps {
   number: string;
   /** @username клиента — только у основного номера. */
   telegramUsername?: string | null;
@@ -50,7 +46,36 @@ export default function PhoneChannelButton({
   /** Команда клиента — её «Способы связи» (у каждой команды свои, 30.09);
    *  нет — набор компании. */
   teamId?: string | null;
+}
+
+// КЛИЕНТ ДРУГОЙ КОМПАНИИ — ЕЁ НАБОР И ЕЁ ШЕСТЕРЁНКА (03.10). Строка
+// работодателя в общем списке клиентов стоит под источником экрана — своей
+// компании: команда клиента там не находится, и лист читал набор телефона, а
+// шестерёнки не было вовсе. С `source` кнопка живёт в компании строки: набор
+// команды (`team_design`), права строки «Связь» и адрес шестерёнки — её.
+
+export default function PhoneChannelButton({
+  source,
+  ...props
+}: ChannelButtonProps & {
+  /** Компания клиента, если она не компания экрана (строка работодателя). */
+  source?: ClientsScope;
 }) {
+  if (!source) return <ChannelButton {...props} />;
+  return (
+    <ClientsScopeProvider scope={source}>
+      <ChannelButton {...props} />
+    </ClientsScopeProvider>
+  );
+}
+
+function ChannelButton({
+  number,
+  telegramUsername,
+  label,
+  smsName,
+  teamId = null,
+}: ChannelButtonProps) {
   const t = useThemeColors();
   const router = useRouter();
   // Шестерёнка — в «Связь» ЭТОЙ команды в её компании (из записи — сиблингом

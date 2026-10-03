@@ -975,6 +975,19 @@ describe("экраны: вкладка «Клиенты» открывается
     assert.match(door, /<ClientsCompanyRoute kind="card" forceActive>/);
   });
 
+  // 03.10: «Связь» и «Карты» из записи стояли за ролью календаря — партнёр
+  // с открытой строкой упирался в стену, а шестерёнка листа ему пряталась.
+  test("«Связь» и «Карты» из записи — те же ворота строки, что во вкладке", () => {
+    for (const page of ["channels", "maps"]) {
+      const door = readFileSync(resolve(here, `../../../app/(shared)/${page}.tsx`), "utf8");
+      assert.ok(
+        door.includes(`export { default } from "../(dashboard)/clients/${page}";`),
+        `(shared)/${page}.tsx открывает не экран вкладки с его воротами`,
+      );
+      assert.ok(!door.includes("RoleCapabilityBoundary"), `(shared)/${page}.tsx: вернулась граница роли`);
+    }
+  });
+
   // ВИЗУАЛ ВКЛАДКИ НЕ ЗАВИСИТ ОТ ТОГО, ЧТО ОТКРЫТО В КАЛЕНДАРЕ (владелец
   // 20.09: «у нас пропали шестерёнки сверху слева… визуал вообще не
   // меняется»). Первый заход гасил шестерёнку и аналитику, пока своя
