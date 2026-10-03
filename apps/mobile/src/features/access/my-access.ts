@@ -253,7 +253,6 @@ export const FINANCE_BLOCK_KEYS: readonly string[] = [
   "finance.settings_categories_expense",
   "finance.settings_categories_debts",
   "finance.settings_requisites",
-  "finance.settings_invoices",
   "finance.settings_currency",
 ];
 

@@ -1,4 +1,4 @@
-// АРХИВ — ТОНКИЙ МАРШРУТ НАД СТРАНИЦЕЙ, как `finances/requisites`: экран
+// АРХИВ — ТОНКИЙ МАРШРУТ НАД СТРАНИЦЕЙ, как `cabinet/requisites`: экран
 // держит только адрес, всё остальное живёт в
 // `features/calendar/CalendarArchiveScreen.tsx`.
 //

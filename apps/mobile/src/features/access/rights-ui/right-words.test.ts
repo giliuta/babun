@@ -41,7 +41,6 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["finance.settings_categories_debts", ["off", "read", "write"]],
   ["finance.settings_currency", ["off", "read"]],
   ["finance.settings_requisites", ["off", "read"]],
-  ["finance.settings_invoices", ["off", "read"]],
   ["clients", ["off", "read"]],
   // «Создание клиента» и «Меню клиента» (02.10) — «Может / Не может».
   ["clients.create", ["off", "write"]],

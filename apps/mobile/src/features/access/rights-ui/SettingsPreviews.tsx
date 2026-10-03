@@ -2,7 +2,6 @@ import {
   Banknote,
   Briefcase,
   Building2,
-  FileText,
   HandCoins,
   NotebookPen,
   ReceiptText,
@@ -216,16 +215,6 @@ export function SettingsPreview({
       case "finance.settings_categories_debts":
         return (
           <SettingsRow tile={SETTINGS_TILE.yellow} icon={NotebookPen} title="Долги" sub="Пока нет" onPress={onPress} />
-        );
-      case "finance.settings_invoices":
-        return (
-          <SettingsRow
-            tile={SETTINGS_TILE.blue}
-            icon={FileText}
-            title="Инвойсы"
-            sub="Срок оплаты 7 дней"
-            onPress={onPress}
-          />
         );
       case "finance.settings_currency":
         return (

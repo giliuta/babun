@@ -143,7 +143,7 @@ export const FINANCE_SETTINGS_BLOCKS: readonly SectionBlock[] = [
   {
     key: "documents",
     title: "Документы",
-    keys: ["finance.settings_requisites", "finance.settings_invoices"],
+    keys: ["finance.settings_requisites"],
   },
   { key: "general", title: "Общие", keys: ["finance.settings_currency"] },
 ];

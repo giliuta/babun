@@ -1,8 +1,6 @@
 import { ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
-  Building2,
-  FileText,
   HandCoins,
   NotebookPen,
   ReceiptText,
@@ -21,16 +19,12 @@ import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useTeams } from "@/features/reference/queries";
 import {
   deletedOperationsDoorLine,
-  invoicesDoorLine,
-  requisitesDoorLine,
   settingsTeamId,
   teamCategoryKindLine,
 } from "@/features/finances/team-settings-lines";
-import { useCompanies } from "@/features/companies/queries";
-import { useNextInvoiceNumber } from "@/features/invoices/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { accountsDoorLine } from "@/features/finances/accounts-sections";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/features/settings/tenant";
 import {
   CATEGORY_KIND_ROW,
   anyFinanceSetting,
@@ -72,9 +66,9 @@ import { useDeletedOperations } from "@/features/finances/deleted-operations";
 // блок «Категории» — три строки «Доходы / Расходы / Долги» тем же видом, что
 // «Счета» и «Реквизиты», каждая ведёт на свою страницу, где внизу «Добавить
 // категорию».
-// Блок команды назван «Деньги» — имя команды уже стоит в ленте над ним. Бланк
-// инвойса вышел из-за шестерёнки «Реквизитов» сюда дверью «Инвойсы», рядом с
-// «Реквизитами» в блоке «Документы»: у настройки одна дверь в её разделе.
+// Блок команды назван «Деньги» — имя команды уже стоит в ленте над ним.
+// Блока «Документы» больше нет (владелец 03.10): страницу «Инвойсы» он
+// удалил, «Реквизиты» — единый блок на все команды — переехали в Кабинет.
 
 
 const KINDS: {
@@ -117,12 +111,6 @@ export default function FinanceSettingsScreen() {
   const teamAccounts = (accounts.data ?? []).filter((a) => a.brigade_id === teamId);
   const categoriesQuery = useFinanceCategories();
   const deletedOperations = useDeletedOperations();
-  const companies = useCompanies();
-  // Номер следующего инвойса сервер показывает владельцу и тому, кто сам
-  // выставляет инвойсы; партнёр «Реквизитов» видит наборы без номера.
-  const nextInvoice = useNextInvoiceNumber(new Date().getFullYear(), undefined, owner).data;
-  const liveSets = (companies.data ?? []).filter((c) => !c.archived_at).length;
-  const tenant = useTenant().data;
 
   // «Выгрузку для бухгалтера» владелец удалил 03.10: «ненужно вообще».
   const money = {
@@ -131,8 +119,7 @@ export default function FinanceSettingsScreen() {
   };
   const moneyGroup = teamId !== null && (money.accounts || money.trash);
   const categoryKinds = teamId ? KINDS.filter(({ kind }) => shown(CATEGORY_KIND_ROW[kind])) : [];
-  const documentsGroup = shown("requisites") || shown("invoices");
-  const any = moneyGroup || categoryKinds.length > 0 || documentsGroup || shown("currency");
+  const any = moneyGroup || categoryKinds.length > 0 || shown("currency");
 
   return (
     <Screen edges={["top"]}>
@@ -216,34 +203,6 @@ export default function FinanceSettingsScreen() {
                   />
                 </View>
               ))}
-            </SectionCard>
-          ) : null}
-
-          {/* ДОКУМЕНТЫ — ОДНО НА ВЕСЬ АККАУНТ: реквизиты (номер инвойса за
-              каждым набором) и бланк инвойса — что подставлять в новый счёт. */}
-          {documentsGroup ? (
-            <SectionCard title="Документы">
-              {shown("requisites") ? (
-                <SettingsRow
-                  tile={SETTINGS_TILE.green}
-                  icon={Building2}
-                  title="Реквизиты"
-                  sub={companies.data ? requisitesDoorLine(liveSets, nextInvoice) : undefined}
-                  onPress={() => router.push("/finances/requisites")}
-                />
-              ) : null}
-              {shown("invoices") ? (
-                <>
-                  {shown("requisites") ? <Divider inset={56} /> : null}
-                  <SettingsRow
-                    tile={SETTINGS_TILE.blue}
-                    icon={FileText}
-                    title="Инвойсы"
-                    sub={tenant ? invoicesDoorLine(tenant.invoice_due_days) : undefined}
-                    onPress={() => router.push("/finances/invoice-blank")}
-                  />
-                </>
-              ) : null}
             </SectionCard>
           ) : null}
 

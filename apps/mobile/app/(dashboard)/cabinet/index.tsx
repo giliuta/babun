@@ -12,7 +12,9 @@
 //   • МОИ КОМПАНИИ — приглашения и компании, где он состоит (роль, календари);
 //   • КОМАНДЫ (не «Компания»: у владельца нет компаний, есть аккаунт и его
 //     команды — 01.10; «Аккаунт» — уже имя секции входа ниже) — «Тариф», «Оплаты тарифа», «Партнёры», «История изменений»,
-//     «SMS», «Выгрузка данных» и «Архив» (только владельцу). История — кто что
+//     «Реквизиты» (03.10, из шестерёнки «Финансов»: «единый блок на все
+//     компании»), «SMS», «Выгрузка данных» и «Архив» (только владельцу;
+//     «Реквизиты» видит и партнёр с их правом). История — кто что
 //     менял во всех календарях; выгрузка — только своих команд. SMS — баланс,
 //     пополнение и отправка всей компании (владелец 2026-09-29: «баланс и
 //     пополнение — это всё будет Кабинет SMS»); шаблоны команд — за
@@ -41,6 +43,7 @@ import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { TYPE } from "@/components/ui/tokens";
 import { AboutRow } from "@/features/cabinet/AboutRow";
 import { ArchiveRow } from "@/features/cabinet/ArchiveRow";
+import { CabinetRequisitesRow } from "@/features/cabinet/CabinetRequisitesRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
 import { HistoryRow } from "@/features/cabinet/HistoryRow";
 import { DataExportRow } from "@/features/cabinet/DataExportRow";
@@ -52,6 +55,7 @@ import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
 import { TariffRow } from "@/features/tariffs/TariffRow";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { useFinanceSettingLevel } from "@/features/finances/use-finance-settings";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useThemeColors } from "@/theme/colors";
 
@@ -62,6 +66,9 @@ export default function CabinetHome() {
   const syncDepth = useQueueDepth();
   // Очередь выгрузки видят те, кто правит данные офлайн, — как и прежде.
   const showSync = role === "owner" || role === "dispatcher";
+  // Партнёр с «Реквизиты: Только видит» открывает их тоже отсюда.
+  const requisitesLevel = useFinanceSettingLevel("requisites", null);
+  const partnerRequisites = role !== "owner" && requisitesLevel !== "hidden";
 
   return (
     <Screen>
@@ -102,6 +109,10 @@ export default function CabinetHome() {
                 onPress={() => router.push("/cabinet/people" as Href)}
               />
               <Divider inset={48} />
+              {/* РЕКВИЗИТЫ (владелец 03.10: «единый блок на все компании —
+                  запихни в кабинет»), прежде — шестерёнка «Финансов». */}
+              <CabinetRequisitesRow />
+              <Divider inset={48} />
               {/* ИСТОРИЯ ИЗМЕНЕНИЙ (владелец 03.10): кто что менял во всех
                   календарях — он сам и каждый партнёр. */}
               <HistoryRow />
@@ -113,6 +124,13 @@ export default function CabinetHome() {
               <DataExportRow />
               <Divider inset={48} />
               <ArchiveRow />
+            </SectionCard>
+          </>
+        ) : partnerRequisites ? (
+          <>
+            <SectionEyebrow>Команды</SectionEyebrow>
+            <SectionCard>
+              <CabinetRequisitesRow />
             </SectionCard>
           </>
         ) : null}

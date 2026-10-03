@@ -47,7 +47,6 @@ describe("деньги, которые стираются при понижен�
       "finance.settings_categories_expense",
       "finance.settings_categories_debts",
       "finance.settings_requisites",
-      "finance.settings_invoices",
       "finance.settings_currency",
     ]) {
       assert.ok(FINANCE_BLOCK_KEYS.includes(key), key);

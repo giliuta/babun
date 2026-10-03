@@ -104,8 +104,7 @@ describe("двери и подписи по уровню", () => {
     assert.match(layout, /onPath\(pathname, SETTINGS_PATHS\) && anySetting/);
     for (const [file, row] of [
       ["categories.tsx", "row=\\{row\\}"],
-      ["requisites.tsx", 'row="requisites"'],
-      ["invoice-blank.tsx", 'row="invoices"'],
+
       ["deleted.tsx", 'row="trash"'],
     ] as const) {
       const route = read(`../../../app/(dashboard)/finances/${file}`);

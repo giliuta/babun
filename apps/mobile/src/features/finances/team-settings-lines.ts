@@ -71,16 +71,6 @@ export function requisitesDoorLine(liveSets: number, nextNumber: string | null):
   return nextNumber ? `${sets} · ${nextNumber}` : sets;
 }
 
-const FORMS_DAY: PluralFormsRu = ["день", "дня", "дней"];
-
-/** Дверь «Инвойсы» (владелец 03.10: бланк вышел из-за шестерёнки «Реквизитов»
- *  в шестерёнку «Финансов»): «Срок оплаты 7 дней». Ноль — оплата в день
- *  выставления, теми же словами, что подсказка бланка. */
-export function invoicesDoorLine(dueDays: number | null | undefined): string {
-  const days = dueDays ?? 7;
-  return days === 0 ? "Оплата по факту" : `Срок оплаты ${formatCountRu(days, FORMS_DAY)}`;
-}
-
 /** Дверь одной страницы категорий (владелец 2026-09-30: доходы, расходы и
  *  долги — отдельными страницами): «5 категорий · 1 бюджет» либо «Пока нет».
  *  Скрытые и служебные не считаются; бюджет бывает только у расхода. */

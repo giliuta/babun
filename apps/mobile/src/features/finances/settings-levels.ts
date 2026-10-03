@@ -25,7 +25,6 @@ export const FINANCE_SETTING_BLOCKS = {
   categoriesExpense: "finance.settings_categories_expense",
   categoriesDebts: "finance.settings_categories_debts",
   requisites: "finance.settings_requisites",
-  invoices: "finance.settings_invoices",
   currency: "finance.settings_currency",
 } as const;
 
@@ -34,7 +33,7 @@ export type FinanceSettingLevel = "hidden" | "read" | "write";
 export type FinanceSettingLevels = Record<FinanceSettingRow, FinanceSettingLevel>;
 
 /** Строки на весь аккаунт: их право — без команды. */
-const COMPANY_ROWS: ReadonlySet<FinanceSettingRow> = new Set(["requisites", "invoices", "currency"]);
+const COMPANY_ROWS: ReadonlySet<FinanceSettingRow> = new Set(["requisites", "currency"]);
 
 const ROWS = Object.keys(FINANCE_SETTING_BLOCKS) as FinanceSettingRow[];
 
@@ -80,7 +79,13 @@ export function financeSettingLevels({ role, map, teamId }: FinanceSettingsInput
   return levels;
 }
 
+/** «РЕКВИЗИТЫ» — В КАБИНЕТЕ (владелец 2026-10-03: «реквизиты — единый блок
+ *  на все компании, запихни в кабинет»). Право строки прежнее и закрывает
+ *  страницу `/cabinet/requisites`, но шестерёнку «Финансов» оно больше не
+ *  открывает: строки там нет. */
+const OUTSIDE_GEAR: ReadonlySet<FinanceSettingRow> = new Set(["requisites"]);
+
 /** Есть ли у команды хоть одна строка — иначе её нет и в ленте. */
 export function anyFinanceSetting(levels: FinanceSettingLevels): boolean {
-  return ROWS.some((row) => levels[row] !== "hidden");
+  return ROWS.some((row) => !OUTSIDE_GEAR.has(row) && levels[row] !== "hidden");
 }

@@ -51,7 +51,6 @@ const REGISTRY: AccessBlock[] = [
   // видит (03.10).
   block({ key: "finance.settings_currency", area: "finance", levels: ["off", "read"], title: "Валюта" }),
   block({ key: "finance.settings_requisites", area: "finance", levels: ["off", "read"], title: "Реквизиты" }),
-  block({ key: "finance.settings_invoices", area: "finance", levels: ["off", "read"], title: "Инвойсы" }),
   block({ key: "clients", levels: ["off", "read"], title: "Клиенты" }),
   block({ key: "clients.scope", levels: ["near", "month", "own"], title: "Ограничение по времени" }),
   // «Долг и деньги» снято 03.10: деньги идут вместе с «Историей», у которой
@@ -149,7 +148,6 @@ describe("слова прав", () => {
         "finance.settings_categories_debts",
         "finance.settings_currency",
         "finance.settings_requisites",
-        "finance.settings_invoices",
         "clients",
         "clients.scope",
         "clients.history",

@@ -116,7 +116,6 @@ const LOOK: Record<string, RightLook> = {
   "finance.settings_categories_income": { icon: HandCoins, tile: SETTINGS_TILE.green },
   "finance.settings_categories_expense": { icon: ReceiptText, tile: SETTINGS_TILE.red },
   "finance.settings_categories_debts": { icon: NotebookPen, tile: SETTINGS_TILE.yellow },
-  "finance.settings_invoices": { icon: FileText, tile: SETTINGS_TILE.blue },
   "finance.settings_currency": { icon: Banknote, tile: SETTINGS_TILE.green },
   "finance.settings_requisites": { icon: Building2, tile: SETTINGS_TILE.green },
   clients: { icon: Users, tile: SETTINGS_TILE.blue },

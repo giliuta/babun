@@ -70,7 +70,6 @@ const TITLE: Record<string, string> = {
   "finance.settings_categories_debts": "Долги",
   "finance.settings_currency": "Валюта",
   "finance.settings_requisites": "Реквизиты",
-  "finance.settings_invoices": "Инвойсы",
   // «База клиентов» (владелец 01.10: «даём разрешение именно на базу, которая
   // в „Клиентах“») — до 01.10 «Карточки клиентов».
   clients: "База клиентов",
@@ -192,7 +191,6 @@ const STEP: Record<string, Words> = {
   // только видит (правка ударила бы по деньгам и документам чужих команд).
   "finance.settings_currency": { off: "Скрыта", read: "Только видит" },
   "finance.settings_requisites": { off: "Скрыты", read: "Только видит" },
-  "finance.settings_invoices": { off: "Скрыты", read: "Только видит" },
   // КЛИЕНТЫ — ТЕМИ ЖЕ СЛОВАМИ, ЧТО «КАЛЕНДАРЬ» (владелец 30.09: страница
   // «Клиенты» — так же, блоками).
   // База — «Скрыта · Видит» (владелец 02.10: «редактировать убираем… по

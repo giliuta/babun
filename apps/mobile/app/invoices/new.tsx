@@ -15,8 +15,11 @@ import {
   type InvoiceEditorValue,
 } from "@/features/invoices/InvoiceEditor";
 import {
+  useInvoices,
   useIssueInvoice,
 } from "@/features/invoices/queries";
+import { rememberedDueDays } from "@/features/invoices/due-days";
+import { useSession } from "@/providers/SessionProvider";
 import { useTeams } from "@/features/reference/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { accessGate } from "@/features/access/my-access";
@@ -62,6 +65,10 @@ export default function NewInvoiceScreen() {
         "write",
   );
   const tenant = useTenant();
+  // Срок оплаты — как на своём прошлом инвойсе, первый — 30 дней (владелец
+  // 03.10). Отказ списка не держит экран: тогда просто 30.
+  const invoices = useInvoices();
+  const me = useSession().session?.user.id ?? null;
   const calendarSettings = useCalendarSettings();
   const issue = useIssueInvoice();
   const vat = useVatSettings();
@@ -79,7 +86,7 @@ export default function NewInvoiceScreen() {
   // строки без названий и запомнил бы их — генератор считает ОДИН раз.
   const loading = clients.isLoading || appointments.isLoading || teams.isLoading
     || services.isLoading || tenant.isLoading || calendarSettings.isLoading
-    || vat.isLoading || teamVat.isLoading;
+    || vat.isLoading || teamVat.isLoading || invoices.isLoading;
   // A failed background refetch must not unmount InvoiceEditor and erase the
   // user's draft. Only replace the editor when a required query has no usable
   // data at all; retrying keeps all local form state intact.
@@ -192,7 +199,10 @@ export default function NewInvoiceScreen() {
           clients={clients.data ?? []}
           appointments={appointments.data ?? []}
           services={services.data ?? []}
-          generator={invoiceGeneratorSettings(tenant.data)}
+          generator={{
+            ...invoiceGeneratorSettings(tenant.data),
+            dueDays: rememberedDueDays(invoices.data, me),
+          }}
           teams={issueTeams}
           businessToday={businessToday}
           tenant={tenant.data}

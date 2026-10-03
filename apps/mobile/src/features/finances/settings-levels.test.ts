@@ -45,10 +45,10 @@ describe("шестерёнка «Финансов» по правам", () => {
   });
 
   test("строки на весь аккаунт партнёр только видит", () => {
-    const m = map({ a: {} }, { "finance.settings_currency": "write", "finance.settings_invoices": "write" });
+    const m = map({ a: {} }, { "finance.settings_currency": "write", "finance.settings_requisites": "write" });
     const a = financeSettingLevels({ role: "master", map: m, teamId: "a" });
     assert.equal(a.currency, "read");
-    assert.equal(a.invoices, "read");
+    assert.equal(a.requisites, "read");
   });
 
   test("карты нет — строк нет, команды в ленте нет", () => {
@@ -56,10 +56,10 @@ describe("шестерёнка «Финансов» по правам", () => {
     assert.equal(anyFinanceSetting(levels), false);
   });
 
-  test("без команды — только строки на весь аккаунт (реквизиты, инвойсы)", () => {
-    const m = map({ a: { "finance.settings_accounts": "write" } }, { "finance.settings_invoices": "read" });
+  test("без команды — только строки на весь аккаунт (реквизиты, валюта)", () => {
+    const m = map({ a: { "finance.settings_accounts": "write" } }, { "finance.settings_requisites": "read" });
     const none = financeSettingLevels({ role: "master", map: m, teamId: null });
     assert.equal(none.accounts, "hidden");
-    assert.equal(none.invoices, "read");
+    assert.equal(none.requisites, "read");
   });
 });

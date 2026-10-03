@@ -51,8 +51,6 @@ export const unstable_settings = { initialRouteName: "index" };
 const SETTINGS_PATHS = [
   "/finances/settings",
   "/finances/categories",
-  "/finances/requisites",
-  "/finances/invoice-blank",
   "/finances/deleted",
 ];
 

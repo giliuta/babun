@@ -106,6 +106,11 @@ const PERSONAL_CABINET_ROUTES = [
 // клиенты, свои деньги. Без доступа он показывает нули, а не отказ.
 const INSIGHTS_ROUTE = "/cabinet/insights";
 
+// «Реквизиты» (03.10, из шестерёнки «Финансов» в Кабинет): дверь открыта
+// любой роли, страницу закрывает право строки «Реквизиты»
+// (`FinanceSettingsRoute`), а данные — политика `legal_entities`.
+const REQUISITES_ROUTE = "/cabinet/requisites";
+
 const DISPATCHER_CABINET_ROUTES = new Set([
   "/cabinet",
   INSIGHTS_ROUTE,
@@ -114,6 +119,7 @@ const DISPATCHER_CABINET_ROUTES = new Set([
   "/cabinet/inventory",
   "/cabinet/recurring",
   "/cabinet/sync",
+  REQUISITES_ROUTE,
   ...PERSONAL_CABINET_ROUTES,
 ]);
 
@@ -123,6 +129,7 @@ const MASTER_CABINET_ROUTES = new Set([
   "/cabinet/account",
   "/cabinet/business",
   "/cabinet/inventory",
+  REQUISITES_ROUTE,
   ...PERSONAL_CABINET_ROUTES,
 ]);
 
