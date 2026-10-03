@@ -296,6 +296,7 @@ export default function ObjectsBlock({
               onPress={
                 single ? onOpenAll : onOpen ? () => onOpen(loc.id) : undefined
               }
+              pressHint={single ? "Открывает все объекты клиента" : undefined}
               // Долгое нажатие копирует адрес (нет адреса — ссылку на карту):
               // его пересылают бригаде или вставляют в навигатор.
               onLongPress={canCopy && objectTarget(loc) ? () => copy(objectTarget(loc)) : undefined}
@@ -371,11 +372,15 @@ export function ObjectRow({
   onPress,
   onLongPress,
   longPressLabel,
+  pressHint,
   primary = false,
   teamId = null,
 }: {
   loc: Location;
   separated?: boolean;
+  /** Что делает тап — для VoiceOver, когда это не правка (карточка клиента:
+   *  тап по объекту открывает страницу всех). */
+  pressHint?: string;
   /** Звёздочка у адреса — это основной объект, его подставит запись
    *  (владелец 03.10). Ставят только там, где объектов несколько: у
    *  единственного звезда ничего не различает. */
@@ -470,7 +475,9 @@ export function ObjectRow({
             ? `Открывает выбор объекта; удерживайте — ${longPressLabel.toLowerCase()}`
             : !onPress
               ? undefined
-              : onMore
+              : pressHint
+                ? pressHint
+                : onMore
                 ? "Открывает выбор объекта"
                 : "Открывает правку объекта"
         }

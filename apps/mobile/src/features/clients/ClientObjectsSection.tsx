@@ -2,8 +2,6 @@ import { useMemo, useState } from "react";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
 import type { ClientLinkItem } from "@/features/clients/blocks/ClientLinksBlock";
-import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
-import { useLastNonNull } from "@/lib/use-last-non-null";
 import ObjectsBlock from "@/features/clients/blocks/ObjectsBlock";
 import { useLocationRequestActions } from "@/features/clients/location-request-actions";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
@@ -38,11 +36,6 @@ export function ClientObjectsSection({
   adding,
   onAddingChange,
   residentsLine,
-  residentsAt,
-  onAddResident,
-  onOpenResident,
-  onResidentRole,
-  onRemoveResident,
   readOnly = false,
 }: {
   /** Только видит (право блока «Объекты», 30.09): без правки и дверей. */
@@ -64,6 +57,9 @@ export function ClientObjectsSection({
   adding?: boolean;
   onAddingChange?: (open: boolean) => void;
   residentsLine?: (loc: Location) => string | undefined;
+  /** Ниже — двери жильцов из листа объекта. Лист их больше не ставит
+   *  (владелец 03.10: «добавить жильца — убираем»); пропы принимаются, чтобы
+   *  не ломать общий разворот `people.residents` у страниц. */
   residentsAt?: (loc: Location) => readonly ClientLinkItem[];
   onAddResident?: (loc: Location) => void;
   onOpenResident?: (item: ClientLinkItem) => void;
@@ -106,23 +102,6 @@ export function ClientObjectsSection({
   const canEdit = !readOnly && (draft || caps.edit);
   const requestActions = useLocationRequestActions();
 
-  // ЧЕЙ ЛИСТ ОТКРЫТ — ДЕРЖИМ ДО КОНЦА АНИМАЦИИ ЗАКРЫТИЯ. Сам лист так же
-  // держит последний правившийся объект (`useLastNonNull` внутри него): без
-  // этого жильцы пропадали бы из уезжающего вниз листа за кадр до того, как
-  // он скроется, — блок «Жильцы» схлопывался у человека на глазах.
-  const openLocationId = useLastNonNull(sheet?.id ?? null);
-  const openLocation = useMemo(
-    () =>
-      (client.locations ?? EMPTY_LOCATIONS).find((l) => l.id === openLocationId) ??
-      null,
-    [client.locations, openLocationId],
-  );
-  // ИЗ ЛИСТА — НА КАРТОЧКУ ЖИЛЬЦА, И ОБРАТНО В ТОТ ЖЕ ЛИСТ (стандарт двери из
-  // шторки, владелец 2026-09-10: «сделай стандарт, как и везде»). Лист — это
-  // отдельное окно `Modal`, и карточка жильца, открытая при нём, уехала бы
-  // ПОД него. Дверь паркует лист, открывает карточку, а «назад» возвращает
-  // ту же виллу с тем же набранным.
-  const residentDoor = useSheetDoorway();
   // «БЫЛ 12 АВГ» У КАЖДОГО ОБЪЕКТА — из тех же записей клиента, что уже
   // пришли на страницу: отдельного запроса нет.
   const lastVisits = useMemo(() => lastVisitByObject(appointments), [appointments]);
@@ -159,30 +138,11 @@ export function ClientObjectsSection({
       {/* Свайп по строке открывает тот же лист сразу с вопросом об удалении —
           подтверждение и запись остаются в одном месте. */}
       <ObjectEditSheet
-        visible={sheet !== null && !residentDoor.parked}
+        visible={sheet !== null}
         client={client}
         locationId={sheet?.id ?? null}
         askDelete={sheet?.askDelete}
         writer={locationWriter}
-        // Жильцы ЭТОГО объекта: лист в сеть не ходит и связи не считает —
-        // данные приносит страница, у которой они уже есть.
-        residents={
-          openLocation && residentsAt ? residentsAt(openLocation) : undefined
-        }
-        // КУРСОРА В РОЛЬ ЖИЛЬЦА В ЛИСТЕ НЕТ НАМЕРЕННО, поэтому и пропа под
-        // него у листа нет: после выбора жильца лист не открывается заново —
-        // человек уже на странице, и курсор стоит в его строке блока
-        // «Клиент». Ключ фокуса в листе сработал бы позже, на ЛЮБОМ следующем
-        // открытии виллы, и поднял бы клавиатуру над листом, который открыли
-        // совсем не за этим.
-        onAddResident={onAddResident}
-        onOpenResident={
-          onOpenResident
-            ? (item) => residentDoor.open(() => onOpenResident(item))
-            : undefined
-        }
-        onResidentRole={onResidentRole}
-        onRemoveResident={onRemoveResident}
         onRequestFromClient={
           canRequestAddress ? () => void requestActions.request(client.id) : undefined
         }
