@@ -116,15 +116,38 @@ export const FINANCE_ROW_ORDER: readonly string[] = [
   "finance.profit",
 ];
 
-/** «НАСТРОЙКИ ФИНАНСОВ» — по строке на каждую строку шестерёнки финансов, в
- *  её порядке (владелец 03.10: «по строке на каждую»). */
-export const FINANCE_SETTINGS_ROW_ORDER: readonly string[] = [
-  "finance.settings_accounts",
-  "finance.settings_export",
-  "finance.settings_categories",
-  "finance.settings_currency",
-  "finance.settings_requisites",
+/** ШЕСТЕРЁНКА «ФИНАНСОВ» — БЛОКАМИ, КАК НА НЕЙ САМОЙ (владелец 03.10: «по
+ *  строке на каждую»; шестерёнка в тот же вечер стала блоками «Деньги ·
+ *  Категории · Документы · Общие»). Каждый блок прав — блок шестерёнки, в её
+ *  порядке; право, которого ещё нет в реестре, строкой не встаёт. */
+export const FINANCE_SETTINGS_BLOCKS: readonly SectionBlock[] = [
+  {
+    key: "money",
+    title: "Деньги",
+    keys: ["finance.settings_accounts", "finance.settings_export", "finance.settings_trash"],
+  },
+  {
+    key: "categories",
+    title: "Категории",
+    keys: [
+      "finance.settings_categories",
+      "finance.settings_categories_income",
+      "finance.settings_categories_expense",
+      "finance.settings_categories_debts",
+    ],
+  },
+  {
+    key: "documents",
+    title: "Документы",
+    keys: ["finance.settings_requisites", "finance.settings_invoices"],
+  },
+  { key: "general", title: "Общие", keys: ["finance.settings_currency"] },
 ];
+
+/** Все строки шестерёнки «Финансов» по порядку её блоков. */
+export const FINANCE_SETTINGS_ROW_ORDER: readonly string[] = FINANCE_SETTINGS_BLOCKS.flatMap(
+  (block) => block.keys,
+);
 
 /** Права блока «Записи» на странице «Календарь». */
 const RECORD_KINDS: readonly string[] = [
@@ -182,7 +205,7 @@ export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock
   // страницы по порядку, «Настройки финансов» — строки её шестерёнки.
   finance: [
     { key: "main", title: "Главное", keys: FINANCE_ROW_ORDER },
-    { key: "settings", title: "Настройки финансов", keys: FINANCE_SETTINGS_ROW_ORDER },
+    ...FINANCE_SETTINGS_BLOCKS,
   ],
   calendar: [
     // «Доходы» и «Расходы» стояли здесь с 30.09 («переходим к доход расход —

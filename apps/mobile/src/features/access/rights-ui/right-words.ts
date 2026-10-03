@@ -206,7 +206,7 @@ const DANGER: Record<string, Words> = {
   "finance.income": { full: "Сможет править и удалять чужие доходы" },
   "finance.expense": { full: "Сможет править и удалять чужие расходы" },
   "finance.accounts": { write: "Сможет переводить деньги между счетами" },
-  "finance.settings_accounts": { write: "Сможет заводить и скрывать счета команды" },
+  "finance.settings_accounts": { write: "Сможет заводить и удалять счета команды" },
   "finance.debts": { write: "Сможет править и удалять долги" },
   "finance.documents": { write: "Сможет выставлять инвойсы от имени компании" },
 

@@ -165,8 +165,8 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "finance.settings_accounts",
     "finance.settings_export",
     "finance.settings_categories",
-    "finance.settings_currency",
-    "finance.settings_requisites",
+    // «Валюта» и «Реквизиты» — права НА ВСЮ КОМПАНИЮ: скрытый календарь одной
+    // команды не гасит их у всей компании (сброс писал бы `team_id: null`).
   ],
   // Скрыты «Карточки клиентов» — нет ни охвата, ни номера, ни одного блока
   // карточки (защита базы 30.09).

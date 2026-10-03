@@ -132,10 +132,54 @@ describe("страница раздела доступа — блоками вл
           "finance.profit",
         ],
       },
-      {
-        title: "Настройки финансов",
-        keys: ["finance.settings_accounts", "finance.settings_categories", "finance.settings_requisites"],
-      },
+      // Блоки шестерёнки «Финансов» — её названиями и в её порядке (03.10).
+      { title: "Деньги", keys: ["finance.settings_accounts"] },
+      { title: "Категории", keys: ["finance.settings_categories"] },
+      { title: "Документы", keys: ["finance.settings_requisites"] },
     ]);
+  });
+
+  test("права на всю компанию из шестерёнки — в «Настройках финансов» команды, а не в «Компании»", () => {
+    const company = (key: string, position: number): AccessBlock => ({
+      ...block(key, ["off", "read"], position),
+      scope: "company",
+    });
+    const blocks = [
+      ...REGISTRY.filter((b) => b.key !== "finance.settings_requisites"),
+      company("finance.settings_requisites", 165),
+      company("finance.settings_currency", 166),
+      { ...block("company.services", ["off", "read"], 200), area: "company", scope: "company" } as AccessBlock,
+    ];
+    const levelOf = (b: AccessBlock, teamId: string | null) =>
+      b.scope === "company" ? (teamId === null ? "read" : "off") : (b.levels[0] as AccessLevel);
+    const finance = viewSections({
+      blocks,
+      levelOf,
+      activeId: "team-1",
+      onlyCalendar: true,
+      onlyCompany: false,
+      group: "finance",
+    });
+    assert.deepEqual(
+      finance
+        .filter((section) => section.title !== "Главное")
+        .map((section) => [section.title, section.rows.map((row) => [row.block.key, row.level])]),
+      [
+        ["Деньги", [["finance.settings_accounts", "off"]]],
+        ["Категории", [["finance.settings_categories", "off"]]],
+        // Положение компании — без команды, а не «закрыто» в команде.
+        ["Документы", [["finance.settings_requisites", "read"]]],
+        ["Общие", [["finance.settings_currency", "read"]]],
+      ],
+    );
+    const card = viewSections({
+      blocks,
+      levelOf,
+      activeId: "team-1",
+      onlyCalendar: true,
+      onlyCompany: false,
+      withCompany: true,
+    }).find((section) => section.key === "company");
+    assert.deepEqual(card?.rows.map((row) => row.block.key), ["company.services"]);
   });
 });

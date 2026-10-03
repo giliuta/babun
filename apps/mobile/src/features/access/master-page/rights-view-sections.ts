@@ -47,13 +47,24 @@ export function viewSections({
   /** Страница ОДНОГО раздела доступа («Календарь»): только его карточка. */
   group?: CalendarGroup;
 }): ViewSection[] {
+  // ПРАВА НА ВСЮ КОМПАНИЮ, КОТОРЫЕ СТОЯТ В БЛОКЕ РАЗДЕЛА («Валюта» и
+  // «Реквизиты» — строки шестерёнки «Финансов», владелец 03.10: «права =
+  // строки шестерёнки»). На странице команды они стоят в своём блоке — там,
+  // где их видит человек, — а из карточки «Компания» уходят, чтобы одно право
+  // не стояло дважды. Положение у них одно на всю компанию: строка читает и
+  // пишет его без команды (`blockChanges` → `team_id: null`).
+  const claimed = claimedKeys();
   const registry = rightsSections(blocks, levelOf, onlyCompany ? null : activeId)
     .map((section) => ({
       key: section.area as string,
       area: section.area,
       title: section.title,
       rows: section.rows.filter((row) =>
-        onlyCalendar ? row.block.scope === "calendar" : onlyCompany ? row.block.scope !== "calendar" : true,
+        onlyCalendar
+          ? row.block.scope === "calendar" || claimed.has(row.block.key)
+          : onlyCompany
+            ? row.block.scope !== "calendar" && !claimed.has(row.block.key)
+            : true,
       ),
     }))
     // Права компании, открытые строкой «Компания», — только свой раздел.
@@ -80,7 +91,7 @@ export function viewSections({
           title: AREA_TITLE.company,
           rows: rightsSections(blocks, levelOf, null)
             .flatMap((section) => section.rows)
-            .filter((row) => row.block.scope !== "calendar"),
+            .filter((row) => row.block.scope !== "calendar" && !claimed.has(row.block.key)),
         },
       ]
     : [];
@@ -93,6 +104,13 @@ export function viewSections({
     rows: groupPage(section.key as CalendarGroup, team).flatMap((part) => part.rows),
   }));
   return [...paged, ...company].filter((section) => section.rows.length > 0);
+}
+
+/** Ключи, которые блоки разделов (`SECTION_BLOCKS`) забирают себе. */
+function claimedKeys(): Set<string> {
+  return new Set(
+    Object.values(SECTION_BLOCKS).flatMap((blocks) => (blocks ?? []).flatMap((block) => block.keys)),
+  );
 }
 
 /** Страница одного раздела — его блоками (`SECTION_BLOCKS`). Блок берёт свои
