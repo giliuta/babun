@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
-import { House, MapPin, MoreHorizontal, UserRound } from "lucide-react-native";
+import { House, MapPin, MoreHorizontal, Tag, UserRound } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Card } from "@/components/ui/Card";
@@ -25,6 +25,7 @@ import { useThemeColors } from "@/theme/colors";
 import { useCopyValue } from "@/lib/copy-value";
 import { AppearanceTile } from "@/components/ui/AppearanceSheet";
 import { useLocationLabels } from "@/features/settings/local-settings";
+import { objectTypeKey } from "@/features/clients/object-types";
 
 // ОБЪЕКТЫ на карточке клиента.
 //
@@ -82,12 +83,15 @@ function ObjectNote({
   );
 }
 
-/** ПЛИТКА ВИДА ТИПА ОБЪЕКТА. Тип с видом — его цвет и значок; без вида —
- *  светлая акцентная, как кружок маршрута рядом (владелец 03.10: серая
- *  плитка с тёмным домиком «не особо прикольно»). */
-function ObjectTypeTile({ color, icon }: { color?: string | null; icon?: string | null }) {
+/** ПЛИТКА ТИПА ОБЪЕКТА — ТА ЖЕ, ЧТО У ТИПА В ЛИСТЕ ОБЪЕКТА (владелец 03.10:
+ *  «иконка и цвет от типа объекта переходят сюда полноценно»). Правило
+ *  блока «Тип объекта» (`ObjectFields`): цвет типа, а без него акцент;
+ *  значок типа, а без него ярлык. Тип не выбран — светлый домик. */
+function ObjectTypeTile({ typed, color, icon }: { typed: boolean; color?: string | null; icon?: string | null }) {
   const t = useThemeColors();
-  if (color) return <AppearanceTile color={color} icon={icon ?? null} fallback={House} size={34} />;
+  if (typed) {
+    return <AppearanceTile color={color ?? t.accent} icon={icon ?? null} fallback={Tag} size={34} />;
+  }
   return (
     <View
       style={{
@@ -384,7 +388,10 @@ export function ObjectRow({
   // ТИП ОБЪЕКТА — ТОЛЬКО ЗНАЧКОМ (владелец 03.10: «слово не пишем — тип
   // обозначает иконка: цвет и значок из „Типов объектов“; типа нет — домик»).
   const { data: labelPresets = [] } = useLocationLabels(teamId);
-  const type = loc.label ? labelPresets.find((l) => l.name === loc.label) : undefined;
+  const typed = !!loc.label?.trim();
+  const type = typed
+    ? labelPresets.find((l) => objectTypeKey(l.name) === objectTypeKey(loc.label))
+    : undefined;
   // Адрес двумя строками: улица и дом — чёрным, уточнение — мелко серым.
   const lines = addressLines(loc);
   const note = showNote ? (loc.note ?? "").trim() : "";
@@ -442,7 +449,7 @@ export function ObjectRow({
         })}
       >
         <View style={{ marginRight: 4 }}>
-          <ObjectTypeTile color={type?.color} icon={type?.icon} />
+          <ObjectTypeTile typed={typed} color={type?.color} icon={type?.icon} />
         </View>
         <View style={{ flex: 1 }}>
           {/* АДРЕС — ГЛАВНАЯ СТРОКА (владелец 03.10): едут по адресу, тип
