@@ -1,5 +1,6 @@
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { escapeHtml } from "@/features/invoices/pdf";
+import type { InvoiceLanguage } from "@/features/invoices/dictionary";
 import {
   buildReceiptDocument,
   type ReceiptDocument,
@@ -22,13 +23,14 @@ import {
 export function buildReceiptPdfHtml(
   receipt: Receipt,
   lineItems?: ReceiptLineItemsInput,
+  language: InvoiceLanguage = "ru",
 ): string {
-  return renderReceiptHtml(buildReceiptDocument(receipt, lineItems));
+  return renderReceiptHtml(buildReceiptDocument(receipt, lineItems, language));
 }
 
 function renderReceiptHtml(doc: ReceiptDocument): string {
   return `<!doctype html>
-<html lang="ru">
+<html lang="${doc.words.locale.slice(0, 2)}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -36,7 +38,7 @@ function renderReceiptHtml(doc: ReceiptDocument): string {
        скрытый iframe (см. share-pdf.ts), и без title файл уходил клиенту как
        about:blank.pdf либо с именем страницы CRM. Нативная ветка называет файл
        сама, но лишним это не будет и там. -->
-  <title>Чек ${escapeHtml(doc.number)}</title>
+  <title>${escapeHtml(doc.words.receipt)} ${escapeHtml(doc.number)}</title>
   <style>
     @page { size: A4; margin: 48px; }
     * { box-sizing: border-box; }
@@ -88,15 +90,15 @@ function renderReceiptHtml(doc: ReceiptDocument): string {
     <div class="seller-name">${escapeHtml(doc.seller.name)}</div>
     ${doc.seller.lines.map((line) => `<div class="seller-line">${escapeHtml(line)}</div>`).join("")}
 
-    <div class="eyebrow">Чек</div>
+    <div class="eyebrow">${escapeHtml(doc.words.receipt)}</div>
     <h1>${escapeHtml(doc.number)}</h1>
 
-    <div class="row"><span class="label">Дата</span><span class="value">${escapeHtml(doc.issuedOn)}</span></div>
+    <div class="row"><span class="label">${escapeHtml(doc.words.date)}</span><span class="value">${escapeHtml(doc.issuedOn)}</span></div>
 
     ${doc.lines.length > 0 ? `
-    <table class="lines" aria-label="Перечень услуг">
+    <table class="lines" aria-label="${escapeHtml(doc.words.linesAria)}">
       <thead>
-        <tr><th>Услуга</th><th class="number">Кол-во</th><th class="number">Цена</th><th class="number">Сумма</th></tr>
+        <tr><th>${escapeHtml(doc.words.service)}</th><th class="number">${escapeHtml(doc.words.qty)}</th><th class="number">${escapeHtml(doc.words.price)}</th><th class="number">${escapeHtml(doc.words.sum)}</th></tr>
       </thead>
       <tbody>${doc.lines.map((line) => `
         <tr>
@@ -110,13 +112,13 @@ function renderReceiptHtml(doc: ReceiptDocument): string {
 
     <div class="amount-wrap">
       ${doc.linesTotal ? `
-      <div class="total-row"><span>Итого работ</span><strong>${escapeHtml(doc.linesTotal)}</strong></div>` : ""}
+      <div class="total-row"><span>${escapeHtml(doc.words.linesTotal)}</span><strong>${escapeHtml(doc.linesTotal)}</strong></div>` : ""}
       ${doc.discount ? `
       <div class="total-row"><span>${escapeHtml(doc.discount.label)}</span><strong>${escapeHtml(doc.discount.value)}</strong></div>` : ""}
       ${doc.vat ? `
       <div class="total-row"><span>${escapeHtml(doc.vat.label)}</span><strong>${escapeHtml(doc.vat.value)}</strong></div>` : ""}
       <div class="amount-row${doc.linesTotal || doc.discount || doc.vat ? " with-totals-above" : ""}">
-        <span class="amount-label">Получено</span>
+        <span class="amount-label">${escapeHtml(doc.words.received)}</span>
         <span class="amount-value">${escapeHtml(doc.amount)}</span>
       </div>
     </div>

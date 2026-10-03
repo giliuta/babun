@@ -18,15 +18,15 @@ export function buildReceiptShareText(doc: ReceiptDocument): string {
     // а не бизнеса, и в бумаге для клиента ему делать нечего (U57).
     doc.seller.name || null,
     ...doc.seller.lines,
-    `Чек ${doc.number}`,
+    `${doc.words.receipt} ${doc.number}`,
     doc.issuedOn,
     lines.length > 0 ? "" : null,
     ...lines,
     "",
-    doc.linesTotal ? `Итого работ: ${doc.linesTotal}` : null,
+    doc.linesTotal ? `${doc.words.linesTotal}: ${doc.linesTotal}` : null,
     doc.discount ? `${doc.discount.label}: ${doc.discount.value}` : null,
     doc.vat ? `${doc.vat.label}: ${doc.vat.value}` : null,
-    `Получено: ${doc.amount}`,
+    `${doc.words.received}: ${doc.amount}`,
     // Погашенного чека здесь не бывает: лист не даёт его выслать. Возврат
     // подтверждается своим документом (credit note), а не бумагой о приёме
     // денег, которых у нас уже нет.

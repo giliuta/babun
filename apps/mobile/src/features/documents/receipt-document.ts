@@ -11,6 +11,8 @@ import {
 } from "@babun/shared/local/finance/invoice-generator";
 import { formatInvoiceMoney } from "@/features/invoices/format";
 import { formatQty } from "@/features/invoices/document";
+import type { InvoiceLanguage } from "@/features/invoices/dictionary";
+import { RECEIPT_WORDS, type ReceiptWords } from "./receipt-words";
 
 // ОДИН ДОКУМЕНТ ЧЕКА — ОДНА МОДЕЛЬ ДЛЯ PDF (по образцу invoices/document.ts).
 //
@@ -65,6 +67,8 @@ export interface ReceiptDocumentLine {
 }
 
 export interface ReceiptDocument {
+  /** Слова бумаги — на языке документа (`receipt-words.ts`). */
+  words: ReceiptWords;
   number: string;
   /** «Аннулирован» — печатается ТОЛЬКО когда чек погашен возвратом; живой чек
    *  не подписывает себя штампом вовсе (владелец 2026-09-20: «оплачено тоже
@@ -106,12 +110,12 @@ interface ReceiptSellerSnapshot {
 /** Строки под именем продавца: адрес, налоговый номер, банк. Порядок тот же,
  *  что у инвойса, — два документа одной фирмы не имеют права представлять её
  *  по-разному. Пустые поля не оставляют пустых строк. */
-function sellerLines(seller: ReceiptSellerSnapshot | null): string[] {
+function sellerLines(seller: ReceiptSellerSnapshot | null, words: ReceiptWords): string[] {
   const bank = compact([clean(seller?.bank_name), clean(seller?.iban)]).join(" · ");
   return compact([
     clean(seller?.address),
     clean(seller?.vat_number) ? `VAT ${clean(seller?.vat_number)}` : "",
-    clean(seller?.reg_number) ? `Рег. № ${clean(seller?.reg_number)}` : "",
+    clean(seller?.reg_number) ? `${words.regNumber} ${clean(seller?.reg_number)}` : "",
     bank,
   ]);
 }
@@ -142,41 +146,40 @@ export function buildDraftReceiptDocument(input: {
   vatAmount: number;
   /** Полученные деньги. */
   total: number;
+  /** Язык бумаги; по умолчанию русский. */
+  language?: InvoiceLanguage;
 }): ReceiptDocument {
+  const words = RECEIPT_WORDS[input.language ?? "ru"];
+  const money = (value: number) => formatInvoiceMoney(value, input.currency, words.locale);
   return {
+    words,
     number: input.numberLabel,
     voidLabel: null,
     seller: {
-      name: clean(input.seller.name) || "Продавец не указан",
+      name: clean(input.seller.name) || words.sellerMissing,
       lines: compact([clean(input.seller.address)]),
     },
     issuedOn: formatReceiptDate(input.issuedOn),
     lines: input.lines.map((line) => ({
       name: line.name,
-      qty: formatQty(line.qty, line.unit),
-      unitPrice: formatInvoiceMoney(line.unitPrice, input.currency),
-      sum: formatInvoiceMoney(line.sum, input.currency),
+      qty: formatQty(line.qty, line.unit, words.locale),
+      unitPrice: money(line.unitPrice),
+      sum: money(line.sum),
     })),
     linesTotal:
       input.lines.length > 0
-        ? formatInvoiceMoney(
-            round2(input.lines.reduce((sum, line) => sum + line.sum, 0)),
-            input.currency,
-          )
+        ? money(round2(input.lines.reduce((sum, line) => sum + line.sum, 0)))
         : null,
     discount:
       input.discountAmount > 0
-        ? {
-            label: "Скидка",
-            value: `−${formatInvoiceMoney(input.discountAmount, input.currency)}`,
-          }
+        ? { label: words.discount, value: `−${money(input.discountAmount)}` }
         : null,
-    amount: formatInvoiceMoney(input.total, input.currency),
+    amount: money(input.total),
     vat:
       input.vatAmount > 0
         ? {
-            label: `VAT${input.vatRate ? ` ${input.vatRate}%` : ""} в сумме`,
-            value: formatInvoiceMoney(input.vatAmount, input.currency),
+            label: words.vatIncluded(input.vatRate ? `${input.vatRate}%` : ""),
+            value: money(input.vatAmount),
           }
         : null,
   };
@@ -185,42 +188,41 @@ export function buildDraftReceiptDocument(input: {
 export function buildReceiptDocument(
   receipt: Receipt,
   lineItems?: ReceiptLineItemsInput,
+  /** Язык бумаги — язык инвойса, на который выписан чек; нет — русский. */
+  language: InvoiceLanguage = "ru",
 ): ReceiptDocument {
+  const words = RECEIPT_WORDS[language];
+  const money = (value: number) => formatInvoiceMoney(value, receipt.currency, words.locale);
   const seller = receipt.seller_snapshot as ReceiptSellerSnapshot | null;
   const dead = receipt.status === "void";
   const rawLines = lineItems?.lines ?? [];
   const lines: ReceiptDocumentLine[] = rawLines.map((line) => ({
     name: line.name,
-    qty: formatQty(line.qty, line.unit),
-    unitPrice: formatInvoiceMoney(line.unitPrice, receipt.currency),
-    sum: formatInvoiceMoney(line.sum, receipt.currency),
+    qty: formatQty(line.qty, line.unit, words.locale),
+    unitPrice: money(line.unitPrice),
+    sum: money(line.sum),
   }));
   const discountAmount = lineItems?.discountAmount ?? 0;
 
   return {
+    words,
     number: receipt.number,
-    voidLabel: dead ? "Аннулирован" : null,
+    voidLabel: dead ? words.voided : null,
     seller: {
-      name: clean(seller?.name) || "Продавец не указан",
-      lines: sellerLines(seller),
+      name: clean(seller?.name) || words.sellerMissing,
+      lines: sellerLines(seller, words),
     },
     issuedOn: formatReceiptDate(receipt.issued_on),
     lines,
     linesTotal:
       rawLines.length > 0
-        ? formatInvoiceMoney(
-            round2(rawLines.reduce((sum, line) => sum + line.sum, 0)),
-            receipt.currency,
-          )
+        ? money(round2(rawLines.reduce((sum, line) => sum + line.sum, 0)))
         : null,
     discount:
       discountAmount > 0
-        ? {
-            label: "Скидка",
-            value: `−${formatInvoiceMoney(discountAmount, receipt.currency)}`,
-          }
+        ? { label: words.discount, value: `−${money(discountAmount)}` }
         : null,
-    amount: formatInvoiceMoney(receipt.amount, receipt.currency),
+    amount: money(receipt.amount),
     vat: receipt.vat_amount
       ? {
           // «VAT 19% В СУММЕ» — И ЭТО НЕ ОГОВОРКА БУХГАЛТЕРА, А ЕДИНСТВЕННЫЙ
@@ -230,8 +232,8 @@ export function buildReceiptDocument(
           // который забыли взять: по такой строке сумму не восстановить.
           // Владелец просил короче и без «в т.ч.» — здесь два слова вместо
           // четырёх, но убрать их нельзя: без них документ врёт.
-          label: `VAT${receipt.vat_rate ? ` ${receipt.vat_rate}%` : ""} в сумме`,
-          value: formatInvoiceMoney(receipt.vat_amount, receipt.currency),
+          label: words.vatIncluded(receipt.vat_rate ? `${receipt.vat_rate}%` : ""),
+          value: money(receipt.vat_amount),
         }
       : null,
   };

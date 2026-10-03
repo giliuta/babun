@@ -48,6 +48,11 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
     assert.match(src("appointments/pending-files.ts"), /error instanceof RetryableAppointmentPhotoUploadError/);
   });
 
+  test("«Оплаты тарифа»: у выданного навсегда без оплат нет двери в портал", () => {
+    const screen = src("cabinet/TariffPaymentsScreen.tsx");
+    assert.match(screen, /\{forever && months\.length === 0 \? null : \(/);
+  });
+
   test("SMS из карточки: «ближайшая запись» — по часам бизнеса", () => {
     const card = app("(dashboard)/clients/[id].tsx");
     assert.match(card, /today: now\.ymd,\s*nowHm: now\.hm,/);

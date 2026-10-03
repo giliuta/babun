@@ -23,6 +23,7 @@ import { buildReceiptShareText } from "./receipt-text";
 import { shareHtmlAsPdf } from "./share-pdf";
 import { notify } from "@/lib/notify";
 import { financesFrom } from "@/features/appointments/return-to";
+import type { InvoiceLanguage } from "@/features/invoices/dictionary";
 
 // ЧЕК ОТКРЫВАЕТСЯ ЛИСТОМ, А НЕ ЭКРАНОМ (владелец 2026-08-12: «если я нажимаю
 // на чек — там полностью вся информация, запись, клиент… напрямую на клиента
@@ -119,7 +120,10 @@ export function ReceiptSheet({
   }
   // ЭКРАН И PDF — ОДНА МОДЕЛЬ: обе печатают РОВНО этот объект, а не считают
   // похожий рядом (та же причина, что у `InvoiceDocument`).
-  const doc = buildReceiptDocument(r, lineItems);
+  // ЯЗЫК БУМАГИ — ЯЗЫК ИНВОЙСА, на который выписан чек: английский счёт и
+  // русский чек к нему — два голоса одной фирмы (аудит 03.10).
+  const language: InvoiceLanguage = invoiceQuery.data?.language === "en" ? "en" : "ru";
+  const doc = buildReceiptDocument(r, lineItems, language);
 
   const leave = (href: string) => {
     onClose();
@@ -133,9 +137,9 @@ export function ReceiptSheet({
     onClose();
     setTimeout(() => {
       void shareHtmlAsPdf({
-        html: buildReceiptPdfHtml(r, lineItems),
-        fileName: `Чек ${r.number}`,
-        dialogTitle: `Чек ${r.number}`,
+        html: buildReceiptPdfHtml(r, lineItems, language),
+        fileName: `${doc.words.receipt} ${r.number}`,
+        dialogTitle: `${doc.words.receipt} ${r.number}`,
       }).catch((error: unknown) =>
         notify("Не удалось поделиться PDF", (error as Error).message),
       );

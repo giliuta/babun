@@ -305,15 +305,17 @@ export function blockCaption(input: {
   if (input.visitCancelled) {
     return { text: "Визит отменён", tone: "neutral" };
   }
+  // Коротко: строка делит ширину со значками «часть» и «инвойс», и полная
+  // фраза обрезалась в «сохраните зап…» (проверка на Pro Max 03.10).
   if (input.billUnsaved) {
-    return { text: "Итог изменился — сохраните запись", tone: "warning" };
+    return { text: "Итог изменён — сохраните", tone: "warning" };
   }
   // ДЕНЬГИ ЛОЖАТСЯ НА КЛИЕНТА ИЗ БАЗЫ. Выбрали другого и не сохранили —
   // тап записал бы оплату прежнему, а затем «Сохранить» упёрлось бы в
   // «Сначала верните оплату», и вернуть прежнего тоже нельзя: клиента с
   // оплатой не меняют. Выход был один — снять оплату. Просим сохранить ДО.
   if (input.clientUnsaved) {
-    return { text: "Клиент изменился — сохраните запись", tone: "warning" };
+    return { text: "Клиент изменён — сохраните", tone: "warning" };
   }
   if (input.hasAppointment && input.outstanding <= 0 && input.rowsCount > 0) {
     return {

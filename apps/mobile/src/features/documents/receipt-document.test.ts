@@ -9,6 +9,7 @@ import {
   receiptLinesFromAppointment,
   receiptLinesFromInvoice,
 } from "./receipt-document";
+import { buildReceiptShareText } from "./receipt-text";
 
 /** Тот же приём, что у `invoice-generator.test.ts`: партиал + `as unknown as
  *  Appointment` — модель записи большая, а этим тестам нужны только несколько
@@ -71,6 +72,31 @@ const receipt: Receipt = {
 };
 
 describe("receipt document", () => {
+  // Язык чека — язык его инвойса (аудит 03.10): английский счёт и русский
+  // чек к нему больше не встречаются.
+  it("speaks the invoice language: English words and money format", () => {
+    const en = buildReceiptDocument(
+      { ...receipt, status: "void", seller_snapshot: { name: "", reg_number: "HE123" } },
+      { lines: [{ name: "Cleaning", qty: 2, unitPrice: 59.5, sum: 119, unit: null }] },
+      "en",
+    );
+    assert.equal(en.words.receipt, "Receipt");
+    assert.equal(en.words.received, "Received");
+    assert.equal(en.voidLabel, "Voided");
+    assert.equal(en.seller.name, "Seller not set");
+    assert.deepEqual(en.seller.lines, ["Reg. No HE123"]);
+    assert.equal(en.vat?.label, "incl. VAT 19%");
+    assert.equal(en.amount, formatInvoiceMoney(119, "EUR", "en-GB"));
+    assert.equal(en.lines[0]?.unitPrice, formatInvoiceMoney(59.5, "EUR", "en-GB"));
+    // Текст для мессенджера — тем же языком.
+    const text = buildReceiptShareText(en);
+    assert.match(text, /^Receipt RC-2026-007$/m);
+    assert.match(text, /^Work total: /m);
+    assert.match(text, /^Received: /m);
+    // По умолчанию — прежний русский чек.
+    assert.equal(buildReceiptDocument(receipt).words.receipt, "Чек");
+  });
+
   it("prints the tax row only when the receipt actually carries VAT", () => {
     const withVat = buildReceiptDocument(receipt);
     // «VAT 19%», без «в т.ч.» — владелец 2026-09-20 дал ровно эту строку и

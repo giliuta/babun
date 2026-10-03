@@ -67,7 +67,7 @@ export function ReceiptPaper({ doc }: { doc: ReceiptDocument }) {
           textTransform: "uppercase",
         }}
       >
-        Чек
+        {doc.words.receipt}
       </Text>
       <Text
         style={{
@@ -92,7 +92,7 @@ export function ReceiptPaper({ doc }: { doc: ReceiptDocument }) {
           borderBottomColor: PAPER.line,
         }}
       >
-        <Text style={{ fontSize: 12, color: PAPER.muted }}>Дата</Text>
+        <Text style={{ fontSize: 12, color: PAPER.muted }}>{doc.words.date}</Text>
         <Text
           style={{
             fontSize: 12,
@@ -117,10 +117,10 @@ export function ReceiptPaper({ doc }: { doc: ReceiptDocument }) {
               borderBottomColor: PAPER.ruleStrong,
             }}
           >
-            <Text style={[headCell, { flex: 1 }]}>Услуга</Text>
-            <Text style={[headCell, { width: QTY_W, textAlign: "right" }]}>Кол-во</Text>
-            <Text style={[headCell, { width: PRICE_W, textAlign: "right" }]}>Цена</Text>
-            <Text style={[headCell, { width: SUM_W, textAlign: "right" }]}>Сумма</Text>
+            <Text style={[headCell, { flex: 1 }]}>{doc.words.service}</Text>
+            <Text style={[headCell, { width: QTY_W, textAlign: "right" }]}>{doc.words.qty}</Text>
+            <Text style={[headCell, { width: PRICE_W, textAlign: "right" }]}>{doc.words.price}</Text>
+            <Text style={[headCell, { width: SUM_W, textAlign: "right" }]}>{doc.words.sum}</Text>
           </View>
           {doc.lines.map((line, index) => (
             <View
@@ -166,7 +166,7 @@ export function ReceiptPaper({ doc }: { doc: ReceiptDocument }) {
           backgroundColor: PAPER.fill,
         }}
       >
-        {doc.linesTotal ? <TotalRow label="Итого работ" value={doc.linesTotal} /> : null}
+        {doc.linesTotal ? <TotalRow label={doc.words.linesTotal} value={doc.linesTotal} /> : null}
         {doc.discount ? <TotalRow label={doc.discount.label} value={doc.discount.value} /> : null}
         {doc.vat ? <TotalRow label={doc.vat.label} value={doc.vat.value} /> : null}
         {/* «Получено» подчёркнуто линией сверху ТОЛЬКО когда над ним уже есть
@@ -186,7 +186,7 @@ export function ReceiptPaper({ doc }: { doc: ReceiptDocument }) {
             borderTopColor: PAPER.ruleDashed,
           }}
         >
-          <Text style={{ fontSize: 11, color: PAPER.muted }}>Получено</Text>
+          <Text style={{ fontSize: 11, color: PAPER.muted }}>{doc.words.received}</Text>
           <Text
             style={{
               fontSize: 22,

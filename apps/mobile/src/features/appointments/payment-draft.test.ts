@@ -161,7 +161,7 @@ describe("деньги блока считаются по итогу ФОРМЫ"
       billUnsaved: true,
     });
     assert.deepEqual(caption, {
-      text: "Итог изменился — сохраните запись",
+      text: "Итог изменён — сохраните",
       tone: "warning",
     });
   });
@@ -180,7 +180,7 @@ describe("деньги блока считаются по итогу ФОРМЫ"
       clientUnsaved: true,
     });
     assert.deepEqual(caption, {
-      text: "Клиент изменился — сохраните запись",
+      text: "Клиент изменён — сохраните",
       tone: "warning",
     });
   });

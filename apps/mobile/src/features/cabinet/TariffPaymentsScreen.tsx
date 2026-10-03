@@ -10,7 +10,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useDataRole } from "@/features/settings/tenant";
-import { openTariffPortal } from "@/features/tariffs/use-tariff";
+import { openTariffPortal, useTariff } from "@/features/tariffs/use-tariff";
 import { loadErrorWords } from "@/lib/connection-words";
 import { notify } from "@/lib/notify";
 import { usePullRefresh } from "@/lib/pull-refresh";
@@ -50,6 +50,11 @@ export function TariffPaymentsScreen() {
   const pull = usePullRefresh(payments.refetch);
   const opening = useRef(false);
   const months = useMemo(() => groupByMonth(payments.data ?? []), [payments.data]);
+  // ВЫДАН НАВСЕГДА И НИ ОДНОЙ ОПЛАТЫ — ПОДПИСКИ В STRIPE НЕТ (проверка 03.10):
+  // строка вела в портал, которого у аккаунта не существует, и отвечала
+  // «Подписка не открылась». Страница «Тариф» по той же причине прячет
+  // кнопки. Была история — подписка была, дверь остаётся.
+  const forever = useTariff().state.forever;
   const now = Date.now();
 
   const manage = async () => {
@@ -120,15 +125,17 @@ export function TariffPaymentsScreen() {
           <RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColor={t.accent} />
         }
       >
-        <SectionCard>
-          <SettingsRow
-            tile={SETTINGS_TILE.blue}
-            icon={CreditCard}
-            title="Управлять подпиской"
-            sub="Карта, отмена"
-            onPress={() => void manage()}
-          />
-        </SectionCard>
+        {forever && months.length === 0 ? null : (
+          <SectionCard>
+            <SettingsRow
+              tile={SETTINGS_TILE.blue}
+              icon={CreditCard}
+              title="Управлять подпиской"
+              sub="Карта, отмена"
+              onPress={() => void manage()}
+            />
+          </SectionCard>
+        )}
         {months.length === 0 ? (
           <EmptyState fill title="Оплат пока не было" />
         ) : (
