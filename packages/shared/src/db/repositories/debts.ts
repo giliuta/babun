@@ -122,6 +122,10 @@ export async function listDebtPaidTotals(
 }
 
 export interface NewDebt {
+  /** id, придуманный формой один раз на черновик. Повтор того же черновика
+   *  (ответ потерялся, человек нажал ещё раз) упирается в первичный ключ и
+   *  возвращает уже записанный долг, а не заводит второй (аудит 2026-10-03). */
+  id?: string;
   direction: DebtDirection;
   counterparty: string;
   amount: number;
@@ -171,6 +175,7 @@ export async function insertDebt(
   const { data, error } = await supabase
     .from("debts")
     .insert({
+      ...(draft.id ? { id: draft.id } : {}),
       tenant_id: tenantId,
       direction: draft.direction,
       counterparty: draft.counterparty.trim(),
@@ -185,6 +190,16 @@ export async function insertDebt(
     })
     .select("*")
     .single();
+  if (error && draft.id && (error as { code?: string }).code === "23505") {
+    // Этот черновик уже записан первой попыткой — отдаём его, а не ошибку.
+    const again = await supabase
+      .from("debts")
+      .select("*")
+      .eq("id", draft.id)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (!again.error && again.data) return rowToDebt(again.data as Row);
+  }
   if (error || !data) {
     throw new Error(error?.message ?? "Не удалось сохранить долг");
   }

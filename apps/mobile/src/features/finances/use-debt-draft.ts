@@ -10,7 +10,7 @@ import { confirmAction, confirmThen } from "@/lib/confirm";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
-import { useIsOnline } from "@babun/shared/sync";
+import { randomUuid, useIsOnline } from "@babun/shared/sync";
 import { useFinanceCategories } from "./queries";
 import { categoryInTeam, pickableCategories } from "./category-asks";
 import { useTeams } from "@/features/reference/queries";
@@ -103,6 +103,8 @@ export function useDebtDraft({
   // Одна команда — вопроса нет, она и есть команда долга.
   const debtTeamId = pickedTeamId ?? (teams.length === 1 ? teams[0].id : null);
   const insert = useInsertDebt();
+  // Ключ повтора нового долга — один на открытие формы (`insertDebt`).
+  const newDebtId = useRef(randomUuid());
   const update = useUpdateDebt();
   const remove = useDeleteDebt();
 
@@ -114,6 +116,7 @@ export function useDebtDraft({
       keepDraft.current = false;
       return;
     }
+    newDebtId.current = randomUuid();
     setDirection(debt?.direction ?? initialDirection);
     setCounterparty(debt?.counterparty ?? "");
     setClientId(debt?.client_id ?? null);
@@ -226,7 +229,7 @@ export function useDebtDraft({
       if (isEdit && debt) {
         await update.mutateAsync({ id: debt.id, patch: payload });
       } else {
-        await insert.mutateAsync(payload);
+        await insert.mutateAsync({ ...payload, id: newDebtId.current });
       }
       haptics.success();
       toast(isEdit ? "Долг сохранён" : "Долг записан");

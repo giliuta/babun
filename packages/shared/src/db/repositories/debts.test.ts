@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { listDebts } from "./debts";
+import { insertDebt, listDebts } from "./debts";
 
 // ДОЛГИ ЧИТАЮТСЯ ПОСТРАНИЧНО (15.09). «Финансы» берут долги всей компании за
 // период и отбирают команду на устройстве, поэтому срез по `limit` до отбора
@@ -119,5 +119,53 @@ describe("listDebts", () => {
     await expect(
       listDebts(mock.client as never, "tenant-1", "2026-09-01", "2026-09-30"),
     ).rejects.toThrow("listDebts: нет связи");
+  });
+});
+
+// ПОВТОР ТОГО ЖЕ ЧЕРНОВИКА — НЕ ВТОРОЙ ДОЛГ (аудит 2026-10-03). Ответ первой
+// попытки потерялся, человек нажал «Сохранить» ещё раз: тот же id упирается в
+// первичный ключ, и insertDebt отдаёт уже записанный долг.
+describe("insertDebt — ключ повтора", () => {
+  function insertClient(existing: ReturnType<typeof debtRow> | null) {
+    const inserts: unknown[] = [];
+    const client = {
+      from() {
+        const state: { mode: "insert" | "select"; payload?: unknown } = { mode: "select" };
+        const builder: Record<string, unknown> = {};
+        builder.insert = (payload: unknown) => {
+          state.mode = "insert";
+          state.payload = payload;
+          inserts.push(payload);
+          return builder;
+        };
+        for (const method of ["select", "eq"]) builder[method] = () => builder;
+        builder.single = async () =>
+          existing
+            ? { data: null, error: { code: "23505", message: "duplicate key" } }
+            : { data: { ...debtRow(1), ...(state.payload as object) }, error: null };
+        builder.maybeSingle = async () => ({ data: existing, error: null });
+        return builder;
+      },
+    };
+    return { client, inserts };
+  }
+  const draft = {
+    id: "debt-00001",
+    direction: "incoming" as const,
+    counterparty: "Клиент 1",
+    amount: 10,
+    occurred_on: "2026-09-01",
+  };
+
+  it("id формы уходит в базу", async () => {
+    const mock = insertClient(null);
+    await insertDebt(mock.client as never, "tenant-1", draft);
+    expect((mock.inserts[0] as { id?: string }).id).toBe("debt-00001");
+  });
+
+  it("повтор с тем же id отдаёт уже записанный долг, а не ошибку", async () => {
+    const mock = insertClient(debtRow(1));
+    const debt = await insertDebt(mock.client as never, "tenant-1", draft);
+    expect(debt.id).toBe("debt-00001");
   });
 });
