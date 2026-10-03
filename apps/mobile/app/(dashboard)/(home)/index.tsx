@@ -120,6 +120,7 @@ import { useFeatureOn } from "@/features/settings/company-features";
 import {
   useCalendarActionsReader,
   useEventRightsReader,
+  useRecordBlocksReader,
 } from "@/features/appointments/useRecordRights";
 import { isOverdue } from "@/features/calendar/overdue";
 import {
@@ -134,7 +135,7 @@ import {
   COLOR_SITUATIONS,
   appointmentSituation,
   autoBaseColor,
-  recordFilled,
+  recordFilledFor,
   resolveRecordColor,
   serviceBaseColor,
   worstSituation,
@@ -355,6 +356,14 @@ export default function CalendarTab() {
   // диспетчеру читатель отдаёт всё — их ветки ниже не меняются.
   const actionsIn = useCalendarActionsReader();
   const eventRightsIn = useEventRightsReader();
+  // ОПЛАТУ ЗАПИСИ СОТРУДНИК МОЖЕТ НЕ ВИДЕТЬ («Оплата: Скрыта»): сервер шлёт
+  // нули, и сетка красила каждый прошедший визит «нет оплаты» (повторный
+  // аудит 03.10). Владельцу читатель отдаёт всё — у него всегда «видит».
+  const recordRightsIn = useRecordBlocksReader();
+  const paymentHiddenFor = useCallback(
+    (a: Appointment) => recordRightsIn(a.team_id ?? null).payment === "hidden",
+    [recordRightsIn],
+  );
   const canMutateAppointment = useCallback(
     (appointment: Appointment) =>
       canMutateCalendarAppointment(role, session?.user.id, appointment),
@@ -1397,7 +1406,7 @@ export default function CalendarTab() {
       if (a.kind !== "work") return base;
       return resolveRecordColor({
         override: a.color_override,
-        filled: recordFilled(a, todayYmd),
+        filled: recordFilledFor(a, todayYmd, paymentHiddenFor(a)),
         base,
         palette: situationPalette,
         active: activeSituations,
@@ -1414,6 +1423,7 @@ export default function CalendarTab() {
       activeSituations,
       fallbackColor,
       todayYmd,
+      paymentHiddenFor,
     ],
   );
   // ЧУЖАЯ МЕТКА НА БЛОКЕ ЗАПИСИ (владелец 2026-09-04: «можно подсвечивать
@@ -1438,12 +1448,13 @@ export default function CalendarTab() {
         palette: situationPalette,
         active: activeSituations,
         todayYmd,
+        paymentHidden: paymentHiddenFor(a),
       });
       return id
         ? COLOR_SITUATIONS.find((s) => s.id === id)?.label ?? null
         : null;
     },
-    [situationPalette, activeSituations, todayYmd],
+    [situationPalette, activeSituations, todayYmd, paymentHiddenFor],
   );
 
   // ЛЕНТА НАЗЫВАЕТ И НЕЗАКРЫТУЮ РАБОТУ. В сетке просрочка говорит толщиной

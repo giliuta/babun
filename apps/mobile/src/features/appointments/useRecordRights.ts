@@ -63,3 +63,15 @@ export function useEventRightsReader(): (teamId: string | null) => EventBlocks {
     [role, map, registry],
   );
 }
+
+/** Читатель блоков записи по любому календарю — для сетки, где на экране
+ *  записи нескольких команд сразу. */
+export function useRecordBlocksReader(): (teamId: string | null) => RecordBlocks {
+  const role = useCurrentRole().data;
+  const map = useMyAccess().data;
+  const registry = useAccessBlocks().data;
+  return useCallback(
+    (teamId: string | null) => recordBlocks({ role, map, registry, teamId }),
+    [role, map, registry],
+  );
+}

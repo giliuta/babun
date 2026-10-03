@@ -83,6 +83,7 @@ describe("master appointment RPC mapper", () => {
     assert.equal(appointment.custom_total, true);
     assert.equal(appointment.discount_amount, 80);
     assert.equal(appointment.paid_amount, 700);
+    assert.equal(appointment.prepaid_amount, 200);
     assert.equal(appointment.payment_status, "paid");
     assert.deepEqual(appointment.services, [
       {
@@ -95,7 +96,6 @@ describe("master appointment RPC mapper", () => {
       },
     ]);
     // Никогда не из окна.
-    assert.equal(appointment.prepaid_amount, 0);
     assert.equal(appointment.payment_method, undefined);
     assert.deepEqual(appointment.payments, []);
     assert.equal(appointment.payment, null);

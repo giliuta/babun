@@ -222,7 +222,9 @@ export function masterAppointmentJsonToAppointment(value: Json): Appointment {
     discount_amount: moneyField(row, "discount_amount"),
     expenses: [],
     service_price_overrides: {},
-    prepaid_amount: 0,
+    // Предоплата — по уровню «Суммы» и «Оплаты», как доплата (повторный аудит
+    // 03.10): нулём она делала долгом то, что клиент уже внёс.
+    prepaid_amount: moneyField(row, "prepaid_amount"),
     payments: [],
     payment: null,
     payment_status: paymentStatusField(row),

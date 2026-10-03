@@ -1,4 +1,5 @@
 import { useBookingBlocks } from "@/features/appointments/booking-prefs";
+import { useRecordBlocks } from "@/features/appointments/useRecordRights";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
@@ -115,6 +116,10 @@ export function DayFinanceSheet({
   const t = useThemeColors();
   // Блок «Оплата» — из «Дизайна» этой команды (24.09).
   const paymentOn = useBookingBlocks(teamId).includes("payment");
+  // Оплату записей сотрудник может не видеть («Оплата: Скрыта»): сервер шлёт
+  // нули, и «Долг» складывал бы суммы всех прошедших визитов, а строка плана —
+  // «долг» у каждого (повторный аудит 03.10). Владельцу — всегда «видит».
+  const paymentSeen = useRecordBlocks(teamId).payment !== "hidden";
   const router = useRouter();
   const { height: screenH, width: screenW } = useWindowDimensions();
   const services = useFinanceServices();
@@ -394,6 +399,7 @@ export function DayFinanceSheet({
 
   // Статус записи в плане дня: оплачено · долг · ожидается.
   const recordStatus = (a: Appointment): { word: string; amount: number; color: string } => {
+    if (!paymentSeen) return { word: "сумма", amount: Number(a.total_amount) || 0, color: t.sub };
     const debt = getDebtAmount(a);
     if (debt <= 0) return { word: "оплачено", amount: getPaidAmount(a), color: t.success };
     if (debtRecords.some((d) => d.id === a.id)) return { word: "долг", amount: debt, color: t.warning };
@@ -487,7 +493,7 @@ export function DayFinanceSheet({
               {/* Долг дня — неоплаченные записи. Без оплаты в записи
                   (функция компании выключена, STORY-088) все записи
                   выглядели бы долгом — плитки нет. */}
-              {paymentOn ? (
+              {paymentOn && paymentSeen ? (
                 <SummaryToggle
                   label="Долг"
                   color={t.warning}
