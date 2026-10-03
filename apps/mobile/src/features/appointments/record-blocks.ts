@@ -1,4 +1,5 @@
 import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/features/access/access-map";
+import { asRecordWindow, type RecordWindow } from "./record-window";
 
 // ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ — БЛОКИ ПО ПРАВАМ (владелец 21.09: «визуал
 // должен быть идентичный… берёшь чётко те блоки, даёшь просто разрешение на
@@ -76,6 +77,8 @@ export interface CalendarActions {
   dayLabels: RecordLevel;
   /** График команды: рабочие часы и перерывы. */
   schedule: RecordLevel;
+  /** «Ограничения» (03.10): за какой срок назад видна прошедшая работа. */
+  window: RecordWindow;
 }
 
 type Registry = readonly Pick<AccessBlock, "key" | "live" | "levels">[];
@@ -128,6 +131,7 @@ const ALL_ACTIONS: CalendarActions = {
   events: "write",
   dayLabels: "write",
   schedule: "write",
+  window: "own",
 };
 
 const NO_ACTIONS: CalendarActions = {
@@ -140,6 +144,7 @@ const NO_ACTIONS: CalendarActions = {
   events: "hidden",
   dayLabels: "hidden",
   schedule: "hidden",
+  window: "own",
 };
 
 const asRecordLevel = (level: AccessLevel | undefined): RecordLevel =>
@@ -264,6 +269,9 @@ export function calendarActions(input: Input): CalendarActions {
     events: asRecordLevel(read("calendar.events")),
     dayLabels: asRecordLevel(read("calendar.day_labels")),
     schedule: asRecordLevel(read("calendar.schedule")),
+    // Реестр на телефоне ещё не знает права — окна нет: прятать записи по
+    // догадке хуже, чем показать (сервер режет сам).
+    window: read("calendar.window") === undefined ? "own" : asRecordWindow(read("calendar.window")),
   };
 }
 

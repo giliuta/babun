@@ -194,6 +194,7 @@ import { useCreateTeamAccounts } from "@/features/finances/accounts";
 import { financeAccountsHref } from "@/features/finances/accounts-sections";
 import { useCalendarChips } from "@/features/settings/workspaces";
 import { useMirror } from "@/features/access/mirror/mirror-state";
+import { hiddenByWindow } from "@/features/appointments/record-window";
 import {
   useCities,
   useCreateTeam,
@@ -1627,9 +1628,12 @@ export default function CalendarTab() {
       if (a.team_id == null) return false;
       const can = actionsIn(a.team_id);
       if (can.records === "hidden") return false;
+      // «Ограничения» (03.10): прошедшая работа старше окна команды ему не
+      // видна — сервер режет её так же (`member_record_window_start`).
+      if (hiddenByWindow(a, can.window, todayYmd)) return false;
       return a.kind === "work" || can.events !== "hidden";
     },
-    [actionsIn],
+    [actionsIn, todayYmd],
   );
   const byTeam = useCallback(
     (a: Appointment) =>

@@ -198,7 +198,7 @@ describe("повторный аудит календаря 03.10", () => {
 
   test("«его глазами» — только то, что отдал бы ему сервер", () => {
     const src = screen();
-    assert.match(src, /if \(a\.team_id == null\) return false;\s*const can = actionsIn\(a\.team_id\);\s*if \(can\.records === "hidden"\) return false;\s*return a\.kind === "work" \|\| can\.events !== "hidden";/);
+    assert.match(src, /if \(a\.team_id == null\) return false;\s*const can = actionsIn\(a\.team_id\);\s*if \(can\.records === "hidden"\) return false;[\s\S]{0,200}if \(hiddenByWindow\(a, can\.window, todayYmd\)\) return false;\s*return a\.kind === "work" \|\| can\.events !== "hidden";/);
     assert.match(src, /\(eventsOn \|\| a\.kind !== "event"\) &&\s*\(!mirror \|\| mirrorSees\(a\)\),/);
   });
 

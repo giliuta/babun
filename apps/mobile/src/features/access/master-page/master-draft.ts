@@ -125,6 +125,8 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
   // свёртки владелец выставил бы «Меняет» в деньгах скрытого календаря — и у
   // человека не открылось бы ничего.
   "calendar.records": [
+    // «Ограничения» записей (03.10): записей не видит — и окна у них нет.
+    "calendar.window",
     "calendar.create",
     "calendar.move",
     "calendar.cancel",

@@ -64,6 +64,7 @@ export const EVENT_ROW_ORDER: readonly string[] = [
 export const CALENDAR_ROW_ORDER: readonly string[] = [
   "calendar.day_labels",
   "calendar.records",
+  "calendar.window",
   "calendar.create",
   "calendar.events",
   "calendar.move",
@@ -151,6 +152,9 @@ export const FINANCE_SETTINGS_ROW_ORDER: readonly string[] = FINANCE_SETTINGS_BL
 /** Права блока «Записи» на странице «Календарь». */
 const RECORD_KINDS: readonly string[] = [
   "calendar.records",
+  // «Ограничения» — сразу под «Записями клиентов» (03.10), как у клиентов
+  // «Ограничения» под «Базой».
+  "calendar.window",
   "calendar.events",
   "calendar.move",
   "calendar.cancel",

@@ -96,7 +96,9 @@ export function recordLevelsChanged(
     const now = next.calendars[team] ?? {};
     const keys = new Set([...Object.keys(was), ...Object.keys(now)]);
     for (const key of keys) {
-      if (key.startsWith("record.") && was[key] !== now[key]) return true;
+      // «Ограничения» записей (03.10) — тоже маска окна: сузили — строки
+      // старше окна должны уйти, расширили — прийти.
+      if ((key.startsWith("record.") || key === "calendar.window") && was[key] !== now[key]) return true;
     }
   }
   return false;

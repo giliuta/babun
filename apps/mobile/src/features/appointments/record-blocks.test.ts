@@ -74,6 +74,7 @@ describe("страница записи — одна для всех, блоки
       events: "write",
       dayLabels: "write",
       schedule: "write",
+      window: "own",
     });
   });
 
@@ -160,11 +161,22 @@ describe("страница записи — одна для всех, блоки
       events: "read",
       dayLabels: "write",
       schedule: "read",
+      // Реестр теста права «Ограничения» не знает — окна нет.
+      window: "own",
     });
     assert.deepEqual(
       calendarActions(at(map({ "calendar.move": "write", "calendar.cancel": "write", "calendar.events": "write" }))),
-      { create: false, move: true, cancel: true, color: false, status: false, records: "hidden", events: "write", dayLabels: "hidden", schedule: "hidden" },
+      { create: false, move: true, cancel: true, color: false, status: false, records: "hidden", events: "write", dayLabels: "hidden", schedule: "hidden", window: "own" },
     );
+  });
+
+  test("«Ограничения» записей (03.10): ступень команды; нет строки — «Неделя», как сервер", () => {
+    const withWindow = [...REGISTRY, { key: "calendar.window", live: true, levels: ["week", "near", "month", "quarter", "half", "own"] as AccessLevel[] }];
+    const read = (levels: Record<string, AccessLevel>) =>
+      calendarActions({ role: "master", map: map(levels), registry: withWindow, teamId: TEAM }).window;
+    assert.equal(read({ "calendar.window": "month" }), "month");
+    assert.equal(read({ "calendar.window": "own" }), "own");
+    assert.equal(read({}), "week");
   });
 
   test("чужой календарь, запись без календаря, едущая карта — ничего", () => {
