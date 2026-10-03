@@ -13,7 +13,7 @@ import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finan
 import { accountServesTeam } from "@babun/shared/local/finance/integrity";
 import { accountsTotal } from "@/features/finances/account-ui";
 import { getDebtAmount } from "@babun/shared/local/appointments";
-import { invoicedAppointmentIds } from "@babun/shared/local/finance/invoice-ledger";
+import { calculateInvoiceSettlement, invoicedAppointmentIds } from "@babun/shared/local/finance/invoice-ledger";
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
@@ -67,7 +67,7 @@ import {
   rowMatchesQuery,
   type RecordRow,
 } from "@/features/finances/record-rows";
-import { debtRows, manualDebtRows } from "@/features/finances/debt-rows";
+import { debtRows, invoiceDebtRows, manualDebtRows } from "@/features/finances/debt-rows";
 import { DebtSheet } from "@/features/finances/DebtSheet";
 import { useDebtPaidTotals, useDebts } from "@/features/finances/debts-queries";
 import {
@@ -624,6 +624,27 @@ function FinancesContent() {
     [invoices],
   );
 
+  // НЕОПЛАЧЕННЫЕ ИНВОЙСЫ — ДОЛГОМ (владелец 04.10: «выставлен инвойс, оплаты
+  // нет — он переходит в долг»). Работа под инвойсом из долгов записей уже
+  // исключена (`invoicedAppointments`): её деньги — здесь, остатком инвойса.
+  const invoiceDebtSources = useMemo(
+    () =>
+      scopedInvoices.map((inv) => ({
+        ...inv,
+        remaining: calculateInvoiceSettlement(inv, invoicePayments[inv.id] ?? []).remaining,
+      })),
+    [scopedInvoices, invoicePayments],
+  );
+  const invoiceDebts = useMemo(
+    () =>
+      invoiceDebtRows(
+        invoiceDebtSources,
+        { clients, appointments: scopedAppointments },
+        { from: period.from, to: period.to, today: businessToday, teamId: scope },
+      ),
+    [invoiceDebtSources, clients, scopedAppointments, period.from, period.to, businessToday, scope],
+  );
+
   // Пустышки через useMemo, а не `?? []` в выражении: новый литерал на каждый
   // рендер ломает мемоизацию списка долгов, ради которой он и написан.
   const debts = useMemo(() => {
@@ -696,11 +717,12 @@ function FinancesContent() {
       income,
       expense: expenseWithMaterials,
       profit: income - expenseWithMaterials,
-      debt: debt + manualIncomingDebt,
+      debt: debt + manualIncomingDebt + invoiceDebts.reduce((sum, r) => sum + r.amount, 0),
     };
   }, [
     access.recordMoney,
     manualIncomingDebt,
+    invoiceDebts,
     scopedTransactions,
     scopedAppointments,
     invoicedAppointments,
@@ -1014,6 +1036,7 @@ function FinancesContent() {
               { clients, categories },
               { today: businessToday, markDirection: true },
             ),
+            ...invoiceDebts,
           ].map((row) => ({ ...row, key: `debt:${row.key}` }))
         : [];
     // Перевод — не доход и не расход: в срезах его нет, а в общей ленте он
@@ -1057,6 +1080,7 @@ function FinancesContent() {
     businessNowHm,
     scope,
     invoicedAppointments,
+    invoiceDebts,
     debts,
     debtPaid,
     categories,
@@ -1413,6 +1437,11 @@ function FinancesContent() {
   };
 
   const openRecordRow = (row: RecordRow) => {
+    // Неоплаченный инвойс в долгах открывает сам инвойс.
+    if (row.invoiceId) {
+      router.push(`/invoices/${row.invoiceId}` as Href);
+      return;
+    }
     // ДЕНЬГИ ПО ЗАПИСИ ОТКРЫВАЮТ САМУ ЗАПИСЬ (владелец 2026-08-15).
     if (row.appointmentId && openAppointment(row.appointmentId)) return;
     // Ручной долг записи не имеет — открывается он сам.
@@ -1624,6 +1653,7 @@ function FinancesContent() {
             todayYmd={businessToday}
             nowHm={businessNowHm}
             invoicedAppointmentIds={invoicedAppointments}
+            invoiceDebts={invoiceDebts}
             debts={debts}
             paidTotals={debtPaid}
             categories={categories}

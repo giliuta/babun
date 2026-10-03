@@ -9,7 +9,7 @@ import { DEBT_DIRECTION_LABEL } from "@babun/shared/local/finance/debt";
 import { useThemeColors } from "@/theme/colors";
 import { panelCount } from "./PanelHeader";
 import { RecordRowsPanel } from "./RecordRowsPanel";
-import { debtRows, manualDebtRows, mergeDebtRows } from "./debt-rows";
+import { debtRows, manualDebtRows, mergeDebtRows, type DebtRow } from "./debt-rows";
 import type { RecordRow } from "./record-rows";
 import { inTeamScope } from "./team-scope";
 import { financesFrom } from "@/features/appointments/return-to";
@@ -40,6 +40,7 @@ export function DebtorsList({
   todayYmd,
   nowHm,
   invoicedAppointmentIds,
+  invoiceDebts = [],
   debts,
   paidTotals,
   categories,
@@ -65,6 +66,9 @@ export function DebtorsList({
    *  сидит в двух местах сразу. Набор приходит СВЕРХУ, тот же самый, каким
    *  считает плитка: своя копия правила разъехалась бы на первой же правке. */
   invoicedAppointmentIds: ReadonlySet<string>;
+  /** Неоплаченные инвойсы — строками долга (владелец 04.10); считает их тот
+   *  же экран, что и плитку «Долги». */
+  invoiceDebts?: readonly DebtRow[];
   /** Долги, заведённые руками: «Вася должен мне €100» без визита и «я должен
    *  Gree €900» за товар, взятый до оплаты. Стоят в этом же списке той же
    *  строкой — для человека это один вопрос, кто и сколько должен. */
@@ -113,7 +117,7 @@ export function DebtorsList({
       { clients, categories },
       { today: todayYmd, direction },
     );
-    return mergeDebtRows(fromRecords, manual);
+    return mergeDebtRows([...fromRecords, ...(direction === "incoming" ? invoiceDebts : [])], manual);
   }, [
     appointments,
     clients,
@@ -124,6 +128,7 @@ export function DebtorsList({
     nowHm,
     teamId,
     invoicedAppointmentIds,
+    invoiceDebts,
     debts,
     paidTotals,
     categories,
@@ -167,6 +172,11 @@ export function DebtorsList({
   // адресом с «дорогой назад», каким ленту операций водит openAppointment:
   // календарь встаёт на день и команду записи, закрытие возвращает в финансы.
   const openRow = (r: RecordRow) => {
+    // Неоплаченный инвойс — открывается сам инвойс.
+    if (r.invoiceId) {
+      router.push(`/invoices/${r.invoiceId}` as Href);
+      return;
+    }
     // За ручным долгом записи нет — открывать нечего, правят его самого.
     if (r.debtId) {
       onEditDebt(r.debtId);

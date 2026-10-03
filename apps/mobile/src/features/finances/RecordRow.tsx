@@ -116,6 +116,8 @@ export function RecordRowView({
         `${TONE_WORD[tone]} ${formatEUR(Math.abs(row.amount))}`,
         row.appointmentId
           ? "открыть запись"
+          : row.invoiceId
+            ? "открыть инвойс"
           : row.debtId
             ? "открыть долг"
             : row.txId

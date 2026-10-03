@@ -172,7 +172,7 @@ export function RecordRowsPanel({
             // ждал и умел открыть, но нажатие до него не доходило. Другой двери
             // к правке одиночной операции на экране нет.
             onPress={
-              item.appointmentId || item.txId || item.debtId
+              item.appointmentId || item.txId || item.debtId || item.invoiceId
                 ? () => onOpenRecord(item)
                 : undefined
             }

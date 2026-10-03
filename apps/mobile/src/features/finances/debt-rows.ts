@@ -195,3 +195,76 @@ export function mergeDebtRows(
 ): DebtRow[] {
   return [...fromRecords, ...manual].sort((a, b) => (a.date < b.date ? 1 : -1));
 }
+
+// ─── НЕОПЛАЧЕННЫЙ ИНВОЙС ─────────────────────────────────────────────────────
+// Владелец 2026-10-04: «выставлен инвойс, но оплаты ещё нет — он переходит в
+// долг; в долгах появляется: за этим клиентом выставлен инвойс»; «или долг уже
+// зафиксирован за записью». Работа под инвойсом из долгов записей исключена
+// (`invoicedAppointmentIds`) — её деньги здесь, строкой инвойса, ровно один
+// раз: остаток инвойса, подпись «Инвойс INV-… · просрочен». Тап — инвойс,
+// на нём блоком — запись, за которую этот долг.
+
+export interface InvoiceDebtSource {
+  id: string;
+  number: string;
+  kind?: string | null;
+  status: string;
+  issued_on: string;
+  due_on: string | null;
+  client_id: string | null;
+  appointment_id: string | null;
+  brigade_id: string | null;
+  /** Остаток к оплате (`calculateInvoiceSettlement`). */
+  remaining: number;
+}
+
+export function invoiceDebtRows(
+  invoices: readonly InvoiceDebtSource[],
+  refs: {
+    clients: readonly { id: string; full_name: string; phone?: string | null }[];
+    appointments: readonly { id: string; date: string }[];
+  },
+  window: { from: string; to: string; today: string; teamId: string | null },
+): DebtRow[] {
+  const byId = new Map(refs.clients.map((c) => [c.id, c]));
+  return invoices
+    .filter(
+      (inv) =>
+        inv.kind !== "credit_note" &&
+        inv.status !== "void" &&
+        inv.status !== "cancelled" &&
+        inv.remaining > 0 &&
+        inv.issued_on >= window.from &&
+        inv.issued_on <= window.to &&
+        inTeamScope(inv.brigade_id, window.teamId),
+    )
+    .map((inv): DebtRow => {
+      const client = inv.client_id ? byId.get(inv.client_id) : undefined;
+      const overdue = !!inv.due_on && inv.due_on < window.today;
+      return {
+        key: `invoice-debt:${inv.id}`,
+        invoiceId: inv.id,
+        appointmentId: null,
+        title: client?.full_name || "Без имени",
+        services: [],
+        subtitle: [
+          `Инвойс ${inv.number}`,
+          overdue ? "просрочен" : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        amount: inv.remaining,
+        date: inv.issued_on,
+        time: null,
+        caption: debtAge(inv.issued_on, window.today),
+        count: 1,
+        tone: "debt",
+        phone: client?.phone?.trim() || null,
+        firstName: (client?.full_name || "").trim().split(/\s+/)[0] ?? "",
+        clientId: client?.id ?? null,
+        teamId: inv.brigade_id,
+        unclosed: false,
+        direction: "incoming",
+      };
+    });
+}
