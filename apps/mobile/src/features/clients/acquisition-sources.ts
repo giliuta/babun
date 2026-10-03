@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getStorage } from "@babun/shared/storage";
 import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useClientsSourceScope } from "@/features/clients/queries";
@@ -25,11 +26,30 @@ function useSourcesScope() {
   return { scope, tenantId, client };
 }
 
+// КОПИЯ НА ТЕЛЕФОНЕ (проверка системы 03.10): готовые источники раньше жили
+// в коде и были видны без сети; со справочником в базе без сети карточка
+// писала «не указан», а фильтр по источнику прятал всех. Копия на устройство —
+// по компании, обновляется каждым удачным чтением.
+const cacheKey = (tenantId: string) => `babun:clientSources.${tenantId}`;
+
+function readCachedSources(tenantId: string | null): ClientSource[] | undefined {
+  if (!tenantId) return undefined;
+  try {
+    const rows = getStorage().get<ClientSource[]>(cacheKey(tenantId));
+    return Array.isArray(rows) ? rows : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function useClientSources() {
   const { scope, tenantId, client } = useSourcesScope();
   return useQuery({
     queryKey: clientSourcesKey(tenantId),
     enabled: !!tenantId,
+    networkMode: "offlineFirst",
+    initialData: () => readCachedSources(tenantId),
+    initialDataUpdatedAt: 0,
     queryFn: async (): Promise<ClientSource[]> => {
       // Клиент записи справочником компании не распоряжается.
       if (scope?.kind === "record") return [];
@@ -40,7 +60,13 @@ export function useClientSources() {
         .order("position")
         .order("name");
       if (error) throw new Error(`client_sources: ${error.message}`);
-      return (data ?? []) as ClientSource[];
+      const rows = (data ?? []) as ClientSource[];
+      try {
+        getStorage().set(cacheKey(tenantId as string), rows);
+      } catch {
+        // Копия best-effort.
+      }
+      return rows;
     },
   });
 }

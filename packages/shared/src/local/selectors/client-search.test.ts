@@ -188,3 +188,11 @@ describe("порядок найденного — сначала по имени
     assert.deepEqual(rankClientMatches([byLabel, exact], " ").map((c) => c.id), ["a", "b"]);
   });
 });
+
+describe("буквы без разложения", () => {
+  test("украинская «і» и турецкая «ı» находятся латиницей", () => {
+    assert.equal(matchesClient(client("ua", { full_name: "Олексій Коваль" }), "Oleksii"), true);
+    assert.equal(matchesClient(client("tr", { full_name: "Ayşe Işık" }), "isik"), true);
+    assert.equal(matchesClient(client("tr", { full_name: "Ayşe Işık" }), "Işık"), true);
+  });
+});

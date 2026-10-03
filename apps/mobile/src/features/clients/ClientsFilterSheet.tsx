@@ -896,15 +896,17 @@ export function ClientsFilterSheet({
   const zeroHint = (() => {
     if (shownCount > 0) return null;
     const w = facetCounts.withoutOne;
+    // Имя в кавычках — как строка в листе, в именительном: «Без «метку»»
+    // читалось сбоем (проверка 03.10).
     const names: Record<string, string> = {
-      search: "поиск",
-      period: "период",
-      segment: "статус",
-      city: "метку",
-      tag: "теги",
-      team: "команду",
-      source: "источник",
-      property: "тип объекта",
+      search: "Поиск",
+      period: "Период",
+      segment: "Статус",
+      city: "Метка",
+      tag: "Теги",
+      team: "Команда",
+      source: "Источник",
+      property: "Тип объекта",
     };
     const active: Record<string, boolean> = {
       search: !!trimmedSearch,

@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Client } from "@babun/shared/local/clients";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClientAppointments } from "@/features/clients/appointments";
@@ -62,6 +62,16 @@ function peopleIdsOf(
     .filter((id): id is string => !!id);
 }
 
+function freshestClient(qc: QueryClient, id: string): Client | null {
+  let best: { at: number; client: Client } | null = null;
+  for (const query of qc.getQueryCache().findAll({ queryKey: ["client", id] })) {
+    const client = query.state.data as Client | null | undefined;
+    if (!client || client.id !== id) continue;
+    if (!best || query.state.dataUpdatedAt > best.at) best = { at: query.state.dataUpdatedAt, client };
+  }
+  return best?.client ?? null;
+}
+
 /** Обработчик пункта «Объединить с дублем» или `undefined` — пункта нет. */
 export function useMergeDuplicate({
   client,
@@ -103,8 +113,11 @@ export function useMergeDuplicate({
       //    (номера, объекты, заметки, связи) целиком, и снимок с момента
       //    открытия страницы затёр бы номер, добавленный секунду назад
       //    (аудит 22.09).
-      const fresh =
-        qc.getQueryData<Client>(["client", primary.id]) ?? primary;
+      //    Ключ карточки длиннее id — ["client", id, компания, вид], — и
+      //    точный `getQueryData(["client", id])` не находил ничего: слияние
+      //    всегда брало снимок (проверка 03.10). Берём самый свежий из
+      //    совпавших по началу ключа.
+      const fresh = freshestClient(qc, primary.id) ?? primary;
       const patch = mergeClientPatch(fresh, dupRow);
       // Объект дубля, совпавший с объектом основной, уходит в него — и
       // визиты на нём переезжают на объект основной (аудит 03.10).

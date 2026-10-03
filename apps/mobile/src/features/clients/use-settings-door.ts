@@ -11,9 +11,13 @@ import { useClientSettingLevelsOf } from "./use-client-settings";
 // читает лист (`useScopeCompany` в `team-design.ts`): источник экрана, вне
 // вкладки — открытая в календаре.
 
-/** Шестерёнка листа «Связаться» / «Добавить» (`ways`) или «Маршрут»
- *  (`maps`): адрес подстраницы с командой и компанией, `null` — двери нет. */
-export function useClientSettingsDoor(row: "ways" | "maps", teamId: string | null): Href | null {
+/** Шестерёнка листа «Связаться» / «Добавить» (`ways`), «Маршрут» (`maps`),
+ *  «Тег» (`tags`) или «Источник» (`sources`): адрес подстраницы с командой и
+ *  компанией, `null` — двери нет (чужая команда, скрытая строка). */
+export function useClientSettingsDoor(
+  row: "ways" | "maps" | "tags" | "sources",
+  teamId: string | null,
+): Href | null {
   const refs = useReferenceHref();
   const scope = useClientsScopeOrNull();
   const activeTenantId = useTenantId();
@@ -26,7 +30,7 @@ export function useClientSettingsDoor(row: "ways" | "maps", teamId: string | nul
   // команда клиента — тоже своя.
   const { data: teams } = useTeams({ includeInactive: true });
   const door = clientSettingsDoor({
-    pathname: row === "ways" ? refs.channels : refs.maps,
+    pathname: { ways: refs.channels, maps: refs.maps, tags: refs.tags, sources: refs.sources }[row],
     teamId,
     tenantId: scope?.tenantId ?? activeTenantId,
     level,

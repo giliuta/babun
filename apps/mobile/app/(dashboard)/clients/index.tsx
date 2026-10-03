@@ -181,10 +181,10 @@ function ClientsListScreen() {
     [refetch, guests],
   );
   const pull = usePullRefresh(refreshAll);
-  const { data: ownTags = [] } = useClientTags();
+  const { data: ownTags = [], isSuccess: tagsReady } = useClientTags();
   const { data: ownAppointments = [] } = useAppointments();
   const { data: ownTeams = [] } = useTeams();
-  const { data: cities = [] } = useCities();
+  const { data: cities = [], isSuccess: citiesReady } = useCities();
   // Сортировка — персистентная настройка списка (первая строка листа
   // «Фильтры»), не фильтр: «Сбросить» её не трогает.
   const { data: sort = DEFAULT_SORT } = useClientsSort();
@@ -393,8 +393,15 @@ function ClientsListScreen() {
       // Забытый вчерашний выбор прятал бы клиентов без видимого токена.
       void teamSet;
       const selectedTeams: string[] = [];
-      const activeTags = f.activeTags.filter((x) => tagSet.has(x));
-      const selectedCities = f.selectedCities.filter((x) => citySet.has(x));
+      // Теги и метки — тоже только пришедшие: набор дня поднимается из памяти
+      // на холодном старте раньше справочников, и пустой список стирал
+      // вчерашние «VIP · Лимассол» до того, как они успевали загрузиться
+      // (проверка 03.10).
+      const activeTags = tagsReady ? f.activeTags.filter((x) => tagSet.has(x)) : f.activeTags;
+      const selectedCities =
+        citiesReady && data !== undefined
+          ? f.selectedCities.filter((x) => citySet.has(x))
+          : f.selectedCities;
       if (
         selectedTeams.length === f.selectedTeams.length &&
         activeTags.length === f.activeTags.length &&
@@ -404,7 +411,7 @@ function ClientsListScreen() {
         return f;
       return { ...f, selectedTeams, activeTags, selectedCities, sources };
     });
-  }, [teamOptions, cityOptions, tagOptions, sourceOptions, sourcesReady]);
+  }, [teamOptions, cityOptions, tagOptions, sourceOptions, sourcesReady, tagsReady, citiesReady, data]);
 
   const filtering = result.activeCount > 0 || query.trim().length > 0;
 

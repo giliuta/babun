@@ -13,7 +13,7 @@
 
 import { useState } from "react";
 import { View } from "react-native";
-import { useRouter, type Href } from "expo-router";
+import { useRouter } from "expo-router";
 import type { Client } from "@babun/shared/local/clients";
 import { Cake, Circle, Users } from "lucide-react-native";
 import { GUTTER } from "@/components/ui/tokens";
@@ -37,6 +37,7 @@ import { CUSTOM_SOURCE_ICON, SOURCE_ICONS } from "@/features/clients/source-icon
 import { useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
 
 /** Значок источника: у засеянного готового — его, у своего — общий. */
 function sourceIconOf(row: ClientSource) {
@@ -69,6 +70,7 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
   const sourceRow = resolveSource(client.acquisition_source, sources, sourceTeamId);
   const source = sourceRow?.name ?? null;
   const sourceOptions = sourcePickerOptions(sources, sourceTeamId);
+  const sourcesDoor = useClientSettingsDoor("sources", sourceTeamId);
   // «Кто привёл»: список — сами клиенты компании, тот же кеш, что у списка.
   const { data: allClients = [] } = useClients();
   const referrerName =
@@ -162,15 +164,11 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
         }))}
         selectedId={normalizeSource(client.acquisition_source, sources, sourceTeamId)}
         emptyText="Источников нет"
-        // ШЕСТЕРЁНКА — В СВОИ ИСТОЧНИКИ ТОЙ КОМАНДЫ, чьи предложены: там их
-        // добавляют («могут самостоятельно добавить источник»).
-        onSettings={() =>
-          router.push(
-            sourceTeamId
-              ? ({ pathname: "/clients/sources", params: { team: sourceTeamId } } as Href)
-              : ("/clients/sources" as Href),
-          )
-        }
+        // ШЕСТЕРЁНКА — В ИСТОЧНИКИ ТОЙ КОМАНДЫ, чьи предложены: там их
+        // добавляют («могут самостоятельно добавить источник»). Дверь общая с
+        // «Связью»: у клиента чужого аккаунта и без права её нет (проверка
+        // 03.10 — вела в свои источники).
+        onSettings={sourcesDoor ? () => router.push(sourcesDoor) : undefined}
         settingsLabel="Источники команды"
         onClose={() => setSourceOpen(false)}
       />

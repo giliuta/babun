@@ -31,6 +31,8 @@ export function useReferenceHref() {
     // записи уводил во вкладку — «назад» не возвращал в карточку.
     labels: inClientsTab ? ("/clients/labels" as const) : ("/labels" as const),
     tags: inClientsTab ? ("/clients/tags" as const) : ("/tags" as const),
+    // Источники — шестерёнка листа «Источник» (03.10), по той же причине.
+    sources: inClientsTab ? ("/clients/sources" as const) : ("/sources" as const),
     // Услуги, типы событий и категории живут в Кабинете; общий адрес нужен по
     // той же причине, что и остальным: экран над табами не может уходить во
     // вкладку. Категории добавлены 2026-09-10 — их дверь из листа операции

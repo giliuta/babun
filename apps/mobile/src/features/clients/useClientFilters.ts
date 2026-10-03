@@ -89,6 +89,11 @@ function normName(s: string): string {
   return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/** Ключ типа объекта — тот же, по которому варианты схлопываются в фасет. */
+function propertyKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export interface ClientAppointmentIndex {
   /** clientId → множество team_id по записям клиента. */
   clientTeams: Map<string, Set<string>>;
@@ -293,6 +298,10 @@ export function useClientFilters(
         color: "",
       }));
   }, [clients]);
+  const propertyValueByKey = useMemo(
+    () => new Map(propertyOptions.map((o) => [propertyKey(o.value), o.value])),
+    [propertyOptions],
+  );
 
   const tagOptions = useMemo<FacetOption[]>(() => {
     // Весь справочник тегов, не только назначенные.
@@ -393,11 +402,14 @@ export function useClientFilters(
       sel.length === 0 || sel.includes(sourceBucket(c.acquisition_source, customSources, c.team_id));
   }, [sources, customSources]);
 
+  // Тип объекта сравнивается без регистра — как и схлопывается в варианты
+  // (проверка 03.10): «Дом» у одного клиента и «дом» у другого — один
+  // вариант, и выбор «Дом» обязан находить обоих, а не только первого.
   const passesProperty = useMemo(() => {
-    const sel = propertyTypes as string[];
+    const sel = (propertyTypes as string[]).map(propertyKey);
     return (c: Client): boolean => {
       if (sel.length === 0) return true;
-      const own = clientPropertyTypes(c);
+      const own = new Set([...clientPropertyTypes(c)].map(propertyKey));
       return sel.some((p) => own.has(p));
     };
   }, [propertyTypes]);
@@ -542,8 +554,10 @@ export function useClientFilters(
         source[key] = (source[key] ?? 0) + 1;
       }
       if (seg && tm && ct && tg && so) {
-        for (const p of clientPropertyTypes(c)) {
-          property[p] = (property[p] ?? 0) + 1;
+        const own = new Set([...clientPropertyTypes(c)].map(propertyKey));
+        for (const key of own) {
+          const value = propertyValueByKey.get(key);
+          if (value) property[value] = (property[value] ?? 0) + 1;
         }
       }
     }
@@ -563,6 +577,7 @@ export function useClientFilters(
     passesSource,
     passesProperty,
     customSources,
+    propertyValueByKey,
   ]);
 
   // ── Токены summary-бара ──────────────────────────────────────────

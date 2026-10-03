@@ -14,6 +14,7 @@ import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useCities } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
 
 // МЕТКА И ТЕГИ КЛИЕНТА — ДВУМЯ ПЛИТКАМИ, КАК «КОМАНДА | МЕТКА» В ЗАПИСИ
 // (владелец 22.09: «сделаем вот такие блоки — метка и теги… чтоб было более
@@ -70,6 +71,7 @@ export function ClientLabelTags({
   const refs = useReferenceHref();
   const doorway = useSheetDoorway();
   const teamParams = client.team_id ? { team: client.team_id } : undefined;
+  const tagsDoor = useClientSettingsDoor("tags", client.team_id ?? null);
   // ТЕГИ — КОМАНДЫ КЛИЕНТА (владелец 30.09: «теги закреплены за командой»).
   // Предлагаются теги его команды; уже стоящий тег другой команды на плитке
   // остаётся виден (он берётся из всего каталога ниже).
@@ -193,12 +195,10 @@ export function ClientLabelTags({
         tags={teamTags}
         selected={shownTags}
         onPick={pickTag}
-        // Шестерёнка ведёт в теги ТОЙ команды, чьи теги предложены.
-        onSettings={() =>
-          doorway.open(() =>
-            router.push({ pathname: refs.tags, params: teamParams } as Href),
-          )
-        }
+        // Шестерёнка ведёт в теги ТОЙ команды, чьи теги предложены. Дверь
+        // общая с «Связью»: у клиента чужого аккаунта и без права её нет
+        // (проверка 03.10 — вела в свои теги).
+        onSettings={tagsDoor ? () => doorway.open(() => router.push(tagsDoor)) : undefined}
         onClose={() => setTagsOpen(false)}
       />
     </>
