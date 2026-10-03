@@ -10,7 +10,9 @@ import {
   formatEURExact as formatEUR,
   moneySign,
 } from "@babun/shared/common/utils/money";
+import { Trash2 } from "lucide-react-native";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SwipeRow } from "@/components/ui/SwipeRow";
 import { SELECT_SIDE } from "@/components/ui/select-rows";
 import { useThemeColors } from "@/theme/colors";
 import { humanDayYear } from "@/features/appointments/helpers";
@@ -38,6 +40,8 @@ export function RecordRowsPanel({
   countEveryTone,
   refreshControl,
   onOpenRecord,
+  canDeleteRow,
+  onDeleteRow,
 }: {
   rows: RecordRow[];
   /** Эйбрау над списком. Без него список идёт голым: заголовок рисует хозяин
@@ -60,6 +64,11 @@ export function RecordRowsPanel({
   countEveryTone?: boolean;
   refreshControl?: ReactElement<RefreshControlProps>;
   onOpenRecord: (row: RecordRow) => void;
+  /** СВАЙП «УДАЛИТЬ» (владелец 03.10: «удалить операцию — не кнопка внизу»).
+   *  Только у строк, которые хозяин списка разрешил: операции, заведённые
+   *  руками, и только тем, кому их можно править. Долгое нажатие — то же. */
+  canDeleteRow?: (row: RecordRow) => boolean;
+  onDeleteRow?: (row: RecordRow) => void;
 }) {
   const t = useThemeColors();
 
@@ -150,11 +159,13 @@ export function RecordRowsPanel({
       }
       contentContainerStyle={{ paddingBottom: 96 }}
       renderSectionHeader={({ section }) => sectionHeader(section)}
-      renderItem={({ item }) => (
-        <View style={{ paddingHorizontal: SELECT_SIDE }}>
+      renderItem={({ item }) => {
+        const removable = !!onDeleteRow && !!canDeleteRow?.(item);
+        const view = (
           <RecordRowView
             row={item}
             tone={item.tone ?? tone ?? "income"}
+            onLongPress={removable ? () => onDeleteRow?.(item) : undefined}
             // НАЖИМАЕТСЯ ВСЁ, У ЧЕГО ЕСТЬ ДВЕРЬ, а не только записи. Условие
             // было `item.appointmentId`, и строка без визита — бензин, обед,
             // перевод, ручной долг — не нажималась вовсе: обработчик экрана их
@@ -166,8 +177,27 @@ export function RecordRowsPanel({
                 : undefined
             }
           />
-        </View>
-      )}
+        );
+        return (
+          <View style={{ paddingHorizontal: SELECT_SIDE }}>
+            {removable ? (
+              // Правая кромка — разрушительное «Удалить» (AGENTS, правило 9).
+              <SwipeRow
+                radius={t.radius.input}
+                label="Удалить"
+                color={t.danger}
+                icon={Trash2}
+                accessibilityLabel={`Удалить ${item.title}`}
+                onAction={() => onDeleteRow?.(item)}
+              >
+                {view}
+              </SwipeRow>
+            ) : (
+              view
+            )}
+          </View>
+        );
+      }}
       // Плашки — с воздухом между ними, без швов (как `SelectList`).
       ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
       keyboardShouldPersistTaps="handled"

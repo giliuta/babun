@@ -29,7 +29,7 @@ export function useRestoreOperation() {
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: (id: string) => restoreDeletedOperation(supabase, id),
-    onSuccess: () => invalidateLedger(qc),
+    onSettled: () => invalidateLedger(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }
@@ -40,7 +40,7 @@ export function useEraseDeletedOperation() {
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: (id: string) => eraseDeletedOperation(supabase, id),
-    onSuccess: () => invalidateLedger(qc),
+    onSettled: () => invalidateLedger(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }

@@ -46,7 +46,7 @@ import { iconPreset } from "@/components/ui/icon-set";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
-import { confirmAction, confirmThen } from "@/lib/confirm";
+import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
@@ -74,7 +74,6 @@ import { useClientChoice } from "./use-client-choice";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import type { Client } from "@babun/shared/local/clients";
 import {
-  useDeleteTransaction,
   useFinanceCategories,
   useInsertTransaction,
   useUpdateTransaction,
@@ -220,7 +219,6 @@ export function OperationSheet({
   const documentsOn = useFeatureOn("documents");
   const insert = useInsertTransaction();
   const update = useUpdateTransaction();
-  const del = useDeleteTransaction();
   const toast = useToast();
   const isEdit = !!transaction;
   const router = useRouter();
@@ -289,7 +287,7 @@ export function OperationSheet({
   // Идемпотентность вставки: клиентский PK, новый после каждого успеха.
   const [requestId, setRequestId] = useState(randomUuid);
   const savingRef = useRef(false);
-  /** Отложенное до полного ухода листа: см. `remove` и `runAfterExit`. */
+  /** Отложенное до полного ухода листа: см. `guardedClose` и `runAfterExit`. */
   const afterExit = useRef<(() => void) | null>(null);
 
   // Гидрация ТОЛЬКО по фронту открытия/смене операции: смена businessToday
@@ -620,7 +618,7 @@ export function OperationSheet({
   const doorway = useSheetDoorway();
   // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
   const categoriesHref = useReferenceHref().categories;
-  const busy = insert.isPending || update.isPending || del.isPending;
+  const busy = insert.isPending || update.isPending;
   const dateInFuture = date > businessToday;
   // Категория говорит собой: иконка и цвет из справочника, как у типа события
   // в записи. Не выбрана — нейтральный ярлычок, а не пустое место.
@@ -808,49 +806,10 @@ export function OperationSheet({
     }
   };
 
-  const remove = () => {
-    if (!transaction) return;
-    // Доход с возвратом сервер удалить не даст («Системные поля финансовой
-    // операции нельзя изменять» — каскад трогает возврат). Говорим причину
-    // словами до вопроса (аудит 2026-10-03).
-    if (transaction.type === "income" && refundsKnown && refundedTotal > 0) {
-      haptics.warning();
-      notify(
-        "Удалить нельзя",
-        `По этому доходу уже возвращено ${formatEUR(refundedTotal)} — сначала удалите возврат.`,
-      );
-      return;
-    }
-    const target = transaction;
-    // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29): вопрос
-    // рисует хост приложения, а лист — отдельное окно `Modal`. Открытый в тот
-    // же кадр, вопрос получал от iOS «already presenting» и не появлялся
-    // вовсе: кнопка «Удалить» молчала, и это была единственная дверь к откату
-    // денег с экрана (2026-09-08). Сперва уезжаем, спрашиваем по `onExited` —
-    // тем же способом, что «Удалить объект» в листе правки объекта.
-    //
-    // Тело вопроса — ПОСЛЕДСТВИЕ, а не «нельзя отменить» (правила текстов
-    // account-alerts): человек решает по тому, что произойдёт с деньгами.
-    afterExit.current = () => {
-      confirmThen(
-        "Удалить операцию?",
-        {
-          message: "Уйдёт в «Удалённые операции» — вернуть можно 30 дней.",
-          confirmLabel: "Удалить",
-          destructive: true,
-        },
-        async () => {
-          try {
-            await del.mutateAsync(target.id);
-            haptics.success();
-          } catch (e) {
-            notify("Ошибка", (e as Error).message);
-          }
-        },
-      );
-    };
-    onClose();
-  };
+  // «УДАЛИТЬ ОПЕРАЦИЮ» ИЗ ЛИСТА УБРАНО (владелец 03.10: «удалить операцию —
+  // не кнопка внизу, это неправильно»). Операцию, заведённую руками, удаляют
+  // свайпом влево по её строке в ленте «Финансов» и в листе дня
+  // (`features/finances/operation-delete.ts`), как счета и клиентов.
 
   // Пока мутация в полёте, лист не закрывается ни скримом, ни свайпом:
   // ошибка сохранения должна прилететь в открытую форму, а не поверх уже
@@ -908,8 +867,8 @@ export function OperationSheet({
     setAskingClose(true);
   };
 
-  /** Что сделать, когда окно листа СНЯТО. Вопрос об удалении живёт здесь: см.
-   *  `remove` и закон `BottomSheet.onExited`. Возвращает `true`, если что-то
+  /** Что сделать, когда окно листа СНЯТО. Вопрос «Закрыть без сохранения?»
+   *  живёт здесь: см. `guardedClose` и закон `BottomSheet.onExited`. Возвращает `true`, если что-то
    *  выполнилось, — по нему решается, звать ли `onExited` вызывающего. */
   const runAfterExit = (): boolean => {
     const run = afterExit.current;
@@ -947,7 +906,7 @@ export function OperationSheet({
     showClientRow ||
     showInvoiceRow ||
     showRefundRow ||
-    (txAccountClosed ? isOwner : canWrite);
+    (txAccountClosed && isOwner);
 
   // Причина погашенной кнопки — ровно одна и самая важная. Офлайн и
   // закрытый счёт — закрытые двери (нейтральный цвет), остальное — ошибки
@@ -1353,8 +1312,7 @@ export function OperationSheet({
         {/* 8. Действия этой операции. Раньше они жили в отдельной витрине,
             и до правки надо было пройти лишний экран. Теперь всё в одной
             форме: открыл — правь, а рядом то, что ещё можно сделать.
-            «Удалить» — последняя строка этого же списка: красной кнопки в
-            шапке у канонического листа нет. */}
+            «Удалить» здесь больше нет — свайп по строке в ленте (03.10). */}
         {isEdit && transaction && showMoreCard ? (
           <SectionCard title="Ещё">
             {showClientRow ? (
@@ -1396,14 +1354,6 @@ export function OperationSheet({
                   }}
                 />
               ) : null
-            ) : canWrite ? (
-              <ActionRow
-                separated={showClientRow || showInvoiceRow || showRefundRow}
-                tone="danger"
-                label="Удалить операцию"
-                dimmed={busy}
-                onPress={remove}
-              />
             ) : null}
           </SectionCard>
         ) : null}

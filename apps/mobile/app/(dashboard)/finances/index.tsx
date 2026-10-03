@@ -84,7 +84,12 @@ import {
   withTeamlessRows,
 } from "@/features/finances/team-scope";
 import { buildRefundDraft } from "@/features/finances/refund";
-import { loadErrorWords } from "@/lib/connection-words";
+import { loadErrorWords, writeErrorWords } from "@/lib/connection-words";
+import { confirmThen } from "@/lib/confirm";
+import { haptics } from "@/lib/haptics";
+import { notify } from "@/lib/notify";
+import { deleteOperationAlert, deleteTransferAlert } from "@/features/finances/account-alerts";
+import { deletableByHand, refundBlocksDelete } from "@/features/finances/operation-delete";
 import {
   FinanceOverview,
   ScopePeriodBar,
@@ -1353,6 +1358,61 @@ function FinancesContent() {
 
   // СТРОКА ЛЮБОЙ ПАНЕЛИ ВЕДЁТ В ОДНО МЕСТО — и в разрезах «Доход / Расход /
   // Долги», и в ленте счёта под «Счетами»: одна дверь на одну строку.
+  // СВАЙП «УДАЛИТЬ» В ЛЕНТЕ (владелец 03.10: «удалить операцию — не кнопка
+  // внизу»; «только у тех, что создаём своими руками»). Строка — одиночная
+  // ручная операция (`deletableByHand`), право — то же, что у правки строки
+  // и у витрины (`allow.remove` ниже): перевод и ручной возврат — владельцу.
+  // Счёт операции закрыт или удалён — сервер удаление не примет, свайпа нет.
+  const rowTx = (row: RecordRow): FinanceTransaction | null =>
+    row.txId
+      ? (scopedTransactions.find((x) => x.id === row.txId) ??
+        (allTimeSearchQuery.data ?? []).find((x) => x.id === row.txId) ??
+        null)
+      : null;
+  const liveAccountIds = new Set((transferAccountsQuery.data ?? []).map((a) => a.id));
+  const canDeleteRow = (row: RecordRow): boolean => {
+    if (!row.txId || row.appointmentId || row.debtId) return false;
+    const tx = rowTx(row);
+    if (!tx || !deletableByHand(tx)) return false;
+    if (tx.account_id && !liveAccountIds.has(tx.account_id)) return false;
+    if (tx.type === "transfer" || tx.type === "refund") return access.owner;
+    return access.txEditable(tx, {
+      account: allAccounts.find((a) => a.id === tx.account_id) ?? null,
+      debt: debts.find((d) => d.id === tx.debt_id) ?? null,
+    });
+  };
+  const deleteRow = (row: RecordRow) => {
+    const tx = rowTx(row);
+    if (!tx) return;
+    // Доход с возвратом сервер не удалит — причина словами до вопроса.
+    if (refundBlocksDelete(tx, refundTotals ? (refundTotals.get(tx.id) ?? 0) : undefined)) {
+      haptics.warning();
+      notify("Удалить нельзя", "По этому доходу есть возврат — сначала удалите возврат.");
+      return;
+    }
+    const text = tx.type === "transfer" ? deleteTransferAlert() : deleteOperationAlert();
+    confirmThen(
+      text.title,
+      { message: text.message, confirmLabel: text.confirm, destructive: true },
+      async () => {
+        try {
+          if (tx.type === "transfer" && tx.transfer_group_id) {
+            await delTransfer.mutateAsync(tx.transfer_group_id);
+          } else {
+            await delTx.mutateAsync(tx.id);
+          }
+          haptics.success();
+        } catch (e) {
+          const words = writeErrorWords(e, {
+            failed: "Не удалось удалить",
+            notDone: "Операция не удалена",
+          });
+          notify(words.title, words.subtitle);
+        }
+      },
+    );
+  };
+
   const openRecordRow = (row: RecordRow) => {
     // ДЕНЬГИ ПО ЗАПИСИ ОТКРЫВАЮТ САМУ ЗАПИСЬ (владелец 2026-08-15).
     if (row.appointmentId && openAppointment(row.appointmentId)) return;
@@ -1625,6 +1685,8 @@ function FinancesContent() {
               }
               refreshControl={refreshControl}
               onOpenRecord={openRecordRow}
+              canDeleteRow={canDeleteRow}
+              onDeleteRow={deleteRow}
             />
           </View>
         )}

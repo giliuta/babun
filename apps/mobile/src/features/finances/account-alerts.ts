@@ -127,6 +127,16 @@ export function accountNotEmptyAlert(
  * Удаление перевода. Заголовок — ВОПРОС: «Перевод между счетами» это имя
  * сущности, а VoiceOver читает заголовок первым и обрывался на нём.
  */
+/** «Удалить» операции — в «Удалённые операции» на 30 дней (владелец 03.10).
+ *  Один текст на свайп ленты, лист дня и витрину операции. */
+export function deleteOperationAlert(): Required<AlertText> {
+  return {
+    title: "Удалить операцию?",
+    message: "Уйдёт в «Удалённые операции» — вернуть можно 30 дней.",
+    confirm: "Удалить",
+  };
+}
+
 export function deleteTransferAlert(): Required<AlertText> {
   return {
     title: "Удалить перевод?",

@@ -60,10 +60,13 @@ export function RecordRowView({
   row,
   tone,
   onPress,
+  onLongPress,
 }: {
   row: RecordRow;
   tone: RecordRowTone;
   onPress?: () => void;
+  /** Долгое нажатие — то же, что свайп строки, словами (удаление в ленте). */
+  onLongPress?: () => void;
 }) {
   const t = useThemeColors();
   // Перевод НЕЙТРАЛЕН для прибыли: деньги переехали между своими счетами.
@@ -123,6 +126,7 @@ export function RecordRowView({
         .join(", ")}
       // Без двери плашка — показание: нажатие ничего не делает.
       onPress={onPress ?? noop}
+      onLongPress={onLongPress}
       trailing={
         <View
           style={{ alignItems: "flex-end", flexShrink: 0, maxWidth: "45%" }}

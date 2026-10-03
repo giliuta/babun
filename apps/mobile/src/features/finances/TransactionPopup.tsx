@@ -29,7 +29,7 @@ import { useTenant } from "@/features/settings/tenant";
 import { useFeatureOn } from "@/features/settings/company-features";
 import { humanDay } from "@/features/appointments/helpers";
 import type { Team } from "@/features/reference/queries";
-import { deleteTransferAlert } from "./account-alerts";
+import { deleteOperationAlert, deleteTransferAlert } from "./account-alerts";
 import { refundRemainingCents as refundRemainingCentsOf } from "./refund";
 import { payeeName } from "./category-asks";
 import { randomUuid } from "@babun/shared/sync";
@@ -286,14 +286,8 @@ export function TransactionPopup({
     const text =
       tx.type === "transfer"
         ? deleteTransferAlert()
-        : {
-            title: "Удалить операцию?",
-            // ПОСЛЕДСТВИЕ, А НЕ «НЕЛЬЗЯ ОТМЕНИТЬ» (правила текстов
-            // account-alerts). Слово в слово как в листе операции: один
-            // вопрос об одном действии не должен звучать двумя голосами.
-            message: "Уйдёт в «Удалённые операции» — вернуть можно 30 дней.",
-            confirm: "Удалить",
-          };
+        : // Один текст на свайп ленты, лист дня и эту витрину.
+          deleteOperationAlert();
     // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29) — вопрос
     // рисует хост приложения поверх окна листа, и iOS его не показывает.
     // Ждём `onExited`; см. тот же приём в OperationSheet.remove.

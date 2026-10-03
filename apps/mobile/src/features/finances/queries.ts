@@ -224,7 +224,9 @@ export function useDeleteTransaction() {
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: (id: string) => deleteTransaction(supabase, id),
-    onSuccess: () => invalidateLedger(qc),
+    // И после отказа: оборванный по времени ответ (сервер под нагрузкой)
+    // мог уже удалить строку — лента перечитывает правду, а не держит её.
+    onSettled: () => invalidateLedger(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }

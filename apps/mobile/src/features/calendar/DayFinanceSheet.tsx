@@ -1,6 +1,6 @@
 import { useBookingBlocks } from "@/features/appointments/booking-prefs";
 import { useRecordBlocks } from "@/features/appointments/useRecordRights";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -15,7 +15,7 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 import { canEditTransaction } from "@babun/shared/local/finance/transaction";
 import type { DayExtra } from "@babun/shared/local/day-extras";
 import { getDayExtras } from "@babun/shared/local/day-extras";
-import { Wallet } from "lucide-react-native";
+import { Trash2, Wallet } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { RowGroup, RowGroupHeader } from "@/components/ui/card-rows";
 import { SwipeRow } from "@/components/ui/SwipeRow";
@@ -39,11 +39,17 @@ import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import {
   useAppointmentsLedger,
+  useDeleteTransaction,
   useFinanceCategories,
+  useRefundTotals,
   useTransactions,
 } from "@/features/finances/queries";
+import { deleteOperationAlert } from "@/features/finances/account-alerts";
+import { deletableByHand, refundBlocksDelete } from "@/features/finances/operation-delete";
 import { confirmThen } from "@/lib/confirm";
+import { writeErrorWords } from "@/lib/connection-words";
 import { haptics } from "@/lib/haptics";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { accessGate, canEditMoneyRow, moneyKey } from "@/features/access/my-access";
 import { useMyAccess } from "@/features/access/queries";
@@ -375,6 +381,59 @@ export function DayFinanceSheet({
     return undefined;
   };
 
+  // СВАЙП «УДАЛИТЬ» — У РУЧНЫХ ОПЕРАЦИЙ, КОТОРЫЕ ЭТОМУ ЧЕЛОВЕКУ МОЖНО ПРАВИТЬ
+  // (владелец 03.10: кнопки «Удалить операцию» в листе больше нет). Те же
+  // правила, что в ленте «Финансов» (`operation-delete.ts`); деньги записи
+  // снимаются в самой записи. Вопрос — после ухода листа, как у старых строк.
+  const delTx = useDeleteTransaction();
+  const refundTotals = useRefundTotals().data;
+  const canDeleteTx = (tx: FinanceTransaction): boolean =>
+    !tx.appointment_id &&
+    tx.type !== "transfer" &&
+    deletableByHand(tx) &&
+    rowAction(tx) !== undefined;
+  const askDeleteTx = (tx: FinanceTransaction) => {
+    if (refundBlocksDelete(tx, refundTotals ? (refundTotals.get(tx.id) ?? 0) : undefined)) {
+      haptics.warning();
+      notify("Удалить нельзя", "По этому доходу есть возврат — сначала удалите возврат.");
+      return;
+    }
+    const text = deleteOperationAlert();
+    leaveThen(() =>
+      confirmThen(
+        text.title,
+        { message: text.message, confirmLabel: text.confirm, destructive: true },
+        async () => {
+          try {
+            await delTx.mutateAsync(tx.id);
+            haptics.success();
+          } catch (e) {
+            const words = writeErrorWords(e, {
+              failed: "Не удалось удалить",
+              notDone: "Операция не удалена",
+            });
+            notify(words.title, words.subtitle);
+          }
+        },
+      ),
+    );
+  };
+  const swipeTx = (key: string, tx: FinanceTransaction, row: ReactElement) =>
+    canDeleteTx(tx) ? (
+      <SwipeRow
+        key={key}
+        label="Удалить"
+        color={t.danger}
+        icon={Trash2}
+        accessibilityLabel={`Удалить «${rowTitle(tx)}»`}
+        onAction={() => askDeleteTx(tx)}
+      >
+        {row}
+      </SwipeRow>
+    ) : (
+      row
+    );
+
   const listExtras: DayExtra[] =
     view === "income" || view === "expense"
       ? legacyExtras.filter((e) => e.kind === view)
@@ -586,15 +645,19 @@ export function DayFinanceSheet({
                         onPress={() => openRecord(item.record!.id)}
                       />
                     ) : item.tx ? (
-                      <TxRow
-                        key={item.key}
-                        context={rowContext(item.tx)}
-                        title={rowTitle(item.tx)}
-                        amount={item.tx.amount}
-                        outflow={item.tx.type === "expense" || item.tx.type === "refund"}
-                        separated={i > 0}
-                        onPress={rowAction(item.tx)}
-                      />
+                      swipeTx(
+                        item.key,
+                        item.tx,
+                        <TxRow
+                          key={item.key}
+                          context={rowContext(item.tx)}
+                          title={rowTitle(item.tx)}
+                          amount={item.tx.amount}
+                          outflow={item.tx.type === "expense" || item.tx.type === "refund"}
+                          separated={i > 0}
+                          onPress={rowAction(item.tx)}
+                        />,
+                      )
                     ) : null,
                   )
                 : null}
@@ -612,17 +675,21 @@ export function DayFinanceSheet({
                   onPress={() => openRecord(a.id)}
                 />
               ))}
-              {listTx.map((tx, i) => (
-                <TxRow
-                  key={tx.id}
-                  context={rowContext(tx)}
-                  title={rowTitle(tx)}
-                  amount={tx.amount}
-                  outflow={tx.type === "expense" || tx.type === "refund"}
-                  separated={i > 0}
-                  onPress={rowAction(tx)}
-                />
-              ))}
+              {listTx.map((tx, i) =>
+                swipeTx(
+                  tx.id,
+                  tx,
+                  <TxRow
+                    key={tx.id}
+                    context={rowContext(tx)}
+                    title={rowTitle(tx)}
+                    amount={tx.amount}
+                    outflow={tx.type === "expense" || tx.type === "refund"}
+                    separated={i > 0}
+                    onPress={rowAction(tx)}
+                  />,
+                ),
+              )}
               {listExtras.map((e, i) => {
                 const row = (
                   <TxRow
