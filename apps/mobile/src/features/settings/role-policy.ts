@@ -89,11 +89,12 @@ export function can(
 // (`?tenant=` — его собственное членство: роль и календари; тариф страница
 // показывает только владельцу). «Помощь» (03.10) — частые вопросы и связь с
 // поддержкой: строка стоит в блоке «Аккаунт» у любой роли, и партнёр, нажав
-// её, упирался в «Недостаточно прав».
+// её, упирался в «Недостаточно прав». «Языки» (03.10) — язык этого телефона.
 const PERSONAL_CABINET_ROUTES = [
   "/cabinet/invitations",
   "/cabinet/profile",
   "/cabinet/notifications",
+  "/cabinet/languages",
   "/cabinet/about",
   "/cabinet/help",
   "/cabinet/company",

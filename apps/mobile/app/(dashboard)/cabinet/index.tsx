@@ -19,7 +19,8 @@
 //     возвращают или стирают навсегда. Это не настройки раздела, а деньги и
 //     место хранения — и поставил их сюда сам владелец (2026-09-21: «архив
 //     засунь в Кабинет»);
-//   • ЭТОТ ТЕЛЕФОН — уведомления и синхронизация;
+//   • ЭТОТ ТЕЛЕФОН — уведомления, язык (владелец 03.10: «в кабинете добавь
+//     новую страницу языки») и синхронизация;
 //   • АККАУНТ — вход и безопасность, «Помощь», «О приложении» (там же версия, поэтому
 //     отдельной подписи версии внизу нет);
 //   • выход только с этого устройства.
@@ -43,6 +44,7 @@ import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
 import { HistoryRow } from "@/features/cabinet/HistoryRow";
 import { DataExportRow } from "@/features/cabinet/DataExportRow";
 import { HelpRow } from "@/features/cabinet/HelpRow";
+import { LanguageRow } from "@/features/cabinet/LanguageRow";
 import { TariffPaymentsRow } from "@/features/cabinet/TariffPaymentsRow";
 import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
@@ -117,6 +119,8 @@ export default function CabinetHome() {
         <SectionEyebrow>Этот телефон</SectionEyebrow>
         <SectionCard>
           <NotificationsRow />
+          <Divider inset={48} />
+          <LanguageRow />
           {showSync ? (
             <>
               <Divider inset={48} />
