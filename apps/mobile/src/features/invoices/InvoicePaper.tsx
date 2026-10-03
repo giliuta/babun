@@ -66,9 +66,12 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={{ fontSize: 20, fontWeight: "800", color: PAPER.ink, letterSpacing: 0.3 }}>
-            {doc.dict.invoice}
+            {doc.title}
           </Text>
           <Text style={{ fontSize: 10, color: PAPER.muted, marginTop: 4 }}>{doc.number}</Text>
+          {doc.reference ? (
+            <Text style={{ fontSize: 10, color: PAPER.muted, marginTop: 1 }}>{doc.reference}</Text>
+          ) : null}
           <Text style={{ fontSize: 10, color: PAPER.muted, marginTop: 1 }}>
             {doc.dict.issuedShort(doc.issuedShort)}
           </Text>

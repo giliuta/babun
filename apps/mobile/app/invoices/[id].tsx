@@ -86,6 +86,12 @@ export default function InvoiceDetailScreen() {
     () => new Map((invoicesQuery.data ?? []).map((item) => [item.id, item.number])),
     [invoicesQuery.data],
   );
+  // Кредит-нота печатается кредит-нотой со ссылкой на отменённый инвойс —
+  // на странице, в PDF и в тексте одинаково (аудит 03.10).
+  const creditNoteOfId = creditLinks.data?.originalByNoteId.get(id) ?? null;
+  const creditNote = creditNoteOfId
+    ? { originalNumber: numberById.get(creditNoteOfId) ?? null }
+    : null;
   const pay = useRecordInvoicePayment(id);
   const refund = useRefundInvoicePayment(id);
   const cancel = useCancelInvoice(id);
@@ -181,6 +187,7 @@ export default function InvoiceDetailScreen() {
             accountNames: accountById,
             businessToday,
             language: invoice.data.language as "ru" | "en" | undefined,
+            creditNote,
           }),
         ),
       });
@@ -212,6 +219,7 @@ export default function InvoiceDetailScreen() {
         payments,
         accountNames: accountById,
         businessToday,
+        creditNote,
       });
     } catch (error) {
       notify("Не удалось поделиться PDF", (error as Error).message);
@@ -400,6 +408,7 @@ export default function InvoiceDetailScreen() {
     accountNames: accountById,
     businessToday,
     language: row.language as "ru" | "en" | undefined,
+    creditNote,
   });
   const canCancel = !isCreditNote && row.status === "issued";
   const openMenu = async () => {

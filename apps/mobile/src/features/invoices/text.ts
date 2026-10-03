@@ -21,7 +21,8 @@ export function buildInvoiceShareText(doc: InvoiceDocument): string {
     // не бизнеса, и в бумаге для клиента ему делать нечего.
     doc.seller.name || null,
     ...doc.seller.lines,
-    `${doc.dict.invoiceEyebrow} ${doc.number}`,
+    `${doc.eyebrow} ${doc.number}`,
+    doc.reference,
     `${doc.dict.issuedOn}: ${doc.issuedOn}`,
     doc.dueOnKnown ? `${doc.dict.dueOn}: ${doc.dueOn}` : null,
     lines.length > 0 ? "" : null,

@@ -59,6 +59,12 @@ export interface DocumentPayment {
 }
 
 export interface InvoiceDocument {
+  /** Заголовок бумаги: «INVOICE» или «CREDIT NOTE». */
+  title: string;
+  /** То же словом для текста сообщения: «Invoice» / «Credit note». */
+  eyebrow: string;
+  /** Под номером: какой инвойс отменяет кредит-нота; у инвойса — нет. */
+  reference: string | null;
   /** Номер документа. У черновика — тот, что получит при выставлении. */
   number: string;
   /** Черновик ещё не выставлен: печатаем это словом, а не выдуманным статусом. */
@@ -154,6 +160,9 @@ export interface IssuedDocumentInput extends BaseInput {
    *  ТОЛЬКО форма правки; витрина `/invoices/[id]` не передаёт ничего и
    *  печатает снимок как есть. */
   sellerPreview?: InvoiceDraftSeller | null;
+  /** Документ — КРЕДИТ-НОТА: номер инвойса, который она отменяет (`null` —
+   *  номер ещё не известен). Не передан — это инвойс. */
+  creditNote?: { originalNumber: string | null } | null;
 }
 
 export interface DraftDocumentInput extends BaseInput {
@@ -183,8 +192,10 @@ function issuedDocument({
   businessToday,
   language,
   sellerPreview,
+  creditNote,
 }: IssuedDocumentInput): InvoiceDocument {
   const dict = invoiceDictionary(language);
+  const original = creditNote ? creditNote.originalNumber?.trim() || null : null;
   const displayStatus = invoiceDisplayStatus(invoice, businessToday, settlement);
   // Превью несохранённой правки сильнее снимка — но только когда его передали
   // (см. `sellerPreview`).
@@ -215,6 +226,9 @@ function issuedDocument({
   const vatMode = invoiceVatMode(invoice);
 
   return {
+    title: creditNote ? dict.creditNote : dict.invoice,
+    eyebrow: creditNote ? dict.creditNoteEyebrow : dict.invoiceEyebrow,
+    reference: original ? dict.creditNoteFor(original) : null,
     number: invoice.number,
     draft: false,
     dict,
@@ -274,13 +288,28 @@ function issuedDocument({
     // СКИДКА — НЕ УСЛУГА (владелец 2026-09-22: «дискаунт вынести, а не как
     // услугу»). На сервере она строка с отрицательной ценой; на бумаге её
     // строки в таблице нет — она стоит в итогах под «Subtotal».
-    lines: invoice.lines.filter((line) => line.unit_price >= 0).map((line) => ({
-      title: line.title,
-      description: line.description?.trim() || null,
-      qty: formatQty(line.qty, line.unit, dict.locale),
-      unitPrice: paperMoney(line.unit_price, invoice.currency, dict.locale),
-      total: paperMoney(line.total, invoice.currency, dict.locale),
-    })),
+    //
+    // У КРЕДИТ-НОТЫ ПОЗИЦИЙ НЕТ: сервер (`_issue_credit_note`) пишет только
+    // суммы с минусом. Таблица говорит одной строкой, что отменено и на
+    // сколько, — а не «No lines yet» над итогом −€100.
+    lines:
+      creditNote && invoice.lines.length === 0
+        ? [
+            {
+              title: dict.creditNoteLine(original),
+              description: null,
+              qty: formatQty(1, null, dict.locale),
+              unitPrice: paperMoney(invoice.subtotal_net, invoice.currency, dict.locale),
+              total: paperMoney(invoice.subtotal_net, invoice.currency, dict.locale),
+            },
+          ]
+        : invoice.lines.filter((line) => line.unit_price >= 0).map((line) => ({
+            title: line.title,
+            description: line.description?.trim() || null,
+            qty: formatQty(line.qty, line.unit, dict.locale),
+            unitPrice: paperMoney(line.unit_price, invoice.currency, dict.locale),
+            total: paperMoney(line.total, invoice.currency, dict.locale),
+          })),
     totals: totalRows({
       dict,
       currency: invoice.currency,
@@ -291,10 +320,14 @@ function issuedDocument({
       total: invoice.total,
       discount: splitDiscount(invoice.lines.map((line) => line.total)),
     }),
-    payTo: compact([
-      prefixed("IBAN", seller ? clean(seller.iban) : clean(tenant?.iban)),
-      prefixed(dict.bank, seller ? clean(seller.bank_name) : clean(tenant?.bank_name)),
-    ]),
+    // Кредит-ноту не оплачивают: реквизиты для оплаты на ней — приглашение
+    // перевести деньги по документу, который их возвращает.
+    payTo: creditNote
+      ? []
+      : compact([
+          prefixed("IBAN", seller ? clean(seller.iban) : clean(tenant?.iban)),
+          prefixed(dict.bank, seller ? clean(seller.bank_name) : clean(tenant?.bank_name)),
+        ]),
     settlement: [
       {
         label: dict.paid,
@@ -320,8 +353,16 @@ function issuedDocument({
         refund,
       };
     }),
-    notes: clean(invoice.notes),
-    footer: dict.footer(invoice.number, invoice.currency),
+    // Причина по умолчанию сервер пишет по-русски («Отмена инвойса INV-…») —
+    // на бумаге её уже говорят шапка и строка таблицы на языке документа.
+    // Своя причина, набранная человеком, печатается как есть.
+    notes:
+      creditNote && /^Отмена инвойса \S+$/.test(clean(invoice.notes))
+        ? ""
+        : clean(invoice.notes),
+    footer: creditNote
+      ? dict.creditNoteFooter(invoice.number)
+      : dict.footer(invoice.number, invoice.currency),
   };
 }
 
@@ -356,6 +397,9 @@ function draftDocument({
 }: DraftDocumentInput): InvoiceDocument {
   const dict = invoiceDictionary(language);
   return {
+    title: dict.invoice,
+    eyebrow: dict.invoiceEyebrow,
+    reference: null,
     // НОМЕРА У ЧЕРНОВИКА МОЖЕТ НЕ БЫТЬ ВОВСЕ (предпросмотр ещё грузится или
     // сети нет). Говорим об этом НА ЯЗЫКЕ БУМАГИ: раньше сюда зашивали
     // русскую фразу, и она вставала в английский документ 18-м кеглем.
@@ -464,7 +508,7 @@ function totalRows(input: {
   if (input.discount) {
     const { dict, discount } = input;
     const money = (value: number) => paperMoney(value, input.currency, dict.locale);
-    const hasVat = input.vatMode !== "off" && input.vatAmount > 0;
+    const hasVat = input.vatMode !== "off" && input.vatAmount !== 0;
     const vatLabel =
       input.vatMode === "inclusive" ? dict.vatInclusive : dict.vatExclusive;
     return [
@@ -488,7 +532,9 @@ function totalRows(input: {
   // Документ БЕЗ НАЛОГА не должен говорить о налоге дважды («Без НДС» и снова
   // «Без НДС · €0») — это выглядело как ошибка счёта. Строка налога появляется
   // только там, где налог есть.
-  if (input.vatMode === "off" || input.vatAmount <= 0) {
+  // НАЛОГ С МИНУСОМ — ТОЖЕ НАЛОГ: у кредит-ноты он отрицательный, и проверка
+  // «≤ 0» прятала строку VAT, оставляя «Subtotal −€84.03 / Total −€100.00».
+  if (input.vatMode === "off" || input.vatAmount === 0) {
     const { dict } = input;
     return [
       {

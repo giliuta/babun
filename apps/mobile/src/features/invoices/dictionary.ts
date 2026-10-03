@@ -85,6 +85,15 @@ export interface InvoiceDictionary {
   /** Только в PDF: шапка-эйбрау, заголовки таблицы платежей и пустое её
    *  состояние. На экранной бумаге этого блока нет. */
   invoiceEyebrow: string;
+  /** КРЕДИТ-НОТА — СВОЙ ДОКУМЕНТ (аудит 03.10): печаталась «INVOICE» с
+   *  «No lines yet» и без ссылки на отменённый инвойс. */
+  creditNote: string;
+  creditNoteEyebrow: string;
+  /** Под номером: какой инвойс она отменяет. */
+  creditNoteFor: (number: string) => string;
+  /** Строка таблицы: сервер позиций сторно не пишет, сумма — одна строка. */
+  creditNoteLine: (number: string | null) => string;
+  creditNoteFooter: (number: string) => string;
   paymentsDate: string;
   paymentsOperation: string;
   paymentsEmpty: string;
@@ -155,6 +164,11 @@ const RU: InvoiceDictionary = {
   refundRow: "Возврат",
   notes: "Комментарий",
   invoiceEyebrow: "Инвойс",
+  creditNote: "КРЕДИТ-НОТА",
+  creditNoteEyebrow: "Кредит-нота",
+  creditNoteFor: (number) => `К инвойсу ${number}`,
+  creditNoteLine: (number) => (number ? `Отмена инвойса ${number}` : "Отмена инвойса"),
+  creditNoteFooter: (number) => `Кредит-нота ${number}`,
   paymentsDate: "Дата",
   paymentsOperation: "Операция",
   paymentsEmpty: "Подтверждённых операций оплаты пока нет.",
@@ -221,6 +235,12 @@ const EN: InvoiceDictionary = {
   refundRow: "Refund",
   notes: "Notes",
   invoiceEyebrow: "Invoice",
+  creditNote: "CREDIT NOTE",
+  creditNoteEyebrow: "Credit note",
+  creditNoteFor: (number) => `Credits invoice ${number}`,
+  creditNoteLine: (number) =>
+    number ? `Cancellation of invoice ${number}` : "Cancellation of invoice",
+  creditNoteFooter: (number) => `Credit note ${number}`,
   paymentsDate: "Date",
   paymentsOperation: "Operation",
   paymentsEmpty: "No confirmed payments yet.",

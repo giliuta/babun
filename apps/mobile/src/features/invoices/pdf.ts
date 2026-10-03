@@ -61,7 +61,7 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
 <html lang="${doc.dict.locale.slice(0, 2)}">
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(doc.dict.invoiceEyebrow)} ${escapeHtml(doc.number)}</title>
+  <title>${escapeHtml(doc.eyebrow)} ${escapeHtml(doc.number)}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     @page { size: A4; margin: 40px 44px 44px; }
@@ -119,8 +119,9 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
     <header class="header">
       <div>${doc.logoUrl ? `<img class="logo" src="${escapeHtml(doc.logoUrl)}" alt="" />` : ""}</div>
       <div class="doc">
-        <h1>${escapeHtml(doc.dict.invoice)}</h1>
+        <h1>${escapeHtml(doc.title)}</h1>
         <div class="doc-line">${escapeHtml(doc.number)}</div>
+        ${doc.reference ? `<div class="doc-line">${escapeHtml(doc.reference)}</div>` : ""}
         <div class="doc-line">${escapeHtml(doc.dict.issuedShort(doc.issuedShort))}</div>
         ${doc.dueShort ? `<div class="doc-line">${escapeHtml(doc.dict.dueShort(doc.dueShort))}</div>` : ""}
       </div>
