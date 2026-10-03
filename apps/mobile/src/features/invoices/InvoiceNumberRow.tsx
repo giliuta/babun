@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { ChevronRight, Hash } from "lucide-react-native";
+import { ChevronRight } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Field } from "@/components/ui/Field";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { SettingsRow } from "@/components/ui/SettingsRow";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { useSetInvoiceNextNumber, type NextInvoiceNumber } from "./queries";
@@ -129,14 +128,48 @@ export function InvoiceNumberRow({
           {editable ? <ChevronRight color={t.chevron} size={16} strokeWidth={1.75} /> : null}
         </Pressable>
       ) : (
-        <SettingsRow
-          // Плитка того же вида, что у набора над ней: одна карточка — один ряд
-          // значков.
-          appearance={{ fallback: Hash }}
-          title="Номер"
-          value={shown ?? "…"}
+        // ТОНКАЯ СТРОКА ПОД НАБОРОМ (владелец 2026-10-03: «первый блок должен
+        // быть компактный, номер так сильно не выделять — ужасно выглядит»).
+        // Номер — справка к реквизитам, а не главная цифра экрана: без своей
+        // плитки, обычным кеглем, текст встаёт под имя набора (16 + плитка 28
+        // + зазор 12).
+        <Pressable
           onPress={editable ? () => setOpen(true) : undefined}
-        />
+          disabled={!editable}
+          accessibilityRole={editable ? "button" : "text"}
+          accessibilityLabel={`Номер, ${shown ?? "загрузка"}`}
+          accessibilityHint={editable ? "Нажмите, чтобы изменить" : undefined}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            minHeight: 36,
+            paddingLeft: 56,
+            paddingRight: 16,
+            paddingBottom: 8,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <Text
+            maxFontSizeMultiplier={1.2}
+            style={{ flex: 1, fontSize: 13, fontWeight: "500", color: t.caption }}
+          >
+            Номер
+          </Text>
+          <Text
+            maxFontSizeMultiplier={1.2}
+            numberOfLines={1}
+            style={{
+              fontSize: 13,
+              fontWeight: "500",
+              color: shown ? t.sub : t.faint,
+              fontVariant: ["tabular-nums"],
+            }}
+          >
+            {shown ?? "…"}
+          </Text>
+          {editable ? <ChevronRight color={t.chevron} size={14} strokeWidth={1.75} /> : null}
+        </Pressable>
       )}
 
       <BottomSheet
