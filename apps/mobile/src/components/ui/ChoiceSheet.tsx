@@ -52,7 +52,10 @@ export function presentChoiceSheet(
 export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
+  /** Что лист ПОКАЗЫВАЕТ. После ответа не обнуляется: см. `answer`. */
   const [request, setRequest] = useState<Request | null>(null);
+  /** Чей ответ ещё ЖДУТ. Отдельно от показанного: ответ снимает его сразу. */
+  const pendingRef = useRef<Request | null>(null);
   const [visible, setVisible] = useState(false);
   /** Когда закончится анимация ухода предыдущего листа. */
   const reopenAt = useRef(0);
@@ -62,10 +65,9 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
     present = (next) => {
       const show = () => {
         // Один лист за раз: предыдущий обещал ответ — закрываем его отменой.
-        setRequest((cur) => {
-          cur?.resolve(null);
-          return next;
-        });
+        pendingRef.current?.resolve(null);
+        pendingRef.current = next;
+        setRequest(next);
         setVisible(true);
       };
       // ВТОРОЙ ВОПРОС ПОДРЯД ЖДЁТ, ПОКА УЕДЕТ ПЕРВЫЙ.
@@ -88,9 +90,21 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
   const answer = (index: number | null) => {
     // Отвечаем РОВНО один раз: закрытие свайпом и тап по скриму могут прийти
     // подряд, а обещание уже отдано.
-    const pending = request;
+    //
+    // ЛИСТ УЕЗЖАЕТ С ТЕМ, ЧТО ПОКАЗЫВАЛ (падение 2026-10-03 02:22). Здесь
+    // стоял `setRequest(null)`, и в одном кадре со стартом ухода содержимое
+    // перестраивалось: заголовок с двумя кнопками сменялся пустым списком и
+    // «Отменой» во всю ширину — четыре ребёнка панели снимались и два
+    // вставлялись, пока ту же панель начинает двигать Reanimated. На
+    // симуляторе владельца после «Отмены» в «Наличные: деньги не
+    // поступили?» порядок детей панели у UIKit и у Fabric разошёлся, и
+    // снятие листа уронило приложение («Attempt to unmount a view which has
+    // a different index»: «Отмена» на месте 1 вместо 2, шапка с грабером —
+    // в конце). Теперь до самого снятия у панели не меняется ни один
+    // ребёнок; показанный вопрос просто заменит следующий `present`.
+    const pending = pendingRef.current;
+    pendingRef.current = null;
     reopenAt.current = Date.now() + SHEET_EXIT_MS;
-    setRequest(null);
     setVisible(false);
     pending?.resolve(index);
   };
