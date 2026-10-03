@@ -10,7 +10,8 @@
 // подпись с живым состоянием, а не пояснение:
 //   • карта человека → «Профиль»;
 //   • МОИ КОМПАНИИ — приглашения и компании, где он состоит (роль, календари);
-//   • КОМПАНИЯ — «Тариф», «Партнёры», «SMS» и «Архив» (только владельцу). SMS — баланс,
+//   • КОМПАНИЯ — «Тариф», «Партнёры», «История изменений», «SMS» и «Архив»
+//     (только владельцу). История — кто что менял во всех календарях. SMS — баланс,
 //     пополнение и отправка всей компании (владелец 2026-09-29: «баланс и
 //     пополнение — это всё будет Кабинет SMS»); шаблоны команд — за
 //     шестерёнкой календаря. Архив — удалённые календари, откуда их
@@ -38,6 +39,7 @@ import { TYPE } from "@/components/ui/tokens";
 import { AboutRow } from "@/features/cabinet/AboutRow";
 import { ArchiveRow } from "@/features/cabinet/ArchiveRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
+import { HistoryRow } from "@/features/cabinet/HistoryRow";
 import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
@@ -89,6 +91,10 @@ export default function CabinetHome() {
                 sub="Права по командам"
                 onPress={() => router.push("/cabinet/people" as Href)}
               />
+              <Divider inset={48} />
+              {/* ИСТОРИЯ ИЗМЕНЕНИЙ (владелец 03.10): кто что менял во всех
+                  календарях — он сам и каждый партнёр. */}
+              <HistoryRow />
               <Divider inset={48} />
               <SmsCabinetRow />
               <Divider inset={48} />

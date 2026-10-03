@@ -72,6 +72,8 @@ const NULLABLE_OK: Record<string, string> = {
   "appointments.team_id": "пусто = личное событие создателя",
   "member_access.team_id": "пусто = блок уровня компании (шаблоны SMS); клиенты с 29.09 — у команды",
   "invitations.team_id": "устарела, канон — team_ids[]",
+  "change_log.team_id":
+    "журнал изменений (03.10): пусто — изменение уровня аккаунта (партнёры, права без календаря) или личное событие",
   "clients.team_id":
     "владелец 30.09: клиент — у команды; пусто только у компании без команд, удаление команды гасит поле (on delete set null)",
   "finance_categories.team_id":
