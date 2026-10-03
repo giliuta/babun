@@ -9,6 +9,8 @@ import { GUTTER, ICON } from "@/components/ui/tokens";
 import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
 import { TagPickerSheet } from "@/features/clients/TagPickerSheet";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
+import { useReferenceHref } from "@/features/clients/reference-href";
+import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useCities } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -62,6 +64,12 @@ export function ClientLabelTags({
   }, [cities]);
   const [labelOpen, setLabelOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
+  // ШЕСТЕРЁНКИ ЛИСТОВ — ДВЕРЬ С ВОЗВРАТОМ (AGENTS 5.4): адрес своей вкладки
+  // или общий (`useReferenceHref`), лист паркуется и встаёт обратно по
+  // «назад». Метки и теги — той команды, чей клиент.
+  const refs = useReferenceHref();
+  const doorway = useSheetDoorway();
+  const teamParams = client.team_id ? { team: client.team_id } : undefined;
   // ТЕГИ — КОМАНДЫ КЛИЕНТА (владелец 30.09: «теги закреплены за командой»).
   // Предлагаются теги его команды; уже стоящий тег другой команды на плитке
   // остаётся виден (он берётся из всего каталога ниже).
@@ -155,7 +163,7 @@ export function ClientLabelTags({
       </View>
 
       <LabelPickerSheet
-        visible={labelOpen}
+        visible={labelOpen && !doorway.parked}
         title="Метка клиента"
         options={labelOptions}
         value={label || null}
@@ -166,10 +174,11 @@ export function ClientLabelTags({
         // Та же дверь, что у метки дня и у способов связи.
         onSettings={
           <Pressable
-            onPress={() => {
-              setLabelOpen(false);
-              router.push("/cabinet/labels");
-            }}
+            onPress={() =>
+              doorway.open(() =>
+                router.push({ pathname: refs.labels, params: teamParams } as Href),
+              )
+            }
             accessibilityRole="button"
             accessibilityLabel="Настроить метки"
             className="h-11 w-11 items-center justify-center active:opacity-60"
@@ -180,19 +189,16 @@ export function ClientLabelTags({
         onClose={() => setLabelOpen(false)}
       />
       <TagPickerSheet
-        visible={tagsOpen}
+        visible={tagsOpen && !doorway.parked}
         tags={teamTags}
         selected={shownTags}
         onPick={pickTag}
-        onSettings={() => {
-          setTagsOpen(false);
-          // Шестерёнка ведёт в теги ТОЙ команды, чьи теги предложены.
-          router.push(
-            client.team_id
-              ? ({ pathname: "/clients/tags", params: { team: client.team_id } } as Href)
-              : ("/clients/tags" as Href),
-          );
-        }}
+        // Шестерёнка ведёт в теги ТОЙ команды, чьи теги предложены.
+        onSettings={() =>
+          doorway.open(() =>
+            router.push({ pathname: refs.tags, params: teamParams } as Href),
+          )
+        }
         onClose={() => setTagsOpen(false)}
       />
     </>
