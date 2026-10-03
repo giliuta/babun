@@ -111,7 +111,8 @@ const LOOK: Record<string, RightLook> = {
   "clients.labels": { icon: Tag, tile: SETTINGS_TILE.purple },
   "clients.personal": { icon: UserRound, tile: SETTINGS_TILE.blue },
   "clients.files": { icon: Paperclip, tile: SETTINGS_TILE.indigo },
-  "clients.requisites": { icon: Landmark, tile: SETTINGS_TILE.teal },
+  // Здание, как плашка реквизитов на карточке (03.10); банк — у счетов.
+  "clients.requisites": { icon: Building2, tile: SETTINGS_TILE.teal },
   "clients.money": { icon: HandCoins, tile: SETTINGS_TILE.orange },
   // Блоки «Клиент», «История», «SMS» (02.10) — как на странице клиента.
   "clients.client": { icon: Contact, tile: SETTINGS_TILE.blue },
