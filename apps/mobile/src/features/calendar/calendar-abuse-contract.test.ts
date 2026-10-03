@@ -381,4 +381,33 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(parts, /const monthParts = owner\.teams\.reduce\(\(sum, team\) => sum \+ team\.segments, 0\) \|\| owner\.monthCount;/);
     assert.match(parts, /\{euro\(owner\.monthCents\)\} · \{smsCount\(monthParts\)\}/);
   });
+
+  test("шестерёнка: выключенный «Объект» записи гасит объект и у события", () => {
+    const prefs = readFileSync(resolve(here, "../appointments/booking-prefs.ts"), "utf8");
+    assert.match(prefs, /block\.id === "object" && \(!isFeatureOn\(disabled, "objects"\) \|\| off\.has\("record_object"\)\)/);
+  });
+
+  test("счётчики пишутся по-русски: «1 знак», «2 изменения», «1 день 6 ч»", () => {
+    for (const file of ["../sms/SmsTextField.tsx", "../sms/SmsSendSheet.tsx"]) {
+      const src = readFileSync(resolve(here, file), "utf8");
+      assert.match(src, /formatCountRu\(encoding\.length, \["знак", "знака", "знаков"\]\)/, file);
+      assert.doesNotMatch(src, /encoding\.length\} знаков/, file);
+    }
+    const notifier = readFileSync(resolve(here, "../cabinet/TeamActivityNotifier.tsx"), "utf8");
+    assert.match(notifier, /formatCountRu\(fresh\.length, \["изменение", "изменения", "изменений"\]\)/);
+    const template = readFileSync(resolve(here, "../sms/SmsTemplateSheet.tsx"), "utf8");
+    assert.match(template, /formatCountRu\(days, \["день", "дня", "дней"\]\)\} \$\{rest\} ч/);
+  });
+
+  test("имя календаря, набранное перед уходом со страницы, сохраняется", () => {
+    const gear = readFileSync(resolve(here, "../../../app/(dashboard)/(home)/calendar/index.tsx"), "utf8");
+    assert.match(gear, /latest\.current = \{ draft, teamName: team\.name, onPatch \};/);
+    assert.match(gear, /if \(trimmed && trimmed !== teamName\) patch\(\{ name: trimmed \}\);/);
+    assert.match(gear, /latest\.current\.draft = null;\s*setDraft\(null\);/);
+  });
+
+  test("часовой пояс: «Применить» без выбора ничего не пишет", () => {
+    const sheet = readFileSync(resolve(here, "TimezoneSheet.tsx"), "utf8");
+    assert.match(sheet, /const zone = zoneToApply\(value, picked, idx\);\s*if \(zone !== value\) onApply\(zone\);/);
+  });
 });

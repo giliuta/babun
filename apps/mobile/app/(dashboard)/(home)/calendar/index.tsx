@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
@@ -110,12 +110,29 @@ function CalendarIdentityCard({
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const name = draft ?? team.name;
+  // НАБРАННОЕ ИМЯ НЕ ТЕРЯЕТСЯ НА УХОДЕ. Сохранение висит на `onBlur`, а поле,
+  // которое снимают с экрана в фокусе (жест «назад», тап по другой команде в
+  // ленте — карточка с `key={team.id}` пересоздаётся), blur не получает:
+  // новое имя молча пропадало. Последнее состояние держим в ref и дописываем
+  // его при размонтировании; уже сохранённое `commitName` гасит, чтобы не было
+  // второй одинаковой записи.
+  const latest = useRef({ draft, teamName: team.name, onPatch });
+  latest.current = { draft, teamName: team.name, onPatch };
+  useEffect(
+    () => () => {
+      const { draft: left, teamName, onPatch: patch } = latest.current;
+      const trimmed = left?.trim();
+      if (trimmed && trimmed !== teamName) patch({ name: trimmed });
+    },
+    [],
+  );
 
   const commitName = () => {
     const trimmed = name.trim();
     // Пустое имя не пишем: календарь без имени не существует ни в чипах, ни в
     // переводах. Молча возвращаем как было.
     if (trimmed && trimmed !== team.name) onPatch({ name: trimmed });
+    latest.current.draft = null;
     setDraft(null);
   };
 

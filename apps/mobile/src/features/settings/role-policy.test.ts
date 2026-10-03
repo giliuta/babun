@@ -68,6 +68,7 @@ describe("role policy", () => {
       "/cabinet/profile",
       "/cabinet/notifications",
       "/cabinet/about",
+      "/cabinet/help",
       "/cabinet/company",
       "/cabinet/company?tenant=0b6f2d1e-3c4a-4b5d-8e9f-a1b2c3d4e5f6",
     ]) {
@@ -89,6 +90,7 @@ describe("role policy", () => {
       "/cabinet/profile",
       "/cabinet/notifications",
       "/cabinet/about",
+      "/cabinet/help",
       "/cabinet/company",
     ];
     const masterLinks = [
@@ -100,6 +102,7 @@ describe("role policy", () => {
       "/cabinet/profile",
       "/cabinet/notifications",
       "/cabinet/about",
+      "/cabinet/help",
       "/cabinet/company",
     ];
     // «Сводка» переехала из владельческих в общие (владелец 20.09: значок

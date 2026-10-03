@@ -192,8 +192,12 @@ export function useEventBlocks(teamId: string | null | undefined): EventBlockId[
   const disabled = useDisabledFeatures();
   return EVENT_BLOCKS.filter((block) => {
     if (block.pinned) return true;
-    // Объекта события нет там, где у компании нет объектов вовсе.
-    if (block.id === "object" && !isFeatureOn(disabled, "objects")) return false;
+    // Объекта события нет там, где у компании нет объектов вовсе, — и там,
+    // где команда выключила «Объект» в блоках записи: страница «Записи»
+    // показывает его у события запертым, а форма события всё равно его
+    // рисовала (повторный аудит 03.10).
+    if (block.id === "object" && (!isFeatureOn(disabled, "objects") || off.has("record_object")))
+      return false;
     const key = EVENT_BLOCK_KEY[block.id];
     return !key || !off.has(key);
   }).map((block) => block.id);

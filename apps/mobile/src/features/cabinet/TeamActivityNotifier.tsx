@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { AppState } from "react-native";
 import { getStorage } from "@babun/shared/storage";
 import { getNotificationsModule } from "@/lib/notifications";
@@ -97,7 +98,7 @@ export function TeamActivityNotifier() {
         if (fresh.length > 3) {
           const names = [...new Set(fresh.map((r) => teamName(r.team_id)).filter(Boolean))];
           await present({
-            title: `${fresh.length} изменений в командах`,
+            title: `${formatCountRu(fresh.length, ["изменение", "изменения", "изменений"])} в командах`,
             body: names.length > 0 ? names.join(", ") : "Откройте историю изменений",
           });
           return;

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Text, TextInput, View } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { Braces, Building2, Calendar, CalendarDays, Clock, Euro, Link, MapPin, User, Users, Wallet, Wrench } from "lucide-react-native";
@@ -198,7 +199,7 @@ export function SmsTextBlock({ value, onChange }: { value: string; onChange: (ne
           }}
         >
           {preview
-            ? `${encoding.length} знаков · ${encoding.segments} SMS${encoding.segments >= MAX_SMS_PARTS ? " — предел" : ""}`
+            ? `${formatCountRu(encoding.length, ["знак", "знака", "знаков"])} · ${encoding.segments} SMS${encoding.segments >= MAX_SMS_PARTS ? " — предел" : ""}`
             : "До 70 знаков — 1 SMS"}
         </Text>
         <ChooseRow

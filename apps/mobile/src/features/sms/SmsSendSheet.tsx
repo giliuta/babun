@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { MessageSquareText, Settings2, Users } from "lucide-react-native";
@@ -331,7 +332,7 @@ export function SmsSendSheet({
             }}
           >
             {body
-              ? `${encoding.length} знаков · ${encoding.segments} SMS${encoding.segments >= MAX_SMS_PARTS ? " — предел" : ""}`
+              ? `${formatCountRu(encoding.length, ["знак", "знака", "знаков"])} · ${encoding.segments} SMS${encoding.segments >= MAX_SMS_PARTS ? " — предел" : ""}`
               : "Текст пустой"}
           </Text>
         </View>

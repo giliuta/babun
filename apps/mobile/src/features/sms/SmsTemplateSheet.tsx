@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Keyboard, ScrollView, View } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { Bell, CalendarCheck, CalendarClock, CalendarPlus, CalendarSync, CalendarX, Hand, Repeat } from "lucide-react-native";
@@ -136,7 +137,9 @@ function hoursValue(h: number | null): string {
   if (!h) return "Не выбран";
   const days = Math.floor(h / 24);
   const rest = h % 24;
-  if (days && rest) return `${hoursChip(days * 24)} ${rest} ч`;
+  // «1 день 6 ч», а не «24 ч 6 ч»: фишка срока пишет дни только с 48 ч
+  // (повторный аудит 03.10).
+  if (days && rest) return `${formatCountRu(days, ["день", "дня", "дней"])} ${rest} ч`;
   return days ? hoursChip(h) : `${h} ч`;
 }
 
