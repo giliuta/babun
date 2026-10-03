@@ -76,6 +76,8 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   // Тарифы (миграция 20261001183700, 015): рабочие команды и пробный период.
   "choose_working_teams",
   "create_client_with_tags",
+  // Первый календарь владельца — заводит только при пустой компании (03.10).
+  "create_first_calendar",
   "create_invitation",
   "decline_invitation",
   "delete_account_transfer",
