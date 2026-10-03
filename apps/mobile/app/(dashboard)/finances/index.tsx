@@ -1839,22 +1839,8 @@ function FinancesContent() {
               : access.ops === "write"
         }
         canWriteType={access.canAdd}
-        onInvoice={(tx) => {
-          setOpOpen(false);
-          openTransactionInvoice(tx);
-        }}
-        onClientOpen={(clientId) => {
-          setOpOpen(false);
-          router.push(`/clients/${clientId}`);
-        }}
-        onRefund={(tx) => {
-          // Возврат — форма витрины: там уже посчитан остаток и кап.
-          setOpOpen(false);
-          setTimeout(() => setPopupTx(tx), OPERATION_SHEET_EXIT_MS);
-        }}
         // Пока Σ возвратов не приехала — та же консервативность, что у
-        // попапа выше: Infinity гасит «Создать возврат» (остаток 0), иначе
-        // действие маячило бы и у полностью возвращённого дохода.
+        // попапа выше: Infinity не даёт опустить сумму ниже возвращённого.
         refundedTotal={
           editingTx
             ? refundTotals

@@ -1,4 +1,3 @@
-import { useFeatureOn } from "@/features/settings/company-features";
 import { useRememberedVatRate } from "./remembered-vat-rate";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
@@ -12,9 +11,7 @@ import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useReferenceHref } from "@/features/clients/reference-href";
 import { CATEGORY_KIND_ROW } from "./settings-levels";
 import { useFinanceSettingLevelsOf } from "./use-finance-settings";
-import { accountEditHref } from "./account-editor/editor-logic";
 import { Button } from "@/components/ui/Button";
-import { ActionRow } from "@/components/ui/card-rows";
 import { OperationReceiptRow } from "./OperationReceiptRow";
 import { useReceiptSession } from "./receipt-upload";
 import { AmountBlock } from "./AmountBlock";
@@ -53,7 +50,6 @@ import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
   formatEURExact as formatEUR,
-  moneySign,
   parseMoneyInputToCents,
 } from "@babun/shared/common/utils/money";
 import { isOnline, randomUuid, useIsOnline } from "@babun/shared/sync";
@@ -128,9 +124,6 @@ export function OperationSheet({
   businessToday,
   transaction,
   debtPayment,
-  onInvoice,
-  onClientOpen,
-  onRefund,
   refundedTotal = 0,
   canWrite: canWriteProp = true,
   canWriteType,
@@ -164,13 +157,10 @@ export function OperationSheet({
     amount: number;
     clientId: string | null;
   } | null;
-  /** Действия существующей операции — живут внизу той же формы, а не в
-   *  отдельной витрине: владелец 2026-08-10 «всё сразу в редакции». */
-  onInvoice?: (tx: FinanceTransaction) => void;
-  onClientOpen?: (clientId: string) => void;
-  onRefund?: (tx: FinanceTransaction) => void;
-  /** Сколько уже вернули — по нему прячем «Создать возврат» и не даём
-   *  опустить сумму дохода ниже возвращённого. */
+  /** Сколько уже вернули — не даём опустить сумму дохода ниже
+   *  возвращённого. Блока «Ещё» («Выставить инвойс», «Создать возврат»,
+   *  «Открыть клиента») в форме больше нет: владелец 03.10 — «удаляй везде,
+   *  он мне не нужен». */
   refundedTotal?: number;
   /** Уровень «Меняет» в деньгах этого календаря (его передаёт экран, который
    *  форму открыл). `false` — форма только читает: кнопка погашена с
@@ -218,7 +208,6 @@ export function OperationSheet({
   // справочник категорий, настройки счёта, инвойс и возврат сервер отдаёт
   // только владельцу — живой контрол над запрещённым канон не допускает.
   const isOwner = useCurrentRole().data === "owner";
-  const documentsOn = useFeatureOn("documents");
   const insert = useInsertTransaction();
   const update = useUpdateTransaction();
   const toast = useToast();
@@ -884,36 +873,6 @@ export function OperationSheet({
     return true;
   };
 
-  // Строки «Ещё»: разделители считаются от реально показанных соседей.
-  const showClientRow = !!transaction?.client_id && !!onClientOpen;
-  // ДОКУМЕНТЫ И ВОЗВРАТЫ — ВЛАДЕЛЬЧЕСКИЕ (уровни финансов, 2026-09-15):
-  // сотрудник пишет только доход и расход, поэтому этих строк у него нет.
-  // Инвойсы и чеки — функция компании (STORY-088): выключены — строк нет.
-  const showInvoiceRow =
-    documentsOn && isOwner && transaction?.type === "income" && !!onInvoice;
-  const showRefundRow =
-    isOwner &&
-    !!transaction &&
-    transaction.type === "income" &&
-    // Оплата долга возвратом долг не откроет — её снимают удалением.
-    !transaction.debt_id &&
-    !!onRefund &&
-    // Возврат — тоже запись на закрытый счёт, сервер её не примет.
-    !txAccountClosed &&
-    // Остаток к возврату — по округлённым центам (moneySign), а не через
-    // самодельный эпсилон: сравниваем ровно то, что напечатано.
-    moneySign(transaction.amount - refundedTotal) > 0;
-  // Карточка «Ещё» живёт, пока в ней есть хоть одна строка: у сотрудника на
-  // просмотре не остаётся ни одной, и пустая шапка была бы мусором.
-  // «ВЫПИСАТЬ ЧЕК» ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 2026-09-30: «отдельно чеки
-  // пока что не делай»): чек выписывается только на оплату инвойса — на его
-  // странице (`app/invoices/[id].tsx`).
-  const showMoreCard =
-    showClientRow ||
-    showInvoiceRow ||
-    showRefundRow ||
-    (txAccountClosed && isOwner);
-
   // Причина погашенной кнопки — ровно одна и самая важная. Офлайн и
   // закрытый счёт — закрытые двери (нейтральный цвет), остальное — ошибки
   // ввода.
@@ -1314,54 +1273,6 @@ export function OperationSheet({
           </SectionCard>
         ) : null}
 
-        {/* 8. Действия этой операции. Раньше они жили в отдельной витрине,
-            и до правки надо было пройти лишний экран. Теперь всё в одной
-            форме: открыл — правь, а рядом то, что ещё можно сделать.
-            «Удалить» здесь больше нет — свайп по строке в ленте (03.10). */}
-        {isEdit && transaction && showMoreCard ? (
-          <SectionCard title="Ещё">
-            {showClientRow ? (
-              <ActionRow
-                label="Открыть клиента"
-                onPress={() =>
-                  guardedClose(() => onClientOpen?.(transaction.client_id as string))
-                }
-              />
-            ) : null}
-            {showInvoiceRow ? (
-              <ActionRow
-                separated={showClientRow}
-                label={
-                  transaction.invoice_id ? "Открыть инвойс" : "Выставить инвойс"
-                }
-                onPress={() => guardedClose(() => onInvoice?.(transaction))}
-              />
-            ) : null}
-            {showRefundRow ? (
-              <ActionRow
-                separated={showClientRow || showInvoiceRow}
-                label="Создать возврат"
-                onPress={() => guardedClose(() => onRefund?.(transaction))}
-              />
-            ) : null}
-            {txAccountClosed && txAccountId ? (
-              // Выход из тупика закрытого счёта: «Открыть снова» — в его листе,
-              // а счёт открывает владелец, поэтому и дверь его.
-              isOwner ? (
-                <ActionRow
-                  separated={showClientRow || showInvoiceRow || showRefundRow}
-                  label="Открыть настройки счёта"
-                  onPress={() => {
-                    onClose();
-                    // Переход — когда лист уехал: страница поднимает шторку
-                    // счёта, и поверх уезжающего листа она не появлялась.
-                    setTimeout(() => router.push(accountEditHref(txAccountId)), SHEET_EXIT_MS);
-                  }}
-                />
-              ) : null
-            ) : null}
-          </SectionCard>
-        ) : null}
       </View>
 
       {/* Выбор категории — тот же лист, что и везде. Шестерёнка внутри
