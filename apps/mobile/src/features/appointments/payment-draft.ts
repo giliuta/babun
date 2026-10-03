@@ -228,6 +228,29 @@ export function closesVisit(
   return visitStarted(apt, now);
 }
 
+/**
+ * ДЕНЬГИ НОВОЙ ЗАПИСИ — ПО ФОРМЕ В МОМЕНТ «СОЗДАТЬ», А НЕ ТАПА (аудит
+ * 2026-10-03). Тап по счёту у новой записи только отмечает, куда лягут
+ * деньги; уходят они после создания. Раньше уходило замороженное: тапнул
+ * «Наличные» при итоге 100, дописал услугу (150), создал — сервер записывал
+ * 100 частичной оплатой и закрывал визит с долгом 50; урезал итог до 60 —
+ * «Сумма больше остатка», и запись без оплаты. И вид платежа брался с часов
+ * тапа, а закрытие визита — по виду, а не по `closesVisit`.
+ *
+ * `full` — тап без поля суммы: «вся сумма», то есть итог формы на момент
+ * создания. Сумма из поля — как вписали. Пусто — платить нечего.
+ */
+export function pendingPaymentToSend(
+  pending: { amount: number; full: boolean },
+  form: Pick<Appointment, "date" | "time_start" | "status"> & { total: number },
+  now: BusinessNow,
+): { amount: number; kind: PaymentKind; closeVisit: boolean } | null {
+  const amountCents = Math.round((pending.full ? form.total : pending.amount) * 100);
+  if (amountCents <= 0) return null;
+  const kind = paymentKindAt(form, now);
+  return { amount: amountCents / 100, kind, closeVisit: closesVisit(form, kind, now) };
+}
+
 /** `warning` — долг и остаток: янтарь, как у долгов в финансах и карточке
  *  клиента (владелец 2026-09-06: «долг жёлтым или оранжевым, это правило»). */
 export type CaptionTone = "neutral" | "success" | "warning";

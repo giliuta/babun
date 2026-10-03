@@ -138,6 +138,8 @@ import {
   usePersonalEventTypes,
 } from "@/features/settings/local-settings";
 import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
+import { pendingPaymentToSend } from "@/features/appointments/payment-draft";
+import { useBusinessNow } from "@/features/appointments/business-now";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { EventTypeBlock } from "@/features/appointments/EventTypeBlock";
 import { eventTypeIcon } from "@/features/calendar/event-type-icons";
@@ -530,6 +532,7 @@ export default function BookScreen() {
   // Деньги новой записи: счёт выбран, запишется после «Создать запись».
   // У существующей записи блок пишет оплату сам и сразу (STORY-065).
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
+  const businessNow = useBusinessNow();
   // Файлы новой записи ждут её id, как ждёт оплата (STORY-070).
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const tenantIdForFiles = useTenantId();
@@ -2048,18 +2051,27 @@ export default function BookScreen() {
           // `mutateAsync`, а не `mutate` с onError: форма к ответу уже
           // закрыта, и отклики вызова у снятого наблюдателя не звучат —
           // обещание же отвечает всегда.
-          void recordPayment
-            .mutateAsync({
-              appointmentId: created.id,
-              accountId: pendingPayment.accountId,
-              amount: pendingPayment.amount,
-              requestId: randomUuid(),
-              kind: pendingPayment.kind,
-              closeVisit: pendingPayment.kind === "settlement",
-            })
-            .catch((e) =>
-              notify("Запись создана, оплата не записана", (e as Error).message),
-            );
+          // Сумма, вид и закрытие визита — по форме СЕЙЧАС, а не по тапу
+          // (`pendingPaymentToSend`): итог и время могли поменяться после.
+          const send = pendingPaymentToSend(
+            pendingPayment,
+            { total: effectiveTotal, date, time_start: timeStart, status },
+            businessNow(),
+          );
+          if (send) {
+            void recordPayment
+              .mutateAsync({
+                appointmentId: created.id,
+                accountId: pendingPayment.accountId,
+                amount: send.amount,
+                requestId: randomUuid(),
+                kind: send.kind,
+                closeVisit: send.closeVisit,
+              })
+              .catch((e) =>
+                notify("Запись создана, оплата не записана", (e as Error).message),
+              );
+          }
         }
         if (pendingFiles.length > 0 && tenantIdForFiles) {
           // Файлы новой записи — тем же путём, что «Добавить» у сохранённой.

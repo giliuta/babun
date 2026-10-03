@@ -1,5 +1,5 @@
 import { useFeatureOn } from "@/features/settings/company-features";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { FileText, History, Split } from "lucide-react-native";
@@ -78,6 +78,9 @@ export interface PendingPayment {
   /** Евро с копейками. */
   amount: number;
   kind: PaymentKind;
+  /** Тап без поля суммы — «вся сумма»: при создании берётся итог формы на
+   *  тот момент (`pendingPaymentToSend`), а не число с момента тапа. */
+  full: boolean;
 }
 
 export interface PaymentBlockProps {
@@ -123,6 +126,14 @@ export function PaymentBlock({
     errorUpdateCount: accountsFailures,
   } = useTeamPaymentAccounts(teamId);
   // Одна очередь на деньги записи: «Снять» в тосте ждёт ответа оплаты.
+  // СМЕНИЛИ КОМАНДУ — ОТМЕЧЕННЫЙ СЧЁТ УХОДИТ. У новой записи плитка лишь
+  // отмечает счёт; счёт прежней команды сервер отобьёт («Этот счёт не
+  // принимает оплату…»), и запись создастся без денег (аудит 2026-10-03).
+  useEffect(() => {
+    if (pending && accountsLoaded && !accounts.some((a) => a.id === pending.accountId)) {
+      onPendingChange(null);
+    }
+  }, [pending, accountsLoaded, accounts, onPendingChange]);
   const record = useRecordPayment(appointment?.id);
   const cancel = useCancelPayment(appointment?.id);
   const invoicesQuery = useInvoices();
@@ -271,7 +282,7 @@ export function PaymentBlock({
     );
     if (!appointment) {
       const same = pending?.accountId === account.id && pending.kind === kind;
-      onPendingChange(same ? null : { accountId: account.id, amount, kind });
+      onPendingChange(same ? null : { accountId: account.id, amount, kind, full: !amountMode });
       haptics.tap();
       return;
     }

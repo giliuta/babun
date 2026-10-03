@@ -14,6 +14,7 @@ import {
   paidTileIntent,
   paymentKindAt,
   paymentMath,
+  pendingPaymentToSend,
   paymentRows,
   recordedToast,
   visitStarted,
@@ -44,6 +45,29 @@ describe("paymentKindAt — вид платежа по часам тапа", () 
     const early = { ymd: "2026-09-05", hm: "09:00" };
     assert.equal(paymentKindAt({ ...visit, status: "completed" }, early), "settlement");
     assert.equal(paymentKindAt({ ...visit, status: "in_progress" }, early), "settlement");
+  });
+});
+
+describe("pendingPaymentToSend — деньги новой записи по форме на «Создать»", () => {
+  const form = { total: 150, date: "2026-09-06", time_start: "11:00", status: "scheduled" as const };
+  test("«вся сумма» — итог формы на момент создания, не на момент тапа", () => {
+    const send = pendingPaymentToSend({ amount: 100, full: true }, form, NOW);
+    assert.deepEqual(send, { amount: 150, kind: "settlement", closeVisit: true });
+  });
+  test("сумма из поля — как вписали", () => {
+    const send = pendingPaymentToSend({ amount: 40, full: false }, form, NOW);
+    assert.equal(send?.amount, 40);
+  });
+  test("время сдвинули в будущее — предоплата, визит не закрывается", () => {
+    const later = { ...form, time_start: "18:00" };
+    assert.deepEqual(pendingPaymentToSend({ amount: 100, full: true }, later, NOW), {
+      amount: 150,
+      kind: "prepayment",
+      closeVisit: false,
+    });
+  });
+  test("итог обнулили — платить нечего", () => {
+    assert.equal(pendingPaymentToSend({ amount: 100, full: true }, { ...form, total: 0 }, NOW), null);
   });
 });
 
