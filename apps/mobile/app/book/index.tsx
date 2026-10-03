@@ -287,9 +287,13 @@ export default function BookScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const navigation = useNavigation();
-  // Пропуск гварда для программного ухода (сохранение / подтверждённое «Закрыть»),
-  // чтобы back-свайп-защита не показывала второй Alert поверх нашего.
-  const bypassGuardRef = useRef(false);
+  // ПРОГРАММНЫЙ УХОД (сохранение / подтверждённое «Закрыть») СНАЧАЛА СНИМАЕТ
+  // ЗАЩИТУ, ПОТОМ УХОДИТ. Раньше защита пропускала его повтором перехваченного
+  // действия (`navigation.dispatch(data.action)`), и у формы, открытой
+  // ссылкой без истории, этот повтор гас: `replace("/")` не исполнялся.
+  // Запись создавалась, а форма оставалась — второе «Создать» било в дубль,
+  // и «Отмена → Закрыть» не закрывала ничего (03.10, на симуляторе).
+  const [leaving, setLeaving] = useState(false);
   // Прокрутка формы — чтобы поле, получившее фокус в самом низу, показать
   // над клавиатурой: KAV сжимает список, но к сфокусированному полю сам не
   // едет, и заметку набирали вслепую.
@@ -1990,16 +1994,7 @@ export default function BookScreen() {
   // календарь, поэтому стек — «финансы → календарь → запись», и слепой
   // `router.back()` клал человека на календарь. Если пришли с меткой `from`,
   // уходим по ней, а не по истории.
-  const leaveBook = () => {
-    bypassGuardRef.current = true;
-    const returnTo = resolveReturnTo(params.from);
-    if (returnTo) {
-      router.replace(returnTo as Href);
-      return;
-    }
-    if (router.canGoBack()) router.back();
-    else router.replace("/");
-  };
+  const leaveBook = () => setLeaving(true);
 
   // Итог постановки пуша — одной строкой, теми же словами, что меню записи.
   const reminderToast = (
@@ -2262,14 +2257,22 @@ export default function BookScreen() {
 
   // Back-свайп и аппаратная «назад» теряли заполненную запись без спроса —
   // теперь перехватываем POP тем же подтверждением, что и кнопка «Отмена».
-  usePreventRemove(dirty, ({ data }) => {
-    if (bypassGuardRef.current) {
-      bypassGuardRef.current = false;
-      navigation.dispatch(data.action);
-      return;
-    }
+  usePreventRemove(dirty && !leaving, ({ data }) => {
     confirmDiscard(() => navigation.dispatch(data.action));
   });
+  // Уход — после того, как защита снята: навигатор узнаёт о снятии
+  // следующим кадром, поэтому переход ждёт его.
+  useEffect(() => {
+    if (!leaving) return;
+    const timer = setTimeout(() => {
+      const returnTo = resolveReturnTo(params.from);
+      if (returnTo) router.replace(returnTo as Href);
+      else if (router.canGoBack()) router.back();
+      else router.replace("/");
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leaving]);
 
   const title = isEdit
     ? kind === "event"

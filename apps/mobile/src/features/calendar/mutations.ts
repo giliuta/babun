@@ -154,13 +154,20 @@ export function useCreateAppointment() {
         input.kind === "event" || input.kind === "personal"
           ? { ...input, created_by: session?.user.id ?? null }
           : input;
-      return createAppointment(
-        supabase,
-        UUID_RE.test(authoredInput.id)
-          ? authoredInput
-          : { ...authoredInput, id: randomUuid() },
-        tenantId,
-      );
+      const stampedOwn = UUID_RE.test(authoredInput.id)
+        ? authoredInput
+        : { ...authoredInput, id: randomUuid() };
+      try {
+        return await createAppointment(supabase, stampedOwn, tenantId);
+      } catch (error) {
+        // ПОВТОР ПОСЛЕ ОБОРВАННОГО ОТВЕТА — УСПЕХ, КАК У ПАРТНЁРА (03.10, на
+        // перезапуске базы). Первая вставка дошла, ответ — нет; номер записи
+        // один на жизнь формы, и второе «Создать» било в «duplicate key value
+        // violates unique constraint "appointments_pkey"» — сырой текст базы
+        // вместо закрытой формы. Строка уже стоит — это та же запись.
+        if (isOwnRecordAlreadyCreated(error as Error)) return stampedOwn;
+        throw error;
+      }
     },
     // ЗАПИСЬ ВСТАЁТ НА СЕТКУ В МОМЕНТ ТАПА (владелец 2026-09-24: «зажал,
     // выбираю — и оно должно сразу ставиться, а ставится спустя 10 секунд»).

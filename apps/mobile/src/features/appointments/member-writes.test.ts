@@ -98,6 +98,18 @@ describe("запись сотрудника — зеркало серверно�
     );
     assert.equal(isOwnRecordAlreadyCreated({ code: "42501", message: "access:block:calendar.create" }), false);
     assert.equal(isOwnRecordAlreadyCreated(null), false);
+    // Путь владельца: `Error` без кода, текст базы за префиксом обёртки
+    // (03.10 — второе «Создать» после перезапуска базы показывало его как есть).
+    assert.equal(
+      isOwnRecordAlreadyCreated(
+        new Error('createAppointment: duplicate key value violates unique constraint "appointments_pkey"'),
+      ),
+      true,
+    );
+    assert.equal(
+      isOwnRecordAlreadyCreated(new Error('createAppointment: duplicate key value violates unique constraint "x_slot_key"')),
+      false,
+    );
   });
 
   test("длительность из услуг без переноса не требует «Переносить»", () => {

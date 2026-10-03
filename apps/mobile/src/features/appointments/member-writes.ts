@@ -186,12 +186,15 @@ export function memberCreateRow(a: Appointment): Record<string, unknown> {
 
 /** Запись с этим номером УЖЕ вставлена: прошлый «Создать» дошёл до сервера,
  *  а ответ оборвался. Номер — наш, один на жизнь формы, поэтому это та же
- *  запись, и повтор — успех, а не вторая запись (аудит формы записи 03.10). */
+ *  запись, и повтор — успех, а не вторая запись (аудит формы записи 03.10).
+ *  Путь владельца отдаёт ошибку обёрткой `Error` без кода — узнаём по тексту. */
 export function isOwnRecordAlreadyCreated(
   error: { code?: string | null; message?: string | null } | null,
 ): boolean {
   if (!error) return false;
-  return error.code === "23505" && /appointments_pkey/.test(error.message ?? "");
+  const message = error.message ?? "";
+  const duplicate = error.code === "23505" || /duplicate key/i.test(message);
+  return duplicate && /appointments_pkey/.test(message);
 }
 
 /** Отказ двери → слова. `titleOf` — название блока из реестра. */
