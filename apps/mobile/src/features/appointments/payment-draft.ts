@@ -200,6 +200,20 @@ export function paidTileIntent(amountMode: boolean): "add" | "cancel" {
   return amountMode ? "add" : "cancel";
 }
 
+/** ВИД ПЛАТЕЖА — ПО ЧАСАМ В МОМЕНТ ТАПА (аудит 2026-10-03). До начала визита
+ *  тап — предоплата, после — оплата; выполненная или начатая запись платит
+ *  оплатой и до своего часа (предоплату по ней сервер отбивает). Считался вид
+ *  при перерисовке блока: страница, открытая в 9:58 и не перерисованная, в
+ *  10:03 записывала «предоплату» к визиту в 10:00 и не закрывала его. */
+export function paymentKindAt(
+  visit: Pick<Appointment, "date" | "time_start" | "status">,
+  now: BusinessNow,
+): PaymentKind {
+  return visitStarted(visit, now) || visit.status === "completed" || visit.status === "in_progress"
+    ? "settlement"
+    : "prepayment";
+}
+
 /**
  * Закрывать ли визит этим платежом: оплата после начала визита закрывает
  * его, даже частичная — работа сделана, остаток становится долгом.

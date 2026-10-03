@@ -12,6 +12,7 @@ import {
   outstandingCents,
   paidAtLabel,
   paidTileIntent,
+  paymentKindAt,
   paymentMath,
   paymentRows,
   recordedToast,
@@ -31,6 +32,20 @@ function apt(overrides: Partial<Appointment> = {}): Appointment {
     ...overrides,
   });
 }
+
+describe("paymentKindAt — вид платежа по часам тапа", () => {
+  const visit = { date: "2026-09-06", time_start: "11:30", status: "scheduled" as const };
+  test("до начала — предоплата, с начала — оплата", () => {
+    assert.equal(paymentKindAt(visit, { ymd: "2026-09-06", hm: "11:29" }), "prepayment");
+    assert.equal(paymentKindAt(visit, { ymd: "2026-09-06", hm: "11:30" }), "settlement");
+    assert.equal(paymentKindAt(visit, { ymd: "2026-09-07", hm: "08:00" }), "settlement");
+  });
+  test("выполненная или начатая — оплата и до своего часа", () => {
+    const early = { ymd: "2026-09-05", hm: "09:00" };
+    assert.equal(paymentKindAt({ ...visit, status: "completed" }, early), "settlement");
+    assert.equal(paymentKindAt({ ...visit, status: "in_progress" }, early), "settlement");
+  });
+});
 
 describe("visitStarted", () => {
   test("earlier day, same-day past start and exact start count as started", () => {

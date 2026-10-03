@@ -33,6 +33,7 @@ import {
   closesVisit,
   paidAtLabel,
   paidTileIntent,
+  paymentKindAt,
   paymentMath,
   paymentRows,
   recordedToast,
@@ -184,10 +185,10 @@ export function PaymentBlock({
   // Вид платежа выводится из времени, а не выбирается: до начала — предоплата.
   // Запись, уже отмеченная выполненной или начатой, платит оплатой и до
   // своего часа: предоплату по выполненной сервер отбивает.
-  const kindForTap: PaymentKind =
-    started || visit.status === "completed" || visit.status === "in_progress"
-      ? "settlement"
-      : "prepayment";
+  const kindForTap: PaymentKind = paymentKindAt(
+    { date: visit.date, time_start: visit.timeStart, status: visit.status },
+    businessNow(),
+  );
   const amountCents = amountMode ? amountCentsFromInput(partText) : outstanding;
   const problem = amountProblem(amountCents, outstanding);
   const acceptsMoney = outstanding > 0 && !billUnsaved && canTakeMoney && bookingInPlan;
@@ -247,7 +248,12 @@ export function PaymentBlock({
       return;
     }
     const amount = amountCents / 100;
-    const kind = kindForTap;
+    // Часы — сейчас, а не на последней перерисовке (`paymentKindAt`).
+    const now = businessNow();
+    const kind = paymentKindAt(
+      { date: visit.date, time_start: visit.timeStart, status: visit.status },
+      now,
+    );
     if (!appointment) {
       const same = pending?.accountId === account.id && pending.kind === kind;
       onPendingChange(same ? null : { accountId: account.id, amount, kind });
@@ -259,7 +265,7 @@ export function PaymentBlock({
     const closeVisit = closesVisit(
       { date: visit.date, time_start: visit.timeStart, status: appointment.status },
       kind,
-      businessNow(),
+      now,
     );
     const source = appointment;
     const optimistic = optimisticRecordPayment(source, {
