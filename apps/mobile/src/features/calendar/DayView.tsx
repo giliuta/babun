@@ -393,6 +393,12 @@ export function TimeRail({
                 { top: h === startHour ? 0 : -7, fontVariant: ["tabular-nums"] },
               ]}
               maxFontSizeMultiplier={1.3}
+              // Крупный шрифт системы × 1.3 не влезает в 40pt рельса: «06:00»
+              // рвалось на «06:0» и «0» (повторный аудит 03.10). Одна строка,
+              // ужимается до ширины.
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
             >
               {`${pad2(h % 24)}:00`}
             </Text>
@@ -405,6 +411,9 @@ export function TimeRail({
           <Text
             style={[labelStyle, { top: -7, fontVariant: ["tabular-nums"] }]}
             maxFontSizeMultiplier={1.3}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
           >
             {endHour === 24 ? "24:00" : `${pad2(endHour % 24)}:00`}
           </Text>

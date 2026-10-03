@@ -244,7 +244,9 @@ describe("повторный аудит календаря 03.10", () => {
 
   test("полоса денег под сеткой не выдаёт заглушку прошлой недели за «€0»", () => {
     const footer = readFileSync(resolve(here, "DayFinanceFooter.tsx"), "utf8");
-    assert.match(footer, /q\.isPlaceholderData \|\| \(q\.isPending && q\.fetchStatus !== "idle"\)/);
+    // Только пока запрос в пути: выключенный запрос (неделя без записей) с
+    // заглушкой прошлой недели иначе держал прочерки навсегда.
+    assert.match(footer, /q\.fetchStatus !== "idle" && \(q\.isPlaceholderData \|\| q\.isPending\)/);
     assert.match(footer, /const settling = unknown\(ledgerQuery\) \|\| unknown\(recordsLedgerQuery\);/);
     assert.match(footer, /\{settling \? "—" : formatEUR\(income\)\}/);
     assert.match(footer, /\{settling \? "—" : formatEUR\(spent\)\}/);

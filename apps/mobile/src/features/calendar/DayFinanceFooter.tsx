@@ -68,8 +68,11 @@ export function DayFinanceFooter({
   // в пути, запрос отдаёт заглушкой строки ПРОШЛОГО периода, и дни новой
   // недели секунду стояли «Доход €0» — у среды с оплатой €131 тоже. Ноль
   // здесь — утверждение о деньгах; пока ответа нет, в клетке прочерк.
+  // Только пока запрос в пути: у недели без записей запрос по записям
+  // выключен, а заглушку прошлой недели react-query показывает и выключенному
+  // — полоса стояла бы прочерками навсегда.
   const unknown = (q: { isPlaceholderData: boolean; isPending: boolean; fetchStatus: string }) =>
-    q.isPlaceholderData || (q.isPending && q.fetchStatus !== "idle");
+    q.fetchStatus !== "idle" && (q.isPlaceholderData || q.isPending);
   const settling = unknown(ledgerQuery) || unknown(recordsLedgerQuery);
   const ledger = useMemo(
     () => [...(ledgerQuery.data ?? []), ...(recordsLedger ?? [])],
@@ -143,11 +146,13 @@ export function DayFinanceFooter({
           11pt — минимум читаемости iOS (было 9pt, владелец читает деньги
           десятки раз в день). */}
       <View style={{ width: RAIL_W, paddingRight: 6, alignItems: "flex-end", justifyContent: "center" }}>
+        {/* Одной строкой: крупный шрифт системы рвал «Доход» на «Дохо» и
+            «д» в 42pt рельса (повторный аудит 03.10). */}
         {showIncome ? (
-          <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Доход</Text>
+          <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Доход</Text>
         ) : null}
         {showExpense ? (
-          <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Расход</Text>
+          <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Расход</Text>
         ) : null}
       </View>
       {rows.map(({ d, ymd, income, spent, dateLabel }, i) => {
