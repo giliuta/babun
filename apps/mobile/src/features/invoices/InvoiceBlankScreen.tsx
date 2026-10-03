@@ -4,6 +4,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useTenant } from "@/features/settings/tenant";
 import { InvoiceSettingsBlocks } from "./InvoiceSettingsBlocks";
+import { useCurrentRole } from "@/features/settings/tenant";
 
 // «ИНВОЙСЫ» — ДВЕРЬ ШЕСТЕРЁНКИ «ФИНАНСОВ» (владелец 03.10): бланк вышел из-за
 // шестерёнки «Реквизитов» в блок «Документы» рядом с ними, заголовок — словом
@@ -18,6 +19,8 @@ import { InvoiceSettingsBlocks } from "./InvoiceSettingsBlocks";
 // разделе). Номер каждого набора — в его карточке.
 export function InvoiceBlankScreen() {
   const tenant = useTenant();
+  // Партнёр видит бланк только для чтения (право «Инвойсы», 03.10).
+  const owner = useCurrentRole().data === "owner";
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title="Инвойсы" />
@@ -37,7 +40,7 @@ export function InvoiceBlankScreen() {
           contentContainerStyle={{ paddingTop: 8, paddingBottom: 40 }}
           keyboardShouldPersistTaps="handled"
         >
-          <InvoiceSettingsBlocks />
+          <InvoiceSettingsBlocks readOnly={!owner} />
         </ScrollView>
       )}
     </Screen>

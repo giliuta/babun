@@ -24,7 +24,13 @@ import { dueDayOptions } from "./due-days";
 // приписку: поменяли настройку — старые документы не переписываются. Каждая
 // правка пишется сразу, как тумблеры остальных настроек.
 
-export function InvoiceSettingsBlocks() {
+export function InvoiceSettingsBlocks({
+  readOnly = false,
+}: {
+  /** Партнёр с «Инвойсы: Только видит» (03.10): те же блоки без правки —
+   *  менять бланк может только владелец (`tenants_update_owner`). */
+  readOnly?: boolean;
+} = {}) {
   const t = useThemeColors();
   const toast = useToast();
   const tenant = useTenant();
@@ -50,6 +56,7 @@ export function InvoiceSettingsBlocks() {
         <SwitchRow
           label="Услуги строками"
           value={byServices}
+          disabled={readOnly}
           onChange={(next) => save({ invoice_line_source: next ? "services" : "total" })}
         />
         {/* Название позиции, когда у записи нет услуг или тумблер выключен.
@@ -61,6 +68,7 @@ export function InvoiceSettingsBlocks() {
           placeholder="Название строки"
           stacked
           separated
+          readOnly={readOnly}
           onSave={(v) => {
             const clean = v.trim();
             if (!clean || clean === data.invoice_default_line_title) return;
@@ -92,6 +100,7 @@ export function InvoiceSettingsBlocks() {
             compact
             options={dueDayOptions(dueDays)}
             value={String(dueDays)}
+            disabled={readOnly}
             onChange={(value) => {
               const next = Number(value);
               if (next !== dueDays) save({ invoice_due_days: next });
@@ -106,9 +115,10 @@ export function InvoiceSettingsBlocks() {
           label="Приписка внизу"
           value={data.invoice_footer_note ?? ""}
           placeholder="Приписка внизу"
-          addLabel="Добавить"
+          addLabel={readOnly ? undefined : "Добавить"}
           stacked
           multiline
+          readOnly={readOnly}
           onSave={(v) => {
             const clean = v.trim();
             if (clean === (data.invoice_footer_note ?? "")) return;
