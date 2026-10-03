@@ -27,8 +27,10 @@ describe("«Ещё N» в шапке блока карточки (03.10)", () =>
 describe("блок «SMS» — мини-история в самом блоке (03.10)", () => {
   const block = () => read("../sms/SmsClientBlock.tsx");
   test("настройки — на блоке; три последних — плашками; тап — само сообщение", () => {
-    assert.match(block(), /label="Присылать SMS"/);
-    assert.match(block(), /label="Имя для SMS"/);
+    // С 03.10 — плашки со значком (вариант 1 владельца), имя — в сером поле.
+    assert.match(block(), /title="Присылать SMS"/);
+    assert.match(block(), /title="Имя для SMS"/);
+    assert.match(block(), /onBlur=\{saveName\}/);
     assert.match(block(), /const MINI_HISTORY = 3;/);
     assert.match(block(), /<SmsPlaque[\s\S]{0,400}onPress=\{\(\) => setOpen\(item\)\}/);
     assert.match(block(), /<SmsMessageSheet/);

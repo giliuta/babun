@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { Text, TextInput, View } from "react-native";
+import { MessageSquare, UserRound } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Client } from "@babun/shared/local/clients";
-import { FieldRow } from "@/components/ui/card-rows";
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SwitchRow } from "@/components/ui/SwitchRow";
+import { SelectRow } from "@/components/ui/select-rows";
+import { SwitchControl } from "@/components/ui/SwitchControl";
 import { useToast } from "@/components/ui/Toast";
 import { useClientsScopeOrNull } from "@/features/clients/company-scope";
 import { clientSubParams } from "@/features/clients/clients-company";
@@ -83,6 +84,27 @@ export function SmsClientBlock({
   };
   const smsName = (client.sms_name ?? "").trim();
   const fallbackName = firstName(client);
+  // Черновик имени — только пока поле в фокусе; отпустили — запись.
+  const nameRef = useRef<TextInput>(null);
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const saveName = () => {
+    if (nameDraft === null) return;
+    const next = nameDraft.trim();
+    setNameDraft(null);
+    if (next !== smsName) void update({ sms_name: next });
+  };
+  const setSend = (send: boolean) => {
+    setSmsOff(!send);
+    optOut.mutate(
+      { clientId: client.id, value: !send, tenantId: cardTenantId },
+      {
+        onError: (e) => {
+          setSmsOff(null);
+          toast(smsErrorText(e), "error");
+        },
+      },
+    );
+  };
 
   return (
     <>
@@ -90,36 +112,81 @@ export function SmsClientBlock({
         title="SMS"
         action={more ? { label: more, pill: true, onPress: openAll } : undefined}
       >
-        <SwitchRow
-          label="Присылать SMS"
-          hint={smsBlocked ? "Клиент просил не писать" : undefined}
-          value={!smsBlocked}
-          disabled={readOnly || optOut.isPending}
-          onChange={(send) => {
-            setSmsOff(!send);
-            optOut.mutate(
-              { clientId: client.id, value: !send, tenantId: cardTenantId },
-              {
-                onError: (e) => {
-                  setSmsOff(null);
-                  toast(smsErrorText(e), "error");
-                },
-              },
-            );
-          }}
-        />
-        {/* ИМЯ ДЛЯ SMS — ПИШЕТСЯ ПРЯМО В СТРОКЕ (владелец 30.09: «не
-            шторка — сразу туда можно написать, блок справа»). Сохраняется,
-            когда поле отпускают. */}
-        <FieldRow
-          label="Имя для SMS"
-          value={smsName}
-          placeholder={fallbackName || "Имя"}
-          separated
-          autoCapitalize="words"
-          readOnly={readOnly}
-          onSave={(name) => void update({ sms_name: name })}
-        />
+        {/* НАСТРОЙКИ — ПЛАШКАМИ СО ЗНАЧКОМ, КАК СООБЩЕНИЯ НИЖЕ (владелец
+            03.10 выбрал вариант 1 из трёх: «имя для SMS справа — Артем, только
+            под Артёма этот блок»). Значок «Присылать» — зелёный, пока SMS
+            идут, и серый, когда клиент просил не писать; вся плашка —
+            тумблер. Имя пишется прямо в сером поле справа (владелец 30.09:
+            «не шторка — сразу туда можно написать»), сохраняется, когда поле
+            отпускают; пусто — первое слово имени клиента серым. */}
+        <View style={{ paddingHorizontal: 2, paddingTop: 2, paddingBottom: 4, gap: 2 }}>
+          <SelectRow
+            icon={MessageSquare}
+            color={smsBlocked ? t.faint : t.success}
+            plain
+            title="Присылать SMS"
+            subtitle={smsBlocked ? "Клиент просил не писать" : undefined}
+            disabled={readOnly}
+            accessibilityLabel={`Присылать SMS: ${smsBlocked ? "нет" : "да"}`}
+            accessibilityHint={readOnly ? undefined : "Переключает отправку SMS этому клиенту"}
+            onPress={() => {
+              if (readOnly || optOut.isPending) return;
+              setSend(smsBlocked);
+            }}
+            trailing={
+              // Тумблер — показание: жест собирает плашка (как в SwitchRow),
+              // и обёртка держит его ровно по центру строки.
+              <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <SwitchControl value={!smsBlocked} disabled={readOnly} />
+              </View>
+            }
+          />
+          <SelectRow
+            icon={UserRound}
+            color={t.accent}
+            plain
+            title="Имя для SMS"
+            accessibilityLabel={`Имя для SMS: ${smsName || fallbackName}`}
+            onPress={() => nameRef.current?.focus()}
+            trailing={
+              <View
+                style={{
+                  minWidth: 96,
+                  maxWidth: 180,
+                  height: 36,
+                  justifyContent: "center",
+                  paddingHorizontal: 12,
+                  borderRadius: t.radius.input,
+                  backgroundColor: t.fill,
+                }}
+              >
+                {readOnly ? (
+                  <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 15, color: smsName ? t.ink : t.placeholder, textAlign: "right" }}>
+                    {smsName || fallbackName}
+                  </Text>
+                ) : (
+                  <TextInput
+                    ref={nameRef}
+                    value={nameDraft ?? smsName}
+                    placeholder={fallbackName || "Имя"}
+                    placeholderTextColor={t.placeholder}
+                    selectionColor={t.accent}
+                    onFocus={() => setNameDraft(smsName)}
+                    onChangeText={setNameDraft}
+                    onBlur={saveName}
+                    returnKeyType="done"
+                    onSubmitEditing={() => nameRef.current?.blur()}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    accessibilityLabel="Имя для SMS"
+                    maxFontSizeMultiplier={1.3}
+                    style={{ fontSize: 15, color: t.ink, textAlign: "right", padding: 0 }}
+                  />
+                )}
+              </View>
+            }
+          />
+        </View>
         {recent.length > 0 ? (
           <>
             <Divider inset={16} />
