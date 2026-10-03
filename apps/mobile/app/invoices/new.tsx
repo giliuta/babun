@@ -18,6 +18,9 @@ import {
   useIssueInvoice,
 } from "@/features/invoices/queries";
 import { useTeams } from "@/features/reference/queries";
+import { useCurrentRole } from "@/features/settings/tenant";
+import { accessGate } from "@/features/access/my-access";
+import { useMyAccess } from "@/features/access/queries";
 import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { todayYmd } from "@/features/invoices/format";
@@ -48,6 +51,16 @@ export default function NewInvoiceScreen() {
   // выставленного документа теряла название и печаталась заглушкой.
   const services = useAllServices();
   const teams = useTeams();
+  // Партнёр выставляет инвойсы только командам, где у него «Документы:
+  // Выставляет» (03.10); владелец — всем.
+  const role = useCurrentRole().data;
+  const myAccess = useMyAccess().data;
+  const issueTeams = (teams.data ?? []).filter(
+    (team) =>
+      role === "owner" ||
+      accessGate({ role, map: myAccess, blockKey: "finance.documents", scope: "calendar", teamId: team.id }) ===
+        "write",
+  );
   const tenant = useTenant();
   const calendarSettings = useCalendarSettings();
   const issue = useIssueInvoice();
@@ -180,7 +193,7 @@ export default function NewInvoiceScreen() {
           appointments={appointments.data ?? []}
           services={services.data ?? []}
           generator={invoiceGeneratorSettings(tenant.data)}
-          teams={teams.data ?? []}
+          teams={issueTeams}
           businessToday={businessToday}
           tenant={tenant.data}
           submitting={issue.isPending}

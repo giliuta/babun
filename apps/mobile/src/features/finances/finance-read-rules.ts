@@ -13,8 +13,9 @@ import { levelInCalendar } from "./finance-page-access";
 // команде строки, расход — «Расходы», перевод — «Счета»
 // (`finance_transactions_select_calendar`), оплата долга — ещё и «Долги» его
 // команды (`finance_transactions_select_debt`), долг — «Долги»
-// (`debts_read`), инвойс — только владельцу (`invoices_owner_all`), чек — когда
-// видна его операция (`receipts_read_own_money`), диспетчеру — все
+// (`debts_read`), инвойс и чек — «Документами» команды документа
+// (`invoices_select_documents`, `receipts_select_documents`, с 03.10), чек —
+// ещё и когда видна его операция (`receipts_read_own_money`), диспетчеру — все
 // (`receipts_read`).
 //
 // В ЗЕРКАЛЕ («его глазами») права его, а токен ваш: сервер отдаёт ВСЁ, и
@@ -37,7 +38,8 @@ export interface FinanceReadRules {
    *  долг без команды. */
   txReadable: (tx: TxLike, debtTeamId?: string | null) => boolean;
   debtReadable: (debt: DebtLike) => boolean;
-  invoicesReadable: boolean;
+  /** Инвойс команды — «Документы» этой команды (`invoices_select_documents`). */
+  documentReadable: (teamId: string | null) => boolean;
   /** `tx` — операция чека, если она есть среди загруженных строк. */
   receiptReadable: (
     receipt: ReceiptLike,
@@ -77,7 +79,7 @@ export function financeReadRules({ role, map }: FinanceReader): FinanceReadRules
     owner,
     txReadable,
     debtReadable: (debt) => owner || readable("finance.debts", debt.team_id),
-    invoicesReadable: owner,
+    documentReadable: (teamId) => owner || (!!teamId && readable("finance.documents", teamId)),
     receiptReadable: (receipt, tx, debtTeamId) => {
       if (owner || role === "dispatcher") return true;
       if (!receipt.transaction_id) return false;
@@ -116,8 +118,9 @@ export type DocumentsReadable = (
   receipts: readonly Receipt[] | undefined,
 ) => FinanceDocument[];
 
-/** Документы периода, которые человек вправе прочитать: инвойсы — только
- *  владельцу, чек — по своей операции. Неизвестный чек не показывается. */
+/** Документы периода, которые человек вправе прочитать: инвойс — по
+ *  «Документам» своей команды, чек — так же или по своей операции.
+ *  Неизвестный чек не показывается. */
 export function readableDocuments(
   documents: FinanceDocument[],
   receipts: readonly Receipt[] | undefined,
@@ -128,9 +131,10 @@ export function readableDocuments(
   if (rules.owner) return documents;
   const receiptById = new Map((receipts ?? []).map((receipt) => [receipt.id, receipt]));
   return documents.filter((doc) => {
-    if (doc.kind === "invoice") return rules.invoicesReadable;
+    if (doc.kind === "invoice") return rules.documentReadable(doc.teamId);
     const receipt = receiptById.get(doc.id);
     if (!receipt) return false;
+    if (rules.documentReadable(doc.teamId)) return true;
     const tx = receipt.transaction_id ? (txById.get(receipt.transaction_id) ?? null) : null;
     return rules.receiptReadable(receipt, tx, tx ? debtTeamOf(debtTeams, tx.debt_id) : undefined);
   });

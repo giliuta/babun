@@ -20,6 +20,7 @@ import type { Team } from "@/features/reference/queries";
 import type { Tenant } from "@/features/settings/tenant";
 import { buildInvoiceDocument, type InvoiceDraftSeller } from "./document";
 import { useCompanies, defaultCompany } from "@/features/companies/queries";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { companyFilled } from "@/features/companies/company-rules";
 import { useToast } from "@/components/ui/Toast";
 import { applyDiscount, round2 } from "@babun/shared/local/finance/appointment-calc";
@@ -355,6 +356,11 @@ export function InvoiceEditor({
   // подтверждал кнопкой одну бумагу, клиент получал другую (аудит бумаги
   // 2026-09-21).
   const companies = useCompanies();
+  // ПАРТНЁР С «ДОКУМЕНТЫ: ВЫСТАВЛЯЕТ» (03.10): реквизиты не выбирает и не
+  // правит — сервер выставляет от юрлица команды документа
+  // (`issue_invoice`, миграция 20261003171500); блока «Реквизиты» у него нет,
+  // и проверки реквизитов на телефоне — тоже: их скажет сервер.
+  const owner = useCurrentRole().data === "owner";
 
   // Валюта документа — одна на компанию; форма обязана говорить в ней же,
   // а не в зашитом евро.
@@ -457,7 +463,8 @@ export function InvoiceEditor({
   // НОМЕР — ИЗ СЕРИИ ЭТИХ РЕКВИЗИТОВ И ГОДА ДАТЫ ВЫСТАВЛЕНИЯ (миграция
   // 20260922050000): сменил набор или год — сервер считает заново.
   const issuedYear = Number(issuedOn.slice(0, 4));
-  const series = useNextInvoiceSeries(issuedYear, pickedCompany?.id ?? companyId);
+  // Партнёр — серия юрлица команды: её назовёт сервер по пустому набору.
+  const series = useNextInvoiceSeries(issuedYear, owner ? (pickedCompany?.id ?? companyId) : null);
   const nextNumber = series.data?.number ?? undefined;
   const paperSeller: InvoiceDraftSeller | null = useMemo(() => {
     const picked = pickedCompany;
@@ -587,7 +594,7 @@ export function InvoiceEditor({
               // документ уходил с шапкой «Giliuta» без адреса и VAT-номера).
               // Ведём туда, где их заполняют: блок «Реквизиты» этой же формы
               // открывает набор тапом. Пока справочник не доехал — не судим.
-              : companies.data && (!pickedCompany || !companyFilled(pickedCompany))
+              : owner && companies.data && (!pickedCompany || !companyFilled(pickedCompany))
                 ? {
                     text: "Заполните реквизиты — тапните блок «Реквизиты» выше",
                     error: false,
@@ -595,7 +602,7 @@ export function InvoiceEditor({
                 // VAT НАЧИСЛЯЕТ ТОЛЬКО ЮРЛИЦО С VAT-НОМЕРОМ — правило
                 // `issue_invoice`. Без этой строки реквизиты с одним адресом
                 // проходили, а выпуск молча отказывал (аудит 03.10).
-                : vatMode !== "off" && rate > 0 && pickedCompany && !pickedCompany.vat_number?.trim()
+                : owner && vatMode !== "off" && rate > 0 && pickedCompany && !pickedCompany.vat_number?.trim()
                   ? {
                       text: "Для VAT впишите VAT-номер в реквизитах — тапните блок «Реквизиты» выше",
                       error: false,
@@ -618,7 +625,7 @@ export function InvoiceEditor({
         // основным в день миграции STORY-101: сделал владелец основным B и
         // скрыл A — превью показывало B и «INV-2026-0001», а выпуск шёл от
         // скрытого A его серией и реквизитами.
-        company_id: companyId ?? pickedCompany?.id ?? null,
+        company_id: owner ? (companyId ?? pickedCompany?.id ?? null) : null,
         account_id: accountId,
         issued_on: issuedOn,
         due_on: dueOn,
@@ -687,6 +694,7 @@ export function InvoiceEditor({
             onDueOnChange={setDueOn}
             companyId={companyId}
             onCompanyChange={setCompanyId}
+            showRequisites={owner}
             number={
               !pickedCompany
                 ? undefined

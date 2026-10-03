@@ -148,6 +148,9 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
   const ops = best(income, expense);
   const accounts = levelIn("finance.accounts", scope);
   const debts = levelIn("finance.debts", scope);
+  // «Документы» — своё право команды с 03.10 (миграция 20261003171500):
+  // «Видит» — её инвойсы и чеки, «Выставляет» — ещё и новые инвойсы.
+  const documentsLevel = levelIn("finance.documents", scope);
 
   /** «Правит всё» — чужие операции стороны. На старой карте так вёл себя
    *  «Меняет» у расхода, а доход сотрудник не правил вовсе. */
@@ -213,12 +216,10 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
   };
 
   const footerLevel = (view: HomeView): Level =>
-    // Документы выставляет владелец: пустой список — не повод предлагать
-    // «выставить счёт» тому, кто его не выставит (сервер откажет).
+    // Инвойс выставляет тот, у кого «Документы: Выставляет» в этой команде:
+    // остальным пустой список — не повод предлагать «выставить счёт».
     view === "documents"
-      ? owner
-        ? "write"
-        : "read"
+      ? documentsLevel
       : view === "debt"
         ? debts
         : view === "accounts"
@@ -238,8 +239,10 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
     ops,
     accounts,
     debts,
-    documents: owner && has.documents,
-    settings: owner,
+    documents: has.documents && documentsLevel === "write",
+    // Шестерёнка над счетами ведёт на «Счета» команды — открыта тому, у кого
+    // открыта эта строка шестерёнки (03.10).
+    settings: owner || levelIn("finance.settings_accounts", scope) !== "locked",
     refunds: owner,
     noTeamChip: owner,
     recordMoney: owner,

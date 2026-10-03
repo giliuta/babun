@@ -51,7 +51,9 @@ import {
   useRefundInvoicePayment,
   useSetInvoiceLanguage,
 } from "@/features/invoices/queries";
-import { useTenant } from "@/features/settings/tenant";
+import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { accessGate } from "@/features/access/my-access";
+import { useMyAccess } from "@/features/access/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useIssueReceipt, useReceipts } from "@/features/documents/receipts-queries";
 import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
@@ -75,6 +77,11 @@ export default function InvoiceDetailScreen() {
   const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
   const tenantQuery = useTenant();
   const tenant = tenantQuery.data;
+  // ПАРТНЁР С «ДОКУМЕНТАМИ» (03.10): «Видит» — бумага, платежи, чек; с
+  // «Выставляет» — ещё язык бумаги и «Выписать чек». Принять оплату, вернуть
+  // деньги и отменить инвойс — только владельцу (сервер так и держит).
+  const role = useCurrentRole().data;
+  const myAccess = useMyAccess().data;
   const calendarSettingsQuery = useCalendarSettings();
   const calendarSettings = calendarSettingsQuery.data;
   const paymentRows = useInvoicePayments();
@@ -424,7 +431,17 @@ export default function InvoiceDetailScreen() {
     language: row.language as "ru" | "en" | undefined,
     creditNote,
   });
-  const canCancel = !isCreditNote && row.status === "issued";
+  const owner = role === "owner";
+  const docWrite =
+    owner ||
+    accessGate({
+      role,
+      map: myAccess,
+      blockKey: "finance.documents",
+      scope: "calendar",
+      teamId: row.brigade_id ?? null,
+    }) === "write";
+  const canCancel = owner && !isCreditNote && row.status === "issued";
   // ЯЗЫК БУМАГИ — ПУНКТОМ МЕНЮ (аудит 03.10): переключателя на документе не
   // было, хотя выставление обещало «переключается одним тапом», и счёт с
   // несохранившимся английским уходил клиенту русским.
@@ -438,10 +455,14 @@ export default function InvoiceDetailScreen() {
     const actions = [
       { label: "Поделиться PDF", run: () => void sharePdf() },
       { label: "Поделиться текстом", run: () => void shareInvoice() },
-      {
-        label: paperEnglish ? "Бумага на русском" : "Бумага на английском",
-        run: switchLanguage,
-      },
+      ...(docWrite
+        ? [
+            {
+              label: paperEnglish ? "Бумага на русском" : "Бумага на английском",
+              run: switchLanguage,
+            },
+          ]
+        : []),
       ...(canCancel
         ? [{ label: "Отменить инвойс", destructive: true, run: () => void cancelInvoice() }]
         : []),
@@ -592,7 +613,7 @@ export default function InvoiceDetailScreen() {
                       ? openLinkedAppointment
                       : undefined}
                     onRefund={
-                      refundDestination === "invoice"
+                      owner && refundDestination === "invoice"
                         ? () => setRefundTarget(payment)
                         : undefined
                     }
@@ -646,7 +667,7 @@ export default function InvoiceDetailScreen() {
 
       {/* ДЕЙСТВИЕ ЭКРАНА ОДНО И ЖИВЁТ ВНИЗУ (AGENTS: главное действие — в
           футере): пока документ ждёт денег — «Принять оплату». */}
-      {awaitsPayment ? (
+      {awaitsPayment && owner ? (
         <View
           className="px-4 pb-7 pt-3"
           style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
@@ -656,7 +677,9 @@ export default function InvoiceDetailScreen() {
             onPress={openPayment}
           />
         </View>
-      ) : !isCreditNote &&
+      ) : docWrite &&
+        !awaitsPayment &&
+        !isCreditNote &&
         row.status !== "void" &&
         row.status !== "cancelled" &&
         receiptsQuery.isSuccess &&

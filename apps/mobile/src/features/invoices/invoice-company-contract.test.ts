@@ -14,11 +14,11 @@ const editor = () =>
 
 describe("реквизиты инвойса", () => {
   test("на сервер уходят те, что напечатаны в превью", () => {
-    assert.match(editor(), /company_id: companyId \?\? pickedCompany\?\.id \?\? null,/);
+    assert.match(editor(), /company_id: owner \? \(companyId \?\? pickedCompany\?\.id \?\? null\) : null,/);
   });
 
   test("номер превью — из серии тех же реквизитов", () => {
-    assert.match(editor(), /useNextInvoiceSeries\(issuedYear, pickedCompany\?\.id \?\? companyId\)/);
+    assert.match(editor(), /useNextInvoiceSeries\(issuedYear, owner \? \(pickedCompany\?\.id \?\? companyId\) : null\)/);
   });
 });
 

@@ -122,9 +122,9 @@ describe("уровни выбранной команды", () => {
     assert.equal(access.view("accounts"), "all");
     // ПЛАШКА «ДОКУМЕНТЫ» ОТКРЫВАЕТСЯ (владелец 20.09: «всё равно остаётся
     // плашка „Документы“, и там просто не показываются документы»): вид
-    // включается, список приходит пустым, а футер остаётся владельческим.
+    // включается, список приходит пустым, а футер гаснет — права нет.
     assert.equal(access.view("documents"), "documents");
-    assert.deepEqual(access.footer("documents"), { enabled: false, reason: VIEW_ONLY_REASON });
+    assert.deepEqual(access.footer("documents"), { enabled: false, reason: null });
     assert.equal(access.view("debt"), "debt");
     assert.equal(access.documents, false);
     assert.equal(access.settings, false);
@@ -160,22 +160,29 @@ describe("уровни выбранной команды", () => {
     }
   });
 
-  test("документы и настройки не открывает даже уровень в карте", () => {
-    const access = financePageAccess({
+  test("«Документы» и «Счета» шестерёнки — живые права команды (03.10)", () => {
+    const write = financePageAccess({
       role: "master",
       map: map({
-        company: { "finance.categories": "write", "finance.templates": "write", "finance.vat": "write" },
-        calendars: { [A]: { "finance.operations": "write", "finance.documents": "write" } },
+        calendars: { [A]: { "finance.documents": "write", "finance.settings_accounts": "read" } },
       }),
       scope: A,
     });
-    assert.equal(access.documents, false);
-    assert.equal(access.settings, false);
-    assert.equal(access.refunds, false);
-    // Уровень в карте документы всё равно не открывает — но и плашку больше
-    // не прячет: вид включается, а список сотруднику не приходит.
-    assert.equal(access.view("documents"), "documents");
-    assert.deepEqual(access.footer("documents"), { enabled: false, reason: VIEW_ONLY_REASON });
+    assert.equal(write.documents, true);
+    assert.deepEqual(write.footer("documents"), { enabled: true, reason: null });
+    assert.equal(write.settings, true);
+    // Возвраты — по-прежнему только владельцу.
+    assert.equal(write.refunds, false);
+
+    const read = financePageAccess({
+      role: "master",
+      map: map({ calendars: { [A]: { "finance.documents": "read" } } }),
+      scope: A,
+    });
+    assert.equal(read.documents, false);
+    assert.equal(read.settings, false);
+    assert.equal(read.view("documents"), "documents");
+    assert.deepEqual(read.footer("documents"), { enabled: false, reason: VIEW_ONLY_REASON });
   });
 });
 

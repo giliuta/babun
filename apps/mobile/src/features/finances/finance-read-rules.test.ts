@@ -64,7 +64,7 @@ describe("владелец — без изменений", () => {
       assert.equal(readableDebts(debts, rules), debts);
       const docs = [{ id: "i", kind: "invoice" }] as FinanceDocument[];
       assert.equal(readableDocuments(docs, [], rules, new Map(), NO_DEBTS), docs);
-      assert.equal(rules.invoicesReadable, true);
+      assert.equal(rules.documentReadable(null), true);
     }
     assert.deepEqual(moneySides({ role: "owner", map: undefined }), { income: true, expense: true });
     for (const panel of ["income", "expense", "profit", "check", "services"]) {
@@ -139,9 +139,10 @@ describe("документы", () => {
     receipt("r-old", "tx-outside-window", A),
   ];
   const DOCS = [
-    { id: "inv-1", kind: "invoice" },
-    ...RECEIPTS.map((r) => ({ id: r.id, kind: "receipt" })),
-    { id: "r-unknown", kind: "receipt" },
+    { id: "inv-1", kind: "invoice", teamId: A },
+    { id: "inv-2", kind: "invoice", teamId: B },
+    ...RECEIPTS.map((r) => ({ id: r.id, kind: "receipt", teamId: r.team_id })),
+    { id: "r-unknown", kind: "receipt", teamId: A },
   ] as FinanceDocument[];
   const txById = new Map(ROWS.map((row) => [row.id, row]));
 
@@ -153,6 +154,16 @@ describe("документы", () => {
   test("мастер без «Доходов» не видит ни одного чека", () => {
     const rules = partner({ "finance.expense": "write", "finance.accounts": "write" });
     assert.deepEqual(ids(readableDocuments(DOCS, RECEIPTS, rules, txById, NO_DEBTS)), []);
+  });
+
+  test("«Документы: Видит» в команде — её инвойсы и чеки, чужой — нет (03.10)", () => {
+    const rules = partner({ "finance.documents": "read" });
+    assert.deepEqual(ids(readableDocuments(DOCS, RECEIPTS, rules, txById, NO_DEBTS)), [
+      "inv-1",
+      "r-a",
+      "r-free",
+      "r-old",
+    ]);
   });
 
   test("диспетчер: инвойсов нет, чеки — все (`receipts_read`)", () => {

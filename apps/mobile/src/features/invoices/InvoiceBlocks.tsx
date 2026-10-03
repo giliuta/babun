@@ -71,6 +71,7 @@ export function InvoiceBlocks({
   onDueOnChange,
   companyId,
   onCompanyChange,
+  showRequisites = true,
   number,
   teamId,
   accountId,
@@ -109,6 +110,10 @@ export function InvoiceBlocks({
   onDueOnChange: (ymd: string | null) => void;
   companyId: string | null;
   onCompanyChange: (id: string | null) => void;
+  /** Блок «Реквизиты» — владельцу (03.10). Партнёр выставляет от реквизитов
+   *  своей команды: выбрать или править набор он не может, сервер берёт
+   *  юрлицо команды сам. */
+  showRequisites?: boolean;
   /** Номер следующего инвойса реквизитов — только у нового счёта. */
   number?: InvoiceNumberTarget;
   /** Команда документа — от неё зависит, ЧЬИ кассы показывать. */
@@ -271,11 +276,13 @@ export function InvoiceBlocks({
         contentContainerStyle={{ paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
       >
-        <InvoiceRequisitesBlock
-          companyId={companyId}
-          onCompanyChange={onCompanyChange}
-          number={number}
-        />
+        {showRequisites ? (
+          <InvoiceRequisitesBlock
+            companyId={companyId}
+            onCompanyChange={onCompanyChange}
+            number={number}
+          />
+        ) : null}
 
         {/* ДВЕ ДАТЫ ОДНИМ БЛОКОМ: когда выставлен и до какого числа ждём
             денег. Вторая — просьба владельца «выбор даты, за какой промежуток

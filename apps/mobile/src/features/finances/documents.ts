@@ -46,6 +46,10 @@ export interface FinanceDocument {
   dead: boolean;
   /** Кредит-нота: в списке видна, в числе документов плитки не считается. */
   creditNote?: boolean;
+  /** Команда документа (инвойс — `brigade_id`, чек — команда того, за что
+   *  выдан). По ней партнёр с «Документы: Видит» читает документ (03.10).
+   *  `null` — общий, без команды. */
+  teamId: string | null;
   /** Предсобранная строка поиска: номер, клиент, сумма. Собирается один раз на
    *  документ, а не на каждую нажатую букву. */
   search: string;
@@ -113,6 +117,7 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
         state: "Сторно",
         dead: true,
         creditNote: true,
+        teamId: invoice.brigade_id ?? null,
         search: searchKey(invoice.number, clientName, invoice.total),
       });
       continue;
@@ -140,6 +145,7 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
               ? "Просрочен"
               : "К оплате",
       dead,
+      teamId: invoice.brigade_id ?? null,
       search: searchKey(invoice.number, clientName, invoice.total),
     });
   }
@@ -163,6 +169,7 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
       // и потухший чек сообщал бы противоположное случившемуся.
       state: receipt.status === "void" ? "Аннулирован" : null,
       dead: receipt.status === "void",
+      teamId: team,
       search: searchKey(receipt.number, clientName, receipt.amount),
     });
   }
