@@ -13,8 +13,8 @@ import type { StageAccount } from "./types";
 // ШТОРКА СЧЁТА — КАЖДОЕ ДЕЛО СВОИМ БЛОКОМ (владелец 03.10, третий заход:
 // «блок „На счёте", справа общая сумма, и эти две плитки; „Перевести" — в
 // другой блок; и вообще раздельно можно все эти блоки»):
-//   • «На счёте» — подпись слева, общая сумма справа, под ними плитки
-//     «Свои | VAT» (вариант 2: на счёте — общая сумма, VAT плюс свои);
+//   • «На счёте» — подпись слева, общая сумма справа и под ней «(в т.ч.
+//     VAT …)»: сумма одна, VAT лежит внутри неё;
 //   • «Перевести», «В оплате записи», «Выписка» — каждый своим блоком.
 // Строки «Команда» нет: шторку открывают со страницы счетов этой команды
 // («зачем писать команда команда один»). «Остатка на начало» тоже нет («что
@@ -52,20 +52,26 @@ export function AccountMoneyGroup({
 
   return (
     <>
-      {/* «НА СЧЁТЕ» — ШАПКА С СУММОЙ, как «КОМАНДА 1 … €770» над счетами.
-          Шапка собрана здесь, а не пропом общего `SectionCard`: примитив
-          общий для всех сессий, а сумма в шапке нужна только этому блоку. */}
+      {/* «НА СЧЁТЕ» — ОДНА ОБЩАЯ СУММА, VAT — В СКОБКАХ ВНУТРИ НЕЁ (владелец
+          03.10, четвёртый заход: «на счёте 320, и в эти 320 входит VAT —
+          просто в скобках, не отдельно VAT и отдельно сумма без VAT, а
+          полноценно общая сумма, но в ней лежит VAT»). Нет налога — нет и
+          скобок. Шапка собрана внутри блока, а не пропом общего
+          `SectionCard`: примитив общий для всех сессий. */}
       <SectionCard dense>
         <View
           accessible
-          accessibilityLabel={`На счёте ${money(account.balance)}`}
+          accessibilityLabel={
+            moneySign(vatDue) !== 0
+              ? `На счёте ${money(account.balance)}, в том числе VAT ${money(vatDue)}`
+              : `На счёте ${money(account.balance)}`
+          }
           style={{
             flexDirection: "row",
-            alignItems: "baseline",
+            alignItems: "center",
             justifyContent: "space-between",
             paddingHorizontal: 16,
-            paddingTop: 12,
-            paddingBottom: moneySign(vatDue) !== 0 ? 10 : 12,
+            paddingVertical: 12,
           }}
         >
           <Text
@@ -79,30 +85,30 @@ export function AccountMoneyGroup({
           >
             На счёте
           </Text>
-          <Text
-            maxFontSizeMultiplier={1.3}
-            numberOfLines={1}
-            style={{
-              fontSize: 22,
-              fontWeight: "800",
-              color: moneySign(account.balance) < 0 ? t.danger : t.ink,
-              fontVariant: ["tabular-nums"],
-            }}
-          >
-            {money(account.balance)}
-          </Text>
-        </View>
-        {/* Нет налога — нет и плиток: тогда блок — одна сумма. */}
-        {moneySign(vatDue) !== 0 ? (
-          <View
-            accessible
-            accessibilityLabel={`Из них свои ${money(account.balance - vatDue)}, VAT ${money(vatDue)}`}
-            style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingBottom: 12 }}
-          >
-            <MoneyTile word="Свои" value={account.balance - vatDue} tint={SETTINGS_TILE.green} />
-            <MoneyTile word="VAT" value={vatDue} tint={SETTINGS_TILE.orange} />
+          <View style={{ alignItems: "flex-end" }}>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              style={{
+                fontSize: 22,
+                fontWeight: "800",
+                color: moneySign(account.balance) < 0 ? t.danger : t.ink,
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {money(account.balance)}
+            </Text>
+            {moneySign(vatDue) !== 0 ? (
+              <Text
+                maxFontSizeMultiplier={1.3}
+                numberOfLines={1}
+                style={{ marginTop: 1, fontSize: 13, color: t.sub, fontVariant: ["tabular-nums"] }}
+              >
+                {`(в т.ч. VAT ${money(vatDue)})`}
+              </Text>
+            ) : null}
           </View>
-        ) : null}
+        </View>
       </SectionCard>
 
       {canTransfer ? (
@@ -153,39 +159,5 @@ export function AccountMoneyGroup({
         </View>
       </SectionCard>
     </>
-  );
-}
-
-/** Плитка части остатка: слово сверху, сумма крупно; заливка — цвет части. */
-function MoneyTile({ word, value, tint }: { word: string; value: number; tint: string }) {
-  const t = useThemeColors();
-  return (
-    <View
-      style={{
-        flex: 1,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        borderRadius: t.radius.input,
-        borderCurve: "continuous",
-        backgroundColor: `${tint}1A`,
-      }}
-    >
-      <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 13, color: t.sub }}>
-        {word}
-      </Text>
-      <Text
-        maxFontSizeMultiplier={1.3}
-        numberOfLines={1}
-        style={{
-          marginTop: 2,
-          fontSize: 17,
-          fontWeight: "700",
-          color: moneySign(value) < 0 ? t.danger : t.ink,
-          fontVariant: ["tabular-nums"],
-        }}
-      >
-        {money(value)}
-      </Text>
-    </View>
   );
 }
