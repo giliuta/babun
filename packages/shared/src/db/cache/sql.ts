@@ -516,7 +516,12 @@ export async function dequeueAll(): Promise<QueuedOp[]> {
     `SELECT id, created_at, table_name, op, row_id, payload,
             expected_updated_at, attempts, last_error
        FROM sync_queue
-       ORDER BY created_at ASC, id ASC`,
+       -- ПОРЯДОК ПОСТАНОВКИ, А НЕ ЧАСЫ ТЕЛЕФОНА (аудит 2026-10-03). id —
+       -- AUTOINCREMENT и растёт строго по порядку записи; created_at — Date.now()
+       -- и ходит назад вместе с часами (ручная смена времени, коррекция после
+       -- долгого офлайна): удаление вставало перед вставкой той же записи,
+       -- давало «0 строк = уже удалено», а вставка затем её воскрешала.
+       ORDER BY id ASC`,
   );
   return rows.map(queueRowToOp);
 }

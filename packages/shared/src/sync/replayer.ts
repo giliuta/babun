@@ -241,7 +241,7 @@ function boundTenantOf(supabase: DbSupabase): string | null {
 }
 
 async function drain(opts: ReplayerOptions): Promise<void> {
-  const ops = await dequeueAll(); // sorted by created_at ASC via index
+  const ops = await dequeueAll(); // in enqueue order (id ASC), not by device clock
   if (ops.length === 0) return;
 
   // Компания, под которой слив НАЧАЛСЯ. Сверяется с живой перед каждой
