@@ -23,3 +23,18 @@ describe("«Ещё N» в шапке блока карточки (03.10)", () =>
     }
   });
 });
+
+describe("блок «SMS» — как «История»: последнее плашкой, все — на своей странице (03.10)", () => {
+  const block = () => read("../sms/SmsClientBlock.tsx");
+  test("последнее сообщение — плашкой под днём, тап и «Ещё N» ведут на страницу", () => {
+    assert.match(block(), /<VisitDayHeader date=\{fileDay\(last\.createdAt\)\} \/>/);
+    assert.match(block(), /<SmsPlaque[\s\S]{0,200}onPress=\{openAll\}/);
+    assert.match(block(), /pathname: "\/clients\/sms", params: clientSubParams\(client\.id, scope\)/);
+    assert.match(block(), /label: more, pill: true, onPress: openAll/);
+  });
+  test("отправки в блоке нет — только у трубки клиента", () => {
+    // Ищется КНОПКА, а не слово: почему её нет, сказано в комментарии.
+    assert.doesNotMatch(block(), /label="Отправить/);
+    assert.doesNotMatch(read("../../../app/(dashboard)/clients/sms.tsx"), /<GradientButton|label="Отправить/);
+  });
+});

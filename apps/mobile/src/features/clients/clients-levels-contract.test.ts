@@ -879,6 +879,7 @@ describe("экраны: вкладка «Клиенты» открывается
       "card-fields.tsx",
       "visits.tsx",
       "attachments.tsx",
+      "sms.tsx",
       "channels.tsx",
       "maps.tsx",
       "object-types.tsx",
