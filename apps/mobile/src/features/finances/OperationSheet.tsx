@@ -570,12 +570,27 @@ export function OperationSheet({
   // Доход нельзя опустить ниже уже возвращённого — иначе возвраты по нему
   // превысили бы сам доход (сервер это тоже отбивает, но причину человек
   // должен прочитать до нажатия).
+  //
+  // Σ ВОЗВРАТОВ ЕЩЁ НЕ ИЗВЕСТНА (страница подставляет Infinity, пока запрос
+  // едет или упал). Прежде это значило «ниже возвращённого» для ЛЮБОГО
+  // дохода: правка гасла целиком, а причина печатала «возвращено €∞»
+  // (аудит 2026-10-03). Неизвестно — значит, нельзя только УМЕНЬШИТЬ сумму:
+  // заметка, категория и сумма вверх возвратам не грозят.
+  const refundsKnown = Number.isFinite(refundedTotal);
   const belowRefunded =
     isEdit &&
     type === "income" &&
     amountCents != null &&
+    refundsKnown &&
     Math.round(refundedTotal * 100) > 0 &&
     Math.round(vatBreakdown.gross * 100) < Math.round(refundedTotal * 100);
+  const lowersWhileRefundsUnknown =
+    isEdit &&
+    type === "income" &&
+    amountCents != null &&
+    !refundsKnown &&
+    !!transaction &&
+    Math.round(vatBreakdown.gross * 100) < Math.round(Math.abs(transaction.amount) * 100);
   const doorway = useSheetDoorway();
   // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
   const categoriesHref = useReferenceHref().categories;
@@ -608,6 +623,7 @@ export function OperationSheet({
     !accountMismatch &&
     !dateInFuture &&
     !belowRefunded &&
+    !lowersWhileRefundsUnknown &&
     !txAccountClosed &&
     // Финансы онлайн-only НА ЗАПИСЬ (ТЗ §8): без сети кнопка гасится и
     // объясняет себя строкой ниже. Крутящаяся кнопка страшнее отказа —
@@ -650,6 +666,13 @@ export function OperationSheet({
       notify(
         "Проверьте сумму",
         "Введите сумму больше нуля и не больше двух знаков после запятой.",
+      );
+      return;
+    }
+    if (lowersWhileRefundsUnknown) {
+      notify(
+        "Сверяем возвраты",
+        "Возвраты по этому доходу ещё не загрузились — уменьшить сумму можно, когда они придут.",
       );
       return;
     }
@@ -906,6 +929,11 @@ export function OperationSheet({
                 text: `По этому доходу уже возвращено ${formatEUR(refundedTotal)} — сумма не может стать меньше возвращённого`,
                 error: true,
               }
+            : lowersWhileRefundsUnknown
+              ? {
+                  text: "Возвраты по доходу ещё загружаются — уменьшить сумму можно после",
+                  error: false,
+                }
             : dateInFuture
               ? {
                   text: "Финансовую операцию нельзя записать будущей датой",
