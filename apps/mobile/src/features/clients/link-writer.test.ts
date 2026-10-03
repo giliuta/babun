@@ -112,6 +112,12 @@ describe("пустой черновик не спрашивает «Удалит
       true,
     );
   });
+
+  test("стёртый «Телефон 2» — не набранное, с номером — набранное (повторный аудит 03.10)", () => {
+    const row = (number: string) => ({ id: "p1", number, label: "Мобильный" });
+    assert.equal(draft.draftHasInput(createBlankClient({ phones: [row("+357 ")] }), "+357"), false);
+    assert.equal(draft.draftHasInput(createBlankClient({ phones: [row("+357 99")] }), "+357"), true);
+  });
 });
 
 describe("ключи — договор читателя, писателя и страницы", () => {

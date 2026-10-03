@@ -26,6 +26,7 @@ import { useToast } from "@/components/ui/Toast";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { useTenantId } from "@/lib/tenant";
+import { useSetClientSmsOptOut } from "@/features/sms/sms-account";
 
 // «ОБЪЕДИНИТЬ С ДУБЛЕМ» — ПУНКТ «⋯» КАРТОЧКИ.
 //
@@ -85,6 +86,7 @@ export function useMergeDuplicate({
   const updateById = useUpdateClientById();
   const updateAppt = useUpdateAppointment();
   const archive = useArchiveClients();
+  const setOptOut = useSetClientSmsOptOut();
   const running = useRef(false);
 
   if (!eligible || !client || !dupId) return undefined;
@@ -109,6 +111,17 @@ export function useMergeDuplicate({
       const { remap } = mergeLocations(fresh, dupRow);
       if (Object.keys(patch).length > 0) {
         await updateById.mutateAsync({ id: primary.id, patch });
+      }
+      // «Клиент просил не писать» переезжает вместе с данными (повторный
+      // аудит 03.10): правка клиента его не несёт — у отказа своя функция, —
+      // и после слияния основная карточка снова обещала SMS человеку, который
+      // просил не писать.
+      if (dupRow.sms_opt_out === true && fresh.sms_opt_out !== true) {
+        await setOptOut.mutateAsync({
+          clientId: primary.id,
+          value: true,
+          tenantId: sourceScope?.tenantId ?? null,
+        });
       }
       // 2. Визиты дубля — ради них слияние и затевается.
       const moving = dupAppts.data ?? [];
@@ -159,7 +172,8 @@ export function useMergeDuplicate({
     confirmThen(
       "Объединить карточки?",
       {
-        message: `Данные и визиты «${dup.full_name || dup.phone}» переедут сюда, а сама карточка уйдёт в архив.`,
+        // Архива клиентов нет с 03.10: дубль уходит в «Удалённые клиенты».
+        message: `Данные и визиты «${dup.full_name || dup.phone}» переедут сюда, а сама карточка уйдёт в «Удалённые клиенты».`,
         confirmLabel: "Объединить",
       },
       () => void merge(dup),

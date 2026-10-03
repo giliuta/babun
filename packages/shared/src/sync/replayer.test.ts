@@ -277,6 +277,33 @@ describe("replayer — insert", () => {
     ]);
   });
 
+  test("offline client with a tag: queue fields the RPC refuses do not reach it (повторный аудит 03.10)", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: {
+        id: UUID_A,
+        tenant_id: TENANT,
+        full_name: "A",
+        sms_opt_out: false,
+        purge_at: null,
+        updated_at: "2026-10-03T00:00:00.000Z",
+        __tag_ids: [UUID_B],
+      },
+      expected_updated_at: null,
+    });
+    const { client, rpcCalls } = makeFakeSupabase(
+      () => ({ data: null, error: null }),
+      () => ({ data: { id: UUID_A }, error: null }),
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(await queueDepth()).toBe(0);
+    expect(rpcCalls[0]?.args.p_client).toEqual({ full_name: "A" });
+  });
+
   test("a lost aggregate response repairs tags atomically after duplicate", async () => {
     await enqueueOp({
       table: "clients",

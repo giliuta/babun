@@ -9,6 +9,7 @@ import {
   isLoyalClient,
 } from "@babun/shared/local/selectors/client-stats";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
+import { visitMark } from "./visit-mark";
 import { PERIOD_LABELS, type Period } from "@/features/finances/period";
 
 // Волна 2 — web-parity типы/константы фильтров клиентов. Порт
@@ -110,7 +111,13 @@ export function sortClients(
   const collator = new Intl.Collator("ru");
   const rows = clients.map((c) => {
     const s = statsMap.get(c.id);
-    const last = s?.lastVisitDate ?? "";
+    // ДАТА ВИЗИТА — ТА, ЧТО НАПЕЧАТАНА В СТРОКЕ (`visitMark`; повторный аудит
+    // 03.10): строка показывает и незакрытый прошедший визит (жёлтым), а
+    // сортировка брала только закрытые — «28 сен» стояла среди клиентов с
+    // «1 сен», а клиент с одним незакрытым визитом уходил в хвост с датой в
+    // строке. Будущая запись (серым) визитом не считается — в хвост.
+    const mark = visitMark(s);
+    const last = mark && mark.kind !== "ahead" ? mark.date : "";
     let has = 1; // есть ли значение по активной оси
     let num = 0; // числовая ось (деньги)
     let str = ""; // строковая ось (даты)

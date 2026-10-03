@@ -17,6 +17,7 @@ import { clientCardHref } from "@/features/clients/clients-company";
 import {
   countryDialCode,
   formatPhoneAsYouType,
+  isDialOnly,
   tryToE164,
 } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
@@ -106,7 +107,9 @@ export function draftHasInput(draft: Client, dial: string): boolean {
       draft.whatsapp_phone.trim() ||
       draft.telegram_username.trim() ||
       draft.instagram_username.trim() ||
-      draft.phones.length ||
+      // Строка «Телефон 2», где номер стёрт до кода, набранным не считается —
+      // как и само поле номера выше (повторный аудит 03.10).
+      draft.phones.some((p) => draftPhoneTyped(p.number ?? "", dial)) ||
       draft.legal_name?.trim() ||
       draft.vat_number?.trim() ||
       draft.reg_number?.trim() ||
@@ -473,6 +476,11 @@ export function useClientDraft(
         // со связью) — в нём один код страны, и в базу он уезжает пустым,
         // а не номером «+357».
         phone: e164 ? d.phone.trim() : "",
+        // Стёртый номер «Телефона 2» в черновике хранится (`savePhone`, чтобы
+        // перенабор не терял строку), а при создании отсеивается — иначе
+        // карточка рождалась с пустой строкой «Телефон 2 | +357 | Номер»
+        // (повторный аудит 03.10).
+        phones: d.phones.filter((p) => !isDialOnly(p.number ?? "", country)),
         full_name: d.full_name.trim(),
         phone_e164: e164,
         // Черновик пишет реквизиты как набраны (обрезка под пальцем съедала

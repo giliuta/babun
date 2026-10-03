@@ -311,14 +311,19 @@ export function useClientFilters(
     const q = search.trim();
     // Жильцов управляющей находят по её имени: к полям клиента добавляются
     // имя каждой карточки, в которую он входит, его роль и место.
-    const linkWords = (c: Client): string[] =>
-      clientMemberOf(c, groupsById).flatMap((e) => [
+    // …и имя его тега (повторный аудит 03.10): «VIP» в поиске не находил
+    // никого, хотя тег стоит плиткой на карточке и чипом в фильтре.
+    const tagName = new Map(tags.map((tag) => [tag.id, tag.name]));
+    const linkWords = (c: Client): string[] => [
+      ...clientMemberOf(c, groupsById).flatMap((e) => [
         e.group?.full_name ?? "",
         e.role,
         e.location?.label ?? "",
-      ]);
+      ]),
+      ...(c.tag_ids ?? []).map((id) => tagName.get(id) ?? ""),
+    ];
     return (c: Client) => (q ? matchesClient(c, search, linkWords(c)) : true);
-  }, [search, groupsById]);
+  }, [search, groupsById, tags]);
 
   // Одна дата на весь проход фильтра. Пересчитывается вместе с набором
   // статусов и картой статистики — этого достаточно: экран живёт минуты,

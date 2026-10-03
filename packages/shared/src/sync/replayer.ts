@@ -646,17 +646,24 @@ async function dispatch(
       // Тот же белый список, что и у онлайн-записи: RPC не принимает
       // идентичность, сторожок LWW и `purge_at` (срок корзины ставит только
       // удаление прямым UPDATE). Лишний ключ = отказ 22023 на всю очередь.
+      // `sms_opt_out` — тоже мимо: отказ от SMS правится своей функцией
+      // (`set_client_sms_opt_out`), а очередь кладёт его в строку нового
+      // клиента. С ним клиент с тегом, заведённый без сети, сервер отбивал
+      // на каждом повторе, и после трёх попыток он пропадал с телефона
+      // (повторный аудит 03.10).
       const {
         id: _id,
         tenant_id: _tenantId,
         updated_at: _updatedAt,
         purge_at: _purgeAt,
+        sms_opt_out: _smsOptOut,
         ...clientPayload
       } = payload;
       void _id;
       void _tenantId;
       void _updatedAt;
       void _purgeAt;
+      void _smsOptOut;
       const { error: aggregateError } = await supabase.rpc(
         "create_client_with_tags",
         {

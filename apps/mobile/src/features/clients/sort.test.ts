@@ -55,6 +55,20 @@ describe("sortClients", () => {
   });
 
   // Главная новая ось: «кто пропал дольше всех» для списка на дозвон.
+  test("«Недавний визит» сортирует по дате из строки — незакрытый визит тоже (повторный аудит 03.10)", () => {
+    const list = [client("a"), client("b"), client("c"), client("d")];
+    const map = new Map<string, ClientStats>([
+      // Закрыт 1 сен, потом незакрытый 28 сен — строка печатает «28 сен».
+      ["a", stats({ lastVisitDate: "2026-09-01", lastUnclosedDate: "2026-09-28" })],
+      ["b", stats({ lastVisitDate: "2026-09-15" })],
+      // Только незакрытый визит — дата в строке есть, значит не хвост.
+      ["c", stats({ lastUnclosedDate: "2026-09-10" })],
+      // Только будущая запись — визитом не считается.
+      ["d", stats({ nextApt: { date: "2026-10-10" } as ClientStats["nextApt"] })],
+    ]);
+    assert.deepEqual(ids(sortClients(list, map, "recent")), ["a", "b", "c", "d"]);
+  });
+
   test("«Давний визит»: переворачивает только визиты, хвост остаётся внизу", () => {
     const list = [client("свежий"), client("нет-визитов"), client("старый")];
     const map = new Map([

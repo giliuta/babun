@@ -656,6 +656,10 @@ export function useTrashClientAsPartner() {
       qc.setQueriesData<Client[]>({ queryKey: ["clients"] }, (list) =>
         Array.isArray(list) ? list.filter((c) => c.id !== id) : list,
       );
+      // «Напомнить» об удалённом клиенте снимается и у партнёра, как у
+      // владельца (повторный аудит 03.10): иначе пуш приходил в срок и вёл на
+      // удалённую карточку.
+      void cancelClientReminder(id);
       void qc.invalidateQueries({ queryKey: ["clients"] });
       void qc.invalidateQueries({ queryKey: ["client", id] });
     },
