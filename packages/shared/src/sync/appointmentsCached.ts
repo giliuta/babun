@@ -47,6 +47,7 @@ import {
   createAppointment as repoCreateAppointment,
   updateAppointment as repoUpdateAppointment,
   deleteAppointment as repoDeleteAppointment,
+  StaleAppointmentError,
 } from "../db/repositories/appointments";
 import type { Appointment } from "../local/appointments";
 import {
@@ -64,7 +65,11 @@ import {
 // CachedAppointment (raw Row) is the queue-payload projection; CachedAppointmentData
 // (full domain) is the cache-read projection. Both are used below.
 import { isOnline } from "./network";
-import { kickReplayer, tenantRefreshHeld } from "./replayer";
+import {
+  kickReplayer,
+  tenantRefreshHeld,
+  touchesGuardedAppointmentFields,
+} from "./replayer";
 import {
   enqueueOpAndEmit,
   enqueueOpWithCacheUpsertAndEmit,
@@ -373,11 +378,18 @@ export async function updateAppointment(
     // Online: standalone optimistic upsert (no queued op to pair with).
     if (merged) await cacheUpsert("appointments", merged);
     try {
+      // СТАТУС И ДЕНЬГИ — ТОЛЬКО ПОВЕРХ ТОЙ ЖЕ СТРОКИ, ЧТО ВИДЕЛ ТЕЛЕФОН (аудит
+      // 03.10). Отмена записи с оплатой — это возврат всех её денег; отмена по
+      // устаревшей копии (оплату принял другой телефон, а realtime её ещё не
+      // донёс) молча оформила бы клиенту возврат.
       const updated = await repoUpdateAppointment(
         supabase,
         id,
         patch,
         tenantId,
+        touchesGuardedAppointmentFields("appointments", patch as Record<string, unknown>)
+          ? { expectedUpdatedAt }
+          : {},
       );
       // Ответ правки — каноническая строка (`update().select("*")`): второй
       // GET той же записи был второй поездкой на каждом переносе блока, и
@@ -389,7 +401,13 @@ export async function updateAppointment(
       // Put the canonical cached row back and surface the error instead of
       // leaving a false optimistic edit plus a permanently poisoned queue.
       if (!isTransientNetworkError(err)) {
-        if (existing) await cacheUpsert("appointments", existing).catch(() => {});
+        // Строку правили на другом устройстве — в кэш ложится строка
+        // сервера, а не наша прежняя копия: экран должен показать правду.
+        const restore =
+          err instanceof StaleAppointmentError && err.fresh
+            ? makeCachedRow(err.fresh, tenantId)
+            : existing;
+        if (restore) await cacheUpsert("appointments", restore).catch(() => {});
         throw err;
       }
       await enqueueUpdate(updateOp, merged);

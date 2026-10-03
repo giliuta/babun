@@ -745,6 +745,89 @@ describe("appointments cache-of-domain", () => {
     expect(a.time_end).toBe("14:30");
   });
 
+  test("отмена в сети по устаревшей копии не ложится, в кэш встаёт строка сервера (аудит 03.10)", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+      }),
+      TENANT,
+    );
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    setNetwork(new OnlineNetwork());
+    const [before] = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    // Пока телефон смотрел старую копию, другой телефон принял оплату.
+    const serverRow = {
+      id: APPT_ID,
+      tenant_id: TENANT,
+      kind: "work",
+      date: "2026-07-10",
+      time_start: "09:00",
+      time_end: "10:00",
+      status: "scheduled",
+      payment_status: "paid",
+      prepaid_amount: 0,
+      paid_amount: 100,
+      total_amount: 100,
+      services: [],
+      service_ids: [],
+      payments: [],
+      expenses: [],
+      updated_at: "2026-10-03T12:00:00.000Z",
+    };
+    const seenUpdateFilters: Record<string, unknown>[] = [];
+    const fake = {
+      from() {
+        const filters: Record<string, unknown> = {};
+        let op: "update" | "select" = "select";
+        const chain: Record<string, unknown> = {
+          update() {
+            op = "update";
+            return chain;
+          },
+          select() {
+            return chain;
+          },
+          eq(col: string, val: unknown) {
+            filters[col] = val;
+            return chain;
+          },
+          maybeSingle() {
+            if (op === "update") {
+              seenUpdateFilters.push({ ...filters });
+              return Promise.resolve({ data: null, error: null }); // строка уже другая
+            }
+            return Promise.resolve({ data: serverRow, error: null });
+          },
+          single() {
+            return Promise.resolve({ data: null, error: { message: "single не ждали" } });
+          },
+        };
+        return chain;
+      },
+    };
+
+    await expect(
+      updateAppointment(
+        fake as never,
+        APPT_ID,
+        { status: "cancelled", cancel_reason: "Клиент перенёс" },
+        TENANT,
+      ),
+    ).rejects.toThrow("изменилась на другом устройстве");
+
+    // Правка шла только поверх той строки, что видел телефон.
+    expect(seenUpdateFilters).toHaveLength(1);
+    expect(seenUpdateFilters[0]!.updated_at).toBe(before!.updated_at);
+    const [cached] = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    expect(cached?.status).toBe("scheduled");
+    expect(cached?.payment_status).toBe("paid");
+    expect(await dequeueAll()).toHaveLength(0);
+  });
+
   test("online semantic delete rejection restores the appointment", async () => {
     await createAppointment(
       stubSupabase,

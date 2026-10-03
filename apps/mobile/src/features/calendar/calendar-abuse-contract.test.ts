@@ -148,6 +148,13 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(toastSrc, /\.start\(\(\{ finished \}\) => \{\s*if \(finished\) setToast\(null\);/);
   });
 
+  test("правки одной записи уходят по очереди жестов, устаревшая — строкой сервера", () => {
+    const src = readFileSync(resolve(here, "mutations.ts"), "utf8");
+    assert.match(src, /return afterPreviousEdit\(id, \(\) =>\s*updateAppointment\(supabase, id, patch, tenantId as string\),\s*\);/);
+    assert.match(src, /const next = previous\.then\(run, run\);/);
+    assert.match(src, /err instanceof StaleAppointmentError && err\.fresh \? err\.fresh : ctx\?\.prevRecord/);
+  });
+
   test("полоса тоста смонтирована всегда — второй тост не встаёт невидимым", () => {
     const toastSrc = readFileSync(resolve(here, "../../components/ui/Toast.tsx"), "utf8");
     assert.match(toastSrc, /<Animated\.View\s*pointerEvents=\{toast\?\.action \? "box-none" : "none"\}/);

@@ -97,6 +97,38 @@ type DbSupabase = SupabaseClient<Database>;
 export const MAX_ATTEMPTS = 3;
 const BACKOFFS_MS = [1000, 5000, 30000]; // attempts 1, 2, 3
 
+/** ПОЛЯ ЗАПИСИ, КОТОРЫЕ НЕЛЬЗЯ ПРОДАВИТЬ ПОВЕРХ ЧУЖОЙ ПРАВКИ (аудит 03.10).
+ *  Статус и деньги решают сервер и сверка финансов: отмена записи с оплатой
+ *  — это возврат всех её денег, и он необратим. Правка, вставшая в очередь
+ *  до того, как другой телефон принял оплату, силой «последний побеждает»
+ *  оформила бы клиенту возврат, которого никто не просил. Такая правка при
+ *  конфликте уступает серверу, а человек узнаёт об этом словами. */
+export const APPOINTMENT_GUARDED_FIELDS: ReadonlySet<string> = new Set([
+  "status",
+  "cancel_reason",
+  "prepaid_amount",
+  "paid_amount",
+  "payment_status",
+  "payment",
+  "payments",
+  "payment_method",
+]);
+
+/** Правка записи трогает статус или деньги — см. `APPOINTMENT_GUARDED_FIELDS`. */
+export function touchesGuardedAppointmentFields(
+  table: string,
+  payload: Record<string, unknown>,
+): boolean {
+  return (
+    table === "appointments" &&
+    Object.keys(payload).some((key) => APPOINTMENT_GUARDED_FIELDS.has(key))
+  );
+}
+
+/** Сообщение, когда правка статуса или денег уступила серверу. */
+export const GUARDED_CONFLICT_MESSAGE =
+  "Запись изменилась на другом устройстве, и ваша правка статуса или оплаты не применена. Откройте запись и сделайте это ещё раз.";
+
 /** ДЕРЖИТ ЛИ ОПЕРАЦИЯ ПЕРЕЧИТКУ ТАБЛИЦЫ ЭТОЙ КОМПАНИИ (аудит 2026-10-03).
  *  Перечитка с сервера пропускается, пока своя операция той же таблицы ждёт
  *  выгрузки: снимок сервера стёр бы оптимистичную строку раньше, чем она
@@ -464,7 +496,9 @@ async function drain(opts: ReplayerOptions): Promise<void> {
           sentinels.set(rowKey(op), { from: op.expected_updated_at, to });
         }
       });
-      if (conflict) {
+      if (conflict === "server-won") {
+        opts.onConflict?.(GUARDED_CONFLICT_MESSAGE);
+      } else if (conflict) {
         opts.onConflict?.(
           "Запись была обновлена на другом устройстве. Применены ваши изменения.",
         );
@@ -493,6 +527,8 @@ async function drain(opts: ReplayerOptions): Promise<void> {
 /** Returns `true` if the dispatch succeeded but a conflict was
  *  detected (UPDATE matched 0 rows on the first pass; we then
  *  retried without expected_updated_at and that one succeeded).
+ *  `"server-won"` — правка статуса или денег записи при конфликте уступила
+ *  серверу (`APPOINTMENT_GUARDED_FIELDS`): о ней надо сказать словами.
  *  Throws on unrecoverable errors so the caller bumps attempts. */
 async function dispatch(
   supabase: DbSupabase,
@@ -503,7 +539,7 @@ async function dispatch(
   serverWinsOnConflict = false,
   /** Правка легла чисто, и у строки теперь новое `updated_at`. */
   onApplied?: (updatedAt: string) => void,
-): Promise<boolean> {
+): Promise<boolean | "server-won"> {
   // The repositories accept the row shapes already; payloads are
   // pre-shaped at enqueue time so dispatch is mostly a relay. We
   // talk directly to PostgREST here (not through the typed repo
@@ -723,10 +759,13 @@ async function dispatch(
       return false;
     }
 
-    if (serverWinsOnConflict) {
+    const guarded = touchesGuardedAppointmentFields(op.table, updatePayload);
+    if (serverWinsOnConflict || guarded) {
       // Строку правили после того, как эта правка встала в очередь. Старая
       // правка поверх новой затёрла бы свежие изменения (время, услуги),
-      // поэтому операция снимается, а кэш берёт строку сервера.
+      // поэтому операция снимается, а кэш берёт строку сервера. Правка
+      // статуса или денег записи уступает ВСЕГДА — см.
+      // `APPOINTMENT_GUARDED_FIELDS`.
       const { data: fresh, error: freshErr } = await supabase
         .from(tableName)
         .select()
@@ -745,7 +784,9 @@ async function dispatch(
           await cacheUpsert(op.table as CachedTable, toCachedRow(op.table, row, prevCached));
         }
       }
-      return false;
+      // Строки больше нет — говорить не о чем; есть — правка статуса или
+      // денег уступила, и человек должен это узнать.
+      return guarded && fresh ? "server-won" : false;
     }
 
     // 0 rows → conflict. Retry without updated_at filter and re-fetch

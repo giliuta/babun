@@ -657,6 +657,91 @@ describe("replayer — вторая офлайн-правка строки бе�
   });
 });
 
+describe("replayer — статус и деньги записи силой не продавливаются (аудит 03.10)", () => {
+  const serverRow = {
+    id: UUID_A,
+    tenant_id: TENANT,
+    team_id: "team-1",
+    kind: "work",
+    date: "2026-10-05",
+    time_start: "10:00",
+    time_end: "11:00",
+    status: "scheduled",
+    payment_status: "partial",
+    prepaid_amount: 30,
+    paid_amount: 0,
+    total_amount: 100,
+    services: [],
+    service_ids: [],
+    payments: [],
+    expenses: [],
+    updated_at: "2026-10-03T12:00:00.000Z",
+  };
+
+  test("отмена, вставшая до чужой оплаты, уступает серверу и говорит словами", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { status: "cancelled", cancel_reason: "Клиент перенёс", tenant_id: TENANT },
+      expected_updated_at: "2026-10-01T00:00:00.000Z",
+    });
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update") return { data: [], error: null }; // строку правили — конфликт
+      if (rec.op === "select") return { data: serverRow, error: null };
+      return { data: null, error: null };
+    });
+    const toasts: string[] = [];
+
+    await kickReplayer({
+      supabase: asSupabase(client),
+      tenantId: TENANT,
+      onConflict: (m) => {
+        toasts.push(m);
+      },
+    });
+
+    // Одна условная правка — силовой второй (= возврата всех денег) нет.
+    expect(calls.filter((c) => c.op === "update")).toHaveLength(1);
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]).toContain("не применена");
+    expect(await queueDepth()).toBe(0);
+    const cached = await cacheGetOne<{ status: string; updated_at: string }>("appointments", UUID_A);
+    expect(cached?.status).toBe("scheduled");
+  });
+
+  test("правка времени при конфликте по-прежнему применяется (последний побеждает)", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_start: "12:00", time_end: "13:00", tenant_id: TENANT },
+      expected_updated_at: "2026-10-01T00:00:00.000Z",
+    });
+    let call = 0;
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update") {
+        call += 1;
+        if (call === 1) return { data: [], error: null };
+        return { data: { ...serverRow, time_start: "12:00", time_end: "13:00" }, error: null };
+      }
+      return { data: null, error: null };
+    });
+    const toasts: string[] = [];
+
+    await kickReplayer({
+      supabase: asSupabase(client),
+      tenantId: TENANT,
+      onConflict: (m) => {
+        toasts.push(m);
+      },
+    });
+
+    expect(calls.filter((c) => c.op === "update")).toHaveLength(2);
+    expect(toasts[0]).toContain("Применены ваши изменения");
+  });
+});
+
 describe("replayer — injected quota gate", () => {
   test("host defaults protect wrapper kicks that provide only supabase", async () => {
     await enqueueOp({

@@ -14,6 +14,7 @@ import {
   updateAppointment,
 } from "@babun/shared/sync/appointmentsCached";
 import { isOnline, randomUuid } from "@babun/shared/sync";
+import { StaleAppointmentError } from "@babun/shared/db/repositories/appointments";
 import { markOwnWrite, OWN_WRITE_IN_FLIGHT_MS, OWN_WRITE_SETTLE_MS } from "@/lib/own-writes";
 import {
   listPhotoPaths,
@@ -203,6 +204,21 @@ export function useCreateAppointment() {
  *  обратно (два переноса подряд — «подлагивает»). */
 const inFlightEdits = new Map<string, number>();
 
+/** Последняя начатая правка каждой записи: следующая ждёт её (успех или
+ *  отказ — неважно), прежде чем решать, идти в сеть или в очередь. */
+const editChains = new Map<string, Promise<unknown>>();
+
+function afterPreviousEdit<T>(id: string, run: () => Promise<T>): Promise<T> {
+  const previous = editChains.get(id) ?? Promise.resolve();
+  const next = previous.then(run, run);
+  editChains.set(id, next);
+  const forget = () => {
+    if (editChains.get(id) === next) editChains.delete(id);
+  };
+  next.then(forget, forget);
+  return next;
+}
+
 function useUpdateAppointmentOptions() {
   const tenantId = useTenantId();
   const role = useCurrentRole().data;
@@ -235,7 +251,14 @@ function useUpdateAppointmentOptions() {
       if (role !== "owner" && role !== "dispatcher") {
         throw new Error("Роль в компании ещё не подтверждена.");
       }
-      return updateAppointment(supabase, id, patch, tenantId as string);
+      // ПРАВКИ ОДНОЙ ЗАПИСИ — ПО ОЧЕРЕДИ ЖЕСТОВ (аудит 03.10). Два быстрых
+      // переноса уходили в сеть разом: при медленной связи второй ложился
+      // первым, а первый, оборвавшись, вставал в очередь и силой затирал
+      // его — в базе оставалось место ПЕРВОГО жеста. Теперь следующая правка
+      // записи ждёт предыдущую.
+      return afterPreviousEdit(id, () =>
+        updateAppointment(supabase, id, patch, tenantId as string),
+      );
     },
     // Optimistic: patch the cached list immediately so a drag-rescheduled
     // block lands on its new slot without waiting for the server round-trip.
@@ -265,11 +288,14 @@ function useUpdateAppointmentOptions() {
       if (left > 0) inFlightEdits.set(id, left);
       else inFlightEdits.delete(id);
     },
-    onError: (_err, { id }, ctx) => {
-      const prevRecord = ctx?.prevRecord;
-      if (!prevRecord) return;
+    onError: (err, { id }, ctx) => {
+      // Запись изменилась на другом устройстве — показываем строку сервера,
+      // а не нашу прежнюю копию: по ней человек и решит, что делать дальше.
+      const restore =
+        err instanceof StaleAppointmentError && err.fresh ? err.fresh : ctx?.prevRecord;
+      if (!restore) return;
       qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
-        cur?.map((a) => (a.id === id ? prevRecord : a)),
+        cur?.map((a) => (a.id === id ? restore : a)),
       );
     },
     onSuccess: (data, { id, patch }) => {
