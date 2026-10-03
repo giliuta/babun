@@ -396,7 +396,12 @@ export function ClientDetailScreen() {
   // ШАБЛОНЫ SMS ИЗ КАРТОЧКИ (STORY-089): имя, долг и ближайшая запись
   // клиента — «SMS» у его номера предложит шаблоны, которые ими заполняются.
   const { data: smsTeams = [] } = useTeams({ includeInactive: true });
-  const companyName = useTenant().data?.name ?? null;
+  // Имя в шаблоне — компании КАРТОЧКИ (03.10): при команде партнёра в
+  // календаре клиент AirFix получал бы подпись чужой компании.
+  const activeCompanyName = useTenant().data?.name ?? null;
+  const companyName = scope
+    ? (scope.tenantName ?? (scope.isActive ? activeCompanyName : null))
+    : activeCompanyName;
   // «Ближайшая запись» в SMS — по часам команды клиента, а не телефона.
   const smsNow = useBusinessNow(c?.team_id ?? null);
   const clientSmsContext = useMemo(() => {
@@ -405,6 +410,10 @@ export function ClientDetailScreen() {
     return {
       clientId: c.id,
       optOut: c.sms_opt_out === true,
+      tenantId: scope?.tenantId ?? null,
+      // Команда клиента — от неё SMS по умолчанию, если у неё есть имя
+      // отправителя (так и задумано в листе: «без записи — команда клиента»).
+      teamId: c.team_id ?? null,
       vars: clientSmsVars({
         client: c,
         appointments,
@@ -416,7 +425,7 @@ export function ClientDetailScreen() {
         nowHm: now.hm,
       }),
     };
-  }, [appointments, c, access.money.show, companyName, smsTeams, stats?.debt, smsNow]);
+  }, [appointments, c, access.money.show, companyName, smsTeams, stats?.debt, smsNow, scope?.tenantId]);
 
   if (roleQuery.isPending) {
     return (

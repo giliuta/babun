@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { Linking, Platform } from "react-native";
 import { usePlanAllows } from "@/features/settings/tenant";
+import { useTenantId } from "@/lib/tenant";
 import { smsUrlWithBody, type SmsVars } from "./sms-compose";
 import { useSmsAccount } from "./sms-account";
 
@@ -21,6 +22,9 @@ export interface SmsContext {
   /** «Клиент просил не писать» (`sms_opt_out`): сервис его отказом и
    *  встретит — кнопки «Отправить от …» нет, остаётся только свой телефон. */
   optOut?: boolean;
+  /** Компания клиента или записи. Сервис шлёт от компании, открытой в
+   *  календаре, и чужого ей клиента отклонит (`sms:client`/`sms:rights`). */
+  tenantId?: string | null;
 }
 
 const SmsVarsContext = createContext<SmsContext | null>(null);
@@ -56,10 +60,16 @@ export function useSmsServiceFor(context: SmsContext | null): SmsServiceState {
   // Без тарифа SMS сервиса нет (02.10, SMS — с «Соло»); с телефона — как
   // звонок, это не наш сервис.
   const smsInPlan = usePlanAllows("sms");
+  // СВОЙ КЛИЕНТ, ПОКА В КАЛЕНДАРЕ КОМАНДА ПАРТНЁРА (03.10): баланс, имена
+  // отправителей и сама отправка — компании, открытой в календаре, а клиент
+  // другой; сервер отказал бы. Двери, которая кончится отказом, нет —
+  // остаётся «Со своего телефона».
+  const activeTenantId = useTenantId();
+  const sameCompany = !context?.tenantId || context.tenantId === activeTenantId;
   // Клиент просил не писать — сервер ответит «sms:opt_out»; двери, которая
   // кончится отказом, нет (повторный аудит 03.10).
   const ready = Boolean(
-    smsInPlan && context?.clientId && !context.optOut && account?.serviceOn && account.canPay,
+    sameCompany && smsInPlan && context?.clientId && !context.optOut && account?.serviceOn && account.canPay,
   );
   const available =
     ready && (context?.appointmentId ? Boolean(teamId && senders[teamId]) : senderTeams.length > 0);

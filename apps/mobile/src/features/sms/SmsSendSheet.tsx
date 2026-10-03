@@ -13,6 +13,7 @@ import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
@@ -80,12 +81,16 @@ export function SmsSendSheet({
 
   // ОТ КАКОЙ КОМАНДЫ (владелец 30.09): у записи — её команда; без записи —
   // команда клиента, если у неё есть имя отправителя, иначе первая с именем.
-  const fixedTeam = context.appointmentId ? (context.teamId ?? null) : null;
+  // Клиент чужой компании (своя, пока в календаре команда партнёра): от её
+  // команды и с её шаблонами — сервис другой компании здесь не участвует.
+  const activeTenantId = useTenantId();
+  const foreign = !!context.tenantId && context.tenantId !== activeTenantId;
+  const fixedTeam = context.appointmentId || foreign ? (context.teamId ?? null) : null;
   const [pickedTeam, setPickedTeam] = useState<string | null>(null);
   const defaultTeam =
     context.teamId && service.senders[context.teamId] ? context.teamId : (service.senderTeams[0] ?? context.teamId ?? null);
   const fromTeam = fixedTeam ?? pickedTeam ?? defaultTeam;
-  const fetched = useTeamTemplates(given ? null : fromTeam).data;
+  const fetched = useTeamTemplates(given ? null : fromTeam, foreign ? context.tenantId : null).data;
   const templates = given ?? fetched ?? [];
 
   const needsLink = templates.some((tpl) => wantsLink(tpl.body));
@@ -132,7 +137,8 @@ export function SmsSendSheet({
   const senderName = fromTeam ? service.senders[fromTeam] : null;
   const teamName = (id: string | null) => teams.find((x) => x.id === id)?.name ?? "Команда";
   // Шаблоны правит тот, кто правит настройки календаря.
-  const canEditTemplates = (role === "owner" || role === "dispatcher") && !!fromTeam;
+  // Страница шаблонов живёт в компании календаря — у чужой её не открыть.
+  const canEditTemplates = (role === "owner" || role === "dispatcher") && !!fromTeam && !foreign;
 
   // Отправили — закрываются обе шторки: сперва верхняя, потом нижняя (два
   // окна разом iOS закрывает ненадёжно).

@@ -84,14 +84,20 @@ export function useSaveSmsSettings() {
 }
 
 /** Шаблоны команды (`teamId`) или всех видимых команд (`null`). */
-export function useTeamTemplates(teamId: string | null) {
-  const tenantId = useTenantId();
+export function useTeamTemplates(teamId: string | null, cardTenantId?: string | null) {
+  const activeTenantId = useTenantId();
   const role = useDataRole();
+  // Шаблоны команды СВОЕЙ компании карточки (03.10): пока в календаре открыта
+  // команда партнёра, команда клиента — не из активной компании, и чтение без
+  // её заголовка возвращало пустой список («Шаблонов пока нет»).
+  const tenantId = cardTenantId ?? activeTenantId;
   return useQuery({
     queryKey: [...smsTemplatesKey(tenantId), teamId],
     enabled: !!tenantId && role.isSuccess && role.data != null,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("sms_team_templates", { p_team_id: teamId ?? undefined });
+      const { data, error } = await clientOf(cardTenantId, activeTenantId).rpc("sms_team_templates", {
+        p_team_id: teamId ?? undefined,
+      });
       if (error) throw new Error(error.message);
       return parseTeamTemplates(data);
     },
@@ -474,7 +480,13 @@ export function useSetClientSmsOptOut() {
       if (error) throw new Error(error.message);
       return input.value;
     },
-    onSettled: () => void qc.invalidateQueries({ queryKey: ["clients"] }),
+    // КАРТОЧКА ТОЖЕ (аудит 03.10): у неё свой ключ `["client", id, …]`, и после
+    // одного `["clients"]` шторка трубки ещё предлагала «Отправить от
+    // компании» клиенту, который просил не писать, — сервер отвечал отказом.
+    onSettled: (_value, _error, input) => {
+      void qc.invalidateQueries({ queryKey: ["clients"] });
+      void qc.invalidateQueries({ queryKey: ["client", input.clientId] });
+    },
     meta: { errorHandled: true },
   });
 }
