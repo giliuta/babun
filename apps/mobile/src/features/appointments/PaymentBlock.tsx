@@ -92,6 +92,9 @@ export interface PaymentBlockProps {
   onPendingChange: (next: PendingPayment | null) => void;
   /** Свежая запись после оплаты/снятия — страница подтягивает статус. */
   onAppointmentChanged: (fresh: Appointment) => void;
+  /** Клиент в форме. Расходится с сохранённым — деньги не принимаем, пока
+   *  запись не сохранена: платёж лёг бы на прежнего клиента. */
+  clientId?: string | null;
 }
 
 
@@ -103,6 +106,7 @@ export function PaymentBlock({
   pending,
   onPendingChange,
   onAppointmentChanged,
+  clientId,
 }: PaymentBlockProps) {
   const t = useThemeColors();
   const router = useRouter();
@@ -192,7 +196,11 @@ export function PaymentBlock({
   );
   const amountCents = amountMode ? amountCentsFromInput(partText) : outstanding;
   const problem = amountProblem(amountCents, outstanding);
-  const acceptsMoney = outstanding > 0 && !billUnsaved && canTakeMoney && bookingInPlan;
+  const clientUnsaved =
+    appointment !== null &&
+    clientId !== undefined &&
+    (appointment.client_id ?? null) !== (clientId ?? null);
+  const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && canTakeMoney && bookingInPlan;
 
   // СНЯТИЕ И ПРИЁМ — ПО ТАПУ, А НЕ ПО ОТВЕТУ (владелец 2026-09-30: «должно
   // всё мгновенно»): запись в кэше меняется сразу так, как её поменяет
@@ -237,6 +245,11 @@ export function PaymentBlock({
     if (billUnsaved) {
       haptics.warning();
       toast("Итог изменился — сначала сохраните запись", "info");
+      return;
+    }
+    if (clientUnsaved) {
+      haptics.warning();
+      toast("Клиент изменился — сначала сохраните запись", "info");
       return;
     }
     if (problem === "exceeds") {
@@ -383,6 +396,7 @@ export function PaymentBlock({
     overpaid,
     overpaidLabel: formatEURExact(overpaid / 100),
     billUnsaved,
+    clientUnsaved,
   });
   const captionColor =
     caption?.tone === "success"

@@ -23,7 +23,7 @@ describe("инвойс в оплате и тариф", () => {
   test("без тарифа записи клиентов — плитки, «Часть суммы» и снятие серые и зовут плашку", () => {
     const src = block();
     assert.match(src, /const bookingInPlan = usePlanAllows\("book-clients"\);/);
-    assert.match(src, /const acceptsMoney = outstanding > 0 && !billUnsaved && canTakeMoney && bookingInPlan;/);
+    assert.match(src, /const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && canTakeMoney && bookingInPlan;/);
     // Все три входа в деньги: тап по плитке, снятие с оплаченной, «Часть суммы».
     assert.equal((src.match(/if \(!bookingInPlan\) \{\s*tariffNudge\(\);\s*return;\s*\}/g) ?? []).length, 3);
     assert.match(src, /dimmed=\{!bookingInPlan\}/);

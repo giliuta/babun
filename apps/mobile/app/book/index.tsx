@@ -2873,6 +2873,7 @@ export default function BookScreen() {
                   visit={{ date, timeStart, status }}
                   pending={pendingPayment}
                   onPendingChange={setPendingPayment}
+                  clientId={clientId}
                   onAppointmentChanged={(fresh) => {
                     // Сервер закрыл визит вместе с оплатой — форма обязана
                     // знать об этом, иначе «Сохранить» вернул бы старый статус,

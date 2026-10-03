@@ -142,6 +142,25 @@ describe("деньги блока считаются по итогу ФОРМЫ"
     });
   });
 
+  test("клиент сменён и не сохранён — сначала сохранить (аудит 03.10)", () => {
+    const caption = blockCaption({
+      hasTeam: true,
+      hasAppointment: true,
+      visitCompleted: false,
+      outstanding: 13500,
+      rowsCount: 0,
+      amountMode: false,
+      started: false,
+      hasPending: false,
+      outstandingLabel: "€135,00",
+      clientUnsaved: true,
+    });
+    assert.deepEqual(caption, {
+      text: "Клиент изменился — сохраните запись",
+      tone: "warning",
+    });
+  });
+
   test("сохранённый итог — обычная жизнь строки: долг называется долгом", () => {
     const caption = blockCaption({
       hasTeam: true,
