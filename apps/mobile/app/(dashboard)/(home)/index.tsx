@@ -194,6 +194,7 @@ import {
 } from "@/features/settings/local-settings";
 import { eventTypeIcon } from "@/features/calendar/event-type-icons";
 import { useCurrentRole, usePlanAllows, useTenant } from "@/features/settings/tenant";
+import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { SmsSendSheet } from "@/features/sms/SmsSendSheet";
 import { appointmentSmsVars } from "@/features/sms/client-sms-vars";
 import { accessGate, moneyKey } from "@/features/access/my-access";
@@ -314,6 +315,8 @@ export default function CalendarTab() {
   const [smsApt, setSmsApt] = useState<Appointment | null>(null);
   const [smsOpen, setSmsOpen] = useState(false);
   const smsInPlan = usePlanAllows("sms");
+  const workInPlan = usePlanAllows("book-clients");
+  const nudgeTariff = useTariffNudge();
   const companyName = useTenant().data?.name ?? null;
   // Метки дня — функция компании (STORY-088): выключены — тап по дате метку
   // не открывает, в сетке меток нет.
@@ -331,13 +334,16 @@ export default function CalendarTab() {
   /** Можно ли двигать запись: пальцем, «Перенести», растяжкой. */
   const canMoveAppointment = useCallback(
     (appointment: Appointment) => {
+      // Без тарифа запись клиента не двигается ни пальцем, ни растяжкой:
+      // сервер её правку отклонит (аудит 03.10).
+      if (!workInPlan && !isCalendarEvent(appointment)) return false;
       if (!isCrew) return canMutateAppointment(appointment);
       const can = actionsIn(appointment.team_id ?? null);
       return isCalendarEvent(appointment)
         ? can.events === "write" && appointment.created_by === session?.user.id
         : can.move;
     },
-    [isCrew, canMutateAppointment, actionsIn, session?.user.id],
+    [workInPlan, isCrew, canMutateAppointment, actionsIn, session?.user.id],
   );
   // «Первый день недели» — общая настройка; правит Неделю, Месяц и мини-
   // календарь одинаково (до этого понедельник был зашит в каждом из трёх).
@@ -404,6 +410,10 @@ export default function CalendarTab() {
     // перевод отбивает (`access:team_move`).
     if (isCrew && teamMoves) {
       toast("Запись остаётся в своей команде", "info");
+      return;
+    }
+    if (!workInPlan && !isCalendarEvent(apt)) {
+      nudgeTariff();
       return;
     }
     if (!canMoveAppointment(apt)) {
@@ -2131,12 +2141,14 @@ export default function CalendarTab() {
     const event = isCalendarEvent(apt);
     const mutable = canMutateAppointment(apt);
 
-    type Item = { label: string; run: () => void; destructive?: boolean };
+    /** `view` — пункт ничего не меняет в записи (открыть, позвонить, SMS…). */
+    type Item = { label: string; run: () => void; destructive?: boolean; view?: true };
     const items: Item[] = [];
     if (isCrew) {
       items.push({
         label: event ? "Открыть событие" : "Открыть заявку",
         run: () => openEdit(apt),
+        view: true,
       });
       // Мастер может двигать статус только вперёд на один шаг. Это ровно
       // совпадает с серверной политикой и не оставляет кнопок, которые после
@@ -2153,7 +2165,7 @@ export default function CalendarTab() {
       // Локальное напоминание доступно и для командного события в режиме
       // просмотра: это настройка устройства, она не изменяет чужую запись.
       if (apt.status !== "cancelled" && apt.date >= todayYmd)
-        items.push({ label: "Напомнить…", run: () => openReminderMenu(apt) });
+        items.push({ label: "Напомнить…", run: () => openReminderMenu(apt), view: true });
       if (phone && !event && smsInPlan)
         items.push({
           label: "Отправить SMS",
@@ -2161,11 +2173,13 @@ export default function CalendarTab() {
             setSmsApt(apt);
             setSmsOpen(true);
           },
+          view: true,
         });
       if (phone)
         items.push({
           label: "Позвонить",
           run: () => Linking.openURL(`tel:${phone.replace(/[^+\d]/g, "")}`),
+          view: true,
         });
       if (address)
         items.push({
@@ -2174,6 +2188,7 @@ export default function CalendarTab() {
             Linking.openURL(
               `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
             ),
+          view: true,
         });
       // ДЕЙСТВИЯ ПО ПРАВАМ (STORY-088): каждое — свой блок в календаре
       // записи; нет права — нет пункта. Своё событие при «События: Меняет»
@@ -2254,6 +2269,7 @@ export default function CalendarTab() {
             setSmsApt(apt);
             setSmsOpen(true);
           },
+          view: true,
         });
       if (!event) {
         if (!paymentBlockOn && apt.status !== "cancelled")
@@ -2287,10 +2303,20 @@ export default function CalendarTab() {
 
     // Шапка — кто, подпись — когда. Действие ждёт ухода листа сам
     // `PickerSheet`: почти каждый пункт открывает своё окно.
+    // БЕЗ ТАРИФА ЗАПИСЬ КЛИЕНТА — ТОЛЬКО ДЛЯ ПРОСМОТРА (аудит 03.10): сервер
+    // (`appointments_free_readonly`) отклоняет любую её правку, а меню
+    // предлагало перенос, цвет, статус, копию и удаление — и каждое кончалось
+    // откатом с ошибкой сервера. Пункты остаются, тап — плашка «Нужно
+    // изменить тариф», как на странице записи.
+    const shown =
+      !event && !workInPlan
+        ? items.map((item) => (item.view ? item : { ...item, run: nudgeTariff }))
+        : items;
+
     setSheetMenu({
       title: clientName(apt) || apt.comment || "Запись",
       subtitle: `${humanDay(apt.date)}, ${apt.time_start}–${apt.time_end}`,
-      items,
+      items: shown,
     });
   };
 
