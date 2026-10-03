@@ -278,11 +278,11 @@ export function CrewWorkRecord({
         <SectionCard title="Заметка команды" padded>
           <TextInput
             keyboardAppearance="light"
-            accessibilityLabel="Комментарий к заявке"
+            accessibilityLabel="Заметка записи"
             value={comment}
             onChangeText={setComment}
             multiline
-            placeholder="Что важно знать по заявке"
+            placeholder="Заметка записи"
             placeholderTextColor={t.placeholder}
             style={{
               minHeight: 88,

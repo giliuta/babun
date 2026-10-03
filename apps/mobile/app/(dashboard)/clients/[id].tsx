@@ -1142,7 +1142,7 @@ function MasterClientOperationalView({
                   <Pressable
                     onPress={() => onOpenAppointment(appointment)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Открыть заявку ${humanDay(appointment.date)} ${appointment.time_start}`}
+                    accessibilityLabel={`Открыть запись ${humanDay(appointment.date)} ${appointment.time_start}`}
                     className="min-h-[72px] flex-row items-center gap-3 px-4 py-3 active:opacity-70"
                   >
                     <View className="min-w-0 flex-1">

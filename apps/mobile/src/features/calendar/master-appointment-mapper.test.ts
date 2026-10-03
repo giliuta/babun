@@ -151,7 +151,7 @@ describe("master appointment RPC mapper", () => {
         masterAppointmentJsonToAppointment(
           rpcRow({ tenant_id: null }),
         ),
-      /некорректную заявку/,
+      /некорректную запись/,
     );
     assert.throws(
       () => masterAppointmentJsonToAppointment(rpcRow({ status: "unknown" })),

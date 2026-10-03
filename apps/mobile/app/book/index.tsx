@@ -36,8 +36,6 @@ import type {
 } from "@babun/shared/local/appointments";
 import { isCustomServiceId, newCustomServiceId } from "@babun/shared/local/appointments";
 import {
-} from "@babun/shared/local/appointments";
-import {
   locationAddressForBooking,
   type Client,
   type Location,
@@ -2387,7 +2385,7 @@ export default function BookScreen() {
             onPress={requestClose}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Закрыть оформление заявки"
+            accessibilityLabel="Закрыть запись"
             style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
           >
             <Text style={{ fontSize: 16, color: t.body }}>Отмена</Text>
@@ -2428,7 +2426,7 @@ export default function BookScreen() {
                 void Promise.all(referenceQueries.map(({ query }) => query.refetch()));
               }}
               accessibilityRole="button"
-              accessibilityLabel="Повторить загрузку данных заявки"
+              accessibilityLabel="Повторить загрузку записи"
               style={{
                 minHeight: 48,
                 justifyContent: "center",

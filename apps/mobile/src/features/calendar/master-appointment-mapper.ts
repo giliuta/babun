@@ -31,7 +31,7 @@ type JsonRecord = Record<string, Json | undefined>;
 
 function asRecord(value: Json): JsonRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Сервер вернул некорректную заявку");
+    throw new Error("Сервер вернул некорректную запись");
   }
   return value as JsonRecord;
 }
@@ -39,7 +39,7 @@ function asRecord(value: Json): JsonRecord {
 function stringField(row: JsonRecord, key: string): string {
   const value = row[key];
   if (typeof value !== "string") {
-    throw new Error("Сервер вернул некорректную заявку");
+    throw new Error("Сервер вернул некорректную запись");
   }
   return value;
 }
@@ -48,7 +48,7 @@ function nullableStringField(row: JsonRecord, key: string): string | null {
   const value = row[key];
   if (value === null) return null;
   if (typeof value !== "string") {
-    throw new Error("Сервер вернул некорректную заявку");
+    throw new Error("Сервер вернул некорректную запись");
   }
   return value;
 }
@@ -56,7 +56,7 @@ function nullableStringField(row: JsonRecord, key: string): string | null {
 function booleanField(row: JsonRecord, key: string): boolean {
   const value = row[key];
   if (typeof value !== "boolean") {
-    throw new Error("Сервер вернул некорректную заявку");
+    throw new Error("Сервер вернул некорректную запись");
   }
   return value;
 }
@@ -65,14 +65,14 @@ function nullableNumberField(row: JsonRecord, key: string): number | null {
   const value = row[key];
   if (value === null) return null;
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new Error("Сервер вернул некорректную заявку");
+    throw new Error("Сервер вернул некорректную запись");
   }
   return value;
 }
 
 function numberField(row: JsonRecord, key: string): number {
   const value = nullableNumberField(row, key);
-  if (value === null) throw new Error("Сервер вернул некорректную заявку");
+  if (value === null) throw new Error("Сервер вернул некорректную запись");
   return value;
 }
 
@@ -158,14 +158,14 @@ function serviceLines(value: Json | undefined): AppointmentService[] {
 
 function kindField(row: JsonRecord): AppointmentKind {
   const value = stringField(row, "kind") as AppointmentKind;
-  if (!KINDS.has(value)) throw new Error("Сервер вернул неизвестный тип заявки");
+  if (!KINDS.has(value)) throw new Error("Сервер вернул неизвестный тип записи");
   return value;
 }
 
 function statusField(row: JsonRecord): AppointmentStatus {
   const value = stringField(row, "status") as AppointmentStatus;
   if (!STATUSES.has(value)) {
-    throw new Error("Сервер вернул неизвестный статус заявки");
+    throw new Error("Сервер вернул неизвестный статус записи");
   }
   return value;
 }
@@ -174,7 +174,7 @@ function sourceField(row: JsonRecord): AppointmentSource | null {
   const value = nullableStringField(row, "source");
   if (value === null) return null;
   if (!SOURCES.has(value as AppointmentSource)) {
-    throw new Error("Сервер вернул неизвестный источник заявки");
+    throw new Error("Сервер вернул неизвестный источник записи");
   }
   return value as AppointmentSource;
 }
@@ -237,7 +237,7 @@ export function masterAppointmentJsonToAppointment(value: Json): Appointment {
     // МЕТКА ЗАПИСИ ЧИТАЕТСЯ МЯГКО. Бригадная проекция — отдельная серверная
     // функция, и колонка `city` появилась позже неё: пока RPC не обновят,
     // ключа в ответе просто нет, а строгое чтение роняло бы весь наряд
-    // («Сервер вернул некорректную заявку»). Отсутствует — значит «как у дня».
+    // («Сервер вернул некорректную запись»). Отсутствует — значит «как у дня».
     city: typeof row.city === "string" ? row.city : null,
     comment: stringField(row, "comment"),
     address: stringField(row, "address"),

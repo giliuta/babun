@@ -406,6 +406,22 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(gear, /latest\.current\.draft = null;\s*setDraft\(null\);/);
   });
 
+  test("«Свободное перемещение» из «Месяца» и «Списка» уводит на сетку недели", () => {
+    const src = screen();
+    const start = src.slice(src.indexOf("const startFreeMove = (apt: Appointment) => {"), src.indexOf("const startMove = (apt: Appointment"));
+    assert.match(start, /if \(mode !== "week" && mode !== "day"\) \{\s*setMode\("week"\);/);
+    assert.equal(src.match(/label: "Свободное перемещение",\s*run: (?:wholeSeries\()?\(\) => startFreeMove\(apt\)/g)?.length, 2);
+  });
+
+  test("в календаре и листах записи — «запись», не «заявка»", () => {
+    const src = screen();
+    assert.doesNotMatch(src, /"Открыть заявку"|исчезнут из заявки/);
+    for (const file of ["../appointments/BookingSheets.tsx", "../appointments/CrewWorkRecord.tsx", "../appointments/CrewAppointmentSheet.tsx", "ActionMenuSheet.tsx"]) {
+      const body = readFileSync(resolve(here, file), "utf8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+      assert.doesNotMatch(body, /"[^"]*[Зз]аявк[^"]*"/, file);
+    }
+  });
+
   test("часовой пояс: «Применить» без выбора ничего не пишет", () => {
     const sheet = readFileSync(resolve(here, "TimezoneSheet.tsx"), "utf8");
     assert.match(sheet, /const zone = zoneToApply\(value, picked, idx\);\s*if \(zone !== value\) onApply\(zone\);/);

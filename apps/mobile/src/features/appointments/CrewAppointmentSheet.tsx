@@ -108,7 +108,7 @@ export function CrewAppointmentSheet({
       <MirrorBanner inModal />
       <Screen edges={["top"]}>
         <ScreenHeader
-          title={client?.full_name || appointment.comment || "Заявка"}
+          title={client?.full_name || appointment.comment || "Запись"}
           subtitle={`${humanDayTitle(appointment.date)} · ${appointment.time_start}–${appointment.time_end}`}
           onBack={onClose}
         />

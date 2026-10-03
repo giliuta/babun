@@ -2118,7 +2118,7 @@ export default function CalendarTab() {
           ? "Удалится исходное событие и все его повторы. Действие необратимо."
           : isCalendarEvent(apt)
             ? "Действие необратимо."
-            : "Действие необратимо; связанные фото также исчезнут из заявки.",
+            : "Действие необратимо. Фото записи удалятся вместе с ней.",
         confirmLabel: repeating ? "Удалить серию" : "Удалить",
         destructive: true,
       },
@@ -2139,6 +2139,19 @@ export default function CalendarTab() {
   /** «Перенести» из меню — в режим зелёных кубиков. Список и Месяц кубиков не
    *  рисуют, поэтому переезжаем в Неделю этой записи; выйти — крестиком на
    *  плашке, сменой команды или уходом с экрана. */
+  // «СВОБОДНОЕ ПЕРЕМЕЩЕНИЕ» — ТОЛЬКО ПО СЕТКЕ. Из «Месяца» и «Списка» режим
+  // включался без неё: плашка «Тяните запись», а тянуть нечего (проверка
+  // 03.10). Как «Перенести» (`startMove`) — в неделю записи.
+  const startFreeMove = (apt: Appointment) => {
+    setMoving(null);
+    setEditingApt(apt);
+    if (mode !== "week" && mode !== "day") {
+      setMode("week");
+      rememberView({ mode: "week" });
+      setDay(startOfDay(parseYMD(apt.date)));
+    }
+  };
+
   const startMove = (apt: Appointment, kind: "move" | "copy" = "move") => {
     placedFromRef.current = null;
     setPick(null);
@@ -2400,7 +2413,7 @@ export default function CalendarTab() {
     const items: Item[] = [];
     if (isCrew) {
       items.push({
-        label: event ? "Открыть событие" : "Открыть заявку",
+        label: event ? "Открыть событие" : "Открыть запись",
         run: () => openEdit(apt),
         view: true,
       });
@@ -2465,10 +2478,7 @@ export default function CalendarTab() {
       if (movable && !event)
         items.push({
           label: "Свободное перемещение",
-          run: () => {
-            setMoving(null);
-            setEditingApt(apt);
-          },
+          run: () => startFreeMove(apt),
         });
       if (movable) items.push({ label: "Перенести", run: wholeSeries(() => startMove(apt)) });
       if (!event && can.move && apt.event_all_day !== true)
@@ -2508,10 +2518,7 @@ export default function CalendarTab() {
       ) {
         items.push({
           label: "Свободное перемещение",
-          run: wholeSeries(() => {
-            setMoving(null);
-            setEditingApt(apt);
-          }),
+          run: wholeSeries(() => startFreeMove(apt)),
         });
         items.push({ label: "Перенести", run: wholeSeries(() => startMove(apt)) });
       }

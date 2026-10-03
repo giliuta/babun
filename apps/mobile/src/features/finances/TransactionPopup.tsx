@@ -379,7 +379,7 @@ export function TransactionPopup({
     metaRows.push({ label: "Источник", value: "Автоматически (из записи)" });
   }
   if (isAppointmentLedger) {
-    metaRows.push({ label: "Изменение", value: "Через связанную заявку" });
+    metaRows.push({ label: "Изменение", value: "Через связанную запись" });
   }
   if (Number.isFinite(alreadyRefunded) && alreadyRefunded > 0) {
     metaRows.push({

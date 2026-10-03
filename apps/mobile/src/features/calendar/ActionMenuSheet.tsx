@@ -61,7 +61,7 @@ const LOOK: Record<string, { icon: LucideIcon; color: string }> = {
   "Вернуть в план": { icon: RotateCcw, color: SETTINGS_TILE.blue },
   "Отменить визит": { icon: Ban, color: SETTINGS_TILE.yellow },
   Восстановить: { icon: RotateCcw, color: SETTINGS_TILE.green },
-  "Открыть заявку": { icon: ExternalLink, color: SETTINGS_TILE.blue },
+  "Открыть запись": { icon: ExternalLink, color: SETTINGS_TILE.blue },
   "Открыть событие": { icon: ExternalLink, color: SETTINGS_TILE.blue },
   "В работу": { icon: Play, color: SETTINGS_TILE.indigo },
   "Напомнить…": { icon: Bell, color: SETTINGS_TILE.yellow },
