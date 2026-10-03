@@ -40,8 +40,8 @@ describe("деньги, которые стираются при понижен�
       "finance.debts",
       "finance.documents",
       "finance.profit",
+      "finance.window",
       "finance.settings_accounts",
-      "finance.settings_export",
       "finance.settings_trash",
       "finance.settings_categories_income",
       "finance.settings_categories_expense",
@@ -185,6 +185,15 @@ describe("править ручную операцию — ровно то, чт
       canEditMoneyRow({ role: "master", map: map({ calendars: { a: { "finance.income": "full" } } }), teamId: null, side: "income", createdBy: null, me: ME }),
       false,
     );
+  });
+});
+
+describe("«Ограничения» — сузили срок, деньги уходят с телефона (03.10)", () => {
+  test("короче срок — потеря доступа; длиннее — нет", () => {
+    const at = (level: AccessLevel) => map({ calendars: { a: { "finance.window": level } } });
+    assert.equal(lostAccess(at("own"), at("month"), ["finance.window"]), true);
+    assert.equal(lostAccess(at("week"), at("half"), ["finance.window"]), false);
+    assert.equal(lostAccess(at("month"), at("month"), ["finance.window"]), false);
   });
 });
 

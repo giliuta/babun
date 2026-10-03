@@ -164,8 +164,8 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     // «Прибыль» и шестерёнка финансов (владелец 03.10) — деньги той же
     // команды: скрыт календарь — свёрнуты и они.
     "finance.profit",
+    "finance.window",
     "finance.settings_accounts",
-    "finance.settings_export",
     "finance.settings_trash",
     "finance.settings_categories_income",
     "finance.settings_categories_expense",

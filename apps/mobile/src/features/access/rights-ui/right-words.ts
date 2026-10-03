@@ -55,9 +55,11 @@ const TITLE: Record<string, string> = {
   // на странице финансов (владелец 03.10: права — по плиткам страницы).
   "finance.documents": "Документы",
   "finance.profit": "Прибыль",
+  // «Ограничения» финансов (владелец 03.10) — то же слово, что у клиентов
+  // и записей календаря.
+  "finance.window": "Ограничения",
   // Строки шестерёнки финансов — её словами (03.10).
   "finance.settings_accounts": "Счета",
-  "finance.settings_export": "Выгрузка для бухгалтера",
   "finance.settings_trash": "Удалённые операции",
   // Блок «Категории» шестерёнки — строки её видами (03.10).
   "finance.settings_categories_income": "Доходы",
@@ -167,9 +169,16 @@ const STEP: Record<string, Words> = {
   // Плитки «Документы» и «Прибыль» (владелец 03.10: «своё право»).
   "finance.documents": { off: "Скрыты", read: "Видит", write: "Выставляет" },
   "finance.profit": { off: "Скрыта", read: "Видит" },
+  "finance.window": {
+    week: "Неделя",
+    near: "2 недели",
+    month: "Месяц",
+    quarter: "3 месяца",
+    half: "Полгода",
+    own: "Без ограничения",
+  },
   // Строки шестерёнки финансов — как у шестерёнки клиентов.
   "finance.settings_accounts": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
-  "finance.settings_export": { off: "Скрыта", write: "Выгружает" },
   // «Возвращает» — вернуть и стереть насовсем СВОЮ удалённую операцию.
   "finance.settings_trash": { off: "Скрыты", read: "Только видит", write: "Возвращает" },
   "finance.settings_categories_income": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },

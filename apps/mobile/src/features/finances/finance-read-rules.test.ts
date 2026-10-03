@@ -208,3 +208,42 @@ describe("аналитика — стороны денег порознь", () =
     );
   });
 });
+
+describe("«Ограничения» финансов (03.10) — окно, как у сервера", () => {
+  const dated = (id: string, type: FinanceTransaction["type"], day: string, debtId: string | null = null) =>
+    ({ ...tx(id, type, A, debtId), occurred_on: day }) as FinanceTransaction;
+  const rows = [
+    dated("old-in", "income", "2026-09-20"),
+    dated("new-in", "income", "2026-09-30"),
+    dated("old-ex", "expense", "2026-08-01"),
+    dated("old-debt-pay", "income", "2026-08-01", "debt-1"),
+  ];
+  const rules = (window: string | undefined, today: string | null = "2026-10-03") =>
+    financeReadRules({
+      role: "master",
+      map: map({
+        [A]: {
+          "finance.income": "read",
+          "finance.expense": "read",
+          ...(window ? { "finance.window": window as Lvl } : {}),
+        },
+      }),
+      today: today ?? undefined,
+    });
+
+  test("«Неделя» — старые доход и расход уходят, платёж по долгу остаётся", () => {
+    assert.deepEqual(ids(readableTransactions(rows, rules("week"), new Map([["debt-1", A]]))), ["new-in", "old-debt-pay"]);
+  });
+
+  test("«Без ограничения», нет ступени в карте или нет «сегодня» — всё как было", () => {
+    // Все четыре — доходы и расходы команды A, платёж по долгу тоже доход.
+    assert.equal(readableTransactions(rows, rules("own"), NO_DEBTS).length, 4);
+    assert.equal(readableTransactions(rows, rules(undefined), NO_DEBTS).length, 4);
+    assert.equal(readableTransactions(rows, rules("week", null), NO_DEBTS).length, 4);
+  });
+
+  test("владелец — окно не режет", () => {
+    const owner = financeReadRules({ role: "owner", map: undefined, today: "2026-10-03" });
+    assert.equal(readableTransactions(rows, owner, NO_DEBTS).length, 4);
+  });
+});

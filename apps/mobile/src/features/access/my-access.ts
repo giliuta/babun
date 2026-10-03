@@ -30,6 +30,21 @@ const RANK: Readonly<Partial<Record<AccessLevel, number>>> = { off: 0, read: 1, 
 const rank = (level: AccessLevel | undefined): number =>
   level === undefined ? 0 : (RANK[level] ?? 0);
 
+/** «Ограничения» (03.10) — своя шкала: срок короче — доступ уже. Без ступени
+ *  в карте — «Неделя», как у сервера. */
+const WINDOW_RANK: Readonly<Partial<Record<AccessLevel, number>>> = {
+  week: 0,
+  near: 1,
+  month: 2,
+  quarter: 3,
+  half: 4,
+  own: 5,
+  all: 6,
+};
+
+const rankOf = (key: string, level: AccessLevel | undefined): number =>
+  key.endsWith(".window") ? (level === undefined ? 0 : (WINDOW_RANK[level] ?? 0)) : rank(level);
+
 /** Лучшее положение блока по всем календарям человека. Для экрана без
  *  выбранного календаря («Финансы» открываются, если хоть где-то смотрит). */
 export function bestCalendarLevel(
@@ -228,10 +243,11 @@ export const FINANCE_BLOCK_KEYS: readonly string[] = [
   "finance.debts",
   "finance.documents",
   "finance.profit",
+  // «Ограничения» (03.10): сузили окно — старые деньги уходят с телефона.
+  "finance.window",
   // Строки шестерёнки (03.10): категории, счета, ящик и бланк — тоже деньги
   // компании на телефоне.
   "finance.settings_accounts",
-  "finance.settings_export",
   "finance.settings_trash",
   "finance.settings_categories_income",
   "finance.settings_categories_expense",
@@ -279,9 +295,9 @@ export function lostAccess(
   if (before.isOwner && !after.isOwner) return true;
   if (after.isOwner) return false;
   for (const key of blockKeys) {
-    if (rank(after.company[key]) < rank(before.company[key])) return true;
+    if (rankOf(key, after.company[key]) < rankOf(key, before.company[key])) return true;
     for (const [teamId, levels] of Object.entries(before.calendars)) {
-      if (rank(after.calendars[teamId]?.[key]) < rank(levels[key])) return true;
+      if (rankOf(key, after.calendars[teamId]?.[key]) < rankOf(key, levels[key])) return true;
     }
   }
   return false;

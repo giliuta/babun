@@ -113,6 +113,8 @@ export const FINANCE_ROW_ORDER: readonly string[] = [
   "finance.documents",
   "finance.income",
   "finance.expense",
+  // «Ограничения» (03.10) — под доходами и расходами, которые они режут.
+  "finance.window",
   "finance.debts",
   "finance.profit",
 ];
@@ -125,7 +127,7 @@ export const FINANCE_SETTINGS_BLOCKS: readonly SectionBlock[] = [
   {
     key: "money",
     title: "Деньги",
-    keys: ["finance.settings_accounts", "finance.settings_export", "finance.settings_trash"],
+    keys: ["finance.settings_accounts", "finance.settings_trash"],
   },
   {
     key: "categories",

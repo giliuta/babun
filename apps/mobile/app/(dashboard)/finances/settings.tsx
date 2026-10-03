@@ -37,7 +37,6 @@ import {
   type FinanceSettingRow,
 } from "@/features/finances/settings-levels";
 import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-settings";
-import { LedgerExportRow } from "@/features/finances/LedgerExportRow";
 import { CurrencySettingsRow } from "@/features/settings/CurrencySettingsRow";
 import { useFinanceCategories } from "@/features/finances/queries";
 import { useDeletedOperations } from "@/features/finances/deleted-operations";
@@ -125,13 +124,12 @@ export default function FinanceSettingsScreen() {
   const liveSets = (companies.data ?? []).filter((c) => !c.archived_at).length;
   const tenant = useTenant().data;
 
-  // «Выгрузка» — действие, а не страница: строка есть только у «Выгружает».
+  // «Выгрузку для бухгалтера» владелец удалил 03.10: «ненужно вообще».
   const money = {
     accounts: shown("accounts"),
-    export: levels.export === "write",
     trash: shown("trash"),
   };
-  const moneyGroup = teamId !== null && (money.accounts || money.export || money.trash);
+  const moneyGroup = teamId !== null && (money.accounts || money.trash);
   const categoryKinds = teamId ? KINDS.filter(({ kind }) => shown(CATEGORY_KIND_ROW[kind])) : [];
   const documentsGroup = shown("requisites") || shown("invoices");
   const any = moneyGroup || categoryKinds.length > 0 || documentsGroup || shown("currency");
@@ -172,19 +170,12 @@ export default function FinanceSettingsScreen() {
                   onPress={() => router.push(withTeam("/accounts/settings"))}
                 />
               ) : null}
-              {/* ВЫГРУЗКА — ТОЛЬКО ЭТОЙ КОМАНДЫ (владелец 2026-09-30). */}
-              {money.export ? (
-                <>
-                  {money.accounts ? <Divider inset={56} /> : null}
-                  <LedgerExportRow teamId={teamId} />
-                </>
-              ) : null}
               {/* «УДАЛЁННЫЕ ОПЕРАЦИИ» (владелец 03.10) — ящик этой команды:
                   30 дней, «Вернуть». Вид — как «Удалённые клиенты» в
                   шестерёнке клиентов. */}
               {money.trash ? (
                 <>
-                  {money.accounts || money.export ? <Divider inset={56} /> : null}
+                  {money.accounts ? <Divider inset={56} /> : null}
                   <SettingsRow
                     tile={SETTINGS_TILE.red}
                     icon={Trash2}

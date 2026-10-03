@@ -117,19 +117,18 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   const sides = moneySides({ role, map: myAccess });
   const showMoney = sides.income;
   const showExpense = showMoney && sides.expense;
-  // Строки журнала — по стороне и команде строки, как режет сервер: «его
-  // глазами» журнал читается токеном владельца.
-  const readRules = useMemo(
-    () => financeReadRules({ role, map: myAccess }),
-    [role, myAccess],
-  );
-
   const calendarSettings = useCalendarSettings().data;
   const timezone = calendarSettings?.timezone ?? "Europe/Nicosia";
   const businessNow = calendarSettings?.timezone
     ? getCurrentTimeInZone(timezone)
     : getCurrentCyprusTime();
   const today = todayYmd(timezone);
+  // Строки журнала — по стороне и команде строки и «Ограничениям» (03.10),
+  // как режет сервер: «его глазами» журнал читается токеном владельца.
+  const readRules = useMemo(
+    () => financeReadRules({ role, map: myAccess, today }),
+    [role, myAccess, today],
+  );
   // «Сейчас» для сегодняшних записей: сделана — когда её время кончилось.
   const nowHm = `${String(businessNow.getHours()).padStart(2, "0")}:${String(
     businessNow.getMinutes(),

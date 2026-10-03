@@ -36,7 +36,6 @@ describe("шестерёнка «Финансов» по правам", () => {
     assert.equal(a.categoriesExpense, "write");
     assert.equal(a.categoriesIncome, "hidden");
     assert.equal(a.trash, "write");
-    assert.equal(a.export, "hidden");
     assert.equal(a.requisites, "read");
     assert.equal(a.currency, "hidden");
     const b = financeSettingLevels({ role: "master", map: m, teamId: "b" });

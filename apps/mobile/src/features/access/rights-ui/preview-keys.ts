@@ -83,7 +83,6 @@ export const SETTINGS_PREVIEW_KEYS: readonly string[] = [
   "clients.settings_sources",
   // Строки шестерёнки финансов (владелец 03.10) — тот же вид строки.
   "finance.settings_accounts",
-  "finance.settings_export",
   "finance.settings_trash",
   "finance.settings_categories_income",
   "finance.settings_categories_expense",
@@ -93,8 +92,12 @@ export const SETTINGS_PREVIEW_KEYS: readonly string[] = [
   "finance.settings_currency",
 ];
 
+/** «Ограничения» записей и финансов (03.10) — общий вид сроков. */
+export const WINDOW_PREVIEW_KEYS: readonly string[] = ["calendar.window", "finance.window"];
+
 export function hasBlockPreview(key: string): boolean {
   return (
+    WINDOW_PREVIEW_KEYS.includes(key) ||
     RECORD_PREVIEW_KEYS.includes(key) ||
     CALENDAR_PREVIEW_KEYS.includes(key) ||
     MONEY_PREVIEW_KEYS.includes(key) ||

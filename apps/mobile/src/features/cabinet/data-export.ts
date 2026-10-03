@@ -2,7 +2,7 @@ import type { Database, Json } from "@babun/shared/db/database.types";
 import { STATUS_LABELS, getPaidAmount, type Appointment } from "@babun/shared/local/appointments";
 import { ACQUISITION_LABELS } from "@babun/shared/local/clients";
 import { TX_TYPE_LABEL } from "@babun/shared/local/finance/transaction";
-import { csvAmount } from "@/features/finances/ledger-export";
+import { csvAmount } from "@/lib/csv-amount";
 import { csvCell, csvDocument, csvTextCell } from "@/lib/share-csv";
 
 // ВЫГРУЗКА ВСЕХ ДАННЫХ (Кабинет, владелец 03.10: «выгрузить все данные можно,
@@ -12,7 +12,7 @@ import { csvCell, csvDocument, csvTextCell } from "@/lib/share-csv";
 // Здесь только чистая часть: превратить прочитанные строки в CSV и назвать
 // файл. Чтение базы и «Поделиться» — в `use-data-export.ts`, право — там же.
 //
-// ФОРМАТ — ТОТ ЖЕ, ЧТО У ВЫГРУЗКИ БУХГАЛТЕРА (`finances/ledger-export.ts`):
+// ФОРМАТ (был общим с выгрузкой для бухгалтера, удалённой 03.10):
 // разделитель «;», BOM, CRLF, суммы числами с запятой («1234,50»). Excel с
 // русской или кипрской локалью открывает файл сразу, а сумму можно сложить.
 // Текст пользователя (имена, заметки, адреса) проходит `csvTextCell`: ячейка,
@@ -336,7 +336,7 @@ export function transactionsToCsv(
 /** ОТБОР ОПЕРАЦИЙ ОДНОЙ КОМАНДЫ ДЛЯ `postgrest.or(...)` — тот же, что на экране
  *  «Финансов»: строки команды ПЛЮС строки без команды, чьи деньги лежат на её
  *  счетах. Только по `team_id` выгрузка команды теряла вторые и не сходилась с
- *  экраном (аудит 2026-10-03, там же `exportLedgerRows`).
+ *  экраном (аудит 2026-10-03).
  *
  *  Идентификаторы вклеиваются в строку фильтра, поэтому пропускаются только
  *  безопасные символы: запятая или скобка в id сломала бы фильтр целиком. */

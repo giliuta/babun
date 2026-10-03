@@ -39,8 +39,9 @@ const REGISTRY: AccessBlock[] = [
   // «Финансы» по плиткам и шестерёнке (владелец 03.10).
   block({ key: "finance.documents", area: "finance", scope: "calendar", title: "Документы" }),
   block({ key: "finance.profit", area: "finance", scope: "calendar", levels: ["off", "read"], title: "Прибыль" }),
+  // «Ограничения» финансов (03.10) — шкала сроков, как у клиентов.
+  block({ key: "finance.window", area: "finance", scope: "calendar", levels: ["week", "near", "month", "quarter", "half", "own"], title: "Ограничения" }),
   block({ key: "finance.settings_accounts", area: "finance", scope: "calendar", title: "Счета" }),
-  block({ key: "finance.settings_export", area: "finance", scope: "calendar", levels: ["off", "write"], title: "Выгрузка для бухгалтера" }),
   block({ key: "finance.settings_trash", area: "finance", scope: "calendar", title: "Удалённые операции" }),
   // Категории — по виду, как строки шестерёнки (03.10).
   block({ key: "finance.settings_categories_income", area: "finance", scope: "calendar", title: "Доходы" }),
@@ -140,8 +141,8 @@ describe("слова прав", () => {
         // «Финансы» по плиткам и шестерёнке (владелец 03.10).
         "finance.documents",
         "finance.profit",
+        "finance.window",
         "finance.settings_accounts",
-        "finance.settings_export",
         "finance.settings_trash",
         "finance.settings_categories_income",
         "finance.settings_categories_expense",

@@ -46,7 +46,6 @@ import {
   Users,
   Wallet,
   FileText,
-  FileSpreadsheet,
   NotebookPen,
   PiggyBank,
   type LucideIcon,
@@ -109,9 +108,9 @@ const LOOK: Record<string, RightLook> = {
   // Плитки «Документы» и «Прибыль» (03.10).
   "finance.documents": { icon: FileText, tile: SETTINGS_TILE.blue },
   "finance.profit": { icon: PiggyBank, tile: SETTINGS_TILE.purple },
+  "finance.window": { icon: CalendarClock, tile: SETTINGS_TILE.teal },
   // Строки шестерёнки финансов — её значками (03.10).
   "finance.settings_accounts": { icon: Wallet, tile: SETTINGS_TILE.blue },
-  "finance.settings_export": { icon: FileSpreadsheet, tile: SETTINGS_TILE.green },
   "finance.settings_trash": { icon: Trash2, tile: SETTINGS_TILE.red },
   "finance.settings_categories_income": { icon: HandCoins, tile: SETTINGS_TILE.green },
   "finance.settings_categories_expense": { icon: ReceiptText, tile: SETTINGS_TILE.red },

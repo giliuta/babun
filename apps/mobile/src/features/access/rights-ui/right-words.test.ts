@@ -32,7 +32,9 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["finance.documents", ["off", "read", "write"]],
   ["finance.profit", ["off", "read"]],
   ["finance.settings_accounts", ["off", "read", "write"]],
-  ["finance.settings_export", ["off", "write"]],
+  // «Ограничения» финансов и записей календаря (03.10).
+  ["finance.window", ["week", "near", "month", "quarter", "half", "own"]],
+  ["calendar.window", ["week", "near", "month", "quarter", "half", "own"]],
   ["finance.settings_trash", ["off", "read", "write"]],
   ["finance.settings_categories_income", ["off", "read", "write"]],
   ["finance.settings_categories_expense", ["off", "read", "write"]],

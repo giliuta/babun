@@ -2,7 +2,6 @@ import {
   Banknote,
   Briefcase,
   Building2,
-  FileSpreadsheet,
   FileText,
   HandCoins,
   NotebookPen,
@@ -189,16 +188,6 @@ export function SettingsPreview({
       case "finance.settings_accounts":
         return (
           <SettingsRow tile={SETTINGS_TILE.blue} icon={Wallet} title="Счета" sub="2 счёта" onPress={onPress} />
-        );
-      case "finance.settings_export":
-        return (
-          <SettingsRow
-            tile={SETTINGS_TILE.green}
-            icon={FileSpreadsheet}
-            title="Выгрузка для бухгалтера"
-            sub="CSV за период"
-            onPress={onPress}
-          />
         );
       case "finance.settings_trash":
         return (

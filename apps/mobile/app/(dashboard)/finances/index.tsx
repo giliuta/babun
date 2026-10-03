@@ -302,8 +302,8 @@ function FinancesContent() {
   // без этого лента показала бы расход при «Расходы: Не видит». У владельца
   // фильтры отдают вход как есть.
   const readRules = useMemo(
-    () => financeReadRules({ role, map: myAccessQuery.data }),
-    [role, myAccessQuery.data],
+    () => financeReadRules({ role, map: myAccessQuery.data, today: businessToday }),
+    [role, myAccessQuery.data, businessToday],
   );
   // Гасим РАЗРЕЗ документов, а не только плитку: в «Документы» приходят и
   // адресом `?view=documents`, и возвратом из записи. Закрытая уровнем панель
@@ -1085,9 +1085,6 @@ function FinancesContent() {
     }
     await insertTx.mutateAsync(buildRefundDraft(tx, amount, businessToday, requestId));
   };
-
-  // Выгрузка операций для бухгалтера живёт в настройках финансов
-  // (`LedgerExportRow`), а не на этом экране: здесь действие одно — в футере.
 
   /**
    * Открыть заявку в календаре. Возвращает false, если её нет в загруженном

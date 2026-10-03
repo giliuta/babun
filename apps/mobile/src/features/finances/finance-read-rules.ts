@@ -6,6 +6,7 @@ import { moneyKey } from "@/features/access/my-access";
 import type { UserRole } from "@/features/settings/role-policy";
 import type { FinanceDocument } from "./documents";
 import { levelInCalendar } from "./finance-page-access";
+import { asRecordWindow, recordWindowStart } from "@/features/appointments/record-window";
 
 // ЧТО ЧЕЛОВЕКУ ВИДНО В «ФИНАНСАХ» — ПО СТРОКЕ, А НЕ ПО ЧИПУ.
 //
@@ -26,7 +27,10 @@ import { levelInCalendar } from "./finance-page-access";
 // Чек ещё проверяется «Историей» клиента (`clients.history`): права клиента
 // на телефоне не считаются, и здесь работает только правило операции.
 
-type TxLike = Pick<FinanceTransaction, "type" | "team_id" | "debt_id">;
+type TxLike = Pick<FinanceTransaction, "type" | "team_id" | "debt_id"> & {
+  /** День операции — для «Ограничений» (03.10); без него окно не режет. */
+  occurred_on?: string;
+};
 type DebtLike = Pick<Debt, "team_id">;
 type ReceiptLike = Pick<Receipt, "transaction_id" | "team_id">;
 
@@ -53,9 +57,12 @@ export interface FinanceReader {
   role: UserRole | null | undefined;
   /** `undefined` — карта прав ещё не пришла. */
   map: MemberAccessMap | undefined;
+  /** Сегодня по часам бизнеса — для «Ограничений» финансов (03.10). Нет —
+   *  окно не режет (аналитика берёт свой период сама). */
+  today?: string;
 }
 
-export function financeReadRules({ role, map }: FinanceReader): FinanceReadRules {
+export function financeReadRules({ role, map, today }: FinanceReader): FinanceReadRules {
   const owner = role === "owner" || map?.isOwner === true;
   const readable = (blockKey: string, teamId: string | null | undefined): boolean =>
     levelInCalendar({ role, map }, blockKey, teamId) !== "locked";
@@ -67,9 +74,22 @@ export function financeReadRules({ role, map }: FinanceReader): FinanceReadRules
         ? moneyKey(map, "expense")
         : "finance.accounts";
 
+  /** «Ограничения» (владелец 03.10): доход, возврат и расход старше окна
+   *  команды партнёру не видны — как сервер (`finance_transactions_window`).
+   *  Платежи по долгам и переводы окно не режет. Ступени в карте нет (старая
+   *  карта) — окна нет: прятать по догадке хуже. */
+  const beforeWindow = (tx: TxLike): boolean => {
+    if (!today || !tx.occurred_on || tx.debt_id || !tx.team_id) return false;
+    if (tx.type !== "income" && tx.type !== "refund" && tx.type !== "expense") return false;
+    const level = map?.calendars[tx.team_id]?.["finance.window"];
+    if (level === undefined) return false;
+    const start = recordWindowStart(asRecordWindow(level), today);
+    return start !== null && tx.occurred_on < start;
+  };
+
   const txReadable: FinanceReadRules["txReadable"] = (tx, debtTeamId) => {
     if (owner) return true;
-    if (readable(sideBlock(tx.type), tx.team_id)) return true;
+    if (readable(sideBlock(tx.type), tx.team_id)) return !beforeWindow(tx);
     if (!tx.debt_id) return false;
     return readable("finance.debts", debtTeamId === undefined ? tx.team_id : debtTeamId);
   };

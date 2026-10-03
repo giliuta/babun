@@ -10,9 +10,11 @@ import {
   MONEY_PREVIEW_KEYS,
   RECORD_PREVIEW_KEYS,
   SETTINGS_PREVIEW_KEYS,
+  WINDOW_PREVIEW_KEYS,
 } from "./preview-keys";
 import { SettingsPreview } from "./SettingsPreviews";
 import { RecordPreview } from "./RecordPreviews";
+import { WindowPreview } from "./WindowPreviews";
 
 // ВИД БЛОКА В ШТОРКЕ ПРАВА — КАКОЙ ИЗ ВИДОВ РИСОВАТЬ. Права без своего вида
 // (новое в реестре, шаблоны SMS) шторку не ломают: вида просто нет, лестница
@@ -34,6 +36,9 @@ export function BlockPreview({
   teamColor: string;
 }) {
   const key = block.key;
+  if (WINDOW_PREVIEW_KEYS.includes(key)) {
+    return <WindowPreview blockKey={key} level={levels[key] ?? block.levels[0]} />;
+  }
   if (RECORD_PREVIEW_KEYS.includes(key)) {
     return <RecordPreview blockKey={key} blocks={blocks} levels={levels} teamName={teamName} teamColor={teamColor} />;
   }

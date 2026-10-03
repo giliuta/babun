@@ -1,5 +1,4 @@
 import { NO_TEAM } from "./accounts-sections";
-import { pickLedgerRows } from "./ledger-select";
 
 // ДЕНЬГИ БЕЗ КОМАНДЫ ВСЁ РАВНО ЧЬИ-ТО (находки 2026-09-15).
 //
@@ -77,23 +76,5 @@ export function hasTeamlessMoney({
     appointments.some((a) => a.team_id == null && (a.kind ?? "work") === "work") ||
     debts.some((d) => d.team_id == null) ||
     teamlessLedgerRows(companyRows, NO_TEAM, accountTeam).length > 0
-  );
-}
-
-/** Строки выгрузки CSV команды — те же, что на экране «Финансов»: отбор по
- *  команде плюс строки без команды, чьи деньги лежат на её счетах. Выгрузка
- *  брала только отбор и теряла эти строки — CSV команды не сходился с
- *  экраном (аудит 2026-10-03). Без команды — вся компания. */
-export function exportLedgerRows<
-  R extends { id: string; team_id: string | null; account_id: string | null },
->(
-  all: R[],
-  teamId: string | null | undefined,
-  accountTeam: ReadonlyMap<string, string | null>,
-): R[] {
-  if (!teamId) return all;
-  return withTeamlessRows(
-    pickLedgerRows(all, [teamId], []),
-    teamlessLedgerRows(all, teamId, accountTeam),
   );
 }

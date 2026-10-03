@@ -11,8 +11,8 @@ import type { UserRole } from "@/features/settings/role-policy";
 // `finance_categories`, `deleted_operations`, профиль компании — миграции
 // 20261003171500 и 20261003235500), здесь — только вид.
 //
-// Строки шестерёнки — в её порядке и её блоками: «Деньги» (счета, выгрузка,
-// удалённые операции), «Категории» (доходы, расходы, долги), «Документы»
+// Строки шестерёнки — в её порядке и её блоками: «Деньги» (счета, удалённые
+// операции; «Выгрузку для бухгалтера» владелец удалил 03.10), «Категории» (доходы, расходы, долги), «Документы»
 // (реквизиты, инвойсы), «Общие» (валюта). Последние три — одни на весь
 // аккаунт: право на компанию, и партнёр их только видит.
 //
@@ -20,7 +20,6 @@ import type { UserRole } from "@/features/settings/role-policy";
 
 export const FINANCE_SETTING_BLOCKS = {
   accounts: "finance.settings_accounts",
-  export: "finance.settings_export",
   trash: "finance.settings_trash",
   categoriesIncome: "finance.settings_categories_income",
   categoriesExpense: "finance.settings_categories_expense",
