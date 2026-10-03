@@ -335,8 +335,9 @@ export function InvoiceEditor({
   const [discountKind, setDiscountKind] = useState<DiscountKind>("percent");
   const [discountValue, setDiscountValue] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  /** Какими реквизитами подписан счёт. `null` — сервер возьмёт основные:
-   *  документ не должен требовать выбора там, где ответ и так известен. */
+  /** Какими реквизитами подписан счёт, если их выбрали руками. `null` —
+   *  основные (`pickedCompany`): документ не должен требовать выбора там, где
+   *  ответ и так известен. На сервер уходят ВСЕГДА те, что в превью. */
   const [companyId, setCompanyId] = useState<string | null>(null);
   /** Куда клиент должен заплатить (владелец 2026-09-20). Подсказка платежу, а
    *  не сам платёж: деньги придут отдельной операцией. */
@@ -600,7 +601,12 @@ export function InvoiceEditor({
     try {
       await onSubmit({
         language,
-        company_id: companyId,
+        // ТО, ЧТО В ПРЕВЬЮ, И ВЫСТАВЛЯЕТСЯ (аудит 03.10). Пустой выбор сервер
+        // понимал как «юрлицо команды», а команды хранят юрлицо, бывшее
+        // основным в день миграции STORY-101: сделал владелец основным B и
+        // скрыл A — превью показывало B и «INV-2026-0001», а выпуск шёл от
+        // скрытого A его серией и реквизитами.
+        company_id: companyId ?? pickedCompany?.id ?? null,
         account_id: accountId,
         issued_on: issuedOn,
         due_on: dueOn,
