@@ -7,11 +7,16 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { GUTTER } from "@/components/ui/tokens";
+import { useToast } from "@/components/ui/Toast";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
-import { useAccountsWithBalances, useUpdateAccount } from "../accounts";
+import {
+  useAccountsWithBalances,
+  useSetAccountHidden,
+  useUpdateAccount,
+} from "../accounts";
 import {
   ACCOUNT_GONE_SETTINGS,
   OFFLINE_ACCOUNT_EDIT,
@@ -53,7 +58,7 @@ export function EditAccountSheet({
   const t = useThemeColors();
   const online = useIsOnline();
 
-  const accountsQuery = useAccountsWithBalances({ includeInactive: true });
+  const accountsQuery = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
   const accounts = useMemo(
     () => accountsQuery.data ?? [],
     [accountsQuery.data],
@@ -70,6 +75,8 @@ export function EditAccountSheet({
     [teamsQuery.data],
   );
   const update = useUpdateAccount();
+  const setHidden = useSetAccountHidden();
+  const toast = useToast();
 
   // ПРИЧИНА ОТКАЗА ОБЯЗАНА БЫТЬ ЧИТАЕМОЙ. Мутации счёта помечены NEVER_PAUSE и
   // офлайн падают сразу — сырое «Network request failed» не отвечает на
@@ -149,7 +156,13 @@ export function EditAccountSheet({
         // Имени в шапке нет: оно стоит первой строкой листа, и одно и то же
         // слово дважды в одном кадре — шум.
         title="Настройки счёта"
-        subtitle={account && !account.is_active ? "Счёт скрыт" : undefined}
+        subtitle={
+          account && !account.is_active
+            ? "Счёт закрыт"
+            : account?.is_hidden
+              ? "Скрытый счёт"
+              : undefined
+        }
         maxHeightRatio={ACCOUNT_SHEET_RATIO}
         avoidKeyboard
         onExited={() => {
@@ -193,7 +206,25 @@ export function EditAccountSheet({
               />
               <AccountCloseGroup
                 account={account}
-                onHide={() => flow.start(account, accounts, "hide")}
+                onHide={() => {
+                  // «СКРЫТЬ» ⇄ «ПОКАЗАТЬ» — СРАЗУ, БЕЗ ВОПРОСА (владелец 03.10:
+                  // скрытый счёт работает, виден только на странице «Счета»).
+                  // Прятать — вместе с «В оплате записи»: черновик этого
+                  // тумблера уходит, иначе «Применить» упёрся бы в запрет базы.
+                  const hide = !account.is_hidden;
+                  if (hide) {
+                    setPending(({ show_in_payments: _drop, ...rest }) => rest);
+                  }
+                  setHidden.mutateAsync({ id: account.id, hidden: hide }).then(
+                    () =>
+                      toast(
+                        hide
+                          ? `Счёт «${account.name}» скрыт — виден только в «Счетах»`
+                          : `Счёт «${account.name}» снова виден`,
+                      ),
+                    alertError(hide ? "Не удалось скрыть счёт" : "Не удалось показать счёт"),
+                  );
+                }}
                 onDelete={() => flow.start(account, accounts, "trash")}
               />
             </>

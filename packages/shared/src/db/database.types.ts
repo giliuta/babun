@@ -268,6 +268,7 @@ export type Database = {
           icon: string | null
           id: string
           is_active: boolean
+          is_hidden: boolean
           is_primary: boolean
           kind: string
           name: string
@@ -292,6 +293,7 @@ export type Database = {
           icon?: string | null
           id?: string
           is_active?: boolean
+          is_hidden?: boolean
           is_primary?: boolean
           kind: string
           name: string
@@ -316,6 +318,7 @@ export type Database = {
           icon?: string | null
           id?: string
           is_active?: boolean
+          is_hidden?: boolean
           is_primary?: boolean
           kind?: string
           name?: string

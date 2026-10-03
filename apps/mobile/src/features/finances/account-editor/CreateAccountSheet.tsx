@@ -70,7 +70,8 @@ export function CreateAccountSheet({
   const teamsQuery = useTeams();
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const teamsLoaded = teamsQuery.data !== undefined;
-  const accountsQuery = useAccountsWithBalances({ includeInactive: true });
+  // Дубль имени — и среди скрытых: имя в команде одно на всех.
+  const accountsQuery = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
 
   const [name, setName] = useState("");
   /** Владелец счёта — ровно одна команда. */

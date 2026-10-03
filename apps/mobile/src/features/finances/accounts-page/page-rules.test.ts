@@ -100,6 +100,9 @@ describe("тихая метка строки счёта", () => {
   test("счёт вне оплаты записи говорит об этом; «Основного» больше нет", () => {
     assert.equal(accountRowMark({ show_in_payments: false }), "Не в оплате");
     assert.equal(accountRowMark({ show_in_payments: true }), null);
+    // Скрытый счёт (владелец 03.10) — «Скрыт», а не «Не в оплате»: в оплате
+    // его не бывает никогда, главное про него — что он спрятан.
+    assert.equal(accountRowMark({ show_in_payments: false, is_hidden: true }), "Скрыт");
   });
 });
 

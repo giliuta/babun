@@ -140,11 +140,17 @@ export function useAccountsWithBalances(
     /** Счета из «Удалённых счетов» — только для подписей истории: имя счёта
      *  у прошлой операции не пропадает. Пикеры и списки их не просят. */
     includeDeleted?: boolean;
+    /** СКРЫТЫЕ счета (владелец 03.10: «нигде не показывался, только в
+     *  счетах»). Просят их страница «Счета», лист счёта, лист перевода и
+     *  подписи истории; плитка «Счета», оплата, операции и документы — нет.
+     *  По умолчанию — как `includeDeleted`: подписям истории нужны все. */
+    includeHidden?: boolean;
   } = {},
 ): AccountsWithBalances {
   const tenantId = useTenantId();
   const includeInactive = options.includeInactive ?? false;
   const includeDeleted = options.includeDeleted ?? false;
+  const includeHidden = options.includeHidden ?? includeDeleted;
   const includeArchived = options.includeArchivedCalendars ?? false;
   const rowsQuery = useQuery({
     queryKey: accountRowsQueryKey(tenantId, includeInactive, includeDeleted),
@@ -173,10 +179,11 @@ export function useAccountsWithBalances(
   const data = useMemo(() => {
     if (!rows || !balances || !teamsReady) return undefined;
     const merged = mergeAccountBalances(rows, balances);
+    const shown = includeHidden ? merged : merged.filter((account) => !account.is_hidden);
     return includeArchived
-      ? merged
-      : withoutArchivedCalendars(merged, archivedCalendarIds(teams ?? []));
-  }, [rows, balances, teams, teamsReady, includeArchived]);
+      ? shown
+      : withoutArchivedCalendars(shown, archivedCalendarIds(teams ?? []));
+  }, [rows, balances, teams, teamsReady, includeArchived, includeHidden]);
 
   return {
     data,
@@ -238,6 +245,30 @@ export function useTrashAccount() {
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: (id: string) => trashAccount(supabase, id),
+    onSuccess: () => invalidateAccounts(qc),
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+/** «Скрыть» / «Показать» (владелец 03.10). Прячет счёт вместе с «В оплате
+ *  записи»: скрытый счёт деньги записи не принимает (база держит это
+ *  ограничением). Вернуть «В оплате» можно передать в `showInPayments` —
+ *  так «Отменить» возвращает счёт ровно каким он был. */
+export function useSetAccountHidden() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: (input: { id: string; hidden: boolean; showInPayments?: boolean }) =>
+      updateAccount(
+        supabase,
+        input.id,
+        input.hidden
+          ? { is_hidden: true, show_in_payments: false }
+          : {
+              is_hidden: false,
+              ...(input.showInPayments !== undefined ? { show_in_payments: input.showInPayments } : {}),
+            },
+      ),
     onSuccess: () => invalidateAccounts(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });

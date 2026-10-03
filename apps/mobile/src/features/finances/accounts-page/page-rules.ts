@@ -106,7 +106,12 @@ export function accountEditParam(
  * 2026-09-29): первым в оплате и первым среди касс стоит тот, что выше в
  * списке, и отдельное слово об этом не нужно.
  */
-export function accountRowMark(account: { show_in_payments: boolean }): string | null {
+export function accountRowMark(account: {
+  show_in_payments: boolean;
+  is_hidden?: boolean;
+}): string | null {
+  // Скрытый — главное, что про него надо знать; «Не в оплате» у него всегда.
+  if (account.is_hidden) return "Скрыт";
   return account.show_in_payments ? null : "Не в оплате";
 }
 

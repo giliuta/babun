@@ -79,7 +79,7 @@ export default function FinanceSettingsScreen() {
   // Полный список ради двух чисел — сколько счетов открыто и закрыто. Кэш
   // общий со страницей «Счета», так что дверь и страница не назовут разные
   // числа.
-  const accounts = useAccountsWithBalances({ includeInactive: true });
+  const accounts = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
   const teamAccounts = (accounts.data ?? []).filter((a) => a.brigade_id === teamId);
   const categoriesQuery = useFinanceCategories();
   const companies = useCompanies();

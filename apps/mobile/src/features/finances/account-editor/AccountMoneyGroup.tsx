@@ -134,16 +134,21 @@ export function AccountMoneyGroup({
             color={account.show_in_payments ? t.accent : t.faint}
             plain
             title="В оплате записи"
-            disabled={!account.is_active}
+            // Скрытый счёт деньги записи не принимает (база держит это
+            // ограничением) — переключатель гаснет, пока счёт скрыт.
+            disabled={!account.is_active || !!account.is_hidden}
             accessibilityLabel={`В оплате записи: ${account.show_in_payments ? "да" : "нет"}`}
             accessibilityHint="Ставит счёт плиткой в блок «Оплата» записи"
             onPress={() => {
-              if (!account.is_active || busy) return;
+              if (!account.is_active || account.is_hidden || busy) return;
               stage({ show_in_payments: !account.show_in_payments });
             }}
             trailing={
               <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                <SwitchControl value={account.show_in_payments} disabled={!account.is_active} />
+                <SwitchControl
+                  value={account.show_in_payments}
+                  disabled={!account.is_active || !!account.is_hidden}
+                />
               </View>
             }
           />

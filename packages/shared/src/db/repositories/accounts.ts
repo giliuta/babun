@@ -75,6 +75,7 @@ function rowToAccount(r: Row, teamIds: string[] = []): Account {
     is_primary: r.is_primary,
     show_in_payments: r.show_in_payments,
     is_active: r.is_active,
+    is_hidden: r.is_hidden ?? false,
     note: r.note ?? null,
     deleted_at: r.deleted_at ?? null,
     purge_at: r.purge_at ?? null,
@@ -156,6 +157,9 @@ export interface AccountDraft {
   show_in_payments?: boolean;
   /** Режим НДС этого счёта. null — как у команды/компании. */
   vat_mode?: "off" | "inclusive" | "exclusive" | "on" | null;
+  /** Скрытый счёт (только владелец): прятать — вместе с
+   *  `show_in_payments: false`, иначе база откажет. */
+  is_hidden?: boolean;
 }
 
 function assertOpeningBalance(amount: number | undefined): void {
@@ -288,6 +292,7 @@ export async function updateAccount(
     update.show_in_payments = patch.show_in_payments;
   }
   if (patch.vat_mode !== undefined) update.vat_mode = patch.vat_mode;
+  if (patch.is_hidden !== undefined) update.is_hidden = patch.is_hidden;
   const { data, error } = await supabase
     .from("accounts")
     .update(update)

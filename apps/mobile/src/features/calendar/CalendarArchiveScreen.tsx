@@ -44,6 +44,7 @@ export function CalendarArchiveScreen() {
   const accountsQuery = useAccountsWithBalances({
     includeInactive: true,
     includeArchivedCalendars: true,
+    includeHidden: true,
   });
   const { restore, measure, erase } = useCalendarDelete();
   const [picked, setPicked] = useState<ArchivedCalendar | null>(null);

@@ -77,7 +77,8 @@ export default function AccountsScreen() {
   const router = useRouter();
   const deletedQuery = useDeletedAccounts();
   // Полный список: закрытые нужны счётчику двери в архив и шторке правки.
-  const accountsQuery = useAccountsWithBalances({ includeInactive: true });
+  // Со скрытыми: скрытый счёт виден только здесь (владелец 03.10).
+  const accountsQuery = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
   // ВСЕ команды, включая архивные: по ним называются группы осиротевших
   // счетов и строится подпись команды в листе перевода.
   const teamsQuery = useTeams({ includeInactive: true });
@@ -149,8 +150,10 @@ export default function AccountsScreen() {
         teams,
       }).map((group) => ({
         ...group,
+        // Видимые → скрытые («Скрыт») → закрытые.
         accounts: [
-          ...group.accounts.filter((account) => account.is_active),
+          ...group.accounts.filter((account) => account.is_active && !account.is_hidden),
+          ...group.accounts.filter((account) => account.is_active && account.is_hidden),
           ...group.accounts.filter((account) => !account.is_active),
         ],
       })),
@@ -267,7 +270,11 @@ export default function AccountsScreen() {
               <RowGroupHeader
                 title={group.title ?? "На счетах"}
                 value={money(
-                  sumAccountBalances(group.accounts.filter((account) => account.is_active)),
+                  // Скрытый счёт в сумму не входит — как на плитке «Счета»
+                  // (владелец 03.10: «не считать»).
+                  sumAccountBalances(
+                    group.accounts.filter((account) => account.is_active && !account.is_hidden),
+                  ),
                 )}
               />
               {/* ПОРЯДОК — РУЧКОЙ, КАК ВЕЗДЕ (владелец 2026-09-12: «шесть
@@ -290,12 +297,13 @@ export default function AccountsScreen() {
                     <AccountRow
                       account={account}
                       mark={
-                        account.is_active ? accountRowMark(account) : "Скрыт"
+                        account.is_active ? accountRowMark(account) : "Закрыт"
                       }
                       handle={handle}
                       onPress={() => setEditor({ open: true, id: account.id })}
                       onHide={() => hider.hide(account)}
                       onDelete={() => hider.remove(account)}
+                      hidden={!!account.is_hidden}
                       closed={
                         account.is_active
                           ? null

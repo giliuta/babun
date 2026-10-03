@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
+import { Eye, EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import { money, moneySign } from "@babun/shared/common/utils/money";
 import {
   AppearanceTile,
@@ -25,6 +25,10 @@ export const ACCOUNT_ROW_H = 52;
 // другого места увидеть деньги счёта у этой двери нет. Цифра тихая
 // (моноширинная, вторым цветом): она справка, а не герой строки; минус — долг.
 //
+// «СКРЫТЬ» — СЧЁТ ДЛЯ СЕБЯ (владелец 03.10): скрытый счёт работает, но
+// виден только на этой странице и только владельцу; в строке — метка
+// «Скрыт», левая кромка — «Показать».
+//
 // ПРАВАЯ КРОМКА — «УДАЛИТЬ» У КАЖДОГО СЧЁТА (владелец 03.10: «свайпом
 // удалять, они попадают в папку „Удалённые счета" на 30 дней, как клиенты»).
 // Удаление обратимо: счёт уходит в «Удалённые счета», откуда возвращается.
@@ -44,6 +48,7 @@ export function AccountRow({
   onPress,
   onHide,
   onDelete,
+  hidden = false,
   closed,
 }: {
   account: Pick<
@@ -59,9 +64,12 @@ export function AccountRow({
   sub?: string | null;
   handle: ReactNode;
   onPress: () => void;
+  /** «Скрыть» ⇄ «Показать» (скрытый счёт — только здесь, владелец 03.10). */
   onHide: () => void;
   /** «Удалить» — в «Удалённые счета». */
   onDelete: () => void;
+  /** Счёт скрыт: левая кромка — «Показать». */
+  hidden?: boolean;
   /** Счёт скрыт: строка гаснет, слева «Открыть». */
   closed?: { onReopen: () => void } | null;
 }) {
@@ -82,13 +90,21 @@ export function AccountRow({
               accessibilityLabel: `Открыть счёт ${account.name} снова`,
               onAction: closed.onReopen,
             }
-          : {
-              label: "Скрыть",
-              color: t.warning,
-              icon: EyeOff,
-              accessibilityLabel: `Скрыть счёт ${account.name}`,
-              onAction: onHide,
-            }
+          : hidden
+            ? {
+                label: "Показать",
+                color: t.accent,
+                icon: Eye,
+                accessibilityLabel: `Показать счёт ${account.name}`,
+                onAction: onHide,
+              }
+            : {
+                label: "Скрыть",
+                color: t.warning,
+                icon: EyeOff,
+                accessibilityLabel: `Скрыть счёт ${account.name}`,
+                onAction: onHide,
+              }
       }
       label="Удалить"
       color={t.danger}
@@ -117,7 +133,9 @@ export function AccountRow({
           accessibilityHint="Открывает правку счёта"
           // Свайпа для VoiceOver не существует — то же действие ротором.
           accessibilityActions={[
-            closed ? { name: "reopen", label: "Открыть снова" } : { name: "hide", label: "Скрыть" },
+            closed
+              ? { name: "reopen", label: "Открыть снова" }
+              : { name: "hide", label: hidden ? "Показать" : "Скрыть" },
             { name: "delete", label: "Удалить" },
           ]}
           onAccessibilityAction={(event) => {

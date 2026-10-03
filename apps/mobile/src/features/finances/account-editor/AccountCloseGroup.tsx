@@ -1,5 +1,5 @@
 import { View } from "react-native";
-import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
+import { Eye, EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectRow } from "@/components/ui/select-rows";
 import { useThemeColors } from "@/theme/colors";
@@ -7,7 +7,9 @@ import type { AccountWithBalance } from "../accounts";
 import { useClosedAccountActions } from "../accounts-page/use-closed-account-actions";
 
 // ПОСЛЕДНЯЯ ГРУППА ЛИСТА — ТЕ ЖЕ ДВА СЛОВА, ЧТО У СВАЙПОВ СТРОКИ:
-//   • открытый счёт — «Скрыть счёт» (серым вниз списка) и «Удалить счёт»;
+//   • открытый счёт — «Скрыть счёт» (счёт для себя: работает, виден только на
+//     странице «Счета», владелец 03.10; у скрытого — «Показать счёт») и
+//     «Удалить счёт»;
 //   • скрытый — «Открыть счёт» и «Удалить счёт».
 // «Удалить» уводит в «Удалённые счета» на 30 дней, как клиентов (владелец
 // 03.10); счёт с операциями там лежит без срока и возвращается оттуда же.
@@ -20,7 +22,7 @@ export function AccountCloseGroup({
   onDelete,
 }: {
   account: AccountWithBalance;
-  /** «Скрыть счёт» — начать разговор о скрытии. */
+  /** «Скрыть счёт» ⇄ «Показать счёт» — сразу, без вопроса. */
   onHide: () => void;
   /** «Удалить счёт» — начать разговор об удалении в «Удалённые счета». */
   onDelete: () => void;
@@ -47,7 +49,11 @@ export function AccountCloseGroup({
       <>
         <SectionCard dense>
           <View style={blockBody}>
-            <SelectRow icon={EyeOff} color={t.warning} plain title="Скрыть счёт" onPress={onHide} />
+            {account.is_hidden ? (
+              <SelectRow icon={Eye} color={t.accent} plain title="Показать счёт" onPress={onHide} />
+            ) : (
+              <SelectRow icon={EyeOff} color={t.warning} plain title="Скрыть счёт" onPress={onHide} />
+            )}
           </View>
         </SectionCard>
         {remove}

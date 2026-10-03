@@ -40,6 +40,7 @@ export function FinancesFooter({
   teamById,
   teamId,
   accounts,
+  transferAccounts,
   shownAccounts,
   selectedAccountId,
   onIssueInvoice,
@@ -59,6 +60,10 @@ export function FinancesFooter({
    *  счетами тенанта, и фильтр экрана на перевод не распространяется (иначе
    *  «сдать выручку на счёт другой команды» стало бы невозможно). */
   accounts: AccountWithBalance[];
+  /** Счета листа перевода — те же, плюс СКРЫТЫЕ (владелец 03.10: на
+   *  скрытый счёт переводят обычным «Перевести»; партнёрам сервер его не
+   *  отдаёт вовсе). Нет — лист берёт `accounts`. */
+  transferAccounts?: AccountWithBalance[];
   /** Счета на плитках — выбор считается, только если он виден. */
   shownAccounts: readonly AccountWithBalance[];
   selectedAccountId: string | null;
@@ -167,7 +172,7 @@ export function FinancesFooter({
       <TransferSheet
         visible={transferOpen}
         onClose={() => setTransferOpen(false)}
-        accounts={accounts}
+        accounts={transferAccounts ?? accounts}
         teamById={teamById}
         presetFromId={transferFromId}
       />

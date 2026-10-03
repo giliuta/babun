@@ -258,6 +258,9 @@ function FinancesContent() {
   const invoicesQuery = useInvoices();
   const invoicePaymentsQuery = useInvoicePayments();
   const accountsQuery = useAccountsWithBalances();
+  // Лист перевода — со СКРЫТЫМИ счетами (владелец 03.10: «в конце месяца
+  // переводить на накопительный»); плитки и панель «Счета» их не знают.
+  const transferAccountsQuery = useAccountsWithBalances({ includeHidden: true });
   // С закрытыми — только ради имён в строках ленты: операция периода могла
   // пройти через счёт, который с тех пор закрыли.
   // ПОДПИСИ ИСТОРИИ — СО СКРЫТЫМИ И УДАЛЁННЫМИ: имя и команда счёта у
@@ -498,7 +501,8 @@ function FinancesContent() {
     return scope ? accounts.filter((a) => accountServesTeam(a, scope)) : accounts;
   }, [accounts, orphanAccounts, scope]);
   // Одна цифра «сколько у нас денег» на весь продукт: плитка «Счета» считает
-  // ПОЛНУЮ сумму. Скрытых балансов в продукте нет.
+  // сумму видимых счетов. СКРЫТЫЙ счёт (владелец 03.10: «накопительный, для
+  // себя») в неё не входит — его деньги видны только на странице «Счета».
   // Разбивки по видам счетов здесь НЕТ (владелец 2026-08-11): плитка отвечает
   // «сколько у команды», а не «сколько из этого наличными» — второй вопрос
   // задают плитками счетов под ней, глядя на конкретный счёт.
@@ -1625,6 +1629,7 @@ function FinancesContent() {
         teamById={teamByIdAll}
         teamId={scope === NO_TEAM ? null : scope}
         accounts={accounts}
+        transferAccounts={transferAccountsQuery.data}
         shownAccounts={scopedAccounts}
         selectedAccountId={view === "accounts" ? accountId : null}
         // Команда чипа — команда счёта (ставка VAT, касса, «Документы» этой
