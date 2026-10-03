@@ -5,6 +5,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, Search, Settings, X } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
+import { containsPattern } from "@/lib/like-pattern";
 import { useTenantId } from "@/lib/tenant";
 import { useSession } from "@/providers/SessionProvider";
 import { GUTTER } from "@/components/ui/tokens";
@@ -1228,7 +1229,7 @@ function FinancesContent() {
         .from("finance_transactions")
         .select("*")
         .eq("tenant_id", tenantId as string)
-        .ilike("notes", `%${trimmedQuery}%`)
+        .ilike("notes", containsPattern(trimmedQuery))
         .order("occurred_on", { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
