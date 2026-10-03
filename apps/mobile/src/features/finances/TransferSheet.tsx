@@ -13,6 +13,7 @@ import { transferValidationError } from "@babun/shared/local/finance/integrity";
 import { todayYmd } from "@/features/invoices/format";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { accountIcon } from "./account-ui";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -159,6 +160,9 @@ export function TransferSheet({
   // Каждое ОТКРЫТИЕ листа начинает заново, но только по фронту: фоновый
   // рефетч счетов при открытом листе не должен стирать набранное.
   const wasVisible = useRef(false);
+  /** Что лист показал при открытии: смахнуть его без вопроса можно, пока
+   *  набранное с этим совпадает. */
+  const opened = useRef<{ from: string | null; to: string | null; amount: string; on: string } | null>(null);
   useEffect(() => {
     if (!visible) {
       wasVisible.current = false;
@@ -194,11 +198,18 @@ export function TransferSheet({
     // форма встречала двумя «Выберите счёт» и цифровой клавиатурой под пустой
     // суммой: три лишних тапа, чтобы добраться до единственного вопроса,
     // который вообще можно задать первым.
+    const startAmount = moneySign(preset) > 0 ? formatMoneyForInput(preset) : "";
+    opened.current = {
+      from: source?.id ?? donor?.id ?? null,
+      to: target?.id ?? null,
+      amount: startAmount,
+      on: businessToday,
+    };
     setStep(source || donor ? "form" : "from");
     setFromId(source?.id ?? donor?.id ?? null);
     setSourceLocked(!!source);
     setToId(target?.id ?? null);
-    setAmount(moneySign(preset) > 0 ? formatMoneyForInput(preset) : "");
+    setAmount(startAmount);
     setNote("");
     setOccurredOn(businessToday);
     setFailure(null);
@@ -263,9 +274,22 @@ export function TransferSheet({
   const canSend = reason === null && !sending;
   // ПОКА ПЕРЕВОД ЛЕТИТ, ЛИСТ НЕ ЗАКРЫВАЕТСЯ (аудит 2026-09-24): смахнутый в
   // этот момент лист прятал отказ сервера, и человек думал, что деньги ушли.
-  const closeUnlessSending = () => {
-    if (!sending) onClose();
-  };
+  // НАБРАННОЕ — ТОЛЬКО ПОСЛЕ ВОПРОСА (аудит 017, 03.10): свайп вниз молча
+  // терял сумму, день и заметку. Открытый и нетронутый лист закрывается сразу.
+  const start = opened.current;
+  const dirty =
+    !!start &&
+    (fromId !== start.from ||
+      toId !== start.to ||
+      amount !== start.amount ||
+      occurredOn !== start.on ||
+      note.trim() !== "");
+  const guard = useGuardedClose({
+    dirty,
+    busy: sending,
+    onClose,
+    message: "Перевод не сохранится.",
+  });
 
   /** `request_id` привязан к НАМЕРЕНИЮ, а не к открытию листа: та же пара,
    *  сумма, день и комментарий — тот же ключ и серверный дедуп после
@@ -409,8 +433,9 @@ export function TransferSheet({
     return (
       <BottomSheet
       padded={false}
-        visible={visible}
-        onClose={closeUnlessSending}
+        visible={visible && !guard.hidden}
+        onClose={guard.close}
+        onExited={guard.onExited}
         title={title}
         footer={
           <View style={{ paddingHorizontal: GUTTER }}>
@@ -455,8 +480,9 @@ export function TransferSheet({
     return (
       <BottomSheet
       padded={false}
-        visible={visible}
-        onClose={closeUnlessSending}
+        visible={visible && !guard.hidden}
+        onClose={guard.close}
+        onExited={guard.onExited}
         title={title}
         scroll
         maxHeightRatio={0.8}
@@ -572,8 +598,9 @@ export function TransferSheet({
   return (
     <BottomSheet
       padded={false}
-      visible={visible}
-      onClose={closeUnlessSending}
+      visible={visible && !guard.hidden}
+      onClose={guard.close}
+      onExited={guard.onExited}
       title={title}
       scroll
       avoidKeyboard

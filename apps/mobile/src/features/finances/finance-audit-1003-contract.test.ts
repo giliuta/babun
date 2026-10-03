@@ -42,4 +42,27 @@ describe("повторный аудит финансов 03.10", () => {
     assert.doesNotMatch(debt, /formatHM\(new Date\(\)\)/);
     assert.match(debt, /formatHM\(getCurrentTimeInZone\(timeZone\)\)/);
   });
+
+  test("«История платежей» записи сбрасывается с журналом и инвойсами (017)", () => {
+    const ledger = read("queries.ts");
+    const helper = ledger.slice(ledger.indexOf("export function invalidateLedger"), ledger.indexOf("export function useInsertTransaction"));
+    assert.match(helper, /queryKey: \["appointment-ledger"\]/);
+    const invoices = read("../invoices/queries.ts");
+    const inv = invoices.slice(invoices.indexOf("function invalidateInvoices"), invoices.indexOf("/** ЯЗЫК БУМАГИ"));
+    assert.match(inv, /queryKey: \["appointment-ledger"\]/);
+  });
+
+  test("отказ «Номер не сохранён» — одно окно, без «Проверьте соединение» (017)", () => {
+    const invoices = read("../invoices/queries.ts");
+    const hook = invoices.slice(invoices.indexOf("export function useSetInvoiceNextNumber"), invoices.indexOf("mutationFn", invoices.indexOf("export function useSetInvoiceNextNumber")));
+    assert.match(hook, /meta: \{ errorHandled: true \}/);
+  });
+
+  test("лист перевода не теряет набранное свайпом (017)", () => {
+    const sheet = read("TransferSheet.tsx");
+    assert.match(sheet, /const guard = useGuardedClose\(\{/);
+    assert.equal((sheet.match(/onClose=\{guard\.close\}/g) ?? []).length, 3);
+    assert.equal((sheet.match(/onExited=\{guard\.onExited\}/g) ?? []).length, 3);
+    assert.doesNotMatch(sheet, /closeUnlessSending/);
+  });
 });

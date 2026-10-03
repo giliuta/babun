@@ -115,6 +115,10 @@ export function useSetInvoiceNextNumber() {
   const queryClient = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
+    // Отказ называет сама строка номера («Номер не сохранён: …»,
+    // `InvoiceNumberRow`) — общее «Проверьте соединение» поверх неё врало бы
+    // про связь (аудит 017, 03.10).
+    meta: { errorHandled: true },
     mutationFn: async (input: { companyId: string; year: number; number: number }) => {
       const { error } = await supabase.rpc("set_document_series_start", {
         p_legal_entity_id: input.companyId,
@@ -184,6 +188,9 @@ function invalidateInvoices(qc: ReturnType<typeof useQueryClient>) {
   // а отказ — кредит-нотой: без инвалидации панель «Документы» показывала
   // список чеков без только что рождённого.
   qc.invalidateQueries({ queryKey: ["receipts"] });
+  // Оплата и возврат по инвойсу — строки журнала записи: её «История
+  // платежей» живёт под своим ключом (аудит 017, 03.10).
+  qc.invalidateQueries({ queryKey: ["appointment-ledger"] });
 }
 
 /** ЯЗЫК БУМАГИ ВЫСТАВЛЕННОГО ДОКУМЕНТА — пункт «⋯» на его странице (аудит

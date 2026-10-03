@@ -185,6 +185,10 @@ export function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
   // колонкой: платёж, не уронивший этот ключ, оставил бы закрытый долг
   // висеть в списке до перезапуска приложения.
   qc.invalidateQueries({ queryKey: ["debts"] });
+  // «История платежей» записи — свой ключ вне ["transactions"]: без него
+  // оплата и возврат по инвойсу доходили до неё только через минуту (аудит
+  // 017, 03.10).
+  qc.invalidateQueries({ queryKey: ["appointment-ledger"] });
 }
 
 export function useInsertTransaction() {
