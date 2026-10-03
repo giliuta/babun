@@ -114,6 +114,7 @@ import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 
 import {
+  useClientCardWritable,
   useClients,
   useUpdateClientById,
 } from "@/features/clients/queries";
@@ -1500,6 +1501,11 @@ export default function BookScreen() {
   };
   // Логика поля — общий хук: тот же блок «Клиент» ставят инвойс и чек.
   const clientNote = useClientNoteField(client);
+  // КАРТОЧКУ КЛИЕНТА ОТСЮДА МОЖНО ПРАВИТЬ? (аудит прав 03.10). Мастер вне
+  // вкладки «Клиенты» видит «клиента записи» — заметка клиента, заметка и
+  // правка объекта, «Добавить объект» пишут в карточку и всегда получали
+  // отказ «ведёт владелец». Такие поля здесь только читаются.
+  const clientWritable = useClientCardWritable();
   const objectNote = useInlineNote<string | null>(
     selectedLocation?.note ?? "",
     locationId,
@@ -2709,6 +2715,7 @@ export default function BookScreen() {
                       placeholder="Заметка клиента"
                       accessibilityLabel="Заметка клиента"
                       maxLength={500}
+                      readOnly={!clientWritable}
                     />
                   }
                 />
@@ -2765,7 +2772,7 @@ export default function BookScreen() {
                               : undefined
                           }
                           onLongPress={
-                            can.editObject
+                            can.editObject && clientWritable
                               ? () => {
                                   haptics.tap();
                                   setObjectEdit(true);
@@ -2781,6 +2788,7 @@ export default function BookScreen() {
                           note={objectNote}
                           placeholder="Заметка объекта"
                           accessibilityLabel="Заметка объекта"
+                          readOnly={!clientWritable}
                         />
                       </>
                     ) : clientLocations.length > 0 && can.editObject ? (
@@ -2839,7 +2847,7 @@ export default function BookScreen() {
                         под надписью «ОБЪЕКТ», а голая синяя строка — рядом с
                         «Выбрать услугу», у которой кружок есть. Один вопрос —
                         одна дверь: `ChooseRow`, как у соседей. */}
-                    {clientLocations.length === 0 && can.editObject ? (
+                    {clientLocations.length === 0 && can.editObject && clientWritable ? (
                       <View
                         style={{
                           borderTopWidth: pendingRequests.length > 0 ? 1 : 0,
@@ -3122,6 +3130,7 @@ export default function BookScreen() {
                       placeholder="Заметка клиента"
                       accessibilityLabel="Заметка клиента"
                       maxLength={500}
+                      readOnly={!clientWritable}
                     />
                   }
                 />
@@ -3167,7 +3176,7 @@ export default function BookScreen() {
                           : undefined
                       }
                       onLongPress={
-                        can.editObject
+                        can.editObject && clientWritable
                           ? () => {
                               haptics.tap();
                               setObjectEdit(true);
@@ -3196,6 +3205,7 @@ export default function BookScreen() {
                       note={eventObjectNote}
                       placeholder="Заметка объекта"
                       accessibilityLabel="Заметка объекта"
+                      readOnly={!clientWritable}
                     />
                   </>
                 ) : (
@@ -3471,7 +3481,9 @@ export default function BookScreen() {
           setLocationId(null);
           haptics.tap();
         }}
-        onAdd={kind === "event" ? openEventObjectAdd : () => setObjectSheet(true)}
+        onAdd={
+          !clientWritable ? undefined : kind === "event" ? openEventObjectAdd : () => setObjectSheet(true)
+        }
         onClose={() => setObjectPicker(false)}
       />
       {/* Правка выбранного объекта — тем же листом, что на карточке, и тем же

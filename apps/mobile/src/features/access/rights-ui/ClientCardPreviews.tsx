@@ -138,7 +138,7 @@ export function ClientCardPreview({
       );
     case "clients.people":
       return (
-        <PreviewFrame state={state} caption={state === "hidden" ? undefined : "Люди — без их номеров"}>
+        <PreviewFrame state={state}>
           <SectionCard title="Люди">
             <SelectList>
               <SelectRow title="Мария Спиру" subtitle="Жена" initial="М" onPress={noop} />
@@ -240,7 +240,7 @@ export function ClientCardPreview({
           <SectionCard title="Долг и деньги">
             <SelectList>
               <SelectRow icon={Wallet} color={SETTINGS_TILE.orange} title="Долг" value="€30" onPress={noop} />
-              <SelectRow icon={ReceiptText} color={SETTINGS_TILE.green} title="Инвойс 12" value="€120" onPress={noop} />
+              <SelectRow icon={ReceiptText} color={SETTINGS_TILE.green} title="Чек 12" value="€120" onPress={noop} />
             </SelectList>
           </SectionCard>
         </PreviewFrame>

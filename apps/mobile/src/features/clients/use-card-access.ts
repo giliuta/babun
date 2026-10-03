@@ -11,6 +11,7 @@ import { mirrorClientBlocks } from "@/features/access/mirror/mirror-client";
 import { myAccessQueryKey } from "@/lib/company-query-keys";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { usePlanAllows } from "@/features/settings/tenant";
+import { useTeams } from "@/features/reference/queries";
 
 /** Карта прав сотрудника в компании источника: активной — `useMyAccess`
  *  (в зеркале уже подменена), работодателя вне активной — тем же ключом через
@@ -53,14 +54,22 @@ export function useCardAccess(client: Client | null | undefined, draft: boolean)
   // команды сервер кладёт клиента в первую, где «Карточки клиентов: Меняет».
   const accessMap = useScopeAccessMap();
   const draftTeam = client?.team_id ?? null;
+  // КОМАНДА ЧЕРНОВИКА — ТА ЖЕ, КУДА СЕРВЕР ПОЛОЖИТ КЛИЕНТА (аудит прав 03.10).
+  // `create_client_with_tags` оставляет команду, только если в ней «Создание
+  // клиента: Может», иначе берёт первую по порядку такую — и обнуляет блоки,
+  // которые там нельзя менять. Черновик показывал блоки команды чипа, и
+  // заметка, вписанная в «чужой» команде, молча пропадала при сохранении.
+  const { data: scopeTeams = [] } = useTeams();
   const draftBlocks = useMemo(() => {
     if (!draft || !accessMap || accessMap.isOwner) return null;
+    const canCreate = (teamId: string) => accessMap.calendars[teamId]?.["clients.create"] === "write";
     const team =
-      draftTeam ??
-      Object.entries(accessMap.calendars).find(([, levels]) => levels.clients === "write")?.[0] ??
-      null;
+      (draftTeam && canCreate(draftTeam) ? draftTeam : null) ??
+      scopeTeams.map((team) => team.id).find(canCreate) ??
+      Object.keys(accessMap.calendars).find(canCreate) ??
+      draftTeam;
     return mirrorClientBlocks({ team_id: team }, accessMap);
-  }, [draft, accessMap, draftTeam]);
+  }, [draft, accessMap, draftTeam, scopeTeams]);
   // БЕЗ ТАРИФА СВОЯ БАЗА — ТОЛЬКО ДЛЯ ПРОСМОТРА (владелец 02.10: «если клиент
   // заведён раньше — становится серым, редактировать нельзя»). Карточка
   // открывается, блоки на месте, правки нет — сервер держит то же

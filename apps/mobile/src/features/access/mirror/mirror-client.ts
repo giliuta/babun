@@ -28,6 +28,10 @@ const CARD_KEYS = [
   "clients.money",
   "clients.history",
   "clients.sms",
+  // «Меню клиента» и «Удаление клиента» (03.10): без них «его глазами»
+  // никогда не показывало «⋯» и «Удалить», даже когда право дано (аудит).
+  "clients.menu",
+  "clients.delete",
 ] as const;
 
 const RANK: Partial<Record<AccessLevel, number>> = { off: 0, read: 1, write: 2 };

@@ -57,7 +57,9 @@ export function ObjectPickerSheet({
   /** Повторный тап по выбранному снимает выбор (владелец 2026-09-22). */
   onDeselect?: () => void;
   /** Открыть лист добавления объекта — после того, как этот уедет. */
-  onAdd: () => void;
+  /** Нет — кнопки «Добавить объект» нет: отсюда карточку клиента не
+   *  поправить (мастер вне своей базы, аудит прав 03.10). */
+  onAdd?: () => void;
   onClose: () => void;
 }) {
   const afterExit = useRef<(() => void) | null>(null);
@@ -84,16 +86,18 @@ export function ObjectPickerSheet({
         run?.();
       }}
       footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
-          <Button
-            label="Добавить объект"
-            onPress={() => {
-              afterExit.current = onAdd;
-              onClose();
-            }}
-            accessibilityHint="Открывает добавление объекта"
-          />
-        </View>
+        onAdd ? (
+          <View style={{ paddingHorizontal: GUTTER }}>
+            <Button
+              label="Добавить объект"
+              onPress={() => {
+                afterExit.current = onAdd;
+                onClose();
+              }}
+              accessibilityHint="Открывает добавление объекта"
+            />
+          </View>
+        ) : undefined
       }
     >
       <SelectList>
