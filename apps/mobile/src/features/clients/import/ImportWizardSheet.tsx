@@ -19,7 +19,6 @@ import { MirrorBanner } from "@/features/access/mirror/MirrorBanner";
 import { Screen } from "@/components/ui/Screen";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { Spinner } from "@/components/ui/Spinner";
@@ -38,7 +37,6 @@ import {
 import {
   mapAndValidate,
   selectImportable,
-  type DuplicateAction,
   type MapAndValidateResult,
   type MappedRow,
   type RowReason,
@@ -108,7 +106,6 @@ export function ImportWizardSheet({
   const [mapping, setMapping] = useState<ImportableField[]>([]);
   const [country, setCountry] = useState<CountryCode>(DEFAULT_COUNTRY);
   const [tagId, setTagId] = useState<string | null>(null);
-  const [dupAction, setDupAction] = useState<DuplicateAction>("skip");
   const [validation, setValidation] = useState<MapAndValidateResult | null>(null);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [result, setResult] = useState<ImportRowsResult | null>(null);
@@ -127,7 +124,6 @@ export function ImportWizardSheet({
     setMapping([]);
     setCountry(DEFAULT_COUNTRY);
     setTagId(null);
-    setDupAction("skip");
     setValidation(null);
     setProgress(null);
     setResult(null);
@@ -269,17 +265,14 @@ export function ImportWizardSheet({
   // Preview «Импортировать» — insert the currently-selected keep set.
   const runImport = useCallback(() => {
     if (!validation) return;
-    const { keep } = selectImportable(validation.mapped, dupAction);
+    const { keep } = selectImportable(validation.mapped);
     void runRows(keep, 0);
-  }, [validation, dupAction, runRows]);
+  }, [validation, runRows]);
 
   // Retry after an error that struck BEFORE any result: re-validate against a
-  // FRESH DB set, then run the REMAINDER from scratch. Dedup is forced to
-  // «skip» here (not the user's dupAction) so rows THIS run already wrote —
-  // now present in the DB — read as «дубликат в базе» and drop out instead of
-  // double-inserting (clients.phone_e164 has no unique index). The
-  // import_as_dup intent was already honoured for pre-existing rows in the
-  // first attempt's keep. No offset, no double-write.
+  // FRESH DB set, then run the REMAINDER from scratch. Rows THIS run already
+  // wrote — now present in the DB — read as «дубликат в базе» and drop out
+  // instead of hitting the unique phone index. No offset, no double-write.
   const retryFromError = useCallback(async () => {
     if (!parsed || preparing) return;
     setStep("result");
@@ -289,7 +282,7 @@ export function ImportWizardSheet({
     setPreparing(true);
     try {
       const v = await runValidate();
-      const { keep } = selectImportable(v.mapped, "skip");
+      const { keep } = selectImportable(v.mapped);
       // Baseline = rows already written for this file (progress saved it).
       const baseline = resume?.importedRows ?? progress?.done ?? 0;
       await runRows(keep, baseline);
@@ -313,7 +306,7 @@ export function ImportWizardSheet({
 
   const hasName = mapping.some((f) => f === "full_name");
   const selected = validation
-    ? selectImportable(validation.mapped, dupAction)
+    ? selectImportable(validation.mapped)
     : null;
 
   return (
@@ -380,8 +373,6 @@ export function ImportWizardSheet({
             <PreviewStep
               t={t}
               validation={validation}
-              dupAction={dupAction}
-              setDupAction={setDupAction}
               willImport={selected.keep.length}
               willSkip={selected.drop.length}
               onBack={() => setStep("mapping")}
@@ -824,8 +815,6 @@ function TagChip({
 function PreviewStep({
   t,
   validation,
-  dupAction,
-  setDupAction,
   willImport,
   willSkip,
   onBack,
@@ -833,8 +822,6 @@ function PreviewStep({
 }: {
   t: ReturnType<typeof useThemeColors>;
   validation: MapAndValidateResult;
-  dupAction: DuplicateAction;
-  setDupAction: (a: DuplicateAction) => void;
   willImport: number;
   willSkip: number;
   onBack: () => void;
@@ -869,23 +856,12 @@ function PreviewStep({
         ) : null}
       </Card>
 
+      {/* Номер у клиента один (закон 25.07): дубль из базы не импортируется,
+          и выбора здесь нет — только слова (аудит 03.10). */}
       {validation.duplicateInDb > 0 ? (
-        <View className="gap-2">
-          <Text
-            className="text-[11px] font-bold uppercase"
-            style={{ color: t.faint, letterSpacing: 0.6 }}
-          >
-            Дубликаты по телефону в базе
-          </Text>
-          <SegmentedControl<DuplicateAction>
-            options={[
-              { value: "skip", label: "Пропустить" },
-              { value: "import_as_dup", label: "Импортировать" },
-            ]}
-            value={dupAction}
-            onChange={setDupAction}
-          />
-        </View>
+        <Text className="text-xs" style={{ color: t.sub }}>
+          Клиенты с номерами, которые уже есть в базе, пропускаются.
+        </Text>
       ) : null}
 
       <Card className="p-0">

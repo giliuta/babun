@@ -139,16 +139,18 @@ export function mapAndValidate(opts: MapAndValidateOptions): MapAndValidateResul
   };
 }
 
-export type DuplicateAction = "skip" | "import_as_dup";
-
-/** Decide which rows go to the INSERT batch given the user's duplicate
- *  choice. Always drops rows flagged «пустое имя», «битый телефон» or
- *  «дубликат в файле» (non-recoverable). DB duplicates: dropped on
- *  'skip', kept on 'import_as_dup'. */
-export function selectImportable(
-  mapped: MappedRow[],
-  action: DuplicateAction,
-): { keep: MappedRow[]; drop: MappedRow[] } {
+/** Decide which rows go to the INSERT batch. Drops rows flagged «пустое
+ *  имя», «битый телефон», «дубликат в файле» and «дубликат в базе».
+ *
+ *  ДУБЛЬ ИЗ БАЗЫ ВЫБОРА НЕ ИМЕЕТ (аудит 2026-10-03). Был вариант
+ *  «Импортировать» — но номер у клиента уникален (закон владельца
+ *  2026-07-25, индекс `clients_tenant_phone_e164_idx`), и база отбивала
+ *  каждую такую строку английским `duplicate key…`, а «Повторить неуд.»
+ *  повторял тот же отказ. */
+export function selectImportable(mapped: MappedRow[]): {
+  keep: MappedRow[];
+  drop: MappedRow[];
+} {
   const keep: MappedRow[] = [];
   const drop: MappedRow[] = [];
   for (const row of mapped) {
@@ -161,7 +163,7 @@ export function selectImportable(
       drop.push(row);
       continue;
     }
-    if (r.includes("дубликат в базе") && action === "skip") {
+    if (r.includes("дубликат в базе")) {
       drop.push(row);
       continue;
     }
