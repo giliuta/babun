@@ -15,7 +15,17 @@ const block = () => readFileSync(resolve(here, "AppointmentBlock.tsx"), "utf8");
 
 describe("календарь под нагрузкой", () => {
   test("быстрое событие рождается с uuid — «Отменить» удаляет именно его", () => {
-    assert.match(screen(), /total_amount: 0,\s*\}\), id: randomUuid\(\) \};\s*createAppt\.mutate\(ev,/);
+    // Номер — uuid попытки: повтор того же действия после потерянного ответа
+    // несёт тот же номер и не заводит второе событие (аудит 03.10).
+    const src = screen();
+    assert.match(src, /total_amount: 0,\s*\}\), id: attemptId\(attempt\) \};\s*createAppt\.mutate\(ev,/);
+    assert.match(src, /const id = randomUuid\(\);\s*attemptIdsRef\.current\.set\(key, id\);/);
+  });
+
+  test("копия партнёра несёт номер попытки — повтор не даёт дубля", () => {
+    const src = screen();
+    assert.match(src, /timeEnd: addMinutesHM\(timeStart, moveWindowMin\),\s*id: attemptId\(attempt\),/);
+    assert.match(readFileSync(resolve(here, "mutations.ts"), "utf8"), /p_id: input\.id,/);
   });
 
   test("двойной тап не открывает форму записи дважды", () => {

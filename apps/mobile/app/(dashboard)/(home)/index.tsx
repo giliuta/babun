@@ -2146,11 +2146,27 @@ export default function CalendarTab() {
           : "Типов пока нет",
     });
   };
+  // ПОВТОР ТОГО ЖЕ ДЕЙСТВИЯ — ТОТ ЖЕ НОМЕР ЗАПИСИ (аудит параллельных правок
+  // 03.10). На слабой связи запись вставала, а ответ обрывался: тост «Не
+  // удалось…», человек повторял — и номер был новый, то есть вторая запись
+  // (и второе SMS клиенту о записи). Номер попытки живёт, пока она не
+  // удалась: повтор того же действия несёт его же, и сервер отвечает уже
+  // вставшей записью.
+  const attemptIdsRef = useRef(new Map<string, string>());
+  const attemptId = (key: string) => {
+    const known = attemptIdsRef.current.get(key);
+    if (known) return known;
+    const id = randomUuid();
+    attemptIdsRef.current.set(key, id);
+    return id;
+  };
+  const settleAttempt = (key: string) => attemptIdsRef.current.delete(key);
   const addQuickEvent = (
     dateYmd: string,
     timeStart: string,
     preset: { label: string; color: string; minutes: number },
   ) => {
+    const attempt = `event|${activeTeamId ?? ""}|${dateYmd}|${timeStart}|${preset.label}`;
     // ID — СРАЗУ UUID (аудит 03.10): на Hermes нет `crypto.randomUUID`, и
     // пустая запись рождалась с `apt-…`; создание меняло его на uuid, а
     // «Отменить» в тосте удаляло прежний `apt-…` — событие оставалось.
@@ -2170,9 +2186,10 @@ export default function CalendarTab() {
       service_ids: [],
       services: [],
       total_amount: 0,
-    }), id: randomUuid() };
+    }), id: attemptId(attempt) };
     createAppt.mutate(ev, {
       onSuccess: () => {
+        settleAttempt(attempt);
         haptics.success();
         toast(`${preset.label} ${timeStart}–${ev.time_end}`, "success", {
           label: "Отменить",
@@ -2205,15 +2222,18 @@ export default function CalendarTab() {
     // СОТРУДНИК КОПИРУЕТ НА СЕРВЕРЕ И ТОЛЬКО В ТУ ЖЕ КОМАНДУ (владелец 30.09):
     // копия встаёт туда же, где оригинал, какой бы чип ни был выбран.
     if (isCrew) {
+      const attempt = `copy|${apt.id}|${dateYmd}|${timeStart}`;
       memberCopy.mutate(
         {
           sourceId: apt.id,
           date: dateYmd,
           timeStart,
           timeEnd: addMinutesHM(timeStart, moveWindowMin),
+          id: attemptId(attempt),
         },
         {
           onSuccess: () => {
+            settleAttempt(attempt);
             haptics.success();
             toast(`Скопировано: ${humanDay(dateYmd)}, ${timeStart}`, "success");
           },

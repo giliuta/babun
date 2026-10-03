@@ -4374,6 +4374,7 @@ export type Database = {
       member_appointment_copy: {
         Args: {
           p_date: string
+          p_id?: string
           p_source: string
           p_time_end: string
           p_time_start: string

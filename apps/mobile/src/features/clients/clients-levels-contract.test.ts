@@ -70,6 +70,9 @@ const cardBlocks = norm(readFileSync(join(MIGRATIONS_DIR, CARD_BLOCKS), "utf8"))
 // ОБХОДНЫЕ ДОРОГИ (аудит 30.09): SMS, чеки, копия записи, старые записи
 // мастера — данные клиента не уходят мимо «номер по одному» и «Около записи».
 const LEAKS = "20260930235950_clients_leak_paths.sql";
+// Копия партнёра принимает номер с телефона (повтор без дубля, 03.10) —
+// с прежним сторожем клиента команды.
+const COPY = "20261003191837_member_copy_idempotent.sql";
 const leaks = norm(readFileSync(join(MIGRATIONS_DIR, LEAKS), "utf8"));
 
 // «ГЛАВНОЕ» КЛИЕНТОВ (владелец 01.10): «Открывает карточку» гасит блоки
@@ -177,7 +180,6 @@ describe("сервер: клиенты по уровням", () => {
       "sms_appointment_link",
       "receipts_client_snapshot_no_phone",
       "member_client_in_team",
-      "member_appointment_copy",
       "member_appointment_update",
     ]) {
       assert.equal(lastDefiner(fn), LEAKS, `${fn} переопределён позже`);
@@ -504,6 +506,17 @@ describe("сервер: клиенты по уровням", () => {
     assert.ok(
       leaks.includes("if s.client_id is not null and not public.member_client_in_team(s.client_id, s.team_id) then raise exception 'access:client'"),
       "копия давней записи возвращает клиента в окно",
+    );
+    // Копию с 03.10 определяет миграция без дублей — сторож клиента в ней тот же.
+    const copy = norm(readFileSync(join(MIGRATIONS_DIR, COPY), "utf8"));
+    assert.equal(lastDefiner("member_appointment_copy"), COPY, "копия переопределена позже");
+    assert.ok(
+      copy.includes("if s.client_id is not null and not public.member_client_in_team(s.client_id, s.team_id) then raise exception 'access:client'"),
+      "копия без дублей потеряла сторож клиента команды",
+    );
+    assert.ok(
+      copy.includes("revoke all on function public.member_appointment_copy(uuid, text, text, text, uuid) from public, anon;"),
+      "новая сигнатура копии осталась исполнимой для anon",
     );
     assert.ok(
       leaks.includes("or (a.status is distinct from 'cancelled' and a.date between (me.today - 7)::text and (me.today + 1)::text) as near_ok"),

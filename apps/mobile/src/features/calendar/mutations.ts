@@ -405,12 +405,21 @@ export function useMemberCopyAppointment() {
   const qc = useQueryClient();
   const refusal = useMemberRefusal();
   return useMutation({
-    mutationFn: async (input: { sourceId: string; date: string; timeStart: string; timeEnd: string }) => {
+    mutationFn: async (input: {
+      sourceId: string;
+      date: string;
+      timeStart: string;
+      timeEnd: string;
+      /** Номер копии с телефона: повтор после потерянного ответа вернёт уже
+       *  вставшую копию, а не заведёт вторую (аудит 03.10). */
+      id: string;
+    }) => {
       const { data, error } = await supabase.rpc("member_appointment_copy", {
         p_source: input.sourceId,
         p_date: input.date,
         p_time_start: input.timeStart,
         p_time_end: input.timeEnd,
+        p_id: input.id,
       });
       if (error) throw refusal("createAppointment", error.message);
       const id = (data as { id?: unknown } | null)?.id;
