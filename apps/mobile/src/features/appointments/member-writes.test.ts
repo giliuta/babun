@@ -14,6 +14,7 @@ import {
   memberCreateRow,
   memberPatch,
   memberWriteRefusal,
+  isOwnRecordAlreadyCreated,
 } from "./member-writes";
 
 const MIGRATIONS = join(__dirname, "../../../../../supabase/migrations");
@@ -80,6 +81,23 @@ describe("запись сотрудника — зеркало серверно�
     assert.equal(fieldBlock("location_id", "event"), "event.object");
     assert.equal(fieldBlock("event_notes", "event"), "event.note");
     assert.equal(fieldBlock("paid_amount", "event"), null);
+  });
+
+  test("повтор «Создать» после оборванного ответа — та же запись, а не ошибка", () => {
+    assert.equal(
+      isOwnRecordAlreadyCreated({
+        code: "23505",
+        message: 'duplicate key value violates unique constraint "appointments_pkey"',
+      }),
+      true,
+    );
+    // Другой уникальный ключ — настоящий отказ.
+    assert.equal(
+      isOwnRecordAlreadyCreated({ code: "23505", message: 'violates unique constraint "x_slot_key"' }),
+      false,
+    );
+    assert.equal(isOwnRecordAlreadyCreated({ code: "42501", message: "access:block:calendar.create" }), false);
+    assert.equal(isOwnRecordAlreadyCreated(null), false);
   });
 
   test("длительность из услуг без переноса не требует «Переносить»", () => {

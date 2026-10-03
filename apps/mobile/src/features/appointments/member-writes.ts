@@ -184,6 +184,16 @@ export function memberCreateRow(a: Appointment): Record<string, unknown> {
   return row;
 }
 
+/** Запись с этим номером УЖЕ вставлена: прошлый «Создать» дошёл до сервера,
+ *  а ответ оборвался. Номер — наш, один на жизнь формы, поэтому это та же
+ *  запись, и повтор — успех, а не вторая запись (аудит формы записи 03.10). */
+export function isOwnRecordAlreadyCreated(
+  error: { code?: string | null; message?: string | null } | null,
+): boolean {
+  if (!error) return false;
+  return error.code === "23505" && /appointments_pkey/.test(error.message ?? "");
+}
+
 /** Отказ двери → слова. `titleOf` — название блока из реестра. */
 export function memberWriteRefusal(
   message: string,

@@ -533,6 +533,8 @@ export default function BookScreen() {
   // У существующей записи блок пишет оплату сам и сразу (STORY-065).
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
   const businessNow = useBusinessNow(teamId);
+  // Номер новой записи — один на всю жизнь формы (см. `booking.save`).
+  const newRecordIdRef = useRef(randomUuid());
   // Файлы новой записи ждут её id, как ждёт оплата (STORY-070).
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const tenantIdForFiles = useTenantId();
@@ -2047,7 +2049,13 @@ export default function BookScreen() {
         haptics.success();
       } else {
         const created = await booking.save({
-          patch: buildPatch(),
+          // ОДИН НОМЕР НА ЖИЗНЬ ФОРМЫ (аудит формы записи 03.10, 017). Новый
+          // номер на каждое «Создать» давал партнёру вторую запись (и второе
+          // SMS), когда сервер её уже вставил, а ответ оборвался: «Не удалось
+          // сохранить» — и второй тап. С тем же номером повтор упирается в
+          // уже вставшую запись, а её дверь отвечает успехом
+          // (`useCreateAppointment`).
+          patch: { ...buildPatch(), id: newRecordIdRef.current },
           kind,
           reminderId,
           eventReminderOffset,
@@ -3587,7 +3595,12 @@ export default function BookScreen() {
       <TeamMasterSheet
         visible={teamSheetOpen}
         onClose={() => setTeamSheetOpen(false)}
-        teams={teams}
+        // ЗАПИСЬ ПАРТНЁРА ОСТАЁТСЯ В СВОЕЙ КОМАНДЕ (сервер: access:team_move,
+        // 30.09). Лист предлагал ему все команды: выбор снимал услуги и
+        // мастера, а «Сохранить» отказывал целиком, вместе с остальными
+        // правками (аудит формы записи 03.10, 017). В правке у партнёра —
+        // только своя команда и смена мастера внутри неё.
+        teams={isMemberView && isEdit ? teams.filter((tm) => tm.id === teamId) : teams}
         masters={masters}
         teamId={teamId}
         masterId={masterId}

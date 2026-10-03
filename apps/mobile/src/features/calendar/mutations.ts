@@ -43,6 +43,7 @@ import { useAccessBlocks } from "@/features/access/queries";
 import {
   memberCreateRow,
   memberPatch,
+  isOwnRecordAlreadyCreated,
   memberWriteRefusal,
 } from "@/features/appointments/member-writes";
 import { appointmentsQueryKey } from "./queries";
@@ -124,7 +125,10 @@ export function useCreateAppointment() {
         const { error } = await supabase.rpc("member_appointment_create", {
           p_row: memberCreateRow(stamped) as Json,
         });
-        if (error) throw refusal("createAppointment", error.message);
+        // Повтор после оборванного ответа: запись уже стоит — это успех.
+        if (error && !isOwnRecordAlreadyCreated(error)) {
+          throw refusal("createAppointment", error.message);
+        }
         // Дверь отвечает только id — он наш же; форме нужна запись целиком,
         // свежую строку довезёт перечитывание списка.
         return { ...stamped, status: "scheduled" } as Appointment;

@@ -56,6 +56,14 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
     assert.match(book, /if \(moneyHoldsClient\) \{\s*haptics\.warning\(\);\s*toast\("Команду не сменить/);
   });
 
+  test("партнёр: один номер новой записи на форму, команда записи не меняется", () => {
+    const book = app("book/index.tsx");
+    assert.match(book, /patch: \{ \.\.\.buildPatch\(\), id: newRecordIdRef\.current \},/);
+    assert.match(book, /const newRecordIdRef = useRef\(randomUuid\(\)\);/);
+    assert.match(book, /teams=\{isMemberView && isEdit \? teams\.filter\(\(tm\) => tm\.id === teamId\) : teams\}/);
+    assert.match(src("calendar/mutations.ts"), /if \(error && !isOwnRecordAlreadyCreated\(error\)\) \{/);
+  });
+
   test("«Оплаты тарифа»: у выданного навсегда без оплат нет двери в портал", () => {
     const screen = src("cabinet/TariffPaymentsScreen.tsx");
     assert.match(screen, /\{forever && months\.length === 0 \? null : \(/);
