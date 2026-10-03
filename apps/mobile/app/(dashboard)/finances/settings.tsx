@@ -2,7 +2,6 @@ import { ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   Building2,
-  ChevronRight,
   FileText,
   HandCoins,
   NotebookPen,
@@ -17,21 +16,19 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { SelectRow } from "@/components/ui/select-rows";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useTeams } from "@/features/reference/queries";
 import {
   invoicesDoorLine,
   requisitesDoorLine,
   settingsTeamId,
-  teamCategoryKindCount,
+  teamCategoryKindLine,
 } from "@/features/finances/team-settings-lines";
 import { useCompanies } from "@/features/companies/queries";
 import { useNextInvoiceNumber } from "@/features/invoices/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { accountsDoorLine } from "@/features/finances/accounts-sections";
 import { useCurrentRole, useTenant } from "@/features/settings/tenant";
-import { useThemeColors } from "@/theme/colors";
 import { financeSettingsRows } from "@/features/finances/settings-rows";
 import { LedgerExportRow } from "@/features/finances/LedgerExportRow";
 import { CurrencySettingsRow } from "@/features/settings/CurrencySettingsRow";
@@ -64,9 +61,10 @@ import { useFinanceCategories } from "@/features/finances/queries";
 //
 // ВИД 03.10 (владелец: «разделите категории — доход, расход, долги, — но не
 // так, как сейчас, это ужасно»). Блоки с самими категориями внутри он отверг
-// («почему так сложно — просто три группы»): блок «Категории» — три плашки
-// «Доходы / Расходы / Долги», каждая ведёт на свою страницу, где внизу
-// «Добавить категорию».
+// («почему так сложно — просто три группы»), плашки с числом справа тоже:
+// блок «Категории» — три строки «Доходы / Расходы / Долги» тем же видом, что
+// «Счета» и «Реквизиты», каждая ведёт на свою страницу, где внизу «Добавить
+// категорию».
 // Блок команды назван «Деньги» — имя команды уже стоит в ленте над ним. Бланк
 // инвойса вышел из-за шестерёнки «Реквизитов» сюда дверью «Инвойсы», рядом с
 // «Реквизитами» в блоке «Документы»: у настройки одна дверь в её разделе.
@@ -85,7 +83,6 @@ const KINDS: {
 
 export default function FinanceSettingsScreen() {
   const router = useRouter();
-  const t = useThemeColors();
   // СТРАНИЦА ОТКРЫТА ВСЕМ, СТРОКИ — ПО ДОСТУПУ (владелец 20.09). Правило и
   // его причины — `features/finances/settings-rows.ts`.
   const rows = financeSettingsRows(useCurrentRole().data);
@@ -158,32 +155,28 @@ export default function FinanceSettingsScreen() {
             </SectionCard>
           ) : null}
 
-          {/* КАТЕГОРИИ — ТРИ ПЛАШКИ (владелец 03.10: «просто три группы, назови
-              блок „Категории“: доходы, расходы, долги; каждая — переход на
-              свою страницу, там кнопка создать категорию»). Число справа —
-              сколько живых категорий вида у команды; пока список едет — без
-              числа: «0» на загрузке врал бы. */}
+          {/* КАТЕГОРИИ — ТРИ СТРОКИ, КАК «СЧЕТА», «РЕКВИЗИТЫ» И «ИНВОЙСЫ»
+              (владелец 03.10: «обычный блок, как все: доходы, расходы, долги»).
+              Каждая ведёт на свою страницу вида, там внизу «Добавить
+              категорию». Подпись — сколько категорий у команды. */}
           {rows.categories && teamId ? (
             <SectionCard title="Категории">
-              <View style={{ paddingHorizontal: 10, paddingTop: 2, paddingBottom: 8 }}>
-                {KINDS.map(({ kind, title, icon, tile }) => (
-                  <SelectRow
-                    key={kind}
-                    plain
+              {KINDS.map(({ kind, title, icon, tile }, index) => (
+                <View key={kind}>
+                  {index > 0 ? <Divider inset={56} /> : null}
+                  <SettingsRow
+                    tile={tile}
                     icon={icon}
-                    color={tile}
                     title={title}
-                    value={
+                    sub={
                       categoriesQuery.data
-                        ? String(teamCategoryKindCount(categoriesQuery.data, teamId, kind))
+                        ? teamCategoryKindLine(categoriesQuery.data, teamId, kind)
                         : undefined
                     }
-                    accessibilityHint="Открывает страницу категорий"
-                    trailing={<ChevronRight color={t.faint} size={18} strokeWidth={2.2} />}
                     onPress={() => router.push(withTeam("/finances/categories", `kind=${kind}`))}
                   />
-                ))}
-              </View>
+                </View>
+              ))}
             </SectionCard>
           ) : null}
 
