@@ -438,8 +438,14 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       // КРАЙ ЭКРАНА = СОСЕДНЯЯ НЕДЕЛЯ: дальше воскресенья тянуть некуда,
       // поэтому палец у правого края ставит запись на день ПОСЛЕ последней
       // видимой колонки (у левого, за рельсом времени, — на день до первой).
-      if (dayW && e.absoluteX > screenW - EDGE_PAGE) days += 1;
-      else if (dayW && e.absoluteX < RAIL_W + EDGE_PAGE / 2) days -= 1;
+      //
+      // …НО ТОЛЬКО КОГДА ПАЛЕЦ ТУДА ПРИВЕЛИ (аудит 2026-10-03). Край считался
+      // по месту пальца, а не по движению: запись воскресенья, взятая в
+      // правых 28pt (больше половины узкой колонки), уезжала на понедельник
+      // следующей недели при движении строго вниз.
+      const edgeMove = dayW ? Math.max(12, dayW * 0.3) : 0;
+      if (dayW && e.translationX > edgeMove && e.absoluteX > screenW - EDGE_PAGE) days += 1;
+      else if (dayW && e.translationX < -edgeMove && e.absoluteX < RAIL_W + EDGE_PAGE / 2) days -= 1;
       tx.value = days * (dayW ?? 0);
       if (steps !== snapSteps.value || days !== daySteps.value) {
         snapSteps.value = steps;
