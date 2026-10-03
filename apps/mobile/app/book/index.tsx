@@ -41,6 +41,8 @@ import {
   type Location,
 } from "@babun/shared/local/clients";
 import { Spinner } from "@/components/ui/Spinner";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { loadErrorWords } from "@/lib/connection-words";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
@@ -1818,7 +1820,12 @@ export default function BookScreen() {
             ? ([{ label: "запись", query: appointmentsQuery }] as const)
             : ([] as const)),
         ] as const);
-  const failedReference = essentialQueries.find(({ query }) => query.isError);
+  // ФОРМУ ПРЯЧЕТ ТОЛЬКО ОШИБКА ПЕРВОЙ ЗАГРУЗКИ (03.10, на лежащем сервере).
+  // Команды и клиенты уже приехали, черновик собран — «Создать запись»
+  // будит их перечитывание, и упавшее перечитывание (`isError` при живых
+  // данных) меняло всю заполненную форму на экран ошибки. Данные на руках —
+  // форма остаётся; сохранение само скажет, если сервер молчит.
+  const failedReference = essentialQueries.find(({ query }) => query.isLoadingError);
   const referencesPending = essentialQueries.some(
     ({ query }) => query.isPending,
   );
@@ -2382,10 +2389,13 @@ export default function BookScreen() {
   }
 
   if (failedReference || referencesPending) {
-    const errorMessage =
-      failedReference?.query.error instanceof Error
-        ? failedReference.query.error.message
-        : "Проверьте подключение и повторите загрузку.";
+    // Обрыв — словами, а не ответом шлюза: под заголовком вставала сырая
+    // HTML-страница Cloudflare «525: SSL handshake failed» и налезала на
+    // шапку. Отказ сервера по делу (права, данные) остаётся своим текстом.
+    const errorWords = loadErrorWords(failedReference?.query.error, {
+      failed: `Не удалось загрузить ${failedReference?.label ?? "данные"}`,
+      later: "Проверьте связь и повторите загрузку.",
+    });
     return (
       <Screen edges={["top", "bottom"]}>
         <View className="flex-row items-center px-3" style={{ height: 48 }}>
@@ -2406,50 +2416,35 @@ export default function BookScreen() {
           </Text>
           <View style={{ minWidth: 72 }} />
         </View>
-        <View className="flex-1 items-center justify-center px-7">
-          {/* Ожидание ДВИЖЕТСЯ: крупная надпись без движения читалась как
-              зависший экран (владелец 2026-07-27). */}
-          {referencesPending ? (
+        {failedReference ? (
+          // Тот же экран ошибки, что у календаря и списков: облако, слова,
+          // «Повторить» — футером, где все кнопки (владелец 21.09).
+          <EmptyState
+            state="error"
+            fill
+            title={errorWords.title}
+            subtitle={errorWords.subtitle}
+            action={{
+              label: "Повторить",
+              onPress: () => {
+                void Promise.all(referenceQueries.map(({ query }) => query.refetch()));
+              },
+            }}
+          />
+        ) : (
+          <View className="flex-1 items-center justify-center px-7">
+            {/* Ожидание ДВИЖЕТСЯ: крупная надпись без движения читалась как
+                зависший экран (владелец 2026-07-27). */}
             <View style={{ marginBottom: 14 }}>
               <Spinner size={30} label="Загружаем данные записи" />
             </View>
-          ) : null}
-          <Text
-            style={{ fontSize: 20, fontWeight: "700", color: t.ink, textAlign: "center" }}
-          >
-            {referencesPending
-              ? "Загружаем данные записи"
-              : `Не удалось загрузить ${failedReference?.label ?? "данные"}`}
-          </Text>
-          {!referencesPending ? (
             <Text
-              style={{ fontSize: 14, lineHeight: 20, color: t.sub, textAlign: "center", marginTop: 8 }}
+              style={{ fontSize: 20, fontWeight: "700", color: t.ink, textAlign: "center" }}
             >
-              {errorMessage}
+              Загружаем данные записи
             </Text>
-          ) : null}
-          {failedReference ? (
-            <Pressable
-              onPress={() => {
-                void Promise.all(referenceQueries.map(({ query }) => query.refetch()));
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Повторить загрузку записи"
-              style={{
-                minHeight: 48,
-                justifyContent: "center",
-                paddingHorizontal: 22,
-                borderRadius: t.radius.card,
-                backgroundColor: t.accent,
-                marginTop: 18,
-              }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#FFFFFF" }}>
-                Повторить
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
+          </View>
+        )}
       </Screen>
     );
   }
@@ -3591,6 +3586,15 @@ export default function BookScreen() {
           serviceIds.map((id) => [id, overrides[id]?.qty ?? 1]),
         )}
         onQtyChange={setQty}
+        catalog={
+          servicesQuery.isLoadingError
+            ? "failed"
+            : servicesQuery.isPending
+              ? "loading"
+              : "ready"
+        }
+        catalogError={servicesQuery.error}
+        onRetryCatalog={() => void servicesQuery.refetch()}
       />
       <TeamMasterSheet
         visible={teamSheetOpen}

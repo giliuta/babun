@@ -28,6 +28,7 @@ import { isoWeekdayOf, servedOnWeekday } from "@babun/shared/local/services";
 import { durationLabel } from "@/features/services/format";
 import { unitPriceFor } from "@/features/appointments/helpers";
 import { round2 } from "@babun/shared/local/finance/appointment-calc";
+import { loadErrorWords } from "@/lib/connection-words";
 
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   return (
@@ -73,10 +74,19 @@ export function ServicePicker({
   quantities,
   onToggle,
   onQtyChange,
+  catalog = "ready",
+  catalogError,
+  onRetryCatalog,
 }: {
   visible: boolean;
   onClose: () => void;
   services: Service[];
+  /** Прайс ещё едет или не приехал. Пустой список тогда — НЕ «услуг нет»:
+   *  на лежащем сервере лист говорил «У команды пока нет услуг» и звал
+   *  «Добавить услугу» — завести дубль того, что у команды уже есть. */
+  catalog?: "ready" | "loading" | "failed";
+  catalogError?: unknown;
+  onRetryCatalog?: () => void;
   selectedIds: string[];
   /** Дата записи «YYYY-MM-DD» — по ней виден день недели. */
   date?: string;
@@ -161,6 +171,14 @@ export function ServicePicker({
       ),
     );
   const catalogEmpty = services.length === 0;
+  const catalogMissing = catalogEmpty && catalog !== "ready";
+  const missingWords =
+    catalog === "failed"
+      ? loadErrorWords(catalogError, {
+          failed: "Не удалось загрузить услуги",
+          later: "Прайс команды появится, когда связь вернётся.",
+        })
+      : null;
   // ТАП ПО СТРОКЕ — ВЗЯТЬ ИЛИ СНЯТЬ, КОЛИЧЕСТВО — СТЕППЕРОМ (владелец
   // 2026-09-08: «количество набирать несколькими тапами не очень прикольно, а
   // чтобы снять — надо прям на это нажимать, не все люди это поймут»).
@@ -211,7 +229,13 @@ export function ServicePicker({
       // Закрыть шторку без единой услуги законно: запись сохраняется и так.
       footer={
         <View style={{ paddingHorizontal: GUTTER }}>
-          {catalogEmpty ? (
+          {catalogMissing ? (
+            // ПРАЙС НЕ ПРИЕХАЛ — ДВЕРИ «ДОБАВИТЬ УСЛУГУ» НЕТ: заводить нечего,
+            // услуги у команды есть, их просто не видно. Внизу — «Повторить».
+            catalog === "failed" && onRetryCatalog ? (
+              <GradientButton label="Повторить" onPress={onRetryCatalog} />
+            ) : null
+          ) : catalogEmpty ? (
             // ПУСТОЙ ПРАЙС — ОДНА КНОПКА, И ОНА ВНИЗУ (владелец 2026-09-14:
             // «если услуги нет, кнопка „Применить“ меняется на „Добавить
             // услугу“»). Применять нечего, поэтому место главного действия
@@ -294,9 +318,17 @@ export function ServicePicker({
           // запись: дверь — кнопка футера «Добавить услугу», здесь только
           // слова. Второй формы услуги не появляется: сущность-владелец
           // правится своей страницей.
-          <EmptyState
-            title={q.trim() ? "Услуги не найдены" : "У команды пока нет услуг"}
-          />
+          catalogMissing ? (
+            missingWords ? (
+              <EmptyState state="error" title={missingWords.title} subtitle={missingWords.subtitle} />
+            ) : (
+              <EmptyState state="loading" title="Загружаем услуги" />
+            )
+          ) : (
+            <EmptyState
+              title={q.trim() ? "Услуги не найдены" : "У команды пока нет услуг"}
+            />
+          )
         )}
       </SelectList>
     </BottomSheet>
