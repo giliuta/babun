@@ -37,7 +37,7 @@ export function BlockPreview({
 }) {
   const key = block.key;
   if (WINDOW_PREVIEW_KEYS.includes(key)) {
-    return <WindowPreview blockKey={key} level={levels[key] ?? block.levels[0]} />;
+    return <WindowPreview blockKey={key} level={levels[key] ?? block.levels[0]} teamColor={teamColor} />;
   }
   if (RECORD_PREVIEW_KEYS.includes(key)) {
     return <RecordPreview blockKey={key} blocks={blocks} levels={levels} teamName={teamName} teamColor={teamColor} />;

@@ -42,7 +42,7 @@ export const SAMPLE_SERVICES: readonly ServicesBlockLine[] = [
 
 export const SAMPLE_TOTAL = 200;
 
-const row = (over: Partial<RecordRow> & Pick<RecordRow, "key" | "title" | "amount">): RecordRow => ({
+export const row = (over: Partial<RecordRow> & Pick<RecordRow, "key" | "title" | "amount">): RecordRow => ({
   appointmentId: null,
   services: [],
   date: "2026-09-29",
