@@ -159,6 +159,12 @@ export function invitationShareText(args: {
  *  не сюда: под нужным аккаунтом то же приглашение примут. */
 export class InvitationGoneError extends Error {}
 
+/** Приглашение выписано на другой email. Отдельный класс, а не поиск слов:
+ *  приём бросает уже переведённую фразу, и поиск английского «does not
+ *  match» в ней не находил ничего — кнопка «Войти под другим аккаунтом»
+ *  не появлялась ни на одном языке (аудит Кабинета 03.10). */
+export class InvitationWrongAccountError extends Error {}
+
 export function isGoneInvitationMessage(message: string): boolean {
   return /not found|invalid token|already accepted|Некорректная ссылка/i.test(message);
 }

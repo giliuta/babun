@@ -135,4 +135,10 @@ describe("действие страницы «Тариф»", () => {
     assert.equal(tariffAction({ ...paid, tier: "max", forever: true }, "solo"), null);
     assert.equal(tariffStatus({ ...paid, forever: true }), "Навсегда");
   });
+
+  test("продление не списалось — «Оплата не прошла», а не «Оплачен до …» (аудит 03.10)", () => {
+    const paid = { ...fresh, tier: "pro" as const, paid: true, trialUsed: true };
+    assert.equal(tariffStatus({ ...paid, pastDue: true }, "2026-11-03T00:00:00Z"), "Оплата не прошла — обновите карту");
+    assert.match(tariffStatus(paid, "2026-11-03T00:00:00Z"), /^Оплачен до 03\.11$/);
+  });
 });

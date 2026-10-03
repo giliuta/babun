@@ -39,6 +39,7 @@ export function useTariff() {
     forever: !!profile?.plan_override?.trim(),
     trial: trialLeft(profile),
     trialUsed: trialUsed(profile),
+    pastDue: !profile?.plan_override?.trim() && profile?.subscription_status === "past_due",
   };
   return {
     loading: tenant.isPending,

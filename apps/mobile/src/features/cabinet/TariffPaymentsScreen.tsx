@@ -54,7 +54,12 @@ export function TariffPaymentsScreen() {
   // строка вела в портал, которого у аккаунта не существует, и отвечала
   // «Подписка не открылась». Страница «Тариф» по той же причине прячет
   // кнопки. Была история — подписка была, дверь остаётся.
-  const forever = useTariff().state.forever;
+  // Дверь в Stripe — только к подписке, которая есть: оплаченной или с
+  // оплатами в истории. На пробном и без тарифа строка вела в «Подписки ещё
+  // нет — сначала оплатите тариф» (аудит Кабинета 03.10); у «навсегда»
+  // подписки нет вовсе.
+  const tariffState = useTariff().state;
+  const hasSubscription = tariffState.paid && !tariffState.forever;
   const now = Date.now();
 
   const manage = async () => {
@@ -125,7 +130,7 @@ export function TariffPaymentsScreen() {
           <RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColor={t.accent} />
         }
       >
-        {forever && months.length === 0 ? null : (
+        {!hasSubscription && months.length === 0 ? null : (
           <SectionCard>
             <SettingsRow
               tile={SETTINGS_TILE.blue}

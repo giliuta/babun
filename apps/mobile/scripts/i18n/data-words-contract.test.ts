@@ -47,6 +47,11 @@ describe("i18n: words that are data stay raw", () => {
   it("wrong-email invitation is told by the server reply, not by the shown phrase", () => {
     const code = compiled("apps/mobile/app/invite/[token].tsx");
     assert.ok(!/actionError\??\.includes\(/.test(code), "the shown error is translated — never search it");
-    assert.match(code, /\/does not match\/i\.test\(/);
+    // Решает КЛАСС ошибки: приём (`acceptAndActivateInvitation`) бросает уже
+    // переведённую фразу, поиск в ней «does not match» не находил ничего и
+    // кнопка не появлялась даже по-русски (аудит Кабинета 03.10).
+    assert.match(code, /setWrongAccount\(error instanceof InvitationWrongAccountError\)/);
+    const accept = readFileSync(path.join(REPO, "apps/mobile/src/features/settings/invitations.ts"), "utf8");
+    assert.match(accept, /\/does not match\/i\.test\(raw\) \? new InvitationWrongAccountError\(words\)/);
   });
 });

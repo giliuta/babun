@@ -64,9 +64,12 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
     assert.match(src("calendar/mutations.ts"), /if \(error && !isOwnRecordAlreadyCreated\(error\)\) \{/);
   });
 
-  test("«Оплаты тарифа»: у выданного навсегда без оплат нет двери в портал", () => {
+  test("«Оплаты тарифа»: без подписки и без оплат нет двери в портал", () => {
     const screen = src("cabinet/TariffPaymentsScreen.tsx");
-    assert.match(screen, /\{forever && months\.length === 0 \? null : \(/);
+    // Подписка — только оплаченный не «навсегда»; на пробном и без тарифа
+    // дверь вела в «Подписки ещё нет» (аудит Кабинета 03.10).
+    assert.match(screen, /const hasSubscription = tariffState\.paid && !tariffState\.forever;/);
+    assert.match(screen, /\{!hasSubscription && months\.length === 0 \? null : \(/);
   });
 
   test("SMS из карточки: «ближайшая запись» — по часам бизнеса", () => {

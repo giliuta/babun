@@ -10,6 +10,7 @@ import {
 } from "./pending-invitation";
 import {
   InvitationGoneError,
+  InvitationWrongAccountError,
   invitationErrorMessage,
   isGoneInvitationMessage,
   isInvitableRole,
@@ -123,6 +124,12 @@ async function readRoleInCompany(tenantId: string): Promise<unknown> {
 export async function acceptAndActivateInvitation(
   token: string,
   previewRole?: InvitableRole,
+  /** Своё место на устройстве уже есть — ПЕРЕХОДА НЕТ, как у приёма из
+   *  «Приглашений» (владелец 01.10: «добавление просто в команды и всё…
+   *  переключаться точно не надо»). По ссылке приём уводил владельца в чужой
+   *  аккаунт: роль становилась партнёрской, и «Тариф», «Партнёры», «Оплаты»
+   *  пропадали из Кабинета (аудит Кабинета 03.10). */
+  opts: { stay?: boolean } = {},
 ): Promise<string> {
   if (!isInvitationToken(token)) throw new Error("Некорректная ссылка");
 
@@ -131,9 +138,9 @@ export async function acceptAndActivateInvitation(
     { p_token: token },
   );
   if (acceptError || !tenantId) {
-    throw new Error(
-      invitationErrorMessage(acceptError?.message ?? "Приглашение не найдено"),
-    );
+    const raw = acceptError?.message ?? "Приглашение не найдено";
+    const words = invitationErrorMessage(raw);
+    throw /does not match/i.test(raw) ? new InvitationWrongAccountError(words) : new Error(words);
   }
 
   // Само переключение — общая транзакция `switchTenant`: её же зовёт
@@ -157,7 +164,7 @@ export async function acceptAndActivateInvitation(
   // кадр новой компании — граница прав с крутилкой на весь экран, пока роль
   // летит на сервер. Лента контуров роль знает заранее; у приглашения её
   // спрашиваем здесь, пока крутилка приёма ещё на экране.
-  await activateAcceptedInvitation(tenantId, previewRole);
+  if (!opts.stay) await activateAcceptedInvitation(tenantId, previewRole);
   await clearPendingInvitationToken(token);
   return tenantId;
 }

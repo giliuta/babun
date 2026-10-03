@@ -213,6 +213,9 @@ export interface TariffState {
   forever: boolean;
   trial: { tier: Exclude<Tier, "free">; days: number } | null;
   trialUsed: boolean;
+  /** Продление не списалось (`past_due`): доступ ещё держится, а Stripe
+   *  уже сдвинул конец периода — «Оплачен до …» было бы неправдой. */
+  pastDue?: boolean;
 }
 
 /** Одно действие страницы «Тариф» — в футере. Пробный — пока его не было и
@@ -237,6 +240,7 @@ export function tariffAction(
 export function tariffStatus(state: TariffState, periodEnd?: string | null): string {
   if (state.forever) return "Навсегда";
   if (state.trial) return `Пробный · ещё ${state.trial.days} ${daysWord(state.trial.days)}`;
+  if (state.pastDue) return "Оплата не прошла — обновите карту";
   if (state.paid) {
     const end = periodEnd ? new Date(periodEnd) : null;
     return end && !Number.isNaN(end.getTime())
