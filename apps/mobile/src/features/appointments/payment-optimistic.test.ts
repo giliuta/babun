@@ -84,6 +84,60 @@ describe("оплата по тапу — как сервер", () => {
     assert.equal(getDebtAmount(preBack), 50);
   });
 
+  // Аудит 2026-10-03: снятие считает статус, способ и счёт из ОСТАВШИХСЯ
+  // строк — как `cancel_appointment_payment`.
+  test("снята предоплата при живой оплате — «частично», счёт оплаты", () => {
+    const pre = optimisticRecordPayment(appt({ total_amount: 100 }), {
+      ...base,
+      amount: 30,
+      kind: "prepayment",
+    });
+    const both = optimisticRecordPayment(pre, {
+      ...base,
+      requestId: "req-2",
+      accountId: "card-acc",
+      accountKind: "card",
+      amount: 40,
+      kind: "settlement",
+    });
+    const back = optimisticCancelPayment(both, "req-1");
+    assert.equal(back.prepaid_amount, 0);
+    assert.equal(back.paid_amount, 40);
+    assert.equal(back.payment_status, "partial");
+    assert.equal(back.payment_method, "card");
+    assert.equal(back.payment_account_id, "card-acc");
+    assert.equal(getDebtAmount(back), 60);
+  });
+
+  test("снята оплата, осталась предоплата — способ и счёт предоплаты", () => {
+    const pre = optimisticRecordPayment(appt({ total_amount: 100 }), {
+      ...base,
+      amount: 30,
+      kind: "prepayment",
+    });
+    const both = optimisticRecordPayment(pre, {
+      ...base,
+      requestId: "req-2",
+      accountId: "card-acc",
+      accountKind: "card",
+      amount: 40,
+      kind: "settlement",
+    });
+    const back = optimisticCancelPayment(both, "req-2");
+    assert.equal(back.paid_amount, 0);
+    assert.equal(back.prepaid_amount, 30);
+    assert.equal(back.payment_status, "unpaid");
+    assert.equal(back.payment_method, "cash");
+    assert.equal(back.payment_account_id, "cash-acc");
+  });
+
+  test("снято всё — ни способа, ни счёта", () => {
+    const paid = optimisticRecordPayment(appt(), { ...base, amount: 50, kind: "settlement" });
+    const back = optimisticCancelPayment(paid, "req-1");
+    assert.equal(back.payment_method, undefined);
+    assert.equal(back.payment_account_id, null);
+  });
+
   test("чужой id — запись не меняется", () => {
     const a = appt();
     assert.equal(optimisticCancelPayment(a, "nope"), a);

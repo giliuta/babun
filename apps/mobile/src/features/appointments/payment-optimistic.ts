@@ -75,26 +75,46 @@ export function optimisticRecordPayment(
   };
 }
 
-/** Снятие платежа — тот же принцип: строка платежа уходит сразу. */
+/** Снятие платежа — тот же принцип: строка платежа уходит сразу.
+ *
+ *  ЗЕРКАЛО `cancel_appointment_payment` СТРОКА В СТРОКУ (аудит 2026-10-03).
+ *  Прежняя версия считала статус только по своей ветке: снятая предоплата
+ *  при живой оплате давала «unpaid» (сервер — «partial»), а способ и счёт
+ *  оплаты оставались от снятого платежа — плитка и общая строка «Предоплата»
+ *  стояли не на том счёте, пока не придёт ответ. Сервер пересчитывает всё из
+ *  ОСТАВШИХСЯ строк: «получено» = предоплата + сумма оплат, способ и счёт —
+ *  у последней оставшейся оплаты, иначе у последней предоплаты. */
 export function optimisticCancelPayment(apt: Appointment, paymentId: string): Appointment {
-  const pre = (apt.prepayments ?? []).find((p) => p.id === paymentId);
-  if (pre) {
-    const prepaid = Math.max(0, cents(apt.prepaid_amount) - cents(pre.amount)) / 100;
-    return {
-      ...apt,
-      prepaid_amount: prepaid,
-      prepayments: (apt.prepayments ?? []).filter((p) => p.id !== paymentId),
-      payment_status: prepaid > 0 && cents(prepaid) >= cents(apt.total_amount) ? "paid" : "unpaid",
-    };
-  }
+  const prepayments = apt.prepayments ?? [];
   const settled = apt.payments.find((p) => p.id === paymentId);
-  if (!settled) return apt;
-  const paid = Math.max(0, cents(apt.paid_amount ?? 0) - cents(settled.amount)) / 100;
+  const pre = settled ? undefined : prepayments.find((p) => p.id === paymentId);
+  if (!settled && !pre) return apt;
+  const payments = settled ? apt.payments.filter((p) => p.id !== paymentId) : apt.payments;
+  const remainingPrepayments = pre
+    ? prepayments.filter((p) => p.id !== paymentId)
+    : prepayments;
+  const prepaidCents = pre
+    ? Math.max(0, cents(apt.prepaid_amount) - cents(pre.amount))
+    : cents(apt.prepaid_amount);
+  const paidCents = payments.reduce((sum, p) => sum + cents(p.amount), 0);
+  const totalCents = cents(apt.total_amount);
+  const last = payments.at(-1) ?? remainingPrepayments.at(-1) ?? null;
   return {
     ...apt,
-    payments: apt.payments.filter((p) => p.id !== paymentId),
+    payments,
+    prepayments: remainingPrepayments,
+    // Зеркало веба сервер пересобирает из оставшихся оплат; до ответа его
+    // заменяет `paid_amount` — как у приёма.
     payment: null,
-    paid_amount: paid,
-    payment_status: paid > 0 ? "partial" : "unpaid",
+    paid_amount: paidCents / 100,
+    prepaid_amount: prepaidCents / 100,
+    payment_status:
+      totalCents > 0 && prepaidCents + paidCents >= totalCents
+        ? "paid"
+        : paidCents > 0
+          ? "partial"
+          : "unpaid",
+    payment_method: last ? (last.method as Appointment["payment_method"]) : undefined,
+    payment_account_id: last ? (last.account_id ?? null) : null,
   };
 }
