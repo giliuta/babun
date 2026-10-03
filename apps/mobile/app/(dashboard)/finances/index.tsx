@@ -303,16 +303,17 @@ function FinancesContent() {
   const documentsView = view === "documents";
   // «Без команды» — не команда: долги под этим чипом отбираются на экране
   // (`team_id` пуст), а у хука берётся вся компания тем же ключом.
-  // ДОЛГИ — ЭТО ДОЛГИ, ПЕРИОД ИМ НЕ УКАЗ (владелец 03.10: «показывать
-  // полностью, кто нам должен, неважно какой период»; и «я должен» — тоже).
-  // Плитка и панель «Долги» — всё, что висит сейчас; лента «Записи» остаётся
-  // лентой периода.
-  const debtsQuery = useDebts(DEBTS_SINCE, DEBTS_UNTIL, {
+  // ДОЛГИ — ЗА ВЫБРАННЫЙ ПЕРИОД (владелец 03.10, вечером, после «долги это
+  // долги»: «лучше выбирать период — я могу запутаться в деньгах; выбираю
+  // текущий месяц — и долги только по текущему месяцу»). Плитка, панель
+  // «Долги» и лента считают одно окно. Оплаты долга при этом — без окна
+  // (`useDebtPayments`): долг из этого месяца, закрытый в следующем, закрыт.
+  const debtsQuery = useDebts(period.from, period.to, {
     teamId: scope === NO_TEAM ? null : scope,
   });
   // Вся компания без отбора — тот же ключ, лишнего запроса нет: по ней видно,
   // есть ли долги без команды, которым нужен чип «Без команды».
-  const companyDebtsQuery = useDebts(DEBTS_SINCE, DEBTS_UNTIL);
+  const companyDebtsQuery = useDebts(period.from, period.to);
   // Команда каждого долга: оплата долга видна и по «Долгам» его команды.
   const debtTeams = useMemo(
     () =>
@@ -659,6 +660,8 @@ function FinancesContent() {
       const past = a.date < businessToday && a.status !== "cancelled";
       if (a.status !== "completed" && !past) continue;
       if (a.status === "cancelled") continue;
+      // Долги — за выбранный период, как список под плиткой (владелец 03.10).
+      if (a.date < period.from || a.date > period.to) continue;
       // Тем же правилом, что лента долгов (`debtRows`): на «Без команды»
       // плитка не брала ни одной записи, а лента — все записи компании.
       if (!inTeamScope(a.team_id, scope)) continue;
@@ -1543,9 +1546,9 @@ function FinancesContent() {
             clients={clients}
             services={services}
             teamId={scope}
-            // Всё, что висит сейчас, при любом периоде (владелец 03.10).
-            fromDate={DEBTS_SINCE}
-            toDate={DEBTS_UNTIL}
+            // Долги выбранного периода (владелец 03.10, вечер).
+            fromDate={period.from}
+            toDate={period.to}
             todayYmd={businessToday}
             invoicedAppointmentIds={invoicedAppointments}
             debts={debts}
@@ -1833,10 +1836,6 @@ function FinancesContent() {
 // Граница прав живёт в `finances/_layout.tsx` и накрывает ВЕСЬ каталог:
 // вторая копия здесь закрывала бы только корень, оставляя `/finances/vat` и
 // `/finances/settings` открытыми по диплинку.
-/** С какого дня копятся долги: у остатка нижней границы нет. */
-const DEBTS_SINCE = "2000-01-01";
-/** До какого дня: верхней границы у долгов тоже нет (владелец 03.10). */
-const DEBTS_UNTIL = "9999-12-31";
 
 export default function FinancesTab() {
   return <FinancesContent />;
