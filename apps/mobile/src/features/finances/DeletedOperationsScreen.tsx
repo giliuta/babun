@@ -25,6 +25,9 @@ import {
   useRestoreOperation,
 } from "./deleted-operations";
 import { useFinanceCategories } from "./queries";
+import { useFinanceSettingLevel } from "./use-finance-settings";
+import { useSession } from "@/providers/SessionProvider";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { RecordRowView, type RecordRowTone } from "./RecordRow";
 import { recordRows, type RecordRow } from "./record-rows";
 
@@ -48,6 +51,8 @@ interface TrashRow {
   id: string;
   row: RecordRow;
   tone: RecordRowTone;
+  /** Кто заводил операцию: «Возвращает» у партнёра — только своё. */
+  createdBy: string | null;
 }
 
 const OFFLINE = "Без сети не получится — операции живут на сервере.";
@@ -57,6 +62,15 @@ export function DeletedOperationsScreen() {
   const toast = useToast();
   const { team } = useLocalSearchParams<{ team?: string }>();
   const teamName = (useTeams().data ?? []).find((item) => item.id === team)?.name;
+  // ПРАВО СТРОКИ «Удалённые операции» (03.10): «Только видит» — список без
+  // кромок и меню; «Возвращает» — вернуть и стереть СВОЁ (что удалил сам и
+  // что сам заводил — сервер вставку чужой операции не пустит). Владелец —
+  // всё.
+  const owner = useCurrentRole().data === "owner";
+  const me = useSession().session?.user.id ?? null;
+  const canRestore = useFinanceSettingLevel("trash", team || null) === "write";
+  const actionable = (item: TrashRow) =>
+    owner || (canRestore && !!me && item.createdBy === me);
   const deleted = useDeletedOperations();
   const restore = useRestoreOperation();
   const erase = useEraseDeletedOperation();
@@ -95,6 +109,7 @@ export function DeletedOperationsScreen() {
         return [
           {
             id: item.id,
+            createdBy: tx.created_by ?? null,
             tone: tx.debt_id ? "debt" : tx.type === "expense" ? "expense" : "income",
             row: {
               ...row,
@@ -171,7 +186,11 @@ export function DeletedOperationsScreen() {
                 {humanDayYear(day)}
               </Text>
               <View style={{ paddingHorizontal: SELECT_SIDE, gap: 8 }}>
-                {items.map((item) => (
+                {items.map((item) =>
+                  !actionable(item) ? (
+                    // «Только видит» или чужая операция — показание, без кромок.
+                    <RecordRowView key={item.id} row={item.row} tone={item.tone} />
+                  ) : (
                   <SwipeRow
                     key={item.id}
                     radius={t.radius.input}
@@ -190,7 +209,8 @@ export function DeletedOperationsScreen() {
                   >
                     <RecordRowView row={item.row} tone={item.tone} onPress={() => setMenu(item)} />
                   </SwipeRow>
-                ))}
+                  ),
+                )}
               </View>
             </View>
           ))}
