@@ -232,14 +232,16 @@ export function closedCountValue(closedCount: number): string {
  */
 export function accountsDoorLine(
   openCount: number | undefined,
-  closedCount: number | undefined,
+  hiddenCount: number | undefined,
 ): string {
-  if (openCount === undefined || closedCount === undefined) {
-    return "Остатки, порядок, закрытые";
+  // ЗАКРЫТЫХ СЧЕТОВ БОЛЬШЕ НЕТ (03.10): «Скрыть» — скрытый счёт для себя,
+  // «Удалить» — в «Удалённые счета». Дверь считает видимые и скрытые.
+  if (openCount === undefined || hiddenCount === undefined) {
+    return "Остатки, порядок, скрытые";
   }
   const open =
-    openCount > 0 ? formatCountRu(openCount, FORMS_SCHET) : "Открытых нет";
-  return `${open} · закрытых ${closedCountValue(closedCount)}`;
+    openCount > 0 ? formatCountRu(openCount, FORMS_SCHET) : "Счетов нет";
+  return `${open} · скрытых ${closedCountValue(hiddenCount)}`;
 }
 
 /** Дни между двумя `YYYY-MM-DD`. `null` — дата нечитаема. */

@@ -220,12 +220,12 @@ describe("адрес счетов на «Финансах»", () => {
 });
 
 describe("подпись двери «Счета»", () => {
-  test("числа открытых и закрытых, ноль — словом, неизвестное не выдумываем", () => {
-    assert.equal(accountsDoorLine(2, 0), "2 счёта · закрытых нет");
-    assert.equal(accountsDoorLine(5, 3), "5 счетов · закрытых 3");
-    assert.equal(accountsDoorLine(0, 1), "Открытых нет · закрытых 1");
-    assert.equal(accountsDoorLine(undefined, 0), "Остатки, порядок, закрытые");
-    assert.equal(accountsDoorLine(2, undefined), "Остатки, порядок, закрытые");
+  test("числа видимых и скрытых (03.10), ноль — словом, неизвестное не выдумываем", () => {
+    assert.equal(accountsDoorLine(2, 0), "2 счёта · скрытых нет");
+    assert.equal(accountsDoorLine(5, 3), "5 счетов · скрытых 3");
+    assert.equal(accountsDoorLine(0, 1), "Счетов нет · скрытых 1");
+    assert.equal(accountsDoorLine(undefined, 0), "Остатки, порядок, скрытые");
+    assert.equal(accountsDoorLine(2, undefined), "Остатки, порядок, скрытые");
   });
 
   test("строка «Закрытые счета» за дверью пишет то же число тем же словом", () => {

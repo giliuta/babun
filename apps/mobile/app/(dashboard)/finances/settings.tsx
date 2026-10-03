@@ -76,7 +76,7 @@ export default function FinanceSettingsScreen() {
       ? `${path}?team=${encodeURIComponent(teamId)}${extra ? `&${extra}` : ""}`
       : `${path}${extra ? `?${extra}` : ""}`) as Href;
 
-  // Полный список ради двух чисел — сколько счетов открыто и закрыто. Кэш
+  // Полный список ради двух чисел — сколько счетов видно и сколько скрыто. Кэш
   // общий со страницей «Счета», так что дверь и страница не назовут разные
   // числа.
   const accounts = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
@@ -139,8 +139,8 @@ export default function FinanceSettingsScreen() {
                     sub={
                       accounts.data
                         ? accountsDoorLine(
-                            teamAccounts.filter((a) => a.is_active).length,
-                            teamAccounts.filter((a) => !a.is_active).length,
+                            teamAccounts.filter((a) => a.is_active && !a.is_hidden).length,
+                            teamAccounts.filter((a) => a.is_active && a.is_hidden).length,
                           )
                         : accountsDoorLine(undefined, undefined)
                     }
