@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 
@@ -109,6 +109,12 @@ function Cell({
   placeholder?: string;
 }) {
   const t = useThemeColors();
+  // НАБРАННОЕ — КАК НАБРАНО, ПОКА ПОЛЕ В ФОКУСЕ (аудит шестерёнки 03.10).
+  // Строка ступени хранит сумму «за всё» и показывает «за одну»: «12.»
+  // на количестве 2 уходило в черновик как 24, возвращалось «12», и точка
+  // стиралась — копейки на ступени не набирались вовсе. Пока человек
+  // печатает, поле держит его текст; пересчитанное число — после ухода.
+  const [typing, setTyping] = useState<string | null>(null);
   return (
     <View
       className="flex-row items-center justify-end"
@@ -127,8 +133,13 @@ function Cell({
         <Text style={{ fontSize: 13, color: t.sub }}>{prefix}</Text>
       ) : null}
       <TextInput
-        value={value}
-        onChangeText={onChange}
+        value={typing ?? value}
+        onFocus={() => setTyping(value)}
+        onBlur={() => setTyping(null)}
+        onChangeText={(next) => {
+          setTyping(next);
+          onChange(next);
+        }}
         placeholder={placeholder}
         placeholderTextColor={t.placeholder}
         keyboardType="decimal-pad"
@@ -380,7 +391,11 @@ export function ServiceLadder({
                 value={s.price}
                 onChange={(v) => onPriceChange(id, v)}
                 suffix={currencySymbol}
-                placeholder="0"
+                // Пустая БАЗОВАЯ цена — «бесплатно» (владелец 29.08), подсказка
+                // «0». Пустая цена СТУПЕНИ — «как выше»: строка без цены
+                // меняет только время, и «0» обещал бесплатное, которого нет
+                // (аудит шестерёнки 03.10).
+                placeholder={id === "base" ? "0" : "—"}
                 accessibilityLabel={`Цена за ${s.qty}`}
               />
               <Cell

@@ -296,7 +296,8 @@ describe("повторный аудит календаря 03.10", () => {
 
   test("месяц: метка видна и на хвостовых днях; окошко дат не подсвечивает «1» в Месяце", () => {
     const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
-    assert.match(month, /const label = labelFor\?\.\(key\) \?\? null;/);
+    // Выходной команды заменяет метку (03.10) — в остальном метка у каждого дня.
+    assert.match(month, /const label = dayOff \? null : labelFor\?\.\(key\) \?\? null;/);
     const mini = readFileSync(resolve(here, "MiniCalendar.tsx"), "utf8");
     assert.match(mini, /const isViewed = markOpenDay && !isToday && key === openKey;/);
     assert.match(screen(), /markOpenDay=\{mode === "day" \|\| mode === "week"\}/);
@@ -420,6 +421,39 @@ describe("повторный аудит календаря 03.10", () => {
       const body = readFileSync(resolve(here, file), "utf8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
       assert.doesNotMatch(body, /"[^"]*[Зз]аявк[^"]*"/, file);
     }
+  });
+
+  test("шестерёнка: перерыв не пересобирается на повороте, полночь не ломает смену", () => {
+    const sheet = readFileSync(resolve(here, "TeamScheduleSheet.tsx"), "utf8");
+    assert.match(sheet, /<View key=\{`break-\$\{i\}`\}>/);
+    assert.match(sheet, /prevEnd >= DAY_LAST - WRAP_EDGE && next\.hour \* 60 \+ next\.minute < WRAP_EDGE/);
+    assert.match(sheet, /prevStart < WRAP_EDGE && next\.hour \* 60 \+ next\.minute >= DAY_LAST - WRAP_EDGE/);
+  });
+
+  test("шестерёнка: выходной виден и в Месяце; порядок команд и меток стоит", () => {
+    const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
+    assert.match(month, /const label = dayOff \? null : labelFor\?\.\(key\) \?\? null;/);
+    assert.match(screen(), /isDayOff=\{\(ymd\) => workBandFor\?\.\(ymd\) === null\}/);
+    const ref = readFileSync(resolve(here, "../reference/queries.ts"), "utf8");
+    assert.equal(ref.match(/\.order\("position"\)\.order\("created_at"\)/g)?.length, 2);
+  });
+
+  test("шестерёнка: тип события и метка не теряют набранное молча", () => {
+    for (const file of ["../reference/screens/EventTypeSheet.tsx", "../reference/screens/LabelsScreen.tsx"]) {
+      const src = readFileSync(resolve(here, file), "utf8");
+      assert.match(src, /onClose=\{guard\.close\}/, file);
+      assert.match(src, /onExited=\{guard\.onExited\}/, file);
+    }
+    const labels = readFileSync(resolve(here, "../reference/screens/LabelsScreen.tsx"), "utf8");
+    assert.match(labels, /persistedTeam && teams\.some\(\(x\) => x\.id === persistedTeam\) \? persistedTeam : null/);
+  });
+
+  test("услуга: копейки на ступени набираются, цена за штуку держится при смене количества", () => {
+    const ladder = readFileSync(resolve(here, "../services/ServiceLadder.tsx"), "utf8");
+    assert.match(ladder, /value=\{typing \?\? value\}/);
+    assert.match(ladder, /placeholder=\{id === "base" \? "0" : "—"\}/);
+    const sheet = readFileSync(resolve(here, "../services/ServiceSheet.tsx"), "utf8");
+    assert.match(sheet, /rowPrice: draftValue\(unit, qtyOf\(v\), "unit"\),/);
   });
 
   test("часовой пояс: «Применить» без выбора ничего не пишет", () => {

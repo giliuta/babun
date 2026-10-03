@@ -42,6 +42,7 @@ import {
   type City,
 } from "@/features/reference/queries";
 import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 
 /** Что лист отдаёт наружу при сохранении. Объектом, а не пятью позиционными
  *  аргументами: имя, цвет, дни и заливка — один ответ на один вопрос «какая
@@ -127,9 +128,15 @@ export function LabelsScreen() {
   // Пропа `teamId` здесь больше нет: его передавал маршрут Кабинет → Команды
   // → метки, а раздел «Команды» снесён 2026-08-30. Проп без вызывающего —
   // приглашение подставить в него что угодно годы спустя.
+  // Запомненный календарь берётся, только если он ещё живой (аудит
+  // шестерёнки 03.10): ушедший в архив оставался в памяти, и метка с прямого
+  // захода заводилась на архивную команду, а подпись «Метки» читала её же.
+  // Тем же правилом живёт «Услуги» (`cabinet/services.tsx`).
+  const liveTeam =
+    persistedTeam && teams.some((x) => x.id === persistedTeam) ? persistedTeam : null;
   const teamId =
     (Array.isArray(params.team) ? params.team[0] : params.team) ??
-    persistedTeam ??
+    liveTeam ??
     teams[0]?.id ??
     null;
   const teamName =
@@ -637,6 +644,24 @@ function LabelEditSheet({
   }
 
   const canSubmit = name.trim().length > 0 && !busy;
+  // НАБРАННОЕ НЕ ПРОПАДАЕТ ОТ СКРИМА И СВАЙПА (аудит шестерёнки 03.10): имя,
+  // цвет и дни новой метки терялись молча. Как у услуги — сначала вопрос.
+  const seedDays = isEdit
+    ? (editing.city.weekdays ?? []).filter((d) => d >= 1 && d <= 7)
+    : [];
+  const dirty =
+    editing !== null &&
+    (name !== (isEdit ? editing.city.name : "") ||
+      color !==
+        (isEdit ? editing.city.color ?? FALLBACK_COLOR : PRESET_COLOR_CYCLE[0].value) ||
+      weekdays.join(",") !== seedDays.join(",") ||
+      tintDay !== (isEdit ? editing.city.tint_day ?? true : true));
+  const guard = useGuardedClose({
+    dirty,
+    busy,
+    onClose,
+    message: "Набранное в метке не сохранится.",
+  });
 
   // У ДНЯ ОДНА МЕТКА. Разрешить второй встать в тот же день — значит сделать
   // календарь недетерминированным: какая из двух покрасит понедельник,
@@ -656,8 +681,9 @@ function LabelEditSheet({
   // а системная «слайд-модалка» тащила вверх ВЕСЬ серый прямоугольник экрана.
   return (
     <BottomSheet
-      visible={editing !== null}
-      onClose={onClose}
+      visible={editing !== null && !guard.hidden}
+      onClose={guard.close}
+      onExited={guard.onExited}
       title={isEdit ? "Метка" : "Новая метка"}
       avoidKeyboard
       footer={

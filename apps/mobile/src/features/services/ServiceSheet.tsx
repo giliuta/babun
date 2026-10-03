@@ -610,9 +610,22 @@ export function ServiceSheet({
         onQtyChange={(id, v) =>
           updateEconomics({
             ...economics,
-            tiers: economics.tiers.map((x) =>
-              x.id === id ? { ...x, minQuantity: v } : x,
-            ),
+            tiers: economics.tiers.map((x) => {
+              if (x.id !== id) return x;
+              // ЧИСЛО НА ЭКРАНЕ НЕ МЕНЯЕТСЯ ОТ ПРАВКИ КОЛИЧЕСТВА — в обоих
+              // режимах (аудит шестерёнки 03.10). «За всё» держит сумму
+              // строки (economics.test), а «за одну» держала её же — и цена
+              // за штуку, на которую человек смотрит, молча менялась: 45 на
+              // «от 2» после «от 10» становилась 9. В режиме «за одну»
+              // держим цену за штуку.
+              if (priceEntry !== "unit") return { ...x, minQuantity: v };
+              const unit = displayValue(x.rowPrice, qtyOf(x.minQuantity), "unit");
+              return {
+                ...x,
+                minQuantity: v,
+                rowPrice: draftValue(unit, qtyOf(v), "unit"),
+              };
+            }),
           })
         }
         onPriceChange={(id, v) => {

@@ -3507,6 +3507,7 @@ export default function CalendarTab() {
                   nowHm={nowHmBusiness}
                   showFinance={seesIncome && seesExpense}
                   labelFor={labelFor}
+                  isDayOff={(ymd) => workBandFor?.(ymd) === null}
                   holeFor={holeFor}
                   onPickDay={openWeekFromMonth}
                   onPickLabelDay={onPickLabelDay}

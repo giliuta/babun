@@ -188,9 +188,13 @@ export function economicsDraftFromService(
         priceByMinimum.get(minimum)?.price_per_unit,
         minimum,
       ),
-      rowCost: String(
-        round2((costByMinimum.get(minimum)?.cost_per_unit ?? 0) * minimum),
-      ),
+      // РАСХОД — ЗА ОДНУ, КАК В БАЗЕ И НА ЭКРАНЕ (аудит шестерёнки 03.10).
+      // Черновик хранил его «за всю строку» (×min здесь, ÷min при сохранении),
+      // а лист услуги (`ServiceSheet`: showCost/storeCost) понимает поле «за
+      // одну»: ступень «от 3 · €10» показывалась как 30, набранные 12
+      // сохранялись как 4, новая ступень от базы 5 — как 2,5. Деньги в
+      // прибыли записи (`costPerUnit × qty`) ехали мимо.
+      rowCost: String(round2(costByMinimum.get(minimum)?.cost_per_unit ?? 0)),
       totalDuration:
         durationByMinimum.get(minimum) === undefined
           ? ""
@@ -378,9 +382,11 @@ export function validateServiceEconomics(
     ) {
       tierErrors.totalDuration = "Целые минуты";
     }
-    // Пустая цена ступени — тоже «бесплатно» (владелец 2026-08-29). Требовать
-    // хоть что-то одно всё же надо: строка без цены И без времени не
-    // добавляет к услуге ничего и лишь занимает место в таблице.
+    // Пустая цена ступени — «как выше»: ступень без цены в прайс не уходит,
+    // и на этом количестве действует предыдущая цена (ступень только меняет
+    // время). «Бесплатно» — это пустая БАЗОВАЯ цена (владелец 2026-08-29).
+    // Требовать хоть что-то одно всё же надо: строка без цены И без времени
+    // не добавляет к услуге ничего и лишь занимает место в таблице.
     if (tier.rowPrice.trim() === "" && tier.totalDuration.trim() === "") {
       tierErrors.row = "Впишите цену или время";
     }
@@ -435,7 +441,8 @@ export function validateServiceEconomics(
     if (row.cost !== null && row.cost > 0) {
       costTiers.push({
         min_qty: row.minimum as number,
-        cost_per_unit: unitFromRowTotal(row.cost, row.minimum as number),
+        // Расход в черновике уже «за одну» — см. economicsDraftFromService.
+        cost_per_unit: row.cost,
       });
     }
   }

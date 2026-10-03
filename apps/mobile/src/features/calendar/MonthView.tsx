@@ -51,6 +51,7 @@ export const MonthView = memo(function MonthView({
   todayYmd,
   nowHm: nowHmProp,
   labelFor,
+  isDayOff,
   holeFor,
   onPickDay,
   onPickLabelDay,
@@ -75,6 +76,9 @@ export const MonthView = memo(function MonthView({
   /** Метка дня (город) — цветная точка у числа: месяц показывает маршрут
    *  меток так же, как шапки Дня/Недели (единая система дат). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
+  /** У команды на эту дату выходной (график: «не работаем»). Как в Неделе и
+   *  Дне, выходной заменяет метку: красная точка вместо цветной. */
+  isDayOff?: (dateYmd: string) => boolean;
   /** Дыра дня — «чего этой работе не хватает», агрегатом на день: первая
    *  незакрытая ситуация по `COLOR_SITUATIONS`. Месяц говорит «сюда надо
    *  зайти»; имя дыры остаётся ленте и озвучке. */
@@ -221,7 +225,11 @@ export const MonthView = memo(function MonthView({
               // Метка — и на хвостовых днях чужого месяца (повторный аудит
               // 03.10): тап по ним открывает шторку метки, а поставленная
               // метка точкой не показывалась — выбор пропадал на глазах.
-              const label = labelFor?.(key) ?? null;
+              // ВЫХОДНОЙ — И В МЕСЯЦЕ (аудит шестерёнки 03.10): «Выходной» из
+              // шторки метки в Месяце не менял клетку вовсе, хотя Неделя и
+              // День показывают его вместо метки.
+              const dayOff = isDayOff?.(key) === true;
+              const label = dayOff ? null : labelFor?.(key) ?? null;
               // ГРОМКО — ТОЛЬКО СЕГОДНЯ И ВПЕРЁД: в прошлом дозаполнять уже
               // нечего, а половина месяца в тёмных пилюлях убила бы сигнал
               // частотой. Гейта `inMonth` здесь НЕТ: хвостовые дни чужого
@@ -248,7 +256,7 @@ export const MonthView = memo(function MonthView({
                   onLongPress={() => onPickDay(d)}
                   delayLongPress={350}
                   accessibilityRole="button"
-                  accessibilityLabel={`${d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${unclosed > 0 ? `, не закрыто: ${unclosed}` : ""}${hole ? `, ${hole.name.toLowerCase()}` : ""}${label ? `, метка: ${label.name}` : ""}`}
+                  accessibilityLabel={`${d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${unclosed > 0 ? `, не закрыто: ${unclosed}` : ""}${hole ? `, ${hole.name.toLowerCase()}` : ""}${dayOff ? ", выходной" : label ? `, метка: ${label.name}` : ""}`}
                   accessibilityHint={
                     onPickLabelDay
                       ? "Нажатие меняет метку, долгое нажатие открывает неделю"
@@ -285,13 +293,13 @@ export const MonthView = memo(function MonthView({
                       </Text>
                       {/* Точка метки — тот же цвет города, что в шапках
                           Дня/Недели: маршрут читается и с высоты месяца. */}
-                      {label ? (
+                      {label || dayOff ? (
                         <View
                           style={{
                             width: 6,
                             height: 6,
                             borderRadius: 3,
-                            backgroundColor: label.color,
+                            backgroundColor: dayOff ? t.danger : label?.color,
                           }}
                         />
                       ) : null}

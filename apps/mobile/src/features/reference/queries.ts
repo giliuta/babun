@@ -99,7 +99,11 @@ export async function fetchTeams(
   if (role !== "owner") throw new Error("Нет доступа к календарям");
   let q = client.from("teams").select("*").eq("tenant_id", tenantId);
   if (!includeInactive) q = q.eq("is_active", true);
-  const { data, error } = await q.order("position");
+  // Позиция у новых календарей и меток — 0 у всех (создание её не пишет),
+  // и порядок решала физическая раскладка таблицы: правка строки (имя, цвет,
+  // часы) уносила её в конец, и лента команд переставлялась сама (аудит
+  // шестерёнки 03.10). Второй ключ — время создания: порядок стоит.
+  const { data, error } = await q.order("position").order("created_at");
   if (error) throw new Error(error.message);
   return data;
 }
@@ -358,7 +362,8 @@ export async function fetchCities(
   // тенанта — так читают экраны, которым нужно НАЗВАТЬ метку прошлого
   // дня, а не предложить её к выбору.
   if (teamId) q = q.eq("team_id", teamId);
-  const { data, error } = await q.order("position");
+  // Второй ключ — время создания (см. календари выше).
+  const { data, error } = await q.order("position").order("created_at");
   if (error) throw new Error(error.message);
   return data;
 }

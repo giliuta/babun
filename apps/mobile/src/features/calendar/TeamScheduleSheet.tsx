@@ -201,8 +201,23 @@ export function TeamScheduleSheet({
     commit(withDay(base, active, pair));
   };
 
+  // ПЕРЕСКОК БАРАБАНА ЧЕРЕЗ ПОЛНОЧЬ — НЕ ПРАВКА ДРУГОЙ ГРАНИЦЫ (аудит
+  // шестерёнки 03.10). Барабан часов закольцован: конец смены, докрученный за
+  // 23, становился 00 — меньше начала, и «двигаем другую границу» ставил
+  // начало на 00:00. Смена превращалась в 00:00–00:00, и сетка молча рисовала
+  // этот день общими часами. Пересчёт через полночь прижимаем к краю суток,
+  // другую границу не трогаем.
+  const WRAP_EDGE = 60;
+  const DAY_LAST = 23 * 60 + 55;
+
   const changeStart = (patch: { hour?: number; minute?: number }) => {
     const next = { ...hm(edited.start), ...patch };
+    const prevStart = timeToMinutes(edited.start);
+    if (prevStart < WRAP_EDGE && next.hour * 60 + next.minute >= DAY_LAST - WRAP_EDGE) {
+      // 00 → 23 назад через полночь: начало остаётся в начале суток.
+      writePair({ start: "00:00", end: edited.end });
+      return;
+    }
     const startMin = next.hour * 60 + next.minute;
     const endMin = timeToMinutes(edited.end);
     // Конец обязан быть позже начала: у смены пару «20:00–09:00» сетка молча
@@ -221,6 +236,12 @@ export function TeamScheduleSheet({
 
   const changeEnd = (patch: { hour?: number; minute?: number }) => {
     const next = { ...hm(edited.end), ...patch };
+    const prevEnd = timeToMinutes(edited.end);
+    if (prevEnd >= DAY_LAST - WRAP_EDGE && next.hour * 60 + next.minute < WRAP_EDGE) {
+      // 23 → 00 вперёд через полночь: конец остаётся в конце суток.
+      writePair({ start: edited.start, end: "23:55" });
+      return;
+    }
     const endMin = next.hour * 60 + next.minute;
     const startMin = timeToMinutes(edited.start);
     const fixedStart = endMin <= startMin ? Math.max(0, endMin - 5) : null;
@@ -496,7 +517,11 @@ export function TeamScheduleSheet({
               />
               {target.kind === "shift" ? WHEEL : null}
               {day.breaks.map((b, i) => (
-                <View key={`${b.start}-${b.end}-${i}`}>
+                // Ключ — место перерыва, а не его часы (аудит шестерёнки
+                // 03.10): каждый поворот барабана менял ключ, строка
+                // пересобиралась вместе с барабаном, и «Перерыв до»
+                // отскакивал на «Перерыв с» после каждой прокрутки.
+                <View key={`break-${i}`}>
                   <Divider inset={16} />
                   {/* УБИРАЮТ ПЕРЕРЫВ ЖЕСТОМ, А НЕ ЛИШНЕЙ КНОПКОЙ (владелец
                       2026-08-17: «удалить перерыв — это должен быть свайп, а не
