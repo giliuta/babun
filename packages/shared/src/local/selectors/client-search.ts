@@ -205,9 +205,12 @@ function matchesPiece(
 ): boolean {
   const qNorm = normalizeSearchable(piece);
   const qDigits = normalizeDigits(piece);
+  // «00» — тот же международный выход, что «+»: номер, вставленный как
+  // «0035799123456», не находил «+357 99 123 456» (прогон 03.10).
+  const qPlain = qDigits.length >= 10 && qDigits.startsWith("00") ? qDigits.slice(2) : qDigits;
   if (qDigits.length >= 4) {
     for (const d of hay.digits) {
-      if (d.includes(qDigits)) return true;
+      if (d.includes(qDigits) || d.includes(qPlain)) return true;
     }
   }
   if (qNorm.length === 0) return false;

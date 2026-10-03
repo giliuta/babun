@@ -61,6 +61,13 @@ describe("matchesClient", () => {
     }
   });
 
+  test("«00» в начале номера — то же, что «+» (прогон 03.10)", () => {
+    assert.equal(matchesClient(item, "0035799123456"), true);
+    assert.equal(matchesClient(item, "00357 99 123 456"), true);
+    // Короткий запрос с нулями не теряет нули: «0099» — не «99».
+    assert.equal(matchesClient(client("c-0", { full_name: "Б", phone: "+357 99 000 111" }), "0099"), false);
+  });
+
   test("keeps phone matching punctuation-independent", () => {
     assert.equal(matchesClient(item, "99123456"), true);
   });
