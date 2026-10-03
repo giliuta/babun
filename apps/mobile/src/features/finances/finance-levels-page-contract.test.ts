@@ -138,6 +138,8 @@ describe("двери и подписи по уровню", () => {
 
   test("дверь на страницу «Счета» закрывается вместе с настройками", () => {
     const panel = read("AccountsPanel.tsx");
-    assert.match(panel, /onSettings=\{canOpenSettings \? \(\) => onOpen\("\/accounts\/settings"\) : undefined\}/);
+    // 03.10: дверь несёт команду чипа (`accountsSettingsHref`) — и всё так же
+    // закрыта без права настроек.
+    assert.match(panel, /onSettings=\{canOpenSettings \? \(\) => onOpen\(accountsSettingsHref\(teamId, NO_TEAM\)\) : undefined\}/);
   });
 });
