@@ -2,11 +2,12 @@ import "@/bootstrap"; // MUST be first — polyfills + storage seam + sentry.
 import "../global.css"; // NativeWind base styles.
 
 import { useEffect } from "react";
-import { Pressable, Text, View } from "react-native";
+import { View } from "react-native";
 import { router, Stack, type ErrorBoundaryProps } from "expo-router";
-import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { AppProviders } from "@/providers/AppProviders";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Screen } from "@/components/ui/Screen";
 import { MirrorProvider } from "@/features/access/mirror/mirror-state";
 import { MirrorBanner, MirrorInsetShim } from "@/features/access/mirror/MirrorBanner";
 import { useSession } from "@/providers/SessionProvider";
@@ -26,70 +27,26 @@ import { reconcileBabunNotifications } from "@/lib/notifications";
 
 void SplashScreen.preventAutoHideAsync();
 
-/** Last-resort native recovery surface. A render error must not strand an
- * operator on a blank white screen in the middle of a working day. Expo
- * Router calls `retry` after resetting the failed route boundary; the fixed
- * palette deliberately stays light even when iOS itself is in dark mode. */
-export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
-  const message =
-    __DEV__ && error instanceof Error && error.message.trim()
-      ? error.message.trim()
-      : "Данные не потеряны. Повторите открытие экрана.";
-
+/** ПОСЛЕДНЯЯ ДВЕРЬ, ЕСЛИ ЭКРАН УПАЛ. Рабочий день не должен застрять на
+ *  белом экране. Expo Router сбрасывает упавший маршрут и зовёт `retry`.
+ *
+ *  ВИД — ОБЛОЖКА ПРОДУКТА (владелец 03.10: «должна быть красивая правильная
+ *  обложка, и кнопка внизу большая „Повторить“»): та же `EmptyState`, что у
+ *  «Нет связи с сервером», — значок в мягком круге, спокойные слова по центру,
+ *  «Повторить» во всю ширину над нижним краем. Техническую причину (часто
+ *  по-английски) экран не печатает: в тестовой сборке её показывает панель
+ *  разработчика, в рабочей — она не для глаз владельца. */
+export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
   return (
-    <View
-      style={{
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "#F7F8FC",
-        paddingHorizontal: 28,
-      }}
-    >
-      <StatusBar style="dark" />
-      <Text
-        accessibilityRole="header"
-        style={{
-          color: "#111827",
-          fontSize: 22,
-          fontWeight: "700",
-          textAlign: "center",
-        }}
-      >
-        Экран временно не открылся
-      </Text>
-      <Text
-        selectable
-        style={{
-          color: "#667085",
-          fontSize: 15,
-          lineHeight: 21,
-          marginTop: 10,
-          textAlign: "center",
-        }}
-      >
-        {message}
-      </Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Повторить открытие экрана"
-        onPress={retry}
-        style={({ pressed }) => ({
-          alignItems: "center",
-          backgroundColor: "#176BFF",
-          borderRadius: 10,
-          justifyContent: "center",
-          marginTop: 22,
-          minHeight: 48,
-          opacity: pressed ? 0.82 : 1,
-          paddingHorizontal: 24,
-        })}
-      >
-        <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700" }}>
-          Повторить
-        </Text>
-      </Pressable>
-    </View>
+    <Screen>
+      <EmptyState
+        state="error"
+        fill
+        title="Экран не открылся"
+        subtitle="Данные целы. Нажмите «Повторить» — экран откроется заново."
+        action={{ label: "Повторить", onPress: () => void retry() }}
+      />
+    </Screen>
   );
 }
 
