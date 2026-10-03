@@ -95,8 +95,10 @@ export function buildStatementPdfHtml(doc: StatementDocument): string {
 </html>`;
 }
 
-/** Лист — в системное «Поделиться» PDF-файлом «Выписка Kasa.pdf». */
+/** Лист — в системное «Поделиться» PDF-файлом «Выписка Kasa 01.10.2026 — 31.10.2026.pdf». */
 export async function shareStatementPdf(doc: StatementDocument): Promise<void> {
-  const title = `Выписка ${doc.accountName}`;
+  // Период в имени файла: бухгалтер получает выписки за разные кварталы, и
+  // «Выписка Kasa» трижды подряд в одной переписке ничего не говорит.
+  const title = `Выписка ${doc.accountName} ${doc.period}`;
   await shareHtmlAsPdf({ html: buildStatementPdfHtml(doc), fileName: title, dialogTitle: title });
 }

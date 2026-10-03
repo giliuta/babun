@@ -92,6 +92,45 @@ describe("выписка счёта (владелец 03.10: сначала ли
     assert.equal(rows[1]?.detail, "Оплата снята · Наличные");
   });
 
+  test("за период: остаток на начало — к первому дню, строки — только периода", () => {
+    const rows = [
+      tx({ id: "a", amount: 120, client_id: "c1", occurred_on: "2026-09-10" }),
+      tx({ id: "b", type: "expense", amount: 35, category_id: "fuel", occurred_on: "2026-10-02" }),
+      tx({ id: "c", amount: 50, occurred_on: "2026-10-20" }),
+      tx({ id: "d", amount: 7, occurred_on: "2026-11-01" }),
+    ];
+    const doc = buildStatementDocument({
+      account: { id: "kasa", name: "Kasa", opening_balance: 5 },
+      teamName: null,
+      transactions: rows,
+      refs: REFS,
+      today: "2026-11-03",
+      period: { from: "2026-10-01", to: "2026-10-31" },
+    });
+    // 5 + 120 (сентябрь) — остаток к 1 октября.
+    assert.equal(doc.opening, "€125");
+    assert.deepEqual(doc.days.map((d) => d.date), ["02.10.2026", "20.10.2026"]);
+    assert.equal(doc.income, "+€50");
+    assert.equal(doc.expense, "−€35");
+    // 125 − 35 + 50; ноябрьские €7 не входят.
+    assert.equal(doc.closing, "€140");
+    assert.equal(doc.period, "01.10.2026 — 31.10.2026");
+  });
+
+  test("всё время (period: null) — от первой операции, остаток на начало счёта", () => {
+    const doc = buildStatementDocument({
+      account: { id: "kasa", name: "Kasa", opening_balance: 5 },
+      teamName: null,
+      transactions: [tx({ id: "a", amount: 10, occurred_on: "2026-09-10" })],
+      refs: REFS,
+      today: "2026-10-03",
+      period: null,
+    });
+    assert.equal(doc.opening, "€5");
+    assert.equal(doc.closing, "€15");
+    assert.equal(doc.period, "10.09.2026 — 03.10.2026");
+  });
+
   test("без операций лист честно пустой: начало равно концу", () => {
     const doc = build([], 5);
     assert.equal(doc.days.length, 0);

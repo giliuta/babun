@@ -209,7 +209,6 @@ export function ScopePeriodBar({
    *  (закон 2026-08-10), а итог компании — ровно вопрос аналитики. */
   deselectable?: boolean;
 }) {
-  const t = useThemeColors();
   const toast = useToast();
   const calendarChips = useCalendarChips({
     own: teams,
@@ -245,62 +244,93 @@ export function ScopePeriodBar({
         }
       />
 
-      {/* period row — NAME opens the preset list, DATES open the wheels.
-          У закрытых финансов ряд серый и глухой: месяц назван, а выбирать
-          период не для чего — денег за ним не покажут. */}
-      <View
-        className="flex-row items-center justify-between px-4"
-        style={{
-          backgroundColor: t.surface,
-          borderTopWidth: 1,
-          borderTopColor: t.separator,
-          borderBottomWidth: 1,
-          borderBottomColor: t.separator,
-          minHeight: 38,
-        }}
-      >
-        <Pressable
-          onPress={onOpenPresets}
-          disabled={locked}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`Период: ${periodTitle(period)}`}
-          accessibilityState={{ disabled: locked }}
-          className="flex-row items-center gap-1 py-2 active:opacity-60"
-        >
-          <Text
-            className="text-[15px] font-semibold"
-            style={{ color: locked ? t.muted : t.ink }}
-          >
-            {periodTitle(period)}
-          </Text>
-          <ChevronDown
-            color={locked ? t.muted : t.faint}
-            size={14}
-            strokeWidth={2.6}
-          />
-        </Pressable>
-        <Pressable
-          onPress={onOpenCustom}
-          disabled={locked}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Выбрать диапазон дат"
-          accessibilityState={{ disabled: locked }}
-          className="py-2 active:opacity-60"
-        >
-          <Text
-            className="text-[15px] font-bold"
-            style={{
-              color: locked ? t.muted : t.ink,
-              fontVariant: ["tabular-nums"],
-            }}
-          >
-            {periodDates(period)}
-          </Text>
-        </Pressable>
-      </View>
+      <PeriodRow
+        title={periodTitle(period)}
+        dates={periodDates(period)}
+        onOpenPresets={onOpenPresets}
+        onOpenCustom={onOpenCustom}
+        locked={locked}
+      />
     </>
+  );
+}
+
+/**
+ * РЯД ПЕРИОДА — ИМЯ слева открывает готовые периоды, ДАТЫ справа — свои даты.
+ * Один на продукт: шапка «Финансов» и «Аналитики» (`ScopePeriodBar`) и
+ * «Выписка» счёта (владелец 03.10: «выписка за период — прям хорошо»).
+ */
+export function PeriodRow({
+  title,
+  dates,
+  onOpenPresets,
+  onOpenCustom,
+  locked = false,
+}: {
+  /** «Текущий месяц», «Всё время». */
+  title: string;
+  /** «01.10.26 – 31.10.26». */
+  dates: string;
+  onOpenPresets: () => void;
+  onOpenCustom: () => void;
+  locked?: boolean;
+}) {
+  const t = useThemeColors();
+  // У закрытых финансов ряд серый и глухой: месяц назван, а выбирать период
+  // не для чего — денег за ним не покажут.
+  return (
+    <View
+      className="flex-row items-center justify-between px-4"
+      style={{
+        backgroundColor: t.surface,
+        borderTopWidth: 1,
+        borderTopColor: t.separator,
+        borderBottomWidth: 1,
+        borderBottomColor: t.separator,
+        minHeight: 38,
+      }}
+    >
+      <Pressable
+        onPress={onOpenPresets}
+        disabled={locked}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Период: ${title}`}
+        accessibilityState={{ disabled: locked }}
+        className="flex-row items-center gap-1 py-2 active:opacity-60"
+      >
+        <Text
+          className="text-[15px] font-semibold"
+          style={{ color: locked ? t.muted : t.ink }}
+        >
+          {title}
+        </Text>
+        <ChevronDown
+          color={locked ? t.muted : t.faint}
+          size={14}
+          strokeWidth={2.6}
+        />
+      </Pressable>
+      <Pressable
+        onPress={onOpenCustom}
+        disabled={locked}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Выбрать диапазон дат"
+        accessibilityState={{ disabled: locked }}
+        className="py-2 active:opacity-60"
+      >
+        <Text
+          className="text-[15px] font-bold"
+          style={{
+            color: locked ? t.muted : t.ink,
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {dates}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 

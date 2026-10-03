@@ -60,8 +60,13 @@ export interface StatementInput {
    *  называется другой счёт. Свои строки модель выберет сама. */
   transactions: readonly FinanceTransaction[];
   refs: StatementRefs;
-  /** Сегодня по поясу команды — конец периода. */
+  /** Сегодня по поясу команды — конец «всего времени». */
   today: string;
+  /** ПЕРИОД ВЫПИСКИ (владелец 03.10: «выписка за период — прям хорошо»).
+   *  Нет — всё время: от первой операции до сегодня. Остаток на начало —
+   *  остаток счёта к началу периода (остаток на начало счёта + всё, что
+   *  прошло до `from`). */
+  period?: { from: string; to: string } | null;
 }
 
 export function buildStatementDocument(input: StatementInput): StatementDocument {
@@ -78,12 +83,21 @@ export function buildStatementDocument(input: StatementInput): StatementDocument
         || a.created_at.localeCompare(b.created_at),
     );
 
+  const range = input.period ?? null;
   // Считаем в центах: сорок строк по 0,10 не обязаны дать 4,0000000001.
   let running = Math.round(input.account.opening_balance * 100);
+  // Всё, что прошло ДО периода, — в остаток на его начало.
+  for (const tx of own) {
+    if (range && tx.occurred_on < range.from) running += Math.round(signedAmount(tx) * 100);
+  }
+  const openingCents = running;
+  const inPeriod = range
+    ? own.filter((tx) => tx.occurred_on >= range.from && tx.occurred_on <= range.to)
+    : own;
   let incomeCents = 0;
   let expenseCents = 0;
   const days: StatementDay[] = [];
-  for (const tx of own) {
+  for (const tx of inPeriod) {
     const cents = Math.round(signedAmount(tx) * 100);
     running += cents;
     if (cents > 0) incomeCents += cents;
@@ -103,12 +117,13 @@ export function buildStatementDocument(input: StatementInput): StatementDocument
     });
   }
 
-  const from = own[0]?.occurred_on ?? input.today;
+  const from = range?.from ?? own[0]?.occurred_on ?? input.today;
+  const to = range?.to ?? input.today;
   return {
     accountName: input.account.name,
     teamName: input.teamName,
-    period: `${formatStatementDate(from)} — ${formatStatementDate(input.today)}`,
-    opening: fmt(input.account.opening_balance),
+    period: `${formatStatementDate(from)} — ${formatStatementDate(to)}`,
+    opening: fmt(openingCents / 100),
     days,
     income: signed(incomeCents / 100),
     expense: signed(-expenseCents / 100),
