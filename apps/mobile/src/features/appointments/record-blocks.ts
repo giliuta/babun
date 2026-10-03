@@ -41,6 +41,8 @@ export interface RecordBlocks {
   note: RecordLevel;
   /** Цвет записи: видят все, красит — «Цвет записи». */
   color: RecordLevel;
+  /** Блок «SMS» внизу записи — история сообщений её клиенту (03.10). */
+  sms: RecordLevel;
 }
 
 /** БЛОКИ СОБЫТИЯ (владелец 30.09: «и внутри события — что может видеть, что
@@ -104,6 +106,7 @@ const EVERYTHING: RecordBlocks = {
   status: "write",
   note: "write",
   color: "write",
+  sms: "write",
 };
 
 const NOTHING: RecordBlocks = {
@@ -119,6 +122,7 @@ const NOTHING: RecordBlocks = {
   status: "hidden",
   note: "hidden",
   color: "hidden",
+  sms: "hidden",
 };
 
 const ALL_ACTIONS: CalendarActions = {
@@ -208,6 +212,9 @@ export function recordBlocks(input: Input): RecordBlocks {
     // «Заметка» — своё право с 30.09; неживое — прежнее правило.
     note: read("record.note") === undefined ? (status === "write" ? "write" : "read") : level("record.note"),
     color: writeOrRead("record.color"),
+    // «SMS» записи (03.10): сервер отдаёт историю только вместе с «Клиентом»
+    // (`sms_for_appointment`) — без клиента блок пустой, его нет.
+    sms: level("record.client") === "hidden" ? "hidden" : level("record.sms"),
   };
 }
 
@@ -303,6 +310,8 @@ export interface BookRights {
   showFiles: boolean;
   /** Файлы добавляются. */
   editFiles: boolean;
+  /** Блок «SMS» внизу записи (03.10). */
+  showSms: boolean;
 }
 
 export function bookRights(input: {
@@ -337,6 +346,7 @@ export function bookRights(input: {
       showType: true,
       showFiles: true,
       editFiles: true,
+      showSms: true,
     };
   }
   if (kind === "event") {
@@ -373,6 +383,8 @@ export function bookRights(input: {
       showType: ev.type !== "hidden",
       showFiles: ev.files !== "hidden",
       editFiles: edits(ev.files),
+      // SMS шлют клиенту записи — у события их блока нет.
+      showSms: false,
     };
   }
   const w = (level: RecordLevel) => level === "write";
@@ -401,6 +413,7 @@ export function bookRights(input: {
       showType: false,
       showFiles: record.files !== "hidden",
       editFiles: w(record.files),
+      showSms: record.sms !== "hidden",
     };
   }
   return {
@@ -423,6 +436,7 @@ export function bookRights(input: {
     showType: false,
     showFiles: record.files !== "hidden",
     editFiles: w(record.files),
+    showSms: record.sms !== "hidden",
   };
 }
 

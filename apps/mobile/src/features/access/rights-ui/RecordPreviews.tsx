@@ -1,5 +1,5 @@
 import { View } from "react-native";
-import { Banknote, Bookmark, CircleCheck, CreditCard, FileText, ImageIcon, Landmark, Paperclip } from "lucide-react-native";
+import { Banknote, Bookmark, CreditCard, FileText, ImageIcon, Landmark, MessageSquare, Paperclip } from "lucide-react-native";
 
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -174,15 +174,33 @@ export function RecordPreview({
     // Статус виден всегда; меняет — «Видит и меняет». Отмена — «Отмена и
     // удаление» в «Календаре».
     case "record.status":
+      // СТАТУС — ЭТО МЕНЮ ЗАПИСИ (владелец 03.10: «я вообще не понимаю, что
+      // такое статус»): строки «Статус» на странице записи нет; он ставится
+      // долгим нажатием на запись — «В работу», затем «Выполнена» — и виден
+      // её видом в календаре. Оплата с «Закрыть визит» ставит «Выполнена» сама.
       return (
-        <PreviewFrame state={levelState(rb.status)}>
-          <SectionCard>
+        <PreviewFrame
+          state={rb.status === "write" ? "can" : "cannot"}
+          caption={
+            rb.status === "write"
+              ? "Долгим нажатием: «В работу», потом «Выполнена»"
+              : "Видит, выполнена ли запись, сам не отмечает"
+          }
+        >
+          <AppointmentMenuPreview color={teamColor} tile={sampleTile(rb)} items={["В работу", "Выполнена"]} />
+        </PreviewFrame>
+      );
+    // «SMS» записи (03.10): блок внизу записи — что ушло её клиенту.
+    case "record.sms":
+      return (
+        <PreviewFrame state={levelState(rb.sms)}>
+          <SectionCard title="SMS">
             <SettingsRow
-              tile={SETTINGS_TILE.orange}
-              icon={CircleCheck}
-              title="Статус"
-              value="Запланирована"
-              onPress={on(rb.status === "write")}
+              tile={SETTINGS_TILE.green}
+              icon={MessageSquare}
+              title="Напоминание о записи"
+              sub="Вчера, 18:00 · Доставлено"
+              onPress={on(rb.sms !== "hidden")}
             />
           </SectionCard>
         </PreviewFrame>

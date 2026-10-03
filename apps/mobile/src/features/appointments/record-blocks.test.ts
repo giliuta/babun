@@ -93,7 +93,23 @@ describe("страница записи — одна для всех, блоки
       status: "write",
       note: "write",
       color: "read",
+      // «SMS» записи (03.10): клиента не видит — и истории SMS ему нет.
+      sms: "hidden",
     });
+  });
+
+  test("«SMS» записи (03.10): по своему праву и только вместе с «Клиентом»", () => {
+    const withSms = [...REGISTRY, { key: "record.sms", live: true, levels: ["off", "read"] as AccessLevel[] }];
+    const sms = (levels: Record<string, AccessLevel>) =>
+      recordBlocks({ role: "master", map: map(levels), registry: withSms, teamId: TEAM }).sms;
+    assert.equal(sms({ "record.client": "read", "record.sms": "read" }), "read");
+    assert.equal(sms({ "record.client": "read", "record.sms": "off" }), "hidden");
+    assert.equal(sms({ "record.client": "off", "record.sms": "read" }), "hidden");
+    // Реестр на телефоне права ещё не знает — блок как раньше, при «Клиенте».
+    assert.equal(
+      recordBlocks({ role: "master", map: map({ "record.client": "read" }), registry: REGISTRY, teamId: TEAM }).sms,
+      "read",
+    );
   });
 
   test("«Меняет» у клиента, объекта, суммы, метки, команды и цвета открывает правку", () => {

@@ -149,6 +149,7 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "record.label",
     "record.color",
     "record.files",
+    "record.sms",
     "calendar.day_labels",
     "calendar.identity",
     "calendar.timezone",

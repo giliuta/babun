@@ -94,6 +94,7 @@ const LOOK: Record<string, RightLook> = {
   "record.payment": { icon: CreditCard, tile: SETTINGS_TILE.green },
   "record.status": { icon: CircleCheck, tile: SETTINGS_TILE.orange },
   "record.files": { icon: Paperclip, tile: SETTINGS_TILE.indigo },
+  "record.sms": { icon: MessageSquare, tile: SETTINGS_TILE.green },
   "record.note": { icon: StickyNote, tile: SETTINGS_TILE.orange },
   "event.label": { icon: Tag, tile: SETTINGS_TILE.purple },
   "event.type": { icon: Tags, tile: SETTINGS_TILE.indigo },

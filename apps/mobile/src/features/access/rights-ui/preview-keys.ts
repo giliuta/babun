@@ -14,6 +14,7 @@ export const RECORD_PREVIEW_KEYS: readonly string[] = [
   "record.status",
   "record.note",
   "record.files",
+  "record.sms",
   "event.label",
   "event.type",
   "event.client",
