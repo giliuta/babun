@@ -1,12 +1,10 @@
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import {
   Bookmark,
+  Building2,
   CalendarCheck,
   FileText,
-  ImageIcon,
-  Landmark,
   MessageSquare,
-  Paperclip,
   Phone,
   ReceiptText,
   Send,
@@ -19,10 +17,11 @@ import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { DocumentPill } from "@/features/appointments/AppointmentFileTiles";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { IdentityCard } from "@/features/appointments/TeamLabelRow";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
+import { VisitDayHeader } from "@/features/clients/VisitRow";
+import { useThemeColors } from "@/theme/colors";
 
 import type { AccessLevel } from "../access-map";
 import { PreviewFrame, levelState } from "./PreviewFrame";
@@ -51,6 +50,7 @@ export function ClientCardPreview({
   blockKey: string;
   levels: Readonly<Record<string, AccessLevel>>;
 }) {
+  const t = useThemeColors();
   if (!CLIENT_CARD_PREVIEW_KEYS.includes(blockKey)) return null;
   const card = levels.clients ?? "off";
   const own = levels[blockKey] ?? "off";
@@ -59,6 +59,12 @@ export function ClientCardPreview({
   const write = level === "write";
   const on = write ? noop : undefined;
   const state = levelState(level);
+  // Сумма справа — цветом, как в «Истории» и «Файлах» (03.10).
+  const amount = (text: string, color: string) => (
+    <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 15, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}>
+      {text}
+    </Text>
+  );
 
   switch (blockKey) {
     // Блоки «Клиент», «История», «SMS» (02.10) — как на странице клиента.
@@ -81,11 +87,20 @@ export function ClientCardPreview({
     case "clients.history":
       return (
         <PreviewFrame state={state}>
+          {/* Как на карточке (03.10): последняя запись под днём — плашкой. */}
           <SectionCard title="История">
-            <SelectList>
-              <SelectRow icon={CalendarCheck} color={SETTINGS_TILE.blue} title="12 сентября" subtitle="Чистка кондиционера" onPress={noop} />
-              <SelectRow icon={CalendarCheck} color={SETTINGS_TILE.blue} title="3 августа" subtitle="Ремонт" onPress={noop} />
-            </SelectList>
+            <VisitDayHeader date="2026-09-12" />
+            <View style={{ paddingHorizontal: 2, paddingBottom: 6 }}>
+              <SelectRow
+                icon={CalendarCheck}
+                color={SETTINGS_TILE.blue}
+                plain
+                title="Команда 1"
+                subtitle="10:00"
+                trailing={amount("€120", t.success)}
+                onPress={noop}
+              />
+            </View>
           </SectionCard>
         </PreviewFrame>
       );
@@ -177,28 +192,31 @@ export function ClientCardPreview({
     case "clients.files":
       return (
         <PreviewFrame state={state}>
+          {/* Как на карточке (03.10): последний файл под днём — плашкой. */}
           <SectionCard title="Файлы">
-            <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 10, gap: 8 }}>
-              <DocumentPill icon={FileText} title="Договор" onOpen={noop} />
-              <DocumentPill icon={ImageIcon} title="Фото объекта" onOpen={noop} />
+            <VisitDayHeader date="2026-09-20" />
+            <View style={{ paddingHorizontal: 2, paddingBottom: 6 }}>
+              <SelectRow icon={FileText} color={t.accent} plain title="Договор" subtitle="10:15 · 340,1 КБ" onPress={noop} />
             </View>
-            {write ? <ChooseRow compact icon={Paperclip} label="Добавить файл" onPress={noop} /> : null}
           </SectionCard>
         </PreviewFrame>
       );
     case "clients.requisites":
       return (
         <PreviewFrame state={state}>
+          {/* Как на карточке (03.10): основной набор — плашкой. */}
           <SectionCard title="Реквизиты">
-            <SelectList>
+            <View style={{ paddingHorizontal: 2, paddingTop: 2, paddingBottom: 6 }}>
               <SelectRow
-                icon={Landmark}
-                color={SETTINGS_TILE.indigo}
+                icon={Building2}
+                color={t.accent}
+                plain
                 title="Компания 1 Ltd"
-                subtitle="VAT CY10000000X · Лимассол"
+                subtitle="VAT CY10000000X"
+                hint="Лимассол"
                 onPress={noop}
               />
-            </SelectList>
+            </View>
           </SectionCard>
         </PreviewFrame>
       );
