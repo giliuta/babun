@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
+import { usePreventRemove } from "@react-navigation/native";
 import { randomUuid } from "@babun/shared/sync";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
@@ -91,19 +92,24 @@ export default function NewInvoiceScreen() {
 
   const submit = async (value: InvoiceEditorValue) => {
     const invoice = await issue.mutateAsync({ ...value, request_id: requestId });
+    // Выставлен — черновика больше нет, уход без вопроса.
+    leavingRef.current = true;
     router.replace(`/invoices/${invoice.id}` as Href);
   };
 
   // ЗАПОЛНЕННЫЙ ЧЕРНОВИК НЕ ИСЧЕЗАЕТ ПО ОДНОМУ ТАПУ. Клиент, позиции, налог и
   // комментарий — это работа на минуту, и «‹» стирала её без вопроса.
+  //
+  // ВОПРОС — НА ЛЮБОЙ УХОД, А НЕ ТОЛЬКО НА «‹» (аудит 2026-10-03). Свайп от
+  // левого края и системное «назад» снимали экран мимо стрелки, и черновик
+  // исчезал молча. Теперь спрашивает сама навигация (`usePreventRemove`, как
+  // у черновика клиента), а «‹» просто уходит — тот же вопрос задаст она.
   const [dirty, setDirty] = useState(false);
-  const leave = () =>
-    router.canGoBack()
-      ? router.back()
-      : router.replace("/finances?view=documents" as Href);
-  const back = () => {
-    if (!dirty) {
-      leave();
+  const navigation = useNavigation();
+  const leavingRef = useRef(false);
+  usePreventRemove(dirty, ({ data }) => {
+    if (leavingRef.current) {
+      navigation.dispatch(data.action);
       return;
     }
     confirmThen(
@@ -113,9 +119,16 @@ export default function NewInvoiceScreen() {
         confirmLabel: "Выйти",
         destructive: true,
       },
-      leave,
+      () => {
+        leavingRef.current = true;
+        navigation.dispatch(data.action);
+      },
     );
-  };
+  });
+  const back = () =>
+    router.canGoBack()
+      ? router.back()
+      : router.replace("/finances?view=documents" as Href);
 
   return (
     <Screen edges={["top"]}>
