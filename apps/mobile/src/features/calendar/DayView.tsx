@@ -1042,7 +1042,7 @@ function DayHeader({
       accessibilityRole={onLabelTap ? "button" : undefined}
       accessibilityLabel={
         onLabelTap
-          ? `${date.getDate()} ${date.toLocaleDateString("ru-RU", { month: "long" })}, ${label ? `метка: ${label.name}` : "без метки"} — сменить метку`
+          ? `${date.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}, ${label ? `метка: ${label.name}` : "без метки"} — сменить метку`
           : undefined
       }
       className="active:opacity-70"

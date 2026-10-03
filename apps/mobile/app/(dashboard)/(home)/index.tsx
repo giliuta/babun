@@ -215,7 +215,8 @@ import {
 } from "@/features/reference/team-schedule";
 import {
   getDayScheduleForDate,
-  setDateOverride,
+  isDayOff,
+  setDayOff,
   type TeamSchedule,
 } from "@babun/shared/local/schedule";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
@@ -1667,6 +1668,10 @@ export default function CalendarTab() {
           palette: situationPalette,
           active: activeSituations,
           todayYmd,
+          // Как у сетки и ленты (повторный аудит 03.10): партнёру без
+          // «Оплаты» сервер отдаёт нули, и выполненная сегодня запись горела в
+          // месяце пилюлей «Не оплачено», хотя в сетке дыры не было.
+          paymentHidden: paymentHiddenFor(a),
         }),
       );
       byDate.set(a.date, arr);
@@ -1681,7 +1686,7 @@ export default function CalendarTab() {
       });
     }
     return out;
-  }, [mode, visibleAppts, situationPalette, activeSituations, todayYmd]);
+  }, [mode, visibleAppts, situationPalette, activeSituations, todayYmd, paymentHiddenFor]);
   const holeFor = useCallback(
     (dateYmd: string) => holeByDay.get(dateYmd) ?? null,
     [holeByDay],
@@ -3620,11 +3625,9 @@ export default function CalendarTab() {
         // дата, недельный график цел. Строки расписания может не быть вовсе —
         // тогда она РОЖДАЕТСЯ из действующих общих часов, ровно как в редакторе
         // графика, поэтому после сохранения на сетке ничего не «прыгает».
-        dayOff={
-          cityPickerYmd
-            ? teamSchedule?.date_overrides?.[cityPickerYmd]?.is_working === false
-            : false
-        }
+        // По ВСЕМУ графику (повторный аудит 03.10): воскресенье, выходное по
+        // неделе, и день отпуска — тоже «Выходной», как «Вых» над датой.
+        dayOff={cityPickerYmd ? isDayOff(teamSchedule, cityPickerYmd) : false}
         // Пока карта графиков не пришла, выходной не предлагаем: блоб собрался
         // бы из общих часов и заменил на сервере настоящий график команды.
         // Выходной — это ГРАФИК команды, не метка: сотруднику — только при
@@ -3649,17 +3652,10 @@ export default function CalendarTab() {
                         end: hourLabel(globalWork.end),
                         breaks: [],
                       };
-                      const day = getDayScheduleForDate(base, parseYMD(ymd));
-                      return setDateOverride(
-                        base,
-                        ymd,
-                        next
-                          ? { ...day, is_working: false }
-                          : // Снятый выходной убирает оверрайд целиком: день
-                            // возвращается под недельный график, а не застывает
-                            // копией его сегодняшних часов.
-                            null,
-                      );
+                      // Правка на дату; снятый выходной с дня, выходного по
+                      // неделе, делает его рабочим по общим часам
+                      // (`setDayOff`).
+                      return setDayOff(base, ymd, next);
                     },
                   },
                   {
@@ -3729,6 +3725,7 @@ export default function CalendarTab() {
       <MiniCalendar
         visible={miniCalOpen}
         currentDate={day}
+        markOpenDay={mode === "day" || mode === "week"}
         todayYmd={todayYmd}
         appointments={visibleAppts}
         onSelectDate={jumpToDate}

@@ -272,7 +272,37 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(sheet, /const ledgerLoading = awaitingAnswer\(txQuery\) \|\| awaitingAnswer\(recordsTxQuery\);/);
     assert.doesNotMatch(sheet, /recordsTxQuery\.isPlaceholderData;/);
     const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
-    assert.match(month, /const recordsAwaiting = awaitingAnswer\(recordsLedgerQuery\);/);
-    assert.match(month, /ledgerAwaiting \|\| recordsAwaiting\s*\? undefined/);
+    assert.match(month, /const ledgerAwaiting = awaitingAnswer\(ledgerQuery\);/);
+    // Операции записей не гасят месяц: создание записи не стирает суммы.
+    assert.match(month, /ledgerAwaiting\s*\? undefined\s*: \[\.\.\.\(ledgerQuery\.data \?\? \[\]\), \.\.\.\(recordsLedgerQuery\.data \?\? \[\]\)\]/);
+    assert.doesNotMatch(month, /recordsLedgerQuery\.isPlaceholderData/);
+  });
+
+  test("«Выходной» в шторке метки — по всему графику и снимается с недельного выходного", () => {
+    const src = screen();
+    assert.match(src, /dayOff=\{cityPickerYmd \? isDayOff\(teamSchedule, cityPickerYmd\) : false\}/);
+    assert.match(src, /return setDayOff\(base, ymd, next\);/);
+  });
+
+  test("пилюля месяца не горит «Не оплачено» у того, кому оплата скрыта", () => {
+    const src = screen();
+    const hole = src.slice(src.indexOf("const holeByDay = useMemo("), src.indexOf("const holeFor = useCallback("));
+    assert.match(hole, /paymentHidden: paymentHiddenFor\(a\),/);
+    assert.match(hole, /todayYmd, paymentHiddenFor\]\);/);
+  });
+
+  test("месяц: метка видна и на хвостовых днях; окошко дат не подсвечивает «1» в Месяце", () => {
+    const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
+    assert.match(month, /const label = labelFor\?\.\(key\) \?\? null;/);
+    const mini = readFileSync(resolve(here, "MiniCalendar.tsx"), "utf8");
+    assert.match(mini, /const isViewed = markOpenDay && !isToday && key === openKey;/);
+    assert.match(screen(), /markOpenDay=\{mode === "day" \|\| mode === "week"\}/);
+  });
+
+  test("озвучка даты — «3 октября», а не «3 октябрь»", () => {
+    for (const f of ["MonthView.tsx", "MiniCalendar.tsx", "WeekView.tsx", "DayView.tsx"]) {
+      const src = readFileSync(resolve(here, f), "utf8");
+      assert.doesNotMatch(src, /toLocaleDateString\("ru-RU", \{ month: "long" \}\)/, f);
+    }
   });
 });

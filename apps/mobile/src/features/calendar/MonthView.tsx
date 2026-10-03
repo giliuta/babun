@@ -122,27 +122,23 @@ export const MonthView = memo(function MonthView({
     return financeAppointments.filter((a) => a.date >= from && a.date <= to).map((a) => a.id);
   }, [financeAppointments, cells]);
   const recordsLedgerQuery = useAppointmentsLedger(recordIds, { enabled: showFinance });
-  // Чужой период не выдаём за свой, пока свой в пути. У месяца без записей
-  // запрос по записям выключен и держит заглушку вечно — по одному
-  // `isPlaceholderData` клетки такого месяца теряли и операции без записи
-  // (повторный аудит 03.10); строки заглушки — чужих номеров, в счёт не идут.
+  // Чужой ПЕРИОД не выдаём за свой, пока свой в пути (смена месяца). У
+  // месяца без записей запрос по записям выключен и держит заглушку вечно —
+  // по одному `isPlaceholderData` клетки такого месяца теряли и операции без
+  // записи (повторный аудит 03.10).
+  //
+  // Операции ЗАПИСЕЙ не гасятся вовсе: это строки с номером записи, и к дню
+  // их относит `dayMoney` по записям клетки — строки заглушки чужих записей ни
+  // в один день не лягут, а свои верны. Гашение по ним стирало зелёные и
+  // красные суммы всего месяца на каждое создание или перенос записи, пока
+  // список номеров перечитывался.
   const ledgerAwaiting = awaitingAnswer(ledgerQuery);
-  const recordsAwaiting = awaitingAnswer(recordsLedgerQuery);
   const ledger = useMemo(
     () =>
-      ledgerAwaiting || recordsAwaiting
+      ledgerAwaiting
         ? undefined
-        : [
-            ...(ledgerQuery.data ?? []),
-            ...(recordsLedgerQuery.isPlaceholderData ? [] : recordsLedgerQuery.data ?? []),
-          ],
-    [
-      ledgerAwaiting,
-      recordsAwaiting,
-      ledgerQuery.data,
-      recordsLedgerQuery.isPlaceholderData,
-      recordsLedgerQuery.data,
-    ],
+        : [...(ledgerQuery.data ?? []), ...(recordsLedgerQuery.data ?? [])],
+    [ledgerAwaiting, ledgerQuery.data, recordsLedgerQuery.data],
   );
 
   // Финансы всех дней одной мемоизацией (аудит: расчёт гонялся по 42
@@ -222,12 +218,14 @@ export const MonthView = memo(function MonthView({
               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
               const count = byDay.get(key)?.length ?? 0;
               const totals = totalsByDay.get(key) ?? null;
-              const label = inMonth ? labelFor?.(key) ?? null : null;
+              // Метка — и на хвостовых днях чужого месяца (повторный аудит
+              // 03.10): тап по ним открывает шторку метки, а поставленная
+              // метка точкой не показывалась — выбор пропадал на глазах.
+              const label = labelFor?.(key) ?? null;
               // ГРОМКО — ТОЛЬКО СЕГОДНЯ И ВПЕРЁД: в прошлом дозаполнять уже
               // нечего, а половина месяца в тёмных пилюлях убила бы сигнал
-              // частотой. Гейта `inMonth` здесь НЕТ (в отличие от метки):
-              // хвостовые дни чужого месяца — настоящие дни, и счётчик с
-              // деньгами на них не гасится.
+              // частотой. Гейта `inMonth` здесь НЕТ: хвостовые дни чужого
+              // месяца — настоящие дни, и счётчик с деньгами на них не гасится.
               const hole = count > 0 && key >= todayStr ? holeFor?.(key) ?? null : null;
               const pill = hole ? edgeColor(hole.color) : null;
               // СКОЛЬКО РАБОТ НЕ ЗАКРЫТО. В сетке просрочка говорит толщиной
@@ -250,7 +248,7 @@ export const MonthView = memo(function MonthView({
                   onLongPress={() => onPickDay(d)}
                   delayLongPress={350}
                   accessibilityRole="button"
-                  accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${unclosed > 0 ? `, не закрыто: ${unclosed}` : ""}${hole ? `, ${hole.name.toLowerCase()}` : ""}${label ? `, метка: ${label.name}` : ""}`}
+                  accessibilityLabel={`${d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${unclosed > 0 ? `, не закрыто: ${unclosed}` : ""}${hole ? `, ${hole.name.toLowerCase()}` : ""}${label ? `, метка: ${label.name}` : ""}`}
                   accessibilityHint={
                     onPickLabelDay
                       ? "Нажатие меняет метку, долгое нажатие открывает неделю"
