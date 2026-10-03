@@ -7,25 +7,16 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { SectionCard } from "@/components/ui/SectionCard";
 import { Spinner } from "@/components/ui/Spinner";
 import { ICON } from "@/components/ui/tokens";
 import { financesFrom } from "@/features/appointments/return-to";
 import { humanDay } from "@/features/appointments/helpers";
-import { ClientBlock } from "@/features/appointments/ClientBlock";
-import { PaymentTile, useTileWidth } from "@/features/appointments/PaymentTiles";
-import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
-import { ClientFileRow } from "@/features/clients/ClientFileRow";
 import { useClients } from "@/features/clients/queries";
-import type { ClientFileItem } from "@/features/clients/use-client-files";
-import { VisitDayHeader, VisitRow } from "@/features/clients/VisitRow";
-import { accountIcon } from "@/features/finances/account-ui";
-import { useTeams } from "@/features/reference/queries";
-import { todayYMD } from "@/features/clients/filter";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { chooseOption } from "@/lib/choose";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
+import { DocumentLinkBlocks } from "./DocumentLinkBlocks";
 import { ReceiptPaper } from "./ReceiptPaper";
 import { buildReceiptPdfHtml } from "./receipt-pdf";
 import { useReceipt } from "./receipts-queries";
@@ -45,9 +36,6 @@ export function ReceiptPage({ id }: { id: string }) {
   const accounts = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
   const paper = useIssuedReceiptDoc(receipt);
   const clients = useClients();
-  const teams = useTeams();
-  const teamsById = new Map((teams.data ?? []).map((team) => [team.id, team]));
-  const tileWidth = useTileWidth();
   const [pdfBusy, setPdfBusy] = useState(false);
 
   if (!receipt) {
@@ -74,7 +62,6 @@ export function ReceiptPage({ id }: { id: string }) {
   const account = (accounts.data ?? []).find((a) => a.id === receipt.account_id) ?? null;
   const appointment = paper.appointment;
   const client = (clients.data ?? []).find((c) => c.id === receipt.client_id) ?? null;
-  const location = client?.locations.find((loc) => loc.id === receipt.location_id) ?? null;
   const invoice = paper.invoice;
   const canEdit = !dead && !!receipt.transaction_id;
 
@@ -159,68 +146,17 @@ export function ReceiptPage({ id }: { id: string }) {
           {paper.doc ? <ReceiptPaper doc={paper.doc} /> : null}
         </View>
 
-        {/* ТО, ЧЕГО НА БУМАГЕ НЕТ — БЛОКАМИ ПРОДУКТА, а не строками «Связи»
-            (владелец 04.10: «сделать в нашей архитектуре»): клиент — блоком
-            клиента, объект — строкой объекта, запись — плашкой визита из
-            истории клиента, инвойс — плашкой документа из «Файлов», счёт —
-            плиткой счёта. */}
-        <View style={{ gap: 6, marginTop: 6 }}>
-          {client ? (
-            <ClientBlock
-              client={client}
-              onOpenCard={() => router.push(`/clients/${client.id}` as Href)}
-            />
-          ) : null}
-
-          {location ? (
-            <SectionCard title="Объект">
-              <ObjectRow loc={location} showNote={false} onPress={() => router.push(`/clients/${client?.id}` as Href)} />
-            </SectionCard>
-          ) : null}
-
-          {appointment ? (
-            <SectionCard title="Запись">
-              <VisitDayHeader date={appointment.date} />
-              <View style={{ paddingHorizontal: 2, paddingBottom: 6 }}>
-                <VisitRow
-                  appointment={appointment}
-                  team={appointment.team_id ? teamsById.get(appointment.team_id) : undefined}
-                  today={todayYMD()}
-                  showMoney
-                  onPress={openAppointment}
-                />
-              </View>
-            </SectionCard>
-          ) : null}
-
-          {invoice ? (
-            <SectionCard title="Инвойс">
-              <ClientFileRow
-                entry={{ type: "invoice", item: invoice, day: invoice.issued_on, at: invoice.issued_on } as ClientFileItem}
-                onPress={() => router.push(`/invoices/${invoice.id}` as Href)}
-              />
-            </SectionCard>
-          ) : null}
-
-          {account ? (
-            <SectionCard title="Счёт">
-              <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10 }}>
-                <PaymentTile
-                  icon={accountIcon(account)}
-                  label={account.name}
-                  color={account.color ?? t.ink}
-                  tint={account.color}
-                  width={tileWidth}
-                  compact
-                  state="idle"
-                  selected
-                  onPress={() => {}}
-                  accessibilityLabel={`Счёт: ${account.name}`}
-                />
-              </View>
-            </SectionCard>
-          ) : null}
-        </View>
+        {/* ТО, ЧЕГО НА БУМАГЕ НЕТ, — БЛОКАМИ ПРОДУКТА (владелец 04.10), теми же,
+            что у страницы инвойса. */}
+        <DocumentLinkBlocks
+          client={client}
+          locationId={receipt.location_id ?? null}
+          appointment={appointment}
+          onOpenAppointment={openAppointment}
+          documents={invoice ? [{ type: "invoice", item: invoice }] : []}
+          documentsTitle="Инвойс"
+          account={account}
+        />
       </ScrollView>
 
       {/* ГЛАВНОЕ ДЕЙСТВИЕ ВЫПИСАННОГО ЧЕКА — ОТПРАВИТЬ (владелец 04.10: «и уже

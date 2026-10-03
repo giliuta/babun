@@ -22,7 +22,6 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Spinner } from "@/components/ui/Spinner";
-import { ValueRow } from "@/components/ui/ValueRow";
 import { ICON } from "@/components/ui/tokens";
 import { chooseOption } from "@/lib/choose";
 import { useAppointments } from "@/features/calendar/queries";
@@ -55,6 +54,7 @@ import { accessGate } from "@/features/access/my-access";
 import { useMyAccess } from "@/features/access/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useReceipts } from "@/features/documents/receipts-queries";
+import { DocumentLinkBlocks } from "@/features/documents/DocumentLinkBlocks";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -323,9 +323,10 @@ export default function InvoiceDetailScreen() {
   const stornoOfId = creditLinks.data?.originalByNoteId.get(row.id) ?? null;
   const isCreditNote = stornoOfId != null;
   const creditNoteId = creditLinks.data?.noteByInvoiceId.get(row.id) ?? null;
-  const recipientName = row.client_snapshot
-    ? row.client_snapshot.full_name
-    : client?.full_name;
+  const invoiceById = (target: string | null) =>
+    target ? ((invoicesQuery.data ?? []).find((item) => item.id === target) ?? null) : null;
+  const stornoOfInvoice = invoiceById(stornoOfId);
+  const creditNoteInvoice = invoiceById(creditNoteId);
   const clientIsArchived = client
     ? client.deleted_at != null
     : row.client_snapshot?.archived === true
@@ -512,48 +513,22 @@ export default function InvoiceDetailScreen() {
         <InvoicePaper doc={paperDoc} />
         </View>
 
-        {/* То, чего на бумаге нет: откуда документ и что с ним стало. */}
-        {appointment || stornoOfId || creditNoteId || (client && !clientIsArchived) ? (
-          <SectionCard title="Связи">
-            {client && !clientIsArchived ? (
-              <ValueRow
-                label="Клиент"
-                value={recipientName ?? client.full_name}
-                onPress={() => router.push(`/clients/${client.id}`)}
-              />
-            ) : null}
-            {appointment ? (
-              <>
-                {client && !clientIsArchived ? <Divider inset={16} /> : null}
-                <ValueRow
-                  label="Заявка"
-                  value={`${formatInvoiceDate(appointment.date)} · ${appointment.time_start}`}
-                  onPress={openLinkedAppointment}
-                />
-              </>
-            ) : null}
-            {stornoOfId ? (
-              <>
-                <Divider inset={16} />
-                <ValueRow
-                  label="Сторнирует"
-                  value={numberById.get(stornoOfId) ?? "Открыть инвойс"}
-                  onPress={() => router.push(`/invoices/${stornoOfId}` as Href)}
-                />
-              </>
-            ) : null}
-            {creditNoteId ? (
-              <>
-                <Divider inset={16} />
-                <ValueRow
-                  label="Кредит-нота"
-                  value={numberById.get(creditNoteId) ?? "Открыть"}
-                  onPress={() => router.push(`/invoices/${creditNoteId}` as Href)}
-                />
-              </>
-            ) : null}
-          </SectionCard>
-        ) : null}
+        {/* ТО, ЧЕГО НА БУМАГЕ НЕТ, — БЛОКАМИ ПРОДУКТА, как на странице чека
+            (владелец 04.10: «в нашей архитектуре»; «кредит-нота и чек
+            закрепляются за инвойсом — сразу в одном файле»): клиент, объект,
+            запись и документы инвойса — чеки, кредит-нота, сторнированный
+            инвойс — плашками «Файлов». */}
+        <DocumentLinkBlocks
+          client={client && !clientIsArchived ? client : null}
+          locationId={row.location_id ?? null}
+          appointment={appointment ?? null}
+          onOpenAppointment={openLinkedAppointment}
+          documents={[
+            ...(stornoOfInvoice ? [{ type: "invoice" as const, item: stornoOfInvoice }] : []),
+            ...(creditNoteInvoice ? [{ type: "invoice" as const, item: creditNoteInvoice }] : []),
+            ...(isCreditNote ? [] : receipts.map((receipt) => ({ type: "receipt" as const, item: receipt }))),
+          ]}
+        />
 
         {/* Платежи — со счётом и возвратом: на бумаге этого действия нет. */}
         {!isCreditNote && payments.length > 0 ? (
@@ -587,45 +562,6 @@ export default function InvoiceDetailScreen() {
           </SectionCard>
         ) : null}
 
-        {/* ЧЕК ИНВОЙСА — закреплён за его оплатой; тап открывает чек. */}
-        {!isCreditNote && receipts.length > 0 ? (
-          <SectionCard title="Чек">
-            {receipts.map((receipt, index) => (
-              <View key={receipt.id}>
-                {index > 0 ? <Divider inset={16} /> : null}
-                <Pressable
-                  onPress={() => router.push(`/documents/receipt/${receipt.id}` as Href)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Чек ${receipt.number}, открыть`}
-                  className="flex-row items-center px-4 py-3 active:opacity-60"
-                >
-                  <View className="flex-1 pr-3">
-                    <Text className="text-[15px] font-medium" style={{ color: t.ink }}>
-                      {`Чек ${receipt.number}`}
-                    </Text>
-                    <Text className="mt-0.5 text-xs" style={{ color: t.sub }}>
-                      {[
-                        formatInvoiceDate(receipt.issued_on),
-                        receipt.status === "void" ? "аннулирован" : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </Text>
-                  </View>
-                  <Text
-                    className="text-base font-semibold"
-                    style={{
-                      color: receipt.status === "void" ? t.faint : t.ink,
-                      fontVariant: ["tabular-nums"],
-                    }}
-                  >
-                    {formatInvoiceMoney(receipt.amount, row.currency)}
-                  </Text>
-                </Pressable>
-              </View>
-            ))}
-          </SectionCard>
-        ) : null}
       </ScrollView>
 
       {/* ДЕЙСТВИЕ ЭКРАНА ОДНО И ЖИВЁТ ВНИЗУ (AGENTS: главное действие — в

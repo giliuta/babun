@@ -4,6 +4,7 @@ import { lineTotal } from "@babun/shared/local/finance/appointment-calc";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { useInvoice } from "@/features/invoices/queries";
+import type { InvoiceLanguage } from "@/features/invoices/dictionary";
 import type { ReceiptDraftState } from "./ReceiptComposer";
 import { paymentReceiptLines } from "./receipt-for-payment";
 import {
@@ -29,6 +30,9 @@ export function useReceiptSource(
   invoiceNumber: string | null;
   /** Чек по инвойсу подписан реквизитами инвойса — их не выбирают. */
   invoiceCompanyId: string | null;
+  /** Язык бумаги — язык инвойса оплаты (чек обязан говорить тем же языком,
+   *  что выйдет: предпросмотр был русским, выписанный — английским, 04.10). */
+  language: InvoiceLanguage;
   ready: boolean;
 } {
   const editing = useReceipt(params.receiptId).data ?? null;
@@ -81,7 +85,8 @@ export function useReceiptSource(
     });
   }, [mode, ready, tx, editing, invoiceRow, invoiceNumber, invoiceCompanyId, appointment.data, change]);
 
-  return { mode, tx, editing, invoiceNumber, invoiceCompanyId, ready };
+  const language: InvoiceLanguage = invoiceRow?.language === "en" ? "en" : "ru";
+  return { mode, tx, editing, invoiceNumber, invoiceCompanyId, language, ready };
 }
 
 /** Строка снимка выписанного чека — снова строка блока «Услуги». */

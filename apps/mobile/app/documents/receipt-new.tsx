@@ -128,6 +128,7 @@ export default function NewReceiptScreen() {
     vatAmount: money.vat,
     total: money.gross,
     invoiceNumber: source.invoiceNumber,
+    language: source.language,
   });
 
   const issue = async () => {

@@ -197,7 +197,7 @@ export function buildDraftReceiptDocument(input: {
     vat:
       input.vatAmount > 0
         ? {
-            label: words.vatIncluded(input.vatRate ? `${input.vatRate}%` : ""),
+            label: vatLabel(words, input.vatRate, input.lines, input.vatAmount, input.total),
             value: money(input.vatAmount),
           }
         : null,
@@ -265,7 +265,7 @@ export function buildReceiptDocument(
           // который забыли взять: по такой строке сумму не восстановить.
           // Владелец просил короче и без «в т.ч.» — здесь два слова вместо
           // четырёх, но убрать их нельзя: без них документ врёт.
-          label: words.vatIncluded(receipt.vat_rate ? `${receipt.vat_rate}%` : ""),
+          label: vatLabel(words, receipt.vat_rate, rawLines, receipt.vat_amount, receipt.amount),
           value: money(receipt.vat_amount),
         }
       : null,
@@ -380,4 +380,22 @@ function compact(values: string[]): string[] {
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+/** НАЛОГ СВЕРХУ ИЛИ ВНУТРИ — ПО ЧИСЛАМ САМОГО ЧЕКА (проверка на 17e, 04.10):
+ *  оплата инвойса с VAT сверху печаталась «Итого работ €150 · VAT 19% в сумме
+ *  €28,50 · Получено €178,50» — «в сумме» врало. Строки + налог = получено —
+ *  налог начислен сверху, подпись просто «VAT 19%»; иначе он внутри цены. */
+function vatLabel(
+  words: ReceiptWords,
+  rate: number | null | undefined,
+  lines: readonly { sum: number }[],
+  vat: number | null | undefined,
+  received: number,
+): string {
+  const percent = rate ? `${rate}%` : "";
+  const linesSum = lines.reduce((sum, line) => sum + line.sum, 0);
+  const onTop =
+    lines.length > 0 && Math.round((linesSum + (vat ?? 0)) * 100) === Math.round(received * 100);
+  return onTop ? `VAT${percent ? ` ${percent}` : ""}` : words.vatIncluded(percent);
 }

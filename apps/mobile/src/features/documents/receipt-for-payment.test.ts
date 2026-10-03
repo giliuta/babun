@@ -90,3 +90,31 @@ describe("чек на принятую оплату", () => {
     assert.equal(lines[0].totalPrice, 20);
   });
 });
+
+// Проверка на 17e (04.10): оплата инвойса с VAT сверху — «VAT 19%», а не «в сумме».
+describe("подпись VAT на бумаге чека", () => {
+  it("сверху — просто «VAT 19%»; внутри — «в сумме»", async () => {
+    const { buildDraftReceiptDocument } = await import("./receipt-document");
+    const base = {
+      numberLabel: "Черновик",
+      seller: { name: "Seller" },
+      currency: "EUR",
+      issuedOn: "2026-10-04",
+      discountAmount: 0,
+      vatRate: 19,
+      vatAmount: 28.5,
+    };
+    const onTop = buildDraftReceiptDocument({
+      ...base,
+      lines: [{ name: "A/C", qty: 3, unitPrice: 50, sum: 150 }],
+      total: 178.5,
+    });
+    assert.equal(onTop.vat?.label, "VAT 19%");
+    const inside = buildDraftReceiptDocument({
+      ...base,
+      lines: [{ name: "A/C", qty: 1, unitPrice: 178.5, sum: 178.5 }],
+      total: 178.5,
+    });
+    assert.equal(inside.vat?.label, "VAT 19% в сумме");
+  });
+});

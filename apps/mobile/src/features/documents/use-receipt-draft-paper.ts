@@ -5,7 +5,7 @@ import {
 } from "@babun/shared/local/client-requisites";
 import { useClients } from "@/features/clients/queries";
 import { defaultCompany, useCompanies } from "@/features/companies/queries";
-import { invoiceDictionary } from "@/features/invoices/dictionary";
+import { invoiceDictionary, type InvoiceLanguage } from "@/features/invoices/dictionary";
 import { clientParty } from "@/features/invoices/document";
 import type { ReceiptDraftState } from "./ReceiptComposer";
 import {
@@ -28,6 +28,7 @@ export function useReceiptDraftPaper(input: {
   vatAmount: number;
   total: number;
   invoiceNumber: string | null;
+  language: InvoiceLanguage;
 }): ReceiptDocument {
   const clients = useClients();
   const companies = useCompanies();
@@ -42,7 +43,7 @@ export function useReceiptDraftPaper(input: {
     ? clientParty(
         { ...client, ...requisitesMirror(chosen ? [chosen] : []) },
         location,
-        invoiceDictionary("ru"),
+        invoiceDictionary(input.language),
       )
     : null;
   return buildDraftReceiptDocument({
@@ -64,5 +65,6 @@ export function useReceiptDraftPaper(input: {
     vatRate: input.vatRate,
     vatAmount: input.vatAmount,
     total: input.total,
+    language: input.language,
   });
 }
