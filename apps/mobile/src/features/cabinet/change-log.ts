@@ -199,6 +199,72 @@ const FIELD_WORDS: Record<string, string> = {
   cancel_reason: "Причина отмены",
   number: "Номер",
   accepted_at: "Принято",
+  // Записи и события — прочее, что меняют руками.
+  address_note: "Уточнение адреса",
+  color_override: "Цвет записи",
+  custom_total: "Своя сумма",
+  service_price_overrides: "Цены услуг",
+  total_duration: "Длительность",
+  reminder_enabled: "SMS-напоминание",
+  reminder_offsets: "SMS-напоминание",
+  event_push_enabled: "Напоминание",
+  event_push_offsets: "Напоминание",
+  event_push_at: "Напоминание",
+  event_repeat: "Повтор",
+  event_url: "Ссылка",
+  payment_id: "Оплата",
+  // Клиенты.
+  whatsapp_phone: "WhatsApp",
+  telegram_username: "Telegram",
+  instagram_username: "Instagram",
+  discount: "Скидка",
+  language: "Язык",
+  referred_by_client_id: "Кто привёл",
+  first_contact_date: "Первое обращение",
+  city_manual: "Метка",
+  memberships: "Абонементы",
+  legal_name: "Юр. название",
+  vat_number: "VAT номер",
+  reg_number: "Рег. номер",
+  billing_address: "Адрес для счетов",
+  avatar_url: "Фото",
+  favorite_master_id: "Любимый мастер",
+  tag_ids: "Теги",
+  // Календарь, график, команда.
+  schedule: "Часы работы",
+  breaks: "Перерывы",
+  default_slot_minutes: "Шаг сетки",
+  buffer_minutes: "Пауза между записями",
+  hide_cancelled: "Отменённые",
+  allow_overtime: "Сверхурочные",
+  default_city: "Метка по умолчанию",
+  tint_days_by_label: "Цвет дней по метке",
+  appointment_blocks: "Блоки записи",
+  legal_entity_id: "Реквизиты",
+  record_color_palette: "Палитра записей",
+  record_color_fallback: "Цвет записей",
+  // Финансы и справочники.
+  receipt_url: "Чек",
+  vat_amount: "VAT",
+  opening_balance: "Начальный остаток",
+  balance_hidden: "Скрытый остаток",
+  is_primary: "Основной",
+  is_hidden: "Скрыт",
+  show_in_payments: "В оплатах",
+  kind: "Вид",
+  type: "Тип",
+  description: "Описание",
+  unit: "Единица",
+  duration_tiers: "Длительность",
+  price_tiers: "Цены",
+  cost_tiers: "Себестоимость",
+  material_costs: "Материалы",
+  budget: "Бюджет",
+  monthly_budget: "Бюджет",
+  hidden: "Скрыт",
+  key: "Вид источника",
+  block: "Блок",
+  team_ids: "Команды",
 };
 
 const STATUS_WORDS: Record<string, string> = {
@@ -246,6 +312,8 @@ function fieldValue(field: string, value: unknown): string | null {
 export function describeField(field: string, change: unknown): string | null {
   const word = FIELD_WORDS[field];
   if (!word) return null;
+  const list = listDiff(field, change);
+  if (list) return `${word} ${list}`;
   if (!Array.isArray(change)) return word;
   const [before, after] = change;
   const a = fieldValue(field, before);
@@ -270,13 +338,190 @@ export function changesSummary(changes: Record<string, unknown> | null): string 
     }
     const word = FIELD_WORDS[field];
     const prev = byWord.get(word);
-    if (prev === undefined || (!prev.includes("→") && text.includes("→"))) byWord.set(word, text);
+    if (prev === undefined || (prev === word && text !== word)) byWord.set(word, text);
   }
   const known = [...byWord.values()];
   const shown = known.slice(0, 3);
   const rest = known.length - shown.length + unknown;
   if (shown.length === 0) return rest > 0 ? "Служебные поля" : "";
   return rest > 0 ? `${shown.join(" · ")} · ещё ${rest}` : shown.join(" · ");
+}
+
+/** Деньги в списках (оплаты, предоплаты, расходы): имя элемента — сумма. */
+const MONEY_LISTS = new Set(["payments", "prepayments", "expenses"]);
+/** Текстовые списки — имена в кавычках: «новая заметка». */
+const QUOTED_LISTS = new Set(["notes"]);
+
+/** СПИСОК: что добавили и что убрали (журнал пишет {"+": [...], "-": [...]},
+ *  миграция 20261003214500): «+ «ключ под ковриком» · − «Zaikaitsa»». */
+function listDiff(field: string, change: unknown): string | null {
+  if (!change || typeof change !== "object" || Array.isArray(change)) return null;
+  const c = change as Record<string, unknown>;
+  const added = Array.isArray(c["+"]) ? (c["+"] as unknown[]) : [];
+  const removed = Array.isArray(c["-"]) ? (c["-"] as unknown[]) : [];
+  if (added.length === 0 && removed.length === 0) return null;
+  const show = (value: unknown) => {
+    const text = String(value ?? "");
+    if (MONEY_LISTS.has(field)) {
+      const n = Number(text);
+      if (Number.isFinite(n) && text !== "") return money(n);
+    }
+    return QUOTED_LISTS.has(field) ? `«${text}»` : text;
+  };
+  return [
+    ...added.map((v) => `+ ${show(v)}`),
+    ...removed.map((v) => `− ${show(v)}`),
+  ].join(" · ");
+}
+
+/** ВСЕ ПОЛЯ ПРАВКИ — для подробностей: по строке на поле, «было → стало»
+ *  или «что добавили и убрали». Поля без слова — одной строкой «Служебные
+ *  поля: N». */
+export function allChanges(changes: Record<string, unknown> | null): string[] {
+  if (!changes) return [];
+  const byWord = new Map<string, string>();
+  let unknown = 0;
+  for (const [field, change] of Object.entries(changes)) {
+    const text = describeField(field, change);
+    if (!text) {
+      unknown += 1;
+      continue;
+    }
+    const word = FIELD_WORDS[field];
+    const prev = byWord.get(word);
+    if (prev === undefined || (prev === word && text !== word)) byWord.set(word, text);
+    else if (prev !== text && text !== word) byWord.set(word, `${prev} · ${text.slice(word.length + 1)}`);
+  }
+  const lines = [...byWord.values()];
+  if (unknown > 0) lines.push(`Служебные поля: ${unknown}`);
+  return lines;
+}
+
+const MONTHS_FULL = [
+  "января", "февраля", "марта", "апреля", "мая", "июня",
+  "июля", "августа", "сентября", "октября", "ноября", "декабря",
+];
+
+/** Точное время строки журнала по часам телефона: «3 октября 2026, 18:49:06». */
+export function fullWhen(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getDate()} ${MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}, ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+// ── ФИЛЬТРЫ ИСТОРИИ (владелец 03.10: «фильтрацию как в клиентах — просто
+//    красивые фильтры всех изменений») ─────────────────────────────────────
+
+/** Что изменили — крупными видами, а не по таблицам. */
+export type ChangeKind = "records" | "events" | "clients" | "money" | "people" | "settings";
+
+export const CHANGE_KINDS: { value: ChangeKind; label: string }[] = [
+  { value: "records", label: "Записи" },
+  { value: "events", label: "События" },
+  { value: "clients", label: "Клиенты" },
+  { value: "money", label: "Деньги" },
+  { value: "people", label: "Партнёры и права" },
+  { value: "settings", label: "Настройки и справочники" },
+];
+
+const MONEY_ENTITIES = new Set(["finance_transactions", "debts", "invoices", "receipts", "accounts"]);
+const PEOPLE_ENTITIES = new Set(["member_access", "member_calendars", "tenant_members", "invitations"]);
+
+export function changeKind(row: Pick<ChangeLogRow, "entity" | "meta">): ChangeKind {
+  if (row.entity === "appointments") {
+    return row.meta?.kind === "event" || row.meta?.kind === "personal" ? "events" : "records";
+  }
+  if (row.entity === "clients") return "clients";
+  if (MONEY_ENTITIES.has(row.entity)) return "money";
+  if (PEOPLE_ENTITIES.has(row.entity)) return "people";
+  return "settings";
+}
+
+export const CHANGE_ACTIONS: { value: ChangeLogRow["action"]; label: string }[] = [
+  { value: "insert", label: "Создано" },
+  { value: "update", label: "Изменено" },
+  { value: "delete", label: "Удалено" },
+  { value: "restore", label: "Возвращено" },
+];
+
+export type HistoryPeriod = "today" | "yesterday" | "week" | "month" | "all";
+
+export const HISTORY_PERIODS: { value: HistoryPeriod; label: string }[] = [
+  { value: "today", label: "Сегодня" },
+  { value: "yesterday", label: "Вчера" },
+  { value: "week", label: "7 дней" },
+  { value: "month", label: "30 дней" },
+  { value: "all", label: "Всё время" },
+];
+
+/** Границы периода по часам телефона: с какого момента и до какого. */
+export function periodRange(period: HistoryPeriod, now: Date = new Date()): { from: string | null; to: string | null } {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const day = 24 * 60 * 60 * 1000;
+  switch (period) {
+    case "today":
+      return { from: start.toISOString(), to: null };
+    case "yesterday":
+      return { from: new Date(start.getTime() - day).toISOString(), to: start.toISOString() };
+    case "week":
+      return { from: new Date(start.getTime() - 6 * day).toISOString(), to: null };
+    case "month":
+      return { from: new Date(start.getTime() - 29 * day).toISOString(), to: null };
+    default:
+      return { from: null, to: null };
+  }
+}
+
+/** Набор фильтров. Пусто в фасете — «Все». Автор `"system"` — сервер. */
+export interface HistoryFilter {
+  actors: string[];
+  teams: string[];
+  kinds: ChangeKind[];
+  actions: ChangeLogRow["action"][];
+}
+
+export const EMPTY_HISTORY_FILTER: HistoryFilter = { actors: [], teams: [], kinds: [], actions: [] };
+
+const actorKey = (row: Pick<ChangeLogRow, "actor_id">) => row.actor_id ?? "system";
+const teamKey = (row: Pick<ChangeLogRow, "team_id">) => row.team_id ?? "none";
+
+type Facet = keyof HistoryFilter;
+
+function passes(row: ChangeLogRow, filter: HistoryFilter, skip?: Facet): boolean {
+  if (skip !== "actors" && filter.actors.length > 0 && !filter.actors.includes(actorKey(row))) return false;
+  if (skip !== "teams" && filter.teams.length > 0 && !filter.teams.includes(teamKey(row))) return false;
+  if (skip !== "kinds" && filter.kinds.length > 0 && !filter.kinds.includes(changeKind(row))) return false;
+  if (skip !== "actions" && filter.actions.length > 0 && !filter.actions.includes(row.action)) return false;
+  return true;
+}
+
+export function filterChanges(rows: readonly ChangeLogRow[], filter: HistoryFilter): ChangeLogRow[] {
+  return rows.filter((row) => passes(row, filter));
+}
+
+/** Счётчики вариантов, как в клиентах: у каждого фасета — с учётом всех
+ *  остальных фильтров, но не своего (иначе выбранный ряд гасил бы соседей). */
+export function historyFacetCounts(
+  rows: readonly ChangeLogRow[],
+  filter: HistoryFilter,
+): Record<Facet, Record<string, number>> {
+  const out: Record<Facet, Record<string, number>> = { actors: {}, teams: {}, kinds: {}, actions: {} };
+  const bump = (facet: Facet, key: string) => {
+    out[facet][key] = (out[facet][key] ?? 0) + 1;
+  };
+  for (const row of rows) {
+    if (passes(row, filter, "actors")) bump("actors", actorKey(row));
+    if (passes(row, filter, "teams")) bump("teams", teamKey(row));
+    if (passes(row, filter, "kinds")) bump("kinds", changeKind(row));
+    if (passes(row, filter, "actions")) bump("actions", row.action);
+  }
+  return out;
+}
+
+export function historyFilterCount(filter: HistoryFilter): number {
+  return filter.actors.length + filter.teams.length + filter.kinds.length + filter.actions.length;
 }
 
 export interface ChangeLogItem {

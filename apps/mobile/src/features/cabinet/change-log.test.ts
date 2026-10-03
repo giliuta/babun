@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  EMPTY_HISTORY_FILTER,
+  allChanges,
+  changeKind,
+  filterChanges,
+  fullWhen,
+  historyFacetCounts,
+  periodRange,
   changeSubject,
   changeTarget,
   changeTitle,
@@ -113,5 +120,78 @@ describe("история изменений — пачки", () => {
     const b = row({ entity: "clients", action: "insert", actor_id: "u2", created_at: "2026-10-03T12:00:01Z" });
     const c = row({ entity: "clients", action: "insert", actor_id: "u2", created_at: "2026-10-03T11:50:00Z" });
     assert.equal(collapseBursts([a, b, c]).length, 3);
+  });
+});
+
+describe("история изменений — списки и подробности", () => {
+  test("заметка, телефоны, оплаты: что добавили и что убрали", () => {
+    assert.equal(describeField("notes", { "+": ["ключ под ковриком"] }), "Заметка + «ключ под ковриком»");
+    assert.equal(describeField("notes", { "-": ["Zaikaitsa"] }), "Заметка − «Zaikaitsa»");
+    assert.equal(describeField("phones", { "+": ["+35799000000"] }), "Телефоны + +35799000000");
+    assert.match(describeField("payments", { "+": ["50"] }) ?? "", /^Оплата \+ .*50/);
+    // Без имён — просто слово поля.
+    assert.equal(describeField("services", "*"), "Услуги");
+  });
+
+  test("подробности — все поля, служебные одной строкой", () => {
+    const lines = allChanges({
+      time_start: ["09:30", "10:00"],
+      notes: { "+": ["новая"], "-": ["старая"] },
+      weird_column: [1, 2],
+      another: [3, 4],
+    });
+    assert.deepEqual(lines, ["Начало 09:30 → 10:00", "Заметка + «новая» · − «старая»", "Служебные поля: 2"]);
+  });
+
+  test("точное время до секунды", () => {
+    const iso = new Date(2026, 9, 3, 18, 49, 6).toISOString();
+    assert.equal(fullWhen(iso), "3 октября 2026, 18:49:06");
+  });
+});
+
+describe("история изменений — фильтры", () => {
+  const rows = [
+    row({ actor_id: "me", entity: "appointments", action: "insert", team_id: "t1" }),
+    row({ actor_id: "ivan", entity: "appointments", action: "update", team_id: "t1" }),
+    row({ actor_id: "ivan", entity: "clients", action: "delete", team_id: "t2" }),
+    row({ actor_id: null, entity: "finance_transactions", action: "insert", team_id: "t1", meta: { type: "income" } }),
+    row({ actor_id: "me", entity: "member_access", action: "insert", team_id: null }),
+  ];
+
+  test("виды: записи, события, клиенты, деньги, права, настройки", () => {
+    assert.equal(changeKind(row({})), "records");
+    assert.equal(changeKind(row({ meta: { kind: "event" } })), "events");
+    assert.equal(changeKind(row({ entity: "clients" })), "clients");
+    assert.equal(changeKind(row({ entity: "debts" })), "money");
+    assert.equal(changeKind(row({ entity: "member_calendars" })), "people");
+    assert.equal(changeKind(row({ entity: "services" })), "settings");
+  });
+
+  test("фильтр по человеку, команде, виду и действию — И между фасетами, ИЛИ внутри", () => {
+    assert.equal(filterChanges(rows, EMPTY_HISTORY_FILTER).length, 5);
+    assert.equal(filterChanges(rows, { ...EMPTY_HISTORY_FILTER, actors: ["ivan"] }).length, 2);
+    assert.equal(filterChanges(rows, { ...EMPTY_HISTORY_FILTER, actors: ["system"] }).length, 1);
+    assert.equal(filterChanges(rows, { ...EMPTY_HISTORY_FILTER, teams: ["none"] }).length, 1);
+    assert.equal(filterChanges(rows, { ...EMPTY_HISTORY_FILTER, actors: ["ivan", "me"], kinds: ["records"] }).length, 2);
+    assert.equal(filterChanges(rows, { ...EMPTY_HISTORY_FILTER, actions: ["delete"] }).length, 1);
+  });
+
+  test("счётчики фасета не гасят соседей своим же выбором", () => {
+    const counts = historyFacetCounts(rows, { ...EMPTY_HISTORY_FILTER, actors: ["ivan"] });
+    // «Кто» считается без своего фильтра — видно всех.
+    assert.deepEqual(counts.actors, { me: 2, ivan: 2, system: 1 });
+    // Остальные — только по Ивану.
+    assert.deepEqual(counts.kinds, { records: 1, clients: 1 });
+  });
+
+  test("период: сегодня, вчера, всё время", () => {
+    const now = new Date(2026, 9, 3, 15, 0, 0);
+    const today = periodRange("today", now);
+    assert.equal(new Date(today.from as string).getHours(), 0);
+    assert.equal(today.to, null);
+    const yesterday = periodRange("yesterday", now);
+    assert.equal(new Date(yesterday.from as string).getDate(), 2);
+    assert.equal(yesterday.to, today.from);
+    assert.deepEqual(periodRange("all", now), { from: null, to: null });
   });
 });

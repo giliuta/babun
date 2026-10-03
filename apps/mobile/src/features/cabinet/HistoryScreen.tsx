@@ -18,6 +18,7 @@ import {
   Settings2,
   Shapes,
   Shield,
+  SlidersHorizontal,
   Tags,
   UserRound,
   Users,
@@ -28,7 +29,6 @@ import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { ScopeChips } from "@/components/ui/ScopeChips";
 import { GUTTER } from "@/components/ui/tokens";
 import { useCompanyMembers } from "@/features/access/queries";
 import { useTeams } from "@/features/reference/queries";
@@ -38,23 +38,33 @@ import { haptics } from "@/lib/haptics";
 import { useSession } from "@/providers/SessionProvider";
 import { useThemeColors } from "@/theme/colors";
 import {
+  EMPTY_HISTORY_FILTER,
   changeSubject,
   changeTarget,
   changeTitle,
   changesSummary,
   collapseBursts,
+  filterChanges,
+  historyFacetCounts,
+  historyFilterCount,
   type ChangeLogItem,
+  type HistoryFilter,
+  type HistoryPeriod,
 } from "./change-log";
-import { useChangeLog, type ActorFilter } from "./use-change-log";
+import { ChangeDetailSheet } from "./ChangeDetailSheet";
+import { HistoryFilterSheet } from "./HistoryFilterSheet";
+import { useChangeLogPeriod } from "./use-change-log";
 
 // «ИСТОРИЯ ИЗМЕНЕНИЙ» (Кабинет → Компания, владелец 03.10: «любое изменение
 // записывается в историю… чётко отслеживать, что делаю я и что делает каждый
 // из моих партнёров»).
 //
-// Вверху две ленты: люди («Я» и каждый партнёр) и календари — как в истории
-// SMS: ничего не выбрано — видно всё, тап выбирает, повторный снимает. Ниже —
-// лента по дням: что случилось, с чем, что поменялось, кто и где. Тап по
-// записи или клиенту открывает его; удалённое никуда не ведёт.
+// ФИЛЬТРЫ — КАК В КЛИЕНТАХ (03.10): значок справа в шапке, точка на нём —
+// фильтр включён; шторка «Фильтры» (`HistoryFilterSheet`): период, кто,
+// команда, что, действие. Ниже — лента по дням: что случилось, с чем, что
+// поменялось, кто и где, время. Тап по строке — подробности до секунды и
+// все поля «было → стало» (`ChangeDetailSheet`), оттуда — в запись или
+// клиента.
 
 const ICONS: Record<string, LucideIcon> = {
   clients: UserRound,
@@ -110,29 +120,48 @@ export function HistoryScreen() {
   const me = session?.user?.id ?? null;
   const { data: teams = [] } = useTeams();
   const { data: members = [] } = useCompanyMembers();
-  const [actor, setActor] = useState<ActorFilter>("all");
-  const [teamId, setTeamId] = useState<string | null>(null);
-  const log = useChangeLog(actor, teamId);
+  const [period, setPeriod] = useState<HistoryPeriod>("all");
+  const [filter, setFilter] = useState<HistoryFilter>(EMPTY_HISTORY_FILTER);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [detail, setDetail] = useState<ChangeLogItem | null>(null);
+  const log = useChangeLogPeriod(period);
   const pull = usePullRefresh(log.refetch);
+  const rows = useMemo(() => log.data?.rows ?? [], [log.data]);
 
-  // «Я» первым, дальше партнёры по имени (сервер уже отдаёт по имени).
-  const people = useMemo(() => {
-    const others = members.filter((m) => m.userId !== me).map((m) => ({ id: m.userId, name: m.name }));
-    return me ? [{ id: me, name: "Я" }, ...others] : others;
-  }, [members, me]);
   const teamName = (id: string | null) => (id ? (teams.find((x) => x.id === id)?.name ?? null) : null);
-  const actorName = (item: ChangeLogItem) =>
-    item.row.actor_id == null
+  const actorName = (row: ChangeLogItem["row"]) =>
+    row.actor_id == null
       ? "Система"
-      : item.row.actor_id === me
+      : row.actor_id === me
         ? "Я"
-        : (members.find((m) => m.userId === item.row.actor_id)?.name ?? item.row.actor_name ?? "Партнёр");
+        : (members.find((m) => m.userId === row.actor_id)?.name ?? row.actor_name ?? "Партнёр");
+
+  // Варианты «Кто»: «Я», партнёры аккаунта и все, кто есть в журнале (в том
+  // числе бывшие партнёры — по имени на тот момент), «Система» — если была.
+  const people = useMemo(() => {
+    const out = new Map<string, string>();
+    if (me) out.set(me, "Я");
+    for (const m of members) if (m.userId !== me) out.set(m.userId, m.name);
+    for (const r of rows) {
+      const key = r.actor_id ?? "system";
+      if (!out.has(key)) out.set(key, r.actor_id == null ? "Система" : (r.actor_name ?? "Партнёр"));
+    }
+    return [...out].map(([value, label]) => ({ value, label, color: "" }));
+  }, [members, me, rows]);
+  const teamOptions = useMemo(() => {
+    const out = teams.map((x) => ({ value: x.id, label: x.name, color: x.color ?? "" }));
+    if (rows.some((r) => r.team_id == null)) out.push({ value: "none", label: "Без команды", color: "" });
+    return out;
+  }, [teams, rows]);
+
+  const filtered = useMemo(() => filterChanges(rows, filter), [rows, filter]);
+  const counts = useMemo(() => historyFacetCounts(rows, filter), [rows, filter]);
+  const active = historyFilterCount(filter) + (period === "all" ? 0 : 1);
 
   const days = useMemo<Day[]>(() => {
-    const rows = log.data?.pages.flat() ?? [];
     const now = new Date();
     const out: Day[] = [];
-    for (const item of collapseBursts(rows)) {
+    for (const item of collapseBursts(filtered)) {
       const key = dayKey(item.row.created_at);
       let day = out[out.length - 1];
       if (!day || day.key !== key) {
@@ -142,11 +171,12 @@ export function HistoryScreen() {
       day.data.push(item);
     }
     return out;
-  }, [log.data]);
+  }, [filtered]);
 
-  const open = (item: ChangeLogItem) => {
+  const openTarget = (item: ChangeLogItem) => {
     const target = item.count === 1 ? changeTarget(item.row) : null;
     if (!target) return;
+    setDetail(null);
     haptics.tap();
     if (target.kind === "appointment") {
       router.push({ pathname: "/book", params: { appointmentId: target.id } } as unknown as Href);
@@ -155,38 +185,46 @@ export function HistoryScreen() {
     }
   };
 
-  const header = (
-    <View style={{ paddingTop: 12, gap: 10, marginBottom: 4 }}>
-      {people.length > 1 ? (
-        <ScopeChips
-          onCanvas
-          seam={false}
-          items={people}
-          activeId={actor === "all" || actor === "system" ? null : actor}
-          onSelect={(id) => {
-            haptics.tap();
-            setActor((cur) => (cur === id ? "all" : id));
+  const filterButton = (
+    <Pressable
+      onPress={() => {
+        haptics.tap();
+        setSheetOpen(true);
+      }}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={active > 0 ? `Фильтры, включено ${active}` : "Фильтры"}
+      style={({ pressed }) => ({
+        width: 44,
+        height: 44,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: t.radius.card,
+        backgroundColor: pressed ? t.pressed : "transparent",
+      })}
+    >
+      <SlidersHorizontal color={active > 0 ? t.accent : t.sub} size={21} strokeWidth={2} />
+      {active > 0 ? (
+        <View
+          style={{
+            position: "absolute",
+            top: 9,
+            right: 8,
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: t.accent,
+            borderWidth: 1.5,
+            borderColor: t.surface,
           }}
         />
       ) : null}
-      {teams.length > 0 ? (
-        <ScopeChips
-          onCanvas
-          seam={false}
-          items={teams.map((x) => ({ id: x.id, name: x.name, color: x.color }))}
-          activeId={teamId}
-          onSelect={(id) => {
-            haptics.tap();
-            setTeamId((cur) => (cur === id ? null : id));
-          }}
-        />
-      ) : null}
-    </View>
+    </Pressable>
   );
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="История изменений" />
+      <ScreenHeader title="История изменений" right={filterButton} />
       {log.isLoading ? (
         <EmptyState state="loading" fill />
       ) : log.isError ? (
@@ -200,9 +238,8 @@ export function HistoryScreen() {
         <SectionList
           sections={days}
           keyExtractor={(item) => item.key}
-          ListHeaderComponent={header}
           stickySectionHeadersEnabled={false}
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={{ paddingBottom: 24, paddingTop: 4 }}
           renderSectionHeader={({ section }) => (
             <Text
               maxFontSizeMultiplier={1.2}
@@ -235,26 +272,42 @@ export function HistoryScreen() {
               <ChangeRow
                 item={item}
                 Icon={iconOf(item)}
-                actor={actorName(item)}
+                actor={actorName(item.row)}
                 team={item.row.entity === "teams" ? null : teamName(item.row.team_id)}
-                onPress={item.count === 1 && changeTarget(item.row) ? () => open(item) : undefined}
+                onPress={() => {
+                  haptics.tap();
+                  setDetail(item);
+                }}
               />
             </View>
           )}
           ListEmptyComponent={
-            <EmptyState
-              title={actor === "all" && !teamId ? "Изменений пока нет" : "Здесь изменений нет"}
-            />
+            <EmptyState title={rows.length === 0 ? "Изменений пока нет" : "Ничего не найдено"} />
           }
-          onEndReachedThreshold={0.4}
-          onEndReached={() => {
-            if (log.hasNextPage && !log.isFetchingNextPage) void log.fetchNextPage();
-          }}
-          ListFooterComponent={log.isFetchingNextPage ? <EmptyState state="loading" /> : null}
           refreshing={pull.refreshing}
           onRefresh={pull.onRefresh}
         />
       )}
+
+      <HistoryFilterSheet
+        visible={sheetOpen}
+        period={period}
+        filter={filter}
+        people={people}
+        teams={teamOptions}
+        counts={counts}
+        shownCount={filtered.length}
+        onPeriod={setPeriod}
+        onFilter={setFilter}
+        onClose={() => setSheetOpen(false)}
+      />
+      <ChangeDetailSheet
+        item={detail}
+        actor={detail ? actorName(detail.row) : ""}
+        team={detail && detail.row.entity !== "teams" ? teamName(detail.row.team_id) : null}
+        onOpen={openTarget}
+        onClose={() => setDetail(null)}
+      />
     </Screen>
   );
 }
