@@ -33,6 +33,7 @@ import {
   cacheGetOne,
   cacheUpsert,
   cacheDelete,
+  forwardQueuedSentinel,
   type QueuedOp,
   type CachedTable,
   type CachedClient,
@@ -115,6 +116,28 @@ export function holdsTenantRefresh(
   const opTenant = (op.payload as { tenant_id?: unknown } | null)?.tenant_id;
   return (
     typeof opTenant !== "string" || opTenant.length === 0 || opTenant === tenantId
+  );
+}
+
+/** ДЕРЖИТ ЛИ ОЧЕРЕДЬ ПЕРЕЧИТКУ ТАБЛИЦЫ ЭТОЙ КОМПАНИИ.
+ *
+ *  Правки, придержанные за навсегда упавшей операцией своей строки (см.
+ *  `drain`), сами не уйдут, пока человек не нажмёт «Повторить» или
+ *  «Удалить», — держать ими перечитку значило бы заморозить весь календарь
+ *  из-за одной строки. Они ждут в «Синхронизации», как и упавшая. */
+export function tenantRefreshHeld(
+  pending: readonly QueuedOp[],
+  table: CachedTable,
+  tenantId: string,
+): boolean {
+  const stuck = new Set(
+    pending
+      .filter((op) => op.attempts >= MAX_ATTEMPTS)
+      .map((op) => `${op.table}:${op.row_id}`),
+  );
+  return pending.some(
+    (op) =>
+      holdsTenantRefresh(op, table, tenantId) && !stuck.has(`${op.table}:${op.row_id}`),
   );
 }
 
@@ -291,8 +314,21 @@ async function drain(opts: ReplayerOptions): Promise<void> {
   // долетела бы ПОСЛЕ них и перезаписала свежую (24.09: растяжка 14:30→15:00
   // на 504, возврат к 14:30 — и в базе снова 15:00). Порядок жестов по одной
   // строке — закон; разные строки друг друга не держат.
+  //
+  // НАВСЕГДА УПАВШАЯ ПРАВКА ДЕРЖИТ СВОЮ СТРОКУ ТОЖЕ (аудит 2026-10-03).
+  // Раньше она пропускалась раньше этой проверки, и следующие правки той же
+  // строки уходили без неё: (а) создание записи сверх лимита упало навсегда
+  // — правки следом находили ноль строк и снимались молча как «удалено на
+  // другом устройстве», а «Повторить» создавал запись с исходным телом;
+  // (б) перенос упал навсегда, человек вернул время, правка применилась — и
+  // «Повторить» на старой ставил старое время поверх нового. Теперь цепочка
+  // строки ждёт ручного «Повторить» целиком («Синхронизация» и повторяет, и
+  // удаляет её целиком).
   const heldRows = new Set<string>();
   const rowKey = (o: QueuedOp) => `${o.table}:${o.row_id}`;
+  // Свежий сторож строки после применившейся правки (см. `forwardQueuedSentinel`):
+  // в памяти — для правок этого же прохода, в базе — для следующих.
+  const sentinels = new Map<string, { from: string; to: string }>();
 
   for (const op of ops) {
     let legacyUpdate = false;
@@ -300,6 +336,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
     if (op.attempts >= MAX_ATTEMPTS) {
       // Already failed permanently — leave in queue so the UI can
       // show the manual-retry button. Manual retry resets attempts.
+      heldRows.add(rowKey(op));
       continue;
     }
 
@@ -349,6 +386,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
         const msg = "Операция без компании — отправлять её некуда";
         await markOpPermanentlyFailedAndEmit(op.id, msg);
         opts.onPermanentFailure?.({ ...op, attempts: MAX_ATTEMPTS, last_error: msg });
+        heldRows.add(rowKey(op));
         continue;
       }
       if (payloadTenant !== liveTenantId) continue;
@@ -369,6 +407,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
         attempts: MAX_ATTEMPTS,
         last_error: msg,
       });
+      heldRows.add(rowKey(op));
       continue;
     }
 
@@ -398,6 +437,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
             attempts: 999,
             last_error: msg,
           });
+          heldRows.add(rowKey(op));
           continue;
         }
         // Non-quota error in the gate — fall through to normal
@@ -413,8 +453,17 @@ async function drain(opts: ReplayerOptions): Promise<void> {
     // чтобы не начинать; эта — чтобы не доотправить начатое.
     if (gateTenantId && readTenantId(opts) !== gateTenantId) break;
 
+    const carried = sentinels.get(rowKey(op));
+    const sendOp =
+      carried && op.op === "update" && op.expected_updated_at === carried.from
+        ? { ...op, expected_updated_at: carried.to }
+        : op;
     try {
-      const conflict = await dispatch(opts.supabase, op, legacyUpdate);
+      const conflict = await dispatch(opts.supabase, sendOp, legacyUpdate, (to) => {
+        if (op.expected_updated_at) {
+          sentinels.set(rowKey(op), { from: op.expected_updated_at, to });
+        }
+      });
       if (conflict) {
         opts.onConflict?.(
           "Запись была обновлена на другом устройстве. Применены ваши изменения.",
@@ -452,6 +501,8 @@ async function dispatch(
    *  пролежала в очереди часы и дни, и строку за это время правили — при
    *  конфликте побеждает сервер, а не она. */
   serverWinsOnConflict = false,
+  /** Правка легла чисто, и у строки теперь новое `updated_at`. */
+  onApplied?: (updatedAt: string) => void,
 ): Promise<boolean> {
   // The repositories accept the row shapes already; payloads are
   // pre-shaped at enqueue time so dispatch is mostly a relay. We
@@ -656,11 +707,21 @@ async function dispatch(
     )
       .eq("id", op.row_id)
       .eq("updated_at", op.expected_updated_at)
-      .select("id");
+      .select("id, updated_at");
     /* eslint-enable @typescript-eslint/no-explicit-any */
     const { data, error } = await filter;
     if (error) throw new Error(`replay update: ${error.message}`);
-    if (data && data.length > 0) return false; // matched cleanly
+    if (data && data.length > 0) {
+      // Matched cleanly. Свежий `updated_at` — следующим правкам строки и
+      // кэшу: иначе вторая офлайн-правка несла бы прежний сторож и ловила
+      // ложный «конфликт» (аудит 03.10).
+      const next = (data[0] as { updated_at?: unknown }).updated_at;
+      if (typeof next === "string" && next !== op.expected_updated_at) {
+        await carrySentinel(op, op.expected_updated_at, next);
+        onApplied?.(next);
+      }
+      return false;
+    }
 
     if (serverWinsOnConflict) {
       // Строку правили после того, как эта правка встала в очередь. Старая
@@ -764,6 +825,25 @@ async function dispatch(
     .eq("id", op.row_id);
   if (plainErr) throw new Error(`replay update (plain): ${plainErr.message}`);
   return false;
+}
+
+/** Передать свежий сторож ждущим правкам строки и строке кэша. Сбой здесь
+ *  правку не отменяет — она уже на сервере; худшее — прежний ложный
+ *  «конфликт» у следующей. */
+async function carrySentinel(op: QueuedOp, from: string, to: string): Promise<void> {
+  try {
+    await forwardQueuedSentinel(op.table, op.row_id, op.id, from, to);
+    const cached = await cacheGetOne<CachedClientData | CachedAppointmentData>(
+      op.table as CachedTable,
+      op.row_id,
+    );
+    const stamp = (cached as { updated_at?: unknown } | null)?.updated_at;
+    if (cached && stamp === from) {
+      await cacheUpsert(op.table as CachedTable, { ...cached, updated_at: to });
+    }
+  } catch {
+    /* см. выше */
+  }
 }
 
 /** НОЛЬ СТРОК ДВУСМЫСЛЕН, и разрешает его только чтение видимости: строки не

@@ -547,6 +547,27 @@ export async function removeOp(id: number): Promise<void> {
   await sql.runAsync("DELETE FROM sync_queue WHERE id = ?", [id]);
 }
 
+/** СВЕЖИЙ СТОРОЖ ДЛЯ СЛЕДУЮЩИХ ПРАВОК СТРОКИ (аудит 2026-10-03).
+ *
+ *  Все офлайн-правки одной строки встают в очередь с одним и тем же
+ *  `expected_updated_at` — тем, что был в кэше. Первая применилась, триггер
+ *  сервера поставил строке новое `updated_at`, и вторая с прежним сторожем
+ *  находила ноль строк: ложный «Конфликт синхронизации» и силовая запись.
+ *  Применившаяся правка передаёт свежий сторож тем, кто ждёт за ней. */
+export async function forwardQueuedSentinel(
+  table: CachedTable,
+  rowId: string,
+  afterId: number,
+  from: string,
+  to: string,
+): Promise<void> {
+  const sql = await ready();
+  await sql.runAsync(
+    "UPDATE sync_queue SET expected_updated_at = ? WHERE table_name = ? AND row_id = ? AND id > ? AND expected_updated_at = ?",
+    [to, table, rowId, afterId, from],
+  );
+}
+
 export async function bumpAttempt(id: number, error: string): Promise<void> {
   const sql = await ready();
   // Match the web semantics: increment attempts, set last_error. A

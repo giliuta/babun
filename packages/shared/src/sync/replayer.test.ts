@@ -25,14 +25,18 @@ import {
   dequeueAll,
   cacheUpsert,
   cacheGetOne,
+  markOpPermanentlyFailed,
   type CachedClient,
+  type QueuedOp,
 } from "../db/cache/sql";
 import {
   __resetReplayerForTests,
   BOUND_TENANT_FIELD,
   kickReplayer,
+  MAX_ATTEMPTS,
   READ_ONLY_VIEW_FIELD,
   setReplayerDefaults,
+  tenantRefreshHeld,
   type QuotaGate,
 } from "./replayer";
 
@@ -519,6 +523,137 @@ describe("replayer — порядок правок одной строки", () 
       "15:00",
       "14:30",
     ]);
+  });
+});
+
+describe("replayer — навсегда упавшая правка держит свою строку (аудит 03.10)", () => {
+  test("правки за упавшей навсегда ждут её «Повторить», чужие строки уходят", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { comment: "дописал адрес" },
+      expected_updated_at: null,
+    });
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_B,
+      payload: { comment: "другая" },
+      expected_updated_at: null,
+    });
+    const [insert] = await dequeueAll();
+    await markOpPermanentlyFailed(insert!.id, "quota_exceeded");
+    const { client, calls } = makeFakeSupabase((rec) => ({
+      data: [{ id: rec.filters.id }],
+      error: null,
+    }));
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(calls.some((c) => c.filters.id === UUID_A)).toBe(false);
+    expect(calls.some((c) => c.op === "update" && c.filters.id === UUID_B)).toBe(true);
+    expect((await dequeueAll()).map((o) => o.row_id)).toEqual([UUID_A, UUID_A]);
+  });
+
+  test("придержанные за упавшей не замораживают перечитку календаря", () => {
+    const op = (id: number, row: string, attempts: number): QueuedOp => ({
+      id,
+      created_at: id,
+      table: "appointments",
+      op: "update",
+      row_id: row,
+      payload: { tenant_id: TENANT },
+      expected_updated_at: null,
+      attempts,
+      last_error: null,
+    });
+    expect(tenantRefreshHeld([op(1, UUID_A, MAX_ATTEMPTS), op(2, UUID_A, 0)], "appointments", TENANT)).toBe(false);
+    expect(tenantRefreshHeld([op(1, UUID_A, MAX_ATTEMPTS), op(2, UUID_B, 0)], "appointments", TENANT)).toBe(true);
+  });
+});
+
+describe("replayer — вторая офлайн-правка строки без ложного конфликта (аудит 03.10)", () => {
+  test("сторож переходит от применившейся правки к следующей", async () => {
+    await cacheUpsert("clients", {
+      id: UUID_A,
+      tenant_id: TENANT,
+      updated_at: "2026-01-01T00:00:00.000Z",
+    } as unknown as CachedClient);
+    for (const name of ["Первая", "Вторая"]) {
+      await enqueueOp({
+        table: "clients",
+        op: "update",
+        row_id: UUID_A,
+        payload: { full_name: name },
+        expected_updated_at: "2026-01-01T00:00:00.000Z",
+      });
+    }
+    let stamp = "2026-01-01T00:00:00.000Z";
+    let tick = 0;
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update" && rec.filters.updated_at === stamp) {
+        tick += 1;
+        stamp = `2026-02-0${tick}T00:00:00.000Z`;
+        return { data: [{ id: UUID_A, updated_at: stamp }], error: null };
+      }
+      if (rec.op === "update") return { data: [], error: null };
+      return { data: null, error: null };
+    });
+    let conflicts = 0;
+
+    await kickReplayer({
+      supabase: asSupabase(client),
+      onConflict: () => {
+        conflicts += 1;
+      },
+    });
+
+    expect(conflicts).toBe(0);
+    expect(await queueDepth()).toBe(0);
+    expect(calls.filter((c) => c.op === "update").map((c) => c.filters.updated_at)).toEqual([
+      "2026-01-01T00:00:00.000Z",
+      "2026-02-01T00:00:00.000Z",
+    ]);
+    const cached = await cacheGetOne<CachedClient>("clients", UUID_A);
+    expect(cached?.updated_at).toBe("2026-02-02T00:00:00.000Z");
+  });
+
+  test("сторож доживает до следующего прохода, если вторая не ушла", async () => {
+    await cacheUpsert("clients", {
+      id: UUID_A,
+      tenant_id: TENANT,
+      updated_at: "2026-01-01T00:00:00.000Z",
+    } as unknown as CachedClient);
+    for (const name of ["Первая", "Вторая"]) {
+      await enqueueOp({
+        table: "clients",
+        op: "update",
+        row_id: UUID_A,
+        payload: { full_name: name },
+        expected_updated_at: "2026-01-01T00:00:00.000Z",
+      });
+    }
+    let first = true;
+    const { client } = makeFakeSupabase((rec) => {
+      if (rec.op === "update" && first) {
+        first = false;
+        return { data: [{ id: UUID_A, updated_at: "2026-02-01T00:00:00.000Z" }], error: null };
+      }
+      return { data: null, error: { status: 503, message: "Service Unavailable" } };
+    });
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    const left = await dequeueAll();
+    expect(left.map((o) => o.expected_updated_at)).toEqual(["2026-02-01T00:00:00.000Z"]);
   });
 });
 

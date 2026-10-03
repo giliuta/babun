@@ -45,7 +45,7 @@ import {
 import { isOnline } from "./network";
 import { OnlineOnlyWriteError } from "./cache-errors";
 import type { CachedWriteOptions } from "./clientsCached";
-import { holdsTenantRefresh, kickReplayer } from "./replayer";
+import { kickReplayer, tenantRefreshHeld } from "./replayer";
 import {
   enqueueOpAndEmit,
   enqueueOpWithCacheUpsertAndEmit,
@@ -121,7 +121,7 @@ async function refreshCacheFromSupabase(
   // `cacheReplaceTenant` makes it disappear before the queued write runs.
   const pending = await dequeueAll();
   if (
-    pending.some((op) => holdsTenantRefresh(op, "tags", tenantId))
+    tenantRefreshHeld(pending, "tags", tenantId)
   ) {
     void kickReplayer({ supabase });
     return false;
