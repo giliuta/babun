@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CountryCode } from "libphonenumber-js";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import {
@@ -47,6 +47,16 @@ export function usePhoneCountry({
   // страны) — показываем как набран: иначе поле съело бы «+» под пальцем.
   const ownCode = !phone.trim().startsWith("+") || digits.startsWith(dialDigits);
 
+  // ПУСТОЕ ПОЛЕ ИДЁТ ЗА СТРАНОЙ КОМАНДЫ (аудит 03.10): подпись бралась один
+  // раз при открытии, и команда черновика, узнанная кадром позже (из записи,
+  // после загрузки команд), уже не меняла «+357» на «+30». Выбранную руками
+  // страну и набранный номер не трогаем.
+  const picked = useRef(false);
+  useEffect(() => {
+    if (picked.current || phone.trim()) return;
+    setCountry((cur) => (cur === home ? cur : home));
+  }, [home, phone]);
+
   // Номер пришёл СНАРУЖИ (вставка «Мария +7 916…» в имя делит её, номер
   // уезжает сюда) — подпись следует за его кодом (аудит 22.09).
   useEffect(() => {
@@ -69,6 +79,7 @@ export function usePhoneCountry({
   };
 
   const pick = (next: CountryCode) => {
+    picked.current = true;
     setCountry(next);
     // Цифры — по коду САМОГО номера: подпись могла ещё не догнать вставку,
     // и тогда код прежней страны ушёл бы в цифры («+7 7916…»).

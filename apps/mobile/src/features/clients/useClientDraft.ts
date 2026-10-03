@@ -190,11 +190,13 @@ export interface ClientDraftOptions {
    *  уходит оттуда. Бросили черновик — исходная не тронута: убирается номер
    *  только в `save`, после того как клиент уже создан. */
   split?: SplitRef | null;
+  /** Команда, ради записи которой заводят клиента (`/client` из записи). */
+  team?: string | null;
 }
 
 export function useClientDraft(
   active: boolean,
-  { forBooking = false, name, phone, link, split }: ClientDraftOptions = {},
+  { forBooking = false, name, phone, link, split, team }: ClientDraftOptions = {},
 ) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -213,7 +215,14 @@ export function useClientDraft(
   const { data: savedTeam } = useClientsTeam(tenantId ?? null);
   const { data: teams = [] } = useTeams();
   const teamIds = teams.map((team) => team.id);
-  const newClientTeam = teamForNewClient(liveTeamChoice(savedTeam, teamIds), teamIds);
+  // КОМАНДА ЗАПИСИ СИЛЬНЕЕ ЧИПА (аудит 03.10): клиент, заведённый из
+  // записи, — клиент её команды. Раньше он уходил в команду последнего чипа
+  // вкладки «Клиенты» (или в первую), а от команды зависят теги, страна
+  // номера, поля карточки и отправитель SMS.
+  const bookingTeam =
+    team && (teamIds.length === 0 || teamIds.includes(team)) ? team : null;
+  const newClientTeam =
+    bookingTeam ?? teamForNewClient(liveTeamChoice(savedTeam, teamIds), teamIds);
   // Код страны берём из профиля КОМПАНИИ (tenants.country), а не из константы
   // продукта: у кипрской фирмы поле открывается с «+357», у греческой — с
   // «+30». Номер, введённый со своим «+», всё равно уважается как есть.
@@ -239,6 +248,22 @@ export function useClientDraft(
         : [],
     }),
   );
+  // КОМАНДА ЧЕРНОВИКА ВИДНА СТРАНИЦЕ СРАЗУ (аудит 03.10): подпись страны над
+  // номером читает `client.team_id`, и у черновика без неё код брался от
+  // пояса компании, а не команды, куда клиент уйдёт. Выбранную руками
+  // команду не трогаем — только ту, что поставили сами.
+  const autoTeam = useRef<string | null>(null);
+  useEffect(() => {
+    if (!active || !newClientTeam) return;
+    const previous = autoTeam.current;
+    autoTeam.current = newClientTeam;
+    setDraft((current) =>
+      (!current.team_id || current.team_id === previous) &&
+      current.team_id !== newClientTeam
+        ? { ...current, team_id: newClientTeam }
+        : current,
+    );
+  }, [active, newClientTeam]);
   // Свежий черновик для `save`: замыкание нажатия видит состояние до записи
   // поля, которое дописалось при снятии фокуса.
   const draftRef = useRef(draft);

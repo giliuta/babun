@@ -3518,7 +3518,8 @@ export default function BookScreen() {
         onCreate={(prefill) =>
           router.push({
             pathname: "/client",
-            params: { id: "new", ...prefill },
+            // Клиент записи — клиент её команды (аудит 03.10).
+            params: { id: "new", ...prefill, ...(teamId ? { team: teamId } : {}) },
           })
         }
         onClose={() => setClientPickerOpen(false)}

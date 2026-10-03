@@ -145,8 +145,11 @@ export function ClientDetailScreen() {
     phone: prefillPhone,
     open: openOnArrive,
     split: splitParam,
+    team: teamParam,
     ...linkParams
-  } = useLocalSearchParams<{ id: string; open?: string; split?: string } & DraftLinkParams>();
+  } = useLocalSearchParams<
+    { id: string; open?: string; split?: string; team?: string } & DraftLinkParams
+  >();
   const router = useRouter();
   const pathname = usePathname();
   const roleQuery = useCurrentRole();
@@ -245,6 +248,8 @@ export function ClientDetailScreen() {
     link: draftLink,
     // «Разделить клиента»: после создания номер уходит из исходной карточки.
     split: isDraft ? parseSplit(splitParam) : null,
+    // Из записи — команда записи.
+    team: isDraft ? (teamParam ?? null) : null,
   });
 
   // Единый persist-путь для блоков: черновик — локально, карточка — PATCH.
