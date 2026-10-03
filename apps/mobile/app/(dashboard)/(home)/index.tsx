@@ -193,7 +193,9 @@ import {
   usePersonalEventTypes,
 } from "@/features/settings/local-settings";
 import { eventTypeIcon } from "@/features/calendar/event-type-icons";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole, usePlanAllows, useTenant } from "@/features/settings/tenant";
+import { SmsSendSheet } from "@/features/sms/SmsSendSheet";
+import { appointmentSmsVars } from "@/features/sms/client-sms-vars";
 import { accessGate, moneyKey } from "@/features/access/my-access";
 import { useMyAccess } from "@/features/access/queries";
 import { haptics } from "@/lib/haptics";
@@ -306,6 +308,13 @@ export default function CalendarTab() {
   const { session } = useSession();
   const isCrew = role === "master";
   const canManageBookings = role === "owner" || role === "dispatcher";
+  // «Отправить SMS» из меню записи (владелец 03.10: «зажимаю запись — в
+  // шторке сразу „Отправить SMS“»): та же шторка, что у трубки клиента —
+  // шаблоны, потом текст и две кнопки.
+  const [smsApt, setSmsApt] = useState<Appointment | null>(null);
+  const [smsOpen, setSmsOpen] = useState(false);
+  const smsInPlan = usePlanAllows("sms");
+  const companyName = useTenant().data?.name ?? null;
   // Метки дня — функция компании (STORY-088): выключены — тап по дате метку
   // не открывает, в сетке меток нет.
   const dayLabelsOn = useFeatureOn("day_labels");
@@ -2145,6 +2154,14 @@ export default function CalendarTab() {
       // просмотра: это настройка устройства, она не изменяет чужую запись.
       if (apt.status !== "cancelled" && apt.date >= todayYmd)
         items.push({ label: "Напомнить…", run: () => openReminderMenu(apt) });
+      if (phone && !event && smsInPlan)
+        items.push({
+          label: "Отправить SMS",
+          run: () => {
+            setSmsApt(apt);
+            setSmsOpen(true);
+          },
+        });
       if (phone)
         items.push({
           label: "Позвонить",
@@ -2230,6 +2247,14 @@ export default function CalendarTab() {
       });
       if (!event || mutable)
         items.push({ label: "Цвет", run: () => setRecolor(apt) });
+      if (!event && phone && smsInPlan)
+        items.push({
+          label: "Отправить SMS",
+          run: () => {
+            setSmsApt(apt);
+            setSmsOpen(true);
+          },
+        });
       if (!event) {
         if (!paymentBlockOn && apt.status !== "cancelled")
           items.push(
@@ -3213,6 +3238,29 @@ export default function CalendarTab() {
 
 
       <ActionMenuSheet menu={sheetMenu} onClose={() => setSheetMenu(null)} />
+      {smsApt ? (() => {
+        const smsClient = smsApt.client_id ? clients.find((c) => c.id === smsApt.client_id) : undefined;
+        return (
+          <SmsSendSheet
+            visible={smsOpen}
+            context={{
+              appointmentId: smsApt.id,
+              clientId: smsApt.client_id ?? null,
+              teamId: smsApt.team_id ?? null,
+              vars: appointmentSmsVars({
+                client: smsClient ?? null,
+                appointment: smsApt,
+                teamName: teams.find((tm) => tm.id === smsApt.team_id)?.name ?? null,
+                address: smsApt.address || smsClient?.address || null,
+                company: companyName,
+                showMoney: canManageBookings,
+              }),
+            }}
+            phone={(smsClient?.phone_e164 || smsClient?.phone || "").trim() || null}
+            onClose={() => setSmsOpen(false)}
+          />
+        );
+      })() : null}
       <SelfReminderSheet
         visible={reminderFor != null}
         value={reminderFor ? getSelfReminder(reminderFor.id) : null}

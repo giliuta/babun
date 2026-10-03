@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
+  MessageSquareText,
   MoreHorizontal,
   Move,
   Navigation,
@@ -66,6 +67,8 @@ const LOOK: Record<string, { icon: LucideIcon; color: string }> = {
   "Напомнить…": { icon: Bell, color: SETTINGS_TILE.yellow },
   Позвонить: { icon: Phone, color: SETTINGS_TILE.green },
   Маршрут: { icon: Navigation, color: SETTINGS_TILE.teal },
+  // Тот же значок, что у шаблона SMS без своего (шторка отправки).
+  "Отправить SMS": { icon: MessageSquareText, color: SETTINGS_TILE.blue },
   "Метка дня": { icon: Bookmark, color: SETTINGS_TILE.teal },
 };
 

@@ -57,3 +57,27 @@ export function clientSmsVars(input: {
     total: next && input.showMoney ? next.total_amount : null,
   });
 }
+
+/** Поля SMS о ЗАПИСИ из календаря (владелец 03.10: «зажимаю запись в
+ *  календаре — в шторке сразу „Отправить SMS“»): как к клиенту обращаться
+ *  (его «Имя для SMS», нет — первое слово имени), дата, время, команда,
+ *  услуги, адрес. Сумма — только тому, кому деньги записи видны. */
+export function appointmentSmsVars(input: {
+  client: Pick<Client, "full_name" | "sms_name"> | null;
+  appointment: Pick<Appointment, "date" | "time_start" | "address" | "services" | "total_amount">;
+  teamName: string | null;
+  address?: string | null;
+  company: string | null;
+  showMoney: boolean;
+}): SmsVars {
+  return smsVars({
+    name: input.client ? addressedAs(input.client, firstName(input.client)) : null,
+    date: input.appointment.date,
+    time: input.appointment.time_start,
+    calendar: input.teamName,
+    services: input.appointment.services.map((line) => line.serviceName),
+    address: input.address ?? input.appointment.address ?? null,
+    total: input.showMoney ? input.appointment.total_amount : null,
+    company: input.company,
+  });
+}
