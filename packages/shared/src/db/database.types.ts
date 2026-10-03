@@ -1403,6 +1403,47 @@ export type Database = {
           },
         ]
       }
+      deleted_operations: {
+        Row: {
+          deleted_at: string
+          deleted_by: string | null
+          id: string
+          operation: Json
+          purge_at: string
+          team_id: string
+          tenant_id: string
+          type: string
+        }
+        Insert: {
+          deleted_at?: string
+          deleted_by?: string | null
+          id: string
+          operation: Json
+          purge_at: string
+          team_id: string
+          tenant_id: string
+          type: string
+        }
+        Update: {
+          deleted_at?: string
+          deleted_by?: string | null
+          id?: string
+          operation?: Json
+          purge_at?: string
+          team_id?: string
+          tenant_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deleted_operations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       edge_cron_secrets: {
         Row: {
           created_at: string
@@ -4443,6 +4484,7 @@ export type Database = {
         Args: { p_transfer_group_id: string }
         Returns: boolean
       }
+      delete_operation: { Args: { p_id: string }; Returns: string }
       delete_sole_owned_tenants_for_account: {
         Args: { p_user_id: string }
         Returns: number
@@ -4515,6 +4557,7 @@ export type Database = {
           seq: number
         }[]
       }
+      restore_deleted_operation: { Args: { p_id: string }; Returns: string }
       set_default_company: {
         Args: { p_company_id: string }
         Returns: undefined

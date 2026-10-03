@@ -165,6 +165,11 @@ export const accountRowsQueryKey = (
 export const deletedAccountsQueryKey = (tenantId: string | null) =>
   ["accounts", tenantId, "deleted"] as const;
 
+/** «Удалённые операции» (03.10). Под ключом журнала: удаление и «Вернуть»
+ *  роняют `["transactions"]` целиком — ящик перечитывается вместе с лентой. */
+export const deletedOperationsQueryKey = (tenantId: string | null) =>
+  ["transactions", tenantId, "deleted"] as const;
+
 export const accountBalancesQueryKey = (tenantId: string | null) =>
   ["accounts", tenantId, "balances"] as const;
 

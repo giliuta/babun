@@ -176,7 +176,7 @@ export function useFinanceCategories() {
 // `receipt_on_demand`), но правка и удаление проводки по-прежнему меняют уже
 // выписанный документ: возврат его гасит, снятие возврата — оживляет.
 // Открытая панель «Чеки» смонтирована и без инвалидации об этом не узнаёт.
-function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
+export function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["transactions"] });
   qc.invalidateQueries({ queryKey: ["accounts"] });
   qc.invalidateQueries({ queryKey: ["invoices"] });

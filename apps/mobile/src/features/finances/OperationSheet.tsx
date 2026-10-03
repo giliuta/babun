@@ -835,7 +835,7 @@ export function OperationSheet({
       confirmThen(
         "Удалить операцию?",
         {
-          message: "Операция исчезнет из ленты, остаток счёта пересчитается.",
+          message: "Уйдёт в «Удалённые операции» — вернуть можно 30 дней.",
           confirmLabel: "Удалить",
           destructive: true,
         },

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   accountsSettingsHref,
+  deletedOperationsDoorLine,
   invoicesDoorLine,
   requisitesDoorLine,
   settingsTeamId,
@@ -97,5 +98,14 @@ describe("дверь «Инвойсы» (владелец 03.10)", () => {
     assert.equal(invoicesDoorLine(0), "Оплата по факту");
     // Настройка ещё не пришла — то же, что у бланка по умолчанию.
     assert.equal(invoicesDoorLine(null), "Срок оплаты 7 дней");
+  });
+});
+
+describe("deletedOperationsDoorLine", () => {
+  test("пусто — словом, иначе число операций", () => {
+    assert.equal(deletedOperationsDoorLine(0), "Пусто");
+    assert.equal(deletedOperationsDoorLine(1), "1 операция");
+    assert.equal(deletedOperationsDoorLine(3), "3 операции");
+    assert.equal(deletedOperationsDoorLine(5), "5 операций");
   });
 });

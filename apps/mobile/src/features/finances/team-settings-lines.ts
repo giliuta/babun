@@ -9,6 +9,13 @@ import { hasBudget } from "./category-budget";
 // её категорий и бюджетов, сколько шаблонов — не проваливаясь внутрь.
 
 const FORMS_BUDGET: PluralFormsRu = ["бюджет", "бюджета", "бюджетов"];
+const FORMS_OPERATION: PluralFormsRu = ["операция", "операции", "операций"];
+
+/** Дверь «Удалённые операции» (03.10): «Пусто» либо «2 операции» — сколько
+ *  в ящике у выбранной команды. */
+export function deletedOperationsDoorLine(count: number): string {
+  return count > 0 ? formatCountRu(count, FORMS_OPERATION) : "Пусто";
+}
 
 /** Какая команда открыта: из адреса, если она живая; иначе первая. */
 export function settingsTeamId(

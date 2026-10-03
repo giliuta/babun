@@ -30,6 +30,9 @@ export interface FinanceSettingsRows {
   /** «Валюта» — одна на компанию (владелец 30.09: перенесена из шестерёнки
    *  календаря сюда, к деньгам). */
   currency: boolean;
+  /** «Удалённые операции» (03.10): ящик команды. Владельческая, как вся
+   *  страница; сервер пускает партнёра только к удалённому им самим. */
+  deletedOperations: boolean;
   /** Заголовок «Деньги»: без своих строк он не рисуется — подпись над
    *  пустотой читается как сломанный экран. */
   moneyGroup: boolean;
@@ -54,6 +57,7 @@ export function financeSettingsRows(
     ...money,
     ...documents,
     currency: owner,
+    deletedOperations: owner,
     moneyGroup,
     documentsGroup,
     any: moneyGroup || documentsGroup || owner,

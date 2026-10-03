@@ -6,6 +6,7 @@ import {
   HandCoins,
   NotebookPen,
   ReceiptText,
+  Trash2,
   Wallet,
 } from "lucide-react-native";
 import type { FinanceCategoryKind } from "@babun/shared/db/repositories/finance-categories";
@@ -19,6 +20,7 @@ import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useTeams } from "@/features/reference/queries";
 import {
+  deletedOperationsDoorLine,
   invoicesDoorLine,
   requisitesDoorLine,
   settingsTeamId,
@@ -33,6 +35,7 @@ import { financeSettingsRows } from "@/features/finances/settings-rows";
 import { LedgerExportRow } from "@/features/finances/LedgerExportRow";
 import { CurrencySettingsRow } from "@/features/settings/CurrencySettingsRow";
 import { useFinanceCategories } from "@/features/finances/queries";
+import { useDeletedOperations } from "@/features/finances/deleted-operations";
 
 // НАСТРОЙКИ ФИНАНСОВ — ПО КОМАНДЕ (владелец 2026-09-30: «перешёл сверху в
 // команду один — и это полностью настройки чётко под команду один»).
@@ -101,6 +104,7 @@ export default function FinanceSettingsScreen() {
   const accounts = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
   const teamAccounts = (accounts.data ?? []).filter((a) => a.brigade_id === teamId);
   const categoriesQuery = useFinanceCategories();
+  const deletedOperations = useDeletedOperations();
   const companies = useCompanies();
   const nextInvoice = useNextInvoiceNumber(new Date().getFullYear()).data;
   const liveSets = (companies.data ?? []).filter((c) => !c.archived_at).length;
@@ -150,6 +154,27 @@ export default function FinanceSettingsScreen() {
                 <>
                   {rows.accounts ? <Divider inset={56} /> : null}
                   <LedgerExportRow teamId={teamId} />
+                </>
+              ) : null}
+              {/* «УДАЛЁННЫЕ ОПЕРАЦИИ» (владелец 03.10) — ящик этой команды:
+                  30 дней, «Вернуть». Вид — как «Удалённые клиенты» в
+                  шестерёнке клиентов. */}
+              {rows.deletedOperations ? (
+                <>
+                  <Divider inset={56} />
+                  <SettingsRow
+                    tile={SETTINGS_TILE.red}
+                    icon={Trash2}
+                    title="Удалённые операции"
+                    sub={
+                      deletedOperations.data
+                        ? deletedOperationsDoorLine(
+                            deletedOperations.data.filter((item) => item.teamId === teamId).length,
+                          )
+                        : undefined
+                    }
+                    onPress={() => router.push(withTeam("/finances/deleted"))}
+                  />
                 </>
               ) : null}
             </SectionCard>

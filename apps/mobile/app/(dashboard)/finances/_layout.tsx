@@ -57,6 +57,8 @@ const OWNER_ONLY_PATHS = [
   "/finances/categories",
   "/finances/requisites",
   "/finances/invoice-blank",
+  // «Удалённые операции» (03.10): дверь — строка шестерёнки владельца.
+  "/finances/deleted",
 ];
 
 export default function FinancesLayout() {

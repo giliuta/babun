@@ -70,7 +70,7 @@ function assertPositiveMoneyAmount(amount: number): void {
   }
 }
 
-function rowToTx(r: Row): FinanceTransaction {
+export function rowToTx(r: Row): FinanceTransaction {
   return {
     id: r.id,
     tenant_id: r.tenant_id,
@@ -444,22 +444,20 @@ export async function updateTransaction(
   }
 }
 
+/**
+ * Удалить операцию В «УДАЛЁННЫЕ ОПЕРАЦИИ» (владелец 03.10): 30 дней её можно
+ * вернуть. Серверная `delete_operation` удаляет строку по прежним правилам
+ * (ручная, не перевод, без инвойса; права — политики удаления) и кладёт её
+ * снимок в ящик. Ноль строк — отказ с текстом, а не тихий успех.
+ */
 export async function deleteTransaction(
   supabase: DbSupabase,
   id: string,
 ): Promise<void> {
-  const { data, error } = await supabase
-    .from("finance_transactions")
-    .delete()
-    .eq("id", id)
-    .eq("source", "manual")
-    .neq("type", "transfer")
-    .is("invoice_id", null)
-    .select("id")
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("delete_operation", { p_id: id });
   if (error || !data) {
     throw new Error(
-      error?.message ?? "Операция недоступна или связана с инвойсом",
+      error?.message || "Операция недоступна или связана с инвойсом",
     );
   }
 }

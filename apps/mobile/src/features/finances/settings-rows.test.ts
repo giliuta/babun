@@ -12,6 +12,7 @@ describe("строки настроек финансов", () => {
       invoices: true,
       requisites: true,
       currency: true,
+      deletedOperations: true,
       moneyGroup: true,
       documentsGroup: true,
       any: true,
