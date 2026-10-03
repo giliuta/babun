@@ -12,6 +12,7 @@ import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useToast } from "@/components/ui/Toast";
 import { useCalendarChips } from "@/features/settings/workspaces";
 import { useThemeColors } from "@/theme/colors";
+import { fillRgba } from "@/components/ui/color-contrast";
 import type { Team } from "@/features/reference/queries";
 import { periodDates, periodTitle, type Period } from "./period";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
@@ -143,7 +144,7 @@ export function SummaryToggle({
         // Тинта ХВАТАЕТ: цветная рамка была третьей грамматикой выбора на
         // продукт (у Chip — заливка, у оттиск-рядов — углубление материала), и
         // 1.5px контур нигде больше не встречался.
-        backgroundColor: active && !locked ? color + "1a" : t.surface,
+        backgroundColor: active && !locked ? fillRgba(color, 0.1) : t.surface,
         borderCurve: "continuous",
       }}
     >

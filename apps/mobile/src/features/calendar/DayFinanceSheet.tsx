@@ -478,6 +478,9 @@ export function DayFinanceSheet({
                 label="Доход"
                 color={moneySign(money.income) < 0 ? t.danger : t.success}
                 value={formatEUR(money.income)}
+                // Ноль тише живых денег — как у плиток «Финансов»: красный
+                // «€0» у расхода врал цветом (повторный аудит 03.10).
+                quiet={moneySign(money.income) === 0}
                 active={view === "income"}
                 onPress={() => pick("income")}
               />
@@ -485,6 +488,7 @@ export function DayFinanceSheet({
                 label="Расход"
                 color={t.danger}
                 value={formatEUR(money.expense)}
+                quiet={moneySign(money.expense) === 0}
                 active={view === "expense"}
                 onPress={() => pick("expense")}
               />
@@ -498,6 +502,7 @@ export function DayFinanceSheet({
                   label="Долг"
                   color={t.warning}
                   value={formatEUR(money.debt)}
+                  quiet={moneySign(money.debt) === 0}
                   active={view === "debt"}
                   onPress={() => pick("debt")}
                 />
@@ -507,6 +512,7 @@ export function DayFinanceSheet({
                 label="Ожидается"
                 color={t.sub}
                 value={formatEUR(money.planned)}
+                quiet={moneySign(money.planned) === 0}
                 active={view === "planned"}
                 onPress={() => pick("planned")}
               />

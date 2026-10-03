@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Linking, View } from "react-native";
+import { AppState, Linking, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
@@ -1069,10 +1069,27 @@ export default function CalendarTab() {
     [timezone],
   );
   const [now, setNow] = useState(readNow);
+  // ЧАСЫ — ПО СМЕНЕ МИНУТЫ И ПО ВОЗВРАТУ ИЗ ФОНА (повторный аудит 03.10).
+  // Интервал в 60 с от открытия экрана отставал от часов телефона до минуты
+  // (на сетке «17:48» при 17:49 в статус-баре), а в фоне таймеры JS стоят:
+  // открыл утром — до минуты «сегодня» оставалось вчерашним, со вчерашними
+  // «не закрыта» и метками. Тик — к началу следующей минуты, и сразу при
+  // возвращении приложения.
   useEffect(() => {
-    setNow(readNow());
-    const id = setInterval(() => setNow(readNow()), 60000);
-    return () => clearInterval(id);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = () => {
+      clearTimeout(timer);
+      setNow(readNow());
+      timer = setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50);
+    };
+    tick();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") tick();
+    });
+    return () => {
+      clearTimeout(timer);
+      sub.remove();
+    };
   }, [readNow]);
   const todayYmd = formatYMD(now);
   const tomorrowYmd = formatYMD(addDays(now, 1));

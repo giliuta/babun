@@ -212,4 +212,26 @@ describe("повторный аудит календаря 03.10", () => {
     const mini = readFileSync(resolve(here, "MiniCalendar.tsx"), "utf8");
     assert.match(mini, /const CELL = Math\.min\(44, Math\.floor\(\(screenW - 24 - 26 - 2\) \/ 7\)\);/);
   });
+
+  test("часы экрана тикают по смене минуты и при возврате из фона", () => {
+    const src = screen();
+    assert.match(src, /timer = setTimeout\(tick, 60_000 - \(Date\.now\(\) % 60_000\) \+ 50\);/);
+    assert.match(src, /AppState\.addEventListener\("change", \(state\) => \{\s*if \(state === "active"\) tick\(\);/);
+    assert.doesNotMatch(src, /setInterval\(\(\) => setNow\(readNow\(\)\), 60000\)/);
+  });
+
+  test("«Маршрут →» не раздвигает шапку дня и считает адреса по-русски", () => {
+    const agenda = readFileSync(resolve(here, "AgendaView.tsx"), "utf8");
+    assert.match(agenda, /minHeight: 44,\s*marginVertical: -13,/);
+    assert.match(agenda, /pluralize\(addresses\.length, "адрес", "адреса", "адресов"\)/);
+  });
+
+  test("«Финансы дня»: нули тихие, выбранная серая плитка — светлый тинт", () => {
+    const sheet = readFileSync(resolve(here, "DayFinanceSheet.tsx"), "utf8");
+    for (const k of ["income", "expense", "debt", "planned"]) {
+      assert.match(sheet, new RegExp(`quiet=\\{moneySign\\(money\\.${k}\\) === 0\\}`));
+    }
+    const toggle = readFileSync(resolve(here, "../finances/FinanceOverview.tsx"), "utf8");
+    assert.match(toggle, /backgroundColor: active && !locked \? fillRgba\(color, 0\.1\) : t\.surface,/);
+  });
 });

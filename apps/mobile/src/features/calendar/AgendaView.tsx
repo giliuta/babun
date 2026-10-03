@@ -9,6 +9,7 @@ import {
 import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS, getDebtAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { pluralize } from "@babun/shared/common/utils/pluralize";
 import { parseYMD } from "@/features/appointments/helpers";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
@@ -270,10 +271,14 @@ function DaySection({
             hitSlop={8}
             className="active:opacity-60"
             accessibilityRole="link"
-            accessibilityLabel={`Маршрут дня, ${addresses.length} адресов`}
+            accessibilityLabel={`Маршрут дня, ${pluralize(addresses.length, "адрес", "адреса", "адресов")}`}
             // 44 — минимальная тап-мишень HIG: текст 11pt, мишень — контейнер.
+            // Мишень заходит на поля, а не раздвигает шапку: у дня с
+            // «Маршрутом» зазор до карточки был вдвое больше, чем у соседних
+            // дней (повторный аудит 03.10).
             style={{
               minHeight: 44,
+              marginVertical: -13,
               justifyContent: "center",
               flexShrink: 0,
               marginLeft: 8,
