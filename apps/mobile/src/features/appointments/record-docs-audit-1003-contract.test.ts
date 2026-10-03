@@ -39,6 +39,15 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
     assert.match(src("invoices/InvoiceRequisitesBlock.tsx"), /if \(!editing\) onCompanyChange\(id\);/);
   });
 
+  test("фото и видео записи: минута влезает, пачка не рвётся молча", () => {
+    assert.match(src("appointments/use-file-pickers.ts"), /videoQuality: ImagePicker\.UIImagePickerControllerQualityType\.VGA640x480,/);
+    const upload = src("appointments/appointment-photos.ts");
+    const loop = upload.slice(upload.indexOf("for (let index = 0; index < selected.length"));
+    assert.match(loop, /try \{[\s\S]{0,300}const bytes = await assetBytes\(asset, mime\);/);
+    assert.ok(upload.indexOf("for (const asset of selected)") < upload.indexOf("for (let index = 0; index < selected.length"));
+    assert.match(src("appointments/pending-files.ts"), /error instanceof RetryableAppointmentPhotoUploadError/);
+  });
+
   test("SMS из карточки: «ближайшая запись» — по часам бизнеса", () => {
     const card = app("(dashboard)/clients/[id].tsx");
     assert.match(card, /today: now\.ymd,\s*nowHm: now\.hm,/);

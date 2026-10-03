@@ -240,7 +240,7 @@ function scopeOf(scope: ClientsScope): QueryScope {
 /** Хозяйство базы — архив, корзина, справочник тегов, импорт — живёт только у
  *  СВОЕЙ компании: у работодателя человек гость, даже когда «Меняет». */
 function assertOwnCompany(scope: QueryScope, what: string): asserts scope is QueryScope & { tenantId: string } {
-  if (!scope.tenantId) throw new Error("Нет активного тенанта");
+  if (!scope.tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
   if (scope.kind !== "own") {
     throw new Error(`${what} можно только в своей компании.`);
   }
@@ -492,7 +492,7 @@ async function saveClient(
   // Guard: never fire the PATCH with tenant_id=undefined (session not
   // resolved yet) — it would silently match nothing / hit RLS.
   const tenantId = scope.tenantId;
-  if (!tenantId) throw new Error("Нет активного тенанта");
+  if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
   if (scope.kind === "record") {
     throw new Error("Карточку этого клиента ведёт владелец компании.");
   }
@@ -729,7 +729,7 @@ export function useCreateClient() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (overrides: Partial<Client>) => {
-      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       if (scope.kind === "record") {
         throw new Error("Заводить клиентов этой компании может её владелец.");
       }
@@ -1021,7 +1021,7 @@ function assertCanManageClientTags(
   // Какой команды — решает сервер политикой `client_tags_write_settings`;
   // здесь только не мешаем ему ответить.
   if (scope.kind === "member") {
-    if (!scope.tenantId) throw new Error("Нет активного тенанта");
+    if (!scope.tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
     return;
   }
   assertOwnCompany(scope, "Управлять тегами");

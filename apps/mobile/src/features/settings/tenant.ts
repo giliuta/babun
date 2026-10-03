@@ -200,7 +200,7 @@ export function useUpdateTenant() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (patch: TenantUpdate) => {
-      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       const { error, count } = await supabase
         .from("tenants")
         .update(patch, { count: "exact" })

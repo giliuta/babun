@@ -109,7 +109,7 @@ export function useImportRows() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: ImportRowsArgs): Promise<ImportRowsResult> => {
-      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       const {
         rows,
         defaultCountry,

@@ -154,7 +154,7 @@ export function useCalendarSettings() {
       const activeTenantId = tenantId as string;
       try {
         if (role !== "master" && role !== "owner" && role !== "dispatcher") {
-          throw new Error("Роль в компании ещё не подтверждена.");
+          throw new Error("Роль в аккаунте ещё не подтверждена.");
         }
         const settings = await fetchCalendarSettings(
           supabase,

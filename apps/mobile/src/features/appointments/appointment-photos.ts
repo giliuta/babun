@@ -132,12 +132,29 @@ export async function uploadAppointmentAssets(args: {
   const remaining = MAX_APPOINTMENT_PHOTOS - current.length;
   if (remaining <= 0) throw new Error(`На записи уже ${MAX_APPOINTMENT_PHOTOS} файлов.`);
   const selected = assets.slice(0, remaining);
+  // РАЗМЕР — ДО ПЕРВОЙ ВЫГРУЗКИ (аудит формы записи 03.10). Слишком большой
+  // файл в середине пачки обрывал её простой ошибкой: начало уже лежало на
+  // записи, хвост пропадал без «Повторить». Известный размер проверяем
+  // сразу — тогда не уезжает ничего, и ответ называет причину.
+  for (const asset of selected) {
+    const mime = inferMime(asset);
+    const video = isVideoMime(mime);
+    if ((asset.fileSize ?? 0) > (video ? MAX_VIDEO_BYTES : MAX_PHOTO_BYTES)) {
+      throw new Error(
+        video
+          ? "Видео больше 50 МБ. Снимите короче или сожмите."
+          : "Фото больше 5 МБ. Выберите изображение меньшего размера.",
+      );
+    }
+  }
   const uploaded: AppointmentPhotoRecord[] = [];
   for (let index = 0; index < selected.length; index += 1) {
     const asset = selected[index];
-    const mime = inferMime(asset);
-    const bytes = await assetBytes(asset, mime);
     try {
+      // Чтение файла — внутри повтора: сбой на нём отдаёт «Повторить» с
+      // оставшимися, а не обрывает пачку.
+      const mime = inferMime(asset);
+      const bytes = await assetBytes(asset, mime);
       uploaded.push(await uploadPhoto(supabase, {
         tenantId,
         appointmentId,
@@ -167,7 +184,7 @@ export function useUploadAppointmentPhotos(appointmentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: UploadAppointmentPhotosInput): Promise<AppointmentPhotoRecord[]> => {
-      if (!tenantId) throw new Error("Нет активной организации");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       return uploadAppointmentAssets({ tenantId, appointmentId, input });
     },
     onSettled: () =>
@@ -181,7 +198,7 @@ export function useDeleteAppointmentPhoto(appointmentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (photo: AppointmentPhotoRecord) => {
-      if (!tenantId) throw new Error("Нет активной организации");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       return deletePhoto(supabase, photo);
     },
     onSuccess: (_, removed) => {

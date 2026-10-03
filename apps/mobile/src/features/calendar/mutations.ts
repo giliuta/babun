@@ -113,7 +113,7 @@ export function useCreateAppointment() {
   const refusal = useMemberRefusal();
   return useMutation({
     mutationFn: async (input: Appointment) => {
-      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       if (role === "master") {
         // Квоту месяца держит серверный триггер вставки; предпроверка —
         // удобство владельца, сотруднику она не нужна. Без сети дверь
@@ -128,7 +128,7 @@ export function useCreateAppointment() {
         return { ...stamped, status: "scheduled" } as Appointment;
       }
       if (role !== "owner" && role !== "dispatcher") {
-        throw new Error("Роль в компании ещё не подтверждена.");
+        throw new Error("Роль в аккаунте ещё не подтверждена.");
       }
       await preflightQuotaForCreate(
         supabase,
@@ -252,7 +252,7 @@ function useUpdateAppointmentOptions() {
         return data;
       }
       if (role !== "owner" && role !== "dispatcher") {
-        throw new Error("Роль в компании ещё не подтверждена.");
+        throw new Error("Роль в аккаунте ещё не подтверждена.");
       }
       // ПРАВКИ ОДНОЙ ЗАПИСИ — ПО ОЧЕРЕДИ ЖЕСТОВ (аудит 03.10). Два быстрых
       // переноса уходили в сеть разом: при медленной связи второй ложился
@@ -472,7 +472,7 @@ export function useDeleteAppointment() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (role !== "owner" && role !== "dispatcher" && role !== "master") {
-        throw new Error("Роль в компании ещё не подтверждена.");
+        throw new Error("Роль в аккаунте ещё не подтверждена.");
       }
       // ФАЙЛЫ ЗАПИСИ: строки appointment_photos уходят каскадом вместе с
       // записью, а блобы в хранилище — нет (2026-09-07: в бакете лежали

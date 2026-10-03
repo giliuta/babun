@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { uploadAttachment } from "@/features/clients/card-attachments";
-import { uploadAppointmentAssets } from "./appointment-photos";
+import { RetryableAppointmentPhotoUploadError, uploadAppointmentAssets } from "./appointment-photos";
 import type { PendingFile } from "./appointment-files";
 
 export { pendingDocs, pendingMedia, type PendingFile } from "./appointment-files";
@@ -30,8 +30,15 @@ export async function uploadPendingFiles(args: {
         appointmentId: args.appointmentId,
         input: { assets: media.map((f) => f.asset), kind: "other", locationId: args.locationId },
       });
-    } catch {
-      failed.push(...media.map((f) => f.name));
+    } catch (error) {
+      // Не уехало — только то, что повтор отдал назад: уже выгруженные
+      // файлы лежат на записи, и назвать их «не загружены» значило бы
+      // позвать добавить их второй раз (аудит формы записи 03.10).
+      const left =
+        error instanceof RetryableAppointmentPhotoUploadError
+          ? new Set(error.retryInput.assets)
+          : null;
+      failed.push(...media.filter((f) => !left || left.has(f.asset)).map((f) => f.name));
     }
   }
   for (const doc of docs) {
