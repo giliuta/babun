@@ -35,6 +35,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-12)).current;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Тост, чья кнопка уже нажата: второй тап — пока плашка гаснет (220 мс) —
+   *  не делает ничего. Двойное «Снять» уходило вторым снятием по уже снятому
+   *  платежу: сервер отвечал «Платёж не найден», и экран откатывался назад
+   *  (аудит 2026-10-03). */
+  const actedId = useRef<number | null>(null);
   const insets = useSafeAreaInsets();
   const reducedMotion = useReduceMotion();
 
@@ -113,6 +118,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 ? {
                     label: toast.action.label,
                     onPress: () => {
+                      if (actedId.current === toast.id) return;
+                      actedId.current = toast.id;
                       const run = toast.action?.onPress;
                       hide();
                       run?.();
