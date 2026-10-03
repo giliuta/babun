@@ -212,7 +212,7 @@ export function useSaveCalendarSettings() {
       if (role !== "owner") {
         throw new Error("Изменять настройки календаря может только владелец.");
       }
-      if (!tenantId) throw new Error("Нет активной компании");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       return updateCalendarSettings(supabase, tenantId, patch);
     },
     // Instant-commit controls can issue several overlapping patches. Keep an
@@ -418,7 +418,7 @@ export function useSaveLocationLabels(teamId: string | null = null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (l: LocationLabel[]) => {
-      if (!tenantId) throw new Error("Нет активной компании");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       // ПАРТНЁР ПРАВИТ ТИПЫ СВОЕЙ КОМАНДЫ ПО ПРАВУ «ТИПЫ ОБЪЕКТОВ» (владелец
       // 01.10): решает сервер (`apply_team_location_label_changes`). Общий
       // справочник компании без команды — по-прежнему только владельцу.
@@ -618,7 +618,7 @@ export function useSavePersonalEventTypes() {
       /** Команда, чьи это типы. */
       teamId: string;
     }) => {
-      if (!tenantId) throw new Error("Нет активной компании");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       // Сотрудник — по праву «Записи» своей команды (30.09): чужую команду
       // отобьёт политика `personal_event_types_write_access`.
       if (role !== "owner" && role !== "dispatcher" && role !== "master") {

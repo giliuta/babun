@@ -49,7 +49,7 @@ describe("mobile invitation flow", () => {
     assert.match(invitationErrorMessage("invite:email_not_confirmed"), /Подтвердите почту/);
     assert.match(
       invitationErrorMessage("finish company setup before inviting employees"),
-      /завершите настройку компании/,
+      /завершите настройку аккаунта/,
     );
   });
 });

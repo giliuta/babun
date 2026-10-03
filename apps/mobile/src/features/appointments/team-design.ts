@@ -180,7 +180,7 @@ export function useSaveTeamDesign() {
   return useMutation({
     networkMode: "always",
     mutationFn: async (input: { teamId: string; next: TeamDesign }) => {
-      if (!tenantId) throw new Error("Нет активной компании");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       const was = before.current.get(input.teamId) ?? null;
       before.current.delete(input.teamId);
       const stamp = { updated_at: new Date().toISOString() };

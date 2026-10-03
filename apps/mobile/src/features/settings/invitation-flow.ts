@@ -44,7 +44,7 @@ export function invitationErrorMessage(message: string): string {
     return "Выберите календарь, в который зовёте мастера.";
   }
   if (/finish company setup|company setup is incomplete/i.test(message)) {
-    return "Сначала завершите настройку компании, затем пригласите партнёра.";
+    return "Сначала завершите настройку аккаунта, затем пригласите партнёра.";
   }
   // Принять приглашение можно только с подтверждённой почтой (миграция
   // 20260924120000): иначе его забрал бы любой, кто занял адрес сотрудника.
@@ -52,7 +52,7 @@ export function invitationErrorMessage(message: string): string {
     return "Подтвердите почту — письмо пришло при регистрации — и примите приглашение снова.";
   }
   if (/already has access/i.test(message)) {
-    return "У этого аккаунта уже есть доступ к компании.";
+    return "У этого аккаунта уже есть доступ к этим командам.";
   }
   if (/invalid invitation email/i.test(message)) {
     return "Проверьте адрес электронной почты.";
@@ -122,7 +122,7 @@ export function invitationErrorMessage(message: string): string {
     return "Создавать приглашения может только владелец.";
   }
   if (/membership not found/i.test(message)) {
-    return "Доступ к этой компании не найден.";
+    return "Доступ к этому аккаунту не найден.";
   }
   return message || "Не удалось обработать приглашение.";
 }

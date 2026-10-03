@@ -121,7 +121,7 @@ export function useRemoveTenantMember() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (userId: string) => {
-      if (!tenantId) throw new Error("Нет активной компании");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       if (session?.user.id === userId) {
         throw new Error("Свой доступ нельзя удалить с этого экрана.");
       }
@@ -146,7 +146,7 @@ export function useRevokeInvitation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      if (!tenantId) throw new Error("Нет активной компании");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       await requireOwner();
       const { data, error } = await supabase
         .from("invitations")

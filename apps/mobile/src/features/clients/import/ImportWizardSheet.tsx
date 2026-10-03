@@ -156,7 +156,7 @@ export function ImportWizardSheet({
   // partial/stale dedup data can create hundreds of duplicate clients.
   const runValidate = useCallback(async (): Promise<MapAndValidateResult> => {
     if (!parsed) throw new Error("Нет разобранного файла");
-    if (!tenantId) throw new Error("Нет активной компании");
+    if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
     const db = scopeForeign ? tenantBoundClient(tenantId) : supabase;
     const existingPhones = await fetchExistingPhoneSet(db, tenantId);
     const v = mapAndValidate({

@@ -85,7 +85,7 @@ export function RoleCapabilityBoundary({
         <ScreenHeader title="Нет доступа" />
         <EmptyState
           fill
-          title="Вы больше не состоите в этой компании"
+          title="Доступа к этому аккаунту больше нет"
           subtitle="Войдите заново или попросите владельца восстановить доступ."
           action={{ label: "Выйти", onPress: () => void signOutAndWipe() }}
         />
@@ -113,7 +113,7 @@ export function RoleCapabilityBoundary({
         <EmptyState
           fill
           title="Этот раздел вам недоступен"
-          subtitle="Доступ к нему открывает владелец компании."
+          subtitle="Доступ к нему открывает владелец аккаунта."
           action={{ label: "Вернуться", onPress: () => router.replace(fallbackHref) }}
         />
       </Screen>

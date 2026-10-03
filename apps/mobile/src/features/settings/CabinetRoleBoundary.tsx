@@ -54,7 +54,7 @@ export function CabinetRoleBoundary({ children }: { children: ReactNode }) {
           state="error"
           fill
           title="Не удалось проверить права"
-          subtitle="Настройки компании закрыты, пока сервер не подтвердит вашу роль."
+          subtitle="Настройки аккаунта закрыты, пока сервер не подтвердит вашу роль."
           action={{ label: "Повторить", onPress: () => void roleQuery.refetch() }}
         />
       </Screen>
@@ -68,7 +68,7 @@ export function CabinetRoleBoundary({ children }: { children: ReactNode }) {
         <ScreenHeader title="Нет доступа" />
         <EmptyState
           fill
-          title="Вы больше не состоите в этой компании"
+          title="Доступа к этому аккаунту больше нет"
           subtitle="Войдите заново или попросите владельца восстановить доступ."
           action={{ label: "Выйти", onPress: () => void signOutAndWipe() }}
         />
