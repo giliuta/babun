@@ -442,6 +442,20 @@ export function clientCardHref(id: string, tenantId: string) {
   return { pathname: "/clients/[id]" as const, params: { id, tenant: tenantId } };
 }
 
+/** Карточка СВОЕГО клиента из вкладки (строка списка, «Удалённые клиенты»,
+ *  «Создать клиента» — `id = "new"`). Пока в календаре открыта команда
+ *  партнёра, активна чужая компания, и ссылка без `?tenant=` уводила ворота
+ *  карточки туда: 15 секунд загрузки и «Клиент не найден», а новый клиент
+ *  заводился бы в базу работодателя (03.10). Своя открыта — ссылка прежняя. */
+export function ownClientCardHref(
+  id: string,
+  scope: { tenantId: string; isActive: boolean } | null | undefined,
+) {
+  return scope && !scope.isActive
+    ? clientCardHref(id, scope.tenantId)
+    : { pathname: "/clients/[id]" as const, params: { id } };
+}
+
 /** Параметры подстраницы карточки («Все объекты», «Люди», «Реквизиты»,
  *  «Файлы», «История»). Карточка клиента компании-работодателя открыта с
  *  `tenant` — и подстраница обязана унести его с собой, иначе откроется в

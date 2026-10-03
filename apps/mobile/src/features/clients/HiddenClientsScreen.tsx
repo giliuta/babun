@@ -18,6 +18,8 @@ import { notify } from "@/lib/notify";
 import type { LucideIcon } from "lucide-react-native";
 import { useCardFieldsByTeam } from "@/features/clients/card-prefs";
 import { clientsOfTeam } from "@/features/clients/team-scope";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { ownClientCardHref } from "@/features/clients/clients-company";
 import { useAppointments } from "@/features/calendar/queries";
 import { useTeams } from "@/features/reference/queries";
 import { usePullRefresh } from "@/lib/pull-refresh";
@@ -61,6 +63,9 @@ export function HiddenClientsScreen({
 }) {
   const t = useThemeColors();
   const router = useRouter();
+  // Полка своей компании: пока в календаре команда партнёра, карточка обязана
+  // унести компанию в адресе (`ownClientCardHref`).
+  const scope = useClientsScopeOrNull();
   const pull = usePullRefresh(query.refetch);
   const [menuClient, setMenuClient] = useState<Client | null>(null);
   const shownMenu = useLastNonNull(menuClient);
@@ -169,7 +174,7 @@ export function HiddenClientsScreen({
                     // Карточка открывается ЦЕЛИКОМ — с историей, деньгами и
                     // объектами. Свайпов нет: заученный флик «убери» здесь
                     // означал бы не то, что человек ждёт.
-                    onPress={() => router.push(`/clients/${item.id}`)}
+                    onPress={() => router.push(ownClientCardHref(item.id, scope))}
                     onLongPress={() => setMenuClient(item)}
                   />
                 </View>

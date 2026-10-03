@@ -70,6 +70,7 @@ import { useMemberClientHistory } from "@/features/clients/use-member-history";
 import {
   capabilitiesOf,
   clientCardHref,
+  ownClientCardHref,
   clientsInsightsHref,
   clientsSettingsHref,
   type ClientsScope,
@@ -885,7 +886,7 @@ function ClientsListScreen() {
                       // «Открывает карточку» убрано).
                       guest
                       ? router.push(clientCardHref(item.id, guest.tenantId))
-                      : router.push(`/clients/${item.id}`)
+                      : router.push(ownClientCardHref(item.id, scope))
                 }
                 onSwipeOpen={(row) => {
                   if (openSwipe.current && openSwipe.current !== row) {
@@ -980,7 +981,7 @@ function ClientsListScreen() {
           <TariffLocked locked={!clientsInPlan}>
             <GradientButton
               label="Создать клиента"
-              onPress={() => router.push("/clients/new")}
+              onPress={() => router.push(ownClientCardHref("new", scope))}
               disabled={!caps.create}
             />
           </TariffLocked>

@@ -10,6 +10,7 @@ import {
   clientsSources,
   memberScope,
   offlineForeignWriteMessage,
+  ownClientCardHref,
   type ClientsCompany,
   type ClientsScope,
   type ClientsSources,
@@ -321,6 +322,33 @@ const SOURCES: ClientsSources = clientsSources({
   memberships: EMPLOYEE_MEMBERSHIPS,
   names: NAMES,
   access: new Map([[GILIUTA, access()]]),
+});
+
+describe("карточка своего клиента из вкладки", () => {
+  test("своя компания открыта в календаре — ссылка без компании", () => {
+    assert.deepEqual(ownClientCardHref("c1", { tenantId: AIRFIX, isActive: true }), {
+      pathname: "/clients/[id]",
+      params: { id: "c1" },
+    });
+  });
+
+  test("открыта команда партнёра — своя компания едет в адресе", () => {
+    assert.deepEqual(ownClientCardHref("c1", { tenantId: AIRFIX, isActive: false }), {
+      pathname: "/clients/[id]",
+      params: { id: "c1", tenant: AIRFIX },
+    });
+  });
+
+  test("«Создать клиента» при команде партнёра заводит в свою базу", () => {
+    assert.deepEqual(ownClientCardHref("new", { tenantId: AIRFIX, isActive: false }).params, {
+      id: "new",
+      tenant: AIRFIX,
+    });
+  });
+
+  test("источник ещё не известен — прежняя ссылка", () => {
+    assert.deepEqual(ownClientCardHref("c1", null).params, { id: "c1" });
+  });
 });
 
 describe("чья карточка и чья вкладка открыты", () => {
