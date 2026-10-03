@@ -144,8 +144,14 @@ export function ReceiptComposer({
   onChange,
   onOpenCompany,
   footer,
+  forPayment = false,
 }: {
   draft: ReceiptDraftState;
+  /** ЧЕК НА УЖЕ ПРИНЯТУЮ ОПЛАТУ (владелец 2026-10-03): клиент, дата, счёт и
+   *  сумма — проводки, их чек не меняет (`issue_receipt` снимает их с неё).
+   *  Правятся строки работ и реквизиты; скидки и VAT в «Итого» нет — налог
+   *  уже посчитан в проводке. */
+  forPayment?: boolean;
   /** Сегодня по часам бизнеса: дальше него чек не датируется — деньги не
    *  приходят из будущего. */
   businessToday: string;
@@ -217,7 +223,9 @@ export function ReceiptComposer({
       })),
     [catalog, draft.lines],
   );
-  const openAccounts = accountsForTeam(accounts.data ?? [], draft.teamId);
+  const openAccounts = forPayment
+    ? (accounts.data ?? []).filter((a) => a.id === draft.accountId)
+    : accountsForTeam(accounts.data ?? [], draft.teamId);
 
   const setLines = (lines: AppointmentService[]) => onChange({ lines });
 
@@ -287,9 +295,9 @@ export function ReceiptComposer({
         <ClientBlock
           client={client}
           stats={client ? statsById.get(client.id) : undefined}
-          onPick={() => setSheet("client")}
-          onOpenCard={() => setSheet("client")}
-          onClear={client ? () => onChange({ clientId: null }) : undefined}
+          onPick={forPayment ? undefined : () => setSheet("client")}
+          onOpenCard={forPayment ? undefined : () => setSheet("client")}
+          onClear={client && !forPayment ? () => onChange({ clientId: null }) : undefined}
         />
 
         {/* ДАТА — СВОИМ БЛОКОМ (владелец 2026-09-20: «дата — это должен быть
@@ -299,7 +307,7 @@ export function ReceiptComposer({
           <NavRow
             label="Дата чека"
             value={humanDay(draft.date)}
-            onPress={() => setSheet("when")}
+            onPress={forPayment ? undefined : () => setSheet("when")}
           />
         </SectionCard>
 
@@ -347,7 +355,7 @@ export function ReceiptComposer({
                   compact
                   state="idle"
                   selected={draft.accountId === a.id}
-                  onPress={() => onChange({ accountId: a.id })}
+                  onPress={forPayment ? () => {} : () => onChange({ accountId: a.id })}
                   accessibilityLabel={`Счёт: ${a.name}`}
                 />
               ))}
@@ -431,22 +439,30 @@ export function ReceiptComposer({
         onAddLine={addCustomLine}
         onNameChange={renameLine}
         onRemoveLine={removeCustomLine}
-        discount={{
-          kind: draft.discountType,
-          value: draft.discountValue,
-          onKindChange: (discountType) => onChange({ discountType }),
-          onValueChange: (discountValue) => onChange({ discountValue }),
-        }}
+        discount={
+          forPayment
+            ? undefined
+            : {
+                kind: draft.discountType,
+                value: draft.discountValue,
+                onKindChange: (discountType) => onChange({ discountType }),
+                onValueChange: (discountValue) => onChange({ discountValue }),
+              }
+        }
         total={totals.total}
-        vat={{
-          mode: draft.vatMode,
-          rate: vatRate,
-          onModeChange: (vatMode) => onChange({ vatMode }),
-          onRateChange: (vatRate) => {
-            onChange({ vatRate });
-            rememberedRate.remember(vatRate);
-          },
-        }}
+        vat={
+          forPayment
+            ? undefined
+            : {
+                mode: draft.vatMode,
+                rate: vatRate,
+                onModeChange: (vatMode) => onChange({ vatMode }),
+                onRateChange: (vatRate) => {
+                  onChange({ vatRate });
+                  rememberedRate.remember(vatRate);
+                },
+              }
+        }
       />
 
       {/* ДАТА БЕЗ ЧАСОВ (владелец 2026-09-20: «чётко по времени не надо»):

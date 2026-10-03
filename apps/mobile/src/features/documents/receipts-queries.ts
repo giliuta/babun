@@ -3,6 +3,7 @@ import { NEVER_PAUSE } from "@/features/finances/accounts";
 import { getAppointment } from "@babun/shared/db/repositories/appointments";
 import type { TransactionDraft } from "@babun/shared/db/repositories/finance-transactions";
 import type { Json } from "@babun/shared/db/database.types";
+import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type {
   Receipt,
   ReceiptLineSnapshot,
@@ -113,8 +114,11 @@ export function useIssueReceipt() {
     mutationFn: async ({
       transactionId,
       lines,
+      companyId,
     }: {
       transactionId: string;
+      /** Чьими реквизитами подписан чек; не передан — основными. */
+      companyId?: string | null;
       /** Перечень работ, который сервер ЗАМОРОЗИТ в чеке. `undefined` —
        *  выписка по уже проведённым деньгам, где перечень берут из записи
        *  или инвойса за спиной проводки. */
@@ -123,6 +127,7 @@ export function useIssueReceipt() {
       const { data, error } = await supabase.rpc("issue_receipt", {
         p_transaction_id: transactionId,
         ...(lines && lines.length > 0 ? { p_lines: lines as unknown as Json } : {}),
+        ...(companyId ? { p_company_id: companyId } : {}),
       });
       if (error) throw new Error(error.message);
       if (!data) throw new Error("Чек не выписан: сервер не подтвердил документ");
@@ -170,5 +175,28 @@ export function useComposeReceipt() {
       return issue.mutateAsync({ transactionId: tx.id, lines });
     },
     meta: { errorHandled: true },
+  });
+}
+
+/**
+ * ПРОВОДКА, НА КОТОРУЮ ВЫПИСЫВАЮТ ЧЕК (владелец 2026-10-03: чек по оплаченной
+ * записи и по оплаченному инвойсу). Одна строка журнала — её клиент, счёт,
+ * дата и сумма станут чеком.
+ */
+export function useReceiptTransaction(id: string | null | undefined) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["receipt-transaction", tenantId, id],
+    enabled: !!tenantId && !!id,
+    queryFn: async (): Promise<FinanceTransaction | null> => {
+      const { data, error } = await supabase
+        .from("finance_transactions")
+        .select("*")
+        .eq("tenant_id", tenantId as string)
+        .eq("id", id as string)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return (data ?? null) as unknown as FinanceTransaction | null;
+    },
   });
 }

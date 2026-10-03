@@ -2,7 +2,7 @@ import { useFeatureOn } from "@/features/settings/company-features";
 import { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { FileText, History, Split } from "lucide-react-native";
+import { FileText, History, Receipt as ReceiptIcon, Split } from "lucide-react-native";
 import type {
   Appointment,
   AppointmentStatus,
@@ -17,6 +17,9 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { accountIcon } from "@/features/finances/account-ui";
 import { PaymentHistorySheet } from "@/features/finances/PaymentHistorySheet";
+import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
+import type { Receipt } from "@babun/shared/local/finance/receipt";
+import { useAppointmentReceipt } from "./use-appointment-receipt";
 import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
 import { useCreditNoteLinks, useInvoices } from "@/features/invoices/queries";
 import { liveAppointmentInvoices } from "@/features/invoices/appointment-invoices";
@@ -138,6 +141,8 @@ export function PaymentBlock({
   const record = useRecordPayment(appointment?.id);
   const cancel = useCancelPayment(appointment?.id);
   const invoicesQuery = useInvoices();
+  const receiptState = useAppointmentReceipt(appointment?.id ?? null, documentsOn);
+  const [openReceipt, setOpenReceipt] = useState<Receipt | null>(null);
   const creditLinks = useCreditNoteLinks();
   const [partText, setPartText] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -404,6 +409,18 @@ export function PaymentBlock({
     setPartText(amountMode ? null : "");
   };
 
+  const handleReceipt = () => {
+    haptics.tap();
+    if (receiptState.next) {
+      router.push({
+        pathname: "/documents/receipt-new",
+        params: { transactionId: receiptState.next.id },
+      } as unknown as Href);
+      return;
+    }
+    if (receiptState.latest) setOpenReceipt(receiptState.latest);
+  };
+
   const handleInvoice = () => {
     haptics.tap();
     if (!appointment) {
@@ -466,6 +483,11 @@ export function PaymentBlock({
   // Инвойсы — функция компании (STORY-088): выключены — иконки нет, даже у
   // уже выставленного (он открывается из «Файлов», когда функцию вернут).
   const canInvoice = documentsOn && (Boolean(invoice) || outstanding > 0);
+  // ЧЕК — ПОСЛЕ ОПЛАТЫ (владелец 03.10): есть приход без чека — значок ведёт
+  // в составитель чека, заполненный этой оплатой; чек уже выписан — горит и
+  // открывает его. Денег нет — значка нет.
+  const canReceipt = documentsOn && Boolean(receiptState.next || receiptState.latest);
+  const receiptTariffLocked = !receiptState.latest && !canUseDocuments;
   const invoiceTariffLocked = !invoice && !canUseDocuments;
   // История — и у возвращённой записи: строк у неё нет (деньги вернули), но
   // приём и возврат в истории лежат, и именно их и ищут на отменённом визите.
@@ -474,7 +496,7 @@ export function PaymentBlock({
     (rows.length > 0 ||
       (appointment?.payment_status === "refunded" &&
         ((appointment.prepaid_amount ?? 0) > 0 || (appointment.paid_amount ?? 0) > 0)));
-  const anyAction = Boolean(teamId) && (canSplit || canInvoice || hasHistory);
+  const anyAction = Boolean(teamId) && (canSplit || canInvoice || canReceipt || hasHistory);
   // Строка состояния нужна, когда ей ЕСТЬ ЧТО СКАЗАТЬ: подпись, поле суммы или
   // хоть одно живое действие. Иначе блок начинается сразу со счетов.
   const showStateRow = Boolean(caption?.text) || showAmountField || anyAction;
@@ -521,6 +543,15 @@ export function PaymentBlock({
                   active={Boolean(invoice)}
                   dimmed={invoiceTariffLocked}
                   onPress={invoiceTariffLocked ? tariffNudge : handleInvoice}
+                />
+              ) : null}
+              {canReceipt ? (
+                <ModeIconButton
+                  icon={ReceiptIcon}
+                  label="Чек"
+                  active={!receiptState.next}
+                  dimmed={receiptTariffLocked}
+                  onPress={receiptTariffLocked ? tariffNudge : handleReceipt}
                 />
               ) : null}
               {hasHistory ? (
@@ -600,6 +631,16 @@ export function PaymentBlock({
         visible={historyOpen}
         appointmentId={appointment?.id ?? null}
         onClose={() => setHistoryOpen(false)}
+      />
+      <ReceiptSheet
+        receipt={openReceipt}
+        appointment={null}
+        accountName={accounts.find((a) => a.id === openReceipt?.account_id)?.name ?? null}
+        onClose={() => setOpenReceipt(null)}
+        onOpen={(href) => {
+          setOpenReceipt(null);
+          router.push(href as Href);
+        }}
       />
     </SectionCard>
   );

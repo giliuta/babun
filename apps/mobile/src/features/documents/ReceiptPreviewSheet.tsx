@@ -27,8 +27,12 @@ export function ReceiptPreviewSheet({
   busy,
   onIssue,
   onClose,
+  onExited,
 }: {
   visible: boolean;
+  /** Лист уехал целиком: следующий лист (выписанный чек) открывается только
+   *  теперь — два модальных листа в одном кадре iOS не показывает. */
+  onExited?: () => void;
   doc: ReceiptDocument | null;
   busy: boolean;
   onIssue: () => void;
@@ -38,6 +42,7 @@ export function ReceiptPreviewSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
+      onExited={onExited}
       title="Чек"
       scroll
       maxHeightRatio={0.9}

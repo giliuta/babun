@@ -4563,7 +4563,7 @@ export type Database = {
         Returns: undefined
       }
       issue_receipt: {
-        Args: { p_lines?: Json; p_transaction_id: string }
+        Args: { p_company_id?: string; p_lines?: Json; p_transaction_id: string }
         Returns: {
           account_id: string | null
           amount: number

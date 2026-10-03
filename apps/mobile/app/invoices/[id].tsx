@@ -55,10 +55,9 @@ import { useCurrentRole, useTenant } from "@/features/settings/tenant";
 import { accessGate } from "@/features/access/my-access";
 import { useMyAccess } from "@/features/access/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { useIssueReceipt, useReceipts } from "@/features/documents/receipts-queries";
+import { useReceipts } from "@/features/documents/receipts-queries";
 import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
-import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -112,10 +111,7 @@ export default function InvoiceDetailScreen() {
   // делай; чек можно выставить на выставленный инвойс — на оплату, принятую
   // по нему»). Инвойс оплачен — внизу «Выписать чек», выписанный чек стоит
   // блоком на странице и открывается листом.
-  const issueReceipt = useIssueReceipt();
-  const toast = useToast();
   const [openReceipt, setOpenReceipt] = useState<Receipt | null>(null);
-  const [issuing, setIssuing] = useState(false);
   const businessToday = todayYmd(calendarSettings?.timezone ?? "Europe/Nicosia");
 
   const client = useMemo(
@@ -172,22 +168,21 @@ export default function InvoiceDetailScreen() {
     );
   }, [payments, receipts]);
 
-  const issueReceipts = async () => {
-    if (issuing) return;
-    setIssuing(true);
-    try {
-      // Чек — на каждый платёж без чека: обычно он один, при доплатах —
-      // по одному на каждую.
-      for (const payment of paymentsWithoutReceipt) {
-        const receipt = await issueReceipt.mutateAsync({ transactionId: payment.id });
-        haptics.success();
-        toast(`Чек ${receipt.number} выписан`);
-      }
-    } catch (error) {
-      notify("Чек не выписан", error instanceof Error ? error.message : undefined);
-    } finally {
-      setIssuing(false);
-    }
+  // «ВЫПИСАТЬ ЧЕК» ОТКРЫВАЕТ ЧЕК, А НЕ ВЫДАЁТ ЕГО СРАЗУ (владелец 2026-10-03:
+  // «нажимаю — оно сразу заполняет, и я всё равно проверяю, как это будет
+  // выглядеть, может что-то подправить, — и тогда выставляю чек»). Составитель
+  // заполнен этой оплатой: клиент, счёт, строки инвойса. Платежей без чека
+  // несколько (доплаты) — по одному, первым самый ранний; вернулся — кнопка
+  // ведёт к следующему.
+  const issueReceipts = () => {
+    const payment = [...paymentsWithoutReceipt].sort((a, b) =>
+      a.created_at.localeCompare(b.created_at),
+    )[0];
+    if (!payment) return;
+    router.push({
+      pathname: "/documents/receipt-new",
+      params: { transactionId: payment.id },
+    } as unknown as Href);
   };
 
   const shareInvoice = async () => {
@@ -690,7 +685,7 @@ export default function InvoiceDetailScreen() {
           className="px-4 pb-7 pt-3"
           style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
         >
-          <Button label="Выписать чек" loading={issuing} onPress={() => void issueReceipts()} />
+          <Button label="Выписать чек" onPress={issueReceipts} />
         </View>
       ) : null}
 

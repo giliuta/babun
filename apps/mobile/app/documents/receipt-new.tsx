@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { applyTxVat } from "@babun/shared/local/finance/vat";
@@ -18,7 +18,14 @@ import {
 import { buildDraftReceiptDocument } from "@/features/documents/receipt-document";
 import { ReceiptPreviewSheet } from "@/features/documents/ReceiptPreviewSheet";
 import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
-import { useComposeReceipt } from "@/features/documents/receipts-queries";
+import {
+  useComposeReceipt,
+  useIssueReceipt,
+  useReceiptAppointment,
+  useReceiptTransaction,
+} from "@/features/documents/receipts-queries";
+import { paymentReceiptLines } from "@/features/documents/receipt-for-payment";
+import { useInvoice } from "@/features/invoices/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { readRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { useTeamVatRate } from "@/features/finances/vat-queries";
@@ -41,14 +48,55 @@ export default function NewReceiptScreen() {
   const router = useRouter();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [issued, setIssued] = useState<Receipt | null>(null);
+  // Выписанный чек ждёт, пока уедет предпросмотр: открытый в том же кадре
+  // лист iOS не показывал — чек выписан, а на экране снова составитель
+  // (проверка на 17e, 04.10).
+  const justIssued = useRef<Receipt | null>(null);
   const toast = useToast();
   const calendarSettings = useCalendarSettings();
   const businessToday = todayYmd(calendarSettings.data?.timezone ?? "Europe/Nicosia");
   // Команда приходит чипом с «Финансов»: чек выписывают в той команде, где
   // на него смотрели. Внутри её можно сменить — тогда сменится и список касс.
-  const params = useLocalSearchParams<{ teamId?: string }>();
+  const params = useLocalSearchParams<{ teamId?: string; transactionId?: string }>();
   const [draft, change] = useReceiptDraft(businessToday, params.teamId ?? null);
   const compose = useComposeReceipt();
+  const issueForPayment = useIssueReceipt();
+
+  // ЧЕК НА ПРИНЯТУЮ ОПЛАТУ (владелец 2026-10-03): значок чека в оплаченной
+  // записи и «Выписать чек» оплаченного инвойса ведут сюда с проводкой. Чек
+  // заполняется сам — клиент, счёт, дата, строки из инвойса или записи, — и
+  // человек проверяет его перед выпиской. Деньги уже в журнале: второй
+  // проводки нет, чек ложится на эту (`issue_receipt`).
+  const forPayment = Boolean(params.transactionId);
+  const paymentTx = useReceiptTransaction(params.transactionId).data ?? null;
+  const paymentInvoice = useInvoice(paymentTx?.invoice_id ?? undefined);
+  const paymentAppointment = useReceiptAppointment(
+    paymentTx && !paymentTx.invoice_id ? paymentTx.appointment_id : null,
+  );
+  const sourcesReady =
+    !!paymentTx &&
+    (!paymentTx.invoice_id || !paymentInvoice.isLoading) &&
+    (paymentTx.invoice_id || !paymentTx.appointment_id || !paymentAppointment.isLoading);
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!paymentTx || !sourcesReady || seeded.current) return;
+    seeded.current = true;
+    const invoiceNumber = paymentInvoice.data?.number;
+    change({
+      clientId: paymentTx.client_id,
+      accountId: paymentTx.account_id,
+      teamId: paymentTx.team_id ?? null,
+      date: paymentTx.occurred_on,
+      lines: paymentReceiptLines(
+        paymentTx,
+        {
+          invoiceLines: paymentInvoice.data?.lines ?? null,
+          appointment: paymentAppointment.data ?? null,
+        },
+        invoiceNumber ? `Оплата по инвойсу ${invoiceNumber}` : "Оплата",
+      ),
+    });
+  }, [paymentTx, sourcesReady, paymentInvoice.data, paymentAppointment.data, change]);
   const accounts = useAccountsWithBalances();
   const services = useServices();
   const tenant = useTenant();
@@ -78,8 +126,16 @@ export default function NewReceiptScreen() {
   // ДЕНЬГИ В ПРОВОДКУ (`applyTxVat`). Налог берётся ТОЛЬКО из выбора
   // человека — настройка компании отвечает за ставку, а не за «включить»
   // (владелец 2026-09-20).
-  const money = applyTxVat(totals.total, draft.vatMode, vatRate);
-  const problem = !draft.clientId
+  const typed = applyTxVat(totals.total, draft.vatMode, vatRate);
+  // У чека на оплату деньги и налог — проводки, а не набранного в «Итого».
+  const money = paymentTx
+    ? { gross: paymentTx.amount, vat: paymentTx.vat_amount ?? 0 }
+    : typed;
+  const paperVatRate = paymentTx ? (paymentTx.vat_rate ?? 0) : vatRate;
+  const currency = tenant.data?.currency || "EUR";
+  const problem = forPayment && !paymentTx
+    ? "Загружаем оплату…"
+    : !draft.clientId
     ? "Выберите клиента — чек выписывается на человека"
     : !account
       ? "Выберите счёт — деньги всегда куда-то приходят"
@@ -93,11 +149,11 @@ export default function NewReceiptScreen() {
       name: tenant.data?.legal_name || tenant.data?.name || null,
       address: tenant.data?.business_address ?? null,
     },
-    currency: tenant.data?.currency || "EUR",
+    currency,
     issuedOn: draft.date,
     lines: receiptLinesForServer(draft, nameFor),
     discountAmount: totals.discountAmount,
-    vatRate,
+    vatRate: paperVatRate,
     vatAmount: money.vat,
     total: money.gross,
   });
@@ -105,7 +161,13 @@ export default function NewReceiptScreen() {
   const issue = async () => {
     if (problem || !account) return;
     try {
-      const receipt = await compose.mutateAsync({
+      const receipt = paymentTx
+        ? await issueForPayment.mutateAsync({
+            transactionId: paymentTx.id,
+            lines: receiptLinesForServer(draft, nameFor),
+            companyId: draft.companyId,
+          })
+        : await compose.mutateAsync({
         // Перечень замораживается в чеке сервером: выданный документ больше
         // не зависит от того, что потом станет с прайсом.
         lines: receiptLinesForServer(draft, nameFor),
@@ -136,8 +198,8 @@ export default function NewReceiptScreen() {
       setPreviewOpen(false);
       toast(`Чек ${receipt.number} выписан`, "success");
       // Выписанный чек открывается своим листом — из него его и отправляют
-      // клиенту («потом можно уже отправить»).
-      setIssued(receipt);
+      // клиенту («потом можно уже отправить»), когда предпросмотр уехал.
+      justIssued.current = receipt;
     } catch (error) {
       toast(error instanceof Error ? error.message : "Чек не выписан", "error");
     }
@@ -150,6 +212,7 @@ export default function NewReceiptScreen() {
         draft={draft}
         businessToday={businessToday}
         onChange={change}
+        forPayment={forPayment}
         // Компании живут на странице реквизитов: владелец 2026-09-20 попросил
         // совместить их в одном месте, и второй двери к ним нет.
         onOpenCompany={() => router.push("/requisites" as Href)}
@@ -170,9 +233,18 @@ export default function NewReceiptScreen() {
       <ReceiptPreviewSheet
         visible={previewOpen}
         doc={doc}
-        busy={compose.isPending}
+        busy={compose.isPending || issueForPayment.isPending}
         onIssue={() => void issue()}
         onClose={() => setPreviewOpen(false)}
+        onExited={() => {
+          const receipt = justIssued.current;
+          justIssued.current = null;
+          // ПАУЗА ПОСЛЕ УХОДА — НЕ ЛИШНЯЯ: на 17e лист чека, открытый прямо
+          // в `onExited`, рисовался (журнал JS) и не показывался — UIKit ещё
+          // снимал окно предпросмотра, а новый лист вставал невидимым и
+          // закрывал экран от касаний (04.10).
+          if (receipt) setTimeout(() => setIssued(receipt), 350);
+        }}
       />
 
       {/* Выписанный чек — тот же лист, что в ленте документов: бумага,
