@@ -27,7 +27,6 @@ import { useAccountVatDue } from "../vat-queries";
 import { teamControl } from "./editor-logic";
 import { TeamChips } from "./TeamChips";
 import type { AlertError, StageAccount } from "./types";
-import { useAccountStatement } from "./use-account-statement";
 
 const noop = () => {};
 
@@ -49,6 +48,7 @@ export function AccountMoneyGroup({
   busy,
   alertError,
   onTransfer,
+  onStatement,
 }: {
   account: AccountWithBalance;
   accounts: readonly AccountWithBalance[];
@@ -63,6 +63,8 @@ export function AccountMoneyGroup({
   alertError: AlertError;
   /** Открыть перевод с этого счёта (или на него, если денег нет). */
   onTransfer: () => void;
+  /** Открыть страницу выписки: лист с операциями, потом файл. */
+  onStatement: () => void;
 }) {
   // ПЕРЕВОДИТЬ ЕСТЬ КУДА, только если рядом есть другой открытый счёт; у
   // закрытого счёта денег в оборотах нет вовсе.
@@ -101,7 +103,6 @@ export function AccountMoneyGroup({
   );
 
   const t = useThemeColors();
-  const statement = useAccountStatement(account);
   const amount = (text: string, color: string = t.ink) => (
     <Text
       maxFontSizeMultiplier={1.3}
@@ -179,9 +180,8 @@ export function AccountMoneyGroup({
             color={SETTINGS_TILE.green}
             plain
             title="Выписка"
-            subtitle={statement.busy ? "Готовим файл…" : undefined}
-            accessibilityHint="Все операции счёта одним файлом"
-            onPress={() => void statement.run()}
+            accessibilityHint="Лист с операциями счёта, потом — файл"
+            onPress={onStatement}
           />
         </View>
       </SectionCard>

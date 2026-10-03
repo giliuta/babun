@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
 import type { AccountDraft } from "@babun/shared/db/repositories/accounts";
 import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -37,7 +38,8 @@ import { useCloseFlow } from "./use-close-flow";
 // кнопка применить или сохранить, чтоб было всё чётко»). Имя, вид, остаток на
 // начало, команда и «В оплате записи» копятся черновиком и уходят на сервер
 // одной правкой; закрыть лист с черновиком — только после вопроса. Действия
-// («Перевести», «Выписка», «Скрыть») — сразу, это не настройки. Закрытый
+// («Перевести», «Выписка», «Скрыть») — сразу, это не настройки; черновик они
+// не трогают. Закрытый
 // счёт открывается тем же листом — с «Открыть счёт снова».
 export function EditAccountSheet({
   visible,
@@ -84,6 +86,19 @@ export function EditAccountSheet({
   // ЧЕРНОВИК ЛИСТА. Новый счёт или новое открытие — с чистого листа.
   const [pending, setPending] = useState<Partial<AccountDraft>>({});
   useEffect(() => setPending({}), [accountId, visible]);
+
+  // «ВЫПИСКА» — СТРАНИЦА ПОВЕРХ «СЧЕТОВ» (владелец 03.10: сначала превью,
+  // потом файл). Лист модальный и над страницей висел бы, поэтому он сперва
+  // уезжает, страница открывается после его ухода, а «назад» возвращает лист
+  // с тем же черновиком — родитель его не закрывал.
+  const router = useRouter();
+  const [statement, setStatement] = useState<"idle" | "leaving" | "away">("idle");
+  useEffect(() => setStatement("idle"), [accountId, visible]);
+  useFocusEffect(
+    useCallback(() => {
+      setStatement((now) => (now === "away" ? "idle" : now));
+    }, []),
+  );
   const stage = (patch: Partial<AccountDraft>) => setPending((prev) => ({ ...prev, ...patch }));
   const dirty = Object.keys(pending).length > 0;
 
@@ -142,7 +157,7 @@ export function EditAccountSheet({
         padded={false}
         // Лист уезжает с дороги на время разговора о скрытии или удалении
         // (`use-close-flow`).
-        visible={visible && !flow.parked && !guard.hidden}
+        visible={visible && !flow.parked && !guard.hidden && statement === "idle"}
         onClose={guard.close}
         // Имени в шапке нет: оно стоит первой строкой листа, и одно и то же
         // слово дважды в одном кадре — шум.
@@ -153,6 +168,10 @@ export function EditAccountSheet({
         onExited={() => {
           flow.onSheetExited();
           guard.onExited();
+          if (statement === "leaving") {
+            setStatement("away");
+            router.push(`/accounts/${encodeURIComponent(accountId)}/statement` as Href);
+          }
         }}
         footer={
           account ? (
@@ -187,6 +206,7 @@ export function EditAccountSheet({
                 busy={update.isPending}
                 alertError={alertError}
                 onTransfer={() => flow.startTransfer(account)}
+                onStatement={() => setStatement("leaving")}
               />
               <AccountCloseGroup
                 account={account}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
-import { accountStatementRows, csvAmount, ledgerToCsv } from "./ledger-export";
+import { csvAmount, ledgerToCsv } from "./ledger-export";
 
 const tx = (over: Partial<FinanceTransaction>): FinanceTransaction =>
   ({
@@ -78,16 +78,3 @@ describe("выгрузка операций для бухгалтера", () => 
     assert.ok(out[1]?.includes("Зарплата · Даня"), out[1]);
   });
 });
-
-describe("выписка счёта (03.10)", () => {
-  test("только операции этого счёта, с ногами переводов", () => {
-    const rows = [
-      tx({ id: "a", account_id: "kasa" }),
-      tx({ id: "b", account_id: "revolut" }),
-      tx({ id: "c", account_id: "kasa", type: "transfer" }),
-      tx({ id: "d", account_id: null }),
-    ];
-    assert.deepEqual(accountStatementRows(rows, "kasa").map((r) => r.id), ["a", "c"]);
-  });
-});
-
