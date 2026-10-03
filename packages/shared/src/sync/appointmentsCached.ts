@@ -234,6 +234,27 @@ async function refreshCacheFromSupabase(
   const appts = domain ?? (await repoListAppointments(supabase, tenantId));
   const rows = appts.map((a) => makeCachedRow(a, tenantId));
   const cachedRows = await safeCacheReadAppointments(tenantId);
+  // ЗАПИСЬ, НЕ ДОШЕДШАЯ ДО СЕРВЕРА, С СЕТКИ НЕ ПРОПАДАЕТ (аудит 03.10). Её
+  // вставка, отклонённая навсегда (например, клиента с этим номером успели
+  // завести с другого телефона, и вставка записи упала на его отсутствии),
+  // перечитку не держит — и замена кэша снимком сервера стирала запись с
+  // экрана: слот выглядел свободным, на него записывали второго клиента.
+  // Пока вставка лежит в очереди (в «Синхронизации» — повторить или
+  // удалить), запись остаётся на сетке.
+  const serverIds = new Set(rows.map((r) => r.id));
+  const unsentIds = new Set(
+    pending
+      .filter(
+        (op) =>
+          op.table === "appointments" &&
+          op.op === "insert" &&
+          (op.payload as { tenant_id?: unknown }).tenant_id === tenantId,
+      )
+      .map((op) => op.row_id),
+  );
+  for (const cached of cachedRows) {
+    if (unsentIds.has(cached.id) && !serverIds.has(cached.id)) rows.push(cached);
+  }
   if (sameRows(cachedRows, rows)) return false;
   const before = cacheSignature(cachedRows);
   await cacheReplaceTenant("appointments", tenantId, rows);

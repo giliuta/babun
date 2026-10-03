@@ -587,6 +587,30 @@ describe("appointments cache-of-domain", () => {
     expect(cachedA.map((row) => row.id)).toEqual([APPT_ID]);
   });
 
+  test("запись с навсегда упавшей вставкой не пропадает с сетки при перечитке (аудит 03.10)", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+      }),
+      TENANT,
+    );
+    const [insert] = await dequeueAll();
+    await markOpPermanentlyFailed(insert!.id, "insert or update on table appointments violates foreign key");
+    setNetwork(new OnlineNetwork());
+    const server = emptyClientSnapshotSupabase();
+
+    // Список берётся из кэша, перечитка сервера идёт в фоне.
+    await listAppointments(server.client as never, TENANT);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const cached = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    expect(cached.map((row) => row.id)).toEqual([APPT_ID]);
+  });
+
   test("an authoritative empty calendar snapshot remains usable offline", async () => {
     await cacheReplaceTenant("appointments", TENANT, []);
     expect(await listAppointments(stubSupabase, TENANT)).toEqual([]);

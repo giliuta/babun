@@ -37,7 +37,7 @@ import {
   resyncAfterClaim,
   subscribeClaimSettled,
 } from "@/lib/claim-resync-plan";
-import { isKnownChange } from "@/lib/own-writes";
+import { isKnownChange, ownWindowEndsAt, takeMissedChange } from "@/lib/own-writes";
 
 /** Строки записей во всех списках кэша — версия каждой (`updated_at`). */
 function* cachedAppointmentRows(
@@ -74,6 +74,28 @@ function invalidate(qc: QueryClient, table: CachedTable): void {
   if (table === "clients") {
     void qc.invalidateQueries({ queryKey: ["client"] });
   }
+}
+
+/** Событие проглочено окном своей правки — когда окно закроется, сверить
+ *  проглоченное с кэшем: чужая правка новее кэша — перечитать список
+ *  (аудит параллельных правок 03.10, `own-writes.ts`). Окно продлилось
+ *  (снова своя правка) — сверка ждёт его нового конца. */
+function checkAfterOwnWindow(qc: QueryClient, id: string, isLive: () => boolean): void {
+  const ends = ownWindowEndsAt(id);
+  const wait = ends == null ? 0 : Math.max(0, ends - Date.now()) + 100;
+  setTimeout(() => {
+    if (!isLive()) return;
+    const again = ownWindowEndsAt(id);
+    if (again != null && again > Date.now()) {
+      checkAfterOwnWindow(qc, id, isLive);
+      return;
+    }
+    let cachedUpdatedAt: string | null | undefined;
+    for (const row of cachedAppointmentRows(qc)) {
+      if (row.id === id) cachedUpdatedAt = row.updated_at;
+    }
+    if (takeMissedChange(id, cachedUpdatedAt)) invalidate(qc, "appointments");
+  }, wait);
 }
 
 type ActiveBridge = {
@@ -113,7 +135,10 @@ export function startSyncBridge(
       // Эхо своей правки (перенос, оплата) — не новость: полная перечитка
       // календаря после каждого жеста и была «подлагиванием» (own-writes.ts).
       onChange: (table, change) => {
-        if (table === "appointments" && isKnownChange(change, cachedAppointmentRows(qc))) return;
+        if (table === "appointments" && isKnownChange(change, cachedAppointmentRows(qc))) {
+          if (change?.id) checkAfterOwnWindow(qc, change.id, () => !disposed);
+          return;
+        }
         invalidate(qc, table);
       },
       onResync: (table) => invalidate(qc, table),
