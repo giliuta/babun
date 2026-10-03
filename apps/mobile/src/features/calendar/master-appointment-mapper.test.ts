@@ -70,6 +70,8 @@ describe("master appointment RPC mapper", () => {
         services: [{ serviceId: "service-1", pricePerUnit: 980 }],
         service_price_overrides: { "service-1": 980 },
         global_discount: { type: "fixed", value: 80 },
+        vat_mode: "exclusive",
+        vat_rate: 19,
       }),
     );
 
@@ -85,6 +87,12 @@ describe("master appointment RPC mapper", () => {
     assert.equal(appointment.paid_amount, 700);
     assert.equal(appointment.prepaid_amount, 200);
     assert.equal(appointment.payment_status, "paid");
+    // Скидка, цены услуг и VAT — тоже по уровню (03.10): пустыми они
+    // расходились с «Итого», а сохранение партнёра стирало скидку.
+    assert.deepEqual(appointment.service_price_overrides, { "service-1": 980 });
+    assert.deepEqual(appointment.global_discount, { type: "fixed", value: 80 });
+    assert.equal(appointment.vat_mode, "exclusive");
+    assert.equal(appointment.vat_rate, 19);
     assert.deepEqual(appointment.services, [
       {
         serviceId: "service-1",
@@ -100,8 +108,25 @@ describe("master appointment RPC mapper", () => {
     assert.deepEqual(appointment.payments, []);
     assert.equal(appointment.payment, null);
     assert.deepEqual(appointment.expenses, []);
-    assert.deepEqual(appointment.service_price_overrides, {});
-    assert.equal(appointment.global_discount, null);
+  });
+
+  test("окно без скидки и VAT (до 03.10 или «Сумма» закрыта) — как раньше", () => {
+    const closed = masterAppointmentJsonToAppointment(
+      rpcRow({ global_discount: null, service_price_overrides: {}, vat_mode: null, vat_rate: null }),
+    );
+    assert.equal(closed.global_discount, null);
+    assert.deepEqual(closed.service_price_overrides, {});
+    assert.equal(closed.vat_mode, null);
+    assert.equal(closed.vat_rate, null);
+    const old = masterAppointmentJsonToAppointment(rpcRow({}));
+    assert.equal(old.vat_mode, undefined);
+    assert.equal(old.vat_rate, undefined);
+    const junk = masterAppointmentJsonToAppointment(
+      rpcRow({ global_discount: { type: "x", value: 1 }, service_price_overrides: { a: -1, b: "5" }, vat_mode: "zzz" }),
+    );
+    assert.equal(junk.global_discount, null);
+    assert.deepEqual(junk.service_price_overrides, {});
+    assert.equal(junk.vat_mode, null);
   });
 
   test("closed blocks and junk read as zero, not as a crash", () => {

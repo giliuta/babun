@@ -127,6 +127,39 @@ function discountOf(value: Json | undefined): Discount | undefined {
   };
 }
 
+/** Цены услуг записи: id → цена за единицу, только конечные неотрицательные. */
+function priceOverrides(value: Json | undefined): Record<string, number> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, number> = {};
+  for (const [id, price] of Object.entries(value)) {
+    if (typeof price === "number" && Number.isFinite(price) && price >= 0) out[id] = price;
+  }
+  return out;
+}
+
+const VAT_MODES = new Set<NonNullable<Appointment["vat_mode"]>>([
+  "on",
+  "off",
+  "none",
+  "inclusive",
+  "exclusive",
+]);
+
+/** VAT записи: ключа нет (окно старше 03.10) — `undefined`, как раньше. */
+function vatModeField(row: JsonRecord): Appointment["vat_mode"] {
+  if (!("vat_mode" in row)) return undefined;
+  const value = row.vat_mode;
+  return typeof value === "string" && VAT_MODES.has(value as NonNullable<Appointment["vat_mode"]>)
+    ? (value as NonNullable<Appointment["vat_mode"]>)
+    : null;
+}
+
+function vatRateField(row: JsonRecord): number | null | undefined {
+  if (!("vat_rate" in row)) return undefined;
+  const value = row.vat_rate;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 function finiteOr(value: Json | undefined, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
@@ -200,9 +233,11 @@ function repeatField(value: Json | undefined): PersonalEventRepeat {
 }
 
 /** Rebuilds an RPC row. РЕШАЕТ СЕРВЕР (STORY-084, волна 4): строки работ,
- *  итог, скидку, внесённое и статус оплаты окно отдаёт по уровням «Услуг»,
- *  «Суммы» и «Оплаты» — при закрытом блоке там нули. Историю платежей,
- *  расходы и переопределения цен окно не отдаёт никогда, и здесь они гаснут. */
+ *  итог, скидку, цены услуг, VAT, внесённое и статус оплаты окно отдаёт по
+ *  уровням «Услуг», «Суммы» и «Оплаты» — при закрытом блоке там нули.
+ *  Историю платежей и расходы окно не отдаёт никогда, и здесь они гаснут.
+ *  Скидку, цены услуг и VAT окно отдаёт с 03.10 (миграция 20261003235710):
+ *  пустыми они расходились с «Итого», а сохранение стирало скидку записи. */
 export function masterAppointmentJsonToAppointment(value: Json): Appointment {
   const row = asRecord(value);
   stringField(row, "tenant_id");
@@ -221,7 +256,7 @@ export function masterAppointmentJsonToAppointment(value: Json): Appointment {
     custom_total: row.custom_total === true,
     discount_amount: moneyField(row, "discount_amount"),
     expenses: [],
-    service_price_overrides: {},
+    service_price_overrides: priceOverrides(row.service_price_overrides),
     // Предоплата — по уровню «Суммы» и «Оплаты», как доплата (повторный аудит
     // 03.10): нулём она делала долгом то, что клиент уже внёс.
     prepaid_amount: moneyField(row, "prepaid_amount"),
@@ -231,7 +266,9 @@ export function masterAppointmentJsonToAppointment(value: Json): Appointment {
     payment_method: undefined,
     paid_amount: moneyField(row, "paid_amount"),
     services: serviceLines(row.services),
-    global_discount: null,
+    global_discount: discountOf(row.global_discount) ?? null,
+    vat_mode: vatModeField(row),
+    vat_rate: vatRateField(row),
     total_duration: numberField(row, "total_duration"),
     color_override: nullableStringField(row, "color_override"),
     // МЕТКА ЗАПИСИ ЧИТАЕТСЯ МЯГКО. Бригадная проекция — отдельная серверная
