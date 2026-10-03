@@ -61,6 +61,7 @@ import {
   findBufferClash,
   findOverlap,
 } from "@babun/shared/common/utils/appointment-overlap";
+import { draftSlot } from "@/features/appointments/draft-slot";
 import { getDayScheduleForDate } from "@babun/shared/local/schedule";
 import { colorName } from "@babun/shared/common/utils/colors";
 import {
@@ -1174,17 +1175,10 @@ export default function BookScreen() {
   const overlap = useMemo(() => {
     if (!teamId) return null;
     return findOverlap(
-      {
-        id: "book-draft",
-        date,
-        time_start: timeStart,
-        time_end: timeEnd,
-        kind: "work",
-        status: "scheduled",
-      } as unknown as Appointment,
+      draftSlot({ editId, teamId, date, timeStart, timeEnd }),
       dayTeamAppts,
     );
-  }, [teamId, date, timeStart, timeEnd, dayTeamAppts]);
+  }, [editId, teamId, date, timeStart, timeEnd, dayTeamAppts]);
   const timeWarning = useMemo(() => {
     if (!teamId) return null;
     const startMinutes = absoluteMinutes(timeStart) ?? 0;
@@ -1239,14 +1233,7 @@ export default function BookScreen() {
       calendarSettings,
     );
     const tight = findBufferClash(
-      {
-        id: "book-draft",
-        date,
-        time_start: timeStart,
-        time_end: timeEnd,
-        kind: "work",
-        status: "scheduled",
-      } as unknown as Appointment,
+      draftSlot({ editId, teamId, date, timeStart, timeEnd }),
       dayTeamAppts,
       bufferMinutes,
     );
@@ -1258,6 +1245,7 @@ export default function BookScreen() {
     teams,
     date,
     dayTeamAppts,
+    editId,
     teamId,
     teamScheduleQuery.data,
     timeEnd,
@@ -1906,8 +1894,12 @@ export default function BookScreen() {
   // подаёт голос ровно тогда, когда дату или время сдвинули внутри формы, —
   // это уже НОВЫЙ выбор, о котором никто не предупреждал. Пересечение с
   // другой записью не гасится никогда: о нём в календаре не говорили вовсе.
+  // Снимок — только ПОСЛЕ загрузки записи: сохранённую открывают одним
+  // `appointmentId`, и до гидрации форма стоит на «сегодня, 10:00». Снятый
+  // тогда, он объявлял время записи «сдвинутым», и «Вне графика» загоралось
+  // на записи, которую никто не трогал (находка 2026-10-03).
   const openedAtRef = useRef<{ date: string; time: string } | null>(null);
-  if (openedAtRef.current === null && date && timeStart) {
+  if (openedAtRef.current === null && hydrated && date && timeStart) {
     openedAtRef.current = { date, time: timeStart };
   }
   const timeMovedHere =
