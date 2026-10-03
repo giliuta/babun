@@ -126,3 +126,31 @@ describe("слова связи в поиске", () => {
     assert.equal(matchesClient(ivan, "натал", ["Мария"]), false);
   });
 });
+
+describe("поиск промахивался (аудит 03.10)", () => {
+  test("греческое ударение — та же буква", () => {
+    const giannis = client("gr-1", { full_name: "Γιάννης Παπαδόπουλος" });
+    for (const q of ["Γιαννης", "ΓΙΑΝΝΗΣ", "Γιάννης", "giannis", "Παπαδοπουλος"]) {
+      assert.equal(matchesClient(giannis, q), true, q);
+    }
+  });
+
+  test("латиница с диакритикой", () => {
+    assert.equal(matchesClient(client("lat-1", { full_name: "José Müller" }), "jose muller"), true);
+  });
+
+  test("слова по отдельности, в любом порядке", () => {
+    const sidorov = client("w-1", { full_name: "Иван Петрович Сидоров" });
+    assert.equal(matchesClient(sidorov, "Иван Сидоров"), true);
+    const petrov = client("w-2", { full_name: "Иван Петров", city: "Лимассол" });
+    assert.equal(matchesClient(petrov, "Петров Иван"), true);
+    assert.equal(matchesClient(petrov, "Иван Лимассол"), true);
+    assert.equal(matchesClient(petrov, "Иван Козлов"), false);
+  });
+
+  test("номер, показанный с кодом страны, находит клиента с номером без кода", () => {
+    const csv = client("e164-1", { phone: "99 123 456", phone_e164: "+35799123456" });
+    assert.equal(matchesClient(csv, "+357 99 123 456"), true);
+    assert.equal(matchesClient(csv, "99123456"), true);
+  });
+});

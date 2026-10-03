@@ -25,6 +25,12 @@ const GR_TO_LAT: Record<string, string> = {
   α: "a", β: "b", γ: "g", δ: "d", ε: "e", ζ: "z", η: "i", θ: "th",
   ι: "i", κ: "k", λ: "l", μ: "m", ν: "n", ξ: "x", ο: "o", π: "p", ρ: "r",
   σ: "s", ς: "s", τ: "t", υ: "y", φ: "f", χ: "h", ψ: "ps", ω: "o",
+  // Ударение и диерезис — та же буква (аудит 03.10): ударная выпадала из
+  // поиска целиком, и «Γιάννης» не находился ни по «Γιαννης», ни по
+  // «ΓΙΑΝΝΗΣ». Обычно знак снимает `stripMarks`; таблица — на случай движка
+  // без `normalize`, греческие имена — главные у кипрских клиентов.
+  ά: "a", έ: "e", ή: "i", ί: "i", ϊ: "i", ΐ: "i", ό: "o", ύ: "y", ϋ: "y",
+  ΰ: "y", ώ: "o",
 };
 
 function transliterate(input: string): string {
@@ -35,6 +41,16 @@ function transliterate(input: string): string {
   return out;
 }
 
+/** Снять диакритику: «José» → «jose», «Müller» → «muller». Буква и знак
+ *  разделяются (NFD), знак уходит. */
+function stripMarks(input: string): string {
+  try {
+    return input.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  } catch {
+    return input;
+  }
+}
+
 function normalizeDigits(input: string): string {
   return input.replace(/\D/g, "");
 }
@@ -43,7 +59,7 @@ function normalizeSearchable(input: string): string {
   // Lower-case + strip everything that isn't a letter or digit; also
   // transliterate Cyrillic/Greek so "Ivan" and "Иван" hit the same
   // normalised form.
-  const lower = input.toLowerCase();
+  const lower = stripMarks(input.toLowerCase());
   const translit = transliterate(lower);
   return translit.replace(/[^a-z0-9]/g, "");
 }
@@ -62,6 +78,10 @@ function clientHaystacks(client: Client): {
   };
   push(client.full_name);
   push(client.phone);
+  // Канонический номер (аудит 03.10): у клиентов из CSV и контактов `phone`
+  // лежит без кода страны, а строка списка показывает номер с ним — вставка
+  // показанного «+357 99 123 456» в поиск не находила того же клиента.
+  push(client.phone_e164);
   push(client.email);
   push(client.sms_name);
   push(client.whatsapp_phone);
@@ -117,14 +137,30 @@ export function matchesClient(
 ): boolean {
   const q = rawQuery.trim();
   if (!q) return true;
-  const qNorm = normalizeSearchable(q);
-  const qDigits = normalizeDigits(q);
 
   // Cache-worthy per call: we stringify the client haystacks once per
   // invocation. The caller loops through `clients` so keeping this here
   // is fine — it's not a hot path compared to a proper index yet.
   const hay = clientHaystacks(client);
+  const extraNorm = extra.map(normalizeSearchable);
+  if (matchesPiece(q, hay, extraNorm)) return true;
 
+  // СЛОВА ПО ОТДЕЛЬНОСТИ (аудит 03.10). Запрос склеивался в одну строку, и
+  // «Иван Сидоров» не находил «Иван Петрович Сидоров», а «Петров Иван» —
+  // «Иван Петров». Теперь, если целиком не нашлось, каждое слово обязано
+  // найтись где-то у клиента (имя, город, номер — в любом поле).
+  const words = q.split(/\s+/).filter((w) => normalizeSearchable(w).length > 0);
+  if (words.length < 2) return false;
+  return words.every((w) => matchesPiece(w, hay, extraNorm));
+}
+
+function matchesPiece(
+  piece: string,
+  hay: { normalized: string[]; digits: string[] },
+  extraNorm: readonly string[],
+): boolean {
+  const qNorm = normalizeSearchable(piece);
+  const qDigits = normalizeDigits(piece);
   if (qDigits.length >= 4) {
     for (const d of hay.digits) {
       if (d.includes(qDigits)) return true;
@@ -134,8 +170,8 @@ export function matchesClient(
   for (const s of hay.normalized) {
     if (s.includes(qNorm)) return true;
   }
-  for (const word of extra) {
-    if (normalizeSearchable(word).includes(qNorm)) return true;
+  for (const word of extraNorm) {
+    if (word.includes(qNorm)) return true;
   }
   return false;
 }
