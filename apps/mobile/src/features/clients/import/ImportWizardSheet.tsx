@@ -23,7 +23,8 @@ import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { Spinner } from "@/components/ui/Spinner";
 import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
+import { useScopeCompany } from "@/features/clients/company-scope";
 import { useDefaultCountry } from "../default-country";
 import { useClientTags } from "../queries";
 import { parseCsv, type ParsedCsv } from "./csv-parse";
@@ -98,7 +99,10 @@ export function ImportWizardSheet({
     () => (teamId ? allTags.filter((tag) => !tag.team_id || tag.team_id === teamId) : allTags),
     [allTags, teamId],
   );
-  const tenantId = useTenantId();
+  // Дубли — из той же компании, куда пишет импорт (компания вкладки, 03.10).
+  // Привязанный клиент строится в самой проверке: `useScopeCompany().client`
+  // новый на каждый кадр и в зависимостях колбэка не живёт.
+  const { tenantId, foreign: scopeForeign } = useScopeCompany();
   const importer = useImportRows();
 
   const [step, setStep] = useState<WizardStep>("upload");
@@ -153,7 +157,8 @@ export function ImportWizardSheet({
   const runValidate = useCallback(async (): Promise<MapAndValidateResult> => {
     if (!parsed) throw new Error("Нет разобранного файла");
     if (!tenantId) throw new Error("Нет активной компании");
-    const existingPhones = await fetchExistingPhoneSet(supabase, tenantId);
+    const db = scopeForeign ? tenantBoundClient(tenantId) : supabase;
+    const existingPhones = await fetchExistingPhoneSet(db, tenantId);
     const v = mapAndValidate({
       rows: parsed.rows,
       headers: parsed.headers,
@@ -163,7 +168,7 @@ export function ImportWizardSheet({
     });
     setValidation(v);
     return v;
-  }, [parsed, mapping, country, tenantId]);
+  }, [parsed, mapping, country, tenantId, scopeForeign]);
 
   // ── Step 1: pick + parse ────────────────────────────────────────────
   // Guardrails — web parity (UploadStep.tsx): ≤10 МБ, .csv/.txt, непустой

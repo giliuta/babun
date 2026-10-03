@@ -3,6 +3,7 @@ import { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
 import { useTenant } from "@/features/settings/tenant";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
 import {
   locationRequestLink,
   locationRequestShareText,
@@ -25,7 +26,13 @@ import {
 
 export function useLocationRequestActions() {
   const tenant = useTenant();
-  const businessName = tenant.data?.name ?? null;
+  // ИМЯ — КОМПАНИИ КАРТОЧКИ, а не открытой в календаре (03.10): при команде
+  // партнёра клиент AirFix получал «Giliuta: отметьте адрес…». Имени чужой
+  // компании нет под рукой — без подписи, но не чужим именем.
+  const scope = useClientsScopeOrNull();
+  const businessName = scope
+    ? (scope.tenantName ?? (scope.isActive ? (tenant.data?.name ?? null) : null))
+    : (tenant.data?.name ?? null);
   const toast = useToast();
   const create = useCreateLocationRequest();
   const cancel = useCancelLocationRequest();

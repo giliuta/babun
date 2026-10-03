@@ -8,8 +8,7 @@ import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { cardObjectId, lastVisitByObject } from "@/features/clients/object-last-visit";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
+import { useClientsCapabilities, useScopeCompany } from "@/features/clients/company-scope";
 
 // ОБЪЕКТЫ КЛИЕНТА — ОДИН КУСОК НА ДВА МЕСТА (владелец 22.09: «блок объекты —
 // нажимаю, и открывается страница, где все объекты… если у клиента 12
@@ -91,8 +90,9 @@ export function ClientObjectsSection({
   );
   // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС» (STORY-077) — у сохранённого клиента и
   // только владельцу/диспетчеру: черновику ссылку не выписать (нет id), а
-  // мастеру сервер откажет.
-  const role = useCurrentRole().data;
+  // мастеру сервер откажет. Роль — в компании КАРТОЧКИ (03.10), а не той, что
+  // открыта в календаре: при команде партнёра своя дверь пряталась.
+  const role = useScopeCompany().role;
   const canRequestAddress = !draft && (role === "owner" || role === "dispatcher");
   // Черновик нового клиента правит тот, кто его заводит; сохранённого —
   // по праву «Клиенты: Меняет» в этой компании.
