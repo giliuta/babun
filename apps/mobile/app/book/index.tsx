@@ -2153,6 +2153,10 @@ export default function BookScreen() {
   const discardNotes = () => {
     clientNote.discard();
     objectNote.discard();
+    // Заметка объекта у события — тот же черновик: без отказа здесь она
+    // уезжала в объект при уходе экрана, хотя человек нажал «Закрыть»
+    // (аудит 2026-10-03; она же считается в `notesDirty`).
+    eventObjectNote.discard();
   };
   const confirmDiscard = (onDiscard: () => void) => {
     confirmThen(
