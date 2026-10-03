@@ -145,7 +145,7 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
 
     ${noteLines.length > 0 ? `
       <section class="section">
-        <div class="eyebrow">${escapeHtml(doc.dict.notesAndPayment)}</div>
+        <div class="eyebrow">${escapeHtml(doc.dict.notesTitle)}</div>
         ${doc.payTo.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
         ${doc.notes ? `<div class="note">${escapeHtml(doc.notes)}</div>` : ""}
       </section>

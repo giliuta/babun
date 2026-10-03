@@ -183,7 +183,7 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
 
       {doc.payTo.length > 0 || doc.notes ? (
         <View style={{ marginTop: 16 }}>
-          <Text style={eyebrow}>{doc.dict.notesAndPayment}</Text>
+          <Text style={eyebrow}>{doc.dict.notesTitle}</Text>
           {[...doc.payTo, ...(doc.notes ? [doc.notes] : [])].map((line, index) => (
             <Text key={`${line}-${index}`} style={{ fontSize: 10, color: PAPER.body, marginTop: 3 }}>
               {line}

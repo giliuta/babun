@@ -54,8 +54,8 @@ export interface InvoiceDictionary {
   /** Даты под номером в шапке, коротко — как у AirFix #103: «Issued 18/09/2026». */
   issuedShort: (date: string) => string;
   dueShort: (date: string) => string;
-  /** Нижний блок бумаги: примечание и реквизиты для оплаты одним блоком. */
-  notesAndPayment: string;
+  /** Шапка блока внизу бумаги (владелец 03.10: «просто слово „Примечание“»). */
+  notesTitle: string;
   /** Номер черновику ещё не выдан: настоящий рождается на сервере в момент
    *  выставления, и показать угаданный значит однажды показать не тот. */
   numberPending: string;
@@ -146,7 +146,7 @@ const RU: InvoiceDictionary = {
   addrApartment: (value) => `кв. ${value}`,
   issuedShort: (date) => `Выставлен ${date}`,
   dueShort: (date) => `Оплатить до ${date}`,
-  notesAndPayment: "Примечание и оплата",
+  notesTitle: "Примечание",
   numberPending: "Номер присвоится при выставлении",
   paymentPurpose: (number) => `В назначении платежа укажите номер ${number}.`,
   method_cash: "Наличные",
@@ -217,7 +217,7 @@ const EN: InvoiceDictionary = {
   addrApartment: (value) => `Apt ${value}`,
   issuedShort: (date) => `Issued ${date}`,
   dueShort: (date) => `Due ${date}`,
-  notesAndPayment: "Notes & payment instructions",
+  notesTitle: "Notes",
   numberPending: "Number will be assigned on issue",
   paymentPurpose: (number) => `Please quote invoice ${number} as the payment reference.`,
   method_cash: "Cash",
