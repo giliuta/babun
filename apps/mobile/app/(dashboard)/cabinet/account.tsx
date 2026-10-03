@@ -21,6 +21,7 @@ import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import {
   signOutScopeAndWipe,
+  unsentChangesNow,
   wipeTenantScopedData,
 } from "@/lib/auth-clear";
 import { supabase } from "@/lib/supabase";
@@ -223,11 +224,16 @@ function DevicesSection() {
     }
   };
 
-  const signOutEverywhere = () => {
+  const signOutEverywhere = async () => {
+    // Очередь правок стирается вместе с кэшем — сказать об этом в том же
+    // окне, а не вторым (аудит 03.10).
+    const unsent = await unsentChangesNow();
     confirmThen(
       "Выйти со всех устройств?",
       {
-        message: "Все сессии, включая это устройство, будут завершены.",
+        message: unsent
+          ? `Все сессии, включая это устройство, будут завершены. ${unsent}`
+          : "Все сессии, включая это устройство, будут завершены.",
         confirmLabel: "Выйти везде",
         destructive: true,
       },
@@ -295,7 +301,7 @@ function DevicesSection() {
       </Pressable>
       <Divider inset={16} />
       <Pressable
-        onPress={signOutEverywhere}
+        onPress={() => void signOutEverywhere()}
         disabled={busy}
         accessibilityRole="button"
         accessibilityLabel="Выйти со всех устройств"

@@ -1,7 +1,9 @@
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { getStorage } from "@babun/shared/storage";
-import { cacheClearAll } from "@babun/shared/db/cache/sql";
+import { cacheClearAll, queueDepth } from "@babun/shared/db/cache/sql";
+import { confirmAction } from "@/lib/confirm";
 import { queryClient } from "@/lib/query-client";
+import { unsentChangesNote } from "@/lib/unsent-changes";
 import { forgetRevealedContacts } from "@/features/clients/revealed-contacts";
 import { notify } from "./notify";
 import { supabase } from "@/lib/supabase";
@@ -291,6 +293,16 @@ export function wipeLocalData(): void {
   });
 }
 
+/** The sentence about changes still waiting in the sync queue, or null when
+ *  nothing would be lost (an unreadable cache has nothing to lose either). */
+export async function unsentChangesNow(): Promise<string | null> {
+  try {
+    return unsentChangesNote(await queueDepth());
+  } catch {
+    return null;
+  }
+}
+
 /** Intentional «Выйти» — sign out FIRST, wipe only once the session is
  *  really gone. auth-js signOut() does NOT throw: on a network failure
  *  (offline is a normal mobile state) it returns { error } and KEEPS the
@@ -303,8 +315,22 @@ export function wipeLocalData(): void {
  *  `"global"`: «Выйти» on one phone revoked the account's sessions on every
  *  other device and did exactly what «Выйти со всех устройств» does. The
  *  global sign-out stays one explicit row in «Вход и безопасность»
- *  (`cabinet/account.tsx`); `sign-out-contract.test.ts` holds both. */
+ *  (`cabinet/account.tsx`); `sign-out-contract.test.ts` holds both.
+ *
+ *  UNSENT CHANGES ASK FIRST (audit 2026-10-03): the wipe takes the sync
+ *  queue with it, so a non-empty queue needs an explicit «Выйти». */
 export async function signOutAndWipe(): Promise<void> {
+  const unsent = await unsentChangesNow();
+  if (
+    unsent &&
+    !(await confirmAction("Не всё отправлено", {
+      message: unsent,
+      confirmLabel: "Выйти",
+      destructive: true,
+    }))
+  ) {
+    return;
+  }
   try {
     await signOutScopeAndWipe("local");
   } catch {
