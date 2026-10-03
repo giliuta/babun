@@ -148,12 +148,20 @@ export function SmsClientBlock({
           />
           <SelectRow
             icon={UserRound}
-            color={t.accent}
+            // «Только видит» — тише, как «Присылать SMS» над ним: живая синяя
+            // плашка обещала правку, которой нет (проверка «его глазами» 03.10).
+            color={readOnly ? t.faint : t.accent}
             plain
             title="Имя для SMS"
+            disabled={readOnly}
             accessibilityLabel={`Имя для SMS: ${smsName || fallbackName}`}
             onPress={() => nameRef.current?.focus()}
             trailing={
+              readOnly ? (
+                <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 15, color: t.sub, maxWidth: 180 }}>
+                  {smsName || fallbackName}
+                </Text>
+              ) : (
               <View
                 style={{
                   minWidth: 96,
@@ -168,11 +176,7 @@ export function SmsClientBlock({
                   backgroundColor: `${t.accent}14`,
                 }}
               >
-                {readOnly ? (
-                  <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 15, fontWeight: "600", color: t.accent, textAlign: "right" }}>
-                    {smsName || fallbackName}
-                  </Text>
-                ) : (
+                {(
                   <TextInput
                     ref={nameRef}
                     value={nameDraft ?? smsName}
@@ -194,6 +198,7 @@ export function SmsClientBlock({
                   />
                 )}
               </View>
+              )
             }
           />
         </View>
