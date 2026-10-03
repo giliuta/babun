@@ -84,9 +84,13 @@ export const SETTINGS_PREVIEW_KEYS: readonly string[] = [
   // Строки шестерёнки финансов (владелец 03.10) — тот же вид строки.
   "finance.settings_accounts",
   "finance.settings_export",
-  "finance.settings_categories",
-  "finance.settings_currency",
+  "finance.settings_trash",
+  "finance.settings_categories_income",
+  "finance.settings_categories_expense",
+  "finance.settings_categories_debts",
   "finance.settings_requisites",
+  "finance.settings_invoices",
+  "finance.settings_currency",
 ];
 
 export function hasBlockPreview(key: string): boolean {

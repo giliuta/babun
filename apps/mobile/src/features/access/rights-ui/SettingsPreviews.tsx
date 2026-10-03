@@ -3,7 +3,11 @@ import {
   Briefcase,
   Building2,
   FileSpreadsheet,
-  FolderOpen,
+  FileText,
+  HandCoins,
+  NotebookPen,
+  ReceiptText,
+  Trash2,
   Wallet,
   CalendarRange,
   ClipboardList,
@@ -196,13 +200,41 @@ export function SettingsPreview({
             onPress={onPress}
           />
         );
-      case "finance.settings_categories":
+      case "finance.settings_trash":
         return (
           <SettingsRow
-            tile={SETTINGS_TILE.orange}
-            icon={FolderOpen}
-            title="Категории"
-            sub="Доходы · Расходы · Долги"
+            tile={SETTINGS_TILE.red}
+            icon={Trash2}
+            title="Удалённые операции"
+            sub="2 операции"
+            onPress={onPress}
+          />
+        );
+      case "finance.settings_categories_income":
+        return (
+          <SettingsRow tile={SETTINGS_TILE.green} icon={HandCoins} title="Доходы" sub="2 категории" onPress={onPress} />
+        );
+      case "finance.settings_categories_expense":
+        return (
+          <SettingsRow
+            tile={SETTINGS_TILE.red}
+            icon={ReceiptText}
+            title="Расходы"
+            sub="5 категорий"
+            onPress={onPress}
+          />
+        );
+      case "finance.settings_categories_debts":
+        return (
+          <SettingsRow tile={SETTINGS_TILE.yellow} icon={NotebookPen} title="Долги" sub="Пока нет" onPress={onPress} />
+        );
+      case "finance.settings_invoices":
+        return (
+          <SettingsRow
+            tile={SETTINGS_TILE.blue}
+            icon={FileText}
+            title="Инвойсы"
+            sub="Срок оплаты 7 дней"
             onPress={onPress}
           />
         );

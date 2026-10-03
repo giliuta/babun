@@ -164,7 +164,10 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "finance.profit",
     "finance.settings_accounts",
     "finance.settings_export",
-    "finance.settings_categories",
+    "finance.settings_trash",
+    "finance.settings_categories_income",
+    "finance.settings_categories_expense",
+    "finance.settings_categories_debts",
     // «Валюта» и «Реквизиты» — права НА ВСЮ КОМПАНИЮ: скрытый календарь одной
     // команды не гасит их у всей компании (сброс писал бы `team_id: null`).
   ],

@@ -233,13 +233,21 @@ export function canEditMoneyRow(input: {
 export const FINANCE_BLOCK_KEYS: readonly string[] = [
   "finance.income",
   "finance.expense",
-  "finance.operations",
   "finance.accounts",
   "finance.debts",
   "finance.documents",
-  "finance.categories",
-  "finance.templates",
-  "finance.vat",
+  "finance.profit",
+  // Строки шестерёнки (03.10): категории, счета, ящик и бланк — тоже деньги
+  // компании на телефоне.
+  "finance.settings_accounts",
+  "finance.settings_export",
+  "finance.settings_trash",
+  "finance.settings_categories_income",
+  "finance.settings_categories_expense",
+  "finance.settings_categories_debts",
+  "finance.settings_requisites",
+  "finance.settings_invoices",
+  "finance.settings_currency",
 ];
 
 /** Первые сегменты ключей, под которыми на телефоне лежат деньги компании. */

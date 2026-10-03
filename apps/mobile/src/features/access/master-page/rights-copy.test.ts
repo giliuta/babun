@@ -41,10 +41,16 @@ const REGISTRY: AccessBlock[] = [
   block({ key: "finance.profit", area: "finance", scope: "calendar", levels: ["off", "read"], title: "Прибыль" }),
   block({ key: "finance.settings_accounts", area: "finance", scope: "calendar", title: "Счета" }),
   block({ key: "finance.settings_export", area: "finance", scope: "calendar", levels: ["off", "write"], title: "Выгрузка для бухгалтера" }),
-  block({ key: "finance.settings_categories", area: "finance", scope: "calendar", title: "Категории" }),
-  // Валюта и реквизиты — одни на аккаунт, партнёр их только видит (03.10).
+  block({ key: "finance.settings_trash", area: "finance", scope: "calendar", title: "Удалённые операции" }),
+  // Категории — по виду, как строки шестерёнки (03.10).
+  block({ key: "finance.settings_categories_income", area: "finance", scope: "calendar", title: "Доходы" }),
+  block({ key: "finance.settings_categories_expense", area: "finance", scope: "calendar", title: "Расходы" }),
+  block({ key: "finance.settings_categories_debts", area: "finance", scope: "calendar", title: "Долги" }),
+  // Валюта, реквизиты и бланк инвойса — одни на аккаунт, партнёр их только
+  // видит (03.10).
   block({ key: "finance.settings_currency", area: "finance", levels: ["off", "read"], title: "Валюта" }),
   block({ key: "finance.settings_requisites", area: "finance", levels: ["off", "read"], title: "Реквизиты" }),
+  block({ key: "finance.settings_invoices", area: "finance", levels: ["off", "read"], title: "Инвойсы" }),
   block({ key: "clients", levels: ["off", "read"], title: "Клиенты" }),
   block({ key: "clients.scope", levels: ["near", "month", "own"], title: "Ограничение по времени" }),
   // «Долг и деньги» снято 03.10: деньги идут вместе с «Историей», у которой
@@ -136,9 +142,13 @@ describe("слова прав", () => {
         "finance.profit",
         "finance.settings_accounts",
         "finance.settings_export",
-        "finance.settings_categories",
+        "finance.settings_trash",
+        "finance.settings_categories_income",
+        "finance.settings_categories_expense",
+        "finance.settings_categories_debts",
         "finance.settings_currency",
         "finance.settings_requisites",
+        "finance.settings_invoices",
         "clients",
         "clients.scope",
         "clients.history",

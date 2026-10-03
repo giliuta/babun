@@ -32,18 +32,29 @@ describe("деньги, которые стираются при понижен�
   });
 
   test("все блоки финансов в списке понижения", () => {
+    // Живые права реестра 03.10: плитки страницы и строки шестерёнки.
     for (const key of [
       "finance.income",
       "finance.expense",
-      "finance.operations",
       "finance.accounts",
       "finance.debts",
       "finance.documents",
-      "finance.categories",
-      "finance.templates",
-      "finance.vat",
+      "finance.profit",
+      "finance.settings_accounts",
+      "finance.settings_export",
+      "finance.settings_trash",
+      "finance.settings_categories_income",
+      "finance.settings_categories_expense",
+      "finance.settings_categories_debts",
+      "finance.settings_requisites",
+      "finance.settings_invoices",
+      "finance.settings_currency",
     ]) {
       assert.ok(FINANCE_BLOCK_KEYS.includes(key), key);
+    }
+    // Ключей, которых в реестре больше нет, в списке тоже нет.
+    for (const gone of ["finance.operations", "finance.categories", "finance.templates", "finance.vat"]) {
+      assert.ok(!FINANCE_BLOCK_KEYS.includes(gone), gone);
     }
   });
 });

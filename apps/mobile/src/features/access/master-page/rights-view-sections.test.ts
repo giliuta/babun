@@ -46,7 +46,10 @@ const REGISTRY: AccessBlock[] = [
   block("finance.profit", ["off", "read"], 150),
   block("finance.settings_requisites", ["off", "read", "write"], 165),
   block("finance.settings_accounts", ["off", "read", "write"], 160),
-  block("finance.settings_categories", ["off", "read", "write"], 162),
+  block("finance.settings_trash", ["off", "read", "write"], 161),
+  block("finance.settings_categories_income", ["off", "read", "write"], 162),
+  block("finance.settings_categories_expense", ["off", "read", "write"], 163),
+  block("finance.settings_categories_debts", ["off", "read", "write"], 164),
 ];
 
 const page = (group: "calendar" | "finance" | "record", open: Record<string, AccessLevel> = {}) =>
@@ -133,8 +136,15 @@ describe("страница раздела доступа — блоками вл
         ],
       },
       // Блоки шестерёнки «Финансов» — её названиями и в её порядке (03.10).
-      { title: "Деньги", keys: ["finance.settings_accounts"] },
-      { title: "Категории", keys: ["finance.settings_categories"] },
+      { title: "Деньги", keys: ["finance.settings_accounts", "finance.settings_trash"] },
+      {
+        title: "Категории",
+        keys: [
+          "finance.settings_categories_income",
+          "finance.settings_categories_expense",
+          "finance.settings_categories_debts",
+        ],
+      },
       { title: "Документы", keys: ["finance.settings_requisites"] },
     ]);
   });
@@ -165,8 +175,15 @@ describe("страница раздела доступа — блоками вл
         .filter((section) => section.title !== "Главное")
         .map((section) => [section.title, section.rows.map((row) => [row.block.key, row.level])]),
       [
-        ["Деньги", [["finance.settings_accounts", "off"]]],
-        ["Категории", [["finance.settings_categories", "off"]]],
+        ["Деньги", [["finance.settings_accounts", "off"], ["finance.settings_trash", "off"]]],
+        [
+          "Категории",
+          [
+            ["finance.settings_categories_income", "off"],
+            ["finance.settings_categories_expense", "off"],
+            ["finance.settings_categories_debts", "off"],
+          ],
+        ],
         // Положение компании — без команды, а не «закрыто» в команде.
         ["Документы", [["finance.settings_requisites", "read"]]],
         ["Общие", [["finance.settings_currency", "read"]]],

@@ -130,7 +130,6 @@ export const FINANCE_SETTINGS_BLOCKS: readonly SectionBlock[] = [
     key: "categories",
     title: "Категории",
     keys: [
-      "finance.settings_categories",
       "finance.settings_categories_income",
       "finance.settings_categories_expense",
       "finance.settings_categories_debts",
