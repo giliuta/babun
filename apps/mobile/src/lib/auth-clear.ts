@@ -389,7 +389,18 @@ export async function handleAuthEvent(
     await suspendAllBabunNotifications();
     return;
   }
-  if (event !== "SIGNED_IN" && event !== "INITIAL_SESSION") return;
+  // PASSWORD_RECOVERY — тоже вход (аудит 03.10): ссылка сброса из письма
+  // заводит сессию своего человека (`verifyOtp` шлёт это событие, а не
+  // SIGNED_IN). Без этой строки вход по ссылке B поверх данных A,
+  // оставшихся после выхода «со всех устройств» на другом телефоне, сверку
+  // человека пропускал — и B видел кэш A.
+  if (
+    event !== "SIGNED_IN" &&
+    event !== "INITIAL_SESSION" &&
+    event !== "PASSWORD_RECOVERY"
+  ) {
+    return;
+  }
   const next = session?.user?.id;
   if (!next) return;
   const storage = getStorage();

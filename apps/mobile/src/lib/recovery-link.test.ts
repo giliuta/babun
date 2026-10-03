@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
-import { parseRecoveryLink } from "./recovery-link";
+import { fileURLToPath } from "node:url";
+import { parseRecoveryLink, recoveryLinkKey } from "./recovery-link";
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 describe("password recovery deep links", () => {
   test("parses legacy session tokens from a custom-scheme fragment", () => {
@@ -34,5 +39,31 @@ describe("password recovery deep links", () => {
       parseRecoveryLink("babun://reset-password#access_token=missing-refresh"),
       null,
     );
+  });
+});
+
+describe("ссылка сброса меняет пароль своему человеку (аудит 03.10)", () => {
+  test("отпечаток ссылки: та же — тот же, другая — другой", () => {
+    const a = parseRecoveryLink("babun://reset-password#token_hash=aaa")!;
+    const b = parseRecoveryLink("babun://reset-password?token_hash=bbb")!;
+    assert.equal(recoveryLinkKey(a), recoveryLinkKey(parseRecoveryLink("babun://reset-password?token_hash=aaa")!));
+    assert.notEqual(recoveryLinkKey(a), recoveryLinkKey(b));
+  });
+
+  test("живая сессия не заменяет проверку ссылки", () => {
+    const screen = readFileSync(resolve(here, "../../app/(auth)/reset-password.tsx"), "utf8");
+    const hydrate = screen.slice(screen.indexOf("async function hydrate()"), screen.indexOf("void hydrate();"));
+    const firstSession = hydrate.indexOf("getSession()");
+    const parse = hydrate.indexOf("parseRecoveryLink(");
+    assert.ok(parse >= 0, "ссылка читается");
+    assert.ok(firstSession > parse, "сессия спрашивается только после ссылки");
+    assert.ok(hydrate.indexOf("verifiedRecoveryLinks.has(key)") < firstSession);
+  });
+
+  test("вход по ссылке сброса проходит сверку человека", () => {
+    const authClear = readFileSync(resolve(here, "auth-clear.ts"), "utf8");
+    const handler = authClear.slice(authClear.indexOf("export async function handleAuthEvent("));
+    const guard = handler.slice(0, handler.indexOf("const next = session?.user?.id;"));
+    assert.match(guard, /event !== "PASSWORD_RECOVERY"/);
   });
 });

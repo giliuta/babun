@@ -14,8 +14,11 @@ import {
 import { mapAuthError } from "@/components/auth/authErrors";
 import { useAuthTheme } from "@/components/auth/theme";
 import { signOutScopeAndWipe } from "@/lib/auth-clear";
-import { parseRecoveryLink } from "@/lib/recovery-link";
+import { parseRecoveryLink, recoveryLinkKey } from "@/lib/recovery-link";
 import { supabase } from "@/lib/supabase";
+
+/** Ссылки восстановления, уже проверенные в этом запуске приложения. */
+const verifiedRecoveryLinks = new Set<string>();
 
 // Set-new-password screen — the exit of the reset flow. The recovery deep link
 // (babun://reset-password#access_token=…) establishes a recovery session here;
@@ -37,17 +40,29 @@ export default function ResetPasswordScreen() {
     let active = true;
     async function hydrate() {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session) {
-          if (active) setReady(true);
-          return;
-        }
+        // ЧЕЙ ПАРОЛЬ — РЕШАЕТ ССЫЛКА, А НЕ ТОТ, КТО СЕЙЧАС ВОШЁЛ (аудит 03.10).
+        // Раньше при живой сессии ссылка не читалась вовсе: на телефоне вошёл
+        // A, открыли письмо сброса аккаунта B — и «Сохранить пароль» менял
+        // пароль A, выкидывал его и стирал его данные, а ссылка B оставалась
+        // непотраченной. Просроченная ссылка у вошедшего тоже показывала
+        // «Новый пароль». Теперь ссылка проверяется всегда; повторно — только
+        // та, что уже проверена в этом запуске (одноразовую второй раз сервер
+        // не примет, а сессия на телефоне уже её).
         const link = url ?? (await Linking.getInitialURL());
         const credential = parseRecoveryLink(link);
         if (!credential) {
           if (active) setExpired(true);
+          return;
+        }
+        const key = recoveryLinkKey(credential);
+        if (verifiedRecoveryLinks.has(key)) {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (active) {
+            if (session) setReady(true);
+            else setExpired(true);
+          }
           return;
         }
         const { error: recoveryError } =
@@ -60,6 +75,7 @@ export default function ResetPasswordScreen() {
                 type: "recovery",
                 token_hash: credential.tokenHash,
               });
+        if (!recoveryError) verifiedRecoveryLinks.add(key);
         if (active) {
           if (recoveryError) setExpired(true);
           else setReady(true);

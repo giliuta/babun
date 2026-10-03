@@ -30,3 +30,10 @@ export function parseRecoveryLink(
     return null;
   }
 }
+
+/** Отпечаток ссылки: одна и та же ссылка — один ключ, разные — разные. */
+export function recoveryLinkKey(credential: RecoveryLinkCredential): string {
+  return credential.kind === "session"
+    ? `session:${credential.refreshToken}`
+    : `hash:${credential.tokenHash}`;
+}
