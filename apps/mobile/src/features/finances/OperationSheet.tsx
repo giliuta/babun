@@ -263,6 +263,11 @@ export function OperationSheet({
   // тот при правке взводится гидрацией, а здесь нужен именно жест человека —
   // только он разрешает пересчитать операцию по сегодняшней ставке.
   const [vatRetouched, setVatRetouched] = useState(false);
+  // СТРОКА VAT ОТКРЫТА (владелец 03.10: «расход, доход — всё время без VAT;
+  // отдельная кнопочка, которая включает, — спрятать: справа у суммы,
+  // нажимаешь — вылазит»). Новая операция — без налога и без строки; у
+  // старой с налогом строка открыта сразу.
+  const [vatShown, setVatShown] = useState(false);
   // «Умный дефолт» счёта: пока диспетчер сам не трогал чипы счёта,
   // счёт следует за командой операции (счета строго per-team).
   const [accountTouched, setAccountTouched] = useState(false);
@@ -302,6 +307,7 @@ export function OperationSheet({
         transaction.vat_mode ?? (transaction.vat_amount ? "inclusive" : "none");
       setVatMode(txVat);
       setVatTouched(true);
+      setVatShown(txVat !== "none");
       setAmount(
         String(
           inputFromGross(
@@ -336,6 +342,8 @@ export function OperationSheet({
     } else {
       setType(startType);
       setVatTouched(false);
+      setVatMode("none");
+      setVatShown(false);
       // Остаток долга подставлен, но не заперт: отдать можно и часть — тогда
       // долг останется висеть на разницу, как и должен.
       setAmount(debtPayment ? String(debtPayment.amount) : "");
@@ -532,25 +540,23 @@ export function OperationSheet({
     accounts,
   ]);
 
-  // Пока диспетчер не нажал клавишу сам, режим идёт за настройкой счёта.
-  // Зависимость — ПОЛЯ настройки, а не сам объект: effectiveVatSettings
-  // собирает новый объект на каждый рендер, и эффект зациклился бы.
-  const vatModeSetting = vat.mode;
-  const vatRateSetting = vat.rate;
-  useEffect(() => {
-    if (!visible || vatTouched || isEdit) return;
-    // У расхода «Плюс VAT» по умолчанию не ставится (`defaultOperationVatMode`).
-    setVatMode(
-      defaultOperationVatMode(
-        defaultTxVatMode({
-          mode: vatModeSetting,
-          rate: vatRateSetting,
-          exemptionNote: null,
-        }),
-        type,
-      ),
-    );
-  }, [visible, vatTouched, isEdit, vatModeSetting, vatRateSetting, type]);
+  // ОПЕРАЦИЯ БЕЗ VAT, ПОКА VAT НЕ ОТКРЫЛИ (владелец 03.10: «всё время без
+  // VAT»). Открыли «+ VAT» — режим по настройке (у расхода «Плюс VAT» не
+  // ставится, `defaultOperationVatMode`), а если настройка «без налога» —
+  // «внутри цены»: сумма с чека остаётся той, что ушла.
+  const openVat = () => {
+    const base = defaultTxVatMode({ mode: vat.mode, rate: vat.rate, exemptionNote: null });
+    setVatMode(base === "none" ? "inclusive" : defaultOperationVatMode(base, type));
+    setVatShown(true);
+    setVatTouched(true);
+    setVatRetouched(true);
+  };
+  const closeVat = () => {
+    setVatMode("none");
+    setVatShown(false);
+    setVatTouched(true);
+    setVatRetouched(true);
+  };
 
   // СТАВКА ОПЕРАЦИИ — ЕЁ СНИМОК, а не сегодняшняя настройка. Страница НДС
   // обещает: «поднимете ставку завтра — прошлые отчёты не изменятся», и
@@ -705,12 +711,17 @@ export function OperationSheet({
       // РЕЖИМ НДС НАЗЫВАЕМ, ТОЛЬКО ЕСЛИ ЕГО ЗНАЕМ (`operation-vat.ts`): пустая
       // колонка значит «считай сам», а явное 'none' сервер уважает сильнее
       // настроек компании.
-      const vatModeToSend = vatModeForDraft({
-        mode: vatMode,
-        chosen: vatTouched,
-        canReadSettings: isOwner,
-        settingsKnown: vatSettingsKnown,
-      });
+      // Новая операция называет серверу ровно то, что на экране: без
+      // открытого «+ VAT» — явное «без налога» (владелец 03.10), у кого бы ни
+      // была форма. Правка — по прежним правилам (`vatModeForDraft`).
+      const vatModeToSend = !isEdit
+        ? vatMode
+        : vatModeForDraft({
+            mode: vatMode,
+            chosen: vatTouched,
+            canReadSettings: isOwner,
+            settingsKnown: vatSettingsKnown,
+          });
       const vatSnapshot = vatSnapshotForDraft({
         mode: vatModeToSend,
         rate: opVatRate,
@@ -1171,19 +1182,32 @@ export function OperationSheet({
             клавиатуру»). Автофокус на сумме закрывал половину формы ещё до
             того, как человек посмотрел на неё: категория, счёт и заметка
             уезжали под клавиатуру, и первым делом приходилось её убирать. */}
-        {/* 4. СУММА И ПОД НЕЙ «ИТОГО» С КЛАВИШЕЙ VAT — ТА ЖЕ СТРОКА, ЧТО В
-            «ИТОГО» ЗАПИСИ (владелец 03.10: «сделал бы точно такую же
-            кнопочку, как в сумме итого в записях клиента»). Клавиша «VAT»
-            переключает «сверху цены → внутри цены → без налога», ставка —
-            цифрами (запоминается, как в «Итого»), рядом налог и «К оплате».
+        {/* 4. СУММА. VAT СПРЯТАН (владелец 03.10: «VAT используется крайне
+            редко — спрятать; справа у суммы кнопочка, нажимаешь — вылазит»):
+            в шапке блока справа «+ VAT»; открытый — строка «Итого» записи
+            (клавиша «VAT»: сверху → внутри → без налога, ставка цифрами, налог,
+            «К оплате»), а в шапке «Без VAT» снимает налог и прячет строку.
             Видна только тем, кто работает с налогом (`vatVisible`). */}
         <AmountBlock
           value={amount}
           onChange={setAmount}
           accessibilityLabel="Сумма операции"
           color={isExpense ? th.danger : th.success}
+          action={
+            vatVisible
+              ? {
+                  label: vatShown ? "Без VAT" : "+ VAT",
+                  pill: true,
+                  onPress: () => {
+                    haptics.tap();
+                    if (vatShown) closeVat();
+                    else openVat();
+                  },
+                }
+              : undefined
+          }
           footer={
-            vatVisible ? (
+            vatVisible && vatShown ? (
               <PayRow
                 total={vatBreakdown.gross}
                 vat={{

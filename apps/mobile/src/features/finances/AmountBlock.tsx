@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { Text, TextInput, View } from "react-native";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useThemeColors } from "@/theme/colors";
@@ -24,6 +24,7 @@ export function AmountBlock({
   accessibilityLabel,
   hint,
   footer,
+  action,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -36,11 +37,13 @@ export function AmountBlock({
   /** Под числом, внутри того же блока: у операции — строка «Итого» с
    *  клавишей VAT, как в «Итого» записи (владелец 03.10). */
   footer?: ReactNode;
+  /** Действие в правом краю шапки блока (у операции — «+ VAT»). */
+  action?: ComponentProps<typeof SectionCard>["action"];
 }) {
   const t = useThemeColors();
   const currencySymbol = useMoney().symbol;
   return (
-    <SectionCard title={title} dense>
+    <SectionCard title={title} dense action={action}>
       {/* КЕГЛЬ — САМИМ СТИЛЕМ, А НЕ КЛАССОМ, И БЕЗ ФИКСИРОВАННОЙ ВЫСОТЫ.
           Ноль-подсказка выходил обрезанным сверху — «€ ᴗ» вместо «€ 0». Первая
           попытка (жёсткая высота поля) не помогла: в этом стеке `text-[28px]`
