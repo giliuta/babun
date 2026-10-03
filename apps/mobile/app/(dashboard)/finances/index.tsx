@@ -65,6 +65,7 @@ import {
   mergeByRecord,
   recordRows,
   rowMatchesQuery,
+  splitDebtsByPeriod,
   type RecordRow,
 } from "@/features/finances/record-rows";
 import { debtRows, manualDebtRows } from "@/features/finances/debt-rows";
@@ -303,9 +304,9 @@ function FinancesContent() {
   const documentsView = view === "documents";
   // «Без команды» — не команда: долги под этим чипом отбираются на экране
   // (`team_id` пуст), а у хука берётся вся компания тем же ключом.
-  // ДОЛГ — ОСТАТОК НА КОНЕЦ ПЕРИОДА, А НЕ ПОТОК ЗА ПЕРИОД (аудит 2026-09-30):
-  // 1 октября неоплаченная работа 27 сентября пропадала из «Долгов», хотя
-  // клиент всё ещё должен. Нижней границы у долгов нет — только верхняя.
+  // Долги читаются без нижней границы: в списке и на плитке — долги периода
+  // (владелец 03.10: «текущий месяц, а в долгах — сентябрь»), а про более
+  // ранние список говорит строчкой внизу — для неё их и нужно знать.
   const debtsQuery = useDebts(DEBTS_SINCE, period.to, {
     teamId: scope === NO_TEAM ? null : scope,
   });
@@ -626,15 +627,20 @@ function FinancesContent() {
   // должны МНЕ: долги записей плюс ручные входящие. «Я должен» в плитку не
   // подмешивается: одни деньги придут, другие уйдут, и общая сумма не значила
   // бы ничего (владелец 2026-09-10 — две стороны, переключатель между ними).
+  // ЗА ВЫБРАННЫЙ ПЕРИОД (владелец 03.10): плитка считает те же строки, что
+  // список под ней (`splitDebtsByPeriod`), — долги, повисшие в периоде.
   const manualIncomingDebt = useMemo(
     () =>
-      manualDebtRows(
-        debts,
-        debtPaid,
-        { clients, categories },
-        { today: businessToday, direction: "incoming" },
-      ).reduce((sum, r) => sum + r.amount, 0),
-    [debts, debtPaid, clients, categories, businessToday],
+      splitDebtsByPeriod(
+        manualDebtRows(
+          debts,
+          debtPaid,
+          { clients, categories },
+          { today: businessToday, direction: "incoming" },
+        ),
+        period.from,
+      ).shown.reduce((sum, r) => sum + r.amount, 0),
+    [debts, debtPaid, clients, categories, businessToday, period.from],
   );
 
   const totals = useMemo(() => {
@@ -659,6 +665,8 @@ function FinancesContent() {
       if (a.status !== "completed" && !past) continue;
       if (a.status === "cancelled") continue;
       if (a.date > period.to) continue;
+      // Долги — за выбранный период, как список под плиткой (владелец 03.10).
+      if (a.date < period.from) continue;
       // Тем же правилом, что лента долгов (`debtRows`): на «Без команды»
       // плитка не брала ни одной записи, а лента — все записи компании.
       if (!inTeamScope(a.team_id, scope)) continue;
@@ -1544,8 +1552,7 @@ function FinancesContent() {
             teamId={scope}
             fromDate={DEBTS_SINCE}
             toDate={period.to}
-            // Остаток без нижней границы — старые долги под подписью
-            // «С прошлых периодов» (владелец 03.10).
+            // В списке — долги периода, про ранние — строчка внизу (03.10).
             periodFrom={period.from}
             todayYmd={businessToday}
             invoicedAppointmentIds={invoicedAppointments}

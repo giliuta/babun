@@ -16,7 +16,7 @@ import { useThemeColors } from "@/theme/colors";
 import { humanDayYear } from "@/features/appointments/helpers";
 import { PanelHeader } from "./PanelHeader";
 import { RecordRowView, type RecordRowTone } from "./RecordRow";
-import { firstEarlierDay, rowsNet, type RecordRow } from "./record-rows";
+import { rowsNet, type RecordRow } from "./record-rows";
 
 // РАЗРЕЗ ДЕНЕГ РАСКРЫВАЕТСЯ НА МЕСТЕ, ПОД ПЛИТКАМИ (владелец 2026-09-09:
 // «не надо делать вообще отдельную страницу — оно должно быть внизу, под
@@ -38,7 +38,7 @@ export function RecordRowsPanel({
   countEveryTone,
   refreshControl,
   onOpenRecord,
-  periodFrom,
+  footnote,
 }: {
   rows: RecordRow[];
   /** Эйбрау над списком. Без него список идёт голым: заголовок рисует хозяин
@@ -61,10 +61,9 @@ export function RecordRowsPanel({
   countEveryTone?: boolean;
   refreshControl?: ReactElement<RefreshControlProps>;
   onOpenRecord: (row: RecordRow) => void;
-  /** Начало выбранного периода — у остатков (долги), которые копятся без
-   *  нижней границы: над первым днём раньше него встаёт подпись «С прошлых
-   *  периодов» (владелец 03.10). У потоков (доход, расход) его нет. */
-  periodFrom?: string;
+  /** Тихая строчка под списком (долги: «есть и за прошлые периоды», без
+   *  сумм — владелец 03.10). Только слова, не кнопка. */
+  footnote?: string;
 }) {
   const t = useThemeColors();
 
@@ -87,11 +86,6 @@ export function RecordRowsPanel({
       data,
     }));
   }, [rows, countEveryTone]);
-
-  const earlierDay = firstEarlierDay(
-    sections.map((section) => section.title),
-    periodFrom,
-  );
 
   const sectionHeader = (section: { title: string; net: number }) => {
     // Ноль движения — не приход: цвет здесь означает направление денег, а у
@@ -117,40 +111,25 @@ export function RecordRowsPanel({
     // ДЕНЬ — ПОДПИСЬЮ НАД ПЛАШКАМИ, а не серой полосой (владелец 03.10,
     // вариант 2: как день над записями в «Истории» клиента).
     return (
-      <View>
-        {section.title === earlierDay ? (
-          // Долг — остаток: сентябрьский неоплаченный в октябре всё ещё долг.
-          // Подпись говорит, почему он стоит под «Текущим месяцем».
-          <View className="px-4 pt-5">
-            <Text
-              maxFontSizeMultiplier={1.3}
-              className="text-[13px] font-semibold"
-              style={{ color: t.ink }}
-            >
-              С прошлых периодов
-            </Text>
-          </View>
-        ) : null}
-        <View className="flex-row items-center justify-between px-4 pb-1.5 pt-3">
-          <Text
-            className="text-xs font-semibold uppercase tracking-wider"
-            style={{ color: t.sub }}
-          >
-            {/* С годом — разделитель дня (владелец 03.10). */}
-            {humanDayYear(section.title)}
-          </Text>
-          {/* День без пришедших и ушедших денег (одни долги, перевод между
+      <View className="flex-row items-center justify-between px-4 pb-1.5 pt-3">
+        <Text
+          className="text-xs font-semibold uppercase tracking-wider"
+          style={{ color: t.sub }}
+        >
+          {/* С годом — разделитель дня (владелец 03.10). */}
+          {humanDayYear(section.title)}
+        </Text>
+        {/* День без пришедших и ушедших денег (одни долги, перевод между
             своими счетами) итога не печатает: серый «€0» над долгом €200
             читался как «денег ноль при долге» — число без смысла. */}
-          {netSign === 0 && !countEveryTone ? null : (
-            <Text
-              className="text-xs font-semibold"
-              style={{ color: dayColor, fontVariant: ["tabular-nums"] }}
-            >
-              {formatEUR(section.net)}
-            </Text>
-          )}
-        </View>
+        {netSign === 0 && !countEveryTone ? null : (
+          <Text
+            className="text-xs font-semibold"
+            style={{ color: dayColor, fontVariant: ["tabular-nums"] }}
+          >
+            {formatEUR(section.net)}
+          </Text>
+        )}
       </View>
     );
   };
@@ -172,6 +151,17 @@ export function RecordRowsPanel({
           subtitle={emptySubtitle}
           action={emptyAction}
         />
+      }
+      ListFooterComponent={
+        footnote ? (
+          <Text
+            maxFontSizeMultiplier={1.3}
+            className="px-4 pt-3 text-[13px]"
+            style={{ color: t.faint }}
+          >
+            {footnote}
+          </Text>
+        ) : null
       }
       contentContainerStyle={{ paddingBottom: 96 }}
       renderSectionHeader={({ section }) => sectionHeader(section)}

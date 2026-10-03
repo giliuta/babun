@@ -538,13 +538,16 @@ export function mergeByRecord(rows: readonly RecordRow[]): RecordRow[] {
   });
 }
 
-/** ПЕРВЫЙ ДЕНЬ «С ПРОШЛЫХ ПЕРИОДОВ» (владелец 03.10: «текущий месяц, а в
- *  долгах — сентябрь»). Долг — остаток, а не поток: неоплаченная работа
- *  27 сентября 1 октября не исчезает. Чтобы это читалось, над первым днём
- *  раньше начала периода встаёт подпись. Дни идут от новых к старым; `null` —
- *  все долги внутри периода (подписи нет). */
-export function firstEarlierDay(days: readonly string[], periodFrom: string | null | undefined): string | null {
-  if (!periodFrom) return null;
-  return days.find((day) => day < periodFrom) ?? null;
+/** ДОЛГИ — ЗА ВЫБРАННЫЙ ПЕРИОД (владелец 03.10: «текущий месяц, а в долгах —
+ *  сентябрь… не показывай все суммы, я сам найду»). В списке и на плитке —
+ *  долги, повисшие в периоде; про более ранние — одна строчка внизу, без
+ *  сумм (`hasEarlier`). Без начала периода — всё как есть. */
+export function splitDebtsByPeriod<T extends { date: string }>(
+  rows: readonly T[],
+  periodFrom: string | null | undefined,
+): { shown: T[]; hasEarlier: boolean } {
+  if (!periodFrom) return { shown: [...rows], hasEarlier: false };
+  const shown = rows.filter((row) => row.date >= periodFrom);
+  return { shown, hasEarlier: shown.length < rows.length };
 }
 

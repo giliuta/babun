@@ -10,6 +10,7 @@ import { useThemeColors } from "@/theme/colors";
 import { panelCount } from "./PanelHeader";
 import { RecordRowsPanel } from "./RecordRowsPanel";
 import { debtRows, manualDebtRows, mergeDebtRows } from "./debt-rows";
+import { splitDebtsByPeriod } from "./record-rows";
 import type { RecordRow } from "./record-rows";
 import { inTeamScope } from "./team-scope";
 import { financesFrom } from "@/features/appointments/return-to";
@@ -84,7 +85,8 @@ export function DebtorsList({
   onOpenDocuments?: () => void;
   /** Pull-to-refresh хозяина экрана (U86) — один жест на все панели. */
   refreshControl?: ReactElement<RefreshControlProps>;
-  /** Начало выбранного периода: долги старше — под «С прошлых периодов». */
+  /** Начало выбранного периода: в списке — долги периода, про более ранние
+   *  — строчка внизу без сумм (владелец 03.10). */
   periodFrom?: string;
 }) {
   const t = useThemeColors();
@@ -140,6 +142,12 @@ export function DebtorsList({
         return a.key < b.key ? 1 : -1;
       }),
     [rows],
+  );
+
+  // В списке — долги периода; про ранние — строчка внизу (владелец 03.10).
+  const { shown, hasEarlier } = useMemo(
+    () => splitDebtsByPeriod(sorted, periodFrom),
+    [sorted, periodFrom],
   );
 
   // Деньги не пропали — они переехали в «Документы». Говорим об этом ТОЛЬКО
@@ -227,7 +235,10 @@ export function DebtorsList({
   const sideChips = (
     <>
       {sideButton("incoming")}
-      <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 13, color: t.separator }}>
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={{ fontSize: 13, color: t.separator }}
+      >
         ·
       </Text>
       {sideButton("outgoing")}
@@ -242,8 +253,8 @@ export function DebtorsList({
       // взята та же: дни с итогом, те же швы, тот же эйбрау. Одно «ВСЕГО»
       // сверху отвечало на вопрос, которого к списку не задают, — а «когда это
       // повисло» пряталось в подписи строки.
-      rows={sorted}
-      title={panelCount("Долги", sorted.length)}
+      rows={shown}
+      title={panelCount("Долги", shown.length)}
       tone="debt"
       headerRight={sideChips}
       // Итог дня складывает долги: список однороден, и без этого над каждым
@@ -263,7 +274,7 @@ export function DebtorsList({
       // владелец 15.09): дверь в «Документы» — плитка над списком.
       refreshControl={refreshControl}
       onOpenRecord={openRow}
-      periodFrom={periodFrom}
+      footnote={hasEarlier ? "Есть долги и за прошлые периоды" : undefined}
     />
   );
 }

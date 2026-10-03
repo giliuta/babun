@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import {
-  firstEarlierDay,
+  splitDebtsByPeriod,
   accountsLine,
   debtAge,
   mergeByRecord,
@@ -574,18 +574,23 @@ describe("итог дня со склеенной записью", () => {
   });
 });
 
-describe("долги: подпись «С прошлых периодов» (владелец 03.10)", () => {
-  test("над первым днём раньше начала периода", () => {
-    assert.equal(firstEarlierDay(["2026-10-01", "2026-09-25", "2026-09-17"], "2026-10-01"), "2026-09-25");
+describe("долги — за выбранный период, про ранние — строчкой (владелец 03.10)", () => {
+  const rows = [{ date: "2026-10-01" }, { date: "2026-09-25" }, { date: "2026-09-17" }];
+  test("в списке только долги периода, ранние отмечены", () => {
+    const split = splitDebtsByPeriod(rows, "2026-10-01");
+    assert.deepEqual(split.shown.map((r) => r.date), ["2026-10-01"]);
+    assert.equal(split.hasEarlier, true);
   });
-  test("все долги в периоде — подписи нет", () => {
-    assert.equal(firstEarlierDay(["2026-10-03", "2026-10-01"], "2026-10-01"), null);
+  test("все в периоде — строчки нет", () => {
+    assert.equal(splitDebtsByPeriod([{ date: "2026-10-03" }], "2026-10-01").hasEarlier, false);
   });
-  test("все долги старше периода — подпись над первым же днём", () => {
-    assert.equal(firstEarlierDay(["2026-09-25"], "2026-10-01"), "2026-09-25");
+  test("в периоде пусто, ранние есть — пустой список и строчка", () => {
+    const split = splitDebtsByPeriod([{ date: "2026-09-25" }], "2026-10-01");
+    assert.equal(split.shown.length, 0);
+    assert.equal(split.hasEarlier, true);
   });
-  test("без начала периода — подписи нет", () => {
-    assert.equal(firstEarlierDay(["2026-09-25"], null), null);
+  test("без начала периода — всё как есть", () => {
+    assert.equal(splitDebtsByPeriod(rows, null).shown.length, 3);
   });
 });
 
