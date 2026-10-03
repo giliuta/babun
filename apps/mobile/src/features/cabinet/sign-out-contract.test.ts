@@ -39,4 +39,13 @@ describe("выход из аккаунта", () => {
     assert.doesNotMatch(account, /\bsignOutAndWipe\b/);
     assert.match(account, /await signOutScopeAndWipe\("global"\)/);
   });
+
+  test("«Выйти из аккаунта» в Кабинете всегда спрашивает (аудит 03.10)", () => {
+    const cabinet = read("../../../app/(dashboard)/cabinet/index.tsx");
+    assert.match(cabinet, /onPress=\{\(\) => void confirmAndSignOut\(\)\}/);
+    const body = functionBody(read("../../lib/auth-clear.ts"), "export async function confirmAndSignOut()");
+    assert.match(body, /confirmAction\("Выйти из аккаунта\?"/);
+    assert.match(body, /signOutScopeAndWipe\("local"\)/);
+    assert.doesNotMatch(body, /"global"/);
+  });
 });

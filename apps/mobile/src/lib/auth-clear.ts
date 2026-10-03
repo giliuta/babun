@@ -19,6 +19,7 @@ import { sweepQueryCacheOnSwitch } from "@/lib/switch-cache-sweep";
 import { settleClaimDebt } from "@/lib/claim-catch-up";
 import { notificationsForWipe } from "@/lib/wipe-plan";
 import {
+  babunNotificationRegistrySnapshot,
   clearAllBabunNotifications,
   suspendAllBabunNotifications,
 } from "@/lib/notifications";
@@ -335,6 +336,34 @@ export async function signOutAndWipe(): Promise<void> {
   ) {
     return;
   }
+  try {
+    await signOutScopeAndWipe("local");
+  } catch {
+    notify(
+      "Не удалось выйти",
+      "Проверьте соединение и попробуйте ещё раз.",
+    );
+  }
+}
+
+/** «ВЫЙТИ ИЗ АККАУНТА» В КАБИНЕТЕ — ВСЕГДА С ВОПРОСОМ (аудит Кабинета 03.10).
+ *  Выход срабатывал с одного тапа и стирал с телефона напоминания «Напомнить»
+ *  — они живут только здесь и после входа не вернутся. Вопрос один: в нём же
+ *  и про неотправленные правки, второго окна нет. Остальные выходы
+ *  («Вы больше не состоите…», чужое приглашение) зовут `signOutAndWipe`. */
+export async function confirmAndSignOut(): Promise<void> {
+  const unsent = await unsentChangesNow();
+  const parts = ["Выход — только на этом телефоне."];
+  if (babunNotificationRegistrySnapshot().length > 0) {
+    parts.push("Напоминания, поставленные на этом телефоне, удалятся.");
+  }
+  if (unsent) parts.push(unsent);
+  const ok = await confirmAction("Выйти из аккаунта?", {
+    message: parts.join(" "),
+    confirmLabel: "Выйти",
+    destructive: true,
+  });
+  if (!ok) return;
   try {
     await signOutScopeAndWipe("local");
   } catch {

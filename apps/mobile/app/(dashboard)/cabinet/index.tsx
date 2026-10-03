@@ -56,7 +56,7 @@ import { PersonCard } from "@/features/cabinet/PersonCard";
 import { TariffRow } from "@/features/tariffs/TariffRow";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { useFinanceSettingLevel } from "@/features/finances/use-finance-settings";
-import { signOutAndWipe } from "@/lib/auth-clear";
+import { confirmAndSignOut } from "@/lib/auth-clear";
 import { useThemeColors } from "@/theme/colors";
 
 export default function CabinetHome() {
@@ -177,13 +177,14 @@ export default function CabinetHome() {
         </SectionCard>
 
         {/* ВЫХОД — ОДИН НА ПРИЛОЖЕНИЕ И ТОЛЬКО С ЭТОГО УСТРОЙСТВА
-            (`signOutAndWipe` → `scope: "local"`). Выход со всех устройств —
+            (`confirmAndSignOut` → `scope: "local"`, всегда с вопросом —
+            стираются напоминания этого телефона). Выход со всех устройств —
             явной строкой в «Вход и безопасность». */}
         <SectionCard className="mt-4">
           <ActionRow
             label="Выйти из аккаунта"
             tone="danger"
-            onPress={() => void signOutAndWipe()}
+            onPress={() => void confirmAndSignOut()}
           />
         </SectionCard>
       </ScrollView>
