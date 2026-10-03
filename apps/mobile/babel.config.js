@@ -18,11 +18,14 @@
 //     that bundle resolves react-native directly instead of via the barrel.
 //     App code is the only place `className` exists, so excluding
 //     node_modules costs nothing.
+//   * scripts/i18n/babel-plugin.js translates the UI: every Russian literal
+//     of app/, src/ and packages/shared goes through the dictionary of the
+//     language chosen in Кабинет → «Языки». It limits itself to those folders.
 module.exports = function (api) {
   api.cache(true);
   return {
     presets: ["babel-preset-expo"],
-    plugins: ["react-native-reanimated/plugin"],
+    plugins: [require.resolve("./scripts/i18n/babel-plugin"), "react-native-reanimated/plugin"],
     overrides: [
       {
         exclude: /node_modules/,
