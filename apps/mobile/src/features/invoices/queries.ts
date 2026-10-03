@@ -74,10 +74,17 @@ export interface NextInvoiceNumber {
  * Серия — у юрлица: у каждого свои INV, REC и CN, команда в номер не входит.
  * `companyId` пусто — основное юрлицо.
  */
-export function useNextInvoiceSeries(year: number, companyId?: string | null, enabled = true) {
+export function useNextInvoiceSeries(
+  year: number,
+  companyId?: string | null,
+  enabled = true,
+  /** Серия какого документа: у юрлица свои INV и RC (чек — 04.10, «номер
+   *  чека — так же, как номер инвойса»). */
+  docType: "invoice" | "receipt" = "invoice",
+) {
   const tenantId = useTenantId();
   return useQuery({
-    queryKey: ["invoices", tenantId, "next-number", year, companyId ?? null],
+    queryKey: ["invoices", tenantId, "next-number", year, companyId ?? null, docType],
     // Партнёру без «Документы: Выставляет» сервер номер не показывает
     // (`peek_document_number` отказывает) — такой экран не спрашивает.
     enabled: !!tenantId && enabled,
@@ -86,7 +93,7 @@ export function useNextInvoiceSeries(year: number, companyId?: string | null, en
     queryFn: async (): Promise<NextInvoiceNumber | null> => {
       const { data, error } = await supabase.rpc("peek_document_number", {
         p_legal_entity_id: companyId ?? null,
-        p_doc_type: "invoice",
+        p_doc_type: docType,
         p_year: year,
       });
       if (error) throw new Error(error.message);
@@ -119,10 +126,15 @@ export function useSetInvoiceNextNumber() {
     // `InvoiceNumberRow`) — общее «Проверьте соединение» поверх неё врало бы
     // про связь (аудит 017, 03.10).
     meta: { errorHandled: true },
-    mutationFn: async (input: { companyId: string; year: number; number: number }) => {
+    mutationFn: async (input: {
+      companyId: string;
+      year: number;
+      number: number;
+      docType?: "invoice" | "receipt";
+    }) => {
       const { error } = await supabase.rpc("set_document_series_start", {
         p_legal_entity_id: input.companyId,
-        p_doc_type: "invoice",
+        p_doc_type: input.docType ?? "invoice",
         p_year: input.year,
         p_next_number: input.number,
       });

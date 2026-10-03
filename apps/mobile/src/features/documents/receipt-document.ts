@@ -10,7 +10,9 @@ import {
   type ServiceNameLookup,
 } from "@babun/shared/local/finance/invoice-generator";
 import { formatInvoiceMoney } from "@/features/invoices/format";
-import { formatQty } from "@/features/invoices/document";
+import { clientSnapshotParty, formatQty } from "@/features/invoices/document";
+import { invoiceDictionary } from "@/features/invoices/dictionary";
+import { parseInvoiceClientSnapshot } from "@babun/shared/local/finance/invoice-ledger";
 import type { InvoiceLanguage } from "@/features/invoices/dictionary";
 import { RECEIPT_WORDS, type ReceiptWords } from "./receipt-words";
 
@@ -79,6 +81,14 @@ export interface ReceiptDocument {
    *  только давай дату цифрами полностью сделаем»). Считает `formatReceiptDate`
    *  ниже — не `formatInvoiceDate`, у того дата словом для другого документа. */
   issuedOn: string;
+  /** ПОЛУЧАТЕЛЬ — КАК В ИНВОЙСЕ (владелец 04.10: «чек — как инвойс… выписать
+   *  чек на принятие оплаты именно на этот объект»). Та же вёрстка, что у
+   *  инвойса (`clientSnapshotParty`): имя или юрназвание, номера, юрадрес,
+   *  адрес объекта. Подпись — словом инвойса на языке бумаги. */
+  recipient: { label: string; name: string; lines: string[] } | null;
+  /** «Инвойс INV-2026-005» — за какой документ эти деньги (владелец 04.10:
+   *  «как понять, что это оплата именно за тот инвойс»). */
+  basis: string | null;
   /** Перечень услуг — пусто, когда источника нет (ручной доход с клиентом)
    *  либо запись/инвойс ещё не подтянулись. PDF и экран рисуют РОВНО этот
    *  список — второго решения «что показать» нигде больше нет. */
@@ -98,13 +108,13 @@ export interface ReceiptDocument {
  *  (`_issue_receipt_core`, миграция реквизитов). Читаем ВСЁ, что он кладёт:
  *  поле, которое лежит в документе и не печатается, — это поле, которого для
  *  клиента нет. */
-interface ReceiptSellerSnapshot {
-  name?: string;
-  address?: string;
-  vat_number?: string;
-  reg_number?: string;
-  iban?: string;
-  bank_name?: string;
+export interface ReceiptSellerSnapshot {
+  name?: string | null;
+  address?: string | null;
+  vat_number?: string | null;
+  reg_number?: string | null;
+  iban?: string | null;
+  bank_name?: string | null;
 }
 
 /** Строки под именем продавца: адрес, налоговый номер, банк. Порядок тот же,
@@ -136,7 +146,13 @@ function sellerLines(seller: ReceiptSellerSnapshot | null, words: ReceiptWords):
 export function buildDraftReceiptDocument(input: {
   /** Что печатать вместо номера, пока номера нет («Черновик»). */
   numberLabel: string;
-  seller: { name: string | null; address: string | null };
+  /** Выбранные реквизиты — те же поля, что положит снимок сервера: черновик
+   *  не имеет права показывать продавца иначе, чем выписанный чек. */
+  seller: ReceiptSellerSnapshot;
+  /** Получатель черновика — тем же правилом, что у инвойса. */
+  recipient?: { name: string; lines: string[] } | null;
+  /** Номер инвойса, за который эти деньги. */
+  invoiceNumber?: string | null;
   currency: string;
   /** «ГГГГ-ММ-ДД» — тот же вид, что у `receipts.issued_on`. */
   issuedOn: string;
@@ -150,14 +166,17 @@ export function buildDraftReceiptDocument(input: {
   language?: InvoiceLanguage;
 }): ReceiptDocument {
   const words = RECEIPT_WORDS[input.language ?? "ru"];
+  const dict = invoiceDictionary(input.language ?? "ru");
   const money = (value: number) => formatInvoiceMoney(value, input.currency, words.locale);
   return {
     words,
+    recipient: input.recipient ? { label: dict.recipient, ...input.recipient } : null,
+    basis: clean(input.invoiceNumber) ? dict.footer(clean(input.invoiceNumber), input.currency) : null,
     number: input.numberLabel,
     voidLabel: null,
     seller: {
       name: clean(input.seller.name) || words.sellerMissing,
-      lines: compact([clean(input.seller.address)]),
+      lines: sellerLines(input.seller, words),
     },
     issuedOn: formatReceiptDate(input.issuedOn),
     lines: input.lines.map((line) => ({
@@ -190,8 +209,20 @@ export function buildReceiptDocument(
   lineItems?: ReceiptLineItemsInput,
   /** Язык бумаги — язык инвойса, на который выписан чек; нет — русский. */
   language: InvoiceLanguage = "ru",
+  /** Номер инвойса, за который эти деньги (его читает лист чека). */
+  invoiceNumber?: string | null,
 ): ReceiptDocument {
   const words = RECEIPT_WORDS[language];
+  const dict = invoiceDictionary(language);
+  // Снимок получателя: у чеков с 04.10 — как у инвойса; у старых только имя
+  // (`name`), их бумага печатает его одно.
+  const buyer = receipt.client_snapshot
+    ? parseInvoiceClientSnapshot(receipt.client_snapshot)
+    : null;
+  const buyerName = clean(buyer?.full_name) || clean(receipt.client_snapshot?.name as string | undefined);
+  const recipient = buyer && (buyerName || clean(buyer.legal_name))
+    ? { label: dict.recipient, ...clientSnapshotParty({ ...buyer, full_name: buyerName }, dict) }
+    : null;
   const money = (value: number) => formatInvoiceMoney(value, receipt.currency, words.locale);
   const seller = receipt.seller_snapshot as ReceiptSellerSnapshot | null;
   const dead = receipt.status === "void";
@@ -206,6 +237,8 @@ export function buildReceiptDocument(
 
   return {
     words,
+    recipient,
+    basis: clean(invoiceNumber) ? dict.footer(clean(invoiceNumber), receipt.currency) : null,
     number: receipt.number,
     voidLabel: dead ? words.voided : null,
     seller: {

@@ -46,6 +46,11 @@ export interface Receipt {
    *  записи или инвойса за спиной проводки. У новых он свой и не меняется,
    *  даже если запись потом поправят. */
   lines: ReceiptLineSnapshot[] | null;
+  /** Реквизиты продавца, объект и набор реквизитов клиента (04.10, чек —
+   *  как инвойс). Необязательные: чеки из кэша старой сборки их не несут. */
+  company_id?: string | null;
+  location_id?: string | null;
+  client_requisites_id?: string | null;
   created_at: string;
 }
 

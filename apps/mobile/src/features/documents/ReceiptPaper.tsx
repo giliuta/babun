@@ -105,6 +105,36 @@ export function ReceiptPaper({ doc }: { doc: ReceiptDocument }) {
         </Text>
       </View>
 
+      {/* ПОЛУЧАТЕЛЬ И ИНВОЙС ОПЛАТЫ — как в инвойсе (владелец 04.10). */}
+      {doc.recipient ? (
+        <View style={{ marginTop: 12 }}>
+          <Text
+            style={{
+              fontSize: 9,
+              fontWeight: "700",
+              letterSpacing: 1.1,
+              color: PAPER.muted,
+              textTransform: "uppercase",
+            }}
+          >
+            {doc.recipient.label}
+          </Text>
+          <Text style={{ marginTop: 3, fontSize: 12, fontWeight: "700", color: PAPER.ink }}>
+            {doc.recipient.name}
+          </Text>
+          {doc.recipient.lines.map((line) => (
+            <Text key={line} style={{ marginTop: 2, fontSize: 10.5, color: PAPER.muted }}>
+              {line}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+      {doc.basis ? (
+        <Text style={{ marginTop: 10, fontSize: 11, fontWeight: "600", color: PAPER.ink }}>
+          {doc.basis}
+        </Text>
+      ) : null}
+
       {/* Перечень услуг — ровно та же таблица, что в PDF: имя строкой слева,
           три узкие числовые колонки справа. */}
       {doc.lines.length > 0 ? (

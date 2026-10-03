@@ -26,6 +26,8 @@ export interface InvoiceNumberTarget {
   companyId: string;
   year: number;
   next: NextInvoiceNumber | null;
+  /** Чей номер: инвойса или чека (04.10, чек — как инвойс). */
+  docType?: "invoice" | "receipt";
 }
 
 /** «INV-2026-104» с другим хвостом: префикс и год — из серии сервера. */
@@ -77,7 +79,7 @@ export function InvoiceNumberRow({
       return;
     }
     save.mutate(
-      { companyId: target.companyId, year: target.year, number: typed },
+      { companyId: target.companyId, year: target.year, number: typed, docType: target.docType },
       {
         onSuccess: () => setOpen(false),
         onError: (error) => notify("Номер не сохранён", error.message),
@@ -176,7 +178,7 @@ export function InvoiceNumberRow({
 
       <BottomSheet
         visible={open}
-        title="Номер инвойса"
+        title={target.docType === "receipt" ? "Номер чека" : "Номер инвойса"}
         avoidKeyboard
         onClose={() => setOpen(false)}
         // Кнопка — прямо в подвале: отступ от краёв лист даёт сам, и лишняя
@@ -192,7 +194,7 @@ export function InvoiceNumberRow({
         {/* Воздух под подсказкой: без него кнопка подвала прилипала к тексту. */}
         <View style={{ gap: 10, paddingBottom: 16 }}>
           <Field
-            label="Номер инвойса"
+            label={target.docType === "receipt" ? "Номер чека" : "Номер инвойса"}
             value={draft}
             onChangeText={(text) => setDraft(text.replace(/\D/g, "").slice(0, 6))}
             placeholder={next ? String(next.seq) : "104"}

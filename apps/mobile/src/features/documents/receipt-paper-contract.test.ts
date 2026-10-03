@@ -77,6 +77,9 @@ describe("бумага чека и PDF печатают одну модель в
       "voidLabel",
       "seller",
       "issuedOn",
+      // Владелец 04.10: «чек — как инвойс» — получатель и инвойс оплаты.
+      "recipient",
+      "basis",
       "lines",
       "linesTotal",
       "discount",
@@ -99,6 +102,8 @@ describe("бумага чека и PDF печатают одну модель в
         "seller",
         "number",
         "issuedOn",
+        "recipient",
+        "basis",
         "lines",
         "linesTotal",
         "discount",

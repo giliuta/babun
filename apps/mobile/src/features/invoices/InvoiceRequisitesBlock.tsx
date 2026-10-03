@@ -41,11 +41,15 @@ export function InvoiceRequisitesBlock({
   companyId,
   onCompanyChange,
   number,
+  locked = false,
 }: {
   companyId: string | null;
   onCompanyChange: (id: string | null) => void;
   /** Строка «Номер» — серия этих реквизитов; у выставленного счёта её нет. */
   number?: InvoiceNumberTarget;
+  /** Реквизиты уже решены — чек оплаты инвойса подписан реквизитами
+   *  инвойса, выписанный чек их не меняет: строка только показывает. */
+  locked?: boolean;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -78,11 +82,11 @@ export function InvoiceRequisitesBlock({
           title={company?.name ?? "Реквизиты не заведены"}
           sub={company ? companyDetail(company) : "Добавьте, чем подписывать инвойс"}
           subColor={empty ? t.warning : undefined}
-          onPress={open}
+          onPress={locked ? undefined : open}
           // ДОЛГОЕ НАЖАТИЕ — ПРАВКА ЭТОГО НАБОРА (владелец 2026-10-03:
           // «задерживаю — редактирование, тапнул — выбор другого»). Не заведён
           // ни один — заводим новый.
-          onLongPress={() => edit(company ?? null)}
+          onLongPress={locked ? undefined : () => edit(company ?? null)}
         />
         {number ? <InvoiceNumberRow target={number} /> : null}
       </SectionCard>

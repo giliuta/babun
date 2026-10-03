@@ -2898,6 +2898,8 @@ export type Database = {
           invoice_id: string | null
           issued_on: string
           lines: Json | null
+          location_id: string | null
+          client_requisites_id: string | null
           number: string
           payment_method: string | null
           seller_snapshot: Json
@@ -2923,6 +2925,8 @@ export type Database = {
           invoice_id?: string | null
           issued_on: string
           lines?: Json | null
+          location_id?: string | null
+          client_requisites_id?: string | null
           number: string
           payment_method?: string | null
           seller_snapshot?: Json
@@ -2948,6 +2952,8 @@ export type Database = {
           invoice_id?: string | null
           issued_on?: string
           lines?: Json | null
+          location_id?: string | null
+          client_requisites_id?: string | null
           number?: string
           payment_method?: string | null
           seller_snapshot?: Json
@@ -4563,7 +4569,45 @@ export type Database = {
         Returns: undefined
       }
       issue_receipt: {
-        Args: { p_company_id?: string; p_lines?: Json; p_transaction_id: string }
+        Args: {
+          p_client_requisites_id?: string
+          p_company_id?: string
+          p_issued_on?: string
+          p_lines?: Json
+          p_location_id?: string
+          p_transaction_id: string
+        }
+        Returns: {
+          account_id: string | null
+          amount: number
+          appointment_id: string | null
+          client_id: string | null
+          client_snapshot: Json | null
+          created_at: string
+          currency: string
+          id: string
+          invoice_id: string | null
+          issued_on: string
+          number: string
+          payment_method: string | null
+          seller_snapshot: Json
+          seq: number
+          status: string
+          tenant_id: string
+          transaction_id: string | null
+          vat_amount: number | null
+          vat_rate: number | null
+          year: number
+        }
+      }
+      update_receipt: {
+        Args: {
+          p_client_requisites_id?: string
+          p_issued_on?: string
+          p_lines?: Json
+          p_location_id?: string
+          p_receipt_id: string
+        }
         Returns: {
           account_id: string | null
           amount: number

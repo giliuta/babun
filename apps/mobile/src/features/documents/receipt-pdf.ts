@@ -24,8 +24,10 @@ export function buildReceiptPdfHtml(
   receipt: Receipt,
   lineItems?: ReceiptLineItemsInput,
   language: InvoiceLanguage = "ru",
+  /** Номер инвойса, за который эти деньги (04.10). */
+  invoiceNumber?: string | null,
 ): string {
-  return renderReceiptHtml(buildReceiptDocument(receipt, lineItems, language));
+  return renderReceiptHtml(buildReceiptDocument(receipt, lineItems, language, invoiceNumber));
 }
 
 function renderReceiptHtml(doc: ReceiptDocument): string {
@@ -61,6 +63,10 @@ function renderReceiptHtml(doc: ReceiptDocument): string {
     .row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid #e8edf3; }
     .row .label { color: #64748b; }
     .row .value { color: #111827; font-weight: 600; text-align: right; }
+    .party { margin-top: 12px; }
+    .party-label { color: #64748b; font-size: 9px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; }
+    .party-name { margin-top: 3px; color: #111827; font-size: 12px; font-weight: 700; }
+    .basis { margin-top: 10px; color: #111827; font-size: 11px; font-weight: 600; }
     .lines { width: 100%; margin-top: 14px; border-collapse: collapse; }
     /* МНОГОСТРАНИЧНЫЙ ЧЕК НЕ РВЁТСЯ ПОСРЕДИ СТРОКИ. Тридцать позиций уходят
        на вторую страницу, и без этих правил она начиналась без шапки таблицы,
@@ -94,6 +100,14 @@ function renderReceiptHtml(doc: ReceiptDocument): string {
     <h1>${escapeHtml(doc.number)}</h1>
 
     <div class="row"><span class="label">${escapeHtml(doc.words.date)}</span><span class="value">${escapeHtml(doc.issuedOn)}</span></div>
+
+    ${doc.recipient ? `
+    <div class="party">
+      <div class="party-label">${escapeHtml(doc.recipient.label)}</div>
+      <div class="party-name">${escapeHtml(doc.recipient.name)}</div>
+      ${doc.recipient.lines.map((line) => `<div class="seller-line">${escapeHtml(line)}</div>`).join("")}
+    </div>` : ""}
+    ${doc.basis ? `<div class="basis">${escapeHtml(doc.basis)}</div>` : ""}
 
     ${doc.lines.length > 0 ? `
     <table class="lines" aria-label="${escapeHtml(doc.words.linesAria)}">

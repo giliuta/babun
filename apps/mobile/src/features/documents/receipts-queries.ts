@@ -115,10 +115,18 @@ export function useIssueReceipt() {
       transactionId,
       lines,
       companyId,
+      issuedOn,
+      locationId,
+      clientRequisitesId,
     }: {
       transactionId: string;
       /** Чьими реквизитами подписан чек; не передан — основными. */
       companyId?: string | null;
+      /** Дата чека; не передана — день оплаты (04.10, «дата — как в инвойсе»). */
+      issuedOn?: string | null;
+      /** Объект и реквизиты клиента — как у инвойса. */
+      locationId?: string | null;
+      clientRequisitesId?: string | null;
       /** Перечень работ, который сервер ЗАМОРОЗИТ в чеке. `undefined` —
        *  выписка по уже проведённым деньгам, где перечень берут из записи
        *  или инвойса за спиной проводки. */
@@ -128,6 +136,9 @@ export function useIssueReceipt() {
         p_transaction_id: transactionId,
         ...(lines && lines.length > 0 ? { p_lines: lines as unknown as Json } : {}),
         ...(companyId ? { p_company_id: companyId } : {}),
+        ...(issuedOn ? { p_issued_on: issuedOn } : {}),
+        ...(locationId ? { p_location_id: locationId } : {}),
+        ...(clientRequisitesId ? { p_client_requisites_id: clientRequisitesId } : {}),
       });
       if (error) throw new Error(error.message);
       if (!data) throw new Error("Чек не выписан: сервер не подтвердил документ");
@@ -198,5 +209,58 @@ export function useReceiptTransaction(id: string | null | undefined) {
       if (error) throw new Error(error.message);
       return (data ?? null) as unknown as FinanceTransaction | null;
     },
+  });
+}
+
+/** Один чек — для его правки (`/documents/receipt-new?receiptId=`). */
+export function useReceipt(id: string | null | undefined) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["receipts", tenantId, "one", id],
+    enabled: !!tenantId && !!id,
+    queryFn: async (): Promise<Receipt | null> => {
+      const { data, error } = await supabase
+        .from("receipts")
+        .select("*")
+        .eq("tenant_id", tenantId as string)
+        .eq("id", id as string)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return (data ?? null) as unknown as Receipt | null;
+    },
+  });
+}
+
+/**
+ * ПРАВКА ВЫПИСАННОГО ЧЕКА НА МЕСТЕ (владелец 2026-10-04: «выписал чек, увидел
+ * мелочь, клиенту ещё не отправлял — сразу отредактирую и отправлю»). Тот же
+ * номер; сумма, счёт и клиент — от оплаты и не меняются (`update_receipt`).
+ */
+export function useUpdateReceipt() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: async (input: {
+      receiptId: string;
+      lines: ReceiptLineSnapshot[];
+      issuedOn: string;
+      locationId: string | null;
+      clientRequisitesId: string | null;
+    }): Promise<Receipt> => {
+      const { data, error } = await supabase.rpc("update_receipt", {
+        p_receipt_id: input.receiptId,
+        p_lines: input.lines as unknown as Json,
+        p_issued_on: input.issuedOn,
+        ...(input.locationId ? { p_location_id: input.locationId } : {}),
+        ...(input.clientRequisitesId ? { p_client_requisites_id: input.clientRequisitesId } : {}),
+      });
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error("Чек не сохранён: сервер не подтвердил документ");
+      return data as unknown as Receipt;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["receipts"] });
+    },
+    meta: { errorHandled: true },
   });
 }

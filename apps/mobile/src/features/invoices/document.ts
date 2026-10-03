@@ -2,6 +2,7 @@ import type { Client, Location } from "@babun/shared/local/clients";
 import {
   invoiceDisplayStatus,
   invoiceLineTotal,
+  type InvoiceClientSnapshot,
   type InvoiceLedgerWithLines,
   type InvoiceObjectAddressParts,
   type InvoicePaymentLedger,
@@ -265,21 +266,7 @@ function issuedDocument({
     // свой адрес как раньше: выставленный документ не переписывается
     // задним числом.
     client: recipient
-      ? {
-          name: firstNonEmpty(recipient.legal_name, recipient.full_name)
-            || dict.recipientMissing,
-          lines: compact([
-            prefixed(dict.vatNo, clean(recipient.vat_number)),
-            prefixed(dict.regNumber, clean(recipient.reg_number)),
-            clean(recipient.email),
-            ...(recipient.object === undefined
-              ? addressLines(firstNonEmpty(recipient.primary_address, recipient.address))
-              : [
-                  ...addressLines(clean(recipient.billing_address)),
-                  ...objectAddressLines(recipient.object?.address_parts, dict),
-                ]),
-          ]),
-        }
+      ? clientSnapshotParty(recipient, dict)
       : clientParty(
           client,
           client?.locations.find((loc) => loc.id === invoice.location_id) ?? null,
@@ -576,7 +563,7 @@ function totalRows(input: {
 
 /** Получатель черновика — те же правила, что у снимка сервера
  *  (`build_invoice_client_snapshot_with_object`). */
-function clientParty(
+export function clientParty(
   client: Client | undefined,
   location: Location | null,
   dict: InvoiceDictionary,
@@ -601,6 +588,30 @@ function clientParty(
       ...(hasExactAddress(location?.addressParts)
         ? objectAddressLines(location?.addressParts ?? null, dict)
         : []),
+    ]),
+  };
+}
+
+/** ПОЛУЧАТЕЛЬ ИЗ СНИМКА — одна вёрстка на инвойс и чек (владелец 04.10:
+ *  «чек — как инвойс»): юрназвание или имя, номера, почта, юрадрес
+ *  реквизитов, точный адрес объекта. Снимок старше объектов печатает свой
+ *  адрес как раньше. */
+export function clientSnapshotParty(
+  recipient: Partial<InvoiceClientSnapshot>,
+  dict: InvoiceDictionary,
+): DocumentParty {
+  return {
+    name: firstNonEmpty(recipient.legal_name, recipient.full_name) || dict.recipientMissing,
+    lines: compact([
+      prefixed(dict.vatNo, clean(recipient.vat_number)),
+      prefixed(dict.regNumber, clean(recipient.reg_number)),
+      clean(recipient.email),
+      ...(recipient.object === undefined
+        ? addressLines(firstNonEmpty(recipient.primary_address, recipient.address))
+        : [
+            ...addressLines(clean(recipient.billing_address)),
+            ...objectAddressLines(recipient.object?.address_parts, dict),
+          ]),
     ]),
   };
 }

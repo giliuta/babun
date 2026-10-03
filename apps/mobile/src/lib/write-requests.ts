@@ -86,6 +86,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "delete_operation",
   "issue_invoice",
   "issue_receipt",
+  "update_receipt",
   "location_request_create",
   "location_request_submit",
   "member_appointment_copy",

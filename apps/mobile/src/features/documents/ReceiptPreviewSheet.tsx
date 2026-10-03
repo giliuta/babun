@@ -27,6 +27,7 @@ export function ReceiptPreviewSheet({
   busy,
   onIssue,
   onClose,
+  actionLabel = "Выписать чек",
   onExited,
 }: {
   visible: boolean;
@@ -36,6 +37,8 @@ export function ReceiptPreviewSheet({
   doc: ReceiptDocument | null;
   busy: boolean;
   onIssue: () => void;
+  /** «Выписать чек» или «Сохранить чек» у правки выписанного. */
+  actionLabel?: string;
   onClose: () => void;
 }) {
   return (
@@ -48,7 +51,7 @@ export function ReceiptPreviewSheet({
       maxHeightRatio={0.9}
       footer={
         <View style={{ paddingHorizontal: SIDE }}>
-          <GradientButton label="Выписать чек" loading={busy} onPress={onIssue} />
+          <GradientButton label={actionLabel} loading={busy} onPress={onIssue} />
         </View>
       }
     >
