@@ -67,12 +67,15 @@ export function TeamActivityNotifier() {
         const last = storage.get<number>(lastSeenKey(tenantId));
         if (last == null) {
           // Первый запуск — точка отсчёта, без старых новостей.
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from("change_log")
             .select("id")
             .eq("tenant_id", tenantId)
             .order("id", { ascending: false })
             .limit(1);
+          // Сбой сети — не ноль: точка отсчёта «с самого начала» читала бы
+          // журнал по сто строк за тик и задерживала свежее.
+          if (cancelled || error) return;
           storage.set(lastSeenKey(tenantId), data?.[0]?.id ?? 0);
           return;
         }
@@ -83,7 +86,10 @@ export function TeamActivityNotifier() {
           .gt("id", last)
           .order("id", { ascending: true })
           .limit(100);
-        if (error || !data || data.length === 0) return;
+        // Пока ждали ответ, человек мог выйти или сменить аккаунт: ни
+        // уведомления с клиентом прежнего аккаунта, ни записи в уже
+        // очищенное хранилище (проверка системы 03.10).
+        if (cancelled || error || !data || data.length === 0) return;
         const rows = data as ChangeLogRow[];
         storage.set(lastSeenKey(tenantId), rows[rows.length - 1].id);
         const now = Date.now();
@@ -104,6 +110,7 @@ export function TeamActivityNotifier() {
           return;
         }
         for (const row of fresh) {
+          if (cancelled) return;
           const { title, body } = activityNotification(row, teamName(row.team_id), row.actor_name);
           const date = typeof row.meta?.date === "string" ? row.meta.date : null;
           await present({

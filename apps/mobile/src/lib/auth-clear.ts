@@ -22,6 +22,7 @@ import {
   clearAllBabunNotifications,
   suspendAllBabunNotifications,
 } from "@/lib/notifications";
+import { resetTeamPrefsCache } from "@/features/cabinet/notification-prefs-cache";
 
 // Wipe device-local data when this device must no longer see the previous
 // account's data. Originally ported from the Next.js web app's
@@ -103,6 +104,9 @@ function wipeFastStores(
     if (keepTenantNamedKeys && isTenantScopedKey(key)) continue;
     if (TENANT_PREFIXES.some((p) => key.startsWith(p))) storage.remove(key);
   }
+  // Копия настроек уведомлений живёт и в памяти — на выходе из аккаунта
+  // уходит вместе с MMKV (проверка системы 03.10).
+  if (!keepTenantNamedKeys) resetTeamPrefsCache();
   if (!keepSubscribers) {
     // Номера, открытые сотрудником дверью, живут только в памяти — и на
     // выходе уходят вместе с остальным (30.09).

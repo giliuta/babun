@@ -9,6 +9,7 @@ import {
   type SelfReminder,
 } from "@/features/calendar/reminder-time";
 import {
+  babunNotificationRegistrySnapshot,
   getNotificationsModule,
   removeBabunNotificationOwners,
   replaceBabunNotificationOwner,
@@ -353,6 +354,10 @@ export async function setSelfReminder(
   }
   all[apt.id] = rule;
   writeSelfReminders(all);
+  // У записи с колокольчиком звонит колокольчик — автонапоминание снимаем
+  // сразу, а не на следующей сверке календаря.
+  const autos = autoOwnersOf(apt.id);
+  if (autos.length > 0) await removeBabunNotificationOwners(autos);
   // ПРАВИЛО, КОТОРОЕ НЕ ЗАЗВОНИТ, НЕ ХРАНИТСЯ (повторный аудит 03.10). Раньше
   // оно сохранялось и при прошедшем времени, и при сбое: шторка показывала
   // его отмеченным, хотя пуша не будет, а повторный тап его СНИМАЛ вместо
@@ -447,12 +452,28 @@ export async function clearSelfReminder(appointmentId: string): Promise<void> {
 // звонит колокольчик — два пуша об одном не нужны. Везде выключено — группа
 // пустеет.
 
-const autoOwnerKey = (appointmentId: string) => `auto:${appointmentId}`;
+// Ключ — с аккаунтом (проверка системы 03.10): сверка видит записи только
+// открытого аккаунта, и замена всей группы `auto:` стирала напоминания своих
+// команд, пока человек смотрел команду другого аккаунта.
+const autoOwnerKey = (tenantId: string, appointmentId: string) => `auto:${tenantId}:${appointmentId}`;
+
+/** Ключи `auto:` этой записи (любого аккаунта) — снять, когда на запись
+ *  ставят колокольчик: два пуша об одном не нужны. */
+function autoOwnersOf(appointmentId: string): string[] {
+  return [
+    ...new Set(
+      babunNotificationRegistrySnapshot()
+        .map((item) => item.ownerKey)
+        .filter((key) => key.startsWith("auto:") && key.endsWith(`:${appointmentId}`)),
+    ),
+  ];
+}
 
 export async function reconcileAutoReminders(
   appointments: readonly Appointment[],
   timeZoneFor: (appointment: Appointment) => string,
-  clientNameFor?: (appointment: Appointment) => string | undefined,
+  clientNameFor: ((appointment: Appointment) => string | undefined) | undefined,
+  tenantId: string,
 ): Promise<void> {
   const owners: BabunNotificationOwnerDrafts[] = [];
   {
@@ -472,7 +493,7 @@ export async function reconcileAutoReminders(
       }
       const at = when.getTime();
       if (at <= now || at > now + AUTO_REMINDER_HORIZON_MS) continue;
-      const ownerKey = autoOwnerKey(apt.id);
+      const ownerKey = autoOwnerKey(tenantId, apt.id);
       owners.push({
         ownerKey,
         drafts: notificationDrafts(
@@ -484,5 +505,14 @@ export async function reconcileAutoReminders(
       });
     }
   }
-  await replaceBabunNotificationScope("auto:", owners, { requestPermission: false });
+  await replaceBabunNotificationScope(`auto:${tenantId}:`, owners, { requestPermission: false });
+  // Ключи первого дня (`auto:<запись>` без аккаунта) — снять.
+  const legacy = [
+    ...new Set(
+      babunNotificationRegistrySnapshot()
+        .map((item) => item.ownerKey)
+        .filter((key) => key.startsWith("auto:") && key.split(":").length === 2),
+    ),
+  ];
+  if (legacy.length > 0) await removeBabunNotificationOwners(legacy);
 }

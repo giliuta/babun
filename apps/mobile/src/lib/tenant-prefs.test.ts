@@ -185,7 +185,9 @@ describe("настройки, помнящиеся по компании", () =>
     // И НАОБОРОТ: ключ хранилища вне подметаемых префиксов переживает
     // «Выйти» — черновик реквизитов с IBAN оставался на телефоне (03.10).
     // Имена, которые не ключи хранилища, перечислены явно.
-    const NOT_STORAGE = new Set(["tenant", "personal-event-types"]);
+    // `auto` — ключ владельца в реестре уведомлений (`auto:<компания>:<запись>`,
+    // 03.10), сам реестр подметается выходом целиком.
+    const NOT_STORAGE = new Set(["tenant", "personal-event-types", "auto"]);
     const unwiped = [...found]
       .filter(([prefix]) => !NOT_STORAGE.has(prefix))
       .filter(([prefix]) => !WIPED_PREFIXES.some((p) => prefix.startsWith(p)))

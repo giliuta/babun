@@ -34,7 +34,6 @@ import {
   clearSelfReminder,
 } from "@/features/calendar/reminders";
 import { reconcileClientReminders } from "@/features/clients/reminders";
-import { useClients } from "@/features/clients/queries";
 import { chooseOption } from "@/lib/choose";
 import {
   getNotificationsModule,
@@ -101,7 +100,6 @@ export function NotificationsScreen() {
   const permission = permissionQuery.data;
   const { days, count } = useDeviceReminders();
   const permissionView = permission ? permissionRow(permission) : null;
-  const { data: clients = [] } = useClients();
   const [picker, setPicker] = useState<"records" | "clients" | null>(null);
   const { data: teams = [] } = useTeams();
   const isOwner = useDataRole().data === "owner";
@@ -369,7 +367,7 @@ export function NotificationsScreen() {
             setPrefs({ clientTime: time });
             // Напоминания уже стоят — пересобрать их под новое время (копия
             // настроек обновлена сразу, до ответа базы).
-            void reconcileClientReminders(clients).catch(() => {});
+            void reconcileClientReminders().catch(() => {});
             if (time) void askIfUndetermined();
           },
         }))}

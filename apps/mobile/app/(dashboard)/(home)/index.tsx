@@ -1031,6 +1031,10 @@ export default function CalendarTab() {
   apptsRef.current = appts;
   useEffect(() => {
     if (
+      // Записи РЕАЛЬНО пришли: без сети запрос стоит на паузе, а у
+      // выключенного isLoading ложно — пустой список сверка принимала за
+      // «записей нет» и стирала все пуши (проверка системы 03.10).
+      !appointmentsQuery.isSuccess ||
       isLoading ||
       error ||
       teamsLoading ||
@@ -1062,14 +1066,19 @@ export default function CalendarTab() {
       ).catch(() => {});
       // Напоминание о каждой записи — по правилу телефона; у записи с
       // колокольчиком звонит колокольчик.
-      void reconcileAutoReminders(
-        list,
-        tzFor,
-        (a) => clientNameRef.current(a) || undefined,
-      ).catch(() => {});
+      if (tenantId) {
+        void reconcileAutoReminders(
+          list,
+          tzFor,
+          (a) => clientNameRef.current(a) || undefined,
+          tenantId,
+        ).catch(() => {});
+      }
     }, 1000);
     return () => clearTimeout(timer);
   }, [
+    appointmentsQuery.isSuccess,
+    tenantId,
     reminderSig,
     autoRuleSig,
     calSettings?.timezone,

@@ -59,3 +59,11 @@ export function subscribeTeamPrefs(listener: () => void): () => void {
 export function teamPrefsVersion(): number {
   return version;
 }
+
+/** Выход из аккаунта: копия в памяти уходит вместе с MMKV — следующий
+ *  человек на этом телефоне не получит чужих настроек до первого запроса. */
+export function resetTeamPrefsCache(): void {
+  cache = null;
+  version += 1;
+  for (const listener of listeners) listener();
+}

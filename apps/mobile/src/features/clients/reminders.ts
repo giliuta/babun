@@ -4,8 +4,6 @@ import {
   getNotificationsModule,
   removeBabunNotificationOwners,
   replaceBabunNotificationOwner,
-  replaceBabunNotificationScope,
-  type BabunNotificationDraft,
 } from "@/lib/notifications";
 import { clockParts } from "@/features/cabinet/notification-prefs";
 import { readTeamNotifyPrefs } from "@/features/cabinet/notification-prefs-cache";
@@ -90,29 +88,39 @@ export async function cancelClientReminder(clientId: string): Promise<void> {
   }
 }
 
-/** Turn the persisted client follow-up date into a real iOS notification.
- * The server update stays authoritative; a native failure is returned to the
- * caller so the UI can say that the date was saved but the alert was not. */
-export async function syncClientReminder(
-  client: Pick<
-    Client,
-    "id" | "full_name" | "phone" | "reminder_at" | "deleted_at" | "team_id"
-  >,
-): Promise<ClientReminderResult> {
-  const reminderAt = client.reminder_at?.trim() ?? "";
-  // «О клиентах: Не напоминать» в команде клиента (Кабинет → Уведомления) —
-  // дата сохраняется, а телефон молчит.
-  const time = readTeamNotifyPrefs(client.team_id).clientTime;
-  if (!reminderAt || client.deleted_at || !time) {
-    await cancelClientReminder(client.id);
-    return "cleared";
-  }
+// ЧТО ЭТОТ ТЕЛЕФОН ОБЕЩАЛ НАПОМНИТЬ (проверка системы 03.10). Смена времени
+// «О клиентах» пересобирала всю группу `client:` по списку клиентов
+// открытого аккаунта — и стирала напоминания по клиентам другого аккаунта, а
+// пока список грузился, пустым списком — все. Теперь пересобирается ровно то,
+// что ставили здесь: запись хранит имя, номер, дату и команду клиента.
+const CLIENT_REMINDER_WANT_KEY = "babun:clients.reminderWanted.v1";
 
-  const fireAt = clientReminderFireDate(reminderAt, new Date(), time);
-  if (!fireAt) {
-    await cancelClientReminder(client.id);
-    return "past";
-  }
+type WantedReminder = { reminderAt: string; teamId: string | null; name: string; phone: string };
+
+function readWanted(): Record<string, WantedReminder> {
+  return getStorage().get<Record<string, WantedReminder>>(CLIENT_REMINDER_WANT_KEY) ?? {};
+}
+
+function writeWanted(next: Record<string, WantedReminder>): void {
+  getStorage().set(CLIENT_REMINDER_WANT_KEY, next);
+}
+
+function forgetWanted(clientId: string): void {
+  const all = readWanted();
+  if (!(clientId in all)) return;
+  const next = { ...all };
+  delete next[clientId];
+  writeWanted(next);
+}
+
+type ReminderClient = Pick<Client, "id" | "full_name" | "phone" | "reminder_at" | "deleted_at" | "team_id">;
+
+async function scheduleClientReminder(
+  client: { id: string; name: string; phone: string; reminderAt: string },
+  fireAt: Date,
+  time: string,
+  requestPermission: boolean,
+): Promise<ClientReminderResult> {
   try {
     const registry = readRegistry();
     const previous = registry[client.id];
@@ -120,13 +128,11 @@ export async function syncClientReminder(
       clientOwnerKey(client.id),
       [
         {
-          logicalId: `${clientOwnerKey(client.id)}:${reminderAt}:${time}`,
+          logicalId: `${clientOwnerKey(client.id)}:${client.reminderAt}:${time}`,
           fireAt,
           content: {
             title: "Напоминание о клиенте",
-            body: [client.full_name.trim() || "Клиент", client.phone.trim()]
-              .filter(Boolean)
-              .join(" · "),
+            body: [client.name.trim() || "Клиент", client.phone.trim()].filter(Boolean).join(" · "),
             sound: "default",
             data: {
               type: "client-reminder",
@@ -136,15 +142,13 @@ export async function syncClientReminder(
         },
       ],
       {
-        requestPermission: true,
-        legacyIds: previous?.notificationId
-          ? [previous.notificationId]
-          : [],
+        requestPermission,
+        legacyIds: previous?.notificationId ? [previous.notificationId] : [],
       },
     );
-    const next = { ...registry };
+    const next = { ...readRegistry() };
     const notificationId = result.identifiers[0];
-    if (notificationId) next[client.id] = { notificationId, reminderAt };
+    if (notificationId) next[client.id] = { notificationId, reminderAt: client.reminderAt };
     else delete next[client.id];
     writeRegistry(next);
     return result.status;
@@ -153,6 +157,46 @@ export async function syncClientReminder(
     // next authenticated launch; stale native ids were already retired.
     return "unavailable";
   }
+}
+
+/** Turn the persisted client follow-up date into a real iOS notification.
+ * The server update stays authoritative; a native failure is returned to the
+ * caller so the UI can say that the date was saved but the alert was not. */
+export async function syncClientReminder(client: ReminderClient): Promise<ClientReminderResult> {
+  const reminderAt = client.reminder_at?.trim() ?? "";
+  if (!reminderAt || client.deleted_at) {
+    forgetWanted(client.id);
+    await cancelClientReminder(client.id);
+    return "cleared";
+  }
+  writeWanted({
+    ...readWanted(),
+    [client.id]: {
+      reminderAt,
+      teamId: client.team_id ?? null,
+      name: client.full_name,
+      phone: client.phone,
+    },
+  });
+  // «О клиентах: Не напоминать» в команде клиента (Кабинет → Уведомления) —
+  // дата сохраняется (и обещание помнится), а телефон молчит.
+  const time = readTeamNotifyPrefs(client.team_id).clientTime;
+  if (!time) {
+    await cancelClientReminder(client.id);
+    return "cleared";
+  }
+  const fireAt = clientReminderFireDate(reminderAt, new Date(), time);
+  if (!fireAt) {
+    forgetWanted(client.id);
+    await cancelClientReminder(client.id);
+    return "past";
+  }
+  return scheduleClientReminder(
+    { id: client.id, name: client.full_name, phone: client.phone, reminderAt },
+    fireAt,
+    time,
+    true,
+  );
 }
 
 export function parseClientNotificationTarget(
@@ -199,42 +243,29 @@ export async function consumeLastClientNotificationTarget(): Promise<
   }
 }
 
-/** ПЕРЕСОБРАТЬ ВСЕ НАПОМИНАНИЯ О КЛИЕНТАХ (Кабинет → Уведомления, 03.10):
- *  сменили время или выключили — группа `client:` строится заново по
- *  списку клиентов, без разрешения iOS (его спрашивает явное действие). */
-export async function reconcileClientReminders(
-  clients: readonly Pick<Client, "id" | "full_name" | "phone" | "reminder_at" | "deleted_at" | "team_id">[],
-): Promise<void> {
-  const owners: { ownerKey: string; drafts: BabunNotificationDraft[] }[] = [];
-  {
-    const now = new Date();
-    for (const client of clients) {
-      // Время — у команды клиента (03.10).
-      const time = readTeamNotifyPrefs(client.team_id).clientTime;
-      if (!time) continue;
-      const reminderAt = client.reminder_at?.trim() ?? "";
-      if (!reminderAt || client.deleted_at) continue;
-      const fireAt = clientReminderFireDate(reminderAt, now, time);
-      if (!fireAt) continue;
-      const ownerKey = clientOwnerKey(client.id);
-      owners.push({
-        ownerKey,
-        drafts: [
-          {
-            logicalId: `${ownerKey}:${reminderAt}:${time}`,
-            fireAt,
-            content: {
-              title: "Напоминание о клиенте",
-              body: [client.full_name.trim() || "Клиент", client.phone.trim()]
-                .filter(Boolean)
-                .join(" · "),
-              sound: "default",
-              data: { type: "client-reminder", clientId: client.id },
-            },
-          },
-        ],
-      });
+/** ПЕРЕСОБРАТЬ НАПОМИНАНИЯ О КЛИЕНТАХ ЭТОГО ТЕЛЕФОНА (Кабинет → Уведомления,
+ *  03.10): сменили время или выключили в команде — каждое обещанное здесь
+ *  напоминание встаёт на новое время или замолкает. Чужие и других аккаунтов
+ *  не трогаются; разрешение iOS не спрашивается. */
+export async function reconcileClientReminders(): Promise<void> {
+  const now = new Date();
+  for (const [clientId, want] of Object.entries(readWanted())) {
+    const time = readTeamNotifyPrefs(want.teamId).clientTime;
+    if (!time) {
+      await cancelClientReminder(clientId);
+      continue;
     }
+    const fireAt = clientReminderFireDate(want.reminderAt, now, time);
+    if (!fireAt) {
+      forgetWanted(clientId);
+      await cancelClientReminder(clientId);
+      continue;
+    }
+    await scheduleClientReminder(
+      { id: clientId, name: want.name, phone: want.phone, reminderAt: want.reminderAt },
+      fireAt,
+      time,
+      false,
+    );
   }
-  await replaceBabunNotificationScope("client:", owners, { requestPermission: false });
 }
