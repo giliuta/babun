@@ -69,7 +69,8 @@ const map = (over: Partial<MemberAccessMap> = {}): MemberAccessMap => ({
   ...over,
 });
 
-const OPS = "finance.operations";
+// Любой блок команды: ворота спрашивают ключ, им всё равно какой.
+const OPS = "finance.expense";
 
 describe("ворота блока", () => {
   test("владелец меняет всё и не ждёт карту", () => {
@@ -134,20 +135,20 @@ describe("ворота блока", () => {
   });
 });
 
-describe("сторона денег — новый ключ или старый общий", () => {
+describe("сторона денег — свой ключ", () => {
   test("карта после наката — свои ключи доходов и расходов", () => {
     const m = map({ calendars: { a: { "finance.income": "read", "finance.expense": "full" } } });
     assert.equal(moneyKey(m, "income"), "finance.income");
     assert.equal(moneyKey(m, "expense"), "finance.expense");
   });
 
-  test("карта до наката — общий «Доходы и расходы» за обе стороны", () => {
-    const m = map({ calendars: { a: { [OPS]: "write" } } });
-    assert.equal(moneyKey(m, "income"), OPS);
-    assert.equal(moneyKey(m, "expense"), OPS);
+  test("старая общая строка `finance.operations` (сервер её не знает) стороны не подменяет", () => {
+    const m = map({ calendars: { a: { "finance.operations": "write" } } });
+    assert.equal(moneyKey(m, "income"), "finance.income");
+    assert.equal(moneyKey(m, "expense"), "finance.expense");
   });
 
-  test("карты нет или календарей нет — новый ключ: ворота всё равно закрыты или владелец", () => {
+  test("карты нет или календарей нет — свой ключ: ворота всё равно закрыты или владелец", () => {
     assert.equal(moneyKey(undefined, "income"), "finance.income");
     assert.equal(moneyKey(map(), "expense"), "finance.expense");
   });
@@ -173,9 +174,9 @@ describe("править ручную операцию — ровно то, чт
     assert.equal(edit({ "finance.income": "read", "finance.expense": "full" }, "income", ME), false);
   });
 
-  test("старая карта: «Меняет» правит любой расход, доход — никогда", () => {
-    assert.equal(edit({ [OPS]: "write" }, "expense", "someone"), true);
-    assert.equal(edit({ [OPS]: "write" }, "income", ME), false);
+  test("старая общая строка `finance.operations` ничего не открывает", () => {
+    assert.equal(edit({ "finance.operations": "write" }, "expense", ME), false);
+    assert.equal(edit({ "finance.operations": "write" }, "income", ME), false);
   });
 
   test("владелец — любую; без календаря сотрудник — ничего", () => {

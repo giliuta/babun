@@ -59,8 +59,7 @@ export function financeReadRules({ role, map }: FinanceReader): FinanceReadRules
   const owner = role === "owner" || map?.isOwner === true;
   const readable = (blockKey: string, teamId: string | null | undefined): boolean =>
     levelInCalendar({ role, map }, blockKey, teamId) !== "locked";
-  /** Блок стороны строки. Старая карта несёт одну строку на обе стороны
-   *  (`moneyKey`) — тем же ключом, что считает страница. */
+  /** Блок стороны строки — тем же ключом, что считает страница. */
   const sideBlock = (type: TxLike["type"]): string =>
     type === "income" || type === "refund"
       ? moneyKey(map, "income")

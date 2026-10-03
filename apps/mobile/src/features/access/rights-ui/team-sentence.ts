@@ -87,17 +87,10 @@ function teamFacts(read: LevelRead): TeamFacts {
 
   const money: string[] = [];
   if (is("record.payment", "write")) money.push("принимает оплату");
-  // Доходы и расходы — два права с этапа 2; реестр до наката знает только
-  // общее `finance.operations`, и тогда итог говорит по нему.
-  const ops = read("finance.operations");
+  // Доходы и расходы — два права с этапа 2.
   const income = read("finance.income");
   const expense = read("finance.expense");
-  if (income !== undefined || expense !== undefined) {
-    money.push(...sideWords(income, expense));
-  } else {
-    if (ops === "read") money.push("видит доходы и расходы");
-    if (ops === "write") money.push("ведёт доходы и расходы");
-  }
+  money.push(...sideWords(income, expense));
   const accounts = read("finance.accounts");
   if (accounts === "read") money.push("видит счета");
   if (accounts === "write") money.push("управляет счетами");
@@ -117,7 +110,6 @@ function teamFacts(read: LevelRead): TeamFacts {
     money,
     risky:
       is("calendar.cancel", "write") ||
-      ops === "write" ||
       accounts === "write" ||
       debts === "write" ||
       income === "full" ||

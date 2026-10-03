@@ -96,9 +96,9 @@ describe("сотрудник и зеркало — строка по своей 
     assert.deepEqual(ids(readableTransactions(ROWS, rules, NO_DEBTS)), ["in-a", "rf-a", "ex-a", "tr-a"]);
   });
 
-  test("старая карта: одна строка «Доходы и расходы» на обе стороны", () => {
+  test("старая общая строка `finance.operations` (сервер её не знает) ничего не открывает", () => {
     const rules = partner({ "finance.operations": "read" });
-    assert.deepEqual(ids(readableTransactions(ROWS, rules, NO_DEBTS)), ["in-a", "rf-a", "ex-a"]);
+    assert.deepEqual(ids(readableTransactions(ROWS, rules, NO_DEBTS)), []);
   });
 
   test("оплата долга видна и по «Долгам» команды долга", () => {
@@ -196,7 +196,7 @@ describe("аналитика — стороны денег порознь", () =
     assert.equal(moneyPanelOpen("services", sides), true);
   });
 
-  test("уровень — лучший по календарям; старая карта открывает обе стороны", () => {
+  test("уровень — лучший по календарям; старая общая строка сторон не открывает", () => {
     const sides = moneySides({
       role: "dispatcher",
       map: map({ [A]: { "finance.income": "off" }, [B]: { "finance.income": "full" } }),
@@ -204,7 +204,7 @@ describe("аналитика — стороны денег порознь", () =
     assert.deepEqual(sides, { income: true, expense: false });
     assert.deepEqual(
       moneySides({ role: "master", map: map({ [A]: { "finance.operations": "read" } }) }),
-      { income: true, expense: true },
+      { income: false, expense: false },
     );
   });
 });

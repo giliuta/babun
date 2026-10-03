@@ -108,7 +108,7 @@ describe("уровни выбранной команды", () => {
     const access = financePageAccess({
       role: "master",
       map: employeeMap({
-        [A]: { "finance.operations": "read", "finance.accounts": "off", "finance.debts": "write" },
+        [A]: { "finance.income": "read", "finance.expense": "read", "finance.accounts": "off", "finance.debts": "write" },
       }),
       scope: A,
     });
@@ -137,7 +137,7 @@ describe("уровни выбранной команды", () => {
   test("чип, которого нет в карте прав, — закрыт целиком", () => {
     const access = financePageAccess({
       role: "master",
-      map: employeeMap({ [A]: { "finance.operations": "write" } }),
+      map: employeeMap({ [A]: { "finance.expense": "full" } }),
       scope: B,
     });
     assert.equal(access.ops, "locked");
@@ -151,7 +151,7 @@ describe("уровни выбранной команды", () => {
     for (const scope of [NO_TEAM, null]) {
       const access = financePageAccess({
         role: "master",
-        map: employeeMap({ [A]: { "finance.operations": "write", "finance.accounts": "write" } }),
+        map: employeeMap({ [A]: { "finance.income": "full", "finance.expense": "full", "finance.accounts": "write" } }),
         scope,
       });
       assert.equal(access.ops, "locked", String(scope));
@@ -190,8 +190,8 @@ describe("строка журнала — по своему календарю",
   const access = financePageAccess({
     role: "master",
     map: employeeMap({
-      [A]: { "finance.operations": "write", "finance.accounts": "write", "finance.debts": "read" },
-      [B]: { "finance.operations": "read" },
+      [A]: { "finance.expense": "full", "finance.accounts": "write", "finance.debts": "read" },
+      [B]: { "finance.expense": "read" },
     }),
     scope: A,
   });
@@ -238,8 +238,8 @@ describe("счета, переводы и долги", () => {
   const access = financePageAccess({
     role: "master",
     map: employeeMap({
-      [A]: { "finance.accounts": "write", "finance.operations": "write", "finance.debts": "write" },
-      [B]: { "finance.accounts": "read", "finance.operations": "read", "finance.debts": "read" },
+      [A]: { "finance.accounts": "write", "finance.income": "full", "finance.expense": "full", "finance.debts": "write" },
+      [B]: { "finance.accounts": "read", "finance.income": "read", "finance.expense": "read", "finance.debts": "read" },
     }),
     scope: A,
   });
@@ -253,7 +253,7 @@ describe("счета, переводы и долги", () => {
   test("остаток счёта команды без уровня «Счетов» не виден", () => {
     const opsOnly = financePageAccess({
       role: "master",
-      map: employeeMap({ [A]: { "finance.operations": "read" } }),
+      map: employeeMap({ [A]: { "finance.income": "read", "finance.expense": "read" } }),
       scope: A,
     });
     assert.equal(opsOnly.balanceVisible(teamAccount("acc-a", A)), false);
@@ -280,14 +280,14 @@ describe("счета, переводы и долги", () => {
     assert.equal(access.debtEditable(debt("d-3", null)), false);
   });
 
-  test("оплата долга требует и «Доходы и расходы» «Меняет»", () => {
+  test("оплату долга принимают «Долги» сами, без сторон денег", () => {
     const debtsOnly = financePageAccess({
       role: "master",
-      map: employeeMap({ [A]: { "finance.debts": "write", "finance.operations": "read" } }),
+      map: employeeMap({ [A]: { "finance.debts": "write" } }),
       scope: A,
     });
     assert.equal(debtsOnly.debtEditable(debt("d-1", A)), true);
-    assert.equal(debtsOnly.debtPayable(debt("d-1", A)), false);
+    assert.equal(debtsOnly.debtPayable(debt("d-1", A)), true);
   });
 });
 
@@ -415,16 +415,16 @@ describe("две стороны денег", () => {
     assert.equal(debtsRead.txEditable(tx({ debt_id: d.id, created_by: ME }), { debt: d }), false);
   });
 
-  test("старая карта: доход не правится, любой расход команды — правится", () => {
-    const legacy = financePageAccess({
+  test("старая общая строка `finance.operations` (сервер её не знает) ничего не открывает", () => {
+    const stale = financePageAccess({
       role: "master",
       map: employeeMap({ [A]: { "finance.operations": "write" } }),
       scope: A,
       userId: ME,
     });
-    assert.equal(legacy.income, "write");
-    assert.equal(legacy.expense, "write");
-    assert.equal(legacy.txEditable(tx({ type: "income", created_by: ME })), false);
-    assert.equal(legacy.txEditable(tx({ created_by: OTHER })), true);
+    assert.equal(stale.income, "locked");
+    assert.equal(stale.expense, "locked");
+    assert.equal(stale.txEditable(tx({ type: "income", created_by: ME })), false);
+    assert.equal(stale.txEditable(tx({ created_by: ME })), false);
   });
 });

@@ -6,7 +6,7 @@ import { joinRu, teamBrief, teamSentence } from "./team-sentence";
 
 const reader = (levels: Record<string, AccessLevel>) => (key: string) => levels[key];
 
-// Реестр на 29.09: всё, о чём итог говорит, — живое.
+// Реестр после этапа 2: всё, о чём итог говорит, — живое.
 const CLOSED: Record<string, AccessLevel> = {
   "calendar.create": "off",
   "calendar.move": "off",
@@ -18,7 +18,8 @@ const CLOSED: Record<string, AccessLevel> = {
   "record.amount": "off",
   "record.payment": "off",
   "record.files": "off",
-  "finance.operations": "off",
+  "finance.income": "off",
+  "finance.expense": "off",
   "finance.accounts": "off",
   "finance.debts": "off",
   clients: "off",
@@ -90,7 +91,7 @@ describe("итог прав команды", () => {
     const riskySets: readonly Record<string, AccessLevel>[] = [
       { "calendar.cancel": "write" },
       { "finance.debts": "write" },
-      { "finance.operations": "write" },
+      { "finance.income": "full" },
     ];
     for (const risky of riskySets) {
       assert.doesNotMatch(teamSentence(reader({ ...CLOSED, ...risky })), /удалить не может/, JSON.stringify(risky));
@@ -120,14 +121,7 @@ describe("итог прав команды", () => {
   });
 
   describe("доходы и расходы — два права (этап 2)", () => {
-    // Реестр после наката: общего `finance.operations` нет, есть две стороны.
-    const SPLIT: Record<string, AccessLevel | undefined> = {
-      ...CLOSED,
-      "finance.operations": undefined,
-      "finance.income": "off",
-      "finance.expense": "off",
-    };
-    const say = (over: Record<string, AccessLevel>) => teamSentence((key) => ({ ...SPLIT, ...over })[key]);
+    const say = (over: Record<string, AccessLevel>) => teamSentence(reader({ ...CLOSED, ...over }));
 
     test("равные ступени — одной фразой, разные — по стороне", () => {
       assert.match(say({ "finance.income": "read", "finance.expense": "read" }), /Видит доходы и расходы\./);

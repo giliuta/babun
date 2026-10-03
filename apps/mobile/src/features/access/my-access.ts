@@ -190,27 +190,18 @@ export function isClientDataKey(queryKey: readonly unknown[], tenantId: string):
 }
 
 /** ДОХОДЫ И РАСХОДЫ — ДВА ПРАВА С ЭТАПА 2 (владелец 29.09: «только доходы, но
- *  видел все расходы»). До наката их вела одна строка `finance.operations`.
- *  Карта сервера несёт все живые блоки с умолчаниями, поэтому новый ключ либо
- *  есть в каждом календаре, либо ни в одном: по нему и видно, какая карта
- *  пришла. Экран спрашивает сторону денег этим ключом — и работает до наката,
- *  после него и на телефоне, который карту ещё не перечитал. */
-export function moneyKey(map: MemberAccessMap | undefined, side: "income" | "expense"): string {
-  const key = side === "income" ? "finance.income" : "finance.expense";
-  for (const levels of Object.values(map?.calendars ?? {})) {
-    if (key in levels) return key;
-    if ("finance.operations" in levels) return "finance.operations";
-  }
-  return key;
+ *  видел все расходы»): ключ права стороны денег. Общей строки
+ *  `finance.operations` на сервере нет с наката этапа 2 (03.10 сверено: ни в
+ *  реестре, ни в правах, ни в функциях и политиках) — карта её не принесёт. */
+export function moneyKey(_map: MemberAccessMap | undefined, side: "income" | "expense"): string {
+  return side === "income" ? "finance.income" : "finance.expense";
 }
 
 /** Можно ли человеку править и удалять эту ручную операцию команды (срез 2а)
  *  — ровно то, что пустит сервер (политики `finance_transactions_*_income` /
- *  `_expense`): владелец — любую; сотрудник по стороне денег: «Правит всё» —
- *  любую строку команды, «Добавляет» — только свою. На старой карте (общий
- *  `finance.operations`) — как было: «Меняет» правит любой расход, доход —
- *  никогда. Оплату записи, инвойс, возврат и долг вызывающий отсекает сам:
- *  их ведут свои двери. */
+ *  `_expense`): владелец — любую; партнёр по стороне денег: «Правит всё» —
+ *  любую строку команды, «Добавляет» — только свою. Оплату записи, инвойс,
+ *  возврат и долг вызывающий отсекает сам: их ведут свои двери. */
 export function canEditMoneyRow(input: {
   role: Role | null | undefined;
   map: MemberAccessMap | undefined;
@@ -222,9 +213,7 @@ export function canEditMoneyRow(input: {
   const { role, map, teamId, side, createdBy, me } = input;
   if (role === "owner" || map?.isOwner) return true;
   if (!map || !teamId) return false;
-  const key = moneyKey(map, side);
-  const level = map.calendars[teamId]?.[key];
-  if (key === "finance.operations") return side === "expense" && level === "write";
+  const level = map.calendars[teamId]?.[moneyKey(map, side)];
   if (level === "full") return true;
   return level === "write" && !!me && createdBy === me;
 }

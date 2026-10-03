@@ -27,9 +27,7 @@ import type { HomeView } from "./FinanceOverview";
 // ДОХОДЫ И РАСХОДЫ — ДВА ПРАВА (владелец 29.09: «только доходы, но видел все
 // расходы»). У каждой стороны: Не видит · Видит · Добавляет · Правит всё.
 // «Добавляет» правит только свою операцию, «Правит всё» — и чужие. Оплату
-// долга ведёт «Долги: Принимает оплату» сама, без сторон денег. Старая карта
-// (до наката) несёт одну строку `finance.operations`: по ней доход сотрудник
-// не правил вовсе, а любой расход своей команды — правил (`moneyKey`).
+// долга ведёт «Долги: Принимает оплату» сама, без сторон денег.
 //
 // Владелец ограничений не имеет и карту прав не ждёт: его страница не мигает.
 
@@ -138,7 +136,6 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
   const levelIn = (blockKey: FinanceBlock, teamId: string | null | undefined): Level =>
     levelInCalendar({ role, map }, blockKey, teamId);
 
-  const legacy = !owner && moneyKey(map, "income") === "finance.operations";
   const sideKey = (side: Side): string => moneyKey(map, side);
   const best = (a: Level, b: Level): Level =>
     a === "write" || b === "write" ? "write" : a === "read" || b === "read" ? "read" : "locked";
@@ -152,12 +149,10 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
   // «Видит» — её инвойсы и чеки, «Выставляет» — ещё и новые инвойсы.
   const documentsLevel = levelIn("finance.documents", scope);
 
-  /** «Правит всё» — чужие операции стороны. На старой карте так вёл себя
-   *  «Меняет» у расхода, а доход сотрудник не правил вовсе. */
+  /** «Правит всё» — чужие операции стороны. */
   const sideFull = (side: Side, teamId: string | null): boolean => {
     if (owner) return true;
     if (!teamId || teamId === NO_TEAM || !map) return false;
-    if (legacy) return side === "expense" && levelIn(sideKey(side), teamId) === "write";
     return map.calendars[teamId]?.[sideKey(side)] === "full";
   };
   const mine = (tx: FinanceTransaction): boolean =>
@@ -191,14 +186,6 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
       const debt = ref?.debt ?? null;
       return !!debt && debt.id === tx.debt_id && levelIn("finance.debts", debt.team_id) === "write";
     };
-
-    if (legacy) {
-      // До наката: только расход, по «Доходам и расходам», долг — ещё и «Долгами».
-      if (tx.type !== "expense") return false;
-      if (levelIn("finance.operations", tx.team_id) !== "write") return false;
-      if (!accountOk("finance.operations")) return false;
-      return !tx.debt_id || debtOk();
-    }
 
     if (tx.debt_id) {
       // Оплата долга — своя, по «Долги: Принимает оплату», без сторон денег.
@@ -293,10 +280,7 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
       );
     },
     debtEditable,
-    // Оплата долга — «Долги: Принимает оплату» сама; до наката платёж был
-    // операцией журнала и требовал ещё «Доходы и расходы».
-    debtPayable: (debt) =>
-      debtEditable(debt) &&
-      (!legacy || levelIn("finance.operations", debt.team_id) === "write"),
+    // Оплата долга — «Долги: Принимает оплату» сама, без сторон денег.
+    debtPayable: debtEditable,
   };
 }
