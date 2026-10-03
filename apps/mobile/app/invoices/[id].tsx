@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Share, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { MoreHorizontal, Share2 } from "lucide-react-native";
 import {
@@ -38,7 +38,6 @@ import { InvoicePaymentSheet } from "@/features/invoices/InvoicePaymentSheet";
 import { InvoiceRefundSheet } from "@/features/invoices/InvoiceRefundSheet";
 import { shareInvoicePdf } from "@/features/invoices/share-pdf";
 import { buildInvoiceDocument } from "@/features/invoices/document";
-import { buildInvoiceShareText } from "@/features/invoices/text";
 import { InvoiceStatusBadge } from "@/features/invoices/InvoiceStatusBadge";
 import { InvoicePaper } from "@/features/invoices/InvoicePaper";
 import {
@@ -183,33 +182,6 @@ export default function InvoiceDetailScreen() {
       pathname: "/documents/receipt-new",
       params: { transactionId: payment.id },
     } as unknown as Href);
-  };
-
-  const shareInvoice = async () => {
-    // Итоги — часть документа, а не украшение: без них сообщение не собрать,
-    // и лучше промолчать, чем отправить клиенту счёт без сумм.
-    if (!invoice.data || !settlement) return;
-    try {
-      await Share.share({
-        // ТЕКСТ И PDF — ОДНА МОДЕЛЬ. Раньше сообщение считало состав само и
-        // расходилось с вложением словами за одну отправку.
-        message: buildInvoiceShareText(
-          buildInvoiceDocument({
-            invoice: invoice.data,
-            tenant: tenant ?? undefined,
-            client,
-            settlement,
-            payments,
-            accountNames: accountById,
-            businessToday,
-            language: invoice.data.language as "ru" | "en" | undefined,
-            creditNote,
-          }),
-        ),
-      });
-    } catch (error) {
-      notify("Не удалось поделиться", (error as Error).message);
-    }
   };
 
   const sharePdf = async () => {
@@ -449,7 +421,6 @@ export default function InvoiceDetailScreen() {
   const openMenu = async () => {
     const actions = [
       { label: "Поделиться PDF", run: () => void sharePdf() },
-      { label: "Поделиться текстом", run: () => void shareInvoice() },
       ...(docWrite
         ? [
             {

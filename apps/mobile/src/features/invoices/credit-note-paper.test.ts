@@ -3,7 +3,6 @@ import { describe, it } from "node:test";
 import type { InvoiceLedgerWithLines } from "@babun/shared/local/finance/invoice-ledger";
 import { buildInvoiceDocument } from "./document";
 import { buildInvoicePdfHtml } from "./pdf";
-import { buildInvoiceShareText } from "./text";
 
 // КРЕДИТ-НОТА ПЕЧАТАЛАСЬ СЛОМАННЫМ «INVOICE» (аудит 03.10): сервер
 // (`_issue_credit_note`) пишет только суммы с минусом и русскую причину —
@@ -87,14 +86,11 @@ describe("кредит-нота на бумаге", () => {
     assert.equal(own.notes, "Client returned the unit");
   });
 
-  it("PDF и текст говорят то же", () => {
+  it("PDF говорит то же", () => {
     const html = buildInvoicePdfHtml(input);
     assert.match(html, /<h1>CREDIT NOTE<\/h1>/);
     assert.match(html, /Credits invoice INV-2026-0007/);
     assert.doesNotMatch(html, /No lines yet/);
-    const text = buildInvoiceShareText(doc);
-    assert.match(text, /^Credit note CN-2026-0001$/m);
-    assert.match(text, /^Credits invoice INV-2026-0007$/m);
   });
 
   it("обычный инвойс не меняется", () => {

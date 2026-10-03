@@ -1,4 +1,4 @@
-import { Share, View } from "react-native";
+import { View } from "react-native";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
@@ -19,7 +19,6 @@ import {
 import { buildReceiptPdfHtml } from "./receipt-pdf";
 import { ReceiptPaper } from "./ReceiptPaper";
 import { useReceiptAppointment } from "./receipts-queries";
-import { buildReceiptShareText } from "./receipt-text";
 import { shareHtmlAsPdf } from "./share-pdf";
 import { notify } from "@/lib/notify";
 import { financesFrom } from "@/features/appointments/return-to";
@@ -123,7 +122,9 @@ export function ReceiptSheet({
   // ЯЗЫК БУМАГИ — ЯЗЫК ИНВОЙСА, на который выписан чек: английский счёт и
   // русский чек к нему — два голоса одной фирмы (аудит 03.10).
   const language: InvoiceLanguage = invoiceQuery.data?.language === "en" ? "en" : "ru";
-  const doc = buildReceiptDocument(r, lineItems, language);
+  // «Инвойс INV-…» на бумаге — за какой документ эти деньги (владелец 04.10).
+  const invoiceNumber = invoiceQuery.data?.number ?? null;
+  const doc = buildReceiptDocument(r, lineItems, language, invoiceNumber);
 
   const leave = (href: string) => {
     onClose();
@@ -137,22 +138,11 @@ export function ReceiptSheet({
     onClose();
     setTimeout(() => {
       void shareHtmlAsPdf({
-        html: buildReceiptPdfHtml(r, lineItems, language),
+        html: buildReceiptPdfHtml(r, lineItems, language, invoiceNumber),
         fileName: `${doc.words.receipt} ${r.number}`,
         dialogTitle: `${doc.words.receipt} ${r.number}`,
       }).catch((error: unknown) =>
         notify("Не удалось поделиться PDF", (error as Error).message),
-      );
-    }, SHEET_EXIT_MS);
-  };
-
-  const shareText = () => {
-    onClose();
-    setTimeout(() => {
-      void Share.share({
-        message: buildReceiptShareText(doc),
-      }).catch((error: unknown) =>
-        notify("Не удалось выслать чек", (error as Error).message),
       );
     }, SHEET_EXIT_MS);
   };
@@ -178,7 +168,16 @@ export function ReceiptSheet({
               loading={linesLoading}
               onPress={sharePdf}
             />
-            <Button label="Поделиться текстом" variant="secondary" onPress={shareText} />
+            {/* ПРАВКА НА МЕСТЕ (владелец 04.10: «выписал чек, увидел мелочь,
+                клиенту ещё не отправлял — сразу отредактирую и отправлю»):
+                тот же составитель, тот же номер. */}
+            {r.transaction_id ? (
+              <Button
+                label="Изменить чек"
+                variant="secondary"
+                onPress={() => leave(`/documents/receipt-new?receiptId=${r.id}`)}
+              />
+            ) : null}
           </View>
         )
       }
@@ -231,7 +230,7 @@ export function ReceiptSheet({
           {r.invoice_id ? (
             <NavRow
               label="Инвойс"
-              value="Открыть"
+              value={invoiceNumber ?? "Открыть"}
               separated
               onPress={() => leave(`/invoices/${r.invoice_id}`)}
             />

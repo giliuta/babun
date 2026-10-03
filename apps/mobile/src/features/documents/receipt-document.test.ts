@@ -9,7 +9,6 @@ import {
   receiptLinesFromAppointment,
   receiptLinesFromInvoice,
 } from "./receipt-document";
-import { buildReceiptShareText } from "./receipt-text";
 
 /** Тот же приём, что у `invoice-generator.test.ts`: партиал + `as unknown as
  *  Appointment` — модель записи большая, а этим тестам нужны только несколько
@@ -88,11 +87,6 @@ describe("receipt document", () => {
     assert.equal(en.vat?.label, "incl. VAT 19%");
     assert.equal(en.amount, formatInvoiceMoney(119, "EUR", "en-GB"));
     assert.equal(en.lines[0]?.unitPrice, formatInvoiceMoney(59.5, "EUR", "en-GB"));
-    // Текст для мессенджера — тем же языком.
-    const text = buildReceiptShareText(en);
-    assert.match(text, /^Receipt RC-2026-007$/m);
-    assert.match(text, /^Work total: /m);
-    assert.match(text, /^Received: /m);
     // По умолчанию — прежний русский чек.
     assert.equal(buildReceiptDocument(receipt).words.receipt, "Чек");
   });
