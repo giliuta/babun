@@ -132,10 +132,13 @@
 ```
 
 
-Выбранный клиент: имя 17/700 → `ClientHistoryLine` (долг, визиты, деньги,
-последний визит) → телефон 13. Справа `PhoneChannelButton` 32pt (тап звонит,
-удержание — способы связи) и «…» 32pt в карточку клиента. Пустой — `ChooseRow`.
-Под клиентом — его заметка мини-плашкой.
+Выбранный клиент — как строка списка клиентов (`ClientRow`, владелец 03.10):
+имя 17/700 → одной строкой номер 14 серым и дата визита 13 цветом
+(`visitMark`: синяя — последний визит, жёлтая — не закрыт, серая — записан
+вперёд). Долга и числа визитов в блоке нет. Справа `PhoneChannelButton` 32pt
+(тап звонит, удержание — способы связи). Тап по клиенту — выбор, удержание —
+карточка клиента (кружка «…» нет с 03.10). Пустой — `ChooseRow`. Под клиентом
+— его заметка мини-плашкой.
 
 ```tsx
 <SectionCard title="Клиент">
@@ -144,17 +147,23 @@
       <Pressable
         className="flex-1 flex-row items-center px-4 py-2.5"
         onPress={() => setClientPickerOpen(true)}
+        onLongPress={openClientCard}
         accessibilityRole="button"
-        accessibilityHint="Открывает выбор клиента"
+        accessibilityHint="Открывает выбор клиента; удерживайте — карточка клиента"
       >
         <View className="flex-1">
           <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
             {client.full_name || "Без имени"}
           </Text>
-          <ClientHistoryLine client={client} stats={clientStats} />
-          <Text numberOfLines={1} style={{ fontSize: 13, marginTop: 2, color: client.phone ? t.sub : t.placeholder }}>
-            {client.phone ?? "без телефона"}
-          </Text>
+          {/* как в списке клиентов: номер серым, за ним дата визита цветом */}
+          <View className="mt-0.5 flex-row items-center" style={{ gap: 12 }}>
+            <Text numberOfLines={1} style={{ fontSize: 14, color: t.sub }}>
+              {formatPhoneForDisplay(client.phone, country)}
+            </Text>
+            {mark ? (
+              <Text style={{ fontSize: 13, color: markColor }}>{formatShortDateRu(mark.date)}</Text>
+            ) : null}
+          </View>
         </View>
       </Pressable>
       {client.phone ? (
@@ -162,15 +171,6 @@
           <PhoneChannelButton number={client.phone} telegramUsername={client.telegram_username} label={client.full_name || undefined} />
         </View>
       ) : null}
-      <Pressable
-        onPress={openClientCard}
-        className="mr-4 items-center justify-center self-center rounded-full"
-        style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
-        accessibilityRole="button"
-        accessibilityLabel="Карточка клиента"
-      >
-        <MoreHorizontal color={t.body} size={ICON.sm} />
-      </Pressable>
     </View>
   ) : (
     <ChooseRow

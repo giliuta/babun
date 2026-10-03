@@ -120,7 +120,7 @@ describe("библиотека блоков указывает на живой �
     );
     for (const marker of [
       'SectionCard title="Клиент"',
-      "<ClientHistoryLine",
+      "visitMark(",
       "<PhoneChannelButton",
       "<ChooseRow",
     ]) {

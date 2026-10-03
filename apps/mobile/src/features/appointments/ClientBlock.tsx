@@ -1,13 +1,17 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { Phone, UserRound, X } from "lucide-react-native";
+import { CalendarClock, Clock, Phone, UserRound, X } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { RowActionButton } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ICON } from "@/components/ui/tokens";
-import { ClientHistoryLine } from "@/features/clients/history-line";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
+import { useDefaultCountry } from "@/features/clients/default-country";
+import { formatShortDateRu } from "@/features/clients/format";
+import { formatPhoneForDisplay } from "@/features/clients/phone";
+import { visitMark } from "@/features/clients/visit-mark";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { contactsLocked } from "@/features/clients/member-contacts";
 import { useRevealedClient } from "@/features/clients/revealed-contacts";
@@ -29,6 +33,12 @@ import { useThemeColors } from "@/theme/colors";
 // прежние копии — его вызовами. Вид не менялся: порядок строк (имя → вводная
 // о человеке → телефон), кнопка связи и «X» перенесены дословно.
 //
+// СТРОКА — КАК В СПИСКЕ КЛИЕНТОВ (владелец 03.10: «одна такая же карточка
+// клиента, как на странице клиентов: имя, номер телефона и дата последнего
+// визита»). Долга, числа визитов и денег здесь больше нет — они на странице
+// клиента. Под именем — номер и дата цветом, правило `visit-mark.ts`: синяя —
+// последний визит, жёлтая — визит не закрыт, серая — записан вперёд.
+//
 // КАРТОЧКА КЛИЕНТА — ДОЛГИМ НАЖАТИЕМ (владелец 03.10: «убери эти три точки…
 // чтобы зайти в карточку клиента — зажать на клиента, а если один раз нажать —
 // выбор клиента»). Кружка «…» в хвосте строки больше нет: тап по клиенту —
@@ -47,21 +57,15 @@ import { useThemeColors } from "@/theme/colors";
 export function ClientBlock({
   client,
   stats,
-  summary,
   onPick,
   onOpenCard,
   onClear,
   note,
 }: {
   client: Client | null;
-  /** Долг, визиты, деньги, последний визит — вводная о человеке (владелец
-   *  2026-09-04). `undefined` — считать нечем, строка просто не появится. */
+  /** Последний визит (или запись вперёд) — дата под именем, как в списке
+   *  клиентов. `undefined` — считать нечем, даты нет. */
   stats?: ClientStats;
-  /** Вводная о человеке ОДНОЙ СТРОКОЙ для VoiceOver — тем же текстом, что в
-   *  списке выбора (`clientHistoryText`): долг идёт первым. Глазами её
-   *  показывает `ClientHistoryLine`, но экранный читатель видит только
-   *  подпись строки, и без этого он терял самое важное. */
-  summary?: string | null;
   /** Нет — клиент записи только читается (STORY-084: одна страница записи
    *  для всех, блок по праву). Звонок и карточка при этом остаются: это
    *  дорога к человеку, а не правка записи. */
@@ -80,6 +84,8 @@ export function ClientBlock({
   const { open } = useOpenMemberContacts();
   // Открытый номер лежит в памяти — поверх строки окна.
   const shown = useRevealedClient(client, tenantId) ?? null;
+  // Номер — в том же виде, что в списке клиентов: страна команды клиента.
+  const country = useDefaultCountry(shown?.team_id ?? null);
   // Отступ правого края: с «X» кнопки стоят теснее, иначе три круга подряд
   // упираются в край карточки.
   const gap = onClear ? "mr-2" : "mr-4";
@@ -88,6 +94,18 @@ export function ClientBlock({
   const locked = shown ? contactsLocked(shown) : false;
   const lockedDay = locked && shown?.contacts_hidden === "day";
   const noPhoneRight = locked && shown?.contacts_hidden === "right";
+  // Дата — как в списке клиентов; «Историю записей» закрыли — даты нет.
+  const mark =
+    shown && clientBlockLevel(shown, "clients.history") !== "hidden" ? visitMark(stats) : null;
+  const markColor = mark?.kind === "unclosed" ? t.warning : mark?.kind === "ahead" ? t.sub : t.accent;
+  const MarkIcon = mark?.kind === "ahead" ? CalendarClock : Clock;
+  const markWords = !mark
+    ? null
+    : mark.kind === "unclosed"
+      ? `визит ${formatShortDateRu(mark.date)} не закрыт`
+      : mark.kind === "ahead"
+        ? `записан ${formatShortDateRu(mark.date)}`
+        : `последний визит ${formatShortDateRu(mark.date)}`;
 
   return (
     <SectionCard title="Клиент">
@@ -113,9 +131,9 @@ export function ClientBlock({
                 : undefined
             }
             accessibilityRole={onPick || onOpenCard ? "button" : "text"}
-            accessibilityLabel={`Клиент: ${shown.full_name || "без имени"}. ${
-              summary ?? shown.phone ?? "ещё не обслуживали"
-            }`}
+            accessibilityLabel={[`Клиент: ${shown.full_name || "без имени"}`, locked ? null : shown.phone, markWords]
+              .filter(Boolean)
+              .join(". ")}
             accessibilityHint={
               onPick && onOpenCard
                 ? "Открывает выбор клиента; удерживайте — карточка клиента"
@@ -134,25 +152,42 @@ export function ClientBlock({
               <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
                 {shown.full_name || "Без имени"}
               </Text>
-              {/* ПОРЯДОК КАК В СПИСКЕ КЛИЕНТОВ: имя, деньги, связь. Раньше
-                  история ВЫТЕСНЯЛА телефон — у постоянного клиента номер из
-                  записи пропадал вовсе. */}
-              <ClientHistoryLine client={shown} stats={stats} />
-              {noPhoneRight ? null : (
-                <Text
-                  style={{
-                    fontSize: 13,
-                    color: shown.phone || locked ? t.sub : t.placeholder,
-                    marginTop: 2,
-                  }}
-                  numberOfLines={1}
-                >
-                  {lockedDay
-                    ? "Номер откроется в день записи"
-                    : locked
-                      ? "•• ••• •••"
-                      : shown.phone || "без телефона"}
-                </Text>
+              {/* НОМЕР И ДАТА ОДНОЙ СТРОКОЙ ПОД ИМЕНЕМ — как в списке клиентов
+                  (`ClientRow`): номер серым, за ним дата визита цветом. */}
+              {noPhoneRight && !mark ? null : (
+                <View className="mt-0.5 flex-row items-center" style={{ gap: 12 }}>
+                  {noPhoneRight ? null : (
+                    <Text
+                      maxFontSizeMultiplier={1.3}
+                      numberOfLines={1}
+                      style={{
+                        fontSize: 14,
+                        color: shown.phone || locked ? t.sub : t.placeholder,
+                        fontVariant: ["tabular-nums"],
+                      }}
+                    >
+                      {lockedDay
+                        ? "Номер откроется в день записи"
+                        : locked
+                          ? "•• ••• •••"
+                          : shown.phone
+                            ? formatPhoneForDisplay(shown.phone, country)
+                            : "без телефона"}
+                    </Text>
+                  )}
+                  {mark ? (
+                    <View className="shrink flex-row items-center gap-1">
+                      <MarkIcon color={markColor} size={12} strokeWidth={2} />
+                      <Text
+                        maxFontSizeMultiplier={1.3}
+                        numberOfLines={1}
+                        style={{ fontSize: 13, color: markColor, fontVariant: ["tabular-nums"] }}
+                      >
+                        {formatShortDateRu(mark.date)}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
               )}
             </View>
           </Pressable>

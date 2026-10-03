@@ -14,7 +14,6 @@ import { FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
 import { useAppointments } from "@/features/calendar/queries";
-import { clientHistoryText } from "@/features/clients/history-line";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
@@ -295,7 +294,6 @@ export function InvoiceBlocks({
         <ClientBlock
           client={client}
           stats={clientStats}
-          summary={client ? clientHistoryText(client, clientStats) : null}
           onPick={() => setSheet("client")}
           // «…» ведёт в карточку клиента, как в записи; выбор — тапом по имени.
           onOpenCard={

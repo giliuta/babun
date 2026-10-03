@@ -165,9 +165,6 @@ import { SmsComposeProvider } from "@/features/sms/SmsCompose";
 import { SmsRecordBlock } from "@/features/sms/SmsRecordBlock";
 import { smsVars } from "@/features/sms/sms-compose";
 import { addressedAs, firstName } from "@/features/clients/sms-name";
-import {
-  clientHistoryText,
-} from "@/features/clients/history-line";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { WhenRow } from "@/features/appointments/BookingSummary";
@@ -840,12 +837,10 @@ export default function BookScreen() {
     if (next !== date) setDate(next);
   }, [calendarSettings?.timezone, date, params.date, team?.timezone]);
 
-  // ВВОДНАЯ О КЛИЕНТЕ — ТЕМ ЖЕ ТЕКСТОМ, ЧТО В СПИСКЕ ВЫБОРА. Раньше строка
-  // собиралась здесь своими руками и молчала о ДОЛГЕ — самом важном, что
-  // стоит знать, набирая клиента на работу. Теперь состав один на оба места
-  // (`clientHistoryParts`), и долг идёт первым.
+  // ДАТА ВИЗИТА ПОД ИМЕНЕМ КЛИЕНТА — как в списке клиентов (владелец 03.10:
+  // «имя, номер телефона и дата последнего визита»; долга и визитов в блоке
+  // записи больше нет — они на странице клиента).
   const clientStats = client ? statsById.get(client.id) : undefined;
-  const clientHistory = client ? clientHistoryText(client, clientStats) : null;
 
   // ═══ ГИДРАЦИЯ ПРАВКИ ═══
   //
@@ -2675,7 +2670,6 @@ export default function BookScreen() {
                 <ClientBlock
                   client={client}
                   stats={clientStats}
-                  summary={clientHistory}
                   onPick={can.editClient ? pickClientOrRefuse : undefined}
                   onOpenCard={openClientCard}
                   note={
@@ -3070,7 +3064,6 @@ export default function BookScreen() {
                 <ClientBlock
                   client={client}
                   stats={clientStats}
-                  summary={clientHistory}
                   onPick={can.editClient ? pickClientOrRefuse : undefined}
                   onOpenCard={openClientCard}
                   onClear={
