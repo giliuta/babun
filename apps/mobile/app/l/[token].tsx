@@ -11,7 +11,6 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import Head from "expo-router/head";
 import { CircleCheck, LocateFixed, MapPin } from "lucide-react-native";
-import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { Button } from "@/components/ui/Button";
 import { ChoiceRow, FieldRow, RowGroup } from "@/components/ui/card-rows";
 import { ChooseRow } from "@/components/ui/ChooseRow";
@@ -362,9 +361,6 @@ function AddressForm({
           <AddressDetailsFields
             parts={form.parts}
             onChange={(parts) => setForm((f) => ({ ...f, parts }))}
-            pin={form.pin}
-            onPinChange={(pin) => setForm((f) => ({ ...f, pin }))}
-            showPin={!form.coords && !isLikelyUrl(form.line.trim())}
           />
         ) : null}
         <ChoiceRow

@@ -327,10 +327,6 @@ export function ObjectFields({
             parts={value.parts}
             onChange={(parts) => onChange({ parts })}
             onEditEnd={onCommit}
-            pin={value.pin}
-            onPinChange={(pin) => onChange({ pin })}
-            onPinEditEnd={onCommit}
-            showPin={!isLikelyUrl(value.target.trim())}
           />
         ) : null}
       </SectionCard>

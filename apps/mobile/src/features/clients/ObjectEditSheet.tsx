@@ -9,10 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ActionRow } from "@/components/ui/card-rows";
 import { useLastNonNull } from "@/lib/use-last-non-null";
-import {
-  ClientLinksBlock,
-  type ClientLinkItem,
-} from "@/features/clients/blocks/ClientLinksBlock";
+import { type ClientLinkItem } from "@/features/clients/blocks/ClientLinksBlock";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
 import {
   ObjectFields,
@@ -49,11 +46,6 @@ import { useThemeColors } from "@/theme/colors";
 // четвёртая строка «Мария Спиру · жилец, Андреас · жилец».
 
 const EMPTY_LOCATIONS: Location[] = [];
-/** Ссылка постоянная: новый пустой массив на каждый рендер перерисовывал бы
- *  блок жильцов вместе с полем роли под курсором. */
-const EMPTY_RESIDENTS: readonly ClientLinkItem[] = [];
-/** Карточку жильца открывать некуда (лист записи) — строка остаётся строкой. */
-const NOOP = () => {};
 
 export function ObjectEditSheet({
   visible,
@@ -61,11 +53,6 @@ export function ObjectEditSheet({
   locationId,
   writer,
   askDelete,
-  residents,
-  onAddResident,
-  onOpenResident,
-  onResidentRole,
-  onRemoveResident,
   onRequestFromClient,
   onDeleted,
   onClose,
@@ -134,10 +121,6 @@ export function ObjectEditSheet({
   /** Что сделать, когда лист полностью уйдёт (см. `onExited`). Хук стоит
    *  ДО `if (!loc) return null`: иначе число хуков плясало между рендерами. */
   const afterExit = useRef<(() => void) | null>(null);
-  const residentsHere = useMemo(
-    () => (residents ?? EMPTY_RESIDENTS).map((r) => ({ ...r, place: undefined })),
-    [residents],
-  );
   const [target, setTarget] = useState("");
   const [note, setNote] = useState("");
   useEffect(() => {
@@ -318,41 +301,8 @@ export function ObjectEditSheet({
           </SectionCard>
         ) : null}
 
-        {/* ЖИЛЬЦЫ — ТОТ ЖЕ БЛОК СВЯЗЕЙ, ЧТО НА КАРТОЧКЕ, только плотнее: в
-            листе блоков несколько, и воздух страницы съедал бы треть окна
-            (`dense`, владелец 2026-09-10 — «сделай все эти блоки
-            компактнее»). Второй вёрстки строки человека в продукте нет: она
-            одна на «Людей» карточки, «Чей он» и «Жильцов» (`LinkRow`).
-
-            Блок сам исчезает, когда показывать нечего и двери нет, — так он
-            не занимает место в листе записи, где жильцов не заводят. */}
-        <ClientLinksBlock
-          dense
-          title="Жильцы"
-          // Место жильца здесь не пишется: лист и есть это место, и «· Вилла
-          // 5» у каждого жильца Виллы 5 было бы эхом заголовка.
-          items={residentsHere}
-          addLabel="Добавить жильца"
-          onAdd={
-            onAddResident
-              ? () => {
-                  // СПЕРВА УЕЗЖАЕТ ЛИСТ, ПОТОМ ПОДНИМАЕТСЯ ШТОРКА. Таймер
-                  // здесь мерил бы анимацию, а не снятие окна, — ровно так
-                  // «Удалить объект» из этого листа однажды получал от iOS
-                  // «already presenting» и не показывался вовсе
-                  // (2026-09-04). Набранное в полях коммитим, как при любом
-                  // другом закрытии.
-                  const place = loc;
-                  afterExit.current = () => onAddResident(place);
-                  commitAll();
-                  onClose();
-                }
-              : undefined
-          }
-          onOpen={onOpenResident ?? NOOP}
-          onRoleChange={onResidentRole}
-          onRemove={onRemoveResident}
-        />
+        {/* БЛОКА «ЖИЛЬЦЫ» НЕТ (владелец 03.10: «добавить жильца — полностью
+            убираем, это перебор»). */}
       </ScrollView>
 
       <View

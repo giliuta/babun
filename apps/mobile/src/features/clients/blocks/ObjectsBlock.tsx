@@ -24,6 +24,7 @@ import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useCopyValue } from "@/lib/copy-value";
 import { AppearanceTile } from "@/components/ui/AppearanceSheet";
+import { PICKER_RADIUS } from "@/components/ui/picker-grid";
 import { useLocationLabels } from "@/features/settings/local-settings";
 import { objectTypeKey } from "@/features/clients/object-types";
 
@@ -83,6 +84,11 @@ function ObjectNote({
   );
 }
 
+/** Плитка объекта — того же размера, что плитка записи в «Истории»
+ *  (`SelectRow`, 28): рядом на карточке они не должны различаться
+ *  (владелец 03.10: «значки отличаются прям»). */
+const OBJECT_TILE = 28;
+
 /** ПЛИТКА ТИПА ОБЪЕКТА — ТА ЖЕ, ЧТО У ТИПА В ЛИСТЕ ОБЪЕКТА (владелец 03.10:
  *  «иконка и цвет от типа объекта переходят сюда полноценно»). Правило
  *  блока «Тип объекта» (`ObjectFields`): цвет типа, а без него акцент;
@@ -90,21 +96,23 @@ function ObjectNote({
 function ObjectTypeTile({ typed, color, icon }: { typed: boolean; color?: string | null; icon?: string | null }) {
   const t = useThemeColors();
   if (typed) {
-    return <AppearanceTile color={color ?? t.accent} icon={icon ?? null} fallback={Tag} size={34} />;
+    return <AppearanceTile color={color ?? t.accent} icon={icon ?? null} fallback={Tag} size={OBJECT_TILE} />;
   }
   return (
     <View
       style={{
-        width: 34,
-        height: 34,
-        borderRadius: 10,
+        // Та же геометрия, что у `AppearanceTile` (владелец 03.10: домик
+        // «отличается размером — не очень аккуратно»): радиус и глиф 56 %.
+        width: OBJECT_TILE,
+        height: OBJECT_TILE,
+        borderRadius: PICKER_RADIUS,
         borderCurve: "continuous",
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: `${t.accent}14`,
       }}
     >
-      <House color={t.accent} size={18} strokeWidth={2} />
+      <House color={t.accent} size={Math.round(OBJECT_TILE * 0.56)} strokeWidth={2} />
     </View>
   );
 }
