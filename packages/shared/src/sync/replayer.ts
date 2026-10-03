@@ -96,6 +96,28 @@ type DbSupabase = SupabaseClient<Database>;
 export const MAX_ATTEMPTS = 3;
 const BACKOFFS_MS = [1000, 5000, 30000]; // attempts 1, 2, 3
 
+/** ДЕРЖИТ ЛИ ОПЕРАЦИЯ ПЕРЕЧИТКУ ТАБЛИЦЫ ЭТОЙ КОМПАНИИ (аудит 2026-10-03).
+ *  Перечитка с сервера пропускается, пока своя операция той же таблицы ждёт
+ *  выгрузки: снимок сервера стёр бы оптимистичную строку раньше, чем она
+ *  туда дойдёт. Но операция ДРУГОЙ компании под текущей не уходит никогда
+ *  (гейт компании в `replayQueue`), и без этой сверки она замораживала
+ *  календарь, клиентов и теги текущей компании до возвращения в ту: не
+ *  видно ни правок партнёров, ни удалений, ни оплат. Её строк перечитка и не
+ *  касается — `cacheReplaceTenant` меняет только строки своей компании.
+ *  Операция без компании в теле (правки до 24.09) держит, как раньше:
+ *  гейт узнает её компанию из кэша, а здесь осторожнее не гадать. */
+export function holdsTenantRefresh(
+  op: QueuedOp,
+  table: CachedTable,
+  tenantId: string,
+): boolean {
+  if (op.table !== table || op.attempts >= MAX_ATTEMPTS) return false;
+  const opTenant = (op.payload as { tenant_id?: unknown } | null)?.tenant_id;
+  return (
+    typeof opTenant !== "string" || opTenant.length === 0 || opTenant === tenantId
+  );
+}
+
 type Toast = (msg: string) => void;
 
 export interface ReplayerOptions {

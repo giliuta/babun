@@ -83,7 +83,7 @@ import {
   type CachedClientData,
 } from "../db/cache/sql";
 import { isOnline } from "./network";
-import { kickReplayer, MAX_ATTEMPTS } from "./replayer";
+import { holdsTenantRefresh, kickReplayer } from "./replayer";
 import {
   enqueueOpAndEmit,
   enqueueOpWithCacheUpsertAndEmit,
@@ -226,9 +226,7 @@ async function refreshCacheFromSupabase(
   // to heal a rejected optimistic row.
   const pending = await dequeueAll();
   if (
-    pending.some(
-      (op) => op.table === "clients" && op.attempts < MAX_ATTEMPTS,
-    )
+    pending.some((op) => holdsTenantRefresh(op, "clients", tenantId))
   ) {
     void kickReplayer({ supabase });
     return false;

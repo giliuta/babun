@@ -64,7 +64,7 @@ import {
 // CachedAppointment (raw Row) is the queue-payload projection; CachedAppointmentData
 // (full domain) is the cache-read projection. Both are used below.
 import { isOnline } from "./network";
-import { kickReplayer, MAX_ATTEMPTS } from "./replayer";
+import { holdsTenantRefresh, kickReplayer } from "./replayer";
 import {
   enqueueOpAndEmit,
   enqueueOpWithCacheUpsertAndEmit,
@@ -215,9 +215,7 @@ async function refreshCacheFromSupabase(
   // блокируют: их реплей не воскресит, сервер — истина.
   const pending = await dequeueAll();
   if (
-    pending.some(
-      (op) => op.table === "appointments" && op.attempts < MAX_ATTEMPTS,
-    )
+    pending.some((op) => holdsTenantRefresh(op, "appointments", tenantId))
   ) {
     // Пропуск обязан сам подтолкнуть дренаж: кроме флипа сети, старта
     // приложения и следующей мутации очередь никто не разгребает — один

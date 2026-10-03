@@ -55,6 +55,7 @@ import type { Appointment } from "../local/appointments";
 import { ColdOfflineCacheMissError } from "./cache-errors";
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
+const OTHER_TENANT = "22222222-2222-2222-2222-222222222222";
 const CLIENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const APPT_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
@@ -180,6 +181,27 @@ describe("clients cache-of-domain", () => {
     expect(server.readPages()).toBe(0);
     const cached = await cacheRead<Record<string, unknown>>("clients", TENANT);
     expect(cached.map((row) => row.id)).toEqual([CLIENT_ID]);
+  });
+
+  test("an offline write of ANOTHER company does not freeze this company's refresh (audit 03.10)", async () => {
+    // Офлайн-клиент компании A ждёт в очереди; под B он не уйдёт никогда.
+    await createClient(
+      stubSupabase,
+      createBlankClient({ id: CLIENT_ID, full_name: "Оффлайн A" }),
+      TENANT,
+    );
+    setNetwork(new OnlineNetwork());
+    const server = emptyClientSnapshotSupabase();
+
+    await listClients(server.client as never, OTHER_TENANT);
+
+    // Снимок B лёг в кэш: без сети B открывается, а не «ещё не загружено».
+    setNetwork(new OfflineNetwork());
+    expect(await listClients(stubSupabase, OTHER_TENANT)).toEqual([]);
+    // Строка A и её операция на месте.
+    const cachedA = await cacheRead<Record<string, unknown>>("clients", TENANT);
+    expect(cachedA.map((row) => row.id)).toEqual([CLIENT_ID]);
+    expect((await dequeueAll()).map((op) => op.row_id)).toEqual([CLIENT_ID]);
   });
 
   test("cold offline cache miss is unknown, not an empty client list", async () => {
@@ -462,6 +484,28 @@ describe("appointments cache-of-domain", () => {
     await expect(
       listAppointments(stubSupabase, TENANT),
     ).rejects.toBeInstanceOf(ColdOfflineCacheMissError);
+  });
+
+  test("an offline record of ANOTHER company does not freeze this calendar's refresh (audit 03.10)", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+      }),
+      TENANT,
+    );
+    setNetwork(new OnlineNetwork());
+    const server = emptyClientSnapshotSupabase();
+
+    await listAppointments(server.client as never, OTHER_TENANT);
+
+    setNetwork(new OfflineNetwork());
+    expect(await listAppointments(stubSupabase, OTHER_TENANT)).toEqual([]);
+    const cachedA = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    expect(cachedA.map((row) => row.id)).toEqual([APPT_ID]);
   });
 
   test("an authoritative empty calendar snapshot remains usable offline", async () => {
