@@ -273,6 +273,7 @@ export function FieldRow({
   column,
   prefix,
   onPrefixPress,
+  sanitize,
   onSave,
 }: {
   label: string;
@@ -366,6 +367,10 @@ export function FieldRow({
    *  blur, а следующая буква вернула бы номер обратно. Не включать у полей с
    *  форматированием на лету (номер): текст прыгал бы под пальцем. */
   followValue?: boolean;
+  /** ЧИСТКА ПОД ПАЛЬЦЕМ для поля со своим алфавитом (буквы серии номера:
+   *  латиница заглавными и цифры). Отсечённое не появляется в поле вовсе —
+   *  родитель, получив то же значение, перерисовкой его бы не убрал. */
+  sanitize?: (v: string) => string;
   onSave: (v: string) => void;
 }) {
   // ЧИСЛО ВЫДЕЛЯЕТСЯ ЦЕЛИКОМ ПРИ ФОКУСЕ — иначе правка «135» на «140» даёт
@@ -409,7 +414,7 @@ export function FieldRow({
   // ни внешней клавиатурой. Чистка живёт в примитиве, а не в каждом вызове:
   // забыть её на новой строке-номере невозможно.
   const clean = (v: string) =>
-    keyboardType === "phone-pad" ? sanitizePhoneInput(v) : v;
+    keyboardType === "phone-pad" ? sanitizePhoneInput(v) : sanitize ? sanitize(v) : v;
 
   // Коммит значения. Единственная точка: blur, Return и размонтирование
   // строки. Раньше коммит был только в onBlur, а кнопки «Готово» и «Назад»

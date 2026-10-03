@@ -35,8 +35,16 @@ export function withSeq(number: string, seq: number): string {
 export function InvoiceNumberRow({
   target,
   stacked,
+  preview,
+  label = "Следующий номер",
 }: {
   target: InvoiceNumberTarget;
+  /** Номер, каким он станет после «Сохранить» листа реквизитов: там правят
+   *  буквы и длину, и строка показывает их сразу, ещё до записи. */
+  preview?: string;
+  /** Подпись строки: в блоке «Номер» реквизитов рядом буквы чека и
+   *  кредит-ноты, и там говорим, чей это номер, — «Следующий инвойс». */
+  label?: string;
   /** СТРОКОЙ ПОЛЯ — подпись сверху, номер под ней (лист реквизитов, владелец
    *  2026-09-30: «сделай стандартный наш блок с шрифтом»). Соседи по листу —
    *  поля «Юридическое имя», «IBAN» тем же видом (`FieldRow stacked`), и
@@ -50,6 +58,7 @@ export function InvoiceNumberRow({
   const next = target.next;
   // Шторка — только пока серию можно начать; иначе строка показывает номер.
   const editable = next?.canSetStart === true;
+  const shown = preview ?? next?.number ?? null;
 
   // Поле открывается ПУСТЫМ, нынешний номер — подсказкой: цифры поверх
   // подставленной «1» давали «1104» вместо «104».
@@ -82,7 +91,7 @@ export function InvoiceNumberRow({
           onPress={editable ? () => setOpen(true) : undefined}
           disabled={!editable}
           accessibilityRole={editable ? "button" : "text"}
-          accessibilityLabel={`Следующий номер, ${next?.number ?? "загрузка"}`}
+          accessibilityLabel={`${label}, ${shown ?? "загрузка"}`}
           accessibilityHint={editable ? "Нажмите, чтобы изменить" : undefined}
           style={({ pressed }) => ({
             flexDirection: "row",
@@ -100,7 +109,7 @@ export function InvoiceNumberRow({
               numberOfLines={1}
               style={{ fontSize: 13, fontWeight: "500", color: t.sub, marginBottom: 2 }}
             >
-              Следующий номер
+              {label}
             </Text>
             <Text
               maxFontSizeMultiplier={1.2}
@@ -108,11 +117,11 @@ export function InvoiceNumberRow({
               style={{
                 fontSize: 15,
                 fontWeight: "600",
-                color: next ? t.ink : t.faint,
+                color: shown ? t.ink : t.faint,
                 fontVariant: ["tabular-nums"],
               }}
             >
-              {next?.number ?? "…"}
+              {shown ?? "…"}
             </Text>
           </View>
           {/* Шеврон: строка уводит в шторку, а не правится на месте, как
@@ -125,7 +134,7 @@ export function InvoiceNumberRow({
           // значков.
           appearance={{ fallback: Hash }}
           title="Номер"
-          value={next?.number ?? "…"}
+          value={shown ?? "…"}
           onPress={editable ? () => setOpen(true) : undefined}
         />
       )}
@@ -158,8 +167,8 @@ export function InvoiceNumberRow({
             onSubmitEditing={apply}
           />
           <Text style={{ fontSize: 13, color: t.sub }}>
-            {next && valid && typed != null
-              ? `${withSeq(next.number, typed)}, следующий — ${withSeq(next.number, typed + 1)}. Номер задаётся до первого инвойса года.`
+            {shown && valid && typed != null
+              ? `${withSeq(shown, typed)}, следующий — ${withSeq(shown, typed + 1)}. Номер задаётся до первого инвойса года.`
               : "Цифры номера. Следующие инвойсы продолжат с него."}
           </Text>
         </View>

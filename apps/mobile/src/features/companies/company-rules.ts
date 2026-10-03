@@ -55,6 +55,40 @@ const clean = (value: string | null | undefined): string | null => {
   return text ? text : null;
 };
 
+// БУКВЫ И ДЛИНА НОМЕРА — У НАБОРА (владелец 03.10: «буквы и длина номера — в
+// реквизитах, сразу»). Сервер держит то же правило (`legal_entities_prefix_
+// format`: A–Z и цифры, до 10; `number_padding` 3…8). Сменить можно в любой
+// день: номер выдаётся по порядку в серии (уникален `seq`, а не текст), так что
+// дыр нет; выпущенные бумаги хранят свой номер, новые печатаются по-новому.
+
+/** Буквы серии так, как их примет сервер: латиница заглавными и цифры. Русская
+ *  раскладка и пробелы отсекаются прямо под пальцем. */
+export function cleanSeriesPrefix(raw: string): string {
+  return raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
+}
+
+/** Цифр в номере — что предлагает лист. */
+export const NUMBER_PADDINGS = [3, 4, 5, 6] as const;
+
+/** Номер так, как его соберёт сервер (`format_document_number`):
+ *  «INV-2026-005». Длина — не меньше самого числа. */
+export function documentNumberPreview(
+  prefix: string,
+  year: number,
+  seq: number,
+  padding: number,
+): string {
+  const digits = String(seq);
+  return `${prefix}-${year}-${digits.padStart(Math.max(padding, digits.length), "0")}`;
+}
+
+/** Пустые буквы — «не трогать»: поле не уходит в запись, сервер держит
+ *  прежние. Пустой префикс сервер всё равно не примет. */
+const seriesPrefix = (value: string | undefined): string | undefined => {
+  const prefix = cleanSeriesPrefix(value ?? "");
+  return prefix ? prefix : undefined;
+};
+
 /** Черновик перед записью. Пустое — `null`, номера — заглавными, почта —
  *  строчными, у адреса убраны пустые строки (перенос строки в нём — перенос
  *  на бумаге, лишний пустой ряд — дыра в шапке). Название набора, если его не
@@ -81,6 +115,13 @@ export function normalizeCompanyDraft(draft: CompanyDraft): CompanyDraft {
     bank_name: clean(draft.bank_name),
     contact_phone: clean(draft.contact_phone),
     contact_email: clean(draft.contact_email)?.toLowerCase() ?? null,
+    invoice_prefix: seriesPrefix(draft.invoice_prefix),
+    receipt_prefix: seriesPrefix(draft.receipt_prefix),
+    credit_note_prefix: seriesPrefix(draft.credit_note_prefix),
+    number_padding:
+      typeof draft.number_padding === "number"
+        ? Math.min(8, Math.max(3, Math.round(draft.number_padding)))
+        : undefined,
   };
 }
 

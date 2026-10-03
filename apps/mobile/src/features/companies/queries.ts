@@ -83,7 +83,12 @@ export function useSaveCompany() {
       if (error) throw new Error(error.message);
       return data.id;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["companies"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["companies"] });
+      // Буквы и длина номера живут на наборе: следующий номер у реквизитов,
+      // в шестерёнке и в новом инвойсе перечитывается сразу.
+      void qc.invalidateQueries({ queryKey: ["invoices", tenantId, "next-number"] });
+    },
     meta: { errorHandled: true },
   });
 }
