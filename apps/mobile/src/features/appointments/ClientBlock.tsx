@@ -11,7 +11,7 @@ import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { formatPhoneForDisplay } from "@/features/clients/phone";
 import { visitMark } from "@/features/clients/visit-mark";
-import { VisitDate, visitMarkWords } from "@/features/clients/VisitDate";
+import { PhoneVisitLine, visitMarkWords } from "@/features/clients/VisitDate";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { contactsLocked } from "@/features/clients/member-contacts";
 import { useRevealedClient } from "@/features/clients/revealed-contacts";
@@ -146,30 +146,22 @@ export function ClientBlock({
               </Text>
               {/* НОМЕР И ДАТА ОДНОЙ СТРОКОЙ ПОД ИМЕНЕМ — как в списке клиентов
                   (`ClientRow`): номер серым, за ним дата визита цветом. */}
-              {noPhoneRight && !mark ? null : (
-                <View className="mt-0.5 flex-row items-center" style={{ gap: 12 }}>
-                  {noPhoneRight ? null : (
-                    <Text
-                      maxFontSizeMultiplier={1.3}
-                      numberOfLines={1}
-                      style={{
-                        fontSize: 14,
-                        color: shown.phone || locked ? t.sub : t.placeholder,
-                        fontVariant: ["tabular-nums"],
-                      }}
-                    >
-                      {lockedDay
-                        ? "Номер откроется в день записи"
-                        : locked
-                          ? "•• ••• •••"
-                          : shown.phone
-                            ? formatPhoneForDisplay(shown.phone, country)
-                            : "без телефона"}
-                    </Text>
-                  )}
-                  {mark ? <VisitDate mark={mark} /> : null}
-                </View>
-              )}
+              <PhoneVisitLine
+                phone={
+                  noPhoneRight
+                    ? null
+                    : lockedDay
+                      ? "Номер откроется в день записи"
+                      : locked
+                        ? "•• ••• •••"
+                        : shown.phone
+                          ? formatPhoneForDisplay(shown.phone, country)
+                          : "без телефона"
+                }
+                phoneColor={shown.phone || locked ? t.sub : t.placeholder}
+                mark={mark}
+                wide={lockedDay}
+              />
             </View>
           </Pressable>
           {locked && !lockedDay && !noPhoneRight ? (

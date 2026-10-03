@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select-rows";
 import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { visitMark, type VisitMark } from "@/features/clients/visit-mark";
-import { VisitDate, visitMarkWords } from "@/features/clients/VisitDate";
+import { PhoneVisitLine, visitMarkWords } from "@/features/clients/VisitDate";
 import {
   buildQuickClientDraft,
   findQuickClientDuplicate,
@@ -53,36 +53,6 @@ const byName = new Intl.Collator("ru");
  *  закрыли — даты нет. */
 function pickerMark(client: Client, stats: ClientStats | undefined): VisitMark | null {
   return clientBlockLevel(client, "clients.history") !== "hidden" ? visitMark(stats) : null;
-}
-
-/** Номер и дата визита одной строкой — как под именем в списке клиентов. */
-function ClientPhoneVisit({
-  client,
-  stats,
-  country,
-}: {
-  client: Client;
-  stats: ClientStats | undefined;
-  country: Parameters<typeof formatPhoneForDisplay>[1];
-}) {
-  const t = useThemeColors();
-  const mark = pickerMark(client, stats);
-  const phone = client.phone?.trim() ? formatPhoneForDisplay(client.phone, country) : null;
-  if (!phone && !mark) return null;
-  return (
-    <View className="mt-0.5 flex-row items-center" style={{ gap: 12 }}>
-      {phone ? (
-        <Text
-          maxFontSizeMultiplier={1.3}
-          numberOfLines={1}
-          style={{ fontSize: 14, color: t.sub, fontVariant: ["tabular-nums"] }}
-        >
-          {phone}
-        </Text>
-      ) : null}
-      {mark ? <VisitDate mark={mark} /> : null}
-    </View>
-  );
 }
 
 export function ClientPickerSheet({
@@ -325,7 +295,10 @@ export function ClientPickerSheet({
               // цветом (`VisitDate`). Без кружка с буквой.
               subtitle={
                 <>
-                  <ClientPhoneVisit client={c} stats={statsById?.get(c.id)} country={country} />
+                  <PhoneVisitLine
+                    phone={c.phone?.trim() ? formatPhoneForDisplay(c.phone, country) : null}
+                    mark={pickerMark(c, statsById?.get(c.id))}
+                  />
                   {linkFor?.(c) ? (
                       <Text
                         numberOfLines={1}
