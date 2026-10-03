@@ -9,8 +9,11 @@ import {
   deleteAccount,
   insertAccount,
   listAccounts,
+  listDeletedAccounts,
   reopenAccount,
+  restoreAccount,
   softCloseAccount,
+  trashAccount,
   updateAccount,
   type AccountDraft,
 } from "@babun/shared/db/repositories/accounts";
@@ -208,6 +211,39 @@ export function useReopenAccount() {
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: (id: string) => reopenAccount(supabase, id),
+    onSuccess: () => invalidateAccounts(qc),
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+// «УДАЛЁННЫЕ СЧЕТА» (владелец 03.10: «на 30 дней, как клиенты»). Ключ под
+// ["accounts"]: любая правка счёта перечитывает и эту полку.
+export function useDeletedAccounts() {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["accounts", "deleted", tenantId],
+    enabled: !!tenantId,
+    queryFn: () => listDeletedAccounts(supabase, tenantId as string),
+  });
+}
+
+/** «Удалить» — счёт уходит в «Удалённые счета»; правила держит сервер. */
+export function useTrashAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: (id: string) => trashAccount(supabase, id),
+    onSuccess: () => invalidateAccounts(qc),
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+/** «Вернуть» из «Удалённых счетов» — обычный открытый счёт. */
+export function useRestoreAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: (id: string) => restoreAccount(supabase, id),
     onSuccess: () => invalidateAccounts(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });

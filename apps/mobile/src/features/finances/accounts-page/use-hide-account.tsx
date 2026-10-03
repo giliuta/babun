@@ -7,11 +7,17 @@ import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
 import type { Team } from "@/features/reference/queries";
-import { useSoftCloseAccount, type AccountWithBalance } from "../accounts";
+import {
+  useRestoreAccount,
+  useSoftCloseAccount,
+  useTrashAccount,
+  type AccountWithBalance,
+} from "../accounts";
 import {
   OFFLINE_ACCOUNT_EDIT,
   accountNotEmptyAlert,
   hideAccountAlert,
+  trashAccountAlert,
 } from "../account-alerts";
 import { sortAccountRows } from "../accounts-sections";
 import { TransferSheet } from "../TransferSheet";
@@ -20,8 +26,14 @@ import { isLastOpenOfTeam } from "../close-decision";
 import {
   hideDecision,
   hideDecisionAfterTransfer,
+  trashDecision,
+  trashDecisionAfterTransfer,
   type HideDecision,
+  type TrashDecision,
 } from "./page-rules";
+
+/** Ради чего обнуляют счёт: «Скрыть» или «Удалить». */
+type Mode = "hide" | "trash";
 
 /** Вопрос поверх уезжающего листа iOS не покажет («already presenting»). */
 const AFTER_SHEET_MS = SHEET_EXIT_MS + 350;
@@ -55,6 +67,11 @@ interface TransferPreset {
 //   • увести некуда — объяснение, а не вопрос.
 // Закрытие обратимо, но вопрос перед ним остаётся: так скрывают услугу, и за
 // основным счётом команды текст называет, кому перейдёт «основной».
+//
+// «УДАЛИТЬ» (владелец 03.10: «свайпом удалять, они попадают в папку
+// „Удалённые счета" на 30 дней, как клиенты») идёт тем же разговором: деньги
+// уводятся переводом, ноль — вопрос «Удалить счёт?», и счёт уходит в
+// «Удалённые счета». Тост держит «Отменить» — счёт возвращается сразу.
 export function useHideAccount({
   accounts,
   teamById,
@@ -62,11 +79,17 @@ export function useHideAccount({
   /** Все счета тенанта с остатками; закрытые отсеиваются здесь. */
   accounts: readonly AccountWithBalance[];
   teamById: Map<string, Team>;
-}): { hide: (account: AccountWithBalance) => void; sheet: ReactNode } {
+}): {
+  hide: (account: AccountWithBalance) => void;
+  remove: (account: AccountWithBalance) => void;
+  sheet: ReactNode;
+} {
   const qc = useQueryClient();
   const tenantId = useTenantId();
   const toast = useToast();
   const closeAcc = useSoftCloseAccount();
+  const trashAcc = useTrashAccount();
+  const restoreAcc = useRestoreAccount();
 
   const [transferOpen, setTransferOpen] = useState(false);
   const [preset, setPreset] = useState<TransferPreset>({
@@ -74,8 +97,8 @@ export function useHideAccount({
     toId: null,
     amount: null,
   });
-  /** Счёт в момент вопроса: перевод затеян ради скрытия. */
-  const closingFrom = useRef<AccountWithBalance | null>(null);
+  /** Счёт в момент вопроса: перевод затеян ради скрытия или удаления. */
+  const closingFrom = useRef<{ account: AccountWithBalance; mode: Mode } | null>(null);
   // СТРАНИЦУ МОГЛИ ПОКИНУТЬ, ПОКА ЖДАЛИ ОСТАТКИ: вопрос всплыл бы над чужим
   // экраном.
   const mounted = useRef(true);
@@ -92,10 +115,41 @@ export function useHideAccount({
     [accounts],
   );
 
+  const trash = (target: AccountWithBalance) =>
+    trashAcc.mutateAsync(target.id).then(
+      () =>
+        toast(`Счёт «${target.name}» удалён`, "success", {
+          label: "Отменить",
+          onPress: () =>
+            restoreAcc.mutate(target.id, {
+              onError: (e) => toast(`Не удалось вернуть счёт: ${e.message}`, "error"),
+            }),
+        }),
+      (e: unknown) =>
+        toast(
+          isOnline() ? `Не удалось удалить счёт: ${reason(e)}` : OFFLINE_ACCOUNT_EDIT,
+          "error",
+        ),
+    );
+
   const ask = (
     target: AccountWithBalance,
-    decision: HideDecision,
+    decision: HideDecision | TrashDecision,
+    mode: Mode,
   ) => {
+    if (decision.kind === "trash") {
+      const text = trashAccountAlert(
+        target.name,
+        target.has_history,
+        target.is_active && isLastOpenOfTeam(target, accounts),
+      );
+      confirmThen(
+        text.title,
+        { message: text.message, confirmLabel: text.confirm, destructive: true },
+        () => void trash(target),
+      );
+      return;
+    }
     if (decision.kind === "close") {
       const text = hideAccountAlert(target.name, isLastOpenOfTeam(target, accounts));
       confirmThen(
@@ -121,6 +175,7 @@ export function useHideAccount({
       target.name,
       target.balance,
       decision.kind === "transfer",
+      mode === "trash" ? "Удалить" : "Скрыть",
     );
     if (decision.kind === "explain" || !text.confirm) {
       notify(text.title, text.message);
@@ -136,7 +191,7 @@ export function useHideAccount({
           toId: direction === "in" ? target.id : null,
           amount,
         });
-        closingFrom.current = target;
+        closingFrom.current = { account: target, mode };
         // ЛИСТ ПЕРЕВОДА — ПОСЛЕ ТОГО, КАК УЕХАЛ ВОПРОС. `confirmThen` отвечает
         // в миг тапа, пока шторка вопроса ещё уезжает, и открытый в этот кадр
         // лист не появлялся вовсе, а флаг «открыт» оставался — следующее
@@ -157,6 +212,7 @@ export function useHideAccount({
         const before = closingFrom.current;
         closingFrom.current = null;
         if (!before) return;
+        const { account: from, mode } = before;
         void Promise.all([
           Promise.race([
             freshAccounts(qc, tenantId),
@@ -165,8 +221,11 @@ export function useHideAccount({
           delay(AFTER_SHEET_MS, null),
         ]).then(([fresh]) => {
           if (!mounted.current) return;
-          const next = hideDecisionAfterTransfer(before, fresh);
-          if (next) ask(next.account, next.decision);
+          const next =
+            mode === "trash"
+              ? trashDecisionAfterTransfer(from, fresh)
+              : hideDecisionAfterTransfer(from, fresh);
+          if (next) ask(next.account, next.decision, mode);
         });
       }}
       accounts={active}
@@ -177,5 +236,9 @@ export function useHideAccount({
     />
   );
 
-  return { hide: (account) => ask(account, hideDecision(account, active)), sheet };
+  return {
+    hide: (account) => ask(account, hideDecision(account, active), "hide"),
+    remove: (account) => ask(account, trashDecision(account, active), "trash"),
+    sheet,
+  };
 }

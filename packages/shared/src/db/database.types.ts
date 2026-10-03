@@ -264,15 +264,18 @@ export type Database = {
           color: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
           icon: string | null
           id: string
           is_active: boolean
           is_primary: boolean
           kind: string
           name: string
+          note: string | null
           opening_balance: number
           owner_master_id: string | null
           position: number
+          purge_at: string | null
           scope: string
           show_in_payments: boolean
           tenant_id: string
@@ -285,15 +288,18 @@ export type Database = {
           color?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean
           is_primary?: boolean
           kind: string
           name: string
+          note?: string | null
           opening_balance?: number
           owner_master_id?: string | null
           position?: number
+          purge_at?: string | null
           scope?: string
           show_in_payments?: boolean
           tenant_id: string
@@ -306,15 +312,18 @@ export type Database = {
           color?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean
           is_primary?: boolean
           kind?: string
           name?: string
+          note?: string | null
           opening_balance?: number
           owner_master_id?: string | null
           position?: number
+          purge_at?: string | null
           scope?: string
           show_in_payments?: boolean
           tenant_id?: string

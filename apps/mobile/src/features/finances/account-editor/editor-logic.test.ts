@@ -77,6 +77,10 @@ describe("после ответа на вопрос о закрытии", () => 
   test("согласие делает то, о чём спрашивали", () => {
     assert.equal(stepAfterAnswer({ kind: "delete" }, true), "delete");
     assert.equal(stepAfterAnswer({ kind: "close" }, true), "close");
+    // «Удалить счёт» (03.10): согласие уводит в «Удалённые счета», отказ —
+    // возвращает лист, как у любого другого вопроса.
+    assert.equal(stepAfterAnswer({ kind: "trash" }, true), "trash");
+    assert.equal(stepAfterAnswer({ kind: "trash" }, false), "return");
     assert.equal(
       stepAfterAnswer({ kind: "transfer", direction: "in", amount: 5 }, true),
       "transfer",

@@ -25,13 +25,13 @@ export const ACCOUNT_ROW_H = 52;
 // другого места увидеть деньги счёта у этой двери нет. Цифра тихая
 // (моноширинная, вторым цветом): она справка, а не герой строки; минус — долг.
 //
-// У ОТКРЫТОГО СЧЁТА ПРАВОЙ КРОМКИ НЕТ. Разрушительного у него не бывает
-// вовсе: «Скрыть» никогда не удаляет (`hideDecision`).
+// ПРАВАЯ КРОМКА — «УДАЛИТЬ» У КАЖДОГО СЧЁТА (владелец 03.10: «свайпом
+// удалять, они попадают в папку „Удалённые счета" на 30 дней, как клиенты»).
+// Удаление обратимо: счёт уходит в «Удалённые счета», откуда возвращается.
 //
 // ЗАКРЫТЫЙ СЧЁТ — ТА ЖЕ СТРОКА, СЕРАЯ, ВНИЗУ СВОЕЙ КОМАНДЫ (владелец
 // 2026-09-29: «убери вкладку „Закрытые счета“»). Как скрытая категория: слева
-// «Открыть», справа «Удалить» — только у пустого, без единой операции
-// (владелец 2026-09-23: «в архив и потом удалить»).
+// «Открыть», справа — то же «Удалить».
 //
 // Ручка — ВНЕ нажимаемой области, но ВНУТРИ заливки строки: вложенная в
 // `Pressable`, она отдавала бы короткий тап правке, а оставленная без цвета —
@@ -43,6 +43,7 @@ export function AccountRow({
   handle,
   onPress,
   onHide,
+  onDelete,
   closed,
 }: {
   account: Pick<
@@ -59,9 +60,10 @@ export function AccountRow({
   handle: ReactNode;
   onPress: () => void;
   onHide: () => void;
-  /** Счёт закрыт: строка гаснет, слева «Открыть», справа «Удалить» (если
-   *  стереть его можно). */
-  closed?: { onReopen: () => void; onDelete?: () => void } | null;
+  /** «Удалить» — в «Удалённые счета». */
+  onDelete: () => void;
+  /** Счёт закрыт: строка гаснет, слева «Открыть». */
+  closed?: { onReopen: () => void } | null;
 }) {
   const t = useThemeColors();
   const sign = moneySign(account.balance);
@@ -88,11 +90,11 @@ export function AccountRow({
               onAction: onHide,
             }
       }
-      label={closed?.onDelete ? "Удалить" : undefined}
+      label="Удалить"
       color={t.danger}
-      icon={closed?.onDelete ? Trash2 : undefined}
-      accessibilityLabel={closed?.onDelete ? `Удалить счёт ${account.name}` : undefined}
-      onAction={closed?.onDelete}
+      icon={Trash2}
+      accessibilityLabel={`Удалить счёт ${account.name}`}
+      onAction={onDelete}
     >
       <View
         style={{
@@ -114,19 +116,15 @@ export function AccountRow({
             .join(", ")}
           accessibilityHint="Открывает правку счёта"
           // Свайпа для VoiceOver не существует — то же действие ротором.
-          accessibilityActions={
-            closed
-              ? [
-                  { name: "reopen", label: "Открыть снова" },
-                  ...(closed.onDelete ? [{ name: "delete", label: "Удалить" }] : []),
-                ]
-              : [{ name: "hide", label: "Скрыть" }]
-          }
+          accessibilityActions={[
+            closed ? { name: "reopen", label: "Открыть снова" } : { name: "hide", label: "Скрыть" },
+            { name: "delete", label: "Удалить" },
+          ]}
           onAccessibilityAction={(event) => {
             const name = event.nativeEvent.actionName;
             if (name === "hide") onHide();
             if (name === "reopen") closed?.onReopen();
-            if (name === "delete") closed?.onDelete?.();
+            if (name === "delete") onDelete();
           }}
           style={({ pressed }) => ({
             flex: 1,

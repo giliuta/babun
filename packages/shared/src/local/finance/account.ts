@@ -56,6 +56,13 @@ export interface Account {
    */
   show_in_payments: boolean;
   is_active: boolean;
+  /** Заметка счёта: IBAN, последние цифры карты (до 500 знаков). */
+  note?: string | null;
+  /** Счёт в «Удалённых счетах» с этого времени (ставит сервер). Удалённый
+   *  счёт всегда закрыт и с нулём; обычные списки его не показывают. */
+  deleted_at?: string | null;
+  /** Когда удалённый счёт без истории сотрётся. Пусто — с историей, лежит. */
+  purge_at?: string | null;
   created_at: string;
   updated_at: string;
 }

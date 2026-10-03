@@ -210,7 +210,8 @@ export function EditAccountSheet({
               />
               <AccountCloseGroup
                 account={account}
-                onCloseAccount={() => flow.start(account, accounts)}
+                onHide={() => flow.start(account, accounts, "hide")}
+                onDelete={() => flow.start(account, accounts, "trash")}
                 alertError={alertError}
               />
             </>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, View } from "react-native";
-import { useLocalSearchParams, type Href } from "expo-router";
+import { ScrollView, Text, View } from "react-native";
+import { Trash2 } from "lucide-react-native";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { settingsTeamId } from "@/features/finances/team-settings-lines";
 import { useClosedAccountActions } from "@/features/finances/accounts-page/use-closed-account-actions";
 import { money, moneySign } from "@babun/shared/common/utils/money";
@@ -10,6 +11,9 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { SelectRow } from "@/components/ui/select-rows";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { RowCaption, RowGroupHeader } from "@/components/ui/card-rows";
 import { GUTTER } from "@/components/ui/tokens";
@@ -27,6 +31,7 @@ import {
 import { useHideAccount } from "@/features/finances/accounts-page/use-hide-account";
 import {
   useAccountsWithBalances,
+  useDeletedAccounts,
   useReorderAccounts,
   useUnassignedMoney,
 } from "@/features/finances/accounts";
@@ -36,6 +41,7 @@ import {
   sumAccountBalances,
 } from "@/features/finances/accounts-sections";
 import { useTeams } from "@/features/reference/queries";
+import { useThemeColors } from "@/theme/colors";
 
 // СЧЕТА — ОДНА СТРАНИЦА ЗА ДВУМЯ ДВЕРЯМИ (владелец 2026-09-15).
 //
@@ -68,6 +74,9 @@ const EDIT_AFTER_PUSH_MS = SHEET_EXIT_MS + 350;
 
 export default function AccountsScreen() {
   const online = useIsOnline();
+  const t = useThemeColors();
+  const router = useRouter();
+  const deletedQuery = useDeletedAccounts();
   // Полный список: закрытые нужны счётчику двери в архив и шторке правки.
   const accountsQuery = useAccountsWithBalances({ includeInactive: true });
   // ВСЕ команды, включая архивные: по ним называются группы осиротевших
@@ -157,6 +166,12 @@ export default function AccountsScreen() {
   const liveTeams = useMemo(() => teams.filter((team) => team.is_active), [teams]);
   const teamId = teamParam ? settingsTeamId(liveTeams, teamParam) : null;
   const shownGroups = teamId ? groups.filter((group) => group.key === teamId) : groups;
+  // «УДАЛЁННЫЕ СЧЕТА» — ДВЕРЬ ПОД СПИСКОМ, ТОЛЬКО КОГДА ТАМ ЧТО-ТО ЛЕЖИТ
+  // (владелец 03.10: «попадают в папку „Удалённые счета"»). Страница сама за
+  // шестерёнкой, поэтому дверь здесь, а не ещё одной строкой настроек.
+  const deletedCount = (deletedQuery.data ?? []).filter(
+    (account) => !teamId || account.brigade_id === teamId,
+  ).length;
 
   /** Новый порядок строк группы: пишем позиции 0, 1, 2… по списку id. */
   const applyOrder = (ids: string[]) => {
@@ -281,17 +296,11 @@ export default function AccountsScreen() {
                       handle={handle}
                       onPress={() => setEditor({ open: true, id: account.id })}
                       onHide={() => hider.hide(account)}
+                      onDelete={() => hider.remove(account)}
                       closed={
                         account.is_active
                           ? null
-                          : {
-                              onReopen: () => closedActions.openAgain(account),
-                              // Стереть можно только счёт без единой операции:
-                              // историю денег сервер не отдаёт.
-                              onDelete: account.has_history
-                                ? undefined
-                                : () => closedActions.erase(account),
-                            }
+                          : { onReopen: () => closedActions.openAgain(account) }
                       }
                     />
                   )}
@@ -305,6 +314,30 @@ export default function AccountsScreen() {
               2026-09-06), без инструкции: откуда эти деньги, он знает сам. */}
           {moneySign(unassigned) !== 0 ? (
             <RowCaption text={`Без счёта ${money(unassigned)}`} />
+          ) : null}
+          {deletedCount > 0 ? (
+            <View style={{ marginTop: 16 }}>
+              <SectionCard dense>
+                <View style={{ paddingHorizontal: 2, paddingVertical: 2 }}>
+                  <SelectRow
+                    icon={Trash2}
+                    color={SETTINGS_TILE.red}
+                    plain
+                    title="Удалённые счета"
+                    onPress={() =>
+                      router.push(
+                        (teamId ? `/accounts/trash?team=${encodeURIComponent(teamId)}` : "/accounts/trash") as Href,
+                      )
+                    }
+                    trailing={
+                      <Text style={{ fontSize: 15, color: t.sub, fontVariant: ["tabular-nums"] }}>
+                        {deletedCount}
+                      </Text>
+                    }
+                  />
+                </View>
+              </SectionCard>
+            </View>
           ) : null}
         </ScrollView>
       )}

@@ -6,33 +6,29 @@ import { useThemeColors } from "@/theme/colors";
 import { useReopenAccount, type AccountWithBalance } from "../accounts";
 import type { AlertError } from "./types";
 
-// ПОСЛЕДНЯЯ ГРУППА ЛИСТА — ПО АРХИТЕКТУРЕ «СКРЫТЬ → АРХИВ → СТЕРЕТЬ»
-// (владелец 2026-09-23: «добавить их в архив и потом удалить… чтоб всё
-// соблюдалось по нашей архитектуре»; тот же закон, что у календарей 21.09).
-//
-//   • открытый счёт — «Скрыть счёт»: то же слово и то же действие, что свайп
-//     на странице «Счета»; счёт уходит в «Закрытые счета», даже пустой;
-//   • закрытый — «Открыть счёт снова», а у счёта без операций ещё и «Удалить
-//     счёт» (насовсем);
-//   • закрытый с операциями не стирается: операции держат доход и отчёты
-//     (сервер: `finance_transactions → accounts on delete restrict`), и
-//     подпись говорит это до нажатия.
+// ПОСЛЕДНЯЯ ГРУППА ЛИСТА — ТЕ ЖЕ ДВА СЛОВА, ЧТО У СВАЙПОВ СТРОКИ:
+//   • открытый счёт — «Скрыть счёт» (серым вниз списка) и «Удалить счёт»;
+//   • закрытый — «Открыть счёт снова» и «Удалить счёт».
+// «Удалить» уводит в «Удалённые счета» на 30 дней, как клиентов (владелец
+// 03.10); счёт с операциями там лежит без срока и возвращается оттуда же.
 //
 // Сам вопрос и перевод остатка живут в `use-close-flow`: из открытого листа
 // вопрос не показать, и лист на это время уезжает.
 export function AccountCloseGroup({
   account,
-  onCloseAccount,
+  onHide,
+  onDelete,
   alertError,
 }: {
   account: AccountWithBalance;
-  /** «Скрыть» у открытого, «Удалить» у закрытого — начать разговор. */
-  onCloseAccount: () => void;
+  /** «Скрыть счёт» — начать разговор о скрытии. */
+  onHide: () => void;
+  /** «Удалить счёт» — начать разговор об удалении в «Удалённые счета». */
+  onDelete: () => void;
   alertError: AlertError;
 }) {
   const t = useThemeColors();
   const reopenAcc = useReopenAccount();
-  const hasHistory = account.has_history;
   // Плашки, как во всей шторке (вариант 1, 03.10); объяснений под ними нет —
   // всё нужное говорит вопрос, который задаёт само действие
   // (`use-close-flow`): остаток, перевод, «насовсем».
@@ -42,7 +38,8 @@ export function AccountCloseGroup({
     return (
       <SectionCard dense>
         <View style={blockBody}>
-          <SelectRow icon={EyeOff} color={t.danger} plain title="Скрыть счёт" onPress={onCloseAccount} />
+          <SelectRow icon={EyeOff} color={t.warning} plain title="Скрыть счёт" onPress={onHide} />
+          <SelectRow icon={Trash2} color={t.danger} plain title="Удалить счёт" onPress={onDelete} />
         </View>
       </SectionCard>
     );
@@ -65,11 +62,7 @@ export function AccountCloseGroup({
               .catch(alertError("Не удалось открыть счёт"))
           }
         />
-        {/* Стереть можно только пустой: операции держат доход и отчёты
-            (сервер: `finance_transactions → accounts on delete restrict`). */}
-        {!hasHistory ? (
-          <SelectRow icon={Trash2} color={t.danger} plain title="Удалить счёт" onPress={onCloseAccount} />
-        ) : null}
+        <SelectRow icon={Trash2} color={t.danger} plain title="Удалить счёт" onPress={onDelete} />
       </View>
     </SectionCard>
   );
