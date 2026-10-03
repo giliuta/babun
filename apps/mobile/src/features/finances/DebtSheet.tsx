@@ -153,7 +153,7 @@ export function DebtSheet({
       avoidKeyboard
       maxHeightRatio={0.86}
       footer={
-        <View style={{ paddingHorizontal: 20, gap: 8 }}>
+        <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
           {/* Причина «Смотрит» вытесняет остальные: пока права нет, ни сумма,
               ни клиент кнопку не оживят. */}
           {!canWrite ? (

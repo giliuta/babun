@@ -13,7 +13,6 @@ import { useReferenceHref } from "@/features/clients/reference-href";
 import { accountEditHref } from "./account-editor/editor-logic";
 import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
-import { Chip } from "@/components/ui/Chip";
 import { OperationReceiptRow } from "./OperationReceiptRow";
 import { useReceiptSession } from "./receipt-upload";
 import { AmountBlock } from "./AmountBlock";
@@ -30,11 +29,11 @@ import {
   useTileWidth,
 } from "@/features/appointments/PaymentTiles";
 
+import { PayRow } from "@/features/appointments/VatLooks";
 import {
   applyTxVat,
   defaultTxVatMode,
   inputFromGross,
-  TX_VAT_MODE_LABELS,
   type TxVatMode,
 } from "@babun/shared/local/finance/vat";
 import {
@@ -84,7 +83,6 @@ import { useAccountsWithBalances } from "./accounts";
 import { accountIcon } from "./account-ui";
 import {
   defaultOperationVatMode,
-  vatConsequenceLine,
   vatModeForDraft,
   vatSnapshotForDraft,
 } from "./operation-vat";
@@ -1030,7 +1028,7 @@ export function OperationSheet({
       avoidKeyboard
       maxHeightRatio={0.86}
       footer={
-        <View style={{ paddingHorizontal: 20, gap: 8 }}>
+        <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
           {reason ? (
             <Text
               accessibilityLiveRegion="polite"
@@ -1173,50 +1171,40 @@ export function OperationSheet({
             клавиатуру»). Автофокус на сумме закрывал половину формы ещё до
             того, как человек посмотрел на неё: категория, счёт и заметка
             уезжали под клавиатуру, и первым делом приходилось её убирать. */}
+        {/* 4. СУММА И ПОД НЕЙ «ИТОГО» С КЛАВИШЕЙ VAT — ТА ЖЕ СТРОКА, ЧТО В
+            «ИТОГО» ЗАПИСИ (владелец 03.10: «сделал бы точно такую же
+            кнопочку, как в сумме итого в записях клиента»). Клавиша «VAT»
+            переключает «сверху цены → внутри цены → без налога», ставка —
+            цифрами (запоминается, как в «Итого»), рядом налог и «К оплате».
+            Видна только тем, кто работает с налогом (`vatVisible`). */}
         <AmountBlock
           value={amount}
           onChange={setAmount}
           accessibilityLabel="Сумма операции"
           color={isExpense ? th.danger : th.success}
+          footer={
+            vatVisible ? (
+              <PayRow
+                total={vatBreakdown.gross}
+                vat={{
+                  mode: vatMode,
+                  rate: opVatRate,
+                  amount: vatBreakdown.vat,
+                  onModeChange: (next) => {
+                    setVatTouched(true);
+                    setVatRetouched(true);
+                    setVatMode(next);
+                  },
+                  onRateChange: (next) => {
+                    rememberedVat.remember(next);
+                    setVatTouched(true);
+                    setVatRetouched(true);
+                  },
+                }}
+              />
+            ) : undefined
+          }
         />
-
-        {/* 4a. НДС — ТРИ КЛАВИШИ НА КАЖДОЙ ОПЕРАЦИИ. Появляются только у тех,
-            кто с налогом работает: выключили тумблер компании — слова «НДС» в
-            форме нет. Режим, закреплённый за счётом, клавиши не прячет — он
-            выбирает, какая из них нажата при открытии.
-            Под клавишами стоит последствие в евро, потому что разница
-            между «включён» и «плюсом» — это деньги, а не термин. */}
-        {vatVisible ? (
-          <SectionCard title="VAT">
-            <View className="flex-row flex-wrap gap-2 px-3 py-3">
-              {(["none", "inclusive", "exclusive"] as TxVatMode[]).map(
-                (m) => (
-                  <Chip
-                    key={m}
-                    label={TX_VAT_MODE_LABELS[m]}
-                    radio
-                    selected={vatMode === m}
-                    onPress={() => {
-                      setVatTouched(true);
-                      setVatRetouched(true);
-                      setVatMode(m);
-                    }}
-                  />
-                ),
-              )}
-            </View>
-            {amountCents != null && vatMode !== "none" ? (
-              <Text
-                maxFontSizeMultiplier={1.3}
-                className="px-4 pb-3 text-[13px]"
-                style={{ color: th.sub, fontVariant: ["tabular-nums"] }}
-              >
-                {/* По направлению денег: у расхода они уходят со счёта. */}
-                {vatConsequenceLine(type, vatMode, vatBreakdown, formatEUR)}
-              </Text>
-            ) : null}
-          </SectionCard>
-        ) : null}
 
         {/* 5. Счёт — ПЛИТКАМИ, КАК В ЗАПИСИ (владелец 2026-09-09: «счёт делаем
             так же, как в записи клиента: иконки полноценные, наличные или
@@ -1224,14 +1212,14 @@ export function OperationSheet({
             и цвет — те же, что человек задал счёту в финансах, и тот же
             контрол, которым принимают оплату на записи. */}
         {accountsFailed ? (
-          <SectionCard title="Счёт">
+          <SectionCard title="Счёт" dense>
             <Text className="px-4 py-3 text-sm" style={{ color: th.faint }}>
               Счета не загрузились. Обновите экран финансов и откройте форму
               заново.
             </Text>
           </SectionCard>
         ) : teamAccounts.length > 0 ? (
-          <SectionCard title="Счёт">
+          <SectionCard title="Счёт" dense>
             <View
               className="flex-row flex-wrap"
               style={{
@@ -1282,7 +1270,7 @@ export function OperationSheet({
             </View>
           </SectionCard>
         ) : (
-          <SectionCard title="Счёт">
+          <SectionCard title="Счёт" dense>
             <Text className="px-4 py-3 text-sm" style={{ color: th.faint }}>
               {teamId
                 ? "У этой команды нет активного счёта — заведите его в «Счетах»."

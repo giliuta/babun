@@ -2,8 +2,9 @@ import { useRef, useState } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import { Camera, FileText, FileUp, Images, X } from "lucide-react-native";
-import { AddRow } from "@/components/ui/AddRow";
+import { Camera, FileText, Image as ImageIcon, Images, Paperclip, X } from "lucide-react-native";
+import { ChooseRow } from "@/components/ui/ChooseRow";
+import { SelectRow } from "@/components/ui/select-rows";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { Spinner } from "@/components/ui/Spinner";
 import { useTenantId } from "@/lib/tenant";
@@ -155,80 +156,74 @@ export function OperationReceiptRow({
   }
 
   if (receiptUrl) {
+    // ПЛАШКА, КАК ФАЙЛ КЛИЕНТА (владелец 03.10: «файлы сделаем такие, как в
+    // клиентах»): снимок — плиткой с самим фото, документ — значком файла.
+    // Тап открывает файл, крестик справа снимает его с операции.
+    const photo = isImagePath(receiptUrl);
     return (
-      <View className="flex-row items-center gap-3 px-4 py-2">
-        <FileText color={t.accent} size={18} strokeWidth={2} />
-        <Pressable
+      <View style={{ paddingHorizontal: 2, paddingVertical: 2 }}>
+        <SelectRow
+          icon={photo ? ImageIcon : FileText}
+          color={t.accent}
+          image={photo && signed ? signed : undefined}
+          plain
+          title={photo ? "Фото" : "Документ"}
+          accessibilityLabel={photo ? "Фото к операции" : "Документ к операции"}
+          accessibilityHint="Открывает файл"
           onPress={() => signed && void Linking.openURL(signed)}
-          disabled={!signed}
-          accessibilityRole="button"
-          accessibilityLabel="Открыть приложенный документ"
-          style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.6 : 1 })}
-        >
-          <Text
-            className="text-base"
-            maxFontSizeMultiplier={1.3}
-            style={{ color: t.ink }}
-            numberOfLines={1}
-          >
-            Документ приложен
-          </Text>
-          <Text
-            className="mt-0.5 text-xs"
-            maxFontSizeMultiplier={1.3}
-            style={{ color: t.sub }}
-          >
-            {signed ? "Нажмите, чтобы открыть" : "Готовим ссылку…"}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            if (receiptUrl && uploadedHere.current.has(receiptUrl)) {
-              uploadedHere.current.delete(receiptUrl);
-              void deleteOperationReceipt(receiptUrl).catch(() => {});
-            }
-            onPick(null);
-          }}
-          disabled={disabled}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Убрать документ"
-          style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-        >
-          <X color={t.sub} size={18} strokeWidth={2.2} />
-        </Pressable>
+          trailing={
+            <Pressable
+              onPress={() => {
+                if (receiptUrl && uploadedHere.current.has(receiptUrl)) {
+                  uploadedHere.current.delete(receiptUrl);
+                  void deleteOperationReceipt(receiptUrl).catch(() => {});
+                }
+                onPick(null);
+              }}
+              disabled={disabled}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Убрать файл"
+              style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+            >
+              <X color={t.sub} size={18} strokeWidth={2.2} />
+            </Pressable>
+          }
+        />
       </View>
     );
   }
 
   return (
     <>
-      {/* СТРОКА «ДОБАВИТЬ» — ТА ЖЕ, ЧТО У ФАЙЛОВ ЗАПИСИ (владелец 2026-09-10:
-          «посмотри, как выполнены файлы в записи, сделай так же»). Здесь была
-          своя строка со скрепкой и подписью «чек, инвойс» — третий диалект
-          одного действия: у объектов и файлов записи это `AddRow`. */}
-      <AddRow
-        label="Добавить"
-        disabled={disabled}
+      {/* СТРОКА «ДОБАВИТЬ ФАЙЛ» — ТА ЖЕ, ЧТО В БЛОКЕ «ФАЙЛЫ» КЛИЕНТА
+          (владелец 03.10: «файлы сделаем такие, как в клиентах»): скрепка в
+          круге, слово, стрелка. */}
+      <ChooseRow
         compact
+        icon={Paperclip}
+        label="Добавить файл"
+        disabled={disabled}
         onPress={() => setPickerOpen(true)}
       />
 
+      {/* Пункты и слова — как в листе «Добавить» файлов клиента
+          (`FileAddSheet`); чеку видео не нужно — только снимок или файл. */}
       <PickerSheet
         visible={pickerOpen}
-        title="Документ к операции"
+        title="Добавить"
         onClose={() => setPickerOpen(false)}
         items={[
           {
             id: "camera",
-            label: "Снять камерой",
+            label: "Снять фото",
             icon: Camera,
             color: t.accent,
             onPress: () => void attach("camera"),
           },
           {
             id: "gallery",
-            label: "Из фотоплёнки",
+            label: "Выбрать из галереи",
             icon: Images,
             color: t.accent,
             onPress: () => void attach("gallery"),
@@ -236,7 +231,7 @@ export function OperationReceiptRow({
           {
             id: "file",
             label: "Выбрать файл",
-            icon: FileUp,
+            icon: FileText,
             color: t.accent,
             onPress: () => void attach("file"),
           },
@@ -244,4 +239,9 @@ export function OperationReceiptRow({
       />
     </>
   );
+}
+
+/** Снимок или документ — по расширению пути в бакете чеков. */
+function isImagePath(path: string): boolean {
+  return /\.(jpe?g|png|heic|heif|webp|gif)$/i.test(path.trim());
 }

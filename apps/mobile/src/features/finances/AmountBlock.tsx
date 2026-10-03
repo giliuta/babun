@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Text, TextInput, View } from "react-native";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useThemeColors } from "@/theme/colors";
@@ -22,6 +23,7 @@ export function AmountBlock({
   title = "Сумма",
   accessibilityLabel,
   hint,
+  footer,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -31,6 +33,9 @@ export function AmountBlock({
   /** Строка под числом, внутри блока: что эта сумма значит сейчас (у
    *  бюджета категории — сколько уже потрачено) или почему она не годится. */
   hint?: { text: string; error?: boolean } | null;
+  /** Под числом, внутри того же блока: у операции — строка «Итого» с
+   *  клавишей VAT, как в «Итого» записи (владелец 03.10). */
+  footer?: ReactNode;
 }) {
   const t = useThemeColors();
   const currencySymbol = useMoney().symbol;
@@ -100,6 +105,7 @@ export function AmountBlock({
           {hint.text}
         </Text>
       ) : null}
+      {footer ? <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>{footer}</View> : null}
     </SectionCard>
   );
 }
