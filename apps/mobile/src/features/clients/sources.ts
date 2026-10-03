@@ -77,7 +77,12 @@ export function useAccessMapOf(tenantId: string | null): MemberAccessMap | undef
 
 /** Что показывает вкладка «Клиенты»: своя компания и компании, где человеку
  *  открыли клиентов. */
-export function useClientsSources(): ClientsSources {
+export function useClientsSources(): ClientsSources & {
+  /** Компании человека не приехали и уже не едут (сервер молчит): ждать
+   *  нечего — ворота показывают «Нет связи», а не вечную загрузку (03.10). */
+  failed: boolean;
+  retry: () => void;
+} {
   const activeTenantId = useTenantId();
   const activeRole = useCurrentRole().data;
   // В ЗЕРКАЛЕ ЧЕЛОВЕК — НЕ ВЛАДЕЛЕЦ ЭТОЙ КОМПАНИИ (STORY-083). Иначе вкладка
@@ -85,7 +90,10 @@ export function useClientsSources(): ClientsSources {
   // уровни «Клиенты», «Какие клиенты», «Телефоны» в предпросмотре не
   // действовали бы вовсе: телефоны оставались бы на месте при «Скрыт».
   const mirror = useMirror();
-  const memberships = useMyMemberships().data;
+  const membershipsQuery = useMyMemberships();
+  const memberships = membershipsQuery.data;
+  const failed = membershipsQuery.isError && memberships === undefined;
+  const retry = membershipsQuery.refetch;
   const calendars = useMyCalendars().data;
   const activeAccess = useMyAccess().data;
 
@@ -122,7 +130,7 @@ export function useClientsSources(): ClientsSources {
   const foreign = useMemo(() => (foreignKey ? foreignKey.split(",") : []), [foreignKey]);
   const foreignMaps = useAccessMaps(foreign);
 
-  return useMemo(() => {
+  const sources = useMemo(() => {
     // В ЗЕРКАЛЕ ИСТОЧНИК СОБРАН ВЫШЕ И ПЕРЕСБОРКЕ НЕ ПОДЛЕЖИТ. Второй проход
     // считает по НАСТОЯЩИМ роли и членствам — то есть по владельцу, — и
     // вкладка посреди просмотра вернулась бы к его глазам. Сегодня спасает
@@ -134,6 +142,10 @@ export function useClientsSources(): ClientsSources {
     for (const [tenantId, map] of foreignMaps) access.set(tenantId, accessOf(map));
     return clientsSources({ activeTenantId, activeRole, memberships, names, access });
   }, [withActive, mirror, foreign.length, foreignMaps, activeTenantId, activeRole, memberships, names, activeAccess]);
+  return useMemo(
+    () => ({ ...sources, failed, retry: () => void retry() }),
+    [sources, failed, retry],
+  );
 }
 
 /** Клиент Supabase для источника: своя активная компания ходит обычным,

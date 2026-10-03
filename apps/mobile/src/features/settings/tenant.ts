@@ -25,6 +25,7 @@ import {
   subscribeSwitchRevalidation,
 } from "@/lib/switch-revalidate-plan";
 import { rearmRolePollers } from "@/lib/role-poll-rearm";
+import { roleLookupUnanswered } from "./role-unanswered";
 
 const ROLE_POLL_MS = 60 * 1000;
 
@@ -99,6 +100,7 @@ export function useCurrentRole() {
 
 function useRoleQuery() {
   const tenantId = useTenantId();
+  const qc = useQueryClient();
   return useQuery({
     queryKey: currentRoleQueryKey(tenantId),
     enabled: !!tenantId,
@@ -120,10 +122,22 @@ function useRoleQuery() {
     refetchInterval: () => rolePollInterval(ROLE_POLL_MS),
     refetchIntervalInBackground: false,
     queryFn: async (): Promise<UserRole | null> => {
-      const { data, error } = await withRoleLookupTimeout(
-        supabase.rpc("current_user_role"),
-      );
-      if (error) throw new Error(error.message);
+      // СЕРВЕР НЕ ОТВЕТИЛ — ПРЕЖНЯЯ РОЛЬ ОСТАЁТСЯ (`role-unanswered.ts`):
+      // иначе запросы, которые ждут «опрос роли успешен», выключались, и
+      // экраны висели загрузкой, пока сервер лежал (03.10).
+      const known = qc.getQueryData<UserRole | null>(currentRoleQueryKey(tenantId));
+      let result: Awaited<ReturnType<typeof supabase.rpc<"current_user_role">>>;
+      try {
+        result = await withRoleLookupTimeout(supabase.rpc("current_user_role"));
+      } catch (error) {
+        if (known && roleLookupUnanswered({ thrown: true })) return known;
+        throw error;
+      }
+      const { data, error, status } = result;
+      if (error) {
+        if (known && roleLookupUnanswered({ status })) return known;
+        throw new Error(error.message);
+      }
       if (data == null) return null;
       if (!isUserRole(data)) throw new Error("Сервер вернул неизвестную роль");
       return data;

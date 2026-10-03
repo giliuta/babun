@@ -16,6 +16,7 @@ import {
   staleTimeFor,
   type FreshnessContext,
 } from "./switch-revalidate-plan";
+import { restoreChrome, watchChrome } from "./chrome-cache";
 
 /** Кто сейчас активен и кого дообновляет очередь — читается на каждое решение
  *  о свежести: оба значения меняются переходом, а не рендером. */
@@ -118,3 +119,10 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// ШАПКА ВКЛАДОК ЖИВЁТ И БЕЗ СЕРВЕРА (владелец 03.10): роль, компании,
+// календари, права, команды и профиль компании поднимаются с устройства до
+// первого экрана и записываются после каждого удачного ответа
+// (`chrome-cache.ts`). Данные экранов сюда не входят.
+restoreChrome(queryClient);
+watchChrome(queryClient);

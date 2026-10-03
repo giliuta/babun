@@ -76,8 +76,10 @@ import {
   withTeamlessRows,
 } from "@/features/finances/team-scope";
 import { buildRefundDraft } from "@/features/finances/refund";
+import { loadErrorWords } from "@/lib/connection-words";
 import {
   FinanceOverview,
+  ScopePeriodBar,
   type HomeView,
 } from "@/features/finances/FinanceOverview";
 import {
@@ -1322,23 +1324,48 @@ function FinancesContent() {
     setPopupTx(tx);
   };
 
+  // ЛЕНТА КОМАНД И ПЕРИОД — И ПОКА ГРУЗИТСЯ, И КОГДА СЕРВЕР МОЛЧИТ (владелец
+  // 03.10: «календарь, когда не грузится, показывает команды сверху… в
+  // финансах то же самое должно быть»). Та же полоса, что над сводкой, —
+  // при ответе сервера экран не прыгает. Без ответа период глухой: выбирать
+  // его не для чего, цифр за ним нет.
+  const scopeBar = (locked: boolean) => (
+    <ScopePeriodBar
+      teams={scopeChipTeams}
+      scopeTeamId={scope}
+      onScopeChange={changeScope}
+      period={period}
+      onOpenPresets={() => setPresetOpen(true)}
+      onOpenCustom={() => setWheelsOpen(true)}
+      locked={locked}
+    />
+  );
+
   if (loading) {
     return (
       <Screen edges={["top"]}>
         {header}
+        {scopeBar(false)}
         <EmptyState state="loading" fill />
       </Screen>
     );
   }
 
   if (loadError) {
+    // Обрыв — словами, а не «TypeError: Network request failed» (03.10).
+    const words = loadErrorWords(loadError, {
+      failed: "Не удалось загрузить финансы",
+      later: "Финансы загрузятся, как только сервер ответит.",
+    });
     return (
       <Screen edges={["top"]}>
         {header}
+        {scopeBar(true)}
         <EmptyState
           state="error"
           fill
-          subtitle={(loadError as Error).message}
+          title={words.title}
+          subtitle={words.subtitle}
           action={{ label: "Повторить", onPress: refreshAll }}
         />
       </Screen>

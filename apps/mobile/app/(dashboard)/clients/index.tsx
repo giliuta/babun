@@ -85,6 +85,7 @@ import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { RemindSheet } from "@/features/clients/RemindSheet";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
+import { loadErrorWords } from "@/lib/connection-words";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
 import { ContactsImportSheet } from "@/features/clients/import/ContactsImportSheet";
@@ -593,6 +594,12 @@ function ClientsListScreen() {
     );
   };
 
+  // Обрыв — словами, а не текстом ошибки (03.10).
+  const listErrorWords = loadErrorWords(error, {
+    failed: "Не удалось загрузить клиентов",
+    later: "Клиенты загрузятся, как только сервер ответит.",
+  });
+
   return (
     // edges top-only: экран внутри Tabs — нижний safe-area держит таб-бар,
     // иначе двойной инсет (~34pt зазор над CTA). Паттерн chats/(dashboard).
@@ -779,11 +786,8 @@ function ClientsListScreen() {
       ) : error ? (
         <ClientDataNotice
           fullScreen
-          title="Не удалось загрузить клиентов"
-          message={
-            (error as Error).message ||
-            "Проверьте соединение и повторите попытку."
-          }
+          title={listErrorWords.title}
+          message={listErrorWords.subtitle}
           onRetry={() => void refetch()}
           retrying={isRefetching}
         />
