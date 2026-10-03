@@ -325,4 +325,21 @@ describe("повторный аудит календаря 03.10", () => {
   test("первая запись предлагается по часам команды", () => {
     assert.doesNotMatch(screen(), /suggestFirstSlot\(new Date\(\)\)/);
   });
+
+  test("«Клиент просил не писать» — без кнопки отправки от компании везде", () => {
+    const compose = readFileSync(resolve(here, "../sms/SmsCompose.tsx"), "utf8");
+    assert.match(compose, /smsInPlan && context\?\.clientId && !context\.optOut && account\?\.serviceOn/);
+    assert.match(screen(), /optOut: smsClient\?\.sms_opt_out === true,/);
+    const book = readFileSync(resolve(here, "../../../app/book/index.tsx"), "utf8");
+    assert.match(book, /optOut: client\?\.sms_opt_out === true,/);
+    const card = readFileSync(resolve(here, "../../../app/(dashboard)/clients/[id].tsx"), "utf8");
+    assert.match(card, /optOut: c\.sms_opt_out === true,/);
+  });
+
+  test("поиск клиента: найденные по имени — выше найденных по метке", () => {
+    const picker = readFileSync(resolve(here, "../clients/ClientPickerSheet.tsx"), "utf8");
+    assert.match(picker, /if \(query\) return rankClientMatches\(pool\.filter\(\(c\) => matchesClient\(c, query\)\), query\);/);
+    const list = readFileSync(resolve(here, "../clients/useClientFilters.ts"), "utf8");
+    assert.match(list, /return rankClientMatches\(hits, search\);/);
+  });
 });

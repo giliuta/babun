@@ -178,6 +178,11 @@ export function rowToClient(r: ClientRow): Client {
     whatsapp_phone: r.whatsapp_phone,
     email: r.email,
     sms_name: r.sms_name,
+    // «Клиент просил не писать» (повторный аудит 03.10). Поле не читалось:
+    // после перезапуска карточка снова показывала «Присылать SMS» включённым,
+    // хотя в базе запрет стоит, а календарь и запись предлагали «Отправить
+    // от компании», которую сервер отклонял.
+    sms_opt_out: r.sms_opt_out === true,
     telegram_username: r.telegram_username,
     instagram_username: r.instagram_username,
 

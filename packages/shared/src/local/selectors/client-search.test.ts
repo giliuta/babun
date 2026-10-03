@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { createBlankClient } from "../clients";
-import { findDuplicateCandidates, matchesClient } from "./client-search";
+import {
+  clientSearchRank,
+  findDuplicateCandidates,
+  matchesClient,
+  rankClientMatches,
+} from "./client-search";
 
 function client(
   id: string,
@@ -152,5 +157,34 @@ describe("поиск промахивался (аудит 03.10)", () => {
     const csv = client("e164-1", { phone: "99 123 456", phone_e164: "+35799123456" });
     assert.equal(matchesClient(csv, "+357 99 123 456"), true);
     assert.equal(matchesClient(csv, "99123456"), true);
+  });
+});
+
+describe("порядок найденного — сначала по имени", () => {
+  const byLabel = client("a", { full_name: "Тшлшщ", city: "Test" });
+  const exact = client("b", { full_name: "Тест Календарь" });
+  const inside = client("c", { full_name: "Анна Тестова" });
+  const byPhone = client("d", { full_name: "Ольга", phone: "+357 99 000 001" });
+
+  test("имя с начала — выше совпадения внутри имени, а то — выше метки", () => {
+    assert.equal(clientSearchRank(exact, "Тест"), 0);
+    assert.equal(clientSearchRank(inside, "Тест"), 1);
+    assert.equal(clientSearchRank(byLabel, "Тест"), 2);
+    assert.deepEqual(
+      rankClientMatches([byLabel, inside, exact], "Тест").map((c) => c.id),
+      ["b", "c", "a"],
+    );
+  });
+
+  test("номер — первой ступенью; слова имени в любом порядке — второй", () => {
+    assert.equal(clientSearchRank(byPhone, "99000"), 0);
+    assert.equal(clientSearchRank(exact, "Календарь Тест"), 1);
+  });
+
+  test("внутри ступени порядок сохраняется; пустой запрос не трогает список", () => {
+    const a1 = client("x", { full_name: "Тест 1" });
+    const a2 = client("y", { full_name: "Тест 2" });
+    assert.deepEqual(rankClientMatches([a2, a1], "тест").map((c) => c.id), ["y", "x"]);
+    assert.deepEqual(rankClientMatches([byLabel, exact], " ").map((c) => c.id), ["a", "b"]);
   });
 });

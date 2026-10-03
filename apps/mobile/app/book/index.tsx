@@ -1139,9 +1139,10 @@ export default function BookScreen() {
             appointmentId: editing?.id ?? null,
             clientId: client?.id ?? null,
             teamId: teamId ?? null,
+            optOut: client?.sms_opt_out === true,
           }
         : null,
-    [client?.id, editing?.id, recordSmsVars, teamId],
+    [client?.id, client?.sms_opt_out, editing?.id, recordSmsVars, teamId],
   );
 
   // Keep the editable total in sync with catalog pricing until the operator

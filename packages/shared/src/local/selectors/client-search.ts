@@ -154,6 +154,44 @@ export function matchesClient(
   return words.every((w) => matchesPiece(w, hay, extraNorm));
 }
 
+/**
+ * НАСКОЛЬКО ПРЯМО ЗАПРОС ПОПАЛ В КЛИЕНТА — для порядка найденного.
+ *
+ * 0 — имя начинается с запроса или номер содержит набранные цифры;
+ * 1 — запрос (или каждое его слово) есть в имени;
+ * 2 — нашёлся по другим полям: метке, адресу, заметке, реквизитам.
+ *
+ * Без порядка поиск «Тест» в шторке выбора ставил четырёх клиентов с меткой
+ * «Test» выше самого «Тест Календарь» — нужный оказывался последним, под
+ * кнопкой (повторный аудит 03.10). Внутри одной ступени порядок прежний.
+ */
+export function clientSearchRank(client: Client, rawQuery: string): 0 | 1 | 2 {
+  const q = rawQuery.trim();
+  if (!q) return 2;
+  const name = normalizeSearchable(client.full_name ?? "");
+  const qNorm = normalizeSearchable(q);
+  const qDigits = normalizeDigits(q);
+  if (qNorm && name.startsWith(qNorm)) return 0;
+  if (qDigits.length >= 4) {
+    for (const phone of [client.phone, client.phone_e164]) {
+      if (phone && normalizeDigits(phone).includes(qDigits)) return 0;
+    }
+  }
+  if (qNorm && name.includes(qNorm)) return 1;
+  const words = q.split(/\s+/).map(normalizeSearchable).filter((w) => w.length > 0);
+  if (words.length > 1 && words.every((w) => name.includes(w))) return 1;
+  return 2;
+}
+
+/** Найденные — по `clientSearchRank`, внутри ступени порядок сохраняется. */
+export function rankClientMatches<T extends Client>(list: readonly T[], rawQuery: string): T[] {
+  if (!rawQuery.trim()) return [...list];
+  return list
+    .map((c, i) => ({ c, i, r: clientSearchRank(c, rawQuery) }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.c);
+}
+
 function matchesPiece(
   piece: string,
   hay: { normalized: string[]; digits: string[] },

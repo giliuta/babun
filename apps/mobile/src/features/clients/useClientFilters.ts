@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import { matchesClient } from "@babun/shared/local/selectors/client-search";
+import { matchesClient, rankClientMatches } from "@babun/shared/local/selectors/client-search";
 import { clientMemberOf, clientsById } from "@babun/shared/local/selectors/client-links";
 import { nameInComment } from "@babun/shared/local/selectors/client-stats";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
@@ -422,7 +422,7 @@ export function useClientFilters(
   );
 
   const filtered = useMemo(() => {
-    return sorted.filter(
+    const hits = sorted.filter(
       (c) =>
         passesSearch(c) &&
         passesTag(c) &&
@@ -433,7 +433,11 @@ export function useClientFilters(
         passesSource(c) &&
         passesProperty(c),
     );
+    // С поиском найденные по имени — выше найденных по метке, адресу или
+    // заметке; внутри ступени — выбранная сортировка (повторный аудит 03.10).
+    return rankClientMatches(hits, search);
   }, [
+    search,
     sorted,
     passesSearch,
     passesTag,

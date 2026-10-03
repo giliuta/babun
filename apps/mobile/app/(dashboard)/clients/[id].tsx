@@ -399,6 +399,7 @@ export function ClientDetailScreen() {
       c
         ? {
             clientId: c.id,
+            optOut: c.sms_opt_out === true,
             vars: clientSmsVars({
               client: c,
               appointments,

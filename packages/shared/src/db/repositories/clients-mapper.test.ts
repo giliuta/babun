@@ -174,3 +174,14 @@ describe("rowToClient — реквизиты и связи", () => {
     expect(c.memberships?.[0]?.role).toBe("");
   });
 });
+
+describe("rowToClient — отказ от SMS", () => {
+  const base = rowWithLocation({ id: "loc-1", label: "", address: "" }) as unknown as Record<string, unknown>;
+  test("«Клиент просил не писать» доезжает до домена", () => {
+    expect(rowToClient({ ...base, sms_opt_out: true } as never).sms_opt_out).toBe(true);
+  });
+  test("без запрета — false, а не undefined", () => {
+    expect(rowToClient({ ...base, sms_opt_out: false } as never).sms_opt_out).toBe(false);
+    expect(rowToClient(base as never).sms_opt_out).toBe(false);
+  });
+});

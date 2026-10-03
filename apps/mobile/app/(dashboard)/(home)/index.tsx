@@ -3553,6 +3553,7 @@ export default function CalendarTab() {
               appointmentId: smsApt.id,
               clientId: smsApt.client_id ?? null,
               teamId: smsApt.team_id ?? null,
+              optOut: smsClient?.sms_opt_out === true,
               vars: appointmentSmsVars({
                 client: smsClient ?? null,
                 appointment: smsApt,

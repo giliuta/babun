@@ -18,6 +18,9 @@ export interface SmsContext {
   appointmentId?: string | null;
   clientId?: string | null;
   teamId?: string | null;
+  /** «Клиент просил не писать» (`sms_opt_out`): сервис его отказом и
+   *  встретит — кнопки «Отправить от …» нет, остаётся только свой телефон. */
+  optOut?: boolean;
 }
 
 const SmsVarsContext = createContext<SmsContext | null>(null);
@@ -53,7 +56,11 @@ export function useSmsServiceFor(context: SmsContext | null): SmsServiceState {
   // Без тарифа SMS сервиса нет (02.10, SMS — с «Соло»); с телефона — как
   // звонок, это не наш сервис.
   const smsInPlan = usePlanAllows("sms");
-  const ready = Boolean(smsInPlan && context?.clientId && account?.serviceOn && account.canPay);
+  // Клиент просил не писать — сервер ответит «sms:opt_out»; двери, которая
+  // кончится отказом, нет (повторный аудит 03.10).
+  const ready = Boolean(
+    smsInPlan && context?.clientId && !context.optOut && account?.serviceOn && account.canPay,
+  );
   const available =
     ready && (context?.appointmentId ? Boolean(teamId && senders[teamId]) : senderTeams.length > 0);
   return { available, priceCents: account?.priceCents ?? 10, context, senderTeams, senders };

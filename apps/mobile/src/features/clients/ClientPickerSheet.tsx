@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import { matchesClient } from "@babun/shared/local/selectors/client-search";
+import { matchesClient, rankClientMatches } from "@babun/shared/local/selectors/client-search";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -164,7 +164,9 @@ export function ClientPickerSheet({
   // кого УЖЕ были записи, а у новорождённого их нет по определению.
   const rows = useMemo(() => {
     const query = q.trim();
-    if (query) return pool.filter((c) => matchesClient(c, query));
+    // Найденные по имени — выше найденных по метке или адресу
+    // (`rankClientMatches`, повторный аудит 03.10).
+    if (query) return rankClientMatches(pool.filter((c) => matchesClient(c, query)), query);
     if (!recentIds?.length) {
       return [...pool].sort((a, b) => byName.compare(a.full_name || "", b.full_name || ""));
     }
