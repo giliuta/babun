@@ -100,22 +100,29 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={show}>
       {children}
-      {toast ? (
-        <Animated.View
-          pointerEvents={toast.action ? "box-none" : "none"}
-          style={{
-            position: "absolute",
-            // ПОЛОСА ВО ВСЮ ШИРИНУ, вплотную к верху — у любого тона: ровно
-            // так лежит `CalendarNotice`, и поля с зазором делали бы из неё
-            // висящую карточку (владелец 2026-09-06: «все уведомления везде
-            // одинаковые — как полноценный design block»).
-            top: insets.top,
-            left: 0,
-            right: 0,
-            opacity,
-            transform: [{ translateY }],
-          }}
-        >
+      {/* ПОЛОСА СМОНТИРОВАНА ВСЕГДА, ПУСТАЯ — КОГДА ТОСТА НЕТ (повторный аудит
+          03.10, на симуляторе). Монтировалась она вместе с тостом, а появление
+          запускалось в том же вызове — до того, как вид встал на экран. После
+          первого угасания значение прозрачности уже живёт в нативном
+          аниматоре, и новый вид вставал с нулём, а анимация к единице к этому
+          моменту уже отыграла: тост «Перенесено · Отменить» вызывался, но был
+          невидим — отменить перенос было нечем. */}
+      <Animated.View
+        pointerEvents={toast?.action ? "box-none" : "none"}
+        style={{
+          position: "absolute",
+          // ПОЛОСА ВО ВСЮ ШИРИНУ, вплотную к верху — у любого тона: ровно
+          // так лежит `CalendarNotice`, и поля с зазором делали бы из неё
+          // висящую карточку (владелец 2026-09-06: «все уведомления везде
+          // одинаковые — как полноценный design block»).
+          top: insets.top,
+          left: 0,
+          right: 0,
+          opacity,
+          transform: [{ translateY }],
+        }}
+      >
+        {toast ? (
           <NoticeBar
             tone={toast.type}
             message={toast.message}
@@ -134,8 +141,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 : undefined
             }
           />
-        </Animated.View>
-      ) : null}
+        ) : null}
+      </Animated.View>
     </ToastCtx.Provider>
   );
 }

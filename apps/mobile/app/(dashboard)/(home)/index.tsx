@@ -1391,6 +1391,12 @@ export default function CalendarTab() {
     const timer = setTimeout(() => setNotice(null), 5000);
     return () => clearTimeout(timer);
   }, [notice]);
+  // Вопрос задан про КОНКРЕТНУЮ сетку: чужая команда, другой вид или
+  // компания — и «Записать» открывал бы слот, чью причину считали по графику
+  // прежней команды (повторный аудит 03.10). Смена — вопрос снимается.
+  useEffect(() => {
+    setNotice(null);
+  }, [activeTeamId, mode, tenantId]);
   // Разбор финансов дня по тапу на футер Доход/Расход (null = закрыт).
   const [finModalYmd, setFinModalYmd] = useState<string | null>(null);
   // МЕТКА ДНЯ — ТОЛЬКО ЯВНАЯ (владелец 2026-08-29: «кнопку „основная" вообще

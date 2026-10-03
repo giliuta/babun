@@ -148,6 +148,16 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(toastSrc, /\.start\(\(\{ finished \}\) => \{\s*if \(finished\) setToast\(null\);/);
   });
 
+  test("полоса тоста смонтирована всегда — второй тост не встаёт невидимым", () => {
+    const toastSrc = readFileSync(resolve(here, "../../components/ui/Toast.tsx"), "utf8");
+    assert.match(toastSrc, /<Animated\.View\s*pointerEvents=\{toast\?\.action \? "box-none" : "none"\}/);
+    assert.doesNotMatch(toastSrc, /\{toast \? \(\s*<Animated\.View/);
+  });
+
+  test("вопрос «время прошло» снимается сменой команды, вида и компании", () => {
+    assert.match(screen(), /setNotice\(null\);\s*\}, \[activeTeamId, mode, tenantId\]\);/);
+  });
+
   test("«Настроить» метки и шестерёнка — с командой и от двойного тапа", () => {
     const src = screen();
     assert.match(src, /pathname: "\/calendar\/labels",\s*params: activeTeamId \? \{ team: activeTeamId \} : \{\},/);
