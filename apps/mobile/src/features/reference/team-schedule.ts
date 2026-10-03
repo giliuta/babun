@@ -82,9 +82,10 @@ export function useUpsertTeamSchedule() {
       teamId: string;
       schedule: TeamSchedule;
     }) => {
-      if (role !== "owner") {
-        throw new Error("Изменять график команды может только владелец.");
-      }
+      // Кто может — решает сервер: график пишет владелец и тот, кому дали
+      // «График: Меняет» (`team_schedules_write_access`). Ворота «только
+      // владелец» отбивали партнёра — выходной на дату и правка часов из
+      // шторки дня падали «Не удалось сохранить» (аудит 2026-10-03).
       await upsertScheduleEntry(supabase, tenantId as string, teamId, schedule);
     },
     // Оптимистичный мерж здесь ОБЯЗАТЕЛЕН, а не украшение: апсерт ЗАМЕНЯЕТ
