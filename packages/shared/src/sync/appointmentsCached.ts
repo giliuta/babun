@@ -47,6 +47,7 @@ import {
   createAppointment as repoCreateAppointment,
   updateAppointment as repoUpdateAppointment,
   deleteAppointment as repoDeleteAppointment,
+  GoneAppointmentError,
   StaleAppointmentError,
 } from "../db/repositories/appointments";
 import type { Appointment } from "../local/appointments";
@@ -426,6 +427,11 @@ export async function updateAppointment(
       // Put the canonical cached row back and surface the error instead of
       // leaving a false optimistic edit plus a permanently poisoned queue.
       if (!isTransientNetworkError(err)) {
+        // Записи нет на сервере — из кэша она уходит тоже.
+        if (err instanceof GoneAppointmentError) {
+          await cacheDelete("appointments", id).catch(() => {});
+          throw err;
+        }
         // Строку правили на другом устройстве — в кэш ложится строка
         // сервера, а не наша прежняя копия: экран должен показать правду.
         const restore =

@@ -443,6 +443,17 @@ export class StaleAppointmentError extends Error {
   }
 }
 
+/** Записи на сервере больше нет — её удалили на другом устройстве, пока
+ *  этот телефон её показывал (повторный аудит 03.10): правка находит ноль
+ *  строк. Раньше это было общее «Не удалось…», а запись оставалась на
+ *  экране. */
+export class GoneAppointmentError extends Error {
+  constructor() {
+    super("updateAppointment: Этой записи больше нет — её удалили на другом устройстве");
+    this.name = "GoneAppointmentError";
+  }
+}
+
 /**
  * Patch top-level columns. Nested arrays / objects in the patch are
  * REPLACED ATOMICALLY (no merge). To add one item, the caller must
@@ -493,6 +504,9 @@ export async function updateAppointment(
       .single();
     if (retry.error) throw new Error(`updateAppointment: ${retry.error.message}`);
     return rowToAppointment(retry.data);
+  }
+  if (error && (error as { code?: string }).code === "PGRST116") {
+    throw new GoneAppointmentError();
   }
   if (error) throw new Error(`updateAppointment: ${error.message}`);
   return rowToAppointment(row);

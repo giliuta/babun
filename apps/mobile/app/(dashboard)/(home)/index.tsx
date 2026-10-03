@@ -2032,9 +2032,13 @@ export default function CalendarTab() {
         apt.payments.length > 0 ||
         apt.payment != null);
     if (hasRecordedPayment) {
+      // Отменённая с возвратом — уже «отменена и возвращена»: совет «отмените
+      // или оформите возврат» был тупиком (повторный аудит 03.10).
       notify(
         "Запись хранится в истории",
-        "Запись с оплатой нельзя удалить. Отмените её или оформите возврат, чтобы история расчётов сохранилась.",
+        apt.status === "cancelled" || apt.payment_status === "refunded"
+          ? "У записи был возврат оплаты — она остаётся в истории расчётов, удалить её нельзя."
+          : "Запись с оплатой нельзя удалить. Отмените её или оформите возврат, чтобы история расчётов сохранилась.",
       );
       return;
     }
@@ -3321,7 +3325,9 @@ export default function CalendarTab() {
                   bookAt({
                     date: todayYmd,
                     time_start: `${String(Math.floor(next / 60)).padStart(2, "0")}:${String(next % 60).padStart(2, "0")}`,
-                    kind: "work",
+                    // Сотруднику с одними «Событиями» — событие: запись ему не
+                    // открыта, и кнопка всегда кончалась отказом (аудит 03.10).
+                    kind: canManageBookings || activeActions.create ? "work" : "event",
                   });
                 }
               : undefined

@@ -351,13 +351,25 @@ export async function setSelfReminder(
   }
   all[apt.id] = rule;
   writeSelfReminders(all);
+  // ПРАВИЛО, КОТОРОЕ НЕ ЗАЗВОНИТ, НЕ ХРАНИТСЯ (повторный аудит 03.10). Раньше
+  // оно сохранялось и при прошедшем времени, и при сбое: шторка показывала
+  // его отмеченным, хотя пуша не будет, а повторный тап его СНИМАЛ вместо
+  // того, чтобы поставить заново. Запрет уведомлений и очередь iPhone —
+  // другое: правило зазвонит, когда разрешат или освободится место.
+  const forget = () => {
+    const current = { ...readSelfReminders() };
+    delete current[apt.id];
+    writeSelfReminders(current);
+  };
   let when: Date;
   try {
     when = selfReminderInstant(apt, rule, timeZone);
   } catch {
+    forget();
     return "unavailable";
   }
   if (when.getTime() <= Date.now()) {
+    forget();
     await removeBabunNotificationOwners([selfOwnerKey(apt.id)]);
     return "past";
   }
@@ -372,8 +384,10 @@ export async function setSelfReminder(
       ),
       { requestPermission: true },
     );
+    if (result.status === "capacity" || result.status === "unavailable") forget();
     return result.status;
   } catch {
+    forget();
     return "unavailable";
   }
 }

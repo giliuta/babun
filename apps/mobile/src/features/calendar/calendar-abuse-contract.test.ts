@@ -174,6 +174,12 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(screen(), /schedule: \(current\) => \{\s*const base: TeamSchedule = current \?\?/);
   });
 
+  test("мелочи: «Новая запись» в пустом Списке у сотрудника с одними событиями, удаление записи с возвратом", () => {
+    const src = screen();
+    assert.match(src, /kind: canManageBookings \|\| activeActions\.create \? "work" : "event",/);
+    assert.match(src, /apt\.status === "cancelled" \|\| apt\.payment_status === "refunded"\s*\? "У записи был возврат оплаты/);
+  });
+
   test("полоса тоста смонтирована всегда — второй тост не встаёт невидимым", () => {
     const toastSrc = readFileSync(resolve(here, "../../components/ui/Toast.tsx"), "utf8");
     assert.match(toastSrc, /<Animated\.View\s*pointerEvents=\{toast\?\.action \? "box-none" : "none"\}/);

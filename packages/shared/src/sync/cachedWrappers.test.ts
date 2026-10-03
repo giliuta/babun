@@ -853,6 +853,42 @@ describe("appointments cache-of-domain", () => {
     expect(await dequeueAll()).toHaveLength(0);
   });
 
+  test("правка записи, удалённой на другом телефоне, — словами, и запись уходит с экрана (аудит 03.10)", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+      }),
+      TENANT,
+    );
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    setNetwork(new OnlineNetwork());
+    const gone = {
+      from() {
+        const chain: Record<string, unknown> = {
+          update: () => chain,
+          eq: () => chain,
+          select: () => chain,
+          single: () =>
+            Promise.resolve({
+              data: null,
+              error: { code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned" },
+            }),
+        };
+        return chain;
+      },
+    };
+
+    await expect(
+      updateAppointment(gone as never, APPT_ID, { time_start: "11:00" }, TENANT),
+    ).rejects.toThrow("больше нет");
+    expect(await cacheRead<Record<string, unknown>>("appointments", TENANT)).toEqual([]);
+    expect(await dequeueAll()).toHaveLength(0);
+  });
+
   test("за навсегда упавшей правкой новая не прячется — отказ словами (аудит 03.10)", async () => {
     await createAppointment(
       stubSupabase,

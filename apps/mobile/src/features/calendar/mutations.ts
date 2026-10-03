@@ -14,7 +14,10 @@ import {
   updateAppointment,
 } from "@babun/shared/sync/appointmentsCached";
 import { isOnline, randomUuid } from "@babun/shared/sync";
-import { StaleAppointmentError } from "@babun/shared/db/repositories/appointments";
+import {
+  GoneAppointmentError,
+  StaleAppointmentError,
+} from "@babun/shared/db/repositories/appointments";
 import { markOwnWrite, OWN_WRITE_IN_FLIGHT_MS, OWN_WRITE_SETTLE_MS } from "@/lib/own-writes";
 import {
   listPhotoPaths,
@@ -289,6 +292,13 @@ function useUpdateAppointmentOptions() {
       else inFlightEdits.delete(id);
     },
     onError: (err, { id }, ctx) => {
+      // Записи больше нет на сервере — убираем её и с экрана.
+      if (err instanceof GoneAppointmentError) {
+        qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
+          cur?.filter((a) => a.id !== id),
+        );
+        return;
+      }
       // Запись изменилась на другом устройстве — показываем строку сервера,
       // а не нашу прежнюю копию: по ней человек и решит, что делать дальше.
       const restore =
