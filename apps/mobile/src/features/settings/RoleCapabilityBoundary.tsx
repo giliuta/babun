@@ -4,7 +4,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { signOutAndWipe } from "@/lib/auth-clear";
-import { evictCompanyFromDevice } from "@/lib/evict-company";
+import { evictCompanyFromDevice, forgetEviction } from "@/lib/evict-company";
 import { useTenantId } from "@/lib/tenant";
 import { can, type AppCapability } from "./role-policy";
 import { useCurrentRole } from "./tenant";
@@ -48,8 +48,12 @@ export function RoleCapabilityBoundary({
   // плана доступа). Это путь телефона, который в момент увольнения был выключен
   // и сигнал `membership_removed` не услышал. Стирание само ещё раз спрашивает
   // сервер и уводит в другую компанию, если она есть.
+  // Роль пришла — человек в компании (снова): память о прошлом стирании
+  // забывается, иначе второе удаление в том же запуске ничего не стёрло бы.
   useEffect(() => {
-    if (role === null && tenantId) void evictCompanyFromDevice(tenantId);
+    if (!tenantId) return;
+    if (role === null) void evictCompanyFromDevice(tenantId);
+    else if (role) forgetEviction(tenantId);
   }, [role, tenantId]);
 
   if (role === undefined) {

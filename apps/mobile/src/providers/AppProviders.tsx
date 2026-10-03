@@ -100,7 +100,9 @@ function AccessSignalsMount() {
     channel.on("broadcast", { event: "membership_removed" }, (message) => {
       const tenantId = (message.payload as { tenant_id?: unknown } | undefined)
         ?.tenant_id;
-      if (typeof tenantId === "string") void evictCompanyFromDevice(tenantId);
+      if (typeof tenantId === "string") {
+        void evictCompanyFromDevice(tenantId, { fresh: true });
+      }
     });
     // ПРИГЛАШЕНИЯ МЕНЯЮТСЯ БЕЗ ПЕРЕЗАПУСКА (006, 14.09): сигнал уходит и
     // приглашённому, и пригласившему — оба перечитывают свои списки.
