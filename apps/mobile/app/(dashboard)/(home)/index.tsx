@@ -534,6 +534,16 @@ export default function CalendarTab() {
   };
 
   const router = useRouter();
+  // ДВОЙНОЙ ТАП НЕ ОТКРЫВАЕТ ФОРМУ ДВАЖДЫ (аудит 03.10): две страницы одной
+  // записи (нижняя — со старыми данными), а из «Записать» — вторая
+  // заполненная форма и дубль записи. Та же защита, что у «Финансов».
+  const lastBookPushRef = useRef(0);
+  const pushBookOnce = (href: Parameters<typeof router.push>[0]) => {
+    const at = Date.now();
+    if (at - lastBookPushRef.current < 700) return;
+    lastBookPushRef.current = at;
+    router.push(href);
+  };
   /** Экран, с которого пришли открывать запись. Ref, а не state: он не влияет
    *  на отрисовку и не должен вызывать лишний рендер календаря. Гасится сразу
    *  после ухода — второе закрытие уже никуда не уводит. */
@@ -613,11 +623,14 @@ export default function CalendarTab() {
     router,
   ]);
   // Уход с календаря снимает вопросы «когда?» и «куда?»: они заданы один раз.
+  // И «Свободное перемещение» тоже (аудит 03.10): плашка висела после
+  // возвращения, а сетка оставалась в режиме правки.
   useFocusEffect(
     useCallback(
       () => () => {
         setPick(null);
         setMoving(null);
+        setEditingApt(null);
       },
       [],
     ),
@@ -629,9 +642,12 @@ export default function CalendarTab() {
   // Дефолт для нового пользователя — «Неделя» (стандарт по решению
   // владельца 2026-07-13; дальше вид запоминается за пользователем).
   const tenantId = useTenantId();
+  // Смена компании снимает и «Записать: клиент» (аудит 03.10): плашка с
+  // чужим клиентом переживала переход, форма открывалась без клиента.
   useEffect(() => {
     setMoving(null);
     setEditingApt(null);
+    setPick(null);
   }, [tenantId]);
   const [mode, setMode] = useState<CalMode>(() => {
     let saved: CalMode | undefined;
@@ -1667,7 +1683,7 @@ export default function CalendarTab() {
       );
       return;
     }
-    router.push({
+    pushBookOnce({
       pathname: "/book",
       params: {
         ...(activeTeamId ? { teamId: activeTeamId } : {}),
@@ -1777,7 +1793,7 @@ export default function CalendarTab() {
     // страница создаёт и правит»), просто сюда его не звали. Пока обе формы
     // живы, любая правка делается наполовину — вчерашний снос «Источника
     // заявки» вычистил его из создания и оставил в правке.
-    router.push({
+    pushBookOnce({
       pathname: "/book",
       params: { appointmentId: target.id },
     } as Href);
@@ -2012,7 +2028,10 @@ export default function CalendarTab() {
     timeStart: string,
     preset: { label: string; color: string; minutes: number },
   ) => {
-    const ev = createBlankAppointment({
+    // ID — СРАЗУ UUID (аудит 03.10): на Hermes нет `crypto.randomUUID`, и
+    // пустая запись рождалась с `apt-…`; создание меняло его на uuid, а
+    // «Отменить» в тосте удаляло прежний `apt-…` — событие оставалось.
+    const ev = { ...createBlankAppointment({
       kind: "event",
       date: dateYmd,
       time_start: timeStart,
@@ -2028,7 +2047,7 @@ export default function CalendarTab() {
       service_ids: [],
       services: [],
       total_amount: 0,
-    });
+    }), id: randomUuid() };
     createAppt.mutate(ev, {
       onSuccess: () => {
         haptics.success();
@@ -2347,6 +2366,8 @@ export default function CalendarTab() {
     if (m === "day" && mode === "week" && weekYmds.includes(todayYmd)) {
       setDay(startOfDay(now));
     }
+    // В Месяце и Списке тянуть нечего — «Свободное перемещение» снимается.
+    if (m === "month" || m === "agenda") setEditingApt(null);
     setMode(m);
     rememberView({ mode: m });
   };
@@ -2619,7 +2640,7 @@ export default function CalendarTab() {
   /** Выбрали время в режиме подбора — уходим в форму записи с ним. */
   const pickSlotForClient = (dateYmd: string, timeStart: string) => {
     if (!pickClientId) return;
-    router.push({
+    pushBookOnce({
       pathname: "/book",
       params: {
         clientId: pickClientId,
@@ -3114,7 +3135,9 @@ export default function CalendarTab() {
               today={now}
               labelFor={labelFor}
               offLabelColorFor={offLabelColorFor}
-              onCreateAt={canCreateOnGrid || moving ? createAtGrid : undefined}
+              // «Свободное перемещение» заканчивается тапом по сетке — и у
+              // того, кому «Новые записи» закрыты (аудит 03.10).
+              onCreateAt={canCreateOnGrid || moving || editingApt ? createAtGrid : undefined}
               onSlotLongPress={
                 !canSlotMenu || moving || pickClientId ? undefined : slotMenuGrid
               }
@@ -3153,7 +3176,9 @@ export default function CalendarTab() {
               offLabelColorFor={offLabelColorFor}
               onDayLabelTap={onDayLabelTap}
               onMenu={onMenuGrid}
-              onCreateAt={canCreateOnGrid || moving ? createAtGrid : undefined}
+              // «Свободное перемещение» заканчивается тапом по сетке — и у
+              // того, кому «Новые записи» закрыты (аудит 03.10).
+              onCreateAt={canCreateOnGrid || moving || editingApt ? createAtGrid : undefined}
               onSlotLongPress={
                 !canSlotMenu || moving || pickClientId ? undefined : slotMenuGrid
               }

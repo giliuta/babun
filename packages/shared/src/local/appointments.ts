@@ -420,6 +420,10 @@ export function duplicateAppointment(apt: Appointment): Appointment {
     // carry the source event's author into the optimistic copy.
     created_by: null,
     prepaid_amount: 0,
+    // Строки предоплаты — деньги оригинала (аудит 03.10): копия несла их, и
+    // своя предоплата на копии дописывалась к чужим — сумма строк расходилась
+    // с `prepaid_amount`, а блок оплаты показывал одну строку без «Снять».
+    prepayments: [],
     payments: [],
     payment: null,
     payment_status: "unpaid",
@@ -428,6 +432,10 @@ export function duplicateAppointment(apt: Appointment): Appointment {
     status: "scheduled",
     cancel_reason: null,
     photos: [],
+    // Копия повторяющегося события — РАЗОВАЯ (аудит 03.10): копия первого
+    // вхождения заводила вторую серию, и дальше каждый день стояло по два
+    // события (и по два пуша).
+    ...(apt.event_repeat ? { event_repeat: { kind: "none" } as PersonalEventRepeat } : {}),
     created_at: now,
     updated_at: now,
   };

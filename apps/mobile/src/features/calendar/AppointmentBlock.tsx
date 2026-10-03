@@ -154,7 +154,11 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       setLiveStart(null);
       return;
     }
-    const time = minToHM(startMin + steps * dragStep);
+    // Подпись под пальцем — то, что встанет при отпускании (аудит 03.10):
+    // без того же ограничения она показывала «-1:-30» и «24:30».
+    const time = minToHM(
+      clampStart(startMin + steps * dragStep, Math.max(15, spanEnd - startMin)),
+    );
     setLiveStart(days === 0 ? time : `${dayShort(apt.date, days)} ${time}`);
   };
   const clearLive = () => setLiveStart(null);
@@ -301,6 +305,17 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // такой записи считалась нулём, «Перенести»/«Копировать» брали окно не той
   // длины, и сегодняшняя неоплаченная запись не становилась долгом.
   const endHM = (min: number) => minToHM(Math.min(min, 23 * 60 + 59));
+  // …и обратно: конец 23:59 в арифметике — это конец суток (аудит 03.10).
+  // Иначе длительность выходила на минуту короче: запись 22:00–23:59 при
+  // каждом переносе вниз становилась 22:01–23:59, 22:02–23:59…, а растяжка
+  // нижнего края на шаг вверх давала 23:44 вместо 23:45.
+  const spanEnd = endMin >= 23 * 60 + 59 ? 24 * 60 : endMin;
+  /** Начало, которое запись может занять: в окне, но не теснее, чем стоит. */
+  const clampStart = (newStart: number, duration: number) => {
+    const lo = Math.min(startMin, winStart);
+    const hi = Math.max(spanEnd, winEnd) - duration;
+    return Math.max(lo, Math.min(hi, newStart));
+  };
 
   const commit = (translationY: number, dayDelta = 0) => {
     if (!onReschedule) {
@@ -308,7 +323,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       tx.value = withSpring(0);
       return;
     }
-    const duration = Math.max(15, endMin - startMin);
+    const duration = Math.max(15, spanEnd - startMin);
     // Base the move on the UNCLAMPED startMin (like moveBy below), not on
     // the clamped visual top: a block clipped by the visible window
     // (e.g. 06:30 with startHour=7) must keep its real start, not get
@@ -316,12 +331,9 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     const step = dragStep;
     const deltaMin =
       Math.round(((translationY / hourH) * 60) / step) * step;
-    let newStart = startMin + deltaMin;
     // Clamp into the window, but never TIGHTER than where the block
     // already sits — a clipped block may legitimately stay clipped.
-    const lo = Math.min(startMin, winStart);
-    const hi = Math.max(endMin, winEnd) - duration;
-    newStart = Math.max(lo, Math.min(hi, newStart));
+    const newStart = clampStart(startMin + deltaMin, duration);
     if (newStart === startMin && dayDelta === 0) {
       // Некуда двигать — мягко возвращаем карточку на место.
       ty.value = withSpring(0);
@@ -340,11 +352,8 @@ export const AppointmentBlock = memo(function AppointmentBlock({
 
   const moveBy = (deltaMin: number) => {
     if (!onReschedule) return;
-    const duration = Math.max(15, endMin - startMin);
-    let newStart = startMin + deltaMin;
-    const lo = Math.min(startMin, winStart);
-    const hi = Math.max(endMin, winEnd) - duration;
-    newStart = Math.max(lo, Math.min(hi, newStart));
+    const duration = Math.max(15, spanEnd - startMin);
+    const newStart = clampStart(startMin + deltaMin, duration);
     if (newStart === startMin) return;
     onReschedule(apt, minToHM(newStart), endHM(newStart + duration));
   };
@@ -361,12 +370,12 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   const canResize = editing && !!onReschedule && !cancelled && cardH >= 24;
   const edgeH = Math.min(EDGE_H, cardH / 3);
   const resizeStep = Math.max(15, Math.min(60, stepMinutes));
-  const durMin = Math.max(resizeStep, endMin - startMin);
+  const durMin = Math.max(resizeStep, spanEnd - startMin);
   const maxShrink = Math.floor((durMin - resizeStep) / resizeStep);
   const onResizeSnap = (edge: "top" | "bottom", steps: number) => {
     haptics.tap();
-    const s0 = edge === "top" ? startMin + steps * resizeStep : startMin;
-    const e0 = edge === "bottom" ? endMin + steps * resizeStep : endMin;
+    const s0 = Math.max(0, edge === "top" ? startMin + steps * resizeStep : startMin);
+    const e0 = edge === "bottom" ? spanEnd + steps * resizeStep : spanEnd;
     setLiveStart(`${minToHM(s0)}–${endHM(e0)}`);
   };
   const commitResize = (edge: "top" | "bottom", steps: number) => {
@@ -380,7 +389,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       return;
     }
     const ns = edge === "top" ? startMin + steps * resizeStep : startMin;
-    const ne = edge === "bottom" ? endMin + steps * resizeStep : endMin;
+    const ne = edge === "bottom" ? spanEnd + steps * resizeStep : spanEnd;
     if (ns < 0 || ne > 24 * 60 || ne - ns < resizeStep) {
       reset();
       return;
