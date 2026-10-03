@@ -32,6 +32,7 @@ import {
 } from "@/features/clients/queries";
 import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
 import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings";
+import { tagWriteWords } from "@/features/clients/tag-write-words";
 import { useTeams } from "@/features/reference/queries";
 
 // ТЕГИ КЛИЕНТОВ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
@@ -63,7 +64,7 @@ type Editing = { mode: "create" } | { mode: "edit"; tag: ClientTag };
 // (STORY-082).
 export default function ClientTagsScreenRoute() {
   return (
-    <ClientSettingsRoute row={["tags", "card"]}>
+    <ClientSettingsRoute row="tags">
       <ClientTagsScreen />
     </ClientSettingsRoute>
   );
@@ -145,7 +146,7 @@ function ClientTagsScreen() {
     } catch (error) {
       notify(
         "Не удалось сохранить тег",
-        (error as Error).message || "Проверьте соединение и попробуйте ещё раз.",
+        tagWriteWords((error as Error).message),
       );
     }
   };
@@ -159,7 +160,7 @@ function ClientTagsScreen() {
     } catch (error) {
       notify(
         "Не удалось изменить тег",
-        (error as Error).message || "Проверьте соединение и попробуйте ещё раз.",
+        tagWriteWords((error as Error).message),
       );
     }
   };
@@ -170,7 +171,7 @@ function ClientTagsScreen() {
     } catch (error) {
       notify(
         "Не удалось сохранить порядок",
-        (error as Error).message || "Проверьте соединение и попробуйте ещё раз.",
+        tagWriteWords((error as Error).message),
       );
     }
   };
@@ -192,8 +193,7 @@ function ClientTagsScreen() {
         } catch (error) {
           notify(
             "Не удалось удалить тег",
-            (error as Error).message ||
-              "Проверьте соединение и попробуйте ещё раз.",
+            tagWriteWords((error as Error).message),
           );
         }
       },

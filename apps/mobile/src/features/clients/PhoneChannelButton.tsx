@@ -9,7 +9,7 @@ import { useEnabledChannels } from "@/features/clients/contact-ways";
 import { RowActionButton } from "@/components/ui/card-rows";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { formatPhoneForDisplay, tryToE164 } from "@/features/clients/phone";
-import { useReferenceHref } from "@/features/clients/reference-href";
+import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { useSmsComposeContext } from "@/features/sms/SmsCompose";
 import { SmsSendSheet } from "@/features/sms/SmsSendSheet";
@@ -53,8 +53,9 @@ export default function PhoneChannelButton({
 }) {
   const t = useThemeColors();
   const router = useRouter();
-  // Из записи справочник открывается её сиблингом (см. `useReferenceHref`).
-  const channelsHref = useReferenceHref().channels;
+  // Шестерёнка — в «Связь» ЭТОЙ команды в её компании (из записи — сиблингом
+  // записи, см. `useReferenceHref`); строки, закрытой человеку, нет и в листе.
+  const settingsHref = useClientSettingsDoor("ways", teamId);
   const [open, setOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
   // Где стоит номер — запись или карточка: её поля встанут в шаблоны SMS
@@ -121,8 +122,8 @@ export default function PhoneChannelButton({
         title={formatPhoneForDisplay(number, country)}
         items={items}
         // Страница этого же списка — см. AddContactSheet.
-        onSettings={() => router.push(channelsHref)}
-        settingsLabel="Способы связи"
+        onSettings={settingsHref ? () => router.push(settingsHref) : undefined}
+        settingsLabel="Связь"
         onClose={() => setOpen(false)}
       />
       {smsContext ? (

@@ -282,6 +282,13 @@ describe("клиенты уходят с телефона, когда права
     assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.files": "read" })), "changed");
   });
 
+  test("«Меню клиента» и «Удаление клиента» сузили — сужение (аудит 03.10)", () => {
+    const withMenu = { ...base, "clients.menu": "write", "clients.delete": "write" } as const;
+    assert.equal(clientLevelsChange(team(withMenu), team({ ...withMenu, "clients.delete": "off" })), "narrowed");
+    assert.equal(clientLevelsChange(team(withMenu), team({ ...withMenu, "clients.menu": "off" })), "narrowed");
+    assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.menu": "write" })), "changed");
+  });
+
   test("владелец, ставший сотрудником, — сужение", () => {
     assert.equal(clientLevelsChange(map({ isOwner: true }), team(base)), "narrowed");
   });

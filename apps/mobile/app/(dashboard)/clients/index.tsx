@@ -66,11 +66,13 @@ import { useGuestSources } from "@/features/clients/guest-sources";
 import { withClientHistory } from "@/features/clients/member-history";
 import { useMemberClientHistory } from "@/features/clients/use-member-history";
 import {
+  capabilitiesOf,
   clientCardHref,
   clientsInsightsHref,
   clientsSettingsHref,
   type ClientsScope,
 } from "@/features/clients/clients-company";
+import { clientRowActions } from "@/features/clients/client-row-actions";
 import {
   loadDayFilter,
   saveDayFilter,
@@ -403,33 +405,13 @@ function ClientsListScreen() {
   // выглядеть по-разному в двух местах (раньше здесь был системный Alert).
   const [remindClient, setRemindClient] = useState<Client | null>(null);
   const openRemindMenu = (c: Client) => setRemindClient(c);
-  const clientsInPlan = usePlanAllows("clients");
-  // «МЕНЮ КЛИЕНТА» (владелец 02.10: «зажимаю на клиенте — открывается
-  // менюшка… может или не может, как „Переносить" в календаре»; 03.10 — в нём
-  // «Напомнить» и «В чёрный список»). У строки партнёра (`blocks`) — его
-  // право на ЭТОГО клиента; своя база — как была.
-  const partnerMenu = (c: Client) => !!c.blocks && clientBlockLevel(c, "clients.menu") === "write";
-  // «Удаление клиента» (03.10) — своим правом, как «Отмена и удаление».
-  const partnerDelete = (c: Client) => !!c.blocks && clientBlockLevel(c, "clients.delete") === "write";
-  // «Напомнить» и «В чёрный список»: своя база по праву карточки, партнёр —
-  // по «Меню клиента».
   // Своя база без тарифа только смотрит (аудит 03.10): «Напомнить» и «В
-  // чёрный список» сервер отказал бы — карточка их и так гасит.
-  const canEditClient = (c: Client) =>
-    c.blocks
-      ? partnerMenu(c)
-      : clientsInPlan && caps.edit && clientBlockLevel(c, "clients") === "write";
-  // «Удалить»: своя база — владелец, партнёр — «Удаление клиента».
-  const canDeleteClient = (c: Client) => (c.blocks ? partnerDelete(c) : caps.manage);
-  // «Поделиться» и «Выбрать несколько»: своя база — «можно вынести»,
-  // партнёр — «Меню клиента» (владелец 03.10: «всё меню, кроме „Удалить"»).
-  const canExportClient = (c: Client) => (c.blocks ? partnerMenu(c) : caps.export);
+  // чёрный список» сервер отказал бы — карточка их и так гасит. Что ещё
+  // можно со строкой — `rowActionsOf` ниже (`client-row-actions.ts`).
+  const clientsInPlan = usePlanAllows("clients");
   // «Записать» — только с правом «Новые записи» в команде записи (03.10:
-  // «если нет разрешения на запись — этого и не будет»); партнёру ещё и с
-  // «Меню клиента».
+  // «если нет разрешения на запись — этого и не будет»).
   const calendarActionsFor = useCalendarActionsReader();
-  const canBookClient = (c: Client) =>
-    caps.book && (!c.blocks || partnerMenu(c)) && calendarActionsFor(bookTeamOf(c)).create;
   const trashAsPartner = useTrashClientAsPartner();
   // Удаление партнёра — своей дверью сервера; вернуть может владелец.
   const confirmPartnerDelete = (c: Client) => {
@@ -442,7 +424,9 @@ function ClientsListScreen() {
       },
       async () => {
         try {
-          await trashAsPartner.mutateAsync(c.id);
+          // Строка работодателя удаляется в ЕГО компании (`source`), а не в
+          // своей: там такого клиента нет.
+          await trashAsPartner.mutateAsync({ id: c.id, source: guestOf.get(c.id) });
         } catch (e) {
           notify("Не удалось удалить", (e as Error).message);
         }
@@ -474,6 +458,33 @@ function ClientsListScreen() {
       teamId: bookTeamOf(c),
     });
   };
+
+  // ЖЕСТЫ И МЕНЮ СТРОКИ — ПО КОМПАНИИ СТРОКИ (аудит 03.10,
+  // `client-row-actions.ts`). Своя строка — права своей базы, как было;
+  // строка работодателя — права его источника: «Записать» у неё есть, только
+  // когда открыт ЕГО календарь (запись делается в открытом), а «Напомнить»,
+  // «В чёрный список» и «Удалить» пишутся в его компанию (`source`).
+  const ownRights = {
+    edit: clientsInPlan && caps.edit,
+    manage: caps.manage,
+    export: caps.export,
+    book: caps.book,
+  };
+  const rowActionsOf = (c: Client, selectingNow: boolean, teamCreate?: boolean) => {
+    const guest = guestOf.get(c.id);
+    return clientRowActions({
+      client: c,
+      guest: !!guest,
+      selecting: selectingNow,
+      rights: guest ? capabilitiesOf(guest) : ownRights,
+      teamCreate,
+    });
+  };
+  // Лист — про клиента, а не про режим: пункты не меняются, пока он уезжает
+  // после «Выбрать несколько».
+  const menuActions = menuClient
+    ? rowActionsOf(menuClient, false, calendarActionsFor(bookTeamOf(menuClient)).create)
+    : null;
 
   // УДАЛИТЬ — ОДНО ДЕЙСТВИЕ (владелец 03.10: «понятия „в архив" не будет —
   // удалить»). Клиент уходит в «Удалённые клиенты». Без истории он сотрётся
@@ -511,8 +522,10 @@ function ClientsListScreen() {
     );
   };
 
+  // Правки по строке — в компанию строки: у работодателя — его клиентом
+  // (`source`), у своей — источником экрана, как было.
   const onToggleBlacklist = (c: Client) =>
-    updateById.mutate({ id: c.id, patch: { blacklisted: !c.blacklisted } });
+    updateById.mutate({ id: c.id, patch: { blacklisted: !c.blacklisted }, source: guestOf.get(c.id) });
 
   // «Поделиться» — тот же текст, что из «⋯» карточки (`shareText`). Реквизиты
   // в нём — только когда их видно (аудит 03.10: из списка они уходили всегда,
@@ -830,10 +843,11 @@ function ClientsListScreen() {
           renderItem={({ item }) => {
             const stats = statsMap.get(item.id);
             // ГОСТЬ — клиент компании, где человек работает. Его карточка
-            // открывается в ЕГО компании, а жесты своей базы (записать,
-            // напомнить, архив) и массовый выбор к нему не относятся: это
-            // хозяйство владельца той компании.
+            // открывается в ЕГО компании, и массовый выбор к нему не
+            // относится. Меню и свайпы — по его блокам, как в зеркале (аудит
+            // 03.10: у настоящего партнёра они гасли целиком).
             const guest = guestOf.get(item.id);
+            const actions = rowActionsOf(item, selecting);
             return (
               <ClientRow
                 client={item}
@@ -858,20 +872,14 @@ function ClientsListScreen() {
                 }}
                 // Свайп (владелец 03.10): вправо — «Напомнить», влево —
                 // «Удалить»; «Записать» — в меню долгого нажатия.
-                onRemind={!guest && canEditClient(item) ? () => setRemindClient(item) : undefined}
-                onDelete={!guest && canDeleteClient(item) ? () => confirmDeleteOne(item) : undefined}
+                onRemind={actions.remind ? () => setRemindClient(item) : undefined}
+                onDelete={actions.remove ? () => confirmDeleteOne(item) : undefined}
                 onLongPress={() => {
-                  if (guest) return;
-                  if (selecting) toggleId(item.id);
+                  if (actions.select) toggleId(item.id);
                   // Меню — те же права, что у `ClientActionsSheet` ниже; ни
                   // одного — нет и пустой шторки (проверка глазами 30.09).
                   // Партнёру — с «Меню клиента» или «Удаление клиента» (03.10).
-                  else if (
-                    item.blocks
-                      ? partnerMenu(item) || partnerDelete(item)
-                      : caps.book || caps.export || caps.manage || canEditClient(item)
-                  )
-                    setMenuClient(item);
+                  else if (actions.menu) setMenuClient(item);
                 }}
               />
             );
@@ -965,6 +973,7 @@ function ClientsListScreen() {
             updateById.mutate({
               id: remindClient.id,
               patch: { reminder_at },
+              source: guestOf.get(remindClient.id),
             });
           }
         }}
@@ -976,15 +985,16 @@ function ClientsListScreen() {
         // записать — «можно записать», напомнить и чёрный список — «меняет
         // карточку» / «Меню клиента», удалить — владелец своей компании /
         // «Удаление клиента».
-        onBook={menuClient && canBookClient(menuClient) ? bookFor : undefined}
+        onBook={menuActions?.book ? bookFor : undefined}
         onClose={() => setMenuClient(null)}
         // Выбор нескольких ведёт к экспорту и массовой SMS: своя база — по
-        // «можно вынести», партнёр — по «Меню клиента» (03.10).
-        onSelectMany={menuClient && canExportClient(menuClient) ? (c) => enterSelection(c.id) : undefined}
-        onRemind={menuClient && canEditClient(menuClient) ? openRemindMenu : undefined}
-        onShare={menuClient && canExportClient(menuClient) ? (c) => void onShareClient(c) : undefined}
-        onToggleBlacklist={menuClient && canEditClient(menuClient) ? onToggleBlacklist : undefined}
-        onDelete={menuClient && canDeleteClient(menuClient) ? confirmDeleteOne : undefined}
+        // «можно вынести», партнёр — по «Меню клиента» (03.10); строки
+        // работодателя в выбор не попадают вовсе.
+        onSelectMany={menuActions?.selectMany ? (c) => enterSelection(c.id) : undefined}
+        onRemind={menuActions?.remind ? openRemindMenu : undefined}
+        onShare={menuActions?.share ? (c) => void onShareClient(c) : undefined}
+        onToggleBlacklist={menuActions?.blacklist ? onToggleBlacklist : undefined}
+        onDelete={menuActions?.remove ? confirmDeleteOne : undefined}
       />
       <ClientsFilterSheet
         visible={sheetOpen}

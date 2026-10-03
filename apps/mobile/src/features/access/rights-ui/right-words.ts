@@ -195,7 +195,7 @@ const DANGER: Record<string, Words> = {
   "clients.sms": { write: "Сможет отправлять SMS клиентам — за счёт баланса" },
   "clients.files": { write: "Сможет удалять файлы клиента" },
   "clients.settings_tags": { write: "Сможет удалять теги у всех клиентов команды" },
-  "clients.settings_sources": { write: "Удалённый источник у клиентов станет «Другое»" },
+  "clients.settings_sources": { write: "Клиенты удалённого источника останутся без источника" },
 };
 
 /** Имя строки права. */

@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 // single-client card is not one of the three cached tables and must render the
 // canonical row live.
 import {
+  clientWriteRefusal,
   getClient,
   purgeDateFromNow,
   createClient as repoCreateClient,
@@ -614,6 +615,16 @@ export function useSetClientTeam() {
   });
 }
 
+/** КЛИЕНТ ЧУЖОЙ СТРОКИ СПИСКА (аудит 03.10). Список склеен из нескольких
+ *  компаний, а источник у экрана один — своя. Действие по строке
+ *  работодателя (`guestOf`) несёт её источник: без него запись ушла бы под
+ *  заголовком своей компании и не нашла бы клиента. Нет `source` — источник
+ *  экрана, как было. */
+export interface ClientWriteTarget {
+  id: string;
+  source?: ClientsScope;
+}
+
 /** ПАРТНЁР С «УДАЛЕНИЕ КЛИЕНТА: МОЖЕТ» УДАЛЯЕТ КЛИЕНТА (владелец 03.10).
  *  Своей дверью `member_trash_client`: клиент уходит в «Удалённые клиенты»;
  *  без истории он сотрётся через 30 дней, с историей — лежит там, пока
@@ -622,17 +633,23 @@ export function useTrashClientAsPartner() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (target: string | ClientWriteTarget) => {
+      const { id, source } = typeof target === "string" ? { id: target, source: undefined } : target;
       // Дверь новее сгенерированных типов базы — вызов через узкий тип.
-      const db = writeClientOf(scope) as unknown as {
+      // Строка работодателя — клиентом, привязанным к ЕГО компании: дверь
+      // берёт компанию из заголовка.
+      const db = (source ? tenantBoundClient(source.tenantId) : writeClientOf(scope)) as unknown as {
         rpc: (name: "member_trash_client", args: { p_client_id: string }) => PromiseLike<{
-          error: { message: string } | null;
+          error: { message: string; code?: string; hint?: string } | null;
         }>;
       };
       const { error } = await db.rpc("member_trash_client", { p_client_id: id });
-      if (error) throw new Error(error.message);
+      // Отказ — словами (`block:clients.delete` → «Нет права удалять
+      // клиентов»), а не английским текстом сервера.
+      if (error) throw new Error(clientWriteRefusal(error) ?? error.message);
     },
-    onSuccess: (_d, id) => {
+    onSuccess: (_d, target) => {
+      const id = typeof target === "string" ? target : target.id;
       qc.setQueriesData<Client[]>({ queryKey: ["clients"] }, (list) =>
         Array.isArray(list) ? list.filter((c) => c.id !== id) : list,
       );
@@ -647,8 +664,10 @@ export function useUpdateClientById() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: Partial<Client> }) =>
-      saveClient(scope, id, patch),
+    // `source` — строка работодателя из общего списка (`ClientWriteTarget`):
+    // правка идёт его компании, а не источнику экрана.
+    mutationFn: ({ id, patch, source }: ClientWriteTarget & { patch: Partial<Client> }) =>
+      saveClient(source ? scopeOf(source) : scope, id, patch),
     onMutate: async ({ id, patch }) => {
       // Чтение, уже летящее по этому ключу, ответит ПОСЛЕ нашей подстановки и
       // вернуло бы строку без правки — отменяем его до, а не после.
@@ -659,11 +678,11 @@ export function useUpdateClientById() {
       );
       return { previous };
     },
-    onSuccess: (updated, { id, patch }) => {
+    onSuccess: (updated, { id, patch, source }) => {
       qc.setQueriesData<Client | null>({ queryKey: ["client", id] }, (old) =>
         keepAccessFields(old, updated),
       );
-      refreshRevealedContacts(scope.tenantId, id, patch);
+      refreshRevealedContacts(source?.tenantId ?? scope.tenantId, id, patch);
       qc.invalidateQueries({ queryKey: ["client", id] });
       qc.invalidateQueries({ queryKey: ["clients"] });
       // ЧЕЛОВЕК ВИДЕН И В ЧУЖОМ БЛОКЕ «ЛЮДИ» — своим запросом

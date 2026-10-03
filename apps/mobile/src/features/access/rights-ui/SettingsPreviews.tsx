@@ -45,7 +45,10 @@ export function SettingsPreview({
   teamColor: string;
 }) {
   const state: State = level === "off" ? "hidden" : level === "read" ? "read" : "write";
-  const onPress = state === "write" ? noop : undefined;
+  // Строка шестерёнки клиентов открывается и при «Только видит» — страницей
+  // без правки (аудит 03.10): у неё та же стрелка, что у «Меняет».
+  const onPress =
+    state === "write" || (state === "read" && blockKey.startsWith("clients.settings_")) ? noop : undefined;
   const row = (() => {
     switch (blockKey) {
       case "calendar.identity":

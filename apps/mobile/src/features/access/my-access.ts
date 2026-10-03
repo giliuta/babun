@@ -129,6 +129,11 @@ const CLIENT_RANKS: Readonly<Record<string, Readonly<Partial<Record<AccessLevel,
   "clients.client": BLOCK_RANK,
   "clients.history": BLOCK_RANK,
   "clients.sms": BLOCK_RANK,
+  // «Меню клиента» и «Удаление клиента» (03.10) тоже едут в `blocks` строки:
+  // без них сужение оставляло «Удалить» и «Напомнить» на кэше, а сервер
+  // отказывал (аудит 03.10).
+  "clients.menu": BLOCK_RANK,
+  "clients.delete": BLOCK_RANK,
 };
 
 export type ClientLevelsChange = "same" | "changed" | "narrowed";

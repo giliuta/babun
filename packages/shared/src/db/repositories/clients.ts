@@ -370,8 +370,7 @@ type PostgrestErrorLike = {
 
 /** Имена блоков карточки — как на странице прав (015 + 014, 30.09). */
 const CLIENT_BLOCK_TITLES: Record<string, string> = {
-  clients: "Карточки клиентов",
-  "clients.contacts": "Телефоны и контакты",
+  "clients.client": "Клиент",
   "clients.note": "Заметка",
   "clients.people": "Люди",
   "clients.objects": "Объекты",
@@ -382,6 +381,17 @@ const CLIENT_BLOCK_TITLES: Record<string, string> = {
   "clients.files": "Файлы",
   "clients.requisites": "Реквизиты",
   "clients.history": "История",
+  "clients.sms": "SMS",
+};
+
+/** Права-действия — своей фразой: «менять „Удаление клиента"» не по-русски.
+ *  `block:clients` сервер даёт и без базы, и на деньги, корзину и любимого
+ *  мастера в правке партнёра — это всегда дело владельца (аудит 03.10). */
+const CLIENT_ACTION_REFUSALS: Record<string, string> = {
+  clients: "Это может только владелец",
+  "clients.create": "Нет права заводить клиентов",
+  "clients.menu": "Нет права на «Меню клиента»",
+  "clients.delete": "Нет права удалять клиентов",
 };
 
 /** ОТКАЗ СЕРВЕРА СЛОВАМИ (аудит 015, 30.09). Права по блокам отвечают 42501
@@ -395,7 +405,9 @@ export function clientWriteRefusal(error: PostgrestErrorLike): string | null {
   // 03.10: партнёр ставит только теги команды клиента.
   if (hint === "client:tag_other_team") return "Тег другой команды этому клиенту не поставить";
   if (hint.startsWith("block:")) {
-    const title = CLIENT_BLOCK_TITLES[hint.slice("block:".length)];
+    const key = hint.slice("block:".length);
+    if (CLIENT_ACTION_REFUSALS[key]) return CLIENT_ACTION_REFUSALS[key];
+    const title = CLIENT_BLOCK_TITLES[key];
     return title ? `Нет права менять «${title}»` : "Нет права на это изменение";
   }
   if (error.code === "P0002") return "Клиент недоступен";

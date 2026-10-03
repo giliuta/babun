@@ -56,6 +56,11 @@ describe("итог прав команды", () => {
     assert.match(text, /^Видит записи команды без клиента, цен и оплаты\. Базу/);
   });
 
+  test("«Без ограничения» (`own`, 02.10) — «всех клиентов» (аудит 03.10)", () => {
+    assert.match(teamSentence(reader({ ...CLOSED, clients: "read", "clients.scope": "own" })), /Видит всех клиентов\./);
+    assert.match(teamSentence(reader({ ...CLOSED, clients: "read", "clients.scope": "month" })), /Видит своих клиентов\./);
+  });
+
   test("старший: создаёт, переносит, видит своих клиентов с телефонами, принимает оплату", () => {
     const levels: Record<string, AccessLevel> = {
       ...CLOSED,
@@ -67,6 +72,7 @@ describe("итог прав команды", () => {
       "record.payment": "write",
       "record.files": "write",
       clients: "read",
+      "clients.scope": "week",
       "clients.contacts": "read",
       "finance.debts": "read",
     };

@@ -9,9 +9,9 @@ import {
   MessageSquare,
   Phone,
   ReceiptText,
-  Send,
   Tags,
   UserPlus,
+  UserRound,
   Wallet,
 } from "lucide-react-native";
 
@@ -19,6 +19,7 @@ import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { SwitchControl } from "@/components/ui/SwitchControl";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { IdentityCard } from "@/features/appointments/TeamLabelRow";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
@@ -87,12 +88,20 @@ export function ClientCardPreview({
         </PreviewFrame>
       );
     case "clients.history":
+      // «Своя команда» и «Все команды» (03.10) — обе ступени только смотрят:
+      // подпись называет охват, а у «Всех команд» в истории стоит и запись
+      // другой команды (аудит 03.10: карандаш «Видит и меняет» лгал).
       return (
-        <PreviewFrame state={state}>
-          {/* Как на карточке (03.10): последняя запись под днём — плашкой. */}
+        <PreviewFrame
+          state={level === "off" ? "hidden" : "read"}
+          caption={
+            level === "write" ? "Записи всех команд — с суммами" : level === "read" ? "Только записи его команд — с суммами" : undefined
+          }
+        >
+          {/* Как на карточке (03.10): записи под днём — плашками. */}
           <SectionCard title="История">
             <VisitDayHeader date="2026-09-12" />
-            <View style={{ paddingHorizontal: 2, paddingBottom: 6 }}>
+            <View style={{ paddingHorizontal: 2, paddingBottom: 6, gap: 2 }}>
               <SelectRow
                 icon={CalendarCheck}
                 color={SETTINGS_TILE.blue}
@@ -102,24 +111,63 @@ export function ClientCardPreview({
                 trailing={amount("€120", t.success)}
                 onPress={noop}
               />
+              {write ? (
+                <SelectRow
+                  icon={CalendarCheck}
+                  color={SETTINGS_TILE.orange}
+                  plain
+                  title="Команда 2"
+                  subtitle="15:30"
+                  trailing={amount("€80", t.success)}
+                  onPress={noop}
+                />
+              ) : null}
             </View>
           </SectionCard>
         </PreviewFrame>
       );
     case "clients.sms":
+      // Как блок на карточке (03.10): «Присылать SMS» и «Имя для SMS» —
+      // плашками, ниже история. Отправки в блоке нет (она у трубки клиента):
+      // «Меняет» правит только тумблер и имя (аудит 03.10).
       return (
         <PreviewFrame state={state}>
           <SectionCard title="SMS">
-            <SelectList>
+            <View style={{ paddingHorizontal: 2, paddingTop: 2, paddingBottom: 4, gap: 2 }}>
+              <SelectRow
+                icon={MessageSquare}
+                color={t.success}
+                plain
+                title="Присылать SMS"
+                disabled={!write}
+                onPress={noop}
+                trailing={<SwitchControl value disabled={!write} />}
+              />
+              <SelectRow
+                icon={UserRound}
+                color={write ? t.accent : t.faint}
+                plain
+                title="Имя для SMS"
+                disabled={!write}
+                onPress={noop}
+                trailing={
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    style={{ fontSize: 15, fontWeight: write ? "600" : "400", color: write ? t.accent : t.sub }}
+                  >
+                    Анна
+                  </Text>
+                }
+              />
               <SelectRow
                 icon={MessageSquare}
                 color={SETTINGS_TILE.green}
+                plain
                 title="Напоминание о записи"
                 subtitle="Доставлено · 12 сентября"
                 onPress={noop}
               />
-            </SelectList>
-            {write ? <ChooseRow compact icon={Send} label="Отправить SMS" onPress={noop} /> : null}
+            </View>
           </SectionCard>
         </PreviewFrame>
       );

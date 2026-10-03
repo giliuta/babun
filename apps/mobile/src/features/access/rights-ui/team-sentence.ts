@@ -111,7 +111,9 @@ function teamFacts(read: LevelRead): TeamFacts {
     acts,
     edits: RECORD_EDITS.some((key) => is(key, "write")),
     clients: read("clients"),
-    clientsAll: read("clients.scope") === "all",
+    // «Без ограничения» с 02.10 хранится как `own` («all» — прежнее имя):
+    // проверка одного «all» всегда говорила «своих» (аудит 03.10).
+    clientsAll: read("clients.scope") === "own" || read("clients.scope") === "all",
     money,
     risky:
       is("calendar.cancel", "write") ||

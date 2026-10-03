@@ -80,7 +80,22 @@ export function useMirrorClientScope(map: MemberAccessMap | null): MirrorView | 
           .order("id")
           .range(from, to) as unknown as Page,
       );
-      return mirrorView(accessMap, { appointments, today });
+      // «Завёл сам» (03.10, как `access_client_ids_in`): его клиенты команд с
+      // окном видны и без записи. Владельцу таблица открыта.
+      let created: { id: string; team_id: string | null }[] = [];
+      if (userId) {
+        const own = await db
+          .from("clients")
+          .select("id, team_id")
+          .eq("tenant_id", tenantId)
+          // Колонки автора нет в сгенерированных типах (отстают от базы).
+          .filter("created_by", "eq", userId)
+          .is("deleted_at", null)
+          .in("team_id", windowed);
+        if (own.error) throw new Error(`mirrorClientScope: ${own.error.message}`);
+        created = own.data ?? [];
+      }
+      return mirrorView(accessMap, { appointments, today, created });
     },
   });
   if (map && teams && teams.length === 0) return EMPTY_VIEW;

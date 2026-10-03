@@ -407,7 +407,9 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
           <SettingsGroup
             title="Справочники"
             rows={[
-              showCard || levels.tags !== "hidden" ? (
+              // Строка — своим правом «Теги» (аудит 03.10: по «Блокам
+              // клиентов» она открывалась пустой страницей).
+              levels.tags !== "hidden" ? (
                 <SettingsRow
                   key="tags"
                   tile={SETTINGS_TILE.purple}

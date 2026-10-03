@@ -149,6 +149,10 @@ export interface MirrorClientData {
   appointments: readonly MirrorScopeAppointment[];
   /** Рабочий день компании (`tenant_business_date`). */
   today: string;
+  /** Клиенты, которых он завёл сам (`created_by`), с их командой: сервер с
+   *  03.10 держит их в наборе команды при любом «Ограничении» — иначе
+   *  «Создание клиента» рождало клиента, которого тут же «нет». */
+  created?: readonly { id: string; team_id: string | null }[];
 }
 
 /** Команды с открытой «Базой клиентов» и их «Ограничение по времени». */
@@ -211,7 +215,10 @@ export function mirrorView(map: MemberAccessMap, data: MirrorClientData): Mirror
     }
     const window = windows[scope];
     if (!window) {
-      teams.set(teamId, { ids: new Set() });
+      // Окна нет — только свои заведённые (сервер держит их и без окна).
+      teams.set(teamId, {
+        ids: new Set((data.created ?? []).filter((c) => c.team_id === teamId).map((c) => c.id)),
+      });
       continue;
     }
     const ids = new Set<string>();
@@ -219,6 +226,8 @@ export function mirrorView(map: MemberAccessMap, data: MirrorClientData): Mirror
       if (!a.client_id || a.team_id !== teamId || a.status === "cancelled" || !a.date) continue;
       if (a.date >= window[0] && a.date <= window[1]) ids.add(a.client_id);
     }
+    // «Завёл сам» — в наборе своей команды всегда (как `access_client_ids_in`).
+    for (const c of data.created ?? []) if (c.team_id === teamId) ids.add(c.id);
     teams.set(teamId, { ids });
   }
   return { teams };

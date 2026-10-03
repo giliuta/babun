@@ -197,6 +197,18 @@ describe("зеркало: какие клиенты в его наборе (ка
     assert.deepEqual(ids(map({ A: { clients: "read", "clients.scope": "week" } }), { today: "" }), []);
   });
 
+  test("«завёл сам» — в наборе своей команды при любом «Ограничении», чужой команде — нет (03.10)", () => {
+    const m = map({ A: { clients: "read" } });
+    // c3 заведён им в команде A без записей; c4 — в команде Z, которой база не открыта.
+    const created = [
+      { id: "c3", team_id: "A" },
+      { id: "c4", team_id: "Z" },
+    ];
+    assert.deepEqual(ids(m, { created }), ["c3"]);
+    // Окна нет (день не известен) — свои заведённые всё равно видны.
+    assert.deepEqual(ids(m, { created, today: "" }), ["c3"]);
+  });
+
   test("база закрыта — никого", () => {
     assert.deepEqual(ids(map({ A: { clients: "off", "clients.scope": "own" } })), []);
   });

@@ -146,11 +146,16 @@ function ClientVisitsScreen() {
   const scope = useClientsScopeOrNull();
   const bookInPlan = usePlanAllows("book-clients");
   const bookTeam = client?.team_id ?? rows.find((a) => a.team_id)?.team_id ?? null;
-  const canBook =
+  // Нет права записи — нет и кнопки (владелец 03.10: «если нет разрешения
+  // на запись — этого и не будет»; так же «Добавить файл» и «Добавить
+  // объект»). Серой она остаётся только владельцу, когда запись закрыта
+  // тарифом.
+  const bookRight =
     !!client &&
     caps.book &&
-    (scope?.kind === "member" ? clientBlockLevel(client, "clients.menu") === "write" : bookInPlan) &&
+    (scope?.kind === "member" ? clientBlockLevel(client, "clients.menu") === "write" : true) &&
     calendarActionsFor(bookTeam).create;
+  const canBook = bookRight && (scope?.kind === "member" || bookInPlan);
 
   // Запись открывается ПОВЕРХ истории, а не через таб «Календарь»
   // (владелец 2026-07-26): «назад» — сюда, ещё раз «назад» — в клиента.
@@ -237,7 +242,7 @@ function ClientVisitsScreen() {
         </ScrollView>
       )}
       {/* «Записать клиента» — внизу, на месте главного действия страницы. */}
-      {client && access.history.show ? (
+      {client && access.history.show && bookRight ? (
         // Тот же футер, что «Создать клиента» в списке: те же отступы,
         // та же высота — кнопки экранов стоят на одном уровне.
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>

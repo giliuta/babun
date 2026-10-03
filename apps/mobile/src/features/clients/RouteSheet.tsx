@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
-import { useReferenceHref } from "@/features/clients/reference-href";
+import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
 import { useEnabledMapServices } from "@/lib/map-services";
 import { openInMap, routeServices } from "@/lib/route-menu";
 
@@ -28,8 +28,10 @@ export function RouteSheet({
   teamId?: string | null;
 }) {
   const router = useRouter();
-  // Из записи справочник открывается её сиблингом (см. `useReferenceHref`).
-  const mapsHref = useReferenceHref().maps;
+  // Шестерёнка — в «Карты для маршрута» ЭТОЙ команды в её компании (из
+  // записи — сиблингом записи, см. `useReferenceHref`); строки, закрытой
+  // человеку, нет и в листе.
+  const settingsHref = useClientSettingsDoor("maps", teamId);
   const enabled = useEnabledMapServices(teamId);
 
   const items: PickerSheetItem[] = routeServices(enabled).map((s) => ({
@@ -45,7 +47,7 @@ export function RouteSheet({
       visible={visible}
       title="Маршрут"
       items={items}
-      onSettings={() => router.push(mapsHref)}
+      onSettings={settingsHref ? () => router.push(settingsHref) : undefined}
       settingsLabel="Карты для маршрута"
       onClose={onClose}
     />

@@ -1,0 +1,61 @@
+import type { ClientSettingLevel } from "./settings-levels";
+
+// ШЕСТЕРЁНКА ЛИСТА ВЕДЁТ В НАБОР, КОТОРЫЙ ЛИСТ ПОКАЗЫВАЕТ (аудит 03.10).
+//
+// Листы «Связаться», «Добавить» и «Маршрут» читают набор КОМАНДЫ клиента в
+// её компании (`team_design`, 30.09), а их шестерёнка уводила на подстраницу
+// без команды и компании: там правился набор телефона, а партнёр на клиенте
+// работодателя попадал в СВОЮ компанию со всеми правами — при любой «Связи».
+// Теперь адрес несёт команду и компанию, как у шестерёнки клиентов
+// (`teamHref` в `clients/settings.tsx`), а строки, закрытой человеку, в листе
+// нет вовсе: дверь в «Настроек пока нет» — тот же мёртвый контрол.
+//
+// Правило без React: его читают три листа и тест.
+
+export interface ClientSettingsDoorInput {
+  /** Подстраница: вкладочный или общий адрес (`useReferenceHref`). */
+  pathname: string;
+  /** Команда, чей набор показывает лист; нет — набор компании. */
+  teamId: string | null;
+  /** Компания этого набора — источник экрана, вне вкладки — календарная. */
+  tenantId: string | null;
+  /** Положение строки у человека в этой команде (`useClientSettingLevelsOf`). */
+  level: ClientSettingLevel;
+  /** Владелец компании набора. */
+  owner: boolean;
+  /** Источник экрана — компания, где человек партнёр: уровень строки
+   *  посчитан по его карте прав, а не запасным «всё открыто». */
+  member: boolean;
+  /** Команда есть среди команд компании набора. */
+  teamKnown: boolean;
+  /** Адрес общий (экран над табами) — он стоит за ролью «operate-clients». */
+  sharedRoute: boolean;
+  /** Роль календаря пускает на общий адрес. */
+  operatesClients: boolean;
+}
+
+export interface ClientSettingsHref {
+  pathname: string;
+  params: { team?: string; tenant?: string };
+}
+
+/** Куда ведёт шестерёнка листа; `null` — двери нет. */
+export function clientSettingsDoor(input: ClientSettingsDoorInput): ClientSettingsHref | null {
+  if (input.level === "hidden") return null;
+  // Уровень без источника — запасное «всё открыто» (`use-client-settings`):
+  // оно честно только для владельца. Подстраница посчитает строку по
+  // компании из адреса, и прочим там строк не откроется.
+  if (!input.owner && !input.member) return null;
+  // Команда чужой компании (гость в общем списке клиентов): набор лежит не
+  // там, куда указал бы адрес, — правка ушла бы не в ту компанию.
+  if (input.teamId && !input.teamKnown) return null;
+  // Над табами подстраница за ролью календаря: мастер упёрся бы в стену.
+  if (input.sharedRoute && !input.operatesClients) return null;
+  const params: ClientSettingsHref["params"] = {};
+  if (input.teamId) params.team = input.teamId;
+  // Компания — всегда, когда известна. Основную вкладка открывает и по её
+  // адресу, и без него (`clientsRouteDecision`), а чужая без адреса
+  // открылась бы основной — так партнёр и попадал в свою.
+  if (input.tenantId) params.tenant = input.tenantId;
+  return { pathname: input.pathname, params };
+}
