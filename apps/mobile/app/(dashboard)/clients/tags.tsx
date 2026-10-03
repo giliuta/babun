@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { EyeOff, RotateCcw, Tags, Trash2 } from "lucide-react-native";
+import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import type { ClientTag } from "@babun/shared/local/clients";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
@@ -32,10 +32,6 @@ import {
 } from "@/features/clients/queries";
 import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
 import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings";
-import { useClientFunctionOn, useToggleClientFunction } from "@/features/clients/client-functions";
-import { SectionCard } from "@/components/ui/SectionCard";
-import { SettingsRow } from "@/components/ui/SettingsRow";
-import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useTeams } from "@/features/reference/queries";
 
 // ТЕГИ КЛИЕНТОВ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
@@ -90,11 +86,8 @@ function ClientTagsScreen() {
   const levels = useClientSettingLevelsOf()(teamId);
   const readOnly = levels.tags !== "write";
   const showTags = levels.tags !== "hidden";
-  // «МЕТКА И ТЕГ» — ОДНА ФУНКЦИЯ КАРТОЧКИ (владелец 02.10, «настройки по
-  // функциям»): есть ли блок на странице клиента — здесь же, над тегами.
-  // Право тумблера — «Карточка клиента».
-  const labelsOn = useClientFunctionOn("client_labels", teamId);
-  const toggleLabels = useToggleClientFunction(teamId);
+  // Включён ли блок «Тег» на карточке — на странице «Блоки клиентов» (03.10:
+  // «всё в одну страницу»); здесь только справочник тегов.
   const teamName = ownTeams.find((tm) => tm.id === teamId)?.name;
   const createTag = useCreateClientTag();
   const updateTag = useUpdateClientTag();
@@ -208,23 +201,7 @@ function ClientTagsScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Метка и тег" subtitle={teamName} />
-
-      {levels.card !== "hidden" ? (
-        <SectionCard>
-          <SettingsRow
-            tile={SETTINGS_TILE.purple}
-            icon={Tags}
-            title="Метка и тег в карточке"
-            sub={labelsOn ? "Блок на странице клиента" : "Блока нет, данные остаются"}
-            toggle={{
-              value: labelsOn,
-              onChange: (on) => toggleLabels.mutate({ key: "client_labels", on }),
-              disabled: levels.card !== "write",
-            }}
-          />
-        </SectionCard>
-      ) : null}
+      <ScreenHeader title="Теги" subtitle={teamName} />
 
       {!showTags ? (
         <View style={{ flex: 1 }} />

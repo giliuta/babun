@@ -4,18 +4,13 @@ import { useRouter, type Href } from "expo-router";
 import {
   Download,
   Eye,
-  FileText,
   Home,
   MessageCircle,
   Navigation,
-  Paperclip,
   Smartphone,
-  StickyNote,
   Tags,
   Trash2,
   Upload,
-  UserRound,
-  UsersRound,
 } from "lucide-react-native";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { Screen } from "@/components/ui/Screen";
@@ -27,10 +22,6 @@ import { CONTACTS_AVAILABLE } from "@/features/clients/import/ContactsImportShee
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
 import { useToast } from "@/components/ui/Toast";
-import {
-  DEFAULT_CARD_FIELDS,
-  useCardFields,
-} from "@/features/clients/card-prefs";
 import {
   contactWayDef,
   isWayOffered,
@@ -64,14 +55,13 @@ import { useFeatureOn } from "@/features/settings/company-features";
 import { useLocationLabels } from "@/features/settings/local-settings";
 import {
   useClientFunctionOn,
-  useToggleClientFunction,
   type ClientFunctionKey,
 } from "@/features/clients/client-functions";
 import { serviceMonthsLabel } from "@/features/clients/service-default";
 import { useTeamServiceMonths } from "@/features/clients/use-service-default";
 import {
-  labelsSummary,
-  listRowSummary,
+  blocksSummary,
+  tagsSummary,
   objectsSummary,
 } from "@/features/clients/settings-summary";
 import { anyClientSetting, clientSettingLevels } from "@/features/clients/settings-levels";
@@ -88,6 +78,18 @@ import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings
 
 // Экран вкладки «Клиенты»: компанию называет источник, а не роль
 // (STORY-082).
+// Подпись «Блоков клиентов» называет выключенные блоки словами их страницы.
+const BLOCK_WORDS: [ClientFunctionKey, string][] = [
+  ["client_note", "заметка"],
+  ["client_people", "люди"],
+  ["client_objects", "объекты"],
+  ["client_files", "файлы"],
+  ["client_requisites", "реквизиты"],
+  ["client_labels", "метка"],
+  ["client_tags", "тег"],
+  ["client_personal", "личное"],
+];
+
 export default function ClientsSettingsScreenRoute() {
   return (
     <ClientsCompanyRoute kind="tab">
@@ -191,7 +193,7 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
   // ХОЗЯЙСТВО БАЗЫ («Данные») — только своей компании (владелец 20.09).
   const caps = useClientsCapabilities();
   const objectsOn = useFeatureOn("objects");
-  // Выключено у всей компании (STORY-088) — строки функции нет вовсе.
+  // Выключено у всей компании (STORY-088) — в подписи блока не числится.
   const companyPeople = useFeatureOn("client_people");
   const companyFiles = useFeatureOn("client_files");
   const companyRequisites = useFeatureOn("client_requisites");
@@ -209,19 +211,22 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
     client_files: useClientFunctionOn("client_files", teamId),
     client_requisites: useClientFunctionOn("client_requisites", teamId),
     client_labels: useClientFunctionOn("client_labels", teamId),
+    client_tags: useClientFunctionOn("client_tags", teamId),
     client_personal: useClientFunctionOn("client_personal", teamId),
   };
-  const toggleFunction = useToggleClientFunction(teamId);
-  // Тумблер функции — право «Карточки клиента»: «Скрыты» — строки нет,
-  // «Только видит» — положение видно, не переключается.
+  // «БЛОКИ КЛИЕНТОВ» — ОДНОЙ СТРОКОЙ (владелец 03.10: «всё в одну страницу и
+  // там уже редактировать»): тумблеры блоков уехали на эту страницу, здесь —
+  // что выключено. Строка — по праву «Карточки клиента».
   const showCard = levels.card !== "hidden";
-  const functionToggle = (key: ClientFunctionKey) => ({
-    value: blockOn[key],
-    onChange: (on: boolean) => toggleFunction.mutate({ key, on }),
-    disabled: levels.card !== "write",
-  });
+  const offBlocks = BLOCK_WORDS.filter(
+    ([key]) =>
+      !blockOn[key] &&
+      (key !== "client_objects" || objectsOn) &&
+      (key !== "client_people" || companyPeople) &&
+      (key !== "client_files" || companyFiles) &&
+      (key !== "client_requisites" || companyRequisites),
+  ).map(([, word]) => word);
   const service = useTeamServiceMonths(teamId);
-  const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields(teamId);
   const { data: teamObjectTypes = [] } = useLocationLabels(teamId);
   const clientsQuery = useClients();
   const tagsQuery = useClientTags();
@@ -329,11 +334,11 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
             rows={[
               showCard ? (
                 <SettingsRow
-                  key="row"
+                  key="blocks"
                   tile={SETTINGS_TILE.blue}
                   icon={Eye}
-                  title="Строка в списке"
-                  sub={listRowSummary(prefs)}
+                  title="Блоки клиентов"
+                  sub={blocksSummary(offBlocks)}
                   onPress={() => router.push(teamHref("/clients/card-fields"))}
                 />
               ) : null,
@@ -355,25 +360,6 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
                   title="Карты для маршрута"
                   sub={mapServicesSummary(mapServices)}
                   onPress={() => router.push(teamHref("/clients/maps"))}
-                />
-              ) : null,
-              showCard ? (
-                <SettingsRow
-                  key="note"
-                  tile={SETTINGS_TILE.yellow}
-                  icon={StickyNote}
-                  title="Заметка"
-                  toggle={functionToggle("client_note")}
-                />
-              ) : null,
-              showCard ? (
-                <SettingsRow
-                  key="personal"
-                  tile={SETTINGS_TILE.indigo}
-                  icon={UserRound}
-                  title="Личное"
-                  sub="День рождения, источник"
-                  toggle={functionToggle("client_personal")}
                 />
               ) : null,
             ]}
@@ -400,48 +386,19 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
             />
           ) : null}
 
+          {/* ТЕГИ — СПРАВОЧНИК КОМАНДЫ: какие теги есть. Включён ли блок «Тег»
+              на карточке — на странице «Блоки клиентов». */}
           <SettingsGroup
-            title="Карточка"
+            title="Справочники"
             rows={[
               showCard || levels.tags !== "hidden" ? (
                 <SettingsRow
-                  key="labels"
+                  key="tags"
                   tile={SETTINGS_TILE.purple}
                   icon={Tags}
-                  title="Метка и тег"
-                  sub={
-                    tagsQuery.isLoading
-                      ? "Загрузка…"
-                      : labelsSummary(blockOn.client_labels, teamTags.length)
-                  }
+                  title="Теги"
+                  sub={tagsQuery.isLoading ? "Загрузка…" : tagsSummary(teamTags.length)}
                   onPress={() => router.push(teamHref("/clients/tags"))}
-                />
-              ) : null,
-              showCard && companyPeople ? (
-                <SettingsRow
-                  key="people"
-                  tile={SETTINGS_TILE.blue}
-                  icon={UsersRound}
-                  title="Люди"
-                  toggle={functionToggle("client_people")}
-                />
-              ) : null,
-              showCard && companyFiles ? (
-                <SettingsRow
-                  key="files"
-                  tile={SETTINGS_TILE.orange}
-                  icon={Paperclip}
-                  title="Файлы"
-                  toggle={functionToggle("client_files")}
-                />
-              ) : null,
-              showCard && companyRequisites ? (
-                <SettingsRow
-                  key="requisites"
-                  tile={SETTINGS_TILE.teal}
-                  icon={FileText}
-                  title="Реквизиты"
-                  toggle={functionToggle("client_requisites")}
                 />
               ) : null,
             ]}

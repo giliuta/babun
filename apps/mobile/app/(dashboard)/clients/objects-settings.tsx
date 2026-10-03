@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { CalendarClock, Home, Navigation, Shapes } from "lucide-react-native";
+import { CalendarClock, Navigation, Shapes } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { Screen } from "@/components/ui/Screen";
@@ -10,7 +10,6 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
-import { useClientFunctionOn, useToggleClientFunction } from "@/features/clients/client-functions";
 import { SERVICE_MONTH_CHOICES, serviceMonthsLabel } from "@/features/clients/service-default";
 import { useTeamServiceMonths } from "@/features/clients/use-service-default";
 import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings";
@@ -49,8 +48,6 @@ function ClientObjectsSettingsScreen() {
     (team ? ownTeams.find((tm) => tm.id === team) : undefined) ?? ownTeams[0] ?? null;
   const teamId = team || teamRow?.id || null;
   const levels = useClientSettingLevelsOf()(teamId);
-  const blockOn = useClientFunctionOn("client_objects", teamId);
-  const toggleBlock = useToggleClientFunction(teamId);
   const { data: types = [] } = useLocationLabels(teamId);
   const service = useTeamServiceMonths(teamId);
   const [servicePicker, setServicePicker] = useState(false);
@@ -65,21 +62,8 @@ function ClientObjectsSettingsScreen() {
     <Screen edges={["top"]}>
       <ScreenHeader title="Объекты" subtitle={teamRow?.name} />
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        {levels.card !== "hidden" ? (
-          <SectionCard>
-            <SettingsRow
-              tile={SETTINGS_TILE.teal}
-              icon={Home}
-              title="Объекты в карточке"
-              sub={blockOn ? "Блок на странице клиента" : "Блока нет, данные остаются"}
-              toggle={{
-                value: blockOn,
-                onChange: (on) => toggleBlock.mutate({ key: "client_objects", on }),
-                disabled: levels.card !== "write",
-              }}
-            />
-          </SectionCard>
-        ) : null}
+        {/* Включён ли блок «Объекты» на карточке — на странице «Блоки
+            клиентов» (03.10); здесь типы, обслуживание и карты. */}
 
         {showTypes || showMaps ? (
           <SectionCard>

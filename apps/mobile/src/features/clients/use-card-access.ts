@@ -44,6 +44,7 @@ export function useCardAccess(client: Client | null | undefined, draft: boolean)
   const people = useClientFunctionOn("client_people", teamId);
   const objects = useClientFunctionOn("client_objects", teamId);
   const labels = useClientFunctionOn("client_labels", teamId);
+  const tags = useClientFunctionOn("client_tags", teamId);
   const personal = useClientFunctionOn("client_personal", teamId);
   const files = useClientFunctionOn("client_files", teamId);
   const requisites = useClientFunctionOn("client_requisites", teamId);
@@ -77,6 +78,7 @@ export function useCardAccess(client: Client | null | undefined, draft: boolean)
           people,
           objects: objectsCompany && objects,
           labels,
+          tags,
           personal,
           files,
           requisites,
@@ -89,6 +91,6 @@ export function useCardAccess(client: Client | null | undefined, draft: boolean)
         Object.entries(access).map(([key, block]) => [key, { show: block.show, edit: false }]),
       ) as CardAccess;
     },
-    [frozen, draftBlocks, blocks, caps, note, people, objectsCompany, objects, labels, personal, files, requisites, draft],
+    [frozen, draftBlocks, blocks, caps, note, people, objectsCompany, objects, labels, tags, personal, files, requisites, draft],
   );
 }

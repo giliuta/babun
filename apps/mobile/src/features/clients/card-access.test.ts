@@ -4,7 +4,7 @@ import { describe, test } from "node:test";
 import { cardAccess, type TeamBlocksOn } from "./card-access";
 
 const ALL_ON: TeamBlocksOn = {
-  note: true, people: true, objects: true, labels: true, personal: true, files: true, requisites: true,
+  note: true, people: true, objects: true, labels: true, tags: true, personal: true, files: true, requisites: true,
 };
 const OWNER = { edit: true, money: true, files: true, links: true };
 const MEMBER = { edit: true, money: false, files: true, links: false };

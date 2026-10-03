@@ -342,7 +342,9 @@ export function ClientDetailScreen() {
   const access = useCardAccess(c, isDraft);
   const peopleOn = access.people.show;
   const noteOn = access.note.show;
-  const labelsOn = access.labels.show;
+  // «Метка» и «Тег» — два блока (03.10): ряд плиток есть, если включён хоть
+  // один.
+  const labelsOn = access.labels.show || access.tags.show;
   const people = useClientPeople({
     id,
     // На карточке — первые трое и дверь «Все люди · N» (владелец 22.09).
@@ -750,7 +752,14 @@ export function ClientDetailScreen() {
             «метку и тег поставим в самый верх перед блоком „Клиент“»; 22.09
             они уезжали вниз, к «Личному»). */}
         {labelsOn ? (
-          <ClientLabelTags client={c} update={update} tags={tags} readOnly={!access.labels.edit} />
+          <ClientLabelTags
+            client={c}
+            update={update}
+            tags={tags}
+            readOnly={!access.labels.edit}
+            labelOn={access.labels.show}
+            tagOn={access.tags.show}
+          />
         ) : null}
 
         <ClientHeader

@@ -38,7 +38,9 @@ export type TeamBlockKey =
   | "client_note"
   | "client_objects"
   | "client_labels"
-  | "client_personal";
+  | "client_personal"
+  // «Тег» отдельно от «Метки» (владелец 03.10).
+  | "client_tags";
 
 /** Упорядоченный набор «что предлагать»: включённые и полный порядок. */
 export interface TeamOrderedSet {

@@ -29,9 +29,14 @@ export function objectsSummary(input: {
   return [types, input.service, input.maps].filter(Boolean).join(" · ");
 }
 
-/** «Метка и тег»: выключены — так и сказано; иначе число тегов. */
-export function labelsSummary(on: boolean, tags: number): string {
-  if (!on) return "Выключены в карточке";
+/** «Блоки клиентов» (03.10): выключенные блоки словами страницы, иначе
+ *  «Все блоки». Короче строки шестерёнки — строку списка видно на странице. */
+export function blocksSummary(off: string[]): string {
+  return off.length === 0 ? "Все блоки" : `Без: ${off.join(", ")}`;
+}
+
+/** «Теги»: сколько тегов у команды. */
+export function tagsSummary(tags: number): string {
   if (tags === 0) return "Тегов пока нет";
   const mod10 = tags % 10;
   const mod100 = tags % 100;

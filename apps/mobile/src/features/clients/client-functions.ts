@@ -16,7 +16,8 @@ export type ClientFunctionKey =
   | "client_note"
   | "client_objects"
   | "client_labels"
-  | "client_personal";
+  | "client_personal"
+  | "client_tags";
 
 /** Ключи с выключателем компании (STORY-088). У остальных блоков его нет —
  *  они выключаются только у команды. */

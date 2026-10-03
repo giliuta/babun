@@ -28,7 +28,12 @@ export function ClientLabelTags({
   update,
   tags,
   readOnly,
+  labelOn = true,
+  tagOn = true,
 }: {
+  /** Блоки «Метка» и «Тег» — у команды раздельно (03.10). */
+  labelOn?: boolean;
+  tagOn?: boolean;
   client: Client;
   update: (patch: Partial<Client>) => Promise<boolean> | void;
   /** Каталог тегов компании (Кабинет → «Теги клиентов»). */
@@ -95,8 +100,8 @@ export function ClientLabelTags({
   // ПУСТАЯ ПЛИТКА ТОЛЬКО ДЛЯ ТОГО, КТО МОЖЕТ ЕЁ ЗАПОЛНИТЬ (владелец 01.10).
   // «Только видит» и значения нет — плитка-приглашение была бы кнопкой в
   // никуда: её нет, а обе пустые — нет и ряда.
-  const showLabel = !readOnly || !!label;
-  const showTag = !readOnly || !!tagsTitle;
+  const showLabel = labelOn && (!readOnly || !!label);
+  const showTag = tagOn && (!readOnly || !!tagsTitle);
   if (!showLabel && !showTag) return null;
 
   return (
