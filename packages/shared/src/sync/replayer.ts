@@ -430,6 +430,21 @@ async function drain(opts: ReplayerOptions): Promise<void> {
   // удаляет её целиком).
   const heldRows = new Set<string>();
   const rowKey = (o: QueuedOp) => `${o.table}:${o.row_id}`;
+  // КЛИЕНТ, ЧЬЯ ВСТАВКА НЕ УШЛА, ДЕРЖИТ И СВОИ ЗАПИСИ (аудит работы без сети
+  // 03.10). Клиент и запись, заведённые без сети: вставка клиента упала
+  // (5xx, «номер уже заведён») — вставка записи падала следом на внешнем
+  // ключе и за три прохода становилась «навсегда не отправленной», хотя
+  // виноват не она. Теперь запись ждёт своего клиента, попыток не тратя.
+  const heldClientInserts = new Set<string>();
+  const hold = (o: QueuedOp) => {
+    heldRows.add(rowKey(o));
+    if (o.table === "clients" && o.op === "insert") heldClientInserts.add(o.row_id);
+  };
+  const waitsForClient = (o: QueuedOp) => {
+    if (o.table === "clients") return false;
+    const clientId = (o.payload as { client_id?: unknown } | null)?.client_id;
+    return typeof clientId === "string" && heldClientInserts.has(clientId);
+  };
   // Свежий сторож строки после применившейся правки (см. `forwardQueuedSentinel`):
   // в памяти — для правок этого же прохода, в базе — для следующих.
   const sentinels = new Map<string, { from: string; to: string }>();
@@ -437,10 +452,14 @@ async function drain(opts: ReplayerOptions): Promise<void> {
   for (const op of ops) {
     let legacyUpdate = false;
     if (heldRows.has(rowKey(op))) continue;
+    if (waitsForClient(op)) {
+      heldRows.add(rowKey(op));
+      continue;
+    }
     if (op.attempts >= MAX_ATTEMPTS) {
       // Already failed permanently — leave in queue so the UI can
       // show the manual-retry button. Manual retry resets attempts.
-      heldRows.add(rowKey(op));
+      hold(op);
       continue;
     }
 
@@ -490,7 +509,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
         const msg = "Операция без компании — отправлять её некуда";
         await markOpPermanentlyFailedAndEmit(op.id, msg);
         opts.onPermanentFailure?.({ ...op, attempts: MAX_ATTEMPTS, last_error: msg });
-        heldRows.add(rowKey(op));
+        hold(op);
         continue;
       }
       if (payloadTenant !== liveTenantId) continue;
@@ -511,7 +530,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
         attempts: MAX_ATTEMPTS,
         last_error: msg,
       });
-      heldRows.add(rowKey(op));
+      hold(op);
       continue;
     }
 
@@ -541,7 +560,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
             attempts: 999,
             last_error: msg,
           });
-          heldRows.add(rowKey(op));
+          hold(op);
           continue;
         }
         // Non-quota error in the gate — fall through to normal
@@ -587,7 +606,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
       // обрываем, как это делает проверка перед отправкой.
       if (err instanceof TenantSwitchedMidway) break;
       const msg = err instanceof Error ? err.message : String(err);
-      heldRows.add(rowKey(op));
+      hold(op);
       // Обрыв — попытку не тратим: строка ждёт следующего прохода.
       if (isTransientReplayError(err)) {
         transientFailure = true;

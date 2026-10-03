@@ -970,6 +970,35 @@ describe("appointments cache-of-domain", () => {
 });
 
 describe("client tags offline and semantic failures", () => {
+  test("правка тега встаёт за его ждущей правкой, а не обгоняет её (аудит 03.10)", async () => {
+    const created = await createClientTag(
+      stubSupabase,
+      { name: "A", color: "#3366ff" },
+      TENANT,
+    );
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    // A→B легла в очередь без сети.
+    await updateClientTag(stubSupabase, created.id, { name: "B" }, TENANT);
+    // Сеть вернулась: B→C не идёт в сеть мимо ждущей A→B.
+    setNetwork(new OnlineNetwork());
+    let direct = 0;
+    const spy = {
+      from() {
+        direct += 1;
+        throw new Error("прямая запись мимо очереди");
+      },
+      rpc() {
+        direct += 1;
+        throw new Error("прямая запись мимо очереди");
+      },
+    };
+    await updateClientTag(spy as never, created.id, { name: "C" }, TENANT);
+    expect(direct).toBe(0);
+    const names = (await dequeueAll()).map((op) => (op.payload as { name?: string }).name);
+    expect(names).toEqual(["B", "C"]);
+  });
+
+
   test("offline create keeps one stable UUID in cache and replay payload", async () => {
     const created = await createClientTag(
       stubSupabase,
@@ -1004,6 +1033,9 @@ describe("client tags offline and semantic failures", () => {
       { name: "Исходная", color: "#3366ff" },
       TENANT,
     );
+    // Вставка «ушла на сервер»: без неё в очереди правка в сети идёт напрямую
+    // (иначе она встала бы за неотправленной вставкой того же тега).
+    for (const op of await dequeueAll()) await removeOp(op.id);
     const queuedBefore = (await dequeueAll()).length;
     setNetwork(new OnlineNetwork());
 

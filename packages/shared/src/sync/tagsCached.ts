@@ -41,6 +41,7 @@ import {
   cacheGetOne,
   dequeueAll,
   type CachedTag,
+  hasQueuedOps,
 } from "../db/cache/sql";
 import { isOnline } from "./network";
 import { OnlineOnlyWriteError } from "./cache-errors";
@@ -280,7 +281,12 @@ export async function updateClientTag(
     expected_updated_at: null, // no updated_at column → no detection
   };
 
-  if (isOnline()) {
+  // ПОРЯДОК ПРАВОК ТЕГА — ПОРЯДОК ЖЕСТОВ (аудит работы без сети 03.10). У тега
+  // нет `updated_at`, и очередь шлёт его правку без сторожа: правка A→B,
+  // упавшая на обрыве в очередь, долетала ПОСЛЕ прошедшей в сети B→C и
+  // возвращала B. Есть ждущие правки этого тега — новая встаёт за ними.
+  const behindQueued = await hasQueuedOps("tags", id).catch(() => false);
+  if (isOnline() && !behindQueued) {
     // Online: standalone optimistic upsert (no queued op to pair with).
     if (merged) await cacheUpsert("tags", merged);
     try {
@@ -314,8 +320,10 @@ export async function updateClientTag(
     }
   }
 
-  // Offline — ATOMIC with the optimistic row when cached (risk #6).
+  // Offline (или за ждущими правками) — ATOMIC with the optimistic row
+  // when cached (risk #6). В сети очередь пинаем сразу.
   await enqueueTagUpdate(updateOp, merged);
+  if (isOnline()) void kickReplayer({ supabase });
   return {
     id,
     name: patch.name ?? existing?.name ?? "",
@@ -354,7 +362,10 @@ export async function deleteClientTag(
     expected_updated_at: null,
   };
 
-  if (isOnline()) {
+  // Удаление тоже ждёт ждущие правки тега — иначе правка, долетевшая после,
+  // искала бы уже удалённую строку.
+  const behindQueued = await hasQueuedOps("tags", id).catch(() => false);
+  if (isOnline() && !behindQueued) {
     await cacheDelete("tags", id); // optimistic (standalone online)
     try {
       await repoDeleteClientTag(supabase, id, tenantId);
@@ -371,8 +382,10 @@ export async function deleteClientTag(
     }
   }
 
-  // Offline — ATOMIC optimistic delete + enqueue (risk #6).
+  // Offline (или за ждущими правками) — ATOMIC optimistic delete + enqueue
+  // (risk #6). В сети очередь пинаем сразу.
   await enqueueOpWithCacheDeleteAndEmit(deleteOp, "tags", id);
+  if (isOnline()) void kickReplayer({ supabase });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────

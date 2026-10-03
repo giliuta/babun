@@ -632,6 +632,34 @@ describe("replayer — обрыв связи не тратит попыток (�
   });
 });
 
+describe("replayer — запись ждёт своего клиента (аудит работы без сети 03.10)", () => {
+  test("вставка клиента упала — его запись не отправляется и попыток не тратит", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT, full_name: "Тест" },
+      expected_updated_at: null,
+    });
+    await enqueueOp({
+      table: "appointments",
+      op: "insert",
+      row_id: UUID_B,
+      payload: { id: UUID_B, tenant_id: TENANT, client_id: UUID_A },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase((rec) =>
+      rec.table === "clients"
+        ? { data: null, error: { code: "23514", message: "Номер уже заведён" } }
+        : { data: [{ id: UUID_B }], error: null },
+    );
+    await kickReplayer({ supabase: asSupabase(client) });
+    expect(calls.some((c) => c.table === "appointments")).toBe(false);
+    const appt = (await dequeueAll()).find((o) => o.row_id === UUID_B);
+    expect(appt?.attempts).toBe(0);
+  });
+});
+
 describe("replayer — навсегда упавшая правка держит свою строку (аудит 03.10)", () => {
   test("правки за упавшей навсегда ждут её «Повторить», чужие строки уходят", async () => {
     await enqueueOp({
