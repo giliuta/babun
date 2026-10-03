@@ -26,7 +26,7 @@ import type { AccountWithBalance } from "../accounts";
 import { useAccountVatDue } from "../vat-queries";
 import { teamControl } from "./editor-logic";
 import { TeamChips } from "./TeamChips";
-import type { AlertError, SaveAccount } from "./types";
+import type { AlertError, StageAccount } from "./types";
 import { useAccountStatement } from "./use-account-statement";
 
 const noop = () => {};
@@ -45,7 +45,7 @@ export function AccountMoneyGroup({
   accounts,
   activeTeams,
   teamById,
-  save,
+  stage,
   busy,
   alertError,
   onTransfer,
@@ -56,7 +56,8 @@ export function AccountMoneyGroup({
   activeTeams: readonly Team[];
   /** Все команды, включая архивные: у счёта может остаться имя распущенной. */
   teamById: Map<string, Team>;
-  save: SaveAccount;
+  /** Правка в черновик листа: на сервер — по «Применить» (03.10). */
+  stage: StageAccount;
   /** Идёт другая правка счёта — переключатели ждут её ответа. */
   busy: boolean;
   alertError: AlertError;
@@ -158,7 +159,7 @@ export function AccountMoneyGroup({
               ) : (
                 <OpeningField
                   value={account.opening_balance}
-                  onSave={(num) => void save({ opening_balance: num }, "Не удалось изменить остаток")}
+                  onSave={(num) => stage({ opening_balance: num })}
                 />
               )
             }
@@ -209,9 +210,7 @@ export function AccountMoneyGroup({
                 disabled={busy}
                 onSelect={(teamId) => {
                   if (teamId === account.brigade_id) return;
-                  void (control === "hand-over"
-                    ? save({ scope: "team", brigade_id: teamId }, "Не удалось отдать счёт команде")
-                    : save({ brigade_id: teamId }, "Не удалось сменить команду счёта"));
+                  stage(control === "hand-over" ? { scope: "team", brigade_id: teamId } : { brigade_id: teamId });
                 }}
               />
             </View>
@@ -230,7 +229,7 @@ export function AccountMoneyGroup({
             accessibilityHint="Ставит счёт плиткой в блок «Оплата» записи"
             onPress={() => {
               if (!account.is_active || busy) return;
-              void save({ show_in_payments: !account.show_in_payments }, "Не удалось изменить оплату записи");
+              stage({ show_in_payments: !account.show_in_payments });
             }}
             trailing={
               <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">

@@ -1,8 +1,12 @@
-import { useMemo } from "react";
-import { ScrollView } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { ScrollView, View } from "react-native";
+import type { AccountDraft } from "@babun/shared/db/repositories/accounts";
 import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { GradientButton } from "@/components/ui/GradientButton";
+import { GUTTER } from "@/components/ui/tokens";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
@@ -29,8 +33,11 @@ import { useCloseFlow } from "./use-close-flow";
 // деньги: в «Итого» записи и клавишами операции; счёт только показывает,
 // сколько VAT на нём к уплате (`AccountMoneyGroup`).
 //
-// КНОПКИ В ФУТЕРЕ НЕТ: каждая строка пишет сама, на уходе из поля или на
-// переключении, и каждая сообщает о своём отказе (`accountSaver`). Закрытый
+// «ПРИМЕНИТЬ» В ФУТЕРЕ (владелец 03.10: «в настройках счёта должна быть
+// кнопка применить или сохранить, чтоб было всё чётко»). Имя, вид, остаток на
+// начало, команда и «В оплате записи» копятся черновиком и уходят на сервер
+// одной правкой; закрыть лист с черновиком — только после вопроса. Действия
+// («Перевести», «Выписка», «Скрыть») — сразу, это не настройки. Закрытый
 // счёт открывается тем же листом — с «Открыть счёт снова».
 export function EditAccountSheet({
   visible,
@@ -74,13 +81,60 @@ export function EditAccountSheet({
   const save = accountSaver(update, accountId, alertError);
   const flow = useCloseFlow({ onDone: onClose, alertError });
 
+  // ЧЕРНОВИК ЛИСТА. Новый счёт или новое открытие — с чистого листа.
+  const [pending, setPending] = useState<Partial<AccountDraft>>({});
+  useEffect(() => setPending({}), [accountId, visible]);
+  const stage = (patch: Partial<AccountDraft>) => setPending((prev) => ({ ...prev, ...patch }));
+  const dirty = Object.keys(pending).length > 0;
+
   const view = editorView({
     accountId,
     accounts: accountsQuery.data,
     error: accountsQuery.error,
     online,
   });
-  const account = view.kind === "edit" ? view.account : null;
+  const saved = view.kind === "edit" ? view.account : null;
+  // Лист показывает счёт С ЧЕРНОВИКОМ поверх: «На счёте» едет за правкой
+  // остатка на начало, как поедет после «Применить».
+  const account = saved
+    ? {
+        ...saved,
+        ...pending,
+        balance:
+          saved.balance
+          + (pending.opening_balance !== undefined ? pending.opening_balance - saved.opening_balance : 0),
+      }
+    : null;
+
+  const guard = useGuardedClose({
+    dirty,
+    busy: update.isPending,
+    onClose,
+    message: "Изменения счёта не сохранятся.",
+  });
+
+  const apply = async () => {
+    if (!saved || !dirty) return;
+    const patch = { ...pending };
+    if (patch.name !== undefined) {
+      const name = patch.name.trim();
+      if (!name) {
+        notify("Дайте счёту название", "Без названия счёт не узнать в оплате и переводах.");
+        return;
+      }
+      if (name === saved.name) delete patch.name;
+      else patch.name = name;
+    }
+    if (Object.keys(patch).length === 0) {
+      setPending({});
+      onClose();
+      return;
+    }
+    const ok = await save(patch, "Не удалось сохранить счёт");
+    if (!ok) return;
+    setPending({});
+    onClose();
+  };
 
   return (
     <>
@@ -88,15 +142,31 @@ export function EditAccountSheet({
         padded={false}
         // Лист уезжает с дороги на время разговора о скрытии или удалении
         // (`use-close-flow`).
-        visible={visible && !flow.parked}
-        onClose={onClose}
+        visible={visible && !flow.parked && !guard.hidden}
+        onClose={guard.close}
         // Имени в шапке нет: оно стоит первой строкой листа, и одно и то же
         // слово дважды в одном кадре — шум.
         title="Настройки счёта"
         subtitle={account && !account.is_active ? "Счёт закрыт" : undefined}
         maxHeightRatio={ACCOUNT_SHEET_RATIO}
         avoidKeyboard
-        onExited={flow.onSheetExited}
+        onExited={() => {
+          flow.onSheetExited();
+          guard.onExited();
+        }}
+        footer={
+          account ? (
+            // Лист без полей (`padded={false}`): отступ у кнопки свой — та же
+            // ширина, что у кнопок внизу страниц.
+            <View style={{ paddingHorizontal: GUTTER, paddingTop: 8 }}>
+              <GradientButton
+                label="Применить"
+                disabled={!dirty || update.isPending}
+                onPress={() => void apply()}
+              />
+            </View>
+          ) : undefined
+        }
       >
         {/* Тело — язык страницы (группы строк на прохладном фоне): лист
             заменил собой страницу настроек, и строки в нём те же самые. */}
@@ -107,13 +177,13 @@ export function EditAccountSheet({
         >
           {account ? (
             <>
-              <AccountNameCard account={account} save={save} />
+              <AccountNameCard account={account} stage={stage} />
               <AccountMoneyGroup
                 account={account}
                 accounts={accounts}
                 activeTeams={activeTeams}
                 teamById={teamById}
-                save={save}
+                stage={stage}
                 busy={update.isPending}
                 alertError={alertError}
                 onTransfer={() => flow.startTransfer(account)}

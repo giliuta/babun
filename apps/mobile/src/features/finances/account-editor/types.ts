@@ -14,6 +14,10 @@ export type SaveAccount = (
   errorTitle: string,
 ) => Promise<boolean>;
 
+/** Правка в черновик листа (владелец 03.10: «кнопка „Применить“, чтобы всё
+ *  было чётко»): на сервер уходит только по «Применить». */
+export type StageAccount = (patch: Partial<AccountDraft>) => void;
+
 /**
  * КАЖДАЯ ПРАВКА СООБЩАЕТ О СВОЁМ ОТКАЗЕ САМА (разбор багов счетов 2026-09-15).
  * Все группы листа делят одну мутацию, а `mutate(…, { onError })` в
