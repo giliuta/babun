@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { MessageSquareText, Settings2, Users } from "lucide-react-native";
 import { smsUrl } from "@babun/shared/common/utils/messenger-links";
@@ -31,22 +31,22 @@ import { openSms, useSmsServiceFor, type SmsContext } from "./SmsCompose";
 // чётко выбираешь шаблон, оно отмечается, и внизу кнопка „Отправить“»).
 // Внизу записи и карточки клиента — только история, кнопки там нет.
 //
-//   • Строки — шаблоны команды: значок и цвет шаблона, под именем — готовый
-//     текст с полями клиента и записи. Тап отмечает шаблон галкой; шаблон,
-//     которому не хватает данных («нет записи»), погашен. «Своего SMS» нет —
-//     «чтоб случайно не тыкали».
-//   • Под шаблонами — ТЕКСТ отмеченного шаблона полем: правится сразу, уходит
-//     ровно то, что в поле (владелец 03.10: «обязательно превью шаблона,
-//     которое я могу сразу редактировать, и только потом отправка»).
+//   • ШТОРКА ШАБЛОНОВ — только шаблоны команды строками: значок и цвет шаблона,
+//     под именем — готовый текст с полями клиента и записи; шаблон, которому
+//     не хватает данных («нет записи»), погашен. Кнопок здесь нет: откуда
+//     отправлять, решается потом. «Своего SMS» нет — «чтоб случайно не
+//     тыкали».
 //   • Справа в шапке — «палочки с кружочками»: шаблоны команды (владелец:
 //     «справа поставить, чтоб сразу переходила в шаблоны»). Страница — общим
 //     адресом над табами (`/sms-templates`): «назад» вернёт в запись.
-//   • Внизу — ДВЕ ДОРОГИ (владелец 03.10: «кто не хочет платно — со своего
-//     телефона… две кнопки… снизу синяя „Отправить от“, сверху — через
-//     телефон»): «Со своего телефона» — «Сообщения» телефона с этим текстом,
-//     бесплатно; под ней «Отправить от <имя отправителя>» — через сервис, с
-//     баланса. Сервиса нет (тариф, баланс, имя отправителя) — остаётся одна
-//     «Со своего телефона», синей.
+//   • ТАП ПО ШАБЛОНУ — ВТОРАЯ ШТОРКА ПОВЕРХ (владелец 03.10: «выбираю шаблон
+//     — появляется новая шторка, как будет выглядеть SMS, и там уже две
+//     кнопки: отправить через компанию или со своего телефона»): шапка — имя
+//     шаблона, поле с готовым текстом (правится, уходит ровно то, что в поле),
+//     «N знаков · M SMS»; внизу «Со своего телефона» («Сообщения» телефона,
+//     бесплатно) и под ней синяя «Отправить от <имя отправителя>» (сервис, с
+//     баланса). Сервиса нет — одна «Со своего телефона», синей. Закрыли вторую
+//     — снова шаблоны.
 //   • «От команды» — строкой над шаблонами, только без записи и когда команд с
 //     именем отправителя несколько (владелец 30.09).
 
@@ -106,16 +106,18 @@ export function SmsSendSheet({
 
   const [choosingTeam, setChoosingTeam] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
+  // Вторая шторка — текст выбранного шаблона и две кнопки.
+  const [composeOpen, setComposeOpen] = useState(false);
   // Текст в поле — шаблон, заполненный полями, и правки поверх него.
   const [text, setText] = useState("");
-  const scrollRef = useRef<ScrollView | null>(null);
-  // Каждое открытие — без отметки: прошлый выбор не живёт.
+  // Каждое открытие — с шаблонов: прошлый выбор не живёт.
   const [wasVisible, setWasVisible] = useState(false);
   if (visible !== wasVisible) {
     setWasVisible(visible);
     if (visible) {
       setChoosingTeam(false);
       setPicked(null);
+      setComposeOpen(false);
       setText("");
       setPickedTeam(null);
     }
@@ -131,10 +133,17 @@ export function SmsSendSheet({
   // Шаблоны правит тот, кто правит настройки календаря.
   const canEditTemplates = (role === "owner" || role === "dispatcher") && !!fromTeam;
 
+  // Отправили — закрываются обе шторки: сперва верхняя, потом нижняя (два
+  // окна разом iOS закрывает ненадёжно).
+  const closeAll = () => {
+    setComposeOpen(false);
+    setTimeout(onClose, SHEET_EXIT_MS);
+  };
+
   const sendFromCompany = () => {
     if (!body) return;
     haptics.tap();
-    onClose();
+    closeAll();
     send.mutate(
       {
         appointmentId: context.appointmentId ?? null,
@@ -154,8 +163,8 @@ export function SmsSendSheet({
   const sendFromPhone = () => {
     if (!body || !url) return;
     haptics.tap();
-    onClose();
-    setTimeout(() => openSms(url, body), SHEET_EXIT_MS);
+    closeAll();
+    setTimeout(() => openSms(url, body), SHEET_EXIT_MS * 2);
   };
 
   const openTemplates = () => {
@@ -173,11 +182,8 @@ export function SmsSendSheet({
       visible={visible}
       onClose={onClose}
       title={choosingTeam ? "От команды" : "SMS"}
-      subtitle={!choosingTeam && viaService && senderName ? `от ${senderName}` : undefined}
       padded={false}
       scroll
-      scrollRef={scrollRef}
-      avoidKeyboard
       maxHeightRatio={0.9}
       headerAction={
         canEditTemplates && !choosingTeam ? (
@@ -197,27 +203,6 @@ export function SmsSendSheet({
             <Settings2 color={t.sub} size={20} strokeWidth={2} />
           </Pressable>
         ) : undefined
-      }
-      footer={
-        choosingTeam ? undefined : (
-          <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
-            {url ? (
-              <Button
-                label="Со своего телефона"
-                variant={viaService ? "secondary" : "primary"}
-                onPress={sendFromPhone}
-                disabled={!body}
-              />
-            ) : null}
-            {viaService ? (
-              <Button
-                label={senderName ? `Отправить от ${senderName}` : "Отправить"}
-                onPress={sendFromCompany}
-                disabled={!body}
-              />
-            ) : null}
-          </View>
-        )
       }
     >
       {choosingTeam ? (
@@ -264,15 +249,12 @@ export function SmsSendSheet({
               title={template.name}
               subtitle={text ?? "Не хватает данных записи"}
               disabled={!text}
-              selected={picked === template.id}
-              accessibilityRole="radio"
               onPress={() => {
                 if (!text) return;
                 haptics.tap();
                 setPicked(template.id);
                 setText(text);
-                // Поле текста — под шаблонами: докручиваем к нему.
-                setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
+                setComposeOpen(true);
               }}
             />
           ))}
@@ -283,8 +265,35 @@ export function SmsSendSheet({
           ) : null}
         </SelectList>
       )}
-      {!choosingTeam && chosen ? (
-        <View style={{ paddingHorizontal: GUTTER, paddingTop: 4, paddingBottom: 12 }}>
+      {/* Вторая шторка — внутри первой: лист в листе iOS показывает. */}
+      <BottomSheet
+        visible={composeOpen && !!chosen}
+        onClose={() => setComposeOpen(false)}
+        title={chosen?.template.name ?? "SMS"}
+        padded={false}
+        avoidKeyboard
+        maxHeightRatio={0.9}
+        footer={
+          <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
+            {url ? (
+              <Button
+                label="Со своего телефона"
+                variant={viaService ? "secondary" : "primary"}
+                onPress={sendFromPhone}
+                disabled={!body}
+              />
+            ) : null}
+            {viaService ? (
+              <Button
+                label={senderName ? `Отправить от ${senderName}` : "Отправить"}
+                onPress={sendFromCompany}
+                disabled={!body}
+              />
+            ) : null}
+          </View>
+        }
+      >
+        <View style={{ paddingHorizontal: GUTTER, paddingTop: 4, paddingBottom: 8 }}>
           <TextInput
             value={text}
             // Без эмодзи и не длиннее 3 SMS — то же правило, что у шаблона.
@@ -326,7 +335,7 @@ export function SmsSendSheet({
               : "Текст пустой"}
           </Text>
         </View>
-      ) : null}
+      </BottomSheet>
     </BottomSheet>
   );
 }

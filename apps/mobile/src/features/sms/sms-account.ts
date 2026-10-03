@@ -12,6 +12,7 @@ import {
   parseSmsHistory,
   parseSmsRecordLog,
   type SmsAccount,
+  type SmsHistoryItem,
   type SmsSettingsPatch,
 } from "./sms-model";
 import {
@@ -320,6 +321,19 @@ export function useSmsHistoryPages(teamId: string | null) {
   });
 }
 
+/** Сколько ждать между сверками, пока SMS «в пути»; `false` — не сверять.
+ *  Статус меняет сервер по отчёту оператора (секунды), а блок читается при
+ *  открытии — и «Отправляется» висело, хотя SMS давно «Доставлено» (владелец
+ *  03.10). Сверяем только свежие (10 мин): старые без отчёта не крутят сеть. */
+export function smsInFlightInterval(messages: readonly SmsHistoryItem[] | undefined, now = Date.now()): number | false {
+  const fresh = (messages ?? []).some(
+    (m) =>
+      (m.status === "queued" || m.status === "sending" || m.status === "sent") &&
+      now - Date.parse(m.createdAt) < 10 * 60 * 1000,
+  );
+  return fresh ? 4000 : false;
+}
+
 /** SMS записи — блок внизу страницы записи. */
 export function useAppointmentSms(appointmentId: string | null | undefined) {
   const tenantId = useTenantId();
@@ -327,8 +341,10 @@ export function useAppointmentSms(appointmentId: string | null | undefined) {
     queryKey: [...smsLogKey(tenantId), "appointment", appointmentId],
     enabled: !!tenantId && !!appointmentId,
     // Статусы («Доставлено», «Не доставлено») меняет сервер — при каждом
-    // открытии записи и карточки блок перечитывается.
+    // открытии записи и карточки блок перечитывается, а пока SMS «в пути» —
+    // сверяется сам каждые несколько секунд.
     staleTime: 0,
+    refetchInterval: (query) => smsInFlightInterval(query.state.data?.messages),
     queryFn: async () => {
       const { data, error } = await supabase.rpc("sms_for_appointment", {
         p_appointment_id: appointmentId as string,
@@ -374,6 +390,7 @@ export function useClientSms(clientId: string | null | undefined, limit = 20, ca
     queryKey: [...smsLogKey(tenantId), "client", clientId, limit],
     enabled: !!tenantId && !!clientId,
     staleTime: 0,
+    refetchInterval: (query) => smsInFlightInterval(query.state.data),
     queryFn: async () => {
       const { data, error } = await clientOf(tenantId, activeTenantId).rpc("sms_for_client", {
         p_client_id: clientId as string,
