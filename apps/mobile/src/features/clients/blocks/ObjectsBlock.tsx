@@ -27,6 +27,7 @@ import { AppearanceTile } from "@/components/ui/AppearanceSheet";
 import { PICKER_RADIUS } from "@/components/ui/picker-grid";
 import { useLocationLabels } from "@/features/settings/local-settings";
 import { findObjectType } from "@/features/clients/object-types";
+import { moreLabel } from "@/features/clients/more-label";
 
 // ОБЪЕКТЫ на карточке клиента.
 //
@@ -272,8 +273,13 @@ export default function ObjectsBlock({
     );
   }
 
+  // «Ещё N» — объектов сверх показанного основного (03.10).
+  const more = single && onOpenAll ? moreLabel(ordered.length) : null;
   return (
-    <SectionCard title={bare ? undefined : "Объекты"}>
+    <SectionCard
+      title={bare ? undefined : "Объекты"}
+      action={more && onOpenAll ? { label: more, pill: true, onPress: onOpenAll } : undefined}
+    >
       {shown.map((loc, i) => {
         const row = (
           <>

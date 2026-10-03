@@ -12,6 +12,7 @@ import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ClientSummaryCard } from "@/features/clients/ClientSummaryCard";
 import { lastClientRecord } from "@/features/clients/last-record";
+import { moreLabel } from "@/features/clients/more-label";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -74,6 +75,9 @@ export default function ClientContactRow({
     (c) => c.id === "chat",
   );
   const lastRecord = useMemo(() => lastClientRecord(appointments), [appointments]);
+  // «Ещё N» — записей сверх показанной последней (те же, что на странице
+  // истории: только работы, без событий).
+  const more = moreLabel(appointments.filter((a) => !a.kind || a.kind === "work").length);
 
   // В НОВОМ КЛИЕНТЕ — ТОТ ЖЕ БЛОК (владелец 22.09: «при создании — те же
   // самые блоки»): записей у него ещё нет — так и сказано, словами.
@@ -94,7 +98,14 @@ export default function ClientContactRow({
   if (!showSummary && !chat) return null;
 
   return (
-    <SectionCard title="История">
+    <SectionCard
+      title="История"
+      action={
+        showSummary && onOpenHistory && more
+          ? { label: more, pill: true, onPress: onOpenHistory }
+          : undefined
+      }
+    >
         {showSummary ? (
           <ClientSummaryCard
             lastRecord={lastRecord}

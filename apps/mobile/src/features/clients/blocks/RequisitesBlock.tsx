@@ -15,6 +15,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { haptics } from "@/lib/haptics";
 import { useCopyValue } from "@/lib/copy-value";
 import { requisitesLines } from "@/features/clients/client-share";
+import { moreLabel } from "@/features/clients/more-label";
 import { RequisitesSheet } from "@/features/clients/RequisitesSheet";
 import { useRequisitesWriter } from "@/features/clients/use-requisites-writer";
 import { useThemeColors } from "@/theme/colors";
@@ -200,8 +201,13 @@ export function RequisitesBlock({
   // КАРТОЧКА — ОДИН НАБОР, ОСНОВНОЙ (владелец 03.10, как «История» и
   // «Файлы»): плашкой под шапкой блока, тап — страница всех наборов. Пусто —
   // дверь «Добавить реквизиты», как «Добавить объект».
+  // «Ещё N» — наборов сверх показанного основного (03.10).
+  const more = single && onOpenAll ? moreLabel(ordered.length) : null;
   return (
-    <SectionCard title="Реквизиты">
+    <SectionCard
+      title="Реквизиты"
+      action={more && onOpenAll ? { label: more, pill: true, onPress: onOpenAll } : undefined}
+    >
       {shown.map((set) => (
         <View key={set.id} style={{ paddingHorizontal: 2, paddingTop: 2, paddingBottom: 6 }}>
           <RequisitesPlaque

@@ -107,7 +107,7 @@ describe("«Файлы» — как «История»: последний на 
   test("страница ставит блок «Файлы»; в черновике — только его дверь", () => {
     assert.match(profile(), /import ClientFilesBlock from "@\/features\/clients\/blocks\/ClientFilesBlock"/);
     assert.match(profile(), /\{!draft && a\.files\.show \? \(\s*<ClientFilesBlock\s/);
-    assert.match(block(), /<SectionCard title="Файлы">/);
+    assert.match(block(), /<SectionCard\s+title="Файлы"/);
   });
 
   test("карточка — последний файл под заголовком своего дня; тап — страница всех", () => {

@@ -631,7 +631,8 @@ describe("блок «История»", () => {
   // ней — история со всеми записями.
   test("в блоке «История» — последняя запись и вход в историю, без «Записать»", () => {
     const row = read("ClientContactRow.tsx");
-    assert.match(row, /<SectionCard title="История">\s*\{showSummary \? \(\s*<ClientSummaryCard/);
+    // Шапка носит плашку «Ещё N» (03.10) — сама запись по-прежнему первой.
+    assert.match(row, /<SectionCard\s+title="История"[\s\S]{0,260}>\s*\{showSummary \? \(\s*<ClientSummaryCard/);
     assert.doesNotMatch(row, /label="Записать"/);
     assert.match(row, /lastRecord=\{lastRecord\}/);
     // Строка последней записи — та же `VisitRow`, что в «Истории» (03.10).

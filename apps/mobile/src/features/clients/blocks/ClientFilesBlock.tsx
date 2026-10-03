@@ -11,6 +11,7 @@ import { FileAddSheet } from "@/features/appointments/FileAddSheet";
 import { ClientFileRow } from "@/features/clients/ClientFileRow";
 import { VisitDayHeader } from "@/features/clients/VisitRow";
 import { useClientFileUpload, useClientFiles } from "@/features/clients/use-client-files";
+import { moreLabel } from "@/features/clients/more-label";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -54,6 +55,7 @@ export default function ClientFilesBlock({
   }, [openOnArrive, canChange, onArrived]);
 
   const last = files.timeline[0] ?? null;
+  const more = moreLabel(files.timeline.length);
 
   const openAll = () => {
     haptics.tap();
@@ -66,7 +68,11 @@ export default function ClientFilesBlock({
 
   return (
     <>
-      <SectionCard title="Файлы">
+      <SectionCard
+        title="Файлы"
+        // «Ещё N» — файлов сверх показанного последнего (03.10).
+        action={more ? { label: more, pill: true, onPress: openAll } : undefined}
+      >
         {last ? (
           <>
             <VisitDayHeader date={last.day} />

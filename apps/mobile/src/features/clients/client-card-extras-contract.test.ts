@@ -220,7 +220,7 @@ describe("аудит 23.09 — то, что чинили", () => {
     assert.match(read("RequisitesSheet.tsx"), /const ok = await onSave\(fieldsOf\(form\)\);\s*setSaving\(false\);\s*if \(!ok\) return;/);
   });
   test("на своей странице блок без второй шапки", () => {
-    assert.match(read("blocks/ObjectsBlock.tsx"), /<SectionCard title=\{bare \? undefined : "Объекты"\}>/);
+    assert.match(read("blocks/ObjectsBlock.tsx"), /<SectionCard\s+title=\{bare \? undefined : "Объекты"\}/);
     // Своя страница реквизитов (03.10) — плашки без карточки и шапки.
     assert.match(read("blocks/RequisitesBlock.tsx"), /if \(bare\) \{\s*return \(\s*<>/);
   });

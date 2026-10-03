@@ -11,6 +11,10 @@ interface SectionCardAction {
   /** Значок акцентом — действие над содержимым блока (точка на карте, запрос
    *  адреса), а не дверь в настройки: та остаётся серой. */
   accent?: boolean;
+  /** ПЛАШКА «ЕЩЁ N» (владелец 03.10: «как понять, что там есть ещё —
+   *  какую-то плашку, типа „ещё“ и количество»). Подпись — в мягкой
+   *  акцентной пилюле; высоту шапки не меняет. */
+  pill?: boolean;
   onPress: () => void;
 }
 
@@ -120,6 +124,23 @@ export function SectionCard({
                   >
                     {item.icon ? (
                       <item.icon color={item.accent ? t.accent : t.sub} size={20} strokeWidth={2} />
+                    ) : item.pill ? (
+                      <View
+                        style={{
+                          height: 22,
+                          paddingHorizontal: 10,
+                          borderRadius: 11,
+                          justifyContent: "center",
+                          backgroundColor: `${t.accent}14`,
+                        }}
+                      >
+                        <Text
+                          maxFontSizeMultiplier={1.2}
+                          style={{ fontSize: 13, fontWeight: "600", color: t.accent, fontVariant: ["tabular-nums"] }}
+                        >
+                          {item.label}
+                        </Text>
+                      </View>
                     ) : (
                       <Text
                         style={{ fontSize: 13, fontWeight: "500", color: t.accent }}
