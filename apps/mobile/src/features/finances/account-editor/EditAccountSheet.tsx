@@ -225,7 +225,7 @@ export function EditAccountSheet({
                     alertError(hide ? "Не удалось скрыть счёт" : "Не удалось показать счёт"),
                   );
                 }}
-                onDelete={() => flow.start(account, accounts, "trash")}
+                onDelete={() => flow.start(account, accounts)}
               />
             </>
           ) : (

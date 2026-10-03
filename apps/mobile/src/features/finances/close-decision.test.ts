@@ -6,7 +6,7 @@ import {
   isLastOpenOfTeam,
   type ClosableAccount,
 } from "./close-decision";
-import { deleteAccountAlert, hideAccountAlert } from "./account-alerts";
+import { deleteAccountAlert, trashAccountAlert } from "./account-alerts";
 
 const acc = (over: Partial<ClosableAccount> & { id: string }): ClosableAccount => ({
   balance: 0,
@@ -119,8 +119,8 @@ describe("последний открытый счёт команды (30.09)", 
   });
 
   test("вопрос говорит, что команда останется без счёта", () => {
-    assert.match(hideAccountAlert("Наличные", true).message, /последний открытый счёт команды/);
-    assert.doesNotMatch(hideAccountAlert("Наличные").message, /последний/);
+    assert.match(trashAccountAlert("Наличные", true).message, /последний открытый счёт команды/);
+    assert.doesNotMatch(trashAccountAlert("Наличные").message, /последний/);
     assert.match(deleteAccountAlert("Карта", 0, true).message, /последний открытый счёт команды/);
   });
 });

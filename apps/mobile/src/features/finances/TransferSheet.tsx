@@ -16,6 +16,7 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { accountIcon } from "./account-ui";
 import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { GUTTER } from "@/components/ui/tokens";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { ValueOptionList } from "@/components/ui/ValuePickerSheet";
 import { FieldRow, NavRow, RowGroupBody } from "@/components/ui/card-rows";
@@ -405,7 +406,7 @@ export function TransferSheet({
         onClose={closeUnlessSending}
         title={title}
         footer={
-          <View style={{ paddingHorizontal: 20 }}>
+          <View style={{ paddingHorizontal: GUTTER }}>
             <GradientButton
               // Слово из словаря AGENTS 5.2: «Выбрать» кнопкой шторки не бывает.
               label="Применить"
@@ -418,7 +419,7 @@ export function TransferSheet({
           </View>
         }
       >
-        <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
+        <View style={{ paddingHorizontal: GUTTER, paddingBottom: 12 }}>
           <StepBack onPress={() => setStep("form")} />
           <View style={{ alignItems: "center" }}>
             {/* ПИКЕР РОЖДАЕТСЯ СО ЗНАЧЕНИЕМ. Смонтированный до того, как дата
@@ -464,7 +465,7 @@ export function TransferSheet({
         scroll
         maxHeightRatio={0.8}
       >
-        <View style={{ paddingHorizontal: 12, paddingBottom: 28 }}>
+        <View style={{ paddingHorizontal: GUTTER, paddingBottom: 28 }}>
           <StepBack onPress={() => setStep("form")} />
           {/* 0–1 счетов: выбирать нечего, и голый «Назад» без единого слова
               читался бы как поломка. Кнопки «завести счёт» тут нет нарочно:
@@ -566,7 +567,7 @@ export function TransferSheet({
       scroll
       avoidKeyboard
       footer={
-        <View style={{ paddingHorizontal: 20, gap: 8 }}>
+        <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
           {(failure ?? reason) ? (
             <Text
               accessibilityLiveRegion="polite"
@@ -706,7 +707,7 @@ export function TransferSheet({
               style={({ pressed }) => ({
                 width: 40,
                 height: 40,
-                borderRadius: 999,
+                borderRadius: t.radius.pill,
                 alignItems: "center",
                 justifyContent: "center",
                 // Кольцо цветом ЛИСТА, а не карточки: кнопка «прорезает» шов
@@ -819,7 +820,9 @@ function PartyCard({
   return (
     <View
       style={{
-        marginHorizontal: 12,
+        // ОДНО ПОЛЕ НА ЛИСТ (DS, LOCKED 2026-08-29): карточки, списки и
+        // кнопка внизу стоят на одной линии — общий `GUTTER`.
+        marginHorizontal: GUTTER,
         marginBottom: 4,
         paddingHorizontal: 14,
         paddingVertical: 12,

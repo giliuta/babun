@@ -330,8 +330,8 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
    не выбираются по силе: «правая несёт самое сильное из доступного этой
    строке» — ошибка, из-за которой у стандартной категории справа стояло
    «Скрыть», у своей — «Удалить», и один жест на соседних строках делал
-   разное. Нет разрушительного действия (стандартную категорию защищает RLS,
-   у закрытого счёта висит история) — правой кромки нет вовсе: `label` и
+   разное. Нет разрушительного действия (стандартную категорию защищает RLS)
+   — правой кромки нет вовсе: `label` и
    `onAction` необязательны, ход влево упирается в ноль. Тап по строке
    справочника открывает ПРАВКУ и никогда не меняет состояние молча: «нажал —
    и оно скрылось» стоило владельцу стандартной категории «Налоги и сборы».
@@ -403,7 +403,7 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Запись и событие (форма) | `app/book/index.tsx` | — |
 | Настройки страницы записи | `app/(dashboard)/cabinet/booking-record.tsx` | `calendar/booking-record.tsx` |
 | Настройки страницы события | `app/(dashboard)/cabinet/booking-event.tsx` | `calendar/booking-event.tsx` |
-| Счёт (создание = правка) | страница «Счета» `app/accounts/settings.tsx` (строки `finances/accounts-page/AccountRow.tsx`, порядок, «Скрыть», «Добавить счёт») + `archive.tsx`; ОДИН лист создания и правки `finances/account-editor/AccountEditorSheet.tsx` | Ползунки панели «Счета» и шестерёнка «Финансов» ведут на одну страницу; `app/accounts/index.tsx` — указатель на панель «Счета», `[id]/index.tsx` и `[id]/settings.tsx` — редиректы на «Счета» с `?edit=<id>`; вид — общий блок; закрытие мягкое |
+| Счёт (создание = правка) | страница «Счета» `app/accounts/settings.tsx` (строки `finances/accounts-page/AccountRow.tsx`, порядок, «Скрыть»/«Показать», «Удалить», «Добавить счёт») + «Удалённые счета» `app/accounts/trash.tsx` + «Выписка» `app/accounts/[id]/statement.tsx`; ОДИН лист создания и правки `finances/account-editor/AccountEditorSheet.tsx` (блоки-плашки, «Применить») | Ползунки панели «Счета» и шестерёнка «Финансов» ведут на одну страницу; `app/accounts/index.tsx` — указатель на панель «Счета», `[id]/index.tsx` и `[id]/settings.tsx` — редиректы на «Счета» с `?edit=<id>`; вид — общий блок. «Скрыть» (03.10) — скрытый счёт: работает, виден только владельцу и только на «Счетах» (`is_hidden`); «Удалить» — в «Удалённые счета» на 30 дней (`deleted_at`), с историей не стирается |
 | Способы связи | `app/(dashboard)/clients/channels.tsx` | `app/(shared)/channels.tsx` |
 | Реквизиты (справочник + лист создания = правки) | `src/features/companies/RequisitesScreen.tsx` + `CompanySheet.tsx`; правила подписи и чистки — `company-rules.ts` | `finances/requisites.tsx`, `app/(shared)/requisites.tsx`; выбор в инвойсе и чеке — `PickerSheet` с той же подписью (`companyDetail`) |
 | Карты для маршрута | `app/(dashboard)/clients/maps.tsx` | `app/(shared)/maps.tsx` |
