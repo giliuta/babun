@@ -105,10 +105,11 @@ export const EVENT_FIELDS: ReadonlySet<string> = new Set(Object.keys(EVENT_FIELD
 
 const isEvent = (kind: Appointment["kind"] | undefined) => kind === "event" || kind === "personal";
 
-/** Блок статуса: отмена и возврат из отмены — «Отменять», остальное —
- *  «Статус записи». */
-export function statusBlock(next: string, previous: string | undefined): string {
-  return next === "cancelled" || previous === "cancelled" ? "calendar.cancel" : "record.status";
+/** Блок статуса: отмена и возврат из отмены — «Отменять». Иного статуса
+ *  больше нет (владелец 03.10: «статус удаляй полностью») — `null`: его не
+ *  меняет никто, визит закрывает оплата. */
+export function statusBlock(next: string, previous: string | undefined): string | null {
+  return next === "cancelled" || previous === "cancelled" ? "calendar.cancel" : null;
 }
 
 /** Какой блок нужен, чтобы поменять поле. `null` — поле сотруднику не

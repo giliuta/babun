@@ -35,7 +35,6 @@ const REGISTRY: AccessBlock[] = (
   [
     ["calendar.records", "calendar", "calendar", ["off", "read", "write"], "Календарь и записи", false, false, 10],
     ["calendar.create", "calendar", "calendar", ["off", "write"], "Новые записи", false, false, 20],
-    ["record.status", "calendar", "calendar", ["off", "read", "write"], "Статус записи", false, true, 30],
     // Волна 3: два положения — «видит или не видит» (слово владельца).
     ["record.client", "calendar", "calendar", ["off", "read"], "Клиент в записи", false, true, 34],
     ["record.object", "calendar", "calendar", ["off", "read"], "Объект в записи", false, true, 35],

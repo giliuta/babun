@@ -34,12 +34,12 @@ describe("работа сотрудника — по его календарям
     { date: "2026-09-13", team_id: "A", status: "scheduled", kind: "event" },
   ];
   test("чужой календарь, отменённые, события и прошлый месяц не считаются", () => {
-    assert.deepEqual(monthWorkOf(rows, ["A"], now), { total: 2, done: 1 });
+    assert.deepEqual(monthWorkOf(rows, ["A"], now), { total: 2 });
   });
   test("строка сводки", () => {
-    assert.equal(workLine({ total: 2, done: 1 }, now), "2 записи в сентябре · 1 выполнено");
-    assert.equal(workLine({ total: 5, done: 0 }, now), "5 записей в сентябре");
-    assert.equal(workLine({ total: 0, done: 0 }, now), "в сентябре нет");
+    assert.equal(workLine({ total: 2 }, now), "2 записи в сентябре");
+    assert.equal(workLine({ total: 5 }, now), "5 записей в сентябре");
+    assert.equal(workLine({ total: 0 }, now), "в сентябре нет");
   });
 });
 
@@ -129,7 +129,7 @@ describe("страница «Записи» сотрудника — перио�
       "2026-09-24",
       (r) => Number(r.paid),
     );
-    assert.deepEqual(got.summary, { total: 3, done: 2, cancelled: 1, revenue: 300 });
+    assert.deepEqual(got.summary, { total: 3, cancelled: 1, revenue: 300 });
     assert.deepEqual(got.upcoming.map((d) => d.date), ["2026-09-25", "2026-09-26"]);
     assert.deepEqual(got.past.map((d) => d.rows.map((r) => r.id)), [["2", "1"]]);
   });

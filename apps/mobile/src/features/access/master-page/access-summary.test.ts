@@ -12,12 +12,12 @@ describe("разделы прав команды", () => {
   });
 
   test("права записи — в порядке страницы записи", () => {
-    const rows = ["record.status", "record.amount", "record.client", "record.services", "record.team"].map(
+    const rows = ["record.amount", "record.client", "record.services", "record.team"].map(
       (key) => ({ block: { key } }),
     );
     assert.deepEqual(
       orderGroupRows("record", rows).map((row) => row.block.key),
-      ["record.team", "record.client", "record.services", "record.amount", "record.status"],
+      ["record.team", "record.client", "record.services", "record.amount"],
     );
     assert.deepEqual(orderGroupRows("finance", rows), rows);
   });

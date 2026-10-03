@@ -22,7 +22,6 @@ const REGISTRY: AccessBlock[] = (
   [
     ["calendar.records", "calendar", "calendar", OFF_READ_WRITE, 10],
     ["calendar.create", "calendar", "calendar", ["off", "write"], 20],
-    ["record.status", "calendar", "calendar", OFF_READ_WRITE, 30],
     ["record.amount", "calendar", "calendar", OFF_READ_WRITE, 40],
     ["record.payment", "calendar", "calendar", OFF_READ_WRITE, 50],
     ["calendar.day_labels", "calendar", "calendar", OFF_READ_WRITE, 60],
@@ -73,7 +72,6 @@ const foldedOf = (sections: ReturnType<typeof rightsSections>, area: string) =>
 // (владелец 30.09): свёртку их строки проверять нечего, её нет и при
 // открытом главном (отдельный тест ниже).
 const CALENDAR_DEPENDANTS = [
-  "record.status",
   "record.amount",
   "record.payment",
   "calendar.day_labels",
@@ -311,7 +309,7 @@ describe("страница не предлагает того, что серве
     assert.ok(!keys.includes("calendar.records"), "спящий блок снова предлагается");
     assert.ok(!keys.includes("calendar.create"), "спящий зависимый снова предлагается");
     // Остальные строки раздела на месте: спит не весь раздел, а блок.
-    assert.ok(keys.includes("record.status"));
+    assert.ok(keys.includes("record.amount"));
   });
 
   test("все блоки спят — разделов нет вовсе", () => {

@@ -21,10 +21,6 @@ type Role = "owner" | "dispatcher" | "master";
 export type CrewLevel = "hidden" | "read" | "write";
 
 export interface CrewBlocks {
-  /** «Статус записи». Заметку пишет тот, кто меняет статус (владелец 21.09:
-   *  «если статус меняется — значит он может писать заметку»), — сервер
-   *  пускает обе правки одной дверью. Читать заметку можно всегда. */
-  status: CrewLevel;
   /** «Фото и файлы записи». */
   files: CrewLevel;
   /** «Клиент в записи»: два положения — видит или нет. */
@@ -75,7 +71,6 @@ export function crewBlocks(input: {
     );
   };
   return {
-    status: gate("record.status"),
     files: on("record_files") ? gate("record.files") : "hidden",
     client: gate("record.client") !== "hidden",
     object: on("objects") && gate("record.object") !== "hidden",

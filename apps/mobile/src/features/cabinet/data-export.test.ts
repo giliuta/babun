@@ -233,7 +233,7 @@ describe("выгрузка записей", () => {
   test("заголовок — двенадцать колонок по порядку", () => {
     assert.equal(
       lines(appointmentsToCsv([], refs))[0],
-      "Дата;Начало;Конец;Вид;Команда;Клиент;Статус;Услуги;Сумма;Оплачено;Адрес;Заметка",
+      "Дата;Начало;Конец;Вид;Команда;Клиент;Отмена;Услуги;Сумма;Оплачено;Адрес;Заметка",
     );
   });
 
@@ -248,7 +248,7 @@ describe("выгрузка записей", () => {
       "Запись",
       "Y&D",
       "Андрей",
-      "Выполнена",
+      "",
       "Чистка",
       "120,00",
       "60,50",
@@ -267,14 +267,13 @@ describe("выгрузка записей", () => {
     assert.equal(cells(row)[7], '"Чистка, Заправка"');
   });
 
-  test("слова статусов", () => {
+  test("статуса нет — колонка говорит только об отмене", () => {
     const status = (value: string) =>
       cells(lines(appointmentsToCsv([appointment({ status: value })], refs))[1])[6];
-    assert.equal(status("scheduled"), "Запланирована");
-    assert.equal(status("completed"), "Выполнена");
+    assert.equal(status("scheduled"), "");
+    assert.equal(status("completed"), "");
+    assert.equal(status("in_progress"), "");
     assert.equal(status("cancelled"), "Отменена");
-    assert.equal(status("in_progress"), "В работе");
-    assert.equal(status("postponed"), "postponed");
   });
 
   test("событие: вид «Событие», денег и клиента нет, заметки склеены", () => {

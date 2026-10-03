@@ -1,5 +1,5 @@
 import type { Database, Json } from "@babun/shared/db/database.types";
-import { STATUS_LABELS, getPaidAmount, type Appointment } from "@babun/shared/local/appointments";
+import { getPaidAmount, type Appointment } from "@babun/shared/local/appointments";
 import { ACQUISITION_LABELS } from "@babun/shared/local/clients";
 import { TX_TYPE_LABEL } from "@babun/shared/local/finance/transaction";
 import { csvAmount } from "@/lib/csv-amount";
@@ -204,7 +204,9 @@ const APPOINTMENT_HEADER = [
   "Вид",
   "Команда",
   "Клиент",
-  "Статус",
+  // Статуса записи больше нет (владелец 03.10) — колонка говорит только об
+  // отмене.
+  "Отмена",
   "Услуги",
   "Сумма",
   "Оплачено",
@@ -272,7 +274,7 @@ export function appointmentsToCsv(
       csvCell(kindWord(a.kind)),
       csvTextCell(nameOf(refs.teams, a.team_id)),
       csvTextCell(nameOf(refs.clients, a.client_id)),
-      csvCell(word(STATUS_LABELS, a.status)),
+      csvCell(a.status === "cancelled" ? "Отменена" : ""),
       csvTextCell(serviceNames(a.services, refs.services)),
       // У личного события денег нет: «0,00» в каждой строке обеда — шум.
       csvAmount(isWork ? a.total_amount : null),

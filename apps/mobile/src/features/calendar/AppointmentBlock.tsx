@@ -11,7 +11,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { Check } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { blockFrame, type PlacedAppt } from "@/features/calendar/layout";
@@ -620,7 +619,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
         accessibilityRole="button"
         // Адрес читается ВСЕГДА: озвучке недоступны ни ширина блока, ни его
         // высота, и гейты вёрстки для неё не существуют.
-        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}, ${STATUS_LABELS[apt.status]}${overdue ? ", не закрыта" : ""}${address ? `, ${address}` : ""}`}
+        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}${cancelled ? ", отменена" : ""}${overdue ? ", не оплачена" : ""}${address ? `, ${address}` : ""}`}
         accessibilityActions={
           onReschedule
             ? [

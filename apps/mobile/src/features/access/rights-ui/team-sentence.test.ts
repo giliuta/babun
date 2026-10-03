@@ -11,7 +11,6 @@ const CLOSED: Record<string, AccessLevel> = {
   "calendar.create": "off",
   "calendar.move": "off",
   "calendar.cancel": "off",
-  "record.status": "read",
   "record.client": "off",
   "record.object": "read",
   "record.services": "read",
@@ -67,7 +66,6 @@ describe("итог прав команды", () => {
       ...CLOSED,
       "calendar.create": "write",
       "calendar.move": "write",
-      "record.status": "write",
       "record.client": "write",
       "record.amount": "read",
       "record.payment": "write",
@@ -79,7 +77,7 @@ describe("итог прав команды", () => {
     };
     assert.equal(
       teamSentence(reader(levels)),
-      "Видит записи команды полностью. Создаёт и переносит записи, ставит статус. Видит своих клиентов. Принимает оплату и видит долги. Записи и деньги удалить не может.",
+      "Видит записи команды полностью. Создаёт и переносит записи. Видит своих клиентов. Принимает оплату и видит долги. Записи и деньги удалить не может.",
     );
   });
 

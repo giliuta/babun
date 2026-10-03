@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useInClientsTab } from "@/features/clients/reference-href";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { getDebtAmount } from "@babun/shared/local/appointments";
+import { getPaidAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -121,11 +121,16 @@ function ClientVisitsScreen() {
   }, [rows]);
 
   // Итог сверху — то, ради чего историю чаще всего и открывают.
-  const done = appointments.filter((a) => a.status === "completed");
-  const spent = done.reduce(
-    (n, a) => n + Math.max(0, (a.total_amount ?? 0) - getDebtAmount(a)),
-    0,
+  // Визит — прошедшая неотменённая работа: статуса «Выполнена» больше нет
+  // (владелец 03.10).
+  const done = appointments.filter(
+    (a) => a.status !== "cancelled" && (a.kind ?? "work") === "work" && a.date <= today,
   );
+  // «Заплачено» — деньги, полученные по записям (аванс плюс оплаты), а не
+  // сумма «выполненных» минус долг.
+  const spent = appointments
+    .filter((a) => a.status !== "cancelled" && (a.kind ?? "work") === "work")
+    .reduce((n, a) => n + Math.max(0, getPaidAmount(a)), 0);
   const caption = unpaidOnly
     ? unpaidList.list.length > 0
       ? `${formatCountRu(unpaidList.list.length, ["запись", "записи", "записей"])} · долг ${formatEUR(unpaidList.total)}`

@@ -23,7 +23,6 @@ const REGISTRY: AccessBlock[] = [
   block("calendar.records", ["off", "read", "write"], 10),
   block("calendar.create", ["off", "write"], 20),
   block("calendar.move", ["off", "write"], 26),
-  block("record.status", ["read", "write"], 30),
   block("record.team", ["read", "write"], 31),
   block("record.label", ["off", "read", "write"], 32),
   block("record.client", ["off", "read", "write"], 34),

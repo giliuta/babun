@@ -285,10 +285,14 @@ export interface Appointment {
   updated_at: string;
 }
 
+/** Статус СЛОВОМ — только отмена (владелец 03.10: «статус удаляй
+ *  полностью, он не нужен»). «Запланирована / В работе / Выполнена» нигде
+ *  не печатаются; внутри «выполнена» остаётся закрытием визита оплатой — по
+ *  нему считаются долги и аналитика. */
 export const STATUS_LABELS: Record<AppointmentStatus, string> = {
-  scheduled: "Запланирована",
-  in_progress: "В работе",
-  completed: "Выполнена",
+  scheduled: "",
+  in_progress: "",
+  completed: "",
   cancelled: "Отменена",
 };
 

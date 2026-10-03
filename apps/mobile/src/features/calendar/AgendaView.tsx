@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { STATUS_LABELS, getDebtAmount } from "@babun/shared/local/appointments";
+import { getDebtAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { pluralize } from "@babun/shared/common/utils/pluralize";
 import { parseYMD } from "@/features/appointments/helpers";
@@ -388,15 +388,8 @@ function AgendaRow({
   overdue: boolean;
   t: ThemeColors;
 }) {
-  // ЦВЕТ СТАТУСА В ЛЕНТЕ БОЛЬШЕ НЕ СВОЙ: третья копия правды расходилась с
-  // сеткой (там «в работе» — янтарь, здесь был кобальт).
-  const statusColor =
-    apt.status === "completed"
-      ? t.success
-      : apt.status === "cancelled"
-        ? t.faint
-        : t.sub;
   const cancelled = apt.status === "cancelled";
+  const statusWord = overdue ? "Не оплачена" : cancelled ? "Отменена" : null;
   // ЦВЕТ ЗАПИСИ ЗАЛИВАЕТ ВСЮ СТРОКУ, а не квадратик слева (владелец
   // 2026-09-06: «зачем мне слева цветовой квадратик — весь блок должен
   // подсвечиваться»). Рецепт тот же, что у блока в сетке: заливка BLOCK_FILL,
@@ -502,7 +495,7 @@ function AgendaRow({
             style={{
               marginTop: 2,
               fontSize: 11,
-              color: statusColor,
+              color: cancelled ? t.faint : t.sub,
               textDecorationLine: cancelled ? "line-through" : "none",
             }}
           >
@@ -525,7 +518,7 @@ function AgendaRow({
       accessibilityRole="button"
       // Озвучка называет ВСЁ, что напечатано в строке: статус, «не закрыта» и
       // имя дыры видны глазу и обязаны быть слышны.
-      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}, ${overdue ? "не закрыта" : STATUS_LABELS[apt.status]}${situation ? `, ${situation.toLowerCase()}` : ""}${offLabel ? `, метка ${offLabel.name}` : ""}, ${formatEUR(total)}`}
+      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}${statusWord ? `, ${statusWord.toLowerCase()}` : ""}${situation ? `, ${situation.toLowerCase()}` : ""}${offLabel ? `, метка ${offLabel.name}` : ""}, ${formatEUR(total)}`}
       style={{
         flexDirection: "row",
         alignItems: "flex-start",
@@ -585,19 +578,21 @@ function AgendaRow({
             gap: 6,
           }}
         >
-          <Text
-            style={{
-              fontSize: 11,
-              color: overdue ? t.warning : statusColor,
-              textDecorationLine: cancelled ? "line-through" : "none",
-            }}
-          >
-            {/* НЕ ЗАКРЫТА — СЛОВОМ, ВМЕСТО СТАТУСА. Толщина канта в сетке
-                отвечает на «эта ли висит», но не на «сколько их». А
-                «Запланирована · не закрыта» — два слова об одном и то, что
-                съедало место ситуации (аудит 29.09: «не закры… · Не оплаче…»). */}
-            {overdue ? "Не закрыта" : STATUS_LABELS[apt.status]}
-          </Text>
+          {/* СТАТУСА СЛОВОМ НЕТ (владелец 03.10: «статус удаляй полностью»):
+              осталась отмена и прошедшая неоплаченная работа — «Не оплачена»
+              (визит закрывает только оплата). Толщина канта в сетке отвечает
+              на «эта ли висит», слово — на «сколько их». */}
+          {statusWord ? (
+            <Text
+              style={{
+                fontSize: 11,
+                color: overdue ? t.warning : t.faint,
+                textDecorationLine: cancelled ? "line-through" : "none",
+              }}
+            >
+              {statusWord}
+            </Text>
+          ) : null}
           {/* ЧЕГО НЕ ХВАТАЕТ — СЛОВОМ. Цвет один на три ситуации различает их
               слишком слабо для дальтоника (ΔE заливок «нет объекта» и «нет
               услуг» при дейтеранопии — 4.1), а в списке есть место для слова:
@@ -607,7 +602,7 @@ function AgendaRow({
               numberOfLines={1}
               style={{ flexShrink: 1, fontSize: 11, color: t.body }}
             >
-              · {situation}
+              {statusWord ? "· " : ""}{situation}
             </Text>
           ) : null}
           {/* МЕТКА, ОТЛИЧНАЯ ОТ МЕТКИ ДНЯ: «весь день Лимассол, а эта работа

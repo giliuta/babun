@@ -83,7 +83,6 @@ function teamFacts(read: LevelRead): TeamFacts {
   if (is("calendar.move", "write")) verbs.push("переносит");
   if (is("calendar.cancel", "write")) verbs.push("отменяет");
   const acts: string[] = verbs.length > 0 ? [`${joinRu(verbs)} записи`] : [];
-  if (is("record.status", "write")) acts.push("ставит статус");
 
   const money: string[] = [];
   if (is("record.payment", "write")) money.push("принимает оплату");

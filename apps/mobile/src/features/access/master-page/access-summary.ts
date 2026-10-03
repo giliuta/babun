@@ -41,7 +41,6 @@ export const RECORD_ROW_ORDER: readonly string[] = [
   "record.services",
   "record.amount",
   "record.payment",
-  "record.status",
   "record.note",
   "record.files",
   // «SMS» внизу записи (03.10) — последним, как и на странице.

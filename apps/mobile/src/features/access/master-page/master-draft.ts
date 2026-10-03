@@ -50,7 +50,6 @@ export const STARTER_CALENDAR_LEVELS: Readonly<Record<string, AccessLevel>> = {
   // (`seed_records_level`); без этой строки черновик показывал «Скрыты», а
   // человек приходил с «Видит» (01.10).
   "calendar.records": "read",
-  "record.status": "read",
   "record.object": "read",
   "record.services": "read",
   // STORY-088, волна 1: события, метки дня и график команды сотрудник видел
@@ -138,7 +137,6 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "event.note",
     "event.files",
     "calendar.schedule",
-    "record.status",
     "record.note",
     "record.team",
     "record.client",

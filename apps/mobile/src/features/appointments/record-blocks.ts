@@ -34,10 +34,8 @@ export interface RecordBlocks {
   amount: RecordLevel;
   payment: RecordLevel;
   files: RecordLevel;
-  /** Статус записи. */
-  status: RecordLevel;
   /** Заметка записи — своё право «Заметка» (30.09). Пока сервер его не
-   *  проверяет — прежнее правило: пишет тот, кто меняет статус, читают все. */
+   *  проверяет — читают все, не пишет никто. Статуса нет (03.10). */
   note: RecordLevel;
   /** Цвет записи: видят все, красит — «Цвет записи». */
   color: RecordLevel;
@@ -69,8 +67,6 @@ export interface CalendarActions {
   cancel: boolean;
   /** Перекрасить запись из меню. */
   color: boolean;
-  /** Статус рабочей записи из меню: «В работу», «Выполнена». */
-  status: boolean;
   /** «Записи клиентов»: видит ли он записи этого календаря вообще. */
   records: RecordLevel;
   /** События команды в сетке: скрыты, видны или свои заводит и правит. */
@@ -103,7 +99,6 @@ const EVERYTHING: RecordBlocks = {
   amount: "write",
   payment: "write",
   files: "write",
-  status: "write",
   note: "write",
   color: "write",
   sms: "write",
@@ -119,7 +114,6 @@ const NOTHING: RecordBlocks = {
   amount: "hidden",
   payment: "hidden",
   files: "hidden",
-  status: "hidden",
   note: "hidden",
   color: "hidden",
   sms: "hidden",
@@ -130,7 +124,6 @@ const ALL_ACTIONS: CalendarActions = {
   move: true,
   cancel: true,
   color: true,
-  status: true,
   records: "write",
   events: "write",
   dayLabels: "write",
@@ -143,7 +136,6 @@ const NO_ACTIONS: CalendarActions = {
   move: false,
   cancel: false,
   color: false,
-  status: false,
   records: "hidden",
   events: "hidden",
   dayLabels: "hidden",
@@ -190,9 +182,6 @@ export function recordBlocks(input: Input): RecordBlocks {
   /** Два положения «Не меняет / Меняет»: видят всегда, меняет — по праву. */
   const writeOrRead = (key: string): RecordLevel => (read(key) === "write" ? "write" : "read");
 
-  // Статус виден всегда (аудит 24.09: «Не видит» у него снято — отменённая
-  // запись без статуса выглядела бы живой); меняет — по праву.
-  const status = writeOrRead("record.status");
   const amount = level("record.amount");
   const services = level("record.services");
   return {
@@ -208,9 +197,8 @@ export function recordBlocks(input: Input): RecordBlocks {
     amount,
     payment: level("record.payment"),
     files: level("record.files"),
-    status,
     // «Заметка» — своё право с 30.09; неживое — прежнее правило.
-    note: read("record.note") === undefined ? (status === "write" ? "write" : "read") : level("record.note"),
+    note: read("record.note") === undefined ? "read" : level("record.note"),
     color: writeOrRead("record.color"),
     // «SMS» записи (03.10): сервер отдаёт историю только вместе с «Клиентом»
     // (`sms_for_appointment`) — без клиента блок пустой, его нет.
@@ -271,7 +259,6 @@ export function calendarActions(input: Input): CalendarActions {
     move: can("calendar.move"),
     cancel: can("calendar.cancel"),
     color: can("record.color"),
-    status: can("record.status"),
     records: asRecordLevel(read("calendar.records")),
     events: asRecordLevel(read("calendar.events")),
     dayLabels: asRecordLevel(read("calendar.day_labels")),

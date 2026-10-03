@@ -21,7 +21,6 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["record.services", ["off", "read"]],
   ["record.amount", ["off", "read", "write"]],
   ["record.payment", ["off", "read", "write"]],
-  ["record.status", ["read", "write"]],
   ["record.files", ["off", "read", "write"]],
   // Этап 2 денег: общее «Доходы и расходы» делится на два права.
   ["finance.income", ["off", "read", "write", "full"]],

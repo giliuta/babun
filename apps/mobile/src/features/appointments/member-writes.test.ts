@@ -72,10 +72,10 @@ describe("запись сотрудника — зеркало серверно�
     assert.deepEqual([...EVENT_FIELDS].sort(), Object.keys(server).sort());
   });
 
-  test("статус: отмена и возврат из неё — «Отменять», остальное — «Статус»", () => {
+  test("статус: отмена и возврат из неё — «Отменять», иного статуса нет (03.10)", () => {
     assert.equal(fieldBlock("status", "work", "cancelled", "scheduled"), "calendar.cancel");
     assert.equal(fieldBlock("status", "work", "scheduled", "cancelled"), "calendar.cancel");
-    assert.equal(fieldBlock("status", "work", "completed", "in_progress"), "record.status");
+    assert.equal(fieldBlock("status", "work", "completed", "in_progress"), null, "своего права у статуса больше нет");
     assert.equal(fieldBlock("paid_amount", "work"), null, "деньги сотрудник так не меняет");
     assert.equal(fieldBlock("client_id", "event"), "event.client");
     assert.equal(fieldBlock("location_id", "event"), "event.object");

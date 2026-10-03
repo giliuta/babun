@@ -88,7 +88,8 @@ describe("повторный аудит календаря 03.10", () => {
 
   test("кнопки сотрудника — только по его правам", () => {
     const src = screen();
-    assert.match(src, /if \(!event && actionsIn\(apt\.team_id \?\? null\)\.status\) \{/);
+    // «В работу» / «Выполнена» удалены вместе со статусом (владелец 03.10).
+    assert.doesNotMatch(src, /quickStatus|"В работу"|"Вернуть в план"/);
     assert.match(src, /ownEvent && eventRightsIn\(apt\.team_id \?\? null\)\.type === "write"/);
     assert.match(src, /\(canManageBookings \|\| activeActions\.schedule === "write"\)\s*\? \(next\) =>/);
     assert.match(src, /const canSlotMenu = canAddBreak && eventsOn;/);

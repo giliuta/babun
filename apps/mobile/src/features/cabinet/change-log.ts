@@ -286,12 +286,23 @@ const FIELD_WORDS: Record<string, string> = {
 };
 
 const STATUS_WORDS: Record<string, string> = {
-  scheduled: "запланирована",
-  completed: "выполнена",
   cancelled: "отменена",
-  in_progress: "в работе",
   no_show: "не пришёл",
 };
+
+/** Статуса записи у владельца нет (03.10: «статус удаляй полностью»):
+ *  «запланирована → выполнена» ставит оплата сама, и журнал о нём молчит —
+ *  не строкой и не «служебным полем». Словом остаётся только отмена. */
+const VISIT_STATES = new Set(["scheduled", "in_progress", "completed"]);
+
+function visitStatusChange(field: string, change: unknown): string | null | undefined {
+  if (field !== "status" || !Array.isArray(change)) return undefined;
+  const [before, after] = change.map(String);
+  if (VISIT_STATES.has(before) && VISIT_STATES.has(after)) return null;
+  if (VISIT_STATES.has(before) && after === "cancelled") return "Отменена";
+  if (before === "cancelled" && VISIT_STATES.has(after)) return "Восстановлена";
+  return undefined;
+}
 
 const PAYMENT_STATUS_WORDS: Record<string, string> = {
   unpaid: "не оплачена",
@@ -362,6 +373,8 @@ function fieldValue(field: string, value: unknown): string | null {
 
 /** Одно поле правки словами: «Начало 09:30 → 10:00», «Услуги». */
 export function describeField(field: string, change: unknown): string | null {
+  const visit = visitStatusChange(field, change);
+  if (visit !== undefined) return visit;
   const word = FIELD_WORDS[field];
   if (!word) return null;
   const list = listDiff(field, change);
@@ -383,6 +396,7 @@ export function changesSummary(changes: Record<string, unknown> | null): string 
   const byWord = new Map<string, string>();
   let unknown = 0;
   for (const [field, change] of Object.entries(changes)) {
+    if (visitStatusChange(field, change) === null) continue;
     const text = describeField(field, change);
     if (!text) {
       unknown += 1;
@@ -434,6 +448,7 @@ export function allChanges(changes: Record<string, unknown> | null): string[] {
   const byWord = new Map<string, string>();
   let unknown = 0;
   for (const [field, change] of Object.entries(changes)) {
+    if (visitStatusChange(field, change) === null) continue;
     const text = describeField(field, change);
     if (!text) {
       unknown += 1;

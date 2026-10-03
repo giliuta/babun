@@ -37,8 +37,6 @@ const TITLE: Record<string, string> = {
   "record.services": "Услуги",
   "record.amount": "Цены",
   "record.payment": "Оплата",
-  // «Статус» владельцу непонятен (03.10): это «В работе» / «Выполнена».
-  "record.status": "Статус записи",
   // Блок «SMS» внизу записи (владелец 03.10: «в записи SMS нужно добавить»).
   "record.sms": "SMS",
   "record.note": "Заметка",
@@ -151,7 +149,6 @@ const STEP: Record<string, Words> = {
   "record.services": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
   "record.amount": { off: "Скрыты", read: "Видит" },
   "record.payment": { off: "Скрыта", read: "Только видит", write: "Видит и принимает" },
-  "record.status": { read: "Только видит", write: "Видит и меняет" },
   "record.sms": { off: "Скрыты", read: "Видит" },
   "record.files": { off: "Скрыты", read: "Только видит", write: "Видит и добавляет" },
   "record.note": { off: "Скрыта", read: "Только видит", write: "Видит и меняет" },

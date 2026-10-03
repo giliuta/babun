@@ -175,7 +175,6 @@ import {
 } from "@/features/calendar/reminder-time";
 import { SelfReminderSheet } from "@/features/calendar/SelfReminderSheet";
 import { monthTitle, weekTitle } from "@/features/calendar/header-title";
-import { nextCrewAppointmentStatus } from "@/features/calendar/crew-status";
 import {
   canMutateCalendarAppointment,
   isCalendarEvent,
@@ -951,10 +950,6 @@ export default function CalendarTab() {
     teamChoice && teams.some((tm) => tm.id === teamChoice)
       ? teamChoice
       : teams[0]?.id ?? null;
-  // Без блока «Оплата» («Дизайн» команды) визит закрывать нечем: статус на
-  // странице записи меняет только оплата. Тогда «Выполнена» живёт здесь, в
-  // меню долгого нажатия, — денег она не пишет.
-  const paymentBlockOn = useBookingBlocks(activeTeamId).includes("payment");
   const activeTeam = teams.find((tm) => tm.id === activeTeamId);
   // Что сотрудник может в открытом календаре: новые записи, события, метка
   // дня. Владельцу — всё.
@@ -1988,47 +1983,6 @@ export default function CalendarTab() {
   const memberCopy = useMemberCopyAppointment();
   const deleteAppt = useDeleteAppointment();
 
-  const quickStatus = (apt: Appointment, status: Appointment["status"]) => {
-    const prev = apt.status;
-    const done =
-      status === "completed"
-        ? "Выполнена"
-        : status === "in_progress"
-          ? "В работе"
-          : "Возвращена в план";
-    updateAppt.mutate(
-      { id: apt.id, patch: { status } },
-      {
-        onSuccess: () => {
-          haptics.success();
-          // Мастеру «Отменить» не предлагаем: переходы статуса для него
-          // односторонние по политике сервера (update_master_appointment_safe
-          // пускает только scheduled→in_progress→completed) — кнопка лишь
-          // мигала бы блоком и молча откатывалась.
-          toast(
-            done,
-            "success",
-            isCrew
-              ? undefined
-              : {
-                  label: "Отменить",
-                  onPress: () =>
-                    updateAppt.mutate(
-                      { id: apt.id, patch: { status: prev } },
-                      {
-                        onError: () =>
-                          toast("Не удалось вернуть статус", "error"),
-                      },
-                    ),
-                },
-          );
-        },
-        onError: (e) =>
-          toast(serverReason(e) ?? "Не удалось изменить статус", "error"),
-      },
-    );
-  };
-
   /** Отмена и возврат в план — одна дорога с откатом из тоста. Причина
    *  ложится в cancel_reason (список — cancel-reasons.ts) и стирается при
    *  «Восстановить». */
@@ -2428,20 +2382,8 @@ export default function CalendarTab() {
         run: () => openEdit(apt),
         view: true,
       });
-      // Мастер может двигать статус только вперёд на один шаг. Это ровно
-      // совпадает с серверной политикой и не оставляет кнопок, которые после
-      // тапа всё равно закончатся отказом. Team events are read-only.
-      // И только при «Статус: Меняет» в календаре записи — без него сервер
-      // отказывал на каждый тап (аудит 03.10).
-      if (!event && actionsIn(apt.team_id ?? null).status) {
-        const nextStatus = nextCrewAppointmentStatus(apt.status);
-        if (nextStatus) {
-          items.push({
-            label: nextStatus === "in_progress" ? "В работу" : "Выполнена",
-            run: () => quickStatus(apt, nextStatus),
-          });
-        }
-      }
+      // «В работу» / «Выполнена» убраны вместе со статусом (владелец 03.10:
+      // «статус удаляй полностью»); визит закрывает оплата.
       // Локальное напоминание доступно и для командного события в режиме
       // просмотра: это настройка устройства, она не изменяет чужую запись.
       if (apt.status !== "cancelled" && apt.date >= todayYmd)
@@ -2555,15 +2497,6 @@ export default function CalendarTab() {
           view: true,
         });
       if (!event) {
-        if (!paymentBlockOn && apt.status !== "cancelled")
-          items.push(
-            apt.status === "completed"
-              ? {
-                  label: "Вернуть в план",
-                  run: () => quickStatus(apt, "scheduled"),
-                }
-              : { label: "Выполнена", run: () => quickStatus(apt, "completed") },
-          );
         if (restorable)
           items.push(
             apt.status === "cancelled"

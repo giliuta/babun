@@ -58,7 +58,15 @@ describe("история изменений — слова", () => {
 
   test("поля правки: было → стало, служебное — словом", () => {
     assert.equal(describeField("time_start", ["09:30", "10:00"]), "Начало 09:30 → 10:00");
-    assert.equal(describeField("status", ["scheduled", "cancelled"]), "Статус запланирована → отменена");
+    // Статуса записи нет (03.10): словом остаётся только отмена, «запланирована
+    // → выполнена» от оплаты журнал не показывает вовсе.
+    assert.equal(describeField("status", ["scheduled", "cancelled"]), "Отменена");
+    assert.equal(describeField("status", ["cancelled", "scheduled"]), "Восстановлена");
+    assert.equal(describeField("status", ["scheduled", "completed"]), null);
+    assert.equal(changesSummary({ status: ["scheduled", "completed"], payment_status: ["unpaid", "paid"] }), "Оплата не оплачена → оплачена");
+    assert.deepEqual(allChanges({ status: ["in_progress", "completed"] }), []);
+    // Статусы инвойса — прежними словами.
+    assert.equal(describeField("status", ["issued", "paid"]), "Статус выставлен → оплачен");
     assert.equal(describeField("client_id", ["a", "b"]), "Клиент");
     assert.equal(describeField("services", "*"), "Услуги");
     assert.equal(describeField("blacklisted", [false, true]), "Чёрный список нет → да");

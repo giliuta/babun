@@ -11,7 +11,6 @@ export const RECORD_PREVIEW_KEYS: readonly string[] = [
   "record.services",
   "record.amount",
   "record.payment",
-  "record.status",
   "record.note",
   "record.files",
   "record.sms",

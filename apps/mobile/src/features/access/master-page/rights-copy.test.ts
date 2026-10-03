@@ -24,8 +24,6 @@ const block = (over: Partial<AccessBlock>): AccessBlock => ({
 const REGISTRY: AccessBlock[] = [
   block({ key: "calendar.records", area: "calendar", scope: "calendar", live: false, title: "Календарь и записи" }),
   block({ key: "calendar.create", area: "calendar", scope: "calendar", levels: ["off", "write"], live: false, title: "Новые записи" }),
-  // «Не видит» у статуса снято аудитом 24.09.
-  block({ key: "record.status", area: "calendar", scope: "calendar", levels: ["read", "write"], title: "Статус записи" }),
   block({ key: "record.client", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Клиент в записи" }),
   block({ key: "record.object", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Объект в записи" }),
   block({ key: "record.services", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Услуги в записи" }),
@@ -126,9 +124,9 @@ describe("слова прав", () => {
     assert.deepEqual(
       offered.map((b) => b.key),
       // Порядок — как в реестре по `position`; волна 2 (21.09) оживила
-      // «Статус записи» и «Фото и файлы записи», волна 3 — клиента и объект.
+      // «Фото и файлы записи», волна 3 — клиента и объект. «Статус записи»
+      // удалён (03.10).
       [
-        "record.status",
         "record.client",
         "record.object",
         "record.services",
