@@ -25,7 +25,8 @@ export function useStatementDocument(accountId: string | undefined): {
   refetch: () => void;
 } {
   const tenantId = useTenantId();
-  const accounts = useAccountsWithBalances({ includeInactive: true });
+  // С удалёнными: перевод называет и счёт, ушедший в «Удалённые счета».
+  const accounts = useAccountsWithBalances({ includeInactive: true, includeDeleted: true });
   const categories = useFinanceCategories();
   const clients = useClients();
   const teams = useTeams({ includeInactive: true });

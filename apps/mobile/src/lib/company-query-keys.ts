@@ -148,10 +148,22 @@ export const invoicesQueryKey = (tenantId: string | null) =>
 export const invoicePaymentsQueryKey = (tenantId: string | null) =>
   ["invoices", tenantId, "payments"] as const;
 
+/** Строки счетов. С удалёнными — отдельный ключ под тем же «accounts»:
+ *  обычные списки и подписи истории не делят один кэш. */
 export const accountRowsQueryKey = (
   tenantId: string | null,
   includeInactive: boolean,
-) => ["accounts", tenantId, "rows", includeInactive ? "all" : "active"] as const;
+  includeDeleted = false,
+) =>
+  includeDeleted
+    ? (["accounts", tenantId, "rows", includeInactive ? "all" : "active", "with-deleted"] as const)
+    : (["accounts", tenantId, "rows", includeInactive ? "all" : "active"] as const);
+
+/** «Удалённые счета». Компания вторым элементом — как у всех денежных
+ *  ключей: снятые права на финансы стирают и эту полку
+ *  (`isFinanceDataKey`). */
+export const deletedAccountsQueryKey = (tenantId: string | null) =>
+  ["accounts", tenantId, "deleted"] as const;
 
 export const accountBalancesQueryKey = (tenantId: string | null) =>
   ["accounts", tenantId, "balances"] as const;

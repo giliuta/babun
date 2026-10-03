@@ -76,9 +76,9 @@ function ClientAttachmentsScreen() {
   const [viewer, setViewer] = useState<{ url: string; kind: PhotoKind; source: "attachment" | "visit" } | null>(null);
   const [openReceipt, setOpenReceipt] = useState<ReceiptDoc | null>(null);
   const accountRows = useQuery({
-    queryKey: ["accounts", tenantId, "rows", "all"],
+    queryKey: ["accounts", tenantId, "rows", "all", "with-deleted"],
     enabled: !!tenantId && openReceipt != null,
-    queryFn: () => listAccounts(supabase, tenantId as string, { includeInactive: true }),
+    queryFn: () => listAccounts(supabase, tenantId as string, { includeInactive: true, includeDeleted: true }),
   });
   const days = groupFilesByDay(files.timeline);
 

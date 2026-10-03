@@ -42,7 +42,8 @@ export function LedgerExportRow({ teamId }: { teamId: string | null }) {
   const t = useThemeColors();
   const toast = useToast();
   const tenantId = useTenantId();
-  const accounts = useAccountsWithBalances({ includeInactive: true });
+  // С удалёнными: колонка «Счёт» у прошлой операции не пустеет.
+  const accounts = useAccountsWithBalances({ includeInactive: true, includeDeleted: true });
   const categories = useFinanceCategories();
   const clients = useClients();
   const teams = useTeams({ includeInactive: true });

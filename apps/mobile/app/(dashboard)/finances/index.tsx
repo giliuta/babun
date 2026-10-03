@@ -260,7 +260,9 @@ function FinancesContent() {
   const accountsQuery = useAccountsWithBalances();
   // С закрытыми — только ради имён в строках ленты: операция периода могла
   // пройти через счёт, который с тех пор закрыли.
-  const allAccountsQuery = useAccountsWithBalances({ includeInactive: true });
+  // ПОДПИСИ ИСТОРИИ — СО СКРЫТЫМИ И УДАЛЁННЫМИ: имя и команда счёта у
+  // прошлой операции не пропадают, когда счёт ушёл в «Удалённые счета».
+  const allAccountsQuery = useAccountsWithBalances({ includeInactive: true, includeDeleted: true });
   // Разрез, команда и выбранный счёт — из адреса и из тапов.
   const {
     view: routeView,

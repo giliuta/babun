@@ -75,8 +75,9 @@ export function useCalendarDelete() {
     if (!tenantId) throw new Error("Нет активного аккаунта.");
     const [accounts, documents] = await Promise.all([
       qc.fetchQuery({
-        queryKey: accountRowsQueryKey(tenantId, true),
-        queryFn: () => listAccounts(supabase, tenantId, { includeInactive: true }),
+        // С удалёнными: сервер сотрёт и их, и вопрос обязан их сосчитать.
+        queryKey: accountRowsQueryKey(tenantId, true, true),
+        queryFn: () => listAccounts(supabase, tenantId, { includeInactive: true, includeDeleted: true }),
       }),
       qc.fetchQuery({
         queryKey: invoicesQueryKey(tenantId),

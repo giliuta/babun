@@ -251,10 +251,10 @@ export function DayFinanceSheet({
   // счёта, повторный — снова все.
   const tenantId = useTenantId();
   const accountsQuery = useQuery({
-    queryKey: accountRowsQueryKey(tenantId, true),
+    queryKey: accountRowsQueryKey(tenantId, true, true),
     enabled: !!tenantId && shownYmd != null,
     staleTime: 60_000,
-    queryFn: () => listAccounts(supabase, tenantId as string, { includeInactive: true }),
+    queryFn: () => listAccounts(supabase, tenantId as string, { includeInactive: true, includeDeleted: true }),
   });
   const accountById = useMemo(
     () => new Map((accountsQuery.data ?? []).map((a) => [a.id, a])),

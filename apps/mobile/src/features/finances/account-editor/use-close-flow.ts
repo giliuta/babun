@@ -69,7 +69,7 @@ function questionText(
   // без счёта (аудит 2026-09-30).
   const last = target.is_active && isLastOpenOfTeam(target, accounts);
   if (decision.kind === "trash") {
-    return trashAccountAlert(target.name, target.has_history, last);
+    return trashAccountAlert(target.name, last);
   }
   if (decision.kind === "close") {
     return hideAccountAlert(target.name, last);

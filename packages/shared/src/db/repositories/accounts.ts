@@ -86,7 +86,13 @@ function rowToAccount(r: Row, teamIds: string[] = []): Account {
 export async function listAccounts(
   supabase: DbSupabase,
   tenantId: string,
-  options: { includeInactive?: boolean } = {},
+  options: {
+    includeInactive?: boolean;
+    /** Счета из «Удалённых счетов» — только для подписей истории (лента,
+     *  выгрузка, выписка): у операции на удалённом счёте имя счёта не
+     *  пропадает. Пикеры и списки их не берут. */
+    includeDeleted?: boolean;
+  } = {},
 ): Promise<Account[]> {
   let q = supabase
     .from("accounts")
@@ -98,7 +104,7 @@ export async function listAccounts(
   // «УДАЛЁННЫЕ СЧЕТА» В ОБЫЧНЫХ СПИСКАХ НЕ ЖИВУТ (владелец 03.10). Отсев —
   // здесь, по полю строки, а не фильтром запроса: так список не падает и на
   // базе, где колонки `deleted_at` ещё нет.
-  const rows = ((data ?? []) as Row[]).filter((r) => !r.deleted_at);
+  const rows = ((data ?? []) as Row[]).filter((r) => options.includeDeleted || !r.deleted_at);
 
   // ПРИВЯЗКИ ЧИТАЕМ, ТОЛЬКО ЕСЛИ ЕСТЬ КОМУ. `account_teams` — историческая
   // таблица общего счёта: схема «счёт принадлежит ОДНОЙ команде» снесла его

@@ -185,7 +185,7 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   const people = useMemo(() => peopleData ?? [], [peopleData]);
   const categoriesData = useFinanceCategories().data;
   const categories = useMemo(() => categoriesData ?? [], [categoriesData]);
-  const accountsData = useAccountsWithBalances({ includeInactive: true }).data;
+  const accountsData = useAccountsWithBalances({ includeInactive: true, includeDeleted: true }).data;
   const accountTeam = useMemo(
     () => new Map((accountsData ?? []).map((a) => [a.id, a.brigade_id ?? null] as const)),
     [accountsData],

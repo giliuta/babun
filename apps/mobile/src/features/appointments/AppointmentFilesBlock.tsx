@@ -110,10 +110,10 @@ export function AppointmentFilesBlock({
   // счёта листу — из того же справочника, что у оплаты; грузится по открытию.
   const [openReceipt, setOpenReceipt] = useState<ReceiptDoc | null>(null);
   const accountRows = useQuery({
-    queryKey: ["accounts", tenantId, "rows", "all"],
+    queryKey: ["accounts", tenantId, "rows", "all", "with-deleted"],
     enabled: !!tenantId && openReceipt != null,
     queryFn: () =>
-      listAccounts(supabase, tenantId as string, { includeInactive: true }),
+      listAccounts(supabase, tenantId as string, { includeInactive: true, includeDeleted: true }),
   });
   const [viewer, setViewer] = useState<AppointmentPhotoRecord | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);

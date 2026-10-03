@@ -36,7 +36,8 @@ export default function ReceiptsScreen() {
   // Запись и счёт нужны только строкам открытого листа — та же пара запросов,
   // что у `DocumentsPanel`.
   const appointmentsQuery = useAppointments();
-  const accountsQuery = useAccountsWithBalances();
+  // Подпись чека: и скрытый, и удалённый счёт остаются названы.
+  const accountsQuery = useAccountsWithBalances({ includeInactive: true, includeDeleted: true });
   const [openReceipt, setOpenReceipt] = useState<Receipt | null>(null);
   const clientName = clientId
     ? clients.find((c) => c.id === clientId)?.full_name

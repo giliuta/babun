@@ -33,6 +33,7 @@ import { useTenantId } from "@/lib/tenant";
 import {
   accountBalancesQueryKey,
   accountRowsQueryKey,
+  deletedAccountsQueryKey,
 } from "@/lib/company-query-keys";
 import { useTeams } from "@/features/reference/queries";
 import {
@@ -136,17 +137,21 @@ export function useAccountsWithBalances(
      *  в архив календаря в живых финансах не существуют (владелец
      *  2026-09-21, `archived-calendar-accounts.ts`). Просит их только архив. */
     includeArchivedCalendars?: boolean;
+    /** Счета из «Удалённых счетов» — только для подписей истории: имя счёта
+     *  у прошлой операции не пропадает. Пикеры и списки их не просят. */
+    includeDeleted?: boolean;
   } = {},
 ): AccountsWithBalances {
   const tenantId = useTenantId();
   const includeInactive = options.includeInactive ?? false;
+  const includeDeleted = options.includeDeleted ?? false;
   const includeArchived = options.includeArchivedCalendars ?? false;
   const rowsQuery = useQuery({
-    queryKey: accountRowsQueryKey(tenantId, includeInactive),
+    queryKey: accountRowsQueryKey(tenantId, includeInactive, includeDeleted),
     enabled: !!tenantId,
     staleTime: ACCOUNT_ROWS_STALE_MS,
     queryFn: () =>
-      listAccounts(supabase, tenantId as string, { includeInactive }),
+      listAccounts(supabase, tenantId as string, { includeInactive, includeDeleted }),
   });
   const balancesQuery = useQuery({
     queryKey: accountBalancesQueryKey(tenantId),
@@ -221,7 +226,7 @@ export function useReopenAccount() {
 export function useDeletedAccounts() {
   const tenantId = useTenantId();
   return useQuery({
-    queryKey: ["accounts", "deleted", tenantId],
+    queryKey: deletedAccountsQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listDeletedAccounts(supabase, tenantId as string),
   });

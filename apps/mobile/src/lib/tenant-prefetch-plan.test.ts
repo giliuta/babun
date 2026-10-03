@@ -323,6 +323,9 @@ function argValues(token: string, role: string): unknown[] {
       return [null];
     case "includeInactive":
       return [true, false];
+    // Счета «с удалёнными» — ключ подписей истории; прогрев греет обычный.
+    case "includeDeleted":
+      return [true, false];
     case "from":
     case "to":
       return [ANY];

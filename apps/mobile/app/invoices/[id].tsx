@@ -144,7 +144,14 @@ export default function InvoiceDetailScreen() {
     () => accountsForTeam(accounts, invoice.data?.brigade_id ?? null),
     [accounts, invoice.data?.brigade_id],
   );
-  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts]);
+  // ИМЕНА — СО СКРЫТЫМИ И УДАЛЁННЫМИ: оплата на счёте, который потом скрыли
+  // или удалили, не теряет его имя ни в ленте, ни в PDF. Пикеры оплаты
+  // по-прежнему берут только живые счета (`accounts`).
+  const namedAccountsQuery = useAccountsWithBalances({ includeInactive: true, includeDeleted: true });
+  const accountById = useMemo(
+    () => new Map((namedAccountsQuery.data ?? accounts).map((a) => [a.id, a.name])),
+    [namedAccountsQuery.data, accounts],
+  );
   const receipts = useMemo(() => receiptsQuery.data ?? [], [receiptsQuery.data]);
   // Платежи, по которым чек ещё не выписан. Возвращённый целиком чека не
   // получает — сервер откажет («оформлен полный возврат»).

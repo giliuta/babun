@@ -140,7 +140,6 @@ export function useHideAccount({
     if (decision.kind === "trash") {
       const text = trashAccountAlert(
         target.name,
-        target.has_history,
         target.is_active && isLastOpenOfTeam(target, accounts),
       );
       confirmThen(
