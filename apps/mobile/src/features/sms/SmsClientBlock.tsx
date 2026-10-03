@@ -9,9 +9,7 @@ import { SwitchRow } from "@/components/ui/SwitchRow";
 import { useToast } from "@/components/ui/Toast";
 import { useClientsScopeOrNull } from "@/features/clients/company-scope";
 import { clientSubParams } from "@/features/clients/clients-company";
-import { fileDay } from "@/features/clients/client-files";
 import { moreLabel } from "@/features/clients/more-label";
-import { VisitDayHeader } from "@/features/clients/VisitRow";
 import { haptics } from "@/lib/haptics";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { formatPhoneForDisplay } from "@/features/clients/phone";
@@ -19,6 +17,8 @@ import { firstName } from "@/features/clients/sms-name";
 import { useThemeColors } from "@/theme/colors";
 import { smsErrorText, useClientSms, useSetClientSmsOptOut, type SmsHistoryItem } from "./sms-account";
 import { SmsPlaque } from "./SmsPlaque";
+import { SmsMessageSheet } from "./SmsMessageSheet";
+import { useTeams } from "@/features/reference/queries";
 
 // БЛОК «SMS» НА СТРАНИЦЕ КЛИЕНТА — ВСЁ ПРО SMS ЭТОМУ КЛИЕНТУ ОДНИМ БЛОКОМ
 // (STORY-089; владелец 30.09: «присылать или не присылать — в едином блоке
@@ -31,14 +31,18 @@ import { SmsPlaque } from "./SmsPlaque";
 //     стереть офлайн-очередью. Тумблер откликается сразу;
 //   • «Имя для SMS» — то, что встаёт в [Имя] (`sms_name`), пишется прямо в
 //     строке; пусто — первое слово имени клиента, оно и показано серым;
-//   • сообщения — ПОСЛЕДНЕЕ плашкой под днём, как «История» и «Файлы»
-//     (владелец 03.10: «постараться улучшить блок SMS, чтобы было более
-//     красиво»): плитка — итог цветом, шаблон, время, номер; «Ещё N» в шапке
-//     и тап по плашке — страница всех SMS клиента (`/clients/sms`). Кнопки
+//   • сообщения — МИНИ-ИСТОРИЯ прямо в блоке (владелец 03.10: «не надо
+//     отдельную страницу — мини-блок просто с историей; „Присылать SMS“ и
+//     имя — сразу на блоке, чтобы не тапать много раз; отдельная страница —
+//     только если их много»): три последних плашками `SmsPlaque` — итог
+//     цветом, шаблон, день и время, номер; тап — сообщение целиком. Больше
+//     трёх — «Ещё N» в шапке ведёт на страницу всех (`/clients/sms`). Кнопки
 //     «Отправить SMS» нет (владелец 03.10: «SMS отправляется исключительно,
 //     если нажать на трубку клиента… внизу просто история»).
 
 const HISTORY_LIMIT = 200;
+/** Сколько последних сообщений стоит в мини-истории блока. */
+const MINI_HISTORY = 3;
 const NO_MESSAGES: SmsHistoryItem[] = [];
 
 export function SmsClientBlock({
@@ -63,15 +67,16 @@ export function SmsClientBlock({
   const [smsOff, setSmsOff] = useState<boolean | null>(null);
   const smsBlocked = smsOff ?? client.sms_opt_out === true;
   const messages = log.data ?? NO_MESSAGES;
-  const last = useMemo<SmsHistoryItem | null>(
+  const recent = useMemo(
     () =>
-      messages.reduce<SmsHistoryItem | null>(
-        (best, item) => (best === null || item.createdAt > best.createdAt ? item : best),
-        null,
-      ),
+      [...messages]
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
+        .slice(0, MINI_HISTORY),
     [messages],
   );
-  const more = moreLabel(messages.length);
+  const more = moreLabel(messages.length, recent.length);
+  const { data: teams = [] } = useTeams();
+  const [open, setOpen] = useState<SmsHistoryItem | null>(null);
   const openAll = () => {
     haptics.tap();
     router.push({ pathname: "/clients/sms", params: clientSubParams(client.id, scope) });
@@ -115,16 +120,19 @@ export function SmsClientBlock({
           readOnly={readOnly}
           onSave={(name) => void update({ sms_name: name })}
         />
-        {last ? (
+        {recent.length > 0 ? (
           <>
             <Divider inset={16} />
-            <VisitDayHeader date={fileDay(last.createdAt)} />
-            <View style={{ paddingHorizontal: 2, paddingBottom: 6 }}>
-              <SmsPlaque
-                item={last}
-                phone={last.toPhone ? formatPhoneForDisplay(last.toPhone, country) : null}
-                onPress={openAll}
-              />
+            <View style={{ paddingHorizontal: 2, paddingTop: 4, paddingBottom: 6 }}>
+              {recent.map((item) => (
+                <SmsPlaque
+                  key={item.id}
+                  item={item}
+                  withDate
+                  phone={item.toPhone ? formatPhoneForDisplay(item.toPhone, country) : null}
+                  onPress={() => setOpen(item)}
+                />
+              ))}
             </View>
           </>
         ) : null}
@@ -140,6 +148,13 @@ export function SmsClientBlock({
           </>
         ) : null}
       </SectionCard>
+
+      <SmsMessageSheet
+        item={open}
+        teamName={(teamId) => teams.find((x) => x.id === teamId)?.name ?? null}
+        from="client"
+        onClose={() => setOpen(null)}
+      />
     </>
   );
 }

@@ -25,11 +25,15 @@ function lookOf(item: SmsHistoryItem, waits: boolean): Look {
 export function SmsPlaque({
   item,
   phone,
+  withDate = false,
   onPress,
 }: {
   item: SmsHistoryItem;
   /** Номер, на который ушло, — уже в виде для глаза. */
   phone?: string | null;
+  /** День в подписи («3 окт, 10:15») — в мини-истории карточки, где
+   *  заголовков дня нет. На странице день называет заголовок. */
+  withDate?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
@@ -38,7 +42,8 @@ export function SmsPlaque({
   const look = lookOf(item, waits);
   const title = item.templateName ?? (item.trigger === "manual" ? "SMS" : triggerWords(item.trigger));
   const status = waits && item.sendAfter ? `уйдёт ${when(item.sendAfter)}` : statusWords(item.status);
-  const subtitle = [waits ? status : fileTime(item.createdAt), phone || null].filter(Boolean).join(" · ");
+  const sentAt = withDate ? when(item.createdAt) : fileTime(item.createdAt);
+  const subtitle = [waits ? status : sentAt, phone || null].filter(Boolean).join(" · ");
   return (
     <SelectRow
       icon={look.icon}

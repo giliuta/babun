@@ -24,13 +24,19 @@ describe("«Ещё N» в шапке блока карточки (03.10)", () =>
   });
 });
 
-describe("блок «SMS» — как «История»: последнее плашкой, все — на своей странице (03.10)", () => {
+describe("блок «SMS» — мини-история в самом блоке (03.10)", () => {
   const block = () => read("../sms/SmsClientBlock.tsx");
-  test("последнее сообщение — плашкой под днём, тап и «Ещё N» ведут на страницу", () => {
-    assert.match(block(), /<VisitDayHeader date=\{fileDay\(last\.createdAt\)\} \/>/);
-    assert.match(block(), /<SmsPlaque[\s\S]{0,200}onPress=\{openAll\}/);
-    assert.match(block(), /pathname: "\/clients\/sms", params: clientSubParams\(client\.id, scope\)/);
+  test("настройки — на блоке; три последних — плашками; тап — само сообщение", () => {
+    assert.match(block(), /label="Присылать SMS"/);
+    assert.match(block(), /label="Имя для SMS"/);
+    assert.match(block(), /const MINI_HISTORY = 3;/);
+    assert.match(block(), /<SmsPlaque[\s\S]{0,400}onPress=\{\(\) => setOpen\(item\)\}/);
+    assert.match(block(), /<SmsMessageSheet/);
+  });
+  test("страница — только когда сообщений больше трёх, через «Ещё N»", () => {
+    assert.match(block(), /const more = moreLabel\(messages\.length, recent\.length\);/);
     assert.match(block(), /label: more, pill: true, onPress: openAll/);
+    assert.match(block(), /pathname: "\/clients\/sms", params: clientSubParams\(client\.id, scope\)/);
   });
   test("отправки в блоке нет — только у трубки клиента", () => {
     // Ищется КНОПКА, а не слово: почему её нет, сказано в комментарии.
