@@ -1,10 +1,5 @@
 import { Text, View } from "react-native";
-import {
-  ArrowLeftRight,
-  Banknote,
-  FileSpreadsheet,
-  Wallet,
-} from "lucide-react-native";
+import { ArrowLeftRight, Banknote, FileSpreadsheet } from "lucide-react-native";
 import { money, moneySign } from "@babun/shared/common/utils/money";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectRow } from "@/components/ui/select-rows";
@@ -15,20 +10,16 @@ import type { AccountWithBalance } from "../accounts";
 import { useAccountVatDue } from "../vat-queries";
 import type { StageAccount } from "./types";
 
-const noop = () => {};
-
-// ШТОРКА СЧЁТА БЛОКАМИ, КАК «НОВЫЙ ОБЪЕКТ» (владелец 03.10, вариант 1), со
-// второго захода того же дня:
-//   • «Деньги» — «На счёте», под ним две плитки «Свои | VAT» и «Перевести»:
-//     действие с деньгами стоит у денег;
-//   • «Счёт» — «В оплате записи» и «Выписка» внизу («выписку надо вниз
-//     поставить»).
-// Строки «Команда» нет: шторку открывают со страницы счетов этой команды,
-// и «Команда · Команда 1» повторяло то, что уже сказано («зачем писать
-// команда команда один»). «Остатка на начало» тоже нет («что значит остаток
-// на начало — это лишнее»): его задают при создании счёта, а дальше остаток
-// живёт операциями. Каждая строка — плашка со значком, подписей под
-// строками нет (вкус владельца 02–03.10).
+// ШТОРКА СЧЁТА — КАЖДОЕ ДЕЛО СВОИМ БЛОКОМ (владелец 03.10, третий заход:
+// «блок „На счёте", справа общая сумма, и эти две плитки; „Перевести" — в
+// другой блок; и вообще раздельно можно все эти блоки»):
+//   • «На счёте» — подпись слева, общая сумма справа, под ними плитки
+//     «Свои | VAT» (вариант 2: на счёте — общая сумма, VAT плюс свои);
+//   • «Перевести», «В оплате записи», «Выписка» — каждый своим блоком.
+// Строки «Команда» нет: шторку открывают со страницы счетов этой команды
+// («зачем писать команда команда один»). «Остатка на начало» тоже нет («что
+// значит остаток на начало — это лишнее»): его задают при создании счёта.
+// Подписей под строками нет (вкус владельца 02–03.10).
 export function AccountMoneyGroup({
   account,
   accounts,
@@ -55,56 +46,74 @@ export function AccountMoneyGroup({
     account.is_active
     && accounts.some((other) => other.is_active && other.id !== account.id);
   // СКОЛЬКО VAT НА СЧЁТЕ К УПЛАТЕ (владелец 2026-09-23: «сколько VAT мы
-  // должны будем заплатить»; 03.10 — своей строкой в «Деньгах»).
+  // должны будем заплатить»).
   const vatDue = useAccountVatDue(account.id, true).data ?? 0;
-
-  const amount = (text: string, color: string = t.ink) => (
-    <Text
-      maxFontSizeMultiplier={1.3}
-      numberOfLines={1}
-      style={{ fontSize: 15, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}
-    >
-      {text}
-    </Text>
-  );
-  const blockBody = { paddingHorizontal: 2, paddingTop: 2, paddingBottom: 4, gap: 2 } as const;
+  const blockBody = { paddingHorizontal: 2, paddingVertical: 2 } as const;
 
   return (
     <>
-      <SectionCard dense title="Деньги">
-        <View style={blockBody}>
-          {/* На счёте — факт, а не поле: остаток меняют операции и переводы. */}
-          <SelectRow
-            icon={Wallet}
-            color={SETTINGS_TILE.green}
-            plain
-            title="На счёте"
-            onPress={noop}
-            accessibilityLabel={`На счёте ${money(account.balance)}`}
-            trailing={amount(money(account.balance), moneySign(account.balance) < 0 ? t.danger : t.ink)}
-          />
-          {/* «НА СЧЁТЕ» = СВОИ + VAT (владелец 03.10 выбрал вариант 2 из трёх:
-              «оно должно быть общая сумма — VAT плюс счёт»). Строка «VAT к
-              уплате» стояла рядом с остатком и читалась как вторые деньги;
-              плитки показывают, что это части одной суммы. Нет налога — нет и
-              плиток. */}
-          {moneySign(vatDue) !== 0 ? (
-            <View
-              accessible
-              accessibilityLabel={`Из них свои ${money(account.balance - vatDue)}, VAT ${money(vatDue)}`}
-              style={{ flexDirection: "row", gap: 8, paddingHorizontal: 10, paddingBottom: 8 }}
-            >
-              <MoneyTile word="Свои" value={account.balance - vatDue} tint={SETTINGS_TILE.green} />
-              <MoneyTile word="VAT" value={vatDue} tint={SETTINGS_TILE.orange} />
-            </View>
-          ) : null}
-          {canTransfer ? (
-            <SelectRow icon={ArrowLeftRight} color={t.accent} plain title="Перевести" onPress={onTransfer} />
-          ) : null}
+      {/* «НА СЧЁТЕ» — ШАПКА С СУММОЙ, как «КОМАНДА 1 … €770» над счетами.
+          Шапка собрана здесь, а не пропом общего `SectionCard`: примитив
+          общий для всех сессий, а сумма в шапке нужна только этому блоку. */}
+      <SectionCard dense>
+        <View
+          accessible
+          accessibilityLabel={`На счёте ${money(account.balance)}`}
+          style={{
+            flexDirection: "row",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            paddingBottom: moneySign(vatDue) !== 0 ? 10 : 12,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: "700",
+              letterSpacing: 0.6,
+              textTransform: "uppercase",
+              color: t.faint,
+            }}
+          >
+            На счёте
+          </Text>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            numberOfLines={1}
+            style={{
+              fontSize: 22,
+              fontWeight: "800",
+              color: moneySign(account.balance) < 0 ? t.danger : t.ink,
+              fontVariant: ["tabular-nums"],
+            }}
+          >
+            {money(account.balance)}
+          </Text>
         </View>
+        {/* Нет налога — нет и плиток: тогда блок — одна сумма. */}
+        {moneySign(vatDue) !== 0 ? (
+          <View
+            accessible
+            accessibilityLabel={`Из них свои ${money(account.balance - vatDue)}, VAT ${money(vatDue)}`}
+            style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingBottom: 12 }}
+          >
+            <MoneyTile word="Свои" value={account.balance - vatDue} tint={SETTINGS_TILE.green} />
+            <MoneyTile word="VAT" value={vatDue} tint={SETTINGS_TILE.orange} />
+          </View>
+        ) : null}
       </SectionCard>
 
-      <SectionCard dense title="Счёт">
+      {canTransfer ? (
+        <SectionCard dense>
+          <View style={blockBody}>
+            <SelectRow icon={ArrowLeftRight} color={t.accent} plain title="Перевести" onPress={onTransfer} />
+          </View>
+        </SectionCard>
+      ) : null}
+
+      <SectionCard dense>
         <View style={blockBody}>
           {/* ПРИНИМАЕТ ЛИ СЧЁТ ДЕНЬГИ ЗАПИСИ — вся плашка тумблер (как
               «Присылать SMS»). Выключенный счёт остаётся на «Финансах», в
@@ -128,6 +137,11 @@ export function AccountMoneyGroup({
               </View>
             }
           />
+        </View>
+      </SectionCard>
+
+      <SectionCard dense>
+        <View style={blockBody}>
           <SelectRow
             icon={FileSpreadsheet}
             color={SETTINGS_TILE.green}

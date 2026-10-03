@@ -32,38 +32,52 @@ export function AccountCloseGroup({
   // Плашки, как во всей шторке (вариант 1, 03.10); объяснений под ними нет —
   // всё нужное говорит вопрос, который задаёт само действие
   // (`use-close-flow`): остаток, перевод, «насовсем».
-  const blockBody = { paddingHorizontal: 2, paddingTop: 2, paddingBottom: 4, gap: 2 } as const;
+  const blockBody = { paddingHorizontal: 2, paddingVertical: 2 } as const;
+
+  // КАЖДОЕ ДЕЛО СВОИМ БЛОКОМ (владелец 03.10: «вообще раздельно можно все
+  // эти блоки») — «Скрыть» и «Удалить» не делят одну карточку.
+  const remove = (
+    <SectionCard dense>
+      <View style={blockBody}>
+        <SelectRow icon={Trash2} color={t.danger} plain title="Удалить счёт" onPress={onDelete} />
+      </View>
+    </SectionCard>
+  );
 
   if (account.is_active) {
     return (
-      <SectionCard dense>
-        <View style={blockBody}>
-          <SelectRow icon={EyeOff} color={t.warning} plain title="Скрыть счёт" onPress={onHide} />
-          <SelectRow icon={Trash2} color={t.danger} plain title="Удалить счёт" onPress={onDelete} />
-        </View>
-      </SectionCard>
+      <>
+        <SectionCard dense>
+          <View style={blockBody}>
+            <SelectRow icon={EyeOff} color={t.warning} plain title="Скрыть счёт" onPress={onHide} />
+          </View>
+        </SectionCard>
+        {remove}
+      </>
     );
   }
 
   return (
-    <SectionCard dense>
-      <View style={blockBody}>
-        {/* ЗАКРЫТЫЙ СЧЁТ ОТКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, без вопроса: действие
-            обратимо, и лист остаётся на месте. */}
-        <SelectRow
-          icon={Eye}
-          color={t.accent}
-          plain
-          title="Открыть счёт снова"
-          disabled={reopenAcc.isPending}
-          onPress={() =>
-            void reopenAcc
-              .mutateAsync(account.id)
-              .catch(alertError("Не удалось открыть счёт"))
-          }
-        />
-        <SelectRow icon={Trash2} color={t.danger} plain title="Удалить счёт" onPress={onDelete} />
-      </View>
-    </SectionCard>
+    <>
+      <SectionCard dense>
+        <View style={blockBody}>
+          {/* ЗАКРЫТЫЙ СЧЁТ ОТКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, без вопроса: действие
+              обратимо, и лист остаётся на месте. */}
+          <SelectRow
+            icon={Eye}
+            color={t.accent}
+            plain
+            title="Открыть счёт снова"
+            disabled={reopenAcc.isPending}
+            onPress={() =>
+              void reopenAcc
+                .mutateAsync(account.id)
+                .catch(alertError("Не удалось открыть счёт"))
+            }
+          />
+        </View>
+      </SectionCard>
+      {remove}
+    </>
   );
 }
