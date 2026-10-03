@@ -141,9 +141,24 @@ export function overrideWithQuantity(
   current: ServiceOverride | undefined,
   qty: number,
   repriceable: boolean,
+  /** Строка прайса — чтобы узнать цену лестницы, а не ручную (ниже). */
+  service?: Service,
 ): ServiceOverride {
   const next: ServiceOverride = { ...current, qty };
-  if (repriceable) delete next.locked;
+  if (repriceable) {
+    // ЦЕНА ЛЕСТНИЦЫ — НЕ РУЧНАЯ (аудит формы записи 03.10). Открытая заново
+    // запись помечает «ручной» каждую строку, где цена за штуку не равна
+    // базовой, — а у строки «3+ по €40» она не равна никогда. Правка
+    // количества держала €40: 3 → 2 давало €80 вместо €100. Если записанная
+    // цена — это ровно лестница прайса при прежнем количестве, её решала
+    // лестница, и решать дальше будет она.
+    const ladderBefore =
+      service && current?.locked && current.price === current.locked.pricePerUnit
+        ? unitPriceFor(service, current.qty ?? 1)
+        : null;
+    if (ladderBefore != null && ladderBefore === next.price) delete next.price;
+    delete next.locked;
+  }
   return next;
 }
 

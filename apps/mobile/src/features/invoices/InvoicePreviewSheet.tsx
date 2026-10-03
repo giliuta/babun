@@ -30,6 +30,7 @@ export function InvoicePreviewSheet({
   busy,
   label,
   blockedReason,
+  error = null,
   language,
   onChangeLanguage,
   onIssue,
@@ -43,6 +44,9 @@ export function InvoicePreviewSheet({
   label: string;
   /** Почему выпускать ещё нельзя. Лист открывают и просто посмотреть. */
   blockedReason?: string | null;
+  /** Почему выпуск не прошёл (ответ сервера). Кнопку не гасит: поправили
+   *  реквизиты, сеть вернулась — можно жать снова. */
+  error?: string | null;
   /** Язык бумаги — переключатель над документом. */
   language: InvoiceLanguage;
   onChangeLanguage: (next: InvoiceLanguage) => void;
@@ -65,6 +69,14 @@ export function InvoicePreviewSheet({
               style={{ fontSize: 13, color: t.sub, textAlign: "center", marginBottom: 8 }}
             >
               {blockedReason}
+            </Text>
+          ) : error ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 13, color: t.danger, textAlign: "center", marginBottom: 8 }}
+            >
+              {error}
             </Text>
           ) : null}
           <GradientButton

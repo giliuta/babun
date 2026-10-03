@@ -116,7 +116,7 @@ export function PaymentBlock({
   const documentsOn = useFeatureOn("documents");
   const toast = useToast();
   const currency = useTenant().data?.currency;
-  const businessNow = useBusinessNow();
+  const businessNow = useBusinessNow(teamId);
   const tileWidth = useTileWidth();
   const {
     data: accounts = [],

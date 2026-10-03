@@ -131,9 +131,14 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
           : "Отменён"
         : settlement.isPaid
           ? "Оплачен"
-          : overdue
-            ? "Просрочен"
-            : "К оплате",
+          // Частично оплаченный — тем же словом, что на странице инвойса
+          // (`invoiceDisplayStatus`: частичная оплата важнее просрочки), а
+          // не «К оплате», как нетронутый (аудит 03.10).
+          : settlement.isPartial
+            ? "Частично оплачен"
+            : overdue
+              ? "Просрочен"
+              : "К оплате",
       dead,
       search: searchKey(invoice.number, clientName, invoice.total),
     });

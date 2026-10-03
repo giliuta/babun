@@ -215,7 +215,7 @@ export default function InvoiceDetailScreen() {
     if (!tenant && !invoice.data.seller_snapshot) {
       notify(
         "PDF пока недоступен",
-        "Реквизиты компании ещё загружаются. Попробуйте через несколько секунд.",
+        "Реквизиты ещё загружаются. Попробуйте через несколько секунд.",
       );
       return;
     }

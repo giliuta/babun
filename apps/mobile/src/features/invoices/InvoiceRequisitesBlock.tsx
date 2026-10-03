@@ -167,6 +167,10 @@ export function InvoiceRequisitesBlock({
               onSuccess: async (id) => {
                 // Первый набор сразу основной — как на странице «Реквизиты».
                 if (live.length === 0) await makeDefault.mutateAsync(id);
+                // Новый набор, заведённый ИЗ ФОРМЫ, — тот, что для этого
+                // инвойса и заводили: без выбора документ уходил от прежнего
+                // юрлица его номером и серией (аудит 03.10).
+                if (!editing) onCompanyChange(id);
                 setSheetOpen(false);
               },
               onError: (e) => notify("Не сохранилось", e.message),

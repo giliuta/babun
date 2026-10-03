@@ -31,7 +31,7 @@ describe("слова страницы SMS", () => {
     assert.equal(costWords({ status: "queued", costCents: 0, wasFree: false }), undefined);
     assert.equal(costWords({ status: "failed", costCents: 0, wasFree: false }), undefined);
     assert.equal(priceOf(2, 10), "€0,20");
-    assert.equal(statusWords("blocked"), "Не хватило баланса");
+    assert.equal(statusWords("blocked"), "Не отправлено");
   });
 
   test("повод в истории", () => {

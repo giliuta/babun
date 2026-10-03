@@ -26,6 +26,7 @@ import { useTenantId } from "@/lib/tenant";
 import type { CrewBlocks } from "./crew-blocks";
 import { ActionRow, AmountRow, InfoRow, WorkLineRow } from "./crew-rows";
 import type { CrewMoney, CrewWorkLine } from "./crew-work";
+import { useRouteOpener } from "@/features/clients/use-route-opener";
 
 const CREW_STATUSES: readonly {
   value: Exclude<AppointmentStatus, "cancelled">;
@@ -98,6 +99,7 @@ export function CrewWorkRecord({
   // Заметка — своё право «Заметка» (30.09): «Видит и меняет» — пишет,
   // «Только видит» — читает, «Скрыта» — заметки нет.
   const canWriteNote = blocks.note === "write";
+  const route = useRouteOpener(appointment.team_id ?? null);
 
   const patch = async (next: Partial<Appointment>, success: string) => {
     try {
@@ -161,11 +163,7 @@ export function CrewWorkRecord({
               icon={<MapPin color={t.accent} size={ICON.sm} />}
               title={address}
               subtitle={appointment.address_note || "Открыть маршрут"}
-              onPress={() =>
-                void Linking.openURL(
-                  `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
-                )
-              }
+              onPress={() => route.open(null, address)}
             />
           </>
         ) : null}
@@ -314,6 +312,7 @@ export function CrewWorkRecord({
           </Text>
         </SectionCard>
       ) : null}
+      {route.sheet}
     </>
   );
 }

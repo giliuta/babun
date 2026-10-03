@@ -13,14 +13,16 @@ import type { Appointment } from "@babun/shared/local/appointments";
 // без React и без сети: правила проверяются тестом.
 
 /** Поле рабочей записи → блок, который его меняет. Копия
- *  `member_check_appointment_field` (миграция 20260924150000); статус решается
- *  отдельно (`statusBlock`). */
+ *  `member_check_appointment_field` (последнее определение — миграция
+ *  20260930070000; тест находит его сам); статус решается отдельно
+ *  (`statusBlock`). */
 export const WORK_FIELD_BLOCK: Readonly<Record<string, string>> = {
   date: "calendar.move",
   time_start: "calendar.move",
   time_end: "calendar.move",
   total_duration: "calendar.move",
-  comment: "record.status",
+  // Заметка записи — своё право с 30.09 (раньше шла со статусом).
+  comment: "record.note",
   cancel_reason: "calendar.cancel",
   client_id: "record.client",
   location_id: "record.object",
@@ -67,29 +69,39 @@ export const WORK_CREATE_FIELDS: ReadonlySet<string> = new Set([
   "master_id",
 ]);
 
-/** Поля своего события, которые автор правит при «События: Меняет». */
-export const EVENT_FIELDS: ReadonlySet<string> = new Set([
-  "date",
-  "time_start",
-  "time_end",
-  "total_duration",
-  "status",
-  "comment",
-  "color_override",
-  "city",
-  "event_all_day",
-  "event_notes",
-  "event_url",
-  "event_push_enabled",
-  "event_push_offsets",
-  "event_push_at",
-  "event_repeat",
-  "cancel_reason",
-  "address",
-  "address_note",
-  "address_lat",
-  "address_lng",
-]);
+/** Поле своего события → блок (та же функция сервера, ветка события, 30.09).
+ *  Время, статус, «весь день», напоминания и повтор идут вместе с самим
+ *  событием («События: Меняет»); метка, клиент, объект, тип и заметка — по
+ *  блокам события. Клиента и объекта здесь не было: партнёр, которому их
+ *  открыли, создавал событие без них, а правка отвечала «Это поле меняет
+ *  только владелец» (аудит формы записи 03.10). */
+export const EVENT_FIELD_BLOCK: Readonly<Record<string, string>> = {
+  date: "calendar.events",
+  time_start: "calendar.events",
+  time_end: "calendar.events",
+  total_duration: "calendar.events",
+  status: "calendar.events",
+  event_all_day: "calendar.events",
+  event_push_enabled: "calendar.events",
+  event_push_offsets: "calendar.events",
+  event_push_at: "calendar.events",
+  event_repeat: "calendar.events",
+  cancel_reason: "calendar.events",
+  city: "event.label",
+  client_id: "event.client",
+  location_id: "event.object",
+  address: "event.object",
+  address_note: "event.object",
+  address_lat: "event.object",
+  address_lng: "event.object",
+  comment: "event.type",
+  color_override: "event.type",
+  event_notes: "event.note",
+  event_url: "event.note",
+};
+
+/** Поля своего события, которые сервер принимает от автора. */
+export const EVENT_FIELDS: ReadonlySet<string> = new Set(Object.keys(EVENT_FIELD_BLOCK));
 
 const isEvent = (kind: Appointment["kind"] | undefined) => kind === "event" || kind === "personal";
 
@@ -107,7 +119,7 @@ export function fieldBlock(
   value?: unknown,
   previousStatus?: string,
 ): string | null {
-  if (isEvent(kind)) return EVENT_FIELDS.has(key) ? "calendar.events" : null;
+  if (isEvent(kind)) return EVENT_FIELD_BLOCK[key] ?? null;
   if (key === "status") return statusBlock(String(value ?? ""), previousStatus);
   return WORK_FIELD_BLOCK[key] ?? null;
 }
@@ -122,8 +134,15 @@ export function memberPatch(
 ): { body: Record<string, unknown>; foreign: string[] } {
   const body: Record<string, unknown> = {};
   const foreign: string[] = [];
+  // ДЛИТЕЛЬНОСТЬ БЕЗ ПЕРЕНОСА — НЕ ПЕРЕНОС (аудит формы записи 03.10).
+  // `total_duration` считается из услуг: партнёр поменял количество — она
+  // сдвинулась, хотя дата и часы на месте. Сервер ведёт это поле правом
+  // «Переносить», и правка суммы с «Сумма: Меняет» отвергалась целиком.
+  // Слот не двигали — длительность не отправляем; двигали — она едет с ним.
+  const moves = patch.date !== undefined || patch.time_start !== undefined || patch.time_end !== undefined;
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined || key === "id") continue;
+    if (key === "total_duration" && !moves) continue;
     const known = isEvent(kind) ? EVENT_FIELDS.has(key) : key === "status" || key in WORK_FIELD_BLOCK;
     if (known) body[key] = value;
     else foreign.push(key);

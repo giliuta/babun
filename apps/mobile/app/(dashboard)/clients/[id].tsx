@@ -125,6 +125,7 @@ import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { deliverCreatedClient } from "@/features/appointments/pending-client";
 import { contactsLocked } from "@/features/clients/member-contacts";
+import { useBusinessNow } from "@/features/appointments/business-now";
 
 // КАРТОЧКА ОТКРЫВАЕТСЯ В КОМПАНИИ СВОЕЙ СТРОКИ (STORY-082): `?tenant=` несёт
 // компанию, ворота решают, чья она, и объявляют источник блокам.
@@ -394,24 +395,26 @@ export function ClientDetailScreen() {
   // клиента — «SMS» у его номера предложит шаблоны, которые ими заполняются.
   const { data: smsTeams = [] } = useTeams({ includeInactive: true });
   const companyName = useTenant().data?.name ?? null;
-  const clientSmsContext = useMemo(
-    () =>
-      c
-        ? {
-            clientId: c.id,
-            optOut: c.sms_opt_out === true,
-            vars: clientSmsVars({
-              client: c,
-              appointments,
-              teams: smsTeams,
-              company: companyName,
-              debt: access.money.show ? (stats?.debt ?? 0) : null,
-              showMoney: access.money.show,
-            }),
-          }
-        : null,
-    [appointments, c, access.money.show, companyName, smsTeams, stats?.debt],
-  );
+  // «Ближайшая запись» в SMS — по часам команды клиента, а не телефона.
+  const smsNow = useBusinessNow(c?.team_id ?? null);
+  const clientSmsContext = useMemo(() => {
+    if (!c) return null;
+    const now = smsNow();
+    return {
+      clientId: c.id,
+      optOut: c.sms_opt_out === true,
+      vars: clientSmsVars({
+        client: c,
+        appointments,
+        teams: smsTeams,
+        company: companyName,
+        debt: access.money.show ? (stats?.debt ?? 0) : null,
+        showMoney: access.money.show,
+        today: now.ymd,
+        nowHm: now.hm,
+      }),
+    };
+  }, [appointments, c, access.money.show, companyName, smsTeams, stats?.debt, smsNow]);
 
   if (roleQuery.isPending) {
     return (

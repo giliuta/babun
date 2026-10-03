@@ -32,6 +32,15 @@ describe("ближайшая запись клиента", () => {
   test("сегодняшняя запись — ещё ближайшая", () => {
     assert.equal(nextScheduledWork([apt({ date: "2026-09-24" })], "2026-09-24")?.date, "2026-09-24");
   });
+
+  test("сегодняшняя, чьё время прошло, — уже не ближайшая (03.10)", () => {
+    const list = [
+      apt({ date: "2026-09-24", time_start: "09:00" }),
+      apt({ date: "2026-09-26", time_start: "10:00" }),
+    ];
+    assert.equal(nextScheduledWork(list, "2026-09-24", "13:00")?.date, "2026-09-26");
+    assert.equal(nextScheduledWork(list, "2026-09-24", "08:30")?.date, "2026-09-24");
+  });
 });
 
 describe("поля шаблона из карточки", () => {

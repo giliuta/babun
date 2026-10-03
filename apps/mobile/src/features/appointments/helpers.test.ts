@@ -200,6 +200,33 @@ describe("appointment service economics", () => {
     assert.equal(line.duration, 200);
   });
 
+  // Так строку отдаёт открытие записи: цена лестницы ≠ базовой — и уходит
+  // в `price`, как ручная (аудит формы записи 03.10).
+  test("цена лестницы у открытой записи пересчитывается при правке количества", () => {
+    const service = makeService({
+      price: 50,
+      price_tiers: [{ min_qty: 3, price_per_unit: 40 }],
+    });
+    const catalog = new Map([[service.id, service]]);
+    const hydrated = {
+      qty: 3,
+      price: 40,
+      locked: { pricePerUnit: 40, originalPrice: 50, duration: 180 },
+    };
+    const [down] = buildServices([service.id], catalog, {
+      [service.id]: overrideWithQuantity(hydrated, 2, true, service),
+    });
+    assert.equal(down.pricePerUnit, 50);
+    assert.equal(down.totalPrice, 100);
+
+    // Ручная цена (не равна лестнице при прежнем количестве) остаётся.
+    const byHand = { ...hydrated, price: 35, locked: { ...hydrated.locked, pricePerUnit: 35 } };
+    const [kept] = buildServices([service.id], catalog, {
+      [service.id]: overrideWithQuantity(byHand, 2, true, service),
+    });
+    assert.equal(kept.pricePerUnit, 35);
+  });
+
   test("своя строка и убранная из прайса держат замок при правке количества", () => {
     const own = {
       qty: 1,

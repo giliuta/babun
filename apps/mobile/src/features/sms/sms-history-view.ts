@@ -80,7 +80,8 @@ export function groupByDay(items: readonly SmsHistoryItem[], now: Date): SmsDay[
       days.push(day);
     }
     day.data.push(item);
-    day.count += 1;
+    // В частях, как баланс и «За месяц»: две части — две SMS по €0,12.
+    day.count += item.segments ?? 1;
     day.cents += item.costCents;
   }
   return days;

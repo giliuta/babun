@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 
 import type { Appointment } from "@babun/shared/local/appointments";
 import {
   EVENT_FIELDS,
+  EVENT_FIELD_BLOCK,
   WORK_CREATE_FIELDS,
   WORK_FIELD_BLOCK,
   changedFields,
@@ -15,37 +16,59 @@ import {
   memberWriteRefusal,
 } from "./member-writes";
 
-const MIGRATION = join(
-  __dirname,
-  "../../../../../supabase/migrations/20260924150000_calendar_and_record_blocks_live.sql",
-);
+const MIGRATIONS = join(__dirname, "../../../../../supabase/migrations");
+const DEFINER = /create or replace function public\.member_check_appointment_field/i;
 
-/** Тело `member_check_appointment_field` из файла миграции — истина сервера. */
+/** Тело `member_check_appointment_field` из ПОСЛЕДНЕЙ миграции, которая её
+ *  определяет, — истина сервера. Прежде тест держал файл 24.09 и не увидел,
+ *  что 30.09 событие получило клиента и объект, а заметка записи — своё право
+ *  (сторож, который не мог упасть; аудит формы записи 03.10). */
 function serverFieldCheck(): string {
-  const sql = readFileSync(MIGRATION, "utf8");
-  const start = sql.indexOf("create or replace function public.member_check_appointment_field");
-  const end = sql.indexOf("$function$;", start);
-  assert.ok(start > 0 && end > start, "функция проверки поля есть в миграции");
+  const files = readdirSync(MIGRATIONS)
+    .filter((name) => name.endsWith(".sql"))
+    .sort()
+    .filter((name) => DEFINER.test(readFileSync(join(MIGRATIONS, name), "utf8")));
+  const latest = files.at(-1);
+  assert.ok(latest, "функция проверки поля есть в миграциях");
+  const sql = readFileSync(join(MIGRATIONS, latest), "utf8");
+  const start = sql.search(DEFINER);
+  const end = sql.indexOf("$function$", sql.indexOf("$function$", start) + 1);
+  assert.ok(start >= 0 && end > start, `тело функции в ${latest}`);
   return sql.slice(start, end);
+}
+
+/** Ветки `case … then '<блок>'` в куске тела → поле → блок. */
+function caseArms(body: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  const arms = /when p_key (?:in \(([^)]*)\)|= ('[a-z_]+')) then '([a-z_.]+)'/g;
+  for (const arm of body.matchAll(arms)) {
+    const keys = arm[1] ?? arm[2] ?? "";
+    for (const key of keys.match(/'([a-z_]+)'/g) ?? []) map[key.slice(1, -1)] = arm[3];
+  }
+  return map;
+}
+
+/** Тело делится на ветку события (до первого `end if;` после `return;`) и
+ *  ветку рабочей записи. */
+function branches(): { event: string; work: string } {
+  const body = serverFieldCheck();
+  const split = body.indexOf("v_block := case", body.indexOf("v_block := case") + 1);
+  assert.ok(split > 0, "у функции две ветки: событие и запись");
+  return { event: body.slice(0, split), work: body.slice(split) };
 }
 
 describe("запись сотрудника — зеркало серверной карты", () => {
   test("каждое поле рабочей записи ведёт в тот же блок, что на сервере", () => {
-    const body = serverFieldCheck();
-    const server: Record<string, string> = {};
-    const arms = /when p_key (?:in \(([^)]*)\)|= ('[a-z_]+')) then '([a-z_.]+)'/g;
-    for (const arm of body.matchAll(arms)) {
-      const keys = arm[1] ?? arm[2] ?? "";
-      for (const key of keys.match(/'([a-z_]+)'/g) ?? []) server[key.slice(1, -1)] = arm[3];
-    }
-    assert.deepEqual(server, { ...WORK_FIELD_BLOCK });
+    assert.deepEqual(caseArms(branches().work), { ...WORK_FIELD_BLOCK });
   });
 
-  test("поля события — те же, что пускает сервер", () => {
-    const body = serverFieldCheck();
-    const list = /if p_key not in \(([^)]*)\)/.exec(body)?.[1] ?? "";
-    const server = new Set((list.match(/'([a-z_]+)'/g) ?? []).map((k) => k.slice(1, -1)));
-    assert.deepEqual([...server].sort(), [...EVENT_FIELDS].sort());
+  test("поля события и их блоки — те же, что у сервера", () => {
+    const { event } = branches();
+    const server = caseArms(event);
+    const together = /if p_key in \(([^)]*)\) then\s*return;/.exec(event)?.[1] ?? "";
+    for (const key of together.match(/'([a-z_]+)'/g) ?? []) server[key.slice(1, -1)] = "calendar.events";
+    assert.deepEqual(server, { ...EVENT_FIELD_BLOCK });
+    assert.deepEqual([...EVENT_FIELDS].sort(), Object.keys(server).sort());
   });
 
   test("статус: отмена и возврат из неё — «Отменять», остальное — «Статус»", () => {
@@ -53,8 +76,17 @@ describe("запись сотрудника — зеркало серверно�
     assert.equal(fieldBlock("status", "work", "scheduled", "cancelled"), "calendar.cancel");
     assert.equal(fieldBlock("status", "work", "completed", "in_progress"), "record.status");
     assert.equal(fieldBlock("paid_amount", "work"), null, "деньги сотрудник так не меняет");
-    assert.equal(fieldBlock("client_id", "event"), null, "у события клиента нет");
-    assert.equal(fieldBlock("event_notes", "event"), "calendar.events");
+    assert.equal(fieldBlock("client_id", "event"), "event.client");
+    assert.equal(fieldBlock("location_id", "event"), "event.object");
+    assert.equal(fieldBlock("event_notes", "event"), "event.note");
+    assert.equal(fieldBlock("paid_amount", "event"), null);
+  });
+
+  test("длительность из услуг без переноса не требует «Переносить»", () => {
+    const quantity = memberPatch({ services: [], total_amount: 80, total_duration: 120 }, "work");
+    assert.deepEqual(quantity.body, { services: [], total_amount: 80 });
+    const moved = memberPatch({ time_end: "12:00", total_duration: 120 }, "work");
+    assert.deepEqual(moved.body, { time_end: "12:00", total_duration: 120 });
   });
 
   test("патч: без undefined; незнакомое поле не выбрасывается молча", () => {

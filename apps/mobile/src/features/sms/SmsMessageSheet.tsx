@@ -88,8 +88,18 @@ export function SmsMessageSheet({
 
   const resend = () => {
     onClose();
+    // ТА ЖЕ SMS — ТЕМ ЖЕ ПУТЁМ (аудит 03.10): без записи сервер ищет
+    // команду в аргументах и отвечал «SMS в этом календаре выключены» на
+    // каждый повтор из карточки и истории; без номера повтор уходил на
+    // основной номер клиента, а не на тот, куда слали.
     send.mutate(
-      { appointmentId: m.appointmentId, clientId: m.clientId, body: m.body ?? "" },
+      {
+        appointmentId: m.appointmentId,
+        clientId: m.clientId,
+        body: m.body ?? "",
+        teamId: m.teamId,
+        phone: m.toPhone.trim() || null,
+      },
       {
         onSuccess: () => toast("SMS отправляется", "success"),
         onError: (e) => notify("SMS не отправлена", smsErrorText(e)),

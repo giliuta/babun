@@ -17,14 +17,20 @@ type AppointmentLike = Pick<
   "date" | "time_start" | "status" | "kind" | "team_id" | "address" | "services" | "total_amount"
 >;
 
-/** Ближайшая запланированная работа клиента, начиная с сегодняшнего дня. */
+/** Ближайшая запланированная работа клиента, начиная с «сейчас».
+ *
+ *  `nowHm` — часы бизнеса: сегодняшняя запись, время которой уже прошло, а
+ *  статус всё ещё «запланирована», ближайшей не считается — [Дата] и
+ *  [Время] из карточки описывали бы прошедший визит (аудит 03.10). */
 export function nextScheduledWork<T extends AppointmentLike>(
   appointments: readonly T[],
   today: string,
+  nowHm = "00:00",
 ): T | null {
   let best: T | null = null;
   for (const a of appointments) {
     if (a.kind !== "work" || a.status !== "scheduled" || a.date < today) continue;
+    if (a.date === today && a.time_start < nowHm) continue;
     if (!best || a.date < best.date || (a.date === best.date && a.time_start < best.time_start)) {
       best = a;
     }
@@ -41,10 +47,16 @@ export function clientSmsVars(input: {
   debt: number | null;
   /** Цена ближайшей записи видна только вместе с деньгами клиента. */
   showMoney: boolean;
-  /** «Сегодня» — для тестов; по умолчанию дата телефона. */
+  /** «Сегодня» по часам бизнеса; по умолчанию дата телефона. */
   today?: string;
+  /** «Сейчас» по часам бизнеса — прошедшая сегодня запись не ближайшая. */
+  nowHm?: string;
 }): SmsVars {
-  const next = nextScheduledWork(input.appointments, input.today ?? formatDateKey(new Date()));
+  const next = nextScheduledWork(
+    input.appointments,
+    input.today ?? formatDateKey(new Date()),
+    input.nowHm,
+  );
   return smsVars({
     name: addressedAs(input.client, firstName(input.client)),
     company: input.company,
