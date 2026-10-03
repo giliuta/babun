@@ -1724,6 +1724,7 @@ function FinancesContent() {
         // гасит (страница и так серая по нулям).
         enabled={access.footer(view).enabled}
         reason={access.footer(view).reason}
+        create={access.accountCreate}
       />
 
       <TransactionPopup

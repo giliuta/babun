@@ -115,8 +115,11 @@ describe("двери и подписи по уровню", () => {
 
   test("футер гаснет и называет причину словами", () => {
     const footer = read("FinancesFooter.tsx");
-    assert.match(footer, /\{reason \? \( <Text/);
+    assert.match(footer, /\{shownReason \? \( <Text/);
     assert.match(footer, /disabled=\{!enabled\}/);
+    // «Добавить счёт» — своё право (строка шестерёнки «Счета», 03.10).
+    assert.match(footer, /label="Добавить счёт" disabled=\{!create\.enabled\}/);
+    assert.match(footer, /const shownReason = creating \? create\.reason : reason;/);
   });
 
   test("витрина операции рисует только открытые действия", () => {

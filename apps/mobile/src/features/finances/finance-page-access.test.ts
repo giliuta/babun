@@ -4,7 +4,7 @@ import { describe, test } from "node:test";
 import type { Account } from "@babun/shared/local/finance/account";
 import type { Debt } from "@babun/shared/local/finance/debt";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
-import type { MemberAccessMap } from "@/features/access/access-map";
+import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map";
 import { NO_TEAM } from "./accounts-sections";
 import { financePageAccess, VIEW_ONLY_REASON } from "./finance-page-access";
 
@@ -183,6 +183,36 @@ describe("уровни выбранной команды", () => {
     assert.equal(read.settings, false);
     assert.equal(read.view("documents"), "documents");
     assert.deepEqual(read.footer("documents"), { enabled: false, reason: VIEW_ONLY_REASON });
+  });
+});
+
+describe("«Добавить счёт» — по строке шестерёнки «Счета», а не по праву «Счета»", () => {
+  const page = (levels: Record<string, AccessLevel>) =>
+    financePageAccess({ role: "master", map: map({ calendars: { [A]: levels } }), scope: A });
+
+  test("«Счета: Меняет» без строки шестерёнки — перевод есть, нового счёта нет", () => {
+    const access = page({ "finance.accounts": "write" });
+    assert.deepEqual(access.footer("accounts"), { enabled: true, reason: null });
+    assert.deepEqual(access.accountCreate, { enabled: false, reason: null });
+  });
+
+  test("строка «Счета» шестерёнки: «Видит» — серая с причиной, «Меняет» — живая", () => {
+    assert.deepEqual(page({ "finance.settings_accounts": "read" }).accountCreate, {
+      enabled: false,
+      reason: VIEW_ONLY_REASON,
+    });
+    assert.deepEqual(page({ "finance.settings_accounts": "write" }).accountCreate, {
+      enabled: true,
+      reason: null,
+    });
+  });
+
+  test("владелец заводит счёт всегда; карта ещё едет — кнопка мёртвая", () => {
+    assert.deepEqual(financePageAccess({ role: "owner", map: undefined, scope: A }).accountCreate, {
+      enabled: true,
+      reason: null,
+    });
+    assert.equal(financePageAccess({ role: "master", map: undefined, scope: A }).accountCreate.enabled, false);
   });
 });
 

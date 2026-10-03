@@ -48,6 +48,7 @@ export function FinancesFooter({
   onAddOperation,
   enabled = true,
   reason = null,
+  create = { enabled: true, reason: null },
 }: {
   view: HomeView;
   debtSide: DebtDirection;
@@ -76,6 +77,9 @@ export function FinancesFooter({
    *  серая по нулям. */
   enabled?: boolean;
   reason?: string | null;
+  /** «Добавить счёт» (у команды нет ни одного счёта) — своё право: счёт
+   *  заводит строка шестерёнки «Счета», перевод — право «Счета» (03.10). */
+  create?: { enabled: boolean; reason: string | null };
 }) {
   const t = useThemeColors();
   const toast = useToast();
@@ -91,6 +95,8 @@ export function FinancesFooter({
     // «Для перевода нужен второй счёт» (аудит финансов 03.10).
     company: transferAccounts ?? accounts,
   });
+  const creating = view === "accounts" && accountsAction.kind === "create";
+  const shownReason = creating ? create.reason : reason;
 
   const button =
     view === "accounts" ? (
@@ -115,7 +121,7 @@ export function FinancesFooter({
       ) : (
         <GradientButton
           label="Добавить счёт"
-          disabled={!enabled}
+          disabled={!create.enabled}
           onPress={() => setCreateOpen(true)}
         />
       )
@@ -161,13 +167,13 @@ export function FinancesFooter({
       <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, gap: 6 }}>
         {/* ПРИЧИНА — СЛОВАМИ НАД КНОПКОЙ, как в «Финансах дня»: серая кнопка
             без объяснения читается как поломка. */}
-        {reason ? (
+        {shownReason ? (
           <Text
             className="text-center text-[13px]"
             style={{ color: t.sub }}
             maxFontSizeMultiplier={1.3}
           >
-            {reason}
+            {shownReason}
           </Text>
         ) : null}
         {button}

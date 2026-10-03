@@ -83,6 +83,10 @@ export interface FinancePageAccess {
   /** Закрытая панель уводит на общий вид, а не показывает пустоту. */
   view: (view: HomeView) => HomeView;
   footer: (view: HomeView) => { enabled: boolean; reason: string | null };
+  /** «Добавить счёт» в футере «Счетов» (у команды ещё нет счёта): счёт
+   *  заводит строка шестерёнки «Счета», а не право «Счета» на плитке —
+   *  перевод и новый счёт разведены, как на сервере (03.10). */
+  accountCreate: { enabled: boolean; reason: string | null };
   /** Новую операцию этой стороны можно завести в выбранном календаре. */
   canAdd: (side: Side) => boolean;
   balanceVisible: (account: AccountLike) => boolean;
@@ -202,6 +206,16 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
     return accountOk(sideKey(side));
   };
 
+  /** Кнопка по уровню: «Только видит» — серая с причиной; закрытый блок
+   *  причины не называет: страница и так серая по нулям. */
+  const footerState = (level: Level): { enabled: boolean; reason: string | null } =>
+    !ready
+      ? { enabled: false, reason: null }
+      : level === "write"
+        ? { enabled: true, reason: null }
+        : { enabled: false, reason: level === "read" ? VIEW_ONLY_REASON : null };
+  const settingsAccounts = levelIn("finance.settings_accounts", scope);
+
   const footerLevel = (view: HomeView): Level =>
     // Инвойс выставляет тот, у кого «Документы: Выставляет» в этой команде:
     // остальным пустой список — не повод предлагать «выставить счёт».
@@ -229,7 +243,7 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
     documents: has.documents && documentsLevel === "write",
     // Шестерёнка над счетами ведёт на «Счета» команды — открыта тому, у кого
     // открыта эта строка шестерёнки (03.10).
-    settings: owner || levelIn("finance.settings_accounts", scope) !== "locked",
+    settings: owner || settingsAccounts !== "locked",
     refunds: owner,
     noTeamChip: owner,
     recordMoney: owner,
@@ -261,13 +275,8 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
       }
       return view;
     },
-    footer: (view) => {
-      if (!ready) return { enabled: false, reason: null };
-      const level = footerLevel(view);
-      if (level === "write") return { enabled: true, reason: null };
-      // Закрытый блок причины не называет: страница и так серая по нулям.
-      return { enabled: false, reason: level === "read" ? VIEW_ONLY_REASON : null };
-    },
+    footer: (view) => footerState(footerLevel(view)),
+    accountCreate: footerState(owner ? "write" : settingsAccounts),
     balanceVisible,
     accountWritable,
     txEditable,
