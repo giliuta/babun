@@ -1,4 +1,11 @@
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Dimensions,
   Keyboard,
@@ -143,6 +150,23 @@ export function BottomSheet({
   const reduced = useReduceMotion();
   // Остаётся смонтированным на время анимации закрытия, потом снимается.
   const [mounted, setMounted] = useState(visible);
+
+  // ЛИСТ УЕЗЖАЕТ С ТЕМ, ЧТО ПОКАЗЫВАЛ (краш 2026-10-03 02:22). Почти
+  // три десятка листов открываются самим значением (`visible={x !== null}`) и
+  // на закрытии получают null в ТОМ ЖЕ коммите, что и `visible=false`: тело
+  // перестраивается — строки пропадают, на их место встаёт «пусто» — в
+  // панели, которую в этот момент начинает уводить Reanimated. Так у шторки
+  // выбора разошёлся порядок детей панели у UIKit и у Fabric, и снятие листа
+  // уронило приложение («Attempt to unmount a view which has a different
+  // index»). Пока лист уезжает, он показывает последний видимый кадр; живые
+  // пропсы вернутся со следующим открытием. `useLastNonNull` делал то же для
+  // четырёх листов клиентов — здесь это закон для всех.
+  const live = { children, title, subtitle, footer, banner, headerAction };
+  const lastShown = useRef(live);
+  useLayoutEffect(() => {
+    if (visible) lastShown.current = live;
+  });
+  const shown = visible ? live : lastShown.current;
   const exitedRef = useRef(onExited);
   exitedRef.current = onExited;
   const wasMounted = useRef(mounted);
@@ -269,7 +293,7 @@ export function BottomSheet({
           0,2% площади листа, и «свайп вниз» промахивался мимо неё почти
           всегда. Заголовок ничего не нажимает, поэтому конфликта нет, а
           площадь жеста вырастает до нормальной. */}
-      {grabber || title ? (
+      {grabber || shown.title ? (
         <GestureDetector gesture={drag}>
           <View>
             {grabber ? (
@@ -286,7 +310,7 @@ export function BottomSheet({
                 />
               </View>
             ) : null}
-            {title ? (
+            {shown.title ? (
               <View
                 style={{
                   flexDirection: "row",
@@ -311,9 +335,9 @@ export function BottomSheet({
                       color: t.ink,
                     }}
                   >
-                    {title}
+                    {shown.title}
                   </Text>
-                  {subtitle ? (
+                  {shown.subtitle ? (
                     <Text
                       maxFontSizeMultiplier={1.2}
                       numberOfLines={1}
@@ -324,7 +348,7 @@ export function BottomSheet({
                         color: t.sub,
                       }}
                     >
-                      {subtitle}
+                      {shown.subtitle}
                     </Text>
                   ) : null}
                 </View>
@@ -335,7 +359,7 @@ export function BottomSheet({
                     justifyContent: "center",
                   }}
                 >
-                  {headerAction}
+                  {shown.headerAction}
                 </View>
               </View>
             ) : null}
@@ -351,14 +375,14 @@ export function BottomSheet({
           contentContainerStyle={padded ? { paddingHorizontal: GUTTER } : undefined}
           keyboardShouldPersistTaps="handled"
         >
-          {children}
+          {shown.children}
         </ScrollView>
       ) : padded ? (
-        <View style={{ paddingHorizontal: GUTTER }}>{children}</View>
+        <View style={{ paddingHorizontal: GUTTER }}>{shown.children}</View>
       ) : (
-        children
+        shown.children
       )}
-      {footer ? <SheetFooter padded={padded}>{footer}</SheetFooter> : null}
+      {shown.footer ? <SheetFooter padded={padded}>{shown.footer}</SheetFooter> : null}
     </Animated.View>
   );
 
@@ -397,7 +421,7 @@ export function BottomSheet({
         ) : (
           sheet
         )}
-        {banner ? (
+        {shown.banner ? (
           <View
             pointerEvents="box-none"
             style={{
@@ -407,7 +431,7 @@ export function BottomSheet({
               right: 16,
             }}
           >
-            {banner}
+            {shown.banner}
           </View>
         ) : null}
       </GestureHandlerRootView>
