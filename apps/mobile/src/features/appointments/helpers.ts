@@ -126,6 +126,27 @@ export interface ServiceOverride {
   locked?: LockedLine;
 }
 
+/**
+ * Новое количество строки — по правилу замка выше: правка количества
+ * снимает замок, и лестница считает строку по действующему прайсу. Это
+ * правило потерялось при переносе формы (2026-08-25): степпер менял `qty`,
+ * а замок оставался, и «×2» у сохранённой записи не трогало ни цену по
+ * лестнице, ни длительность (аудит 2026-10-03).
+ *
+ * `repriceable` — есть по чему считать: услуга стоит в прайсе. Своя строка
+ * записи и услуга, убранная из прайса, держат замок — без него у них
+ * пропали бы имя, цена и время.
+ */
+export function overrideWithQuantity(
+  current: ServiceOverride | undefined,
+  qty: number,
+  repriceable: boolean,
+): ServiceOverride {
+  const next: ServiceOverride = { ...current, qty };
+  if (repriceable) delete next.locked;
+  return next;
+}
+
 /** Что держит замок: три числа и два слова снимка. */
 export interface LockedLine {
   pricePerUnit: number;

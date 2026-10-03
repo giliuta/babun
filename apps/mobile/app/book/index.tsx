@@ -186,6 +186,7 @@ import {
   buildServices,
   formatYMD,
   minutesBetweenHM,
+  overrideWithQuantity,
   parseYMD,
   parseMoneyInput,
   type ServiceOverride,
@@ -1568,7 +1569,11 @@ export default function BookScreen() {
       setServiceIds((p) => p.filter((x) => x !== id));
       return;
     }
-    setOverrides((p) => ({ ...p, [id]: { ...p[id], qty } }));
+    // Правка количества снимает замок сохранённой строки — строка считается
+    // по действующему прайсу (`overrideWithQuantity`); своя строка и услуга,
+    // убранная из прайса, держат свои числа.
+    const repriceable = catalog.has(id) && !isCustomServiceId(id);
+    setOverrides((p) => ({ ...p, [id]: overrideWithQuantity(p[id], qty, repriceable) }));
   };
 
   // СОБЫТИЕ НАЗЫВАЕТСЯ ТИПОМ (владелец 2026-09-06: «первое — команда, второе
