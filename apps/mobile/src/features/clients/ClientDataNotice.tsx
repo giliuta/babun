@@ -3,6 +3,7 @@ import { AlertCircle } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { isOutageNoise, OUTAGE_WORDS } from "@/lib/connection-words";
 
 // ПЛАШКА «ДАННЫЕ НЕ ПРИЕХАЛИ» — слова, действие ВНИЗУ.
 //
@@ -31,6 +32,11 @@ export function ClientDataNotice({
   fullScreen = false,
 }: ClientDataNoticeProps) {
   const t = useThemeColors();
+  // Обрыв — словами: в `message` сюда тоже приходит `error.message` как есть.
+  if (isOutageNoise(message)) {
+    title = OUTAGE_WORDS.title;
+    message = OUTAGE_WORDS.subtitle;
+  }
 
   if (fullScreen) {
     // Тот же экран ошибки, что у календаря и списков (`EmptyState`): значок

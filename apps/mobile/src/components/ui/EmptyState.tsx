@@ -5,6 +5,7 @@ import { tDynamic } from "@babun/shared/i18n/runtime";
 import { Spinner } from "@/components/ui/Spinner";
 import { Button } from "./Button";
 import { useThemeColors } from "@/theme/colors";
+import { isOutageNoise, OUTAGE_WORDS } from "@/lib/connection-words";
 
 // Пустое / загрузка / ошибка — одна поверхность на продукт. `fill` занимает
 // экран целиком; без него это блок с полями, годный как ListEmptyComponent.
@@ -33,6 +34,15 @@ export function EmptyState({
   fill?: boolean;
 }) {
   const t = useThemeColors();
+  // ОБРЫВ — СЛОВАМИ, А НЕ ОТВЕТОМ ДРАЙВЕРА (03.10, на лежащем сервере).
+  // Два десятка экранов кладут в подпись ошибки `error.message` как есть, и
+  // под «Не удалось загрузить …» вставало «AbortError: Aborted» или целая
+  // HTML-страница шлюза. Шум без единого русского слова заменяется здесь,
+  // один раз на продукт; отказ сервера по делу остаётся своим текстом.
+  if (state === "error" && subtitle && isOutageNoise(subtitle)) {
+    title = OUTAGE_WORDS.title;
+    subtitle = OUTAGE_WORDS.subtitle;
+  }
   // Слова — своим блоком: при `fill` они забирают всю пустоту и встают по её
   // центру, а кнопка остаётся снаружи этого центрирования, внизу.
   const words = fill

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { loadErrorWords, looksLikeNoConnection, writeErrorWords } from "./connection-words";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { isOutageNoise, loadErrorWords, looksLikeNoConnection, writeErrorWords } from "./connection-words";
 
 const what = { failed: "Не удалось загрузить финансы", later: "Финансы загрузятся, как только сервер ответит." };
 
@@ -43,5 +45,43 @@ describe("неудача действия — словами, что не сде
       title: "Не удалось удалить",
       subtitle: "Нет права удалять клиентов",
     });
+  });
+});
+
+// ПОДПИСЬ ОШИБКИ НА ЛЕЖАЩЕМ СЕРВЕРЕ (03.10 вечер). Два десятка экранов
+// кладут `error.message` в подпись `EmptyState` как есть; общий экран
+// ошибки узнаёт шум драйвера и говорит словами.
+describe("шум драйвера в подписи ошибки", () => {
+  const cloudflare525 =
+    '<!DOCTYPE html>\n<!--[if lt IE 7]> <html class="no-js ie6 oldie" lang="en-US"> <![endif]-->\n<head>\n<title>supabase.co | 525: SSL handshake failed</title>';
+
+  test("обрыв, тайм-аут и HTML шлюза — шум", () => {
+    for (const text of [
+      "AbortError: Aborted",
+      "TypeError: Network request failed",
+      "listAccounts: AbortError: Aborted",
+      cloudflare525,
+      "upstream 503 Service Unavailable",
+    ]) {
+      assert.equal(isOutageNoise(text), true, text.slice(0, 40));
+    }
+  });
+
+  test("отказ сервера словами — не шум, даже с числом", () => {
+    for (const text of [
+      "Операция без команды не записывается: выберите команду или счёт команды",
+      "Сумма 520 больше долга клиента",
+      "permission denied for table clients",
+      "",
+    ]) {
+      assert.equal(isOutageNoise(text), false, text);
+    }
+  });
+
+  test("общий экран ошибки и плашка клиента подменяют шум словами", () => {
+    const empty = readFileSync(path.join(__dirname, "../components/ui/EmptyState.tsx"), "utf8");
+    assert.match(empty, /if \(state === "error" && subtitle && isOutageNoise\(subtitle\)\)/);
+    const notice = readFileSync(path.join(__dirname, "../features/clients/ClientDataNotice.tsx"), "utf8");
+    assert.match(notice, /if \(isOutageNoise\(message\)\)/);
   });
 });

@@ -13,8 +13,21 @@ export function looksLikeNoConnection(error: unknown): boolean {
   if (isConfirmedNetworkUnavailable(e)) return true;
   if (typeof e.status === "number" && e.status >= 500) return true;
   const text = `${e.message ?? ""} ${e.details ?? ""}`;
-  return /(?:abort|timed? ?out|timeout|сеть не отвечает|\b5(?:0[234]|2[0-9])\b)/i.test(text);
+  return /(?:abort|timed? ?out|timeout|сеть не отвечает|\b5(?:0[234]|2[0-9])\b|<!doctype html|<html[\s>])/i.test(text);
 }
+
+/** Подпись ошибки — шум драйвера, а не слова: без единой русской буквы и
+ *  похожа на обрыв («AbortError: Aborted», «TypeError: Network request
+ *  failed», HTML-страница шлюза «525: SSL handshake failed»). Отказ сервера
+ *  по делу пишется по-русски и сюда не попадает. */
+export function isOutageNoise(text: string): boolean {
+  return !/[А-Яа-яЁё]/.test(text) && looksLikeNoConnection({ message: text });
+}
+
+export const OUTAGE_WORDS = {
+  title: "Нет связи с сервером",
+  subtitle: "Проверьте связь и попробуйте ещё раз.",
+} as const;
 
 /** Заголовок и пояснение экрана ошибки: обрыв — словами, отказ — как есть. */
 export function loadErrorWords(
