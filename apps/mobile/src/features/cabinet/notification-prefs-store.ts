@@ -1,45 +1,106 @@
 import { useSyncExternalStore } from "react";
-import { getStorage } from "@babun/shared/storage";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import { useSession } from "@/providers/SessionProvider";
 import {
-  DEFAULT_NOTIFICATION_PREFS,
-  normalizeNotificationPrefs,
-  type NotificationPrefs,
+  prefsFromRow,
+  rowFromPrefs,
+  type TeamNotifyPrefs,
+  type TeamNotifyRow,
 } from "./notification-prefs";
+import {
+  readTeamNotifyPrefs,
+  readTeamPrefsMap as readMap,
+  subscribeTeamPrefs as subscribe,
+  teamPrefsVersion,
+  writeTeamPrefsMap as writeMap,
+  type TeamPrefsMap as PrefsMap,
+} from "./notification-prefs-cache";
 
-// Хранилище настроек уведомлений — MMKV этого телефона. Правила — в
-// `notification-prefs.ts`; здесь чтение, запись и подписка экрана.
+// НАСТРОЙКИ УВЕДОМЛЕНИЙ ПО КОМАНДАМ — база + копия на телефоне.
+//
+// Истина — `team_notification_prefs` (у каждого человека свои строки). Копия
+// в MMKV нужна тем, кто читает настройки синхронно и без сети: сверка
+// напоминаний календаря, напоминание о клиенте, сторож бюджета и читатель
+// событий команды. Запрос обновляет копию; правка пишет в копию сразу (экран
+// и сверка видят её мгновенно) и уходит в базу.
 
-const KEY = "babun:notifications.prefs.v1";
-const listeners = new Set<() => void>();
-let cache: NotificationPrefs | null = null;
+const COLUMNS =
+  "tenant_id, team_id, record_reminder, client_reminder_time, notify_new, notify_change, notify_cancel, notify_payment, budget";
 
-export function readNotificationPrefs(): NotificationPrefs {
-  if (cache) return cache;
-  try {
-    cache = normalizeNotificationPrefs(getStorage().get<unknown>(KEY));
-  } catch {
-    cache = DEFAULT_NOTIFICATION_PREFS;
-  }
-  return cache;
+export { readTeamNotifyPrefs };
+
+// Правки в пути: пока они не сохранились, ответ запроса не перетирает копию —
+// иначе ответ, ушедший до второго тапа, на миг вернул бы тумблер назад.
+let pendingWrites = 0;
+
+/** Номер версии копии — подпись для эффектов, которым нужно пересобраться
+ *  при любой правке настроек (сверка напоминаний календаря). */
+export function useTeamNotifyVersion(): number {
+  return useSyncExternalStore(subscribe, teamPrefsVersion, teamPrefsVersion);
 }
 
-export function writeNotificationPrefs(patch: Partial<NotificationPrefs>): NotificationPrefs {
-  const next = normalizeNotificationPrefs({ ...readNotificationPrefs(), ...patch });
-  cache = next;
-  try {
-    getStorage().set(KEY, next);
-  } catch {
-    // Запись best-effort: настройка живёт в памяти до перезапуска.
-  }
-  for (const listener of listeners) listener();
-  return next;
+export const teamNotifyKey = (userId: string | null) => ["team-notify-prefs", userId] as const;
+
+/** Все строки человека — копия обновляется при каждом чтении. */
+export function useTeamNotifyPrefs() {
+  const { session } = useSession();
+  const userId = session?.user?.id ?? null;
+  useTeamNotifyVersion();
+  const query = useQuery({
+    queryKey: teamNotifyKey(userId),
+    enabled: !!userId,
+    staleTime: 60_000,
+    queryFn: async (): Promise<PrefsMap> => {
+      const { data, error } = await supabase
+        .from("team_notification_prefs")
+        .select(COLUMNS)
+        .eq("user_id", userId as string);
+      if (error) throw new Error(`team_notification_prefs: ${error.message}`);
+      const map: PrefsMap = {};
+      for (const row of (data ?? []) as TeamNotifyRow[]) map[row.team_id] = prefsFromRow(row);
+      if (pendingWrites === 0) writeMap(map);
+      return map;
+    },
+  });
+  return { ...query, prefsFor: readTeamNotifyPrefs };
 }
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export function useNotificationPrefs(): NotificationPrefs {
-  return useSyncExternalStore(subscribe, readNotificationPrefs, readNotificationPrefs);
+/** Правка настроек команды: копия — сразу, база — следом; сбой — откат. */
+export function useSaveTeamNotifyPrefs() {
+  const { session } = useSession();
+  const userId = session?.user?.id ?? null;
+  const qc = useQueryClient();
+  return useMutation<void, Error, { tenantId: string; teamId: string; patch: Partial<TeamNotifyPrefs> }, PrefsMap>({
+    onMutate: ({ teamId, patch }) => {
+      pendingWrites += 1;
+      const before = readMap();
+      writeMap({ ...before, [teamId]: { ...readTeamNotifyPrefs(teamId), ...patch } });
+      return before;
+    },
+    mutationFn: async ({ tenantId, teamId }) => {
+      if (!userId) throw new Error("Нет входа");
+      const { error } = await supabase
+        .from("team_notification_prefs")
+        .upsert(
+          {
+            user_id: userId,
+            tenant_id: tenantId,
+            team_id: teamId,
+            ...rowFromPrefs(readTeamNotifyPrefs(teamId)),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,tenant_id,team_id" },
+        );
+      if (error) throw new Error(`team_notification_prefs: ${error.message}`);
+    },
+    onError: (_error, _vars, before) => {
+      if (before) writeMap(before);
+    },
+    onSettled: () => {
+      pendingWrites = Math.max(0, pendingWrites - 1);
+      void qc.invalidateQueries({ queryKey: teamNotifyKey(userId) });
+    },
+    meta: { errorHandled: true },
+  });
 }

@@ -3497,6 +3497,56 @@ export type Database = {
           },
         ]
       }
+      team_notification_prefs: {
+        Row: {
+          budget: boolean
+          client_reminder_time: string | null
+          notify_cancel: boolean
+          notify_change: boolean
+          notify_new: boolean
+          notify_payment: boolean
+          record_reminder: Json | null
+          team_id: string
+          tenant_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          budget?: boolean
+          client_reminder_time?: string | null
+          notify_cancel?: boolean
+          notify_change?: boolean
+          notify_new?: boolean
+          notify_payment?: boolean
+          record_reminder?: Json | null
+          team_id: string
+          tenant_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          budget?: boolean
+          client_reminder_time?: string | null
+          notify_cancel?: boolean
+          notify_change?: boolean
+          notify_new?: boolean
+          notify_payment?: boolean
+          record_reminder?: Json | null
+          team_id?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_notification_prefs_team_fk"
+            columns: ["tenant_id", "team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["tenant_id", "id"]
+          },
+        ]
+      }
       team_schedules: {
         Row: {
           created_at: string

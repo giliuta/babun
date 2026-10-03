@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Linking, ScrollView } from "react-native";
+import { Linking, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Bell,
@@ -7,8 +7,12 @@ import {
   CalendarCheck,
   CalendarClock,
   CalendarDays,
+  CalendarPlus,
+  CalendarX,
   PiggyBank,
+  RefreshCw,
   UserRound,
+  Wallet,
   type LucideIcon,
 } from "lucide-react-native";
 
@@ -21,6 +25,10 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useToast } from "@/components/ui/Toast";
 import { PickerSheet } from "@/components/ui/PickerSheet";
+import { ScopeChips } from "@/components/ui/ScopeChips";
+import { useTeams } from "@/features/reference/queries";
+import { useDataRole } from "@/features/settings/tenant";
+import { haptics } from "@/lib/haptics";
 import {
   cancelManualAppointmentReminder,
   clearSelfReminder,
@@ -41,8 +49,13 @@ import {
   clientTimeLabel,
   recordsLabel,
   sameRecordRule,
+  type TeamNotifyPrefs,
 } from "./notification-prefs";
-import { useNotificationPrefs, writeNotificationPrefs } from "./notification-prefs-store";
+import {
+  readTeamNotifyPrefs,
+  useSaveTeamNotifyPrefs,
+  useTeamNotifyPrefs,
+} from "./notification-prefs-store";
 import {
   permissionRow,
   reminderCanCancel,
@@ -62,6 +75,11 @@ import {
 //
 // СТРОКА НАПОМИНАНИЯ — дверь в его источник. Ручное напоминание записи ещё и
 // отменяется (лист выбора); событие и клиент открываются сразу.
+//
+// НАСТРОЙКИ — НА КАЖДУЮ КОМАНДУ (владелец 03.10: «когда добавляется новая
+// команда, мы настраиваем уведомления чётко на эту команду»): лента команд, у
+// выбранной — напоминания, что происходит в команде и бюджет. Правила — в
+// `notification-prefs.ts`.
 
 const SOURCE_ICON: Record<ReminderSource["kind"], LucideIcon> = {
   appointment: CalendarClock,
@@ -83,9 +101,24 @@ export function NotificationsScreen() {
   const permission = permissionQuery.data;
   const { days, count } = useDeviceReminders();
   const permissionView = permission ? permissionRow(permission) : null;
-  const prefs = useNotificationPrefs();
   const { data: clients = [] } = useClients();
   const [picker, setPicker] = useState<"records" | "clients" | null>(null);
+  const { data: teams = [] } = useTeams();
+  const isOwner = useDataRole().data === "owner";
+  const [teamPick, setTeamPick] = useState<string | null>(null);
+  const team = teams.find((x) => x.id === teamPick) ?? teams[0] ?? null;
+  useTeamNotifyPrefs();
+  const save = useSaveTeamNotifyPrefs();
+  const prefs = readTeamNotifyPrefs(team?.id);
+  const setPrefs = (patch: Partial<TeamNotifyPrefs>) => {
+    if (!team) return;
+    save.mutate(
+      { tenantId: team.tenant_id, teamId: team.id, patch },
+      {
+        onError: (error) => toast(error.message || "Не удалось сохранить", "error"),
+      },
+    );
+  };
 
   // Правило выбрано, а iPhone ещё не спрашивали — спросить сейчас: это явное
   // действие человека, иначе напоминание молча не зазвонит.
@@ -169,7 +202,8 @@ export function NotificationsScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Уведомления" />
+      {/* Одна команда — ленты нет, имя команды в шапке: видно, чьи настройки. */}
+      <ScreenHeader title="Уведомления" subtitle={teams.length === 1 ? team?.name : undefined} />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <SectionCard>
           <SettingsRow
@@ -190,38 +224,90 @@ export function NotificationsScreen() {
           />
         </SectionCard>
 
-        {/* НАСТРОЙКИ НАПОМИНАНИЙ ЭТОГО ТЕЛЕФОНА (владелец 03.10: «страница
-            уведомления — настройки уведомлений»). */}
-        <SectionCard title="Напоминания">
-          <SettingsRow
-            tile={SETTINGS_TILE.blue}
-            icon={CalendarCheck}
-            title="О записях"
-            sub={recordsLabel(prefs.records)}
-            onPress={() => setPicker("records")}
-          />
-          <Divider inset={56} />
-          <SettingsRow
-            tile={SETTINGS_TILE.indigo}
-            icon={UserRound}
-            title="О клиентах"
-            sub={clientTimeLabel(prefs.clientTime)}
-            onPress={() => setPicker("clients")}
-          />
-          <Divider inset={56} />
-          <SettingsRow
-            tile={SETTINGS_TILE.green}
-            icon={PiggyBank}
-            title="Бюджет категорий"
-            sub={prefs.budget ? "Сообщать о 80% и 100%" : "Не сообщать"}
-            toggle={{
-              value: prefs.budget,
-              onChange: (value) => {
-                writeNotificationPrefs({ budget: value });
-              },
-            }}
-          />
-        </SectionCard>
+        {/* НАСТРОЙКИ — У КАЖДОЙ КОМАНДЫ (владелец 03.10). Одна команда —
+            ленты нет. */}
+        {teams.length > 1 ? (
+          <View style={{ marginTop: 12 }}>
+            <ScopeChips
+              onCanvas
+              seam={false}
+              items={teams.map((x) => ({ id: x.id, name: x.name, color: x.color }))}
+              activeId={team?.id ?? null}
+              onSelect={(id) => {
+                haptics.tap();
+                setTeamPick(id);
+              }}
+            />
+          </View>
+        ) : null}
+
+        {team ? (
+          <>
+            <SectionCard title="Напоминания">
+              <SettingsRow
+                tile={SETTINGS_TILE.blue}
+                icon={CalendarCheck}
+                title="О записях"
+                sub={recordsLabel(prefs.records)}
+                onPress={() => setPicker("records")}
+              />
+              <Divider inset={56} />
+              <SettingsRow
+                tile={SETTINGS_TILE.indigo}
+                icon={UserRound}
+                title="О клиентах"
+                sub={clientTimeLabel(prefs.clientTime)}
+                onPress={() => setPicker("clients")}
+              />
+            </SectionCard>
+
+            {/* ЧТО ДЕЛАЮТ ДРУГИЕ В КОМАНДЕ — из истории изменений; свои
+                действия не присылаются. Историю читает владелец аккаунта. */}
+            {isOwner ? (
+              <SectionCard title="Что происходит в команде">
+                <SettingsRow
+                  tile={SETTINGS_TILE.green}
+                  icon={CalendarPlus}
+                  title="Новые записи"
+                  toggle={{ value: prefs.notifyNew, onChange: (v) => setPrefs({ notifyNew: v }) }}
+                />
+                <Divider inset={56} />
+                <SettingsRow
+                  tile={SETTINGS_TILE.blue}
+                  icon={RefreshCw}
+                  title="Переносы и изменения"
+                  toggle={{ value: prefs.notifyChange, onChange: (v) => setPrefs({ notifyChange: v }) }}
+                />
+                <Divider inset={56} />
+                <SettingsRow
+                  tile={SETTINGS_TILE.red}
+                  icon={CalendarX}
+                  title="Отмены"
+                  toggle={{ value: prefs.notifyCancel, onChange: (v) => setPrefs({ notifyCancel: v }) }}
+                />
+                <Divider inset={56} />
+                <SettingsRow
+                  tile={SETTINGS_TILE.teal}
+                  icon={Wallet}
+                  title="Оплаты"
+                  toggle={{ value: prefs.notifyPayment, onChange: (v) => setPrefs({ notifyPayment: v }) }}
+                />
+              </SectionCard>
+            ) : null}
+
+            {isOwner ? (
+              <SectionCard title="Финансы">
+                <SettingsRow
+                  tile={SETTINGS_TILE.green}
+                  icon={PiggyBank}
+                  title="Бюджет категорий"
+                  sub={prefs.budget ? "Сообщать о 80% и 100%" : "Не сообщать"}
+                  toggle={{ value: prefs.budget, onChange: (v) => setPrefs({ budget: v }) }}
+                />
+              </SectionCard>
+            ) : null}
+          </>
+        ) : null}
 
         {days.length === 0 ? (
           <EmptyState title="Напоминаний нет" />
@@ -253,6 +339,7 @@ export function NotificationsScreen() {
       <PickerSheet
         visible={picker === "records"}
         title="Напоминать о записях"
+        subtitle={team?.name}
         selectedId={prefs.records ? recordsLabel(prefs.records) : "off"}
         items={RECORD_REMINDER_OPTIONS.map((rule) => ({
           id: rule ? recordsLabel(rule) : "off",
@@ -261,7 +348,7 @@ export function NotificationsScreen() {
           color: t.accent,
           onPress: () => {
             if (sameRecordRule(rule, prefs.records)) return;
-            writeNotificationPrefs({ records: rule });
+            setPrefs({ records: rule });
             if (rule) void askIfUndetermined();
           },
         }))}
@@ -270,6 +357,7 @@ export function NotificationsScreen() {
       <PickerSheet
         visible={picker === "clients"}
         title="Напоминать о клиентах"
+        subtitle={team?.name}
         selectedId={prefs.clientTime ?? "off"}
         items={CLIENT_TIME_OPTIONS.map((time) => ({
           id: time ?? "off",
@@ -278,8 +366,9 @@ export function NotificationsScreen() {
           color: t.accent,
           onPress: () => {
             if (time === prefs.clientTime) return;
-            writeNotificationPrefs({ clientTime: time });
-            // Напоминания уже стоят — пересобрать их под новое время.
+            setPrefs({ clientTime: time });
+            // Напоминания уже стоят — пересобрать их под новое время (копия
+            // настроек обновлена сразу, до ответа базы).
             void reconcileClientReminders(clients).catch(() => {});
             if (time) void askIfUndetermined();
           },

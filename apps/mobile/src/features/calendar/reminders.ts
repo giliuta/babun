@@ -1,6 +1,6 @@
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getStorage } from "@babun/shared/storage";
-import { readNotificationPrefs } from "@/features/cabinet/notification-prefs-store";
+import { readTeamNotifyPrefs } from "@/features/cabinet/notification-prefs-cache";
 import { AUTO_REMINDER_HORIZON_MS } from "@/features/cabinet/notification-prefs";
 import {
   eventReminderOccurrences,
@@ -441,10 +441,11 @@ export async function clearSelfReminder(appointmentId: string): Promise<void> {
 
 // ── НАПОМИНАНИЕ О КАЖДОЙ ЗАПИСИ (Кабинет → Уведомления, владелец 03.10) ──
 //
-// Правило одно на телефон (`notification-prefs`), группа `auto:`. Ставится
-// только записям (не событиям), не отменённым, в ближайшие две недели. У
-// записи с колокольчиком звонит колокольчик — два пуша об одном не нужны.
-// Правило выключено — группа пустеет.
+// Правило — у команды записи (`team_notification_prefs`, 03.10: «уведомления
+// чётко на эту команду»), группа `auto:`. Ставится только записям (не
+// событиям), не отменённым, в ближайшие две недели. У записи с колокольчиком
+// звонит колокольчик — два пуша об одном не нужны. Везде выключено — группа
+// пустеет.
 
 const autoOwnerKey = (appointmentId: string) => `auto:${appointmentId}`;
 
@@ -453,13 +454,14 @@ export async function reconcileAutoReminders(
   timeZoneFor: (appointment: Appointment) => string,
   clientNameFor?: (appointment: Appointment) => string | undefined,
 ): Promise<void> {
-  const rule = readNotificationPrefs().records;
   const owners: BabunNotificationOwnerDrafts[] = [];
-  if (rule) {
+  {
     const selfRules = readSelfReminders();
     const now = Date.now();
     for (const apt of appointments) {
       if (apt.kind === "event" || apt.kind === "personal") continue;
+      const rule = readTeamNotifyPrefs(apt.team_id).records;
+      if (!rule) continue;
       if (apt.status === "cancelled" || apt.status === "completed") continue;
       if (selfRules[apt.id]) continue;
       let when: Date;

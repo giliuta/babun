@@ -168,7 +168,7 @@ import {
   setSelfReminder,
   syncEventAppointmentReminders,
 } from "@/features/calendar/reminders";
-import { useNotificationPrefs } from "@/features/cabinet/notification-prefs-store";
+import { useTeamNotifyPrefs, useTeamNotifyVersion } from "@/features/cabinet/notification-prefs-store";
 import {
   selfReminderLabel,
   type SelfReminder,
@@ -1020,10 +1020,11 @@ export default function CalendarTab() {
         .join(";"),
     [appts],
   );
-  // Правило «О записях» (Кабинет → Уведомления, 03.10): сменили — сверка
+  // Правило «О записях» — у каждой команды (Кабинет → Уведомления, 03.10):
+  // календарь держит копию настроек свежей, а правка любой команды
   // пересобирает группу `auto:` сразу, без правки в календаре.
-  const autoRule = useNotificationPrefs().records;
-  const autoRuleSig = autoRule ? JSON.stringify(autoRule) : "";
+  useTeamNotifyPrefs();
+  const autoRuleSig = useTeamNotifyVersion();
   const apptsRef = useRef(appts);
   /** Имя клиента записи для сверки пушей «себе» — функция объявлена ниже. */
   const clientNameRef = useRef<(a: Appointment) => string>(() => "");

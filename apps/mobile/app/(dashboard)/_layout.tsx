@@ -15,6 +15,7 @@ import { useCurrentRole } from "@/features/settings/tenant";
 import { MESSAGING_ENABLED, can } from "@/features/settings/role-policy";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { DashboardGate } from "@/lib/DashboardGate";
+import { TeamActivityNotifier } from "@/features/cabinet/TeamActivityNotifier";
 
 export default function DashboardLayout() {
   const t = useThemeColors();
@@ -56,6 +57,9 @@ export default function DashboardLayout() {
   // переиспользует стек /calendar, который лежит НАД табами.
   return (
     <DashboardGate>
+      {/* Уведомления о делах команды из истории изменений (03.10) — пока
+          приложение открыто; без интерфейса. */}
+      <TeamActivityNotifier />
       <RoleCapabilityBoundary capability="view-cabinet" title="Babun">
         <Tabs
           // ПОВТОРНЫЙ ТАП ПО СВОЕЙ ЖЕ ВКЛАДКЕ ВОЗВРАЩАЕТ К ЕЁ НАЧАЛУ.

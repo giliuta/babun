@@ -8,7 +8,7 @@ import {
   type BabunNotificationDraft,
 } from "@/lib/notifications";
 import { clockParts } from "@/features/cabinet/notification-prefs";
-import { readNotificationPrefs } from "@/features/cabinet/notification-prefs-store";
+import { readTeamNotifyPrefs } from "@/features/cabinet/notification-prefs-cache";
 
 const Notifications = getNotificationsModule();
 
@@ -96,13 +96,13 @@ export async function cancelClientReminder(clientId: string): Promise<void> {
 export async function syncClientReminder(
   client: Pick<
     Client,
-    "id" | "full_name" | "phone" | "reminder_at" | "deleted_at"
+    "id" | "full_name" | "phone" | "reminder_at" | "deleted_at" | "team_id"
   >,
 ): Promise<ClientReminderResult> {
   const reminderAt = client.reminder_at?.trim() ?? "";
-  // «О клиентах: Не напоминать» (Кабинет → Уведомления) — дата сохраняется,
-  // а телефон молчит.
-  const time = readNotificationPrefs().clientTime;
+  // «О клиентах: Не напоминать» в команде клиента (Кабинет → Уведомления) —
+  // дата сохраняется, а телефон молчит.
+  const time = readTeamNotifyPrefs(client.team_id).clientTime;
   if (!reminderAt || client.deleted_at || !time) {
     await cancelClientReminder(client.id);
     return "cleared";
@@ -203,13 +203,15 @@ export async function consumeLastClientNotificationTarget(): Promise<
  *  сменили время или выключили — группа `client:` строится заново по
  *  списку клиентов, без разрешения iOS (его спрашивает явное действие). */
 export async function reconcileClientReminders(
-  clients: readonly Pick<Client, "id" | "full_name" | "phone" | "reminder_at" | "deleted_at">[],
+  clients: readonly Pick<Client, "id" | "full_name" | "phone" | "reminder_at" | "deleted_at" | "team_id">[],
 ): Promise<void> {
-  const time = readNotificationPrefs().clientTime;
   const owners: { ownerKey: string; drafts: BabunNotificationDraft[] }[] = [];
-  if (time) {
+  {
     const now = new Date();
     for (const client of clients) {
+      // Время — у команды клиента (03.10).
+      const time = readTeamNotifyPrefs(client.team_id).clientTime;
+      if (!time) continue;
       const reminderAt = client.reminder_at?.trim() ?? "";
       if (!reminderAt || client.deleted_at) continue;
       const fireAt = clientReminderFireDate(reminderAt, now, time);
