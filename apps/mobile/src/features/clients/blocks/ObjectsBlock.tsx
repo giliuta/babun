@@ -362,6 +362,7 @@ export function ObjectRow({
   lastVisit,
   onPress,
   onLongPress,
+  longPressLabel,
   teamId = null,
 }: {
   loc: Location;
@@ -385,9 +386,13 @@ export function ObjectRow({
   /** Нет — строка только читается (STORY-084: в записи объект человеку не
    *  меняется). Маршрут при этом остаётся: это дорога, а не правка. */
   onPress?: () => void;
-  /** Долгое нажатие по строке — на карточке клиента копирует адрес. Запись и
-   *  инвойс его не передают: там строка ведёт свой сценарий выбора. */
+  /** Долгое нажатие по строке — на карточке клиента копирует адрес; в записи
+   *  и инвойсе — правка объекта (владелец 03.10: «три точки убираем…
+   *  редактирование — задержать»). */
   onLongPress?: () => void;
+  /** Что делает удержание — словами для VoiceOver («Правка объекта»): тогда
+   *  подсказка называет оба жеста и есть действие удержания. Нет — как было. */
+  longPressLabel?: string;
   /** Команда клиента — её «Карты для маршрута» (у каждой команды свои). */
   teamId?: string | null;
 }) {
@@ -442,12 +447,20 @@ export function ObjectRow({
           .filter(Boolean)
           .join(", ")}
         accessibilityHint={
-          !onPress
-            ? undefined
-            : onMore
-              ? "Открывает выбор объекта"
-              : "Открывает правку объекта"
+          longPressLabel && onPress
+            ? `Открывает выбор объекта; удерживайте — ${longPressLabel.toLowerCase()}`
+            : !onPress
+              ? undefined
+              : onMore
+                ? "Открывает выбор объекта"
+                : "Открывает правку объекта"
         }
+        accessibilityActions={
+          longPressLabel && onLongPress ? [{ name: "longpress", label: longPressLabel }] : undefined
+        }
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === "longpress") onLongPress?.();
+        }}
         style={({ pressed }) => ({
           flex: 1,
           flexDirection: "row",

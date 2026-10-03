@@ -2722,14 +2722,9 @@ export default function BookScreen() {
                         <ObjectRow
                           loc={selectedLocation}
                           showNote={false}
-                          onMore={
-                            can.editObject
-                              ? () => {
-                                  setObjectEdit(true);
-                                  haptics.tap();
-                                }
-                              : undefined
-                          }
+                          // Тап — выбор другого объекта, удержание — правка этого (владелец
+                          // 03.10: «три точки справа убираем… редактирование объекта —
+                          // задержать, как у клиента переход в карточку»).
                           onPress={
                             can.editObject
                               ? () => {
@@ -2738,6 +2733,15 @@ export default function BookScreen() {
                                 }
                               : undefined
                           }
+                          onLongPress={
+                            can.editObject
+                              ? () => {
+                                  haptics.tap();
+                                  setObjectEdit(true);
+                                }
+                              : undefined
+                          }
+                          longPressLabel="Правка объекта"
                         />
                         {/* ЗАМЕТКА ОБЪЕКТА — «код ворот», «ключ у соседей»:
                             мини-блок пишет прямо в объект (см. `writeObjectNote`),
@@ -3113,14 +3117,9 @@ export default function BookScreen() {
                     <ObjectRow
                       loc={eventLocationEntry.loc}
                       showNote={false}
-                      onMore={
-                        can.editObject
-                          ? () => {
-                              setObjectEdit(true);
-                              haptics.tap();
-                            }
-                          : undefined
-                      }
+                      // Тап — выбор другого объекта, удержание — правка этого (владелец
+                      // 03.10: «три точки справа убираем… редактирование объекта —
+                      // задержать, как у клиента переход в карточку»).
                       onPress={
                         can.editObject
                           ? () => {
@@ -3129,6 +3128,15 @@ export default function BookScreen() {
                             }
                           : undefined
                       }
+                      onLongPress={
+                        can.editObject
+                          ? () => {
+                              haptics.tap();
+                              setObjectEdit(true);
+                            }
+                          : undefined
+                      }
+                      longPressLabel="Правка объекта"
                     />
                     {/* Чей объект — строкой под ним, когда это не клиент
                         события: иначе «Дом» ничего не говорит о том, куда

@@ -86,7 +86,8 @@ export function InvoiceObjectBlock({
               loc={selected}
               showNote={false}
               onPress={() => setPicker(true)}
-              onMore={() => setEditing(true)}
+              onLongPress={() => setEditing(true)}
+              longPressLabel="Правка объекта"
             />
             {hasExactAddress(selected.addressParts) ? null : (
               <Text
