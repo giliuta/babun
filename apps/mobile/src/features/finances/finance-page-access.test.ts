@@ -359,9 +359,26 @@ describe("две стороны денег", () => {
   test("«Видит» расходы и «Добавляет» доходы: кнопка расхода погашена с причиной", () => {
     const access = sides({ "finance.income": "write", "finance.expense": "read" });
     assert.deepEqual(access.footer("expense"), { enabled: false, reason: VIEW_ONLY_REASON });
-    // Прибыль сотруднику закрыта: материалов записей у него нет, и число
-    // вышло бы больше настоящего (аудит 2026-09-30).
+    // Без права «Прибыль» плитка закрыта и при обеих сторонах.
+    assert.equal(access.profit, "locked");
     assert.equal(access.view("profit"), "all");
+  });
+
+  test("«Прибыль: Видит» (03.10) — открыта при обеих сторонах, иначе нет", () => {
+    const open = sides({ "finance.income": "read", "finance.expense": "read", "finance.profit": "read" });
+    assert.equal(open.profit, "read");
+    assert.equal(open.view("profit"), "profit");
+    // Правки у прибыли нет — и кнопки в футере тоже.
+    assert.equal(open.footer("profit").enabled, false);
+    const oneSide = sides({ "finance.income": "read", "finance.profit": "read" });
+    assert.equal(oneSide.profit, "locked");
+    assert.equal(oneSide.view("profit"), "all");
+    // Право другой команды на выбранную не действует.
+    const elsewhere = sides(
+      { "finance.income": "read", "finance.expense": "read" },
+      { "finance.profit": "read" },
+    );
+    assert.equal(elsewhere.profit, "locked");
   });
 
   test("«Правит всё» для ворот — та же запись", () => {

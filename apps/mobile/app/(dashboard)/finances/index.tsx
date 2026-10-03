@@ -562,9 +562,12 @@ function FinancesContent() {
     ) {
       return null;
     }
-    const rows = withTeamlessRows(
-      prevTeamQuery.data,
-      teamlessLedgerRows(prevCompanyQuery.data, scope, accountTeam),
+    // Тем же отбором, что текущий период: «было» партнёра — только из строк,
+    // которые он видит (в зеркале журнал приходит владельческий).
+    const rows = readableTransactions(
+      withTeamlessRows(prevTeamQuery.data, teamlessLedgerRows(prevCompanyQuery.data, scope, accountTeam)),
+      readRules,
+      debtTeams,
     );
     const transactions = requestedClientId
       ? rows.filter((transaction) => transaction.client_id === requestedClientId)
@@ -596,6 +599,8 @@ function FinancesContent() {
     prevRange.from,
     prevRange.to,
     access.recordMoney,
+    readRules,
+    debtTeams,
   ]);
 
   // ОДНИ И ТЕ ЖЕ ДЕНЬГИ СЧИТАЮТСЯ ОДИН РАЗ.
@@ -713,13 +718,10 @@ function FinancesContent() {
     () => ({
       income: access.income === "locked" ? 0 : totals.income,
       expense: access.expense === "locked" ? 0 : totals.expense,
-      profit:
-        access.income === "locked" || access.expense === "locked" || !access.recordMoney
-          ? 0
-          : totals.profit,
+      profit: access.profit === "locked" ? 0 : totals.profit,
       debt: access.debts === "locked" ? 0 : totals.debt,
     }),
-    [access.debts, access.income, access.expense, access.recordMoney, totals],
+    [access.debts, access.income, access.expense, access.profit, totals],
   );
 
   // Σ refunds already issued against each income — caps further refunds.
@@ -1529,7 +1531,7 @@ function FinancesContent() {
           lockAccounts={access.accounts === "locked"}
           lockIncome={access.income === "locked"}
           lockExpense={access.expense === "locked"}
-          lockProfit={!access.recordMoney}
+          lockProfit={access.profit === "locked"}
           lockDebts={access.debts === "locked"}
           view={view}
           onTap={toggleView}

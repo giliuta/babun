@@ -69,6 +69,9 @@ export interface FinancePageAccess {
   ops: Level;
   accounts: Level;
   debts: Level;
+  /** «Прибыль» (`finance.profit`, 03.10: «Скрыта» · «Видит»). Плитка и панель
+   *  открыты, когда видны и обе стороны денег: прибыль — их разница. */
+  profit: Level;
   /** Пока владельческие: срез 1 их не открывает. */
   documents: boolean;
   settings: boolean;
@@ -152,6 +155,16 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
   // «Документы» — своё право команды с 03.10 (миграция 20261003171500):
   // «Видит» — её инвойсы и чеки, «Выставляет» — ещё и новые инвойсы.
   const documentsLevel = levelIn("finance.documents", scope);
+  // ПРИБЫЛЬ ПАРТНЁРА — доход минус расход команды, которые он видит. Материалы
+  // записей в неё не входят: их суммы ему не приходят (`recordMoney`).
+  const profit: Level =
+    income === "locked" || expense === "locked"
+      ? "locked"
+      : owner
+        ? "read"
+        : levelIn("finance.profit", scope) === "locked"
+          ? "locked"
+          : "read";
 
   /** «Правит всё» — чужие операции стороны. */
   const sideFull = (side: Side, teamId: string | null): boolean => {
@@ -240,6 +253,7 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
     ops,
     accounts,
     debts,
+    profit,
     documents: has.documents && documentsLevel === "write",
     // Шестерёнка над счетами ведёт на «Счета» команды — открыта тому, у кого
     // открыта эта строка шестерёнки (03.10).
@@ -264,15 +278,9 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
       if (view === "debt" && debts === "locked") return "all";
       if (view === "income" && income === "locked") return "all";
       if (view === "expense" && expense === "locked") return "all";
-      // Прибыль — доход минус расход: без одной из сторон она была бы выдумкой.
-      // И без материалов записей (их деньги сотруднику не приходят) — тоже:
-      // €800 у диспетчера против €500 у владельца (аудит 2026-09-30).
-      if (
-        view === "profit" &&
-        (income === "locked" || expense === "locked" || !owner)
-      ) {
-        return "all";
-      }
+      // Прибыль — доход минус расход: без одной из сторон она была бы
+      // выдумкой. Партнёру — по его праву «Прибыль» (03.10).
+      if (view === "profit" && profit === "locked") return "all";
       return view;
     },
     footer: (view) => footerState(footerLevel(view)),
