@@ -249,4 +249,19 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(footer, /\{settling \? "—" : formatEUR\(income\)\}/);
     assert.match(footer, /\{settling \? "—" : formatEUR\(spent\)\}/);
   });
+
+  test("подзаголовки шторок начинаются с заглавной: «Пт, 25 сентября»", () => {
+    const src = screen();
+    assert.match(src, /subtitle: `\$\{humanDayTitle\(dateYmd\)\}, \$\{timeStart\}`,/);
+    assert.match(src, /subtitle: `\$\{humanDayTitle\(apt\.date\)\}, \$\{apt\.time_start\}–\$\{apt\.time_end\}`,/);
+    assert.match(src, /reminderFor \? `\$\{humanDayTitle\(reminderFor\.date\)\}/);
+    assert.doesNotMatch(src, /subtitle: `\$\{humanDay\(/);
+  });
+
+  test("событие без типа показывает своё имя, а не пустую дверь", () => {
+    const block = readFileSync(resolve(here, "../appointments/EventTypeBlock.tsx"), "utf8");
+    assert.match(block, /: freeTitle\s*\? \{ name: freeTitle, color: titleColor \?\? null, Icon: Tag \}/);
+    const book = readFileSync(resolve(here, "../../../app/book/index.tsx"), "utf8");
+    assert.match(book, /<EventTypeBlock\s*type=\{eventType\}\s*title=\{eventTitle\}\s*titleColor=\{eventColor\}/);
+  });
 });

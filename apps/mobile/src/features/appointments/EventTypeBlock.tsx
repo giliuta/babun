@@ -29,12 +29,22 @@ import { eventTypeIcon } from "@/features/calendar/event-type-icons";
 
 export function EventTypeBlock({
   type,
+  title,
+  titleColor,
   onPress,
 }: {
   /** Выбранный тип; `null` — событие без типа (оно называется «Событие»). */
   type: PersonalEventType | null | undefined;
+  /** НАЗВАНИЕ СОБЫТИЯ БЕЗ ТИПА (повторный аудит 03.10). У старых событий имя
+   *  вписано словом («Встреча», «Перерыв»), а тип с таким именем не заведён
+   *  или стёрт. Сетка подписывает блок этим именем, сохранение его бережёт, а
+   *  страница показывала пустую дверь «Выбрать тип события» — будто события
+   *  никак не зовут. Теперь в блоке стоит его имя; выбор типа заменит его. */
+  title?: string;
+  titleColor?: string | null;
   onPress: () => void;
 }) {
+  const freeTitle = title?.trim();
   return (
     <ReferenceBlock
       title="Тип события"
@@ -48,7 +58,9 @@ export function EventTypeBlock({
               color: type.color,
               Icon: eventTypeIcon(type.icon),
             }
-          : null
+          : freeTitle
+            ? { name: freeTitle, color: titleColor ?? null, Icon: Tag }
+            : null
       }
       onPress={onPress}
     />

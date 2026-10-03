@@ -23,7 +23,7 @@ import { crewAddress, crewBlocks } from "@/features/appointments/crew-blocks";
 import { crewMoney, crewWorkLines } from "@/features/appointments/crew-work";
 import { ActionRow, InfoRow } from "@/features/appointments/crew-rows";
 import { CrewWorkRecord } from "@/features/appointments/CrewWorkRecord";
-import { humanDay } from "@/features/appointments/helpers";
+import { humanDay, humanDayTitle } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 
 const REPEAT_LABELS: Record<PersonalEventRepeat["kind"], string> = {
@@ -107,7 +107,7 @@ export function CrewAppointmentSheet({
       <Screen edges={["top"]}>
         <ScreenHeader
           title={client?.full_name || appointment.comment || "Заявка"}
-          subtitle={`${humanDay(appointment.date)} · ${appointment.time_start}–${appointment.time_end}`}
+          subtitle={`${humanDayTitle(appointment.date)} · ${appointment.time_start}–${appointment.time_end}`}
           onBack={onClose}
         />
         <ScrollView

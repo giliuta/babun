@@ -3095,9 +3095,11 @@ export default function BookScreen() {
                   строка-дверь → шторка. Цвет события и есть цвет типа. */}
               {/* Без права править событие тип только читается: пустую дверь
                   «Выбрать тип» не показываем, выбранный — без действия. */}
-              {evShowType && can.showType && (can.editEventType || eventType) ? (
+              {evShowType && can.showType && (can.editEventType || eventType || eventTitle.trim()) ? (
                 <EventTypeBlock
                   type={eventType}
+                  title={eventTitle}
+                  titleColor={eventColor}
                   onPress={
                     can.editEventType
                       ? () => {

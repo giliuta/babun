@@ -62,6 +62,7 @@ import {
   addMinutesHM,
   formatYMD,
   humanDay,
+  humanDayTitle,
   minutesBetweenHM,
   parseYMD,
 } from "@/features/appointments/helpers";
@@ -2158,7 +2159,7 @@ export default function CalendarTab() {
     // ничего»). Встроенного «Перерыва» больше нет: нужен — заводится типом.
     setSheetMenu({
       title: "Быстрое событие",
-      subtitle: `${humanDay(dateYmd)}, ${timeStart}`,
+      subtitle: `${humanDayTitle(dateYmd)}, ${timeStart}`,
       items: (eventTypesOn ? quickTypes : []).map((type) => ({
         label: type.label,
         icon: eventTypeIcon(type.icon),
@@ -2544,7 +2545,7 @@ export default function CalendarTab() {
 
     setSheetMenu({
       title: clientName(apt) || apt.comment || "Запись",
-      subtitle: `${humanDay(apt.date)}, ${apt.time_start}–${apt.time_end}`,
+      subtitle: `${humanDayTitle(apt.date)}, ${apt.time_start}–${apt.time_end}`,
       items: shown,
     });
   };
@@ -3565,7 +3566,7 @@ export default function CalendarTab() {
         visible={reminderFor != null}
         value={reminderFor ? getSelfReminder(reminderFor.id) : null}
         subtitle={
-          reminderFor ? `${humanDay(reminderFor.date)}, ${reminderFor.time_start}` : undefined
+          reminderFor ? `${humanDayTitle(reminderFor.date)}, ${reminderFor.time_start}` : undefined
         }
         onPick={pickReminderFor}
         onClose={() => setReminderFor(null)}
