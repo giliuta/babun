@@ -16,6 +16,7 @@ import {
   staleTimeFor,
   type FreshnessContext,
 } from "./switch-revalidate-plan";
+import { onStorageReady } from "@babun/shared/storage";
 import { restoreChrome, watchChrome } from "./chrome-cache";
 
 /** Кто сейчас активен и кого дообновляет очередь — читается на каждое решение
@@ -124,5 +125,10 @@ export const queryClient = new QueryClient({
 // календари, права, команды и профиль компании поднимаются с устройства до
 // первого экрана и записываются после каждого удачного ответа
 // (`chrome-cache.ts`). Данные экранов сюда не входят.
-restoreChrome(queryClient);
+//
+// Поднимаем, КОГДА ХРАНИЛИЩЕ ПОДКЛЮЧЕНО: этот модуль вычисляется раньше него
+// (маршрут `(auth)` грузится до корневого макета) — прямой вызов читал
+// пустоту, и без сервера холодный старт упирался в «Нет связи с сервером»
+// вместо вкладок. Экраны рисуются позже подключения, так что шапка успевает.
+onStorageReady(() => restoreChrome(queryClient));
 watchChrome(queryClient);

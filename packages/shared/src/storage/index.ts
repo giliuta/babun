@@ -7,4 +7,4 @@
 export type { KVStorage } from "./types";
 export { WebKVStorage } from "./web";
 export { MemoryKVStorage } from "./memory";
-export { getStorage, setStorage } from "./provider";
+export { getStorage, onStorageReady, setStorage } from "./provider";

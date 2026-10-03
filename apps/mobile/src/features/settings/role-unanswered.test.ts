@@ -37,7 +37,9 @@ describe("проводка: без сервера шапка на месте, т
 
   test("шапка поднимается с устройства до первого экрана", () => {
     const client = read("../../lib/query-client.ts");
-    assert.match(client, /restoreChrome\(queryClient\);\s*watchChrome\(queryClient\);/);
+    // Поднимается, КОГДА хранилище подключено: модуль грузится раньше него
+    // (разбор — chrome-cache-cold-start.test.ts).
+    assert.match(client, /onStorageReady\(\(\) => restoreChrome\(queryClient\)\);\s*watchChrome\(queryClient\);/);
   });
 
   test("«Финансы»: лента команд и при загрузке, и при ошибке", () => {
