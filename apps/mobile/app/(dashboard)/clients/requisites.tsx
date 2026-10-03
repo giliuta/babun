@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocalSearchParams } from "expo-router";
+import { useInClientsTab } from "@/features/clients/reference-href";
 import { ScrollView, View } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { clientRequisitesOf } from "@babun/shared/local/client-requisites";
@@ -48,13 +49,17 @@ function ClientRequisitesScreen() {
   const empty = client ? clientRequisitesOf(client).length === 0 : false;
   const canEdit = access.requisites.edit;
 
+  // Во вкладке нижний край держит таб-бар; поверх записи — свой.
+  const inTab = useInClientsTab();
   return (
     // Нижнюю зону держит таб-бар — кнопка внизу на той же высоте, что у
     // «Истории», «Файлов» и «Объектов».
-    <Screen edges={["top"]}>
+    <Screen edges={inTab ? ["top"] : undefined}>
       <ScreenHeader title="Реквизиты" subtitle={client?.full_name ?? undefined} />
-      {isLoading || !client ? (
+      {isLoading ? (
         <EmptyState state="loading" fill />
+      ) : !client ? (
+        <EmptyState fill title="Клиент не найден" />
       ) : !access.requisites.show ? null : (
         <>
           {/* ПУСТО — ОДНИМ СЛОВОМ (закон 15.09): «Добавить» — внизу. Блок

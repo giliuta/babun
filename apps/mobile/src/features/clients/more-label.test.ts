@@ -38,7 +38,7 @@ describe("блок «SMS» — мини-история в самом блоке 
   test("страница — только когда сообщений больше трёх, через «Ещё N»", () => {
     assert.match(block(), /const more = moreLabel\(messages\.length, recent\.length\);/);
     assert.match(block(), /label: more, pill: true, onPress: openAll/);
-    assert.match(block(), /pathname: "\/clients\/sms", params: clientSubParams\(client\.id, scope\)/);
+    assert.match(block(), /pathname: subPage\("sms"\), params: clientSubParams\(client\.id, scope\)/);
   });
   test("отправки в блоке нет — только у трубки клиента", () => {
     // Ищется КНОПКА, а не слово: почему её нет, сказано в комментарии.

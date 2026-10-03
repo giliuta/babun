@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocalSearchParams } from "expo-router";
+import { useInClientsTab } from "@/features/clients/reference-href";
 import { ScrollView, View } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import type { Client } from "@babun/shared/local/clients";
@@ -12,6 +13,9 @@ import { useClient, useUpdateClient } from "@/features/clients/queries";
 import { useClientPeople } from "@/features/clients/ClientPeopleDoor";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useCardAccess } from "@/features/clients/use-card-access";
+import type { Appointment } from "@babun/shared/local/appointments";
+
+const NO_APPOINTMENTS: Appointment[] = [];
 
 // ВСЕ ОБЪЕКТЫ КЛИЕНТА — СВОЯ СТРАНИЦА (владелец 22.09: «блок объекты —
 // нажимаю, и открывается страница, где все объекты… если у клиента 12
@@ -67,12 +71,17 @@ function ClientObjectsScreen() {
     access: access.people,
   });
 
+  // Во вкладке нижний край держит таб-бар; поверх записи — свой.
+  const inTab = useInClientsTab();
   return (
     // Нижнюю зону держит таб-бар — кнопка на уровне соседних экранов.
-    <Screen edges={["top"]}>
+    <Screen edges={inTab ? ["top"] : undefined}>
       <ScreenHeader title="Объекты" subtitle={client?.full_name ?? undefined} />
-      {isLoading || !client ? (
+      {isLoading ? (
         <EmptyState state="loading" fill />
+      ) : !client ? (
+        // Клиента нет (удалён, нет связи) — словами, а не вечной загрузкой.
+        <EmptyState fill title="Клиент не найден" />
       ) : !access.objects.show ? null : (
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
           <ClientObjectsSection
@@ -80,7 +89,9 @@ function ClientObjectsScreen() {
             update={update}
             draft={false}
             readOnly={!access.objects.edit}
-            appointments={appointments}
+            // «был 12 авг» — из записей: без права «История» их нет (аудит
+            // 03.10 — на карточке так и было, на странице дата протекала).
+            appointments={access.history.show ? appointments : NO_APPOINTMENTS}
             bare
             adding={adding}
             onAddingChange={setAdding}

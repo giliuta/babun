@@ -86,6 +86,7 @@ import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { RemindSheet } from "@/features/clients/RemindSheet";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
+import { useFeatureOn } from "@/features/settings/company-features";
 import { loadErrorWords } from "@/lib/connection-words";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
@@ -422,8 +423,12 @@ function ClientsListScreen() {
   const partnerDelete = (c: Client) => !!c.blocks && clientBlockLevel(c, "clients.delete") === "write";
   // «Напомнить» и «В чёрный список»: своя база по праву карточки, партнёр —
   // по «Меню клиента».
+  // Своя база без тарифа только смотрит (аудит 03.10): «Напомнить» и «В
+  // чёрный список» сервер отказал бы — карточка их и так гасит.
   const canEditClient = (c: Client) =>
-    c.blocks ? partnerMenu(c) : caps.edit && clientBlockLevel(c, "clients") === "write";
+    c.blocks
+      ? partnerMenu(c)
+      : clientsInPlan && caps.edit && clientBlockLevel(c, "clients") === "write";
   // «Удалить»: своя база — владелец, партнёр — «Удаление клиента».
   const canDeleteClient = (c: Client) => (c.blocks ? partnerDelete(c) : caps.manage);
   // «Поделиться» и «Выбрать несколько»: своя база — «можно вынести»,
@@ -519,10 +524,16 @@ function ClientsListScreen() {
   const onToggleBlacklist = (c: Client) =>
     updateById.mutate({ id: c.id, patch: { blacklisted: !c.blacklisted } });
 
-  // «Поделиться» — тот же текст, что из «⋯» карточки (`shareText`).
+  // «Поделиться» — тот же текст, что из «⋯» карточки (`shareText`). Реквизиты
+  // в нём — только когда их видно (аудит 03.10: из списка они уходили всегда,
+  // даже при скрытом блоке «Реквизиты»).
+  const requisitesOn = useFeatureOn("client_requisites");
   const onShareClient = async (c: Client) => {
+    const requisites =
+      requisitesOn &&
+      (c.blocks ? clientBlockLevel(c, "clients.requisites") !== "hidden" : caps.money);
     try {
-      await Share.share({ message: shareText(c, { requisites: true }) });
+      await Share.share({ message: shareText(c, { requisites }) });
     } catch {
       // user dismissed the share sheet — no-op.
     }

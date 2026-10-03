@@ -79,6 +79,7 @@ import { useClientAppointments } from "@/features/clients/appointments";
 import { useAllServices } from "@/features/services/queries";
 import ClientHeader from "@/features/clients/ClientHeader";
 import { clientSubParams } from "@/features/clients/clients-company";
+import { useReferenceHref } from "@/features/clients/reference-href";
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
 import { ClientLabelTags } from "@/features/clients/ClientLabelTags";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
@@ -151,6 +152,9 @@ export function ClientDetailScreen() {
     { id: string; open?: string; split?: string; team?: string } & DraftLinkParams
   >();
   const router = useRouter();
+  // Страницы карточки — во вкладке или поверх записи (`/client`), смотря
+  // откуда открыта сама карточка (аудит 03.10).
+  const subPage = useReferenceHref().clientPage;
   const pathname = usePathname();
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
@@ -585,7 +589,10 @@ export function ClientDetailScreen() {
           guardedBook(c, {
             locationId:
               c.locations?.find((l) => l.isPrimary)?.id ?? c.locations?.[0]?.id ?? null,
-            teamId: stats?.lastTeamId ?? null,
+            // Та же команда, по которой проверено право записи (аудит 03.10:
+            // проверка шла по команде клиента, а календарь открывался в
+            // команде последнего визита — без права там).
+            teamId: bookTeam,
           });
         }
       : undefined;
@@ -762,6 +769,8 @@ export function ClientDetailScreen() {
             update={update}
             tags={tags}
             readOnly={!access.labels.edit}
+            // Выключенная командой метка не запирает тег (аудит 03.10).
+            tagReadOnly={!access.tags.edit}
             labelOn={access.labels.show}
             tagOn={access.tags.show}
           />
@@ -797,7 +806,7 @@ export function ClientDetailScreen() {
                     separated
                     onPress={() =>
                       router.push({
-                        pathname: "/clients/people",
+                        pathname: subPage("people"),
                         params: clientSubParams(id, scope),
                       })
                     }
@@ -859,7 +868,7 @@ export function ClientDetailScreen() {
             !isDraft && access.history.show && appointments.length > 0
               ? () => {
                   router.push({
-                    pathname: "/clients/visits",
+                    pathname: subPage("visits"),
                     params: clientSubParams(id, scope),
                   });
                 }
@@ -877,10 +886,10 @@ export function ClientDetailScreen() {
           access={access}
           // Длинные списки — своими страницами, как история записей.
           onOpenObjects={() =>
-            router.push({ pathname: "/clients/objects", params: clientSubParams(id, scope) })
+            router.push({ pathname: subPage("objects"), params: clientSubParams(id, scope) })
           }
           onOpenRequisites={() =>
-            router.push({ pathname: "/clients/requisites", params: clientSubParams(id, scope) })
+            router.push({ pathname: subPage("requisites"), params: clientSubParams(id, scope) })
           }
           onDraftFiles={() => onDraftDoor("files")}
           openFilesOnArrive={!isDraft && openOnArrive === "files"}

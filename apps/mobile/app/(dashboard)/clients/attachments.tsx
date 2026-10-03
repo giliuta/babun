@@ -1,6 +1,7 @@
 import { Fragment, useState } from "react";
 import { Linking, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useInClientsTab } from "@/features/clients/reference-href";
 import { useQuery } from "@tanstack/react-query";
 import { listAccounts } from "@babun/shared/db/repositories/accounts";
 import type { PhotoKind } from "@babun/shared/db/repositories/appointment-photos";
@@ -129,10 +130,12 @@ function ClientAttachmentsScreen() {
       () => remove.mutate(doc, { onSuccess: () => toast("Удалено", "info") }),
     );
 
+  // Во вкладке нижний край держит таб-бар; поверх записи — свой.
+  const inTab = useInClientsTab();
   return (
     // Нижнюю зону держит таб-бар — как у «Истории»: кнопка внизу стоит на
     // той же высоте, что на соседних экранах.
-    <Screen edges={["top"]}>
+    <Screen edges={inTab ? ["top"] : undefined}>
       <ScreenHeader title="Файлы" subtitle={client?.full_name || undefined} />
 
       {!access.files.show ? null : files.isLoading ? (

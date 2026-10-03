@@ -114,7 +114,7 @@ describe("«Файлы» — как «История»: последний на 
     assert.match(block(), /const last = files\.timeline\[0\] \?\? null;/);
     assert.match(block(), /<VisitDayHeader date=\{last\.day\} \/>/);
     assert.match(block(), /<ClientFileRow[\s\S]{0,160}onPress=\{openAll\}/);
-    assert.match(block(), /pathname: "\/clients\/attachments", params: clientSubParams\(clientId, scope\)/);
+    assert.match(block(), /pathname: subPage\("attachments"\), params: clientSubParams\(clientId, scope\)/);
     // Квадратов и пилюль записи на карточке клиента больше нет.
     assert.doesNotMatch(block(), /<PhotoTile|<DocumentPill/);
   });

@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { ScrollView } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { useInClientsTab } from "@/features/clients/reference-href";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -63,9 +64,11 @@ function ClientSmsScreen() {
     later: "Сообщения загрузятся, как только сервер ответит.",
   });
 
+  // Во вкладке нижний край держит таб-бар; поверх записи — свой.
+  const inTab = useInClientsTab();
   return (
     // Нижнюю зону держит таб-бар — как у «Истории» и «Файлов».
-    <Screen edges={["top"]}>
+    <Screen edges={inTab ? ["top"] : undefined}>
       <ScreenHeader title="SMS" subtitle={client?.full_name || undefined} />
       {!access.sms.show ? null : log.isLoading ? (
         <EmptyState state="loading" fill />

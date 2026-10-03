@@ -1,6 +1,7 @@
 import { Fragment, useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useInClientsTab } from "@/features/clients/reference-href";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
@@ -159,10 +160,12 @@ function ClientVisitsScreen() {
   };
 
 
+  // Во вкладке нижний край держит таб-бар; поверх записи — свой.
+  const inTab = useInClientsTab();
   return (
     // Нижнюю зону держит таб-бар — как у списка клиентов: иначе кнопка
     // внизу стояла на ~34pt выше, чем на соседних экранах (владелец 03.10).
-    <Screen edges={["top"]}>
+    <Screen edges={inTab ? ["top"] : undefined}>
       {/* ФИЛЬТР НАЗВАН В ШАПКЕ и снимается там же словом «Все» — как разрез
           ленты в «Финансах» (PanelHeader). */}
       <ScreenHeader
@@ -220,7 +223,12 @@ function ClientVisitsScreen() {
                     team={a.team_id ? teamsById.get(a.team_id) : undefined}
                     today={today}
                     showMoney={showMoney}
-                    onPress={historyOnly.has(a.id) ? undefined : () => open(a)}
+                    // Запись чужой (не открытой сейчас) компании страница
+                    // записи не прочтёт — она читает активную; такая строка —
+                    // показание, а не дверь в пустой экран (аудит 03.10).
+                    onPress={
+                      historyOnly.has(a.id) || (scope && !scope.isActive) ? undefined : () => open(a)
+                    }
                   />
                 ))}
               </SelectList>

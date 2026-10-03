@@ -33,5 +33,19 @@ export function useReferenceHref() {
     services: ("/services" as const),
     eventTypes: ("/event-types" as const),
     categories: ("/categories" as const),
+    // СТРАНИЦЫ САМОЙ КАРТОЧКИ (аудит 03.10): с 03.10 тап по объекту, файлу,
+    // реквизитам и «Ещё N» уводит на страницу — и карточка, открытая поверх
+    // записи (`/client`), уводила во вкладку, бросая запись под табами.
+    clientPage: (page: ClientSubPage) =>
+      inClientsTab ? (`/clients/${page}` as const) : (`/client-${page}` as const),
   };
+}
+
+/** Страницы карточки клиента, у которых есть второй адрес в `app/(shared)`. */
+export type ClientSubPage = "visits" | "objects" | "attachments" | "requisites" | "sms" | "people";
+
+/** Экран во вкладке «Клиенты» — нижний край держит таб-бар; над табами —
+ *  свой (иначе кнопка внизу легла бы на полоску «домой»). */
+export function useInClientsTab(): boolean {
+  return usePathname().startsWith("/clients");
 }

@@ -28,6 +28,7 @@ export function ClientLabelTags({
   update,
   tags,
   readOnly,
+  tagReadOnly,
   labelOn = true,
   tagOn = true,
 }: {
@@ -38,8 +39,11 @@ export function ClientLabelTags({
   update: (patch: Partial<Client>) => Promise<boolean> | void;
   /** Каталог тегов компании (Кабинет → «Теги клиентов»). */
   tags: ClientTag[];
-  /** Нет права менять карточку — плитки только читаются. */
+  /** Нет права менять метку — её плитка только читается. */
   readOnly?: boolean;
+  /** Своё «только читать» у тега: у метки и тега разные выключатели команды
+   *  (03.10), и выключенная метка не должна запирать тег. Нет — как метка. */
+  tagReadOnly?: boolean;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -101,7 +105,8 @@ export function ClientLabelTags({
   // «Только видит» и значения нет — плитка-приглашение была бы кнопкой в
   // никуда: её нет, а обе пустые — нет и ряда.
   const showLabel = labelOn && (!readOnly || !!label);
-  const showTag = tagOn && (!readOnly || !!tagsTitle);
+  const tagLocked = tagReadOnly ?? readOnly;
+  const showTag = tagOn && (!tagLocked || !!tagsTitle);
   if (!showLabel && !showTag) return null;
 
   return (
@@ -136,7 +141,7 @@ export function ClientLabelTags({
             title={tagsTitle ?? "Тег"}
             muted={!tagsTitle}
             onPress={
-              readOnly
+              tagLocked
                 ? undefined
                 : () => {
                     haptics.tap();

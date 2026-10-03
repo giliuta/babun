@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Text, TextInput, View } from "react-native";
 import { MessageSquare, UserRound } from "lucide-react-native";
 import { useRouter } from "expo-router";
@@ -10,6 +10,7 @@ import { SwitchControl } from "@/components/ui/SwitchControl";
 import { useToast } from "@/components/ui/Toast";
 import { useClientsScopeOrNull } from "@/features/clients/company-scope";
 import { clientSubParams } from "@/features/clients/clients-company";
+import { useReferenceHref } from "@/features/clients/reference-href";
 import { moreLabel } from "@/features/clients/more-label";
 import { haptics } from "@/lib/haptics";
 import { useDefaultCountry } from "@/features/clients/default-country";
@@ -59,6 +60,7 @@ export function SmsClientBlock({
   const t = useThemeColors();
   const toast = useToast();
   const router = useRouter();
+  const subPage = useReferenceHref().clientPage;
   const country = useDefaultCountry(client.team_id ?? null);
   // Компания карточки: клиент работодателя читается под её заголовком.
   const scope = useClientsScopeOrNull();
@@ -67,6 +69,9 @@ export function SmsClientBlock({
   const optOut = useSetClientSmsOptOut();
   const [smsOff, setSmsOff] = useState<boolean | null>(null);
   const smsBlocked = smsOff ?? client.sms_opt_out === true;
+  // Приехало значение сервера — своё «на время» больше не держим (аудит
+  // 03.10: иначе смена с другого устройства пряталась до ухода с экрана).
+  useEffect(() => setSmsOff(null), [client.sms_opt_out]);
   const messages = log.data ?? NO_MESSAGES;
   const recent = useMemo(
     () =>
@@ -80,7 +85,7 @@ export function SmsClientBlock({
   const [open, setOpen] = useState<SmsHistoryItem | null>(null);
   const openAll = () => {
     haptics.tap();
-    router.push({ pathname: "/clients/sms", params: clientSubParams(client.id, scope) });
+    router.push({ pathname: subPage("sms"), params: clientSubParams(client.id, scope) });
   };
   const smsName = (client.sms_name ?? "").trim();
   const fallbackName = firstName(client);

@@ -6,6 +6,7 @@ import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Spinner } from "@/components/ui/Spinner";
 import { clientSubParams } from "@/features/clients/clients-company";
+import { useReferenceHref } from "@/features/clients/reference-href";
 import { useClientsScopeOrNull } from "@/features/clients/company-scope";
 import { FileAddSheet } from "@/features/appointments/FileAddSheet";
 import { ClientFileRow } from "@/features/clients/ClientFileRow";
@@ -44,6 +45,7 @@ export default function ClientFilesBlock({
 }) {
   const t = useThemeColors();
   const router = useRouter();
+  const subPage = useReferenceHref().clientPage;
   const scope = useClientsScopeOrNull();
   const files = useClientFiles(clientId, showMoney);
   const upload = useClientFileUpload(clientId);
@@ -59,7 +61,7 @@ export default function ClientFilesBlock({
 
   const openAll = () => {
     haptics.tap();
-    router.push({ pathname: "/clients/attachments", params: clientSubParams(clientId, scope) });
+    router.push({ pathname: subPage("attachments"), params: clientSubParams(clientId, scope) });
   };
 
   // Смотреть нечего и добавить нельзя — блока нет (закон «недоступный блок

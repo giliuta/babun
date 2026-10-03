@@ -166,7 +166,7 @@ describe("длинные списки — своей страницей", () => 
     const page = read("../../../app/(dashboard)/clients/objects.tsx");
     assert.match(page, /<ClientObjectsSection/);
     assert.doesNotMatch(page, /limit=/);
-    assert.match(read("../../../app/(dashboard)/clients/[id].tsx"), /pathname: "\/clients\/objects"/);
+    assert.match(read("../../../app/(dashboard)/clients/[id].tsx"), /pathname: subPage\("objects"\)/);
   });
 });
 
@@ -181,8 +181,8 @@ describe("люди и реквизиты — тоже своими страни�
     const page = read("../../../app/(dashboard)/clients/[id].tsx");
     assert.match(page, /label="Все люди"/);
     assert.match(page, /limit: PEOPLE_ON_CARD/);
-    assert.match(page, /pathname: "\/clients\/people"/);
-    assert.match(page, /pathname: "\/clients\/requisites"/);
+    assert.match(page, /pathname: subPage\("people"\)/);
+    assert.match(page, /pathname: subPage\("requisites"\)/);
   });
   test("страницы собраны теми же кусками", () => {
     assert.match(read("../../../app/(dashboard)/clients/people.tsx"), /useClientPeople\(\{/);
@@ -200,8 +200,8 @@ describe("аудит 23.09 — то, что чинили", () => {
   });
   test("двери подстраниц уносят компанию клиента", () => {
     assert.match(read("clients-company.ts"), /export function clientSubParams\(/);
-    assert.match(page(), /pathname: "\/clients\/objects", params: clientSubParams\(id, scope\)/);
-    assert.match(page(), /pathname: "\/clients\/requisites", params: clientSubParams\(id, scope\)/);
+    assert.match(page(), /pathname: subPage\("objects"\), params: clientSubParams\(id, scope\)/);
+    assert.match(page(), /pathname: subPage\("requisites"\), params: clientSubParams\(id, scope\)/);
     assert.match(read("blocks/ClientFilesBlock.tsx"), /clientSubParams\(clientId, scope\)/);
   });
   test("объекты и люди на своей странице — с правами карточки", () => {
@@ -246,5 +246,18 @@ describe("«Отменить» возвращает связь по-настоя
       /const base = queue\.latest \? \[\.\.\.queue\.latest\] : freshLinks\(queue, clientMemberships\(row\)\);/,
     );
     assert.match(read("use-link-writer.ts"), /detachedRows\.set\(ref\.memberId, row\);/);
+  });
+});
+
+describe("страницы карточки — над записью свои адреса (аудит 03.10)", () => {
+  test("карточка, открытая из записи, уходит в `(shared)`, а не во вкладку", () => {
+    const href = read("reference-href.ts");
+    assert.match(href, /inClientsTab \? \(`\/clients\/\$\{page\}` as const\) : \(`\/client-\$\{page\}` as const\)/);
+    for (const page of ["visits", "objects", "attachments", "requisites", "sms", "people"]) {
+      assert.match(
+        read(`../../../app/(shared)/client-${page}.tsx`),
+        new RegExp(`export \\{ default \\} from "\\.\\./\\(dashboard\\)/clients/${page}"`),
+      );
+    }
   });
 });
