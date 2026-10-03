@@ -634,17 +634,22 @@ function AgendaRow({
       </View>
       {showAmounts && total > 0 ? (
         <View style={{ alignItems: "flex-end" }}>
+          {/* ОТМЕНЁННАЯ — СУММА ЗАЧЁРКНУТА И БЕЗ «К ОПЛАТЕ» (повторный аудит
+              03.10, на симуляторе): отменённый визит стоял в ленте с суммой
+              полным чёрным, а неоплаченный — ещё и с «€50 к оплате», хотя
+              денег по нему никто не ждёт. */}
           <Text
             style={{
               fontVariant: ["tabular-nums"],
               fontSize: 14,
               fontWeight: "600",
-              color: t.ink,
+              color: cancelled ? t.faint : t.ink,
+              textDecorationLine: cancelled ? "line-through" : "none",
             }}
           >
             {formatEUR(total)}
           </Text>
-          {debt > 0 ? (
+          {debt > 0 && !cancelled ? (
             <Text
               // ДОЛГ — ТОЛЬКО ПОСЛЕ ВИЗИТА (STORY-067): пока визит впереди,
               // неоплаченная сумма — просто «к оплате», серым; выполненный или

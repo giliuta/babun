@@ -363,4 +363,16 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(src, /const rowsFit = rowsThatFit\(cardH - topHandle - bottomHandle, lineH\);/);
     assert.match(src, /paddingTop: 2 - \(bw - 1\) \+ topHandle,/);
   });
+
+  test("снятая метка «свободного» дня удаляется, а не застывает «явно без метки»", () => {
+    const src = screen();
+    assert.match(src, /const weekly = resolveCalendarDayLabel\(\{\s*dayCities: \{\},/);
+    assert.match(src, /city: weekly \? CITY_CLEARED : "",/);
+  });
+
+  test("«Список»: у отменённой сумма зачёркнута и без «к оплате»", () => {
+    const agenda = readFileSync(resolve(here, "AgendaView.tsx"), "utf8");
+    assert.match(agenda, /textDecorationLine: cancelled \? "line-through" : "none",/);
+    assert.match(agenda, /\{debt > 0 && !cancelled \? \(/);
+  });
 });

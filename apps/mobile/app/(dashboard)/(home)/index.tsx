@@ -3710,11 +3710,25 @@ export default function CalendarTab() {
         onClear={() => {
           if (activeTeamId && cityPickerYmd) {
             // Сентинел, не пустая строка: "" удаляет override, и день тут же
-            // перекрашивал бы default_city команды (web v693 handleCityReset).
+            // перекрашивала бы метка по расписанию недели (web v693
+            // handleCityReset). НО ТОЛЬКО КОГДА ТАКАЯ МЕТКА ЕСТЬ (повторный
+            // аудит 03.10): снятая со «свободного» дня метка оставляла
+            // «явно без метки» навсегда — и вторник, которому потом дали
+            // метку по дням недели, этот день уже не получал. Нечему
+            // перекрашивать — строка просто удаляется.
+            const weekly = resolveCalendarDayLabel({
+              dayCities: {},
+              cities,
+              teamId: activeTeamId,
+              dateYmd: cityPickerYmd,
+              todayYmd,
+              fallbackColor: t.faint,
+              off: !dayLabelsOn,
+            });
             setDayCityMut.mutate({
               teamId: activeTeamId,
               date: cityPickerYmd,
-              city: CITY_CLEARED,
+              city: weekly ? CITY_CLEARED : "",
             }, {
               onError: () => toast("Не удалось снять метку дня", "error"),
             });
