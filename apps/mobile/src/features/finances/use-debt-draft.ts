@@ -17,6 +17,8 @@ import { useTeams } from "@/features/reference/queries";
 import { useClientChoice } from "./use-client-choice";
 import { useDeleteDebt, useInsertDebt, useUpdateDebt } from "./debts-queries";
 import { useReceiptSession } from "./receipt-upload";
+import { todayYmd as todayInZone } from "@/features/invoices/format";
+import { useCalendarSettings } from "@/features/settings/local-settings";
 
 // ЧЕРНОВИК ДОЛГА — ДАННЫЕ ФОРМЫ ОТДЕЛЬНО ОТ ЕЁ ВЁРСТКИ (тот же приём, что у
 // карточки клиента, `useClientDraft`). Поля, пересев, проверки, запись,
@@ -24,12 +26,11 @@ import { useReceiptSession } from "./receipt-upload";
 
 const OFFLINE = "Долг записывается только онлайн: нет сети";
 
-export function todayYmd(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`;
-}
+// «СЕГОДНЯ» ДОЛГА — ПО ПОЯСУ КОМПАНИИ, КАК У ОПЕРАЦИИ И ПЕРЕВОДА (аудит
+// 2026-10-03). Здесь стояли часы телефона: телефон впереди Никосии (в 23:30
+// у компании у него уже 00:30 завтра) ставил долг «завтра», и при периоде
+// «Сегодня» он пропадал из плитки «Долги» до следующего дня.
+const DEFAULT_TZ = "Europe/Nicosia";
 
 export function useDebtDraft({
   visible,
@@ -52,6 +53,8 @@ export function useDebtDraft({
   const toast = useToast();
   const online = useIsOnline();
   const isEdit = !!debt;
+  const timeZone = useCalendarSettings().data?.timezone ?? DEFAULT_TZ;
+  const todayYmd = () => todayInZone(timeZone);
 
   const [direction, setDirection] = useState<DebtDirection>(initialDirection);
   const [counterparty, setCounterparty] = useState("");
