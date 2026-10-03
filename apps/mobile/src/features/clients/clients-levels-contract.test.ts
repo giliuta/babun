@@ -128,8 +128,10 @@ const SMS_JSON = "20261003013700_sms_message_client_and_template.sql";
 const smsJson = norm(readFileSync(join(MIGRATIONS_DIR, SMS_JSON), "utf8"));
 
 // SMS ИЗ ЗАПИСИ — КЛИЕНТУ НА ЭКРАНЕ (03.10): клиент сменён и не сохранён — SMS
-// ему и всё равно о записи. Охрана клиента сотрудника и номера — та же.
-const SMS_SEND = "20261003022700_sms_send_manual_record_client_on_screen.sql";
+// ему и всё равно о записи. Охрана клиента сотрудника и номера — та же; другой
+// клиент, чем у записи, — по праву «SMS: Меняет» (аудит 03.10, тело взято из
+// базы и дополнено одной проверкой).
+const SMS_SEND = "20261003120713_member_security_gaps.sql";
 const smsSend = norm(readFileSync(join(MIGRATIONS_DIR, SMS_SEND), "utf8"));
 
 describe("сервер: клиенты по уровням", () => {
@@ -417,6 +419,8 @@ describe("сервер: клиенты по уровням", () => {
       "if not public.sms_client_owns_phone(v_client, p_phone) then raise exception 'sms:phone'",
       "if not is_owner and p_appointment_id is null and not (v_client = any(public.access_block_client_ids('clients.sms', 'write'))) then raise exception 'sms:rights'",
       "where cl.id = v_client and cl.tenant_id = v_tenant;",
+      // Другой клиент, чем у записи, — по праву «SMS: Меняет» (аудит 03.10).
+      "if v_client is distinct from a.client_id and not (v_client = any(public.access_block_client_ids('clients.sms', 'write'))) then raise exception 'sms:rights'",
     ]) {
       assert.ok(smsSend.includes(guard), `отправка SMS потеряла охрану: ${guard}`);
     }
