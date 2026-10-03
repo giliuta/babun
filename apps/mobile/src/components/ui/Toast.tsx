@@ -53,7 +53,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     Animated.parallel([
       Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: -12, duration: 220, useNativeDriver: true }),
-    ]).start(() => setToast(null));
+      // Только ДОИГРАННОЕ угасание убирает плашку. Новый тост в эти 220 мс
+      // останавливает его анимацию, и колбэк приходит с `finished: false` —
+      // раньше он и стирал только что показанный тост (повторный аудит 03.10:
+      // быстрый отказ сервера после «Отменить» пропадал молча).
+    ]).start(({ finished }) => {
+      if (finished) setToast(null);
+    });
   }, [opacity, reducedMotion, translateY]);
 
   const show = useCallback(

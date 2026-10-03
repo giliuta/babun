@@ -96,6 +96,45 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(screen(), /if \(teamsPending \|\| teamsFetching \|\| teamsError\) return;/);
   });
 
+  test("оплаченная — только в своём дне: и пальцем, и кубиком", () => {
+    const src = screen();
+    assert.match(src, /if \(\(dateMoves \|\| teamMoves\) && settledVisit\(apt\)\) \{/);
+    assert.match(src, /if \(\(teamChanges \|\| dateYmd !== apt\.date\) && settledVisit\(apt\)\) \{\s*toast\(SETTLED_STAYS, "info"\);\s*return false;/);
+  });
+
+  test("один тап по кубику — одна копия", () => {
+    const src = screen();
+    assert.match(src, /if \(placedFromRef\.current === moving\) return;/);
+    assert.match(src, /if \(placed\) placedFromRef\.current = moving;/);
+    assert.match(src, /const startMove = \([^)]*\) => \{\s*placedFromRef\.current = null;/);
+  });
+
+  test("серия переносится только после вопроса", () => {
+    const src = screen();
+    assert.equal((src.match(/run: wholeSeries\(\(\) => startMove\(apt\)\)/g) ?? []).length, 2);
+    assert.match(src, /confirmAction\("Перенести всю серию\?"/);
+  });
+
+  test("режимы и меню не спорят: смена команды у сотрудника, долгое нажатие в правке", () => {
+    const src = screen();
+    assert.match(src, /if \(isCrew\) setMoving\(null\);\s*\},\s*onSwitchError/);
+    assert.equal(
+      (src.match(/!canSlotMenu \|\| moving \|\| editingApt \|\| pickClientId \? undefined : slotMenuGrid/g) ?? []).length,
+      2,
+    );
+  });
+
+  test("«своё событие» — глазами того, кого показываем", () => {
+    const src = screen();
+    assert.match(src, /const actorId = mirror \? mirror\.userId : session\?\.user\.id;/);
+    assert.doesNotMatch(src, /created_by === session\?\.user\.id/);
+  });
+
+  test("тост, показанный во время угасания прошлого, не стирается", () => {
+    const toastSrc = readFileSync(resolve(here, "../../components/ui/Toast.tsx"), "utf8");
+    assert.match(toastSrc, /\.start\(\(\{ finished \}\) => \{\s*if \(finished\) setToast\(null\);/);
+  });
+
   test("«Настроить» метки и шестерёнка — с командой и от двойного тапа", () => {
     const src = screen();
     assert.match(src, /pathname: "\/calendar\/labels",\s*params: activeTeamId \? \{ team: activeTeamId \} : \{\},/);

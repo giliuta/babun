@@ -190,6 +190,7 @@ import { useAllServices, useServices } from "@/features/services/queries";
 import { useCreateTeamAccounts } from "@/features/finances/accounts";
 import { financeAccountsHref } from "@/features/finances/accounts-sections";
 import { useCalendarChips } from "@/features/settings/workspaces";
+import { useMirror } from "@/features/access/mirror/mirror-state";
 import {
   useCities,
   useCreateTeam,
@@ -280,6 +281,19 @@ function isPersonalEvent(apt: Appointment): boolean {
   return apt.team_id == null && apt.kind !== "work";
 }
 
+/** Визит с доплатой или закрытый оплаченным: сервер не меняет ему ни день, ни
+ *  команду — «Сначала отмените оплату или оформите возврат по заявке»
+ *  (`protect_paid_appointment_finance`). Время внутри дня — можно. */
+function settledVisit(apt: Appointment): boolean {
+  if (isCalendarEvent(apt) || apt.payment_status === "refunded") return false;
+  return (
+    (apt.paid_amount ?? 0) > 0 ||
+    apt.payments.length > 0 ||
+    (apt.status === "completed" && apt.payment_status === "paid")
+  );
+}
+const SETTLED_STAYS = "Оплаченная запись переносится только внутри своего дня";
+
 /** У записи есть полученные деньги, которые отмена вернёт клиенту, — то же
  *  условие, по которому сервер при отмене ставит «возврат»
  *  (`protect_paid_appointment_finance`). Уже возвращённая — не в счёт. */
@@ -364,10 +378,16 @@ export default function CalendarTab() {
     (a: Appointment) => recordRightsIn(a.team_id ?? null).payment === "hidden",
     [recordRightsIn],
   );
+  // ЧЬЁ СОБЫТИЕ — ГЛАЗАМИ ТОГО, КОГО ПОКАЗЫВАЕМ (повторный аудит 03.10). В
+  // зеркале «своё» сверялось с вошедшим владельцем: его события выглядели
+  // доступными сотруднику для переноса и удаления, а события самого
+  // сотрудника — нет.
+  const mirror = useMirror();
+  const actorId = mirror ? mirror.userId : session?.user.id;
   const canMutateAppointment = useCallback(
     (appointment: Appointment) =>
-      canMutateCalendarAppointment(role, session?.user.id, appointment),
-    [role, session?.user.id],
+      canMutateCalendarAppointment(role, actorId, appointment),
+    [role, actorId],
   );
   /** Можно ли двигать запись: пальцем, «Перенести», растяжкой. */
   const canMoveAppointment = useCallback(
@@ -378,10 +398,10 @@ export default function CalendarTab() {
       if (!isCrew) return canMutateAppointment(appointment);
       const can = actionsIn(appointment.team_id ?? null);
       return isCalendarEvent(appointment)
-        ? can.events === "write" && appointment.created_by === session?.user.id
+        ? can.events === "write" && !!actorId && appointment.created_by === actorId
         : can.move;
     },
-    [workInPlan, isCrew, canMutateAppointment, actionsIn, session?.user.id],
+    [workInPlan, isCrew, canMutateAppointment, actionsIn, actorId],
   );
   // «Первый день недели» — общая настройка; правит Неделю, Месяц и мини-
   // календарь одинаково (до этого понедельник был зашит в каждом из трёх).
@@ -472,6 +492,12 @@ export default function CalendarTab() {
       !teamMoves
     )
       return;
+    // Оплаченную — только в её дне: сервер отказал бы, а экран уже уехал бы
+    // на новую неделю, и запись пропала бы с глаз (повторный аудит 03.10).
+    if ((dateMoves || teamMoves) && settledVisit(apt)) {
+      toast(SETTLED_STAYS, "info");
+      return;
+    }
     // Виртуальное вхождение повтора двигать нельзя — правится только seed
     // (id виртуала синтетический, мутация по нему невалидна).
     if ((apt as { virtualParentId?: string }).virtualParentId) {
@@ -843,6 +869,9 @@ export default function CalendarTab() {
   // клал дубль ПОВЕРХ оригинала и открывал форму — куда вставить, приходилось
   // править руками.
   const [movingKind, setMovingKind] = useState<"move" | "copy">("move");
+  /** Запись, по которой уже тапнули кубик в этом режиме, — второй тап до
+   *  перерисовки её не ставит ещё раз. Ref: ответ нужен в том же кадре. */
+  const placedFromRef = useRef<Appointment | null>(null);
   // «ЦВЕТ» ИЗ МЕНЮ ДОЛГОГО НАЖАТИЯ (владелец 2026-09-24: «после записи функция
   // смены цветов — максимально улучшить»). Раньше цвет менялся только из формы
   // записи: пять тапов, и «Применить» в листе лишь закрывал его, а сохранял
@@ -882,6 +911,10 @@ export default function CalendarTab() {
         setTeamChoice(teamId);
       });
       rememberView({ teamId });
+      // У СОТРУДНИКА ЗАПИСЬ ИЗ СВОЕЙ КОМАНДЫ НЕ УХОДИТ — зелёные кубики
+      // другой команды показывали бы её время, а запись вставала бы в своей
+      // поверх занятого (повторный аудит 03.10). Режим снимается.
+      if (isCrew) setMoving(null);
     },
     onSwitchError: (message) => toast(message, "error"),
   });
@@ -2023,6 +2056,7 @@ export default function CalendarTab() {
    *  рисуют, поэтому переезжаем в Неделю этой записи; выйти — крестиком на
    *  плашке, сменой команды или уходом с экрана. */
   const startMove = (apt: Appointment, kind: "move" | "copy" = "move") => {
+    placedFromRef.current = null;
     setPick(null);
     setNotice(null);
     setMovingKind(kind);
@@ -2154,8 +2188,8 @@ export default function CalendarTab() {
   /** Тап по кубику в режиме копии: копия встаёт в выбранное время выбранной
    *  команды, оригинал остаётся на месте. «Открыть» в тосте — сразу на
    *  правку копии, «Отменить» — копия удаляется. */
-  const copyToSlot = (apt: Appointment, dateYmd: string, timeStart: string) => {
-    if (rejectOutsideFreeSlots(dateYmd, timeStart)) return;
+  const copyToSlot = (apt: Appointment, dateYmd: string, timeStart: string): boolean => {
+    if (rejectOutsideFreeSlots(dateYmd, timeStart)) return false;
     setMoving(null);
     // СОТРУДНИК КОПИРУЕТ НА СЕРВЕРЕ И ТОЛЬКО В ТУ ЖЕ КОМАНДУ (владелец 30.09):
     // копия встаёт туда же, где оригинал, какой бы чип ни был выбран.
@@ -2175,7 +2209,7 @@ export default function CalendarTab() {
           onError: (e) => toast(serverReason(e) ?? "Не удалось скопировать", "error"),
         },
       );
-      return;
+      return true;
     }
     const copy = {
       ...duplicateAppointment(apt),
@@ -2195,6 +2229,7 @@ export default function CalendarTab() {
       },
       onError: (e) => toast(serverReason(e) ?? "Не удалось скопировать", "error"),
     });
+    return true;
   };
 
   // «Напомнить…» из меню записи — та же шторка, что колокольчик в шапке
@@ -2242,6 +2277,19 @@ export default function CalendarTab() {
     // отказом всегда.
     const restorable =
       apt.status !== "cancelled" || apt.payment_status !== "refunded";
+    // ПЕРВОЕ СОБЫТИЕ СЕРИИ — САМА СЕРИЯ (повторный аудит 03.10): его перенос
+    // сдвигает все повторы, а на день вне правила блок просто исчезал. У
+    // удаления вопрос был всегда; теперь — и у переноса.
+    const repeating = !!apt.event_repeat && apt.event_repeat.kind !== "none";
+    const wholeSeries = (run: () => void) => () =>
+      repeating
+        ? void confirmAction("Перенести всю серию?", {
+            message: "Это первое событие серии: вместе с ним сдвинутся все его повторы.",
+            confirmLabel: "Перенести серию",
+          }).then((ok) => {
+            if (ok) run();
+          })
+        : run();
 
     /** `view` — пункт ничего не меняет в записи (открыть, позвонить, SMS…). */
     type Item = { label: string; run: () => void; destructive?: boolean; view?: true };
@@ -2305,7 +2353,7 @@ export default function CalendarTab() {
       // делается на сервере в ту же команду (`member_appointment_copy`).
       const can = actionsIn(apt.team_id ?? null);
       const ownEvent =
-        event && can.events === "write" && apt.created_by === session?.user.id;
+        event && can.events === "write" && !!actorId && apt.created_by === actorId;
       const movable =
         apt.status !== "cancelled" &&
         apt.event_all_day !== true &&
@@ -2318,7 +2366,7 @@ export default function CalendarTab() {
             setEditingApt(apt);
           },
         });
-      if (movable) items.push({ label: "Перенести", run: () => startMove(apt) });
+      if (movable) items.push({ label: "Перенести", run: wholeSeries(() => startMove(apt)) });
       if (!event && can.move && apt.event_all_day !== true)
         items.push({ label: "Копировать", run: () => startMove(apt, "copy") });
       // Цвет события — его блок «Тип» (название и цвет): без «Меняет»
@@ -2352,12 +2400,12 @@ export default function CalendarTab() {
       ) {
         items.push({
           label: "Свободное перемещение",
-          run: () => {
+          run: wholeSeries(() => {
             setMoving(null);
             setEditingApt(apt);
-          },
+          }),
         });
-        items.push({ label: "Перенести", run: () => startMove(apt) });
+        items.push({ label: "Перенести", run: wholeSeries(() => startMove(apt)) });
       }
       items.push({
         label: "Копировать",
@@ -2753,13 +2801,19 @@ export default function CalendarTab() {
   /** Тап по кубику в режиме переноса: запись уезжает туда целиком, длительность
    *  прежняя; напоминания события переезжают следом, напоминание о визите
    *  снимается (оно целилось в старое время). Откат — из тоста. */
-  const moveToSlot = (apt: Appointment, dateYmd: string, timeStart: string) => {
-    if (rejectOutsideFreeSlots(dateYmd, timeStart)) return;
-    setMoving(null);
+  const moveToSlot = (apt: Appointment, dateYmd: string, timeStart: string): boolean => {
+    if (rejectOutsideFreeSlots(dateYmd, timeStart)) return false;
     // Сотрудник переносит только внутри команды записи (владелец 30.09).
     const toTeam = isCrew || isPersonalEvent(apt) ? apt.team_id : (activeTeamId ?? apt.team_id);
     const teamChanges = toTeam !== apt.team_id;
-    if (!teamChanges && apt.date === dateYmd && apt.time_start === timeStart) return;
+    // Оплаченная — только в её дне; режим остаётся: кубик её дня ещё можно
+    // выбрать (повторный аудит 03.10).
+    if ((teamChanges || dateYmd !== apt.date) && settledVisit(apt)) {
+      toast(SETTLED_STAYS, "info");
+      return false;
+    }
+    setMoving(null);
+    if (!teamChanges && apt.date === dateYmd && apt.time_start === timeStart) return true;
     const prev = {
       date: apt.date,
       time_start: apt.time_start,
@@ -2807,6 +2861,7 @@ export default function CalendarTab() {
         onError: (e) => toast(serverReason(e) ?? "Не удалось перенести", "error"),
       },
     );
+    return true;
   };
 
   /** Тап по пустому времени — одна дорога для Недели и Дня. */
@@ -2824,8 +2879,15 @@ export default function CalendarTab() {
     }
     // Режим переноса: тап по кубику — переезд записи, не новая запись.
     if (moving) {
-      if (movingKind === "copy") copyToSlot(moving, dateYmd, timeStart);
-      else moveToSlot(moving, dateYmd, timeStart);
+      // ОДИН ТАП — ОДНА КОПИЯ (повторный аудит 03.10). Второй тап по кубику
+      // до перерисовки видел тот же `moving` и ставил вторую копию: настоящую
+      // запись, а клиенту при включённом шаблоне — второе SMS о записи.
+      if (placedFromRef.current === moving) return;
+      const placed =
+        movingKind === "copy"
+          ? copyToSlot(moving, dateYmd, timeStart)
+          : moveToSlot(moving, dateYmd, timeStart);
+      if (placed) placedFromRef.current = moving;
       return;
     }
     // Кнопка на плашке зовёт ровно тот же путь, минуя проверки: на них уже
@@ -3148,7 +3210,7 @@ export default function CalendarTab() {
         <ModePlaque
           title={`${movingKind === "copy" ? "Копировать" : "Перенести"}: ${clientName(moving) || moving.comment || "Запись"}`}
           subtitle={
-            teams.length > 1
+            teams.length > 1 && !isCrew
               ? `Зелёное время · ${moveWindowMin} мин · команда — ниже`
               : `Выберите зелёное время · ${moveWindowMin} мин`
           }
@@ -3247,7 +3309,7 @@ export default function CalendarTab() {
               // того, кому «Новые записи» закрыты (аудит 03.10).
               onCreateAt={canCreateOnGrid || moving || editingApt ? createAtGrid : undefined}
               onSlotLongPress={
-                !canSlotMenu || moving || pickClientId ? undefined : slotMenuGrid
+                !canSlotMenu || moving || editingApt || pickClientId ? undefined : slotMenuGrid
               }
               editingId={editingApt?.id ?? null}
               onMenu={onMenuGrid}
@@ -3288,7 +3350,7 @@ export default function CalendarTab() {
               // того, кому «Новые записи» закрыты (аудит 03.10).
               onCreateAt={canCreateOnGrid || moving || editingApt ? createAtGrid : undefined}
               onSlotLongPress={
-                !canSlotMenu || moving || pickClientId ? undefined : slotMenuGrid
+                !canSlotMenu || moving || editingApt || pickClientId ? undefined : slotMenuGrid
               }
               editingId={editingApt?.id ?? null}
               onCommitPage={onCommitDayPage}
