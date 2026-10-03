@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { NO_TEAM } from "./accounts-sections";
 import {
+  exportLedgerRows,
   hasTeamlessMoney,
   inTeamScope,
   teamlessLedgerRows,
@@ -110,5 +111,27 @@ describe("hasTeamlessMoney", () => {
 
   test("доход без счёта и без команды — нужен", () => {
     assert.equal(hasTeamlessMoney({ ...none, companyRows: [row("x", null, null)] }), true);
+  });
+});
+
+describe("exportLedgerRows — CSV команды как на экране (аудит 03.10)", () => {
+  const rows = [
+    { id: "t1", team_id: "A", account_id: "acc-a" },
+    { id: "t2", team_id: "B", account_id: "acc-b" },
+    { id: "t3", team_id: null, account_id: "acc-a" },
+    { id: "t4", team_id: null, account_id: "acc-b" },
+  ];
+  const accountTeam = new Map<string, string | null>([
+    ["acc-a", "A"],
+    ["acc-b", "B"],
+  ]);
+  test("строка без команды на счёте команды попадает в её выгрузку", () => {
+    assert.deepEqual(
+      exportLedgerRows(rows, "A", accountTeam).map((r) => r.id),
+      ["t1", "t3"],
+    );
+  });
+  test("без команды — вся компания", () => {
+    assert.equal(exportLedgerRows(rows, null, accountTeam).length, 4);
   });
 });

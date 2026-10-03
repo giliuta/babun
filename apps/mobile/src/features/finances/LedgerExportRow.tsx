@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { pickLedgerRows } from "./ledger-select";
 import { CalendarRange, FileSpreadsheet } from "lucide-react-native";
 import { listTransactionsForRange } from "@babun/shared/db/repositories/finance-transactions";
 import { PickerSheet } from "@/components/ui/PickerSheet";
@@ -15,6 +14,9 @@ import { useAccountsWithBalances } from "./accounts";
 import { shareLedgerCsv } from "./ledger-export";
 import { PERIOD_LABELS, presetHint, presetRange, type PeriodKind } from "./period";
 import { useFinanceCategories } from "./queries";
+import { exportLedgerRows } from "./team-scope";
+import { getCurrentTimeInZone } from "@babun/shared/common/utils/date-utils";
+import { useCalendarSettings } from "@/features/settings/local-settings";
 
 // ВЫГРУЗКА ДЛЯ БУХГАЛТЕРА — СТРОКОЙ В «НАСТРОЙКАХ ФИНАНСОВ» (аудит 2026-09-24).
 //
@@ -45,6 +47,7 @@ export function LedgerExportRow({ teamId }: { teamId: string | null }) {
   const clients = useClients();
   const teams = useTeams({ includeInactive: true });
   const people = useMasters({ includeInactive: true });
+  const timeZone = useCalendarSettings().data?.timezone ?? "Europe/Nicosia";
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   /** Выбранный период ждёт ухода листа: «Поделиться» — отдельное окно, и
@@ -55,9 +58,15 @@ export function LedgerExportRow({ teamId }: { teamId: string | null }) {
     if (!tenantId) return;
     setBusy(true);
     try {
-      const { from, to } = presetRange(kind);
+      // Период и строки — как на экране «Финансов» (аудит 2026-10-03): сегодня
+      // по поясу компании, а не по часам телефона, и строки без команды,
+      // чьи деньги лежат на счетах этой команды.
+      const { from, to } = presetRange(kind, getCurrentTimeInZone(timeZone));
       const all = await listTransactionsForRange(supabase, tenantId, from, to);
-      const transactions = teamId ? pickLedgerRows(all, [teamId], []) : all;
+      const accountTeam = new Map(
+        (accounts.data ?? []).map((account) => [account.id, account.brigade_id ?? null] as const),
+      );
+      const transactions = exportLedgerRows(all, teamId, accountTeam);
       const teamName = teamId
         ? (teams.data ?? []).find((team) => team.id === teamId)?.name
         : undefined;
