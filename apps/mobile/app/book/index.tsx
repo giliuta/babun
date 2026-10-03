@@ -2012,15 +2012,23 @@ export default function BookScreen() {
         // требует своего права, и нетронутый клиент в патче стоил бы отказа
         // тому, у кого нет «Клиент: Меняет». Снимок — та же подпись, что
         // считает «есть несохранённое».
-        const patch = isMemberView
-          ? changedFields(
-              editBaselineRef.current
-                ? (JSON.parse(editBaselineRef.current) as Partial<Appointment>)
-                : (editing ?? {}),
-              buildPatch(),
-            )
-          : buildPatch();
-        await updateMut.mutateAsync({ id: editId, patch });
+        //
+        // ТОЛЬКО ИЗМЕНЁННОЕ — У ВСЕХ, НЕ ТОЛЬКО У СОТРУДНИКА (аудит
+        // 2026-10-03). Владелец слал патч целиком: форма гидрируется один
+        // раз, и всё, что за это время поменяли с другого телефона (мастер
+        // принял оплату и закрыл визит, диспетчер сдвинул время), «Сохранить»
+        // молча возвращало назад — статус «запланирована» поверх оплаченной.
+        // Снимок знает, какой форма была при открытии, поэтому уходит ровно
+        // то, что тронули на этом экране.
+        const patch = changedFields(
+          editBaselineRef.current
+            ? (JSON.parse(editBaselineRef.current) as Partial<Appointment>)
+            : (editing ?? {}),
+          buildPatch(),
+        );
+        if (Object.keys(patch).length > 0) {
+          await updateMut.mutateAsync({ id: editId, patch });
+        }
         toast("Изменения сохранены", "success");
         haptics.success();
       } else {
