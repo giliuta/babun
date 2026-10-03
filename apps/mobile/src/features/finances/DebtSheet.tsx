@@ -8,6 +8,8 @@ import type { Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useReferenceHref } from "@/features/clients/reference-href";
+import { CATEGORY_KIND_ROW } from "./settings-levels";
+import { useFinanceSettingLevelsOf } from "./use-finance-settings";
 import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -85,6 +87,7 @@ export function DebtSheet({
   const doorway = useSheetDoorway();
   // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
   const categoriesHref = useReferenceHref().categories;
+  const categoriesLevelOf = useFinanceSettingLevelsOf();
   const router = useRouter();
   const {
     isEdit,
@@ -400,15 +403,19 @@ export function DebtSheet({
           onPress: () => setCategoryId(c.id),
         }))}
         selectedId={categoryId}
-        // Та же дверь и та же парковка, что у листа операции.
-        onSettings={() =>
-          doorway.open(() =>
-            router.push(
-              (debtTeamId
-                ? `${categoriesHref}?team=${encodeURIComponent(debtTeamId)}&kind=debt`
-                : `${categoriesHref}?kind=debt`) as Href,
-            ),
-          )
+        // Та же дверь и та же парковка, что у листа операции; у партнёра —
+        // по праву «Категории долгов» в команде долга (03.10).
+        onSettings={
+          categoriesLevelOf(debtTeamId)[CATEGORY_KIND_ROW.debt] !== "hidden"
+            ? () =>
+                doorway.open(() =>
+                  router.push(
+                    (debtTeamId
+                      ? `${categoriesHref}?team=${encodeURIComponent(debtTeamId)}&kind=debt`
+                      : `${categoriesHref}?kind=debt`) as Href,
+                  ),
+                )
+            : undefined
         }
         settingsLabel="Категории долгов"
         onClose={() => setCategoryOpen(false)}

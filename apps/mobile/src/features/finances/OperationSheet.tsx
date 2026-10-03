@@ -10,6 +10,8 @@ import type {
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useReferenceHref } from "@/features/clients/reference-href";
+import { CATEGORY_KIND_ROW } from "./settings-levels";
+import { useFinanceSettingLevelsOf } from "./use-finance-settings";
 import { accountEditHref } from "./account-editor/editor-logic";
 import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
@@ -618,6 +620,10 @@ export function OperationSheet({
   const doorway = useSheetDoorway();
   // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
   const categoriesHref = useReferenceHref().categories;
+  // Шестерёнка справочника — по праву вида в команде операции (03.10): есть
+  // строка категорий этого вида — есть и дверь (страница сама гасит правку
+  // у «Только видит»).
+  const categoriesLevelOf = useFinanceSettingLevelsOf();
   const busy = insert.isPending || update.isPending;
   const dateInFuture = date > businessToday;
   // Категория говорит собой: иконка и цвет из справочника, как у типа события
@@ -1410,10 +1416,10 @@ export function OperationSheet({
         }))}
         selectedId={categoryId}
         // Дверь паркует лист операции: иначе страница категорий открывается
-        // ПОД ним и до неё не дотянуться (владелец 2026-09-10). Справочник
-        // категорий владельческий — сотруднику шестерёнки нет.
+        // ПОД ним и до неё не дотянуться (владелец 2026-09-10). У партнёра —
+        // по праву вида в команде операции (03.10).
         onSettings={
-          isOwner
+          categoriesLevelOf(teamId)[CATEGORY_KIND_ROW[type]] !== "hidden"
             ? () =>
                 doorway.open(() =>
                   // Команда операции — команда справочника: без неё страница

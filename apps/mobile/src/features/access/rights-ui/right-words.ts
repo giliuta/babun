@@ -233,6 +233,21 @@ export function rightTitle(block: Pick<AccessBlock, "key" | "title">): string {
   return TITLE[block.key] ?? block.title;
 }
 
+/** ИМЯ ПРАВА ВНЕ ЕГО БЛОКА — в подписи раздела «Доступ» («Финансы: доходы,
+ *  расходы, категории доходов»). В своём блоке строка зовётся словом
+ *  шестерёнки («Доходы» под шапкой «Категории»), а в одной строке-сводке
+ *  такое слово повторяло плитку страницы: «доходы, расходы, доходы». */
+const BRIEF_TITLE: Record<string, string> = {
+  "finance.settings_accounts": "Настройки счетов",
+  "finance.settings_categories_income": "Категории доходов",
+  "finance.settings_categories_expense": "Категории расходов",
+  "finance.settings_categories_debts": "Категории долгов",
+};
+
+export function briefTitle(block: Pick<AccessBlock, "key" | "title">): string {
+  return BRIEF_TITLE[block.key] ?? rightTitle(block);
+}
+
 /** Положения соседних прав той же команды — там, где слово ступени зависит
  *  от соседа. */
 type Context = Readonly<Record<string, AccessLevel>>;

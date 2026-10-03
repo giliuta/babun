@@ -1,5 +1,5 @@
 import { AREA_TITLE, type AccessBlock, type AccessLevel } from "../access-map";
-import { isClosedStep, rightTitle } from "../rights-ui/right-words";
+import { briefTitle, isClosedStep } from "../rights-ui/right-words";
 import {
   CALENDAR_GROUPS,
   CALENDAR_GROUP_TITLE,
@@ -166,7 +166,7 @@ export function sectionBrief(section: Pick<ViewSection, "rows">): string {
   if (open.length === section.rows.length) return "Всё открыто";
   return open
     .map((row, i) => {
-      const title = rightTitle(row.block);
+      const title = briefTitle(row.block);
       return i === 0 ? title : title.charAt(0).toLowerCase() + title.slice(1);
     })
     .join(", ");

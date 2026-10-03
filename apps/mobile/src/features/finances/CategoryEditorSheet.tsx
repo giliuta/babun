@@ -17,6 +17,8 @@ import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
+import { CATEGORY_KIND_ROW } from "./settings-levels";
+import { useFinanceSettingLevelsOf } from "./use-finance-settings";
 import { useCurrency } from "@/features/settings/currency";
 import { AmountBlock } from "./AmountBlock";
 import { askBudgetNotificationPermission } from "./budget-notify";
@@ -76,7 +78,7 @@ export function CategoryEditorSheet({
   const th = useThemeColors();
   const insert = useInsertCategory();
   const update = useUpdateCategory();
-  const teams = useTeams().data ?? [];
+  const allTeamsList = useTeams().data ?? [];
   const currency = useCurrency();
   const fmt = (n: number) => money(n, currency);
 
@@ -90,6 +92,11 @@ export function CategoryEditorSheet({
   const kind: FinanceCategoryKind =
     view?.mode === "edit" ? view.category.type : (view?.kind ?? "expense");
   const teamId = view?.mode === "create" ? view.teamId : (editing?.team_id ?? null);
+  // «Во всех командах» — только там, где человек сам правит категории этого
+  // вида (03.10): сервер вставку в чужую команду отбил бы, и создание
+  // упало бы целиком. У владельца — все команды.
+  const levelsOf = useFinanceSettingLevelsOf();
+  const teams = allTeamsList.filter((team) => levelsOf(team.id)[CATEGORY_KIND_ROW[kind]] === "write");
   const spend = useCategoryMonthSpend(kind === "expense" && view != null);
 
   const [name, setName] = useState("");

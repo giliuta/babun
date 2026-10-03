@@ -1,11 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import {
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  type AccessibilityActionEvent,
-} from "react-native";
+import { useMemo, useState } from "react";
+import { ScrollView, View } from "react-native";
 import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import type {
   FinanceCategory,
@@ -18,10 +12,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { ReorderList } from "@/components/ui/ReorderList";
-import {
-  AppearanceTile,
-  appearanceRowFill,
-} from "@/components/ui/AppearanceSheet";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
@@ -44,6 +34,10 @@ import { useTeams } from "@/features/reference/queries";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { settingsTeamId } from "@/features/finances/team-settings-lines";
+import { CategoryRow } from "@/features/finances/CategoryRow";
+import { CATEGORY_KIND_ROW } from "@/features/finances/settings-levels";
+import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-settings";
+import { useCurrentRole } from "@/features/settings/tenant";
 
 // КАТЕГОРИИ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
 //
@@ -138,12 +132,22 @@ export default function CategoriesScreen() {
   // «Финансов» (`CategoryEditorSheet`).
   const [editorTarget, setEditorTarget] = useState<CategoryEditorTarget | null>(null);
   const router = useRouter();
-  const teams = useTeams().data ?? [];
+  // ПРАВО ВИДА (03.10): у партнёра у каждого вида категорий своё право в
+  // каждой команде — «Скрыты» (команды нет в ленте, страницы нет), «Только
+  // видит» (список без правки, кромок, порядка и «Добавить»), «Видит и
+  // меняет». Владелец правит всё. Правку пускает сервер (политика вида).
+  const owner = useCurrentRole().data === "owner";
+  const levelsOf = useFinanceSettingLevelsOf();
+  const allTeams = useTeams().data ?? [];
+  const kindRow = CATEGORY_KIND_ROW[fixedKind ?? pickedType];
+  const teams = owner ? allTeams : allTeams.filter((team) => levelsOf(team.id)[kindRow] !== "hidden");
   // КОМАНДА — В АДРЕСЕ (`?team=`): «Настройки финансов» открывают справочник
   // сразу на своей команде, а лента меняет её, не уводя со страницы. Команды
   // нет или она ушла в архив — первая, а не пустой список.
   const { team: teamParam } = useLocalSearchParams<{ team?: string }>();
   const teamId = settingsTeamId(teams, teamParam);
+  const level = levelsOf(teamId)[kindRow];
+  const canEdit = level === "write";
   const currency = useCurrency();
   const fmt = (n: number) => money(n, currency);
   const spend = useCategoryMonthSpend(type === "expense");
@@ -256,7 +260,12 @@ export default function CategoriesScreen() {
         />
       )}
 
-      {isLoading ? (
+      {level === "hidden" ? (
+        // Вид закрыт правом — страница остаётся собой, тело словами (дверь
+        // `FinanceSettingsRoute` закрывает его и раньше; общий адрес из листа
+        // операции идёт сюда же).
+        <EmptyState fill title="Настроек пока нет" />
+      ) : isLoading ? (
         <EmptyState state="loading" fill />
       ) : isError ? (
         <EmptyState
@@ -280,7 +289,7 @@ export default function CategoriesScreen() {
               ? "Категории называют, за что висят деньги — «Поставщик», «Займ», «Аренда»"
               : "Своих категорий пока нет — создайте те, что нужны именно вам"
           }
-          action={{ label: "Добавить категорию", onPress: openCreate }}
+          action={canEdit ? { label: "Добавить категорию", onPress: openCreate } : undefined}
         />
       ) : (
         <ScrollView
@@ -289,6 +298,7 @@ export default function CategoriesScreen() {
           scrollEnabled={!dragging}
         >
           <View style={{ paddingHorizontal: GUTTER }}>
+            {canEdit ? (
             <ReorderList
               items={filtered}
               rowHeight={52}
@@ -333,11 +343,31 @@ export default function CategoriesScreen() {
                 </SwipeRow>
               )}
             </ReorderList>
+            ) : (
+              // «Только видит»: тот же список, без ручек, кромок и правки.
+              <View style={{ gap: 8 }}>
+                {filtered.map((item) => (
+                  <CategoryRow
+                    key={item.id}
+                    item={item}
+                    budget={
+                      hasBudget(item) && spend
+                        ? {
+                            text: budgetShort(spend.get(item.id) ?? 0, item.monthly_budget, fmt),
+                            level: budgetLevel(spend.get(item.id) ?? 0, item.monthly_budget),
+                          }
+                        : null
+                    }
+                    handle={null}
+                  />
+                ))}
+              </View>
+            )}
           </View>
         </ScrollView>
       )}
 
-      {!isLoading && !isError && filtered.length > 0 ? (
+      {canEdit && !isLoading && !isError && filtered.length > 0 ? (
         <View
           style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}
         >
@@ -347,110 +377,5 @@ export default function CategoriesScreen() {
 
       <CategoryEditorSheet target={editorTarget} onClose={() => setEditorTarget(null)} />
     </Screen>
-  );
-}
-
-/** Строка категории — 52pt, кружок цвета, имя. Скрытая гаснет, но остаётся на
- *  месте: исчезнувшая строка читалась бы как «категория пропала».
- *
- *  ТАП ОТКРЫВАЕТ ПРАВКУ — и только её: «нажал — и оно скрылось» человек
- *  прочитает как поломку. Кромкам это не мешает, а ротор получает те же
- *  действия словами — подложка свайпа от него спрятана (см. SwipeRow). */
-function CategoryRow({
-  item,
-  budget,
-  handle,
-  onEdit,
-  onToggleHidden,
-  onDelete,
-}: {
-  item: FinanceCategory;
-  /** Бюджет месяца: «€180 из €250» и порог (80 — жёлтым, 100 — красным). */
-  budget: { text: string; level: 0 | 80 | 100 } | null;
-  /** Ручка перетаскивания — СНАРУЖИ нажимаемой области строки. */
-  handle: ReactNode;
-  onEdit: () => void;
-  onToggleHidden: () => void;
-  onDelete: () => void;
-}) {
-  const th = useThemeColors();
-  const actions = [
-    { name: "hide", label: item.hidden ? "Показать" : "Скрыть" },
-    { name: "delete", label: "Удалить" },
-  ];
-  const onAccessibilityAction = (e: AccessibilityActionEvent) => {
-    if (e.nativeEvent.actionName === "hide") onToggleHidden();
-    if (e.nativeEvent.actionName === "delete") onDelete();
-  };
-  const label = item.hidden
-    ? `Категория ${item.name}, скрыта`
-    : budget
-      ? `Категория ${item.name}, бюджет: ${budget.text}`
-      : `Категория ${item.name}`;
-  const box = (pressed: boolean) =>
-    ({
-      height: 52,
-      flexDirection: "row",
-      alignItems: "center",
-      paddingLeft: 16,
-      paddingRight: 12,
-      borderRadius: th.radius.card,
-      backgroundColor: appearanceRowFill(item.color, pressed, {
-        rest: th.surface,
-        pressed: th.pressed,
-      }),
-      opacity: item.hidden ? 0.45 : 1,
-    }) as const;
-  const face = (
-    <>
-      {/* ПЛИТКА ВИДА — как у тега, метки, услуги и типа объекта. Точка 12pt
-          умела показать только цвет, а у категории есть и значок. */}
-      <AppearanceTile color={item.color} icon={item.icon} size={28} />
-      <Text
-        numberOfLines={1}
-        maxFontSizeMultiplier={1.3}
-        style={{ flex: 1, marginLeft: 12, fontSize: 16, color: th.ink }}
-      >
-        {item.name}
-      </Text>
-      {budget && !item.hidden ? (
-        <Text
-          maxFontSizeMultiplier={1.2}
-          style={{
-            fontSize: 13,
-            fontVariant: ["tabular-nums"],
-            fontWeight: budget.level ? "600" : "400",
-            color:
-              budget.level === 100
-                ? th.danger
-                : budget.level === 80
-                  ? th.warning
-                  : th.faint,
-          }}
-        >
-          {budget.text}
-        </Text>
-      ) : null}
-      {item.hidden ? (
-        <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 12, color: th.faint }}>
-          скрыта
-        </Text>
-      ) : null}
-      {handle}
-    </>
-  );
-
-  return (
-    <Pressable
-      onPress={onEdit}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint="Открывает имя, цвет и что прикрепляет"
-      accessibilityActions={actions}
-      onAccessibilityAction={onAccessibilityAction}
-      style={({ pressed }) => box(pressed)}
-    >
-      {face}
-    </Pressable>
   );
 }
