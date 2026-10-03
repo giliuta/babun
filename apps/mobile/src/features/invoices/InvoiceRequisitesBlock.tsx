@@ -19,6 +19,7 @@ import {
 } from "@/features/companies/queries";
 import { notify } from "@/lib/notify";
 import { InvoiceNumberRow, type InvoiceNumberTarget } from "./InvoiceNumberRow";
+import { DocMetaRow } from "./DocMetaRow";
 import { useThemeColors } from "@/theme/colors";
 
 // БЛОК «РЕКВИЗИТЫ» ИНВОЙСА — ЧЕМ ПОДПИСАН ДОКУМЕНТ.
@@ -41,12 +42,16 @@ export function InvoiceRequisitesBlock({
   companyId,
   onCompanyChange,
   number,
+  language,
   locked = false,
 }: {
   companyId: string | null;
   onCompanyChange: (id: string | null) => void;
   /** Строка «Номер» — серия этих реквизитов; у выставленного счёта её нет. */
   number?: InvoiceNumberTarget;
+  /** «Язык · English» — язык бумаги документа, строкой под номером
+   *  (04.10, общая работа с сессией языков: шторку выбора даёт она). */
+  language?: { value: string; onPress?: () => void };
   /** Реквизиты уже решены — чек оплаты инвойса подписан реквизитами
    *  инвойса, выписанный чек их не меняет: строка только показывает. */
   locked?: boolean;
@@ -89,6 +94,9 @@ export function InvoiceRequisitesBlock({
           onLongPress={locked ? undefined : () => edit(company ?? null)}
         />
         {number ? <InvoiceNumberRow target={number} /> : null}
+        {language ? (
+          <DocMetaRow label="Язык" value={language.value} onPress={language.onPress} />
+        ) : null}
       </SectionCard>
 
       <BottomSheet

@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/Field";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
+import { DocMetaRow } from "./DocMetaRow";
 import { useSetInvoiceNextNumber, type NextInvoiceNumber } from "./queries";
 
 // НОМЕР ИНВОЙСА — СТРОКА В БЛОКЕ «РЕКВИЗИТЫ».
@@ -132,48 +133,12 @@ export function InvoiceNumberRow({
           {editable ? <ChevronRight color={t.chevron} size={16} strokeWidth={1.75} /> : null}
         </Pressable>
       ) : (
-        // ТОНКАЯ СТРОКА ПОД НАБОРОМ (владелец 2026-10-03: «первый блок должен
-        // быть компактный, номер так сильно не выделять — ужасно выглядит»).
-        // Номер — справка к реквизитам, а не главная цифра экрана: без своей
-        // плитки, обычным кеглем, текст встаёт под имя набора (16 + плитка 28
-        // + зазор 12).
-        <Pressable
+        <DocMetaRow
+          label="Номер"
+          value={shown}
           onPress={editable ? () => setOpen(true) : undefined}
-          disabled={!editable}
-          accessibilityRole={editable ? "button" : "text"}
-          accessibilityLabel={`Номер, ${shown ?? "загрузка"}`}
-          accessibilityHint={editable ? "Нажмите, чтобы изменить" : undefined}
-          style={({ pressed }) => ({
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            minHeight: 36,
-            paddingLeft: 56,
-            paddingRight: 16,
-            paddingBottom: 8,
-            opacity: pressed ? 0.6 : 1,
-          })}
-        >
-          <Text
-            maxFontSizeMultiplier={1.2}
-            style={{ flex: 1, fontSize: 13, fontWeight: "500", color: t.caption }}
-          >
-            Номер
-          </Text>
-          <Text
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-            style={{
-              fontSize: 13,
-              fontWeight: "500",
-              color: shown ? t.sub : t.faint,
-              fontVariant: ["tabular-nums"],
-            }}
-          >
-            {shown ?? "…"}
-          </Text>
-          {editable ? <ChevronRight color={t.chevron} size={14} strokeWidth={1.75} /> : null}
-        </Pressable>
+          accessibilityHint="Нажмите, чтобы изменить"
+        />
       )}
 
       <BottomSheet
