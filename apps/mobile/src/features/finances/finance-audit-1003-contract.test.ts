@@ -28,6 +28,12 @@ describe("повторный аудит финансов 03.10", () => {
     assert.match(analytics, /const ahead = upcomingWork\.owed;/);
   });
 
+  test("пустой разбор дохода не прячет «Работы и оплаты» и «Прогноз»", () => {
+    const breakdown = read("ProfitBreakdown.tsx");
+    const empty = breakdown.slice(breakdown.indexOf("if (empty) {"), breakdown.indexOf("return (", breakdown.indexOf("if (empty) {") + 40));
+    assert.match(empty, /<EmptyState[\s\S]*\{footer\}\s*<\/ScrollView>/);
+  });
+
   test("время новой операции и долга — по часам бизнеса, не телефона", () => {
     const sheet = read("OperationSheet.tsx");
     assert.doesNotMatch(sheet, /formatHM\(new Date\(\)\)/);
