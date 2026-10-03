@@ -351,4 +351,16 @@ describe("повторный аудит календаря 03.10", () => {
     const del = src.slice(src.indexOf("export function useDeleteAppointment"), src.indexOf("export function useUndoAppointmentPayment"));
     assert.match(del, /onSuccess: \(_data, id\) => \{[\s\S]*?cur\?\.filter\(\(a\) => a\.id !== id\)/);
   });
+
+  test("у отменённой записи нет «Цвета» — он ничего не меняет на сетке", () => {
+    const src = screen();
+    assert.match(src, /if \(\(!event \|\| mutable\) && apt\.status !== "cancelled"\)\s*items\.push\(\{ label: "Цвет"/);
+    assert.match(src, /apt\.status !== "cancelled" &&\s*\(event \? ownEvent && eventRightsIn/);
+  });
+
+  test("ручки растяжки не ложатся на текст карточки", () => {
+    const src = block();
+    assert.match(src, /const rowsFit = rowsThatFit\(cardH - topHandle - bottomHandle, lineH\);/);
+    assert.match(src, /paddingTop: 2 - \(bw - 1\) \+ topHandle,/);
+  });
 });

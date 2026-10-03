@@ -2464,8 +2464,12 @@ export default function CalendarTab() {
       if (!event && can.move && apt.event_all_day !== true)
         items.push({ label: "Копировать", run: () => startMove(apt, "copy") });
       // Цвет события — его блок «Тип» (название и цвет): без «Меняет»
-      // сервер отказывает (аудит 03.10).
-      if (event ? ownEvent && eventRightsIn(apt.team_id ?? null).type === "write" : can.color)
+      // сервер отказывает (аудит 03.10). Отменённой цвет не нужен: она всегда
+      // серая пунктиром, и выбранный цвет на сетке ничего не менял.
+      if (
+        apt.status !== "cancelled" &&
+        (event ? ownEvent && eventRightsIn(apt.team_id ?? null).type === "write" : can.color)
+      )
         items.push({ label: "Цвет", run: () => setRecolor(apt) });
       if (!event && can.cancel && restorable)
         items.push(
@@ -2508,7 +2512,10 @@ export default function CalendarTab() {
         run: () =>
           apt.event_all_day === true ? copyInPlace(apt) : startMove(apt, "copy"),
       });
-      if (!event || mutable)
+      // ОТМЕНЁННОЙ — БЕЗ «ЦВЕТА» (повторный аудит 03.10, на симуляторе):
+      // отменённая запись всегда серая пунктиром, выбранный цвет на сетке не
+      // показывался — пункт, который ничего не меняет.
+      if ((!event || mutable) && apt.status !== "cancelled")
         items.push({ label: "Цвет", run: () => setRecolor(apt) });
       if (!event && phone && smsInPlan)
         items.push({

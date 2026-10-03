@@ -220,7 +220,16 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // ЧЕСТНЫЙ СЧЁТЧИК СТРОК. Обвязка карточки постоянна и равна 6pt: кант сверху
   // и снизу плюс вертикальный паддинг (при bw 1 это 2+4, при bw 2 — 4+2).
   // Значит n строк ФИЗИЧЕСКИ помещаются при cardH ≥ 6 + n·lineH.
-  const rowsFit = rowsThatFit(cardH, lineH);
+  // РУЧКА РАСТЯЖКИ СВЕРХУ — НЕ ПОВЕРХ ИМЕНИ (повторный аудит 03.10, на
+  // симуляторе). В «Свободном перемещении» верхняя ручка (top 3, высота 4)
+  // ложилась белой полосой прямо на первую строку — имя читалось
+  // перечёркнутым. Пока ручка видна, текст отступает под неё, а строк
+  // считается на столько меньше — и с нижней ручкой тоже: иначе сдвинутая
+  // вниз последняя строка ложилась уже под нижнюю.
+  const resizable = editing && !!onReschedule && apt.status !== "cancelled";
+  const topHandle = resizable && cardH >= 40 ? 6 : 0;
+  const bottomHandle = resizable && cardH >= 24 ? 6 : 0;
+  const rowsFit = rowsThatFit(cardH - topHandle - bottomHandle, lineH);
   // СТРОКА ЛИБО НАРИСОВАНА ЦЕЛИКОМ, ЛИБО ЕЁ НЕТ. Прежняя формула
   // `floor((cardH − 9) / lineH) + 1` пускала строку, когда до неё не хватало
   // почти целой: получасовая запись при обычном зуме (высота 28) получала две
@@ -663,6 +672,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               // просрочки съедал бы строку текста.
               paddingHorizontal: pad - (bw - 1),
               paddingVertical: 2 - (bw - 1),
+              paddingTop: 2 - (bw - 1) + topHandle,
               borderRadius: t.radius.card,
               borderCurve: "continuous",
               overflow: "hidden",
