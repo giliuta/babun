@@ -1,8 +1,7 @@
 import {
-  ACQUISITION_LABELS,
   PROPERTY_LABELS,
-  type AcquisitionSource,
   type Client,
+  type ClientSourceValue,
   type PropertyType,
 } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
@@ -488,24 +487,7 @@ export const FACET_SUBTITLES: Record<string, string> = {
 
 // ── Источник · Язык · Тип объекта (владелец 2026-07-24) ────────────
 
-/** Канонический порядок источников — порядок попапа и сводки строки. */
-const SOURCE_ORDER: AcquisitionSource[] = [
-  "referral",
-  "instagram",
-  "whatsapp",
-  "google_maps",
-  "website",
-  "repeat",
-  "walk_in",
-  "other",
-  "unknown",
-];
-
-export const SOURCE_OPTIONS = SOURCE_ORDER.map((key) => ({
-  value: key as string,
-  label: ACQUISITION_LABELS[key],
-  color: "",
-}));
+// Варианты источника (готовые + свои команд) — `acquisition-source.ts`.
 
 // LEGACY-ПЕРЕЧИСЛЕНИЕ ТИПОВ ОБЪЕКТА — только словарь ПЕРЕВОДА.
 //
@@ -531,9 +513,11 @@ const PROPERTY_OPTIONS = PROPERTY_ORDER.map((key) => ({
   color: "",
 }));
 
-/** Источник клиента: пустые legacy-строки читаются как «Неизвестно». */
-export function clientSource(c: Client): AcquisitionSource {
-  return (c.acquisition_source || "unknown") as AcquisitionSource;
+/** Источник клиента: пустые legacy-строки читаются как «Неизвестно». Свой
+ *  источник команды (`src:<id>`) возвращается как есть — подпись и судьбу
+ *  удалённого решает `acquisition-source.ts`. */
+export function clientSource(c: Client): ClientSourceValue {
+  return c.acquisition_source || "unknown";
 }
 
 /** Типы объектов клиента. Владелец 2026-07-26: «метка — это и есть тип
@@ -660,7 +644,7 @@ export interface ClientsFilter {
   selectedCities: string[];
   activeTags: string[];
   period: PeriodValue | null;
-  sources: AcquisitionSource[];
+  sources: ClientSourceValue[];
   propertyTypes: PropertyType[];
 }
 

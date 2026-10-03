@@ -25,8 +25,8 @@ import type { Database, Json } from "../database.types";
 import { rpcArgs } from "../rpc-args";
 import type {
   ACUnit,
-  AcquisitionSource,
   Client,
+  ClientSourceValue,
   ClientMembership,
   ClientRequisites,
   ClientNote,
@@ -185,7 +185,7 @@ export function rowToClient(r: ClientRow): Client {
     discount: r.discount ?? 0,
     comment: r.comment,
 
-    acquisition_source: (r.acquisition_source ?? "unknown") as AcquisitionSource,
+    acquisition_source: (r.acquisition_source ?? "unknown") as ClientSourceValue,
     referred_by_client_id: r.referred_by_client_id,
     first_contact_date: r.first_contact_date,
 

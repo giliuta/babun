@@ -62,6 +62,12 @@ export const ACQUISITION_LABELS: Record<AcquisitionSource, string> = {
   unknown: "Неизвестно",
 };
 
+/** ИСТОЧНИК КЛИЕНТА В ДАННЫХ (владелец 03.10: «могут самостоятельно добавить
+ *  источник»). Готовый — ключом из `ACQUISITION_LABELS`, свой источник
+ *  команды — `src:<id строки client_sources>`. Поле в базе — текст, поэтому
+ *  колонка клиента не менялась. */
+export type ClientSourceValue = AcquisitionSource | `src:${string}`;
+
 export type PropertyType = "apartment" | "house" | "office" | "restaurant" | "shop" | "other";
 
 export const PROPERTY_LABELS: Record<PropertyType, string> = {
@@ -291,7 +297,7 @@ export interface Client {
   discount: number;
   comment: string;
   tag_ids: string[];
-  acquisition_source: AcquisitionSource;
+  acquisition_source: ClientSourceValue;
   referred_by_client_id: string | null;
   first_contact_date: string | null;
   address: string;

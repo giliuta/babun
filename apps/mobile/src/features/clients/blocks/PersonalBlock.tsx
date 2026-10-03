@@ -11,19 +11,9 @@
 // свойства человека — строками одного вида: значение справа, тап — выбор.
 
 import { useState } from "react";
+import { useRouter, type Href } from "expo-router";
 import type { AcquisitionSource, Client } from "@babun/shared/local/clients";
-import { ACQUISITION_LABELS } from "@babun/shared/local/clients";
-import {
-  Circle,
-  Footprints,
-  Globe,
-  Instagram,
-  MapPin,
-  MessageCircle,
-  RotateCcw,
-  Users,
-  type LucideIcon,
-} from "lucide-react-native";
+import { Circle } from "lucide-react-native";
 import { NavRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { PickerSheet } from "@/components/ui/PickerSheet";
@@ -32,6 +22,14 @@ import { formatShortDateRu } from "@/features/clients/format";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { normalizeYMD } from "@/features/clients/OptionalDateField";
 import { useClients } from "@/features/clients/queries";
+import { useClientSources } from "@/features/clients/acquisition-sources";
+import {
+  normalizeSource,
+  sourceLabel,
+  sourcePickerOptions,
+} from "@/features/clients/acquisition-source";
+import { CUSTOM_SOURCE_ICON, SOURCE_ICONS } from "@/features/clients/source-icons";
+import { useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -45,28 +43,20 @@ interface PersonalBlockProps {
   draft?: boolean;
 }
 
-/** Значок источника: откуда пришёл клиент, узнаётся с одного взгляда. */
-const SOURCE_ICONS: Partial<Record<AcquisitionSource, LucideIcon>> = {
-  referral: Users,
-  instagram: Instagram,
-  whatsapp: MessageCircle,
-  google_maps: MapPin,
-  website: Globe,
-  repeat: RotateCcw,
-  walk_in: Footprints,
-  other: Circle,
-};
-
 export function PersonalBlock({ client, update, readOnly = false, draft = false }: PersonalBlockProps) {
   const t = useThemeColors();
   const [birthdayOpen, setBirthdayOpen] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [referrerOpen, setReferrerOpen] = useState(false);
   const birthday = normalizeYMD(client.birthday);
-  const source =
-    client.acquisition_source && client.acquisition_source !== "unknown"
-      ? ACQUISITION_LABELS[client.acquisition_source]
-      : null;
+  const router = useRouter();
+  // ИСТОЧНИК — ГОТОВЫЕ ПЛЮС СВОИ КОМАНДЫ КЛИЕНТА (владелец 03.10). Клиент без
+  // команды — у компании без команд — берёт первую.
+  const { data: sources = [] } = useClientSources();
+  const { data: ownTeams = [] } = useTeams();
+  const sourceTeamId = client.team_id ?? ownTeams[0]?.id ?? null;
+  const source = sourceLabel(client.acquisition_source, sources);
+  const sourceOptions = sourcePickerOptions(sources, sourceTeamId);
   // «Кто привёл»: список — сами клиенты компании, тот же кеш, что у списка.
   const { data: allClients = [] } = useClients();
   const referrerName =
@@ -126,15 +116,24 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
       <PickerSheet
         visible={sourceOpen}
         title="Источник обращения"
-        items={(Object.keys(ACQUISITION_LABELS) as AcquisitionSource[])
-          .filter((k) => k !== "unknown")
-          .map((k) => ({
-            id: k,
-            label: ACQUISITION_LABELS[k],
-            icon: SOURCE_ICONS[k] ?? Circle,
-            color: t.accent,
-            onPress: () => update({ acquisition_source: k }),
-          }))}
+        items={sourceOptions.map((o) => ({
+          id: o.value,
+          label: o.label,
+          icon: o.sourceId ? CUSTOM_SOURCE_ICON : (SOURCE_ICONS[o.value as AcquisitionSource] ?? Circle),
+          color: t.accent,
+          onPress: () => update({ acquisition_source: o.value }),
+        }))}
+        selectedId={normalizeSource(client.acquisition_source, sources)}
+        // ШЕСТЕРЁНКА — В СВОИ ИСТОЧНИКИ ТОЙ КОМАНДЫ, чьи предложены: там их
+        // добавляют («могут самостоятельно добавить источник»).
+        onSettings={() =>
+          router.push(
+            sourceTeamId
+              ? ({ pathname: "/clients/sources", params: { team: sourceTeamId } } as Href)
+              : ("/clients/sources" as Href),
+          )
+        }
+        settingsLabel="Свои источники"
         onClose={() => setSourceOpen(false)}
       />
       <DateWheelSheet

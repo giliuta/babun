@@ -9,19 +9,24 @@ import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import {
   clientPropertyTypes,
   propertyTypeLabel,
-  clientSource,
   matchesSegment,
   sortClients,
   periodLabel,
   todayYMD,
   SEGMENT_OPTIONS,
-  SOURCE_OPTIONS,
   type ActiveToken,
   type ClientsFilter,
   type FacetOption,
   type SegmentKey,
   type SortKey,
 } from "./filter";
+import {
+  normalizeSource,
+  sourceFilterOptions,
+  type ClientSource,
+} from "./acquisition-source";
+
+const NO_SOURCES: ClientSource[] = [];
 
 // Волна 2 — порт web useClientFilters (v812): один хук владеет
 // отфильтрованным списком, опциями фасетов и токенами бара.
@@ -70,6 +75,8 @@ export interface ClientFilterResult {
   tagOptions: FacetOption[];
   /** Типы объектов, которые РЕАЛЬНО есть в данных (порядок по частоте). */
   propertyOptions: FacetOption[];
+  /** Источники: готовые, свои команд, «Неизвестно» (03.10). */
+  sourceOptions: FacetOption[];
   facetCounts: FacetCounts;
   /** Строки Источник/Тип объекта появляются, когда данные есть хоть у
    *  одного клиента — пустой справочник не даёт мёртвую строку. */
@@ -174,6 +181,8 @@ export function useClientFilters(
   /** Считать контекстные счётчики попапов только когда лист открыт —
    *  иначе полный проход по клиентам гоняется на каждую клавишу поиска. */
   withFacetCounts: boolean,
+  /** Свои источники команд (`client_sources`) — подписи и варианты фасета. */
+  customSources: ClientSource[] = NO_SOURCES,
 ): ClientFilterResult {
   const {
     segments,
@@ -364,11 +373,17 @@ export function useClientFilters(
       sel.length === 0 || sel.some((t) => c.tag_ids.includes(t));
   }, [activeTags]);
 
+  const sourceOptions = useMemo<FacetOption[]>(
+    () => sourceFilterOptions(customSources),
+    [customSources],
+  );
+
+  // Удалённый свой источник читается как «Другое» — и в фильтре тоже.
   const passesSource = useMemo(() => {
     const sel = sources as string[];
     return (c: Client): boolean =>
-      sel.length === 0 || sel.includes(clientSource(c));
-  }, [sources]);
+      sel.length === 0 || sel.includes(normalizeSource(c.acquisition_source, customSources));
+  }, [sources, customSources]);
 
   const passesProperty = useMemo(() => {
     const sel = propertyTypes as string[];
@@ -381,8 +396,8 @@ export function useClientFilters(
 
   // Строки-фильтры «портрета» появляются, только когда данные есть.
   const hasSourceData = useMemo(
-    () => clients.some((c) => clientSource(c) !== "unknown"),
-    [clients],
+    () => clients.some((c) => normalizeSource(c.acquisition_source, customSources) !== "unknown"),
+    [clients, customSources],
   );
   const hasPropertyData = useMemo(
     () => clients.some((c) => clientPropertyTypes(c).size > 0),
@@ -511,7 +526,7 @@ export function useClientFilters(
         if (set) for (const id of set) team[id] = (team[id] ?? 0) + 1;
       }
       if (seg && tm && ct && tg && pr) {
-        const key = clientSource(c);
+        const key = normalizeSource(c.acquisition_source, customSources);
         source[key] = (source[key] ?? 0) + 1;
       }
       if (seg && tm && ct && tg && so) {
@@ -535,6 +550,7 @@ export function useClientFilters(
     passesTag,
     passesSource,
     passesProperty,
+    customSources,
   ]);
 
   // ── Токены summary-бара ──────────────────────────────────────────
@@ -576,7 +592,7 @@ export function useClientFilters(
       });
     }
     for (const src of sources) {
-      const o = SOURCE_OPTIONS.find((x) => x.value === src);
+      const o = sourceOptions.find((x) => x.value === src);
       if (o)
         tokens.push({ key: "source", val: src, label: o.label, color: "" });
     }
@@ -602,6 +618,7 @@ export function useClientFilters(
     teamOptions,
     cityOptions,
     tagOptions,
+    sourceOptions,
   ]);
 
   // Бейдж считает ровно то, что можно снять токеном: значение по мёртвому
@@ -617,6 +634,7 @@ export function useClientFilters(
     cityOptions,
     tagOptions,
     propertyOptions,
+    sourceOptions,
     facetCounts,
     hasSourceData,
     hasPropertyData,

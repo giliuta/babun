@@ -37,6 +37,7 @@ import {
   useTrashClientAsPartner,
   useUpdateClientById,
 } from "@/features/clients/queries";
+import { useClientSources } from "@/features/clients/acquisition-sources";
 import { useDeleteWithUndo } from "@/features/clients/delete-undo";
 import { shareText } from "@/features/clients/client-share";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
@@ -342,6 +343,23 @@ function ClientsListScreen() {
     });
   }, [tags, teams, teamChoice]);
 
+  // СВОИ ИСТОЧНИКИ КОМАНД (03.10) — в фильтре все: клиент мог перейти в
+  // другую команду со своим источником. Одинаковые имена разных команд
+  // подписаны командой, как теги.
+  const { data: ownSources = [] } = useClientSources();
+  const filterSources = useMemo(() => {
+    const byName = new Map<string, number>();
+    for (const src of ownSources) {
+      const key = src.name.trim().toLowerCase();
+      byName.set(key, (byName.get(key) ?? 0) + 1);
+    }
+    return ownSources.map((src) => {
+      const shared = (byName.get(src.name.trim().toLowerCase()) ?? 0) > 1;
+      const teamName = teams.find((tm) => tm.id === src.team_id)?.name;
+      return shared && teamName ? { ...src, name: `${src.name} · ${teamName}` } : src;
+    });
+  }, [ownSources, teams]);
+
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
   // (deps без поиска) — фикс Волны 1 сохранён: клавиши не гоняют
   // localeCompare-компаратор.
@@ -356,6 +374,7 @@ function ClientsListScreen() {
     filter,
     query,
     sheetOpen, // счётчики попапов считаем только при открытом листе
+    filterSources,
   );
 
   // Прунинг «призрачных» фильтров: если тег/команду/метку удалили, пока

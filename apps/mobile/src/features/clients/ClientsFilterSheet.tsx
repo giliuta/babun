@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BarChart3, Check, ChevronDown, ChevronRight } from "lucide-react-native";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import type {
-  AcquisitionSource,
+  ClientSourceValue,
   PropertyType,
 } from "@babun/shared/local/clients";
 import { haptics } from "@/lib/haptics";
@@ -44,7 +44,6 @@ import {
   FACET_SUBTITLES,
   SORT_BLOCKS,
   SORT_LABELS_LONG,
-  SOURCE_OPTIONS,
   type ClientsFilter,
   type FacetOption,
   type SegmentKey,
@@ -963,7 +962,7 @@ export function ClientsFilterSheet({
           .map((id) => teamOptions.find((o) => o.value === id)?.label ?? "")
           .filter(Boolean),
         ...filter.sources
-          .map((s) => SOURCE_OPTIONS.find((o) => o.value === s)?.label ?? "")
+          .map((s) => result.sourceOptions.find((o) => o.value === s)?.label ?? "")
           .filter(Boolean),
         ...filter.propertyTypes.map(propertyTypeLabel).filter(Boolean),
       ].join(" · ");
@@ -1112,13 +1111,13 @@ export function ClientsFilterSheet({
     source: {
       title: "Источник",
       subtitle: FACET_SUBTITLES.source,
-      blocks: [SOURCE_OPTIONS],
+      blocks: [result.sourceOptions],
       selected: filter.sources,
       counts: facetCounts.source,
       toggle: (v) =>
         applyFilter({
           ...filter,
-          sources: toggleIn(filter.sources, v) as AcquisitionSource[],
+          sources: toggleIn(filter.sources, v) as ClientSourceValue[],
         }),
       clear: () => applyFilter({ ...filter, sources: [] }),
     },
@@ -1148,7 +1147,7 @@ export function ClientsFilterSheet({
   const cityValue = summarize(cityOptions, filter.selectedCities);
   const tagValue = summarize(tagOptions, filter.activeTags);
   const teamValue = summarize(teamOptions, filter.selectedTeams);
-  const sourceValue = summarize(SOURCE_OPTIONS, filter.sources);
+  const sourceValue = summarize(result.sourceOptions, filter.sources);
   const propertyValue = summarize(result.propertyOptions, filter.propertyTypes);
 
   return (

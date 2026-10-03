@@ -5,6 +5,7 @@ import {
   Download,
   Eye,
   Home,
+  Megaphone,
   MessageCircle,
   Navigation,
   Smartphone,
@@ -33,6 +34,8 @@ import {
 } from "@/lib/map-services";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useClients, useClientTags } from "@/features/clients/queries";
+import { useClientSources } from "@/features/clients/acquisition-sources";
+import { sourcesSummary, teamSources } from "@/features/clients/acquisition-source";
 import { useAppointments } from "@/features/calendar/queries";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
@@ -243,6 +246,12 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
     () => (teamId ? tags.filter((tag) => !tag.team_id || tag.team_id === teamId) : tags),
     [tags, teamId],
   );
+  // Свои источники команды (03.10) — счётчик строки «Источники».
+  const sourcesQuery = useClientSources();
+  const teamSourceCount = useMemo(
+    () => teamSources(sourcesQuery.data ?? [], teamId).length,
+    [sourcesQuery.data, teamId],
+  );
   // ДАННЫЕ — ТОЖЕ У КОМАНДЫ (владелец 30.09): выгрузка, архив и корзина — её
   // клиенты (свои и те, кого она обслуживала, как под чипом списка), импорт —
   // в неё.
@@ -386,8 +395,9 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
             />
           ) : null}
 
-          {/* ТЕГИ — СПРАВОЧНИК КОМАНДЫ: какие теги есть. Включён ли блок «Тег»
-              на карточке — на странице «Блоки клиентов». */}
+          {/* ТЕГИ И ИСТОЧНИКИ — СПРАВОЧНИКИ КОМАНДЫ: какие есть. Включён ли
+              блок «Тег» на карточке — на странице «Блоки клиентов». Источник
+              (03.10) — готовые плюс свои, право то же, что у тегов. */}
           <SettingsGroup
             title="Справочники"
             rows={[
@@ -399,6 +409,16 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
                   title="Теги"
                   sub={tagsQuery.isLoading ? "Загрузка…" : tagsSummary(teamTags.length)}
                   onPress={() => router.push(teamHref("/clients/tags"))}
+                />
+              ) : null,
+              levels.tags !== "hidden" ? (
+                <SettingsRow
+                  key="sources"
+                  tile={SETTINGS_TILE.orange}
+                  icon={Megaphone}
+                  title="Источники"
+                  sub={sourcesQuery.isLoading ? "Загрузка…" : sourcesSummary(teamSourceCount)}
+                  onPress={() => router.push(teamHref("/clients/sources"))}
                 />
               ) : null,
             ]}
