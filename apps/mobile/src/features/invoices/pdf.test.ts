@@ -264,3 +264,57 @@ describe("invoice PDF HTML", () => {
   // предлагает эти слова: без логотипа, без реквизитов продавца, без
   // клиента, без срока оплаты и без комментария.
 });
+
+// ДВА АДРЕСА ПОЛУЧАТЕЛЯ (владелец 2026-10-03): юрадрес реквизитов — на
+// компанию, а объектов у неё много. Оба необязательны: без реквизитов и без
+// объекта инвойс выставляется просто на имя клиента.
+describe("invoice recipient addresses", () => {
+  const snapshot = (extra: Record<string, unknown>) => ({
+    schema_version: 1,
+    client_id: "client-1",
+    full_name: "Ivan Petrov",
+    phone: null,
+    phone_e164: null,
+    whatsapp_phone: null,
+    email: null,
+    address: null,
+    city: null,
+    primary_address: "Primary location 1",
+    archived: false,
+    deleted_at: null,
+    ...extra,
+  });
+  const settlement = {
+    income: 0, refunded: 0, paid: 0, remaining: 119, overpaid: 0, isPartial: false, isPaid: false,
+  };
+  const render = (clientSnapshot: ReturnType<typeof snapshot>) =>
+    buildInvoicePdfHtml({
+      invoice: { ...invoice, language: "en", client_snapshot: clientSnapshot },
+      tenant,
+      client,
+      settlement,
+      payments: [],
+    });
+
+  it("prints the legal address of the chosen requisites above the object address", () => {
+    const html = render(snapshot({
+      legal_name: "Petrov Holdings Ltd",
+      vat_number: "CY999",
+      billing_address: "Arch. Makariou 1\nNicosia 1065",
+      object: { id: "loc-2", label: "Shop", address_parts: { street: "Ledras 20", city: "Nicosia" } },
+    }));
+    assert.match(html, /Petrov Holdings Ltd/);
+    const legal = html.indexOf("Arch. Makariou 1");
+    const city = html.indexOf("Nicosia 1065");
+    const site = html.indexOf("Ledras 20");
+    assert.ok(legal > 0 && city > legal, "legal address is printed line by line");
+    assert.ok(site > city, "object address follows the legal address");
+  });
+
+  it("prints just the client name without requisites and without an object", () => {
+    const html = render(snapshot({ object: null }));
+    assert.match(html, /Ivan Petrov/);
+    assert.doesNotMatch(html, /Primary location 1/);
+    assert.doesNotMatch(html, /Recipient not set/);
+  });
+});

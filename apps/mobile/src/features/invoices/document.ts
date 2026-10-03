@@ -258,9 +258,12 @@ function issuedDocument({
       ]),
     },
     // ПОЛУЧАТЕЛЬ (владелец 2026-09-22): юрназвание и реквизиты — из карточки
-    // клиента, телефона на бумаге нет, адрес — только точный адрес ОБЪЕКТА
-    // счёта. Снимок старше объектов (`object` нет вовсе) печатает свой адрес
-    // как раньше: выставленный документ не переписывается задним числом.
+    // клиента, телефона на бумаге нет. Адресов два и оба необязательны
+    // (владелец 2026-10-03: «юрадрес — на компанию, а объектов у неё много»):
+    // юридический адрес реквизитов под юрназванием, ниже — точный адрес
+    // ОБЪЕКТА счёта. Снимок старше объектов (`object` нет вовсе) печатает
+    // свой адрес как раньше: выставленный документ не переписывается
+    // задним числом.
     client: recipient
       ? {
           name: firstNonEmpty(recipient.legal_name, recipient.full_name)
@@ -271,7 +274,10 @@ function issuedDocument({
             clean(recipient.email),
             ...(recipient.object === undefined
               ? addressLines(firstNonEmpty(recipient.primary_address, recipient.address))
-              : objectAddressLines(recipient.object?.address_parts, dict)),
+              : [
+                  ...addressLines(clean(recipient.billing_address)),
+                  ...objectAddressLines(recipient.object?.address_parts, dict),
+                ]),
           ]),
         }
       : clientParty(
@@ -578,7 +584,12 @@ function clientParty(
   // Реквизиты клиента заводит карточка клиента (сессия 012); читаем их
   // структурно, чтобы бумага не зависела от того, когда поля лягут в тип.
   const requisites = client as
-    | (Client & { legal_name?: string | null; vat_number?: string | null; reg_number?: string | null })
+    | (Client & {
+        legal_name?: string | null;
+        vat_number?: string | null;
+        reg_number?: string | null;
+        billing_address?: string | null;
+      })
     | undefined;
   return {
     name: firstNonEmpty(requisites?.legal_name, client?.full_name) || dict.recipientMissing,
@@ -586,6 +597,7 @@ function clientParty(
       prefixed(dict.vatNo, clean(requisites?.vat_number)),
       prefixed(dict.regNumber, clean(requisites?.reg_number)),
       clean(client?.email),
+      ...addressLines(clean(requisites?.billing_address)),
       ...(hasExactAddress(location?.addressParts)
         ? objectAddressLines(location?.addressParts ?? null, dict)
         : []),

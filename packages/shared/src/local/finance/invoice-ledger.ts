@@ -118,6 +118,9 @@ export interface InvoiceClientSnapshot {
   legal_name?: string | null;
   vat_number?: string | null;
   reg_number?: string | null;
+  /** Юридический адрес выбранного набора реквизитов — печатается под
+   *  юрназванием; адрес объекта идёт отдельно, ниже. */
+  billing_address?: string | null;
   /** ОБЪЕКТ СЧЁТА (миграция 20260922060000). `undefined` — снимок старше
    *  объектов; `null` — объект не выбран; адрес на бумагу — только
    *  `address_parts` (точный адрес), иначе адреса нет вовсе. */
@@ -521,6 +524,7 @@ export function parseInvoiceClientSnapshot(
     legal_name: stringValue(row.legal_name),
     vat_number: stringValue(row.vat_number),
     reg_number: stringValue(row.reg_number),
+    billing_address: stringValue(row.billing_address),
     ...("object" in row ? { object: parseInvoiceObjectSnapshot(row.object) } : {}),
     archived: row.archived === true,
     deleted_at: stringValue(row.deleted_at),
