@@ -237,14 +237,31 @@ Deno.serve(async (request: Request) => {
       const item = (sub.items as { data?: { id: string; price?: { id?: string } }[] } | undefined)?.data?.[0];
       if (!item) return json(409, { error: "subscription_without_items" });
       if (item.price?.id === priceId) return json(200, { changed: false });
+      // СМЕНА ТАРИФА — ТОЛЬКО ПОСЛЕ ОПЛАТЫ РАЗНИЦЫ (аудит 03.10). Было
+      // `create_prorations`: доплата за остаток периода ждала СЛЕДУЮЩЕГО
+      // счёта, а вебхук сразу ставил новый тариф — Соло → «Макс» → отмена в
+      // портале давали «Макс» до конца периода без доплаты. Теперь разница
+      // выставляется счётом сразу, и при `pending_if_incomplete` новая цена
+      // встаёт в подписку лишь когда счёт оплачен (до того вебхук видит
+      // прежнюю цену). Понижение даёт кредит на следующий счёт. Метки в такой
+      // запрос Stripe не принимает — они уже стоят на подписке с оформления.
       await stripe(stripeKey, "POST", `subscriptions/${tenant.stripe_subscription_id}`, {
         "items[0][id]": item.id,
         "items[0][price]": priceId,
-        proration_behavior: "create_prorations",
-        "metadata[tenant_id]": tenantId,
-        "metadata[tier]": tier,
+        proration_behavior: "always_invoice",
+        payment_behavior: "pending_if_incomplete",
       });
       return json(200, { changed: true });
+    }
+
+    // ЛИМИТ ПАРТНЁРОВ — И У НОВОЙ ПОДПИСКИ (аудит 03.10): проверка стояла
+    // только у смены тарифа в живой подписке. Пробный «Макс» → 50 партнёров
+    // → пробный кончился → новая подписка «Про» оживляла всех 50 по цене Про.
+    {
+      const { data: people } = await service.rpc("tariff_partner_count", { p_tenant: tenantId });
+      if (typeof people === "number" && people > PARTNERS[tier]) {
+        return json(409, { error: "too_many_partners", limit: PARTNERS[tier] });
+      }
     }
 
     // Клиент Stripe аккаунта: свой, иначе тот, что завёлся для SMS, иначе новый.

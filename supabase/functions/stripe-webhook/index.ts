@@ -114,8 +114,11 @@ function mapSubscriptionStatus(s: string): SubStatus {
     case "incomplete":
     case "incomplete_expired":
       return "incomplete";
+    // «Не оплачено» после всех повторов списания — БЕЗ доступа (аудит
+    // 03.10): как `past_due` оно держало платный тариф, пока Stripe двигает
+    // конец периода, то есть бессрочно.
     case "unpaid":
-      return "past_due";
+      return "incomplete";
     case "paused":
       return "incomplete";
     default:
@@ -124,6 +127,79 @@ function mapSubscriptionStatus(s: string): SubStatus {
 }
 
 const unixToIso = (unix: number): string => new Date(unix * 1000).toISOString();
+
+/** Поля аккаунта из подписки, как она есть в Stripe СЕЙЧАС. */
+function fieldsOfSubscription(sub: Stripe.Subscription): ReconcileFields {
+  const item = sub.items?.data?.[0];
+  const status = mapSubscriptionStatus(sub.status);
+  const ended = sub.status === "canceled" || sub.status === "incomplete_expired";
+  const update: ReconcileFields = {
+    plan: ended ? "free" : priceToTier(item?.price),
+    subscription_status: status,
+    stripe_subscription_id: ended ? null : sub.id,
+  };
+  const withPeriod = sub as unknown as {
+    current_period_end?: number | null;
+    trial_end?: number | null;
+  };
+  const periodEnd =
+    withPeriod.current_period_end ??
+    (item as unknown as { current_period_end?: number | null } | undefined)?.current_period_end;
+  if (typeof periodEnd === "number") update.current_period_end = unixToIso(periodEnd);
+  update.trial_ends_at =
+    !ended && typeof withPeriod.trial_end === "number" ? unixToIso(withPeriod.trial_end) : null;
+  return update;
+}
+
+const LIVE_STATUSES = new Set(["active", "trialing", "past_due"]);
+
+/** ПРАВДА О ПОДПИСКЕ — ИЗ STRIPE, А НЕ ИЗ СОБЫТИЯ (аудит 03.10).
+ *
+ *  Stripe не обещает порядок событий, а повтор после 5xx приходит позже
+ *  новых. Раньше событие применялось как есть: старое `updated(active)`
+ *  после `deleted` возвращало тариф по отменённой подписке, `deleted` ЛЮБОЙ
+ *  подписки клиента обнулял тариф при живой другой. Теперь на каждое
+ *  событие подписки или её счёта подписка перечитывается, и применяется
+ *  только если это текущая подписка аккаунта (или её нет), либо текущая уже
+ *  не живая, а эта — живая и новее. */
+async function subscriptionTruth(
+  event: Stripe.Event,
+  stripe: Stripe,
+  // deno-lint-ignore no-explicit-any
+  sbs: any,
+  tenantId: string,
+): Promise<ReconcileFields | null> {
+  const obj = event.data.object as unknown as Record<string, unknown>;
+  const subId = event.type.startsWith("customer.subscription.")
+    ? (typeof obj.id === "string" ? obj.id : null)
+    : idOf(obj.subscription) ??
+      idOf((obj.parent as { subscription_details?: { subscription?: unknown } } | undefined)?.subscription_details?.subscription);
+  if (!subId) return null;
+
+  const { data: tenant } = await sbs
+    .from("tenants")
+    .select("stripe_subscription_id")
+    .eq("id", tenantId)
+    .maybeSingle();
+  const current = (tenant?.stripe_subscription_id as string | null | undefined) ?? null;
+
+  const fresh = await stripe.subscriptions.retrieve(subId);
+  const freshLive = LIVE_STATUSES.has(fresh.status);
+  if (!current || current === subId) return fieldsOfSubscription(fresh);
+
+  // Событие про ДРУГУЮ подписку, не текущую у аккаунта.
+  if (!freshLive) return null; // чужая мёртвая подписка тариф не трогает
+  let currentSub: Stripe.Subscription | null = null;
+  try {
+    currentSub = await stripe.subscriptions.retrieve(current);
+  } catch {
+    currentSub = null; // текущей в Stripe нет — переходим на живую
+  }
+  if (currentSub && LIVE_STATUSES.has(currentSub.status) && currentSub.created >= fresh.created) {
+    return null; // текущая живая и не старше — остаётся
+  }
+  return fieldsOfSubscription(fresh);
+}
 
 function computeUpdate(event: Stripe.Event): ReconcileFields | null {
   switch (event.type) {
@@ -461,6 +537,13 @@ Deno.serve(async (req: Request) => {
     return json(400, { error: "bad signature" });
   }
 
+  // ТЕСТОВОЕ СОБЫТИЕ НА БОЕВОМ КЛЮЧЕ — МИМО (аудит 03.10): карта 4242 не
+  // должна давать тариф и баланс SMS, а Twilio — слать настоящие SMS.
+  if (secretKey.startsWith("sk_live_") && event.livemode !== true) {
+    console.warn("stripe webhook: test-mode event on live key ignored", event.id);
+    return json(200, { ok: true, ignored: "test_mode" });
+  }
+
   const service = serviceClient();
   if (!service) return json(503, { error: "service_role_unavailable" });
   // deno-lint-ignore no-explicit-any
@@ -496,16 +579,26 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (tenantIdHint) {
-      const update = computeUpdate(event);
+      const bySubscription =
+        event.type.startsWith("customer.subscription.") && event.type !== "customer.subscription.trial_will_end"
+        || event.type === "invoice.payment_succeeded"
+        || event.type === "invoice.payment_failed";
+      const update = bySubscription
+        ? await subscriptionTruth(event, stripe, sbs, tenantIdHint)
+        : computeUpdate(event);
       if (update) {
-        await sbs.from("tenants").update(update).eq("id", tenantIdHint);
+        const { error: updateErr } = await sbs.from("tenants").update(update).eq("id", tenantIdHint);
+        if (updateErr) throw new Error(updateErr.message ?? "tenants update failed");
       }
     }
   } catch (err) {
+    // СБОЙ ЗАПИСИ ТАРИФА — НЕ «УСПЕХ» (аудит 03.10): раньше ошибка update не
+    // проверялась, и ответ 200 при уже записанном журнале означал, что
+    // повтора не будет никогда. Журнал снимается, Stripe получает 500 и
+    // пришлёт событие ещё раз.
     console.error("stripe webhook: reconcile failed", err);
-    // Audit row is in place; ACK so Stripe stops retrying and we replay
-    // from billing_events instead.
-    return json(200, { ok: true, reconcile_warning: true });
+    await sbs.from("billing_events").delete().eq("stripe_event_id", event.id);
+    return json(500, { error: "reconcile failed" });
   }
 
   return json(200, { ok: true });
