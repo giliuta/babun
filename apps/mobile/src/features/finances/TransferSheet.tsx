@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { DateTimeInput } from "@/components/ui/DateTimeInput";
-import { ArrowDown, ChevronDown, ChevronLeft } from "lucide-react-native";
+import { ArrowUpDown, CalendarDays, ChevronLeft, Wallet } from "lucide-react-native";
 import {
   formatMoneyForInput,
   money,
@@ -14,12 +14,15 @@ import { todayYmd } from "@/features/invoices/format";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { accountIcon } from "./account-ui";
-import { Chip } from "@/components/ui/Chip";
+import { ChooseRow } from "@/components/ui/ChooseRow";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { SelectRow } from "@/components/ui/select-rows";
+import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { AmountBlock } from "./AmountBlock";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GUTTER } from "@/components/ui/tokens";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { ValueOptionList } from "@/components/ui/ValuePickerSheet";
-import { FieldRow, NavRow, RowGroupBody } from "@/components/ui/card-rows";
 import { useThemeColors } from "@/theme/colors";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useTenant } from "@/features/settings/tenant";
@@ -89,6 +92,9 @@ const OFFLINE_MID_FLIGHT =
   "Связь пропала. Нажмите ещё раз, когда появится сеть — перевод не задвоится.";
 
 type Step = "form" | "from" | "to" | "date";
+
+const noop = () => {};
+const blockBody = { paddingHorizontal: 2, paddingVertical: 2 } as const;
 
 export function TransferSheet({
   visible,
@@ -437,17 +443,6 @@ export function TransferSheet({
               onChange={(_, date) => date && setDateDraft(formatYMD(date))}
             />
           </View>
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{
-              marginHorizontal: 8,
-              fontSize: 13,
-              lineHeight: 18,
-              color: t.faint,
-            }}
-          >
-            Вперёд день не ставится: деньги нельзя передать завтра.
-          </Text>
         </View>
       </BottomSheet>
     );
@@ -475,10 +470,6 @@ export function TransferSheet({
             <EmptyState
               title={
                 step === "from" ? "Переводить неоткуда" : "Переводить некуда"
-              }
-              subtitle={
-                "Перевод ходит между двумя активными счетами. "
-                + "Заведите ещё один на экране счетов — и список оживёт."
               }
             />
           ) : null}
@@ -538,25 +529,44 @@ export function TransferSheet({
   const onHandSince = from?.last_outflow_on ?? from?.first_tx_on ?? null;
   const onHandDays =
     from && onHandSince ? accountDaysOnHand(from, businessToday) : null;
+  // В плашке справа — остаток; у кассы с деньгами на руках — и с какого дня.
   const sourceCaption = !from
     ? null
     : from.kind === "cash" && onHandSince && onHandDays !== null && onHandDays > 0
-      ? `На руках ${money(from.balance, currency)} · с ${dayPhrase(onHandSince)}`
-      : `На счёте ${money(from.balance, currency)}`;
-
-  // «После перевода» показывает ОБЕ стороны: цифра, которую нельзя проверить
-  // пальцем, доверия не создаёт.
-  const afterLine =
-    from && to && amountCents !== null && reason === null
-      ? `После перевода: ${label(from)} ${money(
-          from.balance - amountNum,
-          currency,
-        )} · ${label(to)} ${money(to.balance + amountNum, currency)}`
-      : null;
+      ? `${money(from.balance, currency)} · с ${dayPhrase(onHandSince)}`
+      : money(from.balance, currency);
 
   const remainder = from?.balance ?? 0;
-  const showRemainderChip =
+  const showRemainder =
     moneySign(remainder) > 0 && amountCents !== Math.round(remainder * 100);
+
+  /** Плашка счёта стороны перевода — как плашки листа счёта: значок счёта,
+   *  имя, остаток справа. Не выбран — «Выбрать счёт» скрепкой-дверью. */
+  const accountPlaque = (
+    side: "from" | "to",
+    account: AccountWithBalance | null,
+    caption: string | null,
+  ) =>
+    account ? (
+      <SelectRow
+        icon={accountIcon(account)}
+        // Без своего цвета — нейтральная плитка, как в списке счетов.
+        color={account.color ?? undefined}
+        plain
+        title={label(account)}
+        value={caption ?? undefined}
+        accessibilityLabel={`${side === "from" ? "Откуда" : "Куда"}: ${label(account)}`}
+        // Пришли со строки счёта — источник это показание, а не выбор.
+        onPress={side === "from" && sourceLocked ? noop : () => setStep(side)}
+      />
+    ) : (
+      <ChooseRow
+        compact
+        icon={Wallet}
+        label="Выбрать счёт"
+        onPress={() => setStep(side)}
+      />
+    );
 
   return (
     <BottomSheet
@@ -582,8 +592,8 @@ export function TransferSheet({
               {failure ?? reason}
             </Text>
           ) : null}
-          {/* Получателя кнопка НЕ называет: он стоит в карточке «Куда» прямо
-              над ней, а «на Наличка · Команда 2» ломала падеж и длинным именем
+          {/* Получателя кнопка НЕ называет: он стоит в блоке «Куда» прямо над
+              ней, а «на Наличка · Команда 2» ломала падеж и длинным именем
               выталкивала сумму из единственной строки кнопки. */}
           <GradientButton
             label={
@@ -598,170 +608,82 @@ export function TransferSheet({
         </View>
       }
     >
-      <View style={{ paddingBottom: 8 }}>
-        {/* 1. КОГДА — первой строкой (владелец 2026-08-15). Обычно это
-            «Сегодня», и тогда строка молчит о себе одним словом. */}
-        <RowGroupBody>
-          <NavRow
-            label="Когда"
-            value={
-              occurredOn === businessToday
-                ? `Сегодня, ${dayPhrase(businessToday)}`
-                : dayPhrase(occurredOn)
-            }
-            onPress={() => {
-              setDateDraft(occurredOn);
-              setStep("date");
-            }}
-          />
-        </RowGroupBody>
-
-        {/* 2. ДВЕ КАРТОЧКИ, сумма справа в каждой. Набираешь в верхней — нижняя
-            повторяет ту же цифру плюсом. Кнопка разворота на шве. */}
-        <View style={{ marginTop: 12 }}>
-          <PartyCard
-            eyebrow="Откуда"
-            name={from ? label(from) : null}
-            caption={sourceCaption}
-            // Пришли со строки счёта — источник это показание, а не выбор.
-            onPick={sourceLocked ? undefined : () => setStep("from")}
-            amount={
-              <TextInput
-                value={amount}
-                onChangeText={(v) => {
-                  setAmount(v);
-                  setFailure(null);
-                }}
-                keyboardType="decimal-pad"
-                keyboardAppearance="light"
-                selectionColor={t.accent}
-                placeholder="0"
-                placeholderTextColor={t.placeholder}
-                autoFocus
-                // Предзаполненный остаток ВЫДЕЛЕН: первый же символ заменяет
-                // его целиком — частичная сумма набирается поверх, без стирания.
-                selectTextOnFocus
-                accessibilityLabel="Сумма перевода"
-                maxFontSizeMultiplier={1.2}
-                // Без className: он вместе со `style`-функцией молча убивает
-                // весь стиль, а textAlign NativeWind до TextInput не доносит.
-                style={{
-                  minWidth: 96,
-                  fontSize: 28,
-                  // БЕЗ ИНТЕРВАЛА iOS СРЕЖЕТ ВЕРХ ГЛИФОВ (см. тест ловушек
-                  // nativewind): строка поля выходит ниже кегля.
-                  lineHeight: 36,
-                  fontWeight: "700",
-                  textAlign: "right",
-                  color: amount ? t.ink : t.placeholder,
-                  fontVariant: ["tabular-nums"],
-                }}
-              />
-            }
-            sign="−"
-            currency={currency}
-          />
-          <PartyCard
-            eyebrow="Куда"
-            name={to ? label(to) : null}
-            caption={to ? `На счёте ${money(to.balance, currency)}` : null}
-            onPick={() => setStep("to")}
-            // Зеркало: та же цифра, тот же размер, но плюсом и тише. Считать
-                // её нечем — она равна набранной по определению.
-            amount={
-              <Text
-                maxFontSizeMultiplier={1.2}
-                style={{
-                  fontSize: 28,
-                  fontWeight: "700",
-                  color: amountCents ? t.sub : t.placeholder,
-                  fontVariant: ["tabular-nums"],
-                }}
-              >
-                {amount || "0"}
-              </Text>
-            }
-            sign="+"
-            currency={currency}
-          />
-          {/* Кнопка разворота стоит НА ШВЕ между карточками — там, где её ищет
-              палец, и туда же смотрит стрелка. */}
-          <View
-            pointerEvents="box-none"
-            style={{
-              position: "absolute",
-              top: 0,
-              bottom: 0,
-              left: 0,
-              right: 0,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Pressable
-              onPress={swap}
-              disabled={!from || !to}
-              accessibilityRole="button"
-              accessibilityLabel="Поменять местами"
-              hitSlop={10}
-              style={({ pressed }) => ({
-                width: 40,
-                height: 40,
-                borderRadius: t.radius.pill,
-                alignItems: "center",
-                justifyContent: "center",
-                // Кольцо цветом ЛИСТА, а не карточки: кнопка «прорезает» шов
-                // между ними, иначе она просто лежит поверх стыка.
-                borderWidth: 4,
-                borderColor: t.surface,
-                opacity: !from || !to ? 0.4 : 1,
-                backgroundColor: pressed ? t.rowFillPressed : t.fill,
-              })}
-            >
-              <ArrowDown color={t.accent} size={18} strokeWidth={2.4} />
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={{ paddingHorizontal: 16, marginTop: 10, gap: 8 }}>
-          {showRemainderChip ? (
-            <View style={{ flexDirection: "row" }}>
-              <Chip
-                label={`Весь остаток ${money(remainder, currency)}`}
-                variant="tint"
-                onPress={() => setAmount(formatMoneyForInput(remainder))}
-              />
-            </View>
-          ) : null}
-          {afterLine ? (
-            <Text
-              maxFontSizeMultiplier={1.3}
-              style={{
-                fontSize: 13,
-                lineHeight: 18,
-                color: t.faint,
-                fontVariant: ["tabular-nums"],
+      {/* ПЕРЕВОД — ТЕМИ ЖЕ БЛОКАМИ, ЧТО ОПЕРАЦИЯ И ДОЛГ (владелец 03.10: «и
+          ещё между счетами переводы» — в тот же дизайн): на прохладном фоне
+          блоки с шапкой, в них плашки. Порядок — как думает человек: когда →
+          откуда → куда → сколько → заметка. */}
+      <View style={{ backgroundColor: t.canvas, paddingBottom: 24 }}>
+        {/* КОГДА — обычно «Сегодня»; день выбирается вторым шагом листа,
+            вперёд не ставится. */}
+        <SectionCard dense title="Когда">
+          <View style={blockBody}>
+            <SelectRow
+              icon={CalendarDays}
+              color={t.accent}
+              plain
+              title={
+                occurredOn === businessToday
+                  ? `Сегодня, ${dayPhrase(businessToday)}`
+                  : dayPhrase(occurredOn)
+              }
+              onPress={() => {
+                setDateDraft(occurredOn);
+                setStep("date");
               }}
-            >
-              {afterLine}
-            </Text>
-          ) : null}
-        </View>
-
-        <View style={{ marginTop: 12 }}>
-          <RowGroupBody>
-            <FieldRow
-              label="Комментарий"
-              value={note}
-              placeholder="Необязательно"
-              stacked
-              // На каждый символ: кнопка листа не снимает фокус с поля, и
-              // коммит по blur до неё бы не дошёл — комментарий терялся бы.
-              live
-              onSave={setNote}
             />
-          </RowGroupBody>
-        </View>
+          </View>
+        </SectionCard>
+
+        <SectionCard dense title="Откуда">
+          <View style={blockBody}>{accountPlaque("from", from, from ? sourceCaption : null)}</View>
+        </SectionCard>
+
+        {/* «ПОМЕНЯТЬ МЕСТАМИ» — значком в шапке «Куда», где его ищут после
+            выбора обеих сторон. */}
+        <SectionCard
+          dense
+          title="Куда"
+          action={
+            from && to
+              ? { label: "Поменять местами", icon: ArrowUpDown, accent: true, onPress: swap }
+              : undefined
+          }
+        >
+          <View style={blockBody}>
+            {accountPlaque("to", to, to ? money(to.balance, currency) : null)}
+          </View>
+        </SectionCard>
+
+        {/* СУММА — общий блок денег продукта; «Весь остаток» — пилюлей в
+            шапке, как «+ VAT» у операции. */}
+        <AmountBlock
+          value={amount}
+          onChange={(v) => {
+            setAmount(v);
+            setFailure(null);
+          }}
+          accessibilityLabel="Сумма перевода"
+          color={t.ink}
+          selectOnFocus
+          action={
+            showRemainder
+              ? {
+                  label: `Весь остаток ${money(remainder, currency)}`,
+                  pill: true,
+                  onPress: () => setAmount(formatMoneyForInput(remainder)),
+                }
+              : undefined
+          }
+        />
+
+        <SectionCard dense title="Заметка">
+          <InlineNoteField
+            note={{ draft: note, setDraft: setNote, onFocus: () => {}, onBlur: () => {} }}
+            placeholder="Заметка перевода"
+            accessibilityLabel="Заметка перевода"
+            maxLength={500}
+          />
+        </SectionCard>
       </View>
     </BottomSheet>
   );
@@ -792,129 +714,4 @@ function StepBack({ onPress }: { onPress: () => void }) {
       </Text>
     </Pressable>
   );
-}
-
-/** Одна сторона перевода: слева счёт и его остаток, справа сумма со знаком.
- *  Обе карточки собраны ОДНИМ компонентом — иначе «откуда» и «куда» разъедутся
- *  по высоте и типографике на первой же правке. */
-function PartyCard({
-  eyebrow,
-  name,
-  caption,
-  amount,
-  sign,
-  currency,
-  onPick,
-}: {
-  eyebrow: string;
-  /** null — счёт ещё не выбран: печатаем приглашение, а не пустоту. */
-  name: string | null;
-  caption: string | null;
-  amount: React.ReactNode;
-  sign: "−" | "+";
-  currency: string | undefined;
-  /** Без обработчика счёт становится показанием: ни шеврона, ни нажатия. */
-  onPick?: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <View
-      style={{
-        // ОДНО ПОЛЕ НА ЛИСТ (DS, LOCKED 2026-08-29): карточки, списки и
-        // кнопка внизу стоят на одной линии — общий `GUTTER`.
-        marginHorizontal: GUTTER,
-        marginBottom: 4,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        borderRadius: t.radius.card,
-        borderCurve: "continuous",
-        // Тело листа белое (`t.surface`), поэтому карточка берёт заливку полей:
-        // на белом по белому карточек не видно вовсе.
-        backgroundColor: t.fill,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-      }}
-    >
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text
-          maxFontSizeMultiplier={1.2}
-          style={{
-            fontSize: 11,
-            fontWeight: "700",
-            letterSpacing: 0.6,
-            textTransform: "uppercase",
-            color: t.faint,
-          }}
-        >
-          {eyebrow}
-        </Text>
-        <Pressable
-          onPress={onPick}
-          disabled={!onPick}
-          accessibilityRole={onPick ? "button" : undefined}
-          accessibilityLabel={onPick ? `${eyebrow}: ${name ?? "выберите счёт"}` : undefined}
-          hitSlop={6}
-          style={({ pressed }) => ({
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 2,
-            marginTop: 2,
-            opacity: pressed ? 0.6 : 1,
-          })}
-        >
-          <Text
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-            style={{
-              flexShrink: 1,
-              fontSize: 17,
-              fontWeight: "600",
-              color: name ? t.ink : t.placeholder,
-            }}
-          >
-            {name ?? "Выберите счёт"}
-          </Text>
-          {onPick ? <ChevronDown color={t.sub} size={16} strokeWidth={2.4} /> : null}
-        </Pressable>
-        {caption ? (
-          <Text
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-            style={{
-              marginTop: 2,
-              fontSize: 13,
-              color: t.faint,
-              fontVariant: ["tabular-nums"],
-            }}
-          >
-            {caption}
-          </Text>
-        ) : null}
-      </View>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-        {/* Знак и валюта — вокруг цифры, а не внутри поля: иначе они уезжали бы
-            вместе с курсором при наборе. */}
-        <Text
-          maxFontSizeMultiplier={1.2}
-          style={{ fontSize: 28, fontWeight: "700", color: t.faint }}
-        >
-          {sign}
-        </Text>
-        {amount}
-        <Text
-          maxFontSizeMultiplier={1.2}
-          style={{ fontSize: 20, fontWeight: "600", color: t.faint }}
-        >
-          {currencySymbol(currency)}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-/** Символ валюты тенанта. Продукт живёт в евро, но пятёрка валют уже описана
- *  в `money()` — берём знак оттуда, а не зашиваем «€». */
-function currencySymbol(currency: string | undefined): string {
-  return money(0, currency).replace(/[\d\s.,]/g, "") || "€";
 }

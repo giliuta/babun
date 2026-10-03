@@ -25,6 +25,7 @@ export function AmountBlock({
   hint,
   footer,
   action,
+  selectOnFocus = false,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -39,6 +40,9 @@ export function AmountBlock({
   footer?: ReactNode;
   /** Действие в правом краю шапки блока (у операции — «+ VAT»). */
   action?: ComponentProps<typeof SectionCard>["action"];
+  /** Подставленная сумма выделена: первый символ заменяет её целиком (перевод
+   *  с готовым остатком). */
+  selectOnFocus?: boolean;
 }) {
   const t = useThemeColors();
   const currencySymbol = useMoney().symbol;
@@ -68,6 +72,7 @@ export function AmountBlock({
           accessibilityLabel={accessibilityLabel}
           onChangeText={onChange}
           keyboardType="decimal-pad"
+          selectTextOnFocus={selectOnFocus}
           placeholder="0"
           placeholderTextColor={t.placeholder}
           selectionColor={t.accent}
