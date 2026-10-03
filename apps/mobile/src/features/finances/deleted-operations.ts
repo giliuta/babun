@@ -3,6 +3,7 @@ import {
   eraseDeletedOperation,
   listDeletedOperations,
   restoreDeletedOperation,
+  type DeletedOperation,
 } from "@babun/shared/db/repositories/deleted-operations";
 import { deletedOperationsQueryKey } from "@/lib/company-query-keys";
 import { supabase } from "@/lib/supabase";
@@ -23,12 +24,22 @@ export function useDeletedOperations() {
   });
 }
 
+/** Строка уходит из ящика, как только сервер ответил «готово» (03.10): без
+ *  этого она висела 2–3 секунды — пока перечитывается весь журнал. */
+function dropFromTrash(qc: ReturnType<typeof useQueryClient>, tenantId: string | null, id: string) {
+  qc.setQueryData<DeletedOperation[]>(deletedOperationsQueryKey(tenantId), (rows) =>
+    rows?.filter((row) => row.id !== id),
+  );
+}
+
 /** «Вернуть» — операция снова в ленте и в остатках. */
 export function useRestoreOperation() {
   const qc = useQueryClient();
+  const tenantId = useTenantId();
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: (id: string) => restoreDeletedOperation(supabase, id),
+    onSuccess: (_data, id) => dropFromTrash(qc, tenantId, id),
     onSettled: () => invalidateLedger(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });
@@ -37,9 +48,11 @@ export function useRestoreOperation() {
 /** «Удалить насовсем» — раньше ночной очистки. */
 export function useEraseDeletedOperation() {
   const qc = useQueryClient();
+  const tenantId = useTenantId();
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: (id: string) => eraseDeletedOperation(supabase, id),
+    onSuccess: (_data, id) => dropFromTrash(qc, tenantId, id),
     onSettled: () => invalidateLedger(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });
