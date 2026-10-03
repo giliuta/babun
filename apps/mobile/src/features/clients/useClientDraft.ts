@@ -91,6 +91,38 @@ export function draftPhoneTyped(text: string, dial: string): boolean {
   return typed !== "" && typed !== dial.trim();
 }
 
+/** ЕСТЬ ЛИ В ЧЕРНОВИКЕ НАБРАННОЕ — то, что «Назад» не вправе выбросить молча.
+ *  Код страны в поле номера набранным не считается (аудит 03.10): поле с
+ *  22.09 рождается пустым, а сравнение «номер ≠ код» на пустом поле было
+ *  истинным всегда — пустое «Создать клиента» спрашивало «Удалить
+ *  черновик?», и свайп назад был выключен. */
+export function draftHasInput(draft: Client, dial: string): boolean {
+  return Boolean(
+    draft.full_name.trim() ||
+      draftPhoneTyped(draft.phone, dial) ||
+      draft.email.trim() ||
+      draft.city.trim() ||
+      draft.birthday ||
+      draft.whatsapp_phone.trim() ||
+      draft.telegram_username.trim() ||
+      draft.instagram_username.trim() ||
+      draft.phones.length ||
+      draft.legal_name?.trim() ||
+      draft.vat_number?.trim() ||
+      draft.reg_number?.trim() ||
+      draft.billing_address?.trim() ||
+      draft.locations.length ||
+      draft.notes.length ||
+      draft.tag_ids.length ||
+      // Связь, приехавшая с дверью, — тоже набранное: без этой строки
+      // черновик жильца уходил по «Назад» молча, и человек пропадал вместе
+      // с тем, что его заводили именно в эту виллу.
+      draft.memberships?.length ||
+      draft.acquisition_source !== "unknown" ||
+      draft.blacklisted
+  );
+}
+
 /** Параметры маршрута черновика, открытого дверью связи (сценарий г-б). */
 export type DraftLinkParams = {
   name?: string;
@@ -303,33 +335,10 @@ export function useClientDraft(
     return () => clearTimeout(timer);
   }, [active, e164, tenantId, findDuplicate]);
 
-  const isDirty = useMemo(() => {
-    if (!active) return false;
-    return Boolean(
-      draft.full_name.trim() ||
-        draft.phone.trim() !== dial ||
-        draft.email.trim() ||
-        draft.city.trim() ||
-        draft.birthday ||
-        draft.whatsapp_phone.trim() ||
-        draft.telegram_username.trim() ||
-        draft.instagram_username.trim() ||
-        draft.phones.length ||
-        draft.legal_name?.trim() ||
-        draft.vat_number?.trim() ||
-        draft.reg_number?.trim() ||
-        draft.billing_address?.trim() ||
-        draft.locations.length ||
-        draft.notes.length ||
-        draft.tag_ids.length ||
-        // Связь, приехавшая с дверью, — тоже набранное: без этой строки
-        // черновик жильца уходил по «Назад» молча, и человек пропадал вместе
-        // с тем, что его заводили именно в эту виллу.
-        draft.memberships?.length ||
-        draft.acquisition_source !== "unknown" ||
-        draft.blacklisted
-    );
-  }, [active, draft, dial]);
+  const isDirty = useMemo(
+    () => active && draftHasInput(draft, dial),
+    [active, draft, dial],
+  );
 
   // Владелец 2026-07-25: телефон ОБЯЗАТЕЛЕН и УНИКАЛЕН. Уникальность
   // держится на ключе phone_e164, поэтому «5+ цифр» больше не пропуск —

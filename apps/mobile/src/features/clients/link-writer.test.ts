@@ -72,7 +72,7 @@ const WRITER_CORE = [
 ] as const;
 type WriterCore = Pick<typeof import("./use-link-writer"), (typeof WRITER_CORE)[number]>;
 
-const DRAFT_CORE = ["draftCanSave", "draftPhoneTyped"] as const;
+const DRAFT_CORE = ["draftCanSave", "draftPhoneTyped", "draftHasInput"] as const;
 type DraftCore = Pick<typeof import("./useClientDraft"), (typeof DRAFT_CORE)[number]>;
 
 const writer = await loadCore<WriterCore>("use-link-writer.ts");
@@ -95,6 +95,22 @@ describe("ядро вырезано целиком", () => {
   test("каждая чистая часть писателя и черновика поднимается копией", () => {
     for (const name of WRITER_CORE) assert.equal(typeof writer[name], "function", name);
     for (const name of DRAFT_CORE) assert.equal(typeof draft[name], "function", name);
+  });
+});
+
+describe("пустой черновик не спрашивает «Удалить черновик?» (аудит 03.10)", () => {
+  test("код страны в поле номера — не набранное", () => {
+    assert.equal(draft.draftHasInput(createBlankClient(), "+357"), false);
+    assert.equal(draft.draftHasInput(createBlankClient({ phone: "+357 " }), "+357"), false);
+  });
+
+  test("номер, имя или связь — набранное", () => {
+    assert.equal(draft.draftHasInput(createBlankClient({ phone: "+357 99" }), "+357"), true);
+    assert.equal(draft.draftHasInput(createBlankClient({ full_name: "Иван" }), "+357"), true);
+    assert.equal(
+      draft.draftHasInput(createBlankClient({ memberships: [link(NATALIA, "жилец")] }), "+357"),
+      true,
+    );
   });
 });
 
