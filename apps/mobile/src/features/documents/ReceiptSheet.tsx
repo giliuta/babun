@@ -5,6 +5,7 @@ import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { NavRow, RowGroupBody } from "@/components/ui/card-rows";
+import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { humanDay } from "@/features/appointments/helpers";
 import { useInvoice } from "@/features/invoices/queries";
@@ -164,8 +165,10 @@ export function ReceiptSheet({
         // конкретный чек, кнопка внизу списка не знала бы, какой именно. Тот
         // же дуэт и те же слова, что на экране инвойса (`app/invoices/[id].tsx`):
         // PDF — основное действие, текст — второе.
+        // Поля по краям — свои: лист без них (`padded={false}`), и без
+        // `GUTTER` кнопки упирались в края экрана (снято 03.10 на «Файлах»).
         dead ? null : (
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: 8, paddingHorizontal: GUTTER }}>
             <GradientButton
               label="Поделиться PDF"
               loading={linesLoading}
