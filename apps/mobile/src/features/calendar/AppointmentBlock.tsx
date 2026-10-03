@@ -447,7 +447,20 @@ export const AppointmentBlock = memo(function AppointmentBlock({
         runOnJS(onSnap)(steps, days);
       }
     })
-    .onEnd((e) => {
+    .onEnd((e, success) => {
+      // ЖЕСТ ОТМЕНИЛА СИСТЕМА (звонок, баннер, системный свайп) — это не
+      // «отпустил»: RNGH зовёт onEnd с success=false, и перенос с последним
+      // смещением уходил в базу сам (аудит 2026-10-03). Карточка — домой.
+      if (!success) {
+        edgeMode.value = 0;
+        ty.value = withSpring(0);
+        tx.value = withSpring(0);
+        topPx.value = withSpring(0);
+        botPx.value = withSpring(0);
+        runOnJS(clearLive)();
+        active.value = withSpring(0);
+        return;
+      }
       if (edgeMode.value !== 0) {
         runOnJS(commitResize)(edgeMode.value === 1 ? "top" : "bottom", rSteps.value);
         edgeMode.value = 0;
