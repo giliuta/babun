@@ -553,6 +553,85 @@ describe("replayer — порядок правок одной строки", () 
   });
 });
 
+describe("replayer — обрыв связи не тратит попыток (аудит работы без сети 03.10)", () => {
+  test("504 трижды подряд — правка жива и не «навсегда не отправлена»", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "15:00" },
+      expected_updated_at: null,
+    });
+    const failures: string[] = [];
+    const { client } = makeFakeSupabase(() => ({
+      data: null,
+      error: { status: 504, message: "Gateway Timeout" },
+    }));
+    for (let i = 0; i < MAX_ATTEMPTS + 1; i += 1) {
+      await kickReplayer({
+        supabase: asSupabase(client),
+        onPermanentFailure: (op) => failures.push(op.row_id),
+      });
+    }
+    const [left] = await dequeueAll();
+    expect(left?.attempts).toBe(0);
+    expect(failures).toEqual([]);
+
+    // Сеть вернулась — правка уходит с первого раза.
+    const ok = makeFakeSupabase((rec) => ({ data: [{ id: rec.filters.id }], error: null }));
+    await kickReplayer({ supabase: asSupabase(ok.client) });
+    expect(await queueDepth()).toBe(0);
+  });
+
+  test("отказ сервера (не обрыв) по-прежнему считается попыткой", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "15:00" },
+      expected_updated_at: null,
+    });
+    const { client } = makeFakeSupabase(() => ({
+      data: null,
+      error: { code: "42501", message: "new row violates row-level security policy" },
+    }));
+    await kickReplayer({ supabase: asSupabase(client) });
+    const [left] = await dequeueAll();
+    expect(left?.attempts).toBe(1);
+  });
+
+  test("без сети слив не начинается; перечитка — только когда очередь изменилась", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "15:00" },
+      expected_updated_at: null,
+    });
+    let changed = 0;
+    const offline = makeFakeSupabase(() => ({ data: [], error: null }));
+    await kickReplayer({
+      supabase: asSupabase(offline.client),
+      isOnline: () => false,
+      onChanged: () => (changed += 1),
+    });
+    expect(offline.calls.length).toBe(0);
+
+    const outage = makeFakeSupabase(() => ({
+      data: null,
+      error: { message: "TypeError: Network request failed" },
+    }));
+    await kickReplayer({ supabase: asSupabase(outage.client), onChanged: () => (changed += 1) });
+    // Обрыв ничего не поменял — календарь не дёргаем (иначе круг
+    // «перечитка → слив → перечитка»).
+    expect(changed).toBe(0);
+
+    const ok = makeFakeSupabase((rec) => ({ data: [{ id: rec.filters.id }], error: null }));
+    await kickReplayer({ supabase: asSupabase(ok.client), onChanged: () => (changed += 1) });
+    expect(changed).toBe(1);
+  });
+});
+
 describe("replayer — навсегда упавшая правка держит свою строку (аудит 03.10)", () => {
   test("правки за упавшей навсегда ждут её «Повторить», чужие строки уходят", async () => {
     await enqueueOp({

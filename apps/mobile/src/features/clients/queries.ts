@@ -91,6 +91,7 @@ import {
   syncClientReminder,
   type ClientReminderResult,
 } from "@/features/clients/reminders";
+import { NEVER_PAUSE } from "@/features/finances/accounts";
 
 function surfaceClientReminderResult(result: ClientReminderResult): void {
   if (result === "scheduled" || result === "cleared") return;
@@ -524,6 +525,7 @@ export function useUpdateClient(id: string) {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (patch: Partial<Client>) => saveClient(scope, id, patch),
     onSuccess: (updated, patch) => {
       qc.setQueriesData<Client | null>({ queryKey: ["client", id] }, (old) =>
@@ -580,6 +582,7 @@ export function useSetClientTeam() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async ({ id, teamId }: { id: string; teamId: string }) => {
       const { error } = await writeClientOf(scope).rpc("set_client_team", {
         p_client_id: id,
@@ -671,6 +674,7 @@ export function useUpdateClientById() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     // `source` — строка работодателя из общего списка (`ClientWriteTarget`):
     // правка идёт его компании, а не источнику экрана.
     mutationFn: ({ id, patch, source }: ClientWriteTarget & { patch: Partial<Client> }) =>
@@ -728,6 +732,7 @@ export function useCreateClient() {
   const tenantId = scope.tenantId;
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (overrides: Partial<Client>) => {
       if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       if (scope.kind === "record") {
@@ -805,6 +810,7 @@ export function useArchiveClients() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (
       input: ArchiveClientsInput,
     ): Promise<ArchiveClientsResult> => {
@@ -909,6 +915,7 @@ export function useRestoreClient() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (client: Client) => {
       assertOwnCompany(scope, "Возвращать клиентов в работу");
       if (scope.role !== "owner" && scope.role !== "dispatcher") {
@@ -943,6 +950,7 @@ export function useDeleteClientForever() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (id: string) => {
       assertOwnCompany(scope, "Стирать клиентов");
       if (scope.role !== "owner") {
@@ -1043,6 +1051,7 @@ export function useCreateClientTag() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation<ClientTag, Error, CreateClientTagInput>({
+    ...NEVER_PAUSE,
     mutationFn: ({ name, color, icon, teamId }) => {
       assertCanManageClientTags(scope);
       const normalizedName = name.trim();
@@ -1063,6 +1072,7 @@ export function useUpdateClientTag() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation<ClientTag, Error, UpdateClientTagInput>({
+    ...NEVER_PAUSE,
     mutationFn: ({ id, patch }) => {
       assertCanManageClientTags(scope);
       const normalizedPatch = {
@@ -1087,6 +1097,7 @@ export function useSetClientTagHidden() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation<ClientTag, Error, { id: string; hidden: boolean }>({
+    ...NEVER_PAUSE,
     mutationFn: ({ id, hidden }) => {
       assertCanManageClientTags(scope);
       return updateClientTagCached(writeClientOf(scope), id, { hidden }, scope.tenantId, scope.writeOpts);
@@ -1103,6 +1114,7 @@ export function useReorderClientTags() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation<void, Error, string[]>({
+    ...NEVER_PAUSE,
     mutationFn: async (orderedIds) => {
       assertCanManageClientTags(scope);
       for (const [position, id] of orderedIds.entries()) {
@@ -1118,6 +1130,7 @@ export function useDeleteClientTag() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
+    ...NEVER_PAUSE,
     mutationFn: (id) => {
       assertCanManageClientTags(scope);
       return deleteClientTagCached(writeClientOf(scope), id, scope.tenantId, scope.writeOpts);

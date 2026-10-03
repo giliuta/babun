@@ -53,7 +53,7 @@ import { createBlankClient } from "../local/clients";
 import { createBlankAppointment } from "../local/appointments";
 import type { Client } from "../local/clients";
 import type { Appointment } from "../local/appointments";
-import { ColdOfflineCacheMissError } from "./cache-errors";
+import { ColdOfflineCacheMissError, OnlineOnlyWriteError } from "./cache-errors";
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
 const OTHER_TENANT = "22222222-2222-2222-2222-222222222222";
@@ -559,6 +559,28 @@ describe("правка клиента встаёт за его ждущими п
 });
 
 describe("appointments cache-of-domain", () => {
+  test("отмена визита с деньгами без сети — отказ, в очередь не встаёт (аудит 03.10)", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+        prepaid_amount: 50,
+      }),
+      TENANT,
+    );
+    await expect(
+      updateAppointment(stubSupabase, APPT_ID, { status: "cancelled" }, TENANT),
+    ).rejects.toBeInstanceOf(OnlineOnlyWriteError);
+    const queued = await dequeueAll();
+    expect(queued.filter((op) => op.op === "update")).toEqual([]);
+    // Перенос того же визита без сети по-прежнему встаёт в очередь.
+    await updateAppointment(stubSupabase, APPT_ID, { time_end: "10:30" }, TENANT);
+    expect((await dequeueAll()).filter((op) => op.op === "update").length).toBe(1);
+  });
+
   test("cold offline cache miss is unknown, not a free calendar", async () => {
     await expect(
       listAppointments(stubSupabase, TENANT),

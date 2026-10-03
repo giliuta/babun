@@ -80,7 +80,7 @@ import {
 } from "./queue-events";
 import { emitRevalidated, cacheSignature } from "./revalidate-events";
 import { randomUuid } from "./uuid";
-import { ColdOfflineCacheMissError } from "./cache-errors";
+import { ColdOfflineCacheMissError, OnlineOnlyWriteError } from "./cache-errors";
 
 type DbSupabase = SupabaseClient<Database>;
 
@@ -387,6 +387,16 @@ export async function updateAppointment(
 
   await refuseBehindStuckEdit(id, "updateAppointment");
 
+  // ОТМЕНА ВИЗИТА С ДЕНЬГАМИ — ТОЛЬКО В СЕТИ (аудит работы без сети 03.10).
+  // Сервер превращает её в возврат (`protect_paid_appointment_finance`):
+  // из очереди она долетела бы часами позже, и возврат лёг бы в кассу
+  // другого дня, хотя тост уже сказал «Визит отменён». Деньги — онлайн,
+  // как вся касса (ТЗ §8).
+  const cancelsMoney = cancelsPaidVisit(existing, patch);
+  if (cancelsMoney && !isOnline()) {
+    throw new OnlineOnlyWriteError(PAID_CANCEL_OFFLINE);
+  }
+
   const updateOp = {
     table: "appointments" as const,
     op: "update" as const,
@@ -441,6 +451,11 @@ export async function updateAppointment(
         if (restore) await cacheUpsert("appointments", restore).catch(() => {});
         throw err;
       }
+      // Отмена с деньгами в очередь не встаёт и на обрыве: см. выше.
+      if (cancelsMoney) {
+        if (existing) await cacheUpsert("appointments", existing).catch(() => {});
+        throw new OnlineOnlyWriteError(PAID_CANCEL_OFFLINE);
+      }
       await enqueueUpdate(updateOp, merged);
       void kickReplayer({ supabase });
       return { ...toDomain(existing), ...patch, id } as Appointment;
@@ -452,6 +467,26 @@ export async function updateAppointment(
   await enqueueUpdate(updateOp, merged);
   if (isOnline()) void kickReplayer({ supabase });
   return { ...toDomain(existing), ...patch, id } as Appointment;
+}
+
+export const PAID_CANCEL_OFFLINE =
+  "Визит с оплатой отменяется только при связи с сервером: отмена оформляет возврат денег.";
+
+/** Отменяет ли правка визит, по которому уже есть деньги. Строки нет в
+ *  кэше — не знаем, и решает сервер, как раньше. */
+export function cancelsPaidVisit(
+  existing: CachedAppointmentData | null,
+  patch: Partial<Appointment>,
+): boolean {
+  if (patch.status !== "cancelled" || !existing) return false;
+  const row = existing as unknown as {
+    status?: unknown;
+    prepaid_amount?: unknown;
+    paid_amount?: unknown;
+    payment_status?: unknown;
+  };
+  if (row.status === "cancelled" || row.payment_status === "refunded") return false;
+  return Number(row.prepaid_amount ?? 0) > 0 || Number(row.paid_amount ?? 0) > 0;
 }
 
 /** Domain view of a cached row (drops the tenant_id bookkeeping key), or an

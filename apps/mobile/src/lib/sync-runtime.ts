@@ -44,6 +44,8 @@ function buildReplayerOptions(
     // решает ЖИВОЕ чтение: компания теперь свойство устройства и меняется без
     // перезапуска рантайма.
     currentTenantId: getActiveTenantId,
+    // Без сети слив не начинается (обрыв не тратит попыток — `replayer.ts`).
+    isOnline: () => onlineManager.isOnline(),
     quota,
     onConflict: (msg: string) => {
       notify("Конфликт синхронизации", msg);
@@ -86,6 +88,7 @@ export function startSyncRuntime(tenantId: string): () => void {
     onConflict: opts.onConflict,
     onChanged: opts.onChanged,
     onPermanentFailure: opts.onPermanentFailure,
+    isOnline: opts.isOnline,
     // Вид только для чтения (шим постраничного календаря) подталкивает
     // выгрузку собой — сливается она этим, настоящим клиентом (03.10).
     writeClient: supabase,

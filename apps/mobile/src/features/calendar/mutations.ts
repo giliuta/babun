@@ -14,6 +14,7 @@ import {
   updateAppointment,
 } from "@babun/shared/sync/appointmentsCached";
 import { isOnline, randomUuid } from "@babun/shared/sync";
+import { NEVER_PAUSE } from "@/features/finances/accounts";
 import {
   GoneAppointmentError,
   StaleAppointmentError,
@@ -112,6 +113,7 @@ export function useCreateAppointment() {
   const qc = useQueryClient();
   const refusal = useMemberRefusal();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (input: Appointment) => {
       if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       if (role === "master") {
@@ -228,6 +230,7 @@ function useUpdateAppointmentOptions() {
   const qc = useQueryClient();
   const refusal = useMemberRefusal();
   return {
+    ...NEVER_PAUSE,
     mutationFn: async ({
       id,
       patch,
@@ -415,6 +418,7 @@ export function useMemberCopyAppointment() {
   const qc = useQueryClient();
   const refusal = useMemberRefusal();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (input: {
       sourceId: string;
       date: string;
@@ -450,6 +454,7 @@ export function useMemberUpdateTeam() {
   const qc = useQueryClient();
   const refusal = useMemberRefusal();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (input: { teamId: string; patch: Record<string, unknown> }) => {
       const { error } = await supabase.rpc("member_update_team", {
         p_team: input.teamId,
@@ -470,6 +475,7 @@ export function useDeleteAppointment() {
   const qc = useQueryClient();
   const refusal = useMemberRefusal();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (id: string) => {
       if (role !== "owner" && role !== "dispatcher" && role !== "master") {
         throw new Error("Роль в аккаунте ещё не подтверждена.");
@@ -509,6 +515,7 @@ export function useDeleteAppointment() {
 export function useUndoAppointmentPayment() {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (appointmentId: string) =>
       undoAppointmentPayment(supabase, appointmentId),
     onSuccess: () => {
@@ -523,6 +530,7 @@ export function useUndoAppointmentPayment() {
 export function useResetAppointmentPayment() {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (appointmentId: string) =>
       resetAppointmentPayment(supabase, appointmentId),
     onSuccess: () => {
@@ -537,6 +545,7 @@ export function useResetAppointmentPayment() {
 export function useSetAppointmentPrepayment() {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: ({
       appointmentId,
       amount,

@@ -226,10 +226,59 @@ export interface ReplayerOptions {
    *  ДЛЯ ЧТЕНИЯ (`READ_ONLY_VIEW_FIELD`); нет — такой заход ничего не
    *  выгружает. Хост кладёт его в умолчания (`setReplayerDefaults`). */
   writeClient?: DbSupabase;
+  /** Есть ли сеть (у телефона — NetInfo через onlineManager). Без сети слив
+   *  не начинается: каждая отправка упала бы сразу. Нет — считаем «есть». */
+  isOnline?: () => boolean;
 }
 
 let draining = false;
 let pendingFollowup = false;
+
+// ОБРЫВ СВЯЗИ — НЕ ОТКАЗ СЕРВЕРА (аудит работы без сети 03.10). Раньше любая
+// ошибка шла в счёт попыток: подвал, туннель, 503 или минута заморозки базы —
+// и за ~6 секунд (1 с + 5 с отката) каждая правка набирала MAX_ATTEMPTS и
+// становилась «навсегда не отправленной». После возврата сети она уже не
+// уходила, а сервер перечитывал календарь поверх неё. Теперь обрыв попытку
+// не тратит: строка ждёт, остальные уходят, а слив повторяется сам через
+// TRANSIENT_RETRY_MS (и сразу — при возврате сети). В счёт идут только ответы
+// сервера, которые повтором не лечатся: RLS, ограничения, 4xx.
+export const TRANSIENT_RETRY_MS = 30_000;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Та же граница, что у обёрток кэша (`isTransientNetworkError`): 5xx шлюза
+ *  и рестарта, сетевые сбои fetch, таймауты, аборты. */
+export function isTransientReplayError(err: unknown): boolean {
+  const withStatus = err as { status?: unknown; statusCode?: unknown };
+  const httpStatus =
+    typeof withStatus?.status === "number"
+      ? withStatus.status
+      : typeof withStatus?.statusCode === "number"
+        ? withStatus.statusCode
+        : 0;
+  if (httpStatus >= 500) return true;
+  const msg =
+    err instanceof Error
+      ? err.message
+      : typeof (err as { message?: unknown })?.message === "string"
+        ? (err as { message: string }).message
+        : String(err);
+  return /failed to fetch|load failed|network request failed|network error|fetch failed|timed? ?out|socket|econn|abort|bad gateway|service unavailable|gateway time|\b50[234]\b/i.test(
+    msg,
+  );
+}
+
+function scheduleTransientRetry(opts: ReplayerOptions): void {
+  if (retryTimer) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void kickReplayer(opts);
+  }, TRANSIENT_RETRY_MS);
+}
+
+/** Отпечаток очереди: менялось ли в ней что-то за проход. */
+function queueSignature(ops: readonly QueuedOp[]): string {
+  return ops.map((o) => `${o.id}:${o.attempts}`).join(",");
+}
 
 /** ТОЛЬКО ДЛЯ ТЕСТОВ. Обёртки кэша зовут `void kickReplayer(...)` не дожидаясь
  *  ответа; когда такой вызов ещё в полёте на границе двух тестовых файлов,
@@ -240,6 +289,8 @@ export function __resetReplayerForTests(): void {
   draining = false;
   pendingFollowup = false;
   replayerDefaults = {};
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
 }
 
 // Cached wrappers deliberately know nothing about the host application: they
@@ -335,8 +386,12 @@ function boundTenantOf(supabase: DbSupabase): string | null {
 }
 
 async function drain(opts: ReplayerOptions): Promise<void> {
+  // Без сети не сливаем: всё упало бы сразу. Сольёт возврат сети.
+  if (opts.isOnline && !opts.isOnline()) return;
   const ops = await dequeueAll(); // in enqueue order (id ASC), not by device clock
   if (ops.length === 0) return;
+  const signatureBefore = queueSignature(ops);
+  let transientFailure = false;
 
   // Компания, под которой слив НАЧАЛСЯ. Сверяется с живой перед каждой
   // операцией: переход посреди слива обязан его прервать, а не дописать
@@ -533,6 +588,11 @@ async function drain(opts: ReplayerOptions): Promise<void> {
       if (err instanceof TenantSwitchedMidway) break;
       const msg = err instanceof Error ? err.message : String(err);
       heldRows.add(rowKey(op));
+      // Обрыв — попытку не тратим: строка ждёт следующего прохода.
+      if (isTransientReplayError(err)) {
+        transientFailure = true;
+        continue;
+      }
       await bumpAttempt(op.id, msg);
       // If we just exceeded the cap, surface to UI once.
       if (op.attempts + 1 >= MAX_ATTEMPTS) {
@@ -547,7 +607,12 @@ async function drain(opts: ReplayerOptions): Promise<void> {
     }
   }
 
-  opts.onChanged?.();
+  if (transientFailure) scheduleTransientRetry(opts);
+  // ПЕРЕЧИТКА — ТОЛЬКО КОГДА ОЧЕРЕДЬ ПРАВДА ИЗМЕНИЛАСЬ. Хост на `onChanged`
+  // перечитывает календарь, а перечитка при непустой очереди сама толкает
+  // слив: проход, где ничего не ушло (обрыв), крутил этот круг без конца.
+  const signatureAfter = queueSignature(await dequeueAll().catch(() => ops));
+  if (signatureAfter !== signatureBefore) opts.onChanged?.();
 }
 
 /** Returns `true` if the dispatch succeeded but a conflict was
