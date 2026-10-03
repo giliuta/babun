@@ -375,4 +375,10 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(agenda, /textDecorationLine: cancelled \? "line-through" : "none",/);
     assert.match(agenda, /\{debt > 0 && !cancelled \? \(/);
   });
+
+  test("SMS за месяц — в частях, как баланс и тариф («€1,20 · 10 SMS» при €0,12)", () => {
+    const parts = readFileSync(resolve(here, "../sms/SmsParts.tsx"), "utf8");
+    assert.match(parts, /const monthParts = owner\.teams\.reduce\(\(sum, team\) => sum \+ team\.segments, 0\) \|\| owner\.monthCount;/);
+    assert.match(parts, /\{euro\(owner\.monthCents\)\} · \{smsCount\(monthParts\)\}/);
+  });
 });
