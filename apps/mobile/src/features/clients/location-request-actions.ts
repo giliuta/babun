@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useToast } from "@/components/ui/Toast";
-import { chooseOption } from "@/lib/choose";
+import { afterChoiceSheet, chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
 import { useTenant } from "@/features/settings/tenant";
 import { useClientsScopeOrNull } from "@/features/clients/company-scope";
@@ -108,8 +108,11 @@ export function useLocationRequestActions() {
           { label: "Выписать новую и поделиться" },
           { label: "Убрать", destructive: true },
         ]);
-        if (picked === 0) await request(r.client_id);
-        else if (picked === 1) await revoke(r);
+        if (picked === 0) {
+          // «Поделиться» откроется только после ухода листа выбора.
+          await afterChoiceSheet();
+          await request(r.client_id);
+        } else if (picked === 1) await revoke(r);
         return;
       }
       const choices = [
@@ -122,7 +125,10 @@ export function useLocationRequestActions() {
       });
       if (picked === null) return;
       const label = choices[picked]?.label;
-      if (label === "Поделиться ещё раз") await share(r.token);
+      if (label === "Поделиться ещё раз") {
+        await afterChoiceSheet();
+        await share(r.token);
+      }
       else if (label === "Скопировать ссылку") await copy(r.token);
       else if (label === "Отозвать ссылку") await revoke(r);
     },

@@ -1,8 +1,15 @@
 import { ActionSheetIOS, Alert, Platform } from "react-native";
 import {
+  choiceSheetGone,
   choiceSheetReady,
   presentChoiceSheet,
 } from "@/components/ui/ChoiceSheet";
+
+/** Ждать, пока лист выбора уедет целиком, — перед системным окном
+ *  («Поделиться», камера), которое iOS поверх уезжающего листа не покажет. */
+export function afterChoiceSheet(): Promise<void> {
+  return choiceSheetGone();
+}
 import { haptics } from "@/lib/haptics";
 
 // ВЫБОР «ЧТО СДЕЛАТЬ» / «КАКОЕ ЗНАЧЕНИЕ» — ОДНА ТОЧКА НА ВЕСЬ ПРОДУКТ.

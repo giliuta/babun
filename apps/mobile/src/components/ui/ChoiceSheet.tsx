@@ -33,6 +33,37 @@ interface Request {
 
 let present: ((request: Request) => void) | null = null;
 
+/** Лист на экране — показан или ещё уезжает. */
+let sheetOnScreen = false;
+let goneWaiters: Array<() => void> = [];
+
+function flushGone(): void {
+  sheetOnScreen = false;
+  const waiters = goneWaiters;
+  goneWaiters = [];
+  for (const finish of waiters) finish();
+}
+
+/** ЛИСТ ВЫБОРА УШЁЛ ЦЕЛИКОМ (03.10). Ответ отдаётся сразу по тапу, а окно
+ *  ещё уезжает (`SHEET_EXIT_MS`), и системное окно — «Поделиться», камера —
+ *  iOS в этот миг не показывает: «Поделиться ещё раз» у ссылки клиенту молча
+ *  ничего не открывало. Кто открывает системное окно сразу после выбора,
+ *  ждёт этот сигнал (`onExited` листа), а не таймер. */
+export function choiceSheetGone(): Promise<void> {
+  if (!sheetOnScreen) return Promise.resolve();
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    goneWaiters.push(finish);
+    // Страховка: сигнал не пришёл (лист открыли снова) — не держим зовущего.
+    setTimeout(finish, 1000);
+  });
+}
+
 /** Есть ли смонтированный хост (иначе вызывающий уходит на системный лист). */
 export function choiceSheetReady(): boolean {
   return present !== null;
@@ -67,6 +98,7 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
         // Один лист за раз: предыдущий обещал ответ — закрываем его отменой.
         pendingRef.current?.resolve(null);
         pendingRef.current = next;
+        sheetOnScreen = true;
         setRequest(next);
         setVisible(true);
       };
@@ -116,6 +148,7 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
       padded={false}
         visible={visible}
         onClose={() => answer(null)}
+        onExited={flushGone}
         maxHeightRatio={0.8}
       >
         {request?.title || request?.message ? (
