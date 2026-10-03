@@ -22,6 +22,7 @@ import { SmsHistoryRow } from "./SmsHistoryRow";
 import { SmsMessageSheet } from "./SmsMessageSheet";
 import { SmsBalanceCard, SmsTariffCard } from "./SmsParts";
 import { SmsTopupSheet } from "./SmsTopupSheet";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // КАБИНЕТ → SMS — ДЕНЬГИ И ОТПРАВКА ВСЕЙ КОМПАНИИ (STORY-089; владелец
 // 29.09: «баланс и пополнение — это всё будет Кабинет SMS», «баланс единый,
@@ -142,7 +143,7 @@ export function SmsScreen() {
             предохранитель платформы. Администратору платформы — и чужие. */}
         {(owner.alerts ?? []).slice(0, 3).map((alert) => (
           <View key={`${alert.kind}-${alert.at}`} style={{ marginHorizontal: GUTTER, marginTop: 12 }}>
-            <NoticeBar tone="error" message={alert.own ? alert.message : `Платформа: ${alert.message}`} />
+            <NoticeBar tone="error" message={alert.own ? tDynamic(alert.message) : `Платформа: ${tDynamic(alert.message)}`} />
           </View>
         ))}
 

@@ -9,6 +9,7 @@ import {
 } from "react";
 import { AccessibilityInfo, Animated } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 import { useReduceMotion } from "@/lib/reduce-motion";
 import { NoticeBar, type NoticeTone } from "./NoticeBar";
 
@@ -63,7 +64,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [opacity, reducedMotion, translateY]);
 
   const show = useCallback(
-    (message: string, type: ToastType = "success", action?: ToastAction) => {
+    (raw: string, type: ToastType = "success", action?: ToastAction) => {
+      // Текст тоста часто приходит с сервера (`error.message` из функции
+      // базы) — сборка его не переводила, переводим при показе.
+      const message = tDynamic(raw);
       setToast({ id: Date.now(), message, type, action });
       // The toast is pointerEvents="none" and auto-dismisses — VoiceOver
       // users would never know it appeared without an explicit announcement.

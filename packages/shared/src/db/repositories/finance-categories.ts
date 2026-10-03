@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
+import { tDynamic } from "../../i18n/runtime";
 
 // Третий вид — «debt». Владелец 2026-09-10: «под расход свои категории, под
 // доход свои, под долги свои, они не смешиваются»: в списке поставщиков и
@@ -57,7 +58,10 @@ function rowToCategory(r: Row): FinanceCategory {
     tenant_id: r.tenant_id,
     team_id: r.team_id ?? null,
     slug: r.slug,
-    name: r.name,
+    // Служебные категории сервера («Услуги», «Возврат») засеяны по-русски и
+    // людьми не правятся — их имя переводится на язык интерфейса здесь, один
+    // раз на чтение. Имена категорий команды — как их написал человек.
+    name: r.is_system ? tDynamic(r.name) : r.name,
     type: r.type as FinanceCategoryKind,
     icon: r.icon,
     color: r.color,

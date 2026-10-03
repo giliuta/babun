@@ -16,6 +16,7 @@ import {
 } from "@/features/reference/queries";
 import { useCreateTeamAccounts } from "@/features/finances/accounts";
 import { financeAccountsHref } from "@/features/finances/accounts-sections";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // СОЗДАНИЕ КАЛЕНДАРЯ — ЕДИНСТВЕННАЯ ДВЕРЬ НА ВЕСЬ ПРОДУКТ.
 //
@@ -108,7 +109,8 @@ export function CalendarCreateSheet({
     try {
       team = await create.mutateAsync({ name: name.trim(), color: color ?? undefined });
     } catch (e) {
-      setFailure(e instanceof Error ? e.message : "Не удалось создать календарь");
+      // Отказ (тариф, права) — текстом функции базы: переводим при показе.
+      setFailure(e instanceof Error ? tDynamic(e.message) : "Не удалось создать календарь");
       return;
     }
     // Календарь уже есть — закрываем лист и переключаем ленту ДО засева

@@ -2,6 +2,7 @@
 // черновик правки и слова отказов. Без React и сети — его читают тесты.
 
 import { parseTeamTemplates, type SmsTeamTemplate } from "./sms-team-templates";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 /** Счёт месяца по команде. */
 export interface SmsTeamStats {
@@ -266,7 +267,8 @@ export function smsErrorText(error: unknown): string {
   if (message.includes("sms:phone")) return "У клиента нет номера";
   if (message.includes("sms:rights")) return "Нет доступа к отправке";
   if (message.includes("sms: empty body")) return "Напишите текст SMS";
-  return message || "Не удалось отправить";
+  // Отказ сервера — по-русски из функции базы: переводим при показе.
+  return (message && tDynamic(message)) || "Не удалось отправить";
 }
 
 /** Пополнение — любая сумма целыми евро от €5 до €500 (владелец 30.09:

@@ -3,6 +3,8 @@ import {
   type AcquisitionSource,
   type ClientSourceValue,
 } from "@babun/shared/local/clients";
+import { tDynamic } from "@babun/shared/i18n/runtime";
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
 // ИСТОЧНИК КЛИЕНТА — СПРАВОЧНИК КОМАНДЫ (владелец 03.10: «сделай просто
 // стандартные источники, такие, какие я могу править; не нужен Instagram —
@@ -86,13 +88,22 @@ export function normalizeSource(
   return row ? customSourceValue(row.id) : "unknown";
 }
 
+/** ИМЯ ИСТОЧНИКА НА ЭКРАНЕ. Восемь готовых строк засевает сервер по-русски
+ *  («Рекомендация», «Сайт» …); у засеянной строки есть `key`, и её имя
+ *  переводится при показе. Своё имя человека — как написано. Хранится и
+ *  сравнивается всегда исходное имя (корзина фильтра, поиск). */
+export function sourceDisplayName(source: Pick<ClientSource, "key" | "name">): string {
+  return source.key ? tDynamic(source.name) : source.name;
+}
+
 /** Подпись источника клиента; `null` — не указан. */
 export function sourceLabel(
   value: string | null | undefined,
   sources: ClientSource[],
   teamId: string | null | undefined,
 ): string | null {
-  return resolveSource(value, sources, teamId)?.name ?? null;
+  const row = resolveSource(value, sources, teamId);
+  return row ? sourceDisplayName(row) : null;
 }
 
 /** «Кто привёл» — у строки, засеянной «Рекомендацией», как её ни назови. */
@@ -111,7 +122,7 @@ export function sourcePickerOptions(
 ): SourceOption[] {
   return teamSources(sources, teamId).map((s) => ({
     value: customSourceValue(s.id),
-    label: s.name,
+    label: sourceDisplayName(s),
     source: s,
   }));
 }
@@ -145,7 +156,7 @@ export function sourceFilterOptions(
     const value = `n:${s.name.trim().toLowerCase()}`;
     if (seen.has(value)) continue;
     seen.add(value);
-    out.push({ value, label: s.name.trim(), color: "" });
+    out.push({ value, label: sourceDisplayName(s).trim(), color: "" });
   }
   out.push({ value: "unknown", label: ACQUISITION_LABELS.unknown, color: "" });
   return out;
@@ -154,13 +165,7 @@ export function sourceFilterOptions(
 /** Подпись строки «Источники» в шестерёнке. */
 export function sourcesSummary(n: number): string {
   if (n === 0) return "Источников нет";
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  const word =
-    mod10 === 1 && mod100 !== 11
-      ? "источник"
-      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
-        ? "источника"
-        : "источников";
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  const word = pluralRu(n, ["источник", "источника", "источников"]);
   return `${n} ${word}`;
 }

@@ -1,4 +1,5 @@
 import type { Json } from "@babun/shared/db/database.types";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // ПРАВА СОТРУДНИКА ПО БЛОКАМ — ЧИСТЫЙ СЛОЙ ЭКРАНА (STORY-081).
 //
@@ -141,7 +142,9 @@ export function parseAccessBlocks(rows: readonly unknown[]): AccessBlock[] {
         area,
         scope,
         levels,
-        title: title_ru,
+        // Название блока сервер хранит по-русски — переводим на язык
+        // интерфейса при чтении (список — scripts/i18n/server-keys.js).
+        title: tDynamic(title_ru),
         ownerOnly: owner_only,
         live,
         position,

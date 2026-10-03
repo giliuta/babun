@@ -43,6 +43,7 @@ import {
   rememberTransferTarget,
 } from "./transfer-memory";
 import { useTransferWithUndo } from "./transfer-undo";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // ЛИСТ ПЕРЕВОДА (ТЗ 2026-08-10 §5.2–5.4).
 //
@@ -374,7 +375,7 @@ export function TransferSheet({
         // Обрыв связи говорит по-человечески: сырое «Network request failed»
         // не отвечает на единственный вопрос — ушли деньги или нет.
         isOnline()
-          ? message || "Не удалось сохранить"
+          ? tDynamic(message) || "Не удалось сохранить"
           : OFFLINE_MID_FLIGHT,
       );
     } finally {

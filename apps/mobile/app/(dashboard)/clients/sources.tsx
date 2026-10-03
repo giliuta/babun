@@ -16,7 +16,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
-import { teamSources, type ClientSource } from "@/features/clients/acquisition-source";
+import { teamSources, type ClientSource, sourceDisplayName } from "@/features/clients/acquisition-source";
 import {
   useClientSources,
   useCreateClientSource,
@@ -160,7 +160,7 @@ function ClientSourcesScreen() {
               items={list}
               rowHeight={ROW_H}
               spaced
-              labelFor={(s) => s.name}
+              labelFor={(s) => sourceDisplayName(s)}
               rangeFor={(index) => (readOnly ? [index, index] : [0, list.length - 1])}
               handleInside
               onReorder={reorder}
@@ -200,7 +200,7 @@ function ClientSourcesScreen() {
                           maxFontSizeMultiplier={1.3}
                           style={{ flexShrink: 1, fontSize: 16, color: t.ink }}
                         >
-                          {source.name}
+                          {sourceDisplayName(source)}
                         </Text>
                       </Pressable>
                       {handle}

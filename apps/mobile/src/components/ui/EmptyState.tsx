@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { Text, View } from "react-native";
 import { CloudOff } from "lucide-react-native";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 import { Spinner } from "@/components/ui/Spinner";
 import { Button } from "./Button";
 import { useThemeColors } from "@/theme/colors";
@@ -105,7 +106,9 @@ export function EmptyState({
               color: state === "error" ? t.sub : t.faint,
             }}
           >
-            {subtitle}
+            {/* Подпись ошибки — часто `error.message` с сервера: её
+                сборка не переводила, переводим при показе. */}
+            {tDynamic(subtitle)}
           </Text>
         ) : null}
       </View>

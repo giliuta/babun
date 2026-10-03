@@ -1,4 +1,5 @@
 import { Alert, Platform } from "react-native";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // СООБЩЕНИЕ, КОТОРОЕ НЕЛЬЗЯ ПОТЕРЯТЬ — ОДНА ТОЧКА НА ВЕСЬ ПРОДУКТ.
 //
@@ -12,7 +13,12 @@ import { Alert, Platform } from "react-native";
 // системное окно браузера — оно всегда видно и не отнимает единственный слот
 // у листа подтверждения (ChoiceSheetHost). Подтверждения с кнопками живут
 // отдельно — см. ./confirm.
-export function notify(title: string, message?: string): void {
+//
+// Текст здесь часто пришёл с сервера (`error.message` из функции базы) —
+// сборка его не переводила, поэтому он переводится при показе (`tDynamic`).
+export function notify(rawTitle: string, rawMessage?: string): void {
+  const title = tDynamic(rawTitle);
+  const message = rawMessage ? tDynamic(rawMessage) : rawMessage;
   if (Platform.OS === "web") {
     globalThis.alert?.(message ? `${title}\n\n${message}` : title);
     return;

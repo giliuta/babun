@@ -16,6 +16,7 @@ import {
   formatInvoiceMoney,
   parseMoneyAmount,
 } from "./format";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // ЛИСТ ВОЗВРАТА ПЛАТЕЖА ПО ИНВОЙСУ — канонический BottomSheet. Раньше здесь
 // был самописный Modal slide (третий в инвойсном контуре) со своими радиусами.
@@ -116,7 +117,8 @@ export function InvoiceRefundSheet({
       haptics.success();
       onClose();
     } catch (submissionError) {
-      setError((submissionError as Error).message);
+      // Отказ — текстом функции базы: переводим при показе.
+      setError(tDynamic((submissionError as Error).message));
     }
   };
 

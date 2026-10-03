@@ -1,3 +1,5 @@
+import { intlLocale } from "@babun/shared/i18n/runtime";
+
 // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС» — чистая часть (STORY-077).
 //
 // Владелец 2026-09-07: «менеджеру сложно постоянно запрашивать локацию у
@@ -78,7 +80,7 @@ export function visibleLocationRequests(
 }
 
 /** «7 сент.» — дата в строке «Ждём адрес». */
-export function shortDate(iso: string, locale = "ru-RU"): string {
+export function shortDate(iso: string, locale: string = intlLocale()): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
   try {

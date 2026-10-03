@@ -44,6 +44,7 @@ import {
   parseDecimal,
   parseMoneyAmount,
 } from "./format";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 export interface InvoicePrefill {
   transactionId?: string | null;
@@ -643,7 +644,8 @@ export function InvoiceEditor({
         link_to_tx_id: prefill?.transactionId ?? null,
       });
     } catch (submissionError) {
-      setError((submissionError as Error).message);
+      // Отказ — текстом функции базы: переводим при показе.
+      setError(tDynamic((submissionError as Error).message));
     }
   };
 

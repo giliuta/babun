@@ -22,6 +22,7 @@ import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { formatInvoiceDate, formatInvoiceMoney, parseMoneyAmount } from "./format";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // ЛИСТ «ПРИНЯТЬ ОПЛАТУ» — момент рождения чека, поэтому жанр строгий:
 // канонический BottomSheet (скрим fade + пружина), список счетов — общий
@@ -199,7 +200,8 @@ export function InvoicePaymentSheet({
       haptics.success();
       onClose();
     } catch (submissionError) {
-      setError((submissionError as Error).message);
+      // Отказ — текстом функции базы: переводим при показе.
+      setError(tDynamic((submissionError as Error).message));
     }
   };
 

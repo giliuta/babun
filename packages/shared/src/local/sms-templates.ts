@@ -62,6 +62,8 @@ export const AVAILABLE_TOKENS = [
   // ним читаются по-прежнему — алиас ниже остаётся.
 ] as const;
 
+// i18n-ignore-block — these are token names inside SMS templates, not words of
+// the UI: the build-time translation must leave them Russian.
 // Russian → canonical English keys used by the context dictionary
 // passed to renderTemplate. Lets legacy [Name] AND new [Имя] resolve
 // to the same value without duplicating the substitution map.

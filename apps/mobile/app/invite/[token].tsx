@@ -56,6 +56,9 @@ export default function InvitationScreen() {
   const preview = useInvitationPreview(token);
   const [working, setWorking] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // «Войти под другим аккаунтом» — по ответу сервера, а не по словам
+  // сообщения: на другом языке «другой email» в тексте уже не найти.
+  const [wrongAccount, setWrongAccount] = useState(false);
 
   const gone = preview.error instanceof InvitationGoneError;
   const expired = preview.data?.state === "expired";
@@ -88,12 +91,14 @@ export default function InvitationScreen() {
   const accept = async () => {
     if (!token || !session || working) return;
     setActionError(null);
+    setWrongAccount(false);
     setWorking(true);
     try {
       await acceptAndActivateInvitation(token, preview.data?.role);
       router.replace("/");
     } catch (error) {
       setActionError(invitationErrorMessage((error as Error).message));
+      setWrongAccount(/does not match/i.test((error as Error).message));
       setWorking(false);
     }
   };
@@ -255,7 +260,7 @@ export default function InvitationScreen() {
             loading={working}
             disabled={working}
           />
-          {actionError?.includes("другой email") ? (
+          {wrongAccount ? (
             <Button
               label="Войти под другим аккаунтом"
               variant="secondary"

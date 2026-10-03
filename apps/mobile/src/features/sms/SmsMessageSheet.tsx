@@ -23,6 +23,7 @@ import { bucketOf } from "./sms-history-view";
 import type { SmsHistoryItem } from "./sms-model";
 import { when } from "./SmsHistoryRow";
 import { costWords, statusWords, triggerWords } from "./sms-words";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // СООБЩЕНИЕ ЦЕЛИКОМ (STORY-089). Тап по строке истории — в записи, у клиента,
 // на странице истории. Лист собран нашим языком (владелец 03.10: «сделать
@@ -163,7 +164,8 @@ export function SmsMessageSheet({
             title="Итог"
             value={status}
             valueColor={color}
-            sub={bucket === "failed" && m.error ? m.error : undefined}
+            // Причину отказа пишет сервер — переводим при показе.
+            sub={bucket === "failed" && m.error ? tDynamic(m.error) : undefined}
             subColor={t.danger}
           />
           {facts.map((fact) => (

@@ -3,6 +3,7 @@ import { formatDateKey, formatDateShortRu } from "@babun/shared/common/utils/dat
 import { useThemeColors } from "@/theme/colors";
 import type { SmsHistoryItem } from "./sms-model";
 import { costWords, isFailure, statusWords, triggerWords } from "./sms-words";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // СТРОКА ИСТОРИИ SMS (STORY-089): кому и когда — первой строкой, текст —
 // второй, итог и цена — справа. Отказ красный: владелец должен увидеть его,
@@ -90,7 +91,8 @@ export function SmsHistoryRow({
         ) : null}
         {failed && item.error ? (
           <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, color: t.danger, marginTop: 4 }}>
-            {item.error}
+            {/* Причину отказа пишет сервер — переводим при показе. */}
+            {tDynamic(item.error)}
           </Text>
         ) : null}
       </View>

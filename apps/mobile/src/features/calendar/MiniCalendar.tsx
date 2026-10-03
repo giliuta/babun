@@ -102,7 +102,8 @@ export function MiniCalendar({
 
   const monthTitle = new Date(viewYear, viewMonth, 1)
     .toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
-    .replace(/\s*г\.?\s*$/i, "");
+    // «г.» (русский, болгарский) и «р.» (украинский) после года — лишние.
+    .replace(/\s*[гр]\.?\s*$/i, "");
 
   // 44 — минимальная тап-мишень HIG: раньше 40pt-ячейки были единственным
   // суб-минимальным контролом всего джампера. Но на экране 320 (iPhone SE
