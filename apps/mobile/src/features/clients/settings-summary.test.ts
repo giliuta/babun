@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { blocksSummary, listRowSummary, objectsSummary, tagsSummary } from "./settings-summary";
+import { blocksSummary, listRowSummary, objectTypesSummary, tagsSummary } from "./settings-summary";
 
 // Подписи строк шестерёнки «Клиентов» (02.10, «по функциям»).
 
@@ -11,13 +11,10 @@ describe("подписи настроек клиентов", () => {
     assert.equal(listRowSummary({ phone: false, last: false }), "Только имя");
   });
 
-  test("объекты: выключены, без типов, с типами", () => {
-    assert.equal(objectsSummary({ on: false, types: ["Дом"], service: "x", maps: "y" }), "Выключены в карточке");
-    assert.equal(
-      objectsSummary({ on: true, types: ["Дом", "Квартира", "Офис"], service: "Не напоминать", maps: "Google Карты" }),
-      "Дом, Квартира… · Не напоминать · Google Карты",
-    );
-    assert.equal(objectsSummary({ on: true, types: [], service: "Раз в год", maps: "" }), "Типов нет · Раз в год");
+  test("типы объектов", () => {
+    assert.equal(objectTypesSummary([]), "Типов нет");
+    assert.equal(objectTypesSummary(["Дом", "Квартира"]), "Дом, Квартира");
+    assert.equal(objectTypesSummary(["Дом", "Квартира", "Офис"]), "Дом, Квартира…");
   });
 
   test("теги", () => {

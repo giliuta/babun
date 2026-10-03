@@ -16,17 +16,10 @@ export function listRowSummary(prefs: Record<CardField, boolean>): string {
   return on.length > 0 ? on.join(" · ") : "Только имя";
 }
 
-/** «Объекты»: выключены — так и сказано; иначе типы, срок и карты одной
- *  строкой («Дом, Квартира · Не напоминать · Google Карты, Waze»). */
-export function objectsSummary(input: {
-  on: boolean;
-  types: string[];
-  service: string;
-  maps: string;
-}): string {
-  if (!input.on) return "Выключены в карточке";
-  const types = input.types.length > 0 ? input.types.slice(0, 2).join(", ") + (input.types.length > 2 ? "…" : "") : "Типов нет";
-  return [types, input.service, input.maps].filter(Boolean).join(" · ");
+/** «Типы объектов»: два первых имени и многоточие, без типов — «Типов нет». */
+export function objectTypesSummary(types: string[]): string {
+  if (types.length === 0) return "Типов нет";
+  return types.slice(0, 2).join(", ") + (types.length > 2 ? "…" : "");
 }
 
 /** «Блоки клиентов» (03.10): выключенные блоки словами страницы, иначе

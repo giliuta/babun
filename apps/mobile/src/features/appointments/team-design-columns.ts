@@ -13,7 +13,6 @@ export function designColumns(design: TeamDesign): Record<string, unknown> {
     client_list_off: design.listOff ?? null,
     contact_ways: design.contactWays ?? null,
     map_services: design.mapServices ?? null,
-    service_every_months: design.serviceEveryMonths ?? null,
   };
 }
 

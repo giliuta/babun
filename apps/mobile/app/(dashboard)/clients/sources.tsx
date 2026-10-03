@@ -1,11 +1,9 @@
 import { useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Lock, Trash2 } from "lucide-react-native";
-import { ACQUISITION_LABELS } from "@babun/shared/local/clients";
+import { Trash2 } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
@@ -13,16 +11,12 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { NameField } from "@/components/ui/picker-fields";
-import { GUTTER, TYPE } from "@/components/ui/tokens";
+import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
-import {
-  BUILT_IN_SOURCES,
-  teamSources,
-  type ClientSource,
-} from "@/features/clients/acquisition-source";
+import { teamSources, type ClientSource } from "@/features/clients/acquisition-source";
 import {
   useClientSources,
   useCreateClientSource,
@@ -30,19 +24,20 @@ import {
   useRenameClientSource,
   useReorderClientSources,
 } from "@/features/clients/acquisition-sources";
-import { CUSTOM_SOURCE_ICON } from "@/features/clients/source-icons";
+import { CUSTOM_SOURCE_ICON, SOURCE_ICONS } from "@/features/clients/source-icons";
 import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
 import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
 
-// ИСТОЧНИКИ — ОТКУДА ПРИХОДЯТ КЛИЕНТЫ (владелец 03.10: «используй источник, с
-// учётом что они могут самостоятельно добавить источник»).
+// ИСТОЧНИКИ — ОТКУДА ПРИХОДЯТ КЛИЕНТЫ (владелец 03.10: «сделай просто
+// стандартные источники, такие, какие я могу править; не нужен Instagram —
+// могу его вообще удалить; и добавлять новые»).
 //
-// Готовые восемь стоят одной тихой строкой: их не правят и не удаляют.
-// Свои — справочник команды по рецепту «Тегов»: строка 52pt, тап —
+// Один справочник команды по рецепту «Тегов»: восемь готовых засеяны
+// строками и ничем не отличаются от добавленных. Строка 52pt, тап —
 // переименовать, свайп влево — «Удалить» с вопросом, ручка — порядок,
-// «Добавить источник» — кнопкой внизу. Цвета у источника нет: он — подпись
-// в карточке, а не плитка.
+// «Добавить источник» — кнопкой внизу. Цвета у источника нет: значок — у
+// готового его, у добавленного общий.
 //
 // Право — то же, что у тегов: «Справочники» команды (`clients.settings_tags`).
 
@@ -79,7 +74,7 @@ function ClientSourcesScreen() {
   const [dragging, setDragging] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
 
-  const own = useMemo(() => teamSources(query.data ?? [], teamId), [query.data, teamId]);
+  const list = useMemo(() => teamSources(query.data ?? [], teamId), [query.data, teamId]);
   const busy = createSource.isPending || renameSource.isPending;
   const failed = (title: string, error: unknown) =>
     notify(title, (error as Error).message || "Проверьте соединение и попробуйте ещё раз.");
@@ -92,7 +87,7 @@ function ClientSourcesScreen() {
         toast("Источник обновлён", "success");
       } else {
         if (!teamId) throw new Error("Сначала заведите календарь.");
-        const last = own[own.length - 1];
+        const last = list[list.length - 1];
         await createSource.mutateAsync({ name, teamId, position: (last?.position ?? -1) + 1 });
         toast("Источник добавлен", "success");
       }
@@ -114,7 +109,7 @@ function ClientSourcesScreen() {
     confirmThen(
       "Удалить источник?",
       {
-        message: `У клиентов из «${source.name}» источником станет «Другое».`,
+        message: `Клиенты из «${source.name}» останутся без источника.`,
         confirmLabel: "Удалить",
         destructive: true,
       },
@@ -127,8 +122,6 @@ function ClientSourcesScreen() {
         }
       },
     );
-
-  const Icon = CUSTOM_SOURCE_ICON;
 
   return (
     <Screen edges={["top"]}>
@@ -145,43 +138,36 @@ function ClientSourcesScreen() {
           subtitle={query.error instanceof Error ? query.error.message : undefined}
           action={{ label: "Повторить", onPress: () => void query.refetch() }}
         />
+      ) : list.length === 0 ? (
+        <EmptyState
+          fill
+          title="Источников пока нет"
+          action={
+            readOnly
+              ? undefined
+              : { label: "Добавить источник", onPress: () => setEditing({ mode: "create" }) }
+          }
+        />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 12 }}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 12 }}
           scrollEnabled={!dragging}
         >
-          <SectionCard title="Готовые">
-            <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingBottom: 12 }}>
-              <Lock size={14} strokeWidth={2.2} color={t.faint} style={{ marginTop: 3 }} />
-              <Text
-                maxFontSizeMultiplier={1.3}
-                style={{ flex: 1, fontSize: TYPE.subhead.fontSize, color: t.sub }}
-              >
-                {BUILT_IN_SOURCES.map((k) => ACQUISITION_LABELS[k]).join(", ")}
-              </Text>
-            </View>
-          </SectionCard>
-
-          <SectionCard title="Свои">
-            {own.length === 0 ? (
-              <Text
-                maxFontSizeMultiplier={1.3}
-                style={{ paddingHorizontal: 16, paddingBottom: 12, fontSize: TYPE.subhead.fontSize, color: t.sub }}
-              >
-                Своих пока нет
-              </Text>
-            ) : (
-              <ReorderList
-                items={own}
-                rowHeight={ROW_H}
-                labelFor={(s) => s.name}
-                rangeFor={(index) => (readOnly ? [index, index] : [0, own.length - 1])}
-                handleInside
-                onReorder={reorder}
-                onDraggingChange={setDragging}
-              >
-                {(source, _index, handle) => (
+          <View style={{ paddingHorizontal: GUTTER }}>
+            <ReorderList
+              items={list}
+              rowHeight={ROW_H}
+              spaced
+              labelFor={(s) => s.name}
+              rangeFor={(index) => (readOnly ? [index, index] : [0, list.length - 1])}
+              handleInside
+              onReorder={reorder}
+              onDraggingChange={setDragging}
+            >
+              {(source, _index, handle) => {
+                const Icon = (source.key ? SOURCE_ICONS[source.key] : undefined) ?? CUSTOM_SOURCE_ICON;
+                return (
                   <SwipeRow
                     label={readOnly ? undefined : "Удалить"}
                     color={t.danger}
@@ -219,14 +205,14 @@ function ClientSourcesScreen() {
                       {handle}
                     </View>
                   </SwipeRow>
-                )}
-              </ReorderList>
-            )}
-          </SectionCard>
+                );
+              }}
+            </ReorderList>
+          </View>
         </ScrollView>
       )}
 
-      {!readOnly && !query.isLoading && !query.isError ? (
+      {!readOnly && !query.isLoading && !query.isError && list.length > 0 ? (
         <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
           <GradientButton label="Добавить источник" onPress={() => setEditing({ mode: "create" })} />
         </View>

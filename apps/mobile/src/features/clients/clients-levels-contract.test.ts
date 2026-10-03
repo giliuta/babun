@@ -887,7 +887,7 @@ describe("экраны: вкладка «Клиенты» открывается
       "channels.tsx",
       "maps.tsx",
       "object-types.tsx",
-      "objects-settings.tsx",
+      "sources.tsx",
       "tags.tsx",
     ]) {
       const source = read(file);

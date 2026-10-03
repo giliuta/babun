@@ -4,7 +4,8 @@ import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useClientsSourceScope } from "@/features/clients/queries";
 import type { ClientSource } from "@/features/clients/acquisition-source";
 
-// СВОИ ИСТОЧНИКИ КОМАНДЫ — данные (владелец 03.10). Правила показа и выбора —
+// ИСТОЧНИКИ КОМАНДЫ — данные (владелец 03.10): готовые засеяны строками,
+// правятся и удаляются как свои. Правила показа и выбора —
 // в `acquisition-source.ts`, здесь только чтение и правка `client_sources`.
 //
 // Читаем все источники компании разом: их единицы, а карточке, списку и
@@ -15,7 +16,7 @@ import type { ClientSource } from "@/features/clients/acquisition-source";
 export const clientSourcesKey = (tenantId: string | null) =>
   ["client-sources", tenantId] as const;
 
-const COLUMNS = "id, tenant_id, team_id, name, position";
+const COLUMNS = "id, tenant_id, team_id, name, position, key";
 
 function useSourcesScope() {
   const scope = useClientsSourceScope();
@@ -119,7 +120,7 @@ export function useReorderClientSources() {
   });
 }
 
-/** Удалённый источник у клиентов читается как «Другое» — их карточки не
+/** Удалённый источник у клиентов читается как «не указан» — их карточки не
  *  переписываем. */
 export function useDeleteClientSource() {
   const { client } = useSourcesScope();

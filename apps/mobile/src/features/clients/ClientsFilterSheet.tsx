@@ -19,10 +19,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BarChart3, Check, ChevronDown, ChevronRight } from "lucide-react-native";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
-import type {
-  ClientSourceValue,
-  PropertyType,
-} from "@babun/shared/local/clients";
+import type { PropertyType } from "@babun/shared/local/clients";
 import { haptics } from "@/lib/haptics";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
@@ -1117,7 +1114,7 @@ export function ClientsFilterSheet({
       toggle: (v) =>
         applyFilter({
           ...filter,
-          sources: toggleIn(filter.sources, v) as ClientSourceValue[],
+          sources: toggleIn(filter.sources, v),
         }),
       clear: () => applyFilter({ ...filter, sources: [] }),
     },

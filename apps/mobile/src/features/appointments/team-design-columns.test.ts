@@ -16,7 +16,6 @@ const base: TeamDesign = {
   listOff: null,
   contactWays: { enabled: ["phone"], order: ["phone"] },
   mapServices: null,
-  serviceEveryMonths: null,
 };
 
 describe("разница правки настроек команды", () => {

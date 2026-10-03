@@ -80,7 +80,7 @@ describe("сводка клиента по его правам", () => {
   const stats = {
     visits: 4, totalSpent: 400, lastVisitDate: "2026-09-20", lastVisitDays: 10,
     nextApt: { date: "2026-10-03", time: "13:30" }, nextAptDays: 3, medianGapDays: 30,
-    serviceDue: 1, unclosedVisits: 1, debt: 300, expectedRevenue: 80,
+    unclosedVisits: 1, debt: 300, expectedRevenue: 80,
   };
   test("владелец — как есть", () => {
     assert.equal(statsByBlocks({}, stats), stats);

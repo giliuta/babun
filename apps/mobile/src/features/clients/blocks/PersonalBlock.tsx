@@ -14,7 +14,7 @@
 import { useState } from "react";
 import { View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import type { AcquisitionSource, Client } from "@babun/shared/local/clients";
+import type { Client } from "@babun/shared/local/clients";
 import { Cake, Circle, Users } from "lucide-react-native";
 import { GUTTER } from "@/components/ui/tokens";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
@@ -27,14 +27,21 @@ import { normalizeYMD } from "@/features/clients/OptionalDateField";
 import { useClients } from "@/features/clients/queries";
 import { useClientSources } from "@/features/clients/acquisition-sources";
 import {
+  isReferral,
   normalizeSource,
-  sourceLabel,
+  resolveSource,
   sourcePickerOptions,
+  type ClientSource,
 } from "@/features/clients/acquisition-source";
 import { CUSTOM_SOURCE_ICON, SOURCE_ICONS } from "@/features/clients/source-icons";
 import { useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+
+/** Значок источника: у засеянного готового — его, у своего — общий. */
+function sourceIconOf(row: ClientSource) {
+  return (row.key ? SOURCE_ICONS[row.key] : undefined) ?? CUSTOM_SOURCE_ICON;
+}
 
 interface PersonalBlockProps {
   client: Client;
@@ -53,23 +60,21 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
   const [referrerOpen, setReferrerOpen] = useState(false);
   const birthday = normalizeYMD(client.birthday);
   const router = useRouter();
-  // ИСТОЧНИК — ГОТОВЫЕ ПЛЮС СВОИ КОМАНДЫ КЛИЕНТА (владелец 03.10). Клиент без
-  // команды — у компании без команд — берёт первую.
+  // ИСТОЧНИК — СПРАВОЧНИК КОМАНДЫ КЛИЕНТА (владелец 03.10: готовые правятся
+  // и удаляются, как свои). Клиент без команды — у компании без команд —
+  // берёт первую.
   const { data: sources = [] } = useClientSources();
   const { data: ownTeams = [] } = useTeams();
   const sourceTeamId = client.team_id ?? ownTeams[0]?.id ?? null;
-  const source = sourceLabel(client.acquisition_source, sources);
+  const sourceRow = resolveSource(client.acquisition_source, sources, sourceTeamId);
+  const source = sourceRow?.name ?? null;
   const sourceOptions = sourcePickerOptions(sources, sourceTeamId);
   // «Кто привёл»: список — сами клиенты компании, тот же кеш, что у списка.
   const { data: allClients = [] } = useClients();
   const referrerName =
     allClients.find((x: Client) => x.id === client.referred_by_client_id)?.full_name ?? null;
   // Значок плитки — значок самого источника (тот же, что в шторке выбора).
-  const sourceKey = normalizeSource(client.acquisition_source, sources);
-  const sourceIcon =
-    !source
-      ? Circle
-      : (SOURCE_ICONS[sourceKey as AcquisitionSource] ?? CUSTOM_SOURCE_ICON);
+  const sourceIcon = sourceRow ? sourceIconOf(sourceRow) : Circle;
   const showBirthday = !readOnly || !!birthday;
   const showSource = !readOnly || !!source;
 
@@ -121,7 +126,7 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
         </View>
       ) : null}
       {/* КТО ПРИВЁЛ — только при источнике «Рекомендация», плиткой ниже. */}
-      {client.acquisition_source === "referral" && (!readOnly || referrerName) ? (
+      {isReferral(client.acquisition_source, sources, sourceTeamId) && (!readOnly || referrerName) ? (
         <View style={{ flexDirection: "row", marginHorizontal: GUTTER, marginTop: 8 }}>
           <IdentityCard
             icon={Users}
@@ -151,11 +156,12 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
         items={sourceOptions.map((o) => ({
           id: o.value,
           label: o.label,
-          icon: o.sourceId ? CUSTOM_SOURCE_ICON : (SOURCE_ICONS[o.value as AcquisitionSource] ?? Circle),
+          icon: sourceIconOf(o.source),
           color: t.accent,
           onPress: () => update({ acquisition_source: o.value }),
         }))}
-        selectedId={normalizeSource(client.acquisition_source, sources)}
+        selectedId={normalizeSource(client.acquisition_source, sources, sourceTeamId)}
+        emptyText="Источников нет"
         // ШЕСТЕРЁНКА — В СВОИ ИСТОЧНИКИ ТОЙ КОМАНДЫ, чьи предложены: там их
         // добавляют («могут самостоятельно добавить источник»).
         onSettings={() =>
@@ -165,7 +171,7 @@ export function PersonalBlock({ client, update, readOnly = false, draft = false 
               : ("/clients/sources" as Href),
           )
         }
-        settingsLabel="Свои источники"
+        settingsLabel="Источники команды"
         onClose={() => setSourceOpen(false)}
       />
       <DateWheelSheet

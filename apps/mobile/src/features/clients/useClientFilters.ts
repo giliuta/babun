@@ -21,7 +21,7 @@ import {
   type SortKey,
 } from "./filter";
 import {
-  normalizeSource,
+  sourceBucket,
   sourceFilterOptions,
   type ClientSource,
 } from "./acquisition-source";
@@ -181,8 +181,11 @@ export function useClientFilters(
   /** Считать контекстные счётчики попапов только когда лист открыт —
    *  иначе полный проход по клиентам гоняется на каждую клавишу поиска. */
   withFacetCounts: boolean,
-  /** Свои источники команд (`client_sources`) — подписи и варианты фасета. */
+  /** Источники команд (`client_sources`) — все: по ним читается значение
+   *  клиента любой команды. */
   customSources: ClientSource[] = NO_SOURCES,
+  /** Команда чипа: варианты фасета — только её источники. */
+  sourceTeamId: string | null = null,
 ): ClientFilterResult {
   const {
     segments,
@@ -374,15 +377,15 @@ export function useClientFilters(
   }, [activeTags]);
 
   const sourceOptions = useMemo<FacetOption[]>(
-    () => sourceFilterOptions(customSources),
-    [customSources],
+    () => sourceFilterOptions(customSources, sourceTeamId),
+    [customSources, sourceTeamId],
   );
 
-  // Удалённый свой источник читается как «Другое» — и в фильтре тоже.
+  // Корзина — имя строки источника: «Instagram» всех команд — один вариант.
   const passesSource = useMemo(() => {
     const sel = sources as string[];
     return (c: Client): boolean =>
-      sel.length === 0 || sel.includes(normalizeSource(c.acquisition_source, customSources));
+      sel.length === 0 || sel.includes(sourceBucket(c.acquisition_source, customSources, c.team_id));
   }, [sources, customSources]);
 
   const passesProperty = useMemo(() => {
@@ -396,7 +399,7 @@ export function useClientFilters(
 
   // Строки-фильтры «портрета» появляются, только когда данные есть.
   const hasSourceData = useMemo(
-    () => clients.some((c) => normalizeSource(c.acquisition_source, customSources) !== "unknown"),
+    () => clients.some((c) => sourceBucket(c.acquisition_source, customSources, c.team_id) !== "unknown"),
     [clients, customSources],
   );
   const hasPropertyData = useMemo(
@@ -526,7 +529,7 @@ export function useClientFilters(
         if (set) for (const id of set) team[id] = (team[id] ?? 0) + 1;
       }
       if (seg && tm && ct && tg && pr) {
-        const key = normalizeSource(c.acquisition_source, customSources);
+        const key = sourceBucket(c.acquisition_source, customSources, c.team_id);
         source[key] = (source[key] ?? 0) + 1;
       }
       if (seg && tm && ct && tg && so) {

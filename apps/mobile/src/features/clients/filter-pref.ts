@@ -1,6 +1,6 @@
 import { getStorage } from "@babun/shared/storage";
 import { makePeriod } from "@/features/finances/period";
-import { EMPTY_FILTER, todayYMD, type ClientsFilter } from "./filter";
+import { EMPTY_FILTER, SEGMENT_OPTIONS, todayYMD, type ClientsFilter } from "./filter";
 
 // ОДИН живой набор фильтров, переживающий выход из приложения — и ничего
 // больше: ни имён, ни списка сохранённых наборов (те владелец отклонил).
@@ -40,7 +40,11 @@ export function loadDayFilter(): ClientsFilter | null {
       period,
       // Массивы восстанавливаем строго массивами: чужой/битый JSON не
       // должен доехать до предикатов.
-      segments: Array.isArray(f.segments) ? f.segments : [],
+      // Статус, которого больше нет («Пора обслужить», снят 03.10), — мимо:
+      // иначе он фильтровал бы список без токена, которым его снять.
+      segments: Array.isArray(f.segments)
+        ? f.segments.filter((k) => SEGMENT_OPTIONS.some((o) => o.key === k))
+        : [],
       selectedTeams: Array.isArray(f.selectedTeams) ? f.selectedTeams : [],
       selectedCities: Array.isArray(f.selectedCities) ? f.selectedCities : [],
       activeTags: Array.isArray(f.activeTags) ? f.activeTags : [],

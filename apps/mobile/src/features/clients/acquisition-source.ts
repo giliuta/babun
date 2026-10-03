@@ -4,14 +4,17 @@ import {
   type ClientSourceValue,
 } from "@babun/shared/local/clients";
 
-// ИСТОЧНИК КЛИЕНТА — ГОТОВЫЕ ВАРИАНТЫ ПЛЮС СВОИ У КОМАНДЫ (владелец 03.10:
-// «используй источник, с учётом что они могут самостоятельно добавить
-// источник»).
+// ИСТОЧНИК КЛИЕНТА — СПРАВОЧНИК КОМАНДЫ (владелец 03.10: «сделай просто
+// стандартные источники, такие, какие я могу править; не нужен Instagram —
+// могу его вообще удалить; и добавлять новые»).
 //
-// Восемь готовых живут в коде (`ACQUISITION_LABELS`), свои — строками
-// `client_sources` у команды. Клиент хранит выбор одним текстом: готовый —
-// ключом, свой — `src:<id>`. Удалённый свой источник у клиента читается как
-// «Другое»: значение в данных остаётся, но показать его больше нечем.
+// Все источники — строки `client_sources` команды. Восемь готовых засеваются
+// каждой команде при рождении (`key` помнит, каким готовым строка была), и
+// дальше ничем не отличаются от своих. Клиент хранит выбор как `src:<id>`.
+//
+// Старое значение — ключ готового (`instagram`, импорт пишет `other`) —
+// читается строкой своей команды с тем же `key`. Источник, которого больше
+// нет (удалён), читается как «не указан».
 //
 // Лист без React — правила проверяются тестом напрямую.
 
@@ -21,41 +24,30 @@ export interface ClientSource {
   team_id: string;
   name: string;
   position: number;
+  /** Каким готовым вариантом строка засеяна; у своих — `null`. */
+  key: AcquisitionSource | null;
 }
 
 export interface SourceOption {
   value: ClientSourceValue;
   label: string;
-  /** Свой источник команды — у готовых `null`. */
-  sourceId: string | null;
+  source: ClientSource;
 }
 
 const CUSTOM_PREFIX = "src:";
-
-/** Готовые варианты в порядке выбора; «Неизвестно» — не вариант, а пустота. */
-export const BUILT_IN_SOURCES: AcquisitionSource[] = [
-  "referral",
-  "instagram",
-  "whatsapp",
-  "google_maps",
-  "website",
-  "repeat",
-  "walk_in",
-  "other",
-];
 
 export function customSourceValue(id: string): ClientSourceValue {
   return `${CUSTOM_PREFIX}${id}`;
 }
 
-/** id своего источника из значения клиента; у готовых — `null`. */
+/** id строки из значения клиента; у старых ключей — `null`. */
 export function customSourceId(value: string | null | undefined): string | null {
   if (!value || !value.startsWith(CUSTOM_PREFIX)) return null;
   const id = value.slice(CUSTOM_PREFIX.length);
   return id ? id : null;
 }
 
-/** Свои источники команды в порядке справочника: позиция, потом имя. */
+/** Источники команды в порядке справочника: позиция, потом имя. */
 export function teamSources(sources: ClientSource[], teamId: string | null): ClientSource[] {
   return sources
     .filter((s) => s.team_id === teamId)
@@ -66,65 +58,109 @@ export function teamSources(sources: ClientSource[], teamId: string | null): Cli
     );
 }
 
-/** Значение клиента для фильтра и счётчиков: пусто — «unknown», свой
- *  удалённый — «other» (как его и показывает карточка). */
+/** Строка справочника за значением клиента или `null` — источник не указан
+ *  или его больше нет. Старый ключ ищется у команды клиента; без команды —
+ *  у любой. */
+export function resolveSource(
+  value: string | null | undefined,
+  sources: ClientSource[],
+  teamId: string | null | undefined,
+): ClientSource | null {
+  if (!value || value === "unknown") return null;
+  const id = customSourceId(value);
+  if (id) return sources.find((s) => s.id === id) ?? null;
+  if (!(value in ACQUISITION_LABELS)) return null;
+  return (
+    sources.find((s) => s.key === value && (!teamId || s.team_id === teamId)) ?? null
+  );
+}
+
+/** Значение клиента для фильтра и отметки в шторке: строка — `src:<id>`,
+ *  иначе «unknown». */
 export function normalizeSource(
   value: string | null | undefined,
   sources: ClientSource[],
+  teamId: string | null | undefined,
 ): ClientSourceValue {
-  if (!value) return "unknown";
-  const id = customSourceId(value);
-  if (id) return sources.some((s) => s.id === id) ? (value as ClientSourceValue) : "other";
-  if (value in ACQUISITION_LABELS) return value as AcquisitionSource;
-  // Незнакомый ключ (старое значение мимо перечня) — тоже «Другое».
-  return "other";
+  const row = resolveSource(value, sources, teamId);
+  return row ? customSourceValue(row.id) : "unknown";
 }
 
-/** Подпись источника клиента; `null` — источник не указан. */
+/** Подпись источника клиента; `null` — не указан. */
 export function sourceLabel(
   value: string | null | undefined,
   sources: ClientSource[],
+  teamId: string | null | undefined,
 ): string | null {
-  const v = normalizeSource(value, sources);
-  if (v === "unknown") return null;
-  const id = customSourceId(v);
-  if (id) return sources.find((s) => s.id === id)?.name ?? ACQUISITION_LABELS.other;
-  return ACQUISITION_LABELS[v as AcquisitionSource];
+  return resolveSource(value, sources, teamId)?.name ?? null;
 }
 
-/** Варианты выбора на карточке: готовые, затем свои источники команды. */
+/** «Кто привёл» — у строки, засеянной «Рекомендацией», как её ни назови. */
+export function isReferral(
+  value: string | null | undefined,
+  sources: ClientSource[],
+  teamId: string | null | undefined,
+): boolean {
+  return resolveSource(value, sources, teamId)?.key === "referral";
+}
+
+/** Варианты выбора на карточке — источники команды клиента. */
 export function sourcePickerOptions(
   sources: ClientSource[],
   teamId: string | null,
 ): SourceOption[] {
-  return [
-    ...BUILT_IN_SOURCES.map((k) => ({ value: k, label: ACQUISITION_LABELS[k], sourceId: null })),
-    ...teamSources(sources, teamId).map((s) => ({
-      value: customSourceValue(s.id),
-      label: s.name,
-      sourceId: s.id,
-    })),
-  ];
+  return teamSources(sources, teamId).map((s) => ({
+    value: customSourceValue(s.id),
+    label: s.name,
+    source: s,
+  }));
 }
 
-/** Варианты фильтра: готовые, свои всех команд по имени, «Неизвестно» —
- *  последним, как и было. */
+/** КОРЗИНА ФИЛЬТРА — ИМЯ ИСТОЧНИКА. У каждой команды своя строка
+ *  «Instagram», а в фильтре «всех команд» это один вариант: клиент попадает
+ *  в корзину по имени своей строки, без строки — в «Неизвестно». */
+export function sourceBucket(
+  value: string | null | undefined,
+  sources: ClientSource[],
+  teamId: string | null | undefined,
+): string {
+  const row = resolveSource(value, sources, teamId);
+  return row ? `n:${row.name.trim().toLowerCase()}` : "unknown";
+}
+
+/** Варианты фильтра: имена источников (под чипом — только его команды) в
+ *  порядке справочника, «Неизвестно» — последним. */
 export function sourceFilterOptions(
   sources: ClientSource[],
+  teamId: string | null = null,
 ): { value: string; label: string; color: string }[] {
-  const own = [...sources].sort((a, b) =>
-    a.name.localeCompare(b.name, "ru", { sensitivity: "base" }),
+  const ordered = (teamId ? sources.filter((s) => s.team_id === teamId) : [...sources]).sort(
+    (a, b) =>
+      a.position - b.position ||
+      a.name.localeCompare(b.name, "ru", { sensitivity: "base" }),
   );
-  return [
-    ...BUILT_IN_SOURCES.map((k) => ({ value: k as string, label: ACQUISITION_LABELS[k], color: "" })),
-    ...own.map((s) => ({ value: customSourceValue(s.id) as string, label: s.name, color: "" })),
-    { value: "unknown", label: ACQUISITION_LABELS.unknown, color: "" },
-  ];
+  const seen = new Set<string>();
+  const out: { value: string; label: string; color: string }[] = [];
+  for (const s of ordered) {
+    const value = `n:${s.name.trim().toLowerCase()}`;
+    if (seen.has(value)) continue;
+    seen.add(value);
+    out.push({ value, label: s.name.trim(), color: "" });
+  }
+  out.push({ value: "unknown", label: ACQUISITION_LABELS.unknown, color: "" });
+  return out;
 }
 
 /** Подпись строки «Источники» в шестерёнке. */
 export function sourcesSummary(n: number): string {
-  if (n === 0) return "Только готовые";
-  const word = n % 10 === 1 && n % 100 !== 11 ? "свой" : "своих";
-  return `Готовые + ${n} ${word}`;
+  if (n === 0) return "Источников нет";
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  const word =
+    mod10 === 1 && mod100 !== 11
+      ? "источник"
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+        ? "источника"
+        : "источников";
+  return `${n} ${word}`;
 }

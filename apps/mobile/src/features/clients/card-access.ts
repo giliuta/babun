@@ -134,7 +134,6 @@ export function statsByBlocks<S extends {
   nextApt: unknown;
   nextAptDays: number | null;
   medianGapDays: number | null;
-  serviceDue: number;
   unclosedVisits: number;
   debt: number;
   expectedRevenue: number;
@@ -154,7 +153,6 @@ export function statsByBlocks<S extends {
           nextApt: null,
           nextAptDays: null,
           medianGapDays: null,
-          serviceDue: 0,
           unclosedVisits: 0,
         }
       : {}),

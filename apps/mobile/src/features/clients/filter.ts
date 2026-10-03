@@ -1,7 +1,6 @@
 import {
   PROPERTY_LABELS,
   type Client,
-  type ClientSourceValue,
   type PropertyType,
 } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
@@ -171,7 +170,6 @@ export type Segment =
   | "all"
   | "debt"
   | "debtNoUpcoming"
-  | "serviceDue"
   | "unclosed"
   | "booked"
   | "noUpcoming"
@@ -191,7 +189,6 @@ export type SegmentKey = Exclude<Segment, "all">;
 export const SEGMENT_BLOCKS: SegmentKey[][] = [
   [
     "unclosed",
-    "serviceDue",
     "debt",
     "debtNoUpcoming",
     "silent",
@@ -207,7 +204,6 @@ export const SEGMENT_BLOCKS: SegmentKey[][] = [
  *  того, в каком блоке ряд нарисован. */
 export const OUTREACH_SEGMENTS: SegmentKey[] = [
   "unclosed",
-  "serviceDue",
   "debt",
   "debtNoUpcoming",
   "silent",
@@ -269,7 +265,6 @@ export const BIRTHDAY_DAYS = 14; // «Скоро день рождения»
 
 export const SEGMENT_OPTIONS: { key: SegmentKey; label: string }[] = [
   { key: "unclosed", label: "Визит не закрыт" },
-  { key: "serviceDue", label: "Пора обслужить" },
   { key: "debt", label: "Должники" },
   { key: "debtNoUpcoming", label: "Должники без новой записи" },
   { key: "silent", label: "Пропали" },
@@ -292,7 +287,6 @@ export const SEGMENT_OPTIONS: { key: SegmentKey; label: string }[] = [
  *  иначе смена порога сделает подпись ложью. */
 export const SEGMENT_RULES: Record<SegmentKey, string> = {
   unclosed: "Дата визита прошла, а запись всё ещё «запланирована»",
-  serviceDue: "Прошёл интервал обслуживания объекта",
   debt: "Есть недоплата по завершённым визитам",
   debtNoUpcoming: "Есть недоплата, и следующий визит не назначен",
   silent: "Не приезжает дольше своего обычного срока",
@@ -337,12 +331,6 @@ export function segmentEvidence(
       case "unclosed": {
         const n = s?.unclosedVisits ?? 0;
         return `${n} ${countWordRu(n, "визит не закрыт", "визита не закрыты", "визитов не закрыто")}`;
-      }
-      case "serviceDue": {
-        const n = s?.serviceDue ?? 0;
-        return n === 1
-          ? "объект просрочен"
-          : `${n} ${countWordRu(n, "объект просрочен", "объекта просрочены", "объектов просрочено")}`;
       }
       case "silent": {
         const days = s?.lastVisitDays ?? 0;
@@ -422,11 +410,6 @@ export function matchesSegment(
     case "debtNoUpcoming":
       // Должен и больше не придёт — деньги уходят.
       return clientDebt(c, s) > 0 && (s?.nextApt ?? null) === null;
-    case "serviceDue":
-      // ПОРА ОБСЛУЖИТЬ — по интервалу самого объекта, а не по общей цифре.
-      // Единственный статус, предсказывающий выручку следующего месяца:
-      // регулярное обслуживание и есть основной доход сервиса.
-      return (s?.serviceDue ?? 0) > 0;
     case "noUpcoming":
       // Был визит, но следующего нет (реактивация).
       return (s?.visits ?? 0) > 0 && (s?.nextApt ?? null) === null;
@@ -512,13 +495,6 @@ const PROPERTY_OPTIONS = PROPERTY_ORDER.map((key) => ({
   label: PROPERTY_LABELS[key],
   color: "",
 }));
-
-/** Источник клиента: пустые legacy-строки читаются как «Неизвестно». Свой
- *  источник команды (`src:<id>`) возвращается как есть — подпись и судьбу
- *  удалённого решает `acquisition-source.ts`. */
-export function clientSource(c: Client): ClientSourceValue {
-  return c.acquisition_source || "unknown";
-}
 
 /** Типы объектов клиента. Владелец 2026-07-26: «метка — это и есть тип
  *  объекта: дом, офис, вилла — стандарт, и можно добавить своё». Значит
@@ -644,7 +620,8 @@ export interface ClientsFilter {
   selectedCities: string[];
   activeTags: string[];
   period: PeriodValue | null;
-  sources: ClientSourceValue[];
+  /** Корзины источника: имя строки (`n:instagram`) или «unknown». */
+  sources: string[];
   propertyTypes: PropertyType[];
 }
 

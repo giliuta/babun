@@ -61,8 +61,6 @@ export interface TeamDesign {
   contactWays?: TeamOrderedSet | null;
   /** «Карты для маршрута». */
   mapServices?: TeamOrderedSet | null;
-  /** «Пора обслужить» объекта без своего интервала, месяцев. */
-  serviceEveryMonths?: number | null;
 }
 
 type Row = {
@@ -74,7 +72,6 @@ type Row = {
   client_list_off?: string[] | null;
   contact_ways?: TeamOrderedSet | null;
   map_services?: TeamOrderedSet | null;
-  service_every_months?: number | null;
 };
 
 // Таблицы ещё нет в сгенерированных типах (database.types.ts отстаёт от
@@ -109,7 +106,6 @@ function toDesign(row: Row): TeamDesign {
     listOff: row.client_list_off ?? null,
     contactWays: row.contact_ways ?? null,
     mapServices: row.map_services ?? null,
-    serviceEveryMonths: row.service_every_months ?? null,
   };
 }
 
@@ -143,7 +139,7 @@ export function useTeamDesigns() {
     queryFn: async (): Promise<DesignMap> => {
       const { data, error } = await table(client)
         .select(
-          "team_id, record_color_rule, record_color_palette, record_color_fallback, disabled_blocks, client_list_off, contact_ways, map_services, service_every_months",
+          "team_id, record_color_rule, record_color_palette, record_color_fallback, disabled_blocks, client_list_off, contact_ways, map_services",
         )
         .eq("tenant_id", tenantId as string);
       if (error) {

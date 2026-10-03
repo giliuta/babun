@@ -18,8 +18,6 @@ import {
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import type { Client } from "@babun/shared/local/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
-import { withServiceDefault } from "@/features/clients/service-default";
-import { useServiceMonthsOf } from "@/features/clients/use-service-default";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ScopeChips } from "@/components/ui/ScopeChips";
@@ -38,6 +36,7 @@ import {
   useUpdateClientById,
 } from "@/features/clients/queries";
 import { useClientSources } from "@/features/clients/acquisition-sources";
+import type { ClientSource } from "@/features/clients/acquisition-source";
 import { useDeleteWithUndo } from "@/features/clients/delete-undo";
 import { shareText } from "@/features/clients/client-share";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
@@ -137,6 +136,8 @@ function uniqueById<T extends { id: string }>(rows: T[]): T[] {
   }
   return out;
 }
+
+const NO_SOURCES: ClientSource[] = [];
 
 function ClientsListScreen() {
   const t = useThemeColors();
@@ -284,19 +285,13 @@ function ClientsListScreen() {
   // Под чипом команды строка, сортировка и фильтры считают ТОЛЬКО её записи.
   // Полная история нужна там, где решается судьба клиента: можно ли его
   // удалить и что уйдёт в выгрузку, — там `allStatsMap`.
-  // «Пора обслужить» — и по интервалу команды клиента у объектов без своего
-  // (владелец 30.09); подстановка живёт только в счёте, не в карточке.
-  const serviceMonthsOf = useServiceMonthsOf();
   const allStatsMap = useMemo(
-    () => buildStatsMap(withServiceDefault(clients, serviceMonthsOf), appointments),
-    [clients, appointments, serviceMonthsOf],
+    () => buildStatsMap(clients, appointments),
+    [clients, appointments],
   );
   const teamStatsMap = useMemo(
-    () =>
-      teamChoice === ALL_TEAMS
-        ? null
-        : buildStatsMap(withServiceDefault(teamClients, serviceMonthsOf), teamAppointments),
-    [teamChoice, teamClients, teamAppointments, serviceMonthsOf],
+    () => (teamChoice === ALL_TEAMS ? null : buildStatsMap(teamClients, teamAppointments)),
+    [teamChoice, teamClients, teamAppointments],
   );
   // Деньги и визиты строки — по правам этого клиента (30.09): у сотрудника
   // сводка из видимых записей не должна показывать то, что закрыто в
@@ -344,22 +339,10 @@ function ClientsListScreen() {
     });
   }, [tags, teams, teamChoice]);
 
-  // СВОИ ИСТОЧНИКИ КОМАНД (03.10) — в фильтре все: клиент мог перейти в
-  // другую команду со своим источником. Одинаковые имена разных команд
-  // подписаны командой, как теги.
-  const { data: ownSources = [] } = useClientSources();
-  const filterSources = useMemo(() => {
-    const byName = new Map<string, number>();
-    for (const src of ownSources) {
-      const key = src.name.trim().toLowerCase();
-      byName.set(key, (byName.get(key) ?? 0) + 1);
-    }
-    return ownSources.map((src) => {
-      const shared = (byName.get(src.name.trim().toLowerCase()) ?? 0) > 1;
-      const teamName = teams.find((tm) => tm.id === src.team_id)?.name;
-      return shared && teamName ? { ...src, name: `${src.name} · ${teamName}` } : src;
-    });
-  }, [ownSources, teams]);
+  // ИСТОЧНИКИ КОМАНД (03.10) — все: значение клиента любой команды читается
+  // по ним; варианты фильтра — по именам, под чипом — только его команды.
+  const sourcesQuery = useClientSources();
+  const ownSources = sourcesQuery.data ?? NO_SOURCES;
 
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
   // (deps без поиска) — фикс Волны 1 сохранён: клавиши не гоняют
@@ -375,18 +358,24 @@ function ClientsListScreen() {
     filter,
     query,
     sheetOpen, // счётчики попапов считаем только при открытом листе
-    filterSources,
+    ownSources,
+    teamChoice === ALL_TEAMS ? null : teamChoice,
   );
 
   // Прунинг «призрачных» фильтров: если тег/команду/метку удалили, пока
   // фильтр по ним активен, список схлопнулся бы в ноль без токена для
   // снятия. Держим выбранное подмножеством живых опций.
-  const { teamOptions, cityOptions, tagOptions } = result;
+  const { teamOptions, cityOptions, tagOptions, sourceOptions } = result;
+  const sourcesReady = sourcesQuery.isSuccess;
   useEffect(() => {
     setFilter((f) => {
       const teamSet = new Set(teamOptions.map((o) => o.value));
       const tagSet = new Set(tagOptions.map((o) => o.value));
       const citySet = new Set(cityOptions.map((o) => o.value));
+      // Источники — только когда справочник пришёл: пока он в пути, живым
+      // кажется одно «Неизвестно».
+      const sourceSet = new Set(sourceOptions.map((o) => o.value));
+      const sources = sourcesReady ? f.sources.filter((x) => sourceSet.has(x)) : f.sources;
       // Строки «Команда» в фильтрах с 30.09 нет — команду выбирает лента.
       // Забытый вчерашний выбор прятал бы клиентов без видимого токена.
       void teamSet;
@@ -396,12 +385,13 @@ function ClientsListScreen() {
       if (
         selectedTeams.length === f.selectedTeams.length &&
         activeTags.length === f.activeTags.length &&
-        selectedCities.length === f.selectedCities.length
+        selectedCities.length === f.selectedCities.length &&
+        sources.length === f.sources.length
       )
         return f;
-      return { ...f, selectedTeams, activeTags, selectedCities };
+      return { ...f, selectedTeams, activeTags, selectedCities, sources };
     });
-  }, [teamOptions, cityOptions, tagOptions]);
+  }, [teamOptions, cityOptions, tagOptions, sourceOptions, sourcesReady]);
 
   const filtering = result.activeCount > 0 || query.trim().length > 0;
 

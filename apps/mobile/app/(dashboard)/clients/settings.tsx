@@ -4,10 +4,10 @@ import { useRouter, type Href } from "expo-router";
 import {
   Download,
   Eye,
-  Home,
   Megaphone,
   MessageCircle,
   Navigation,
+  Shapes,
   Smartphone,
   Tags,
   Trash2,
@@ -60,12 +60,10 @@ import {
   useClientFunctionOn,
   type ClientFunctionKey,
 } from "@/features/clients/client-functions";
-import { serviceMonthsLabel } from "@/features/clients/service-default";
-import { useTeamServiceMonths } from "@/features/clients/use-service-default";
 import {
   blocksSummary,
+  objectTypesSummary,
   tagsSummary,
-  objectsSummary,
 } from "@/features/clients/settings-summary";
 import { anyClientSetting, clientSettingLevels } from "@/features/clients/settings-levels";
 import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings";
@@ -73,7 +71,7 @@ import { useClientSettingLevelsOf } from "@/features/clients/use-client-settings
 // «НАСТРОЙКИ КЛИЕНТОВ» — шестерёнка списка клиентов. С 02.10 разложены ПО
 // ФУНКЦИЯМ КАРТОЧКИ (владелец: «чтоб оно разделялось всё по функциям»):
 //   • Клиент — строка в списке, связь, заметка, личное;
-//   • Объекты — блок, типы, обслуживание и карты одной страницей;
+//   • Объекты — типы объектов и карты для маршрута (03.10 без своей страницы);
 //   • Карточка — метка и тег, люди, файлы, реквизиты;
 //   • Данные — импорт, выгрузка, архив и корзина (только своей базы).
 // Сортировка ЗДЕСЬ НЕ живёт: она первая строка листа «Фильтры» (решение
@@ -229,7 +227,6 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
       (key !== "client_files" || companyFiles) &&
       (key !== "client_requisites" || companyRequisites),
   ).map(([, word]) => word);
-  const service = useTeamServiceMonths(teamId);
   const { data: teamObjectTypes = [] } = useLocationLabels(teamId);
   const clientsQuery = useClients();
   const tagsQuery = useClientTags();
@@ -246,7 +243,7 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
     () => (teamId ? tags.filter((tag) => !tag.team_id || tag.team_id === teamId) : tags),
     [tags, teamId],
   );
-  // Свои источники команды (03.10) — счётчик строки «Источники».
+  // Источники команды (03.10) — счётчик строки «Источники».
   const sourcesQuery = useClientSources();
   const teamSourceCount = useMemo(
     () => teamSources(sourcesQuery.data ?? [], teamId).length,
@@ -319,12 +316,13 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
     }
   };
 
-  // «Объекты» — одна дверь на всё про объекты (02.10): блок, типы, срок,
-  // карты. Выключенные у компании объекты уносят и строку; карты тогда —
-  // отдельной строкой у клиента (маршрут по адресу клиента остаётся).
-  const objectsRow =
-    objectsOn && (showCard || levels.objects !== "hidden" || levels.maps !== "hidden");
+  // «ОБЪЕКТЫ» — ПОДЗАГОЛОВОК С ДВУМЯ ДВЕРЯМИ (владелец 03.10: «полноценный
+  // подзаголовок объекты, туда типы объектов и карты для маршрута, отдельную
+  // страницу не надо»). Выключенные у компании объекты уносят типы; карты
+  // тогда — отдельной строкой у клиента (маршрут по адресу клиента остаётся).
+  const typesRow = objectsOn && levels.objects !== "hidden";
   const mapsRowAlone = !objectsOn && levels.maps !== "hidden";
+  const mapsInObjects = objectsOn && levels.maps !== "hidden";
 
   return (
     <>
@@ -374,30 +372,38 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
             ]}
           />
 
-          {objectsRow ? (
+          {typesRow || mapsInObjects ? (
             <SettingsGroup
               title="Объекты"
               rows={[
-                <SettingsRow
-                  key="objects"
-                  tile={SETTINGS_TILE.teal}
-                  icon={Home}
-                  title="Объекты"
-                  sub={objectsSummary({
-                    on: blockOn.client_objects,
-                    types: teamObjectTypes.map((label) => label.name),
-                    service: serviceMonthsLabel(service.months),
-                    maps: levels.maps !== "hidden" ? mapServicesSummary(mapServices) : "",
-                  })}
-                  onPress={() => router.push(teamHref("/clients/objects-settings"))}
-                />,
+                typesRow ? (
+                  <SettingsRow
+                    key="types"
+                    tile={SETTINGS_TILE.teal}
+                    icon={Shapes}
+                    title="Типы объектов"
+                    sub={objectTypesSummary(teamObjectTypes.map((label) => label.name))}
+                    onPress={() => router.push(teamHref("/clients/object-types"))}
+                  />
+                ) : null,
+                mapsInObjects ? (
+                  <SettingsRow
+                    key="maps"
+                    tile={SETTINGS_TILE.blue}
+                    icon={Navigation}
+                    title="Карты для маршрута"
+                    sub={mapServicesSummary(mapServices)}
+                    onPress={() => router.push(teamHref("/clients/maps"))}
+                  />
+                ) : null,
               ]}
             />
           ) : null}
 
           {/* ТЕГИ И ИСТОЧНИКИ — СПРАВОЧНИКИ КОМАНДЫ: какие есть. Включён ли
-              блок «Тег» на карточке — на странице «Блоки клиентов». Источник
-              (03.10) — готовые плюс свои, право то же, что у тегов. */}
+              блок «Тег» на карточке — на странице «Блоки клиентов». Источники
+              (03.10) — справочник команды с засеянными готовыми, право то же,
+              что у тегов. */}
           <SettingsGroup
             title="Справочники"
             rows={[

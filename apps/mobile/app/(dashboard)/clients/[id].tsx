@@ -3,8 +3,8 @@
 //
 // This screen does ALL data wiring; the blocks are presentational. It
 // fetches the client + its appointments, computes the shared `stats`
-// (client-stats selector) and `serviceDue` (service-due selector), then
-// renders the page as ONE STACK OF ROWS (ЗАКОН СТРОКИ, DESIGN-SYSTEM.md):
+// (client-stats selector), then renders the page as ONE STACK OF ROWS
+// (ЗАКОН СТРОКИ, DESIGN-SYSTEM.md):
 //
 //   Клиент (ClientHeader) · Заметка клиента · Люди · История · Объекты
 //   · Файлы · Реквизиты · Метка | Тег · Личное (docs/BLOCKS.md §9.1)
@@ -410,9 +410,6 @@ export function ClientDetailScreen() {
         : null,
     [appointments, c, access.money.show, companyName, smsTeams, stats?.debt],
   );
-
-  // heroUnitId больше не нужен: состояния ТО ушли из «Что дальше» в свою
-  // группу «Обслуживание» целиком — дублировать нечего.
 
   if (roleQuery.isPending) {
     return (
@@ -843,8 +840,7 @@ export function ClientDetailScreen() {
         {/* Действия уровня человека. В черновике строка видна, но пригашена
             с подписью «Записать можно после сохранения» — владелец требует
             видеть страницу целиком, а мёртвого тапа быть не должно.
-            «Обслуживание» гейта не требует: блок сам возвращает null, пока у
-            клиента нет техники с датами ТО, и сети не касается. */}
+            */}
         {/* Дубли ищутся не только при создании: карточка живёт годами, а
             второй «тот же человек» заводится позже — импортом или звонком с
             другого номера. */}
