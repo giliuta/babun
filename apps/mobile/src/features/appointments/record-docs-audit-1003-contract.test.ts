@@ -48,6 +48,14 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
     assert.match(src("appointments/pending-files.ts"), /error instanceof RetryableAppointmentPhotoUploadError/);
   });
 
+  test("форма записи: лестница, часы команды, снятый объект, команда при оплате", () => {
+    const book = app("book/index.tsx");
+    assert.match(book, /overrideWithQuantity\(p\[id\], qty, repriceable, catalog\.get\(id\)\)/);
+    assert.match(book, /const businessNow = useBusinessNow\(teamId\);/);
+    assert.match(book, /setLocationId\(null\);[\s\S]{0,400}if \(kind === "work"\) setAddress\(""\);/);
+    assert.match(book, /if \(moneyHoldsClient\) \{\s*haptics\.warning\(\);\s*toast\("Команду не сменить/);
+  });
+
   test("«Оплаты тарифа»: у выданного навсегда без оплат нет двери в портал", () => {
     const screen = src("cabinet/TariffPaymentsScreen.tsx");
     assert.match(screen, /\{forever && months\.length === 0 \? null : \(/);

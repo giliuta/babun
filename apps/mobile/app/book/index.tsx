@@ -534,7 +534,7 @@ export default function BookScreen() {
   // Деньги новой записи: счёт выбран, запишется после «Создать запись».
   // У существующей записи блок пишет оплату сам и сразу (STORY-065).
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
-  const businessNow = useBusinessNow();
+  const businessNow = useBusinessNow(teamId);
   // Файлы новой записи ждут её id, как ждёт оплата (STORY-070).
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const tenantIdForFiles = useTenantId();
@@ -1589,7 +1589,10 @@ export default function BookScreen() {
     // по действующему прайсу (`overrideWithQuantity`); своя строка и услуга,
     // убранная из прайса, держат свои числа.
     const repriceable = catalog.has(id) && !isCustomServiceId(id);
-    setOverrides((p) => ({ ...p, [id]: overrideWithQuantity(p[id], qty, repriceable) }));
+    setOverrides((p) => ({
+      ...p,
+      [id]: overrideWithQuantity(p[id], qty, repriceable, catalog.get(id)),
+    }));
   };
 
   // СОБЫТИЕ НАЗЫВАЕТСЯ ТИПОМ (владелец 2026-09-06: «первое — команда, второе
@@ -2650,6 +2653,16 @@ export default function BookScreen() {
                     ? () => {
                         // Из архива запись не переносят: она только для просмотра.
                         if (archivedRecord) return;
+                        // КОМАНДУ И ИСПОЛНИТЕЛЯ ДЕРЖАТ ДЕНЬГИ, как клиента
+                        // (сервер: «клиента, команду и исполнителя менять
+                        // нельзя»). Лист снимал услуги прежней команды, итог
+                        // падал в ноль, а сохранение всё равно отвергалось —
+                        // тупик посреди расчёта (аудит формы записи 03.10).
+                        if (moneyHoldsClient) {
+                          haptics.warning();
+                          toast("Команду не сменить: по записи есть оплата. Сначала снимите оплату", "info");
+                          return;
+                        }
                         setTeamSheetOpen(true);
                         haptics.tap();
                       }
@@ -3492,6 +3505,11 @@ export default function BookScreen() {
         onSelect={(loc) => pickLocation(loc.id)}
         onDeselect={() => {
           setLocationId(null);
+          // Адрес записи — снимок выбранного объекта: снятый объект уносит и
+          // его. Иначе запись сохранялась «без объекта» с прежним адресом —
+          // в маршруте, в SMS и в цвете «нет объекта» (аудит 03.10). У
+          // события адрес — своё поле, его не трогаем.
+          if (kind === "work") setAddress("");
           haptics.tap();
         }}
         onAdd={
