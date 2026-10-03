@@ -100,9 +100,9 @@ export function cardAccess({
     objects: block(teamOn.objects, "clients.objects"),
     // Метку и тег черновик тоже ставит только с правом менять карточки.
     labels: block(teamOn.labels, "clients.labels", true, caps.edit),
-    // «Тег» — свой выключатель команды (03.10); право сотрудника у метки и
-    // тега одно — «Метка и тег».
-    tags: block(teamOn.tags, "clients.labels", true, caps.edit),
+    // «Тег» — свой выключатель команды и своё право (владелец 03.10:
+    // «разделение на метку и на тег»).
+    tags: block(teamOn.tags, "clients.tags", true, caps.edit),
     personal: block(teamOn.personal, "clients.personal"),
     // Файлы кладёт хранилище, которое видит компанию из токена (`caps.files`).
     files: {

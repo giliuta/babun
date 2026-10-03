@@ -91,6 +91,7 @@ export const CLIENT_CARD_ROW_ORDER: readonly string[] = [
   // клиент, люди, заметка… история… в конце SMS»; 03.10 метка и тег ушли на
   // самый верх карточки — и здесь первыми).
   "clients.labels",
+  "clients.tags",
   "clients.client",
   "clients.note",
   "clients.people",

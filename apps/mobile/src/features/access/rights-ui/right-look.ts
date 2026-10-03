@@ -108,7 +108,10 @@ const LOOK: Record<string, RightLook> = {
   "clients.note": { icon: StickyNote, tile: SETTINGS_TILE.orange },
   "clients.people": { icon: Users, tile: SETTINGS_TILE.indigo },
   "clients.objects": { icon: House, tile: SETTINGS_TILE.green },
-  "clients.labels": { icon: Tag, tile: SETTINGS_TILE.purple },
+  // Метка — закладка, тег — ярлыки: те же значки, что у плиток «Метка | Тег»
+  // на карточке клиента (03.10, права разделены).
+  "clients.labels": { icon: Bookmark, tile: SETTINGS_TILE.teal },
+  "clients.tags": { icon: Tags, tile: SETTINGS_TILE.purple },
   "clients.personal": { icon: UserRound, tile: SETTINGS_TILE.blue },
   "clients.files": { icon: Paperclip, tile: SETTINGS_TILE.indigo },
   // Здание, как плашка реквизитов на карточке (03.10); банк — у счетов.

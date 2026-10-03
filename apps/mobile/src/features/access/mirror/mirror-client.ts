@@ -22,6 +22,7 @@ const CARD_KEYS = [
   "clients.people",
   "clients.objects",
   "clients.labels",
+  "clients.tags",
   "clients.personal",
   "clients.files",
   "clients.requisites",
@@ -99,7 +100,8 @@ export function mirrorMemberClient(client: Client, map: MemberAccessMap, view?: 
     ...(off("clients.people") ? { memberships: [] } : {}),
     ...(off("clients.note") ? { comment: "", notes: [] } : {}),
     ...(off("clients.objects") ? { locations: [], equipment: [], address: "", property_type: "" } : {}),
-    ...(off("clients.labels") ? { city: "", city_manual: false, tag_ids: [] } : {}),
+    ...(off("clients.labels") ? { city: "", city_manual: false } : {}),
+    ...(off("clients.tags") ? { tag_ids: [] } : {}),
     ...(off("clients.personal")
       ? { birthday: "", language: null, acquisition_source: "unknown", referred_by_client_id: null, first_contact_date: null }
       : {}),

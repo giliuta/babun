@@ -10,7 +10,7 @@ import {
   Phone,
   ReceiptText,
   Send,
-  Tag,
+  Tags,
   UserPlus,
   Wallet,
 } from "lucide-react-native";
@@ -156,10 +156,11 @@ export function ClientCardPreview({
           </SectionCard>
         </PreviewFrame>
       );
+    // «Метка» и «Тег» — два права (03.10): у каждого своя плитка.
     case "clients.labels":
       return (
         <PreviewFrame state={state}>
-          <View className="mx-4 mt-2" style={{ flexDirection: "row", gap: 8 }}>
+          <View className="mx-4 mt-2" style={{ flexDirection: "row" }}>
             <IdentityCard
               icon={Bookmark}
               color={SETTINGS_TILE.teal}
@@ -168,8 +169,15 @@ export function ClientCardPreview({
               accessibilityLabel="Метка: Метка 1"
               accessibilityHint="Открывает выбор метки"
             />
+          </View>
+        </PreviewFrame>
+      );
+    case "clients.tags":
+      return (
+        <PreviewFrame state={state}>
+          <View className="mx-4 mt-2" style={{ flexDirection: "row" }}>
             <IdentityCard
-              icon={Tag}
+              icon={Tags}
               color={SETTINGS_TILE.purple}
               title="Тег 1"
               onPress={on}

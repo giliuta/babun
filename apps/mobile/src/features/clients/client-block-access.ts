@@ -15,6 +15,7 @@ export type ClientCardBlock =
   | "clients.people"
   | "clients.objects"
   | "clients.labels"
+  | "clients.tags"
   | "clients.personal"
   | "clients.files"
   | "clients.requisites"
