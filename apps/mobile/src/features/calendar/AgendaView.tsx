@@ -42,6 +42,7 @@ export function AgendaView({
   situationFor,
   overdueFor,
   showAmounts = true,
+  addressFor,
   refreshing,
   onRefresh,
   onCreate,
@@ -72,6 +73,9 @@ export function AgendaView({
   overdueFor?: (a: Appointment) => boolean;
   /** Master/brigadier sees job logistics, never company/customer money. */
   showAmounts?: boolean;
+  /** Куда ехать — то же правило, что у блока сетки и «Маршрута» в меню:
+   *  снимок адреса записи, иначе адрес клиента. */
+  addressFor?: (a: Appointment) => string | null;
   refreshing: boolean;
   onRefresh: () => void;
   /** Пустая лента — «Новая запись» внизу (владелец 29.09: «пусто — надо
@@ -132,6 +136,7 @@ export function AgendaView({
               onEdit={onEdit}
               onMenu={onMenu}
               showAmounts={showAmounts}
+              addressFor={addressFor}
               t={t}
             />
           );
@@ -157,6 +162,7 @@ function DaySection({
   onEdit,
   onMenu,
   showAmounts,
+  addressFor,
   t,
 }: {
   section: AgendaSection;
@@ -171,13 +177,23 @@ function DaySection({
   onEdit: (a: Appointment) => void;
   onMenu?: (a: Appointment) => void;
   showAmounts: boolean;
+  addressFor?: (a: Appointment) => string | null;
   t: ThemeColors;
 }) {
   // Beta #54 — maps deep-link with the day's addresses as waypoints, in
   // visit order (web AgendaView). No route optimization (paid quota) — the
   // dispatcher just gets every address pinned in order.
+  // МАРШРУТ — ТОЛЬКО ПО ВЫЕЗДАМ (повторный аудит 03.10): отменённый визит и
+  // событие в него не входят, а адрес — как у блока сетки, с адресом клиента
+  // вместо пустого снимка; иначе мастера везло на отменённый визит, а
+  // старые записи без снимка из маршрута выпадали.
   const addresses = Array.from(
-    new Set(section.data.map((a) => (a.address || "").trim()).filter(Boolean)),
+    new Set(
+      section.data
+        .filter((a) => a.kind === "work" && a.status !== "cancelled")
+        .map((a) => (addressFor?.(a) ?? a.address ?? "").trim())
+        .filter(Boolean),
+    ),
   );
   const mapsUrl =
     addresses.length > 0

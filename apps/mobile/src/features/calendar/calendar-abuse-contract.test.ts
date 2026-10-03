@@ -30,8 +30,16 @@ describe("календарь под нагрузкой", () => {
   test("режимы снимаются: уход с экрана, смена компании, Месяц и Список", () => {
     const src = screen();
     assert.match(src, /setPick\(null\);\s*setMoving\(null\);\s*setEditingApt\(null\);\s*\},\s*\[\],/);
-    assert.match(src, /setMoving\(null\);\s*setEditingApt\(null\);\s*setPick\(null\);\s*\}, \[tenantId\]\);/);
-    assert.match(src, /if \(m === "month" \|\| m === "agenda"\) setEditingApt\(null\);/);
+    // Смена компании — именно СМЕНА: на монтировании сброс шёл следом за
+    // приёмом параметров и стирал «Записать» из ссылки (повторный аудит).
+    assert.match(
+      src,
+      /if \(clearedForTenantRef\.current === tenantId\) return;\s*clearedForTenantRef\.current = tenantId;\s*setMoving\(null\);\s*setEditingApt\(null\);\s*setPick\(null\);\s*\}, \[tenantId\]\);/,
+    );
+    assert.match(
+      src,
+      /if \(m === "month" \|\| m === "agenda"\) \{\s*setEditingApt\(null\);\s*setMoving\(null\);\s*\}/,
+    );
   });
 
   test("«Свободное перемещение» заканчивается тапом и без «Новых записей»", () => {
@@ -50,5 +58,47 @@ describe("календарь под нагрузкой", () => {
 
   test("подпись под пальцем ограничена так же, как отпускание", () => {
     assert.match(block(), /clampStart\(startMin \+ steps \* dragStep, Math\.max\(15, spanEnd - startMin\)\)/);
+  });
+});
+
+describe("повторный аудит календаря 03.10", () => {
+  test("личное событие остаётся личным при переносе и копии", () => {
+    const src = screen();
+    assert.match(src, /const toTeam = isCrew \|\| isPersonalEvent\(apt\) \? apt\.team_id :/);
+    assert.match(src, /team_id: isPersonalEvent\(apt\) \? apt\.team_id : \(activeTeamId \?\? apt\.team_id\),/);
+  });
+
+  test("отмена визита с деньгами — с вопросом, без «Отменить» и без «Восстановить»", () => {
+    const src = screen();
+    assert.match(src, /holdsMoney\(apt\)\s*\? void confirmAction\("Отменить визит с оплатой\?"/);
+    assert.match(src, /const undoable = to !== "cancelled" \|\| !holdsMoney\(apt\);/);
+    assert.match(src, /apt\.status !== "cancelled" \|\| apt\.payment_status !== "refunded";/);
+    assert.equal((src.match(/&& restorable\)|if \(restorable\)/g) ?? []).length, 2);
+  });
+
+  test("кнопки сотрудника — только по его правам", () => {
+    const src = screen();
+    assert.match(src, /if \(!event && actionsIn\(apt\.team_id \?\? null\)\.status\) \{/);
+    assert.match(src, /ownEvent && eventRightsIn\(apt\.team_id \?\? null\)\.type === "write"/);
+    assert.match(src, /\(canManageBookings \|\| activeActions\.schedule === "write"\)\s*\? \(next\) =>/);
+    assert.match(src, /const canSlotMenu = canAddBreak && eventsOn;/);
+  });
+
+  test("сетку прячет только первая загрузка, а без сети — честное «офлайн»", () => {
+    const src = screen();
+    const body = src.slice(src.indexOf("const calendarError ="), src.indexOf("const calendarError =") + 700);
+    assert.doesNotMatch(body, /Query\.error\b/);
+    assert.match(body, /new ColdOfflineCacheMissError\("appointments"\)/);
+    assert.match(src, /\(params\.appointmentId && \(appointmentsQuery\.isPending \|\| error\)\)/);
+  });
+
+  test("«Личный» не заводится на паузе без сети", () => {
+    assert.match(screen(), /if \(teamsPending \|\| teamsFetching \|\| teamsError\) return;/);
+  });
+
+  test("«Настроить» метки и шестерёнка — с командой и от двойного тапа", () => {
+    const src = screen();
+    assert.match(src, /pathname: "\/calendar\/labels",\s*params: activeTeamId \? \{ team: activeTeamId \} : \{\},/);
+    assert.match(src, /onGear=\{\(\) => pushBookOnce\(/);
   });
 });

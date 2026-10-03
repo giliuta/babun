@@ -51,3 +51,15 @@ export function useCalendarActionsReader(): (teamId: string | null) => CalendarA
     [role, map, registry],
   );
 }
+
+/** Читатель блоков события по любому календарю — для меню записи, где
+ *  событие бывает не из открытой команды. */
+export function useEventRightsReader(): (teamId: string | null) => EventBlocks {
+  const role = useCurrentRole().data;
+  const map = useMyAccess().data;
+  const registry = useAccessBlocks().data;
+  return useCallback(
+    (teamId: string | null) => eventBlocks({ role, map, registry, teamId }),
+    [role, map, registry],
+  );
+}

@@ -31,6 +31,11 @@ function apptBounds(appts: readonly Appointment[]): [number, number] | null {
     if (Number.isFinite(s)) lo = Math.min(lo, s);
     // Конец «18:30» обязан попасть в окно целиком → округляем час вверх.
     if (Number.isFinite(e)) hi = Math.max(hi, eMin > 0 ? e + 1 : e);
+    // И НАЧАЛО тоже: у события 20:00–20:00 (тип с нулевой длительностью) и
+    // у записи «23:00–00:00» конец окна не двигал — запись стояла ровно на
+    // его кромке или «до» начала и в сетку не попадала, хотя в «Списке» была
+    // (повторный аудит 03.10).
+    if (Number.isFinite(s)) hi = Math.max(hi, s + 1);
   }
   return lo === Infinity ? null : [lo, hi];
 }

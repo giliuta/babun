@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { MemoryKVStorage, setStorage } from "@babun/shared/storage";
+import { CHROME_STORAGE_KEY } from "./chrome-cache";
 
 import {
   TENANT_SCOPED_KEY_PREFIXES,
@@ -49,6 +50,8 @@ describe("настройки, помнящиеся по компании", () =>
     assert.ok(isTenantScopedKey("babun-clients-sort"));
     assert.ok(isTenantScopedKey("babun:hint-accounts-swipe"));
     assert.ok(isTenantScopedKey("babun:transfer:last:acc-1"));
+    // Шапка без сервера — тоже человека: в ней все его компании.
+    assert.ok(isTenantScopedKey(CHROME_STORAGE_KEY));
   });
 
   test("ЧИСТКА ВЖИВУЮ: переход бережёт настройку компании, выход из аккаунта — нет", () => {

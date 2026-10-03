@@ -170,7 +170,8 @@ export function DateCell({
           {dayOff ? (
             <LabelTag color={t.danger} text="Вых" />
           ) : label ? (
-            <LabelTag color={label.color} text={label.name.slice(0, 4)} />
+            // По символам, а не по UTF-16: `slice` резал эмодзи пополам.
+            <LabelTag color={label.color} text={Array.from(label.name).slice(0, 4).join("")} />
           ) : null}
         </View>
       </View>

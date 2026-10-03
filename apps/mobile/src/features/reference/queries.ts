@@ -173,6 +173,9 @@ export function useCreateTeam() {
   const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
+    // Без сети — отказ сразу, а не пауза: отложенное создание календаря
+    // срабатывало, когда вернулась сеть и его уже никто не ждал (03.10).
+    networkMode: "always",
     mutationFn: async (input: {
       name: string;
       color?: string;

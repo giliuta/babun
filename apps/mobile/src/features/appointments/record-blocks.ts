@@ -66,6 +66,8 @@ export interface CalendarActions {
   cancel: boolean;
   /** Перекрасить запись из меню. */
   color: boolean;
+  /** Статус рабочей записи из меню: «В работу», «Выполнена». */
+  status: boolean;
   /** События команды в сетке: скрыты, видны или свои заводит и правит. */
   events: RecordLevel;
   /** Метка дня над колонкой. */
@@ -119,6 +121,7 @@ const ALL_ACTIONS: CalendarActions = {
   move: true,
   cancel: true,
   color: true,
+  status: true,
   events: "write",
   dayLabels: "write",
   schedule: "write",
@@ -129,6 +132,7 @@ const NO_ACTIONS: CalendarActions = {
   move: false,
   cancel: false,
   color: false,
+  status: false,
   events: "hidden",
   dayLabels: "hidden",
   schedule: "hidden",
@@ -251,6 +255,7 @@ export function calendarActions(input: Input): CalendarActions {
     move: can("calendar.move"),
     cancel: can("calendar.cancel"),
     color: can("record.color"),
+    status: can("record.status"),
     events: asRecordLevel(read("calendar.events")),
     dayLabels: asRecordLevel(read("calendar.day_labels")),
     schedule: asRecordLevel(read("calendar.schedule")),

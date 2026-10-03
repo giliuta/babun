@@ -730,8 +730,11 @@ export const DayColumn = memo(function DayColumn({
         />
       ) : null}
       {/* Прошедшие дни (неделя) — то же затемнение всей колонки: «что уже
-          позади» видно при сканировании, тем же слоем, что «до сейчас». */}
-      {todayYmd && dateYmd < todayYmd ? (
+          позади» видно при сканировании, тем же слоем, что «до сейчас».
+          И сегодня после конца окна: в 19:59 колонка затемнена до низа, а
+          в 20:30 была белой, как будущее (повторный аудит 03.10). */}
+      {(todayYmd && dateYmd < todayYmd) ||
+      (isToday && nowMinutes != null && nowMinutes > winEndMin) ? (
         <MinuteBand
           fromMin={winStartMin}
           toMin={winEndMin}

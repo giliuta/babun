@@ -66,6 +66,7 @@ describe("страница записи — одна для всех, блоки
       move: true,
       cancel: true,
       color: true,
+      status: true,
       events: "write",
       dayLabels: "write",
       schedule: "write",
@@ -150,13 +151,14 @@ describe("страница записи — одна для всех, блоки
       move: false,
       cancel: false,
       color: false,
+      status: true,
       events: "read",
       dayLabels: "write",
       schedule: "read",
     });
     assert.deepEqual(
       calendarActions(at(map({ "calendar.move": "write", "calendar.cancel": "write", "calendar.events": "write" }))),
-      { create: false, move: true, cancel: true, color: false, events: "write", dayLabels: "hidden", schedule: "hidden" },
+      { create: false, move: true, cancel: true, color: false, status: false, events: "write", dayLabels: "hidden", schedule: "hidden" },
     );
   });
 
@@ -170,7 +172,7 @@ describe("страница записи — одна для всех, блоки
     for (const input of inputs) {
       assert.ok(Object.values(recordBlocks(input)).every((level) => level === "hidden"));
       const actions = calendarActions(input);
-      assert.equal(actions.create || actions.move || actions.cancel, false);
+      assert.equal(actions.create || actions.move || actions.cancel || actions.status, false);
       assert.equal(actions.events, "hidden");
     }
   });

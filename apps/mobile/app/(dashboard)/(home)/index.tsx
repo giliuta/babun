@@ -26,8 +26,11 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import {
   createBlankAppointment,
   duplicateAppointment,
+  getPaidAmount,
 } from "@babun/shared/local/appointments";
+import { money } from "@babun/shared/common/utils/money";
 import {
+  ColdOfflineCacheMissError,
   isColdOfflineCacheMissError,
   randomUuid,
 } from "@babun/shared/sync";
@@ -114,7 +117,10 @@ import {
 } from "@/features/calendar/day-label";
 import { resolveOffDayLabel } from "@/features/calendar/appointment-label";
 import { useFeatureOn } from "@/features/settings/company-features";
-import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
+import {
+  useCalendarActionsReader,
+  useEventRightsReader,
+} from "@/features/appointments/useRecordRights";
 import { isOverdue } from "@/features/calendar/overdue";
 import {
   useAutoColorRule,
@@ -266,6 +272,27 @@ function parseHourHM(s: string | null | undefined): number | null {
   return val >= 0 && val <= 24 ? val : null;
 }
 
+/** «Личное» событие — без команды: оно видно в любом календаре, и перенос
+ *  или копия по кубику выбранной команды не превращают его в событие этой
+ *  команды (аудит 03.10: «Стоматолог» становился виден партнёрам). */
+function isPersonalEvent(apt: Appointment): boolean {
+  return apt.team_id == null && apt.kind !== "work";
+}
+
+/** У записи есть полученные деньги, которые отмена вернёт клиенту, — то же
+ *  условие, по которому сервер при отмене ставит «возврат»
+ *  (`protect_paid_appointment_finance`). Уже возвращённая — не в счёт. */
+function holdsMoney(apt: Appointment): boolean {
+  if (isCalendarEvent(apt) || apt.payment_status === "refunded") return false;
+  return (
+    apt.prepaid_amount > 0 ||
+    (apt.paid_amount ?? 0) > 0 ||
+    apt.payment_status === "partial" ||
+    apt.payment_status === "paid" ||
+    apt.payments.length > 0
+  );
+}
+
 export default function CalendarTab() {
   const appointmentsQuery = useAppointments();
   const {
@@ -288,6 +315,7 @@ export default function CalendarTab() {
     isPending: teamsPending,
     isFetching: teamsFetching,
     isError: teamsError,
+    isLoadingError: teamsLoadError,
     error: teamsQueryError,
     refetch: refetchTeams,
   } = useTeams();
@@ -326,6 +354,7 @@ export default function CalendarTab() {
   // «Отменять и удалять», «События», «Метка дня», «Цвет записи»). Владельцу и
   // диспетчеру читатель отдаёт всё — их ветки ниже не меняются.
   const actionsIn = useCalendarActionsReader();
+  const eventRightsIn = useEventRightsReader();
   const canMutateAppointment = useCallback(
     (appointment: Appointment) =>
       canMutateCalendarAppointment(role, session?.user.id, appointment),
@@ -644,7 +673,13 @@ export default function CalendarTab() {
   const tenantId = useTenantId();
   // Смена компании снимает и «Записать: клиент» (аудит 03.10): плашка с
   // чужим клиентом переживала переход, форма открывалась без клиента.
+  // Именно СМЕНА: на монтировании эффект шёл следом за приёмом параметров
+  // выше и стирал только что принятое «Записать» — экран, открытый ссылкой
+  // сразу с заданием, его терял (повторный аудит 03.10).
+  const clearedForTenantRef = useRef(tenantId);
   useEffect(() => {
+    if (clearedForTenantRef.current === tenantId) return;
+    clearedForTenantRef.current = tenantId;
     setMoving(null);
     setEditingApt(null);
     setPick(null);
@@ -1031,10 +1066,13 @@ export default function CalendarTab() {
     // ещё «не знает» ответа — гасить параметры рано (визит с карточки
     // молча пропадал). Ждём резолва: эффект перезапустится по
     // teamsLoading/teams и обработает параметры уже с данными.
+    // `isPending`, а не `isLoading`: без сети запрос стоит на паузе с
+    // `isLoading` = false, список пуст — и запись из уведомления объявлялась
+    // «не найденной», а параметры стирались (аудит 03.10).
     if (
-      teamsLoading ||
+      teamsPending ||
       teamsError ||
-      (params.appointmentId && (isLoading || error))
+      (params.appointmentId && (appointmentsQuery.isPending || error))
     ) {
       return;
     }
@@ -1467,7 +1505,7 @@ export default function CalendarTab() {
   const inTeamCal = useCallback(
     (a: Appointment) =>
       activeTeamId
-        ? a.team_id === activeTeamId || (a.team_id == null && a.kind !== "work")
+        ? a.team_id === activeTeamId || isPersonalEvent(a)
         : true,
     [activeTeamId],
   );
@@ -1760,19 +1798,25 @@ export default function CalendarTab() {
   // только владелец (мастер календарей не заводит), только когда список
   // команд ДОЗАГРУЖЕН и пуст, только один раз за жизнь экрана (ref, а не
   // state — он не должен перезапускать эффект).
-  const firstCalendarStarted = useRef(false);
+  //
+  // «ДОЗАГРУЖЕН» — ЭТО ОТВЕТ, А НЕ «НЕ ГРУЗИТСЯ» (аудит 03.10). Без сети
+  // запрос команд стоит на паузе: данных нет, `isFetching` и `isError`
+  // ложны — и пустой список читался как «календарей нет». Владелец получал
+  // второй «Личный», как только возвращалась сеть. Поэтому ждём `isPending`.
+  // Раз — на КОМПАНИЮ, а не на жизнь экрана: экран переход переживает.
+  const firstCalendarStarted = useRef<string | null>(null);
   const [firstCalendarFailed, setFirstCalendarFailed] = useState(false);
   useEffect(() => {
-    if (firstCalendarStarted.current) return;
+    if (!tenantId || firstCalendarStarted.current === tenantId) return;
     if (role !== "owner") return;
-    if (teamsFetching || teamsError) return;
+    if (teamsPending || teamsFetching || teamsError) return;
     if (teams.length > 0) return;
-    firstCalendarStarted.current = true;
+    firstCalendarStarted.current = tenantId;
     createFirstCalendar();
     // createFirstCalendar намеренно не в зависимостях: он пересоздаётся
     // каждый рендер, и его включение превратило бы эффект в цикл.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, teamsFetching, teamsError, teams.length]);
+  }, [tenantId, role, teamsPending, teamsFetching, teamsError, teams.length]);
   const openEdit = (apt: Appointment) => {
     // Виртуальное вхождение повтора редактируем через его seed-запись —
     // у виртуала синтетический id, мутации по нему невалидны (web parity).
@@ -1856,6 +1900,8 @@ export default function CalendarTab() {
   const setCancelled = (apt: Appointment, reason: string | null) => {
     const to: Appointment["status"] = reason ? "cancelled" : "scheduled";
     const prev = { status: apt.status, cancel_reason: apt.cancel_reason ?? null };
+    // Отмена с деньгами необратима (сервер вернул оплату) — откатывать нечем.
+    const undoable = to !== "cancelled" || !holdsMoney(apt);
     updateAppt.mutate(
       { id: apt.id, patch: { status: to, cancel_reason: reason } },
       {
@@ -1865,19 +1911,21 @@ export default function CalendarTab() {
           toast(
             to === "cancelled" ? "Визит отменён" : "Запись восстановлена",
             "info",
-            {
-              label: "Отменить",
-              onPress: () =>
-                updateAppt.mutate(
-                  { id: apt.id, patch: prev },
-                  {
-                    // Без колбэка откат падал молча: options-level onError
-                    // хука гасит глобальный алерт MutationCache.
-                    onError: () =>
-                      toast("Не удалось вернуть запись", "error"),
-                  },
-                ),
-            },
+            undoable
+              ? {
+                  label: "Отменить",
+                  onPress: () =>
+                    updateAppt.mutate(
+                      { id: apt.id, patch: prev },
+                      {
+                        // Без колбэка откат падал молча: options-level onError
+                        // хука гасит глобальный алерт MutationCache.
+                        onError: (e) =>
+                          toast(serverReason(e) ?? "Не удалось вернуть запись", "error"),
+                      },
+                    ),
+                }
+              : undefined,
           );
         },
         onError: (e) =>
@@ -1889,6 +1937,22 @@ export default function CalendarTab() {
   /** «Отменить визит» — вторым листом причина, без неё визит не отменяется:
    *  отмена без причины в отчёте дня читается как «забыли». */
   const cancelWithReason = (apt: Appointment) => {
+    // ОТМЕНА ВИЗИТА С ДЕНЬГАМИ — ЭТО ВОЗВРАТ (жёсткая проверка 03.10). Сервер
+    // при отмене сам возвращает клиенту всю полученную оплату: в кассе
+    // появляется возврат, и вернуть запись назад уже нельзя — «Возвращённую
+    // оплату нельзя изменить». Раньше это делал один тап по причине, а тост
+    // предлагал «Отменить», которое всегда кончалось отказом.
+    const paid = getPaidAmount(apt);
+    const cancel = (label: string) =>
+      holdsMoney(apt)
+        ? void confirmAction("Отменить визит с оплатой?", {
+            message: `${paid > 0 ? `Клиенту вернётся ${money(paid)}` : "Полученная оплата вернётся клиенту"}: в кассе появится возврат. Вернуть запись после этого будет нельзя.`,
+            confirmLabel: "Отменить визит",
+            destructive: true,
+          }).then((ok) => {
+            if (ok) setCancelled(apt, label);
+          })
+        : setCancelled(apt, label);
     // Та же наша шторка, что меню записи: подменю не имеет права выглядеть
     // системным листом посреди нашего.
     setSheetMenu({
@@ -1898,7 +1962,7 @@ export default function CalendarTab() {
         label,
         icon: Ban,
         color: SETTINGS_TILE.yellow,
-        run: () => setCancelled(apt, label),
+        run: () => cancel(label),
       })),
     });
   };
@@ -1973,7 +2037,10 @@ export default function CalendarTab() {
   // календаре.
   const canAddBreak =
     canManageBookings || (isCrew && activeActions.events === "write");
-  const canSlotMenu = canAddBreak;
+  // Функция «События» выключена — событий нет в сетке ни у кого (`byTeam`),
+  // и быстрое событие рождалось невидимым: тост «Обед · Отменить», а на сетке
+  // пусто (аудит 03.10).
+  const canSlotMenu = canAddBreak && eventsOn;
   // Типы событий открытой команды (владелец 24.09: «у каждой команды свои»).
   const eventTypesQuery = usePersonalEventTypes(activeTeamId);
   // Блок «Тип» у события выключен — типов в быстром событии нет.
@@ -2105,7 +2172,7 @@ export default function CalendarTab() {
       date: dateYmd,
       time_start: timeStart,
       time_end: addMinutesHM(timeStart, moveWindowMin),
-      team_id: activeTeamId ?? apt.team_id,
+      team_id: isPersonalEvent(apt) ? apt.team_id : (activeTeamId ?? apt.team_id),
     };
     createAppt.mutate(copy, {
       onSuccess: () => {
@@ -2159,6 +2226,11 @@ export default function CalendarTab() {
     const address = (apt.address || client?.address || "").trim();
     const event = isCalendarEvent(apt);
     const mutable = canMutateAppointment(apt);
+    // Отменённую с возвратом оплаты не восстановить: сервер не меняет
+    // возвращённую оплату («создайте новую заявку») — пункт кончался бы
+    // отказом всегда.
+    const restorable =
+      apt.status !== "cancelled" || apt.payment_status !== "refunded";
 
     /** `view` — пункт ничего не меняет в записи (открыть, позвонить, SMS…). */
     type Item = { label: string; run: () => void; destructive?: boolean; view?: true };
@@ -2172,7 +2244,9 @@ export default function CalendarTab() {
       // Мастер может двигать статус только вперёд на один шаг. Это ровно
       // совпадает с серверной политикой и не оставляет кнопок, которые после
       // тапа всё равно закончатся отказом. Team events are read-only.
-      if (!event) {
+      // И только при «Статус: Меняет» в календаре записи — без него сервер
+      // отказывал на каждый тап (аудит 03.10).
+      if (!event && actionsIn(apt.team_id ?? null).status) {
         const nextStatus = nextCrewAppointmentStatus(apt.status);
         if (nextStatus) {
           items.push({
@@ -2236,9 +2310,11 @@ export default function CalendarTab() {
       if (movable) items.push({ label: "Перенести", run: () => startMove(apt) });
       if (!event && can.move && apt.event_all_day !== true)
         items.push({ label: "Копировать", run: () => startMove(apt, "copy") });
-      if (event ? ownEvent : can.color)
+      // Цвет события — его блок «Тип» (название и цвет): без «Меняет»
+      // сервер отказывает (аудит 03.10).
+      if (event ? ownEvent && eventRightsIn(apt.team_id ?? null).type === "write" : can.color)
         items.push({ label: "Цвет", run: () => setRecolor(apt) });
-      if (!event && can.cancel)
+      if (!event && can.cancel && restorable)
         items.push(
           apt.status === "cancelled"
             ? { label: "Восстановить", run: () => setCancelled(apt, null) }
@@ -2300,11 +2376,12 @@ export default function CalendarTab() {
                 }
               : { label: "Выполнена", run: () => quickStatus(apt, "completed") },
           );
-        items.push(
-          apt.status === "cancelled"
-            ? { label: "Восстановить", run: () => setCancelled(apt, null) }
-            : { label: "Отменить визит", run: () => cancelWithReason(apt) },
-        );
+        if (restorable)
+          items.push(
+            apt.status === "cancelled"
+              ? { label: "Восстановить", run: () => setCancelled(apt, null) }
+              : { label: "Отменить визит", run: () => cancelWithReason(apt) },
+          );
       }
       if (mutable)
         items.push({
@@ -2367,7 +2444,12 @@ export default function CalendarTab() {
       setDay(startOfDay(now));
     }
     // В Месяце и Списке тянуть нечего — «Свободное перемещение» снимается.
-    if (m === "month" || m === "agenda") setEditingApt(null);
+    // И перенос с копией: зелёных кубиков там нет, а плашка «Выберите
+    // зелёное время» висела над видом без них (аудит 03.10).
+    if (m === "month" || m === "agenda") {
+      setEditingApt(null);
+      setMoving(null);
+    }
     setMode(m);
     rememberView({ mode: m });
   };
@@ -2664,7 +2746,7 @@ export default function CalendarTab() {
     if (rejectOutsideFreeSlots(dateYmd, timeStart)) return;
     setMoving(null);
     // Сотрудник переносит только внутри команды записи (владелец 30.09).
-    const toTeam = isCrew ? apt.team_id : (activeTeamId ?? apt.team_id);
+    const toTeam = isCrew || isPersonalEvent(apt) ? apt.team_id : (activeTeamId ?? apt.team_id);
     const teamChanges = toTeam !== apt.team_id;
     if (!teamChanges && apt.date === dateYmd && apt.time_start === timeStart) return;
     const prev = {
@@ -2881,15 +2963,27 @@ export default function CalendarTab() {
     citiesQuery.isLoading ||
     dayCitiesQuery.isLoading ||
     teamScheduleQuery.isLoading;
+  // СЕТКУ ПРЯЧЕТ ТОЛЬКО ОШИБКА ПЕРВОЙ ЗАГРУЗКИ (аудит 03.10). Неудачное
+  // ПЕРЕЧИТЫВАНИЕ в react-query ставит `error`, а данные оставляет — и
+  // загруженная неделя целиком менялась на «Не удалось загрузить календарь»,
+  // стоило метке дня или графику не перечитаться при возврате в приложение.
+  const loadError = (q: { isLoadingError: boolean; error: unknown }) =>
+    q.isLoadingError ? q.error : null;
+  // Без сети записи без копии в памяти не читаются вовсе — запрос стоит на
+  // паузе, данных и ошибки нет, и рисовалась пустая неделя «Пока нет
+  // записей». Это тот же «нет копии на устройстве», что и у обёртки кэша.
+  const appointmentsOfflineCold =
+    appointmentsQuery.isPending && appointmentsQuery.fetchStatus === "paused";
   const calendarError =
-    error ||
-    teamsQueryError ||
-    clientsQuery.error ||
-    servicesQuery.error ||
-    calSettingsQuery.error ||
-    citiesQuery.error ||
-    dayCitiesQuery.error ||
-    teamScheduleQuery.error;
+    loadError(appointmentsQuery) ||
+    (appointmentsOfflineCold ? new ColdOfflineCacheMissError("appointments") : null) ||
+    (teamsLoadError ? teamsQueryError : null) ||
+    loadError(clientsQuery) ||
+    loadError(servicesQuery) ||
+    loadError(calSettingsQuery) ||
+    loadError(citiesQuery) ||
+    loadError(dayCitiesQuery) ||
+    loadError(teamScheduleQuery);
 
   // Долгий тап по дате в Неделе — провалиться в День (см. WeekHeaderRow).
   // Стабильная ссылка (как `openWeekFromMonth`): иначе memo Недели мёртв.
@@ -3005,7 +3099,9 @@ export default function CalendarTab() {
         // в чужой команде шапка календаря стояла без неё — визуал страницы
         // менялся вместе с ролью. Теперь страница настроек открыта всем, а
         // какие строки на ней есть, решает `calendar/settings-rows.ts`.
-        onGear={() => router.push(`/calendar?team=${activeTeamId}`)}
+        // Та же защита от двойного тапа, что у формы: две страницы настроек
+        // и «назад» дважды (аудит 03.10).
+        onGear={() => pushBookOnce(`/calendar?team=${activeTeamId}`)}
         onTitlePress={() => setMiniCalOpen(true)}
         onToday={goToday}
       />
@@ -3093,6 +3189,7 @@ export default function CalendarTab() {
       ) : mode === "agenda" ? (
         <AgendaView
           sections={agendaSections}
+          addressFor={addressFor}
           todayYmd={todayYmd}
           tomorrowYmd={tomorrowYmd}
           clientName={clientName}
@@ -3377,8 +3474,14 @@ export default function CalendarTab() {
         }
         // Пока карта графиков не пришла, выходной не предлагаем: блоб собрался
         // бы из общих часов и заменил на сервере настоящий график команды.
+        // Выходной — это ГРАФИК команды, не метка: сотруднику — только при
+        // «График: Меняет», иначе тумблер всегда кончался «Не удалось
+        // изменить день» (аудит 03.10).
         onToggleDayOff={
-          activeTeamId && cityPickerYmd && !teamScheduleQuery.isPending
+          activeTeamId &&
+          cityPickerYmd &&
+          !teamScheduleQuery.isPending &&
+          (canManageBookings || activeActions.schedule === "write")
             ? (next) => {
                 const base: TeamSchedule = teamSchedule ?? {
                   start: hourLabel(globalWork.start),
@@ -3451,7 +3554,14 @@ export default function CalendarTab() {
           role === "owner"
             ? () => {
                 setCityPickerYmd(null);
-                router.push("/calendar/labels");
+                // Команда открытого календаря — параметром, как у шестерёнки:
+                // без него экран брал выбор из памяти, а календарь после
+                // перехода по ссылке показывал другую команду, и новая метка
+                // уходила не туда (аудит 03.10).
+                router.push({
+                  pathname: "/calendar/labels",
+                  params: activeTeamId ? { team: activeTeamId } : {},
+                } as Href);
               }
             : undefined
         }

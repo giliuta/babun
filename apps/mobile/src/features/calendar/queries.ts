@@ -171,6 +171,13 @@ export function useAppointments() {
     // Fail closed: no broad cached list is mounted before the membership role
     // is confirmed. Masters always bypass the SQLite/SWR wrapper.
     enabled: !!tenantId && ready && role != null,
+    // БЕЗ СЕТИ ЧТЕНИЕ ВСЁ РАВНО ИДЁТ (аудит 03.10). По умолчанию react-query
+    // офлайн не зовёт `queryFn` вовсе — и обёртка кэша, которая как раз и
+    // решает, что показать без сети (копию с устройства или честное «копии
+    // нет»), не запускалась: компания, открытая без сети, рисовала пустую
+    // неделю. `offlineFirst` зовёт её один раз; сетевой путь мастера без
+    // копии встаёт на паузу, и экран говорит «недоступен офлайн».
+    networkMode: "offlineFirst",
     queryFn: () => {
       if (guest || role === "master") {
         return listMasterAppointmentsSafePaged(
