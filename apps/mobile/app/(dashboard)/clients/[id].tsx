@@ -230,6 +230,8 @@ export function ClientDetailScreen() {
     isRefetching: servicesRetrying,
     refetch: retryServices,
   } = servicesQuery;
+  const staleCopy = !isDraft && clientFailed;
+  const partFailed = tagsFailed || (!isDraft && (appointmentsFailed || servicesFailed));
   const [menuOpen, setMenuOpen] = useState(false);
   const [remindOpen, setRemindOpen] = useState(false);
   const {
@@ -706,30 +708,36 @@ export function ClientDetailScreen() {
         contentContainerStyle={{ paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
       >
-        {!isDraft && clientFailed ? (
+        {/* ОДНА ПЛАШКА, ОДНА КНОПКА. На молчащем сервере падают сразу и
+            клиент, и история со справочниками — раньше вставали две плашки
+            подряд с двумя синими кнопками («Загружаю…» и «Повторить»),
+            делавшими одно и то же. Теперь одна: слова — про худшее из
+            случившегося, «Повторить» — перечитывает всё упавшее разом. */}
+        {staleCopy || partFailed ? (
           <ClientDataNotice
-            title="Показана сохранённая копия"
-            message="Свежие изменения пока не удалось получить. Карточка остаётся доступной."
-            onRetry={() => void retryClient()}
-            retrying={clientRetrying}
-          />
-        ) : null}
-
-        {tagsFailed || (!isDraft && (appointmentsFailed || servicesFailed)) ? (
-          <ClientDataNotice
-            title="Часть данных не загрузилась"
+            title={staleCopy ? "Показана сохранённая копия" : "Часть данных не загрузилась"}
             message={
-              isDraft
-                ? "Каталог тегов пока недоступен. Остальные данные можно заполнить и сохранить."
-                : "История визитов, финансы или справочники могут быть неполными."
+              staleCopy
+                ? partFailed
+                  ? "Свежие изменения, история визитов и справочники пока не загрузились. Карточка остаётся доступной."
+                  : "Свежие изменения пока не удалось получить. Карточка остаётся доступной."
+                : isDraft
+                  ? "Каталог тегов пока недоступен. Остальные данные можно заполнить и сохранить."
+                  : "История визитов, финансы или справочники могут быть неполными."
             }
             onRetry={() => {
               if (isDraft) void retryTags();
-              else void Promise.all([retryAppointments(), retryTags(), retryServices()]);
+              else
+                void Promise.all([
+                  ...(clientFailed ? [retryClient()] : []),
+                  retryAppointments(),
+                  retryTags(),
+                  retryServices(),
+                ]);
             }}
             retrying={
               tagsRetrying ||
-              (!isDraft && (appointmentsRetrying || servicesRetrying))
+              (!isDraft && (clientRetrying || appointmentsRetrying || servicesRetrying))
             }
           />
         ) : null}
