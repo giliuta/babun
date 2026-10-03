@@ -1286,19 +1286,27 @@ export default function BookScreen() {
     const prefill = resolveBookingClientPrefill(c);
     // Continuity: команда по ПОСЛЕДНЕМУ визиту клиента, а не глобально-последняя.
     // Иначе любимый мастер клиента отсеивается как «не из той команды».
-    const lastTeamForClient =
-      [...allAppts]
-        .filter(
-          (a) =>
-            a.client_id === c.id &&
-            a.team_id &&
-            teams.some((tm) => tm.id === a.team_id),
-        )
-        .sort((a, b) =>
-          a.date !== b.date
-            ? b.date.localeCompare(a.date)
-            : b.time_start.localeCompare(a.time_start),
-        )[0]?.team_id ?? null;
+    //
+    // ТОЛЬКО У НОВОЙ ЗАПИСИ (аудит 2026-10-03). У сохранённой сменить
+    // клиента значит сменить клиента: прежде запись молча переезжала в
+    // команду последнего визита нового клиента — услуги прежней команды
+    // выпадали («Итого» 0, «Сохранить» серый), счета оплаты становились
+    // чужими, — а его «любимый» мастер подменял мастера записи в обход
+    // права менять команду.
+    const lastTeamForClient = isEdit
+      ? null
+      : [...allAppts]
+          .filter(
+            (a) =>
+              a.client_id === c.id &&
+              a.team_id &&
+              teams.some((tm) => tm.id === a.team_id),
+          )
+          .sort((a, b) =>
+            a.date !== b.date
+              ? b.date.localeCompare(a.date)
+              : b.time_start.localeCompare(a.time_start),
+          )[0]?.team_id ?? null;
     const targetTeam = lastTeamForClient ?? teamId;
     if (lastTeamForClient && lastTeamForClient !== teamId) {
       selectTeam(lastTeamForClient);
@@ -1307,6 +1315,7 @@ export default function BookScreen() {
     setLocationId(prefill.locationId);
     setAddress(prefill.address);
     if (
+      !isEdit &&
       prefill.masterId &&
       isMasterAllowedForTeam(
         masters.find((candidate) => candidate.id === prefill.masterId),
