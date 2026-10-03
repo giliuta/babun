@@ -37,6 +37,7 @@ import {
   paymentMath,
   paymentRows,
   recordedToast,
+  slotUnsaved,
   visitStarted,
   type PaymentKind,
   type PaymentRow,
@@ -211,6 +212,9 @@ export function PaymentBlock({
     appointment !== null &&
     clientId !== undefined &&
     (appointment.client_id ?? null) !== (clientId ?? null);
+  // Перенесли в форме и не сохранили: сервер записал бы оплату и закрыл
+  // визит по прежней дате (`slotUnsaved`).
+  const slotChange = slotUnsaved(appointment, visit);
   // Отменённый визит денег не принимает — так решает сервер
   // (`record_appointment_payment`). Плитки гаснут заранее: тап рисовал
   // «оплачено» и через секунду откатывал с ошибкой (аудит 2026-10-03). Снять
@@ -218,7 +222,7 @@ export function PaymentBlock({
   const visitCancelled =
     appointment !== null &&
     (appointment.status === "cancelled" || appointment.payment_status === "refunded");
-  const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && !visitCancelled && canTakeMoney && bookingInPlan;
+  const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && !slotChange && !visitCancelled && canTakeMoney && bookingInPlan;
 
   // СНЯТИЕ И ПРИЁМ — ПО ТАПУ, А НЕ ПО ОТВЕТУ (владелец 2026-09-30: «должно
   // всё мгновенно»): запись в кэше меняется сразу так, как её поменяет
@@ -268,6 +272,16 @@ export function PaymentBlock({
     if (clientUnsaved) {
       haptics.warning();
       toast("Клиент изменился — сначала сохраните запись", "info");
+      return;
+    }
+    if (slotChange) {
+      haptics.warning();
+      toast(
+        slotChange === "date"
+          ? "Дата изменилась — сначала сохраните запись"
+          : "Время изменилось — сначала сохраните запись",
+        "info",
+      );
       return;
     }
     if (visitCancelled) {
@@ -420,6 +434,7 @@ export function PaymentBlock({
     overpaidLabel: formatEURExact(overpaid / 100),
     billUnsaved,
     clientUnsaved,
+    slotUnsaved: slotChange,
     visitCancelled,
   });
   const captionColor =

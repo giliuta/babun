@@ -17,6 +17,7 @@ import {
   pendingPaymentToSend,
   paymentRows,
   recordedToast,
+  slotUnsaved,
   visitStarted,
 } from "./payment-draft";
 
@@ -369,5 +370,31 @@ describe("labels", () => {
     assert.equal(recordedToast({ kind: "settlement", amount: 50, already: 0, accountName: "Наличные" }), "Оплачено €50 · Наличные");
     assert.equal(recordedToast({ kind: "prepayment", amount: 50, already: 0, accountName: "Карта" }), "Предоплата €50 · Карта");
     assert.equal(recordedToast({ kind: "settlement", amount: 50, already: 50, accountName: "Наличные" }), "+€50 · Наличные · всего €100");
+  });
+});
+
+// ПЕРЕНЕСЛИ В ФОРМЕ И НЕ СОХРАНИЛИ (017, 03.10): сервер записал бы оплату и
+// закрыл визит по прежней дате, а «Сохранить» отказало бы.
+describe("дата и время формы против сохранённых", () => {
+  test("новая запись — без замка; всё совпадает — без замка", () => {
+    assert.equal(slotUnsaved(null, { date: "2026-10-04", timeStart: "08:00" }), null);
+    assert.equal(slotUnsaved({ date: "2026-10-04", time_start: "08:00:00" }, { date: "2026-10-04", timeStart: "08:00" }), null);
+  });
+  test("сменили дату или время — сначала сохранить", () => {
+    assert.equal(slotUnsaved({ date: "2026-10-05", time_start: "10:00" }, { date: "2026-10-04", timeStart: "08:00" }), "date");
+    assert.equal(slotUnsaved({ date: "2026-10-04", time_start: "10:00" }, { date: "2026-10-04", timeStart: "08:00" }), "time");
+    const base = {
+      hasTeam: true,
+      hasAppointment: true,
+      visitCompleted: false,
+      outstanding: 5000,
+      rowsCount: 0,
+      amountMode: false,
+      started: false,
+      hasPending: false,
+      outstandingLabel: "€50,00",
+    };
+    assert.deepEqual(blockCaption({ ...base, slotUnsaved: "date" }), { text: "Дата изменена — сохраните", tone: "warning" });
+    assert.deepEqual(blockCaption({ ...base, slotUnsaved: "time" }), { text: "Время изменено — сохраните", tone: "warning" });
   });
 });

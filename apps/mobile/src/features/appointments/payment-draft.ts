@@ -211,6 +211,22 @@ export function paidTileIntent(amountMode: boolean): "add" | "cancel" {
  *  оплатой и до своего часа (предоплату по ней сервер отбивает). Считался вид
  *  при перерисовке блока: страница, открытая в 9:58 и не перерисованная, в
  *  10:03 записывала «предоплату» к визиту в 10:00 и не закрывала его. */
+/** ДАТА ИЛИ ВРЕМЯ В ФОРМЕ УЖЕ НЕ ТЕ, ЧТО В БАЗЕ (017, 03.10). Вид платежа и
+ *  закрытие визита считались по НЕСОХРАНЁННОЙ дате формы, а сервер пишет
+ *  оплату и закрывает визит по своей строке: перенесли запись с завтра на
+ *  сегодня, не сохранив, тапнули «Наличные» — визит закрылся на завтрашней
+ *  дате, и «Сохранить» отказало «Сначала отмените оплату…». Пока не
+ *  сохранено, деньги ждут. `null` — новой записи (её дату и пишет создание)
+ *  или когда всё совпадает. */
+export function slotUnsaved(
+  saved: { date: string; time_start: string } | null,
+  form: { date: string; timeStart: string },
+): "date" | "time" | null {
+  if (!saved) return null;
+  if (saved.date !== form.date) return "date";
+  return saved.time_start.slice(0, 5) !== form.timeStart.slice(0, 5) ? "time" : null;
+}
+
 export function paymentKindAt(
   visit: Pick<Appointment, "date" | "time_start" | "status">,
   now: BusinessNow,
@@ -283,6 +299,8 @@ export function blockCaption(input: {
   /** Клиент в форме сменён, но не сохранён: платёж ушёл бы на запись
    *  ПРЕЖНЕГО клиента и запер бы смену (аудит 2026-10-03). */
   clientUnsaved?: boolean;
+  /** Дата или время в форме сменены и не сохранены (`slotUnsaved`). */
+  slotUnsaved?: "date" | "time" | null;
   /** Визит отменён (или деньги возвращены): сервер оплату не примет. */
   visitCancelled?: boolean;
 }): { text: string; tone: CaptionTone } | null {
@@ -316,6 +334,12 @@ export function blockCaption(input: {
   // оплатой не меняют. Выход был один — снять оплату. Просим сохранить ДО.
   if (input.clientUnsaved) {
     return { text: "Клиент изменён — сохраните", tone: "warning" };
+  }
+  if (input.slotUnsaved) {
+    return {
+      text: input.slotUnsaved === "date" ? "Дата изменена — сохраните" : "Время изменено — сохраните",
+      tone: "warning",
+    };
   }
   if (input.hasAppointment && input.outstanding <= 0 && input.rowsCount > 0) {
     return {
