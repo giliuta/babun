@@ -1,5 +1,7 @@
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getStorage } from "@babun/shared/storage";
+import { readNotificationPrefs } from "@/features/cabinet/notification-prefs-store";
+import { AUTO_REMINDER_HORIZON_MS } from "@/features/cabinet/notification-prefs";
 import {
   eventReminderOccurrences,
   selfReminderInstant,
@@ -426,4 +428,59 @@ export async function reconcileSelfReminders(
     });
   }
   await replaceBabunNotificationScope("self:", owners, { requestPermission: false });
+}
+
+/** Снять напоминание себе по id записи (страница «Уведомления»): запись
+ *  может быть не загружена, поэтому без неё — правило и пуш уходят сразу. */
+export async function clearSelfReminder(appointmentId: string): Promise<void> {
+  const all = { ...readSelfReminders() };
+  delete all[appointmentId];
+  writeSelfReminders(all);
+  await removeBabunNotificationOwners([selfOwnerKey(appointmentId)]);
+}
+
+// ── НАПОМИНАНИЕ О КАЖДОЙ ЗАПИСИ (Кабинет → Уведомления, владелец 03.10) ──
+//
+// Правило одно на телефон (`notification-prefs`), группа `auto:`. Ставится
+// только записям (не событиям), не отменённым, в ближайшие две недели. У
+// записи с колокольчиком звонит колокольчик — два пуша об одном не нужны.
+// Правило выключено — группа пустеет.
+
+const autoOwnerKey = (appointmentId: string) => `auto:${appointmentId}`;
+
+export async function reconcileAutoReminders(
+  appointments: readonly Appointment[],
+  timeZoneFor: (appointment: Appointment) => string,
+  clientNameFor?: (appointment: Appointment) => string | undefined,
+): Promise<void> {
+  const rule = readNotificationPrefs().records;
+  const owners: BabunNotificationOwnerDrafts[] = [];
+  if (rule) {
+    const selfRules = readSelfReminders();
+    const now = Date.now();
+    for (const apt of appointments) {
+      if (apt.kind === "event" || apt.kind === "personal") continue;
+      if (apt.status === "cancelled" || apt.status === "completed") continue;
+      if (selfRules[apt.id]) continue;
+      let when: Date;
+      try {
+        when = selfReminderInstant(apt, rule, timeZoneFor(apt));
+      } catch {
+        continue;
+      }
+      const at = when.getTime();
+      if (at <= now || at > now + AUTO_REMINDER_HORIZON_MS) continue;
+      const ownerKey = autoOwnerKey(apt.id);
+      owners.push({
+        ownerKey,
+        drafts: notificationDrafts(
+          apt,
+          [{ when, label: selfReminderLabel(rule), date: apt.date }],
+          clientNameFor?.(apt),
+          ownerKey,
+        ),
+      });
+    }
+  }
+  await replaceBabunNotificationScope("auto:", owners, { requestPermission: false });
 }

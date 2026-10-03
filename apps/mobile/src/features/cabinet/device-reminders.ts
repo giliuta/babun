@@ -13,7 +13,9 @@ import { clockTime, dayMonth, localDayKey, weekdayName } from "./when";
 // строки-двери. Нативного модуля и хранилища здесь нет — решение целиком под
 // тестом.
 //
-// ТРИ ИСТОЧНИКА, И У КАЖДОГО СВОЯ ПРАВДА:
+// ИСТОЧНИКИ, И У КАЖДОГО СВОЯ ПРАВДА (03.10 добавлены `self:` — колокольчик
+// записи, и `auto:` — «О записях»; до этого колокольчик падал в «другое» и не
+// открывался):
 //   • `appointment:` — ручное «Напомнить» из записи. Живёт только на этом
 //     телефоне, пересоздать его некому, поэтому отмена отсюда честная;
 //   • `event:` — напоминание события из базы (`event_push_enabled`). Сверка
@@ -41,6 +43,10 @@ export interface DeviceReminder {
 
 export type ReminderSource =
   | { kind: "appointment"; appointmentId: string; date: string; teamId?: string }
+  /** Колокольчик записи «напомнить себе» (`self:`) — правило этого телефона. */
+  | { kind: "self"; appointmentId: string; date: string; teamId?: string }
+  /** «О записях» из Кабинета (`auto:`) — общее правило телефона. */
+  | { kind: "auto"; appointmentId: string; date: string; teamId?: string }
   | { kind: "event"; appointmentId: string; date: string; teamId?: string }
   | { kind: "client"; clientId: string }
   | { kind: "other" };
@@ -75,12 +81,10 @@ export function reminderSource(
   reminder: Pick<DeviceReminder, "ownerKey" | "data">,
 ): ReminderSource {
   const prefix = reminder.ownerKey.split(":", 1)[0];
-  if (prefix === "appointment" || prefix === "event") {
+  if (prefix === "appointment" || prefix === "event" || prefix === "self" || prefix === "auto") {
     const target = parseAppointmentNotificationTarget(reminder.data);
     if (!target) return { kind: "other" };
-    return prefix === "appointment"
-      ? { kind: "appointment", ...target }
-      : { kind: "event", ...target };
+    return { kind: prefix, ...target };
   }
   if (prefix === "client") {
     const target = parseClientNotificationTarget(reminder.data);
@@ -89,10 +93,12 @@ export function reminderSource(
   return { kind: "other" };
 }
 
-/** Отменить отсюда можно ТОЛЬКО ручное напоминание записи. Событие и клиента
- *  пересоздаст база — их строка открывает свой источник. */
+/** Отменить отсюда можно только ручное напоминание записи и колокольчик
+ *  «себе» — их больше некому пересоздать. Событие и клиента пересоздаст база,
+ *  «О записях» — общее правило (выключают в настройке выше): их строка
+ *  открывает свой источник. */
 export function reminderCanCancel(source: ReminderSource): boolean {
-  return source.kind === "appointment";
+  return source.kind === "appointment" || source.kind === "self";
 }
 
 const lowerFirst = (value: string) =>

@@ -4,7 +4,11 @@ import {
   getNotificationsModule,
   removeBabunNotificationOwners,
   replaceBabunNotificationOwner,
+  replaceBabunNotificationScope,
+  type BabunNotificationDraft,
 } from "@/lib/notifications";
+import { clockParts } from "@/features/cabinet/notification-prefs";
+import { readNotificationPrefs } from "@/features/cabinet/notification-prefs-store";
 
 const Notifications = getNotificationsModule();
 
@@ -45,6 +49,8 @@ const clientOwnerKey = (clientId: string) => `client:${clientId}`;
 export function clientReminderFireDate(
   value: string,
   now: Date = new Date(),
+  /** Время из «Уведомлений» (03.10); по умолчанию — 09:00, как было. */
+  time = "09:00",
 ): Date | null {
   // Приложение пишет ДАТУ («2026-08-02»), а колонка reminder_at —
   // timestamptz: после синка то же значение возвращается как
@@ -57,7 +63,8 @@ export function clientReminderFireDate(
   const year = Number(match[1]);
   const monthIndex = Number(match[2]) - 1;
   const day = Number(match[3]);
-  const fireAt = new Date(year, monthIndex, day, 9, 0, 0, 0);
+  const { hour, minute } = clockParts(time);
+  const fireAt = new Date(year, monthIndex, day, hour, minute, 0, 0);
   if (
     fireAt.getFullYear() !== year ||
     fireAt.getMonth() !== monthIndex ||
@@ -93,12 +100,15 @@ export async function syncClientReminder(
   >,
 ): Promise<ClientReminderResult> {
   const reminderAt = client.reminder_at?.trim() ?? "";
-  if (!reminderAt || client.deleted_at) {
+  // «О клиентах: Не напоминать» (Кабинет → Уведомления) — дата сохраняется,
+  // а телефон молчит.
+  const time = readNotificationPrefs().clientTime;
+  if (!reminderAt || client.deleted_at || !time) {
     await cancelClientReminder(client.id);
     return "cleared";
   }
 
-  const fireAt = clientReminderFireDate(reminderAt);
+  const fireAt = clientReminderFireDate(reminderAt, new Date(), time);
   if (!fireAt) {
     await cancelClientReminder(client.id);
     return "past";
@@ -110,7 +120,7 @@ export async function syncClientReminder(
       clientOwnerKey(client.id),
       [
         {
-          logicalId: `${clientOwnerKey(client.id)}:${reminderAt}`,
+          logicalId: `${clientOwnerKey(client.id)}:${reminderAt}:${time}`,
           fireAt,
           content: {
             title: "Напоминание о клиенте",
@@ -187,4 +197,42 @@ export async function consumeLastClientNotificationTarget(): Promise<
   } catch {
     return null;
   }
+}
+
+/** ПЕРЕСОБРАТЬ ВСЕ НАПОМИНАНИЯ О КЛИЕНТАХ (Кабинет → Уведомления, 03.10):
+ *  сменили время или выключили — группа `client:` строится заново по
+ *  списку клиентов, без разрешения iOS (его спрашивает явное действие). */
+export async function reconcileClientReminders(
+  clients: readonly Pick<Client, "id" | "full_name" | "phone" | "reminder_at" | "deleted_at">[],
+): Promise<void> {
+  const time = readNotificationPrefs().clientTime;
+  const owners: { ownerKey: string; drafts: BabunNotificationDraft[] }[] = [];
+  if (time) {
+    const now = new Date();
+    for (const client of clients) {
+      const reminderAt = client.reminder_at?.trim() ?? "";
+      if (!reminderAt || client.deleted_at) continue;
+      const fireAt = clientReminderFireDate(reminderAt, now, time);
+      if (!fireAt) continue;
+      const ownerKey = clientOwnerKey(client.id);
+      owners.push({
+        ownerKey,
+        drafts: [
+          {
+            logicalId: `${ownerKey}:${reminderAt}:${time}`,
+            fireAt,
+            content: {
+              title: "Напоминание о клиенте",
+              body: [client.full_name.trim() || "Клиент", client.phone.trim()]
+                .filter(Boolean)
+                .join(" · "),
+              sound: "default",
+              data: { type: "client-reminder", clientId: client.id },
+            },
+          },
+        ],
+      });
+    }
+  }
+  await replaceBabunNotificationScope("client:", owners, { requestPermission: false });
 }

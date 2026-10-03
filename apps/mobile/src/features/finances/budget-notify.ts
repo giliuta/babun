@@ -19,6 +19,7 @@ import {
   monthSpendByCategory,
   type BudgetSeen,
 } from "./category-budget";
+import { readNotificationPrefs } from "@/features/cabinet/notification-prefs-store";
 
 // УВЕДОМЛЕНИЕ О БЮДЖЕТЕ — КОМУ, КОГДА И СКОЛЬКО РАЗ.
 //
@@ -70,6 +71,9 @@ function writeSeen(tenantId: string, seen: BudgetSeen): void {
 }
 
 async function presentNow(title: string, body: string): Promise<void> {
+  // «Бюджет категорий» выключен в Кабинете → Уведомления (03.10): порог
+  // всё равно отмечается сообщённым — включили обратно, старое не сыплется.
+  if (!readNotificationPrefs().budget) return;
   const Notifications = getNotificationsModule();
   if (!Notifications) return;
   try {

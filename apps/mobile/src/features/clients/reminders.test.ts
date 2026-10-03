@@ -19,6 +19,16 @@ describe("client reminders", () => {
     assert.equal(result.getMinutes(), 0);
   });
 
+  test("время из «Уведомлений» (03.10): звонит в выбранный час", () => {
+    const result = clientReminderFireDate("2026-07-21", new Date(2026, 6, 20, 23, 59), "18:30");
+    assert.ok(result);
+    assert.equal(result.getDate(), 21);
+    assert.equal(result.getHours(), 18);
+    assert.equal(result.getMinutes(), 30);
+    // Сегодняшняя дата, а час уже прошёл — не ставится.
+    assert.equal(clientReminderFireDate("2026-07-20", new Date(2026, 6, 20, 19, 0), "18:30"), null);
+  });
+
   test("rejects invalid and already elapsed dates", () => {
     assert.equal(
       clientReminderFireDate("2026-02-30", new Date(2026, 0, 1)),

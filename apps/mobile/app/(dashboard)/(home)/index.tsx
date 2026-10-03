@@ -161,12 +161,14 @@ import { CANCEL_REASONS } from "@/features/calendar/cancel-reasons";
 import { serverReason } from "@/features/calendar/server-reason";
 import {
   cancelAppointmentReminders,
+  reconcileAutoReminders,
   reconcileEventAppointmentReminders,
   reconcileSelfReminders,
   getSelfReminder,
   setSelfReminder,
   syncEventAppointmentReminders,
 } from "@/features/calendar/reminders";
+import { useNotificationPrefs } from "@/features/cabinet/notification-prefs-store";
 import {
   selfReminderLabel,
   type SelfReminder,
@@ -1018,6 +1020,10 @@ export default function CalendarTab() {
         .join(";"),
     [appts],
   );
+  // Правило «О записях» (Кабинет → Уведомления, 03.10): сменили — сверка
+  // пересобирает группу `auto:` сразу, без правки в календаре.
+  const autoRule = useNotificationPrefs().records;
+  const autoRuleSig = autoRule ? JSON.stringify(autoRule) : "";
   const apptsRef = useRef(appts);
   /** Имя клиента записи для сверки пушей «себе» — функция объявлена ниже. */
   const clientNameRef = useRef<(a: Appointment) => string>(() => "");
@@ -1053,10 +1059,18 @@ export default function CalendarTab() {
         tzFor,
         (a) => clientNameRef.current(a) || undefined,
       ).catch(() => {});
+      // Напоминание о каждой записи — по правилу телефона; у записи с
+      // колокольчиком звонит колокольчик.
+      void reconcileAutoReminders(
+        list,
+        tzFor,
+        (a) => clientNameRef.current(a) || undefined,
+      ).catch(() => {});
     }, 1000);
     return () => clearTimeout(timer);
   }, [
     reminderSig,
+    autoRuleSig,
     calSettings?.timezone,
     calSettingsQuery.isError,
     calSettingsQuery.isLoading,

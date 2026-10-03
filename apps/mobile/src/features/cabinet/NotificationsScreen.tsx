@@ -1,10 +1,13 @@
-import { Fragment, useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Linking, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Bell,
+  BellRing,
+  CalendarCheck,
   CalendarClock,
   CalendarDays,
+  PiggyBank,
   UserRound,
   type LucideIcon,
 } from "lucide-react-native";
@@ -17,7 +20,13 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useToast } from "@/components/ui/Toast";
-import { cancelManualAppointmentReminder } from "@/features/calendar/reminders";
+import { PickerSheet } from "@/components/ui/PickerSheet";
+import {
+  cancelManualAppointmentReminder,
+  clearSelfReminder,
+} from "@/features/calendar/reminders";
+import { reconcileClientReminders } from "@/features/clients/reminders";
+import { useClients } from "@/features/clients/queries";
 import { chooseOption } from "@/lib/choose";
 import {
   getNotificationsModule,
@@ -26,6 +35,14 @@ import {
 import { useThemeColors } from "@/theme/colors";
 
 import { useDevicePermission, useDeviceReminders } from "./device-notifications";
+import {
+  CLIENT_TIME_OPTIONS,
+  RECORD_REMINDER_OPTIONS,
+  clientTimeLabel,
+  recordsLabel,
+  sameRecordRule,
+} from "./notification-prefs";
+import { useNotificationPrefs, writeNotificationPrefs } from "./notification-prefs-store";
 import {
   permissionRow,
   reminderCanCancel,
@@ -48,6 +65,8 @@ import {
 
 const SOURCE_ICON: Record<ReminderSource["kind"], LucideIcon> = {
   appointment: CalendarClock,
+  self: BellRing,
+  auto: CalendarCheck,
   event: CalendarDays,
   client: UserRound,
   other: Bell,
@@ -64,6 +83,21 @@ export function NotificationsScreen() {
   const permission = permissionQuery.data;
   const { days, count } = useDeviceReminders();
   const permissionView = permission ? permissionRow(permission) : null;
+  const prefs = useNotificationPrefs();
+  const { data: clients = [] } = useClients();
+  const [picker, setPicker] = useState<"records" | "clients" | null>(null);
+
+  // Правило выбрано, а iPhone ещё не спрашивали — спросить сейчас: это явное
+  // действие человека, иначе напоминание молча не зазвонит.
+  const askIfUndetermined = async () => {
+    if (permission !== "undetermined") return;
+    try {
+      await getNotificationsModule()?.requestPermissionsAsync();
+    } catch {
+      // Метода нет в этой сборке — перечитка покажет «недоступны».
+    }
+    void permissionQuery.refetch();
+  };
 
   const seenPermission = useRef<DevicePermission | undefined>(undefined);
   useEffect(() => {
@@ -91,7 +125,12 @@ export function NotificationsScreen() {
   };
 
   const openSource = (source: ReminderSource) => {
-    if (source.kind === "appointment" || source.kind === "event") {
+    if (
+      source.kind === "appointment" ||
+      source.kind === "event" ||
+      source.kind === "self" ||
+      source.kind === "auto"
+    ) {
       router.push({
         pathname: "/",
         params: {
@@ -122,6 +161,9 @@ export function NotificationsScreen() {
     } else if (choice === 1 && row.source.kind === "appointment") {
       await cancelManualAppointmentReminder(row.source.appointmentId);
       toast("Напоминание отменено");
+    } else if (choice === 1 && row.source.kind === "self") {
+      await clearSelfReminder(row.source.appointmentId);
+      toast("Напоминание отменено");
     }
   };
 
@@ -145,6 +187,39 @@ export function NotificationsScreen() {
                 ? () => void onPermission(permissionView.action!)
                 : undefined
             }
+          />
+        </SectionCard>
+
+        {/* НАСТРОЙКИ НАПОМИНАНИЙ ЭТОГО ТЕЛЕФОНА (владелец 03.10: «страница
+            уведомления — настройки уведомлений»). */}
+        <SectionCard title="Напоминания">
+          <SettingsRow
+            tile={SETTINGS_TILE.blue}
+            icon={CalendarCheck}
+            title="О записях"
+            sub={recordsLabel(prefs.records)}
+            onPress={() => setPicker("records")}
+          />
+          <Divider inset={56} />
+          <SettingsRow
+            tile={SETTINGS_TILE.indigo}
+            icon={UserRound}
+            title="О клиентах"
+            sub={clientTimeLabel(prefs.clientTime)}
+            onPress={() => setPicker("clients")}
+          />
+          <Divider inset={56} />
+          <SettingsRow
+            tile={SETTINGS_TILE.green}
+            icon={PiggyBank}
+            title="Бюджет категорий"
+            sub={prefs.budget ? "Сообщать о 80% и 100%" : "Не сообщать"}
+            toggle={{
+              value: prefs.budget,
+              onChange: (value) => {
+                writeNotificationPrefs({ budget: value });
+              },
+            }}
           />
         </SectionCard>
 
@@ -174,6 +249,43 @@ export function NotificationsScreen() {
           ))
         )}
       </ScrollView>
+
+      <PickerSheet
+        visible={picker === "records"}
+        title="Напоминать о записях"
+        selectedId={prefs.records ? recordsLabel(prefs.records) : "off"}
+        items={RECORD_REMINDER_OPTIONS.map((rule) => ({
+          id: rule ? recordsLabel(rule) : "off",
+          label: recordsLabel(rule),
+          icon: rule ? CalendarCheck : Bell,
+          color: t.accent,
+          onPress: () => {
+            if (sameRecordRule(rule, prefs.records)) return;
+            writeNotificationPrefs({ records: rule });
+            if (rule) void askIfUndetermined();
+          },
+        }))}
+        onClose={() => setPicker(null)}
+      />
+      <PickerSheet
+        visible={picker === "clients"}
+        title="Напоминать о клиентах"
+        selectedId={prefs.clientTime ?? "off"}
+        items={CLIENT_TIME_OPTIONS.map((time) => ({
+          id: time ?? "off",
+          label: clientTimeLabel(time),
+          icon: time ? UserRound : Bell,
+          color: t.accent,
+          onPress: () => {
+            if (time === prefs.clientTime) return;
+            writeNotificationPrefs({ clientTime: time });
+            // Напоминания уже стоят — пересобрать их под новое время.
+            void reconcileClientReminders(clients).catch(() => {});
+            if (time) void askIfUndetermined();
+          },
+        }))}
+        onClose={() => setPicker(null)}
+      />
     </Screen>
   );
 }
