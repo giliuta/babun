@@ -452,7 +452,13 @@ export function PaymentBlock({
   // уже выставленного (он открывается из «Файлов», когда функцию вернут).
   const canInvoice = documentsOn && (Boolean(invoice) || outstanding > 0);
   const invoiceTariffLocked = !invoice && !canUseDocuments;
-  const hasHistory = canSeeHistory && rows.length > 0;
+  // История — и у возвращённой записи: строк у неё нет (деньги вернули), но
+  // приём и возврат в истории лежат, и именно их и ищут на отменённом визите.
+  const hasHistory =
+    canSeeHistory &&
+    (rows.length > 0 ||
+      (appointment?.payment_status === "refunded" &&
+        ((appointment.prepaid_amount ?? 0) > 0 || (appointment.paid_amount ?? 0) > 0)));
   const anyAction = Boolean(teamId) && (canSplit || canInvoice || hasHistory);
   // Строка состояния нужна, когда ей ЕСТЬ ЧТО СКАЗАТЬ: подпись, поле суммы или
   // хоть одно живое действие. Иначе блок начинается сразу со счетов.

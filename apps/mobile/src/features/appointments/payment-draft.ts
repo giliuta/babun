@@ -124,6 +124,12 @@ export interface PaymentRow {
 const cents = (euros: number): number => Math.round(euros * 100);
 
 function prepaymentRows(apt: Appointment): PaymentRow[] {
+  // ВОЗВРАТ — И У ПРЕДОПЛАТЫ (повторный аудит 03.10, на симуляторе). Сервер
+  // при возврате оставляет `prepaid_amount` как был и ставит «refunded»; оплата
+  // по такому статусу строк уже не давала, а предоплата давала — и отменённый
+  // визит с возвращёнными €50 стоял с зелёной «✓ Наличные €50», будто деньги
+  // в кассе.
+  if (apt.payment_status === "refunded") return [];
   if (apt.prepaid_amount <= 0) return [];
   const itemized: Payment[] = apt.prepayments ?? [];
   const itemizedTotal = itemized.reduce((sum, p) => sum + p.amount, 0);

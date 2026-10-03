@@ -285,6 +285,17 @@ describe("paymentRows", () => {
       { id: "settled-total", kind: "settlement", amount: 135, accountId: null, paidAt: "2026-09-06T09:00:00.000Z", cancellable: false },
     ]);
   });
+  test("возвращённая предоплата не стоит зелёной плиткой (повторный аудит 03.10)", () => {
+    const rows = paymentRows(
+      apt({
+        prepaid_amount: 50,
+        prepayments: [{ id: "p1", method: "cash", amount: 50, paid_at: "2026-10-03T15:48:00.000Z" }],
+        payment_status: "refunded",
+        status: "cancelled",
+      }),
+    );
+    assert.deepEqual(rows, []);
+  });
   test("refunded record shows no settlement rows", () => {
     const rows = paymentRows(
       apt({
