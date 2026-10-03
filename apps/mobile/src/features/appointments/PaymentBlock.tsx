@@ -211,7 +211,14 @@ export function PaymentBlock({
     appointment !== null &&
     clientId !== undefined &&
     (appointment.client_id ?? null) !== (clientId ?? null);
-  const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && canTakeMoney && bookingInPlan;
+  // Отменённый визит денег не принимает — так решает сервер
+  // (`record_appointment_payment`). Плитки гаснут заранее: тап рисовал
+  // «оплачено» и через секунду откатывал с ошибкой (аудит 2026-10-03). Снять
+  // уже принятое можно — это зелёная плитка.
+  const visitCancelled =
+    appointment !== null &&
+    (appointment.status === "cancelled" || appointment.payment_status === "refunded");
+  const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && !visitCancelled && canTakeMoney && bookingInPlan;
 
   // СНЯТИЕ И ПРИЁМ — ПО ТАПУ, А НЕ ПО ОТВЕТУ (владелец 2026-09-30: «должно
   // всё мгновенно»): запись в кэше меняется сразу так, как её поменяет
@@ -261,6 +268,11 @@ export function PaymentBlock({
     if (clientUnsaved) {
       haptics.warning();
       toast("Клиент изменился — сначала сохраните запись", "info");
+      return;
+    }
+    if (visitCancelled) {
+      haptics.warning();
+      toast("Визит отменён — оплату не записать", "info");
       return;
     }
     if (problem === "exceeds") {
@@ -408,6 +420,7 @@ export function PaymentBlock({
     overpaidLabel: formatEURExact(overpaid / 100),
     billUnsaved,
     clientUnsaved,
+    visitCancelled,
   });
   const captionColor =
     caption?.tone === "success"

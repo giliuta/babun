@@ -185,6 +185,22 @@ describe("деньги блока считаются по итогу ФОРМЫ"
     });
   });
 
+  test("отменённый визит — не долг: «Визит отменён» (аудит 03.10)", () => {
+    const caption = blockCaption({
+      hasTeam: true,
+      hasAppointment: true,
+      visitCompleted: false,
+      outstanding: 13500,
+      rowsCount: 0,
+      amountMode: false,
+      started: true,
+      hasPending: false,
+      outstandingLabel: "€135,00",
+      visitCancelled: true,
+    });
+    assert.deepEqual(caption, { text: "Визит отменён", tone: "neutral" });
+  });
+
   test("сохранённый итог — обычная жизнь строки: долг называется долгом", () => {
     const caption = blockCaption({
       hasTeam: true,
