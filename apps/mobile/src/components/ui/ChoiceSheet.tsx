@@ -221,10 +221,21 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
                 opacity: pressed ? 0.85 : 1,
               })}
             >
+              {/* ДЛИННЫЙ ОТВЕТ ПЕРЕНОСИТСЯ, А НЕ ОБРЕЗАЕТСЯ (03.10): «Снять
+                  €100 · предоплата» на половине ширины уходило в «Снять €100 ·
+                  предо…» — человек подтверждал, не дочитав, что снимает. */}
               <Text
                 maxFontSizeMultiplier={1.2}
-                numberOfLines={1}
-                style={{ fontSize: 17, fontWeight: "700", color: t.onAccent }}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                style={{
+                  fontSize: 17,
+                  fontWeight: "700",
+                  color: t.onAccent,
+                  textAlign: "center",
+                  paddingHorizontal: 8,
+                }}
               >
                 {request.choices[0].label}
               </Text>
