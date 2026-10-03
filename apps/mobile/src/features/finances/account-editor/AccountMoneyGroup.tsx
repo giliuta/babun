@@ -3,7 +3,6 @@ import {
   ArrowLeftRight,
   Banknote,
   FileSpreadsheet,
-  ReceiptText,
   Wallet,
 } from "lucide-react-native";
 import { money, moneySign } from "@babun/shared/common/utils/money";
@@ -20,8 +19,8 @@ const noop = () => {};
 
 // ШТОРКА СЧЁТА БЛОКАМИ, КАК «НОВЫЙ ОБЪЕКТ» (владелец 03.10, вариант 1), со
 // второго захода того же дня:
-//   • «Деньги» — «На счёте», «VAT к уплате» и «Перевести»: действие с
-//     деньгами стоит у денег;
+//   • «Деньги» — «На счёте», под ним две плитки «Свои | VAT» и «Перевести»:
+//     действие с деньгами стоит у денег;
 //   • «Счёт» — «В оплате записи» и «Выписка» внизу («выписку надо вниз
 //     поставить»).
 // Строки «Команда» нет: шторку открывают со страницы счетов этой команды,
@@ -84,18 +83,20 @@ export function AccountMoneyGroup({
             accessibilityLabel={`На счёте ${money(account.balance)}`}
             trailing={amount(money(account.balance), moneySign(account.balance) < 0 ? t.danger : t.ink)}
           />
-          {/* VAT СТРОКОЙ, А НЕ СКОБКОЙ (владелец 03.10). Нет налога — нет и
-              строки. */}
+          {/* «НА СЧЁТЕ» = СВОИ + VAT (владелец 03.10 выбрал вариант 2 из трёх:
+              «оно должно быть общая сумма — VAT плюс счёт»). Строка «VAT к
+              уплате» стояла рядом с остатком и читалась как вторые деньги;
+              плитки показывают, что это части одной суммы. Нет налога — нет и
+              плиток. */}
           {moneySign(vatDue) !== 0 ? (
-            <SelectRow
-              icon={ReceiptText}
-              color={SETTINGS_TILE.orange}
-              plain
-              title="VAT к уплате"
-              onPress={noop}
-              accessibilityLabel={`VAT к уплате ${money(vatDue)}`}
-              trailing={amount(money(vatDue))}
-            />
+            <View
+              accessible
+              accessibilityLabel={`Из них свои ${money(account.balance - vatDue)}, VAT ${money(vatDue)}`}
+              style={{ flexDirection: "row", gap: 8, paddingHorizontal: 10, paddingBottom: 8 }}
+            >
+              <MoneyTile word="Свои" value={account.balance - vatDue} tint={SETTINGS_TILE.green} />
+              <MoneyTile word="VAT" value={vatDue} tint={SETTINGS_TILE.orange} />
+            </View>
           ) : null}
           {canTransfer ? (
             <SelectRow icon={ArrowLeftRight} color={t.accent} plain title="Перевести" onPress={onTransfer} />
@@ -138,5 +139,39 @@ export function AccountMoneyGroup({
         </View>
       </SectionCard>
     </>
+  );
+}
+
+/** Плитка части остатка: слово сверху, сумма крупно; заливка — цвет части. */
+function MoneyTile({ word, value, tint }: { word: string; value: number; tint: string }) {
+  const t = useThemeColors();
+  return (
+    <View
+      style={{
+        flex: 1,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: t.radius.input,
+        borderCurve: "continuous",
+        backgroundColor: `${tint}1A`,
+      }}
+    >
+      <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 13, color: t.sub }}>
+        {word}
+      </Text>
+      <Text
+        maxFontSizeMultiplier={1.3}
+        numberOfLines={1}
+        style={{
+          marginTop: 2,
+          fontSize: 17,
+          fontWeight: "700",
+          color: moneySign(value) < 0 ? t.danger : t.ink,
+          fontVariant: ["tabular-nums"],
+        }}
+      >
+        {money(value)}
+      </Text>
+    </View>
   );
 }
