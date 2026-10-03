@@ -13,8 +13,7 @@ import {
   composeDetails,
   objectPlacePatch,
   primaryLine,
-  withoutStreet,
-} from "./object-address";
+  withoutStreet, addressLines } from "./object-address";
 
 describe("objectTarget", () => {
   test("адрес важнее ссылки", () => {
@@ -242,5 +241,21 @@ describe("главная строка и уточнение", () => {
   test("пин из уточнения главнее ссылки в строке", () => {
     const patch = objectPlacePatch("https://a.example/1", { city: "Пафос" }, "https://b.example/2");
     assert.equal(patch.mapUrl, "https://b.example/2");
+  });
+});
+
+describe("адрес двумя строками (03.10)", () => {
+  test("улица и дом — главная; комплекс, подъезд, этаж, квартира, город — уточнение", () => {
+    assert.deepEqual(
+      addressLines({
+        address: "x",
+        addressParts: { street: "Makariou 12", complex: "Sea View", floor: "3", apartment: "12", city: "Limassol" },
+      }),
+      { main: "Makariou 12", detail: "Sea View, эт. 3, кв. 12, Limassol" },
+    );
+  });
+  test("без частей — строка как есть, уточнения нет; без адреса — ссылка", () => {
+    assert.deepEqual(addressLines({ address: "Villa 5, Limassol" }), { main: "Villa 5, Limassol", detail: "" });
+    assert.deepEqual(addressLines({ address: "", mapUrl: "https://maps.app" }), { main: "https://maps.app", detail: "" });
   });
 });

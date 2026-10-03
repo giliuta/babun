@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { House, MapPin, MoreHorizontal, UserRound } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
@@ -18,7 +18,7 @@ import {
   type LocationRequest,
 } from "@/features/clients/location-request-link";
 import { useLocationRequests } from "@/features/clients/location-requests";
-import { objectTarget, routeAddress } from "@/features/clients/object-address";
+import { addressLines, objectTarget, routeAddress } from "@/features/clients/object-address";
 import { formatShortDateRu } from "@/features/clients/format";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -177,9 +177,6 @@ export default function ObjectsBlock({
   const requestActions = useLocationRequestActions();
   const copy = useCopyValue();
   const shownRequests = useMemo(() => visibleLocationRequests(requests), [requests]);
-  // Вид типа объекта (цвет и значок, Кабинет → «Типы объектов»).
-  const { data: labelPresets = [] } = useLocationLabels(client.team_id ?? null);
-  const typeLook = (loc: Location) => labelPresets.find((l) => l.name === loc.label);
   // Основной первым: при записи подставляется он, и в списке он должен
   // читаться первым. Бейджа «основной» нет — порядок и есть признак.
   const ordered = useMemo(
@@ -209,15 +206,10 @@ export default function ObjectsBlock({
     return (
       <View style={{ gap: 10, paddingTop: 4 }}>
         {shown.map((loc) => {
-          const type = typeLook(loc);
-          // ПЛИТКА ВИДА ТИПА ОБЪЕКТА (владелец 03.10, вариант 1: «прикольно, что
-          // от типа объекта меняются иконка и цвет»).
-          const tile = <ObjectTypeTile color={type?.color} icon={type?.icon} />;
           const row = (
             <ObjectRow
               loc={loc}
               teamId={client.team_id ?? null}
-              tile={tile}
               // Заметка правится прямо здесь — третьей строкой её не печатаем.
               showNote={!onNote}
               residents={residentsFor?.(loc)}
@@ -276,10 +268,6 @@ export default function ObjectsBlock({
               loc={loc}
               separated={i > 0}
               teamId={client.team_id ?? null}
-              // На карточке — тот же объект, что на странице: с плиткой вида.
-              tile={
-                single ? <ObjectTypeTile color={typeLook(loc)?.color} icon={typeLook(loc)?.icon} /> : undefined
-              }
               // Заметка стоит ПОД строкой своей плашкой — третьей строкой её
               // печатать больше не надо.
               showNote={!onNote}
@@ -363,11 +351,8 @@ export function ObjectRow({
   onPress,
   onLongPress,
   teamId = null,
-  tile,
 }: {
   loc: Location;
-  /** Плитка вида типа объекта слева (страница объектов, 03.10). */
-  tile?: ReactNode;
   separated?: boolean;
   /** Кружок «…» в хвосте строки — правка ЭТОГО объекта (форма записи, где
    *  сам тап по строке меняет объект). Стрелки справа нет нигде: владелец
@@ -396,6 +381,12 @@ export function ObjectRow({
 }) {
   const t = useThemeColors();
   const target = objectTarget(loc);
+  // ТИП ОБЪЕКТА — ТОЛЬКО ЗНАЧКОМ (владелец 03.10: «слово не пишем — тип
+  // обозначает иконка: цвет и значок из „Типов объектов“; типа нет — домик»).
+  const { data: labelPresets = [] } = useLocationLabels(teamId);
+  const type = loc.label ? labelPresets.find((l) => l.name === loc.label) : undefined;
+  // Адрес двумя строками: улица и дом — чёрным, уточнение — мелко серым.
+  const lines = addressLines(loc);
   const note = showNote ? (loc.note ?? "").trim() : "";
   const people = (residents ?? "").trim();
   // «БЫЛ 12 АВГ» ДЕЛИТ ТРЕТЬЮ СТРОКУ С ЗАМЕТКОЙ через «·» — формат тот же,
@@ -450,29 +441,33 @@ export function ObjectRow({
           opacity: pressed && onPress ? 0.6 : 1,
         })}
       >
-        {tile ? <View style={{ marginRight: 4 }}>{tile}</View> : null}
+        <View style={{ marginRight: 4 }}>
+          <ObjectTypeTile color={type?.color} icon={type?.icon} />
+        </View>
         <View style={{ flex: 1 }}>
-          {/* ТИП — МЕЛКО И СЕРЫМ, АДРЕС — КРУПНО И ЧЁРНЫМ (владелец 03.10:
-              «тип объекта маленьким серым, а адрес — чёрным, полноценно»):
-              едут по адресу, тип — подпись к нему. */}
-          <Text
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-            style={{ fontSize: 13, color: t.sub }}
-          >
-            {loc.label || "Объект"}
-          </Text>
+          {/* АДРЕС — ГЛАВНАЯ СТРОКА (владелец 03.10): едут по адресу, тип
+              объекта говорит плитка слева. Улица и дом — чёрным, точный адрес
+              (комплекс, подъезд, этаж, квартира, город) — под ним мелко серым. */}
           <Text
             maxFontSizeMultiplier={1.2}
             numberOfLines={1}
             style={{
               fontSize: 15,
-              fontWeight: target ? "500" : "400",
-              color: target ? t.ink : t.faint,
+              fontWeight: lines.main ? "500" : "400",
+              color: lines.main ? t.ink : t.faint,
             }}
           >
-            {target || "адрес не указан"}
+            {lines.main || "адрес не указан"}
           </Text>
+          {lines.detail ? (
+            <Text
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
+              style={{ fontSize: 13, color: t.sub }}
+            >
+              {lines.detail}
+            </Text>
+          ) : null}
           {/* ТРЕТЬЯ СТРОКА — «был 12 авг · код домофона». Срок обслуживания
               делил её через «·», пока у объекта был интервал; сам интервал
               снесён 2026-09-04 (владелец: «сделаем лучше в напоминаниях»).

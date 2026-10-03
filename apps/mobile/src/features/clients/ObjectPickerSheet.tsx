@@ -93,8 +93,9 @@ export function ObjectPickerSheet({
     >
       <SelectList>
         {ordered.map((loc) => {
-          const label = loc.label || "Объект";
           const target = objectTarget(loc);
+          // Тип не выбран — в заголовке адрес, без слова «Объект» (03.10).
+          const label = loc.label || target || "Адрес не указан";
           const owner = ownerNameFor?.(loc) ?? null;
           const chosen = loc.id === selectedId;
           return (
@@ -102,10 +103,10 @@ export function ObjectPickerSheet({
               key={loc.id}
               icon={MapPin}
               title={label}
-              subtitle={target || "адрес не указан"}
+              subtitle={loc.label ? target || "адрес не указан" : undefined}
               hint={owner || undefined}
               selected={chosen}
-              accessibilityLabel={[label, target, owner].filter(Boolean).join(", ")}
+              accessibilityLabel={[label, loc.label ? target : null, owner].filter(Boolean).join(", ")}
               onPress={() => {
                 if (onDeselect && chosen) onDeselect();
                 else onSelect(loc);
