@@ -24,12 +24,12 @@ import { useThemeColors } from "@/theme/colors";
 import { Spinner } from "@/components/ui/Spinner";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { useDefaultCountry } from "../default-country";
 import { useClientTags } from "../queries";
 import { parseCsv, type ParsedCsv } from "./csv-parse";
 import {
   autoMapHeaders,
   COUNTRY_OPTIONS,
-  DEFAULT_COUNTRY,
   FIELD_LABEL,
   FIELD_OPTIONS,
   type ImportableField,
@@ -104,7 +104,12 @@ export function ImportWizardSheet({
   const [fileName, setFileName] = useState("");
   const [parsed, setParsed] = useState<ParsedCsv | null>(null);
   const [mapping, setMapping] = useState<ImportableField[]>([]);
-  const [country, setCountry] = useState<CountryCode>(DEFAULT_COUNTRY);
+  // КОД СТРАНЫ — ИЗ ЧАСОВОГО ПОЯСА КОМАНДЫ, КУДА ИДЁТ ИМПОРТ (правило 02.10),
+  // а не «CY» продукта: у греческой команды номера без кода — греческие.
+  // Выбранный руками сильнее.
+  const teamCountry = useDefaultCountry(teamId);
+  const [countryPick, setCountry] = useState<CountryCode | null>(null);
+  const country = countryPick ?? teamCountry;
   const [tagId, setTagId] = useState<string | null>(null);
   const [validation, setValidation] = useState<MapAndValidateResult | null>(null);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
@@ -122,7 +127,7 @@ export function ImportWizardSheet({
     setFileName("");
     setParsed(null);
     setMapping([]);
-    setCountry(DEFAULT_COUNTRY);
+    setCountry(null);
     setTagId(null);
     setValidation(null);
     setProgress(null);

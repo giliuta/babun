@@ -52,3 +52,36 @@ describe("CSV import client projection", () => {
     );
   });
 });
+
+describe("адрес и метка из файла (аудит 03.10)", () => {
+  const base = {
+    source: 3,
+    full_name: "Мария",
+    phone: "+35799123457",
+    rawPhone: "99 123 457",
+    email: "",
+    city: "",
+    address: "",
+    comment: "",
+    reasons: [],
+  };
+
+  test("адрес становится объектом клиента, а не старым полем", () => {
+    const client = rowToClient({ ...base, address: " Agias Fylaxeos 10 " }, "CY");
+    assert.equal(client.address, "");
+    assert.equal(client.locations.length, 1);
+    assert.equal(client.locations[0]?.address, "Agias Fylaxeos 10");
+    assert.equal(client.locations[0]?.isPrimary, true);
+  });
+
+  test("без адреса объекта нет", () => {
+    assert.deepEqual(rowToClient(base, "CY").locations, []);
+  });
+
+  test("метка из файла — ручная: авто-метка её не перепишет", () => {
+    const client = rowToClient({ ...base, city: "Лимассол" }, "CY");
+    assert.equal(client.city, "Лимассол");
+    assert.equal(client.city_manual, true);
+    assert.equal(rowToClient(base, "CY").city_manual, undefined);
+  });
+});
