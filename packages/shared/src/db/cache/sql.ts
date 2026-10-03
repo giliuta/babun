@@ -542,6 +542,22 @@ export async function hasQueuedOps(
   return (row?.n ?? 0) > 0;
 }
 
+/** Лежит ли у строки правка, которую очередь уже не повторит сама
+ *  (`attempts >= minAttempts`): всё, что встанет за ней, тоже не уйдёт, пока
+ *  человек её не повторит или не удалит в «Синхронизации». */
+export async function hasStuckQueuedOps(
+  table: CachedTable,
+  rowId: string,
+  minAttempts: number,
+): Promise<boolean> {
+  const sql = await ready();
+  const row = await sql.getFirstAsync<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM sync_queue WHERE table_name = ? AND row_id = ? AND attempts >= ?",
+    [table, rowId, minAttempts],
+  );
+  return (row?.n ?? 0) > 0;
+}
+
 export async function removeOp(id: number): Promise<void> {
   const sql = await ready();
   await sql.runAsync("DELETE FROM sync_queue WHERE id = ?", [id]);

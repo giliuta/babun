@@ -59,6 +59,7 @@ import {
   hasAuthoritativeTenantSnapshot,
   dequeueAll,
   hasQueuedOps,
+  hasStuckQueuedOps,
   type CachedAppointment,
   type CachedAppointmentData,
 } from "../db/cache/sql";
@@ -67,6 +68,7 @@ import {
 import { isOnline } from "./network";
 import {
   kickReplayer,
+  MAX_ATTEMPTS,
   tenantRefreshHeld,
   touchesGuardedAppointmentFields,
 } from "./replayer";
@@ -361,6 +363,8 @@ export async function updateAppointment(
     return { ...toDomain(existing), ...patch, id } as Appointment;
   }
 
+  await refuseBehindStuckEdit(id, "updateAppointment");
+
   const updateOp = {
     table: "appointments" as const,
     op: "update" as const,
@@ -459,6 +463,7 @@ export async function deleteAppointment(
   }
 
   const existing = await readCachedAppointment(id, tenantId);
+  await refuseBehindStuckEdit(id, "deleteAppointment");
 
   const deleteOp = {
     table: "appointments" as const,
@@ -493,6 +498,19 @@ export async function deleteAppointment(
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
+
+/** ЗА НАВСЕГДА УПАВШЕЙ ПРАВКОЙ НОВАЯ НЕ ПРЯЧЕТСЯ (аудит 03.10). Правки одной
+ *  записи уходят по порядку, и за правкой, которую сервер окончательно
+ *  отклонил (её ждут «Повторить» или «Удалить» в «Синхронизации»), новая
+ *  ложилась в очередь и не уходила никогда — а экран говорил «Перенесено», и
+ *  следующая перечитка возвращала запись назад. Теперь — отказ словами. */
+async function refuseBehindStuckEdit(id: string, op: string): Promise<void> {
+  if (await hasStuckQueuedOps("appointments", id, MAX_ATTEMPTS).catch(() => false)) {
+    throw new Error(
+      `${op}: Прошлая правка этой записи не дошла до сервера — откройте Кабинет → Синхронизация и повторите её или удалите`,
+    );
+  }
+}
 
 async function safeCacheReadAppointments(
   tenantId: string,

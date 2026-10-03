@@ -27,6 +27,7 @@ import {
   cacheReplaceTenant,
   dequeueAll,
   removeOp,
+  markOpPermanentlyFailed,
 } from "../db/cache/sql";
 import {
   createClient,
@@ -826,6 +827,34 @@ describe("appointments cache-of-domain", () => {
     expect(cached?.status).toBe("scheduled");
     expect(cached?.payment_status).toBe("paid");
     expect(await dequeueAll()).toHaveLength(0);
+  });
+
+  test("за навсегда упавшей правкой новая не прячется — отказ словами (аудит 03.10)", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+      }),
+      TENANT,
+    );
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    // Офлайн-перенос, который сервер потом окончательно отклонил.
+    await updateAppointment(stubSupabase, APPT_ID, { date: "2026-07-11" }, TENANT);
+    const [stuck] = await dequeueAll();
+    await markOpPermanentlyFailed(stuck!.id, "Сначала отмените оплату");
+    setNetwork(new OnlineNetwork());
+
+    await expect(
+      updateAppointment(stubSupabase, APPT_ID, { time_start: "11:00" }, TENANT),
+    ).rejects.toThrow("не дошла до сервера");
+    await expect(deleteAppointment(stubSupabase, APPT_ID, TENANT)).rejects.toThrow(
+      "не дошла до сервера",
+    );
+    // Новая правка в очередь не легла — там по-прежнему одна упавшая.
+    expect(await dequeueAll()).toHaveLength(1);
   });
 
   test("online semantic delete rejection restores the appointment", async () => {
