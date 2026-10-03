@@ -1,11 +1,12 @@
 import { Fragment } from "react";
 import { Text, View } from "react-native";
-import { Banknote, CreditCard } from "lucide-react-native";
+import { Banknote, CreditCard, PiggyBank, Receipt, ReceiptText } from "lucide-react-native";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Divider } from "@/components/ui/Divider";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { SelectRow } from "@/components/ui/select-rows";
 import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/PaymentTiles";
 import { DateCell } from "@/features/calendar/date-header";
 import { RecordRowView } from "@/features/finances/RecordRow";
@@ -173,9 +174,82 @@ export function MoneyPreview({ blockKey, level }: { blockKey: string; level: Acc
           {write ? <Action label="Принять оплату" /> : null}
         </PreviewFrame>
       );
+    // «Документы» (владелец 03.10: своё право) — инвойс и чек, как в панели
+    // «Документы»; «Выставляет» — кнопка внизу, как на странице.
+    case "finance.documents":
+      return (
+        <PreviewFrame state={levelState(level)}>
+          <DocumentsPreview />
+          {write ? <Action label="Выставить инвойс" /> : null}
+        </PreviewFrame>
+      );
+    // «Прибыль» (владелец 03.10: своё право) — плитка страницы: доход минус
+    // расход команды за период. Смотрят её, правки у неё нет.
+    case "finance.profit":
+      return (
+        <PreviewFrame state={levelState(level)}>
+          <ProfitPreview />
+        </PreviewFrame>
+      );
     default:
       return null;
   }
+}
+
+/** Инвойс и чек — строками панели «Документы». */
+function DocumentsPreview() {
+  const t = useThemeColors();
+  const amount = (text: string, color: string) => (
+    <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 15, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}>
+      {text}
+    </Text>
+  );
+  return (
+    <Card style={{ marginHorizontal: 16, marginTop: 8, paddingVertical: 4 }}>
+      <SelectRow
+        icon={Receipt}
+        color={t.accent}
+        plain
+        title="Инвойс INV-0012"
+        subtitle="Анна Петрова · 12 сентября"
+        trailing={amount("€120", t.warning)}
+        onPress={noop}
+      />
+      <SelectRow
+        icon={ReceiptText}
+        color={t.success}
+        plain
+        title="Чек REC-0031"
+        subtitle="Анна Петрова · 12 сентября"
+        trailing={amount("€120", t.success)}
+        onPress={noop}
+      />
+    </Card>
+  );
+}
+
+/** Плитка «Прибыль» — как на странице финансов. */
+function ProfitPreview() {
+  const t = useThemeColors();
+  const width = useTileWidth(2);
+  return (
+    <Card style={{ marginHorizontal: 16, marginTop: 8 }}>
+      <View style={{ padding: 16, paddingTop: 12 }}>
+        <PaymentTile
+          icon={PiggyBank}
+          label="Прибыль"
+          color={t.brandAccent}
+          tint={t.brandAccent}
+          width={width}
+          compact
+          state="idle"
+          amount="€1 430"
+          onPress={noop}
+          accessibilityLabel="Прибыль €1 430"
+        />
+      </View>
+    </Card>
+  );
 }
 
 /** Плитки счетов команды с остатками. */

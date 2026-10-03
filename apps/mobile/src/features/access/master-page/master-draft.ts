@@ -156,10 +156,17 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "calendar.labels",
     "finance.income",
     "finance.expense",
-    "finance.operations",
     "finance.accounts",
     "finance.debts",
     "finance.documents",
+    // «Прибыль» и шестерёнка финансов (владелец 03.10) — деньги той же
+    // команды: скрыт календарь — свёрнуты и они.
+    "finance.profit",
+    "finance.settings_accounts",
+    "finance.settings_export",
+    "finance.settings_categories",
+    "finance.settings_currency",
+    "finance.settings_requisites",
   ],
   // Скрыты «Карточки клиентов» — нет ни охвата, ни номера, ни одного блока
   // карточки (защита базы 30.09).

@@ -1,5 +1,6 @@
 import {
   ArrowRightLeft,
+  Banknote,
   Bookmark,
   Briefcase,
   Building2,
@@ -44,6 +45,10 @@ import {
   UserRound,
   Users,
   Wallet,
+  FileText,
+  FileSpreadsheet,
+  FolderOpen,
+  PiggyBank,
   type LucideIcon,
 } from "lucide-react-native";
 
@@ -98,9 +103,17 @@ const LOOK: Record<string, RightLook> = {
   "event.files": { icon: Paperclip, tile: SETTINGS_TILE.indigo },
   "finance.income": { icon: TrendingUp, tile: SETTINGS_TILE.green },
   "finance.expense": { icon: TrendingDown, tile: SETTINGS_TILE.red },
-  "finance.operations": { icon: Wallet, tile: SETTINGS_TILE.green },
   "finance.accounts": { icon: Landmark, tile: SETTINGS_TILE.indigo },
   "finance.debts": { icon: HandCoins, tile: SETTINGS_TILE.orange },
+  // Плитки «Документы» и «Прибыль» (03.10).
+  "finance.documents": { icon: FileText, tile: SETTINGS_TILE.blue },
+  "finance.profit": { icon: PiggyBank, tile: SETTINGS_TILE.purple },
+  // Строки шестерёнки финансов — её значками (03.10).
+  "finance.settings_accounts": { icon: Wallet, tile: SETTINGS_TILE.blue },
+  "finance.settings_export": { icon: FileSpreadsheet, tile: SETTINGS_TILE.green },
+  "finance.settings_categories": { icon: FolderOpen, tile: SETTINGS_TILE.orange },
+  "finance.settings_currency": { icon: Banknote, tile: SETTINGS_TILE.green },
+  "finance.settings_requisites": { icon: Building2, tile: SETTINGS_TILE.green },
   clients: { icon: Users, tile: SETTINGS_TILE.blue },
   "clients.scope": { icon: UserCheck, tile: SETTINGS_TILE.teal },
   // «Создание клиента» и «Меню клиента» (02.10).

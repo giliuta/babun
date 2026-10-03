@@ -35,9 +35,11 @@ export const CALENDAR_PREVIEW_KEYS: readonly string[] = [
 export const MONEY_PREVIEW_KEYS: readonly string[] = [
   "finance.income",
   "finance.expense",
-  "finance.operations",
   "finance.accounts",
   "finance.debts",
+  // Плитки «Документы» и «Прибыль» (владелец 03.10).
+  "finance.documents",
+  "finance.profit",
 ];
 
 export const CLIENTS_PREVIEW_KEYS: readonly string[] = [
@@ -79,6 +81,12 @@ export const SETTINGS_PREVIEW_KEYS: readonly string[] = [
   "clients.settings_maps",
   "clients.settings_tags",
   "clients.settings_sources",
+  // Строки шестерёнки финансов (владелец 03.10) — тот же вид строки.
+  "finance.settings_accounts",
+  "finance.settings_export",
+  "finance.settings_categories",
+  "finance.settings_currency",
+  "finance.settings_requisites",
 ];
 
 export function hasBlockPreview(key: string): boolean {

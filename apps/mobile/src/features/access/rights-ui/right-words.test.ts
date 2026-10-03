@@ -23,12 +23,19 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["record.payment", ["off", "read", "write"]],
   ["record.status", ["read", "write"]],
   ["record.files", ["off", "read", "write"]],
-  ["finance.operations", ["off", "read", "write"]],
   // Этап 2 денег: общее «Доходы и расходы» делится на два права.
   ["finance.income", ["off", "read", "write", "full"]],
   ["finance.expense", ["off", "read", "write", "full"]],
   ["finance.accounts", ["off", "read", "write"]],
   ["finance.debts", ["off", "read", "write"]],
+  // «Финансы» по плиткам и шестерёнке (владелец 03.10).
+  ["finance.documents", ["off", "read", "write"]],
+  ["finance.profit", ["off", "read"]],
+  ["finance.settings_accounts", ["off", "read", "write"]],
+  ["finance.settings_export", ["off", "write"]],
+  ["finance.settings_categories", ["off", "read", "write"]],
+  ["finance.settings_currency", ["off", "read"]],
+  ["finance.settings_requisites", ["off", "read"]],
   ["clients", ["off", "read"]],
   // «Создание клиента» и «Меню клиента» (02.10) — «Может / Не может».
   ["clients.create", ["off", "write"]],

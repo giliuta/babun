@@ -47,9 +47,18 @@ const TITLE: Record<string, string> = {
   "event.files": "Файлы",
   "finance.income": "Доходы",
   "finance.expense": "Расходы",
-  "finance.operations": "Доходы и расходы",
   "finance.accounts": "Счета",
   "finance.debts": "Долги",
+  // «Документы» вместо реестрового «Инвойсы и чеки»: так называется плитка
+  // на странице финансов (владелец 03.10: права — по плиткам страницы).
+  "finance.documents": "Документы",
+  "finance.profit": "Прибыль",
+  // Строки шестерёнки финансов — её словами (03.10).
+  "finance.settings_accounts": "Счета",
+  "finance.settings_export": "Выгрузка для бухгалтера",
+  "finance.settings_categories": "Категории",
+  "finance.settings_currency": "Валюта",
+  "finance.settings_requisites": "Реквизиты",
   // «База клиентов» (владелец 01.10: «даём разрешение именно на базу, которая
   // в „Клиентах“») — до 01.10 «Карточки клиентов».
   clients: "База клиентов",
@@ -135,11 +144,19 @@ const STEP: Record<string, Words> = {
   // остальных строк «Главного».
   "finance.income": { off: "Скрыты", read: "Только видит", write: "Видит и добавляет", full: "Видит и правит всё" },
   "finance.expense": { off: "Скрыты", read: "Только видит", write: "Видит и добавляет", full: "Видит и правит всё" },
-  // Доходы и расходы в «Главном» «Календаря» (владелец 30.09: «то же самое —
-  // видит, не видит, меняет»).
-  "finance.operations": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
   "finance.accounts": { off: "Не видит", read: "Видит", write: "Управляет" },
   "finance.debts": { off: "Не видит", read: "Видит", write: "Принимает оплату" },
+  // Плитки «Документы» и «Прибыль» (владелец 03.10: «своё право»).
+  "finance.documents": { off: "Скрыты", read: "Видит", write: "Выставляет" },
+  "finance.profit": { off: "Скрыта", read: "Видит" },
+  // Строки шестерёнки финансов — как у шестерёнки клиентов.
+  "finance.settings_accounts": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "finance.settings_export": { off: "Скрыта", write: "Выгружает" },
+  "finance.settings_categories": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  // Валюта и реквизиты — одни на весь аккаунт: партнёр их только видит
+  // (правка ударила бы по деньгам и документам чужих команд).
+  "finance.settings_currency": { off: "Скрыта", read: "Только видит" },
+  "finance.settings_requisites": { off: "Скрыты", read: "Только видит" },
   // КЛИЕНТЫ — ТЕМИ ЖЕ СЛОВАМИ, ЧТО «КАЛЕНДАРЬ» (владелец 30.09: страница
   // «Клиенты» — так же, блоками).
   // База — «Скрыта · Видит» (владелец 02.10: «редактировать убираем… по
@@ -188,9 +205,11 @@ const DANGER: Record<string, Words> = {
   "calendar.cancel": { write: "Сможет удалять записи насовсем" },
   "finance.income": { full: "Сможет править и удалять чужие доходы" },
   "finance.expense": { full: "Сможет править и удалять чужие расходы" },
-  "finance.operations": { write: "Сможет заводить и править деньги" },
   "finance.accounts": { write: "Сможет переводить деньги между счетами" },
-  "finance.debts": { write: "Сможет удалять долги клиентов" },
+  "finance.settings_accounts": { write: "Сможет заводить и скрывать счета команды" },
+  "finance.debts": { write: "Сможет править и удалять долги" },
+  "finance.documents": { write: "Сможет выставлять инвойсы от имени компании" },
+
   "clients.delete": { write: "Сможет удалять клиентов команды" },
   "clients.sms": { write: "Сможет отправлять SMS клиентам — за счёт баланса" },
   "clients.files": { write: "Сможет удалять файлы клиента" },

@@ -103,6 +103,29 @@ export const CLIENT_CARD_ROW_ORDER: readonly string[] = [
   "clients.sms",
 ];
 
+/** «ФИНАНСЫ» — В ПОРЯДКЕ ПЛИТОК СТРАНИЦЫ (владелец 03.10: «как у клиентов»):
+ *  Счета · Документы · Доход · Расход · Долги · Прибыль. «Доход» и «Расход»
+ *  переехали сюда из «Главного» календаря — право то же, оно же открывает
+ *  деньги дня в календаре. */
+export const FINANCE_ROW_ORDER: readonly string[] = [
+  "finance.accounts",
+  "finance.documents",
+  "finance.income",
+  "finance.expense",
+  "finance.debts",
+  "finance.profit",
+];
+
+/** «НАСТРОЙКИ ФИНАНСОВ» — по строке на каждую строку шестерёнки финансов, в
+ *  её порядке (владелец 03.10: «по строке на каждую»). */
+export const FINANCE_SETTINGS_ROW_ORDER: readonly string[] = [
+  "finance.settings_accounts",
+  "finance.settings_export",
+  "finance.settings_categories",
+  "finance.settings_currency",
+  "finance.settings_requisites",
+];
+
 /** Права блока «Записи» на странице «Календарь». */
 const RECORD_KINDS: readonly string[] = [
   "calendar.records",
@@ -155,19 +178,19 @@ export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock
       ],
     },
   ],
+  // «ФИНАНСЫ» — БЛОКАМИ, КАК «КЛИЕНТЫ» (владелец 03.10): «Главное» — плитки
+  // страницы по порядку, «Настройки финансов» — строки её шестерёнки.
+  finance: [
+    { key: "main", title: "Главное", keys: FINANCE_ROW_ORDER },
+    { key: "settings", title: "Настройки финансов", keys: FINANCE_SETTINGS_ROW_ORDER },
+  ],
   calendar: [
-    // Доходы и расходы — в «Главном» (владелец 30.09: «переходим к доход
-    // расход — в главный»): полоса денег под календарём и деньги дня. После
-    // среза 2а это два права — «Доходы» и «Расходы», — место у них то же.
+    // «Доходы» и «Расходы» стояли здесь с 30.09 («переходим к доход расход —
+    // в главный»); 03.10 владелец перенёс их в «Финансы» по плиткам страницы.
     {
       key: "main",
       title: "Главное",
-      keys: [
-        "calendar.day_labels",
-        "finance.operations",
-        "finance.income",
-        "finance.expense",
-      ],
+      keys: ["calendar.day_labels"],
     },
     // Записи клиентов и событий, перенос и отмена — своим блоком «Записи»
     // (владелец 30.09: «создай второй блок — „Записи"»; «событие тоже

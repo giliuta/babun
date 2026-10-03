@@ -27,7 +27,7 @@ const REGISTRY: AccessBlock[] = (
     ["record.payment", "calendar", "calendar", OFF_READ_WRITE, 50],
     ["calendar.day_labels", "calendar", "calendar", OFF_READ_WRITE, 60],
     ["calendar.settings", "calendar", "company", OFF_READ_WRITE, 70],
-    ["finance.operations", "finance", "calendar", OFF_READ_WRITE, 110],
+    ["finance.income", "finance", "calendar", OFF_READ_WRITE, 110],
     ["finance.vat", "finance", "company", OFF_READ_WRITE, 175],
     ["clients", "clients", "company", OFF_READ_WRITE, 210],
     ["clients.scope", "clients", "company", ["own", "all"], 220],
@@ -81,7 +81,7 @@ const CALENDAR_DEPENDANTS = [
 
 // Деньги календаря в реестре теста — «Доходы и расходы»; остальные блоки
 // финансов в копию реестра не входят.
-const FINANCE_CALENDAR_DEPENDANTS = ["finance.operations"];
+const FINANCE_CALENDAR_DEPENDANTS = ["finance.income"];
 
 describe("страница прав — какие строки видны", () => {
   test("в разделе сначала блоки календаря, потом блоки компании", () => {
@@ -89,7 +89,7 @@ describe("страница прав — какие строки видны", () 
       b.key === "finance.vat" ? { ...b, position: 100 } : b,
     ).sort((a, b) => a.position - b.position);
     const sections = rightsSections(shuffled, () => "write", "team-1");
-    assert.deepEqual(keysOf(sections, "finance"), ["finance.operations", "finance.vat"]);
+    assert.deepEqual(keysOf(sections, "finance"), ["finance.income", "finance.vat"]);
   });
 
   test("«Календарь и записи» скрыт — зависимые строки свёрнуты только в этом календаре", () => {
@@ -288,11 +288,11 @@ describe("сотрудник на карточке мастера", () => {
   test("правка до ответа сервера не трогает исходную карту и не хранит умолчание", () => {
     const next = withMemberChanges(map, REGISTRY, [
       { block: "calendar.records", team_id: "team-1", level: "off" },
-      { block: "finance.operations", team_id: "team-2", level: "read" },
+      { block: "finance.income", team_id: "team-2", level: "read" },
       { block: "clients", team_id: "team-1", level: "write" },
     ]);
     assert.equal(next.calendars["team-1"]?.["calendar.records"], undefined);
-    assert.equal(next.calendars["team-2"]?.["finance.operations"], "read");
+    assert.equal(next.calendars["team-2"]?.["finance.income"], "read");
     assert.equal(next.company.clients, "read", "компанейский блок с календарём пропущен");
     assert.equal(next.calendars["team-1"]?.clients, undefined, "и в календарь не лёг");
     assert.equal(map.calendars["team-1"]?.["calendar.records"], "write");

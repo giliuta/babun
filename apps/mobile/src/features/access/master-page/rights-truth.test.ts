@@ -47,7 +47,7 @@ const REGISTRY: AccessBlock[] = (
     ["record.files", "calendar", "calendar", ["off", "read", "write"], "Фото и файлы записи", false, true, 55],
     ["calendar.day_labels", "calendar", "calendar", ["off", "read", "write"], "Метка дня", false, false, 60],
     ["calendar.settings", "calendar", "company", ["off", "read", "write"], "Настройки календаря", false, false, 70],
-    ["finance.operations", "finance", "calendar", ["off", "read", "write"], "Доходы и расходы", false, true, 110],
+    ["finance.income", "finance", "calendar", ["off", "read", "write"], "Доходы", false, true, 108],
     ["finance.accounts", "finance", "calendar", ["off", "read", "write"], "Счета и остатки", false, true, 120],
     ["finance.debts", "finance", "calendar", ["off", "read", "write"], "Долги", false, true, 130],
     ["finance.documents", "finance", "calendar", ["off", "read", "write"], "Инвойсы и чеки", false, false, 140],
@@ -127,22 +127,22 @@ describe("право, выданное владельцем, доходит до
   // стоял на «Скрыт» и гасил выданное право: экран говорил «Меняет», на
   // сервер не уходило ничего, и поднять родителя было нельзя.
   test("«Доходы и расходы: Меняет» уходит, хотя неживой родитель скрыт", () => {
-    const draft = draftWith("finance.operations", "write");
-    assert.equal(rowLevel(draft, "finance.operations"), "write");
-    assert.equal(sentLevel(draft, "finance.operations"), "write");
+    const draft = draftWith("finance.income", "write");
+    assert.equal(rowLevel(draft, "finance.income"), "write");
+    assert.equal(sentLevel(draft, "finance.income"), "write");
   });
 
   test("строка, слово раздела, сводка, зеркало и отправка совпадают", () => {
-    const draft = draftWith("finance.operations", "write");
+    const draft = draftWith("finance.income", "write");
 
-    assert.equal(rowLevel(draft, "finance.operations"), "write", "строка страницы");
-    assert.equal(sentLevel(draft, "finance.operations"), "write", "уходит на сервер");
+    assert.equal(rowLevel(draft, "finance.income"), "write", "строка страницы");
+    assert.equal(sentLevel(draft, "finance.income"), "write", "уходит на сервер");
     // Раздел целиком — «Частично»: живых блоков в «Финансах» три, поднят один.
     assert.equal(areaLevel(REGISTRY, draft, "finance"), "mixed", "слово раздела");
 
 
     const map = mirrorMapOf(TENANT, REGISTRY, draft);
-    assert.equal(map.calendars[TEAM]?.["finance.operations"], "write", "зеркало");
+    assert.equal(map.calendars[TEAM]?.["finance.income"], "write", "зеркало");
   });
 
   test("скрытые клиенты гасят «Историю» (а с ней и деньги) во всех пяти местах сразу", () => {
@@ -190,15 +190,15 @@ describe("право, выданное владельцем, доходит до
   // этом же черновике оно давало ДРУГОЙ ответ. Значит проверки выше держат
   // настоящую разницу, а не совпадение.
   test("прежнее правило на этом же черновике гасило выданное право", () => {
-    const draft = draftWith("finance.operations", "write");
-    const byWholeRegistry = isBlockFolded("finance.operations", (parentKey) => {
+    const draft = draftWith("finance.income", "write");
+    const byWholeRegistry = isBlockFolded("finance.income", (parentKey) => {
       const parent = REGISTRY.find((block) => block.key === parentKey);
       return parent ? draftLevel(parent, draft, TEAM) : "write";
     });
     assert.equal(byWholeRegistry, true, "прежнее правило не сворачивало — тест ничего не охраняет");
 
     const byOfferedOnly = visibleLevel(REGISTRY, draft)(
-      BLOCK["finance.operations"] as AccessBlock,
+      BLOCK["finance.income"] as AccessBlock,
       TEAM,
     );
     assert.equal(byOfferedOnly, "write", "новое правило потеряло право");

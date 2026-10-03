@@ -6,8 +6,8 @@ import { dependantResets } from "./master-draft";
 import { viewSections } from "./rights-view-sections";
 
 // СТРАНИЦЫ РАЗДЕЛОВ ДОСТУПА — БЛОКАМИ (владелец 30.09). Право стоит там, куда
-// его поставил владелец, и только там: «Доходы и расходы» — в «Главном»
-// «Календаря», а не второй строкой в «Финансах».
+// его поставил владелец, и только там: «Доход» и «Расход» с 03.10 — в
+// «Главном» «Финансов» по плиткам страницы, а не в «Календаре».
 
 const block = (key: string, levels: AccessLevel[], position: number): AccessBlock => ({
   key,
@@ -38,8 +38,15 @@ const REGISTRY: AccessBlock[] = [
   block("calendar.booking_form", ["off", "read", "write"], 79),
   block("calendar.services", ["off", "read", "write"], 80),
   block("calendar.labels", ["off", "read", "write"], 81),
-  block("finance.operations", ["off", "read", "write"], 110),
+  block("finance.income", ["off", "read", "write", "full"], 108),
+  block("finance.expense", ["off", "read", "write", "full"], 109),
   block("finance.accounts", ["off", "read", "write"], 120),
+  block("finance.debts", ["off", "read", "write"], 130),
+  block("finance.documents", ["off", "read", "write"], 140),
+  block("finance.profit", ["off", "read"], 150),
+  block("finance.settings_requisites", ["off", "read", "write"], 165),
+  block("finance.settings_accounts", ["off", "read", "write"], 160),
+  block("finance.settings_categories", ["off", "read", "write"], 162),
 ];
 
 const page = (group: "calendar" | "finance" | "record", open: Record<string, AccessLevel> = {}) =>
@@ -59,7 +66,7 @@ const page = (group: "calendar" | "finance" | "record", open: Record<string, Acc
 describe("страница раздела доступа — блоками владельца", () => {
   test("«Календарь»: «Главное» с деньгами, «Записи», «Настройки команды» — строками шестерёнки", () => {
     assert.deepEqual(page("calendar"), [
-      { title: "Главное", keys: ["calendar.day_labels", "finance.operations"] },
+      { title: "Главное", keys: ["calendar.day_labels"] },
       { title: "Записи", keys: ["calendar.records", "calendar.events", "calendar.move", "calendar.cancel"] },
       // Блоки внутри записи — здесь же (владелец 30.09); события скрыты —
       // блока «Событие» нет.
@@ -112,7 +119,23 @@ describe("страница раздела доступа — блоками вл
     assert.ok(dependantResets(REGISTRY, records, "off", "team-1").some((c) => c.block === "record.label"));
   });
 
-  test("«Финансы»: «Доходов и расходов» здесь нет — они в «Календаре»", () => {
-    assert.deepEqual(page("finance"), [{ title: "", keys: ["finance.accounts"] }]);
+  test("«Финансы»: «Главное» — плитки страницы по порядку, «Настройки финансов» — строки шестерёнки (03.10)", () => {
+    assert.deepEqual(page("finance"), [
+      {
+        title: "Главное",
+        keys: [
+          "finance.accounts",
+          "finance.documents",
+          "finance.income",
+          "finance.expense",
+          "finance.debts",
+          "finance.profit",
+        ],
+      },
+      {
+        title: "Настройки финансов",
+        keys: ["finance.settings_accounts", "finance.settings_categories", "finance.settings_requisites"],
+      },
+    ]);
   });
 });

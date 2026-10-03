@@ -1,5 +1,10 @@
 import {
+  Banknote,
   Briefcase,
+  Building2,
+  FileSpreadsheet,
+  FolderOpen,
+  Wallet,
   CalendarRange,
   ClipboardList,
   Eye,
@@ -48,7 +53,10 @@ export function SettingsPreview({
   // Строка шестерёнки клиентов открывается и при «Только видит» — страницей
   // без правки (аудит 03.10): у неё та же стрелка, что у «Меняет».
   const onPress =
-    state === "write" || (state === "read" && blockKey.startsWith("clients.settings_")) ? noop : undefined;
+    state === "write" ||
+    (state === "read" && (blockKey.startsWith("clients.settings_") || blockKey.startsWith("finance.settings_")))
+      ? noop
+      : undefined;
   const row = (() => {
     switch (blockKey) {
       case "calendar.identity":
@@ -169,6 +177,46 @@ export function SettingsPreview({
             icon={Megaphone}
             title="Источники"
             sub="8 источников"
+            onPress={onPress}
+          />
+        );
+      // Шестерёнка «Финансов» (владелец 03.10: «по строке на каждую») —
+      // строки как в ней.
+      case "finance.settings_accounts":
+        return (
+          <SettingsRow tile={SETTINGS_TILE.blue} icon={Wallet} title="Счета" sub="2 счёта" onPress={onPress} />
+        );
+      case "finance.settings_export":
+        return (
+          <SettingsRow
+            tile={SETTINGS_TILE.green}
+            icon={FileSpreadsheet}
+            title="Выгрузка для бухгалтера"
+            sub="CSV за период"
+            onPress={onPress}
+          />
+        );
+      case "finance.settings_categories":
+        return (
+          <SettingsRow
+            tile={SETTINGS_TILE.orange}
+            icon={FolderOpen}
+            title="Категории"
+            sub="Доходы · Расходы · Долги"
+            onPress={onPress}
+          />
+        );
+      case "finance.settings_currency":
+        return (
+          <SettingsRow tile={SETTINGS_TILE.green} icon={Banknote} title="Валюта" sub="EUR · €" onPress={onPress} />
+        );
+      case "finance.settings_requisites":
+        return (
+          <SettingsRow
+            tile={SETTINGS_TILE.green}
+            icon={Building2}
+            title="Реквизиты"
+            sub="1 набор · следующий INV-0013"
             onPress={onPress}
           />
         );
