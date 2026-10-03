@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
 import type { Client } from "@babun/shared/local/clients";
 import { createBlankClient } from "@babun/shared/local/clients";
-import { mergeBlocker, mergeClientPatch, phoneKey } from "./merge-clients";
+import {
+  mergeBlocker,
+  mergeClientPatch,
+  mergeLocations,
+  paidVisitsBlocker,
+  phoneKey,
+} from "./merge-clients";
 
 // Слияние необратимо для записей (они меняют владельца), поэтому правило
 // одно: ДОПОЛНЯТЬ, но не затирать. Ошибка здесь стирает историю живого
@@ -216,5 +225,72 @@ describe("слияние: тег один, реквизиты переезжаю
     assert.deepEqual(patch.requisites?.map((s) => s.legal_name), ["Gem Ltd", "Villa Co"]);
     assert.deepEqual(patch.requisites?.map((s) => s.is_default), [true, false]);
     assert.equal(patch.legal_name, "Gem Ltd");
+  });
+});
+
+describe("объекты и оплаченные визиты при слиянии (аудит 03.10)", () => {
+  const unit = (id: string) => ({
+    id,
+    room: "Спальня",
+    ac_type: "split" as const,
+    has_indoor: true,
+    has_outdoor: true,
+  });
+
+  test("тот же адрес: визиты дубля переезжают на объект основной, техника — туда же", () => {
+    const primary = client({
+      locations: [{ id: "l1", label: "Дом", address: "Ленина 1", isPrimary: true, equipment: [unit("u1")] }],
+    });
+    const dup = client({
+      id: "c2",
+      locations: [
+        { id: "l2", label: "Дом", address: "ленина 1 ", isPrimary: true, equipment: [unit("u2")], note: "Код 42" },
+      ],
+    });
+    const { locations, remap } = mergeLocations(primary, dup);
+    assert.equal(remap.get("l2"), "l1");
+    assert.equal(locations?.length, 1);
+    assert.deepEqual(locations?.[0]?.equipment?.map((u) => u.id), ["u1", "u2"]);
+    assert.equal(locations?.[0]?.note, "Код 42");
+  });
+
+  test("объект без адреса не выпадает — у него своя техника", () => {
+    const { locations, remap } = mergeLocations(
+      client({ locations: [] }),
+      client({ id: "c2", locations: [{ id: "l9", label: "Склад", address: "", isPrimary: true, equipment: [unit("u9")] }] }),
+    );
+    assert.deepEqual(locations?.map((l) => l.id), ["l9"]);
+    assert.equal(remap.size, 0);
+  });
+
+  test("повторное слияние ничего не удваивает", () => {
+    const dupLoc = { id: "l9", label: "Склад", address: "", isPrimary: false };
+    const { locations } = mergeLocations(
+      client({ locations: [dupLoc] }),
+      client({ id: "c2", locations: [dupLoc] }),
+    );
+    assert.equal(locations, undefined);
+  });
+
+  test("оплаченные визиты дубля — отказ до первой записи", () => {
+    assert.equal(paidVisitsBlocker([{ prepaid_amount: 0, paid_amount: 0, payment_status: "unpaid" }]), null);
+    assert.equal(paidVisitsBlocker([{ prepaid_amount: 0, paid_amount: 0, payment_status: "refunded" }]), null);
+    assert.match(
+      paidVisitsBlocker([
+        { prepaid_amount: 0, paid_amount: 50, payment_status: "paid" },
+        { prepaid_amount: 20, paid_amount: 0, payment_status: "unpaid" },
+      ]) ?? "",
+      /2 оплаченных визита/,
+    );
+  });
+
+  test("слияние этим пользуется: отказ до записи, визиты — на объект основной", () => {
+    const hook = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "use-merge-duplicate.ts"),
+      "utf8",
+    );
+    assert.match(hook, /paidVisitsBlocker\(dupAppts\.data \?\? \[\]\)/);
+    assert.match(hook, /remap\.get\(a\.location_id\)/);
+    assert.match(hook, /location_id: location/);
   });
 });

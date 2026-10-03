@@ -8,7 +8,12 @@ import {
   duplicateQueryKeyPrefix,
   useDuplicateOf,
 } from "@/features/clients/DuplicateNotice";
-import { mergeBlocker, mergeClientPatch } from "@/features/clients/merge-clients";
+import {
+  mergeBlocker,
+  mergeClientPatch,
+  mergeLocations,
+  paidVisitsBlocker,
+} from "@/features/clients/merge-clients";
 import {
   useArchiveClients,
   useClient,
@@ -99,13 +104,20 @@ export function useMergeDuplicate({
       const fresh =
         qc.getQueryData<Client>(["client", primary.id]) ?? primary;
       const patch = mergeClientPatch(fresh, dupRow);
+      // Объект дубля, совпавший с объектом основной, уходит в него — и
+      // визиты на нём переезжают на объект основной (аудит 03.10).
+      const { remap } = mergeLocations(fresh, dupRow);
       if (Object.keys(patch).length > 0) {
         await updateById.mutateAsync({ id: primary.id, patch });
       }
       // 2. Визиты дубля — ради них слияние и затевается.
       const moving = dupAppts.data ?? [];
       for (const a of moving) {
-        await updateAppt.mutateAsync({ id: a.id, patch: { client_id: primary.id } });
+        const location = a.location_id ? remap.get(a.location_id) : undefined;
+        await updateAppt.mutateAsync({
+          id: a.id,
+          patch: { client_id: primary.id, ...(location ? { location_id: location } : {}) },
+        });
       }
       // 3. Дубль — в «Удалённые клиенты» (архива с 03.10 нет): визиты уже
       //    у основной, и без истории он сотрётся через 30 дней; оставшиеся
@@ -136,7 +148,8 @@ export function useMergeDuplicate({
       ? "Карточка дубля не загрузилась — объединить пока нельзя"
       : !dupAppts.isSuccess
         ? "Визиты дубля не загрузились — объединить пока нельзя"
-        : mergeBlocker(primary, dup, peopleIdsOf(members, sourceScope?.role === "owner"));
+        : mergeBlocker(primary, dup, peopleIdsOf(members, sourceScope?.role === "owner")) ??
+          paidVisitsBlocker(dupAppts.data ?? []);
     if (blocker || !dup) {
       haptics.warning();
       toast(blocker ?? "Не удалось объединить", "error");
