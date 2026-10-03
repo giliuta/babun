@@ -104,6 +104,22 @@ export interface FinancePageAccess {
 const toLevel = (gate: AccessGate): Level =>
   gate === "write" ? "write" : gate === "read" ? "read" : "locked";
 
+/** Уровень блока в КОНКРЕТНОМ календаре. `NO_TEAM` и пустой чип календарём
+ *  не являются: `accessGate` без календаря берёт лучший по всем, и человек
+ *  с правом в одной команде получил бы кнопку в другой. Одно тело на правку
+ *  (`financePageAccess`) и на чтение строк (`finance-read-rules.ts`). */
+export function levelInCalendar(
+  who: { role: UserRole | null | undefined; map: MemberAccessMap | undefined },
+  blockKey: FinanceBlock,
+  teamId: string | null | undefined,
+): Level {
+  const { role, map } = who;
+  if (role === "owner" || map?.isOwner === true) return "write";
+  if (role === undefined || role === null || !map) return "locked";
+  if (!teamId || teamId === NO_TEAM) return "locked";
+  return toLevel(accessGate({ role, map, blockKey, scope: "calendar", teamId }));
+}
+
 /** Календарь счёта. Общий счёт компании календаря не имеет: сотруднику он
  *  закрыт и на запись, и на показ остатка. */
 const accountCalendar = (account: AccountLike): string | null =>
@@ -119,15 +135,8 @@ export function financePageAccess(input: FinancePageAccessInput): FinancePageAcc
   const owner = role === "owner" || map?.isOwner === true;
   const ready = owner || (role !== undefined && role !== null && !!map);
 
-  /** Уровень блока в КОНКРЕТНОМ календаре. `NO_TEAM` и пустой чип календарём
-   *  не являются: `accessGate` без календаря берёт лучший по всем, и человек
-   *  с правом в одной команде получил бы кнопку в другой. */
-  const levelIn = (blockKey: FinanceBlock, teamId: string | null | undefined): Level => {
-    if (owner) return "write";
-    if (!ready) return "locked";
-    if (!teamId || teamId === NO_TEAM) return "locked";
-    return toLevel(accessGate({ role, map, blockKey, scope: "calendar", teamId }));
-  };
+  const levelIn = (blockKey: FinanceBlock, teamId: string | null | undefined): Level =>
+    levelInCalendar({ role, map }, blockKey, teamId);
 
   const legacy = !owner && moneyKey(map, "income") === "finance.operations";
   const sideKey = (side: Side): string => moneyKey(map, side);

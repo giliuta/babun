@@ -18,7 +18,6 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useThemeColors } from "@/theme/colors";
 import { useMyAccess } from "@/features/access/queries";
-import { bestCalendarLevel, moneyKey } from "@/features/access/my-access";
 import { useAppointments, useFinanceServices } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
 import { todayYmd } from "@/features/invoices/format";
@@ -27,6 +26,12 @@ import { useAllServices } from "@/features/services/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { useAccountsWithBalances } from "../accounts";
+import {
+  financeReadRules,
+  moneyPanelOpen,
+  moneySides,
+  readableTransactions,
+} from "../finance-read-rules";
 import { ScopePeriodBar, SummaryToggle } from "../FinanceOverview";
 import { IncomeShareDonut } from "../IncomeShareDonut";
 import { PanelHeader, panelCount } from "../PanelHeader";
@@ -80,6 +85,9 @@ import { MonthTable, monthLabel } from "./MonthTable";
 
 const FORMS_ZAPIS: PluralFormsRu = ["запись", "записи", "записей"];
 const FORMS_KLIENT: PluralFormsRu = ["клиент", "клиента", "клиентов"];
+/** Долгов аналитика не грузит: оплата долга судится командой самой строки
+ *  (платёж проводится в команде долга). */
+const NO_DEBT_TEAMS: ReadonlyMap<string, string | null> = new Map();
 const WEEKDAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 
 type Panel =
@@ -100,17 +108,20 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   const t = useThemeColors();
   const role = useCurrentRole().data;
   const myAccess = useMyAccess().data;
-  const moneyLevel = myAccess
-    ? bestCalendarLevel(myAccess, moneyKey(myAccess, "income"))
-    : undefined;
   // ДЕНЬГИ — ПО ФИНАНСОВОМУ ПРАВУ (как было у «Сводки» с 20.09): записи
   // диспетчеру приходят с суммами, и выручка компании не должна утекать мимо
   // блока «Доходы» (выручка — это доход; до наката — «Доходы и расходы»).
-  const showMoney =
-    role === "owner" ||
-    moneyLevel === "read" ||
-    moneyLevel === "write" ||
-    moneyLevel === "full";
+  // РАСХОД — ПО СВОЕМУ ПРАВУ (аудит зеркала 03.10): без «Расходов» нет ни
+  // расхода, ни прибыли, ни материалов услуг (`moneySides`).
+  const sides = moneySides({ role, map: myAccess });
+  const showMoney = sides.income;
+  const showExpense = showMoney && sides.expense;
+  // Строки журнала — по стороне и команде строки, как режет сервер: «его
+  // глазами» журнал читается токеном владельца.
+  const readRules = useMemo(
+    () => financeReadRules({ role, map: myAccess }),
+    [role, myAccess],
+  );
 
   const calendarSettings = useCalendarSettings().data;
   const timezone = calendarSettings?.timezone ?? "Europe/Nicosia";
@@ -132,7 +143,12 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
    *  2026-09-24: «захожу — показывает все команды, нажимаю команду — её»);
    *  строка — выбранная команда, повторный тап по ней снимает выбор. */
   const [pickedTeam, setPickedTeam] = useState<string | null>(null);
-  const [panel, setPanel] = useState<Panel>("services");
+  const [pickedPanel, setPanel] = useState<Panel>("services");
+  // Денежная панель без права на её деньги не открывается — экран стоит на
+  // услугах, как при входе.
+  const panel: Panel = moneyPanelOpen(pickedPanel, { income: showMoney, expense: showExpense })
+    ? pickedPanel
+    : "services";
 
   const teamsData = useTeams().data;
   const teams = useMemo(() => teamsData ?? [], [teamsData]);
@@ -187,10 +203,14 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   const ledger = useTransactions(ledgerFrom, ledgerTo, { enabled: showMoney });
   const txs = useMemo(
     () =>
-      (ledger.data ?? []).filter(
-        (tx) => !liveTeam || !tx.team_id || liveTeam.has(tx.team_id),
+      readableTransactions(
+        (ledger.data ?? []).filter(
+          (tx) => !liveTeam || !tx.team_id || liveTeam.has(tx.team_id),
+        ),
+        readRules,
+        NO_DEBT_TEAMS,
       ),
-    [ledger.data, liveTeam],
+    [ledger.data, liveTeam, readRules],
   );
 
   const scope: Scope = useMemo(
@@ -338,6 +358,14 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   const clientsTile = tile("clients", "Клиенты", String(clientRows.length), t.ink, clientRows.length === 0,
     formatCountRu(clientRows.length, FORMS_KLIENT));
   const timeTile = tile("time", "Время", hoursLabel(work.minutes), t.ink, work.minutes === 0);
+  const incomeTile = tile(
+    "income",
+    "Доход",
+    moneyText(money.income),
+    moneySign(money.income) < 0 ? t.danger : t.success,
+    moneyPending || moneySign(money.income) === 0,
+  );
+  const checkTile = tile("check", "Средний чек", formatEUR(work.averageCheck), t.ink, work.records === 0);
 
   const listEnd = { paddingBottom: 96 };
   const empty = <EmptyState title="За период работ нет" />;
@@ -631,8 +659,9 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
                   />
                 ))}
                 {/* ПРИБЫЛЬ ПО УСЛУГАМ — работы минус материалы услуги: что
-                    реально выгодно, а не только что дорого стоит. */}
-                {showMoney ? (
+                    реально выгодно, а не только что дорого стоит. Материалы —
+                    расход: без «Расходов» блока нет. */}
+                {showExpense ? (
                   <View className="mt-1">
                     <BreakdownSectionHeader
                       title="Прибыль по услугам"
@@ -780,27 +809,30 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
         />
 
         <View className="px-4 pb-2 pt-2" style={{ gap: 6 }}>
-          {showMoney ? (
+          {showExpense ? (
             <>
               {row(
                 <>
-                  {tile(
-                    "income",
-                    "Доход",
-                    moneyText(money.income),
-                    moneySign(money.income) < 0 ? t.danger : t.success,
-                    moneyPending || moneySign(money.income) === 0,
-                  )}
+                  {incomeTile}
                   {tile("expense", "Расход", moneyText(money.expense), t.danger, moneyPending || moneySign(money.expense) === 0)}
                 </>,
               )}
               {row(
                 <>
                   {tile("profit", "Прибыль", moneyText(money.profit), t.brandAccent, moneyPending || moneySign(money.profit) === 0)}
-                  {tile("check", "Средний чек", formatEUR(work.averageCheck), t.ink, work.records === 0)}
+                  {checkTile}
                 </>,
               )}
             </>
+          ) : showMoney ? (
+            // Без «Расходов» плиток расхода и прибыли нет вовсе (канон «блок
+            // без права отсутствует»): доход и средний чек — одной строкой.
+            row(
+              <>
+                {incomeTile}
+                {checkTile}
+              </>,
+            )
           ) : null}
           {row(
             <>

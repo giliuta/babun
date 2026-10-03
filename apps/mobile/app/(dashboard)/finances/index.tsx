@@ -40,6 +40,13 @@ import { OperationSheet } from "@/features/finances/OperationSheet";
 import { AccountsPanel } from "@/features/finances/AccountsPanel";
 import { FinancesFooter } from "@/features/finances/FinancesFooter";
 import { financePageAccess } from "@/features/finances/finance-page-access";
+import {
+  financeReadRules,
+  readableDebts,
+  readableDocuments,
+  readableTransactions,
+  type DocumentsReadable,
+} from "@/features/finances/finance-read-rules";
 import { incomeDeals } from "@/features/finances/income-deals";
 import { materialExpenseRows } from "@/features/finances/material-expenses";
 import { useFinanceRoute } from "@/features/finances/use-finance-route";
@@ -277,6 +284,14 @@ function FinancesContent() {
     disabledFeatures,
     userId,
   });
+  // ЧТО ВИДНО ПО СТРОКЕ — её сторона в её команде (`finance-read-rules.ts`).
+  // Сотруднику строки режет сервер, а «его глазами» читают токеном владельца:
+  // без этого лента показала бы расход при «Расходы: Не видит». У владельца
+  // фильтры отдают вход как есть.
+  const readRules = useMemo(
+    () => financeReadRules({ role, map: myAccessQuery.data }),
+    [role, myAccessQuery.data],
+  );
   // Гасим РАЗРЕЗ документов, а не только плитку: в «Документы» приходят и
   // адресом `?view=documents`, и возвратом из записи. Закрытая уровнем панель
   // уходит туда же — на общий вид, а не показывает пустоту.
@@ -297,6 +312,14 @@ function FinancesContent() {
   // Вся компания без отбора — тот же ключ, лишнего запроса нет: по ней видно,
   // есть ли долги без команды, которым нужен чип «Без команды».
   const companyDebtsQuery = useDebts(DEBTS_SINCE, period.to);
+  // Команда каждого долга: оплата долга видна и по «Долгам» его команды.
+  const debtTeams = useMemo(
+    () =>
+      new Map(
+        (companyDebtsQuery.data ?? []).map((debt) => [debt.id, debt.team_id ?? null] as const),
+      ),
+    [companyDebtsQuery.data],
+  );
   const debtPaidQuery = useDebtPaidTotals();
   const categories = useMemo(
     () => categoriesQuery.data ?? [],
@@ -453,12 +476,14 @@ function FinancesContent() {
     () => teamlessLedgerRows(companyLedgerQuery.data ?? [], scope, accountTeam),
     [companyLedgerQuery.data, scope, accountTeam],
   );
+  // Видимое по строке — до любых итогов и лент: лента «Записи», «Счета» и
+  // плитки считают одно и то же множество.
   const scopedTransactions = useMemo(() => {
-    const rows = withTeamlessRows(txs, teamlessRows);
+    const rows = readableTransactions(withTeamlessRows(txs, teamlessRows), readRules, debtTeams);
     return requestedClientId
       ? rows.filter((transaction) => transaction.client_id === requestedClientId)
       : rows;
-  }, [requestedClientId, txs, teamlessRows]);
+  }, [requestedClientId, txs, teamlessRows, readRules, debtTeams]);
 
   // Счёт = одна команда (2026-08-15): командный скоуп видит РОВНО счета
   // своей команды, «общих счетов» больше нет; чип «Без команды» показывает
@@ -581,7 +606,8 @@ function FinancesContent() {
   // Пустышки через useMemo, а не `?? []` в выражении: новый литерал на каждый
   // рендер ломает мемоизацию списка долгов, ради которой он и написан.
   const debts = useMemo(() => {
-    const rows = debtsQuery.data ?? [];
+    // «Долги: Не видит» в команде долга — его нет ни в ленте, ни в плитке.
+    const rows = readableDebts(debtsQuery.data ?? [], readRules);
     // Ручной долг, заведённый под «Без команды», пишется без команды — и здесь
     // же обязан найтись (раньше не показывался ни под одним чипом).
     const scoped = scope === NO_TEAM ? rows.filter((debt) => debt.team_id == null) : rows;
@@ -590,7 +616,7 @@ function FinancesContent() {
     return requestedClientId
       ? scoped.filter((debt) => debt.client_id === requestedClientId)
       : scoped;
-  }, [debtsQuery.data, scope, requestedClientId]);
+  }, [debtsQuery.data, scope, requestedClientId, readRules]);
   const debtPaid = useMemo(
     () => debtPaidQuery.data ?? new Map<string, number>(),
     [debtPaidQuery.data],
@@ -822,7 +848,7 @@ function FinancesContent() {
   // откроются под ней (аудит 2026-09-29: «Документы 0», а в «Чеках» за тот же
   // месяц 1 чек — плитка считала только инвойсы, ждущие оплату). Один список
   // с панелью (`usePeriodDocuments`): число и строки не расходятся.
-  const periodDocuments = usePeriodDocuments({
+  const issuedDocuments = usePeriodDocuments({
     invoices: scopedInvoices,
     payments: invoicePayments,
     appointments: scopedAppointments,
@@ -833,6 +859,24 @@ function FinancesContent() {
     period,
     today: businessToday,
   });
+  // ДОКУМЕНТЫ — ПО ПРАВУ ЧИТАЮЩЕГО: инвойсы видит только владелец, чек — тот,
+  // кому видна его операция. Журнал периода всей компании — тот же ключ, что
+  // у ленты, лишнего запроса нет. Плитка и панель режут одним отбором.
+  const ledgerById = useMemo(
+    () => new Map((companyLedgerQuery.data ?? []).map((tx) => [tx.id, tx] as const)),
+    [companyLedgerQuery.data],
+  );
+  const documentsReadable = useCallback<DocumentsReadable>(
+    (documents, receipts) =>
+      readableDocuments(documents, receipts, readRules, ledgerById, debtTeams),
+    [readRules, ledgerById, debtTeams],
+  );
+  const periodDocuments = useMemo(
+    () => ({
+      documents: documentsReadable(issuedDocuments.documents, issuedDocuments.receipts),
+    }),
+    [documentsReadable, issuedDocuments.documents, issuedDocuments.receipts],
+  );
   const invoiceSummary = useMemo(
     // Кредит-нота — сторно отменённого счёта, а не ещё один документ периода.
     () => ({ count: periodDocuments.documents.filter((d) => !d.creditNote).length }),
@@ -1241,7 +1285,9 @@ function FinancesContent() {
   // поиск показывал бы и расходы, и чужие команды.
   const allTimeRows = useMemo(() => {
     if (!searchInPeriodEmpty) return [];
-    const found = allTimeSearchQuery.data ?? [];
+    // Тем же отбором по строке, что лента: в зеркале поиск идёт токеном
+    // владельца и нашёл бы скрытую сторону.
+    const found = readableTransactions(allTimeSearchQuery.data ?? [], readRules, debtTeams);
     const orphanIds = new Set(orphanAccounts.map((account) => account.id));
     const teamRows = !scope
       ? found
@@ -1278,6 +1324,8 @@ function FinancesContent() {
   }, [
     searchInPeriodEmpty,
     allTimeSearchQuery.data,
+    readRules,
+    debtTeams,
     orphanAccounts,
     scope,
     accountTeam,
@@ -1457,6 +1505,7 @@ function FinancesContent() {
             // Документы выставляет владелец: у остальных панель не обещает
             // кнопку, которой у них нет (владелец 20.09).
             canIssue={access.documents}
+            readable={documentsReadable}
             invoices={scopedInvoices}
             payments={invoicePayments}
             appointments={scopedAppointments}

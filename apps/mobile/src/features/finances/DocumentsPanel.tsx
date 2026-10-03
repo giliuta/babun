@@ -20,6 +20,7 @@ import { useThemeColors } from "@/theme/colors";
 import { humanDayYear } from "@/features/appointments/helpers";
 import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import type { AccountWithBalance } from "./accounts";
+import type { DocumentsReadable } from "./finance-read-rules";
 import { PanelHeader } from "./PanelHeader";
 import type { Period } from "./period";
 import { usePeriodDocuments } from "./use-period-documents";
@@ -54,6 +55,7 @@ export function DocumentsPanel({
   today,
   query,
   canIssue = true,
+  readable,
   filter,
   onFilterChange,
   onOpen,
@@ -79,6 +81,10 @@ export function DocumentsPanel({
    *  кнопку, которой у него нет (владелец 20.09: плашка «Документы» остаётся
    *  и без доступа, но внутри просто ничего не показывается). */
   canIssue?: boolean;
+  /** Что человеку видно — тот же отбор, что у плитки «Документы»
+   *  (`finance-read-rules.ts`): в зеркале сервер отдаёт бумаги владельца.
+   *  Нет — видно всё. */
+  readable?: DocumentsReadable;
   filter: DocumentFilter;
   onFilterChange: (filter: DocumentFilter) => void;
   onOpen: (href: string) => void;
@@ -88,7 +94,11 @@ export function DocumentsPanel({
   const t = useThemeColors();
   // Список документов периода — общий с плиткой «Документы» на «Финансах»
   // (`usePeriodDocuments`): число на плитке и строки здесь из одного места.
-  const { documents, receipts, receiptsQuery } = usePeriodDocuments({
+  const {
+    documents: issued,
+    receipts,
+    receiptsQuery,
+  } = usePeriodDocuments({
     invoices,
     payments,
     appointments,
@@ -99,6 +109,10 @@ export function DocumentsPanel({
     period,
     today,
   });
+  const documents = useMemo(
+    () => (readable ? readable(issued, receipts) : issued),
+    [issued, readable, receipts],
+  );
   // Открытый чек. Своей страницы у него нет: документ неизменяем, и всё, что с
   // ним делают, — смотрят и высылают (владелец: «не надо лишних страниц»).
   const [openReceipt, setOpenReceipt] = useState<Receipt | null>(null);
