@@ -5,64 +5,77 @@ import type { AccessBlock, AccessLevel } from "../access-map";
 import { hasBlockPreview } from "./preview-keys";
 import { WORDED_KEYS, rightTitle, rowWord, stepDanger, stepHint, stepWord } from "./right-words";
 
-// Живые права реестра на 29.09 (`access_blocks where live`) — с их лестницами.
+// Живые права реестра на 04.10 (`access_blocks where live`, все 69, в порядке
+// `position`) — с их лестницами. Сверка с базой 04.10 нашла, что прежний список
+// (29.09) не знал 23 живых прав и держал снятые «Шаблоны SMS» компании.
 const LIVE: readonly [string, AccessLevel[]][] = [
+  ["calendar.records", ["off", "read", "write"]],
+  ["calendar.window", ["week", "near", "month", "quarter", "half", "own"]],
   ["calendar.create", ["off", "write"]],
+  ["calendar.events", ["off", "read", "write"]],
   ["calendar.move", ["off", "write"]],
   ["calendar.cancel", ["off", "write"]],
-  ["calendar.events", ["off", "read", "write"]],
-  ["calendar.day_labels", ["off", "read", "write"]],
-  ["calendar.schedule", ["off", "read", "write"]],
   ["record.team", ["read", "write"]],
   ["record.label", ["off", "read", "write"]],
-  ["record.color", ["off", "write"]],
   ["record.client", ["off", "read", "write"]],
   ["record.object", ["off", "read", "write"]],
   ["record.services", ["off", "read"]],
+  ["record.color", ["off", "write"]],
+  ["record.note", ["off", "read", "write"]],
   ["record.amount", ["off", "read", "write"]],
   ["record.payment", ["off", "read", "write"]],
   ["record.files", ["off", "read", "write"]],
-  // Этап 2 денег: общее «Доходы и расходы» делится на два права.
+  ["record.sms", ["off", "read"]],
+  ["calendar.day_labels", ["off", "read", "write"]],
+  ["event.label", ["off", "read", "write"]],
+  ["event.client", ["off", "read", "write"]],
+  ["event.object", ["off", "read", "write"]],
+  ["event.type", ["off", "read", "write"]],
+  ["event.note", ["off", "read", "write"]],
+  ["event.files", ["off", "read", "write"]],
+  ["calendar.schedule", ["off", "read", "write"]],
+  ["calendar.identity", ["off", "read", "write"]],
+  ["calendar.timezone", ["off", "read", "write"]],
+  ["calendar.hours", ["off", "read", "write"]],
+  ["calendar.booking_form", ["off", "read", "write"]],
+  ["calendar.services", ["off", "read", "write"]],
+  ["calendar.labels", ["off", "read", "write"]],
+  ["finance.accounts", ["off", "read", "write"]],
+  ["finance.documents", ["off", "read", "write"]],
   ["finance.income", ["off", "read", "write", "full"]],
   ["finance.expense", ["off", "read", "write", "full"]],
-  ["finance.accounts", ["off", "read", "write"]],
   ["finance.debts", ["off", "read", "write"]],
-  // «Финансы» по плиткам и шестерёнке (владелец 03.10).
-  ["finance.documents", ["off", "read", "write"]],
   ["finance.profit", ["off", "read"]],
-  ["finance.settings_accounts", ["off", "read", "write"]],
-  // «Ограничения» финансов и записей календаря (03.10).
   ["finance.window", ["week", "near", "month", "quarter", "half", "own"]],
-  ["calendar.window", ["week", "near", "month", "quarter", "half", "own"]],
+  ["finance.settings_accounts", ["off", "read", "write"]],
   ["finance.settings_trash", ["off", "read", "write"]],
   ["finance.settings_categories_income", ["off", "read", "write"]],
   ["finance.settings_categories_expense", ["off", "read", "write"]],
   ["finance.settings_categories_debts", ["off", "read", "write"]],
-  ["finance.settings_currency", ["off", "read"]],
   ["finance.settings_requisites", ["off", "read"]],
+  ["finance.settings_currency", ["off", "read"]],
   ["clients", ["off", "read"]],
-  // «Создание клиента» и «Меню клиента» (02.10) — «Может / Не может».
+  ["clients.scope", ["week", "near", "month", "quarter", "half", "own"]],
   ["clients.create", ["off", "write"]],
   ["clients.menu", ["off", "write"]],
-  // «Удаление клиента» (03.10) — своим правом, как «Отмена и удаление».
   ["clients.delete", ["off", "write"]],
-  // Защита базы: «Ограничение по времени» (02.10), блоки карточки.
-  // «Открывает карточку», «Телефон», «История записей» и «Карточка из
-  // записи» убраны 02.10 — их даёт база.
-  ["clients.scope", ["near", "month", "own"]],
+  ["clients.client", ["off", "read", "write"]],
   ["clients.note", ["off", "read", "write"]],
   ["clients.people", ["off", "read", "write"]],
   ["clients.objects", ["off", "read", "write"]],
   ["clients.labels", ["off", "read", "write"]],
-  // «Метка и тег» разделены (03.10): «Тег» — своё право.
   ["clients.tags", ["off", "read", "write"]],
   ["clients.personal", ["off", "read", "write"]],
   ["clients.files", ["off", "read", "write"]],
   ["clients.requisites", ["off", "read", "write"]],
-  // «Долг и деньги» снято 03.10 — деньги идут с «Историей», у неё три
-  // положения: «Скрыта / Своя команда / Все команды».
   ["clients.history", ["off", "read", "write"]],
-  ["company.sms_templates", ["off", "read", "write"]],
+  ["clients.sms", ["off", "read", "write"]],
+  ["clients.settings_card", ["off", "read", "write"]],
+  ["clients.settings_ways", ["off", "read", "write"]],
+  ["clients.settings_objects", ["off", "read", "write"]],
+  ["clients.settings_maps", ["off", "read", "write"]],
+  ["clients.settings_tags", ["off", "read", "write"]],
+  ["clients.settings_sources", ["off", "read", "write"]],
 ];
 
 const block = (key: string, levels: AccessLevel[]): AccessBlock => ({
