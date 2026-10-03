@@ -7,16 +7,33 @@ import type { SmsHistoryItem } from "./sms-model";
 /** Плитки страницы — они же фильтры. */
 export type SmsBucket = "all" | "delivered" | "waiting" | "failed";
 
-export function bucketOf(status: SmsHistoryItem["status"]): Exclude<SmsBucket, "all"> {
+/** ОТЧЁТ О ДОСТАВКЕ ПРИХОДИТ ЗА СЕКУНДЫ (03.10: 8–15 с от отправки). «Отправлено»
+ *  без отчёта спустя сутки уже ничего не ждёт: оператор отчёт не вернёт — так
+ *  две SMS от 02.10, ушедшие до подключения отчётов, навсегда висели в «Ждут».
+ *  Строка при этом честно говорит «Отправлено», а плитка считает их ушедшими. */
+export const SENT_REPORT_WAIT_MS = 24 * 60 * 60 * 1000;
+
+export function bucketOf(
+  status: SmsHistoryItem["status"],
+  createdAt?: string | null,
+  now: number = Date.now(),
+): Exclude<SmsBucket, "all"> {
   if (status === "delivered") return "delivered";
   if (status === "failed" || status === "undelivered" || status === "blocked") return "failed";
+  if (status === "sent" && createdAt) {
+    const at = new Date(createdAt).getTime();
+    if (Number.isFinite(at) && now - at > SENT_REPORT_WAIT_MS) return "delivered";
+  }
   // Ушло к оператору, но доставку ещё не подтвердили, или ждёт своего часа.
   return "waiting";
 }
 
-export function countBuckets(items: readonly SmsHistoryItem[]): Record<SmsBucket, number> {
+export function countBuckets(
+  items: readonly SmsHistoryItem[],
+  now: number = Date.now(),
+): Record<SmsBucket, number> {
   const out: Record<SmsBucket, number> = { all: items.length, delivered: 0, waiting: 0, failed: 0 };
-  for (const item of items) out[bucketOf(item.status)] += 1;
+  for (const item of items) out[bucketOf(item.status, item.createdAt, now)] += 1;
   return out;
 }
 
@@ -33,8 +50,13 @@ export function filterHistory(
   items: readonly SmsHistoryItem[],
   bucket: SmsBucket,
   query: string,
+  now: number = Date.now(),
 ): SmsHistoryItem[] {
-  return items.filter((item) => (bucket === "all" || bucketOf(item.status) === bucket) && matchesSearch(item, query));
+  return items.filter(
+    (item) =>
+      (bucket === "all" || bucketOf(item.status, item.createdAt, now) === bucket) &&
+      matchesSearch(item, query),
+  );
 }
 
 const WEEKDAYS = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];

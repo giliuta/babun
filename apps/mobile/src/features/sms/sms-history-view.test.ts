@@ -18,7 +18,9 @@ describe("история SMS — плитки, поиск, дни", () => {
     assert.equal(bucketOf("queued"), "waiting");
     assert.equal(bucketOf("undelivered"), "failed");
     assert.equal(bucketOf("blocked"), "failed");
-    assert.deepEqual(countBuckets(items), { all: 4, delivered: 1, waiting: 2, failed: 1 });
+    // В тот же день «Отправлено» ещё ждёт отчёта.
+    const sameDay = new Date("2026-09-27T12:00:00").getTime();
+    assert.deepEqual(countBuckets(items, sameDay), { all: 4, delivered: 1, waiting: 2, failed: 1 });
   });
 
   test("поиск: имя, текст, номер цифрами", () => {
@@ -26,7 +28,8 @@ describe("история SMS — плитки, поиск, дни", () => {
     assert.ok(matchesSearch(items[1]!, "напоминаем"));
     assert.ok(matchesSearch(items[1]!, "456 747"));
     assert.ok(!matchesSearch(items[2]!, "анна"));
-    assert.deepEqual(filterHistory(items, "waiting", "анна").map((i) => i.id), ["4"]);
+    const sameDay = new Date("2026-09-27T12:00:00").getTime();
+    assert.deepEqual(filterHistory(items, "waiting", "анна", sameDay).map((i) => i.id), ["4"]);
     assert.deepEqual(filterHistory(items, "all", "").map((i) => i.id), ["1", "2", "3", "4"]);
   });
 
@@ -42,5 +45,29 @@ describe("история SMS — плитки, поиск, дни", () => {
     assert.equal(twoParts[0]?.count, 2);
     assert.equal(dayTitle(new Date("2026-09-28T09:00:00"), now), "ВЧЕРА");
     assert.equal(dayTitle(new Date("2025-12-31T09:00:00"), now), "СР, 31 ДЕКАБРЯ 2025");
+  });
+});
+
+describe("«Отправлено» без отчёта о доставке", () => {
+  const sentAt = "2026-10-02T21:50:04";
+  const base = new Date(sentAt).getTime();
+
+  test("первые сутки — ждёт отчёта", () => {
+    assert.equal(bucketOf("sent", sentAt, base + 60_000), "waiting");
+    assert.equal(bucketOf("sent", sentAt, base + 23 * 3600_000), "waiting");
+  });
+
+  test("спустя сутки без отчёта — больше не «Ждут»", () => {
+    assert.equal(bucketOf("sent", sentAt, base + 25 * 3600_000), "delivered");
+  });
+
+  test("ждущие своего часа и отправляемые сроком не уходят из «Ждут»", () => {
+    assert.equal(bucketOf("queued", sentAt, base + 72 * 3600_000), "waiting");
+    assert.equal(bucketOf("sending", sentAt, base + 72 * 3600_000), "waiting");
+  });
+
+  test("без даты — как раньше", () => {
+    assert.equal(bucketOf("sent"), "waiting");
+    assert.equal(bucketOf("sent", "не дата", base + 72 * 3600_000), "waiting");
   });
 });

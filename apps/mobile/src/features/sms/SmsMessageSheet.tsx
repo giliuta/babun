@@ -70,7 +70,7 @@ export function SmsMessageSheet({
   const m = item ?? shown;
   if (!m) return null;
 
-  const bucket = bucketOf(m.status);
+  const bucket = bucketOf(m.status, m.createdAt);
   const color = bucket === "failed" ? t.danger : bucket === "delivered" ? t.success : t.warning;
   const waits = m.status === "queued" && m.sendAfter && new Date(m.sendAfter).getTime() > Date.now();
   const look = statusLook(bucket, !!waits);
