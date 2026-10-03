@@ -79,6 +79,9 @@ export function SectionCard({
             className={`relative flex-row items-center px-4 ${
               dense ? "pb-0 pt-1.5" : "pb-0.5 pt-2.5"
             }`}
+            // Пилюля «Ещё N» (22pt) на 3pt ниже шапки: без подъёма белая
+            // плашка первой строки ложилась поверх и срезала ей низ.
+            style={{ zIndex: 1 }}
           >
             <Text
               accessibilityRole="header"

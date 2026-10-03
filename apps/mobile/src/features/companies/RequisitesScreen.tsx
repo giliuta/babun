@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { usePathname, useRouter, type Href } from "expo-router";
-import { Building2, EyeOff, RotateCcw, Settings, Trash2 } from "lucide-react-native";
+import { Building2, EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import { useNextInvoiceNumber } from "@/features/invoices/queries";
 import { AppearanceTile, appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -72,8 +71,8 @@ import {
 // вставляем в инвойс; может быть несколько»). На странице — ТОЛЬКО список
 // наборов и кнопка внизу. Справа в строке — номер следующего инвойса этого
 // набора (нумерация живёт за реквизитами), как цена в прайсе услуг. Бланк,
-// общий для всех наборов, — за шестерёнкой в шапке («Бланк инвойса»); под
-// списком его больше нет.
+// общий для всех наборов, с 03.10 — дверь «Инвойсы» в шестерёнке «Финансов»;
+// своей шестерёнки у страницы больше нет.
 
 /** Высота строки: по ней перетаскивание считает перелёт через соседей. Та же,
  *  что у типов событий и меток. */
@@ -95,12 +94,6 @@ export function RequisitesScreen() {
   const role = useCurrentRole().data;
   // Пока роль грузится, владелец не должен видеть мигание «только чтение».
   const readOnly = role !== undefined && role !== "owner";
-  const router = useRouter();
-  // Шестерёнка ведёт на бланк тем же адресом, каким пришли сюда: из вкладки
-  // «Финансы» — внутри неё, из документа — поверх него (`(shared)`).
-  const blankHref = (usePathname().startsWith("/finances")
-    ? "/finances/invoice-blank"
-    : "/invoice-blank") as Href;
 
   // Видимые сверху, скрытые под ними — тем же порядком, что у меток и услуг.
   const rows = useMemo(() => {
@@ -200,30 +193,9 @@ export function RequisitesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader
-        title="Реквизиты"
-        right={
-          readOnly ? null : (
-            <Pressable
-              onPress={() => router.push(blankHref)}
-              accessibilityRole="button"
-              accessibilityLabel="Бланк инвойса"
-              hitSlop={8}
-              style={({ pressed }) => ({
-                width: 44,
-                height: 44,
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: t.radius.card,
-                backgroundColor: pressed ? t.pressed : "transparent",
-              })}
-            >
-              {/* Та же шестерёнка, что у раздела «Финансы». */}
-              <Settings color={t.sub} size={21} strokeWidth={2} />
-            </Pressable>
-          )
-        }
-      />
+      {/* БЕЗ ШЕСТЕРЁНКИ (владелец 03.10): бланк инвойса — дверь «Инвойсы» в
+          шестерёнке «Финансов», рядом с «Реквизитами». У настройки одна дверь. */}
+      <ScreenHeader title="Реквизиты" />
 
       {companies.isLoading ? (
         <EmptyState state="loading" fill />

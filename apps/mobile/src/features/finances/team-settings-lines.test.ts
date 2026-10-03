@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   accountsSettingsHref,
+  invoicesDoorLine,
   requisitesDoorLine,
   settingsTeamId,
   teamCategoriesLine,
@@ -85,5 +86,16 @@ describe("дверь настроек над счетами — счета вы�
   test("«Без команды» и все счета — страница всех счетов", () => {
     assert.equal(accountsSettingsHref("__no_team__", "__no_team__"), "/accounts/settings");
     assert.equal(accountsSettingsHref(null, "__no_team__"), "/accounts/settings");
+  });
+});
+
+describe("дверь «Инвойсы» (владелец 03.10)", () => {
+  test("срок оплаты словами, ноль — по факту", () => {
+    assert.equal(invoicesDoorLine(7), "Срок оплаты 7 дней");
+    assert.equal(invoicesDoorLine(1), "Срок оплаты 1 день");
+    assert.equal(invoicesDoorLine(14), "Срок оплаты 14 дней");
+    assert.equal(invoicesDoorLine(0), "Оплата по факту");
+    // Настройка ещё не пришла — то же, что у бланка по умолчанию.
+    assert.equal(invoicesDoorLine(null), "Срок оплаты 7 дней");
   });
 });
