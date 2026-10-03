@@ -960,6 +960,8 @@ export default function CalendarTab() {
   const todayYmd = formatYMD(now);
   const tomorrowYmd = formatYMD(addDays(now, 1));
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  /** «Сейчас» по времени бизнеса строкой — шторке дня и месяцу для долга. */
+  const nowHmBusiness = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   // Перепривязка стартового дня к бизнес-сегодня (см. seedYmdRef выше).
   // Ждём, пока таймзона резолвится (todayYmd разойдётся с сидом), но
@@ -3133,6 +3135,7 @@ export default function CalendarTab() {
                   financeAppointments={financeAppts}
                   teamId={activeTeamId}
                   todayYmd={todayYmd}
+                  nowHm={nowHmBusiness}
                   showFinance={seesIncome && seesExpense}
                   labelFor={labelFor}
                   holeFor={holeFor}
@@ -3184,6 +3187,7 @@ export default function CalendarTab() {
           appointments={finModalYmd ? financeFor(finModalYmd) : []}
           teamId={activeTeamId}
           businessToday={todayYmd}
+          nowHm={nowHmBusiness}
           onClose={() => setFinModalYmd(null)}
           onEditAppointment={openEdit}
           // После формы операции человек возвращается в разбор того же дня.

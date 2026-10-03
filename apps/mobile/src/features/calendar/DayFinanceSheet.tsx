@@ -87,6 +87,7 @@ export function DayFinanceSheet({
   appointments,
   teamId,
   businessToday,
+  nowHm: nowHmProp,
   onClose,
   onEditAppointment,
   onReopen,
@@ -99,6 +100,9 @@ export function DayFinanceSheet({
   teamId: string | null;
   /** Сегодня по времени бизнеса — будущий день операций не принимает. */
   businessToday: string;
+  /** «Сейчас» по времени бизнеса (HH:MM) — пара к `businessToday`: долг дня
+   *  считается по тем же часам, что сетка. Нет — часы телефона. */
+  nowHm?: string;
   onClose: () => void;
   /** Открыть запись — отметить оплату, посмотреть работу. */
   onEditAppointment?: (a: Appointment) => void;
@@ -146,7 +150,8 @@ export function DayFinanceSheet({
   }, [dateYmd, appointments, shownYmd]);
   const ymd = shownYmd ?? businessToday;
   const appts = shownAppts;
-  const nowHm = formatHM(new Date());
+  // Часы бизнеса, а не телефона (аудит 2026-10-03) — как у сетки.
+  const nowHm = nowHmProp ?? formatHM(new Date());
 
   const txQuery = useTransactions(ymd, ymd, {
     brigadeIds: teamId ? [teamId] : undefined,

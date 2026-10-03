@@ -48,6 +48,7 @@ export const MonthView = memo(function MonthView({
   financeAppointments,
   teamId,
   todayYmd,
+  nowHm: nowHmProp,
   labelFor,
   holeFor,
   onPickDay,
@@ -67,6 +68,9 @@ export const MonthView = memo(function MonthView({
   teamId: string | null;
   /** Business-timezone today (YYYY-MM-DD); falls back to device time. */
   todayYmd?: string;
+  /** «Сейчас» по времени бизнеса (HH:MM) — пара к `todayYmd`: долг дня
+   *  считается по тем же часам, что сетка. Нет — часы телефона. */
+  nowHm?: string;
   /** Метка дня (город) — цветная точка у числа: месяц показывает маршрут
    *  меток так же, как шапки Дня/Недели (единая система дат). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
@@ -145,7 +149,10 @@ export const MonthView = memo(function MonthView({
         if (k.startsWith(prefix)) dates.add(k.slice(prefix.length));
       }
     }
-    const nowHm = formatHM(new Date());
+    // Часы бизнеса, а не телефона (аудит 2026-10-03): запись, кончившаяся в
+    // 17:00 по команде, при 23:30 на телефоне в другом поясе уже была
+    // «долгом», хотя сетка считала её идущей.
+    const nowHm = nowHmProp ?? formatHM(new Date());
     for (const date of dates) {
       m.set(
         date,
@@ -162,7 +169,7 @@ export const MonthView = memo(function MonthView({
       );
     }
     return m;
-  }, [financeByDay, ledger, services, extrasMap, teamId, showFinance, todayStr]);
+  }, [financeByDay, ledger, services, extrasMap, teamId, showFinance, todayStr, nowHmProp]);
 
   const t = useThemeColors();
 
