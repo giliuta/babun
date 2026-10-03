@@ -2,7 +2,9 @@ import { Text, View } from "react-native";
 import {
   Bookmark,
   Building2,
+  Cake,
   CalendarCheck,
+  MapPin,
   FileText,
   MessageSquare,
   Phone,
@@ -180,13 +182,25 @@ export function ClientCardPreview({
     case "clients.personal":
       return (
         <PreviewFrame state={state}>
-          <SectionCard title="Личное">
-            <SelectList>
-              <SelectRow title="День рождения" value="12 мая" onPress={noop} />
-              <SelectRow title="Язык" value="Русский" onPress={noop} />
-              <SelectRow title="Откуда пришёл" value="Google Maps" onPress={noop} />
-            </SelectList>
-          </SectionCard>
+          {/* Как на карточке (03.10): «День рождения | Источник» плитками. */}
+          <View className="mx-4 mt-2" style={{ flexDirection: "row", gap: 8 }}>
+            <IdentityCard
+              icon={Cake}
+              color={SETTINGS_TILE.red}
+              title="12 мая"
+              onPress={on}
+              accessibilityLabel="День рождения: 12 мая"
+              accessibilityHint="Открывает выбор даты"
+            />
+            <IdentityCard
+              icon={MapPin}
+              color={SETTINGS_TILE.orange}
+              title="Google Maps"
+              onPress={on}
+              accessibilityLabel="Источник: Google Maps"
+              accessibilityHint="Открывает выбор источника"
+            />
+          </View>
         </PreviewFrame>
       );
     case "clients.files":

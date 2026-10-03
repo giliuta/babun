@@ -46,3 +46,14 @@ describe("блок «SMS» — мини-история в самом блоке 
     assert.doesNotMatch(read("../../../app/(dashboard)/clients/sms.tsx"), /<GradientButton|label="Отправить/);
   });
 });
+
+describe("«Личное» — плитками, как «Метка | Тег» (03.10)", () => {
+  test("день рождения и источник — `IdentityCard` в ряд пополам, без строк", () => {
+    const personal = read("blocks/PersonalBlock.tsx");
+    assert.match(personal, /<IdentityCard\s+icon=\{Cake\}/);
+    assert.match(personal, /<IdentityCard\s+icon=\{sourceIcon\}/);
+    assert.doesNotMatch(personal, /<NavRow|<SectionCard/);
+    // Пустую плитку «Только видит» не показываем — заполнить её нельзя.
+    assert.match(personal, /const showBirthday = !readOnly \|\| !!birthday;/);
+  });
+});
