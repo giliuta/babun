@@ -411,13 +411,17 @@ export function ClientDetailScreen() {
     );
   }
 
+  // ЭКРАН ОШИБКИ — С ШАПКОЙ И НАЗАД (владелец 03.10): без шапки с него
+  // уходили только таб-баром. Нижний край держит таб-бар, как у соседних
+  // экранов: «Повторить» стоит на той же высоте, что их кнопки.
   if (roleQuery.isError || !role) {
     return (
-      <Screen>
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Клиент" />
         <ClientDataNotice
           fullScreen
-          title="Доступ не подтверждён"
-          message="Не удалось проверить вашу роль в компании. Повторите попытку."
+          title="Нет связи с сервером"
+          message="Не получилось проверить доступ к клиенту. Повторите через минуту."
           onRetry={() => void roleQuery.refetch()}
           retrying={roleQuery.isRefetching}
         />
@@ -435,7 +439,8 @@ export function ClientDetailScreen() {
 
   if (!isDraft && clientFailed && !c) {
     return (
-      <Screen>
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Клиент" />
         <ClientDataNotice
           fullScreen
           title="Не удалось загрузить клиента"
