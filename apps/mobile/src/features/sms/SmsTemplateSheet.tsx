@@ -12,6 +12,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { ValueRow } from "@/components/ui/ValueRow";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
@@ -185,6 +186,17 @@ export function SmsTemplateSheet({
     setTerm(kind);
   };
 
+  // Тап по фону и свайп вниз не выбрасывают набранный шаблон (аудит
+  // 2026-10-03): следующее открытие засевает черновик заново.
+  const guard = useGuardedClose({
+    dirty:
+      JSON.stringify(draft) !==
+      JSON.stringify(template ? draftOf(template) : blankDraft(teamId)),
+    busy: save.isPending,
+    onClose,
+    message: "Набранное в шаблоне не сохранится.",
+  });
+
   const submit = () =>
     save.mutate(draft, {
       onSuccess: () => {
@@ -196,8 +208,9 @@ export function SmsTemplateSheet({
 
   return (
     <BottomSheet
-      visible={visible}
-      onClose={onClose}
+      visible={visible && !guard.hidden}
+      onClose={guard.close}
+      onExited={guard.onExited}
       title={template ? "Шаблон SMS" : "Новый шаблон"}
       subtitle={teamName}
       padded={false}
