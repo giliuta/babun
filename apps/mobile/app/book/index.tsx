@@ -1878,8 +1878,25 @@ export default function BookScreen() {
 
   const failedOptional = referenceQueries.find(
     ({ query }) =>
-      query.isError && !essentialQueries.some((e) => e.query === query),
+      query.isLoadingError && !essentialQueries.some((e) => e.query === query),
   );
+  // УПАВШИЙ СПРАВОЧНИК ПЕРЕЧИТЫВАЕТСЯ, ПОКА ФОРМА ОТКРЫТА (03.10, после
+  // лежащего сервера). Сервер вернулся, а «Не удалось загрузить партнёров»
+  // висела над формой до её закрытия: сам запрос больше никто не будил —
+  // сеть телефона не пропадала, и react-query «переподключения» не видел.
+  // Так же, как счета оплаты (`useTeamPaymentAccounts`), — раз в 10 с.
+  const referenceQueriesRef = useRef(referenceQueries);
+  referenceQueriesRef.current = referenceQueries;
+  const failedOptionalLabel = failedOptional?.label ?? null;
+  useEffect(() => {
+    if (!failedOptionalLabel) return;
+    const timer = setInterval(() => {
+      for (const { query } of referenceQueriesRef.current) {
+        if (query.isLoadingError && !query.isFetching) void query.refetch();
+      }
+    }, 10_000);
+    return () => clearInterval(timer);
+  }, [failedOptionalLabel]);
   // ЗАПИСЬ КЛИЕНТА = КЛИЕНТ + УСЛУГА (владелец 25.09: «нельзя сохранить
   // запись без клиента — без клиента это событие; после клиента нельзя
   // сохранить без услуги»). «Сохранить» остаётся нажимаемым и говорит

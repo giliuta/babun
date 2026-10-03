@@ -37,4 +37,12 @@ describe("booking form while the server is down", () => {
     const footer = pickers.slice(pickers.indexOf("{catalogMissing ? ("), pickers.indexOf('label="Добавить услугу"'));
     assert.match(footer, /\) : catalogEmpty \? \(/);
   });
+
+  test("a failed optional reference retries while the form is open", () => {
+    // Сервер вернулся, а «Не удалось загрузить партнёров» висела до закрытия
+    // формы: запрос никто не будил.
+    assert.match(book, /query\.isLoadingError && !essentialQueries\.some/);
+    assert.match(book, /if \(query\.isLoadingError && !query\.isFetching\) void query\.refetch\(\);/);
+    assert.match(book, /}, 10_000\);/);
+  });
 });
