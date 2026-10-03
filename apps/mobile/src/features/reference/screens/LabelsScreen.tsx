@@ -241,6 +241,10 @@ export function LabelsScreen() {
     return off;
   }, [schedules, teamId]);
 
+  /** Метка скрыта или удалена — патч, который возвращает её в живые. */
+  const reviveIfGone = (city: City) =>
+    city.deleted_at || !city.is_active ? { deleted_at: null, is_active: true } : {};
+
   const alertError = (e: unknown) =>
     notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
@@ -252,10 +256,13 @@ export function LabelsScreen() {
         (c) => c.name.toLowerCase() === trimmed.toLowerCase(),
       );
       if (existing) {
-        // Уже в библиотеке — просто обновляем цвет.
+        // Уже в библиотеке — обновляем вид. Совпала СКРЫТАЯ или УДАЛЁННАЯ
+        // (список держит и их) — возвращаем в живые тем же патчем, что
+        // «Вернуть»: иначе тост «Метка добавлена», а метки нет ни в выборе
+        // дня, ни среди живых (аудит 2026-10-03).
         await updateCity.mutateAsync({
           id: existing.id,
-          patch: { color, weekdays, tint_day: tintDay },
+          patch: { color, weekdays, tint_day: tintDay, ...reviveIfGone(existing) },
         });
       } else {
         if (!teamId) return;
@@ -293,7 +300,9 @@ export function LabelsScreen() {
         target = collision.name;
         await updateCity.mutateAsync({
           id: collision.id,
-          patch: { color, weekdays, tint_day: tintDay },
+          // Слились в удалённую — она возвращается: живая «А» уходит в
+          // скрытые, и без возврата живой метки не оставалось вовсе.
+          patch: { color, weekdays, tint_day: tintDay, ...reviveIfGone(collision) },
         });
         await deleteCity.mutateAsync(city.id);
       } else {
