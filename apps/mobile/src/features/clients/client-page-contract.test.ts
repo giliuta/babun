@@ -496,7 +496,8 @@ describe("«Объединить с дублем» в «⋯» карточки",
     const src = merge();
     const body = src.slice(src.indexOf("const merge = async"), src.indexOf("return () => {"));
     const patch = body.indexOf("await updateById.mutateAsync({ id: primary.id, patch })");
-    const appts = body.indexOf("await updateAppt.mutateAsync({ id: a.id, patch: { client_id: primary.id } })");
+    // Визит едет к основной вместе с объектом основной (аудит 03.10).
+    const appts = body.indexOf("patch: { client_id: primary.id, ...(location ? { location_id: location } : {}) },");
     const archive = body.indexOf("await archive.mutateAsync({ ids: [dupRow.id], trash: true })");
     assert.ok(patch > -1 && appts > -1 && archive > -1, "шаг слияния пропал");
     assert.ok(patch < appts && appts < archive, "порядок слияния сломан");
