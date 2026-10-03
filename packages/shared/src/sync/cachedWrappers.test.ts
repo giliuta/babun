@@ -493,6 +493,9 @@ describe("clients cache-of-domain", () => {
       createBlankClient({ id: CLIENT_ID, full_name: "До изменения" }),
       TENANT,
     );
+    // Создание уже на сервере: ждущая операция строки отправила бы правку
+    // в очередь за собой (аудит 03.10), а здесь проверяется прямой путь.
+    for (const op of await dequeueAll()) await removeOp(op.id);
     const queuedBefore = (await dequeueAll()).length;
     setNetwork(new OnlineNetwork());
 
@@ -508,6 +511,49 @@ describe("clients cache-of-domain", () => {
     const [cached] = await cacheRead<Record<string, unknown>>("clients", TENANT);
     expect(cached?.full_name).toBe("До изменения");
     expect((await dequeueAll()).length).toBe(queuedBefore);
+  });
+});
+
+describe("правка клиента встаёт за его ждущими правками (аудит 03.10)", () => {
+  // Сервер, который нельзя звать: прямая запись при ждущей очереди — ошибка.
+  const forbidden = {
+    from() {
+      throw new Error("прямая запись мимо очереди");
+    },
+    rpc() {
+      throw new Error("прямая запись мимо очереди");
+    },
+  };
+
+  test("удаление ждёт в очереди — возврат встаёт за ним, а не обгоняет", async () => {
+    const client = createBlankClient({ id: CLIENT_ID, full_name: "Ждущий" });
+    await createClient(stubSupabase, client, TENANT);
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    await archiveClient(stubSupabase, CLIENT_ID, TENANT, "2026-09-07T10:00:00.000Z");
+    setNetwork(new OnlineNetwork());
+
+    await restoreClient(
+      forbidden as never,
+      { ...client, deleted_at: "2026-08-08T10:00:00.000Z", purge_at: "2026-09-07T10:00:00.000Z" },
+      TENANT,
+    );
+
+    const ops = await dequeueAll();
+    expect(ops.map((op) => op.payload.deleted_at === null ? "restore" : "archive")).toEqual([
+      "archive",
+      "restore",
+    ]);
+  });
+
+  test("правка телефона при ждущей правке — в очередь за ней", async () => {
+    await createClient(stubSupabase, createBlankClient({ id: CLIENT_ID, full_name: "Ждущий" }), TENANT);
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    await updateClient(stubSupabase, CLIENT_ID, { comment: "первая" }, TENANT);
+    setNetwork(new OnlineNetwork());
+
+    await updateClient(forbidden as never, CLIENT_ID, { comment: "вторая" }, TENANT);
+
+    expect((await dequeueAll()).map((op) => op.payload.comment)).toEqual(["первая", "вторая"]);
   });
 });
 

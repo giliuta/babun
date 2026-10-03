@@ -78,6 +78,7 @@ import {
   cacheReplaceTenant,
   cacheGetOne,
   hasAuthoritativeTenantSnapshot,
+  hasQueuedOps,
   dequeueAll,
   type CachedClient,
   type CachedClientData,
@@ -140,6 +141,25 @@ function refuseOfflineWrite(opts: CachedWriteOptions | undefined): void {
  *  операция не ложится — откат и тот же честный отказ. */
 function refuseQueueing(opts: CachedWriteOptions | undefined): boolean {
   return !!opts?.onlineOnly;
+}
+
+/** ПРАВКА ВСТАЁТ ЗА ЖДУЩИМИ ПРАВКАМИ ЭТОГО ЖЕ КЛИЕНТА (аудит 2026-10-03).
+ *
+ *  У записей правило давнее (`appointmentsCached`): при живой сети, но с
+ *  неотправленными правками строки, новая встаёт в очередь за ними — иначе
+ *  очередь дошлёт старую ПОСЛЕ свежей и перезапишет её. У клиентов прямая
+ *  запись обгоняла очередь: удалил офлайн (удаление в очереди), первая
+ *  попытка упала на 5xx, человек вернул клиента напрямую — а очередь
+ *  досылала удаление: клиент снова в корзине со сроком стирания, и тост
+ *  «Применены ваши изменения». То же с двумя правками телефона или заметки.
+ *
+ *  Запись «только в сети» (чужая компания) в очередь не ложится вовсе. */
+async function mustQueueBehind(
+  id: string,
+  opts: CachedWriteOptions | undefined,
+): Promise<boolean> {
+  if (refuseQueueing(opts)) return false;
+  return hasQueuedOps("clients", id).catch(() => false);
 }
 
 // ─── Read ─────────────────────────────────────────────────────────
@@ -426,7 +446,10 @@ export async function updateClient(
     expected_updated_at: expectedUpdatedAt,
   };
 
-  if (!offline) {
+  // Теги в очередь не ложатся (правка тегов только в сети) — такая правка
+  // идёт напрямую и при ждущей очереди.
+  const queued = !offline && (await mustQueueBehind(id, opts));
+  if (!offline && (!queued || scrubbedPatch.tag_ids !== undefined)) {
     // Online: standalone optimistic upsert (no queued op to pair with).
     if (merged) await cacheUpsert("clients", merged);
     try {
@@ -455,9 +478,11 @@ export async function updateClient(
     }
   }
 
-  // Offline — queue the write (ATOMIC with the optimistic row when we have
-  // one; plain enqueue when the row wasn't cached yet).
+  // Offline (or behind this client's queued edits) — queue the write (ATOMIC
+  // with the optimistic row when we have one; plain enqueue when the row
+  // wasn't cached yet).
   await enqueueUpdate(updateOp, merged);
+  if (queued) void kickReplayer({ supabase });
   return { ...toDomain(existing), ...scrubbedPatch, id } as Client;
 }
 
@@ -525,7 +550,7 @@ export async function archiveClient(
       ? enqueueOpWithCacheUpsertAndEmit(archiveOp, "clients", hidden)
       : enqueueOpAndEmit(archiveOp);
 
-  if (isOnline()) {
+  if (isOnline() && !(await mustQueueBehind(id, opts))) {
     if (hidden) await cacheUpsert("clients", hidden);
     try {
       await repoSoftDeleteClient(supabase, id, tenantId, purgeAt);
@@ -542,6 +567,7 @@ export async function archiveClient(
   }
 
   await queue();
+  if (isOnline()) void kickReplayer({ supabase });
 }
 
 /** Restore an archived client into the active-list cache. Supplying the
@@ -571,7 +597,7 @@ export async function restoreClient(
     expected_updated_at: null,
   };
 
-  if (isOnline()) {
+  if (isOnline() && !(await mustQueueBehind(client.id, opts))) {
     // Строка, какой она была до возврата: отказ сервера кладёт её обратно.
     const before = await cacheGetOne<CachedClientData>("clients", client.id, tenantId).catch(
       () => null,
@@ -602,6 +628,7 @@ export async function restoreClient(
   }
 
   await enqueueOpWithCacheUpsertAndEmit(restoreOp, "clients", cachedRow);
+  if (isOnline()) void kickReplayer({ supabase });
 }
 
 /** Low-level physical delete retained for maintenance callers only. Native
@@ -625,7 +652,7 @@ export async function deleteClient(
     expected_updated_at: null,
   };
 
-  if (isOnline()) {
+  if (isOnline() && !(await mustQueueBehind(id, opts))) {
     await cacheDelete("clients", id); // optimistic (standalone online)
     try {
       await repoDeleteClient(supabase, id, tenantId);
@@ -644,8 +671,9 @@ export async function deleteClient(
     }
   }
 
-  // Offline — ATOMIC optimistic delete + enqueue (risk #6).
+  // Offline (or behind queued edits) — ATOMIC optimistic delete + enqueue.
   await enqueueOpWithCacheDeleteAndEmit(deleteOp, "clients", id);
+  if (isOnline()) void kickReplayer({ supabase });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
