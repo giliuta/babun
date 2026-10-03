@@ -4,7 +4,6 @@ import {
   accountEditHref,
   editorView,
   stepAfterAnswer,
-  teamControl,
 } from "./editor-logic";
 
 
@@ -42,24 +41,6 @@ describe("что показывает лист правки", () => {
       editorView({ accountId: "x", accounts: list, error: new Error("stale"), online: true }),
       { kind: "gone" },
     );
-  });
-});
-
-describe("команда счёта в листе", () => {
-  test("счёт без команды отдают команде даже с историей", () => {
-    assert.equal(teamControl({ brigade_id: null, has_history: true }, ["t1"]), "hand-over");
-    assert.equal(teamControl({ brigade_id: null, has_history: false }, []), "fixed");
-  });
-
-  test("с историей команда заморожена", () => {
-    assert.equal(teamControl({ brigade_id: "t1", has_history: true }, ["t1", "t2"]), "fixed");
-  });
-
-  test("без истории выбирают, только если есть другая живая команда", () => {
-    assert.equal(teamControl({ brigade_id: "t1", has_history: false }, ["t1", "t2"]), "choose");
-    assert.equal(teamControl({ brigade_id: "t1", has_history: false }, ["t1"]), "fixed");
-    // Команда счёта в архиве, живая одна — перенести в неё можно.
-    assert.equal(teamControl({ brigade_id: "old", has_history: false }, ["t1"]), "choose");
   });
 });
 

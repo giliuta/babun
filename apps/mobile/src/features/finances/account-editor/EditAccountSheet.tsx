@@ -26,8 +26,9 @@ import { useCloseFlow } from "./use-close-flow";
 
 // ПРАВКА СЧЁТА — режим правки листа счёта (`AccountEditorSheet`). Здесь всё,
 // что было на странице настроек счёта (владелец 2026-09-15: «тапнуть на тот же
-// созданный и то же самое редактировать уже созданный счёт»). Порядок: имя и
-// вид первой строкой → деньги → команда → оплата записи → скрытие.
+// созданный и то же самое редактировать уже созданный счёт»). Порядок (03.10):
+// имя и вид → «Деньги» (на счёте, VAT, перевести) → «Счёт» (оплата записи,
+// выписка) → скрыть / удалить.
 //
 // НАЛОГА У СЧЁТА НЕТ (владелец 2026-09-23: «VAT мы уже пишем в „Итого“, нам
 // без разницы — счёт с VAT или без»). Налог решается там, где вносятся
@@ -35,12 +36,11 @@ import { useCloseFlow } from "./use-close-flow";
 // сколько VAT на нём к уплате (`AccountMoneyGroup`).
 //
 // «ПРИМЕНИТЬ» В ФУТЕРЕ (владелец 03.10: «в настройках счёта должна быть
-// кнопка применить или сохранить, чтоб было всё чётко»). Имя, вид, остаток на
-// начало, команда и «В оплате записи» копятся черновиком и уходят на сервер
-// одной правкой; закрыть лист с черновиком — только после вопроса. Действия
-// («Перевести», «Выписка», «Скрыть») — сразу, это не настройки; черновик они
-// не трогают. Закрытый
-// счёт открывается тем же листом — с «Открыть счёт снова».
+// кнопка применить или сохранить, чтоб было всё чётко»). Имя, вид и «В оплате
+// записи» копятся черновиком и уходят на сервер одной правкой; закрыть лист с
+// черновиком — только после вопроса. Действия («Перевести», «Выписка»,
+// «Скрыть», «Удалить») — сразу, это не настройки; черновик они не трогают.
+// Закрытый счёт открывается тем же листом — с «Открыть счёт снова».
 export function EditAccountSheet({
   visible,
   accountId,
@@ -63,14 +63,10 @@ export function EditAccountSheet({
     [accounts],
   );
   // ВСЕ команды, включая архивные: счёт живёт дольше своей команды, и её имя
-  // нужно и строке «Команда», и листу перевода.
+  // нужно листу перевода.
   const teamsQuery = useTeams({ includeInactive: true });
   const teamById = useMemo(
     () => new Map((teamsQuery.data ?? []).map((team) => [team.id, team])),
-    [teamsQuery.data],
-  );
-  const activeTeams = useMemo(
-    () => (teamsQuery.data ?? []).filter((team) => team.is_active),
     [teamsQuery.data],
   );
   const update = useUpdateAccount();
@@ -109,17 +105,8 @@ export function EditAccountSheet({
     online,
   });
   const saved = view.kind === "edit" ? view.account : null;
-  // Лист показывает счёт С ЧЕРНОВИКОМ поверх: «На счёте» едет за правкой
-  // остатка на начало, как поедет после «Применить».
-  const account = saved
-    ? {
-        ...saved,
-        ...pending,
-        balance:
-          saved.balance
-          + (pending.opening_balance !== undefined ? pending.opening_balance - saved.opening_balance : 0),
-      }
-    : null;
+  // Лист показывает счёт С ЧЕРНОВИКОМ поверх — как он станет после «Применить».
+  const account = saved ? { ...saved, ...pending } : null;
 
   const guard = useGuardedClose({
     dirty,
@@ -200,11 +187,8 @@ export function EditAccountSheet({
               <AccountMoneyGroup
                 account={account}
                 accounts={accounts}
-                activeTeams={activeTeams}
-                teamById={teamById}
                 stage={stage}
                 busy={update.isPending}
-                alertError={alertError}
                 onTransfer={() => flow.startTransfer(account)}
                 onStatement={() => setStatement("leaving")}
               />
