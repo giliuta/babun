@@ -94,9 +94,11 @@ export function isImage(att: { mime_type: string }): boolean {
 }
 
 export function formatBytes(n: number): string {
+  // Десятичная запятая — по-русски: «336,9 КБ», а не «336.9 КБ».
+  const one = (v: number) => v.toFixed(1).replace(".", ",");
   if (n < 1024) return `${n} Б`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} КБ`;
-  return `${(n / 1024 / 1024).toFixed(1)} МБ`;
+  if (n < 1024 * 1024) return `${one(n / 1024)} КБ`;
+  return `${one(n / 1024 / 1024)} МБ`;
 }
 
 // ─── Repo ──────────────────────────────────────────────────────────────
