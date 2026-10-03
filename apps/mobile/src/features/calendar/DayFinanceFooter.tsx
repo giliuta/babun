@@ -59,10 +59,18 @@ export function DayFinanceFooter({
   });
   // Операции видимых записей — в любой день внесения (предоплата неделей
   // раньше тоже стоит в дне записи).
-  const recordsLedger = useAppointmentsLedger(
+  const recordsLedgerQuery = useAppointmentsLedger(
     useMemo(() => appointments.map((a) => a.id), [appointments]),
     { enabled: days.length > 0 },
-  ).data;
+  );
+  const recordsLedger = recordsLedgerQuery.data;
+  // ДЕНЕГ ЕЩЁ НЕТ — НЕ НОЛЬ (повторный аудит 03.10). Пока журнал новой недели
+  // в пути, запрос отдаёт заглушкой строки ПРОШЛОГО периода, и дни новой
+  // недели секунду стояли «Доход €0» — у среды с оплатой €131 тоже. Ноль
+  // здесь — утверждение о деньгах; пока ответа нет, в клетке прочерк.
+  const unknown = (q: { isPlaceholderData: boolean; isPending: boolean; fetchStatus: string }) =>
+    q.isPlaceholderData || (q.isPending && q.fetchStatus !== "idle");
+  const settling = unknown(ledgerQuery) || unknown(recordsLedgerQuery);
   const ledger = useMemo(
     () => [...(ledgerQuery.data ?? []), ...(recordsLedger ?? [])],
     [ledgerQuery.data, recordsLedger],
@@ -150,12 +158,16 @@ export function DayFinanceFooter({
             // Мишень — во всю высоту полосы: поле полосы тоже нажимает день.
             hitSlop={{ top: 7, bottom: 7 }}
             accessibilityRole="button"
-            accessibilityLabel={`Финансы за ${dateLabel}: ${[
-              showIncome ? `доход ${formatEUR(income)}` : null,
-              showExpense ? `расход ${formatEUR(spent)}` : null,
-            ]
-              .filter(Boolean)
-              .join(", ")}`}
+            accessibilityLabel={`Финансы за ${dateLabel}: ${
+              settling
+                ? "загружаются"
+                : [
+                    showIncome ? `доход ${formatEUR(income)}` : null,
+                    showExpense ? `расход ${formatEUR(spent)}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")
+            }`}
             style={{
               flex: 1,
               alignItems: "center",
@@ -168,20 +180,20 @@ export function DayFinanceFooter({
                 есть реальные деньги (цвет = смысл). */}
             {showIncome ? (
               <Text
-                style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
+                style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 && !settling ? t.success : t.faint }}
                 numberOfLines={1}
                 maxFontSizeMultiplier={1.3}
               >
-                {formatEUR(income)}
+                {settling ? "—" : formatEUR(income)}
               </Text>
             ) : null}
             {showExpense ? (
               <Text
-                style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 ? t.danger : t.faint }}
+                style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 && !settling ? t.danger : t.faint }}
                 numberOfLines={1}
                 maxFontSizeMultiplier={1.3}
               >
-                {formatEUR(spent)}
+                {settling ? "—" : formatEUR(spent)}
               </Text>
             ) : null}
           </Pressable>

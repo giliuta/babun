@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   FlatList,
   Linking,
@@ -85,6 +86,25 @@ export function AgendaView({
   onCreate?: () => void;
 }) {
   const t = useThemeColors();
+  // ТЕКУЩИЙ МЕСЯЦ ОТКРЫВАЕТСЯ НА СЕГОДНЯ (повторный аудит 03.10). Лента
+  // начиналась с 1-го числа, а кнопки «Сегодня» в текущем месяце нет: к
+  // двадцатому числу загруженного месяца до своего дня приходилось листать
+  // через весь прошедший. Прошедшие дни месяца остаются выше — пальцем вверх.
+  // Один раз на месяц: новая запись в ленте не дёргает прокрутку.
+  const listRef = useRef<FlatList<AgendaSection>>(null);
+  const monthKey = sections[0]?.title.slice(0, 7) ?? "";
+  const todayIndex = todayYmd.startsWith(monthKey)
+    ? sections.findIndex((s) => s.title >= todayYmd)
+    : -1;
+  const scrolledFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!monthKey || scrolledFor.current === monthKey) return;
+    scrolledFor.current = monthKey;
+    if (todayIndex <= 0) return;
+    requestAnimationFrame(() =>
+      listRef.current?.scrollToIndex({ index: todayIndex, animated: false }),
+    );
+  }, [monthKey, todayIndex]);
   // ПУСТОЙ МЕСЯЦ — ЭКРАН, А НЕ СТРОКА ЛЕНТЫ (владелец 2026-09-29: «кнопка
   // не на своём месте, выше, чем положено»). Внутри ленты пустое состояние
   // наследовало её отступы — 16 сверху и 96 снизу, — и «Новая запись» стояла
@@ -105,8 +125,21 @@ export function AgendaView({
   return (
     <View style={{ flex: 1 }}>
       <FlatList
+        ref={listRef}
         style={{ flex: 1 }}
         data={sections}
+        // Высоты дней разные, и до дальнего дня лента ещё не измерена:
+        // сначала прыжок по средней высоте, потом точно.
+        onScrollToIndexFailed={(info) => {
+          listRef.current?.scrollToOffset({
+            offset: info.averageItemLength * info.index,
+            animated: false,
+          });
+          setTimeout(
+            () => listRef.current?.scrollToIndex({ index: info.index, animated: false }),
+            60,
+          );
+        }}
         keyExtractor={(s) => s.title}
         contentContainerStyle={{
           padding: 16,

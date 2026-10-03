@@ -234,4 +234,19 @@ describe("повторный аудит календаря 03.10", () => {
     const toggle = readFileSync(resolve(here, "../finances/FinanceOverview.tsx"), "utf8");
     assert.match(toggle, /backgroundColor: active && !locked \? fillRgba\(color, 0\.1\) : t\.surface,/);
   });
+
+  test("«Список» текущего месяца открывается на сегодня, один раз на месяц", () => {
+    const agenda = readFileSync(resolve(here, "AgendaView.tsx"), "utf8");
+    assert.match(agenda, /const todayIndex = todayYmd\.startsWith\(monthKey\)\s*\? sections\.findIndex\(\(s\) => s\.title >= todayYmd\)/);
+    assert.match(agenda, /if \(!monthKey \|\| scrolledFor\.current === monthKey\) return;\s*scrolledFor\.current = monthKey;/);
+    assert.match(agenda, /onScrollToIndexFailed=/);
+  });
+
+  test("полоса денег под сеткой не выдаёт заглушку прошлой недели за «€0»", () => {
+    const footer = readFileSync(resolve(here, "DayFinanceFooter.tsx"), "utf8");
+    assert.match(footer, /q\.isPlaceholderData \|\| \(q\.isPending && q\.fetchStatus !== "idle"\)/);
+    assert.match(footer, /const settling = unknown\(ledgerQuery\) \|\| unknown\(recordsLedgerQuery\);/);
+    assert.match(footer, /\{settling \? "—" : formatEUR\(income\)\}/);
+    assert.match(footer, /\{settling \? "—" : formatEUR\(spent\)\}/);
+  });
 });
