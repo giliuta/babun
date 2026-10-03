@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Image, Pressable, Text, TextInput, View } from "react-native";
 import { Check, Search, X } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { GUTTER, ICON } from "@/components/ui/tokens";
@@ -149,6 +149,7 @@ export function SelectRow({
   accessibilityHint,
   accessibilityRole = "button",
   plain = false,
+  image,
   onPress,
 }: {
   /** Имя сущности — главная строка. */
@@ -188,10 +189,13 @@ export function SelectRow({
    *  (история клиента, владелец 03.10: «заливку фона не надо, белый фон, а
    *  иконка цветная»). По умолчанию — тинт цвета, как у тегов и меток. */
   plain?: boolean;
+  /** СНИМОК ВМЕСТО ЗНАЧКА — плитка того же размера показывает само фото
+   *  (файлы клиента, владелец 03.10: фото узнают глазами, а не по слову). */
+  image?: string;
   onPress: () => void;
 }) {
   const t = useThemeColors();
-  const hasTile = Boolean(Icon || initial);
+  const hasTile = Boolean(Icon || initial || image);
   const emoji = typeof Icon === "string" ? Icon : null;
   // АВАТАР — СВОЙ СЛУЧАЙ: круг, тинт акцента, буква акцентом. Всё остальное —
   // плитка сущности из блока «Вид»: цвет заливкой в полную силу, глиф поверх
@@ -261,9 +265,12 @@ export function SelectRow({
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: fill,
+            overflow: image ? "hidden" : undefined,
           }}
         >
-          {emoji ? (
+          {image ? (
+            <Image source={{ uri: image }} style={{ width: TILE, height: TILE }} resizeMode="cover" />
+          ) : emoji ? (
             <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 15 }}>
               {emoji}
             </Text>

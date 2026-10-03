@@ -396,10 +396,19 @@
 же блок у записи и у события. Вид — общие плитки
 `src/features/appointments/AppointmentFileTiles.tsx` (`PhotoTile` — квадрат фото
 и видео, `DocumentPill` — плашка документа, инвойса и чека) и общий лист
-«Добавить» `src/features/appointments/FileAddSheet.tsx`. На странице клиента
-тот же блок собирает `src/features/clients/blocks/ClientFilesBlock.tsx` из тех
-же плиток и того же листа (владелец 22.09: «как у нас файлы, как везде
-хранятся файлы») — второй анатомии нет.
+«Добавить» `src/features/appointments/FileAddSheet.tsx`.
+
+**У клиента — лента по дням, как «История»** (владелец 03.10: «файлы — как
+история, по датам… файлы, чеки, инвойсы — полноценные блоки, чтобы сразу
+открывать»). Блок `src/features/clients/blocks/ClientFilesBlock.tsx` показывает
+ПОСЛЕДНИЙ файл под заголовком своего дня (`VisitDayHeader`), тап — страница
+`app/(dashboard)/clients/attachments.tsx`: вся лента (`clientFileTimeline` в
+`src/features/clients/client-files.ts`) днями, плашки `ClientFileRow` —
+`SelectRow plain`: фото — снимком в плитке (`image`), документ, инвойс и чек —
+значком; у инвойса и чека справа сумма цветом (получено — зелёным, ждёт —
+янтарём). Тап открывает сразу; своё вложение удаляется свайпом; «Добавить
+файл» — футером страницы, на карточке — дверью только у пустого блока. Лист
+«Добавить» тот же (`FileAddSheet`).
 
 ```tsx
 <AppointmentFilesBlock
@@ -625,7 +634,7 @@
 | «Люди» | `app/(dashboard)/clients/[id].tsx` + `src/features/clients/ClientPeopleDoor.tsx` | `LinkRow` одной строкой без аватара · свайп «Убрать» + «Отменить» · «Все люди · N» → `clients/people.tsx` · дверь «Добавить человека» |
 | «История» | `src/features/clients/ClientContactRow.tsx` | сводка `src/features/clients/ClientSummaryCard.tsx` (визиты · сумма · был · команда; при долге — в «Неоплаченные») · дверь «Записать» |
 | «Объекты» | `src/features/clients/ClientObjectsSection.tsx` + `src/features/clients/blocks/ObjectsBlock.tsx` | `ObjectRow` · мини-заметка объекта под строкой · «Все объекты · N» → `clients/objects.tsx` · дверь «Добавить объект» (курсор сразу в адрес) |
-| «Файлы» | `src/features/clients/blocks/ClientFilesBlock.tsx` | плитки и плашки из `AppointmentFileTiles` · «Все файлы · N» (файлы + инвойсы и чеки) → `clients/attachments.tsx`, там же «Инвойсы и чеки» · дверь «Добавить файл» |
+| «Файлы» | `src/features/clients/blocks/ClientFilesBlock.tsx` | последний файл под заголовком дня (`ClientFileRow`) → `clients/attachments.tsx`: лента по дням, инвойсы и чеки в ней же · пустой блок — дверь «Добавить файл» |
 | «Реквизиты» | `src/features/clients/blocks/RequisitesBlock.tsx` | наборы (`RequisitesRow` без шеврона, свайп «Удалить» + «Отменить») · «Все реквизиты · N» → `clients/requisites.tsx` · дверь «Добавить реквизиты» → `src/features/clients/RequisitesSheet.tsx` |
 | «Метка \| Тег» | `src/features/clients/ClientLabelTags.tsx` | две `IdentityCard` из шапки записи; метка «по записи» — пришла сама (`src/features/clients/label-auto-assign.ts`); тег один, как метка; шестерёнки в шторках ведут в справочники |
 | «Личное» | `src/features/clients/blocks/PersonalBlock.tsx` | День рождения · Источник · Кто привёл (при «Рекомендации») |

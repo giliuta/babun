@@ -209,11 +209,10 @@ describe("аудит 23.09 — то, что чинили", () => {
   test("неудачная правка откатывает только свои поля", () => {
     assert.match(read("queries.ts"), /const keys = Object\.keys\(variables\.patch\)/);
   });
-  test("«Все файлы» видна, когда за ней только инвойсы и чеки", () => {
-    assert.match(read("blocks/ClientFilesBlock.tsx"), /layout\.total > 0 \|\| layout\.hiddenPapers > 0/);
+  test("инвойсы и чеки — в ленте файлов, а не за второй дверью (03.10)", () => {
     const files = read("../../../app/(dashboard)/clients/attachments.tsx");
-    assert.match(files, /docsCount === 0/);
-    assert.match(files, /label="Инвойсы и чеки"/);
+    assert.match(read("use-client-files.ts"), /invoices: withDocs \? \(invoices\.data \?\? \[\]\) : \[\]/);
+    assert.doesNotMatch(files, /label="Инвойсы и чеки"/);
   });
   test("лист реквизитов закрывается, только когда записалось", () => {
     assert.match(read("RequisitesSheet.tsx"), /const ok = await onSave\(fieldsOf\(form\)\);\s*setSaving\(false\);\s*if \(!ok\) return;/);
