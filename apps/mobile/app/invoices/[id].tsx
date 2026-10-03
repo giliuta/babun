@@ -55,8 +55,6 @@ import { accessGate } from "@/features/access/my-access";
 import { useMyAccess } from "@/features/access/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useReceipts } from "@/features/documents/receipts-queries";
-import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
-import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -110,7 +108,6 @@ export default function InvoiceDetailScreen() {
   // делай; чек можно выставить на выставленный инвойс — на оплату, принятую
   // по нему»). Инвойс оплачен — внизу «Выписать чек», выписанный чек стоит
   // блоком на странице и открывается листом.
-  const [openReceipt, setOpenReceipt] = useState<Receipt | null>(null);
   const businessToday = todayYmd(calendarSettings?.timezone ?? "Europe/Nicosia");
 
   const client = useMemo(
@@ -597,7 +594,7 @@ export default function InvoiceDetailScreen() {
               <View key={receipt.id}>
                 {index > 0 ? <Divider inset={16} /> : null}
                 <Pressable
-                  onPress={() => setOpenReceipt(receipt)}
+                  onPress={() => router.push(`/documents/receipt/${receipt.id}` as Href)}
                   accessibilityRole="button"
                   accessibilityLabel={`Чек ${receipt.number}, открыть`}
                   className="flex-row items-center px-4 py-3 active:opacity-60"
@@ -690,17 +687,6 @@ export default function InvoiceDetailScreen() {
           await refund.mutateAsync(value);
         }}
         onClose={() => setRefundTarget(null)}
-      />
-      <ReceiptSheet
-        receipt={openReceipt}
-        appointment={appointment ?? null}
-        accountName={openReceipt?.account_id ? (accountById.get(openReceipt.account_id) ?? null) : null}
-        onClose={() => setOpenReceipt(null)}
-        // Дверь «к инвойсу» из листа ведёт на эту же страницу — лист просто
-        // закрывается.
-        onOpen={(href) => {
-          if (href !== `/invoices/${id}`) router.push(href as Href);
-        }}
       />
       <AccountEditorSheet
         visible={accountCreateOpen}

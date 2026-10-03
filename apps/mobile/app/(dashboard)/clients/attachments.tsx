@@ -2,10 +2,7 @@ import { Fragment, useState } from "react";
 import { Linking, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useInClientsTab } from "@/features/clients/reference-href";
-import { useQuery } from "@tanstack/react-query";
-import { listAccounts } from "@babun/shared/db/repositories/accounts";
 import type { PhotoKind } from "@babun/shared/db/repositories/appointment-photos";
-import type { Receipt as ReceiptDoc } from "@babun/shared/local/finance/receipt";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -23,11 +20,8 @@ import { useClientFileUpload, useClientFiles, type ClientFileItem } from "@/feat
 import { isVideoPath } from "@/features/appointments/appointment-files";
 import { AppointmentPhotoViewer } from "@/features/appointments/AppointmentPhotoViewer";
 import { FileAddSheet } from "@/features/appointments/FileAddSheet";
-import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
-import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { useCardAccess } from "@/features/clients/use-card-access";
@@ -61,7 +55,6 @@ function ClientAttachmentsScreen() {
   const t = useThemeColors();
   const toast = useToast();
   const router = useRouter();
-  const tenantId = useTenantId();
   const { clientId } = useLocalSearchParams<{ clientId: string }>();
   const id = clientId ?? "";
   const { data: client } = useClient(id);
@@ -74,12 +67,6 @@ function ClientAttachmentsScreen() {
   const remove = useDeleteAttachment(id);
   const [addOpen, setAddOpen] = useState(false);
   const [viewer, setViewer] = useState<{ url: string; kind: PhotoKind; source: "attachment" | "visit" } | null>(null);
-  const [openReceipt, setOpenReceipt] = useState<ReceiptDoc | null>(null);
-  const accountRows = useQuery({
-    queryKey: ["accounts", tenantId, "rows", "all", "with-deleted"],
-    enabled: !!tenantId && openReceipt != null,
-    queryFn: () => listAccounts(supabase, tenantId as string, { includeInactive: true, includeDeleted: true }),
-  });
   const days = groupFilesByDay(files.timeline);
 
   const openUrl = async (url: string) => {
@@ -118,7 +105,8 @@ function ClientAttachmentsScreen() {
         router.push(`/invoices/${entry.item.id}` as Href);
         return;
       case "receipt":
-        setOpenReceipt(entry.item);
+        // Чек — своей страницей, как инвойс (владелец 04.10).
+        router.push(`/documents/receipt/${entry.item.id}` as Href);
         return;
     }
   };
@@ -219,13 +207,6 @@ function ClientAttachmentsScreen() {
         }
       />
 
-      <ReceiptSheet
-        receipt={openReceipt}
-        appointment={null}
-        accountName={(accountRows.data ?? []).find((a) => a.id === openReceipt?.account_id)?.name ?? null}
-        onClose={() => setOpenReceipt(null)}
-        onOpen={(href) => router.push(href as Href)}
-      />
     </Screen>
   );
 }

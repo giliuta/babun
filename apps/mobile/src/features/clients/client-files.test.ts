@@ -132,7 +132,8 @@ describe("«Файлы» — как «История»: последний на 
     assert.match(page(), /case "photo":[\s\S]{0,200}setViewer/);
     assert.match(page(), /case "file":\s*void openAttachment\(entry\.item\)/);
     assert.match(page(), /case "invoice":\s*router\.push\(`\/invoices\/\$\{entry\.item\.id\}`/);
-    assert.match(page(), /case "receipt":\s*setOpenReceipt\(entry\.item\)/);
+    // Чек — своей страницей, как инвойс (владелец 04.10).
+    assert.match(page(), /case "receipt":[\s\S]{0,160}router\.push\(`\/documents\/receipt\/\$\{entry\.item\.id\}`/);
   });
 
   test("удалить можно только своё вложение — свайпом, с вопросом", () => {

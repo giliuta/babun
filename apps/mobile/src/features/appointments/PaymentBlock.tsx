@@ -17,8 +17,6 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { accountIcon } from "@/features/finances/account-ui";
 import { PaymentHistorySheet } from "@/features/finances/PaymentHistorySheet";
-import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
-import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { useAppointmentReceipt } from "./use-appointment-receipt";
 import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
 import { useCreditNoteLinks, useInvoices } from "@/features/invoices/queries";
@@ -142,7 +140,6 @@ export function PaymentBlock({
   const cancel = useCancelPayment(appointment?.id);
   const invoicesQuery = useInvoices();
   const receiptState = useAppointmentReceipt(appointment?.id ?? null, documentsOn);
-  const [openReceipt, setOpenReceipt] = useState<Receipt | null>(null);
   const creditLinks = useCreditNoteLinks();
   const [partText, setPartText] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -418,7 +415,7 @@ export function PaymentBlock({
       } as unknown as Href);
       return;
     }
-    if (receiptState.latest) setOpenReceipt(receiptState.latest);
+    if (receiptState.latest) router.push(`/documents/receipt/${receiptState.latest.id}` as Href);
   };
 
   const handleInvoice = () => {
@@ -631,16 +628,6 @@ export function PaymentBlock({
         visible={historyOpen}
         appointmentId={appointment?.id ?? null}
         onClose={() => setHistoryOpen(false)}
-      />
-      <ReceiptSheet
-        receipt={openReceipt}
-        appointment={null}
-        accountName={accounts.find((a) => a.id === openReceipt?.account_id)?.name ?? null}
-        onClose={() => setOpenReceipt(null)}
-        onOpen={(href) => {
-          setOpenReceipt(null);
-          router.push(href as Href);
-        }}
       />
     </SectionCard>
   );

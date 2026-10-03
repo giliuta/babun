@@ -29,7 +29,7 @@ import { RECEIPT_WORDS, type ReceiptWords } from "./receipt-words";
 //
 // ВЛАДЕЛЕЦ 2026-09-20: «в чеке должен быть перечень услуг с ценой, по сути
 // как инвойс, но не инвойс». Перечень — НЕОБЯЗАТЕЛЬНЫЙ вход: его собирает
-// вызывающий (`ReceiptSheet`) через `receiptLinesFromInvoice` или
+// вызывающий (страница чека, `use-issued-receipt-doc`) через `receiptLinesFromInvoice` или
 // `receiptLinesFromAppointment` ниже, а эта функция остаётся чистой — только
 // форматирует готовое, без единого запроса внутри.
 //

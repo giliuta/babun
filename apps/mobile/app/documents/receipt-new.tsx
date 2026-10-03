@@ -16,7 +16,6 @@ import {
   useReceiptDraft,
 } from "@/features/documents/ReceiptComposer";
 import { ReceiptPreviewSheet } from "@/features/documents/ReceiptPreviewSheet";
-import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import {
   useComposeReceipt,
   useIssueReceipt,
@@ -47,10 +46,8 @@ import { todayYmd } from "@/features/invoices/format";
 export default function NewReceiptScreen() {
   const router = useRouter();
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [issued, setIssued] = useState<Receipt | null>(null);
-  // Выписанный чек ждёт, пока уедет предпросмотр: открытый в том же кадре
-  // лист iOS не показывал — чек выписан, а на экране снова составитель
-  // (проверка на 17e, 04.10).
+  // Выписанный чек ждёт, пока уедет предпросмотр: переход, начатый под
+  // модальным листом, iOS показывал не всегда (проверка на 17e, 04.10).
   const justIssued = useRef<Receipt | null>(null);
   const toast = useToast();
   const calendarSettings = useCalendarSettings();
@@ -180,8 +177,9 @@ export default function NewReceiptScreen() {
       });
       setPreviewOpen(false);
       toast(editing ? `Чек ${receipt.number} сохранён` : `Чек ${receipt.number} выписан`, "success");
-      // Выписанный чек открывается своим листом — из него его и отправляют
-      // клиенту («потом можно уже отправить»), когда предпросмотр уехал.
+      // ВЫПИСАННЫЙ ЧЕК ОТКРЫВАЕТСЯ СВОЕЙ СТРАНИЦЕЙ, как инвойс (владелец
+      // 04.10: «нажимаю — сохраняется, и уже всё можно отправлять»), когда
+      // предпросмотр уехал.
       justIssued.current = receipt;
     } catch (error) {
       toast(error instanceof Error ? error.message : "Чек не выписан", "error");
@@ -224,26 +222,14 @@ export default function NewReceiptScreen() {
         onExited={() => {
           const receipt = justIssued.current;
           justIssued.current = null;
-          // ПАУЗА ПОСЛЕ УХОДА — НЕ ЛИШНЯЯ: на 17e лист чека, открытый прямо
-          // в `onExited`, рисовался (журнал JS) и не показывался — UIKit ещё
-          // снимал окно предпросмотра, а новый лист вставал невидимым и
-          // закрывал экран от касаний (04.10).
-          if (receipt) setTimeout(() => setIssued(receipt), 350);
+          // Правка уже стоит поверх страницы чека — возвращаемся на неё;
+          // новый чек встаёт на место составителя своей страницей.
+          if (!receipt) return;
+          if (editing) router.back();
+          else router.replace(`/documents/receipt/${receipt.id}` as Href);
         }}
       />
 
-      {/* Выписанный чек — тот же лист, что в ленте документов: бумага,
-          «Поделиться PDF» и текстом. Закрыли — вернулись туда, откуда пришли. */}
-      <ReceiptSheet
-        receipt={issued}
-        appointment={null}
-        accountName={account?.name ?? null}
-        onClose={() => {
-          setIssued(null);
-          router.back();
-        }}
-        onOpen={(href) => router.push(href as Href)}
-      />
     </Screen>
   );
 }

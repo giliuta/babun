@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactElement } from "react";
+import { useMemo, type ReactElement } from "react";
 import {
   SectionList,
   Text,
@@ -10,7 +10,6 @@ import type {
   InvoiceLedger,
   InvoicePaymentLedger,
 } from "@babun/shared/local/finance/invoice-ledger";
-import type { Receipt } from "@babun/shared/local/finance/receipt";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import { Receipt as ReceiptIcon, ReceiptText } from "lucide-react-native";
@@ -19,7 +18,6 @@ import { SELECT_SIDE, SelectRow } from "@/components/ui/select-rows";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useThemeColors } from "@/theme/colors";
 import { humanDayYear } from "@/features/appointments/helpers";
-import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import type { AccountWithBalance } from "./accounts";
 import type { DocumentsReadable } from "./finance-read-rules";
 import { PanelHeader } from "./PanelHeader";
@@ -114,9 +112,6 @@ export function DocumentsPanel({
     () => (readable ? readable(issued, receipts) : issued),
     [issued, readable, receipts],
   );
-  // Открытый чек. Своей страницы у него нет: документ неизменяем, и всё, что с
-  // ним делают, — смотрят и высылают (владелец: «не надо лишних страниц»).
-  const [openReceipt, setOpenReceipt] = useState<Receipt | null>(null);
   const rows = useMemo(
     () => filterDocuments(documents, filter, query),
     [documents, filter, query],
@@ -133,12 +128,6 @@ export function DocumentsPanel({
     }
     return byDate;
   }, [rows]);
-  // Строка списка знает только id — сам чек нужен листу целиком (снимки
-  // сторон, НДС, способ оплаты), и второй раз собирать его из строки нельзя.
-  const receiptById = useMemo(
-    () => new Map((receipts ?? []).map((r) => [r.id, r])),
-    [receipts],
-  );
 
   // Шапка одна на все ветки — загрузку, ошибку и список: сегмент не смеет
   // мигать, пока чеки в пути.
@@ -233,8 +222,9 @@ export function DocumentsPanel({
                   onOpen(`/invoices/${item.id}`);
                   return;
                 }
-                const receipt = receiptById.get(item.id);
-                if (receipt) setOpenReceipt(receipt);
+                // Чек — своей страницей, как инвойс (владелец 04.10: «чек — в
+                // такой же архитектуре»).
+                onOpen(`/documents/receipt/${item.id}`);
               }}
             />
           </View>
@@ -257,20 +247,6 @@ export function DocumentsPanel({
             }
           />
         }
-      />
-      <ReceiptSheet
-        receipt={openReceipt}
-        appointment={
-          openReceipt?.appointment_id
-            ? (appointments.find((a) => a.id === openReceipt.appointment_id) ??
-              null)
-            : null
-        }
-        accountName={
-          accounts.find((a) => a.id === openReceipt?.account_id)?.name ?? null
-        }
-        onClose={() => setOpenReceipt(null)}
-        onOpen={onOpen}
       />
     </>
   );

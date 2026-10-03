@@ -1,12 +1,9 @@
 import { useFeatureOn } from "@/features/settings/company-features";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Linking, Pressable, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { FileText, Paperclip, Video, X } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
-import { listAccounts } from "@babun/shared/db/repositories/accounts";
-import type { Receipt as ReceiptDoc } from "@babun/shared/local/finance/receipt";
 import { randomUuid } from "@babun/shared/sync";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SelectRow } from "@/components/ui/select-rows";
@@ -20,8 +17,6 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
-import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
 import {
   getSignedUrl,
   useClientAttachments,
@@ -30,7 +25,6 @@ import {
   type ClientAttachment,
   type PickedFile,
 } from "@/features/clients/card-attachments";
-import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import { useReceipts } from "@/features/documents/receipts-queries";
 import { useCreditNoteLinks, useInvoices } from "@/features/invoices/queries";
 import { liveAppointmentInvoices } from "@/features/invoices/appointment-invoices";
@@ -94,7 +88,6 @@ export function AppointmentFilesBlock({
 }: AppointmentFilesBlockProps) {
   const toast = useToast();
   const router = useRouter();
-  const tenantId = useTenantId();
   const saved = appointmentId != null;
   const photosQuery = useAppointmentPhotos(appointmentId ?? "");
   const upload = useUploadAppointmentPhotos(appointmentId ?? "");
@@ -105,16 +98,6 @@ export function AppointmentFilesBlock({
   const invoicesQuery = useInvoices();
   const creditLinks = useCreditNoteLinks();
   const receiptsQuery = useReceipts({ appointmentId, enabled: saved });
-  // ЧЕК ОТКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, ЛИСТОМ С «ВЫСЛАТЬ ЧЕК» (STORY-068): раньше плитка
-  // уводила на экран всех чеков клиента, и до отправки было три экрана. Имя
-  // счёта листу — из того же справочника, что у оплаты; грузится по открытию.
-  const [openReceipt, setOpenReceipt] = useState<ReceiptDoc | null>(null);
-  const accountRows = useQuery({
-    queryKey: ["accounts", tenantId, "rows", "all", "with-deleted"],
-    enabled: !!tenantId && openReceipt != null,
-    queryFn: () =>
-      listAccounts(supabase, tenantId as string, { includeInactive: true, includeDeleted: true }),
-  });
   const [viewer, setViewer] = useState<AppointmentPhotoRecord | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -344,7 +327,8 @@ export function AppointmentFilesBlock({
                         router.push(`/invoices/${entry.item.id}` as Href);
                         return;
                       case "receipt":
-                        setOpenReceipt(entry.item);
+                        // Чек — своей страницей, как инвойс (владелец 04.10).
+                        router.push(`/documents/receipt/${entry.item.id}` as Href);
                         return;
                     }
                   }}
@@ -406,18 +390,6 @@ export function AppointmentFilesBlock({
         onRetry={async () => (await photosQuery.refetch()).isSuccess}
       />
 
-      {/* Запись листу не передаём: мы и так на ней — строка «запись» в чеке
-          молчит, а «Выслать чек» работает как на экране чеков. */}
-      <ReceiptSheet
-        receipt={openReceipt}
-        appointment={null}
-        accountName={
-          (accountRows.data ?? []).find((a) => a.id === openReceipt?.account_id)
-            ?.name ?? null
-        }
-        onClose={() => setOpenReceipt(null)}
-        onOpen={(href) => router.push(href as Href)}
-      />
     </>
   );
 }
