@@ -82,6 +82,29 @@ function ObjectNote({
   );
 }
 
+/** ПЛИТКА ВИДА ТИПА ОБЪЕКТА. Тип с видом — его цвет и значок; без вида —
+ *  светлая акцентная, как кружок маршрута рядом (владелец 03.10: серая
+ *  плитка с тёмным домиком «не особо прикольно»). */
+function ObjectTypeTile({ color, icon }: { color?: string | null; icon?: string | null }) {
+  const t = useThemeColors();
+  if (color) return <AppearanceTile color={color} icon={icon ?? null} fallback={House} size={34} />;
+  return (
+    <View
+      style={{
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        borderCurve: "continuous",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: `${t.accent}14`,
+      }}
+    >
+      <House color={t.accent} size={18} strokeWidth={2} />
+    </View>
+  );
+}
+
 export default function ObjectsBlock({
   client,
   onOpen,
@@ -100,8 +123,8 @@ export default function ObjectsBlock({
   client: Client;
   /** КАРТОЧКА — ОДИН ОБЪЕКТ (владелец 03.10: «видно только последний —
    *  обслуженный или добавленный; нажимаю — открывается страница со всеми»).
-   *  Показывается только он; тап по нему — страница объектов (`onOpenAll`),
-   *  без свайпа и плашки заметки. Объектов нет — дверь «Добавить объект». */
+   *  Показывается только он, с заметкой; тап по нему — страница объектов
+   *  (`onOpenAll`), без свайпа. Объектов нет — дверь «Добавить объект». */
   only?: string | null;
   /** На своей странице шапки у блока нет: название уже в заголовке экрана. */
   bare?: boolean;
@@ -189,9 +212,7 @@ export default function ObjectsBlock({
           const type = typeLook(loc);
           // ПЛИТКА ВИДА ТИПА ОБЪЕКТА (владелец 03.10, вариант 1: «прикольно, что
           // от типа объекта меняются иконка и цвет»).
-          const tile = (
-            <AppearanceTile color={type?.color ?? null} icon={type?.icon ?? null} fallback={House} size={34} />
-          );
+          const tile = <ObjectTypeTile color={type?.color} icon={type?.icon} />;
           const row = (
             <ObjectRow
               loc={loc}
@@ -257,18 +278,11 @@ export default function ObjectsBlock({
               teamId={client.team_id ?? null}
               // На карточке — тот же объект, что на странице: с плиткой вида.
               tile={
-                single ? (
-                  <AppearanceTile
-                    color={typeLook(loc)?.color ?? null}
-                    icon={typeLook(loc)?.icon ?? null}
-                    fallback={House}
-                    size={34}
-                  />
-                ) : undefined
+                single ? <ObjectTypeTile color={typeLook(loc)?.color} icon={typeLook(loc)?.icon} /> : undefined
               }
               // Заметка стоит ПОД строкой своей плашкой — третьей строкой её
               // печатать больше не надо.
-              showNote={single || !onNote}
+              showNote={!onNote}
               residents={residentsFor?.(loc)}
               lastVisit={lastVisitFor?.(loc)}
               onPress={
@@ -278,7 +292,9 @@ export default function ObjectsBlock({
               // его пересылают бригаде или вставляют в навигатор.
               onLongPress={canCopy && objectTarget(loc) ? () => copy(objectTarget(loc)) : undefined}
             />
-            {onNote && !single ? (
+            {/* ЗАМЕТКА ПРИШИТА К ОБЪЕКТУ (владелец 03.10: «везде, где ставится
+                этот блок, там сразу и заметка объекта») — и на карточке. */}
+            {onNote ? (
               <ObjectNote loc={loc} ownerKey={client.id} onSave={onNote} />
             ) : null}
           </>
@@ -451,7 +467,7 @@ export function ObjectRow({
             numberOfLines={1}
             style={{
               fontSize: 15,
-              fontWeight: target ? "600" : "400",
+              fontWeight: target ? "500" : "400",
               color: target ? t.ink : t.faint,
             }}
           >
