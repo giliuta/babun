@@ -155,6 +155,15 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(src, /err instanceof StaleAppointmentError && err\.fresh \? err\.fresh : ctx\?\.prevRecord/);
   });
 
+  test("«Выходной» ложится поверх свежего графика, а не копии телефона", () => {
+    const sched = readFileSync(resolve(here, "../reference/team-schedule.ts"), "utf8");
+    assert.match(
+      sched,
+      /typeof schedule === "function"\s*\? schedule\(\s*pickTeamSchedule\(\s*await listScheduleEntries\(supabase, tenantId as string\),/,
+    );
+    assert.match(screen(), /schedule: \(current\) => \{\s*const base: TeamSchedule = current \?\?/);
+  });
+
   test("полоса тоста смонтирована всегда — второй тост не встаёт невидимым", () => {
     const toastSrc = readFileSync(resolve(here, "../../components/ui/Toast.tsx"), "utf8");
     assert.match(toastSrc, /<Animated\.View\s*pointerEvents=\{toast\?\.action \? "box-none" : "none"\}/);

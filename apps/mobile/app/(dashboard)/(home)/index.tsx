@@ -3567,25 +3567,31 @@ export default function CalendarTab() {
           !teamScheduleQuery.isPending &&
           (canManageBookings || activeActions.schedule === "write")
             ? (next) => {
-                const base: TeamSchedule = teamSchedule ?? {
-                  start: hourLabel(globalWork.start),
-                  end: hourLabel(globalWork.end),
-                  breaks: [],
-                };
-                const day = getDayScheduleForDate(base, parseYMD(cityPickerYmd));
+                const ymd = cityPickerYmd;
                 upsertSchedule.mutate(
                   {
                     teamId: activeTeamId,
-                    schedule: setDateOverride(
-                      base,
-                      cityPickerYmd,
-                      next
-                        ? { ...day, is_working: false }
-                        : // Снятый выходной убирает оверрайд целиком: день
-                          // возвращается под недельный график, а не застывает
-                          // копией его сегодняшних часов.
-                          null,
-                    ),
+                    // Правка ПОВЕРХ графика, а не готовый блоб: на сервер она
+                    // ляжет поверх свежего графика команды, а не копии,
+                    // загруженной когда-то на этот телефон (аудит 03.10).
+                    schedule: (current) => {
+                      const base: TeamSchedule = current ?? {
+                        start: hourLabel(globalWork.start),
+                        end: hourLabel(globalWork.end),
+                        breaks: [],
+                      };
+                      const day = getDayScheduleForDate(base, parseYMD(ymd));
+                      return setDateOverride(
+                        base,
+                        ymd,
+                        next
+                          ? { ...day, is_working: false }
+                          : // Снятый выходной убирает оверрайд целиком: день
+                            // возвращается под недельный график, а не застывает
+                            // копией его сегодняшних часов.
+                            null,
+                      );
+                    },
                   },
                   {
                     onError: () =>
