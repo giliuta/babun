@@ -229,6 +229,20 @@ describe("сервер: клиенты по уровням", () => {
     assert.ok(gaps.includes("and (h.all_teams or a.team_id = any(ht.ids))"));
   });
 
+  test("«Источники» шестерёнки правятся своим правом, а не правом тегов (03.10)", () => {
+    const files = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
+    const touching = files.filter((name) =>
+      readFileSync(join(MIGRATIONS_DIR, name), "utf8").includes("client_sources_write_settings"),
+    );
+    const last = touching[touching.length - 1];
+    assert.equal(last, "20261003154100_clients_settings_rights_like_gear.sql", "политику источников переписали позже");
+    const gear = norm(readFileSync(join(MIGRATIONS_DIR, last), "utf8"));
+    const policy = gear.slice(gear.indexOf("alter policy client_sources_write_settings"));
+    assert.equal(policy.split("access_calendars('clients.settings_sources', 'write')").length - 1, 2);
+    assert.ok(!policy.includes("settings_tags"), "источники снова правятся правом тегов");
+    assert.ok(gear.includes("'clients.settings_sources', 'clients', 'calendar', array['off', 'read', 'write'], 'Источники'"));
+  });
+
   test("база — только клиенты команды; «Ограничение по времени» едет с днём", () => {
     // Только клиент с командой из открытых — ни «завёл сам», ни записи чужой команды.
     assert.ok(teamBase.includes("c.team_id = any(team_wide)"));

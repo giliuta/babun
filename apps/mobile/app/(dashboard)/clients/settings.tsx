@@ -402,8 +402,8 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
 
           {/* ТЕГИ И ИСТОЧНИКИ — СПРАВОЧНИКИ КОМАНДЫ: какие есть. Включён ли
               блок «Тег» на карточке — на странице «Блоки клиентов». Источники
-              (03.10) — справочник команды с засеянными готовыми, право то же,
-              что у тегов. */}
+              (03.10) — справочник команды с засеянными готовыми, со своим
+              правом «Источники» (как у каждой строки шестерёнки). */}
           <SettingsGroup
             title="Справочники"
             rows={[
@@ -417,7 +417,7 @@ function SettingsBody({ teamId, tenantParam }: { teamId: string; tenantParam: st
                   onPress={() => router.push(teamHref("/clients/tags"))}
                 />
               ) : null,
-              levels.tags !== "hidden" ? (
+              levels.sources !== "hidden" ? (
                 <SettingsRow
                   key="sources"
                   tile={SETTINGS_TILE.orange}

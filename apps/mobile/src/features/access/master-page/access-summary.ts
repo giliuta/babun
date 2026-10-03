@@ -143,13 +143,15 @@ export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock
     {
       key: "settings",
       title: "Настройки клиентов",
-      // В порядке строк шестерёнки клиентов.
+      // В порядке строк шестерёнки клиентов (03.10): «Клиент» — блоки и
+      // связь, «Объекты» — типы и карты, «Справочники» — теги и источники.
       keys: [
         "clients.settings_card",
         "clients.settings_ways",
-        "clients.settings_maps",
         "clients.settings_objects",
+        "clients.settings_maps",
         "clients.settings_tags",
+        "clients.settings_sources",
       ],
     },
   ],

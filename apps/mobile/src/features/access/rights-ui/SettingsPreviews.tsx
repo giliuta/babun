@@ -4,9 +4,10 @@ import {
   ClipboardList,
   Eye,
   Globe,
-  House,
+  Megaphone,
   MessageCircle,
   Navigation,
+  Shapes,
   Tags,
 } from "lucide-react-native";
 
@@ -106,14 +107,15 @@ export function SettingsPreview({
             onPress={onPress}
           />
         );
-      // Шестерёнка «Клиентов» (владелец 01.10) — строки ровно как в ней.
+      // Шестерёнка «Клиентов» (владелец 01.10; словами 03.10) — строки
+      // ровно как в ней.
       case "clients.settings_card":
         return (
           <SettingsRow
             tile={SETTINGS_TILE.blue}
             icon={Eye}
-            title="Карточка клиента"
-            sub="Все блоки · в строке 6 из 6"
+            title="Блоки клиентов"
+            sub="Все блоки"
             onPress={onPress}
           />
         );
@@ -122,7 +124,7 @@ export function SettingsPreview({
           <SettingsRow
             tile={SETTINGS_TILE.green}
             icon={MessageCircle}
-            title="Способы связи"
+            title="Связь"
             sub="SMS · WhatsApp · Viber"
             onPress={onPress}
           />
@@ -141,9 +143,9 @@ export function SettingsPreview({
         return (
           <SettingsRow
             tile={SETTINGS_TILE.teal}
-            icon={House}
+            icon={Shapes}
             title="Типы объектов"
-            sub="Вилла, Дом, Квартира"
+            sub="Вилла, Дом…"
             onPress={onPress}
           />
         );
@@ -152,8 +154,18 @@ export function SettingsPreview({
           <SettingsRow
             tile={SETTINGS_TILE.purple}
             icon={Tags}
-            title="Теги клиентов"
-            sub="Создано: 3"
+            title="Теги"
+            sub="3 тега"
+            onPress={onPress}
+          />
+        );
+      case "clients.settings_sources":
+        return (
+          <SettingsRow
+            tile={SETTINGS_TILE.orange}
+            icon={Megaphone}
+            title="Источники"
+            sub="8 источников"
             onPress={onPress}
           />
         );

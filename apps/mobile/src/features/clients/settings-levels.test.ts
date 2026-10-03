@@ -37,7 +37,7 @@ const partner = (over: Partial<ClientSettingsInput>): ClientSettingsInput => ({
 describe("строки шестерёнки клиентов", () => {
   test("своя компания — всё правится, карта не нужна", () => {
     const levels = clientSettingLevels({ own: true, member: false, role: "owner", map: undefined, teamId: null });
-    assert.deepEqual(Object.values(levels), ["write", "write", "write", "write", "write"]);
+    assert.deepEqual(Object.values(levels), ["write", "write", "write", "write", "write", "write"]);
   });
 
   test("партнёру — ступень его права в этой команде", () => {
@@ -48,6 +48,24 @@ describe("строки шестерёнки клиентов", () => {
     assert.equal(levels.maps, "hidden");
     assert.equal(levels.objects, "hidden");
     assert.equal(anyClientSetting(levels), true);
+  });
+
+  test("«Источники» — своё право: «Теги» его не открывают (03.10)", () => {
+    const tagsOnly = clientSettingLevels(
+      partner({ map: map({ [TEAM]: { "clients.settings_tags": "write" } }) }),
+    );
+    assert.equal(tagsOnly.tags, "write");
+    assert.equal(tagsOnly.sources, "hidden");
+    const sourcesOnly = clientSettingLevels(
+      partner({ map: map({ [TEAM]: { "clients.settings_sources": "read" } }) }),
+    );
+    assert.equal(sourcesOnly.sources, "read");
+    assert.equal(sourcesOnly.tags, "hidden");
+  });
+
+  test("строки — в порядке шестерёнки: «Клиент», «Объекты», «Справочники»", () => {
+    const levels = clientSettingLevels({ own: true, member: false, role: "owner", map: undefined, teamId: null });
+    assert.deepEqual(Object.keys(levels), ["card", "ways", "objects", "maps", "tags", "sources"]);
   });
 
   test("в другой команде его права не действуют", () => {

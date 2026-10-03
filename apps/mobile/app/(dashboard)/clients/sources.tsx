@@ -39,7 +39,8 @@ import { useTeams } from "@/features/reference/queries";
 // «Добавить источник» — кнопкой внизу. Цвета у источника нет: значок — у
 // готового его, у добавленного общий.
 //
-// Право — то же, что у тегов: «Справочники» команды (`clients.settings_tags`).
+// Право — своё, «Источники» (`clients.settings_sources`, 03.10): у каждой
+// строки шестерёнки своё право.
 
 const ROW_H = 52;
 
@@ -47,7 +48,7 @@ type Editing = { mode: "create" } | { mode: "edit"; source: ClientSource };
 
 export default function ClientSourcesScreenRoute() {
   return (
-    <ClientSettingsRoute row="tags">
+    <ClientSettingsRoute row="sources">
       <ClientSourcesScreen />
     </ClientSettingsRoute>
   );
@@ -65,7 +66,7 @@ function ClientSourcesScreen() {
     null;
   const teamName = ownTeams.find((tm) => tm.id === teamId)?.name;
   const levels = useClientSettingLevelsOf()(teamId);
-  const readOnly = levels.tags !== "write";
+  const readOnly = levels.sources !== "write";
 
   const createSource = useCreateClientSource();
   const renameSource = useRenameClientSource();
@@ -127,7 +128,7 @@ function ClientSourcesScreen() {
     <Screen edges={["top"]}>
       <ScreenHeader title="Источники" subtitle={teamName} />
 
-      {levels.tags === "hidden" ? (
+      {levels.sources === "hidden" ? (
         <View style={{ flex: 1 }} />
       ) : query.isLoading ? (
         <EmptyState state="loading" fill />

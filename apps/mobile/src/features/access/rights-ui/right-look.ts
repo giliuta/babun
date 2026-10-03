@@ -21,6 +21,7 @@ import {
   HandCoins,
   House,
   Landmark,
+  Megaphone,
   MessageCircle,
   MessageSquare,
   Navigation,
@@ -29,6 +30,7 @@ import {
   PenLine,
   PencilLine,
   ReceiptText,
+  Shapes,
   Shield,
   ShieldAlert,
   StickyNote,
@@ -123,9 +125,10 @@ const LOOK: Record<string, RightLook> = {
   // Настройки клиентов — те же значки и цвета, что у строк шестерёнки клиентов.
   "clients.settings_card": { icon: Eye, tile: SETTINGS_TILE.blue },
   "clients.settings_ways": { icon: MessageCircle, tile: SETTINGS_TILE.green },
+  "clients.settings_objects": { icon: Shapes, tile: SETTINGS_TILE.teal },
   "clients.settings_maps": { icon: Navigation, tile: SETTINGS_TILE.blue },
-  "clients.settings_objects": { icon: House, tile: SETTINGS_TILE.teal },
   "clients.settings_tags": { icon: Tags, tile: SETTINGS_TILE.purple },
+  "clients.settings_sources": { icon: Megaphone, tile: SETTINGS_TILE.orange },
   "company.sms_templates": { icon: MessageSquare, tile: SETTINGS_TILE.green },
 };
 

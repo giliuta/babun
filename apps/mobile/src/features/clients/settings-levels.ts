@@ -12,13 +12,16 @@ import { accessGate } from "../access/my-access";
 //
 // Лист без React: правило читают страница, её подстраницы и тест.
 
-/** Строки шестерёнки клиентов, у которых есть своё право. */
+/** Строки шестерёнки клиентов, у которых есть своё право, — в её порядке
+ *  (03.10): «Клиент» · «Объекты» · «Справочники». */
 export const CLIENT_SETTING_BLOCKS = {
   card: "clients.settings_card",
   ways: "clients.settings_ways",
-  maps: "clients.settings_maps",
   objects: "clients.settings_objects",
+  maps: "clients.settings_maps",
   tags: "clients.settings_tags",
+  // «Источники» (03.10) — своё право, как у каждой строки шестерёнки.
+  sources: "clients.settings_sources",
 } as const;
 
 export type ClientSettingRow = keyof typeof CLIENT_SETTING_BLOCKS;

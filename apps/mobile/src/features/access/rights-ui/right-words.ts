@@ -77,11 +77,13 @@ const TITLE: Record<string, string> = {
   "clients.history": "История",
   "clients.sms": "SMS",
   // Настройки клиентов — именами строк шестерёнки клиентов (владелец 01.10).
-  "clients.settings_card": "Карточка клиента",
-  "clients.settings_ways": "Способы связи",
-  "clients.settings_maps": "Карты для маршрута",
+  // Словами шестерёнки «Клиентов» (03.10) — строка права = её строка.
+  "clients.settings_card": "Блоки клиентов",
+  "clients.settings_ways": "Связь",
   "clients.settings_objects": "Типы объектов",
-  "clients.settings_tags": "Теги клиентов",
+  "clients.settings_maps": "Карты для маршрута",
+  "clients.settings_tags": "Теги",
+  "clients.settings_sources": "Источники",
   "company.sms_templates": "Шаблоны SMS",
 };
 
@@ -171,11 +173,12 @@ const STEP: Record<string, Words> = {
   "clients.sms": { off: "Скрыты", read: "Только видит", write: "Видит и отправляет" },
   // Настройки клиентов — как «Настройки команды» (владелец 01.10: «в
   // настройках он может редактировать или не может редактировать»).
-  "clients.settings_card": { off: "Скрыта", read: "Только видит", write: "Видит и меняет" },
-  "clients.settings_ways": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
-  "clients.settings_maps": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.settings_card": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.settings_ways": { off: "Скрыта", read: "Только видит", write: "Видит и меняет" },
   "clients.settings_objects": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.settings_maps": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
   "clients.settings_tags": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
+  "clients.settings_sources": { off: "Скрыты", read: "Только видит", write: "Видит и меняет" },
 };
 
 /** ОПАСНЫЕ СТУПЕНИ — одна строка предупреждения под пояснением (владелец
@@ -192,6 +195,7 @@ const DANGER: Record<string, Words> = {
   "clients.sms": { write: "Сможет отправлять SMS клиентам — за счёт баланса" },
   "clients.files": { write: "Сможет удалять файлы клиента" },
   "clients.settings_tags": { write: "Сможет удалять теги у всех клиентов команды" },
+  "clients.settings_sources": { write: "Удалённый источник у клиентов станет «Другое»" },
 };
 
 /** Имя строки права. */
