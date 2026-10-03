@@ -581,7 +581,10 @@ export function DayFinanceSheet({
                   key={a.id}
                   name={clientName(a)}
                   context={[a.time_start, servicesOf(a)].filter(Boolean).join(" · ")}
-                  amount={view === "debt" ? getDebtAmount(a) : a.total_amount}
+                  // Остаток, а не итог — у обоих списков (аудит 2026-10-03):
+                  // плитка «Ожидается» складывает остатки, и запись €100 с
+                  // предоплатой €30 стояла строкой €100 под плиткой €70.
+                  amount={getDebtAmount(a)}
                   color={view === "debt" ? t.warning : t.sub}
                   separated={i > 0}
                   onPress={() => openRecord(a.id)}
