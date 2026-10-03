@@ -44,6 +44,7 @@ import {
 import { dmyShort, makePeriod, type Period } from "../period";
 import { summarizeVat } from "@babun/shared/local/finance/vat";
 import { useFinanceCategories, useTransactions } from "../queries";
+import { awaitingAnswer } from "../ledger-select";
 import {
   accountBreakdown,
   cancelledCount,
@@ -287,8 +288,11 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   );
   const cancelled = useMemo(() => cancelledCount(appointments, scope), [appointments, scope]);
   // ДЕНЬГИ ЕЩЁ ЕДУТ — плитка говорит «—», а не «€0»: ноль выглядел бы фактом
-  // (аудит 2026-09-24), хотя журнал просто не доехал.
-  const moneyPending = showMoney && ledger.data === undefined;
+  // (аудит 2026-09-24), хотя журнал просто не доехал. Смена периода меняет
+  // ключ журнала, и заглушка отдаёт строки ПРОШЛОГО диапазона: без проверки
+  // заглушки «Прошлый год» до ответа показывал нули и обрывки текущего месяца
+  // (аудит финансов 03.10).
+  const moneyPending = showMoney && (ledger.data === undefined || awaitingAnswer(ledger));
   const scopedAppointments = useMemo(
     () => appointments.filter((a) => teamId === null || a.team_id === teamId),
     [appointments, teamId],
@@ -473,16 +477,16 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
                     <BreakdownBarRow
                       name="Оплачено"
                       count={0}
-                      value={formatEUR(Math.min(work.paid, work.worked))}
+                      value={formatEUR(Math.max(0, work.worked - work.owed))}
                       color={t.success}
-                      share={work.paid / work.worked}
+                      share={Math.max(0, work.worked - work.owed) / work.worked}
                     />
                     <BreakdownBarRow
                       name="Не оплачено"
                       count={0}
-                      value={formatEUR(Math.max(0, work.worked - work.paid))}
+                      value={formatEUR(work.owed)}
                       color={t.warning}
-                      share={Math.max(0, work.worked - work.paid) / work.worked}
+                      share={work.owed / work.worked}
                     />
                   </View>
                 ) : null}
@@ -491,8 +495,11 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
                     тем, что уже пришло. Только у периода, который ещё идёт. */}
                 {panel === "income" && period.to >= today && !moneyPending ? (
                   (() => {
-                    const owed = Math.max(0, work.worked - work.paid);
-                    const ahead = upcomingWork.worked;
+                    // Впереди — только НЕДОПЛАЧЕННОЕ: предоплата за будущий
+                    // визит уже сидит в «Уже пришло» (день операции — день
+                    // оплаты), и полная сумма записи считала её дважды.
+                    const owed = work.owed;
+                    const ahead = upcomingWork.owed;
                     const total = money.income + owed + ahead;
                     const base = Math.max(total, 0);
                     return (

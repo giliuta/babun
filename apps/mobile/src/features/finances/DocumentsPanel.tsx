@@ -154,9 +154,12 @@ export function DocumentsPanel({
       <SegmentedControl
         // Число в каждой вкладке (аудит 2026-09-29): плитка «Документы» —
         // сумма вкладок, и без чисел «16» над одним инвойсом читалось ошибкой.
+        // Кредит-нота стоит строкой под своим инвойсом, но документом периода
+        // не считается — как у плитки: отменённый инвойс с кредит-нотой давал
+        // плитку «1» и вкладку «Инвойсы 2» (аудит финансов 03.10).
         options={SEGMENTS.map((segment) => ({
           ...segment,
-          label: `${segment.label} ${documents.filter((d) => d.kind === segment.value).length}`,
+          label: `${segment.label} ${documents.filter((d) => d.kind === segment.value && !d.creditNote).length}`,
         }))}
         value={filter}
         onChange={onFilterChange}

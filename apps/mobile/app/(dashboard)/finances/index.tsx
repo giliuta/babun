@@ -1667,7 +1667,9 @@ function FinancesContent() {
       <TransactionPopup
         visible={!!popupTx}
         transaction={popupTx}
-        accounts={accounts}
+        // Подписи строки — по ВСЕМ счетам: перевод на скрытый накопительный
+        // терял ноги «Откуда/Куда» и показывал одну сторону (аудит 03.10).
+        accounts={allAccounts}
         teams={allTeams}
         categories={categories}
         people={people}

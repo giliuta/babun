@@ -86,7 +86,10 @@ export function FinancesFooter({
   const accountsAction = accountsFooterAction({
     selectedId: selectedAccountId,
     shown: shownAccounts,
-    company: accounts,
+    // Второй счёт ищется там же, куда шторка умеет переводить: вместе со
+    // скрытыми (накопительный). Иначе один видимый счёт плюс скрытый давали
+    // «Для перевода нужен второй счёт» (аудит финансов 03.10).
+    company: transferAccounts ?? accounts,
   });
 
   const button =

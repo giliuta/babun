@@ -1,5 +1,5 @@
 import type { Appointment } from "@babun/shared/local/appointments";
-import { getPaidAmount } from "@babun/shared/local/appointments";
+import { getDebtAmount, getPaidAmount } from "@babun/shared/local/appointments";
 import {
   appointmentMaterialCost,
   appointmentMaterialCostLines,
@@ -149,6 +149,9 @@ export interface WorkTotals {
   worked: number;
   /** Сколько по этим записям пришло денег (включая предоплату). */
   paid: number;
+  /** Сколько по ним ещё не пришло — долг записи (`getDebtAmount`), как у
+   *  плитки «Долги»: переплата одной записи не гасит долг другой. */
+  owed: number;
   /** Средний чек — работ на одну запись. */
   averageCheck: number;
   minutes: number;
@@ -156,17 +159,21 @@ export interface WorkTotals {
   perHour: number | null;
 }
 
+// «РАБОТ НА» — СУММА ЗАПИСИ К ОПЛАТЕ (`total_amount`), а не сумма строк
+// услуг. Строки не знают ни общей скидки записи, ни ручного «Итого», ни VAT,
+// а оплаты и долг считаются от `total_amount`: полностью оплаченный визит со
+// скидкой 10% показывал «Не оплачено €10», хотя плитка «Долги» давала ноль
+// (аудит финансов 03.10). Полный возврат работу не оплачивает и долга не
+// открывает — у такой записи ноль, как в `getRecognizedRevenue`.
 export function workTotals(records: readonly Appointment[]): WorkTotals {
   let worked = 0;
   let paid = 0;
+  let owed = 0;
   let minutes = 0;
   for (const a of records) {
-    worked += cents(
-      (a.services ?? []).length > 0
-        ? (a.services ?? []).reduce((s, l) => s + lineTotal(l), 0)
-        : a.total_amount ?? 0,
-    );
+    if (a.payment_status !== "refunded") worked += cents(a.total_amount ?? 0);
     paid += cents(getPaidAmount(a));
+    owed += cents(getDebtAmount(a));
     minutes += recordMinutes(a);
   }
   const n = records.length;
@@ -174,6 +181,7 @@ export function workTotals(records: readonly Appointment[]): WorkTotals {
     records: n,
     worked: euros(worked),
     paid: euros(paid),
+    owed: euros(owed),
     averageCheck: n > 0 ? Math.round(worked / n) / 100 : 0,
     minutes,
     perHour: minutes > 0 ? Math.round((worked / (minutes / 60))) / 100 : null,
@@ -468,8 +476,13 @@ export function previousPeriod(
     const prevTo = addDaysYmd(prevFrom, elapsed);
     return { from: prevFrom, to: prevTo < prevEnd ? prevTo : prevEnd, partial };
   }
-  const length = elapsed + 1;
-  return { from: addDaysYmd(from, -length), to: addDaysYmd(from, -1), partial };
+  // Прочий период сдвигается на ВСЮ свою длину, а сравнивается столько же
+  // дней с начала. Раньше брался отрезок длины «прошедших» дней вплотную
+  // перед началом: «Текущая неделя» в субботу сравнивала пн–сб с вт–вс
+  // прошлой недели, в среду — пн–ср с пт–вс (аудит финансов 03.10).
+  const span = daysBetween(from, to) + 1;
+  const prevFrom = addDaysYmd(from, -span);
+  return { from: prevFrom, to: addDaysYmd(prevFrom, elapsed), partial };
 }
 
 /** Изменение в процентах; прошлое ноль — сравнивать не с чем (`null`). */

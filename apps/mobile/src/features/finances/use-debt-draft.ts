@@ -5,6 +5,7 @@ import { debtRemainderCents } from "@babun/shared/local/finance/debt";
 import { formatEURExact, parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { useToast } from "@/components/ui/Toast";
 import { formatHM } from "@/features/appointments/helpers";
+import { getCurrentTimeInZone } from "@babun/shared/common/utils/date-utils";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { confirmAction, confirmThen } from "@/lib/confirm";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
@@ -64,7 +65,8 @@ export function useDebtDraft({
   // ЧАС — КАК У ОПЕРАЦИИ (владелец 2026-09-10: «время должно быть такое же,
   // как в доходе»). У нового долга это «сейчас»; у заведённого до появления
   // колонки часа нет, и подставлять выдуманный нельзя.
-  const [time, setTime] = useState<string | null>(() => formatHM(new Date()));
+  // «Сейчас» — по часам бизнеса, как и `todayYmd` (аудит финансов 03.10).
+  const [time, setTime] = useState<string | null>(() => formatHM(getCurrentTimeInZone(timeZone)));
   const [categoryId, setCategoryId] = useState<string | null>(null);
   // КОМАНДА ДОЛГА (владелец 2026-09-24: «всё отдельно под каждую команду»;
   // долг без команды сервер не примет). Своя у долга, а не «выбранная сейчас
@@ -122,7 +124,7 @@ export function useDebtDraft({
     setClientId(debt?.client_id ?? null);
     setAmount(debt ? String(debt.amount) : "");
     setDate(debt?.occurred_on ?? todayYmd());
-    setTime(debt ? debt.occurred_time : formatHM(new Date()));
+    setTime(debt ? debt.occurred_time : formatHM(getCurrentTimeInZone(timeZone)));
     setCategoryId(debt?.category_id ?? null);
     setPickedTeamId(debt?.team_id ?? teamId ?? null);
     setNote(debt?.note ?? "");

@@ -59,7 +59,7 @@ import {
   accountServesTeam,
   isPaymentAccountCompatible,
 } from "@babun/shared/local/finance/integrity";
-import { formatHM } from "@/features/appointments/helpers";
+import { useBusinessNow } from "@/features/appointments/business-now";
 import { useRouter, type Href } from "expo-router";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
@@ -191,10 +191,20 @@ export function OperationSheet({
   const { data: teams = [] } = useTeams();
   // Делит кэш счетов с экраном «Финансы» — один запрос на двоих вместо
   // повторного listAccounts.
-  const accountsQuery = useAccountsWithBalances();
+  //
+  // СКРЫТЫЙ СЧЁТ — НЕ ЗАКРЫТЫЙ (аудит финансов 03.10). Список по умолчанию
+  // скрытые счета не отдаёт, и операция на счёте, который потом спрятали,
+  // объявлялась «на закрытом счёте»: ни сохранить, ни удалить, ни вернуть,
+  // хотя сервер её принимает. Берём все и прячем скрытые только из выбора —
+  // кроме счёта самой операции и счёта, с карточки которого пришли.
+  const accountsQuery = useAccountsWithBalances({ includeHidden: true });
+  const txOwnAccountId = transaction?.account_id ?? null;
   const accounts = useMemo(
-    () => accountsQuery.data ?? [],
-    [accountsQuery.data],
+    () =>
+      (accountsQuery.data ?? []).filter(
+        (a) => !a.is_hidden || a.id === txOwnAccountId || a.id === defaultAccountId,
+      ),
+    [accountsQuery.data, txOwnAccountId, defaultAccountId],
   );
   // `account_balances` с уровнями финансов (2026-09-15) отдаёт сотруднику
   // видимые ему остатки, а на отказе по-прежнему БРОСАЕТ. Пустой список счетов
@@ -235,7 +245,12 @@ export function OperationSheet({
   // Время операции (владелец 2026-09-07: «выбираю дату, время»). Новая —
   // сейчас; у старой строки времени может не быть — тогда его предлагают
   // указать, а не подставляют выдуманное.
-  const [time, setTime] = useState<string | null>(() => formatHM(new Date()));
+  //
+  // «СЕЙЧАС» — ПО ЧАСАМ БИЗНЕСА, как и дата (`businessToday`): телефон в
+  // другом поясе ставил операции 23:30 по Кипру время 00:30 своего пояса, и
+  // строка вставала в конец сегодняшнего списка (аудит финансов 03.10).
+  const businessNow = useBusinessNow();
+  const [time, setTime] = useState<string | null>(() => businessNow().hm);
   const [notes, setNotes] = useState("");
   // Документ, подтверждающий операцию (путь в приватном бакете).
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
@@ -356,7 +371,7 @@ export function OperationSheet({
       // Разбор дня открывает форму на своём дне; будущее леджер не примет,
       // поэтому дальше сегодняшнего не уходим.
       setDate(defaultDate && defaultDate <= businessToday ? defaultDate : businessToday);
-      setTime(formatHM(new Date()));
+      setTime(businessNow().hm);
       setNotes(debtPayment ? `Долг: ${debtPayment.counterparty}` : "");
       setReceiptUrl(null);
       initialDraftKey.current = operationDraftKey({
@@ -1114,9 +1129,9 @@ export function OperationSheet({
             контрол и второй способ сказать то же самое. */}
         <WhenRow
           date={date}
-          timeStart={time ?? formatHM(new Date())}
+          timeStart={time ?? businessNow().hm}
           onPress={() => {
-            if (time == null) setTime(formatHM(new Date()));
+            if (time == null) setTime(businessNow().hm);
             setWhenOpen(true);
             haptics.tap();
           }}
@@ -1407,8 +1422,8 @@ export function OperationSheet({
         open={whenOpen}
         onClose={() => setWhenOpen(false)}
         date={date}
-        timeStart={time ?? formatHM(new Date())}
-        timeEnd={time ?? formatHM(new Date())}
+        timeStart={time ?? businessNow().hm}
+        timeEnd={time ?? businessNow().hm}
         allDay={false}
         allowAllDay={false}
         singleTime
