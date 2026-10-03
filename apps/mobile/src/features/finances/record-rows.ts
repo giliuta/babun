@@ -537,17 +537,3 @@ export function mergeByRecord(rows: readonly RecordRow[]): RecordRow[] {
     return a.key < b.key ? 1 : -1;
   });
 }
-
-/** ДОЛГИ — ЗА ВЫБРАННЫЙ ПЕРИОД (владелец 03.10: «текущий месяц, а в долгах —
- *  сентябрь… не показывай все суммы, я сам найду»). В списке и на плитке —
- *  долги, повисшие в периоде; про более ранние — одна строчка внизу, без
- *  сумм (`hasEarlier`). Без начала периода — всё как есть. */
-export function splitDebtsByPeriod<T extends { date: string }>(
-  rows: readonly T[],
-  periodFrom: string | null | undefined,
-): { shown: T[]; hasEarlier: boolean } {
-  if (!periodFrom) return { shown: [...rows], hasEarlier: false };
-  const shown = rows.filter((row) => row.date >= periodFrom);
-  return { shown, hasEarlier: shown.length < rows.length };
-}
-

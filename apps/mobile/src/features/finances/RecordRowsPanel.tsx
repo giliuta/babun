@@ -38,7 +38,6 @@ export function RecordRowsPanel({
   countEveryTone,
   refreshControl,
   onOpenRecord,
-  footnote,
 }: {
   rows: RecordRow[];
   /** Эйбрау над списком. Без него список идёт голым: заголовок рисует хозяин
@@ -61,9 +60,6 @@ export function RecordRowsPanel({
   countEveryTone?: boolean;
   refreshControl?: ReactElement<RefreshControlProps>;
   onOpenRecord: (row: RecordRow) => void;
-  /** Тихая строчка под списком (долги: «есть и за прошлые периоды», без
-   *  сумм — владелец 03.10). Только слова, не кнопка. */
-  footnote?: string;
 }) {
   const t = useThemeColors();
 
@@ -151,17 +147,6 @@ export function RecordRowsPanel({
           subtitle={emptySubtitle}
           action={emptyAction}
         />
-      }
-      ListFooterComponent={
-        footnote ? (
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="px-4 pt-3 text-[13px]"
-            style={{ color: t.faint }}
-          >
-            {footnote}
-          </Text>
-        ) : null
       }
       contentContainerStyle={{ paddingBottom: 96 }}
       renderSectionHeader={({ section }) => sectionHeader(section)}
