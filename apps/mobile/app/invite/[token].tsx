@@ -113,7 +113,7 @@ export default function InvitationScreen() {
     content = (
       <MessageCard
         title="Ссылка повреждена"
-        text="Попросите владельца компании отправить новое приглашение."
+        text="Попросите владельца аккаунта отправить новое приглашение."
       />
     );
     footer = <GradientButton label="Готово" onPress={goBack} />;
@@ -171,7 +171,7 @@ export default function InvitationScreen() {
               color: t.sub,
             }}
           >
-            Владелец приглашает вас работать в этой компании.
+            Владелец приглашает вас в свои команды.
           </Text>
         </View>
 
@@ -250,7 +250,7 @@ export default function InvitationScreen() {
       footer = (
         <>
           <GradientButton
-            label={working ? "Подключаем компанию…" : "Принять приглашение"}
+            label={working ? "Подключаем команды…" : "Принять приглашение"}
             onPress={() => void accept()}
             loading={working}
             disabled={working}

@@ -13,7 +13,7 @@ import {
   PillButton,
   SwitchLink,
 } from "@/components/auth/AuthCard";
-import { mapAuthError } from "@/components/auth/authErrors";
+import { mapAuthError, signUpHitExistingAccount } from "@/components/auth/authErrors";
 import { useAuthTheme } from "@/components/auth/theme";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/notify";
@@ -82,6 +82,11 @@ export default function RegisterScreen() {
         (pendingInviteToken && invitationSignupErrorMessage(e.message)) ||
           mapAuthError(e, "signup"),
       );
+      setLoading(false);
+      return;
+    }
+    if (signUpHitExistingAccount(data)) {
+      setError(mapAuthError({ code: "user_already_exists" }, "signup"));
       setLoading(false);
       return;
     }

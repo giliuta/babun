@@ -3227,12 +3227,12 @@ export default function CalendarTab() {
             title={
               role === "master"
                 ? "Календарь ещё не назначен"
-                : "В компании ещё нет календарей"
+                : "В аккаунте ещё нет календарей"
             }
             subtitle={
               role === "master"
                 ? "Попросите владельца добавить вас в команду. После назначения заявки появятся здесь."
-                : "Первый календарь создаёт владелец компании."
+                : "Первый календарь создаёт владелец аккаунта."
             }
           />
         ) : firstCalendarFailed ? (
@@ -3512,17 +3512,34 @@ export default function CalendarTab() {
           <CalendarOnboardingCard
             hasClients={clients.length > 0}
             hasServices={services.length > 0}
+            workInPlan={workInPlan}
+            servicesHref={
+              activeTeamId
+                ? `/calendar/services?team=${encodeURIComponent(activeTeamId)}`
+                : "/calendar/services"
+            }
             onCreate={() => {
               const slot = suggestFirstSlot(now);
-              bookAt({ date: formatYMD(slot.date), time_start: slot.time });
+              // Без тарифа форма открывалась на записи с клиентом — она
+              // только для чтения; план разрешает событие.
+              bookAt({
+                date: formatYMD(slot.date),
+                time_start: slot.time,
+                ...(workInPlan ? {} : { kind: "event" as const }),
+              });
             }}
             onDismiss={dismissOnboarding}
           />
         ) : (
           <CalendarEmptyState
+            event={!workInPlan}
             onCreate={() => {
               const slot = suggestFirstSlot(now);
-              bookAt({ date: formatYMD(slot.date), time_start: slot.time });
+              bookAt({
+                date: formatYMD(slot.date),
+                time_start: slot.time,
+                ...(workInPlan ? {} : { kind: "event" as const }),
+              });
             }}
           />
         )

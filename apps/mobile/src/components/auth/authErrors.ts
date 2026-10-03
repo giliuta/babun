@@ -45,3 +45,15 @@ export function mapAuthError(
 
   return "Неверная почта или пароль";
 }
+
+/**
+ * GoTrue с подтверждением почты НЕ ОШИБАЕТСЯ на уже занятом адресе: чтобы не
+ * выдавать, кто зарегистрирован, он отвечает «успехом» без сессии и с пустым
+ * `identities` — и письма не шлёт. Экран показывал «Письмо ушло на …», и
+ * человек ждал письма, которого не будет (аудит первого входа 03.10).
+ */
+export function signUpHitExistingAccount(
+  data: { user: { identities?: readonly unknown[] | null } | null; session: unknown } | null,
+): boolean {
+  return !!data?.user && !data.session && Array.isArray(data.user.identities) && data.user.identities.length === 0;
+}

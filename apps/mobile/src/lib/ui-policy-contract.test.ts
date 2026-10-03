@@ -130,7 +130,7 @@ describe("mobile UI product policy", () => {
       "utf8",
     );
 
-    assert.match(dashboardGate, /state="loading"[\s\S]*Открываем компанию/);
+    assert.match(dashboardGate, /state="loading"[\s\S]*Открываем аккаунт/);
     assert.doesNotMatch(dashboardGate, /gate\.status === "loading"\) return null/);
     assert.match(authLayout, /pendingInvitation\.isPending \|\| gate\.status === "loading"/);
     assert.match(authLayout, /Открываем аккаунт/);

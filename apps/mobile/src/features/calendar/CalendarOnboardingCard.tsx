@@ -1,9 +1,10 @@
 import { Pressable, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { Check, ChevronRight, X } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { ICON } from "@/components/ui/tokens";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
 
 // Онбординг первого запуска — web CalendarOnboardingCard (STORY-060 §F1.1).
 // Плавает над пустой сеткой, пока у тенанта нет записей.
@@ -17,15 +18,29 @@ import { useCurrentRole } from "@/features/settings/tenant";
 //     глотала тапы по тем самым слотам, по которым сама же просила тапнуть.
 //  3. Шаг 3 — кнопка, а не текст «Тапните по свободному слоту»: приложение
 //     не учит жестам, оно даёт нажать.
+//
+// БЕЗ ТАРИФА ШАГИ ВЕДУТ НЕ В ТУПИК (аудит первого входа 03.10). Новый аккаунт
+// живёт на бесплатном плане: клиент открывался запертой карточкой без слова
+// почему, услуга падала отказом сервера, третий шаг не загорался никогда.
+// Теперь клиент и услуга — серым с плашкой «Нужно изменить тариф» (как всё
+// закрытое тарифом), а третий шаг — событие: его план разрешает.
 export function CalendarOnboardingCard({
   hasClients,
   hasServices,
+  workInPlan,
+  servicesHref,
   onCreate,
   onDismiss,
 }: {
   hasClients: boolean;
   hasServices: boolean;
-  /** Создать первую запись — активна, когда есть клиент и услуга. */
+  /** Тариф разрешает работу с клиентами (`usePlanAllows("book-clients")`). */
+  workInPlan: boolean;
+  /** Услуги ЭТОЙ команды в шестерёнке календаря — не уводит во вкладку
+   *  «Кабинет» посреди календаря. */
+  servicesHref: string;
+  /** Создать первую запись — активна, когда есть клиент и услуга; без
+   *  тарифа — первое событие, сразу. */
   onCreate: () => void;
   onDismiss: () => void;
 }) {
@@ -38,12 +53,14 @@ export function CalendarOnboardingCard({
     label: string;
     done?: boolean;
     disabled?: boolean;
+    locked?: boolean;
     onPress?: () => void;
   }[] = [
     {
       n: 1,
       label: "Добавьте клиента",
       done: hasClients,
+      locked: !workInPlan,
       onPress: () => router.push("/clients/new"),
     },
     {
@@ -53,13 +70,14 @@ export function CalendarOnboardingCard({
           ? "Попросите владельца добавить услугу"
           : "Заведите услугу",
       done: hasServices,
+      locked: !workInPlan,
       onPress:
-        role === "owner" ? () => router.push("/cabinet/services") : undefined,
+        role === "owner" ? () => router.push(servicesHref as Href) : undefined,
     },
     {
       n: 3,
-      label: "Запланируйте запись",
-      disabled: !hasClients || !hasServices,
+      label: workInPlan ? "Запланируйте запись" : "Запланируйте событие",
+      disabled: workInPlan && (!hasClients || !hasServices),
       onPress: onCreate,
     },
   ];
@@ -126,8 +144,10 @@ export function CalendarOnboardingCard({
         </Text>
 
         <View style={{ gap: 8 }}>
-          {steps.map((s) => (
-            <StepRow key={s.n} {...s} />
+          {steps.map(({ locked, ...s }) => (
+            <TariffLocked key={s.n} locked={!!locked && !s.done}>
+              <StepRow {...s} />
+            </TariffLocked>
           ))}
         </View>
       </View>

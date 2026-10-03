@@ -14,7 +14,9 @@ import { useTenantId } from "@/lib/tenant";
 // разные. Выставленный документ хранит СВОЮ ставку снимком — память влияет
 // только на новые.
 
-export const vatRateKey = (tenantId: string | null) => `vat.lastRate.${tenantId ?? "none"}`;
+// Под `babun:` — его подметает «Выйти» (аудит первого входа 03.10: ключ без
+// префикса переживал выход).
+export const vatRateKey = (tenantId: string | null) => `babun:vat:last-rate:${tenantId ?? "none"}`;
 
 /** Написанная ставка либо `null`, если на этом телефоне её ещё не писали. */
 function readStoredVatRate(tenantId: string | null): number | null {

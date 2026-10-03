@@ -142,7 +142,9 @@ export function CompanySheet({
   // убирает.
   const tenantId = useTenantId();
   const key = company?.id ?? "new";
-  const storageKey = tenantId ? `companies.draft.${tenantId}.${key}` : null;
+  // Под `babun:`: черновик реквизитов (IBAN, VAT, адрес) обязан уйти вместе
+  // с «Выйти» — ключ без префикса чистка не видела (аудит 03.10).
+  const storageKey = tenantId ? `babun:companies:draft:${tenantId}:${key}` : null;
   const [hydratedKey, setHydratedKey] = useState<string | null>(null);
   useEffect(() => {
     if (!visible || hydratedKey === key) return;

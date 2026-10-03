@@ -341,6 +341,9 @@ export interface CompleteOnboardingArgs {
   tenantId: string;
   name: string;
   vertical: string;
+  /** Имя, с которым аккаунт пришёл в мастер (триггер регистрации ставит
+   *  туда email). */
+  previousName?: string | null;
 }
 
 export function useCompleteOnboarding() {
@@ -349,7 +352,7 @@ export function useCompleteOnboarding() {
     // Онбординг-экран показывает ошибку сам (FormError) — без meta глобальный
     // MutationCache добавил бы второй, дублирующий Alert.
     meta: { errorHandled: true },
-    mutationFn: async ({ tenantId, name, vertical }: CompleteOnboardingArgs) => {
+    mutationFn: async ({ tenantId, name, vertical, previousName }: CompleteOnboardingArgs) => {
       const { error, count } = await supabase
         .from("tenants")
         .update(
@@ -368,6 +371,20 @@ export function useCompleteOnboarding() {
         throw new Error(
           "Не удалось сохранить: завершить настройку может только владелец.",
         );
+      }
+      // РЕКВИЗИТЫ ПО УМОЛЧАНИЮ — ТЕМ ЖЕ ИМЕНЕМ (аудит первого входа 03.10).
+      // Триггер регистрации называет аккаунт email'ом, и тот же email уходил
+      // в «Реквизиты» по умолчанию — а оттуда продавцом в первый инвойс.
+      // Переименовываем только нетронутые: строка всё ещё носит прежнее имя.
+      const before = previousName?.trim();
+      if (before && before !== name.trim()) {
+        const { error: entityError } = await supabase
+          .from("legal_entities")
+          .update({ name: name.trim() })
+          .eq("tenant_id", tenantId)
+          .eq("is_default", true)
+          .eq("name", before);
+        if (entityError) throw new Error(entityError.message);
       }
     },
     onSuccess: (_data, { tenantId }) => {

@@ -46,6 +46,11 @@ export const TENANT_SCOPED_KEY_PREFIXES: readonly string[] = [
   // Штамп «эта компания прошла онбординг» — он и так именной, и переживать
   // переход обязан: ради него переход и перестал показывать гейт.
   "babun:tenant:onboarded",
+  // Черновик реквизитов, последняя ставка VAT и «что уже видел» в ленте
+  // изменений команд — все с компанией в имени (03.10).
+  "babun:companies:draft",
+  "babun:vat:last-rate",
+  "babun:teamActivity.lastSeen",
   // Привычки экранов, переведённые на этот механизм.
   TENANT_PREF_PREFIX,
 ];
