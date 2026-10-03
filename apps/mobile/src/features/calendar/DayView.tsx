@@ -3,6 +3,7 @@ import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD, pad2, parseYMD } from "@/features/appointments/helpers";
+import { pluralize } from "@babun/shared/common/utils/pluralize";
 import { useThemeColors } from "@/theme/colors";
 import {
   decksFor,
@@ -946,6 +947,11 @@ export const DayColumn = memo(function DayColumn({
           style={{
             position: "absolute",
             top: pct(nowMin, totalMin),
+            // Ряд высотой в точку (9pt) центрирует линию на 4.5pt НИЖЕ своего
+            // верха: линия «сейчас» стояла на 4–10 минут позже настоящего
+            // времени — ниже капсулы на рельсе и края серого «прошлого»
+            // (повторный аудит 03.10, видно на симуляторе).
+            marginTop: -4.5,
             left: -4,
             right: 0,
             flexDirection: "row",
@@ -979,7 +985,10 @@ export const DayColumn = memo(function DayColumn({
               lineH={lineH}
               onMenu={onMenu}
               editing={editingId === p.apt.id}
-              dayW={compact && laneW > 0 ? laneW + 1 : undefined}
+              // Шаг колонки — её ширина целиком: `onLayout` уже включает
+              // левую линию колонки. С «+1» карточка на дальнем дне недели
+              // уезжала на 6pt мимо колонки (повторный аудит 03.10).
+              dayW={compact && laneW > 0 ? laneW : undefined}
               overdue={isOverdue(p.apt, todayYmd, isToday ? nowMinutes : null)}
               // Тап по стопке — список её записей, а не первая попавшаяся.
               onEdit={deck ? openDeck : onEdit}
@@ -993,7 +1002,13 @@ export const DayColumn = memo(function DayColumn({
 
       <PickerSheet
         visible={deckOpen != null}
-        title={deckOpen ? `${minToHM(deckOpen[0].startMin)} · ${deckOpen.length} ${deckOpen.length < 5 ? "записи" : "записей"}` : ""}
+        // Начало стопки — самое раннее из её записей: первой в стопке лежит
+        // самая короткая, и шапка показывала её время (повторный аудит 03.10).
+        title={
+          deckOpen
+            ? `${minToHM(Math.min(...deckOpen.map((p) => p.startMin)))} · ${pluralize(deckOpen.length, "запись", "записи", "записей")}`
+            : ""
+        }
         onClose={() => setDeckOpen(null)}
         items={(deckOpen ?? []).map((p) => ({
           id: p.apt.id,
@@ -1166,6 +1181,11 @@ export const DayView = memo(function DayView({
   const t = useThemeColors();
   const pager = usePeriodPager({ periodKey: dateYmd, onCommit: onCommitPage });
   const dateAt = (off: -1 | 0 | 1) => addDaysYmd(dateYmd, off);
+  // «+N» полосы «весь день» в Дне — список всех событий дня (повторный аудит
+  // 03.10): Неделя уводит «+N» в День, а в самом Дне ему вести было некуда, и
+  // спрятанные события дня были недостижимы.
+  const [allDayList, setAllDayList] = useState<Appointment[] | null>(null);
+  const allDayColors = useBlockColors(teamColorFor);
   const bandH = useAllDayBandH();
   // Условие по ВСЕМ трём страницам пейджера: иначе чип выскакивал бы уже после
   // доводки свайпа, а высота полосы менялась бы под пальцем.
@@ -1225,6 +1245,7 @@ export const DayView = memo(function DayView({
                 teamColorFor={teamColorFor}
                 onEdit={onEdit}
                 onMenu={onMenu}
+                onOverflow={() => setAllDayList(allDayOf(apptsFor(dateAt(off))))}
               />
             )}
           />
@@ -1284,6 +1305,18 @@ export const DayView = memo(function DayView({
           }}
         />
       </ZoomableTimeGrid>
+      <PickerSheet
+        visible={allDayList != null}
+        title={allDayList ? `Весь день · ${pluralize(allDayList.length, "событие", "события", "событий")}` : ""}
+        onClose={() => setAllDayList(null)}
+        items={(allDayList ?? []).map((a) => ({
+          id: a.id,
+          label: clientName(a) || a.comment || "Событие",
+          icon: CalendarClock,
+          color: allDayColors(a).solid,
+          onPress: () => onEdit(a),
+        }))}
+      />
     </View>
   );
 });

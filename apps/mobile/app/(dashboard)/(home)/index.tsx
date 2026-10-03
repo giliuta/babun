@@ -3491,7 +3491,7 @@ export default function CalendarTab() {
             hasClients={clients.length > 0}
             hasServices={services.length > 0}
             onCreate={() => {
-              const slot = suggestFirstSlot(new Date());
+              const slot = suggestFirstSlot(now);
               bookAt({ date: formatYMD(slot.date), time_start: slot.time });
             }}
             onDismiss={dismissOnboarding}
@@ -3499,7 +3499,7 @@ export default function CalendarTab() {
         ) : (
           <CalendarEmptyState
             onCreate={() => {
-              const slot = suggestFirstSlot(new Date());
+              const slot = suggestFirstSlot(now);
               bookAt({ date: formatYMD(slot.date), time_start: slot.time });
             }}
           />

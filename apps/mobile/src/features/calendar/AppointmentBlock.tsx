@@ -253,6 +253,12 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // «+N» стопки: внизу, если под именем есть ещё строка; иначе сверху, и
   // тогда имя отступает на ширину значка.
   const deckBadgeLow = deckMore > 0 && rowsFit >= 2;
+  // ШИРИНА ПЕРВОЙ СТРОКИ ИМЕНИ — после значка «+N» сверху. Значок резервировался
+  // уже ПОСЛЕ гейта 24pt: у верхней карточки стопки в Неделе (две короткие
+  // записи в одно время) имени оставалось ~14pt — «А…» (повторный аудит
+  // 03.10). Гейт меряет то, что останется имени на самом деле.
+  const nameLineW =
+    textW + markReserve - Math.max(markReserve, deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0);
   const dotReserve =
     offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? 12 : 0;
 
@@ -388,9 +394,12 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       reset();
       return;
     }
-    const ns = edge === "top" ? startMin + steps * resizeStep : startMin;
-    const ne = edge === "bottom" ? spanEnd + steps * resizeStep : spanEnd;
-    if (ns < 0 || ne > 24 * 60 || ne - ns < resizeStep) {
+    // За край суток — до края, а не откат (повторный аудит 03.10): подпись
+    // во время растяжки уже показывала «–23:59» / «00:00», а на отпускании
+    // запись молча прыгала обратно. Перенос клампится так же (`clampStart`).
+    const ns = Math.max(0, edge === "top" ? startMin + steps * resizeStep : startMin);
+    const ne = Math.min(24 * 60, edge === "bottom" ? spanEnd + steps * resizeStep : spanEnd);
+    if ((ns === startMin && ne === spanEnd) || ne - ns < resizeStep) {
       reset();
       return;
     }
@@ -750,7 +759,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               девятка, которой неделя набиралась раньше, была нечитаема.
               Лестница только ДОПИСЫВАЕТСЯ вниз и никогда не переставляется:
               при щипке глаз не должен терять якорь. */}
-          {textW >= 24
+          {textW >= 24 && nameLineW >= 24
             ? nameParts.map((part, i) => (
                 <Text
                   key={i}
@@ -778,9 +787,15 @@ export const AppointmentBlock = memo(function AppointmentBlock({
                   // и 11pt мало, режется по краю, как раньше: «Конс» говорит
                   // больше, чем «Ко…».
                   ellipsizeMode={
-                    textW >= 96 || nameShrinkFits(part, textW) ? "tail" : "clip"
+                    (i === 0 ? nameLineW : textW) >= 96 ||
+                    nameShrinkFits(part, i === 0 ? nameLineW : textW)
+                      ? "tail"
+                      : "clip"
                   }
-                  adjustsFontSizeToFit={textW < 96 && nameShrinkFits(part, textW)}
+                  adjustsFontSizeToFit={
+                    (i === 0 ? nameLineW : textW) < 96 &&
+                    nameShrinkFits(part, i === 0 ? nameLineW : textW)
+                  }
                   minimumFontScale={NAME_MIN_SCALE}
                   maxFontSizeMultiplier={1.3}
                 >

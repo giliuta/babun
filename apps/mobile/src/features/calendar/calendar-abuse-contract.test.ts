@@ -305,4 +305,24 @@ describe("повторный аудит календаря 03.10", () => {
       assert.doesNotMatch(src, /toLocaleDateString\("ru-RU", \{ month: "long" \}\)/, f);
     }
   });
+
+  test("сетка: линия «сейчас» на своём времени, шаг колонки без +1, стопка с самым ранним началом", () => {
+    const day = readFileSync(resolve(here, "DayView.tsx"), "utf8");
+    assert.match(day, /top: pct\(nowMin, totalMin\),[\s\S]{0,400}?marginTop: -4\.5,/);
+    assert.match(day, /dayW=\{compact && laneW > 0 \? laneW : undefined\}/);
+    assert.match(day, /minToHM\(Math\.min\(\.\.\.deckOpen\.map\(\(p\) => p\.startMin\)\)\)/);
+    assert.match(day, /onOverflow=\{\(\) => setAllDayList\(allDayOf\(apptsFor\(dateAt\(off\)\)\)\)\}/);
+  });
+
+  test("растяжка за край суток — до края, а не молчаливый откат; имя стопки — по живой ширине", () => {
+    const src = block();
+    assert.match(src, /const ns = Math\.max\(0, edge === "top"/);
+    assert.match(src, /const ne = Math\.min\(24 \* 60, edge === "bottom"/);
+    assert.doesNotMatch(src, /if \(ns < 0 \|\| ne > 24 \* 60/);
+    assert.match(src, /\{textW >= 24 && nameLineW >= 24/);
+  });
+
+  test("первая запись предлагается по часам команды", () => {
+    assert.doesNotMatch(screen(), /suggestFirstSlot\(new Date\(\)\)/);
+  });
 });
