@@ -15,6 +15,7 @@ import {
 } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { firstCalendarFromRpc } from "@/features/reference/first-calendar";
 import {
   citiesQueryKey,
   mastersQueryKey,
@@ -169,6 +170,40 @@ export function useTeam(id: string | undefined) {
       if (error) throw new Error(error.message);
       return data;
     },
+  });
+}
+
+/** Узкий тип вызова: функции нет в сгенерированных типах базы (накачена
+ *  03.10 миграцией `create_first_calendar_once`, типы перегенерируют позже). */
+type RpcWithFirstCalendar = {
+  rpc: (
+    name: "create_first_calendar",
+    args: { p_id: string; p_name: string; p_color: string | null },
+  ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
+};
+
+/** ПЕРВЫЙ КАЛЕНДАРЬ — РЕШАЕТ БАЗА (03.10). Экран заводит «Личный» сам, когда
+ *  список календарей пуст, — но пустым его однажды прочли без входа (истёк
+ *  токен: RLS отдал 0 строк ответом 200), и у компании с тремя календарями
+ *  появился второй «Личный». `create_first_calendar` под замком компании
+ *  проверяет живые календари и, если они есть, ничего не создаёт: ответ —
+ *  `null`, экран просто перечитывает список. */
+export function useCreateFirstCalendar() {
+  const qc = useQueryClient();
+  return useMutation({
+    networkMode: "always",
+    mutationFn: async (input: { name: string; color?: string }): Promise<Team | null> => {
+      const { data, error } = await (supabase as unknown as RpcWithFirstCalendar).rpc(
+        "create_first_calendar",
+        { p_id: generateId("team"), p_name: input.name, p_color: input.color || null },
+      );
+      if (error) throw new Error(error.message);
+      return firstCalendarFromRpc<Team>(data);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["teams"] });
+    },
+    meta: { errorHandled: true },
   });
 }
 

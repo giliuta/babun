@@ -197,7 +197,7 @@ import { useMirror } from "@/features/access/mirror/mirror-state";
 import { hiddenByWindow } from "@/features/appointments/record-window";
 import {
   useCities,
-  useCreateTeam,
+  useCreateFirstCalendar,
   useTeams,
 } from "@/features/reference/queries";
 import {
@@ -413,7 +413,7 @@ export default function CalendarTab() {
   // Без подписки на состояние мутации: экран её не читает, а каждый шаг
   // (ожидание → успех) перерисовывал бы весь календарь на переносе.
   const updateAppt = useQuietUpdateAppointment();
-  const createTeam = useCreateTeam();
+  const createFirstCalendarMutation = useCreateFirstCalendar();
   const seedFirstCalendarAccounts = useCreateTeamAccounts();
   const toast = useToast();
   const t = useThemeColors();
@@ -1872,7 +1872,7 @@ export default function CalendarTab() {
     const color =
       PRESET_COLOR_CYCLE.find((c) => !used.has(c.value))?.value ??
       PRESET_COLOR_CYCLE[0].value;
-    createTeam.mutate(
+    createFirstCalendarMutation.mutate(
       // «Личный», а не «Команда 1»: у человека, который только что завёл
       // первый календарь, ещё нет никаких «команд» — счётчик в имени это язык
       // базы, а не язык владельца. Владелец 01.10: у каждого аккаунта есть
@@ -1881,6 +1881,13 @@ export default function CalendarTab() {
       { name: "Личный", color },
       {
         onSuccess: (team) => {
+          // Календарь у компании уже есть — пустым список прочли по ошибке
+          // (без входа, на гонке двух устройств). Ничего не заводим, только
+          // перечитываем список: база ответила, что создавать нечего.
+          if (!team) {
+            void refetchTeams();
+            return;
+          }
           setTeamChoice(team.id);
           rememberView({ teamId: team.id });
           // Тоста нет намеренно: календарь заводится САМ, человек его не
@@ -3263,7 +3270,7 @@ export default function CalendarTab() {
               setFirstCalendarFailed(false);
               createFirstCalendar();
             }}
-            creating={createTeam.isPending}
+            creating={createFirstCalendarMutation.isPending}
           />
         ) : (
           // Календарь уже создаётся — показываем скелет сетки, а не кнопку:
