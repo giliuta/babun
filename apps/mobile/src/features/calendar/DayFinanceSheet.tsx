@@ -51,7 +51,12 @@ import { writeErrorWords } from "@/lib/connection-words";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
-import { accessGate, canEditMoneyRow, moneyKey } from "@/features/access/my-access";
+import { accessGate, moneyKey } from "@/features/access/my-access";
+import {
+  canEditDayMoneyRow,
+  dayMoneyGate,
+  dayMoneyRowReadable,
+} from "@/features/calendar/day-money-access";
 import { useMyAccess } from "@/features/access/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { useSession } from "@/providers/SessionProvider";
@@ -81,6 +86,11 @@ import { useSession } from "@/providers/SessionProvider";
 // «Добавить операцию» — та же форма по категориям, что на вкладке. День
 // подставляется в форму; будущий день леджер не принимает, поэтому форма
 // открывается на сегодняшней дате и показывает её в строке «Дата».
+//
+// Операция отсюда помечена «из календаря» (`fromCalendar`, владелец 04.10:
+// «с дохода/расхода календаря обязательно переносится в финансы, а с
+// финансов обратно — нет»): она есть и в «Финансах», а день календаря
+// считает только оплаты записей и такие операции.
 //
 // Старые «ручные операции дня» (day_extras) показываются и удаляются с
 // вопросом; новых не заводится — деньги живут в одном леджере.
@@ -134,17 +144,21 @@ export function DayFinanceSheet({
   const { data: clients = [] } = useClients();
   const { data: categories = [] } = useFinanceCategories();
   const setExtras = useSetDayExtras();
-  // «СМОТРИТ» — ЛИСТ ТОТ ЖЕ, ИЗМЕНЕНИЯ ЗАКРЫТЫ (этап 2 доступа; план: кнопка
-  // на месте, серая, причина словами). С среза 2а доходы и расходы — два
-  // права: кнопка и строки открыты по своей стороне денег в ЭТОМ календаре;
-  // сервер проверяет то же, так что серое не врёт.
+  // «ВИДИТ» — ЛИСТ ТОТ ЖЕ, ИЗМЕНЕНИЯ ЗАКРЫТЫ (кнопка на месте, серая,
+  // причина словами). Открывает их право календаря «Доход и расход дня»
+  // (владелец 04.10, `day-money-access.ts`), а не доходы и расходы «Финансов»:
+  // «Вносит» — доход и расход этого дня в ЭТОМ календаре; сервер проверяет
+  // то же (`finance_transactions_insert_day_money`), так что серое не врёт.
   const role = useCurrentRole().data;
   const myAccess = useMyAccess().data;
   const me = useSession().session?.user.id ?? null;
-  const writesSide = (side: "income" | "expense") =>
+  const canWriteDayMoney = dayMoneyGate({ role, map: myAccess, teamId }) === "write";
+  const canWriteIncome = canWriteDayMoney;
+  const canWriteExpense = canWriteDayMoney;
+  /** Старые «ручные операции дня» (day_extras): их сервер правит по сторонам
+   *  «Финансов» (`replace_day_extras`), новых не заводится. */
+  const writesLegacySide = (side: "income" | "expense") =>
     accessGate({ role, map: myAccess, blockKey: moneyKey(myAccess, side), scope: "calendar", teamId }) === "write";
-  const canWriteIncome = writesSide("income");
-  const canWriteExpense = writesSide("expense");
   const [view, setView] = useState<DayView>("all");
 
   // Лист остаётся смонтированным с dateYmd=null: последний открытый день и
@@ -176,14 +190,16 @@ export function DayFinanceSheet({
     { enabled: shownYmd != null },
   );
   // Обе выборки вместе; к дню строки относит `dayMoney` — и прошлый день,
-  // подсунутый keepPreviousData, туда не попадёт.
-  const dayTx = useMemo(
-    () => [
+  // подсунутый keepPreviousData, туда не попадёт. «Его глазами» сервер
+  // отдаёт всё (токен ваш): строки режутся его правом календаря и
+  // «Ограничениями», как у полосы под сеткой.
+  const dayTx = useMemo(() => {
+    const readable = dayMoneyRowReadable({ role, map: myAccess, today: businessToday });
+    return [
       ...(txQuery.data ?? []),
       ...(recordsTxQuery.isPlaceholderData ? [] : recordsTxQuery.data ?? []),
-    ],
-    [txQuery.data, recordsTxQuery.isPlaceholderData, recordsTxQuery.data],
-  );
+    ].filter(readable);
+  }, [txQuery.data, recordsTxQuery.isPlaceholderData, recordsTxQuery.data, role, myAccess, businessToday]);
   // Загрузка — пока ответ в пути (`awaitingAnswer`). По одному
   // `isPlaceholderData` день БЕЗ ЗАПИСЕЙ, открытый после дня с записями,
   // крутил загрузку вечно: запрос по записям у него выключен, а заглушку
@@ -366,15 +382,22 @@ export function DayFinanceSheet({
       const id = tx.appointment_id;
       return () => openRecord(id);
     }
-    // Сотрудник правит операцию своей стороны денег (срез 2а): «Правит всё» —
-    // любую строку команды, «Добавляет» — свою; оплату долга ведёт экран
-    // долгов. Сервер отказывает ровно так же — двери, которая кончится
+    // Партнёр с «Вносит» правит СВОЮ операцию из календаря (04.10), владелец —
+    // любую; оплату долга ведёт экран долгов. Сервер отказывает ровно так же
+    // (`finance_transactions_update_day_money`) — двери, которая кончится
     // отказом, нет (правило 10).
     const side = tx.type === "expense" ? "expense" : "income";
     if (
       canEditTransaction(tx) &&
       (role === "owner" || !tx.debt_id) &&
-      canEditMoneyRow({ role, map: myAccess, teamId: tx.team_id ?? teamId, side, createdBy: tx.created_by, me })
+      canEditDayMoneyRow({
+        role,
+        map: myAccess,
+        teamId: tx.team_id ?? teamId,
+        createdBy: tx.created_by,
+        me,
+        fromCalendar: tx.from_calendar,
+      })
     ) {
       return () => openOperation(tx, side);
     }
@@ -704,8 +727,10 @@ export function DayFinanceSheet({
                 // крестик в строке был четвёртым способом удалить что-то в
                 // продукте и мишенью 36pt рядом с суммой.
                 // Стирает строку своей стороны: сервер пишет только её, а чужую
-                // сторону дня оставляет как была (срез 2а).
-                return teamId && (e.kind === "income" ? canWriteIncome : canWriteExpense) ? (
+                // сторону дня оставляет как была (срез 2а). Старые строки
+                // `replace_day_extras` пускает правами «Финансов», а не
+                // «Доходом и расходом дня» — кнопка спрашивает то же.
+                return teamId && writesLegacySide(e.kind) ? (
                   <SwipeRow
                     key={e.id}
                     label="Удалить"
@@ -735,6 +760,7 @@ export function DayFinanceSheet({
         defaultDate={shownYmd}
         businessToday={businessToday}
         transaction={editingTx}
+        fromCalendar
       />
     </>
   );

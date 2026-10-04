@@ -28,6 +28,7 @@ export const CALENDAR_PREVIEW_KEYS: readonly string[] = [
   "calendar.move",
   "calendar.cancel",
   "calendar.events",
+  "calendar.day_money",
   "calendar.day_labels",
   "calendar.schedule",
 ];

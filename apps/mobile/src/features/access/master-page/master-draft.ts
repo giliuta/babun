@@ -155,6 +155,8 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "calendar.booking_form",
     "calendar.services",
     "calendar.labels",
+    // Доход и расход дня (04.10) — деньги этого календаря.
+    "calendar.day_money",
     "finance.income",
     "finance.expense",
     "finance.accounts",

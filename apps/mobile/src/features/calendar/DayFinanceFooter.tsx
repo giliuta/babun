@@ -10,6 +10,9 @@ import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 import { dayMoney } from "@/features/calendar/day-money";
 import { useAppointmentsLedger, useTransactions } from "@/features/finances/queries";
 import { awaitingAnswer } from "@/features/finances/ledger-select";
+import { useMyAccess } from "@/features/access/queries";
+import { useCurrentRole } from "@/features/settings/tenant";
+import { dayMoneyRowReadable } from "@/features/calendar/day-money-access";
 
 // Thin money strip pinned under the day/week grid — per-day Доход (green) over
 // Расход (red), aligned to the day columns (gutter width = the hour rail).
@@ -23,13 +26,15 @@ import { awaitingAnswer } from "@/features/finances/ledger-select";
 //
 // ДЕНЬГИ ЗАПИСИ — В ДНЕ ЗАПИСИ (владелец 2026-10-01, правило в
 // `day-money.ts`): предоплата, внесённая сегодня за завтрашнюю запись, стоит
-// доходом завтра и переезжает вместе с записью; операция без записи (доход
-// или расход с категорией) — в своём дне. Расход — расходы журнала тем же
-// правилом и материалы записей дня.
+// доходом завтра и переезжает вместе с записью; операция без записи — в
+// своём дне, если внесена кнопкой календаря (касса «Финансов» календарю
+// чужая, владелец 04.10). Расход — расходы журнала тем же правилом и
+// материалы записей дня.
 export function DayFinanceFooter({
   days,
   appointments,
   teamId,
+  todayYmd,
   onTapDay,
   showIncome = true,
   showExpense = true,
@@ -39,8 +44,8 @@ export function DayFinanceFooter({
   /** Active team filter — day extras are stored per (team, date), so with
    *  no team selected extras are skipped (same as web's personal tab). */
   teamId: string | null;
-  /** Сегодня в поясе компании. Полоса его больше не читает (доход — только
-   *  оплаченное), проп остаётся, чтобы не трогать экран календаря. */
+  /** Сегодня в поясе компании — для «Ограничений» календаря в зеркале
+   *  (`dayMoneyRowReadable`). Нет — последний день полосы. */
   todayYmd?: string;
   onTapDay?: (d: Date) => void;
   /** Доходы и расходы — два права (срез 2а): строка стороны, которую человек
@@ -81,10 +86,15 @@ export function DayFinanceFooter({
   const settling =
     awaitingAnswer(ledgerQuery) ||
     (awaitingAnswer(recordsLedgerQuery) && !recordsLedgerQuery.isPlaceholderData);
-  const ledger = useMemo(
-    () => [...(ledgerQuery.data ?? []), ...(recordsLedger ?? [])],
-    [ledgerQuery.data, recordsLedger],
-  );
+  // «ЕГО ГЛАЗАМИ» токен ваш, и сервер отдаёт всё: деньги дня режутся его
+  // правом календаря и «Ограничениями» (`day-money-access.ts`). Партнёру
+  // сервер уже отрезал — здесь ничего не уходит.
+  const role = useCurrentRole().data;
+  const myAccess = useMyAccess().data;
+  const ledger = useMemo(() => {
+    const readable = dayMoneyRowReadable({ role, map: myAccess, today: todayYmd ?? rangeTo });
+    return [...(ledgerQuery.data ?? []), ...(recordsLedger ?? [])].filter(readable);
+  }, [ledgerQuery.data, recordsLedger, role, myAccess, todayYmd, rangeTo]);
 
   const byDate = useMemo(() => {
     const m = new Map<string, Appointment[]>();

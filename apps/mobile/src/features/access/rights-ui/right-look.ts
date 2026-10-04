@@ -76,6 +76,8 @@ const LOOK: Record<string, RightLook> = {
   "calendar.move": { icon: ArrowRightLeft, tile: SETTINGS_TILE.teal },
   "calendar.cancel": { icon: CalendarX2, tile: SETTINGS_TILE.red },
   "calendar.events": { icon: CalendarDays, tile: SETTINGS_TILE.indigo },
+  // Тот же кошелёк, что у листа «Финансы дня» под календарём.
+  "calendar.day_money": { icon: Wallet, tile: SETTINGS_TILE.green },
   "calendar.day_labels": { icon: Bookmark, tile: SETTINGS_TILE.purple },
   "calendar.schedule": { icon: CalendarClock, tile: SETTINGS_TILE.blue },
   // Те же значки и цвета, что у строк шестерёнки календаря.

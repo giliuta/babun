@@ -8,6 +8,9 @@ import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 import { dayMoney, type DayMoney } from "@/features/calendar/day-money";
 import { useAppointmentsLedger, useTransactions } from "@/features/finances/queries";
 import { awaitingAnswer } from "@/features/finances/ledger-select";
+import { useMyAccess } from "@/features/access/queries";
+import { useCurrentRole } from "@/features/settings/tenant";
+import { dayMoneyRowReadable } from "@/features/calendar/day-money-access";
 import {
   isWeekendColumn,
   weekdayIndex,
@@ -112,8 +115,8 @@ export const MonthView = memo(function MonthView({
   const { data: extrasMap = {} } = useDayExtras();
 
   // ДЕНЬГИ КЛЕТКИ — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО ПОЛОСА НЕДЕЛИ (`day-money.ts`):
-  // деньги записи — в дне записи (владелец 2026-10-01), операция без записи —
-  // в дне операции.
+  // деньги записи — в дне записи (владелец 2026-10-01), операция из
+  // календаря — в дне операции, касса «Финансов» сюда не входит (04.10).
   const todayStr = todayYmd ?? ymd(new Date());
   const ledgerQuery = useTransactions(ymd(cells[0]), ymd(cells[cells.length - 1]), {
     brigadeIds: teamId ? [teamId] : undefined,
@@ -137,13 +140,14 @@ export const MonthView = memo(function MonthView({
   // красные суммы всего месяца на каждое создание или перенос записи, пока
   // список номеров перечитывался.
   const ledgerAwaiting = awaitingAnswer(ledgerQuery);
-  const ledger = useMemo(
-    () =>
-      ledgerAwaiting
-        ? undefined
-        : [...(ledgerQuery.data ?? []), ...(recordsLedgerQuery.data ?? [])],
-    [ledgerAwaiting, ledgerQuery.data, recordsLedgerQuery.data],
-  );
+  // «Его глазами» — его правом календаря и «Ограничениями», как полоса недели.
+  const role = useCurrentRole().data;
+  const myAccess = useMyAccess().data;
+  const ledger = useMemo(() => {
+    if (ledgerAwaiting) return undefined;
+    const readable = dayMoneyRowReadable({ role, map: myAccess, today: todayStr });
+    return [...(ledgerQuery.data ?? []), ...(recordsLedgerQuery.data ?? [])].filter(readable);
+  }, [ledgerAwaiting, ledgerQuery.data, recordsLedgerQuery.data, role, myAccess, todayStr]);
 
   // Финансы всех дней одной мемоизацией (аудит: расчёт гонялся по 42
   // клеткам в каждом рендере). Дни без записей, но с операциями леджера или
@@ -152,8 +156,8 @@ export const MonthView = memo(function MonthView({
     const m = new Map<string, DayMoney>();
     if (!showFinance) return m;
     const dates = new Set(financeByDay.keys());
-    // Дни записей уже в наборе; операция без записи добавляет свой день.
-    for (const tx of ledger ?? []) if (!tx.appointment_id) dates.add(tx.occurred_on);
+    // Дни записей уже в наборе; операция из календаря добавляет свой день.
+    for (const tx of ledger ?? []) if (!tx.appointment_id && tx.from_calendar) dates.add(tx.occurred_on);
     if (teamId) {
       const prefix = `${teamId}:`;
       for (const k of Object.keys(extrasMap)) {

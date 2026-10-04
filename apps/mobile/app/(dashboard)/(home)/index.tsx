@@ -208,7 +208,7 @@ import { useCurrentRole, usePlanAllows, useTenant } from "@/features/settings/te
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { SmsSendSheet } from "@/features/sms/SmsSendSheet";
 import { appointmentSmsVars } from "@/features/sms/client-sms-vars";
-import { accessGate, moneyKey } from "@/features/access/my-access";
+import { dayMoneyGate, seesDayMoney } from "@/features/calendar/day-money-access";
 import { useMyAccess } from "@/features/access/queries";
 import { haptics } from "@/lib/haptics";
 import {
@@ -959,29 +959,18 @@ export default function CalendarTab() {
   const canCreateOnGrid =
     canManageBookings ||
     (isCrew && (activeActions.create || activeActions.events === "write"));
-  // ДЕНЬГИ В КАЛЕНДАРЕ — ПО УРОВНЮ «ДОХОДЫ И РАСХОДЫ» В ЭТОМ КАЛЕНДАРЕ (этап 2
-  // доступа, владелец 15.09: «чтоб всё сразу менялось в живом времени»).
-  // Раньше — только владельцу, какие бы права ни выставили сотруднику. Смена
-  // уровня приходит сигналом и перерисовывает полосу сразу.
-  // Полоса «Доход / Расход» под сеткой: право И желание (настройка «Что
-  // показывать»). `undefined` — согласие: у тенанта без строки настроек
-  // полоса была всегда, и молчание не должно её отбирать.
-  // С среза 2а доходы и расходы — два права: полоса показывает ту сторону,
-  // что человек видит; месяц с прибылью — только когда видны обе (прибыль
-  // из одной стороны была бы неправдой).
-  const seesSide = (side: "income" | "expense") => {
-    const gate = accessGate({
-      role,
-      map: myAccessQuery.data,
-      blockKey: moneyKey(myAccessQuery.data, side),
-      scope: "calendar",
-      teamId: activeTeamId,
-    });
-    return gate === "read" || gate === "write";
-  };
-  const seesIncome = seesSide("income");
-  const seesExpense = seesSide("expense");
-  const canViewCompanyFinance = seesIncome || seesExpense;
+  // ДЕНЬГИ В КАЛЕНДАРЕ — ПРАВОМ КАЛЕНДАРЯ «ДОХОД И РАСХОД ДНЯ» (владелец
+  // 04.10: «функция расход/доход должна быть в доступах календаря — финансы
+  // этого календаря за день, не общая картина»; `day-money-access.ts`). Права
+  // «Финансов» полосу больше не открывают. Смена уровня приходит сигналом и
+  // перерисовывает полосу сразу. Доход и расход дня — одно право: обе строки
+  // полосы и месяц с прибылью видны вместе.
+  const seesDayMoneyHere = seesDayMoney(
+    dayMoneyGate({ role, map: myAccessQuery.data, teamId: activeTeamId }),
+  );
+  const seesIncome = seesDayMoneyHere;
+  const seesExpense = seesDayMoneyHere;
+  const canViewCompanyFinance = seesDayMoneyHere;
   // Полоса денег под календарём — всегда, кому видны деньги (владелец 30.09:
   // «показывать доход и расход всегда будет открыто»; тумблера больше нет).
   const showDayFinance = canViewCompanyFinance;

@@ -5,7 +5,7 @@ import type { AccessBlock, AccessLevel } from "../access-map";
 import { hasBlockPreview } from "./preview-keys";
 import { WORDED_KEYS, rightTitle, rowWord, stepDanger, stepHint, stepWord } from "./right-words";
 
-// Живые права реестра на 04.10 (`access_blocks where live`, все 70, в порядке
+// Живые права реестра на 04.10 (`access_blocks where live`, все 71, в порядке
 // `position`) — с их лестницами. Сверка с базой 04.10 нашла, что прежний список
 // (29.09) не знал 23 живых прав и держал снятые «Шаблоны SMS» компании.
 const LIVE: readonly [string, AccessLevel[]][] = [
@@ -15,6 +15,7 @@ const LIVE: readonly [string, AccessLevel[]][] = [
   ["calendar.events", ["off", "read", "write"]],
   ["calendar.move", ["off", "write"]],
   ["calendar.cancel", ["off", "write"]],
+  ["calendar.day_money", ["off", "read", "write"]],
   ["record.team", ["read", "write"]],
   ["record.label", ["off", "read", "write"]],
   ["record.client", ["off", "read", "write"]],

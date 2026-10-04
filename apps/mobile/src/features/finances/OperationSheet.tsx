@@ -127,6 +127,7 @@ export function OperationSheet({
   refundedTotal = 0,
   canWrite: canWriteProp = true,
   canWriteType,
+  fromCalendar = false,
   onExited,
 }: {
   visible: boolean;
@@ -171,6 +172,11 @@ export function OperationSheet({
    *  права, срез 2а). Спрашивается только у НОВОЙ операции: правку и платёж
    *  по долгу решает `canWrite`. Нет — обе стороны. */
   canWriteType?: (type: "income" | "expense") => boolean;
+  /** Форму открыл лист «Финансы дня» календаря: НОВАЯ операция помечается
+   *  «из календаря» и встаёт в день календаря (владелец 04.10: «с календаря
+   *  переносится в финансы, а с финансов обратно — нет»). Правка признак не
+   *  трогает. */
+  fromCalendar?: boolean;
   /** Лист полностью ушёл — тому, кто открывал форму поверх своего листа
    *  (разбор дня в календаре), пора вернуть свой. */
   onExited?: () => void;
@@ -786,6 +792,7 @@ export function OperationSheet({
         await insert.mutateAsync({
           type,
           request_id: requestId,
+          ...(fromCalendar ? { from_calendar: true } : {}),
           ...draft,
           ...(vatSnapshot ?? {}),
         });

@@ -6,7 +6,7 @@ import { dayMoney, isMoneyRecord, moneyByAccount, moneyOfDay } from "./day-money
 
 // ДЕНЬГИ ЗАПИСИ — В ДНЕ ЗАПИСИ (владелец 2026-10-01). Живой случай: предоплата
 // €20 внесена 30.09 за запись на 1.10 — полоса показывала её в среду, где
-// записи нет. Операция без записи (доход/расход с категорией) — в своём дне.
+// записи нет. Операция без записи — в своём дне, если внесена из календаря.
 
 const TODAY = "2026-09-30";
 const TOMORROW = "2026-10-01";
@@ -23,6 +23,8 @@ const tx = (
     refund_of_id: null,
     notes: null,
     team_id: "t1",
+    // Операция без записи — та, что внесена кнопкой календаря (04.10).
+    from_calendar: true,
     ...over,
   }) as FinanceTransaction;
 
@@ -135,6 +137,33 @@ describe("доход дня — деньги записи в дне записи
     const day = run(TODAY, [], rows);
     assert.deepEqual(day.incomeRows.map((r) => r.id), ["i2", "r2"]);
     assert.equal(day.income, 20);
+  });
+});
+
+describe("касса «Финансов» — не деньги календаря (владелец 04.10)", () => {
+  // «Расход на рекламу €300 внёс через финансы — в календаре его нет; внёс
+  // нижней кнопкой календаря — есть, и в финансах тоже».
+  test("операция «Финансов» без записи в день не попадает", () => {
+    const ads = tx({ id: "ads", type: "expense", amount: 300, from_calendar: false });
+    const fuel = tx({ id: "fuel", type: "expense", amount: 15 });
+    const day = run(TODAY, [], [ads, fuel]);
+    assert.deepEqual(day.expenseRows.map((r) => r.id), ["fuel"]);
+    assert.equal(day.expense, 15);
+  });
+
+  test("доход «Финансов» без записи — тоже нет; оплата записи — всегда есть", () => {
+    const record = appt({ id: "a1", date: TODAY });
+    const pay = tx({ id: "pay", type: "income", amount: 50, source: "auto", appointment_id: "a1", from_calendar: false });
+    const other = tx({ id: "other", type: "income", amount: 70, from_calendar: false });
+    const day = run(TODAY, [record], [pay, other]);
+    assert.deepEqual(day.incomeRows.map((r) => r.id), ["pay"]);
+    assert.equal(day.income, 50);
+  });
+
+  test("строка без признака (старая) — касса «Финансов»", () => {
+    const legacy = { ...tx({ id: "old", type: "expense", amount: 9 }) } as FinanceTransaction;
+    delete (legacy as { from_calendar?: boolean }).from_calendar;
+    assert.deepEqual(moneyOfDay(TODAY, [], [legacy]), []);
   });
 });
 

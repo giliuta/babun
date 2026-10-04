@@ -70,6 +70,8 @@ export const CALENDAR_ROW_ORDER: readonly string[] = [
   "calendar.events",
   "calendar.move",
   "calendar.cancel",
+  // Доход и расход дня под сеткой (владелец 04.10).
+  "calendar.day_money",
   "calendar.schedule",
 ];
 
@@ -176,6 +178,10 @@ const RECORD_KINDS: readonly string[] = [
   "calendar.events",
   "calendar.move",
   "calendar.cancel",
+  // ДОХОД И РАСХОД ДНЯ — В «ГЛАВНОМ» КАЛЕНДАРЯ (владелец 04.10: «функция
+  // расход/доход должна быть в доступах календаря»): полоса под сеткой и лист
+  // «Финансы дня». Доходы и расходы «Финансов» — свои строки в «Финансах».
+  "calendar.day_money",
 ];
 
 export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock[]>> = {

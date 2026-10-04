@@ -86,6 +86,9 @@ function teamFacts(read: LevelRead): TeamFacts {
 
   const money: string[] = [];
   if (is("record.payment", "write")) money.push("принимает оплату");
+  // Доход и расход дня под календарём (04.10) — право календаря.
+  if (is("calendar.day_money", "read")) money.push("видит доход и расход дня");
+  if (is("calendar.day_money", "write")) money.push("вносит доход и расход дня");
   // Доходы и расходы — два права с этапа 2.
   const income = read("finance.income");
   const expense = read("finance.expense");

@@ -102,6 +102,8 @@ export function rowToTx(r: Row): FinanceTransaction {
     refund_of_id: r.refund_of_id,
     reversal_kind: (r.reversal_kind ?? null) as FinanceTransaction["reversal_kind"],
     source: r.source as TransactionSource,
+    // Колонки ещё нет в сгенерированных типах (миграция 20261004080218).
+    from_calendar: (r as { from_calendar?: boolean | null }).from_calendar === true,
     created_at: r.created_at,
     updated_at: r.updated_at,
     created_by: r.created_by,
@@ -332,6 +334,9 @@ export interface TransactionDraft {
    *  операция, поэтому платёж живёт в журнале, а не в таблице долгов. */
   debt_id?: string | null;
   refund_of_id?: string | null;
+  /** Внесена кнопкой «Финансы дня» календаря: только такие операции без
+   *  записи день календаря и считает (владелец 04.10). */
+  from_calendar?: boolean;
   /** Клиентский PK строки. Стабилен на время попытки: ретрай после
    *  потерянного ответа или двойной тап упирается в duplicate key,
    *  который трактуется как успех — деньги не задваиваются (паттерн
@@ -348,8 +353,9 @@ export async function insertTransaction(
   const businessToday = draft.business_today ?? localTodayYmd();
   const occurredOn = draft.occurred_on ?? businessToday;
   rejectFutureLedgerDate(occurredOn, businessToday);
-  const insert: Insert = {
+  const insert: Insert & { from_calendar?: boolean } = {
     ...(draft.request_id ? { id: draft.request_id } : {}),
+    ...(draft.from_calendar ? { from_calendar: true } : {}),
     tenant_id: tenantId,
     type: draft.type,
     amount: draft.amount,
@@ -375,7 +381,8 @@ export async function insertTransaction(
   };
   const { data, error } = await supabase
     .from("finance_transactions")
-    .insert(insert)
+    // `from_calendar` ещё нет в сгенерированных типах — колонка в базе есть.
+    .insert(insert as Insert)
     .select("*")
     .single();
   if (error && draft.request_id && error.code === "23505") {

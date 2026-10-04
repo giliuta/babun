@@ -278,7 +278,7 @@ describe("повторный аудит календаря 03.10", () => {
     const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
     assert.match(month, /const ledgerAwaiting = awaitingAnswer\(ledgerQuery\);/);
     // Операции записей не гасят месяц: создание записи не стирает суммы.
-    assert.match(month, /ledgerAwaiting\s*\? undefined\s*: \[\.\.\.\(ledgerQuery\.data \?\? \[\]\), \.\.\.\(recordsLedgerQuery\.data \?\? \[\]\)\]/);
+    assert.match(month, /if \(ledgerAwaiting\) return undefined;[\s\S]{0,200}?\[\.\.\.\(ledgerQuery\.data \?\? \[\]\), \.\.\.\(recordsLedgerQuery\.data \?\? \[\]\)\]\.filter\(readable\)/);
     assert.doesNotMatch(month, /recordsLedgerQuery\.isPlaceholderData/);
   });
 
