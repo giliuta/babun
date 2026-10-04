@@ -177,7 +177,13 @@ export function parseMemberAccessMap(value: Json | null): MemberAccessMap {
   ) {
     throw new Error(BAD_MAP);
   }
-  const attached = attached_calendars ?? [];
+  // СВОЯ КАРТА ПАРТНЁРА (`my_access_map`) СПИСКА НЕ НЕСЁТ: сервер кладёт его
+  // только в карту, которую читает владелец (`access_map_for(…, true)`). Зато
+  // в своей карте `calendars` — ровно прикреплённые календари, где записи
+  // видны. Без этого `record-blocks` считал каждый календарь чужим, и у живого
+  // партнёра страница записи теряла все блоки (04.10, прогон на двух
+  // телефонах; зеркало владельца ошибку не показывало — у него список есть).
+  const attached = attached_calendars ?? Object.keys(calendars);
   if (!Array.isArray(attached) || !attached.every((id) => typeof id === "string")) {
     throw new Error(BAD_MAP);
   }

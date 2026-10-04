@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map";
+import { parseMemberAccessMap, type AccessLevel, type MemberAccessMap } from "@/features/access/access-map";
 import { bookRights, calendarActions, eventBlocks, readOnlyBookRights, recordBlocks } from "./record-blocks";
 
 const TEAM = "team-1";
@@ -320,5 +320,30 @@ describe("запись клиента без тарифа (02.10)", () => {
       if (key.startsWith("edit")) assert.equal(value, false, `${key} должен быть закрыт`);
       else assert.equal(value, owner[key as keyof typeof owner], `${key} — как с тарифом`);
     }
+  });
+});
+
+describe("живой партнёр — своя карта с сервера (04.10)", () => {
+  // `my_access_map` не несёт `attached_calendars`: до 04.10 каждый календарь
+  // читался чужим, и у партнёра на телефоне запись теряла все блоки, хотя
+  // в зеркале владельца всё было на месте.
+  const own = parseMemberAccessMap({
+    tenant_id: "tenant-1",
+    is_owner: false,
+    version: 1,
+    company: {},
+    calendars: {
+      [TEAM]: { "calendar.records": "write", "calendar.create": "write", "record.client": "read" },
+    },
+  });
+
+  test("блоки записи и действия календаря — по его правам, а не «ничего»", () => {
+    assert.equal(recordBlocks(at(own)).client, "read");
+    assert.equal(calendarActions(at(own)).create, true);
+    assert.equal(calendarActions(at(own)).records, "write");
+  });
+
+  test("календарь, которого нет в карте, по-прежнему закрыт", () => {
+    assert.equal(recordBlocks(at(own, "team-2")).client, "hidden");
   });
 });

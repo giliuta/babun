@@ -101,6 +101,18 @@ describe("разбор карты сотрудника", () => {
     assert.deepEqual(map.attachedCalendars, [TEAM]);
   });
 
+  test("своя карта партнёра без списка — прикреплены календари из `calendars`", () => {
+    // Так отвечает `my_access_map`: `attached_calendars` нет вовсе.
+    const own = parseMemberAccessMap({
+      tenant_id: "t",
+      is_owner: false,
+      version: 1,
+      company: {},
+      calendars: { [TEAM]: { "calendar.records": "write" } },
+    });
+    assert.deepEqual(own.attachedCalendars, [TEAM]);
+  });
+
   test("битый ответ — ошибка, а не пустые права", () => {
     assert.throws(() => parseMemberAccessMap(null));
     assert.throws(() => parseMemberAccessMap({ tenant_id: "t", is_owner: false, version: 1, calendars: [] }));
