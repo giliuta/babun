@@ -49,6 +49,42 @@
       SceneDelegate) не пересобирать клиент на этом Mac; перед следующей
       сборкой TestFlight проверить, какой Xcode у образа EAS.
 
+## Выпуск в App Store и Google Play (план 04.10)
+
+Решения владельца 04.10: выпускаем **от себя** (личная лицензия Apple,
+личный аккаунт Google), на компанию переходим позже переносом аккаунта;
+оплата — **только на сайте** (в приложениях из магазинов ни кнопок, ни слов
+об оплате, `lib/pay-here.ts`); почта поддержки — `babun.app@gmail.com`
+(позже — `support@babun.app` через Cloudflare Email Routing → Gmail).
+
+Сделано в коде (021): оплата скрыта на iOS/Android; страницы без входа
+babun.app/privacy, /terms, /delete-account, /support; «Помощь» → «Документы»;
+Android без WRITE_CONTACTS / RECORD_AUDIO / SYSTEM_ALERT_WINDOW; образ EAS
+закреплён на Xcode 26.
+
+Осталось:
+- [ ] Владелец: полное имя (как в Apple) и город/страна → `features/legal/operator.ts`
+      (пока «—», `isLegalReady` = false — так не выкладывать).
+- [ ] Слияние ветки в `master` (PR — по слову владельца) → страницы на babun.app.
+- [ ] Свежая сборка iOS (`eas build -p ios --profile production --auto-submit`).
+- [ ] App Store Connect: описание, ключевые слова, категория «Бизнес»,
+      скриншоты 6,9″, Support URL `https://babun.app/support`, Privacy URL
+      `https://babun.app/privacy`, анкета App Privacy, возрастной рейтинг,
+      статус трейдера ЕС (DSA: адрес и телефон станут публичными),
+      демо-аккаунт для проверяющего с тестовыми данными.
+- [ ] Google Play Console (личный, $25, паспорт) → приложение `com.babun.crm`.
+- [ ] Ключ Google Maps для Android (`android.config.googleMaps.apiKey`) — иначе
+      карта точки объекта пустая.
+- [ ] Первая Android-сборка (`eas build -p android --profile production`,
+      ключ подписи создаёт EAS) и прогон на эмуляторе — на Android приложение
+      ещё не запускалось ни разу.
+- [ ] Первый .aab — ручной загрузкой в закрытый тест; 12 тестеров 14 дней
+      подряд (для личного аккаунта обязательно).
+- [ ] Data safety, рейтинг контента, ссылка удаления аккаунта
+      `https://babun.app/delete-account`, политика `https://babun.app/privacy`.
+- [ ] Ключ сервисного аккаунта Google для `eas submit` (после первой ручной загрузки).
+- [ ] Своя почта для писем Supabase (SMTP) — до наплыва регистраций.
+
 ## SMS через сервис (STORY-089)
 
 Работает с 30.09: деньги журналом, пополнение на любую сумму €5–€500
