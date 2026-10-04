@@ -13,6 +13,7 @@ import "react-native-get-random-values";
 import "react-native-url-polyfill/auto";
 import { Appearance, Platform } from "react-native";
 import { setStorage, WebKVStorage } from "@babun/shared/storage";
+import { uiLocale } from "@babun/shared/i18n/locale";
 import { setSql, setNetwork } from "@babun/shared/storage/sql";
 import { initSentry } from "@/lib/sentry";
 
@@ -22,6 +23,11 @@ import { initSentry } from "@/lib/sentry";
 // light theme is already pinned by our own tokens + app.json's
 // userInterfaceStyle, and an unguarded call kills the whole boot.
 Appearance.setColorScheme?.("light");
+
+// ЯЗЫК ЗАПУСКА — ДО ПЕРВОГО ОБРАЩЕНИЯ К ХРАНИЛИЩУ. Первая установка берёт язык
+// телефона или браузера, прежняя остаётся русской; отличаем их по собственному
+// хранилищу приложения, а его открывает первый же `get` после `setStorage`.
+uiLocale();
 
 // Storage backend is platform-split. The `@/` alias goes through tsconfig
 // paths, which Expo's Metro resolver does NOT widen with platform extensions

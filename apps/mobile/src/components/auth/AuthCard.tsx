@@ -23,6 +23,7 @@ import Animated, {
 import { GradientButton } from "@/components/ui/GradientButton";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { useAuthTheme } from "@/components/auth/theme";
+import { AuthLanguageButton } from "@/components/auth/AuthLanguageButton";
 import { useReduceMotion } from "@/lib/reduce-motion";
 
 // «Halo Cobalt» auth surfaces — one fixed-light styling dialect, formal «вы»,
@@ -84,6 +85,10 @@ export function AuthCard({
       <StatusBar style={t.statusBar} />
       <AmbientHalo />
       <SafeAreaView style={{ flex: 1 }}>
+        {/* Язык — до входа: человек, не читающий по-русски, находит свой. */}
+        <View style={{ alignItems: "flex-end", paddingHorizontal: 16, paddingTop: 8 }}>
+          <AuthLanguageButton />
+        </View>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}

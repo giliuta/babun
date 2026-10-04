@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { isValidElement } from "react";
 
 import { pluralRu } from "../common/utils/plural-ru";
-import { overrideUiLocale, uiIntlTag, uiLocale } from "./locale";
+import { overrideUiLocale, pickDeviceLocale, uiIntlTag, uiLocale } from "./locale";
 import { UI_LOCALES } from "./locales";
 import { isHumanText, t, tDynamic, tf, tj } from "./runtime";
 
@@ -99,4 +99,15 @@ describe("dictionaries", () => {
       }
     });
   }
+
+  // ПЕРВЫЙ ЗАПУСК — ЯЗЫК ЧЕЛОВЕКА (владелец 04.10): первый знакомый из языков
+  // телефона или браузера, иначе английский, а не русский.
+  it("a fresh device speaks the first of its own languages the app knows", () => {
+    expect(pickDeviceLocale(["el-GR"])).toBe("el");
+    expect(pickDeviceLocale(["fr-FR", "de-DE", "ru-RU"])).toBe("de");
+    expect(pickDeviceLocale(["uk_UA"])).toBe("uk");
+    expect(pickDeviceLocale(["RU"])).toBe("ru");
+    expect(pickDeviceLocale(["fr-FR", "it-IT"])).toBe("en");
+    expect(pickDeviceLocale([])).toBe("en");
+  });
 });

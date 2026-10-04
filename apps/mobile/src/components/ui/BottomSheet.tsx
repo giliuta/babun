@@ -7,7 +7,6 @@ import {
   useState,
 } from "react";
 import {
-  Dimensions,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -16,6 +15,7 @@ import {
   ScrollView,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import {
   Gesture,
@@ -46,8 +46,6 @@ import { useReduceMotion } from "@/lib/reduce-motion";
 // Здесь скрим проявляется opacity-ом НА МЕСТЕ, а лист отдельно выезжает
 // пружиной снизу и так же уезжает вниз. Всё гейтится на Reduce Motion.
 // Правило: любой новый нижний лист = <BottomSheet>. См. DESIGN-SYSTEM.md.
-
-const SCREEN_H = Dimensions.get("window").height;
 
 // Пружина входа: почти критически задемпфирована — плавный «доводчик» без
 // дешёвого пружинения. Выход — короткий ease-in вниз.
@@ -147,6 +145,15 @@ export function BottomSheet({
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
+  // ВЫСОТА ОКНА — ПРИ ПОКАЗЕ, А НЕ ПРИ ЗАГРУЗКЕ МОДУЛЯ (04.10). В браузере
+  // вкладка, открытая «за кадром», грузит код при окне 0×0: константа
+  // модуля давала `maxHeight: 0`, лист схлопывался, и строки уходили под
+  // нижний край — выбрать язык на входе было нельзя.
+  const { height: SCREEN_H } = useWindowDimensions();
+  // Эффект входа/выхода читает её через ref: перезапуск анимации на каждый
+  // поворот или ресайз окна не нужен.
+  const screenH = useRef(SCREEN_H);
+  screenH.current = SCREEN_H;
   const reduced = useReduceMotion();
   // Остаётся смонтированным на время анимации закрытия, потом снимается.
   const [mounted, setMounted] = useState(visible);
@@ -191,7 +198,7 @@ export function BottomSheet({
       // Вход: лист пружиной из-за нижнего края. Стартуем с ИЗМЕРЕННОЙ
       // высоты (фолбэк — экран): телепорт на весь экран делал вход и
       // выход несимметричными, вход «прилетал» из-под таб-бара.
-      ty.value = sheetH.value > 0 ? sheetH.value : SCREEN_H;
+      ty.value = sheetH.value > 0 ? sheetH.value : screenH.current;
       ty.value = reduced
         ? withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) })
         : withSpring(0, SPRING);
@@ -201,7 +208,7 @@ export function BottomSheet({
       });
     } else {
       // Выход: лист вниз на свою высоту, скрим гаснет; затем размонтируем.
-      const target = sheetH.value > 0 ? sheetH.value : SCREEN_H;
+      const target = sheetH.value > 0 ? sheetH.value : screenH.current;
       ty.value = withTiming(target, {
         duration: reduced ? 160 : 240,
         easing: Easing.in(Easing.cubic),

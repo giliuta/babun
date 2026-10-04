@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { uiLocale } from "@babun/shared/i18n/locale";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -68,6 +69,8 @@ export default function RegisterScreen() {
       options: {
         data: {
           full_name: fullName.trim(),
+          // Язык, на котором человек регистрировался, — письма ему на нём же.
+          locale: uiLocale(),
           ...(pendingInviteToken
             ? { pending_invitation_token: pendingInviteToken }
             : {}),
