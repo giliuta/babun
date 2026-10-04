@@ -316,10 +316,6 @@ export default function CalendarTab() {
   const clientsQuery = useClients();
   const servicesQuery = useServices();
   const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
-  const services = useMemo(
-    () => servicesQuery.data ?? [],
-    [servicesQuery.data],
-  );
   const {
     data: teamsAll = [],
     isLoading: teamsLoading,
@@ -645,7 +641,6 @@ export default function CalendarTab() {
     teamId?: string;
     date?: string;
     kind?: string; // AppointmentKind черновика
-    reminderId?: string; // recurring ТО → mark booked after successful create
     /** Куда вернуться, когда запись закроют. Ставит её тот, кто сюда привёл:
      *  деньги по заявке открывают запись с «Финансов», и закрытие обязано
      *  вернуть человека в ту же ленту, а не оставить в календаре (владелец
@@ -658,10 +653,9 @@ export default function CalendarTab() {
     // который уже существует, и там просто выбираешь»).
     pickClient?: string;
     pickLocation?: string;
-    /** Команда и напоминание того же задания — везём их до формы, а не
-     *  теряем на пересадке в календаре. */
+    /** Команда того же задания — везём её до формы, а не теряем на
+     *  пересадке в календаре. */
     pickTeam?: string;
-    pickReminder?: string;
   }>();
   // РЕЖИМ — СОСТОЯНИЕ ЭКРАНА, А НЕ АДРЕС. Параметр вкладки переживает всё:
   // и уход в форму, и переключение табов — плашка «Записать: Иван» висела
@@ -672,7 +666,6 @@ export default function CalendarTab() {
     clientId: string;
     locationId: string | null;
     teamId: string | null;
-    reminderId: string | null;
   } | null>(null);
   const pickClientId = pick?.clientId ?? null;
   useEffect(() => {
@@ -681,19 +674,16 @@ export default function CalendarTab() {
       clientId: params.pickClient,
       locationId: params.pickLocation || null,
       teamId: params.pickTeam || null,
-      reminderId: params.pickReminder || null,
     });
     router.setParams({
       pickClient: "",
       pickLocation: "",
       pickTeam: "",
-      pickReminder: "",
     });
   }, [
     params.pickClient,
     params.pickLocation,
     params.pickTeam,
-    params.pickReminder,
     router,
   ]);
   // Уход с календаря снимает вопросы «когда?» и «куда?»: они заданы один раз.
@@ -1134,7 +1124,6 @@ export default function CalendarTab() {
         teamId: undefined,
         date: undefined,
         kind: undefined,
-        reminderId: undefined,
         appointmentId: undefined,
       });
     // Гонка с загрузкой команд: на холодном старте по диплинку teams=[]
@@ -1229,7 +1218,6 @@ export default function CalendarTab() {
           ...(params.teamId ? { teamId: params.teamId } : {}),
           ...(draftDate ? { date: draftDate } : {}),
           ...(draftKind ? { kind: draftKind } : {}),
-          ...(params.reminderId ? { reminderId: params.reminderId } : {}),
         },
       });
       clearParams();
@@ -1251,7 +1239,6 @@ export default function CalendarTab() {
     params.appointmentId,
     params.new,
     params.clientId,
-    params.reminderId,
     params.date,
     params.teamId,
     teamsLoading,
@@ -1299,9 +1286,7 @@ export default function CalendarTab() {
     [addressById],
   );
 
-  // Лента дня называет услуги ПРОШЕДШИХ записей — по полному справочнику;
-  // `services` выше остаётся про живой каталог (онбординг спрашивает им,
-  // заведён ли прайс вообще).
+  // Лента дня называет услуги ПРОШЕДШИХ записей — по полному справочнику.
   const { data: allServices = [] } = useAllServices();
   // ЦВЕТ УСЛУГИ ЧИТАЕТСЯ ПО ПОЛНОМУ СПРАВОЧНИКУ, как и имя: услуга, убранная
   // из прайса, обязана продолжать красить прошлые дни.
@@ -2838,9 +2823,8 @@ export default function CalendarTab() {
         clientId: pickClientId,
         ...(pick?.locationId ? { locationId: pick.locationId } : {}),
         ...(activeTeamId ? { teamId: activeTeamId } : {}),
-        // Услуги прошлого визита («Повторить») и гашение напоминания о ТО
-        // доезжают до формы вместе с выбранным временем.
-        ...(pick?.reminderId ? { reminderId: pick.reminderId } : {}),
+        // Услуги прошлого визита («Повторить») доезжают до формы вместе с
+        // выбранным временем.
         date: dateYmd,
         // Форма ждёт именно `time_start` — под именем `time` выбранный кубик
         // молча терялся и запись открывалась на дефолтные 10:00.

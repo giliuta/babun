@@ -24,7 +24,6 @@ import {
 } from "@babun/shared/local/appointments";
 import { useToast } from "@/components/ui/Toast";
 import { useCreateAppointment } from "@/features/calendar/mutations";
-import { useUpdateReminderStatus } from "@/features/recurring/queries";
 import { syncEventAppointmentReminders } from "@/features/calendar/reminders";
 import { haptics } from "@/lib/haptics";
 
@@ -32,8 +31,6 @@ export interface BookingSaveInput {
   /** Готовый патч заявки (собирает вызывающий экран). */
   patch: Partial<Appointment>;
   kind: "work" | "event";
-  /** Рекуррентное напоминание, из которого выросла заявка — закрываем его. */
-  reminderId?: string | null;
   /** Смещение push-напоминания события; null — напоминание не ставим. */
   eventReminderOffset?: number | null;
   /** Таймзона для расчёта момента напоминания. */
@@ -42,35 +39,18 @@ export interface BookingSaveInput {
 
 export function useBookingSave() {
   const createMut = useCreateAppointment();
-  const updateReminderStatus = useUpdateReminderStatus();
   const toast = useToast();
 
   const save = useCallback(
     async ({
       patch,
       kind,
-      reminderId,
       eventReminderOffset,
       timezone,
     }: BookingSaveInput): Promise<Appointment> => {
       const created = await createMut.mutateAsync(
         createBlankAppointment(patch),
       );
-
-      let reminderUpdateFailed = false;
-      if (kind === "work" && reminderId) {
-        try {
-          await updateReminderStatus.mutateAsync({
-            id: reminderId,
-            status: "booked",
-          });
-        } catch {
-          // Заявка уже создана. Не бросаем в ветку ошибки создания — иначе
-          // экран останется открытым и пригласит создать дубль. Честно
-          // сообщаем про оставшуюся ручную работу.
-          reminderUpdateFailed = true;
-        }
-      }
 
       if (kind === "event" && eventReminderOffset != null) {
         const reminderResult = await syncEventAppointmentReminders(
@@ -97,24 +77,17 @@ export function useBookingSave() {
           toast("Событие создано с напоминанием");
         }
       } else {
-        toast(
-          kind === "event"
-            ? "Событие создано"
-            : reminderUpdateFailed
-              ? "Запись создана, но напоминание осталось в списке — отметьте его вручную"
-              : "Запись создана",
-          reminderUpdateFailed ? "info" : "success",
-        );
+        toast(kind === "event" ? "Событие создано" : "Запись создана", "success");
       }
 
       haptics.success();
       return created;
     },
-    [createMut, updateReminderStatus, toast],
+    [createMut, toast],
   );
 
   return {
     save,
-    isPending: createMut.isPending || updateReminderStatus.isPending,
+    isPending: createMut.isPending,
   };
 }

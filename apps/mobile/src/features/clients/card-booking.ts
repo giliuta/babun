@@ -24,12 +24,9 @@ export interface BookingTarget {
   clientId: string;
   locationId?: string | null;
   teamId?: string | null;
-  /** YYYY-MM-DD, если дата известна («Записать» на дату ТО). Без неё
+  /** YYYY-MM-DD, если дата известна (тап по пустому слоту). Без неё
    *  экран записи открывается на СЕГОДНЯ по времени тенанта. */
   date?: string | null;
-  /** Повторное ТО: экран записи гасит напоминание только после
-   *  подтверждённой вставки заявки — иначе то же ТО осталось бы в «Пора». */
-  reminderId?: string | null;
 }
 
 /** Returns a stable-enough callback that opens the calendar pre-aimed at
@@ -45,7 +42,6 @@ export function useBookingNav(): (target: BookingTarget) => void {
     locationId,
     teamId,
     date,
-    reminderId,
   }: BookingTarget) => {
     if (busy.current) return;
     busy.current = true;
@@ -58,20 +54,19 @@ export function useBookingNav(): (target: BookingTarget) => void {
     // ведёт в форму с этим временем. Раньше форма открывалась сразу, а время
     // крутили колесом, не видя, занято оно или нет.
     //
-    // Исключение: дата уже известна (тап по пустому слоту в календаре,
-    // «Записать ТО» на дату) — выбирать «когда» второй раз незачем.
+    // Исключение: дата уже известна (тап по пустому слоту в календаре) —
+    // выбирать «когда» второй раз незачем.
     if (!date) {
       router.push({
         pathname: "/",
         params: {
           pickClient: clientId,
           ...(locationId ? { pickLocation: locationId } : {}),
-          // Команда и напоминание ЕДУТ ДАЛЬШЕ вместе с клиентом. Раньше эта
+          // Команда ЕДЕТ ДАЛЬШЕ вместе с клиентом. Раньше эта
           // ветка забирала только клиента: календарь считал свободное время
           // по команде, открытой в чипе, и записывал туда же — клиента,
           // который всегда ездит к команде Б, ставили к А.
           ...(teamId ? { pickTeam: teamId } : {}),
-          ...(reminderId ? { pickReminder: reminderId } : {}),
         },
       });
       return;
@@ -83,7 +78,6 @@ export function useBookingNav(): (target: BookingTarget) => void {
         ...(locationId ? { locationId } : {}),
         ...(teamId ? { teamId } : {}),
         ...(date ? { date } : {}),
-        ...(reminderId ? { reminderId } : {}),
       },
     });
   };
