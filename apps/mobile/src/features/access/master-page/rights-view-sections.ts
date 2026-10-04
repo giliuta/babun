@@ -1,10 +1,11 @@
 import { AREA_TITLE, type AccessBlock, type AccessLevel } from "../access-map";
-import { isClosedStep, rightTitle } from "../rights-ui/right-words";
+import { briefTitle, isClosedStep } from "../rights-ui/right-words";
 import {
   CALENDAR_GROUPS,
   CALENDAR_GROUP_TITLE,
   SECTION_BLOCKS,
   inGroup,
+  orderCabinetRows,
   orderGroupRows,
   type CalendarGroup,
 } from "./access-summary";
@@ -47,17 +48,36 @@ export function viewSections({
   /** Страница ОДНОГО раздела доступа («Календарь»): только его карточка. */
   group?: CalendarGroup;
 }): ViewSection[] {
+  // ПРАВА НА ВСЮ КОМПАНИЮ, КОТОРЫЕ СТОЯТ В БЛОКЕ РАЗДЕЛА («Валюта» — строка
+  // шестерёнки «Финансов», владелец 03.10: «права = строки шестерёнки»). На
+  // странице команды они стоят в своём блоке — там, где их видит человек, — а
+  // из раздела «Кабинет» уходят, чтобы одно право не стояло дважды.
+  // «Реквизиты» с 04.10 — в «Кабинете», где их строка и живёт. Положение у них одно на всю компанию: строка читает и
+  // пишет его без команды (`blockChanges` → `team_id: null`).
+  const claimed = claimedKeys();
   const registry = rightsSections(blocks, levelOf, onlyCompany ? null : activeId)
     .map((section) => ({
       key: section.area as string,
       area: section.area,
       title: section.title,
       rows: section.rows.filter((row) =>
-        onlyCalendar ? row.block.scope === "calendar" : onlyCompany ? row.block.scope !== "calendar" : true,
+        onlyCalendar
+          ? row.block.scope === "calendar" || claimed.has(row.block.key)
+          : onlyCompany
+            ? row.block.scope !== "calendar" && !claimed.has(row.block.key)
+            : true,
       ),
-    }))
-    // Права компании, открытые строкой «Компания», — только свой раздел.
-    .filter((section) => !(onlyCompany && area) || section.area === area);
+    }));
+  // РАЗДЕЛ «КАБИНЕТ» (04.10) — одной карточкой: права аккаунта из разных
+  // разделов реестра («Реквизиты» числятся за финансами) стоят вместе, в
+  // порядке строк Кабинета.
+  if (onlyCompany) {
+    const rows = orderCabinetRows(registry.flatMap((section) => section.rows));
+    // Карточка одна — без шапки: имя раздела уже в шапке страницы.
+    return rows.length > 0 && (!area || area === "company")
+      ? [{ key: "company", area: "company", title: "", rows }]
+      : [];
+  }
   if (!onlyCalendar) return registry.filter((section) => section.rows.length > 0);
   // ПРАВА ОДНОЙ КОМАНДЫ — БЛОКАМИ РАЗДЕЛОВ ПРИЛОЖЕНИЯ (владелец 29.09):
   // «Календарь», «Запись» (в порядке блоков страницы записи), «Финансы»,
@@ -78,9 +98,11 @@ export function viewSections({
           key: "company",
           area: "company",
           title: AREA_TITLE.company,
-          rows: rightsSections(blocks, levelOf, null)
-            .flatMap((section) => section.rows)
-            .filter((row) => row.block.scope !== "calendar"),
+          rows: orderCabinetRows(
+            rightsSections(blocks, levelOf, null)
+              .flatMap((section) => section.rows)
+              .filter((row) => row.block.scope !== "calendar" && !claimed.has(row.block.key)),
+          ),
         },
       ]
     : [];
@@ -93,6 +115,13 @@ export function viewSections({
     rows: groupPage(section.key as CalendarGroup, team).flatMap((part) => part.rows),
   }));
   return [...paged, ...company].filter((section) => section.rows.length > 0);
+}
+
+/** Ключи, которые блоки разделов (`SECTION_BLOCKS`) забирают себе. */
+function claimedKeys(): Set<string> {
+  return new Set(
+    Object.values(SECTION_BLOCKS).flatMap((blocks) => (blocks ?? []).flatMap((block) => block.keys)),
+  );
 }
 
 /** Страница одного раздела — его блоками (`SECTION_BLOCKS`). Блок берёт свои
@@ -148,8 +177,10 @@ export function sectionBrief(section: Pick<ViewSection, "rows">): string {
   if (open.length === section.rows.length) return "Всё открыто";
   return open
     .map((row, i) => {
-      const title = rightTitle(row.block);
-      return i === 0 ? title : title.charAt(0).toLowerCase() + title.slice(1);
+      const title = briefTitle(row.block);
+      // Аббревиатура остаётся заглавной: «sMS» в подписи «Кабинета» (04.10).
+      const acronym = /^[A-ZА-ЯЁ]{2}/.test(title);
+      return i === 0 || acronym ? title : title.charAt(0).toLowerCase() + title.slice(1);
     })
     .join(", ");
 }

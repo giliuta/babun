@@ -178,3 +178,19 @@ describe("free slots for a move", () => {
     assert.deepEqual(slots, []);
   });
 });
+
+describe("запись нулевой длительности (аудит 03.10)", () => {
+  test("занимает 15 минут — кубик поверх неё не встаёт", () => {
+    const slots = freeSlotsForDay({
+      band: BAND,
+      fallback: FALLBACK,
+      appts: [apt({ time_start: "10:00", time_end: "10:00" })],
+      stepMinutes: 15,
+      bufferMinutes: 0,
+      nowMinutes: null,
+    });
+    assert.ok(!slots.some((slot) => slot.time === "10:00"), "10:00 занято");
+    assert.ok(slots.some((slot) => slot.time === "10:15"), "10:15 свободно");
+  });
+});
+

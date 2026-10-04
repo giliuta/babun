@@ -264,15 +264,19 @@ export type Database = {
           color: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
           icon: string | null
           id: string
           is_active: boolean
+          is_hidden: boolean
           is_primary: boolean
           kind: string
           name: string
+          note: string | null
           opening_balance: number
           owner_master_id: string | null
           position: number
+          purge_at: string | null
           scope: string
           show_in_payments: boolean
           tenant_id: string
@@ -285,15 +289,19 @@ export type Database = {
           color?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean
+          is_hidden?: boolean
           is_primary?: boolean
           kind: string
           name: string
+          note?: string | null
           opening_balance?: number
           owner_master_id?: string | null
           position?: number
+          purge_at?: string | null
           scope?: string
           show_in_payments?: boolean
           tenant_id: string
@@ -306,15 +314,19 @@ export type Database = {
           color?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean
+          is_hidden?: boolean
           is_primary?: boolean
           kind?: string
           name?: string
+          note?: string | null
           opening_balance?: number
           owner_master_id?: string | null
           position?: number
+          purge_at?: string | null
           scope?: string
           show_in_payments?: boolean
           tenant_id?: string
@@ -775,6 +787,59 @@ export type Database = {
           },
         ]
       }
+      change_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          actor_name: string | null
+          changes: Json | null
+          created_at: string
+          entity: string
+          entity_id: string | null
+          id: number
+          label: string | null
+          meta: Json | null
+          team_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          actor_name?: string | null
+          changes?: Json | null
+          created_at?: string
+          entity: string
+          entity_id?: string | null
+          id?: never
+          label?: string | null
+          meta?: Json | null
+          team_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          actor_name?: string | null
+          changes?: Json | null
+          created_at?: string
+          entity?: string
+          entity_id?: string | null
+          id?: never
+          label?: string | null
+          meta?: Json | null
+          team_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "change_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cities: {
         Row: {
           color: string | null
@@ -899,6 +964,44 @@ export type Database = {
           },
         ]
       }
+      client_sources: {
+        Row: {
+          created_at: string
+          id: string
+          key: string | null
+          name: string
+          position: number
+          team_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key?: string | null
+          name: string
+          position?: number
+          team_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string | null
+          name?: string
+          position?: number
+          team_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_sources_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_tag_assignments: {
         Row: {
           client_id: string
@@ -979,78 +1082,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      companies: {
-        Row: {
-          archived_at: string | null
-          bank_name: string | null
-          business_address: string | null
-          color: string | null
-          contact_email: string | null
-          contact_phone: string | null
-          created_at: string
-          iban: string | null
-          icon: string | null
-          invoice_next_number: number | null
-          invoice_next_year: number | null
-          id: string
-          is_default: boolean
-          legal_name: string | null
-          logo_url: string | null
-          name: string
-          position: number
-          reg_number: string | null
-          tenant_id: string
-          updated_at: string
-          vat_number: string | null
-        }
-        Insert: {
-          archived_at?: string | null
-          bank_name?: string | null
-          business_address?: string | null
-          color?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
-          created_at?: string
-          iban?: string | null
-          icon?: string | null
-          invoice_next_number?: number | null
-          invoice_next_year?: number | null
-          id?: string
-          is_default?: boolean
-          legal_name?: string | null
-          logo_url?: string | null
-          name: string
-          position?: number
-          reg_number?: string | null
-          tenant_id: string
-          updated_at?: string
-          vat_number?: string | null
-        }
-        Update: {
-          archived_at?: string | null
-          bank_name?: string | null
-          business_address?: string | null
-          color?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
-          created_at?: string
-          iban?: string | null
-          icon?: string | null
-          invoice_next_number?: number | null
-          invoice_next_year?: number | null
-          id?: string
-          is_default?: boolean
-          legal_name?: string | null
-          logo_url?: string | null
-          name?: string
-          position?: number
-          reg_number?: string | null
-          tenant_id?: string
-          updated_at?: string
-          vat_number?: string | null
-        }
-        Relationships: []
       }
       clients: {
         Row: {
@@ -1365,6 +1396,47 @@ export type Database = {
           },
           {
             foreignKeyName: "debts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deleted_operations: {
+        Row: {
+          deleted_at: string
+          deleted_by: string | null
+          id: string
+          operation: Json
+          purge_at: string
+          team_id: string
+          tenant_id: string
+          type: string
+        }
+        Insert: {
+          deleted_at?: string
+          deleted_by?: string | null
+          id: string
+          operation: Json
+          purge_at: string
+          team_id: string
+          tenant_id: string
+          type: string
+        }
+        Update: {
+          deleted_at?: string
+          deleted_by?: string | null
+          id?: string
+          operation?: Json
+          purge_at?: string
+          team_id?: string
+          tenant_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deleted_operations_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -2067,10 +2139,13 @@ export type Database = {
           client_id: string | null
           client_requisites_id: string | null
           client_snapshot: Json | null
-          company_id: string | null
+          company_id: string
           created_at: string
           created_by: string | null
           credit_note_of_id: string | null
+          credit_note_of_receipt_id: string | null
+          credit_partial: boolean
+          credited_amount: number
           currency: string
           due_on: string | null
           id: string
@@ -2105,6 +2180,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           credit_note_of_id?: string | null
+          credit_note_of_receipt_id?: string | null
+          credit_partial?: boolean
+          credited_amount?: number
           currency?: string
           due_on?: string | null
           id?: string
@@ -2139,6 +2217,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           credit_note_of_id?: string | null
+          credit_note_of_receipt_id?: string | null
+          credit_partial?: boolean
+          credited_amount?: number
           currency?: string
           due_on?: string | null
           id?: string
@@ -2192,6 +2273,84 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      legal_entities: {
+        Row: {
+          archived_at: string | null
+          bank_name: string | null
+          business_address: string | null
+          color: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          credit_note_prefix: string
+          iban: string | null
+          icon: string | null
+          id: string
+          invoice_prefix: string
+          is_default: boolean
+          legal_name: string | null
+          logo_url: string | null
+          name: string
+          number_padding: number
+          position: number
+          receipt_prefix: string
+          reg_number: string | null
+          tenant_id: string
+          updated_at: string
+          vat_number: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          bank_name?: string | null
+          business_address?: string | null
+          color?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          credit_note_prefix?: string
+          iban?: string | null
+          icon?: string | null
+          id?: string
+          invoice_prefix?: string
+          is_default?: boolean
+          legal_name?: string | null
+          logo_url?: string | null
+          name: string
+          number_padding?: number
+          position?: number
+          receipt_prefix?: string
+          reg_number?: string | null
+          tenant_id: string
+          updated_at?: string
+          vat_number?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          bank_name?: string | null
+          business_address?: string | null
+          color?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          credit_note_prefix?: string
+          iban?: string | null
+          icon?: string | null
+          id?: string
+          invoice_prefix?: string
+          is_default?: boolean
+          legal_name?: string | null
+          logo_url?: string | null
+          name?: string
+          number_padding?: number
+          position?: number
+          receipt_prefix?: string
+          reg_number?: string | null
+          tenant_id?: string
+          updated_at?: string
+          vat_number?: string | null
+        }
+        Relationships: []
       }
       location_labels: {
         Row: {
@@ -2741,12 +2900,15 @@ export type Database = {
           appointment_id: string | null
           client_id: string | null
           client_snapshot: Json | null
+          company_id: string
           created_at: string
           currency: string
           id: string
           invoice_id: string | null
           issued_on: string
           lines: Json | null
+          location_id: string | null
+          client_requisites_id: string | null
           number: string
           payment_method: string | null
           seller_snapshot: Json
@@ -2765,12 +2927,15 @@ export type Database = {
           appointment_id?: string | null
           client_id?: string | null
           client_snapshot?: Json | null
+          company_id?: string
           created_at?: string
           currency?: string
           id?: string
           invoice_id?: string | null
           issued_on: string
           lines?: Json | null
+          location_id?: string | null
+          client_requisites_id?: string | null
           number: string
           payment_method?: string | null
           seller_snapshot?: Json
@@ -2789,12 +2954,15 @@ export type Database = {
           appointment_id?: string | null
           client_id?: string | null
           client_snapshot?: Json | null
+          company_id?: string
           created_at?: string
           currency?: string
           id?: string
           invoice_id?: string | null
           issued_on?: string
           lines?: Json | null
+          location_id?: string | null
+          client_requisites_id?: string | null
           number?: string
           payment_method?: string | null
           seller_snapshot?: Json
@@ -3385,6 +3553,56 @@ export type Database = {
           },
         ]
       }
+      team_notification_prefs: {
+        Row: {
+          budget: boolean
+          client_reminder_time: string | null
+          notify_cancel: boolean
+          notify_change: boolean
+          notify_new: boolean
+          notify_payment: boolean
+          record_reminder: Json | null
+          team_id: string
+          tenant_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          budget?: boolean
+          client_reminder_time?: string | null
+          notify_cancel?: boolean
+          notify_change?: boolean
+          notify_new?: boolean
+          notify_payment?: boolean
+          record_reminder?: Json | null
+          team_id: string
+          tenant_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          budget?: boolean
+          client_reminder_time?: string | null
+          notify_cancel?: boolean
+          notify_change?: boolean
+          notify_new?: boolean
+          notify_payment?: boolean
+          record_reminder?: Json | null
+          team_id?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_notification_prefs_team_fk"
+            columns: ["tenant_id", "team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["tenant_id", "id"]
+          },
+        ]
+      }
       team_schedules: {
         Row: {
           created_at: string
@@ -3439,6 +3657,7 @@ export type Database = {
           id: string
           is_active: boolean
           lead_id: string | null
+          legal_entity_id: string | null
           lead_ids: Json
           members: Json
           name: string
@@ -3469,6 +3688,7 @@ export type Database = {
           id: string
           is_active?: boolean
           lead_id?: string | null
+          legal_entity_id?: string | null
           lead_ids?: Json
           members?: Json
           name: string
@@ -3499,6 +3719,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           lead_id?: string | null
+          legal_entity_id?: string | null
           lead_ids?: Json
           members?: Json
           name?: string
@@ -4151,6 +4372,74 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      refund_appointment_overpayment: {
+        Args: {
+          p_amount: number
+          p_appointment_id: string
+          p_request_id: string
+        }
+        Returns: {
+          address: string
+          address_lat: number | null
+          address_lng: number | null
+          address_note: string
+          cancel_reason: string | null
+          city: string | null
+          client_id: string | null
+          color_override: string | null
+          comment: string
+          consent_given: boolean
+          created_at: string
+          created_by: string | null
+          custom_total: boolean
+          date: string
+          discount_amount: number
+          event_all_day: boolean
+          event_notes: string
+          event_push_at: string | null
+          event_push_enabled: boolean
+          event_push_offsets: Json
+          event_repeat: Json
+          event_url: string
+          expenses: Json
+          global_discount: Json | null
+          id: string
+          is_online_booking: boolean
+          kind: string
+          location_id: string | null
+          master_id: string | null
+          paid_amount: number
+          payment: Json | null
+          payment_account_id: string | null
+          payment_method: string | null
+          payment_status: string
+          payments: Json
+          prepaid_amount: number
+          prepayments: Json
+          reminder_enabled: boolean
+          reminder_offsets: Json
+          reminder_template: string
+          service_ids: Json
+          service_price_overrides: Json
+          services: Json
+          source: string | null
+          status: string
+          team_id: string | null
+          tenant_id: string
+          time_end: string
+          time_start: string
+          total_amount: number
+          total_duration: number
+          updated_at: string
+          vat_mode: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "appointments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cancel_invoice: {
         Args: { p_invoice_id: string; p_reason?: string }
         Returns: {
@@ -4278,6 +4567,7 @@ export type Database = {
         Args: { p_transfer_group_id: string }
         Returns: boolean
       }
+      delete_operation: { Args: { p_id: string }; Returns: string }
       delete_sole_owned_tenants_for_account: {
         Args: { p_user_id: string }
         Returns: number
@@ -4289,16 +4579,6 @@ export type Database = {
           vat_mode: string
           vat_rate: number
         }[]
-      }
-      format_invoice_number: {
-        Args: {
-          p_padding: number
-          p_prefix: string
-          p_seq: number
-          p_year: number
-          p_yearly_reset: boolean
-        }
-        Returns: string
       }
       grant_invitation_calendar: {
         Args: {
@@ -4325,6 +4605,7 @@ export type Database = {
       member_appointment_copy: {
         Args: {
           p_date: string
+          p_id?: string
           p_source: string
           p_time_end: string
           p_time_start: string
@@ -4351,12 +4632,73 @@ export type Database = {
         Args: { p_from: string; p_team: string; p_to: string }
         Returns: number
       }
+      peek_document_number: {
+        Args: { p_doc_type: string; p_legal_entity_id: string | null; p_year: number }
+        Returns: {
+          can_set_start: boolean
+          number: string
+          seq: number
+        }[]
+      }
+      restore_deleted_operation: { Args: { p_id: string }; Returns: string }
       set_default_company: {
         Args: { p_company_id: string }
         Returns: undefined
       }
+      issue_partial_credit_note: {
+        Args: {
+          p_amount: number
+          p_invoice_id: string
+          p_language?: string
+          p_reason?: string
+          p_request_id: string
+        }
+        Returns: Database["public"]["Tables"]["invoices"]["Row"]
+      }
+      issue_receipt_credit_note: {
+        Args: { p_language?: string; p_reason?: string; p_receipt_id: string }
+        Returns: Database["public"]["Tables"]["invoices"]["Row"]
+      }
       issue_receipt: {
-        Args: { p_lines?: Json; p_transaction_id: string }
+        Args: {
+          p_client_requisites_id?: string
+          p_company_id?: string
+          p_issued_on?: string
+          p_lines?: Json
+          p_location_id?: string
+          p_transaction_id: string
+        }
+        Returns: {
+          account_id: string | null
+          amount: number
+          appointment_id: string | null
+          client_id: string | null
+          client_snapshot: Json | null
+          created_at: string
+          currency: string
+          id: string
+          invoice_id: string | null
+          issued_on: string
+          number: string
+          payment_method: string | null
+          seller_snapshot: Json
+          seq: number
+          status: string
+          tenant_id: string
+          transaction_id: string | null
+          vat_amount: number | null
+          vat_rate: number | null
+          year: number
+        }
+      }
+      update_receipt: {
+        Args: {
+          p_client_requisites_id?: string
+          p_issued_on?: string
+          p_lines?: Json
+          p_location_id?: string
+          p_receipt_id: string
+        }
         Returns: {
           account_id: string | null
           amount: number
@@ -4491,20 +4833,6 @@ export type Database = {
       }
       my_access_map: { Args: never; Returns: Json }
       my_invitations: { Args: never; Returns: Json }
-      next_company_invoice_number: {
-        Args: { p_company_id: string | null; p_tenant_id: string; p_year: number }
-        Returns: {
-          number: string
-          seq: number
-        }[]
-      }
-      next_invoice_number: {
-        Args: { p_tenant_id: string; p_year: number }
-        Returns: {
-          number: string
-          seq: number
-        }[]
-      }
       normalize_client_tag_ids: {
         Args: { p_tag_ids: string[]; p_tenant_id: string }
         Returns: string[]
@@ -4760,6 +5088,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      refund_receipt: {
+        Args: {
+          p_amount: number
+          p_language?: string
+          p_reason?: string
+          p_receipt_id: string
+          p_request_id: string
+        }
+        Returns: Database["public"]["Tables"]["invoices"]["Row"]
+      }
       refund_invoice_payment: {
         Args: {
           p_amount: number
@@ -4988,9 +5326,18 @@ export type Database = {
         Args: { p_appointment_id: string; p_vat_mode: string | null }
         Returns: Database["public"]["Tables"]["appointments"]["Row"]
       }
-      set_company_invoice_next_number: {
-        Args: { p_company_id: string; p_number: number; p_year: number }
-        Returns: Database["public"]["Tables"]["companies"]["Row"]
+      set_document_series_start: {
+        Args: {
+          p_doc_type: string
+          p_legal_entity_id: string
+          p_next_number: number
+          p_year: number
+        }
+        Returns: {
+          can_set_start: boolean
+          number: string
+          seq: number
+        }[]
       }
       set_member_access: {
         Args: { p_changes: Json; p_user_id: string }
@@ -5107,16 +5454,31 @@ export type Database = {
         }
         Returns: Json
       }
+      delete_receipt: {
+        Args: { p_receipt_id: string }
+        Returns: undefined
+      }
+      delete_credit_note: {
+        Args: { p_note_id: string }
+        Returns: undefined
+      }
+      delete_invoice: {
+        Args: { p_invoice_id: string }
+        Returns: undefined
+      }
       update_invoice_draft: {
         Args: {
           p_account_id?: string
           p_appointment_id: string
           p_brigade_id: string
           p_client_id: string
+          p_client_requisites_id?: string
           p_company_id?: string
           p_due_on: string
           p_invoice_id: string
+          p_issued_on?: string
           p_lines: Json
+          p_location_id?: string
           p_notes?: string
           p_vat_mode: string
           p_vat_percent: number

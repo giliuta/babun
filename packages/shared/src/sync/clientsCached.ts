@@ -29,8 +29,8 @@
 // itself lacks (`tenant_id`, `updated_at`). `rowToClient` returns it whole
 // so an online read-from-cache is byte-identical to a live repo read — no
 // more emptied `tag_ids` / nested-field regression. The revalidate path
-// pulls the canonical domain list via `repoListClients` (which joins the
-// junction) so background refresh keeps `tag_ids` accurate too.
+// pulls the canonical domain list via `repoListClientsWithStamps` (which
+// joins the junction) so background refresh keeps `tag_ids` accurate too.
 //
 // TWO PROJECTIONS (offline-plan rule 4). What lands in the queue payload is
 // the RAW DB-column projection the server accepts (built by `makeServerRow`
@@ -62,7 +62,7 @@ import { assertWritesAllowed } from "./write-guard";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../db/database.types";
 import {
-  listClients as repoListClients,
+  listClientsWithStamps as repoListClientsWithStamps,
   getClient as repoGetClient,
   createClient as repoCreateClient,
   updateClient as repoUpdateClient,
@@ -78,18 +78,20 @@ import {
   cacheReplaceTenant,
   cacheGetOne,
   hasAuthoritativeTenantSnapshot,
+  hasQueuedOps,
   dequeueAll,
+  cacheLocalWriteSeq,
   type CachedClient,
   type CachedClientData,
 } from "../db/cache/sql";
 import { isOnline } from "./network";
-import { kickReplayer, MAX_ATTEMPTS } from "./replayer";
+import { kickReplayer, tenantRefreshHeld } from "./replayer";
 import {
   enqueueOpAndEmit,
   enqueueOpWithCacheUpsertAndEmit,
   enqueueOpWithCacheDeleteAndEmit,
 } from "./queue-events";
-import { emitRevalidated, cacheSignature } from "./revalidate-events";
+import { emitRevalidated } from "./revalidate-events";
 import { randomUuid } from "./uuid";
 import { ColdOfflineCacheMissError, OnlineOnlyWriteError } from "./cache-errors";
 
@@ -142,6 +144,25 @@ function refuseQueueing(opts: CachedWriteOptions | undefined): boolean {
   return !!opts?.onlineOnly;
 }
 
+/** ПРАВКА ВСТАЁТ ЗА ЖДУЩИМИ ПРАВКАМИ ЭТОГО ЖЕ КЛИЕНТА (аудит 2026-10-03).
+ *
+ *  У записей правило давнее (`appointmentsCached`): при живой сети, но с
+ *  неотправленными правками строки, новая встаёт в очередь за ними — иначе
+ *  очередь дошлёт старую ПОСЛЕ свежей и перезапишет её. У клиентов прямая
+ *  запись обгоняла очередь: удалил офлайн (удаление в очереди), первая
+ *  попытка упала на 5xx, человек вернул клиента напрямую — а очередь
+ *  досылала удаление: клиент снова в корзине со сроком стирания, и тост
+ *  «Применены ваши изменения». То же с двумя правками телефона или заметки.
+ *
+ *  Запись «только в сети» (чужая компания) в очередь не ложится вовсе. */
+async function mustQueueBehind(
+  id: string,
+  opts: CachedWriteOptions | undefined,
+): Promise<boolean> {
+  if (refuseQueueing(opts)) return false;
+  return hasQueuedOps("clients", id).catch(() => false);
+}
+
 // ─── Read ─────────────────────────────────────────────────────────
 
 /** SWR list. Returns cached rows immediately if any; in parallel
@@ -168,11 +189,14 @@ export async function listClients(
   try {
     // Тянем ВСЕХ (со скрытыми) — этим наполняется кэш, из которого потом
     // живут и архив, и корзина. Наверх отдаём только рабочий список.
-    const all = await repoListClients(supabase, tenantId, {
+    // Счётчик — ДО запроса: правка, легшая в кэш, пока список ехал, старше
+    // снимка не бывает (`cacheLocalWriteSeq`, как у записей).
+    const writeSeq = cacheLocalWriteSeq("clients");
+    const fetched = await repoListClientsWithStamps(supabase, tenantId, {
       includeDeleted: true,
     });
-    await refreshCacheFromSupabase(supabase, tenantId, all).catch(() => {});
-    return all.filter((c) => c.deleted_at == null);
+    await refreshCacheFromSupabase(supabase, tenantId, fetched, writeSeq).catch(() => {});
+    return fetched.clients.filter((c) => c.deleted_at == null);
   } catch (err) {
     // With a live connection, RLS/server failures reach the screen. Offline
     // may reuse a known-empty authoritative snapshot; a never-synced device
@@ -187,48 +211,90 @@ export async function listClients(
   }
 }
 
-async function revalidateClients(
+/** Сверка компании уже идёт — вторая ждёт её, а не запускает свою (тот же
+ *  закон, что у записей): параллельные снимки ложились в произвольном
+ *  порядке, и старый мог лечь поверх нового. */
+const revalidatingClients = new Map<string, Promise<void>>();
+/** Сверка, чью замену отменила свежая локальная правка: сразу за ней идёт
+ *  ещё одна, уже после правки. */
+const staleClientRevalidation = new Set<string>();
+
+function revalidateClients(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<void> {
-  try {
-    const changed = await refreshCacheFromSupabase(supabase, tenantId);
-    // Emit only on a real change so the mobile bridge's invalidate →
-    // refetch → revalidate cycle settles after one pass (loop guard).
-    if (changed) emitRevalidated("clients");
-  } catch {
-    // ignore — list() already returned cached data; UI is fine.
+  const running = revalidatingClients.get(tenantId);
+  if (running) return running;
+  const run = (async () => {
+    try {
+      const changed = await refreshCacheFromSupabase(supabase, tenantId);
+      // Emit only on a real change so the mobile bridge's invalidate →
+      // refetch → revalidate cycle settles after one pass (loop guard).
+      if (changed) emitRevalidated("clients");
+    } catch {
+      // ignore — list() already returned cached data; UI is fine.
+    } finally {
+      revalidatingClients.delete(tenantId);
+      if (staleClientRevalidation.delete(tenantId)) {
+        void revalidateClients(supabase, tenantId);
+      }
+    }
+  })();
+  revalidatingClients.set(tenantId, run);
+  return run;
+}
+
+/** Кэш уже совпадает с сервером строка в строку? Сравнение — полным JSON,
+ *  а не подписью `id@updated_at`: смена тегов клиента `updated_at` не
+ *  двигает, и по подписи такая правка с другого телефона не доезжала до
+ *  экрана. Порядок строк не важен; сомнение — в сторону записи. */
+function sameClientRows(
+  cached: readonly CachedClientData[],
+  fresh: readonly CachedClientData[],
+): boolean {
+  if (cached.length !== fresh.length || fresh.length === 0) return false;
+  const byId = new Map(cached.map((r) => [r.id, r]));
+  for (const row of fresh) {
+    const old = byId.get(row.id);
+    if (!old || JSON.stringify(old) !== JSON.stringify(row)) return false;
   }
+  return true;
 }
 
 /** Refill the cache with the canonical DOMAIN list (tag_ids + nested
- *  fields intact). `repoListClients` joins the junction table for us; we
- *  then decorate each `Client` with the bookkeeping keys the cache layer
- *  needs (tenant_id for scoping, updated_at for the LWW sentinel) — the
- *  latter pulled in a light id/updated_at select the domain list drops.
+ *  fields intact), decorated with the bookkeeping keys the cache layer
+ *  needs (tenant_id for scoping, updated_at for the LWW sentinel).
  *
- *  Callers on the cold path pass the already-fetched `domain` to avoid a
- *  second list round-trip.
+ *  Callers on the cold path pass the already-fetched list to avoid a
+ *  second round-trip.
+ *
+ *  ПРАВКА, ЛЕГШАЯ ЗА ВРЕМЯ ЗАПРОСА, НЕ ЗАТИРАЕТСЯ (аудит 04.10; у записей —
+ *  eb6ffe65). Снимок едет секунды; заведённый за это время клиент пропадал,
+ *  новый номер откатывался, и следующая правка из очереди несла старый
+ *  `updated_at` — ложный «Конфликт» и силовая запись, а правка массива
+ *  (заметки, номера) строилась от откатившегося массива и затирала первую.
+ *  Теперь замена отменяется, если с начала запроса в кэш клиентов писали, и
+ *  следом идёт вторая сверка.
  *
  *  Slice 5 — AUTHORITATIVE + REVALIDATE-BRIDGE. Uses `cacheReplaceTenant`
  *  (delete-then-fill) so a client deleted on another device is pruned from
- *  the cache, not left as a phantom row. Diffs the fresh server signature
- *  against the pre-refresh cache signature and returns whether it changed —
+ *  the cache, not left as a phantom row. Returns whether the cache changed —
  *  the SWR caller emits `revalidated` only on a real change (loop guard). */
 async function refreshCacheFromSupabase(
   supabase: DbSupabase,
   tenantId: string,
-  domain?: Client[],
+  fetched?: { clients: Client[]; updatedAtById: Map<string, string> },
+  /** Счётчик локальных записей, снятый до запроса `fetched` (холодный путь). */
+  writeSeqAtFetch?: number,
 ): Promise<boolean> {
+  const writeSeq = writeSeqAtFetch ?? cacheLocalWriteSeq("clients");
   // Never let an authoritative snapshot erase an optimistic client while its
   // offline mutation is still waiting in the replay queue. Permanently failed
   // ops stop blocking after MAX_ATTEMPTS, allowing the next server snapshot
   // to heal a rejected optimistic row.
   const pending = await dequeueAll();
   if (
-    pending.some(
-      (op) => op.table === "clients" && op.attempts < MAX_ATTEMPTS,
-    )
+    tenantRefreshHeld(pending, "clients", tenantId)
   ) {
     void kickReplayer({ supabase });
     return false;
@@ -237,47 +303,45 @@ async function refreshCacheFromSupabase(
   // лежащие в корзине; каждый экран фильтрует своё. Без этого обновление
   // (cacheReplaceTenant = снести и залить) вычищало бы архив из кэша при
   // первом же ответе сервера, и экран архива снова остался бы без данных.
-  const clients =
-    domain ?? (await repoListClients(supabase, tenantId, { includeDeleted: true }));
-  const updatedById = await fetchUpdatedAtById(supabase, tenantId);
+  // Штамп `updated_at` — из тех же строк, что и данные (см. репозиторий).
+  const { clients, updatedAtById } =
+    fetched ??
+    (await repoListClientsWithStamps(supabase, tenantId, { includeDeleted: true }));
   const rows = clients.map((c) =>
-    makeCachedRow(c, tenantId, updatedById.get(c.id)),
+    makeCachedRow(c, tenantId, updatedAtById.get(c.id)),
   );
-  // Подпись ДО записи. Читаем нефильтрованно — иначе слева активные, справа
-  // все, подписи не совпадут никогда и «revalidated» будет уходить на каждый
-  // проход (тот самый цикл, от которого сторожок и заведён).
-  const before = cacheSignature(await allCachedClients(tenantId));
-  await cacheReplaceTenant("clients", tenantId, rows);
-  const after = cacheSignature(rows);
-  return before !== after;
-}
-
-/** Map id → updated_at for the tenant's clients. The domain `Client`
- *  shape drops `updated_at`; we need it for the cache's denorm column +
- *  the LWW conflict sentinel, so pull it in a tiny separate projection. */
-async function fetchUpdatedAtById(
-  supabase: DbSupabase,
-  tenantId: string,
-): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-  const pageSize = 1000;
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await supabase
-      .from("clients")
-      .select("id, updated_at")
-      .eq("tenant_id", tenantId)
-      // Скрытые тоже: сторожок LWW нужен и архивному клиенту — его ещё
-      // восстанавливать, и без updated_at возврат пойдёт вслепую.
-      .order("id", { ascending: true })
-      .range(offset, offset + pageSize - 1);
-    if (error) throw new Error(`refreshClients meta: ${error.message}`);
-    const page = data ?? [];
-    for (const r of page) {
-      if (r.updated_at) map.set(r.id, r.updated_at);
-    }
-    if (page.length < pageSize) break;
+  // Читаем нефильтрованно — иначе слева активные, справа все, и сверка не
+  // совпала бы никогда («revalidated» уходил бы на каждый проход).
+  const cachedRows = await allCachedClients(tenantId);
+  // КЛИЕНТ, НЕ ДОШЕДШИЙ ДО СЕРВЕРА, С ЭКРАНА НЕ ПРОПАДАЕТ (аудит 04.10; у
+  // записей — то же правило). Его вставка, отклонённая навсегда («номер уже
+  // заведён», конец пробного), перечитку не держит, и замена кэша снимком
+  // сервера стирала клиента: его запись оставалась на сетке без клиента.
+  // Пока вставка лежит в очереди («Синхронизация» — повторить или удалить),
+  // клиент остаётся.
+  const serverIds = new Set(rows.map((r) => r.id));
+  const unsentIds = new Set(
+    pending
+      .filter(
+        (op) =>
+          op.table === "clients" &&
+          op.op === "insert" &&
+          (op.payload as { tenant_id?: unknown } | null)?.tenant_id === tenantId,
+      )
+      .map((op) => op.row_id),
+  );
+  for (const cached of cachedRows) {
+    if (unsentIds.has(cached.id) && !serverIds.has(cached.id)) rows.push(cached);
   }
-  return map;
+  if (sameClientRows(cachedRows, rows)) return false;
+  const replaced = await cacheReplaceTenant("clients", tenantId, rows, {
+    unlessLocalWriteSince: writeSeq,
+  });
+  if (!replaced) {
+    staleClientRevalidation.add(tenantId);
+    return false;
+  }
+  return true;
 }
 
 // Cache row → domain. The cache stores the full domain object decorated
@@ -428,7 +492,10 @@ export async function updateClient(
     expected_updated_at: expectedUpdatedAt,
   };
 
-  if (!offline) {
+  // Теги в очередь не ложатся (правка тегов только в сети) — такая правка
+  // идёт напрямую и при ждущей очереди.
+  const queued = !offline && (await mustQueueBehind(id, opts));
+  if (!offline && (!queued || scrubbedPatch.tag_ids !== undefined)) {
     // Online: standalone optimistic upsert (no queued op to pair with).
     if (merged) await cacheUpsert("clients", merged);
     try {
@@ -457,9 +524,11 @@ export async function updateClient(
     }
   }
 
-  // Offline — queue the write (ATOMIC with the optimistic row when we have
-  // one; plain enqueue when the row wasn't cached yet).
+  // Offline (or behind this client's queued edits) — queue the write (ATOMIC
+  // with the optimistic row when we have one; plain enqueue when the row
+  // wasn't cached yet).
   await enqueueUpdate(updateOp, merged);
+  if (queued) void kickReplayer({ supabase });
   return { ...toDomain(existing), ...scrubbedPatch, id } as Client;
 }
 
@@ -527,7 +596,7 @@ export async function archiveClient(
       ? enqueueOpWithCacheUpsertAndEmit(archiveOp, "clients", hidden)
       : enqueueOpAndEmit(archiveOp);
 
-  if (isOnline()) {
+  if (isOnline() && !(await mustQueueBehind(id, opts))) {
     if (hidden) await cacheUpsert("clients", hidden);
     try {
       await repoSoftDeleteClient(supabase, id, tenantId, purgeAt);
@@ -544,6 +613,7 @@ export async function archiveClient(
   }
 
   await queue();
+  if (isOnline()) void kickReplayer({ supabase });
 }
 
 /** Restore an archived client into the active-list cache. Supplying the
@@ -573,7 +643,11 @@ export async function restoreClient(
     expected_updated_at: null,
   };
 
-  if (isOnline()) {
+  if (isOnline() && !(await mustQueueBehind(client.id, opts))) {
+    // Строка, какой она была до возврата: отказ сервера кладёт её обратно.
+    const before = await cacheGetOne<CachedClientData>("clients", client.id, tenantId).catch(
+      () => null,
+    );
     await cacheUpsert("clients", cachedRow);
     try {
       await repoRestoreClient(supabase, client.id, tenantId);
@@ -581,7 +655,12 @@ export async function restoreClient(
       return;
     } catch (err) {
       if (!isTransientNetworkError(err) || refuseQueueing(opts)) {
-        await cacheDelete("clients", client.id).catch(() => {});
+        // ОТКАЗ — НЕ «КЛИЕНТА НЕТ» (аудит 03.10). Раньше строку из кэша
+        // удаляли, и отвергнутый возврат (номер уже занят другим клиентом)
+        // уносил клиента и из «Удалённых» до следующего чтения. Теперь она
+        // возвращается такой, какой была.
+        if (before) await cacheUpsert("clients", before).catch(() => {});
+        else await cacheDelete("clients", client.id).catch(() => {});
         throw err;
       }
       await enqueueOpWithCacheUpsertAndEmit(
@@ -595,6 +674,7 @@ export async function restoreClient(
   }
 
   await enqueueOpWithCacheUpsertAndEmit(restoreOp, "clients", cachedRow);
+  if (isOnline()) void kickReplayer({ supabase });
 }
 
 /** Low-level physical delete retained for maintenance callers only. Native
@@ -618,7 +698,7 @@ export async function deleteClient(
     expected_updated_at: null,
   };
 
-  if (isOnline()) {
+  if (isOnline() && !(await mustQueueBehind(id, opts))) {
     await cacheDelete("clients", id); // optimistic (standalone online)
     try {
       await repoDeleteClient(supabase, id, tenantId);
@@ -637,8 +717,9 @@ export async function deleteClient(
     }
   }
 
-  // Offline — ATOMIC optimistic delete + enqueue (risk #6).
+  // Offline (or behind queued edits) — ATOMIC optimistic delete + enqueue.
   await enqueueOpWithCacheDeleteAndEmit(deleteOp, "clients", id);
+  if (isOnline()) void kickReplayer({ supabase });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────

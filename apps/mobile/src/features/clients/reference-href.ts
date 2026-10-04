@@ -26,6 +26,13 @@ export function useReferenceHref() {
     channels: inClientsTab
       ? ("/clients/channels" as const)
       : ("/channels" as const),
+    // Метки и теги — шестерёнки листов карточки (03.10): `/cabinet/labels`
+    // переключал таб-бар на «Кабинет», `/clients/tags` из карточки поверх
+    // записи уводил во вкладку — «назад» не возвращал в карточку.
+    labels: inClientsTab ? ("/clients/labels" as const) : ("/labels" as const),
+    tags: inClientsTab ? ("/clients/tags" as const) : ("/tags" as const),
+    // Источники — шестерёнка листа «Источник» (03.10), по той же причине.
+    sources: inClientsTab ? ("/clients/sources" as const) : ("/sources" as const),
     // Услуги, типы событий и категории живут в Кабинете; общий адрес нужен по
     // той же причине, что и остальным: экран над табами не может уходить во
     // вкладку. Категории добавлены 2026-09-10 — их дверь из листа операции
@@ -33,5 +40,19 @@ export function useReferenceHref() {
     services: ("/services" as const),
     eventTypes: ("/event-types" as const),
     categories: ("/categories" as const),
+    // СТРАНИЦЫ САМОЙ КАРТОЧКИ (аудит 03.10): с 03.10 тап по объекту, файлу,
+    // реквизитам и «Ещё N» уводит на страницу — и карточка, открытая поверх
+    // записи (`/client`), уводила во вкладку, бросая запись под табами.
+    clientPage: (page: ClientSubPage) =>
+      inClientsTab ? (`/clients/${page}` as const) : (`/client-${page}` as const),
   };
+}
+
+/** Страницы карточки клиента, у которых есть второй адрес в `app/(shared)`. */
+export type ClientSubPage = "visits" | "objects" | "attachments" | "requisites" | "sms" | "people";
+
+/** Экран во вкладке «Клиенты» — нижний край держит таб-бар; над табами —
+ *  свой (иначе кнопка внизу легла бы на полоску «домой»). */
+export function useInClientsTab(): boolean {
+  return usePathname().startsWith("/clients");
 }

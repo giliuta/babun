@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   CalendarRange,
@@ -17,6 +18,8 @@ import { useThemeColors } from "@/theme/colors";
 import { Spinner } from "@/components/ui/Spinner";
 import { useSession } from "@/providers/SessionProvider";
 import { signOutAndWipe } from "@/lib/auth-clear";
+import { getActiveTenantId } from "@/lib/active-tenant";
+import { myCalendarsQueryKey } from "@/features/settings/my-calendars-key";
 import {
   acceptAndActivateInvitation,
   useInvitationPreview,
@@ -27,6 +30,7 @@ import {
 } from "@/features/settings/pending-invitation";
 import {
   InvitationGoneError,
+  InvitationWrongAccountError,
   invitationErrorMessage,
   isInvitationToken,
 } from "@/features/settings/invitation-flow";
@@ -49,6 +53,7 @@ import {
 export default function InvitationScreen() {
   const t = useThemeColors();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { session } = useSession();
   const params = useLocalSearchParams<{ token?: string | string[] }>();
   const rawToken = Array.isArray(params.token) ? params.token[0] : params.token;
@@ -56,8 +61,16 @@ export default function InvitationScreen() {
   const preview = useInvitationPreview(token);
   const [working, setWorking] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // «Войти под другим аккаунтом» — по ответу сервера, а не по словам
+  // сообщения: на другом языке «другой email» в тексте уже не найти.
+  const [wrongAccount, setWrongAccount] = useState(false);
 
-  const gone = preview.error instanceof InvitationGoneError;
+  // Уже принятое — тоже «приглашения больше нет»: сервер отдаёт его
+  // предпросмотр с `state: "accepted"`, и экран звал «Принять» на ссылку,
+  // которая откажет «уже использовано», а ссылка возвращала сюда после
+  // каждого входа (аудит Кабинета 03.10).
+  const gone =
+    preview.error instanceof InvitationGoneError || preview.data?.state === "accepted";
   const expired = preview.data?.state === "expired";
 
   useEffect(() => {
@@ -88,12 +101,20 @@ export default function InvitationScreen() {
   const accept = async () => {
     if (!token || !session || working) return;
     setActionError(null);
+    setWrongAccount(false);
     setWorking(true);
     try {
-      await acceptAndActivateInvitation(token, preview.data?.role);
+      // Своё место на устройстве есть — команды просто встают в ленту
+      // календаря; перехода в чужой аккаунт нет (как у «Приглашений»).
+      const stay = Boolean(getActiveTenantId());
+      await acceptAndActivateInvitation(token, preview.data?.role, { stay });
+      if (stay) void queryClient.invalidateQueries({ queryKey: myCalendarsQueryKey });
       router.replace("/");
     } catch (error) {
       setActionError(invitationErrorMessage((error as Error).message));
+      // По классу ошибки, а не по словам: приём бросает уже переведённую
+      // фразу, английского «does not match» в ней нет.
+      setWrongAccount(error instanceof InvitationWrongAccountError);
       setWorking(false);
     }
   };
@@ -113,7 +134,7 @@ export default function InvitationScreen() {
     content = (
       <MessageCard
         title="Ссылка повреждена"
-        text="Попросите владельца компании отправить новое приглашение."
+        text="Попросите владельца аккаунта отправить новое приглашение."
       />
     );
     footer = <GradientButton label="Готово" onPress={goBack} />;
@@ -171,7 +192,7 @@ export default function InvitationScreen() {
               color: t.sub,
             }}
           >
-            Владелец приглашает вас работать в этой компании.
+            Владелец приглашает вас в свои команды.
           </Text>
         </View>
 
@@ -250,12 +271,12 @@ export default function InvitationScreen() {
       footer = (
         <>
           <GradientButton
-            label={working ? "Подключаем компанию…" : "Принять приглашение"}
+            label={working ? "Подключаем команды…" : "Принять приглашение"}
             onPress={() => void accept()}
             loading={working}
             disabled={working}
           />
-          {actionError?.includes("другой email") ? (
+          {wrongAccount ? (
             <Button
               label="Войти под другим аккаунтом"
               variant="secondary"

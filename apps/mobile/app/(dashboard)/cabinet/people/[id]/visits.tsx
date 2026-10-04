@@ -82,7 +82,7 @@ export default function MasterWorkScreen() {
     return (
       <Screen edges={["top"]}>
         <ScreenHeader title="Записи" />
-        <EmptyState fill title="Сотрудник не найден" />
+        <EmptyState fill title="Партнёр не найден" />
       </Screen>
     );
   }
@@ -92,13 +92,13 @@ export default function MasterWorkScreen() {
     router.push(`/book?appointmentId=${a.id}` as Href);
   };
 
-  /** Слева — кто и что: клиент, иначе услуги, иначе статус. Календарь —
+  /** Слева — кто и что: клиент, иначе услуги, иначе просто «Запись». Календарь —
    *  только когда их у человека несколько. */
   const rowValue = (a: Appointment) => {
     const who = a.client_id ? clientName.get(a.client_id) : null;
     const what =
       (a.service_ids ?? []).map((id) => serviceName.get(id)).filter(Boolean).join(", ") ||
-      STATUS_LABELS[a.status];
+      (STATUS_LABELS[a.status] || "Запись");
     const where = multiCalendar && a.team_id ? teamName.get(a.team_id) : null;
     const money = a.status !== "cancelled" && (a.total_amount ?? 0) > 0 ? formatEUR(a.total_amount) : null;
     return [who || what, where, money].filter(Boolean).join(" · ");
@@ -109,7 +109,6 @@ export default function MasterWorkScreen() {
       key={a.id}
       label={`${formatShortDateRu(a.date)}${a.time_start ? ` · ${a.time_start}` : ""}`}
       value={rowValue(a)}
-      valueColor={a.status === "completed" ? t.success : undefined}
       dimmed={a.status === "cancelled"}
       separated={i > 0}
       onPress={() => open(a)}
@@ -129,7 +128,6 @@ export default function MasterWorkScreen() {
 
         <SectionCard title="Итого" padded={false}>
           <NavRow label="Записей" value={String(s.total)} />
-          <NavRow label="Выполнено" value={String(s.done)} separated />
           {s.cancelled > 0 ? (
             <NavRow label="Отменено" value={String(s.cancelled)} separated />
           ) : null}

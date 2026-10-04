@@ -31,8 +31,7 @@ export function financesGate(
   map: MemberAccessMap | undefined,
 ): FinancesGate {
   if (!role) return "boundary";
-  // Две стороны денег (срез 2а): открывает любая из них. На старой карте
-  // `moneyKey` отдаёт общий `finance.operations`.
+  // Две стороны денег (срез 2а): открывает любая из них.
   const gates = (["income", "expense"] as const).map((side) =>
     accessGate({ role, map, blockKey: moneyKey(map, side), scope: "calendar" }),
   );

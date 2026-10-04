@@ -6,7 +6,11 @@ import { getDayExtras } from "@babun/shared/local/day-extras";
 import { formatHM } from "@/features/appointments/helpers";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 import { dayMoney, type DayMoney } from "@/features/calendar/day-money";
-import { useTransactions } from "@/features/finances/queries";
+import { useAppointmentsLedger, useTransactions } from "@/features/finances/queries";
+import { awaitingAnswer } from "@/features/finances/ledger-select";
+import { useMyAccess } from "@/features/access/queries";
+import { useCurrentRole } from "@/features/settings/tenant";
+import { dayMoneyRowReadable } from "@/features/calendar/day-money-access";
 import {
   isWeekendColumn,
   weekdayIndex,
@@ -48,7 +52,9 @@ export const MonthView = memo(function MonthView({
   financeAppointments,
   teamId,
   todayYmd,
+  nowHm: nowHmProp,
   labelFor,
+  isDayOff,
   holeFor,
   onPickDay,
   onPickLabelDay,
@@ -67,9 +73,15 @@ export const MonthView = memo(function MonthView({
   teamId: string | null;
   /** Business-timezone today (YYYY-MM-DD); falls back to device time. */
   todayYmd?: string;
+  /** «Сейчас» по времени бизнеса (HH:MM) — пара к `todayYmd`: долг дня
+   *  считается по тем же часам, что сетка. Нет — часы телефона. */
+  nowHm?: string;
   /** Метка дня (город) — цветная точка у числа: месяц показывает маршрут
    *  меток так же, как шапки Дня/Недели (единая система дат). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
+  /** У команды на эту дату выходной (график: «не работаем»). Как в Неделе и
+   *  Дне, выходной заменяет метку: красная точка вместо цветной. */
+  isDayOff?: (dateYmd: string) => boolean;
   /** Дыра дня — «чего этой работе не хватает», агрегатом на день: первая
    *  незакрытая ситуация по `COLOR_SITUATIONS`. Месяц говорит «сюда надо
    *  зайти»; имя дыры остаётся ленте и озвучке. */
@@ -102,16 +114,40 @@ export const MonthView = memo(function MonthView({
   const services = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
 
-  // ДЕНЬГИ КЛЕТКИ — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО ПОЛОСА НЕДЕЛИ И «ФИНАНСЫ»
-  // (`day-money.ts`, 2026-09-30): доход — пришедшее в этот день по леджеру,
-  // а не оплаты записей дня; месяц раньше леджера не видел вовсе, и ручная
-  // операция с вкладки «Финансы» в клетке не стояла.
+  // ДЕНЬГИ КЛЕТКИ — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО ПОЛОСА НЕДЕЛИ (`day-money.ts`):
+  // деньги записи — в дне записи (владелец 2026-10-01), операция из
+  // календаря — в дне операции, касса «Финансов» сюда не входит (04.10).
   const todayStr = todayYmd ?? ymd(new Date());
   const ledgerQuery = useTransactions(ymd(cells[0]), ymd(cells[cells.length - 1]), {
     brigadeIds: teamId ? [teamId] : undefined,
     enabled: showFinance,
   });
-  const ledger = ledgerQuery.isPlaceholderData ? undefined : ledgerQuery.data;
+  // Только записи клеток месяца: денежный набор экрана бывает шире.
+  const recordIds = useMemo(() => {
+    const from = ymd(cells[0]);
+    const to = ymd(cells[cells.length - 1]);
+    return financeAppointments.filter((a) => a.date >= from && a.date <= to).map((a) => a.id);
+  }, [financeAppointments, cells]);
+  const recordsLedgerQuery = useAppointmentsLedger(recordIds, { enabled: showFinance });
+  // Чужой ПЕРИОД не выдаём за свой, пока свой в пути (смена месяца). У
+  // месяца без записей запрос по записям выключен и держит заглушку вечно —
+  // по одному `isPlaceholderData` клетки такого месяца теряли и операции без
+  // записи (повторный аудит 03.10).
+  //
+  // Операции ЗАПИСЕЙ не гасятся вовсе: это строки с номером записи, и к дню
+  // их относит `dayMoney` по записям клетки — строки заглушки чужих записей ни
+  // в один день не лягут, а свои верны. Гашение по ним стирало зелёные и
+  // красные суммы всего месяца на каждое создание или перенос записи, пока
+  // список номеров перечитывался.
+  const ledgerAwaiting = awaitingAnswer(ledgerQuery);
+  // «Его глазами» — его правом календаря и «Ограничениями», как полоса недели.
+  const role = useCurrentRole().data;
+  const myAccess = useMyAccess().data;
+  const ledger = useMemo(() => {
+    if (ledgerAwaiting) return undefined;
+    const readable = dayMoneyRowReadable({ role, map: myAccess, today: todayStr });
+    return [...(ledgerQuery.data ?? []), ...(recordsLedgerQuery.data ?? [])].filter(readable);
+  }, [ledgerAwaiting, ledgerQuery.data, recordsLedgerQuery.data, role, myAccess, todayStr]);
 
   // Финансы всех дней одной мемоизацией (аудит: расчёт гонялся по 42
   // клеткам в каждом рендере). Дни без записей, но с операциями леджера или
@@ -120,14 +156,18 @@ export const MonthView = memo(function MonthView({
     const m = new Map<string, DayMoney>();
     if (!showFinance) return m;
     const dates = new Set(financeByDay.keys());
-    for (const tx of ledger ?? []) dates.add(tx.occurred_on);
+    // Дни записей уже в наборе; операция из календаря добавляет свой день.
+    for (const tx of ledger ?? []) if (!tx.appointment_id && tx.from_calendar) dates.add(tx.occurred_on);
     if (teamId) {
       const prefix = `${teamId}:`;
       for (const k of Object.keys(extrasMap)) {
         if (k.startsWith(prefix)) dates.add(k.slice(prefix.length));
       }
     }
-    const nowHm = formatHM(new Date());
+    // Часы бизнеса, а не телефона (аудит 2026-10-03): запись, кончившаяся в
+    // 17:00 по команде, при 23:30 на телефоне в другом поясе уже была
+    // «долгом», хотя сетка считала её идущей.
+    const nowHm = nowHmProp ?? formatHM(new Date());
     for (const date of dates) {
       m.set(
         date,
@@ -144,7 +184,7 @@ export const MonthView = memo(function MonthView({
       );
     }
     return m;
-  }, [financeByDay, ledger, services, extrasMap, teamId, showFinance, todayStr]);
+  }, [financeByDay, ledger, services, extrasMap, teamId, showFinance, todayStr, nowHmProp]);
 
   const t = useThemeColors();
 
@@ -186,12 +226,18 @@ export const MonthView = memo(function MonthView({
               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
               const count = byDay.get(key)?.length ?? 0;
               const totals = totalsByDay.get(key) ?? null;
-              const label = inMonth ? labelFor?.(key) ?? null : null;
+              // Метка — и на хвостовых днях чужого месяца (повторный аудит
+              // 03.10): тап по ним открывает шторку метки, а поставленная
+              // метка точкой не показывалась — выбор пропадал на глазах.
+              // ВЫХОДНОЙ — И В МЕСЯЦЕ (аудит шестерёнки 03.10): «Выходной» из
+              // шторки метки в Месяце не менял клетку вовсе, хотя Неделя и
+              // День показывают его вместо метки.
+              const dayOff = isDayOff?.(key) === true;
+              const label = dayOff ? null : labelFor?.(key) ?? null;
               // ГРОМКО — ТОЛЬКО СЕГОДНЯ И ВПЕРЁД: в прошлом дозаполнять уже
               // нечего, а половина месяца в тёмных пилюлях убила бы сигнал
-              // частотой. Гейта `inMonth` здесь НЕТ (в отличие от метки):
-              // хвостовые дни чужого месяца — настоящие дни, и счётчик с
-              // деньгами на них не гасится.
+              // частотой. Гейта `inMonth` здесь НЕТ: хвостовые дни чужого
+              // месяца — настоящие дни, и счётчик с деньгами на них не гасится.
               const hole = count > 0 && key >= todayStr ? holeFor?.(key) ?? null : null;
               const pill = hole ? edgeColor(hole.color) : null;
               // СКОЛЬКО РАБОТ НЕ ЗАКРЫТО. В сетке просрочка говорит толщиной
@@ -214,7 +260,7 @@ export const MonthView = memo(function MonthView({
                   onLongPress={() => onPickDay(d)}
                   delayLongPress={350}
                   accessibilityRole="button"
-                  accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${unclosed > 0 ? `, не закрыто: ${unclosed}` : ""}${hole ? `, ${hole.name.toLowerCase()}` : ""}${label ? `, метка: ${label.name}` : ""}`}
+                  accessibilityLabel={`${d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${unclosed > 0 ? `, не закрыто: ${unclosed}` : ""}${hole ? `, ${hole.name.toLowerCase()}` : ""}${dayOff ? ", выходной" : label ? `, метка: ${label.name}` : ""}`}
                   accessibilityHint={
                     onPickLabelDay
                       ? "Нажатие меняет метку, долгое нажатие открывает неделю"
@@ -251,13 +297,13 @@ export const MonthView = memo(function MonthView({
                       </Text>
                       {/* Точка метки — тот же цвет города, что в шапках
                           Дня/Недели: маршрут читается и с высоты месяца. */}
-                      {label ? (
+                      {label || dayOff ? (
                         <View
                           style={{
                             width: 6,
                             height: 6,
                             borderRadius: 3,
-                            backgroundColor: label.color,
+                            backgroundColor: dayOff ? t.danger : label?.color,
                           }}
                         />
                       ) : null}

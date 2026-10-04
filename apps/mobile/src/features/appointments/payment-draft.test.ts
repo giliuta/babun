@@ -12,9 +12,13 @@ import {
   outstandingCents,
   paidAtLabel,
   paidTileIntent,
+  paymentKindAt,
   paymentMath,
+  pendingPaymentToSend,
   paymentRows,
+  overpaymentToRefund,
   recordedToast,
+  slotUnsaved,
   visitStarted,
 } from "./payment-draft";
 
@@ -31,6 +35,43 @@ function apt(overrides: Partial<Appointment> = {}): Appointment {
     ...overrides,
   });
 }
+
+describe("paymentKindAt — вид платежа по часам тапа", () => {
+  const visit = { date: "2026-09-06", time_start: "11:30", status: "scheduled" as const };
+  test("до начала — предоплата, с начала — оплата", () => {
+    assert.equal(paymentKindAt(visit, { ymd: "2026-09-06", hm: "11:29" }), "prepayment");
+    assert.equal(paymentKindAt(visit, { ymd: "2026-09-06", hm: "11:30" }), "settlement");
+    assert.equal(paymentKindAt(visit, { ymd: "2026-09-07", hm: "08:00" }), "settlement");
+  });
+  test("выполненная или начатая — оплата и до своего часа", () => {
+    const early = { ymd: "2026-09-05", hm: "09:00" };
+    assert.equal(paymentKindAt({ ...visit, status: "completed" }, early), "settlement");
+    assert.equal(paymentKindAt({ ...visit, status: "in_progress" }, early), "settlement");
+  });
+});
+
+describe("pendingPaymentToSend — деньги новой записи по форме на «Создать»", () => {
+  const form = { total: 150, date: "2026-09-06", time_start: "11:00", status: "scheduled" as const };
+  test("«вся сумма» — итог формы на момент создания, не на момент тапа", () => {
+    const send = pendingPaymentToSend({ amount: 100, full: true }, form, NOW);
+    assert.deepEqual(send, { amount: 150, kind: "settlement", closeVisit: true });
+  });
+  test("сумма из поля — как вписали", () => {
+    const send = pendingPaymentToSend({ amount: 40, full: false }, form, NOW);
+    assert.equal(send?.amount, 40);
+  });
+  test("время сдвинули в будущее — предоплата, визит не закрывается", () => {
+    const later = { ...form, time_start: "18:00" };
+    assert.deepEqual(pendingPaymentToSend({ amount: 100, full: true }, later, NOW), {
+      amount: 150,
+      kind: "prepayment",
+      closeVisit: false,
+    });
+  });
+  test("итог обнулили — платить нечего", () => {
+    assert.equal(pendingPaymentToSend({ amount: 100, full: true }, { ...form, total: 0 }, NOW), null);
+  });
+});
 
 describe("visitStarted", () => {
   test("earlier day, same-day past start and exact start count as started", () => {
@@ -96,6 +137,25 @@ describe("деньги блока считаются по итогу ФОРМЫ"
     });
   });
 
+  test("переплата перед сохранением — сколько вернуть клиенту (владелец 04.10)", () => {
+    // Карта 20 + наличные 10 + карта 20, итог опустили с 50 до 30.
+    const split = apt({
+      total_amount: 50,
+      paid_amount: 50,
+      payment_status: "paid",
+      payments: [
+        { id: "a", method: "card", amount: 20, paid_at: "2026-10-03T21:11:19.602Z" },
+        { id: "b", method: "cash", amount: 10, paid_at: "2026-10-03T21:11:48.287Z" },
+        { id: "c", method: "card", amount: 20, paid_at: "2026-10-03T21:12:14.339Z" },
+      ],
+    });
+    assert.deepEqual(overpaymentToRefund(split, 30), { amountCents: 2000, receivedCents: 5000 });
+    assert.equal(overpaymentToRefund(split, 50), null);
+    assert.equal(overpaymentToRefund(split, 80), null);
+    assert.equal(overpaymentToRefund(null, 30), null);
+    assert.equal(overpaymentToRefund({ ...split, status: "cancelled" }, 30), null);
+  });
+
   test("возвращённая запись не должна и не переплачена ни при каком итоге", () => {
     const refunded = apt({ payment_status: "refunded", paid_amount: 160 });
     assert.deepEqual(paymentMath(refunded, 280), { outstanding: 0, overpaid: 0 });
@@ -122,9 +182,44 @@ describe("деньги блока считаются по итогу ФОРМЫ"
       billUnsaved: true,
     });
     assert.deepEqual(caption, {
-      text: "Итог изменился — сохраните запись",
+      text: "Итог изменён — сохраните",
       tone: "warning",
     });
+  });
+
+  test("клиент сменён и не сохранён — сначала сохранить (аудит 03.10)", () => {
+    const caption = blockCaption({
+      hasTeam: true,
+      hasAppointment: true,
+      visitCompleted: false,
+      outstanding: 13500,
+      rowsCount: 0,
+      amountMode: false,
+      started: false,
+      hasPending: false,
+      outstandingLabel: "€135,00",
+      clientUnsaved: true,
+    });
+    assert.deepEqual(caption, {
+      text: "Клиент изменён — сохраните",
+      tone: "warning",
+    });
+  });
+
+  test("отменённый визит — не долг: «Визит отменён» (аудит 03.10)", () => {
+    const caption = blockCaption({
+      hasTeam: true,
+      hasAppointment: true,
+      visitCompleted: false,
+      outstanding: 13500,
+      rowsCount: 0,
+      amountMode: false,
+      started: true,
+      hasPending: false,
+      outstandingLabel: "€135,00",
+      visitCancelled: true,
+    });
+    assert.deepEqual(caption, { text: "Визит отменён", tone: "neutral" });
   });
 
   test("сохранённый итог — обычная жизнь строки: долг называется долгом", () => {
@@ -211,6 +306,17 @@ describe("paymentRows", () => {
       { id: "settled-total", kind: "settlement", amount: 135, accountId: null, paidAt: "2026-09-06T09:00:00.000Z", cancellable: false },
     ]);
   });
+  test("возвращённая предоплата не стоит зелёной плиткой (повторный аудит 03.10)", () => {
+    const rows = paymentRows(
+      apt({
+        prepaid_amount: 50,
+        prepayments: [{ id: "p1", method: "cash", amount: 50, paid_at: "2026-10-03T15:48:00.000Z" }],
+        payment_status: "refunded",
+        status: "cancelled",
+      }),
+    );
+    assert.deepEqual(rows, []);
+  });
   test("refunded record shows no settlement rows", () => {
     const rows = paymentRows(
       apt({
@@ -284,5 +390,31 @@ describe("labels", () => {
     assert.equal(recordedToast({ kind: "settlement", amount: 50, already: 0, accountName: "Наличные" }), "Оплачено €50 · Наличные");
     assert.equal(recordedToast({ kind: "prepayment", amount: 50, already: 0, accountName: "Карта" }), "Предоплата €50 · Карта");
     assert.equal(recordedToast({ kind: "settlement", amount: 50, already: 50, accountName: "Наличные" }), "+€50 · Наличные · всего €100");
+  });
+});
+
+// ПЕРЕНЕСЛИ В ФОРМЕ И НЕ СОХРАНИЛИ (017, 03.10): сервер записал бы оплату и
+// закрыл визит по прежней дате, а «Сохранить» отказало бы.
+describe("дата и время формы против сохранённых", () => {
+  test("новая запись — без замка; всё совпадает — без замка", () => {
+    assert.equal(slotUnsaved(null, { date: "2026-10-04", timeStart: "08:00" }), null);
+    assert.equal(slotUnsaved({ date: "2026-10-04", time_start: "08:00:00" }, { date: "2026-10-04", timeStart: "08:00" }), null);
+  });
+  test("сменили дату или время — сначала сохранить", () => {
+    assert.equal(slotUnsaved({ date: "2026-10-05", time_start: "10:00" }, { date: "2026-10-04", timeStart: "08:00" }), "date");
+    assert.equal(slotUnsaved({ date: "2026-10-04", time_start: "10:00" }, { date: "2026-10-04", timeStart: "08:00" }), "time");
+    const base = {
+      hasTeam: true,
+      hasAppointment: true,
+      visitCompleted: false,
+      outstanding: 5000,
+      rowsCount: 0,
+      amountMode: false,
+      started: false,
+      hasPending: false,
+      outstandingLabel: "€50,00",
+    };
+    assert.deepEqual(blockCaption({ ...base, slotUnsaved: "date" }), { text: "Дата изменена — сохраните", tone: "warning" });
+    assert.deepEqual(blockCaption({ ...base, slotUnsaved: "time" }), { text: "Время изменено — сохраните", tone: "warning" });
   });
 });

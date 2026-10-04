@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Image, Pressable, Text, TextInput, View } from "react-native";
 import { Check, Search, X } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { GUTTER, ICON } from "@/components/ui/tokens";
@@ -148,7 +148,10 @@ export function SelectRow({
   accessibilityLabel,
   accessibilityHint,
   accessibilityRole = "button",
+  plain = false,
+  image,
   onPress,
+  onLongPress,
 }: {
   /** Имя сущности — главная строка. */
   title: string;
@@ -183,10 +186,19 @@ export function SelectRow({
    *  когда выбранное стало строкой шторки 2026-09-15). */
   accessibilityHint?: string;
   accessibilityRole?: "button" | "radio" | "checkbox";
+  /** БЕЛАЯ ПЛАШКА: цвет сущности — только у плитки, фон строки — белый
+   *  (история клиента, владелец 03.10: «заливку фона не надо, белый фон, а
+   *  иконка цветная»). По умолчанию — тинт цвета, как у тегов и меток. */
+  plain?: boolean;
+  /** СНИМОК ВМЕСТО ЗНАЧКА — плитка того же размера показывает само фото
+   *  (файлы клиента, владелец 03.10: фото узнают глазами, а не по слову). */
+  image?: string;
   onPress: () => void;
+  /** Удержание — второе действие строки (реквизиты: скопировать набор). */
+  onLongPress?: () => void;
 }) {
   const t = useThemeColors();
-  const hasTile = Boolean(Icon || initial);
+  const hasTile = Boolean(Icon || initial || image);
   const emoji = typeof Icon === "string" ? Icon : null;
   // АВАТАР — СВОЙ СЛУЧАЙ: круг, тинт акцента, буква акцентом. Всё остальное —
   // плитка сущности из блока «Вид»: цвет заливкой в полную силу, глиф поверх
@@ -203,6 +215,7 @@ export function SelectRow({
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       disabled={disabled}
       accessibilityRole={accessibilityRole}
       accessibilityState={
@@ -239,9 +252,11 @@ export function SelectRow({
             : `${t.accent}14`
           : pressed
             ? t.rowFillPressed
-            : color
-              ? `${color}14`
-              : t.rowFill,
+            : plain
+              ? t.surface
+              : color
+                ? `${color}14`
+                : t.rowFill,
       })}
     >
       {hasTile ? (
@@ -254,9 +269,12 @@ export function SelectRow({
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: fill,
+            overflow: image ? "hidden" : undefined,
           }}
         >
-          {emoji ? (
+          {image ? (
+            <Image source={{ uri: image }} style={{ width: TILE, height: TILE }} resizeMode="cover" />
+          ) : emoji ? (
             <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 15 }}>
               {emoji}
             </Text>

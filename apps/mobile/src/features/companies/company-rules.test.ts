@@ -3,7 +3,9 @@ import { describe, test } from "node:test";
 
 import {
   canSaveCompany,
+  cleanSeriesPrefix,
   companyDetail,
+  documentNumberPreview,
   companyFilled,
   defaultHeir,
   formatIban,
@@ -117,5 +119,35 @@ describe("isCompanyDraftDirty", () => {
     const initial = { ...blank, name: "AirFix" };
     assert.equal(isCompanyDraftDirty(initial, { ...initial, name: "AirFix " }), false);
     assert.equal(isCompanyDraftDirty(initial, { ...initial, vat_number: "1" }), true);
+  });
+});
+
+describe("буквы и длина номера (владелец 03.10: «в реквизитах, сразу»)", () => {
+  test("буквы — латиница заглавными и цифры, как примет сервер", () => {
+    assert.equal(cleanSeriesPrefix("inv 2"), "INV2");
+    // Русская раскладка не проходит: сервер такие буквы отбил бы.
+    assert.equal(cleanSeriesPrefix("СЧЁТ"), "");
+    assert.equal(cleanSeriesPrefix("ABCDEFGHIJKL"), "ABCDEFGHIJ");
+  });
+
+  test("номер собирается так же, как на сервере", () => {
+    assert.equal(documentNumberPreview("INV", 2026, 5, 3), "INV-2026-005");
+    assert.equal(documentNumberPreview("RC", 2026, 16, 5), "RC-2026-00016");
+    // Число длиннее разрядов не обрезается.
+    assert.equal(documentNumberPreview("INV", 2026, 12345, 3), "INV-2026-12345");
+  });
+
+  test("пустые буквы не уходят в запись, длина — в пределах сервера", () => {
+    const out = normalizeCompanyDraft({ ...blank, name: "A", invoice_prefix: "  ", receipt_prefix: "rc", number_padding: 12 });
+    assert.equal(out.invoice_prefix, undefined);
+    assert.equal(out.receipt_prefix, "RC");
+    assert.equal(out.number_padding, 8);
+  });
+
+  test("смена букв — правка набора", () => {
+    const initial = { ...blank, name: "AirFix", invoice_prefix: "INV", number_padding: 3 };
+    assert.equal(isCompanyDraftDirty(initial, { ...initial, invoice_prefix: "inv" }), false);
+    assert.equal(isCompanyDraftDirty(initial, { ...initial, invoice_prefix: "AF" }), true);
+    assert.equal(isCompanyDraftDirty(initial, { ...initial, number_padding: 4 }), true);
   });
 });

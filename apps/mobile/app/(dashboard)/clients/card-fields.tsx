@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from "expo-router";
 import { ScrollView } from "react-native";
 import {
-  AlertCircle,
+  Bookmark,
   Clock,
   FileText,
   Home,
@@ -9,10 +9,8 @@ import {
   Phone,
   StickyNote,
   Tags,
-  TrendingUp,
   UserRound,
   UsersRound,
-  Wallet,
   type LucideIcon,
 } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
@@ -31,22 +29,22 @@ import {
   useToggleClientFunction,
   type ClientFunctionKey,
 } from "@/features/clients/client-functions";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
-import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
+import { useClientSettingLevel } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
 import { useFeatureOn } from "@/features/settings/company-features";
 
-// «КАРТОЧКА КЛИЕНТА» — ИЗ ЧЕГО СОБРАН КЛИЕНТ У КОМАНДЫ (владелец 30.09:
-// «название „что показывать на карточке“ неправильно — сделай то же самое,
-// как это выглядит у нас в записи клиентов в календаре»). Та же анатомия, что
-// у «Записей»: обязательное — одной строкой «Всегда: …», выключаемое — строки
-// с галкой.
+// «БЛОКИ КЛИЕНТОВ» — ВСЁ О ВИДЕ КЛИЕНТА НА ОДНОЙ СТРАНИЦЕ (владелец 03.10:
+// «заметка, личная, метка, тег — раздельно, люди и так далее… назвать „блоки
+// клиентов“, как в календаре, и полноценно запихнуть всё в одну страницу»).
+// Анатомия — как у «Записей» календаря: обязательное одной строкой «Всегда:
+// …», выключаемое — строками с галкой.
 //
-//   • «Блоки страницы» — блоки страницы клиента; «Всегда» только клиент и
-//     история. Выключается у всей команды (`team_design`); у людей, файлов и
-//     реквизитов выключатель компании (STORY-088) главнее.
-//   • «Строка в списке» — что видно под именем в списке клиентов; тоже у
-//     всей команды (`team_design.client_list_off`, 30.09).
+//   • «Карточка клиента» — блоки страницы клиента у всей команды
+//     (`team_design.disabled_blocks`); у людей, файлов и реквизитов
+//     выключатель компании главнее, объекты гасит и функция компании.
+//   • «В списке» — что видно под именем в списке клиентов
+//     (`team_design.client_list_off`).
 //
 // Команда едет адресом из «Настроек клиентов»; без неё — первая команда.
 
@@ -57,47 +55,44 @@ type PageBlock = {
   icon?: LucideIcon;
 };
 
-// Порядок — порядок страницы клиента (docs/BLOCKS.md §9.1).
+// Порядок — порядок страницы клиента.
 const PAGE_BLOCKS: PageBlock[] = [
   { label: "Клиент", pinned: true },
   { label: "Заметка", key: "client_note", icon: StickyNote },
-  { label: "История", pinned: true },
   { label: "Люди", key: "client_people", icon: UsersRound },
+  { label: "История", pinned: true },
   { label: "Объекты", key: "client_objects", icon: Home },
   { label: "Файлы", key: "client_files", icon: Paperclip },
   { label: "Реквизиты", key: "client_requisites", icon: FileText },
-  { label: "Метка и тег", key: "client_labels", icon: Tags },
+  { label: "Метка", key: "client_labels", icon: Bookmark },
+  { label: "Тег", key: "client_tags", icon: Tags },
   { label: "Личное", key: "client_personal", icon: UserRound },
 ];
 
-// ВЫРУЧКА, А НЕ ПРИБЫЛЬ: «Ожидается» — сумма будущих записей до расходов.
+// Денег в строке нет (владелец 01.10) — они на странице клиента.
 const ROW_FIELDS: { field: CardField; label: string; icon: LucideIcon }[] = [
   { field: "phone", label: "Телефон", icon: Phone },
-  { field: "exp", label: "Ожидается", icon: TrendingUp },
-  { field: "inc", label: "Доход", icon: Wallet },
-  { field: "debt", label: "Долг", icon: AlertCircle },
   { field: "last", label: "Последняя запись", icon: Clock },
-  { field: "meta", label: "Команда, метка, теги", icon: Tags },
 ];
 
 // Экран вкладки «Клиенты»: компанию называет источник, а не роль
 // (STORY-082).
-export default function ClientCardSettingsRoute() {
+export default function ClientBlocksSettingsRoute() {
   return (
-    <ClientsCompanyRoute kind="tab">
-      <ClientCardSettingsScreen />
-    </ClientsCompanyRoute>
+    <ClientSettingsRoute row="card">
+      <ClientBlocksSettingsScreen />
+    </ClientSettingsRoute>
   );
 }
 
-function ClientCardSettingsScreen() {
+function ClientBlocksSettingsScreen() {
   const { team } = useLocalSearchParams<{ team?: string }>();
   const { data: ownTeams = [] } = useTeams();
   const teamRow =
     (team ? ownTeams.find((tm) => tm.id === team) : undefined) ?? ownTeams[0] ?? null;
   const teamId = teamRow?.id ?? null;
-  const caps = useClientsCapabilities();
-  const readOnly = !caps.manage;
+  // «Только видит» (владелец 01.10) — галки стоят, но не переключаются.
+  const readOnly = useClientSettingLevel("card", teamId) !== "write";
 
   // Объекты выключаются у компании там, где их заводят («Записи»): без них
   // блока нет вовсе — ни галкой, ни во «Всегда».
@@ -109,33 +104,28 @@ function ClientCardSettingsScreen() {
     client_files: useClientFunctionOn("client_files", teamId),
     client_requisites: useClientFunctionOn("client_requisites", teamId),
     client_labels: useClientFunctionOn("client_labels", teamId),
+    client_tags: useClientFunctionOn("client_tags", teamId),
     client_personal: useClientFunctionOn("client_personal", teamId),
   };
   // Выключено у всей компании — у команды его не включить: строка гаснет.
   const companyPeople = useFeatureOn("client_people");
   const companyFiles = useFeatureOn("client_files");
   const companyRequisites = useFeatureOn("client_requisites");
-  const companyOn: Record<ClientFunctionKey, boolean> = {
-    client_note: true,
-    client_people: companyPeople,
-    client_objects: true,
-    client_files: companyFiles,
-    client_requisites: companyRequisites,
-    client_labels: true,
-    client_personal: true,
-  };
+  const companyLocked = (key: ClientFunctionKey): boolean =>
+    (key === "client_people" && !companyPeople) ||
+    (key === "client_files" && !companyFiles) ||
+    (key === "client_requisites" && !companyRequisites);
   const toggleFunction = useToggleClientFunction(teamId);
-
-  const blocks = PAGE_BLOCKS.filter((b) => objectsOn || b.label !== "Объекты");
+  const blocks = PAGE_BLOCKS.filter((b) => objectsOn || b.key !== "client_objects");
 
   const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields(teamId);
   const toggleField = useToggleCardField(teamId);
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Карточка клиента" subtitle={teamRow?.name} />
+      <ScreenHeader title="Блоки клиентов" subtitle={teamRow?.name} />
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        <SectionCard title="Блоки страницы">
+        <SectionCard title="Карточка клиента">
           <AlwaysLine blocks={blocks} />
           {blocks
             .filter((b) => !b.pinned && b.key)
@@ -147,7 +137,7 @@ function ClientCardSettingsScreen() {
                   label={b.label}
                   icon={b.icon ?? FileText}
                   on={functionOn[key]}
-                  locked={!companyOn[key]}
+                  locked={companyLocked(key)}
                   readOnly={readOnly}
                   onToggle={() => toggleFunction.mutate({ key, on: !functionOn[key] })}
                 />
@@ -156,7 +146,7 @@ function ClientCardSettingsScreen() {
         </SectionCard>
         <RowCaption text="Выключенный блок пропадает у всей команды. Данные остаются." />
 
-        <SectionCard title="Строка в списке">
+        <SectionCard title="В списке">
           <AlwaysLine blocks={[{ label: "Имя", pinned: true }]} />
           {ROW_FIELDS.map((f) => (
             <BlockCell
@@ -165,12 +155,12 @@ function ClientCardSettingsScreen() {
               icon={f.icon}
               on={prefs[f.field]}
               locked={false}
-              readOnly={false}
+              readOnly={readOnly}
               onToggle={() => toggleField.mutate(f.field)}
             />
           ))}
         </SectionCard>
-        <RowCaption text="Выключенное поле пропадает из строки у всей команды." />
+        <RowCaption text="Что видно под именем в списке клиентов." />
       </ScrollView>
     </Screen>
   );

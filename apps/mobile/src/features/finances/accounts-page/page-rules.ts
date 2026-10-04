@@ -55,6 +55,35 @@ export function hideDecisionAfterTransfer<A extends ClosableAccount>(
   return { account: next.account, decision: hideDecision(next.account, fresh) };
 }
 
+/**
+ * «УДАЛИТЬ» — ТЕ ЖЕ ШАГИ, ЧТО «СКРЫТЬ», НО В КОНЦЕ СЧЁТ УХОДИТ В «УДАЛЁННЫЕ
+ * СЧЕТА» (владелец 03.10). Сервер принимает только пустой счёт
+ * (`account_trash_rules`), поэтому деньги сначала уводятся переводом — ровно
+ * как у «Скрыть»; ноль — вопрос «Удалить счёт?».
+ */
+export type TrashDecision = Exclude<HideDecision, { kind: "close" }> | { kind: "trash" };
+
+export function trashDecision<A extends ClosableAccount>(
+  account: A,
+  accounts: readonly A[],
+): TrashDecision {
+  const decision = hideDecision(account, accounts);
+  return decision.kind === "close" ? { kind: "trash" } : decision;
+}
+
+/** Вопрос после перевода, затеянного ради «Удалить», — по свежему остатку. */
+export function trashDecisionAfterTransfer<A extends ClosableAccount>(
+  before: ClosableAccount,
+  fresh: readonly A[] | undefined,
+): { account: A; decision: TrashDecision } | null {
+  const next = hideDecisionAfterTransfer(before, fresh);
+  if (!next) return null;
+  return {
+    account: next.account,
+    decision: next.decision.kind === "close" ? { kind: "trash" } : next.decision,
+  };
+}
+
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -77,7 +106,12 @@ export function accountEditParam(
  * 2026-09-29): первым в оплате и первым среди касс стоит тот, что выше в
  * списке, и отдельное слово об этом не нужно.
  */
-export function accountRowMark(account: { show_in_payments: boolean }): string | null {
+export function accountRowMark(account: {
+  show_in_payments: boolean;
+  is_hidden?: boolean;
+}): string | null {
+  // Скрытый — главное, что про него надо знать; «Не в оплате» у него всегда.
+  if (account.is_hidden) return "Скрыт";
   return account.show_in_payments ? null : "Не в оплате";
 }
 

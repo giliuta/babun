@@ -11,7 +11,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { Check } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { blockFrame, type PlacedAppt } from "@/features/calendar/layout";
@@ -154,7 +153,11 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       setLiveStart(null);
       return;
     }
-    const time = minToHM(startMin + steps * dragStep);
+    // Подпись под пальцем — то, что встанет при отпускании (аудит 03.10):
+    // без того же ограничения она показывала «-1:-30» и «24:30».
+    const time = minToHM(
+      clampStart(startMin + steps * dragStep, Math.max(15, spanEnd - startMin)),
+    );
     setLiveStart(days === 0 ? time : `${dayShort(apt.date, days)} ${time}`);
   };
   const clearLive = () => setLiveStart(null);
@@ -201,9 +204,10 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // палитры владельцем — в отличие от любого оттенка.
   // КОНТУР 1.5pt У КАЖДОГО БЛОКА (владелец 2026-09-24, вариант 3 второй
   // итерации: «контур добавить, насыщенность»): тёмный тон своего же цвета
-  // отделяет соседние записи и даёт плотной заливке край. Просрочка — на
-  // точку толще и почти чёрным тоном (`blockEdge`).
-  const bw = overdue ? 2.5 : 1.5;
+  // отделяет соседние записи и даёт плотной заливке край. Толстого чёрного
+  // канта просрочки нет (владелец 2026-10-01: «некрасиво») — незакрытая
+  // запись говорит жирным временем.
+  const bw = 1.5;
   const markSize = width >= 96 ? 14 : width >= 40 ? 8 : 0;
   // Место под знак резервирует ТОЛЬКО выполненная: у просрочки знака нет.
   // Пока его резервировала и она, просроченный блок недели на экране 393pt
@@ -215,7 +219,16 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // ЧЕСТНЫЙ СЧЁТЧИК СТРОК. Обвязка карточки постоянна и равна 6pt: кант сверху
   // и снизу плюс вертикальный паддинг (при bw 1 это 2+4, при bw 2 — 4+2).
   // Значит n строк ФИЗИЧЕСКИ помещаются при cardH ≥ 6 + n·lineH.
-  const rowsFit = rowsThatFit(cardH, lineH);
+  // РУЧКА РАСТЯЖКИ СВЕРХУ — НЕ ПОВЕРХ ИМЕНИ (повторный аудит 03.10, на
+  // симуляторе). В «Свободном перемещении» верхняя ручка (top 3, высота 4)
+  // ложилась белой полосой прямо на первую строку — имя читалось
+  // перечёркнутым. Пока ручка видна, текст отступает под неё, а строк
+  // считается на столько меньше — и с нижней ручкой тоже: иначе сдвинутая
+  // вниз последняя строка ложилась уже под нижнюю.
+  const resizable = editing && !!onReschedule && apt.status !== "cancelled";
+  const topHandle = resizable && cardH >= 40 ? 6 : 0;
+  const bottomHandle = resizable && cardH >= 24 ? 6 : 0;
+  const rowsFit = rowsThatFit(cardH - topHandle - bottomHandle, lineH);
   // СТРОКА ЛИБО НАРИСОВАНА ЦЕЛИКОМ, ЛИБО ЕЁ НЕТ. Прежняя формула
   // `floor((cardH − 9) / lineH) + 1` пускала строку, когда до неё не хватало
   // почти целой: получасовая запись при обычном зуме (высота 28) получала две
@@ -248,11 +261,17 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // «+N» стопки: внизу, если под именем есть ещё строка; иначе сверху, и
   // тогда имя отступает на ширину значка.
   const deckBadgeLow = deckMore > 0 && rowsFit >= 2;
+  // ШИРИНА ПЕРВОЙ СТРОКИ ИМЕНИ — после значка «+N» сверху. Значок резервировался
+  // уже ПОСЛЕ гейта 24pt: у верхней карточки стопки в Неделе (две короткие
+  // записи в одно время) имени оставалось ~14pt — «А…» (повторный аудит
+  // 03.10). Гейт меряет то, что останется имени на самом деле.
+  const nameLineW =
+    textW + markReserve - Math.max(markReserve, deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0);
   const dotReserve =
     offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? 12 : 0;
 
   // КАНТ ЗАБИРАЕТ ТОЛЬКО ОТМЕНЁННАЯ — правило и его гейт в `status-colors`.
-  const edge = blockEdge(colors, apt.status, overdue);
+  const edge = blockEdge(colors, apt.status);
   // РАЗОМКНУТЫЙ КАНТ = РАБОТЫ НЕ БУДЕТ. Кант — единственный слой блока, который
   // рисуется ВСЕГДА: текста нет при textW < 24 (наложение в Неделе даёт 11),
   // углового знака нет при ширине < 40. Цвет канта занят категорией, толщина —
@@ -294,13 +313,31 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     [],
   );
 
+  // КОНЕЦ ЗАПИСИ — НЕ ПОЗЖЕ 23:59 (аудит 2026-10-03). «24:00» у записи не
+  // бывает (форма записи и `addMinutesHM` останавливаются на 23:59), а
+  // перенос в последний слот дня и растяжка до края писали «24:00»: длина
+  // такой записи считалась нулём, «Перенести»/«Копировать» брали окно не той
+  // длины, и сегодняшняя неоплаченная запись не становилась долгом.
+  const endHM = (min: number) => minToHM(Math.min(min, 23 * 60 + 59));
+  // …и обратно: конец 23:59 в арифметике — это конец суток (аудит 03.10).
+  // Иначе длительность выходила на минуту короче: запись 22:00–23:59 при
+  // каждом переносе вниз становилась 22:01–23:59, 22:02–23:59…, а растяжка
+  // нижнего края на шаг вверх давала 23:44 вместо 23:45.
+  const spanEnd = endMin >= 23 * 60 + 59 ? 24 * 60 : endMin;
+  /** Начало, которое запись может занять: в окне, но не теснее, чем стоит. */
+  const clampStart = (newStart: number, duration: number) => {
+    const lo = Math.min(startMin, winStart);
+    const hi = Math.max(spanEnd, winEnd) - duration;
+    return Math.max(lo, Math.min(hi, newStart));
+  };
+
   const commit = (translationY: number, dayDelta = 0) => {
     if (!onReschedule) {
       ty.value = withSpring(0);
       tx.value = withSpring(0);
       return;
     }
-    const duration = Math.max(15, endMin - startMin);
+    const duration = Math.max(15, spanEnd - startMin);
     // Base the move on the UNCLAMPED startMin (like moveBy below), not on
     // the clamped visual top: a block clipped by the visible window
     // (e.g. 06:30 with startHour=7) must keep its real start, not get
@@ -308,12 +345,9 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     const step = dragStep;
     const deltaMin =
       Math.round(((translationY / hourH) * 60) / step) * step;
-    let newStart = startMin + deltaMin;
     // Clamp into the window, but never TIGHTER than where the block
     // already sits — a clipped block may legitimately stay clipped.
-    const lo = Math.min(startMin, winStart);
-    const hi = Math.max(endMin, winEnd) - duration;
-    newStart = Math.max(lo, Math.min(hi, newStart));
+    const newStart = clampStart(startMin + deltaMin, duration);
     if (newStart === startMin && dayDelta === 0) {
       // Некуда двигать — мягко возвращаем карточку на место.
       ty.value = withSpring(0);
@@ -323,7 +357,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     onReschedule(
       apt,
       minToHM(newStart),
-      minToHM(newStart + duration),
+      endHM(newStart + duration),
       dayDelta === 0 ? undefined : shiftYmd(apt.date, dayDelta),
     );
     // Смещение сбросит приземление — когда блок встанет на новый слот.
@@ -332,13 +366,10 @@ export const AppointmentBlock = memo(function AppointmentBlock({
 
   const moveBy = (deltaMin: number) => {
     if (!onReschedule) return;
-    const duration = Math.max(15, endMin - startMin);
-    let newStart = startMin + deltaMin;
-    const lo = Math.min(startMin, winStart);
-    const hi = Math.max(endMin, winEnd) - duration;
-    newStart = Math.max(lo, Math.min(hi, newStart));
+    const duration = Math.max(15, spanEnd - startMin);
+    const newStart = clampStart(startMin + deltaMin, duration);
     if (newStart === startMin) return;
-    onReschedule(apt, minToHM(newStart), minToHM(newStart + duration));
+    onReschedule(apt, minToHM(newStart), endHM(newStart + duration));
   };
 
   // ═══ РАСТЯЖКА ЗА КРАЙ (владелец 2026-09-24: «запись растягивать по
@@ -353,13 +384,13 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   const canResize = editing && !!onReschedule && !cancelled && cardH >= 24;
   const edgeH = Math.min(EDGE_H, cardH / 3);
   const resizeStep = Math.max(15, Math.min(60, stepMinutes));
-  const durMin = Math.max(resizeStep, endMin - startMin);
+  const durMin = Math.max(resizeStep, spanEnd - startMin);
   const maxShrink = Math.floor((durMin - resizeStep) / resizeStep);
   const onResizeSnap = (edge: "top" | "bottom", steps: number) => {
     haptics.tap();
-    const s0 = edge === "top" ? startMin + steps * resizeStep : startMin;
-    const e0 = edge === "bottom" ? endMin + steps * resizeStep : endMin;
-    setLiveStart(`${minToHM(s0)}–${minToHM(e0)}`);
+    const s0 = Math.max(0, edge === "top" ? startMin + steps * resizeStep : startMin);
+    const e0 = edge === "bottom" ? spanEnd + steps * resizeStep : spanEnd;
+    setLiveStart(`${minToHM(s0)}–${endHM(e0)}`);
   };
   const commitResize = (edge: "top" | "bottom", steps: number) => {
     setLiveStart(null);
@@ -371,13 +402,16 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       reset();
       return;
     }
-    const ns = edge === "top" ? startMin + steps * resizeStep : startMin;
-    const ne = edge === "bottom" ? endMin + steps * resizeStep : endMin;
-    if (ns < 0 || ne > 24 * 60 || ne - ns < resizeStep) {
+    // За край суток — до края, а не откат (повторный аудит 03.10): подпись
+    // во время растяжки уже показывала «–23:59» / «00:00», а на отпускании
+    // запись молча прыгала обратно. Перенос клампится так же (`clampStart`).
+    const ns = Math.max(0, edge === "top" ? startMin + steps * resizeStep : startMin);
+    const ne = Math.min(24 * 60, edge === "bottom" ? spanEnd + steps * resizeStep : spanEnd);
+    if ((ns === startMin && ne === spanEnd) || ne - ns < resizeStep) {
       reset();
       return;
     }
-    onReschedule(apt, minToHM(ns), minToHM(ne));
+    onReschedule(apt, minToHM(ns), endHM(ne));
     // Края сбросит приземление — когда блок встанет в новую высоту.
     awaitLanding();
   };
@@ -437,8 +471,14 @@ export const AppointmentBlock = memo(function AppointmentBlock({
       // КРАЙ ЭКРАНА = СОСЕДНЯЯ НЕДЕЛЯ: дальше воскресенья тянуть некуда,
       // поэтому палец у правого края ставит запись на день ПОСЛЕ последней
       // видимой колонки (у левого, за рельсом времени, — на день до первой).
-      if (dayW && e.absoluteX > screenW - EDGE_PAGE) days += 1;
-      else if (dayW && e.absoluteX < RAIL_W + EDGE_PAGE / 2) days -= 1;
+      //
+      // …НО ТОЛЬКО КОГДА ПАЛЕЦ ТУДА ПРИВЕЛИ (аудит 2026-10-03). Край считался
+      // по месту пальца, а не по движению: запись воскресенья, взятая в
+      // правых 28pt (больше половины узкой колонки), уезжала на понедельник
+      // следующей недели при движении строго вниз.
+      const edgeMove = dayW ? Math.max(12, dayW * 0.3) : 0;
+      if (dayW && e.translationX > edgeMove && e.absoluteX > screenW - EDGE_PAGE) days += 1;
+      else if (dayW && e.translationX < -edgeMove && e.absoluteX < RAIL_W + EDGE_PAGE / 2) days -= 1;
       tx.value = days * (dayW ?? 0);
       if (steps !== snapSteps.value || days !== daySteps.value) {
         snapSteps.value = steps;
@@ -446,7 +486,20 @@ export const AppointmentBlock = memo(function AppointmentBlock({
         runOnJS(onSnap)(steps, days);
       }
     })
-    .onEnd((e) => {
+    .onEnd((e, success) => {
+      // ЖЕСТ ОТМЕНИЛА СИСТЕМА (звонок, баннер, системный свайп) — это не
+      // «отпустил»: RNGH зовёт onEnd с success=false, и перенос с последним
+      // смещением уходил в базу сам (аудит 2026-10-03). Карточка — домой.
+      if (!success) {
+        edgeMode.value = 0;
+        ty.value = withSpring(0);
+        tx.value = withSpring(0);
+        topPx.value = withSpring(0);
+        botPx.value = withSpring(0);
+        runOnJS(clearLive)();
+        active.value = withSpring(0);
+        return;
+      }
       if (edgeMode.value !== 0) {
         runOnJS(commitResize)(edgeMode.value === 1 ? "top" : "bottom", rSteps.value);
         edgeMode.value = 0;
@@ -566,7 +619,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
         accessibilityRole="button"
         // Адрес читается ВСЕГДА: озвучке недоступны ни ширина блока, ни его
         // высота, и гейты вёрстки для неё не существуют.
-        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}, ${STATUS_LABELS[apt.status]}${overdue ? ", не закрыта" : ""}${address ? `, ${address}` : ""}`}
+        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}${cancelled ? ", отменена" : ""}${overdue ? ", не оплачена" : ""}${address ? `, ${address}` : ""}`}
         accessibilityActions={
           onReschedule
             ? [
@@ -618,6 +671,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               // просрочки съедал бы строку текста.
               paddingHorizontal: pad - (bw - 1),
               paddingVertical: 2 - (bw - 1),
+              paddingTop: 2 - (bw - 1) + topHandle,
               borderRadius: t.radius.card,
               borderCurve: "continuous",
               overflow: "hidden",
@@ -714,7 +768,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               девятка, которой неделя набиралась раньше, была нечитаема.
               Лестница только ДОПИСЫВАЕТСЯ вниз и никогда не переставляется:
               при щипке глаз не должен терять якорь. */}
-          {textW >= 24
+          {textW >= 24 && nameLineW >= 24
             ? nameParts.map((part, i) => (
                 <Text
                   key={i}
@@ -742,9 +796,15 @@ export const AppointmentBlock = memo(function AppointmentBlock({
                   // и 11pt мало, режется по краю, как раньше: «Конс» говорит
                   // больше, чем «Ко…».
                   ellipsizeMode={
-                    textW >= 96 || nameShrinkFits(part, textW) ? "tail" : "clip"
+                    (i === 0 ? nameLineW : textW) >= 96 ||
+                    nameShrinkFits(part, i === 0 ? nameLineW : textW)
+                      ? "tail"
+                      : "clip"
                   }
-                  adjustsFontSizeToFit={textW < 96 && nameShrinkFits(part, textW)}
+                  adjustsFontSizeToFit={
+                    (i === 0 ? nameLineW : textW) < 96 &&
+                    nameShrinkFits(part, i === 0 ? nameLineW : textW)
+                  }
                   minimumFontScale={NAME_MIN_SCALE}
                   maxFontSizeMultiplier={1.3}
                 >

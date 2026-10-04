@@ -108,3 +108,11 @@ describe("команда чипа в дороге назад (30.09)", () => {
     }
   });
 });
+
+describe("дорога назад в чек (04.10)", () => {
+  test("receipt:<uuid> ведёт на страницу чека; мусор — никуда", () => {
+    const id = "26190ac1-11a5-4672-98c8-c99ddf222006";
+    assert.equal(resolveReturnTo(`receipt:${id}`), `/documents/receipt/${id}`);
+    assert.equal(resolveReturnTo("receipt:../x"), null);
+  });
+});

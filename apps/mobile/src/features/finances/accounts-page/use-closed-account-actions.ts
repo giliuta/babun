@@ -1,10 +1,7 @@
 import { moneySign } from "@babun/shared/common/utils/money";
 import { isOnline } from "@babun/shared/sync";
 import { useToast } from "@/components/ui/Toast";
-import { confirmThen } from "@/lib/confirm";
-import { deleteAccountAlert } from "../account-alerts";
 import {
-  useDeleteAccount,
   useReopenAccount,
   useSoftCloseAccount,
   type AccountWithBalance,
@@ -13,13 +10,12 @@ import {
 // ЗАКРЫТЫЙ СЧЁТ — В ТОМ ЖЕ СПИСКЕ, ВНИЗУ СВОЕЙ КОМАНДЫ (владелец 2026-09-29:
 // «убери вкладку „Закрытые счета“»). Отдельной страницы больше нет: закрытый
 // счёт стоит серым под открытыми, как скрытая категория, и возвращается
-// левой кромкой «Открыть», а пустой стирается правой. Действия — отсюда,
-// тексты и тосты прежней страницы без изменений.
+// левой кромкой «Открыть». Правая кромка — «Удалить» в «Удалённые счета», как
+// у открытого (`useHideAccount().remove`).
 export function useClosedAccountActions() {
   const toast = useToast();
   const reopen = useReopenAccount();
   const close = useSoftCloseAccount();
-  const remove = useDeleteAccount();
 
   // ОТКРЫТИЕ ОБРАТИМО — значит тостом с «Отменить», а не вопросом до
   // действия (тот же приём, что у перевода и архива клиентов).
@@ -39,7 +35,7 @@ export function useClosedAccountActions() {
                 onPress: () =>
                   close.mutate({ id: account.id }, {
                     onError: (e) =>
-                      toast(`Не удалось закрыть счёт: ${e.message}`, "error"),
+                      toast(`Не удалось скрыть счёт: ${e.message}`, "error"),
                   }),
               },
         ),
@@ -53,26 +49,5 @@ export function useClosedAccountActions() {
     });
   };
 
-  // СТЕРЕТЬ — ТОЛЬКО ЗАКРЫТЫЙ И ТОЛЬКО ПУСТОЙ (владелец 2026-09-23: «добавить
-  // в архив и потом удалить»). Вопрос обязателен: удаление безвозвратно.
-  const erase = (account: AccountWithBalance) => {
-    const text = deleteAccountAlert(account.name, account.balance);
-    confirmThen(
-      text.title,
-      { message: text.message, confirmLabel: text.confirm, destructive: true },
-      () =>
-        remove.mutateAsync(account.id).then(
-          () => toast(`Счёт «${account.name}» удалён`),
-          (e: unknown) =>
-            toast(
-              isOnline()
-                ? `Не удалось удалить счёт: ${e instanceof Error ? e.message : String(e)}`
-                : "Без сети счёт не удалить — счета живут на сервере.",
-              "error",
-            ),
-        ),
-    );
-  };
-
-  return { openAgain, erase };
+  return { openAgain };
 }

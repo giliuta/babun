@@ -33,9 +33,10 @@ import {
   toggleTeam,
   type MasterDraft,
 } from "./master-draft";
-import { draftTeamBrief } from "../rights-ui/team-sentence";
 import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, companyAreasOf } from "./rights-rows";
+import { useDraftTeamAccess } from "./draft-team-access";
+import { useStepAllowed, useTeamsAllowed } from "./use-partner-manager";
 
 // КАРТОЧКА МАСТЕРА — ОДНА НА ТРИ СЛУЧАЯ (владелец 15.09: «„Добавить мастера"
 // должен сразу открывать полную страницу мастера, как добавление клиента»).
@@ -81,6 +82,11 @@ function MasterDraftCard({
   const blocksQuery = useAccessBlocks({ fresh: true });
   const blocks = blocksQuery.data;
   const create = useCreateMasterInvitation();
+  // ДИРЕКТОР (04.10): зовёт только в свои команды и даёт не выше своих прав —
+  // заготовка новой команды («Видит» в шести правах) урезается по его правам,
+  // иначе сервер отказал бы всему приглашению.
+  const allows = useStepAllowed();
+  const teamsAllowed = useTeamsAllowed();
   const [calendarsOpen, setCalendarsOpen] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
   // Адрес, который отказал сервер: красный, пока его не поправили.
@@ -143,10 +149,15 @@ function MasterDraftCard({
     router.push(
       `/cabinet/people/new/rights?area=${area}&team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "company" })}` as Href,
     );
-  const openCalendarRights = (id: string) =>
-    router.push(
-      `/cabinet/people/new/rights?team=${encodeURIComponent(teamId ?? "")}&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
-    );
+  // Лента команд и «Доступ» — как у сотрудника (01.10).
+  const access = useDraftTeamAccess({
+    blocks,
+    draft,
+    teams,
+    initialTeam: teamId,
+    rightsHref: `/cabinet/people/new/rights?team=${encodeURIComponent(teamId ?? "")}`,
+    onAdd: () => setCalendarsOpen(true),
+  });
 
   // СЕРАЯ КНОПКА НЕ МОЛЧИТ И НЕ ОБЪЯСНЯЕТ СЛОВАМИ: тап отзывается вибрацией и
   // ведёт к первому, чего не хватает, — в порядке полей на странице.
@@ -166,7 +177,7 @@ function MasterDraftCard({
       setCalendarsOpen(true);
       return;
     }
-    const target = first === "name" ? nameRef : first === "email" ? emailRef : phoneRef;
+    const target = first === "email" ? emailRef : phoneRef;
     target.current?.focus();
   };
 
@@ -178,7 +189,12 @@ function MasterDraftCard({
     }
     // Без реестра блоков права ушли бы пустыми — кнопка до него серая.
     if (!blocks || create.isPending) return;
-    create.mutate({ ...invitationRequest(draft, blocks, phoneToSave), masterId }, {
+    const request = invitationRequest(draft, blocks, phoneToSave);
+    const access = request.access.filter((change) => {
+      const block = blocks.find((each) => each.key === change.block);
+      return !block || allows(block, change.team_id, change.level);
+    });
+    create.mutate({ ...request, access, masterId }, {
       onSuccess: (saved) => {
         haptics.success();
         toast("Приглашение отправлено");
@@ -204,7 +220,7 @@ function MasterDraftCard({
     <>
       <Stack.Screen options={{ gestureEnabled: !dirty && !create.isPending }} />
       <MasterCardView
-        title={masterId ? "Пригласить в CRM" : "Новый сотрудник"}
+        title={masterId ? "Пригласить в CRM" : "Новый партнёр"}
         subtitle={masterId ? draft.name.trim() || undefined : undefined}
         onBack={leave}
         identity={draft}
@@ -212,7 +228,9 @@ function MasterDraftCard({
         editable
         cardFieldsEditable={!masterId}
         emailEditable
-        // По карточке имя уже есть — курсор сразу в почту.
+        // Новый партнёр — только почта (01.10); по старой карточке без
+        // аккаунта имя уже есть, блок прежний.
+        emailOnly={!masterId}
         autoFocusName={!masterId}
         emailState={emailState}
         refs={{ name: nameRef, email: emailRef, phone: phoneRef }}
@@ -240,14 +258,11 @@ function MasterDraftCard({
         liveAreas={blocks ? companyAreasOf(blocks) : []}
         areaLevels={blocks ? areaLevelsOf(blocks, draft) : null}
         onOpenArea={openArea}
-        // Команды нового сотрудника выбираются здесь (29.09: сотрудники живут
-        // в Кабинете, команды из адреса больше нет): «Добавить в команду» и
-        // свайп «Убрать», как у сотрудника.
-        showCalendars={!!blocks}
+        // Команды — лентой, права выбранной — «Доступом» разделами, как у
+        // сотрудника (01.10). «Добавить» справа от ленты — шторка команд.
         onOpenCalendars={() => setCalendarsOpen(true)}
-        onDetachCalendar={(id) => updateMasterDraft((currentDraft) => toggleTeam(currentDraft, id, true))}
-        teamLine={blocks ? (id) => draftTeamBrief(blocks, draft, id) : undefined}
-        onOpenCalendarRights={openCalendarRights}
+        teamChips={blocks ? access.teamChips : undefined}
+        teamRights={access.teamRights}
         footer={
           // Серая кнопка — чего-то не хватает или реестр прав не пришёл — сама
           // тапов не ловит: их ловит обёртка, чтобы отозваться и повести к
@@ -266,9 +281,13 @@ function MasterDraftCard({
       />
       <CalendarPickerSheet
         visible={calendarsOpen}
-        teams={teams}
+        teams={teamsAllowed ? teams.filter((team) => teamsAllowed.has(team.id)) : teams}
         selected={draft.teamIds}
-        onToggle={(id) => updateMasterDraft((currentDraft) => toggleTeam(currentDraft, id, true))}
+        onToggle={(id) => {
+          // Добавленная команда сразу выбрана в ленте: её права — здесь же.
+          if (!draft.teamIds.includes(id)) access.select(id);
+          updateMasterDraft((currentDraft) => toggleTeam(currentDraft, id, true));
+        }}
         onClose={() => setCalendarsOpen(false)}
       />
     </>

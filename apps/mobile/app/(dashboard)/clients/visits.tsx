@@ -1,28 +1,29 @@
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useInClientsTab } from "@/features/clients/reference-href";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { STATUS_LABELS, getDebtAmount } from "@babun/shared/local/appointments";
+import { getPaidAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { Spinner } from "@/components/ui/Spinner";
-import { NavRow, RowCaption, RowGroup } from "@/components/ui/card-rows";
-import { formatShortDateRu, visitsWord } from "@/features/clients/format";
+import { RowCaption } from "@/components/ui/card-rows";
+import { SelectList } from "@/components/ui/select-rows";
+import { useGuardedBookingNav } from "@/features/clients/card-booking";
+import { GradientButton } from "@/components/ui/GradientButton";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
+import { useClientsCapabilities, useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
+import { usePlanAllows } from "@/features/settings/tenant";
+import { visitsWord } from "@/features/clients/format";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { todayYMD } from "@/features/clients/filter";
 import { unpaidVisits } from "@/features/clients/unpaid-visits";
 import { useClient } from "@/features/clients/queries";
-import { buildTimeline, type TimelineEvent } from "@/features/clients/timeline";
-import {
-  archivedVisitTag,
-  hasManyLiveTeams,
-  liveVisitTeam,
-  visitRowValue,
-} from "@/features/clients/archived-visit";
+import { VisitDayHeader, VisitRow } from "@/features/clients/VisitRow";
 import { useTeams } from "@/features/reference/queries";
-import { useAllServices } from "@/features/services/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
@@ -40,14 +41,16 @@ import { useCardAccess } from "@/features/clients/use-card-access";
 // в историю, а второй «назад» — к клиенту. Раньше тап уводил в таб
 // «Календарь», и возврат выбрасывал человека туда же.
 //
-// Группировка по годам: у постоянного клиента за три года набирается полсотни
-// визитов, и без года «12 мар» ничего не значит. Внутри года — от свежих к
-// старым. Будущие записи стоят отдельной группой сверху: это не история, это
-// план, и путать их нельзя.
+// ОДНИМ СПИСКОМ, ОТДЕЛЬНЫМИ ПЛАШКАМИ (владелец 03.10: «блоков „Впереди“ и
+// „2026“ не надо — полностью поэтапно вниз списком»; «полноценные блоки,
+// отдельные друг от друга, красивые, компактные» — как список тегов).
+// Плашка — `VisitRow` (наш `SelectRow`) в `SelectList`.
+// Услуги не пишутся; заметки клиента — в блоке «Заметка» карточки.
+//
+// ВНИЗУ — «ЗАПИСАТЬ КЛИЕНТА» (владелец 03.10): та же дверь, что «Записать» в
+// «⋯» карточки, с тем же правом «Новые записи».
 
-function yearOf(date: string): string {
-  return date.slice(0, 4);
-}
+// Строка — `VisitRow`: та же, что последняя запись на карточке.
 
 // Экран вкладки «Клиенты»: компанию называет источник, а не роль
 // (STORY-082).
@@ -61,59 +64,34 @@ export default function ClientVisitsScreenRoute() {
 
 function ClientVisitsScreen() {
   const t = useThemeColors();
+  const router = useRouter();
   // `unpaid=1` — вход из сводки по «Долг €…»: только неоплаченные записи.
   const { clientId, unpaid } = useLocalSearchParams<{
     clientId: string;
     unpaid?: string;
   }>();
   const { data: client } = useClient(clientId ?? "");
-  // С 30.09 история открыта и сотруднику — по праву «История записей» этого
+  // С 30.09 история открыта и сотруднику — по праву «История» этого
   // клиента; суммы и долг — по праву «Долг и деньги» (`card-access.ts`).
   const access = useCardAccess(client, false);
   const showMoney = access.money.show;
   const unpaidOnly = unpaid === "1" && showMoney;
-  const { data: appointments = [], isLoading } = useClientAppointments(
+  const { data: appointments = [], isLoading, historyOnly } = useClientAppointments(
     clientId ?? "",
   );
-  // Прошлые визиты — чтение: имя убранной услуги обязано пережить её.
-  const { data: services = [] } = useAllServices();
-
-  const serviceName = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const s of services) m.set(s.id, s.name);
-    return m;
-  }, [services]);
-  // Справочник с архивом — только чтобы назвать команду архивного визита.
-  // Ключ общий с календарём: сети это не добавляет.
+  // Справочник с архивом — назвать команду и архивного визита. Ключ общий с
+  // календарём: сети это не добавляет.
   const { data: allTeams = [] } = useTeams({ includeInactive: true });
   const teamsById = useMemo(
     () => new Map(allTeams.map((team) => [team.id, team])),
     [allTeams],
   );
-  // КТО ОБСЛУЖИВАЛ — ВИДНО В ИСТОРИИ (владелец 30.09): при нескольких командах
-  // дата визита идёт с командой, «6 авг · Команда 3»; время — в самой записи.
-  const manyTeams = hasManyLiveTeams(teamsById);
-  const visitLabel = (date: string, time: string | null | undefined, teamId: string | null | undefined) => {
-    const team = liveVisitTeam(teamId, teamsById, manyTeams);
-    return `${formatShortDateRu(date)}${team ? ` · ${team}` : time ? ` · ${time}` : ""}`;
-  };
-
-  const sorted = useMemo(
-    () =>
-      [...appointments].sort((a, b) =>
-        `${b.date}${b.time_start ?? ""}`.localeCompare(
-          `${a.date}${a.time_start ?? ""}`,
-        ),
-      ),
-    [appointments],
-  );
 
   // Локальная дата, а не UTC: `toISOString()` ночью на Кипре отдавал
-  // вчерашний день, и сегодняшние визиты уезжали в «Впереди».
+  // вчерашний день.
   const today = todayYMD();
-  // НЕОПЛАЧЕННЫЕ — правилом долга из сводки (`unpaid-visits.ts`), а не
-  // итогом ниже: тот складывает только выполненные, а «Долг» в сводке — ещё
-  // и прошедшие незакрытые. Тапнули по €240 — список обязан дать €240.
+  // НЕОПЛАЧЕННЫЕ — правилом долга из сводки (`unpaid-visits.ts`): тапнули по
+  // €240 — список обязан дать €240.
   const unpaidList = useMemo(
     () => unpaidVisits(appointments, today),
     [appointments, today],
@@ -122,90 +100,84 @@ function ClientVisitsScreen() {
     () => new Set(unpaidList.list.map((a) => a.id)),
     [unpaidList],
   );
-  // Будущая запись долгом не бывает — в фильтре группы «Впереди» нет.
-  const upcoming = useMemo(
+
+  // От свежих к старым, будущие — сверху тем же списком.
+  const rows = useMemo(
     () =>
-      unpaidOnly
-        ? []
-        : sorted.filter(
-            (a) =>
-              a.date >= today && a.status !== "completed" && a.status !== "cancelled",
-          ),
-    [unpaidOnly, sorted, today],
+      [...appointments]
+        .filter((a) => !a.kind || a.kind === "work")
+        .filter((a) => !unpaidOnly || unpaidIds.has(a.id))
+        .sort((a, b) =>
+          `${b.date}${b.time_start ?? ""}`.localeCompare(`${a.date}${a.time_start ?? ""}`),
+        ),
+    [appointments, unpaidOnly, unpaidIds],
   );
-  const pastAppts = sorted.filter((a) => !upcoming.includes(a));
 
-  const done = pastAppts.filter((a) => a.status === "completed");
-  const spent = done.reduce(
-    (n, a) => n + Math.max(0, (a.total_amount ?? 0) - getDebtAmount(a)),
-    0,
+  // Записи одного дня — под одним заголовком, дни — от свежих к старым.
+  const days = useMemo(() => {
+    const byDay = new Map<string, Appointment[]>();
+    for (const a of rows) byDay.set(a.date, [...(byDay.get(a.date) ?? []), a]);
+    return [...byDay.entries()];
+  }, [rows]);
+
+  // Итог сверху — то, ради чего историю чаще всего и открывают.
+  // Визит — прошедшая неотменённая работа: статуса «Выполнена» больше нет
+  // (владелец 03.10).
+  const done = appointments.filter(
+    (a) => a.status !== "cancelled" && (a.kind ?? "work") === "work" && a.date <= today,
   );
-  const debt = done.reduce((n, a) => n + getDebtAmount(a), 0);
+  // «Заплачено» — деньги, полученные по записям (аванс плюс оплаты), а не
+  // сумма «выполненных» минус долг.
+  const spent = appointments
+    .filter((a) => a.status !== "cancelled" && (a.kind ?? "work") === "work")
+    .reduce((n, a) => n + Math.max(0, getPaidAmount(a)), 0);
+  const caption = unpaidOnly
+    ? unpaidList.list.length > 0
+      ? `${formatCountRu(unpaidList.list.length, ["запись", "записи", "записей"])} · долг ${formatEUR(unpaidList.total)}`
+      : "Неоплаченных записей нет."
+    : done.length > 0
+      ? showMoney
+        ? `${done.length} ${visitsWord(done.length)} · заплачено ${formatEUR(spent)}${
+            unpaidList.total > 0 ? ` · долг ${formatEUR(unpaidList.total)}` : ""
+          }`
+        : `${done.length} ${visitsWord(done.length)}`
+      : null;
 
-  // ОДНА НИТЬ ВМЕСТО ТРЁХ РАЗДЕЛОВ (2026-08-07). Раньше «что было» жило в
-  // трёх местах: визиты здесь, заметки блоком на карточке, документы своей
-  // страницей — и перед звонком картину собирали вручную, переключая экраны.
-  // «Звонила вчера, просила перенести» и «приезжали 30 мая на €120» — это
-  // одна история клиента, а не две.
-  const past = useMemo(() => {
-    const upcomingIds = new Set(upcoming.map((a) => a.id));
-    return buildTimeline(
-      client ?? null,
-      appointments.filter((a) => !upcomingIds.has(a.id)),
-      (id) => serviceName.get(id) ?? null,
-    );
-  }, [client, appointments, upcoming, serviceName]);
+  // «ЗАПИСАТЬ КЛИЕНТА» — тем же правом, что «Записать» в «⋯» карточки:
+  // «Новые записи» в команде записи; партнёру — ещё и «Меню клиента».
+  const guardedBook = useGuardedBookingNav();
+  const calendarActionsFor = useCalendarActionsReader();
+  const caps = useClientsCapabilities();
+  const scope = useClientsScopeOrNull();
+  const bookInPlan = usePlanAllows("book-clients");
+  const bookTeam = client?.team_id ?? rows.find((a) => a.team_id)?.team_id ?? null;
+  // Нет права записи — нет и кнопки (владелец 03.10: «если нет разрешения
+  // на запись — этого и не будет»; так же «Добавить файл» и «Добавить
+  // объект»). Серой она остаётся только владельцу, когда запись закрыта
+  // тарифом.
+  const bookRight =
+    !!client &&
+    caps.book &&
+    (scope?.kind === "member" ? clientBlockLevel(client, "clients.menu") === "write" : true) &&
+    calendarActionsFor(bookTeam).create;
+  const canBook = bookRight && (scope?.kind === "member" || bookInPlan);
 
-  const byYear = useMemo(() => {
-    const groups = new Map<string, TimelineEvent[]>();
-    for (const e of past) {
-      // В фильтре — только записи с долгом: заметки и напоминания не долг.
-      if (unpaidOnly && !(e.apptId && unpaidIds.has(e.apptId))) continue;
-      const y = yearOf(e.date);
-      groups.set(y, [...(groups.get(y) ?? []), e]);
-    }
-    return [...groups.entries()];
-  }, [past, unpaidOnly, unpaidIds]);
-
-  // Запись открывается ПОВЕРХ истории, а не через таб «Календарь».
-  // Владелец 2026-07-26: «нажимаю на запись — оно открывает эту запись; если
-  // нажимаю назад, возвращает в историю записей; ещё раз назад — в клиента.
-  // Проблема в том, что когда захожу в запись и возвращаюсь, оно
-  // перебрасывает на календарь — она не должна так делать».
-  // Раньше тап уводил в другой ТАБ: история выпадала из стека, и «назад»
-  // возвращал не туда, откуда пришли.
-  const router = useRouter();
+  // Запись открывается ПОВЕРХ истории, а не через таб «Календарь»
+  // (владелец 2026-07-26): «назад» — сюда, ещё раз «назад» — в клиента.
   const open = (a: Appointment) => {
     haptics.tap();
     router.push(`/book?appointmentId=${a.id}` as Href);
   };
 
-  /** Значение строки: услуги, а если их нет — статус. Деньги отдельным
-   *  хвостом, чтобы взгляд не искал их среди слов. */
-  const visitValue = (a: Appointment) => {
-    const names = (a.service_ids ?? [])
-      .map((id) => serviceName.get(id))
-      .filter(Boolean)
-      .join(", ");
-    return names || STATUS_LABELS[a.status] || "Визит";
-  };
 
-  const money = (a: Appointment) => {
-    if (!showMoney) return a.status === "cancelled" ? { text: "отменён", color: t.faint } : null;
-    const owed = getDebtAmount(a);
-    if (owed > 0) return { text: `долг ${formatEUR(owed)}`, color: t.warning };
-    if (a.status === "cancelled")
-      return { text: "отменён", color: t.faint };
-    if ((a.total_amount ?? 0) > 0)
-      return { text: formatEUR(a.total_amount), color: t.sub };
-    return null;
-  };
-
+  // Во вкладке нижний край держит таб-бар; поверх записи — свой.
+  const inTab = useInClientsTab();
   return (
-    <Screen>
+    // Нижнюю зону держит таб-бар — как у списка клиентов: иначе кнопка
+    // внизу стояла на ~34pt выше, чем на соседних экранах (владелец 03.10).
+    <Screen edges={inTab ? ["top"] : undefined}>
       {/* ФИЛЬТР НАЗВАН В ШАПКЕ и снимается там же словом «Все» — как разрез
-          ленты в «Финансах» (PanelHeader). В содержимом кнопок нет: снятый
-          фильтр возвращает ту же страницу целиком, без второго захода. */}
+          ленты в «Финансах» (PanelHeader). */}
       <ScreenHeader
         title={unpaidOnly ? "Неоплаченные" : "История"}
         subtitle={client?.full_name || undefined}
@@ -236,108 +208,62 @@ function ClientVisitsScreen() {
           ) : undefined
         }
       />
-      {!access.history.show ? null : (
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-        {isLoading ? (
-          <View className="items-center py-10">
-            <Spinner size={26} label="Загрузка истории записей" />
-          </View>
-        ) : unpaidOnly ? (
-          // Итог фильтра — тем же числом, что «Долг» в сводке.
-          <RowCaption
-            text={
-              unpaidList.list.length > 0
-                ? `${formatCountRu(unpaidList.list.length, ["запись", "записи", "записей"])} · долг ${formatEUR(unpaidList.total)}`
-                : "Неоплаченных записей нет."
-            }
-            tone={unpaidList.list.length > 0 ? "warning" : "quiet"}
-          />
-        ) : sorted.length === 0 && past.length === 0 ? (
-          <RowCaption text="Пока ничего не было." />
-        ) : null}
-
-        {/* Итог сверху — то, ради чего историю чаще всего и открывают. */}
-        {!unpaidOnly && done.length > 0 ? (
-          <RowCaption
-            text={
-              showMoney
-                ? `${done.length} ${visitsWord(done.length)} · заплачено ${formatEUR(spent)}${
-                    debt > 0 ? ` · долг ${formatEUR(debt)}` : ""
-                  }`
-                : `${done.length} ${visitsWord(done.length)}`
-            }
-            tone={showMoney && debt > 0 ? "warning" : "quiet"}
-          />
-        ) : null}
-
-        {upcoming.length > 0 ? (
-          <RowGroup title="Впереди">
-            {upcoming.map((a, i) => {
-              const m = money(a);
-              return (
-                <NavRow
-                  key={a.id}
-                  label={visitLabel(a.date, a.time_start, a.team_id)}
-                  value={visitRowValue({
-                    tag: archivedVisitTag(a.team_id, teamsById),
-                    details: [visitValue(a)],
-                    money: m?.text,
-                  })}
-                  valueColor={m?.color}
-                  separated={i > 0}
-                  onPress={() => open(a)}
-                />
-              );
-            })}
-          </RowGroup>
-        ) : null}
-
-        {byYear.map(([year, list]) => (
-          <RowGroup key={year} title={year}>
-            {list.map((e, i) => {
-              const appt = e.apptId
-                ? appointments.find((a) => a.id === e.apptId)
-                : undefined;
-              const m = appt ? money(appt) : null;
-              // Заметка и напоминание — та же строка, но без шеврона: внутрь
-              // них проваливаться некуда, они целиком видны здесь.
-              return (
-                <NavRow
-                  key={e.id}
-                  label={visitLabel(e.date, e.time, appt?.team_id)}
-                  // Значение берём из СОБЫТИЯ ЛЕНТЫ, а не пересобираем из
-                  // записи: `buildTimeline` уже разобрал услуги (новый
-                  // массив `services` + легаси `service_ids`) и подобрал
-                  // комментарий визита. Пересборка через `visitValue`
-                  // выбрасывала и то и другое — «звонила, просила перенести»
-                  // не появлялось в истории никогда, ради чего ленту и
-                  // затевали.
-                  value={visitRowValue({
-                    // Визит архивного календаря называет свою команду
-                    // (`archived-visit.ts`) — открывается он только для
-                    // просмотра, и подпись объясняет почему.
-                    tag: appt ? archivedVisitTag(appt.team_id, teamsById) : null,
-                    details: [e.title, e.subtitle],
-                    money: appt ? m?.text : null,
-                  })}
-                  valueColor={
-                    appt ? m?.color : e.kind === "reminder" ? t.accent : t.sub
-                  }
-                  dimmed={e.cancelled}
-                  separated={i > 0}
-                  onPress={appt ? () => open(appt) : undefined}
-                />
-              );
-            })}
-          </RowGroup>
-        ))}
-
-        <View style={{ height: 8 }} />
-      </ScrollView>
+      {!access.history.show ? null : isLoading ? (
+        <EmptyState state="loading" fill title="Загрузка" />
+      ) : rows.length === 0 ? (
+        <EmptyState fill title={unpaidOnly ? "Неоплаченных записей нет" : "Записей пока нет"} />
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingTop: 4, paddingBottom: 24 }}>
+          {caption ? (
+            <RowCaption
+              text={caption}
+              tone={unpaidOnly || (showMoney && unpaidList.total > 0) ? "warning" : "quiet"}
+            />
+          ) : null}
+          {/* День — заголовком над своими плашками, как в «Финансах»;
+              плашки — отдельные, с воздухом между ними, как список тегов. */}
+          {days.map(([date, list]) => (
+            <Fragment key={date}>
+              <VisitDayHeader date={date} />
+              <SelectList>
+                {list.map((a) => (
+                  <VisitRow
+                    key={a.id}
+                    appointment={a}
+                    team={a.team_id ? teamsById.get(a.team_id) : undefined}
+                    today={today}
+                    showMoney={showMoney}
+                    // Запись чужой (не открытой сейчас) компании страница
+                    // записи не прочтёт — она читает активную; такая строка —
+                    // показание, а не дверь в пустой экран (аудит 03.10).
+                    onPress={
+                      historyOnly.has(a.id) || (scope && !scope.isActive) ? undefined : () => open(a)
+                    }
+                  />
+                ))}
+              </SelectList>
+            </Fragment>
+          ))}
+        </ScrollView>
       )}
-
-      {/* Запись открывается СТРАНИЦЕЙ /book (STORY-064): назад — сюда же, в
-          историю визитов. */}
+      {/* «Записать клиента» — внизу, на месте главного действия страницы. */}
+      {client && access.history.show && bookRight ? (
+        // Тот же футер, что «Создать клиента» в списке: те же отступы,
+        // та же высота — кнопки экранов стоят на одном уровне.
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+          <GradientButton
+            label="Записать клиента"
+            disabled={!canBook}
+            onPress={() =>
+              guardedBook(client, {
+                locationId:
+                  client.locations?.find((l) => l.isPrimary)?.id ?? client.locations?.[0]?.id ?? null,
+                teamId: bookTeam,
+              })
+            }
+          />
+        </View>
+      ) : null}
     </Screen>
   );
 }

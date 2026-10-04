@@ -14,6 +14,11 @@ import {
   updateAppointment,
 } from "@babun/shared/sync/appointmentsCached";
 import { isOnline, randomUuid } from "@babun/shared/sync";
+import { NEVER_PAUSE } from "@/features/finances/accounts";
+import {
+  GoneAppointmentError,
+  StaleAppointmentError,
+} from "@babun/shared/db/repositories/appointments";
 import { markOwnWrite, OWN_WRITE_IN_FLIGHT_MS, OWN_WRITE_SETTLE_MS } from "@/lib/own-writes";
 import {
   listPhotoPaths,
@@ -38,6 +43,7 @@ import { useAccessBlocks } from "@/features/access/queries";
 import {
   memberCreateRow,
   memberPatch,
+  isOwnRecordAlreadyCreated,
   memberWriteRefusal,
 } from "@/features/appointments/member-writes";
 import { appointmentsQueryKey } from "./queries";
@@ -108,8 +114,9 @@ export function useCreateAppointment() {
   const qc = useQueryClient();
   const refusal = useMemberRefusal();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (input: Appointment) => {
-      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       if (role === "master") {
         // Квоту месяца держит серверный триггер вставки; предпроверка —
         // удобство владельца, сотруднику она не нужна. Без сети дверь
@@ -118,13 +125,16 @@ export function useCreateAppointment() {
         const { error } = await supabase.rpc("member_appointment_create", {
           p_row: memberCreateRow(stamped) as Json,
         });
-        if (error) throw refusal("createAppointment", error.message);
+        // Повтор после оборванного ответа: запись уже стоит — это успех.
+        if (error && !isOwnRecordAlreadyCreated(error)) {
+          throw refusal("createAppointment", error.message);
+        }
         // Дверь отвечает только id — он наш же; форме нужна запись целиком,
         // свежую строку довезёт перечитывание списка.
         return { ...stamped, status: "scheduled" } as Appointment;
       }
       if (role !== "owner" && role !== "dispatcher") {
-        throw new Error("Роль сотрудника ещё не подтверждена.");
+        throw new Error("Роль в аккаунте ещё не подтверждена.");
       }
       await preflightQuotaForCreate(
         supabase,
@@ -144,13 +154,20 @@ export function useCreateAppointment() {
         input.kind === "event" || input.kind === "personal"
           ? { ...input, created_by: session?.user.id ?? null }
           : input;
-      return createAppointment(
-        supabase,
-        UUID_RE.test(authoredInput.id)
-          ? authoredInput
-          : { ...authoredInput, id: randomUuid() },
-        tenantId,
-      );
+      const stampedOwn = UUID_RE.test(authoredInput.id)
+        ? authoredInput
+        : { ...authoredInput, id: randomUuid() };
+      try {
+        return await createAppointment(supabase, stampedOwn, tenantId);
+      } catch (error) {
+        // ПОВТОР ПОСЛЕ ОБОРВАННОГО ОТВЕТА — УСПЕХ, КАК У ПАРТНЁРА (03.10, на
+        // перезапуске базы). Первая вставка дошла, ответ — нет; номер записи
+        // один на жизнь формы, и второе «Создать» било в «duplicate key value
+        // violates unique constraint "appointments_pkey"» — сырой текст базы
+        // вместо закрытой формы. Строка уже стоит — это та же запись.
+        if (isOwnRecordAlreadyCreated(error as Error)) return stampedOwn;
+        throw error;
+      }
     },
     // ЗАПИСЬ ВСТАЁТ НА СЕТКУ В МОМЕНТ ТАПА (владелец 2026-09-24: «зажал,
     // выбираю — и оно должно сразу ставиться, а ставится спустя 10 секунд»).
@@ -203,12 +220,28 @@ export function useCreateAppointment() {
  *  обратно (два переноса подряд — «подлагивает»). */
 const inFlightEdits = new Map<string, number>();
 
+/** Последняя начатая правка каждой записи: следующая ждёт её (успех или
+ *  отказ — неважно), прежде чем решать, идти в сеть или в очередь. */
+const editChains = new Map<string, Promise<unknown>>();
+
+function afterPreviousEdit<T>(id: string, run: () => Promise<T>): Promise<T> {
+  const previous = editChains.get(id) ?? Promise.resolve();
+  const next = previous.then(run, run);
+  editChains.set(id, next);
+  const forget = () => {
+    if (editChains.get(id) === next) editChains.delete(id);
+  };
+  next.then(forget, forget);
+  return next;
+}
+
 function useUpdateAppointmentOptions() {
   const tenantId = useTenantId();
   const role = useCurrentRole().data;
   const qc = useQueryClient();
   const refusal = useMemberRefusal();
   return {
+    ...NEVER_PAUSE,
     mutationFn: async ({
       id,
       patch,
@@ -233,9 +266,16 @@ function useUpdateAppointmentOptions() {
         return data;
       }
       if (role !== "owner" && role !== "dispatcher") {
-        throw new Error("Роль сотрудника ещё не подтверждена.");
+        throw new Error("Роль в аккаунте ещё не подтверждена.");
       }
-      return updateAppointment(supabase, id, patch, tenantId as string);
+      // ПРАВКИ ОДНОЙ ЗАПИСИ — ПО ОЧЕРЕДИ ЖЕСТОВ (аудит 03.10). Два быстрых
+      // переноса уходили в сеть разом: при медленной связи второй ложился
+      // первым, а первый, оборвавшись, вставал в очередь и силой затирал
+      // его — в базе оставалось место ПЕРВОГО жеста. Теперь следующая правка
+      // записи ждёт предыдущую.
+      return afterPreviousEdit(id, () =>
+        updateAppointment(supabase, id, patch, tenantId as string),
+      );
     },
     // Optimistic: patch the cached list immediately so a drag-rescheduled
     // block lands on its new slot without waiting for the server round-trip.
@@ -265,11 +305,21 @@ function useUpdateAppointmentOptions() {
       if (left > 0) inFlightEdits.set(id, left);
       else inFlightEdits.delete(id);
     },
-    onError: (_err, { id }, ctx) => {
-      const prevRecord = ctx?.prevRecord;
-      if (!prevRecord) return;
+    onError: (err, { id }, ctx) => {
+      // Записи больше нет на сервере — убираем её и с экрана.
+      if (err instanceof GoneAppointmentError) {
+        qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
+          cur?.filter((a) => a.id !== id),
+        );
+        return;
+      }
+      // Запись изменилась на другом устройстве — показываем строку сервера,
+      // а не нашу прежнюю копию: по ней человек и решит, что делать дальше.
+      const restore =
+        err instanceof StaleAppointmentError && err.fresh ? err.fresh : ctx?.prevRecord;
+      if (!restore) return;
       qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
-        cur?.map((a) => (a.id === id ? prevRecord : a)),
+        cur?.map((a) => (a.id === id ? restore : a)),
       );
     },
     onSuccess: (data, { id, patch }) => {
@@ -379,12 +429,22 @@ export function useMemberCopyAppointment() {
   const qc = useQueryClient();
   const refusal = useMemberRefusal();
   return useMutation({
-    mutationFn: async (input: { sourceId: string; date: string; timeStart: string; timeEnd: string }) => {
+    ...NEVER_PAUSE,
+    mutationFn: async (input: {
+      sourceId: string;
+      date: string;
+      timeStart: string;
+      timeEnd: string;
+      /** Номер копии с телефона: повтор после потерянного ответа вернёт уже
+       *  вставшую копию, а не заведёт вторую (аудит 03.10). */
+      id: string;
+    }) => {
       const { data, error } = await supabase.rpc("member_appointment_copy", {
         p_source: input.sourceId,
         p_date: input.date,
         p_time_start: input.timeStart,
         p_time_end: input.timeEnd,
+        p_id: input.id,
       });
       if (error) throw refusal("createAppointment", error.message);
       const id = (data as { id?: unknown } | null)?.id;
@@ -405,6 +465,7 @@ export function useMemberUpdateTeam() {
   const qc = useQueryClient();
   const refusal = useMemberRefusal();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (input: { teamId: string; patch: Record<string, unknown> }) => {
       const { error } = await supabase.rpc("member_update_team", {
         p_team: input.teamId,
@@ -425,9 +486,10 @@ export function useDeleteAppointment() {
   const qc = useQueryClient();
   const refusal = useMemberRefusal();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (id: string) => {
       if (role !== "owner" && role !== "dispatcher" && role !== "master") {
-        throw new Error("Роль сотрудника ещё не подтверждена.");
+        throw new Error("Роль в аккаунте ещё не подтверждена.");
       }
       // ФАЙЛЫ ЗАПИСИ: строки appointment_photos уходят каскадом вместе с
       // записью, а блобы в хранилище — нет (2026-09-07: в бакете лежали
@@ -445,7 +507,14 @@ export function useDeleteAppointment() {
       }
       if (paths.length > 0) void removePhotoBlobs(supabase, paths);
     },
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
+      // СЕТКА ТЕРЯЕТ БЛОК ВМЕСТЕ С ТОСТОМ (повторный аудит 03.10, на
+      // симуляторе). Список ждал перечитывания: тост «Событие удалено» уже
+      // висел, а блок стоял на сетке ещё секунду-две — будто удаление не
+      // прошло. Сервер подтвердил — запись уходит из списка сразу.
+      qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
+        cur?.filter((a) => a.id !== id),
+      );
       for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });
     },
     meta: { errorHandled: true }, // call sites alert themselves
@@ -457,6 +526,7 @@ export function useDeleteAppointment() {
 export function useUndoAppointmentPayment() {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (appointmentId: string) =>
       undoAppointmentPayment(supabase, appointmentId),
     onSuccess: () => {
@@ -471,6 +541,7 @@ export function useUndoAppointmentPayment() {
 export function useResetAppointmentPayment() {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (appointmentId: string) =>
       resetAppointmentPayment(supabase, appointmentId),
     onSuccess: () => {
@@ -485,6 +556,7 @@ export function useResetAppointmentPayment() {
 export function useSetAppointmentPrepayment() {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: ({
       appointmentId,
       amount,

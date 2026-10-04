@@ -21,6 +21,8 @@
 const { getDefaultConfig } = require("expo/metro-config");
 const { withNativeWind } = require("nativewind/metro");
 const path = require("path");
+const fs = require("fs");
+const crypto = require("crypto");
 
 const projectRoot = __dirname;
 let config = withNativeWind(getDefaultConfig(projectRoot), { input: "./global.css" });
@@ -61,5 +63,15 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   }
   return (previous ?? context.resolveRequest)(context, moduleName, platform);
 };
+
+// ПЕРЕВОД ИНТЕРФЕЙСА — В КЛЮЧЕ КЭША. Babel-плагин перевода (`scripts/i18n`)
+// решает, какие строки оборачивать, по своему коду и по списку исключений.
+// Metro кэширует преобразованные файлы по их содержимому и не знает об этих
+// двух файлах — без отпечатка правка списка исключений не доходила бы до
+// бандла до `--clear`.
+const i18nInputs = ["scripts/i18n/babel-plugin.js", "../../packages/shared/src/i18n/ignore.json"];
+const i18nPrint = crypto.createHash("sha1");
+for (const file of i18nInputs) i18nPrint.update(fs.readFileSync(path.join(projectRoot, file)));
+config.cacheVersion = `${config.cacheVersion ?? ""}:i18n-${i18nPrint.digest("hex").slice(0, 12)}`;
 
 module.exports = config;

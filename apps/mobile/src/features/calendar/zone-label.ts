@@ -25,6 +25,24 @@ export function zoneGroupIndexOf(zone: string): number {
   return byCity >= 0 ? byCity : 0;
 }
 
+/** ЧТО ПИСАТЬ В БАЗУ ПО «ПРИМЕНИТЬ».
+ *
+ *  Город из поиска — его зона. Барабан отдаёт только группу, и её
+ *  представитель годится, лишь когда человек ушёл в ДРУГУЮ группу: открыл лист
+ *  у кипрского календаря (`Asia/Nicosia`), ничего не тронул, нажал
+ *  «Применить» — и пояс тихо становился `Europe/Kyiv`, а подпись в настройках
+ *  из «Nicosia, Kyiv, Helsinki» превращалась в «Kyiv, Helsinki, Athens».
+ *  Своя группа на барабане — значит, своя зона остаётся. */
+export function zoneToApply(
+  current: string,
+  picked: string | null,
+  groupIndex: number,
+): string {
+  if (picked) return picked;
+  if (zoneGroupIndexOf(current) === groupIndex) return current;
+  return (ZONE_GROUPS[groupIndex] ?? ZONE_GROUPS[0]).zone;
+}
+
 /** Группа, в которой лежит эта зона. Ищем по ГОРОДАМ, а не по представителю:
  *  сохранено может быть `Europe/Kyiv`, а группа названа `Europe/Helsinki`. */
 export function zoneGroupOf(zone: string): ZoneGroup {

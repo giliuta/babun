@@ -33,10 +33,17 @@ export function paymentEventTitle(
   tx: Pick<
     FinanceTransaction,
     "type" | "reversal_kind" | "appointment_payment_kind"
-  >,
+  > & { notes?: string | null },
 ): string {
   if (tx.type === "refund") {
-    return tx.reversal_kind === "client_refund" ? "Возврат" : "Оплата снята";
+    if (tx.reversal_kind === "client_refund") return "Возврат";
+    // ВОЗВРАТ ПРИ ОТМЕНЕ ЗАЯВКИ (повторный аудит 03.10, на симуляторе).
+    // Сервер пишет его без причины, но с подписью «Возврат при отмене
+    // заявки»; история звала его «Оплата снята» — «денег не было», хотя
+    // отмена только что сказала «Клиенту вернётся €50: в кассе появится
+    // возврат». Минус без причины и без такой подписи — по-прежнему снятие.
+    if (!tx.reversal_kind && (tx.notes ?? "").trim().startsWith(/* i18n-ignore */ "Возврат")) return "Возврат";
+    return "Оплата снята";
   }
   return tx.appointment_payment_kind === "prepayment" ? "Предоплата" : "Оплата";
 }

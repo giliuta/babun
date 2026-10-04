@@ -37,16 +37,16 @@ const REGISTRY: AccessBlock[] = (
   [
     ["calendar.records", "calendar", "calendar", OFF_READ_WRITE, 10],
     ["calendar.create", "calendar", "calendar", ["off", "write"], 20],
-    ["record.status", "calendar", "calendar", OFF_READ_WRITE, 30],
     ["record.amount", "calendar", "calendar", OFF_READ_WRITE, 40],
     ["record.payment", "calendar", "calendar", OFF_READ_WRITE, 50],
     ["calendar.day_labels", "calendar", "calendar", OFF_READ_WRITE, 60],
     ["calendar.settings", "calendar", "company", OFF_READ_WRITE, 70],
-    ["finance.operations", "finance", "calendar", OFF_READ_WRITE, 110],
+    ["finance.income", "finance", "calendar", OFF_READ_WRITE, 110],
     ["finance.vat", "finance", "company", OFF_READ_WRITE, 175],
     ["clients", "clients", "company", OFF_READ_WRITE, 210],
     ["clients.scope", "clients", "company", ["own", "all"], 220],
-    ["clients.contacts", "clients", "company", ["off", "read"], 230],
+    // «Долг и деньги» снято 03.10 — деньги идут с «Историей» (три положения).
+    ["clients.history", "clients", "company", OFF_READ_WRITE, 230],
     ["services", "company", "company", OFF_READ_WRITE, 310],
     ["company.currency", "company", "company", ["read", "write"], 330],
     ["owner.access", "owner", "company", ["off"], 410],
@@ -157,15 +157,17 @@ describe("черновик нового мастера", () => {
     draft = toggleTeam(draft, "team-2");
     assert.deepEqual(draft.teamIds, ["team-1", "team-2"]);
     assert.equal(draftLevel(records, draft, "team-2"), "off");
+    // «Записи клиентов» уходят и на «Скрыты» (01.10): приём засевает им
+    // «Видит», и молчание превратилось бы в «Видит».
     assert.deepEqual(
       draftAccessChanges(REGISTRY, draft).filter((change) => change.team_id === "team-2"),
-      [],
+      [{ block: "calendar.records", team_id: "team-2", level: "off" }],
     );
   });
 
   test("права уходят по календарю: у каждого свои положения", () => {
     const records = byKey("calendar.records");
-    const operations = byKey("finance.operations");
+    const operations = byKey("finance.income");
     const services = byKey("services");
     let draft = withLevel(twoCalendars(), records, "write", "team-1");
     draft = withLevel(draft, records, "read", "team-2");
@@ -177,7 +179,7 @@ describe("черновик нового мастера", () => {
       { block: "calendar.records", team_id: "team-1", level: "write" },
       { block: "calendar.records", team_id: "team-2", level: "read" },
       { block: "calendar.create", team_id: "team-1", level: "write" },
-      { block: "finance.operations", team_id: "team-2", level: "read" },
+      { block: "finance.income", team_id: "team-2", level: "read" },
       { block: "services", team_id: null, level: "write" },
     ]);
   });
@@ -188,11 +190,10 @@ describe("черновик нового мастера", () => {
     for (const teamId of ["team-1", "team-2"]) {
       draft = withLevel(draft, records, "write", teamId);
       draft = withLevel(draft, byKey("calendar.create"), "write", teamId);
-      draft = withLevel(draft, byKey("record.status"), "write", teamId);
       draft = withLevel(draft, byKey("record.amount"), "read", teamId);
       draft = withLevel(draft, byKey("record.payment"), "read", teamId);
       draft = withLevel(draft, byKey("calendar.day_labels"), "read", teamId);
-      draft = withLevel(draft, byKey("finance.operations"), "write", teamId);
+      draft = withLevel(draft, byKey("finance.income"), "write", teamId);
     }
     draft = withLevel(draft, byKey("calendar.settings"), "read", null);
     draft = withLevel(draft, records, "off", "team-1");
@@ -200,13 +201,13 @@ describe("черновик нового мастера", () => {
     assert.equal(draftLevel(byKey("calendar.create"), draft, "team-2"), "write");
     assert.equal(draftLevel(byKey("calendar.day_labels"), draft, "team-2"), "read");
     // Деньги скрытого календаря сброшены вместе с ним, в соседнем — на месте.
-    assert.equal(draftLevel(byKey("finance.operations"), draft, "team-1"), "off");
-    assert.equal(draftLevel(byKey("finance.operations"), draft, "team-2"), "write");
+    assert.equal(draftLevel(byKey("finance.income"), draft, "team-1"), "off");
+    assert.equal(draftLevel(byKey("finance.income"), draft, "team-2"), "write");
     assert.equal(draftLevel(byKey("calendar.settings"), draft, null), "read");
 
     let clients = withLevel(blankMasterDraft("team-1"), byKey("clients"), "read", null);
     clients = withLevel(clients, byKey("clients.scope"), "all", null);
-    clients = withLevel(clients, byKey("clients.contacts"), "read", null);
+    clients = withLevel(clients, byKey("clients.history"), "write", null);
     clients = withLevel(clients, byKey("clients"), "off", null);
     assert.deepEqual(clients.companyLevels, {});
   });
@@ -217,10 +218,13 @@ describe("черновик нового мастера", () => {
       team_id: "team-1",
       access_changes: [
         { block: "calendar.create", team_id: "team-1", level: "write" },
-        { block: "clients.contacts", team_id: null, level: "read" },
+        { block: "clients.history", team_id: null, level: "read" },
       ],
     });
-    assert.deepEqual(draftAccessChanges(REGISTRY, draft), []);
+    // Свёрнутое не уходит; уходит только явное «Записи клиентов: Скрыты».
+    assert.deepEqual(draftAccessChanges(REGISTRY, draft), [
+      { block: "calendar.records", team_id: "team-1", level: "off" },
+    ]);
     assert.equal(areaWord(REGISTRY, draft, "calendar"), "Не видит");
     assert.equal(areaWord(REGISTRY, draft, "clients"), "Не видит");
     const parentLevel = (key: string) => draftLevel(byKey(key), draft, "team-1");
@@ -231,30 +235,25 @@ describe("черновик нового мастера", () => {
   test("живому сотруднику скрытие главного блока сбрасывает зависимые на умолчание", () => {
     assert.deepEqual(dependantResets(REGISTRY, byKey("clients"), "off", null), [
       { block: "clients.scope", team_id: null, level: "own" },
-      { block: "clients.contacts", team_id: null, level: "off" },
+      { block: "clients.history", team_id: null, level: "off" },
     ]);
     assert.deepEqual(
       dependantResets(REGISTRY, byKey("calendar.records"), "off", "team-1").map((c) => c.block),
       [
         "calendar.create",
-        "record.status",
         "record.amount",
         "record.payment",
         "calendar.day_labels",
-        "finance.operations",
+        "finance.income",
       ],
     );
     assert.deepEqual(dependantResets(REGISTRY, byKey("calendar.records"), "read", "team-1"), []);
     assert.deepEqual(dependantResets(REGISTRY, byKey("services"), "off", null), []);
   });
 
-  test("до «Пригласить» нужны имя, почта и календарь; телефон — только если набран", () => {
-    assert.deepEqual(inviteBlockers(blankMasterDraft(null), checks), [
-      "name",
-      "email",
-      "calendar",
-    ]);
-    const filled = { ...blankMasterDraft("team-1"), name: "Dmitry", email: "d@airfix.cy" };
+  test("до «Пригласить» нужны почта и команда; имени не нужно (партнёр, 01.10)", () => {
+    assert.deepEqual(inviteBlockers(blankMasterDraft(null), checks), ["email", "calendar"]);
+    const filled = { ...blankMasterDraft("team-1"), email: "d@airfix.cy" };
     assert.deepEqual(inviteBlockers(filled, checks), []);
     assert.deepEqual(inviteBlockers({ ...filled, phone: "12" }, checks), ["phone"]);
   });
@@ -432,24 +431,24 @@ describe("права «как в том календаре»", () => {
     const draft: MasterDraft = {
       ...blankMasterDraft("A"),
       teamIds: ["A", "B"],
-      calendarLevels: { A: { "calendar.records": "read", "record.status": "write", "finance.operations": "read" } },
+      calendarLevels: { A: { "calendar.records": "read", "record.amount": "write", "finance.income": "read" } },
     };
     const changes = copyCalendarLevels(REGISTRY, draft, "A", "B");
     assert.ok(changes.every((c) => c.team_id === "B"));
     const byBlock = new Map(changes.map((c) => [c.block, c.level]));
-    assert.equal(byBlock.get("record.status"), "write");
-    assert.equal(byBlock.get("finance.operations"), "read");
+    assert.equal(byBlock.get("record.amount"), "write");
+    assert.equal(byBlock.get("finance.income"), "read");
     // Компанейские блоки (клиенты) не трогаются: они одни на все календари.
     assert.equal(byBlock.has("clients"), false);
   });
 });
 
 describe("стартовые права нового календаря (владелец 24.09)", () => {
-  test("черновик нового мастера видит статус, объект и услуги — и он чистый", () => {
+  test("черновик нового мастера видит объект и услуги — и он чистый", () => {
     const draft = emptyMasterDraft("A");
     assert.deepEqual(draft.calendarLevels, { A: STARTER_CALENDAR_LEVELS });
     assert.equal(isDraftDirty(draft, "A"), false);
-    assert.equal(isDraftDirty(withLevel(draft, byKey("record.status"), "off", "A"), "A"), true);
+    assert.equal(isDraftDirty(withLevel(draft, byKey("calendar.day_labels"), "off", "A"), "A"), true);
   });
 
   test("добавленный календарь — со стартовыми правами только там, где попросили", () => {
@@ -460,10 +459,11 @@ describe("стартовые права нового календаря (вла�
   });
 
   test("изменения для сотрудника — только живые блоки", () => {
-    // В тестовом реестре живы «Статус» и «Метка дня»: остальные заготовки
+    // В тестовом реестре жива «Метка дня»: остальные заготовки
     // сервер бы отверг, и в изменения они не идут.
     assert.deepEqual(starterCalendarChanges(REGISTRY, "B"), [
-      { block: "record.status", team_id: "B", level: "read" },
+      // Записи команды — «Видит», как засевает сервер (01.10).
+      { block: "calendar.records", team_id: "B", level: "read" },
       { block: "calendar.day_labels", team_id: "B", level: "read" },
     ]);
   });

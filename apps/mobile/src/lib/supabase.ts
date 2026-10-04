@@ -3,9 +3,11 @@ import { AppState, Platform } from "react-native";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@babun/shared/db/database.types";
 import { LargeSecureStore } from "@/lib/secure-store";
-import { getActiveTenantId } from "@/lib/active-tenant";
+import { getActiveTenantId, getActiveUserId } from "@/lib/active-tenant";
+import { anonymousRequestError, isAnonymousDataRequest } from "@/lib/anon-guard";
 import { applyTenantHeader } from "@/lib/tenant-header";
 import { isWriteRequest } from "@/lib/write-requests";
+import { isAuthRequest, retryableAuthResponse } from "@/lib/auth-fetch";
 import { WritesBlockedError, writesBlocked } from "@babun/shared/sync/write-guard";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -63,6 +65,31 @@ function fetchWithActiveTenant(
     new Headers(init?.headers ?? {}),
     getActiveTenantId(),
   );
+
+  // ВОШЁЛ — ЗНАЧИТ, ЗАПРОС К ДАННЫМ НЕСЁТ ЕГО ТОКЕН (аудит 04.10). Минуту
+  // после неудачного обновления токена supabase-js шлёт запросы публичным
+  // ключом, и RLS отвечает анониму «200, пусто» — это стирало кэш календаря и
+  // снимало напоминания. Такой запрос падает как обрыв связи (`anon-guard.ts`).
+  if (
+    isAnonymousDataRequest({
+      url: requestUrl(input),
+      authorization: headers.get("Authorization"),
+      publishableKey: key ?? "",
+      signedInUserId: getActiveUserId(),
+    })
+  ) {
+    return Promise.reject(anonymousRequestError());
+  }
+
+  // ВХОД ПОТОЛКА НЕ ИМЕЕТ, А ЕГО 409 — ВРЕМЕННЫЙ ОТКАЗ (01.10, `auth-fetch.ts`).
+  // Оборванное обновление токена оставалось в очереди лежащего сервера, и
+  // после подъёма очередь выкинула людей из аккаунта.
+  if (isAuthRequest(requestUrl(input))) {
+    const target = requestUrl(input);
+    return fetch(input, { ...init, headers }).then((response) =>
+      retryableAuthResponse(target, response),
+    );
+  }
 
   // Свой сигнал НЕ отменяет чужой: если вызывающий уже дал `signal`
   // (react-query умеет отменять запросы), оставляем его хозяином — два

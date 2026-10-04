@@ -1,26 +1,15 @@
-import { useEffect, useState } from "react";
-import type { Client } from "@babun/shared/local/clients";
-
-// СЛОВАРЬ ТИПОВ ОБЪЕКТА — собирается из ФАКТИЧЕСКИХ данных бизнеса.
+// СЛОВАРЬ ТИПОВ ОБЪЕКТА — ТОЛЬКО ТО, ЧТО ЗАВЁЛ САМ ЧЕЛОВЕК.
 //
-// Владелец 2026-07-26: «дом офис вилла — это стандарт… можешь просто листать
-// либо добавлять своё» и «продумаем для SaaS»: у автомойки типы свои, у
-// кондиционерщиков свои, и заводиться они должны сами по ходу работы.
+// Владелец 03.10: «удали все типы объектов — изначально их быть не должно,
+// каждый человек сам создаёт свой тип объекта». До этого словарь собирался из
+// трёх слоёв: справочник команды (Кабинет → «Типы объектов»), типы,
+// встреченные на объектах клиентов, и стандартный набор «Дом · Квартира ·
+// Офис». Два последних слоя снова приносили в выбор то, что человек удалил
+// или никогда не заводил, — теперь словарь равен справочнику команды.
 //
-// Справочник бизнеса живёт в таблице `location_labels` (проверено на проекте
-// 2026-07-27: таблица и RPC apply_location_label_changes на месте, читает
-// useLocationLabels, редактирует Кабинет → «Типы объектов» — туда и ведёт
-// шестерёнка в строке выбора).
-//
-// Но словарь строки НЕ СВОДИТСЯ к справочнику: у бизнеса, который его ещё не
-// заполнил, объекты уже заведены, и типы у них живые. Поэтому порядок = порядок
-// пользы: сначала объявленное в настройках, затем то, чем реально пользуются
-// (по частоте), затем стандартный набор. Так у кондиционерщика первым будет
-// «Квартира», а не наш «Дом».
-
-/** Стандартный набор — ровно тот, что назвал владелец 2026-07-27. «Вилла»
- *  убрана им же: «дом и вилла по сути одно и то же». */
-const STANDARD_OBJECT_TYPES = ["Дом", "Квартира", "Офис"] as const;
+// Метка на объекте, которой в справочнике нет (тип удалили), объект типом
+// не красит: он показывается как объект без типа (`findObjectType`).
+// Заведут такой тип снова — объект подхватит его сам.
 
 /** Ключ сравнения: «дом», «Дом» и «ДОМ » — один тип, а не три. */
 export function objectTypeKey(name: string): string {
@@ -28,62 +17,33 @@ export function objectTypeKey(name: string): string {
 }
 
 /**
- * Словарь типов объекта для строки выбора.
- *
- * ПОРЯДОК НЕ ЗАВИСИТ ОТ ВЫБОРА. Это не украшение, а исправление бага, который
- * владелец увидел первым же тапом (2026-07-27: «нажимаю офис — оно
- * перекладывает на виллу»): раньше текущее значение подмешивалось в сортировку
- * по частоте, поэтому в момент выбора список пересобирался и чип уезжал
- * из-под пальца — выбранным оказывался сосед.
- *
- * Порядок: (1) типы, заведённые бизнесом в настройках, в их порядке;
- * (2) фактически используемые, которых в настройках нет, по убыванию частоты;
- * (3) стандартный набор, если он ещё не покрыт; (4) текущее значение объекта,
- * если его нет нигде — оно ДОПИСЫВАЕТСЯ в конец и ничего не двигает.
- *
- * @param presets — типы из настроек (кабинет), в порядке настроек.
- * @param current — текущее значение объекта: показать обязательно.
+ * Словарь типов объекта для выбора — справочник команды в его порядке, без
+ * пустых строк и без дублей по регистру. Порядок задаёт сам справочник,
+ * поэтому выбор типа его не двигает: строка не уезжает из-под пальца.
  */
-export function objectTypeVocabulary(
-  clients: readonly Client[],
-  presets: readonly string[] = [],
-  current?: string,
-): string[] {
+export function objectTypeVocabulary(presets: readonly string[]): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
-  const push = (raw: string | undefined | null) => {
-    const name = (raw ?? "").trim();
-    if (!name) return;
+  for (const raw of presets) {
+    const name = raw.trim();
+    if (!name) continue;
     const key = objectTypeKey(name);
-    if (seen.has(key)) return;
+    if (seen.has(key)) continue;
     seen.add(key);
     out.push(name);
-  };
-
-  for (const preset of presets) push(preset);
-
-  // Используемые — по частоте, при равенстве по алфавиту. Считаем ВСЕГДА от
-  // объектов клиентов и никогда от текущего выбора.
-  const uses = new Map<string, { name: string; count: number }>();
-  for (const client of clients) {
-    for (const loc of client.locations ?? []) {
-      const name = (loc.label ?? "").trim();
-      if (!name) continue;
-      const key = objectTypeKey(name);
-      const prev = uses.get(key);
-      // Написание берём от первого встреченного: не «нормализуем» чужой язык.
-      if (prev) prev.count += 1;
-      else uses.set(key, { name, count: 1 });
-    }
   }
-  [...uses.values()]
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ru"))
-    .forEach((u) => push(u.name));
-
-  for (const name of STANDARD_OBJECT_TYPES) push(name);
-  push(current);
-
   return out;
+}
+
+/** Тип объекта из справочника по метке объекта; нет такого — `undefined`,
+ *  и объект показывается без типа. */
+export function findObjectType<T extends { name: string }>(
+  presets: readonly T[],
+  label: string | null | undefined,
+): T | undefined {
+  const key = objectTypeKey(label ?? "");
+  if (!key) return undefined;
+  return presets.find((preset) => objectTypeKey(preset.name) === key);
 }
 
 /** Приводит введённое значение к уже существующему написанию: «дом» → «Дом».
@@ -96,56 +56,4 @@ export function snapObjectType(
   if (!name) return "";
   const key = objectTypeKey(name);
   return vocabulary.find((v) => objectTypeKey(v) === key) ?? name;
-}
-
-/** Слияние БЕЗ ПЕРЕСТАНОВОК: уже показанный порядок сохраняется как есть, а
- *  всё новое дописывается в хвост. Это и есть защита пальца — вынесена в
- *  чистую функцию, чтобы её можно было проверить тестом, а не «на глаз». */
-export function appendOnly(
-  shown: readonly string[],
-  incoming: readonly string[],
-): string[] {
-  const seen = new Set(shown.map(objectTypeKey));
-  const extra = incoming.filter((v) => {
-    const key = objectTypeKey(v);
-    if (!v.trim() || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  return extra.length > 0 ? [...shown, ...extra] : (shown as string[]);
-}
-
-/**
- * ЗАМОРОЖЕННЫЙ словарь на время жизни экрана.
- *
- * Порядок словаря не зависит от текущего значения — но он зависит от ЧАСТОТ, а
- * тап по чипу переписывает метку объекта, то есть меняет сами данные, из
- * которых частоты считаются. Второй контур обратной связи: чип снова уезжает
- * из-под пальца, просто через базу.
- *
- * Поэтому порядок фиксируется первым РЕАЛЬНЫМ расчётом (когда клиенты уже
- * приехали) и дальше только дополняется: новые значения дописываются в хвост,
- * ничего не переставляя. Список, по которому человек уже целится пальцем, не
- * имеет права перестраиваться под ним ни от чего.
- */
-export function useFrozenObjectTypes(
-  clients: readonly Client[],
-  presets: readonly string[],
-  current: string | undefined,
-): string[] {
-  const [frozen, setFrozen] = useState<string[] | null>(null);
-  const live = objectTypeVocabulary(clients, presets, current);
-  const ready = clients.length > 0 || presets.length > 0;
-
-  // Фиксируем и дополняем ЭФФЕКТОМ, а не по ходу рендера: рендер обязан быть
-  // чистым, иначе строгий режим и будущий конкурентный рендер дают разный
-  // порядок на двух проходах одного кадра.
-  useEffect(() => {
-    if (!ready) return;
-    setFrozen((cur) => (cur ? appendOnly(cur, live) : live));
-    // live — производная от clients/presets/current, поэтому следим за ними.
-  }, [ready, clients, presets, current]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Текущее значение обязано быть видно сразу, даже если эффект ещё не успел.
-  return frozen ? appendOnly(frozen, [(current ?? "").trim()]) : live;
 }

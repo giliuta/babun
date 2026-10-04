@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
@@ -38,9 +38,14 @@ export function MiniCalendar({
   appointments,
   onSelectDate,
   onClose,
+  markOpenDay = true,
 }: {
   visible: boolean;
   currentDate: Date;
+  /** Подсвечивать открытый день. В Месяце и Списке открытого дня нет: якорь
+   *  там — 1-е число, и после листания окошко подсвечивало «1» как «открыт»
+   *  (повторный аудит 03.10). */
+  markOpenDay?: boolean;
   /** Business-timezone today (YYYY-MM-DD). */
   todayYmd: string;
   appointments: Appointment[];
@@ -97,11 +102,16 @@ export function MiniCalendar({
 
   const monthTitle = new Date(viewYear, viewMonth, 1)
     .toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
-    .replace(/\s*г\.?\s*$/i, "");
+    // «г.» (русский, болгарский) и «р.» (украинский) после года — лишние.
+    .replace(/\s*[гр]\.?\s*$/i, "");
 
   // 44 — минимальная тап-мишень HIG: раньше 40pt-ячейки были единственным
-  // суб-минимальным контролом всего джампера.
-  const CELL = 44;
+  // суб-минимальным контролом всего джампера. Но на экране 320 (iPhone SE
+  // первого поколения, «Увеличенный» вид экрана) окно 7×44 + поля уходило
+  // за правый край: обрезались «Вс» и стрелка следующего месяца (повторный
+  // аудит 03.10). Там ячейка ужимается ровно настолько, чтобы окно влезло.
+  const { width: screenW } = useWindowDimensions();
+  const CELL = Math.min(44, Math.floor((screenW - 24 - 26 - 2) / 7));
   // Шесть рядов всегда: в месяце бывает 5 или 6 недель, и без фиксации
   // попап дёргался бы по высоте на каждом свайпе.
   const GRID_H = 6 * CELL;
@@ -232,14 +242,14 @@ export function MiniCalendar({
                         // Просматриваемый сейчас день (≠ сегодня) — лёгкий
                         // акцентный тинт: джампер открывают, уйдя с сегодня,
                         // и точка отсчёта обязана быть видна (HIG).
-                        const isViewed = !isToday && key === openKey;
+                        const isViewed = markOpenDay && !isToday && key === openKey;
                         const count = countByDate.get(key) ?? 0;
                         return (
                           <Pressable
                             key={day}
                             onPress={() => onSelectDate(date)}
                             accessibilityRole="button"
-                            accessibilityLabel={`${day} ${date.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${isViewed ? ", открыт" : ""}${count > 0 ? `, записей: ${count}` : ""}`}
+                            accessibilityLabel={`${date.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}${isToday ? ", сегодня" : ""}${isViewed ? ", открыт" : ""}${count > 0 ? `, записей: ${count}` : ""}`}
                             style={({ pressed }) => ({
                               width: CELL,
                               height: CELL,

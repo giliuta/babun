@@ -26,3 +26,26 @@ export function lastVisitByObject(
   }
   return out;
 }
+
+/** ОБЪЕКТ ДЛЯ КАРТОЧКИ КЛИЕНТА — ОДИН. Основной — первым (владелец 03.10,
+ *  вторым заходом: при записи подставляется основной, и карточка обязана
+ *  показывать тот же объект, а не соседний). Основного нет (старые данные) —
+ *  обслуженный последним (по `lastVisitByObject`); ни одного визита —
+ *  последний добавленный (в конце массива). Объектов нет — `null`. */
+export function cardObjectId(
+  locations: readonly { id: string; isPrimary?: boolean }[],
+  lastVisits: ReadonlyMap<string, string>,
+): string | null {
+  const primary = locations.find((l) => l.isPrimary);
+  if (primary) return primary.id;
+  let best: string | null = null;
+  let bestDate = "";
+  for (const loc of locations) {
+    const date = lastVisits.get(loc.id);
+    if (date && date > bestDate) {
+      best = loc.id;
+      bestDate = date;
+    }
+  }
+  return best ?? locations[locations.length - 1]?.id ?? null;
+}

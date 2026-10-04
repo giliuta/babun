@@ -3,6 +3,7 @@ import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD, pad2, parseYMD } from "@/features/appointments/helpers";
+import { pluralize } from "@babun/shared/common/utils/pluralize";
 import { useThemeColors } from "@/theme/colors";
 import {
   decksFor,
@@ -393,6 +394,12 @@ export function TimeRail({
                 { top: h === startHour ? 0 : -7, fontVariant: ["tabular-nums"] },
               ]}
               maxFontSizeMultiplier={1.3}
+              // Крупный шрифт системы × 1.3 не влезает в 40pt рельса: «06:00»
+              // рвалось на «06:0» и «0» (повторный аудит 03.10). Одна строка,
+              // ужимается до ширины.
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
             >
               {`${pad2(h % 24)}:00`}
             </Text>
@@ -405,6 +412,9 @@ export function TimeRail({
           <Text
             style={[labelStyle, { top: -7, fontVariant: ["tabular-nums"] }]}
             maxFontSizeMultiplier={1.3}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
           >
             {endHour === 24 ? "24:00" : `${pad2(endHour % 24)}:00`}
           </Text>
@@ -730,8 +740,11 @@ export const DayColumn = memo(function DayColumn({
         />
       ) : null}
       {/* Прошедшие дни (неделя) — то же затемнение всей колонки: «что уже
-          позади» видно при сканировании, тем же слоем, что «до сейчас». */}
-      {todayYmd && dateYmd < todayYmd ? (
+          позади» видно при сканировании, тем же слоем, что «до сейчас».
+          И сегодня после конца окна: в 19:59 колонка затемнена до низа, а
+          в 20:30 была белой, как будущее (повторный аудит 03.10). */}
+      {(todayYmd && dateYmd < todayYmd) ||
+      (isToday && nowMinutes != null && nowMinutes > winEndMin) ? (
         <MinuteBand
           fromMin={winStartMin}
           toMin={winEndMin}
@@ -934,6 +947,11 @@ export const DayColumn = memo(function DayColumn({
           style={{
             position: "absolute",
             top: pct(nowMin, totalMin),
+            // Ряд высотой в точку (9pt) центрирует линию на 4.5pt НИЖЕ своего
+            // верха: линия «сейчас» стояла на 4–10 минут позже настоящего
+            // времени — ниже капсулы на рельсе и края серого «прошлого»
+            // (повторный аудит 03.10, видно на симуляторе).
+            marginTop: -4.5,
             left: -4,
             right: 0,
             flexDirection: "row",
@@ -947,6 +965,11 @@ export const DayColumn = memo(function DayColumn({
 
       {laneW > 0
         ? placements.map((p) => {
+            // ОТМЕНЁННАЯ В РЕЖИМЕ ВЫБОРА ВРЕМЕНИ НЕ РИСУЕТСЯ (прогон 03.10).
+            // Время она не держит — под ней лежит зелёный кубик, а карточка
+            // ложилась сверху: зачёркнутое имя и «11:00» кубика читались одно
+            // поверх другого, и тап по кубику открывал отменённую запись.
+            if (freeSlots !== undefined && p.apt.status === "cancelled") return null;
             const deck = decks.get(p.apt.id);
             return (
             <AppointmentBlock
@@ -967,7 +990,10 @@ export const DayColumn = memo(function DayColumn({
               lineH={lineH}
               onMenu={onMenu}
               editing={editingId === p.apt.id}
-              dayW={compact && laneW > 0 ? laneW + 1 : undefined}
+              // Шаг колонки — её ширина целиком: `onLayout` уже включает
+              // левую линию колонки. С «+1» карточка на дальнем дне недели
+              // уезжала на 6pt мимо колонки (повторный аудит 03.10).
+              dayW={compact && laneW > 0 ? laneW : undefined}
               overdue={isOverdue(p.apt, todayYmd, isToday ? nowMinutes : null)}
               // Тап по стопке — список её записей, а не первая попавшаяся.
               onEdit={deck ? openDeck : onEdit}
@@ -981,7 +1007,13 @@ export const DayColumn = memo(function DayColumn({
 
       <PickerSheet
         visible={deckOpen != null}
-        title={deckOpen ? `${minToHM(deckOpen[0].startMin)} · ${deckOpen.length} ${deckOpen.length < 5 ? "записи" : "записей"}` : ""}
+        // Начало стопки — самое раннее из её записей: первой в стопке лежит
+        // самая короткая, и шапка показывала её время (повторный аудит 03.10).
+        title={
+          deckOpen
+            ? `${minToHM(Math.min(...deckOpen.map((p) => p.startMin)))} · ${pluralize(deckOpen.length, "запись", "записи", "записей")}`
+            : ""
+        }
         onClose={() => setDeckOpen(null)}
         items={(deckOpen ?? []).map((p) => ({
           id: p.apt.id,
@@ -1030,7 +1062,7 @@ function DayHeader({
       accessibilityRole={onLabelTap ? "button" : undefined}
       accessibilityLabel={
         onLabelTap
-          ? `${date.getDate()} ${date.toLocaleDateString("ru-RU", { month: "long" })}, ${label ? `метка: ${label.name}` : "без метки"} — сменить метку`
+          ? `${date.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}, ${label ? `метка: ${label.name}` : "без метки"} — сменить метку`
           : undefined
       }
       className="active:opacity-70"
@@ -1154,6 +1186,11 @@ export const DayView = memo(function DayView({
   const t = useThemeColors();
   const pager = usePeriodPager({ periodKey: dateYmd, onCommit: onCommitPage });
   const dateAt = (off: -1 | 0 | 1) => addDaysYmd(dateYmd, off);
+  // «+N» полосы «весь день» в Дне — список всех событий дня (повторный аудит
+  // 03.10): Неделя уводит «+N» в День, а в самом Дне ему вести было некуда, и
+  // спрятанные события дня были недостижимы.
+  const [allDayList, setAllDayList] = useState<Appointment[] | null>(null);
+  const allDayColors = useBlockColors(teamColorFor);
   const bandH = useAllDayBandH();
   // Условие по ВСЕМ трём страницам пейджера: иначе чип выскакивал бы уже после
   // доводки свайпа, а высота полосы менялась бы под пальцем.
@@ -1213,6 +1250,7 @@ export const DayView = memo(function DayView({
                 teamColorFor={teamColorFor}
                 onEdit={onEdit}
                 onMenu={onMenu}
+                onOverflow={() => setAllDayList(allDayOf(apptsFor(dateAt(off))))}
               />
             )}
           />
@@ -1272,6 +1310,18 @@ export const DayView = memo(function DayView({
           }}
         />
       </ZoomableTimeGrid>
+      <PickerSheet
+        visible={allDayList != null}
+        title={allDayList ? `Весь день · ${pluralize(allDayList.length, "событие", "события", "событий")}` : ""}
+        onClose={() => setAllDayList(null)}
+        items={(allDayList ?? []).map((a) => ({
+          id: a.id,
+          label: clientName(a) || a.comment || "Событие",
+          icon: CalendarClock,
+          color: allDayColors(a).solid,
+          onPress: () => onEdit(a),
+        }))}
+      />
     </View>
   );
 });

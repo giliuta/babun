@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   accountKindForPaymentMethod,
+  accountWriteErrorMessage,
   accountServesTeam,
   isPaymentAccountCompatible,
   paymentMethodForAccountKind,
@@ -103,5 +104,23 @@ describe("accountServesTeam", () => {
   // его команде значило бы отдать ей чужие деньги.
   it("an account without a brigade serves nobody", () => {
     expect(accountServesTeam({ brigade_id: null }, "team-a")).toBe(false);
+  });
+});
+
+describe("отказы «Удалённых счетов» своими словами (03.10)", () => {
+  it("подсказка сервера важнее его текста с машинным числом", () => {
+    const fallback = { fallback: "Не удалось удалить счёт" };
+    expect(
+      accountWriteErrorMessage(
+        { code: "23514", message: "Счёт с остатком 445.00 нельзя удалить", hint: "account:balance" },
+        fallback,
+      ),
+    ).toBe("На счёте остались деньги — удалить можно только пустой счёт");
+    expect(
+      accountWriteErrorMessage({ code: "23514", message: "x", hint: "account:deleted" }, fallback),
+    ).toBe("Счёт удалён — сначала верните его из «Удалённых счетов»");
+    expect(accountWriteErrorMessage({ code: "23514", message: "x" }, fallback)).toBe(
+      "Не удалось удалить счёт",
+    );
   });
 });

@@ -18,22 +18,21 @@ import { notify } from "@/lib/notify";
 import type { LucideIcon } from "lucide-react-native";
 import { useCardFieldsByTeam } from "@/features/clients/card-prefs";
 import { clientsOfTeam } from "@/features/clients/team-scope";
-import { useClientTags } from "@/features/clients/queries";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { ownClientCardHref } from "@/features/clients/clients-company";
 import { useAppointments } from "@/features/calendar/queries";
 import { useTeams } from "@/features/reference/queries";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
-// АРХИВ И КОРЗИНА — ОДИН ЭКРАН С ДВУМЯ НАСТРОЙКАМИ.
-//
-// Обе полки показывают одно и то же: клиента, убранного с глаз. Отличаются
-// только вопросом («кого убрали последним» против «кого сотрут первым») и
-// набором глаголов. Поэтому вёрстка общая, а разное приходит пропсами —
-// иначе через месяц это были бы два экрана, разошедшихся во всём.
+// ЭКРАН УБРАННЫХ КЛИЕНТОВ. Полок было две — архив и корзина; с 03.10 одна,
+// «Удалённые клиенты» (владелец: «понятия „в архив" не будет»). Вёрстка
+// осталась общей, а подпись, хвост и глаголы приходят пропсами.
 //
 // Строка — ТА ЖЕ `ClientRow`, что в рабочем списке (владелец 2026-08-08:
 // «чтоб выглядело как клиент полноценный с историей»): аватар, имя, номер,
-// долг, доход, последний визит. Раньше архив рисовал свою карточку с рамкой
+// долг, доход, последний визит. Раньше полка рисовала свою карточку с рамкой
 // и кнопкой внутри, и человек в ней выглядел записью в реестре, а не
 // клиентом. Тап ведёт в ПОЛНУЮ карточку со всей историей — не в огрызок.
 
@@ -48,7 +47,7 @@ interface HiddenAction {
 export function HiddenClientsScreen({
   title,
   query,
-  /** Подпись под именем: «в архиве с 8 авг.» / «через 27 дней». */
+  /** Подпись под именем: «удалён 8 авг.». */
   caption,
   /** Хвост строки — счётчик срока в корзине. */
   trailing,
@@ -65,6 +64,9 @@ export function HiddenClientsScreen({
 }) {
   const t = useThemeColors();
   const router = useRouter();
+  // Полка своей компании: пока в календаре команда партнёра, карточка обязана
+  // унести компанию в адресе (`ownClientCardHref`).
+  const scope = useClientsScopeOrNull();
   const pull = usePullRefresh(query.refetch);
   const [menuClient, setMenuClient] = useState<Client | null>(null);
   const shownMenu = useLastNonNull(menuClient);
@@ -80,12 +82,11 @@ export function HiddenClientsScreen({
     [query.data, team, appointments],
   );
   const { data: teams = [] } = useTeams();
-  const { data: tags = [] } = useClientTags();
   // Набор полей — команды клиента (у каждой команды свой, 30.09).
   const teamIds = useMemo(() => teams.map((tm) => tm.id), [teams]);
   const cardFieldsFor = useCardFieldsByTeam(teamIds);
   // Деньги и визиты считаются ТЕМ ЖЕ селектором, что в рабочем списке:
-  // архивный клиент не перестаёт быть должником, и цифра под его именем
+  // удалённый клиент не перестаёт быть должником, и цифра под его именем
   // обязана совпадать с той, что была вчера.
   const statsMap = useMemo(
     () => buildStatsMap(clients, appointments),
@@ -153,23 +154,17 @@ export function HiddenClientsScreen({
             }
             ItemSeparatorComponent={() => (
               <View
-                className="ml-[68px] h-px"
+                className="ml-4 h-px"
                 style={{ backgroundColor: t.separator }}
               />
             )}
             renderItem={({ item }) => {
               const stats = statsMap.get(item.id);
-              const rowTeamId = item.team_id ?? stats?.lastTeamId ?? null;
-              const teamName = rowTeamId
-                ? (teams.find((tm) => tm.id === rowTeamId)?.name ?? null)
-                : null;
               return (
                 <View style={{ opacity: busyId === item.id ? 0.5 : 1 }}>
                   <ClientRow
                     client={item}
                     stats={stats}
-                    teamName={teamName}
-                    tags={tags}
                     cardFields={cardFieldsFor(item.team_id)}
                     // Место улики статуса занимает срок: на этих полках
                     // главный вопрос — «когда убрали» и «сколько осталось».
@@ -180,7 +175,7 @@ export function HiddenClientsScreen({
                     // Карточка открывается ЦЕЛИКОМ — с историей, деньгами и
                     // объектами. Свайпов нет: заученный флик «убери» здесь
                     // означал бы не то, что человек ждёт.
-                    onPress={() => router.push(`/clients/${item.id}`)}
+                    onPress={() => router.push(ownClientCardHref(item.id, scope))}
                     onLongPress={() => setMenuClient(item)}
                   />
                 </View>
@@ -231,12 +226,6 @@ function shortDay(date: string | null | undefined): string | null {
   }).format(d);
 }
 
-/** Подпись архива: «в архиве с 8 авг.». */
-export function ArchivedSince(date: string | null | undefined): string {
-  const day = shortDay(date);
-  return day ? `в архиве с ${day}` : "в архиве";
-}
-
 /** Подпись корзины: «удалён 8 авг.». Срок живёт в хвосте строки — здесь
  *  только факт, иначе обе половины строки говорят одно и то же. */
 export function DeletedOn(date: string | null | undefined): string {
@@ -277,9 +266,6 @@ export function daysLeft(purgeAt: string | null | undefined): number | null {
 }
 
 export function daysWordRu(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "день";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "дня";
-  return "дней";
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return pluralRu(n, ["день", "дня", "дней"]);
 }

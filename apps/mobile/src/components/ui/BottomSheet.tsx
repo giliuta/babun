@@ -1,6 +1,12 @@
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import {
-  Dimensions,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import {
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -9,6 +15,7 @@ import {
   ScrollView,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import {
   Gesture,
@@ -39,8 +46,6 @@ import { useReduceMotion } from "@/lib/reduce-motion";
 // Здесь скрим проявляется opacity-ом НА МЕСТЕ, а лист отдельно выезжает
 // пружиной снизу и так же уезжает вниз. Всё гейтится на Reduce Motion.
 // Правило: любой новый нижний лист = <BottomSheet>. См. DESIGN-SYSTEM.md.
-
-const SCREEN_H = Dimensions.get("window").height;
 
 // Пружина входа: почти критически задемпфирована — плавный «доводчик» без
 // дешёвого пружинения. Выход — короткий ease-in вниз.
@@ -140,9 +145,35 @@ export function BottomSheet({
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
+  // ВЫСОТА ОКНА — ПРИ ПОКАЗЕ, А НЕ ПРИ ЗАГРУЗКЕ МОДУЛЯ (04.10). В браузере
+  // вкладка, открытая «за кадром», грузит код при окне 0×0: константа
+  // модуля давала `maxHeight: 0`, лист схлопывался, и строки уходили под
+  // нижний край — выбрать язык на входе было нельзя.
+  const { height: SCREEN_H } = useWindowDimensions();
+  // Эффект входа/выхода читает её через ref: перезапуск анимации на каждый
+  // поворот или ресайз окна не нужен.
+  const screenH = useRef(SCREEN_H);
+  screenH.current = SCREEN_H;
   const reduced = useReduceMotion();
   // Остаётся смонтированным на время анимации закрытия, потом снимается.
   const [mounted, setMounted] = useState(visible);
+
+  // ЛИСТ УЕЗЖАЕТ С ТЕМ, ЧТО ПОКАЗЫВАЛ (краш 2026-10-03 02:22). Почти
+  // три десятка листов открываются самим значением (`visible={x !== null}`) и
+  // на закрытии получают null в ТОМ ЖЕ коммите, что и `visible=false`: тело
+  // перестраивается — строки пропадают, на их место встаёт «пусто» — в
+  // панели, которую в этот момент начинает уводить Reanimated. Так у шторки
+  // выбора разошёлся порядок детей панели у UIKit и у Fabric, и снятие листа
+  // уронило приложение («Attempt to unmount a view which has a different
+  // index»). Пока лист уезжает, он показывает последний видимый кадр; живые
+  // пропсы вернутся со следующим открытием. `useLastNonNull` делал то же для
+  // четырёх листов клиентов — здесь это закон для всех.
+  const live = { children, title, subtitle, footer, banner, headerAction };
+  const lastShown = useRef(live);
+  useLayoutEffect(() => {
+    if (visible) lastShown.current = live;
+  });
+  const shown = visible ? live : lastShown.current;
   const exitedRef = useRef(onExited);
   exitedRef.current = onExited;
   const wasMounted = useRef(mounted);
@@ -167,7 +198,7 @@ export function BottomSheet({
       // Вход: лист пружиной из-за нижнего края. Стартуем с ИЗМЕРЕННОЙ
       // высоты (фолбэк — экран): телепорт на весь экран делал вход и
       // выход несимметричными, вход «прилетал» из-под таб-бара.
-      ty.value = sheetH.value > 0 ? sheetH.value : SCREEN_H;
+      ty.value = sheetH.value > 0 ? sheetH.value : screenH.current;
       ty.value = reduced
         ? withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) })
         : withSpring(0, SPRING);
@@ -177,7 +208,7 @@ export function BottomSheet({
       });
     } else {
       // Выход: лист вниз на свою высоту, скрим гаснет; затем размонтируем.
-      const target = sheetH.value > 0 ? sheetH.value : SCREEN_H;
+      const target = sheetH.value > 0 ? sheetH.value : screenH.current;
       ty.value = withTiming(target, {
         duration: reduced ? 160 : 240,
         easing: Easing.in(Easing.cubic),
@@ -269,7 +300,7 @@ export function BottomSheet({
           0,2% площади листа, и «свайп вниз» промахивался мимо неё почти
           всегда. Заголовок ничего не нажимает, поэтому конфликта нет, а
           площадь жеста вырастает до нормальной. */}
-      {grabber || title ? (
+      {grabber || shown.title ? (
         <GestureDetector gesture={drag}>
           <View>
             {grabber ? (
@@ -286,7 +317,7 @@ export function BottomSheet({
                 />
               </View>
             ) : null}
-            {title ? (
+            {shown.title ? (
               <View
                 style={{
                   flexDirection: "row",
@@ -311,9 +342,9 @@ export function BottomSheet({
                       color: t.ink,
                     }}
                   >
-                    {title}
+                    {shown.title}
                   </Text>
-                  {subtitle ? (
+                  {shown.subtitle ? (
                     <Text
                       maxFontSizeMultiplier={1.2}
                       numberOfLines={1}
@@ -324,7 +355,7 @@ export function BottomSheet({
                         color: t.sub,
                       }}
                     >
-                      {subtitle}
+                      {shown.subtitle}
                     </Text>
                   ) : null}
                 </View>
@@ -335,7 +366,7 @@ export function BottomSheet({
                     justifyContent: "center",
                   }}
                 >
-                  {headerAction}
+                  {shown.headerAction}
                 </View>
               </View>
             ) : null}
@@ -351,14 +382,14 @@ export function BottomSheet({
           contentContainerStyle={padded ? { paddingHorizontal: GUTTER } : undefined}
           keyboardShouldPersistTaps="handled"
         >
-          {children}
+          {shown.children}
         </ScrollView>
       ) : padded ? (
-        <View style={{ paddingHorizontal: GUTTER }}>{children}</View>
+        <View style={{ paddingHorizontal: GUTTER }}>{shown.children}</View>
       ) : (
-        children
+        shown.children
       )}
-      {footer ? <SheetFooter padded={padded}>{footer}</SheetFooter> : null}
+      {shown.footer ? <SheetFooter padded={padded}>{shown.footer}</SheetFooter> : null}
     </Animated.View>
   );
 
@@ -397,7 +428,7 @@ export function BottomSheet({
         ) : (
           sheet
         )}
-        {banner ? (
+        {shown.banner ? (
           <View
             pointerEvents="box-none"
             style={{
@@ -407,7 +438,7 @@ export function BottomSheet({
               right: 16,
             }}
           >
-            {banner}
+            {shown.banner}
           </View>
         ) : null}
       </GestureHandlerRootView>

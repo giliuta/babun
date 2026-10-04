@@ -31,7 +31,8 @@ import {
 } from "./master-draft";
 
 /** Разделы прав на карточке и на странице — в порядке реестра. */
-export const RIGHTS_AREAS: readonly RightsArea[] = ["calendar", "finance", "clients", "company"];
+/** Порядок разделов — слово владельца 01.10: «Календарь, Клиенты, Финансы, Компания». */
+export const RIGHTS_AREAS: readonly RightsArea[] = ["calendar", "clients", "finance", "company"];
 
 /** `?area=` из адреса — только знакомый раздел, иначе страница открывается
  *  сверху. */
@@ -61,10 +62,10 @@ export function levelWord(level: AreaLevel): string {
  *  прав сотрудника вместе с его правилами). */
 export const MEMBER_REFUSAL_TEXT: Record<AccessRefusal, string> = {
   not_live: "Этот раздел прав ещё не включён",
-  not_owner: "Права сотрудников настраивает владелец",
+  not_owner: "Права партнёров настраивает владелец",
   target_owner: "Права владельца не меняются",
-  not_attached: "Сотрудник не прикреплён к этому календарю",
-  not_member: "Сотрудник больше не работает в компании",
+  not_attached: "Партнёр не добавлен в эту команду",
+  not_member: "Партнёр больше не работает с компанией",
   other: "Не удалось сохранить права",
 };
 

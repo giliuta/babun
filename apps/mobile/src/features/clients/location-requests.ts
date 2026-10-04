@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/Toast";
-import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
+import { useScopeCompany } from "@/features/clients/company-scope";
 import {
   isLocationRequestToken,
   locationRequestState,
@@ -16,6 +15,11 @@ import {
 // Таблица `location_requests` читается по RLS (владелец и диспетчер своего
 // бизнеса), выписывается только RPC `location_request_create` — токен
 // рождается на сервере, — а отзыв ссылки = удаление строки.
+//
+// КОМПАНИЯ — КАРТОЧКИ, А НЕ КАЛЕНДАРЯ (03.10): ссылка выписывается клиенту той
+// компании, чья карточка открыта (`useScopeCompany`). Раньше запрос шёл в
+// компанию, открытую в календаре, и при команде партнёра отвечал «Клиент не
+// найден».
 
 export const locationRequestsKey = (tenantId: string | null, clientId: string) =>
   ["location-requests", tenantId, clientId] as const;
@@ -25,14 +29,14 @@ export const locationRequestsKey = (tenantId: string | null, clientId: string) =
  *  раз в 20 секунд: клиент обычно отвечает сразу после отправки, и объект
  *  должен появиться у диспетчера без «потянуть, чтобы обновить». */
 export function useLocationRequests(clientId: string | null) {
-  const tenantId = useTenantId();
+  const { tenantId, client: db } = useScopeCompany();
   const qc = useQueryClient();
   const toast = useToast();
   const query = useQuery({
     queryKey: locationRequestsKey(tenantId, clientId ?? ""),
     enabled: !!tenantId && !!clientId,
     queryFn: async (): Promise<LocationRequest[]> => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from("location_requests")
         .select("id, client_id, token, created_at, expires_at, used_at, location_id")
         .eq("client_id", clientId as string)
@@ -69,11 +73,11 @@ export function useLocationRequests(clientId: string | null) {
 }
 
 export function useCreateLocationRequest() {
-  const tenantId = useTenantId();
+  const { tenantId, client: db } = useScopeCompany();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (clientId: string): Promise<string> => {
-      const { data, error } = await supabase.rpc("location_request_create", {
+      const { data, error } = await db.rpc("location_request_create", {
         p_client_id: clientId,
       });
       if (error) throw new Error(friendlyRequestError(error.message));
@@ -89,11 +93,11 @@ export function useCreateLocationRequest() {
 }
 
 export function useCancelLocationRequest() {
-  const tenantId = useTenantId();
+  const { tenantId, client: db } = useScopeCompany();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (r: Pick<LocationRequest, "id" | "client_id">) => {
-      const { error } = await supabase
+      const { error } = await db
         .from("location_requests")
         .delete()
         .eq("id", r.id);

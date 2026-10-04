@@ -43,8 +43,8 @@ describe("цвета блока записи", () => {
 
   test("кант плотного блока — контур своего тона; отмена и просрочка свои", () => {
     // Контур (вторая итерация 24.09) — тот же тон темнее заливки. Право
-    // заговорить кантом иначе есть у двух состояний: отменённая (нейтраль,
-    // пунктир) и просрочка (почти чёрный тон, толще).
+    // заговорить кантом иначе есть только у отменённой (нейтраль, пунктир):
+    // чёрный кант просрочки снят владельцем 2026-10-01.
     for (const preset of PRESET_COLORS) {
       const c = blockColorsFor(preset.value);
       for (const status of ["scheduled", "in_progress", "completed"] as const) {
@@ -53,10 +53,8 @@ describe("цвета блока записи", () => {
           c.contour,
           `${preset.name}/${status}: кант обязан быть контуром своего тона`,
         );
-        assert.equal(blockEdge(c, status, true), c.overdueEdge);
       }
       assert.equal(blockEdge(c, "cancelled"), CANCELLED_EDGE);
-      assert.equal(blockEdge(c, "cancelled", true), CANCELLED_EDGE);
     }
   });
 

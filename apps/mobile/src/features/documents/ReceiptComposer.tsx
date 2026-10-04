@@ -11,14 +11,17 @@ import {
 } from "@babun/shared/local/finance/appointment-calc";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
-import { NavRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
-import { Building2 } from "lucide-react-native";
-import { PickerSheet } from "@/components/ui/PickerSheet";
-import { humanDay } from "@/features/appointments/helpers";
+import { WhenRow } from "@/features/appointments/BookingSummary";
+import { dmyShort } from "@/features/finances/period";
+import { clientRequisitesOf } from "@babun/shared/local/client-requisites";
+import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
+import { InvoiceObjectBlock } from "@/features/invoices/InvoiceObjectBlock";
+import { InvoiceClientRequisitesBlock } from "@/features/invoices/InvoiceClientRequisitesBlock";
+import type { InvoiceNumberTarget } from "@/features/invoices/InvoiceNumberRow";
 import { durationLabel } from "@/features/services/format";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/PaymentTiles";
@@ -31,13 +34,9 @@ import { accountIcon } from "@/features/finances/account-ui";
 import { accountsForTeam } from "@babun/shared/local/finance/integrity";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { useServices, type Service } from "@/features/services/queries";
-import { useCompanies, defaultCompany } from "@/features/companies/queries";
 import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { useTeamVatRate } from "@/features/finances/vat-queries";
-import { companyDetail } from "@/features/companies/company-rules";
-import { useTenant } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
-import { iconPreset } from "@/components/ui/icon-set";
 
 // СОСТАВИТЕЛЬ ЧЕКА — ИЗ ТЕХ ЖЕ БЛОКОВ, ЧТО ЗАПИСЬ.
 //
@@ -70,6 +69,11 @@ export interface ReceiptDraftState {
   companyId: string | null;
   /** День и время приёма денег — ровно как у операции. */
   date: string;
+  /** Объект клиента — как у инвойса (владелец 04.10: «выписать чек на
+   *  принятие оплаты именно на этот объект»). */
+  locationId: string | null;
+  /** Набор реквизитов клиента; `null` — основной, `"none"` — на имя. */
+  clientRequisitesId: string | null;
   lines: AppointmentService[];
   discountType: DiscountKind;
   /** Сырой текст поля скидки — разбор живёт здесь, как в записи. */
@@ -84,7 +88,7 @@ export interface ReceiptDraftState {
   vatRate?: number | null;
 }
 
-type OpenSheet = "client" | "company" | "services" | "total" | "when" | null;
+type OpenSheet = "client" | "services" | "total" | "when" | null;
 
 export function useReceiptDraft(
   today: string,
@@ -96,6 +100,8 @@ export function useReceiptDraft(
     accountId: null,
     companyId: null,
     date: today,
+    locationId: null,
+    clientRequisitesId: null,
     lines: [],
     discountType: "percent",
     discountValue: "",
@@ -142,16 +148,27 @@ export function ReceiptComposer({
   draft,
   businessToday,
   onChange,
-  onOpenCompany,
   footer,
+  forPayment = false,
+  number,
+  companyLocked = false,
 }: {
+  /** Строка «Номер» в блоке «Реквизиты» — номер чека, правится, как у
+   *  инвойса (владелец 04.10). Выписанному чеку номер уже дан — строки нет. */
+  number?: InvoiceNumberTarget;
+  /** Реквизиты решены: у чека по инвойсу — реквизиты инвойса, у
+   *  выписанного — свои. */
+  companyLocked?: boolean;
   draft: ReceiptDraftState;
+  /** ЧЕК НА УЖЕ ПРИНЯТУЮ ОПЛАТУ (владелец 2026-10-03): клиент, дата, счёт и
+   *  сумма — проводки, их чек не меняет (`issue_receipt` снимает их с неё).
+   *  Правятся строки работ и реквизиты; скидки и VAT в «Итого» нет — налог
+   *  уже посчитан в проводке. */
+  forPayment?: boolean;
   /** Сегодня по часам бизнеса: дальше него чек не датируется — деньги не
    *  приходят из будущего. */
   businessToday: string;
   onChange: (next: Partial<ReceiptDraftState>) => void;
-  /** Дверь в реквизиты: наборы заводят и правят там. */
-  onOpenCompany: () => void;
   /** Действие экрана рисует маршрут: у экрана оно одно и живёт в футере. */
   footer?: ReactNode;
 }) {
@@ -162,8 +179,6 @@ export function ReceiptComposer({
   const appointments = useAppointments();
   const tileWidth = useTileWidth();
   const router = useRouter();
-  const tenant = useTenant();
-  const companies = useCompanies();
   const [sheet, setSheet] = useState<OpenSheet>(null);
 
   // Созданный ради чека клиент возвращается в чек: тот же ящик, что у записи.
@@ -195,10 +210,6 @@ export function ReceiptComposer({
   const teamVatRate = useTeamVatRate(draft.teamId);
   const rememberedRate = useRememberedVatRate(teamVatRate);
   const vatRate = draft.vatRate ?? rememberedRate.rate;
-  const liveCompanies = (companies.data ?? []).filter((c) => !c.archived_at);
-  const company =
-    liveCompanies.find((c) => c.id === draft.companyId) ??
-    defaultCompany(companies.data ?? []);
   const totals = receiptTotals(draft);
   // ПЕРЕВОД «РАБОТА → СТРОКА БЛОКА» — ОДИН НА ЭКРАН: его читают и блок
   // «Услуги», и шторка «Итого». Две копии разошлись бы на первой же правке.
@@ -217,7 +228,9 @@ export function ReceiptComposer({
       })),
     [catalog, draft.lines],
   );
-  const openAccounts = accountsForTeam(accounts.data ?? [], draft.teamId);
+  const openAccounts = forPayment
+    ? (accounts.data ?? []).filter((a) => a.id === draft.accountId)
+    : accountsForTeam(accounts.data ?? [], draft.teamId);
 
   const setLines = (lines: AppointmentService[]) => onChange({ lines });
 
@@ -284,37 +297,47 @@ export function ReceiptComposer({
         contentContainerStyle={{ paddingTop: 6, paddingBottom: 32, gap: 6 }}
         keyboardShouldPersistTaps="handled"
       >
+        {/* ТА ЖЕ КОНСТРУКЦИЯ, ЧТО У ИНВОЙСА (владелец 04.10: «реквизиты —
+            первыми, в них номер; дата — как в инвойсе; объект и реквизиты
+            клиента — так же»). Блоки — инвойса, не копии. */}
+        <InvoiceRequisitesBlock
+          companyId={draft.companyId}
+          onCompanyChange={(companyId) => onChange({ companyId })}
+          number={number}
+          locked={companyLocked}
+        />
+
+        {/* ДАТА ПЛАШКОЙ, КАК У ИНВОЙСА: один день числами — деньги приняты в
+            такой-то день; правится барабаном. */}
+        <WhenRow
+          date={draft.date}
+          dateLabel={dmyShort(draft.date)}
+          until={{ text: "", pill: null }}
+          onPress={() => setSheet("when")}
+        />
+
         <ClientBlock
           client={client}
           stats={client ? statsById.get(client.id) : undefined}
-          onPick={() => setSheet("client")}
-          onOpenCard={() => setSheet("client")}
-          onClear={client ? () => onChange({ clientId: null }) : undefined}
+          onPick={forPayment ? undefined : () => setSheet("client")}
+          onOpenCard={forPayment ? undefined : () => setSheet("client")}
+          onClear={client && !forPayment ? () => onChange({ clientId: null }) : undefined}
         />
 
-        {/* ДАТА — СВОИМ БЛОКОМ (владелец 2026-09-20: «дата — это должен быть
-            блок с выбором даты»). Часов у чека нет: деньги приняты в такой-то
-            день. */}
-        <SectionCard title="Дата">
-          <NavRow
-            label="Дата чека"
-            value={humanDay(draft.date)}
-            onPress={() => setSheet("when")}
-          />
-        </SectionCard>
+        <InvoiceObjectBlock
+          client={client}
+          locationId={draft.locationId}
+          onLocationChange={(locationId) => onChange({ locationId })}
+          paper="receipt"
+        />
 
-        {/* РЕКВИЗИТЫ — ЧЕМ ПОДПИСАН ЧЕК. Владелец 2026-09-20 поправил слово:
-            «компания — это компания, а именно реквизиты компании». Выбирают не
-            юрлицо, а набор реквизитов; основной подставляется сам, а выбрать
-            можно любой — тем же жестом, что выбирают услугу. */}
-        <SectionCard title="Реквизиты">
-          <NavRow
-            label={company?.name ?? tenant.data?.legal_name ?? tenant.data?.name ?? "Компания"}
-            value={company?.business_address ?? tenant.data?.business_address ?? null}
-            placeholder="Реквизиты не заполнены"
-            onPress={() => setSheet("company")}
+        {client && clientRequisitesOf(client).length > 0 ? (
+          <InvoiceClientRequisitesBlock
+            client={client}
+            requisitesId={draft.clientRequisitesId}
+            onRequisitesChange={(clientRequisitesId) => onChange({ clientRequisitesId })}
           />
-        </SectionCard>
+        ) : null}
 
         {/* УСЛУГИ И «ИТОГО» — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ. Про налог здесь нет
             ни слова, пока человек его не выбрал (владелец 2026-09-20: «если
@@ -347,7 +370,7 @@ export function ReceiptComposer({
                   compact
                   state="idle"
                   selected={draft.accountId === a.id}
-                  onPress={() => onChange({ accountId: a.id })}
+                  onPress={forPayment ? () => {} : () => onChange({ accountId: a.id })}
                   accessibilityLabel={`Счёт: ${a.name}`}
                 />
               ))}
@@ -369,31 +392,6 @@ export function ReceiptComposer({
           Карточка нового клиента открывается ПОВЕРХ чека в том же корневом
           стеке, набранное остаётся, а «Готово» отдаёт id сюда — и клиент
           встаёт в чек сам (`pending-client.ts`). */}
-      <PickerSheet
-        visible={sheet === "company"}
-        title="Реквизиты"
-        items={[
-          ...liveCompanies.map((c) => ({
-            id: c.id,
-            label: c.name,
-            // Та же подпись, что на странице «Реквизиты»: один набор
-          // не выглядит в выборе иначе, чем в справочнике.
-          hint: companyDetail(c),
-            // Вид набора — его собственный: две фирмы в списке различает
-            // плитка, а не чтение имени. Нет вида — прежний «дом» акцентом.
-            icon: iconPreset(c.icon) ?? Building2,
-            color: c.color ?? t.accent,
-            onPress: () => onChange({ companyId: c.id }),
-          })),
-        ]}
-        selectedId={company?.id ?? null}
-        // «Завести компанию» — дверь в справочник, а не вторая форма: юрлицо
-        // заводят один раз и печатают им годами.
-        onSettings={onOpenCompany}
-        settingsLabel="Реквизиты"
-        onClose={() => setSheet(null)}
-      />
-
       <ClientPickerSheet
         visible={sheet === "client"}
         selectedId={draft.clientId}
@@ -431,22 +429,30 @@ export function ReceiptComposer({
         onAddLine={addCustomLine}
         onNameChange={renameLine}
         onRemoveLine={removeCustomLine}
-        discount={{
-          kind: draft.discountType,
-          value: draft.discountValue,
-          onKindChange: (discountType) => onChange({ discountType }),
-          onValueChange: (discountValue) => onChange({ discountValue }),
-        }}
+        discount={
+          forPayment
+            ? undefined
+            : {
+                kind: draft.discountType,
+                value: draft.discountValue,
+                onKindChange: (discountType) => onChange({ discountType }),
+                onValueChange: (discountValue) => onChange({ discountValue }),
+              }
+        }
         total={totals.total}
-        vat={{
-          mode: draft.vatMode,
-          rate: vatRate,
-          onModeChange: (vatMode) => onChange({ vatMode }),
-          onRateChange: (vatRate) => {
-            onChange({ vatRate });
-            rememberedRate.remember(vatRate);
-          },
-        }}
+        vat={
+          forPayment
+            ? undefined
+            : {
+                mode: draft.vatMode,
+                rate: vatRate,
+                onModeChange: (vatMode) => onChange({ vatMode }),
+                onRateChange: (vatRate) => {
+                  onChange({ vatRate });
+                  rememberedRate.remember(vatRate);
+                },
+              }
+        }
       />
 
       {/* ДАТА БЕЗ ЧАСОВ (владелец 2026-09-20: «чётко по времени не надо»):

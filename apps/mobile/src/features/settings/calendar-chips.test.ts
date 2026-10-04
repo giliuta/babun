@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { composeCalendarChips, type ChipSourceCalendar } from "./calendar-chips";
+import { FOREIGN_PREFIX, composeCalendarChips, type ChipSourceCalendar } from "./calendar-chips";
+
+// Чужой чип узнаётся по адресу (`@компания:команда`), а не по виду: с 1.10
+// команды партнёра рисуются так же, как свои.
+const foreign = (chip: { id: string } | undefined) => !!chip?.id.startsWith(FOREIGN_PREFIX);
 
 const AIRFIX = "2bc7907e-b149-44a9-92ff-a5e73403031c";
 const GILIUTA = "11365a87-bef9-4f6c-a030-b15083fe646b";
@@ -26,8 +30,8 @@ describe("лента календарей — состав от компании
       activeTenantId: AIRFIX,
     });
     assert.deepEqual(names(chips), ["Y&D", "Команда 1"]);
-    assert.equal(chips.find((c) => c.name === "Y&D")?.outline, undefined);
-    assert.equal(chips.find((c) => c.name === "Команда 1")?.outline, true);
+    assert.equal(foreign(chips.find((c) => c.name === "Y&D")), false);
+    assert.equal(foreign(chips.find((c) => c.name === "Команда 1")), true);
   });
 
   test("уход с устаревшим флагом — зеркально", () => {
@@ -37,8 +41,8 @@ describe("лента календарей — состав от компании
       activeTenantId: GILIUTA,
     });
     assert.deepEqual(names(chips), ["Y&D", "Команда 1"]);
-    assert.equal(chips.find((c) => c.name === "Y&D")?.outline, true);
-    assert.equal(chips.find((c) => c.name === "Команда 1")?.outline, undefined);
+    assert.equal(foreign(chips.find((c) => c.name === "Y&D")), true);
+    assert.equal(foreign(chips.find((c) => c.name === "Команда 1")), false);
   });
 
   test("порядок один и тот же, где бы человек ни стоял", () => {

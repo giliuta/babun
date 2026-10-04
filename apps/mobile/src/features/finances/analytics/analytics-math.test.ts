@@ -149,12 +149,13 @@ describe("деньги — правилом плиток «Финансов»", 
 describe("итоги работы", () => {
   test("работ на, оплачено, средний чек и работ на час", () => {
     const w = workTotals([
-      appt({ id: "1", services: [line("c", 3, 45)] as never, prepaid_amount: 100 }),
-      appt({ id: "2", services: [line("c", 1, 50)] as never, time_start: "12:00", time_end: "12:30" }),
+      appt({ id: "1", services: [line("c", 3, 45)] as never, total_amount: 135, prepaid_amount: 100 }),
+      appt({ id: "2", services: [line("c", 1, 50)] as never, total_amount: 50, time_start: "12:00", time_end: "12:30" }),
     ]);
     assert.equal(w.records, 2);
     assert.equal(w.worked, 185);
     assert.equal(w.paid, 100);
+    assert.equal(w.owed, 85);
     assert.equal(w.averageCheck, 92.5);
     assert.equal(w.minutes, 120);
     assert.equal(w.perHour, 92.5);
@@ -162,8 +163,28 @@ describe("итоги работы", () => {
 
   test("без записей — нули, работ на час — нет", () => {
     assert.deepEqual(workTotals([]), {
-      records: 0, worked: 0, paid: 0, averageCheck: 0, minutes: 0, perHour: null,
+      records: 0, worked: 0, paid: 0, owed: 0, averageCheck: 0, minutes: 0, perHour: null,
     });
+  });
+
+  // Аудит финансов 03.10: строки услуг не знают общей скидки записи.
+  test("оплаченный визит со скидкой на запись — без «не оплачено»", () => {
+    const w = workTotals([
+      appt({ services: [line("c", 1, 100)] as never, total_amount: 90, prepaid_amount: 90 }),
+    ]);
+    assert.equal(w.worked, 90);
+    assert.equal(w.owed, 0);
+    assert.equal(w.averageCheck, 90);
+  });
+
+  test("полный возврат — ни работы, ни долга; переплата не гасит чужой долг", () => {
+    const w = workTotals([
+      appt({ id: "r", total_amount: 80, prepaid_amount: 80, payment_status: "refunded" }),
+      appt({ id: "o", total_amount: 50, prepaid_amount: 70 }),
+      appt({ id: "d", total_amount: 40 }),
+    ]);
+    assert.equal(w.worked, 90);
+    assert.equal(w.owed, 40);
   });
 });
 
@@ -200,9 +221,9 @@ describe("разрез по командам", () => {
   test("команды по сумме работ; без команды — своей строкой", () => {
     const rows = teamBreakdown(
       [
-        appt({ id: "1", team_id: "yd", services: [line("c", 1, 50)] as never }),
-        appt({ id: "2", team_id: "dk", services: [line("c", 4, 45)] as never }),
-        appt({ id: "3", team_id: null, services: [line("c", 1, 10)] as never }),
+        appt({ id: "1", team_id: "yd", services: [line("c", 1, 50)] as never, total_amount: 50 }),
+        appt({ id: "2", team_id: "dk", services: [line("c", 4, 45)] as never, total_amount: 180 }),
+        appt({ id: "3", team_id: null, services: [line("c", 1, 10)] as never, total_amount: 10 }),
       ],
       [{ id: "yd", name: "Y&D" }, { id: "dk", name: "D&K" }],
     );
@@ -312,6 +333,14 @@ describe("сравнение с прошлым периодом", () => {
       from: "2026-09-14",
       to: "2026-09-20",
       partial: false,
+    });
+  });
+  test("идущая неделя — те же дни прошлой: пн–сб против пн–сб", () => {
+    // Суббота 03.10: неделя 28.09–04.10 идёт.
+    assert.deepEqual(previousPeriod("2026-09-28", "2026-10-04", "2026-10-03"), {
+      from: "2026-09-21",
+      to: "2026-09-26",
+      partial: true,
     });
   });
   test("процент изменения; с нуля сравнивать не с чем", () => {

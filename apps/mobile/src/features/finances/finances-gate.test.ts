@@ -28,13 +28,13 @@ describe("financesGate", () => {
     assert.equal(financesGate("master", undefined), "loading");
   });
 
-  test("без «Доходов и расходов» — та же страница серым, а не «раздел недоступен»", () => {
+  test("без «Доходов» и «Расходов» — та же страница серым, а не «раздел недоступен»", () => {
     assert.equal(financesGate("master", map()), "locked");
     assert.equal(
-      financesGate("dispatcher", map({ calendars: { "team-1": { "finance.operations": "off" } } })),
+      financesGate("dispatcher", map({ calendars: { "team-1": { "finance.income": "off", "finance.expense": "off" } } })),
       "locked",
     );
-    // Другие блоки финансов без «Доходов и расходов» вкладку не открывают.
+    // Другие блоки финансов без сторон денег вкладку не открывают.
     assert.equal(
       financesGate("master", map({ calendars: { "team-1": { "finance.debts": "write" } } })),
       "locked",
@@ -43,11 +43,11 @@ describe("financesGate", () => {
 
   test("«Смотрит» или «Меняет» хотя бы в одном календаре — финансы открыты", () => {
     const readSomewhere = map({
-      calendars: { "team-1": { "finance.operations": "off" }, "team-2": { "finance.operations": "read" } },
+      calendars: { "team-1": { "finance.income": "off" }, "team-2": { "finance.expense": "read" } },
     });
     assert.equal(financesGate("master", readSomewhere), "open");
     assert.equal(
-      financesGate("dispatcher", map({ calendars: { "team-1": { "finance.operations": "write" } } })),
+      financesGate("dispatcher", map({ calendars: { "team-1": { "finance.income": "full" } } })),
       "open",
     );
   });

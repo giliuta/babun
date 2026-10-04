@@ -66,6 +66,7 @@ export function SwipeRow({
   fullSwipe = false,
   onAction,
   leading,
+  radius,
   children,
 }: {
   /** Подпись кнопки ПРАВОЙ кромки — разрушительного действия. Одна кромка —
@@ -96,6 +97,10 @@ export function SwipeRow({
     accessibilityLabel?: string;
     onAction: () => void;
   };
+  /** ПЛАШКА НА ХОЛСТЕ (файлы и реквизиты клиента, 03.10): строка — отдельная
+   *  плашка со скруглением, и подложка с кромкой скругляются вместе с ней.
+   *  Нет — строка внутри карточки, углы держит карточка. */
+  radius?: number;
   children: ReactNode;
 }) {
   const t = useThemeColors();
@@ -183,7 +188,7 @@ export function SwipeRow({
   }));
 
   return (
-    <View>
+    <View style={radius ? { borderRadius: radius, borderCurve: "continuous", overflow: "hidden" } : undefined}>
       {/* Цветная подложка живёт ПОД строкой и видна ровно настолько,
           насколько её сдвинули.
 

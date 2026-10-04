@@ -95,7 +95,7 @@ export function useCreateInvitation() {
       // В календарь мастера зовут по почте и без карточки («Мастера → Добавить
       // мастера», STORY-081); карточку требует только приглашение без календаря.
       if (role === "master" && !masterId && !teamId) {
-        throw new Error("Для мастера выберите карточку сотрудника.");
+        throw new Error("Для мастера выберите карточку партнёра.");
       }
       const name = fullName?.trim();
       const { data, error } = await supabase.rpc("create_invitation", {
@@ -121,7 +121,7 @@ export function useRemoveTenantMember() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (userId: string) => {
-      if (!tenantId) throw new Error("Нет активной компании");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       if (session?.user.id === userId) {
         throw new Error("Свой доступ нельзя удалить с этого экрана.");
       }
@@ -134,7 +134,7 @@ export function useRemoveTenantMember() {
         .select("user_id")
         .maybeSingle();
       if (error) throw new Error(error.message);
-      if (!data) throw new Error("Сотрудник не найден или доступ запрещён");
+      if (!data) throw new Error("Партнёр не найден или доступ запрещён");
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["tenant-members"] }),
     meta: { errorHandled: true },
@@ -146,7 +146,7 @@ export function useRevokeInvitation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      if (!tenantId) throw new Error("Нет активной компании");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       await requireOwner();
       const { data, error } = await supabase
         .from("invitations")

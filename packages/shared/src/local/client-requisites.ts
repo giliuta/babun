@@ -174,6 +174,12 @@ export function requisitesNumbersLine(set: Partial<RequisitesFields>): string {
 
 // ─── Выбор набора в инвойсе ─────────────────────────────────────────────
 
+/** «БЕЗ РЕКВИЗИТОВ — НА ИМЯ» (владелец 2026-10-03: «выставить инвойс можно
+ *  без реквизитов, только на имя»). Сервер (`build_invoice_client_snapshot_for`,
+ *  миграция 20261004011347) кладёт в снимок пустые поля набора — на бумаге
+ *  остаётся имя клиента. `null` по-прежнему значит «основной». */
+export const NO_CLIENT_REQUISITES = "none";
+
 /** Что ставить в инвойс: выбранный набор, пока он есть у клиента; иначе —
  *  ничего (`null` = основной, его подставит сервер). Смена клиента, удаление
  *  набора или выбор основного сводятся к `null`: колонка инвойса не должна
@@ -183,6 +189,7 @@ export function resolveInvoiceRequisitesId(
   chosenId: string | null | undefined,
 ): string | null {
   if (!chosenId) return null;
+  if (chosenId === NO_CLIENT_REQUISITES) return sets.length ? NO_CLIENT_REQUISITES : null;
   const chosen = sets.find((s) => s.id === chosenId);
   if (!chosen || chosen.is_default) return null;
   return chosen.id;
@@ -194,6 +201,7 @@ export function invoiceRequisites(
   chosenId: string | null | undefined,
 ): ClientRequisites | null {
   const id = resolveInvoiceRequisitesId(sets, chosenId);
+  if (id === NO_CLIENT_REQUISITES) return null;
   return (id ? sets.find((s) => s.id === id) : null) ?? defaultRequisites(sets);
 }
 

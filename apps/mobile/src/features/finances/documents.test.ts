@@ -214,7 +214,9 @@ describe("состояние документа называет только т
         },
       }),
     );
-    assert.equal(docs[0].state, "К оплате");
+    // Не «Оплачен» — и не «К оплате», как нетронутый: то же слово, что на
+    // странице инвойса (03.10).
+    assert.equal(docs[0].state, "Частично оплачен");
   });
 
   test("аннулированный инвойс не пропадает, а гаснет", () => {
@@ -313,23 +315,22 @@ describe("сегмент и поиск режут уже собранный сп
 });
 
 describe("кредит-нота в «Документах»", () => {
-  test("называется кредит-нотой, состояние «Сторно», строка погашена", async () => {
-    const { collectDocuments: collect } = await import("./documents");
+  // Владелец 2026-10-04: нота — часть своего инвойса, а не отдельная строка;
+  // в списке стоит только инвойс, погасший, и номер ноты находит его.
+  test("своей строки нет: инвойс погашен «Отменён», номер ноты его находит", async () => {
+    const { collectDocuments: collect, filterDocuments: filter } = await import("./documents");
+    const base = {
+      issued_on: "2026-09-10",
+      currency: "EUR",
+      client_id: null,
+      client_snapshot: null,
+      team_id: null,
+      due_on: null,
+    };
     const docs = collect({
       invoices: [
-        {
-          id: "cn",
-          kind: "credit_note",
-          number: "CN-2026-001",
-          issued_on: "2026-09-10",
-          total: -100,
-          currency: "EUR",
-          status: "issued",
-          client_id: null,
-          client_snapshot: null,
-          team_id: null,
-          due_on: null,
-        } as never,
+        { ...base, id: "inv", kind: "invoice", number: "INV-2026-001", total: 100, status: "cancelled", credit_note_of_id: null } as never,
+        { ...base, id: "cn", kind: "credit_note", number: "CN-2026-001", total: -100, status: "issued", credit_note_of_id: "inv" } as never,
       ],
       payments: {},
       receipts: [],
@@ -339,9 +340,37 @@ describe("кредит-нота в «Документах»", () => {
       teamId: null,
       today: "2026-09-30",
     });
-    assert.equal(docs[0].title, "Кредит-нота CN-2026-001");
-    assert.equal(docs[0].state, "Сторно");
+    assert.deepEqual(docs.map((d) => d.id), ["inv"]);
+    assert.equal(docs[0].state, "Отменён");
     assert.equal(docs[0].dead, true);
-    assert.equal(docs[0].creditNote, true);
+    assert.equal(filter(docs, "invoice", "CN-2026-001").length, 1);
+  });
+});
+
+describe("возврат по чеку в «Документах» (04.10)", () => {
+  test("погашен возвратом — «Возвращён», частично — «Частично возвращён», номер ноты ищет чек", () => {
+    const note = (id: string, receiptId: string, number: string) =>
+      invoice({
+        id,
+        number,
+        kind: "credit_note",
+        credit_note_of_receipt_id: receiptId,
+        total: -10,
+      } as never);
+    const docs = collectDocuments(
+      sources({
+        invoices: [note("n1", "full", "CN-2026-010"), note("n2", "part", "CN-2026-011")],
+        receipts: [
+          receipt({ id: "full", number: "RC-2026-001", status: "void" }),
+          receipt({ id: "part", number: "RC-2026-002" }),
+          receipt({ id: "dead", number: "RC-2026-003", status: "void" }),
+        ],
+      }),
+    );
+    assert.equal(docs.find((d) => d.id === "full")?.state, "Возвращён");
+    assert.equal(docs.find((d) => d.id === "part")?.state, "Частично возвращён");
+    assert.equal(docs.find((d) => d.id === "dead")?.state, "Аннулирован");
+    assert.equal(docs.some((d) => d.id === "n1" || d.id === "n2"), false);
+    assert.equal(filterDocuments(docs, "receipt", "CN-2026-011").length, 1);
   });
 });

@@ -48,6 +48,12 @@ export function useFilePickers(opts: {
         mediaTypes: ["images", "videos"],
         quality: 0.75,
         videoMaxDuration: 60,
+        // МИНУТА ВИДЕО ОБЯЗАНА ВЛЕЗТЬ В 50 МБ ХРАНИЛИЩА. По умолчанию камера
+        // пишет в высшем качестве — 1080p, 60–120 МБ в минуту (миграция
+        // бакета), и ролик длиннее ~30 с снимался, а потом отвергался «Видео
+        // больше 50 МБ» и пропадал (аудит формы записи 03.10). 640×480 —
+        // десятки мегабайт в минуту, а агрегат и щиток на нём видно.
+        videoQuality: ImagePicker.UIImagePickerControllerQualityType.VGA640x480,
       });
       if (!result.canceled && result.assets.length > 0) opts.onMedia(toMedia(result.assets));
     } catch (error) {

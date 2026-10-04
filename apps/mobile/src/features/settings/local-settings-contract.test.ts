@@ -57,4 +57,10 @@ describe("canonical settings cache contract", () => {
     assert.match(personalSave, /\.select\("id"\)/);
     assert.match(personalSave, /Сохранение типов событий не подтверждено сервером/);
   });
+
+  test("копия настроек календаря по компании — у всех ролей, и без сети читается первой после перехода", () => {
+    const read = section("export function useCalendarSettings()", "export function useSaveCalendarSettings()");
+    assert.match(read, /safeSaveOperationalCalendarSettings\(activeTenantId, \{ \.\.\.settings \}\);\s*if \(role !== "master"\) safeSaveCalendarSettings\(settings\);/);
+    assert.match(read, /role !== "master" && safeHasStoredCalendarSettings\(\)\s*\? safeLoadCalendarSettings\(\)\s*: safeLoadOperationalCalendarSettings\(activeTenantId\)/);
+  });
 });

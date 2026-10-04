@@ -22,6 +22,8 @@
 export const READ_RPCS: ReadonlySet<string> = new Set([
   "account_balances",
   "appointment_link_lookup",
+  // Оплаты тарифа в Кабинете (20261004085616): `stable`, сверено в базе 04.10.
+  "cabinet_tariff_payments",
   "current_tenant_profile_safe",
   "current_user_role",
   "invitation_preview",
@@ -34,6 +36,8 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "list_master_services_safe",
   "list_member_access",
   "list_member_clients",
+  // «История записей» клиента сотруднику (015, 01.10): `stable`.
+  "member_client_history",
   "list_members",
   "list_my_calendars",
   "list_operational_masters_safe",
@@ -42,8 +46,9 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "location_request_lookup",
   "my_access_map",
   "my_invitations",
-  "next_company_invoice_number",
-  "next_invoice_number",
+  // STORY-101: предпросмотр номера из серии юрлица, `stable`
+  // (миграция 20261001001000).
+  "peek_document_number",
   "read_operational_calendar_settings_safe",
   "read_sms_templates_safe",
   "sms_account",
@@ -53,6 +58,9 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "sms_team_templates",
   "tenant_quota_appointments_month",
   "tenant_quota_clients",
+  // Рабочий день компании — окно «Около записи» в зеркале (015, 30.09):
+  // `provolatile = 's'` спрошено у базы 30.09.
+  "tenant_business_date",
 ]);
 
 /** Функции, которые пишут: `provolatile = 'v'`. Перечислены явно, хотя
@@ -67,13 +75,28 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "appointment_link_answer",
   "cancel_appointment_payment",
   "cancel_invoice",
+  // Тарифы (миграция 20261001183700, 015): рабочие команды и пробный период.
+  "choose_working_teams",
   "create_client_with_tags",
+  // Первый календарь владельца — заводит только при пустой компании (03.10).
+  "create_first_calendar",
   "create_invitation",
   "decline_invitation",
   "delete_account_transfer",
   "delete_calendar",
+  "delete_credit_note",
+  "delete_invoice",
+  // «Удалённые операции» (миграция 20261003224700, 016).
+  "delete_operation",
   "issue_invoice",
   "issue_receipt",
+  "update_receipt",
+  // Возврат по чеку + кредит-нота (миграция 20261004091731).
+  "refund_receipt",
+  "delete_receipt",
+  "issue_receipt_credit_note",
+  // Частичная кредит-нота к инвойсу (миграция 20261004133917).
+  "issue_partial_credit_note",
   "location_request_create",
   "location_request_submit",
   "member_appointment_copy",
@@ -89,16 +112,19 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "record_account_transfer",
   "record_appointment_payment",
   "record_invoice_payment",
+  // Возврат клиенту переплаты по записи (миграция 20261004024913).
+  "refund_appointment_overpayment",
   "refund_invoice_payment",
   "replace_day_extras",
   "reset_appointment_payment",
+  "restore_deleted_operation",
   "set_appointment_prepayment",
   "set_client_sms_opt_out",
   "set_client_team",
-  // Живёт в ещё не накатанной миграции `20260920200000_companies_registry`:
-  // волатильность спросить не у кого, а дело её — ставить умолчание.
-  "set_company_invoice_next_number",
+  "member_trash_client",
   "set_default_company",
+  // STORY-101: старт серии документов юрлица (миграция 20261001001000).
+  "set_document_series_start",
   "set_member_access",
   "set_member_calendars",
   "sms_appointment_link",
@@ -112,6 +138,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "sms_send_bulk",
   "sms_send_manual",
   "sms_set_team_template_enabled",
+  "start_trial",
   "undo_appointment_payment",
   "update_client_with_tags",
   "update_invoice_draft",

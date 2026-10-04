@@ -21,11 +21,15 @@ import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import {
   signOutScopeAndWipe,
+  unsentChangesNow,
   wipeTenantScopedData,
 } from "@/lib/auth-clear";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
+import { writeErrorWords } from "@/lib/connection-words";
+import { isHumanText } from "@babun/shared/i18n/runtime";
+import { deleteRefusal, passwordRefusal } from "@/features/cabinet/account-errors";
 
 function Row({ label, value }: { label: string; value: string }) {
   const t = useThemeColors();
@@ -52,7 +56,8 @@ export default function AccountScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Аккаунт" />
+      {/* Шапка = строка Кабинета, которой сюда пришли (аудит 03.10). */}
+      <ScreenHeader title="Вход и безопасность" />
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -129,17 +134,21 @@ function PasswordSection({ email }: { email: string | null }) {
         throw new Error(
           /invalid|credentials/i.test(reauthErr.message)
             ? "Текущий пароль введён неверно."
-            : reauthErr.message,
+            : passwordRefusal(reauthErr.message),
         );
       }
       const { error } = await supabase.auth.updateUser({ password: pwd });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(passwordRefusal(error.message));
       setCurrentPwd("");
       setPwd("");
       setConfirm("");
       toast("Пароль обновлён");
     } catch (e) {
-      notify("Ошибка", e instanceof Error ? e.message : "Не удалось сменить пароль");
+      const words = writeErrorWords(e, {
+        failed: "Не удалось сменить пароль",
+        notDone: "Пароль прежний",
+      });
+      notify(words.title, words.subtitle);
     } finally {
       setSaving(false);
     }
@@ -214,20 +223,26 @@ function DevicesSection() {
       if (error) throw new Error(error.message);
       notify("Готово", "Сессии на других устройствах завершены.");
     } catch (e) {
-      notify(
-        "Не удалось выйти",
-        e instanceof Error ? e.message : "Проверьте соединение и попробуйте ещё раз.",
-      );
+      const words = writeErrorWords(e, {
+        failed: "Не удалось выйти",
+        notDone: "Другие устройства остались в аккаунте",
+      });
+      notify(words.title, isHumanText(words.subtitle) ? words.subtitle : "Попробуйте ещё раз.");
     } finally {
       setBusy(false);
     }
   };
 
-  const signOutEverywhere = () => {
+  const signOutEverywhere = async () => {
+    // Очередь правок стирается вместе с кэшем — сказать об этом в том же
+    // окне, а не вторым (аудит 03.10).
+    const unsent = await unsentChangesNow();
     confirmThen(
       "Выйти со всех устройств?",
       {
-        message: "Все сессии, включая это устройство, будут завершены.",
+        message: unsent
+          ? `Все сессии, включая это устройство, будут завершены. ${unsent}`
+          : "Все сессии, включая это устройство, будут завершены.",
         confirmLabel: "Выйти везде",
         destructive: true,
       },
@@ -242,10 +257,11 @@ function DevicesSection() {
           // it exposes the signed-out/login tree.
           await signOutScopeAndWipe("global");
         } catch (e) {
-          notify(
-            "Не удалось выйти",
-            e instanceof Error ? e.message : "Проверьте соединение и попробуйте ещё раз.",
-          );
+          const words = writeErrorWords(e, {
+            failed: "Не удалось выйти",
+            notDone: "Устройства остались в аккаунте",
+          });
+          notify(words.title, isHumanText(words.subtitle) ? words.subtitle : "Попробуйте ещё раз.");
         } finally {
           setBusy(false);
         }
@@ -295,7 +311,7 @@ function DevicesSection() {
       </Pressable>
       <Divider inset={16} />
       <Pressable
-        onPress={signOutEverywhere}
+        onPress={() => void signOutEverywhere()}
         disabled={busy}
         accessibilityRole="button"
         accessibilityLabel="Выйти со всех устройств"
@@ -337,7 +353,7 @@ function DangerZoneSection({ email }: { email: string }) {
         "account-delete",
         { body: { confirmation: typed.trim() } },
       );
-      if (invokeError) throw new Error(invokeError.message);
+      if (invokeError) throw await deleteRefusal(invokeError);
       if (!data || data.ok !== true) {
         throw new Error(
           typeof data?.error === "string" ? data.error : "Не удалось удалить аккаунт",
@@ -350,11 +366,8 @@ function DangerZoneSection({ email }: { email: string }) {
       await supabase.auth.signOut({ scope: "local" });
       setOpen(false);
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Не удалось удалить аккаунт",
-      );
+      const message = caught instanceof Error ? caught.message : "";
+      setError(isHumanText(message) ? message : "Не удалось удалить аккаунт. Попробуйте ещё раз.");
       setBusy(false);
     }
   };

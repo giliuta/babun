@@ -199,11 +199,14 @@ export function ModeIconButton({
   icon: Icon,
   label,
   active,
+  dimmed = false,
   onPress,
 }: {
   icon: LucideIcon;
   label: string;
   active?: boolean;
+  /** Серая, но нажимается — закрыто тарифом: тап поднимает плашку (1.10). */
+  dimmed?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
@@ -213,6 +216,7 @@ export function ModeIconButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ selected: Boolean(active) }}
+      accessibilityHint={dimmed ? "Нужно изменить тариф" : undefined}
       hitSlop={8}
       style={({ pressed }) => ({
         width: 32,
@@ -221,7 +225,7 @@ export function ModeIconButton({
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: active ? `${t.accent}1f` : "transparent",
-        opacity: pressed ? 0.6 : 1,
+        opacity: pressed ? 0.6 : dimmed ? 0.4 : 1,
       })}
     >
       <Icon size={18} strokeWidth={2} color={active ? t.accent : t.sub} />
@@ -387,7 +391,7 @@ export function NoAccountsNotice({
           : "У команды нет счёта. Попросите владельца завести его в финансах."}
       </Text>
       {canCreate ? (
-        <AddRow label="Создать счёт" onPress={onCreate} />
+        <AddRow label="Добавить счёт" onPress={onCreate} />
       ) : (
         <View style={{ height: 12 }} />
       )}

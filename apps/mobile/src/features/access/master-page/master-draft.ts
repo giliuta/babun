@@ -46,7 +46,10 @@ export type RightsArea = Exclude<AccessArea, "owner">;
  *  календаря, а не умолчание реестра: у живого сотрудника страница читает
  *  то, что лежит на сервере, и не может показать «Видит» там, где «Не видит». */
 export const STARTER_CALENDAR_LEVELS: Readonly<Record<string, AccessLevel>> = {
-  "record.status": "read",
+  // Записи команды видит — так их засевает и сервер при приёме приглашения
+  // (`seed_records_level`); без этой строки черновик показывал «Скрыты», а
+  // человек приходил с «Видит» (01.10).
+  "calendar.records": "read",
   "record.object": "read",
   "record.services": "read",
   // STORY-088, волна 1: события, метки дня и график команды сотрудник видел
@@ -121,6 +124,8 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
   // свёртки владелец выставил бы «Меняет» в деньгах скрытого календаря — и у
   // человека не открылось бы ничего.
   "calendar.records": [
+    // «Ограничения» записей (03.10): записей не видит — и окна у них нет.
+    "calendar.window",
     "calendar.create",
     "calendar.move",
     "calendar.cancel",
@@ -132,7 +137,6 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "event.note",
     "event.files",
     "calendar.schedule",
-    "record.status",
     "record.note",
     "record.team",
     "record.client",
@@ -143,6 +147,7 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "record.label",
     "record.color",
     "record.files",
+    "record.sms",
     "calendar.day_labels",
     "calendar.identity",
     "calendar.timezone",
@@ -150,27 +155,49 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     "calendar.booking_form",
     "calendar.services",
     "calendar.labels",
+    // Доход и расход дня (04.10) — деньги этого календаря.
+    "calendar.day_money",
     "finance.income",
     "finance.expense",
-    "finance.operations",
     "finance.accounts",
     "finance.debts",
     "finance.documents",
+    // «Прибыль» и шестерёнка финансов (владелец 03.10) — деньги той же
+    // команды: скрыт календарь — свёрнуты и они.
+    "finance.profit",
+    "finance.window",
+    "finance.settings_accounts",
+    "finance.settings_trash",
+    "finance.settings_categories_income",
+    "finance.settings_categories_expense",
+    "finance.settings_categories_debts",
+    // «Валюта» и «Реквизиты» — права НА ВСЮ КОМПАНИЮ: скрытый календарь одной
+    // команды не гасит их у всей компании (сброс писал бы `team_id: null`).
   ],
   // Скрыты «Карточки клиентов» — нет ни охвата, ни номера, ни одного блока
   // карточки (защита базы 30.09).
   clients: [
     "clients.scope",
-    "clients.contacts",
+    "clients.create",
+    "clients.menu",
+    "clients.delete",
     "clients.note",
     "clients.people",
     "clients.objects",
     "clients.labels",
+    "clients.tags",
     "clients.personal",
     "clients.files",
     "clients.requisites",
+    "clients.client",
     "clients.history",
-    "clients.money",
+    "clients.sms",
+    "clients.settings_card",
+    "clients.settings_ways",
+    "clients.settings_objects",
+    "clients.settings_maps",
+    "clients.settings_tags",
+    "clients.settings_sources",
   ],
   // ЦЕПОЧКА ВНУТРИ ЗАПИСИ (владелец 30.09: «продумай логическую цепочку»):
   // скрыты услуги — не видно и цен; скрыты цены — оплату не принять, сколько
@@ -427,7 +454,7 @@ export function invitationCarriesCardFields(row: Readonly<Record<string, unknown
   return row.role === "master" && (row.master_id === null || row.master_id === undefined);
 }
 
-export type InviteBlocker = "name" | "email" | "phone" | "calendar";
+export type InviteBlocker = "email" | "phone" | "calendar";
 
 /** Чего не хватает до «Пригласить» — в порядке полей на странице: серая
  *  кнопка по тапу ведёт к первому. Набранный в телефон мусор — повод
@@ -440,7 +467,8 @@ export function inviteBlockers(
   },
 ): InviteBlocker[] {
   const out: InviteBlocker[] = [];
-  if (!draft.name.trim()) out.push("name");
+  // Имя не нужно (01.10): партнёр — со своим аккаунтом, имя и телефон
+  // приходят из его профиля при приёме.
   if (!checks.isEmail(draft.email)) out.push("email");
   if (draft.phone.trim() && !checks.isPhone(draft.phone)) out.push("phone");
   if (draft.teamIds.length === 0) out.push("calendar");
@@ -631,7 +659,9 @@ export function draftAccessChanges(
     const targets = block.scope === "calendar" ? teamIds : [null];
     for (const teamId of targets) {
       const level = shown(block, teamId);
-      if (level === defaultLevel(block)) continue;
+      // «Записи клиентов» уходят всегда: приём засевает им «Видит», и
+      // «Скрыты» без явной строки молча превратилось бы в «Видит» (01.10).
+      if (level === defaultLevel(block) && block.key !== RECORDS_KEY) continue;
       out.push({ block: block.key, team_id: teamId, level });
     }
   }

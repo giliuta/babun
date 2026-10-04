@@ -1,12 +1,13 @@
+import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   RecordColorPalette,
   RecordColorRule,
 } from "@babun/shared/local/calendar-settings";
 import { getStorage } from "@babun/shared/storage";
+import { changedDesignColumns, designColumns, rebaseDesign } from "./team-design-columns";
 import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
-import { useDataRole } from "@/features/settings/tenant";
+import { useScopeCompany } from "@/features/clients/company-scope";
 
 // «ДИЗАЙН» КОМАНДЫ (владелец 2026-09-24: «всё отдельно под каждую команду»;
 // миграция 20260924233000_team_design). Одна строка `team_design` на команду:
@@ -37,7 +38,9 @@ export type TeamBlockKey =
   | "client_note"
   | "client_objects"
   | "client_labels"
-  | "client_personal";
+  | "client_personal"
+  // «Тег» отдельно от «Метки» (владелец 03.10).
+  | "client_tags";
 
 /** Упорядоченный набор «что предлагать»: включённые и полный порядок. */
 export interface TeamOrderedSet {
@@ -58,8 +61,6 @@ export interface TeamDesign {
   contactWays?: TeamOrderedSet | null;
   /** «Карты для маршрута». */
   mapServices?: TeamOrderedSet | null;
-  /** «Пора обслужить» объекта без своего интервала, месяцев. */
-  serviceEveryMonths?: number | null;
 }
 
 type Row = {
@@ -71,7 +72,6 @@ type Row = {
   client_list_off?: string[] | null;
   contact_ways?: TeamOrderedSet | null;
   map_services?: TeamOrderedSet | null;
-  service_every_months?: number | null;
 };
 
 // Таблицы ещё нет в сгенерированных типах (database.types.ts отстаёт от
@@ -84,11 +84,21 @@ type Query = {
     row: Record<string, unknown>,
     opts: { onConflict: string },
   ) => Promise<{ error: { message: string } | null }>;
+  update: (row: Record<string, unknown>) => {
+    eq: (col: string, v: string) => {
+      eq: (col: string, v: string) => Promise<{ error: { message: string } | null }>;
+    };
+  };
 };
-const table = () =>
-  (supabase as unknown as { from: (t: string) => Query }).from("team_design");
+/** Таблица — клиентом компании экрана: у партнёра и у владельца с чужим
+ *  календарём это привязанный клиент (`useScopeCompany`). */
+const table = (client: typeof supabase) =>
+  (client as unknown as { from: (t: string) => Query }).from("team_design");
 
 const cacheKey = (tenantId: string) => `babun-team-design:${tenantId}`;
+
+const DESIGN_COLUMNS =
+  "team_id, record_color_rule, record_color_palette, record_color_fallback, disabled_blocks, client_list_off, contact_ways, map_services";
 
 function toDesign(row: Row): TeamDesign {
   return {
@@ -99,11 +109,11 @@ function toDesign(row: Row): TeamDesign {
     listOff: row.client_list_off ?? null,
     contactWays: row.contact_ways ?? null,
     mapServices: row.map_services ?? null,
-    serviceEveryMonths: row.service_every_months ?? null,
   };
 }
 
 type DesignMap = Record<string, TeamDesign>;
+
 
 function readCache(tenantId: string | null): DesignMap | undefined {
   if (!tenantId) return undefined;
@@ -120,30 +130,33 @@ export function teamDesignQueryKey(tenantId: string | null) {
 
 /** Все «Дизайны» команд компании: teamId → настройки. */
 export function useTeamDesigns() {
-  const tenantId = useTenantId();
-  const roleQuery = useDataRole();
+  // КОМПАНИЯ ЭКРАНА, А НЕ КАЛЕНДАРЯ (01.10): настройки клиентов команды
+  // работодателя партнёр правит из своей вкладки, не переключая календарь.
+  // Вне вкладки «Клиенты» это та же активная компания, что и раньше.
+  const { tenantId, client, role, foreign } = useScopeCompany();
   return useQuery({
     queryKey: teamDesignQueryKey(tenantId),
-    enabled: !!tenantId && roleQuery.isSuccess && roleQuery.data != null,
+    enabled: !!tenantId && role != null,
     networkMode: "always",
-    placeholderData: () => readCache(tenantId),
+    placeholderData: () => (foreign ? undefined : readCache(tenantId)),
     queryFn: async (): Promise<DesignMap> => {
-      const { data, error } = await table()
-        .select(
-          "team_id, record_color_rule, record_color_palette, record_color_fallback, disabled_blocks, client_list_off, contact_ways, map_services, service_every_months",
-        )
+      const { data, error } = await table(client)
+        .select(DESIGN_COLUMNS)
         .eq("tenant_id", tenantId as string);
       if (error) {
         // Таблицы ещё нет (миграция не накачена) или нет сети — живём на
         // кэше, а без него на настройках компании.
-        return readCache(tenantId) ?? {};
+        return (foreign ? undefined : readCache(tenantId)) ?? {};
       }
       const map: DesignMap = {};
       for (const row of data ?? []) map[row.team_id] = toDesign(row);
-      try {
-        getStorage().set(cacheKey(tenantId as string), map);
-      } catch {
-        /* кэш не обязателен */
+      // Чужая компания на диск не ложится — только в памяти.
+      if (!foreign) {
+        try {
+          getStorage().set(cacheKey(tenantId as string), map);
+        } catch {
+          /* кэш не обязателен */
+        }
       }
       return map;
     },
@@ -159,50 +172,86 @@ export function useTeamDesign(teamId: string | null | undefined): TeamDesign | n
 
 /** Правка «Дизайна» команды — патчем, мгновенно на экране (владелец). */
 export function useSaveTeamDesign() {
-  const tenantId = useTenantId();
+  const { tenantId, client, foreign } = useScopeCompany();
   const qc = useQueryClient();
   const key = teamDesignQueryKey(tenantId);
+  // Что было на экране у команды перед правкой: `onMutate` идёт раньше
+  // записи и успевает положить сюда снимок до своей оптимистичной подмены.
+  const before = useRef(new Map<string, TeamDesign | null>());
   return useMutation({
     networkMode: "always",
-    mutationFn: async (input: { teamId: string; next: TeamDesign }) => {
-      if (!tenantId) throw new Error("Нет активной компании");
-      const { error } = await table().upsert(
-        {
-          tenant_id: tenantId,
-          team_id: input.teamId,
-          record_color_rule: input.next.rule,
-          record_color_palette: input.next.palette,
-          record_color_fallback: input.next.fallback,
-          disabled_blocks: input.next.disabledBlocks,
-          client_list_off: input.next.listOff ?? null,
-          contact_ways: input.next.contactWays ?? null,
-          map_services: input.next.mapServices ?? null,
-          service_every_months: input.next.serviceEveryMonths ?? null,
-          updated_at: new Date().toISOString(),
-        },
+    mutationFn: async (input: {
+      teamId: string;
+      next: TeamDesign;
+      /** Что экран показывал перед правкой — от этого `next` и построен. */
+      base: TeamDesign;
+    }): Promise<{ teamId: string; next: TeamDesign }> => {
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
+      let was = before.current.get(input.teamId) ?? null;
+      before.current.delete(input.teamId);
+      let next = input.next;
+      if (!was) {
+        // СТРОКИ У ТЕЛЕФОНА НЕ БЫЛО — СПРАШИВАЕМ СЕРВЕР (аудит 04.10). Экран
+        // показывал умолчания (страница открыта до ответа сервера, чтение
+        // упало, строку завёл другой телефон), и запись целой строкой стирала
+        // остальные настройки команды. Правка ложится на строку сервера.
+        const { data, error } = await table(client)
+          .select(DESIGN_COLUMNS)
+          .eq("tenant_id", tenantId);
+        if (error) throw new Error(error.message);
+        const row = (data ?? []).find((r) => r.team_id === input.teamId);
+        if (row) {
+          was = toDesign(row);
+          next = rebaseDesign(input.base, input.next, was);
+        }
+      }
+      const stamp = { updated_at: new Date().toISOString() };
+      if (was) {
+        // Строка на сервере есть — уходят только изменённые колонки.
+        const patch = changedDesignColumns(was, next);
+        if (Object.keys(patch).length === 0) return { teamId: input.teamId, next };
+        const { error } = await table(client)
+          .update({ ...patch, ...stamp })
+          .eq("tenant_id", tenantId)
+          .eq("team_id", input.teamId);
+        if (error) throw new Error(error.message);
+        return { teamId: input.teamId, next };
+      }
+      // Строки ещё нет — первая правка команды заводит её целиком.
+      const { error } = await table(client).upsert(
+        { tenant_id: tenantId, team_id: input.teamId, ...designColumns(next), ...stamp },
         { onConflict: "tenant_id,team_id" },
       );
       if (error) throw new Error(error.message);
-      return input;
+      return { teamId: input.teamId, next };
     },
     onMutate: async ({ teamId, next }) => {
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<DesignMap>(key);
+      before.current.set(teamId, prev?.[teamId] ?? null);
       qc.setQueryData<DesignMap>(key, { ...(prev ?? {}), [teamId]: next });
       return { prev };
     },
     onError: (_e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(key, ctx.prev);
     },
-    onSuccess: () => {
-      const map = qc.getQueryData<DesignMap>(key);
-      if (map && tenantId) {
+    onSuccess: (saved) => {
+      // На экране — то, что легло на сервер (правка поверх строки сервера),
+      // а не умолчания с правкой.
+      const map = { ...(qc.getQueryData<DesignMap>(key) ?? {}), [saved.teamId]: saved.next };
+      qc.setQueryData<DesignMap>(key, map);
+      if (tenantId && !foreign) {
         try {
           getStorage().set(cacheKey(tenantId), map);
         } catch {
           /* кэш не обязателен */
         }
       }
+    },
+    // `onMutate` отменял летящую загрузку и мог оставить на экране карту из
+    // одной команды — после записи карта перечитывается целиком (04.10).
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: key });
     },
   });
 }

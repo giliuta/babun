@@ -15,7 +15,7 @@ import {
 import type { AccountWithBalance } from "./accounts";
 import { accountIcon } from "./account-ui";
 import { accountOperationRows } from "./account-operations";
-import { sortAccountRows } from "./accounts-sections";
+import { NO_TEAM, sortAccountRows } from "./accounts-sections";
 import { PanelHeader, panelCount } from "./PanelHeader";
 import {
   dropAccountNames,
@@ -24,6 +24,7 @@ import {
   type RecordRowRefs,
 } from "./record-rows";
 import { RecordRowsPanel } from "./RecordRowsPanel";
+import { accountsSettingsHref } from "./team-settings-lines";
 
 // СЧЕТА РАСКРЫВАЮТСЯ ЗДЕСЬ, А НЕ УВОДЯТ (владелец 2026-08-11: «перекинем
 // вниз, в операции»). Ответ «где лежат деньги» — такой же срез команды, как
@@ -66,6 +67,7 @@ export function AccountsPanel({
   onOpenRecord,
   refreshControl,
   canOpenSettings = true,
+  teamId = null,
 }: {
   /** Ровно тот набор, который просуммирован плиткой «Счета»: плитки и цифра
    *  над ними обязаны сходиться пальцем. */
@@ -88,6 +90,9 @@ export function AccountsPanel({
   onOpenRecord: (row: RecordRow) => void;
   /** Pull-to-refresh хозяина экрана (U86) — один жест на все панели. */
   refreshControl?: ReactElement<RefreshControlProps>;
+  /** Команда чипа над плитками: настройки открываются на её счетах
+   *  (владелец 03.10). `null` и «Без команды» — все счета. */
+  teamId?: string | null;
 }) {
   const t = useThemeColors();
   // Ширина плитки оплаты: три в ряд. В ленте во всю ширину экрана четвёртая
@@ -119,7 +124,7 @@ export function AccountsPanel({
   const header = (
     <PanelHeader
       title={panelCount("Счета", rows.length)}
-      onSettings={canOpenSettings ? () => onOpen("/accounts/settings") : undefined}
+      onSettings={canOpenSettings ? () => onOpen(accountsSettingsHref(teamId, NO_TEAM)) : undefined}
       settingsLabel="Счета: порядок и настройки"
     />
   );
@@ -134,10 +139,7 @@ export function AccountsPanel({
         {header}
         {/* Только слова (владелец 2026-09-15: «никаких кнопок внутри»), и
             без указки на кнопки: двери к созданию — ползунки шапки и футер. */}
-        <EmptyState
-          title="У команды нет счетов"
-          subtitle="Счёт — это касса или карта, где лежат деньги команды."
-        />
+        <EmptyState title="Счетов нет" />
       </ScrollView>
     );
   }

@@ -31,7 +31,7 @@ type JsonRecord = Record<string, Json | undefined>;
 
 function asRecord(value: Json): JsonRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Сервер вернул некорректную заявку");
+    throw new Error("Сервер вернул некорректную запись");
   }
   return value as JsonRecord;
 }
@@ -39,7 +39,7 @@ function asRecord(value: Json): JsonRecord {
 function stringField(row: JsonRecord, key: string): string {
   const value = row[key];
   if (typeof value !== "string") {
-    throw new Error("Сервер вернул некорректную заявку");
+    throw new Error("Сервер вернул некорректную запись");
   }
   return value;
 }
@@ -48,7 +48,7 @@ function nullableStringField(row: JsonRecord, key: string): string | null {
   const value = row[key];
   if (value === null) return null;
   if (typeof value !== "string") {
-    throw new Error("Сервер вернул некорректную заявку");
+    throw new Error("Сервер вернул некорректную запись");
   }
   return value;
 }
@@ -56,7 +56,7 @@ function nullableStringField(row: JsonRecord, key: string): string | null {
 function booleanField(row: JsonRecord, key: string): boolean {
   const value = row[key];
   if (typeof value !== "boolean") {
-    throw new Error("Сервер вернул некорректную заявку");
+    throw new Error("Сервер вернул некорректную запись");
   }
   return value;
 }
@@ -65,14 +65,14 @@ function nullableNumberField(row: JsonRecord, key: string): number | null {
   const value = row[key];
   if (value === null) return null;
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new Error("Сервер вернул некорректную заявку");
+    throw new Error("Сервер вернул некорректную запись");
   }
   return value;
 }
 
 function numberField(row: JsonRecord, key: string): number {
   const value = nullableNumberField(row, key);
-  if (value === null) throw new Error("Сервер вернул некорректную заявку");
+  if (value === null) throw new Error("Сервер вернул некорректную запись");
   return value;
 }
 
@@ -127,6 +127,39 @@ function discountOf(value: Json | undefined): Discount | undefined {
   };
 }
 
+/** Цены услуг записи: id → цена за единицу, только конечные неотрицательные. */
+function priceOverrides(value: Json | undefined): Record<string, number> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, number> = {};
+  for (const [id, price] of Object.entries(value)) {
+    if (typeof price === "number" && Number.isFinite(price) && price >= 0) out[id] = price;
+  }
+  return out;
+}
+
+const VAT_MODES = new Set<NonNullable<Appointment["vat_mode"]>>([
+  "on",
+  "off",
+  "none",
+  "inclusive",
+  "exclusive",
+]);
+
+/** VAT записи: ключа нет (окно старше 03.10) — `undefined`, как раньше. */
+function vatModeField(row: JsonRecord): Appointment["vat_mode"] {
+  if (!("vat_mode" in row)) return undefined;
+  const value = row.vat_mode;
+  return typeof value === "string" && VAT_MODES.has(value as NonNullable<Appointment["vat_mode"]>)
+    ? (value as NonNullable<Appointment["vat_mode"]>)
+    : null;
+}
+
+function vatRateField(row: JsonRecord): number | null | undefined {
+  if (!("vat_rate" in row)) return undefined;
+  const value = row.vat_rate;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 function finiteOr(value: Json | undefined, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
@@ -158,14 +191,14 @@ function serviceLines(value: Json | undefined): AppointmentService[] {
 
 function kindField(row: JsonRecord): AppointmentKind {
   const value = stringField(row, "kind") as AppointmentKind;
-  if (!KINDS.has(value)) throw new Error("Сервер вернул неизвестный тип заявки");
+  if (!KINDS.has(value)) throw new Error("Сервер вернул неизвестный тип записи");
   return value;
 }
 
 function statusField(row: JsonRecord): AppointmentStatus {
   const value = stringField(row, "status") as AppointmentStatus;
   if (!STATUSES.has(value)) {
-    throw new Error("Сервер вернул неизвестный статус заявки");
+    throw new Error("Сервер вернул неизвестный статус записи");
   }
   return value;
 }
@@ -174,7 +207,7 @@ function sourceField(row: JsonRecord): AppointmentSource | null {
   const value = nullableStringField(row, "source");
   if (value === null) return null;
   if (!SOURCES.has(value as AppointmentSource)) {
-    throw new Error("Сервер вернул неизвестный источник заявки");
+    throw new Error("Сервер вернул неизвестный источник записи");
   }
   return value as AppointmentSource;
 }
@@ -200,9 +233,11 @@ function repeatField(value: Json | undefined): PersonalEventRepeat {
 }
 
 /** Rebuilds an RPC row. РЕШАЕТ СЕРВЕР (STORY-084, волна 4): строки работ,
- *  итог, скидку, внесённое и статус оплаты окно отдаёт по уровням «Услуг»,
- *  «Суммы» и «Оплаты» — при закрытом блоке там нули. Историю платежей,
- *  расходы и переопределения цен окно не отдаёт никогда, и здесь они гаснут. */
+ *  итог, скидку, цены услуг, VAT, внесённое и статус оплаты окно отдаёт по
+ *  уровням «Услуг», «Суммы» и «Оплаты» — при закрытом блоке там нули.
+ *  Историю платежей и расходы окно не отдаёт никогда, и здесь они гаснут.
+ *  Скидку, цены услуг и VAT окно отдаёт с 03.10 (миграция 20261003235710):
+ *  пустыми они расходились с «Итого», а сохранение стирало скидку записи. */
 export function masterAppointmentJsonToAppointment(value: Json): Appointment {
   const row = asRecord(value);
   stringField(row, "tenant_id");
@@ -221,21 +256,25 @@ export function masterAppointmentJsonToAppointment(value: Json): Appointment {
     custom_total: row.custom_total === true,
     discount_amount: moneyField(row, "discount_amount"),
     expenses: [],
-    service_price_overrides: {},
-    prepaid_amount: 0,
+    service_price_overrides: priceOverrides(row.service_price_overrides),
+    // Предоплата — по уровню «Суммы» и «Оплаты», как доплата (повторный аудит
+    // 03.10): нулём она делала долгом то, что клиент уже внёс.
+    prepaid_amount: moneyField(row, "prepaid_amount"),
     payments: [],
     payment: null,
     payment_status: paymentStatusField(row),
     payment_method: undefined,
     paid_amount: moneyField(row, "paid_amount"),
     services: serviceLines(row.services),
-    global_discount: null,
+    global_discount: discountOf(row.global_discount) ?? null,
+    vat_mode: vatModeField(row),
+    vat_rate: vatRateField(row),
     total_duration: numberField(row, "total_duration"),
     color_override: nullableStringField(row, "color_override"),
     // МЕТКА ЗАПИСИ ЧИТАЕТСЯ МЯГКО. Бригадная проекция — отдельная серверная
     // функция, и колонка `city` появилась позже неё: пока RPC не обновят,
     // ключа в ответе просто нет, а строгое чтение роняло бы весь наряд
-    // («Сервер вернул некорректную заявку»). Отсутствует — значит «как у дня».
+    // («Сервер вернул некорректную запись»). Отсутствует — значит «как у дня».
     city: typeof row.city === "string" ? row.city : null,
     comment: stringField(row, "comment"),
     address: stringField(row, "address"),

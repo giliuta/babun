@@ -14,9 +14,9 @@ import {
   getClient as getClientRepo,
 } from "@babun/shared/db/repositories/clients";
 import type { Client } from "@babun/shared/local/clients";
-import { supabase } from "@/lib/supabase";
+import type { supabase } from "@/lib/supabase";
 import { assertQuotaAvailable } from "@/lib/quota";
-import { useTenantId } from "@/lib/tenant";
+import { useScopeCompany } from "@/features/clients/company-scope";
 import { tryToE164 } from "../phone";
 import type { CountryCode } from "libphonenumber-js";
 import type { MappedRow } from "./csv-validate";
@@ -77,12 +77,13 @@ function isDuplicateImportId(error: unknown): boolean {
 }
 
 async function ensureImportTag(
+  db: typeof supabase,
   clientId: string,
   tagId: string | null | undefined,
   tenantId: string,
 ): Promise<void> {
   if (!tagId) return;
-  const { error } = await supabase.from("client_tag_assignments").upsert(
+  const { error } = await db.from("client_tag_assignments").upsert(
     { client_id: clientId, tag_id: tagId, tenant_id: tenantId },
     { onConflict: "client_id,tag_id", ignoreDuplicates: true },
   );
@@ -90,26 +91,30 @@ async function ensureImportTag(
 }
 
 async function createImportClient(
+  db: typeof supabase,
   client: Client,
   tagId: string | null | undefined,
   tenantId: string,
 ): Promise<void> {
   try {
-    await createClientRepo(supabase, client, tenantId);
+    await createClientRepo(db, client, tenantId);
   } catch (error) {
     if (!isDuplicateImportId(error)) throw error;
-    const existing = await getClientRepo(supabase, client.id, tenantId);
+    const existing = await getClientRepo(db, client.id, tenantId);
     if (!existing) throw error;
-    await ensureImportTag(client.id, tagId, tenantId);
+    await ensureImportTag(db, client.id, tagId, tenantId);
   }
 }
 
 export function useImportRows() {
-  const tenantId = useTenantId();
+  // КОМПАНИЯ ИМПОРТА — КОМПАНИЯ ВКЛАДКИ «КЛИЕНТЫ», чьи команда и теги выбраны в
+  // мастере, а не открытая в календаре (03.10): при команде партнёра каждая
+  // строка отбивалась «client team does not belong to the active tenant».
+  const { tenantId, client: db } = useScopeCompany();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: ImportRowsArgs): Promise<ImportRowsResult> => {
-      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       const {
         rows,
         defaultCountry,
@@ -126,7 +131,7 @@ export function useImportRows() {
       // not fit the tenant's remaining allowance. Without this preflight a
       // 200-row CSV near the cap produced a misleading partial import: early
       // chunks succeeded and every later row failed independently.
-      await assertQuotaAvailable(supabase, tenantId, "clients", rows.length);
+      await assertQuotaAvailable(db, tenantId, "clients", rows.length);
 
       // Slice into fixed chunks so we can persist a resume offset between
       // them. totalBatches is stable across a resume (same rows array).
@@ -151,6 +156,7 @@ export function useImportRows() {
           batch.map((r) => {
             const id = importClientId(tenantId, fileHash, r.source);
             return createImportClient(
+              db,
               { ...rowToClient(r, defaultCountry, tagId, id), team_id: teamId },
               tagId,
               tenantId,

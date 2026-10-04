@@ -3,8 +3,8 @@
 //
 // This screen does ALL data wiring; the blocks are presentational. It
 // fetches the client + its appointments, computes the shared `stats`
-// (client-stats selector) and `serviceDue` (service-due selector), then
-// renders the page as ONE STACK OF ROWS (ЗАКОН СТРОКИ, DESIGN-SYSTEM.md):
+// (client-stats selector), then renders the page as ONE STACK OF ROWS
+// (ЗАКОН СТРОКИ, DESIGN-SYSTEM.md):
 //
 //   Клиент (ClientHeader) · Заметка клиента · Люди · История · Объекты
 //   · Файлы · Реквизиты · Метка | Тег · Личное (docs/BLOCKS.md §9.1)
@@ -41,7 +41,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Archive, ChevronRight, Phone, UserPlus } from "lucide-react-native";
+import { ChevronRight, Phone, Trash2, UserPlus } from "lucide-react-native";
 import {
   Stack,
   useLocalSearchParams,
@@ -66,9 +66,11 @@ import {
   useClient,
   useClientTags,
   useRestoreClient,
+  useTrashClientAsPartner,
   useUpdateClient,
 } from "@/features/clients/queries";
-import { useArchiveWithUndo } from "@/features/clients/archive-undo";
+import { useDeleteWithUndo } from "@/features/clients/delete-undo";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { archivedVisitTag } from "@/features/clients/archived-visit";
 import { useTeams } from "@/features/reference/queries";
 import { daysLeft, daysWordRu } from "@/features/clients/HiddenClientsScreen";
@@ -77,6 +79,7 @@ import { useClientAppointments } from "@/features/clients/appointments";
 import { useAllServices } from "@/features/services/queries";
 import ClientHeader from "@/features/clients/ClientHeader";
 import { clientSubParams } from "@/features/clients/clients-company";
+import { useReferenceHref } from "@/features/clients/reference-href";
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
 import { ClientLabelTags } from "@/features/clients/ClientLabelTags";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
@@ -100,7 +103,9 @@ import {
   type DraftOpen,
 } from "@/features/clients/useClientDraft";
 import ClientContactRow from "@/features/clients/ClientContactRow";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { useCurrentRole, usePlanAllows, useTenant } from "@/features/settings/tenant";
+import { useGuardedBookingNav } from "@/features/clients/card-booking";
+import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { SmsComposeProvider } from "@/features/sms/SmsCompose";
 import { SmsClientBlock } from "@/features/sms/SmsClientBlock";
 import { clientSmsVars } from "@/features/sms/client-sms-vars";
@@ -115,9 +120,12 @@ import {
 } from "@/features/clients/company-scope";
 import { humanDay } from "@/features/appointments/helpers";
 import { notify } from "@/lib/notify";
+import { writeErrorWords } from "@/lib/connection-words";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { deliverCreatedClient } from "@/features/appointments/pending-client";
+import { contactsLocked } from "@/features/clients/member-contacts";
+import { useBusinessNow } from "@/features/appointments/business-now";
 
 // КАРТОЧКА ОТКРЫВАЕТСЯ В КОМПАНИИ СВОЕЙ СТРОКИ (STORY-082): `?tenant=` несёт
 // компанию, ворота решают, чья она, и объявляют источник блокам.
@@ -140,9 +148,15 @@ export function ClientDetailScreen() {
     phone: prefillPhone,
     open: openOnArrive,
     split: splitParam,
+    team: teamParam,
     ...linkParams
-  } = useLocalSearchParams<{ id: string; open?: string; split?: string } & DraftLinkParams>();
+  } = useLocalSearchParams<
+    { id: string; open?: string; split?: string; team?: string } & DraftLinkParams
+  >();
   const router = useRouter();
+  // Страницы карточки — во вкладке или поверх записи (`/client`), смотря
+  // откуда открыта сама карточка (аудит 03.10).
+  const subPage = useReferenceHref().clientPage;
   const pathname = usePathname();
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
@@ -184,7 +198,13 @@ export function ClientDetailScreen() {
   const activeTenantId = useTenantId();
   const client = useRevealedClient(clientRow, scope?.tenantId ?? activeTenantId);
   const updateClient = useUpdateClient(isDraft ? "" : id);
-  const archiveWithUndo = useArchiveWithUndo();
+  const deleteWithUndo = useDeleteWithUndo();
+  const trashAsPartner = useTrashClientAsPartner();
+  // «Записать» в «⋯» (03.10) — тем же гейтом, что строка «Записать» блока
+  // «История», и только с правом «Новые записи» в команде клиента.
+  const guardedBook = useGuardedBookingNav();
+  const calendarActionsFor = useCalendarActionsReader();
+  const bookInPlan = usePlanAllows("book-clients");
   const restoreClient = useRestoreClient();
   const appointmentsQuery = useClientAppointments(isDraft ? "" : id);
   const {
@@ -210,6 +230,8 @@ export function ClientDetailScreen() {
     isRefetching: servicesRetrying,
     refetch: retryServices,
   } = servicesQuery;
+  const staleCopy = !isDraft && clientFailed;
+  const partFailed = tagsFailed || (!isDraft && (appointmentsFailed || servicesFailed));
   const [menuOpen, setMenuOpen] = useState(false);
   const [remindOpen, setRemindOpen] = useState(false);
   const {
@@ -234,6 +256,8 @@ export function ClientDetailScreen() {
     link: draftLink,
     // «Разделить клиента»: после создания номер уходит из исходной карточки.
     split: isDraft ? parseSplit(splitParam) : null,
+    // Из записи — команда записи.
+    team: isDraft ? (teamParam ?? null) : null,
   });
 
   // Единый persist-путь для блоков: черновик — локально, карточка — PATCH.
@@ -331,7 +355,9 @@ export function ClientDetailScreen() {
   const access = useCardAccess(c, isDraft);
   const peopleOn = access.people.show;
   const noteOn = access.note.show;
-  const labelsOn = access.labels.show;
+  // «Метка» и «Тег» — два блока (03.10): ряд плиток есть, если включён хоть
+  // один.
+  const labelsOn = access.labels.show || access.tags.show;
   const people = useClientPeople({
     id,
     // На карточке — первые трое и дверь «Все люди · N» (владелец 22.09).
@@ -349,7 +375,15 @@ export function ClientDetailScreen() {
   // «Объединить с дублем» в «⋯» — вся проводка в `use-merge-duplicate.ts`.
   const onMerge = useMergeDuplicate({ client: c, isDraft, canManage: caps.manage, closeMenu: () => setMenuOpen(false) });
   // «Разделить клиента» в «⋯» — вся проводка в `use-split-client.ts`.
-  const split = useSplitClient({ client: c, isDraft, canEdit: caps.edit, canLinks: caps.links && peopleOn, menuOpen });
+  // «Разделить» переносит номера и связи в новую карточку: у сотрудника с
+  // закрытым номером переносить нечего, пункт прятан (аудит 015, 30.09).
+  const split = useSplitClient({
+    client: c,
+    isDraft,
+    canEdit: access.card.edit && !(c && contactsLocked(c)),
+    canLinks: access.people.edit,
+    menuOpen,
+  });
 
   // Shared selectors — memoized so unrelated state changes don't re-scan
   // every appointment. Hooks must run unconditionally, hence the guards
@@ -362,27 +396,36 @@ export function ClientDetailScreen() {
   // ШАБЛОНЫ SMS ИЗ КАРТОЧКИ (STORY-089): имя, долг и ближайшая запись
   // клиента — «SMS» у его номера предложит шаблоны, которые ими заполняются.
   const { data: smsTeams = [] } = useTeams({ includeInactive: true });
-  const companyName = useTenant().data?.name ?? null;
-  const clientSmsContext = useMemo(
-    () =>
-      c
-        ? {
-            clientId: c.id,
-            vars: clientSmsVars({
-              client: c,
-              appointments,
-              teams: smsTeams,
-              company: companyName,
-              debt: access.money.show ? (stats?.debt ?? 0) : null,
-              showMoney: access.money.show,
-            }),
-          }
-        : null,
-    [appointments, c, access.money.show, companyName, smsTeams, stats?.debt],
-  );
-
-  // heroUnitId больше не нужен: состояния ТО ушли из «Что дальше» в свою
-  // группу «Обслуживание» целиком — дублировать нечего.
+  // Имя в шаблоне — компании КАРТОЧКИ (03.10): при команде партнёра в
+  // календаре клиент AirFix получал бы подпись чужой компании.
+  const activeCompanyName = useTenant().data?.name ?? null;
+  const companyName = scope
+    ? (scope.tenantName ?? (scope.isActive ? activeCompanyName : null))
+    : activeCompanyName;
+  // «Ближайшая запись» в SMS — по часам команды клиента, а не телефона.
+  const smsNow = useBusinessNow(c?.team_id ?? null);
+  const clientSmsContext = useMemo(() => {
+    if (!c) return null;
+    const now = smsNow();
+    return {
+      clientId: c.id,
+      optOut: c.sms_opt_out === true,
+      tenantId: scope?.tenantId ?? null,
+      // Команда клиента — от неё SMS по умолчанию, если у неё есть имя
+      // отправителя (так и задумано в листе: «без записи — команда клиента»).
+      teamId: c.team_id ?? null,
+      vars: clientSmsVars({
+        client: c,
+        appointments,
+        teams: smsTeams,
+        company: companyName,
+        debt: access.money.show ? (stats?.debt ?? 0) : null,
+        showMoney: access.money.show,
+        today: now.ymd,
+        nowHm: now.hm,
+      }),
+    };
+  }, [appointments, c, access.money.show, companyName, smsTeams, stats?.debt, smsNow, scope?.tenantId]);
 
   if (roleQuery.isPending) {
     return (
@@ -392,13 +435,17 @@ export function ClientDetailScreen() {
     );
   }
 
+  // ЭКРАН ОШИБКИ — С ШАПКОЙ И НАЗАД (владелец 03.10): без шапки с него
+  // уходили только таб-баром. Нижний край держит таб-бар, как у соседних
+  // экранов: «Повторить» стоит на той же высоте, что их кнопки.
   if (roleQuery.isError || !role) {
     return (
-      <Screen>
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Клиент" />
         <ClientDataNotice
           fullScreen
-          title="Доступ не подтверждён"
-          message="Не удалось проверить роль сотрудника. Повторите попытку."
+          title="Нет связи с сервером"
+          message="Не получилось проверить доступ к клиенту. Повторите через минуту."
           onRetry={() => void roleQuery.refetch()}
           retrying={roleQuery.isRefetching}
         />
@@ -416,7 +463,8 @@ export function ClientDetailScreen() {
 
   if (!isDraft && clientFailed && !c) {
     return (
-      <Screen>
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Клиент" />
         <ClientDataNotice
           fullScreen
           title="Не удалось загрузить клиента"
@@ -519,13 +567,6 @@ export function ClientDetailScreen() {
     }
   };
 
-  // «Закрепить» — тот же патч, что у долгого нажатия в списке
-  // (`onTogglePin` в clients/index.tsx): метка времени или её снятие.
-  const onTogglePin = () => {
-    setMenuOpen(false);
-    void update({ pinned_at: c.pinned_at ? null : new Date().toISOString() });
-  };
-
   const onToggleBlacklist = () => {
     setMenuOpen(false);
     update({ blacklisted: !c.blacklisted });
@@ -539,69 +580,88 @@ export function ClientDetailScreen() {
   
   const onBack = () => router.back();
 
-  const onArchive = () => {
-    setMenuOpen(false);
-    confirmThen(
-      "Архивировать клиента?",
-      {
-        message: "Клиент исчезнет из рабочего списка, но записи, инвойсы и финансовая история сохранятся. Вернуть его можно сразу — кнопкой «Отменить», а позже в Клиенты › шестерёнка › «Архив клиентов».",
-        confirmLabel: "Архивировать",
-        destructive: true,
-      },
-      async () => {
-        try {
-          // Экран закрывается, поэтому «Отменить» живёт в тосте: он
-          // глобальный и переживает уход с карточки.
-          const res = await archiveWithUndo([c]);
-          if (res.archived > 0) router.back();
-        } catch (e) {
-          notify("Не удалось архивировать", (e as Error).message);
-        }
-      },
-    );
-  };
+  // МЕНЮ КЛИЕНТА ПАРТНЁРА (владелец 03.10): «Меню клиента» — всё меню, кроме
+  // «Удалить»: Записать, Поделиться, Напомнить, В чёрный список; «Удаление
+  // клиента» — «Удалить». Своими дверями сервера.
+  const partnerMenu =
+    !isDraft && scope?.kind === "member" && clientBlockLevel(c, "clients.menu") === "write";
+  const partnerDelete =
+    !isDraft && scope?.kind === "member" && clientBlockLevel(c, "clients.delete") === "write";
 
-  // УДАЛИТЬ — не то же, что архив. Клиент едет в «Недавно удалённые» и
-  // через 30 дней стирается насовсем.
-  //
-  // Но за клиентом с визитами стоит финансовая история, и база стереть его
-  // не даст (guard_client_hard_delete_history). Честнее сказать это ДО
-  // действия и предложить архив, чем дать нажать и показать ошибку.
+  // «Записать» — первым в «⋯» (03.10). Нет права записи в команде клиента —
+  // нет и пункта (владелец: «если нет разрешения на запись — этого и не
+  // будет»).
+  const bookTeam = c.team_id ?? stats?.lastTeamId ?? null;
+  const onBookFromMenu =
+    !isDraft &&
+    caps.book &&
+    (scope?.kind === "member" ? partnerMenu : bookInPlan) &&
+    calendarActionsFor(bookTeam).create
+      ? () => {
+          setMenuOpen(false);
+          guardedBook(c, {
+            locationId:
+              c.locations?.find((l) => l.isPrimary)?.id ?? c.locations?.[0]?.id ?? null,
+            // Та же команда, по которой проверено право записи (аудит 03.10:
+            // проверка шла по команде клиента, а календарь открывался в
+            // команде последнего визита — без права там).
+            teamId: bookTeam,
+          });
+        }
+      : undefined;
+
+  // УДАЛИТЬ — ОДНО ДЕЙСТВИЕ (владелец 03.10: «понятия „в архив" не будет»).
+  // Клиент уходит в «Удалённые клиенты». Без истории он сотрётся через 30
+  // дней; за клиентом с визитами стоит финансовая история, и база снимает
+  // ему срок сама (`client_history_never_purges`) — он лежит там, пока его не
+  // вернут. Поэтому слова подтверждения зависят от истории.
   const onDelete = () => {
     setMenuOpen(false);
-    // ЛЮБАЯ запись — уже история, даже будущая. База запрещает стирать
-    // клиента с заявками (guard_client_hard_delete_history), поэтому такой
-    // клиент лёг бы в корзину НАВСЕГДА: счётчик тикает, а ночная очистка
-    // его пропускает — он застревает между полками.
+    // Партнёр с «Удаление клиента: Может» — своей дверью, вернуть может
+    // владелец.
+    if (!caps.manage) {
+      confirmThen(
+        "Удалить клиента?",
+        {
+          message: `${c.full_name || "Клиент"} исчезнет из клиентов команды. Вернуть его может владелец.`,
+          confirmLabel: "Удалить",
+          destructive: true,
+        },
+        async () => {
+          try {
+            await trashAsPartner.mutateAsync(c.id);
+            router.back();
+          } catch (e) {
+            // Обрыв — словами, а не «TypeError: Network request failed» (03.10).
+            const words = writeErrorWords(e, { failed: "Не удалось удалить", notDone: "Клиент не удалён" });
+            notify(words.title, words.subtitle);
+          }
+        },
+      );
+      return;
+    }
+    // ЛЮБАЯ запись — уже история, даже будущая.
     const hasHistory =
       (stats?.visits ?? 0) > 0 ||
       (stats?.totalSpent ?? 0) > 0 ||
       (stats?.unclosedVisits ?? 0) > 0 ||
       stats?.nextApt != null;
-    if (hasHistory) {
-      confirmThen(
-        "Этого клиента нельзя удалить",
-        {
-          message: "За этим клиентом есть визиты и деньги — они останутся в отчётах и должны быть к кому-то привязаны. Такого клиента убирают в архив: из списка он исчезнет, история сохранится.",
-          confirmLabel: "В архив",
-        },
-        onArchive,
-      );
-      return;
-    }
     confirmThen(
       "Удалить клиента?",
       {
-        message: `${c.full_name || "Клиент"} переедет в «Недавно удалённые» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — там же, в шестерёнке.`,
+        message: hasHistory
+          ? `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно там же, в шестерёнке.`
+          : `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — там же, в шестерёнке.`,
         confirmLabel: "Удалить",
         destructive: true,
       },
       async () => {
         try {
-          const res = await archiveWithUndo([c], true);
+          const res = await deleteWithUndo([c]);
           if (res.archived > 0) router.back();
         } catch (e) {
-          notify("Не удалось удалить", (e as Error).message);
+          const words = writeErrorWords(e, { failed: "Не удалось удалить", notDone: "Клиент не удалён" });
+          notify(words.title, words.subtitle);
         }
       },
     );
@@ -610,7 +670,9 @@ export function ClientDetailScreen() {
   return (
     // Все номера страницы — клиента, его людей, доп. номера — предлагают
     // шаблоны SMS, заполненные этим клиентом (STORY-089).
-    <SmsComposeProvider context={clientSmsContext}>
+    // Шаблоны и отправка с платформы — по блоку «SMS: Меняет» (02.10); без
+    // него номер пишет со своего телефона, как раньше.
+    <SmsComposeProvider context={access.sms.edit ? clientSmsContext : null}>
       <Stack.Screen options={{ gestureEnabled: !isDraftDirty }} />
       <Screen edges={["top"]}>
       {/* «Готово» из правого верхнего угла снесено: единственное действие
@@ -624,19 +686,21 @@ export function ClientDetailScreen() {
         onToggleMenu={() => setMenuOpen((open) => !open)}
         onCloseMenu={() => setMenuOpen(false)}
         onRemind={() => void onRemind()}
-        onShare={caps.export ? () => void onShare() : undefined}
+        onBook={onBookFromMenu}
+        // «Поделиться» — своя база; партнёру — с «Меню клиента» (03.10).
+        onShare={caps.export || partnerMenu ? () => void onShare() : undefined}
         onToggleBlacklist={onToggleBlacklist}
-        onArchive={onArchive}
         onDelete={onDelete}
-        canEdit={caps.edit}
-        canManage={caps.manage}
+        // Меню то же, что у долгого нажатия в списке (03.10): имя сверху.
+        menuTitle={c.full_name || c.phone || "Клиент"}
+        // «Напомнить» и «В чёрный список» — своя база по праву карточки,
+        // партнёр — по «Меню клиента».
+        canEdit={scope?.kind === "member" ? partnerMenu : access.card.edit}
+        // «Удалить» — своя база у владельца, партнёр — «Удаление клиента».
+        canDelete={caps.manage || partnerDelete}
         onMerge={onMerge}
         onSplit={split.onSplit}
         onMenuExited={split.onMenuExited}
-        pinned={!!c.pinned_at}
-        // Список открывает меню со «Закрепить» только у строк своей компании —
-        // здесь то же право (`manage` = своя компания).
-        onTogglePin={!isDraft && caps.manage ? onTogglePin : undefined}
       />
 
       {/* ОТСТУП НА ВЫСОТУ ХРОМА. Без него нижние поля страницы уходили под
@@ -653,30 +717,36 @@ export function ClientDetailScreen() {
         contentContainerStyle={{ paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
       >
-        {!isDraft && clientFailed ? (
+        {/* ОДНА ПЛАШКА, ОДНА КНОПКА. На молчащем сервере падают сразу и
+            клиент, и история со справочниками — раньше вставали две плашки
+            подряд с двумя синими кнопками («Загружаю…» и «Повторить»),
+            делавшими одно и то же. Теперь одна: слова — про худшее из
+            случившегося, «Повторить» — перечитывает всё упавшее разом. */}
+        {staleCopy || partFailed ? (
           <ClientDataNotice
-            title="Показана сохранённая копия"
-            message="Свежие изменения пока не удалось получить. Карточка остаётся доступной."
-            onRetry={() => void retryClient()}
-            retrying={clientRetrying}
-          />
-        ) : null}
-
-        {tagsFailed || (!isDraft && (appointmentsFailed || servicesFailed)) ? (
-          <ClientDataNotice
-            title="Часть данных не загрузилась"
+            title={staleCopy ? "Показана сохранённая копия" : "Часть данных не загрузилась"}
             message={
-              isDraft
-                ? "Каталог тегов пока недоступен. Остальные данные можно заполнить и сохранить."
-                : "История визитов, финансы или справочники могут быть неполными."
+              staleCopy
+                ? partFailed
+                  ? "Свежие изменения, история визитов и справочники пока не загрузились. Карточка остаётся доступной."
+                  : "Свежие изменения пока не удалось получить. Карточка остаётся доступной."
+                : isDraft
+                  ? "Каталог тегов пока недоступен. Остальные данные можно заполнить и сохранить."
+                  : "История визитов, финансы или справочники могут быть неполными."
             }
             onRetry={() => {
               if (isDraft) void retryTags();
-              else void Promise.all([retryAppointments(), retryTags(), retryServices()]);
+              else
+                void Promise.all([
+                  ...(clientFailed ? [retryClient()] : []),
+                  retryAppointments(),
+                  retryTags(),
+                  retryServices(),
+                ]);
             }}
             retrying={
               tagsRetrying ||
-              (!isDraft && (appointmentsRetrying || servicesRetrying))
+              (!isDraft && (clientRetrying || appointmentsRetrying || servicesRetrying))
             }
           />
         ) : null}
@@ -712,6 +782,22 @@ export function ClientDetailScreen() {
             без ключа локальное состояние строк переживает смену клиента:
             набранный, но не сохранённый номер закоммитился бы в ДРУГОГО
             клиента при уходе фокуса. */}
+        {/* МЕТКА И ТЕГ — САМЫМ ВЕРХОМ, ПЕРЕД БЛОКОМ «КЛИЕНТ» (владелец 03.10:
+            «метку и тег поставим в самый верх перед блоком „Клиент“»; 22.09
+            они уезжали вниз, к «Личному»). */}
+        {labelsOn ? (
+          <ClientLabelTags
+            client={c}
+            update={update}
+            tags={tags}
+            readOnly={!access.labels.edit}
+            // Выключенная командой метка не запирает тег (аудит 03.10).
+            tagReadOnly={!access.tags.edit}
+            labelOn={access.labels.show}
+            tagOn={access.tags.show}
+          />
+        ) : null}
+
         <ClientHeader
           key={`header-${id}`}
           client={c}
@@ -720,7 +806,9 @@ export function ClientDetailScreen() {
           // Без передачи (владелец 30.09): клиента чужой компании не
           // скопировать ни долгим нажатием, ни из поля.
           noCopy={!isDraft && !caps.export}
-          memberOf={peopleOn ? people.memberOfRows : undefined}
+          // «Входит в карточку Павла · жена» — это связь, а связи и роли живут
+          // в блоке «Люди» (владелец 30.09: «роли в блоке клиента не
+          // назначаем»). В шапке клиента — только он сам и его контакты.
           // Заметка клиента — вторым блоком, под «Клиентом» (владелец 23.09:
           // «сначала идёт блок „Клиент", потом заметка клиента»).
           note={
@@ -729,8 +817,9 @@ export function ClientDetailScreen() {
             ) : null
           }
           people={
-            peopleOn && (people.peopleRows || people.onAddPerson) ? (
+            peopleOn && (people.peopleRows || people.onAddPerson || people.memberOfRows) ? (
               <SectionCard title="Люди">
+                {people.memberOfRows}
                 {people.peopleRows}
                 {people.peopleHidden > 0 ? (
                   <NavRow
@@ -739,7 +828,7 @@ export function ClientDetailScreen() {
                     separated
                     onPress={() =>
                       router.push({
-                        pathname: "/clients/people",
+                        pathname: subPage("people"),
                         params: clientSubParams(id, scope),
                       })
                     }
@@ -776,8 +865,7 @@ export function ClientDetailScreen() {
         {/* Действия уровня человека. В черновике строка видна, но пригашена
             с подписью «Записать можно после сохранения» — владелец требует
             видеть страницу целиком, а мёртвого тапа быть не должно.
-            «Обслуживание» гейта не требует: блок сам возвращает null, пока у
-            клиента нет техники с датами ТО, и сети не касается. */}
+            */}
         {/* Дубли ищутся не только при создании: карточка живёт годами, а
             второй «тот же человек» заводится позже — импортом или звонком с
             другого номера. */}
@@ -792,9 +880,7 @@ export function ClientDetailScreen() {
           // «История» и «Долг и деньги» — права сотрудника по блокам.
           showSummary={access.history.show}
           showMoney={access.money.show}
-          onDraftBook={() => onDraftDoor("book")}
-          bookOnArrive={!isDraft && openOnArrive === "book"}
-          onArrived={() => router.setParams({ open: undefined })}
+          appointments={appointments}
           // Сводка в блоке «История» = вход в перечень записей. Записей нет — вести
           // некуда, и сводка остаётся просто текстом (мёртвых тапов не держим).
           // С 30.09 история открыта и сотруднику — по праву «История
@@ -803,7 +889,7 @@ export function ClientDetailScreen() {
             !isDraft && access.history.show && appointments.length > 0
               ? () => {
                   router.push({
-                    pathname: "/clients/visits",
+                    pathname: subPage("visits"),
                     params: clientSubParams(id, scope),
                   });
                 }
@@ -821,15 +907,10 @@ export function ClientDetailScreen() {
           access={access}
           // Длинные списки — своими страницами, как история записей.
           onOpenObjects={() =>
-            router.push({ pathname: "/clients/objects", params: clientSubParams(id, scope) })
+            router.push({ pathname: subPage("objects"), params: clientSubParams(id, scope) })
           }
           onOpenRequisites={() =>
-            router.push({ pathname: "/clients/requisites", params: clientSubParams(id, scope) })
-          }
-          labelTags={
-            labelsOn ? (
-              <ClientLabelTags client={c} update={update} tags={tags} readOnly={!access.labels.edit} />
-            ) : null
+            router.push({ pathname: subPage("requisites"), params: clientSubParams(id, scope) })
           }
           onDraftFiles={() => onDraftDoor("files")}
           openFilesOnArrive={!isDraft && openOnArrive === "files"}
@@ -842,7 +923,9 @@ export function ClientDetailScreen() {
         {/* SMS КЛИЕНТУ ОДНИМ БЛОКОМ (STORY-089; владелец 30.09): «Присылать
             SMS», «Имя для SMS» и все сообщения — на какой номер ушло.
             Отправка — в кнопке номера. */}
-        {!isDraft ? <SmsClientBlock client={c} update={update} readOnly={!access.card.edit} /> : null}
+        {!isDraft && access.sms.show ? (
+          <SmsClientBlock client={c} update={update} readOnly={!access.sms.edit} />
+        ) : null}
       </ScrollView>
 
       {/* ЕДИНСТВЕННОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ, ПОД ПАЛЬЦЕМ, ВНЕ ПРОКРУТКИ.
@@ -892,13 +975,9 @@ function ArchivedClientView({
   onRestore: () => Promise<void>;
 }) {
   const t = useThemeColors();
-  // КОРЗИНА И АРХИВ — РАЗНЫЕ ПОЛКИ, и карточка обязана их различать.
-  // Раньше она смотрела только на deleted_at и писала «В архиве» клиенту,
-  // которого владелец только что удалил: страница противоречила экрану, с
-  // которого на неё пришли, и умалчивала главное — что через N дней его
-  // сотрут.
-  const trashed = !!client.purge_at;
-  const daysToPurge = trashed ? daysLeft(client.purge_at) : null;
+  // УДАЛЁННЫЙ КЛИЕНТ (архива с 03.10 нет). Срок есть — страница говорит,
+  // когда его сотрут; нет (у клиента история) — только когда удалён.
+  const daysToPurge = client.purge_at ? daysLeft(client.purge_at) : null;
   const archivedAt = client.deleted_at ? new Date(client.deleted_at) : null;
   const archivedLabel =
     archivedAt && !Number.isNaN(archivedAt.getTime())
@@ -918,14 +997,14 @@ function ArchivedClientView({
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title={trashed ? "Удалённый клиент" : "Архивный клиент"} onBack={onBack} />
+      <ScreenHeader title="Удалённый клиент" onBack={onBack} />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <View className="items-center px-5 pb-5 pt-5">
           <View
             className="h-14 w-14 items-center justify-center rounded-[10px]"
             style={{ backgroundColor: t.fill }}
           >
-            <Archive color={t.sub} size={26} />
+            <Trash2 color={t.sub} size={26} />
           </View>
           <Text
             className="mt-3 text-center text-2xl font-bold"
@@ -937,17 +1016,13 @@ function ArchivedClientView({
             className="mt-1 text-center text-[13px] leading-5"
             style={{ color: t.sub }}
           >
-            {trashed
-              ? `${archivedLabel ? `Удалён ${archivedLabel}. ` : "Удалён. "}${
-                  daysToPurge === null
-                    ? ""
-                    : daysToPurge <= 0
-                      ? "Будет стёрт сегодня. "
-                      : `Будет стёрт через ${daysToPurge} ${daysWordRu(daysToPurge)}. `
-                }`
-              : archivedLabel
-                ? `В архиве с ${archivedLabel}. `
-                : "В архиве. "}
+            {`${archivedLabel ? `Удалён ${archivedLabel}. ` : "Удалён. "}${
+              daysToPurge === null
+                ? ""
+                : daysToPurge <= 0
+                  ? "Будет стёрт сегодня. "
+                  : `Будет стёрт через ${daysToPurge} ${daysWordRu(daysToPurge)}. `
+            }`}
             Карточка доступна только для чтения; история записей и инвойсов сохранена.
           </Text>
         </View>
@@ -1084,7 +1159,7 @@ function MasterClientOperationalView({
                   <Pressable
                     onPress={() => onOpenAppointment(appointment)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Открыть заявку ${humanDay(appointment.date)} ${appointment.time_start}`}
+                    accessibilityLabel={`Открыть запись ${humanDay(appointment.date)} ${appointment.time_start}`}
                     className="min-h-[72px] flex-row items-center gap-3 px-4 py-3 active:opacity-70"
                   >
                     <View className="min-w-0 flex-1">

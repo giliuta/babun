@@ -78,12 +78,39 @@ export function parseMemberContacts(raw: unknown): MemberContactsAnswer {
   };
 }
 
-/** Номер закрыт: строка сотрудника, и открытых контактов в ней нет. */
+/** Номер закрыт правом: «Скрыт» у блока «Клиент» (`right`) или «в день
+ *  записи» (`day`). С 03.10 открытый номер приходит в строке целиком
+ *  (владелец: «видит клиента — видит номер и звонит, точки не надо»), и
+ *  `null` с пустым номером — просто клиент без номера, а не замок. */
 export function contactsLocked(client: Pick<Client, "contacts_hidden" | "phone">): boolean {
-  return client.contacts_hidden !== undefined && !client.phone.trim();
+  return client.contacts_hidden === "right" || client.contacts_hidden === "day";
 }
 
-/** Карточка с открытыми контактами поверх строки окна. */
+/** Карточка с открытыми контактами поверх строки окна. Связи («Входит в»)
+ *  не накладываются: с 30.09 это блок «Люди», и строка сама несёт их по
+ *  праву — старый снимок затирал бы свежие. */
 export function withContacts<T extends Client>(client: T, contacts: MemberContacts): T {
-  return { ...client, ...contacts, contacts_hidden: null };
+  const { memberships: _ignored, ...own } = contacts;
+  return { ...client, ...own, contacts_hidden: null };
+}
+
+const CONTACT_KEYS = [
+  "phone",
+  "phone_e164",
+  "phones",
+  "whatsapp_phone",
+  "email",
+  "telegram_username",
+  "instagram_username",
+] as const;
+
+/** Снимок открытых контактов после удачной правки: поля патча поверх. Иначе
+ *  старый снимок лёг бы на свежую строку, и следующая правка номеров
+ *  (`ClientExtraContacts`) записала бы старые телефоны обратно. */
+export function contactsAfterPatch(contacts: MemberContacts, patch: Partial<Client>): MemberContacts {
+  const next = { ...contacts };
+  for (const key of CONTACT_KEYS) {
+    if (patch[key] !== undefined) (next as Record<string, unknown>)[key] = patch[key];
+  }
+  return next;
 }

@@ -80,12 +80,26 @@ export function useUpsertTeamSchedule() {
       schedule,
     }: {
       teamId: string;
-      schedule: TeamSchedule;
+      /** Весь график — или правка поверх него (`(current) => next`). Правку
+       *  сервер получает поверх СВЕЖЕГО графика: «Выходной» на дату собирал
+       *  весь блоб из кэша телефона и молча затирал правку графика,
+       *  сделанную на другом телефоне после загрузки (аудит 03.10). */
+      schedule: TeamSchedule | ((current: TeamSchedule | null) => TeamSchedule);
     }) => {
-      if (role !== "owner") {
-        throw new Error("Изменять график команды может только владелец.");
-      }
-      await upsertScheduleEntry(supabase, tenantId as string, teamId, schedule);
+      // Кто может — решает сервер: график пишет владелец и тот, кому дали
+      // «График: Меняет» (`team_schedules_write_access`). Ворота «только
+      // владелец» отбивали партнёра — выходной на дату и правка часов из
+      // шторки дня падали «Не удалось сохранить» (аудит 2026-10-03).
+      const next =
+        typeof schedule === "function"
+          ? schedule(
+              pickTeamSchedule(
+                await listScheduleEntries(supabase, tenantId as string),
+                teamId,
+              ),
+            )
+          : schedule;
+      await upsertScheduleEntry(supabase, tenantId as string, teamId, next);
     },
     // Оптимистичный мерж здесь ОБЯЗАТЕЛЕН, а не украшение: апсерт ЗАМЕНЯЕТ
     // весь блоб, а редактор дня строит следующий блоб от того, что лежит в
@@ -106,7 +120,14 @@ export function useUpsertTeamSchedule() {
         allTeamSchedulesQueryKey(tenantId, role),
         () => listScheduleEntries(supabase, tenantId as string),
         teamId,
-        schedule,
+        typeof schedule === "function"
+          ? schedule(
+              pickTeamSchedule(
+                qc.getQueryData<ScheduleMap>(allTeamSchedulesQueryKey(tenantId, role)),
+                teamId,
+              ),
+            )
+          : schedule,
       ),
     onError: (_e, _vars, ctx) => {
       if (ctx) {

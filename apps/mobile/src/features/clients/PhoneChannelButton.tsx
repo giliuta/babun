@@ -9,9 +9,12 @@ import { useEnabledChannels } from "@/features/clients/contact-ways";
 import { RowActionButton } from "@/components/ui/card-rows";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { formatPhoneForDisplay, tryToE164 } from "@/features/clients/phone";
-import { useReferenceHref } from "@/features/clients/reference-href";
+import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
+import { ClientsScopeProvider } from "@/features/clients/company-scope";
+import type { ClientsScope } from "@/features/clients/clients-company";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
-import { SmsTemplateSheet, useSmsOptions } from "@/features/sms/SmsCompose";
+import { useSmsComposeContext } from "@/features/sms/SmsCompose";
+import { SmsSendSheet } from "@/features/sms/SmsSendSheet";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -32,13 +35,7 @@ import { useThemeColors } from "@/theme/colors";
 // свой номер. Лист — ТОТ ЖЕ, что у «Добавить» (владелец 2026-08-02):
 // значок канала слева, шестерёнка в углу ведёт в настройки способов связи.
 
-export default function PhoneChannelButton({
-  number,
-  telegramUsername,
-  label,
-  smsName,
-  teamId = null,
-}: {
+interface ChannelButtonProps {
   number: string;
   /** @username клиента — только у основного номера. */
   telegramUsername?: string | null;
@@ -49,17 +46,48 @@ export default function PhoneChannelButton({
   /** Команда клиента — её «Способы связи» (у каждой команды свои, 30.09);
    *  нет — набор компании. */
   teamId?: string | null;
+}
+
+// КЛИЕНТ ДРУГОЙ КОМПАНИИ — ЕЁ НАБОР И ЕЁ ШЕСТЕРЁНКА (03.10). Строка
+// работодателя в общем списке клиентов стоит под источником экрана — своей
+// компании: команда клиента там не находится, и лист читал набор телефона, а
+// шестерёнки не было вовсе. С `source` кнопка живёт в компании строки: набор
+// команды (`team_design`), права строки «Связь» и адрес шестерёнки — её.
+
+export default function PhoneChannelButton({
+  source,
+  ...props
+}: ChannelButtonProps & {
+  /** Компания клиента, если она не компания экрана (строка работодателя). */
+  source?: ClientsScope;
 }) {
+  if (!source) return <ChannelButton {...props} />;
+  return (
+    <ClientsScopeProvider scope={source}>
+      <ChannelButton {...props} />
+    </ClientsScopeProvider>
+  );
+}
+
+function ChannelButton({
+  number,
+  telegramUsername,
+  label,
+  smsName,
+  teamId = null,
+}: ChannelButtonProps) {
   const t = useThemeColors();
   const router = useRouter();
-  // Из записи справочник открывается её сиблингом (см. `useReferenceHref`).
-  const channelsHref = useReferenceHref().channels;
+  // Шестерёнка — в «Связь» ЭТОЙ команды в её компании (из записи — сиблингом
+  // записи, см. `useReferenceHref`); строки, закрытой человеку, нет и в листе.
+  const settingsHref = useClientSettingsDoor("ways", teamId);
   const [open, setOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
-  // Шаблоны, заполненные записью или карточкой, где стоит номер (STORY-089).
-  const smsOptions = useSmsOptions(smsName);
+  // Где стоит номер — запись или карточка: её поля встанут в шаблоны SMS
+  // (STORY-089). Нет контекста (список клиентов) — «Сообщения» телефона.
+  const smsContext = useSmsComposeContext();
   const enabled = useEnabledChannels(teamId);
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(teamId);
   const channels = resolveChannelsForNumber(number, enabled, {
     telegramUsername,
     country,
@@ -75,14 +103,13 @@ export default function PhoneChannelButton({
     color: c.color,
     // Все каналы НОМЕРА — внешние ссылки: внутренний чат ведётся с клиентом,
     // а не с номером, и в этот список не попадает (contact-channels.ts).
-    // «SMS» с шаблонами — второй лист с готовыми текстами; без шаблонов —
-    // пустое сообщение, как раньше.
+    // «SMS» — единственная дверь отправки (владелец 03.10): шаблон галкой,
+    // внизу «Отправить от …» и «Со своего телефона».
     onPress:
-      c.id === "sms" && smsOptions.length > 0
+      c.id === "sms" && smsContext
         ? () => setSmsOpen(true)
         : () => void Linking.openURL(c.url),
   }));
-  const smsChannel = channels.find((c) => c.id === "sms");
 
   // Звонок отключить нельзя (`optional: false`), так что у разобранного
   // номера он есть всегда; запасной путь — первый канал списка.
@@ -120,17 +147,17 @@ export default function PhoneChannelButton({
         title={formatPhoneForDisplay(number, country)}
         items={items}
         // Страница этого же списка — см. AddContactSheet.
-        onSettings={() => router.push(channelsHref)}
-        settingsLabel="Способы связи"
+        onSettings={settingsHref ? () => router.push(settingsHref) : undefined}
+        settingsLabel="Связь"
         onClose={() => setOpen(false)}
       />
-      {smsChannel ? (
-        <SmsTemplateSheet
+      {smsContext ? (
+        <SmsSendSheet
           visible={smsOpen}
-          title={formatPhoneForDisplay(number, country)}
-          url={smsChannel.url}
-          phone={tryToE164(number, country)}
-          options={smsOptions}
+          // Без записи — от команды клиента (её «Способы связи» уже здесь).
+          context={{ ...smsContext, teamId: smsContext.teamId ?? teamId }}
+          phone={tryToE164(number, country) ?? number}
+          name={smsName}
           onClose={() => setSmsOpen(false)}
         />
       ) : null}

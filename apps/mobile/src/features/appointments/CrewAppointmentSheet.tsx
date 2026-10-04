@@ -23,8 +23,9 @@ import { crewAddress, crewBlocks } from "@/features/appointments/crew-blocks";
 import { crewMoney, crewWorkLines } from "@/features/appointments/crew-work";
 import { ActionRow, InfoRow } from "@/features/appointments/crew-rows";
 import { CrewWorkRecord } from "@/features/appointments/CrewWorkRecord";
-import { humanDay } from "@/features/appointments/helpers";
+import { humanDay, humanDayTitle } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
+import { useRouteOpener } from "@/features/clients/use-route-opener";
 
 const REPEAT_LABELS: Record<PersonalEventRepeat["kind"], string> = {
   none: "Не повторяется",
@@ -88,6 +89,7 @@ export function CrewAppointmentSheet({
     () => new Map(services.map((item) => [item.id, item.name])),
     [services],
   );
+  const route = useRouteOpener(appointment?.team_id ?? null);
 
   if (!appointment) return null;
 
@@ -106,8 +108,8 @@ export function CrewAppointmentSheet({
       <MirrorBanner inModal />
       <Screen edges={["top"]}>
         <ScreenHeader
-          title={client?.full_name || appointment.comment || "Заявка"}
-          subtitle={`${humanDay(appointment.date)} · ${appointment.time_start}–${appointment.time_end}`}
+          title={client?.full_name || appointment.comment || "Запись"}
+          subtitle={`${humanDayTitle(appointment.date)} · ${appointment.time_start}–${appointment.time_end}`}
           onBack={onClose}
         />
         <ScrollView
@@ -154,11 +156,7 @@ export function CrewAppointmentSheet({
                       icon={<MapPin color={t.accent} size={ICON.sm} />}
                       title={address}
                       subtitle="Открыть маршрут"
-                      onPress={() =>
-                        void Linking.openURL(
-                          `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
-                        )
-                      }
+                      onPress={() => route.open(null, address)}
                     />
                   ) : null}
                   {address && appointment.event_url?.trim() ? (
@@ -208,6 +206,7 @@ export function CrewAppointmentSheet({
           )}
         </ScrollView>
       </Screen>
+      {route.sheet}
     </Modal>
   );
 }

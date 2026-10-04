@@ -120,6 +120,41 @@ function computeFullUrl(req: Request): string {
   return `${proto}://${host}${url.pathname}${url.search}`;
 }
 
+/** АДРЕСА, ПО КОТОРЫМ TWILIO МОГ ПОДПИСАТЬ ВЫЗОВ (03.10). Внутри Supabase
+ *  `req.url` приходит без `/functions/v1` — шлюз отрезает префикс, — а Twilio
+ *  подписывает ровно тот адрес, что `send_sms` дал ему в StatusCallback:
+ *  `${SUPABASE_URL}/functions/v1/twilio-status`. Сверка шла только с
+ *  `req.url`, каждый отчёт о доставке получал 403, и SMS навсегда оставались
+ *  «Отправлено». Первым — канонический адрес; подпись по-прежнему обязана
+ *  совпасть точно, просто кандидатов несколько. */
+function signedUrlCandidates(req: Request): string[] {
+  const out: string[] = [];
+  const base = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/+$/, "");
+  const search = new URL(req.url).search;
+  if (base) out.push(`${base}/functions/v1/twilio-status${search}`);
+  const seen = computeFullUrl(req);
+  out.push(seen);
+  const u = new URL(seen);
+  if (!u.pathname.startsWith("/functions/v1/")) {
+    out.push(`${u.protocol}//${u.host}/functions/v1${u.pathname}${u.search}`);
+  }
+  return [...new Set(out)];
+}
+
+/** Подпись совпала хотя бы с одним из адресов-кандидатов. */
+async function signatureMatches(
+  authToken: string,
+  urls: readonly string[],
+  params: URLSearchParams,
+  signature: string,
+): Promise<boolean> {
+  for (const candidate of urls) {
+    const expected = await twilioSignature(authToken, candidate, params);
+    if (constantTimeEq(expected, signature)) return true;
+  }
+  return false;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
@@ -149,15 +184,10 @@ Deno.serve(async (req: Request) => {
     return json(200, { ok: true, ignored: "platform_creds_missing" });
   }
 
-  const fullUrl = computeFullUrl(req);
-  const platformExpected = await twilioSignature(
-    platformAuthToken,
-    fullUrl,
-    params,
-  );
+  const urls = signedUrlCandidates(req);
   const platformSigOk =
     constantTimeEq(accountSid, platformAccountSid) &&
-    constantTimeEq(platformExpected, signature);
+    (await signatureMatches(platformAuthToken, urls, params, signature));
 
   const service = serviceClient();
   if (!service) return json(503, { error: "service_role_unavailable" });
@@ -193,16 +223,14 @@ Deno.serve(async (req: Request) => {
       console.error("twilio/status: BYOK creds missing", row.tenant_id, cfgErr);
       return json(403, { error: "byok creds missing" });
     }
-    const byokExpected = await twilioSignature(
-      cfg.twilio_auth_token,
-      fullUrl,
-      params,
-    );
     const byokSigOk =
       constantTimeEq(accountSid, cfg.twilio_account_sid) &&
-      constantTimeEq(byokExpected, signature);
+      (await signatureMatches(cfg.twilio_auth_token, urls, params, signature));
     if (!byokSigOk) return json(403, { error: "bad signature" });
   } else if (!platformSigOk) {
+    // Какие адреса сверяли — без токена и подписи: если Twilio снова позовёт
+    // по другому адресу, это видно в логе функции сразу.
+    console.warn("twilio/status: bad signature", { urls, accountSidMatches: accountSid === platformAccountSid });
     return json(403, { error: "bad signature" });
   }
 

@@ -164,7 +164,11 @@ export function ProfitBreakdown({
 
   if (empty) {
     return (
-      <ScrollView style={{ flex: 1 }} refreshControl={refreshControl}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 96 }}
+        refreshControl={refreshControl}
+      >
         <PanelHeader title={title} />
         <EmptyState
           title={
@@ -175,6 +179,10 @@ export function ProfitBreakdown({
                 : "Нет доходов и расходов за период"
           }
         />
+        {/* Подвал — и у пустого разбора. В «Аналитике» там «Работы и оплаты»
+            и «Прогноз»: месяц, где сделано на €370 и не пришло ни евро,
+            показывал одно «Нет доходов» и прятал как раз долг (03.10). */}
+        {footer}
       </ScrollView>
     );
   }

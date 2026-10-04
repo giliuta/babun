@@ -12,8 +12,11 @@ import {
   teamsQueryKey,
 } from "@/lib/company-query-keys";
 import { fetchTeams } from "@/features/reference/queries";
+import { useMirrorMode } from "@/features/access/mirror/mirror-state";
 import { listMasterAppointmentsSafePaged } from "@/features/calendar/master-appointments";
 import { listMemberClients } from "./queries";
+import { withClientHistory } from "./member-history";
+import { listMemberClientHistory, memberHistoryQueryKey } from "./use-member-history";
 import { viewKeyOf, type ClientsScope } from "./clients-company";
 
 // КЛИЕНТЫ КОМПАНИЙ, ГДЕ ЧЕЛОВЕК РАБОТАЕТ, — ВТОРАЯ ПОЛОВИНА ОБЩЕГО СПИСКА.
@@ -48,7 +51,18 @@ export interface GuestSources {
 
 const MINUTE = 60_000;
 
+/** Запросов на одну компанию: клиенты, метки, команды, записи, история. */
+const PER_SOURCE = 5;
+
 export function useGuestSources(scopes: readonly ClientsScope[]): GuestSources {
+  // ЗЕРКАЛО ЧИТАЕТ ТОКЕНОМ ВЛАДЕЛЬЦА («права его, данные ваши»): дверь команд
+  // сотрудника (`list_operational_teams_safe`) ему пуста, и в «его глазах»
+  // у шестерёнки клиентов не было ни одной команды — «Настроек пока нет» при
+  // любых правах (аудит 03.10). Как в `useTeams`: список владельца, на
+  // устройстве — только его прикрепления.
+  const { mirror } = useMirrorMode();
+  const mirroredTenant = mirror?.map.tenantId ?? null;
+  const attachedKey = mirror ? [...mirror.map.attachedCalendars].sort().join(",") : "";
   const queries = useQueries({
     queries: scopes.flatMap((scope) => {
       const tenantId = scope.tenantId;
@@ -69,13 +83,25 @@ export function useGuestSources(scopes: readonly ClientsScope[]): GuestSources {
         },
         {
           ...common,
-          queryKey: teamsQueryKey(tenantId, scope.role, true),
-          queryFn: () => fetchTeams(tenantBoundClient(tenantId), tenantId, scope.role, true),
+          queryKey: teamsQueryKey(tenantId, tenantId === mirroredTenant ? "owner" : scope.role, true),
+          queryFn: () =>
+            fetchTeams(
+              tenantBoundClient(tenantId),
+              tenantId,
+              tenantId === mirroredTenant ? "owner" : scope.role,
+              true,
+            ),
         },
         {
           ...common,
           queryKey: appointmentsQueryKey(tenantId, scope.role),
           queryFn: () => listMasterAppointmentsSafePaged(tenantBoundClient(tenantId)),
+        },
+        // «История записей» его клиентов (01.10, `member-history.ts`).
+        {
+          ...common,
+          queryKey: memberHistoryQueryKey(tenantId, view, false),
+          queryFn: () => listMemberClientHistory(tenantBoundClient(tenantId)),
         },
       ];
     }),
@@ -85,23 +111,28 @@ export function useGuestSources(scopes: readonly ClientsScope[]): GuestSources {
   const ids = scopes.map((scope) => `${scope.tenantId}:${viewKeyOf(scope)}`).join(",");
 
   return useMemo(() => {
+    const attached = new Set(attachedKey ? attachedKey.split(",") : []);
     const list: GuestSource[] = scopes.map((scope, index) => {
-      const at = index * 4;
+      const at = index * PER_SOURCE;
+      const teams = (queries[at + 2]?.data as Team[] | undefined) ?? [];
       return {
         scope,
         clients: (queries[at]?.data as Client[] | undefined) ?? [],
         tags: (queries[at + 1]?.data as ClientTag[] | undefined) ?? [],
-        teams: (queries[at + 2]?.data as Team[] | undefined) ?? [],
-        appointments: (queries[at + 3]?.data as Appointment[] | undefined) ?? [],
+        teams: scope.tenantId === mirroredTenant ? teams.filter((team) => attached.has(team.id)) : teams,
+        appointments: withClientHistory(
+          (queries[at + 3]?.data as Appointment[] | undefined) ?? [],
+          (queries[at + 4]?.data as Appointment[] | undefined) ?? [],
+        ),
       };
     });
     return {
       list,
       // Ждём только СПИСКИ клиентов: подписи и записи догружаются следом и
       // пустой строкой список не держат.
-      loading: scopes.some((_, index) => queries[index * 4]?.isPending === true),
+      loading: scopes.some((_, index) => queries[index * PER_SOURCE]?.isPending === true),
       refetch: () => Promise.all(queries.map((query) => query.refetch())),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- пересборка по времени ответов, а не по массиву результатов
-  }, [ids, stamps]);
+  }, [ids, stamps, mirroredTenant, attachedKey]);
 }

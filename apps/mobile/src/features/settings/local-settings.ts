@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 import type { Database, Json } from "@babun/shared/db/database.types";
 import {
+  hasStoredCalendarSettings,
   loadCalendarSettings,
   loadOperationalCalendarSettings,
   saveCalendarSettings,
@@ -35,6 +36,7 @@ import { useTenantId } from "@/lib/tenant";
 // владельца ложились бы под ключ «master» — тот самый, который потом возьмёт
 // настоящий мастер на этом устройстве. Показ решает `useCurrentRole`.
 import { useDataRole } from "@/features/settings/tenant";
+import { useScopeCompany } from "@/features/clients/company-scope";
 import { fetchCalendarSettings } from "@/features/settings/company-fetchers";
 import { calendarSettingsQueryKey } from "@/lib/company-query-keys";
 import {
@@ -103,6 +105,14 @@ function safeLoadCalendarSettings(): CalendarSettings {
   }
 }
 
+function safeHasStoredCalendarSettings(): boolean {
+  try {
+    return hasStoredCalendarSettings();
+  } catch {
+    return false;
+  }
+}
+
 function safeSaveCalendarSettings(settings: CalendarSettings): void {
   try {
     saveCalendarSettings(settings);
@@ -144,7 +154,7 @@ export function useCalendarSettings() {
       const activeTenantId = tenantId as string;
       try {
         if (role !== "master" && role !== "owner" && role !== "dispatcher") {
-          throw new Error("Роль сотрудника ещё не подтверждена.");
+          throw new Error("Роль в аккаунте ещё не подтверждена.");
         }
         const settings = await fetchCalendarSettings(
           supabase,
@@ -155,17 +165,18 @@ export function useCalendarSettings() {
         // компании, а прогрев чужой читает те же настройки через
         // `fetchCalendarSettings` и кэш устройства не трогает — иначе настройки
         // компании B легли бы под общий ключ и всплыли у A.
-        if (role === "master") {
-          safeSaveOperationalCalendarSettings(activeTenantId, { ...settings });
-        } else {
-          safeSaveCalendarSettings(settings);
-        }
+        // Копия по компании — у всех ролей: полная копия владельца лежит под
+        // общим ключом, и переход в другую компанию её стирает. Без неё
+        // компания, открытая без сети после перехода, рисовалась с заводскими
+        // настройками — окно 00–24, отменённые видны (повторный аудит 03.10).
+        safeSaveOperationalCalendarSettings(activeTenantId, { ...settings });
+        if (role !== "master") safeSaveCalendarSettings(settings);
         return settings;
       } catch (error) {
         if (!calendarReadMayUseCache(error)) throw error;
-        return role === "master"
-          ? safeLoadOperationalCalendarSettings(activeTenantId)
-          : safeLoadCalendarSettings();
+        return role !== "master" && safeHasStoredCalendarSettings()
+          ? safeLoadCalendarSettings()
+          : safeLoadOperationalCalendarSettings(activeTenantId);
       }
     },
   });
@@ -201,7 +212,7 @@ export function useSaveCalendarSettings() {
       if (role !== "owner") {
         throw new Error("Изменять настройки календаря может только владелец.");
       }
-      if (!tenantId) throw new Error("Нет активной компании");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       return updateCalendarSettings(supabase, tenantId, patch);
     },
     // Instant-commit controls can issue several overlapping patches. Keep an
@@ -342,19 +353,20 @@ function cacheServerLocationLabels(
 }
 
 export function useLocationLabels(teamId: string | null = null) {
-  const tenantId = useTenantId();
-  const roleQuery = useDataRole();
-  const role = roleQuery.data;
+  // КОМПАНИЯ ЭКРАНА, А НЕ КАЛЕНДАРЯ (01.10): типы объектов команды
+  // работодателя партнёр видит и правит из своей вкладки «Клиенты».
+  const { tenantId, client, role, foreign } = useScopeCompany();
   return useQuery({
     queryKey: ["location-labels", tenantId, role ?? "role-pending"],
-    enabled: !!tenantId && roleQuery.isSuccess && role != null,
+    enabled: !!tenantId && role != null,
     staleTime: 5 * 60 * 1000,
     // Читается вся компания одним ключом, отдаётся — команда.
     select: (labels: LocationLabel[]) => locationLabelsOfTeam(labels, teamId),
     queryFn: async (): Promise<LocationLabel[]> => {
       const activeTenantId = tenantId as string;
-      const cached = loadCachedLocationLabels(activeTenantId);
-      const { data, error } = await supabase
+      // Чужая компания на диск не ложится: ни читаем, ни пишем её кэш.
+      const cached = foreign ? [] : loadCachedLocationLabels(activeTenantId);
+      const { data, error } = await client
         .from("location_labels")
         .select("*")
         .eq("tenant_id", activeTenantId)
@@ -376,6 +388,7 @@ export function useLocationLabels(teamId: string | null = null) {
       // One-time rolling-deploy import. A previously server-synced empty list
       // is authoritative and must never resurrect stale device rows.
       if (
+        !foreign &&
         labels.length === 0 &&
         cached.length > 0 &&
         role === "owner" &&
@@ -394,20 +407,22 @@ export function useLocationLabels(teamId: string | null = null) {
         );
       }
 
-      cacheServerLocationLabels(activeTenantId, labels);
+      if (!foreign) cacheServerLocationLabels(activeTenantId, labels);
       return labels;
     },
   });
 }
 
 export function useSaveLocationLabels(teamId: string | null = null) {
-  const tenantId = useTenantId();
-  const role = useDataRole().data;
+  const { tenantId, client, role, foreign } = useScopeCompany();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (l: LocationLabel[]) => {
-      if (!tenantId) throw new Error("Нет активной компании");
-      if (role !== "owner") {
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
+      // ПАРТНЁР ПРАВИТ ТИПЫ СВОЕЙ КОМАНДЫ ПО ПРАВУ «ТИПЫ ОБЪЕКТОВ» (владелец
+      // 01.10): решает сервер (`apply_team_location_label_changes`). Общий
+      // справочник компании без команды — по-прежнему только владельцу.
+      if (role !== "owner" && !(teamId && role === "master")) {
         throw new Error("Настраивать типы объектов может только владелец.");
       }
       const normalized = l.map((label) => ({
@@ -425,18 +440,18 @@ export function useSaveLocationLabels(teamId: string | null = null) {
       ] as const;
       const all =
         qc.getQueryData<LocationLabel[]>(cacheKey) ??
-        loadCachedLocationLabels(tenantId);
+        (foreign ? [] : loadCachedLocationLabels(tenantId));
       // Сравнивается и удаляется — только список ЭТОЙ команды.
       const previous = teamId ? all.filter((label) => label.teamId === teamId) : all;
       const removeIds = locationLabelRemoveIds(previous, normalized);
       const upserts = positionedLocationLabelUpserts(previous, normalized);
       const { data, error } = teamId
-        ? await supabase.rpc("apply_team_location_label_changes", {
+        ? await client.rpc("apply_team_location_label_changes", {
             p_team_id: teamId,
             p_labels: locationLabelsToJson(upserts, normalized),
             p_remove_ids: removeIds,
           })
-        : await supabase.rpc("apply_location_label_changes", {
+        : await client.rpc("apply_location_label_changes", {
             p_labels: locationLabelsToJson(upserts, normalized),
             p_remove_ids: removeIds,
           });
@@ -458,7 +473,7 @@ export function useSaveLocationLabels(teamId: string | null = null) {
       const merged = teamId
         ? [...all.filter((label) => label.teamId !== teamId), ...canonical]
         : canonical;
-      cacheServerLocationLabels(tenantId, merged);
+      if (!foreign) cacheServerLocationLabels(tenantId, merged);
       return merged;
     },
     onSuccess: (l) =>
@@ -603,11 +618,11 @@ export function useSavePersonalEventTypes() {
       /** Команда, чьи это типы. */
       teamId: string;
     }) => {
-      if (!tenantId) throw new Error("Нет активной компании");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       // Сотрудник — по праву «Записи» своей команды (30.09): чужую команду
       // отобьёт политика `personal_event_types_write_access`.
       if (role !== "owner" && role !== "dispatcher" && role !== "master") {
-        throw new Error("Роль сотрудника не позволяет менять типы событий.");
+        throw new Error("Ваша роль не позволяет менять типы событий.");
       }
       // Заготовок с общими id больше нет (24.09) — перекладывать нечего.
       const list = types;

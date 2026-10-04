@@ -6,6 +6,7 @@ import {
   buildServices,
   parseYMD,
   minutesBetweenHM,
+  overrideWithQuantity,
   parseMoneyInput,
 } from "./helpers";
 import type { Service } from "@/features/services/queries";
@@ -178,6 +179,66 @@ describe("appointment service economics", () => {
     assert.equal(line.pricePerUnit, 100);
     assert.equal(line.duration, 200);
     assert.equal(line.originalPrice, 120);
+  });
+
+  test("степпер количества у сохранённой строки снимает замок (аудит 2026-10-03)", () => {
+    const service = makeService({
+      price: 120,
+      duration_minutes: 90,
+      price_tiers: [{ min_qty: 2, price_per_unit: 100 }],
+      duration_tiers: [{ min_qty: 2, duration_minutes: 200 }],
+    });
+    const saved = {
+      qty: 1,
+      locked: { pricePerUnit: 120, originalPrice: 120, duration: 90 },
+    };
+    const [line] = buildServices([service.id], new Map([[service.id, service]]), {
+      [service.id]: overrideWithQuantity(saved, 2, true),
+    });
+    assert.equal(line.quantity, 2);
+    assert.equal(line.pricePerUnit, 100);
+    assert.equal(line.duration, 200);
+  });
+
+  // Так строку отдаёт открытие записи: цена лестницы ≠ базовой — и уходит
+  // в `price`, как ручная (аудит формы записи 03.10).
+  test("цена лестницы у открытой записи пересчитывается при правке количества", () => {
+    const service = makeService({
+      price: 50,
+      price_tiers: [{ min_qty: 3, price_per_unit: 40 }],
+    });
+    const catalog = new Map([[service.id, service]]);
+    const hydrated = {
+      qty: 3,
+      price: 40,
+      locked: { pricePerUnit: 40, originalPrice: 50, duration: 180 },
+    };
+    const [down] = buildServices([service.id], catalog, {
+      [service.id]: overrideWithQuantity(hydrated, 2, true, service),
+    });
+    assert.equal(down.pricePerUnit, 50);
+    assert.equal(down.totalPrice, 100);
+
+    // Ручная цена (не равна лестнице при прежнем количестве) остаётся.
+    const byHand = { ...hydrated, price: 35, locked: { ...hydrated.locked, pricePerUnit: 35 } };
+    const [kept] = buildServices([service.id], catalog, {
+      [service.id]: overrideWithQuantity(byHand, 2, true, service),
+    });
+    assert.equal(kept.pricePerUnit, 35);
+  });
+
+  test("своя строка и убранная из прайса держат замок при правке количества", () => {
+    const own = {
+      qty: 1,
+      price: 30,
+      locked: { pricePerUnit: 30, originalPrice: 30, duration: 0, serviceName: "Выезд", unit: null },
+    };
+    const next = overrideWithQuantity(own, 3, false);
+    assert.equal(next.qty, 3);
+    assert.deepEqual(next.locked, own.locked);
+    const [line] = buildServices(["custom-1"], new Map(), { "custom-1": next });
+    assert.equal(line.quantity, 3);
+    assert.equal(line.serviceName, "Выезд");
   });
 
   test("the lock survives a service that vanished from the catalogue", () => {

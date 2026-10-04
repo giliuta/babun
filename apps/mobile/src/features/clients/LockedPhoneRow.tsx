@@ -3,6 +3,7 @@ import type { Client } from "@babun/shared/local/clients";
 import { FieldRow, RowActionButton } from "@/components/ui/card-rows";
 import { useOpenMemberContacts } from "@/features/clients/use-member-contacts";
 import { useThemeColors } from "@/theme/colors";
+import { CONTACT_COLUMN } from "@/features/clients/contact-column";
 
 // СТРОКА НОМЕРА, КОТОРЫЙ СОТРУДНИКУ ЕЩЁ НЕ ОТКРЫЛИ (30.09).
 //
@@ -20,15 +21,13 @@ export function LockedPhoneRow({ client }: { client: Client }) {
   const day = client.contacts_hidden === "day";
   return (
     <FieldRow
-      compact
-      hideLabel
-      label=""
-      value={day ? "Номер откроется в день записи" : "•• ••• •••"}
+      label="Телефон"
+      column={CONTACT_COLUMN}
+      separated
+      value={day ? "Откроется в день записи" : "•• ••• •••"}
       placeholder="Телефон"
       readOnly
       noCopy
-      big={!day}
-      stacked
       tabular={!day}
       valueColor={t.sub}
       onSave={() => undefined}

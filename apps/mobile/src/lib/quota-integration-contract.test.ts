@@ -29,7 +29,7 @@ describe("mobile create quota integration", () => {
     assert.match(clients, /online:\s*isOnline\(\)/);
     assert.match(clients, /isConfirmedNetworkUnavailable/);
 
-    ordered(appointments, "await preflightQuotaForCreate", "return createAppointment");
+    ordered(appointments, "await preflightQuotaForCreate", "return await createAppointment");
     assert.match(appointments, /online:\s*isOnline\(\)/);
     assert.match(appointments, /isConfirmedNetworkUnavailable/);
   });

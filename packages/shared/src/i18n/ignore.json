@@ -1,0 +1,194 @@
+{
+  "_": "Literals the UI translation must NOT touch (apps/mobile/scripts/i18n/babel-plugin.js). files: the whole file stays as written. literals: per file, these exact texts stay raw ({0} for a template slot); display: true keeps the phrase in the dictionaries so tDynamic still translates it when it is printed. Every entry says why.",
+  "files": [
+    {
+      "path": "apps/mobile/src/features/invoices/dictionary.ts",
+      "why": "invoice paper has its own language (ru/en), chosen per document"
+    },
+    {
+      "path": "apps/mobile/src/features/sms/sms-compose.ts",
+      "why": "words inserted into SMS for clients must match what the server sends"
+    },
+    {
+      "path": "apps/mobile/src/features/documents/receipt-pdf.ts",
+      "why": "receipt paper is a document for the client; whole HTML template, stays Russian until it gets a paper language like invoices"
+    },
+    {
+      "path": "apps/mobile/src/features/finances/statement/statement-pdf.ts",
+      "why": "statement paper — whole HTML template as one string; stays Russian until labels move out of the template"
+    },
+    {
+      "path": "packages/shared/src/local/selectors/client-search.ts",
+      "why": "Cyrillic→Latin letter map for search, not text"
+    },
+    {
+      "path": "apps/mobile/src/features/finances/account-editor/account-names.ts",
+      "why": "Latin→Cyrillic letter map for account names"
+    },
+    {
+      "path": "packages/shared/src/db/cache/sql.ts",
+      "why": "SQL text"
+    },
+    {
+      "path": "apps/mobile/src/features/invoices/paper-languages.ts",
+      "why": "invoice paper in bg/el/uk/de/es — paper language is chosen per document; Bulgarian and Ukrainian words would otherwise hit Russian keys («Цена»)"
+    },
+    {
+      "path": "apps/mobile/src/features/documents/receipt-words.ts",
+      "why": "receipt paper words per language — the receipt speaks its invoice's language, not the UI's"
+    }
+  ],
+  "literals": {
+    "packages/shared/src/common/utils/quick-replies.ts": [
+      {
+        "text": "Добрый день! Чем могу помочь?",
+        "why": "the Russian variant of a reply; ru/en/el variants are chosen by the client's language"
+      },
+      {
+        "text": "Стоимость работы — €…. Точную сумму назову после осмотра.",
+        "why": "Russian reply variant"
+      },
+      {
+        "text": "Подскажите, пожалуйста, ваш адрес и удобное время для визита мастера?",
+        "why": "Russian reply variant"
+      },
+      {
+        "text": "Отлично! Мастер будет у вас в назначенное время. Пожалуйста, обеспечьте доступ к объекту.",
+        "why": "Russian reply variant"
+      },
+      {
+        "text": "К сожалению, нам нужно перенести визит. Какая дата и время вам подойдут?",
+        "why": "Russian reply variant"
+      },
+      {
+        "text": "Мы обслуживаем …. Скажите ваш район — подскажу, выезжаем ли туда.",
+        "why": "Russian reply variant"
+      },
+      {
+        "text": "Спасибо, что выбрали нас! Будем очень благодарны за отзыв на Google Maps — это помогает нам становиться лучше.",
+        "why": "Russian reply variant"
+      }
+    ],
+    "apps/mobile/src/features/cabinet/tariff-payments.ts": [
+      {
+        "text": "соло",
+        "why": "matched against plan names stored by the server"
+      },
+      {
+        "text": "про",
+        "why": "matched against plan names stored by the server"
+      },
+      {
+        "text": "макс",
+        "why": "matched against plan names stored by the server"
+      }
+    ],
+    "apps/mobile/app/(dashboard)/cabinet/people/index.tsx": [
+      {
+        "text": "е",
+        "why": "ё→е search normalisation"
+      }
+    ],
+    "packages/shared/src/local/master-presets.ts": [
+      {
+        "text": "е",
+        "why": "ё→е normalisation"
+      }
+    ],
+    "packages/shared/src/local/masters.ts": [
+      {
+        "text": "бригадир",
+        "why": "compared with role names stored in the database"
+      }
+    ],
+    "packages/shared/src/local/services-pricing.ts": [
+      {
+        "text": "ч",
+        "why": "stored service unit code"
+      }
+    ],
+    "apps/mobile/src/features/clients/bulk-sms.ts": [
+      {
+        "text": "Имя",
+        "why": "SMS template variable name"
+      }
+    ],
+    "apps/mobile/src/features/settings/tenant.ts": [
+      {
+        "text": "Не удалось проверить роль: сеть не отвечает",
+        "display": true,
+        "why": "lib/connection-words.ts recognises a lost connection by these words"
+      }
+    ],
+    "apps/mobile/src/features/clients/import/csv-mapping.ts": [
+      {
+        "text": "имя",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "фио",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "клиент",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "название",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "телефон",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "тел",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "моб",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "номер",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "почта",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "емейл",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "адрес",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "заметки",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "заметка",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "примечан",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "комментар",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "город",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      },
+      {
+        "text": "метка",
+        "why": "CSV header pattern — matched against a Russian file's column names"
+      }
+    ]
+  }
+}

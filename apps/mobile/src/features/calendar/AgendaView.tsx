@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   FlatList,
   Linking,
@@ -7,8 +8,9 @@ import {
   View,
 } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { STATUS_LABELS, getDebtAmount } from "@babun/shared/local/appointments";
+import { getDebtAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { pluralize } from "@babun/shared/common/utils/pluralize";
 import { parseYMD } from "@/features/appointments/helpers";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
@@ -42,6 +44,7 @@ export function AgendaView({
   situationFor,
   overdueFor,
   showAmounts = true,
+  addressFor,
   refreshing,
   onRefresh,
   onCreate,
@@ -72,6 +75,9 @@ export function AgendaView({
   overdueFor?: (a: Appointment) => boolean;
   /** Master/brigadier sees job logistics, never company/customer money. */
   showAmounts?: boolean;
+  /** Куда ехать — то же правило, что у блока сетки и «Маршрута» в меню:
+   *  снимок адреса записи, иначе адрес клиента. */
+  addressFor?: (a: Appointment) => string | null;
   refreshing: boolean;
   onRefresh: () => void;
   /** Пустая лента — «Новая запись» внизу (владелец 29.09: «пусто — надо
@@ -80,6 +86,25 @@ export function AgendaView({
   onCreate?: () => void;
 }) {
   const t = useThemeColors();
+  // ТЕКУЩИЙ МЕСЯЦ ОТКРЫВАЕТСЯ НА СЕГОДНЯ (повторный аудит 03.10). Лента
+  // начиналась с 1-го числа, а кнопки «Сегодня» в текущем месяце нет: к
+  // двадцатому числу загруженного месяца до своего дня приходилось листать
+  // через весь прошедший. Прошедшие дни месяца остаются выше — пальцем вверх.
+  // Один раз на месяц: новая запись в ленте не дёргает прокрутку.
+  const listRef = useRef<FlatList<AgendaSection>>(null);
+  const monthKey = sections[0]?.title.slice(0, 7) ?? "";
+  const todayIndex = todayYmd.startsWith(monthKey)
+    ? sections.findIndex((s) => s.title >= todayYmd)
+    : -1;
+  const scrolledFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!monthKey || scrolledFor.current === monthKey) return;
+    scrolledFor.current = monthKey;
+    if (todayIndex <= 0) return;
+    requestAnimationFrame(() =>
+      listRef.current?.scrollToIndex({ index: todayIndex, animated: false }),
+    );
+  }, [monthKey, todayIndex]);
   // ПУСТОЙ МЕСЯЦ — ЭКРАН, А НЕ СТРОКА ЛЕНТЫ (владелец 2026-09-29: «кнопка
   // не на своём месте, выше, чем положено»). Внутри ленты пустое состояние
   // наследовало её отступы — 16 сверху и 96 снизу, — и «Новая запись» стояла
@@ -100,8 +125,21 @@ export function AgendaView({
   return (
     <View style={{ flex: 1 }}>
       <FlatList
+        ref={listRef}
         style={{ flex: 1 }}
         data={sections}
+        // Высоты дней разные, и до дальнего дня лента ещё не измерена:
+        // сначала прыжок по средней высоте, потом точно.
+        onScrollToIndexFailed={(info) => {
+          listRef.current?.scrollToOffset({
+            offset: info.averageItemLength * info.index,
+            animated: false,
+          });
+          setTimeout(
+            () => listRef.current?.scrollToIndex({ index: info.index, animated: false }),
+            60,
+          );
+        }}
         keyExtractor={(s) => s.title}
         contentContainerStyle={{
           padding: 16,
@@ -132,6 +170,7 @@ export function AgendaView({
               onEdit={onEdit}
               onMenu={onMenu}
               showAmounts={showAmounts}
+              addressFor={addressFor}
               t={t}
             />
           );
@@ -157,6 +196,7 @@ function DaySection({
   onEdit,
   onMenu,
   showAmounts,
+  addressFor,
   t,
 }: {
   section: AgendaSection;
@@ -171,13 +211,23 @@ function DaySection({
   onEdit: (a: Appointment) => void;
   onMenu?: (a: Appointment) => void;
   showAmounts: boolean;
+  addressFor?: (a: Appointment) => string | null;
   t: ThemeColors;
 }) {
   // Beta #54 — maps deep-link with the day's addresses as waypoints, in
   // visit order (web AgendaView). No route optimization (paid quota) — the
   // dispatcher just gets every address pinned in order.
+  // МАРШРУТ — ТОЛЬКО ПО ВЫЕЗДАМ (повторный аудит 03.10): отменённый визит и
+  // событие в него не входят, а адрес — как у блока сетки, с адресом клиента
+  // вместо пустого снимка; иначе мастера везло на отменённый визит, а
+  // старые записи без снимка из маршрута выпадали.
   const addresses = Array.from(
-    new Set(section.data.map((a) => (a.address || "").trim()).filter(Boolean)),
+    new Set(
+      section.data
+        .filter((a) => a.kind === "work" && a.status !== "cancelled")
+        .map((a) => (addressFor?.(a) ?? a.address ?? "").trim())
+        .filter(Boolean),
+    ),
   );
   const mapsUrl =
     addresses.length > 0
@@ -254,10 +304,14 @@ function DaySection({
             hitSlop={8}
             className="active:opacity-60"
             accessibilityRole="link"
-            accessibilityLabel={`Маршрут дня, ${addresses.length} адресов`}
+            accessibilityLabel={`Маршрут дня, ${pluralize(addresses.length, "адрес", "адреса", "адресов")}`}
             // 44 — минимальная тап-мишень HIG: текст 11pt, мишень — контейнер.
+            // Мишень заходит на поля, а не раздвигает шапку: у дня с
+            // «Маршрутом» зазор до карточки был вдвое больше, чем у соседних
+            // дней (повторный аудит 03.10).
             style={{
               minHeight: 44,
+              marginVertical: -13,
               justifyContent: "center",
               flexShrink: 0,
               marginLeft: 8,
@@ -334,15 +388,8 @@ function AgendaRow({
   overdue: boolean;
   t: ThemeColors;
 }) {
-  // ЦВЕТ СТАТУСА В ЛЕНТЕ БОЛЬШЕ НЕ СВОЙ: третья копия правды расходилась с
-  // сеткой (там «в работе» — янтарь, здесь был кобальт).
-  const statusColor =
-    apt.status === "completed"
-      ? t.success
-      : apt.status === "cancelled"
-        ? t.faint
-        : t.sub;
   const cancelled = apt.status === "cancelled";
+  const statusWord = overdue ? "Не оплачена" : cancelled ? "Отменена" : null;
   // ЦВЕТ ЗАПИСИ ЗАЛИВАЕТ ВСЮ СТРОКУ, а не квадратик слева (владелец
   // 2026-09-06: «зачем мне слева цветовой квадратик — весь блок должен
   // подсвечиваться»). Рецепт тот же, что у блока в сетке: заливка BLOCK_FILL,
@@ -448,7 +495,7 @@ function AgendaRow({
             style={{
               marginTop: 2,
               fontSize: 11,
-              color: statusColor,
+              color: cancelled ? t.faint : t.sub,
               textDecorationLine: cancelled ? "line-through" : "none",
             }}
           >
@@ -471,7 +518,7 @@ function AgendaRow({
       accessibilityRole="button"
       // Озвучка называет ВСЁ, что напечатано в строке: статус, «не закрыта» и
       // имя дыры видны глазу и обязаны быть слышны.
-      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}, ${overdue ? "не закрыта" : STATUS_LABELS[apt.status]}${situation ? `, ${situation.toLowerCase()}` : ""}${offLabel ? `, метка ${offLabel.name}` : ""}, ${formatEUR(total)}`}
+      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}${statusWord ? `, ${statusWord.toLowerCase()}` : ""}${situation ? `, ${situation.toLowerCase()}` : ""}${offLabel ? `, метка ${offLabel.name}` : ""}, ${formatEUR(total)}`}
       style={{
         flexDirection: "row",
         alignItems: "flex-start",
@@ -531,19 +578,21 @@ function AgendaRow({
             gap: 6,
           }}
         >
-          <Text
-            style={{
-              fontSize: 11,
-              color: overdue ? t.warning : statusColor,
-              textDecorationLine: cancelled ? "line-through" : "none",
-            }}
-          >
-            {/* НЕ ЗАКРЫТА — СЛОВОМ, ВМЕСТО СТАТУСА. Толщина канта в сетке
-                отвечает на «эта ли висит», но не на «сколько их». А
-                «Запланирована · не закрыта» — два слова об одном и то, что
-                съедало место ситуации (аудит 29.09: «не закры… · Не оплаче…»). */}
-            {overdue ? "Не закрыта" : STATUS_LABELS[apt.status]}
-          </Text>
+          {/* СТАТУСА СЛОВОМ НЕТ (владелец 03.10: «статус удаляй полностью»):
+              осталась отмена и прошедшая неоплаченная работа — «Не оплачена»
+              (визит закрывает только оплата). Толщина канта в сетке отвечает
+              на «эта ли висит», слово — на «сколько их». */}
+          {statusWord ? (
+            <Text
+              style={{
+                fontSize: 11,
+                color: overdue ? t.warning : t.faint,
+                textDecorationLine: cancelled ? "line-through" : "none",
+              }}
+            >
+              {statusWord}
+            </Text>
+          ) : null}
           {/* ЧЕГО НЕ ХВАТАЕТ — СЛОВОМ. Цвет один на три ситуации различает их
               слишком слабо для дальтоника (ΔE заливок «нет объекта» и «нет
               услуг» при дейтеранопии — 4.1), а в списке есть место для слова:
@@ -553,7 +602,7 @@ function AgendaRow({
               numberOfLines={1}
               style={{ flexShrink: 1, fontSize: 11, color: t.body }}
             >
-              · {situation}
+              {statusWord ? "· " : ""}{situation}
             </Text>
           ) : null}
           {/* МЕТКА, ОТЛИЧНАЯ ОТ МЕТКИ ДНЯ: «весь день Лимассол, а эта работа
@@ -580,17 +629,22 @@ function AgendaRow({
       </View>
       {showAmounts && total > 0 ? (
         <View style={{ alignItems: "flex-end" }}>
+          {/* ОТМЕНЁННАЯ — СУММА ЗАЧЁРКНУТА И БЕЗ «К ОПЛАТЕ» (повторный аудит
+              03.10, на симуляторе): отменённый визит стоял в ленте с суммой
+              полным чёрным, а неоплаченный — ещё и с «€50 к оплате», хотя
+              денег по нему никто не ждёт. */}
           <Text
             style={{
               fontVariant: ["tabular-nums"],
               fontSize: 14,
               fontWeight: "600",
-              color: t.ink,
+              color: cancelled ? t.faint : t.ink,
+              textDecorationLine: cancelled ? "line-through" : "none",
             }}
           >
             {formatEUR(total)}
           </Text>
-          {debt > 0 ? (
+          {debt > 0 && !cancelled ? (
             <Text
               // ДОЛГ — ТОЛЬКО ПОСЛЕ ВИЗИТА (STORY-067): пока визит впереди,
               // неоплаченная сумма — просто «к оплате», серым; выполненный или

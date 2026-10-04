@@ -7,21 +7,18 @@ import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
 import {
-  useDeleteAccount,
-  useSoftCloseAccount,
+  useRestoreAccount,
+  useTrashAccount,
   type AccountWithBalance,
 } from "../accounts";
-import {
-  accountNotEmptyAlert,
-  deleteAccountAlert,
-  hideAccountAlert,
-} from "../account-alerts";
+import { accountNotEmptyAlert, trashAccountAlert } from "../account-alerts";
 import { freshAccounts } from "../accounts-page/fresh-accounts";
 import {
-  hideDecision,
-  hideDecisionAfterTransfer,
+  trashDecision,
+  trashDecisionAfterTransfer,
+  type TrashDecision,
 } from "../accounts-page/page-rules";
-import { closeDecision, isLastOpenOfTeam, type CloseDecision } from "../close-decision";
+import { isLastOpenOfTeam } from "../close-decision";
 import { stepAfterAnswer } from "./editor-logic";
 import type { AlertError } from "./types";
 
@@ -35,11 +32,10 @@ import type { AlertError } from "./types";
 // аудит 2026-09-10). Отказ на любом шаге возвращает лист; закрыли или удалили
 // — лист закрывается совсем.
 //
-// ОТКРЫТЫЙ СЧЁТ ТОЛЬКО СКРЫВАЕТСЯ, СТИРАЕТСЯ — ИЗ АРХИВА (владелец
-// 2026-09-23: «добавить их в архив и потом удалить… чтоб всё соблюдалось по
-// нашей архитектуре»; тот же закон, что у календарей 21.09). Кнопка открытого
-// листа говорит то же, что свайп «Скрыть», и ведёт туда же — в «Закрытые
-// счета», даже у счёта без операций. «Удалить счёт» есть только у закрытого.
+// РАЗГОВОР ЗДЕСЬ — ТОЛЬКО ОБ «УДАЛИТЬ СЧЁТ» (владелец 03.10): счёт уходит в
+// «Удалённые счета», как свайп «Удалить» и как клиенты; удалить можно только
+// пустой — деньги сначала уводятся переводом. «Скрыть счёт» вопроса не
+// задаёт: скрытый счёт работает, лист прячет его сразу (`EditAccountSheet`).
 
 /** Окно поверх уезжающего листа iOS не покажет — ждём конец его ухода. */
 const AFTER_SHEET_MS = SHEET_EXIT_MS + 350;
@@ -50,7 +46,7 @@ const FRESH_TIMEOUT_MS = 6000;
 const delay = <T,>(ms: number, value: T) =>
   new Promise<T>((resolve) => setTimeout(() => resolve(value), ms));
 
-type Decision = CloseDecision;
+type Decision = TrashDecision;
 
 /** Слова вопроса. `null` — это не вопрос, а объяснение: остаток увести некуда. */
 function questionText(
@@ -60,17 +56,15 @@ function questionText(
 ) {
   // Последний открытый счёт команды — вопрос говорит, что команда останется
   // без счёта (аудит 2026-09-30).
-  const last = isLastOpenOfTeam(target, accounts);
-  if (decision.kind === "delete") {
-    return deleteAccountAlert(target.name, target.balance, last);
-  }
-  if (decision.kind === "close") {
-    return hideAccountAlert(target.name, last);
+  const last = target.is_active && isLastOpenOfTeam(target, accounts);
+  if (decision.kind === "trash") {
+    return trashAccountAlert(target.name, last);
   }
   const text = accountNotEmptyAlert(
     target.name,
     target.balance,
     decision.kind === "transfer",
+    "Удалить",
   );
   return decision.kind === "transfer" && text.confirm
     ? { ...text, confirm: text.confirm }
@@ -78,7 +72,7 @@ function questionText(
 }
 
 function explain(target: AccountWithBalance) {
-  const text = accountNotEmptyAlert(target.name, target.balance, false);
+  const text = accountNotEmptyAlert(target.name, target.balance, false, "Удалить");
   notify(text.title, text.message);
 }
 
@@ -92,8 +86,8 @@ export function useCloseFlow({
 }) {
   const qc = useQueryClient();
   const tenantId = useTenantId();
-  const closeAcc = useSoftCloseAccount();
-  const deleteAcc = useDeleteAccount();
+  const trashAcc = useTrashAccount();
+  const restoreAcc = useRestoreAccount();
   // ТОСТ — ТОТ ЖЕ, ЧТО У СВАЙПА (живой прогон 2026-09-23): свайп «Скрыть»
   // говорил «Счёт скрыт», а кнопка листа то же действие делала молча.
   const toast = useToast();
@@ -110,7 +104,7 @@ export function useCloseFlow({
   const afterExit = useRef<(() => void) | null>(null);
   /** Счета на момент тапа — чтобы вопрос знал, последний ли это счёт команды. */
   const knownAccounts = useRef<readonly AccountWithBalance[]>([]);
-  /** Перевод затеян РАДИ ЗАКРЫТИЯ: счёт в момент вопроса. */
+  /** Перевод затеян РАДИ УДАЛЕНИЯ: счёт в момент вопроса. */
   const closingFrom = useRef<AccountWithBalance | null>(null);
   // ЭКРАН МОГЛИ ПОКИНУТЬ, ПОКА ЖДАЛИ ОСТАТКИ: вопрос всплыл бы над чужим
   // экраном, а лист — над пустым местом.
@@ -155,18 +149,17 @@ export function useCloseFlow({
       const step = stepAfterAnswer(decision, ok);
       if (step === "return") {
         returnSheet();
-      } else if (step === "delete") {
-        void deleteAcc.mutateAsync(target.id).then(() => {
-          toast(`Счёт «${target.name}» удалён`);
+      } else if (step === "trash") {
+        void trashAcc.mutateAsync(target.id).then(() => {
+          toast(`Счёт «${target.name}» удалён`, "success", {
+            label: "Отменить",
+            onPress: () =>
+              restoreAcc.mutate(target.id, {
+                onError: (e) => toast(`Не удалось вернуть счёт: ${e.message}`, "error"),
+              }),
+          });
           finish();
         }, fail("Не удалось удалить счёт"));
-      } else if (decision.kind === "close") {
-        void closeAcc
-          .mutateAsync({ id: target.id })
-          .then(() => {
-            toast(`Счёт «${target.name}» скрыт`);
-            finish();
-          }, fail("Не удалось скрыть счёт"));
       } else if (decision.kind === "transfer") {
         // Минус лечится переводом В счёт, плюс — переводом ИЗ него: один лист,
         // разное направление.
@@ -182,15 +175,14 @@ export function useCloseFlow({
     });
   };
 
-  /** Тап по «Закрыть счёт» / «Удалить счёт» в открытом листе. */
+  /** Тап по «Удалить счёт» в открытом листе. */
   const start = (
     account: AccountWithBalance,
     accounts: readonly AccountWithBalance[],
   ) => {
     knownAccounts.current = accounts;
-    const decision: Decision = account.is_active
-      ? hideDecision(account, accounts)
-      : closeDecision(account, accounts);
+    const active = accounts.filter((other) => other.is_active);
+    const decision = trashDecision(account, active);
     if (!questionText(account, decision, accounts)) {
       // Объяснение без вопроса: системный алерт встаёт поверх листа, и лист
       // уезжать не должен.
@@ -237,6 +229,7 @@ export function useCloseFlow({
       returnSheet();
       return;
     }
+    const from = before;
     void Promise.all([
       Promise.race([
         freshAccounts(qc, tenantId),
@@ -245,9 +238,8 @@ export function useCloseFlow({
       delay(AFTER_SHEET_MS, null),
     ]).then(([fresh]) => {
       if (!mounted.current) return;
-      // Перевод затевается только у открытого счёта — значит и вопрос после
-      // него тот же, что у свайпа: скрыть, без удаления.
-      const next = hideDecisionAfterTransfer(before, fresh);
+      // Вопрос после перевода — по свежему остатку.
+      const next = trashDecisionAfterTransfer(from, fresh);
       if (!next) setParked(false);
       else ask(next.account, next.decision);
     });

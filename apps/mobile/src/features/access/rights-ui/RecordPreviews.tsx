@@ -1,5 +1,5 @@
 import { View } from "react-native";
-import { Banknote, Bookmark, CircleCheck, CreditCard, FileText, ImageIcon, Landmark, Paperclip } from "lucide-react-native";
+import { Banknote, Bookmark, CreditCard, FileText, ImageIcon, Landmark, MessageSquare, Paperclip } from "lucide-react-native";
 
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -71,9 +71,8 @@ export function RecordPreview({
   const rb = previewRecord(blocks, levels);
   const ev = previewEvent(blocks, levels);
   const on = (write: boolean) => (write ? noop : undefined);
-  // Телефон клиента в записи сервер прячет, когда «Телефоны» закрыты; «В день
-  // записи» — запись образца сегодняшняя, номер открывается.
-  const phoneOpen = levels["clients.contacts"] === "read" || levels["clients.contacts"] === "day";
+  // Телефон клиента в записи — по блоку «Клиент» карточки (02.10).
+  const phoneOpen = levels["clients.client"] === "read" || levels["clients.client"] === "write";
 
   switch (blockKey) {
     case "record.team":
@@ -174,16 +173,17 @@ export function RecordPreview({
       );
     // Статус виден всегда; меняет — «Видит и меняет». Отмена — «Отмена и
     // удаление» в «Календаре».
-    case "record.status":
+    // «SMS» записи (03.10): блок внизу записи — что ушло её клиенту.
+    case "record.sms":
       return (
-        <PreviewFrame state={levelState(rb.status)}>
-          <SectionCard>
+        <PreviewFrame state={levelState(rb.sms)}>
+          <SectionCard title="SMS">
             <SettingsRow
-              tile={SETTINGS_TILE.orange}
-              icon={CircleCheck}
-              title="Статус"
-              value="Запланирована"
-              onPress={on(rb.status === "write")}
+              tile={SETTINGS_TILE.green}
+              icon={MessageSquare}
+              title="Напоминание о записи"
+              sub="Вчера, 18:00 · Доставлено"
+              onPress={on(rb.sms !== "hidden")}
             />
           </SectionCard>
         </PreviewFrame>

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Share, Text, View } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { MoreHorizontal, Share2 } from "lucide-react-native";
 import {
@@ -22,9 +22,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Spinner } from "@/components/ui/Spinner";
-import { ValueRow } from "@/components/ui/ValueRow";
 import { ICON } from "@/components/ui/tokens";
-import { chooseOption } from "@/lib/choose";
 import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
@@ -35,25 +33,25 @@ import {
   todayYmd,
 } from "@/features/invoices/format";
 import { InvoicePaymentSheet } from "@/features/invoices/InvoicePaymentSheet";
-import { InvoiceRefundSheet } from "@/features/invoices/InvoiceRefundSheet";
+import { useInvoiceMenu } from "@/features/invoices/invoice-menu";
+import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
 import { shareInvoicePdf } from "@/features/invoices/share-pdf";
 import { buildInvoiceDocument } from "@/features/invoices/document";
-import { buildInvoiceShareText } from "@/features/invoices/text";
 import { InvoiceStatusBadge } from "@/features/invoices/InvoiceStatusBadge";
 import { InvoicePaper } from "@/features/invoices/InvoicePaper";
 import {
-  useCancelInvoice,
   useCreditNoteLinks,
   useInvoice,
   useInvoicePayments,
   useInvoices,
   useRecordInvoicePayment,
-  useRefundInvoicePayment,
-  useSetInvoiceStatus,
 } from "@/features/invoices/queries";
-import { useTenant } from "@/features/settings/tenant";
+import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { accessGate } from "@/features/access/my-access";
+import { useMyAccess } from "@/features/access/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { haptics } from "@/lib/haptics";
+import { useReceipt, useReceipts } from "@/features/documents/receipts-queries";
+import { DocumentLinkBlocks } from "@/features/documents/DocumentLinkBlocks";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
@@ -61,7 +59,11 @@ import { useThemeColors } from "@/theme/colors";
 export default function InvoiceDetailScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, action } = useLocalSearchParams<{ id: string; action?: string }>();
+  // ДЕЙСТВИЕ ИЗ МЕНЮ СПИСКА (04.10: долгое нажатие в «Документах» — «Поделиться
+  // PDF», «Принять оплату», «Выписать чек»): страница открывается и делает его
+  // сама, один раз, когда всё нужное загружено.
+  const pendingAction = useRef<string | null>(action ?? null);
   const invoice = useInvoice(id);
   const clientsQuery = useClients();
   const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
@@ -71,6 +73,11 @@ export default function InvoiceDetailScreen() {
   const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
   const tenantQuery = useTenant();
   const tenant = tenantQuery.data;
+  // ПАРТНЁР С «ДОКУМЕНТАМИ» (03.10): «Видит» — бумага, платежи, чек; с
+  // «Выставляет» — ещё язык бумаги и «Выписать чек». Принять оплату, вернуть
+  // деньги и отменить инвойс — только владельцу (сервер так и держит).
+  const role = useCurrentRole().data;
+  const myAccess = useMyAccess().data;
   const calendarSettingsQuery = useCalendarSettings();
   const calendarSettings = calendarSettingsQuery.data;
   const paymentRows = useInvoicePayments();
@@ -83,14 +90,27 @@ export default function InvoiceDetailScreen() {
     () => new Map((invoicesQuery.data ?? []).map((item) => [item.id, item.number])),
     [invoicesQuery.data],
   );
-  const setStatus = useSetInvoiceStatus(id);
+  // Кредит-нота печатается кредит-нотой со ссылкой на отменённый инвойс —
+  // на странице, в PDF и в тексте одинаково (аудит 03.10).
+  const creditNoteOfId = creditLinks.data?.originalByNoteId.get(id) ?? null;
+  // Кредит-нота к ЧЕКУ (возврат по чеку, 04.10) ссылается на чек, а не на
+  // инвойс: номер — его.
+  const noteReceipt = useReceipt(invoice.data?.credit_note_of_receipt_id ?? null).data ?? null;
+  const creditNote = creditNoteOfId
+    ? { originalNumber: numberById.get(creditNoteOfId) ?? null }
+    : invoice.data?.kind === "credit_note"
+      ? { originalNumber: noteReceipt?.number ?? null, ofReceipt: true }
+      : null;
   const pay = useRecordInvoicePayment(id);
-  const refund = useRefundInvoicePayment(id);
-  const cancel = useCancelInvoice(id);
+  const invoiceMenu = useInvoiceMenu();
+  const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [accountCreateOpen, setAccountCreateOpen] = useState(false);
-  const [refundTarget, setRefundTarget] = useState<InvoicePaymentLedger | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  // ЧЕК — ТОЛЬКО У ИНВОЙСА (владелец 2026-09-30: «отдельно чеки пока что не
+  // делай; чек можно выставить на выставленный инвойс — на оплату, принятую
+  // по нему»). Инвойс оплачен — внизу «Выписать чек», выписанный чек стоит
+  // блоком на странице и открывается листом.
   const businessToday = todayYmd(calendarSettings?.timezone ?? "Europe/Nicosia");
 
   const client = useMemo(
@@ -99,15 +119,15 @@ export default function InvoiceDetailScreen() {
   );
   const appointment = appointments.find((item) => item.id === invoice.data?.appointment_id);
   const payments = useMemo(() => paymentRows.data?.[id] ?? [], [id, paymentRows.data]);
+  // Чеки инвойса — и его, и выписанные на его платежи раньше него.
+  const incomeIds = useMemo(
+    () => payments.filter((p) => p.type === "income").map((p) => p.id),
+    [payments],
+  );
+  const receiptsQuery = useReceipts({ invoiceId: id, transactionIds: incomeIds, enabled: !!id });
   const settlement = useMemo(
     () => invoice.data ? calculateInvoiceSettlement(invoice.data, payments) : null,
     [invoice.data, payments],
-  );
-  const refundAvailable = useMemo(
-    () => refundTarget
-      ? calculateInvoicePaymentRefundable(refundTarget, payments)
-      : 0,
-    [payments, refundTarget],
   );
   // ДОКУМЕНТ БЕЗ КЛИЕНТА МОЖНО ПРИВЯЗАТЬ (владелец 2026-09-07: «открываю
   // документ — сверху пишет, что он ни к чему не присвоен, и предлагает
@@ -120,32 +140,42 @@ export default function InvoiceDetailScreen() {
     () => accountsForTeam(accounts, invoice.data?.brigade_id ?? null),
     [accounts, invoice.data?.brigade_id],
   );
-  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts]);
+  // ИМЕНА — СО СКРЫТЫМИ И УДАЛЁННЫМИ: оплата на счёте, который потом скрыли
+  // или удалили, не теряет его имя ни в ленте, ни в PDF. Пикеры оплаты
+  // по-прежнему берут только живые счета (`accounts`).
+  const namedAccountsQuery = useAccountsWithBalances({ includeInactive: true, includeDeleted: true });
+  const accountById = useMemo(
+    () => new Map((namedAccountsQuery.data ?? accounts).map((a) => [a.id, a.name])),
+    [namedAccountsQuery.data, accounts],
+  );
+  const receipts = useMemo(() => receiptsQuery.data ?? [], [receiptsQuery.data]);
+  // Платежи, по которым чек ещё не выписан. Возвращённый целиком чека не
+  // получает — сервер откажет («оформлен полный возврат»).
+  const paymentsWithoutReceipt = useMemo(() => {
+    const withReceipt = new Set(receipts.map((r) => r.transaction_id));
+    return payments.filter(
+      (p) =>
+        p.type === "income" &&
+        !withReceipt.has(p.id) &&
+        calculateInvoicePaymentRefundable(p, payments) > 0,
+    );
+  }, [payments, receipts]);
 
-  const shareInvoice = async () => {
-    // Итоги — часть документа, а не украшение: без них сообщение не собрать,
-    // и лучше промолчать, чем отправить клиенту счёт без сумм.
-    if (!invoice.data || !settlement) return;
-    try {
-      await Share.share({
-        // ТЕКСТ И PDF — ОДНА МОДЕЛЬ. Раньше сообщение считало состав само и
-        // расходилось с вложением словами за одну отправку.
-        message: buildInvoiceShareText(
-          buildInvoiceDocument({
-            invoice: invoice.data,
-            tenant: tenant ?? undefined,
-            client,
-            settlement,
-            payments,
-            accountNames: accountById,
-            businessToday,
-            language: invoice.data.language as "ru" | "en" | undefined,
-          }),
-        ),
-      });
-    } catch (error) {
-      notify("Не удалось поделиться", (error as Error).message);
-    }
+  // «ВЫПИСАТЬ ЧЕК» ОТКРЫВАЕТ ЧЕК, А НЕ ВЫДАЁТ ЕГО СРАЗУ (владелец 2026-10-03:
+  // «нажимаю — оно сразу заполняет, и я всё равно проверяю, как это будет
+  // выглядеть, может что-то подправить, — и тогда выставляю чек»). Составитель
+  // заполнен этой оплатой: клиент, счёт, строки инвойса. Платежей без чека
+  // несколько (доплаты) — по одному, первым самый ранний; вернулся — кнопка
+  // ведёт к следующему.
+  const issueReceipts = () => {
+    const payment = [...paymentsWithoutReceipt].sort((a, b) =>
+      a.created_at.localeCompare(b.created_at),
+    )[0];
+    if (!payment) return;
+    router.push({
+      pathname: "/documents/receipt-new",
+      params: { transactionId: payment.id },
+    } as unknown as Href);
   };
 
   const sharePdf = async () => {
@@ -153,7 +183,7 @@ export default function InvoiceDetailScreen() {
     if (!tenant && !invoice.data.seller_snapshot) {
       notify(
         "PDF пока недоступен",
-        "Реквизиты компании ещё загружаются. Попробуйте через несколько секунд.",
+        "Реквизиты ещё загружаются. Попробуйте через несколько секунд.",
       );
       return;
     }
@@ -171,76 +201,13 @@ export default function InvoiceDetailScreen() {
         payments,
         accountNames: accountById,
         businessToday,
+        creditNote,
       });
     } catch (error) {
       notify("Не удалось поделиться PDF", (error as Error).message);
     } finally {
       setPdfBusy(false);
     }
-  };
-
-  const runVoid = () =>
-    setStatus.mutate("void", {
-      onError: (error) => notify("Ошибка", error.message),
-    });
-
-  const runCreditNote = () =>
-    cancel.mutate(undefined, {
-      onSuccess: (note) => {
-        haptics.success();
-        // Показываем рождённую кредит-ноту — она и есть результат.
-        router.push(`/invoices/${note.id}` as Href);
-      },
-      onError: (error) => notify("Инвойс не отменён", error.message),
-    });
-
-  // ОТКАЗ ОТ ИНВОЙСА — ОДНА ДВЕРЬ (владелец 2026-09-12).
-  //
-  // Рядом стояли две красные кнопки: «Отменить инвойс» и «Аннулировать
-  // инвойс». По-русски это одно и то же слово дважды, а последствия разные —
-  // и разницу было видно только внутри подтверждения, то есть после того, как
-  // человек уже выбрал. Владелец выбрал: кнопка одна, выбор в подтверждении.
-  //
-  // КАНОННЫЙ ОТКАЗ (ТЗ 2026-08-09) — кредит-нота: сервер выпускает встречный
-  // документ на ту же сумму, инвойс получает статус «Отменён», у клиента
-  // остаются оба. Он возможен всегда и потому стоит первым.
-  //
-  // Аннулирование предлагается ТОЛЬКО пока по инвойсу ничего не получено: это
-  // путь для ошибочной бумаги, выставленной минуту назад, и оставлять след
-  // кредит-нотой там нечему.
-  const cancelInvoice = async () => {
-    // Кнопка живёт только под загруженным документом; guard — на случай
-    // вызова не с неё (ротор VoiceOver).
-    if (!settlement) return;
-    if (settlement.paid > 0) {
-      // ДЕНЬГИ ВПЕРЁД БУМАГИ. Сервер отменяет инвойс только когда у нас по нему
-      // ничего не осталось (`cancel_invoice` считает доходы минус возвраты), и
-      // кредит-нота на инвойс с деньгами не выписывается вовсе. Раньше экран
-      // всё равно предлагал отмену и печатал отказ сервера ПОСЛЕ
-      // подтверждения — теперь он сразу называет единственный путь.
-      notify(
-        "Сначала верните оплату",
-        `По инвойсу получено ${formatInvoiceMoney(settlement.paid, invoice.data?.currency)}.`
-          + " Оформите возврат в списке платежей — после него инвойс отменяется"
-          + " кредит-нотой.",
-      );
-      return;
-    }
-    const index = await chooseOption(
-      "Отменить инвойс?",
-      [
-        { label: "Выпустить кредит-ноту", destructive: true },
-        { label: "Аннулировать — документ ошибочный", destructive: true },
-      ],
-      {
-        message:
-          "Кредит-нота — встречный документ на ту же сумму: у клиента остаются"
-          + " оба, и отказ виден в истории. Аннулирование оставляет инвойс в"
-          + " истории, но он перестаёт ждать оплату и не попадает в документы.",
-      },
-    );
-    if (index === 0) runCreditNote();
-    if (index === 1) runVoid();
   };
 
   const loading =
@@ -302,11 +269,14 @@ export default function InvoiceDetailScreen() {
   // Кредит-нота — не инвойс: не оплачивается, не редактируется и не
   // отменяется, а честно называет себя и ссылается на сторнированный документ.
   const stornoOfId = creditLinks.data?.originalByNoteId.get(row.id) ?? null;
-  const isCreditNote = stornoOfId != null;
-  const creditNoteId = creditLinks.data?.noteByInvoiceId.get(row.id) ?? null;
-  const recipientName = row.client_snapshot
-    ? row.client_snapshot.full_name
-    : client?.full_name;
+  const isCreditNote = stornoOfId != null || row.kind === "credit_note";
+  const invoiceById = (target: string | null) =>
+    target ? ((invoicesQuery.data ?? []).find((item) => item.id === target) ?? null) : null;
+  const stornoOfInvoice = invoiceById(stornoOfId);
+  // Все ноты инвойса — частичные и полная (04.10), плашками в «Документах».
+  const creditNotes = (invoicesQuery.data ?? []).filter(
+    (item) => item.kind === "credit_note" && item.credit_note_of_id === row.id,
+  );
   const clientIsArchived = client
     ? client.deleted_at != null
     : row.client_snapshot?.archived === true
@@ -345,6 +315,16 @@ export default function InvoiceDetailScreen() {
     });
   };
 
+  if (pendingAction.current && receiptsQuery.isSuccess) {
+    const next = pendingAction.current;
+    pendingAction.current = null;
+    setTimeout(() => {
+      if (next === "share" && docWrite) void sharePdf();
+      else if (next === "pay" && owner && awaitsPayment) openPayment();
+      else if (next === "receipt") issueReceipts();
+    }, 450);
+  }
+
   const openLinkedAppointment = () => {
     if (!appointment) return;
     router.push({
@@ -374,19 +354,31 @@ export default function InvoiceDetailScreen() {
     accountNames: accountById,
     businessToday,
     language: row.language as "ru" | "en" | undefined,
+    creditNote,
   });
-  const canCancel = !isCreditNote && row.status === "issued";
-  const openMenu = async () => {
-    const options = [
-      { label: "Поделиться PDF" },
-      { label: "Поделиться текстом" },
-      ...(canCancel ? [{ label: "Отменить инвойс", destructive: true }] : []),
-    ];
-    const index = await chooseOption(row.number, options);
-    if (index === 0) void sharePdf();
-    if (index === 1) void shareInvoice();
-    if (index === 2) void cancelInvoice();
+  const owner = role === "owner";
+  const docWrite =
+    owner ||
+    accessGate({
+      role,
+      map: myAccess,
+      blockKey: "finance.documents",
+      scope: "calendar",
+      teamId: row.brigade_id ?? null,
+    }) === "write";
+  // «⋯» — ДЕЙСТВИЯ С ДОКУМЕНТОМ, те же, что долгим нажатием в «Документах»
+  // (`useInvoiceMenu`, владелец 04.10). Языка и «Поделиться» в меню нет.
+  const menuContext = {
+    all: invoicesQuery.data ?? [],
+    payments,
+    hasReceipt: receipts.length > 0,
+    onDeleted: () => {
+      if (router.canGoBack()) router.back();
+      else router.replace("/finances?view=documents" as Href);
+    },
   };
+  const hasMenu = invoiceMenu.actionsFor(row, menuContext).length > 0;
+  const openMenu = () => setSheetMenu(invoiceMenu.menuFor(row, menuContext));
 
   return (
     <Screen edges={["top"]}>
@@ -394,6 +386,8 @@ export default function InvoiceDetailScreen() {
         title={row.number}
         right={
           <View style={{ flexDirection: "row" }}>
+            {/* «Документы: Видит» — смотрит, но не отправляет (владелец 04.10). */}
+            {docWrite ? (
             <Pressable
               onPress={pdfBusy ? undefined : sharePdf}
               disabled={pdfBusy}
@@ -410,15 +404,18 @@ export default function InvoiceDetailScreen() {
                 <Share2 color={t.body} size={ICON.sm} />
               )}
             </Pressable>
-            <Pressable
-              onPress={() => void openMenu()}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Ещё действия"
-              className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
-            >
-              <MoreHorizontal color={t.body} size={ICON.sm} />
-            </Pressable>
+            ) : null}
+            {hasMenu ? (
+              <Pressable
+                onPress={openMenu}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Ещё действия"
+                className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
+              >
+                <MoreHorizontal color={t.body} size={ICON.sm} />
+              </Pressable>
+            ) : null}
           </View>
         }
       />
@@ -463,48 +460,23 @@ export default function InvoiceDetailScreen() {
         <InvoicePaper doc={paperDoc} />
         </View>
 
-        {/* То, чего на бумаге нет: откуда документ и что с ним стало. */}
-        {appointment || stornoOfId || creditNoteId || (client && !clientIsArchived) ? (
-          <SectionCard title="Связи">
-            {client && !clientIsArchived ? (
-              <ValueRow
-                label="Клиент"
-                value={recipientName ?? client.full_name}
-                onPress={() => router.push(`/clients/${client.id}`)}
-              />
-            ) : null}
-            {appointment ? (
-              <>
-                {client && !clientIsArchived ? <Divider inset={16} /> : null}
-                <ValueRow
-                  label="Заявка"
-                  value={`${formatInvoiceDate(appointment.date)} · ${appointment.time_start}`}
-                  onPress={openLinkedAppointment}
-                />
-              </>
-            ) : null}
-            {stornoOfId ? (
-              <>
-                <Divider inset={16} />
-                <ValueRow
-                  label="Сторнирует"
-                  value={numberById.get(stornoOfId) ?? "Открыть инвойс"}
-                  onPress={() => router.push(`/invoices/${stornoOfId}` as Href)}
-                />
-              </>
-            ) : null}
-            {creditNoteId ? (
-              <>
-                <Divider inset={16} />
-                <ValueRow
-                  label="Кредит-нота"
-                  value={numberById.get(creditNoteId) ?? "Открыть"}
-                  onPress={() => router.push(`/invoices/${creditNoteId}` as Href)}
-                />
-              </>
-            ) : null}
-          </SectionCard>
-        ) : null}
+        {/* ТО, ЧЕГО НА БУМАГЕ НЕТ, — БЛОКАМИ ПРОДУКТА, как на странице чека
+            (владелец 04.10: «в нашей архитектуре»; «кредит-нота и чек
+            закрепляются за инвойсом — сразу в одном файле»): клиент, объект,
+            запись и документы инвойса — чеки, кредит-нота, сторнированный
+            инвойс — плашками «Файлов». */}
+        <DocumentLinkBlocks
+          client={client && !clientIsArchived ? client : null}
+          locationId={row.location_id ?? null}
+          appointment={appointment ?? null}
+          onOpenAppointment={openLinkedAppointment}
+          documents={[
+            ...(stornoOfInvoice ? [{ type: "invoice" as const, item: stornoOfInvoice }] : []),
+            ...(noteReceipt ? [{ type: "receipt" as const, item: noteReceipt }] : []),
+            ...creditNotes.map((note) => ({ type: "invoice" as const, item: note })),
+            ...(isCreditNote ? [] : receipts.map((receipt) => ({ type: "receipt" as const, item: receipt }))),
+          ]}
+        />
 
         {/* Платежи — со счётом и возвратом: на бумаге этого действия нет. */}
         {!isCreditNote && payments.length > 0 ? (
@@ -526,9 +498,14 @@ export default function InvoiceDetailScreen() {
                     onOpenAppointment={refundInAppointment && appointment
                       ? openLinkedAppointment
                       : undefined}
+                    // ВОЗВРАТ — ЧЕРЕЗ КРЕДИТ-НОТУ (04.10): документ и деньги одним
+                    // движением; старый возврат без документа оставлял долг.
                     onRefund={
-                      refundDestination === "invoice"
-                        ? () => setRefundTarget(payment)
+                      owner && refundDestination === "invoice" && refundable > 0
+                        ? () =>
+                            router.push(
+                              `/invoices/credit-note?invoiceId=${row.id}&amount=${refundable}` as Href,
+                            )
                         : undefined
                     }
                   />
@@ -537,11 +514,12 @@ export default function InvoiceDetailScreen() {
             })}
           </SectionCard>
         ) : null}
+
       </ScrollView>
 
       {/* ДЕЙСТВИЕ ЭКРАНА ОДНО И ЖИВЁТ ВНИЗУ (AGENTS: главное действие — в
           футере): пока документ ждёт денег — «Принять оплату». */}
-      {awaitsPayment ? (
+      {awaitsPayment && owner ? (
         <View
           className="px-4 pb-7 pt-3"
           style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
@@ -551,7 +529,35 @@ export default function InvoiceDetailScreen() {
             onPress={openPayment}
           />
         </View>
-      ) : null}
+      ) : docWrite &&
+        !awaitsPayment &&
+        !isCreditNote &&
+        row.status !== "void" &&
+        row.status !== "cancelled" &&
+        receiptsQuery.isSuccess &&
+        paymentsWithoutReceipt.length > 0 ? (
+        // Оплачен — главное действие экрана становится «Выписать чек»: чек
+        // рождается кнопкой, а не сам (владелец 2026-09-20).
+        <View
+          className="px-4 pb-7 pt-3"
+          style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
+        >
+          <Button label="Выписать чек" onPress={issueReceipts} />
+        </View>
+      ) : !docWrite ? null : (
+        // ШАГОВ НЕ ОСТАЛОСЬ — ДОКУМЕНТ ОТПРАВЛЯЮТ, как у чека (владелец 04.10:
+        // «на чеке внизу „Поделиться PDF“ есть, а в инвойсе нет — расхождение
+        // в архитектуре; то же и в кредит-ноте»). Оплачен с чеком, отменён,
+        // кредит-нота — внизу «Поделиться PDF».
+        <View
+          className="px-4 pb-7 pt-3"
+          style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
+        >
+          <Button label="Поделиться PDF" loading={pdfBusy} onPress={() => void sharePdf()} />
+        </View>
+      )}
+
+      <ActionMenuSheet menu={sheetMenu} onClose={() => setSheetMenu(null)} />
 
       <InvoicePaymentSheet
         visible={paymentOpen}
@@ -568,21 +574,6 @@ export default function InvoiceDetailScreen() {
           await pay.mutateAsync(value);
         }}
         onClose={() => setPaymentOpen(false)}
-      />
-      <InvoiceRefundSheet
-        visible={refundTarget != null}
-        payment={refundTarget}
-        refundable={refundAvailable}
-        currency={row.currency}
-        businessToday={businessToday}
-        accountName={refundTarget?.account_id
-          ? accountById.get(refundTarget.account_id)
-          : undefined}
-        submitting={refund.isPending}
-        onSubmit={async (value) => {
-          await refund.mutateAsync(value);
-        }}
-        onClose={() => setRefundTarget(null)}
       />
       <AccountEditorSheet
         visible={accountCreateOpen}
@@ -615,10 +606,12 @@ function PaymentHistoryRow({
 }) {
   const t = useThemeColors();
   const isRefund = payment.type === "refund";
+  const method = paymentMethodLabel(payment.payment_method) || null;
   const meta = [
     formatInvoiceDate(payment.occurred_on),
     accountName || "Счёт не указан",
-    paymentMethodLabel(payment.payment_method) || null,
+    // Счёт «Наличные» и способ «Наличные» — одно слово дважды подряд.
+    method && method !== accountName ? method : null,
     payment.type === "income" && refundable <= 0 ? "возвращён полностью" : null,
     refundInAppointment
       ? onOpenAppointment

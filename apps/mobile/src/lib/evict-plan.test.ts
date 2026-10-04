@@ -5,6 +5,7 @@ import { describe, test } from "node:test";
 
 import {
   companyToOpenAfterEviction,
+  createEvictionMemory,
   isConfirmedNotMember,
   queryBelongsToCompany,
   queuedOpIdsOfCompany,
@@ -86,5 +87,39 @@ describe("стирание уволенной компании с телефон
       "utf8",
     );
     assert.match(boundary, /evictCompanyFromDevice\(tenantId\)/);
+  });
+});
+
+describe("второе удаление в том же запуске стирает заново (аудит 03.10)", () => {
+  test("после стирания опрос роли не крутит круг", () => {
+    const memory = createEvictionMemory();
+    assert.equal(memory.skip(X, false), false);
+    memory.mark(X);
+    assert.equal(memory.skip(X, false), true);
+  });
+
+  test("свежий сигнал сервера стирает, даже если уже стирали", () => {
+    const memory = createEvictionMemory();
+    memory.mark(X);
+    assert.equal(memory.skip(X, true), false);
+  });
+
+  test("роль пришла снова — память забыта, опрос тоже стирает", () => {
+    const memory = createEvictionMemory();
+    memory.mark(X);
+    memory.mark(A);
+    memory.forget(X);
+    assert.equal(memory.skip(X, false), false);
+    assert.equal(memory.skip(A, false), true);
+  });
+
+  test("оба входа стирания этим пользуются", () => {
+    const signals = readFileSync(join(__dirname, "../providers/AppProviders.tsx"), "utf8");
+    assert.match(signals, /evictCompanyFromDevice\(tenantId, \{ fresh: true \}\)/);
+    const boundary = readFileSync(
+      join(__dirname, "../features/settings/RoleCapabilityBoundary.tsx"),
+      "utf8",
+    );
+    assert.match(boundary, /forgetEviction\(tenantId\)/);
   });
 });

@@ -1,5 +1,6 @@
 import { useBookingBlocks } from "@/features/appointments/booking-prefs";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRecordBlocks } from "@/features/appointments/useRecordRights";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -14,14 +15,14 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 import { canEditTransaction } from "@babun/shared/local/finance/transaction";
 import type { DayExtra } from "@babun/shared/local/day-extras";
 import { getDayExtras } from "@babun/shared/local/day-extras";
-import { Wallet } from "lucide-react-native";
+import { Trash2, Wallet } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { RowGroup, RowGroupHeader } from "@/components/ui/card-rows";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { PaymentTile, TILE_GAP } from "@/features/appointments/PaymentTiles";
-import { formatHM, humanDay } from "@/features/appointments/helpers";
+import { formatHM, humanDay, humanDayYear } from "@/features/appointments/helpers";
 import { dayMoney, moneyByAccount } from "@/features/calendar/day-money";
 import {
   useDayExtras,
@@ -32,17 +33,30 @@ import { useClients } from "@/features/clients/queries";
 import { accountIcon } from "@/features/finances/account-ui";
 import { SummaryToggle } from "@/features/finances/FinanceOverview";
 import { OperationSheet } from "@/features/finances/OperationSheet";
+import { awaitingAnswer } from "@/features/finances/ledger-select";
 import { accountRowsQueryKey } from "@/lib/company-query-keys";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import {
+  useAppointmentsLedger,
+  useDeleteTransaction,
   useFinanceCategories,
+  useRefundTotals,
   useTransactions,
 } from "@/features/finances/queries";
+import { deleteOperationAlert } from "@/features/finances/account-alerts";
+import { deletableByHand, refundBlocksDelete } from "@/features/finances/operation-delete";
 import { confirmThen } from "@/lib/confirm";
+import { writeErrorWords } from "@/lib/connection-words";
 import { haptics } from "@/lib/haptics";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
-import { accessGate, canEditMoneyRow, moneyKey } from "@/features/access/my-access";
+import { accessGate, moneyKey } from "@/features/access/my-access";
+import {
+  canEditDayMoneyRow,
+  dayMoneyGate,
+  dayMoneyRowReadable,
+} from "@/features/calendar/day-money-access";
 import { useMyAccess } from "@/features/access/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { useSession } from "@/providers/SessionProvider";
@@ -73,6 +87,11 @@ import { useSession } from "@/providers/SessionProvider";
 // подставляется в форму; будущий день леджер не принимает, поэтому форма
 // открывается на сегодняшней дате и показывает её в строке «Дата».
 //
+// Операция отсюда помечена «из календаря» (`fromCalendar`, владелец 04.10:
+// «с дохода/расхода календаря обязательно переносится в финансы, а с
+// финансов обратно — нет»): она есть и в «Финансах», а день календаря
+// считает только оплаты записей и такие операции.
+//
 // Старые «ручные операции дня» (day_extras) показываются и удаляются с
 // вопросом; новых не заводится — деньги живут в одном леджере.
 
@@ -86,6 +105,7 @@ export function DayFinanceSheet({
   appointments,
   teamId,
   businessToday,
+  nowHm: nowHmProp,
   onClose,
   onEditAppointment,
   onReopen,
@@ -98,6 +118,9 @@ export function DayFinanceSheet({
   teamId: string | null;
   /** Сегодня по времени бизнеса — будущий день операций не принимает. */
   businessToday: string;
+  /** «Сейчас» по времени бизнеса (HH:MM) — пара к `businessToday`: долг дня
+   *  считается по тем же часам, что сетка. Нет — часы телефона. */
+  nowHm?: string;
   onClose: () => void;
   /** Открыть запись — отметить оплату, посмотреть работу. */
   onEditAppointment?: (a: Appointment) => void;
@@ -110,6 +133,10 @@ export function DayFinanceSheet({
   const t = useThemeColors();
   // Блок «Оплата» — из «Дизайна» этой команды (24.09).
   const paymentOn = useBookingBlocks(teamId).includes("payment");
+  // Оплату записей сотрудник может не видеть («Оплата: Скрыта»): сервер шлёт
+  // нули, и «Долг» складывал бы суммы всех прошедших визитов, а строка плана —
+  // «долг» у каждого (повторный аудит 03.10). Владельцу — всегда «видит».
+  const paymentSeen = useRecordBlocks(teamId).payment !== "hidden";
   const router = useRouter();
   const { height: screenH, width: screenW } = useWindowDimensions();
   const services = useFinanceServices();
@@ -117,17 +144,21 @@ export function DayFinanceSheet({
   const { data: clients = [] } = useClients();
   const { data: categories = [] } = useFinanceCategories();
   const setExtras = useSetDayExtras();
-  // «СМОТРИТ» — ЛИСТ ТОТ ЖЕ, ИЗМЕНЕНИЯ ЗАКРЫТЫ (этап 2 доступа; план: кнопка
-  // на месте, серая, причина словами). С среза 2а доходы и расходы — два
-  // права: кнопка и строки открыты по своей стороне денег в ЭТОМ календаре;
-  // сервер проверяет то же, так что серое не врёт.
+  // «ВИДИТ» — ЛИСТ ТОТ ЖЕ, ИЗМЕНЕНИЯ ЗАКРЫТЫ (кнопка на месте, серая,
+  // причина словами). Открывает их право календаря «Доход и расход дня»
+  // (владелец 04.10, `day-money-access.ts`), а не доходы и расходы «Финансов»:
+  // «Вносит» — доход и расход этого дня в ЭТОМ календаре; сервер проверяет
+  // то же (`finance_transactions_insert_day_money`), так что серое не врёт.
   const role = useCurrentRole().data;
   const myAccess = useMyAccess().data;
   const me = useSession().session?.user.id ?? null;
-  const writesSide = (side: "income" | "expense") =>
+  const canWriteDayMoney = dayMoneyGate({ role, map: myAccess, teamId }) === "write";
+  const canWriteIncome = canWriteDayMoney;
+  const canWriteExpense = canWriteDayMoney;
+  /** Старые «ручные операции дня» (day_extras): их сервер правит по сторонам
+   *  «Финансов» (`replace_day_extras`), новых не заводится. */
+  const writesLegacySide = (side: "income" | "expense") =>
     accessGate({ role, map: myAccess, blockKey: moneyKey(myAccess, side), scope: "calendar", teamId }) === "write";
-  const canWriteIncome = writesSide("income");
-  const canWriteExpense = writesSide("expense");
   const [view, setView] = useState<DayView>("all");
 
   // Лист остаётся смонтированным с dateYmd=null: последний открытый день и
@@ -145,27 +176,43 @@ export function DayFinanceSheet({
   }, [dateYmd, appointments, shownYmd]);
   const ymd = shownYmd ?? businessToday;
   const appts = shownAppts;
-  const nowHm = formatHM(new Date());
+  // Часы бизнеса, а не телефона (аудит 2026-10-03) — как у сетки.
+  const nowHm = nowHmProp ?? formatHM(new Date());
 
   const txQuery = useTransactions(ymd, ymd, {
     brigadeIds: teamId ? [teamId] : undefined,
     enabled: shownYmd != null,
   });
-  // keepPreviousData подсовывает прошлый день под новыми плитками — режем
-  // строго по дню, как это делает ledgerExtrasForDay для цифр.
-  const dayTx = useMemo(
-    () => (txQuery.data ?? []).filter((tx) => tx.occurred_on === ymd),
-    [txQuery.data, ymd],
+  // Операции записей дня — в любой день внесения: предоплата за запись
+  // стоит в дне записи (владелец 2026-10-01, правило в `day-money.ts`).
+  const recordsTxQuery = useAppointmentsLedger(
+    useMemo(() => appts.map((a) => a.id), [appts]),
+    { enabled: shownYmd != null },
   );
-  const ledgerLoading =
-    (txQuery.isPending && txQuery.data === undefined) || txQuery.isPlaceholderData;
+  // Обе выборки вместе; к дню строки относит `dayMoney` — и прошлый день,
+  // подсунутый keepPreviousData, туда не попадёт. «Его глазами» сервер
+  // отдаёт всё (токен ваш): строки режутся его правом календаря и
+  // «Ограничениями», как у полосы под сеткой.
+  const dayTx = useMemo(() => {
+    const readable = dayMoneyRowReadable({ role, map: myAccess, today: businessToday });
+    return [
+      ...(txQuery.data ?? []),
+      ...(recordsTxQuery.isPlaceholderData ? [] : recordsTxQuery.data ?? []),
+    ].filter(readable);
+  }, [txQuery.data, recordsTxQuery.isPlaceholderData, recordsTxQuery.data, role, myAccess, businessToday]);
+  // Загрузка — пока ответ в пути (`awaitingAnswer`). По одному
+  // `isPlaceholderData` день БЕЗ ЗАПИСЕЙ, открытый после дня с записями,
+  // крутил загрузку вечно: запрос по записям у него выключен, а заглушку
+  // прошлого дня react-query держит и выключенному (повторный аудит 03.10).
+  const ledgerLoading = awaitingAnswer(txQuery) || awaitingAnswer(recordsTxQuery);
 
   const legacyExtras = useMemo(
     () => (shownYmd ? getDayExtras(extrasMap, teamId, shownYmd) : []),
     [extrasMap, teamId, shownYmd],
   );
-  // ДЕНЬГИ ДНЯ — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО ПОЛОСА ПОД СЕТКОЙ И «ФИНАНСЫ»
-  // (`day-money.ts`): доход — пришедшее в этот день, события — не деньги.
+  // ДЕНЬГИ ДНЯ — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО ПОЛОСА ПОД СЕТКОЙ (`day-money.ts`):
+  // деньги записи — в дне записи, операция без записи — в своём дне, события —
+  // не деньги.
   const money = useMemo(
     () =>
       dayMoney({
@@ -231,10 +278,10 @@ export function DayFinanceSheet({
   // счёта, повторный — снова все.
   const tenantId = useTenantId();
   const accountsQuery = useQuery({
-    queryKey: accountRowsQueryKey(tenantId, true),
+    queryKey: accountRowsQueryKey(tenantId, true, true),
     enabled: !!tenantId && shownYmd != null,
     staleTime: 60_000,
-    queryFn: () => listAccounts(supabase, tenantId as string, { includeInactive: true }),
+    queryFn: () => listAccounts(supabase, tenantId as string, { includeInactive: true, includeDeleted: true }),
   });
   const accountById = useMemo(
     () => new Map((accountsQuery.data ?? []).map((a) => [a.id, a])),
@@ -335,20 +382,80 @@ export function DayFinanceSheet({
       const id = tx.appointment_id;
       return () => openRecord(id);
     }
-    // Сотрудник правит операцию своей стороны денег (срез 2а): «Правит всё» —
-    // любую строку команды, «Добавляет» — свою; оплату долга ведёт экран
-    // долгов. Сервер отказывает ровно так же — двери, которая кончится
+    // Партнёр с «Вносит» правит СВОЮ операцию из календаря (04.10), владелец —
+    // любую; оплату долга ведёт экран долгов. Сервер отказывает ровно так же
+    // (`finance_transactions_update_day_money`) — двери, которая кончится
     // отказом, нет (правило 10).
     const side = tx.type === "expense" ? "expense" : "income";
     if (
       canEditTransaction(tx) &&
       (role === "owner" || !tx.debt_id) &&
-      canEditMoneyRow({ role, map: myAccess, teamId: tx.team_id ?? teamId, side, createdBy: tx.created_by, me })
+      canEditDayMoneyRow({
+        role,
+        map: myAccess,
+        teamId: tx.team_id ?? teamId,
+        createdBy: tx.created_by,
+        me,
+        fromCalendar: tx.from_calendar,
+      })
     ) {
       return () => openOperation(tx, side);
     }
     return undefined;
   };
+
+  // СВАЙП «УДАЛИТЬ» — У РУЧНЫХ ОПЕРАЦИЙ, КОТОРЫЕ ЭТОМУ ЧЕЛОВЕКУ МОЖНО ПРАВИТЬ
+  // (владелец 03.10: кнопки «Удалить операцию» в листе больше нет). Те же
+  // правила, что в ленте «Финансов» (`operation-delete.ts`); деньги записи
+  // снимаются в самой записи. Вопрос — после ухода листа, как у старых строк.
+  const delTx = useDeleteTransaction();
+  const refundTotals = useRefundTotals().data;
+  const canDeleteTx = (tx: FinanceTransaction): boolean =>
+    !tx.appointment_id &&
+    tx.type !== "transfer" &&
+    deletableByHand(tx) &&
+    rowAction(tx) !== undefined;
+  const askDeleteTx = (tx: FinanceTransaction) => {
+    if (refundBlocksDelete(tx, refundTotals ? (refundTotals.get(tx.id) ?? 0) : undefined)) {
+      haptics.warning();
+      notify("Удалить нельзя", "По этому доходу есть возврат — сначала удалите возврат.");
+      return;
+    }
+    const text = deleteOperationAlert();
+    leaveThen(() =>
+      confirmThen(
+        text.title,
+        { message: text.message, confirmLabel: text.confirm, destructive: true },
+        async () => {
+          try {
+            await delTx.mutateAsync(tx.id);
+            haptics.success();
+          } catch (e) {
+            const words = writeErrorWords(e, {
+              failed: "Не удалось удалить",
+              notDone: "Операция не удалена",
+            });
+            notify(words.title, words.subtitle);
+          }
+        },
+      ),
+    );
+  };
+  const swipeTx = (key: string, tx: FinanceTransaction, row: ReactElement) =>
+    canDeleteTx(tx) ? (
+      <SwipeRow
+        key={key}
+        label="Удалить"
+        color={t.danger}
+        icon={Trash2}
+        accessibilityLabel={`Удалить «${rowTitle(tx)}»`}
+        onAction={() => askDeleteTx(tx)}
+      >
+        {row}
+      </SwipeRow>
+    ) : (
+      row
+    );
 
   const listExtras: DayExtra[] =
     view === "income" || view === "expense"
@@ -379,6 +486,7 @@ export function DayFinanceSheet({
 
   // Статус записи в плане дня: оплачено · долг · ожидается.
   const recordStatus = (a: Appointment): { word: string; amount: number; color: string } => {
+    if (!paymentSeen) return { word: "сумма", amount: Number(a.total_amount) || 0, color: t.sub };
     const debt = getDebtAmount(a);
     if (debt <= 0) return { word: "оплачено", amount: getPaidAmount(a), color: t.success };
     if (debtRecords.some((d) => d.id === a.id)) return { word: "долг", amount: debt, color: t.warning };
@@ -457,6 +565,9 @@ export function DayFinanceSheet({
                 label="Доход"
                 color={moneySign(money.income) < 0 ? t.danger : t.success}
                 value={formatEUR(money.income)}
+                // Ноль тише живых денег — как у плиток «Финансов»: красный
+                // «€0» у расхода врал цветом (повторный аудит 03.10).
+                quiet={moneySign(money.income) === 0}
                 active={view === "income"}
                 onPress={() => pick("income")}
               />
@@ -464,6 +575,7 @@ export function DayFinanceSheet({
                 label="Расход"
                 color={t.danger}
                 value={formatEUR(money.expense)}
+                quiet={moneySign(money.expense) === 0}
                 active={view === "expense"}
                 onPress={() => pick("expense")}
               />
@@ -472,11 +584,12 @@ export function DayFinanceSheet({
               {/* Долг дня — неоплаченные записи. Без оплаты в записи
                   (функция компании выключена, STORY-088) все записи
                   выглядели бы долгом — плитки нет. */}
-              {paymentOn ? (
+              {paymentOn && paymentSeen ? (
                 <SummaryToggle
                   label="Долг"
                   color={t.warning}
                   value={formatEUR(money.debt)}
+                  quiet={moneySign(money.debt) === 0}
                   active={view === "debt"}
                   onPress={() => pick("debt")}
                 />
@@ -486,6 +599,7 @@ export function DayFinanceSheet({
                 label="Ожидается"
                 color={t.sub}
                 value={formatEUR(money.planned)}
+                quiet={moneySign(money.planned) === 0}
                 active={view === "planned"}
                 onPress={() => pick("planned")}
               />
@@ -537,7 +651,7 @@ export function DayFinanceSheet({
           {listLoading ? (
             <EmptyState state="loading" />
           ) : listEmpty ? null : (
-            <RowGroup title={humanDay(ymd)}>
+            <RowGroup title={humanDayYear(ymd)}>
               {view === "all"
                 ? dayPlan.map((item, i) =>
                     item.record ? (
@@ -554,15 +668,19 @@ export function DayFinanceSheet({
                         onPress={() => openRecord(item.record!.id)}
                       />
                     ) : item.tx ? (
-                      <TxRow
-                        key={item.key}
-                        context={rowContext(item.tx)}
-                        title={rowTitle(item.tx)}
-                        amount={item.tx.amount}
-                        outflow={item.tx.type === "expense" || item.tx.type === "refund"}
-                        separated={i > 0}
-                        onPress={rowAction(item.tx)}
-                      />
+                      swipeTx(
+                        item.key,
+                        item.tx,
+                        <TxRow
+                          key={item.key}
+                          context={rowContext(item.tx)}
+                          title={rowTitle(item.tx)}
+                          amount={item.tx.amount}
+                          outflow={item.tx.type === "expense" || item.tx.type === "refund"}
+                          separated={i > 0}
+                          onPress={rowAction(item.tx)}
+                        />,
+                      )
                     ) : null,
                   )
                 : null}
@@ -571,23 +689,30 @@ export function DayFinanceSheet({
                   key={a.id}
                   name={clientName(a)}
                   context={[a.time_start, servicesOf(a)].filter(Boolean).join(" · ")}
-                  amount={view === "debt" ? getDebtAmount(a) : a.total_amount}
+                  // Остаток, а не итог — у обоих списков (аудит 2026-10-03):
+                  // плитка «Ожидается» складывает остатки, и запись €100 с
+                  // предоплатой €30 стояла строкой €100 под плиткой €70.
+                  amount={getDebtAmount(a)}
                   color={view === "debt" ? t.warning : t.sub}
                   separated={i > 0}
                   onPress={() => openRecord(a.id)}
                 />
               ))}
-              {listTx.map((tx, i) => (
-                <TxRow
-                  key={tx.id}
-                  context={rowContext(tx)}
-                  title={rowTitle(tx)}
-                  amount={tx.amount}
-                  outflow={tx.type === "expense" || tx.type === "refund"}
-                  separated={i > 0}
-                  onPress={rowAction(tx)}
-                />
-              ))}
+              {listTx.map((tx, i) =>
+                swipeTx(
+                  tx.id,
+                  tx,
+                  <TxRow
+                    key={tx.id}
+                    context={rowContext(tx)}
+                    title={rowTitle(tx)}
+                    amount={tx.amount}
+                    outflow={tx.type === "expense" || tx.type === "refund"}
+                    separated={i > 0}
+                    onPress={rowAction(tx)}
+                  />,
+                ),
+              )}
               {listExtras.map((e, i) => {
                 const row = (
                   <TxRow
@@ -602,8 +727,10 @@ export function DayFinanceSheet({
                 // крестик в строке был четвёртым способом удалить что-то в
                 // продукте и мишенью 36pt рядом с суммой.
                 // Стирает строку своей стороны: сервер пишет только её, а чужую
-                // сторону дня оставляет как была (срез 2а).
-                return teamId && (e.kind === "income" ? canWriteIncome : canWriteExpense) ? (
+                // сторону дня оставляет как была (срез 2а). Старые строки
+                // `replace_day_extras` пускает правами «Финансов», а не
+                // «Доходом и расходом дня» — кнопка спрашивает то же.
+                return teamId && writesLegacySide(e.kind) ? (
                   <SwipeRow
                     key={e.id}
                     label="Удалить"
@@ -633,6 +760,7 @@ export function DayFinanceSheet({
         defaultDate={shownYmd}
         businessToday={businessToday}
         transaction={editingTx}
+        fromCalendar
       />
     </>
   );

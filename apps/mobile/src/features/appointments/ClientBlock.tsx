@@ -1,13 +1,17 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { MoreHorizontal, Phone, UserRound, X } from "lucide-react-native";
+import { Phone, UserRound, X } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { RowActionButton } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ICON } from "@/components/ui/tokens";
-import { ClientHistoryLine } from "@/features/clients/history-line";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
+import { useDefaultCountry } from "@/features/clients/default-country";
+import { formatPhoneForDisplay } from "@/features/clients/phone";
+import { visitMark } from "@/features/clients/visit-mark";
+import { PhoneVisitLine, visitMarkWords } from "@/features/clients/VisitDate";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { contactsLocked } from "@/features/clients/member-contacts";
 import { useRevealedClient } from "@/features/clients/revealed-contacts";
@@ -27,8 +31,18 @@ import { useThemeColors } from "@/theme/colors";
 // «не надо создавать с нуля что-то новое, копируй то, что мы уже создали».
 // Третьей копии заводить было нельзя, поэтому блок стал компонентом, а обе
 // прежние копии — его вызовами. Вид не менялся: порядок строк (имя → вводная
-// о человеке → телефон), кнопка связи, «…» в карточку и «X» перенесены
-// дословно.
+// о человеке → телефон), кнопка связи и «X» перенесены дословно.
+//
+// СТРОКА — КАК В СПИСКЕ КЛИЕНТОВ (владелец 03.10: «одна такая же карточка
+// клиента, как на странице клиентов: имя, номер телефона и дата последнего
+// визита»). Долга, числа визитов и денег здесь больше нет — они на странице
+// клиента. Под именем — номер и дата цветом, правило `visit-mark.ts`: синяя —
+// последний визит, жёлтая — визит не закрыт, серая — записан вперёд.
+//
+// КАРТОЧКА КЛИЕНТА — ДОЛГИМ НАЖАТИЕМ (владелец 03.10: «убери эти три точки…
+// чтобы зайти в карточку клиента — зажать на клиента, а если один раз нажать —
+// выбор клиента»). Кружка «…» в хвосте строки больше нет: тап по клиенту —
+// выбор, удержание — карточка (VoiceOver — действием «Карточка клиента»).
 //
 // ЧЕГО БЛОК НЕ ЗНАЕТ. Ни записи, ни события, ни чека. Заметку клиента он не
 // пишет сам — её передают готовым узлом (`note`): у записи это поле есть, у
@@ -43,26 +57,20 @@ import { useThemeColors } from "@/theme/colors";
 export function ClientBlock({
   client,
   stats,
-  summary,
   onPick,
   onOpenCard,
   onClear,
   note,
 }: {
   client: Client | null;
-  /** Долг, визиты, деньги, последний визит — вводная о человеке (владелец
-   *  2026-09-04). `undefined` — считать нечем, строка просто не появится. */
+  /** Последний визит (или запись вперёд) — дата под именем, как в списке
+   *  клиентов. `undefined` — считать нечем, даты нет. */
   stats?: ClientStats;
-  /** Вводная о человеке ОДНОЙ СТРОКОЙ для VoiceOver — тем же текстом, что в
-   *  списке выбора (`clientHistoryText`): долг идёт первым. Глазами её
-   *  показывает `ClientHistoryLine`, но экранный читатель видит только
-   *  подпись строки, и без этого он терял самое важное. */
-  summary?: string | null;
   /** Нет — клиент записи только читается (STORY-084: одна страница записи
    *  для всех, блок по праву). Звонок и карточка при этом остаются: это
    *  дорога к человеку, а не правка записи. */
   onPick?: () => void;
-  /** Нет — кружка «…» нет: карточку клиента человеку не открыть. */
+  /** Удержание строки — карточка клиента. Нет — карточку человеку не открыть. */
   onOpenCard?: () => void;
   /** «X» — снять выбранного. Нет обработчика — нет и кнопки: у записи клиента
    *  меняют выбором другого, а не пустотой. */
@@ -76,6 +84,8 @@ export function ClientBlock({
   const { open } = useOpenMemberContacts();
   // Открытый номер лежит в памяти — поверх строки окна.
   const shown = useRevealedClient(client, tenantId) ?? null;
+  // Номер — в том же виде, что в списке клиентов: страна команды клиента.
+  const country = useDefaultCountry(shown?.team_id ?? null);
   // Отступ правого края: с «X» кнопки стоят теснее, иначе три круга подряд
   // упираются в край карточки.
   const gap = onClear ? "mr-2" : "mr-4";
@@ -84,6 +94,10 @@ export function ClientBlock({
   const locked = shown ? contactsLocked(shown) : false;
   const lockedDay = locked && shown?.contacts_hidden === "day";
   const noPhoneRight = locked && shown?.contacts_hidden === "right";
+  // Дата — как в списке клиентов; «Историю записей» закрыли — даты нет.
+  const mark =
+    shown && clientBlockLevel(shown, "clients.history") !== "hidden" ? visitMark(stats) : null;
+  const markWords = mark ? visitMarkWords(mark) : null;
 
   return (
     <SectionCard title="Клиент">
@@ -91,42 +105,63 @@ export function ClientBlock({
         <View className="flex-row items-center">
           <Pressable
             className="flex-1 flex-row items-center px-4 py-2.5"
-            disabled={!onPick}
-            onPress={() => {
-              if (!onPick) return;
-              onPick();
-              haptics.tap();
+            disabled={!onPick && !onOpenCard}
+            onPress={
+              onPick
+                ? () => {
+                    onPick();
+                    haptics.tap();
+                  }
+                : undefined
+            }
+            onLongPress={
+              onOpenCard
+                ? () => {
+                    haptics.tap();
+                    onOpenCard();
+                  }
+                : undefined
+            }
+            accessibilityRole={onPick || onOpenCard ? "button" : "text"}
+            accessibilityLabel={[`Клиент: ${shown.full_name || "без имени"}`, locked ? null : shown.phone, markWords]
+              .filter(Boolean)
+              .join(". ")}
+            accessibilityHint={
+              onPick && onOpenCard
+                ? "Открывает выбор клиента; удерживайте — карточка клиента"
+                : onPick
+                  ? "Открывает выбор клиента"
+                  : onOpenCard
+                    ? "Удерживайте — карточка клиента"
+                    : undefined
+            }
+            accessibilityActions={onOpenCard ? [{ name: "longpress", label: "Карточка клиента" }] : undefined}
+            onAccessibilityAction={(event) => {
+              if (event.nativeEvent.actionName === "longpress") onOpenCard?.();
             }}
-            accessibilityRole={onPick ? "button" : "text"}
-            accessibilityLabel={`Клиент: ${shown.full_name || "без имени"}. ${
-              summary ?? shown.phone ?? "ещё не обслуживали"
-            }`}
-            accessibilityHint={onPick ? "Открывает выбор клиента" : undefined}
           >
             <View className="flex-1">
               <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
                 {shown.full_name || "Без имени"}
               </Text>
-              {/* ПОРЯДОК КАК В СПИСКЕ КЛИЕНТОВ: имя, деньги, связь. Раньше
-                  история ВЫТЕСНЯЛА телефон — у постоянного клиента номер из
-                  записи пропадал вовсе. */}
-              <ClientHistoryLine client={shown} stats={stats} />
-              {noPhoneRight ? null : (
-                <Text
-                  style={{
-                    fontSize: 13,
-                    color: shown.phone || locked ? t.sub : t.placeholder,
-                    marginTop: 2,
-                  }}
-                  numberOfLines={1}
-                >
-                  {lockedDay
-                    ? "Номер откроется в день записи"
-                    : locked
-                      ? "•• ••• •••"
-                      : shown.phone || "без телефона"}
-                </Text>
-              )}
+              {/* НОМЕР И ДАТА ОДНОЙ СТРОКОЙ ПОД ИМЕНЕМ — как в списке клиентов
+                  (`ClientRow`): номер серым, за ним дата визита цветом. */}
+              <PhoneVisitLine
+                phone={
+                  noPhoneRight
+                    ? null
+                    : lockedDay
+                      ? "Номер откроется в день записи"
+                      : locked
+                        ? "•• ••• •••"
+                        : shown.phone
+                          ? formatPhoneForDisplay(shown.phone, country)
+                          : "без телефона"
+                }
+                phoneColor={shown.phone || locked ? t.sub : t.placeholder}
+                mark={mark}
+                wide={lockedDay}
+              />
             </View>
           </Pressable>
           {locked && !lockedDay && !noPhoneRight ? (
@@ -155,20 +190,6 @@ export function ClientBlock({
                 teamId={shown.team_id ?? null}
               />
             </View>
-          ) : null}
-          {/* «…» — карточка клиента: телефоны, объекты, история, долг.
-              Снаружи нажимаемой области строки, иначе VoiceOver склеит их в
-              один элемент. */}
-          {onOpenCard ? (
-            <Pressable
-              onPress={onOpenCard}
-              className={`${gap} items-center justify-center self-center rounded-full`}
-              style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
-              accessibilityRole="button"
-              accessibilityLabel={`Карточка клиента ${shown.full_name || "без имени"}`}
-            >
-              <MoreHorizontal color={t.body} size={ICON.sm} />
-            </Pressable>
           ) : null}
           {onClear ? (
             <Pressable

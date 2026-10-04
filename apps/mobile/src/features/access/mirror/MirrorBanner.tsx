@@ -5,9 +5,11 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Eye } from "lucide-react-native";
+import { useRouter, type Href } from "expo-router";
 import { TYPE } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useMirror, useMirrorMode } from "./mirror-state";
+import { rememberReturn } from "./mirror-return";
 import type { ReactNode } from "react";
 
 // ПЛАШКА ЗЕРКАЛА — ЕДИНСТВЕННЫЙ ПРИЗНАК РЕЖИМА И ЕДИНСТВЕННЫЙ ВЫХОД.
@@ -25,6 +27,11 @@ import type { ReactNode } from "react";
 // одной руки тянется с перехватом: промах по маленькой цели стоил бы второго
 // движения. Слово остаётся — оно называет, что произойдёт.
 //
+// ВЫХОД ВЕДЁТ ТУДА, ГДЕ НАЖАЛИ «ПОСМОТРЕТЬ ЕГО ГЛАЗАМИ» (владелец 01.10),
+// со всей цепочкой страниц под ней. Сначала режим снимается, и только
+// следующим кадром открывается вкладка: под ролью сотрудника её страницы
+// закрыты, и переход в том же кадре показал бы стену.
+//
 // Вторая строка говорит честную границу: права его, данные ваши. Сервер
 // отдаёт строки по токену владельца, и это не притворство зеркала, а его
 // предел — тот же, который Power BI называет прямо в своей документации.
@@ -34,7 +41,15 @@ export function MirrorBanner({ inModal = false }: { inModal?: boolean } = {}) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
   const { mirror, exit } = useMirrorMode();
+  const router = useRouter();
   if (!mirror) return null;
+  const leave = () => {
+    const chain = mirror.returnTo;
+    rememberReturn(chain);
+    exit();
+    // В корень цепочки — остальное достроит сама вкладка (`MirrorReturnRetry`).
+    if (chain[0]) requestAnimationFrame(() => router.navigate(chain[0] as Href));
+  };
   // ЛИСТ НА ВЕСЬ ЭКРАН — ОТДЕЛЬНОЕ ОКНО, И КОРНЕВАЯ ПЛАШКА ПОД НИМ НЕ ВИДНА.
   // Поэтому такие листы рисуют её у себя первым ребёнком. Вырез там свой:
   // контекст под корнем уже обнулён шимом (`MirrorInsetShim`), и взять его
@@ -42,7 +57,7 @@ export function MirrorBanner({ inModal = false }: { inModal?: boolean } = {}) {
   const top = inModal ? (initialWindowMetrics?.insets.top ?? insets.top) : insets.top;
   return (
     <Pressable
-      onPress={exit}
+      onPress={leave}
       accessibilityRole="button"
       accessibilityLabel="Выйти из просмотра чужими глазами"
       style={({ pressed }) => ({

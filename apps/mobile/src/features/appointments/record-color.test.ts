@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  appointmentSituation,
   autoBaseColor,
   recordFilled,
+  recordFilledFor,
   resolveRecordColor,
   resolveRecordSituation,
   serviceBaseColor,
@@ -198,5 +200,37 @@ describe("autoBaseColor — обычный цвет по настройке, о�
   });
   test("нет ничего — null, решает запасной цвет у вызывающего", () => {
     assert.equal(autoBaseColor("label", {}), null);
+  });
+});
+
+describe("оплата, которую смотрящий не видит", () => {
+  // Партнёр с «Суммой», но без «Оплаты»: сервер шлёт итог и нули оплаты.
+  const past = {
+    kind: "work",
+    status: "scheduled",
+    date: "2026-10-01",
+    client_id: "c1",
+    location_id: "l1",
+    service_ids: ["s1"],
+    total_amount: 100,
+    payment_status: "unpaid",
+    prepaid_amount: 0,
+    paid_amount: 0,
+  };
+
+  test("видит оплату — прошедший неоплаченный визит горит «нет оплаты»", () => {
+    assert.equal(recordFilled(past, "2026-10-03").paid, false);
+    assert.equal(
+      appointmentSituation(past, { palette: PALETTE, todayYmd: "2026-10-03" }),
+      "unpaid",
+    );
+  });
+
+  test("не видит — про оплату сказать нечего, дыры нет", () => {
+    assert.equal(recordFilledFor(past, "2026-10-03", true).paid, true);
+    assert.equal(
+      appointmentSituation(past, { palette: PALETTE, todayYmd: "2026-10-03", paymentHidden: true }),
+      null,
+    );
   });
 });

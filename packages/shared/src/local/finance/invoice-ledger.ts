@@ -65,6 +65,10 @@ export interface InvoicePaymentLedger {
 export type InvoicePaymentRefundDestination = "invoice" | "appointment" | null;
 
 export interface InvoiceSettlement {
+  /** К оплате по инвойсу: сумма минус уже сторнированное частичными
+   *  кредит-нотами (04.10). Без нот — сама сумма. Необязательное в типе:
+   *  собранные руками расчёты (тесты бумаги) его не несут. */
+  due?: number;
   income: number;
   refunded: number;
   paid: number;
@@ -118,6 +122,9 @@ export interface InvoiceClientSnapshot {
   legal_name?: string | null;
   vat_number?: string | null;
   reg_number?: string | null;
+  /** Юридический адрес выбранного набора реквизитов — печатается под
+   *  юрназванием; адрес объекта идёт отдельно, ниже. */
+  billing_address?: string | null;
   /** ОБЪЕКТ СЧЁТА (миграция 20260922060000). `undefined` — снимок старше
    *  объектов; `null` — объект не выбран; адрес на бумагу — только
    *  `address_parts` (точный адрес), иначе адреса нет вовсе. */
@@ -167,6 +174,9 @@ export interface InvoiceLedger {
   account_id?: string | null;
   /** Объект клиента, под который выписан счёт (миграция 20260922060000). */
   location_id?: string | null;
+  /** Набор реквизитов клиента (`'none'` — на имя). Правка счёта поднимает
+   *  его в форму, чтобы не сбросить на основной. */
+  client_requisites_id?: string | null;
   subtotal_net: number;
   vat_percent: number;
   vat_amount: number;
@@ -182,6 +192,13 @@ export interface InvoiceLedger {
   kind?: InvoiceKind;
   /** Инвойс, который сторнирует эта кредит-нота. */
   credit_note_of_id?: string | null;
+  /** Чек, который сторнирует эта кредит-нота (возврат по чеку без инвойса,
+   *  миграция 20261004091731). */
+  credit_note_of_receipt_id?: string | null;
+  /** Сколько инвойса уже сторнировано частичными кредит-нотами (04.10). */
+  credited_amount?: number;
+  /** Кредит-нота — частичная: инвойс остаётся в силе. */
+  credit_partial?: boolean;
   /** Режим НДС, КОТОРЫМ ДОКУМЕНТ ПОСЧИТАН (колонка с 20260915120000): сервер
    *  пишет ровно то, чем считал. У выписанных раньше пусто — их режим
    *  восстанавливают по суммам, а не выдумывают (`invoiceVatMode`). */
@@ -215,11 +232,9 @@ export interface InvoiceLedgerWithLines extends InvoiceLedger {
   lines: InvoiceLineLedger[];
 }
 
-// `formatInvoiceNumber` здесь БОЛЬШЕ НЕ ЖИВЁТ (U49): жёсткие «3 знака,
-// всегда год» спорили с настраиваемой нумерацией тенанта. Номер собирает
-// единственная живая формула — apps/mobile/src/features/invoices/numbering.ts
-// (prefix/padding/yearlyReset из настроек), а выпущенному документу номер
-// выдаёт сервер (next_invoice_number / issue_invoice).
+// Номер документа клиент НЕ собирает: его выдаёт сервер из серии юрлица при
+// выпуске (`next_document_number`, STORY-101), а предпросмотр берётся у
+// сервера же (`peek_document_number`) — одна формула, один источник.
 
 /**
  * Split a gross total into net + VAT. Cyprus standard is 19%. We treat
@@ -396,9 +411,12 @@ export function invoiceDisplayStatus(
  * still reopen the balance because they are subtracted after that fallback.
  */
 export function calculateInvoiceSettlement(
-  invoice: Pick<InvoiceLedger, "status" | "total">,
+  invoice: Pick<InvoiceLedger, "status" | "total" | "credited_amount">,
   payments: readonly InvoicePaymentLedger[],
 ): InvoiceSettlement {
+  // К ОПЛАТЕ = СУММА − СТОРНИРОВАНО (частичная кредит-нота, 04.10) — то же
+  // правило, что у сервера (`sync_invoice_status_from_ledger`).
+  const due = round2(Math.max(0, invoice.total - (invoice.credited_amount ?? 0)));
   const income = round2(
     payments.reduce(
       (sum, payment) =>
@@ -414,18 +432,19 @@ export function calculateInvoiceSettlement(
     ),
   );
   const recognizedIncome =
-    invoice.status === "paid" ? Math.max(invoice.total, income) : income;
+    invoice.status === "paid" ? Math.max(due, income) : income;
   const rawPaid = round2(Math.max(0, recognizedIncome - refunded));
-  const paid = round2(Math.min(invoice.total, rawPaid));
-  const overpaid = round2(Math.max(0, rawPaid - invoice.total));
+  const paid = round2(Math.min(due, rawPaid));
+  const overpaid = round2(Math.max(0, rawPaid - due));
   // ЗАКРЫТАЯ БУМАГА ДЕНЕГ НЕ ЖДЁТ. «Аннулирован» — ошибочный документ;
   // «отменён» — сторнированный кредит-нотой, и сервер отменяет инвойс только
   // когда у нас по нему ничего не осталось (`cancel_invoice`: доходы минус
   // возвраты). Пока `cancelled` считался открытым, отменённый счёт показывал
   // остаток, попадал в «ждут оплату» и звал принять по нему деньги.
   const closed = invoice.status === "void" || invoice.status === "cancelled";
-  const remaining = closed ? 0 : round2(Math.max(0, invoice.total - paid));
+  const remaining = closed ? 0 : round2(Math.max(0, due - paid));
   return {
+    due,
     income,
     refunded,
     paid,
@@ -523,6 +542,7 @@ export function parseInvoiceClientSnapshot(
     legal_name: stringValue(row.legal_name),
     vat_number: stringValue(row.vat_number),
     reg_number: stringValue(row.reg_number),
+    billing_address: stringValue(row.billing_address),
     ...("object" in row ? { object: parseInvoiceObjectSnapshot(row.object) } : {}),
     archived: row.archived === true,
     deleted_at: stringValue(row.deleted_at),

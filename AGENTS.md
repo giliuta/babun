@@ -80,6 +80,38 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
 6. **НИКОГДА** не используй `any` — если TypeScript ругается, разбирайся с типами, а не обходи
 7. **Максимум 400 строк** на компонент — если больше, разбивай на sub-components
 8. **RU в UI, EN в коде.** Переменные, функции, комментарии — только английский
+8.1 **ЯЗЫКИ ИНТЕРФЕЙСА — ПЕРЕВОД ПРИ СБОРКЕ (владелец 2026-10-03: «сделай
+    систему мультиязычной… в кабинете страница „Языки"… переведи все
+    страницы»).** Русский текст в коде остаётся ИСТОЧНИКОМ — пиши UI по-русски,
+    как раньше. Babel-плагин `apps/mobile/scripts/i18n/babel-plugin.js` при
+    сборке оборачивает каждый русский литерал (JSX-текст, пропы, строки,
+    шаблоны, `"…" + x`) в поиск по словарю языка, выбранного в Кабинет →
+    «Языки» (`packages/shared/src/i18n/dict/<язык>.json`, ключ — русская
+    фраза, `{0}` — подставленное значение). Русский — сам источник: на нём
+    код работает как до плагина. Фраза без перевода показывается по-русски.
+    • **Новые строки переводятся отдельным шагом:** `node apps/mobile/scripts/i18n/check.js`
+      — сколько не переведено; `--missing out.json` — список с контекстом;
+      переведённое `{ "фраза": { en, bg, el, uk, de, es } }` вливается
+      `--merge <папка>` (слоты `{0}` и SMS-поля `[Имя]` сверяются).
+    • **Ключ и сравнение переводятся С ОБЕИХ СТОРОН:** `LOOK["Перенести"]`,
+      `label === "Отмена"`, `case "…":` — обе стороны в коде, поэтому сходятся
+      на любом языке. НЕ сравнивай русский литерал с данными из базы, ответом
+      сервера или вводом человека — на другом языке литерал станет другим.
+      Литерал-данные (имя в базе, токен, значение для сервера) помечается
+      `/* i18n-ignore */` прямо перед ним или вносится в
+      `packages/shared/src/i18n/ignore.json`; `--logic` печатает все такие места.
+    • **Сырыми остаются сами:** логи, `RegExp`, типы TS, фильтры запросов
+      Supabase, SMS-поля `[Имя]`, `key`/`testID`.
+    • **Даты:** `toLocaleDateString("ru-RU")`, `Intl.DateTimeFormat("ru-RU")` и
+      `locale="ru-RU"` пикера плагин сам переводит на язык интерфейса; массивы
+      месяцев и дней переводятся словами. Счёт с числом — только
+      `pluralRu`/`formatCountRu`: своё `n % 10` на английском даст «21 client».
+    • **Текст с сервера** (`raise exception` в функциях базы) тост и
+      `EmptyState` переводят при показе (`tDynamic`); список сообщений —
+      `packages/shared/src/i18n/server-keys.json`, обновляет
+      `node apps/mobile/scripts/i18n/server-keys.js`.
+    • Язык — свойство телефона (своё хранилище MMKV `babun-ui`); смена
+      перезапускает приложение: часть строк считается один раз при старте модуля.
 9. **Один логический коммит = одно сообщение.** Не меняй 10 несвязанных файлов в один commit
 10. **НИКОГДА** не ставь хуки, которые запускают `tsc` на каждую правку — наш tsc медленный, это убьёт сессию. Живут такие хуки в `.claude/settings.local.json` — файл локальный, в git его нет (`.gitignore`), правит его только владелец
 11. **НИКОГДА** не «улучшайзь» существующий UI без явного запроса. Refactor — да (если не виден пользователю). Redesign — нет.
@@ -330,8 +362,8 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
    не выбираются по силе: «правая несёт самое сильное из доступного этой
    строке» — ошибка, из-за которой у стандартной категории справа стояло
    «Скрыть», у своей — «Удалить», и один жест на соседних строках делал
-   разное. Нет разрушительного действия (стандартную категорию защищает RLS,
-   у закрытого счёта висит история) — правой кромки нет вовсе: `label` и
+   разное. Нет разрушительного действия (стандартную категорию защищает RLS)
+   — правой кромки нет вовсе: `label` и
    `onAction` необязательны, ход влево упирается в ноль. Тап по строке
    справочника открывает ПРАВКУ и никогда не меняет состояние молча: «нажал —
    и оно скрылось» стоило владельцу стандартной категории «Налоги и сборы».
@@ -394,7 +426,7 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Клиент (карточка = создание) | `app/(dashboard)/clients/[id].tsx` | `app/(shared)/client.tsx` |
 | Логика черновика клиента | `src/features/clients/useClientDraft.ts` | — |
 | Объект (создание = правка) | `src/features/clients/ObjectSheet.tsx` + `ObjectFields.tsx` | — |
-| Метки (справочник) | `src/features/reference/screens/LabelsScreen.tsx` | `cabinet/labels.tsx`, `calendar/labels.tsx` |
+| Метки (справочник) | `src/features/reference/screens/LabelsScreen.tsx` | `cabinet/labels.tsx`, `calendar/labels.tsx`, `clients/labels.tsx`, `(shared)/labels.tsx` (шестерёнка листа «Метка клиента», адрес — `useReferenceHref().labels`) |
 | Услуги (справочник) | `app/(dashboard)/cabinet/services.tsx` | `calendar/services.tsx`, `(shared)/services.tsx` |
 | Форма услуги прайса | `src/features/services/ServiceSheet.tsx` | — |
 | Своя услуга (запись, чек, инвойс) | `src/features/appointments/TotalSheet.tsx` (`onAddLine`) | значок в шапке «Итого» |
@@ -403,9 +435,10 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Запись и событие (форма) | `app/book/index.tsx` | — |
 | Настройки страницы записи | `app/(dashboard)/cabinet/booking-record.tsx` | `calendar/booking-record.tsx` |
 | Настройки страницы события | `app/(dashboard)/cabinet/booking-event.tsx` | `calendar/booking-event.tsx` |
-| Счёт (создание = правка) | страница «Счета» `app/accounts/settings.tsx` (строки `finances/accounts-page/AccountRow.tsx`, порядок, «Скрыть», «Добавить счёт») + `archive.tsx`; ОДИН лист создания и правки `finances/account-editor/AccountEditorSheet.tsx` | Ползунки панели «Счета» и шестерёнка «Финансов» ведут на одну страницу; `app/accounts/index.tsx` — указатель на панель «Счета», `[id]/index.tsx` и `[id]/settings.tsx` — редиректы на «Счета» с `?edit=<id>`; вид — общий блок; закрытие мягкое |
+| Счёт (создание = правка) | страница «Счета» `app/accounts/settings.tsx` (строки `finances/accounts-page/AccountRow.tsx`, порядок, «Скрыть»/«Показать», «Удалить», «Добавить счёт») + «Удалённые счета» `app/accounts/trash.tsx` + «Выписка» `app/accounts/[id]/statement.tsx`; ОДИН лист создания и правки `finances/account-editor/AccountEditorSheet.tsx` (блоки-плашки, «Применить») | Ползунки панели «Счета» и шестерёнка «Финансов» ведут на одну страницу; `app/accounts/index.tsx` — указатель на панель «Счета», `[id]/index.tsx` и `[id]/settings.tsx` — редиректы на «Счета» с `?edit=<id>`; вид — общий блок. «Скрыть» (03.10) — скрытый счёт: работает, виден только владельцу и только на «Счетах» (`is_hidden`); «Удалить» — в «Удалённые счета» на 30 дней (`deleted_at`), с историей не стирается |
+| «Удалённые операции» | `src/features/finances/DeletedOperationsScreen.tsx` (строка — `RecordRowView` ленты, «Вернуть» / «Удалить» насовсем); ящик на сервере — таблица `deleted_operations` (снимок строки, 30 дней), удаление — `delete_operation`, возврат — `restore_deleted_operation` | `app/(dashboard)/finances/deleted.tsx` — дверь шестерёнки «Финансов», блок «Деньги» (03.10). Лента, остатки и аналитика ящик не читают; переводы в него не идут — у них своя отмена |
 | Способы связи | `app/(dashboard)/clients/channels.tsx` | `app/(shared)/channels.tsx` |
-| Реквизиты (справочник + лист создания = правки) | `src/features/companies/RequisitesScreen.tsx` + `CompanySheet.tsx`; правила подписи и чистки — `company-rules.ts` | `finances/requisites.tsx`, `app/(shared)/requisites.tsx`; выбор в инвойсе и чеке — `PickerSheet` с той же подписью (`companyDetail`) |
+| Реквизиты (справочник + лист создания = правки) | `src/features/companies/RequisitesScreen.tsx` + `CompanySheet.tsx`; правила подписи и чистки — `company-rules.ts` | `cabinet/requisites.tsx` (с 03.10 — Кабинет, строка «Реквизиты»: «единый блок на все компании»), `app/(shared)/requisites.tsx`; выбор в инвойсе и чеке — `PickerSheet` с той же подписью (`companyDetail`) |
 | Карты для маршрута | `app/(dashboard)/clients/maps.tsx` | `app/(shared)/maps.tsx` |
 
 **Реестр выбора — какой блок открывает какую шторку и что написано на кнопке.**

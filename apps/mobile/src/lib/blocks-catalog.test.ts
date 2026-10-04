@@ -120,7 +120,7 @@ describe("библиотека блоков указывает на живой �
     );
     for (const marker of [
       'SectionCard title="Клиент"',
-      "<ClientHistoryLine",
+      "visitMark(",
       "<PhoneChannelButton",
       "<ChooseRow",
     ]) {
@@ -148,7 +148,8 @@ describe("библиотека блоков указывает на живой �
     // с иконкой, и «по пикселям одинаково» перестаёт быть правдой.
     assert.match(card, /position: "absolute"/, "команда блока вернулась в поток");
     assert.match(card, /right: 16/);
-    assert.match(card, /top: 6/);
+    // В плотной шапке (форма в шторке) подпись на 4 выше — и команда тоже.
+    assert.match(card, /top: dense \? 2 : 6/);
     assert.match(card, /gap: 16/);
     assert.match(card, /className="p-4 pt-2"/, "внутренние отступы тела блока поехали");
 
@@ -204,7 +205,9 @@ describe("библиотека блоков указывает на живой �
       // Значок услуги уехал вместе с блоком: с 2026-09-20 «Услуги» —
       // компонент, и `Briefcase` живёт там же, где пустое состояние блока.
       ["src/features/appointments/ServicesBlock.tsx", "Briefcase", "услуга"],
-      ["src/features/clients/ObjectPickerSheet.tsx", "MapPin", "объект"],
+      // Значок объекта — у двери «Добавить объект»; строки шторки выбора с
+      // 03.10 носят вид типа объекта (без типа — домик), как строка объекта.
+      ["src/features/clients/blocks/ObjectsBlock.tsx", "MapPin", "объект"],
       ["src/features/reference/LabelPickerSheet.tsx", "Bookmark", "метка"],
       ["src/features/clients/TagPickerSheet.tsx", "Tag", "тег"],
       ["src/features/clients/ObjectFields.tsx", "MapPinned", "точка на карте"],

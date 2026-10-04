@@ -14,7 +14,9 @@ import { useTenantId } from "@/lib/tenant";
 // разные. Выставленный документ хранит СВОЮ ставку снимком — память влияет
 // только на новые.
 
-export const vatRateKey = (tenantId: string | null) => `vat.lastRate.${tenantId ?? "none"}`;
+// Под `babun:` — его подметает «Выйти» (аудит первого входа 03.10: ключ без
+// префикса переживал выход).
+export const vatRateKey = (tenantId: string | null) => `babun:vat:last-rate:${tenantId ?? "none"}`;
 
 /** Написанная ставка либо `null`, если на этом телефоне её ещё не писали. */
 function readStoredVatRate(tenantId: string | null): number | null {
@@ -36,11 +38,17 @@ export function useRememberedVatRate(fallback = 0): {
   remember: (rate: number) => void;
 } {
   const tenantId = useTenantId();
-  const [stored, setStored] = useState(() => readStoredVatRate(tenantId));
+  // ПАМЯТЬ ЧИТАЕТСЯ НА КАЖДЫЙ ПОКАЗ, А НЕ ОДИН РАЗ (аудит 2026-10-03).
+  // Снимок при монтировании жил весь сеанс: вкладка «Финансы» не видела
+  // ставку, только что написанную в «Итого» инвойса, до перезапуска, а после
+  // смены компании считала по ставке ПРЕЖНЕЙ. Хранилище синхронное (MMKV) —
+  // чтение дешёвое; счётчик лишь перерисовывает после своей записи.
+  const [, setWrites] = useState(0);
+  const stored = readStoredVatRate(tenantId);
   const remember = useCallback(
     (next: number) => {
-      setStored(next);
       getStorage().set(vatRateKey(tenantId), next);
+      setWrites((n) => n + 1);
     },
     [tenantId],
   );

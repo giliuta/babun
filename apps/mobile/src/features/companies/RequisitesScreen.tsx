@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { usePathname, useRouter, type Href } from "expo-router";
-import { Building2, EyeOff, RotateCcw, Settings, Trash2 } from "lucide-react-native";
+import { Building2, EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import { useNextInvoiceNumber } from "@/features/invoices/queries";
 import { AppearanceTile, appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -14,11 +13,12 @@ import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useAccountScope } from "@/features/cabinet/account-scope";
 import { useThemeColors } from "@/theme/colors";
 import { CompanySheet } from "./CompanySheet";
 import { companyDetail, companyFilled, defaultHeir } from "./company-rules";
 import {
+  companyHasDocuments,
   useArchiveCompany,
   useCompanies,
   useDeleteCompany,
@@ -70,8 +70,8 @@ import {
 // вставляем в инвойс; может быть несколько»). На странице — ТОЛЬКО список
 // наборов и кнопка внизу. Справа в строке — номер следующего инвойса этого
 // набора (нумерация живёт за реквизитами), как цена в прайсе услуг. Бланк,
-// общий для всех наборов, — за шестерёнкой в шапке («Бланк инвойса»); под
-// списком его больше нет.
+// общий для всех наборов, с 03.10 — дверь «Инвойсы» в шестерёнке «Финансов»;
+// своей шестерёнки у страницы больше нет.
 
 /** Высота строки: по ней перетаскивание считает перелёт через соседей. Та же,
  *  что у типов событий и меток. */
@@ -85,19 +85,20 @@ export function RequisitesScreen() {
   const makeDefault = useMakeDefaultCompany();
   const archive = useArchiveCompany();
   const del = useDeleteCompany();
+  // Аккаунт страницы (04.10): из блока пригласившего аккаунта в Кабинете —
+  // его наборы и его роль, правка — только владельцу этого аккаунта.
+  const scope = useAccountScope();
+  const tenantId = scope.tenantId;
   const reorder = useReorderCompanies();
   const [editing, setEditing] = useState<Company | null>(null);
   const [open, setOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const role = useCurrentRole().data;
+  const role = scope.viewRole;
   // Пока роль грузится, владелец не должен видеть мигание «только чтение».
-  const readOnly = role !== undefined && role !== "owner";
-  const router = useRouter();
-  // Шестерёнка ведёт на бланк тем же адресом, каким пришли сюда: из вкладки
-  // «Финансы» — внутри неё, из документа — поверх него (`(shared)`).
-  const blankHref = (usePathname().startsWith("/finances")
-    ? "/finances/invoice-blank"
-    : "/invoice-blank") as Href;
+  // Аккаунт страницы — не открытый на телефоне (свой, открытый из Кабинета
+  // со стороны, 04.10): правка наборов пишет в открытый, поэтому здесь —
+  // только чтение; править — из своего аккаунта.
+  const readOnly = scope.foreign || (role !== undefined && role !== "owner");
 
   // Видимые сверху, скрытые под ними — тем же порядком, что у меток и услуг.
   const rows = useMemo(() => {
@@ -149,15 +150,25 @@ export function RequisitesScreen() {
     confirmThen(
       "Удалить реквизиты?",
       {
-        // ПРАВДА, А НЕ ПУГАЛКА: выданные чек и инвойс держат продавца своим
-        // снимком и печатаются как раньше.
-        message: `«${company.name}» исчезнет из выбора. Уже выданные чеки и инвойсы не изменятся.`,
+        // ПРАВДА, А НЕ ПУГАЛКА: удаляется только набор без документов, и
+        // выданным бумагам удалять нечего (STORY-101).
+        message: `«${company.name}» исчезнет из выбора.`,
         confirmLabel: "Удалить",
         destructive: true,
       },
       () =>
         void (async () => {
           try {
+            // Юрлицо с документами держит их серию номеров — только скрыть.
+            // Спрашиваем раньше передачи умолчания: отказ после неё оставил
+            // бы основным другой набор (STORY-101).
+            if (tenantId && (await companyHasDocuments(tenantId, company.id))) {
+              notify(
+                "Реквизиты с документами не удаляются",
+                "Выпущенные инвойсы и чеки держат их серию номеров. Их можно скрыть.",
+              );
+              return;
+            }
             // Единственные основные реквизиты не удаляются — тем же правилом,
             // что скрытие: документу было бы нечем подписаться (аудит
             // 2026-09-30, удаление этот ответ пропускало).
@@ -187,30 +198,9 @@ export function RequisitesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader
-        title="Реквизиты"
-        right={
-          readOnly ? null : (
-            <Pressable
-              onPress={() => router.push(blankHref)}
-              accessibilityRole="button"
-              accessibilityLabel="Бланк инвойса"
-              hitSlop={8}
-              style={({ pressed }) => ({
-                width: 44,
-                height: 44,
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: t.radius.card,
-                backgroundColor: pressed ? t.pressed : "transparent",
-              })}
-            >
-              {/* Та же шестерёнка, что у раздела «Финансы». */}
-              <Settings color={t.sub} size={21} strokeWidth={2} />
-            </Pressable>
-          )
-        }
-      />
+      {/* БЕЗ ШЕСТЕРЁНКИ (владелец 03.10): бланк инвойса — дверь «Инвойсы» в
+          шестерёнке «Финансов», рядом с «Реквизитами». У настройки одна дверь. */}
+      <ScreenHeader title="Реквизиты" />
 
       {companies.isLoading ? (
         <EmptyState state="loading" fill />
@@ -319,8 +309,10 @@ export function RequisitesScreen() {
                       </View>
                       {/* НОМЕР СЛЕДУЮЩЕГО ИНВОЙСА НАБОРА — справа, как цена в
                           прайсе услуг: нумерация живёт за реквизитами. У
-                          скрытого набора номера нет — им не выставляют. */}
-                      {company.archived_at ? null : <NextNumber companyId={company.id} />}
+                          скрытого набора номера нет — им не выставляют. Номер
+                          серии читается в аккаунте, открытом на телефоне, —
+                          у чужого аккаунта (04.10) он был бы не его. */}
+                      {company.archived_at || scope.foreign ? null : <NextNumber companyId={company.id} />}
                     </Pressable>
                     {readOnly ? null : handle}
                   </View>

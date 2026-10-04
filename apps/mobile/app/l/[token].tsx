@@ -11,7 +11,6 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import Head from "expo-router/head";
 import { CircleCheck, LocateFixed, MapPin } from "lucide-react-native";
-import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { Button } from "@/components/ui/Button";
 import { ChoiceRow, FieldRow, RowGroup } from "@/components/ui/card-rows";
 import { ChooseRow } from "@/components/ui/ChooseRow";
@@ -31,7 +30,6 @@ import {
 } from "@/features/clients/location-request-link";
 import {
   buildLocationPayload,
-  DEFAULT_LOCATION_LABELS,
   EMPTY_LOCATION_FORM,
   formatCoords,
   locationFormReady,
@@ -214,8 +212,10 @@ function AddressForm({
   onState: (state: Exclude<LookupState, "pending">) => void;
 }) {
   const t = useThemeColors();
-  const labels = info.labels.length > 0 ? info.labels : [...DEFAULT_LOCATION_LABELS];
-  const [form, setForm] = useState<LocationForm>({ ...EMPTY_LOCATION_FORM, label: labels[0] });
+  // Типы — только заведённые командой (владелец 03.10: готового набора
+  // нет). Не завела — выбора типа на странице нет вовсе.
+  const labels = info.labels;
+  const [form, setForm] = useState<LocationForm>({ ...EMPTY_LOCATION_FORM, label: labels[0] ?? "" });
   // Точный адрес ОТКРЫТ сразу: подъезд, этаж и квартира — то, ради чего
   // ссылку и отправили; спрятанные за строкой их пропустили бы.
   const [partsOpen, setPartsOpen] = useState(true);
@@ -362,17 +362,16 @@ function AddressForm({
           <AddressDetailsFields
             parts={form.parts}
             onChange={(parts) => setForm((f) => ({ ...f, parts }))}
-            pin={form.pin}
-            onPinChange={(pin) => setForm((f) => ({ ...f, pin }))}
-            showPin={!form.coords && !isLikelyUrl(form.line.trim())}
           />
         ) : null}
-        <ChoiceRow
-          separated
-          options={labels}
-          value={form.label}
-          onSelect={(v) => setForm((f) => ({ ...f, label: v }))}
-        />
+        {labels.length > 0 ? (
+          <ChoiceRow
+            separated
+            options={labels}
+            value={form.label}
+            onSelect={(v) => setForm((f) => ({ ...f, label: v }))}
+          />
+        ) : null}
       </RowGroup>
 
       <RowGroup title="Заметка">

@@ -27,10 +27,9 @@ import { geocodeAddress } from "@/features/clients/geocode";
 import { isLikelyUrl, parseAddress } from "@babun/shared/common/utils/map-links";
 import {
   objectTypeKey,
+  objectTypeVocabulary,
   snapObjectType,
-  useFrozenObjectTypes,
 } from "@/features/clients/object-types";
-import { useClients } from "@/features/clients/queries";
 import { useLocationLabels } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -77,23 +76,16 @@ export interface ObjectFieldsValue {
  *  которым словарь строится, и без заморозки чип уезжает из-под пальца через
  *  базу (владелец 2026-07-27: «нажимаю офис — перекладывает на виллу»). */
 export function useObjectTypeOptions(
-  current: string | undefined,
   /** Команда клиента — её «Типы объектов» (у каждой команды свои, 30.09). */
   teamId: string | null = null,
 ): string[] {
-  const { data: everyClient = [] } = useClients();
-  // Типы «из данных» — тоже только клиентов этой команды: иначе в выбор
-  // протекали бы типы соседней команды.
-  const allClients = useMemo(
-    () => (teamId ? everyClient.filter((c) => c.team_id === teamId) : everyClient),
-    [everyClient, teamId],
-  );
+  // ТОЛЬКО СПРАВОЧНИК КОМАНДЫ (владелец 03.10: «каждый сам создаёт свой
+  // тип»): ни стандартного набора, ни типов, подсмотренных на объектах.
   const { data: labelPresets = [] } = useLocationLabels(teamId);
-  const presetNames = useMemo(
-    () => labelPresets.map((preset) => preset.name),
+  return useMemo(
+    () => objectTypeVocabulary(labelPresets.map((preset) => preset.name)),
     [labelPresets],
   );
-  return useFrozenObjectTypes(allClients, presetNames, current);
 }
 
 export function ObjectFields({
@@ -197,14 +189,20 @@ export function ObjectFields({
           В шапке блока они держались потому, что лента не оставляла им места
           внутри; ленты нет — причина исчезла. */}
       <ReferenceBlock
+        // ФОРМА В ШТОРКЕ — плотно (владелец 03.10: «тип объекта выпадает из
+        // размера»). Вид выбранного — тот же, что у категории (закон 15.09
+        // «как в шторке… и так во всех»); тише только воздух.
+        dense
         title="Тип объекта"
         emptyIcon={Tag}
         emptyLabel="Выбрать тип объекта"
         emptyHint="Открывает список типов объектов"
+        // Метка без типа в справочнике (тип удалили) — «не выбрано»: объект
+        // без типа, как и в строке объекта (`findObjectType`).
         value={
-          value.type.trim()
+          typePreset
             ? {
-                name: value.type,
+                name: typePreset.name,
                 color: typePreset?.color ?? null,
                 Icon: iconPreset(typePreset?.icon),
               }
@@ -217,6 +215,7 @@ export function ObjectFields({
       />
 
       <SectionCard
+        dense
         title="Адрес"
         action={[
           {
@@ -226,6 +225,8 @@ export function ObjectFields({
             // их URL-схемы односторонние. Поэтому карта своя.
             label: "Выбрать точку на карте",
             icon: MapPinned,
+            // Синим, как кнопка маршрута у объекта (владелец 03.10).
+            accent: true,
             onPress: () => setMapOpen((v) => !v),
           },
           ...(onRequestFromClient
@@ -233,6 +234,7 @@ export function ObjectFields({
                 {
                   label: "Попросить адрес у клиента",
                   icon: Send,
+                  accent: true,
                   onPress: onRequestFromClient,
                 },
               ]
@@ -327,10 +329,6 @@ export function ObjectFields({
             parts={value.parts}
             onChange={(parts) => onChange({ parts })}
             onEditEnd={onCommit}
-            pin={value.pin}
-            onPinChange={(pin) => onChange({ pin })}
-            onPinEditEnd={onCommit}
-            showPin={!isLikelyUrl(value.target.trim())}
           />
         ) : null}
       </SectionCard>
@@ -338,7 +336,7 @@ export function ObjectFields({
       {/* ЗАМЕТКА — ПОЛЕМ-ПОДЛОЖКОЙ (владелец 2026-09-07: «мне нравились старые
           заметки»). Тот же вид, что у заметок на странице записи; поле открыто
           сразу, без кнопки «добавить» (владелец 2026-09-04). */}
-      <SectionCard title="Заметка">
+      <SectionCard dense title="Заметка">
         <View style={{ paddingHorizontal: 12, paddingBottom: 10, paddingTop: 2 }}>
           <TextInput
             value={value.note}
@@ -381,7 +379,9 @@ export function ObjectFields({
       <PickerSheet
         visible={typeSheetOpen}
         title="Тип объекта"
-        selectedId={value.type.trim() || null}
+        selectedId={typePreset?.name ?? null}
+        // Справочник пуст — так и говорим; завести тип — значком справа.
+        emptyText="Типов объектов пока нет — добавьте свой значком справа"
         items={typeOptions.map((name) => ({
           id: name,
           label: name,
@@ -393,7 +393,7 @@ export function ObjectFields({
           // значение можно не иметь.
           onPress: () => {
             onChange({
-              type: name === value.type ? "" : snapObjectType(name, typeOptions),
+              type: name === typePreset?.name ? "" : snapObjectType(name, typeOptions),
             });
             onCommit?.();
           },

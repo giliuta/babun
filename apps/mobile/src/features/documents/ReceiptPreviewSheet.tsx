@@ -27,23 +27,31 @@ export function ReceiptPreviewSheet({
   busy,
   onIssue,
   onClose,
+  actionLabel = "Выписать чек",
+  onExited,
 }: {
   visible: boolean;
+  /** Лист уехал целиком: следующий лист (выписанный чек) открывается только
+   *  теперь — два модальных листа в одном кадре iOS не показывает. */
+  onExited?: () => void;
   doc: ReceiptDocument | null;
   busy: boolean;
   onIssue: () => void;
+  /** «Выписать чек» или «Сохранить чек» у правки выписанного. */
+  actionLabel?: string;
   onClose: () => void;
 }) {
   return (
     <BottomSheet
       visible={visible}
       onClose={onClose}
+      onExited={onExited}
       title="Чек"
       scroll
       maxHeightRatio={0.9}
       footer={
         <View style={{ paddingHorizontal: SIDE }}>
-          <GradientButton label="Выписать чек" loading={busy} onPress={onIssue} />
+          <GradientButton label={actionLabel} loading={busy} onPress={onIssue} />
         </View>
       }
     >

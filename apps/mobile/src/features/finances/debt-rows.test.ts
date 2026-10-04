@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Debt } from "@babun/shared/local/finance/debt";
 import {
+  invoiceDebtRows,
   debtRows,
   manualDebtRows,
   mergeDebtRows,
@@ -55,6 +56,14 @@ describe("debtRows", () => {
     assert.equal(row.phone, "+357 111");
     assert.equal(row.firstName, "Константин");
     assert.equal(row.unclosed, false);
+  });
+
+  test("сегодняшняя запись, чьё время кончилось, — долг, как в календаре (повторный аудит 03.10)", () => {
+    const today = appt({ id: "t-today", status: "scheduled", date: "2026-09-09", time_start: "13:00", time_end: "14:30" });
+    assert.equal(debtRows([today], clients, services, win({ nowHm: "15:00" })).length, 1);
+    assert.equal(debtRows([today], clients, services, win({ nowHm: "14:00" })).length, 0);
+    // Без часов — как раньше: сегодняшняя запись ещё не долг.
+    assert.equal(debtRows([today], clients, services, win()).length, 0);
   });
 
   test("оплаченный визит долгом не считается", () => {
@@ -306,5 +315,33 @@ describe("mergeDebtRows", () => {
       mergeDebtRows(fromRecords, manual).map((r) => r.date),
       ["2026-09-07", "2026-09-05"],
     );
+  });
+});
+
+// Владелец 04.10: неоплаченный инвойс — в «Долгах», остатком, один раз.
+describe("invoiceDebtRows", () => {
+  const inv = (over: Record<string, unknown>) => ({
+    id: "i1", number: "INV-2026-006", kind: "invoice", status: "issued",
+    issued_on: "2026-10-04", due_on: "2026-10-11", client_id: "c1",
+    appointment_id: null, brigade_id: "t1", remaining: 178.5, ...over,
+  });
+  const refs = { clients: [{ id: "c1", full_name: "Артем Иванов", phone: "+357" }], appointments: [{ id: "a1", date: "2026-10-03" }] };
+  const win = { from: "2026-10-01", to: "2026-10-31", today: "2026-10-12", teamId: "t1" };
+
+  test("остаток инвойса — строка долга с номером и просрочкой", () => {
+    const [row] = invoiceDebtRows([inv({ appointment_id: "a1" })], refs, win);
+    assert.equal(row?.invoiceId, "i1");
+    assert.equal(row?.amount, 178.5);
+    assert.equal(row?.subtitle, "Инвойс INV-2026-006 · просрочен");
+    assert.equal(row?.title, "Артем Иванов");
+  });
+
+  test("оплаченный, отменённый, кредит-нота и чужая команда — не долг", () => {
+    const rows = invoiceDebtRows(
+      [inv({ remaining: 0 }), inv({ status: "cancelled" }), inv({ kind: "credit_note" }), inv({ brigade_id: "t2" })],
+      refs,
+      win,
+    );
+    assert.deepEqual(rows, []);
   });
 });

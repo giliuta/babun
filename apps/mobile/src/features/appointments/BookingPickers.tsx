@@ -28,6 +28,7 @@ import { isoWeekdayOf, servedOnWeekday } from "@babun/shared/local/services";
 import { durationLabel } from "@/features/services/format";
 import { unitPriceFor } from "@/features/appointments/helpers";
 import { round2 } from "@babun/shared/local/finance/appointment-calc";
+import { loadErrorWords } from "@/lib/connection-words";
 
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   return (
@@ -73,10 +74,20 @@ export function ServicePicker({
   quantities,
   onToggle,
   onQtyChange,
+  recordLines,
+  catalog = "ready",
+  catalogError,
+  onRetryCatalog,
 }: {
   visible: boolean;
   onClose: () => void;
   services: Service[];
+  /** Прайс ещё едет или не приехал. Пустой список тогда — НЕ «услуг нет»:
+   *  на лежащем сервере лист говорил «У команды пока нет услуг» и звал
+   *  «Добавить услугу» — завести дубль того, что у команды уже есть. */
+  catalog?: "ready" | "loading" | "failed";
+  catalogError?: unknown;
+  onRetryCatalog?: () => void;
   selectedIds: string[];
   /** Дата записи «YYYY-MM-DD» — по ней виден день недели. */
   date?: string;
@@ -88,6 +99,9 @@ export function ServicePicker({
   quantities: Record<string, number>;
   /** Ноль убирает услугу из записи. */
   onQtyChange: (id: string, qty: number) => void;
+  /** Цена, которую держит САМА запись: снимок цены прошлой правки или цена,
+   *  вписанная руками. Нет ключа — услуга по прайсу. */
+  recordLines?: Record<string, { unitPrice: number; total: number }>;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -130,17 +144,24 @@ export function ServicePicker({
   );
   // ЦЕНА — ПО ЛЕСТНИЦЕ КОЛИЧЕСТВА, КАК В ФОРМЕ: подвал считал по базовой цене
   // и обещал «€150», а «Итого» на форме — €135 по опту от трёх.
+  //
+  // А У ЗАПИСИ — ЕЁ ЦЕНА (прогон оплаты 04.10). Запись держит снимок цены:
+  // чистка по €30, прайс с тех пор поднят до €50. Лист читал прайс и обещал
+  // «Применить · 1 · €50», а форма после «Применить» честно оставляла €30.
+  // Строка, которую форма уже посчитала, берётся у формы.
   const subtotal = useMemo(
     () =>
       round2(
         catalogIds.reduce((sum, id) => {
+          const held = recordLines?.[id];
+          if (held) return sum + held.total;
           const svc = services.find((s) => s.id === id);
           if (!svc) return sum;
           const qty = quantities[id] ?? 1;
           return sum + unitPriceFor(svc, qty) * qty;
         }, 0),
       ),
-    [catalogIds, services, quantities],
+    [catalogIds, services, quantities, recordLines],
   );
   const close = () => {
     setQ("");
@@ -161,6 +182,14 @@ export function ServicePicker({
       ),
     );
   const catalogEmpty = services.length === 0;
+  const catalogMissing = catalogEmpty && catalog !== "ready";
+  const missingWords =
+    catalog === "failed"
+      ? loadErrorWords(catalogError, {
+          failed: "Не удалось загрузить услуги",
+          later: "Прайс команды появится, когда связь вернётся.",
+        })
+      : null;
   // ТАП ПО СТРОКЕ — ВЗЯТЬ ИЛИ СНЯТЬ, КОЛИЧЕСТВО — СТЕППЕРОМ (владелец
   // 2026-09-08: «количество набирать несколькими тапами не очень прикольно, а
   // чтобы снять — надо прям на это нажимать, не все люди это поймут»).
@@ -211,7 +240,13 @@ export function ServicePicker({
       // Закрыть шторку без единой услуги законно: запись сохраняется и так.
       footer={
         <View style={{ paddingHorizontal: GUTTER }}>
-          {catalogEmpty ? (
+          {catalogMissing ? (
+            // ПРАЙС НЕ ПРИЕХАЛ — ДВЕРИ «ДОБАВИТЬ УСЛУГУ» НЕТ: заводить нечего,
+            // услуги у команды есть, их просто не видно. Внизу — «Повторить».
+            catalog === "failed" && onRetryCatalog ? (
+              <GradientButton label="Повторить" onPress={onRetryCatalog} />
+            ) : null
+          ) : catalogEmpty ? (
             // ПУСТОЙ ПРАЙС — ОДНА КНОПКА, И ОНА ВНИЗУ (владелец 2026-09-14:
             // «если услуги нет, кнопка „Применить“ меняется на „Добавить
             // услугу“»). Применять нечего, поэтому место главного действия
@@ -267,11 +302,11 @@ export function ServicePicker({
                 subtitle={
                   offDayIds.has(s.id)
                     ? offDayLabel
-                    : `${formatEURExact(s.price)} · ${durationLabel(s.duration_minutes)}`
+                    : `${formatEURExact(recordLines?.[s.id]?.unitPrice ?? s.price)} · ${durationLabel(s.duration_minutes)}`
                 }
                 selected={on}
                 accessibilityRole="checkbox"
-                accessibilityLabel={`${s.name}, ${formatEURExact(s.price)}${
+                accessibilityLabel={`${s.name}, ${formatEURExact(recordLines?.[s.id]?.unitPrice ?? s.price)}${
                   on ? `, взято ${qty ?? 1}` : ""
                 }`}
                 onPress={() => toggle(s.id)}
@@ -294,9 +329,17 @@ export function ServicePicker({
           // запись: дверь — кнопка футера «Добавить услугу», здесь только
           // слова. Второй формы услуги не появляется: сущность-владелец
           // правится своей страницей.
-          <EmptyState
-            title={q.trim() ? "Услуги не найдены" : "У команды пока нет услуг"}
-          />
+          catalogMissing ? (
+            missingWords ? (
+              <EmptyState state="error" title={missingWords.title} subtitle={missingWords.subtitle} />
+            ) : (
+              <EmptyState state="loading" title="Загружаем услуги" />
+            )
+          ) : (
+            <EmptyState
+              title={q.trim() ? "Услуги не найдены" : "У команды пока нет услуг"}
+            />
+          )
         )}
       </SelectList>
     </BottomSheet>

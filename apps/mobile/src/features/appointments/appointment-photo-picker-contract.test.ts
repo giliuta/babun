@@ -8,11 +8,15 @@ const appointmentSource = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), "use-file-pickers.ts"),
   "utf8",
 );
-const clientSource = readFileSync(
+const clientPage = readFileSync(
   resolve(
     dirname(fileURLToPath(import.meta.url)),
     "../../../app/(dashboard)/clients/attachments.tsx",
   ),
+  "utf8",
+);
+const clientFiles = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), "../clients/use-client-files.ts"),
   "utf8",
 );
 
@@ -30,6 +34,10 @@ function assertCompatiblePicker(source: string): void {
 describe("appointment photo picker", () => {
   test("requests an iOS-compatible representation before upload", () => {
     assertCompatiblePicker(appointmentSource);
-    assertCompatiblePicker(clientSource);
+    // Файлы клиента (03.10) выбирают тем же `useFilePickers`, что и запись:
+    // своего вызова галереи у страницы нет — значит, и своего режима тоже.
+    assert.match(clientFiles, /useFilePickers\(/);
+    assert.match(clientPage, /useClientFileUpload\(id\)/);
+    assert.doesNotMatch(clientPage, /launchImageLibraryAsync|launchCameraAsync/);
   });
 });

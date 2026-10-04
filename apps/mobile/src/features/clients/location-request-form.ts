@@ -47,9 +47,6 @@ export const EMPTY_LOCATION_FORM: LocationForm = {
   note: "",
 };
 
-/** Типы, если бизнес не завёл своих. */
-export const DEFAULT_LOCATION_LABELS = ["Дом", "Квартира", "Офис"] as const;
-
 /** Отправлять есть что: точка, строка, ссылка-пин или «где» в точном адресе. */
 export function locationFormReady(form: LocationForm): boolean {
   return (

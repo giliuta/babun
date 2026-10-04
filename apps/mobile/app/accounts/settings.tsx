@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
-import { useLocalSearchParams, type Href } from "expo-router";
+import { Trash2 } from "lucide-react-native";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { settingsTeamId } from "@/features/finances/team-settings-lines";
 import { useClosedAccountActions } from "@/features/finances/accounts-page/use-closed-account-actions";
 import { money, moneySign } from "@babun/shared/common/utils/money";
@@ -10,32 +11,25 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { ReorderList } from "@/components/ui/ReorderList";
-import { RowCaption, RowGroupHeader } from "@/components/ui/card-rows";
-import { GUTTER } from "@/components/ui/tokens";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { SelectRow } from "@/components/ui/select-rows";
+import { RowCaption } from "@/components/ui/card-rows";
 import { notify } from "@/lib/notify";
 import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
-import {
-  ACCOUNT_ROW_H,
-  AccountRow,
-} from "@/features/finances/accounts-page/AccountRow";
-import {
-  accountEditParam,
-  accountRowMark,
-  presetTeamFor,
-} from "@/features/finances/accounts-page/page-rules";
+import { AccountsGroup } from "@/features/finances/accounts-page/AccountsGroup";
+import { accountEditParam, presetTeamFor } from "@/features/finances/accounts-page/page-rules";
 import { useHideAccount } from "@/features/finances/accounts-page/use-hide-account";
 import {
   useAccountsWithBalances,
+  useDeletedAccounts,
   useReorderAccounts,
   useUnassignedMoney,
 } from "@/features/finances/accounts";
-import {
-  accountOrderGroups,
-  financeAccountsHref,
-  sumAccountBalances,
-} from "@/features/finances/accounts-sections";
+import { accountOrderGroups, financeAccountsHref } from "@/features/finances/accounts-sections";
 import { useTeams } from "@/features/reference/queries";
+import { useThemeColors } from "@/theme/colors";
+import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-settings";
+import { useCurrentRole } from "@/features/settings/tenant";
 
 // СЧЕТА — ОДНА СТРАНИЦА ЗА ДВУМЯ ДВЕРЯМИ (владелец 2026-09-15).
 //
@@ -59,17 +53,25 @@ import { useTeams } from "@/features/reference/queries";
 // показывают только живые команды, и у этих счетов нет другой двери. Группа у
 // них своя, см. `accountOrderGroups`.
 //
-// ПРАВА: счета заводит, правит, двигает и закрывает только владелец (RLS
-// `accounts_owner_all`); обе двери сюда — ползунки «Счетов» и шестерёнка —
-// стоят только у владельца.
+// ПРАВА (03.10): строка шестерёнки «Счета» команды. Владелец — всё и по всем
+// командам. Партнёр — только команды, где у него «Счета» открыты: «Только
+// видит» — список без правки, порядка и «Добавить счёт»; «Видит и меняет» —
+// заводит, правит, двигает и удаляет счета своей команды
+// (`accounts_insert_calendar`, `accounts_update_calendar`). Скрыть счёт,
+// «Удалённые счета» и деньги «без счёта» — только владельцу (ограничительная
+// политика `accounts_hidden_owner_only`, удаление насовсем — владельца).
 
 /** Въезд страницы и отъезд листа, с которого на неё пришли. */
 const EDIT_AFTER_PUSH_MS = SHEET_EXIT_MS + 350;
 
 export default function AccountsScreen() {
   const online = useIsOnline();
+  const t = useThemeColors();
+  const router = useRouter();
+  const deletedQuery = useDeletedAccounts();
   // Полный список: закрытые нужны счётчику двери в архив и шторке правки.
-  const accountsQuery = useAccountsWithBalances({ includeInactive: true });
+  // Со скрытыми: скрытый счёт виден только здесь (владелец 03.10).
+  const accountsQuery = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
   // ВСЕ команды, включая архивные: по ним называются группы осиротевших
   // счетов и строится подпись команды в листе перевода.
   const teamsQuery = useTeams({ includeInactive: true });
@@ -141,8 +143,10 @@ export default function AccountsScreen() {
         teams,
       }).map((group) => ({
         ...group,
+        // Видимые → скрытые («Скрыт») → закрытые.
         accounts: [
-          ...group.accounts.filter((account) => account.is_active),
+          ...group.accounts.filter((account) => account.is_active && !account.is_hidden),
+          ...group.accounts.filter((account) => account.is_active && account.is_hidden),
           ...group.accounts.filter((account) => !account.is_active),
         ],
       })),
@@ -154,9 +158,30 @@ export default function AccountsScreen() {
   // финансов по каждой команде»). Из «Настроек финансов» страница приходит на
   // команде — сверху лента, ниже только её счета, и новый счёт заводится ей.
   // Из панели «Счета» адреса нет, и страница прежняя: все команды группами.
-  const liveTeams = useMemo(() => teams.filter((team) => team.is_active), [teams]);
-  const teamId = teamParam ? settingsTeamId(liveTeams, teamParam) : null;
-  const shownGroups = teamId ? groups.filter((group) => group.key === teamId) : groups;
+  const owner = useCurrentRole().data === "owner";
+  const levelsOf = useFinanceSettingLevelsOf();
+  const liveTeams = useMemo(
+    () =>
+      teams.filter(
+        (team) => team.is_active && (owner || levelsOf(team.id).accounts !== "hidden"),
+      ),
+    [teams, owner, levelsOf],
+  );
+  // У партнёра страница — всегда одной команды: «все группами» — вид
+  // владельца.
+  const teamId = teamParam || !owner ? settingsTeamId(liveTeams, teamParam) : null;
+  const canEdit = owner || levelsOf(teamId).accounts === "write";
+  const shownGroups = teamId
+    ? groups.filter((group) => group.key === teamId)
+    : owner
+      ? groups
+      : [];
+  // «УДАЛЁННЫЕ СЧЕТА» — ДВЕРЬ ПОД СПИСКОМ, ТОЛЬКО КОГДА ТАМ ЧТО-ТО ЛЕЖИТ
+  // (владелец 03.10: «попадают в папку „Удалённые счета"»). Страница сама за
+  // шестерёнкой, поэтому дверь здесь, а не ещё одной строкой настроек.
+  const deletedCount = (deletedQuery.data ?? []).filter(
+    (account) => !teamId || account.brigade_id === teamId,
+  ).length;
 
   /** Новый порядок строк группы: пишем позиции 0, 1, 2… по списку id. */
   const applyOrder = (ids: string[]) => {
@@ -197,8 +222,12 @@ export default function AccountsScreen() {
     void teamsQuery.refetch();
   };
 
+  // Страница стоит НАД вкладками: таб-бара под ней нет, и нижний край держит
+  // сам экран — иначе «Добавить счёт» садилась на полоску «домой» (владелец
+  // 03.10: «как будто слишком низко»). Та же высота, что у «Записать клиента»
+  // поверх записи.
   return (
-    <Screen edges={["top"]}>
+    <Screen>
       <ScreenHeader
         title="Счета"
         // Холодная ссылка прямо сюда: «назад» ведёт к панели «Счета», откуда
@@ -241,66 +270,46 @@ export default function AccountsScreen() {
             <RowCaption text="Счетов нет" />
           ) : null}
           {shownGroups.map((group) => (
-            <View key={group.key} style={{ marginTop: 12 }}>
-              {/* ПОДЫТОГ СТОИТ НАД ГРУППОЙ, А НЕ ПОД НЕЙ: это заголовок
-                  раздела с числом, как везде в продукте. У компании с одной
-                  командой имени нет — тогда строку называет слово «На
-                  счетах»: сумма без подписи читается как чей-то остаток. */}
-              <RowGroupHeader
-                title={group.title ?? "На счетах"}
-                value={money(
-                  sumAccountBalances(group.accounts.filter((account) => account.is_active)),
-                )}
-              />
-              {/* ПОРЯДОК — РУЧКОЙ, КАК ВЕЗДЕ (владелец 2026-09-12: «шесть
-                  точек справа для передвижения… везде одно и то же»). Каждая
-                  группа — свой список: `position` нумеруется внутри команды,
-                  и строка чужой команды между ними ничего не значит.
-                  ПОРЯДОК НЕ ПЕРЕАДРЕСУЕТ ДЕНЬГИ: маршрут оплаты держит
-                  «Основной счёт команды» в правке счёта. */}
-              <View style={{ paddingHorizontal: GUTTER }}>
-                <ReorderList
-                  items={group.accounts}
-                  rowHeight={ACCOUNT_ROW_H}
-                  spaced
-                  handleInside
-                  labelFor={(account) => account.name}
-                  onReorder={applyOrder}
-                  onDraggingChange={setDragging}
-                >
-                  {(account, _index, handle) => (
-                    <AccountRow
-                      account={account}
-                      mark={
-                        account.is_active ? accountRowMark(account) : "Закрыт"
-                      }
-                      handle={handle}
-                      onPress={() => setEditor({ open: true, id: account.id })}
-                      onHide={() => hider.hide(account)}
-                      closed={
-                        account.is_active
-                          ? null
-                          : {
-                              onReopen: () => closedActions.openAgain(account),
-                              // Стереть можно только счёт без единой операции:
-                              // историю денег сервер не отдаёт.
-                              onDelete: account.has_history
-                                ? undefined
-                                : () => closedActions.erase(account),
-                            }
-                      }
-                    />
-                  )}
-                </ReorderList>
-              </View>
-            </View>
+            <AccountsGroup
+              key={group.key}
+              title={group.title}
+              accounts={group.accounts}
+              canEdit={canEdit}
+              onReorder={applyOrder}
+              onDraggingChange={setDragging}
+              onEdit={(account) => setEditor({ open: true, id: account.id })}
+              onHide={owner ? (account) => hider.hide(account) : undefined}
+              onDelete={(account) => hider.remove(account)}
+              onReopen={(account) => closedActions.openAgain(account)}
+            />
           ))}
           {/* ДЕНЬГИ БЕЗ СЧЁТА — СЛОВАМИ, А НЕ МОЛЧАНИЕМ (аудит 2026-09-10).
               Сервер считает операции, у которых счёта нет вовсе, и в остатки
               они не попадают. Одно слово с суммой (вкус владельца
               2026-09-06), без инструкции: откуда эти деньги, он знает сам. */}
-          {moneySign(unassigned) !== 0 ? (
+          {owner && moneySign(unassigned) !== 0 ? (
             <RowCaption text={`Без счёта ${money(unassigned)}`} />
+          ) : null}
+          {owner && deletedCount > 0 ? (
+            <View style={{ marginTop: 16 }}>
+              <SectionCard dense>
+                <View style={{ paddingHorizontal: 2, paddingVertical: 2 }}>
+                  <SelectRow
+                    icon={Trash2}
+                    color={t.danger}
+                    plain
+                    title="Удалённые счета"
+                    value={String(deletedCount)}
+                    accessibilityLabel={`Удалённые счета: ${deletedCount}`}
+                    onPress={() =>
+                      router.push(
+                        (teamId ? `/accounts/trash?team=${encodeURIComponent(teamId)}` : "/accounts/trash") as Href,
+                      )
+                    }
+                  />
+                </View>
+              </SectionCard>
+            </View>
           ) : null}
         </ScrollView>
       )}
@@ -308,17 +317,22 @@ export default function AccountsScreen() {
       {/* ГЛАВНОЕ ДЕЙСТВИЕ — В ФУТЕРЕ, ВСЕГДА (AGENTS 7.1): список пуст,
           полон или ещё грузится — кнопка на том же месте. Шторка сама
           дочитывает, что ей нужно, и сама говорит про сеть. */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
-        <GradientButton
-          label="Добавить счёт"
-          onPress={() => setEditor({ open: true, id: null })}
-        />
-      </View>
+      {canEdit ? (
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+          <GradientButton
+            label="Добавить счёт"
+            onPress={() => setEditor({ open: true, id: null })}
+          />
+        </View>
+      ) : null}
 
       <AccountEditorSheet
         visible={editor.open}
         accountId={editor.id}
         presetTeamId={teamId ?? presetTeamFor(teams)}
+        // Страница на команде (`?team=`) — новый счёт ей, без выбора. На
+        // общей странице всех команд команду выбирают в листе.
+        teamLocked={teamId != null}
         onClose={() => setEditor((current) => ({ ...current, open: false }))}
       />
       {hider.sheet}

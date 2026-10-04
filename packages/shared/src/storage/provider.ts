@@ -47,4 +47,22 @@ export function getStorage(): KVStorage {
  *  own state. */
 export function setStorage(impl: KVStorage): void {
   _impl = impl;
+  for (const fn of _onReady.splice(0)) fn();
+}
+
+// МОДУЛЬ, ЧИТАЮЩИЙ ХРАНИЛИЩЕ ПРИ ЗАГРУЗКЕ, ГРУЗИТСЯ РАНЬШЕ ХРАНИЛИЩА.
+// Expo Router при старте вычисляет файлы маршрутов по алфавиту, и
+// `app/(auth)/_layout.tsx` идёт раньше корневого `app/_layout.tsx`, который
+// подключает хранилище (`bootstrap.ts`). Всё, что тянется из `(auth)` —
+// сессия, чистка, кэш запросов, — вычисляется ДО `setStorage`, и чтение
+// при загрузке модуля бросало. Так шапка вкладок без сервера (`chrome-cache`)
+// при холодном старте не поднималась ни разу: чтение глоталось, «поднято 0».
+const _onReady: Array<() => void> = [];
+
+/** Run `fn` once the storage backend exists — now, if it already does. For
+ *  work a module wants to do at load time: on native the backend is bound
+ *  only after the route files have been evaluated. */
+export function onStorageReady(fn: () => void): void {
+  if (_impl || !isReactNative()) fn();
+  else _onReady.push(fn);
 }

@@ -16,28 +16,21 @@ import {
 // Дефолт-мердж при чтении: объект от старой сборки не может скрыть
 // новое поле.
 
-export type CardField = "phone" | "exp" | "inc" | "debt" | "last" | "meta";
+// ДЕНЕГ В СТРОКЕ НЕТ (владелец 01.10: «уберём полностью этот блок — долг,
+// доход, ожидается — со страницы клиентов»). Они остаются на странице клиента.
+// И НИ КОМАНДЫ, НИ МЕТКИ, НИ ТЕГОВ (01.10: «оставить только последний
+// визит, и всё»).
+export type CardField = "phone" | "last";
 
 export type CardFieldPrefs = Record<CardField, boolean>;
 
-const CARD_FIELDS: CardField[] = [
-  "phone",
-  "exp",
-  "inc",
-  "debt",
-  "last",
-  "meta",
-];
+const CARD_FIELDS: CardField[] = ["phone", "last"];
 
 /** Всё видно по умолчанию — карточка до появления тогглов. */
 export const DEFAULT_CARD_FIELDS: CardFieldPrefs = {
   // Владелец 2026-08-06: «хочу, чтоб сразу было видно номер телефона».
   phone: true,
-  exp: true,
-  inc: true,
-  debt: true,
   last: true,
-  meta: true,
 };
 
 // Тот же ключ, что и web (localStorage) — единая конвенция `babun-…`.
@@ -169,6 +162,7 @@ export function useToggleCardField(teamId: string | null = null) {
       const next = { ...current, [field]: !current[field] };
       saveTeam.mutate({
         teamId,
+        base,
         next: { ...base, listOff: CARD_FIELDS.filter((f) => !next[f]) },
       });
     },
@@ -180,10 +174,6 @@ export function useToggleCardField(teamId: string | null = null) {
 export function cardFieldsSummary(p: CardFieldPrefs): string {
   const parts = ["Имя"];
   if (p.phone) parts.push("телефон");
-  if (p.exp) parts.push("ожид. прибыль");
-  if (p.inc) parts.push("доход");
-  if (p.debt) parts.push("долг");
   if (p.last) parts.push("посл. запись");
-  if (p.meta) parts.push("команда/метка/теги");
   return parts.join(" · ");
 }

@@ -36,6 +36,10 @@ export interface ToggleListItem {
   locked?: boolean;
   /** Приписка, объясняющая замок: «всегда», «нужна хотя бы одна». */
   lockedNote?: string;
+  /** «Только видит» (права партнёра, 01.10): галка стоит как есть, тап не
+   *  переключает, но подпись не гаснет — это не запрет пункта, а чужая
+   *  настройка, которую человек читает. */
+  readOnly?: boolean;
   onToggle: () => void;
 }
 
@@ -47,13 +51,13 @@ export function ToggleRow({ item }: { item: ToggleListItem }) {
   return (
     <Pressable
       onPress={() => {
-        if (item.locked) return;
+        if (item.locked || item.readOnly) return;
         haptics.tap();
         item.onToggle();
       }}
-      disabled={item.locked}
+      disabled={item.locked || item.readOnly}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: item.checked, disabled: !!item.locked }}
+      accessibilityState={{ checked: item.checked, disabled: !!(item.locked || item.readOnly) }}
       accessibilityLabel={item.label}
       style={({ pressed }) => ({
         flex: 1,
@@ -167,9 +171,12 @@ function Section({
 // касанием, а прочитанная один раз подсказка потом просто занимает экран.
 export function ToggleListScreen({
   title,
+  subtitle,
   sections,
 }: {
   title: string;
+  /** Чей это набор — имя команды (настройки клиентов у каждой команды свои). */
+  subtitle?: string;
   sections: ToggleListSection[];
 }) {
   // Пока строку тянут, список не должен уезжать под пальцем.
@@ -177,7 +184,7 @@ export function ToggleListScreen({
 
   return (
     <Screen>
-      <ScreenHeader title={title} />
+      <ScreenHeader title={title} subtitle={subtitle} />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}

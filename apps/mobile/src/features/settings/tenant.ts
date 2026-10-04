@@ -1,3 +1,4 @@
+import { tierAllows, tierOf } from "@/features/tariffs/tiers";
 import { setDefaultCurrency } from "@babun/shared/common/utils/money";
 import {
   useMutation,
@@ -9,9 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useMirror } from "@/features/access/mirror/mirror-state";
 import {
-  effectivePlan,
   isUserRole,
-  planAllows,
   type PlanCapability,
   type UserRole,
 } from "./role-policy";
@@ -26,6 +25,7 @@ import {
   subscribeSwitchRevalidation,
 } from "@/lib/switch-revalidate-plan";
 import { rearmRolePollers } from "@/lib/role-poll-rearm";
+import { roleLookupUnanswered } from "./role-unanswered";
 
 const ROLE_POLL_MS = 60 * 1000;
 
@@ -100,6 +100,7 @@ export function useCurrentRole() {
 
 function useRoleQuery() {
   const tenantId = useTenantId();
+  const qc = useQueryClient();
   return useQuery({
     queryKey: currentRoleQueryKey(tenantId),
     enabled: !!tenantId,
@@ -121,10 +122,22 @@ function useRoleQuery() {
     refetchInterval: () => rolePollInterval(ROLE_POLL_MS),
     refetchIntervalInBackground: false,
     queryFn: async (): Promise<UserRole | null> => {
-      const { data, error } = await withRoleLookupTimeout(
-        supabase.rpc("current_user_role"),
-      );
-      if (error) throw new Error(error.message);
+      // СЕРВЕР НЕ ОТВЕТИЛ — ПРЕЖНЯЯ РОЛЬ ОСТАЁТСЯ (`role-unanswered.ts`):
+      // иначе запросы, которые ждут «опрос роли успешен», выключались, и
+      // экраны висели загрузкой, пока сервер лежал (03.10).
+      const known = qc.getQueryData<UserRole | null>(currentRoleQueryKey(tenantId));
+      let result: Awaited<ReturnType<typeof supabase.rpc<"current_user_role">>>;
+      try {
+        result = await withRoleLookupTimeout(supabase.rpc("current_user_role"));
+      } catch (error) {
+        if (known && roleLookupUnanswered({ thrown: true })) return known;
+        throw error;
+      }
+      const { data, error, status } = result;
+      if (error) {
+        if (known && roleLookupUnanswered({ status })) return known;
+        throw new Error(error.message);
+      }
       if (data == null) return null;
       if (!isUserRole(data)) throw new Error("Сервер вернул неизвестную роль");
       return data;
@@ -147,8 +160,9 @@ function friendlyTenantError(message: string): string {
  *  сломанный продукт, а настоящий замок всё равно стоит на сервере
  *  (`enforce_plan_limits`). Канон, правило 10: экран объясняет, база решает. */
 export function usePlanAllows(capability: PlanCapability): boolean {
-  const tenant = useTenant().data;
-  return planAllows(effectivePlan(tenant), capability);
+  // ТАРИФ АККАУНТА-ВЛАДЕЛЬЦА КОМАНДЫ (01.10): сервер отдаёт `tier` и
+  // партнёрам — у него серое и плашка те же, что у владельца.
+  return tierAllows(tierOf(useTenant().data), capability);
 }
 
 export function useTenant() {
@@ -186,7 +200,7 @@ export function useUpdateTenant() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (patch: TenantUpdate) => {
-      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       const { error, count } = await supabase
         .from("tenants")
         .update(patch, { count: "exact" })

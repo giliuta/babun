@@ -179,6 +179,13 @@ function deviceZone(): string {
 }
 
 
+/** Лежит ли на устройстве полная копия настроек. Переход в другую компанию
+ *  её стирает (ключ компанию не называет), поэтому «есть» значит «от этой
+ *  компании». */
+export function hasStoredCalendarSettings(): boolean {
+  return getStorage().get<Partial<CalendarSettings>>(STORAGE_KEY) != null;
+}
+
 export function loadCalendarSettings(): CalendarSettings {
   // Storage seam (STORY-035): WebKVStorage on web, MMKV on RN.
   const parsed = getStorage().get<Partial<CalendarSettings>>(STORAGE_KEY);

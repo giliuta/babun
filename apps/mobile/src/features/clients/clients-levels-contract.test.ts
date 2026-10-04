@@ -67,26 +67,372 @@ const oneByOne = norm(readFileSync(join(MIGRATIONS_DIR, ONE_BY_ONE), "utf8"));
 const CARD_BLOCKS = "20260930234000_clients_card_blocks.sql";
 const cardBlocks = norm(readFileSync(join(MIGRATIONS_DIR, CARD_BLOCKS), "utf8"));
 
+// ОБХОДНЫЕ ДОРОГИ (аудит 30.09): SMS, чеки, копия записи, старые записи
+// мастера — данные клиента не уходят мимо «номер по одному» и «Около записи».
+const LEAKS = "20260930235950_clients_leak_paths.sql";
+// ССЫЛКА ИЗ SMS ОТМЕНЯЕТ ЗАПИСЬ (аудит 04.10): сотруднику её выдают только с
+// правом «Отменять и удалять записи»; защита клиента LEAKS — на месте.
+const SMS_LINKS = "20261004085941_sms_links_and_archived_calendars.sql";
+const smsLinks = norm(readFileSync(join(MIGRATIONS_DIR, SMS_LINKS), "utf8"));
+// Копия партнёра принимает номер с телефона (повтор без дубля, 03.10) —
+// с прежним сторожем клиента команды.
+const COPY = "20261003191837_member_copy_idempotent.sql";
+const leaks = norm(readFileSync(join(MIGRATIONS_DIR, LEAKS), "utf8"));
+
+// «ГЛАВНОЕ» КЛИЕНТОВ (владелец 01.10): «Открывает карточку» гасит блоки
+// страницы клиента, «Карточка из записи» — окно клиента записи. Обе функции
+// переписаны сознательно — сторож держит их новые условия.
+const OPEN_CARD = "20261001161500_clients_open_card_rights.sql";
+const openCard = norm(readFileSync(join(MIGRATIONS_DIR, OPEN_CARD), "utf8"));
+
+// «БАЗА КЛИЕНТОВ» — «СКРЫТА» ИЛИ «ТОЛЬКО ВИДИТ» (владелец 02.10): окно
+// «2 недели» / «Месяц» едет с днём, блок карточки с «Меняет» правится сам,
+// база (имя, номера) — только владельцу. Функции переписаны сознательно.
+const BASE_READ = "20261002233700_clients_base_read_window.sql";
+const baseRead = norm(readFileSync(join(MIGRATIONS_DIR, BASE_READ), "utf8"));
+
+// «БАЗА КЛИЕНТОВ» — ТРИ СТУПЕНИ (владелец 02.10, вслед за BASE_READ):
+// «Открывает карточку» и «Телефон» убраны — их даёт база; «Редактирует»
+// заводит, правит и удаляет клиентов. Функции переписаны сознательно.
+const THREE_LEVELS = "20261002235300_clients_base_three_levels.sql";
+const threeLevels = norm(readFileSync(join(MIGRATIONS_DIR, THREE_LEVELS), "utf8"));
+
+// БАЗА — ТОЛЬКО КЛИЕНТЫ КОМАНДЫ (владелец 02.10): «Ограничение по времени»
+// (бывшее «Какие клиенты») сужает их; «История записей» и «Карточка из
+// записи» убраны — их даёт база и видимая запись.
+const TEAM_BASE = "20261002235800_clients_team_base_time_limit.sql";
+const teamBase = norm(readFileSync(join(MIGRATIONS_DIR, TEAM_BASE), "utf8"));
+
+// «ОГРАНИЧЕНИЯ» — ШЕСТЬ ШАГОВ (владелец 02.10, вариант 1): Неделя · 2 недели ·
+// Месяц · 3 месяца · Полгода · Без ограничения; умолчание — «Неделя».
+const LIMITS = "20261002235930_clients_limits_steps.sql";
+const limits = norm(readFileSync(join(MIGRATIONS_DIR, LIMITS), "utf8"));
+
+// «КАРТОЧКА КЛИЕНТА» ПО БЛОКАМ СТРАНИЦЫ (владелец 02.10): «Клиент», «История»,
+// «SMS» — свои права; номер — по «Клиенту», SMS с карточки — по «SMS».
+const CLIENT_BLOCKS = "20261003001200_clients_card_blocks_client_history_sms.sql";
+const clientBlocks = norm(readFileSync(join(MIGRATIONS_DIR, CLIENT_BLOCKS), "utf8"));
+
+// «ГЛАВНОЕ» (владелец 02.10): база — Скрыта / Видит; «Создание клиента» и
+// «Меню клиента» — свои права «Не может / Может».
+const CREATE_MENU = "20261003002400_clients_create_and_menu_rights.sql";
+const createMenu = norm(readFileSync(join(MIGRATIONS_DIR, CREATE_MENU), "utf8"));
+
+// «УДАЛЕНИЕ КЛИЕНТА» — СВОИМ ПРАВОМ, АРХИВА НЕТ (владелец 03.10): удаление
+// одно, клиенту с историей база срок стирания не ставит.
+const DELETE_RIGHT = "20261003004100_clients_delete_right_no_archive.sql";
+const deleteRight = norm(readFileSync(join(MIGRATIONS_DIR, DELETE_RIGHT), "utf8"));
+
+// НОМЕР — СРАЗУ (владелец 03.10): «Клиент: Видит» отдаёт контакты целиком,
+// без двери и точек; «Скрыт» — без контактов.
+const PHONE_OPEN = "20261003010500_clients_phone_open_with_client_block.sql";
+const phoneOpen = norm(readFileSync(join(MIGRATIONS_DIR, PHONE_OPEN), "utf8"));
+
+// СТРОКА ИСТОРИИ SMS ЗНАЕТ КЛИЕНТА И ШАБЛОН (STORY-089, 03.10): «SMS
+// фиксируются за клиентом», в строке — имя шаблона. Номер и деньги — по-прежнему
+// только владельцу (защита `LEAKS`), это сторожит тест ниже.
+const SMS_JSON = "20261003013700_sms_message_client_and_template.sql";
+const smsJson = norm(readFileSync(join(MIGRATIONS_DIR, SMS_JSON), "utf8"));
+
+// SMS ИЗ ЗАПИСИ — КЛИЕНТУ НА ЭКРАНЕ (03.10): клиент сменён и не сохранён — SMS
+// ему и всё равно о записи. Охрана клиента сотрудника и номера — та же; другой
+// клиент, чем у записи, — по праву «SMS: Меняет» (аудит 03.10, тело взято из
+// базы и дополнено одной проверкой).
+const SMS_SEND = "20261003120713_member_security_gaps.sql";
+const smsSend = norm(readFileSync(join(MIGRATIONS_DIR, SMS_SEND), "utf8"));
+
+// ДЫРЫ ПОСЛЕ АУДИТА 03.10 и СЛОВО ВЛАДЕЛЬЦА 03.10: «завёл сам» — в наборе
+// своей команды; «Метка» и «Тег» — два права; «Долг и деньги» ушли в
+// «Историю», у неё три положения («Скрыта» · «Своя команда» · «Все команды»).
+// Тела взяты из базы и дополнены — сторож держит новые условия.
+const GAPS = "20261003133700_clients_rights_gaps.sql";
+const gaps = norm(readFileSync(join(MIGRATIONS_DIR, GAPS), "utf8"));
+
 describe("сервер: клиенты по уровням", () => {
   test("правило видимости и окно живут в миграции «по командам» и не переписаны позже", () => {
     for (const fn of ["access_client_ids", "current_user_can_edit_client"]) {
       assert.equal(lastDefiner(fn), PER_TEAM, `${fn} переопределён позже`);
     }
-    for (const fn of ["access_client_ids_in", "access_company_level", "list_master_clients_safe"]) {
-      assert.equal(lastDefiner(fn), ONE_BY_ONE, `${fn} переопределён позже`);
+    for (const fn of ["access_company_level"]) {
+      assert.equal(lastDefiner(fn), BASE_READ, `${fn} переопределён позже`);
+    }
+    for (const fn of ["member_trash_client", "client_history_never_purges"]) {
+      assert.equal(lastDefiner(fn), DELETE_RIGHT, `${fn} переопределён позже`);
+    }
+    for (const fn of ["list_master_clients_safe"]) {
+      assert.equal(lastDefiner(fn), PHONE_OPEN, `${fn} переопределён позже`);
     }
     for (const fn of [
+      "access_client_ids_in",
       "access_client_blocks",
       "client_masked_for_member",
+      "create_client_with_tags",
+      "update_client_with_tags",
+      "member_client_history",
+    ]) {
+      assert.equal(lastDefiner(fn), GAPS, `${fn} переопределён позже`);
+    }
+    for (const fn of [
+      "access_contact_client_ids",
+      "sms_for_client",
+      "set_client_sms_opt_out",
+    ]) {
+      assert.equal(lastDefiner(fn), CLIENT_BLOCKS, `${fn} переопределён позже`);
+    }
+    assert.equal(lastDefiner("sms_appointment_link"), SMS_LINKS, "sms_appointment_link переопределён позже");
+    for (const fn of [
+      "list_master_appointments_safe",
+      "receipts_client_snapshot_no_phone",
+      "member_client_in_team",
+      "member_appointment_update",
+    ]) {
+      assert.equal(lastDefiner(fn), LEAKS, `${fn} переопределён позже`);
+    }
+    assert.equal(lastDefiner("sms_message_json"), SMS_JSON, "sms_message_json переопределён позже");
+    assert.equal(lastDefiner("sms_send_manual"), SMS_SEND, "sms_send_manual переопределён позже");
+    for (const fn of [
       "list_member_clients",
       "list_client_members",
       "client_seen_by_caller",
       "member_client_contacts",
-      "update_client_with_tags",
-      "create_client_with_tags",
     ]) {
       assert.equal(lastDefiner(fn), CARD_BLOCKS, `${fn} переопределён позже`);
     }
+  });
+
+  test("03.10: «завёл сам» в наборе своей команды; «Метка» и «Тег» — два права; деньги — за «Историей» (GAPS)", () => {
+    // Набор — прежнее правило команды и окна; «завёл сам» — только в командах набора.
+    const idsBody = gaps.slice(
+      gaps.indexOf("CREATE OR REPLACE FUNCTION public.access_client_ids_in"),
+      gaps.indexOf("$function$;", gaps.indexOf("CREATE OR REPLACE FUNCTION public.access_client_ids_in")),
+    );
+    assert.ok(idsBody.includes("c.team_id in (select lv.team_id from lv where lv.level in ('own', 'all'))"));
+    assert.ok(idsBody.includes("and a.date between (today - w.span)::date::text and (today + w.span)::date::text"));
+    assert.ok(idsBody.includes("or (c.created_by = caller and c.team_id in (select lv.team_id from lv))"));
+    // «Тег» — своё право: в блоках клиента, в маске, в правке и создании.
+    assert.ok(gaps.includes("insert into public.access_blocks (key, area, scope, levels, title_ru, owner_only, live, enforced_by, position) select 'clients.tags', 'clients', 'calendar', array['off', 'read', 'write'], 'Тег',"));
+    assert.ok(gaps.includes("select ma.tenant_id, ma.user_id, 'clients.tags', ma.team_id, ma.level, ma.set_by, ma.set_at from public.member_access ma where ma.block = 'clients.labels'"));
+    assert.ok(gaps.includes("'clients.tags' ];"));
+    assert.ok(gaps.includes("|| case when coalesce(b.v ->> 'clients.tags', 'off') = 'off' then jsonb_build_object('tag_ids', '[]'::jsonb) else '{}'::jsonb end"));
+    assert.ok(gaps.includes("and coalesce(card_blocks ->> 'clients.tags', 'off') <> 'write' then denied_block := 'clients.tags';"));
+    assert.ok(gaps.includes("if public.access_team_level(active_tenant_id, auth.uid(), 'clients.tags', input_row.team_id) is distinct from 'write' then"));
+    // Закрытый «Клиент» прячет и фото.
+    assert.ok(gaps.includes("then public.client_without_contacts(p_client) || jsonb_build_object('avatar_url', null)"));
+    // «Долг и деньги» упразднено: ключа нет ни в реестре, ни в блоках клиента.
+    assert.ok(gaps.includes("delete from public.member_access where block = 'clients.money';"));
+    assert.ok(gaps.includes("delete from public.access_blocks where key = 'clients.money';"));
+    const blocksBody = gaps.slice(
+      gaps.indexOf("CREATE OR REPLACE FUNCTION public.access_client_blocks"),
+      gaps.indexOf("$function$;", gaps.indexOf("CREATE OR REPLACE FUNCTION public.access_client_blocks")),
+    );
+    assert.ok(blocksBody.length > 0 && !blocksBody.includes("'clients.money'"), "блоки клиента снова знают «Долг и деньги»");
+    assert.ok(gaps.includes("|| case when coalesce(b.v ->> 'clients.history', 'off') = 'off' then jsonb_build_object('balance', 0, 'discount', 0) else '{}'::jsonb end"));
+    // «История»: три положения; кто видел — получает «Все команды».
+    assert.ok(gaps.includes("update public.member_access set level = 'write' where block = 'clients.history' and level = 'read';"));
+    assert.ok(gaps.includes("cb.blocks ->> 'clients.history' in ('read', 'write') as see_money"));
+    assert.ok(gaps.includes("cb.blocks ->> 'clients.history' = 'write' as all_teams"));
+    assert.ok(gaps.includes("select public.access_calendars('clients.history', 'read') as ids"));
+    assert.ok(gaps.includes("and (h.all_teams or a.team_id = any(ht.ids))"));
+  });
+
+  test("«Источники» шестерёнки правятся своим правом, а не правом тегов (03.10)", () => {
+    const files = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
+    const touching = files.filter((name) =>
+      readFileSync(join(MIGRATIONS_DIR, name), "utf8").includes("client_sources_write_settings"),
+    );
+    const last = touching[touching.length - 1];
+    assert.equal(last, "20261003154100_clients_settings_rights_like_gear.sql", "политику источников переписали позже");
+    const gear = norm(readFileSync(join(MIGRATIONS_DIR, last), "utf8"));
+    const policy = gear.slice(gear.indexOf("alter policy client_sources_write_settings"));
+    assert.equal(policy.split("access_calendars('clients.settings_sources', 'write')").length - 1, 2);
+    assert.ok(!policy.includes("settings_tags"), "источники снова правятся правом тегов");
+    assert.ok(gear.includes("'clients.settings_sources', 'clients', 'calendar', array['off', 'read', 'write'], 'Источники'"));
+  });
+
+  test("база — только клиенты команды; «Ограничение по времени» едет с днём", () => {
+    // Только клиент с командой из открытых — ни «завёл сам», ни записи чужой команды.
+    assert.ok(teamBase.includes("c.team_id = any(team_wide)"));
+    const idsBody = teamBase.slice(
+      teamBase.indexOf("create or replace function public.access_client_ids_in"),
+      teamBase.indexOf("$function$;", teamBase.indexOf("create or replace function public.access_client_ids_in")),
+    );
+    assert.ok(idsBody.length > 0 && !idsBody.includes("created_by"), "в набор снова пускает «завёл сам»");
+    for (const [teams, window] of [
+      ["month_teams", "a.date between (today - interval '1 month')::date::text and (today + interval '1 month')::date::text"],
+      ["near_teams", "a.date between (today - 14)::text and (today + 14)::text"],
+    ] as const) {
+      assert.ok(
+        teamBase.includes(
+          `c.team_id = any(${teams}) and exists ( select 1 from public.appointments a where a.tenant_id = active_tenant and a.client_id = c.id and a.team_id = c.team_id and a.status is distinct from 'cancelled' and ${window}`,
+        ),
+        teams,
+      );
+    }
+    assert.ok(teamBase.includes("update public.access_blocks set title_ru = 'Ограничение по времени' where key = 'clients.scope';"));
+    // «История записей» — вместе с клиентом; «Карточка из записи» — без двери.
+    assert.ok(teamBase.includes("select tm.team_id, 'clients.history'::text, 1 from teams tm"));
+    assert.ok(!teamBase.includes("door_ids"));
+    for (const key of ["clients.history", "clients.from_record"]) {
+      assert.ok(teamBase.includes(`delete from public.member_access where block = '${key}';`), key);
+      assert.ok(teamBase.includes(`delete from public.access_blocks where key = '${key}';`), key);
+    }
+  });
+
+  test("«Главное»: база Скрыта / Видит, «Создание клиента» и «Меню клиента» — свои права", () => {
+    assert.ok(createMenu.includes("update public.access_blocks set levels = array['off', 'read'] where key = 'clients';"));
+    assert.ok(createMenu.includes("update public.member_access set level = 'read' where block = 'clients' and level = 'write';"));
+    for (const key of ["clients.create", "clients.menu"]) {
+      assert.ok(createMenu.includes(`('${key}', 'clients', 'calendar', array['off', 'write'],`), key);
+    }
+    // Создание — по своему праву, команда — из тех, где он может заводить.
+    assert.ok(createMenu.includes("or cardinality(public.access_calendars('clients.create', 'write')) > 0) then"));
+    assert.ok(createMenu.includes("hint = 'block:clients.create'"));
+    assert.ok(!createMenu.includes("access_company('clients', 'write')"));
+    // Архив, корзина, закрепление и напоминание — «Меню клиента».
+    assert.ok(createMenu.includes("select b.blocks ->> 'clients.menu' into base_level"));
+    assert.ok(createMenu.includes("('clients.menu', array['reminder_at', 'pinned_at'])"));
+    assert.ok(createMenu.includes("revoke all on function public.member_archive_client(uuid) from public, anon;"));
+  });
+
+  test("«Удаление клиента» — своё право; «Меню клиента» — напоминание и чёрный список; архива нет", () => {
+    assert.ok(deleteRight.includes("('clients.delete', 'clients', 'calendar', array['off', 'write'], 'Удаление клиента', false, true,"));
+    // Удаляет партнёр по своему праву, а не по меню.
+    assert.ok(deleteRight.includes("select b.blocks ->> 'clients.delete' into base_level"));
+    assert.ok(deleteRight.includes("hint = 'block:clients.delete'"));
+    assert.ok(!deleteRight.includes("select b.blocks ->> 'clients.menu' into base_level"));
+    assert.ok(deleteRight.includes("'clients.personal', 'clients.money', 'clients.sms', 'clients.menu', 'clients.delete' ];"));
+    // Чёрный список — из списка владельца в «Меню клиента».
+    assert.ok(deleteRight.includes("('clients.menu', array['reminder_at', 'pinned_at', 'blacklisted'])"));
+    assert.ok(deleteRight.includes("if p_patch ?| array['deleted_at', 'balance', 'discount', 'favorite_master_id'] then"));
+    // Архива нет: дверь снята и нигде позже не появляется.
+    assert.ok(deleteRight.includes("drop function if exists public.member_archive_client(uuid);"));
+    assert.equal(lastDefiner("member_archive_client"), CREATE_MENU, "дверь архива вернулась");
+    // Клиенту с историей срок стирания не ставится — правилом базы.
+    assert.ok(
+      deleteRight.includes(
+        "if new.purge_at is not null and ( exists (select 1 from public.appointments a where a.client_id = new.id) or exists (select 1 from public.invoices i where i.client_id = new.id) or exists (select 1 from public.finance_transactions f where f.client_id = new.id) ) then new.purge_at := null;",
+      ),
+    );
+    assert.ok(deleteRight.includes("before insert or update of purge_at on public.clients for each row execute function public.client_history_never_purges();"));
+    assert.ok(deleteRight.includes("revoke all on function public.client_history_never_purges() from public, anon, authenticated;"));
+  });
+
+  test("номер — сразу по блоку «Клиент», без двери и точек (03.10)", () => {
+    // Маска: «Скрыт» — без контактов, «Видит» — строка целиком.
+    assert.ok(
+      phoneOpen.includes(
+        "select case when coalesce(b.v ->> 'clients.client', 'off') = 'off' then public.client_without_contacts(p_client) else p_client end",
+      ),
+    );
+    // Связи — только своим блоком, даже когда контакты открыты.
+    assert.ok(
+      phoneOpen.includes(
+        "|| case when coalesce(b.v ->> 'clients.people', 'off') = 'off' then jsonb_build_object('memberships', '[]'::jsonb)",
+      ),
+    );
+    // Выбор клиента мастера — номер у тех же клиентов.
+    assert.ok(phoneOpen.includes("'phone', case when c.id = any(cs.open_ids) then c.phone else '' end,"));
+  });
+
+  test("«Клиент», «История», «SMS» — свои права; номер и SMS с карточки — по ним", () => {
+    for (const key of ["clients.client", "clients.history", "clients.sms"]) {
+      assert.ok(clientBlocks.includes(`('${key}', 'clients', 'calendar', array[`), key);
+    }
+    // Тем, кто уже работает, — то, что они видели.
+    assert.ok(
+      clientBlocks.includes(
+        "case when b.block = 'clients.client' and ma.level = 'write' then 'write' else 'read' end from public.member_access ma cross join (values ('clients.client'), ('clients.history'), ('clients.sms')) as b(block) where ma.block = 'clients'",
+      ),
+    );
+    assert.ok(clientBlocks.includes("'clients.client', 'clients.note', 'clients.people', 'clients.history',"));
+    assert.ok(!clientBlocks.includes("'clients.history'::text, 1"), "история снова гарантирована мимо права");
+    assert.ok(clientBlocks.includes("then public.access_block_client_ids('clients.client', 'read')"));
+    assert.ok(clientBlocks.includes("hint = 'block:clients.client'"));
+    assert.ok(clientBlocks.includes("('clients.sms', array['sms_name'])"));
+    assert.ok(clientBlocks.includes("if not is_owner and not (p_client_id = any(public.access_block_client_ids('clients.sms', 'read'))) then return;"));
+    assert.ok(
+      clientBlocks.includes(
+        "if not is_owner and p_appointment_id is null and not (v_client = any(public.access_block_client_ids('clients.sms', 'write'))) then raise exception 'sms:rights'",
+      ),
+    );
+    assert.ok(clientBlocks.includes("or p_client_id = any(public.access_block_client_ids('clients.sms', 'write'))"));
+  });
+
+  test("«Ограничения» — шесть шагов, окно по записи своей команды, умолчание «Неделя»", () => {
+    assert.ok(
+      limits.includes(
+        "update public.access_blocks set levels = array['week', 'near', 'month', 'quarter', 'half', 'own'], title_ru = 'Ограничения' where key = 'clients.scope';",
+      ),
+    );
+    assert.ok(limits.includes("coalesce(public.access_team_level(active_tenant, caller, 'clients.scope', t.team_id), 'week') as level"));
+    assert.ok(
+      limits.includes(
+        "case lv.level when 'near' then interval '14 days' when 'month' then interval '1 month' when 'quarter' then interval '3 months' when 'half' then interval '6 months' else interval '7 days' end as span",
+      ),
+    );
+    // Только клиент своей команды и запись этой же команды; отменённая окна не открывает.
+    assert.ok(limits.includes("c.team_id in (select lv.team_id from lv where lv.level in ('own', 'all'))"));
+    assert.ok(limits.includes("and a.team_id = w.team_id where w.team_id = c.team_id and a.status is distinct from 'cancelled'"));
+    assert.ok(limits.includes("and a.date between (today - w.span)::date::text and (today + w.span)::date::text"));
+    const idsBody = limits.slice(limits.indexOf("create or replace function public.access_client_ids_in"));
+    assert.ok(!idsBody.includes("created_by"), "в набор снова пускает «завёл сам»");
+  });
+
+  test("окно «Какие клиенты» едет с днём: 2 недели, месяц, своей команды (BASE_READ)", () => {
+    assert.ok(baseRead.includes("update public.access_blocks set levels = array['near', 'month', 'own'] where key = 'clients.scope';"));
+    // «2 недели» и «Месяц» до и после записи; отменённая окна не открывает.
+    assert.ok(
+      baseRead.includes(
+        "and a.team_id = any(near_teams) and a.status is distinct from 'cancelled' and a.date between (today - 14)::text and (today + 14)::text",
+      ),
+    );
+    assert.ok(
+      baseRead.includes(
+        "and a.team_id = any(month_teams) and a.status is distinct from 'cancelled' and a.date between (today - interval '1 month')::date::text and (today + interval '1 month')::date::text",
+      ),
+    );
+    assert.ok(baseRead.includes("when 'month' = any(scope_levels) then 'month'"));
+  });
+
+  test("база — «Скрыта · Только видит · Редактирует»; карточку и номер даёт база; блок правится своим правом", () => {
+    assert.ok(threeLevels.includes("update public.access_blocks set levels = array['off', 'read', 'write'] where key = 'clients';"));
+    // «Открывает карточку» и «Телефон» убраны вместе со строками партнёров.
+    for (const key of ["clients.open", "clients.contacts"]) {
+      assert.ok(threeLevels.includes(`delete from public.member_access where block = '${key}';`), key);
+      assert.ok(threeLevels.includes(`delete from public.access_blocks where key = '${key}';`), key);
+    }
+    // Номер — у каждого видимого клиента.
+    assert.ok(
+      threeLevels.includes(
+        "when public.current_user_role() is distinct from 'owner' then public.access_client_ids_in(public.access_calendars('clients', 'read'))",
+      ),
+    );
+    // Блоки страницы не гаснут без «Открывает карточку»; «Меняет» блока — своим правом.
+    assert.ok(!threeLevels.includes("open_level"));
+    assert.ok(!teamBase.includes("open_level"));
+    assert.ok(teamBase.includes("when l.level = 'write' then 2 when l.level in ('read', 'write') then 1"));
+    assert.ok(threeLevels.includes("when l.level = 'write' then 2 when l.level in ('read', 'write') then 1"));
+    assert.ok(!threeLevels.includes("when l.level = 'write' and tm.card_level = 'write' then 2"));
+    // Правка — только видимого клиента, вход по «Видит»; база — по «Редактирует».
+    assert.ok(threeLevels.includes("or not (active_role = 'owner' or public.access_company('clients', 'read')) then"));
+    assert.ok(
+      threeLevels.includes(
+        "and (p_client_id = any(public.access_client_ids_in(public.access_calendars('clients', 'read')))) is not true then raise exception 'client not found'",
+      ),
+    );
+    assert.ok(threeLevels.includes("if coalesce(card_blocks ->> 'clients', 'off') <> 'write' and exists ("));
+    // Удаляет партнёр с «Редактирует» своей дверью; незашедшему она закрыта.
+    assert.ok(threeLevels.includes("if base_level is distinct from 'write' then"));
+    assert.ok(threeLevels.includes("revoke all on function public.member_trash_client(uuid) from public, anon;"));
+  });
+
+  test("«Карточка из записи» — условия на сервере", () => {
+    // Клиент записи — только из команды, где открыт переход из записи, и
+    // «Около записи» осталось на месте.
+    assert.ok(openCard.includes("and a.team_id = any(ct.ids) and a.team_id = any(ct.door_ids)"));
+    assert.ok(openCard.includes("and a.date between (cs.today - 7)::text and (cs.today + 1)::text"));
+    // У тех, кто уже работает, ничего не пропадает.
+    assert.ok(openCard.includes("'clients.from_record', mc.team_id, 'write'"));
   });
 
   test("блоки карточки: маска — контакты всегда, закрытые блоки пустые, у всех дверей одна", () => {
@@ -112,11 +458,85 @@ describe("сервер: клиенты по уровням", () => {
     assert.ok(cardBlocks.includes("else public.client_masked_for_member( p_client, (select b.blocks from public.access_client_blocks() b"));
     assert.ok(cardBlocks.includes("select public.client_masked_for_member( to_jsonb(c) || jsonb_build_object("));
     assert.ok(cardBlocks.includes("else public.client_masked_for_member(r.row_json, cb.blocks)"));
-    // «Меняет» блока — только при «Меняет» карточки этой команды.
-    assert.ok(cardBlocks.includes("when l.level = 'write' and tm.card_level = 'write' then 2"));
     // Помощники не зовутся снаружи.
     assert.ok(cardBlocks.includes("revoke all on function public.access_client_blocks() from public, anon, authenticated;"));
     assert.ok(cardBlocks.includes("revoke all on function public.access_block_client_ids(text, text) from public, anon;"));
+  });
+
+  test("обходные дороги закрыты: SMS, чеки, копия записи, старые записи мастера", () => {
+    assert.ok(leaks.includes("'to_phone', case when p_owner then m.to_phone else '' end,"), "SMS снова отдают номер сотруднику");
+    // Строку истории переписала миграция «клиент и шаблон» (03.10) — маска та же.
+    assert.ok(smsJson.includes("'to_phone', case when p_owner then m.to_phone else '' end,"), "SMS снова отдают номер сотруднику");
+    assert.ok(smsJson.includes("'cost_cents', case when p_owner then m.cost_cents else 0 end,"), "SMS снова отдают цену сотруднику");
+    assert.ok(
+      leaks.includes("if not is_owner and not (p_client_id = any(public.access_client_ids())) then return; end if;"),
+      "история SMS клиента мимо набора",
+    );
+    assert.ok(
+      leaks.includes("if not is_owner and not public.member_client_in_team(v_client, v_team) then raise exception 'sms:rights'"),
+      "SMS любому клиенту компании по uuid",
+    );
+    assert.ok(
+      leaks.includes("if not is_owner and not (v_client = any(public.access_contact_client_ids()) or v_client = any(public.access_day_contact_client_ids())) then raise exception 'sms:phone'"),
+      "выбор номера SMS проверяет угаданный номер",
+    );
+    // Отправку переписала миграция «клиент на экране» (03.10) — охрана та же.
+    for (const guard of [
+      "if not is_owner and not public.member_client_in_team(v_client, v_team) then raise exception 'sms:rights'",
+      "if not is_owner and not (v_client = any(public.access_contact_client_ids()) or v_client = any(public.access_day_contact_client_ids())) then raise exception 'sms:phone'",
+      "if not public.sms_client_owns_phone(v_client, p_phone) then raise exception 'sms:phone'",
+      "if not is_owner and p_appointment_id is null and not (v_client = any(public.access_block_client_ids('clients.sms', 'write'))) then raise exception 'sms:rights'",
+      "where cl.id = v_client and cl.tenant_id = v_tenant;",
+      // Другой клиент, чем у записи, — по праву «SMS: Меняет» (аудит 03.10).
+      "if v_client is distinct from a.client_id and not (v_client = any(public.access_block_client_ids('clients.sms', 'write'))) then raise exception 'sms:rights'",
+    ]) {
+      assert.ok(smsSend.includes(guard), `отправка SMS потеряла охрану: ${guard}`);
+    }
+    assert.ok(
+      leaks.includes("and (v_team = any(public.access_calendars('record.client', 'read'))) is not true then raise exception 'sms:rights'"),
+      "ссылка записи без «Клиент в записи»",
+    );
+    // Последнее определение ссылки держит и защиту клиента, и право отмены.
+    assert.ok(
+      smsLinks.includes("and (v_team = any(public.access_calendars('record.client', 'read'))) is not true then raise exception 'sms:rights'"),
+      "ссылка записи без «Клиент в записи»",
+    );
+    assert.ok(
+      smsLinks.includes("and public.member_can('calendar.cancel', 'write', v_team) is not true then raise exception 'sms:rights'"),
+      "ссылку записи выдают без права отмены",
+    );
+    // Чек — без телефона клиента: снимок режет триггер, прежние строки вычищены.
+    assert.ok(leaks.includes("new.client_snapshot := new.client_snapshot - 'phone';"), "в чек снова ложится телефон");
+    assert.ok(
+      leaks.includes("create trigger trg_receipts_client_snapshot_no_phone before insert or update on public.receipts for each row execute function public.receipts_client_snapshot_no_phone();"),
+      "триггер чека снят",
+    );
+    assert.ok(leaks.includes("update public.receipts set client_snapshot = client_snapshot - 'phone' where client_snapshot ? 'phone';"));
+    assert.ok(
+      leaks.includes("and a.date between (public.tenant_business_date(public.current_tenant_id()) - 7)::text and (public.tenant_business_date(public.current_tenant_id()) + 1)::text"),
+      "давний клиент команды проходит в запись мимо окна",
+    );
+    assert.ok(
+      leaks.includes("if s.client_id is not null and not public.member_client_in_team(s.client_id, s.team_id) then raise exception 'access:client'"),
+      "копия давней записи возвращает клиента в окно",
+    );
+    // Копию с 03.10 определяет миграция без дублей — сторож клиента в ней тот же.
+    const copy = norm(readFileSync(join(MIGRATIONS_DIR, COPY), "utf8"));
+    assert.equal(lastDefiner("member_appointment_copy"), COPY, "копия переопределена позже");
+    assert.ok(
+      copy.includes("if s.client_id is not null and not public.member_client_in_team(s.client_id, s.team_id) then raise exception 'access:client'"),
+      "копия без дублей потеряла сторож клиента команды",
+    );
+    assert.ok(
+      copy.includes("revoke all on function public.member_appointment_copy(uuid, text, text, text, uuid) from public, anon;"),
+      "новая сигнатура копии осталась исполнимой для anon",
+    );
+    assert.ok(
+      leaks.includes("or (a.status is distinct from 'cancelled' and a.date between (me.today - 7)::text and (me.today + 1)::text) as near_ok"),
+      "старые записи мастера показывают давнего клиента",
+    );
+    assert.ok(leaks.includes("else a.team_id = any(me.ev_client_teams) end, false) and w.near_ok as see_client,"));
+    assert.ok(leaks.includes("else a.team_id = any(me.ev_object_teams) end, false) and w.near_ok as see_object,"));
   });
 
   test("блоки карточки: правка отказывает по блоку, файлы — по «Файлам»", () => {
@@ -382,22 +802,22 @@ describe("сервер: клиенты по уровням", () => {
   test("скрытые маской связи сотрудник не запишет обратно", () => {
     const file = lastDefiner("update_client_with_tags");
     const sql = norm(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
-    // С 30.09 (защита базы) — контакты только тот, чей номер открыт сейчас,
-    // и только открыв его дверью. Связи — блок «Люди»: скрыты — в строке их
-    // нет, «Только видит» — записать нельзя, «Меняет» — строка несёт настоящие.
+    // С 02.10 номера, имя и мессенджеры — блок «Клиент»: правит их только
+    // «Меняет» (судят по значению). С 03.10 номер приходит целиком тому, кто
+    // блок видит, поэтому «сначала открой дверью» снято — пустых номеров
+    // маски поверх настоящих больше нет. Связи — блок «Люди»: скрыты — в
+    // строке их нет, «Только видит» — записать нельзя, «Меняет» — строка
+    // несёт настоящие.
     assert.ok(
       sql.includes(
-        "if p_patch ?| array['phone', 'whatsapp_phone', 'email', 'telegram_username', 'instagram_username', 'phones', 'phone_e164'] then if not (p_client_id = any(public.access_contact_client_ids()) or p_client_id = any(public.access_day_contact_client_ids())) then raise exception 'contacts are hidden for this employee'",
+        "where (to_jsonb(next_row) -> f.field) is distinct from (to_jsonb(current_row) -> f.field) ) then raise exception 'this block of the client card is closed for this employee' using errcode = '42501', hint = 'block:clients.client';",
       ),
-      `${file}: контакты правятся без права на номер`,
+      `${file}: партнёр без «Клиент: Меняет» правит имя или номера клиента`,
     );
+    assert.ok(!sql.includes("open the contacts before changing them"), `${file}: вернулась дверь номера в правке`);
     assert.ok(
       sql.includes("('clients.people', array['memberships'])"),
       `${file}: связи выпали из блока «Люди» — пустой массив маски запишется поверх настоящих`,
-    );
-    assert.ok(
-      sql.includes("and v.outcome = 'open' and v.opened_at > now() - interval '12 hours' ) then raise exception 'open the contacts before changing them'"),
-      `${file}: контакты правятся без открытия номера`,
     );
   });
 
@@ -545,22 +965,53 @@ describe("экраны: вкладка «Клиенты» открывается
     for (const file of [
       "index.tsx",
       "[id].tsx",
-      "archive.tsx",
       "trash.tsx",
       "tags.tsx",
       "settings.tsx",
       "card-fields.tsx",
       "visits.tsx",
       "attachments.tsx",
+      "sms.tsx",
+      "channels.tsx",
+      "maps.tsx",
+      "object-types.tsx",
+      "sources.tsx",
+      "tags.tsx",
     ]) {
       const source = read(file);
-      assert.ok(source.includes("<ClientsCompanyRoute"), `${file} открывается мимо ворот источника`);
+      // Подстраницы шестерёнки идут через дверь права своей строки — она
+      // сама стоит на воротах источника (проверка ниже).
+      assert.ok(
+        source.includes("<ClientsCompanyRoute") || source.includes("<ClientSettingsRoute"),
+        `${file} открывается мимо ворот источника`,
+      );
     }
+  });
+
+  test("дверь права строки шестерёнки стоит на воротах источника", () => {
+    const door = readFileSync(resolve(here, "ClientSettingsRoute.tsx"), "utf8");
+    assert.match(door, /<ClientsCompanyRoute kind="tab">/);
+    // Страница нескольких строк («Объекты», 02.10) закрыта, только если
+    // скрыты все её строки.
+    assert.match(door, /rows\.every\(\(key\) => levels\[key\] === "hidden"\)/, "«Скрыты» открывались бы адресом");
   });
 
   test("общий адрес из записи держит компанию календаря", () => {
     const door = readFileSync(resolve(here, "../../../app/(shared)/client.tsx"), "utf8");
     assert.match(door, /<ClientsCompanyRoute kind="card" forceActive>/);
+  });
+
+  // 03.10: «Связь» и «Карты» из записи стояли за ролью календаря — партнёр
+  // с открытой строкой упирался в стену, а шестерёнка листа ему пряталась.
+  test("«Связь» и «Карты» из записи — те же ворота строки, что во вкладке", () => {
+    for (const page of ["channels", "maps"]) {
+      const door = readFileSync(resolve(here, `../../../app/(shared)/${page}.tsx`), "utf8");
+      assert.ok(
+        door.includes(`export { default } from "../(dashboard)/clients/${page}";`),
+        `(shared)/${page}.tsx открывает не экран вкладки с его воротами`,
+      );
+      assert.ok(!door.includes("RoleCapabilityBoundary"), `(shared)/${page}.tsx: вернулась граница роли`);
+    }
   });
 
   // ВИЗУАЛ ВКЛАДКИ НЕ ЗАВИСИТ ОТ ТОГО, ЧТО ОТКРЫТО В КАЛЕНДАРЕ (владелец
@@ -592,10 +1043,17 @@ describe("экраны: вкладка «Клиенты» открывается
       !/\{caps\.manage[^}]*\?\s*\(?\s*<Pressable/.test(header),
       "двери шапки снова гаснут по правам",
     );
-    // Футер на месте и гаснет, а не исчезает.
+    // Футер на месте и гаснет, а не исчезает — по ВЫБРАННОЙ команде
+    // (владелец 04.10: «если запрещено — гаси»): своя — `caps.create`,
+    // команда партнёра — её «Создание клиента».
     assert.ok(
-      /disabled=\{!caps\.create\}/.test(list),
+      /disabled=\{!createHere\}/.test(list),
       "кнопка «Создать клиента» снова исчезает вместо того, чтобы гаснуть",
+    );
+    assert.ok(
+      /chipGuestAccess\?\.calendars\[teamChoice\]\?\.\["clients\.create"\] === "write"/.test(list) &&
+        /: caps\.create;/.test(list),
+      "кнопка «Создать клиента» снова не смотрит на выбранную команду",
     );
   });
 

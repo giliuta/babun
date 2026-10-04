@@ -118,6 +118,23 @@ export function composeAddress(
   return out.join(", ");
 }
 
+/** АДРЕС ДВУМЯ СТРОКАМИ (владелец 03.10: «основной адрес — чёрным, а точный —
+ *  маленькими буковками под ним, серым»). Главная — улица и дом; уточнение —
+ *  улица места, подъезд, этаж, квартира и город, через «·», как в свёрнутом
+ *  «Точном адресе» листа. ИНДЕКСА В СТРОКЕ НЕТ: он для почты, мастеру на
+ *  выезде не нужен, а строка с ним обрезалась на городе. Без частей — строка
+ *  адреса как есть (или ссылка на карту), уточнения нет. */
+export function addressLines(
+  loc: { address?: string | null; mapUrl?: string | null; addressParts?: AddressParts | null } | null | undefined,
+): { main: string; detail: string } {
+  const clean = cleanAddressParts(loc?.addressParts);
+  if (clean?.street) {
+    const rest = composeDetails({ ...clean, street: undefined, zip: undefined });
+    return { main: clean.street, detail: rest };
+  }
+  return { main: objectTarget(loc), detail: "" };
+}
+
 /** Адрес для маршрута по тексту: у объекта с частями — геокодируемая часть,
  *  иначе строка как есть. Пин (`mapUrl`) выбирает вызывающая сторона. */
 export function routeAddress(

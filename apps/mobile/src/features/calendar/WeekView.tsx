@@ -331,7 +331,7 @@ function WeekHeaderRow({
             onLongPress={() => onPickDay(d)}
             delayLongPress={350}
             accessibilityRole="button"
-            accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
+            accessibilityLabel={`${d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
             accessibilityHint={
               onPickLabelDay
                 ? "Нажатие меняет метку, долгое нажатие открывает день"

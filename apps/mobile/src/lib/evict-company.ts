@@ -16,6 +16,7 @@ import {
 import { forgetWarmCompany } from "@/lib/tenant-prefetch";
 import {
   companyToOpenAfterEviction,
+  createEvictionMemory,
   isConfirmedNotMember,
   queryBelongsToCompany,
   queuedOpIdsOfCompany,
@@ -56,13 +57,25 @@ import { isUserRole } from "@/features/settings/role-policy";
 const CACHED_TABLES = ["clients", "appointments", "tags"] as const;
 
 const running = new Map<string, Promise<boolean>>();
-/** Стёртые в этой сессии. После стирания запрос роли перечитывается, снова
- *  отвечает «не состоит» и снова зовёт стирание — без этой памяти круг. */
-const evictedThisSession = new Set<string>();
+/** Стёртые в этой сессии — см. `createEvictionMemory` (`evict-plan.ts`). */
+const evictedThisSession = createEvictionMemory();
 
-/** Стереть компанию с телефона. `true` — стёрта (или уже была стёрта). */
-export function evictCompanyFromDevice(tenantId: string): Promise<boolean> {
-  if (evictedThisSession.has(tenantId)) return Promise.resolve(true);
+/** Сервер снова назвал роль в компании: человек в ней, и следующее удаление
+ *  обязано стереть её заново. */
+export function forgetEviction(tenantId: string): void {
+  evictedThisSession.forget(tenantId);
+}
+
+/** Стереть компанию с телефона. `true` — стёрта (или уже была стёрта).
+ *  `fresh` — свежий сигнал сервера об удалении: стирает, даже если эта
+ *  компания уже стиралась в этом запуске. */
+export function evictCompanyFromDevice(
+  tenantId: string,
+  opts: { fresh?: boolean } = {},
+): Promise<boolean> {
+  if (evictedThisSession.skip(tenantId, opts.fresh ?? false)) {
+    return Promise.resolve(true);
+  }
   const existing = running.get(tenantId);
   if (existing) return existing;
   const work = evict(tenantId)
@@ -85,7 +98,7 @@ async function evict(tenantId: string): Promise<boolean> {
   const userId = getActiveUserId();
   if (!userId) return false;
   if (!(await confirmNotMember(tenantId))) return false;
-  evictedThisSession.add(tenantId);
+  evictedThisSession.mark(tenantId);
 
   const feedKey = [...myCalendarsQueryKey, userId];
   let calendars = queryClient.getQueryData<MyCalendar[]>(feedKey) ?? [];

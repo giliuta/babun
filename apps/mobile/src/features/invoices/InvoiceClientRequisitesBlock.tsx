@@ -5,6 +5,7 @@ import type { Client, ClientRequisites } from "@babun/shared/local/clients";
 import {
   clientRequisitesOf,
   invoiceRequisites,
+  NO_CLIENT_REQUISITES,
   orderedRequisites,
   requisitesNumbersLine,
   resolveInvoiceRequisitesId,
@@ -32,6 +33,12 @@ import { useThemeColors } from "@/theme/colors";
 //   • реквизиты есть — строка набора той же анатомии, что на карточке
 //     (`RequisitesRow`); не выбирали — стоит основной. Тап — шторка выбора с
 //     «Добавить реквизиты» в футере.
+//   • ПОВТОРНЫЙ ТАП ПО ВЫБРАННОМУ — СНЯТЬ (владелец 2026-10-03: «выставить
+//     инвойс можно без реквизитов — только на имя»): блок говорит «Выбрать
+//     реквизиты», а на бумаге — имя клиента;
+//   • ДОЛГОЕ НАЖАТИЕ — ПРАВКА ЭТОГО НАБОРА (владелец 2026-10-03: «задерживаю
+//     — открывается редактирование, просто тапнул — выбор другого»): тот же
+//     лист, что на карточке клиента.
 // Наборы и их запись — работа сессии 012 (`client-requisites.ts`, миграция
 // 20260922100000); здесь только выбор.
 
@@ -55,11 +62,17 @@ export function InvoiceClientRequisitesBlock({
   const sets = useMemo(() => clientRequisitesOf(client), [client]);
   const chosen = invoiceRequisites(sets, requisitesId);
   const [picker, setPicker] = useState(false);
-  // Лист нового набора монтируется заново на каждое открытие — как на
-  // карточке клиента (`autoFocus` работает только на монтировании).
-  const [sheet, setSheet] = useState<{ key: number; open: boolean } | null>(null);
+  const unset = resolveInvoiceRequisitesId(sets, requisitesId) === NO_CLIENT_REQUISITES;
+  // Лист набора монтируется заново на каждое открытие — как на карточке
+  // клиента (`autoFocus` работает только на монтировании). `id: null` —
+  // новый набор, иначе правка этого.
+  const [sheet, setSheet] = useState<{ key: number; open: boolean; id: string | null } | null>(
+    null,
+  );
   const [afterPicker, setAfterPicker] = useState<(() => void) | null>(null);
-  const openSheet = () => setSheet((prev) => ({ key: (prev?.key ?? 0) + 1, open: true }));
+  const openSheet = (id: string | null = null) =>
+    setSheet((prev) => ({ key: (prev?.key ?? 0) + 1, open: true, id }));
+  const editing = sheet?.id ? (sets.find((set) => set.id === sheet.id) ?? null) : null;
 
   const writer = useRequisitesWriter(
     sets,
@@ -92,14 +105,21 @@ export function InvoiceClientRequisitesBlock({
             markDefault={sets.length > 1}
             separated={false}
             onPress={() => setPicker(true)}
-            onLongPress={() => setPicker(true)}
+            onLongPress={() => openSheet(chosen.id)}
+          />
+        ) : unset ? (
+          <ChooseRow
+            icon={Building2}
+            label="Выбрать реквизиты"
+            hint="Инвойс на имя клиента"
+            onPress={() => setPicker(true)}
           />
         ) : (
           <ChooseRow
             icon={Building2}
             label="Добавить реквизиты"
             hint="Заводит реквизиты клиента"
-            onPress={openSheet}
+            onPress={() => openSheet()}
           />
         )}
       </SectionCard>
@@ -122,7 +142,7 @@ export function InvoiceClientRequisitesBlock({
               onPress={() => {
                 // Лист набора — после ухода шторки: два модальных листа в
                 // одном кадре iOS не показывает.
-                setAfterPicker(() => openSheet);
+                setAfterPicker(() => () => openSheet());
                 setPicker(false);
               }}
             />
@@ -139,10 +159,13 @@ export function InvoiceClientRequisitesBlock({
               subtitle={subtitle(set)}
               selected={set.id === chosen?.id}
               onPress={() => {
-                // Повторный тап по выбранному набору возвращает к основному
-                // (владелец 2026-09-22: «нажимаю второй раз — снимается»).
+                // Повторный тап по выбранному набору СНИМАЕТ его (владелец
+                // 2026-09-22: «нажимаю второй раз — снимается»; 2026-10-03:
+                // «можно без реквизитов — на имя»).
                 onRequisitesChange(
-                  set.id === chosen?.id ? null : resolveInvoiceRequisitesId(sets, set.id),
+                  set.id === chosen?.id
+                    ? NO_CLIENT_REQUISITES
+                    : (resolveInvoiceRequisitesId(sets, set.id) ?? null),
                 );
                 setPicker(false);
               }}
@@ -154,16 +177,17 @@ export function InvoiceClientRequisitesBlock({
       {sheet && client ? (
         <RequisitesSheet
           key={sheet.key}
-          visible={sheet.open}
-          set={null}
+          // Набор удалили под открытым листом правки — лист закрывается.
+          visible={sheet.open && (sheet.id === null || editing !== null)}
+          set={editing}
           canMakeDefault={false}
           onClose={() => setSheet((prev) => (prev ? { ...prev, open: false } : prev))}
           onSave={async (fields) => {
-            const id = await writer.saveRequisites({ ...fields, id: null });
+            const id = await writer.saveRequisites({ ...fields, id: sheet.id });
             if (id === null) return false;
             // Новый набор сразу идёт в этот инвойс (первый станет основным —
-            // тогда выбор и так он).
-            onRequisitesChange(id);
+            // тогда выбор и так он); правленый и так выбран.
+            if (sheet.id === null) onRequisitesChange(id);
             return true;
           }}
           onMakeDefault={() => {}}

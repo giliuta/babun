@@ -25,6 +25,7 @@ import {
   roundInvoiceMoney,
   validateInvoiceDraft,
 } from "./invoice-write-helpers";
+import type { UiLocale } from "../../i18n/locales";
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["invoices"]["Row"];
@@ -75,6 +76,7 @@ function rowToInvoice(r: Row): InvoiceLedger {
     company_id: r.company_id,
     account_id: r.account_id,
     location_id: r.location_id ?? null,
+    client_requisites_id: r.client_requisites_id ?? null,
     subtotal_net: Number(r.subtotal_net ?? 0),
     vat_percent: Number(r.vat_percent ?? 19),
     vat_amount: Number(r.vat_amount ?? 0),
@@ -86,6 +88,9 @@ function rowToInvoice(r: Row): InvoiceLedger {
     // угадывали по суммам, хотя сервер его теперь пишет.
     kind: (r.kind as InvoiceKind | null) ?? "invoice",
     credit_note_of_id: r.credit_note_of_id,
+    credit_note_of_receipt_id: r.credit_note_of_receipt_id ?? null,
+    credited_amount: Number(r.credited_amount ?? 0),
+    credit_partial: r.credit_partial ?? false,
     vat_mode: (r.vat_mode as InvoiceVatMode | null) ?? null,
     pdf_url: r.pdf_url,
     notes: r.notes,
@@ -239,24 +244,6 @@ export async function getInvoice(
   };
 }
 
-export async function updateInvoiceStatus(
-  supabase: DbSupabase,
-  id: string,
-  status: InvoiceStatus,
-): Promise<void> {
-  if (status !== "void") {
-    throw new Error("Статус оплаты изменяется только подтверждённым платежом");
-  }
-  const { data, error } = await supabase.rpc("void_invoice", {
-    p_invoice_id: id,
-  });
-  if (error || !data || data.id !== id || data.status !== "void") {
-    throw new Error(
-      `updateInvoiceStatus: ${error?.message ?? "аннулирование не подтверждено сервером"}`,
-    );
-  }
-}
-
 /**
  * ЯЗЫК БУМАГИ — ОТДЕЛЬНОЙ ЗАПИСЬЮ, И ЭТО СОЗНАТЕЛЬНО.
  *
@@ -270,7 +257,7 @@ export async function updateInvoiceStatus(
 export async function setInvoiceLanguage(
   supabase: DbSupabase,
   id: string,
-  language: "ru" | "en",
+  language: UiLocale,
 ): Promise<void> {
   const { error } = await supabase
     .from("invoices")
@@ -375,4 +362,59 @@ export async function setInvoicePdfUrl(
   if (error || !data) {
     throw new Error(`setInvoicePdfUrl: ${error?.message ?? "инвойс недоступен"}`);
   }
+}
+
+/**
+ * ПРАВКА ВЫСТАВЛЕННОГО ИНВОЙСА НА МЕСТЕ (владелец 2026-10-04: «я ещё не
+ * отправил клиенту — могу отредактировать»). Тот же номер; сервер пускает
+ * только владельца и только счёт без оплат (`update_invoice_draft`, миграция
+ * 20261004060000). Реквизиты продавца не меняются — номер из их серии.
+ */
+export async function updateInvoice(
+  supabase: DbSupabase,
+  invoiceId: string,
+  draft: Omit<IssueInvoiceDraft, "request_id" | "link_to_tx_id">,
+): Promise<InvoiceLedgerWithLines> {
+  const lines = validateInvoiceDraft(draft);
+  const totals = calculateInvoiceTotals(lines, draft.vat_mode, draft.vat_percent);
+  assertInvoiceTotal(totals.total);
+  const { error } = await supabase.rpc(
+    "update_invoice_draft",
+    rpcArgs<"update_invoice_draft">({
+      p_invoice_id: invoiceId,
+      p_issued_on: draft.issued_on,
+      p_due_on: draft.due_on ?? null,
+      p_client_id: draft.client_id ?? null,
+      p_appointment_id: draft.appointment_id ?? null,
+      p_brigade_id: draft.brigade_id ?? null,
+      p_vat_mode: draft.vat_mode,
+      p_vat_percent: draft.vat_percent,
+      p_lines: lines.map((line) => ({
+        title: line.title,
+        description: line.description ?? null,
+        unit: line.unit ?? null,
+        qty: line.qty,
+        unit_price: line.unit_price,
+        ...(line.discount ? { discount: true } : {}),
+      })),
+      p_notes: draft.notes?.trim() || null,
+      p_account_id: draft.account_id ?? null,
+      p_location_id: draft.location_id ?? null,
+      p_client_requisites_id: draft.client_requisites_id ?? null,
+    }),
+  );
+  if (error) throw new Error(error.message);
+  const saved = await getInvoice(supabase, invoiceId);
+  if (!saved) throw new Error("Инвойс сохранён, но контрольное чтение не подтверждено");
+  return saved;
+}
+
+/**
+ * УДАЛЕНИЕ ИНВОЙСА (владелец 2026-10-04: «смахнуть — удалить, и тогда
+ * восстанавливается порядковый номер»). Только последний в серии и без
+ * оплат — сервер так и держит (`delete_invoice`); иначе — кредит-нота.
+ */
+export async function deleteInvoice(supabase: DbSupabase, invoiceId: string): Promise<void> {
+  const { error } = await supabase.rpc("delete_invoice", { p_invoice_id: invoiceId });
+  if (error) throw new Error(error.message);
 }

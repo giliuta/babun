@@ -58,6 +58,11 @@ export function resolveReturnTo(from: string | undefined): string | null {
     if (!team) return path;
     return `${path}${path.includes("?") ? "&" : "?"}team=${team}`;
   }
+  // Страница чека (04.10): запись, открытую с чека, закрывают обратно в чек.
+  if (from.startsWith("receipt:")) {
+    const receipt = from.slice("receipt:".length).trim();
+    return ACCOUNT_ID.test(receipt) ? `/documents/receipt/${receipt}` : null;
+  }
   if (!from.startsWith("invoice:")) return null;
   const id = from.slice("invoice:".length).trim();
   // Пустой id дал бы `/invoices/` — маршрут, которого нет. Лучше остаться на

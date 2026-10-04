@@ -67,7 +67,7 @@ export function useEquipment() {
     queryKey: ["equipment", tenantId, role ?? "role-pending"],
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
     queryFn: async (): Promise<Equipment[]> => {
-      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       const { data, error } = await supabase
         .from("equipment")
         .select("*")
@@ -114,7 +114,7 @@ export function useSaveEquipment() {
       /** Rows changed by this action. Omitted only for legacy bulk saves. */
       upsertIds?: string[];
     }) => {
-      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       if (role !== "owner") {
         throw new Error("Изменять склад может только владелец.");
       }

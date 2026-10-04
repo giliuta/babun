@@ -88,6 +88,11 @@ export interface FinanceTransaction {
    *  словами их называет UI, поэтому поле доезжает до клиента. */
   reversal_kind: ReversalKind | null;
   source: TransactionSource;
+  /** Внесена кнопкой «Финансы дня» календаря (владелец 04.10: «с дохода и
+   *  расхода календаря переносится в финансы, а с финансов обратно — нет»).
+   *  День календаря считает деньги записей и такие операции; возврат
+   *  наследует признак своего дохода. Нет поля — не из календаря. */
+  from_calendar?: boolean;
   created_at: string;
   updated_at: string;
   created_by: string | null;

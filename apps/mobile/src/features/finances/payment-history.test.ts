@@ -45,6 +45,15 @@ describe("paymentEventTitle", () => {
       "Оплата снята",
     );
   });
+
+  test("возврат при отмене заявки — «Возврат», как обещала отмена (повторный аудит 03.10)", () => {
+    assert.equal(
+      paymentEventTitle(
+        tx({ type: "refund", reversal_kind: null, notes: "Возврат при отмене заявки" }),
+      ),
+      "Возврат",
+    );
+  });
 });
 
 describe("paymentEvents", () => {

@@ -16,19 +16,18 @@ import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import {
   balanceWarning,
   orderTemplates,
   useDeleteTeamTemplate,
   useReorderTeamTemplates,
-  useSaveTeamTemplate,
   useSetTeamTemplateEnabled,
   useSmsAccount,
   useTeamTemplates,
   whenWords,
   type SmsTeamTemplate,
-  type TemplateDraft,
 } from "./sms-account";
 import { SmsSenderSheet } from "./SmsSenderSheet";
 import { SmsTemplateSheet } from "./SmsTemplateSheet";
@@ -44,7 +43,7 @@ import { balanceWords, euro } from "./sms-words";
 //     10); без него команда не отправляет;
 //   • ШАБЛОНЫ — справочник по канону меток и типов событий: строка залита
 //     цветом шаблона, значок, имя и «когда»; ручка порядка справа; тап —
-//     правка шторкой; смахнуть влево (правая кромка) — «Удалить», вправо
+//     шторка шаблона (03.10, снова шторка — как объекты); смахнуть влево (правая кромка) — «Удалить», вправо
 //     (левая кромка) — «Скрыть» / «Показать». Скрытый гаснет и уходит вниз:
 //     сам не отправляется и в листе «SMS клиенту» не стоит;
 //   • «Добавить шаблон» — внизу и всегда.
@@ -64,13 +63,12 @@ export function SmsTeamScreen() {
   const teamId = team?.id ?? "";
   const account = useSmsAccount();
   const templates = useTeamTemplates(teamId || null);
-  const save = useSaveTeamTemplate();
   const toggle = useSetTeamTemplateEnabled();
   const remove = useDeleteTeamTemplate();
   const reorder = useReorderTeamTemplates(teamId || null);
-  const [editing, setEditing] = useState<Editing>(null);
   const [dragging, setDragging] = useState(false);
   const [senderOpen, setSenderOpen] = useState(false);
+  const [editing, setEditing] = useState<Editing>(null);
 
   const owner = account.data?.owner;
   const sender = (teamId && account.data?.senders?.[teamId]) || null;
@@ -79,14 +77,10 @@ export function SmsTeamScreen() {
   const failed = account.isError || templates.isError;
   const error = account.error ?? templates.error;
 
-  const submit = (draft: TemplateDraft) =>
-    save.mutate(draft, {
-      onSuccess: () => {
-        setEditing(null);
-        toast(draft.id ? "Шаблон сохранён" : "Шаблон добавлен", "success");
-      },
-      onError: (e) => notify("Не удалось сохранить", e instanceof Error ? e.message : undefined),
-    });
+  // Шаблон — шторка блоками (03.10, была страница): двери внутри открывают
+  // свои шторки поверх неё, как «Тип объекта» в листе объекта.
+  const openTemplate = (template: SmsTeamTemplate | null) =>
+    setEditing(template ? { mode: "edit", template } : { mode: "create" });
 
   const drop = (template: SmsTeamTemplate) =>
     confirmThen(
@@ -136,12 +130,12 @@ export function SmsTeamScreen() {
               title={owner ? euro(owner.balanceCents) : "—"}
               // Ниже €5 — «Пополните баланс» строкой, без плашки (владелец 30.09).
               sub={
-                balanceWarning(account.data) ??
+                balanceWarning(account.data, CAN_PAY_HERE) ??
                 (owner && account.data
                   ? balanceWords(owner.balanceCents, owner.freeLeft, account.data.priceCents)
                   : undefined)
               }
-              subColor={balanceWarning(account.data) ? t.warning : undefined}
+              subColor={balanceWarning(account.data, CAN_PAY_HERE) ? t.warning : undefined}
               onPress={() => router.push("/cabinet/sms" as Href)}
             />
           </SectionCard>
@@ -208,7 +202,7 @@ export function SmsTeamScreen() {
                       }}
                     >
                       <Pressable
-                        onPress={() => setEditing({ mode: "edit", template })}
+                        onPress={() => openTemplate(template)}
                         accessibilityRole="button"
                         accessibilityLabel={`Шаблон ${template.name}, ${whenWords(template)}, редактировать`}
                         style={({ pressed }) => ({
@@ -249,7 +243,7 @@ export function SmsTeamScreen() {
       {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ И ВСЕГДА, как у меток и типов событий. */}
       {!loading && !failed && teamId ? (
         <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
-          <GradientButton label="Добавить шаблон" onPress={() => setEditing({ mode: "create" })} />
+          <GradientButton label="Добавить шаблон" onPress={() => openTemplate(null)} />
         </View>
       ) : null}
 
@@ -265,10 +259,9 @@ export function SmsTeamScreen() {
         <SmsTemplateSheet
           visible={editing !== null}
           teamId={teamId}
+          teamName={team?.name}
           template={editing?.mode === "edit" ? editing.template : null}
-          busy={save.isPending}
           onClose={() => setEditing(null)}
-          onSubmit={submit}
         />
       ) : null}
     </Screen>

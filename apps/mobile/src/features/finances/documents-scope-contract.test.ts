@@ -38,6 +38,9 @@ describe("плитка «Документы» и список под ней — 
       /count:\s*periodDocuments\.documents\.filter\(\(d\) => !d\.creditNote\)\.length/,
     );
     assert.ok(panel.includes("usePeriodDocuments("));
+    // И вкладки панели считают по тому же правилу (03.10): сумма вкладок =
+    // плитка.
+    assert.ok(panel.includes("d.kind === segment.value && !d.creditNote"));
   });
 
   test("список режет команду общим правилом invoiceInTeamScope", () => {

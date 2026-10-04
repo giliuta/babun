@@ -155,6 +155,42 @@ export function setDateOverride(
   return { ...schedule, date_overrides: next };
 }
 
+/** ВЫХОДНОЙ ЛИ ЭТА ДАТА — по ВСЕМУ графику: правка на дату, отпуск, недельный
+ *  выходной. Тумблер «Выходной» в шторке метки читал только правку на дату:
+ *  у воскресенья, выходного по неделе, он стоял выключенным, хотя сетка
+ *  показывала «Вых» (повторный аудит 03.10). Графика нет — день рабочий. */
+export function isDayOff(schedule: TeamSchedule | null | undefined, dateKey: string): boolean {
+  if (!schedule) return false;
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return !getDayScheduleForDate(schedule, new Date(y, m - 1, d)).is_working;
+}
+
+/** ВЫХОДНОЙ НА ДАТУ ВКЛ/ВЫКЛ — правкой на эту дату, недельный график цел.
+ *
+ *  Включить — день становится выходным (часы дня сохраняются в правке).
+ *  Выключить — правка снимается, если без неё день рабочий; если же день
+ *  выходной по неделе или в отпуске, правкой на дату он делается РАБОЧИМ по
+ *  общим часам. Прежде снятие только удаляло правку — и воскресенье, выходное
+ *  по неделе, из шторки сделать рабочим было нельзя (повторный аудит 03.10). */
+export function setDayOff(schedule: TeamSchedule, dateKey: string, off: boolean): TeamSchedule {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  // Без правки день уже такой, как просят, — правка не нужна вовсе: день
+  // возвращается под недельный график, а не застывает его копией.
+  const without = setDateOverride(schedule, dateKey, null);
+  if (getDayScheduleForDate(without, date).is_working === !off) return without;
+  if (off) {
+    const day = getDayScheduleForDate(schedule, date);
+    return setDateOverride(schedule, dateKey, { ...day, is_working: false });
+  }
+  return setDateOverride(schedule, dateKey, {
+    is_working: true,
+    start: schedule.start,
+    end: schedule.end,
+    breaks: schedule.breaks ?? [],
+  });
+}
+
 export function timeToMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
   return (h || 0) * 60 + (m || 0);

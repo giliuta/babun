@@ -45,7 +45,6 @@ const EMPTY_STATS = {
   expectedRevenue: 0,
   lastTeamId: null,
   medianGapDays: null,
-  serviceDue: 0,
   unclosedVisits: 0,
 } as unknown as import("@babun/shared/local/selectors/client-stats").ClientStats;
 

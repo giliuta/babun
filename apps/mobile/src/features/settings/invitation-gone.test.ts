@@ -34,7 +34,12 @@ const screen = readFileSync(join(__dirname, "../../../app/invite/[token].tsx"), 
 
 describe("экран приглашения", () => {
   test("ссылка забывается, когда приглашения нет или срок истёк", () => {
-    assert.match(screen, /const gone = preview\.error instanceof InvitationGoneError;/);
+    // Уже принятое — тоже «нет»: сервер отдаёт его с `state: "accepted"`
+    // (аудит Кабинета 03.10).
+    assert.match(
+      screen,
+      /const gone =\s*preview\.error instanceof InvitationGoneError \|\| preview\.data\?\.state === "accepted";/,
+    );
     assert.match(
       screen,
       /if \(token && \(gone \|\| expired\)\) void clearPendingInvitationToken\(token\);/,
@@ -59,5 +64,15 @@ describe("экран приглашения", () => {
       screen,
       /\} else if \(gone\) \{ content = \( <MessageCard title="Приглашения больше нет"[^)]*\/> \); footer = <GradientButton label="Готово" onPress=\{goBack\} \/>;/,
     );
+  });
+
+  test("приём по ссылке не уводит владельца в чужой аккаунт (аудит Кабинета 03.10)", () => {
+    // Как у «Приглашений»: своё место на устройстве есть — команды встают
+    // в ленту, перехода нет (владелец 01.10).
+    const raw = readFileSync(join(__dirname, "../../../app/invite/[token].tsx"), "utf8");
+    assert.match(raw, /const stay = Boolean\(getActiveTenantId\(\)\);/);
+    assert.match(raw, /acceptAndActivateInvitation\(token, preview\.data\?\.role, \{ stay \}\)/);
+    const accept = readFileSync(join(__dirname, "invitations.ts"), "utf8");
+    assert.match(accept, /if \(!opts\.stay\) await activateAcceptedInvitation\(tenantId, previewRole\);/);
   });
 });

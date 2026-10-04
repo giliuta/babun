@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Linking, Text, TextInput, View } from "react-native";
 import { MapPin, Phone, UserRound } from "lucide-react-native";
-import type { Appointment, AppointmentStatus } from "@babun/shared/local/appointments";
+import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 
@@ -26,26 +26,7 @@ import { useTenantId } from "@/lib/tenant";
 import type { CrewBlocks } from "./crew-blocks";
 import { ActionRow, AmountRow, InfoRow, WorkLineRow } from "./crew-rows";
 import type { CrewMoney, CrewWorkLine } from "./crew-work";
-
-const CREW_STATUSES: readonly {
-  value: Exclude<AppointmentStatus, "cancelled">;
-  label: string;
-}[] = [
-  { value: "scheduled", label: "Запланировано" },
-  { value: "in_progress", label: "В работе" },
-  { value: "completed", label: "Выполнено" },
-];
-
-function canCrewSelectStatus(
-  current: AppointmentStatus,
-  next: Exclude<AppointmentStatus, "cancelled">,
-): boolean {
-  return (
-    current === next ||
-    (current === "scheduled" && next === "in_progress") ||
-    (current === "in_progress" && next === "completed")
-  );
-}
+import { useRouteOpener } from "@/features/clients/use-route-opener";
 
 /** Запись глазами команды. Каждый блок стоит на своём праве (`crew-blocks.ts`):
  *  закрытого нет вовсе, «Смотрит» — без кнопок, «Меняет» — как было. */
@@ -74,18 +55,16 @@ export function CrewWorkRecord({
   onOpenClient: (clientId: string) => void;
 }) {
   const t = useThemeColors();
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(appointment.team_id ?? null);
   const toast = useToast();
   const update = useUpdateAppointment();
   const [comment, setComment] = useState(appointment.comment ?? "");
   const [savedComment, setSavedComment] = useState(appointment.comment ?? "");
-  const [status, setStatus] = useState<AppointmentStatus>(appointment.status);
 
   useEffect(() => {
     setComment(appointment.comment ?? "");
     setSavedComment(appointment.comment ?? "");
-    setStatus(appointment.status);
-  }, [appointment.id, appointment.comment, appointment.status]);
+  }, [appointment.id, appointment.comment]);
 
   // НОМЕР — ПО ОДНОМУ (защита базы 30.09): клиент записи приходит без
   // контактов; строка номера открывает его дверью с журналом, дальше — звонок.
@@ -98,11 +77,11 @@ export function CrewWorkRecord({
   // Заметка — своё право «Заметка» (30.09): «Видит и меняет» — пишет,
   // «Только видит» — читает, «Скрыта» — заметки нет.
   const canWriteNote = blocks.note === "write";
+  const route = useRouteOpener(appointment.team_id ?? null);
 
   const patch = async (next: Partial<Appointment>, success: string) => {
     try {
       await update.mutateAsync({ id: appointment.id, patch: next });
-      if (next.status) setStatus(next.status);
       if (next.comment !== undefined) setSavedComment(next.comment);
       toast(success, "success");
     } catch (error) {
@@ -115,35 +94,11 @@ export function CrewWorkRecord({
 
   return (
     <>
-      {blocks.status !== "hidden" ? (
-        <SectionCard title="Статус">
-          {status === "cancelled" ? (
-            <Text style={{ padding: 16, fontSize: 15, color: t.danger }}>
-              Запись отменена диспетчером
-            </Text>
-          ) : blocks.status === "read" ? (
-            <Text style={{ padding: 16, fontSize: 15, color: t.ink }}>
-              {CREW_STATUSES.find((item) => item.value === status)?.label ?? "Запланировано"}
-            </Text>
-          ) : (
-            <View className="flex-row flex-wrap gap-2 p-3">
-              {CREW_STATUSES.map((item) => (
-                <Chip
-                  key={item.value}
-                  label={item.label}
-                  radio
-                  selected={status === item.value}
-                  disabled={!canCrewSelectStatus(status, item.value)}
-                  dimmed={!canCrewSelectStatus(status, item.value)}
-                  onPress={() => {
-                    if (status !== item.value) {
-                      void patch({ status: item.value }, `Статус: ${item.label}`);
-                    }
-                  }}
-                />
-              ))}
-            </View>
-          )}
+      {/* СТАТУСА НЕТ (владелец 03.10: «статус удаляй полностью»): остаётся
+          только отмена — её видно словами. */}
+      {appointment.status === "cancelled" ? (
+        <SectionCard>
+          <Text style={{ padding: 16, fontSize: 15, color: t.danger }}>Визит отменён</Text>
         </SectionCard>
       ) : null}
 
@@ -161,11 +116,7 @@ export function CrewWorkRecord({
               icon={<MapPin color={t.accent} size={ICON.sm} />}
               title={address}
               subtitle={appointment.address_note || "Открыть маршрут"}
-              onPress={() =>
-                void Linking.openURL(
-                  `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
-                )
-              }
+              onPress={() => route.open(null, address)}
             />
           </>
         ) : null}
@@ -267,7 +218,7 @@ export function CrewWorkRecord({
           appointmentId={appointment.id}
           clientId={null}
           locationId={blocks.object ? appointment.location_id : null}
-          canUpload={blocks.files === "write" && status !== "cancelled"}
+          canUpload={blocks.files === "write" && appointment.status !== "cancelled"}
           // Удалять файлы сервер пускает только владельца и диспетчера, и то
           // при «Меняет»; мастеру корзинку не рисуем (15.09).
           canDelete={blocks.files === "write" && role !== "master"}
@@ -280,11 +231,11 @@ export function CrewWorkRecord({
         <SectionCard title="Заметка команды" padded>
           <TextInput
             keyboardAppearance="light"
-            accessibilityLabel="Комментарий к заявке"
+            accessibilityLabel="Заметка записи"
             value={comment}
             onChangeText={setComment}
             multiline
-            placeholder="Что важно знать по заявке"
+            placeholder="Заметка записи"
             placeholderTextColor={t.placeholder}
             style={{
               minHeight: 88,
@@ -314,6 +265,7 @@ export function CrewWorkRecord({
           </Text>
         </SectionCard>
       ) : null}
+      {route.sheet}
     </>
   );
 }

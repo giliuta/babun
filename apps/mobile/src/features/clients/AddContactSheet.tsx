@@ -7,7 +7,7 @@ import {
   type ContactHolder,
 } from "@/features/clients/contact-fields";
 import { useEnabledContactFields } from "@/features/clients/contact-ways";
-import { useReferenceHref } from "@/features/clients/reference-href";
+import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
 import { useThemeColors } from "@/theme/colors";
 
 // «ДОБАВИТЬ» — один плюс вместо строки «+ Добавить номер» (владелец
@@ -45,8 +45,9 @@ export function AddContactSheet({
 }) {
   const t = useThemeColors();
   const router = useRouter();
-  // Из записи справочник открывается её сиблингом (см. `useReferenceHref`).
-  const channelsHref = useReferenceHref().channels;
+  // Шестерёнка — в «Связь» ЭТОЙ команды в её компании (из записи — сиблингом
+  // записи, см. `useReferenceHref`); строки, закрытой человеку, нет и в листе.
+  const settingsHref = useClientSettingsDoor("ways", teamId);
   const enabled = useEnabledContactFields(teamId);
 
   // Номер — всегда первым и всегда доступен: их у клиента может быть сколько
@@ -85,8 +86,8 @@ export function AddContactSheet({
       // Шестерёнка ведёт на СТРАНИЦУ этого самого списка, а не в общие
       // настройки: закон владельца 2026-08-02 — настройка всегда страница,
       // и она должна открыться ровно там, где её искали.
-      onSettings={() => router.push(channelsHref)}
-      settingsLabel="Способы связи"
+      onSettings={settingsHref ? () => router.push(settingsHref) : undefined}
+      settingsLabel="Связь"
       onClose={onClose}
       onExited={onExited}
     />

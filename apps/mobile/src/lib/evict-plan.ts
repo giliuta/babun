@@ -63,3 +63,32 @@ export function isConfirmedNotMember(answer: {
 }): boolean {
   return !answer.error && answer.data === null;
 }
+
+/** ПАМЯТЬ СТЁРТЫХ КОМПАНИЙ НА ВРЕМЯ ЗАПУСКА.
+ *
+ *  Зачем: после стирания опрос роли перечитывается, снова отвечает «не
+ *  состоит» и снова зовёт стирание — без памяти это круг.
+ *
+ *  Почему не навсегда (аудит 2026-10-03): партнёра удалили из X, данные
+ *  стёрлись; его пригласили снова, он принял — и удалили второй раз без
+ *  перезапуска приложения. Память отвечала «уже стёрта», и X оставалась на
+ *  телефоне целиком: запросы, MMKV, локальная база, очередь. Теперь свежий
+ *  сигнал сервера об удалении стирает всегда, а роль, снова пришедшая от
+ *  сервера, память забывает. */
+export function createEvictionMemory() {
+  const evicted = new Set<string>();
+  return {
+    /** Пропустить стирание: компания уже стёрта, и это не свежий сигнал. */
+    skip(tenantId: string, fresh: boolean): boolean {
+      if (fresh) evicted.delete(tenantId);
+      return evicted.has(tenantId);
+    },
+    mark(tenantId: string): void {
+      evicted.add(tenantId);
+    },
+    /** Человек снова в компании — следующее удаление стирает заново. */
+    forget(tenantId: string): void {
+      evicted.delete(tenantId);
+    },
+  };
+}

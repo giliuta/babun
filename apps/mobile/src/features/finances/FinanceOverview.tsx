@@ -12,8 +12,10 @@ import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useToast } from "@/components/ui/Toast";
 import { useCalendarChips } from "@/features/settings/workspaces";
 import { useThemeColors } from "@/theme/colors";
+import { fillRgba } from "@/components/ui/color-contrast";
 import type { Team } from "@/features/reference/queries";
 import { periodDates, periodTitle, type Period } from "./period";
+import { useTariffNudge } from "@/features/tariffs/use-tariff";
 
 /**
  * Какую панель раскрывает сводка. Страниц среди них больше нет.
@@ -81,8 +83,11 @@ export function SummaryToggle({
   a11yValue,
   active,
   locked = false,
+  dimmed = false,
   onPress,
 }: {
+  /** Серая, но нажимается — закрыто тарифом: тап поднимает плашку (1.10). */
+  dimmed?: boolean;
   label: string;
   /** Цвет смысла строки: им красится точка, а значение — когда оно не ноль. */
   color: string;
@@ -133,12 +138,13 @@ export function SummaryToggle({
         flexShrink: 1,
         minWidth: 0,
         minHeight: 38,
+        opacity: dimmed ? 0.4 : 1,
         // `1a` — тот же тинт, что у выбранного чипа: 10% цвета читается как
         // подсветка, но не спорит со значением, набранным тем же цветом.
         // Тинта ХВАТАЕТ: цветная рамка была третьей грамматикой выбора на
         // продукт (у Chip — заливка, у оттиск-рядов — углубление материала), и
         // 1.5px контур нигде больше не встречался.
-        backgroundColor: active && !locked ? color + "1a" : t.surface,
+        backgroundColor: active && !locked ? fillRgba(color, 0.1) : t.surface,
         borderCurve: "continuous",
       }}
     >
@@ -203,7 +209,6 @@ export function ScopePeriodBar({
    *  (закон 2026-08-10), а итог компании — ровно вопрос аналитики. */
   deselectable?: boolean;
 }) {
-  const t = useThemeColors();
   const toast = useToast();
   const calendarChips = useCalendarChips({
     own: teams,
@@ -239,62 +244,93 @@ export function ScopePeriodBar({
         }
       />
 
-      {/* period row — NAME opens the preset list, DATES open the wheels.
-          У закрытых финансов ряд серый и глухой: месяц назван, а выбирать
-          период не для чего — денег за ним не покажут. */}
-      <View
-        className="flex-row items-center justify-between px-4"
-        style={{
-          backgroundColor: t.surface,
-          borderTopWidth: 1,
-          borderTopColor: t.separator,
-          borderBottomWidth: 1,
-          borderBottomColor: t.separator,
-          minHeight: 38,
-        }}
-      >
-        <Pressable
-          onPress={onOpenPresets}
-          disabled={locked}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`Период: ${periodTitle(period)}`}
-          accessibilityState={{ disabled: locked }}
-          className="flex-row items-center gap-1 py-2 active:opacity-60"
-        >
-          <Text
-            className="text-[15px] font-semibold"
-            style={{ color: locked ? t.muted : t.ink }}
-          >
-            {periodTitle(period)}
-          </Text>
-          <ChevronDown
-            color={locked ? t.muted : t.faint}
-            size={14}
-            strokeWidth={2.6}
-          />
-        </Pressable>
-        <Pressable
-          onPress={onOpenCustom}
-          disabled={locked}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Выбрать диапазон дат"
-          accessibilityState={{ disabled: locked }}
-          className="py-2 active:opacity-60"
-        >
-          <Text
-            className="text-[15px] font-bold"
-            style={{
-              color: locked ? t.muted : t.ink,
-              fontVariant: ["tabular-nums"],
-            }}
-          >
-            {periodDates(period)}
-          </Text>
-        </Pressable>
-      </View>
+      <PeriodRow
+        title={periodTitle(period)}
+        dates={periodDates(period)}
+        onOpenPresets={onOpenPresets}
+        onOpenCustom={onOpenCustom}
+        locked={locked}
+      />
     </>
+  );
+}
+
+/**
+ * РЯД ПЕРИОДА — ИМЯ слева открывает готовые периоды, ДАТЫ справа — свои даты.
+ * Один на продукт: шапка «Финансов» и «Аналитики» (`ScopePeriodBar`) и
+ * «Выписка» счёта (владелец 03.10: «выписка за период — прям хорошо»).
+ */
+export function PeriodRow({
+  title,
+  dates,
+  onOpenPresets,
+  onOpenCustom,
+  locked = false,
+}: {
+  /** «Текущий месяц», «Всё время». */
+  title: string;
+  /** «01.10.26 – 31.10.26». */
+  dates: string;
+  onOpenPresets: () => void;
+  onOpenCustom: () => void;
+  locked?: boolean;
+}) {
+  const t = useThemeColors();
+  // У закрытых финансов ряд серый и глухой: месяц назван, а выбирать период
+  // не для чего — денег за ним не покажут.
+  return (
+    <View
+      className="flex-row items-center justify-between px-4"
+      style={{
+        backgroundColor: t.surface,
+        borderTopWidth: 1,
+        borderTopColor: t.separator,
+        borderBottomWidth: 1,
+        borderBottomColor: t.separator,
+        minHeight: 38,
+      }}
+    >
+      <Pressable
+        onPress={onOpenPresets}
+        disabled={locked}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Период: ${title}`}
+        accessibilityState={{ disabled: locked }}
+        className="flex-row items-center gap-1 py-2 active:opacity-60"
+      >
+        <Text
+          className="text-[15px] font-semibold"
+          style={{ color: locked ? t.muted : t.ink }}
+        >
+          {title}
+        </Text>
+        <ChevronDown
+          color={locked ? t.muted : t.faint}
+          size={14}
+          strokeWidth={2.6}
+        />
+      </Pressable>
+      <Pressable
+        onPress={onOpenCustom}
+        disabled={locked}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Выбрать диапазон дат"
+        accessibilityState={{ disabled: locked }}
+        className="py-2 active:opacity-60"
+      >
+        <Text
+          className="text-[15px] font-bold"
+          style={{
+            color: locked ? t.muted : t.ink,
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {dates}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -314,6 +350,7 @@ export function FinanceOverview({
   accounts,
   invoices,
   showDocuments = true,
+  documentsTariffLocked = false,
   showAccounts = true,
   showDebts = true,
   view,
@@ -334,10 +371,13 @@ export function FinanceOverview({
   totals: OverviewTotals;
   accounts: AccountTileSummary;
   invoices: InvoiceTileSummary;
-  /** Документы есть в тарифе. Нет — плитки нет ВОВСЕ (канон: без права блок
-   *  не показывается либо только читается; «видно, но при нажатии ошибка» в
-   *  продукте не бывает). «Счета» занимают ряд целиком. */
+  /** Документы видны этому человеку (право «Документы»). Нет — плитки нет:
+   *  «Счета» занимают ряд целиком. */
   showDocuments?: boolean;
+  /** Документов нет в ТАРИФЕ — плитка на месте, но серая, тап поднимает
+   *  плашку «Нужно изменить тариф» (владелец 1.10: «всё видно, новое
+   *  серым»). */
+  documentsTariffLocked?: boolean;
   /** Функции компании (STORY-088): выключенные счета и долги — без плиток. */
   showAccounts?: boolean;
   showDebts?: boolean;
@@ -361,6 +401,7 @@ export function FinanceOverview({
   lockProfit?: boolean;
   lockDebts?: boolean;
 }) {
+  const tariffNudge = useTariffNudge();
   const t = useThemeColors();
 
   // ПРОСТО «СЧЕТА» (владелец 2026-08-11). Уточнение «команды» было нужно, пока
@@ -431,7 +472,10 @@ export function FinanceOverview({
             active={view === "documents"}
             a11yValue={`${formatCountRu(invoices.count, FORMS_DOCUMENT)} за период`}
             locked={locked}
-            onPress={() => onTap("documents")}
+            // Нет в тарифе — плитка на месте и серая, тап поднимает плашку
+            // «Нужно изменить тариф». Без обёртки: она ломала сетку ряда.
+            dimmed={documentsTariffLocked}
+            onPress={documentsTariffLocked ? tariffNudge : () => onTap("documents")}
           />
           ) : null}
         </View>

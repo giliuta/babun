@@ -5,7 +5,7 @@ import type {
   InvoiceSettlement,
 } from "@babun/shared/local/finance/invoice-ledger";
 import type { Tenant } from "@/features/settings/tenant";
-import type { InvoiceLanguage } from "./dictionary";
+import { invoiceDictionary, type InvoiceLanguage } from "./dictionary";
 import { shareHtmlAsPdf } from "@/features/documents/share-pdf";
 import { buildInvoicePdfHtml } from "./pdf";
 
@@ -26,11 +26,11 @@ export async function shareInvoicePdf(input: {
    *  не было, англичанин, которому счёт СОБИРАЛИ на английском, получал PDF
    *  «ИНВОЙС / Продавец / Получатель / К оплате» — аудит бумаги 2026-09-20. */
   language?: InvoiceLanguage;
+  /** Кредит-нота: номер отменённого инвойса (см. `IssuedDocumentInput`). */
+  creditNote?: { originalNumber: string | null } | null;
 }): Promise<void> {
-  const title =
-    input.language === "en"
-      ? `Invoice ${input.invoice.number}`
-      : `Инвойс ${input.invoice.number}`;
+  const dict = invoiceDictionary(input.language);
+  const title = `${input.creditNote ? dict.creditNoteEyebrow : dict.invoiceEyebrow} ${input.invoice.number}`;
   await shareHtmlAsPdf({
     html: buildInvoicePdfHtml(input),
     fileName: title,

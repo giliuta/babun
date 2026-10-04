@@ -8,6 +8,7 @@ import { FieldLabel } from "@/components/ui/Field";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { eventTypeIconPresets } from "@/features/calendar/event-type-icons";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 
 // ПРАВКА ТИПА СОБЫТИЯ — КАНОНИЧЕСКИЙ ЛИСТ, как «Новая метка» и «Услуга».
 // Заведение и правка — один лист: поля у них одни и те же, а два разных окна
@@ -63,10 +64,26 @@ export function EventTypeSheet({
   // сравнением, а не прыжком колеса из-под пальца.
   const parsed = Math.max(MIN_DURATION, Math.min(24 * 60, duration));
 
+  // НАБРАННОЕ НЕ ПРОПАДАЕТ ОТ СКРИМА И СВАЙПА (аудит шестерёнки 03.10): лист
+  // закрывался молча, и имя, цвет и время нового типа терялись. Как у
+  // услуги и шаблона SMS — сначала вопрос.
+  const dirty =
+    label !== (type?.label ?? "") ||
+    color !== (type?.color ?? DEFAULT_COLOR) ||
+    icon !== (type?.icon ?? "tag") ||
+    duration !== (type?.defaultDuration ?? 60);
+  const guard = useGuardedClose({
+    dirty,
+    busy,
+    onClose,
+    message: "Набранное в типе события не сохранится.",
+  });
+
   return (
     <BottomSheet
-      visible={visible}
-      onClose={onClose}
+      visible={visible && !guard.hidden}
+      onClose={guard.close}
+      onExited={guard.onExited}
       title={type ? "Тип события" : "Новый тип"}
       avoidKeyboard
       scroll

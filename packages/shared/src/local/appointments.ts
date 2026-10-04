@@ -285,10 +285,14 @@ export interface Appointment {
   updated_at: string;
 }
 
+/** Статус СЛОВОМ — только отмена (владелец 03.10: «статус удаляй
+ *  полностью, он не нужен»). «Запланирована / В работе / Выполнена» нигде
+ *  не печатаются; внутри «выполнена» остаётся закрытием визита оплатой — по
+ *  нему считаются долги и аналитика. */
 export const STATUS_LABELS: Record<AppointmentStatus, string> = {
-  scheduled: "Запланирована",
-  in_progress: "В работе",
-  completed: "Выполнена",
+  scheduled: "",
+  in_progress: "",
+  completed: "",
   cancelled: "Отменена",
 };
 
@@ -316,7 +320,14 @@ export function getPaidAmount(apt: Appointment): number {
     : (apt.payment_status ?? "unpaid") !== "unpaid"
       ? apt.paid_amount ?? 0
       : 0;
-  return apt.prepaid_amount + Math.max(ledger, mirror);
+  return cents(apt.prepaid_amount + Math.max(ledger, mirror));
+}
+
+/** До цента. Аванс 4,76 + платёж 7,14 во float — 11.899999…, и долг
+ *  оплаченной записи выходил 1.8e-15: строка «€0» в «Долгах», в долгах дня и
+ *  у клиента (проверка системы 03.10). Деньги в продукте живут в центах. */
+function cents(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 export function getDebtAmount(apt: Appointment): number {
@@ -324,7 +335,7 @@ export function getDebtAmount(apt: Appointment): number {
   // visit remains in history with the explicit «Возврат» status; collecting
   // it again requires a new payment lifecycle, not a derived balance.
   if (apt.payment_status === "refunded") return 0;
-  return Math.max(0, apt.total_amount - getPaidAmount(apt));
+  return Math.max(0, cents(apt.total_amount - getPaidAmount(apt)));
 }
 
 export function isFullyPaid(apt: Appointment): boolean {
@@ -420,6 +431,10 @@ export function duplicateAppointment(apt: Appointment): Appointment {
     // carry the source event's author into the optimistic copy.
     created_by: null,
     prepaid_amount: 0,
+    // Строки предоплаты — деньги оригинала (аудит 03.10): копия несла их, и
+    // своя предоплата на копии дописывалась к чужим — сумма строк расходилась
+    // с `prepaid_amount`, а блок оплаты показывал одну строку без «Снять».
+    prepayments: [],
     payments: [],
     payment: null,
     payment_status: "unpaid",
@@ -428,6 +443,10 @@ export function duplicateAppointment(apt: Appointment): Appointment {
     status: "scheduled",
     cancel_reason: null,
     photos: [],
+    // Копия повторяющегося события — РАЗОВАЯ (аудит 03.10): копия первого
+    // вхождения заводила вторую серию, и дальше каждый день стояло по два
+    // события (и по два пуша).
+    ...(apt.event_repeat ? { event_repeat: { kind: "none" } as PersonalEventRepeat } : {}),
     created_at: now,
     updated_at: now,
   };

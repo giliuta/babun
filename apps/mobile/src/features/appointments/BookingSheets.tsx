@@ -108,7 +108,7 @@ export function TeamMasterSheet({
         ) : (
           <EmptyState
             title="Команд пока нет"
-            subtitle="Создайте команду в кабинете и вернитесь к заявке"
+            subtitle="Создайте команду в настройках календаря и вернитесь к записи"
           />
         )}
       </SelectList>

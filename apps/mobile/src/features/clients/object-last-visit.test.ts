@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { lastVisitByObject } from "./object-last-visit";
+import { cardObjectId, lastVisitByObject } from "./object-last-visit";
 
 type Row = Pick<Appointment, "status" | "date" | "location_id">;
 const row = (
@@ -35,5 +35,22 @@ describe("«был …» у объекта — последний визит п�
   test("записи без объекта или без даты не дают строки", () => {
     const map = lastVisitByObject([row(null, "2026-08-12"), row("villa", "")]);
     assert.equal(map.size, 0);
+  });
+});
+
+describe("объект для карточки — один (03.10)", () => {
+  const locs = [{ id: "dom" }, { id: "flat" }, { id: "office" }];
+  test("обслуженный последним", () => {
+    const visits = new Map([["dom", "2026-09-01"], ["flat", "2026-09-20"]]);
+    assert.equal(cardObjectId(locs, visits), "flat");
+  });
+  test("визитов нет — последний добавленный; объектов нет — null", () => {
+    assert.equal(cardObjectId(locs, new Map()), "office");
+    assert.equal(cardObjectId([], new Map()), null);
+  });
+  test("основной важнее обслуженного: карточка = то, что подставит запись", () => {
+    const withPrimary = [{ id: "dom", isPrimary: true }, { id: "flat" }, { id: "office" }];
+    const visits = new Map([["flat", "2026-09-20"]]);
+    assert.equal(cardObjectId(withPrimary, visits), "dom");
   });
 });

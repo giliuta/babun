@@ -17,14 +17,20 @@ type AppointmentLike = Pick<
   "date" | "time_start" | "status" | "kind" | "team_id" | "address" | "services" | "total_amount"
 >;
 
-/** Ближайшая запланированная работа клиента, начиная с сегодняшнего дня. */
+/** Ближайшая запланированная работа клиента, начиная с «сейчас».
+ *
+ *  `nowHm` — часы бизнеса: сегодняшняя запись, время которой уже прошло, а
+ *  статус всё ещё «запланирована», ближайшей не считается — [Дата] и
+ *  [Время] из карточки описывали бы прошедший визит (аудит 03.10). */
 export function nextScheduledWork<T extends AppointmentLike>(
   appointments: readonly T[],
   today: string,
+  nowHm = "00:00",
 ): T | null {
   let best: T | null = null;
   for (const a of appointments) {
     if (a.kind !== "work" || a.status !== "scheduled" || a.date < today) continue;
+    if (a.date === today && a.time_start < nowHm) continue;
     if (!best || a.date < best.date || (a.date === best.date && a.time_start < best.time_start)) {
       best = a;
     }
@@ -41,10 +47,16 @@ export function clientSmsVars(input: {
   debt: number | null;
   /** Цена ближайшей записи видна только вместе с деньгами клиента. */
   showMoney: boolean;
-  /** «Сегодня» — для тестов; по умолчанию дата телефона. */
+  /** «Сегодня» по часам бизнеса; по умолчанию дата телефона. */
   today?: string;
+  /** «Сейчас» по часам бизнеса — прошедшая сегодня запись не ближайшая. */
+  nowHm?: string;
 }): SmsVars {
-  const next = nextScheduledWork(input.appointments, input.today ?? formatDateKey(new Date()));
+  const next = nextScheduledWork(
+    input.appointments,
+    input.today ?? formatDateKey(new Date()),
+    input.nowHm,
+  );
   return smsVars({
     name: addressedAs(input.client, firstName(input.client)),
     company: input.company,
@@ -55,5 +67,29 @@ export function clientSmsVars(input: {
     services: next?.services.map((line) => line.serviceName) ?? [],
     address: next?.address ?? null,
     total: next && input.showMoney ? next.total_amount : null,
+  });
+}
+
+/** Поля SMS о ЗАПИСИ из календаря (владелец 03.10: «зажимаю запись в
+ *  календаре — в шторке сразу „Отправить SMS“»): как к клиенту обращаться
+ *  (его «Имя для SMS», нет — первое слово имени), дата, время, команда,
+ *  услуги, адрес. Сумма — только тому, кому деньги записи видны. */
+export function appointmentSmsVars(input: {
+  client: Pick<Client, "full_name" | "sms_name"> | null;
+  appointment: Pick<Appointment, "date" | "time_start" | "address" | "services" | "total_amount">;
+  teamName: string | null;
+  address?: string | null;
+  company: string | null;
+  showMoney: boolean;
+}): SmsVars {
+  return smsVars({
+    name: input.client ? addressedAs(input.client, firstName(input.client)) : null,
+    date: input.appointment.date,
+    time: input.appointment.time_start,
+    calendar: input.teamName,
+    services: input.appointment.services.map((line) => line.serviceName),
+    address: input.address ?? input.appointment.address ?? null,
+    total: input.showMoney ? input.appointment.total_amount : null,
+    company: input.company,
   });
 }

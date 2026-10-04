@@ -66,9 +66,12 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={{ fontSize: 20, fontWeight: "800", color: PAPER.ink, letterSpacing: 0.3 }}>
-            {doc.dict.invoice}
+            {doc.title}
           </Text>
           <Text style={{ fontSize: 10, color: PAPER.muted, marginTop: 4 }}>{doc.number}</Text>
+          {doc.reference ? (
+            <Text style={{ fontSize: 10, color: PAPER.muted, marginTop: 1 }}>{doc.reference}</Text>
+          ) : null}
           <Text style={{ fontSize: 10, color: PAPER.muted, marginTop: 1 }}>
             {doc.dict.issuedShort(doc.issuedShort)}
           </Text>
@@ -180,7 +183,7 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
 
       {doc.payTo.length > 0 || doc.notes ? (
         <View style={{ marginTop: 16 }}>
-          <Text style={eyebrow}>{doc.dict.notesAndPayment}</Text>
+          <Text style={eyebrow}>{doc.dict.notesTitle}</Text>
           {[...doc.payTo, ...(doc.notes ? [doc.notes] : [])].map((line, index) => (
             <Text key={`${line}-${index}`} style={{ fontSize: 10, color: PAPER.body, marginTop: 3 }}>
               {line}

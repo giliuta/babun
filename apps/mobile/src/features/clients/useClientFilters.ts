@@ -2,26 +2,31 @@ import { useMemo } from "react";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import { matchesClient } from "@babun/shared/local/selectors/client-search";
+import { matchesClient, rankClientMatches } from "@babun/shared/local/selectors/client-search";
 import { clientMemberOf, clientsById } from "@babun/shared/local/selectors/client-links";
 import { nameInComment } from "@babun/shared/local/selectors/client-stats";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import {
   clientPropertyTypes,
   propertyTypeLabel,
-  clientSource,
   matchesSegment,
   sortClients,
   periodLabel,
   todayYMD,
   SEGMENT_OPTIONS,
-  SOURCE_OPTIONS,
   type ActiveToken,
   type ClientsFilter,
   type FacetOption,
   type SegmentKey,
   type SortKey,
 } from "./filter";
+import {
+  sourceBucket,
+  sourceFilterOptions,
+  type ClientSource,
+} from "./acquisition-source";
+
+const NO_SOURCES: ClientSource[] = [];
 
 // Волна 2 — порт web useClientFilters (v812): один хук владеет
 // отфильтрованным списком, опциями фасетов и токенами бара.
@@ -70,6 +75,8 @@ export interface ClientFilterResult {
   tagOptions: FacetOption[];
   /** Типы объектов, которые РЕАЛЬНО есть в данных (порядок по частоте). */
   propertyOptions: FacetOption[];
+  /** Источники: готовые, свои команд, «Неизвестно» (03.10). */
+  sourceOptions: FacetOption[];
   facetCounts: FacetCounts;
   /** Строки Источник/Тип объекта появляются, когда данные есть хоть у
    *  одного клиента — пустой справочник не даёт мёртвую строку. */
@@ -80,6 +87,11 @@ export interface ClientFilterResult {
 /** Свободная нормализация имени — зеркалит seed-fallback buildStatsMap. */
 function normName(s: string): string {
   return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Ключ типа объекта — тот же, по которому варианты схлопываются в фасет. */
+function propertyKey(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 export interface ClientAppointmentIndex {
@@ -174,6 +186,11 @@ export function useClientFilters(
   /** Считать контекстные счётчики попапов только когда лист открыт —
    *  иначе полный проход по клиентам гоняется на каждую клавишу поиска. */
   withFacetCounts: boolean,
+  /** Источники команд (`client_sources`) — все: по ним читается значение
+   *  клиента любой команды. */
+  customSources: ClientSource[] = NO_SOURCES,
+  /** Команда чипа: варианты фасета — только её источники. */
+  sourceTeamId: string | null = null,
 ): ClientFilterResult {
   const {
     segments,
@@ -281,6 +298,10 @@ export function useClientFilters(
         color: "",
       }));
   }, [clients]);
+  const propertyValueByKey = useMemo(
+    () => new Map(propertyOptions.map((o) => [propertyKey(o.value), o.value])),
+    [propertyOptions],
+  );
 
   const tagOptions = useMemo<FacetOption[]>(() => {
     // Весь справочник тегов, не только назначенные.
@@ -299,14 +320,19 @@ export function useClientFilters(
     const q = search.trim();
     // Жильцов управляющей находят по её имени: к полям клиента добавляются
     // имя каждой карточки, в которую он входит, его роль и место.
-    const linkWords = (c: Client): string[] =>
-      clientMemberOf(c, groupsById).flatMap((e) => [
+    // …и имя его тега (повторный аудит 03.10): «VIP» в поиске не находил
+    // никого, хотя тег стоит плиткой на карточке и чипом в фильтре.
+    const tagName = new Map(tags.map((tag) => [tag.id, tag.name]));
+    const linkWords = (c: Client): string[] => [
+      ...clientMemberOf(c, groupsById).flatMap((e) => [
         e.group?.full_name ?? "",
         e.role,
         e.location?.label ?? "",
-      ]);
+      ]),
+      ...(c.tag_ids ?? []).map((id) => tagName.get(id) ?? ""),
+    ];
     return (c: Client) => (q ? matchesClient(c, search, linkWords(c)) : true);
-  }, [search, groupsById]);
+  }, [search, groupsById, tags]);
 
   // Одна дата на весь проход фильтра. Пересчитывается вместе с набором
   // статусов и картой статистики — этого достаточно: экран живёт минуты,
@@ -364,25 +390,34 @@ export function useClientFilters(
       sel.length === 0 || sel.some((t) => c.tag_ids.includes(t));
   }, [activeTags]);
 
+  const sourceOptions = useMemo<FacetOption[]>(
+    () => sourceFilterOptions(customSources, sourceTeamId),
+    [customSources, sourceTeamId],
+  );
+
+  // Корзина — имя строки источника: «Instagram» всех команд — один вариант.
   const passesSource = useMemo(() => {
     const sel = sources as string[];
     return (c: Client): boolean =>
-      sel.length === 0 || sel.includes(clientSource(c));
-  }, [sources]);
+      sel.length === 0 || sel.includes(sourceBucket(c.acquisition_source, customSources, c.team_id));
+  }, [sources, customSources]);
 
+  // Тип объекта сравнивается без регистра — как и схлопывается в варианты
+  // (проверка 03.10): «Дом» у одного клиента и «дом» у другого — один
+  // вариант, и выбор «Дом» обязан находить обоих, а не только первого.
   const passesProperty = useMemo(() => {
-    const sel = propertyTypes as string[];
+    const sel = (propertyTypes as string[]).map(propertyKey);
     return (c: Client): boolean => {
       if (sel.length === 0) return true;
-      const own = clientPropertyTypes(c);
+      const own = new Set([...clientPropertyTypes(c)].map(propertyKey));
       return sel.some((p) => own.has(p));
     };
   }, [propertyTypes]);
 
   // Строки-фильтры «портрета» появляются, только когда данные есть.
   const hasSourceData = useMemo(
-    () => clients.some((c) => clientSource(c) !== "unknown"),
-    [clients],
+    () => clients.some((c) => sourceBucket(c.acquisition_source, customSources, c.team_id) !== "unknown"),
+    [clients, customSources],
   );
   const hasPropertyData = useMemo(
     () => clients.some((c) => clientPropertyTypes(c).size > 0),
@@ -404,7 +439,7 @@ export function useClientFilters(
   );
 
   const filtered = useMemo(() => {
-    return sorted.filter(
+    const hits = sorted.filter(
       (c) =>
         passesSearch(c) &&
         passesTag(c) &&
@@ -415,7 +450,11 @@ export function useClientFilters(
         passesSource(c) &&
         passesProperty(c),
     );
+    // С поиском найденные по имени — выше найденных по метке, адресу или
+    // заметке; внутри ступени — выбранная сортировка (повторный аудит 03.10).
+    return rankClientMatches(hits, search);
   }, [
+    search,
     sorted,
     passesSearch,
     passesTag,
@@ -511,12 +550,14 @@ export function useClientFilters(
         if (set) for (const id of set) team[id] = (team[id] ?? 0) + 1;
       }
       if (seg && tm && ct && tg && pr) {
-        const key = clientSource(c);
+        const key = sourceBucket(c.acquisition_source, customSources, c.team_id);
         source[key] = (source[key] ?? 0) + 1;
       }
       if (seg && tm && ct && tg && so) {
-        for (const p of clientPropertyTypes(c)) {
-          property[p] = (property[p] ?? 0) + 1;
+        const own = new Set([...clientPropertyTypes(c)].map(propertyKey));
+        for (const key of own) {
+          const value = propertyValueByKey.get(key);
+          if (value) property[value] = (property[value] ?? 0) + 1;
         }
       }
     }
@@ -535,6 +576,8 @@ export function useClientFilters(
     passesTag,
     passesSource,
     passesProperty,
+    customSources,
+    propertyValueByKey,
   ]);
 
   // ── Токены summary-бара ──────────────────────────────────────────
@@ -576,7 +619,7 @@ export function useClientFilters(
       });
     }
     for (const src of sources) {
-      const o = SOURCE_OPTIONS.find((x) => x.value === src);
+      const o = sourceOptions.find((x) => x.value === src);
       if (o)
         tokens.push({ key: "source", val: src, label: o.label, color: "" });
     }
@@ -602,6 +645,7 @@ export function useClientFilters(
     teamOptions,
     cityOptions,
     tagOptions,
+    sourceOptions,
   ]);
 
   // Бейдж считает ровно то, что можно снять токеном: значение по мёртвому
@@ -617,6 +661,7 @@ export function useClientFilters(
     cityOptions,
     tagOptions,
     propertyOptions,
+    sourceOptions,
     facetCounts,
     hasSourceData,
     hasPropertyData,

@@ -1,4 +1,5 @@
 import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/features/access/access-map";
+import { asRecordWindow, type RecordWindow } from "./record-window";
 
 // ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ — БЛОКИ ПО ПРАВАМ (владелец 21.09: «визуал
 // должен быть идентичный… берёшь чётко те блоки, даёшь просто разрешение на
@@ -33,13 +34,13 @@ export interface RecordBlocks {
   amount: RecordLevel;
   payment: RecordLevel;
   files: RecordLevel;
-  /** Статус записи. */
-  status: RecordLevel;
   /** Заметка записи — своё право «Заметка» (30.09). Пока сервер его не
-   *  проверяет — прежнее правило: пишет тот, кто меняет статус, читают все. */
+   *  проверяет — читают все, не пишет никто. Статуса нет (03.10). */
   note: RecordLevel;
   /** Цвет записи: видят все, красит — «Цвет записи». */
   color: RecordLevel;
+  /** Блок «SMS» внизу записи — история сообщений её клиенту (03.10). */
+  sms: RecordLevel;
 }
 
 /** БЛОКИ СОБЫТИЯ (владелец 30.09: «и внутри события — что может видеть, что
@@ -66,12 +67,16 @@ export interface CalendarActions {
   cancel: boolean;
   /** Перекрасить запись из меню. */
   color: boolean;
+  /** «Записи клиентов»: видит ли он записи этого календаря вообще. */
+  records: RecordLevel;
   /** События команды в сетке: скрыты, видны или свои заводит и правит. */
   events: RecordLevel;
   /** Метка дня над колонкой. */
   dayLabels: RecordLevel;
   /** График команды: рабочие часы и перерывы. */
   schedule: RecordLevel;
+  /** «Ограничения» (03.10): за какой срок назад видна прошедшая работа. */
+  window: RecordWindow;
 }
 
 type Registry = readonly Pick<AccessBlock, "key" | "live" | "levels">[];
@@ -94,9 +99,9 @@ const EVERYTHING: RecordBlocks = {
   amount: "write",
   payment: "write",
   files: "write",
-  status: "write",
   note: "write",
   color: "write",
+  sms: "write",
 };
 
 const NOTHING: RecordBlocks = {
@@ -109,9 +114,9 @@ const NOTHING: RecordBlocks = {
   amount: "hidden",
   payment: "hidden",
   files: "hidden",
-  status: "hidden",
   note: "hidden",
   color: "hidden",
+  sms: "hidden",
 };
 
 const ALL_ACTIONS: CalendarActions = {
@@ -119,9 +124,11 @@ const ALL_ACTIONS: CalendarActions = {
   move: true,
   cancel: true,
   color: true,
+  records: "write",
   events: "write",
   dayLabels: "write",
   schedule: "write",
+  window: "own",
 };
 
 const NO_ACTIONS: CalendarActions = {
@@ -129,9 +136,11 @@ const NO_ACTIONS: CalendarActions = {
   move: false,
   cancel: false,
   color: false,
+  records: "hidden",
   events: "hidden",
   dayLabels: "hidden",
   schedule: "hidden",
+  window: "own",
 };
 
 const asRecordLevel = (level: AccessLevel | undefined): RecordLevel =>
@@ -173,9 +182,6 @@ export function recordBlocks(input: Input): RecordBlocks {
   /** Два положения «Не меняет / Меняет»: видят всегда, меняет — по праву. */
   const writeOrRead = (key: string): RecordLevel => (read(key) === "write" ? "write" : "read");
 
-  // Статус виден всегда (аудит 24.09: «Не видит» у него снято — отменённая
-  // запись без статуса выглядела бы живой); меняет — по праву.
-  const status = writeOrRead("record.status");
   const amount = level("record.amount");
   const services = level("record.services");
   return {
@@ -191,10 +197,12 @@ export function recordBlocks(input: Input): RecordBlocks {
     amount,
     payment: level("record.payment"),
     files: level("record.files"),
-    status,
     // «Заметка» — своё право с 30.09; неживое — прежнее правило.
-    note: read("record.note") === undefined ? (status === "write" ? "write" : "read") : level("record.note"),
+    note: read("record.note") === undefined ? "read" : level("record.note"),
     color: writeOrRead("record.color"),
+    // «SMS» записи (03.10): сервер отдаёт историю только вместе с «Клиентом»
+    // (`sms_for_appointment`) — без клиента блок пустой, его нет.
+    sms: level("record.client") === "hidden" ? "hidden" : level("record.sms"),
   };
 }
 
@@ -251,9 +259,13 @@ export function calendarActions(input: Input): CalendarActions {
     move: can("calendar.move"),
     cancel: can("calendar.cancel"),
     color: can("record.color"),
+    records: asRecordLevel(read("calendar.records")),
     events: asRecordLevel(read("calendar.events")),
     dayLabels: asRecordLevel(read("calendar.day_labels")),
     schedule: asRecordLevel(read("calendar.schedule")),
+    // Реестр на телефоне ещё не знает права — окна нет: прятать записи по
+    // догадке хуже, чем показать (сервер режет сам).
+    window: read("calendar.window") === undefined ? "own" : asRecordWindow(read("calendar.window")),
   };
 }
 
@@ -285,6 +297,8 @@ export interface BookRights {
   showFiles: boolean;
   /** Файлы добавляются. */
   editFiles: boolean;
+  /** Блок «SMS» внизу записи (03.10). */
+  showSms: boolean;
 }
 
 export function bookRights(input: {
@@ -319,6 +333,7 @@ export function bookRights(input: {
       showType: true,
       showFiles: true,
       editFiles: true,
+      showSms: true,
     };
   }
   if (kind === "event") {
@@ -355,6 +370,8 @@ export function bookRights(input: {
       showType: ev.type !== "hidden",
       showFiles: ev.files !== "hidden",
       editFiles: edits(ev.files),
+      // SMS шлют клиенту записи — у события их блока нет.
+      showSms: false,
     };
   }
   const w = (level: RecordLevel) => level === "write";
@@ -383,6 +400,7 @@ export function bookRights(input: {
       showType: false,
       showFiles: record.files !== "hidden",
       editFiles: w(record.files),
+      showSms: record.sms !== "hidden",
     };
   }
   return {
@@ -405,5 +423,29 @@ export function bookRights(input: {
     showType: false,
     showFiles: record.files !== "hidden",
     editFiles: w(record.files),
+    showSms: record.sms !== "hidden",
+  };
+}
+
+/** ЗАПИСЬ КЛИЕНТА БЕЗ ТАРИФА — ТОЛЬКО ДЛЯ ПРОСМОТРА (владелец 02.10: «без
+ *  тарифа нельзя добавлять объекты, услугу применить нельзя, менять нельзя
+ *  ничего в целом на клиентах»). Видно то же, что и с тарифом; ни одна
+ *  правка не нажимается — тот же вид, что у партнёра с «Только видит»:
+ *  пустой блок (объект не выбран) уходит, заполненный стоит без двери.
+ *  Сервер держит то же (`tenant_free_readonly_guard`). */
+export function readOnlyBookRights(rights: BookRights): BookRights {
+  return {
+    ...rights,
+    editTeam: false,
+    editLabel: false,
+    editWhen: false,
+    editClient: false,
+    editObject: false,
+    editServices: false,
+    editTotal: false,
+    editNote: false,
+    editColor: false,
+    editEventType: false,
+    editFiles: false,
   };
 }

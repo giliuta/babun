@@ -1,234 +1,172 @@
-import { View } from "react-native";
-import {
-  formatMoneyForInput,
-  money,
-  moneySign,
-  parseMoneyInputToCents,
-} from "@babun/shared/common/utils/money";
-import { SwitchRow } from "@/components/ui/SwitchRow";
-import {
-  ActionRow,
-  FieldRow,
-  NavRow,
-  RowCaption,
-  RowGroup,
-} from "@/components/ui/card-rows";
-import { notify } from "@/lib/notify";
-import type { Team } from "@/features/reference/queries";
+import { Text, View } from "react-native";
+import { ArrowLeftRight, Banknote, FileSpreadsheet, Wallet } from "lucide-react-native";
+import { money, moneySign } from "@babun/shared/common/utils/money";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { SelectRow } from "@/components/ui/select-rows";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { SwitchControl } from "@/components/ui/SwitchControl";
+import { useThemeColors } from "@/theme/colors";
 import type { AccountWithBalance } from "../accounts";
 import { useAccountVatDue } from "../vat-queries";
-import {
-  CLOSED_ACCOUNT_OPENING_FROZEN,
-  FROZEN_FIELDS_CAPTION,
-  FROZEN_OPENING_CAPTION,
-  ORPHAN_FROZEN_FIELDS_CAPTION,
-} from "../account-alerts";
-import { teamControl } from "./editor-logic";
-import { TeamChips } from "./TeamChips";
-import type { AlertError, SaveAccount } from "./types";
+import type { StageAccount } from "./types";
 
-// ДЕНЬГИ, КОМАНДА И ОПЛАТА ЗАПИСИ: сколько на счёте (и сколько в этом VAT к
-// уплате), с чего он начался, чей он, основной ли он у команды и стоит ли
-// плиткой в блоке «Оплата» записи. Строки «Тип счёта» нет (владелец
-// 2026-09-15: «тип вообще убираем») — тип задаёт значок в первой строке листа.
+const noop = () => {};
+/** Колонка суммы счёта: «€12 345,67» жирным 15pt. */
+const SUM_COL_W = 92;
+/** Колонка VAT левее суммы: «VAT €1 234,56» серым 13pt. */
+const VAT_COL_W = 104;
+
+// ШТОРКА СЧЁТА — КАЖДОЕ ДЕЛО СВОИМ БЛОКОМ (владелец 03.10, третий заход:
+// «блок „На счёте", справа общая сумма, и эти две плитки; „Перевести" — в
+// другой блок; и вообще раздельно можно все эти блоки»):
+//   • «На счёте» — плашка со значком, справа серым «VAT …» и общая сумма:
+//     сумма одна, VAT лежит внутри неё;
+//   • «Перевести», «В оплате записи», «Выписка» — каждый своим блоком.
+// Строки «Команда» нет: шторку открывают со страницы счетов этой команды
+// («зачем писать команда команда один»). «Остатка на начало» тоже нет («что
+// значит остаток на начало — это лишнее»): его задают при создании счёта.
+// Подписей под строками нет (вкус владельца 02–03.10).
 export function AccountMoneyGroup({
   account,
   accounts,
-  activeTeams,
-  teamById,
-  save,
+  stage,
   busy,
-  alertError,
   onTransfer,
+  onStatement,
 }: {
   account: AccountWithBalance;
   accounts: readonly AccountWithBalance[];
-  /** Живые команды — кому можно отдать счёт. */
-  activeTeams: readonly Team[];
-  /** Все команды, включая архивные: у счёта может остаться имя распущенной. */
-  teamById: Map<string, Team>;
-  save: SaveAccount;
-  /** Идёт другая правка счёта — переключатели ждут её ответа. */
+  /** Правка в черновик листа: на сервер — по «Применить» (03.10). */
+  stage: StageAccount;
+  /** Идёт другая правка счёта — переключатель ждёт её ответа. */
   busy: boolean;
-  alertError: AlertError;
   /** Открыть перевод с этого счёта (или на него, если денег нет). */
   onTransfer: () => void;
+  /** Открыть страницу выписки: лист с операциями, потом файл. */
+  onStatement: () => void;
 }) {
+  const t = useThemeColors();
   // ПЕРЕВОДИТЬ ЕСТЬ КУДА, только если рядом есть другой открытый счёт; у
   // закрытого счёта денег в оборотах нет вовсе.
   const canTransfer =
     account.is_active
     && accounts.some((other) => other.is_active && other.id !== account.id);
-  // VAT СКОБКОЙ ПРИ СУММЕ, а не отдельной настройкой (владелец 2026-09-23:
-  // «общая сумма, и в скобочках — сколько VAT мы должны будем заплатить; это
-  // мелочь»). Нет налога — нет и скобки.
+  // СКОЛЬКО VAT НА СЧЁТЕ К УПЛАТЕ (владелец 2026-09-23: «сколько VAT мы
+  // должны будем заплатить»).
   const vatDue = useAccountVatDue(account.id, true).data ?? 0;
-  const onHand =
-    moneySign(vatDue) !== 0
-      ? `${money(account.balance)} (VAT ${money(vatDue)})`
-      : money(account.balance);
-
-  // Ответ на «можно ли ещё править» приезжает ВМЕСТЕ со счётом
-  // (`account_balances.has_history`) и зеркалит серверный
-  // `guard_account_financial_history`: лист глушит правку старта и команды
-  // заранее, а не отказом после сохранения.
-  const hasHistory = account.has_history;
-  // ДВЕ РАЗНЫЕ ПРИЧИНЫ ЗАМОРОЗИТЬ ОСТАТОК НА НАЧАЛО, и обе кончаются одним:
-  // поле показывается, но не правится. У счёта С ОПЕРАЦИЯМИ правка ломает
-  // сходимость истории; у ЗАКРЫТОГО счёта заданный после закрытия остаток не
-  // попадает ни в «Всего денег», ни в один подытог (§9.7). Тот же запрет стоит
-  // на сервере, в `guard_account_financial_history`.
-  const openingFrozen = hasHistory || !account.is_active;
-  const control = teamControl(
-    account,
-    activeTeams.map((team) => team.id),
-  );
-  // ГРУППЫ «КОМАНДА» НЕТ, КОГДА ВЫБИРАТЬ НЕ ИЗ ЧЕГО (прогон 2026-09-23): у
-  // компании с одной командой строка «Команда · Y&D» — единственная в своей
-  // группе и ничего не решает. Тот же закон, что у листа создания: «у тенанта
-  // с одной командой вопрос не задаётся вовсе». Счёт удалённой или архивной
-  // команды и счёт «Без команды» группу держат — там она и есть новость.
-  const showTeam = !(
-    control === "fixed"
-    && account.brigade_id !== null
-    && activeTeams.length <= 1
-    && activeTeams.some((team) => team.id === account.brigade_id)
-  );
-
-  // ПОДПИСЬ ГОВОРИТ ПОСЛЕДСТВИЕ, А НЕ МЕХАНИКУ, И СЛОВАМИ ПРОДУКТА: «запись» и
-  // «оплата», а не «заявка» и «бригадир» старого словаря. Выключенный счёт
-  // никуда не девается: он остаётся на «Финансах», в переводах, операциях и
-  // отчётах — он только перестаёт стоять плиткой в блоке «Оплата» записи
-  // (сервер: `list_payment_accounts_safe` и
-  // `resolve_appointment_payment_account` читают тот же флаг).
-  const paymentsHint = account.show_in_payments
-    ? "Плитка счёта стоит в блоке «Оплата» записи — деньги можно зачислить сюда."
-    : "В записи счёта нет. На «Финансах», в переводах и операциях он остаётся.";
+  const blockBody = { paddingHorizontal: 2, paddingVertical: 2 } as const;
 
   return (
     <>
-      <RowGroup title="Деньги">
-        {/* На счёте — факт, а не поле: остаток меняют операции и переводы. */}
-        <NavRow label="На счёте" value={onHand} />
-        {canTransfer ? (
-          // ДЕЙСТВИЕ С ДЕНЬГАМИ СТОИТ У ДЕНЕГ: строкой группы «Деньги», а не
-          // второй кнопкой в футере — действие листа одно, а это — операция
-          // над суммой строкой выше; подпись о заморозке остаётся под своим полем.
-          <ActionRow label="Перевести" separated onPress={onTransfer} />
-        ) : null}
-        {openingFrozen ? (
-          // ЗАМОРОЖЕННОЕ ПОЛЕ — ФАКТ, А НЕ ДВЕРЬ. `NavRow` без `onPress` теряет
-          // шеврон, нажатие и роль кнопки; причина живёт одной подписью под
-          // группой.
-          <NavRow
-            label="Остаток на начало"
-            value={money(account.opening_balance)}
-            separated
-          />
-        ) : (
-          <FieldRow
-            label="Остаток на начало"
-            value={formatMoneyForInput(account.opening_balance)}
-            placeholder="0"
-            separated
-            tabular
-            keyboardType="numbers-and-punctuation"
-            onSave={(next: string) => {
-              if (!next.trim()) return; // очистили поле — не значит «ноль»
-              const cents = parseMoneyInputToCents(next, {
-                allowNegative: true,
-                allowZero: true,
-              });
-              if (cents == null) {
-                notify(
-                  "Проверьте сумму",
-                  "Остаток на начало — число, максимум два знака после "
-                  + "запятой. Например: 1250,50",
-                );
-                return;
-              }
-              const num = cents / 100;
-              if (num === account.opening_balance) return;
-              void save({ opening_balance: num }, "Не удалось изменить остаток");
-            }}
-          />
-        )}
-      </RowGroup>
-      {hasHistory ? (
-        // У счёта-наследия «Без команды» общий текст врал бы про единственную
-        // живую дверь: команду ему назначить КАК РАЗ можно.
-        <RowCaption
-          text={
-            account.brigade_id === null
-              ? ORPHAN_FROZEN_FIELDS_CAPTION
-              : showTeam
-                ? FROZEN_FIELDS_CAPTION
-                : FROZEN_OPENING_CAPTION
-          }
-        />
-      ) : openingFrozen ? (
-        <RowCaption text={CLOSED_ACCOUNT_OPENING_FROZEN} />
-      ) : null}
-
-      {showTeam ? (
-      <RowGroup title="Команда">
-        {/* ЧЕЙ ЭТО СЧЁТ. Пустая команда — не «команду удалили», а счёт старой
-            схемы: его отдают команде целиком (`scope` и `brigade_id` одной
-            правкой) даже с историей — иначе деньги навечно оставались бы без
-            хозяина. */}
-        {control === "fixed" ? (
-          <NavRow
-            label="Команда"
-            value={
-              account.brigade_id
-                ? (teamById.get(account.brigade_id)?.name ?? "Команда удалена")
-                : "Без команды"
+      {/* «НА СЧЁТЕ» — ОДНА ОБЩАЯ СУММА, VAT ЛЕЖИТ ВНУТРИ НЕЁ (владелец 03.10:
+          «в эти 320 входит VAT, не отдельно VAT и отдельно сумма без VAT»).
+          Плашка — та же, что у соседних блоков («вернуть в хороший дизайн»):
+          значок, слово, справа серым «VAT …» и жирная сумма — вариант 3 из
+          четырёх показанных. Нет налога — нет и VAT. На счёте — факт, а не
+          поле: остаток меняют операции. */}
+      <SectionCard dense>
+        <View style={blockBody}>
+          <SelectRow
+            icon={Wallet}
+            color={SETTINGS_TILE.green}
+            plain
+            title="На счёте"
+            onPress={noop}
+            accessibilityLabel={
+              moneySign(vatDue) !== 0
+                ? `На счёте ${money(account.balance)}, в том числе VAT ${money(vatDue)}`
+                : `На счёте ${money(account.balance)}`
+            }
+            trailing={
+              // ДВЕ КОЛОНКИ ПОСТОЯННОЙ ШИРИНЫ (владелец 03.10 выбрал вариант 3
+              // — «серым перед суммой» — и попросил «чётко ряд для суммы VAT,
+              // чтоб не дёргался слева направо»): «VAT …» всегда начинается с
+              // одного места, сумма счёта всегда прижата к правому краю, у
+              // какого счёта лист ни открой.
+              <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+                {moneySign(vatDue) !== 0 ? (
+                  <Text
+                    maxFontSizeMultiplier={1.15}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    style={{ width: VAT_COL_W, fontSize: 13, color: t.sub, fontVariant: ["tabular-nums"] }}
+                  >
+                    {`VAT ${money(vatDue)}`}
+                  </Text>
+                ) : null}
+                <Text
+                  maxFontSizeMultiplier={1.15}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  style={{
+                    width: SUM_COL_W,
+                    textAlign: "right",
+                    fontSize: 15,
+                    fontWeight: "700",
+                    color: moneySign(account.balance) < 0 ? t.danger : t.ink,
+                    fontVariant: ["tabular-nums"],
+                  }}
+                >
+                  {money(account.balance)}
+                </Text>
+              </View>
             }
           />
-        ) : (
-          <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-            <TeamChips
-              teams={activeTeams}
-              selectedId={account.brigade_id}
-              disabled={busy}
-              onSelect={(teamId) => {
-                if (teamId === account.brigade_id) return;
-                void (control === "hand-over"
-                  ? save(
-                      { scope: "team", brigade_id: teamId },
-                      "Не удалось отдать счёт команде",
-                    )
-                  : save({ brigade_id: teamId }, "Не удалось сменить команду счёта"));
-              }}
-            />
+        </View>
+      </SectionCard>
+
+      {canTransfer ? (
+        <SectionCard dense>
+          <View style={blockBody}>
+            <SelectRow icon={ArrowLeftRight} color={t.accent} plain title="Перевести" onPress={onTransfer} />
           </View>
-        )}
-      </RowGroup>
+        </SectionCard>
       ) : null}
 
-      {/* ОПЛАТА ЗАПИСИ — СВОЕЙ ГРУППОЙ (владелец 2026-09-23: «настройка того,
-          будет ли он впадать в оплату при записи, — собрать правильно по
-          нашей архитектуре»). Оба переключателя отвечают на один вопрос —
-          куда ложатся деньги записи — и стояли под «Командой» чужими
-          соседями. */}
-      <RowGroup title="Оплата записи">
-        {/* ПРИНИМАЕТ ЛИ СЧЁТ ДЕНЬГИ ЗАПИСИ. Решает не тип счёта, а сам счёт:
-            накопительный или резервный лежит рядом с рабочей кассой, и одного
-            промаха пальцем хватает, чтобы выручка ушла туда, откуда её
-            достанут через месяц. */}
-        <SwitchRow
-          label="В оплате записи"
-          hint={paymentsHint}
-          value={account.show_in_payments}
-          disabled={!account.is_active || busy}
-          onChange={(next) => {
-            void save(
-              { show_in_payments: next },
-              "Не удалось изменить оплату записи",
-            );
-          }}
-        />
-      </RowGroup>
+      <SectionCard dense>
+        <View style={blockBody}>
+          {/* ПРИНИМАЕТ ЛИ СЧЁТ ДЕНЬГИ ЗАПИСИ — вся плашка тумблер (как
+              «Присылать SMS»). Выключенный счёт остаётся на «Финансах», в
+              переводах и операциях; он только не стоит плиткой в «Оплате»
+              записи (сервер читает тот же флаг). */}
+          <SelectRow
+            icon={Banknote}
+            color={account.show_in_payments ? t.accent : t.faint}
+            plain
+            title="В оплате записи"
+            // Скрытый счёт деньги записи не принимает (база держит это
+            // ограничением) — переключатель гаснет, пока счёт скрыт.
+            disabled={!account.is_active || !!account.is_hidden}
+            accessibilityLabel={`В оплате записи: ${account.show_in_payments ? "да" : "нет"}`}
+            accessibilityHint="Ставит счёт плиткой в блок «Оплата» записи"
+            onPress={() => {
+              if (!account.is_active || account.is_hidden || busy) return;
+              stage({ show_in_payments: !account.show_in_payments });
+            }}
+            trailing={
+              <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <SwitchControl
+                  value={account.show_in_payments}
+                  disabled={!account.is_active || !!account.is_hidden}
+                />
+              </View>
+            }
+          />
+        </View>
+      </SectionCard>
+
+      <SectionCard dense>
+        <View style={blockBody}>
+          <SelectRow
+            icon={FileSpreadsheet}
+            color={SETTINGS_TILE.green}
+            plain
+            title="Выписка"
+            accessibilityHint="Лист с операциями счёта, потом — файл"
+            onPress={onStatement}
+          />
+        </View>
+      </SectionCard>
     </>
   );
 }

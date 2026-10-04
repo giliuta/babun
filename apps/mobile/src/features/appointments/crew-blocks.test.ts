@@ -19,7 +19,6 @@ function map(levels: Record<string, "off" | "read" | "write">): MemberAccessMap 
 }
 
 const MIXED = map({
-  "record.status": "write",
   "record.files": "read",
   "record.client": "read",
   "record.object": "off",
@@ -32,7 +31,6 @@ const MIXED = map({
 describe("карточка записи у команды спрашивает права календаря записи", () => {
   test("владелец видит и меняет всё, карту не ждёт", () => {
     assert.deepEqual(crewBlocks({ role: "owner", map: undefined, teamId: TEAM }), {
-      status: "write",
       files: "write",
       client: true,
       object: true,
@@ -45,7 +43,6 @@ describe("карточка записи у команды спрашивает �
 
   test("мастер получает ровно положения своего календаря", () => {
     assert.deepEqual(crewBlocks({ role: "master", map: MIXED, teamId: TEAM }), {
-      status: "write",
       files: "read",
       client: true,
       object: false,
@@ -58,7 +55,6 @@ describe("карточка записи у команды спрашивает �
 
   test("в чужом календаре — ничего, даже если в своём можно всё", () => {
     assert.deepEqual(crewBlocks({ role: "master", map: MIXED, teamId: OTHER }), {
-      status: "hidden",
       files: "hidden",
       client: false,
       object: false,
@@ -71,13 +67,12 @@ describe("карточка записи у команды спрашивает �
 
   test("запись без календаря закрыта сотруднику и открыта владельцу", () => {
     assert.equal(crewBlocks({ role: "master", map: MIXED, teamId: null }).client, false);
-    assert.equal(crewBlocks({ role: "master", map: MIXED, teamId: null }).status, "hidden");
-    assert.equal(crewBlocks({ role: "owner", map: undefined, teamId: null }).status, "write");
+    assert.equal(crewBlocks({ role: "master", map: MIXED, teamId: null }).files, "hidden");
+    assert.equal(crewBlocks({ role: "owner", map: undefined, teamId: null }).files, "write");
   });
 
   test("пока карта едет — закрыто, а не «всё можно»", () => {
     assert.deepEqual(crewBlocks({ role: "master", map: undefined, teamId: TEAM }), {
-      status: "hidden",
       files: "hidden",
       client: false,
       object: false,
@@ -105,7 +100,6 @@ describe("функции компании сильнее прав", () => {
     assert.equal(blocks.files, "hidden");
     assert.equal(blocks.note, "hidden");
     // Остальное — по правам, как было.
-    assert.equal(blocks.status, "write");
     assert.equal(blocks.client, true);
   });
 });

@@ -1,89 +1,84 @@
-import { money, moneySign } from "@babun/shared/common/utils/money";
-import { ActionRow, RowCaption, RowGroup } from "@/components/ui/card-rows";
-import { useReopenAccount, type AccountWithBalance } from "../accounts";
-import type { AlertError } from "./types";
+import { View } from "react-native";
+import { Eye, EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { SelectRow } from "@/components/ui/select-rows";
+import { useThemeColors } from "@/theme/colors";
+import type { AccountWithBalance } from "../accounts";
+import { useClosedAccountActions } from "../accounts-page/use-closed-account-actions";
 
-// ПОСЛЕДНЯЯ ГРУППА ЛИСТА — ПО АРХИТЕКТУРЕ «СКРЫТЬ → АРХИВ → СТЕРЕТЬ»
-// (владелец 2026-09-23: «добавить их в архив и потом удалить… чтоб всё
-// соблюдалось по нашей архитектуре»; тот же закон, что у календарей 21.09).
-//
-//   • открытый счёт — «Скрыть счёт»: то же слово и то же действие, что свайп
-//     на странице «Счета»; счёт уходит в «Закрытые счета», даже пустой;
-//   • закрытый — «Открыть счёт снова», а у счёта без операций ещё и «Удалить
-//     счёт» (насовсем);
-//   • закрытый с операциями не стирается: операции держат доход и отчёты
-//     (сервер: `finance_transactions → accounts on delete restrict`), и
-//     подпись говорит это до нажатия.
+// ПОСЛЕДНЯЯ ГРУППА ЛИСТА — ТЕ ЖЕ ДВА СЛОВА, ЧТО У СВАЙПОВ СТРОКИ:
+//   • открытый счёт — «Скрыть счёт» (счёт для себя: работает, виден только на
+//     странице «Счета», владелец 03.10; у скрытого — «Показать счёт») и
+//     «Удалить счёт»;
+//   • скрытый — «Открыть счёт» и «Удалить счёт».
+// «Удалить» уводит в «Удалённые счета» на 30 дней, как клиентов (владелец
+// 03.10); счёт с операциями там лежит без срока и возвращается оттуда же.
 //
 // Сам вопрос и перевод остатка живут в `use-close-flow`: из открытого листа
 // вопрос не показать, и лист на это время уезжает.
 export function AccountCloseGroup({
   account,
-  onCloseAccount,
-  alertError,
+  onHide,
+  onDelete,
 }: {
   account: AccountWithBalance;
-  /** «Скрыть» у открытого, «Удалить» у закрытого — начать разговор. */
-  onCloseAccount: () => void;
-  alertError: AlertError;
+  /** «Скрыть счёт» ⇄ «Показать счёт» — сразу, без вопроса. */
+  onHide: () => void;
+  /** «Удалить счёт» — начать разговор об удалении в «Удалённые счета». */
+  onDelete: () => void;
 }) {
-  const reopenAcc = useReopenAccount();
-  const hasHistory = account.has_history;
-  const hasBalance = moneySign(account.balance) !== 0;
+  const t = useThemeColors();
+  const { openAgain } = useClosedAccountActions();
+  // Плашки, как во всей шторке (вариант 1, 03.10); объяснений под ними нет —
+  // всё нужное говорит вопрос, который задаёт само действие
+  // (`use-close-flow`): остаток, перевод, «насовсем».
+  const blockBody = { paddingHorizontal: 2, paddingVertical: 2 } as const;
+
+  // КАЖДОЕ ДЕЛО СВОИМ БЛОКОМ (владелец 03.10: «вообще раздельно можно все
+  // эти блоки») — «Скрыть» и «Удалить» не делят одну карточку.
+  const remove = (
+    <SectionCard dense>
+      <View style={blockBody}>
+        <SelectRow icon={Trash2} color={t.danger} plain title="Удалить счёт" onPress={onDelete} />
+      </View>
+    </SectionCard>
+  );
 
   if (account.is_active) {
     return (
       <>
-        <RowGroup>
-          <ActionRow label="Скрыть счёт" tone="danger" onPress={onCloseAccount} />
-        </RowGroup>
-        <RowCaption
-          tone={hasBalance ? "warning" : "quiet"}
-          text={
-            hasBalance
-              ? `Сейчас на счёте ${money(account.balance)} — сначала `
-                + "переведите остаток на другой счёт или спишите операцией."
-              : "Счёт станет серым внизу списка и исчезнет из оплаты. История "
-                + "сохранится; вернуть счёт или стереть пустой можно там же."
-          }
-        />
+        <SectionCard dense>
+          <View style={blockBody}>
+            {account.is_hidden ? (
+              <SelectRow icon={Eye} color={t.accent} plain title="Показать счёт" onPress={onHide} />
+            ) : (
+              <SelectRow icon={EyeOff} color={t.warning} plain title="Скрыть счёт" onPress={onHide} />
+            )}
+          </View>
+        </SectionCard>
+        {remove}
       </>
     );
   }
 
   return (
     <>
-      <RowGroup>
-        {/* ЗАКРЫТЫЙ СЧЁТ ОТКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, без вопроса: действие
-            обратимо, и лист остаётся на месте — дальше счёт правится как
-            любой другой. */}
-        <ActionRow
-          label="Открыть счёт снова"
-          dimmed={reopenAcc.isPending}
-          onPress={() =>
-            void reopenAcc
-              .mutateAsync(account.id)
-              .catch(alertError("Не удалось открыть счёт"))
-          }
-        />
-        {!hasHistory ? (
-          <ActionRow
-            label="Удалить счёт"
-            tone="danger"
-            separated
-            onPress={onCloseAccount}
+      <SectionCard dense>
+        <View style={blockBody}>
+          {/* СКРЫТЫЙ СЧЁТ ОТКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, без вопроса: действие
+              обратимо, и лист остаётся на месте. Значок, цвет и тост «Счёт
+              открыт · Отменить» — те же, что у свайпа «Открыть»
+              (`useClosedAccountActions`): одно действие говорит одинаково. */}
+          <SelectRow
+            icon={RotateCcw}
+            color={t.success}
+            plain
+            title="Открыть счёт"
+            onPress={() => openAgain(account)}
           />
-        ) : null}
-      </RowGroup>
-      <RowCaption
-        text={
-          hasHistory
-            ? "По счёту есть операции — стереть его нельзя: они держат доход "
-              + "и отчёты. В итоги и оплату закрытый счёт не входит."
-            : "Операций по счёту не было, поэтому он удаляется насовсем. "
-              + "Восстановить будет нельзя."
-        }
-      />
+        </View>
+      </SectionCard>
+      {remove}
     </>
   );
 }

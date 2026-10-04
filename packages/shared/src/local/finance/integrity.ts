@@ -116,7 +116,15 @@ export function transferValidationError(
 export interface DatabaseErrorLike {
   code?: string | null;
   message?: string | null;
+  hint?: string | null;
 }
+
+/** Отказы «Удалённых счетов» (`account_trash_rules`) — своими словами: число
+ *  в тексте сервера напечатано по-машинному («445.00»). */
+const ACCOUNT_TRASH_REFUSALS: Record<string, string> = {
+  "account:balance": "На счёте остались деньги — удалить можно только пустой счёт",
+  "account:deleted": "Счёт удалён — сначала верните его из «Удалённых счетов»",
+};
 
 /**
  * Дубль имени счёта (уникальные индексы `ux_accounts_team_name` и
@@ -142,6 +150,8 @@ export function accountWriteErrorMessage(
   texts: { fallback: string; duplicate?: string },
 ): string {
   if (!error) return texts.fallback;
+  const trash = error.hint ? ACCOUNT_TRASH_REFUSALS[error.hint] : undefined;
+  if (trash) return trash;
   if (error.code === "P0001" && error.message) return error.message;
   if (error.code === "23505" && texts.duplicate) return texts.duplicate;
   return texts.fallback;

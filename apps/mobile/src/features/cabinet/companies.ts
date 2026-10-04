@@ -8,6 +8,7 @@
 
 import type { MyCalendar } from "../settings/workspaces";
 import { isUserRole, ROLE_LABELS, type UserRole } from "../settings/role-policy";
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
 export interface CompanyCalendar {
   teamId: string;
@@ -60,13 +61,8 @@ export function groupMemberships(
 }
 
 function calendarsWord(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return "календарь";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
-    return "календаря";
-  }
-  return "календарей";
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return pluralRu(count, ["календарь", "календаря", "календарей"]);
 }
 
 /** Подпись строки компании — состояние, а не пояснение: где я сейчас, кем я

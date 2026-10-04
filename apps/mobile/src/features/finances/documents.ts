@@ -46,6 +46,10 @@ export interface FinanceDocument {
   dead: boolean;
   /** Кредит-нота: в списке видна, в числе документов плитки не считается. */
   creditNote?: boolean;
+  /** Команда документа (инвойс — `brigade_id`, чек — команда того, за что
+   *  выдан). По ней партнёр с «Документы: Видит» читает документ (03.10).
+   *  `null` — общий, без команды. */
+  teamId: string | null;
   /** Предсобранная строка поиска: номер, клиент, сумма. Собирается один раз на
    *  документ, а не на каждую нажатую букву. */
   search: string;
@@ -77,6 +81,18 @@ export interface DocumentSources {
  *  при каждом рефетче. */
 export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
   const docs: FinanceDocument[] = [];
+  // Номер кредит-ноты ищется по её инвойсу: своей строки у ноты нет.
+  const noteNumberOf = new Map<string, string>();
+  // Чеки с возвратом (04.10): нота к самому чеку или к его инвойсу.
+  const receiptNotes = new Map<string, string>();
+  for (const invoice of sources.invoices) {
+    if (invoice.kind === "credit_note" && invoice.credit_note_of_id) {
+      noteNumberOf.set(invoice.credit_note_of_id, invoice.number);
+    }
+    if (invoice.kind === "credit_note" && invoice.credit_note_of_receipt_id) {
+      receiptNotes.set(invoice.credit_note_of_receipt_id, invoice.number);
+    }
+  }
 
   for (const invoice of sources.invoices) {
     if (!inPeriod(invoice.issued_on, sources.period)) continue;
@@ -98,25 +114,12 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
       invoice.client_snapshot?.full_name?.trim() ||
       sources.clientName(invoice.client_id) ||
       "Без клиента";
-    // КРЕДИТ-НОТА — СТОРНО ОТМЕНЁННОГО СЧЁТА, А НЕ СЧЁТ К ОПЛАТЕ (аудит
-    // 2026-09-30): «Инвойс CN-2026-001 −€100 · Оплачен» читался как второй
-    // оплаченный инвойс. Своё имя и слово, строка гаснет — как у отменённого.
-    if (invoice.kind === "credit_note") {
-      docs.push({
-        id: invoice.id,
-        kind: "invoice",
-        title: `Кредит-нота ${invoice.number}`,
-        clientName,
-        date: invoice.issued_on,
-        amount: invoice.total,
-        currency: invoice.currency,
-        state: "Сторно",
-        dead: true,
-        creditNote: true,
-        search: searchKey(invoice.number, clientName, invoice.total),
-      });
-      continue;
-    }
+    // КРЕДИТ-НОТА — ЧАСТЬ СВОЕГО ИНВОЙСА, А НЕ ОТДЕЛЬНАЯ СТРОКА (владелец
+    // 2026-10-04: «она не должна быть отдельным списком… это по сути один
+    // файл: инвойс становится серым, как отменённый»). Нота живёт на странице
+    // инвойса; в списке — только он, погасший, и её номер находит его поиском.
+    if (invoice.kind === "credit_note") continue;
+    const noteNumber = noteNumberOf.get(invoice.id);
     docs.push({
       id: invoice.id,
       kind: "invoice",
@@ -131,11 +134,21 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
           : "Отменён"
         : settlement.isPaid
           ? "Оплачен"
-          : overdue
-            ? "Просрочен"
-            : "К оплате",
+          // Частично оплаченный — тем же словом, что на странице инвойса
+          // (`invoiceDisplayStatus`: частичная оплата важнее просрочки), а
+          // не «К оплате», как нетронутый (аудит 03.10).
+          : settlement.isPartial
+            ? "Частично оплачен"
+            : overdue
+              ? "Просрочен"
+              : "К оплате",
       dead,
-      search: searchKey(invoice.number, clientName, invoice.total),
+      teamId: invoice.brigade_id ?? null,
+      search: searchKey(
+        noteNumber ? `${invoice.number} ${noteNumber}` : invoice.number,
+        clientName,
+        invoice.total,
+      ),
     });
   }
 
@@ -156,9 +169,22 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
       // только у аннулированного — иначе непонятно, почему строка потухла.
       // Слово то же, что у инвойса: «погашен» в финансах значит «оплачен»,
       // и потухший чек сообщал бы противоположное случившемуся.
-      state: receipt.status === "void" ? "Аннулирован" : null,
+      // ВОЗВРАТ — СЛОВОМ (04.10): погашенный возвратом — «Возвращён», частично —
+      // «Частично возвращён»; номер ноты находит чек поиском.
+      state: (() => {
+        const returned =
+          receiptNotes.has(receipt.id)
+          || (!!receipt.invoice_id && noteNumberOf.has(receipt.invoice_id));
+        if (receipt.status === "void") return returned ? "Возвращён" : "Аннулирован";
+        return returned ? "Частично возвращён" : null;
+      })(),
       dead: receipt.status === "void",
-      search: searchKey(receipt.number, clientName, receipt.amount),
+      teamId: team,
+      search: searchKey(
+        [receipt.number, receiptNotes.get(receipt.id)].filter(Boolean).join(" "),
+        clientName,
+        receipt.amount,
+      ),
     });
   }
 

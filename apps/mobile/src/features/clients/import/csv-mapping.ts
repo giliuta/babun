@@ -47,12 +47,16 @@ const AUTO_MAP_RULES: { field: ImportableField; patterns: string[] }[] = [
   },
   { field: "phone", patterns: ["mobile", "телефон", "phone", "тел", "моб", "номер"] },
   { field: "email", patterns: ["e-mail", "email", "почта", "емейл", "mail"] },
-  { field: "city", patterns: ["city", "город"] },
   { field: "address", patterns: ["address", "адрес"] },
   {
     field: "comment",
     patterns: ["comment", "заметки", "заметка", "примечан", "notes", "note", "комментар"],
   },
+  // «Метка» — заголовок нашей же выгрузки (`bulk-export.ts`) и слово поля в
+  // выборе колонки: повторный импорт выгруженного файла терял метки
+  // (повторный аудит 03.10). Правило — ПОСЛЕ «заметки»: «Заметка» содержит
+  // «метка» и иначе уехала бы в метку.
+  { field: "city", patterns: ["city", "город", "метка"] },
 ];
 
 /** Best-effort guess for one CSV header. Returns 'skip' when nothing

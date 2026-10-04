@@ -40,12 +40,14 @@ import {
   cacheReplaceTenant,
   cacheGetOne,
   dequeueAll,
+  cacheLocalWriteSeq,
   type CachedTag,
+  hasQueuedOps,
 } from "../db/cache/sql";
 import { isOnline } from "./network";
 import { OnlineOnlyWriteError } from "./cache-errors";
 import type { CachedWriteOptions } from "./clientsCached";
-import { kickReplayer, MAX_ATTEMPTS } from "./replayer";
+import { kickReplayer, tenantRefreshHeld } from "./replayer";
 import {
   enqueueOpAndEmit,
   enqueueOpWithCacheUpsertAndEmit,
@@ -85,8 +87,10 @@ export async function listClientTags(
   // Cold cache. If offline, repoListClientTags will throw — we
   // catch and return empty. UI shows no tag chips until reconnect.
   try {
+    // Счётчик — ДО запроса (`cacheLocalWriteSeq`, как у записей и клиентов).
+    const writeSeq = cacheLocalWriteSeq("tags");
     const fresh = await repoListClientTags(supabase, tenantId);
-    await refreshCacheFromSupabase(supabase, tenantId, fresh).catch(() => {});
+    await refreshCacheFromSupabase(supabase, tenantId, fresh, writeSeq).catch(() => {});
     return fresh;
   } catch (err) {
     if (isOnline()) throw err;
@@ -94,34 +98,59 @@ export async function listClientTags(
   }
 }
 
-async function revalidateTags(
+/** Сверка компании уже идёт — вторая ждёт её (как у записей и клиентов):
+ *  параллельные снимки ложились в произвольном порядке, старый поверх нового. */
+const revalidatingTags = new Map<string, Promise<void>>();
+/** Сверка, чью замену отменила свежая локальная правка: за ней идёт ещё одна. */
+const staleTagRevalidation = new Set<string>();
+
+function revalidateTags(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<void> {
-  try {
-    const changed = await refreshCacheFromSupabase(supabase, tenantId);
-    // Emit only on a real change (loop guard — see revalidate-events).
-    if (changed) emitRevalidated("tags");
-  } catch {
-    /* ignore */
-  }
+  const running = revalidatingTags.get(tenantId);
+  if (running) return running;
+  const run = (async () => {
+    try {
+      const changed = await refreshCacheFromSupabase(supabase, tenantId);
+      // Emit only on a real change (loop guard — see revalidate-events).
+      if (changed) emitRevalidated("tags");
+    } catch {
+      /* ignore */
+    } finally {
+      revalidatingTags.delete(tenantId);
+      if (staleTagRevalidation.delete(tenantId)) {
+        void revalidateTags(supabase, tenantId);
+      }
+    }
+  })();
+  revalidatingTags.set(tenantId, run);
+  return run;
 }
 
 /** Slice 5 — AUTHORITATIVE + REVALIDATE-BRIDGE. `cacheReplaceTenant` prunes
  *  tags deleted on another device; the signature diff (which folds the whole
  *  tag row — client_tags has no `updated_at`, so a rename/recolour still
- *  registers) drives the bridge emit. Returns whether anything changed. */
+ *  registers) drives the bridge emit. Returns whether anything changed.
+ *
+ *  ПРАВКА, ЛЕГШАЯ ЗА ВРЕМЯ ЗАПРОСА, НЕ ЗАТИРАЕТСЯ (аудит 04.10): удалённый
+ *  тег воскресал (а поставить его давало 23503), новый исчезал,
+ *  переименование откатывалось. Замена отменяется, если с начала запроса в
+ *  кэш тегов писали, и следом идёт вторая сверка. */
 async function refreshCacheFromSupabase(
   supabase: DbSupabase,
   tenantId: string,
   domain?: ClientTag[],
+  /** Счётчик локальных записей, снятый до запроса `domain` (холодный путь). */
+  writeSeqAtFetch?: number,
 ): Promise<boolean> {
+  const writeSeq = writeSeqAtFetch ?? cacheLocalWriteSeq("tags");
   // Preserve optimistic offline tags until replay finishes. Otherwise the
   // first reconnect snapshot naturally lacks the not-yet-inserted tag and
   // `cacheReplaceTenant` makes it disappear before the queued write runs.
   const pending = await dequeueAll();
   if (
-    pending.some((op) => op.table === "tags" && op.attempts < MAX_ATTEMPTS)
+    tenantRefreshHeld(pending, "tags", tenantId)
   ) {
     void kickReplayer({ supabase });
     return false;
@@ -140,7 +169,13 @@ async function refreshCacheFromSupabase(
     ...(tag.team_id ? { team_id: tag.team_id } : {}),
   })) as CachedTag[];
   const before = cacheSignature(await safeCacheReadTags(tenantId));
-  await cacheReplaceTenant("tags", tenantId, rows);
+  const replaced = await cacheReplaceTenant("tags", tenantId, rows, {
+    unlessLocalWriteSince: writeSeq,
+  });
+  if (!replaced) {
+    staleTagRevalidation.add(tenantId);
+    return false;
+  }
   const after = cacheSignature(rows);
   return before !== after;
 }
@@ -280,7 +315,12 @@ export async function updateClientTag(
     expected_updated_at: null, // no updated_at column → no detection
   };
 
-  if (isOnline()) {
+  // ПОРЯДОК ПРАВОК ТЕГА — ПОРЯДОК ЖЕСТОВ (аудит работы без сети 03.10). У тега
+  // нет `updated_at`, и очередь шлёт его правку без сторожа: правка A→B,
+  // упавшая на обрыве в очередь, долетала ПОСЛЕ прошедшей в сети B→C и
+  // возвращала B. Есть ждущие правки этого тега — новая встаёт за ними.
+  const behindQueued = await hasQueuedOps("tags", id).catch(() => false);
+  if (isOnline() && !behindQueued) {
     // Online: standalone optimistic upsert (no queued op to pair with).
     if (merged) await cacheUpsert("tags", merged);
     try {
@@ -314,8 +354,10 @@ export async function updateClientTag(
     }
   }
 
-  // Offline — ATOMIC with the optimistic row when cached (risk #6).
+  // Offline (или за ждущими правками) — ATOMIC with the optimistic row
+  // when cached (risk #6). В сети очередь пинаем сразу.
   await enqueueTagUpdate(updateOp, merged);
+  if (isOnline()) void kickReplayer({ supabase });
   return {
     id,
     name: patch.name ?? existing?.name ?? "",
@@ -354,7 +396,10 @@ export async function deleteClientTag(
     expected_updated_at: null,
   };
 
-  if (isOnline()) {
+  // Удаление тоже ждёт ждущие правки тега — иначе правка, долетевшая после,
+  // искала бы уже удалённую строку.
+  const behindQueued = await hasQueuedOps("tags", id).catch(() => false);
+  if (isOnline() && !behindQueued) {
     await cacheDelete("tags", id); // optimistic (standalone online)
     try {
       await repoDeleteClientTag(supabase, id, tenantId);
@@ -371,8 +416,10 @@ export async function deleteClientTag(
     }
   }
 
-  // Offline — ATOMIC optimistic delete + enqueue (risk #6).
+  // Offline (или за ждущими правками) — ATOMIC optimistic delete + enqueue
+  // (risk #6). В сети очередь пинаем сразу.
   await enqueueOpWithCacheDeleteAndEmit(deleteOp, "tags", id);
+  if (isOnline()) void kickReplayer({ supabase });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────

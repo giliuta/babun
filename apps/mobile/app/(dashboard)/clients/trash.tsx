@@ -1,7 +1,6 @@
 
-import { Archive, RotateCcw, Trash2 } from "lucide-react-native";
+import { RotateCcw, Trash2 } from "lucide-react-native";
 import {
-  useArchiveClients,
   useDeleteClientForever,
   useRestoreClient,
   useTrashedClients,
@@ -16,7 +15,7 @@ import { useThemeColors } from "@/theme/colors";
 import { confirmAction } from "@/lib/confirm";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 
-// «НЕДАВНО УДАЛЁННЫЕ» — как в Фото на iPhone.
+// «УДАЛЁННЫЕ КЛИЕНТЫ» — как «Недавно удалённые» в Фото на iPhone.
 //
 // Удаление клиента ничего не стирает сразу: он лежит здесь со счётчиком, и
 // каждый день счётчик уменьшается. Ночное задание в базе стирает тех, чей
@@ -24,6 +23,10 @@ import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 //
 // Владелец 2026-08-08: «если удаляешь клиента, он сначала перемещается в
 // настройки, удалённые контакты, на 30 дней — как фотографии в iPhone».
+//
+// ОДНА ПОЛКА (владелец 03.10: «понятия „в архив" не будет — удалить»).
+// Клиент с записями, инвойсами или деньгами тоже здесь, но без счётчика и
+// без «Стереть навсегда»: его история в отчётах, база его не сотрёт.
 
 // Экран вкладки «Клиенты»: компанию называет источник, а не роль
 // (STORY-082).
@@ -39,7 +42,6 @@ function ClientTrashScreen() {
   const t = useThemeColors();
   const trashed = useTrashedClients();
   const restore = useRestoreClient();
-  const archive = useArchiveClients();
   const erase = useDeleteClientForever();
   // «Стереть навсегда» разрешено только владельцу (гейт в самой мутации).
   // Показывать его диспетчеру значит обещать действие, которое ответит
@@ -48,7 +50,7 @@ function ClientTrashScreen() {
 
   return (
     <HiddenClientsScreen
-      title="Недавно удалённые"
+      title="Удалённые клиенты"
       query={trashed}
       // Слева ФАКТ («удалён 8 авг.»), справа СРОК («30 дней»). Сначала обе
       // половины говорили одно и то же — «будет стёрт через 30 дней» и рядом
@@ -59,7 +61,7 @@ function ClientTrashScreen() {
         icon: <Trash2 color={t.faint} size={40} strokeWidth={1.5} />,
         title: "Пусто",
         subtitle:
-          "Удалённые клиенты лежат здесь 30 дней — за это время их можно вернуть. Потом они стираются навсегда.",
+          "Удалённые клиенты лежат здесь — отсюда их можно вернуть. Без записей и денег клиент стирается через 30 дней.",
       }}
       actions={(client) => [
         {
@@ -70,21 +72,8 @@ function ClientTrashScreen() {
             await restore.mutateAsync(client);
           },
         },
-        {
-          // Передумал стирать, но и в работе он не нужен: архив держит без
-          // срока. Иначе единственным выходом из корзины был бы возврат в
-          // рабочий список — и человек снова мозолил бы глаза.
-          id: "archive",
-          label: "Оставить в архиве",
-          icon: Archive,
-          run: async () => {
-            const res = await archive.mutateAsync({ ids: [client.id] });
-            if (res.archived === 0) {
-              throw new Error("Проверьте соединение и повторите.");
-            }
-          },
-        },
-        ...(isOwner
+        // Срока нет — у клиента история, стереть его база не даст.
+        ...(isOwner && client.purge_at
           ? [{
           id: "erase",
           label: "Стереть навсегда",

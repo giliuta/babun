@@ -10,8 +10,10 @@ import { useUpdateMasterInvitation } from "./invitation-api";
 import { invitationRefusalText, isInvitationGone } from "./invitation-contract";
 import { usePendingInvitation } from "./MasterInviteCard";
 import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRightsView";
+import { previewAreaOf } from "./rights-focus";
 import { MemberRights } from "./MemberRights";
 import { RightsPlaceholder, activeOf, liveIdsOf, usePreview } from "./rights-page-shared";
+import { usePartnersAccess } from "./use-partner-manager";
 import {
   draftFromInvitation,
   invitationCarriesCardFields,
@@ -76,6 +78,8 @@ function DraftRights({
   onBack: () => void;
 }) {
   const preview = usePreview();
+  // «Его глазами» — инструмент владельца; директор зовёт без него (04.10).
+  const partners = usePartnersAccess();
   const blocksQuery = useAccessBlocks({ fresh: true });
   const teamsQuery = useTeams();
   const current = useMasterDraft();
@@ -118,14 +122,14 @@ function DraftRights({
         updateMasterDraft((currentDraft) => withLevel(currentDraft, block, level, teamId, blocks))
       }
       area={rightsAreaOf(area)}
-      onPreview={() =>
+      onPreview={partners.owner ? () =>
         preview({
           blocks,
           draft,
           name: draft.name,
-          area: rightsAreaOf(area),
+          area: previewAreaOf(rightsAreaOf(area), focus),
         })
-      }
+      : undefined}
     />
   );
 }
@@ -143,6 +147,8 @@ function InviteRights({
 }) {
   const toast = useToast();
   const preview = usePreview();
+  // «Его глазами» — инструмент владельца; директор зовёт без него (04.10).
+  const partners = usePartnersAccess();
   const blocksQuery = useAccessBlocks({ fresh: true });
   const teamsQuery = useTeams();
   const update = useUpdateMasterInvitation();
@@ -201,14 +207,14 @@ function InviteRights({
       // ПРИГЛАШЕНИЕ — САМЫЙ ПОЛЕЗНЫЙ МОМЕНТ ДЛЯ ЗЕРКАЛА: человек ещё не в
       // компании, и посмотреть, что он увидит, стоит ДО того, как позвали.
       // Кнопки здесь не было — три режима одной страницы разошлись.
-      onPreview={() =>
+      onPreview={partners.owner ? () =>
         preview({
           blocks,
           draft,
           name: draft.name,
-          area: rightsAreaOf(area),
+          area: previewAreaOf(rightsAreaOf(area), focus),
         })
-      }
+      : undefined}
     />
   );
 }

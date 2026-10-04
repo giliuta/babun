@@ -4,7 +4,6 @@ import {
   accountEditHref,
   editorView,
   stepAfterAnswer,
-  teamControl,
 } from "./editor-logic";
 
 
@@ -45,24 +44,6 @@ describe("что показывает лист правки", () => {
   });
 });
 
-describe("команда счёта в листе", () => {
-  test("счёт без команды отдают команде даже с историей", () => {
-    assert.equal(teamControl({ brigade_id: null, has_history: true }, ["t1"]), "hand-over");
-    assert.equal(teamControl({ brigade_id: null, has_history: false }, []), "fixed");
-  });
-
-  test("с историей команда заморожена", () => {
-    assert.equal(teamControl({ brigade_id: "t1", has_history: true }, ["t1", "t2"]), "fixed");
-  });
-
-  test("без истории выбирают, только если есть другая живая команда", () => {
-    assert.equal(teamControl({ brigade_id: "t1", has_history: false }, ["t1", "t2"]), "choose");
-    assert.equal(teamControl({ brigade_id: "t1", has_history: false }, ["t1"]), "fixed");
-    // Команда счёта в архиве, живая одна — перенести в неё можно.
-    assert.equal(teamControl({ brigade_id: "old", has_history: false }, ["t1"]), "choose");
-  });
-});
-
 describe("после ответа на вопрос о закрытии", () => {
   test("любой отказ возвращает лист", () => {
     assert.equal(stepAfterAnswer({ kind: "delete" }, false), "return");
@@ -77,6 +58,10 @@ describe("после ответа на вопрос о закрытии", () => 
   test("согласие делает то, о чём спрашивали", () => {
     assert.equal(stepAfterAnswer({ kind: "delete" }, true), "delete");
     assert.equal(stepAfterAnswer({ kind: "close" }, true), "close");
+    // «Удалить счёт» (03.10): согласие уводит в «Удалённые счета», отказ —
+    // возвращает лист, как у любого другого вопроса.
+    assert.equal(stepAfterAnswer({ kind: "trash" }, true), "trash");
+    assert.equal(stepAfterAnswer({ kind: "trash" }, false), "return");
     assert.equal(
       stepAfterAnswer({ kind: "transfer", direction: "in", amount: 5 }, true),
       "transfer",

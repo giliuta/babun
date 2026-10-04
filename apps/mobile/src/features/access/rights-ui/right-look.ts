@@ -1,14 +1,19 @@
 import {
+  History,
+  UserCog,
   ArrowRightLeft,
+  Banknote,
   Bookmark,
   Briefcase,
   Building2,
   CalendarClock,
   CalendarRange,
   CalendarDays,
+  Infinity as InfinityIcon,
   CalendarPlus,
   CalendarX2,
-  CircleCheck,
+  Contact,
+  Ellipsis,
   ClipboardList,
   Clock,
   CreditCard,
@@ -18,24 +23,35 @@ import {
   HandCoins,
   House,
   Landmark,
+  LayoutGrid,
+  Megaphone,
+  MessageCircle,
   MessageSquare,
+  Navigation,
   Palette,
   Paperclip,
   PenLine,
   PencilLine,
-  Phone,
   ReceiptText,
+  Shapes,
   Shield,
   ShieldAlert,
   StickyNote,
   Tag,
   Tags,
+  Trash2,
   TrendingDown,
   TrendingUp,
   UserCheck,
+  UserPlus,
   UserRound,
   Users,
   Wallet,
+  FileText,
+  NotebookPen,
+  PiggyBank,
+  BadgeCheck,
+  Receipt,
   type LucideIcon,
 } from "lucide-react-native";
 
@@ -57,10 +73,13 @@ export interface RightLook {
 
 const LOOK: Record<string, RightLook> = {
   "calendar.records": { icon: CalendarPlus, tile: SETTINGS_TILE.blue },
+  "calendar.window": { icon: CalendarClock, tile: SETTINGS_TILE.teal },
   "calendar.create": { icon: CalendarPlus, tile: SETTINGS_TILE.blue },
   "calendar.move": { icon: ArrowRightLeft, tile: SETTINGS_TILE.teal },
   "calendar.cancel": { icon: CalendarX2, tile: SETTINGS_TILE.red },
   "calendar.events": { icon: CalendarDays, tile: SETTINGS_TILE.indigo },
+  // Тот же кошелёк, что у листа «Финансы дня» под календарём.
+  "calendar.day_money": { icon: Wallet, tile: SETTINGS_TILE.green },
   "calendar.day_labels": { icon: Bookmark, tile: SETTINGS_TILE.purple },
   "calendar.schedule": { icon: CalendarClock, tile: SETTINGS_TILE.blue },
   // Те же значки и цвета, что у строк шестерёнки календаря.
@@ -79,8 +98,8 @@ const LOOK: Record<string, RightLook> = {
   "record.services": { icon: Briefcase, tile: SETTINGS_TILE.blue },
   "record.amount": { icon: ReceiptText, tile: SETTINGS_TILE.green },
   "record.payment": { icon: CreditCard, tile: SETTINGS_TILE.green },
-  "record.status": { icon: CircleCheck, tile: SETTINGS_TILE.orange },
   "record.files": { icon: Paperclip, tile: SETTINGS_TILE.indigo },
+  "record.sms": { icon: MessageSquare, tile: SETTINGS_TILE.green },
   "record.note": { icon: StickyNote, tile: SETTINGS_TILE.orange },
   "event.label": { icon: Tag, tile: SETTINGS_TILE.purple },
   "event.type": { icon: Tags, tile: SETTINGS_TILE.indigo },
@@ -90,22 +109,56 @@ const LOOK: Record<string, RightLook> = {
   "event.files": { icon: Paperclip, tile: SETTINGS_TILE.indigo },
   "finance.income": { icon: TrendingUp, tile: SETTINGS_TILE.green },
   "finance.expense": { icon: TrendingDown, tile: SETTINGS_TILE.red },
-  "finance.operations": { icon: Wallet, tile: SETTINGS_TILE.green },
   "finance.accounts": { icon: Landmark, tile: SETTINGS_TILE.indigo },
   "finance.debts": { icon: HandCoins, tile: SETTINGS_TILE.orange },
+  // Плитки «Документы» и «Прибыль» (03.10).
+  "finance.documents": { icon: FileText, tile: SETTINGS_TILE.blue },
+  "finance.profit": { icon: PiggyBank, tile: SETTINGS_TILE.purple },
+  "finance.window": { icon: CalendarClock, tile: SETTINGS_TILE.teal },
+  // Строки шестерёнки финансов — её значками (03.10).
+  "finance.settings_accounts": { icon: Wallet, tile: SETTINGS_TILE.blue },
+  "finance.settings_trash": { icon: Trash2, tile: SETTINGS_TILE.red },
+  "finance.settings_categories_income": { icon: HandCoins, tile: SETTINGS_TILE.green },
+  "finance.settings_categories_expense": { icon: ReceiptText, tile: SETTINGS_TILE.red },
+  "finance.settings_categories_debts": { icon: NotebookPen, tile: SETTINGS_TILE.yellow },
+  "finance.settings_currency": { icon: Banknote, tile: SETTINGS_TILE.green },
+  "finance.settings_requisites": { icon: Building2, tile: SETTINGS_TILE.green },
   clients: { icon: Users, tile: SETTINGS_TILE.blue },
   "clients.scope": { icon: UserCheck, tile: SETTINGS_TILE.teal },
-  "clients.contacts": { icon: Phone, tile: SETTINGS_TILE.green },
+  // «Создание клиента» и «Меню клиента» (02.10).
+  "clients.create": { icon: UserPlus, tile: SETTINGS_TILE.green },
+  "clients.menu": { icon: Ellipsis, tile: SETTINGS_TILE.indigo },
+  "clients.delete": { icon: Trash2, tile: SETTINGS_TILE.red },
   "clients.note": { icon: StickyNote, tile: SETTINGS_TILE.orange },
   "clients.people": { icon: Users, tile: SETTINGS_TILE.indigo },
   "clients.objects": { icon: House, tile: SETTINGS_TILE.green },
-  "clients.labels": { icon: Tag, tile: SETTINGS_TILE.purple },
+  // Метка — закладка, тег — ярлыки: те же значки, что у плиток «Метка | Тег»
+  // на карточке клиента (03.10, права разделены).
+  "clients.labels": { icon: Bookmark, tile: SETTINGS_TILE.teal },
+  "clients.tags": { icon: Tags, tile: SETTINGS_TILE.purple },
   "clients.personal": { icon: UserRound, tile: SETTINGS_TILE.blue },
   "clients.files": { icon: Paperclip, tile: SETTINGS_TILE.indigo },
-  "clients.requisites": { icon: Landmark, tile: SETTINGS_TILE.teal },
+  // Здание, как плашка реквизитов на карточке (03.10); банк — у счетов.
+  "clients.requisites": { icon: Building2, tile: SETTINGS_TILE.teal },
+  // Блоки «Клиент», «История», «SMS» (02.10) — как на странице клиента.
+  "clients.client": { icon: Contact, tile: SETTINGS_TILE.blue },
   "clients.history": { icon: CalendarClock, tile: SETTINGS_TILE.blue },
-  "clients.money": { icon: HandCoins, tile: SETTINGS_TILE.orange },
+  "clients.sms": { icon: MessageSquare, tile: SETTINGS_TILE.green },
+  // Настройки клиентов — те же значки и цвета, что у строк шестерёнки клиентов.
+  "clients.settings_card": { icon: Eye, tile: SETTINGS_TILE.blue },
+  "clients.settings_ways": { icon: MessageCircle, tile: SETTINGS_TILE.green },
+  "clients.settings_objects": { icon: Shapes, tile: SETTINGS_TILE.teal },
+  "clients.settings_maps": { icon: Navigation, tile: SETTINGS_TILE.blue },
+  "clients.settings_tags": { icon: Tags, tile: SETTINGS_TILE.purple },
+  "clients.settings_sources": { icon: Megaphone, tile: SETTINGS_TILE.orange },
   "company.sms_templates": { icon: MessageSquare, tile: SETTINGS_TILE.green },
+  // Кабинет (04.10) — значками строк Кабинета.
+  "cabinet.tariff": { icon: BadgeCheck, tile: SETTINGS_TILE.blue },
+  "cabinet.tariff_payments": { icon: Receipt, tile: SETTINGS_TILE.blue },
+  "cabinet.sms": { icon: MessageSquare, tile: SETTINGS_TILE.green },
+  // Тот же значок и цвет, что у строки «История изменений» в Кабинете.
+  "cabinet.history": { icon: History, tile: SETTINGS_TILE.teal },
+  "company.partners": { icon: UserCog, tile: SETTINGS_TILE.indigo },
 };
 
 /** Право, которого ещё нет в словаре (реестр живёт на сервере и может
@@ -124,7 +177,8 @@ const SECTION_LOOK: Record<string, RightLook> = {
   record: { icon: ClipboardList, tile: SETTINGS_TILE.teal },
   finance: { icon: Wallet, tile: SETTINGS_TILE.green },
   clients: { icon: Users, tile: SETTINGS_TILE.indigo },
-  company: { icon: Building2, tile: SETTINGS_TILE.orange },
+  // «Кабинет» (04.10) — значком вкладки «Кабинет».
+  company: { icon: LayoutGrid, tile: SETTINGS_TILE.orange },
 };
 
 export function sectionLook(key: string): RightLook {
@@ -140,9 +194,14 @@ const STEP_LOOK: Partial<Record<AccessLevel, RightLook>> = {
   read: { icon: Eye, tile: SETTINGS_TILE.blue },
   write: { icon: PencilLine, tile: SETTINGS_TILE.green },
   full: { icon: ShieldAlert, tile: SETTINGS_TILE.orange },
-  own: { icon: UserRound, tile: SETTINGS_TILE.blue },
+  // «Без ограничения» у «Ограничений» (02.10) — бесконечность.
+  own: { icon: InfinityIcon, tile: SETTINGS_TILE.blue },
   all: { icon: Users, tile: SETTINGS_TILE.green },
+  week: { icon: CalendarClock, tile: SETTINGS_TILE.teal },
   near: { icon: CalendarClock, tile: SETTINGS_TILE.teal },
+  month: { icon: CalendarDays, tile: SETTINGS_TILE.teal },
+  quarter: { icon: CalendarRange, tile: SETTINGS_TILE.teal },
+  half: { icon: CalendarRange, tile: SETTINGS_TILE.teal },
   day: { icon: CalendarDays, tile: SETTINGS_TILE.teal },
 };
 

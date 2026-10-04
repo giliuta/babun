@@ -32,18 +32,28 @@ describe("деньги, которые стираются при понижен�
   });
 
   test("все блоки финансов в списке понижения", () => {
+    // Живые права реестра 03.10: плитки страницы и строки шестерёнки.
     for (const key of [
       "finance.income",
       "finance.expense",
-      "finance.operations",
       "finance.accounts",
       "finance.debts",
       "finance.documents",
-      "finance.categories",
-      "finance.templates",
-      "finance.vat",
+      "finance.profit",
+      "finance.window",
+      "finance.settings_accounts",
+      "finance.settings_trash",
+      "finance.settings_categories_income",
+      "finance.settings_categories_expense",
+      "finance.settings_categories_debts",
+      "finance.settings_requisites",
+      "finance.settings_currency",
     ]) {
       assert.ok(FINANCE_BLOCK_KEYS.includes(key), key);
+    }
+    // Ключей, которых в реестре больше нет, в списке тоже нет.
+    for (const gone of ["finance.operations", "finance.categories", "finance.templates", "finance.vat"]) {
+      assert.ok(!FINANCE_BLOCK_KEYS.includes(gone), gone);
     }
   });
 });
@@ -58,7 +68,8 @@ const map = (over: Partial<MemberAccessMap> = {}): MemberAccessMap => ({
   ...over,
 });
 
-const OPS = "finance.operations";
+// Любой блок команды: ворота спрашивают ключ, им всё равно какой.
+const OPS = "finance.expense";
 
 describe("ворота блока", () => {
   test("владелец меняет всё и не ждёт карту", () => {
@@ -123,20 +134,20 @@ describe("ворота блока", () => {
   });
 });
 
-describe("сторона денег — новый ключ или старый общий", () => {
+describe("сторона денег — свой ключ", () => {
   test("карта после наката — свои ключи доходов и расходов", () => {
     const m = map({ calendars: { a: { "finance.income": "read", "finance.expense": "full" } } });
     assert.equal(moneyKey(m, "income"), "finance.income");
     assert.equal(moneyKey(m, "expense"), "finance.expense");
   });
 
-  test("карта до наката — общий «Доходы и расходы» за обе стороны", () => {
-    const m = map({ calendars: { a: { [OPS]: "write" } } });
-    assert.equal(moneyKey(m, "income"), OPS);
-    assert.equal(moneyKey(m, "expense"), OPS);
+  test("старая общая строка `finance.operations` (сервер её не знает) стороны не подменяет", () => {
+    const m = map({ calendars: { a: { "finance.operations": "write" } } });
+    assert.equal(moneyKey(m, "income"), "finance.income");
+    assert.equal(moneyKey(m, "expense"), "finance.expense");
   });
 
-  test("карты нет или календарей нет — новый ключ: ворота всё равно закрыты или владелец", () => {
+  test("карты нет или календарей нет — свой ключ: ворота всё равно закрыты или владелец", () => {
     assert.equal(moneyKey(undefined, "income"), "finance.income");
     assert.equal(moneyKey(map(), "expense"), "finance.expense");
   });
@@ -162,9 +173,9 @@ describe("править ручную операцию — ровно то, чт
     assert.equal(edit({ "finance.income": "read", "finance.expense": "full" }, "income", ME), false);
   });
 
-  test("старая карта: «Меняет» правит любой расход, доход — никогда", () => {
-    assert.equal(edit({ [OPS]: "write" }, "expense", "someone"), true);
-    assert.equal(edit({ [OPS]: "write" }, "income", ME), false);
+  test("старая общая строка `finance.operations` ничего не открывает", () => {
+    assert.equal(edit({ "finance.operations": "write" }, "expense", ME), false);
+    assert.equal(edit({ "finance.operations": "write" }, "income", ME), false);
   });
 
   test("владелец — любую; без календаря сотрудник — ничего", () => {
@@ -173,6 +184,15 @@ describe("править ручную операцию — ровно то, чт
       canEditMoneyRow({ role: "master", map: map({ calendars: { a: { "finance.income": "full" } } }), teamId: null, side: "income", createdBy: null, me: ME }),
       false,
     );
+  });
+});
+
+describe("«Ограничения» — сузили срок, деньги уходят с телефона (03.10)", () => {
+  test("короче срок — потеря доступа; длиннее — нет", () => {
+    const at = (level: AccessLevel) => map({ calendars: { a: { "finance.window": level } } });
+    assert.equal(lostAccess(at("own"), at("month"), ["finance.window"]), true);
+    assert.equal(lostAccess(at("week"), at("half"), ["finance.window"]), false);
+    assert.equal(lostAccess(at("month"), at("month"), ["finance.window"]), false);
   });
 });
 
@@ -249,7 +269,7 @@ describe("строки записей перечитываются, когда �
 describe("клиенты уходят с телефона, когда права сузили (защита базы 30.09)", () => {
   const T = "tenant-1";
   const team = (levels: Record<string, AccessLevel>) => map({ calendars: { A: levels } });
-  const base = { clients: "read", "clients.scope": "own", "clients.contacts": "read" } as const;
+  const base = { clients: "read", "clients.scope": "own" } as const;
 
   test("ключи клиентов этой компании — да; другой компании и не клиентов — нет", () => {
     assert.equal(isClientDataKey(["clients", T, "member:read:own:phones"], T), true);
@@ -261,8 +281,9 @@ describe("клиенты уходят с телефона, когда права
     assert.equal(isClientDataKey(["appointments", T, "master"], T), false);
   });
 
-  test("«Всегда» → «В день записи», «Своей команды» → «Около записи», снятая команда — сужение", () => {
-    assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.contacts": "day" })), "narrowed");
+  test("«Своей команды» → «Месяц» → «2 недели», снятая команда — сужение", () => {
+    assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.scope": "month" })), "narrowed");
+    assert.equal(clientLevelsChange(team({ ...base, "clients.scope": "month" }), team({ ...base, "clients.scope": "near" })), "narrowed");
     assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.scope": "near" })), "narrowed");
     assert.equal(clientLevelsChange(team(base), team({ ...base, clients: "off" })), "narrowed");
     assert.equal(clientLevelsChange(team(base), map({ calendars: {} })), "narrowed");
@@ -270,7 +291,7 @@ describe("клиенты уходят с телефона, когда права
 
   test("расширили — перечитать, не стирать; ничего не поменяли и первая загрузка — ничего", () => {
     assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.scope": "all" })), "changed");
-    assert.equal(clientLevelsChange(team({ ...base, "clients.contacts": "day" }), team(base)), "changed");
+    assert.equal(clientLevelsChange(team({ ...base, "clients.scope": "month" }), team(base)), "changed");
     assert.equal(clientLevelsChange(team(base), team({ ...base, "record.team": "write" })), "same");
     assert.equal(clientLevelsChange(undefined, team(base)), "same");
   });
@@ -279,6 +300,13 @@ describe("клиенты уходят с телефона, когда права
     const withNote = { ...base, "clients.note": "read" } as const;
     assert.equal(clientLevelsChange(team(withNote), team({ ...withNote, "clients.note": "off" })), "narrowed");
     assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.files": "read" })), "changed");
+  });
+
+  test("«Меню клиента» и «Удаление клиента» сузили — сужение (аудит 03.10)", () => {
+    const withMenu = { ...base, "clients.menu": "write", "clients.delete": "write" } as const;
+    assert.equal(clientLevelsChange(team(withMenu), team({ ...withMenu, "clients.delete": "off" })), "narrowed");
+    assert.equal(clientLevelsChange(team(withMenu), team({ ...withMenu, "clients.menu": "off" })), "narrowed");
+    assert.equal(clientLevelsChange(team(base), team({ ...base, "clients.menu": "write" })), "changed");
   });
 
   test("владелец, ставший сотрудником, — сужение", () => {

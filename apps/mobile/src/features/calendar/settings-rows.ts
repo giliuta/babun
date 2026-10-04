@@ -85,6 +85,8 @@ export interface CalendarSettingsRows {
    *  страница читает сама). */
   booking: boolean;
   services: boolean;
+  /** «Услуги» закрыты тарифом: строка серая, тап — плашка про тариф. */
+  servicesLocked: boolean;
   /** «Метки» — метки дня. */
   labels: boolean;
   /** «Удалить календарь» — последняя строка экрана. */
@@ -118,7 +120,11 @@ export function calendarSettingsRows(
     // (владелец 30.09: «разделения „владелец, директор" не будет»).
     buffer: manage || access.schedule === "write",
     booking: shown(access.booking),
-    services: shown(access.services) && plan.services,
+    services: shown(access.services),
+    // Без тарифа строка на месте, но серая: тап — плашка «Нужно изменить
+    // тариф» (владелец 01.10). Не в `any` ниже: «страница не пустая» —
+    // про строки, которые есть.
+    servicesLocked: !plan.services,
     labels: shown(access.labels),
     remove: manage,
   };
@@ -126,6 +132,6 @@ export function calendarSettingsRows(
     ...rows,
     // Считаем по самим строкам, а не по праву: строку могли погасить тарифом,
     // и «страница не пустая» должно оставаться правдой, а не намерением.
-    any: Object.values(rows).some(Boolean),
+    any: Object.entries(rows).some(([key, on]) => key !== "servicesLocked" && on),
   };
 }

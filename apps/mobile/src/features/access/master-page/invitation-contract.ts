@@ -162,7 +162,7 @@ export function invitationRefusalText(error: unknown): string {
     case "invite:needs_calendar":
       return "Выберите календарь, в который зовёте мастера.";
     case "invite:card_fields_on_card":
-      return "Должность и цвет меняются в карточке сотрудника.";
+      return "Должность и цвет меняются в карточке партнёра.";
     case "access:not_attached":
       return "Права календаря ставятся только в календарях мастера.";
     case "access:owner_only":

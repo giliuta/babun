@@ -6,6 +6,7 @@ import {
   clientRequisitesOf,
   invoiceNeedsRequisitesChoice,
   invoiceRequisites,
+  NO_CLIENT_REQUISITES,
   makeDefaultRequisites,
   normalizeClientRequisites,
   orderedRequisites,
@@ -176,6 +177,13 @@ describe("выбор набора в инвойсе", () => {
     assert.equal(invoiceRequisites(all, "second")?.id, "second");
     assert.equal(invoiceRequisites(all, "gone")?.id, "main");
     assert.equal(invoiceRequisites([], "second"), null);
+  });
+
+  test("«без реквизитов» — на имя: ничего не печатается, id едет на сервер", () => {
+    assert.equal(resolveInvoiceRequisitesId(all, NO_CLIENT_REQUISITES), NO_CLIENT_REQUISITES);
+    assert.equal(invoiceRequisites(all, NO_CLIENT_REQUISITES), null);
+    // У клиента без наборов снимать нечего — серверу не о чем говорить.
+    assert.equal(resolveInvoiceRequisitesId([], NO_CLIENT_REQUISITES), null);
   });
 
   test("набор другого клиента после смены клиента — основной нового", () => {

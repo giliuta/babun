@@ -27,6 +27,7 @@ import {
   cacheReplaceTenant,
   dequeueAll,
   removeOp,
+  markOpPermanentlyFailed,
 } from "../db/cache/sql";
 import {
   createClient,
@@ -52,9 +53,10 @@ import { createBlankClient } from "../local/clients";
 import { createBlankAppointment } from "../local/appointments";
 import type { Client } from "../local/clients";
 import type { Appointment } from "../local/appointments";
-import { ColdOfflineCacheMissError } from "./cache-errors";
+import { ColdOfflineCacheMissError, OnlineOnlyWriteError } from "./cache-errors";
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
+const OTHER_TENANT = "22222222-2222-2222-2222-222222222222";
 const CLIENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const APPT_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
@@ -180,6 +182,27 @@ describe("clients cache-of-domain", () => {
     expect(server.readPages()).toBe(0);
     const cached = await cacheRead<Record<string, unknown>>("clients", TENANT);
     expect(cached.map((row) => row.id)).toEqual([CLIENT_ID]);
+  });
+
+  test("an offline write of ANOTHER company does not freeze this company's refresh (audit 03.10)", async () => {
+    // Офлайн-клиент компании A ждёт в очереди; под B он не уйдёт никогда.
+    await createClient(
+      stubSupabase,
+      createBlankClient({ id: CLIENT_ID, full_name: "Оффлайн A" }),
+      TENANT,
+    );
+    setNetwork(new OnlineNetwork());
+    const server = emptyClientSnapshotSupabase();
+
+    await listClients(server.client as never, OTHER_TENANT);
+
+    // Снимок B лёг в кэш: без сети B открывается, а не «ещё не загружено».
+    setNetwork(new OfflineNetwork());
+    expect(await listClients(stubSupabase, OTHER_TENANT)).toEqual([]);
+    // Строка A и её операция на месте.
+    const cachedA = await cacheRead<Record<string, unknown>>("clients", TENANT);
+    expect(cachedA.map((row) => row.id)).toEqual([CLIENT_ID]);
+    expect((await dequeueAll()).map((op) => op.row_id)).toEqual([CLIENT_ID]);
   });
 
   test("cold offline cache miss is unknown, not an empty client list", async () => {
@@ -433,12 +456,47 @@ describe("clients cache-of-domain", () => {
     expect(await listTrashedClients(stubSupabase, TENANT)).toEqual([]);
   });
 
+  test("отказ возврата (номер занят) оставляет клиента в «Удалённых» и говорит словами (аудит 03.10)", async () => {
+    const client = createBlankClient({ id: CLIENT_ID, full_name: "Номер занят" });
+    await createClient(stubSupabase, client, TENANT);
+    await archiveClient(stubSupabase, CLIENT_ID, TENANT, "2026-09-07T10:00:00.000Z");
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    setNetwork(new OnlineNetwork());
+    const taken = { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } };
+    const server = {
+      from() {
+        const chain: Record<string, unknown> = {};
+        chain.update = () => chain;
+        chain.eq = () => chain;
+        chain.select = () => chain;
+        chain.single = () => Promise.resolve(taken);
+        return chain;
+      },
+    };
+
+    await expect(
+      restoreClient(
+        server as never,
+        { ...client, deleted_at: "2026-08-08T10:00:00.000Z", purge_at: "2026-09-07T10:00:00.000Z" },
+        TENANT,
+      ),
+    ).rejects.toThrow("Его номер уже у другого клиента");
+
+    const cached = await cacheRead<Record<string, unknown>>("clients", TENANT);
+    expect(cached.map((row) => row.id)).toEqual([CLIENT_ID]);
+    expect(cached[0]!.deleted_at).not.toBeNull();
+    expect(await dequeueAll()).toEqual([]);
+  });
+
   test("online semantic update rejection rolls back cache and is never queued", async () => {
     await createClient(
       stubSupabase,
       createBlankClient({ id: CLIENT_ID, full_name: "До изменения" }),
       TENANT,
     );
+    // Создание уже на сервере: ждущая операция строки отправила бы правку
+    // в очередь за собой (аудит 03.10), а здесь проверяется прямой путь.
+    for (const op of await dequeueAll()) await removeOp(op.id);
     const queuedBefore = (await dequeueAll()).length;
     setNetwork(new OnlineNetwork());
 
@@ -457,11 +515,122 @@ describe("clients cache-of-domain", () => {
   });
 });
 
+describe("правка клиента встаёт за его ждущими правками (аудит 03.10)", () => {
+  // Сервер, который нельзя звать: прямая запись при ждущей очереди — ошибка.
+  const forbidden = {
+    from() {
+      throw new Error("прямая запись мимо очереди");
+    },
+    rpc() {
+      throw new Error("прямая запись мимо очереди");
+    },
+  };
+
+  test("удаление ждёт в очереди — возврат встаёт за ним, а не обгоняет", async () => {
+    const client = createBlankClient({ id: CLIENT_ID, full_name: "Ждущий" });
+    await createClient(stubSupabase, client, TENANT);
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    await archiveClient(stubSupabase, CLIENT_ID, TENANT, "2026-09-07T10:00:00.000Z");
+    setNetwork(new OnlineNetwork());
+
+    await restoreClient(
+      forbidden as never,
+      { ...client, deleted_at: "2026-08-08T10:00:00.000Z", purge_at: "2026-09-07T10:00:00.000Z" },
+      TENANT,
+    );
+
+    const ops = await dequeueAll();
+    expect(ops.map((op) => op.payload.deleted_at === null ? "restore" : "archive")).toEqual([
+      "archive",
+      "restore",
+    ]);
+  });
+
+  test("правка телефона при ждущей правке — в очередь за ней", async () => {
+    await createClient(stubSupabase, createBlankClient({ id: CLIENT_ID, full_name: "Ждущий" }), TENANT);
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    await updateClient(stubSupabase, CLIENT_ID, { comment: "первая" }, TENANT);
+    setNetwork(new OnlineNetwork());
+
+    await updateClient(forbidden as never, CLIENT_ID, { comment: "вторая" }, TENANT);
+
+    expect((await dequeueAll()).map((op) => op.payload.comment)).toEqual(["первая", "вторая"]);
+  });
+});
+
 describe("appointments cache-of-domain", () => {
+  test("отмена визита с деньгами без сети — отказ, в очередь не встаёт (аудит 03.10)", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+        prepaid_amount: 50,
+      }),
+      TENANT,
+    );
+    await expect(
+      updateAppointment(stubSupabase, APPT_ID, { status: "cancelled" }, TENANT),
+    ).rejects.toBeInstanceOf(OnlineOnlyWriteError);
+    const queued = await dequeueAll();
+    expect(queued.filter((op) => op.op === "update")).toEqual([]);
+    // Перенос того же визита без сети по-прежнему встаёт в очередь.
+    await updateAppointment(stubSupabase, APPT_ID, { time_end: "10:30" }, TENANT);
+    expect((await dequeueAll()).filter((op) => op.op === "update").length).toBe(1);
+  });
+
   test("cold offline cache miss is unknown, not a free calendar", async () => {
     await expect(
       listAppointments(stubSupabase, TENANT),
     ).rejects.toBeInstanceOf(ColdOfflineCacheMissError);
+  });
+
+  test("an offline record of ANOTHER company does not freeze this calendar's refresh (audit 03.10)", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+      }),
+      TENANT,
+    );
+    setNetwork(new OnlineNetwork());
+    const server = emptyClientSnapshotSupabase();
+
+    await listAppointments(server.client as never, OTHER_TENANT);
+
+    setNetwork(new OfflineNetwork());
+    expect(await listAppointments(stubSupabase, OTHER_TENANT)).toEqual([]);
+    const cachedA = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    expect(cachedA.map((row) => row.id)).toEqual([APPT_ID]);
+  });
+
+  test("запись с навсегда упавшей вставкой не пропадает с сетки при перечитке (аудит 03.10)", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+      }),
+      TENANT,
+    );
+    const [insert] = await dequeueAll();
+    await markOpPermanentlyFailed(insert!.id, "insert or update on table appointments violates foreign key");
+    setNetwork(new OnlineNetwork());
+    const server = emptyClientSnapshotSupabase();
+
+    // Список берётся из кэша, перечитка сервера идёт в фоне.
+    await listAppointments(server.client as never, TENANT);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const cached = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    expect(cached.map((row) => row.id)).toEqual([APPT_ID]);
   });
 
   test("an authoritative empty calendar snapshot remains usable offline", async () => {
@@ -623,6 +792,153 @@ describe("appointments cache-of-domain", () => {
     expect(a.time_end).toBe("14:30");
   });
 
+  test("отмена в сети по устаревшей копии не ложится, в кэш встаёт строка сервера (аудит 03.10)", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+      }),
+      TENANT,
+    );
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    setNetwork(new OnlineNetwork());
+    const [before] = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    // Пока телефон смотрел старую копию, другой телефон принял оплату.
+    const serverRow = {
+      id: APPT_ID,
+      tenant_id: TENANT,
+      kind: "work",
+      date: "2026-07-10",
+      time_start: "09:00",
+      time_end: "10:00",
+      status: "scheduled",
+      payment_status: "paid",
+      prepaid_amount: 0,
+      paid_amount: 100,
+      total_amount: 100,
+      services: [],
+      service_ids: [],
+      payments: [],
+      expenses: [],
+      updated_at: "2026-10-03T12:00:00.000Z",
+    };
+    const seenUpdateFilters: Record<string, unknown>[] = [];
+    const fake = {
+      from() {
+        const filters: Record<string, unknown> = {};
+        let op: "update" | "select" = "select";
+        const chain: Record<string, unknown> = {
+          update() {
+            op = "update";
+            return chain;
+          },
+          select() {
+            return chain;
+          },
+          eq(col: string, val: unknown) {
+            filters[col] = val;
+            return chain;
+          },
+          maybeSingle() {
+            if (op === "update") {
+              seenUpdateFilters.push({ ...filters });
+              return Promise.resolve({ data: null, error: null }); // строка уже другая
+            }
+            return Promise.resolve({ data: serverRow, error: null });
+          },
+          single() {
+            return Promise.resolve({ data: null, error: { message: "single не ждали" } });
+          },
+        };
+        return chain;
+      },
+    };
+
+    await expect(
+      updateAppointment(
+        fake as never,
+        APPT_ID,
+        { status: "cancelled", cancel_reason: "Клиент перенёс" },
+        TENANT,
+      ),
+    ).rejects.toThrow("изменилась на другом устройстве");
+
+    // Правка шла только поверх той строки, что видел телефон.
+    expect(seenUpdateFilters).toHaveLength(1);
+    expect(seenUpdateFilters[0]!.updated_at).toBe(before!.updated_at);
+    const [cached] = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    expect(cached?.status).toBe("scheduled");
+    expect(cached?.payment_status).toBe("paid");
+    expect(await dequeueAll()).toHaveLength(0);
+  });
+
+  test("правка записи, удалённой на другом телефоне, — словами, и запись уходит с экрана (аудит 03.10)", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+      }),
+      TENANT,
+    );
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    setNetwork(new OnlineNetwork());
+    const gone = {
+      from() {
+        const chain: Record<string, unknown> = {
+          update: () => chain,
+          eq: () => chain,
+          select: () => chain,
+          single: () =>
+            Promise.resolve({
+              data: null,
+              error: { code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned" },
+            }),
+        };
+        return chain;
+      },
+    };
+
+    await expect(
+      updateAppointment(gone as never, APPT_ID, { time_start: "11:00" }, TENANT),
+    ).rejects.toThrow("больше нет");
+    expect(await cacheRead<Record<string, unknown>>("appointments", TENANT)).toEqual([]);
+    expect(await dequeueAll()).toHaveLength(0);
+  });
+
+  test("за навсегда упавшей правкой новая не прячется — отказ словами (аудит 03.10)", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+      }),
+      TENANT,
+    );
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    // Офлайн-перенос, который сервер потом окончательно отклонил.
+    await updateAppointment(stubSupabase, APPT_ID, { date: "2026-07-11" }, TENANT);
+    const [stuck] = await dequeueAll();
+    await markOpPermanentlyFailed(stuck!.id, "Сначала отмените оплату");
+    setNetwork(new OnlineNetwork());
+
+    await expect(
+      updateAppointment(stubSupabase, APPT_ID, { time_start: "11:00" }, TENANT),
+    ).rejects.toThrow("не дошла до сервера");
+    await expect(deleteAppointment(stubSupabase, APPT_ID, TENANT)).rejects.toThrow(
+      "не дошла до сервера",
+    );
+    // Новая правка в очередь не легла — там по-прежнему одна упавшая.
+    expect(await dequeueAll()).toHaveLength(1);
+  });
+
   test("online semantic delete rejection restores the appointment", async () => {
     await createAppointment(
       stubSupabase,
@@ -654,6 +970,35 @@ describe("appointments cache-of-domain", () => {
 });
 
 describe("client tags offline and semantic failures", () => {
+  test("правка тега встаёт за его ждущей правкой, а не обгоняет её (аудит 03.10)", async () => {
+    const created = await createClientTag(
+      stubSupabase,
+      { name: "A", color: "#3366ff" },
+      TENANT,
+    );
+    for (const op of await dequeueAll()) await removeOp(op.id);
+    // A→B легла в очередь без сети.
+    await updateClientTag(stubSupabase, created.id, { name: "B" }, TENANT);
+    // Сеть вернулась: B→C не идёт в сеть мимо ждущей A→B.
+    setNetwork(new OnlineNetwork());
+    let direct = 0;
+    const spy = {
+      from() {
+        direct += 1;
+        throw new Error("прямая запись мимо очереди");
+      },
+      rpc() {
+        direct += 1;
+        throw new Error("прямая запись мимо очереди");
+      },
+    };
+    await updateClientTag(spy as never, created.id, { name: "C" }, TENANT);
+    expect(direct).toBe(0);
+    const names = (await dequeueAll()).map((op) => (op.payload as { name?: string }).name);
+    expect(names).toEqual(["B", "C"]);
+  });
+
+
   test("offline create keeps one stable UUID in cache and replay payload", async () => {
     const created = await createClientTag(
       stubSupabase,
@@ -688,6 +1033,9 @@ describe("client tags offline and semantic failures", () => {
       { name: "Исходная", color: "#3366ff" },
       TENANT,
     );
+    // Вставка «ушла на сервер»: без неё в очереди правка в сети идёт напрямую
+    // (иначе она встала бы за неотправленной вставкой того же тега).
+    for (const op of await dequeueAll()) await removeOp(op.id);
     const queuedBefore = (await dequeueAll()).length;
     setNetwork(new OnlineNetwork());
 

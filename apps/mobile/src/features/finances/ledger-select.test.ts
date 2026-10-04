@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 
 import { NO_TEAM } from "./accounts-sections";
 import {
+  awaitingAnswer,
   idsFromKey,
   idsKey,
   pickLedgerRows,
@@ -163,5 +164,20 @@ describe("кадр перехода в другую компанию", () => {
       { id: "b-2", team_id: "team-b2", account_id: "acc-b2" },
     ];
     assert.deepEqual(pickLedgerRows(companyB, [A], null), []);
+  });
+});
+
+describe("awaitingAnswer — «ответ в пути», а не «показана заглушка»", () => {
+  test("новый ключ грузится поверх заглушки — в пути", () => {
+    assert.equal(awaitingAnswer({ isPlaceholderData: true, isPending: true, fetchStatus: "fetching" }), true);
+  });
+  test("первая загрузка без заглушки и без сети — в пути", () => {
+    assert.equal(awaitingAnswer({ isPlaceholderData: false, isPending: true, fetchStatus: "paused" }), true);
+  });
+  test("ВЫКЛЮЧЕННЫЙ запрос с заглушкой (день без записей) — не в пути", () => {
+    assert.equal(awaitingAnswer({ isPlaceholderData: true, isPending: true, fetchStatus: "idle" }), false);
+  });
+  test("ответ пришёл, идёт фоновое перечитывание — не в пути", () => {
+    assert.equal(awaitingAnswer({ isPlaceholderData: false, isPending: false, fetchStatus: "fetching" }), false);
   });
 });

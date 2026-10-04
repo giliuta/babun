@@ -119,6 +119,19 @@ function owesAfterVisit(
   return paid < total;
 }
 
+/** То же, что `recordFilled`, но для того, кто не видит оплату записи: тогда
+ *  про оплату сказать нечего, и дырой «не оплачено» она не считается
+ *  (повторный аудит 03.10: у партнёра без «Оплаты» каждая прошедшая запись
+ *  горела «нет оплаты»). */
+export function recordFilledFor(
+  apt: Parameters<typeof recordFilled>[0],
+  todayYmd?: string,
+  paymentHidden?: boolean,
+): ReturnType<typeof recordFilled> {
+  const filled = recordFilled(apt, todayYmd);
+  return paymentHidden ? { ...filled, paid: true } : filled;
+}
+
 /** ЦВЕТ ЗАПИСИ ПО УСЛУГЕ — ПЕРВАЯ СТРОКА, У КОТОРОЙ ЦВЕТ ЕЩЁ ЕСТЬ.
  *
  *  Порядок услуг — это порядок нажатий (выбор дописывает в конец) и он же
@@ -239,13 +252,16 @@ export function appointmentSituation(
     active?: readonly ColorSituation[];
     /** Сегодня (YYYY-MM-DD) — чтобы знать, что визит уже прошёл. */
     todayYmd?: string;
+    /** Оплату записи смотрящий не видит («Оплата: Скрыта»): деньги в ней
+     *  нули, и «нет оплаты» было бы неправдой о каждом прошедшем визите. */
+    paymentHidden?: boolean;
   },
 ): ColorSituation | null {
   if (apt.kind !== "work") return null;
   if (apt.status === "cancelled") return null;
   return resolveRecordSituation({
     override: apt.color_override,
-    filled: recordFilled(apt, opts.todayYmd),
+    filled: recordFilledFor(apt, opts.todayYmd, opts.paymentHidden),
     palette: opts.palette,
     active: opts.active,
   });

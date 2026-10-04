@@ -126,6 +126,42 @@ export interface ServiceOverride {
   locked?: LockedLine;
 }
 
+/**
+ * Новое количество строки — по правилу замка выше: правка количества
+ * снимает замок, и лестница считает строку по действующему прайсу. Это
+ * правило потерялось при переносе формы (2026-08-25): степпер менял `qty`,
+ * а замок оставался, и «×2» у сохранённой записи не трогало ни цену по
+ * лестнице, ни длительность (аудит 2026-10-03).
+ *
+ * `repriceable` — есть по чему считать: услуга стоит в прайсе. Своя строка
+ * записи и услуга, убранная из прайса, держат замок — без него у них
+ * пропали бы имя, цена и время.
+ */
+export function overrideWithQuantity(
+  current: ServiceOverride | undefined,
+  qty: number,
+  repriceable: boolean,
+  /** Строка прайса — чтобы узнать цену лестницы, а не ручную (ниже). */
+  service?: Service,
+): ServiceOverride {
+  const next: ServiceOverride = { ...current, qty };
+  if (repriceable) {
+    // ЦЕНА ЛЕСТНИЦЫ — НЕ РУЧНАЯ (аудит формы записи 03.10). Открытая заново
+    // запись помечает «ручной» каждую строку, где цена за штуку не равна
+    // базовой, — а у строки «3+ по €40» она не равна никогда. Правка
+    // количества держала €40: 3 → 2 давало €80 вместо €100. Если записанная
+    // цена — это ровно лестница прайса при прежнем количестве, её решала
+    // лестница, и решать дальше будет она.
+    const ladderBefore =
+      service && current?.locked && current.price === current.locked.pricePerUnit
+        ? unitPriceFor(service, current.qty ?? 1)
+        : null;
+    if (ladderBefore != null && ladderBefore === next.price) delete next.price;
+    delete next.locked;
+  }
+  return next;
+}
+
 /** Что держит замок: три числа и два слова снимка. */
 export interface LockedLine {
   pricePerUnit: number;
@@ -229,4 +265,23 @@ export function humanDay(ymd: string): string {
   const d = parseYMD(ymd);
   if (Number.isNaN(d.getTime())) return ymd;
   return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+
+// «Пт, 25 сентября» — тот же день В НАЧАЛЕ СТРОКИ: подзаголовок шторки или
+// шапки. Шторка метки и шторка свободного времени писали «Сб, 3 октября», а
+// меню записи на той же сетке — «пт, 25 сентября» (повторный аудит 03.10).
+export function humanDayTitle(ymd: string): string {
+  const s = humanDay(ymd);
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// «чт, 1 октября 2026» — РАЗДЕЛИТЕЛЬ ДНЯ В СПИСКАХ, с годом всегда (владелец
+// 03.10: «в финансах тоже поставь год, как в истории, — везде, где так
+// показано; год — только в таких моментах»). Строки и подписи остаются без
+// года (`humanDay`).
+export function humanDayYear(ymd: string): string {
+  if (!ymd) return "—";
+  const d = parseYMD(ymd);
+  if (Number.isNaN(d.getTime())) return ymd;
+  return `${humanDay(ymd)} ${d.getFullYear()}`;
 }

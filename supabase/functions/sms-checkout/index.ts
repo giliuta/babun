@@ -5,8 +5,12 @@
 // ТОЛЬКО веб-версия (babun.app): в iOS-приложении нет ни кнопки, ни ссылки на
 // оплату — правило Apple о цифровых товарах.
 //
-// Что делает: проверяет, что зовёт владелец активной компании, и открывает
-// Stripe Checkout на выбранную сумму. Деньги зачисляет не эта функция, а
+// Что делает: проверяет, что зовёт владелец аккаунта — или партнёр с правом
+// «SMS: Пополняет» (`cabinet.sms`, владелец 04.10: «чтоб кто-то тоже мог
+// оплачивать, но зафиксировано за нашей командой»), — и открывает Stripe
+// Checkout на выбранную сумму. Аккаунт — из заголовка `x-babun-tenant`:
+// Кабинет ставит его из блока аккаунта, а не из открытого календаря, и имя
+// аккаунта стоит в строке оплаты на странице Stripe. Деньги зачисляет не эта функция, а
 // вебхук `stripe-webhook` по факту оплаты (`sms_credit_topup`), — отсюда
 // баланс не меняется никак.
 //
@@ -19,13 +23,18 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 
-/** Суммы пополнения, центы EUR. Любая другая сумма — отказ. */
-const PACKS: Record<number, string> = {
-  1000: "eur10",
-  2500: "eur25",
-  5000: "eur50",
-  10000: "eur100",
-};
+/** Сумма пополнения — любая целыми евро от €5 до €500 (владелец 30.09:
+ *  «вписываю туда сумму и нажимаю оплатить»). Те же пределы держит база
+ *  (`sms_topup_min_cents` / `sms_topup_max_cents`, `sms_credit_topup`): сумму
+ *  вне их вебхук не зачислит. Метка оплаты — «eur30». */
+const MIN_CENTS = 500;
+const MAX_CENTS = 50000;
+
+function packOf(amount: number): string | null {
+  if (!Number.isInteger(amount) || amount % 100 !== 0) return null;
+  if (amount < MIN_CENTS || amount > MAX_CENTS) return null;
+  return `eur${amount / 100}`;
+}
 
 /** Куда можно вернуть человека после оплаты. */
 const RETURN_ORIGINS = [
@@ -120,13 +129,17 @@ Deno.serve(async (request: Request) => {
     global: { headers },
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  const [{ data: tenantId }, { data: role }] = await Promise.all([
+  const [{ data: tenantId }, { data: role }, { data: canTopUp }, { data: profile }] = await Promise.all([
     asUser.rpc("current_tenant_id"),
     asUser.rpc("current_user_role"),
+    asUser.rpc("access_company", { p_block: "cabinet.sms", p_min: "write" }),
+    asUser.rpc("current_tenant_profile_safe"),
   ]);
-  if (typeof tenantId !== "string" || role !== "owner") {
+  // Владелец — всегда; партнёр — при «SMS: Пополняет» в ЭТОМ аккаунте.
+  if (typeof tenantId !== "string" || (role !== "owner" && canTopUp !== true)) {
     return json(403, { error: "owner_only" });
   }
+  const accountName = String((profile as { name?: unknown } | null)?.name ?? "").trim();
 
   let body: Record<string, unknown> = {};
   try {
@@ -135,7 +148,7 @@ Deno.serve(async (request: Request) => {
     // пустое тело — ниже отказ по сумме
   }
   const amount = Number(body.amount_cents);
-  const pack = PACKS[amount];
+  const pack = packOf(amount);
   if (!pack) return json(400, { error: "bad_amount" });
   const back = safeReturn(body.return_url);
 
@@ -144,7 +157,8 @@ Deno.serve(async (request: Request) => {
     "line_items[0][quantity]": "1",
     "line_items[0][price_data][currency]": "eur",
     "line_items[0][price_data][unit_amount]": String(amount),
-    "line_items[0][price_data][product_data][name]": "Баланс SMS · Babun",
+    // Чей баланс — прямо в строке оплаты: партнёр не спутает со своим.
+    "line_items[0][price_data][product_data][name]": accountName ? `Баланс SMS · ${accountName}` : "Баланс SMS · Babun",
     client_reference_id: tenantId,
     "metadata[kind]": "sms_topup",
     "metadata[tenant_id]": tenantId,
@@ -166,6 +180,8 @@ Deno.serve(async (request: Request) => {
   // живёт в Stripe; у нас — только её клиент, способ оплаты и «Visa •••• 4242».
   const auto = body.autotopup && typeof body.autotopup === "object" ? (body.autotopup as Record<string, unknown>) : null;
   if (auto) {
+    // Автопополнение сохраняет карту на аккаунт — это делает только владелец.
+    if (role !== "owner") return json(403, { error: "owner_only" });
     const threshold = Number(auto.threshold_cents);
     if (!THRESHOLDS.includes(threshold)) return json(400, { error: "bad_threshold" });
     const service = serviceClient();

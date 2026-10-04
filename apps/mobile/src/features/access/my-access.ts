@@ -30,6 +30,21 @@ const RANK: Readonly<Partial<Record<AccessLevel, number>>> = { off: 0, read: 1, 
 const rank = (level: AccessLevel | undefined): number =>
   level === undefined ? 0 : (RANK[level] ?? 0);
 
+/** «Ограничения» (03.10) — своя шкала: срок короче — доступ уже. Без ступени
+ *  в карте — «Неделя», как у сервера. */
+const WINDOW_RANK: Readonly<Partial<Record<AccessLevel, number>>> = {
+  week: 0,
+  near: 1,
+  month: 2,
+  quarter: 3,
+  half: 4,
+  own: 5,
+  all: 6,
+};
+
+const rankOf = (key: string, level: AccessLevel | undefined): number =>
+  key.endsWith(".window") ? (level === undefined ? 0 : (WINDOW_RANK[level] ?? 0)) : rank(level);
+
 /** Лучшее положение блока по всем календарям человека. Для экрана без
  *  выбранного календаря («Финансы» открываются, если хоть где-то смотрит). */
 export function bestCalendarLevel(
@@ -96,16 +111,19 @@ export function recordLevelsChanged(
     const now = next.calendars[team] ?? {};
     const keys = new Set([...Object.keys(was), ...Object.keys(now)]);
     for (const key of keys) {
-      if (key.startsWith("record.") && was[key] !== now[key]) return true;
+      // «Ограничения» записей (03.10) — тоже маска окна: сузили — строки
+      // старше окна должны уйти, расширили — прийти.
+      if ((key.startsWith("record.") || key === "calendar.window") && was[key] !== now[key]) return true;
     }
   }
   return false;
 }
 
 // КЛИЕНТЫ УХОДЯТ С ТЕЛЕФОНА ПРИ СУЖЕНИИ ПРАВ (защита базы, владелец 30.09:
-// «чтоб не пришёл на неделю, не выгрузил базу и не ушёл»). У каждого из трёх
-// прав клиентов своя шкала: «Какие клиенты» — Около записи < Своей команды <
-// Вся база, «Телефон» — Скрыт < В день записи < Всегда. Сузили хоть одно
+// «чтоб не пришёл на неделю, не выгрузил базу и не ушёл»). У прав клиентов
+// своя шкала: «Ограничения» — Неделя < 2 недели < Месяц < 3 месяца < Полгода
+// < Без ограничения
+// («Телефон» с 02.10 идёт вместе с базой). Сузили хоть одно
 // хоть в одной команде (или команду сняли) — клиенты и открытые номера этой
 // компании стираются с телефона сразу; поменяли иначе — перечитываются: маска
 // строк и `contacts_hidden` пришли при прежних правах.
@@ -114,19 +132,25 @@ const BLOCK_RANK: Readonly<Partial<Record<AccessLevel, number>>> = { off: 0, rea
 
 const CLIENT_RANKS: Readonly<Record<string, Readonly<Partial<Record<AccessLevel, number>>>>> = {
   clients: BLOCK_RANK,
-  "clients.scope": { near: 0, own: 1, all: 2 },
-  "clients.contacts": { off: 0, day: 1, read: 2 },
+  "clients.scope": { week: 0, near: 1, month: 2, quarter: 3, half: 4, own: 5, all: 6 },
   // Блоки карточки (30.09): закрыли блок — его поля уходят с телефона вместе
   // со строками, перечитанными уже без них.
   "clients.note": BLOCK_RANK,
   "clients.people": BLOCK_RANK,
   "clients.objects": BLOCK_RANK,
   "clients.labels": BLOCK_RANK,
+  "clients.tags": BLOCK_RANK,
   "clients.personal": BLOCK_RANK,
   "clients.files": BLOCK_RANK,
   "clients.requisites": BLOCK_RANK,
+  "clients.client": BLOCK_RANK,
   "clients.history": BLOCK_RANK,
-  "clients.money": BLOCK_RANK,
+  "clients.sms": BLOCK_RANK,
+  // «Меню клиента» и «Удаление клиента» (03.10) тоже едут в `blocks` строки:
+  // без них сужение оставляло «Удалить» и «Напомнить» на кэше, а сервер
+  // отказывал (аудит 03.10).
+  "clients.menu": BLOCK_RANK,
+  "clients.delete": BLOCK_RANK,
 };
 
 export type ClientLevelsChange = "same" | "changed" | "narrowed";
@@ -183,27 +207,18 @@ export function isClientDataKey(queryKey: readonly unknown[], tenantId: string):
 }
 
 /** ДОХОДЫ И РАСХОДЫ — ДВА ПРАВА С ЭТАПА 2 (владелец 29.09: «только доходы, но
- *  видел все расходы»). До наката их вела одна строка `finance.operations`.
- *  Карта сервера несёт все живые блоки с умолчаниями, поэтому новый ключ либо
- *  есть в каждом календаре, либо ни в одном: по нему и видно, какая карта
- *  пришла. Экран спрашивает сторону денег этим ключом — и работает до наката,
- *  после него и на телефоне, который карту ещё не перечитал. */
-export function moneyKey(map: MemberAccessMap | undefined, side: "income" | "expense"): string {
-  const key = side === "income" ? "finance.income" : "finance.expense";
-  for (const levels of Object.values(map?.calendars ?? {})) {
-    if (key in levels) return key;
-    if ("finance.operations" in levels) return "finance.operations";
-  }
-  return key;
+ *  видел все расходы»): ключ права стороны денег. Общей строки
+ *  `finance.operations` на сервере нет с наката этапа 2 (03.10 сверено: ни в
+ *  реестре, ни в правах, ни в функциях и политиках) — карта её не принесёт. */
+export function moneyKey(_map: MemberAccessMap | undefined, side: "income" | "expense"): string {
+  return side === "income" ? "finance.income" : "finance.expense";
 }
 
 /** Можно ли человеку править и удалять эту ручную операцию команды (срез 2а)
  *  — ровно то, что пустит сервер (политики `finance_transactions_*_income` /
- *  `_expense`): владелец — любую; сотрудник по стороне денег: «Правит всё» —
- *  любую строку команды, «Добавляет» — только свою. На старой карте (общий
- *  `finance.operations`) — как было: «Меняет» правит любой расход, доход —
- *  никогда. Оплату записи, инвойс, возврат и долг вызывающий отсекает сам:
- *  их ведут свои двери. */
+ *  `_expense`): владелец — любую; партнёр по стороне денег: «Правит всё» —
+ *  любую строку команды, «Добавляет» — только свою. Оплату записи, инвойс,
+ *  возврат и долг вызывающий отсекает сам: их ведут свои двери. */
 export function canEditMoneyRow(input: {
   role: Role | null | undefined;
   map: MemberAccessMap | undefined;
@@ -215,9 +230,7 @@ export function canEditMoneyRow(input: {
   const { role, map, teamId, side, createdBy, me } = input;
   if (role === "owner" || map?.isOwner) return true;
   if (!map || !teamId) return false;
-  const key = moneyKey(map, side);
-  const level = map.calendars[teamId]?.[key];
-  if (key === "finance.operations") return side === "expense" && level === "write";
+  const level = map.calendars[teamId]?.[moneyKey(map, side)];
   if (level === "full") return true;
   return level === "write" && !!me && createdBy === me;
 }
@@ -226,13 +239,21 @@ export function canEditMoneyRow(input: {
 export const FINANCE_BLOCK_KEYS: readonly string[] = [
   "finance.income",
   "finance.expense",
-  "finance.operations",
   "finance.accounts",
   "finance.debts",
   "finance.documents",
-  "finance.categories",
-  "finance.templates",
-  "finance.vat",
+  "finance.profit",
+  // «Ограничения» (03.10): сузили окно — старые деньги уходят с телефона.
+  "finance.window",
+  // Строки шестерёнки (03.10): категории, счета, ящик и бланк — тоже деньги
+  // компании на телефоне.
+  "finance.settings_accounts",
+  "finance.settings_trash",
+  "finance.settings_categories_income",
+  "finance.settings_categories_expense",
+  "finance.settings_categories_debts",
+  "finance.settings_requisites",
+  "finance.settings_currency",
 ];
 
 /** Первые сегменты ключей, под которыми на телефоне лежат деньги компании. */
@@ -273,9 +294,9 @@ export function lostAccess(
   if (before.isOwner && !after.isOwner) return true;
   if (after.isOwner) return false;
   for (const key of blockKeys) {
-    if (rank(after.company[key]) < rank(before.company[key])) return true;
+    if (rankOf(key, after.company[key]) < rankOf(key, before.company[key])) return true;
     for (const [teamId, levels] of Object.entries(before.calendars)) {
-      if (rank(after.calendars[teamId]?.[key]) < rank(levels[key])) return true;
+      if (rankOf(key, after.calendars[teamId]?.[key]) < rankOf(key, levels[key])) return true;
     }
   }
   return false;

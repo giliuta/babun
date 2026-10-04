@@ -1,4 +1,5 @@
 import type { Json } from "@babun/shared/db/database.types";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // ПРАВА СОТРУДНИКА ПО БЛОКАМ — ЧИСТЫЙ СЛОЙ ЭКРАНА (STORY-081).
 //
@@ -15,14 +16,40 @@ import type { Json } from "@babun/shared/db/database.types";
 // удаляет и чужое в команде. На сервере ступень стоит в конце шкалы
 // (`array['off', 'read', 'write', 'full']`), поэтому прежние ранги не сдвинулись.
 //
-// «Около записи» (`near`) и «В день записи» (`day`) — защита базы клиентов
-// (владелец 30.09): охват «Какие клиенты» уже «Своей команды», телефон —
-// только в день записи. Сервер их в ранг `access_calendars` не ставит.
-export type AccessLevel = "off" | "read" | "write" | "full" | "own" | "all" | "near" | "day";
+// «2 недели» (`near`), «Месяц» (`month`) и «В день записи» (`day`) — защита
+// базы клиентов (владелец 30.09, окно — 02.10): охват «Какие клиенты» уже
+// «Своей команды», телефон — только в день записи. Сервер их в ранг
+// `access_calendars` не ставит.
+export type AccessLevel =
+  | "off"
+  | "read"
+  | "write"
+  | "full"
+  | "own"
+  | "all"
+  | "week"
+  | "near"
+  | "month"
+  | "quarter"
+  | "half"
+  | "day";
 export type AccessArea = "calendar" | "finance" | "clients" | "company" | "owner";
 export type AccessScope = "calendar" | "company";
 
-const LEVELS: readonly AccessLevel[] = ["off", "read", "write", "full", "own", "all", "near", "day"];
+const LEVELS: readonly AccessLevel[] = [
+  "off",
+  "read",
+  "write",
+  "full",
+  "own",
+  "all",
+  "week",
+  "near",
+  "month",
+  "quarter",
+  "half",
+  "day",
+];
 const AREAS: readonly AccessArea[] = ["calendar", "finance", "clients", "company", "owner"];
 
 export interface AccessBlock {
@@ -59,7 +86,11 @@ export const LEVEL_WORD: Record<AccessLevel, string> = {
   full: "Правит всё",
   own: "Из его календарей",
   all: "Все",
-  near: "Около записи",
+  week: "Неделя",
+  near: "2 недели",
+  month: "Месяц",
+  quarter: "3 месяца",
+  half: "Полгода",
   day: "В день записи",
 };
 
@@ -67,7 +98,9 @@ export const AREA_TITLE: Record<Exclude<AccessArea, "owner">, string> = {
   calendar: "Календарь",
   finance: "Финансы",
   clients: "Клиенты",
-  company: "Компания",
+  // Права аккаунта — тариф, оплаты, SMS, реквизиты (04.10): раздел зовётся
+  // как место, где они живут у человека, — «Кабинет».
+  company: "Кабинет",
 };
 
 type Row = Record<string, unknown>;
@@ -82,7 +115,7 @@ const isArea = (value: unknown): value is AccessArea =>
   typeof value === "string" && (AREAS as readonly string[]).includes(value);
 
 const BAD_BLOCKS = "Сервер вернул некорректный список прав";
-const BAD_MAP = "Сервер вернул некорректные права сотрудника";
+const BAD_MAP = "Сервер вернул некорректные права партнёра";
 
 /** Строки `access_blocks` → блоки по порядку `position`. Блок с незнакомой
  *  областью или положением — ошибка сервера, а не «пропустить молча»: иначе
@@ -111,7 +144,9 @@ export function parseAccessBlocks(rows: readonly unknown[]): AccessBlock[] {
         area,
         scope,
         levels,
-        title: title_ru,
+        // Название блока сервер хранит по-русски — переводим на язык
+        // интерфейса при чтении (список — scripts/i18n/server-keys.js).
+        title: tDynamic(title_ru),
         ownerOnly: owner_only,
         live,
         position,
@@ -142,7 +177,13 @@ export function parseMemberAccessMap(value: Json | null): MemberAccessMap {
   ) {
     throw new Error(BAD_MAP);
   }
-  const attached = attached_calendars ?? [];
+  // СВОЯ КАРТА ПАРТНЁРА (`my_access_map`) СПИСКА НЕ НЕСЁТ: сервер кладёт его
+  // только в карту, которую читает владелец (`access_map_for(…, true)`). Зато
+  // в своей карте `calendars` — ровно прикреплённые календари, где записи
+  // видны. Без этого `record-blocks` считал каждый календарь чужим, и у живого
+  // партнёра страница записи теряла все блоки (04.10, прогон на двух
+  // телефонах; зеркало владельца ошибку не показывало — у него список есть).
+  const attached = attached_calendars ?? Object.keys(calendars);
   if (!Array.isArray(attached) || !attached.every((id) => typeof id === "string")) {
     throw new Error(BAD_MAP);
   }
@@ -193,8 +234,12 @@ export function sectionsFor(blocks: readonly AccessBlock[]): AccessSection[] {
     }
     section.blocks.push(block);
   }
-  return sections;
+  // Порядок разделов — слово владельца 01.10: «Календарь, Клиенты, Финансы,
+  // Компания»; реестр сервера ставит финансы раньше клиентов.
+  return sections.sort((a, b) => SECTION_ORDER.indexOf(a.area) - SECTION_ORDER.indexOf(b.area));
 }
+
+const SECTION_ORDER: readonly AccessArea[] = ["calendar", "clients", "finance", "company", "owner"];
 
 export interface AccessChange {
   block: string;

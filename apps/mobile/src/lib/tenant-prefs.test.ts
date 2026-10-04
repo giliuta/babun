@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { MemoryKVStorage, setStorage } from "@babun/shared/storage";
+import { CHROME_STORAGE_KEY } from "./chrome-cache";
 
 import {
   TENANT_SCOPED_KEY_PREFIXES,
@@ -49,6 +50,8 @@ describe("настройки, помнящиеся по компании", () =>
     assert.ok(isTenantScopedKey("babun-clients-sort"));
     assert.ok(isTenantScopedKey("babun:hint-accounts-swipe"));
     assert.ok(isTenantScopedKey("babun:transfer:last:acc-1"));
+    // Шапка без сервера — тоже человека: в ней все его компании.
+    assert.ok(isTenantScopedKey(CHROME_STORAGE_KEY));
   });
 
   test("ЧИСТКА ВЖИВУЮ: переход бережёт настройку компании, выход из аккаунта — нет", () => {
@@ -143,8 +146,10 @@ describe("настройки, помнящиеся по компании", () =>
         const src = readFileSync(full, "utf8");
         const rel = full.slice(repo.length + 1);
 
-        // Форма 1: ключ собирается строкой — `babun-что-то:${tenantId}`.
-        for (const m of src.matchAll(/`([A-Za-z0-9:._-]+):\$\{tenantId\}/g)) {
+        // Форма 1: ключ собирается строкой — `babun-что-то:${tenantId}`, и с
+        // точкой, и с выражением (`${tenantId ?? "none"}`): обе формы прошли
+        // мимо сторожа, и три ключа жили вне реестра (аудит 03.10).
+        for (const m of src.matchAll(/`([A-Za-z0-9:._-]+)[:.]\$\{tenantId[^}]*\}/g)) {
           found.set(m[1], rel);
         }
         // Форма 2: набор `createEnabledPrefs`, который приклеивает компанию сам.
@@ -176,5 +181,17 @@ describe("настройки, помнящиеся по компании", () =>
       "ключ называет компанию, но не объявлен в TENANT_SCOPED_KEY_PREFIXES — " +
         "переход будет сносить его молча:\n" + unregistered.join("\n"),
     );
+
+    // И НАОБОРОТ: ключ хранилища вне подметаемых префиксов переживает
+    // «Выйти» — черновик реквизитов с IBAN оставался на телефоне (03.10).
+    // Имена, которые не ключи хранилища, перечислены явно.
+    // `auto` — ключ владельца в реестре уведомлений (`auto:<компания>:<запись>`,
+    // 03.10), сам реестр подметается выходом целиком.
+    const NOT_STORAGE = new Set(["tenant", "personal-event-types", "auto"]);
+    const unwiped = [...found]
+      .filter(([prefix]) => !NOT_STORAGE.has(prefix))
+      .filter(([prefix]) => !WIPED_PREFIXES.some((p) => prefix.startsWith(p)))
+      .map(([prefix, file]) => `${prefix} (${file})`);
+    assert.deepEqual(unwiped, [], "ключ с компанией в имени не подметается выходом:\n" + unwiped.join("\n"));
   });
 });

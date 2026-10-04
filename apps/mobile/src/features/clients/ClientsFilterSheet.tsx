@@ -19,10 +19,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BarChart3, Check, ChevronDown, ChevronRight } from "lucide-react-native";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
-import type {
-  AcquisitionSource,
-  PropertyType,
-} from "@babun/shared/local/clients";
+import type { PropertyType } from "@babun/shared/local/clients";
 import { haptics } from "@/lib/haptics";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
@@ -44,7 +41,6 @@ import {
   FACET_SUBTITLES,
   SORT_BLOCKS,
   SORT_LABELS_LONG,
-  SOURCE_OPTIONS,
   type ClientsFilter,
   type FacetOption,
   type SegmentKey,
@@ -69,12 +65,16 @@ import { useReduceMotion } from "@/lib/reduce-motion";
 
 const INK = "#0B1220";
 const SLOT = 92; // боковые слоты шапки: заголовок оптически по центру.
-const GRABBER_H = 19; // язычок листа (высота + его отступы)
-const TOP_GAP = 10; // зазор до статус-бара
+export const GRABBER_H = 19; // язычок листа (высота + его отступы)
+export const TOP_GAP = 10; // зазор до статус-бара
 /** Доля экрана под лист «Фильтры» (владелец 2026-08-07: «в половину»).
  *  Чуть больше половины: ровно 0.5 обрезает футер «Показать N» на
  *  маленьких экранах, и кнопка уезжала под сгиб. */
-const HALF_RATIO = 0.58;
+export const HALF_RATIO = 0.58;
+
+/** Три формы счётного слова: «клиент / клиента / клиентов». */
+export type Noun3 = [string, string, string];
+const CLIENT_NOUN: Noun3 = ["клиент", "клиента", "клиентов"];
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -98,7 +98,7 @@ function summarize(
 /** Строка блока: одна тап-зона «имя + шеврон … значение». Значение —
  *  «Все» faint в покое, оттиск в чёрный при выборе; у сущностей перед
  *  значением тик цвета первой выбранной. */
-function FilterRow({
+export function FilterRow({
   name,
   value,
   tick,
@@ -228,9 +228,12 @@ function PickRow({
   tick,
   count,
   reduced,
+  noun = CLIENT_NOUN,
   onToggle,
 }: {
   label: string;
+  /** Что считается: «клиент» здесь, «изменение» в истории (03.10). */
+  noun?: Noun3;
   /** Правило ряда одним предложением. Без него «Постоянные» не говорит,
    *  сколько это визитов, и статусу невозможно верить (владелец 2026-08-07). */
   rule?: string;
@@ -284,8 +287,8 @@ function PickRow({
       accessibilityState={{ checked: active, disabled: dimmed }}
       accessibilityLabel={
         dimmed
-          ? `${label}, нет клиентов при текущих условиях`
-          : `${label}, ${count} ${countWordRu(count, "клиент", "клиента", "клиентов")}`
+          ? `${label}, нет ${noun[2]} при текущих условиях`
+          : `${label}, ${count} ${countWordRu(count, ...noun)}`
       }
       accessibilityHint={
         dimmed ? undefined : "Добавляет к набору, список останется открытым"
@@ -359,7 +362,7 @@ function PickRow({
  *  ТОЛЬКО меняющаяся часть (число): раньше при каждом пересчёте
  *  перерисовывалась вся надпись, и кнопка «моргала» глаголом. Слот хинта
  *  постоянной высоты — иначе лист прыгал на 26pt прямо под пальцем. */
-function FooterCta({
+export function FooterCta({
   t,
   verb,
   roll,
@@ -470,7 +473,7 @@ function FooterCta({
  *  (и скрим/свайп) возвращают на СТРАНИЦУ фильтров, где выбранное
  *  видно в строке; на список ведёт только CTA страницы (решение
  *  владельца 2026-07-24: тап не должен «перекидывать в клиенты»). */
-function MultiPickSheet({
+export function MultiPickSheet({
   visible,
   title,
   subtitle,
@@ -482,10 +485,13 @@ function MultiPickSheet({
   shownCount,
   zeroHint,
   reduced,
+  noun = CLIENT_NOUN,
   onToggle,
   onClear,
   onClose,
 }: {
+  /** Что считается в счётчиках и «Готово · N» (по умолчанию — клиенты). */
+  noun?: Noun3;
   visible: boolean;
   title: string;
   /** Подпись-семантика под заголовком — своя у каждого фасета. */
@@ -605,6 +611,7 @@ function MultiPickSheet({
                       tick={o.color || undefined}
                       count={shown[o.value] ?? 0}
                       reduced={reduced}
+                      noun={noun}
                       onToggle={() => onToggle(o.value)}
                     />
                   ))}
@@ -637,13 +644,13 @@ function MultiPickSheet({
         roll={
           shownCount === 0
             ? null
-            : ` · ${shownCount} ${countWordRu(shownCount, "клиент", "клиента", "клиентов")}`
+            : ` · ${shownCount} ${countWordRu(shownCount, ...noun)}`
         }
         hint={zeroHint}
         a11yLabel={
           shownCount === 0
             ? "Готово"
-            : `Готово, ${shownCount} ${countWordRu(shownCount, "клиент", "клиента", "клиентов")}`
+            : `Готово, ${shownCount} ${countWordRu(shownCount, ...noun)}`
         }
         a11yHint="Возвращает к фильтрам"
         reduced={reduced}
@@ -656,7 +663,7 @@ function MultiPickSheet({
 /** Попап одиночного выбора — закон «галка = один»: тап применяет и
  *  ЗАКРЫВАЕТ (эталон — пресеты периода). Для «Сортировки»: это
  *  персистентная настройка списка, «Сбросить» её не трогает. */
-function SinglePickSheet({
+export function SinglePickSheet({
   visible,
   title,
   subtitle,
@@ -889,15 +896,17 @@ export function ClientsFilterSheet({
   const zeroHint = (() => {
     if (shownCount > 0) return null;
     const w = facetCounts.withoutOne;
+    // Имя в кавычках — как строка в листе, в именительном: «Без «метку»»
+    // читалось сбоем (проверка 03.10).
     const names: Record<string, string> = {
-      search: "поиск",
-      period: "период",
-      segment: "статус",
-      city: "метку",
-      tag: "теги",
-      team: "команду",
-      source: "источник",
-      property: "тип объекта",
+      search: "Поиск",
+      period: "Период",
+      segment: "Статус",
+      city: "Метка",
+      tag: "Теги",
+      team: "Команда",
+      source: "Источник",
+      property: "Тип объекта",
     };
     const active: Record<string, boolean> = {
       search: !!trimmedSearch,
@@ -963,7 +972,7 @@ export function ClientsFilterSheet({
           .map((id) => teamOptions.find((o) => o.value === id)?.label ?? "")
           .filter(Boolean),
         ...filter.sources
-          .map((s) => SOURCE_OPTIONS.find((o) => o.value === s)?.label ?? "")
+          .map((s) => result.sourceOptions.find((o) => o.value === s)?.label ?? "")
           .filter(Boolean),
         ...filter.propertyTypes.map(propertyTypeLabel).filter(Boolean),
       ].join(" · ");
@@ -1112,13 +1121,13 @@ export function ClientsFilterSheet({
     source: {
       title: "Источник",
       subtitle: FACET_SUBTITLES.source,
-      blocks: [SOURCE_OPTIONS],
+      blocks: [result.sourceOptions],
       selected: filter.sources,
       counts: facetCounts.source,
       toggle: (v) =>
         applyFilter({
           ...filter,
-          sources: toggleIn(filter.sources, v) as AcquisitionSource[],
+          sources: toggleIn(filter.sources, v),
         }),
       clear: () => applyFilter({ ...filter, sources: [] }),
     },
@@ -1148,7 +1157,7 @@ export function ClientsFilterSheet({
   const cityValue = summarize(cityOptions, filter.selectedCities);
   const tagValue = summarize(tagOptions, filter.activeTags);
   const teamValue = summarize(teamOptions, filter.selectedTeams);
-  const sourceValue = summarize(SOURCE_OPTIONS, filter.sources);
+  const sourceValue = summarize(result.sourceOptions, filter.sources);
   const propertyValue = summarize(result.propertyOptions, filter.propertyTypes);
 
   return (

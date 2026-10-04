@@ -36,7 +36,8 @@ const EXEMPT: Record<string, string> = {
   client_tag_assignments: "команда через client_tags (теги — у команды с 30.09)",
   client_attachments: "файлы клиента — у клиента",
   location_requests: "запрос адреса у клиента — у клиента",
-  companies: "реквизиты и нумерация инвойсов — едины на компанию",
+  legal_entities: "юрлица компании — команда выбирает своё полем teams.legal_entity_id (STORY-101)",
+  document_sequences: "серия номеров — у юрлица, а не у команды: закон о VAT требует одну сплошную нумерацию на юрлицо",
   master_documents: "команда через masters",
   master_ratings: "команда через masters",
   master_rating_tokens: "команда через masters",
@@ -71,6 +72,8 @@ const NULLABLE_OK: Record<string, string> = {
   "appointments.team_id": "пусто = личное событие создателя",
   "member_access.team_id": "пусто = блок уровня компании (шаблоны SMS); клиенты с 29.09 — у команды",
   "invitations.team_id": "устарела, канон — team_ids[]",
+  "change_log.team_id":
+    "журнал изменений (03.10): пусто — изменение уровня аккаунта (партнёры, права без календаря) или личное событие",
   "clients.team_id":
     "владелец 30.09: клиент — у команды; пусто только у компании без команд, удаление команды гасит поле (on delete set null)",
   "finance_categories.team_id":

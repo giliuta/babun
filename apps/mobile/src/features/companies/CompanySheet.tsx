@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { InvoiceNumberRow } from "@/features/invoices/InvoiceNumberRow";
 import { useNextInvoiceSeries } from "@/features/invoices/queries";
-import { ScrollView, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { Building2 } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { FieldRow, RowCaption } from "@/components/ui/card-rows";
 import { NameColorField } from "@/components/ui/picker-fields";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { GUTTER } from "@/components/ui/tokens";
@@ -14,7 +15,14 @@ import { LogoRow } from "@/features/settings/LogoRow";
 import { getStorage } from "@babun/shared/storage";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
-import { canSaveCompany, isCompanyDraftDirty, normalizeCompanyDraft } from "./company-rules";
+import {
+  NUMBER_PADDINGS,
+  canSaveCompany,
+  cleanSeriesPrefix,
+  documentNumberPreview,
+  isCompanyDraftDirty,
+  normalizeCompanyDraft,
+} from "./company-rules";
 import type { Company, CompanyDraft } from "./queries";
 
 // КАРТОЧКА РЕКВИЗИТОВ — ОДНА ФОРМА НА СОЗДАНИЕ И НА ПРАВКУ (тот же закон, что у
@@ -68,8 +76,14 @@ function companyToDraft(company: Company | null): CompanyDraft {
     bank_name: company.bank_name,
     contact_phone: company.contact_phone,
     contact_email: company.contact_email,
+    invoice_prefix: company.invoice_prefix,
+    receipt_prefix: company.receipt_prefix,
+    credit_note_prefix: company.credit_note_prefix,
+    number_padding: company.number_padding,
   };
 }
+
+type PrefixKey = "invoice_prefix" | "receipt_prefix" | "credit_note_prefix";
 
 /** Черновик на устройстве — пережить перезапуск приложения (см. ниже). */
 function readStoredDraft(storageKey: string | null): CompanyDraft | null {
@@ -128,7 +142,9 @@ export function CompanySheet({
   // убирает.
   const tenantId = useTenantId();
   const key = company?.id ?? "new";
-  const storageKey = tenantId ? `companies.draft.${tenantId}.${key}` : null;
+  // Под `babun:`: черновик реквизитов (IBAN, VAT, адрес) обязан уйти вместе
+  // с «Выйти» — ключ без префикса чистка не видела (аудит 03.10).
+  const storageKey = tenantId ? `babun:companies:draft:${tenantId}:${key}` : null;
   const [hydratedKey, setHydratedKey] = useState<string | null>(null);
   useEffect(() => {
     if (!visible || hydratedKey === key) return;
@@ -195,6 +211,23 @@ export function CompanySheet({
       keyboardType={options.keyboardType}
       autoCapitalize={options.autoCapitalize}
       onSave={(v) => set({ [key]: v.trim() ? v : null })}
+    />
+  );
+
+  /** Буквы серии. Чистятся под пальцем (`sanitize`): русская раскладка и
+   *  строчные не доживают до бумаги. Пусто у нового набора — подсказкой то,
+   *  что поставит сервер. */
+  const prefixField = (key: PrefixKey, label: string, fallback: string, separated = true) => (
+    <FieldRow
+      label={label}
+      value={draft[key] ?? ""}
+      placeholder={fallback}
+      stacked
+      live
+      separated={separated}
+      autoCapitalize="characters"
+      sanitize={cleanSeriesPrefix}
+      onSave={(v) => set({ [key]: v })}
     />
   );
 
@@ -300,7 +333,15 @@ export function CompanySheet({
             пишем номер инвойса — за реквизитами сохраняется нумерация»).
             Серия живёт на наборе (миграция 20260922050000): следующий номер
             этих реквизитов и правка «этот инвойс — 104». */}
-        {company ? <CompanyInvoiceNumber companyId={company.id} /> : null}
+        <SeriesBlock
+          company={company}
+          draft={draft}
+          onPadding={(number_padding) => set({ number_padding })}
+        >
+          {prefixField("invoice_prefix", "Буквы инвойса", "INV", !!company)}
+          {prefixField("receipt_prefix", "Буквы чека", "REC")}
+          {prefixField("credit_note_prefix", "Буквы кредит-ноты", "CN")}
+        </SeriesBlock>
 
         {company ? (
           <SectionCard dense>
@@ -320,12 +361,66 @@ export function CompanySheet({
   );
 }
 
-function CompanyInvoiceNumber({ companyId }: { companyId: string }) {
+// БЛОК «НОМЕР» (владелец 03.10: «буквы и длина номера — в реквизитах,
+// сразу»). Следующий инвойс показывает набранное до «Сохранить»: сменил
+// буквы — видишь, как будет. Порядок номера при этом не трогается — дальше
+// идёт тот же счётчик серии, выпущенные бумаги хранят свой номер.
+function SeriesBlock({
+  company,
+  draft,
+  onPadding,
+  children,
+}: {
+  company: Company | null;
+  draft: CompanyDraft;
+  onPadding: (padding: number) => void;
+  children: ReactNode;
+}) {
+  const t = useThemeColors();
   const year = new Date().getFullYear();
-  const next = useNextInvoiceSeries(year, companyId).data ?? null;
+  const next = useNextInvoiceSeries(year, company?.id ?? null).data ?? null;
+  const padding = draft.number_padding ?? company?.number_padding ?? 4;
+  const prefix =
+    cleanSeriesPrefix(draft.invoice_prefix ?? "") || company?.invoice_prefix || "INV";
   return (
-    <SectionCard dense title="Инвойс">
-      <InvoiceNumberRow stacked target={{ companyId, year, next }} />
+    <SectionCard dense title="Номер">
+      {company ? (
+        <InvoiceNumberRow
+          stacked
+          label="Следующий инвойс"
+          target={{ companyId: company.id, year, next }}
+          preview={next ? documentNumberPreview(prefix, year, next.seq, padding) : undefined}
+        />
+      ) : null}
+      {children}
+      <View
+        style={{
+          // Линия — как у строк-полей над ней: от края до края карточки.
+          borderTopWidth: 1,
+          borderTopColor: t.separator,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          minHeight: 60,
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+        }}
+      >
+        <Text
+          maxFontSizeMultiplier={1.2}
+          numberOfLines={1}
+          style={{ flex: 1, fontSize: 15, color: t.ink }}
+        >
+          Цифр в номере
+        </Text>
+        <SegmentedControl
+          compact
+          options={NUMBER_PADDINGS.map((n) => ({ value: String(n), label: String(n) }))}
+          value={String(padding)}
+          onChange={(value) => onPadding(Number(value))}
+          style={{ width: 176 }}
+        />
+      </View>
     </SectionCard>
   );
 }

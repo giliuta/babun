@@ -1,6 +1,6 @@
 import { useFeatureOn } from "@/features/settings/company-features";
 import { useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -18,6 +18,7 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { pad2, parseYMD } from "@/features/appointments/helpers";
 import { usePlanAllows } from "@/features/settings/tenant";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import type { WorkBand } from "@/features/calendar/DayView";
 
 // Тап по пустому слоту сетки → этот лист (веб-паритет слот-попапа
@@ -235,40 +236,31 @@ export function BookSlotSheet({
                 Никогда не тонируются и не блокируются — вне часов запись
                 разрешена, сигнал уже сказан колесом и подписью. */}
             <View style={{ gap: 10 }}>
-              {/* БЕЗ ПОДПИСКИ КНОПКИ «КЛИЕНТ» НЕТ ВОВСЕ, А НЕ «ЕСТЬ, НО РУГАЕТСЯ».
-                  Канон, правило 10: человек без права либо не видит блок, либо
-                  видит его только для чтения; третьего («видно, но при нажатии
-                  ошибка») не бывает. Строка ниже называет закрытое и МОЛЧИТ ПРО
-                  ДЕНЬГИ: ни цены, ни ссылки, ни «оплатите на сайте» — на этом
-                  стоит основание, по которому приложение живёт в App Store без
-                  встроенных покупок. Тариф решает не здесь: настоящий запрет —
-                  триггер `enforce_plan_limits` в базе. */}
+              {/* БЕЗ ТАРИФА «КЛИЕНТ» — СЕРЫЙ (владелец 01.10: закрытое тарифом
+                  видно серым, тап поднимает плашку «Нужно изменить тариф» с
+                  кнопкой «Тариф»). Оплата — на сайте, не через Apple. Тариф
+                  решает не здесь: настоящий запрет — триггер
+                  `enforce_plan_limits` в базе. */}
               {/* События выключены у компании (STORY-088) — второй дороги нет. */}
               {eventsOn && canEvent ? (
                 <Button
                   label="Событие"
-                  variant={canBookClients && canWork ? "secondary" : "primary"}
+                  // Вид не зависит от тарифа (владелец 02.10: «всё должно
+                  // оставаться точно так же»): без тарифа «Клиент» серый,
+                  // «Событие» — прежнее белое.
+                  variant={canWork ? "secondary" : "primary"}
                   accessibilityHint="Откроет новое событие на выбранное время"
                   onPress={() => pick("event")}
                 />
               ) : null}
-              {!canWork ? null : canBookClients ? (
-                <Button
-                  label="Клиент"
-                  accessibilityHint="Откроет новую запись клиенту на выбранное время"
-                  onPress={() => pick("work")}
-                />
-              ) : (
-                <Text
-                  style={{
-                    color: t.faint,
-                    fontSize: 13,
-                    textAlign: "center",
-                    paddingHorizontal: 8,
-                  }}
-                >
-                  Запись клиента — в другом тарифе
-                </Text>
+              {!canWork ? null : (
+                <TariffLocked locked={!canBookClients} beforeNudge={onClose}>
+                  <Button
+                    label="Клиент"
+                    accessibilityHint="Откроет новую запись клиенту на выбранное время"
+                    onPress={() => pick("work")}
+                  />
+                </TariffLocked>
               )}
             </View>
           </View>

@@ -198,7 +198,7 @@ export function SmsHistoryScreen() {
               }}
             >
               {index > 0 ? <Divider inset={16} /> : null}
-              <SmsHistoryRow item={item} onPress={() => setOpen(item)} />
+              <SmsHistoryRow item={item} compact onPress={() => setOpen(item)} />
             </View>
           )}
           ListEmptyComponent={

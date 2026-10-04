@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Client } from "@babun/shared/local/clients";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClientAppointments } from "@/features/clients/appointments";
@@ -8,7 +8,12 @@ import {
   duplicateQueryKeyPrefix,
   useDuplicateOf,
 } from "@/features/clients/DuplicateNotice";
-import { mergeBlocker, mergeClientPatch } from "@/features/clients/merge-clients";
+import {
+  mergeBlocker,
+  mergeClientPatch,
+  mergeLocations,
+  paidVisitsBlocker,
+} from "@/features/clients/merge-clients";
 import {
   useArchiveClients,
   useClient,
@@ -21,6 +26,7 @@ import { useToast } from "@/components/ui/Toast";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { useTenantId } from "@/lib/tenant";
+import { useSetClientSmsOptOut } from "@/features/sms/sms-account";
 
 // «ОБЪЕДИНИТЬ С ДУБЛЕМ» — ПУНКТ «⋯» КАРТОЧКИ.
 //
@@ -56,6 +62,16 @@ function peopleIdsOf(
     .filter((id): id is string => !!id);
 }
 
+function freshestClient(qc: QueryClient, id: string): Client | null {
+  let best: { at: number; client: Client } | null = null;
+  for (const query of qc.getQueryCache().findAll({ queryKey: ["client", id] })) {
+    const client = query.state.data as Client | null | undefined;
+    if (!client || client.id !== id) continue;
+    if (!best || query.state.dataUpdatedAt > best.at) best = { at: query.state.dataUpdatedAt, client };
+  }
+  return best?.client ?? null;
+}
+
 /** Обработчик пункта «Объединить с дублем» или `undefined` — пункта нет. */
 export function useMergeDuplicate({
   client,
@@ -80,6 +96,7 @@ export function useMergeDuplicate({
   const updateById = useUpdateClientById();
   const updateAppt = useUpdateAppointment();
   const archive = useArchiveClients();
+  const setOptOut = useSetClientSmsOptOut();
   const running = useRef(false);
 
   if (!eligible || !client || !dupId) return undefined;
@@ -96,22 +113,46 @@ export function useMergeDuplicate({
       //    (номера, объекты, заметки, связи) целиком, и снимок с момента
       //    открытия страницы затёр бы номер, добавленный секунду назад
       //    (аудит 22.09).
-      const fresh =
-        qc.getQueryData<Client>(["client", primary.id]) ?? primary;
+      //    Ключ карточки длиннее id — ["client", id, компания, вид], — и
+      //    точный `getQueryData(["client", id])` не находил ничего: слияние
+      //    всегда брало снимок (проверка 03.10). Берём самый свежий из
+      //    совпавших по началу ключа.
+      const fresh = freshestClient(qc, primary.id) ?? primary;
       const patch = mergeClientPatch(fresh, dupRow);
+      // Объект дубля, совпавший с объектом основной, уходит в него — и
+      // визиты на нём переезжают на объект основной (аудит 03.10).
+      const { remap } = mergeLocations(fresh, dupRow);
       if (Object.keys(patch).length > 0) {
         await updateById.mutateAsync({ id: primary.id, patch });
+      }
+      // «Клиент просил не писать» переезжает вместе с данными (повторный
+      // аудит 03.10): правка клиента его не несёт — у отказа своя функция, —
+      // и после слияния основная карточка снова обещала SMS человеку, который
+      // просил не писать.
+      if (dupRow.sms_opt_out === true && fresh.sms_opt_out !== true) {
+        await setOptOut.mutateAsync({
+          clientId: primary.id,
+          value: true,
+          tenantId: sourceScope?.tenantId ?? null,
+        });
       }
       // 2. Визиты дубля — ради них слияние и затевается.
       const moving = dupAppts.data ?? [];
       for (const a of moving) {
-        await updateAppt.mutateAsync({ id: a.id, patch: { client_id: primary.id } });
+        const location = a.location_id ? remap.get(a.location_id) : undefined;
+        await updateAppt.mutateAsync({
+          id: a.id,
+          patch: { client_id: primary.id, ...(location ? { location_id: location } : {}) },
+        });
       }
-      // 3. Дубль — в архив, не в удаление. Архивация отчитывается числами, а
+      // 3. Дубль — в «Удалённые клиенты» (архива с 03.10 нет): визиты уже
+      //    у основной, и без истории он сотрётся через 30 дней; оставшиеся
+      //    за ним инвойсы или деньги база не даст стереть сама
+      //    (`client_history_never_purges`). Мутация отчитывается числами, а
       //    не исключением: без проверки живой дубль сошёл бы за успех.
-      const res = await archive.mutateAsync({ ids: [dupRow.id] });
+      const res = await archive.mutateAsync({ ids: [dupRow.id], trash: true });
       if (res.failed > 0 || res.archived === 0) {
-        throw new Error("Карточка объединена, но дубль не ушёл в архив");
+        throw new Error("Карточка объединена, но дубль не удалился");
       }
       haptics.success();
       toast("Объединили");
@@ -133,7 +174,8 @@ export function useMergeDuplicate({
       ? "Карточка дубля не загрузилась — объединить пока нельзя"
       : !dupAppts.isSuccess
         ? "Визиты дубля не загрузились — объединить пока нельзя"
-        : mergeBlocker(primary, dup, peopleIdsOf(members, sourceScope?.role === "owner"));
+        : mergeBlocker(primary, dup, peopleIdsOf(members, sourceScope?.role === "owner")) ??
+          paidVisitsBlocker(dupAppts.data ?? []);
     if (blocker || !dup) {
       haptics.warning();
       toast(blocker ?? "Не удалось объединить", "error");
@@ -143,7 +185,8 @@ export function useMergeDuplicate({
     confirmThen(
       "Объединить карточки?",
       {
-        message: `Данные и визиты «${dup.full_name || dup.phone}» переедут сюда, а сама карточка уйдёт в архив.`,
+        // Архива клиентов нет с 03.10: дубль уходит в «Удалённые клиенты».
+        message: `Данные и визиты «${dup.full_name || dup.phone}» переедут сюда, а сама карточка уйдёт в «Удалённые клиенты».`,
         confirmLabel: "Объединить",
       },
       () => void merge(dup),

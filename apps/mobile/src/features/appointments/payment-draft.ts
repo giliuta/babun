@@ -86,6 +86,20 @@ export function paymentMath(
   };
 }
 
+/** ИТОГ НИЖЕ ПОЛУЧЕННОГО — СКОЛЬКО ВЕРНУТЬ КЛИЕНТУ перед сохранением
+ *  (владелец 04.10). `null` — переплаты нет, у новой записи или у отменённой
+ *  (её деньги уже закрыты возвратом). Центы — как вся математика блока. */
+export function overpaymentToRefund(
+  appointment: Appointment | null,
+  totalDraft: number,
+): { amountCents: number; receivedCents: number } | null {
+  if (!appointment) return null;
+  if (appointment.status === "cancelled" || appointment.payment_status === "refunded") return null;
+  const { overpaid } = paymentMath(appointment, totalDraft);
+  if (overpaid <= 0) return null;
+  return { amountCents: overpaid, receivedCents: Math.round(getPaidAmount(appointment) * 100) };
+}
+
 /** Сумма из поля ввода — в центах; 0, если это не число. */
 export function amountCentsFromInput(text: string): number {
   const parsed: unknown = parseMoneyInputToCents(text);
@@ -124,6 +138,12 @@ export interface PaymentRow {
 const cents = (euros: number): number => Math.round(euros * 100);
 
 function prepaymentRows(apt: Appointment): PaymentRow[] {
+  // ВОЗВРАТ — И У ПРЕДОПЛАТЫ (повторный аудит 03.10, на симуляторе). Сервер
+  // при возврате оставляет `prepaid_amount` как был и ставит «refunded»; оплата
+  // по такому статусу строк уже не давала, а предоплата давала — и отменённый
+  // визит с возвращёнными €50 стоял с зелёной «✓ Наличные €50», будто деньги
+  // в кассе.
+  if (apt.payment_status === "refunded") return [];
   if (apt.prepaid_amount <= 0) return [];
   const itemized: Payment[] = apt.prepayments ?? [];
   const itemizedTotal = itemized.reduce((sum, p) => sum + p.amount, 0);
@@ -200,6 +220,36 @@ export function paidTileIntent(amountMode: boolean): "add" | "cancel" {
   return amountMode ? "add" : "cancel";
 }
 
+/** ВИД ПЛАТЕЖА — ПО ЧАСАМ В МОМЕНТ ТАПА (аудит 2026-10-03). До начала визита
+ *  тап — предоплата, после — оплата; выполненная или начатая запись платит
+ *  оплатой и до своего часа (предоплату по ней сервер отбивает). Считался вид
+ *  при перерисовке блока: страница, открытая в 9:58 и не перерисованная, в
+ *  10:03 записывала «предоплату» к визиту в 10:00 и не закрывала его. */
+/** ДАТА ИЛИ ВРЕМЯ В ФОРМЕ УЖЕ НЕ ТЕ, ЧТО В БАЗЕ (017, 03.10). Вид платежа и
+ *  закрытие визита считались по НЕСОХРАНЁННОЙ дате формы, а сервер пишет
+ *  оплату и закрывает визит по своей строке: перенесли запись с завтра на
+ *  сегодня, не сохранив, тапнули «Наличные» — визит закрылся на завтрашней
+ *  дате, и «Сохранить» отказало «Сначала отмените оплату…». Пока не
+ *  сохранено, деньги ждут. `null` — новой записи (её дату и пишет создание)
+ *  или когда всё совпадает. */
+export function slotUnsaved(
+  saved: { date: string; time_start: string } | null,
+  form: { date: string; timeStart: string },
+): "date" | "time" | null {
+  if (!saved) return null;
+  if (saved.date !== form.date) return "date";
+  return saved.time_start.slice(0, 5) !== form.timeStart.slice(0, 5) ? "time" : null;
+}
+
+export function paymentKindAt(
+  visit: Pick<Appointment, "date" | "time_start" | "status">,
+  now: BusinessNow,
+): PaymentKind {
+  return visitStarted(visit, now) || visit.status === "completed" || visit.status === "in_progress"
+    ? "settlement"
+    : "prepayment";
+}
+
 /**
  * Закрывать ли визит этим платежом: оплата после начала визита закрывает
  * его, даже частичная — работа сделана, остаток становится долгом.
@@ -212,6 +262,29 @@ export function closesVisit(
   if (kind !== "settlement") return false;
   if (apt.status === "completed" || apt.status === "cancelled") return false;
   return visitStarted(apt, now);
+}
+
+/**
+ * ДЕНЬГИ НОВОЙ ЗАПИСИ — ПО ФОРМЕ В МОМЕНТ «СОЗДАТЬ», А НЕ ТАПА (аудит
+ * 2026-10-03). Тап по счёту у новой записи только отмечает, куда лягут
+ * деньги; уходят они после создания. Раньше уходило замороженное: тапнул
+ * «Наличные» при итоге 100, дописал услугу (150), создал — сервер записывал
+ * 100 частичной оплатой и закрывал визит с долгом 50; урезал итог до 60 —
+ * «Сумма больше остатка», и запись без оплаты. И вид платежа брался с часов
+ * тапа, а закрытие визита — по виду, а не по `closesVisit`.
+ *
+ * `full` — тап без поля суммы: «вся сумма», то есть итог формы на момент
+ * создания. Сумма из поля — как вписали. Пусто — платить нечего.
+ */
+export function pendingPaymentToSend(
+  pending: { amount: number; full: boolean },
+  form: Pick<Appointment, "date" | "time_start" | "status"> & { total: number },
+  now: BusinessNow,
+): { amount: number; kind: PaymentKind; closeVisit: boolean } | null {
+  const amountCents = Math.round((pending.full ? form.total : pending.amount) * 100);
+  if (amountCents <= 0) return null;
+  const kind = paymentKindAt(form, now);
+  return { amount: amountCents / 100, kind, closeVisit: closesVisit(form, kind, now) };
 }
 
 /** `warning` — долг и остаток: янтарь, как у долгов в финансах и карточке
@@ -237,6 +310,13 @@ export function blockCaption(input: {
   /** Итог в форме уже не тот, что в базе: деньги принимает сервер, а он
    *  считает долг по сохранённой записи. */
   billUnsaved?: boolean;
+  /** Клиент в форме сменён, но не сохранён: платёж ушёл бы на запись
+   *  ПРЕЖНЕГО клиента и запер бы смену (аудит 2026-10-03). */
+  clientUnsaved?: boolean;
+  /** Дата или время в форме сменены и не сохранены (`slotUnsaved`). */
+  slotUnsaved?: "date" | "time" | null;
+  /** Визит отменён (или деньги возвращены): сервер оплату не примет. */
+  visitCancelled?: boolean;
 }): { text: string; tone: CaptionTone } | null {
   if (!input.hasTeam) return { text: "Выберите команду", tone: "neutral" };
   // ПЕРЕПЛАТА ВАЖНЕЕ «ОПЛАЧЕНО» (владелец 2026-09-10: «а он-то уже
@@ -251,8 +331,29 @@ export function blockCaption(input: {
   // долг уже посчитан по новому итогу (`paymentMath`), но платёж на него
   // сервер отобьёт: в базе ещё прошлая сумма. Строка просит ровно то, что
   // нужно сделать, вместо отказа после тапа.
+  // ОТМЕНЁННЫЙ ВИЗИТ — НЕ ДОЛГ (аудит 2026-10-03). Остаток у него считается
+  // как у живого, и строка звала «Долг €…», а плитки ждали денег, которые
+  // сервер отобьёт: «По отменённой заявке оплату не записать».
+  if (input.visitCancelled) {
+    return { text: "Визит отменён", tone: "neutral" };
+  }
+  // Коротко: строка делит ширину со значками «часть» и «инвойс», и полная
+  // фраза обрезалась в «сохраните зап…» (проверка на Pro Max 03.10).
   if (input.billUnsaved) {
-    return { text: "Итог изменился — сохраните запись", tone: "warning" };
+    return { text: "Итог изменён — сохраните", tone: "warning" };
+  }
+  // ДЕНЬГИ ЛОЖАТСЯ НА КЛИЕНТА ИЗ БАЗЫ. Выбрали другого и не сохранили —
+  // тап записал бы оплату прежнему, а затем «Сохранить» упёрлось бы в
+  // «Сначала верните оплату», и вернуть прежнего тоже нельзя: клиента с
+  // оплатой не меняют. Выход был один — снять оплату. Просим сохранить ДО.
+  if (input.clientUnsaved) {
+    return { text: "Клиент изменён — сохраните", tone: "warning" };
+  }
+  if (input.slotUnsaved) {
+    return {
+      text: input.slotUnsaved === "date" ? "Дата изменена — сохраните" : "Время изменено — сохраните",
+      tone: "warning",
+    };
   }
   if (input.hasAppointment && input.outstanding <= 0 && input.rowsCount > 0) {
     return {

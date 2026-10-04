@@ -62,6 +62,12 @@ export const ACQUISITION_LABELS: Record<AcquisitionSource, string> = {
   unknown: "Неизвестно",
 };
 
+/** ИСТОЧНИК КЛИЕНТА В ДАННЫХ (владелец 03.10: «могут самостоятельно добавить
+ *  источник»). Готовый — ключом из `ACQUISITION_LABELS`, свой источник
+ *  команды — `src:<id строки client_sources>`. Поле в базе — текст, поэтому
+ *  колонка клиента не менялась. */
+export type ClientSourceValue = AcquisitionSource | `src:${string}`;
+
 export type PropertyType = "apartment" | "house" | "office" | "restaurant" | "shop" | "other";
 
 export const PROPERTY_LABELS: Record<PropertyType, string> = {
@@ -186,17 +192,6 @@ export interface Location {
   /** v309 — A/C юниты на этом объекте. До v309 хранилось на клиенте;
    *  миграция переносит client.equipment → locations[primary].equipment. */
   equipment?: ACUnit[];
-  /** РЕГУЛЯРНОЕ ОБСЛУЖИВАНИЕ ОБЪЕКТА, В МЕСЯЦАХ (2026-08-07).
-   *
-   *  Клининг раз в месяц, бассейн раз в месяц, кондиционеры раз в полгода —
-   *  регулярность есть у ОБЪЕКТА, а не у техники на нём. Прежний график ТО
-   *  жил на юнитах с брендами и моделями: для клининга или бьюти это был
-   *  пустой раздел с чужими словами, и вместе с юнитами он ушёл.
-   *
-   *  Срок считается от ПОСЛЕДНЕГО ВИЗИТА на этот объект — календарь и так
-   *  это знает, поэтому отдельного поля «когда обслужили» нет: его
-   *  невозможно забыть проставить. Пусто/0 — не регулярный объект. */
-  serviceEveryMonths?: number;
 }
 
 export interface PhoneEntry {
@@ -291,7 +286,7 @@ export interface Client {
   discount: number;
   comment: string;
   tag_ids: string[];
-  acquisition_source: AcquisitionSource;
+  acquisition_source: ClientSourceValue;
   referred_by_client_id: string | null;
   first_contact_date: string | null;
   address: string;

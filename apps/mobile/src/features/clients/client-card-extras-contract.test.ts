@@ -39,10 +39,13 @@ describe("«Обращение» со страницы убрано", () => {
 });
 
 describe("долг ведёт в «Неоплаченные»", () => {
-  test("сводка при долге открывает историю с unpaid=1", () => {
+  // 03.10: «не надо в истории писать долг — просто последняя запись и
+  // всё». Строки «Долг» в блоке нет; «Неоплаченные» остаются разрезом самой
+  // истории (вход с `unpaid=1`).
+  test("в блоке «История» карточки долга своей строкой нет", () => {
     const card = read("ClientSummaryCard.tsx");
-    assert.match(card, /debt\s*\?\s*\(\)\s*=>\s*router\.push\(/);
-    assert.match(card, /unpaid: "1"/);
+    assert.doesNotMatch(card, /Долг \$\{/);
+    assert.doesNotMatch(card, /unpaid: "1"/);
   });
 
   test("история читает unpaid=1 и отбирает правилом долга", () => {
@@ -66,13 +69,14 @@ describe("метка и тег — плитками перед «Личным»"
     assert.match(tiles(), /sub=\{labelAuto \? "по записи" : undefined\}/);
     assert.match(tiles(), /onPick=\{\(name\) => update\(\{ city: name, city_manual: true \}\)\}/);
   });
-  test("плитки стоят перед «Личным», а не в шапке", () => {
+  test("плитки стоят самым верхом, перед блоком «Клиент» (03.10)", () => {
     const personal = read("blocks/PersonalBlock.tsx");
     assert.doesNotMatch(personal, /label="Метка"|label="Теги"/);
-    // Владелец 22.09: «это не должно быть на первой странице» — плитки уехали
-    // вниз, к «Личному».
-    // С 30.09 «Личное» команда может выключить — плитки всё равно перед ним.
-    assert.match(read("ClientProfileBlocks.tsx"), /\{labelTags \?\? null\}\s*\{a\.personal\.show \? \(\s*<PersonalBlock/);
+    // Владелец 03.10: «метку и тег поставим в самый верх перед блоком
+    // „Клиент“» (22.09 они уезжали вниз, к «Личному»).
+    const page = read("../../../app/(dashboard)/clients/[id].tsx");
+    assert.match(page, /<ClientLabelTags[\s\S]{0,400}<ClientHeader/);
+    assert.doesNotMatch(read("ClientProfileBlocks.tsx"), /labelTags/);
     assert.doesNotMatch(read("ClientHeader.tsx"), /identity/);
   });
 });
@@ -142,19 +146,27 @@ describe("заметки: клиента — наверху, объекта — 
 describe("длинные списки — своей страницей", () => {
   // Владелец 22.09: «нажимаю объекты — открывается страница, где все объекты;
   // если их 12, до файлов не долистаешь».
-  test("на карточке первые три объекта и дверь «Все объекты»", () => {
+  // 03.10: «видно только последний объект — обслуженный или добавленный;
+  // нажимаю — страница со всеми».
+  test("на карточке один объект, тап по нему — страница всех", () => {
     const section = read("ClientObjectsSection.tsx");
-    assert.match(section, /export const OBJECTS_ON_CARD = 3;/);
-    assert.match(read("ClientProfileBlocks.tsx"), /limit=\{OBJECTS_ON_CARD\}/);
+    assert.match(section, /cardObjectId\(client\.locations \?\? EMPTY_LOCATIONS, lastVisits\)/);
+    assert.match(read("ClientProfileBlocks.tsx"), /single=\{!draft\}/);
     const objects = read("blocks/ObjectsBlock.tsx");
+    assert.match(objects, /single \? onOpenAll : onOpen \? \(\) => onOpen\(loc\.id\) : undefined/);
+    // «Все объекты» остаются у списка с пределом.
     assert.match(objects, /rest > 0 && onOpenAll \?/);
-    assert.match(objects, /label="Все объекты"/);
+  });
+  test("на странице объектов «Добавить объект» — кнопкой внизу", () => {
+    const page = read("../../../app/(dashboard)/clients/objects.tsx");
+    assert.match(page, /<GradientButton label="Добавить объект" onPress=\{\(\) => setAdding\(true\)\} \/>/);
+    assert.match(page, /onAddingChange=\{setAdding\}/);
   });
   test("страница всех объектов собрана тем же куском", () => {
     const page = read("../../../app/(dashboard)/clients/objects.tsx");
     assert.match(page, /<ClientObjectsSection/);
     assert.doesNotMatch(page, /limit=/);
-    assert.match(read("../../../app/(dashboard)/clients/[id].tsx"), /pathname: "\/clients\/objects"/);
+    assert.match(read("../../../app/(dashboard)/clients/[id].tsx"), /pathname: subPage\("objects"\)/);
   });
 });
 
@@ -162,13 +174,15 @@ describe("люди и реквизиты — тоже своими страни�
   // Владелец 22.09: «то же самое можно сделать с людьми и с реквизитами».
   test("на карточке первые строки и дверь «Все …»", () => {
     assert.match(read("ClientPeopleDoor.tsx"), /export const PEOPLE_ON_CARD = 3;/);
-    assert.match(read("blocks/RequisitesBlock.tsx"), /export const REQUISITES_ON_CARD = 2;/);
-    assert.match(read("blocks/RequisitesBlock.tsx"), /label="Все реквизиты"/);
+    // Реквизиты с 03.10 — как «История»: на карточке один набор, основной,
+    // тап по нему — страница всех (двери «Все реквизиты» нет).
+    assert.match(read("blocks/RequisitesBlock.tsx"), /const shown = single \? ordered\.slice\(0, 1\) : ordered;/);
+    assert.match(read("ClientProfileBlocks.tsx"), /onOpenAll=\{draft \? undefined : onOpenRequisites\}/);
     const page = read("../../../app/(dashboard)/clients/[id].tsx");
     assert.match(page, /label="Все люди"/);
     assert.match(page, /limit: PEOPLE_ON_CARD/);
-    assert.match(page, /pathname: "\/clients\/people"/);
-    assert.match(page, /pathname: "\/clients\/requisites"/);
+    assert.match(page, /pathname: subPage\("people"\)/);
+    assert.match(page, /pathname: subPage\("requisites"\)/);
   });
   test("страницы собраны теми же кусками", () => {
     assert.match(read("../../../app/(dashboard)/clients/people.tsx"), /useClientPeople\(\{/);
@@ -186,8 +200,8 @@ describe("аудит 23.09 — то, что чинили", () => {
   });
   test("двери подстраниц уносят компанию клиента", () => {
     assert.match(read("clients-company.ts"), /export function clientSubParams\(/);
-    assert.match(page(), /pathname: "\/clients\/objects", params: clientSubParams\(id, scope\)/);
-    assert.match(page(), /pathname: "\/clients\/requisites", params: clientSubParams\(id, scope\)/);
+    assert.match(page(), /pathname: subPage\("objects"\), params: clientSubParams\(id, scope\)/);
+    assert.match(page(), /pathname: subPage\("requisites"\), params: clientSubParams\(id, scope\)/);
     assert.match(read("blocks/ClientFilesBlock.tsx"), /clientSubParams\(clientId, scope\)/);
   });
   test("объекты и люди на своей странице — с правами карточки", () => {
@@ -197,18 +211,18 @@ describe("аудит 23.09 — то, что чинили", () => {
   test("неудачная правка откатывает только свои поля", () => {
     assert.match(read("queries.ts"), /const keys = Object\.keys\(variables\.patch\)/);
   });
-  test("«Все файлы» видна, когда за ней только инвойсы и чеки", () => {
-    assert.match(read("blocks/ClientFilesBlock.tsx"), /layout\.total > 0 \|\| layout\.hiddenPapers > 0/);
+  test("инвойсы и чеки — в ленте файлов, а не за второй дверью (03.10)", () => {
     const files = read("../../../app/(dashboard)/clients/attachments.tsx");
-    assert.match(files, /docsCount === 0/);
-    assert.match(files, /label="Инвойсы и чеки"/);
+    assert.match(read("use-client-files.ts"), /invoices: withDocs \? \(invoices\.data \?\? \[\]\) : \[\]/);
+    assert.doesNotMatch(files, /label="Инвойсы и чеки"/);
   });
   test("лист реквизитов закрывается, только когда записалось", () => {
     assert.match(read("RequisitesSheet.tsx"), /const ok = await onSave\(fieldsOf\(form\)\);\s*setSaving\(false\);\s*if \(!ok\) return;/);
   });
   test("на своей странице блок без второй шапки", () => {
-    assert.match(read("blocks/ObjectsBlock.tsx"), /<SectionCard title=\{bare \? undefined : "Объекты"\}>/);
-    assert.match(read("blocks/RequisitesBlock.tsx"), /<SectionCard title=\{bare \? undefined : "Реквизиты"\}>/);
+    assert.match(read("blocks/ObjectsBlock.tsx"), /<SectionCard\s+title=\{bare \? undefined : "Объекты"\}/);
+    // Своя страница реквизитов (03.10) — плашки без карточки и шапки.
+    assert.match(read("blocks/RequisitesBlock.tsx"), /if \(bare\) \{\s*return \(\s*<>/);
   });
 });
 
@@ -232,5 +246,18 @@ describe("«Отменить» возвращает связь по-настоя
       /const base = queue\.latest \? \[\.\.\.queue\.latest\] : freshLinks\(queue, clientMemberships\(row\)\);/,
     );
     assert.match(read("use-link-writer.ts"), /detachedRows\.set\(ref\.memberId, row\);/);
+  });
+});
+
+describe("страницы карточки — над записью свои адреса (аудит 03.10)", () => {
+  test("карточка, открытая из записи, уходит в `(shared)`, а не во вкладку", () => {
+    const href = read("reference-href.ts");
+    assert.match(href, /inClientsTab \? \(`\/clients\/\$\{page\}` as const\) : \(`\/client-\$\{page\}` as const\)/);
+    for (const page of ["visits", "objects", "attachments", "requisites", "sms", "people"]) {
+      assert.match(
+        read(`../../../app/(shared)/client-${page}.tsx`),
+        new RegExp(`export \\{ default \\} from "\\.\\./\\(dashboard\\)/clients/${page}"`),
+      );
+    }
   });
 });

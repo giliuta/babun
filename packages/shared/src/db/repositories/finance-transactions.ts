@@ -70,7 +70,7 @@ function assertPositiveMoneyAmount(amount: number): void {
   }
 }
 
-function rowToTx(r: Row): FinanceTransaction {
+export function rowToTx(r: Row): FinanceTransaction {
   return {
     id: r.id,
     tenant_id: r.tenant_id,
@@ -102,6 +102,8 @@ function rowToTx(r: Row): FinanceTransaction {
     refund_of_id: r.refund_of_id,
     reversal_kind: (r.reversal_kind ?? null) as FinanceTransaction["reversal_kind"],
     source: r.source as TransactionSource,
+    // Колонки ещё нет в сгенерированных типах (миграция 20261004080218).
+    from_calendar: (r as { from_calendar?: boolean | null }).from_calendar === true,
     created_at: r.created_at,
     updated_at: r.updated_at,
     created_by: r.created_by,
@@ -149,6 +151,41 @@ export async function listTransactionsForRange(
     const page = (data ?? []) as Row[];
     rows.push(...page);
     if (page.length < LEDGER_PAGE_SIZE) break;
+  }
+  return rows.map(rowToTx);
+}
+
+/** Сколько id записей уходит в один запрос: 150 uuid — около 5,6 КБ адреса. */
+const APPOINTMENT_IDS_PER_REQUEST = 150;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Все операции, привязанные к этим записям, — в какой бы день их ни внесли.
+ *
+ * Календарь ставит деньги записи в день САМОЙ ЗАПИСИ (владелец 2026-10-01:
+ * «передвинул запись — всё сдвигается и считается в этот день»), а
+ * предоплату за неё могли внести неделей раньше: выборка журнала по дате
+ * операции её бы не нашла. Не-uuid id (повтор серии, ещё не сохранённая
+ * копия) в базу не уходят — `in` на колонке uuid упал бы целиком.
+ */
+export async function listTransactionsForAppointments(
+  supabase: DbSupabase,
+  tenantId: string,
+  appointmentIds: readonly string[],
+): Promise<FinanceTransaction[]> {
+  const ids = [...new Set(appointmentIds.filter((id) => UUID.test(id)))];
+  const rows: Row[] = [];
+  for (let i = 0; i < ids.length; i += APPOINTMENT_IDS_PER_REQUEST) {
+    const { data, error } = await supabase
+      .from("finance_transactions")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .in("appointment_id", ids.slice(i, i + APPOINTMENT_IDS_PER_REQUEST))
+      .order("occurred_on", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (error) throw new Error(`listTransactionsForAppointments: ${error.message}`);
+    rows.push(...((data ?? []) as Row[]));
   }
   return rows.map(rowToTx);
 }
@@ -297,6 +334,9 @@ export interface TransactionDraft {
    *  операция, поэтому платёж живёт в журнале, а не в таблице долгов. */
   debt_id?: string | null;
   refund_of_id?: string | null;
+  /** Внесена кнопкой «Финансы дня» календаря: только такие операции без
+   *  записи день календаря и считает (владелец 04.10). */
+  from_calendar?: boolean;
   /** Клиентский PK строки. Стабилен на время попытки: ретрай после
    *  потерянного ответа или двойной тап упирается в duplicate key,
    *  который трактуется как успех — деньги не задваиваются (паттерн
@@ -313,8 +353,9 @@ export async function insertTransaction(
   const businessToday = draft.business_today ?? localTodayYmd();
   const occurredOn = draft.occurred_on ?? businessToday;
   rejectFutureLedgerDate(occurredOn, businessToday);
-  const insert: Insert = {
+  const insert: Insert & { from_calendar?: boolean } = {
     ...(draft.request_id ? { id: draft.request_id } : {}),
+    ...(draft.from_calendar ? { from_calendar: true } : {}),
     tenant_id: tenantId,
     type: draft.type,
     amount: draft.amount,
@@ -340,7 +381,8 @@ export async function insertTransaction(
   };
   const { data, error } = await supabase
     .from("finance_transactions")
-    .insert(insert)
+    // `from_calendar` ещё нет в сгенерированных типах — колонка в базе есть.
+    .insert(insert as Insert)
     .select("*")
     .single();
   if (error && draft.request_id && error.code === "23505") {
@@ -409,22 +451,20 @@ export async function updateTransaction(
   }
 }
 
+/**
+ * Удалить операцию В «УДАЛЁННЫЕ ОПЕРАЦИИ» (владелец 03.10): 30 дней её можно
+ * вернуть. Серверная `delete_operation` удаляет строку по прежним правилам
+ * (ручная, не перевод, без инвойса; права — политики удаления) и кладёт её
+ * снимок в ящик. Ноль строк — отказ с текстом, а не тихий успех.
+ */
 export async function deleteTransaction(
   supabase: DbSupabase,
   id: string,
 ): Promise<void> {
-  const { data, error } = await supabase
-    .from("finance_transactions")
-    .delete()
-    .eq("id", id)
-    .eq("source", "manual")
-    .neq("type", "transfer")
-    .is("invoice_id", null)
-    .select("id")
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("delete_operation", { p_id: id });
   if (error || !data) {
     throw new Error(
-      error?.message ?? "Операция недоступна или связана с инвойсом",
+      error?.message || "Операция недоступна или связана с инвойсом",
     );
   }
 }

@@ -58,6 +58,8 @@ export default function ObjectRouteButton({
       <RouteSheet
         visible={open}
         target={target}
+        // Карты команды клиента — и дверь шестерёнки в её настройки (03.10).
+        teamId={teamId}
         onClose={() => setOpen(false)}
       />
     </>

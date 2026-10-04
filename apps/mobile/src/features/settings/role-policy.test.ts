@@ -67,7 +67,9 @@ describe("role policy", () => {
       "/cabinet/invitations",
       "/cabinet/profile",
       "/cabinet/notifications",
+      "/cabinet/languages",
       "/cabinet/about",
+      "/cabinet/help",
       "/cabinet/company",
       "/cabinet/company?tenant=0b6f2d1e-3c4a-4b5d-8e9f-a1b2c3d4e5f6",
     ]) {
@@ -88,7 +90,9 @@ describe("role policy", () => {
       "/cabinet/invitations",
       "/cabinet/profile",
       "/cabinet/notifications",
+      "/cabinet/languages",
       "/cabinet/about",
+      "/cabinet/help",
       "/cabinet/company",
     ];
     const masterLinks = [
@@ -99,7 +103,9 @@ describe("role policy", () => {
       "/cabinet/invitations",
       "/cabinet/profile",
       "/cabinet/notifications",
+      "/cabinet/languages",
       "/cabinet/about",
+      "/cabinet/help",
       "/cabinet/company",
     ];
     // «Сводка» переехала из владельческих в общие (владелец 20.09: значок
@@ -226,5 +232,18 @@ describe("роль экрана Кабинета", () => {
 
   test("членства ещё не пришли — судит активная роль", () => {
     assert.equal(cabinetScreenRole("owner", MINE, undefined), "owner");
+  });
+});
+
+describe("директор — страницы партнёров по праву «Партнёры» (04.10)", () => {
+  test("без права партнёр страниц партнёров не открывает", () => {
+    assert.equal(canAccessCabinetPath("master", "/cabinet/people"), false);
+  });
+
+  test("с правом — список и страницы партнёра, но не прочие разделы владельца", () => {
+    assert.equal(canAccessCabinetPath("master", "/cabinet/people", true), true);
+    assert.equal(canAccessCabinetPath("master", "/cabinet/people/abc/rights", true), true);
+    assert.equal(canAccessCabinetPath("master", "/cabinet/archive", true), false);
+    assert.equal(canAccessCabinetPath("master", "/cabinet/peoplex", true), false);
   });
 });

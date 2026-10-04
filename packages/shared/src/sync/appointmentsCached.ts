@@ -47,6 +47,8 @@ import {
   createAppointment as repoCreateAppointment,
   updateAppointment as repoUpdateAppointment,
   deleteAppointment as repoDeleteAppointment,
+  GoneAppointmentError,
+  StaleAppointmentError,
 } from "../db/repositories/appointments";
 import type { Appointment } from "../local/appointments";
 import {
@@ -56,15 +58,22 @@ import {
   cacheReplaceTenant,
   cacheGetOne,
   hasAuthoritativeTenantSnapshot,
+  cacheLocalWriteSeq,
   dequeueAll,
   hasQueuedOps,
+  hasStuckQueuedOps,
   type CachedAppointment,
   type CachedAppointmentData,
 } from "../db/cache/sql";
 // CachedAppointment (raw Row) is the queue-payload projection; CachedAppointmentData
 // (full domain) is the cache-read projection. Both are used below.
 import { isOnline } from "./network";
-import { kickReplayer, MAX_ATTEMPTS } from "./replayer";
+import {
+  kickReplayer,
+  MAX_ATTEMPTS,
+  tenantRefreshHeld,
+  touchesGuardedAppointmentFields,
+} from "./replayer";
 import {
   enqueueOpAndEmit,
   enqueueOpWithCacheUpsertAndEmit,
@@ -72,7 +81,7 @@ import {
 } from "./queue-events";
 import { emitRevalidated, cacheSignature } from "./revalidate-events";
 import { randomUuid } from "./uuid";
-import { ColdOfflineCacheMissError } from "./cache-errors";
+import { ColdOfflineCacheMissError, OnlineOnlyWriteError } from "./cache-errors";
 
 type DbSupabase = SupabaseClient<Database>;
 
@@ -127,8 +136,11 @@ export async function listAppointments(
   // device that has never synced appointments. The authoritative marker
   // written by cacheReplaceTenant disambiguates those states below.
   try {
+    // Счётчик — ДО запроса: правка, легшая в кэш, пока список ехал, старше
+    // снимка не бывает (`cacheLocalWriteSeq`).
+    const writeSeq = cacheLocalWriteSeq("appointments");
     const fresh = await repoListAppointments(supabase, tenantId);
-    await refreshCacheFromSupabase(supabase, tenantId, fresh).catch(() => {});
+    await refreshCacheFromSupabase(supabase, tenantId, fresh, writeSeq).catch(() => {});
     return fresh;
   } catch (err) {
     // Online/server errors always reach the UI. Offline may return [] only
@@ -150,6 +162,9 @@ export async function listAppointments(
  *  перезаписи кэша вставали в очередь за блокировкой SQLite, а правки
  *  записей ждали их все (владелец 2026-09-30: «перенос подлагивает»). */
 const revalidating = new Map<string, Promise<void>>();
+/** Сверка, чью замену отменила свежая локальная правка: ждущие чтения
+ *  получили старый снимок, поэтому сразу за ней идёт ещё одна. */
+const staleRevalidation = new Set<string>();
 
 function revalidateAppointments(
   supabase: DbSupabase,
@@ -166,6 +181,10 @@ function revalidateAppointments(
       // ignore — cached list already returned
     } finally {
       revalidating.delete(tenantId);
+      // Снимок оказался старше правки — сверяем снова, уже после неё.
+      if (staleRevalidation.delete(tenantId)) {
+        void revalidateAppointments(supabase, tenantId);
+      }
     }
   })();
   revalidating.set(tenantId, run);
@@ -205,7 +224,10 @@ async function refreshCacheFromSupabase(
   supabase: DbSupabase,
   tenantId: string,
   domain?: Appointment[],
+  /** Счётчик локальных записей, снятый до запроса `domain` (холодный путь). */
+  writeSeqAtFetch?: number,
 ): Promise<boolean> {
+  const writeSeq = writeSeqAtFetch ?? cacheLocalWriteSeq("appointments");
   // Гонка выхода в онлайн: пока в очереди висят ещё реплеящиеся
   // appointment-опы, авторитарный cacheReplaceTenant стёр бы
   // офлайн-созданную запись раньше, чем реплеер долил её на сервер
@@ -215,9 +237,7 @@ async function refreshCacheFromSupabase(
   // блокируют: их реплей не воскресит, сервер — истина.
   const pending = await dequeueAll();
   if (
-    pending.some(
-      (op) => op.table === "appointments" && op.attempts < MAX_ATTEMPTS,
-    )
+    tenantRefreshHeld(pending, "appointments", tenantId)
   ) {
     // Пропуск обязан сам подтолкнуть дренаж: кроме флипа сети, старта
     // приложения и следующей мутации очередь никто не разгребает — один
@@ -229,9 +249,36 @@ async function refreshCacheFromSupabase(
   const appts = domain ?? (await repoListAppointments(supabase, tenantId));
   const rows = appts.map((a) => makeCachedRow(a, tenantId));
   const cachedRows = await safeCacheReadAppointments(tenantId);
+  // ЗАПИСЬ, НЕ ДОШЕДШАЯ ДО СЕРВЕРА, С СЕТКИ НЕ ПРОПАДАЕТ (аудит 03.10). Её
+  // вставка, отклонённая навсегда (например, клиента с этим номером успели
+  // завести с другого телефона, и вставка записи упала на его отсутствии),
+  // перечитку не держит — и замена кэша снимком сервера стирала запись с
+  // экрана: слот выглядел свободным, на него записывали второго клиента.
+  // Пока вставка лежит в очереди (в «Синхронизации» — повторить или
+  // удалить), запись остаётся на сетке.
+  const serverIds = new Set(rows.map((r) => r.id));
+  const unsentIds = new Set(
+    pending
+      .filter(
+        (op) =>
+          op.table === "appointments" &&
+          op.op === "insert" &&
+          (op.payload as { tenant_id?: unknown }).tenant_id === tenantId,
+      )
+      .map((op) => op.row_id),
+  );
+  for (const cached of cachedRows) {
+    if (unsentIds.has(cached.id) && !serverIds.has(cached.id)) rows.push(cached);
+  }
   if (sameRows(cachedRows, rows)) return false;
   const before = cacheSignature(cachedRows);
-  await cacheReplaceTenant("appointments", tenantId, rows);
+  const replaced = await cacheReplaceTenant("appointments", tenantId, rows, {
+    unlessLocalWriteSince: writeSeq,
+  });
+  if (!replaced) {
+    staleRevalidation.add(tenantId);
+    return false;
+  }
   const after = cacheSignature(rows);
   return before !== after;
 }
@@ -358,6 +405,18 @@ export async function updateAppointment(
     return { ...toDomain(existing), ...patch, id } as Appointment;
   }
 
+  await refuseBehindStuckEdit(id, "updateAppointment");
+
+  // ОТМЕНА ВИЗИТА С ДЕНЬГАМИ — ТОЛЬКО В СЕТИ (аудит работы без сети 03.10).
+  // Сервер превращает её в возврат (`protect_paid_appointment_finance`):
+  // из очереди она долетела бы часами позже, и возврат лёг бы в кассу
+  // другого дня, хотя тост уже сказал «Визит отменён». Деньги — онлайн,
+  // как вся касса (ТЗ §8).
+  const cancelsMoney = cancelsPaidVisit(existing, patch);
+  if (cancelsMoney && !isOnline()) {
+    throw new OnlineOnlyWriteError(PAID_CANCEL_OFFLINE);
+  }
+
   const updateOp = {
     table: "appointments" as const,
     op: "update" as const,
@@ -375,11 +434,18 @@ export async function updateAppointment(
     // Online: standalone optimistic upsert (no queued op to pair with).
     if (merged) await cacheUpsert("appointments", merged);
     try {
+      // СТАТУС И ДЕНЬГИ — ТОЛЬКО ПОВЕРХ ТОЙ ЖЕ СТРОКИ, ЧТО ВИДЕЛ ТЕЛЕФОН (аудит
+      // 03.10). Отмена записи с оплатой — это возврат всех её денег; отмена по
+      // устаревшей копии (оплату принял другой телефон, а realtime её ещё не
+      // донёс) молча оформила бы клиенту возврат.
       const updated = await repoUpdateAppointment(
         supabase,
         id,
         patch,
         tenantId,
+        touchesGuardedAppointmentFields("appointments", patch as Record<string, unknown>)
+          ? { expectedUpdatedAt }
+          : {},
       );
       // Ответ правки — каноническая строка (`update().select("*")`): второй
       // GET той же записи был второй поездкой на каждом переносе блока, и
@@ -391,8 +457,24 @@ export async function updateAppointment(
       // Put the canonical cached row back and surface the error instead of
       // leaving a false optimistic edit plus a permanently poisoned queue.
       if (!isTransientNetworkError(err)) {
-        if (existing) await cacheUpsert("appointments", existing).catch(() => {});
+        // Записи нет на сервере — из кэша она уходит тоже.
+        if (err instanceof GoneAppointmentError) {
+          await cacheDelete("appointments", id).catch(() => {});
+          throw err;
+        }
+        // Строку правили на другом устройстве — в кэш ложится строка
+        // сервера, а не наша прежняя копия: экран должен показать правду.
+        const restore =
+          err instanceof StaleAppointmentError && err.fresh
+            ? makeCachedRow(err.fresh, tenantId)
+            : existing;
+        if (restore) await cacheUpsert("appointments", restore).catch(() => {});
         throw err;
+      }
+      // Отмена с деньгами в очередь не встаёт и на обрыве: см. выше.
+      if (cancelsMoney) {
+        if (existing) await cacheUpsert("appointments", existing).catch(() => {});
+        throw new OnlineOnlyWriteError(PAID_CANCEL_OFFLINE);
       }
       await enqueueUpdate(updateOp, merged);
       void kickReplayer({ supabase });
@@ -405,6 +487,26 @@ export async function updateAppointment(
   await enqueueUpdate(updateOp, merged);
   if (isOnline()) void kickReplayer({ supabase });
   return { ...toDomain(existing), ...patch, id } as Appointment;
+}
+
+export const PAID_CANCEL_OFFLINE =
+  "Визит с оплатой отменяется только при связи с сервером: отмена оформляет возврат денег.";
+
+/** Отменяет ли правка визит, по которому уже есть деньги. Строки нет в
+ *  кэше — не знаем, и решает сервер, как раньше. */
+export function cancelsPaidVisit(
+  existing: CachedAppointmentData | null,
+  patch: Partial<Appointment>,
+): boolean {
+  if (patch.status !== "cancelled" || !existing) return false;
+  const row = existing as unknown as {
+    status?: unknown;
+    prepaid_amount?: unknown;
+    paid_amount?: unknown;
+    payment_status?: unknown;
+  };
+  if (row.status === "cancelled" || row.payment_status === "refunded") return false;
+  return Number(row.prepaid_amount ?? 0) > 0 || Number(row.paid_amount ?? 0) > 0;
 }
 
 /** Domain view of a cached row (drops the tenant_id bookkeeping key), or an
@@ -443,6 +545,7 @@ export async function deleteAppointment(
   }
 
   const existing = await readCachedAppointment(id, tenantId);
+  await refuseBehindStuckEdit(id, "deleteAppointment");
 
   const deleteOp = {
     table: "appointments" as const,
@@ -477,6 +580,19 @@ export async function deleteAppointment(
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
+
+/** ЗА НАВСЕГДА УПАВШЕЙ ПРАВКОЙ НОВАЯ НЕ ПРЯЧЕТСЯ (аудит 03.10). Правки одной
+ *  записи уходят по порядку, и за правкой, которую сервер окончательно
+ *  отклонил (её ждут «Повторить» или «Удалить» в «Синхронизации»), новая
+ *  ложилась в очередь и не уходила никогда — а экран говорил «Перенесено», и
+ *  следующая перечитка возвращала запись назад. Теперь — отказ словами. */
+async function refuseBehindStuckEdit(id: string, op: string): Promise<void> {
+  if (await hasStuckQueuedOps("appointments", id, MAX_ATTEMPTS).catch(() => false)) {
+    throw new Error(
+      `${op}: Прошлая правка этой записи не дошла до сервера — откройте Кабинет → Синхронизация и повторите её или удалите`,
+    );
+  }
+}
 
 async function safeCacheReadAppointments(
   tenantId: string,

@@ -41,7 +41,7 @@ export function DashboardGate({ children }: { children: ReactNode }) {
   if (gate.status === "loading") {
     return (
       <Screen edges={["top", "bottom"]}>
-        <EmptyState state="loading" fill title="Открываем компанию" />
+        <EmptyState state="loading" fill title="Открываем аккаунт" />
       </Screen>
     );
   }
@@ -51,8 +51,8 @@ export function DashboardGate({ children }: { children: ReactNode }) {
         <EmptyState
           state="error"
           fill
-          title="Не удалось открыть компанию"
-          subtitle="Проверьте интернет и повторите — данные компании не показываются, пока доступ не подтверждён."
+          title="Не удалось открыть аккаунт"
+          subtitle="Проверьте интернет и повторите — данные не показываются, пока доступ не подтверждён."
           action={{ label: "Повторить", onPress: retry }}
         />
       </Screen>

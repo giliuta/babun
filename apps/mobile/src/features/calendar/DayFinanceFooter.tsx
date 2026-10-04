@@ -8,7 +8,11 @@ import { useThemeColors } from "@/theme/colors";
 import { RAIL_W } from "@/features/calendar/DayView";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 import { dayMoney } from "@/features/calendar/day-money";
-import { useTransactions } from "@/features/finances/queries";
+import { useAppointmentsLedger, useTransactions } from "@/features/finances/queries";
+import { awaitingAnswer } from "@/features/finances/ledger-select";
+import { useMyAccess } from "@/features/access/queries";
+import { useCurrentRole } from "@/features/settings/tenant";
+import { dayMoneyRowReadable } from "@/features/calendar/day-money-access";
 
 // Thin money strip pinned under the day/week grid — per-day Доход (green) over
 // Расход (red), aligned to the day columns (gutter width = the hour rail).
@@ -20,14 +24,17 @@ import { useTransactions } from "@/features/finances/queries";
 // «доходом». План дня живёт в шторке дня (тап по столбцу), а полоса под
 // сеткой говорит только о деньгах, которые уже есть.
 //
-// С 2026-09-30 — ТЕМ ЖЕ ПРАВИЛОМ, ЧТО «ФИНАНСЫ» (`day-money.ts`): доход дня —
-// деньги, пришедшие в этот день по леджеру. Раньше полоса брала оплаты
-// записей ЭТОГО дня, и предоплата, внесённая сегодня за завтрашнюю запись,
-// стояла доходом завтра. Расход — расходы леджера и материалы записей дня.
+// ДЕНЬГИ ЗАПИСИ — В ДНЕ ЗАПИСИ (владелец 2026-10-01, правило в
+// `day-money.ts`): предоплата, внесённая сегодня за завтрашнюю запись, стоит
+// доходом завтра и переезжает вместе с записью; операция без записи — в
+// своём дне, если внесена кнопкой календаря (касса «Финансов» календарю
+// чужая, владелец 04.10). Расход — расходы журнала тем же правилом и
+// материалы записей дня.
 export function DayFinanceFooter({
   days,
   appointments,
   teamId,
+  todayYmd,
   onTapDay,
   showIncome = true,
   showExpense = true,
@@ -37,8 +44,8 @@ export function DayFinanceFooter({
   /** Active team filter — day extras are stored per (team, date), so with
    *  no team selected extras are skipped (same as web's personal tab). */
   teamId: string | null;
-  /** Сегодня в поясе компании. Полоса его больше не читает (доход — только
-   *  оплаченное), проп остаётся, чтобы не трогать экран календаря. */
+  /** Сегодня в поясе компании — для «Ограничений» календаря в зеркале
+   *  (`dayMoneyRowReadable`). Нет — последний день полосы. */
   todayYmd?: string;
   onTapDay?: (d: Date) => void;
   /** Доходы и расходы — два права (срез 2а): строка стороны, которую человек
@@ -49,15 +56,45 @@ export function DayFinanceFooter({
   const t = useThemeColors();
   const sharedServices = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
-  // Леджер видимых дней — источник денег полосы (оплаты записей и ручные
-  // операции одной выборкой, по дате операции).
+  // Журнал видимых дней — операции без записи по дню операции.
   const rangeFrom = days.length > 0 ? formatYMD(days[0]) : "";
   const rangeTo = days.length > 0 ? formatYMD(days[days.length - 1]) : "";
   const ledgerQuery = useTransactions(rangeFrom, rangeTo, {
     brigadeIds: teamId ? [teamId] : undefined,
     enabled: days.length > 0,
   });
-  const ledger = ledgerQuery.data;
+  // Операции видимых записей — в любой день внесения (предоплата неделей
+  // раньше тоже стоит в дне записи).
+  const recordsLedgerQuery = useAppointmentsLedger(
+    useMemo(() => appointments.map((a) => a.id), [appointments]),
+    { enabled: days.length > 0 },
+  );
+  const recordsLedger = recordsLedgerQuery.data;
+  // ДЕНЕГ ЕЩЁ НЕТ — НЕ НОЛЬ (повторный аудит 03.10). Пока журнал новой недели
+  // в пути, запрос отдаёт заглушкой строки ПРОШЛОГО периода, и дни новой
+  // недели секунду стояли «Доход €0» — у среды с оплатой €131 тоже. Ноль
+  // здесь — утверждение о деньгах; пока ответа нет, в клетке прочерк.
+  // Только пока запрос в пути (`awaitingAnswer`): у недели без записей
+  // запрос по записям выключен, а заглушку прошлой недели react-query
+  // показывает и выключенному — полоса стояла бы прочерками навсегда.
+  //
+  // Прочерк — по смене ПЕРИОДА, а не по каждому перечитыванию операций
+  // записей: создание события или перенос записи меняют список номеров, и вся
+  // неделя на секунду уходила в прочерки. Строки операций записей несут номер
+  // записи, к дню их относит `dayMoney` — заглушка с прежним списком верна для
+  // всех прежних записей. Прочерк от них — только когда ответа нет вовсе.
+  const settling =
+    awaitingAnswer(ledgerQuery) ||
+    (awaitingAnswer(recordsLedgerQuery) && !recordsLedgerQuery.isPlaceholderData);
+  // «ЕГО ГЛАЗАМИ» токен ваш, и сервер отдаёт всё: деньги дня режутся его
+  // правом календаря и «Ограничениями» (`day-money-access.ts`). Партнёру
+  // сервер уже отрезал — здесь ничего не уходит.
+  const role = useCurrentRole().data;
+  const myAccess = useMyAccess().data;
+  const ledger = useMemo(() => {
+    const readable = dayMoneyRowReadable({ role, map: myAccess, today: todayYmd ?? rangeTo });
+    return [...(ledgerQuery.data ?? []), ...(recordsLedger ?? [])].filter(readable);
+  }, [ledgerQuery.data, recordsLedger, role, myAccess, todayYmd, rangeTo]);
 
   const byDate = useMemo(() => {
     const m = new Map<string, Appointment[]>();
@@ -78,7 +115,7 @@ export function DayFinanceFooter({
         const money = dayMoney({
           ymd,
           appointments: byDate.get(ymd) ?? [],
-          transactions: ledger ?? [],
+          transactions: ledger,
           services: sharedServices,
           teamId,
           extras: getDayExtras(extrasMap, teamId, ymd),
@@ -126,11 +163,13 @@ export function DayFinanceFooter({
           11pt — минимум читаемости iOS (было 9pt, владелец читает деньги
           десятки раз в день). */}
       <View style={{ width: RAIL_W, paddingRight: 6, alignItems: "flex-end", justifyContent: "center" }}>
+        {/* Одной строкой: крупный шрифт системы рвал «Доход» на «Дохо» и
+            «д» в 42pt рельса (повторный аудит 03.10). */}
         {showIncome ? (
-          <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Доход</Text>
+          <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Доход</Text>
         ) : null}
         {showExpense ? (
-          <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Расход</Text>
+          <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Расход</Text>
         ) : null}
       </View>
       {rows.map(({ d, ymd, income, spent, dateLabel }, i) => {
@@ -141,12 +180,16 @@ export function DayFinanceFooter({
             // Мишень — во всю высоту полосы: поле полосы тоже нажимает день.
             hitSlop={{ top: 7, bottom: 7 }}
             accessibilityRole="button"
-            accessibilityLabel={`Финансы за ${dateLabel}: ${[
-              showIncome ? `доход ${formatEUR(income)}` : null,
-              showExpense ? `расход ${formatEUR(spent)}` : null,
-            ]
-              .filter(Boolean)
-              .join(", ")}`}
+            accessibilityLabel={`Финансы за ${dateLabel}: ${
+              settling
+                ? "загружаются"
+                : [
+                    showIncome ? `доход ${formatEUR(income)}` : null,
+                    showExpense ? `расход ${formatEUR(spent)}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")
+            }`}
             style={{
               flex: 1,
               alignItems: "center",
@@ -159,20 +202,20 @@ export function DayFinanceFooter({
                 есть реальные деньги (цвет = смысл). */}
             {showIncome ? (
               <Text
-                style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
+                style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 && !settling ? t.success : t.faint }}
                 numberOfLines={1}
                 maxFontSizeMultiplier={1.3}
               >
-                {formatEUR(income)}
+                {settling ? "—" : formatEUR(income)}
               </Text>
             ) : null}
             {showExpense ? (
               <Text
-                style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 ? t.danger : t.faint }}
+                style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 && !settling ? t.danger : t.faint }}
                 numberOfLines={1}
                 maxFontSizeMultiplier={1.3}
               >
-                {formatEUR(spent)}
+                {settling ? "—" : formatEUR(spent)}
               </Text>
             ) : null}
           </Pressable>

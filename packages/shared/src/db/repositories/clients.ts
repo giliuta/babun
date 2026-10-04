@@ -25,8 +25,8 @@ import type { Database, Json } from "../database.types";
 import { rpcArgs } from "../rpc-args";
 import type {
   ACUnit,
-  AcquisitionSource,
   Client,
+  ClientSourceValue,
   ClientMembership,
   ClientRequisites,
   ClientNote,
@@ -178,6 +178,11 @@ export function rowToClient(r: ClientRow): Client {
     whatsapp_phone: r.whatsapp_phone,
     email: r.email,
     sms_name: r.sms_name,
+    // «Клиент просил не писать» (повторный аудит 03.10). Поле не читалось:
+    // после перезапуска карточка снова показывала «Присылать SMS» включённым,
+    // хотя в базе запрет стоит, а календарь и запись предлагали «Отправить
+    // от компании», которую сервер отклонял.
+    sms_opt_out: r.sms_opt_out === true,
     telegram_username: r.telegram_username,
     instagram_username: r.instagram_username,
 
@@ -185,7 +190,7 @@ export function rowToClient(r: ClientRow): Client {
     discount: r.discount ?? 0,
     comment: r.comment,
 
-    acquisition_source: (r.acquisition_source ?? "unknown") as AcquisitionSource,
+    acquisition_source: (r.acquisition_source ?? "unknown") as ClientSourceValue,
     referred_by_client_id: r.referred_by_client_id,
     first_contact_date: r.first_contact_date,
 
@@ -228,11 +233,6 @@ export function rowToClient(r: ClientRow): Client {
       property_type: l.property_type,
       isPrimary: l.isPrimary,
       note: l.note,
-      // Регулярное обслуживание объекта (2026-08-07). Без этой строки фича
-      // «Пора обслужить» стирала сама себя: поле читалось из кэша, но
-      // терялось на первом же ответе сервера, а следующая правка объекта
-      // записывала массив уже без интервала.
-      serviceEveryMonths: l.serviceEveryMonths,
       equipment: asArray<ACUnit>(l.equipment as unknown as Json).map(rowToUnit),
     })),
     notes: asArray<ClientNote>(r.notes).map((n) => ({
@@ -368,9 +368,56 @@ type ClientWriteRpcName =
 type PostgrestErrorLike = {
   code?: string;
   message?: string;
+  hint?: string;
   status?: number;
   statusCode?: number;
 };
+
+/** Имена блоков карточки — как на странице прав (015 + 014, 30.09). */
+const CLIENT_BLOCK_TITLES: Record<string, string> = {
+  "clients.client": "Клиент",
+  "clients.note": "Заметка",
+  "clients.people": "Люди",
+  "clients.objects": "Объекты",
+  // 03.10: «Метка» и «Тег» — два права; «Долг и деньги» ушли в «Историю».
+  "clients.labels": "Метка",
+  "clients.tags": "Тег",
+  "clients.personal": "Личное",
+  "clients.files": "Файлы",
+  "clients.requisites": "Реквизиты",
+  "clients.history": "История",
+  "clients.sms": "SMS",
+};
+
+/** Права-действия — своей фразой: «менять „Удаление клиента"» не по-русски.
+ *  `block:clients` сервер даёт и без базы, и на деньги, корзину и любимого
+ *  мастера в правке партнёра — это всегда дело владельца (аудит 03.10). */
+const CLIENT_ACTION_REFUSALS: Record<string, string> = {
+  clients: "Это может только владелец",
+  "clients.create": "Нет права заводить клиентов",
+  "clients.menu": "Нет права на «Меню клиента»",
+  "clients.delete": "Нет права удалять клиентов",
+};
+
+/** ОТКАЗ СЕРВЕРА СЛОВАМИ (аудит 015, 30.09). Права по блокам отвечают 42501
+ *  с подсказкой `block:clients.note`, закрытый номер — `access:contacts_closed`,
+ *  клиент вне набора — P0002. Сырой английский текст Postgres человеку нечего
+ *  делать; наше слово — что именно нельзя и что сделать. `null` — не наш
+ *  случай, остаётся прежний текст. */
+export function clientWriteRefusal(error: PostgrestErrorLike): string | null {
+  const hint = error.hint ?? "";
+  if (hint === "access:contacts_closed") return "Сначала откройте номер";
+  // 03.10: партнёр ставит только теги команды клиента.
+  if (hint === "client:tag_other_team") return "Тег другой команды этому клиенту не поставить";
+  if (hint.startsWith("block:")) {
+    const key = hint.slice("block:".length);
+    if (CLIENT_ACTION_REFUSALS[key]) return CLIENT_ACTION_REFUSALS[key];
+    const title = CLIENT_BLOCK_TITLES[key];
+    return title ? `Нет права менять «${title}»` : "Нет права на это изменение";
+  }
+  if (error.code === "P0002") return "Клиент недоступен";
+  return null;
+}
 
 /** Rolling deployment compatibility is deliberately narrow. Only a missing
  * RPC/schema-cache contract may use the legacy multi-request path; validation,
@@ -397,9 +444,11 @@ function clientWriteError(
   prefix: string,
   error: PostgrestErrorLike,
 ): Error {
-  const wrapped = new Error(`${prefix}: ${error.message ?? "unknown error"}`);
+  const refusal = clientWriteRefusal(error);
+  const wrapped = new Error(refusal ?? `${prefix}: ${error.message ?? "unknown error"}`);
   Object.assign(wrapped, {
     code: error.code,
+    hint: error.hint,
     status: error.status,
     statusCode: error.statusCode,
   });
@@ -458,13 +507,13 @@ function atomicWriteResultToClient(
 
 // ─── Public API ────────────────────────────────────────────────
 
-export async function listClients(
+async function listClientsAndRows(
   supabase: DbSupabase,
   tenantId: string,
-  options: { includeDeleted?: boolean } = {},
-): Promise<Client[]> {
+  includeDeleted: boolean,
+): Promise<{ rows: ClientRow[]; clients: Client[] }> {
   const [rows, assigns] = await Promise.all([
-    listClientRows(supabase, tenantId, !!options.includeDeleted),
+    listClientRows(supabase, tenantId, includeDeleted),
     listClientTagAssignments(supabase, tenantId),
   ]);
 
@@ -475,10 +524,41 @@ export async function listClients(
     tagsByClient.set(a.client_id, arr);
   }
 
-  return rows.map((r) => ({
+  const clients = rows.map((r) => ({
     ...rowToClient(r),
     tag_ids: tagsByClient.get(r.id) ?? [],
   }));
+  return { rows, clients };
+}
+
+export async function listClients(
+  supabase: DbSupabase,
+  tenantId: string,
+  options: { includeDeleted?: boolean } = {},
+): Promise<Client[]> {
+  return (await listClientsAndRows(supabase, tenantId, !!options.includeDeleted)).clients;
+}
+
+/** Клиенты и их `updated_at` — из ОДНИХ И ТЕХ ЖЕ строк (аудит 04.10). Кэшу
+ *  штамп нужен для сторожа правок. Отдельным вторым запросом он мог приехать
+ *  НОВЕЕ данных — правка между запросами давала старые заметки с новым
+ *  штампом, и следующая правка из очереди проходила сторож и тихо затирала
+ *  чужую заметку, без всякого «Конфликта». */
+export async function listClientsWithStamps(
+  supabase: DbSupabase,
+  tenantId: string,
+  options: { includeDeleted?: boolean } = {},
+): Promise<{ clients: Client[]; updatedAtById: Map<string, string> }> {
+  const { rows, clients } = await listClientsAndRows(
+    supabase,
+    tenantId,
+    !!options.includeDeleted,
+  );
+  const updatedAtById = new Map<string, string>();
+  for (const r of rows) {
+    if (r.updated_at) updatedAtById.set(r.id, r.updated_at);
+  }
+  return { clients, updatedAtById };
 }
 
 export async function getClient(
@@ -704,6 +784,12 @@ export async function restoreClient(
     .eq("tenant_id", tenantId)
     .select("id")
     .single();
+  // Номер у клиента уникален среди живых (`clients_tenant_phone_e164_idx`):
+  // пока этот лежал в «Удалённых», его номер мог достаться новому клиенту.
+  // Говорим словами, а не «duplicate key value violates…» (аудит 03.10).
+  if (error?.code === "23505") {
+    throw new Error("Его номер уже у другого клиента — вернуть нельзя, пока номер занят");
+  }
   if (error) throw new Error(`restoreClient: ${error.message}`);
   if (data.id !== id) throw new Error("restoreClient: клиент не найден");
 }

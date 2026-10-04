@@ -3,6 +3,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import {
   cancelAppointmentPayment,
   recordAppointmentPayment,
+  refundAppointmentOverpayment,
   type AppointmentPaymentKind,
 } from "@babun/shared/db/repositories/appointment-payments";
 import { cacheServerAppointment } from "@babun/shared/sync/appointmentsCached";
@@ -13,6 +14,7 @@ import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { appointmentsQueryKey } from "@/features/calendar/queries";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
+import { laterPaymentQueued, paymentScope } from "./payment-queue";
 
 // ДЕНЬГИ ПИШУТСЯ СРАЗУ ПО ТАПУ (владелец 2026-09-06: «без черновика — не
 // нравится выполнять несколько действий»). Поэтому здесь не патч записи, а
@@ -38,10 +40,16 @@ function useSettleFreshAppointment() {
   const tenantId = useTenantId();
   const role = useCurrentRole().data;
   return (fresh: Appointment): void => {
-    qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
-      cur?.map((a) => (a.id === fresh.id ? fresh : a)),
-    );
-    if (tenantId) void cacheServerAppointment(fresh, tenantId).catch(() => {});
+    // За этим ответом в очереди записи стоит следующий шаг («Снять» в
+    // тосте): мгновенное снятие уже на экране, и строка «оплачено» поверх
+    // него дала бы мигание. Каноническую строку положит ответ последнего
+    // (`payment-queue.ts`).
+    if (!laterPaymentQueued(qc, fresh.id)) {
+      qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
+        cur?.map((a) => (a.id === fresh.id ? fresh : a)),
+      );
+      if (tenantId) void cacheServerAppointment(fresh, tenantId).catch(() => {});
+    }
     void qc.invalidateQueries({ queryKey: ["transactions"] });
     void qc.invalidateQueries({ queryKey: ["appointment-ledger"] });
     void qc.invalidateQueries({ queryKey: accountBalancesQueryKey(tenantId) });
@@ -74,6 +82,10 @@ function useOptimisticPatch() {
       qc.setQueryData<Appointment[]>(key, (cur) =>
         cur?.map((a) => (a.id === previous.id ? previous : a)),
       );
+      // В очереди «оплата → снятие» прежняя строка снятия — это мгновенная
+      // оплата, а не база: отказ перечитывает список, чтобы на экране
+      // осталась правда сервера. Только на отказе — редкий путь.
+      void qc.invalidateQueries({ queryKey: key });
     },
   };
 }
@@ -90,11 +102,14 @@ export interface RecordPaymentVars {
   optimistic?: Appointment;
 }
 
-export function useRecordPayment() {
+/** `appointmentId` — очередь денег этой записи (`payment-queue.ts`); у новой
+ *  записи её нет — платёж там один и уходит после создания. */
+export function useRecordPayment(appointmentId?: string | null) {
   const settle = useSettleFreshAppointment();
   const patch = useOptimisticPatch();
   return useMutation({
     ...NEVER_PAUSE,
+    scope: paymentScope(appointmentId),
     onMutate: (vars: RecordPaymentVars) => {
       markOwnWrite(vars.appointmentId, OWN_WRITE_IN_FLIGHT_MS);
       return patch.apply(vars.optimistic);
@@ -122,11 +137,12 @@ export interface CancelPaymentVars {
   optimistic?: Appointment;
 }
 
-export function useCancelPayment() {
+export function useCancelPayment(appointmentId?: string | null) {
   const settle = useSettleFreshAppointment();
   const patch = useOptimisticPatch();
   return useMutation({
     ...NEVER_PAUSE,
+    scope: paymentScope(appointmentId),
     onMutate: (vars: CancelPaymentVars) => {
       markOwnWrite(vars.appointmentId, OWN_WRITE_IN_FLIGHT_MS);
       return patch.apply(vars.optimistic);
@@ -137,6 +153,36 @@ export function useCancelPayment() {
       cancelAppointmentPayment(supabase, {
         appointmentId: vars.appointmentId,
         paymentId: vars.paymentId,
+        requestId: vars.requestId,
+      }),
+    onSuccess: settle,
+  });
+}
+
+export interface RefundOverpaymentVars {
+  appointmentId: string;
+  /** Евро с копейками. */
+  amount: number;
+  requestId: string;
+}
+
+/** ВЕРНУТЬ КЛИЕНТУ ПЕРЕПЛАТУ (владелец 04.10). Итог записи опустили ниже
+ *  полученного: перед сохранением разницу возвращают клиенту — в финансах
+ *  «Возврат клиенту», платежи записи уменьшаются. Без мгновенного вида:
+ *  ответ нужен форме, чтобы следом сохранить итог. */
+export function useRefundOverpayment(appointmentId?: string | null) {
+  const settle = useSettleFreshAppointment();
+  return useMutation({
+    ...NEVER_PAUSE,
+    scope: paymentScope(appointmentId),
+    onMutate: (vars: RefundOverpaymentVars) => {
+      markOwnWrite(vars.appointmentId, OWN_WRITE_IN_FLIGHT_MS);
+    },
+    onSettled: (_data, _error, vars) => markOwnWrite(vars.appointmentId, OWN_WRITE_SETTLE_MS),
+    mutationFn: (vars: RefundOverpaymentVars) =>
+      refundAppointmentOverpayment(supabase, {
+        appointmentId: vars.appointmentId,
+        amount: vars.amount,
         requestId: vars.requestId,
       }),
     onSuccess: settle,

@@ -47,9 +47,11 @@ function ClientPeopleScreen() {
   return (
     <Screen>
       <ScreenHeader title="Люди" subtitle={client?.full_name ?? undefined} />
-      {isLoading || !client ? (
+      {isLoading ? (
         <EmptyState state="loading" fill />
-      ) : (
+      ) : !client ? (
+        <EmptyState fill title="Клиент не найден" />
+      ) : !access.people.show ? null : (
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
           <SectionCard>
             {people.peopleRows}

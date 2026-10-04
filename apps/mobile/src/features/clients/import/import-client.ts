@@ -12,6 +12,8 @@ export function rowToClient(
   id = randomUuid(),
 ): Client {
   const e164 = tryToE164(row.rawPhone, defaultCountry);
+  const address = row.address.trim();
+  const label = row.city.trim();
   return createBlankClient({
     // Hermes does not implement crypto.randomUUID. Stamp the same RN-safe
     // UUID used by normal client creation instead of the legacy `cli-*` id.
@@ -20,8 +22,17 @@ export function rowToClient(
     phone: row.rawPhone || (e164 ?? ""),
     phone_e164: e164,
     email: row.email,
-    city: row.city,
-    address: row.address,
+    // МЕТКА ИЗ ФАЙЛА — ВЫБРАНА ЧЕЛОВЕКОМ (аудит 03.10): без `city_manual`
+    // первая же запись клиента в день с меткой переписывала её авто-меткой
+    // (`label-auto-assign.ts`).
+    city: label,
+    ...(label ? { city_manual: true } : {}),
+    // АДРЕС — ОБЪЕКТОМ, А НЕ СТАРЫМ ПОЛЕМ (аудит 03.10): карточка показывает
+    // адрес только объектов (`locations`), и импортированный адрес находился
+    // поиском, но глазами его не было, а записи к нему не привязать.
+    locations: address
+      ? [{ id: randomUuid(), label: "", address, isPrimary: true }]
+      : [],
     comment: row.comment,
     tag_ids: tagId ? [tagId] : [],
   });

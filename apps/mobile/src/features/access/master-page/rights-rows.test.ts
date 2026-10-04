@@ -22,16 +22,16 @@ const REGISTRY: AccessBlock[] = (
   [
     ["calendar.records", "calendar", "calendar", OFF_READ_WRITE, 10],
     ["calendar.create", "calendar", "calendar", ["off", "write"], 20],
-    ["record.status", "calendar", "calendar", OFF_READ_WRITE, 30],
     ["record.amount", "calendar", "calendar", OFF_READ_WRITE, 40],
     ["record.payment", "calendar", "calendar", OFF_READ_WRITE, 50],
     ["calendar.day_labels", "calendar", "calendar", OFF_READ_WRITE, 60],
     ["calendar.settings", "calendar", "company", OFF_READ_WRITE, 70],
-    ["finance.operations", "finance", "calendar", OFF_READ_WRITE, 110],
+    ["finance.income", "finance", "calendar", OFF_READ_WRITE, 110],
     ["finance.vat", "finance", "company", OFF_READ_WRITE, 175],
     ["clients", "clients", "company", OFF_READ_WRITE, 210],
     ["clients.scope", "clients", "company", ["own", "all"], 220],
-    ["clients.contacts", "clients", "company", ["off", "read"], 230],
+    // «Долг и деньги» снято 03.10 — деньги идут с «Историей» (три положения).
+    ["clients.history", "clients", "company", OFF_READ_WRITE, 230],
     ["services", "company", "company", OFF_READ_WRITE, 310],
     ["company.currency", "company", "company", ["read", "write"], 330],
     ["owner.access", "owner", "company", ["off"], 410],
@@ -72,7 +72,6 @@ const foldedOf = (sections: ReturnType<typeof rightsSections>, area: string) =>
 // (владелец 30.09): свёртку их строки проверять нечего, её нет и при
 // открытом главном (отдельный тест ниже).
 const CALENDAR_DEPENDANTS = [
-  "record.status",
   "record.amount",
   "record.payment",
   "calendar.day_labels",
@@ -80,7 +79,7 @@ const CALENDAR_DEPENDANTS = [
 
 // Деньги календаря в реестре теста — «Доходы и расходы»; остальные блоки
 // финансов в копию реестра не входят.
-const FINANCE_CALENDAR_DEPENDANTS = ["finance.operations"];
+const FINANCE_CALENDAR_DEPENDANTS = ["finance.income"];
 
 describe("страница прав — какие строки видны", () => {
   test("в разделе сначала блоки календаря, потом блоки компании", () => {
@@ -88,11 +87,12 @@ describe("страница прав — какие строки видны", () 
       b.key === "finance.vat" ? { ...b, position: 100 } : b,
     ).sort((a, b) => a.position - b.position);
     const sections = rightsSections(shuffled, () => "write", "team-1");
-    assert.deepEqual(keysOf(sections, "finance"), ["finance.operations", "finance.vat"]);
+    assert.deepEqual(keysOf(sections, "finance"), ["finance.income", "finance.vat"]);
   });
 
   test("«Календарь и записи» скрыт — зависимые строки свёрнуты только в этом календаре", () => {
     let draft = toggleTeam(emptyMasterDraft("team-1"), "team-2");
+    draft = withLevel(draft, block("calendar.records"), "off", "team-1");
     draft = withLevel(draft, block("calendar.records"), "read", "team-2");
     // Оплата стоит под ценами (30.09): чтобы её строка была видна, цены
     // открыты.
@@ -115,6 +115,7 @@ describe("страница прав — какие строки видны", () 
 
   test("«Календарь и записи» скрыт — деньги этого календаря тоже свёрнуты, VAT компании нет", () => {
     let draft = toggleTeam(emptyMasterDraft("team-1"), "team-2");
+    draft = withLevel(draft, block("calendar.records"), "off", "team-1");
     draft = withLevel(draft, block("calendar.records"), "read", "team-2");
     const levelOf = (b: AccessBlock, teamId: string | null) => draftLevel(b, draft, teamId);
     assert.deepEqual(keysOf(rightsSections(REGISTRY, levelOf, "team-1"), "finance"), ["finance.vat"]);
@@ -124,7 +125,7 @@ describe("страница прав — какие строки видны", () 
     ]);
   });
 
-  test("«Клиенты» скрыты — «Какие клиенты» и «Телефоны» свёрнуты", () => {
+  test("«Клиенты» скрыты — «Ограничение по времени» и «История» свёрнуты", () => {
     const draft = emptyMasterDraft("team-1");
     const levelOf = (b: AccessBlock, teamId: string | null) => draftLevel(b, draft, teamId);
     assert.deepEqual(keysOf(rightsSections(REGISTRY, levelOf, "team-1"), "clients"), ["clients"]);
@@ -134,7 +135,7 @@ describe("страница прав — какие строки видны", () 
     assert.deepEqual(keysOf(rightsSections(REGISTRY, openLevel, "team-1"), "clients"), [
       "clients",
       "clients.scope",
-      "clients.contacts",
+      "clients.history",
     ]);
   });
 
@@ -156,7 +157,7 @@ describe("страница прав — какие строки видны", () 
     const sections = rightsSections(REGISTRY, () => "write", "team-1");
     assert.deepEqual(
       sections.map((section) => section.area),
-      ["calendar", "finance", "clients", "company"],
+      ["calendar", "clients", "finance", "company"],
     );
     assert.equal(
       sections.some((section) => section.rows.some((row) => row.block.ownerOnly)),
@@ -285,11 +286,11 @@ describe("сотрудник на карточке мастера", () => {
   test("правка до ответа сервера не трогает исходную карту и не хранит умолчание", () => {
     const next = withMemberChanges(map, REGISTRY, [
       { block: "calendar.records", team_id: "team-1", level: "off" },
-      { block: "finance.operations", team_id: "team-2", level: "read" },
+      { block: "finance.income", team_id: "team-2", level: "read" },
       { block: "clients", team_id: "team-1", level: "write" },
     ]);
     assert.equal(next.calendars["team-1"]?.["calendar.records"], undefined);
-    assert.equal(next.calendars["team-2"]?.["finance.operations"], "read");
+    assert.equal(next.calendars["team-2"]?.["finance.income"], "read");
     assert.equal(next.company.clients, "read", "компанейский блок с календарём пропущен");
     assert.equal(next.calendars["team-1"]?.clients, undefined, "и в календарь не лёг");
     assert.equal(map.calendars["team-1"]?.["calendar.records"], "write");
@@ -308,7 +309,7 @@ describe("страница не предлагает того, что серве
     assert.ok(!keys.includes("calendar.records"), "спящий блок снова предлагается");
     assert.ok(!keys.includes("calendar.create"), "спящий зависимый снова предлагается");
     // Остальные строки раздела на месте: спит не весь раздел, а блок.
-    assert.ok(keys.includes("record.status"));
+    assert.ok(keys.includes("record.amount"));
   });
 
   test("все блоки спят — разделов нет вовсе", () => {

@@ -45,7 +45,7 @@
 | Подпись блока: слева | **16** (`px-4`) | `src/components/ui/SectionCard.tsx:58` |
 | Подпись блока: сверху / снизу | **10** / **2** (`pt-2.5` / `pb-0.5`) | там же |
 | Подпись блока: кегль | **11 / 700**, трекинг **+0.6**, UPPERCASE, цвет `faint` | `src/components/ui/SectionCard.tsx:64` |
-| Команда блока (иконка справа) | абсолютом `right: 16`, `top: 6`, между иконками **16**, `hitSlop 12`, размер **18** (`ICON.sm`) | `src/components/ui/SectionCard.tsx:82` |
+| Команда блока (иконка справа) | абсолютом `right: 16`, `top: 6` (в плотной шапке **2**), между иконками **16**, `hitSlop 12`, размер **18** (`ICON.sm`); серая, а действие над содержимым (`accent`, адрес объекта) — акцентом | `src/components/ui/SectionCard.tsx:82` |
 | Тело блока с `padded` | **16** по краям, **8** сверху (`p-4 pt-2`) | `src/components/ui/SectionCard.tsx` |
 | **Плотный случай** — форма в ШТОРКЕ (`dense` у `SectionCard`, `compact` у `ChooseRow`) | промежуток **6** (`mt-1.5`), подпись **6** сверху / **0** снизу, дверь `py-2`, кружок **30pt** | вторая сессия 2026-09-10 |
 
@@ -60,6 +60,7 @@
 | Дверь пустого блока `ChooseRow` | `px-4 py-3.5`; кружок `IconCircle` **34pt** на `accent14`, значок **18**; подпись **17 / 600** акцентом, отступ от кружка **12**; шеврон **18** цвета `chevron` |
 | Строка выбранного (клиент) | `px-4 py-2.5`; имя **17 / 700**, история строкой, телефон **13** |
 | Кнопка-орган справа в строке | круг **32×32** на `rowFill` |
+| Кнопка действия у строки (`RowActionButton`: звонок, маршрут) | круг **28×28** — размер плитки строки (владелец 03.10), `hitSlop 8` до 44pt, значок **16** |
 | Заметка `InlineNoteField` | поля **12** по бокам, **2** сверху, **8** снизу; внутри **12 / 7**; кегль **13** |
 
 | Шторка выбора | Число |
@@ -132,10 +133,13 @@
 ```
 
 
-Выбранный клиент: имя 17/700 → `ClientHistoryLine` (долг, визиты, деньги,
-последний визит) → телефон 13. Справа `PhoneChannelButton` 32pt (тап звонит,
-удержание — способы связи) и «…» 32pt в карточку клиента. Пустой — `ChooseRow`.
-Под клиентом — его заметка мини-плашкой.
+Выбранный клиент — как строка списка клиентов (`ClientRow`, владелец 03.10):
+имя 17/700 → одной строкой номер 14 серым и дата визита 13 цветом
+(`visitMark`: синяя — последний визит, жёлтая — не закрыт, серая — записан
+вперёд). Долга и числа визитов в блоке нет. Справа `PhoneChannelButton` 28pt
+(тап звонит, удержание — способы связи). Тап по клиенту — выбор, удержание —
+карточка клиента (кружка «…» нет с 03.10). Пустой — `ChooseRow`. Под клиентом
+— его заметка мини-плашкой.
 
 ```tsx
 <SectionCard title="Клиент">
@@ -144,17 +148,23 @@
       <Pressable
         className="flex-1 flex-row items-center px-4 py-2.5"
         onPress={() => setClientPickerOpen(true)}
+        onLongPress={openClientCard}
         accessibilityRole="button"
-        accessibilityHint="Открывает выбор клиента"
+        accessibilityHint="Открывает выбор клиента; удерживайте — карточка клиента"
       >
         <View className="flex-1">
           <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
             {client.full_name || "Без имени"}
           </Text>
-          <ClientHistoryLine client={client} stats={clientStats} />
-          <Text numberOfLines={1} style={{ fontSize: 13, marginTop: 2, color: client.phone ? t.sub : t.placeholder }}>
-            {client.phone ?? "без телефона"}
-          </Text>
+          {/* как в списке клиентов: номер серым, за ним дата визита цветом */}
+          <View className="mt-0.5 flex-row items-center" style={{ gap: 12 }}>
+            <Text numberOfLines={1} style={{ fontSize: 14, color: t.sub }}>
+              {formatPhoneForDisplay(client.phone, country)}
+            </Text>
+            {mark ? (
+              <Text style={{ fontSize: 13, color: markColor }}>{formatShortDateRu(mark.date)}</Text>
+            ) : null}
+          </View>
         </View>
       </Pressable>
       {client.phone ? (
@@ -162,15 +172,6 @@
           <PhoneChannelButton number={client.phone} telegramUsername={client.telegram_username} label={client.full_name || undefined} />
         </View>
       ) : null}
-      <Pressable
-        onPress={openClientCard}
-        className="mr-4 items-center justify-center self-center rounded-full"
-        style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
-        accessibilityRole="button"
-        accessibilityLabel="Карточка клиента"
-      >
-        <MoreHorizontal color={t.body} size={ICON.sm} />
-      </Pressable>
     </View>
   ) : (
     <ChooseRow
@@ -191,7 +192,7 @@
 ```tsx
 <ClientPickerSheet
   visible={clientPickerOpen}
-  statsById={statsById}          // вводная о человеке в строке; без неё строка короче
+  statsById={statsById}          // дата визита в строке (как в списке клиентов); без неё — только номер
   recentIds={recentClientIds}    // недавние наверх
   selectedId={client?.id}
   excludeId={self?.id}           // «кто привёл»: себя не предлагать
@@ -239,7 +240,14 @@
 ```
 
 **Шторка выбора** — `src/features/clients/ObjectPickerSheet.tsx`, кнопка
-**«Добавить объект»** (поиска нет: объектов у клиента два-три).
+**«Добавить объект»** (поиска нет: объектов у клиента два-три). Строка — как
+строка объекта (03.10): адрес заголовком, под ним тип словом и точный адрес,
+плитка — вид типа, без типа — домик.
+
+**Типы объектов — только свои** (владелец 03.10: «изначально их быть не
+должно, каждый сам создаёт свой тип»). Готового набора нет ни в выборе, ни
+на странице типов, ни в ссылке клиенту; метка удалённого типа объект не
+красит — он показывается без типа (`findObjectType`).
 
 **Форма объекта** — `src/features/clients/ObjectSheet.tsx` (новый) и
 `src/features/clients/ObjectEditSheet.tsx` (правка), тело у обеих одно:
@@ -388,10 +396,19 @@
 же блок у записи и у события. Вид — общие плитки
 `src/features/appointments/AppointmentFileTiles.tsx` (`PhotoTile` — квадрат фото
 и видео, `DocumentPill` — плашка документа, инвойса и чека) и общий лист
-«Добавить» `src/features/appointments/FileAddSheet.tsx`. На странице клиента
-тот же блок собирает `src/features/clients/blocks/ClientFilesBlock.tsx` из тех
-же плиток и того же листа (владелец 22.09: «как у нас файлы, как везде
-хранятся файлы») — второй анатомии нет.
+«Добавить» `src/features/appointments/FileAddSheet.tsx`.
+
+**У клиента — лента по дням, как «История»** (владелец 03.10: «файлы — как
+история, по датам… файлы, чеки, инвойсы — полноценные блоки, чтобы сразу
+открывать»). Блок `src/features/clients/blocks/ClientFilesBlock.tsx` показывает
+ПОСЛЕДНИЙ файл под заголовком своего дня (`VisitDayHeader`), тап — страница
+`app/(dashboard)/clients/attachments.tsx`: вся лента (`clientFileTimeline` в
+`src/features/clients/client-files.ts`) днями, плашки `ClientFileRow` —
+`SelectRow plain`: фото — снимком в плитке (`image`), документ, инвойс и чек —
+значком; у инвойса и чека справа сумма цветом (получено — зелёным, ждёт —
+янтарём). Тап открывает сразу; своё вложение удаляется свайпом; «Добавить
+файл» — футером страницы, на карточке — дверью только у пустого блока. Лист
+«Добавить» тот же (`FileAddSheet`).
 
 ```tsx
 <AppointmentFilesBlock
@@ -617,8 +634,8 @@
 | «Люди» | `app/(dashboard)/clients/[id].tsx` + `src/features/clients/ClientPeopleDoor.tsx` | `LinkRow` одной строкой без аватара · свайп «Убрать» + «Отменить» · «Все люди · N» → `clients/people.tsx` · дверь «Добавить человека» |
 | «История» | `src/features/clients/ClientContactRow.tsx` | сводка `src/features/clients/ClientSummaryCard.tsx` (визиты · сумма · был · команда; при долге — в «Неоплаченные») · дверь «Записать» |
 | «Объекты» | `src/features/clients/ClientObjectsSection.tsx` + `src/features/clients/blocks/ObjectsBlock.tsx` | `ObjectRow` · мини-заметка объекта под строкой · «Все объекты · N» → `clients/objects.tsx` · дверь «Добавить объект» (курсор сразу в адрес) |
-| «Файлы» | `src/features/clients/blocks/ClientFilesBlock.tsx` | плитки и плашки из `AppointmentFileTiles` · «Все файлы · N» (файлы + инвойсы и чеки) → `clients/attachments.tsx`, там же «Инвойсы и чеки» · дверь «Добавить файл» |
-| «Реквизиты» | `src/features/clients/blocks/RequisitesBlock.tsx` | наборы (`RequisitesRow` без шеврона, свайп «Удалить» + «Отменить») · «Все реквизиты · N» → `clients/requisites.tsx` · дверь «Добавить реквизиты» → `src/features/clients/RequisitesSheet.tsx` |
+| «Файлы» | `src/features/clients/blocks/ClientFilesBlock.tsx` | последний файл под заголовком дня (`ClientFileRow`) → `clients/attachments.tsx`: лента по дням, инвойсы и чеки в ней же · пустой блок — дверь «Добавить файл» |
+| «Реквизиты» | `src/features/clients/blocks/RequisitesBlock.tsx` | основной набор плашкой (`SelectRow plain`, плитка-здание акцентом) → `clients/requisites.tsx`: каждый набор плашкой, тап — `src/features/clients/RequisitesSheet.tsx`, удержание — скопировать, свайп «Удалить» + «Отменить», футер «Добавить реквизиты» · пустой блок — дверь «Добавить реквизиты» |
 | «Метка \| Тег» | `src/features/clients/ClientLabelTags.tsx` | две `IdentityCard` из шапки записи; метка «по записи» — пришла сама (`src/features/clients/label-auto-assign.ts`); тег один, как метка; шестерёнки в шторках ведут в справочники |
 | «Личное» | `src/features/clients/blocks/PersonalBlock.tsx` | День рождения · Источник · Кто привёл (при «Рекомендации») |
 

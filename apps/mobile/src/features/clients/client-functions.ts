@@ -1,5 +1,5 @@
 import { isFeatureOn, type CompanyFeatureKey } from "@babun/shared/local/company-features";
-import { useDisabledFeatures } from "@/features/settings/company-features";
+import { useScopeDisabledFeatures } from "@/features/settings/company-features";
 import { useDesignBase } from "@/features/appointments/booking-prefs";
 import { useSaveTeamDesign, useTeamDesign } from "@/features/appointments/team-design";
 
@@ -16,7 +16,8 @@ export type ClientFunctionKey =
   | "client_note"
   | "client_objects"
   | "client_labels"
-  | "client_personal";
+  | "client_personal"
+  | "client_tags";
 
 /** Ключи с выключателем компании (STORY-088). У остальных блоков его нет —
  *  они выключаются только у команды. */
@@ -33,8 +34,9 @@ export function useClientFunctionOn(
   teamId: string | null | undefined,
 ): boolean {
   // Выключатель компании есть только у трёх ключей; «Заметку» и прочие
-  // компания не выключает.
-  const disabled = useDisabledFeatures();
+  // компания не выключает. Компания — та же, что у «Дизайна» команды ниже:
+  // компания экрана (у строки работодателя — его, 03.10).
+  const disabled = useScopeDisabledFeatures();
   const companyOn =
     !COMPANY_KEYS.has(key) || isFeatureOn(disabled, key as CompanyFeatureKey);
   const design = useTeamDesign(teamId);
@@ -52,7 +54,7 @@ export function useToggleClientFunction(teamId: string | null | undefined) {
       const off = new Set(base.disabledBlocks);
       if (input.on) off.delete(input.key);
       else off.add(input.key);
-      save.mutate({ teamId, next: { ...base, disabledBlocks: [...off] } });
+      save.mutate({ teamId, base, next: { ...base, disabledBlocks: [...off] } });
     },
   };
 }

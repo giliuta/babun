@@ -7,7 +7,6 @@ import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { listClients as listClientsCached } from "@babun/shared/sync/clientsCached";
 import {
-  listMemberClients,
   useCreateClient,
   useUpdateClientById,
 } from "@/features/clients/queries";
@@ -18,6 +17,7 @@ import { clientCardHref } from "@/features/clients/clients-company";
 import {
   countryDialCode,
   formatPhoneAsYouType,
+  isDialOnly,
   tryToE164,
 } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
@@ -92,6 +92,40 @@ export function draftPhoneTyped(text: string, dial: string): boolean {
   return typed !== "" && typed !== dial.trim();
 }
 
+/** ЕСТЬ ЛИ В ЧЕРНОВИКЕ НАБРАННОЕ — то, что «Назад» не вправе выбросить молча.
+ *  Код страны в поле номера набранным не считается (аудит 03.10): поле с
+ *  22.09 рождается пустым, а сравнение «номер ≠ код» на пустом поле было
+ *  истинным всегда — пустое «Создать клиента» спрашивало «Удалить
+ *  черновик?», и свайп назад был выключен. */
+export function draftHasInput(draft: Client, dial: string): boolean {
+  return Boolean(
+    draft.full_name.trim() ||
+      draftPhoneTyped(draft.phone, dial) ||
+      draft.email.trim() ||
+      draft.city.trim() ||
+      draft.birthday ||
+      draft.whatsapp_phone.trim() ||
+      draft.telegram_username.trim() ||
+      draft.instagram_username.trim() ||
+      // Строка «Телефон 2», где номер стёрт до кода, набранным не считается —
+      // как и само поле номера выше (повторный аудит 03.10).
+      draft.phones.some((p) => draftPhoneTyped(p.number ?? "", dial)) ||
+      draft.legal_name?.trim() ||
+      draft.vat_number?.trim() ||
+      draft.reg_number?.trim() ||
+      draft.billing_address?.trim() ||
+      draft.locations.length ||
+      draft.notes.length ||
+      draft.tag_ids.length ||
+      // Связь, приехавшая с дверью, — тоже набранное: без этой строки
+      // черновик жильца уходил по «Назад» молча, и человек пропадал вместе
+      // с тем, что его заводили именно в эту виллу.
+      draft.memberships?.length ||
+      draft.acquisition_source !== "unknown" ||
+      draft.blacklisted
+  );
+}
+
 /** Параметры маршрута черновика, открытого дверью связи (сценарий г-б). */
 export type DraftLinkParams = {
   name?: string;
@@ -159,11 +193,13 @@ export interface ClientDraftOptions {
    *  уходит оттуда. Бросили черновик — исходная не тронута: убирается номер
    *  только в `save`, после того как клиент уже создан. */
   split?: SplitRef | null;
+  /** Команда, ради записи которой заводят клиента (`/client` из записи). */
+  team?: string | null;
 }
 
 export function useClientDraft(
   active: boolean,
-  { forBooking = false, name, phone, link, split }: ClientDraftOptions = {},
+  { forBooking = false, name, phone, link, split, team }: ClientDraftOptions = {},
 ) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -182,11 +218,18 @@ export function useClientDraft(
   const { data: savedTeam } = useClientsTeam(tenantId ?? null);
   const { data: teams = [] } = useTeams();
   const teamIds = teams.map((team) => team.id);
-  const newClientTeam = teamForNewClient(liveTeamChoice(savedTeam, teamIds), teamIds);
+  // КОМАНДА ЗАПИСИ СИЛЬНЕЕ ЧИПА (аудит 03.10): клиент, заведённый из
+  // записи, — клиент её команды. Раньше он уходил в команду последнего чипа
+  // вкладки «Клиенты» (или в первую), а от команды зависят теги, страна
+  // номера, поля карточки и отправитель SMS.
+  const bookingTeam =
+    team && (teamIds.length === 0 || teamIds.includes(team)) ? team : null;
+  const newClientTeam =
+    bookingTeam ?? teamForNewClient(liveTeamChoice(savedTeam, teamIds), teamIds);
   // Код страны берём из профиля КОМПАНИИ (tenants.country), а не из константы
   // продукта: у кипрской фирмы поле открывается с «+357», у греческой — с
   // «+30». Номер, введённый со своим «+», всё равно уважается как есть.
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(newClientTeam);
   const dial = countryDialCode(country);
   const [draft, setDraft] = useState<Client>(() =>
     createBlankClient({
@@ -208,6 +251,22 @@ export function useClientDraft(
         : [],
     }),
   );
+  // КОМАНДА ЧЕРНОВИКА ВИДНА СТРАНИЦЕ СРАЗУ (аудит 03.10): подпись страны над
+  // номером читает `client.team_id`, и у черновика без неё код брался от
+  // пояса компании, а не команды, куда клиент уйдёт. Выбранную руками
+  // команду не трогаем — только ту, что поставили сами.
+  const autoTeam = useRef<string | null>(null);
+  useEffect(() => {
+    if (!active || !newClientTeam) return;
+    const previous = autoTeam.current;
+    autoTeam.current = newClientTeam;
+    setDraft((current) =>
+      (!current.team_id || current.team_id === previous) &&
+      current.team_id !== newClientTeam
+        ? { ...current, team_id: newClientTeam }
+        : current,
+    );
+  }, [active, newClientTeam]);
   // Свежий черновик для `save`: замыкание нажатия видит состояние до записи
   // поля, которое дописалось при снятии фокуса.
   const draftRef = useRef(draft);
@@ -261,15 +320,11 @@ export function useClientDraft(
     if (!tenantId) return null;
     const sameNumber = (list: readonly Client[]) =>
       list.find((c) => (c.phone_e164 ?? tryToE164(c.phone ?? "")) === key) ?? null;
-    // В компании, где человек работает, таблица клиентов ему закрыта — дубль
-    // ищется тем же окном, которым он её читает.
-    if (scope?.kind === "member") {
-      try {
-        return sameNumber(await listMemberClients(tenantBoundClient(tenantId)));
-      } catch {
-        return null;
-      }
-    }
+    // В компании, где человек работает, номеров в его окне нет никогда (30.09:
+    // номер — по одному, дверью): искать дубль нечем, а качать ради этого
+    // весь список — лишний трафик. Арбитр — UNIQUE-индекс базы: его отказ
+    // говорит нейтрально «уже есть у компании» (ниже, `isPhoneTakenError`).
+    if (scope?.kind === "member") return null;
     try {
       return (await findClientByPhoneE164(draftClient, key, tenantId)) ?? null;
     } catch {
@@ -308,33 +363,10 @@ export function useClientDraft(
     return () => clearTimeout(timer);
   }, [active, e164, tenantId, findDuplicate]);
 
-  const isDirty = useMemo(() => {
-    if (!active) return false;
-    return Boolean(
-      draft.full_name.trim() ||
-        draft.phone.trim() !== dial ||
-        draft.email.trim() ||
-        draft.city.trim() ||
-        draft.birthday ||
-        draft.whatsapp_phone.trim() ||
-        draft.telegram_username.trim() ||
-        draft.instagram_username.trim() ||
-        draft.phones.length ||
-        draft.legal_name?.trim() ||
-        draft.vat_number?.trim() ||
-        draft.reg_number?.trim() ||
-        draft.billing_address?.trim() ||
-        draft.locations.length ||
-        draft.notes.length ||
-        draft.tag_ids.length ||
-        // Связь, приехавшая с дверью, — тоже набранное: без этой строки
-        // черновик жильца уходил по «Назад» молча, и человек пропадал вместе
-        // с тем, что его заводили именно в эту виллу.
-        draft.memberships?.length ||
-        draft.acquisition_source !== "unknown" ||
-        draft.blacklisted
-    );
-  }, [active, draft, dial]);
+  const isDirty = useMemo(
+    () => active && draftHasInput(draft, dial),
+    [active, draft, dial],
+  );
 
   // Владелец 2026-07-25: телефон ОБЯЗАТЕЛЕН и УНИКАЛЕН. Уникальность
   // держится на ключе phone_e164, поэтому «5+ цифр» больше не пропуск —
@@ -444,6 +476,11 @@ export function useClientDraft(
         // со связью) — в нём один код страны, и в базу он уезжает пустым,
         // а не номером «+357».
         phone: e164 ? d.phone.trim() : "",
+        // Стёртый номер «Телефона 2» в черновике хранится (`savePhone`, чтобы
+        // перенабор не терял строку), а при создании отсеивается — иначе
+        // карточка рождалась с пустой строкой «Телефон 2 | +357 | Номер»
+        // (повторный аудит 03.10).
+        phones: d.phones.filter((p) => !isDialOnly(p.number ?? "", country)),
         full_name: d.full_name.trim(),
         phone_e164: e164,
         // Черновик пишет реквизиты как набраны (обрезка под пальцем съедала

@@ -19,6 +19,7 @@ import {
   monthSpendByCategory,
   type BudgetSeen,
 } from "./category-budget";
+import { readTeamNotifyPrefs } from "@/features/cabinet/notification-prefs-cache";
 
 // УВЕДОМЛЕНИЕ О БЮДЖЕТЕ — КОМУ, КОГДА И СКОЛЬКО РАЗ.
 //
@@ -107,8 +108,11 @@ export function runBudgetAlerts(
   teamNames?: ReadonlyMap<string, string>,
 ): Promise<void> {
   return enqueue(async () => {
+    // «Бюджет категорий» — у команды категории (Кабинет → Уведомления,
+    // 03.10): выключенные команды не сообщают, и их пороги не помечаются —
+    // включили обратно, сообщится текущее.
     const { notices, next } = budgetAlerts(
-      categories,
+      categories.filter((c) => readTeamNotifyPrefs(c.team_id ?? null).budget),
       spend,
       readSeen(tenantId),
       monthKey,

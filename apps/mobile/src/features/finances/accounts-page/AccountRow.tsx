@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
+import { Eye, EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import { money, moneySign } from "@babun/shared/common/utils/money";
 import {
   AppearanceTile,
@@ -25,13 +25,17 @@ export const ACCOUNT_ROW_H = 52;
 // другого места увидеть деньги счёта у этой двери нет. Цифра тихая
 // (моноширинная, вторым цветом): она справка, а не герой строки; минус — долг.
 //
-// У ОТКРЫТОГО СЧЁТА ПРАВОЙ КРОМКИ НЕТ. Разрушительного у него не бывает
-// вовсе: «Скрыть» никогда не удаляет (`hideDecision`).
+// «СКРЫТЬ» — СЧЁТ ДЛЯ СЕБЯ (владелец 03.10): скрытый счёт работает, но
+// виден только на этой странице и только владельцу; в строке — метка
+// «Скрыт», левая кромка — «Показать».
+//
+// ПРАВАЯ КРОМКА — «УДАЛИТЬ» У КАЖДОГО СЧЁТА (владелец 03.10: «свайпом
+// удалять, они попадают в папку „Удалённые счета" на 30 дней, как клиенты»).
+// Удаление обратимо: счёт уходит в «Удалённые счета», откуда возвращается.
 //
 // ЗАКРЫТЫЙ СЧЁТ — ТА ЖЕ СТРОКА, СЕРАЯ, ВНИЗУ СВОЕЙ КОМАНДЫ (владелец
 // 2026-09-29: «убери вкладку „Закрытые счета“»). Как скрытая категория: слева
-// «Открыть», справа «Удалить» — только у пустого, без единой операции
-// (владелец 2026-09-23: «в архив и потом удалить»).
+// «Открыть», справа — то же «Удалить».
 //
 // Ручка — ВНЕ нажимаемой области, но ВНУТРИ заливки строки: вложенная в
 // `Pressable`, она отдавала бы короткий тап правке, а оставленная без цвета —
@@ -43,6 +47,8 @@ export function AccountRow({
   handle,
   onPress,
   onHide,
+  onDelete,
+  hidden = false,
   closed,
 }: {
   account: Pick<
@@ -57,11 +63,17 @@ export function AccountRow({
    *  52 pt — шаг перетаскивания не меняется. */
   sub?: string | null;
   handle: ReactNode;
-  onPress: () => void;
-  onHide: () => void;
-  /** Счёт закрыт: строка гаснет, слева «Открыть», справа «Удалить» (если
-   *  стереть его можно). */
-  closed?: { onReopen: () => void; onDelete?: () => void } | null;
+  /** Нет — строка только показывает («Счета: Только видит», 03.10). */
+  onPress?: () => void;
+  /** «Скрыть» ⇄ «Показать» (скрытый счёт — только здесь, владелец 03.10).
+   *  Нет — левой кромки нет: скрывает только владелец. */
+  onHide?: () => void;
+  /** «Удалить» — в «Удалённые счета». Нет — правой кромки нет. */
+  onDelete?: () => void;
+  /** Счёт скрыт: левая кромка — «Показать». */
+  hidden?: boolean;
+  /** Счёт скрыт: строка гаснет, слева «Открыть». */
+  closed?: { onReopen: () => void } | null;
 }) {
   const t = useThemeColors();
   const sign = moneySign(account.balance);
@@ -72,7 +84,9 @@ export function AccountRow({
       // справа, скрыть слева»). Скрытый счёт падает вниз своей команды серым,
       // и там же тем же жестом открывается снова.
       leading={
-        closed
+        !onHide && !closed
+          ? undefined
+          : closed
           ? {
               label: "Открыть",
               color: t.success,
@@ -80,19 +94,27 @@ export function AccountRow({
               accessibilityLabel: `Открыть счёт ${account.name} снова`,
               onAction: closed.onReopen,
             }
-          : {
-              label: "Скрыть",
-              color: t.warning,
-              icon: EyeOff,
-              accessibilityLabel: `Скрыть счёт ${account.name}`,
-              onAction: onHide,
-            }
+          : hidden
+            ? {
+                label: "Показать",
+                color: t.accent,
+                icon: Eye,
+                accessibilityLabel: `Показать счёт ${account.name}`,
+                onAction: () => onHide?.(),
+              }
+            : {
+                label: "Скрыть",
+                color: t.warning,
+                icon: EyeOff,
+                accessibilityLabel: `Скрыть счёт ${account.name}`,
+                onAction: () => onHide?.(),
+              }
       }
-      label={closed?.onDelete ? "Удалить" : undefined}
+      label={onDelete ? "Удалить" : undefined}
       color={t.danger}
-      icon={closed?.onDelete ? Trash2 : undefined}
-      accessibilityLabel={closed?.onDelete ? `Удалить счёт ${account.name}` : undefined}
-      onAction={closed?.onDelete}
+      icon={onDelete ? Trash2 : undefined}
+      accessibilityLabel={onDelete ? `Удалить счёт ${account.name}` : undefined}
+      onAction={onDelete}
     >
       <View
         style={{
@@ -108,25 +130,26 @@ export function AccountRow({
       >
         <Pressable
           onPress={onPress}
-          accessibilityRole="button"
+          disabled={!onPress}
+          accessibilityRole={onPress ? "button" : undefined}
           accessibilityLabel={[account.name, sub, mark, amount, closed ? "закрыт" : null]
             .filter(Boolean)
             .join(", ")}
-          accessibilityHint="Открывает правку счёта"
+          accessibilityHint={onPress ? "Открывает правку счёта" : undefined}
           // Свайпа для VoiceOver не существует — то же действие ротором.
-          accessibilityActions={
-            closed
-              ? [
-                  { name: "reopen", label: "Открыть снова" },
-                  ...(closed.onDelete ? [{ name: "delete", label: "Удалить" }] : []),
-                ]
-              : [{ name: "hide", label: "Скрыть" }]
-          }
+          accessibilityActions={[
+            ...(closed
+              ? [{ name: "reopen", label: "Открыть снова" }]
+              : onHide
+                ? [{ name: "hide", label: hidden ? "Показать" : "Скрыть" }]
+                : []),
+            ...(onDelete ? [{ name: "delete", label: "Удалить" }] : []),
+          ]}
           onAccessibilityAction={(event) => {
             const name = event.nativeEvent.actionName;
-            if (name === "hide") onHide();
+            if (name === "hide") onHide?.();
             if (name === "reopen") closed?.onReopen();
-            if (name === "delete") closed?.onDelete?.();
+            if (name === "delete") onDelete?.();
           }}
           style={({ pressed }) => ({
             flex: 1,

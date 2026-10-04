@@ -1,117 +1,76 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
-  appendOnly,
+  findObjectType,
   objectTypeKey,
   objectTypeVocabulary,
   snapObjectType,
 } from "./object-types";
 
-type Loc = { label: string };
-const client = (...labels: string[]) =>
-  ({ locations: labels.map((label): Loc => ({ label })) }) as never;
+const here = dirname(fileURLToPath(import.meta.url));
+const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
 
-describe("словарь типов объекта", () => {
-  test("пустая база — только стандартный набор", () => {
-    assert.deepEqual(objectTypeVocabulary([]), ["Дом", "Квартира", "Офис"]);
+// Владелец 03.10: «удали все типы объектов — изначально их быть не должно,
+// каждый человек сам создаёт свой тип объекта».
+
+describe("словарь типов объекта — только свои типы команды", () => {
+  test("пустой справочник — пустой выбор: стандартного набора нет", () => {
+    assert.deepEqual(objectTypeVocabulary([]), []);
   });
 
-  test("типы из настроек идут ПЕРВЫМИ, в порядке настроек", () => {
-    // Бизнес объявил свой список — он и есть главный.
-    const vocab = objectTypeVocabulary([client("Ресторан")], ["Склад", "Цех"]);
-    assert.deepEqual(vocab, [
-      "Склад",
-      "Цех",
-      "Ресторан",
-      "Дом",
-      "Квартира",
-      "Офис",
-    ]);
+  test("порядок — порядок справочника", () => {
+    assert.deepEqual(objectTypeVocabulary(["Склад", "Цех", "Ресторан"]), ["Склад", "Цех", "Ресторан"]);
   });
 
-  test("используемое бизнесом идёт ПЕРЕД стандартным", () => {
-    const vocab = objectTypeVocabulary([
-      client("Квартира", "Квартира"),
-      client("Ресторан"),
-    ]);
-    assert.deepEqual(vocab, ["Квартира", "Ресторан", "Дом", "Офис"]);
-  });
-
-  test("регистр и пробелы не плодят дубли", () => {
-    const vocab = objectTypeVocabulary([client("дом", "Дом ", " ДОМ")]);
-    assert.deepEqual(vocab, ["дом", "Квартира", "Офис"]);
+  test("регистр и пробелы не плодят дубли, пустые строки выпадают", () => {
+    assert.deepEqual(objectTypeVocabulary(["Дом", " дом ", "  ", "ДОМ"]), ["Дом"]);
     assert.equal(objectTypeKey(" ДОМ "), "дом");
-  });
-
-  test("ПОРЯДОК НЕ ЗАВИСИТ ОТ ВЫБОРА — чип не уезжает из-под пальца", () => {
-    // Баг, который владелец увидел первым тапом: выбор «Офиса» пересобирал
-    // список, и выбранным оказывался сосед.
-    const clients = [client("Квартира", "Квартира"), client("Ресторан")];
-    const before = objectTypeVocabulary(clients, []);
-    for (const picked of before) {
-      assert.deepEqual(
-        objectTypeVocabulary(clients, [], picked),
-        before,
-        `выбор «${picked}» переставил список`,
-      );
-    }
-  });
-
-  test("текущее значение дописывается В КОНЕЦ, если его нигде нет", () => {
-    const vocab = objectTypeVocabulary([], [], "Ангар");
-    assert.deepEqual(vocab, ["Дом", "Квартира", "Офис", "Ангар"]);
-  });
-
-  test("пустые и пробельные метки игнорируются", () => {
-    assert.deepEqual(objectTypeVocabulary([client("", "   ")]), [
-      "Дом",
-      "Квартира",
-      "Офис",
-    ]);
   });
 });
 
-describe("защита пальца: словарь только дописывается", () => {
-  test("ЗАПИСЬ выбора не переставляет уже показанные чипы", () => {
-    // Реальный контур: тап по чипу переписывает метку объекта, то есть меняет
-    // ЧАСТОТЫ, из которых строится порядок. Чистый словарь обязан на это
-    // отреагировать — а экран обязан НЕ переставлять то, во что уже целится
-    // палец. За это отвечает appendOnly (аудит 2026-07-27).
-    const clients = [
-      client("Квартира", "Квартира"),
-      client("Ресторан"),
-      client("Дом"),
+describe("тип объекта по метке", () => {
+  const presets = [{ name: "Офис", color: "#3276FB" }, { name: "Склад" }];
+
+  test("метка находит тип справочника без учёта регистра", () => {
+    assert.equal(findObjectType(presets, " офис ")?.color, "#3276FB");
+  });
+
+  test("метка удалённого типа — объект без типа", () => {
+    assert.equal(findObjectType(presets, "Дом"), undefined);
+    assert.equal(findObjectType([], "Офис"), undefined);
+  });
+
+  test("пустая метка — без типа", () => {
+    assert.equal(findObjectType(presets, ""), undefined);
+    assert.equal(findObjectType(presets, null), undefined);
+  });
+});
+
+describe("готовых типов нет нигде", () => {
+  test("ни словарь, ни страница типов, ни ссылка клиенту не подставляют «Дом · Квартира · Офис»", () => {
+    const sources = [
+      "object-types.ts",
+      "location-request-form.ts",
+      "../reference/screens/ObjectTypesScreen.tsx",
+      "../../../app/l/[token].tsx",
+      "../../../../../packages/shared/src/local/location-labels.ts",
     ];
-    const shown = objectTypeVocabulary(clients, []);
-    for (const picked of shown) {
-      const afterWrite = objectTypeVocabulary(
-        [
-          { locations: [{ label: picked }, { label: "Квартира" }] } as never,
-          ...clients.slice(1),
-        ],
-        [],
-        picked,
-      );
-      const next = appendOnly(shown, afterWrite);
-      assert.deepEqual(
-        next.slice(0, shown.length),
-        shown,
-        `выбор «${picked}» переставил уже показанные чипы`,
-      );
+    for (const path of sources) {
+      const code = read(path)
+        .split("\n")
+        .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+        .join("\n");
+      assert.doesNotMatch(code, /"Квартира"/, `${path}: вернулся готовый тип`);
+      assert.doesNotMatch(code, /Добавить стандартные/, `${path}: вернулась кнопка стандартного набора`);
     }
   });
 
-  test("новое значение дописывается в хвост, дубли по регистру не плодятся", () => {
-    assert.deepEqual(appendOnly(["Дом", "Офис"], ["дом", "Склад", " СКЛАД "]), [
-      "Дом",
-      "Офис",
-      "Склад",
-    ]);
-  });
-
-  test("нечего дописывать — возвращается ТОТ ЖЕ массив", () => {
-    const shown = ["Дом", "Офис"];
-    assert.equal(appendOnly(shown, ["Дом"]), shown);
+  test("строка объекта и выбор объекта красят только существующим типом", () => {
+    assert.match(read("blocks/ObjectsBlock.tsx"), /findObjectType\(labelPresets, loc\.label\)/);
+    assert.match(read("ObjectPickerSheet.tsx"), /findObjectType\(labelPresets, loc\.label\)/);
   });
 });
 

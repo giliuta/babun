@@ -3,111 +3,100 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { layoutClientFiles } from "./client-files";
+import { clientFileTimeline, fileDay, fileTime, groupFilesByDay } from "./client-files";
 
-// БЛОК «ФАЙЛЫ» НА СТРАНИЦЕ КЛИЕНТА (владелец 22.09: «уберём полностью блок
-// документации и просто туда вставим, как у нас файлы, как везде хранятся
-// файлы»). Две половины: чистое правило отбора и порядка — вызовом, и
-// проводка — по исходникам (экран тянет react-native, которого в node:test
-// нет). Главное, что сторожится: у клиента тот же блок, что у записи, собран
-// из ТЕХ ЖЕ плиток и того же листа, а «Документации» больше нет.
+// ФАЙЛЫ КЛИЕНТА — ЛЕНТОЙ ПО ДНЯМ, КАК «ИСТОРИЯ» (владелец 03.10: «файлы —
+// как история, по датам… файлы, чеки, инвойсы — полноценные блоки, чтобы
+// можно было сразу открывать»). Две половины: чистое правило ленты — вызовом,
+// и проводка — по исходникам (экран тянет react-native, которого в node:test
+// нет).
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
 
 const att = (id: string, mime: string, at: string) => ({ id, mime_type: mime, created_at: at });
+const inv = (id: string, issued_on: string, status = "issued", kind?: string) => ({
+  id,
+  status,
+  kind,
+  issued_on,
+  created_at: `${issued_on}T12:00:00`,
+});
+const rec = (id: string, issued_on: string, status = "issued") => ({
+  id,
+  status,
+  issued_on,
+  created_at: `${issued_on}T13:00:00`,
+});
+const local = (y: number, m: number, d: number, h = 10) => new Date(y, m - 1, d, h, 0).toISOString();
 
-describe("что показывает блок «Файлы» клиента", () => {
-  test("снимки — квадратами, прочее — плашками, свежие сверху", () => {
-    const layout = layoutClientFiles({
+describe("лента файлов клиента", () => {
+  test("все четыре источника — одной лентой, свежий день сверху", () => {
+    const timeline = clientFileTimeline({
       attachments: [
-        att("old-photo", "image/jpeg", "2026-08-01T10:00:00Z"),
-        att("contract", "application/pdf", "2026-09-10T10:00:00Z"),
+        att("photo", "image/jpeg", local(2026, 8, 1)),
+        att("contract", "application/pdf", local(2026, 9, 10)),
       ],
-      visitPhotos: [{ id: "visit", created_at: "2026-09-15T09:00:00Z" }],
-      invoices: [{ id: "inv", status: "issued", kind: "invoice", issued_on: "2026-09-20", created_at: "2026-09-20T08:00:00Z" }],
-      receipts: [{ id: "rc", status: "issued", issued_on: "2026-08-14", created_at: "2026-08-14T12:00:00Z" }],
+      visitPhotos: [{ id: "visit", created_at: local(2026, 9, 20) }],
+      invoices: [inv("inv", "2026-09-15")],
+      receipts: [rec("rc", "2026-09-15")],
     });
-    assert.deepEqual(layout.media.map((m) => m.item.id), ["visit", "old-photo"]);
-    assert.deepEqual(layout.papers.map((p) => p.item.id), ["inv", "contract", "rc"]);
-    // «Все файлы» считает только то, что на той странице: вложения и фото
-    // визитов (3). Инвойс и чек — бумаги, у них своя страница.
-    assert.equal(layout.total, 3);
-    assert.equal(layout.hidden, 0);
-    assert.equal(layout.hiddenPapers, 0);
+    assert.deepEqual(
+      timeline.map((e) => `${e.type}:${e.item.id}`),
+      ["visit:visit", "receipt:rc", "invoice:inv", "file:contract", "photo:photo"],
+    );
+    assert.equal(timeline[0].day, "2026-09-20");
   });
 
-  test("аннулированные бумаги и кредит-ноты — как у записи, не файлы", () => {
-    const layout = layoutClientFiles({
+  test("снимок — фото, прочее вложение — файл", () => {
+    const timeline = clientFileTimeline({
+      attachments: [att("a", "image/png", local(2026, 9, 1)), att("b", "text/plain", local(2026, 9, 1, 9))],
+      visitPhotos: [],
+      invoices: [],
+      receipts: [],
+    });
+    assert.deepEqual(timeline.map((e) => e.type), ["photo", "file"]);
+  });
+
+  test("кредит-нота и аннулированный чек в ленту не попадают; отменённый инвойс стоит", () => {
+    const timeline = clientFileTimeline({
       attachments: [],
       visitPhotos: [],
-      invoices: [
-        { id: "void", status: "void", issued_on: "2026-09-01" },
-        { id: "cancelled", status: "cancelled", issued_on: "2026-09-01" },
-        { id: "note", status: "issued", kind: "credit_note", issued_on: "2026-09-02" },
-        { id: "live", status: "paid", issued_on: "2026-09-03" },
-      ],
-      receipts: [
-        { id: "rc-void", status: "void", issued_on: "2026-09-01" },
-        { id: "rc", status: "issued", issued_on: "2026-09-01" },
-      ],
+      invoices: [inv("void", "2026-09-01", "void"), inv("cn", "2026-09-01", "issued", "credit_note"), inv("ok", "2026-09-01")],
+      receipts: [rec("rv", "2026-09-01", "void"), rec("r", "2026-09-01")],
     });
-    assert.deepEqual(layout.papers.map((p) => p.item.id), ["live", "rc"]);
-    assert.equal(layout.total, 0);
-    assert.equal(layout.hiddenPapers, 0);
+    assert.deepEqual(timeline.map((e) => e.item.id).sort(), ["ok", "r", "void"]);
   });
 
-  test("бумаги сверх плашек — в «Счета и чеки», а не в число «Все файлы»", () => {
-    const layout = layoutClientFiles(
-      {
-        attachments: [],
-        visitPhotos: [],
-        invoices: Array.from({ length: 4 }, (_, i) => ({
-          id: `inv${i}`,
-          status: "issued",
-          kind: "invoice",
-          issued_on: `2026-09-0${i + 1}`,
-        })),
-        receipts: [],
-      },
-      { media: 8, papers: 3 },
-    );
-    assert.equal(layout.papers.length, 3);
-    assert.equal(layout.hiddenPapers, 1);
-    assert.equal(layout.total, 0);
-    assert.equal(layout.hidden, 0);
+  test("документ встаёт в день своей даты, а не в день, когда его завели", () => {
+    const [entry] = clientFileTimeline({
+      attachments: [],
+      visitPhotos: [],
+      invoices: [{ id: "x", status: "issued", issued_on: "2026-08-05", created_at: "2026-08-09T10:00:00Z" }],
+      receipts: [],
+    });
+    assert.equal(entry.day, "2026-08-05");
   });
 
-  test("много файлов — первые, остальное за «Все файлы · N»", () => {
-    const layout = layoutClientFiles(
-      {
-        attachments: [
-          ...Array.from({ length: 5 }, (_, i) => att(`p${i}`, "image/png", `2026-09-0${i + 1}T00:00:00Z`)),
-          ...Array.from({ length: 4 }, (_, i) => att(`d${i}`, "text/plain", `2026-08-0${i + 1}T00:00:00Z`)),
-        ],
-        visitPhotos: [],
-        invoices: [],
-        receipts: [],
-      },
-      { media: 3, papers: 2 },
-    );
-    assert.deepEqual(layout.media.map((m) => m.item.id), ["p4", "p3", "p2"]);
-    assert.deepEqual(layout.papers.map((p) => p.item.id), ["d3", "d2"]);
-    assert.equal(layout.total, 9);
-    assert.equal(layout.hidden, 4);
+  test("по дням — в порядке ленты; пусто — пусто", () => {
+    const groups = groupFilesByDay([{ day: "2026-09-20" }, { day: "2026-09-20" }, { day: "2026-08-01" }]);
+    assert.deepEqual(groups.map((g) => [g.day, g.items.length]), [["2026-09-20", 2], ["2026-08-01", 1]]);
+    assert.deepEqual(groupFilesByDay([]), []);
   });
 
-  test("пусто — пусто: блок держит одна дверь «Добавить»", () => {
-    const layout = layoutClientFiles({ attachments: [], visitPhotos: [], invoices: [], receipts: [] });
-    assert.equal(layout.total, 0);
-    assert.equal(layout.hidden, 0);
+  test("день и время — по местным часам; у голой даты времени нет", () => {
+    assert.equal(fileDay("2026-08-05"), "2026-08-05");
+    assert.equal(fileDay(local(2026, 9, 3, 23)), "2026-09-03");
+    assert.equal(fileTime(new Date(2026, 8, 3, 9, 5).toISOString()), "09:05");
+    assert.equal(fileTime("2026-08-05"), "");
   });
 });
 
-describe("у клиента тот же блок «Файлы», что у записи", () => {
+describe("«Файлы» — как «История»: последний на карточке, вся лента на странице", () => {
   const block = () => read("blocks/ClientFilesBlock.tsx");
+  const page = () => read("../../../app/(dashboard)/clients/attachments.tsx");
   const profile = () => read("ClientProfileBlocks.tsx");
-  const record = () => read("../appointments/AppointmentFilesBlock.tsx");
+  const row = () => read("ClientFileRow.tsx");
 
   test("«Документации» на странице клиента больше нет", () => {
     assert.equal(existsSync(resolve(here, "blocks/DocumentationBlock.tsx")), false);
@@ -118,33 +107,70 @@ describe("у клиента тот же блок «Файлы», что у за�
   test("страница ставит блок «Файлы»; в черновике — только его дверь", () => {
     assert.match(profile(), /import ClientFilesBlock from "@\/features\/clients\/blocks\/ClientFilesBlock"/);
     assert.match(profile(), /\{!draft && a\.files\.show \? \(\s*<ClientFilesBlock\s/);
-    assert.match(block(), /<SectionCard title="Файлы">/);
+    assert.match(block(), /<SectionCard\s+title="Файлы"/);
   });
 
-  test("плитки, плашки и лист — общие с записью, не копии", () => {
-    const shared = /import \{[^}]*\bDocumentPill\b[^}]*\bPhotoTile\b[^}]*\} from "@\/features\/appointments\/AppointmentFileTiles"/;
-    assert.match(block(), shared);
-    assert.match(block(), /import \{ FileAddSheet \} from "@\/features\/appointments\/FileAddSheet"/);
-    for (const tag of ["<PhotoTile", "<DocumentPill", "<FileAddSheet"]) {
-      assert.ok(block().includes(tag), `блок клиента не ставит ${tag}`);
-    }
-    // Своей анатомии у блока клиента нет: ни плитки, ни второго листа.
-    assert.doesNotMatch(block(), /function (PhotoTile|DocumentPill|FileAddSheet)\b/);
-    assert.doesNotMatch(block(), /PickerSheet|<Image\b|<Modal\b/);
-    // И запись берёт то же самое оттуда же — пункты листа живут в одном месте.
-    assert.match(record(), /from "\.\/AppointmentFileTiles"/);
-    assert.match(record(), /import \{ FileAddSheet \} from "\.\/FileAddSheet"/);
-    assert.doesNotMatch(record(), /Снять фото или видео/);
+  test("карточка — последний файл под заголовком своего дня; тап — страница всех", () => {
+    assert.match(block(), /const last = files\.timeline\[0\] \?\? null;/);
+    assert.match(block(), /<VisitDayHeader date=\{last\.day\} \/>/);
+    assert.match(block(), /<ClientFileRow[\s\S]{0,160}onPress=\{openAll\}/);
+    assert.match(block(), /pathname: subPage\("attachments"\), params: clientSubParams\(clientId, scope\)/);
+    // Квадратов и пилюль записи на карточке клиента больше нет.
+    assert.doesNotMatch(block(), /<PhotoTile|<DocumentPill/);
+  });
+
+  test("страница — дни заголовками, плашки, инвойсы и чеки в той же ленте", () => {
+    assert.match(page(), /groupFilesByDay\(files\.timeline\)/);
+    assert.match(page(), /<VisitDayHeader date=\{day\} \/>/);
+    assert.match(page(), /<ClientFileRow/);
+    // Второй двери «Выдано клиенту → Инвойсы и чеки» больше нет.
+    // Ищется ДВЕРЬ, а не слово: почему её нет, сказано в самом файле.
+    assert.doesNotMatch(page(), /title="Выдано клиенту"|label="Инвойсы и чеки"/);
+  });
+
+  test("тап открывает файл сразу: снимок, документ, инвойс, чек", () => {
+    assert.match(page(), /case "photo":[\s\S]{0,200}setViewer/);
+    assert.match(page(), /case "file":\s*void openAttachment\(entry\.item\)/);
+    assert.match(page(), /case "invoice":\s*router\.push\(`\/invoices\/\$\{entry\.item\.id\}`/);
+    // Чек — своей страницей, как инвойс (владелец 04.10).
+    assert.match(page(), /case "receipt":[\s\S]{0,160}router\.push\(`\/documents\/receipt\/\$\{entry\.item\.id\}`/);
+  });
+
+  test("удалить можно только своё вложение — свайпом, с вопросом", () => {
+    assert.match(page(), /const own = entry\.type === "photo" \|\| entry\.type === "file";/);
+    assert.match(page(), /own && canChange \? \(\s*<SwipeRow/);
+    assert.match(page(), /confirmThen\(\s*"Удалить файл\?"/);
   });
 
   test("«Добавить» кладёт во вложения клиента и стоит только при праве менять", () => {
+    const upload = read("use-client-files.ts");
     // Без второго аргумента — без записи: файл ложится к клиенту.
-    assert.match(block(), /useUploadAttachments\(clientId\)/);
-    assert.doesNotMatch(block(), /useUploadAttachments\(clientId, /);
-    assert.match(block(), /\{canChange \? \([\s\S]{0,120}<ChooseRow[\s\S]{0,80}label="Добавить файл"/);
-    // С 30.09 право считает `card-access.ts`: у владельца — прежнее «менять
-    // карточку и хранилище видит компанию», у сотрудника — «Файлы: Меняет».
+    assert.match(upload, /useUploadAttachments\(clientId\)/);
+    assert.doesNotMatch(upload, /useUploadAttachments\(clientId, /);
+    assert.match(block(), /canChange && !last \? \(\s*<ChooseRow[\s\S]{0,80}label="Добавить файл"/);
+    assert.match(page(), /access\.files\.show && canChange \? \([\s\S]{0,200}label="Добавить файл"/);
     assert.match(profile(), /canChange=\{a\.files\.edit\}/);
     assert.match(read("card-access.ts"), /caps\.edit && caps\.files/);
+  });
+
+  test("справа у инвойса и чека — сумма цветом, у фото — сам снимок", () => {
+    assert.match(row(), /entry\.item\.status === "paid" \? t\.success : t\.warning/);
+    assert.match(row(), /image=\{image\}/);
+  });
+});
+
+describe("«Файлы» записи — перечнем плашками, как у клиента (03.10)", () => {
+  const record = () => read("../appointments/AppointmentFilesBlock.tsx");
+  test("та же лента и та же плашка; квадратов и пилюль нет", () => {
+    assert.match(record(), /clientFileTimeline\(\{/);
+    assert.match(record(), /<ClientFileRow[\s\S]{0,80}inRecord/);
+    assert.doesNotMatch(record(), /<PhotoTile|<DocumentPill|<PendingTile/);
+  });
+  test("своё — свайп «Удалить» с вопросом; дверь — «Добавить файл»", () => {
+    assert.match(record(), /confirmThen\(\s*"Удалить файл\?"/);
+    assert.match(record(), /<ChooseRow[\s\S]{0,80}label="Добавить файл"/);
+  });
+  test("у видео в плашке значок, а не пустой снимок", () => {
+    assert.match(read("ClientFileRow.tsx"), /image = video \? undefined : entry\.item\.url \|\| undefined;/);
   });
 });

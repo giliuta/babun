@@ -169,7 +169,7 @@ export default function BusinessScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <SectionCard title="Компания" padded>
-          <Field label="Название" value={form.name} onChangeText={set("name")} placeholder="AirFix" editable={owner} />
+          <Field label="Название" value={form.name} onChangeText={set("name")} placeholder="Название компании" editable={owner} />
           <Field label="Город" value={form.city} onChangeText={set("city")} placeholder="Limassol" editable={owner} />
           {/* КОД СТРАНЫ — свойство компании (владелец 2026-07-26: «чтобы он
               ставил автоматически… в настройках можно было сразу выбирать»).

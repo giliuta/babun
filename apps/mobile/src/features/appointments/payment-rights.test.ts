@@ -71,7 +71,7 @@ describe("права блока «Оплата»", () => {
       calendar({ grants: ["finance"] }),
       calendar({ teamId: OTHER, grants: ["finance"] }),
     ];
-    const mirror = map({ "finance.operations": "off" });
+    const mirror = map({ "finance.income": "off" });
 
     assert.equal(
       paymentRights({
@@ -97,11 +97,11 @@ describe("права блока «Оплата»", () => {
     );
   });
 
-  test("история платежей открыта от «Доходов и расходов»", () => {
+  test("история платежей открыта от «Доходов»", () => {
     const seen = (level: string) =>
       paymentRights({
         role: "master",
-        map: map({ "finance.operations": level }),
+        map: map({ "finance.income": level }),
         teamId: TEAM,
         myCalendars: [],
         mirror: null,

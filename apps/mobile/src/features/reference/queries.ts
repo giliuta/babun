@@ -15,6 +15,7 @@ import {
 } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { firstCalendarFromRpc } from "@/features/reference/first-calendar";
 import {
   citiesQueryKey,
   mastersQueryKey,
@@ -99,13 +100,17 @@ export async function fetchTeams(
   if (role !== "owner") throw new Error("Нет доступа к календарям");
   let q = client.from("teams").select("*").eq("tenant_id", tenantId);
   if (!includeInactive) q = q.eq("is_active", true);
-  const { data, error } = await q.order("position");
+  // Позиция у новых календарей и меток — 0 у всех (создание её не пишет),
+  // и порядок решала физическая раскладка таблицы: правка строки (имя, цвет,
+  // часы) уносила её в конец, и лента команд переставлялась сама (аудит
+  // шестерёнки 03.10). Второй ключ — время создания: порядок стоит.
+  const { data, error } = await q.order("position").order("created_at");
   if (error) throw new Error(error.message);
   return data;
 }
 
 export function useTeams(opts?: { includeInactive?: boolean }) {
-  const { tenantId, role, ready, client } = useReferenceCompany();
+  const { tenantId, role: companyRole, ready, client } = useReferenceCompany();
   const includeInactive = !!opts?.includeInactive;
   // ЗЕРКАЛО ПОКАЗЫВАЕТ ТОЛЬКО ЕГО КАЛЕНДАРИ. Список приходит по токену
   // ВЛАДЕЛЬЦА, то есть полный: в предпросмотре лента показывала команды, к
@@ -126,6 +131,12 @@ export function useTeams(opts?: { includeInactive?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [includeInactive, attached ? [...attached].sort().join(",") : null],
   );
+  // ДАННЫЕ ЗЕРКАЛА ЧИТАЕТ ВЛАДЕЛЕЦ («права его, данные ваши»). Дверь команд
+  // сотрудника (`list_operational_teams_safe`) по токену владельца отдаёт
+  // пусто — в зеркале у партнёра не было ни одной команды, а с ними и
+  // клиентов (владелец 03.10). Список берётся владельческий и режется по его
+  // прикреплениям выше.
+  const role: UserRole | null | undefined = attached ? "owner" : companyRole;
   return useQuery({
     // ОДИН ЗАПРОС НА ОБА ВАРИАНТА (2026-09-15). Календарь зовёт хук и так, и
     // с архивом — это были два запроса за одной таблицей в каждой волне после
@@ -162,11 +173,48 @@ export function useTeam(id: string | undefined) {
   });
 }
 
+/** Узкий тип вызова: функции нет в сгенерированных типах базы (накачена
+ *  03.10 миграцией `create_first_calendar_once`, типы перегенерируют позже). */
+type RpcWithFirstCalendar = {
+  rpc: (
+    name: "create_first_calendar",
+    args: { p_id: string; p_name: string; p_color: string | null },
+  ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
+};
+
+/** ПЕРВЫЙ КАЛЕНДАРЬ — РЕШАЕТ БАЗА (03.10). Экран заводит «Личный» сам, когда
+ *  список календарей пуст, — но пустым его однажды прочли без входа (истёк
+ *  токен: RLS отдал 0 строк ответом 200), и у компании с тремя календарями
+ *  появился второй «Личный». `create_first_calendar` под замком компании
+ *  проверяет живые календари и, если они есть, ничего не создаёт: ответ —
+ *  `null`, экран просто перечитывает список. */
+export function useCreateFirstCalendar() {
+  const qc = useQueryClient();
+  return useMutation({
+    networkMode: "always",
+    mutationFn: async (input: { name: string; color?: string }): Promise<Team | null> => {
+      const { data, error } = await (supabase as unknown as RpcWithFirstCalendar).rpc(
+        "create_first_calendar",
+        { p_id: generateId("team"), p_name: input.name, p_color: input.color || null },
+      );
+      if (error) throw new Error(error.message);
+      return firstCalendarFromRpc<Team>(data);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["teams"] });
+    },
+    meta: { errorHandled: true },
+  });
+}
+
 export function useCreateTeam() {
   const tenantId = useTenantId();
   const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
+    // Без сети — отказ сразу, а не пауза: отложенное создание календаря
+    // срабатывало, когда вернулась сеть и его уже никто не ждал (03.10).
+    networkMode: "always",
     mutationFn: async (input: {
       name: string;
       color?: string;
@@ -219,7 +267,7 @@ export async function fetchMasters(
     const rows = (data ?? []).map(operationalMasterJsonToMaster);
     return includeInactive ? rows : rows.filter((row) => row.is_active);
   }
-  if (role !== "owner") throw new Error("Нет доступа к сотрудникам");
+  if (role !== "owner") throw new Error("Нет доступа к партнёрам");
   let q = client.from("masters").select("*").eq("tenant_id", tenantId);
   if (!includeInactive) q = q.eq("is_active", true);
   const { data, error } = await q.order("position");
@@ -278,7 +326,7 @@ export function useCreateMaster() {
       account_status?: string;
     }) => {
       if (role !== "owner") {
-        throw new Error("Добавлять сотрудников может только владелец.");
+        throw new Error("Приглашать партнёров может только владелец.");
       }
       const { data, error } = await supabase
         .from("masters")
@@ -349,7 +397,8 @@ export async function fetchCities(
   // тенанта — так читают экраны, которым нужно НАЗВАТЬ метку прошлого
   // дня, а не предложить её к выбору.
   if (teamId) q = q.eq("team_id", teamId);
-  const { data, error } = await q.order("position");
+  // Второй ключ — время создания (см. календари выше).
+  const { data, error } = await q.order("position").order("created_at");
   if (error) throw new Error(error.message);
   return data;
 }
@@ -828,7 +877,7 @@ export function useRemoveMasterFromTeams() {
         if (error) throw new Error(error.message);
         if (!data) {
           throw new Error(
-            `Команда «${team.name}» уже изменилась. Повторите удаление сотрудника.`,
+            `Команда «${team.name}» уже изменилась. Повторите удаление партнёра.`,
           );
         }
       }

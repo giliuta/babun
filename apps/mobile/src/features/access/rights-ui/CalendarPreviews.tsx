@@ -1,6 +1,7 @@
 import { Text, View } from "react-native";
 import { Bookmark, CalendarClock, Trash2 } from "lucide-react-native";
 
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { PRESET_COLOR_VALUES } from "@babun/shared/common/utils/colors";
@@ -195,6 +196,68 @@ const EVENTS_CAPTION: Record<"hidden" | "read" | "write", string> = {
   write: "Так он создаёт событие: тап по свободному времени",
 };
 
+/** Подпись над видом дохода и расхода дня (04.10). */
+const DAY_MONEY_CAPTION: Record<"hidden" | "read" | "write", string> = {
+  hidden: "Так у него: под календарём денег нет",
+  read: "Так он видит доход и расход дней — только этого календаря",
+  write: "Так он вносит доход и расход дня: тап по полосе",
+};
+
+/** ПОЛОСА «ДОХОД / РАСХОД» ПОД СЕТКОЙ — так, как стоит у него под календарём:
+ *  оплаты записей и внесённое из календаря, по дням. «Скрыты» — полосы нет
+ *  вовсе (остаётся сетка без денег), «Вносит» — ещё и кнопка листа дня. */
+function DayMoneyPreview({ level }: { level: "hidden" | "read" | "write" }) {
+  const t = useThemeColors();
+  const days = [
+    { day: "Пн", income: "€120", expense: "€15" },
+    { day: "Вт", income: "€0", expense: "€0" },
+    { day: "Ср", income: "€85", expense: "€8" },
+  ];
+  return (
+    <Card style={{ marginHorizontal: 16, marginTop: 8, paddingVertical: 8 }}>
+      <View style={{ flexDirection: "row" }}>
+        <View style={{ width: 64, paddingRight: 8, alignItems: "flex-end", justifyContent: "flex-end" }}>
+          {level === "hidden" ? null : (
+            <>
+              <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 11, fontWeight: "600", color: t.sub }}>Доход</Text>
+              <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 11, fontWeight: "600", color: t.sub }}>Расход</Text>
+            </>
+          )}
+        </View>
+        {days.map((d, i) => (
+          <View
+            key={d.day}
+            style={{ flex: 1, alignItems: "center", borderLeftWidth: i === 0 ? 0 : 1, borderLeftColor: t.separator }}
+          >
+            <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 12, color: t.faint, marginBottom: 4 }}>{d.day}</Text>
+            {level === "hidden" ? null : (
+              <>
+                <Text
+                  maxFontSizeMultiplier={1.2}
+                  style={{ fontSize: 12, fontWeight: "600", fontVariant: ["tabular-nums"], color: d.income === "€0" ? t.faint : t.success }}
+                >
+                  {d.income}
+                </Text>
+                <Text
+                  maxFontSizeMultiplier={1.2}
+                  style={{ fontSize: 12, fontWeight: "600", fontVariant: ["tabular-nums"], color: d.expense === "€0" ? t.faint : t.danger }}
+                >
+                  {d.expense}
+                </Text>
+              </>
+            )}
+          </View>
+        ))}
+      </View>
+      {level === "write" ? (
+        <View style={{ marginTop: 10, marginHorizontal: 12 }}>
+          <Button variant="secondary" label="Добавить расход" onPress={noop} />
+        </View>
+      ) : null}
+    </Card>
+  );
+}
+
 /** Подпись над видом метки дня — что с ней у человека на этой ступени. */
 const DAY_LABEL_CAPTION: Record<"hidden" | "read" | "write", string> = {
   hidden: "Так у него: дни без меток",
@@ -319,6 +382,15 @@ export function CalendarPreview({
           captionOff={level === "hidden"}
         >
           <DayLabelPreview level={level} />
+        </PreviewFrame>
+      );
+    }
+    case "calendar.day_money": {
+      const level = levels["calendar.day_money"] ?? "off";
+      const state = level === "off" ? "hidden" : level === "write" ? "write" : "read";
+      return (
+        <PreviewFrame state={state === "hidden" ? "read" : state} caption={DAY_MONEY_CAPTION[state]} captionOff={state === "hidden"}>
+          <DayMoneyPreview level={state} />
         </PreviewFrame>
       );
     }

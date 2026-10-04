@@ -33,6 +33,37 @@ interface Request {
 
 let present: ((request: Request) => void) | null = null;
 
+/** Лист на экране — показан или ещё уезжает. */
+let sheetOnScreen = false;
+let goneWaiters: Array<() => void> = [];
+
+function flushGone(): void {
+  sheetOnScreen = false;
+  const waiters = goneWaiters;
+  goneWaiters = [];
+  for (const finish of waiters) finish();
+}
+
+/** ЛИСТ ВЫБОРА УШЁЛ ЦЕЛИКОМ (03.10). Ответ отдаётся сразу по тапу, а окно
+ *  ещё уезжает (`SHEET_EXIT_MS`), и системное окно — «Поделиться», камера —
+ *  iOS в этот миг не показывает: «Поделиться ещё раз» у ссылки клиенту молча
+ *  ничего не открывало. Кто открывает системное окно сразу после выбора,
+ *  ждёт этот сигнал (`onExited` листа), а не таймер. */
+export function choiceSheetGone(): Promise<void> {
+  if (!sheetOnScreen) return Promise.resolve();
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    goneWaiters.push(finish);
+    // Страховка: сигнал не пришёл (лист открыли снова) — не держим зовущего.
+    setTimeout(finish, 1000);
+  });
+}
+
 /** Есть ли смонтированный хост (иначе вызывающий уходит на системный лист). */
 export function choiceSheetReady(): boolean {
   return present !== null;
@@ -52,7 +83,10 @@ export function presentChoiceSheet(
 export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
+  /** Что лист ПОКАЗЫВАЕТ. После ответа не обнуляется: см. `answer`. */
   const [request, setRequest] = useState<Request | null>(null);
+  /** Чей ответ ещё ЖДУТ. Отдельно от показанного: ответ снимает его сразу. */
+  const pendingRef = useRef<Request | null>(null);
   const [visible, setVisible] = useState(false);
   /** Когда закончится анимация ухода предыдущего листа. */
   const reopenAt = useRef(0);
@@ -62,10 +96,10 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
     present = (next) => {
       const show = () => {
         // Один лист за раз: предыдущий обещал ответ — закрываем его отменой.
-        setRequest((cur) => {
-          cur?.resolve(null);
-          return next;
-        });
+        pendingRef.current?.resolve(null);
+        pendingRef.current = next;
+        sheetOnScreen = true;
+        setRequest(next);
         setVisible(true);
       };
       // ВТОРОЙ ВОПРОС ПОДРЯД ЖДЁТ, ПОКА УЕДЕТ ПЕРВЫЙ.
@@ -88,9 +122,21 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
   const answer = (index: number | null) => {
     // Отвечаем РОВНО один раз: закрытие свайпом и тап по скриму могут прийти
     // подряд, а обещание уже отдано.
-    const pending = request;
+    //
+    // ЛИСТ УЕЗЖАЕТ С ТЕМ, ЧТО ПОКАЗЫВАЛ (падение 2026-10-03 02:22). Здесь
+    // стоял `setRequest(null)`, и в одном кадре со стартом ухода содержимое
+    // перестраивалось: заголовок с двумя кнопками сменялся пустым списком и
+    // «Отменой» во всю ширину — четыре ребёнка панели снимались и два
+    // вставлялись, пока ту же панель начинает двигать Reanimated. На
+    // симуляторе владельца после «Отмены» в «Наличные: деньги не
+    // поступили?» порядок детей панели у UIKit и у Fabric разошёлся, и
+    // снятие листа уронило приложение («Attempt to unmount a view which has
+    // a different index»: «Отмена» на месте 1 вместо 2, шапка с грабером —
+    // в конце). Теперь до самого снятия у панели не меняется ни один
+    // ребёнок; показанный вопрос просто заменит следующий `present`.
+    const pending = pendingRef.current;
+    pendingRef.current = null;
     reopenAt.current = Date.now() + SHEET_EXIT_MS;
-    setRequest(null);
     setVisible(false);
     pending?.resolve(index);
   };
@@ -102,6 +148,7 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
       padded={false}
         visible={visible}
         onClose={() => answer(null)}
+        onExited={flushGone}
         maxHeightRatio={0.8}
       >
         {request?.title || request?.message ? (
@@ -207,10 +254,21 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
                 opacity: pressed ? 0.85 : 1,
               })}
             >
+              {/* ДЛИННЫЙ ОТВЕТ ПЕРЕНОСИТСЯ, А НЕ ОБРЕЗАЕТСЯ (03.10): «Снять
+                  €100 · предоплата» на половине ширины уходило в «Снять €100 ·
+                  предо…» — человек подтверждал, не дочитав, что снимает. */}
               <Text
                 maxFontSizeMultiplier={1.2}
-                numberOfLines={1}
-                style={{ fontSize: 17, fontWeight: "700", color: t.onAccent }}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                style={{
+                  fontSize: 17,
+                  fontWeight: "700",
+                  color: t.onAccent,
+                  textAlign: "center",
+                  paddingHorizontal: 8,
+                }}
               >
                 {request.choices[0].label}
               </Text>

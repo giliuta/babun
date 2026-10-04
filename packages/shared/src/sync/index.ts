@@ -19,6 +19,7 @@ export {
 } from "./network";
 
 export {
+  cancelReplayerRetry,
   kickReplayer,
   setReplayerDefaults,
   type QuotaGate,

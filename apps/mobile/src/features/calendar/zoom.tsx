@@ -151,8 +151,18 @@ export function ZoomableTimeGrid({
   // on any touch count) — the native pan and the anchor scrollTo below then
   // fight over the offset. Disabling scroll for the pinch's lifetime keeps
   // exactly one writer.
+  //
+  // ЗАПРЕТ ПРОКРУТКИ «СВОБОДНОГО ПЕРЕМЕЩЕНИЯ» — В ТОМ ЖЕ ИСТОЧНИКЕ (повторный
+  // аудит 03.10, на симуляторе). Запрет стоял обычным пропом `scrollEnabled`
+  // рядом с анимированным, и Reanimated ставил своё значение поверх: в
+  // режиме правки сетка всё равно ехала под пальцем (владелец 24.09: «сетка не
+  // прокручивается, палец двигает запись»). Одно свойство — одно правило.
+  const lockedSv = useSharedValue(scrollLocked);
+  useEffect(() => {
+    lockedSv.value = scrollLocked;
+  }, [scrollLocked, lockedSv]);
   const scrollProps = useAnimatedProps(() => ({
-    scrollEnabled: !pinching.value,
+    scrollEnabled: !pinching.value && !lockedSv.value,
   }));
 
   // Zoom floor: the whole visible window must keep filling the viewport —
@@ -260,7 +270,6 @@ export function ZoomableTimeGrid({
           // часом читалась как баг.
           bounces={false}
           overScrollMode="never"
-          scrollEnabled={!scrollLocked}
           contentContainerStyle={{
             paddingTop: PAD_TOP,
             paddingBottom: PAD_BOTTOM,

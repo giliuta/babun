@@ -209,7 +209,9 @@ describe("веб-паритет: платформенные API только з�
     const users = entries.filter(({ code }) =>
       /from\s+["'][^"']*\/DateTimeInput["']/.test(code),
     );
-    assert.ok(users.length > 5, `мест вызова DateTimeInput: ${users.length}`);
+    // Порог — «поиск нашёл места вызова», а не их точное число: шторка
+    // оплаты инвойса перешла на DateSpinner (04.10), и мест стало пять.
+    assert.ok(users.length >= 3, `мест вызова DateTimeInput: ${users.length}`);
     const offenders = users.flatMap(({ id, code }) =>
       [...code.matchAll(/\bmode=["']([a-z-]+)["']/g)]
         .filter((m) => !modes.includes(m[1]))

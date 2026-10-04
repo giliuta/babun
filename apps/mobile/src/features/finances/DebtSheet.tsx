@@ -8,6 +8,8 @@ import type { Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useReferenceHref } from "@/features/clients/reference-href";
+import { CATEGORY_KIND_ROW } from "./settings-levels";
+import { useFinanceSettingLevelsOf } from "./use-finance-settings";
 import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -85,6 +87,7 @@ export function DebtSheet({
   const doorway = useSheetDoorway();
   // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
   const categoriesHref = useReferenceHref().categories;
+  const categoriesLevelOf = useFinanceSettingLevelsOf();
   const router = useRouter();
   const {
     isEdit,
@@ -153,7 +156,7 @@ export function DebtSheet({
       avoidKeyboard
       maxHeightRatio={0.86}
       footer={
-        <View style={{ paddingHorizontal: 20, gap: 8 }}>
+        <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
           {/* Причина «Смотрит» вытесняет остальные: пока права нет, ни сумма,
               ни клиент кнопку не оживят. */}
           {!canWrite ? (
@@ -207,6 +210,10 @@ export function DebtSheet({
           ]}
           value={direction}
           onChange={(next) => setDirection(next as DebtDirection)}
+          // По долгу уже платили — направление закреплено (проверка 03.10):
+          // приход по «мне должны» после переворота гасил бы НАШ долг.
+          // Сервер держит ту же границу (`debts_direction_locked`).
+          disabled={isEdit && paid > 0}
           style={{ marginHorizontal: GUTTER, marginTop: 8 }}
         />
 
@@ -288,7 +295,6 @@ export function DebtSheet({
           accessibilityLabel="Сумма долга"
           // Цвет долга — янтарь, когда должны нам, и красный, когда должны мы:
           // те же два цвета, что у строк в списке.
-          color={direction === "incoming" ? th.warning : th.danger}
         />
 
         {/* ЗАМЕТКА НАЗЫВАЕТ СЕБЯ, А НЕ ОБЪЯСНЯЕТ (владелец 2026-09-10: «в
@@ -382,6 +388,16 @@ export function DebtSheet({
       <PickerSheet
         visible={categoryOpen}
         title="Категория долга"
+        // Пустой лист говорит, где заводят категории, — как у операции.
+        // Без этой строки лист долга открывался немым: заголовок и пустота
+        // (04.10, у AirFix ни одной категории долгов).
+        subtitle={
+          cats.length > 0
+            ? undefined
+            : categoriesLevelOf(debtTeamId)[CATEGORY_KIND_ROW.debt] === "write"
+              ? "Категорий нет — создайте их (значок справа)"
+              : "Категорий пока нет"
+        }
         items={cats.map((c) => ({
           id: c.id,
           label: c.name,
@@ -396,15 +412,19 @@ export function DebtSheet({
           onPress: () => setCategoryId(c.id),
         }))}
         selectedId={categoryId}
-        // Та же дверь и та же парковка, что у листа операции.
-        onSettings={() =>
-          doorway.open(() =>
-            router.push(
-              (debtTeamId
-                ? `${categoriesHref}?team=${encodeURIComponent(debtTeamId)}&kind=debt`
-                : `${categoriesHref}?kind=debt`) as Href,
-            ),
-          )
+        // Та же дверь и та же парковка, что у листа операции; у партнёра —
+        // по праву «Категории долгов» в команде долга (03.10).
+        onSettings={
+          categoriesLevelOf(debtTeamId)[CATEGORY_KIND_ROW.debt] !== "hidden"
+            ? () =>
+                doorway.open(() =>
+                  router.push(
+                    (debtTeamId
+                      ? `${categoriesHref}?team=${encodeURIComponent(debtTeamId)}&kind=debt`
+                      : `${categoriesHref}?kind=debt`) as Href,
+                  ),
+                )
+            : undefined
         }
         settingsLabel="Категории долгов"
         onClose={() => setCategoryOpen(false)}

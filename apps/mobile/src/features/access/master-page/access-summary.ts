@@ -6,7 +6,9 @@
 
 export type CalendarGroup = "calendar" | "record" | "finance" | "clients";
 
-export const CALENDAR_GROUPS: readonly CalendarGroup[] = ["calendar", "record", "finance", "clients"];
+// Порядок разделов — слово владельца 01.10: «Календарь, Клиенты, Финансы,
+// Компания».
+export const CALENDAR_GROUPS: readonly CalendarGroup[] = ["calendar", "record", "clients", "finance"];
 
 /** Блок в разделе: «clients» — сам блок `clients` и его `clients.*`.
  *  Блоки события (`event.*`) — вместе с блоками записи; на странице прав оба
@@ -39,9 +41,10 @@ export const RECORD_ROW_ORDER: readonly string[] = [
   "record.services",
   "record.amount",
   "record.payment",
-  "record.status",
   "record.note",
   "record.files",
+  // «SMS» внизу записи (03.10) — последним, как и на странице.
+  "record.sms",
 ];
 
 /** БЛОКИ СОБЫТИЯ — в порядке страницы события: метка, тип, клиент, объект,
@@ -62,10 +65,13 @@ export const EVENT_ROW_ORDER: readonly string[] = [
 export const CALENDAR_ROW_ORDER: readonly string[] = [
   "calendar.day_labels",
   "calendar.records",
+  "calendar.window",
   "calendar.create",
   "calendar.events",
   "calendar.move",
   "calendar.cancel",
+  // Доход и расход дня под сеткой (владелец 04.10).
+  "calendar.day_money",
   "calendar.schedule",
 ];
 
@@ -80,24 +86,104 @@ export interface SectionBlock {
   keys: readonly string[];
 }
 
-/** Блоки карточки клиента — в порядке самой карточки (заметка под
- *  «Клиентом», люди, объекты, файлы, метка и тег, личное, реквизиты). */
+/** Блоки страницы клиента — в порядке самой страницы: Метка и тег (с 03.10
+ *  они самым верхом карточки), Клиент, Заметка, Люди, История (и долг с
+ *  деньгами в ней), Объекты, Файлы, Реквизиты, Личное, SMS. В строке списка с
+ *  01.10 только имя, номер и последняя запись. */
 export const CLIENT_CARD_ROW_ORDER: readonly string[] = [
+  // В ПОРЯДКЕ БЛОКОВ СТРАНИЦЫ КЛИЕНТА (владелец 02.10: «первая по блокам —
+  // клиент, люди, заметка… история… в конце SMS»; 03.10 метка и тег ушли на
+  // самый верх карточки — и здесь первыми).
+  "clients.labels",
+  "clients.tags",
+  "clients.client",
   "clients.note",
   "clients.people",
+  "clients.history",
   "clients.objects",
   "clients.files",
-  "clients.labels",
-  "clients.personal",
   "clients.requisites",
+  "clients.personal",
+  "clients.sms",
 ];
+
+/** «ФИНАНСЫ» — В ПОРЯДКЕ ПЛИТОК СТРАНИЦЫ (владелец 03.10: «как у клиентов»):
+ *  Счета · Документы · Доход · Расход · Долги · Прибыль. «Доход» и «Расход»
+ *  переехали сюда из «Главного» календаря — право то же, оно же открывает
+ *  деньги дня в календаре. */
+export const FINANCE_ROW_ORDER: readonly string[] = [
+  "finance.accounts",
+  "finance.documents",
+  "finance.income",
+  "finance.expense",
+  // «Ограничения» (03.10) — под доходами и расходами, которые они режут.
+  "finance.window",
+  "finance.debts",
+  "finance.profit",
+];
+
+/** ШЕСТЕРЁНКА «ФИНАНСОВ» — БЛОКАМИ, КАК НА НЕЙ САМОЙ (владелец 03.10: «по
+ *  строке на каждую»; шестерёнка в тот же вечер стала блоками «Деньги ·
+ *  Категории · Документы · Общие»). Каждый блок прав — блок шестерёнки, в её
+ *  порядке; право, которого ещё нет в реестре, строкой не встаёт. */
+export const FINANCE_SETTINGS_BLOCKS: readonly SectionBlock[] = [
+  {
+    key: "money",
+    title: "Деньги",
+    keys: ["finance.settings_accounts", "finance.settings_trash"],
+  },
+  {
+    key: "categories",
+    title: "Категории",
+    keys: [
+      "finance.settings_categories_income",
+      "finance.settings_categories_expense",
+      "finance.settings_categories_debts",
+    ],
+  },
+  // «Реквизиты» ушли из шестерёнки в Кабинет (03.10) — их право теперь в
+  // разделе «Кабинет» (`CABINET_ROW_ORDER`).
+  { key: "general", title: "Общие", keys: ["finance.settings_currency"] },
+];
+
+/** РАЗДЕЛ «КАБИНЕТ» (владелец 04.10: «можем дать доступ к кабинету —
+ *  реквизиты, тариф, SMS, оплата»): права аккаунта в порядке строк Кабинета.
+ *  Право, которого нет в списке, встаёт после них. */
+export const CABINET_ROW_ORDER: readonly string[] = [
+  "cabinet.tariff",
+  "cabinet.tariff_payments",
+  "cabinet.sms",
+  "finance.settings_requisites",
+  "cabinet.history",
+  "company.partners",
+];
+
+export function orderCabinetRows<T extends { block: { key: string } }>(rows: readonly T[]): T[] {
+  const rank = (key: string) => {
+    const at = CABINET_ROW_ORDER.indexOf(key);
+    return at === -1 ? CABINET_ROW_ORDER.length : at;
+  };
+  return [...rows].sort((a, b) => rank(a.block.key) - rank(b.block.key));
+}
+
+/** Все строки шестерёнки «Финансов» по порядку её блоков. */
+export const FINANCE_SETTINGS_ROW_ORDER: readonly string[] = FINANCE_SETTINGS_BLOCKS.flatMap(
+  (block) => block.keys,
+);
 
 /** Права блока «Записи» на странице «Календарь». */
 const RECORD_KINDS: readonly string[] = [
   "calendar.records",
+  // «Ограничения» — сразу под «Записями клиентов» (03.10), как у клиентов
+  // «Ограничения» под «Базой».
+  "calendar.window",
   "calendar.events",
   "calendar.move",
   "calendar.cancel",
+  // ДОХОД И РАСХОД ДНЯ — В «ГЛАВНОМ» КАЛЕНДАРЯ (владелец 04.10: «функция
+  // расход/доход должна быть в доступах календаря»): полоса под сеткой и лист
+  // «Финансы дня». Доходы и расходы «Финансов» — свои строки в «Финансах».
+  "calendar.day_money",
 ];
 
 export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock[]>> = {
@@ -107,29 +193,61 @@ export const SECTION_BLOCKS: Partial<Record<CalendarGroup, readonly SectionBlock
   // клиента» в «Календаре» (владелец 30.09: «страница клиентов по правам —
   // полностью, максимум»). Скрыты «Карточки клиентов» — все строки серые.
   clients: [
-    { key: "main", title: "Главное", keys: ["clients", "clients.scope"] },
-    { key: "contact", title: "Связь", keys: ["clients.contacts"] },
-    { key: "card", title: "Карточка клиента", keys: CLIENT_CARD_ROW_ORDER },
-    { key: "history", title: "История и деньги", keys: ["clients.history", "clients.money"] },
-  ],
-  calendar: [
-    // Доходы и расходы — в «Главном» (владелец 30.09: «переходим к доход
-    // расход — в главный»): полоса денег под календарём и деньги дня. После
-    // среза 2а это два права — «Доходы» и «Расходы», — место у них то же.
+    // «ГЛАВНОЕ» — ЧТО ОН ВИДИТ, ОТКРЫВ «КЛИЕНТОВ» (владелец 01.10: «что будет
+    // видеть на карточке клиентов сразу, когда открывает: последняя запись,
+    // номер телефона… может ли он переходить в это»): база и «Ограничение по
+    // времени». С 02.10 переход на страницу, номер, историю записей и
+    // карточку из записи даёт сама база — отдельных строк у них нет. Денег,
+    // команды, метки и тегов в строке нет (01.10) — они в «Карточке клиента».
     {
       key: "main",
       title: "Главное",
       keys: [
-        "calendar.day_labels",
-        "finance.operations",
-        "finance.income",
-        "finance.expense",
+        "clients",
+        "clients.scope",
+        "clients.create",
+        "clients.menu",
+        "clients.delete",
       ],
     },
-    // Записи клиентов и событий, перенос и отмена — своим блоком «Записи»
-    // (владелец 30.09: «создай второй блок — „Записи"»; «событие тоже
-    // опускаем»; «перенос записи и отмена переносим также в записи»).
-    { key: "records", title: "Записи", keys: RECORD_KINDS },
+    // Блоки, которые есть только на странице клиента.
+    { key: "card", title: "Карточка клиента", keys: CLIENT_CARD_ROW_ORDER },
+    // НАСТРОЙКИ КЛИЕНТОВ — по строке на каждую строку шестерёнки клиентов
+    // (владелец 01.10: «в настройках он может редактировать или не может…
+    // как форма записи — поблочно»), как «Настройки команды» у календаря.
+    {
+      key: "settings",
+      title: "Настройки клиентов",
+      // В порядке строк шестерёнки клиентов (03.10): «Клиент» — блоки и
+      // связь, «Объекты» — типы и карты, «Справочники» — теги и источники.
+      keys: [
+        "clients.settings_card",
+        "clients.settings_ways",
+        "clients.settings_objects",
+        "clients.settings_maps",
+        "clients.settings_tags",
+        "clients.settings_sources",
+      ],
+    },
+  ],
+  // «ФИНАНСЫ» — БЛОКАМИ, КАК «КЛИЕНТЫ» (владелец 03.10): «Главное» — плитки
+  // страницы по порядку, «Настройки финансов» — строки её шестерёнки.
+  finance: [
+    { key: "main", title: "Главное", keys: FINANCE_ROW_ORDER },
+    ...FINANCE_SETTINGS_BLOCKS,
+  ],
+  calendar: [
+    // «Доходы» и «Расходы» стояли здесь с 30.09 («переходим к доход расход —
+    // в главный»); 03.10 владелец перенёс их в «Финансы» по плиткам страницы.
+    // «ГЛАВНОЕ» — ОДНИМ БЛОКОМ (владелец 03.10: «блок „Записи“ убираем,
+    // просто добавляем все эти записи в „Главное“ — нет отдельного главного
+    // только для метки дня»): метка дня, записи клиентов, их ограничения,
+    // записи событий, перенос и отмена.
+    {
+      key: "main",
+      title: "Главное",
+      keys: ["calendar.day_labels", ...RECORD_KINDS],
+    },
     // БЛОКИ ВНУТРИ ЗАПИСИ И СОБЫТИЯ — ЗДЕСЬ ЖЕ, ПОД «ЗАПИСЯМИ» (владелец
     // 30.09: «запись, я думаю, надо перенести в блок „Календарь“»). Скрыты
     // «Записи клиентов» — блока «Запись клиента» нет; скрыты «Записи

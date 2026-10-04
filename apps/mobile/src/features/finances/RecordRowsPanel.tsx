@@ -1,13 +1,21 @@
 import { useMemo } from "react";
-import { SectionList, Text, View, type RefreshControlProps } from "react-native";
+import {
+  SectionList,
+  Text,
+  View,
+  type RefreshControlProps,
+} from "react-native";
 import type { ReactElement, ReactNode } from "react";
 import {
   formatEURExact as formatEUR,
   moneySign,
 } from "@babun/shared/common/utils/money";
+import { Trash2 } from "lucide-react-native";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SwipeRow } from "@/components/ui/SwipeRow";
+import { SELECT_SIDE } from "@/components/ui/select-rows";
 import { useThemeColors } from "@/theme/colors";
-import { humanDay } from "@/features/appointments/helpers";
+import { humanDayYear } from "@/features/appointments/helpers";
 import { PanelHeader } from "./PanelHeader";
 import { RecordRowView, type RecordRowTone } from "./RecordRow";
 import { rowsNet, type RecordRow } from "./record-rows";
@@ -32,6 +40,8 @@ export function RecordRowsPanel({
   countEveryTone,
   refreshControl,
   onOpenRecord,
+  canDeleteRow,
+  onDeleteRow,
 }: {
   rows: RecordRow[];
   /** Эйбрау над списком. Без него список идёт голым: заголовок рисует хозяин
@@ -54,6 +64,11 @@ export function RecordRowsPanel({
   countEveryTone?: boolean;
   refreshControl?: ReactElement<RefreshControlProps>;
   onOpenRecord: (row: RecordRow) => void;
+  /** СВАЙП «УДАЛИТЬ» (владелец 03.10: «удалить операцию — не кнопка внизу»).
+   *  Только у строк, которые хозяин списка разрешил: операции, заведённые
+   *  руками, и только тем, кому их можно править. Долгое нажатие — то же. */
+  canDeleteRow?: (row: RecordRow) => boolean;
+  onDeleteRow?: (row: RecordRow) => void;
 }) {
   const t = useThemeColors();
 
@@ -98,16 +113,16 @@ export function RecordRowsPanel({
           : netSign > 0
             ? t.success
             : t.sub;
+    // ДЕНЬ — ПОДПИСЬЮ НАД ПЛАШКАМИ, а не серой полосой (владелец 03.10,
+    // вариант 2: как день над записями в «Истории» клиента).
     return (
-      <View
-        className="flex-row items-center justify-between px-4 py-1.5"
-        style={{ backgroundColor: t.canvas }}
-      >
+      <View className="flex-row items-center justify-between px-4 pb-1.5 pt-3">
         <Text
           className="text-xs font-semibold uppercase tracking-wider"
           style={{ color: t.sub }}
         >
-          {humanDay(section.title)}
+          {/* С годом — разделитель дня (владелец 03.10). */}
+          {humanDayYear(section.title)}
         </Text>
         {/* День без пришедших и ушедших денег (одни долги, перевод между
             своими счетами) итога не печатает: серый «€0» над долгом €200
@@ -144,25 +159,47 @@ export function RecordRowsPanel({
       }
       contentContainerStyle={{ paddingBottom: 96 }}
       renderSectionHeader={({ section }) => sectionHeader(section)}
-      renderItem={({ item }) => (
-        <RecordRowView
-          row={item}
-          tone={item.tone ?? tone ?? "income"}
-          // НАЖИМАЕТСЯ ВСЁ, У ЧЕГО ЕСТЬ ДВЕРЬ, а не только записи. Условие
-          // было `item.appointmentId`, и строка без визита — бензин, обед,
-          // перевод, ручной долг — не нажималась вовсе: обработчик экрана их
-          // ждал и умел открыть, но нажатие до него не доходило. Другой двери
-          // к правке одиночной операции на экране нет.
-          onPress={
-            item.appointmentId || item.txId || item.debtId
-              ? () => onOpenRecord(item)
-              : undefined
-          }
-        />
-      )}
-      ItemSeparatorComponent={() => (
-        <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
-      )}
+      renderItem={({ item }) => {
+        const removable = !!onDeleteRow && !!canDeleteRow?.(item);
+        const view = (
+          <RecordRowView
+            row={item}
+            tone={item.tone ?? tone ?? "income"}
+            onLongPress={removable ? () => onDeleteRow?.(item) : undefined}
+            // НАЖИМАЕТСЯ ВСЁ, У ЧЕГО ЕСТЬ ДВЕРЬ, а не только записи. Условие
+            // было `item.appointmentId`, и строка без визита — бензин, обед,
+            // перевод, ручной долг — не нажималась вовсе: обработчик экрана их
+            // ждал и умел открыть, но нажатие до него не доходило. Другой двери
+            // к правке одиночной операции на экране нет.
+            onPress={
+              item.appointmentId || item.txId || item.debtId || item.invoiceId
+                ? () => onOpenRecord(item)
+                : undefined
+            }
+          />
+        );
+        return (
+          <View style={{ paddingHorizontal: SELECT_SIDE }}>
+            {removable ? (
+              // Правая кромка — разрушительное «Удалить» (AGENTS, правило 9).
+              <SwipeRow
+                radius={t.radius.input}
+                label="Удалить"
+                color={t.danger}
+                icon={Trash2}
+                accessibilityLabel={`Удалить ${item.title}`}
+                onAction={() => onDeleteRow?.(item)}
+              >
+                {view}
+              </SwipeRow>
+            ) : (
+              view
+            )}
+          </View>
+        );
+      }}
+      // Плашки — с воздухом между ними, без швов (как `SelectList`).
+      ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
       keyboardShouldPersistTaps="handled"
     />
   );

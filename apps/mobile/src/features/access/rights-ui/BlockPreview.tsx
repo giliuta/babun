@@ -1,18 +1,22 @@
 import type { AccessBlock, AccessLevel } from "../access-map";
+import { CabinetPreview } from "./CabinetPreviews";
 import { CalendarPreview } from "./CalendarPreviews";
 import { ClientCardPreview } from "./ClientCardPreviews";
 import { ClientsPreview } from "./ClientsPreviews";
 import { MoneyPreview } from "./MoneyPreviews";
 import {
+  CABINET_PREVIEW_KEYS,
   CALENDAR_PREVIEW_KEYS,
   CLIENT_CARD_PREVIEW_KEYS,
   CLIENTS_PREVIEW_KEYS,
   MONEY_PREVIEW_KEYS,
   RECORD_PREVIEW_KEYS,
   SETTINGS_PREVIEW_KEYS,
+  WINDOW_PREVIEW_KEYS,
 } from "./preview-keys";
 import { SettingsPreview } from "./SettingsPreviews";
 import { RecordPreview } from "./RecordPreviews";
+import { WindowPreview } from "./WindowPreviews";
 
 // ВИД БЛОКА В ШТОРКЕ ПРАВА — КАКОЙ ИЗ ВИДОВ РИСОВАТЬ. Права без своего вида
 // (новое в реестре, шаблоны SMS) шторку не ломают: вида просто нет, лестница
@@ -34,6 +38,9 @@ export function BlockPreview({
   teamColor: string;
 }) {
   const key = block.key;
+  if (WINDOW_PREVIEW_KEYS.includes(key)) {
+    return <WindowPreview blockKey={key} level={levels[key] ?? block.levels[0]} teamColor={teamColor} />;
+  }
   if (RECORD_PREVIEW_KEYS.includes(key)) {
     return <RecordPreview blockKey={key} blocks={blocks} levels={levels} teamName={teamName} teamColor={teamColor} />;
   }
@@ -48,6 +55,9 @@ export function BlockPreview({
   }
   if (CLIENT_CARD_PREVIEW_KEYS.includes(key)) {
     return <ClientCardPreview blockKey={key} levels={levels} />;
+  }
+  if (CABINET_PREVIEW_KEYS.includes(key)) {
+    return <CabinetPreview blockKey={key} level={levels[key] ?? block.levels[0] ?? "off"} />;
   }
   if (SETTINGS_PREVIEW_KEYS.includes(key)) {
     return (

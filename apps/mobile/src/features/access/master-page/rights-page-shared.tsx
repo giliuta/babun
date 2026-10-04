@@ -1,4 +1,4 @@
-import { useRouter, type Href } from "expo-router";
+import { useGlobalSearchParams, useNavigation, usePathname, useRouter, useSegments, type Href } from "expo-router";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
@@ -9,6 +9,7 @@ import type { Team } from "@/features/reference/queries";
 import type { AccessBlock } from "../access-map";
 import { mirrorMapOf } from "../mirror/mirror-map";
 import { useMirrorMode } from "../mirror/mirror-state";
+import { returnHrefOf, stackHrefsOf } from "../mirror/mirror-return";
 import type { RightsArea } from "./master-draft";
 
 // ОБЩЕЕ ТРЁМ РЕЖИМАМ СТРАНИЦЫ ПРАВ: вход в зеркало, экран «едет/отказ» и два
@@ -29,16 +30,29 @@ export function usePreview() {
   const router = useRouter();
   const tenantId = useTenantId();
   const { enter } = useMirrorMode();
+  // Откуда вошли — туда и выйдем (владелец 01.10, `mirror-return.ts`).
+  const pathname = usePathname();
+  const segments = useSegments();
+  const params = useGlobalSearchParams();
+  const navigation = useNavigation();
   return (input: {
     blocks: readonly AccessBlock[] | undefined;
     draft: Parameters<typeof mirrorMapOf>[2];
     name: string;
     /** Раздел, который владелец только что настраивал. */
     area?: RightsArea;
+    /** Сотрудник, уже вошедший в компанию; у черновика и приглашения нет. */
+    userId?: string | null;
   }) => {
     if (!tenantId || !input.blocks) return;
     const state = {
-      name: input.name.trim() || "сотрудник",
+      name: input.name.trim() || "партнёр",
+      userId: input.userId ?? null,
+      // Вся цепочка «Кабинета» — чтобы «назад» после выхода шёл как раньше;
+      // не прочиталась — хотя бы эта страница.
+      returnTo:
+        stackHrefsOf(pathname, navigation.getState()?.routes ?? []) ??
+        [returnHrefOf(pathname, segments, params)],
       role: "master" as const,
       map: mirrorMapOf(tenantId, input.blocks, input.draft),
     };

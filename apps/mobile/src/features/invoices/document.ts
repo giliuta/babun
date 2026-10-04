@@ -2,6 +2,7 @@ import type { Client, Location } from "@babun/shared/local/clients";
 import {
   invoiceDisplayStatus,
   invoiceLineTotal,
+  type InvoiceClientSnapshot,
   type InvoiceLedgerWithLines,
   type InvoiceObjectAddressParts,
   type InvoicePaymentLedger,
@@ -59,6 +60,12 @@ export interface DocumentPayment {
 }
 
 export interface InvoiceDocument {
+  /** Заголовок бумаги: «INVOICE» или «CREDIT NOTE». */
+  title: string;
+  /** То же словом для текста сообщения: «Invoice» / «Credit note». */
+  eyebrow: string;
+  /** Под номером: какой инвойс отменяет кредит-нота; у инвойса — нет. */
+  reference: string | null;
   /** Номер документа. У черновика — тот, что получит при выставлении. */
   number: string;
   /** Черновик ещё не выставлен: печатаем это словом, а не выдуманным статусом. */
@@ -154,6 +161,11 @@ export interface IssuedDocumentInput extends BaseInput {
    *  ТОЛЬКО форма правки; витрина `/invoices/[id]` не передаёт ничего и
    *  печатает снимок как есть. */
   sellerPreview?: InvoiceDraftSeller | null;
+  /** Документ — КРЕДИТ-НОТА: номер инвойса, который она отменяет (`null` —
+   *  номер ещё не известен). Не передан — это инвойс. */
+  /** `ofReceipt` — кредит-нота к ЧЕКУ (возврат по чеку без инвойса): шапка
+   *  и строка таблицы говорят о чеке, а не об инвойсе. */
+  creditNote?: { originalNumber: string | null; ofReceipt?: boolean } | null;
 }
 
 export interface DraftDocumentInput extends BaseInput {
@@ -183,8 +195,10 @@ function issuedDocument({
   businessToday,
   language,
   sellerPreview,
+  creditNote,
 }: IssuedDocumentInput): InvoiceDocument {
   const dict = invoiceDictionary(language);
+  const original = creditNote ? creditNote.originalNumber?.trim() || null : null;
   const displayStatus = invoiceDisplayStatus(invoice, businessToday, settlement);
   // Превью несохранённой правки сильнее снимка — но только когда его передали
   // (см. `sellerPreview`).
@@ -215,6 +229,13 @@ function issuedDocument({
   const vatMode = invoiceVatMode(invoice);
 
   return {
+    title: creditNote ? dict.creditNote : dict.invoice,
+    eyebrow: creditNote ? dict.creditNoteEyebrow : dict.invoiceEyebrow,
+    reference: original
+      ? creditNote?.ofReceipt
+        ? dict.creditNoteForReceipt(original)
+        : dict.creditNoteFor(original)
+      : null,
     number: invoice.number,
     draft: false,
     dict,
@@ -244,22 +265,14 @@ function issuedDocument({
       ]),
     },
     // ПОЛУЧАТЕЛЬ (владелец 2026-09-22): юрназвание и реквизиты — из карточки
-    // клиента, телефона на бумаге нет, адрес — только точный адрес ОБЪЕКТА
-    // счёта. Снимок старше объектов (`object` нет вовсе) печатает свой адрес
-    // как раньше: выставленный документ не переписывается задним числом.
+    // клиента, телефона на бумаге нет. Адресов два и оба необязательны
+    // (владелец 2026-10-03: «юрадрес — на компанию, а объектов у неё много»):
+    // юридический адрес реквизитов под юрназванием, ниже — точный адрес
+    // ОБЪЕКТА счёта. Снимок старше объектов (`object` нет вовсе) печатает
+    // свой адрес как раньше: выставленный документ не переписывается
+    // задним числом.
     client: recipient
-      ? {
-          name: firstNonEmpty(recipient.legal_name, recipient.full_name)
-            || dict.recipientMissing,
-          lines: compact([
-            prefixed(dict.vatNo, clean(recipient.vat_number)),
-            prefixed(dict.regNumber, clean(recipient.reg_number)),
-            clean(recipient.email),
-            ...(recipient.object === undefined
-              ? addressLines(firstNonEmpty(recipient.primary_address, recipient.address))
-              : objectAddressLines(recipient.object?.address_parts, dict)),
-          ]),
-        }
+      ? clientSnapshotParty(recipient, dict)
       : clientParty(
           client,
           client?.locations.find((loc) => loc.id === invoice.location_id) ?? null,
@@ -274,15 +287,36 @@ function issuedDocument({
     // СКИДКА — НЕ УСЛУГА (владелец 2026-09-22: «дискаунт вынести, а не как
     // услугу»). На сервере она строка с отрицательной ценой; на бумаге её
     // строки в таблице нет — она стоит в итогах под «Subtotal».
-    lines: invoice.lines.filter((line) => line.unit_price >= 0).map((line) => ({
-      title: line.title,
-      description: line.description?.trim() || null,
-      qty: formatQty(line.qty, line.unit, dict.locale),
-      unitPrice: paperMoney(line.unit_price, invoice.currency, dict.locale),
-      total: paperMoney(line.total, invoice.currency, dict.locale),
-    })),
+    //
+    // У КРЕДИТ-НОТЫ ПОЗИЦИЙ НЕТ: сервер (`_issue_credit_note`) пишет только
+    // суммы с минусом. Таблица говорит одной строкой, что отменено и на
+    // сколько, — а не «No lines yet» над итогом −€100.
+    lines:
+      creditNote && invoice.lines.length === 0
+        ? [
+            {
+              // Частичная нота инвойс не отменяет — он остаётся в силе.
+              title: creditNote.ofReceipt
+                ? dict.creditNoteReceiptLine(original)
+                : invoice.credit_partial
+                  ? dict.creditNotePartialLine(original)
+                  : dict.creditNoteLine(original),
+              description: null,
+              qty: formatQty(1, null, dict.locale),
+              unitPrice: paperMoney(invoice.subtotal_net, invoice.currency, dict.locale),
+              total: paperMoney(invoice.subtotal_net, invoice.currency, dict.locale),
+            },
+          ]
+        : invoice.lines.filter((line) => line.unit_price >= 0).map((line) => ({
+            title: line.title,
+            description: line.description?.trim() || null,
+            qty: formatQty(line.qty, line.unit, dict.locale),
+            unitPrice: paperMoney(line.unit_price, invoice.currency, dict.locale),
+            total: paperMoney(line.total, invoice.currency, dict.locale),
+          })),
     totals: totalRows({
-      dict,
+      // У кредит-ноты итог — «Итого», не «К оплате»: платить по ней нечего.
+      dict: creditNote ? { ...dict, grandTotal: dict.creditNoteTotal } : dict,
       currency: invoice.currency,
       subtotalNet: invoice.subtotal_net,
       vatAmount: invoice.vat_amount,
@@ -291,10 +325,14 @@ function issuedDocument({
       total: invoice.total,
       discount: splitDiscount(invoice.lines.map((line) => line.total)),
     }),
-    payTo: compact([
-      prefixed("IBAN", seller ? clean(seller.iban) : clean(tenant?.iban)),
-      prefixed(dict.bank, seller ? clean(seller.bank_name) : clean(tenant?.bank_name)),
-    ]),
+    // Кредит-ноту не оплачивают: реквизиты для оплаты на ней — приглашение
+    // перевести деньги по документу, который их возвращает.
+    payTo: creditNote
+      ? []
+      : compact([
+          prefixed("IBAN", seller ? clean(seller.iban) : clean(tenant?.iban)),
+          prefixed(dict.bank, seller ? clean(seller.bank_name) : clean(tenant?.bank_name)),
+        ]),
     settlement: [
       {
         label: dict.paid,
@@ -320,8 +358,19 @@ function issuedDocument({
         refund,
       };
     }),
-    notes: clean(invoice.notes),
-    footer: dict.footer(invoice.number, invoice.currency),
+    // Причина по умолчанию сервер пишет по-русски («Отмена инвойса INV-…»,
+    // у частичной — «Частичная отмена инвойса INV-…», у возврата по чеку —
+    // «Возврат по чеку RC-…») —
+    // на бумаге её уже говорят шапка и строка таблицы на языке документа.
+    // Своя причина, набранная человеком, печатается как есть.
+    notes:
+      creditNote &&
+      /^(Отмена инвойса|Частичная отмена инвойса|Возврат по чеку) \S+$/.test(clean(invoice.notes))
+        ? ""
+        : clean(invoice.notes),
+    footer: creditNote
+      ? dict.creditNoteFooter(invoice.number)
+      : dict.footer(invoice.number, invoice.currency),
   };
 }
 
@@ -356,6 +405,9 @@ function draftDocument({
 }: DraftDocumentInput): InvoiceDocument {
   const dict = invoiceDictionary(language);
   return {
+    title: dict.invoice,
+    eyebrow: dict.invoiceEyebrow,
+    reference: null,
     // НОМЕРА У ЧЕРНОВИКА МОЖЕТ НЕ БЫТЬ ВОВСЕ (предпросмотр ещё грузится или
     // сети нет). Говорим об этом НА ЯЗЫКЕ БУМАГИ: раньше сюда зашивали
     // русскую фразу, и она вставала в английский документ 18-м кеглем.
@@ -464,7 +516,7 @@ function totalRows(input: {
   if (input.discount) {
     const { dict, discount } = input;
     const money = (value: number) => paperMoney(value, input.currency, dict.locale);
-    const hasVat = input.vatMode !== "off" && input.vatAmount > 0;
+    const hasVat = input.vatMode !== "off" && input.vatAmount !== 0;
     const vatLabel =
       input.vatMode === "inclusive" ? dict.vatInclusive : dict.vatExclusive;
     return [
@@ -488,7 +540,9 @@ function totalRows(input: {
   // Документ БЕЗ НАЛОГА не должен говорить о налоге дважды («Без НДС» и снова
   // «Без НДС · €0») — это выглядело как ошибка счёта. Строка налога появляется
   // только там, где налог есть.
-  if (input.vatMode === "off" || input.vatAmount <= 0) {
+  // НАЛОГ С МИНУСОМ — ТОЖЕ НАЛОГ: у кредит-ноты он отрицательный, и проверка
+  // «≤ 0» прятала строку VAT, оставляя «Subtotal −€84.03 / Total −€100.00».
+  if (input.vatMode === "off" || input.vatAmount === 0) {
     const { dict } = input;
     return [
       {
@@ -524,7 +578,7 @@ function totalRows(input: {
 
 /** Получатель черновика — те же правила, что у снимка сервера
  *  (`build_invoice_client_snapshot_with_object`). */
-function clientParty(
+export function clientParty(
   client: Client | undefined,
   location: Location | null,
   dict: InvoiceDictionary,
@@ -532,7 +586,12 @@ function clientParty(
   // Реквизиты клиента заводит карточка клиента (сессия 012); читаем их
   // структурно, чтобы бумага не зависела от того, когда поля лягут в тип.
   const requisites = client as
-    | (Client & { legal_name?: string | null; vat_number?: string | null; reg_number?: string | null })
+    | (Client & {
+        legal_name?: string | null;
+        vat_number?: string | null;
+        reg_number?: string | null;
+        billing_address?: string | null;
+      })
     | undefined;
   return {
     name: firstNonEmpty(requisites?.legal_name, client?.full_name) || dict.recipientMissing,
@@ -540,9 +599,34 @@ function clientParty(
       prefixed(dict.vatNo, clean(requisites?.vat_number)),
       prefixed(dict.regNumber, clean(requisites?.reg_number)),
       clean(client?.email),
+      ...addressLines(clean(requisites?.billing_address)),
       ...(hasExactAddress(location?.addressParts)
         ? objectAddressLines(location?.addressParts ?? null, dict)
         : []),
+    ]),
+  };
+}
+
+/** ПОЛУЧАТЕЛЬ ИЗ СНИМКА — одна вёрстка на инвойс и чек (владелец 04.10:
+ *  «чек — как инвойс»): юрназвание или имя, номера, почта, юрадрес
+ *  реквизитов, точный адрес объекта. Снимок старше объектов печатает свой
+ *  адрес как раньше. */
+export function clientSnapshotParty(
+  recipient: Partial<InvoiceClientSnapshot>,
+  dict: InvoiceDictionary,
+): DocumentParty {
+  return {
+    name: firstNonEmpty(recipient.legal_name, recipient.full_name) || dict.recipientMissing,
+    lines: compact([
+      prefixed(dict.vatNo, clean(recipient.vat_number)),
+      prefixed(dict.regNumber, clean(recipient.reg_number)),
+      clean(recipient.email),
+      ...(recipient.object === undefined
+        ? addressLines(firstNonEmpty(recipient.primary_address, recipient.address))
+        : [
+            ...addressLines(clean(recipient.billing_address)),
+            ...objectAddressLines(recipient.object?.address_parts, dict),
+          ]),
     ]),
   };
 }

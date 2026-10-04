@@ -43,7 +43,7 @@ export function focusViewProps(
 ): { title?: string; onlyCalendar: boolean; onlyCompany: boolean; group?: CalendarGroup } {
   if (!focus) return { onlyCalendar: false, onlyCompany: false };
   if (focus.kind === "company") {
-    return { title: "Компания", onlyCalendar: false, onlyCompany: true };
+    return { title: AREA_TITLE.company, onlyCalendar: false, onlyCompany: true };
   }
   // Раздел доступа — его имя в шапке («Календарь»), команда — в подписи.
   if (focus.group) {
@@ -71,11 +71,15 @@ export function MasterRightsView({
   onlyCompany = false,
   group,
   top,
+  lockedAll,
 }: {
   /** Страница одного раздела доступа («Календарь»): только его права. */
   group?: CalendarGroup;
   /** Над разделами. */
   top?: ReactNode;
+  /** Права отсюда не меняются — почему (директор: себя и директоров ведёт
+   *  владелец, 04.10). */
+  lockedAll?: string;
   /** Заголовок: имя календаря, когда страница — права ОДНОГО календаря. */
   title?: string;
   /** Только строки этого календаря, без ленты чипов и без строк компании
@@ -159,12 +163,14 @@ export function MasterRightsView({
             sections={sections}
             levels={levels}
             sheetSubtitle={(block) =>
-              [subtitle, block.scope === "calendar" ? teamName : "Вся компания"].filter(Boolean).join(" · ") ||
+              [subtitle, block.scope === "calendar" ? teamName : "Весь аккаунт"].filter(Boolean).join(" · ") ||
               undefined
             }
             teamName={teamName}
             teamColor={teamColor}
             busyKey={busyKey}
+            teamId={activeId}
+            lockedAll={lockedAll}
             onPick={(block, level) => onPick(block, level, block.scope === "calendar" ? activeId : null)}
             onSectionLayout={(section, y) => {
               if (section.area !== area || scrolled.current) return;

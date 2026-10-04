@@ -71,6 +71,18 @@ describe("reminderSource", () => {
     assert.equal(reminderCanCancel({ kind: "other" }), false);
   });
 
+  test("колокольчик «себе» и «О записях» — записи, а не «другое» (03.10)", () => {
+    const base = appointment(new Date(2026, 8, 15, 9, 30));
+    const self = reminderSource({ ...base, ownerKey: `self:${APPOINTMENT_ID}` });
+    const auto = reminderSource({ ...base, ownerKey: `auto:${APPOINTMENT_ID}` });
+    assert.equal(self.kind, "self");
+    assert.equal(auto.kind, "auto");
+    // Колокольчик снимается отсюда, общее правило — только в настройке.
+    assert.equal(reminderCanCancel(self), true);
+    assert.equal(reminderCanCancel(auto), false);
+    assert.equal(reminderRow({ ...base, ownerKey: `self:${APPOINTMENT_ID}` }).title, "Иван Петров");
+  });
+
   test("битый или чужой payload не становится дверью", () => {
     const base = appointment(new Date(2026, 8, 15, 9, 30));
     assert.equal(

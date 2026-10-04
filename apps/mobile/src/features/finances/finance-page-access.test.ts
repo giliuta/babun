@@ -4,7 +4,7 @@ import { describe, test } from "node:test";
 import type { Account } from "@babun/shared/local/finance/account";
 import type { Debt } from "@babun/shared/local/finance/debt";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
-import type { MemberAccessMap } from "@/features/access/access-map";
+import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map";
 import { NO_TEAM } from "./accounts-sections";
 import { financePageAccess, VIEW_ONLY_REASON } from "./finance-page-access";
 
@@ -108,7 +108,7 @@ describe("уровни выбранной команды", () => {
     const access = financePageAccess({
       role: "master",
       map: employeeMap({
-        [A]: { "finance.operations": "read", "finance.accounts": "off", "finance.debts": "write" },
+        [A]: { "finance.income": "read", "finance.expense": "read", "finance.accounts": "off", "finance.debts": "write" },
       }),
       scope: A,
     });
@@ -122,9 +122,9 @@ describe("уровни выбранной команды", () => {
     assert.equal(access.view("accounts"), "all");
     // ПЛАШКА «ДОКУМЕНТЫ» ОТКРЫВАЕТСЯ (владелец 20.09: «всё равно остаётся
     // плашка „Документы“, и там просто не показываются документы»): вид
-    // включается, список приходит пустым, а футер остаётся владельческим.
+    // включается, список приходит пустым, а футер гаснет — права нет.
     assert.equal(access.view("documents"), "documents");
-    assert.deepEqual(access.footer("documents"), { enabled: false, reason: VIEW_ONLY_REASON });
+    assert.deepEqual(access.footer("documents"), { enabled: false, reason: null });
     assert.equal(access.view("debt"), "debt");
     assert.equal(access.documents, false);
     assert.equal(access.settings, false);
@@ -137,7 +137,7 @@ describe("уровни выбранной команды", () => {
   test("чип, которого нет в карте прав, — закрыт целиком", () => {
     const access = financePageAccess({
       role: "master",
-      map: employeeMap({ [A]: { "finance.operations": "write" } }),
+      map: employeeMap({ [A]: { "finance.expense": "full" } }),
       scope: B,
     });
     assert.equal(access.ops, "locked");
@@ -151,7 +151,7 @@ describe("уровни выбранной команды", () => {
     for (const scope of [NO_TEAM, null]) {
       const access = financePageAccess({
         role: "master",
-        map: employeeMap({ [A]: { "finance.operations": "write", "finance.accounts": "write" } }),
+        map: employeeMap({ [A]: { "finance.income": "full", "finance.expense": "full", "finance.accounts": "write" } }),
         scope,
       });
       assert.equal(access.ops, "locked", String(scope));
@@ -160,22 +160,59 @@ describe("уровни выбранной команды", () => {
     }
   });
 
-  test("документы и настройки не открывает даже уровень в карте", () => {
-    const access = financePageAccess({
+  test("«Документы» и «Счета» шестерёнки — живые права команды (03.10)", () => {
+    const write = financePageAccess({
       role: "master",
       map: map({
-        company: { "finance.categories": "write", "finance.templates": "write", "finance.vat": "write" },
-        calendars: { [A]: { "finance.operations": "write", "finance.documents": "write" } },
+        calendars: { [A]: { "finance.documents": "write", "finance.settings_accounts": "read" } },
       }),
       scope: A,
     });
-    assert.equal(access.documents, false);
-    assert.equal(access.settings, false);
-    assert.equal(access.refunds, false);
-    // Уровень в карте документы всё равно не открывает — но и плашку больше
-    // не прячет: вид включается, а список сотруднику не приходит.
-    assert.equal(access.view("documents"), "documents");
-    assert.deepEqual(access.footer("documents"), { enabled: false, reason: VIEW_ONLY_REASON });
+    assert.equal(write.documents, true);
+    assert.deepEqual(write.footer("documents"), { enabled: true, reason: null });
+    assert.equal(write.settings, true);
+    // Возвраты — по-прежнему только владельцу.
+    assert.equal(write.refunds, false);
+
+    const read = financePageAccess({
+      role: "master",
+      map: map({ calendars: { [A]: { "finance.documents": "read" } } }),
+      scope: A,
+    });
+    assert.equal(read.documents, false);
+    assert.equal(read.settings, false);
+    assert.equal(read.view("documents"), "documents");
+    assert.deepEqual(read.footer("documents"), { enabled: false, reason: VIEW_ONLY_REASON });
+  });
+});
+
+describe("«Добавить счёт» — по строке шестерёнки «Счета», а не по праву «Счета»", () => {
+  const page = (levels: Record<string, AccessLevel>) =>
+    financePageAccess({ role: "master", map: map({ calendars: { [A]: levels } }), scope: A });
+
+  test("«Счета: Меняет» без строки шестерёнки — перевод есть, нового счёта нет", () => {
+    const access = page({ "finance.accounts": "write" });
+    assert.deepEqual(access.footer("accounts"), { enabled: true, reason: null });
+    assert.deepEqual(access.accountCreate, { enabled: false, reason: null });
+  });
+
+  test("строка «Счета» шестерёнки: «Видит» — серая с причиной, «Меняет» — живая", () => {
+    assert.deepEqual(page({ "finance.settings_accounts": "read" }).accountCreate, {
+      enabled: false,
+      reason: VIEW_ONLY_REASON,
+    });
+    assert.deepEqual(page({ "finance.settings_accounts": "write" }).accountCreate, {
+      enabled: true,
+      reason: null,
+    });
+  });
+
+  test("владелец заводит счёт всегда; карта ещё едет — кнопка мёртвая", () => {
+    assert.deepEqual(financePageAccess({ role: "owner", map: undefined, scope: A }).accountCreate, {
+      enabled: true,
+      reason: null,
+    });
+    assert.equal(financePageAccess({ role: "master", map: undefined, scope: A }).accountCreate.enabled, false);
   });
 });
 
@@ -183,8 +220,8 @@ describe("строка журнала — по своему календарю",
   const access = financePageAccess({
     role: "master",
     map: employeeMap({
-      [A]: { "finance.operations": "write", "finance.accounts": "write", "finance.debts": "read" },
-      [B]: { "finance.operations": "read" },
+      [A]: { "finance.expense": "full", "finance.accounts": "write", "finance.debts": "read" },
+      [B]: { "finance.expense": "read" },
     }),
     scope: A,
   });
@@ -231,8 +268,8 @@ describe("счета, переводы и долги", () => {
   const access = financePageAccess({
     role: "master",
     map: employeeMap({
-      [A]: { "finance.accounts": "write", "finance.operations": "write", "finance.debts": "write" },
-      [B]: { "finance.accounts": "read", "finance.operations": "read", "finance.debts": "read" },
+      [A]: { "finance.accounts": "write", "finance.income": "full", "finance.expense": "full", "finance.debts": "write" },
+      [B]: { "finance.accounts": "read", "finance.income": "read", "finance.expense": "read", "finance.debts": "read" },
     }),
     scope: A,
   });
@@ -246,7 +283,7 @@ describe("счета, переводы и долги", () => {
   test("остаток счёта команды без уровня «Счетов» не виден", () => {
     const opsOnly = financePageAccess({
       role: "master",
-      map: employeeMap({ [A]: { "finance.operations": "read" } }),
+      map: employeeMap({ [A]: { "finance.income": "read", "finance.expense": "read" } }),
       scope: A,
     });
     assert.equal(opsOnly.balanceVisible(teamAccount("acc-a", A)), false);
@@ -273,14 +310,14 @@ describe("счета, переводы и долги", () => {
     assert.equal(access.debtEditable(debt("d-3", null)), false);
   });
 
-  test("оплата долга требует и «Доходы и расходы» «Меняет»", () => {
+  test("оплату долга принимают «Долги» сами, без сторон денег", () => {
     const debtsOnly = financePageAccess({
       role: "master",
-      map: employeeMap({ [A]: { "finance.debts": "write", "finance.operations": "read" } }),
+      map: employeeMap({ [A]: { "finance.debts": "write" } }),
       scope: A,
     });
     assert.equal(debtsOnly.debtEditable(debt("d-1", A)), true);
-    assert.equal(debtsOnly.debtPayable(debt("d-1", A)), false);
+    assert.equal(debtsOnly.debtPayable(debt("d-1", A)), true);
   });
 });
 
@@ -322,9 +359,26 @@ describe("две стороны денег", () => {
   test("«Видит» расходы и «Добавляет» доходы: кнопка расхода погашена с причиной", () => {
     const access = sides({ "finance.income": "write", "finance.expense": "read" });
     assert.deepEqual(access.footer("expense"), { enabled: false, reason: VIEW_ONLY_REASON });
-    // Прибыль сотруднику закрыта: материалов записей у него нет, и число
-    // вышло бы больше настоящего (аудит 2026-09-30).
+    // Без права «Прибыль» плитка закрыта и при обеих сторонах.
+    assert.equal(access.profit, "locked");
     assert.equal(access.view("profit"), "all");
+  });
+
+  test("«Прибыль: Видит» (03.10) — открыта при обеих сторонах, иначе нет", () => {
+    const open = sides({ "finance.income": "read", "finance.expense": "read", "finance.profit": "read" });
+    assert.equal(open.profit, "read");
+    assert.equal(open.view("profit"), "profit");
+    // Правки у прибыли нет — и кнопки в футере тоже.
+    assert.equal(open.footer("profit").enabled, false);
+    const oneSide = sides({ "finance.income": "read", "finance.profit": "read" });
+    assert.equal(oneSide.profit, "locked");
+    assert.equal(oneSide.view("profit"), "all");
+    // Право другой команды на выбранную не действует.
+    const elsewhere = sides(
+      { "finance.income": "read", "finance.expense": "read" },
+      { "finance.profit": "read" },
+    );
+    assert.equal(elsewhere.profit, "locked");
   });
 
   test("«Правит всё» для ворот — та же запись", () => {
@@ -408,16 +462,16 @@ describe("две стороны денег", () => {
     assert.equal(debtsRead.txEditable(tx({ debt_id: d.id, created_by: ME }), { debt: d }), false);
   });
 
-  test("старая карта: доход не правится, любой расход команды — правится", () => {
-    const legacy = financePageAccess({
+  test("старая общая строка `finance.operations` (сервер её не знает) ничего не открывает", () => {
+    const stale = financePageAccess({
       role: "master",
       map: employeeMap({ [A]: { "finance.operations": "write" } }),
       scope: A,
       userId: ME,
     });
-    assert.equal(legacy.income, "write");
-    assert.equal(legacy.expense, "write");
-    assert.equal(legacy.txEditable(tx({ type: "income", created_by: ME })), false);
-    assert.equal(legacy.txEditable(tx({ created_by: OTHER })), true);
+    assert.equal(stale.income, "locked");
+    assert.equal(stale.expense, "locked");
+    assert.equal(stale.txEditable(tx({ type: "income", created_by: ME })), false);
+    assert.equal(stale.txEditable(tx({ created_by: ME })), false);
   });
 });

@@ -7,6 +7,7 @@ import { signOutAndWipe } from "@/lib/auth-clear";
 import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole } from "./tenant";
 import { useMyMemberships } from "./my-memberships";
+import { usePartnersAccess } from "@/features/access/master-page/use-partner-manager";
 import { cabinetScreenRole, canAccessCabinetPath } from "./role-policy";
 
 // РОЛЬ РЕШАЕТ ПО КОМПАНИИ ЭКРАНА, А НЕ ПО ОТКРЫТОЙ В КАЛЕНДАРЕ.
@@ -25,6 +26,8 @@ export function CabinetRoleBoundary({ children }: { children: ReactNode }) {
   const { tenant } = useLocalSearchParams<{ tenant?: string }>();
   const screenTenantId = tenant && tenant !== activeTenantId ? tenant : null;
   const memberships = useMyMemberships();
+  // Директор (04.10): право «Партнёры» открывает страницы партнёров.
+  const partners = usePartnersAccess();
 
   // Пока членства в пути, чужую компанию не судим: иначе на миг мелькает
   // «Недостаточно прав» на экране, который человеку открыт.
@@ -54,7 +57,7 @@ export function CabinetRoleBoundary({ children }: { children: ReactNode }) {
           state="error"
           fill
           title="Не удалось проверить права"
-          subtitle="Настройки компании закрыты, пока сервер не подтвердит вашу роль."
+          subtitle="Настройки аккаунта закрыты, пока сервер не подтвердит вашу роль."
           action={{ label: "Повторить", onPress: () => void roleQuery.refetch() }}
         />
       </Screen>
@@ -68,7 +71,7 @@ export function CabinetRoleBoundary({ children }: { children: ReactNode }) {
         <ScreenHeader title="Нет доступа" />
         <EmptyState
           fill
-          title="Вы больше не состоите в этой компании"
+          title="Доступа к этому аккаунту больше нет"
           subtitle="Войдите заново или попросите владельца восстановить доступ."
           action={{ label: "Выйти", onPress: () => void signOutAndWipe() }}
         />
@@ -77,7 +80,7 @@ export function CabinetRoleBoundary({ children }: { children: ReactNode }) {
   }
 
   const screenRole = cabinetScreenRole(role, screenTenantId, memberships.data);
-  if (!canAccessCabinetPath(screenRole, pathname)) {
+  if (!canAccessCabinetPath(screenRole, pathname, !screenTenantId && partners.sees)) {
     return (
       <Screen edges={["top"]}>
         <ScreenHeader title="Недостаточно прав" />

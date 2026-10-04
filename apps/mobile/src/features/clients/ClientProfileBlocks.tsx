@@ -1,17 +1,13 @@
 import type { CardAccess } from "@/features/clients/card-access";
 import { useCardAccess } from "@/features/clients/use-card-access";
-import type { ReactNode } from "react";
 import { Paperclip } from "lucide-react-native";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
 import type { ClientLinkItem } from "@/features/clients/blocks/ClientLinksBlock";
-import { ClientObjectsSection, OBJECTS_ON_CARD } from "@/features/clients/ClientObjectsSection";
-import {
-  REQUISITES_ON_CARD,
-  RequisitesBlock,
-} from "@/features/clients/blocks/RequisitesBlock";
+import { ClientObjectsSection } from "@/features/clients/ClientObjectsSection";
+import { RequisitesBlock } from "@/features/clients/blocks/RequisitesBlock";
 import ClientFilesBlock from "@/features/clients/blocks/ClientFilesBlock";
 import { PersonalBlock } from "@/features/clients/blocks/PersonalBlock";
 import { RowCaption } from "@/components/ui/card-rows";
@@ -49,10 +45,6 @@ interface ClientProfileBlocksProps {
   /** Карточку только что создали ради файла — сразу открыть лист. */
   openFilesOnArrive?: boolean;
   onArrived?: () => void;
-  /** Метка и тег плитками — стоят ПЕРЕД «Личным» (владелец 22.09: «это не
-   *  должно быть на первой странице»). Собирает страница: ей видно каталог
-   *  тегов и право менять. */
-  labelTags?: ReactNode;
 }
 
 // БЛОКИ КАРТОЧКИ — НА `SectionCard`, КАК НА СТРАНИЦЕ ЗАПИСИ (владелец
@@ -86,7 +78,6 @@ export function ClientProfileBlocks({
   onDraftFiles,
   openFilesOnArrive,
   onArrived,
-  labelTags,
 }: ClientProfileBlocksProps) {
   // Что видно и что правится — страница уже спросила (`card-access.ts`):
   // выключатель команды клиента, права сотрудника по блокам, права компании.
@@ -101,10 +92,12 @@ export function ClientProfileBlocks({
         update={update}
         draft={draft}
         readOnly={!a.objects.edit}
-        appointments={appointments}
-        // НА КАРТОЧКЕ — ПЕРВЫЕ ТРИ И ДВЕРЬ (владелец 22.09: «если у клиента
-        // 12 объектов, их надо листать, чтобы добраться до файлов»).
-        limit={OBJECTS_ON_CARD}
+        // «был 12 авг» у объекта — история записей: без права её нет.
+        appointments={a.history.show ? appointments : []}
+        // НА КАРТОЧКЕ — ОДИН ОБЪЕКТ (владелец 03.10: «видно только последний —
+        // обслуженный или добавленный; нажимаю — страница со всеми»). У
+        // черновика страницы нет — там список целиком.
+        single={!draft}
         onOpenAll={onOpenObjects}
         residentsLine={residentsLine}
         residentsAt={residentsAt}
@@ -165,11 +158,12 @@ export function ClientProfileBlocks({
           draft={draft}
           update={update}
           readOnly={!a.requisites.edit}
-          limit={REQUISITES_ON_CARD}
-          onOpenAll={onOpenRequisites}
+          // Один набор — основной; тап — страница всех (03.10, как «История»).
+          single={!draft}
+          // У черновика своей страницы ещё нет: набор правится листом.
+          onOpenAll={draft ? undefined : onOpenRequisites}
         />
       ) : null}
-      {labelTags ?? null}
       {a.personal.show ? (
         <PersonalBlock client={client} update={update} readOnly={!a.personal.edit} draft={draft} />
       ) : null}

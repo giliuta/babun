@@ -125,10 +125,16 @@ export default function SyncStatusScreen() {
             await Promise.all(
               related.map((item) => removeOpAndEmit(item.id)),
             );
-            // Drop an optimistic snapshot as well. For a queued delete it
-            // is already absent; for insert/update this prevents a rejected
-            // local value from continuing to look canonical.
-            await cacheDelete(op.table, op.row_id).catch(() => {});
+            // СТРОКУ С ТЕЛЕФОНА СНИМАЕМ, ТОЛЬКО ЕСЛИ ЕЁ НЕ БЫЛО НА СЕРВЕРЕ
+            // (несохранённая вставка). Раньше снималась и у отброшенной
+            // ПРАВКИ: запись пропадала с календаря целиком — слот казался
+            // свободным, клиент исчезал из списка, а без сети не возвращались
+            // до перечитки (аудит работы без сети 03.10). Правку заменит
+            // строка сервера при перечитке ниже: очередь по ней пуста, и
+            // перечитку больше ничто не держит.
+            if (related.some((item) => item.op === "insert")) {
+              await cacheDelete(op.table, op.row_id).catch(() => {});
+            }
             await Promise.all([
               queryClient.invalidateQueries({ queryKey: ["appointments"] }),
               queryClient.invalidateQueries({ queryKey: ["clients"] }),

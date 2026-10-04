@@ -41,7 +41,8 @@ export function PaymentHistorySheet({
 }) {
   const t = useThemeColors();
   const ledger = useAppointmentLedger(visible ? appointmentId : null);
-  const accounts = useAccountsWithBalances().data ?? [];
+  // Подписи истории: и скрытый, и удалённый счёт остаются названы.
+  const accounts = useAccountsWithBalances({ includeInactive: true, includeDeleted: true }).data ?? [];
   const events = paymentEvents(ledger.data ?? []);
   const net = paymentEventsNet(events);
 

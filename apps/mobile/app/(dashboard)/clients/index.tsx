@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   FlatList,
   Pressable,
   RefreshControl,
+  Share,
   Text,
   TextInput,
   View,
@@ -17,13 +18,6 @@ import {
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import type { Client } from "@babun/shared/local/clients";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
-import { withServiceDefault } from "@/features/clients/service-default";
-import { useServiceMonthsOf } from "@/features/clients/use-service-default";
-import {
-  clientMemberOf,
-  clientsById,
-  linkLine,
-} from "@babun/shared/local/selectors/client-links";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ScopeChips } from "@/components/ui/ScopeChips";
@@ -38,14 +32,18 @@ import { notify } from "@/lib/notify";
 import {
   useClients,
   useClientTags,
+  useTrashClientAsPartner,
   useUpdateClientById,
 } from "@/features/clients/queries";
-import { useArchiveWithUndo } from "@/features/clients/archive-undo";
+import { useClientSources } from "@/features/clients/acquisition-sources";
+import type { ClientSource } from "@/features/clients/acquisition-source";
+import { useDeleteWithUndo } from "@/features/clients/delete-undo";
+import { shareText, type ShareTextOptions } from "@/features/clients/client-share";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import ClientRow from "@/features/clients/ClientRow";
 import {
+  DEFAULT_SORT,
   EMPTY_FILTER,
-  segmentEvidence,
   type ClientsFilter,
 } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
@@ -54,24 +52,31 @@ import {
   appointmentsOfTeam,
   clientsOfTeam,
   liveTeamChoice,
-  rowTeamLabelId,
   teamForNewClient,
   toggleTeamChoice,
 } from "@/features/clients/team-scope";
+import { useAccessMapOf } from "@/features/clients/use-card-access";
 import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import {
+  ClientsScopeProvider,
   useClientsCapabilities,
   useClientsScopeOrNull,
 } from "@/features/clients/company-scope";
+import { useLastNonNull } from "@/lib/use-last-non-null";
 import { useClientsSources } from "@/features/clients/sources";
 import { useGuestSources } from "@/features/clients/guest-sources";
+import { withClientHistory } from "@/features/clients/member-history";
+import { useMemberClientHistory } from "@/features/clients/use-member-history";
 import {
+  capabilitiesOf,
   clientCardHref,
+  ownClientCardHref,
   clientsInsightsHref,
   clientsSettingsHref,
   type ClientsScope,
 } from "@/features/clients/clients-company";
+import { clientRowActions } from "@/features/clients/client-row-actions";
 import {
   loadDayFilter,
   saveDayFilter,
@@ -80,14 +85,13 @@ import {
   useClientsSort,
   useSetClientsSort,
 } from "@/features/clients/sort-pref";
-import {
-  useCardFieldsByTeam,
-  type CardFieldPrefs,
-} from "@/features/clients/card-prefs";
+import { useCardFieldsByTeam } from "@/features/clients/card-prefs";
 import { ClientActionsSheet } from "@/features/clients/ClientActionsSheet";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
+import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { RemindSheet } from "@/features/clients/RemindSheet";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
+import { loadErrorWords, writeErrorWords } from "@/lib/connection-words";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
 import { ContactsImportSheet } from "@/features/clients/import/ContactsImportSheet";
@@ -98,6 +102,9 @@ import { useAppointments } from "@/features/calendar/queries";
 import { useCities, useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { statsByBlocks } from "@/features/clients/card-access";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
+import { usePlanAllows } from "@/features/settings/tenant";
 
 // v811 list card (approved web design, apps/web/.../clients/page.tsx
 // ClientCard): name row (+pin) · money row (grey expected · green income
@@ -134,6 +141,18 @@ function uniqueById<T extends { id: string }>(rows: T[]): T[] {
   return out;
 }
 
+const NO_SOURCES: ClientSource[] = [];
+
+/** Поддерево в компании строки. Источник у вкладки есть всегда (ворота
+ *  открывают экран только с ним), так что обёртка не пропадает и лист не
+ *  пересобирается посреди выезда. */
+function RowScope({ scope, children }: { scope: ClientsScope | null; children: ReactNode }) {
+  return scope ? <ClientsScopeProvider scope={scope}>{children}</ClientsScopeProvider> : <>{children}</>;
+}
+
+/** Слова неудачи удаления одного клиента (`writeErrorWords`). */
+const CLIENT_NOT_DELETED = { failed: "Не удалось удалить", notDone: "Клиент не удалён" };
+
 function ClientsListScreen() {
   const t = useThemeColors();
   const router = useRouter();
@@ -163,15 +182,15 @@ function ClientsListScreen() {
     [refetch, guests],
   );
   const pull = usePullRefresh(refreshAll);
-  const { data: ownTags = [] } = useClientTags();
+  const { data: ownTags = [], isSuccess: tagsReady } = useClientTags();
   const { data: ownAppointments = [] } = useAppointments();
   const { data: ownTeams = [] } = useTeams();
-  const { data: cities = [] } = useCities();
+  const { data: cities = [], isSuccess: citiesReady } = useCities();
   // Сортировка — персистентная настройка списка (первая строка листа
   // «Фильтры»), не фильтр: «Сбросить» её не трогает.
-  const { data: sort = "recent" } = useClientsSort();
+  const { data: sort = DEFAULT_SORT } = useClientsSort();
   const setSort = useSetClientsSort();
-  const archiveWithUndo = useArchiveWithUndo();
+  const deleteWithUndo = useDeleteWithUndo();
   const updateById = useUpdateClientById();
   const [query, setQuery] = useState("");
   // Набор живёт до конца дня: звонок/SMS выбрасывают из приложения, и
@@ -206,9 +225,6 @@ function ClientsListScreen() {
     () => uniqueById([...(data ?? []), ...guests.list.flatMap((guest) => guest.clients)]),
     [data, guests.list],
   );
-  // Карта карточек для строки связи «жилец · Наталья · Вилла 5» — одна на
-  // список, а не по строке: строк сотни, и каждая спрашивает её заново.
-  const byId = useMemo(() => clientsById(clients), [clients]);
   const guestOf = useMemo(() => {
     const byClient = new Map<string, ClientsScope>();
     for (const guest of guests.list) {
@@ -216,9 +232,16 @@ function ClientsListScreen() {
     }
     return byClient;
   }, [guests.list]);
+  // У сотрудника визиты клиентов — ещё и «Историей записей» (01.10):
+  // календарь открывает клиента записи только около записи.
+  const ownHistory = useMemberClientHistory(scope, data);
   const appointments = useMemo(
-    () => uniqueById([...ownAppointments, ...guests.list.flatMap((guest) => guest.appointments)]),
-    [ownAppointments, guests.list],
+    () =>
+      uniqueById([
+        ...withClientHistory(ownAppointments, ownHistory),
+        ...guests.list.flatMap((guest) => guest.appointments),
+      ]),
+    [ownAppointments, ownHistory, guests.list],
   );
   // Склейка справочников идёт ПО ИДЕНТИФИКАТОРУ: одна и та же компания может
   // прийти и своим хуком, и гостевым источником (её календарь открыт), а два
@@ -242,29 +265,38 @@ function ClientsListScreen() {
     savedTeam,
     teams.map((tm) => tm.id),
   );
-  // Команды компаний-партнёров — обводкой: тот же язык, что у ленты
-  // календаря (чужой чип уводит в чужую базу, а не режет свою).
-  const teamChips = useMemo(() => {
-    const own = new Set(ownTeams.map((tm) => tm.id));
-    return teams.map((tm) => ({
-      id: tm.id,
-      name: tm.name,
-      color: tm.color,
-      outline: !own.has(tm.id),
-    }));
-  }, [teams, ownTeams]);
+  // «СОЗДАТЬ КЛИЕНТА» — В ВЫБРАННУЮ КОМАНДУ (владелец 04.10: «если запрещено
+  // — гаси, он не может создать клиентов, если у него нет доступа»). Своя
+  // команда или «все» — своя база, как было. Команда партнёра на ленте —
+  // клиент заводится в ЕЁ компанию, и только при «Создании клиента: Может»
+  // в этой команде; иначе кнопка серая. Раньше кнопка горела везде и
+  // заводила клиента в свою базу, хотя на экране была чужая команда.
+  const chipGuest =
+    teamChoice === ALL_TEAMS || ownTeams.some((tm) => tm.id === teamChoice)
+      ? null
+      : (guests.list.find((guest) => guest.teams.some((tm) => tm.id === teamChoice)) ?? null);
+  const chipGuestAccess = useAccessMapOf(chipGuest?.scope);
+  const createHere = chipGuest
+    ? capabilitiesOf(chipGuest.scope).create &&
+      chipGuestAccess?.calendars[teamChoice]?.["clients.create"] === "write"
+    : caps.create;
+  // Команды компаний-партнёров — ТЕМ ЖЕ ЧИПОМ, что свои (владелец 1.10: «как
+  // будто все команды его»): граница баз держится данными, а не видом.
+  const teamChips = useMemo(
+    () => teams.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color })),
+    [teams],
+  );
   // КЛИЕНТ ОДИН НА НЕСКОЛЬКО КОМАНД (см. `team-scope.ts`): под чипом — свои
   // клиенты команды и те, кого она обслуживала; цифры — по её записям.
-  // ГРАНИЦА БАЗ (владелец 30.09 — «чтобы не могли украсть наших клиентов»,
-  // сверено с 015): без чипа — ТОЛЬКО СВОЯ база. Клиенты компании, где
-  // человеку открыли клиентов, — только под её чипом с обводкой и никогда в
-  // одном списке со своими: так их не перепутать и граница видна без слов.
+  // БЕЗ ЧИПА — ОБЩИЙ СПИСОК ВСЕХ КОМАНД (владелец 1.10: «когда нет выбора
+  // команды — сразу все три команды, общий список; выбираю свою — только мои
+  // клиенты; хочу разделить — разделяю»). Это отмена правила 30.09 «без чипа
+  // — только своя база»: клиенты партнёра стоят в общем списке, но их строки
+  // по-прежнему такие, какими их отдал сервер (без номеров и денег по
+  // правам), а выбрать их для выгрузки и рассылки нельзя (`selectable`).
   const teamClients = useMemo(
-    () =>
-      teamChoice === ALL_TEAMS
-        ? clients.filter((c) => !guestOf.has(c.id))
-        : clientsOfTeam(clients, teamChoice, appointments),
-    [clients, teamChoice, appointments, guestOf],
+    () => (teamChoice === ALL_TEAMS ? clients : clientsOfTeam(clients, teamChoice, appointments)),
+    [clients, teamChoice, appointments],
   );
   const teamAppointments = useMemo(
     () => appointmentsOfTeam(appointments, teamChoice),
@@ -276,36 +308,33 @@ function ClientsListScreen() {
   // общий набор.
   const teamIdList = useMemo(() => teams.map((tm) => tm.id), [teams]);
   const cardFieldsFor = useCardFieldsByTeam(teamIdList);
-  const guestCardFields = useCallback(
-    (fields: CardFieldPrefs): CardFieldPrefs => ({
-      ...fields,
-      exp: false,
-      inc: false,
-      debt: false,
-    }),
-    [],
-  );
 
   // Per-client roll-up (visits / money / debt / last team) — one pass
   // over appointments, shared by the cards, the sort and the filter.
   // Под чипом команды строка, сортировка и фильтры считают ТОЛЬКО её записи.
   // Полная история нужна там, где решается судьба клиента: можно ли его
   // удалить и что уйдёт в выгрузку, — там `allStatsMap`.
-  // «Пора обслужить» — и по интервалу команды клиента у объектов без своего
-  // (владелец 30.09); подстановка живёт только в счёте, не в карточке.
-  const serviceMonthsOf = useServiceMonthsOf();
   const allStatsMap = useMemo(
-    () => buildStatsMap(withServiceDefault(clients, serviceMonthsOf), appointments),
-    [clients, appointments, serviceMonthsOf],
+    () => buildStatsMap(clients, appointments),
+    [clients, appointments],
   );
   const teamStatsMap = useMemo(
-    () =>
-      teamChoice === ALL_TEAMS
-        ? null
-        : buildStatsMap(withServiceDefault(teamClients, serviceMonthsOf), teamAppointments),
-    [teamChoice, teamClients, teamAppointments, serviceMonthsOf],
+    () => (teamChoice === ALL_TEAMS ? null : buildStatsMap(teamClients, teamAppointments)),
+    [teamChoice, teamClients, teamAppointments],
   );
-  const statsMap = teamStatsMap ?? allStatsMap;
+  // Деньги и визиты строки — по правам этого клиента (30.09): у сотрудника
+  // сводка из видимых записей не должна показывать то, что закрыто в
+  // карточке, ни в строке, ни в сортировке, ни в фильтрах.
+  const statsMap = useMemo(() => {
+    const base = teamStatsMap ?? allStatsMap;
+    if (!clients.some((c) => c.blocks)) return base;
+    const masked = new Map(base);
+    for (const c of clients) {
+      const s = base.get(c.id);
+      if (s && c.blocks) masked.set(c.id, statsByBlocks(c, s));
+    }
+    return masked;
+  }, [teamStatsMap, allStatsMap, clients]);
 
   // Первая и последняя (не отменённые) записи — сплит периода в фильтрах
   // показывает у «Всего времени» честный охват данных в обе стороны.
@@ -339,6 +368,11 @@ function ClientsListScreen() {
     });
   }, [tags, teams, teamChoice]);
 
+  // ИСТОЧНИКИ КОМАНД (03.10) — все: значение клиента любой команды читается
+  // по ним; варианты фильтра — по именам, под чипом — только его команды.
+  const sourcesQuery = useClientSources();
+  const ownSources = sourcesQuery.data ?? NO_SOURCES;
+
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
   // (deps без поиска) — фикс Волны 1 сохранён: клавиши не гоняют
   // localeCompare-компаратор.
@@ -353,32 +387,47 @@ function ClientsListScreen() {
     filter,
     query,
     sheetOpen, // счётчики попапов считаем только при открытом листе
+    ownSources,
+    teamChoice === ALL_TEAMS ? null : teamChoice,
   );
 
   // Прунинг «призрачных» фильтров: если тег/команду/метку удалили, пока
   // фильтр по ним активен, список схлопнулся бы в ноль без токена для
   // снятия. Держим выбранное подмножеством живых опций.
-  const { teamOptions, cityOptions, tagOptions } = result;
+  const { teamOptions, cityOptions, tagOptions, sourceOptions } = result;
+  const sourcesReady = sourcesQuery.isSuccess;
   useEffect(() => {
     setFilter((f) => {
       const teamSet = new Set(teamOptions.map((o) => o.value));
       const tagSet = new Set(tagOptions.map((o) => o.value));
       const citySet = new Set(cityOptions.map((o) => o.value));
+      // Источники — только когда справочник пришёл: пока он в пути, живым
+      // кажется одно «Неизвестно».
+      const sourceSet = new Set(sourceOptions.map((o) => o.value));
+      const sources = sourcesReady ? f.sources.filter((x) => sourceSet.has(x)) : f.sources;
       // Строки «Команда» в фильтрах с 30.09 нет — команду выбирает лента.
       // Забытый вчерашний выбор прятал бы клиентов без видимого токена.
       void teamSet;
       const selectedTeams: string[] = [];
-      const activeTags = f.activeTags.filter((x) => tagSet.has(x));
-      const selectedCities = f.selectedCities.filter((x) => citySet.has(x));
+      // Теги и метки — тоже только пришедшие: набор дня поднимается из памяти
+      // на холодном старте раньше справочников, и пустой список стирал
+      // вчерашние «VIP · Лимассол» до того, как они успевали загрузиться
+      // (проверка 03.10).
+      const activeTags = tagsReady ? f.activeTags.filter((x) => tagSet.has(x)) : f.activeTags;
+      const selectedCities =
+        citiesReady && data !== undefined
+          ? f.selectedCities.filter((x) => citySet.has(x))
+          : f.selectedCities;
       if (
         selectedTeams.length === f.selectedTeams.length &&
         activeTags.length === f.activeTags.length &&
-        selectedCities.length === f.selectedCities.length
+        selectedCities.length === f.selectedCities.length &&
+        sources.length === f.sources.length
       )
         return f;
-      return { ...f, selectedTeams, activeTags, selectedCities };
+      return { ...f, selectedTeams, activeTags, selectedCities, sources };
     });
-  }, [teamOptions, cityOptions, tagOptions]);
+  }, [teamOptions, cityOptions, tagOptions, sourceOptions, sourcesReady, tagsReady, citiesReady, data]);
 
   const filtering = result.activeCount > 0 || query.trim().length > 0;
 
@@ -390,6 +439,36 @@ function ClientsListScreen() {
   // выглядеть по-разному в двух местах (раньше здесь был системный Alert).
   const [remindClient, setRemindClient] = useState<Client | null>(null);
   const openRemindMenu = (c: Client) => setRemindClient(c);
+  // Своя база без тарифа только смотрит (аудит 03.10): «Напомнить» и «В
+  // чёрный список» сервер отказал бы — карточка их и так гасит. Что ещё
+  // можно со строкой — `rowActionsOf` ниже (`client-row-actions.ts`).
+  const clientsInPlan = usePlanAllows("clients");
+  // «Записать» — только с правом «Новые записи» в команде записи (03.10:
+  // «если нет разрешения на запись — этого и не будет»).
+  const calendarActionsFor = useCalendarActionsReader();
+  const trashAsPartner = useTrashClientAsPartner();
+  // Удаление партнёра — своей дверью сервера; вернуть может владелец.
+  const confirmPartnerDelete = (c: Client) => {
+    confirmThen(
+      "Удалить клиента?",
+      {
+        message: `${c.full_name || "Клиент"} исчезнет из клиентов команды. Вернуть его может владелец.`,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      async () => {
+        try {
+          // Строка работодателя удаляется в ЕГО компании (`source`), а не в
+          // своей: там такого клиента нет.
+          await trashAsPartner.mutateAsync({ id: c.id, source: guestOf.get(c.id) });
+        } catch (e) {
+          // Обрыв — словами, а не «TypeError: Network request failed» (03.10).
+          const words = writeErrorWords(e, CLIENT_NOT_DELETED);
+          notify(words.title, words.subtitle);
+        }
+      },
+    );
+  };
 
   // ЗАПИСАТЬ ПРЯМО ИЗ СПИСКА (свайп вправо и лист действий). Строка уже знает
   // и основной объект, и последнюю команду — те же два поля, что подставляет
@@ -399,6 +478,12 @@ function ClientsListScreen() {
   // соседнюю.
   const openSwipe = useRef<SwipeableMethods | null>(null);
   const guardedBook = useGuardedBookingNav();
+  // Команда записи: под чипом — выбранная (её список и открыт); без чипа —
+  // команда клиента, у клиента без неё — команда последнего визита.
+  const bookTeamOf = (c: Client) =>
+    teamChoice !== ALL_TEAMS
+      ? teamChoice
+      : (c.team_id ?? allStatsMap.get(c.id)?.lastTeamId ?? null);
   const bookFor = (c: Client) => {
     const primary =
       (c.locations ?? []).find((l) => l.isPrimary)?.id ??
@@ -406,83 +491,104 @@ function ClientsListScreen() {
       null;
     guardedBook(c, {
       locationId: primary,
-      // Под чипом — в выбранную команду (её список и открыт); без чипа — в
-      // команду клиента, у клиента без неё — в команду последнего визита.
-      teamId:
-        teamChoice !== ALL_TEAMS
-          ? teamChoice
-          : (c.team_id ?? allStatsMap.get(c.id)?.lastTeamId ?? null),
+      teamId: bookTeamOf(c),
     });
   };
 
-  const confirmArchiveOne = (c: Client) => {
-    confirmThen(
-      "Архивировать клиента?",
-      {
-        message: `${c.full_name || "Клиент"} исчезнет из рабочего списка. Вся история сохранится; вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке, «Архив клиентов».`,
-        confirmLabel: "Архивировать",
-        destructive: true,
-      },
-      async () => {
-        try {
-          await archiveWithUndo([c]);
-        } catch (e) {
-          notify("Не удалось архивировать", (e as Error).message);
-        }
-      },
-    );
+  // ЖЕСТЫ И МЕНЮ СТРОКИ — ПО КОМПАНИИ СТРОКИ (аудит 03.10,
+  // `client-row-actions.ts`). Своя строка — права своей базы, как было;
+  // строка работодателя — права его источника: «Записать» у неё есть, только
+  // когда открыт ЕГО календарь (запись делается в открытом), а «Напомнить»,
+  // «В чёрный список» и «Удалить» пишутся в его компанию (`source`).
+  const ownRights = {
+    edit: clientsInPlan && caps.edit,
+    manage: caps.manage,
+    export: caps.export,
+    book: caps.book,
   };
+  const rowActionsOf = (c: Client, selectingNow: boolean, teamCreate?: boolean) => {
+    const guest = guestOf.get(c.id);
+    return clientRowActions({
+      client: c,
+      guest: !!guest,
+      selecting: selectingNow,
+      rights: guest ? capabilitiesOf(guest) : ownRights,
+      teamCreate,
+    });
+  };
+  // Лист — про клиента, а не про режим: пункты не меняются, пока он уезжает
+  // после «Выбрать несколько».
+  const menuActions = menuClient
+    ? rowActionsOf(menuClient, false, calendarActionsFor(bookTeamOf(menuClient)).create)
+    : null;
+  // КОМПАНИЯ ЛИСТА — КОМПАНИЯ СТРОКИ (03.10): его хуки (реквизиты для
+  // «Поделиться») читают её. Последняя держится, пока лист уезжает, — как и
+  // сам клиент листа.
+  const menuScope =
+    useLastNonNull(menuClient ? (guestOf.get(menuClient.id) ?? scope) : null) ?? scope;
 
-  // УДАЛИТЬ ≠ АРХИВ: клиент едет в «Недавно удалённые» и через 30 дней
-  // стирается сам. За клиентом с визитами стоит финансовая история — база
-  // стереть его не даст, поэтому говорим это ДО действия и предлагаем архив.
+  // УДАЛИТЬ — ОДНО ДЕЙСТВИЕ (владелец 03.10: «понятия „в архив" не будет —
+  // удалить»). Клиент уходит в «Удалённые клиенты». Без истории он сотрётся
+  // через 30 дней; клиенту с визитами и деньгами база срок снимает сама
+  // (`client_history_never_purges`) — его история в отчётах. Слова
+  // подтверждения поэтому зависят от истории.
   const confirmDeleteOne = (c: Client) => {
+    if (c.blocks) {
+      confirmPartnerDelete(c);
+      return;
+    }
     const stats = allStatsMap.get(c.id);
-    // ЛЮБАЯ запись — уже история, даже будущая. База запрещает стирать
-    // клиента с заявками (guard_client_hard_delete_history), поэтому такой
-    // клиент лёг бы в корзину НАВСЕГДА: счётчик тикает, а ночная очистка
-    // его пропускает — он застревает между полками.
+    // ЛЮБАЯ запись — уже история, даже будущая.
     const hasHistory =
       (stats?.visits ?? 0) > 0 ||
       (stats?.totalSpent ?? 0) > 0 ||
       (stats?.unclosedVisits ?? 0) > 0 ||
       stats?.nextApt != null;
-    if (hasHistory) {
-      confirmThen(
-        "Этого клиента нельзя удалить",
-        {
-          message: "За этим клиентом есть визиты и деньги — они останутся в отчётах и должны быть к кому-то привязаны. Такого клиента убирают в архив: из списка он исчезнет, история сохранится.",
-          confirmLabel: "В архив",
-        },
-        () => confirmArchiveOne(c),
-      );
-      return;
-    }
     confirmThen(
       "Удалить клиента?",
       {
-        message: `${c.full_name || "Клиент"} переедет в «Недавно удалённые» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — в шестерёнке.`,
+        message: hasHistory
+          ? `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты». Записи и деньги останутся в отчётах; вернуть его можно в шестерёнке.`
+          : `${c.full_name || "Клиент"} уйдёт в «Удалённые клиенты» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — в шестерёнке.`,
         confirmLabel: "Удалить",
         destructive: true,
       },
       async () => {
         try {
-          await archiveWithUndo([c], true);
+          await deleteWithUndo([c]);
         } catch (e) {
-          notify("Не удалось удалить", (e as Error).message);
+          const words = writeErrorWords(e, CLIENT_NOT_DELETED);
+          notify(words.title, words.subtitle);
         }
       },
     );
   };
 
-  const onTogglePin = (c: Client) =>
-    updateById.mutate({
-      id: c.id,
-      patch: { pinned_at: c.pinned_at ? null : new Date().toISOString() },
-    });
+  // Правки по строке — в компанию строки: у работодателя — его клиентом
+  // (`source`), у своей — источником экрана, как было.
+  const onToggleBlacklist = (c: Client) =>
+    updateById.mutate({ id: c.id, patch: { blacklisted: !c.blacklisted }, source: guestOf.get(c.id) });
+
+  // «Поделиться» — тот же текст, что из «⋯» карточки (`shareText`). Реквизиты
+  // в нём — только когда их видно (аудит 03.10: из списка они уходили всегда,
+  // даже при скрытом блоке «Реквизиты»). Видно ли — решает лист меню в
+  // компании строки (`menuScope` ниже): у клиента работодателя выключатели
+  // его компании и команды, а не своей.
+  const onShareClient = async (c: Client, opts: ShareTextOptions) => {
+    try {
+      await Share.share({ message: shareText(c, opts) });
+    } catch {
+      // user dismissed the share sheet — no-op.
+    }
+  };
 
   // ── Bulk-mode helpers ─────────────────────────────────────────────
-  const visible = result.filtered; // «Выбрать всё» = всё, что сейчас в списке
+  // «Выбрать всё» = всё СВОЁ, что сейчас в списке: клиенты партнёра в общем
+  // списке видны, но в выгрузку, рассылку и архив не попадают никогда.
+  const visible = useMemo(
+    () => result.filtered.filter((c) => !guestOf.has(c.id)),
+    [result.filtered, guestOf],
+  );
   // Считаем ВИДИМЫХ выбранных: массовое действие работает по ним же,
   // а selectedIds может помнить исчезнувших из выдачи.
   const pickedCount = visible.reduce(
@@ -511,10 +617,10 @@ function ClientsListScreen() {
     setSelectedIds(allSelected ? new Set() : new Set(visible.map((c) => c.id)));
 
   // Массовые действия — строго по ВИДИМОМУ списку: если фильтр изменился
-  // после выбора, «Архивировать 12» не должно задеть невидимых.
+  // после выбора, «Удалить 12» не должно задеть невидимых.
   const selectedClients = useMemo(
-    () => result.filtered.filter((c) => selectedIds.has(c.id)),
-    [result.filtered, selectedIds],
+    () => visible.filter((c) => selectedIds.has(c.id)),
+    [visible, selectedIds],
   );
 
   const onExport = async () => {
@@ -530,37 +636,46 @@ function ClientsListScreen() {
     }
   };
 
-  const onArchive = () => {
+  const onBulkDelete = () => {
     const n = selectedClients.length;
     if (n === 0) return;
     const word = countWordRu(n, "клиента", "клиента", "клиентов");
     confirmThen(
-      `Архивировать ${n} ${word}?`,
+      `Удалить ${n} ${word}?`,
       {
-        message: "Клиенты исчезнут из рабочего списка. Заявки, инвойсы и финансовая история сохранятся; вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке, «Архив клиентов».",
-        confirmLabel: "Архивировать",
+        message: `Клиенты уйдут в «Удалённые клиенты». Кто без записей и денег — сотрётся через ${TRASH_DAYS} дней, у остальных история останется в отчётах. Вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке.`,
+        confirmLabel: "Удалить",
         destructive: true,
       },
       async () => {
         try {
           // Итог (в т.ч. частичный) и кнопка отмены — в одном тосте;
-          // здесь остаётся только случай «не уехал никто».
-          const { archived, failed } =
-            await archiveWithUndo(selectedClients);
+          // здесь остаётся только случай «не удалился никто».
+          const { archived, failed } = await deleteWithUndo(selectedClients);
           if (archived === 0) {
             notify(
-              "Не удалось архивировать",
-              `Ни один из ${failed} клиентов не архивирован. Проверьте соединение и попробуйте ещё раз.`,
+              "Не удалось удалить",
+              `Ни один из ${failed} клиентов не удалён. Проверьте соединение и попробуйте ещё раз.`,
             );
             return;
           }
           exitSelection();
         } catch (e) {
-          notify("Не удалось архивировать", (e as Error).message);
+          const words = writeErrorWords(e, {
+            failed: "Не удалось удалить",
+            notDone: "Клиенты не удалены",
+          });
+          notify(words.title, words.subtitle);
         }
       },
     );
   };
+
+  // Обрыв — словами, а не текстом ошибки (03.10).
+  const listErrorWords = loadErrorWords(error, {
+    failed: "Не удалось загрузить клиентов",
+    later: "Клиенты загрузятся, как только сервер ответит.",
+  });
 
   return (
     // edges top-only: экран внутри Tabs — нижний safe-area держит таб-бар,
@@ -748,11 +863,8 @@ function ClientsListScreen() {
       ) : error ? (
         <ClientDataNotice
           fullScreen
-          title="Не удалось загрузить клиентов"
-          message={
-            (error as Error).message ||
-            "Проверьте соединение и повторите попытку."
-          }
+          title={listErrorWords.title}
+          message={listErrorWords.subtitle}
           onRetry={() => void refetch()}
           retrying={isRefetching}
         />
@@ -774,57 +886,54 @@ function ClientsListScreen() {
           }}
           renderItem={({ item }) => {
             const stats = statsMap.get(item.id);
-            const rowTeamId = rowTeamLabelId(item, teamChoice, stats?.lastTeamId ?? null);
-            const teamName = rowTeamId
-              ? (teams.find((tm) => tm.id === rowTeamId)?.name ?? null)
-              : null;
             // ГОСТЬ — клиент компании, где человек работает. Его карточка
-            // открывается в ЕГО компании, а жесты своей базы (записать,
-            // напомнить, архив) и массовый выбор к нему не относятся: это
-            // хозяйство владельца той компании.
+            // открывается в ЕГО компании, и массовый выбор к нему не
+            // относится. Меню и свайпы — по его блокам, как в зеркале (аудит
+            // 03.10: у настоящего партнёра они гасли целиком).
             const guest = guestOf.get(item.id);
+            const actions = rowActionsOf(item, selecting);
             return (
               <ClientRow
                 client={item}
                 stats={stats}
-                teamName={teamName}
-                tags={tags}
-                link={linkLine(clientMemberOf(item, byId))?.text}
-                cardFields={
-                  guest
-                    ? guestCardFields(cardFieldsFor(item.team_id))
-                    : cardFieldsFor(item.team_id)
-                }
+                cardFields={cardFieldsFor(item.team_id)}
+                // «Связаться» клиента работодателя — набор и шестерёнка его
+                // компании, а не своей (03.10).
+                source={guest}
                 selectionMode={selecting && !guest}
                 picked={selectedIds.has(item.id)}
                 onPress={() =>
-                  guest
-                    ? router.push(clientCardHref(item.id, guest.tenantId))
-                    : selecting
-                      ? toggleId(item.id)
-                      : router.push(`/clients/${item.id}`)
+                  selecting && !guest
+                    ? toggleId(item.id)
+                    : // Видит клиента — открывает его страницу (владелец 02.10:
+                      // «Открывает карточку» убрано).
+                      guest
+                      ? router.push(clientCardHref(item.id, guest.tenantId))
+                      : router.push(ownClientCardHref(item.id, scope))
                 }
-                evidence={segmentEvidence(item, filter.segments, stats)}
                 onSwipeOpen={(row) => {
                   if (openSwipe.current && openSwipe.current !== row) {
                     openSwipe.current.close();
                   }
                   openSwipe.current = row;
                 }}
-                onBook={!guest && caps.book ? () => bookFor(item) : undefined}
-                onRemind={!guest && caps.edit ? () => setRemindClient(item) : undefined}
-                onArchive={!guest && caps.manage ? () => confirmArchiveOne(item) : undefined}
+                // Свайп (владелец 03.10): вправо — «Напомнить», влево —
+                // «Удалить»; «Записать» — в меню долгого нажатия.
+                onRemind={actions.remind ? () => setRemindClient(item) : undefined}
+                onDelete={actions.remove ? () => confirmDeleteOne(item) : undefined}
                 onLongPress={() => {
-                  if (guest) return;
-                  if (selecting) toggleId(item.id);
-                  else setMenuClient(item);
+                  if (actions.select) toggleId(item.id);
+                  // Меню — те же права, что у `ClientActionsSheet` ниже; ни
+                  // одного — нет и пустой шторки (проверка глазами 30.09).
+                  // Партнёру — с «Меню клиента» или «Удаление клиента» (03.10).
+                  else if (actions.menu) setMenuClient(item);
                 }}
               />
             );
           }}
           ItemSeparatorComponent={() => (
             <View
-              className="ml-[68px] h-px"
+              className="ml-4 h-px"
               style={{ backgroundColor: t.separator }}
             />
           )}
@@ -878,7 +987,7 @@ function ClientsListScreen() {
           count={pickedCount}
           onSms={() => setSmsOpen(true)}
           onExport={onExport}
-          onArchive={caps.manage ? onArchive : undefined}
+          onDelete={caps.manage ? onBulkDelete : undefined}
         />
       ) : (
         // КНОПКА НА СВОЁМ МЕСТЕ И СЕРАЯ, как в «Финансах» (владелец 20.09:
@@ -888,11 +997,23 @@ function ClientsListScreen() {
         <View
           style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}
         >
-          <GradientButton
-            label="Создать клиента"
-            onPress={() => router.push("/clients/new")}
-            disabled={!caps.create}
-          />
+          {/* ТАРИФ БЕЗ КЛИЕНТОВ — КНОПКА СЕРАЯ, а не спрятана (владелец 1.10:
+              «всё видно, новое серым»): тап поднимает плашку «Нужно изменить
+              тариф». Партнёр без своего тарифа видит общий список, но своего
+              клиента не заведёт — сервер отбил бы его на сохранении. */}
+          <TariffLocked locked={!clientsInPlan}>
+            <GradientButton
+              label="Создать клиента"
+              onPress={() =>
+                router.push(
+                  chipGuest
+                    ? clientCardHref("new", chipGuest.scope.tenantId)
+                    : ownClientCardHref("new", scope),
+                )
+              }
+              disabled={!createHere}
+            />
+          </TariffLocked>
         </View>
       )}
 
@@ -905,26 +1026,33 @@ function ClientsListScreen() {
             updateById.mutate({
               id: remindClient.id,
               patch: { reminder_at },
+              source: guestOf.get(remindClient.id),
             });
           }
         }}
         onClose={() => setRemindClient(null)}
       />
-      <ClientActionsSheet
-        client={menuClient}
-        // Те же права, что у свайпов строки: записать — «можно записать»,
-        // напомнить — «меняет карточку», закрепить, архив и удаление —
-        // владелец своей компании (сервер у сотрудника их отказывает).
-        onBook={caps.book ? bookFor : undefined}
-        onClose={() => setMenuClient(null)}
-        // Выбор нескольких ведёт к экспорту и массовой SMS — только своя
-        // база (владелец 30.09: «без передачи»).
-        onSelectMany={caps.export ? (c) => enterSelection(c.id) : undefined}
-        onTogglePin={caps.manage ? onTogglePin : undefined}
-        onRemind={caps.edit ? openRemindMenu : undefined}
-        onArchive={caps.manage ? confirmArchiveOne : undefined}
-        onDelete={caps.manage ? confirmDeleteOne : undefined}
-      />
+      {/* Лист — в компании строки (`menuScope`): реквизиты «Поделиться»
+          клиента работодателя — по его выключателям, а не своим (03.10). */}
+      <RowScope scope={menuScope}>
+        <ClientActionsSheet
+          client={menuClient}
+          // Те же пункты, что в «⋯» карточки (`clientMenuItems`, 03.10):
+          // записать — «можно записать», напомнить и чёрный список — «меняет
+          // карточку» / «Меню клиента», удалить — владелец своей компании /
+          // «Удаление клиента».
+          onBook={menuActions?.book ? bookFor : undefined}
+          onClose={() => setMenuClient(null)}
+          // Выбор нескольких ведёт к экспорту и массовой SMS: своя база — по
+          // «можно вынести», партнёр — по «Меню клиента» (03.10); строки
+          // работодателя в выбор не попадают вовсе.
+          onSelectMany={menuActions?.selectMany ? (c) => enterSelection(c.id) : undefined}
+          onRemind={menuActions?.remind ? openRemindMenu : undefined}
+          onShare={menuActions?.share ? (c, opts) => void onShareClient(c, opts) : undefined}
+          onToggleBlacklist={menuActions?.blacklist ? onToggleBlacklist : undefined}
+          onDelete={menuActions?.remove ? confirmDeleteOne : undefined}
+        />
+      </RowScope>
       <ClientsFilterSheet
         visible={sheetOpen}
         filter={filter}

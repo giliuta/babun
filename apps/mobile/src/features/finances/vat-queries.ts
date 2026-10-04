@@ -60,7 +60,7 @@ export function useSaveVatSettings() {
     // обработчик добавлял второе окно поверх (аудит 2026-09-30).
     meta: { errorHandled: true },
     mutationFn: async (patch: Partial<Pick<VatSettings, "mode" | "rate">>) => {
-      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       const { error } = await supabase
         .from("tenants")
         .update({
@@ -123,7 +123,7 @@ export function useSaveTeamVat() {
     // обработчик добавлял второе окно поверх (аудит 2026-09-30).
     meta: { errorHandled: true },
     mutationFn: async (input: TeamVatOverride) => {
-      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       // Пустое переопределение — это «наследовать компанию», а не «нули».
       const empty =
         input.mode === null && input.rate === null && !input.exemptionNote;

@@ -42,20 +42,31 @@ function noRowWriteSupabase() {
 function rpcSupabase(
   result: { error: { message: string } | null },
   calls?: Array<Record<string, unknown>>,
+  data: unknown = null,
 ) {
   return {
     rpc(name: string, args: Record<string, unknown>) {
       calls?.push({ name, ...args });
-      return Promise.resolve({ data: null, ...result });
+      return Promise.resolve({ data, ...result });
     },
   } as never;
 }
 
 describe("удаление денежной строки подтверждается сервером", () => {
-  it("не считает успехом удаление, отфильтрованное RLS", async () => {
+  it("удаляет операцию в «Удалённые операции» серверной функцией", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    await deleteTransaction(rpcSupabase({ error: null }, calls, ROW_ID), ROW_ID);
+
+    expect(calls).toEqual([{ name: "delete_operation", p_id: ROW_ID }]);
+  });
+
+  it("не считает успехом удаление без ответа сервера", async () => {
     await expect(
-      deleteTransaction(noRowWriteSupabase(), ROW_ID),
+      deleteTransaction(rpcSupabase({ error: null }), ROW_ID),
     ).rejects.toThrow("Операция недоступна или связана с инвойсом");
+    await expect(
+      deleteTransaction(rpcSupabase({ error: { message: "Нет доступа" } }), ROW_ID),
+    ).rejects.toThrow("Нет доступа");
   });
 
   it("не считает успехом правку, отфильтрованную RLS", async () => {

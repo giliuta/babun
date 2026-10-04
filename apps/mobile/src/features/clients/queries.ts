@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 // single-client card is not one of the three cached tables and must render the
 // canonical row live.
 import {
+  clientWriteRefusal,
   getClient,
   purgeDateFromNow,
   createClient as repoCreateClient,
@@ -66,6 +67,7 @@ import { useClientsScopeOrNull } from "./company-scope";
 import {
   activeCompanyScope,
   capabilitiesOf,
+  memberScope,
   offlineForeignWriteMessage,
   viewKeyOf,
   type ClientsCompanyKind,
@@ -74,7 +76,10 @@ import {
 import { masterClientJsonToClient } from "@/features/settings/master-reference";
 import { isPhoneTakenError } from "@/features/clients/client-create-errors";
 import { parseClientBlocks } from "@/features/clients/client-block-access";
-import { mirrorMemberClient } from "@/features/access/mirror/mirror-client";
+import { clientsAccessOf } from "@/features/clients/clients-access";
+import { inMirrorView, mirrorMemberClient } from "@/features/access/mirror/mirror-client";
+import { useMirrorClientScope } from "@/features/access/mirror/use-mirror-client-scope";
+import { refreshRevealedContacts } from "@/features/clients/revealed-contacts";
 import {
   contactsHiddenOf,
   parseMemberContacts,
@@ -86,6 +91,7 @@ import {
   syncClientReminder,
   type ClientReminderResult,
 } from "@/features/clients/reminders";
+import { NEVER_PAUSE } from "@/features/finances/accounts";
 
 function surfaceClientReminderResult(result: ClientReminderResult): void {
   if (result === "scheduled" || result === "cleared") return;
@@ -157,7 +163,23 @@ function useQueryScope(): QueryScope {
   const activeTenantId = useTenantId();
   const roleQuery = useCurrentRole();
   const activeRole = roleQuery.data;
+  const mirror = useMirror();
   if (scope) return scopeOf(scope);
+  // ЗЕРКАЛО ВНЕ ВКЛАДКИ (выбор клиента в записи и календаре). Дверь мастера
+  // (`list_master_clients_safe`) по токену владельца отдаёт пусто — в
+  // «его глазами» выбор клиента был пуст (владелец 03.10). Источник — тот
+  // же, что собирает вкладка «Клиенты» в зеркале: он партнёр этой компании,
+  // а строки доводит до его прав покров зеркала (`useMirroredMemberMap`).
+  if (mirror && activeTenantId) {
+    const mirrored = memberScope(
+      activeTenantId,
+      mirror.role,
+      { isOwner: false, ...clientsAccessOf(mirror.map) },
+      new Map(),
+      activeTenantId,
+    );
+    if (mirrored) return scopeOf(mirrored);
+  }
   return {
     tenantId: activeTenantId,
     role: activeRole,
@@ -171,6 +193,15 @@ function useQueryScope(): QueryScope {
     tenantName: null,
     writeOpts: undefined,
   };
+}
+
+/** МОЖНО ЛИ ОТСЮДА ПРАВИТЬ КАРТОЧКУ КЛИЕНТА (аудит прав 03.10). Мастер вне
+ *  вкладки «Клиенты» читает «клиента записи» безопасной дверью, и любая
+ *  правка карточки отсюда отказывает (`saveClient`, kind "record") — экран
+ *  записи не должен её обещать: заметка клиента и объекты там только
+ *  читаются. */
+export function useClientCardWritable(): boolean {
+  return useQueryScope().kind !== "record";
 }
 
 /** ИСТОЧНИК ЭКРАНА ЦЕЛИКОМ — для правил, которым мало `QueryScope`.
@@ -210,7 +241,7 @@ function scopeOf(scope: ClientsScope): QueryScope {
 /** Хозяйство базы — архив, корзина, справочник тегов, импорт — живёт только у
  *  СВОЕЙ компании: у работодателя человек гость, даже когда «Меняет». */
 function assertOwnCompany(scope: QueryScope, what: string): asserts scope is QueryScope & { tenantId: string } {
-  if (!scope.tenantId) throw new Error("Нет активного тенанта");
+  if (!scope.tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
   if (scope.kind !== "own") {
     throw new Error(`${what} можно только в своей компании.`);
   }
@@ -346,9 +377,18 @@ export function useClients() {
   // скрытого номера — по карте зеркала (015, 30.09). Иначе владелец видел бы
   // заметки, объекты и долг, которых сотрудник не получит.
   const mirrorMap = useMirroredMemberMap(scope.kind);
+  // И только ЕГО клиенты: по токену владельца сервер отдаёт всю базу, а
+  // сотрудник получает набор «Какие клиенты» (проверка глазами 30.09 —
+  // десять строк вместо двух). Пока набор едет — пусто, а не вся база.
+  const mirrorScope = useMirrorClientScope(mirrorMap);
   const mirrorRows = useCallback(
-    (rows: Client[]) => (mirrorMap ? rows.map((row) => mirrorMemberClient(row, mirrorMap)) : rows),
-    [mirrorMap],
+    (rows: Client[]) =>
+      mirrorMap
+        ? rows
+            .filter((row) => mirrorScope !== undefined && inMirrorView(row, mirrorScope))
+            .map((row) => mirrorMemberClient(row, mirrorMap, mirrorScope))
+        : rows,
+    [mirrorMap, mirrorScope],
   );
   return useQuery({
     // У своей компании и у клиента записи ключ ТОТ ЖЕ, что был, — его греет
@@ -377,10 +417,15 @@ export function useClient(id: string) {
   // Тот же покров зеркала, что у списка: карточка — это тот же клиент,
   // открытый крупнее, и прятать только в списке значит не прятать вовсе.
   const mirrorMap = useMirroredMemberMap(scope.kind);
+  // Клиент вне его набора сотруднику не приходит вовсе — и в зеркале тоже.
+  const mirrorScope = useMirrorClientScope(mirrorMap);
   const mirrorOne = useCallback(
-    (client: Client | null): Client | null =>
-      client && mirrorMap ? mirrorMemberClient(client, mirrorMap) : client,
-    [mirrorMap],
+    (client: Client | null): Client | null => {
+      if (!client || !mirrorMap) return client;
+      if (mirrorScope && !inMirrorView(client, mirrorScope)) return null;
+      return mirrorMemberClient(client, mirrorMap, mirrorScope);
+    },
+    [mirrorMap, mirrorScope],
   );
   return useQuery({
     queryKey: sourceClientQueryKey(id, tenantId, scope.view),
@@ -395,7 +440,7 @@ export function useClient(id: string) {
       // Подстановка берёт строку из КЭША списка, а покров списка живёт в
       // `select` и кэш не меняет: без этого карточка мигала бы настоящим
       // телефоном до ответа сервера.
-      return found && mirrorMap ? mirrorMemberClient(found, mirrorMap) : found;
+      return found && mirrorMap ? mirrorOne(found) : found;
     },
     queryFn: async () => {
       if (scope.kind === "record") {
@@ -448,7 +493,7 @@ async function saveClient(
   // Guard: never fire the PATCH with tenant_id=undefined (session not
   // resolved yet) — it would silently match nothing / hit RLS.
   const tenantId = scope.tenantId;
-  if (!tenantId) throw new Error("Нет активного тенанта");
+  if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
   if (scope.kind === "record") {
     throw new Error("Карточку этого клиента ведёт владелец компании.");
   }
@@ -461,26 +506,32 @@ async function saveClient(
   return updateClient(writeClientOf(scope), id, patch, tenantId, scope.writeOpts);
 }
 
+/** Ответ правки у сотрудника разбирается общим маппером
+ *  (`atomicWriteResultToClient`) и приходит без `blocks` и причины скрытого
+ *  номера. Держим прежние, иначе до перечитки закрытые блоки на миг
+ *  открылись бы пустыми, а номер — «разблокировался». */
+function keepAccessFields(old: Client | null | undefined, updated: Client): Client {
+  if (!old || !updated) return updated;
+  return {
+    ...updated,
+    ...(updated.blocks || !old.blocks ? {} : { blocks: old.blocks }),
+    ...(updated.contacts_hidden !== undefined || old.contacts_hidden === undefined
+      ? {}
+      : { contacts_hidden: old.contacts_hidden }),
+  };
+}
+
 export function useUpdateClient(id: string) {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (patch: Partial<Client>) => saveClient(scope, id, patch),
     onSuccess: (updated, patch) => {
-      // Ответ правки у сотрудника разбирается общим маппером и может прийти
-      // без `blocks` и причины скрытого номера: держим прежние, иначе до
-      // перечитки карточка на миг решила бы, что всё открыто.
       qc.setQueriesData<Client | null>({ queryKey: ["client", id] }, (old) =>
-        old && updated
-          ? {
-              ...updated,
-              ...(updated.blocks || !old.blocks ? {} : { blocks: old.blocks }),
-              ...(updated.contacts_hidden !== undefined || old.contacts_hidden === undefined
-                ? {}
-                : { contacts_hidden: old.contacts_hidden }),
-            }
-          : updated,
+        keepAccessFields(old, updated),
       );
+      refreshRevealedContacts(scope.tenantId, id, patch);
       // Blocks fire independent mutations (blur saves), so two PATCHes
       // can resolve out of order and the late response would overwrite
       // the newer field. Refetching settles the cache on the server's
@@ -531,6 +582,7 @@ export function useSetClientTeam() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async ({ id, teamId }: { id: string; teamId: string }) => {
       const { error } = await writeClientOf(scope).rpc("set_client_team", {
         p_client_id: id,
@@ -566,12 +618,67 @@ export function useSetClientTeam() {
   });
 }
 
+/** КЛИЕНТ ЧУЖОЙ СТРОКИ СПИСКА (аудит 03.10). Список склеен из нескольких
+ *  компаний, а источник у экрана один — своя. Действие по строке
+ *  работодателя (`guestOf`) несёт её источник: без него запись ушла бы под
+ *  заголовком своей компании и не нашла бы клиента. Нет `source` — источник
+ *  экрана, как было. */
+export interface ClientWriteTarget {
+  id: string;
+  source?: ClientsScope;
+}
+
+/** ПАРТНЁР С «УДАЛЕНИЕ КЛИЕНТА: МОЖЕТ» УДАЛЯЕТ КЛИЕНТА (владелец 03.10).
+ *  Своей дверью `member_trash_client`: клиент уходит в «Удалённые клиенты»;
+ *  без истории он сотрётся через 30 дней, с историей — лежит там, пока
+ *  владелец его не вернёт. */
+export function useTrashClientAsPartner() {
+  const scope = useQueryScope();
+  const qc = useQueryClient();
+  return useMutation({
+    // Без сети удаление не ждёт молча, чтобы сработать потом, когда его уже
+    // не ждут: отказ сразу, словами «Нет связи с сервером» (03.10).
+    networkMode: "always",
+    mutationFn: async (target: string | ClientWriteTarget) => {
+      const { id, source } = typeof target === "string" ? { id: target, source: undefined } : target;
+      // Дверь новее сгенерированных типов базы — вызов через узкий тип.
+      // Строка работодателя — клиентом, привязанным к ЕГО компании: дверь
+      // берёт компанию из заголовка.
+      const db = (source ? tenantBoundClient(source.tenantId) : writeClientOf(scope)) as unknown as {
+        rpc: (name: "member_trash_client", args: { p_client_id: string }) => PromiseLike<{
+          error: { message: string; code?: string; hint?: string } | null;
+        }>;
+      };
+      const { error } = await db.rpc("member_trash_client", { p_client_id: id });
+      // Отказ — словами (`block:clients.delete` → «Нет права удалять
+      // клиентов»), а не английским текстом сервера.
+      if (error) throw new Error(clientWriteRefusal(error) ?? error.message);
+    },
+    onSuccess: (_d, target) => {
+      const id = typeof target === "string" ? target : target.id;
+      qc.setQueriesData<Client[]>({ queryKey: ["clients"] }, (list) =>
+        Array.isArray(list) ? list.filter((c) => c.id !== id) : list,
+      );
+      // «Напомнить» об удалённом клиенте снимается и у партнёра, как у
+      // владельца (повторный аудит 03.10): иначе пуш приходил в срок и вёл на
+      // удалённую карточку.
+      void cancelClientReminder(id);
+      void qc.invalidateQueries({ queryKey: ["clients"] });
+      void qc.invalidateQueries({ queryKey: ["client", id] });
+    },
+    meta: { errorHandled: true }, // caller messages the refusal itself
+  });
+}
+
 export function useUpdateClientById() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: Partial<Client> }) =>
-      saveClient(scope, id, patch),
+    ...NEVER_PAUSE,
+    // `source` — строка работодателя из общего списка (`ClientWriteTarget`):
+    // правка идёт его компании, а не источнику экрана.
+    mutationFn: ({ id, patch, source }: ClientWriteTarget & { patch: Partial<Client> }) =>
+      saveClient(source ? scopeOf(source) : scope, id, patch),
     onMutate: async ({ id, patch }) => {
       // Чтение, уже летящее по этому ключу, ответит ПОСЛЕ нашей подстановки и
       // вернуло бы строку без правки — отменяем его до, а не после.
@@ -582,8 +689,11 @@ export function useUpdateClientById() {
       );
       return { previous };
     },
-    onSuccess: (updated, { id, patch }) => {
-      qc.setQueriesData({ queryKey: ["client", id] }, updated);
+    onSuccess: (updated, { id, patch, source }) => {
+      qc.setQueriesData<Client | null>({ queryKey: ["client", id] }, (old) =>
+        keepAccessFields(old, updated),
+      );
+      refreshRevealedContacts(source?.tenantId ?? scope.tenantId, id, patch);
       qc.invalidateQueries({ queryKey: ["client", id] });
       qc.invalidateQueries({ queryKey: ["clients"] });
       // ЧЕЛОВЕК ВИДЕН И В ЧУЖОМ БЛОКЕ «ЛЮДИ» — своим запросом
@@ -622,8 +732,9 @@ export function useCreateClient() {
   const tenantId = scope.tenantId;
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (overrides: Partial<Client>) => {
-      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
       if (scope.kind === "record") {
         throw new Error("Заводить клиентов этой компании может её владелец.");
       }
@@ -686,9 +797,10 @@ export interface ArchiveClientsResult {
   archivedIds: string[];
 }
 
-/** `trash: true` — клиент едет в «Недавно удалённые» со сроком 30 дней;
- *  иначе в архив без срока. Одна мутация на обе полки: разница между ними
- *  и в базе ровно одна — проставлен ли `purge_at`. */
+/** `trash: true` — клиент уходит в «Удалённые клиенты» со сроком 30 дней;
+ *  иначе без срока (дубль после слияния). Клиенту с историей база срок
+ *  снимает сама (`client_history_never_purges`, 03.10): архива как полки у
+ *  клиентов больше нет — экран один. */
 export interface ArchiveClientsInput {
   ids: string[];
   trash?: boolean;
@@ -698,6 +810,7 @@ export function useArchiveClients() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (
       input: ArchiveClientsInput,
     ): Promise<ArchiveClientsResult> => {
@@ -705,7 +818,7 @@ export function useArchiveClients() {
       assertOwnCompany(scope, "Убирать клиентов из работы");
       const tenantId = scope.tenantId;
       if (scope.role !== "owner" && scope.role !== "dispatcher") {
-        throw new Error("Архивировать клиентов может владелец или диспетчер.");
+        throw new Error("Удалять клиентов может владелец или диспетчер.");
       }
       // Один срок на весь заход: клиенты, удалённые одним действием, должны
       // и стереться вместе, а не расползтись по секундам.
@@ -754,19 +867,18 @@ export function useArchiveClients() {
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
-      void qc.invalidateQueries({ queryKey: ["archived-clients"] });
       void qc.invalidateQueries({ queryKey: ["trashed-clients"] });
     },
     meta: { errorHandled: true }, // caller messages the partial result itself
   });
 }
 
-/** Архив и корзина ЧИТАЮТСЯ ИЗ КЭША (как рабочий список), а не напрямую с
+/** Удалённые ЧИТАЮТСЯ ИЗ КЭША (как рабочий список), а не напрямую с
  *  сервера. Прямое чтение было дырой: архивация, ушедшая в очередь, делала
  *  клиента невидимым везде — из списка его убрали, а сервер ещё считал
  *  живым, и экран архива о нём не знал. */
 function useHiddenClients(
-  key: "archived-clients" | "trashed-clients",
+  key: "trashed-clients",
   read: (client: typeof supabase, tenantId: string) => Promise<Client[]>,
 ) {
   const scope = useQueryScope();
@@ -784,20 +896,26 @@ function useHiddenClients(
   });
 }
 
-/** Архив: убраны из работы бессрочно. */
-export function useArchivedClients() {
-  return useHiddenClients("archived-clients", listArchivedCached);
-}
-
-/** «Недавно удалённые»: сотрутся по своему сроку. */
+/** «Удалённые клиенты» — ОДНА ПОЛКА (владелец 03.10: архива нет): и те, кто
+ *  сотрётся по сроку, и клиенты с историей без срока; свежие удаления —
+ *  сверху. */
 export function useTrashedClients() {
-  return useHiddenClients("trashed-clients", listTrashedCached);
+  return useHiddenClients("trashed-clients", async (client, tenantId) => {
+    const [dated, kept] = await Promise.all([
+      listTrashedCached(client, tenantId),
+      listArchivedCached(client, tenantId),
+    ]);
+    return [...dated, ...kept].sort((a, b) =>
+      (b.deleted_at ?? "").localeCompare(a.deleted_at ?? ""),
+    );
+  });
 }
 
 export function useRestoreClient() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (client: Client) => {
       assertOwnCompany(scope, "Возвращать клиентов в работу");
       if (scope.role !== "owner" && scope.role !== "dispatcher") {
@@ -808,10 +926,15 @@ export function useRestoreClient() {
     },
     onSuccess: (restored, client) => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
-      void qc.invalidateQueries({ queryKey: ["archived-clients"] });
       void qc.invalidateQueries({ queryKey: ["trashed-clients"] });
       void qc.invalidateQueries({ queryKey: ["client", client.id] });
       if (restored.reminder_at) syncClientReminderWithFeedback(restored);
+    },
+    // Отказ — тоже повод перечитать: список «Удалённых» показывает правду
+    // сервера, а не оптимистичный шаг (аудит 03.10).
+    onError: (_error, client) => {
+      void qc.invalidateQueries({ queryKey: ["trashed-clients"] });
+      void qc.invalidateQueries({ queryKey: ["client", client.id] });
     },
     meta: { errorHandled: true },
   });
@@ -827,6 +950,7 @@ export function useDeleteClientForever() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: async (id: string) => {
       assertOwnCompany(scope, "Стирать клиентов");
       if (scope.role !== "owner") {
@@ -838,7 +962,7 @@ export function useDeleteClientForever() {
         const text = (e as Error).message ?? "";
         if (/history|истори/i.test(text)) {
           throw new Error(
-            "У клиента есть заявки или деньги — стереть его нельзя. Такой клиент живёт в архиве.",
+            "У клиента есть записи или деньги — стереть его нельзя: история остаётся в отчётах.",
           );
         }
         throw e;
@@ -847,7 +971,6 @@ export function useDeleteClientForever() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
       void qc.invalidateQueries({ queryKey: ["trashed-clients"] });
-      void qc.invalidateQueries({ queryKey: ["archived-clients"] });
     },
     meta: { errorHandled: true },
   });
@@ -902,6 +1025,13 @@ export interface UpdateClientTagInput {
 function assertCanManageClientTags(
   scope: QueryScope,
 ): asserts scope is QueryScope & { tenantId: string } {
+  // ПАРТНЁР ПРАВИТ ТЕГИ КОМАНДЫ ПО ПРАВУ «ТЕГИ КЛИЕНТОВ» (владелец 01.10).
+  // Какой команды — решает сервер политикой `client_tags_write_settings`;
+  // здесь только не мешаем ему ответить.
+  if (scope.kind === "member") {
+    if (!scope.tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
+    return;
+  }
   assertOwnCompany(scope, "Управлять тегами");
   if (scope.role !== "owner" && scope.role !== "dispatcher") {
     throw new Error("Управлять тегами может владелец или диспетчер.");
@@ -921,6 +1051,7 @@ export function useCreateClientTag() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation<ClientTag, Error, CreateClientTagInput>({
+    ...NEVER_PAUSE,
     mutationFn: ({ name, color, icon, teamId }) => {
       assertCanManageClientTags(scope);
       const normalizedName = name.trim();
@@ -941,6 +1072,7 @@ export function useUpdateClientTag() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation<ClientTag, Error, UpdateClientTagInput>({
+    ...NEVER_PAUSE,
     mutationFn: ({ id, patch }) => {
       assertCanManageClientTags(scope);
       const normalizedPatch = {
@@ -965,6 +1097,7 @@ export function useSetClientTagHidden() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation<ClientTag, Error, { id: string; hidden: boolean }>({
+    ...NEVER_PAUSE,
     mutationFn: ({ id, hidden }) => {
       assertCanManageClientTags(scope);
       return updateClientTagCached(writeClientOf(scope), id, { hidden }, scope.tenantId, scope.writeOpts);
@@ -981,6 +1114,7 @@ export function useReorderClientTags() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation<void, Error, string[]>({
+    ...NEVER_PAUSE,
     mutationFn: async (orderedIds) => {
       assertCanManageClientTags(scope);
       for (const [position, id] of orderedIds.entries()) {
@@ -996,6 +1130,7 @@ export function useDeleteClientTag() {
   const scope = useQueryScope();
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
+    ...NEVER_PAUSE,
     mutationFn: (id) => {
       assertCanManageClientTags(scope);
       return deleteClientTagCached(writeClientOf(scope), id, scope.tenantId, scope.writeOpts);

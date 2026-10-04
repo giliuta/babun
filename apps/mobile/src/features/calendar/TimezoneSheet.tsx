@@ -19,6 +19,7 @@ import { utcLabel } from "@/features/calendar/device-timezone";
 import {
   NAMES_IN_LABEL,
   zoneGroupIndexOf,
+  zoneToApply,
 } from "@/features/calendar/zone-label";
 
 // ЧАСОВОЙ ПОЯС — БАРАБАН НА ПОЛЭКРАНА, У КАЖДОГО КАЛЕНДАРЯ СВОЙ.
@@ -136,8 +137,6 @@ export function TimezoneSheet({
     setPicked(null);
   }, [visible, value]);
 
-  const group = ZONE_GROUPS[idx] ?? ZONE_GROUPS[0];
-
   // Свой город — первым в подписи СВОЕЙ группы. Иначе киевлянин видел бы
   // «(UTC+2) Helsinki, Athens, Nicosia» и не понимал, что строка про него.
   const ownCity = value.split("/").pop()?.replace(/_/g, " ");
@@ -205,7 +204,9 @@ export function TimezoneSheet({
           <Button
             label="Применить"
             onPress={() => {
-              onApply(picked ?? group.zone);
+              // Ничего не поменяли — ничего и не пишем (см. `zoneToApply`).
+              const zone = zoneToApply(value, picked, idx);
+              if (zone !== value) onApply(zone);
               onClose();
             }}
           />

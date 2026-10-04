@@ -2,8 +2,11 @@ import { Linking, Platform } from "react-native";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/features/settings/tenant";
+import { useAccountScope } from "@/features/cabinet/account-scope";
+import { TENANT_HEADER } from "@/lib/tenant-header";
 import {
   applyPatch,
   checkoutErrorText,
@@ -11,6 +14,7 @@ import {
   parseSmsHistory,
   parseSmsRecordLog,
   type SmsAccount,
+  type SmsHistoryItem,
   type SmsSettingsPatch,
 } from "./sms-model";
 import {
@@ -41,13 +45,14 @@ export const smsLogKey = (tenantId: string | null) => ["sms-log", tenantId];
 export const smsTemplatesKey = (tenantId: string | null) => ["sms-team-templates", tenantId];
 
 export function useSmsAccount() {
-  const tenantId = useTenantId();
-  const role = useDataRole();
+  // Баланс АККАУНТА СТРАНИЦЫ (04.10): в блоке пригласившего аккаунта —
+  // его, а не того, что открыт на телефоне.
+  const { tenantId, client, role } = useAccountScope();
   return useQuery({
     queryKey: smsAccountKey(tenantId),
-    enabled: !!tenantId && role.isSuccess && role.data != null,
+    enabled: !!tenantId && role != null,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("sms_account");
+      const { data, error } = await client.rpc("sms_account");
       if (error) throw new Error(error.message);
       return parseSmsAccount(data);
     },
@@ -82,14 +87,20 @@ export function useSaveSmsSettings() {
 }
 
 /** Шаблоны команды (`teamId`) или всех видимых команд (`null`). */
-export function useTeamTemplates(teamId: string | null) {
-  const tenantId = useTenantId();
+export function useTeamTemplates(teamId: string | null, cardTenantId?: string | null) {
+  const activeTenantId = useTenantId();
   const role = useDataRole();
+  // Шаблоны команды СВОЕЙ компании карточки (03.10): пока в календаре открыта
+  // команда партнёра, команда клиента — не из активной компании, и чтение без
+  // её заголовка возвращало пустой список («Шаблонов пока нет»).
+  const tenantId = cardTenantId ?? activeTenantId;
   return useQuery({
     queryKey: [...smsTemplatesKey(tenantId), teamId],
     enabled: !!tenantId && role.isSuccess && role.data != null,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("sms_team_templates", { p_team_id: teamId ?? undefined });
+      const { data, error } = await clientOf(cardTenantId, activeTenantId).rpc("sms_team_templates", {
+        p_team_id: teamId ?? undefined,
+      });
       if (error) throw new Error(error.message);
       return parseTeamTemplates(data);
     },
@@ -275,15 +286,16 @@ export function useReorderTeamTemplates(teamId: string | null) {
 
 /** История: вся или одной команды / одного события. */
 export function useSmsHistory(limit = 50, filter?: { teamId?: string | null; trigger?: string | null }) {
-  const tenantId = useTenantId();
-  const role = useDataRole();
+  // История сообщений — только владельцу ЭТОГО аккаунта: партнёр с правом
+  // «SMS» видит баланс, но не переписку с клиентами (04.10).
+  const { tenantId, client, role } = useAccountScope();
   const teamId = filter?.teamId ?? null;
   const trigger = filter?.trigger ?? null;
   return useQuery({
     queryKey: [...smsHistoryKey(tenantId), limit, teamId, trigger],
-    enabled: !!tenantId && role.data === "owner",
+    enabled: !!tenantId && role === "owner",
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("sms_history", {
+      const { data, error } = await client.rpc("sms_history", {
         p_limit: limit,
         p_team_id: teamId ?? undefined,
         p_trigger: trigger ?? undefined,
@@ -319,6 +331,19 @@ export function useSmsHistoryPages(teamId: string | null) {
   });
 }
 
+/** Сколько ждать между сверками, пока SMS «в пути»; `false` — не сверять.
+ *  Статус меняет сервер по отчёту оператора (секунды), а блок читается при
+ *  открытии — и «Отправляется» висело, хотя SMS давно «Доставлено» (владелец
+ *  03.10). Сверяем только свежие (10 мин): старые без отчёта не крутят сеть. */
+export function smsInFlightInterval(messages: readonly SmsHistoryItem[] | undefined, now = Date.now()): number | false {
+  const fresh = (messages ?? []).some(
+    (m) =>
+      (m.status === "queued" || m.status === "sending" || m.status === "sent") &&
+      now - Date.parse(m.createdAt) < 10 * 60 * 1000,
+  );
+  return fresh ? 4000 : false;
+}
+
 /** SMS записи — блок внизу страницы записи. */
 export function useAppointmentSms(appointmentId: string | null | undefined) {
   const tenantId = useTenantId();
@@ -326,8 +351,10 @@ export function useAppointmentSms(appointmentId: string | null | undefined) {
     queryKey: [...smsLogKey(tenantId), "appointment", appointmentId],
     enabled: !!tenantId && !!appointmentId,
     // Статусы («Доставлено», «Не доставлено») меняет сервер — при каждом
-    // открытии записи и карточки блок перечитывается.
+    // открытии записи и карточки блок перечитывается, а пока SMS «в пути» —
+    // сверяется сам каждые несколько секунд.
     staleTime: 0,
+    refetchInterval: (query) => smsInFlightInterval(query.state.data?.messages),
     queryFn: async () => {
       const { data, error } = await supabase.rpc("sms_for_appointment", {
         p_appointment_id: appointmentId as string,
@@ -357,15 +384,25 @@ export function useAppointmentLink(appointmentId: string | null | undefined, ena
   });
 }
 
-/** SMS клиента — блок на странице клиента. */
-export function useClientSms(clientId: string | null | undefined, limit = 20) {
-  const tenantId = useTenantId();
+/** Клиент Supabase компании карточки: вкладка «Клиенты» открывает и
+ *  клиентов компании-работодателя (`?tenant=`), и их SMS читаются и меняются
+ *  под её заголовком, а не под активной компанией устройства. */
+function clientOf(cardTenantId: string | null | undefined, activeTenantId: string | null) {
+  return cardTenantId && cardTenantId !== activeTenantId ? tenantBoundClient(cardTenantId) : supabase;
+}
+
+/** SMS клиента — блок на странице клиента. `cardTenantId` — компания
+ *  карточки; нет — активная. */
+export function useClientSms(clientId: string | null | undefined, limit = 20, cardTenantId?: string | null) {
+  const activeTenantId = useTenantId();
+  const tenantId = cardTenantId ?? activeTenantId;
   return useQuery({
     queryKey: [...smsLogKey(tenantId), "client", clientId, limit],
     enabled: !!tenantId && !!clientId,
     staleTime: 0,
+    refetchInterval: (query) => smsInFlightInterval(query.state.data),
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("sms_for_client", {
+      const { data, error } = await clientOf(tenantId, activeTenantId).rpc("sms_for_client", {
         p_client_id: clientId as string,
         p_limit: limit,
       });
@@ -437,22 +474,26 @@ export function useSendSmsBulk() {
 
 export function useSetClientSmsOptOut() {
   const qc = useQueryClient();
+  const activeTenantId = useTenantId();
   return useMutation({
-    mutationFn: async (input: { clientId: string; value: boolean }) => {
-      const { error } = await supabase.rpc("set_client_sms_opt_out", {
+    mutationFn: async (input: { clientId: string; value: boolean; tenantId?: string | null }) => {
+      const { error } = await clientOf(input.tenantId, activeTenantId).rpc("set_client_sms_opt_out", {
         p_client_id: input.clientId,
         p_value: input.value,
       });
       if (error) throw new Error(error.message);
       return input.value;
     },
-    onSettled: () => void qc.invalidateQueries({ queryKey: ["clients"] }),
+    // КАРТОЧКА ТОЖЕ (аудит 03.10): у неё свой ключ `["client", id, …]`, и после
+    // одного `["clients"]` шторка трубки ещё предлагала «Отправить от
+    // компании» клиенту, который просил не писать, — сервер отвечал отказом.
+    onSettled: (_value, _error, input) => {
+      void qc.invalidateQueries({ queryKey: ["clients"] });
+      void qc.invalidateQueries({ queryKey: ["client", input.clientId] });
+    },
     meta: { errorHandled: true },
   });
 }
-
-/** Суммы пополнения — те же, что знает функция `sms-checkout`. */
-export const TOPUP_AMOUNTS_CENTS = [1000, 2500, 5000, 10000] as const;
 
 /** Куда Stripe вернёт человека, платившего из приложения: страница
  *  «Оплата прошла» на сайте (без входа). */
@@ -466,10 +507,13 @@ export const SMS_PAY_DONE_URL = "https://babun.app/pay/done";
 export async function openSmsCheckout(
   amountCents: number,
   autotopup?: { thresholdCents: number },
+  /** Аккаунт, ЧЕЙ баланс пополняют (блок аккаунта в Кабинете), — явно, а не
+   *  тот, что открыт на телефоне (04.10). */
+  tenantId?: string | null,
 ): Promise<void> {
   const web = Platform.OS === "web" && typeof window !== "undefined";
   const back = web ? `${window.location.origin}/cabinet/sms` : SMS_PAY_DONE_URL;
-  const url = await startSmsTopup(amountCents, back, autotopup);
+  const url = await startSmsTopup(amountCents, back, autotopup, tenantId);
   if (web) window.location.assign(url);
   else await Linking.openURL(url);
 }
@@ -481,6 +525,7 @@ export async function startSmsTopup(
   amountCents: number,
   returnUrl: string,
   autotopup?: { thresholdCents: number },
+  tenantId?: string | null,
 ): Promise<string> {
   const { data, error } = await supabase.functions.invoke("sms-checkout", {
     body: {
@@ -488,6 +533,7 @@ export async function startSmsTopup(
       return_url: returnUrl,
       ...(autotopup ? { autotopup: { threshold_cents: autotopup.thresholdCents } } : null),
     },
+    ...(tenantId ? { headers: { [TENANT_HEADER]: tenantId } } : null),
   });
   if (error) throw new Error(await checkoutFailure(error));
   const url = (data as { url?: string } | null)?.url;

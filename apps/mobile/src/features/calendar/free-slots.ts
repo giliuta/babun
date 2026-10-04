@@ -57,8 +57,13 @@ function busy(
     // «Весь день» съедает сутки целиком.
     if (a.event_all_day === true) return true;
     const s = toMin(a.time_start ?? "");
-    const e = toMin(a.time_end ?? "");
-    if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) return false;
+    const e0 = toMin(a.time_end ?? "");
+    if (!Number.isFinite(s) || !Number.isFinite(e0)) return false;
+    // Нулевая или обратная длительность — запись всё равно стоит на сетке
+    // (её рисуют 15-минутной, `layoutDay`), значит и занимает 15 минут
+    // (аудит 03.10): раньше такую запись не считали занятой, и кубик
+    // ложился поверх — двойная запись на одно время.
+    const e = e0 > s ? e0 : s + 15;
     // Буфер добавляется ПОСЛЕ чужой записи и ПЕРЕД ней: дорога нужна в обе
     // стороны.
     return startMin < e + bufferMinutes && endMin + bufferMinutes > s;

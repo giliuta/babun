@@ -57,11 +57,20 @@ const VERTICAL_LABELS: Record<Vertical, string> = {
 // ПУТИ — ЗА ШЕСТЕРЁНКОЙ КАЛЕНДАРЯ (владелец 2026-09-14: «все настройки там, где
 // открывают шестерёнку»). Строк «Мастера», «Команды», «Услуги» и «SMS-шаблоны» в
 // Кабинете больше нет; шаг про SMS снят вместе с ними — экрана, куда он вёл, нет.
+//
+// ПЕРВЫМ — ТАРИФ (аудит первого входа 03.10). Новый аккаунт живёт без тарифа:
+// партнёры, услуги и записи клиентов закрыты, пока не включён пробный период.
+// Без этой строки все три шага ниже вели в серое.
 const TEAM_CHECKLIST: readonly { emoji: string; title: string; body: string }[] = [
+  {
+    emoji: "⭐",
+    title: "Включите пробный период",
+    body: "Кабинет → «Тариф» → «Попробовать 14 дней» — откроются клиенты, услуги и команда. Без тарифа доступны «Личный» календарь и события.",
+  },
   {
     emoji: "👥",
     title: "Соберите команду",
-    body: "Календарь → шестерёнка → «Мастера» — пригласите сотрудников по почте их аккаунтов.",
+    body: "Кабинет → «Партнёры» — пригласите партнёров по почте их аккаунтов в Babun.",
   },
   {
     emoji: "🧰",
@@ -162,17 +171,17 @@ function Wizard({
   // остаётся.
   const saving = complete.isPending;
 
-  const commit = (next: "team" | "calendar") => {
+  const commit = () => {
     if (saving || !name.trim() || !vertical) return;
     setError(null);
     void (async () => {
       complete.mutate(
-        { tenantId, name, vertical },
+        { tenantId, name, vertical, previousName: tenant.name },
         {
           onSuccess: () => {
             // Инвалидация tenant-состояния уже в onSuccess мутации — входим в
             // dashboard без перезапуска приложения.
-            router.replace(next === "team" ? "/calendar" : "/");
+            router.replace("/");
           },
           onError: (e) =>
             setError(
@@ -282,14 +291,17 @@ function StepBusinessName({
           autoFocus
           value={value}
           onChangeText={onChange}
-          placeholder="Название компании"
-          accessibilityLabel="Название компании"
+          placeholder="Название бизнеса"
+          accessibilityLabel="Название бизнеса"
           maxLength={120}
           returnKeyType="done"
           onSubmitEditing={() => ready && onNext()}
         />
       </InputCard>
       <PillButton label="Далее" onPress={onNext} disabled={!ready} />
+      {/* ВЫХОД ЕСТЬ И ОТСЮДА (аудит первого входа 03.10): вошёл не в тот
+          аккаунт — назвать чужой бизнес ради «Выйти» в Кабинете не нужно. */}
+      <GhostLink label="Выйти" muted onPress={() => void signOutAndWipe()} />
     </View>
   );
 }
@@ -374,14 +386,14 @@ function StepDone({
   saving: boolean;
   error: string | null;
   onBack: () => void;
-  onCommit: (next: "team" | "calendar") => void;
+  onCommit: () => void;
 }) {
   const t = useAuthTheme();
   return (
     <View>
       <StepHeading
         title="Всё готово!"
-        subtitle="Babun настроен. Дальше — открыть календарь или сразу собирать команду."
+        subtitle="Babun настроен. Дальше — календарь."
       />
 
       <InputCard>
@@ -442,17 +454,14 @@ function StepDone({
 
       <FormError message={error} />
 
-      {/* Веб-паритет: primary «Создать команду», secondary «календарь». */}
+      {/* ОДНА КНОПКА — В КАЛЕНДАРЬ (аудит первого входа 03.10). «Создать
+          команду» вела в шестерёнку, где у нового аккаунта «Добавить» серое:
+          без тарифа команда одна, и «Личный» заводится сам. */}
       <PillButton
-        label={saving ? "Сохраняем…" : "Создать команду"}
-        onPress={() => onCommit("team")}
+        label={saving ? "Сохраняем…" : "Открыть календарь"}
+        onPress={onCommit}
         disabled={saving}
         loading={saving}
-      />
-      <SecondaryPill
-        label="Сначала посмотреть календарь"
-        onPress={() => onCommit("calendar")}
-        disabled={saving}
       />
       <GhostLink label="← Назад" muted onPress={onBack} />
     </View>
@@ -484,49 +493,5 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
         {value}
       </Text>
     </View>
-  );
-}
-
-// Вторичный full-width pill (веб: surface + border + accent text).
-function SecondaryPill({
-  label,
-  onPress,
-  disabled,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  const t = useAuthTheme();
-  return (
-    <Pressable
-      onPress={disabled ? undefined : onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !!disabled }}
-      style={({ pressed }) => ({
-        marginTop: 10,
-        minHeight: 52,
-        paddingVertical: 14,
-        borderRadius: 999,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: pressed ? t.pressed : t.surface,
-        borderWidth: 1,
-        borderColor: t.separator,
-      })}
-    >
-      <Text
-        maxFontSizeMultiplier={1.3}
-        style={{
-          fontSize: 17,
-          fontWeight: "600",
-          color: disabled ? t.sub : t.accent,
-        }}
-      >
-        {label}
-      </Text>
-    </Pressable>
   );
 }

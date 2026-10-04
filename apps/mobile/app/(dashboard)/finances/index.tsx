@@ -5,6 +5,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, Search, Settings, X } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
+import { containsPattern } from "@/lib/like-pattern";
 import { useTenantId } from "@/lib/tenant";
 import { useSession } from "@/providers/SessionProvider";
 import { GUTTER } from "@/components/ui/tokens";
@@ -12,7 +13,7 @@ import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finan
 import { accountServesTeam } from "@babun/shared/local/finance/integrity";
 import { accountsTotal } from "@/features/finances/account-ui";
 import { getDebtAmount } from "@babun/shared/local/appointments";
-import { invoicedAppointmentIds } from "@babun/shared/local/finance/invoice-ledger";
+import { calculateInvoiceSettlement, invoicedAppointmentIds } from "@babun/shared/local/finance/invoice-ledger";
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
@@ -39,6 +40,13 @@ import { OperationSheet } from "@/features/finances/OperationSheet";
 import { AccountsPanel } from "@/features/finances/AccountsPanel";
 import { FinancesFooter } from "@/features/finances/FinancesFooter";
 import { financePageAccess } from "@/features/finances/finance-page-access";
+import {
+  financeReadRules,
+  readableDebts,
+  readableDocuments,
+  readableTransactions,
+  type DocumentsReadable,
+} from "@/features/finances/finance-read-rules";
 import { incomeDeals } from "@/features/finances/income-deals";
 import { materialExpenseRows } from "@/features/finances/material-expenses";
 import { useFinanceRoute } from "@/features/finances/use-finance-route";
@@ -59,7 +67,7 @@ import {
   rowMatchesQuery,
   type RecordRow,
 } from "@/features/finances/record-rows";
-import { debtRows, manualDebtRows } from "@/features/finances/debt-rows";
+import { debtRows, invoiceDebtRows, manualDebtRows } from "@/features/finances/debt-rows";
 import { DebtSheet } from "@/features/finances/DebtSheet";
 import { useDebtPaidTotals, useDebts } from "@/features/finances/debts-queries";
 import {
@@ -76,8 +84,15 @@ import {
   withTeamlessRows,
 } from "@/features/finances/team-scope";
 import { buildRefundDraft } from "@/features/finances/refund";
+import { loadErrorWords, writeErrorWords } from "@/lib/connection-words";
+import { confirmThen } from "@/lib/confirm";
+import { haptics } from "@/lib/haptics";
+import { notify } from "@/lib/notify";
+import { deleteOperationAlert, deleteTransferAlert } from "@/features/finances/account-alerts";
+import { deletableByHand, refundBlocksDelete } from "@/features/finances/operation-delete";
 import {
   FinanceOverview,
+  ScopePeriodBar,
   type HomeView,
 } from "@/features/finances/FinanceOverview";
 import {
@@ -98,6 +113,8 @@ import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
 import { useInvoiceNavigation } from "@/features/invoices/navigation";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { financesFrom } from "@/features/appointments/return-to";
+import { formatHM } from "@/features/appointments/helpers";
+import { isPastRecord } from "@/features/calendar/day-ledger";
 
 /** Разрезы, в которых поиск из шапки фильтрует ПОКАЗАННОЕ. У «Счетов»,
  *  «Долгов» и «Прибыли» строк поиска нет вовсе, поэтому первая же буква
@@ -167,6 +184,7 @@ function FinancesContent() {
     ? getCurrentTimeInZone(businessTimezone)
     : getCurrentCyprusTime();
   const businessToday = todayYmd(businessTimezone);
+  const businessNowHm = formatHM(businessNow);
 
   const periodTimezoneRef = useRef<string | null>(
     calendarSettingsQuery.isSuccess ? businessTimezone : null,
@@ -248,9 +266,14 @@ function FinancesContent() {
   const invoicesQuery = useInvoices();
   const invoicePaymentsQuery = useInvoicePayments();
   const accountsQuery = useAccountsWithBalances();
+  // Лист перевода — со СКРЫТЫМИ счетами (владелец 03.10: «в конце месяца
+  // переводить на накопительный»); плитки и панель «Счета» их не знают.
+  const transferAccountsQuery = useAccountsWithBalances({ includeHidden: true });
   // С закрытыми — только ради имён в строках ленты: операция периода могла
   // пройти через счёт, который с тех пор закрыли.
-  const allAccountsQuery = useAccountsWithBalances({ includeInactive: true });
+  // ПОДПИСИ ИСТОРИИ — СО СКРЫТЫМИ И УДАЛЁННЫМИ: имя и команда счёта у
+  // прошлой операции не пропадают, когда счёт ушёл в «Удалённые счета».
+  const allAccountsQuery = useAccountsWithBalances({ includeInactive: true, includeDeleted: true });
   // Разрез, команда и выбранный счёт — из адреса и из тапов.
   const {
     view: routeView,
@@ -274,6 +297,14 @@ function FinancesContent() {
     disabledFeatures,
     userId,
   });
+  // ЧТО ВИДНО ПО СТРОКЕ — её сторона в её команде (`finance-read-rules.ts`).
+  // Сотруднику строки режет сервер, а «его глазами» читают токеном владельца:
+  // без этого лента показала бы расход при «Расходы: Не видит». У владельца
+  // фильтры отдают вход как есть.
+  const readRules = useMemo(
+    () => financeReadRules({ role, map: myAccessQuery.data, today: businessToday }),
+    [role, myAccessQuery.data, businessToday],
+  );
   // Гасим РАЗРЕЗ документов, а не только плитку: в «Документы» приходят и
   // адресом `?view=documents`, и возвратом из записи. Закрытая уровнем панель
   // уходит туда же — на общий вид, а не показывает пустоту.
@@ -285,15 +316,25 @@ function FinancesContent() {
   const documentsView = view === "documents";
   // «Без команды» — не команда: долги под этим чипом отбираются на экране
   // (`team_id` пуст), а у хука берётся вся компания тем же ключом.
-  // ДОЛГ — ОСТАТОК НА КОНЕЦ ПЕРИОДА, А НЕ ПОТОК ЗА ПЕРИОД (аудит 2026-09-30):
-  // 1 октября неоплаченная работа 27 сентября пропадала из «Долгов», хотя
-  // клиент всё ещё должен. Нижней границы у долгов нет — только верхняя.
-  const debtsQuery = useDebts(DEBTS_SINCE, period.to, {
+  // ДОЛГИ — ЗА ВЫБРАННЫЙ ПЕРИОД (владелец 03.10, вечером, после «долги это
+  // долги»: «лучше выбирать период — я могу запутаться в деньгах; выбираю
+  // текущий месяц — и долги только по текущему месяцу»). Плитка, панель
+  // «Долги» и лента считают одно окно. Оплаты долга при этом — без окна
+  // (`useDebtPayments`): долг из этого месяца, закрытый в следующем, закрыт.
+  const debtsQuery = useDebts(period.from, period.to, {
     teamId: scope === NO_TEAM ? null : scope,
   });
   // Вся компания без отбора — тот же ключ, лишнего запроса нет: по ней видно,
   // есть ли долги без команды, которым нужен чип «Без команды».
-  const companyDebtsQuery = useDebts(DEBTS_SINCE, period.to);
+  const companyDebtsQuery = useDebts(period.from, period.to);
+  // Команда каждого долга: оплата долга видна и по «Долгам» его команды.
+  const debtTeams = useMemo(
+    () =>
+      new Map(
+        (companyDebtsQuery.data ?? []).map((debt) => [debt.id, debt.team_id ?? null] as const),
+      ),
+    [companyDebtsQuery.data],
+  );
   const debtPaidQuery = useDebtPaidTotals();
   const categories = useMemo(
     () => categoriesQuery.data ?? [],
@@ -450,12 +491,14 @@ function FinancesContent() {
     () => teamlessLedgerRows(companyLedgerQuery.data ?? [], scope, accountTeam),
     [companyLedgerQuery.data, scope, accountTeam],
   );
+  // Видимое по строке — до любых итогов и лент: лента «Записи», «Счета» и
+  // плитки считают одно и то же множество.
   const scopedTransactions = useMemo(() => {
-    const rows = withTeamlessRows(txs, teamlessRows);
+    const rows = readableTransactions(withTeamlessRows(txs, teamlessRows), readRules, debtTeams);
     return requestedClientId
       ? rows.filter((transaction) => transaction.client_id === requestedClientId)
       : rows;
-  }, [requestedClientId, txs, teamlessRows]);
+  }, [requestedClientId, txs, teamlessRows, readRules, debtTeams]);
 
   // Счёт = одна команда (2026-08-15): командный скоуп видит РОВНО счета
   // своей команды, «общих счетов» больше нет; чип «Без команды» показывает
@@ -466,7 +509,8 @@ function FinancesContent() {
     return scope ? accounts.filter((a) => accountServesTeam(a, scope)) : accounts;
   }, [accounts, orphanAccounts, scope]);
   // Одна цифра «сколько у нас денег» на весь продукт: плитка «Счета» считает
-  // ПОЛНУЮ сумму. Скрытых балансов в продукте нет.
+  // сумму видимых счетов. СКРЫТЫЙ счёт (владелец 03.10: «накопительный, для
+  // себя») в неё не входит — его деньги видны только на странице «Счета».
   // Разбивки по видам счетов здесь НЕТ (владелец 2026-08-11): плитка отвечает
   // «сколько у команды», а не «сколько из этого наличными» — второй вопрос
   // задают плитками счетов под ней, глядя на конкретный счёт.
@@ -518,9 +562,12 @@ function FinancesContent() {
     ) {
       return null;
     }
-    const rows = withTeamlessRows(
-      prevTeamQuery.data,
-      teamlessLedgerRows(prevCompanyQuery.data, scope, accountTeam),
+    // Тем же отбором, что текущий период: «было» партнёра — только из строк,
+    // которые он видит (в зеркале журнал приходит владельческий).
+    const rows = readableTransactions(
+      withTeamlessRows(prevTeamQuery.data, teamlessLedgerRows(prevCompanyQuery.data, scope, accountTeam)),
+      readRules,
+      debtTeams,
     );
     const transactions = requestedClientId
       ? rows.filter((transaction) => transaction.client_id === requestedClientId)
@@ -552,6 +599,8 @@ function FinancesContent() {
     prevRange.from,
     prevRange.to,
     access.recordMoney,
+    readRules,
+    debtTeams,
   ]);
 
   // ОДНИ И ТЕ ЖЕ ДЕНЬГИ СЧИТАЮТСЯ ОДИН РАЗ.
@@ -575,10 +624,32 @@ function FinancesContent() {
     [invoices],
   );
 
+  // НЕОПЛАЧЕННЫЕ ИНВОЙСЫ — ДОЛГОМ (владелец 04.10: «выставлен инвойс, оплаты
+  // нет — он переходит в долг»). Работа под инвойсом из долгов записей уже
+  // исключена (`invoicedAppointments`): её деньги — здесь, остатком инвойса.
+  const invoiceDebtSources = useMemo(
+    () =>
+      scopedInvoices.map((inv) => ({
+        ...inv,
+        remaining: calculateInvoiceSettlement(inv, invoicePayments[inv.id] ?? []).remaining,
+      })),
+    [scopedInvoices, invoicePayments],
+  );
+  const invoiceDebts = useMemo(
+    () =>
+      invoiceDebtRows(
+        invoiceDebtSources,
+        { clients, appointments: scopedAppointments },
+        { from: period.from, to: period.to, today: businessToday, teamId: scope },
+      ),
+    [invoiceDebtSources, clients, scopedAppointments, period.from, period.to, businessToday, scope],
+  );
+
   // Пустышки через useMemo, а не `?? []` в выражении: новый литерал на каждый
   // рендер ломает мемоизацию списка долгов, ради которой он и написан.
   const debts = useMemo(() => {
-    const rows = debtsQuery.data ?? [];
+    // «Долги: Не видит» в команде долга — его нет ни в ленте, ни в плитке.
+    const rows = readableDebts(debtsQuery.data ?? [], readRules);
     // Ручной долг, заведённый под «Без команды», пишется без команды — и здесь
     // же обязан найтись (раньше не показывался ни под одним чипом).
     const scoped = scope === NO_TEAM ? rows.filter((debt) => debt.team_id == null) : rows;
@@ -587,7 +658,7 @@ function FinancesContent() {
     return requestedClientId
       ? scoped.filter((debt) => debt.client_id === requestedClientId)
       : scoped;
-  }, [debtsQuery.data, scope, requestedClientId]);
+  }, [debtsQuery.data, scope, requestedClientId, readRules]);
   const debtPaid = useMemo(
     () => debtPaidQuery.data ?? new Map<string, number>(),
     [debtPaidQuery.data],
@@ -626,10 +697,12 @@ function FinancesContent() {
       // которой бригадир не отчитался, — для владельца это одни и те же
       // неполученные деньги: «всё равно нужно принимать решение по клиенту»
       // (2026-08-09). Отдельная строка «Не закрыто» делила одно надвое.
-      const past = a.date < businessToday && a.status !== "cancelled";
-      if (a.status !== "completed" && !past) continue;
+      // Прошла — по часам компании, как в календаре: сегодняшняя запись,
+      // чьё время кончилось, уже долг (повторный аудит 03.10).
       if (a.status === "cancelled") continue;
-      if (a.date > period.to) continue;
+      if (!isPastRecord(a, businessToday, businessNowHm)) continue;
+      // Долги — за выбранный период, как список под плиткой (владелец 03.10).
+      if (a.date < period.from || a.date > period.to) continue;
       // Тем же правилом, что лента долгов (`debtRows`): на «Без команды»
       // плитка не брала ни одной записи, а лента — все записи компании.
       if (!inTeamScope(a.team_id, scope)) continue;
@@ -644,15 +717,17 @@ function FinancesContent() {
       income,
       expense: expenseWithMaterials,
       profit: income - expenseWithMaterials,
-      debt: debt + manualIncomingDebt,
+      debt: debt + manualIncomingDebt + invoiceDebts.reduce((sum, r) => sum + r.amount, 0),
     };
   }, [
     access.recordMoney,
     manualIncomingDebt,
+    invoiceDebts,
     scopedTransactions,
     scopedAppointments,
     invoicedAppointments,
     businessToday,
+    businessNowHm,
     period.from,
     period.to,
     scope,
@@ -665,13 +740,10 @@ function FinancesContent() {
     () => ({
       income: access.income === "locked" ? 0 : totals.income,
       expense: access.expense === "locked" ? 0 : totals.expense,
-      profit:
-        access.income === "locked" || access.expense === "locked" || !access.recordMoney
-          ? 0
-          : totals.profit,
+      profit: access.profit === "locked" ? 0 : totals.profit,
       debt: access.debts === "locked" ? 0 : totals.debt,
     }),
-    [access.debts, access.income, access.expense, access.recordMoney, totals],
+    [access.debts, access.income, access.expense, access.profit, totals],
   );
 
   // Σ refunds already issued against each income — caps further refunds.
@@ -819,7 +891,7 @@ function FinancesContent() {
   // откроются под ней (аудит 2026-09-29: «Документы 0», а в «Чеках» за тот же
   // месяц 1 чек — плитка считала только инвойсы, ждущие оплату). Один список
   // с панелью (`usePeriodDocuments`): число и строки не расходятся.
-  const periodDocuments = usePeriodDocuments({
+  const issuedDocuments = usePeriodDocuments({
     invoices: scopedInvoices,
     payments: invoicePayments,
     appointments: scopedAppointments,
@@ -830,6 +902,18 @@ function FinancesContent() {
     period,
     today: businessToday,
   });
+  // ДОКУМЕНТЫ — ПО ПРАВУ «ДОКУМЕНТЫ» КОМАНДЫ: скрыты — плитка «0» и пустая
+  // панель (владелец 04.10). Плитка и панель режут одним отбором.
+  const documentsReadable = useCallback<DocumentsReadable>(
+    (documents, receipts) => readableDocuments(documents, receipts, readRules),
+    [readRules],
+  );
+  const periodDocuments = useMemo(
+    () => ({
+      documents: documentsReadable(issuedDocuments.documents, issuedDocuments.receipts),
+    }),
+    [documentsReadable, issuedDocuments.documents, issuedDocuments.receipts],
+  );
   const invoiceSummary = useMemo(
     // Кредит-нота — сторно отменённого счёта, а не ещё один документ периода.
     () => ({ count: periodDocuments.documents.filter((d) => !d.creditNote).length }),
@@ -890,8 +974,10 @@ function FinancesContent() {
       people,
       // Визит вне периода (предоплата сегодня за завтра) — строка днём денег.
       window: { from: period.from, to: period.to },
+      // Оплата инвойса — строкой «Инвойс INV-…» (владелец 04.10).
+      invoices,
     }),
-    [scopedAppointments, clients, services, categories, allAccounts, people, period.from, period.to],
+    [scopedAppointments, clients, services, categories, allAccounts, people, period.from, period.to, invoices],
   );
 
   const blockRows = useMemo(() => {
@@ -934,16 +1020,19 @@ function FinancesContent() {
                   from: period.from,
                   to: period.to,
                   today: businessToday,
+                  nowHm: businessNowHm,
                   teamId: scope,
                   invoicedAppointmentIds: invoicedAppointments,
                 })
               : []),
             ...manualDebtRows(
-              debts.filter((debt) => debt.occurred_on >= period.from),
+              // Лента периода: ручные долги того же окна.
+              debts.filter((debt) => debt.occurred_on >= period.from && debt.occurred_on <= period.to),
               debtPaid,
               { clients, categories },
               { today: businessToday, markDirection: true },
             ),
+            ...invoiceDebts,
           ].map((row) => ({ ...row, key: `debt:${row.key}` }))
         : [];
     // Перевод — не доход и не расход: в срезах его нет, а в общей ленте он
@@ -984,8 +1073,10 @@ function FinancesContent() {
     period.from,
     period.to,
     businessToday,
+    businessNowHm,
     scope,
     invoicedAppointments,
+    invoiceDebts,
     debts,
     debtPaid,
     categories,
@@ -1014,9 +1105,6 @@ function FinancesContent() {
     }
     await insertTx.mutateAsync(buildRefundDraft(tx, amount, businessToday, requestId));
   };
-
-  // Выгрузка операций для бухгалтера живёт в настройках финансов
-  // (`LedgerExportRow`), а не на этом экране: здесь действие одно — в футере.
 
   /**
    * Открыть заявку в календаре. Возвращает false, если её нет в загруженном
@@ -1087,7 +1175,7 @@ function FinancesContent() {
         // уже внутри шестерёнки не будет»). Раньше у сотрудника шестерёнка
         // была серой и глухой — визуал шапки менялся вместе с правами.
         // Страница за ней показывает то, что человеку открыто, и ничего, если
-        // не открыто ничего (`finances/settings-rows.ts`).
+        // не открыто ничего (`finances/settings-levels.ts`).
         hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel="Настройки финансов"
@@ -1226,7 +1314,7 @@ function FinancesContent() {
         .from("finance_transactions")
         .select("*")
         .eq("tenant_id", tenantId as string)
-        .ilike("notes", `%${trimmedQuery}%`)
+        .ilike("notes", containsPattern(trimmedQuery))
         .order("occurred_on", { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
@@ -1238,7 +1326,9 @@ function FinancesContent() {
   // поиск показывал бы и расходы, и чужие команды.
   const allTimeRows = useMemo(() => {
     if (!searchInPeriodEmpty) return [];
-    const found = allTimeSearchQuery.data ?? [];
+    // Тем же отбором по строке, что лента: в зеркале поиск идёт токеном
+    // владельца и нашёл бы скрытую сторону.
+    const found = readableTransactions(allTimeSearchQuery.data ?? [], readRules, debtTeams);
     const orphanIds = new Set(orphanAccounts.map((account) => account.id));
     const teamRows = !scope
       ? found
@@ -1275,6 +1365,8 @@ function FinancesContent() {
   }, [
     searchInPeriodEmpty,
     allTimeSearchQuery.data,
+    readRules,
+    debtTeams,
     orphanAccounts,
     scope,
     accountTeam,
@@ -1285,7 +1377,67 @@ function FinancesContent() {
 
   // СТРОКА ЛЮБОЙ ПАНЕЛИ ВЕДЁТ В ОДНО МЕСТО — и в разрезах «Доход / Расход /
   // Долги», и в ленте счёта под «Счетами»: одна дверь на одну строку.
+  // СВАЙП «УДАЛИТЬ» В ЛЕНТЕ (владелец 03.10: «удалить операцию — не кнопка
+  // внизу»; «только у тех, что создаём своими руками»). Строка — одиночная
+  // ручная операция (`deletableByHand`), право — то же, что у правки строки
+  // и у витрины (`allow.remove` ниже): перевод и ручной возврат — владельцу.
+  // Счёт операции закрыт или удалён — сервер удаление не примет, свайпа нет.
+  const rowTx = (row: RecordRow): FinanceTransaction | null =>
+    row.txId
+      ? (scopedTransactions.find((x) => x.id === row.txId) ??
+        (allTimeSearchQuery.data ?? []).find((x) => x.id === row.txId) ??
+        null)
+      : null;
+  const liveAccountIds = new Set((transferAccountsQuery.data ?? []).map((a) => a.id));
+  const canDeleteRow = (row: RecordRow): boolean => {
+    if (!row.txId || row.appointmentId || row.debtId) return false;
+    const tx = rowTx(row);
+    if (!tx || !deletableByHand(tx)) return false;
+    if (tx.account_id && !liveAccountIds.has(tx.account_id)) return false;
+    if (tx.type === "transfer" || tx.type === "refund") return access.owner;
+    return access.txEditable(tx, {
+      account: allAccounts.find((a) => a.id === tx.account_id) ?? null,
+      debt: debts.find((d) => d.id === tx.debt_id) ?? null,
+    });
+  };
+  const deleteRow = (row: RecordRow) => {
+    const tx = rowTx(row);
+    if (!tx) return;
+    // Доход с возвратом сервер не удалит — причина словами до вопроса.
+    if (refundBlocksDelete(tx, refundTotals ? (refundTotals.get(tx.id) ?? 0) : undefined)) {
+      haptics.warning();
+      notify("Удалить нельзя", "По этому доходу есть возврат — сначала удалите возврат.");
+      return;
+    }
+    const text = tx.type === "transfer" ? deleteTransferAlert() : deleteOperationAlert();
+    confirmThen(
+      text.title,
+      { message: text.message, confirmLabel: text.confirm, destructive: true },
+      async () => {
+        try {
+          if (tx.type === "transfer" && tx.transfer_group_id) {
+            await delTransfer.mutateAsync(tx.transfer_group_id);
+          } else {
+            await delTx.mutateAsync(tx.id);
+          }
+          haptics.success();
+        } catch (e) {
+          const words = writeErrorWords(e, {
+            failed: "Не удалось удалить",
+            notDone: "Операция не удалена",
+          });
+          notify(words.title, words.subtitle);
+        }
+      },
+    );
+  };
+
   const openRecordRow = (row: RecordRow) => {
+    // Неоплаченный инвойс в долгах открывает сам инвойс.
+    if (row.invoiceId) {
+      router.push(`/invoices/${row.invoiceId}` as Href);
+      return;
+    }
     // ДЕНЬГИ ПО ЗАПИСИ ОТКРЫВАЮТ САМУ ЗАПИСЬ (владелец 2026-08-15).
     if (row.appointmentId && openAppointment(row.appointmentId)) return;
     // Ручной долг записи не имеет — открывается он сам.
@@ -1322,23 +1474,48 @@ function FinancesContent() {
     setPopupTx(tx);
   };
 
+  // ЛЕНТА КОМАНД И ПЕРИОД — И ПОКА ГРУЗИТСЯ, И КОГДА СЕРВЕР МОЛЧИТ (владелец
+  // 03.10: «календарь, когда не грузится, показывает команды сверху… в
+  // финансах то же самое должно быть»). Та же полоса, что над сводкой, —
+  // при ответе сервера экран не прыгает. Без ответа период глухой: выбирать
+  // его не для чего, цифр за ним нет.
+  const scopeBar = (locked: boolean) => (
+    <ScopePeriodBar
+      teams={scopeChipTeams}
+      scopeTeamId={scope}
+      onScopeChange={changeScope}
+      period={period}
+      onOpenPresets={() => setPresetOpen(true)}
+      onOpenCustom={() => setWheelsOpen(true)}
+      locked={locked}
+    />
+  );
+
   if (loading) {
     return (
       <Screen edges={["top"]}>
         {header}
+        {scopeBar(false)}
         <EmptyState state="loading" fill />
       </Screen>
     );
   }
 
   if (loadError) {
+    // Обрыв — словами, а не «TypeError: Network request failed» (03.10).
+    const words = loadErrorWords(loadError, {
+      failed: "Не удалось загрузить финансы",
+      later: "Финансы загрузятся, как только сервер ответит.",
+    });
     return (
       <Screen edges={["top"]}>
         {header}
+        {scopeBar(true)}
         <EmptyState
           state="error"
           fill
-          subtitle={(loadError as Error).message}
+          title={words.title}
+          subtitle={words.subtitle}
           action={{ label: "Повторить", onPress: refreshAll }}
         />
       </Screen>
@@ -1369,13 +1546,14 @@ function FinancesContent() {
           totals={shownTotals}
           accounts={access.accounts === "locked" ? { total: 0 } : accountsSummary}
           invoices={invoiceSummary}
-          showDocuments={canUseDocuments && access.has.documents}
+          showDocuments={access.has.documents}
+          documentsTariffLocked={!canUseDocuments}
           showAccounts={access.has.accounts}
           showDebts={access.has.debts}
           lockAccounts={access.accounts === "locked"}
           lockIncome={access.income === "locked"}
           lockExpense={access.expense === "locked"}
-          lockProfit={!access.recordMoney}
+          lockProfit={access.profit === "locked"}
           lockDebts={access.debts === "locked"}
           view={view}
           onTap={toggleView}
@@ -1422,12 +1600,15 @@ function FinancesContent() {
             onOpenRecord={openRecordRow}
             refreshControl={refreshControl}
             canOpenSettings={access.settings}
+            // Настройки — на счетах выбранной команды (владелец 03.10).
+            teamId={scope}
           />
         ) : view === "documents" ? (
           <DocumentsPanel
             // Документы выставляет владелец: у остальных панель не обещает
             // кнопку, которой у них нет (владелец 20.09).
             canIssue={access.documents}
+            readable={documentsReadable}
             invoices={scopedInvoices}
             payments={invoicePayments}
             appointments={scopedAppointments}
@@ -1462,10 +1643,13 @@ function FinancesContent() {
             clients={clients}
             services={services}
             teamId={scope}
-            fromDate={DEBTS_SINCE}
+            // Долги выбранного периода (владелец 03.10, вечер).
+            fromDate={period.from}
             toDate={period.to}
             todayYmd={businessToday}
+            nowHm={businessNowHm}
             invoicedAppointmentIds={invoicedAppointments}
+            invoiceDebts={invoiceDebts}
             debts={debts}
             paidTotals={debtPaid}
             categories={categories}
@@ -1526,6 +1710,8 @@ function FinancesContent() {
               }
               refreshControl={refreshControl}
               onOpenRecord={openRecordRow}
+              canDeleteRow={canDeleteRow}
+              onDeleteRow={deleteRow}
             />
           </View>
         )}
@@ -1534,22 +1720,13 @@ function FinancesContent() {
       {/* Главное действие экрана и листы счетов — `FinancesFooter`. */}
       <FinancesFooter
         view={view}
-        docFilter={docFilter}
         debtSide={debtSide}
         teamById={teamByIdAll}
         teamId={scope === NO_TEAM ? null : scope}
         accounts={accounts}
+        transferAccounts={transferAccountsQuery.data}
         shownAccounts={scopedAccounts}
         selectedAccountId={view === "accounts" ? accountId : null}
-        onIssueReceipt={() =>
-          // Команда чипа едет с собой: чек выписывают в той команде,
-          // которую человек сейчас смотрит, и кассы в нём — её.
-          pushOnce(
-            scope && scope !== NO_TEAM
-              ? `/documents/receipt-new?teamId=${encodeURIComponent(scope)}`
-              : "/documents/receipt-new",
-          )
-        }
         // Команда чипа — команда счёта (ставка VAT, касса, «Документы» этой
         // команды); без неё инвойс уходил первой команде (аудит 2026-09-30).
         onIssueInvoice={() =>
@@ -1572,12 +1749,15 @@ function FinancesContent() {
         // гасит (страница и так серая по нулям).
         enabled={access.footer(view).enabled}
         reason={access.footer(view).reason}
+        create={access.accountCreate}
       />
 
       <TransactionPopup
         visible={!!popupTx}
         transaction={popupTx}
-        accounts={accounts}
+        // Подписи строки — по ВСЕМ счетам: перевод на скрытый накопительный
+        // терял ноги «Откуда/Куда» и показывал одну сторону (аудит 03.10).
+        accounts={allAccounts}
         teams={allTeams}
         categories={categories}
         people={people}
@@ -1685,22 +1865,8 @@ function FinancesContent() {
               : access.ops === "write"
         }
         canWriteType={access.canAdd}
-        onInvoice={(tx) => {
-          setOpOpen(false);
-          openTransactionInvoice(tx);
-        }}
-        onClientOpen={(clientId) => {
-          setOpOpen(false);
-          router.push(`/clients/${clientId}`);
-        }}
-        onRefund={(tx) => {
-          // Возврат — форма витрины: там уже посчитан остаток и кап.
-          setOpOpen(false);
-          setTimeout(() => setPopupTx(tx), OPERATION_SHEET_EXIT_MS);
-        }}
         // Пока Σ возвратов не приехала — та же консервативность, что у
-        // попапа выше: Infinity гасит «Создать возврат» (остаток 0), иначе
-        // действие маячило бы и у полностью возвращённого дохода.
+        // попапа выше: Infinity не даёт опустить сумму ниже возвращённого.
         refundedTotal={
           editingTx
             ? refundTotals
@@ -1761,8 +1927,6 @@ function FinancesContent() {
 // Граница прав живёт в `finances/_layout.tsx` и накрывает ВЕСЬ каталог:
 // вторая копия здесь закрывала бы только корень, оставляя `/finances/vat` и
 // `/finances/settings` открытыми по диплинку.
-/** С какого дня копятся долги: у остатка нижней границы нет. */
-const DEBTS_SINCE = "2000-01-01";
 
 export default function FinancesTab() {
   return <FinancesContent />;

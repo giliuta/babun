@@ -8,11 +8,14 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { usePartnersAccess } from "@/features/access/master-page/use-partner-manager";
 import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
 import { useMasters, useTeams, type Master } from "@/features/reference/queries";
+import { useDataRole } from "@/features/settings/tenant";
 import { usePendingInvitations } from "@/features/settings/team-access";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { canAddPartner } from "@/features/tariffs/tiers";
+import { useTariff, useTariffNudge } from "@/features/tariffs/use-tariff";
 import { refusalOf } from "@/features/access/access-map";
 import { calendarCards } from "@/features/access/masters-list";
 import { openMasterDraft } from "@/features/access/master-page/draft-store";
@@ -48,8 +51,9 @@ type MastersRow =
 export default function MastersScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  // Приглашает людей только владелец — сервер откажет остальным (аудит 24.09).
-  const isOwner = useCurrentRole().data === "owner";
+  // Приглашает владелец — и директор с правом «Партнёры: Управляет» (04.10);
+  // остальным сервер откажет (аудит 24.09).
+  const isOwner = usePartnersAccess().manages;
   // Включая архивных: «Вернуть из архива» живёт в хабе мастера, и без
   // архивного хвоста в списке он недостижим (аудит P1-10). Активные
   // сверху, архив серым снизу.
@@ -108,9 +112,18 @@ export default function MastersScreen() {
   // повторила бы его вторым рядом.
   const staffIds = useMemo(() => new Set(staff.map((member) => member.userId)), [staff]);
   // Все карточки компании, кроме тех, чей человек уже стоит строкой выше.
+  // ПАРТНЁР КАРТОЧЕК НЕ ВИДИТ (прогон 04.10: у Дмитрия в «Партнёрах» Giliuta
+  // он сам стоял дважды). Ему мастера приходят из
+  // `list_operational_masters_safe` без `user_id`, и свою же карточку
+  // приглашённого не отличить от строки человека. Карточка без аккаунта —
+  // дело владельца (все — партнёры с аккаунтом, владелец 01.10).
+  const dataRole = useDataRole().data;
   const cards = useMemo(
-    () => calendarCards(masters, { teamId: undefined, teams, staffUserIds: staffIds }),
-    [masters, teams, staffIds],
+    () =>
+      dataRole === "owner"
+        ? calendarCards(masters, { teamId: undefined, teams, staffUserIds: staffIds })
+        : [],
+    [dataRole, masters, teams, staffIds],
   );
   // Отказ «людей видит владелец» — не беда: раздела просто нет. Любая другая
   // ошибка называется вслух, иначе пустой список соврёт «Нет мастеров».
@@ -127,6 +140,9 @@ export default function MastersScreen() {
     if (!needle) return calendarInvitations;
     return calendarInvitations.filter((inv) => normalizeSearch(inv.email).includes(needle));
   }, [calendarInvitations, search]);
+
+  const tariff = useTariff();
+  const nudgeTariff = useTariffNudge();
 
   const hasAnyone = allMasters.length > 0 || staff.length > 0 || calendarInvitations.length > 0;
 
@@ -171,7 +187,7 @@ export default function MastersScreen() {
     <Screen edges={["top"]}>
       {/* Шестерёнки с шаблонами доступа больше нет (владелец 30.09: «по
           сути вот эти шаблоны» не нужны). */}
-      <ScreenHeader title="Сотрудники" />
+      <ScreenHeader title="Партнёры" />
 
       {isLoading || teamsQuery.isLoading || membersQuery.isLoading || invitationsQuery.isLoading ? (
         <EmptyState state="loading" fill />
@@ -277,7 +293,7 @@ export default function MastersScreen() {
             membersFailed ? null : (
               <EmptyState
                 fill
-                title={search.trim() ? "Ничего не найдено" : "Сотрудников пока нет"}
+                title={search.trim() ? "Ничего не найдено" : "Партнёров пока нет"}
                 subtitle={search.trim() ? "Измените имя, телефон или email в поиске." : undefined}
               />
             )
@@ -300,7 +316,11 @@ export default function MastersScreen() {
       {isOwner ? (
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
           <GradientButton
-            label="Пригласить сотрудника"
+            label="Пригласить партнёра"
+            // ЛИМИТ ТАРИФА (01.10): Про — до 5 партнёров, Макс — до 50; люди и
+            // ждущие приглашения. Сверх — кнопка серая, тап поднимает плашку.
+            disabled={!canAddPartner(tariff.state.tier, staff.length + new Set(calendarInvitations.map((inv) => inv.email.toLowerCase())).size)}
+            onDisabledPress={nudgeTariff}
             onPress={() => {
               openMasterDraft(null);
               router.push("/cabinet/people/new" as Href);

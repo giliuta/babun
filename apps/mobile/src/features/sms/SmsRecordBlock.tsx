@@ -1,25 +1,29 @@
 import { useState } from "react";
 import { Text, View } from "react-native";
-import { CircleCheck, CircleX, Send } from "lucide-react-native";
+import { CircleCheck, CircleX } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SettingsRow } from "@/components/ui/SettingsRow";
+import { useTeams } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
-import { fillTemplate } from "./sms-compose";
-import { useAppointmentSms } from "./sms-account";
-import type { SmsContext } from "./SmsCompose";
+import { useAppointmentSms, type SmsHistoryItem } from "./sms-account";
 import { SmsHistoryRow, when } from "./SmsHistoryRow";
-import { SmsSendSheet } from "./SmsSendSheet";
+import { SmsMessageSheet } from "./SmsMessageSheet";
 
-// БЛОК «SMS» — ВНИЗУ ЗАПИСИ (STORY-089; владелец 25.09: «на записи в самом
-// низу блок — что мы уже отправили ему или не отправили… нажал „Отправить
-// SMS“ — и оно сразу отправляет то, что записал»). Блок клиента — свой,
-// `SmsClientBlock`.
+// БЛОК «SMS» — ВНИЗУ ЗАПИСИ (STORY-089). Только история (владелец 03.10:
+// «внизу просто история SMS, которые отправили для этого клиента… SMS
+// отправляется исключительно, если нажать на трубку клиента»): кнопки
+// «Отправить SMS» здесь нет — отправка у трубки, `SmsSendSheet`. Блок
+// клиента — свой, `SmsClientBlock`.
 //
-// Строки — сообщения: повод, когда, итог («Доставлено», «Не доставлено»,
-// «Уйдёт 08:00»), текст. Сверху — ответ клиента по ссылке «Подтвердить /
-// Отменить», если он был. Внизу — строка «Отправить SMS»: лист с шаблонами
-// команды записи, первый уже заполнен.
+// SMS ЗАКРЕПЛЕНЫ ЗА КЛИЕНТОМ (владелец 03.10: «при смене клиента SMS
+// фиксируются за клиентом»): в записи — только сообщения её нынешнему
+// клиенту; поменяли клиента — SMS прежнему остаются в его карточке.
+//
+// БЛОК СТОИТ СРАЗУ (владелец 03.10): и у новой записи, и без клиента — как
+// объект, «зафиксированный»; до первой SMS — «Сообщений пока нет».
+//
+// Строка — коротко: шаблон, когда, итог; тап — сообщение целиком. Сверху —
+// ответ клиента по ссылке «Подтвердить / Отменить», если он был.
 
 /** Ответ клиента по ссылке из SMS — строкой над сообщениями. */
 function ClientAnswer({ answer, at }: { answer: "confirmed" | "cancelled"; at: string | null }) {
@@ -57,20 +61,22 @@ function Empty() {
 }
 
 export function SmsRecordBlock({
-  context,
-  phone,
+  appointmentId,
+  clientId,
 }: {
-  /** Поля записи, её id, клиент и календарь. */
-  context: SmsContext;
-  phone: string | null;
+  /** Сохранённая запись: её SMS. Нет — новая запись: блок стоит сразу,
+   *  «Сообщений пока нет» (владелец 03.10: «блок SMS должен быть сразу —
+   *  создаю запись, подтянул клиента, внизу уже блок»). */
+  appointmentId: string | null;
+  /** Клиент на экране — сменили и не сохранили, всё равно его SMS. */
+  clientId: string | null;
 }) {
-  const log = useAppointmentSms(context.appointmentId);
-  const [sending, setSending] = useState(false);
-  const messages = log.data?.messages ?? [];
-  const templates = log.data?.templates ?? [];
+  const log = useAppointmentSms(appointmentId);
+  const { data: teams = [] } = useTeams();
+  const [open, setOpen] = useState<SmsHistoryItem | null>(null);
+  // Только нынешнему клиенту записи; у старых строк без клиента — как было.
+  const messages = (log.data?.messages ?? []).filter((m) => !m.clientId || m.clientId === clientId);
   const answer = log.data?.clientAnswer ?? null;
-  // Подпись строки — первый шаблон, который заполняется этой записью.
-  const preview = templates.map((tpl) => fillTemplate(tpl.body, context.vars)).find((text) => !!text) ?? null;
 
   return (
     <>
@@ -84,30 +90,16 @@ export function SmsRecordBlock({
         {messages.map((item, index) => (
           <View key={item.id}>
             {index > 0 ? <Divider inset={16} /> : null}
-            <SmsHistoryRow
-              item={item}
-              showClient={false}
-              body={item.templateBody ? (fillTemplate(item.templateBody, context.vars) ?? item.templateBody) : null}
-            />
+            <SmsHistoryRow item={item} showClient={false} compact onPress={() => setOpen(item)} />
           </View>
         ))}
         {messages.length === 0 && !answer && !log.isLoading ? <Empty /> : null}
-        {/* Пока блок грузится, над «Отправить SMS» ничего нет — и черты тоже. */}
-        {messages.length > 0 || answer || !log.isLoading ? <Divider inset={48} /> : null}
-        <SettingsRow
-          tile="neutral"
-          icon={Send}
-          title="Отправить SMS"
-          sub={preview ?? undefined}
-          onPress={() => setSending(true)}
-        />
       </SectionCard>
-      <SmsSendSheet
-        visible={sending}
-        context={context}
-        phone={phone}
-        templates={templates}
-        onClose={() => setSending(false)}
+      <SmsMessageSheet
+        item={open}
+        teamName={(teamId) => teams.find((x) => x.id === teamId)?.name ?? null}
+        from="record"
+        onClose={() => setOpen(null)}
       />
     </>
   );

@@ -44,7 +44,7 @@ export function invitationErrorMessage(message: string): string {
     return "Выберите календарь, в который зовёте мастера.";
   }
   if (/finish company setup|company setup is incomplete/i.test(message)) {
-    return "Сначала завершите настройку компании, затем пригласите сотрудника.";
+    return "Сначала завершите настройку аккаунта, затем пригласите партнёра.";
   }
   // Принять приглашение можно только с подтверждённой почтой (миграция
   // 20260924120000): иначе его забрал бы любой, кто занял адрес сотрудника.
@@ -52,7 +52,7 @@ export function invitationErrorMessage(message: string): string {
     return "Подтвердите почту — письмо пришло при регистрации — и примите приглашение снова.";
   }
   if (/already has access/i.test(message)) {
-    return "У этого аккаунта уже есть доступ к компании.";
+    return "У этого аккаунта уже есть доступ к этим командам.";
   }
   if (/invalid invitation email/i.test(message)) {
     return "Проверьте адрес электронной почты.";
@@ -75,7 +75,7 @@ export function invitationErrorMessage(message: string): string {
   // Должность и цвет приглашения по существующей карточке сервер не хранит:
   // они правятся в самой карточке (`invite:card_fields_on_card`).
   if (/belong to the linked employee card/i.test(message)) {
-    return "Должность и цвет меняются в карточке сотрудника.";
+    return "Должность и цвет меняются в карточке партнёра.";
   }
   // Отказы общей проверки прав (`access_validate_changes`) приходят русской
   // строкой базы. Архив там не проверяется — его раньше отказывает
@@ -113,7 +113,7 @@ export function invitationErrorMessage(message: string): string {
     return "Это приглашение уже использовано.";
   }
   if (/employee card (is unavailable|already linked)/i.test(message)) {
-    return "Карточка сотрудника уже привязана к другому аккаунту. Попросите владельца выбрать другую.";
+    return "Карточка партнёра уже привязана к другому аккаунту. Попросите владельца выбрать другую.";
   }
   if (/not found|invalid token|Некорректная ссылка/i.test(message)) {
     return "Приглашение не найдено или ссылка повреждена.";
@@ -122,7 +122,7 @@ export function invitationErrorMessage(message: string): string {
     return "Создавать приглашения может только владелец.";
   }
   if (/membership not found/i.test(message)) {
-    return "Доступ к этой компании не найден.";
+    return "Доступ к этому аккаунту не найден.";
   }
   return message || "Не удалось обработать приглашение.";
 }
@@ -158,6 +158,12 @@ export function invitationShareText(args: {
  *  (владелец 15.09: «вечная хуета открывается»). «Выписано на другой email» —
  *  не сюда: под нужным аккаунтом то же приглашение примут. */
 export class InvitationGoneError extends Error {}
+
+/** Приглашение выписано на другой email. Отдельный класс, а не поиск слов:
+ *  приём бросает уже переведённую фразу, и поиск английского «does not
+ *  match» в ней не находил ничего — кнопка «Войти под другим аккаунтом»
+ *  не появлялась ни на одном языке (аудит Кабинета 03.10). */
+export class InvitationWrongAccountError extends Error {}
 
 export function isGoneInvitationMessage(message: string): boolean {
   return /not found|invalid token|already accepted|Некорректная ссылка/i.test(message);

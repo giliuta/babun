@@ -5,6 +5,8 @@ import {
   applyPatch,
   balanceWarning,
   checkoutErrorText,
+  parseTopupEuros,
+  topupProblem,
   FROZEN_WORDS,
   parseSmsAccount,
   parseSmsHistory,
@@ -29,7 +31,7 @@ describe("слова страницы SMS", () => {
     assert.equal(costWords({ status: "queued", costCents: 0, wasFree: false }), undefined);
     assert.equal(costWords({ status: "failed", costCents: 0, wasFree: false }), undefined);
     assert.equal(priceOf(2, 10), "€0,20");
-    assert.equal(statusWords("blocked"), "Не хватило баланса");
+    assert.equal(statusWords("blocked"), "Не отправлено");
   });
 
   test("повод в истории", () => {
@@ -108,7 +110,7 @@ describe("ответ базы", () => {
     assert.equal(smsErrorText(new Error("sms:sender_format")), "Имя отправителя: латиница, цифры, до 11 знаков");
     assert.equal(smsErrorText(new Error("sms:sender_taken")), "Это имя занято — выберите другое");
     assert.equal(smsErrorText(new Error("sms:country")), "На номера этой страны SMS не отправляются");
-    assert.equal(smsErrorText(new Error("sms:limit")), "На сегодня предел SMS сотрудника исчерпан");
+    assert.equal(smsErrorText(new Error("sms:limit")), "На сегодня предел SMS партнёра исчерпан");
   });
 
   test("предупреждение о балансе — ниже €5 и только когда SMS настроены", () => {
@@ -161,6 +163,22 @@ describe("ответ базы", () => {
     assert.equal(checkoutErrorText("bad_amount"), "Такой суммы нет");
     assert.equal(checkoutErrorText(null, true), "Нет связи — проверьте интернет");
     assert.equal(checkoutErrorText(undefined), "Попробуйте ещё раз");
+  });
+
+  test("пополнение на свою сумму: целые евро от €5 до €500", () => {
+    assert.equal(parseTopupEuros("30"), 3000);
+    assert.equal(parseTopupEuros(" 1 000 "), 100000);
+    assert.equal(parseTopupEuros("12,5"), 1250);
+    assert.equal(parseTopupEuros("abc"), null);
+    assert.equal(parseTopupEuros(""), null);
+    assert.equal(topupProblem(""), null, "пусто — без ошибки, кнопка просто серая");
+    assert.equal(topupProblem("30"), null);
+    assert.equal(topupProblem("5"), null);
+    assert.equal(topupProblem("500"), null);
+    assert.equal(topupProblem("4"), "От €5 до €500");
+    assert.equal(topupProblem("501"), "От €5 до €500");
+    assert.equal(topupProblem("12,5"), "Только целые евро");
+    assert.equal(topupProblem("-"), "Введите сумму");
   });
 
   test("отказы базы — словами", () => {

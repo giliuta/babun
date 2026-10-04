@@ -108,6 +108,11 @@ export interface MasterCardViewProps {
   emailEditable: boolean;
   /** Строки почты нет — у мастера без аккаунта её нет вовсе. */
   hideEmail?: boolean;
+  /** ПАРТНЁР ПРИГЛАШАЕТСЯ ПО ПОЧТЕ — И ТОЛЬКО (владелец 01.10: «да, давай
+   *  так и сделаем — по почте»). Имя и телефон — его, из профиля в Babun:
+   *  сервер берёт их при приёме (`attach_invited_master_card`). В блоке
+   *  «Партнёр» — одна строка почты. */
+  emailOnly?: boolean;
   autoFocusName?: boolean;
   emailState: EmailState;
   refs?: { name: InputRef; email: InputRef; phone: InputRef };
@@ -251,9 +256,10 @@ export function MasterCardView(p: MasterCardViewProps) {
             />
           ) : null}
 
-          {/* КОМПАНИЯ — ПРАВА НЕ ПРО КОМАНДУ (клиенты, шаблоны SMS). */}
+          {/* АККАУНТ — ПРАВА НЕ ПРО КОМАНДУ: раздел «Кабинет» (тариф, оплаты,
+              SMS, реквизиты — 04.10). */}
           {companyAreas.length > 0 && !p.teamChips ? (
-            <SectionCard title="Компания" padded={false}>
+            <SectionCard title="Аккаунт" padded={false}>
               {companyAreas.map((area, i) => {
                 const level = p.areaLevels?.[area];
                 return (

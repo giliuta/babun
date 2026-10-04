@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
@@ -69,6 +69,9 @@ import {
 import { utcLabel, zoneClock } from "@/features/calendar/device-timezone";
 import { zoneCities } from "@/features/calendar/zone-label";
 import { SmsSettingsRow } from "@/features/sms/SmsSettingsRow";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
+import { canAddTeam } from "@/features/tariffs/tiers";
+import { useTariff, useTariffNudge } from "@/features/tariffs/use-tariff";
 
 // ─── «Календарь» — ВСЕ настройки на одном экране ─────────────────────
 // Сюда ведёт шестерёнка. Уровня «/calendar/[teamId]» больше нет: целый экран
@@ -107,12 +110,29 @@ function CalendarIdentityCard({
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const name = draft ?? team.name;
+  // НАБРАННОЕ ИМЯ НЕ ТЕРЯЕТСЯ НА УХОДЕ. Сохранение висит на `onBlur`, а поле,
+  // которое снимают с экрана в фокусе (жест «назад», тап по другой команде в
+  // ленте — карточка с `key={team.id}` пересоздаётся), blur не получает:
+  // новое имя молча пропадало. Последнее состояние держим в ref и дописываем
+  // его при размонтировании; уже сохранённое `commitName` гасит, чтобы не было
+  // второй одинаковой записи.
+  const latest = useRef({ draft, teamName: team.name, onPatch });
+  latest.current = { draft, teamName: team.name, onPatch };
+  useEffect(
+    () => () => {
+      const { draft: left, teamName, onPatch: patch } = latest.current;
+      const trimmed = left?.trim();
+      if (trimmed && trimmed !== teamName) patch({ name: trimmed });
+    },
+    [],
+  );
 
   const commitName = () => {
     const trimmed = name.trim();
     // Пустое имя не пишем: календарь без имени не существует ни в чипах, ни в
     // переводах. Молча возвращаем как было.
     if (trimmed && trimmed !== team.name) onPatch({ name: trimmed });
+    latest.current.draft = null;
     setDraft(null);
   };
 
@@ -138,6 +158,9 @@ export default function CalendarSettingsScreen() {
   const settingsQuery = useCalendarSettings();
   const settings = settingsQuery.data;
   const { data: teams = [], isLoading: teamsLoading } = useTeams();
+  const tariffTier = useTariff().state.tier;
+  const nudgeTariff = useTariffNudge();
+  const canNewTeam = canAddTeam(tariffTier, teams.length);
   const { data: schedules = {} } = useAllTeamSchedules();
   const update = useUpdateTeam();
   const archiveTeam = useCalendarDelete().archive;
@@ -353,14 +376,16 @@ export default function CalendarSettingsScreen() {
         // лента остаётся лентой его календарей, без действия.
         trailing={rows.addCalendar ? (
           <Pressable
-            onPress={() => setCreateOpen(true)}
+            // ЛИМИТ КОМАНД ТАРИФА (01.10): Соло — одна, Про — 5, Макс — 50.
+            // Сверх — «Добавить» серое, тап поднимает плашку про тариф.
+            onPress={() => (canNewTeam ? setCreateOpen(true) : nudgeTariff())}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Добавить календарь"
             style={({ pressed }: { pressed: boolean }) => ({
               minHeight: 44,
               justifyContent: "center",
-              opacity: pressed ? 0.5 : 1,
+              opacity: !canNewTeam ? 0.4 : pressed ? 0.5 : 1,
             })}
           >
             <Text
@@ -539,6 +564,7 @@ export default function CalendarSettingsScreen() {
                 (настройки «Длительность» на календаре больше нет). Тот же
                 экран, что в Кабинете, второй дверью внутри стека /calendar:
                 наружу этот стек не ведёт (закон навигации). */}
+            <TariffLocked locked={rows.servicesLocked}>
             <SettingsRow
               tile={SETTINGS_TILE.blue}
               icon={Briefcase}
@@ -557,6 +583,7 @@ export default function CalendarSettingsScreen() {
                 )
               }
             />
+            </TariffLocked>
           </SectionCard>
           ) : null}
           {rows.labels ? (

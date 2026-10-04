@@ -6,19 +6,19 @@ import { joinRu, teamBrief, teamSentence } from "./team-sentence";
 
 const reader = (levels: Record<string, AccessLevel>) => (key: string) => levels[key];
 
-// Реестр на 29.09: всё, о чём итог говорит, — живое.
+// Реестр после этапа 2: всё, о чём итог говорит, — живое.
 const CLOSED: Record<string, AccessLevel> = {
   "calendar.create": "off",
   "calendar.move": "off",
   "calendar.cancel": "off",
-  "record.status": "read",
   "record.client": "off",
   "record.object": "read",
   "record.services": "read",
   "record.amount": "off",
   "record.payment": "off",
   "record.files": "off",
-  "finance.operations": "off",
+  "finance.income": "off",
+  "finance.expense": "off",
   "finance.accounts": "off",
   "finance.debts": "off",
   clients: "off",
@@ -56,35 +56,40 @@ describe("итог прав команды", () => {
     assert.match(text, /^Видит записи команды без клиента, цен и оплаты\. Базу/);
   });
 
+  test("«Без ограничения» (`own`, 02.10) — «всех клиентов» (аудит 03.10)", () => {
+    assert.match(teamSentence(reader({ ...CLOSED, clients: "read", "clients.scope": "own" })), /Видит всех клиентов\./);
+    assert.match(teamSentence(reader({ ...CLOSED, clients: "read", "clients.scope": "month" })), /Видит своих клиентов\./);
+  });
+
   test("старший: создаёт, переносит, видит своих клиентов с телефонами, принимает оплату", () => {
     const levels: Record<string, AccessLevel> = {
       ...CLOSED,
       "calendar.create": "write",
       "calendar.move": "write",
-      "record.status": "write",
       "record.client": "write",
       "record.amount": "read",
       "record.payment": "write",
       "record.files": "write",
       clients: "read",
+      "clients.scope": "week",
       "clients.contacts": "read",
       "finance.debts": "read",
     };
     assert.equal(
       teamSentence(reader(levels)),
-      "Видит записи команды полностью. Создаёт и переносит записи, ставит статус. Видит своих клиентов. Принимает оплату и видит долги. Записи и деньги удалить не может.",
+      "Видит записи команды полностью. Создаёт и переносит записи. Видит своих клиентов. Принимает оплату и видит долги. Записи и деньги удалить не может.",
     );
   });
 
   test("опасное право гасит обещание про удаление", () => {
     const text = teamSentence(reader({ ...CLOSED, "finance.accounts": "write", clients: "write", "clients.scope": "all" }));
-    assert.match(text, /Ведёт всех клиентов без телефонов\./);
+    assert.match(text, /Ведёт всех клиентов\./);
     assert.match(text, /Управляет счетами\./);
     assert.doesNotMatch(text, /удалить не может/);
     const riskySets: readonly Record<string, AccessLevel>[] = [
       { "calendar.cancel": "write" },
       { "finance.debts": "write" },
-      { "finance.operations": "write" },
+      { "finance.income": "full" },
     ];
     for (const risky of riskySets) {
       assert.doesNotMatch(teamSentence(reader({ ...CLOSED, ...risky })), /удалить не может/, JSON.stringify(risky));
@@ -106,15 +111,15 @@ describe("итог прав команды", () => {
     assert.doesNotMatch(teamBrief(reader(CLOSED)), / ·/, "перед точкой — только неразрывный пробел");
   });
 
+  test("«Записи клиентов: Скрыты» — итог так и говорит (01.10)", () => {
+    const hidden = { ...CLOSED, "calendar.records": "off" as AccessLevel };
+    assert.match(teamBrief(reader(hidden)), /^Записей не видит/);
+    assert.equal(teamSentence(reader(hidden)), "Записей команды не видит. Деньги закрыты.");
+    assert.match(teamBrief(reader({ ...CLOSED, "calendar.records": "read" })), /^Только смотрит записи/);
+  });
+
   describe("доходы и расходы — два права (этап 2)", () => {
-    // Реестр после наката: общего `finance.operations` нет, есть две стороны.
-    const SPLIT: Record<string, AccessLevel | undefined> = {
-      ...CLOSED,
-      "finance.operations": undefined,
-      "finance.income": "off",
-      "finance.expense": "off",
-    };
-    const say = (over: Record<string, AccessLevel>) => teamSentence((key) => ({ ...SPLIT, ...over })[key]);
+    const say = (over: Record<string, AccessLevel>) => teamSentence(reader({ ...CLOSED, ...over }));
 
     test("равные ступени — одной фразой, разные — по стороне", () => {
       assert.match(say({ "finance.income": "read", "finance.expense": "read" }), /Видит доходы и расходы\./);

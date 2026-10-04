@@ -39,35 +39,14 @@ export function editorView<A extends { id: string }>(input: {
   return account ? { kind: "edit", account } : { kind: "gone" };
 }
 
-/** Как в листе правки меняется команда счёта:
- *  • `hand-over` — счёт старой схемы «Без команды»: отдать команде можно
- *    ВСЕГДА, даже с историей, иначе деньги навечно остались бы без хозяина;
- *  • `choose` — операций не было и есть другая живая команда;
- *  • `fixed` — история заморожена сервером (`guard_account_financial_history`)
- *    или выбирать не из чего: команда показана словом, без двери. */
-export type TeamControl = "hand-over" | "choose" | "fixed";
-
-export function teamControl(
-  account: { brigade_id: string | null; has_history: boolean },
-  activeTeamIds: readonly string[],
-): TeamControl {
-  if (account.brigade_id === null) {
-    return activeTeamIds.length > 0 ? "hand-over" : "fixed";
-  }
-  if (account.has_history) return "fixed";
-  return activeTeamIds.some((id) => id !== account.brigade_id)
-    ? "choose"
-    : "fixed";
-}
-
 /** Что делать после ответа на вопрос о закрытии. Лист на время вопроса
  *  уезжает (из открытого листа вопрос iOS не покажет), поэтому ЛЮБОЙ отказ
  *  обязан вернуть лист — иначе вызывающий считает его открытым, а на экране
  *  пусто, и повторный тап по той же строке ничего не открывает. */
-export type AnswerStep = "return" | "delete" | "close" | "transfer";
+export type AnswerStep = "return" | "delete" | "close" | "transfer" | "trash";
 
 export function stepAfterAnswer(
-  decision: CloseDecision,
+  decision: CloseDecision | { kind: "trash" },
   confirmed: boolean,
 ): AnswerStep {
   if (!confirmed || decision.kind === "explain") return "return";

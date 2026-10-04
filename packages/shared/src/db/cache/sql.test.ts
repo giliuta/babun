@@ -146,6 +146,23 @@ describe("queue ordering + lifecycle", () => {
     }
   });
 
+  test("dequeueAll keeps enqueue order when the device clock goes back (audit 03.10)", async () => {
+    const realNow = Date.now;
+    const first = crypto.randomUUID();
+    const second = crypto.randomUUID();
+    try {
+      Date.now = () => 2_000_000_000_000;
+      await enqueueOp(makeOp({ op: "insert", row_id: first }));
+      // Часы ушли на час назад между двумя правками.
+      Date.now = () => 2_000_000_000_000 - 3_600_000;
+      await enqueueOp(makeOp({ op: "delete", row_id: second }));
+    } finally {
+      Date.now = realNow;
+    }
+    const ops = await dequeueAll();
+    expect(ops.map((o) => o.row_id)).toEqual([first, second]);
+  });
+
   test("enqueued op round-trips its fields", async () => {
     const rowId = crypto.randomUUID();
     await enqueueOp(

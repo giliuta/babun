@@ -1,3 +1,4 @@
+import type { Appointment } from "@babun/shared/local/appointments";
 import type {
   Client,
   ClientMembership,
@@ -5,6 +6,7 @@ import type {
   Location,
   PhoneEntry,
 } from "@babun/shared/local/clients";
+import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { clientMemberships } from "@babun/shared/local/clients";
 import { clientRequisitesOf, requisitesPatch } from "@babun/shared/local/client-requisites";
 
@@ -96,6 +98,86 @@ function mergedMemberships(
   return same ? undefined : out;
 }
 
+/** ОПЛАЧЕННЫЕ ВИЗИТЫ ДУБЛЯ — ЗАПРЕТ, А НЕ ПОЛУСЛИЯНИЕ (аудит 2026-10-03).
+ *
+ *  Клиента у визита с живыми деньгами сервер не меняет
+ *  (`protect_paid_appointment_finance`: «Сначала верните оплату…»).
+ *  Слияние узнавало об этом на первом же оплаченном визите — когда патч
+ *  основной уже записан, а неоплаченные визиты уже уехали: дубль оставался
+ *  жив, история — разорвана надвое, и повтор упирался в ту же запись.
+ *  Теперь отказ — до первой записи. Деньги — те же признаки, что держит
+ *  сервер: предоплата, доплата, статус «оплачено» или «частично». */
+export function paidVisitsBlocker(
+  visits: readonly Pick<Appointment, "prepaid_amount" | "paid_amount" | "payment_status">[],
+): string | null {
+  const paid = visits.filter(
+    (visit) =>
+      visit.payment_status === "paid" ||
+      visit.payment_status === "partial" ||
+      (visit.prepaid_amount ?? 0) > 0 ||
+      (visit.paid_amount ?? 0) > 0,
+  ).length;
+  if (paid === 0) return null;
+  const count = formatCountRu(paid, ["оплаченный визит", "оплаченных визита", "оплаченных визитов"]);
+  return `У дубля ${count} — клиента у них не сменить, пока оплата не возвращена. Объединить пока нельзя`;
+}
+
+/** ОБЪЕКТЫ ДВУХ КАРТОЧЕК ОДНИМ СПИСКОМ — и куда переезжают визиты.
+ *
+ *  Объект дубля с тем же адресом (или ссылкой), что у основной, — тот же
+ *  объект: его техника и заметка дописываются к объекту основной, а визиты
+ *  дубля переезжают на объект основной (`remap`). Раньше такой объект просто
+ *  выпадал (аудит 2026-10-03): визиты уезжали со ссылкой на объект, которого
+ *  у основной нет, «Был…» и «Пора обслужить» их не видели, техника и
+ *  заметка объекта пропадали. Объект без адреса и ссылки тоже больше не
+ *  выпадает — это настоящий объект со своей техникой.
+ *
+ *  Повторное слияние ничего не удваивает: объект с тем же id уже здесь. */
+export function mergeLocations(
+  primary: Client,
+  dup: Client,
+): { locations: Location[] | undefined; remap: Map<string, string> } {
+  const keyOf = (l: Location) =>
+    `${(l.address ?? "").trim().toLowerCase()}|${(l.mapUrl ?? "").trim()}`;
+  const out: Location[] = [...(primary.locations ?? [])];
+  const remap = new Map<string, string>();
+  const ids = new Set(out.map((l) => l.id));
+  const byKey = new Map<string, number>();
+  out.forEach((l, index) => {
+    const key = keyOf(l);
+    if (key !== "|" && !byKey.has(key)) byKey.set(key, index);
+  });
+  let changed = false;
+  for (const theirs of dup.locations ?? []) {
+    if (ids.has(theirs.id)) continue;
+    const key = keyOf(theirs);
+    const at = key === "|" ? undefined : byKey.get(key);
+    const mine = at === undefined ? undefined : out[at];
+    if (at !== undefined && mine) {
+      remap.set(theirs.id, mine.id);
+      const unitIds = new Set((mine.equipment ?? []).map((unit) => unit.id));
+      const addUnits = (theirs.equipment ?? []).filter((unit) => !unitIds.has(unit.id));
+      const addNote = !filled(mine.note) && filled(theirs.note);
+      if (addUnits.length > 0 || addNote) {
+        out[at] = {
+          ...mine,
+          ...(addUnits.length > 0 ? { equipment: [...(mine.equipment ?? []), ...addUnits] } : {}),
+          ...(addNote ? { note: theirs.note } : {}),
+        };
+        changed = true;
+      }
+      continue;
+    }
+    // Основным остаётся объект основной карточки: дубль не переставляет
+    // адрес, к которому диспетчер привык.
+    out.push({ ...theirs, isPrimary: false });
+    ids.add(theirs.id);
+    if (key !== "|") byKey.set(key, out.length - 1);
+    changed = true;
+  }
+  return { locations: changed ? out : undefined, remap };
+}
+
 /** Ключ номера для сравнения — только цифры, хвост в 8 знаков. Так «99 12
  *  34 56», «+357 99123456» и «0035799123456» становятся одним номером. */
 export function phoneKey(raw: string | null | undefined): string {
@@ -170,23 +252,8 @@ export function mergeClientPatch(primary: Client, dup: Client): Partial<Client> 
   }
 
   // ── объекты: по адресу (или ссылке), чтобы не плодить одинаковые ──
-  const addrKey = (l: Location) =>
-    `${(l.address ?? "").trim().toLowerCase()}|${(l.mapUrl ?? "").trim()}`;
-  const seenAddr = new Set((primary.locations ?? []).map(addrKey));
-  const addLocations = (dup.locations ?? []).filter((l) => {
-    const k = addrKey(l);
-    if (k === "|" || seenAddr.has(k)) return false;
-    seenAddr.add(k);
-    return true;
-  });
-  if (addLocations.length > 0) {
-    patch.locations = [
-      ...(primary.locations ?? []),
-      // Основным остаётся объект основной карточки: дубль не переставляет
-      // адрес, к которому диспетчер привык.
-      ...addLocations.map((l) => ({ ...l, isPrimary: false })),
-    ];
-  }
+  const locations = mergeLocations(primary, dup).locations;
+  if (locations) patch.locations = locations;
 
   // ── заметки: обе истории, свежие сверху ──
   //

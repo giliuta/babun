@@ -8,16 +8,16 @@ describe("разделы прав команды", () => {
     assert.equal(inGroup("clients", "clients"), true);
     assert.equal(inGroup("clients.scope", "clients"), true);
     assert.equal(inGroup("calendar.create", "record"), false);
-    assert.deepEqual(CALENDAR_GROUPS, ["calendar", "record", "finance", "clients"]);
+    assert.deepEqual(CALENDAR_GROUPS, ["calendar", "record", "clients", "finance"], "порядок владельца 01.10");
   });
 
   test("права записи — в порядке страницы записи", () => {
-    const rows = ["record.status", "record.amount", "record.client", "record.services", "record.team"].map(
+    const rows = ["record.amount", "record.client", "record.services", "record.team"].map(
       (key) => ({ block: { key } }),
     );
     assert.deepEqual(
       orderGroupRows("record", rows).map((row) => row.block.key),
-      ["record.team", "record.client", "record.services", "record.amount", "record.status"],
+      ["record.team", "record.client", "record.services", "record.amount"],
     );
     assert.deepEqual(orderGroupRows("finance", rows), rows);
   });

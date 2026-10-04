@@ -1,3 +1,4 @@
+import { tierAllows, tierOf, type TierFeature } from "@/features/tariffs/tiers";
 import { isMessagingReady } from "@/features/chats/readiness";
 
 export const USER_ROLES = ["owner", "dispatcher", "master"] as const;
@@ -30,7 +31,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
-  owner: "Полный доступ к компании, сотрудникам и финансам.",
+  owner: "Полный доступ к аккаунту, партнёрам и финансам.",
   dispatcher: "Клиенты, записи и рабочая коммуникация без финансов и опасных настроек.",
   master: "Рабочий график и разрешённые действия внутри назначенных заявок.",
 };
@@ -86,12 +87,16 @@ export function can(
 // телефон. Данных компании там нет, поэтому и закрывать их нечем. Так же
 // личные «Уведомления» и «О приложении» (это телефон человека) и «Компания»
 // (`?tenant=` — его собственное членство: роль и календари; тариф страница
-// показывает только владельцу).
+// показывает только владельцу). «Помощь» (03.10) — частые вопросы и связь с
+// поддержкой: строка стоит в блоке «Аккаунт» у любой роли, и партнёр, нажав
+// её, упирался в «Недостаточно прав». «Языки» (03.10) — язык этого телефона.
 const PERSONAL_CABINET_ROUTES = [
   "/cabinet/invitations",
   "/cabinet/profile",
   "/cabinet/notifications",
+  "/cabinet/languages",
   "/cabinet/about",
+  "/cabinet/help",
   "/cabinet/company",
 ] as const;
 
@@ -101,23 +106,43 @@ const PERSONAL_CABINET_ROUTES = [
 // клиенты, свои деньги. Без доступа он показывает нули, а не отказ.
 const INSIGHTS_ROUTE = "/cabinet/insights";
 
+// «Реквизиты» (03.10, из шестерёнки «Финансов» в Кабинет): дверь открыта
+// любой роли, страницу закрывает право строки «Реквизиты»
+// (`FinanceSettingsRoute`), а данные — политика `legal_entities`.
+const REQUISITES_ROUTE = "/cabinet/requisites";
+
+/** Страницы партнёров — по праву «Партнёры» (директор, 04.10). */
+const PEOPLE_ROUTE = "/cabinet/people";
+
+/** Страницы Кабинета за аккаунт (`?tenant=`, блок аккаунта, 04.10). История
+ *  изменений — по праву «История изменений» того же раздела «Кабинет». */
+const ACCOUNT_CABINET_ROUTES = ["/cabinet/tariff", "/cabinet/payments", "/cabinet/sms", "/cabinet/history"] as const;
+
 const DISPATCHER_CABINET_ROUTES = new Set([
   "/cabinet",
+  // Тариф, оплаты и SMS аккаунта, который пригласил (04.10): страница
+  // сама решает по праву «Тариф» / «Оплаты тарифа» / «SMS».
+  ...ACCOUNT_CABINET_ROUTES,
   INSIGHTS_ROUTE,
   "/cabinet/account",
   "/cabinet/business",
   "/cabinet/inventory",
   "/cabinet/recurring",
   "/cabinet/sync",
+  REQUISITES_ROUTE,
   ...PERSONAL_CABINET_ROUTES,
 ]);
 
 const MASTER_CABINET_ROUTES = new Set([
   "/cabinet",
+  // Тариф, оплаты и SMS аккаунта, который пригласил (04.10): страница
+  // сама решает по праву «Тариф» / «Оплаты тарифа» / «SMS».
+  ...ACCOUNT_CABINET_ROUTES,
   INSIGHTS_ROUTE,
   "/cabinet/account",
   "/cabinet/business",
   "/cabinet/inventory",
+  REQUISITES_ROUTE,
   ...PERSONAL_CABINET_ROUTES,
 ]);
 
@@ -137,10 +162,15 @@ function normalizePath(pathname: string): string {
 export function canAccessCabinetPath(
   role: UserRole | null | undefined,
   pathname: string,
+  /** Право «Партнёры» видно (директор, 04.10): страницы партнёров открыты. */
+  partners = false,
 ): boolean {
   const path = normalizePath(pathname);
   if (!path.startsWith("/cabinet")) return true;
   if (role === "owner") return true;
+  if (partners && (role === "master" || role === "dispatcher") && (path === PEOPLE_ROUTE || path.startsWith(`${PEOPLE_ROUTE}/`))) {
+    return true;
+  }
   if (role === "dispatcher") return DISPATCHER_CABINET_ROUTES.has(path);
   if (role === "master") return MASTER_CABINET_ROUTES.has(path);
   return false;
@@ -195,21 +225,9 @@ export function cabinetScreenRole(
 // то, чего нельзя, но проверка живёт в базе — иначе любой другой путь (deep
 // link, старая сборка, офлайн-очередь) обходит замок. Канон, правило 10.
 
-export type PlanCapability =
-  | "book-clients"
-  | "services"
-  | "masters"
-  | "documents";
-
-/** Что бесплатный уровень НЕ умеет. Перечислено закрытое, а не открытое:
- *  новая функция продукта по умолчанию бесплатна, и закрывать её — отдельное
- *  осознанное решение, а не следствие забытой строки в списке. */
-const FREE_PLAN_CLOSED: ReadonlySet<PlanCapability> = new Set<PlanCapability>([
-  "book-clients",
-  "services",
-  "masters",
-  "documents",
-]);
+/** Возможность, которую открывает тариф (с 01.10 — «Соло · Про · Макс»,
+ *  `features/tariffs/tiers.ts`). */
+export type PlanCapability = TierFeature;
 
 /** Действующий тариф: ручная выдача (`plan_override`) всегда сильнее
  *  оплаченного. Повторяет `public.tenant_effective_plan` — если правило
@@ -235,8 +253,7 @@ export function planAllows(
   plan: string | null | undefined,
   capability: PlanCapability,
 ): boolean {
-  if (plan !== "free") return true;
-  return !FREE_PLAN_CLOSED.has(capability);
+  return tierAllows(tierOf({ plan }), capability);
 }
 
 /** Единственная дверь: действие разрешено, только если его пускают И роль,

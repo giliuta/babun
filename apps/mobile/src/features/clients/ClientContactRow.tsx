@@ -1,16 +1,20 @@
-import { useEffect, useRef } from "react";
+import { useMemo } from "react";
+import { Text } from "react-native";
 import { useRouter } from "expo-router";
+import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { resolveChannels } from "@/features/clients/contact-channels";
 import { useEnabledChannels } from "@/features/clients/contact-ways";
-import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { useDefaultCountry } from "@/features/clients/default-country";
-import { CalendarPlus, MessageCircle } from "lucide-react-native";
+import { MessageCircle } from "lucide-react-native";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ClientSummaryCard } from "@/features/clients/ClientSummaryCard";
+import { lastClientRecord } from "@/features/clients/last-record";
+import { moreLabel } from "@/features/clients/more-label";
 import { haptics } from "@/lib/haptics";
+import { useThemeColors } from "@/theme/colors";
 
 // ДЕЙСТВИЯ УРОВНЯ ЧЕЛОВЕКА — строками, а не кружками.
 //
@@ -32,96 +36,83 @@ import { haptics } from "@/lib/haptics";
 // свойство КОНКРЕТНОГО номера и висят кнопкой в хвосте своей строки.
 
 // БЛОК «ИСТОРИЯ» (владелец 22.09, «делай как считаешь нужным»): сводка
-// визитов и денег — вход в полный перечень, под ней дверь «Записать». Были
-// две карточки без шапки — единственные безымянные на странице.
+// визитов и денег — вход в полный перечень. Были две карточки без шапки —
+// единственные безымянные на странице.
+//
+// «ЗАПИСАТЬ» ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 03.10: «нужно убрать кнопку записать
+// и сделать полноценно последнюю запись»). Лицо блока — последняя запись
+// целиком (`ClientSummaryCard`), тап — история со всеми записями. Записать
+// клиента — «⋯» карточки и долгое нажатие в списке.
 
 export default function ClientContactRow({
   client,
   stats,
+  appointments,
   draft,
   onOpenHistory,
-  onDraftBook,
-  bookOnArrive,
-  onArrived,
   showSummary = true,
   showMoney,
 }: {
   client: Client;
   stats: ClientStats | undefined;
-  /** Право «История записей» (30.09): нет — сводки визитов нет, «Записать»
-   *  остаётся (запись — право календаря). */
+  /** Записи клиента — из них лицо блока, последняя запись. */
+  appointments: readonly Appointment[];
+  /** Право «История» (30.09): нет — блока нет вовсе. */
   showSummary?: boolean;
   /** Право «Долг и деньги» (30.09); нет — `caps.money`. */
   showMoney?: boolean;
-  /** Черновик: строка видна, но записывать ещё некого. */
+  /** Черновик: записей у него ещё нет. */
   draft?: boolean;
-  /** Открыть историю записей; нет — сводка просто текст. */
+  /** Открыть историю записей; нет — запись просто показание. */
   onOpenHistory?: () => void;
-  /** Новый клиент: «Записать» сперва создаёт карточку. */
-  onDraftBook?: () => void;
-  /** Карточку только что создали ради записи — сразу открыть форму. */
-  bookOnArrive?: boolean;
-  onArrived?: () => void;
 }) {
+  const t = useThemeColors();
   const router = useRouter();
   // «Способы связи» — команды клиента (у каждой команды свои, 30.09).
   const enabled = useEnabledChannels(client.team_id ?? null);
-  const guardedBook = useGuardedBookingNav();
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(client.team_id ?? null);
   const chat = resolveChannels(client, enabled, { country }).find(
     (c) => c.id === "chat",
   );
-
-  const primaryLocationId =
-    client.locations?.find((l) => l.isPrimary)?.id ??
-    client.locations?.[0]?.id ??
-    null;
-
-  const book = () =>
-    guardedBook(client, {
-      locationId: primaryLocationId,
-      teamId: stats?.lastTeamId ?? null,
-    });
-  // Карточку создали из черновика ради записи — форма открывается сама.
-  const bookRef = useRef(book);
-  bookRef.current = book;
-  // Один раз: `onArrived` новый на каждой отрисовке, и пока параметр не
-  // снят, эффект иначе открыл бы форму второй раз.
-  const booked = useRef(false);
-  useEffect(() => {
-    if (!bookOnArrive || booked.current) return;
-    booked.current = true;
-    onArrived?.();
-    bookRef.current();
-  }, [bookOnArrive, onArrived]);
+  const lastRecord = useMemo(() => lastClientRecord(appointments), [appointments]);
+  // «Ещё N» — записей сверх показанной последней (те же, что на странице
+  // истории: только работы, без событий).
+  const more = moreLabel(appointments.filter((a) => !a.kind || a.kind === "work").length);
 
   // В НОВОМ КЛИЕНТЕ — ТОТ ЖЕ БЛОК (владелец 22.09: «при создании — те же
-  // самые блоки»). Записать можно только того, кто есть: дверь сперва
-  // создаёт карточку, а форма записи открывается уже на ней.
+  // самые блоки»): записей у него ещё нет — так и сказано, словами.
   if (draft) {
-    return onDraftBook ? (
+    return (
       <SectionCard title="История">
-        <ChooseRow compact icon={CalendarPlus} label="Записать" onPress={onDraftBook} />
+        <Text
+          maxFontSizeMultiplier={1.3}
+          style={{ fontSize: 15, color: t.sub, paddingHorizontal: 16, paddingVertical: 12 }}
+        >
+          Записей пока нет
+        </Text>
       </SectionCard>
-    ) : null;
+    );
   }
+  // Истории ему не открыли — блока нет (владелец 20.09: недоступный блок
+  // просто отсутствует).
+  if (!showSummary && !chat) return null;
 
   return (
-    <SectionCard title="История">
+    <SectionCard
+      title="История"
+      action={
+        showSummary && onOpenHistory && more
+          ? { label: more, pill: true, onPress: onOpenHistory }
+          : undefined
+      }
+    >
         {showSummary ? (
           <ClientSummaryCard
-            client={client}
-            stats={stats}
+            lastRecord={lastRecord}
             onOpenHistory={onOpenHistory}
             showMoney={showMoney}
           />
         ) : null}
-        <ChooseRow
-          compact
-          icon={CalendarPlus}
-          label="Записать"
-          onPress={book}
-        />
         {/* Строки «Как в прошлый раз» здесь больше нет (владелец 2026-09-07:
             «это в клиентах не надо»). Повтор прошлого визита — дело формы
             записи, а не карточки. */}

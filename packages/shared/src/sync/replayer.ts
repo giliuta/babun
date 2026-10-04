@@ -33,6 +33,7 @@ import {
   cacheGetOne,
   cacheUpsert,
   cacheDelete,
+  forwardQueuedSentinel,
   type QueuedOp,
   type CachedTable,
   type CachedClient,
@@ -96,6 +97,120 @@ type DbSupabase = SupabaseClient<Database>;
 export const MAX_ATTEMPTS = 3;
 const BACKOFFS_MS = [1000, 5000, 30000]; // attempts 1, 2, 3
 
+/** ПОЛЯ ЗАПИСИ, КОТОРЫЕ НЕЛЬЗЯ ПРОДАВИТЬ ПОВЕРХ ЧУЖОЙ ПРАВКИ (аудит 03.10).
+ *  Статус и деньги решают сервер и сверка финансов: отмена записи с оплатой
+ *  — это возврат всех её денег, и он необратим. Правка, вставшая в очередь
+ *  до того, как другой телефон принял оплату, силой «последний побеждает»
+ *  оформила бы клиенту возврат, которого никто не просил. Такая правка при
+ *  конфликте уступает серверу, а человек узнаёт об этом словами. */
+export const APPOINTMENT_GUARDED_FIELDS: ReadonlySet<string> = new Set([
+  "status",
+  "cancel_reason",
+  "prepaid_amount",
+  "paid_amount",
+  "payment_status",
+  "payment",
+  "payments",
+  "payment_method",
+]);
+
+/** Правка записи трогает статус или деньги — см. `APPOINTMENT_GUARDED_FIELDS`. */
+export function touchesGuardedAppointmentFields(
+  table: string,
+  payload: Record<string, unknown>,
+): boolean {
+  return (
+    table === "appointments" &&
+    Object.keys(payload).some((key) => APPOINTMENT_GUARDED_FIELDS.has(key))
+  );
+}
+
+/** Компания устройства сменилась ПОСРЕДИ отправки операции (аудит 03.10).
+ *  Заголовок компании берётся в момент каждого запроса: силовая правка и
+ *  проверка видимости после смены ушли бы под чужим заголовком, нашли бы
+ *  ноль строк — и операция снималась бы как «строку удалили». Такая
+ *  операция остаётся в очереди без попытки в счёт и уйдёт в своей
+ *  компании. */
+class TenantSwitchedMidway extends Error {
+  constructor() {
+    super("Компания сменилась посреди отправки — операция подождёт свою компанию");
+    this.name = "TenantSwitchedMidway";
+  }
+}
+
+function assertTenantStill(tenantStill?: () => boolean): void {
+  if (tenantStill && !tenantStill()) throw new TenantSwitchedMidway();
+}
+
+/** Сообщение, когда правка статуса или денег уступила серверу. */
+export const GUARDED_CONFLICT_MESSAGE =
+  "Запись изменилась на другом устройстве, и ваша правка статуса или оплаты не применена. Откройте запись и сделайте это ещё раз.";
+
+/** ДЕРЖИТ ЛИ ОПЕРАЦИЯ ПЕРЕЧИТКУ ТАБЛИЦЫ ЭТОЙ КОМПАНИИ (аудит 2026-10-03).
+ *  Перечитка с сервера пропускается, пока своя операция той же таблицы ждёт
+ *  выгрузки: снимок сервера стёр бы оптимистичную строку раньше, чем она
+ *  туда дойдёт. Но операция ДРУГОЙ компании под текущей не уходит никогда
+ *  (гейт компании в `replayQueue`), и без этой сверки она замораживала
+ *  календарь, клиентов и теги текущей компании до возвращения в ту: не
+ *  видно ни правок партнёров, ни удалений, ни оплат. Её строк перечитка и не
+ *  касается — `cacheReplaceTenant` меняет только строки своей компании.
+ *  Операция без компании в теле (правки до 24.09) держит, как раньше:
+ *  гейт узнает её компанию из кэша, а здесь осторожнее не гадать. */
+export function holdsTenantRefresh(
+  op: QueuedOp,
+  table: CachedTable,
+  tenantId: string,
+): boolean {
+  if (op.table !== table || op.attempts >= MAX_ATTEMPTS) return false;
+  const opTenant = (op.payload as { tenant_id?: unknown } | null)?.tenant_id;
+  return (
+    typeof opTenant !== "string" || opTenant.length === 0 || opTenant === tenantId
+  );
+}
+
+/** ДЕРЖИТ ЛИ ОЧЕРЕДЬ ПЕРЕЧИТКУ ТАБЛИЦЫ ЭТОЙ КОМПАНИИ.
+ *
+ *  Правки, придержанные за навсегда упавшей операцией своей строки (см.
+ *  `drain`), сами не уйдут, пока человек не нажмёт «Повторить» или
+ *  «Удалить», — держать ими перечитку значило бы заморозить весь календарь
+ *  из-за одной строки. Они ждут в «Синхронизации», как и упавшая. */
+export function tenantRefreshHeld(
+  pending: readonly QueuedOp[],
+  table: CachedTable,
+  tenantId: string,
+): boolean {
+  const stuck = new Set(
+    pending
+      .filter((op) => op.attempts >= MAX_ATTEMPTS)
+      .map((op) => `${op.table}:${op.row_id}`),
+  );
+  // ЖДУЩАЯ НАВСЕГДА УПАВШЕГО КЛИЕНТА — ТОЖЕ ЗАСТРЯЛА (аудит 04.10). Запись,
+  // заведённая без сети к новому клиенту, ждёт его вставку, попыток не тратя
+  // (`waitsForClient` в `drain`). Упала вставка клиента навсегда («номер уже
+  // заведён», конец пробного) — запись ждала бы вечно и держала перечитку
+  // календаря: чужие брони, удаления и оплаты на телефоне не появлялись, и
+  // занятое время выглядело свободным. Она ждёт в «Синхронизации» вместе с
+  // клиентом; на сетке остаётся (`appointmentsCached`, неотправленные вставки).
+  const failedClientInserts = new Set(
+    pending
+      .filter((op) => op.attempts >= MAX_ATTEMPTS && op.table === "clients" && op.op === "insert")
+      .map((op) => op.row_id),
+  );
+  if (failedClientInserts.size > 0) {
+    for (const op of pending) {
+      if (op.table === "clients") continue;
+      const clientId = (op.payload as { client_id?: unknown } | null)?.client_id;
+      if (typeof clientId === "string" && failedClientInserts.has(clientId)) {
+        stuck.add(`${op.table}:${op.row_id}`);
+      }
+    }
+  }
+  return pending.some(
+    (op) =>
+      holdsTenantRefresh(op, table, tenantId) && !stuck.has(`${op.table}:${op.row_id}`),
+  );
+}
+
 type Toast = (msg: string) => void;
 
 export interface ReplayerOptions {
@@ -128,10 +243,63 @@ export interface ReplayerOptions {
   /** Called when an op fails MAX_ATTEMPTS times. UI surfaces a
    *  retry-able warning in the sidebar / SyncQueuePanel. */
   onPermanentFailure?: (op: QueuedOp) => void;
+  /** Настоящий клиент хоста. Им идёт выгрузка, когда звавший дал ВИД ТОЛЬКО
+   *  ДЛЯ ЧТЕНИЯ (`READ_ONLY_VIEW_FIELD`); нет — такой заход ничего не
+   *  выгружает. Хост кладёт его в умолчания (`setReplayerDefaults`). */
+  writeClient?: DbSupabase;
+  /** Есть ли сеть (у телефона — NetInfo через onlineManager). Без сети слив
+   *  не начинается: каждая отправка упала бы сразу. Нет — считаем «есть». */
+  isOnline?: () => boolean;
 }
 
 let draining = false;
 let pendingFollowup = false;
+
+// ОБРЫВ СВЯЗИ — НЕ ОТКАЗ СЕРВЕРА (аудит работы без сети 03.10). Раньше любая
+// ошибка шла в счёт попыток: подвал, туннель, 503 или минута заморозки базы —
+// и за ~6 секунд (1 с + 5 с отката) каждая правка набирала MAX_ATTEMPTS и
+// становилась «навсегда не отправленной». После возврата сети она уже не
+// уходила, а сервер перечитывал календарь поверх неё. Теперь обрыв попытку
+// не тратит: строка ждёт, остальные уходят, а слив повторяется сам через
+// TRANSIENT_RETRY_MS (и сразу — при возврате сети). В счёт идут только ответы
+// сервера, которые повтором не лечатся: RLS, ограничения, 4xx.
+export const TRANSIENT_RETRY_MS = 30_000;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Та же граница, что у обёрток кэша (`isTransientNetworkError`): 5xx шлюза
+ *  и рестарта, сетевые сбои fetch, таймауты, аборты. */
+export function isTransientReplayError(err: unknown): boolean {
+  const withStatus = err as { status?: unknown; statusCode?: unknown };
+  const httpStatus =
+    typeof withStatus?.status === "number"
+      ? withStatus.status
+      : typeof withStatus?.statusCode === "number"
+        ? withStatus.statusCode
+        : 0;
+  if (httpStatus >= 500) return true;
+  const msg =
+    err instanceof Error
+      ? err.message
+      : typeof (err as { message?: unknown })?.message === "string"
+        ? (err as { message: string }).message
+        : String(err);
+  return /failed to fetch|load failed|network request failed|network error|fetch failed|timed? ?out|socket|econn|abort|bad gateway|service unavailable|gateway time|\b50[234]\b/i.test(
+    msg,
+  );
+}
+
+function scheduleTransientRetry(opts: ReplayerOptions): void {
+  if (retryTimer) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void kickReplayer(opts);
+  }, TRANSIENT_RETRY_MS);
+}
+
+/** Отпечаток очереди: менялось ли в ней что-то за проход. */
+function queueSignature(ops: readonly QueuedOp[]): string {
+  return ops.map((o) => `${o.id}:${o.attempts}`).join(",");
+}
 
 /** ТОЛЬКО ДЛЯ ТЕСТОВ. Обёртки кэша зовут `void kickReplayer(...)` не дожидаясь
  *  ответа; когда такой вызов ещё в полёте на границе двух тестовых файлов,
@@ -142,6 +310,8 @@ export function __resetReplayerForTests(): void {
   draining = false;
   pendingFollowup = false;
   replayerDefaults = {};
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
 }
 
 // Cached wrappers deliberately know nothing about the host application: they
@@ -160,8 +330,28 @@ export function setReplayerDefaults(
   replayerDefaults = defaults ? { ...defaults } : {};
 }
 
-function withReplayerDefaults(opts: ReplayerOptions): ReplayerOptions {
-  return { ...replayerDefaults, ...opts, supabase: opts.supabase };
+/** ПОЛЕ, КОТОРЫМ КЛИЕНТ ОБЪЯВЛЯЕТ СЕБЯ ВИДОМ ТОЛЬКО ДЛЯ ЧТЕНИЯ.
+ *
+ *  Шим постраничного чтения календаря (`pagingClient`) отдаётся обёртке
+ *  `listAppointments` вместо клиента, и её фоновое перечитывание, увидев
+ *  ждущие операции, подталкивает выгрузку ЭТИМ ЖЕ клиентом. А у шима
+ *  `from()` умеет только `select`: выгрузка правки падала «update is not a
+ *  function», операция после трёх попыток ложилась навсегда, и правка
+ *  пропадала (владелец 03.10: сменил клиента записи — через десять секунд
+ *  вернулся прежний). Вид объявляет себя этим полем, и выгрузка идёт
+ *  настоящим клиентом хоста (`writeClient`), а без него не идёт вовсе. */
+export const READ_ONLY_VIEW_FIELD = "__babunReadOnlyView";
+
+function isReadOnlyView(supabase: DbSupabase): boolean {
+  return (supabase as unknown as Record<string, unknown>)[READ_ONLY_VIEW_FIELD] === true;
+}
+
+/** Опции слива с умолчаниями хоста; `null` — сливать нечем (звавший дал
+ *  вид только для чтения, а клиента хоста нет). */
+function withReplayerDefaults(opts: ReplayerOptions): ReplayerOptions | null {
+  const merged = { ...replayerDefaults, ...opts };
+  const supabase = isReadOnlyView(opts.supabase) ? merged.writeClient : opts.supabase;
+  return supabase ? { ...merged, supabase } : null;
 }
 
 /** Public trigger — call from `online` listener, onResync, manual
@@ -169,6 +359,7 @@ function withReplayerDefaults(opts: ReplayerOptions): ReplayerOptions {
  *  and self-coalescing. */
 export async function kickReplayer(opts: ReplayerOptions): Promise<void> {
   const effectiveOpts = withReplayerDefaults(opts);
+  if (!effectiveOpts) return;
   if (draining) {
     pendingFollowup = true;
     return;
@@ -187,9 +378,39 @@ export async function kickReplayer(opts: ReplayerOptions): Promise<void> {
   }
 }
 
-/** Активная компания: живое чтение, если хост его дал, иначе прежний снимок. */
+/** Активная компания. Если хост дал ЖИВОЕ чтение, его ответ окончательный:
+ *  null значит «компании нет» — человек вышел или идёт переход. Раньше null
+ *  подменялся снимком с запуска (`?? opts.tenantId`), и слив после выхода из
+ *  аккаунта шёл дальше под прежней компанией — уже без входа. Аноним по RLS
+ *  не видит ни строки: удаление находило ноль строк, проверка видимости —
+ *  тоже, и операция снималась как «уже удалено» (аудит 04.10). */
 function readTenantId(opts: ReplayerOptions): string | null {
-  return opts.currentTenantId?.() ?? opts.tenantId ?? null;
+  if (opts.currentTenantId) return opts.currentTenantId();
+  return opts.tenantId ?? null;
+}
+
+/** Есть ли у клиента живой вход. Клиент без `auth` (тестовый, вид только для
+ *  чтения) проверку не держит. Ошибка чтения сессии — «входа нет»: операции
+ *  подождут следующего толчка, а не уйдут анонимом. */
+async function hasLiveSession(supabase: DbSupabase): Promise<boolean> {
+  const auth = (supabase as unknown as {
+    auth?: { getSession?: () => Promise<{ data?: { session?: unknown } | null }> };
+  }).auth;
+  if (typeof auth?.getSession !== "function") return true;
+  try {
+    const { data } = await auth.getSession();
+    return Boolean(data?.session);
+  } catch {
+    return false;
+  }
+}
+
+/** Погасить взведённый повтор слива. Таймер держит опции запуска и без этого
+ *  стрелял и после остановки рантайма — в том числе после выхода из аккаунта
+ *  (аудит 04.10). Рантайм хоста зовёт это при остановке и паузе. */
+export function cancelReplayerRetry(): void {
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
 }
 
 /** ПОЛЕ, КОТОРЫМ КЛИЕНТ ОБЪЯВЛЯЕТ СЕБЯ ПРИВЯЗАННЫМ К ОДНОЙ КОМПАНИИ.
@@ -216,13 +437,21 @@ function boundTenantOf(supabase: DbSupabase): string | null {
 }
 
 async function drain(opts: ReplayerOptions): Promise<void> {
-  const ops = await dequeueAll(); // sorted by created_at ASC via index
+  // Без сети не сливаем: всё упало бы сразу. Сольёт возврат сети.
+  if (opts.isOnline && !opts.isOnline()) return;
+  const ops = await dequeueAll(); // in enqueue order (id ASC), not by device clock
   if (ops.length === 0) return;
+  const signatureBefore = queueSignature(ops);
+  let transientFailure = false;
 
   // Компания, под которой слив НАЧАЛСЯ. Сверяется с живой перед каждой
   // операцией: переход посреди слива обязан его прервать, а не дописать
   // остаток уже в другую компанию.
   const gateTenantId = readTenantId(opts);
+  // ХОСТ ЗНАЕТ КОМПАНИЮ, А ЕЁ НЕТ — НЕ СЛИВАЕМ ВОВСЕ. Гейт ниже без
+  // компании не работает, и операции ушли бы без всякой проверки компании, а
+  // после выхода из аккаунта — ещё и без входа (аудит 04.10).
+  if (opts.currentTenantId && !gateTenantId) return;
 
   // ПРИВЯЗАННЫМ КЛИЕНТОМ НЕ СЛИВАЕМ ВОВСЕ. Не «пропускаем чужие операции», а
   // выходим целиком: такой клиент отправит ЛЮБУЮ операцию под своим
@@ -239,20 +468,60 @@ async function drain(opts: ReplayerOptions): Promise<void> {
   // операции остаются в очереди и уедут, когда просмотр кончится.
   if (writesBlocked()) return;
 
+  // БЕЗ ВХОДА НЕ СЛИВАЕМ (аудит 04.10). Запрос без сессии уходит анонимом, а
+  // аноним по RLS не видит ни одной строки: удаление «удаляет» ноль строк,
+  // правка не находит строку, и обе снимались бы как выполненные. Между
+  // выходом и тем, как хост погасит компанию (`forgetActiveTenantId`), есть
+  // окно — его закрывает эта проверка. Операции ждут следующего толчка.
+  if (!(await hasLiveSession(opts.supabase))) return;
+
   // СТРОКИ, ЧЬЯ ПРАВКА УПАЛА В ЭТОМ ПРОХОДЕ. Следующие правки той же строки
   // ждут следующего прохода: уйди они сейчас, упавшая старая правка
   // долетела бы ПОСЛЕ них и перезаписала свежую (24.09: растяжка 14:30→15:00
   // на 504, возврат к 14:30 — и в базе снова 15:00). Порядок жестов по одной
   // строке — закон; разные строки друг друга не держат.
+  //
+  // НАВСЕГДА УПАВШАЯ ПРАВКА ДЕРЖИТ СВОЮ СТРОКУ ТОЖЕ (аудит 2026-10-03).
+  // Раньше она пропускалась раньше этой проверки, и следующие правки той же
+  // строки уходили без неё: (а) создание записи сверх лимита упало навсегда
+  // — правки следом находили ноль строк и снимались молча как «удалено на
+  // другом устройстве», а «Повторить» создавал запись с исходным телом;
+  // (б) перенос упал навсегда, человек вернул время, правка применилась — и
+  // «Повторить» на старой ставил старое время поверх нового. Теперь цепочка
+  // строки ждёт ручного «Повторить» целиком («Синхронизация» и повторяет, и
+  // удаляет её целиком).
   const heldRows = new Set<string>();
   const rowKey = (o: QueuedOp) => `${o.table}:${o.row_id}`;
+  // КЛИЕНТ, ЧЬЯ ВСТАВКА НЕ УШЛА, ДЕРЖИТ И СВОИ ЗАПИСИ (аудит работы без сети
+  // 03.10). Клиент и запись, заведённые без сети: вставка клиента упала
+  // (5xx, «номер уже заведён») — вставка записи падала следом на внешнем
+  // ключе и за три прохода становилась «навсегда не отправленной», хотя
+  // виноват не она. Теперь запись ждёт своего клиента, попыток не тратя.
+  const heldClientInserts = new Set<string>();
+  const hold = (o: QueuedOp) => {
+    heldRows.add(rowKey(o));
+    if (o.table === "clients" && o.op === "insert") heldClientInserts.add(o.row_id);
+  };
+  const waitsForClient = (o: QueuedOp) => {
+    if (o.table === "clients") return false;
+    const clientId = (o.payload as { client_id?: unknown } | null)?.client_id;
+    return typeof clientId === "string" && heldClientInserts.has(clientId);
+  };
+  // Свежий сторож строки после применившейся правки (см. `forwardQueuedSentinel`):
+  // в памяти — для правок этого же прохода, в базе — для следующих.
+  const sentinels = new Map<string, { from: string; to: string }>();
 
   for (const op of ops) {
     let legacyUpdate = false;
     if (heldRows.has(rowKey(op))) continue;
+    if (waitsForClient(op)) {
+      heldRows.add(rowKey(op));
+      continue;
+    }
     if (op.attempts >= MAX_ATTEMPTS) {
       // Already failed permanently — leave in queue so the UI can
       // show the manual-retry button. Manual retry resets attempts.
+      hold(op);
       continue;
     }
 
@@ -302,6 +571,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
         const msg = "Операция без компании — отправлять её некуда";
         await markOpPermanentlyFailedAndEmit(op.id, msg);
         opts.onPermanentFailure?.({ ...op, attempts: MAX_ATTEMPTS, last_error: msg });
+        hold(op);
         continue;
       }
       if (payloadTenant !== liveTenantId) continue;
@@ -322,6 +592,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
         attempts: MAX_ATTEMPTS,
         last_error: msg,
       });
+      hold(op);
       continue;
     }
 
@@ -351,6 +622,7 @@ async function drain(opts: ReplayerOptions): Promise<void> {
             attempts: 999,
             last_error: msg,
           });
+          hold(op);
           continue;
         }
         // Non-quota error in the gate — fall through to normal
@@ -366,17 +638,42 @@ async function drain(opts: ReplayerOptions): Promise<void> {
     // чтобы не начинать; эта — чтобы не доотправить начатое.
     if (gateTenantId && readTenantId(opts) !== gateTenantId) break;
 
+    const carried = sentinels.get(rowKey(op));
+    const sendOp =
+      carried && op.op === "update" && op.expected_updated_at === carried.from
+        ? { ...op, expected_updated_at: carried.to }
+        : op;
     try {
-      const conflict = await dispatch(opts.supabase, op, legacyUpdate);
-      if (conflict) {
+      const conflict = await dispatch(
+        opts.supabase,
+        sendOp,
+        legacyUpdate,
+        (to) => {
+          if (op.expected_updated_at) {
+            sentinels.set(rowKey(op), { from: op.expected_updated_at, to });
+          }
+        },
+        gateTenantId ? () => readTenantId(opts) === gateTenantId : undefined,
+      );
+      if (conflict === "server-won") {
+        opts.onConflict?.(GUARDED_CONFLICT_MESSAGE);
+      } else if (conflict) {
         opts.onConflict?.(
           "Запись была обновлена на другом устройстве. Применены ваши изменения.",
         );
       }
       await removeOp(op.id);
     } catch (err) {
+      // Сменилась компания — не ошибка операции: попытку не считаем, слив
+      // обрываем, как это делает проверка перед отправкой.
+      if (err instanceof TenantSwitchedMidway) break;
       const msg = err instanceof Error ? err.message : String(err);
-      heldRows.add(rowKey(op));
+      hold(op);
+      // Обрыв — попытку не тратим: строка ждёт следующего прохода.
+      if (isTransientReplayError(err)) {
+        transientFailure = true;
+        continue;
+      }
       await bumpAttempt(op.id, msg);
       // If we just exceeded the cap, surface to UI once.
       if (op.attempts + 1 >= MAX_ATTEMPTS) {
@@ -391,12 +688,19 @@ async function drain(opts: ReplayerOptions): Promise<void> {
     }
   }
 
-  opts.onChanged?.();
+  if (transientFailure) scheduleTransientRetry(opts);
+  // ПЕРЕЧИТКА — ТОЛЬКО КОГДА ОЧЕРЕДЬ ПРАВДА ИЗМЕНИЛАСЬ. Хост на `onChanged`
+  // перечитывает календарь, а перечитка при непустой очереди сама толкает
+  // слив: проход, где ничего не ушло (обрыв), крутил этот круг без конца.
+  const signatureAfter = queueSignature(await dequeueAll().catch(() => ops));
+  if (signatureAfter !== signatureBefore) opts.onChanged?.();
 }
 
 /** Returns `true` if the dispatch succeeded but a conflict was
  *  detected (UPDATE matched 0 rows on the first pass; we then
  *  retried without expected_updated_at and that one succeeded).
+ *  `"server-won"` — правка статуса или денег записи при конфликте уступила
+ *  серверу (`APPOINTMENT_GUARDED_FIELDS`): о ней надо сказать словами.
  *  Throws on unrecoverable errors so the caller bumps attempts. */
 async function dispatch(
   supabase: DbSupabase,
@@ -405,7 +709,11 @@ async function dispatch(
    *  пролежала в очереди часы и дни, и строку за это время правили — при
    *  конфликте побеждает сервер, а не она. */
   serverWinsOnConflict = false,
-): Promise<boolean> {
+  /** Правка легла чисто, и у строки теперь новое `updated_at`. */
+  onApplied?: (updatedAt: string) => void,
+  /** Компания устройства всё ещё та, под которой начат слив. */
+  tenantStill?: () => boolean,
+): Promise<boolean | "server-won"> {
   // The repositories accept the row shapes already; payloads are
   // pre-shaped at enqueue time so dispatch is mostly a relay. We
   // talk directly to PostgREST here (not through the typed repo
@@ -429,6 +737,7 @@ async function dispatch(
       .select("id");
     if (error) throw new Error(`replay delete: ${error.message}`);
     if (Array.isArray(deleted) && deleted.length > 0) return false;
+    assertTenantStill(tenantStill);
 
     // НОЛЬ СТРОК ДВУСМЫСЛЕН, и разрешает его только проверка видимости:
     //   • строки не видно — её уже удалили с другого устройства или её
@@ -470,7 +779,13 @@ async function dispatch(
     // transaction-owning RPC as the online repository. A lost successful
     // response is repaired idempotently through update_client_with_tags on
     // the next duplicate-key attempt.
-    if (op.table === "clients" && queuedClientTagIds.length > 0) {
+    // КЛИЕНТ ВСЕГДА ВСТАЁТ ТОЙ ЖЕ ДВЕРЬЮ, ЧТО В СЕТИ (аудит 04.10). Без
+    // тегов он раньше шёл прямой вставкой — мимо серверных умолчаний
+    // `create_client_with_tags`, главное из которых команда: в сети пустую
+    // команду функция заменяет первой активной, а с очереди клиент уезжал с
+    // `team_id = NULL`, и партнёрам его не было видно. Прямая вставка
+    // осталась только для старых строк с не-UUID id (ниже, v489).
+    if (op.table === "clients" && (queuedClientTagIds.length > 0 || isUuid(op.row_id))) {
       if (!isUuid(op.row_id)) {
         throw new Error(
           "replay client tags: client id is not a UUID; aggregate cannot be restored",
@@ -483,17 +798,24 @@ async function dispatch(
       // Тот же белый список, что и у онлайн-записи: RPC не принимает
       // идентичность, сторожок LWW и `purge_at` (срок корзины ставит только
       // удаление прямым UPDATE). Лишний ключ = отказ 22023 на всю очередь.
+      // `sms_opt_out` — тоже мимо: отказ от SMS правится своей функцией
+      // (`set_client_sms_opt_out`), а очередь кладёт его в строку нового
+      // клиента. С ним клиент с тегом, заведённый без сети, сервер отбивал
+      // на каждом повторе, и после трёх попыток он пропадал с телефона
+      // (повторный аудит 03.10).
       const {
         id: _id,
         tenant_id: _tenantId,
         updated_at: _updatedAt,
         purge_at: _purgeAt,
+        sms_opt_out: _smsOptOut,
         ...clientPayload
       } = payload;
       void _id;
       void _tenantId;
       void _updatedAt;
       void _purgeAt;
+      void _smsOptOut;
       const { error: aggregateError } = await supabase.rpc(
         "create_client_with_tags",
         {
@@ -507,6 +829,21 @@ async function dispatch(
         const duplicate =
           aggregateError.code === "23505" ||
           /duplicate key/i.test(aggregateError.message);
+        // Без тегов дубль — либо клиент уже на сервере (ответ прошлой попытки
+        // потерялся), либо номер занят ЧУЖИМ клиентом; различает сервер, как
+        // у прямой вставки ниже. Теги при этом не трогаем: пустой список
+        // снял бы теги, поставленные с другого телефона.
+        if (duplicate && queuedClientTagIds.length === 0) {
+          const probe = await supabase
+            .from("clients")
+            .select("id")
+            .eq("id", op.row_id)
+            .maybeSingle();
+          if (probe.data) return false;
+          throw new Error(
+            "Клиент с таким номером уже заведён — откройте его карточку, а этот черновик удалите",
+          );
+        }
         if (!duplicate) {
           const unavailable =
             aggregateError.code === "PGRST202" ||
@@ -609,16 +946,30 @@ async function dispatch(
     )
       .eq("id", op.row_id)
       .eq("updated_at", op.expected_updated_at)
-      .select("id");
+      .select("id, updated_at");
     /* eslint-enable @typescript-eslint/no-explicit-any */
     const { data, error } = await filter;
     if (error) throw new Error(`replay update: ${error.message}`);
-    if (data && data.length > 0) return false; // matched cleanly
+    if (data && data.length > 0) {
+      // Matched cleanly. Свежий `updated_at` — следующим правкам строки и
+      // кэшу: иначе вторая офлайн-правка несла бы прежний сторож и ловила
+      // ложный «конфликт» (аудит 03.10).
+      const next = (data[0] as { updated_at?: unknown }).updated_at;
+      if (typeof next === "string" && next !== op.expected_updated_at) {
+        await carrySentinel(op, op.expected_updated_at, next);
+        onApplied?.(next);
+      }
+      return false;
+    }
 
-    if (serverWinsOnConflict) {
+    assertTenantStill(tenantStill);
+    const guarded = touchesGuardedAppointmentFields(op.table, updatePayload);
+    if (serverWinsOnConflict || guarded) {
       // Строку правили после того, как эта правка встала в очередь. Старая
       // правка поверх новой затёрла бы свежие изменения (время, услуги),
-      // поэтому операция снимается, а кэш берёт строку сервера.
+      // поэтому операция снимается, а кэш берёт строку сервера. Правка
+      // статуса или денег записи уступает ВСЕГДА — см.
+      // `APPOINTMENT_GUARDED_FIELDS`.
       const { data: fresh, error: freshErr } = await supabase
         .from(tableName)
         .select()
@@ -637,9 +988,12 @@ async function dispatch(
           await cacheUpsert(op.table as CachedTable, toCachedRow(op.table, row, prevCached));
         }
       }
-      return false;
+      // Строки больше нет — говорить не о чем; есть — правка статуса или
+      // денег уступила, и человек должен это узнать.
+      return guarded && fresh ? "server-won" : false;
     }
 
+    assertTenantStill(tenantStill);
     // 0 rows → conflict. Retry without updated_at filter and re-fetch
     // the canonical server row (now carrying the new updated_at) so
     // the cache stays consistent. Without this re-fetch, IDB would
@@ -700,6 +1054,7 @@ async function dispatch(
     //     `edit_all`). Операция остаётся с причиной и по исчерпании попыток
     //     уходит в `onPermanentFailure`, а не в ложное «применено».
     if (!forced) {
+      assertTenantStill(tenantStill);
       if (await rowStillVisible(supabase, tableName, op.row_id)) {
         throw new Error("Сервер не дал изменить эту запись: нет прав на неё.");
       }
@@ -717,6 +1072,25 @@ async function dispatch(
     .eq("id", op.row_id);
   if (plainErr) throw new Error(`replay update (plain): ${plainErr.message}`);
   return false;
+}
+
+/** Передать свежий сторож ждущим правкам строки и строке кэша. Сбой здесь
+ *  правку не отменяет — она уже на сервере; худшее — прежний ложный
+ *  «конфликт» у следующей. */
+async function carrySentinel(op: QueuedOp, from: string, to: string): Promise<void> {
+  try {
+    await forwardQueuedSentinel(op.table, op.row_id, op.id, from, to);
+    const cached = await cacheGetOne<CachedClientData | CachedAppointmentData>(
+      op.table as CachedTable,
+      op.row_id,
+    );
+    const stamp = (cached as { updated_at?: unknown } | null)?.updated_at;
+    if (cached && stamp === from) {
+      await cacheUpsert(op.table as CachedTable, { ...cached, updated_at: to });
+    }
+  } catch {
+    /* см. выше */
+  }
 }
 
 /** НОЛЬ СТРОК ДВУСМЫСЛЕН, и разрешает его только чтение видимости: строки не

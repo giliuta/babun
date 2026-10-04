@@ -75,6 +75,10 @@ function rowToAccount(r: Row, teamIds: string[] = []): Account {
     is_primary: r.is_primary,
     show_in_payments: r.show_in_payments,
     is_active: r.is_active,
+    is_hidden: r.is_hidden ?? false,
+    note: r.note ?? null,
+    deleted_at: r.deleted_at ?? null,
+    purge_at: r.purge_at ?? null,
     created_at: r.created_at,
     updated_at: r.updated_at,
   };
@@ -83,7 +87,13 @@ function rowToAccount(r: Row, teamIds: string[] = []): Account {
 export async function listAccounts(
   supabase: DbSupabase,
   tenantId: string,
-  options: { includeInactive?: boolean } = {},
+  options: {
+    includeInactive?: boolean;
+    /** Счета из «Удалённых счетов» — только для подписей истории (лента,
+     *  выгрузка, выписка): у операции на удалённом счёте имя счёта не
+     *  пропадает. Пикеры и списки их не берут. */
+    includeDeleted?: boolean;
+  } = {},
 ): Promise<Account[]> {
   let q = supabase
     .from("accounts")
@@ -92,7 +102,10 @@ export async function listAccounts(
   if (!options.includeInactive) q = q.eq("is_active", true);
   const { data, error } = await q.order("position", { ascending: true });
   if (error) throw new Error(`listAccounts: ${error.message}`);
-  const rows = (data ?? []) as Row[];
+  // «УДАЛЁННЫЕ СЧЕТА» В ОБЫЧНЫХ СПИСКАХ НЕ ЖИВУТ (владелец 03.10). Отсев —
+  // здесь, по полю строки, а не фильтром запроса: так список не падает и на
+  // базе, где колонки `deleted_at` ещё нет.
+  const rows = ((data ?? []) as Row[]).filter((r) => options.includeDeleted || !r.deleted_at);
 
   // ПРИВЯЗКИ ЧИТАЕМ, ТОЛЬКО ЕСЛИ ЕСТЬ КОМУ. `account_teams` — историческая
   // таблица общего счёта: схема «счёт принадлежит ОДНОЙ команде» снесла его
@@ -144,6 +157,9 @@ export interface AccountDraft {
   show_in_payments?: boolean;
   /** Режим НДС этого счёта. null — как у команды/компании. */
   vat_mode?: "off" | "inclusive" | "exclusive" | "on" | null;
+  /** Скрытый счёт (только владелец): прятать — вместе с
+   *  `show_in_payments: false`, иначе база откажет. */
+  is_hidden?: boolean;
 }
 
 function assertOpeningBalance(amount: number | undefined): void {
@@ -276,6 +292,7 @@ export async function updateAccount(
     update.show_in_payments = patch.show_in_payments;
   }
   if (patch.vat_mode !== undefined) update.vat_mode = patch.vat_mode;
+  if (patch.is_hidden !== undefined) update.is_hidden = patch.is_hidden;
   const { data, error } = await supabase
     .from("accounts")
     .update(update)
@@ -424,6 +441,60 @@ export async function reopenAccount(
     .select("id")
     .maybeSingle();
   assertAccountWritten({ data, error }, { fallback: "Не удалось открыть счёт" });
+}
+
+/** «Удалённые счета» компании — новые сверху. */
+export async function listDeletedAccounts(
+  supabase: DbSupabase,
+  tenantId: string,
+): Promise<Account[]> {
+  const { data, error } = await supabase
+    .from("accounts")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false });
+  if (error) throw new Error(`listDeletedAccounts: ${error.message}`);
+  return ((data ?? []) as Row[]).map((r) => rowToAccount(r));
+}
+
+/**
+ * «УДАЛИТЬ» — В «УДАЛЁННЫЕ СЧЕТА» (владелец 03.10: «попадают в папку
+ * „Удалённые счета" на 30 дней, как клиенты»). Время ставит сервер
+ * (`account_trash_rules`): он же закрывает счёт, отказывает счёту с деньгами
+ * и назначает срок стирания пустому.
+ */
+export async function trashAccount(
+  supabase: DbSupabase,
+  id: string,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("accounts")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  assertAccountWritten({ data, error }, { fallback: "Не удалось удалить счёт" });
+}
+
+/** Вернуть из «Удалённых счетов»: открытый счёт, срок снят (сервер). */
+export async function restoreAccount(
+  supabase: DbSupabase,
+  id: string,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("accounts")
+    .update({ deleted_at: null })
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  assertAccountWritten(
+    { data, error },
+    {
+      fallback: "Не удалось вернуть счёт",
+      duplicate: "В команде уже есть счёт с таким именем — переименуйте его и верните этот",
+    },
+  );
 }
 
 /**

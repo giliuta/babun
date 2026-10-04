@@ -295,18 +295,15 @@ export function blockContour(hue: string): string {
   return oklchToHex([Math.max(0.2, lch[0] - 0.2), lch[1], lch[2]]);
 }
 
-/** Кант просрочки: тот же тон, почти чёрный. На плотной заливке цветной кант
- *  невидим, а тёмный ободок того же тона читается и сохраняет «чей» блок. */
-export function blockOverdueEdge(hue: string): string {
-  const lch = hexToOklch(blockSolid(hue));
-  if (!lch) return CANCELLED_EDGE;
-  return oklchToHex([0.2, Math.min(lch[1], 0.1), lch[2]]);
-}
-
 /** `rgba()`-строка для анимации заливки: восьмизначный hex Reanimated
- *  разбирает не везде, а `interpolateColor` по rgba работает всегда. */
+ *  разбирает не везде, а `interpolateColor` по rgba работает всегда.
+ *
+ *  Понимает и токен-`rgba(…)`: тиры текста — чернила с прозрачностью, и
+ *  приклеенный к ним hex-суффикс альфы («rgba(11,18,32,0.74)1a») — не цвет.
+ *  Так выбранная плитка «Ожидается» в «Финансах дня» вставала тёмной плитой
+ *  с тёмным текстом (повторный аудит 03.10). */
 export function fillRgba(hue: string, alpha: number): string {
-  const rgb = parseHex(hue);
+  const rgb = parseHex(hue) ?? parseRgba(hue)?.rgb;
   if (!rgb) return `rgba(0,0,0,${alpha})`;
   return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
 }

@@ -112,6 +112,29 @@ async function ready(): Promise<SqlAdapter> {
  *  re-migrates. Never called in production. */
 export function __resetCacheForTests(): void {
   migratePromise = null;
+  localWriteSeq.clear();
+}
+
+// ─── Local-write sequence (guard for authoritative resync) ────────────
+// АВТОРИТЕТНАЯ СВЕРКА НЕ СТИРАЕТ ПРАВКУ, ЛЕГШУЮ ВО ВРЕМЯ ЕЁ ЗАПРОСА (03.10).
+// Сверка календаря качает снимок сервера секундами (1–6 с на слабой связи),
+// а потом целиком заменяет им кэш компании. Перенос или новая запись,
+// записанные в кэш за эти секунды, в снимке ещё старые или их нет вовсе — и
+// замена возвращала запись на прежнее место до следующей сверки, а
+// следующая правка уходила со старым `updated_at` («Запись изменилась на
+// другом устройстве»). Счётчик растёт В НАЧАЛЕ каждой локальной записи
+// (до первого await), сверка запоминает его до запроса и сверяет внутри
+// эксклюзивной транзакции замены: начатая раньше правка отменяет замену,
+// начатая позже ляжет после неё и останется.
+const localWriteSeq = new Map<CachedTable, number>();
+
+function bumpLocalWrite(table: CachedTable): void {
+  localWriteSeq.set(table, (localWriteSeq.get(table) ?? 0) + 1);
+}
+
+/** Сколько раз приложение само писало в таблицу кэша — не сверкой. */
+export function cacheLocalWriteSeq(table: CachedTable): number {
+  return localWriteSeq.get(table) ?? 0;
 }
 
 // ─── Table-name guard ────────────────────────────────────────────────
@@ -210,6 +233,7 @@ export async function cacheUpsert<T extends CachedRow>(
   table: CachedTable,
   row: T,
 ): Promise<void> {
+  bumpLocalWrite(table);
   const sql = await ready();
   await upsertRow(sql, table, row);
 }
@@ -275,6 +299,7 @@ export async function cacheDelete(
   table: CachedTable,
   id: string,
 ): Promise<void> {
+  bumpLocalWrite(table);
   const sql = await ready();
   await deleteRow(sql, table, id);
 }
@@ -296,6 +321,7 @@ export async function cacheBulkUpsert<T extends CachedRow>(
   rows: T[],
 ): Promise<void> {
   if (rows.length === 0) return;
+  bumpLocalWrite(table);
   const sql = await ready();
   // Exclusive: a bulk resync (reconnect / cold-cache fill) writes many
   // rows; an interleaved optimistic single-row write must not land inside
@@ -322,9 +348,23 @@ export async function cacheReplaceTenant<T extends CachedRow>(
   table: CachedTable,
   tenantId: string,
   rows: T[],
-): Promise<void> {
+  opts?: {
+    /** Счётчик `cacheLocalWriteSeq(table)`, снятый ДО запроса снимка. Если
+     *  с тех пор приложение писало в таблицу, замена не делается: снимок
+     *  старше правки. Ответ `false` — «не заменено, сверьте ещё раз». */
+    unlessLocalWriteSince?: number;
+  },
+): Promise<boolean> {
   const sql = await ready();
+  let skipped = false;
   await sql.withExclusiveTransactionAsync(async (txn) => {
+    if (
+      opts?.unlessLocalWriteSince !== undefined &&
+      cacheLocalWriteSeq(table) !== opts.unlessLocalWriteSince
+    ) {
+      skipped = true;
+      return;
+    }
     await txn.runAsync(
       `DELETE FROM ${tableName(table)} WHERE tenant_id = ?`,
       [tenantId],
@@ -346,6 +386,7 @@ export async function cacheReplaceTenant<T extends CachedRow>(
       [authoritativeSnapshotKey(table, tenantId), "1", Date.now()],
     );
   });
+  return !skipped;
 }
 
 /** True after at least one authoritative server snapshot, including []. */
@@ -472,6 +513,7 @@ export async function enqueueOpWithCacheUpsert<T extends CachedRow>(
   table: CachedTable,
   row: T,
 ): Promise<void> {
+  bumpLocalWrite(table);
   const sql = await ready();
   await sql.withExclusiveTransactionAsync(async (txn) => {
     await upsertRow(txn, table, row);
@@ -489,6 +531,7 @@ export async function enqueueOpWithCacheDelete(
   table: CachedTable,
   id: string,
 ): Promise<void> {
+  bumpLocalWrite(table);
   const sql = await ready();
   await sql.withExclusiveTransactionAsync(async (txn) => {
     await deleteRow(txn, table, id);
@@ -516,7 +559,12 @@ export async function dequeueAll(): Promise<QueuedOp[]> {
     `SELECT id, created_at, table_name, op, row_id, payload,
             expected_updated_at, attempts, last_error
        FROM sync_queue
-       ORDER BY created_at ASC, id ASC`,
+       -- ПОРЯДОК ПОСТАНОВКИ, А НЕ ЧАСЫ ТЕЛЕФОНА (аудит 2026-10-03). id —
+       -- AUTOINCREMENT и растёт строго по порядку записи; created_at — Date.now()
+       -- и ходит назад вместе с часами (ручная смена времени, коррекция после
+       -- долгого офлайна): удаление вставало перед вставкой той же записи,
+       -- давало «0 строк = уже удалено», а вставка затем её воскрешала.
+       ORDER BY id ASC`,
   );
   return rows.map(queueRowToOp);
 }
@@ -537,9 +585,46 @@ export async function hasQueuedOps(
   return (row?.n ?? 0) > 0;
 }
 
+/** Лежит ли у строки правка, которую очередь уже не повторит сама
+ *  (`attempts >= minAttempts`): всё, что встанет за ней, тоже не уйдёт, пока
+ *  человек её не повторит или не удалит в «Синхронизации». */
+export async function hasStuckQueuedOps(
+  table: CachedTable,
+  rowId: string,
+  minAttempts: number,
+): Promise<boolean> {
+  const sql = await ready();
+  const row = await sql.getFirstAsync<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM sync_queue WHERE table_name = ? AND row_id = ? AND attempts >= ?",
+    [table, rowId, minAttempts],
+  );
+  return (row?.n ?? 0) > 0;
+}
+
 export async function removeOp(id: number): Promise<void> {
   const sql = await ready();
   await sql.runAsync("DELETE FROM sync_queue WHERE id = ?", [id]);
+}
+
+/** СВЕЖИЙ СТОРОЖ ДЛЯ СЛЕДУЮЩИХ ПРАВОК СТРОКИ (аудит 2026-10-03).
+ *
+ *  Все офлайн-правки одной строки встают в очередь с одним и тем же
+ *  `expected_updated_at` — тем, что был в кэше. Первая применилась, триггер
+ *  сервера поставил строке новое `updated_at`, и вторая с прежним сторожем
+ *  находила ноль строк: ложный «Конфликт синхронизации» и силовая запись.
+ *  Применившаяся правка передаёт свежий сторож тем, кто ждёт за ней. */
+export async function forwardQueuedSentinel(
+  table: CachedTable,
+  rowId: string,
+  afterId: number,
+  from: string,
+  to: string,
+): Promise<void> {
+  const sql = await ready();
+  await sql.runAsync(
+    "UPDATE sync_queue SET expected_updated_at = ? WHERE table_name = ? AND row_id = ? AND id > ? AND expected_updated_at = ?",
+    [to, table, rowId, afterId, from],
+  );
 }
 
 export async function bumpAttempt(id: number, error: string): Promise<void> {

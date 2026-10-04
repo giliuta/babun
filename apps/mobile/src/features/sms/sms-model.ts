@@ -2,6 +2,7 @@
 // черновик правки и слова отказов. Без React и сети — его читают тесты.
 
 import { parseTeamTemplates, type SmsTeamTemplate } from "./sms-team-templates";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 /** Счёт месяца по команде. */
 export interface SmsTeamStats {
@@ -234,6 +235,9 @@ export const LOW_BALANCE_CENTS = 500;
  *  отправителя — пугать нечем). Пусто — SMS не уходят вовсе. */
 export function balanceWarning(
   account: Pick<SmsAccount, "priceCents" | "owner" | "senders" | "frozen"> | null | undefined,
+  /** Можно ли платить здесь (`CAN_PAY_HERE`): в приложении из магазина
+   *  «пополните» не говорим — только состояние (владелец 04.10). */
+  payHere = true,
 ): string | null {
   const owner = account?.owner;
   if (!owner || !account) return null;
@@ -241,7 +245,8 @@ export function balanceWarning(
   if (account.frozen) return FROZEN_WORDS;
   if (owner.balanceCents < 0) return "Долг по балансу — SMS не уходят";
   if (Object.keys(account.senders ?? {}).length === 0) return null;
-  return owner.balanceCents < LOW_BALANCE_CENTS ? "Пополните баланс" : null;
+  if (owner.balanceCents >= LOW_BALANCE_CENTS) return null;
+  return payHere ? "Пополните баланс" : "Баланс на исходе";
 }
 
 /** Отправка остановлена сверкой: баланс не сошёлся с журналом денег. */
@@ -258,7 +263,7 @@ export function smsErrorText(error: unknown): string {
   if (message.includes("sms:sender_format")) return "Имя отправителя: латиница, цифры, до 11 знаков";
   if (message.includes("sms:sender_taken")) return "Это имя занято — выберите другое";
   if (message.includes("sms:country")) return "На номера этой страны SMS не отправляются";
-  if (message.includes("sms:limit")) return "На сегодня предел SMS сотрудника исчерпан";
+  if (message.includes("sms:limit")) return "На сегодня предел SMS партнёра исчерпан";
   if (message.includes("sms:sender")) return "У команды не указано имя отправителя";
   if (message.includes("sms:calendar")) return "SMS в этом календаре выключены";
   if (message.includes("sms:disabled")) return "Отправка через сервис выключена";
@@ -266,7 +271,33 @@ export function smsErrorText(error: unknown): string {
   if (message.includes("sms:phone")) return "У клиента нет номера";
   if (message.includes("sms:rights")) return "Нет доступа к отправке";
   if (message.includes("sms: empty body")) return "Напишите текст SMS";
-  return message || "Не удалось отправить";
+  // Отказ сервера — по-русски из функции базы: переводим при показе.
+  return (message && tDynamic(message)) || "Не удалось отправить";
+}
+
+/** Пополнение — любая сумма целыми евро от €5 до €500 (владелец 30.09:
+ *  «открывается шторка, я вписываю сумму и нажимаю оплатить»). Те же пределы
+ *  у функции `sms-checkout` и у базы (`sms_topup_min_cents` /
+ *  `sms_topup_max_cents`). Центы. */
+export const TOPUP_MIN_CENTS = 500;
+export const TOPUP_MAX_CENTS = 50000;
+
+/** Текст поля «Сумма» → центы; `null` — пусто или не число. Запятая и точка
+ *  равноправны, пробелы не мешают («1 000»). */
+export function parseTopupEuros(text: string): number | null {
+  const clean = text.replace(/\s/g, "").replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(clean)) return null;
+  return Math.round(Number(clean) * 100);
+}
+
+/** Почему такую сумму не оплатить; `null` — можно. */
+export function topupProblem(text: string): string | null {
+  if (!text.trim()) return null;
+  const cents = parseTopupEuros(text);
+  if (cents == null) return "Введите сумму";
+  if (cents % 100 !== 0) return "Только целые евро";
+  if (cents < TOPUP_MIN_CENTS || cents > TOPUP_MAX_CENTS) return "От €5 до €500";
+  return null;
 }
 
 /** Почему не открылась оплата — словами. `code` — поле `error` ответа

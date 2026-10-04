@@ -112,6 +112,35 @@ describe("сумма за строку ходит туда и обратно б�
   });
 });
 
+describe("расход ступени — за одну, туда и обратно (аудит шестерёнки 03.10)", () => {
+  test("ступень «от 3 · €10 за одну» открывается десяткой и сохраняется десяткой", () => {
+    const draft = economicsDraftFromService({
+      price_tiers: [{ min_qty: 3, price_per_unit: 40 }],
+      duration_tiers: null,
+      cost_tiers: [{ min_qty: 3, cost_per_unit: 10 }],
+    });
+    assert.equal(draft.tiers[0]?.rowCost, "10");
+    const untouched = validateServiceEconomics(draft).value;
+    assert.equal(untouched?.cost_tiers?.[0]?.cost_per_unit, 10);
+
+    // Набрали 12 «за одну» — в базу уходит 12, а не 4.
+    const typed = validateServiceEconomics({
+      ...draft,
+      tiers: draft.tiers.map((tier) => ({ ...tier, rowCost: "12" })),
+    }).value;
+    assert.equal(typed?.cost_tiers?.[0]?.cost_per_unit, 12);
+  });
+
+  test("новая ступень берёт расход базы за одну, а не половину", () => {
+    const saved = validateServiceEconomics({
+      tiers: [
+        { id: "n", minQuantity: "2", rowPrice: "90", rowCost: "5", totalDuration: "" },
+      ],
+    }).value;
+    assert.equal(saved?.cost_tiers?.[0]?.cost_per_unit, 5);
+  });
+});
+
 describe("service economics validation", () => {
   test("rejects duplicate thresholds, negative values, and empty tiers", () => {
     const result = validateServiceEconomics({

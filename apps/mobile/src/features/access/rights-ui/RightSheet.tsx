@@ -37,6 +37,7 @@ export function RightSheet({
   rowLevel,
   previewLevels,
   locked,
+  stepAllowed,
   onPick,
   onClose,
 }: {
@@ -49,6 +50,9 @@ export function RightSheet({
   previewLevels?: (chosen: AccessLevel) => Readonly<Record<string, AccessLevel>>;
   /** Строка сейчас не переключается — почему. */
   locked?: string;
+  /** Ступень, которую может поставить тот, кто смотрит (директор — не выше
+   *  своей, 04.10). Нет — любая. */
+  stepAllowed?: (step: AccessLevel) => boolean;
   /** Прошлая ступень ещё сохраняется: вторая запись не ляжет поверх первой. */
   busy?: boolean;
   /** Последнее открытое право — держится и пока шторка уезжает. */
@@ -128,7 +132,10 @@ export function RightSheet({
             {block.levels.map((step) => {
               const danger = stepDanger(block, step);
               const look = stepLook(step);
+              // Ступень выше своей у директора — видна, но не ставится.
+              const above = !!stepAllowed && step !== level && !stepAllowed(step);
               return (
+                <View key={step} style={{ opacity: above ? 0.4 : 1 }}>
                 <SelectRow
                   key={step}
                   icon={look.icon}
@@ -141,6 +148,11 @@ export function RightSheet({
                       <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, lineHeight: 17, color: t.sub }}>
                         {stepHint(block, step, shown)}
                       </Text>
+                      {above ? (
+                        <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, lineHeight: 17, color: t.sub }}>
+                          Выше ваших прав — ставит владелец
+                        </Text>
+                      ) : null}
                       {danger ? (
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                           <AlertTriangle color={t.warning} size={ICON.xs} strokeWidth={2.2} />
@@ -157,7 +169,7 @@ export function RightSheet({
                   }
                   onPress={() => {
                     if (step === chosen) return;
-                    if (locked) {
+                    if (locked || above) {
                       haptics.warning();
                       return;
                     }
@@ -165,6 +177,7 @@ export function RightSheet({
                     setChosen(step);
                   }}
                 />
+                </View>
               );
             })}
           </SelectList>

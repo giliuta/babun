@@ -50,7 +50,6 @@ interface TeamFacts {
   /** Клиенты: `undefined` — права нет в реестре. */
   clients: AccessLevel | undefined;
   clientsAll: boolean;
-  phonesHidden: boolean;
   /** Что с деньгами: «принимает оплату», «видит долги»… */
   money: string[];
   /** Может удалить чужое: записи, долги, переводы, чужие операции. */
@@ -84,21 +83,16 @@ function teamFacts(read: LevelRead): TeamFacts {
   if (is("calendar.move", "write")) verbs.push("переносит");
   if (is("calendar.cancel", "write")) verbs.push("отменяет");
   const acts: string[] = verbs.length > 0 ? [`${joinRu(verbs)} записи`] : [];
-  if (is("record.status", "write")) acts.push("ставит статус");
 
   const money: string[] = [];
   if (is("record.payment", "write")) money.push("принимает оплату");
-  // Доходы и расходы — два права с этапа 2; реестр до наката знает только
-  // общее `finance.operations`, и тогда итог говорит по нему.
-  const ops = read("finance.operations");
+  // Доход и расход дня под календарём (04.10) — право календаря.
+  if (is("calendar.day_money", "read")) money.push("видит доход и расход дня");
+  if (is("calendar.day_money", "write")) money.push("вносит доход и расход дня");
+  // Доходы и расходы — два права с этапа 2.
   const income = read("finance.income");
   const expense = read("finance.expense");
-  if (income !== undefined || expense !== undefined) {
-    money.push(...sideWords(income, expense));
-  } else {
-    if (ops === "read") money.push("видит доходы и расходы");
-    if (ops === "write") money.push("ведёт доходы и расходы");
-  }
+  money.push(...sideWords(income, expense));
   const accounts = read("finance.accounts");
   if (accounts === "read") money.push("видит счета");
   if (accounts === "write") money.push("управляет счетами");
@@ -112,12 +106,12 @@ function teamFacts(read: LevelRead): TeamFacts {
     acts,
     edits: RECORD_EDITS.some((key) => is(key, "write")),
     clients: read("clients"),
-    clientsAll: read("clients.scope") === "all",
-    phonesHidden: read("clients.contacts") === "off",
+    // «Без ограничения» с 02.10 хранится как `own` («all» — прежнее имя):
+    // проверка одного «all» всегда говорила «своих» (аудит 03.10).
+    clientsAll: read("clients.scope") === "own" || read("clients.scope") === "all",
     money,
     risky:
       is("calendar.cancel", "write") ||
-      ops === "write" ||
       accounts === "write" ||
       debts === "write" ||
       income === "full" ||
@@ -130,6 +124,14 @@ function teamFacts(read: LevelRead): TeamFacts {
 export function teamSentence(read: LevelRead): string {
   const f = teamFacts(read);
   const out: string[] = [];
+
+  // «Записи клиентов: Скрыты» — записей команды у него нет вовсе (01.10:
+  // строка говорила «только смотрит записи» при закрытых записях).
+  if (read("calendar.records") === "off") {
+    out.push("Записей команды не видит.");
+    out.push(f.money.length > 0 ? `${cap(joinRu(f.money))}.` : "Деньги закрыты.");
+    return out.join(" ");
+  }
 
   // Записи: видит всегда (он прикреплён к команде); без чего — и что делает.
   if (f.allHidden) {
@@ -146,7 +148,7 @@ export function teamSentence(read: LevelRead): string {
     out.push("Базу клиентов не видит.");
   } else if (f.clients !== undefined) {
     const whom = f.clientsAll ? "всех клиентов" : "своих клиентов";
-    out.push(`${f.clients === "write" ? "Ведёт" : "Видит"} ${whom}${f.phonesHidden ? " без телефонов" : ""}.`);
+    out.push(`${f.clients === "write" ? "Ведёт" : "Видит"} ${whom}.`);
   }
 
   // Деньги: что может с оплатой, операциями, счетами и долгами.
@@ -163,7 +165,8 @@ export function teamSentence(read: LevelRead): string {
 export function teamBrief(read: LevelRead): string {
   const f = teamFacts(read);
   const parts: string[] = [];
-  if (f.acts.length > 0) parts.push(f.acts.join(", "));
+  if (read("calendar.records") === "off") parts.push("записей не видит");
+  else if (f.acts.length > 0) parts.push(f.acts.join(", "));
   else parts.push(f.edits ? "записи не создаёт и не переносит" : "только смотрит записи");
   if (f.clients === "off") parts.push("клиентов не видит");
   else if (f.clients !== undefined) {

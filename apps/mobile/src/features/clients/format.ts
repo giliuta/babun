@@ -1,3 +1,5 @@
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
+
 // Date / plural helpers shared across the clients feature — extracted
 // from ClientHeader / ClientNextJob / VisitsBlock / FinanceBlock /
 // ObjectsBlock, which each kept an identical private copy.
@@ -22,11 +24,8 @@ export function formatShortDateRu(key: string): string {
 /** 1 → «визит», 2–4 → «визита», 5+ → «визитов» (mod10/mod100 rules,
  *  so 21 → «визит», 22 → «визита»). */
 export function visitsWord(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "визит";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "визита";
-  return "визитов";
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return pluralRu(n, ["визит", "визита", "визитов"]);
 }
 
 /** reminder_at (YYYY-MM-DD) → метка бейджа напоминания: «сегодня», когда

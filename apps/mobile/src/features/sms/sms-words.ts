@@ -46,7 +46,11 @@ const STATUS: Record<SmsHistoryItem["status"], string> = {
   delivered: "Доставлено",
   failed: "Не доставлено",
   undelivered: "Не доставлено",
-  blocked: "Не хватило баланса",
+  // Сервер ставит «blocked» и без денег: страна номера, SMS не настроены,
+  // отправка остановлена. Причину говорит строка ошибки под словом —
+  // «Не хватило баланса» рядом с «Страна номера не разрешена» звало
+  // пополнять счёт, который ни при чём (аудит 03.10).
+  blocked: "Не отправлено",
 };
 
 export const statusWords = (status: SmsHistoryItem["status"]): string => STATUS[status] ?? status;

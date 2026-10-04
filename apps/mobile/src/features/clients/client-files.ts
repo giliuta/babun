@@ -1,19 +1,13 @@
-// ФАЙЛЫ КЛИЕНТА — ЧТО ПОКАЗЫВАЕТ БЛОК «ФАЙЛЫ» НА ЕГО СТРАНИЦЕ (владелец
-// 22.09: «уберём полностью блок документации и просто туда вставим, как у нас
-// файлы, как везде хранятся файлы»).
+// ФАЙЛЫ КЛИЕНТА — ОДНОЙ ЛЕНТОЙ ПО ДНЯМ, КАК «ИСТОРИЯ» (владелец 03.10:
+// «файлы — как история, по датам: файлы, фото, чеки, инвойсы — полноценные
+// красивые блоки, чтобы можно было сразу открывать»).
 //
-// Четыре источника: вложения клиента (туда же ложатся документы записей с
-// меткой записи), фото с выездов, инвойсы и чеки. Блок раскладывает их так
-// же, как блок файлов записи: снимки — квадратами, всё прочее — плашками.
+// Четыре источника: вложения клиента (туда же ложатся документы записей),
+// фото с выездов, инвойсы и чеки. Раньше блок раскладывал их квадратами и
+// плашками, а инвойсы и чеки на странице всех файлов прятались за строкой
+// «Инвойсы и чеки» — до чека было три тапа. Теперь это одна лента: день
+// заголовком, под ним плашки, свежие сверху; карточка показывает последнюю.
 // Здесь только правило отбора и порядка — чистое, без сети и вёрстки.
-//
-// Порядок — свежие сверху. Много файлов — показываем первые, остальное за
-// строкой «Все файлы»: блок стоит посреди страницы и не должен съедать экран.
-
-/** Две строки квадратов: плитка 64 + зазор 8, в карточку телефона входит 4. */
-export const CLIENT_FILES_MAX_MEDIA = 8;
-/** Плашек документов под квадратами. */
-export const CLIENT_FILES_MAX_PAPERS = 3;
 
 interface AttachmentLike {
   id: string;
@@ -45,73 +39,77 @@ export interface ClientFileSources<A extends AttachmentLike, V extends VisitPhot
   receipts: readonly R[];
 }
 
-export type ClientMediaEntry<A, V> =
-  | { type: "attachment"; item: A; at: string }
-  | { type: "visit"; item: V; at: string };
+/** Запись ленты: `day` — заголовок дня (YYYY-MM-DD), `at` — порядок внутри
+ *  дня и время в подписи. */
+export type ClientFileEntry<A, V, I, R> =
+  | { type: "photo"; item: A; day: string; at: string }
+  | { type: "file"; item: A; day: string; at: string }
+  | { type: "visit"; item: V; day: string; at: string }
+  | { type: "invoice"; item: I; day: string; at: string }
+  | { type: "receipt"; item: R; day: string; at: string };
 
-export type ClientPaperEntry<A, I, R> =
-  | { type: "file"; item: A; at: string }
-  | { type: "invoice"; item: I; at: string }
-  | { type: "receipt"; item: R; at: string };
+const pad = (n: number) => String(n).padStart(2, "0");
 
-export interface ClientFilesLayout<A, V, I, R> {
-  media: ClientMediaEntry<A, V>[];
-  papers: ClientPaperEntry<A, I, R>[];
-  /** Файлов на странице «Все файлы» — вложения и фото визитов. Бумаги
-   *  (инвойсы и чеки) эта страница НЕ показывает, поэтому и в её числе их нет:
-   *  иначе строка обещала бы больше, чем за ней лежит. */
-  total: number;
-  /** Сколько файлов этой страницы не поместилось; 0 — строки «Все файлы» нет. */
-  hidden: number;
-  /** Сколько инвойсов и чеков не поместилось в плашки; 0 — строки «Счета и
-   *  чеки» нет. Они живут на своей странице (`/documents?clientId=`). */
-  hiddenPapers: number;
+/** День по местному времени: у вложения и фото — из метки времени, у
+ *  документа — его дата (`issued_on`) как есть. */
+export function fileDay(at: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(at)) return at;
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return at.slice(0, 10);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** «13:30» — время из метки; у голой даты времени нет. */
+export function fileTime(at: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(at)) return "";
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const isImageMime = (mime: string) => mime.startsWith("image/");
 
-/** Живой инвойс — как у блока файлов записи: аннулированные, отменённые и
- *  кредит-ноты в файлы не попадают (`liveAppointmentInvoices`). */
-function isLiveInvoice(inv: InvoiceLike): boolean {
-  return inv.status !== "void" && inv.status !== "cancelled" && inv.kind !== "credit_note";
+/** Инвойс в «Файлах» — любой, кроме кредит-ноты: нота — часть своего
+ *  инвойса, а отменённый инвойс стоит серым (владелец 2026-10-04: «по сути
+ *  один файл, инвойс становится серым»). Правило одно с файлами записи
+ *  (`appointmentInvoiceFiles`). */
+function isInvoiceFile(inv: InvoiceLike): boolean {
+  return inv.kind !== "credit_note";
 }
 
-const newestFirst = <T extends { at: string }>(a: T, b: T) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0);
-
-export function layoutClientFiles<A extends AttachmentLike, V extends VisitPhotoLike, I extends InvoiceLike, R extends ReceiptLike>(
+/** Все файлы клиента одной лентой: свежий день сверху, внутри дня — свежее
+ *  сверху. */
+export function clientFileTimeline<A extends AttachmentLike, V extends VisitPhotoLike, I extends InvoiceLike, R extends ReceiptLike>(
   src: ClientFileSources<A, V, I, R>,
-  limits: { media: number; papers: number } = {
-    media: CLIENT_FILES_MAX_MEDIA,
-    papers: CLIENT_FILES_MAX_PAPERS,
-  },
-): ClientFilesLayout<A, V, I, R> {
-  const media: ClientMediaEntry<A, V>[] = [];
-  const papers: ClientPaperEntry<A, I, R>[] = [];
+): ClientFileEntry<A, V, I, R>[] {
+  const out: ClientFileEntry<A, V, I, R>[] = [];
   for (const a of src.attachments) {
-    if (isImageMime(a.mime_type)) media.push({ type: "attachment", item: a, at: a.created_at });
-    else papers.push({ type: "file", item: a, at: a.created_at });
+    const entry = { item: a, day: fileDay(a.created_at), at: a.created_at };
+    out.push(isImageMime(a.mime_type) ? { type: "photo", ...entry } : { type: "file", ...entry });
   }
-  for (const p of src.visitPhotos) media.push({ type: "visit", item: p, at: p.created_at });
+  for (const p of src.visitPhotos) {
+    out.push({ type: "visit", item: p, day: fileDay(p.created_at), at: p.created_at });
+  }
   for (const inv of src.invoices) {
-    if (isLiveInvoice(inv)) papers.push({ type: "invoice", item: inv, at: inv.created_at ?? inv.issued_on });
+    if (!isInvoiceFile(inv)) continue;
+    out.push({ type: "invoice", item: inv, day: inv.issued_on, at: inv.created_at ?? inv.issued_on });
   }
   for (const r of src.receipts) {
-    if (r.status !== "void") papers.push({ type: "receipt", item: r, at: r.created_at ?? r.issued_on });
+    if (r.status === "void") continue;
+    out.push({ type: "receipt", item: r, day: r.issued_on, at: r.created_at ?? r.issued_on });
   }
-  media.sort(newestFirst);
-  papers.sort(newestFirst);
-  const shownMedia = media.slice(0, limits.media);
-  const shownPapers = papers.slice(0, limits.papers);
-  const isFile = (e: ClientPaperEntry<A, I, R>) => e.type === "file";
-  const allFiles = media.length + papers.filter(isFile).length;
-  const shownFiles = shownMedia.length + shownPapers.filter(isFile).length;
-  const allDocs = papers.length - papers.filter(isFile).length;
-  const shownDocs = shownPapers.length - shownPapers.filter(isFile).length;
-  return {
-    media: shownMedia,
-    papers: shownPapers,
-    total: allFiles,
-    hidden: allFiles - shownFiles,
-    hiddenPapers: allDocs - shownDocs,
-  };
+  return out.sort((a, b) =>
+    a.day !== b.day ? (a.day < b.day ? 1 : -1) : a.at < b.at ? 1 : a.at > b.at ? -1 : 0,
+  );
+}
+
+/** Лента по дням — в её же порядке. */
+export function groupFilesByDay<E extends { day: string }>(entries: readonly E[]): { day: string; items: E[] }[] {
+  const out: { day: string; items: E[] }[] = [];
+  for (const entry of entries) {
+    const last = out[out.length - 1];
+    if (last && last.day === entry.day) last.items.push(entry);
+    else out.push({ day: entry.day, items: [entry] });
+  }
+  return out;
 }

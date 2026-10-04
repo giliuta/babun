@@ -24,8 +24,6 @@ const block = (over: Partial<AccessBlock>): AccessBlock => ({
 const REGISTRY: AccessBlock[] = [
   block({ key: "calendar.records", area: "calendar", scope: "calendar", live: false, title: "Календарь и записи" }),
   block({ key: "calendar.create", area: "calendar", scope: "calendar", levels: ["off", "write"], live: false, title: "Новые записи" }),
-  // «Не видит» у статуса снято аудитом 24.09.
-  block({ key: "record.status", area: "calendar", scope: "calendar", levels: ["read", "write"], title: "Статус записи" }),
   block({ key: "record.client", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Клиент в записи" }),
   block({ key: "record.object", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Объект в записи" }),
   block({ key: "record.services", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Услуги в записи" }),
@@ -34,13 +32,28 @@ const REGISTRY: AccessBlock[] = [
   block({ key: "record.files", area: "calendar", scope: "calendar", title: "Фото и файлы записи" }),
   block({ key: "calendar.day_labels", area: "calendar", scope: "calendar", live: false, title: "Метка дня" }),
   block({ key: "calendar.settings", area: "calendar", live: false, title: "Настройки календаря" }),
-  block({ key: "finance.operations", area: "finance", scope: "calendar", title: "Доходы и расходы" }),
-  block({ key: "finance.accounts", area: "finance", scope: "calendar", title: "Счета и остатки" }),
+  block({ key: "finance.accounts", area: "finance", scope: "calendar", title: "Счета" }),
   block({ key: "finance.debts", area: "finance", scope: "calendar", title: "Долги" }),
-  block({ key: "finance.documents", area: "finance", scope: "calendar", live: false, title: "Инвойсы и чеки" }),
-  block({ key: "clients", title: "Клиенты" }),
-  block({ key: "clients.scope", levels: ["own", "all"], title: "Какие клиенты" }),
-  block({ key: "clients.contacts", levels: ["off", "read"], title: "Телефоны и контакты" }),
+  // «Финансы» по плиткам и шестерёнке (владелец 03.10).
+  block({ key: "finance.documents", area: "finance", scope: "calendar", title: "Документы" }),
+  block({ key: "finance.profit", area: "finance", scope: "calendar", levels: ["off", "read"], title: "Прибыль" }),
+  // «Ограничения» финансов (03.10) — шкала сроков, как у клиентов.
+  block({ key: "finance.window", area: "finance", scope: "calendar", levels: ["week", "near", "month", "quarter", "half", "own"], title: "Ограничения" }),
+  block({ key: "finance.settings_accounts", area: "finance", scope: "calendar", title: "Счета" }),
+  block({ key: "finance.settings_trash", area: "finance", scope: "calendar", title: "Удалённые операции" }),
+  // Категории — по виду, как строки шестерёнки (03.10).
+  block({ key: "finance.settings_categories_income", area: "finance", scope: "calendar", title: "Доходы" }),
+  block({ key: "finance.settings_categories_expense", area: "finance", scope: "calendar", title: "Расходы" }),
+  block({ key: "finance.settings_categories_debts", area: "finance", scope: "calendar", title: "Долги" }),
+  // Валюта, реквизиты и бланк инвойса — одни на аккаунт, партнёр их только
+  // видит (03.10).
+  block({ key: "finance.settings_currency", area: "finance", levels: ["off", "read"], title: "Валюта" }),
+  block({ key: "finance.settings_requisites", area: "finance", levels: ["off", "read"], title: "Реквизиты" }),
+  block({ key: "clients", levels: ["off", "read"], title: "Клиенты" }),
+  block({ key: "clients.scope", levels: ["near", "month", "own"], title: "Ограничение по времени" }),
+  // «Долг и деньги» снято 03.10: деньги идут вместе с «Историей», у которой
+  // три положения — «Скрыта / Своя команда / Все команды».
+  block({ key: "clients.history", levels: ["off", "read", "write"], title: "История" }),
   block({ key: "services", area: "company", live: false, title: "Услуги и цены" }),
   block({ key: "masters", area: "company", live: false, title: "Мастера" }),
   block({ key: "company.currency", area: "company", levels: ["read", "write"], live: false, title: "Валюта" }),
@@ -57,15 +70,8 @@ const REGISTRY: AccessBlock[] = [
   block({ key: "calendar.events", area: "calendar", scope: "calendar", live: false, title: "События" }),
   block({ key: "calendar.schedule", area: "calendar", scope: "calendar", live: false, title: "График команды" }),
   block({ key: "calendar.booking_form", area: "calendar", live: false, title: "Вид записи" }),
-  block({ key: "finance.operation_files", area: "finance", scope: "calendar", live: false, title: "Файл к операции" }),
-  block({ key: "finance.categories", area: "finance", live: false, title: "Категории операций" }),
-  block({ key: "finance.templates", area: "finance", live: false, title: "Шаблоны операций" }),
-  block({ key: "finance.vat", area: "finance", live: false, title: "VAT" }),
-  block({ key: "finance.invoicing", area: "finance", live: false, title: "Счета клиентам" }),
   block({ key: "clients.filters", live: false, title: "Фильтры клиентов" }),
   block({ key: "clients.share", live: false, title: "Делиться клиентами" }),
-  block({ key: "clients.money", levels: ["off", "read"], live: false, title: "Долг и визиты клиента" }),
-  block({ key: "clients.history", levels: ["off", "read"], live: false, title: "История записей клиента" }),
   block({ key: "clients.files", live: false, title: "Файлы клиента" }),
   block({ key: "clients.archive", live: false, title: "Архив и корзина" }),
   block({ key: "clients.merge", levels: ["off", "write"], live: false, title: "Объединять дубли" }),
@@ -98,9 +104,12 @@ describe("слова прав", () => {
       "Цен и суммы не видит — и оплату не принимает",
     );
     assert.equal(
-      levelSentence("clients.contacts", "off"),
-      "Номера и мессенджеров не видит",
+      levelSentence("clients.history", "off"),
+      "Историю записей на карточке клиента не видит",
     );
+    // Деньги — вместе с историей (03.10): фраза говорит, что с ней приходят суммы и долг.
+    assert.match(levelSentence("clients.history", "read"), /своих командах.*суммами и долгом/);
+    assert.match(levelSentence("clients.history", "write"), /других команд.*суммами и долгом/);
   });
 
   test("незнакомый блок не роняет экран и не врёт", () => {
@@ -115,21 +124,31 @@ describe("слова прав", () => {
     assert.deepEqual(
       offered.map((b) => b.key),
       // Порядок — как в реестре по `position`; волна 2 (21.09) оживила
-      // «Статус записи» и «Фото и файлы записи», волна 3 — клиента и объект.
+      // «Фото и файлы записи», волна 3 — клиента и объект. «Статус записи»
+      // удалён (03.10).
       [
-        "record.status",
         "record.client",
         "record.object",
         "record.services",
         "record.amount",
         "record.payment",
         "record.files",
-        "finance.operations",
         "finance.accounts",
         "finance.debts",
+        // «Финансы» по плиткам и шестерёнке (владелец 03.10).
+        "finance.documents",
+        "finance.profit",
+        "finance.window",
+        "finance.settings_accounts",
+        "finance.settings_trash",
+        "finance.settings_categories_income",
+        "finance.settings_categories_expense",
+        "finance.settings_categories_debts",
+        "finance.settings_currency",
+        "finance.settings_requisites",
         "clients",
         "clients.scope",
-        "clients.contacts",
+        "clients.history",
       ],
     );
   });

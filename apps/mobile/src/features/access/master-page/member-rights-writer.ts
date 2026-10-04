@@ -27,6 +27,22 @@ import { MEMBER_REFUSAL_TEXT, levelChanges, withMemberChanges } from "./rights-r
 export const memberRefusal = (error: unknown): AccessRefusal =>
   error instanceof AccessRequestError ? refusalOf(error) : "other";
 
+/** Отказ словами. Границы директора (04.10: «не выше своих прав», «не ваша
+ *  команда», «права директора меняет владелец») сервер называет сам — по-русски
+ *  и точнее общей фразы. */
+export function memberRefusalText(error: unknown): string {
+  const refusal = memberRefusal(error);
+  if (
+    refusal === "other" &&
+    error instanceof AccessRequestError &&
+    error.hint?.startsWith("access:") &&
+    /[А-Яа-яЁё]/.test(error.message)
+  ) {
+    return error.message;
+  }
+  return MEMBER_REFUSAL_TEXT[refusal];
+}
+
 export function useMemberRightsWriter(userId: string, blocks: readonly AccessBlock[] | undefined) {
   const toast = useToast();
   const qc = useQueryClient();
@@ -54,7 +70,7 @@ export function useMemberRightsWriter(userId: string, blocks: readonly AccessBlo
     setAccess.mutate(changes, {
       onError: (error) => {
         if (previous) qc.setQueryData(key, previous);
-        toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
+        toast(memberRefusalText(error), "error");
       },
       onSettled: () => setSaving(null),
     });

@@ -9,10 +9,10 @@ import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import {
+  dmyShort,
   makePeriod,
   PERIOD_BLOCKS,
   PERIOD_LABELS,
-  periodDates,
   presetHint,
   type Period,
 } from "./period";
@@ -233,8 +233,8 @@ export function PeriodWheelsModal({
           className="mb-3 flex-row p-1"
           style={{ backgroundColor: t.fill, gap: 4, borderRadius: t.radius.card }}
         >
-          {segment("from", "Начало", periodDates({ preset: "custom", from, to: from }))}
-          {segment("to", "Конец", periodDates({ preset: "custom", from: to, to }))}
+          {segment("from", "Начало", dmyShort(from))}
+          {segment("to", "Конец", dmyShort(to))}
         </View>
 
         {/* one wheel edits the active endpoint */}

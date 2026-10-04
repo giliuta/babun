@@ -38,7 +38,7 @@ describe("экран «Финансы» спрашивает уровень од
   test("шестерёнка денежных настроек серая и глухая", () => {
     // ДВЕРЬ ОТКРЫТА ВСЕМ (владелец 20.09): шестерёнка больше не серая и не
     // глухая — страница за ней сама показывает только доступные строки
-    // (`finances/settings-rows.ts`). Сторож следит, чтобы её снова не закрыли.
+    // (`finances/settings-levels.ts`). Сторож следит, чтобы её снова не закрыли.
     assert.doesNotMatch(index, /disabled=\{!access\.settings\}/);
     assert.doesNotMatch(index, /accessibilityState=\{\{ disabled: !access\.settings \}\}/);
     assert.match(index, /<Settings color=\{t\.sub\} size=\{21\}/);
@@ -53,10 +53,11 @@ describe("экран «Финансы» спрашивает уровень од
     assert.match(index, /accounts=\{access\.accounts === "locked" \? \{ total: 0 \} : accountsSummary\}/);
     // ПЛАШКА «ДОКУМЕНТЫ» ОСТАЁТСЯ БЕЗ ДОСТУПА (владелец 20.09: «всё равно
     // остаётся плашка „Документы“, и там просто не показываются документы»).
-    // Тариф её по-прежнему убирает: без оплаченных документов их в продукте
-    // нет вовсе, и «Счета» занимают ряд целиком.
-    // Выключенная функция компании (STORY-088) убирает плитку так же, как тариф.
-    assert.match(index, /showDocuments=\{canUseDocuments && access\.has\.documents\}/);
+    // С 1.10 тариф её НЕ убирает (владелец: «всё видно, новое серым»):
+    // плитка на месте, серая, тап — плашка «Нужно изменить тариф».
+    // Выключенная функция компании (STORY-088) по-прежнему убирает плитку.
+    assert.match(index, /showDocuments=\{access\.has\.documents\}/);
+    assert.match(index, /documentsTariffLocked=\{!canUseDocuments\}/);
     assert.match(index, /showAccounts=\{access\.has\.accounts\}/);
     assert.match(index, /showDebts=\{access\.has\.debts\}/);
     assert.match(index, /lockAccounts=\{access\.accounts === "locked"\}/);
@@ -92,33 +93,32 @@ describe("экран «Финансы» спрашивает уровень од
 });
 
 describe("двери и подписи по уровню", () => {
-  test("НДС, бланк счёта и список документов сотруднику не открываются ссылкой", () => {
+  test("подстраницы шестерёнки открываются правом своей строки, а не ролью", () => {
     const layout = read("../../../app/(dashboard)/finances/_layout.tsx");
-    // «/finances/settings» ушла из списка (владелец 20.09: «я могу зайти
-    // туда, но блоков уже внутри шестерёнки не будет»): страница открыта, а
-    // строки на ней показывает `finances/settings-rows.ts`. Вторые ступени
-    // остались владельческими — к ним ведут строки, которых у сотрудника нет.
-    assert.doesNotMatch(layout, /OWNER_ONLY_PATHS = \[[^\]]*"\/finances\/settings"/);
-    // СПИСОК ЗАКРЫТ НЕ ПОИМЁННО, А ПРАВИЛОМ: сторожим, что три прежние двери
-    // в нём остались и что «/finances/settings» в него не вернулась. Точное
-    // перечисление краснело на КАЖДОЙ новой владельческой странице — так
-    // 21.09 оно упало на «/finances/requisites», хотя инвариант цел.
-    // Страницы VAT и «Счета клиентам» сняты 30.09 (VAT — в «Итого», бланк —
-    // в «Реквизитах»); владельческими остаются справочники.
-    for (const path of ["/finances/categories", "/finances/requisites"]) {
-      assert.match(
-        layout,
-        new RegExp(`OWNER_ONLY_PATHS = \\[[^\\]]*"${path.replace(/\//g, "\\/")}"`),
-        `${path} пропала из владельческих`,
-      );
+    // ДО 03.10 подстраницы шестерёнки были «только владельцу» поимённым
+    // списком. С правами строк шестерёнки (миграция 20261003235500) список
+    // снят: каждую подстраницу закрывает дверь её строки
+    // (`FinanceSettingsRoute`), а сама шестерёнка не прячется за серой
+    // страницей у партнёра без «Доходов» и «Расходов».
+    assert.doesNotMatch(layout, /OWNER_ONLY_PATHS/);
+    assert.match(layout, /onPath\(pathname, SETTINGS_PATHS\) && anySetting/);
+    for (const [file, row] of [
+      ["categories.tsx", "row=\\{row\\}"],
+
+      ["deleted.tsx", 'row="trash"'],
+    ] as const) {
+      const route = read(`../../../app/(dashboard)/finances/${file}`);
+      assert.match(route, new RegExp(`<FinanceSettingsRoute ${row}`), `${file} без двери своей строки`);
     }
-    assert.match(layout, /if \(OWNER_ONLY_PATHS\.some\(\(path\) => pathname === path \|\| pathname\.startsWith\(`\$\{path\}\/`\)\)\) \{ return <Redirect href="\/finances" \/>; \}/);
   });
 
   test("футер гаснет и называет причину словами", () => {
     const footer = read("FinancesFooter.tsx");
-    assert.match(footer, /\{reason \? \( <Text/);
+    assert.match(footer, /\{shownReason \? \( <Text/);
     assert.match(footer, /disabled=\{!enabled\}/);
+    // «Добавить счёт» — своё право (строка шестерёнки «Счета», 03.10).
+    assert.match(footer, /label="Добавить счёт" disabled=\{!create\.enabled\}/);
+    assert.match(footer, /const shownReason = creating \? create\.reason : reason;/);
   });
 
   test("витрина операции рисует только открытые действия", () => {
@@ -137,6 +137,8 @@ describe("двери и подписи по уровню", () => {
 
   test("дверь на страницу «Счета» закрывается вместе с настройками", () => {
     const panel = read("AccountsPanel.tsx");
-    assert.match(panel, /onSettings=\{canOpenSettings \? \(\) => onOpen\("\/accounts\/settings"\) : undefined\}/);
+    // 03.10: дверь несёт команду чипа (`accountsSettingsHref`) — и всё так же
+    // закрыта без права настроек.
+    assert.match(panel, /onSettings=\{canOpenSettings \? \(\) => onOpen\(accountsSettingsHref\(teamId, NO_TEAM\)\) : undefined\}/);
   });
 });

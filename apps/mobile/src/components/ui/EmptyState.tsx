@@ -1,8 +1,11 @@
 import { type ReactNode } from "react";
 import { Text, View } from "react-native";
+import { CloudOff } from "lucide-react-native";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 import { Spinner } from "@/components/ui/Spinner";
 import { Button } from "./Button";
 import { useThemeColors } from "@/theme/colors";
+import { isOutageNoise, OUTAGE_WORDS } from "@/lib/connection-words";
 
 // Пустое / загрузка / ошибка — одна поверхность на продукт. `fill` занимает
 // экран целиком; без него это блок с полями, годный как ListEmptyComponent.
@@ -26,10 +29,20 @@ export function EmptyState({
   title?: string;
   subtitle?: string;
   icon?: ReactNode;
-  action?: { label: string; onPress: () => void };
+  /** `loading` — повтор уже идёт: кнопка крутится и не жмётся второй раз. */
+  action?: { label: string; onPress: () => void; loading?: boolean };
   fill?: boolean;
 }) {
   const t = useThemeColors();
+  // ОБРЫВ — СЛОВАМИ, А НЕ ОТВЕТОМ ДРАЙВЕРА (03.10, на лежащем сервере).
+  // Два десятка экранов кладут в подпись ошибки `error.message` как есть, и
+  // под «Не удалось загрузить …» вставало «AbortError: Aborted» или целая
+  // HTML-страница шлюза. Шум без единого русского слова заменяется здесь,
+  // один раз на продукт; отказ сервера по делу остаётся своим текстом.
+  if (state === "error" && subtitle && isOutageNoise(subtitle)) {
+    title = OUTAGE_WORDS.title;
+    subtitle = OUTAGE_WORDS.subtitle;
+  }
   // Слова — своим блоком: при `fill` они забирают всю пустоту и встают по её
   // центру, а кнопка остаётся снаружи этого центрирования, внизу.
   const words = fill
@@ -61,21 +74,51 @@ export function EmptyState({
   return (
     <View className={fill ? "flex-1" : undefined}>
       <View className={words}>
-        {icon ? <View className="mb-3 opacity-40">{icon}</View> : null}
+        {icon ? (
+          <View className="mb-3 opacity-40">{icon}</View>
+        ) : state === "error" ? (
+          // ОШИБКА — ЗНАЧОК В МЯГКОМ КРУГЕ И СПОКОЙНЫЙ ЗАГОЛОВОК (владелец
+          // 03.10, на зависшем сервере: «сделаем эту страницу более
+          // красивой»). Почти всегда это «сервер не ответил», а не вина
+          // человека: облако акцентом вместо красного крика заголовком.
+          <View
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 32,
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 16,
+              backgroundColor: `${t.accent}14`,
+            }}
+          >
+            <CloudOff color={t.accent} size={30} strokeWidth={2} />
+          </View>
+        ) : null}
         <Text
           accessibilityRole="header"
           style={{
             textAlign: "center",
             fontSize: 17,
             fontWeight: "600",
-            color: state === "error" ? t.danger : t.sub,
+            color: state === "error" ? t.ink : t.sub,
           }}
         >
           {title ?? (state === "error" ? "Что-то пошло не так" : "Пусто")}
         </Text>
         {subtitle ? (
-          <Text style={{ marginTop: 4, textAlign: "center", fontSize: 13, color: t.faint }}>
-            {subtitle}
+          <Text
+            style={{
+              marginTop: state === "error" ? 6 : 4,
+              textAlign: "center",
+              fontSize: state === "error" ? 15 : 13,
+              lineHeight: state === "error" ? 21 : undefined,
+              color: state === "error" ? t.sub : t.faint,
+            }}
+          >
+            {/* Подпись ошибки — часто `error.message` с сервера: её
+                сборка не переводила, переводим при показе. */}
+            {tDynamic(subtitle)}
           </Text>
         ) : null}
       </View>
@@ -84,8 +127,16 @@ export function EmptyState({
         // стоит действие любого экрана: во всю ширину, с полем 16 от краёв.
         // Раньше она была компактной по центру — обёртка состояния сжимала её
         // до слова, и «Повторить» выглядело третьей породой кнопки.
-        <View style={{ paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8 }}>
-          <Button label={action.label} onPress={action.onPress} />
+        // ОТСТУПЫ — ФУТЕРА ЭКРАНА (03.10): 20 по бокам, 8 сверху, 10 снизу,
+        // как у «Создать клиента» и «Записать клиента». С 16/16 кнопка
+        // стояла шире и выше соседних.
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+          <Button
+            label={action.label}
+            onPress={action.onPress}
+            loading={action.loading}
+            disabled={action.loading}
+          />
         </View>
       ) : null}
     </View>

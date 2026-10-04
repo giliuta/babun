@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { createBlankClient, type Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import { sortClients } from "./filter";
+import { DEFAULT_SORT, SORT_LABELS_LONG, SORT_ORDER, sortClients } from "./filter";
 
 function client(id: string, patch: Partial<Client> = {}): Client {
   return {
@@ -19,8 +19,8 @@ function stats(patch: Partial<ClientStats> = {}): ClientStats {
     lastVisitDate: "",
     lastVisitDays: null,
     medianGapDays: null,
-    serviceDue: 0,
     unclosedVisits: 0,
+    lastUnclosedDate: "",
     nextApt: null,
     nextAptDays: null,
     debt: 0,
@@ -55,6 +55,20 @@ describe("sortClients", () => {
   });
 
   // Главная новая ось: «кто пропал дольше всех» для списка на дозвон.
+  test("«Недавний визит» сортирует по дате из строки — незакрытый визит тоже (повторный аудит 03.10)", () => {
+    const list = [client("a"), client("b"), client("c"), client("d")];
+    const map = new Map<string, ClientStats>([
+      // Закрыт 1 сен, потом незакрытый 28 сен — строка печатает «28 сен».
+      ["a", stats({ lastVisitDate: "2026-09-01", lastUnclosedDate: "2026-09-28" })],
+      ["b", stats({ lastVisitDate: "2026-09-15" })],
+      // Только незакрытый визит — дата в строке есть, значит не хвост.
+      ["c", stats({ lastUnclosedDate: "2026-09-10" })],
+      // Только будущая запись — визитом не считается.
+      ["d", stats({ nextApt: { date: "2026-10-10" } as ClientStats["nextApt"] })],
+    ]);
+    assert.deepEqual(ids(sortClients(list, map, "recent")), ["a", "b", "c", "d"]);
+  });
+
   test("«Давний визит»: переворачивает только визиты, хвост остаётся внизу", () => {
     const list = [client("свежий"), client("нет-визитов"), client("старый")];
     const map = new Map([
@@ -83,7 +97,7 @@ describe("sortClients", () => {
     assert.equal(sorted.includes("баланс-минус"), true);
   });
 
-  test("закреплённые сверху, внутри — тот же компаратор", () => {
+  test("закрепление больше не поднимает клиента (владелец 03.10)", () => {
     const list = [
       client("обычный-свежий"),
       client("пин-старый", { pinned_at: "2026-07-01T00:00:00Z" }),
@@ -95,10 +109,16 @@ describe("sortClients", () => {
       ["пин-свежий", stats({ lastVisitDate: "2026-07-20" })],
     ]);
     assert.deepEqual(ids(sortClients(list, map, "recent")), [
+      "обычный-свежий",
       "пин-свежий",
       "пин-старый",
-      "обычный-свежий",
     ]);
+  });
+
+  test("по умолчанию — по алфавиту, и он первый в выборе", () => {
+    assert.equal(DEFAULT_SORT, "name");
+    assert.equal(SORT_ORDER[0], "name");
+    assert.equal(SORT_LABELS_LONG.name, "По алфавиту");
   });
 
   test("порядок детерминирован при полностью равных значениях", () => {

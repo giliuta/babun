@@ -7,8 +7,7 @@ import type { Location } from "../../local/clients";
 // `rowToClient` перечисляет поля объекта вручную (намеренно: не пускаем в
 // домен мусор из JSON). Цена — забытое поле не падает и не подсвечивается
 // типами: оно просто не читается, а следующая запись массива `locations`
-// стирает его и в базе. Так однажды исчез график ТО, а 2026-08-07 —
-// `serviceEveryMonths`, из-за чего статус «Пора обслужить» был вечно пуст.
+// стирает его и в базе. Так однажды исчез график ТО.
 //
 // Тест держит контракт: КАЖДОЕ поле объекта, пришедшее из базы, обязано
 // доехать до домена. Добавили поле в `Location` — оно появится здесь.
@@ -36,7 +35,6 @@ const FULL_LOCATION: Required<
     | "mapUrl"
     | "isPrimary"
     | "note"
-    | "serviceEveryMonths"
     | "addressParts"
   >
 > = {
@@ -49,7 +47,6 @@ const FULL_LOCATION: Required<
   mapUrl: "https://maps.example/pin",
   isPrimary: true,
   note: "код домофона 25",
-  serviceEveryMonths: 3,
 };
 
 describe("rowToClient — объект клиента", () => {
@@ -58,20 +55,6 @@ describe("rowToClient — объект клиента", () => {
     for (const [key, value] of Object.entries(FULL_LOCATION)) {
       expect(loc[key as keyof Location]).toEqual(value as never);
     }
-  });
-
-  test("интервал обслуживания доезжает и не подменяется", () => {
-    const [loc] = rowToClient(
-      rowWithLocation({ ...FULL_LOCATION, serviceEveryMonths: 12 }),
-    ).locations;
-    expect(loc.serviceEveryMonths).toBe(12);
-  });
-
-  test("объект без интервала остаётся без него, а не получает выдуманный", () => {
-    const { serviceEveryMonths: _omit, ...withoutInterval } = FULL_LOCATION;
-    void _omit;
-    const [loc] = rowToClient(rowWithLocation(withoutInterval)).locations;
-    expect(loc.serviceEveryMonths).toBeUndefined();
   });
 });
 
@@ -189,5 +172,16 @@ describe("rowToClient — реквизиты и связи", () => {
       memberships: [{ group_id: "55555555-5555-4555-8555-555555555555" }],
     } as never);
     expect(c.memberships?.[0]?.role).toBe("");
+  });
+});
+
+describe("rowToClient — отказ от SMS", () => {
+  const base = rowWithLocation({ id: "loc-1", label: "", address: "" }) as unknown as Record<string, unknown>;
+  test("«Клиент просил не писать» доезжает до домена", () => {
+    expect(rowToClient({ ...base, sms_opt_out: true } as never).sms_opt_out).toBe(true);
+  });
+  test("без запрета — false, а не undefined", () => {
+    expect(rowToClient({ ...base, sms_opt_out: false } as never).sms_opt_out).toBe(false);
+    expect(rowToClient(base as never).sms_opt_out).toBe(false);
   });
 });

@@ -1,12 +1,19 @@
 import { useSyncExternalStore } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { getStorage } from "@babun/shared/storage";
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import {
   getActiveTenantId,
+  setActiveTenantId,
   subscribeActiveTenant,
 } from "@/lib/active-tenant";
+import { liveTenantId, markTenantGone } from "@/lib/gone-tenants";
 import { useSession } from "@/providers/SessionProvider";
 
 // Tenant resolution + onboarding gate — mobile port of the web logic in
@@ -144,12 +151,16 @@ function useTenantResolution() {
     getActiveTenantId,
   );
   const deviceTenantId = userId ? storedTenantId : null;
-  const jwtTenantId =
+  // Компания, где человека больше нет (`gone-tenants.ts`), у токена и кэша
+  // пропускается: иначе гейт упирался бы в неё снова и снова.
+  const jwtTenantId = liveTenantId(
+    userId,
     (session?.user.app_metadata as { tenant_id?: string } | undefined)
-      ?.tenant_id ?? null;
+      ?.tenant_id ?? null,
+  );
   const cachedTenantId =
     userId && !deviceTenantId && !jwtTenantId
-      ? readCache(tenantIdCacheKey(userId))
+      ? liveTenantId(userId, readCache(tenantIdCacheKey(userId)))
       : null;
   const knownTenantId = deviceTenantId ?? jwtTenantId ?? cachedTenantId;
 
@@ -174,7 +185,14 @@ function useTenantResolution() {
       const tenantId = data?.tenant_id ?? null;
       // Cache only the positive result: a stale «нет тенанта» must never
       // strand a user who got invited a minute later.
-      if (tenantId) writeCache(tenantIdCacheKey(userId as string), tenantId);
+      if (tenantId) {
+        writeCache(tenantIdCacheKey(userId as string), tenantId);
+        // УСТРОЙСТВО БЕЗ ВЫБОРА ЗАКРЕПЛЯЕТ НАЙДЕННУЮ КОМПАНИЮ (04.10). Без
+        // заголовка сервер берёт компанию из токена и сверяет её с членством
+        // (`current_tenant_id`), а токен мог остаться от компании, где
+        // человека больше нет, — тогда каждый запрос отвечал бы пусто.
+        if (!getActiveTenantId()) setActiveTenantId(userId as string, tenantId);
+      }
       return tenantId;
     },
   });
@@ -224,7 +242,21 @@ export type OnboardingGate =
 const tenantOnboardingKey = (tenantId: string | null) =>
   ["tenant-onboarding", tenantId] as const;
 
+/** Профиль компании подтверждённо пуст: человека в ней больше нет (убрали
+ *  из партнёров, аккаунт удалён). Выбор устройства и кэш забывают её, токен
+ *  с ней резолв пропускает, и поиск по членству идёт заново — к живой
+ *  компании человека, а не к «Аккаунт не настроен» навсегда (аудит 04.10). */
+function forgetGoneTenant(qc: QueryClient, userId: string, tenantId: string): void {
+  markTenantGone(userId, tenantId);
+  if (readCache(tenantIdCacheKey(userId)) === tenantId) {
+    removeCache(tenantIdCacheKey(userId));
+  }
+  qc.removeQueries({ queryKey: tenantMembershipKey(userId) });
+  if (getActiveTenantId() === tenantId) setActiveTenantId(userId, null);
+}
+
 export function useOnboardingGate(): OnboardingGate {
+  const qc = useQueryClient();
   const { userId, tenantId, tenantIdFromCache, membership } =
     useTenantResolution();
   // Once a tenant has been SEEN onboarded, the stamp short-circuits the gate
@@ -292,6 +324,7 @@ export function useOnboardingGate(): OnboardingGate {
       if (!tenant && tenantIdFromCache && userId) {
         removeCache(tenantIdCacheKey(userId));
       }
+      if (!tenant && userId && tenantId) forgetGoneTenant(qc, userId, tenantId);
       return tenant;
     },
   });
@@ -341,6 +374,9 @@ export interface CompleteOnboardingArgs {
   tenantId: string;
   name: string;
   vertical: string;
+  /** Имя, с которым аккаунт пришёл в мастер (триггер регистрации ставит
+   *  туда email). */
+  previousName?: string | null;
 }
 
 export function useCompleteOnboarding() {
@@ -349,7 +385,7 @@ export function useCompleteOnboarding() {
     // Онбординг-экран показывает ошибку сам (FormError) — без meta глобальный
     // MutationCache добавил бы второй, дублирующий Alert.
     meta: { errorHandled: true },
-    mutationFn: async ({ tenantId, name, vertical }: CompleteOnboardingArgs) => {
+    mutationFn: async ({ tenantId, name, vertical, previousName }: CompleteOnboardingArgs) => {
       const { error, count } = await supabase
         .from("tenants")
         .update(
@@ -368,6 +404,20 @@ export function useCompleteOnboarding() {
         throw new Error(
           "Не удалось сохранить: завершить настройку может только владелец.",
         );
+      }
+      // РЕКВИЗИТЫ ПО УМОЛЧАНИЮ — ТЕМ ЖЕ ИМЕНЕМ (аудит первого входа 03.10).
+      // Триггер регистрации называет аккаунт email'ом, и тот же email уходил
+      // в «Реквизиты» по умолчанию — а оттуда продавцом в первый инвойс.
+      // Переименовываем только нетронутые: строка всё ещё носит прежнее имя.
+      const before = previousName?.trim();
+      if (before && before !== name.trim()) {
+        const { error: entityError } = await supabase
+          .from("legal_entities")
+          .update({ name: name.trim() })
+          .eq("tenant_id", tenantId)
+          .eq("is_default", true)
+          .eq("name", before);
+        if (entityError) throw new Error(entityError.message);
       }
     },
     onSuccess: (_data, { tenantId }) => {

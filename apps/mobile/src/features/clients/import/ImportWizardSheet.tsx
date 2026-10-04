@@ -19,18 +19,18 @@ import { MirrorBanner } from "@/features/access/mirror/MirrorBanner";
 import { Screen } from "@/components/ui/Screen";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { Spinner } from "@/components/ui/Spinner";
 import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
+import { useScopeCompany } from "@/features/clients/company-scope";
+import { useDefaultCountry } from "../default-country";
 import { useClientTags } from "../queries";
 import { parseCsv, type ParsedCsv } from "./csv-parse";
 import {
   autoMapHeaders,
   COUNTRY_OPTIONS,
-  DEFAULT_COUNTRY,
   FIELD_LABEL,
   FIELD_OPTIONS,
   type ImportableField,
@@ -38,7 +38,6 @@ import {
 import {
   mapAndValidate,
   selectImportable,
-  type DuplicateAction,
   type MapAndValidateResult,
   type MappedRow,
   type RowReason,
@@ -54,6 +53,7 @@ import {
   loadResumeState,
   type ImportResumeState,
 } from "./resume";
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
 // Upload guardrails — web parity (UploadStep.tsx).
 const MAX_BYTES = 10 * 1024 * 1024; // 10 МБ
@@ -99,16 +99,23 @@ export function ImportWizardSheet({
     () => (teamId ? allTags.filter((tag) => !tag.team_id || tag.team_id === teamId) : allTags),
     [allTags, teamId],
   );
-  const tenantId = useTenantId();
+  // Дубли — из той же компании, куда пишет импорт (компания вкладки, 03.10).
+  // Привязанный клиент строится в самой проверке: `useScopeCompany().client`
+  // новый на каждый кадр и в зависимостях колбэка не живёт.
+  const { tenantId, foreign: scopeForeign } = useScopeCompany();
   const importer = useImportRows();
 
   const [step, setStep] = useState<WizardStep>("upload");
   const [fileName, setFileName] = useState("");
   const [parsed, setParsed] = useState<ParsedCsv | null>(null);
   const [mapping, setMapping] = useState<ImportableField[]>([]);
-  const [country, setCountry] = useState<CountryCode>(DEFAULT_COUNTRY);
+  // КОД СТРАНЫ — ИЗ ЧАСОВОГО ПОЯСА КОМАНДЫ, КУДА ИДЁТ ИМПОРТ (правило 02.10),
+  // а не «CY» продукта: у греческой команды номера без кода — греческие.
+  // Выбранный руками сильнее.
+  const teamCountry = useDefaultCountry(teamId);
+  const [countryPick, setCountry] = useState<CountryCode | null>(null);
+  const country = countryPick ?? teamCountry;
   const [tagId, setTagId] = useState<string | null>(null);
-  const [dupAction, setDupAction] = useState<DuplicateAction>("skip");
   const [validation, setValidation] = useState<MapAndValidateResult | null>(null);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [result, setResult] = useState<ImportRowsResult | null>(null);
@@ -125,9 +132,8 @@ export function ImportWizardSheet({
     setFileName("");
     setParsed(null);
     setMapping([]);
-    setCountry(DEFAULT_COUNTRY);
+    setCountry(null);
     setTagId(null);
-    setDupAction("skip");
     setValidation(null);
     setProgress(null);
     setResult(null);
@@ -150,8 +156,9 @@ export function ImportWizardSheet({
   // partial/stale dedup data can create hundreds of duplicate clients.
   const runValidate = useCallback(async (): Promise<MapAndValidateResult> => {
     if (!parsed) throw new Error("Нет разобранного файла");
-    if (!tenantId) throw new Error("Нет активной компании");
-    const existingPhones = await fetchExistingPhoneSet(supabase, tenantId);
+    if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
+    const db = scopeForeign ? tenantBoundClient(tenantId) : supabase;
+    const existingPhones = await fetchExistingPhoneSet(db, tenantId);
     const v = mapAndValidate({
       rows: parsed.rows,
       headers: parsed.headers,
@@ -161,7 +168,7 @@ export function ImportWizardSheet({
     });
     setValidation(v);
     return v;
-  }, [parsed, mapping, country, tenantId]);
+  }, [parsed, mapping, country, tenantId, scopeForeign]);
 
   // ── Step 1: pick + parse ────────────────────────────────────────────
   // Guardrails — web parity (UploadStep.tsx): ≤10 МБ, .csv/.txt, непустой
@@ -269,17 +276,14 @@ export function ImportWizardSheet({
   // Preview «Импортировать» — insert the currently-selected keep set.
   const runImport = useCallback(() => {
     if (!validation) return;
-    const { keep } = selectImportable(validation.mapped, dupAction);
+    const { keep } = selectImportable(validation.mapped);
     void runRows(keep, 0);
-  }, [validation, dupAction, runRows]);
+  }, [validation, runRows]);
 
   // Retry after an error that struck BEFORE any result: re-validate against a
-  // FRESH DB set, then run the REMAINDER from scratch. Dedup is forced to
-  // «skip» here (not the user's dupAction) so rows THIS run already wrote —
-  // now present in the DB — read as «дубликат в базе» and drop out instead of
-  // double-inserting (clients.phone_e164 has no unique index). The
-  // import_as_dup intent was already honoured for pre-existing rows in the
-  // first attempt's keep. No offset, no double-write.
+  // FRESH DB set, then run the REMAINDER from scratch. Rows THIS run already
+  // wrote — now present in the DB — read as «дубликат в базе» and drop out
+  // instead of hitting the unique phone index. No offset, no double-write.
   const retryFromError = useCallback(async () => {
     if (!parsed || preparing) return;
     setStep("result");
@@ -289,7 +293,7 @@ export function ImportWizardSheet({
     setPreparing(true);
     try {
       const v = await runValidate();
-      const { keep } = selectImportable(v.mapped, "skip");
+      const { keep } = selectImportable(v.mapped);
       // Baseline = rows already written for this file (progress saved it).
       const baseline = resume?.importedRows ?? progress?.done ?? 0;
       await runRows(keep, baseline);
@@ -313,7 +317,7 @@ export function ImportWizardSheet({
 
   const hasName = mapping.some((f) => f === "full_name");
   const selected = validation
-    ? selectImportable(validation.mapped, dupAction)
+    ? selectImportable(validation.mapped)
     : null;
 
   return (
@@ -380,8 +384,6 @@ export function ImportWizardSheet({
             <PreviewStep
               t={t}
               validation={validation}
-              dupAction={dupAction}
-              setDupAction={setDupAction}
               willImport={selected.keep.length}
               willSkip={selected.drop.length}
               onBack={() => setStep("mapping")}
@@ -824,8 +826,6 @@ function TagChip({
 function PreviewStep({
   t,
   validation,
-  dupAction,
-  setDupAction,
   willImport,
   willSkip,
   onBack,
@@ -833,8 +833,6 @@ function PreviewStep({
 }: {
   t: ReturnType<typeof useThemeColors>;
   validation: MapAndValidateResult;
-  dupAction: DuplicateAction;
-  setDupAction: (a: DuplicateAction) => void;
   willImport: number;
   willSkip: number;
   onBack: () => void;
@@ -869,23 +867,12 @@ function PreviewStep({
         ) : null}
       </Card>
 
+      {/* Номер у клиента один (закон 25.07): дубль из базы не импортируется,
+          и выбора здесь нет — только слова (аудит 03.10). */}
       {validation.duplicateInDb > 0 ? (
-        <View className="gap-2">
-          <Text
-            className="text-[11px] font-bold uppercase"
-            style={{ color: t.faint, letterSpacing: 0.6 }}
-          >
-            Дубликаты по телефону в базе
-          </Text>
-          <SegmentedControl<DuplicateAction>
-            options={[
-              { value: "skip", label: "Пропустить" },
-              { value: "import_as_dup", label: "Импортировать" },
-            ]}
-            value={dupAction}
-            onChange={setDupAction}
-          />
-        </View>
+        <Text className="text-xs" style={{ color: t.sub }}>
+          Клиенты с номерами, которые уже есть в базе, пропускаются.
+        </Text>
       ) : null}
 
       <Card className="p-0">
@@ -1133,11 +1120,8 @@ function ResultStep({
 
 /** «строка / строки / строк» for the error line. */
 function countRowsRu(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "строка";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "строки";
-  return "строк";
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return pluralRu(n, ["строка", "строки", "строк"]);
 }
 
 // ─── Shared bits ────────────────────────────────────────────────────────

@@ -1,3 +1,5 @@
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
+
 // «РАБОТА» СОТРУДНИКА — СВОДКА МЕСЯЦА (STORY-087). Лист без React: счёт
 // проверяется тестом.
 //
@@ -15,8 +17,6 @@ export interface WorkLike {
 export interface MonthWork {
   /** Записей в этом месяце (без отменённых). */
   total: number;
-  /** Из них выполнено. */
-  done: number;
 }
 
 export function monthWorkOf(
@@ -27,16 +27,14 @@ export function monthWorkOf(
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const teams = new Set(teamIds);
   let total = 0;
-  let done = 0;
   for (const row of rows) {
     if (row.kind === "event") continue;
     if (!row.team_id || !teams.has(row.team_id)) continue;
     if (!row.date.startsWith(ym)) continue;
     if (row.status === "cancelled") continue;
     total += 1;
-    if (row.status === "completed") done += 1;
   }
-  return { total, done };
+  return { total };
 }
 
 const MONTHS_PREP = [
@@ -45,20 +43,16 @@ const MONTHS_PREP = [
 ];
 
 function recordsWord(n: number): string {
-  const tens = n % 100;
-  const ones = n % 10;
-  if (tens >= 11 && tens <= 14) return "записей";
-  if (ones === 1) return "запись";
-  if (ones >= 2 && ones <= 4) return "записи";
-  return "записей";
+  // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+  return pluralRu(n, ["запись", "записи", "записей"]);
 }
 
-/** «7 записей в сентябре · 5 выполнено»; пусто — «в сентябре нет». */
+/** «7 записей в сентябре»; пусто — «в сентябре нет». Статуса «Выполнена»
+ *  больше нет (владелец 03.10) — и «· 5 выполнено» тоже. */
 export function workLine(work: MonthWork, now: Date = new Date()): string {
   const month = MONTHS_PREP[now.getMonth()];
   if (work.total === 0) return `в ${month} нет`;
-  const base = `${work.total} ${recordsWord(work.total)} в ${month}`;
-  return work.done > 0 ? `${base} · ${work.done} выполнено` : base;
+  return `${work.total} ${recordsWord(work.total)} в ${month}`;
 }
 
 // ─── СТРАНИЦА «ЗАПИСИ» СОТРУДНИКА ────────────────────────────────────────
@@ -101,7 +95,6 @@ export interface WorkRow extends WorkLike {
 
 export interface WorkSummary {
   total: number;
-  done: number;
   cancelled: number;
   /** Выручка — деньги, ПОЛУЧЕННЫЕ по записям периода (кроме отменённых).
    *  Раньше считались только записи со статусом «Выполнена»: оплату приняли,
@@ -127,7 +120,7 @@ export function workOfPeriod<R extends WorkRow>(
   received: (row: R) => number,
 ): { summary: WorkSummary; upcoming: WorkDay<R>[]; past: WorkDay<R>[] } {
   const teams = new Set(teamIds);
-  const summary: WorkSummary = { total: 0, done: 0, cancelled: 0, revenue: 0 };
+  const summary: WorkSummary = { total: 0, cancelled: 0, revenue: 0 };
   const byDate = new Map<string, R[]>();
   for (const row of rows) {
     if (row.kind === "event") continue;
@@ -137,7 +130,6 @@ export function workOfPeriod<R extends WorkRow>(
       summary.cancelled += 1;
     } else {
       summary.total += 1;
-      if (row.status === "completed") summary.done += 1;
       summary.revenue += Math.max(0, received(row));
     }
     const list = byDate.get(row.date) ?? [];

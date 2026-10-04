@@ -5,6 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { buildReceiptPdfHtml } from "./receipt-pdf";
+import { RECEIPT_WORDS } from "./receipt-words";
 
 // СОСТАВ ДОКУМЕНТА ЖИВЁТ В МОДЕЛИ, А НЕ В ДВУХ ВЁРСТКАХ.
 //
@@ -69,10 +70,16 @@ describe("бумага чека и PDF печатают одну модель в
 
   test("модель не разрослась тихо — поля идут в этом порядке", () => {
     assert.deepEqual(fields, [
+      // Слова бумаги — на языке документа (03.10): оба рендера берут их из
+      // модели, а не держат свои.
+      "words",
       "number",
       "voidLabel",
       "seller",
       "issuedOn",
+      // Владелец 04.10: «чек — как инвойс» — получатель и инвойс оплаты.
+      "recipient",
+      "basis",
       "lines",
       "linesTotal",
       "discount",
@@ -95,6 +102,8 @@ describe("бумага чека и PDF печатают одну модель в
         "seller",
         "number",
         "issuedOn",
+        "recipient",
+        "basis",
         "lines",
         "linesTotal",
         "discount",
@@ -114,7 +123,7 @@ describe("бумага чека и PDF печатают одну модель в
   test("«ЧЕК» стоит между компанией и номером — как просил владелец", () => {
     for (const code of [pdfCode, paperCode]) {
       const sellerPos = firstUse(code, "seller");
-      const chekPos = code.indexOf("Чек");
+      const chekPos = code.indexOf("doc.words.receipt");
       const numberPos = firstUse(code, "number");
       assert.ok(chekPos >= 0, "нет подписи «Чек»");
       assert.ok(sellerPos < chekPos && chekPos < numberPos, "«Чек» должен стоять между компанией и номером");
@@ -122,21 +131,30 @@ describe("бумага чека и PDF печатают одну модель в
   });
 
   test("шапка таблицы — тот же порядок колонок: Услуга · Кол-во · Цена · Сумма", () => {
-    const columns = ["Услуга", "Кол-во", "Цена", "Сумма"];
+    const columns = ["service", "qty", "price", "sum"];
     for (const code of [pdfCode, paperCode]) {
       assertAscending(
-        columns.map((label) => code.indexOf(label)),
+        columns.map((key) => code.indexOf(`doc.words.${key}`)),
         columns,
       );
     }
+    const ru = RECEIPT_WORDS.ru;
+    assert.deepEqual([ru.service, ru.qty, ru.price, ru.sum], ["Услуга", "Кол-во", "Цена", "Сумма"]);
   });
 
   test("статичные подписи документа — слово в слово одни и те же на бумаге и в PDF", () => {
-    const labels = ["Чек", "Дата", "Услуга", "Кол-во", "Цена", "Сумма", "Итого работ", "Получено"];
-    for (const label of labels) {
-      assert.ok(pdfCode.includes(label), `receipt-pdf.ts потерял подпись «${label}»`);
-      assert.ok(paperCode.includes(label), `ReceiptPaper.tsx потерял подпись «${label}»`);
+    // Подписи — из словаря чека (`receipt-words.ts`), один на оба рендера и
+    // оба языка; русские слова те же, что владелец видел до 03.10.
+    const keys = ["receipt", "date", "service", "qty", "price", "sum", "linesTotal", "received"] as const;
+    for (const key of keys) {
+      assert.ok(pdfCode.includes(`doc.words.${key}`), `receipt-pdf.ts потерял подпись «${key}»`);
+      assert.ok(paperCode.includes(`doc.words.${key}`), `ReceiptPaper.tsx потерял подпись «${key}»`);
     }
+    assert.deepEqual(
+      keys.map((key) => RECEIPT_WORDS.ru[key]),
+      ["Чек", "Дата", "Услуга", "Кол-во", "Цена", "Сумма", "Итого работ", "Получено"],
+    );
+    for (const key of keys) assert.ok(RECEIPT_WORDS.en[key], `нет английского слова «${key}»`);
   });
 
   test("слова-приглашения зеркала не попадают в PDF", () => {

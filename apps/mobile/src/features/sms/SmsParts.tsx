@@ -3,6 +3,7 @@ import { MessageSquare } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { LOW_BALANCE_CENTS, type SmsAccount } from "./sms-model";
@@ -20,7 +21,7 @@ import { euro } from "./sms-words";
 //   полную сумму… сколько им нужно»).
 
 /** «5 SMS» — число со словом (склонение делает formatCountRu). */
-const smsCount = (n: number): string => formatCountRu(n, ["SMS", "SMS", "SMS"]);
+export const smsCount = (n: number): string => formatCountRu(n, ["SMS", "SMS", "SMS"]);
 
 /** Баланс — компактно (владелец 30.09): сумма и «≈ N SMS» слева, месяц
  *  справа. Ниже €5 — «Пополните баланс» цветом предупреждения. */
@@ -31,12 +32,19 @@ export function SmsBalanceCard({ account }: { account: SmsAccount }) {
   const debt = owner.balanceCents < 0;
   const low = owner.balanceCents < LOW_BALANCE_CENTS;
   const left = debt ? 0 : Math.floor(owner.balanceCents / Math.max(1, account.priceCents));
+  // «SMS» НА ЭТОЙ СТРАНИЦЕ — ЧАСТЬ ПО ТАРИФУ, а не сообщение (повторный аудит
+  // 03.10): «≈ 156 SMS» и «До 134 знаков — 2 SMS» считают части, а месяц
+  // печатал число сообщений — «€1,20 · 5 SMS» при цене €0,12 за SMS. Месяц —
+  // в частях (сумма частей по командам); нет разбивки — число сообщений.
+  const monthParts = owner.teams.reduce((sum, team) => sum + team.segments, 0) || owner.monthCount;
+  // В приложении из магазина «пополните» не говорим (владелец 04.10,
+  // `pay-here.ts`) — только состояние.
   const line = debt
-    ? "Долг — пополните баланс"
+    ? CAN_PAY_HERE ? "Долг — пополните баланс" : "Долг"
     : low
       ? left > 0
-        ? `≈ ${smsCount(left)} · пополните баланс`
-        : "Пополните баланс"
+        ? CAN_PAY_HERE ? `≈ ${smsCount(left)} · пополните баланс` : `≈ ${smsCount(left)} · баланс на исходе`
+        : CAN_PAY_HERE ? "Пополните баланс" : "Баланс на исходе"
       : `≈ ${smsCount(left)}`;
   return (
     <SectionCard title="Баланс">
@@ -52,7 +60,7 @@ export function SmsBalanceCard({ account }: { account: SmsAccount }) {
             {line}
           </Text>
         </View>
-        <View style={{ alignItems: "flex-end" }} accessible accessibilityLabel={`За месяц: ${euro(owner.monthCents)}, ${smsCount(owner.monthCount)}`}>
+        <View style={{ alignItems: "flex-end" }} accessible accessibilityLabel={`За месяц: ${euro(owner.monthCents)}, ${smsCount(monthParts)}`}>
           <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 12, color: t.sub }}>
             За месяц
           </Text>
@@ -60,7 +68,7 @@ export function SmsBalanceCard({ account }: { account: SmsAccount }) {
             maxFontSizeMultiplier={1.3}
             style={{ fontSize: 15, fontWeight: "600", color: owner.monthCount === 0 ? t.sub : t.ink, fontVariant: ["tabular-nums"], marginTop: 1 }}
           >
-            {euro(owner.monthCents)} · {smsCount(owner.monthCount)}
+            {euro(owner.monthCents)} · {smsCount(monthParts)}
           </Text>
         </View>
       </View>

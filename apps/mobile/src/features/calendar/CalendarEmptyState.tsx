@@ -32,7 +32,14 @@ export function suggestFirstSlot(now: Date): { date: Date; time: string } {
   return { date: tomorrow, time: "10:00" };
 }
 
-export function CalendarEmptyState({ onCreate }: { onCreate: () => void }) {
+export function CalendarEmptyState({
+  onCreate,
+  event = false,
+}: {
+  onCreate: () => void;
+  /** Без тарифа запись с клиентом закрыта — подсказка зовёт к событию. */
+  event?: boolean;
+}) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
   const [dismissed, setDismissed] = useState(
@@ -84,7 +91,7 @@ export function CalendarEmptyState({ onCreate }: { onCreate: () => void }) {
             onPress={onCreate}
             hitSlop={{ top: 8, bottom: 14, left: 8, right: 8 }}
             accessibilityRole="button"
-            accessibilityLabel="Добавить первую запись"
+            accessibilityLabel={event ? "Добавить первое событие" : "Добавить первую запись"}
             style={({ pressed }) => ({
               paddingTop: 2,
               paddingBottom: 4,
@@ -92,7 +99,7 @@ export function CalendarEmptyState({ onCreate }: { onCreate: () => void }) {
             })}
           >
             <Text style={{ fontSize: 14, fontWeight: "600", color: t.accent }}>
-              Добавить первую запись
+              {event ? "Добавить первое событие" : "Добавить первую запись"}
             </Text>
           </Pressable>
         </View>

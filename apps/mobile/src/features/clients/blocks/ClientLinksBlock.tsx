@@ -27,6 +27,9 @@ export interface ClientLinkItem {
   phone?: string | null;
   telegramUsername?: string | null;
   role: string;
+  /** Роль и связь пишутся в карточку САМОГО человека, и сервер спрашивает
+   *  его «Люди» (30.09). `false` — права нет: ни роли, ни «Убрать». */
+  editable?: boolean;
 }
 
 /** Строки связей БЕЗ своей карточки — для первого блока карточки клиента,
@@ -77,11 +80,13 @@ export function ClientLinkRows({
             autoFocusRole={item.key === focusKey}
             onOpen={() => onOpen(item)}
             onRoleChange={
-              onRoleChange ? (role) => onRoleChange(item, role) : undefined
+              onRoleChange && item.editable !== false
+                ? (role) => onRoleChange(item, role)
+                : undefined
             }
           />
         );
-        return onRemove ? (
+        return onRemove && item.editable !== false ? (
           <SwipeRow
             key={item.key}
             label="Убрать"

@@ -6,6 +6,7 @@ import {
   type LucideIcon,
 } from "lucide-react-native";
 import { Chip } from "@/components/ui/Chip";
+import { IconCircle } from "@/components/ui/IconCircle";
 import { GUTTER } from "@/components/ui/tokens";
 import { sanitizePhoneInput } from "@/lib/phone-input";
 import { useThemeColors } from "@/theme/colors";
@@ -269,12 +270,26 @@ export function FieldRow({
   onLongPress,
   noCopy,
   followValue,
+  column,
+  prefix,
+  onPrefixPress,
+  sanitize,
   onSave,
 }: {
   label: string;
   value: string;
   placeholder: string;
   separated?: boolean;
+  /** ПОДПИСЬ СЛЕВА КОЛОНКОЙ ЭТОЙ ШИРИНЫ (владелец 30.09, блок «Клиент»,
+   *  вариант 10): «Телефон | +357 97 469 998», как «Настройки» iPhone.
+   *  Значение — по левому краю своей колонки, линия между строками — от
+   *  колонки значений. Нет — прежние виды строки. */
+  column?: number;
+  /** Тихий префикс перед значением — код страны: «+357». Не входит в поле
+   *  ввода: печатают только цифры. */
+  prefix?: string;
+  /** Префикс нажимается (новый клиент: сменить страну номера). */
+  onPrefixPress?: () => void;
   /** `decimal-pad` — деньги; `numbers-and-punctuation` — деньги, которые
    *  бывают отрицательными (остаток счёта в долге): минуса на цифровой
    *  клавиатуре нет ни в одной раскладке. */
@@ -352,6 +367,10 @@ export function FieldRow({
    *  blur, а следующая буква вернула бы номер обратно. Не включать у полей с
    *  форматированием на лету (номер): текст прыгал бы под пальцем. */
   followValue?: boolean;
+  /** ЧИСТКА ПОД ПАЛЬЦЕМ для поля со своим алфавитом (буквы серии номера:
+   *  латиница заглавными и цифры). Отсечённое не появляется в поле вовсе —
+   *  родитель, получив то же значение, перерисовкой его бы не убрал. */
+  sanitize?: (v: string) => string;
   onSave: (v: string) => void;
 }) {
   // ЧИСЛО ВЫДЕЛЯЕТСЯ ЦЕЛИКОМ ПРИ ФОКУСЕ — иначе правка «135» на «140» даёт
@@ -390,11 +409,12 @@ export function FieldRow({
 
   const editingNow = !readOnly && (editing || !!live);
   const valueSize = big ? 17 : 15;
+  const valueWeight = "600";
   // Буквы в номер не попадают НИ ОДНИМ путём — ни вставкой, ни диктовкой,
   // ни внешней клавиатурой. Чистка живёт в примитиве, а не в каждом вызове:
   // забыть её на новой строке-номере невозможно.
   const clean = (v: string) =>
-    keyboardType === "phone-pad" ? sanitizePhoneInput(v) : v;
+    keyboardType === "phone-pad" ? sanitizePhoneInput(v) : sanitize ? sanitize(v) : v;
 
   // Коммит значения. Единственная точка: blur, Return и размонтирование
   // строки. Раньше коммит был только в onBlur, а кнопки «Готово» и «Назад»
@@ -417,6 +437,125 @@ export function FieldRow({
     },
     [],
   );
+
+  if (column !== undefined) {
+    const prefixNode = prefix ? (
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={{ fontSize: 17, color: t.muted, fontVariant: ["tabular-nums"], marginRight: 6 }}
+      >
+        {prefix}
+      </Text>
+    ) : null;
+    return (
+      <View>
+        {separated ? (
+          <View style={{ height: 1, marginLeft: 16 + column, backgroundColor: t.separator }} />
+        ) : null}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            // Плотно, как строка имени (владелец 30.09: «компактно»): 44 —
+            // минимум Apple под палец.
+            minHeight: 44,
+            paddingLeft: 16,
+            paddingRight: trailing ? 8 : 16,
+            paddingVertical: 2,
+          }}
+        >
+          <Text
+            maxFontSizeMultiplier={1.2}
+            numberOfLines={1}
+            style={{ width: column, fontSize: 15, color: t.caption, paddingRight: 8 }}
+          >
+            {label}
+          </Text>
+          {prefixNode && onPrefixPress && !readOnly ? (
+            <Pressable
+              onPress={onPrefixPress}
+              accessibilityRole="button"
+              accessibilityLabel={`Код страны ${prefix}`}
+              accessibilityHint="Нажмите, чтобы сменить страну"
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 4 }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            >
+              {prefixNode}
+            </Pressable>
+          ) : (
+            prefixNode
+          )}
+          <Pressable
+            onPress={
+              readOnly
+                ? undefined
+                : editingNow
+                  ? () => ownInput.current?.focus()
+                  : () => setEditing(true)
+            }
+            onLongPress={editingNow ? undefined : onLongPress}
+            disabled={!!readOnly && !onLongPress}
+            accessible={!editingNow}
+            accessibilityRole={editingNow ? "none" : readOnly ? "text" : "button"}
+            accessibilityLabel={value ? `${label}, ${prefix ? `${prefix} ` : ""}${value}` : label}
+            accessibilityHint={editingNow || readOnly ? undefined : "Нажмите, чтобы изменить"}
+            style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.6 : 1 })}
+          >
+            {editingNow ? (
+              <TextInput
+                ref={setInput}
+                autoFocus={autoFocus || editing}
+                value={text}
+                onChangeText={(raw) => {
+                  const v = clean(raw);
+                  setText(v);
+                  onType?.(v);
+                  if (live) onSave(v);
+                }}
+                onBlur={commit}
+                onSubmitEditing={commit}
+                blurOnSubmit={!multiline}
+                placeholder={addLabel ?? placeholder}
+                placeholderTextColor={addLabel ? t.accent : t.placeholder}
+                selectionColor={t.accent}
+                keyboardAppearance="light"
+                keyboardType={keyboardType}
+                selectTextOnFocus={selectOnFocus}
+                contextMenuHidden={noCopy}
+                autoCapitalize={autoCapitalize}
+                autoCorrect={false}
+                spellCheck={false}
+                accessibilityLabel={label}
+                maxFontSizeMultiplier={1.2}
+                style={{
+                  padding: 0,
+                  fontSize: 17,
+                  // `big` в колонке — имя: жирнее соседних значений.
+                  fontWeight: big ? "600" : "400",
+                  color: inputColor ?? t.ink,
+                  fontVariant: tabular ? ["tabular-nums"] : undefined,
+                }}
+              />
+            ) : (
+              <Text
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={1}
+                style={{
+                  fontSize: 17,
+                  fontWeight: big ? "600" : "400",
+                  color: value ? (valueColor ?? t.ink) : addLabel ? t.accent : t.placeholder,
+                  fontVariant: tabular ? ["tabular-nums"] : undefined,
+                }}
+              >
+                {value || addLabel || placeholder}
+              </Text>
+            )}
+          </Pressable>
+          {trailing}
+        </View>
+      </View>
+    );
+  }
 
   if (stacked) {
     return (
@@ -568,7 +707,7 @@ export function FieldRow({
               style={{
                 padding: 0,
                 fontSize: valueSize,
-                fontWeight: "600",
+                fontWeight: valueWeight,
                 color: inputColor ?? t.ink,
                 fontVariant: tabular ? ["tabular-nums"] : undefined,
               }}
@@ -579,7 +718,7 @@ export function FieldRow({
               numberOfLines={multiline ? 3 : 1}
               style={{
                 fontSize: valueSize,
-                fontWeight: "600",
+                fontWeight: valueWeight,
                 color: value
                   ? (valueColor ?? t.ink)
                   : addLabel
@@ -859,10 +998,14 @@ export function RowActionButton({
           ? (e) => onAccessibilityAction(e.nativeEvent.actionName)
           : undefined
       }
+      // 28 + 8 с каждой стороны = 44pt зоны касания.
       hitSlop={8}
       style={({ pressed }) => ({
-        width: 32,
-        height: 32,
+        // 28 — РАЗМЕР ПЛИТКИ СТРОКИ (`SelectRow`, плитка объекта): кружок
+        // маршрута стоит в одной строке с плиткой объекта, и владелец 03.10
+        // сравнивает значки рядом — 32 против 28 читалось «разного размера».
+        width: 28,
+        height: 28,
         // Круг: w === h. Круг не может стать прямоугольником — это
         // геометрическое исключение из закона одного радиуса.
         borderRadius: 999,
@@ -884,12 +1027,17 @@ export function RowActionButton({
 export function ActionRow({
   label,
   tone = "accent",
+  icon,
   separated,
   dimmed,
   onPress,
 }: {
   label: string;
   tone?: "accent" | "danger";
+  /** Значок в кружке слева — та же голова строки, что у двери `ChooseRow`
+   *  (владелец 03.10: «Сделать основным» голым словом в блоке выпадало).
+   *  Шеврона нет: строка делает, а не ведёт. */
+  icon?: LucideIcon;
   separated?: boolean;
   dimmed?: boolean;
   onPress: () => void;
@@ -913,10 +1061,13 @@ export function ActionRow({
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >
+      {icon ? <IconCircle icon={icon} size={30} /> : null}
       <Text
         maxFontSizeMultiplier={1.2}
         style={{
-          fontSize: 15,
+          marginLeft: icon ? 12 : 0,
+          // Со значком — размер двери `ChooseRow`: рядом они одной высоты.
+          fontSize: icon ? 17 : 15,
           fontWeight: "600",
           color: tone === "danger" ? t.danger : t.accent,
         }}

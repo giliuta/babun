@@ -5,18 +5,21 @@ import { debtRemainderCents } from "@babun/shared/local/finance/debt";
 import { formatEURExact, parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { useToast } from "@/components/ui/Toast";
 import { formatHM } from "@/features/appointments/helpers";
+import { getCurrentTimeInZone } from "@babun/shared/common/utils/date-utils";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { confirmAction, confirmThen } from "@/lib/confirm";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
-import { useIsOnline } from "@babun/shared/sync";
+import { randomUuid, useIsOnline } from "@babun/shared/sync";
 import { useFinanceCategories } from "./queries";
 import { categoryInTeam, pickableCategories } from "./category-asks";
 import { useTeams } from "@/features/reference/queries";
 import { useClientChoice } from "./use-client-choice";
 import { useDeleteDebt, useInsertDebt, useUpdateDebt } from "./debts-queries";
 import { useReceiptSession } from "./receipt-upload";
+import { todayYmd as todayInZone } from "@/features/invoices/format";
+import { useCalendarSettings } from "@/features/settings/local-settings";
 
 // ЧЕРНОВИК ДОЛГА — ДАННЫЕ ФОРМЫ ОТДЕЛЬНО ОТ ЕЁ ВЁРСТКИ (тот же приём, что у
 // карточки клиента, `useClientDraft`). Поля, пересев, проверки, запись,
@@ -24,12 +27,11 @@ import { useReceiptSession } from "./receipt-upload";
 
 const OFFLINE = "Долг записывается только онлайн: нет сети";
 
-export function todayYmd(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`;
-}
+// «СЕГОДНЯ» ДОЛГА — ПО ПОЯСУ КОМПАНИИ, КАК У ОПЕРАЦИИ И ПЕРЕВОДА (аудит
+// 2026-10-03). Здесь стояли часы телефона: телефон впереди Никосии (в 23:30
+// у компании у него уже 00:30 завтра) ставил долг «завтра», и при периоде
+// «Сегодня» он пропадал из плитки «Долги» до следующего дня.
+const DEFAULT_TZ = "Europe/Nicosia";
 
 export function useDebtDraft({
   visible,
@@ -52,6 +54,8 @@ export function useDebtDraft({
   const toast = useToast();
   const online = useIsOnline();
   const isEdit = !!debt;
+  const timeZone = useCalendarSettings().data?.timezone ?? DEFAULT_TZ;
+  const todayYmd = () => todayInZone(timeZone);
 
   const [direction, setDirection] = useState<DebtDirection>(initialDirection);
   const [counterparty, setCounterparty] = useState("");
@@ -61,7 +65,8 @@ export function useDebtDraft({
   // ЧАС — КАК У ОПЕРАЦИИ (владелец 2026-09-10: «время должно быть такое же,
   // как в доходе»). У нового долга это «сейчас»; у заведённого до появления
   // колонки часа нет, и подставлять выдуманный нельзя.
-  const [time, setTime] = useState<string | null>(() => formatHM(new Date()));
+  // «Сейчас» — по часам бизнеса, как и `todayYmd` (аудит финансов 03.10).
+  const [time, setTime] = useState<string | null>(() => formatHM(getCurrentTimeInZone(timeZone)));
   const [categoryId, setCategoryId] = useState<string | null>(null);
   // КОМАНДА ДОЛГА (владелец 2026-09-24: «всё отдельно под каждую команду»;
   // долг без команды сервер не примет). Своя у долга, а не «выбранная сейчас
@@ -100,6 +105,8 @@ export function useDebtDraft({
   // Одна команда — вопроса нет, она и есть команда долга.
   const debtTeamId = pickedTeamId ?? (teams.length === 1 ? teams[0].id : null);
   const insert = useInsertDebt();
+  // Ключ повтора нового долга — один на открытие формы (`insertDebt`).
+  const newDebtId = useRef(randomUuid());
   const update = useUpdateDebt();
   const remove = useDeleteDebt();
 
@@ -111,12 +118,13 @@ export function useDebtDraft({
       keepDraft.current = false;
       return;
     }
+    newDebtId.current = randomUuid();
     setDirection(debt?.direction ?? initialDirection);
     setCounterparty(debt?.counterparty ?? "");
     setClientId(debt?.client_id ?? null);
     setAmount(debt ? String(debt.amount) : "");
     setDate(debt?.occurred_on ?? todayYmd());
-    setTime(debt ? debt.occurred_time : formatHM(new Date()));
+    setTime(debt ? debt.occurred_time : formatHM(getCurrentTimeInZone(timeZone)));
     setCategoryId(debt?.category_id ?? null);
     setPickedTeamId(debt?.team_id ?? teamId ?? null);
     setNote(debt?.note ?? "");
@@ -223,7 +231,7 @@ export function useDebtDraft({
       if (isEdit && debt) {
         await update.mutateAsync({ id: debt.id, patch: payload });
       } else {
-        await insert.mutateAsync(payload);
+        await insert.mutateAsync({ ...payload, id: newDebtId.current });
       }
       haptics.success();
       toast(isEdit ? "Долг сохранён" : "Долг записан");

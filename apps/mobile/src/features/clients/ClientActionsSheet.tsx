@@ -1,15 +1,11 @@
-import {
-  Archive,
-  Bell,
-  CalendarPlus,
-  Check,
-  Pin,
-  Trash2,
-} from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
-import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
+import { PickerSheet } from "@/components/ui/PickerSheet";
 import { useLastNonNull } from "@/lib/use-last-non-null";
 import { useThemeColors } from "@/theme/colors";
+
+import { clientMenuItems } from "./client-menu-items";
+import type { ShareTextOptions } from "./client-share";
+import { useCardAccess } from "./use-card-access";
 
 // МЕНЮ КЛИЕНТА по long-press в списке.
 //
@@ -21,13 +17,14 @@ import { useThemeColors } from "@/theme/colors";
 // живёт ровно в одном месте — в кнопке у номера, которая уважает и набор, и
 // порядок каналов.
 //
-// Осталось то, чего в кнопке нет: записать, отложить, пометить, убрать.
-// «Записать» и «Напомнить» продублированы свайпами (вправо/влево) — жест
-// быстрее, лист обнаруживаемее, и по закону продукта у действия должна быть
-// видимая дорога, а не только жест.
+// Осталось то, чего в кнопке нет: записать, отложить, поделиться, пометить,
+// удалить. «Напомнить» и «Удалить» продублированы свайпами строки (владелец
+// 03.10) — жест быстрее, лист обнаруживаемее, и по закону продукта у
+// действия должна быть видимая дорога, а не только жест.
 //
 // Сам лист — канонический `PickerSheet`: был самописный `Modal
-// animationType="slide"`, что DS запрещает дословно.
+// animationType="slide"`, что DS запрещает дословно. Пункты — общие с «⋯»
+// страницы клиента (`clientMenuItems`, владелец 03.10: «это одно и то же»).
 
 interface ClientActionsSheetProps {
   /** null → лист закрыт. */
@@ -39,9 +36,12 @@ interface ClientActionsSheetProps {
   /** Нет — пункта «Выбрать несколько» нет: за ним экспорт и массовая SMS,
    *  а клиента чужой компании не выносят (владелец 30.09). */
   onSelectMany?: (c: Client) => void;
-  onTogglePin?: (c: Client) => void;
   onRemind?: (c: Client) => void;
-  onArchive?: (c: Client) => void;
+  /** Нет — «Поделиться» нет: клиента нельзя вынести (партнёр, 30.09).
+   *  `opts.requisites` — реквизиты видны так же, как на карточке, в компании
+   *  ЛИСТА: вызывающий оборачивает лист источником строки (03.10). */
+  onShare?: (c: Client, opts: ShareTextOptions) => void;
+  onToggleBlacklist?: (c: Client) => void;
   onDelete?: (c: Client) => void;
 }
 
@@ -50,9 +50,9 @@ export function ClientActionsSheet({
   onClose,
   onBook,
   onSelectMany,
-  onTogglePin,
   onRemind,
-  onArchive,
+  onShare,
+  onToggleBlacklist,
   onDelete,
 }: ClientActionsSheetProps) {
   const t = useThemeColors();
@@ -60,72 +60,28 @@ export function ClientActionsSheet({
   // закрытии размонтировал лист в том же кадре, и вся выездная анимация
   // BottomSheet не проигрывалась — панель просто исчезала.
   const shown = useLastNonNull(client);
+  // «ПОДЕЛИТЬСЯ» — ТОТ ЖЕ ТЕКСТ, ЧТО ИЗ «⋯» КАРТОЧКИ (аудит 03.10): реквизиты
+  // уходят, только когда блок «Реквизиты» виден на карточке — выключатели
+  // компании и команды клиента и права строки. Компания — источник вокруг
+  // листа: у строки работодателя это его компания, а не своя.
+  const requisites = useCardAccess(shown, false).requisites.show;
   if (!shown) return null;
 
-  const pinned = Boolean(shown.pinned_at);
   const c = shown;
-  const items: PickerSheetItem[] = [
-    {
-      id: "book",
-      label: "Записать",
-      icon: CalendarPlus,
-      color: t.accent,
-      onPress: () => onBook?.(c),
-    },
-    {
-      id: "remind",
-      label: "Напомнить",
-      icon: Bell,
-      color: t.warning,
-      onPress: () => onRemind?.(c),
-    },
-    {
-      id: "pin",
-      label: pinned ? "Открепить" : "Закрепить",
-      icon: Pin,
-      color: t.accent,
-      onPress: () => onTogglePin?.(c),
-    },
-    {
-      id: "select",
-      label: "Выбрать несколько",
-      icon: Check,
-      color: t.accent,
-      onPress: () => onSelectMany?.(c),
-    },
-    {
-      // Архив и удаление — разные исходы: первый бессрочный и сохраняет
-      // историю, второй кладёт в «Недавно удалённые» на 30 дней. Поэтому
-      // архив идёт обычным акцентом, красный остаётся за стиранием.
-      id: "archive",
-      label: "В архив",
-      icon: Archive,
-      color: t.accent,
-      onPress: () => onArchive?.(c),
-    },
-    {
-      id: "delete",
-      label: "Удалить",
-      icon: Trash2,
-      color: t.danger,
-      onPress: () => onDelete?.(c),
-    },
-  ];
-  const offered: Record<string, unknown> = {
-    book: onBook,
-    remind: onRemind,
-    pin: onTogglePin,
-    select: onSelectMany,
-    archive: onArchive,
-    delete: onDelete,
-  };
-  const shownItems = items.filter((item) => offered[item.id] !== undefined);
+  const items = clientMenuItems(t, Boolean(c.blacklisted), {
+    onBook: onBook && (() => onBook(c)),
+    onRemind: onRemind && (() => onRemind(c)),
+    onShare: onShare && (() => onShare(c, { requisites })),
+    onSelectMany: onSelectMany && (() => onSelectMany(c)),
+    onToggleBlacklist: onToggleBlacklist && (() => onToggleBlacklist(c)),
+    onDelete: onDelete && (() => onDelete(c)),
+  });
 
   return (
     <PickerSheet
       visible={client !== null}
       title={c.full_name || c.phone || "Клиент"}
-      items={shownItems}
+      items={items}
       onClose={onClose}
     />
   );

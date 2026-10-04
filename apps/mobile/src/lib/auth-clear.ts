@@ -1,7 +1,9 @@
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { getStorage } from "@babun/shared/storage";
-import { cacheClearAll } from "@babun/shared/db/cache/sql";
+import { cacheClearAll, queueDepth } from "@babun/shared/db/cache/sql";
+import { confirmAction } from "@/lib/confirm";
 import { queryClient } from "@/lib/query-client";
+import { unsentChangesNote } from "@/lib/unsent-changes";
 import { forgetRevealedContacts } from "@/features/clients/revealed-contacts";
 import { notify } from "./notify";
 import { supabase } from "@/lib/supabase";
@@ -17,9 +19,11 @@ import { sweepQueryCacheOnSwitch } from "@/lib/switch-cache-sweep";
 import { settleClaimDebt } from "@/lib/claim-catch-up";
 import { notificationsForWipe } from "@/lib/wipe-plan";
 import {
+  babunNotificationRegistrySnapshot,
   clearAllBabunNotifications,
   suspendAllBabunNotifications,
 } from "@/lib/notifications";
+import { resetTeamPrefsCache } from "@/features/cabinet/notification-prefs-cache";
 
 // Wipe device-local data when this device must no longer see the previous
 // account's data. Originally ported from the Next.js web app's
@@ -101,6 +105,9 @@ function wipeFastStores(
     if (keepTenantNamedKeys && isTenantScopedKey(key)) continue;
     if (TENANT_PREFIXES.some((p) => key.startsWith(p))) storage.remove(key);
   }
+  // Копия настроек уведомлений живёт и в памяти — на выходе из аккаунта
+  // уходит вместе с MMKV (проверка системы 03.10).
+  if (!keepTenantNamedKeys) resetTeamPrefsCache();
   if (!keepSubscribers) {
     // Номера, открытые сотрудником дверью, живут только в памяти — и на
     // выходе уходят вместе с остальным (30.09).
@@ -291,6 +298,16 @@ export function wipeLocalData(): void {
   });
 }
 
+/** The sentence about changes still waiting in the sync queue, or null when
+ *  nothing would be lost (an unreadable cache has nothing to lose either). */
+export async function unsentChangesNow(): Promise<string | null> {
+  try {
+    return unsentChangesNote(await queueDepth());
+  } catch {
+    return null;
+  }
+}
+
 /** Intentional «Выйти» — sign out FIRST, wipe only once the session is
  *  really gone. auth-js signOut() does NOT throw: on a network failure
  *  (offline is a normal mobile state) it returns { error } and KEEPS the
@@ -303,8 +320,50 @@ export function wipeLocalData(): void {
  *  `"global"`: «Выйти» on one phone revoked the account's sessions on every
  *  other device and did exactly what «Выйти со всех устройств» does. The
  *  global sign-out stays one explicit row in «Вход и безопасность»
- *  (`cabinet/account.tsx`); `sign-out-contract.test.ts` holds both. */
+ *  (`cabinet/account.tsx`); `sign-out-contract.test.ts` holds both.
+ *
+ *  UNSENT CHANGES ASK FIRST (audit 2026-10-03): the wipe takes the sync
+ *  queue with it, so a non-empty queue needs an explicit «Выйти». */
 export async function signOutAndWipe(): Promise<void> {
+  const unsent = await unsentChangesNow();
+  if (
+    unsent &&
+    !(await confirmAction("Не всё отправлено", {
+      message: unsent,
+      confirmLabel: "Выйти",
+      destructive: true,
+    }))
+  ) {
+    return;
+  }
+  try {
+    await signOutScopeAndWipe("local");
+  } catch {
+    notify(
+      "Не удалось выйти",
+      "Проверьте соединение и попробуйте ещё раз.",
+    );
+  }
+}
+
+/** «ВЫЙТИ ИЗ АККАУНТА» В КАБИНЕТЕ — ВСЕГДА С ВОПРОСОМ (аудит Кабинета 03.10).
+ *  Выход срабатывал с одного тапа и стирал с телефона напоминания «Напомнить»
+ *  — они живут только здесь и после входа не вернутся. Вопрос один: в нём же
+ *  и про неотправленные правки, второго окна нет. Остальные выходы
+ *  («Вы больше не состоите…», чужое приглашение) зовут `signOutAndWipe`. */
+export async function confirmAndSignOut(): Promise<void> {
+  const unsent = await unsentChangesNow();
+  const parts = ["Выход — только на этом телефоне."];
+  if (babunNotificationRegistrySnapshot().length > 0) {
+    parts.push("Напоминания, поставленные на этом телефоне, удалятся.");
+  }
+  if (unsent) parts.push(unsent);
+  const ok = await confirmAction("Выйти из аккаунта?", {
+    message: parts.join(" "),
+    confirmLabel: "Выйти",
+    destructive: true,
+  });
+  if (!ok) return;
   try {
     await signOutScopeAndWipe("local");
   } catch {
@@ -363,7 +422,18 @@ export async function handleAuthEvent(
     await suspendAllBabunNotifications();
     return;
   }
-  if (event !== "SIGNED_IN" && event !== "INITIAL_SESSION") return;
+  // PASSWORD_RECOVERY — тоже вход (аудит 03.10): ссылка сброса из письма
+  // заводит сессию своего человека (`verifyOtp` шлёт это событие, а не
+  // SIGNED_IN). Без этой строки вход по ссылке B поверх данных A,
+  // оставшихся после выхода «со всех устройств» на другом телефоне, сверку
+  // человека пропускал — и B видел кэш A.
+  if (
+    event !== "SIGNED_IN" &&
+    event !== "INITIAL_SESSION" &&
+    event !== "PASSWORD_RECOVERY"
+  ) {
+    return;
+  }
   const next = session?.user?.id;
   if (!next) return;
   const storage = getStorage();

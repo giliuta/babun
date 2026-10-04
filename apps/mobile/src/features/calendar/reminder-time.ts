@@ -3,6 +3,7 @@ import {
 } from "@babun/shared/common/utils/date-utils";
 import { expandRepeat } from "@babun/shared/common/utils/expand-repeat";
 import type { Appointment } from "@babun/shared/local/appointments";
+import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
 export type AppointmentReminderTiming =
   | "before-30"
@@ -199,13 +200,8 @@ export function sameSelfReminder(a: SelfReminder | null, b: SelfReminder | null)
   return false;
 }
 
-const dayWord = (n: number) => {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "день";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "дня";
-  return "дней";
-};
+// Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
+const dayWord = (n: number) => pluralRu(n, ["день", "дня", "дней"]);
 
 /** День напоминания словами: «В день записи», «Накануне», «За 3 дня». */
 export function reminderDayLabel(daysBefore: number): string {

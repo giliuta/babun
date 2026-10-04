@@ -118,7 +118,11 @@ export function TeamLabelRow({
         accessibilityLabel={
           label
             ? `${labelPlaceholder ?? "Метка"}: ${label}${labelFromDay ? ", как у дня" : ""}`
-            : `${labelPlaceholder ?? "Метка"} не выбран${labelPlaceholder ? "" : "а"}`
+            : // Целыми фразами: окончание, приклеенное к слову, на другом
+              // языке интерфейса стало бы лишней буквой.
+              labelPlaceholder
+              ? `${labelPlaceholder} не выбран`
+              : "Метка не выбрана"
         }
         accessibilityHint={`Открывает выбор: ${(labelPlaceholder ?? "метка").toLowerCase()}`}
       />

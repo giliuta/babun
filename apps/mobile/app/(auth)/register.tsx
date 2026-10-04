@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { uiLocale } from "@babun/shared/i18n/locale";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -13,7 +14,7 @@ import {
   PillButton,
   SwitchLink,
 } from "@/components/auth/AuthCard";
-import { mapAuthError } from "@/components/auth/authErrors";
+import { mapAuthError, signUpHitExistingAccount } from "@/components/auth/authErrors";
 import { useAuthTheme } from "@/components/auth/theme";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/notify";
@@ -68,6 +69,8 @@ export default function RegisterScreen() {
       options: {
         data: {
           full_name: fullName.trim(),
+          // Язык, на котором человек регистрировался, — письма ему на нём же.
+          locale: uiLocale(),
           ...(pendingInviteToken
             ? { pending_invitation_token: pendingInviteToken }
             : {}),
@@ -82,6 +85,11 @@ export default function RegisterScreen() {
         (pendingInviteToken && invitationSignupErrorMessage(e.message)) ||
           mapAuthError(e, "signup"),
       );
+      setLoading(false);
+      return;
+    }
+    if (signUpHitExistingAccount(data)) {
+      setError(mapAuthError({ code: "user_already_exists" }, "signup"));
       setLoading(false);
       return;
     }

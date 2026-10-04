@@ -9,6 +9,7 @@ import {
 } from "react";
 import { AccessibilityInfo, Animated } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 import { useReduceMotion } from "@/lib/reduce-motion";
 import { NoticeBar, type NoticeTone } from "./NoticeBar";
 
@@ -35,6 +36,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-12)).current;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Тост, чья кнопка уже нажата: второй тап — пока плашка гаснет (220 мс) —
+   *  не делает ничего. Двойное «Снять» уходило вторым снятием по уже снятому
+   *  платежу: сервер отвечал «Платёж не найден», и экран откатывался назад
+   *  (аудит 2026-10-03). */
+  const actedId = useRef<number | null>(null);
   const insets = useSafeAreaInsets();
   const reducedMotion = useReduceMotion();
 
@@ -48,11 +54,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     Animated.parallel([
       Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: -12, duration: 220, useNativeDriver: true }),
-    ]).start(() => setToast(null));
+      // Только ДОИГРАННОЕ угасание убирает плашку. Новый тост в эти 220 мс
+      // останавливает его анимацию, и колбэк приходит с `finished: false` —
+      // раньше он и стирал только что показанный тост (повторный аудит 03.10:
+      // быстрый отказ сервера после «Отменить» пропадал молча).
+    ]).start(({ finished }) => {
+      if (finished) setToast(null);
+    });
   }, [opacity, reducedMotion, translateY]);
 
   const show = useCallback(
-    (message: string, type: ToastType = "success", action?: ToastAction) => {
+    (raw: string, type: ToastType = "success", action?: ToastAction) => {
+      // Текст тоста часто приходит с сервера (`error.message` из функции
+      // базы) — сборка его не переводила, переводим при показе.
+      const message = tDynamic(raw);
       setToast({ id: Date.now(), message, type, action });
       // The toast is pointerEvents="none" and auto-dismisses — VoiceOver
       // users would never know it appeared without an explicit announcement.
@@ -89,22 +104,29 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={show}>
       {children}
-      {toast ? (
-        <Animated.View
-          pointerEvents={toast.action ? "box-none" : "none"}
-          style={{
-            position: "absolute",
-            // ПОЛОСА ВО ВСЮ ШИРИНУ, вплотную к верху — у любого тона: ровно
-            // так лежит `CalendarNotice`, и поля с зазором делали бы из неё
-            // висящую карточку (владелец 2026-09-06: «все уведомления везде
-            // одинаковые — как полноценный design block»).
-            top: insets.top,
-            left: 0,
-            right: 0,
-            opacity,
-            transform: [{ translateY }],
-          }}
-        >
+      {/* ПОЛОСА СМОНТИРОВАНА ВСЕГДА, ПУСТАЯ — КОГДА ТОСТА НЕТ (повторный аудит
+          03.10, на симуляторе). Монтировалась она вместе с тостом, а появление
+          запускалось в том же вызове — до того, как вид встал на экран. После
+          первого угасания значение прозрачности уже живёт в нативном
+          аниматоре, и новый вид вставал с нулём, а анимация к единице к этому
+          моменту уже отыграла: тост «Перенесено · Отменить» вызывался, но был
+          невидим — отменить перенос было нечем. */}
+      <Animated.View
+        pointerEvents={toast?.action ? "box-none" : "none"}
+        style={{
+          position: "absolute",
+          // ПОЛОСА ВО ВСЮ ШИРИНУ, вплотную к верху — у любого тона: ровно
+          // так лежит `CalendarNotice`, и поля с зазором делали бы из неё
+          // висящую карточку (владелец 2026-09-06: «все уведомления везде
+          // одинаковые — как полноценный design block»).
+          top: insets.top,
+          left: 0,
+          right: 0,
+          opacity,
+          transform: [{ translateY }],
+        }}
+      >
+        {toast ? (
           <NoticeBar
             tone={toast.type}
             message={toast.message}
@@ -113,6 +135,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 ? {
                     label: toast.action.label,
                     onPress: () => {
+                      if (actedId.current === toast.id) return;
+                      actedId.current = toast.id;
                       const run = toast.action?.onPress;
                       hide();
                       run?.();
@@ -121,8 +145,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 : undefined
             }
           />
-        </Animated.View>
-      ) : null}
+        ) : null}
+      </Animated.View>
     </ToastCtx.Provider>
   );
 }

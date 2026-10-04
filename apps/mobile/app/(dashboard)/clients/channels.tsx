@@ -1,5 +1,8 @@
 import { ToggleListScreen } from "@/components/ui/ToggleListScreen";
 import { useLocalSearchParams } from "expo-router";
+import { ClientSettingsRoute } from "@/features/clients/ClientSettingsRoute";
+import { useClientSettingLevel } from "@/features/clients/use-client-settings";
+import { useTeams } from "@/features/reference/queries";
 import {
   contactWayDef,
   isWayOffered,
@@ -23,11 +26,24 @@ import {
 // «у номера», «в карточке» или обе. Правило и перенос старых настроек живут в
 // `contact-ways`.
 
-export default function ClientChannelsScreen() {
+// Строка шестерёнки — за своим правом команды (владелец 01.10).
+export default function ClientChannelsScreenRoute() {
+  return (
+    <ClientSettingsRoute row="ways">
+      <ClientChannelsScreen />
+    </ClientSettingsRoute>
+  );
+}
+
+function ClientChannelsScreen() {
   // Набор КОМАНДЫ из адреса (у каждой команды свои настройки клиентов,
   // владелец 30.09); без команды — набор компании.
   const { team } = useLocalSearchParams<{ team?: string }>();
   const teamId = team || null;
+  const { data: ownTeams = [] } = useTeams();
+  const teamName = ownTeams.find((tm) => tm.id === teamId)?.name;
+  // «Только видит»: галки и порядок как есть, без правки.
+  const readOnly = useClientSettingLevel("ways", teamId) !== "write";
   const order = useWaysOrder(teamId);
   const enabled = useEnabledWays(teamId);
   const toggle = useToggleWay(teamId);
@@ -50,6 +66,7 @@ export default function ClientChannelsScreen() {
             icon: def.icon,
             color: def.color,
             checked: enabled.includes(def.id),
+            readOnly,
             onToggle: () => toggle.mutate(def.id),
           }
         : null;
@@ -58,9 +75,11 @@ export default function ClientChannelsScreen() {
 
   return (
     <ToggleListScreen
-      title="Способы связи"
+      // «Связь» — как строка шестерёнки (02.10, «настройки по функциям»).
+      title="Связь"
+      subtitle={teamName}
       sections={[
-        { items, onReorder: (ids) => reorder.mutate(ids as ContactWayId[]) },
+        { items, onReorder: readOnly ? undefined : (ids) => reorder.mutate(ids as ContactWayId[]) },
       ]}
     />
   );

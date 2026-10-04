@@ -108,14 +108,14 @@ describe("presetHint / periodDates — подписи строк", () => {
     assert.equal(presetHint("week", JAN1), "29 дек – 4 янв");
   });
 
-  test("periodDates: диапазон точными датами, один день — одной", () => {
+  test("periodDates: диапазон точными датами, один день — тоже двумя (03.10)", () => {
     assert.equal(
       periodDates({ preset: "custom", from: "2026-06-01", to: "2026-06-30" }),
       "01.06.26 – 30.06.26",
     );
     assert.equal(
       periodDates({ preset: "custom", from: "2026-06-01", to: "2026-06-01" }),
-      "01.06.26",
+      "01.06.26 – 01.06.26",
     );
   });
 });

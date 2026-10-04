@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Building2, ChevronRight } from "lucide-react-native";
 import type { Client, ClientRequisites } from "@babun/shared/local/clients";
@@ -8,16 +8,18 @@ import {
   requisitesNumbersLine,
 } from "@babun/shared/local/client-requisites";
 import { ChooseRow } from "@/components/ui/ChooseRow";
-import { NavRow } from "@/components/ui/card-rows";
+import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { useToast } from "@/components/ui/Toast";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { haptics } from "@/lib/haptics";
 import { useCopyValue } from "@/lib/copy-value";
 import { requisitesLines } from "@/features/clients/client-share";
+import { moreLabel } from "@/features/clients/more-label";
 import { RequisitesSheet } from "@/features/clients/RequisitesSheet";
 import { useRequisitesWriter } from "@/features/clients/use-requisites-writer";
 import { useThemeColors } from "@/theme/colors";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
 
 // РЕКВИЗИТЫ КЛИЕНТА (STORY-085, владелец 2026-09-21): «реквизиты делаем
 // всегда… инвойс могут просить прямо на клиента с его реквизитами». Блок
@@ -26,29 +28,28 @@ import { useThemeColors } from "@/theme/colors";
 // («Юридическое имя», «VAT номер»…): обе стороны документа подписаны одним
 // языком.
 //
-// НЕСКОЛЬКО НАБОРОВ — СПИСКОМ, КАК ОБЪЕКТЫ (владелец 22.09: «один и тот же
-// клиент может попросить один инвойс на эти реквизиты, а второй — на эти.
-// Сделать как объекты»). Каждая строка — набор: юр. имя крупно, под ним
-// «VAT … · Рег. …», ниже адрес; основной помечен тихим словом «Основные» в
-// подписи, как у реквизитов своей компании — и только когда наборов больше
-// одного: у единственного отличать его не от чего. Тап — лист с четырьмя
-// полями (тот же для нового и для правки); свайп — «Удалить» с
-// подтверждением; последняя строка — дверь «Добавить реквизиты», как
-// «Добавить объект». Какой набор печатать, выбирают в самом инвойсе; не
+// НЕСКОЛЬКО НАБОРОВ — КАК ОБЪЕКТЫ (владелец 22.09: «один и тот же клиент
+// может попросить один инвойс на эти реквизиты, а второй — на эти. Сделать
+// как объекты»). С 03.10 — как «История» и «Файлы»: на карточке ОДИН набор,
+// основной, плашкой; тап — страница всех наборов, где каждый — своя плашка:
+// юр. имя, под ним «VAT … · Рег. …», ниже адрес; основной помечен тихим
+// словом «Основные» — только когда наборов больше одного. Тап — лист с
+// четырьмя полями (тот же для нового и для правки); свайп — «Удалить» с
+// «Отменить»; «Добавить реквизиты» — футером страницы, на карточке — дверью
+// у пустого блока. Какой набор печатать, выбирают в самом инвойсе; не
 // выбрали — основной.
 //
 // Только владельцу: реквизиты — к документам и деньгам, сотруднику сервер их
 // не отдаёт и править не даёт.
 
-/** Сколько наборов показывает карточка; остальные — за дверью. */
-export const REQUISITES_ON_CARD = 2;
-
 export function RequisitesBlock({
   client,
   update,
-  limit,
   onOpenAll,
   bare,
+  single,
+  adding,
+  onAddingChange,
   readOnly = false,
 }: {
   client: Client;
@@ -57,21 +58,30 @@ export function RequisitesBlock({
    *  копируются, но не правятся, не удаляются и не заводятся. */
   readOnly?: boolean;
   update: (patch: Partial<Client>) => Promise<boolean>;
-  /** Сколько наборов показывать; без него — все (своя страница). */
-  limit?: number;
-  /** Открыть страницу всех наборов — дверь под списком. */
+  /** Открыть страницу всех наборов — тап по набору на карточке. */
   onOpenAll?: () => void;
   /** Своя страница: название уже в заголовке экрана, шапки у блока нет. */
   bare?: boolean;
+  /** Карточка: один набор — основной; тап — страница всех (03.10). */
+  single?: boolean;
+  /** Лист нового набора открывает кнопка ВНЕ блока (футер страницы): тогда
+   *  двери «Добавить реквизиты» в блоке нет, а лист — по этому флагу. */
+  adding?: boolean;
+  onAddingChange?: (open: boolean) => void;
 }) {
   const t = useThemeColors();
   const copy = useCopyValue();
   const toast = useToast();
   const sets = useMemo(() => clientRequisitesOf(client), [client]);
   const ordered = useMemo(() => orderedRequisites(sets), [sets]);
-  const shown = limit ? ordered.slice(0, limit) : ordered;
-  const rest = ordered.length - shown.length;
+  const shown = single ? ordered.slice(0, 1) : ordered;
   const writer = useRequisitesWriter(sets, update, client.id);
+  // Копирование — вынос из приложения: только с правом выгрузки (владелец
+  // 30.09: «без передачи»; аудит 015).
+  const canCopy = useClientsCapabilities().export;
+  const copySet = (set: ClientRequisites) => {
+    if (canCopy) copy(requisitesLines(set).join("\n"));
+  };
 
   // Лист монтируется заново на каждое открытие (`key`): черновик полей и
   // курсор собираются из набора В МОМЕНТ ОТКРЫТИЯ, а не эффектом после —
@@ -84,8 +94,15 @@ export function RequisitesBlock({
     haptics.tap();
     setSheet((prev) => ({ key: (prev?.key ?? 0) + 1, id, open: true }));
   };
-  const closeSheet = () => setSheet((prev) => (prev ? { ...prev, open: false } : prev));
+  const closeSheet = () => {
+    setSheet((prev) => (prev ? { ...prev, open: false } : prev));
+    onAddingChange?.(false);
+  };
   const editing = sheet?.id ? sets.find((s) => s.id === sheet.id) ?? null : null;
+  // Футер страницы поднял флаг — открываем лист нового набора.
+  useEffect(() => {
+    if (adding) openSheet(null);
+  }, [adding]);
 
   // СВАЙП УБИРАЕТ СРАЗУ (владелец 22.09: «всё можно вот так вот убирать»,
   // как объекты и связи). Выданные инвойсы печатают свой снимок и не
@@ -115,79 +132,143 @@ export function RequisitesBlock({
     });
   };
 
+  const sheetNode =
+    sheet && !readOnly ? (
+      <RequisitesSheet
+        key={sheet.key}
+        // Набор удалили под открытым листом (реалтайм, второе устройство) —
+        // лист закрывается: править больше нечего.
+        visible={sheet.open && (sheet.id === null || editing !== null)}
+        set={editing}
+        canMakeDefault={sets.length > 1}
+        onClose={closeSheet}
+        onSave={async (fields) =>
+          (await writer.saveRequisites({ ...fields, id: sheet.id })) !== null
+        }
+        onMakeDefault={() => {
+          if (!sheet.id) return;
+          haptics.success();
+          void writer.makeDefault(sheet.id);
+          closeSheet();
+        }}
+      />
+    ) : null;
+
+  // СВОЯ СТРАНИЦА — КАЖДЫЙ НАБОР ОТДЕЛЬНОЙ ПЛАШКОЙ (владелец 03.10: «то же
+  // самое» — как «История» и «Файлы»): тап — лист правки, удержание —
+  // скопировать набор, свайп — «Удалить» с «Отменить». Добавляет футер
+  // страницы; пустой список говорит сама страница.
+  if (bare) {
+    return (
+      <>
+        {shown.length > 0 ? (
+          <SelectList>
+            {shown.map((set) => {
+              const plaque = (
+                <RequisitesPlaque
+                  set={set}
+                  markDefault={sets.length > 1}
+                  onPress={readOnly ? () => undefined : () => openSheet(set.id)}
+                  onLongPress={() => copySet(set)}
+                />
+              );
+              return readOnly ? (
+                <View key={set.id}>{plaque}</View>
+              ) : (
+                <SwipeRow
+                  key={set.id}
+                  radius={t.radius.input}
+                  label="Удалить"
+                  color={t.danger}
+                  onAction={() => askRemove(set)}
+                  accessibilityLabel={`Удалить реквизиты ${set.legal_name ?? ""}`.trim()}
+                >
+                  {plaque}
+                </SwipeRow>
+              );
+            })}
+          </SelectList>
+        ) : null}
+        {sheetNode}
+      </>
+    );
+  }
+
   // Только видит и смотреть нечего — блока нет (недоступное просто
   // отсутствует, владелец 20.09).
   if (readOnly && ordered.length === 0) return null;
 
+  // КАРТОЧКА — ОДИН НАБОР, ОСНОВНОЙ (владелец 03.10, как «История» и
+  // «Файлы»): плашкой под шапкой блока, тап — страница всех наборов. Пусто —
+  // дверь «Добавить реквизиты», как «Добавить объект».
+  // «Ещё N» — наборов сверх показанного основного (03.10).
+  const more = single && onOpenAll ? moreLabel(ordered.length) : null;
   return (
-    <SectionCard title={bare ? undefined : "Реквизиты"}>
-      {readOnly
-        ? shown.map((set, i) => (
-            <RequisitesRow
-              key={set.id}
-              set={set}
-              markDefault={sets.length > 1}
-              chevron={false}
-              separated={i > 0}
-              onPress={() => undefined}
-              onLongPress={() => copy(requisitesLines(set).join("\n"))}
-            />
-          ))
-        : shown.map((set, i) => (
-        <SwipeRow
-          key={set.id}
-          label="Удалить"
-          color={t.danger}
-          onAction={() => askRemove(set)}
-          accessibilityLabel={`Удалить реквизиты ${set.legal_name ?? ""}`.trim()}
-        >
-          <RequisitesRow
+    <SectionCard
+      title="Реквизиты"
+      action={more && onOpenAll ? { label: more, pill: true, onPress: onOpenAll } : undefined}
+    >
+      {shown.map((set) => (
+        <View key={set.id} style={{ paddingHorizontal: 2, paddingTop: 2, paddingBottom: 6 }}>
+          <RequisitesPlaque
             set={set}
-            markDefault={sets.length > 1}
-            chevron={false}
-            separated={i > 0}
-            onPress={() => openSheet(set.id)}
-            // Долгое нажатие копирует набор целиком, построчно — его обычно
-            // пересылают в банк или бухгалтеру одним сообщением.
-            onLongPress={() => copy(requisitesLines(set).join("\n"))}
+            markDefault={false}
+            withAddress={false}
+            onPress={onOpenAll ?? (readOnly ? () => undefined : () => openSheet(set.id))}
+            onLongPress={() => copySet(set)}
           />
-        </SwipeRow>
+        </View>
       ))}
-      {/* ОСТАЛЬНЫЕ НАБОРЫ — НА СВОЕЙ СТРАНИЦЕ (владелец 22.09: «то же самое
-          можно сделать с реквизитами — если их много»). */}
-      {rest > 0 && onOpenAll ? (
-        <NavRow
-          label="Все реквизиты"
-          value={String(ordered.length)}
-          separated
-          onPress={onOpenAll}
-        />
-      ) : null}
-      {readOnly ? null : (
+      {/* Дверь — у пустого блока карточки и в черновике (у него страницы
+          всех наборов ещё нет). */}
+      {readOnly || onAddingChange || (single && ordered.length > 0) ? null : (
         <ChooseRow compact icon={Building2} label="Добавить реквизиты" onPress={() => openSheet(null)} />
       )}
-
-      {sheet && !readOnly ? (
-        <RequisitesSheet
-          key={sheet.key}
-          // Набор удалили под открытым листом (реалтайм, второе устройство) —
-          // лист закрывается: править больше нечего.
-          visible={sheet.open && (sheet.id === null || editing !== null)}
-          set={editing}
-          canMakeDefault={sets.length > 1}
-          onClose={closeSheet}
-          onSave={async (fields) =>
-            (await writer.saveRequisites({ ...fields, id: sheet.id })) !== null
-          }
-          onMakeDefault={() => {
-            if (!sheet.id) return;
-            haptics.success();
-            void writer.makeDefault(sheet.id);
-            closeSheet();
-          }}
-        />
-      ) : null}
+      {sheetNode}
     </SectionCard>
+  );
+}
+
+/** НАБОР РЕКВИЗИТОВ — ПЛАШКОЙ, КАК ЗАПИСЬ В «ИСТОРИИ» И ФАЙЛ (владелец
+ *  03.10): плитка со зданием, юр. имя — названием, под ним «Основные · VAT …
+ *  · Рег. …», ниже адрес тихо. */
+function RequisitesPlaque({
+  set,
+  markDefault,
+  withAddress = true,
+  onPress,
+  onLongPress,
+}: {
+  set: ClientRequisites;
+  markDefault: boolean;
+  /** Адрес третьей строкой — на странице всех наборов. На карточке плашка в
+   *  две строки, как запись, объект и файл соседних блоков (владелец 03.10:
+   *  «реквизиты — как объекты, файлы или история»). */
+  withAddress?: boolean;
+  onPress: () => void;
+  onLongPress: () => void;
+}) {
+  const legal = (set.legal_name ?? "").trim();
+  const numbers = [markDefault && set.is_default ? "Основные" : "", requisitesNumbersLine(set)]
+    .filter(Boolean)
+    .join(" · ");
+  const address = (set.billing_address ?? "").trim();
+  const t = useThemeColors();
+  return (
+    <SelectRow
+      icon={Building2}
+      // Плитка акцентом: серая читалась выключенной рядом с цветными
+      // плитками «Истории» и «Файлов».
+      color={t.accent}
+      plain
+      title={legal || "Юридическое имя не указано"}
+      subtitle={numbers || undefined}
+      hint={withAddress && address ? address : undefined}
+      accessibilityLabel={["Реквизиты", legal, numbers, address].filter(Boolean).join(", ")}
+      accessibilityHint="Открывает реквизиты; удерживайте, чтобы скопировать"
+      onPress={onPress}
+      onLongPress={onLongPress}
+    />
   );
 }
 

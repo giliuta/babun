@@ -22,11 +22,11 @@ export function EmployeeNoteBlock({ card, readOnly = false }: { card: Master; re
   );
   if (readOnly && !saved.trim()) return null;
   return (
-    <SectionCard title="Заметка сотрудника">
+    <SectionCard title="Заметка партнёра">
       <InlineNoteField
         note={note}
-        placeholder="Заметка сотрудника"
-        accessibilityLabel="Заметка сотрудника"
+        placeholder="Заметка партнёра"
+        accessibilityLabel="Заметка партнёра"
         maxLength={MAX_LEN}
         readOnly={readOnly}
       />

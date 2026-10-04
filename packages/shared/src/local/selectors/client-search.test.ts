@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { createBlankClient } from "../clients";
-import { findDuplicateCandidates, matchesClient } from "./client-search";
+import {
+  clientSearchRank,
+  findDuplicateCandidates,
+  matchesClient,
+  rankClientMatches,
+} from "./client-search";
 
 function client(
   id: string,
@@ -54,6 +59,13 @@ describe("matchesClient", () => {
     ]) {
       assert.equal(matchesClient(item, query), true, query);
     }
+  });
+
+  test("«00» в начале номера — то же, что «+» (прогон 03.10)", () => {
+    assert.equal(matchesClient(item, "0035799123456"), true);
+    assert.equal(matchesClient(item, "00357 99 123 456"), true);
+    // Короткий запрос с нулями не теряет нули: «0099» — не «99».
+    assert.equal(matchesClient(client("c-0", { full_name: "Б", phone: "+357 99 000 111" }), "0099"), false);
   });
 
   test("keeps phone matching punctuation-independent", () => {
@@ -124,5 +136,70 @@ describe("слова связи в поиске", () => {
   test("без слов связи чужое имя не находит", () => {
     assert.equal(matchesClient(ivan, "натал"), false);
     assert.equal(matchesClient(ivan, "натал", ["Мария"]), false);
+  });
+});
+
+describe("поиск промахивался (аудит 03.10)", () => {
+  test("греческое ударение — та же буква", () => {
+    const giannis = client("gr-1", { full_name: "Γιάννης Παπαδόπουλος" });
+    for (const q of ["Γιαννης", "ΓΙΑΝΝΗΣ", "Γιάννης", "giannis", "Παπαδοπουλος"]) {
+      assert.equal(matchesClient(giannis, q), true, q);
+    }
+  });
+
+  test("латиница с диакритикой", () => {
+    assert.equal(matchesClient(client("lat-1", { full_name: "José Müller" }), "jose muller"), true);
+  });
+
+  test("слова по отдельности, в любом порядке", () => {
+    const sidorov = client("w-1", { full_name: "Иван Петрович Сидоров" });
+    assert.equal(matchesClient(sidorov, "Иван Сидоров"), true);
+    const petrov = client("w-2", { full_name: "Иван Петров", city: "Лимассол" });
+    assert.equal(matchesClient(petrov, "Петров Иван"), true);
+    assert.equal(matchesClient(petrov, "Иван Лимассол"), true);
+    assert.equal(matchesClient(petrov, "Иван Козлов"), false);
+  });
+
+  test("номер, показанный с кодом страны, находит клиента с номером без кода", () => {
+    const csv = client("e164-1", { phone: "99 123 456", phone_e164: "+35799123456" });
+    assert.equal(matchesClient(csv, "+357 99 123 456"), true);
+    assert.equal(matchesClient(csv, "99123456"), true);
+  });
+});
+
+describe("порядок найденного — сначала по имени", () => {
+  const byLabel = client("a", { full_name: "Тшлшщ", city: "Test" });
+  const exact = client("b", { full_name: "Тест Календарь" });
+  const inside = client("c", { full_name: "Анна Тестова" });
+  const byPhone = client("d", { full_name: "Ольга", phone: "+357 99 000 001" });
+
+  test("имя с начала — выше совпадения внутри имени, а то — выше метки", () => {
+    assert.equal(clientSearchRank(exact, "Тест"), 0);
+    assert.equal(clientSearchRank(inside, "Тест"), 1);
+    assert.equal(clientSearchRank(byLabel, "Тест"), 2);
+    assert.deepEqual(
+      rankClientMatches([byLabel, inside, exact], "Тест").map((c) => c.id),
+      ["b", "c", "a"],
+    );
+  });
+
+  test("номер — первой ступенью; слова имени в любом порядке — второй", () => {
+    assert.equal(clientSearchRank(byPhone, "99000"), 0);
+    assert.equal(clientSearchRank(exact, "Календарь Тест"), 1);
+  });
+
+  test("внутри ступени порядок сохраняется; пустой запрос не трогает список", () => {
+    const a1 = client("x", { full_name: "Тест 1" });
+    const a2 = client("y", { full_name: "Тест 2" });
+    assert.deepEqual(rankClientMatches([a2, a1], "тест").map((c) => c.id), ["y", "x"]);
+    assert.deepEqual(rankClientMatches([byLabel, exact], " ").map((c) => c.id), ["a", "b"]);
+  });
+});
+
+describe("буквы без разложения", () => {
+  test("украинская «і» и турецкая «ı» находятся латиницей", () => {
+    assert.equal(matchesClient(client("ua", { full_name: "Олексій Коваль" }), "Oleksii"), true);
+    assert.equal(matchesClient(client("tr", { full_name: "Ayşe Işık" }), "isik"), true);
+    assert.equal(matchesClient(client("tr", { full_name: "Ayşe Işık" }), "Işık"), true);
   });
 });

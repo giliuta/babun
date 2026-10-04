@@ -58,7 +58,7 @@ export class AccessRequestError extends Error {
   }
 }
 
-const BAD_MEMBERS = "Сервер вернул некорректный список сотрудников";
+const BAD_MEMBERS = "Сервер вернул некорректный список партнёров";
 
 function parseMembers(value: unknown): CalendarMember[] {
   if (!Array.isArray(value)) throw new Error(BAD_MEMBERS);

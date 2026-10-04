@@ -7,6 +7,8 @@ import {
   hideDecision,
   hideDecisionAfterTransfer,
   presetTeamFor,
+  trashDecision,
+  trashDecisionAfterTransfer,
 } from "./page-rules";
 
 type Row = ClosableAccount & { name: string };
@@ -98,5 +100,37 @@ describe("тихая метка строки счёта", () => {
   test("счёт вне оплаты записи говорит об этом; «Основного» больше нет", () => {
     assert.equal(accountRowMark({ show_in_payments: false }), "Не в оплате");
     assert.equal(accountRowMark({ show_in_payments: true }), null);
+    // Скрытый счёт (владелец 03.10) — «Скрыт», а не «Не в оплате»: в оплате
+    // его не бывает никогда, главное про него — что он спрятан.
+    assert.equal(accountRowMark({ show_in_payments: false, is_hidden: true }), "Скрыт");
+  });
+});
+
+describe("«Удалить» на странице «Счета» (владелец 03.10)", () => {
+  test("пустой счёт — вопрос об удалении, с операциями или без", () => {
+    const typo = account({ id: "typo", has_history: false });
+    const used = account({ id: "used" });
+    assert.deepEqual(trashDecision(typo, [typo, used]), { kind: "trash" });
+    assert.deepEqual(trashDecision(used, [typo, used]), { kind: "trash" });
+  });
+
+  test("закрытый счёт удаляется сразу — у него всегда ноль", () => {
+    const closed = account({ id: "closed", is_active: false });
+    assert.deepEqual(trashDecision(closed, [account({ id: "cash" })]), { kind: "trash" });
+  });
+
+  test("деньги на счёте — сначала перевод, как у «Скрыть»", () => {
+    const kasa = account({ id: "kasa", balance: 445 });
+    assert.deepEqual(trashDecision(kasa, [kasa, account({ id: "bank" })]), {
+      kind: "transfer",
+      direction: "out",
+      amount: 445,
+    });
+  });
+
+  test("после перевода всего остатка — снова вопрос об удалении", () => {
+    const before = account({ id: "kasa", balance: 445 });
+    const next = trashDecisionAfterTransfer(before, [account({ id: "kasa", balance: 0 }), account({ id: "bank", balance: 445 })]);
+    assert.deepEqual(next?.decision, { kind: "trash" });
   });
 });

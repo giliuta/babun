@@ -1,20 +1,22 @@
 import { useFeatureOn } from "@/features/settings/company-features";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Linking, View } from "react-native";
+import { Linking, Pressable, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { FileText, Receipt } from "lucide-react-native";
+import { FileText, Paperclip, Video, X } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
-import { listAccounts } from "@babun/shared/db/repositories/accounts";
-import type { Receipt as ReceiptDoc } from "@babun/shared/local/finance/receipt";
 import { randomUuid } from "@babun/shared/sync";
-import { AddRow } from "@/components/ui/AddRow";
+import { ChooseRow } from "@/components/ui/ChooseRow";
+import { SelectRow } from "@/components/ui/select-rows";
+import { Spinner } from "@/components/ui/Spinner";
+import { SwipeRow } from "@/components/ui/SwipeRow";
+import { useThemeColors } from "@/theme/colors";
+import { confirmThen } from "@/lib/confirm";
+import { clientFileTimeline } from "@/features/clients/client-files";
+import { ClientFileRow } from "@/features/clients/ClientFileRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
-import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
 import {
   getSignedUrl,
   useClientAttachments,
@@ -23,19 +25,11 @@ import {
   type ClientAttachment,
   type PickedFile,
 } from "@/features/clients/card-attachments";
-import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import { useReceipts } from "@/features/documents/receipts-queries";
 import { useCreditNoteLinks, useInvoices } from "@/features/invoices/queries";
-import { liveAppointmentInvoices } from "@/features/invoices/appointment-invoices";
+import { appointmentInvoiceFiles } from "@/features/invoices/appointment-invoices";
 import { AppointmentPhotoViewer } from "./AppointmentPhotoViewer";
 import { docTitle, isVideoPath, pendingDocs, pendingMedia, type PendingFile } from "./appointment-files";
-import {
-  DocumentPill,
-  PendingTile,
-  PhotoTile,
-  UploadingDocumentPill,
-  UploadingTile,
-} from "./AppointmentFileTiles";
 import {
   MAX_APPOINTMENT_PHOTOS,
   RetryableAppointmentPhotoUploadError,
@@ -46,11 +40,12 @@ import {
   type UploadAppointmentPhotosInput,
 } from "./appointment-photos";
 import { FileAddSheet } from "./FileAddSheet";
-import { TILE_GAP } from "./PaymentTiles";
 import { useFilePickers } from "./use-file-pickers";
 
-// БЛОК «ФАЙЛЫ» ЗАПИСИ (STORY-070; редизайн 20.09 — владелец: «фотографии
-// открываются квадратиком, обычный файл — плашкой с надписью, компактно»).
+// БЛОК «ФАЙЛЫ» ЗАПИСИ (STORY-070). С 03.10 — ПЕРЕЧЕНЬ ПЛАШКАМИ сверху вниз,
+// как страница файлов клиента (владелец: «вниз перечень файлов по этой
+// записи»; ниже — прежнее описание квадратов и пилюль 20.09, по составу оно
+// верно и сейчас: что попадает в блок и откуда).
 // Фото и видео — квадраты помельче с переносом строк (вид — в
 // AppointmentFileTiles), документы (они лежат во вложениях КЛИЕНТА с меткой
 // записи — владелец 2026-08-03: «все чеки, все инвойсы — всё в одном месте»),
@@ -93,7 +88,6 @@ export function AppointmentFilesBlock({
 }: AppointmentFilesBlockProps) {
   const toast = useToast();
   const router = useRouter();
-  const tenantId = useTenantId();
   const saved = appointmentId != null;
   const photosQuery = useAppointmentPhotos(appointmentId ?? "");
   const upload = useUploadAppointmentPhotos(appointmentId ?? "");
@@ -104,16 +98,6 @@ export function AppointmentFilesBlock({
   const invoicesQuery = useInvoices();
   const creditLinks = useCreditNoteLinks();
   const receiptsQuery = useReceipts({ appointmentId, enabled: saved });
-  // ЧЕК ОТКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, ЛИСТОМ С «ВЫСЛАТЬ ЧЕК» (STORY-068): раньше плитка
-  // уводила на экран всех чеков клиента, и до отправки было три экрана. Имя
-  // счёта листу — из того же справочника, что у оплаты; грузится по открытию.
-  const [openReceipt, setOpenReceipt] = useState<ReceiptDoc | null>(null);
-  const accountRows = useQuery({
-    queryKey: ["accounts", tenantId, "rows", "all"],
-    enabled: !!tenantId && openReceipt != null,
-    queryFn: () =>
-      listAccounts(supabase, tenantId as string, { includeInactive: true }),
-  });
   const [viewer, setViewer] = useState<AppointmentPhotoRecord | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -128,7 +112,7 @@ export function AppointmentFilesBlock({
   const invoices = useMemo(
     () =>
       saved && documentsOn
-        ? liveAppointmentInvoices(
+        ? appointmentInvoiceFiles(
             invoicesQuery.data ?? [],
             appointmentId,
             creditLinks.data?.originalByNoteId ?? new Map(),
@@ -234,80 +218,153 @@ export function AppointmentFilesBlock({
     removeDoc.mutate(doc, { onSuccess: () => toast("Документ удалён", "info") });
   };
 
+  // ПЕРЕЧЕНЬ ФАЙЛОВ ЗАПИСИ — СВЕРХУ ВНИЗ, ПЛАШКАМИ (владелец 03.10: «в
+  // записи клиента — добавление файлов: вниз перечень файлов по этой
+  // записи»). Те же плашки и то же правило, что на странице файлов клиента
+  // (`clientFileTimeline` + `ClientFileRow`): фото — снимком в плитке, видео —
+  // значком, документ — именем и размером, инвойс и чек — суммой цветом;
+  // свежие сверху. Квадраты и пилюли записи (20.09) уступили перечню.
+  const t = useThemeColors();
+  const timeline = useMemo(
+    () =>
+      clientFileTimeline({
+        attachments: docs,
+        visitPhotos: photos,
+        invoices,
+        receipts,
+      }),
+    [docs, photos, invoices, receipts],
+  );
+  const thumbs = attachments.data?.thumbs ?? {};
+
+  const confirmRemovePhoto = (photo: AppointmentPhotoRecord) =>
+    confirmThen(
+      isVideoPath(photo.storage_path) ? "Удалить видео?" : "Удалить фото?",
+      { confirmLabel: "Удалить", destructive: true },
+      () =>
+        remove.mutate(photo, {
+          onSuccess: () => toast("Удалено", "info"),
+          onError: (error) => toast(error instanceof Error ? error.message : "Не удалось удалить", "error"),
+        }),
+    );
+  const confirmRemoveDoc = (doc: ClientAttachment) =>
+    confirmThen(
+      "Удалить файл?",
+      { message: doc.filename, confirmLabel: "Удалить", destructive: true },
+      () => removeDoc.mutate(doc, { onSuccess: () => toast("Документ удалён", "info") }),
+    );
+
+  // Добавлять нельзя и файлов нет — блока нет: пустая шапка «Файлы» ничего
+  // не говорит (партнёр «Только видит», запись клиента без тарифа, 02.10).
+  if (!canUpload && !hasTiles) return null;
+
   return (
     <>
       <SectionCard title="Файлы">
         {hasTiles ? (
-          <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 12 }}>
-            {/* Фото и видео — квадраты помельче, с переносом строк (владелец
-                20.09: «фотографии открываются квадратиком»). */}
-            {hasMediaTiles ? (
-              <View className="flex-row flex-wrap" style={{ gap: TILE_GAP }}>
-                {photos.map((photo) => (
-                  <PhotoTile
-                    key={photo.id}
-                    photo={photo}
-                    deleting={remove.isPending && remove.variables?.id === photo.id}
-                    onOpen={() => (isVideoPath(photo.storage_path) ? void openUrl(photo.url) : setViewer(photo))}
-                    onDelete={canDelete ? () => void holdPhoto(photo) : undefined}
-                  />
-                ))}
-                {pendingMediaFiles.map((file) => (
-                  <PendingTile
-                    key={file.id}
-                    file={file}
-                    onDelete={() => onPendingChange(pending.filter((f) => f.id !== file.id))}
-                  />
-                ))}
-                {photoBusy ? <UploadingTile /> : null}
+          <View style={{ paddingHorizontal: 2, paddingTop: 2, paddingBottom: 6, gap: 2 }}>
+            {/* Ещё не сохранённая запись: выбранное ждёт «Создать запись» —
+                плашкой с крестиком «убрать». */}
+            {pending.map((file) => (
+              <SelectRow
+                key={file.id}
+                icon={file.kind === "document" ? FileText : file.video ? Video : undefined}
+                image={file.kind === "media" && !file.video ? (file.previewUri ?? undefined) : undefined}
+                color={t.accent}
+                plain
+                title={file.kind === "document" ? docTitle(file.name) : file.video ? "Видео" : "Фото"}
+                subtitle="Сохранится вместе с записью"
+                accessibilityLabel={`${file.name}, добавится при создании`}
+                onPress={() => undefined}
+                trailing={
+                  <Pressable
+                    onPress={() => onPendingChange(pending.filter((f) => f.id !== file.id))}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Убрать ${file.name}`}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, padding: 4 })}
+                  >
+                    <X color={t.faint} size={18} strokeWidth={2.2} />
+                  </Pressable>
+                }
+              />
+            ))}
+            {busy ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, minHeight: 44 }}>
+                <Spinner size={16} label="Загрузка" />
+                <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 13, color: t.sub }}>
+                  Загружаем файлы…
+                </Text>
               </View>
             ) : null}
-            {/* Всё остальное — компактная плашка со значком и названием, не
-                квадрат (владелец 20.09: «обычный файл открывается плашкой»). */}
-            {hasDocTiles ? (
-              <View className="flex-row flex-wrap" style={{ gap: TILE_GAP, marginTop: hasMediaTiles ? TILE_GAP : 0 }}>
-                {docs.map((doc) => (
-                  <DocumentPill
-                    key={doc.id}
-                    icon={FileText}
-                    title={docTitle(doc.filename)}
-                    deleting={removeDoc.isPending}
-                    onOpen={() => void openDoc(doc)}
-                    onDelete={canDelete ? () => void holdDoc(doc) : undefined}
-                  />
-                ))}
-                {invoices.map((inv) => (
-                  <DocumentPill
-                    key={inv.id}
-                    icon={Receipt}
-                    title={`Инвойс ${inv.number}`}
-                    onOpen={() => router.push(`/invoices/${inv.id}` as Href)}
-                  />
-                ))}
-                {receipts.map((r) => (
-                  <DocumentPill
-                    key={r.id}
-                    icon={Receipt}
-                    title={`Чек ${r.number}`}
-                    onOpen={() => setOpenReceipt(r)}
-                  />
-                ))}
-                {pendingDocFiles.map((file) => (
-                  <PendingTile
-                    key={file.id}
-                    file={file}
-                    onDelete={() => onPendingChange(pending.filter((f) => f.id !== file.id))}
-                  />
-                ))}
-                {docBusy ? <UploadingDocumentPill /> : null}
-              </View>
-            ) : null}
+            {timeline.map((entry) => {
+              const key = `${entry.type}-${entry.item.id}`;
+              const own = entry.type === "visit" || entry.type === "photo" || entry.type === "file";
+              const onRemove = !canDelete || !own
+                ? undefined
+                : entry.type === "visit"
+                  ? () => confirmRemovePhoto(entry.item as AppointmentPhotoRecord)
+                  : () => confirmRemoveDoc(entry.item as ClientAttachment);
+              const row = (
+                <ClientFileRow
+                  entry={entry}
+                  inRecord
+                  thumb={entry.type === "photo" ? thumbs[entry.item.id] : undefined}
+                  onPress={() => {
+                    haptics.tap();
+                    switch (entry.type) {
+                      case "visit": {
+                        const photo = entry.item as AppointmentPhotoRecord;
+                        if (isVideoPath(photo.storage_path)) void openUrl(photo.url);
+                        else setViewer(photo);
+                        return;
+                      }
+                      case "photo":
+                      case "file":
+                        void openDoc(entry.item);
+                        return;
+                      case "invoice":
+                        router.push(`/invoices/${entry.item.id}` as Href);
+                        return;
+                      case "receipt":
+                        // Чек — своей страницей, как инвойс (владелец 04.10).
+                        router.push(`/documents/receipt/${entry.item.id}` as Href);
+                        return;
+                    }
+                  }}
+                  onLongPress={
+                    onRemove
+                      ? entry.type === "visit"
+                        ? () => void holdPhoto(entry.item as AppointmentPhotoRecord)
+                        : () => void holdDoc(entry.item as ClientAttachment)
+                      : undefined
+                  }
+                />
+              );
+              return onRemove ? (
+                <SwipeRow
+                  key={key}
+                  radius={t.radius.input}
+                  label="Удалить"
+                  color={t.danger}
+                  onAction={onRemove}
+                  accessibilityLabel="Удалить файл"
+                >
+                  {row}
+                </SwipeRow>
+              ) : (
+                <View key={key}>{row}</View>
+              );
+            })}
           </View>
         ) : null}
+        {/* Дверь со значком, как «Добавить файл» у клиента и «Добавить
+            объект» в записи. */}
         {canUpload ? (
-          <AddRow
-            label="Добавить"
-            separated={hasTiles}
+          <ChooseRow
+            compact
+            icon={Paperclip}
+            label="Добавить файл"
             onPress={() => {
               haptics.tap();
               setMenuOpen(true);
@@ -333,18 +390,6 @@ export function AppointmentFilesBlock({
         onRetry={async () => (await photosQuery.refetch()).isSuccess}
       />
 
-      {/* Запись листу не передаём: мы и так на ней — строка «запись» в чеке
-          молчит, а «Выслать чек» работает как на экране чеков. */}
-      <ReceiptSheet
-        receipt={openReceipt}
-        appointment={null}
-        accountName={
-          (accountRows.data ?? []).find((a) => a.id === openReceipt?.account_id)
-            ?.name ?? null
-        }
-        onClose={() => setOpenReceipt(null)}
-        onOpen={(href) => router.push(href as Href)}
-      />
     </>
   );
 }

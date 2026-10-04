@@ -23,16 +23,19 @@ import { useThemeColors } from "@/theme/colors";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
+import { useLastNonNull } from "@/lib/use-last-non-null";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useTenant } from "@/features/settings/tenant";
 import { useFeatureOn } from "@/features/settings/company-features";
 import { humanDay } from "@/features/appointments/helpers";
 import type { Team } from "@/features/reference/queries";
-import { deleteTransferAlert } from "./account-alerts";
+import { deleteOperationAlert, deleteTransferAlert } from "./account-alerts";
 import { refundRemainingCents as refundRemainingCentsOf } from "./refund";
 import { payeeName } from "./category-asks";
 import { randomUuid } from "@babun/shared/sync";
+import { useRouter, type Href } from "expo-router";
+import { useReceipts } from "@/features/documents/receipts-queries";
 
 /** Строка-факт витрины: ярлык слева, значение справа. Читается, но не
  *  правится — правка живёт в форме операции. */
@@ -170,6 +173,18 @@ export function TransactionPopup({
   const afterExit = useRef<(() => void) | null>(null);
   const currency = useTenant().data?.currency;
   const documentsOn = useFeatureOn("documents");
+  const router = useRouter();
+  // ОДНА ДВЕРЬ ВОЗВРАТА (владелец 04.10): у дохода с выписанным чеком возврат
+  // идёт через чек — форма вернёт деньги и выпишет кредит-ноту, а не голую
+  // минусовую строку без документа.
+  const txReceipts = useReceipts({
+    transactionIds: transaction?.id && transaction.type === "income" ? [transaction.id] : [],
+    enabled: visible && !!transaction?.id && transaction.type === "income",
+  });
+  const liveReceipt =
+    (txReceipts.data ?? []).find(
+      (receipt) => receipt.transaction_id === transaction?.id && receipt.status === "issued",
+    ) ?? null;
   const { data: counterpartAccountId } = useTransferCounterpartAccountId(
     visible ? transaction : null,
   );
@@ -183,8 +198,14 @@ export function TransactionPopup({
     setBusy(false);
   }, [visible, transaction?.id]);
 
-  if (!transaction) return null;
-  const tx = transaction;
+  // ЛИСТ ДОЖИВАЕТ ДО КОНЦА УХОДА С ПОСЛЕДНЕЙ ОПЕРАЦИЕЙ. Родитель обнуляет
+  // `transaction` в том же кадре, что и `visible`, и ранний `return null`
+  // снимал лист целиком — без ухода и без `onExited`. А вопрос «Отменить
+  // перевод?» / «Удалить операцию?» ждёт именно `onExited`: кнопка закрывала
+  // лист и молчала (04.10, перевод Карта → Наличные так и остался в ленте).
+  const shownTx = useLastNonNull(transaction);
+  if (!shownTx) return null;
+  const tx = shownTx;
 
   const account = accounts.find((a) => a.id === tx.account_id);
   const team = teams.find((x) => x.id === tx.team_id);
@@ -272,20 +293,22 @@ export function TransactionPopup({
     refundCents != null && refundCents <= refundRemainingCents;
 
   const handleDelete = () => {
+    // Доход с возвратом сервер удалить не даст — причина словами до вопроса,
+    // а не «Системные поля финансовой операции нельзя изменять» после
+    // (аудит 2026-10-03).
+    if (tx.type === "income" && Number.isFinite(alreadyRefunded) && alreadyRefunded > 0) {
+      haptics.warning();
+      notify("Удалить нельзя", "По этому доходу есть возврат — сначала удалите возврат.");
+      return;
+    }
     // У перевода — свой текст (общий на продукт, account-alerts): человек
     // должен понимать, что отменяет ПЕРЕВОД ЦЕЛИКОМ — исчезнут обе операции,
     // а не одна строка ленты.
     const text =
       tx.type === "transfer"
         ? deleteTransferAlert()
-        : {
-            title: "Удалить операцию?",
-            // ПОСЛЕДСТВИЕ, А НЕ «НЕЛЬЗЯ ОТМЕНИТЬ» (правила текстов
-            // account-alerts). Слово в слово как в листе операции: один
-            // вопрос об одном действии не должен звучать двумя голосами.
-            message: "Операция исчезнет из ленты, остаток счёта пересчитается.",
-            confirm: "Удалить",
-          };
+        : // Один текст на свайп ленты, лист дня и эту витрину.
+          deleteOperationAlert();
     // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29) — вопрос
     // рисует хост приложения поверх окна листа, и iOS его не показывает.
     // Ждём `onExited`; см. тот же приём в OperationSheet.remove.
@@ -377,7 +400,7 @@ export function TransactionPopup({
     metaRows.push({ label: "Источник", value: "Автоматически (из записи)" });
   }
   if (isAppointmentLedger) {
-    metaRows.push({ label: "Изменение", value: "Через связанную заявку" });
+    metaRows.push({ label: "Изменение", value: "Через связанную запись" });
   }
   if (Number.isFinite(alreadyRefunded) && alreadyRefunded > 0) {
     metaRows.push({
@@ -408,6 +431,12 @@ export function TransactionPopup({
     actions.push({
       label: "Создать возврат",
       onPress: () => {
+        if (liveReceipt && !tx.invoice_id) {
+          afterExit.current = () =>
+            router.push(`/documents/receipt-refund?receiptId=${liveReceipt.id}` as Href);
+          onClose();
+          return;
+        }
         setShowRefundForm(true);
         setRefundAmount(String(refundRemaining));
         setRefundRequestId(randomUuid());

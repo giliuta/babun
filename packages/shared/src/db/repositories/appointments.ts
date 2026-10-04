@@ -431,18 +431,61 @@ function isMissingEventColumn(error: { code?: string; message?: string }): boole
   return /event_(all_day|notes|url|push_enabled|push_offsets|push_at|repeat)/i.test(msg);
 }
 
+/** Запись изменилась на сервере после того, как телефон её видел, а правка
+ *  трогает статус или деньги — её не применили (аудит 03.10). `fresh` —
+ *  строка сервера, чтобы экран сразу показал правду. */
+export class StaleAppointmentError extends Error {
+  constructor(readonly fresh: Appointment | null) {
+    super(
+      "updateAppointment: Запись изменилась на другом устройстве — проверьте её и повторите",
+    );
+    this.name = "StaleAppointmentError";
+  }
+}
+
+/** Записи на сервере больше нет — её удалили на другом устройстве, пока
+ *  этот телефон её показывал (повторный аудит 03.10): правка находит ноль
+ *  строк. Раньше это было общее «Не удалось…», а запись оставалась на
+ *  экране. */
+export class GoneAppointmentError extends Error {
+  constructor() {
+    super("updateAppointment: Этой записи больше нет — её удалили на другом устройстве");
+    this.name = "GoneAppointmentError";
+  }
+}
+
 /**
  * Patch top-level columns. Nested arrays / objects in the patch are
  * REPLACED ATOMICALLY (no merge). To add one item, the caller must
  * pass the full updated array.
+ *
+ * `expectedUpdatedAt` — правка ляжет, только если строка не менялась с тех
+ * пор (статус и деньги, см. `APPOINTMENT_GUARDED_FIELDS`); иначе
+ * `StaleAppointmentError` со строкой сервера.
  */
 export async function updateAppointment(
   supabase: DbSupabase,
   id: string,
   patch: Partial<Appointment>,
   tenantId: string,
+  opts: { expectedUpdatedAt?: string | null } = {},
 ): Promise<Appointment> {
   const upd = appointmentToUpdate(patch);
+  if (opts.expectedUpdatedAt) {
+    const guarded = await supabase
+      .from("appointments")
+      .update(upd)
+      .eq("id", id)
+      .eq("tenant_id", tenantId)
+      .eq("updated_at", opts.expectedUpdatedAt)
+      .select("*")
+      .maybeSingle();
+    if (guarded.error) throw new Error(`updateAppointment: ${guarded.error.message}`);
+    if (!guarded.data) {
+      throw new StaleAppointmentError(await getAppointment(supabase, id, tenantId).catch(() => null));
+    }
+    return rowToAppointment(guarded.data);
+  }
   const { data: row, error } = await supabase
     .from("appointments")
     .update(upd)
@@ -461,6 +504,9 @@ export async function updateAppointment(
       .single();
     if (retry.error) throw new Error(`updateAppointment: ${retry.error.message}`);
     return rowToAppointment(retry.data);
+  }
+  if (error && (error as { code?: string }).code === "PGRST116") {
+    throw new GoneAppointmentError();
   }
   if (error) throw new Error(`updateAppointment: ${error.message}`);
   return rowToAppointment(row);

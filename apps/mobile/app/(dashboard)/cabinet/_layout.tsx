@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import { CabinetRoleBoundary } from "@/features/settings/CabinetRoleBoundary";
+import { MirrorReturnRetry } from "@/features/access/mirror/MirrorReturnRetry";
 
 // ГЛАВНЫЙ ЭКРАН ВКЛАДКИ ВСЕГДА ПОД ЛЮБЫМ ЕЁ ЭКРАНОМ (владелец 2026-09-24:
 // «открываю финансы, нажимаю „назад“ — перекидывает на календарь»). Экран
@@ -13,6 +14,8 @@ export default function CabinetLayout() {
   return (
     <CabinetRoleBoundary>
       <Stack screenOptions={{ headerShown: false }} />
+      {/* Выход из «его глазами» возвращает на страницу прав (01.10). */}
+      <MirrorReturnRetry />
     </CabinetRoleBoundary>
   );
 }

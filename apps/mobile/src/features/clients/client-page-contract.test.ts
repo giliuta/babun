@@ -67,13 +67,16 @@ describe("люди карточки — только у сохранённой �
       "блок людей перестал спрашивать право, сервер или первый ответ — «видно, но не всё» либо «пусто, пока несут»",
     );
     assert.match(people(), /const peopleRows = showLinks \?/);
+    assert.doesNotMatch(page(), /memberOf=\{/, "строка «чей он» снова в шапке клиента");
     assert.match(
       page(),
       // Между ними стоит слот заметки клиента (владелец 23.09).
       // «Люди и связи» — функция компании (STORY-088): выключена — ни людей,
       // ни «Входит в».
-      /memberOf=\{peopleOn \? people\.memberOfRows : undefined\}[\s\S]{0,400}?people=\{/,
-      "страница перестала ставить люди и строку «чей он» в шапку",
+      // С 30.09 строка «чей он» живёт в блоке «Люди», а не в шапке клиента
+      // (владелец: «роли в блоке клиента не назначаем»).
+      /people=\{\s*peopleOn && \(people\.peopleRows \|\| people\.onAddPerson \|\| people\.memberOfRows\) \? \(\s*<SectionCard title="Люди">\s*\{people\.memberOfRows\}/,
+      "строка «чей он» ушла из блока «Люди» или вернулась в шапку",
     );
   });
 
@@ -86,7 +89,7 @@ describe("люди карточки — только у сохранённой �
       src,
       // Между строками и дверью стоит «Все люди · N» — перечень длиннее
       // трёх уезжает на свою страницу (владелец 22.09).
-      /<SectionCard title="Люди">\s*\{people\.peopleRows\}[\s\S]{0,500}?\{people\.onAddPerson \? \(\s*<ChooseRow\s+compact\s+icon=\{UserPlus\}\s+label="Добавить человека"\s+onPress=\{people\.onAddPerson\}/,
+      /<SectionCard title="Люди">\s*\{people\.memberOfRows\}\s*\{people\.peopleRows\}[\s\S]{0,500}?\{people\.onAddPerson \? \(\s*<ChooseRow\s+compact\s+icon=\{UserPlus\}\s+label="Добавить человека"\s+onPress=\{people\.onAddPerson\}/,
       "людей снова нет своим блоком с дверью «Добавить человека»",
     );
     assert.match(
@@ -233,12 +236,13 @@ describe("строка «чей он» приходит готовой", () => {
     assert.match(line, /\{line\}/, "строка перестала печатать готовый текст построителя");
   });
 
-  test("строка списка зачитывает связь сразу за именем", () => {
-    assert.match(
-      read("ClientRow.tsx"),
-      /client\.full_name \|\| "Без имени",[\s\S]{0,400}?link \?\? "",/,
-      "VoiceOver называет Екатерину без «жена · Павел Иванов», а глазами это видно",
-    );
+  // В СТРОКЕ СПИСКА СВЯЗИ НЕТ (владелец 01.10: «жена, Павел Иванов… это
+  // надо удалить тоже — чётко клиент, номер телефона и внизу последняя
+  // запись»). Связь живёт на странице клиента (`MemberOfLine`).
+  test("строка списка — имя, номер и последняя запись, без связи", () => {
+    const row = read("ClientRow.tsx");
+    assert.doesNotMatch(row, /link\?: string/, "в строку списка вернулась связь");
+    assert.doesNotMatch(row, /\{link\}/, "в строку списка вернулась связь");
   });
 });
 
@@ -458,10 +462,13 @@ describe("«Объединить с дублем» в «⋯» карточки",
       "страница передаёт слиянию не то право",
     );
     assert.match(page(), /onMerge=\{onMerge\}/, "страница не ставит пункт в меню");
+    // Меню одно на долгое нажатие и «⋯» (03.10): пункт рисует общий
+    // `clientMenuItems`, и только с обработчиком.
+    assert.match(read("ClientDetailChrome.tsx"), /clientMenuItems\(t, blacklisted, \{[^}]*\bonMerge,/);
     assert.match(
-      read("ClientDetailChrome.tsx"),
-      /\.\.\.\(onMerge\s*\?\s*\[/,
-      "хром рисует пункт без обработчика",
+      read("client-menu-items.ts"),
+      /handlers\.onMerge\s*\?\s*\{\s*id: "merge"/,
+      "меню рисует пункт без обработчика",
     );
   });
 
@@ -485,18 +492,19 @@ describe("«Объединить с дублем» в «⋯» карточки",
     );
   });
 
-  test("порядок: патч основной → записи дубля → архив дубля", () => {
+  test("порядок: патч основной → записи дубля → удаление дубля", () => {
     const src = merge();
     const body = src.slice(src.indexOf("const merge = async"), src.indexOf("return () => {"));
     const patch = body.indexOf("await updateById.mutateAsync({ id: primary.id, patch })");
-    const appts = body.indexOf("await updateAppt.mutateAsync({ id: a.id, patch: { client_id: primary.id } })");
-    const archive = body.indexOf("await archive.mutateAsync({ ids: [dupRow.id] })");
+    // Визит едет к основной вместе с объектом основной (аудит 03.10).
+    const appts = body.indexOf("patch: { client_id: primary.id, ...(location ? { location_id: location } : {}) },");
+    const archive = body.indexOf("await archive.mutateAsync({ ids: [dupRow.id], trash: true })");
     assert.ok(patch > -1 && appts > -1 && archive > -1, "шаг слияния пропал");
     assert.ok(patch < appts && appts < archive, "порядок слияния сломан");
     assert.match(
       body,
-      /if \(res\.failed > 0 \|\| res\.archived === 0\) \{\s*throw new Error\("Карточка объединена, но дубль не ушёл в архив"\);/,
-      "неудача архива снова сходит за успех",
+      /if \(res\.failed > 0 \|\| res\.archived === 0\) \{\s*throw new Error\("Карточка объединена, но дубль не удалился"\);/,
+      "неудача удаления дубля снова сходит за успех",
     );
     assert.match(body, /if \(running\.current\) return;\s*running\.current = true;/, "двойной тап снова сливает дважды");
   });
@@ -530,14 +538,17 @@ describe("«Разделить клиента» в «⋯» карточки", ()
     assert.match(hook(), /const onSplit = eligible\s*\?/, "обработчик отдаётся без номеров — пункт висит впустую");
     assert.match(
       page(),
-      /useSplitClient\(\{ client: c, isDraft, canEdit: caps\.edit, canLinks: caps\.links && peopleOn, menuOpen \}\)/,
+      // С 30.09 права — этого клиента (`card-access.ts`), и у закрытого
+      // номера переносить нечего (аудит 015).
+      /useSplitClient\(\{\s*client: c,\s*isDraft,\s*canEdit: access\.card\.edit && !\(c && contactsLocked\(c\)\),\s*canLinks: access\.people\.edit,\s*menuOpen,\s*\}\)/,
       "страница передаёт сплиту не те права",
     );
     assert.match(page(), /onSplit=\{split\.onSplit\}/, "страница не ставит пункт в меню");
+    assert.match(read("ClientDetailChrome.tsx"), /clientMenuItems\(t, blacklisted, \{[^}]*\bonSplit,/);
     assert.match(
-      read("ClientDetailChrome.tsx"),
-      /\.\.\.\(onSplit\s*\?\s*\[\s*\{\s*id: "split",\s*label: "Разделить клиента"/,
-      "хром рисует пункт без обработчика",
+      read("client-menu-items.ts"),
+      /handlers\.onSplit\s*\?\s*\{\s*id: "split",\s*label: "Разделить клиента"/,
+      "меню рисует пункт без обработчика",
     );
   });
 
@@ -617,11 +628,17 @@ describe("первый блок карточки — с именем", () => {
 
 describe("блок «История»", () => {
   // Владелец 22.09: визиты и деньги — это история; тап — полный перечень.
-  // Сводка и «Записать» — один блок с шапкой, а не две безымянные карточки.
-  test("сводка и «Записать» стоят в блоке «История»", () => {
+  // 03.10: «Записать» из блока убрана — лицо блока последняя запись, тап по
+  // ней — история со всеми записями.
+  test("в блоке «История» — последняя запись и вход в историю, без «Записать»", () => {
     const row = read("ClientContactRow.tsx");
-    assert.match(row, /<SectionCard title="История">\s*\{showSummary \? \(\s*<ClientSummaryCard/);
-    assert.match(row, /label="Записать"/);
+    // Шапка носит плашку «Ещё N» (03.10) — сама запись по-прежнему первой.
+    assert.match(row, /<SectionCard\s+title="История"[\s\S]{0,260}>\s*\{showSummary \? \(\s*<ClientSummaryCard/);
+    assert.doesNotMatch(row, /label="Записать"/);
+    assert.match(row, /lastRecord=\{lastRecord\}/);
+    // Строка последней записи — та же `VisitRow`, что в «Истории» (03.10).
+    assert.match(read("ClientSummaryCard.tsx"), /<VisitRow[\s\S]{0,400}onPress=\{onOpenHistory\}/);
+    assert.match(read("../../../app/(dashboard)/clients/visits.tsx"), /<VisitRow/);
     assert.doesNotMatch(read("ClientHeader.tsx"), /<ClientSummaryCard/);
     assert.match(page(), /<ClientContactRow[\s\S]{0,900}onOpenHistory=\{/);
   });
@@ -633,13 +650,12 @@ describe("новый клиент — те же блоки", () => {
   // открывает нужное уже на ней.
   test("«Файлы» и «История» стоят и в черновике", () => {
     assert.match(read("ClientProfileBlocks.tsx"), /draft && a\.files\.show[^\n]*onDraftFiles \? \(\s*<SectionCard title="Файлы">/);
-    assert.match(read("ClientContactRow.tsx"), /if \(draft\) \{\s*return onDraftBook \? \(\s*<SectionCard title="История">/);
+    // «История» черновика — словами: записей у него ещё нет (03.10).
+    assert.match(read("ClientContactRow.tsx"), /if \(draft\) \{\s*return \(\s*<SectionCard title="История">/);
   });
   test("двери черновика создают карточку и открывают своё", () => {
     assert.match(page(), /onDraftFiles=\{\(\) => onDraftDoor\("files"\)\}/);
-    assert.match(page(), /onDraftBook=\{\(\) => onDraftDoor\("book"\)\}/);
     assert.match(page(), /openOnArrive === "files"/);
-    assert.match(page(), /openOnArrive === "book"/);
   });
 });
 
@@ -658,5 +674,37 @@ describe("дубль номера не заводится — плашка св�
   });
   test("создать при найденном дубле нельзя", () => {
     assert.match(read("useClientDraft.ts"), /gate\.duplicate/);
+  });
+});
+
+describe("общий список без чипа — все команды, но выбрать можно только своих", () => {
+  // Владелец 1.10: «когда нет выбора команды — сразу все три команды, общий
+  // список». Клиенты партнёра видны, но в выгрузку, рассылку и архив не
+  // попадают: «Выбрать всё» и массовые действия считают только свою базу.
+  const list = () => read("../../../app/(dashboard)/clients/index.tsx");
+  test("без чипа — весь склеенный список", () => {
+    assert.match(list(), /teamChoice === ALL_TEAMS \? clients : clientsOfTeam\(/);
+  });
+  test("выбор и массовые действия — только своя база", () => {
+    assert.match(list(), /const visible = useMemo\(\s*\(\) => result\.filtered\.filter\(\(c\) => !guestOf\.has\(c\.id\)\)/);
+    assert.match(list(), /const selectedClients = useMemo\(\s*\(\) => visible\.filter\(/);
+    assert.match(list(), /selectionMode=\{selecting && !guest\}/);
+  });
+});
+
+// «ПОДЕЛИТЬСЯ» КЛИЕНТОМ РАБОТОДАТЕЛЯ — В ЕГО КОМПАНИИ (03.10). Реквизиты в
+// текст из списка шли по выключателю СВОЕЙ компании: лист меню стоял под
+// источником экрана, а флаг считался `useFeatureOn` открытой в календаре.
+describe("«Поделиться» из списка — реквизиты как на карточке, в компании строки", () => {
+  const list = () => read("../../../app/(dashboard)/clients/index.tsx");
+  test("лист меню стоит в компании строки", () => {
+    assert.match(list(), /useLastNonNull\(menuClient \? \(guestOf\.get\(menuClient\.id\) \?\? scope\) : null\)/);
+    assert.match(list(), /<RowScope scope=\{menuScope\}>\s*<ClientActionsSheet/);
+    assert.doesNotMatch(list(), /useFeatureOn\("client_requisites"\)/, "реквизиты снова по выключателю своей компании");
+  });
+  test("реквизиты — блок карточки в компании листа", () => {
+    assert.match(read("ClientActionsSheet.tsx"), /useCardAccess\(shown, false\)\.requisites\.show/);
+    // Выключатель компании — той же компании, что «Дизайн» команды.
+    assert.match(read("client-functions.ts"), /const disabled = useScopeDisabledFeatures\(\);/);
   });
 });

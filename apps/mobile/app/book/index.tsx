@@ -36,13 +36,13 @@ import type {
 } from "@babun/shared/local/appointments";
 import { isCustomServiceId, newCustomServiceId } from "@babun/shared/local/appointments";
 import {
-} from "@babun/shared/local/appointments";
-import {
   locationAddressForBooking,
   type Client,
   type Location,
 } from "@babun/shared/local/clients";
 import { Spinner } from "@/components/ui/Spinner";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { loadErrorWords } from "@/lib/connection-words";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
@@ -52,15 +52,18 @@ import { useInlineNote } from "@/features/appointments/use-inline-note";
 import { useClientNoteField } from "@/features/appointments/use-client-note-field";
 import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { useTeamVatRate } from "@/features/finances/vat-queries";
-import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
+import { applyTxVat, round2, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
+import { useClientFunctionOn } from "@/features/clients/client-functions";
 import { globalDiscountAmount } from "@babun/shared/local/finance/appointment-calc";
 import {
   findBufferClash,
   findOverlap,
 } from "@babun/shared/common/utils/appointment-overlap";
+import { draftSlot } from "@/features/appointments/draft-slot";
+import { withBaselineStatus } from "@/features/appointments/edit-baseline";
 import { getDayScheduleForDate } from "@babun/shared/local/schedule";
 import { colorName } from "@babun/shared/common/utils/colors";
 import {
@@ -106,11 +109,13 @@ import {
   type ColorSituation,
 } from "@/features/appointments/record-color";
 import { haptics } from "@/lib/haptics";
+import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { useKeyboardShown } from "@/lib/keyboard";
-import { confirmThen } from "@/lib/confirm";
+import { confirmAction, confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 
 import {
+  useClientCardWritable,
   useClients,
   useUpdateClientById,
 } from "@/features/clients/queries";
@@ -124,9 +129,10 @@ import { effectiveBuffer } from "@/features/calendar/setting-options";
 import { useTeamSchedule } from "@/features/reference/team-schedule";
 import { useAppointments } from "@/features/calendar/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
+import { serverReason } from "@/features/calendar/server-reason";
 import { useBookingSave } from "@/features/appointments/useBookingSave";
 import { useCalendarActions, useEventRights, useRecordBlocks } from "@/features/appointments/useRecordRights";
-import { bookRights } from "@/features/appointments/record-blocks";
+import { bookRights, readOnlyBookRights } from "@/features/appointments/record-blocks";
 import { changedFields } from "@/features/appointments/member-writes";
 import { useSession } from "@/providers/SessionProvider";
 import {
@@ -134,6 +140,9 @@ import {
   usePersonalEventTypes,
 } from "@/features/settings/local-settings";
 import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
+import { overpaymentToRefund, pendingPaymentToSend } from "@/features/appointments/payment-draft";
+import { formatEURExact } from "@babun/shared/common/utils/money";
+import { useBusinessNow } from "@/features/appointments/business-now";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { EventTypeBlock } from "@/features/appointments/EventTypeBlock";
 import { eventTypeIcon } from "@/features/calendar/event-type-icons";
@@ -144,7 +153,7 @@ import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { uploadPendingFiles, type PendingFile } from "@/features/appointments/pending-files";
 import { useTenantId } from "@/lib/tenant";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRecordPayment } from "@/features/appointments/payment-mutations";
+import { useRecordPayment, useRefundOverpayment } from "@/features/appointments/payment-mutations";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import {
   resolveBookingClientPrefill,
@@ -158,15 +167,11 @@ import {
   type LocationRequest,
 } from "@/features/clients/location-request-link";
 import { useLocationRequests } from "@/features/clients/location-requests";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { useCurrentRole, usePlanAllows, useTenant } from "@/features/settings/tenant";
 import { SmsComposeProvider } from "@/features/sms/SmsCompose";
-import { useRevealedClient } from "@/features/clients/revealed-contacts";
 import { SmsRecordBlock } from "@/features/sms/SmsRecordBlock";
 import { smsVars } from "@/features/sms/sms-compose";
 import { addressedAs, firstName } from "@/features/clients/sms-name";
-import {
-  clientHistoryText,
-} from "@/features/clients/history-line";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { WhenRow } from "@/features/appointments/BookingSummary";
@@ -186,6 +191,7 @@ import {
   buildServices,
   formatYMD,
   minutesBetweenHM,
+  overrideWithQuantity,
   parseYMD,
   parseMoneyInput,
   type ServiceOverride,
@@ -277,20 +283,41 @@ function serviceBuffersMinutes(
   return before + after;
 }
 
+// ДРУГАЯ ЗАПИСЬ — ДРУГАЯ ФОРМА (прогон оплаты 04.10). Ссылка на `/book` с
+// другим `appointmentId`, пришедшая при открытой форме, меняет параметры ТОГО
+// ЖЕ экрана, а не открывает новый. Гидрация правки идёт один раз — и форма
+// держала дату и время прежней записи («чт, 8 октября 11:00»), а оплату
+// показывала уже новой («Дата изменена — сохраните»): «Сохранить» перенёс бы
+// запись на чужой день. Ключ по записи собирает форму заново.
 export default function BookScreen() {
+  const params = useLocalSearchParams<{ appointmentId?: string }>();
+  return <BookForm key={first(params.appointmentId) ?? "new"} />;
+}
+
+function BookForm() {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const navigation = useNavigation();
-  // Пропуск гварда для программного ухода (сохранение / подтверждённое «Закрыть»),
-  // чтобы back-свайп-защита не показывала второй Alert поверх нашего.
-  const bypassGuardRef = useRef(false);
+  // ПРОГРАММНЫЙ УХОД (сохранение / подтверждённое «Закрыть») СНАЧАЛА СНИМАЕТ
+  // ЗАЩИТУ, ПОТОМ УХОДИТ. Раньше защита пропускала его повтором перехваченного
+  // действия (`navigation.dispatch(data.action)`), и у формы, открытой
+  // ссылкой без истории, этот повтор гас: `replace("/")` не исполнялся.
+  // Запись создавалась, а форма оставалась — второе «Создать» било в дубль,
+  // и «Отмена → Закрыть» не закрывала ничего (03.10, на симуляторе).
+  const [leaving, setLeaving] = useState(false);
   // Прокрутка формы — чтобы поле, получившее фокус в самом низу, показать
   // над клавиатурой: KAV сжимает список, но к сфокусированному полю сам не
   // едет, и заметку набирали вслепую.
   const scrollRef = useRef<ScrollView>(null);
   const keyboardShown = useKeyboardShown();
   const toast = useToast();
+  // БЕЗ ТАРИФА ЗАПИСЬ КЛИЕНТА ТОЛЬКО СМОТРЯТ (владелец 02.10: «раньше
+  // создавал записи — могу надавать наперёд и добавлять туда клиентов»).
+  // Страница открывается, «Сохранить» серая, тап — плашка про тариф; сервер
+  // держит то же (`tenant_free_readonly_guard`).
+  const workInPlan = usePlanAllows("book-clients");
+  const nudgeTariff = useTariffNudge();
   const { data: dayCities = {} } = useDayCities();
   const dayLabelsOn = useFeatureOn("day_labels");
   const params = useLocalSearchParams<{
@@ -523,11 +550,18 @@ export default function BookScreen() {
   // Деньги новой записи: счёт выбран, запишется после «Создать запись».
   // У существующей записи блок пишет оплату сам и сразу (STORY-065).
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
+  const businessNow = useBusinessNow(teamId);
+  // Номер новой записи — один на всю жизнь формы (см. `booking.save`).
+  const newRecordIdRef = useRef(randomUuid());
   // Файлы новой записи ждут её id, как ждёт оплата (STORY-070).
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const tenantIdForFiles = useTenantId();
   const queryClientForFiles = useQueryClient();
   const recordPayment = useRecordPayment();
+  const refundOverpayment = useRefundOverpayment(editId);
+  // Номер попытки возврата переплаты — один на это нажатие «Сохранить» и
+  // его повторы после обрыва: сервер второго возврата не запишет.
+  const overpayRequestRef = useRef<string | null>(null);
   const [reminderOn, setReminderOn] = useState(false);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
@@ -626,9 +660,6 @@ export default function BookScreen() {
     () => clients.find((c) => c.id === clientId) ?? null,
     [clients, clientId],
   );
-  // Номер, открытый сотрудником дверью (защита базы 30.09), — поверх строки
-  // окна: им пишет «С телефона» блок SMS записи.
-  const revealedClient = useRevealedClient(client, tenantIdForFiles);
   // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС» (STORY-077). Пока клиент не ответил, блок
   // объекта показывает строку «Ждём адрес»: диспетчер видит, что адрес уже
   // спрошен, и не спрашивает второй раз. Ответ приезжает объектом сам —
@@ -654,7 +685,7 @@ export default function BookScreen() {
   const recordRights = useRecordBlocks(rightsTeamId);
   const eventRights = useEventRights(rightsTeamId);
   const calendarRights = useCalendarActions(rightsTeamId);
-  const can = bookRights({
+  const rights = bookRights({
     isMember: isMemberView,
     kind,
     isEdit,
@@ -664,6 +695,9 @@ export default function BookScreen() {
       calendarRights.events === "write" &&
       (!isEdit || (editing?.created_by ?? null) === sessionUserId),
   });
+  // Без тарифа запись клиента только смотрят: объект, услуги, клиент,
+  // время — без дверей (владелец 02.10, `readOnlyBookRights`).
+  const can = kind === "work" && !workInPlan ? readOnlyBookRights(rights) : rights;
   // ОБЪЕКТ, ДОБАВЛЕННЫЙ ОТСЮДА, ВИДЕН СРАЗУ. Список клиентов после записи
   // только инвалидируется, и с полсекунды `client.locations` не знает о новом
   // объекте: блок мигал «Выбрать объект», а сохранение в эту щель писало
@@ -833,12 +867,10 @@ export default function BookScreen() {
     if (next !== date) setDate(next);
   }, [calendarSettings?.timezone, date, params.date, team?.timezone]);
 
-  // ВВОДНАЯ О КЛИЕНТЕ — ТЕМ ЖЕ ТЕКСТОМ, ЧТО В СПИСКЕ ВЫБОРА. Раньше строка
-  // собиралась здесь своими руками и молчала о ДОЛГЕ — самом важном, что
-  // стоит знать, набирая клиента на работу. Теперь состав один на оба места
-  // (`clientHistoryParts`), и долг идёт первым.
+  // ДАТА ВИЗИТА ПОД ИМЕНЕМ КЛИЕНТА — как в списке клиентов (владелец 03.10:
+  // «имя, номер телефона и дата последнего визита»; долга и визитов в блоке
+  // записи больше нет — они на странице клиента).
   const clientStats = client ? statsById.get(client.id) : undefined;
-  const clientHistory = client ? clientHistoryText(client, clientStats) : null;
 
   // ═══ ГИДРАЦИЯ ПРАВКИ ═══
   //
@@ -1082,17 +1114,18 @@ export default function BookScreen() {
   );
 
   const discountAmount = globalDiscountAmount(selectedServices, globalDiscount);
-  /** Услуги минус скидка — то, с чего считается налог. */
-  const beforeVat = Math.max(0, computedTotal - discountAmount);
+  /** Услуги минус скидка — то, с чего считается налог. До цента: сумма
+   *  float-ов (10,01 + 12,50 = 22.509999…, 16 € − 7 % = 14.879999…) уходила
+   *  на сервер с хвостом, и он отказывал «Укажите не больше двух знаков после
+   *  запятой» (проверка системы 03.10). */
+  const beforeVat = round2(Math.max(0, computedTotal - discountAmount));
   const vatRateInUse = recordVatRate ?? rememberedVatRate.rate;
   // «К оплате» — после налога. Ставка 0 и «без налога» — та же сумма.
   const automaticTotal =
     recordVatMode !== "none" && vatRateInUse > 0
-      ? applyTxVat(beforeVat, recordVatMode, vatRateInUse).gross
+      ? round2(applyTxVat(beforeVat, recordVatMode, vatRateInUse).gross)
       : beforeVat;
-  const effectiveTotal = customTotal
-    ? parseMoneyInput(totalDraft)
-    : automaticTotal;
+  const effectiveTotal = round2(customTotal ? parseMoneyInput(totalDraft) : automaticTotal);
 
   // ЧТО ПОДСТАВИТ ШАБЛОН SMS ИЗ ЭТОЙ ЗАПИСИ (STORY-089): «SMS» у номера
   // клиента открывает шаблоны, заполненные ровно тем, что на экране. Сумму
@@ -1117,6 +1150,10 @@ export default function BookScreen() {
   );
   // Сервису нужны ещё запись, клиент и календарь: SMS через сервис владелец
   // разрешает по календарям (STORY-089, волна 2).
+  //
+  // КЛИЕНТ СМЕНЁН, НО НЕ СОХРАНЁН (03.10) — SMS всё равно о записи: сервер
+  // шлёт клиенту на экране (`sms_send_manual` берёт присланного клиента, а не
+  // сохранённого), и SMS ложится в блок SMS этой записи.
   const recordSmsContext = useMemo(
     () =>
       recordSmsVars
@@ -1125,9 +1162,10 @@ export default function BookScreen() {
             appointmentId: editing?.id ?? null,
             clientId: client?.id ?? null,
             teamId: teamId ?? null,
+            optOut: client?.sms_opt_out === true,
           }
         : null,
-    [client?.id, editing?.id, recordSmsVars, teamId],
+    [client?.id, client?.sms_opt_out, editing?.id, recordSmsVars, teamId],
   );
 
   // Keep the editable total in sync with catalog pricing until the operator
@@ -1168,17 +1206,10 @@ export default function BookScreen() {
   const overlap = useMemo(() => {
     if (!teamId) return null;
     return findOverlap(
-      {
-        id: "book-draft",
-        date,
-        time_start: timeStart,
-        time_end: timeEnd,
-        kind: "work",
-        status: "scheduled",
-      } as unknown as Appointment,
+      draftSlot({ editId, teamId, date, timeStart, timeEnd }),
       dayTeamAppts,
     );
-  }, [teamId, date, timeStart, timeEnd, dayTeamAppts]);
+  }, [editId, teamId, date, timeStart, timeEnd, dayTeamAppts]);
   const timeWarning = useMemo(() => {
     if (!teamId) return null;
     const startMinutes = absoluteMinutes(timeStart) ?? 0;
@@ -1233,14 +1264,7 @@ export default function BookScreen() {
       calendarSettings,
     );
     const tight = findBufferClash(
-      {
-        id: "book-draft",
-        date,
-        time_start: timeStart,
-        time_end: timeEnd,
-        kind: "work",
-        status: "scheduled",
-      } as unknown as Appointment,
+      draftSlot({ editId, teamId, date, timeStart, timeEnd }),
       dayTeamAppts,
       bufferMinutes,
     );
@@ -1252,6 +1276,7 @@ export default function BookScreen() {
     teams,
     date,
     dayTeamAppts,
+    editId,
     teamId,
     teamScheduleQuery.data,
     timeEnd,
@@ -1291,19 +1316,27 @@ export default function BookScreen() {
     const prefill = resolveBookingClientPrefill(c);
     // Continuity: команда по ПОСЛЕДНЕМУ визиту клиента, а не глобально-последняя.
     // Иначе любимый мастер клиента отсеивается как «не из той команды».
-    const lastTeamForClient =
-      [...allAppts]
-        .filter(
-          (a) =>
-            a.client_id === c.id &&
-            a.team_id &&
-            teams.some((tm) => tm.id === a.team_id),
-        )
-        .sort((a, b) =>
-          a.date !== b.date
-            ? b.date.localeCompare(a.date)
-            : b.time_start.localeCompare(a.time_start),
-        )[0]?.team_id ?? null;
+    //
+    // ТОЛЬКО У НОВОЙ ЗАПИСИ (аудит 2026-10-03). У сохранённой сменить
+    // клиента значит сменить клиента: прежде запись молча переезжала в
+    // команду последнего визита нового клиента — услуги прежней команды
+    // выпадали («Итого» 0, «Сохранить» серый), счета оплаты становились
+    // чужими, — а его «любимый» мастер подменял мастера записи в обход
+    // права менять команду.
+    const lastTeamForClient = isEdit
+      ? null
+      : [...allAppts]
+          .filter(
+            (a) =>
+              a.client_id === c.id &&
+              a.team_id &&
+              teams.some((tm) => tm.id === a.team_id),
+          )
+          .sort((a, b) =>
+            a.date !== b.date
+              ? b.date.localeCompare(a.date)
+              : b.time_start.localeCompare(a.time_start),
+          )[0]?.team_id ?? null;
     const targetTeam = lastTeamForClient ?? teamId;
     if (lastTeamForClient && lastTeamForClient !== teamId) {
       selectTeam(lastTeamForClient);
@@ -1312,6 +1345,7 @@ export default function BookScreen() {
     setLocationId(prefill.locationId);
     setAddress(prefill.address);
     if (
+      !isEdit &&
       prefill.masterId &&
       isMasterAllowedForTeam(
         masters.find((candidate) => candidate.id === prefill.masterId),
@@ -1345,6 +1379,24 @@ export default function BookScreen() {
   // — иначе поверх записи ляжет вторая копия табов и «назад» уведёт на
   // календарь, потеряв набранное. Запись остаётся смонтированной под
   // карточкой, «назад» возвращает ровно в неё.
+  // «Карточка из записи» как право убрано (владелец 02.10: «запись он
+  // всегда может открывать, если он её видит») — дверь открыта всем.
+  // КЛИЕНТ ЗАПИСИ С ОПЛАТОЙ НЕ МЕНЯЕТСЯ (владелец 03.10: «если оплачено за
+  // одним клиентом — потом нельзя менять клиента… поставил Артёма, он оплатил
+  // наличными, а потом я поменял на другого — максимально странно»). Тап по
+  // клиенту не открывает выбор, а говорит почему; снятая оплата клиента не
+  // держит. То же правило у сервера (`protect_paid_appointment_finance`).
+  const moneyHoldsClient =
+    !!editing && ((editing.prepaid_amount ?? 0) > 0 || (editing.paid_amount ?? 0) > 0);
+  const pickClientOrRefuse = () => {
+    if (moneyHoldsClient) {
+      haptics.warning();
+      toast("Клиента не сменить: по записи есть оплата. Сначала снимите оплату", "info");
+      return;
+    }
+    setClientPickerOpen(true);
+  };
+
   const openClientCard = () => {
     if (!clientId) return;
     haptics.tap();
@@ -1474,6 +1526,15 @@ export default function BookScreen() {
   };
   // Логика поля — общий хук: тот же блок «Клиент» ставят инвойс и чек.
   const clientNote = useClientNoteField(client);
+  // ЗАМЕТКА КЛИЕНТА — ЗА ВЫКЛЮЧАТЕЛЕМ «БЛОКОВ КЛИЕНТОВ» (владелец 03.10:
+  // «убрать заметку — она убирается и на карточке клиента, и в записи»).
+  // Команда — та же, что у карточки: клиента; без неё — команда записи.
+  const clientNoteOn = useClientFunctionOn("client_note", client?.team_id ?? teamId);
+  // КАРТОЧКУ КЛИЕНТА ОТСЮДА МОЖНО ПРАВИТЬ? (аудит прав 03.10). Мастер вне
+  // вкладки «Клиенты» видит «клиента записи» — заметка клиента, заметка и
+  // правка объекта, «Добавить объект» пишут в карточку и всегда получали
+  // отказ «ведёт владелец». Такие поля здесь только читаются.
+  const clientWritable = useClientCardWritable();
   const objectNote = useInlineNote<string | null>(
     selectedLocation?.note ?? "",
     locationId,
@@ -1546,7 +1607,14 @@ export default function BookScreen() {
       setServiceIds((p) => p.filter((x) => x !== id));
       return;
     }
-    setOverrides((p) => ({ ...p, [id]: { ...p[id], qty } }));
+    // Правка количества снимает замок сохранённой строки — строка считается
+    // по действующему прайсу (`overrideWithQuantity`); своя строка и услуга,
+    // убранная из прайса, держат свои числа.
+    const repriceable = catalog.has(id) && !isCustomServiceId(id);
+    setOverrides((p) => ({
+      ...p,
+      [id]: overrideWithQuantity(p[id], qty, repriceable, catalog.get(id)),
+    }));
   };
 
   // СОБЫТИЕ НАЗЫВАЕТСЯ ТИПОМ (владелец 2026-09-06: «первое — команда, второе
@@ -1741,7 +1809,7 @@ export default function BookScreen() {
         ] as const)
       : ([
           { label: "команды", query: teamsQuery },
-          { label: "сотрудников", query: mastersQuery },
+          { label: "партнёров", query: mastersQuery },
           { label: "услуги", query: servicesQuery },
           { label: "клиентов", query: clientsQuery },
           { label: "календарь", query: appointmentsQuery },
@@ -1772,7 +1840,12 @@ export default function BookScreen() {
             ? ([{ label: "запись", query: appointmentsQuery }] as const)
             : ([] as const)),
         ] as const);
-  const failedReference = essentialQueries.find(({ query }) => query.isError);
+  // ФОРМУ ПРЯЧЕТ ТОЛЬКО ОШИБКА ПЕРВОЙ ЗАГРУЗКИ (03.10, на лежащем сервере).
+  // Команды и клиенты уже приехали, черновик собран — «Создать запись»
+  // будит их перечитывание, и упавшее перечитывание (`isError` при живых
+  // данных) меняло всю заполненную форму на экран ошибки. Данные на руках —
+  // форма остаётся; сохранение само скажет, если сервер молчит.
+  const failedReference = essentialQueries.find(({ query }) => query.isLoadingError);
   const referencesPending = essentialQueries.some(
     ({ query }) => query.isPending,
   );
@@ -1825,8 +1898,25 @@ export default function BookScreen() {
 
   const failedOptional = referenceQueries.find(
     ({ query }) =>
-      query.isError && !essentialQueries.some((e) => e.query === query),
+      query.isLoadingError && !essentialQueries.some((e) => e.query === query),
   );
+  // УПАВШИЙ СПРАВОЧНИК ПЕРЕЧИТЫВАЕТСЯ, ПОКА ФОРМА ОТКРЫТА (03.10, после
+  // лежащего сервера). Сервер вернулся, а «Не удалось загрузить партнёров»
+  // висела над формой до её закрытия: сам запрос больше никто не будил —
+  // сеть телефона не пропадала, и react-query «переподключения» не видел.
+  // Так же, как счета оплаты (`useTeamPaymentAccounts`), — раз в 10 с.
+  const referenceQueriesRef = useRef(referenceQueries);
+  referenceQueriesRef.current = referenceQueries;
+  const failedOptionalLabel = failedOptional?.label ?? null;
+  useEffect(() => {
+    if (!failedOptionalLabel) return;
+    const timer = setInterval(() => {
+      for (const { query } of referenceQueriesRef.current) {
+        if (query.isLoadingError && !query.isFetching) void query.refetch();
+      }
+    }, 10_000);
+    return () => clearInterval(timer);
+  }, [failedOptionalLabel]);
   // ЗАПИСЬ КЛИЕНТА = КЛИЕНТ + УСЛУГА (владелец 25.09: «нельзя сохранить
   // запись без клиента — без клиента это событие; после клиента нельзя
   // сохранить без услуги»). «Сохранить» остаётся нажимаемым и говорит
@@ -1843,6 +1933,7 @@ export default function BookScreen() {
         hasValidTeam &&
         workSelectionValid);
   const bookingBusy = booking.isPending || updateMut.isPending;
+  const workLocked = kind === "work" && !workInPlan;
   const missingHint = bookingBusy
     ? "Сохраняем…"
     : failedReference
@@ -1881,8 +1972,12 @@ export default function BookScreen() {
   // подаёт голос ровно тогда, когда дату или время сдвинули внутри формы, —
   // это уже НОВЫЙ выбор, о котором никто не предупреждал. Пересечение с
   // другой записью не гасится никогда: о нём в календаре не говорили вовсе.
+  // Снимок — только ПОСЛЕ загрузки записи: сохранённую открывают одним
+  // `appointmentId`, и до гидрации форма стоит на «сегодня, 10:00». Снятый
+  // тогда, он объявлял время записи «сдвинутым», и «Вне графика» загоралось
+  // на записи, которую никто не трогал (находка 2026-10-03).
   const openedAtRef = useRef<{ date: string; time: string } | null>(null);
-  if (openedAtRef.current === null && date && timeStart) {
+  if (openedAtRef.current === null && hydrated && date && timeStart) {
     openedAtRef.current = { date, time: timeStart };
   }
   const timeMovedHere =
@@ -1915,16 +2010,7 @@ export default function BookScreen() {
   // календарь, поэтому стек — «финансы → календарь → запись», и слепой
   // `router.back()` клал человека на календарь. Если пришли с меткой `from`,
   // уходим по ней, а не по истории.
-  const leaveBook = () => {
-    bypassGuardRef.current = true;
-    const returnTo = resolveReturnTo(params.from);
-    if (returnTo) {
-      router.replace(returnTo as Href);
-      return;
-    }
-    if (router.canGoBack()) router.back();
-    else router.replace("/");
-  };
+  const leaveBook = () => setLeaving(true);
 
   // Итог постановки пуша — одной строкой, теми же словами, что меню записи.
   const reminderToast = (
@@ -1977,20 +2063,56 @@ export default function BookScreen() {
         // требует своего права, и нетронутый клиент в патче стоил бы отказа
         // тому, у кого нет «Клиент: Меняет». Снимок — та же подпись, что
         // считает «есть несохранённое».
-        const patch = isMemberView
-          ? changedFields(
-              editBaselineRef.current
-                ? (JSON.parse(editBaselineRef.current) as Partial<Appointment>)
-                : (editing ?? {}),
-              buildPatch(),
-            )
-          : buildPatch();
-        await updateMut.mutateAsync({ id: editId, patch });
+        //
+        // ТОЛЬКО ИЗМЕНЁННОЕ — У ВСЕХ, НЕ ТОЛЬКО У СОТРУДНИКА (аудит
+        // 2026-10-03). Владелец слал патч целиком: форма гидрируется один
+        // раз, и всё, что за это время поменяли с другого телефона (мастер
+        // принял оплату и закрыл визит, диспетчер сдвинул время), «Сохранить»
+        // молча возвращало назад — статус «запланирована» поверх оплаченной.
+        // Снимок знает, какой форма была при открытии, поэтому уходит ровно
+        // то, что тронули на этом экране.
+        const patch = changedFields(
+          editBaselineRef.current
+            ? (JSON.parse(editBaselineRef.current) as Partial<Appointment>)
+            : (editing ?? {}),
+          buildPatch(),
+        );
+        // ИТОГ НИЖЕ ПОЛУЧЕННОГО — СНАЧАЛА ВЕРНУТЬ КЛИЕНТУ РАЗНИЦУ (владелец
+        // 04.10: «разделил платежи 20 + 10 + 20, потом изменил итог на 30 —
+        // словила баг по оплате»). Сервер такой итог не сохранит («Полученная
+        // сумма больше итога заявки»), и форма упиралась в отказ без выхода:
+        // «Снять» — это «деньги не поступили», а вернуть часть было нечем.
+        // Теперь «Сохранить» спрашивает и возвращает разницу возвратом
+        // клиенту (`refund_appointment_overpayment`), а потом сохраняет итог.
+        const refund = overpaymentToRefund(editing ?? null, effectiveTotal);
+        if (refund && "total_amount" in patch) {
+          const ok = await confirmAction(`Вернуть клиенту ${formatEURExact(refund.amountCents / 100)}?`, {
+            message: `Итог ${formatEURExact(effectiveTotal)}, а получено ${formatEURExact(refund.receivedCents / 100)}. Разница вернётся клиенту с последних платежей — в финансах будет возврат.`,
+            confirmLabel: `Вернуть ${formatEURExact(refund.amountCents / 100)}`,
+          });
+          if (!ok) return;
+          overpayRequestRef.current ??= randomUuid();
+          await refundOverpayment.mutateAsync({
+            appointmentId: editId,
+            amount: refund.amountCents / 100,
+            requestId: overpayRequestRef.current,
+          });
+        }
+        if (Object.keys(patch).length > 0) {
+          await updateMut.mutateAsync({ id: editId, patch });
+        }
+        overpayRequestRef.current = null;
         toast("Изменения сохранены", "success");
         haptics.success();
       } else {
         const created = await booking.save({
-          patch: buildPatch(),
+          // ОДИН НОМЕР НА ЖИЗНЬ ФОРМЫ (аудит формы записи 03.10, 017). Новый
+          // номер на каждое «Создать» давал партнёру вторую запись (и второе
+          // SMS), когда сервер её уже вставил, а ответ оборвался: «Не удалось
+          // сохранить» — и второй тап. С тем же номером повтор упирается в
+          // уже вставшую запись, а её дверь отвечает успехом (мутация
+          // создания в `calendar/mutations.ts`).
+          patch: { ...buildPatch(), id: newRecordIdRef.current },
           kind,
           reminderId,
           eventReminderOffset,
@@ -2016,18 +2138,27 @@ export default function BookScreen() {
           // `mutateAsync`, а не `mutate` с onError: форма к ответу уже
           // закрыта, и отклики вызова у снятого наблюдателя не звучат —
           // обещание же отвечает всегда.
-          void recordPayment
-            .mutateAsync({
-              appointmentId: created.id,
-              accountId: pendingPayment.accountId,
-              amount: pendingPayment.amount,
-              requestId: randomUuid(),
-              kind: pendingPayment.kind,
-              closeVisit: pendingPayment.kind === "settlement",
-            })
-            .catch((e) =>
-              notify("Запись создана, оплата не записана", (e as Error).message),
-            );
+          // Сумма, вид и закрытие визита — по форме СЕЙЧАС, а не по тапу
+          // (`pendingPaymentToSend`): итог и время могли поменяться после.
+          const send = pendingPaymentToSend(
+            pendingPayment,
+            { total: effectiveTotal, date, time_start: timeStart, status },
+            businessNow(),
+          );
+          if (send) {
+            void recordPayment
+              .mutateAsync({
+                appointmentId: created.id,
+                accountId: pendingPayment.accountId,
+                amount: send.amount,
+                requestId: randomUuid(),
+                kind: send.kind,
+                closeVisit: send.closeVisit,
+              })
+              .catch((e) =>
+                notify("Запись создана, оплата не записана", (e as Error).message),
+              );
+          }
         }
         if (pendingFiles.length > 0 && tenantIdForFiles) {
           // Файлы новой записи — тем же путём, что «Добавить» у сохранённой.
@@ -2050,7 +2181,8 @@ export default function BookScreen() {
       leaveBook();
     } catch (e) {
       haptics.error();
-      notify("Ошибка", (e as Error).message);
+      // Причина сервера словами, без «updateAppointment:» (03.10).
+      notify("Не удалось сохранить", serverReason(e) ?? (e as Error).message);
     }
   };
 
@@ -2134,6 +2266,10 @@ export default function BookScreen() {
   const discardNotes = () => {
     clientNote.discard();
     objectNote.discard();
+    // Заметка объекта у события — тот же черновик: без отказа здесь она
+    // уезжала в объект при уходе экрана, хотя человек нажал «Закрыть»
+    // (аудит 2026-10-03; она же считается в `notesDirty`).
+    eventObjectNote.discard();
   };
   const confirmDiscard = (onDiscard: () => void) => {
     confirmThen(
@@ -2159,14 +2295,22 @@ export default function BookScreen() {
 
   // Back-свайп и аппаратная «назад» теряли заполненную запись без спроса —
   // теперь перехватываем POP тем же подтверждением, что и кнопка «Отмена».
-  usePreventRemove(dirty, ({ data }) => {
-    if (bypassGuardRef.current) {
-      bypassGuardRef.current = false;
-      navigation.dispatch(data.action);
-      return;
-    }
+  usePreventRemove(dirty && !leaving, ({ data }) => {
     confirmDiscard(() => navigation.dispatch(data.action));
   });
+  // Уход — после того, как защита снята: навигатор узнаёт о снятии
+  // следующим кадром, поэтому переход ждёт его.
+  useEffect(() => {
+    if (!leaving) return;
+    const timer = setTimeout(() => {
+      const returnTo = resolveReturnTo(params.from);
+      if (returnTo) router.replace(returnTo as Href);
+      else if (router.canGoBack()) router.back();
+      else router.replace("/");
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leaving]);
 
   const title = isEdit
     ? kind === "event"
@@ -2303,10 +2447,13 @@ export default function BookScreen() {
   }
 
   if (failedReference || referencesPending) {
-    const errorMessage =
-      failedReference?.query.error instanceof Error
-        ? failedReference.query.error.message
-        : "Проверьте подключение и повторите загрузку.";
+    // Обрыв — словами, а не ответом шлюза: под заголовком вставала сырая
+    // HTML-страница Cloudflare «525: SSL handshake failed» и налезала на
+    // шапку. Отказ сервера по делу (права, данные) остаётся своим текстом.
+    const errorWords = loadErrorWords(failedReference?.query.error, {
+      failed: `Не удалось загрузить ${failedReference?.label ?? "данные"}`,
+      later: "Проверьте связь и повторите загрузку.",
+    });
     return (
       <Screen edges={["top", "bottom"]}>
         <View className="flex-row items-center px-3" style={{ height: 48 }}>
@@ -2314,7 +2461,7 @@ export default function BookScreen() {
             onPress={requestClose}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Закрыть оформление заявки"
+            accessibilityLabel="Закрыть запись"
             style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
           >
             <Text style={{ fontSize: 16, color: t.body }}>Отмена</Text>
@@ -2327,50 +2474,35 @@ export default function BookScreen() {
           </Text>
           <View style={{ minWidth: 72 }} />
         </View>
-        <View className="flex-1 items-center justify-center px-7">
-          {/* Ожидание ДВИЖЕТСЯ: крупная надпись без движения читалась как
-              зависший экран (владелец 2026-07-27). */}
-          {referencesPending ? (
+        {failedReference ? (
+          // Тот же экран ошибки, что у календаря и списков: облако, слова,
+          // «Повторить» — футером, где все кнопки (владелец 21.09).
+          <EmptyState
+            state="error"
+            fill
+            title={errorWords.title}
+            subtitle={errorWords.subtitle}
+            action={{
+              label: "Повторить",
+              onPress: () => {
+                void Promise.all(referenceQueries.map(({ query }) => query.refetch()));
+              },
+            }}
+          />
+        ) : (
+          <View className="flex-1 items-center justify-center px-7">
+            {/* Ожидание ДВИЖЕТСЯ: крупная надпись без движения читалась как
+                зависший экран (владелец 2026-07-27). */}
             <View style={{ marginBottom: 14 }}>
               <Spinner size={30} label="Загружаем данные записи" />
             </View>
-          ) : null}
-          <Text
-            style={{ fontSize: 20, fontWeight: "700", color: t.ink, textAlign: "center" }}
-          >
-            {referencesPending
-              ? "Загружаем данные записи"
-              : `Не удалось загрузить ${failedReference?.label ?? "данные"}`}
-          </Text>
-          {!referencesPending ? (
             <Text
-              style={{ fontSize: 14, lineHeight: 20, color: t.sub, textAlign: "center", marginTop: 8 }}
+              style={{ fontSize: 20, fontWeight: "700", color: t.ink, textAlign: "center" }}
             >
-              {errorMessage}
+              Загружаем данные записи
             </Text>
-          ) : null}
-          {failedReference ? (
-            <Pressable
-              onPress={() => {
-                void Promise.all(referenceQueries.map(({ query }) => query.refetch()));
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Повторить загрузку данных заявки"
-              style={{
-                minHeight: 48,
-                justifyContent: "center",
-                paddingHorizontal: 22,
-                borderRadius: t.radius.card,
-                backgroundColor: t.accent,
-                marginTop: 18,
-              }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#FFFFFF" }}>
-                Повторить
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
+          </View>
+        )}
       </Screen>
     );
   }
@@ -2580,6 +2712,16 @@ export default function BookScreen() {
                     ? () => {
                         // Из архива запись не переносят: она только для просмотра.
                         if (archivedRecord) return;
+                        // КОМАНДУ И ИСПОЛНИТЕЛЯ ДЕРЖАТ ДЕНЬГИ, как клиента
+                        // (сервер: «клиента, команду и исполнителя менять
+                        // нельзя»). Лист снимал услуги прежней команды, итог
+                        // падал в ноль, а сохранение всё равно отвергалось —
+                        // тупик посреди расчёта (аудит формы записи 03.10).
+                        if (moneyHoldsClient) {
+                          haptics.warning();
+                          toast("Команду не сменить: по записи есть оплата. Сначала снимите оплату", "info");
+                          return;
+                        }
                         setTeamSheetOpen(true);
                         haptics.tap();
                       }
@@ -2630,9 +2772,12 @@ export default function BookScreen() {
                   клиента открывается ВЫБОР нового клиента, а справа от
                   телефона значок — три точки, — по нему переход в карточку».
                   Так строка везде значит одно: тап по выбранному открывает
-                  выбор (клиент, объект, услуга), а всё, что ведёт вглубь,
-                  живёт кружком в хвосте. Стрелки справа больше нет ни у
-                  клиента, ни у объекта. */}
+                  выбор (клиент, объект, услуга). Стрелки справа больше нет ни у
+                  клиента, ни у объекта.
+
+                  03.10 ТРИ ТОЧКИ УБРАНЫ (владелец: «чтобы зайти в карточку
+                  клиента — зажать на клиента, а если один раз нажать — выбор
+                  клиента»): карточка — удержанием строки клиента. */}
               {/* БЛОК «КЛИЕНТ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ClientBlock.tsx`):
                   его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
                   ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
@@ -2641,16 +2786,18 @@ export default function BookScreen() {
                 <ClientBlock
                   client={client}
                   stats={clientStats}
-                  summary={clientHistory}
-                  onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
+                  onPick={can.editClient ? pickClientOrRefuse : undefined}
                   onOpenCard={openClientCard}
                   note={
-                    <InlineNoteField
-                      note={clientNote}
-                      placeholder="Заметка клиента"
-                      accessibilityLabel="Заметка клиента"
-                      maxLength={500}
-                    />
+                    clientNoteOn ? (
+                      <InlineNoteField
+                        note={clientNote}
+                        placeholder="Заметка клиента"
+                        accessibilityLabel="Заметка клиента"
+                        maxLength={500}
+                        readOnly={!clientWritable}
+                      />
+                    ) : undefined
                   }
                 />
               </SmsComposeProvider>
@@ -2694,14 +2841,9 @@ export default function BookScreen() {
                         <ObjectRow
                           loc={selectedLocation}
                           showNote={false}
-                          onMore={
-                            can.editObject
-                              ? () => {
-                                  setObjectEdit(true);
-                                  haptics.tap();
-                                }
-                              : undefined
-                          }
+                          // Тап — выбор другого объекта, удержание — правка этого (владелец
+                          // 03.10: «три точки справа убираем… редактирование объекта —
+                          // задержать, как у клиента переход в карточку»).
                           onPress={
                             can.editObject
                               ? () => {
@@ -2710,6 +2852,15 @@ export default function BookScreen() {
                                 }
                               : undefined
                           }
+                          onLongPress={
+                            can.editObject && clientWritable
+                              ? () => {
+                                  haptics.tap();
+                                  setObjectEdit(true);
+                                }
+                              : undefined
+                          }
+                          longPressLabel="Правка объекта"
                         />
                         {/* ЗАМЕТКА ОБЪЕКТА — «код ворот», «ключ у соседей»:
                             мини-блок пишет прямо в объект (см. `writeObjectNote`),
@@ -2718,6 +2869,7 @@ export default function BookScreen() {
                           note={objectNote}
                           placeholder="Заметка объекта"
                           accessibilityLabel="Заметка объекта"
+                          readOnly={!clientWritable}
                         />
                       </>
                     ) : clientLocations.length > 0 && can.editObject ? (
@@ -2776,7 +2928,7 @@ export default function BookScreen() {
                         под надписью «ОБЪЕКТ», а голая синяя строка — рядом с
                         «Выбрать услугу», у которой кружок есть. Один вопрос —
                         одна дверь: `ChooseRow`, как у соседей. */}
-                    {clientLocations.length === 0 && can.editObject ? (
+                    {clientLocations.length === 0 && can.editObject && clientWritable ? (
                       <View
                         style={{
                           borderTopWidth: pendingRequests.length > 0 ? 1 : 0,
@@ -2836,7 +2988,10 @@ export default function BookScreen() {
                   «Запись»: не всякий бизнес принимает деньги в записи. */}
               {/* В архив деньги не принимаются: у архивного календаря счетов в
                   живых финансах нет, а блок пишет оплату сразу, мимо «Сохранить». */}
-              {showPayment && !archivedRecord ? (
+              {/* «Оплата в записи: Скрыта» — блока нет вовсе (недоступный
+                  блок отсутствует, а не стоит без кнопок): партнёр видел «К
+                  оплате €50» при скрытой оплате (прогон 04.10). */}
+              {showPayment && !archivedRecord && recordRights.payment !== "hidden" ? (
                 <PaymentBlock
                   appointment={editing}
                   teamId={teamId}
@@ -2844,12 +2999,19 @@ export default function BookScreen() {
                   visit={{ date, timeStart, status }}
                   pending={pendingPayment}
                   onPendingChange={setPendingPayment}
+                  clientId={clientId}
                   onAppointmentChanged={(fresh) => {
                     // Сервер закрыл визит вместе с оплатой — форма обязана
                     // знать об этом, иначе «Сохранить» вернул бы старый статус,
                     // а «Отмена» спросила бы про несохранённые изменения.
                     setStatus(fresh.status);
-                    editBaselineRef.current = null;
+                    // Снимок «как в базе» узнаёт тот же статус — и только
+                    // его: обнулённый, он снимался заново вместе с
+                    // несохранёнными правками (`edit-baseline.ts`).
+                    editBaselineRef.current = withBaselineStatus(
+                      editBaselineRef.current,
+                      fresh.status,
+                    );
                   }}
                 />
               ) : null}
@@ -2858,7 +3020,9 @@ export default function BookScreen() {
                   снесено 2026-08-30. Зовётся «заметка записи» (владелец
                   2026-09-04): под клиентом и объектом стоят их заметки, и
                   третье поле обязано сказать, чьё оно. */}
-              {showNote && can.showNote ? (
+              {/* Править нельзя и заметки нет — блока нет: пустая шапка
+                  «Заметка» ничего не говорит (02.10). */}
+              {showNote && can.showNote && (can.editNote || comment.trim()) ? (
               // БЛОК, КАК У СОСЕДЕЙ (владелец 2026-09-06: «заметка записи —
               // такой же блок, как под объектом или клиентом, с таким же
               // названием»). Надпись «Заметка» — та же малая шапка.
@@ -2910,14 +3074,14 @@ export default function BookScreen() {
               ) : null}
 
               {/* SMS ЗАПИСИ (STORY-089; владелец 25.09: «на записи в самом низу
-                  блок — что мы уже отправили ему или не отправили… нажал
-                  „Отправить SMS“ — и оно сразу отправляет то, что записал»).
-                  Только у сохранённой записи с клиентом: SMS — о ней. */}
-              {editing?.id && client && recordSmsContext ? (
-                <SmsRecordBlock
-                  context={recordSmsContext}
-                  phone={revealedClient?.phone_e164 || revealedClient?.phone || null}
-                />
+                  блок — что мы уже отправили ему или не отправили»). С 03.10 —
+                  только история её нынешнему клиенту; отправка — у трубки
+                  клиента. Блок стоит СРАЗУ, и у новой записи (владелец 03.10:
+                  «он не появляется после создания записи — он появляется
+                  сразу»): до первой SMS — «Сообщений пока нет». Партнёру — по
+                  праву «SMS» записи (03.10). */}
+              {can.showSms ? (
+                <SmsRecordBlock appointmentId={editing?.id ?? null} clientId={client?.id ?? null} />
               ) : null}
 
               {/* ОТМЕНЫ И УДАЛЕНИЯ НА СТРАНИЦЕ НЕТ (владелец 2026-09-06: «этот
@@ -3011,9 +3175,11 @@ export default function BookScreen() {
                   строка-дверь → шторка. Цвет события и есть цвет типа. */}
               {/* Без права править событие тип только читается: пустую дверь
                   «Выбрать тип» не показываем, выбранный — без действия. */}
-              {evShowType && can.showType && (can.editEventType || eventType) ? (
+              {evShowType && can.showType && (can.editEventType || eventType || eventTitle.trim()) ? (
                 <EventTypeBlock
                   type={eventType}
+                  title={eventTitle}
+                  titleColor={eventColor}
                   onPress={
                     can.editEventType
                       ? () => {
@@ -3037,8 +3203,7 @@ export default function BookScreen() {
                 <ClientBlock
                   client={client}
                   stats={clientStats}
-                  summary={clientHistory}
-                  onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
+                  onPick={can.editClient ? pickClientOrRefuse : undefined}
                   onOpenCard={openClientCard}
                   onClear={
                     can.editClient
@@ -3049,12 +3214,15 @@ export default function BookScreen() {
                       : undefined
                   }
                   note={
-                    <InlineNoteField
-                      note={clientNote}
-                      placeholder="Заметка клиента"
-                      accessibilityLabel="Заметка клиента"
-                      maxLength={500}
-                    />
+                    clientNoteOn ? (
+                      <InlineNoteField
+                        note={clientNote}
+                        placeholder="Заметка клиента"
+                        accessibilityLabel="Заметка клиента"
+                        maxLength={500}
+                        readOnly={!clientWritable}
+                      />
+                    ) : undefined
                   }
                 />
               </SmsComposeProvider>
@@ -3087,14 +3255,9 @@ export default function BookScreen() {
                     <ObjectRow
                       loc={eventLocationEntry.loc}
                       showNote={false}
-                      onMore={
-                        can.editObject
-                          ? () => {
-                              setObjectEdit(true);
-                              haptics.tap();
-                            }
-                          : undefined
-                      }
+                      // Тап — выбор другого объекта, удержание — правка этого (владелец
+                      // 03.10: «три точки справа убираем… редактирование объекта —
+                      // задержать, как у клиента переход в карточку»).
                       onPress={
                         can.editObject
                           ? () => {
@@ -3103,6 +3266,15 @@ export default function BookScreen() {
                             }
                           : undefined
                       }
+                      onLongPress={
+                        can.editObject && clientWritable
+                          ? () => {
+                              haptics.tap();
+                              setObjectEdit(true);
+                            }
+                          : undefined
+                      }
+                      longPressLabel="Правка объекта"
                     />
                     {/* Чей объект — строкой под ним, когда это не клиент
                         события: иначе «Дом» ничего не говорит о том, куда
@@ -3124,6 +3296,7 @@ export default function BookScreen() {
                       note={eventObjectNote}
                       placeholder="Заметка объекта"
                       accessibilityLabel="Заметка объекта"
+                      readOnly={!clientWritable}
                     />
                   </>
                 ) : (
@@ -3264,7 +3437,7 @@ export default function BookScreen() {
         >
         {/* Причина, почему кнопка ещё не активна — всегда видна над CTA
             (раньше disabled-кнопка молчала, и весь missingHint был мёртв). */}
-        {!canSave && !bookingBusy ? (
+        {!workLocked && !canSave && !bookingBusy ? (
           <Text
             accessibilityLiveRegion="polite"
             style={{
@@ -3291,10 +3464,15 @@ export default function BookScreen() {
                 : "Создать запись"
           }
           onPress={save}
-          disabled={!canSave || bookingBusy}
+          disabled={workLocked || !canSave || bookingBusy}
           // Серая кнопка отвечает плашкой сверху: «Выберите клиента»,
-          // «Выберите услугу» — что мешает сохранить.
+          // «Выберите услугу» — что мешает сохранить; без тарифа — «Нужно
+          // изменить тариф».
           onDisabledPress={() => {
+            if (workLocked) {
+              nudgeTariff();
+              return;
+            }
             haptics.warning();
             toast(missingHint, "info");
           }}
@@ -3346,6 +3524,9 @@ export default function BookScreen() {
           2026-09-03. */}
       {client ? (
         <ObjectSheet
+          // Черновик листа — у ЭТОГО клиента: сменили клиента, и адрес,
+          // набранный для прежнего, ушёл бы в объекты нового (аудит 03.10).
+          key={client.id}
           visible={objectSheet}
           writer={locationWriter}
           teamId={client.team_id ?? null}
@@ -3389,9 +3570,16 @@ export default function BookScreen() {
         onSelect={(loc) => pickLocation(loc.id)}
         onDeselect={() => {
           setLocationId(null);
+          // Адрес записи — снимок выбранного объекта: снятый объект уносит и
+          // его. Иначе запись сохранялась «без объекта» с прежним адресом —
+          // в маршруте, в SMS и в цвете «нет объекта» (аудит 03.10). У
+          // события адрес — своё поле, его не трогаем.
+          if (kind === "work") setAddress("");
           haptics.tap();
         }}
-        onAdd={kind === "event" ? openEventObjectAdd : () => setObjectSheet(true)}
+        onAdd={
+          !clientWritable ? undefined : kind === "event" ? openEventObjectAdd : () => setObjectSheet(true)
+        }
         onClose={() => setObjectPicker(false)}
       />
       {/* Правка выбранного объекта — тем же листом, что на карточке, и тем же
@@ -3438,7 +3626,8 @@ export default function BookScreen() {
         onCreate={(prefill) =>
           router.push({
             pathname: "/client",
-            params: { id: "new", ...prefill },
+            // Клиент записи — клиент её команды (аудит 03.10).
+            params: { id: "new", ...prefill, ...(teamId ? { team: teamId } : {}) },
           })
         }
         onClose={() => setClientPickerOpen(false)}
@@ -3461,11 +3650,39 @@ export default function BookScreen() {
           serviceIds.map((id) => [id, overrides[id]?.qty ?? 1]),
         )}
         onQtyChange={setQty}
+        // Цена, которую держит запись (снимок прошлой правки или вписанная
+        // руками), — лист печатает её, а не сегодняшний прайс.
+        recordLines={Object.fromEntries(
+          selectedServices
+            .filter(
+              (line) =>
+                overrides[line.serviceId]?.locked != null ||
+                overrides[line.serviceId]?.price != null,
+            )
+            .map((line) => [
+              line.serviceId,
+              { unitPrice: line.pricePerUnit, total: line.totalPrice },
+            ]),
+        )}
+        catalog={
+          servicesQuery.isLoadingError
+            ? "failed"
+            : servicesQuery.isPending
+              ? "loading"
+              : "ready"
+        }
+        catalogError={servicesQuery.error}
+        onRetryCatalog={() => void servicesQuery.refetch()}
       />
       <TeamMasterSheet
         visible={teamSheetOpen}
         onClose={() => setTeamSheetOpen(false)}
-        teams={teams}
+        // ЗАПИСЬ ПАРТНЁРА ОСТАЁТСЯ В СВОЕЙ КОМАНДЕ (сервер: access:team_move,
+        // 30.09). Лист предлагал ему все команды: выбор снимал услуги и
+        // мастера, а «Сохранить» отказывал целиком, вместе с остальными
+        // правками (аудит формы записи 03.10, 017). В правке у партнёра —
+        // только своя команда и смена мастера внутри неё.
+        teams={isMemberView && isEdit ? teams.filter((tm) => tm.id === teamId) : teams}
         masters={masters}
         teamId={teamId}
         masterId={masterId}

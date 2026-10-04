@@ -36,6 +36,7 @@ import {
   WEEKDAY_FULL,
   withDay,
 } from "@/features/calendar/schedule-days";
+import type { DaySchedule } from "@babun/shared/local/schedule";
 import {
   effectiveWorkHours,
   hourLabel,
@@ -134,11 +135,12 @@ export function TeamScheduleSheet({
   // ничего не «прыгает». Фолбэк берём общим резолвером: свой (?? 6 / ?? 22)
   // показывал бы часы, которых никто не задавал и которые не действуют.
   const gWork = effectiveWorkHours(settings ?? DEFAULT_CALENDAR_SETTINGS);
-  const base: TeamSchedule = schedule ?? {
+  const companyBase: TeamSchedule = {
     start: hourLabel(gWork.start),
     end: hourLabel(gWork.end),
     breaks: [],
   };
+  const base: TeamSchedule = schedule ?? companyBase;
   const days = allDays(base);
   const day = dayOf(base, active);
   // Выбранный перерыв мог исчезнуть под нами: смена дня, чужая правка,
@@ -168,14 +170,28 @@ export function TeamScheduleSheet({
     if (next !== bufferMinutesTotal) onBufferChange?.(next);
   };
 
-  const commit = (next: TeamSchedule) => {
+  /** Правка ОДНОГО ДНЯ поверх СВЕЖЕГО графика команды (аудит 04.10).
+   *
+   *  Апсерт ЗАМЕНЯЕТ блоб целиком. Лист собирал его из кэша: если чтение
+   *  графиков упало (после трёх попыток `isPending` уже false) или «Выходной»
+   *  поставили на другом телефоне, основой были общие часы или старая копия
+   *  — и первый же поворот барабана стирал на сервере свои часы других
+   *  дней, перерывы и выходные на даты. Теперь хук берёт график с сервера
+   *  (`(current) => next`), и на него ложится только этот день; общие часы —
+   *  лишь когда строки у команды правда нет. */
+  const commitDay = (patchOf: (day: DaySchedule) => Partial<DaySchedule>) => {
     if (!teamId) return;
-    // Карта графиков ещё не пришла — `base` собран из общих часов, а не из
-    // строки команды. Апсерт ЗАМЕНЯЕТ блоб целиком, и такая правка стёрла бы
-    // на сервере настоящий график: перерывы, особые дни, отпуска.
+    // Карта графиков ещё не пришла — правке не на что опереться на экране.
     if (schedulePending) return;
+    const weekday = active;
     upsert.mutate(
-      { teamId, schedule: next },
+      {
+        teamId,
+        schedule: (current) => {
+          const from = current ?? companyBase;
+          return withDay(from, weekday, patchOf(dayOf(from, weekday)));
+        },
+      },
       { onError: (e) => notify("Ошибка", (e as Error).message) },
     );
   };
@@ -194,15 +210,33 @@ export function TeamScheduleSheet({
   /** Записать пару в то, что сейчас выбрано: смену дня либо этот перерыв. */
   const writePair = (pair: { start: string; end: string }) => {
     if (target.kind === "break" && brk) {
-      const next = day.breaks.map((b, i) => (i === target.index ? pair : b));
-      commit(withDay(base, active, { breaks: next }));
+      // Перерыв ищем по значению: в свежем графике номер мог указать на другой.
+      const was = brk;
+      commitDay((d) => ({
+        breaks: d.breaks.map((b) => (b.start === was.start && b.end === was.end ? pair : b)),
+      }));
       return;
     }
-    commit(withDay(base, active, pair));
+    commitDay(() => pair);
   };
+
+  // ПЕРЕСКОК БАРАБАНА ЧЕРЕЗ ПОЛНОЧЬ — НЕ ПРАВКА ДРУГОЙ ГРАНИЦЫ (аудит
+  // шестерёнки 03.10). Барабан часов закольцован: конец смены, докрученный за
+  // 23, становился 00 — меньше начала, и «двигаем другую границу» ставил
+  // начало на 00:00. Смена превращалась в 00:00–00:00, и сетка молча рисовала
+  // этот день общими часами. Пересчёт через полночь прижимаем к краю суток,
+  // другую границу не трогаем.
+  const WRAP_EDGE = 60;
+  const DAY_LAST = 23 * 60 + 55;
 
   const changeStart = (patch: { hour?: number; minute?: number }) => {
     const next = { ...hm(edited.start), ...patch };
+    const prevStart = timeToMinutes(edited.start);
+    if (prevStart < WRAP_EDGE && next.hour * 60 + next.minute >= DAY_LAST - WRAP_EDGE) {
+      // 00 → 23 назад через полночь: начало остаётся в начале суток.
+      writePair({ start: "00:00", end: edited.end });
+      return;
+    }
     const startMin = next.hour * 60 + next.minute;
     const endMin = timeToMinutes(edited.end);
     // Конец обязан быть позже начала: у смены пару «20:00–09:00» сетка молча
@@ -221,6 +255,12 @@ export function TeamScheduleSheet({
 
   const changeEnd = (patch: { hour?: number; minute?: number }) => {
     const next = { ...hm(edited.end), ...patch };
+    const prevEnd = timeToMinutes(edited.end);
+    if (prevEnd >= DAY_LAST - WRAP_EDGE && next.hour * 60 + next.minute < WRAP_EDGE) {
+      // 23 → 00 вперёд через полночь: конец остаётся в конце суток.
+      writePair({ start: edited.start, end: "23:55" });
+      return;
+    }
     const endMin = next.hour * 60 + next.minute;
     const startMin = timeToMinutes(edited.start);
     const fixedStart = endMin <= startMin ? Math.max(0, endMin - 5) : null;
@@ -247,7 +287,9 @@ export function TeamScheduleSheet({
     const next = [...day.breaks, fresh].sort((a, b) =>
       a.start.localeCompare(b.start),
     );
-    commit(withDay(base, active, { breaks: next }));
+    commitDay((d) => ({
+      breaks: [...d.breaks, fresh].sort((a, b) => a.start.localeCompare(b.start)),
+    }));
     setTarget({ kind: "break", index: next.indexOf(fresh) });
   };
 
@@ -258,11 +300,12 @@ export function TeamScheduleSheet({
    *  только мешает. */
   const removeBreakAt = (index: number) => {
     haptics.success();
-    commit(
-      withDay(base, active, {
-        breaks: day.breaks.filter((_, i) => i !== index),
-      }),
-    );
+    const victim = day.breaks[index];
+    if (!victim) return;
+    // По значению, а не по номеру: в свежем графике номер мог указать на другой.
+    commitDay((d) => ({
+      breaks: d.breaks.filter((b) => !(b.start === victim.start && b.end === victim.end)),
+    }));
     // Цель возвращается на часы, только если уносим ТУ строку, что крутится.
     setTarget((prev) =>
       prev.kind === "break" && prev.index === index ? { kind: "shift" } : prev,
@@ -477,7 +520,7 @@ export function TeamScheduleSheet({
           <SwitchRow
             label={WEEKDAY_FULL[active]}
             value={day.is_working}
-            onChange={(v) => commit(withDay(base, active, { is_working: v }))}
+            onChange={(v) => commitDay(() => ({ is_working: v }))}
           />
           {day.is_working ? (
             <>
@@ -496,7 +539,11 @@ export function TeamScheduleSheet({
               />
               {target.kind === "shift" ? WHEEL : null}
               {day.breaks.map((b, i) => (
-                <View key={`${b.start}-${b.end}-${i}`}>
+                // Ключ — место перерыва, а не его часы (аудит шестерёнки
+                // 03.10): каждый поворот барабана менял ключ, строка
+                // пересобиралась вместе с барабаном, и «Перерыв до»
+                // отскакивал на «Перерыв с» после каждой прокрутки.
+                <View key={`break-${i}`}>
                   <Divider inset={16} />
                   {/* УБИРАЮТ ПЕРЕРЫВ ЖЕСТОМ, А НЕ ЛИШНЕЙ КНОПКОЙ (владелец
                       2026-08-17: «удалить перерыв — это должен быть свайп, а не

@@ -1,25 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import { AppState, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { History, Wallet } from "lucide-react-native";
+import { History } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { NoticeBar } from "@/components/ui/NoticeBar";
-import { PickerSheet } from "@/components/ui/PickerSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
+import { useTeams } from "@/features/reference/queries";
+import { useAccountGate, useAccountName, useAccountProfile, useAccountScope } from "@/features/cabinet/account-scope";
+import { tierAllows, tierOf } from "@/features/tariffs/tiers";
+import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { notify } from "@/lib/notify";
-import { useThemeColors } from "@/theme/colors";
-import { openSmsCheckout, TOPUP_AMOUNTS_CENTS, useSmsAccount, useSmsHistory } from "./sms-account";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
+import { openSmsCheckout, useSmsAccount, useSmsHistory, type SmsHistoryItem } from "./sms-account";
 import { balanceWarning } from "./sms-model";
 import { SmsHistoryRow } from "./SmsHistoryRow";
+import { SmsMessageSheet } from "./SmsMessageSheet";
 import { SmsBalanceCard, SmsTariffCard } from "./SmsParts";
-import { euro } from "./sms-words";
+import { SmsTopupSheet } from "./SmsTopupSheet";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // КАБИНЕТ → SMS — ДЕНЬГИ И ОТПРАВКА ВСЕЙ КОМПАНИИ (STORY-089; владелец
 // 29.09: «баланс и пополнение — это всё будет Кабинет SMS», «баланс единый,
@@ -39,15 +44,36 @@ import { euro } from "./sms-words";
 // на пополнение через отдельную страницу… просто и легко для клиента»).
 // Внизу «Пополнить баланс» → сумма → страница Stripe; в приложении она
 // открывается в браузере, а по возвращении экран сам перечитывает баланс.
+//
+// БАЛАНС АККАУНТА, КОТОРЫЙ ПРИГЛАСИЛ (04.10): из блока аккаунта в Кабинете
+// страница открыта партнёру с правом «SMS» — шапка и кнопка называют
+// аккаунт («Пополнить баланс Giliuta»), платят за него. «Видит» — баланс и
+// месяц; «Пополняет» — ещё и кнопка. Истории сообщений (переписки с
+// клиентами) партнёру здесь нет.
+//
+// В ПРИЛОЖЕНИИ ИЗ МАГАЗИНА ПОПОЛНЕНИЯ НЕТ (владелец 04.10, `pay-here.ts`):
+// баланс, месяц и история — да; кнопки, шторки суммы и слова «пополните» —
+// нет. Пополняют на babun.app.
 
 export function SmsScreen() {
-  const t = useThemeColors();
   const router = useRouter();
   const toast = useToast();
+  const scope = useAccountScope();
+  const ownerOfAccount = scope.viewRole === "owner";
+  const gate = useAccountGate("cabinet.sms");
+  const accountName = useAccountName();
+  // Без тарифа SMS нет (02.10) — и пополнять нечего: кнопка серая. Тариф —
+  // аккаунта страницы.
+  const smsInPlan = tierAllows(tierOf(useAccountProfile().data), "sms");
+  const nudgeTariff = useTariffNudge();
   const params = useLocalSearchParams<{ topup?: string }>();
   const account = useSmsAccount();
   const history = useSmsHistory(5);
   const [topupOpen, setTopupOpen] = useState(false);
+  // Тап по строке истории — тот же лист сообщения, что в записи и у клиента
+  // (владелец 03.10: «такую же шторку — везде»).
+  const [open, setOpen] = useState<SmsHistoryItem | null>(null);
+  const { data: teams = [] } = useTeams();
   const awaitingPayment = useRef(false);
 
   // Возврат с оплаты на сайте: Stripe привёл обратно — баланс пересчитает
@@ -84,17 +110,30 @@ export function SmsScreen() {
     setTopupOpen(false);
     try {
       awaitingPayment.current = true;
-      await openSmsCheckout(cents);
+      await openSmsCheckout(cents, undefined, scope.foreign ? scope.tenantId : null);
     } catch (e) {
       awaitingPayment.current = false;
       notify("Оплата не открылась", e instanceof Error ? e.message : undefined);
     }
   };
 
+  const subtitle = !ownerOfAccount || scope.foreign ? (accountName ?? undefined) : undefined;
+  const canTopUp = CAN_PAY_HERE && (ownerOfAccount || gate === "write");
+
+  // Без права «SMS» страница пуста — сюда ведёт только старая ссылка.
+  if (!ownerOfAccount && gate !== "read" && gate !== "write") {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="SMS" subtitle={subtitle} />
+        <EmptyState fill state={gate === "loading" ? "loading" : undefined} title={gate === "loading" ? undefined : "SMS скрыты"} />
+      </Screen>
+    );
+  }
+
   if (account.isLoading) {
     return (
       <Screen edges={["top"]}>
-        <ScreenHeader title="SMS" />
+        <ScreenHeader title="SMS" subtitle={subtitle} />
         <EmptyState state="loading" fill />
       </Screen>
     );
@@ -102,7 +141,7 @@ export function SmsScreen() {
   if (account.isError || !data || !owner) {
     return (
       <Screen edges={["top"]}>
-        <ScreenHeader title="SMS" />
+        <ScreenHeader title="SMS" subtitle={subtitle} />
         <EmptyState
           state="error"
           fill
@@ -113,11 +152,11 @@ export function SmsScreen() {
     );
   }
 
-  const warning = balanceWarning(data);
+  const warning = balanceWarning(data, CAN_PAY_HERE);
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="SMS" />
+      <ScreenHeader title="SMS" subtitle={subtitle} />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Плашки нет (владелец 30.09: «баланс ноль и так видно»): «Пополните
             баланс» — строкой под суммой. Плашка — только заморозка сверкой. */}
@@ -134,7 +173,7 @@ export function SmsScreen() {
             предохранитель платформы. Администратору платформы — и чужие. */}
         {(owner.alerts ?? []).slice(0, 3).map((alert) => (
           <View key={`${alert.kind}-${alert.at}`} style={{ marginHorizontal: GUTTER, marginTop: 12 }}>
-            <NoticeBar tone="error" message={alert.own ? alert.message : `Платформа: ${alert.message}`} />
+            <NoticeBar tone="error" message={alert.own ? tDynamic(alert.message) : `Платформа: ${tDynamic(alert.message)}`} />
           </View>
         ))}
 
@@ -142,43 +181,56 @@ export function SmsScreen() {
 
         <SmsTariffCard priceCents={data.priceCents} />
 
-        <SectionCard title="История">
-          {(history.data ?? []).map((item, index) => (
-            <View key={item.id}>
-              {index > 0 ? <Divider inset={16} /> : null}
-              <SmsHistoryRow item={item} />
-            </View>
-          ))}
-          {(history.data ?? []).length > 0 ? <Divider inset={48} /> : null}
-          <SettingsRow
-            tile="neutral"
-            icon={History}
-            title="Вся история"
-            sub={(history.data ?? []).length > 0 ? undefined : "Сообщений пока нет"}
-            onPress={() => router.push("/cabinet/sms-history" as Href)}
-          />
-        </SectionCard>
+        {/* Переписка с клиентами — владельцу аккаунта (04.10). */}
+        {ownerOfAccount ? (
+          <SectionCard title="История">
+            {(history.data ?? []).map((item, index) => (
+              <View key={item.id}>
+                {index > 0 ? <Divider inset={16} /> : null}
+                <SmsHistoryRow item={item} compact onPress={() => setOpen(item)} />
+              </View>
+            ))}
+            {/* «Вся история» читает аккаунт, открытый на телефоне: свой
+                аккаунт, открытый из Кабинета со стороны (04.10), показывает
+                последние сообщения без двери. */}
+            {scope.foreign ? null : (
+              <>
+                {(history.data ?? []).length > 0 ? <Divider inset={48} /> : null}
+                <SettingsRow
+                  tile="neutral"
+                  icon={History}
+                  title="Вся история"
+                  sub={(history.data ?? []).length > 0 ? undefined : "Сообщений пока нет"}
+                  onPress={() => router.push("/cabinet/sms-history" as Href)}
+                />
+              </>
+            )}
+          </SectionCard>
+        ) : null}
       </ScrollView>
 
       {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ: пополнить баланс. */}
-      {data.serviceOn ? (
+      {data.serviceOn && canTopUp ? (
         <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}>
-          <GradientButton label="Пополнить баланс" onPress={() => setTopupOpen(true)} />
+          <GradientButton
+            label={subtitle ? `Пополнить баланс ${subtitle}` : "Пополнить баланс"}
+            disabled={!smsInPlan}
+            onDisabledPress={nudgeTariff}
+            onPress={() => setTopupOpen(true)}
+          />
         </View>
       ) : null}
 
-      <PickerSheet
-        visible={topupOpen}
-        title="Пополнить баланс"
-        items={TOPUP_AMOUNTS_CENTS.map((cents) => ({
-          id: String(cents),
-          label: euro(cents),
-          hint: `≈ ${Math.floor(cents / Math.max(1, data.priceCents))} SMS`,
-          icon: Wallet,
-          color: t.accent,
-          onPress: () => void topup(cents),
-        }))}
+      <SmsTopupSheet
+        visible={canTopUp && topupOpen}
+        priceCents={data.priceCents}
         onClose={() => setTopupOpen(false)}
+        onPay={(cents) => void topup(cents)}
+      />
+      <SmsMessageSheet
+        item={open}
+        teamName={(teamId) => teams.find((x) => x.id === teamId)?.name ?? null}
+        onClose={() => setOpen(null)}
       />
     </Screen>
   );

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import { matchesClient } from "@babun/shared/local/selectors/client-search";
+import { matchesClient, rankClientMatches } from "@babun/shared/local/selectors/client-search";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -13,7 +13,9 @@ import {
   SelectRow,
   SelectSearch,
 } from "@/components/ui/select-rows";
-import { ClientHistoryLine, clientHistoryText } from "@/features/clients/history-line";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
+import { visitMark, type VisitMark } from "@/features/clients/visit-mark";
+import { PhoneVisitLine, visitMarkWords } from "@/features/clients/VisitDate";
 import {
   buildQuickClientDraft,
   findQuickClientDuplicate,
@@ -23,6 +25,8 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { formatPhoneForDisplay } from "@/features/clients/phone";
+import { usePlanAllows } from "@/features/settings/tenant";
+import { TariffLocked } from "@/features/tariffs/TariffLocked";
 
 // ВЫБОР КЛИЕНТА — ОДНА ШТОРКА НА ВЕСЬ ПРОДУКТ (владелец 2026-09-10: «если я
 // прошу „выбрать клиента", архитектура этой шторки должна быть везде
@@ -44,6 +48,12 @@ import { formatPhoneForDisplay } from "@/features/clients/phone";
 /** Один сравниватель на модуль: `localeCompare(…, "ru")` в Hermes заводит
  *  новый коллатор на КАЖДОЕ сравнение — сортировка базы была заметной. */
 const byName = new Intl.Collator("ru");
+
+/** Дата визита строки — та же, что в списке клиентов; «Историю записей»
+ *  закрыли — даты нет. */
+function pickerMark(client: Client, stats: ClientStats | undefined): VisitMark | null {
+  return clientBlockLevel(client, "clients.history") !== "hidden" ? visitMark(stats) : null;
+}
 
 export function ClientPickerSheet({
   visible,
@@ -154,7 +164,9 @@ export function ClientPickerSheet({
   // кого УЖЕ были записи, а у новорождённого их нет по определению.
   const rows = useMemo(() => {
     const query = q.trim();
-    if (query) return pool.filter((c) => matchesClient(c, query));
+    // Найденные по имени — выше найденных по метке или адресу
+    // (`rankClientMatches`, повторный аудит 03.10).
+    if (query) return rankClientMatches(pool.filter((c) => matchesClient(c, query)), query);
     if (!recentIds?.length) {
       return [...pool].sort((a, b) => byName.compare(a.full_name || "", b.full_name || ""));
     }
@@ -187,6 +199,7 @@ export function ClientPickerSheet({
    *  Найденный по номеру дубль — не создание, а выбор: два клиента на одном
    *  номере невозможны. */
   const typedName = q.trim();
+  const clientsInPlan = usePlanAllows("clients");
   const createLabel = duplicate
     ? `Выбрать «${duplicate.full_name || duplicate.phone || typedName}»`
     : typedName
@@ -238,8 +251,14 @@ export function ClientPickerSheet({
                 Строка ушла, а кнопка называет набранное сама: видно, кого
                 именно заведут, и найденный по номеру дубль она выбирает, а не
                 заводит второй раз. */}
+            {/* БЕЗ ТАРИФА НОВОГО КЛИЕНТА НЕ ЗАВЕСТИ НИ ОТКУДА (владелец 02.10:
+                «нажимаю на клиента — там „Создать клиента“, и можно создать
+                любого»). Кнопка серая, тап — плашка про тариф; найденного по
+                номеру выбрать можно — это не создание. */}
             {onCreate ? (
-              <Button label={createLabel} onPress={create} />
+              <TariffLocked locked={!duplicate && !clientsInPlan} beforeNudge={close}>
+                <Button label={createLabel} onPress={create} />
+              </TariffLocked>
             ) : null}
             {onClear && selectedId ? (
               <Button
@@ -272,13 +291,17 @@ export function ClientPickerSheet({
             <SelectRow
               key={c.id}
               title={c.full_name || "Без имени"}
+              // СТРОКА — КАК В СПИСКЕ КЛИЕНТОВ (владелец 03.10: «тут тоже не
+              // нужно показывать долг, „два визита“… и кругляшки с именем —
+              // мы нигде их не используем»): имя, под ним номер и дата визита
+              // цветом (`VisitDate`). Без кружка с буквой.
               subtitle={
-                statsById || linkFor?.(c) ? (
-                  <>
-                    {statsById ? (
-                      <ClientHistoryLine client={c} stats={statsById.get(c.id)} size={12} />
-                    ) : null}
-                    {linkFor?.(c) ? (
+                <>
+                  <PhoneVisitLine
+                    phone={c.phone?.trim() ? formatPhoneForDisplay(c.phone, country) : null}
+                    mark={pickerMark(c, statsById?.get(c.id))}
+                  />
+                  {linkFor?.(c) ? (
                       <Text
                         numberOfLines={1}
                         maxFontSizeMultiplier={1.3}
@@ -287,17 +310,17 @@ export function ClientPickerSheet({
                         {linkFor(c)}
                       </Text>
                     ) : null}
-                  </>
-                ) : undefined
+                </>
               }
-              hint={c.phone ? formatPhoneForDisplay(c.phone, country) : undefined}
-              initial={c.full_name || "?"}
               selected={c.id === selectedId}
               accessibilityLabel={[
                 c.full_name || "Без имени",
                 c.phone,
                 linkFor?.(c) ?? "",
-                statsById ? clientHistoryText(c, statsById.get(c.id)) : "",
+                (() => {
+                  const mark = pickerMark(c, statsById?.get(c.id));
+                  return mark ? visitMarkWords(mark) : "";
+                })(),
               ]
                 .filter(Boolean)
                 .join(", ")}

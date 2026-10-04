@@ -1,35 +1,30 @@
 import { useRef } from "react";
 import type React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import {
-  Archive,
   Ban,
   Bell,
-  CalendarPlus,
+  CalendarClock,
   Check,
   Clock,
-  Pin,
+  Trash2,
 } from "lucide-react-native";
-import type { Client, ClientTag } from "@babun/shared/local/clients";
+import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import { formatEUR } from "@babun/shared/common/utils/money";
-import { countWordRu } from "@babun/shared/common/utils/pluralize";
-import {
-  getAvatarHue,
-  getInitials,
-} from "@babun/shared/common/utils/avatar-color";
 import { haptics } from "@/lib/haptics";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { clientDebt } from "@/features/clients/filter";
-import { formatShortDateRu, reminderBadge } from "@/features/clients/format";
+import { formatShortDateRu } from "@/features/clients/format";
 import { formatPhoneForDisplay } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import type { CardFieldPrefs } from "@/features/clients/card-prefs";
+import type { ClientsScope } from "@/features/clients/clients-company";
+import { clientBlockLevel } from "@/features/clients/client-block-access";
+import { visitMark } from "@/features/clients/visit-mark";
 
 // СТРОКА КЛИЕНТА — ОДНА НА ВСЕ СПИСКИ.
 //
@@ -39,233 +34,94 @@ import type { CardFieldPrefs } from "@/features/clients/card-prefs";
 // историей». По закону «один дизайн на все списки» вёрстка живёт здесь, а
 // экраны отличаются только тем, ЧТО показывают и что делают жесты.
 
+/** Ширина места номера в строке: «+357 99 999 999» и «+7 916 123 45 67»
+ *  шрифтом 14 с моноширинными цифрами — и запас до даты. */
+const PHONE_COLUMN = 138;
+
 export default function ClientRow({
   client,
   stats,
-  teamName,
-  tags,
   cardFields,
   evidence,
   selectionMode,
   picked,
   onPress,
   onLongPress,
-  onBook,
   onRemind,
-  onArchive,
+  onDelete,
   onSwipeOpen,
   trailing,
-  link,
+  source,
 }: {
   client: Client;
   stats: ClientStats | undefined;
-  teamName: string | null;
-  tags: ClientTag[];
   cardFields: CardFieldPrefs;
   /** Почему этот человек попал в выбранный статус («не был 87 дн.»).
    *  Печатается первым в мете — доказательство должно попадаться на глаза
    *  раньше справочных полей. */
-  evidence: string | null;
+  evidence?: string | null;
   selectionMode: boolean;
   picked: boolean;
   onPress: () => void;
   onLongPress: () => void;
-  /** Свайп вправо: открыть запись для этого клиента. Жесты НЕОБЯЗАТЕЛЬНЫ:
-   *  в архиве и корзине глаголы другие («Восстановить», «Стереть»), и
-   *  привычный флик «убери» там означал бы не то. Без обработчиков строка
-   *  просто не оборачивается в свайп. */
-  onBook?: () => void;
-  /** Свайп влево: лист «Напомнить». */
+  /** Свайп вправо: лист «Напомнить». Жесты НЕОБЯЗАТЕЛЬНЫ: в корзине
+   *  глаголы другие («Восстановить», «Стереть»), и привычный флик «убери»
+   *  там означал бы не то. Без обработчика стороны нет; без обоих строка
+   *  не оборачивается в свайп. */
   onRemind?: () => void;
-  /** Свайп влево: архив (спрашивает подтверждение сам). */
-  onArchive?: () => void;
+  /** Свайп влево: «Удалить» (спрашивает подтверждение сам). */
+  onDelete?: () => void;
   /** Открылся свайп этой строки — список закрывает предыдущий. */
   onSwipeOpen?: (row: SwipeableMethods | null) => void;
   /** Хвост строки ВМЕСТО кнопки связи: «через 27 дней» в корзине. */
   trailing?: React.ReactNode;
-  /** Чей это человек — «жена · Павел Иванов» (STORY-086). Второй строкой,
-   *  сразу под именем: звонит Екатерина — по строке видно, чья она.
-   *
-   *  Строка приходит ГОТОВОЙ, из общего построителя `linkLine`
-   *  (`selectors/client-links.ts`) — того же, что печатает `MemberOfLine` на
-   *  карточке и `linkFor` в шторке выбора. Считать её здесь нельзя: строке
-   *  видно одного клиента, а связь названа именем ДРУГОЙ карточки, и список
-   *  разрешает их один раз на все строки. Связей бывает несколько — что
-   *  показать одной строкой, решает тот же построитель (первую и « +N»). */
-  link?: string;
+  /** Компания клиента, если она не компания экрана (строка работодателя в
+   *  общем списке): кнопка связи читает набор и шестерёнку её (03.10). */
+  source?: ClientsScope;
 }) {
   const t = useThemeColors();
-  const country = useDefaultCountry();
+  const country = useDefaultCountry(client.team_id ?? null);
   const swipeRef = useRef<SwipeableMethods | null>(null);
-  const exp = Math.round(stats?.expectedRevenue ?? 0);
-  const income = Math.round(stats?.totalSpent ?? 0);
-  // Одна формула долга на карточку, сортировку и статус «Должники».
-  const debt = clientDebt(client, stats);
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
-  const avatarColor = getAvatarHue(client.full_name);
 
-  // Порядок долг → доход → ожидается: должник — самый срочный сигнал,
-  // читается первым. «долг €450» словом (не голым цветом): золото без
-  // подписи в списке не читается, должника ищут по слову, не по памяти.
-  const figs: { key: string; text: string; color: string }[] = [];
-  if (cardFields.debt && debt > 0)
-    figs.push({
-      key: "debt",
-      text: `долг ${formatEUR(debt)}`,
-      color: t.warning,
-    });
-  if (cardFields.inc && income > 0)
-    figs.push({ key: "inc", text: formatEUR(income), color: t.success });
-  if (cardFields.exp && exp > 0)
-    figs.push({ key: "exp", text: formatEUR(exp), color: t.sub });
+  // ДЕНЕГ В СТРОКЕ НЕТ (владелец 01.10: «уберём полностью этот блок — долг,
+  // доход, ожидается — со страницы клиентов»). Долг и доход — на странице
+  // клиента; отбор «Должники» в фильтрах остаётся.
 
-  // Мета — ОДНА строка с эллипсисом: [🔔 напоминание] · [🕐 посл. визит] ·
-  // команда · город · теги (первые 2 + «+N»). Иконки-сигналы (напоминание,
-  // визит) идут ведущими и не сжимаются; хвост (команда/город/теги) —
-  // единый обрезаемый текст, чтобы ряд не пух в 3 строки и ничего не
-  // наезжало. Напоминание не гейтится тогглами: сигнал, поставленный
-  // руками, — красный, когда пора (сегодня/прошло), серый — когда впереди.
-  const reminder = reminderBadge(client.reminder_at);
-  const metaLead: { key: string; node: React.ReactNode }[] = [];
-  // УЛИКА ВЫБРАННОГО СТАТУСА — первой: список, собранный фильтром, должен
-  // сам объяснять, за что сюда попал каждый человек (владелец 2026-08-07:
-  // «как убеждаться, что это правильные статусы»).
-  if (evidence) {
-    metaLead.push({
-      key: "evidence",
-      node: (
-        <Text
-          maxFontSizeMultiplier={1.3}
-          numberOfLines={1}
-          className="text-[11px] font-semibold"
-          // Полные чернила: доказательство статуса не может быть бледнее
-          // справочного хвоста меты (город, команда, теги) — иначе главное
-          // на строке тише второстепенного.
-          style={{ color: t.ink }}
-        >
-          {evidence}
-        </Text>
-      ),
-    });
-  }
-  if (reminder) {
-    metaLead.push({
-      key: "reminder",
-      node: (
-        <View className="flex-row items-center gap-1">
-          <Bell
-            color={reminder.due ? t.danger : t.sub}
-            size={12}
-            strokeWidth={2}
-          />
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className={`text-[11px] ${reminder.due ? "font-semibold" : ""}`}
-            style={{ color: reminder.due ? t.danger : t.ink }}
-          >
-            {reminder.label}
-          </Text>
-        </View>
-      ),
-    });
-  }
-  // Прошедшие записи, которые никто не закрыл, — не визиты, но и не
-  // «нет записей»: человек у нас был (аудит 29.09). Тем же словом, что
-  // календарь, — «не закрыт».
-  const unclosed = stats?.unclosedVisits ?? 0;
-  const unclosedText =
-    unclosed > 0
-      ? `${unclosed} ${countWordRu(unclosed, "визит не закрыт", "визита не закрыты", "визитов не закрыто")}`
-      : null;
-  if (cardFields.last) {
-    metaLead.push({
-      key: "last",
-      node: stats?.lastVisitDate ? (
-        <View className="flex-row items-center gap-1">
-          <Clock color={t.sub} size={12} strokeWidth={2} />
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="text-[11px]"
-            style={{ color: t.ink }}
-          >
-            {formatShortDateRu(stats.lastVisitDate)}
-          </Text>
-        </View>
-      ) : stats?.nextApt ? (
-        // Визитов ещё не было, но человек ЗАПИСАН — «нет записей» было
-        // прямой ложью в самый нужный момент.
-        <View className="flex-row items-center gap-1">
-          <Clock color={t.accent} size={12} strokeWidth={2} />
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="text-[11px]"
-            style={{ color: t.accent }}
-          >
-            {`записан ${formatShortDateRu(stats.nextApt.date)}`}
-          </Text>
-        </View>
-      ) : unclosedText ? (
-        <View className="flex-row items-center gap-1">
-          <Clock color={t.warning} size={12} strokeWidth={2} />
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="text-[11px]"
-            style={{ color: t.warning }}
-          >
-            {unclosedText}
-          </Text>
-        </View>
-      ) : (
-        <Text
-          maxFontSizeMultiplier={1.3}
-          className="text-[11px]"
-          style={{ color: t.faint }}
-        >
-          нет записей
-        </Text>
-      ),
-    });
-  }
-  const tagNames = cardFields.meta
-    ? (client.tag_ids
-        .map((tid) => tags.find((x) => x.id === tid)?.name)
-        .filter(Boolean) as string[])
-    : [];
-  let metaTail = "";
-  if (cardFields.meta) {
-    const parts: string[] = [];
-    if (teamName) parts.push(teamName);
-    const city = (client.city ?? "").trim();
-    if (city) parts.push(city);
-    parts.push(...tagNames.slice(0, 2));
-    if (tagNames.length > 2) parts.push(`+${tagNames.length - 2}`);
-    metaTail = parts.join(" · ");
-  }
+  // УЛИКА ВЫБРАННОГО СТАТУСА — своей строкой под датой, только когда она
+  // есть: в архиве и корзине это срок («удалится через 27 дн.»).
+  // «Историю записей» ему закрыли — даты нет вовсе: «нет записей» у клиента,
+  // который был вчера, — неправда (проверка глазами 30.09).
+  const showLast = cardFields.last && clientBlockLevel(client, "clients.history") !== "hidden";
+  // ДАТА — ОДНА, РЯДОМ С НОМЕРОМ, И ЦВЕТОМ (владелец 01.10, вариант 3:
+  // «номер и запись одной строкой»): последний визит синим — деньги с него
+  // получены; не закрыт — жёлтым, как долг; визитов не было, но записан
+  // вперёд — серым; записей нет — ничего. Правило — `visit-mark.ts`.
+  const mark = showLast ? visitMark(stats) : null;
+  const markColor =
+    mark?.kind === "unclosed" ? t.warning : mark?.kind === "ahead" ? t.sub : t.accent;
+  const MarkIcon = mark?.kind === "ahead" ? CalendarClock : Clock;
+  const phoneShown = cardFields.phone && client.phone.trim() !== "";
+  // Место номера — под самый длинный номер при крупном тексте телефона
+  // (ограничен тем же 1.3, что и сами строки).
+  const { fontScale } = useWindowDimensions();
+  const phoneColumn = Math.round(PHONE_COLUMN * Math.min(fontScale, 1.3));
 
   // VoiceOver: строка зачитывает реально показанные бизнес-сигналы в
   // порядке экрана, а не только имя+телефон.
   const a11yLabel = [
     client.full_name || "Без имени",
-    // Связь зачитывается сразу за именем — там же, где она и нарисована.
-    // Без неё VoiceOver называл Екатерину просто «Екатерина», а глазами в
-    // этот момент видно «жена · Павел Иванов»: строка и её озвучка говорили
-    // разное.
-    link ?? "",
-    client.pinned_at ? "закреплён" : "",
     client.blacklisted ? "чёрный список" : "",
-    cardFields.debt && debt > 0 ? `долг ${formatEUR(debt)}` : "",
-    cardFields.inc && income > 0 ? `доход ${formatEUR(income)}` : "",
-    cardFields.exp && exp > 0 ? `ожидается ${formatEUR(exp)}` : "",
-    reminder ? `напоминание ${reminder.label}` : "",
-    cardFields.last
-      ? stats?.lastVisitDate
-        ? `последний визит ${formatShortDateRu(stats.lastVisitDate)}`
-        : stats?.nextApt
-          ? `записан ${formatShortDateRu(stats.nextApt.date)}`
-          : (unclosedText ?? "нет записей")
-      : "",
-    metaTail,
+    // Номер, потом дата — в порядке строки на экране.
     client.phone ?? "",
+    !mark
+      ? ""
+      : mark.kind === "unclosed"
+        ? `визит ${formatShortDateRu(mark.date)} не закрыт`
+        : mark.kind === "ahead"
+          ? `записан ${formatShortDateRu(mark.date)}`
+          : `последний визит ${formatShortDateRu(mark.date)}`,
+    evidence ?? "",
   ]
     .filter(Boolean)
     .join(". ");
@@ -287,46 +143,26 @@ export default function ClientRow({
             : "Открыть карточку клиента"
         }
         accessibilityState={selectionMode ? { selected: picked } : undefined}
-        className={`min-h-[68px] flex-1 flex-row items-center py-3 pl-4 active:opacity-60 ${phoneDigits && !selectionMode ? "" : "pr-4"}`}
+        className={`min-h-[56px] flex-1 flex-row items-center py-2.5 pl-4 active:opacity-60 ${phoneDigits && !selectionMode ? "" : "pr-4"}`}
       >
+        {/* БЕЗ КРУЖКА С ИНИЦИАЛАМИ (владелец 30.09: «не нравится слева эти
+            кружочки… давай компактнее»). Инициалы по хешу имени не несли
+            смысла и съедали 60pt слева у каждой строки. В режиме выбора слева
+            встаёт только маленькая отметка — ряд почти не сдвигается. */}
         {selectionMode ? (
-          // Чекбокс замещает аватар (web parity) — ряд не разъезжается.
           <View
-            className="h-11 w-11 items-center justify-center rounded-full"
+            className="mr-3 h-6 w-6 items-center justify-center rounded-full"
             style={{
-              backgroundColor: picked ? t.accent : t.fill,
+              backgroundColor: picked ? t.accent : "transparent",
               borderWidth: picked ? 0 : 2,
-              borderColor: t.separator,
+              borderColor: t.separatorStrong,
             }}
           >
-            {picked ? <Check color="#fff" size={20} strokeWidth={3} /> : null}
+            {picked ? <Check color="#fff" size={14} strokeWidth={3} /> : null}
           </View>
-        ) : (
-          // Мягкий аватар: заливка = цвет клиента при ~18%, инициалы —
-          // чёрные (ink). Насыщенный круг был самым громким элементом
-          // экрана и не нёс смысла (просто хеш имени); тихий тон даёт
-          // идентичность, не перебивая имя и деньги. Зелёным на строке
-          // остаётся только кнопка звонка = действие.
-          <View
-            className="h-11 w-11 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${avatarColor}2e` }}
-          >
-            <Text
-              maxFontSizeMultiplier={1.3}
-              className="text-sm font-bold"
-              style={{ color: t.ink }}
-            >
-              {getInitials(client.full_name || "?")}
-            </Text>
-          </View>
-        )}
-        {/* ml-2: аватар16+44+8 = 68 → колонка текста совпадает с инсетом
-            разделителя (ml-[68px]) и DS-инсетом avatar-рядов. */}
-        <View className="ml-2 flex-1">
+        ) : null}
+        <View className="flex-1">
           <View className="flex-row items-center gap-1.5">
-            {client.pinned_at ? (
-              <Pin color={t.accent} size={12} strokeWidth={2.5} />
-            ) : null}
             {/* Чёрный список: в списке забаненный клиент был НЕОТЛИЧИМ от
                 обычного (маркер жил только на карточке) — мастер мог
                 позвонить и записать того, кого владелец занёс. */}
@@ -342,86 +178,53 @@ export default function ClientRow({
               {client.full_name || "Без имени"}
             </Text>
           </View>
-          {link ? (
-            <Text
-              maxFontSizeMultiplier={1.3}
-              numberOfLines={1}
-              className="mt-0.5 text-[13px]"
-              style={{ color: t.sub }}
-            >
-              {link}
-            </Text>
-          ) : null}
-          {/* НОМЕР ПОД ИМЕНЕМ (владелец 2026-08-06: «хочу, чтоб сразу было
-              видно номер телефона»). Он же — то, по чему ищут: поиск и так
-              понимает цифры, но раньше найденный номер нигде не показывался,
-              и совпадение приходилось проверять, открывая карточку. */}
-          {cardFields.phone && client.phone.trim() ? (
-            <Text
-              maxFontSizeMultiplier={1.3}
-              numberOfLines={1}
-              className="mt-0.5 text-[13px]"
-              style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
-            >
-              {/* Тот же формат, что на карточке: в базе номера лежат как их
-                  когда-то ввели или как пришли из импорта, и рядом стояли
-                  «+357 97469998» и «+357 97 469998» — два вида одного
-                  номера читаются как два разных человека. */}
-              {formatPhoneForDisplay(client.phone, country)}
-            </Text>
-          ) : null}
-          {figs.length > 0 ? (
-            <View className="mt-1 flex-row items-center gap-2.5">
-              {figs.map((f) => (
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  key={f.key}
-                  className="text-[13px] font-semibold"
-                  style={{ color: f.color, fontVariant: ["tabular-nums"] }}
-                >
-                  {f.text}
-                </Text>
-              ))}
-            </View>
-          ) : null}
-          {metaLead.length > 0 || metaTail ? (
+          {/* НОМЕР И ДАТА ОДНОЙ СТРОКОЙ ПОД ИМЕНЕМ (владелец 01.10, вариант 3).
+              Номер — то, по чему ищут (2026-08-06: «хочу, чтоб сразу было
+              видно номер телефона»), в том же виде, что на карточке: в базе
+              номера лежат как их когда-то ввели, и «+357 97469998» рядом с
+              «+357 97 469998» читались как два разных человека. */}
+          {/* НОМЕР И ДАТА — КОЛОНКАМИ (владелец 01.10: «чёткий столбик…
+              специальное место для визита, для номера и для имени, чтобы
+              дата не прыгала слева направо»). У номера место одной ширины
+              под самый длинный номер («+357 99 999 999», «+7 916 123 45 67»),
+              дата начинается за ним в одной точке у каждой строки — даже у
+              клиента без номера. */}
+          {phoneShown || mark ? (
             <View className="mt-0.5 flex-row items-center">
-              {metaLead.map((seg, i) => (
-                <View key={seg.key} className="flex-row items-center">
-                  {i > 0 ? (
-                    <Text
-                      maxFontSizeMultiplier={1.3}
-                      className="mx-[5px] text-[11px]"
-                      style={{ color: t.faint }}
-                    >
-                      ·
-                    </Text>
-                  ) : null}
-                  {seg.node}
-                </View>
-              ))}
-              {metaTail ? (
-                <View className="flex-1 flex-row items-center">
-                  {metaLead.length > 0 ? (
-                    <Text
-                      maxFontSizeMultiplier={1.3}
-                      className="mx-[5px] text-[11px]"
-                      style={{ color: t.faint }}
-                    >
-                      ·
-                    </Text>
-                  ) : null}
+              <View style={{ width: phoneColumn }}>
+                {phoneShown ? (
                   <Text
                     maxFontSizeMultiplier={1.3}
                     numberOfLines={1}
-                    className="flex-1 text-[11px]"
-                    style={{ color: t.ink }}
+                    style={{ fontSize: 14, color: t.sub, fontVariant: ["tabular-nums"] }}
                   >
-                    {metaTail}
+                    {formatPhoneForDisplay(client.phone, country)}
+                  </Text>
+                ) : null}
+              </View>
+              {mark ? (
+                <View className="shrink flex-row items-center gap-1">
+                  <MarkIcon color={markColor} size={12} strokeWidth={2} />
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    numberOfLines={1}
+                    style={{ fontSize: 13, color: markColor, fontVariant: ["tabular-nums"] }}
+                  >
+                    {formatShortDateRu(mark.date)}
                   </Text>
                 </View>
               ) : null}
             </View>
+          ) : null}
+          {evidence ? (
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              className="mt-0.5 text-[11px] font-semibold"
+              style={{ color: t.ink }}
+            >
+              {evidence}
+            </Text>
           ) : null}
         </View>
       </Pressable>
@@ -439,6 +242,7 @@ export default function ClientRow({
             telegramUsername={client.telegram_username}
             label={client.full_name || undefined}
             teamId={client.team_id ?? null}
+            source={source}
           />
         </View>
       ) : null}
@@ -455,15 +259,16 @@ export default function ClientRow({
   // Хуже: свайп ВЛЕВО — то место, где во всех приложениях iPhone лежит
   // «Удалить». Заученный флик «убери» звонил клиенту, а звонок не отменить.
   //
-  // СТАЛО, по закону направления (он же в соседних «Чатах»):
-  //   вправо = продвинуть  → «Записать»
-  //   влево  = отложить/убрать → «Напомнить» + «Архив»
-  // Связи в жестах нет вовсе: она в зелёной кнопке — единственной
-  // поверхности, которая читает настройку «Способы связи» и её порядок.
-  // Свайп больше не зависит от наличия телефона: ни один из глаголов номера
-  // не требует (раньше у клиента без номера жеста не было совсем).
-  // Без глаголов свайпа (архив, корзина) строка остаётся просто строкой.
-  if (selectionMode || !onBook || !onRemind || !onArchive) return row;
+  // СТАЛО (владелец 03.10: «„Записать" убираем, туда — „Напомнить",
+  // вправо — соответственно „Удалить"; архива не будет»):
+  //   вправо = отложить → «Напомнить»
+  //   влево  = убрать   → «Удалить», там же, где во всех приложениях iPhone
+  // «Записать» осталась в меню долгого нажатия. Связи в жестах нет вовсе:
+  // она в зелёной кнопке — единственной поверхности, которая читает
+  // настройку «Способы связи» и её порядок. Свайп не зависит от наличия
+  // телефона: ни один из глаголов номера не требует.
+  // Без глаголов свайпа (корзина, нет прав) строка остаётся просто строкой.
+  if (selectionMode || (!onRemind && !onDelete)) return row;
   const closeSwipe = () => swipeRef.current?.close();
   return (
     <ReanimatedSwipeable
@@ -482,74 +287,60 @@ export default function ClientRow({
         haptics.tap();
         onSwipeOpen?.(swipeRef.current);
       }}
-      renderLeftActions={() => (
-        <Pressable
-          onPress={() => {
-            closeSwipe();
-            haptics.tap();
-            onBook();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`Записать — ${client.full_name || client.phone}`}
-          className="w-[88px] items-center justify-center gap-1"
-          style={{ backgroundColor: t.accent }}
-        >
-          <CalendarPlus color="#fff" size={ICON.sm} />
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="text-[11px] font-semibold"
-            style={{ color: "#fff" }}
-          >
-            Записать
-          </Text>
-        </Pressable>
-      )}
-      renderRightActions={() => (
-        <View className="flex-row">
-          <Pressable
-            onPress={() => {
-              closeSwipe();
-              haptics.tap();
-              onRemind();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`Напомнить — ${client.full_name || client.phone}`}
-            className="w-[88px] items-center justify-center gap-1"
-            style={{ backgroundColor: t.warning }}
-          >
-            <Bell color="#fff" size={ICON.sm} />
-            <Text
-              maxFontSizeMultiplier={1.3}
-              className="text-[11px] font-semibold"
-              style={{ color: "#fff" }}
-            >
-              Напомнить
-            </Text>
-          </Pressable>
-          {/* Архив спрашивает подтверждение (см. confirmArchiveOne) — поэтому
-              он допустим у пальца, а полного свайпа здесь нет вовсе. */}
-          <Pressable
-            onPress={() => {
-              closeSwipe();
-              haptics.warning();
-              onArchive();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`В архив — ${client.full_name || client.phone}`}
-            className="w-[88px] items-center justify-center gap-1"
-            style={{ backgroundColor: t.danger }}
-          >
-            <Archive color="#fff" size={ICON.sm} />
-            <Text
-              maxFontSizeMultiplier={1.3}
-              className="text-[11px] font-semibold"
-              style={{ color: "#fff" }}
-            >
-              В архив
-            </Text>
-          </Pressable>
-        </View>
-      )}
+      renderLeftActions={
+        onRemind
+          ? () => (
+              <Pressable
+                onPress={() => {
+                  closeSwipe();
+                  haptics.tap();
+                  onRemind();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Напомнить — ${client.full_name || client.phone}`}
+                className="w-[88px] items-center justify-center gap-1"
+                style={{ backgroundColor: t.warning }}
+              >
+                <Bell color="#fff" size={ICON.sm} />
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  className="text-[11px] font-semibold"
+                  style={{ color: "#fff" }}
+                >
+                  Напомнить
+                </Text>
+              </Pressable>
+            )
+          : undefined
+      }
+      renderRightActions={
+        onDelete
+          ? () => (
+              // Удаление спрашивает подтверждение само — поэтому оно допустимо
+              // у пальца, а полного свайпа здесь нет вовсе.
+              <Pressable
+                onPress={() => {
+                  closeSwipe();
+                  haptics.warning();
+                  onDelete();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Удалить — ${client.full_name || client.phone}`}
+                className="w-[88px] items-center justify-center gap-1"
+                style={{ backgroundColor: t.danger }}
+              >
+                <Trash2 color="#fff" size={ICON.sm} />
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  className="text-[11px] font-semibold"
+                  style={{ color: "#fff" }}
+                >
+                  Удалить
+                </Text>
+              </Pressable>
+            )
+          : undefined
+      }
     >
       {row}
     </ReanimatedSwipeable>

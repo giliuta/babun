@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
+import { useClientSettingLevel } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 import {
   generateLocationLabelId,
-  HOME_SERVICE_LABELS_PRESET,
   type LocationLabel,
 } from "@babun/shared/local/location-labels";
 import { Screen } from "@/components/ui/Screen";
@@ -78,6 +78,10 @@ export function ObjectTypesScreen() {
     (team && ownTeams.some((tm) => tm.id === team) ? team : null) ??
     ownTeams[0]?.id ??
     null;
+  // «ТОЛЬКО ВИДИТ» (права партнёра, владелец 01.10): ни кнопки внизу, ни
+  // свайпов, ни ручек, строка не открывает редактор. Вне вкладки «Клиенты»
+  // (Кабинет, запись) — как и раньше, правка.
+  const readOnly = useClientSettingLevel("objects", teamId) !== "write";
   const {
     data: labels = [],
     isLoading,
@@ -89,7 +93,6 @@ export function ObjectTypesScreen() {
   const { data: clients = [] } = useClients();
   const [editing, setEditing] = useState<Editing | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [seeding, setSeeding] = useState(false);
 
   // Сколько объектов уже носят это имя — чтобы вопрос об удалении говорил
   // правду, а не пугал вообще.
@@ -113,24 +116,6 @@ export function ObjectTypesScreen() {
       notify(failure, e instanceof Error ? e.message : "Повторите попытку.");
       return false;
     }
-  };
-
-  // СТАНДАРТНЫЙ НАБОР ЗАВОДИТСЯ САМ (владелец 2026-08-02: «типы объектов
-  // должны быть уже добавлены — дом, квартира, офис, как теги»). Пресет
-  // пишется ОДИН РАЗ и только в пустой справочник: дальше это обычные записи,
-  // которые переименуют или удалят.
-  const seedPreset = async () => {
-    if (seeding || labels.length > 0) return;
-    setSeeding(true);
-    // У каждой команды свои строки: id пресета с командой, иначе вторая
-    // команда столкнулась бы с «Домом» первой.
-    await write(
-      teamId
-        ? HOME_SERVICE_LABELS_PRESET.map((label) => ({ ...label, id: `${label.id}@${teamId}` }))
-        : HOME_SERVICE_LABELS_PRESET,
-      "Не удалось добавить стандартные типы",
-    );
-    setSeeding(false);
   };
 
   const duplicate = (name: string, exceptId?: string) =>
@@ -205,7 +190,7 @@ export function ObjectTypesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Типы объектов" />
+      <ScreenHeader title="Типы объектов" subtitle={ownTeams.find((tm) => tm.id === teamId)?.name} />
 
       {isLoading ? (
         <EmptyState state="loading" fill />
@@ -220,10 +205,14 @@ export function ObjectTypesScreen() {
         <EmptyState
           fill
           title="Типов пока нет"
-          action={{
-            label: seeding ? "Добавляем…" : "Добавить стандартные",
-            onPress: () => void seedPreset(),
-          }}
+          // ГОТОВОГО НАБОРА НЕТ (владелец 03.10: «типов не должно быть
+          // изначально — каждый человек сам создаёт свой тип объекта»).
+          // Кнопка пустого списка — та же «Добавить тип», что внизу у полного.
+          action={
+            readOnly
+              ? undefined
+              : { label: "Добавить тип", onPress: () => setEditing({ mode: "create" }) }
+          }
         />
       ) : (
         <ScrollView
@@ -237,6 +226,7 @@ export function ObjectTypesScreen() {
               rowHeight={ROW_H}
               spaced
               labelFor={(label) => label.name}
+              rangeFor={(index) => (readOnly ? [index, index] : [0, labels.length - 1])}
               // Ручка внутри строки: строка ещё и смахивается влево, а колонка
               // ручки снаружи не уезжает — «Удалить» упиралось бы в неё.
               handleInside
@@ -245,11 +235,11 @@ export function ObjectTypesScreen() {
             >
               {(label, _index, handle) => (
                 <SwipeRow
-                  label="Удалить"
+                  label={readOnly ? undefined : "Удалить"}
                   color={t.danger}
                   icon={Trash2}
                   accessibilityLabel={`Удалить тип ${label.name}`}
-                  onAction={() => remove(label)}
+                  onAction={readOnly ? undefined : () => remove(label)}
                 >
                   <View
                     style={{
@@ -262,9 +252,10 @@ export function ObjectTypesScreen() {
                     }}
                   >
                     <Pressable
+                      disabled={readOnly}
                       onPress={() => setEditing({ mode: "edit", label })}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Тип ${label.name}, переименовать`}
+                      accessibilityRole={readOnly ? "text" : "button"}
+                      accessibilityLabel={readOnly ? `Тип ${label.name}` : `Тип ${label.name}, переименовать`}
                       style={({ pressed }) => ({
                         flex: 1,
                         height: ROW_H,
@@ -310,7 +301,7 @@ export function ObjectTypesScreen() {
       {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ И ВСЕГДА (LOCKED 2026-08-27): типы
           заводят пачкой, и после первого не должно приходиться доскролливать
           список ради второго. Тот же приём, что у меток и услуг. */}
-      {!isLoading && !isError && labels.length > 0 ? (
+      {!readOnly && !isLoading && !isError && labels.length > 0 ? (
         <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
           <GradientButton
             label="Добавить тип"

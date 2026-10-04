@@ -20,10 +20,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
 
 describe("номер для глаз", () => {
-  test("своя страна — без кода, как диктуют", () => {
-    assert.equal(formatPhoneForDisplay("+35799000101", "CY"), "99 000 101");
-    assert.equal(formatPhoneForDisplay("99000101", "CY"), "99 000 101");
-    assert.equal(formatPhoneForDisplay("+357 97 469998", "CY"), "97 469 998");
+  test("своя страна — тоже с кодом (владелец 01.10: «обязательно код страны»)", () => {
+    assert.equal(formatPhoneForDisplay("+35799000101", "CY"), "+357 99 000 101");
+    assert.equal(formatPhoneForDisplay("99000101", "CY"), "+357 99 000 101");
+    assert.equal(formatPhoneForDisplay("+357 97 469998", "CY"), "+357 97 469 998");
   });
   test("кипрский номер у компании другой страны — с кодом, теми же группами", () => {
     assert.equal(formatPhoneForDisplay("+35799000101", "GB"), "+357 99 000 101");
@@ -49,6 +49,21 @@ describe("кнопка связи у номера", () => {
   });
   test("заголовок листа — номер для глаз, а не сырой из базы", () => {
     assert.match(button(), /title=\{formatPhoneForDisplay\(number, country\)\}/);
+  });
+  // 03.10: строка работодателя в общем списке жила в компании экрана — лист
+  // читал набор телефона, а шестерёнки не было вовсе.
+  test("клиент другой компании — набор и шестерёнка его компании", () => {
+    assert.match(
+      button(),
+      /<ClientsScopeProvider scope=\{source\}>\s*<ChannelButton \{\.\.\.props\} \/>/,
+      "кнопка не встаёт в компанию клиента",
+    );
+    assert.match(read("ClientRow.tsx"), /<PhoneChannelButton[^>]*source=\{source\}/, "строка не передаёт компанию кнопке");
+    assert.match(
+      read("../../../app/(dashboard)/clients/index.tsx"),
+      /<ClientRow[^>]*source=\{guest\}/,
+      "список не передаёт строке компанию работодателя",
+    );
   });
 });
 
@@ -83,15 +98,21 @@ describe("ввод номера: страна подписью, цифры в п
   });
   test("номер нового клиента набирается с выбором страны", () => {
     const header = read("ClientHeader.tsx");
-    assert.match(header, /label=\{draft \? dial\.label/);
-    assert.match(header, /onLabelPress=\{draft \? dial\.openPicker : undefined\}/);
+    // С 30.09 (вариант 10 владельца) страна — не подписью с флагом, а тихим
+    // кодом перед цифрами; тап по коду открывает выбор страны.
+    assert.match(header, /:\s*dial\.code/);
+    // Тап по коду меняет страну и в новом клиенте, и на карточке (30.09).
+    assert.match(header, /onPrefixPress=\{draft \|\| !readOnly \? dial\.openPicker : undefined\}/);
+    assert.match(read("ClientExtraContacts.tsx"), /onPrefixPress=\{readOnly \? undefined : \(\) => setCodeFor\(p\)\}/);
     assert.match(header, /dial\.onType\(v\)/);
+    assert.doesNotMatch(header, /countryFlag/);
   });
 });
 
 describe("шторка кода страны", () => {
   test("ищет по названию и по коду", () => {
     const hook = read("use-phone-country.tsx");
+    assert.match(hook, /export function CountryPickerSheet/);
     assert.match(hook, /<SelectSearch/);
     assert.match(hook, /name\.includes\(needle\) \|\| countryDialCode\(code\)\.slice\(1\)\.startsWith\(needle\)/);
   });

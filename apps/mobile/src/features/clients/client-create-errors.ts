@@ -1,3 +1,5 @@
+import { isHumanText } from "@babun/shared/i18n/runtime";
+
 // Разбор ошибок создания клиента. Вынесено из useClientDraft, чтобы
 // оставаться чистым модулем без expo-router / react-native — иначе тест
 // тянет весь граф навигации и не запускается.
@@ -36,7 +38,8 @@ export function isPhoneTakenError(error: unknown): boolean {
 export function friendlyCreateError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
   console.error("createClient failed:", raw);
-  return /[А-Яа-яЁё]/.test(raw)
+  // На другом языке наш собственный отказ уже переведён — он тоже для людей.
+  return isHumanText(raw)
     ? raw
     : "Не удалось сохранить клиента. Попробуйте ещё раз.";
 }

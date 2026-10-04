@@ -9,7 +9,6 @@ import type { Team } from "@/features/reference/queries";
 import { AccountEditorSheet } from "./account-editor/AccountEditorSheet";
 import type { AccountWithBalance } from "./accounts";
 import { accountsFooterAction, TRANSFER_NEEDS_SECOND } from "./accounts-footer";
-import type { DocumentFilter } from "./documents";
 import type { HomeView } from "./FinanceOverview";
 import { TransferSheet } from "./TransferSheet";
 
@@ -37,22 +36,21 @@ import { TransferSheet } from "./TransferSheet";
 // команда — та, что выбрана чипом; всё остальное шторка грузит сама.
 export function FinancesFooter({
   view,
-  docFilter,
   debtSide,
   teamById,
   teamId,
   accounts,
+  transferAccounts,
   shownAccounts,
   selectedAccountId,
-  onIssueReceipt,
   onIssueInvoice,
   onAddDebt,
   onAddOperation,
   enabled = true,
   reason = null,
+  create = { enabled: true, reason: null },
 }: {
   view: HomeView;
-  docFilter: DocumentFilter;
   debtSide: DebtDirection;
   /** Все команды, включая расформированные: лист перевода подписывает ими
    *  счета, и старая команда обязана остаться названной. */
@@ -63,10 +61,13 @@ export function FinancesFooter({
    *  счетами тенанта, и фильтр экрана на перевод не распространяется (иначе
    *  «сдать выручку на счёт другой команды» стало бы невозможно). */
   accounts: AccountWithBalance[];
+  /** Счета листа перевода — те же, плюс СКРЫТЫЕ (владелец 03.10: на
+   *  скрытый счёт переводят обычным «Перевести»; партнёрам сервер его не
+   *  отдаёт вовсе). Нет — лист берёт `accounts`. */
+  transferAccounts?: AccountWithBalance[];
   /** Счета на плитках — выбор считается, только если он виден. */
   shownAccounts: readonly AccountWithBalance[];
   selectedAccountId: string | null;
-  onIssueReceipt: () => void;
   onIssueInvoice: () => void;
   onAddDebt: () => void;
   onAddOperation: () => void;
@@ -76,6 +77,9 @@ export function FinancesFooter({
    *  серая по нулям. */
   enabled?: boolean;
   reason?: string | null;
+  /** «Добавить счёт» (у команды нет ни одного счёта) — своё право: счёт
+   *  заводит строка шестерёнки «Счета», перевод — право «Счета» (03.10). */
+  create?: { enabled: boolean; reason: string | null };
 }) {
   const t = useThemeColors();
   const toast = useToast();
@@ -86,8 +90,13 @@ export function FinancesFooter({
   const accountsAction = accountsFooterAction({
     selectedId: selectedAccountId,
     shown: shownAccounts,
-    company: accounts,
+    // Второй счёт ищется там же, куда шторка умеет переводить: вместе со
+    // скрытыми (накопительный). Иначе один видимый счёт плюс скрытый давали
+    // «Для перевода нужен второй счёт» (аудит финансов 03.10).
+    company: transferAccounts ?? accounts,
   });
+  const creating = view === "accounts" && accountsAction.kind === "create";
+  const shownReason = creating ? create.reason : reason;
 
   const button =
     view === "accounts" ? (
@@ -112,23 +121,16 @@ export function FinancesFooter({
       ) : (
         <GradientButton
           label="Добавить счёт"
-          disabled={!enabled}
+          disabled={!create.enabled}
           onPress={() => setCreateOpen(true)}
         />
       )
-    ) : view === "documents" && docFilter === "receipt" ? (
-      // ЧЕК ВЫПИСЫВАЕТСЯ КНОПКОЙ (владелец 2026-09-20: «чек не сразу
-      // выписывается — мы выписываем его только тогда, когда нажмём кнопку
-      // „Выписать чек“»). До этого дня его выдавал сервер триггером в миг
-      // приёма денег, выписывать было нечего, и кнопка честно уводила в
-      // «Долги» — туда, где деньги принимают. Теперь она открывает
-      // составитель: бумага, в которой чек собирают тапом — клиент, дата,
-      // услуги из каталога, скидка и налог.
-      //
-      // Чек, собранный здесь, ВСЕГДА записывает приход на выбранный счёт
-      // (см. `useComposeReceipt`): бумага без денег была бы подделкой.
-      <GradientButton label="Выписать чек" disabled={!enabled} onPress={onIssueReceipt} />
     ) : view === "documents" ? (
+      // ОТДЕЛЬНОГО ЧЕКА НЕТ (владелец 2026-09-30: «отдельно чеки пока что не
+      // делай»): чек выписывается только на оплату инвойса, на его странице.
+      // Поэтому и под «Чеками» главное действие — «Выставить инвойс».
+      // Составитель отдельного чека (`/documents/receipt-new`) остался в коде,
+      // но двери к нему нет.
       <GradientButton label="Выставить инвойс" disabled={!enabled} onPress={onIssueInvoice} />
     ) : view === "debt" ? (
       // ДОЛГ — СВОЯ СУЩНОСТЬ, И ЗАВОДИТСЯ ОН СВОЕЙ ШТОРКОЙ (владелец
@@ -165,13 +167,13 @@ export function FinancesFooter({
       <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, gap: 6 }}>
         {/* ПРИЧИНА — СЛОВАМИ НАД КНОПКОЙ, как в «Финансах дня»: серая кнопка
             без объяснения читается как поломка. */}
-        {reason ? (
+        {shownReason ? (
           <Text
             className="text-center text-[13px]"
             style={{ color: t.sub }}
             maxFontSizeMultiplier={1.3}
           >
-            {reason}
+            {shownReason}
           </Text>
         ) : null}
         {button}
@@ -179,7 +181,7 @@ export function FinancesFooter({
       <TransferSheet
         visible={transferOpen}
         onClose={() => setTransferOpen(false)}
-        accounts={accounts}
+        accounts={transferAccounts ?? accounts}
         teamById={teamById}
         presetFromId={transferFromId}
       />

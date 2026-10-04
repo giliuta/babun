@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { X } from "lucide-react-native";
 import { moneySymbol } from "@babun/shared/common/utils/money";
@@ -8,6 +8,7 @@ import { RowCaption } from "@/components/ui/card-rows";
 import { FieldLabel } from "@/components/ui/Field";
 import { WEEKDAY_LABELS } from "@babun/shared/local/services";
 import { GUTTER } from "@/components/ui/tokens";
+import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import {
   ServiceLadder,
   type LadderStep,
@@ -231,6 +232,27 @@ export function ServiceSheet({
     null;
   const canSubmit = name.trim().length > 0 && !!ownerTeam && !busy;
 
+  // ТАП ПО ФОНУ НЕ ВЫБРАСЫВАЕТ НАБРАННУЮ УСЛУГУ (аудит 2026-10-03): цена,
+  // лестница и описание пропадали молча — следующее открытие засевает лист
+  // заново. Снимок полей — сразу после засева (эффектов, которые правят
+  // поля после него, у листа нет).
+  const signature = JSON.stringify([
+    name, color, icon, price, duration, cost, description, hasDescription,
+    priceEntry, weekdays, hasWeekdays, bufferAfter, hasBufferAfter, economics,
+  ]);
+  const seededSignature = useRef<string | null>(null);
+  useEffect(() => {
+    seededSignature.current = editing ? signature : null;
+    // Только на новый показ листа: снимок — «как открыли».
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seeded]);
+  const guard = useGuardedClose({
+    dirty: seededSignature.current != null && signature !== seededSignature.current,
+    busy,
+    onClose,
+    message: "Набранное в услуге не сохранится.",
+  });
+
   const updateEconomics = (next: ServiceEconomicsDraft) => {
     setEconomics(next);
     if (economicsErrors) {
@@ -398,8 +420,9 @@ export function ServiceSheet({
 
   return (
     <BottomSheet
-      visible={editing !== null}
-      onClose={onClose}
+      visible={editing !== null && !guard.hidden}
+      onClose={guard.close}
+      onExited={guard.onExited}
       // ЗАГОЛОВОК НАЗЫВАЕТ УСЛУГУ, А НЕ ЖАНР (аудит 2026-08-21). «Услуга» —
       // это то, что человек и так видит: он тапнул по строке прайса. Имя в
       // шапке отвечает на другой вопрос — «ту ли я открыл», — который в списке
@@ -587,9 +610,22 @@ export function ServiceSheet({
         onQtyChange={(id, v) =>
           updateEconomics({
             ...economics,
-            tiers: economics.tiers.map((x) =>
-              x.id === id ? { ...x, minQuantity: v } : x,
-            ),
+            tiers: economics.tiers.map((x) => {
+              if (x.id !== id) return x;
+              // ЧИСЛО НА ЭКРАНЕ НЕ МЕНЯЕТСЯ ОТ ПРАВКИ КОЛИЧЕСТВА — в обоих
+              // режимах (аудит шестерёнки 03.10). «За всё» держит сумму
+              // строки (economics.test), а «за одну» держала её же — и цена
+              // за штуку, на которую человек смотрит, молча менялась: 45 на
+              // «от 2» после «от 10» становилась 9. В режиме «за одну»
+              // держим цену за штуку.
+              if (priceEntry !== "unit") return { ...x, minQuantity: v };
+              const unit = displayValue(x.rowPrice, qtyOf(x.minQuantity), "unit");
+              return {
+                ...x,
+                minQuantity: v,
+                rowPrice: draftValue(unit, qtyOf(v), "unit"),
+              };
+            }),
           })
         }
         onPriceChange={(id, v) => {

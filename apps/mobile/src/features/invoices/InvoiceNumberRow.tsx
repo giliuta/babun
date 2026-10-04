@@ -1,27 +1,34 @@
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { ChevronRight, Hash } from "lucide-react-native";
+import { ChevronRight } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Field } from "@/components/ui/Field";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { SettingsRow } from "@/components/ui/SettingsRow";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
+import { DocMetaRow } from "./DocMetaRow";
 import { useSetInvoiceNextNumber, type NextInvoiceNumber } from "./queries";
 
 // НОМЕР ИНВОЙСА — СТРОКА В БЛОКЕ «РЕКВИЗИТЫ».
 //
 // Владелец 2026-09-22: «я могу вручную выбрать номер, и оно автоматически
 // должно продолжаться с выбранного: пишу номер этого инвойса 104 — следующий
-// 105-й, и неважно, с какой командой … запоминается на реквизиты». Серия живёт
-// на наборе реквизитов (миграция 20260922050000), поэтому и строка — в их
-// блоке: сменил набор — видишь его номер. Тап — шторка с одним полем, цифры
-// номера; «Применить» пишет счётчик набора, занятый номер сервер отклоняет.
+// 105-й … запоминается на реквизиты». Серия живёт на юрлице, поэтому и строка
+// — в его блоке: сменил набор — видишь его номер.
+//
+// С 2026-10-03 СНОВА В ЛЮБОЙ МОМЕНТ (владелец: «идёт автоматически
+// последовательно, но если мне нужно — вместо 005 пишу свой»; ограничение
+// STORY-101 «только до первого инвойса года» снято миграцией 20261004021143).
+// Одно правило — вперёд: номер не ниже уже выданного, отказ сервер говорит
+// словами («Номер 4 уже выдан — следующий может быть от 5»). Шторка — только
+// владельцу.
 
 export interface InvoiceNumberTarget {
   companyId: string;
   year: number;
   next: NextInvoiceNumber | null;
+  /** Чей номер: инвойса или чека (04.10, чек — как инвойс). */
+  docType?: "invoice" | "receipt";
 }
 
 /** «INV-2026-104» с другим хвостом: префикс и год — из серии сервера. */
@@ -32,8 +39,16 @@ export function withSeq(number: string, seq: number): string {
 export function InvoiceNumberRow({
   target,
   stacked,
+  preview,
+  label = "Следующий номер",
 }: {
   target: InvoiceNumberTarget;
+  /** Номер, каким он станет после «Сохранить» листа реквизитов: там правят
+   *  буквы и длину, и строка показывает их сразу, ещё до записи. */
+  preview?: string;
+  /** Подпись строки: в блоке «Номер» реквизитов рядом буквы чека и
+   *  кредит-ноты, и там говорим, чей это номер, — «Следующий инвойс». */
+  label?: string;
   /** СТРОКОЙ ПОЛЯ — подпись сверху, номер под ней (лист реквизитов, владелец
    *  2026-09-30: «сделай стандартный наш блок с шрифтом»). Соседи по листу —
    *  поля «Юридическое имя», «IBAN» тем же видом (`FieldRow stacked`), и
@@ -45,6 +60,9 @@ export function InvoiceNumberRow({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const next = target.next;
+  // Шторка — только пока серию можно начать; иначе строка показывает номер.
+  const editable = next?.canSetStart === true;
+  const shown = preview ?? next?.number ?? null;
 
   // Поле открывается ПУСТЫМ, нынешний номер — подсказкой: цифры поверх
   // подставленной «1» давали «1104» вместо «104».
@@ -62,7 +80,7 @@ export function InvoiceNumberRow({
       return;
     }
     save.mutate(
-      { companyId: target.companyId, year: target.year, number: typed },
+      { companyId: target.companyId, year: target.year, number: typed, docType: target.docType },
       {
         onSuccess: () => setOpen(false),
         onError: (error) => notify("Номер не сохранён", error.message),
@@ -74,10 +92,11 @@ export function InvoiceNumberRow({
     <>
       {stacked ? (
         <Pressable
-          onPress={() => setOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={`Следующий номер, ${next?.number ?? "загрузка"}`}
-          accessibilityHint="Нажмите, чтобы изменить"
+          onPress={editable ? () => setOpen(true) : undefined}
+          disabled={!editable}
+          accessibilityRole={editable ? "button" : "text"}
+          accessibilityLabel={`${label}, ${shown ?? "загрузка"}`}
+          accessibilityHint={editable ? "Нажмите, чтобы изменить" : undefined}
           style={({ pressed }) => ({
             flexDirection: "row",
             alignItems: "center",
@@ -94,7 +113,7 @@ export function InvoiceNumberRow({
               numberOfLines={1}
               style={{ fontSize: 13, fontWeight: "500", color: t.sub, marginBottom: 2 }}
             >
-              Следующий номер
+              {label}
             </Text>
             <Text
               maxFontSizeMultiplier={1.2}
@@ -102,31 +121,29 @@ export function InvoiceNumberRow({
               style={{
                 fontSize: 15,
                 fontWeight: "600",
-                color: next ? t.ink : t.faint,
+                color: shown ? t.ink : t.faint,
                 fontVariant: ["tabular-nums"],
               }}
             >
-              {next?.number ?? "…"}
+              {shown ?? "…"}
             </Text>
           </View>
           {/* Шеврон: строка уводит в шторку, а не правится на месте, как
-              поля над ней. */}
-          <ChevronRight color={t.chevron} size={16} strokeWidth={1.75} />
+              поля над ней. Нет шторки — нет и шеврона. */}
+          {editable ? <ChevronRight color={t.chevron} size={16} strokeWidth={1.75} /> : null}
         </Pressable>
       ) : (
-        <SettingsRow
-          // Плитка того же вида, что у набора над ней: одна карточка — один ряд
-          // значков.
-          appearance={{ fallback: Hash }}
-          title="Номер"
-          value={next?.number ?? "…"}
-          onPress={() => setOpen(true)}
+        <DocMetaRow
+          label="Номер"
+          value={shown}
+          onPress={editable ? () => setOpen(true) : undefined}
+          accessibilityHint="Нажмите, чтобы изменить"
         />
       )}
 
       <BottomSheet
         visible={open}
-        title="Номер инвойса"
+        title={target.docType === "receipt" ? "Номер чека" : "Номер инвойса"}
         avoidKeyboard
         onClose={() => setOpen(false)}
         // Кнопка — прямо в подвале: отступ от краёв лист даёт сам, и лишняя
@@ -142,7 +159,7 @@ export function InvoiceNumberRow({
         {/* Воздух под подсказкой: без него кнопка подвала прилипала к тексту. */}
         <View style={{ gap: 10, paddingBottom: 16 }}>
           <Field
-            label="Номер этого инвойса"
+            label={target.docType === "receipt" ? "Номер чека" : "Номер инвойса"}
             value={draft}
             onChangeText={(text) => setDraft(text.replace(/\D/g, "").slice(0, 6))}
             placeholder={next ? String(next.seq) : "104"}
@@ -152,8 +169,8 @@ export function InvoiceNumberRow({
             onSubmitEditing={apply}
           />
           <Text style={{ fontSize: 13, color: t.sub }}>
-            {next && valid && typed != null
-              ? `${withSeq(next.number, typed)}, следующий — ${withSeq(next.number, typed + 1)}. Серия общая для всех команд этих реквизитов.`
+            {shown && valid && typed != null
+              ? `${withSeq(shown, typed)}, следующий — ${withSeq(shown, typed + 1)}.`
               : "Цифры номера. Следующие инвойсы продолжат с него."}
           </Text>
         </View>

@@ -9,6 +9,13 @@ import { hasBudget } from "./category-budget";
 // её категорий и бюджетов, сколько шаблонов — не проваливаясь внутрь.
 
 const FORMS_BUDGET: PluralFormsRu = ["бюджет", "бюджета", "бюджетов"];
+const FORMS_OPERATION: PluralFormsRu = ["операция", "операции", "операций"];
+
+/** Дверь «Удалённые операции» (03.10): «Пусто» либо «2 операции» — сколько
+ *  в ящике у выбранной команды. */
+export function deletedOperationsDoorLine(count: number): string {
+  return count > 0 ? formatCountRu(count, FORMS_OPERATION) : "Пусто";
+}
 
 /** Какая команда открыта: из адреса, если она живая; иначе первая. */
 export function settingsTeamId(
@@ -17,6 +24,16 @@ export function settingsTeamId(
 ): string | null {
   if (requested && teams.some((t) => t.id === requested)) return requested;
   return teams[0]?.id ?? null;
+}
+
+/** ДВЕРЬ «СЧЕТА: ПОРЯДОК И НАСТРОЙКИ» НАД ПЛИТКАМИ СЧЕТОВ (владелец 03.10:
+ *  «открываю счета команды и жму настройки — вижу счета именно той
+ *  команды»). Выбрана команда — страница открывается на ней одной (`?team=`);
+ *  «Без команды» и «все» — страница всех счетов, как раньше. */
+export function accountsSettingsHref(teamId: string | null, noTeam: string): string {
+  return teamId && teamId !== noTeam
+    ? `/accounts/settings?team=${encodeURIComponent(teamId)}`
+    : "/accounts/settings";
 }
 
 /** «Расход 5 · доход 2 · 1 бюджет» — категории команды и сколько у них

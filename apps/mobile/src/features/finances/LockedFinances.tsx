@@ -109,6 +109,9 @@ export function LockedFinances() {
           </Text>
         </View>
         <Pressable
+          // АДРЕС КАБИНЕТА, А НЕ `/finances/insights`, — НАРОЧНО. Эта страница
+          // встаёт вместо ВСЕГО стека «Финансов» (`finances/_layout.tsx`), и
+          // любой адрес внутри вкладки снова рисует её же: значок молчал бы.
           onPress={() => router.push("/cabinet/insights")}
           hitSlop={6}
           accessibilityRole="button"
@@ -137,7 +140,7 @@ export function LockedFinances() {
           totals={ZERO_TOTALS}
           accounts={{ total: 0 }}
           invoices={{ count: 0 }}
-          showDocuments={canUseDocuments}
+          documentsTariffLocked={!canUseDocuments}
           view="all"
           onTap={NOOP}
           locked

@@ -1,4 +1,4 @@
-// Location labels reference book (Дом / Квартира / Офис / Вилла / ...).
+// Location labels reference book — object types the business creates itself.
 // Persisted in the shared KV seam. Used for the preset chips in
 // LocationsBlock when creating/editing a client's object.
 
@@ -29,16 +29,10 @@ function serverSyncKey(tenantId: string): string {
   return `${scopedStorageKey(tenantId)}:server-synced`;
 }
 
-// STORY-078 leak fix — labels Дом / Квартира / Офис / Вилла are
-// HVAC/cleaning-flavoured. Beauty / auto-service tenants don't need
-// them, so nothing is seeded by default: the preset below is offered
-// explicitly from the object-types screen and never auto-applied.
-export const HOME_SERVICE_LABELS_PRESET: LocationLabel[] = [
-  { id: "loclbl-house",    name: "Дом" },
-  { id: "loclbl-flat",     name: "Квартира" },
-  { id: "loclbl-office",   name: "Офис" },
-  { id: "loclbl-villa",    name: "Вилла" },
-];
+// ГОТОВОГО НАБОРА ТИПОВ НЕТ (владелец 03.10: «типов не должно быть
+// изначально — каждый человек сам создаёт свой тип объекта»). Пресет
+// «Дом / Квартира / Офис / Вилла» снят вместе с кнопкой «Добавить
+// стандартные»: справочник пуст, пока человек не заведёт свой тип.
 
 export function loadLocationLabels(tenantId?: string | null): LocationLabel[] {
   const storage = getStorage();

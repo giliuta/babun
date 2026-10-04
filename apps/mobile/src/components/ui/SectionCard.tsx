@@ -8,6 +8,13 @@ import { useThemeColors } from "@/theme/colors";
 interface SectionCardAction {
   label: string;
   icon?: LucideIcon;
+  /** Значок акцентом — действие над содержимым блока (точка на карте, запрос
+   *  адреса), а не дверь в настройки: та остаётся серой. */
+  accent?: boolean;
+  /** ПЛАШКА «ЕЩЁ N» (владелец 03.10: «как понять, что там есть ещё —
+   *  какую-то плашку, типа „ещё“ и количество»). Подпись — в мягкой
+   *  акцентной пилюле; высоту шапки не меняет. */
+  pill?: boolean;
   onPress: () => void;
 }
 
@@ -72,6 +79,9 @@ export function SectionCard({
             className={`relative flex-row items-center px-4 ${
               dense ? "pb-0 pt-1.5" : "pb-0.5 pt-2.5"
             }`}
+            // Пилюля «Ещё N» (22pt) на 3pt ниже шапки: без подъёма белая
+            // плашка первой строки ложилась поверх и срезала ей низ.
+            style={{ zIndex: 1 }}
           >
             <Text
               accessibilityRole="header"
@@ -98,8 +108,9 @@ export function SectionCard({
                   position: "absolute",
                   right: 16,
                   // Значок 20pt по центру подписи (11pt, строка ~13):
-                  // 10 сверху у шапки минус половина разницы высот.
-                  top: 6,
+                  // 10 сверху у шапки минус половина разницы высот; в плотной
+                  // шапке сверху 6 — значок на те же 4 выше.
+                  top: dense ? 2 : 6,
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 16,
@@ -115,7 +126,24 @@ export function SectionCard({
                     style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
                   >
                     {item.icon ? (
-                      <item.icon color={t.sub} size={20} strokeWidth={2} />
+                      <item.icon color={item.accent ? t.accent : t.sub} size={20} strokeWidth={2} />
+                    ) : item.pill ? (
+                      <View
+                        style={{
+                          height: 22,
+                          paddingHorizontal: 10,
+                          borderRadius: 11,
+                          justifyContent: "center",
+                          backgroundColor: `${t.accent}14`,
+                        }}
+                      >
+                        <Text
+                          maxFontSizeMultiplier={1.2}
+                          style={{ fontSize: 13, fontWeight: "600", color: t.accent, fontVariant: ["tabular-nums"] }}
+                        >
+                          {item.label}
+                        </Text>
+                      </View>
                     ) : (
                       <Text
                         style={{ fontSize: 13, fontWeight: "500", color: t.accent }}

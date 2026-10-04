@@ -3,10 +3,15 @@ import { formatDateKey, formatDateShortRu } from "@babun/shared/common/utils/dat
 import { useThemeColors } from "@/theme/colors";
 import type { SmsHistoryItem } from "./sms-model";
 import { costWords, isFailure, statusWords, triggerWords } from "./sms-words";
+import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // СТРОКА ИСТОРИИ SMS (STORY-089): кому и когда — первой строкой, текст —
 // второй, итог и цена — справа. Отказ красный: владелец должен увидеть его,
 // не читая каждую строку.
+//
+// КОРОТКАЯ — В ЗАПИСИ И У КЛИЕНТА (владелец 03.10: «не нужно там полноценно
+// переписывать эту SMS… отправленное SMS — просто дата, время»): шаблон, когда
+// и итог, без текста; тап — сообщение целиком.
 
 export function when(iso: string): string {
   const date = new Date(iso);
@@ -20,9 +25,12 @@ export function SmsHistoryRow({
   showClient = true,
   body,
   phone,
+  compact = false,
   onPress,
 }: {
   item: SmsHistoryItem;
+  /** Без текста: имя шаблона, когда, итог (запись и карточка клиента). */
+  compact?: boolean;
   /** Номер, на который ушло, — уже в виде для глаза. У клиента номеров
    *  бывает несколько, и в его истории видно, на какой именно. */
   phone?: string | null;
@@ -35,9 +43,16 @@ export function SmsHistoryRow({
   body?: string | null;
 }) {
   const t = useThemeColors();
-  const text = item.body ?? body ?? null;
-  const title = showClient ? (item.clientName ?? item.toPhone) : triggerWords(item.trigger);
-  const meta = [showClient ? triggerWords(item.trigger) : null, when(item.createdAt), phone || null]
+  const text = compact ? null : (item.body ?? body ?? null);
+  const title = showClient
+    ? (item.clientName ?? (item.toPhone || "SMS"))
+    : compact
+      ? (item.templateName ?? (item.trigger === "manual" ? "SMS" : triggerWords(item.trigger)))
+      : triggerWords(item.trigger);
+  // В общей истории (кому — заголовком) повод уступает имени шаблона, если
+  // строка короткая: «За день · 3 окт, 00:50».
+  const reason = compact ? (item.templateName ?? triggerWords(item.trigger)) : triggerWords(item.trigger);
+  const meta = [showClient ? reason : null, when(item.createdAt), phone || null]
     .filter(Boolean)
     .join(" · ");
   const failed = isFailure(item.status);
@@ -76,7 +91,8 @@ export function SmsHistoryRow({
         ) : null}
         {failed && item.error ? (
           <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, color: t.danger, marginTop: 4 }}>
-            {item.error}
+            {/* Причину отказа пишет сервер — переводим при показе. */}
+            {tDynamic(item.error)}
           </Text>
         ) : null}
       </View>

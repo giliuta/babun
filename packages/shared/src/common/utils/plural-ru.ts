@@ -23,6 +23,14 @@
 //   formatCountRu(4, ["запись", "записи", "записей"]) → "4 записи"
 //
 // To extend with a new noun, just pass the 3 forms; no enum.
+//
+// OTHER UI LANGUAGES (2026-10-03). The forms are Russian source text, and the
+// build-time translation turns each into the UI language («записей» →
+// «appointments»). Languages with one/other (English, Bulgarian, Greek …) pick
+// the ONE form for exactly 1 and the MANY form otherwise — «21 запись» but
+// «21 appointments». Ukrainian counts like Russian.
+
+import { uiPluralRule } from "../../i18n/locale";
 
 export type PluralFormsRu = readonly [
   /** ONE form — 1, 21, 31, …  */ string,
@@ -36,6 +44,7 @@ export type PluralFormsRu = readonly [
  */
 export function pluralRu(count: number, forms: PluralFormsRu): string {
   const n = Math.abs(Math.floor(count));
+  if (uiPluralRule() === "one-other") return n === 1 ? forms[0] : forms[2];
   const mod10 = n % 10;
   const mod100 = n % 100;
   if (mod100 >= 11 && mod100 <= 14) return forms[2];

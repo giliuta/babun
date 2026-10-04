@@ -4,6 +4,7 @@ import {
   deleteTransaction,
   insertTransaction,
   listRefundTotals,
+  listTransactionsForAppointments,
   listTransactionsForRange,
   updateTransaction,
   type TransactionDraft,
@@ -113,6 +114,34 @@ export function useTransactions(
   });
 }
 
+/**
+ * Операции, привязанные к записям, — в любой день внесения. Календарь ставит
+ * деньги записи в день записи (владелец 2026-10-01), и полосе недели, клетке
+ * месяца и шторке дня нужны и те, что внесены раньше видимых дней.
+ *
+ * Ключ — под общим префиксом `["transactions", компания]`: оплата, возврат и
+ * правка операции сбрасывают и его. Id в ключе отсортированы — перестановка
+ * записей на экране нового запроса не заводит.
+ */
+export function useAppointmentsLedger(
+  appointmentIds: readonly string[],
+  options: { enabled?: boolean } = {},
+) {
+  const tenantId = useTenantId();
+  const key = useMemo(() => [...new Set(appointmentIds)].sort().join(","), [appointmentIds]);
+  const placeholderData = useMemo(
+    () => placeholderWithinTenant<FinanceTransaction[]>(tenantId),
+    [tenantId],
+  );
+  return useQuery({
+    queryKey: ["transactions", tenantId, "by-appointments", key],
+    enabled: !!tenantId && key.length > 0 && (options.enabled ?? true),
+    placeholderData,
+    queryFn: () =>
+      listTransactionsForAppointments(supabase, tenantId as string, key.split(",")),
+  });
+}
+
 // Σ возвратов по каждому исходному доходу (refund_of_id → сумма) — кап для
 // «Создать возврат». Намеренно НЕ оконный запрос (та же логика, что у
 // остатков счетов): возврат датируется сегодняшним днём и может
@@ -147,7 +176,7 @@ export function useFinanceCategories() {
 // `receipt_on_demand`), но правка и удаление проводки по-прежнему меняют уже
 // выписанный документ: возврат его гасит, снятие возврата — оживляет.
 // Открытая панель «Чеки» смонтирована и без инвалидации об этом не узнаёт.
-function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
+export function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["transactions"] });
   qc.invalidateQueries({ queryKey: ["accounts"] });
   qc.invalidateQueries({ queryKey: ["invoices"] });
@@ -156,6 +185,10 @@ function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
   // колонкой: платёж, не уронивший этот ключ, оставил бы закрытый долг
   // висеть в списке до перезапуска приложения.
   qc.invalidateQueries({ queryKey: ["debts"] });
+  // «История платежей» записи — свой ключ вне ["transactions"]: без него
+  // оплата и возврат по инвойсу доходили до неё только через минуту (аудит
+  // 017, 03.10).
+  qc.invalidateQueries({ queryKey: ["appointment-ledger"] });
 }
 
 export function useInsertTransaction() {
@@ -195,7 +228,9 @@ export function useDeleteTransaction() {
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: (id: string) => deleteTransaction(supabase, id),
-    onSuccess: () => invalidateLedger(qc),
+    // И после отказа: оборванный по времени ответ (сервер под нагрузкой)
+    // мог уже удалить строку — лента перечитывает правду, а не держит её.
+    onSettled: () => invalidateLedger(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }

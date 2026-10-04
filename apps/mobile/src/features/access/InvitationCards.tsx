@@ -21,7 +21,12 @@ export function InvitationCards({ invitations }: { invitations: readonly Incomin
   const onAccept = (invitation: IncomingInvitation) => {
     setBusy({ id: invitation.id, action: "accept" });
     accept.mutate(invitation, {
-      onSuccess: () => toast(`Вы в «${invitation.calendar?.name ?? invitation.company}»`),
+      onSuccess: () =>
+        toast(
+          invitation.calendar?.name
+            ? `«${invitation.calendar.name}» — в вашем календаре`
+            : `Команды «${invitation.company}» — в вашем календаре`,
+        ),
       onError: (error) => notify("Не удалось принять приглашение", (error as Error).message),
       onSettled: () => setBusy(null),
     });

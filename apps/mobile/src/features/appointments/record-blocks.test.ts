@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map";
-import { bookRights, calendarActions, eventBlocks, recordBlocks } from "./record-blocks";
+import { parseMemberAccessMap, type AccessLevel, type MemberAccessMap } from "@/features/access/access-map";
+import { bookRights, calendarActions, eventBlocks, readOnlyBookRights, recordBlocks } from "./record-blocks";
 
 const TEAM = "team-1";
 
@@ -12,6 +12,7 @@ const REGISTRY: { key: string; live: boolean; levels: AccessLevel[] }[] = [
   { key: "calendar.create", live: true, levels: ["off", "write"] },
   { key: "calendar.move", live: true, levels: ["off", "write"] },
   { key: "calendar.cancel", live: true, levels: ["off", "write"] },
+  { key: "calendar.records", live: true, levels: ["off", "read", "write"] },
   { key: "calendar.events", live: true, levels: ["off", "read", "write"] },
   { key: "calendar.day_labels", live: true, levels: ["off", "read", "write"] },
   { key: "calendar.schedule", live: true, levels: ["off", "read", "write"] },
@@ -24,7 +25,6 @@ const REGISTRY: { key: string; live: boolean; levels: AccessLevel[] }[] = [
   { key: "record.amount", live: true, levels: ["off", "read", "write"] },
   { key: "record.payment", live: true, levels: ["off", "read", "write"] },
   { key: "record.files", live: true, levels: ["off", "read", "write"] },
-  { key: "record.status", live: true, levels: ["read", "write"] },
   { key: "record.color", live: true, levels: ["off", "write"] },
 ];
 
@@ -41,6 +41,8 @@ function map(levels: Record<string, AccessLevel>): MemberAccessMap {
 
 /** Dmitry на боевой 24.09 после засева. */
 const DMITRY = map({
+  // Записи команды видит — так их засевает сервер при приёме приглашения.
+  "calendar.records": "read",
   "calendar.create": "write",
   "calendar.events": "read",
   "calendar.day_labels": "write",
@@ -50,7 +52,6 @@ const DMITRY = map({
   "record.amount": "read",
   "record.payment": "write",
   "record.files": "write",
-  "record.status": "write",
 });
 
 const at = (levels: MemberAccessMap, teamId: string | null = TEAM) =>
@@ -66,9 +67,11 @@ describe("страница записи — одна для всех, блоки
       move: true,
       cancel: true,
       color: true,
+      records: "write",
       events: "write",
       dayLabels: "write",
       schedule: "write",
+      window: "own",
     });
   });
 
@@ -84,10 +87,25 @@ describe("страница записи — одна для всех, блоки
       amount: "read",
       payment: "write",
       files: "write",
-      status: "write",
-      note: "write",
+      note: "read",
       color: "read",
+      // «SMS» записи (03.10): клиента не видит — и истории SMS ему нет.
+      sms: "hidden",
     });
+  });
+
+  test("«SMS» записи (03.10): по своему праву и только вместе с «Клиентом»", () => {
+    const withSms = [...REGISTRY, { key: "record.sms", live: true, levels: ["off", "read"] as AccessLevel[] }];
+    const sms = (levels: Record<string, AccessLevel>) =>
+      recordBlocks({ role: "master", map: map(levels), registry: withSms, teamId: TEAM }).sms;
+    assert.equal(sms({ "record.client": "read", "record.sms": "read" }), "read");
+    assert.equal(sms({ "record.client": "read", "record.sms": "off" }), "hidden");
+    assert.equal(sms({ "record.client": "off", "record.sms": "read" }), "hidden");
+    // Реестр на телефоне права ещё не знает — блок как раньше, при «Клиенте».
+    assert.equal(
+      recordBlocks({ role: "master", map: map({ "record.client": "read" }), registry: REGISTRY, teamId: TEAM }).sms,
+      "read",
+    );
   });
 
   test("«Меняет» у клиента, объекта, суммы, метки, команды и цвета открывает правку", () => {
@@ -118,19 +136,12 @@ describe("страница записи — одна для всех, блоки
     assert.equal(readOnly.services, "read");
   });
 
-  test("закрытый блок исчезает; заметку без статуса только читают", () => {
-    const blocks = recordBlocks(at(map({ "record.amount": "off", "record.status": "read" })));
+  test("закрытый блок исчезает; неживую заметку только читают", () => {
+    const blocks = recordBlocks(at(map({ "record.amount": "off" })));
     assert.equal(blocks.amount, "hidden");
     assert.equal(blocks.client, "hidden", "нет строки — умолчание «Не видит»");
-    assert.equal(blocks.status, "read");
     assert.equal(blocks.note, "read");
     assert.equal(blocks.when, "read", "время видно всегда, даже без переноса");
-  });
-
-  test("статус не прячется: старое «Не видит» читается как «Видит»", () => {
-    const blocks = recordBlocks(at(map({ "record.status": "off" })));
-    assert.equal(blocks.status, "read");
-    assert.equal(blocks.note, "read");
   });
 
   test("неживой блок — без правки, даже если в карте «Меняет»", () => {
@@ -150,14 +161,26 @@ describe("страница записи — одна для всех, блоки
       move: false,
       cancel: false,
       color: false,
+      records: "read",
       events: "read",
       dayLabels: "write",
       schedule: "read",
+      // Реестр теста права «Ограничения» не знает — окна нет.
+      window: "own",
     });
     assert.deepEqual(
       calendarActions(at(map({ "calendar.move": "write", "calendar.cancel": "write", "calendar.events": "write" }))),
-      { create: false, move: true, cancel: true, color: false, events: "write", dayLabels: "hidden", schedule: "hidden" },
+      { create: false, move: true, cancel: true, color: false, records: "hidden", events: "write", dayLabels: "hidden", schedule: "hidden", window: "own" },
     );
+  });
+
+  test("«Ограничения» записей (03.10): ступень команды; нет строки — «Неделя», как сервер", () => {
+    const withWindow = [...REGISTRY, { key: "calendar.window", live: true, levels: ["week", "near", "month", "quarter", "half", "own"] as AccessLevel[] }];
+    const read = (levels: Record<string, AccessLevel>) =>
+      calendarActions({ role: "master", map: map(levels), registry: withWindow, teamId: TEAM }).window;
+    assert.equal(read({ "calendar.window": "month" }), "month");
+    assert.equal(read({ "calendar.window": "own" }), "own");
+    assert.equal(read({}), "week");
   });
 
   test("чужой календарь, запись без календаря, едущая карта — ничего", () => {
@@ -194,7 +217,7 @@ describe("страница записи — двери по правам", () =>
     assert.equal(edit.editServices, false);
     assert.equal(edit.showMoney, true);
     assert.equal(edit.editTotal, false);
-    assert.equal(edit.editNote, true, "статус меняет — заметку пишет");
+    assert.equal(edit.editNote, false, "неживую заметку партнёр только читает");
     // Новая запись — целиком его: клиента, объект и услуги выбирает сам,
     // ручную цену — только при «Сумма: Меняет».
     const create = bookRights({ isMember: true, kind: "work", isEdit: false, record: blocks, eventWritable: false });
@@ -224,11 +247,11 @@ describe("блоки события и заметка записи", () => {
   ];
   const live = (levels: MemberAccessMap) => ({ role: "master", map: levels, registry: LIVE, teamId: TEAM }) as const;
 
-  test("до миграции: всё видно, клиент и объект события — без правки, заметку пишет тот, кто меняет статус", () => {
+  test("до миграции: всё видно, клиент и объект события — без правки, заметку только читают", () => {
     const ev = eventBlocks(at(DMITRY));
     assert.deepEqual(ev, { label: "write", type: "write", client: "read", object: "read", note: "write", files: "write" });
-    assert.equal(recordBlocks(at(DMITRY)).note, "write");
-    assert.equal(recordBlocks(at(map({ "record.status": "read" }))).note, "read");
+    // Статуса нет (03.10) — неживую заметку больше никто не пишет «через него».
+    assert.equal(recordBlocks(at(DMITRY)).note, "read");
   });
 
   test("после миграции: блоки события — по своим правам", () => {
@@ -239,9 +262,8 @@ describe("блоки события и заметка записи", () => {
     assert.equal(ev.client, "hidden");
   });
 
-  test("заметка записи — своё право: статус меняет, а заметку только читает", () => {
-    const rb = recordBlocks(live(map({ "record.status": "write", "record.note": "read" })));
-    assert.equal(rb.status, "write");
+  test("заметка записи — своё право: «Видит» — только читает", () => {
+    const rb = recordBlocks(live(map({ "record.note": "read" })));
     assert.equal(rb.note, "read");
     const can = bookRights({ isMember: true, kind: "work", isEdit: true, record: rb, eventWritable: false });
     assert.equal(can.showNote, true);
@@ -281,5 +303,47 @@ describe("метка записи и события — под «Меткой д
     const open = map({ "calendar.day_labels": "read", "record.label": "write", "event.label": "read" });
     assert.equal(recordBlocks(at2(open)).label, "write");
     assert.equal(eventBlocks(at2(open)).label, "read");
+  });
+});
+
+describe("запись клиента без тарифа (02.10)", () => {
+  test("видно всё, что и с тарифом, а ни одна правка не нажимается", () => {
+    const owner = bookRights({
+      isMember: false,
+      kind: "work",
+      isEdit: true,
+      record: recordBlocks({ role: "owner", map: undefined, registry: undefined, teamId: TEAM }),
+      eventWritable: true,
+    });
+    const frozen = readOnlyBookRights(owner);
+    for (const [key, value] of Object.entries(frozen)) {
+      if (key.startsWith("edit")) assert.equal(value, false, `${key} должен быть закрыт`);
+      else assert.equal(value, owner[key as keyof typeof owner], `${key} — как с тарифом`);
+    }
+  });
+});
+
+describe("живой партнёр — своя карта с сервера (04.10)", () => {
+  // `my_access_map` не несёт `attached_calendars`: до 04.10 каждый календарь
+  // читался чужим, и у партнёра на телефоне запись теряла все блоки, хотя
+  // в зеркале владельца всё было на месте.
+  const own = parseMemberAccessMap({
+    tenant_id: "tenant-1",
+    is_owner: false,
+    version: 1,
+    company: {},
+    calendars: {
+      [TEAM]: { "calendar.records": "write", "calendar.create": "write", "record.client": "read" },
+    },
+  });
+
+  test("блоки записи и действия календаря — по его правам, а не «ничего»", () => {
+    assert.equal(recordBlocks(at(own)).client, "read");
+    assert.equal(calendarActions(at(own)).create, true);
+    assert.equal(calendarActions(at(own)).records, "write");
+  });
+
+  test("календарь, которого нет в карте, по-прежнему закрыт", () => {
+    assert.equal(recordBlocks(at(own, "team-2")).client, "hidden");
   });
 });

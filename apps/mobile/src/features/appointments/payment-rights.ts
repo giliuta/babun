@@ -46,7 +46,7 @@ export function paymentRights(input: PaymentRightsInput): PaymentRights {
 
   // ИСТОРИЯ ПЛАТЕЖЕЙ ЧИТАЕТ ЖУРНАЛ КОМПАНИИ: платёж записи — доход, и без
   // «Доходов» хотя бы на просмотр сервер строк не отдаст, и значок вёл бы в
-  // пустой лист. На старой карте `moneyKey` отдаёт «Доходы и расходы».
+  // пустой лист.
   const operations = accessGate({
     role: role ?? undefined,
     map,

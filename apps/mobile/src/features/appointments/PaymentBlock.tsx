@@ -1,8 +1,8 @@
 import { useFeatureOn } from "@/features/settings/company-features";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { FileText, History, Split } from "lucide-react-native";
+import { FileText, History, Receipt as ReceiptIcon, Split } from "lucide-react-native";
 import type {
   Appointment,
   AppointmentStatus,
@@ -17,6 +17,7 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { accountIcon } from "@/features/finances/account-ui";
 import { PaymentHistorySheet } from "@/features/finances/PaymentHistorySheet";
+import { useAppointmentReceipt } from "./use-appointment-receipt";
 import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
 import { useCreditNoteLinks, useInvoices } from "@/features/invoices/queries";
 import { liveAppointmentInvoices } from "@/features/invoices/appointment-invoices";
@@ -33,9 +34,11 @@ import {
   closesVisit,
   paidAtLabel,
   paidTileIntent,
+  paymentKindAt,
   paymentMath,
   paymentRows,
   recordedToast,
+  slotUnsaved,
   visitStarted,
   type PaymentKind,
   type PaymentRow,
@@ -50,6 +53,7 @@ import {
   TILE_GAP,
   useTileWidth,
 } from "./PaymentTiles";
+import { useTariffNudge } from "@/features/tariffs/use-tariff";
 
 // БЛОК «ОПЛАТА» (STORY-065). Тап по счёту — деньги получены и записаны СРАЗУ
 // (владелец 2026-09-06: без черновика); визит закрывается, если начался.
@@ -76,6 +80,9 @@ export interface PendingPayment {
   /** Евро с копейками. */
   amount: number;
   kind: PaymentKind;
+  /** Тап без поля суммы — «вся сумма»: при создании берётся итог формы на
+   *  тот момент (`pendingPaymentToSend`), а не число с момента тапа. */
+  full: boolean;
 }
 
 export interface PaymentBlockProps {
@@ -90,6 +97,9 @@ export interface PaymentBlockProps {
   onPendingChange: (next: PendingPayment | null) => void;
   /** Свежая запись после оплаты/снятия — страница подтягивает статус. */
   onAppointmentChanged: (fresh: Appointment) => void;
+  /** Клиент в форме. Расходится с сохранённым — деньги не принимаем, пока
+   *  запись не сохранена: платёж лёг бы на прежнего клиента. */
+  clientId?: string | null;
 }
 
 
@@ -101,13 +111,14 @@ export function PaymentBlock({
   pending,
   onPendingChange,
   onAppointmentChanged,
+  clientId,
 }: PaymentBlockProps) {
   const t = useThemeColors();
   const router = useRouter();
   const documentsOn = useFeatureOn("documents");
   const toast = useToast();
   const currency = useTenant().data?.currency;
-  const businessNow = useBusinessNow();
+  const businessNow = useBusinessNow(teamId);
   const tileWidth = useTileWidth();
   const {
     data: accounts = [],
@@ -116,9 +127,19 @@ export function PaymentBlock({
     // ни разу не загруженный запрос в «pending», и слова мигали бы.
     errorUpdateCount: accountsFailures,
   } = useTeamPaymentAccounts(teamId);
-  const record = useRecordPayment();
-  const cancel = useCancelPayment();
+  // Одна очередь на деньги записи: «Снять» в тосте ждёт ответа оплаты.
+  // СМЕНИЛИ КОМАНДУ — ОТМЕЧЕННЫЙ СЧЁТ УХОДИТ. У новой записи плитка лишь
+  // отмечает счёт; счёт прежней команды сервер отобьёт («Этот счёт не
+  // принимает оплату…»), и запись создастся без денег (аудит 2026-10-03).
+  useEffect(() => {
+    if (pending && accountsLoaded && !accounts.some((a) => a.id === pending.accountId)) {
+      onPendingChange(null);
+    }
+  }, [pending, accountsLoaded, accounts, onPendingChange]);
+  const record = useRecordPayment(appointment?.id);
+  const cancel = useCancelPayment(appointment?.id);
   const invoicesQuery = useInvoices();
+  const receiptState = useAppointmentReceipt(appointment?.id ?? null, documentsOn);
   const creditLinks = useCreditNoteLinks();
   const [partText, setPartText] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -133,6 +154,13 @@ export function PaymentBlock({
     takeMoney: canTakeMoney,
   } = usePaymentRights(teamId);
   const canUseDocuments = usePlanAllows("documents");
+  // БЕЗ ТАРИФА ЗАПИСИ КЛИЕНТОВ — ТОЛЬКО ДЛЯ ПРОСМОТРА (владелец 2.10: «люди 14
+  // дней бесплатно насоздают клиентов, потом будут переносить»). Сервер
+  // отказывает в правке записи (`plan:book-clients`); здесь плитки и «Часть
+  // суммы» серые, а тап поднимает плашку «Нужно изменить тариф» вместо
+  // отказа после поездки на сервер. Полученные деньги видны как были.
+  const bookingInPlan = usePlanAllows("book-clients");
+  const tariffNudge = useTariffNudge();
 
   const invoice = useMemo(
     () =>
@@ -176,13 +204,27 @@ export function PaymentBlock({
   // Вид платежа выводится из времени, а не выбирается: до начала — предоплата.
   // Запись, уже отмеченная выполненной или начатой, платит оплатой и до
   // своего часа: предоплату по выполненной сервер отбивает.
-  const kindForTap: PaymentKind =
-    started || visit.status === "completed" || visit.status === "in_progress"
-      ? "settlement"
-      : "prepayment";
+  const kindForTap: PaymentKind = paymentKindAt(
+    { date: visit.date, time_start: visit.timeStart, status: visit.status },
+    businessNow(),
+  );
   const amountCents = amountMode ? amountCentsFromInput(partText) : outstanding;
   const problem = amountProblem(amountCents, outstanding);
-  const acceptsMoney = outstanding > 0 && !billUnsaved && canTakeMoney;
+  const clientUnsaved =
+    appointment !== null &&
+    clientId !== undefined &&
+    (appointment.client_id ?? null) !== (clientId ?? null);
+  // Перенесли в форме и не сохранили: сервер записал бы оплату и закрыл
+  // визит по прежней дате (`slotUnsaved`).
+  const slotChange = slotUnsaved(appointment, visit);
+  // Отменённый визит денег не принимает — так решает сервер
+  // (`record_appointment_payment`). Плитки гаснут заранее: тап рисовал
+  // «оплачено» и через секунду откатывал с ошибкой (аудит 2026-10-03). Снять
+  // уже принятое можно — это зелёная плитка.
+  const visitCancelled =
+    appointment !== null &&
+    (appointment.status === "cancelled" || appointment.payment_status === "refunded");
+  const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && !slotChange && !visitCancelled && canTakeMoney && bookingInPlan;
 
   // СНЯТИЕ И ПРИЁМ — ПО ТАПУ, А НЕ ПО ОТВЕТУ (владелец 2026-09-30: «должно
   // всё мгновенно»): запись в кэше меняется сразу так, как её поменяет
@@ -199,21 +241,26 @@ export function PaymentBlock({
     haptics.success();
     onAppointmentChanged(optimistic);
     toast(`Оплата ${formatEURExact(amount)} снята · ${accountName}`, "info");
-    cancel.mutate(
-      { appointmentId: source.id, paymentId, requestId: randomUuid(), optimistic },
-      {
-        onSuccess: (fresh) => onAppointmentChanged(fresh),
-        onError: (error) => {
-          haptics.error();
-          onAppointmentChanged(source);
-          toast(error instanceof Error ? error.message : "Не удалось снять оплату", "error");
-        },
-      },
-    );
+    // `mutateAsync`, а не `mutate` с откликами: ушёл со страницы — отклики
+    // вызова у снятого наблюдателя молчат, и отказ сервера пропадал без слова
+    // (аудит 2026-10-03). Обещание отвечает всегда — так же, как у оплаты
+    // новой записи в `book/index.tsx`.
+    cancel
+      .mutateAsync({ appointmentId: source.id, paymentId, requestId: randomUuid(), optimistic })
+      .then((fresh) => onAppointmentChanged(fresh))
+      .catch((error: unknown) => {
+        haptics.error();
+        onAppointmentChanged(source);
+        toast(error instanceof Error ? error.message : "Не удалось снять оплату", "error");
+      });
   };
 
   const handleTileTap = (account: PaymentAccountOption) => {
     if (outstanding <= 0 || busy) return;
+    if (!bookingInPlan) {
+      tariffNudge();
+      return;
+    }
     if (!canTakeMoney) {
       haptics.warning();
       toast(NO_PAYMENT_RIGHT, "info");
@@ -222,6 +269,26 @@ export function PaymentBlock({
     if (billUnsaved) {
       haptics.warning();
       toast("Итог изменился — сначала сохраните запись", "info");
+      return;
+    }
+    if (clientUnsaved) {
+      haptics.warning();
+      toast("Клиент изменился — сначала сохраните запись", "info");
+      return;
+    }
+    if (slotChange) {
+      haptics.warning();
+      toast(
+        slotChange === "date"
+          ? "Дата изменилась — сначала сохраните запись"
+          : "Время изменилось — сначала сохраните запись",
+        "info",
+      );
+      return;
+    }
+    if (visitCancelled) {
+      haptics.warning();
+      toast("Визит отменён — оплату не записать", "info");
       return;
     }
     if (problem === "exceeds") {
@@ -235,10 +302,15 @@ export function PaymentBlock({
       return;
     }
     const amount = amountCents / 100;
-    const kind = kindForTap;
+    // Часы — сейчас, а не на последней перерисовке (`paymentKindAt`).
+    const now = businessNow();
+    const kind = paymentKindAt(
+      { date: visit.date, time_start: visit.timeStart, status: visit.status },
+      now,
+    );
     if (!appointment) {
       const same = pending?.accountId === account.id && pending.kind === kind;
-      onPendingChange(same ? null : { accountId: account.id, amount, kind });
+      onPendingChange(same ? null : { accountId: account.id, amount, kind, full: !amountMode });
       haptics.tap();
       return;
     }
@@ -247,7 +319,7 @@ export function PaymentBlock({
     const closeVisit = closesVisit(
       { date: visit.date, time_start: visit.timeStart, status: appointment.status },
       kind,
-      businessNow(),
+      now,
     );
     const source = appointment;
     const optimistic = optimisticRecordPayment(source, {
@@ -267,8 +339,9 @@ export function PaymentBlock({
       "success",
       { label: "Снять", onPress: () => runCancel(optimistic, requestId, account.name, amount) },
     );
-    record.mutate(
-      {
+    // Ответ — обещанием, как у снятия выше: отказ слышен и после ухода.
+    record
+      .mutateAsync({
         appointmentId: source.id,
         accountId: account.id,
         amount,
@@ -276,22 +349,23 @@ export function PaymentBlock({
         kind,
         closeVisit,
         optimistic,
-      },
-      {
-        onSuccess: (fresh) => onAppointmentChanged(fresh),
-        onError: (error) => {
-          haptics.error();
-          onAppointmentChanged(source);
-          toast(error instanceof Error ? error.message : "Не удалось записать оплату", "error");
-        },
-      },
-    );
+      })
+      .then((fresh) => onAppointmentChanged(fresh))
+      .catch((error: unknown) => {
+        haptics.error();
+        onAppointmentChanged(source);
+        toast(error instanceof Error ? error.message : "Не удалось записать оплату", "error");
+      });
   };
 
   const handlePaidTileTap = async (
     account: PaymentAccountOption,
     accountRowsForTile: PaymentRow[],
   ) => {
+    if (!bookingInPlan) {
+      tariffNudge();
+      return;
+    }
     // Снять оплату — тоже запись денег: то же право, что у приёма.
     if (!canTakeMoney) {
       haptics.warning();
@@ -320,12 +394,28 @@ export function PaymentBlock({
   // Поле открывается ПУСТЫМ: вся сумма — это тап по плитке без поля, а сюда
   // приходят за другой суммой, и стирать подставленный итог было бы лишним.
   const handleAmountToggle = () => {
+    if (!bookingInPlan) {
+      tariffNudge();
+      return;
+    }
     if (outstanding <= 0 && !amountMode) {
       haptics.warning();
       return;
     }
     haptics.tap();
     setPartText(amountMode ? null : "");
+  };
+
+  const handleReceipt = () => {
+    haptics.tap();
+    if (receiptState.next) {
+      router.push({
+        pathname: "/documents/receipt-new",
+        params: { transactionId: receiptState.next.id },
+      } as unknown as Href);
+      return;
+    }
+    if (receiptState.latest) router.push(`/documents/receipt/${receiptState.latest.id}` as Href);
   };
 
   const handleInvoice = () => {
@@ -336,6 +426,23 @@ export function PaymentBlock({
     }
     if (invoice) {
       router.push(`/invoices/${invoice.id}` as Href);
+      return;
+    }
+    // ОПЛАЧЕНО — ИНВОЙС НА ЭТИ ДЕНЬГИ (владелец 04.10: «оплачено заранее, а я
+    // хочу ещё выписать инвойс, и он сразу принимает оплату»). Форма
+    // заполнена приходом и выставит инвойс уже оплаченным, без долга.
+    if (outstanding <= 0 && receiptState.invoiceNext) {
+      const income = receiptState.invoiceNext;
+      router.push({
+        pathname: "/invoices/new",
+        params: {
+          transactionId: income.id,
+          appointmentId: appointment.id,
+          amount: String(income.amount),
+          ...(appointment.client_id ? { clientId: appointment.client_id } : {}),
+          ...(appointment.team_id ? { teamId: appointment.team_id } : {}),
+        },
+      } as unknown as Href);
       return;
     }
     router.push({
@@ -357,6 +464,9 @@ export function PaymentBlock({
     overpaid,
     overpaidLabel: formatEURExact(overpaid / 100),
     billUnsaved,
+    clientUnsaved,
+    slotUnsaved: slotChange,
+    visitCancelled,
   });
   const captionColor =
     caption?.tone === "success"
@@ -378,16 +488,32 @@ export function PaymentBlock({
   // что выписывать, история платежей пуста. Три мёртвых тапа — и полоса в
   // сорок точек, в которой нет ни слова, только они, прижатые вправо.
   const canSplit = outstanding > 0 && canTakeMoney;
-  // ДОКУМЕНТОВ НА БЕСПЛАТНОМ ТАРИФЕ НЕТ ВОВСЕ: `enforce_plan_limits` отобьёт
-  // вставку инвойса, а канон запрещает живой контрол над запрещённым —
-  // значка «Инвойс» просто нет. Уже выписанный документ открыть можно: он
-  // существует, и прятать дорогу к нему значило бы потерять бумагу.
+  // ТАРИФ БЕЗ ДОКУМЕНТОВ — ЗНАЧОК СЕРЫЙ, А НЕ ПРОПАДАЕТ (владелец 1.10:
+  // «закончилась подписка — всё видно, новое серым»). У аккаунта, чей тариф
+  // кончился, остались записи с неоплаченным остатком: значок «Инвойс» на
+  // месте, тап поднимает плашку «Нужно изменить тариф» вместо выписки
+  // (`enforce_plan_limits` её всё равно отбил бы). Уже выписанный документ
+  // открывается как раньше — бумагу не теряем.
   // Инвойсы — функция компании (STORY-088): выключены — иконки нет, даже у
   // уже выставленного (он открывается из «Файлов», когда функцию вернут).
+  // Инвойс — пока есть долг, после выставления (открыть) и после оплаты, если
+  // по деньгам записи его ещё нет (выставится оплаченным, 04.10).
   const canInvoice =
-    documentsOn && (Boolean(invoice) || (outstanding > 0 && canUseDocuments));
-  const hasHistory = canSeeHistory && rows.length > 0;
-  const anyAction = Boolean(teamId) && (canSplit || canInvoice || hasHistory);
+    documentsOn && (Boolean(invoice) || outstanding > 0 || Boolean(receiptState.invoiceNext));
+  // ЧЕК — ПОСЛЕ ОПЛАТЫ (владелец 03.10): есть приход без чека — значок ведёт
+  // в составитель чека, заполненный этой оплатой; чек уже выписан — горит и
+  // открывает его. Денег нет — значка нет.
+  const canReceipt = documentsOn && Boolean(receiptState.next || receiptState.latest);
+  const receiptTariffLocked = !receiptState.latest && !canUseDocuments;
+  const invoiceTariffLocked = !invoice && !canUseDocuments;
+  // История — и у возвращённой записи: строк у неё нет (деньги вернули), но
+  // приём и возврат в истории лежат, и именно их и ищут на отменённом визите.
+  const hasHistory =
+    canSeeHistory &&
+    (rows.length > 0 ||
+      (appointment?.payment_status === "refunded" &&
+        ((appointment.prepaid_amount ?? 0) > 0 || (appointment.paid_amount ?? 0) > 0)));
+  const anyAction = Boolean(teamId) && (canSplit || canInvoice || canReceipt || hasHistory);
   // Строка состояния нужна, когда ей ЕСТЬ ЧТО СКАЗАТЬ: подпись, поле суммы или
   // хоть одно живое действие. Иначе блок начинается сразу со счетов.
   const showStateRow = Boolean(caption?.text) || showAmountField || anyAction;
@@ -419,10 +545,31 @@ export function PaymentBlock({
           anyAction ? (
             <>
               {canSplit ? (
-                <ModeIconButton icon={Split} label={started ? "Часть суммы" : "Предоплата"} active={amountMode} onPress={handleAmountToggle} />
+                <ModeIconButton
+                  icon={Split}
+                  label={started ? "Часть суммы" : "Предоплата"}
+                  active={amountMode}
+                  dimmed={!bookingInPlan}
+                  onPress={handleAmountToggle}
+                />
               ) : null}
               {canInvoice ? (
-                <ModeIconButton icon={FileText} label="Инвойс" active={Boolean(invoice)} onPress={handleInvoice} />
+                <ModeIconButton
+                  icon={FileText}
+                  label="Инвойс"
+                  active={Boolean(invoice)}
+                  dimmed={invoiceTariffLocked}
+                  onPress={invoiceTariffLocked ? tariffNudge : handleInvoice}
+                />
+              ) : null}
+              {canReceipt ? (
+                <ModeIconButton
+                  icon={ReceiptIcon}
+                  label="Чек"
+                  active={!receiptState.next}
+                  dimmed={receiptTariffLocked}
+                  onPress={receiptTariffLocked ? tariffNudge : handleReceipt}
+                />
               ) : null}
               {hasHistory ? (
                 <ModeIconButton icon={History} label="История платежей" onPress={() => setHistoryOpen(true)} />

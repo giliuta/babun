@@ -9,8 +9,11 @@ import {
   deleteAccount,
   insertAccount,
   listAccounts,
+  listDeletedAccounts,
   reopenAccount,
+  restoreAccount,
   softCloseAccount,
+  trashAccount,
   updateAccount,
   type AccountDraft,
 } from "@babun/shared/db/repositories/accounts";
@@ -30,6 +33,7 @@ import { useTenantId } from "@/lib/tenant";
 import {
   accountBalancesQueryKey,
   accountRowsQueryKey,
+  deletedAccountsQueryKey,
 } from "@/lib/company-query-keys";
 import { useTeams } from "@/features/reference/queries";
 import {
@@ -133,17 +137,27 @@ export function useAccountsWithBalances(
      *  в архив календаря в живых финансах не существуют (владелец
      *  2026-09-21, `archived-calendar-accounts.ts`). Просит их только архив. */
     includeArchivedCalendars?: boolean;
+    /** Счета из «Удалённых счетов» — только для подписей истории: имя счёта
+     *  у прошлой операции не пропадает. Пикеры и списки их не просят. */
+    includeDeleted?: boolean;
+    /** СКРЫТЫЕ счета (владелец 03.10: «нигде не показывался, только в
+     *  счетах»). Просят их страница «Счета», лист счёта, лист перевода и
+     *  подписи истории; плитка «Счета», оплата, операции и документы — нет.
+     *  По умолчанию — как `includeDeleted`: подписям истории нужны все. */
+    includeHidden?: boolean;
   } = {},
 ): AccountsWithBalances {
   const tenantId = useTenantId();
   const includeInactive = options.includeInactive ?? false;
+  const includeDeleted = options.includeDeleted ?? false;
+  const includeHidden = options.includeHidden ?? includeDeleted;
   const includeArchived = options.includeArchivedCalendars ?? false;
   const rowsQuery = useQuery({
-    queryKey: accountRowsQueryKey(tenantId, includeInactive),
+    queryKey: accountRowsQueryKey(tenantId, includeInactive, includeDeleted),
     enabled: !!tenantId,
     staleTime: ACCOUNT_ROWS_STALE_MS,
     queryFn: () =>
-      listAccounts(supabase, tenantId as string, { includeInactive }),
+      listAccounts(supabase, tenantId as string, { includeInactive, includeDeleted }),
   });
   const balancesQuery = useQuery({
     queryKey: accountBalancesQueryKey(tenantId),
@@ -165,10 +179,11 @@ export function useAccountsWithBalances(
   const data = useMemo(() => {
     if (!rows || !balances || !teamsReady) return undefined;
     const merged = mergeAccountBalances(rows, balances);
+    const shown = includeHidden ? merged : merged.filter((account) => !account.is_hidden);
     return includeArchived
-      ? merged
-      : withoutArchivedCalendars(merged, archivedCalendarIds(teams ?? []));
-  }, [rows, balances, teams, teamsReady, includeArchived]);
+      ? shown
+      : withoutArchivedCalendars(shown, archivedCalendarIds(teams ?? []));
+  }, [rows, balances, teams, teamsReady, includeArchived, includeHidden]);
 
   return {
     data,
@@ -208,6 +223,63 @@ export function useReopenAccount() {
   return useMutation({
     ...NEVER_PAUSE,
     mutationFn: (id: string) => reopenAccount(supabase, id),
+    onSuccess: () => invalidateAccounts(qc),
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+// «УДАЛЁННЫЕ СЧЕТА» (владелец 03.10: «на 30 дней, как клиенты»). Ключ под
+// ["accounts"]: любая правка счёта перечитывает и эту полку.
+export function useDeletedAccounts() {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: deletedAccountsQueryKey(tenantId),
+    enabled: !!tenantId,
+    queryFn: () => listDeletedAccounts(supabase, tenantId as string),
+  });
+}
+
+/** «Удалить» — счёт уходит в «Удалённые счета»; правила держит сервер. */
+export function useTrashAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: (id: string) => trashAccount(supabase, id),
+    onSuccess: () => invalidateAccounts(qc),
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+/** «Скрыть» / «Показать» (владелец 03.10). Прячет счёт вместе с «В оплате
+ *  записи»: скрытый счёт деньги записи не принимает (база держит это
+ *  ограничением). Вернуть «В оплате» можно передать в `showInPayments` —
+ *  так «Отменить» возвращает счёт ровно каким он был. */
+export function useSetAccountHidden() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: (input: { id: string; hidden: boolean; showInPayments?: boolean }) =>
+      updateAccount(
+        supabase,
+        input.id,
+        input.hidden
+          ? { is_hidden: true, show_in_payments: false }
+          : {
+              is_hidden: false,
+              ...(input.showInPayments !== undefined ? { show_in_payments: input.showInPayments } : {}),
+            },
+      ),
+    onSuccess: () => invalidateAccounts(qc),
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+/** «Вернуть» из «Удалённых счетов» — обычный открытый счёт. */
+export function useRestoreAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: (id: string) => restoreAccount(supabase, id),
     onSuccess: () => invalidateAccounts(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });

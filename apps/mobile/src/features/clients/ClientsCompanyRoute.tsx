@@ -58,6 +58,22 @@ export function ClientsCompanyRoute({
     forceActive,
   });
 
+  // СЕРВЕР МОЛЧИТ, А ЗАПОМНЕННОГО НЕТ (первый запуск без сети): ждать
+  // нечего — честное «Нет связи» с «Повторить», а не вечная загрузка (03.10).
+  if (decision.state === "wait" && sources.failed) {
+    return (
+      <Screen edges={["top"]}>
+        <EmptyState
+          state="error"
+          fill
+          title="Нет связи с сервером"
+          subtitle="Клиенты загрузятся, как только сервер ответит."
+          action={{ label: "Повторить", onPress: sources.retry }}
+        />
+      </Screen>
+    );
+  }
+
   if (decision.state === "wait") {
     return (
       <Screen edges={["top"]}>

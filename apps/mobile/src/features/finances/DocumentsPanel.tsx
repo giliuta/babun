@@ -1,25 +1,40 @@
 import { useMemo, useState, type ReactElement } from "react";
 import {
-  Pressable,
   SectionList,
   Text,
   View,
   type RefreshControlProps,
 } from "react-native";
 import { money } from "@babun/shared/common/utils/money";
-import type {
-  InvoiceLedger,
-  InvoicePaymentLedger,
+import {
+  calculateInvoiceSettlement,
+  type InvoiceLedger,
+  type InvoicePaymentLedger,
 } from "@babun/shared/local/finance/invoice-ledger";
-import type { Receipt } from "@babun/shared/local/finance/receipt";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
+import {
+  Banknote,
+  ExternalLink,
+  Receipt as ReceiptIcon,
+  ReceiptText,
+  Share2,
+  Trash2,
+} from "lucide-react-native";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SwipeRow } from "@/components/ui/SwipeRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
+import { useReceiptMenu } from "@/features/documents/receipt-menu";
+import { useCurrentRole } from "@/features/settings/tenant";
+import { invoiceDeleteBlock } from "@/features/invoices/invoice-delete";
+import { useInvoiceMenu } from "@/features/invoices/invoice-menu";
+import { SELECT_SIDE, SelectRow } from "@/components/ui/select-rows";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useThemeColors } from "@/theme/colors";
-import { humanDay } from "@/features/appointments/helpers";
-import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
+import { humanDayYear } from "@/features/appointments/helpers";
 import type { AccountWithBalance } from "./accounts";
+import type { DocumentsReadable } from "./finance-read-rules";
 import { PanelHeader } from "./PanelHeader";
 import type { Period } from "./period";
 import { usePeriodDocuments } from "./use-period-documents";
@@ -54,6 +69,7 @@ export function DocumentsPanel({
   today,
   query,
   canIssue = true,
+  readable,
   filter,
   onFilterChange,
   onOpen,
@@ -79,6 +95,10 @@ export function DocumentsPanel({
    *  кнопку, которой у него нет (владелец 20.09: плашка «Документы» остаётся
    *  и без доступа, но внутри просто ничего не показывается). */
   canIssue?: boolean;
+  /** Что человеку видно — тот же отбор, что у плитки «Документы»
+   *  (`finance-read-rules.ts`): в зеркале сервер отдаёт бумаги владельца.
+   *  Нет — видно всё. */
+  readable?: DocumentsReadable;
   filter: DocumentFilter;
   onFilterChange: (filter: DocumentFilter) => void;
   onOpen: (href: string) => void;
@@ -86,9 +106,17 @@ export function DocumentsPanel({
   refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   const t = useThemeColors();
+  const invoiceMenu = useInvoiceMenu();
+  const receiptMenu = useReceiptMenu();
+  const owner = useCurrentRole().data === "owner";
+  const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
   // Список документов периода — общий с плиткой «Документы» на «Финансах»
   // (`usePeriodDocuments`): число на плитке и строки здесь из одного места.
-  const { documents, receipts, receiptsQuery } = usePeriodDocuments({
+  const {
+    documents: issued,
+    receipts,
+    receiptsQuery,
+  } = usePeriodDocuments({
     invoices,
     payments,
     appointments,
@@ -99,9 +127,10 @@ export function DocumentsPanel({
     period,
     today,
   });
-  // Открытый чек. Своей страницы у него нет: документ неизменяем, и всё, что с
-  // ним делают, — смотрят и высылают (владелец: «не надо лишних страниц»).
-  const [openReceipt, setOpenReceipt] = useState<Receipt | null>(null);
+  const documents = useMemo(
+    () => (readable ? readable(issued, receipts) : issued),
+    [issued, readable, receipts],
+  );
   const rows = useMemo(
     () => filterDocuments(documents, filter, query),
     [documents, filter, query],
@@ -118,12 +147,6 @@ export function DocumentsPanel({
     }
     return byDate;
   }, [rows]);
-  // Строка списка знает только id — сам чек нужен листу целиком (снимки
-  // сторон, НДС, способ оплаты), и второй раз собирать его из строки нельзя.
-  const receiptById = useMemo(
-    () => new Map((receipts ?? []).map((r) => [r.id, r])),
-    [receipts],
-  );
 
   // Шапка одна на все ветки — загрузку, ошибку и список: сегмент не смеет
   // мигать, пока чеки в пути.
@@ -139,9 +162,12 @@ export function DocumentsPanel({
       <SegmentedControl
         // Число в каждой вкладке (аудит 2026-09-29): плитка «Документы» —
         // сумма вкладок, и без чисел «16» над одним инвойсом читалось ошибкой.
+        // Кредит-нота стоит строкой под своим инвойсом, но документом периода
+        // не считается — как у плитки: отменённый инвойс с кредит-нотой давал
+        // плитку «1» и вкладку «Инвойсы 2» (аудит финансов 03.10).
         options={SEGMENTS.map((segment) => ({
           ...segment,
-          label: `${segment.label} ${documents.filter((d) => d.kind === segment.value).length}`,
+          label: `${segment.label} ${documents.filter((d) => d.kind === segment.value && !d.creditNote).length}`,
         }))}
         value={filter}
         onChange={onFilterChange}
@@ -176,8 +202,69 @@ export function DocumentsPanel({
 
   const searching = query.trim().length > 0;
 
+  // ДЕЙСТВИЯ С ДОКУМЕНТОМ — ТЕ ЖЕ, ЧТО «⋯» НА ЕГО СТРАНИЦЕ (владелец 04.10:
+  // «долгое нажатие на чек или инвойс — шторка-менюшка»). Смахнуть вправо —
+  // «Удалить» (только последний в серии без денег: номер вернётся); у прочих
+  // правой кромки нет.
+  const invoiceById = new Map(invoices.map((item) => [item.id, item]));
+  const receiptById = new Map((receipts ?? []).map((item) => [item.id, item]));
+  const menuContext = (invoice: InvoiceLedger) => ({
+    all: invoices,
+    payments: payments[invoice.id] ?? [],
+    hasReceipt: (receipts ?? []).some((receipt) => receipt.invoice_id === invoice.id),
+  });
+  const deleteAction = (doc: FinanceDocument) => {
+    if (doc.kind !== "invoice") return null;
+    const invoice = invoiceById.get(doc.id);
+    if (!invoice || invoiceDeleteBlock(invoice, invoices, false) !== null) return null;
+    return invoiceMenu.actionsFor(invoice, menuContext(invoice)).find((a) => a.key === "delete") ?? null;
+  };
+  // ПОЛНЫЙ СПИСОК, КАК У ЗАПИСИ В КАЛЕНДАРЕ (владелец 04.10: «зажимаю —
+  // вылезает список: поделиться, принять оплату, удалить, кредит-нота…»).
+  // «Поделиться», «Принять оплату» и «Выписать чек» открывают страницу
+  // документа с этим действием — там вся их логика.
+  const openMenu = (doc: FinanceDocument) => {
+    const open = { label: "Открыть", icon: ExternalLink, color: SETTINGS_TILE.blue };
+    const share = { label: "Поделиться PDF", icon: Share2, color: SETTINGS_TILE.teal };
+    if (doc.kind === "invoice") {
+      const invoice = invoiceById.get(doc.id);
+      if (!invoice) return;
+      const path = `/invoices/${invoice.id}`;
+      const own = payments[invoice.id] ?? [];
+      const settlement = calculateInvoiceSettlement(invoice, own);
+      const isInvoice = (invoice.kind ?? "invoice") === "invoice";
+      const awaits = isInvoice && invoice.status === "issued" && settlement.remaining > 0;
+      const withReceipt = new Set((receipts ?? []).map((r) => r.transaction_id));
+      const needsReceipt =
+        isInvoice && own.some((p) => p.type === "income" && !withReceipt.has(p.id));
+      setSheetMenu(
+        invoiceMenu.menuFor(invoice, menuContext(invoice), [
+          { ...open, run: () => onOpen(path) },
+          { ...share, run: () => onOpen(`${path}?action=share`) },
+          ...(owner && awaits
+            ? [{ label: "Принять оплату", icon: Banknote, color: SETTINGS_TILE.green, run: () => onOpen(`${path}?action=pay`) }]
+            : []),
+          ...(needsReceipt
+            ? [{ label: "Выписать чек", icon: ReceiptText, color: SETTINGS_TILE.green, run: () => onOpen(`${path}?action=receipt`) }]
+            : []),
+        ]),
+      );
+      return;
+    }
+    const receipt = receiptById.get(doc.id);
+    if (!receipt) return;
+    const path = `/documents/receipt/${receipt.id}`;
+    setSheetMenu(
+      receiptMenu.menuFor(receipt, [
+        { ...open, run: () => onOpen(path) },
+        { ...share, run: () => onOpen(`${path}?action=share`) },
+      ]),
+    );
+  };
+
   return (
     <>
+      <ActionMenuSheet menu={sheetMenu} onClose={() => setSheetMenu(null)} />
       <SectionList
         style={{ flex: 1 }}
         sections={sections}
@@ -188,39 +275,53 @@ export function DocumentsPanel({
         // расходах и доходах»). Ровно та же шапка, что у ленты операций: дата
         // прописью, капсом, на цвете холста. Итога дня здесь нет намеренно —
         // инвойс и чек по одним деньгам сложились бы в двойную сумму.
+        // День — подписью над плашками, как в «Истории» и «Файлах» клиента
+        // (владелец 03.10, вариант 2).
         renderSectionHeader={({ section }) => (
-          <View
-            className="flex-row items-center px-4 py-1.5"
-            style={{ backgroundColor: t.canvas }}
-          >
+          <View className="flex-row items-center px-4 pb-1.5 pt-3">
             <Text
               className="text-xs font-semibold uppercase tracking-wider"
               style={{ color: t.sub }}
             >
-              {humanDay(section.title)}
+              {humanDayYear(section.title)}
             </Text>
           </View>
         )}
         ListHeaderComponent={header}
-        ItemSeparatorComponent={() => (
-          <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
-        )}
-        renderItem={({ item }) => (
-          <DocumentRow
-            document={item}
-            onPress={() => {
-              // Инвойс — документ, который правят (сумма, срок, оплата), и он
-              // открывается своей страницей. Чек править нечем: он открывается
-              // листом прямо здесь.
-              if (item.kind === "invoice") {
-                onOpen(`/invoices/${item.id}`);
-                return;
-              }
-              const receipt = receiptById.get(item.id);
-              if (receipt) setOpenReceipt(receipt);
-            }}
-          />
-        )}
+        // Плашки — с воздухом между ними, без швов.
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        renderItem={({ item }) => {
+          const row = (
+            <DocumentRow
+              document={item}
+              onPress={() => {
+                // Инвойс и чек — каждый своей страницей (владелец 04.10: «чек —
+                // в такой же архитектуре»).
+                onOpen(item.kind === "invoice" ? `/invoices/${item.id}` : `/documents/receipt/${item.id}`);
+              }}
+              onLongPress={() => openMenu(item)}
+            />
+          );
+          const removable = deleteAction(item);
+          return (
+            <View style={{ paddingHorizontal: SELECT_SIDE }}>
+              {removable ? (
+                <SwipeRow
+                  radius={t.radius.input}
+                  label="Удалить"
+                  color={t.danger}
+                  icon={Trash2}
+                  accessibilityLabel={`Удалить ${item.title}`}
+                  onAction={removable.run}
+                >
+                  {row}
+                </SwipeRow>
+              ) : (
+                row
+              )}
+            </View>
+          );
+        }}
         ListEmptyComponent={
           <EmptyState
             title={
@@ -230,112 +331,84 @@ export function DocumentsPanel({
                   ? "Инвойсов за период нет"
                   : "Чеков за период нет"
             }
+            // ПУСТО — ОДНОЙ СТРОКОЙ (закон 15.09, владелец 03.10): кнопка
+            // внизу и так говорит, как выставить документ.
             subtitle={
               searching
                 ? "Искали среди документов выбранного периода"
-                : filter === "invoice"
-                  // Тому, кто документы не выставляет, подпись не нужна:
-                  // она называла бы кнопку, которой у него нет. Канон пустых
-                  // состояний (LOCKED 2026-08-27) оставляет объяснения ошибкам.
-                  ? canIssue
-                    ? "Инвойс выставляется кнопкой внизу — по записи или отдельно"
-                    : undefined
-                  : canIssue
-                    ? // ПРО «ПО ПРИНЯТОЙ ОПЛАТЕ» ЗДЕСЬ НЕ ГОВОРИМ, ПОКА ТАКОЙ КНОПКИ НЕТ.
-                      // Единственная кнопка ведёт в составитель, а он ЗАВОДИТ
-                      // НОВЫЙ ПРИХОД: человек, принявший оплату в записи и
-                      // поверивший подсказке, записал бы деньги дважды.
-                      "Чек выписывается кнопкой внизу: клиент, услуги, счёт"
-                    : undefined
+                : undefined
             }
           />
         }
-      />
-      <ReceiptSheet
-        receipt={openReceipt}
-        appointment={
-          openReceipt?.appointment_id
-            ? (appointments.find((a) => a.id === openReceipt.appointment_id) ??
-              null)
-            : null
-        }
-        accountName={
-          accounts.find((a) => a.id === openReceipt?.account_id)?.name ?? null
-        }
-        onClose={() => setOpenReceipt(null)}
-        onOpen={onOpen}
       />
     </>
   );
 }
 
-/** Строка документа: слева тип, номер и кому выдан, справа сумма и состояние.
- *  Состояние молчит у выданного чека — он ничего не ждёт. */
+/** ДОКУМЕНТ — ПЛАШКОЙ, КАК ФАЙЛ КЛИЕНТА (владелец 03.10, вариант 2): слева
+ *  плитка инвойса или чека, номер — названием, кому выдан — подписью;
+ *  справа сумма и состояние словом. Погашенный документ гаснет, но стоит:
+ *  номер занят, и проверяющий должен видеть почему. */
 function DocumentRow({
   document,
   onPress,
+  onLongPress,
 }: {
   document: FinanceDocument;
   onPress: () => void;
+  /** Удержание — шторка действий документа (как «⋯» его страницы). */
+  onLongPress?: () => void;
 }) {
   const t = useThemeColors();
+  const invoice = document.kind === "invoice";
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={[
-        document.title,
-        document.clientName,
-        money(document.amount, document.currency),
-        document.state,
-      ]
-        .filter(Boolean)
-        .join(", ")}
-      className="flex-row items-center gap-3 px-4 py-2.5 active:opacity-60"
-      style={{
-        backgroundColor: t.surface,
-        minHeight: 60,
-        // Погашенный документ не прячется: номер занят, и проверяющий должен
-        // видеть, почему. Он гаснет — ровно как в ленте чеков.
-        opacity: document.dead ? 0.55 : 1,
-      }}
-    >
-      <View className="min-w-0 flex-1">
-        <Text
-          className="text-[15px] font-semibold"
-          style={{ color: t.ink }}
-          numberOfLines={1}
-        >
-          {document.title}
-        </Text>
-        {/* Даты здесь нет: её называет заголовок дня над строкой. Повторять её
-            в каждой строке — то же самое, что писать год в каждой ячейке
-            календаря. */}
-        <Text
-          className="mt-0.5 text-[13px]"
-          style={{ color: t.sub }}
-          numberOfLines={1}
-        >
-          {document.clientName}
-        </Text>
-      </View>
-      <View className="items-end">
-        <Text
-          className="text-[15px] font-bold"
-          style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
-        >
-          {money(document.amount, document.currency)}
-        </Text>
-        {/* СОСТОЯНИЕ ГОВОРИТ СЛОВОМ, А НЕ ЦВЕТОМ (владелец 2026-08-15:
-            «неоплаченный документ — ничего страшного, не надо выставлять его
-            якобы красным»). «Просрочен» краснело и превращало обычный
-            неоплаченный счёт в тревогу; само слово сказано, и этого хватает. */}
-        {document.state ? (
-          <Text className="mt-0.5 text-xs" style={{ color: t.caption }}>
-            {document.state}
-          </Text>
-        ) : null}
-      </View>
-    </Pressable>
+    <View style={{ opacity: document.dead ? 0.55 : 1 }}>
+      <SelectRow
+        icon={invoice ? ReceiptIcon : ReceiptText}
+        // Чек — деньги уже пришли (зелёный, как на карточке клиента);
+        // инвойс — документ к оплате (акцент).
+        color={invoice ? t.accent : t.success}
+        plain
+        title={document.title}
+        // Даты здесь нет: её называет заголовок дня над плашкой.
+        subtitle={document.clientName || undefined}
+        accessibilityLabel={[
+          document.title,
+          document.clientName,
+          money(document.amount, document.currency),
+          document.state,
+        ]
+          .filter(Boolean)
+          .join(", ")}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        trailing={
+          <View style={{ alignItems: "flex-end", flexShrink: 0 }}>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              style={{
+                fontSize: 15,
+                fontWeight: "700",
+                color: t.ink,
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {money(document.amount, document.currency)}
+            </Text>
+            {/* СОСТОЯНИЕ ГОВОРИТ СЛОВОМ, А НЕ ЦВЕТОМ (владелец 2026-08-15:
+                «неоплаченный документ — ничего страшного»). */}
+            {document.state ? (
+              <Text
+                maxFontSizeMultiplier={1.3}
+                style={{ fontSize: 13, color: t.caption }}
+              >
+                {document.state}
+              </Text>
+            ) : null}
+          </View>
+        }
+      />
+    </View>
   );
 }

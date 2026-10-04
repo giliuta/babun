@@ -13,7 +13,7 @@ describe("блоки карточки клиента по правам", () => {
     const client = { blocks: { clients: "read", "clients.note": "read", "clients.files": "off" } };
     assert.equal(clientBlockLevel(client, "clients.note"), "read");
     assert.equal(clientBlockLevel(client, "clients.files"), "hidden");
-    assert.equal(clientBlockLevel(client, "clients.money"), "hidden");
+    assert.equal(clientBlockLevel(client, "clients.history"), "hidden");
     assert.equal(clientBlockLevel({ blocks: { "clients.objects": "write" } }, "clients.objects"), "write");
   });
 

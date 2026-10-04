@@ -25,13 +25,18 @@ import {
   dequeueAll,
   cacheUpsert,
   cacheGetOne,
+  markOpPermanentlyFailed,
   type CachedClient,
+  type QueuedOp,
 } from "../db/cache/sql";
 import {
   __resetReplayerForTests,
   BOUND_TENANT_FIELD,
   kickReplayer,
+  MAX_ATTEMPTS,
+  READ_ONLY_VIEW_FIELD,
   setReplayerDefaults,
+  tenantRefreshHeld,
   type QuotaGate,
 } from "./replayer";
 
@@ -153,10 +158,10 @@ const asSupabase = (c: unknown) => c as any;
 describe("replayer — insert", () => {
   test("successful insert drains the op", async () => {
     await enqueueOp({
-      table: "clients",
+      table: "appointments",
       op: "insert",
       row_id: UUID_A,
-      payload: { id: UUID_A, tenant_id: TENANT, full_name: "A" },
+      payload: { id: UUID_A, tenant_id: TENANT, date: "2026-10-05" },
       expected_updated_at: null,
     });
     const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
@@ -165,12 +170,12 @@ describe("replayer — insert", () => {
 
     expect(await queueDepth()).toBe(0);
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ table: "clients", op: "insert" });
+    expect(calls[0]).toMatchObject({ table: "appointments", op: "insert" });
   });
 
   test("23505 по первичному ключу: строка УЖЕ на сервере — операция снимается", async () => {
     await enqueueOp({
-      table: "clients",
+      table: "appointments",
       op: "insert",
       row_id: UUID_A,
       payload: { id: UUID_A, tenant_id: TENANT },
@@ -184,13 +189,78 @@ describe("replayer — insert", () => {
             error: {
               code: "23505",
               message:
-                'duplicate key value violates unique constraint "clients_pkey"',
+                'duplicate key value violates unique constraint "appointments_pkey"',
             },
           },
     );
 
     await kickReplayer({ supabase: asSupabase(client) });
     expect(await queueDepth()).toBe(0);
+  });
+
+  // Аудит 04.10: клиент без тегов шёл прямой вставкой мимо серверных
+  // умолчаний (`create_client_with_tags` ставит команду) и уезжал без команды.
+  test("клиент без тегов встаёт той же функцией, что в сети, с пустым списком тегов", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT, full_name: "A" },
+      expected_updated_at: null,
+    });
+    const { client, calls, rpcCalls } = makeFakeSupabase(
+      () => ({ data: null, error: null }),
+      () => ({ data: null, error: null }),
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(await queueDepth()).toBe(0);
+    expect(calls.filter((c) => c.op === "insert")).toHaveLength(0);
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0]).toMatchObject({
+      name: "create_client_with_tags",
+      args: { p_tenant_id: TENANT, p_client_id: UUID_A, p_tag_ids: [] },
+    });
+    expect((rpcCalls[0]!.args.p_client as Record<string, unknown>).full_name).toBe("A");
+  });
+
+  test("клиент без тегов: дубль по первичному ключу — уже на сервере, операция снимается", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client, rpcCalls } = makeFakeSupabase(
+      (rec) => (rec.op === "select" ? { data: { id: UUID_A }, error: null } : { data: null, error: null }),
+      () => ({ data: null, error: { code: "23505", message: 'duplicate key value violates unique constraint "clients_pkey"' } }),
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+    expect(await queueDepth()).toBe(0);
+    // Теги не трогали: без них чинить нечего.
+    expect(rpcCalls.map((c) => c.name)).toEqual(["create_client_with_tags"]);
+  });
+
+  test("клиент без тегов: дубль по номеру — операцию не хороним молча", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client } = makeFakeSupabase(
+      (rec) => (rec.op === "select" ? { data: null, error: null } : { data: null, error: null }),
+      () => ({ data: null, error: { code: "23505", message: 'duplicate key value violates unique constraint "clients_tenant_phone_e164_idx"' } }),
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+    const [left] = await dequeueAll();
+    expect(left?.attempts).toBe(1);
+    expect(left?.last_error).toContain("Клиент с таким номером уже заведён");
   });
 
   test("23505 по ЧУЖОМУ индексу (номер занят): операцию не хороним молча", async () => {
@@ -270,6 +340,33 @@ describe("replayer — insert", () => {
         },
       },
     ]);
+  });
+
+  test("offline client with a tag: queue fields the RPC refuses do not reach it (повторный аудит 03.10)", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: {
+        id: UUID_A,
+        tenant_id: TENANT,
+        full_name: "A",
+        sms_opt_out: false,
+        purge_at: null,
+        updated_at: "2026-10-03T00:00:00.000Z",
+        __tag_ids: [UUID_B],
+      },
+      expected_updated_at: null,
+    });
+    const { client, rpcCalls } = makeFakeSupabase(
+      () => ({ data: null, error: null }),
+      () => ({ data: { id: UUID_A }, error: null }),
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(await queueDepth()).toBe(0);
+    expect(rpcCalls[0]?.args.p_client).toEqual({ full_name: "A" });
   });
 
   test("a lost aggregate response repairs tags atomically after duplicate", async () => {
@@ -521,6 +618,370 @@ describe("replayer — порядок правок одной строки", () 
   });
 });
 
+describe("replayer — обрыв связи не тратит попыток (аудит работы без сети 03.10)", () => {
+  test("504 трижды подряд — правка жива и не «навсегда не отправлена»", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "15:00" },
+      expected_updated_at: null,
+    });
+    const failures: string[] = [];
+    const { client } = makeFakeSupabase(() => ({
+      data: null,
+      error: { status: 504, message: "Gateway Timeout" },
+    }));
+    for (let i = 0; i < MAX_ATTEMPTS + 1; i += 1) {
+      await kickReplayer({
+        supabase: asSupabase(client),
+        onPermanentFailure: (op) => failures.push(op.row_id),
+      });
+    }
+    const [left] = await dequeueAll();
+    expect(left?.attempts).toBe(0);
+    expect(failures).toEqual([]);
+
+    // Сеть вернулась — правка уходит с первого раза.
+    const ok = makeFakeSupabase((rec) => ({ data: [{ id: rec.filters.id }], error: null }));
+    await kickReplayer({ supabase: asSupabase(ok.client) });
+    expect(await queueDepth()).toBe(0);
+  });
+
+  test("отказ сервера (не обрыв) по-прежнему считается попыткой", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "15:00" },
+      expected_updated_at: null,
+    });
+    const { client } = makeFakeSupabase(() => ({
+      data: null,
+      error: { code: "42501", message: "new row violates row-level security policy" },
+    }));
+    await kickReplayer({ supabase: asSupabase(client) });
+    const [left] = await dequeueAll();
+    expect(left?.attempts).toBe(1);
+  });
+
+  test("без сети слив не начинается; перечитка — только когда очередь изменилась", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_end: "15:00" },
+      expected_updated_at: null,
+    });
+    let changed = 0;
+    const offline = makeFakeSupabase(() => ({ data: [], error: null }));
+    await kickReplayer({
+      supabase: asSupabase(offline.client),
+      isOnline: () => false,
+      onChanged: () => (changed += 1),
+    });
+    expect(offline.calls.length).toBe(0);
+
+    const outage = makeFakeSupabase(() => ({
+      data: null,
+      error: { message: "TypeError: Network request failed" },
+    }));
+    await kickReplayer({ supabase: asSupabase(outage.client), onChanged: () => (changed += 1) });
+    // Обрыв ничего не поменял — календарь не дёргаем (иначе круг
+    // «перечитка → слив → перечитка»).
+    expect(changed).toBe(0);
+
+    const ok = makeFakeSupabase((rec) => ({ data: [{ id: rec.filters.id }], error: null }));
+    await kickReplayer({ supabase: asSupabase(ok.client), onChanged: () => (changed += 1) });
+    expect(changed).toBe(1);
+  });
+});
+
+describe("replayer — запись ждёт своего клиента (аудит работы без сети 03.10)", () => {
+  test("вставка клиента упала — его запись не отправляется и попыток не тратит", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT, full_name: "Тест" },
+      expected_updated_at: null,
+    });
+    await enqueueOp({
+      table: "appointments",
+      op: "insert",
+      row_id: UUID_B,
+      payload: { id: UUID_B, tenant_id: TENANT, client_id: UUID_A },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase((rec) =>
+      rec.table === "clients"
+        ? { data: null, error: { code: "23514", message: "Номер уже заведён" } }
+        : { data: [{ id: UUID_B }], error: null },
+    );
+    await kickReplayer({ supabase: asSupabase(client) });
+    expect(calls.some((c) => c.table === "appointments")).toBe(false);
+    const appt = (await dequeueAll()).find((o) => o.row_id === UUID_B);
+    expect(appt?.attempts).toBe(0);
+  });
+});
+
+describe("replayer — навсегда упавшая правка держит свою строку (аудит 03.10)", () => {
+  test("правки за упавшей навсегда ждут её «Повторить», чужие строки уходят", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { comment: "дописал адрес" },
+      expected_updated_at: null,
+    });
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_B,
+      payload: { comment: "другая" },
+      expected_updated_at: null,
+    });
+    const [insert] = await dequeueAll();
+    await markOpPermanentlyFailed(insert!.id, "quota_exceeded");
+    const { client, calls } = makeFakeSupabase((rec) => ({
+      data: [{ id: rec.filters.id }],
+      error: null,
+    }));
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(calls.some((c) => c.filters.id === UUID_A)).toBe(false);
+    expect(calls.some((c) => c.op === "update" && c.filters.id === UUID_B)).toBe(true);
+    expect((await dequeueAll()).map((o) => o.row_id)).toEqual([UUID_A, UUID_A]);
+  });
+
+  test("придержанные за упавшей не замораживают перечитку календаря", () => {
+    const op = (id: number, row: string, attempts: number): QueuedOp => ({
+      id,
+      created_at: id,
+      table: "appointments",
+      op: "update",
+      row_id: row,
+      payload: { tenant_id: TENANT },
+      expected_updated_at: null,
+      attempts,
+      last_error: null,
+    });
+    expect(tenantRefreshHeld([op(1, UUID_A, MAX_ATTEMPTS), op(2, UUID_A, 0)], "appointments", TENANT)).toBe(false);
+    expect(tenantRefreshHeld([op(1, UUID_A, MAX_ATTEMPTS), op(2, UUID_B, 0)], "appointments", TENANT)).toBe(true);
+  });
+
+  // Аудит 04.10: запись к клиенту, чья вставка упала навсегда, ждёт его, не
+  // тратя попыток, — и без этой сверки держала перечитку календаря вечно.
+  test("запись, ждущая навсегда упавшего клиента, не замораживает перечитку календаря", () => {
+    const clientInsert: QueuedOp = {
+      id: 1,
+      created_at: 1,
+      table: "clients",
+      op: "insert",
+      row_id: UUID_C,
+      payload: { id: UUID_C, tenant_id: TENANT },
+      expected_updated_at: null,
+      attempts: MAX_ATTEMPTS,
+      last_error: "duplicate key value violates unique constraint \"clients_tenant_phone_e164_idx\"",
+    };
+    const appointmentInsert: QueuedOp = {
+      id: 2,
+      created_at: 2,
+      table: "appointments",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT, client_id: UUID_C },
+      expected_updated_at: null,
+      attempts: 0,
+      last_error: null,
+    };
+    const laterEdit: QueuedOp = { ...appointmentInsert, id: 3, created_at: 3, op: "update", payload: { tenant_id: TENANT } };
+    expect(tenantRefreshHeld([clientInsert, appointmentInsert, laterEdit], "appointments", TENANT)).toBe(false);
+    // Пока вставка клиента ещё живая (не упала навсегда) — держит, как раньше.
+    expect(
+      tenantRefreshHeld([{ ...clientInsert, attempts: 0 }, appointmentInsert], "appointments", TENANT),
+    ).toBe(true);
+    // Чужая запись того же дня, не связанная с клиентом, держит по-прежнему.
+    expect(
+      tenantRefreshHeld(
+        [clientInsert, appointmentInsert, { ...appointmentInsert, id: 4, row_id: UUID_B, payload: { tenant_id: TENANT } }],
+        "appointments",
+        TENANT,
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("replayer — вторая офлайн-правка строки без ложного конфликта (аудит 03.10)", () => {
+  test("сторож переходит от применившейся правки к следующей", async () => {
+    await cacheUpsert("clients", {
+      id: UUID_A,
+      tenant_id: TENANT,
+      updated_at: "2026-01-01T00:00:00.000Z",
+    } as unknown as CachedClient);
+    for (const name of ["Первая", "Вторая"]) {
+      await enqueueOp({
+        table: "clients",
+        op: "update",
+        row_id: UUID_A,
+        payload: { full_name: name },
+        expected_updated_at: "2026-01-01T00:00:00.000Z",
+      });
+    }
+    let stamp = "2026-01-01T00:00:00.000Z";
+    let tick = 0;
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update" && rec.filters.updated_at === stamp) {
+        tick += 1;
+        stamp = `2026-02-0${tick}T00:00:00.000Z`;
+        return { data: [{ id: UUID_A, updated_at: stamp }], error: null };
+      }
+      if (rec.op === "update") return { data: [], error: null };
+      return { data: null, error: null };
+    });
+    let conflicts = 0;
+
+    await kickReplayer({
+      supabase: asSupabase(client),
+      onConflict: () => {
+        conflicts += 1;
+      },
+    });
+
+    expect(conflicts).toBe(0);
+    expect(await queueDepth()).toBe(0);
+    expect(calls.filter((c) => c.op === "update").map((c) => c.filters.updated_at)).toEqual([
+      "2026-01-01T00:00:00.000Z",
+      "2026-02-01T00:00:00.000Z",
+    ]);
+    const cached = await cacheGetOne<CachedClient>("clients", UUID_A);
+    expect(cached?.updated_at).toBe("2026-02-02T00:00:00.000Z");
+  });
+
+  test("сторож доживает до следующего прохода, если вторая не ушла", async () => {
+    await cacheUpsert("clients", {
+      id: UUID_A,
+      tenant_id: TENANT,
+      updated_at: "2026-01-01T00:00:00.000Z",
+    } as unknown as CachedClient);
+    for (const name of ["Первая", "Вторая"]) {
+      await enqueueOp({
+        table: "clients",
+        op: "update",
+        row_id: UUID_A,
+        payload: { full_name: name },
+        expected_updated_at: "2026-01-01T00:00:00.000Z",
+      });
+    }
+    let first = true;
+    const { client } = makeFakeSupabase((rec) => {
+      if (rec.op === "update" && first) {
+        first = false;
+        return { data: [{ id: UUID_A, updated_at: "2026-02-01T00:00:00.000Z" }], error: null };
+      }
+      return { data: null, error: { status: 503, message: "Service Unavailable" } };
+    });
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    const left = await dequeueAll();
+    expect(left.map((o) => o.expected_updated_at)).toEqual(["2026-02-01T00:00:00.000Z"]);
+  });
+});
+
+describe("replayer — статус и деньги записи силой не продавливаются (аудит 03.10)", () => {
+  const serverRow = {
+    id: UUID_A,
+    tenant_id: TENANT,
+    team_id: "team-1",
+    kind: "work",
+    date: "2026-10-05",
+    time_start: "10:00",
+    time_end: "11:00",
+    status: "scheduled",
+    payment_status: "partial",
+    prepaid_amount: 30,
+    paid_amount: 0,
+    total_amount: 100,
+    services: [],
+    service_ids: [],
+    payments: [],
+    expenses: [],
+    updated_at: "2026-10-03T12:00:00.000Z",
+  };
+
+  test("отмена, вставшая до чужой оплаты, уступает серверу и говорит словами", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { status: "cancelled", cancel_reason: "Клиент перенёс", tenant_id: TENANT },
+      expected_updated_at: "2026-10-01T00:00:00.000Z",
+    });
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update") return { data: [], error: null }; // строку правили — конфликт
+      if (rec.op === "select") return { data: serverRow, error: null };
+      return { data: null, error: null };
+    });
+    const toasts: string[] = [];
+
+    await kickReplayer({
+      supabase: asSupabase(client),
+      tenantId: TENANT,
+      onConflict: (m) => {
+        toasts.push(m);
+      },
+    });
+
+    // Одна условная правка — силовой второй (= возврата всех денег) нет.
+    expect(calls.filter((c) => c.op === "update")).toHaveLength(1);
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]).toContain("не применена");
+    expect(await queueDepth()).toBe(0);
+    const cached = await cacheGetOne<{ status: string; updated_at: string }>("appointments", UUID_A);
+    expect(cached?.status).toBe("scheduled");
+  });
+
+  test("правка времени при конфликте по-прежнему применяется (последний побеждает)", async () => {
+    await enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { time_start: "12:00", time_end: "13:00", tenant_id: TENANT },
+      expected_updated_at: "2026-10-01T00:00:00.000Z",
+    });
+    let call = 0;
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update") {
+        call += 1;
+        if (call === 1) return { data: [], error: null };
+        return { data: { ...serverRow, time_start: "12:00", time_end: "13:00" }, error: null };
+      }
+      return { data: null, error: null };
+    });
+    const toasts: string[] = [];
+
+    await kickReplayer({
+      supabase: asSupabase(client),
+      tenantId: TENANT,
+      onConflict: (m) => {
+        toasts.push(m);
+      },
+    });
+
+    expect(calls.filter((c) => c.op === "update")).toHaveLength(2);
+    expect(toasts[0]).toContain("Применены ваши изменения");
+  });
+});
+
 describe("replayer — injected quota gate", () => {
   test("host defaults protect wrapper kicks that provide only supabase", async () => {
     await enqueueOp({
@@ -584,7 +1045,7 @@ describe("replayer — injected quota gate", () => {
 
   test("non-quota gate error falls through to normal dispatch", async () => {
     await enqueueOp({
-      table: "clients",
+      table: "appointments",
       op: "insert",
       row_id: UUID_A,
       payload: { id: UUID_A, tenant_id: TENANT },
@@ -675,20 +1136,50 @@ describe("replayer — гейт по компании", () => {
     }
     const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
 
-    // Живое чтение. Компанию спрашивают трижды за операцию и ещё раз на гейт
-    // слива: 1 — гейт, 2 — начало круга по первой, 3 — перед её отправкой,
-    // 4 — начало круга по второй. Первая обязана доехать целиком, ко второй
+    // Живое чтение. Компанию спрашивают на гейт слива и по ходу операции:
+    // 1 — гейт, 2 — начало круга по первой, 3 — перед её отправкой, 4 — после
+    // двусмысленного «ноль строк», перед проверкой видимости (аудит 03.10),
+    // 5 — начало круга по второй. Первая обязана доехать целиком, ко второй
     // человек уже в другой компании.
     let читаний = 0;
     const currentTenantId = (): string | null => {
       читаний += 1;
-      return читаний >= 4 ? ДРУГАЯ : TENANT;
+      return читаний >= 5 ? ДРУГАЯ : TENANT;
     };
 
     await kickReplayer({ supabase: asSupabase(client), currentTenantId });
 
     expect(calls.filter((c) => c.op === "delete")).toHaveLength(1);
     expect(await queueDepth()).toBe(1);
+  });
+
+  test("компания сменилась между условной правкой и силовой — операция ждёт, попытка не в счёт (аудит 03.10)", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "update",
+      row_id: UUID_A,
+      payload: { full_name: "Моя", tenant_id: TENANT },
+      expected_updated_at: "2026-01-01T00:00:00.000Z",
+    });
+    let switched = false;
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update") {
+        // Условная правка нашла ноль строк, и в этот миг человек тапнул
+        // команду другой компании.
+        switched = true;
+        return { data: [], error: null };
+      }
+      return { data: null, error: null };
+    });
+    const currentTenantId = (): string | null => (switched ? ДРУГАЯ : TENANT);
+
+    await kickReplayer({ supabase: asSupabase(client), currentTenantId });
+
+    // Ни силовой правки, ни проверки видимости под чужим заголовком.
+    expect(calls.filter((c) => c.op === "update")).toHaveLength(1);
+    expect(calls.filter((c) => c.op === "select")).toHaveLength(0);
+    const [left] = await dequeueAll();
+    expect(left?.attempts).toBe(0);
   });
 
   test("без гейта вовсе поведение прежнее — операция без компании уходит", async () => {
@@ -1050,5 +1541,149 @@ describe("replayer — привязанный к компании клиент",
 
     expect(calls).toHaveLength(0);
     expect(await queueDepth()).toBe(1);
+  });
+});
+
+// ─── Вид только для чтения подталкивает, сливает клиент хоста ──────────
+// Шим постраничного календаря отдаётся обёртке `listAppointments` вместо
+// клиента, и её фоновое перечитывание подталкивает выгрузку им же. У шима
+// `from()` умеет только `select` — правка записи падала «update is not a
+// function» и после трёх попыток пропадала (владелец 03.10: сменил клиента
+// записи, через десять секунд вернулся прежний).
+
+describe("replayer — вид только для чтения", () => {
+  /** Шим под видом клиента: только `select`, как `pagingClient`. */
+  const readOnlyView = () => ({
+    [READ_ONLY_VIEW_FIELD]: true,
+    from: () => ({ select: () => ({}) }),
+  });
+
+  const queueClientChange = () =>
+    enqueueOp({
+      table: "appointments",
+      op: "update",
+      row_id: UUID_A,
+      payload: { client_id: UUID_B, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+
+  test("без клиента хоста — ничего не сливает и не портит, очередь цела", async () => {
+    await queueClientChange();
+    let permFailed = false;
+
+    await kickReplayer({
+      supabase: asSupabase(readOnlyView()),
+      tenantId: TENANT,
+      onPermanentFailure: () => {
+        permFailed = true;
+      },
+    });
+
+    expect(permFailed).toBe(false);
+    const remaining = await dequeueAll();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].attempts).toBe(0);
+  });
+
+  test("с клиентом хоста в умолчаниях — правка уходит им", async () => {
+    await queueClientChange();
+    const { client, calls } = makeFakeSupabase((rec) =>
+      rec.op === "update" ? { data: [{ id: UUID_A }], error: null } : { data: null, error: null },
+    );
+    setReplayerDefaults({ writeClient: asSupabase(client) });
+
+    await kickReplayer({ supabase: asSupabase(readOnlyView()), tenantId: TENANT });
+
+    expect(await queueDepth()).toBe(0);
+    expect(calls.some((c) => c.table === "appointments" && c.op === "update")).toBe(true);
+  });
+});
+
+// ─── Выход из аккаунта и слив без входа (аудит 04.10) ─────────────────
+// После выхода хост гасит компанию (`forgetActiveTenantId`), а гейт брал
+// вместо неё снимок с запуска — и слив шёл дальше без входа. Аноним по RLS не
+// видит ни строки: удаление находило ноль строк, проверка видимости — тоже, и
+// операция снималась как «уже удалено». Человек входил снова: очередь пуста,
+// удалённая запись на месте.
+describe("replayer — выход из аккаунта", () => {
+  const queueDelete = (id: string) =>
+    enqueueOp({
+      table: "appointments",
+      op: "delete",
+      row_id: id,
+      payload: { id, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+  const withSession = (client: unknown, session: unknown) => ({
+    ...(client as Record<string, unknown>),
+    auth: { getSession: async () => ({ data: { session } }) },
+  });
+
+  test("живое чтение ответило «компании нет» — снимок с запуска его не подменяет, очередь ждёт", async () => {
+    await queueDelete(UUID_A);
+    const { client, calls } = makeFakeSupabase(() => ({ data: [], error: null }));
+
+    await kickReplayer({
+      supabase: asSupabase(client),
+      tenantId: TENANT,
+      currentTenantId: () => null,
+    });
+
+    expect(calls).toHaveLength(0);
+    expect(await queueDepth()).toBe(1);
+  });
+
+  test("сессии нет — ни одного запроса анонимом, операция цела", async () => {
+    await queueDelete(UUID_A);
+    const { client, calls } = makeFakeSupabase(() => ({ data: [], error: null }));
+
+    await kickReplayer({
+      supabase: asSupabase(withSession(client, null)),
+      currentTenantId: () => TENANT,
+    });
+
+    expect(calls).toHaveLength(0);
+    const [left] = await dequeueAll();
+    expect(left?.attempts).toBe(0);
+  });
+
+  test("вход есть — удаление уходит, как раньше", async () => {
+    await queueDelete(UUID_A);
+    const { client, calls } = makeFakeSupabase((rec) =>
+      rec.op === "delete" ? { data: [{ id: UUID_A }], error: null } : { data: null, error: null },
+    );
+
+    await kickReplayer({
+      supabase: asSupabase(withSession(client, { access_token: "t" })),
+      currentTenantId: () => TENANT,
+    });
+
+    expect(calls.filter((c) => c.op === "delete")).toHaveLength(1);
+    expect(await queueDepth()).toBe(0);
+  });
+
+  test("вышли посреди слива — следующая операция не уходит", async () => {
+    await queueDelete(UUID_A);
+    await queueDelete(UUID_B);
+    let signedOut = false;
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "delete") {
+        // Первое удаление прошло, и в этот миг пришёл SIGNED_OUT.
+        signedOut = true;
+        return { data: [{ id: rec.filters.id }], error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    await kickReplayer({
+      supabase: asSupabase(client),
+      tenantId: TENANT,
+      currentTenantId: () => (signedOut ? null : TENANT),
+    });
+
+    expect(calls.filter((c) => c.op === "delete")).toHaveLength(1);
+    const left = await dequeueAll();
+    expect(left.map((o) => o.row_id)).toEqual([UUID_B]);
+    expect(left[0]?.attempts).toBe(0);
   });
 });

@@ -10,15 +10,19 @@
 
 export type ClientCardBlock =
   | "clients"
+  | "clients.client"
   | "clients.note"
   | "clients.people"
   | "clients.objects"
   | "clients.labels"
+  | "clients.tags"
   | "clients.personal"
   | "clients.files"
   | "clients.requisites"
   | "clients.history"
-  | "clients.money";
+  | "clients.sms"
+  | "clients.menu"
+  | "clients.delete";
 
 export type ClientBlockLevel = "hidden" | "read" | "write";
 

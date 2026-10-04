@@ -36,10 +36,13 @@ export function InvoiceObjectBlock({
   client,
   locationId,
   onLocationChange,
+  paper = "invoice",
 }: {
   client: Client | null;
   locationId: string | null;
   onLocationChange: (id: string | null) => void;
+  /** Чья бумага: подсказка про адрес называет её («на чеке», 04.10). */
+  paper?: "invoice" | "receipt";
 }) {
   const t = useThemeColors();
   const updateClient = useUpdateClientById();
@@ -86,7 +89,8 @@ export function InvoiceObjectBlock({
               loc={selected}
               showNote={false}
               onPress={() => setPicker(true)}
-              onMore={() => setEditing(true)}
+              onLongPress={() => setEditing(true)}
+              longPressLabel="Правка объекта"
             />
             {hasExactAddress(selected.addressParts) ? null : (
               <Text
@@ -97,7 +101,9 @@ export function InvoiceObjectBlock({
                   color: t.warning,
                 }}
               >
-                «Точный адрес» не заполнен — на инвойсе адреса не будет
+                {paper === "receipt"
+                  ? "«Точный адрес» не заполнен — на чеке адреса не будет"
+                  : "«Точный адрес» не заполнен — на инвойсе адреса не будет"}
               </Text>
             )}
           </View>
@@ -130,7 +136,11 @@ export function InvoiceObjectBlock({
             onAdd={() => setAdding(true)}
             onClose={() => setPicker(false)}
           />
+          {/* Черновик листа доживает до следующего открытия — но только у
+              ЭТОГО клиента: сменили клиента, и набранный адрес прежнего ушёл
+              бы в объекты нового (аудит 2026-10-03). */}
           <ObjectSheet
+            key={client.id}
             visible={adding}
             writer={writer}
             teamId={client?.team_id ?? null}

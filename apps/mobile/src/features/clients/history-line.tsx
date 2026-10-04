@@ -5,6 +5,7 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import { clientDebt } from "@/features/clients/filter";
 import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
+import { statsByBlocks } from "@/features/clients/card-access";
 
 // ВВОДНАЯ О КЛИЕНТЕ ОДНОЙ СТРОКОЙ (владелец 2026-09-04: «когда я выбираю
 // клиента, там должна быть уже вводная информация, как это написано в
@@ -32,6 +33,8 @@ export function clientHistoryParts(
   stats: ClientStats | undefined,
 ): HistoryPart[] {
   if (!stats) return [];
+  // Деньги и визиты — по правам КЛИЕНТА, а не календаря (30.09).
+  stats = statsByBlocks(client, stats);
   const parts: HistoryPart[] = [];
   const debt = Math.round(clientDebt(client, stats));
   if (debt > 0) {
