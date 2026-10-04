@@ -12,9 +12,7 @@ import {
 import {
   listInvoicePayments,
   recordInvoicePayment,
-  refundInvoicePayment,
   type RecordInvoicePaymentDraft,
-  type RefundInvoicePaymentDraft,
 } from "@babun/shared/db/repositories/invoice-payments";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
@@ -343,21 +341,3 @@ export function useRecordInvoicePayment(invoiceId: string) {
   });
 }
 
-export function useRefundInvoicePayment(invoiceId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    ...NEVER_PAUSE,
-    mutationFn: ({
-      paymentId,
-      draft,
-    }: {
-      paymentId: string;
-      draft: RefundInvoicePaymentDraft;
-    }) => refundInvoicePayment(supabase, invoiceId, paymentId, draft),
-    onSuccess: () => {
-      invalidateInvoices(qc);
-      qc.invalidateQueries({ queryKey: ["accounts"] });
-    },
-    meta: { errorHandled: true },
-  });
-}

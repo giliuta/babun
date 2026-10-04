@@ -54,7 +54,8 @@ import { useThemeColors } from "@/theme/colors";
 export default function CreditNoteScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  const { invoiceId } = useLocalSearchParams<{ invoiceId: string }>();
+  // `amount` — с «Вернуть» платежа инвойса: форма открывается на его сумме.
+  const { invoiceId, amount: amountParam } = useLocalSearchParams<{ invoiceId: string; amount?: string }>();
   const original = useInvoice(invoiceId);
   const clients = useClients();
   const tenant = useTenant();
@@ -93,26 +94,27 @@ export default function CreditNoteScreen() {
   // К оплате по инвойсу сейчас (сумма минус уже сторнированное).
   const due = settlement?.due ?? row?.total ?? 0;
   const paid = settlement?.paid ?? 0;
-  const text = amountText ?? (paid > 0 ? "" : formatMoneyForInput(due));
+  const text =
+    amountText ??
+    (amountParam && Number(amountParam) > 0
+      ? formatMoneyForInput(Math.min(Number(amountParam), due))
+      : formatMoneyForInput(due));
   const parsed = parseMoneyAmount(text);
   const value = parsed ?? 0;
   const whole = Math.abs(value - due) < 0.005;
-  // Получено больше нового «к оплате» — столько вернётся клиенту.
-  const toRefund = whole ? 0 : Math.max(0, Math.round((paid - (due - value)) * 100) / 100);
+  // Получено больше нового «к оплате» — столько вернётся клиенту (у всей
+  // суммы — всё полученное).
+  const toRefund = Math.max(0, Math.round((paid - (due - value)) * 100) / 100);
   const problem =
     !text
-      ? paid > 0
-        ? "Впишите, какую часть сторнировать"
-        : null
+      ? "Впишите сумму"
       : parsed == null
         ? "Не больше двух знаков после запятой"
         : value <= 0
           ? "Сумма должна быть больше нуля"
           : value > due + 0.005
             ? `Не больше ${formatInvoiceMoney(due, row?.currency)}`
-            : whole && paid > 0
-              ? "По инвойсу получены деньги — на всю сумму сначала оформите возврат"
-              : null;
+            : null;
   const valid = !!text && problem == null;
 
   const defaultNote = row
@@ -186,7 +188,8 @@ export default function CreditNoteScreen() {
   const issue = async () => {
     setError(null);
     try {
-      const note = whole
+      // Вся сумма без денег — прежняя отмена; с деньгами — нота вернёт их сама.
+      const note = whole && paid <= 0
         ? await cancel.mutateAsync(reason.trim() || undefined)
         : await partial.mutateAsync({
             requestId,
@@ -257,7 +260,9 @@ export default function CreditNoteScreen() {
               problem
                 ? { text: problem, error: !!text }
                 : whole
-                  ? { text: "Вся сумма — инвойс будет отменён" }
+                  ? toRefund > 0
+                    ? { text: `Вся сумма — инвойс будет отменён, клиенту вернётся ${formatInvoiceMoney(toRefund, row.currency)}` }
+                    : { text: "Вся сумма — инвойс будет отменён" }
                   : toRefund > 0
                     ? { text: `Часть — инвойс остаётся, клиенту вернётся ${formatInvoiceMoney(toRefund, row.currency)}` }
                     : { text: `Часть — инвойс остаётся, к оплате ${formatInvoiceMoney(Math.max(0, due - value), row.currency)}` }

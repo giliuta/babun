@@ -5212,5 +5212,8 @@
  "Не нашлось платежа инвойса для возврата": "No se encontró un pago de la factura para reembolsar",
  "Не указан идентификатор кредит-ноты": "Falta el identificador de la nota de crédito",
  "Сумма кредит-ноты должна быть больше нуля": "El importe de la nota de crédito debe ser mayor que cero",
- "«Точный адрес» не заполнен — на чеке адреса не будет": "«Dirección exacta» está vacía: el recibo no tendrá dirección"
+ "«Точный адрес» не заполнен — на чеке адреса не будет": "«Dirección exacta» está vacía: el recibo no tendrá dirección",
+ "Впишите сумму": "Indica el importe",
+ "Вся сумма — инвойс будет отменён, клиенту вернётся {0}": "Importe total: la factura se anulará y al cliente se le devuelven {0}",
+ "Больше суммы инвойса сторнировать нельзя: {0} {1}": "No se puede acreditar más que el importe de la factura: {0} {1}"
 }

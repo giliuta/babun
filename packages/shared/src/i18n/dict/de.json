@@ -5212,5 +5212,8 @@
  "Не нашлось платежа инвойса для возврата": "Keine Rechnungszahlung zum Erstatten gefunden",
  "Не указан идентификатор кредит-ноты": "Die Gutschrift-ID fehlt",
  "Сумма кредит-ноты должна быть больше нуля": "Der Gutschriftsbetrag muss größer als null sein",
- "«Точный адрес» не заполнен — на чеке адреса не будет": "„Genaue Adresse“ ist leer — auf der Quittung steht keine Adresse"
+ "«Точный адрес» не заполнен — на чеке адреса не будет": "„Genaue Adresse“ ist leer — auf der Quittung steht keine Adresse",
+ "Впишите сумму": "Betrag eingeben",
+ "Вся сумма — инвойс будет отменён, клиенту вернётся {0}": "Voller Betrag — die Rechnung wird storniert, der Kunde erhält {0} zurück",
+ "Больше суммы инвойса сторнировать нельзя: {0} {1}": "Mehr als den Rechnungsbetrag kannst du nicht gutschreiben: {0} {1}"
 }

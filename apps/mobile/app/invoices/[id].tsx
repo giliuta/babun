@@ -35,7 +35,6 @@ import {
 import { InvoicePaymentSheet } from "@/features/invoices/InvoicePaymentSheet";
 import { useInvoiceMenu } from "@/features/invoices/invoice-menu";
 import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
-import { InvoiceRefundSheet } from "@/features/invoices/InvoiceRefundSheet";
 import { shareInvoicePdf } from "@/features/invoices/share-pdf";
 import { buildInvoiceDocument } from "@/features/invoices/document";
 import { InvoiceStatusBadge } from "@/features/invoices/InvoiceStatusBadge";
@@ -46,7 +45,6 @@ import {
   useInvoicePayments,
   useInvoices,
   useRecordInvoicePayment,
-  useRefundInvoicePayment,
 } from "@/features/invoices/queries";
 import { useCurrentRole, useTenant } from "@/features/settings/tenant";
 import { accessGate } from "@/features/access/my-access";
@@ -104,12 +102,10 @@ export default function InvoiceDetailScreen() {
       ? { originalNumber: noteReceipt?.number ?? null, ofReceipt: true }
       : null;
   const pay = useRecordInvoicePayment(id);
-  const refund = useRefundInvoicePayment(id);
   const invoiceMenu = useInvoiceMenu();
   const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [accountCreateOpen, setAccountCreateOpen] = useState(false);
-  const [refundTarget, setRefundTarget] = useState<InvoicePaymentLedger | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   // ЧЕК — ТОЛЬКО У ИНВОЙСА (владелец 2026-09-30: «отдельно чеки пока что не
   // делай; чек можно выставить на выставленный инвойс — на оплату, принятую
@@ -132,12 +128,6 @@ export default function InvoiceDetailScreen() {
   const settlement = useMemo(
     () => invoice.data ? calculateInvoiceSettlement(invoice.data, payments) : null,
     [invoice.data, payments],
-  );
-  const refundAvailable = useMemo(
-    () => refundTarget
-      ? calculateInvoicePaymentRefundable(refundTarget, payments)
-      : 0,
-    [payments, refundTarget],
   );
   // ДОКУМЕНТ БЕЗ КЛИЕНТА МОЖНО ПРИВЯЗАТЬ (владелец 2026-09-07: «открываю
   // документ — сверху пишет, что он ни к чему не присвоен, и предлагает
@@ -508,9 +498,14 @@ export default function InvoiceDetailScreen() {
                     onOpenAppointment={refundInAppointment && appointment
                       ? openLinkedAppointment
                       : undefined}
+                    // ВОЗВРАТ — ЧЕРЕЗ КРЕДИТ-НОТУ (04.10): документ и деньги одним
+                    // движением; старый возврат без документа оставлял долг.
                     onRefund={
-                      owner && refundDestination === "invoice"
-                        ? () => setRefundTarget(payment)
+                      owner && refundDestination === "invoice" && refundable > 0
+                        ? () =>
+                            router.push(
+                              `/invoices/credit-note?invoiceId=${row.id}&amount=${refundable}` as Href,
+                            )
                         : undefined
                     }
                   />
@@ -579,21 +574,6 @@ export default function InvoiceDetailScreen() {
           await pay.mutateAsync(value);
         }}
         onClose={() => setPaymentOpen(false)}
-      />
-      <InvoiceRefundSheet
-        visible={refundTarget != null}
-        payment={refundTarget}
-        refundable={refundAvailable}
-        currency={row.currency}
-        businessToday={businessToday}
-        accountName={refundTarget?.account_id
-          ? accountById.get(refundTarget.account_id)
-          : undefined}
-        submitting={refund.isPending}
-        onSubmit={async (value) => {
-          await refund.mutateAsync(value);
-        }}
-        onClose={() => setRefundTarget(null)}
       />
       <AccountEditorSheet
         visible={accountCreateOpen}
