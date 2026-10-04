@@ -3,6 +3,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import {
   cancelAppointmentPayment,
   recordAppointmentPayment,
+  refundAppointmentOverpayment,
   type AppointmentPaymentKind,
 } from "@babun/shared/db/repositories/appointment-payments";
 import { cacheServerAppointment } from "@babun/shared/sync/appointmentsCached";
@@ -152,6 +153,36 @@ export function useCancelPayment(appointmentId?: string | null) {
       cancelAppointmentPayment(supabase, {
         appointmentId: vars.appointmentId,
         paymentId: vars.paymentId,
+        requestId: vars.requestId,
+      }),
+    onSuccess: settle,
+  });
+}
+
+export interface RefundOverpaymentVars {
+  appointmentId: string;
+  /** Евро с копейками. */
+  amount: number;
+  requestId: string;
+}
+
+/** ВЕРНУТЬ КЛИЕНТУ ПЕРЕПЛАТУ (владелец 04.10). Итог записи опустили ниже
+ *  полученного: перед сохранением разницу возвращают клиенту — в финансах
+ *  «Возврат клиенту», платежи записи уменьшаются. Без мгновенного вида:
+ *  ответ нужен форме, чтобы следом сохранить итог. */
+export function useRefundOverpayment(appointmentId?: string | null) {
+  const settle = useSettleFreshAppointment();
+  return useMutation({
+    ...NEVER_PAUSE,
+    scope: paymentScope(appointmentId),
+    onMutate: (vars: RefundOverpaymentVars) => {
+      markOwnWrite(vars.appointmentId, OWN_WRITE_IN_FLIGHT_MS);
+    },
+    onSettled: (_data, _error, vars) => markOwnWrite(vars.appointmentId, OWN_WRITE_SETTLE_MS),
+    mutationFn: (vars: RefundOverpaymentVars) =>
+      refundAppointmentOverpayment(supabase, {
+        appointmentId: vars.appointmentId,
+        amount: vars.amount,
         requestId: vars.requestId,
       }),
     onSuccess: settle,

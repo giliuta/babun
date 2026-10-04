@@ -16,6 +16,7 @@ import {
   paymentMath,
   pendingPaymentToSend,
   paymentRows,
+  overpaymentToRefund,
   recordedToast,
   slotUnsaved,
   visitStarted,
@@ -134,6 +135,25 @@ describe("деньги блока считаются по итогу ФОРМЫ"
       outstanding: 0,
       overpaid: 6000,
     });
+  });
+
+  test("переплата перед сохранением — сколько вернуть клиенту (владелец 04.10)", () => {
+    // Карта 20 + наличные 10 + карта 20, итог опустили с 50 до 30.
+    const split = apt({
+      total_amount: 50,
+      paid_amount: 50,
+      payment_status: "paid",
+      payments: [
+        { id: "a", method: "card", amount: 20, paid_at: "2026-10-03T21:11:19.602Z" },
+        { id: "b", method: "cash", amount: 10, paid_at: "2026-10-03T21:11:48.287Z" },
+        { id: "c", method: "card", amount: 20, paid_at: "2026-10-03T21:12:14.339Z" },
+      ],
+    });
+    assert.deepEqual(overpaymentToRefund(split, 30), { amountCents: 2000, receivedCents: 5000 });
+    assert.equal(overpaymentToRefund(split, 50), null);
+    assert.equal(overpaymentToRefund(split, 80), null);
+    assert.equal(overpaymentToRefund(null, 30), null);
+    assert.equal(overpaymentToRefund({ ...split, status: "cancelled" }, 30), null);
   });
 
   test("возвращённая запись не должна и не переплачена ни при каком итоге", () => {

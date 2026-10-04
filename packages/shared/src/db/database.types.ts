@@ -4366,6 +4366,74 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      refund_appointment_overpayment: {
+        Args: {
+          p_amount: number
+          p_appointment_id: string
+          p_request_id: string
+        }
+        Returns: {
+          address: string
+          address_lat: number | null
+          address_lng: number | null
+          address_note: string
+          cancel_reason: string | null
+          city: string | null
+          client_id: string | null
+          color_override: string | null
+          comment: string
+          consent_given: boolean
+          created_at: string
+          created_by: string | null
+          custom_total: boolean
+          date: string
+          discount_amount: number
+          event_all_day: boolean
+          event_notes: string
+          event_push_at: string | null
+          event_push_enabled: boolean
+          event_push_offsets: Json
+          event_repeat: Json
+          event_url: string
+          expenses: Json
+          global_discount: Json | null
+          id: string
+          is_online_booking: boolean
+          kind: string
+          location_id: string | null
+          master_id: string | null
+          paid_amount: number
+          payment: Json | null
+          payment_account_id: string | null
+          payment_method: string | null
+          payment_status: string
+          payments: Json
+          prepaid_amount: number
+          prepayments: Json
+          reminder_enabled: boolean
+          reminder_offsets: Json
+          reminder_template: string
+          service_ids: Json
+          service_price_overrides: Json
+          services: Json
+          source: string | null
+          status: string
+          team_id: string | null
+          tenant_id: string
+          time_end: string
+          time_start: string
+          total_amount: number
+          total_duration: number
+          updated_at: string
+          vat_mode: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "appointments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cancel_invoice: {
         Args: { p_invoice_id: string; p_reason?: string }
         Returns: {

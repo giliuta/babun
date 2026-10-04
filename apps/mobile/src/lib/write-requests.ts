@@ -106,6 +106,8 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "record_account_transfer",
   "record_appointment_payment",
   "record_invoice_payment",
+  // Возврат клиенту переплаты по записи (миграция 20261004024913).
+  "refund_appointment_overpayment",
   "refund_invoice_payment",
   "replace_day_extras",
   "reset_appointment_payment",

@@ -68,3 +68,29 @@ export async function cancelAppointmentPayment(
   if (!data) throw new Error("Сервер не вернул запись после снятия оплаты");
   return rowToAppointment(data as Row);
 }
+
+export interface RefundAppointmentOverpaymentInput {
+  appointmentId: string;
+  /** Сколько вернуть клиенту — евро с копейками. */
+  amount: number;
+  /** UUID, придуманный клиентом: становится id первой строки возврата. */
+  requestId: string;
+}
+
+/** Вернуть клиенту часть полученного по записи (итог стал меньше оплаты).
+ *  Сервер (`refund_appointment_overpayment`, 04.10) пишет возвраты
+ *  «Возврат клиенту» по платежам от последнего к первому и возвращает
+ *  свежую строку записи; повтор того же `requestId` ничего не задваивает. */
+export async function refundAppointmentOverpayment(
+  supabase: SupabaseClient<Database>,
+  input: RefundAppointmentOverpaymentInput,
+): Promise<Appointment> {
+  const { data, error } = await supabase.rpc("refund_appointment_overpayment", {
+    p_appointment_id: input.appointmentId,
+    p_amount: input.amount,
+    p_request_id: input.requestId,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Сервер не вернул запись после возврата");
+  return rowToAppointment(data as Row);
+}

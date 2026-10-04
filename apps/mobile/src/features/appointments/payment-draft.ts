@@ -86,6 +86,20 @@ export function paymentMath(
   };
 }
 
+/** ИТОГ НИЖЕ ПОЛУЧЕННОГО — СКОЛЬКО ВЕРНУТЬ КЛИЕНТУ перед сохранением
+ *  (владелец 04.10). `null` — переплаты нет, у новой записи или у отменённой
+ *  (её деньги уже закрыты возвратом). Центы — как вся математика блока. */
+export function overpaymentToRefund(
+  appointment: Appointment | null,
+  totalDraft: number,
+): { amountCents: number; receivedCents: number } | null {
+  if (!appointment) return null;
+  if (appointment.status === "cancelled" || appointment.payment_status === "refunded") return null;
+  const { overpaid } = paymentMath(appointment, totalDraft);
+  if (overpaid <= 0) return null;
+  return { amountCents: overpaid, receivedCents: Math.round(getPaidAmount(appointment) * 100) };
+}
+
 /** Сумма из поля ввода — в центах; 0, если это не число. */
 export function amountCentsFromInput(text: string): number {
   const parsed: unknown = parseMoneyInputToCents(text);
