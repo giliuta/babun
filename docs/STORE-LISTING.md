@@ -99,7 +99,10 @@ SMS
 Demo account: почта и пароль — их вводит владелец в App Store Connect (в git не
 хранятся).
 
-## App Privacy (Apple) — ответы анкеты
+## App Privacy (Apple) — ответы анкеты (заполнено 04.10)
+
+Возрастной рейтинг: **4+** (все ответы «нет»). В условиях поэтому нет
+минимального возраста — Apple требует, чтобы он совпадал с рейтингом.
 
 Tracking: **No** (данные не используются для слежки). Для каждого типа ниже:
 Linked to the user — **Yes**, Used for tracking — **No**, Purpose — **App
@@ -108,6 +111,8 @@ Functionality**.
 | Раздел | Тип |
 |---|---|
 | Contact Info | Name, Email Address, Phone Number, Physical Address |
+| Financial Info | Other Financial Info (доходы, расходы, долги бизнеса) |
+| User Content | Emails or Text Messages (тексты SMS клиентам) |
 | User Content | Photos or Videos, Other User Content |
 | Contacts | Contacts (только выбранные при импорте) |
 | Location | Precise Location (точка объекта от клиента) |
