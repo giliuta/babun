@@ -15,9 +15,15 @@ module.exports = ({ config }) => ({
   // entitlement in TestFlight.
   plugins: [
     ...(config.plugins ?? []),
+    // Android draws the notification icon as a white silhouette, tinted
+    // with `color`; iOS uses the app icon.
     [
       "expo-notifications",
-      { mode: IS_DEV ? "development" : "production" },
+      {
+        mode: IS_DEV ? "development" : "production",
+        icon: "./assets/notification-icon.png",
+        color: "#2c5be0",
+      },
     ],
     // Сканер документов (STORY-070, этап 2): VisionKit на iOS. Плагин пишет
     // только текст разрешения камеры; сам модуль нативный — dev-клиент
