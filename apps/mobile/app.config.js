@@ -33,6 +33,18 @@ module.exports = ({ config }) => ({
       { cameraPermission: "Babun использует камеру для фото объектов и сканирования документов" },
     ],
   ],
+  // КАРТА НА ANDROID (выпуск в Google Play, 04.10): там у react-native-maps
+  // один провайдер — Google, и без ключа карта точки объекта пустая. Ключ —
+  // переменная окружения EAS (`GOOGLE_MAPS_ANDROID_API_KEY`, окружение
+  // production), а не строка в git. На iOS карта по-прежнему Apple: ключ туда
+  // намеренно не кладём — `ios.config.googleMapsApiKey` переключил бы
+  // MapPicker на провайдер Google без его SDK в сборке.
+  android: {
+    ...config.android,
+    ...(process.env.GOOGLE_MAPS_ANDROID_API_KEY
+      ? { config: { ...config.android?.config, googleMaps: { apiKey: process.env.GOOGLE_MAPS_ANDROID_API_KEY } } }
+      : null),
+  },
   ios: {
     ...config.ios,
     bundleIdentifier: IS_DEV
