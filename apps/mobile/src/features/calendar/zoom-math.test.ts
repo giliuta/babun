@@ -14,6 +14,7 @@ import {
   pinchRelease,
   screenY,
   settleStep,
+  wheelZoomFactor,
 } from "./zoom-math";
 
 // ЗУМ СЕТКИ: ТЫСЯЧИ БЫСТРЫХ ПИНЧЕЙ НА МОДЕЛИ КАДРА (04.10).
@@ -290,5 +291,32 @@ describe("зум сетки: устройство компонента", () => {
   test("масштаб считается от признания жеста", () => {
     assert.match(src, /scale0\.value = e\.scale > 0 \? e\.scale : 1;/);
     assert.match(src, /scale0: scale0\.value,/);
+  });
+});
+
+describe("веб: щипок тачпада (ctrl+wheel) — зум календаря, не страницы (04.10)", () => {
+  test("раздвинул пальцы (deltaY < 0) — крупнее, свёл — мельче, ноль — без изменений", () => {
+    assert.ok(wheelZoomFactor(-4) > 1);
+    assert.ok(wheelZoomFactor(4) < 1);
+    assert.equal(wheelZoomFactor(0), 1);
+  });
+
+  test("щелчок колеса мыши с Ctrl не прыгает втрое", () => {
+    assert.equal(wheelZoomFactor(-400), wheelZoomFactor(-25));
+    assert.ok(wheelZoomFactor(-400) < 1.3);
+    assert.ok(wheelZoomFactor(400) > 0.75);
+  });
+
+  test("время под курсором стоит: кадр с этим множителем держит якорь", () => {
+    const vh = 700;
+    const span = 24;
+    const baseH = 64;
+    const scroll = 500;
+    const focalY = 300;
+    const anchor = pinchAnchor(scroll, focalY, baseH);
+    const f = pinchFrame({ baseH, anchor, scale: wheelZoomFactor(-10), scale0: 1, focalY, span, vh });
+    assert.ok(f.h > baseH);
+    // Под курсором то же время: PAD_TOP + anchor·h − offset = focalY.
+    assert.ok(Math.abs(PAD_TOP + anchor * f.h - f.offset - focalY) < 1e-9);
   });
 });

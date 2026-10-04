@@ -151,3 +151,13 @@ export function screenY(
   "worklet";
   return PAD_TOP + g.ty + g.scale * t * g.layoutH - g.scrollY;
 }
+
+/** ВЕБ: шаг щипка тачпада (wheel с ctrlKey) → множитель высоты часа.
+ *  Тачпад шлёт мелкие дельты (±1…10 на событие), колесо мыши с Ctrl — по
+ *  ±100: дельта зажата, чтобы один щелчок колеса не прыгал втрое. Вниз
+ *  (deltaY > 0) — уменьшение, как у браузера. */
+export function wheelZoomFactor(deltaY: number): number {
+  "worklet";
+  const d = Math.max(-25, Math.min(25, deltaY));
+  return Math.exp(-d / 100);
+}
