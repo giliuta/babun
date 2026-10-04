@@ -17,7 +17,10 @@ export const SIGNUP_LINK_REDIRECT = "https://babun.app/login";
  *  на babun.app работает везде, код из письма — в приложении. */
 export const RECOVERY_LINK_REDIRECT = "https://babun.app/reset-password";
 
-const RESEND_COOLDOWN_S = 45;
+/** Не короче «Minimum interval per user» в SMTP-настройках Supabase (60 с):
+ *  раньше кнопка оживала на 45-й секунде, и повтор упирался в отказ сервера
+ *  «Слишком много попыток». */
+const RESEND_COOLDOWN_S = 60;
 
 // «Введите код» — один экран на код из письма Babun (владелец 04.10: «чтоб
 // дальше продолжить, оно должно отправить на почту подтверждение»).
