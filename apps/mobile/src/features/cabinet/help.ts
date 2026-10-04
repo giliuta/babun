@@ -4,7 +4,9 @@
 // ни RN — ссылки и список вопросов проверяются тестом, а экран только рисует.
 //
 // КОНТАКТЫ — ТОЛЬКО НАЗВАННЫЕ ВЛАДЕЛЬЦЕМ. Почту поддержки он назвал 04.10
-// («babun.app@gmail.com — почта от приложения, специально создал»); номер и ник
+// («babun.app@gmail.com — почта от приложения, специально создал»); с 04.10
+// наружу смотрит адрес домена support@babun.app — Cloudflare Email Routing
+// пересылает его в тот же ящик (проверено: письмо Google «Forwarded»). Номер и ник
 // выдумывать нельзя: строка-дверь в чужой номер — худший вид вранья (закон
 // `SettingsRow.onPress`). Пустой канал — строки нет вовсе, без заглушек и без
 // «скоро»; заполнил — строка появилась сама. Та же почта стоит в документах
@@ -21,7 +23,7 @@ export interface SupportContacts {
 export const SUPPORT_CONTACTS: SupportContacts = {
   whatsapp: "",
   telegram: "",
-  email: "babun.app@gmail.com",
+  email: "support@babun.app",
 };
 
 export type SupportChannel = "whatsapp" | "telegram" | "email";
