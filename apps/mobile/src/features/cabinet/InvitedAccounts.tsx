@@ -1,14 +1,17 @@
 import { Fragment, type ReactNode } from "react";
-import { Users } from "lucide-react-native";
+import { UserCog, Users } from "lucide-react-native";
+import { useRouter, type Href } from "expo-router";
 
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useMirror } from "@/features/access/mirror/mirror-state";
 import { useTeams } from "@/features/reference/queries";
 import { useMyMemberships } from "@/features/settings/my-memberships";
-import { useMyCalendars } from "@/features/settings/workspaces";
+import { useMyCalendars, useSwitchWorkspace } from "@/features/settings/workspaces";
+import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { TariffRow } from "@/features/tariffs/TariffRow";
@@ -27,7 +30,9 @@ import { TariffPaymentsRow } from "./TariffPaymentsRow";
 // Под строкой приглашений — по блоку на каждый аккаунт, где человек партнёр:
 // шапка — имя аккаунта, первой строкой — его команды, ниже — только то, что
 // этот аккаунт открыл правами раздела «Кабинет»: тариф, оплаты тарифа, SMS,
-// реквизиты, история изменений (04.10). Нет права — нет строки. Каждая строка открывает страницу ЗА ЭТОТ
+// реквизиты, история изменений, партнёры (04.10). Нет права — нет строки.
+// «Партнёры» (директор) открываются В ЭТОМ аккаунте: телефон сначала
+// переходит в него — страницы партнёров живут в открытом аккаунте. Каждая строка открывает страницу ЗА ЭТОТ
 // аккаунт (`?tenant=`), а не за тот, что открыт на телефоне, — и платят на
 // ней за него.
 
@@ -46,6 +51,7 @@ export function InvitedAccounts() {
       <AccountScopeProvider tenantId={tenantId}>
         <InvitedAccountBlock
           tenantId={tenantId}
+          mirrored
           fallbackName={null}
           teamNames={teams.filter((team) => attached.has(team.id)).map((team) => team.name)}
         />
@@ -75,17 +81,25 @@ function InvitedAccountBlock({
   tenantId,
   fallbackName,
   teamNames,
+  mirrored = false,
 }: {
   tenantId: string;
   fallbackName: string | null;
   teamNames: string[];
+  /** «Посмотреть его глазами»: строки — картинка, переходов нет. */
+  mirrored?: boolean;
 }) {
+  const router = useRouter();
+  const activeTenant = useTenantId();
+  const memberships = useMyMemberships().data ?? [];
+  const switchWorkspace = useSwitchWorkspace();
   const name = useAccountName() ?? fallbackName ?? "Аккаунт";
   const tariff = useAccountGate("cabinet.tariff");
   const payments = useAccountGate("cabinet.tariff_payments");
   const sms = useAccountGate("cabinet.sms");
   const requisites = useAccountGate("finance.settings_requisites");
   const history = useAccountGate("cabinet.history");
+  const partners = useAccountGate("company.partners");
 
   const rows: { key: string; node: ReactNode }[] = [];
   if (seen(tariff)) rows.push({ key: "tariff", node: <TariffRow tenantId={tenantId} /> });
@@ -93,6 +107,35 @@ function InvitedAccountBlock({
   if (seen(sms)) rows.push({ key: "sms", node: <SmsCabinetRow tenantId={tenantId} /> });
   if (seen(requisites)) rows.push({ key: "requisites", node: <CabinetRequisitesRow tenantId={tenantId} /> });
   if (seen(history)) rows.push({ key: "history", node: <HistoryRow tenantId={tenantId} /> });
+  if (seen(partners)) {
+    const openPartners = async () => {
+      try {
+        if (activeTenant !== tenantId) {
+          const role = memberships.find((m) => m.tenantId === tenantId)?.role;
+          await switchWorkspace.mutateAsync({
+            tenantId,
+            onboarded: true,
+            role: role === "dispatcher" ? "dispatcher" : "master",
+          });
+        }
+        router.push("/cabinet/people" as Href);
+      } catch (e) {
+        notify("Не удалось открыть", (e as Error).message);
+      }
+    };
+    rows.push({
+      key: "partners",
+      node: (
+        <SettingsRow
+          tile={SETTINGS_TILE.indigo}
+          icon={UserCog}
+          title="Партнёры"
+          sub={partners === "write" ? "Приглашает и ставит права" : "Только видит"}
+          onPress={mirrored ? undefined : () => void openPartners()}
+        />
+      ),
+    });
+  }
 
   return (
     <>

@@ -11,6 +11,7 @@ import type { AccessBlock, AccessLevel } from "../access-map";
 import type { ViewSection } from "../master-page/rights-view-sections";
 import { compositeRow } from "../master-page/composite-rows";
 import { rightLook } from "./right-look";
+import { useStepAllowed } from "../master-page/use-partner-manager";
 import { RightSheet } from "./RightSheet";
 import { isClosedStep, rightTitle, rowWord, stepDanger } from "./right-words";
 
@@ -37,6 +38,8 @@ export function TeamRightsCards({
   teamName,
   teamColor,
   busyKey,
+  teamId = null,
+  lockedAll,
   onPick,
   onSectionLayout,
 }: {
@@ -51,11 +54,17 @@ export function TeamRightsCards({
   teamColor: string;
   /** Право, которое сейчас сохраняется: вторая запись ждёт первую. */
   busyKey: string | null;
+  /** Команда этих прав — по ней директору гасятся ступени выше своих. */
+  teamId?: string | null;
+  /** Права этого человека отсюда не меняются — почему (директор и сам он,
+   *  другой директор, 04.10). */
+  lockedAll?: string;
   onPick: (block: AccessBlock, level: AccessLevel) => void;
   /** Где встала карточка раздела — чтобы страница прокрутила к нему. */
   onSectionLayout?: (section: ViewSection, y: number) => void;
 }) {
   const t = useThemeColors();
+  const allows = useStepAllowed();
   /** Право, чья шторка открыта; держится, пока шторка уезжает. */
   const [sheetKey, setSheetKey] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -142,7 +151,12 @@ export function TeamRightsCards({
         busy={busyKey !== null}
         rowLevel={composite ? sheetRow?.level : undefined}
         previewLevels={previewLevels}
-        locked={foldedText(sheetRow?.foldedBy) ?? sheetRow?.locked}
+        locked={lockedAll ?? foldedText(sheetRow?.foldedBy) ?? sheetRow?.locked}
+        stepAllowed={
+          sheetBlock
+            ? (step) => allows(sheetBlock, sheetBlock.scope === "calendar" ? teamId : null, step)
+            : undefined
+        }
         onPick={onPick}
         onClose={() => setSheetOpen(false)}
       />

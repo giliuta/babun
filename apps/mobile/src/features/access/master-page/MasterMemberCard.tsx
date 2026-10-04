@@ -39,8 +39,9 @@ import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
 import { CALENDAR_GROUPS } from "./access-summary";
 import { activeOf, usePreview } from "./rights-page-shared";
-import { memberRefusal } from "./member-rights-writer";
+import { memberRefusal, memberRefusalText } from "./member-rights-writer";
 import { viewSections } from "./rights-view-sections";
+import { usePartnerManager, useTeamsAllowed } from "./use-partner-manager";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import {
   copyCalendarLevels,
@@ -88,6 +89,10 @@ export function MasterMemberCard({
   const teamsQuery = useTeams();
   const blocksQuery = useAccessBlocks({ fresh: true });
   const accessQuery = useMemberAccess(userId);
+  // ДИРЕКТОР (04.10): себя и директоров не правит, команды — только свои,
+  // «его глазами» и «Убрать» — по праву (`partner-manager.ts`).
+  const manager = usePartnerManager(userId, accessQuery.data);
+  const teamsAllowed = useTeamsAllowed();
   const membersQuery = useCompanyMembers();
   const mastersQuery = useMasters({ includeInactive: true });
   // Записи компании уже греются календарём — счёт берётся из того же кэша.
@@ -187,6 +192,14 @@ export function MasterMemberCard({
    *  этом календаре человек разом теряет и записи, и деньги, и права — их
    *  уровни там больше не считаются. */
   const toggleCalendar = async (id: string) => {
+    if (manager.readOnly) {
+      notify(manager.readOnly);
+      return;
+    }
+    if (teamsAllowed && !teamsAllowed.has(id)) {
+      notify("Эту команду назначает владелец", "Добавлять и снимать можно только команды, где работаете вы.");
+      return;
+    }
     const current = draft.teamIds;
     const attached = current.includes(id);
     const next = attached ? current.filter((teamId) => teamId !== id) : [...current, id];
@@ -199,7 +212,7 @@ export function MasterMemberCard({
         await setCalendars.mutateAsync(next);
         return true;
       } catch (error) {
-        toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
+        toast(memberRefusalText(error), "error");
         return false;
       }
     };
@@ -220,7 +233,7 @@ export function MasterMemberCard({
         try {
           await setAccess.mutateAsync(changes);
         } catch (error) {
-          toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
+          toast(memberRefusalText(error), "error");
         }
       };
       // Шаблонов доступа больше нет (владелец 30.09: «этот блок полностью
@@ -244,7 +257,7 @@ export function MasterMemberCard({
           await setAccess.mutateAsync(copyCalendarLevels(blocks, draft, source, id));
           toast(`Права как в «${sourceName}»`);
         } catch (error) {
-          toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error");
+          toast(memberRefusalText(error), "error");
         }
       } else {
         // «Выставлю сам» и закрытый вопрос — со стартовых прав.
@@ -266,7 +279,7 @@ export function MasterMemberCard({
         void setCalendars
           .mutateAsync(current)
           .then(() => setAccess.mutateAsync(restoreLevels))
-          .catch((error) => toast(MEMBER_REFUSAL_TEXT[memberRefusal(error)], "error")),
+          .catch((error) => toast(memberRefusalText(error), "error")),
     });
   };
 
@@ -373,13 +386,13 @@ export function MasterMemberCard({
         title={name || member?.email || "Партнёр"}
         onBack={back}
         headerRight={
-        member && isStaff ? (
+        member && isStaff && manager.canRemove ? (
           <HeaderMenuButton label="Действия с партнёром" onPress={() => void openMenu()} />
         ) : undefined
         }
         identity={identity}
         live={false}
-        editable={card !== null}
+        editable={card !== null && !manager.readOnly}
         emailEditable={false}
         emailState="plain"
         onNameChange={setNameText}
@@ -395,10 +408,14 @@ export function MasterMemberCard({
         }}
         teams={teams}
         teamIds={draft.teamIds}
-        onOpenCalendars={() => {
-        Keyboard.dismiss();
-        setCalendarsOpen(true);
-        }}
+        onOpenCalendars={
+          manager.readOnly
+            ? undefined
+            : () => {
+                Keyboard.dismiss();
+                setCalendarsOpen(true);
+              }
+        }
         liveAreas={companyAreasOf(blocks)}
         showCalendars
         areaLevels={areaLevelsOf(blocks, draft)}
@@ -413,15 +430,13 @@ export function MasterMemberCard({
         // говорит, что человек может в НЁМ, и открывает права этого календаря.
         teamLine={(id) => draftTeamBrief(blocks, draft, id)}
         // «Посмотреть его глазами» — строкой в блоке «Доступ», а не в ⋯.
-        onMirror={() =>
-          preview({ blocks, draft, name, userId })
-        }
+        onMirror={manager.canPreview ? () => preview({ blocks, draft, name, userId }) : undefined}
         onOpenCalendarRights={(id) =>
           router.push(
             `/cabinet/people/access/${userId}?team=${encodeURIComponent(teamId ?? id)}&rights=1&${rightsFocusQuery({ kind: "calendar", teamId: id })}` as Href,
           )
         }
-        onDetachCalendar={(id) => void toggleCalendar(id)}
+        onDetachCalendar={manager.readOnly ? undefined : (id) => void toggleCalendar(id)}
         phoneAction={
           identity.phone ? <PhoneChannelButton number={card?.phone ?? member?.phone ?? ""} label={name} /> : undefined
         }
@@ -430,14 +445,16 @@ export function MasterMemberCard({
             ? { holder: contactsHolderOf(profileWrite.profile), update: profileWrite.writeContacts }
             : undefined
         }
-        note={card ? <EmployeeNoteBlock card={card} /> : undefined}
+        note={card ? <EmployeeNoteBlock card={card} readOnly={!!manager.readOnly} /> : undefined}
         teamChips={{
           activeId,
           onSelect: setActiveTeam,
-          onAdd: () => {
-            Keyboard.dismiss();
-            setCalendarsOpen(true);
-          },
+          onAdd: manager.readOnly
+            ? undefined
+            : () => {
+                Keyboard.dismiss();
+                setCalendarsOpen(true);
+              },
         }}
         teamRights={
           // ДОСТУП — ПОСТРАНИЧНО (владелец 29.09): строка раздела, тап —
@@ -460,7 +477,11 @@ export function MasterMemberCard({
           />
         }
         // ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ (канон 7.1): посмотреть, что из этого выйдет.
-        footer={<GradientButton label="Посмотреть его глазами" onPress={() => preview({ blocks, draft, name, userId })} />}
+        footer={
+          manager.canPreview ? (
+            <GradientButton label="Посмотреть его глазами" onPress={() => preview({ blocks, draft, name, userId })} />
+          ) : undefined
+        }
       >
         {card ? (
           <>
@@ -473,7 +494,7 @@ export function MasterMemberCard({
       </MasterCardView>
       <CalendarPickerSheet
         visible={calendarsOpen}
-        teams={teams}
+        teams={teamsAllowed ? teams.filter((team) => teamsAllowed.has(team.id) || draft.teamIds.includes(team.id)) : teams}
         selected={draft.teamIds}
         onToggle={(id) => void toggleCalendar(id)}
         onClose={() => setCalendarsOpen(false)}

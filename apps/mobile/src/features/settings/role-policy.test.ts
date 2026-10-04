@@ -234,3 +234,16 @@ describe("роль экрана Кабинета", () => {
     assert.equal(cabinetScreenRole("owner", MINE, undefined), "owner");
   });
 });
+
+describe("директор — страницы партнёров по праву «Партнёры» (04.10)", () => {
+  test("без права партнёр страниц партнёров не открывает", () => {
+    assert.equal(canAccessCabinetPath("master", "/cabinet/people"), false);
+  });
+
+  test("с правом — список и страницы партнёра, но не прочие разделы владельца", () => {
+    assert.equal(canAccessCabinetPath("master", "/cabinet/people", true), true);
+    assert.equal(canAccessCabinetPath("master", "/cabinet/people/abc/rights", true), true);
+    assert.equal(canAccessCabinetPath("master", "/cabinet/archive", true), false);
+    assert.equal(canAccessCabinetPath("master", "/cabinet/peoplex", true), false);
+  });
+});

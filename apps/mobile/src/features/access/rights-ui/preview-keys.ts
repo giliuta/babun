@@ -99,6 +99,7 @@ export const CABINET_PREVIEW_KEYS: readonly string[] = [
   "cabinet.sms",
   "finance.settings_requisites",
   "cabinet.history",
+  "company.partners",
 ];
 
 /** «Ограничения» записей и финансов (03.10) — общий вид сроков. */

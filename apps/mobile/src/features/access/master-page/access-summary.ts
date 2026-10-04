@@ -155,6 +155,7 @@ export const CABINET_ROW_ORDER: readonly string[] = [
   "cabinet.sms",
   "finance.settings_requisites",
   "cabinet.history",
+  "company.partners",
 ];
 
 export function orderCabinetRows<T extends { block: { key: string } }>(rows: readonly T[]): T[] {

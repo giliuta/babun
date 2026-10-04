@@ -8,11 +8,11 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { usePartnersAccess } from "@/features/access/master-page/use-partner-manager";
 import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
 import { useMasters, useTeams, type Master } from "@/features/reference/queries";
 import { usePendingInvitations } from "@/features/settings/team-access";
-import { useCurrentRole } from "@/features/settings/tenant";
 import { canAddPartner } from "@/features/tariffs/tiers";
 import { useTariff, useTariffNudge } from "@/features/tariffs/use-tariff";
 import { refusalOf } from "@/features/access/access-map";
@@ -50,8 +50,9 @@ type MastersRow =
 export default function MastersScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  // Приглашает людей только владелец — сервер откажет остальным (аудит 24.09).
-  const isOwner = useCurrentRole().data === "owner";
+  // Приглашает владелец — и директор с правом «Партнёры: Управляет» (04.10);
+  // остальным сервер откажет (аудит 24.09).
+  const isOwner = usePartnersAccess().manages;
   // Включая архивных: «Вернуть из архива» живёт в хабе мастера, и без
   // архивного хвоста в списке он недостижим (аудит P1-10). Активные
   // сверху, архив серым снизу.

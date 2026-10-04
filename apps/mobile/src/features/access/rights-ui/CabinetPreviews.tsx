@@ -1,4 +1,4 @@
-import { BadgeCheck, Building2, History, MessageSquare, Receipt } from "lucide-react-native";
+import { BadgeCheck, Building2, History, MessageSquare, Receipt, UserCog } from "lucide-react-native";
 
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
@@ -50,6 +50,16 @@ export function CabinetPreview({ blockKey, level }: { blockKey: string; level: A
         return (
           <SettingsRow tile={SETTINGS_TILE.teal} icon={History} title="История изменений" sub="Сегодня 3 изменения" onPress={onPress} />
         );
+      case "company.partners":
+        return (
+          <SettingsRow
+            tile={SETTINGS_TILE.indigo}
+            icon={UserCog}
+            title="Партнёры"
+            sub={state === "write" ? "Приглашает и ставит права" : "Только видит"}
+            onPress={onPress}
+          />
+        );
       default:
         return null;
     }
@@ -59,7 +69,9 @@ export function CabinetPreview({ blockKey, level }: { blockKey: string; level: A
   const caption =
     state === "write" && blockKey === "cabinet.sms"
       ? "Так он пополняет — кнопкой с именем вашего аккаунта"
-      : state === "read" && (blockKey === "cabinet.history" || blockKey === "finance.settings_requisites")
+      : state === "write" && blockKey === "company.partners"
+        ? "Так он ведёт партнёров вашего аккаунта — не выше своих прав"
+      : state === "read" && (blockKey === "cabinet.history" || blockKey === "finance.settings_requisites" || blockKey === "company.partners")
         ? "Так он видит в блоке вашего аккаунта"
         : CAPTION[state];
   return (

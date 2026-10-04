@@ -4,6 +4,7 @@ import { useTeams } from "@/features/reference/queries";
 
 import { levelOf as mapLevelOf, type AccessRefusal } from "../access-map";
 import { useAccessBlocks, useCompanyMembers, useMemberAccess } from "../queries";
+import { usePartnerManager } from "./use-partner-manager";
 import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRightsView";
 import { previewAreaOf } from "./rights-focus";
 import { memberRefusal, useMemberRightsWriter } from "./member-rights-writer";
@@ -32,6 +33,8 @@ export function MemberRights({
 }) {
   const blocksQuery = useAccessBlocks({ fresh: true });
   const accessQuery = useMemberAccess(userId);
+  // Директор (04.10): себя и директоров не правит, «его глазами» — у владельца.
+  const manager = usePartnerManager(userId, accessQuery.data);
   const membersQuery = useCompanyMembers();
   const preview = usePreview();
   const writer = useMemberRightsWriter(userId, blocksQuery.data);
@@ -92,7 +95,8 @@ export function MemberRights({
       busyKey={writer.busyKey}
       onPick={writer.pick}
       area={rightsAreaOf(area)}
-      onPreview={() =>
+      lockedAll={manager.readOnly ?? undefined}
+      onPreview={manager.canPreview ? () =>
         preview({
           blocks,
           draft: draftFromMemberAccess(map, {
@@ -106,7 +110,7 @@ export function MemberRights({
           area: previewAreaOf(rightsAreaOf(area), focus),
           userId,
         })
-      }
+      : undefined}
     />
   );
 }

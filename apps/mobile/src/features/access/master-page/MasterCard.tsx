@@ -36,6 +36,7 @@ import {
 import { rightsFocusQuery } from "./rights-focus";
 import { RIGHTS_AREAS, areaLevelsOf, companyAreasOf } from "./rights-rows";
 import { useDraftTeamAccess } from "./draft-team-access";
+import { useStepAllowed, useTeamsAllowed } from "./use-partner-manager";
 
 // КАРТОЧКА МАСТЕРА — ОДНА НА ТРИ СЛУЧАЯ (владелец 15.09: «„Добавить мастера"
 // должен сразу открывать полную страницу мастера, как добавление клиента»).
@@ -81,6 +82,11 @@ function MasterDraftCard({
   const blocksQuery = useAccessBlocks({ fresh: true });
   const blocks = blocksQuery.data;
   const create = useCreateMasterInvitation();
+  // ДИРЕКТОР (04.10): зовёт только в свои команды и даёт не выше своих прав —
+  // заготовка новой команды («Видит» в шести правах) урезается по его правам,
+  // иначе сервер отказал бы всему приглашению.
+  const allows = useStepAllowed();
+  const teamsAllowed = useTeamsAllowed();
   const [calendarsOpen, setCalendarsOpen] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
   // Адрес, который отказал сервер: красный, пока его не поправили.
@@ -183,7 +189,12 @@ function MasterDraftCard({
     }
     // Без реестра блоков права ушли бы пустыми — кнопка до него серая.
     if (!blocks || create.isPending) return;
-    create.mutate({ ...invitationRequest(draft, blocks, phoneToSave), masterId }, {
+    const request = invitationRequest(draft, blocks, phoneToSave);
+    const access = request.access.filter((change) => {
+      const block = blocks.find((each) => each.key === change.block);
+      return !block || allows(block, change.team_id, change.level);
+    });
+    create.mutate({ ...request, access, masterId }, {
       onSuccess: (saved) => {
         haptics.success();
         toast("Приглашение отправлено");
@@ -270,7 +281,7 @@ function MasterDraftCard({
       />
       <CalendarPickerSheet
         visible={calendarsOpen}
-        teams={teams}
+        teams={teamsAllowed ? teams.filter((team) => teamsAllowed.has(team.id)) : teams}
         selected={draft.teamIds}
         onToggle={(id) => {
           // Добавленная команда сразу выбрана в ленте: её права — здесь же.

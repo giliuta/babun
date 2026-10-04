@@ -111,6 +111,9 @@ const INSIGHTS_ROUTE = "/cabinet/insights";
 // (`FinanceSettingsRoute`), а данные — политика `legal_entities`.
 const REQUISITES_ROUTE = "/cabinet/requisites";
 
+/** Страницы партнёров — по праву «Партнёры» (директор, 04.10). */
+const PEOPLE_ROUTE = "/cabinet/people";
+
 /** Страницы Кабинета за аккаунт (`?tenant=`, блок аккаунта, 04.10). История
  *  изменений — по праву «История изменений» того же раздела «Кабинет». */
 const ACCOUNT_CABINET_ROUTES = ["/cabinet/tariff", "/cabinet/payments", "/cabinet/sms", "/cabinet/history"] as const;
@@ -159,10 +162,15 @@ function normalizePath(pathname: string): string {
 export function canAccessCabinetPath(
   role: UserRole | null | undefined,
   pathname: string,
+  /** Право «Партнёры» видно (директор, 04.10): страницы партнёров открыты. */
+  partners = false,
 ): boolean {
   const path = normalizePath(pathname);
   if (!path.startsWith("/cabinet")) return true;
   if (role === "owner") return true;
+  if (partners && (role === "master" || role === "dispatcher") && (path === PEOPLE_ROUTE || path.startsWith(`${PEOPLE_ROUTE}/`))) {
+    return true;
+  }
   if (role === "dispatcher") return DISPATCHER_CABINET_ROUTES.has(path);
   if (role === "master") return MASTER_CABINET_ROUTES.has(path);
   return false;
