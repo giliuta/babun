@@ -27,14 +27,15 @@ export default function AuthLayout() {
   // сегментов два («(auth)», «reset-password»).
   const path = segments as readonly string[];
   const onResetPassword = path[1] === "reset-password";
-  const onOnboarding = path[1] === "onboarding";
+  const onAccountMissing = path[1] === "account-missing";
 
-  // A signed-in user doesn't belong in the auth stack: send configured users to
-  // the app and unconfigured ones to the wizard. "unknown" fails open to the
-  // dashboard, mirroring (dashboard)/_layout.
+  // A signed-in user doesn't belong in the auth stack: send them to the app.
+  // Мастера настройки нет (04.10): только аккаунт без данных уходит на
+  // запасной экран. "unknown" fails open to the dashboard, mirroring
+  // (dashboard)/_layout.
   if (session && !onResetPassword) {
     // Read the Keychain-backed pending token before applying the ordinary
-    // dashboard/onboarding redirect. Otherwise the first signed-in render can
+    // dashboard redirect. Otherwise the first signed-in render can
     // discard the deep-link flow and strand an accepted membership inactive.
     if (pendingInvitation.isPending || gate.status === "loading") {
       return <AccountLoading />;
@@ -49,8 +50,8 @@ export default function AuthLayout() {
         />
       );
     }
-    if (gate.status === "needs-onboarding" || gate.status === "no-tenant") {
-      if (!onOnboarding) return <Redirect href="/onboarding" />;
+    if (gate.status === "no-tenant") {
+      if (!onAccountMissing) return <Redirect href="/account-missing" />;
     } else if (gate.status === "onboarded" || gate.status === "unknown") {
       return <Redirect href="/" />;
     }
@@ -58,9 +59,9 @@ export default function AuthLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      {/* Онбординг — обязательный гейт: свайп назад на логин не должен
-          «сбегать» из мастера (гейт выше всё равно вернёт). */}
-      <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
+      {/* Запасной экран аккаунта — гейт: свайп назад на логин не должен
+          «сбегать» с него (гейт выше всё равно вернёт). */}
+      <Stack.Screen name="account-missing" options={{ gestureEnabled: false }} />
     </Stack>
   );
 }

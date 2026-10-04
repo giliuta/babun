@@ -9,8 +9,9 @@ import {
 } from "@/lib/tenant";
 import { shouldBlockUnresolvedTenant } from "@/lib/dashboard-gate-policy";
 
-// Гейт приложения: без сессии — на /login, без настроенного тенанта — на
-// /onboarding. Рендерится как <Redirect>, а не эффектом: незалогиненный
+// Гейт приложения: без сессии — на /login, без данных аккаунта — на
+// запасной /account-missing (мастера настройки нет с 04.10). Рендерится как
+// <Redirect>, а не эффектом: незалогиненный
 // пользователь уходит на логин ДО того, как календарь успеет нарисоваться
 // (никакой вспышки чужого экрана на старте).
 //
@@ -18,7 +19,7 @@ import { shouldBlockUnresolvedTenant } from "@/lib/dashboard-gate-policy";
 // табам (dashboard) и стеку настроек календаря, который лежит НАД табами.
 //
 // "unknown" с известным tenant id остаётся fail-open: настроенного
-// пользователя нельзя выбрасывать в онбординг из-за сети. Но без tenant id
+// пользователя нельзя выбрасывать на запасной экран из-за сети. Но без tenant id
 // дочерние role-boundary никогда не смогут загрузиться, поэтому такой cold
 // offline start завершается явным безопасным экраном с повтором.
 export function DashboardGate({ children }: { children: ReactNode }) {
@@ -27,13 +28,13 @@ export function DashboardGate({ children }: { children: ReactNode }) {
   const retry = useRetryOnboardingGate();
 
   // ОТКРЫТЫЙ КАБИНЕТ НЕ ЗАМЕНЯЕТСЯ ГЕЙТОМ. Гейт нужен на СТАРТЕ: без сессии —
-  // на логин, без настроенной компании — в мастер. Но он же срабатывал ПОСРЕДИ
+  // на логин, без данных аккаунта — на запасной экран. Но он же срабатывал ПОСРЕДИ
   // работы: переход в компанию, у которой на устройстве ещё нет штампа
   // «онбординг пройден», ронял всё дерево вкладок в «Открываем компанию» — и
   // календарь, клиенты, финансы размонтировались вместе со своим состоянием.
   // По спецификации владельца переход не меняет экран вовсе. Поэтому: если
   // кабинет уже нарисован, «загрузка» гейта — это фон, а не занавес. Ответ
-  // «нужен онбординг» / «нет компании» по-прежнему уводит редиректом.
+  // «нет аккаунта» по-прежнему уводит редиректом.
   const dashboardShown = useRef(false);
 
   if (!session) return <Redirect href="/login" />;
@@ -58,8 +59,8 @@ export function DashboardGate({ children }: { children: ReactNode }) {
       </Screen>
     );
   }
-  if (gate.status === "needs-onboarding" || gate.status === "no-tenant") {
-    return <Redirect href="/onboarding" />;
+  if (gate.status === "no-tenant") {
+    return <Redirect href="/account-missing" />;
   }
   dashboardShown.current = true;
   return <>{children}</>;
