@@ -8,11 +8,9 @@ import {
   FileText,
   MessageSquare,
   Phone,
-  ReceiptText,
   Tags,
   UserPlus,
   UserRound,
-  Wallet,
 } from "lucide-react-native";
 
 import { ChooseRow } from "@/components/ui/ChooseRow";

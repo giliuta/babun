@@ -6,7 +6,6 @@ import type { Client } from "@babun/shared/local/clients";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 
 import { Button } from "@/components/ui/Button";
-import { Chip } from "@/components/ui/Chip";
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ICON } from "@/components/ui/tokens";

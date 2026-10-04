@@ -9,7 +9,6 @@ import {
   levelOf as mapLevelOf,
   refusalOf,
   type AccessBlock,
-  type AccessChange,
   type AccessLevel,
   type AccessRefusal,
   type MemberAccessMap,

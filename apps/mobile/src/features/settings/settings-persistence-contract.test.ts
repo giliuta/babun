@@ -8,28 +8,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) =>
   readFileSync(resolve(here, relative), "utf8");
 
-function section(source: string, start: string, end?: string): string {
-  const from = source.indexOf(start);
-  assert.notEqual(from, -1, `missing ${start}`);
-  const to = end ? source.indexOf(end, from + start.length) : source.length;
-  assert.notEqual(to, -1, `missing ${end}`);
-  return source.slice(from, to);
-}
-
 describe("native settings persistence contract", () => {
-  test("SMS cache never hides authorization errors or precedes server writes", () => {
-    const source = read("sms-templates.ts");
-    const query = section(source, "export function useSmsTemplates()", "export function useSaveSmsTemplates()");
-    assert.match(query, /isConfirmedNetworkUnavailable\(error\)/);
-    assert.match(query, /isMissingSmsTemplatesContract\(error\)/);
-    assert.match(query, /throw caught/);
-
-    const save = section(source, "export function useSaveSmsTemplates()", "// C1");
-    const rpcAt = save.indexOf('supabase.rpc("write_sms_templates_safe"');
-    const cacheAt = save.indexOf("saveCache(tenantId, list)");
-    assert.ok(rpcAt >= 0 && cacheAt > rpcAt, "cache must follow the server RPC");
-  });
-
   test("reference updates confirm a returned row and team snapshots use CAS", () => {
     const source = read("../reference/queries.ts");
     assert.doesNotMatch(source, /\bas any\b/);

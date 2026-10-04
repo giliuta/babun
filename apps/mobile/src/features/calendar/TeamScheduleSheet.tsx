@@ -6,7 +6,7 @@ import {
   WEEKDAY_NAMES,
   type TeamSchedule,
   type WeekdayKey,
-} from "@babun/shared/local/schedule";
+ DaySchedule } from "@babun/shared/local/schedule";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { Divider } from "@/components/ui/Divider";
@@ -36,7 +36,6 @@ import {
   WEEKDAY_FULL,
   withDay,
 } from "@/features/calendar/schedule-days";
-import type { DaySchedule } from "@babun/shared/local/schedule";
 import {
   effectiveWorkHours,
   hourLabel,

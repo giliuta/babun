@@ -21,7 +21,6 @@ import { chooseOption } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
-import { useThemeColors } from "@/theme/colors";
 
 import { levelOf as mapLevelOf, type AccessBlock, type AccessRefusal } from "../access-map";
 import {
@@ -88,7 +87,6 @@ export function MasterMemberCard({
   teamId: string | null;
   onBack: () => void;
 }) {
-  const t = useThemeColors();
   const toast = useToast();
   const router = useRouter();
   const qc = useQueryClient();
@@ -298,7 +296,6 @@ export function MasterMemberCard({
     activeTeam,
     teams.filter((team) => draft.teamIds.includes(team.id)).map((team) => team.id),
   );
-  const activeTeamRow = teams.find((team) => team.id === activeId) ?? null;
   const map = accessQuery.data;
   const levelOf = (block: AccessBlock, pickTeam: string | null) => mapLevelOf(block, map, pickTeam ?? "");
   const rightsSectionsNow = viewSections({

@@ -98,7 +98,6 @@ const BLOCK_ICON: Record<string, LucideIcon> = {
 
 
 export function DesignScreen() {
-  const t = useThemeColors();
   const router = useRouter();
   // «ДИЗАЙН» — У КАЖДОЙ КОМАНДЫ СВОЙ (владелец 24.09). Команда едет адресом из
   // настроек календаря; без неё — первая.
@@ -143,7 +142,6 @@ export function DesignScreen() {
   // просто выбор самого цвета, в какой красить, когда всё заполнено»).
   // Выбор здесь и есть цвет команды: так он один на сетку, ленту команд и
   // её записи.
-  const teams = allTeams;
   const ordinary = team?.color || fallback;
   const updateTeam = useUpdateTeam();
 

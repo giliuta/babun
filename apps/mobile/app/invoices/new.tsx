@@ -23,10 +23,9 @@ import {
 import { rememberedDueDays } from "@/features/invoices/due-days";
 import { useSession } from "@/providers/SessionProvider";
 import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole , useTenant } from "@/features/settings/tenant";
 import { accessGate } from "@/features/access/my-access";
 import { useMyAccess } from "@/features/access/queries";
-import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { todayYmd } from "@/features/invoices/format";
 import { confirmThen } from "@/lib/confirm";

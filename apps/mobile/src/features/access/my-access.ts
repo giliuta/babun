@@ -265,7 +265,6 @@ export const FINANCE_DATA_HEADS: readonly string[] = [
   "invoices",
   "receipts",
   "finance-categories",
-  "finance-templates",
   "vat-settings",
   "vat-team-overrides",
   "day-extras",

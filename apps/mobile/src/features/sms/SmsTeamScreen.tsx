@@ -12,7 +12,6 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { GUTTER } from "@/components/ui/tokens";
-import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -56,7 +55,6 @@ type Editing = { mode: "create" } | { mode: "edit"; template: SmsTeamTemplate } 
 export function SmsTeamScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  const toast = useToast();
   const params = useLocalSearchParams<{ team?: string }>();
   const { data: teams = [] } = useTeams();
   const team = teams.find((x) => x.id === params.team) ?? teams[0];
