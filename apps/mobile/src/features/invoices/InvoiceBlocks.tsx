@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import type { Client } from "@babun/shared/local/clients";
@@ -7,7 +7,6 @@ import {
   invoiceLineTotal,
   type InvoiceVatMode,
 } from "@babun/shared/local/finance/invoice-ledger";
-import { accountsForTeam } from "@babun/shared/local/finance/integrity";
 import { isServiceAllowedForTeam } from "@/features/appointments/booking-selection";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { FieldRow } from "@/components/ui/card-rows";
@@ -18,12 +17,8 @@ import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
 import { TotalSheet, type DiscountKind } from "@/features/appointments/TotalSheet";
-import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/PaymentTiles";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
-import { accountIcon } from "@/features/finances/account-ui";
-import { useAccountsWithBalances } from "@/features/finances/accounts";
 import type { Service } from "@/features/services/queries";
-import { useThemeColors } from "@/theme/colors";
 import { useClientFunctionOn } from "@/features/clients/client-functions";
 import { useFeatureOn } from "@/features/settings/company-features";
 import { InvoiceDatesBlock } from "./InvoiceDatesBlock";
@@ -73,9 +68,8 @@ export function InvoiceBlocks({
   onCompanyChange,
   showRequisites = true,
   number,
+  companyLocked = false,
   teamId,
-  accountId,
-  onAccountChange,
   lines,
   currency,
   services,
@@ -116,10 +110,10 @@ export function InvoiceBlocks({
   showRequisites?: boolean;
   /** Номер следующего инвойса реквизитов — только у нового счёта. */
   number?: InvoiceNumberTarget;
-  /** Команда документа — от неё зависит, ЧЬИ кассы показывать. */
+  /** Реквизиты не меняются — правка выставленного счёта (номер из их серии). */
+  companyLocked?: boolean;
+  /** Команда документа — от неё зависит, чей прайс предлагать. */
   teamId: string | null;
-  accountId: string | null;
-  onAccountChange: (id: string | null) => void;
   lines: readonly EditableInvoiceLine[];
   currency: string;
   services: Service[];
@@ -148,13 +142,10 @@ export function InvoiceBlocks({
   /** Действие экрана рисует маршрут: у экрана оно одно и живёт в футере. */
   footer?: ReactNode;
 }) {
-  const t = useThemeColors();
   const router = useRouter();
-  const accounts = useAccountsWithBalances();
   // Функции компании (STORY-088): выключенные объекты и реквизиты клиента не
   // спрашиваются и в инвойсе — у всех, у владельца тоже.
   const objectsOn = useFeatureOn("objects");
-  const tileWidth = useTileWidth();
   const [sheet, setSheet] = useState<"client" | "services" | "total" | null>(null);
 
   // КЛИЕНТ, СОЗДАННЫЙ РАДИ ИНВОЙСА, ВСТАЁТ В ИНВОЙС (владелец 22.09: «создаю
@@ -183,12 +174,6 @@ export function InvoiceBlocks({
     [clients, appointments.data],
   );
   const clientStats = client ? statsById.get(client.id) : undefined;
-  // ЗАКРЫТЫЙ СЧЁТ В СПИСКЕ — ТУПИК: сервер его всё равно отобьёт
-  // (`assert_invoice_account`), а плитка обещает. Тот же фильтр, что у листа
-  // оплаты инвойса.
-  const openAccounts = accountsForTeam(accounts.data ?? [], teamId).filter(
-    (account) => account.is_active,
-  );
   // ПРАЙС — КОМАНДЫ, А НЕ ВСЕЙ КОМПАНИИ (владелец 2026-09-21: «услуги,
   // которые предоставлены, они будут подтягиваться уже с команды»). Правило
   // одно на продукт — то же, что в записи: `isServiceAllowedForTeam`. Без
@@ -281,6 +266,7 @@ export function InvoiceBlocks({
             companyId={companyId}
             onCompanyChange={onCompanyChange}
             number={number}
+            locked={companyLocked}
           />
         ) : null}
 
@@ -346,43 +332,10 @@ export function InvoiceBlocks({
           onOpenTotal={() => setSheet("total")}
         />
 
-        {/* СЧЁТ — ДЛЯ СЕБЯ, А НЕ ДЛЯ КЛИЕНТА (владелец 2026-09-21: «выбор
-            счёта это уже лично для себя… оно не будет попадать в сам инвойс,
-            это только для сохранения данных в финансах»). Поэтому он стоит
-            ПОСЛЕДНИМ — после всего, что уйдёт клиенту, — и на бумаге его нет
-            ни строкой. Плитки те же, что в записи и в чеке.
-            СРАЗУ ПОСЛЕ «ИТОГО», как оплата в записи (владелец 2026-09-22):
-            счета — команды, их набор меняется вместе с лентой команд. */}
-        <SectionCard title="Счёт">
-          {openAccounts.length > 0 ? (
-            <View
-              className="flex-row flex-wrap"
-              style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, gap: TILE_GAP }}
-            >
-              {openAccounts.map((a) => (
-                <PaymentTile
-                  key={a.id}
-                  icon={accountIcon(a)}
-                  label={a.name}
-                  color={a.color ?? t.ink}
-                  tint={a.color}
-                  width={tileWidth}
-                  compact
-                  state="idle"
-                  selected={accountId === a.id}
-                  onPress={() => onAccountChange(accountId === a.id ? null : a.id)}
-                  accessibilityLabel={`Счёт: ${a.name}`}
-                />
-              ))}
-            </View>
-          ) : (
-            <Text className="px-4 py-3 text-sm" style={{ color: t.faint }}>
-              У этой команды нет счёта — заведите его в «Счетах», иначе деньги
-              по этому инвойсу некуда будет записать.
-            </Text>
-          )}
-        </SectionCard>
-
+        {/* СЧЁТА В ИНВОЙСЕ НЕТ (владелец 2026-10-04: «зачем в инвойсе выставляем,
+            на какой счёт примем оплату, а потом при принятии оплаты снова
+            выбираем счёт»). На бумагу он не попадал; счёт выбирают один раз —
+            когда деньги пришли, в «Принять оплату». */}
         {/* ПРИМЕЧАНИЕ — ОДНА ПОДПИСЬ, А НЕ ДВЕ: шапка блока и подсказка поля
             называли одно и то же дважды («Комментарий» + «Примечание для
             инвойса»). Печатается внизу бумаги, как «Notes» у AirFix #103. */}

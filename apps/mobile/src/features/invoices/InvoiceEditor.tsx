@@ -5,6 +5,7 @@ import type { Client } from "@babun/shared/local/clients";
 import type { VatSettings } from "@babun/shared/local/finance/vat";
 import {
   calculateInvoiceTotals,
+  type InvoiceLedgerWithLines,
   type InvoiceLineDraft,
   type InvoiceVatMode,
 } from "@babun/shared/local/finance/invoice-ledger";
@@ -41,6 +42,7 @@ import {
   addDaysYmd,
   type EditableInvoiceLine,
   formatInvoiceMoney,
+  invoiceVatMode,
   parseDecimal,
   parseMoneyAmount,
 } from "./format";
@@ -82,6 +84,7 @@ export interface InvoiceEditorValue {
 
 export function InvoiceEditor({
   prefill,
+  existing,
   vatForTeam,
   clients,
   appointments,
@@ -95,6 +98,10 @@ export function InvoiceEditor({
   onDirtyChange,
 }: {
   prefill?: InvoicePrefill;
+  /** ПРАВКА ВЫСТАВЛЕННОГО СЧЁТА НА МЕСТЕ (владелец 04.10: «я ещё не отправил
+   *  клиенту — могу отредактировать»). Форма рождается из документа; номер и
+   *  реквизиты продавца не меняются, кнопка — «Сохранить инвойс». */
+  existing?: InvoiceLedgerWithLines | null;
   /** Действующий НДС по команде (счёт → команда → компания, счёта у инвойса
    *  нет). Резолвер тот же, что у операций: греческая команда получает свои
    *  24%, а не кипрский дефолт компании. */
@@ -121,7 +128,9 @@ export function InvoiceEditor({
    *  (владелец 2026-09-22: инвойсы уходят в министерство, а там принимают
    *  греческий или английский). Не запоминается ни за устройством, ни за
    *  клиентом: русский — разовый выбор в шторке предпросмотра. */
-  const [language, setLanguage] = useState<InvoiceLanguage>("en");
+  const [language, setLanguage] = useState<InvoiceLanguage>(
+    existing?.language === "ru" ? "ru" : "en",
+  );
   const serial = useRef(0);
   const newLine = (
     title = "",
@@ -219,11 +228,13 @@ export function InvoiceEditor({
   // будущем остаётся своей датой; руками дату по-прежнему можно сменить.
   const sourceIssuedOn = seed?.issuedOn ?? prefill?.issuedOn ?? businessToday;
   const firstIssuedOn = sourceIssuedOn > businessToday ? sourceIssuedOn : businessToday;
-  const [issuedOn, setIssuedOn] = useState(firstIssuedOn);
+  const [issuedOn, setIssuedOn] = useState(existing?.issued_on ?? firstIssuedOn);
   const [dueOn, setDueOn] = useState<string | null>(
     // Срок — из настроек компании, а не зашитая неделя (владелец 2026-08-15),
     // и считается от даты выставления, а не от визита.
-    addDaysYmd(firstIssuedOn, Math.max(0, generator.dueDays)),
+    existing
+      ? existing.due_on
+      : addDaysYmd(firstIssuedOn, Math.max(0, generator.dueDays)),
   );
   // Общая на «Правку» (строка-дверь) и «Документ» (барабан бумаги): смена
   // даты выставления подтягивает «Оплатить до», если та уже оказалась раньше.
@@ -233,23 +244,27 @@ export function InvoiceEditor({
     if (dueOn && dueOn < value) setDueOn(value);
   };
   const [clientId, setClientId] = useState<string | null>(
-    seed?.clientId ?? prefill?.clientId ?? null,
+    existing ? existing.client_id : seed?.clientId ?? prefill?.clientId ?? null,
   );
   /** ОБЪЕКТ СЧЁТА (владелец 2026-09-22): у счёта из записи — объект записи,
    *  у выставленного — свой; при выборе клиента — его основной объект. */
   const [locationId, setLocationId] = useState<string | null>(
-    sourceAppointment?.location_id ?? null,
+    existing ? existing.location_id ?? null : sourceAppointment?.location_id ?? null,
   );
   /** РЕКВИЗИТЫ КЛИЕНТА (владелец 22.09): на какой набор клиента выписан
    *  счёт; `null` — основной. */
-  const [clientRequisitesId, setClientRequisitesId] = useState<string | null>(null);
+  const [clientRequisitesId, setClientRequisitesId] = useState<string | null>(
+    existing?.client_requisites_id ?? null,
+  );
   // ЗАЯВКА ПРИЕЗЖАЕТ, НО НЕ МЕНЯЕТСЯ ЗДЕСЬ: счёт по работе открывают ИЗ
   // работы, и форма только несёт её дальше на сервер.
-  const appointmentId = prefill?.appointmentId ?? null;
+  const appointmentId = existing ? existing.appointment_id : prefill?.appointmentId ?? null;
   // Первая команда — сразу при рождении, а не эффектом после: иначе форма
   // запоминала себя без команды, и пустой счёт при «назад» спрашивал
   // «Черновик не сохранён» (разбор 2026-09-22, баг 6).
-  const initialTeamId = seed?.teamId ?? prefill?.teamId ?? teams[0]?.id ?? null;
+  const initialTeamId = existing
+    ? existing.brigade_id ?? teams[0]?.id ?? null
+    : seed?.teamId ?? prefill?.teamId ?? teams[0]?.id ?? null;
   // КОМАНДА РЕШАЕТ ТРИ ВЕЩИ СРАЗУ: чей прайс предлагать в услугах, чьи кассы
   // показывать и по какому календарю лягут деньги. Поэтому она наверху,
   // лентой, и видна всегда — а не строкой в анкете, куда надо долистать.
@@ -263,6 +278,9 @@ export function InvoiceEditor({
   // доходом — сервер отказал бы. Услуги записи с её «сверху» уже разложены
   // на сумму до налога (`generate`), им режим записи.
   const [vatMode, setVatMode] = useState<InvoiceVatMode>(() => {
+    // У счетов до колонки режима (20260915120000) он пуст — восстанавливаем
+    // по суммам, как бумага, а не угадываем «в цене».
+    if (existing) return invoiceVatMode(existing);
     const mode = appointmentVat?.mode ?? seedVat.mode;
     return incomeAmount != null && !seed && mode === "exclusive" ? "inclusive" : mode;
   });
@@ -278,12 +296,12 @@ export function InvoiceEditor({
   // Не писали ставку на этом телефоне — ставка команды из настроек.
   const rememberedRate = useRememberedVatRate(vatForTeam(teamId).rate);
   const [rateOverride, setRateOverride] = useState<number | null>(
-    appointmentVat?.rate ?? null,
+    existing && existing.vat_percent > 0 ? existing.vat_percent : appointmentVat?.rate ?? null,
   );
   const documentRate = rateOverride ?? rememberedRate.rate;
   // Смена команды пересаживает налоговое умолчание, пока клавиши VAT не
   // трогали руками; после ручного выбора форма человека не переспорит.
-  const vatTouched = useRef(!!appointmentVat || incomeAmount != null);
+  const vatTouched = useRef(!!existing || !!appointmentVat || incomeAmount != null);
   const changeTeam = (id: string | null) => {
     setTeamId(id);
     if (vatTouched.current) return;
@@ -301,9 +319,31 @@ export function InvoiceEditor({
   // Приписка компании подставляется в НОВЫЙ документ; выставленный хранит
   // свою и не переписывается вслед за настройкой.
   const [notes, setNotes] = useState(
-    seed?.notes ?? generator.footerNote ?? "",
+    existing ? existing.notes ?? "" : seed?.notes ?? generator.footerNote ?? "",
   );
+  // Скидка выставленного счёта — его строка с минусовой ценой: она уходит в
+  // пару «евро + число», а не в услуги.
+  const existingDiscount = existing
+    ? round2(
+        existing.lines
+          .filter((line) => line.unit_price < 0)
+          .reduce((sum, line) => sum - line.unit_price * line.qty, 0),
+      )
+    : 0;
   const [lines, setLines] = useState<EditableInvoiceLine[]>(() => {
+    if (existing) {
+      return existing.lines
+        .filter((line) => line.unit_price >= 0)
+        .map((line) =>
+          newLine(
+            line.title,
+            String(line.qty),
+            String(line.unit_price),
+            line.description,
+            line.unit,
+          ),
+        );
+    }
     // Счёт по записи расписан её услугами; счёт «с нуля» и счёт по операции —
     // одна строка с тем, что о ней известно.
     if (seed) {
@@ -338,16 +378,20 @@ export function InvoiceEditor({
   // процент + число», та же шторка «Итого». На сервер уходит одной строкой
   // счёта с флагом `discount` и отрицательной ценой; налог — после скидки.
   // У выставленного счёта скидка уже напечатана строкой — её и поднимаем.
-  const [discountKind, setDiscountKind] = useState<DiscountKind>("percent");
-  const [discountValue, setDiscountValue] = useState<string>("");
+  const [discountKind, setDiscountKind] = useState<DiscountKind>(
+    existingDiscount > 0 ? "fixed" : "percent",
+  );
+  const [discountValue, setDiscountValue] = useState<string>(
+    existingDiscount > 0 ? String(existingDiscount) : "",
+  );
   const [error, setError] = useState<string | null>(null);
   /** Какими реквизитами подписан счёт, если их выбрали руками. `null` —
    *  основные (`pickedCompany`): документ не должен требовать выбора там, где
    *  ответ и так известен. На сервер уходят ВСЕГДА те, что в превью. */
-  const [companyId, setCompanyId] = useState<string | null>(null);
-  /** Куда клиент должен заплатить (владелец 2026-09-20). Подсказка платежу, а
-   *  не сам платёж: деньги придут отдельной операцией. */
-  const [accountId, setAccountId] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState<string | null>(existing?.company_id ?? null);
+  // Счёт в форме не выбирают (владелец 04.10) — только при приёме оплаты.
+  // У старого счёта, где он задан, правка его не сбрасывает.
+  const accountId = existing?.account_id ?? null;
   /** ПРЕВЬЮ — ОБЯЗАТЕЛЬНЫЙ ШАГ (владелец 2026-09-20: «сначала делается превью
    *  этого инвойса, и потом я нажимаю сохранить»). */
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -467,8 +511,14 @@ export function InvoiceEditor({
   // Партнёр — серия юрлица команды: её назовёт сервер по пустому набору.
   // Партнёру номер не спрашиваем: реквизиты документа выбирает сервер по
   // команде (у неё могут быть свои), а основная серия дала бы чужой номер.
-  const series = useNextInvoiceSeries(issuedYear, owner ? (pickedCompany?.id ?? companyId) : null, owner);
-  const nextNumber = series.data?.number ?? undefined;
+  const series = useNextInvoiceSeries(
+    issuedYear,
+    owner ? (pickedCompany?.id ?? companyId) : null,
+    owner && !existing,
+  );
+  // У выставленного счёта номер свой и не меняется: строка «Номер» печатает
+  // его, а не следующий в серии.
+  const nextNumber = existing ? existing.number : series.data?.number ?? undefined;
   const paperSeller: InvoiceDraftSeller | null = useMemo(() => {
     const picked = pickedCompany;
     if (!picked) return null;
@@ -649,7 +699,7 @@ export function InvoiceEditor({
     }
   };
 
-  const actionVerb = "Выставить инвойс";
+  const actionVerb = existing ? "Сохранить инвойс" : "Выставить инвойс";
   // Кнопка называет сумму: она и есть ответ на вопрос «на сколько документ».
   const actionLabel = `${actionVerb} · ${formatInvoiceMoney(totals.total, currency)}`;
 
@@ -699,14 +749,19 @@ export function InvoiceEditor({
             companyId={companyId}
             onCompanyChange={setCompanyId}
             showRequisites={owner}
+            companyLocked={!!existing}
             number={
               !pickedCompany
                 ? undefined
-                : { companyId: pickedCompany.id, year: issuedYear, next: series.data ?? null }
+                : existing
+                  ? {
+                      companyId: pickedCompany.id,
+                      year: existing.year,
+                      next: { seq: existing.seq, number: existing.number, canSetStart: false },
+                    }
+                  : { companyId: pickedCompany.id, year: issuedYear, next: series.data ?? null }
             }
             teamId={teamId}
-            accountId={accountId}
-            onAccountChange={setAccountId}
             lines={lines}
             currency={currency}
             services={services}

@@ -69,10 +69,12 @@ export function fileTime(at: string): string {
 
 const isImageMime = (mime: string) => mime.startsWith("image/");
 
-/** Живой инвойс — как у блока файлов записи: аннулированные, отменённые и
- *  кредит-ноты в файлы не попадают (`liveAppointmentInvoices`). */
-function isLiveInvoice(inv: InvoiceLike): boolean {
-  return inv.status !== "void" && inv.status !== "cancelled" && inv.kind !== "credit_note";
+/** Инвойс в «Файлах» — любой, кроме кредит-ноты: нота — часть своего
+ *  инвойса, а отменённый инвойс стоит серым (владелец 2026-10-04: «по сути
+ *  один файл, инвойс становится серым»). Правило одно с файлами записи
+ *  (`appointmentInvoiceFiles`). */
+function isInvoiceFile(inv: InvoiceLike): boolean {
+  return inv.kind !== "credit_note";
 }
 
 /** Все файлы клиента одной лентой: свежий день сверху, внутри дня — свежее
@@ -89,7 +91,7 @@ export function clientFileTimeline<A extends AttachmentLike, V extends VisitPhot
     out.push({ type: "visit", item: p, day: fileDay(p.created_at), at: p.created_at });
   }
   for (const inv of src.invoices) {
-    if (!isLiveInvoice(inv)) continue;
+    if (!isInvoiceFile(inv)) continue;
     out.push({ type: "invoice", item: inv, day: inv.issued_on, at: inv.created_at ?? inv.issued_on });
   }
   for (const r of src.receipts) {

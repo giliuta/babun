@@ -21,9 +21,12 @@ describe("язык бумаги инвойса", () => {
     assert.match(read("../../../app/invoices/new.tsx"), /if \(value\.language && invoice\.language !== value\.language\) \{\s*notify\(/);
   });
 
-  test("на странице документа язык переключается пунктом «⋯»", () => {
+  // Владелец 2026-10-04: «в инвойсе не надо менять язык; если надо — пусть
+  // переделывает полностью». Язык — в превью выставления и правки.
+  test("у выставленного инвойса язык не переключается — только через «Изменить»", () => {
     const page = read("../../../app/invoices/[id].tsx");
-    assert.match(page, /label: paperEnglish \? "Бумага на русском" : "Бумага на английском",\s*run: switchLanguage,/);
-    assert.match(page, /setLanguage\.mutate\(paperEnglish \? "ru" : "en"/);
+    assert.doesNotMatch(page, /useSetInvoiceLanguage|Бумага на (русском|английском)/);
+    assert.match(page, /useInvoiceMenu\(\)/);
+    assert.match(read("invoice-menu.ts"), /label: "Изменить инвойс", run: edit/);
   });
 });

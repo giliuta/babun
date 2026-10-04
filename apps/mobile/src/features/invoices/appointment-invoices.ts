@@ -26,3 +26,17 @@ export function liveAppointmentInvoices<T extends AppointmentInvoiceRow>(
       !creditNoteIds.has(inv.id),
   );
 }
+
+/** ИНВОЙСЫ В «ФАЙЛАХ» ЗАПИСИ — все её инвойсы, кроме кредит-нот: отменённый
+ *  стоит серым, нота — часть его (владелец 2026-10-04). Для денег записи
+ *  («Оплата») правило прежнее — `liveAppointmentInvoices`. */
+export function appointmentInvoiceFiles<T extends AppointmentInvoiceRow>(
+  invoices: readonly T[],
+  appointmentId: string | null | undefined,
+  creditNoteIds: ReadonlySet<string> | ReadonlyMap<string, unknown>,
+): T[] {
+  if (!appointmentId) return [];
+  return invoices.filter(
+    (inv) => inv.appointment_id === appointmentId && !creditNoteIds.has(inv.id),
+  );
+}

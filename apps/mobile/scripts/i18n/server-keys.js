@@ -40,6 +40,14 @@ const EDGE_FUNCTION_MESSAGES = [
   "Оплата {0}: {1} ц. вместо {2} — не зачислена",
 ];
 
+// Raises a migration splices into a LIVE function body (pg_get_functiondef +
+// exact replace, e.g. 20261004060000 for `update_invoice_draft`) are not in
+// any `create function` text this scanner reads — listed by hand.
+const PATCHED_FUNCTION_MESSAGES = [
+  "Дата инвойса — в пределах {0} года: номер {1} из серии этого года",
+  "Объект выбирают у клиента — сначала клиент",
+];
+
 /** `'Платёж превышает остаток % %'` → `Платёж превышает остаток {0} {1}`. */
 function toKey(message) {
   let n = 0;
@@ -169,7 +177,7 @@ function collect() {
     const sql = fs.readFileSync(path.join(MIGRATIONS, file), "utf8");
     for (const m of sql.matchAll(FUNCTION)) latest.set(m[1], m[4]);
   }
-  const keys = new Set([...EDGE_FUNCTION_MESSAGES, ...SEEDED_NAMES, ...ACCESS_BLOCK_TITLES]);
+  const keys = new Set([...EDGE_FUNCTION_MESSAGES, ...PATCHED_FUNCTION_MESSAGES, ...SEEDED_NAMES, ...ACCESS_BLOCK_TITLES]);
   for (const body of latest.values()) {
     for (const m of body.matchAll(RAISE)) if (CYRILLIC.test(m[1])) keys.add(toKey(m[1]));
   }

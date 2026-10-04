@@ -572,3 +572,28 @@ describe("итог дня со склеенной записью", () => {
     assert.equal(net([{ amount: 50, tone: "income", extras: [{ tone: "debt", amount: 70 }] }]), 50);
   });
 });
+
+describe("оплата инвойса в ленте денег (владелец 04.10)", () => {
+  test("строка инвойса: кто заплатил, «Инвойс INV-…», тап — инвойс; платежи одной строкой", () => {
+    const rows = recordRows(
+      [
+        tx({ id: "p1", appointment_id: null, client_id: "c1", invoice_id: "inv1", amount: 60 } as never),
+        tx({ id: "p2", appointment_id: "a1", client_id: "c1", invoice_id: "inv1", amount: 40, occurred_on: "2026-09-07" } as never),
+      ],
+      { ...refs, invoices: [{ id: "inv1", number: "INV-2026-006" }] },
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].title, "Инвойс INV-2026-006");
+    assert.equal(rows[0].subtitle, "Константин");
+    assert.equal(rows[0].invoiceId, "inv1");
+    assert.equal(rows[0].appointmentId, null);
+    assert.equal(rows[0].amount, 100);
+    assert.equal(rows[0].count, 2);
+  });
+
+  test("без списка инвойсов — как раньше, по записи", () => {
+    const rows = recordRows([tx({ invoice_id: "inv1" } as never)], refs);
+    assert.equal(rows[0].appointmentId, "a1");
+    assert.equal(rows[0].invoiceId, undefined);
+  });
+});

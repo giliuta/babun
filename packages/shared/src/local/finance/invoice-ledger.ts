@@ -170,6 +170,9 @@ export interface InvoiceLedger {
   account_id?: string | null;
   /** Объект клиента, под который выписан счёт (миграция 20260922060000). */
   location_id?: string | null;
+  /** Набор реквизитов клиента (`'none'` — на имя). Правка счёта поднимает
+   *  его в форму, чтобы не сбросить на основной. */
+  client_requisites_id?: string | null;
   subtotal_net: number;
   vat_percent: number;
   vat_amount: number;

@@ -81,6 +81,13 @@ export interface DocumentSources {
  *  при каждом рефетче. */
 export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
   const docs: FinanceDocument[] = [];
+  // Номер кредит-ноты ищется по её инвойсу: своей строки у ноты нет.
+  const noteNumberOf = new Map<string, string>();
+  for (const invoice of sources.invoices) {
+    if (invoice.kind === "credit_note" && invoice.credit_note_of_id) {
+      noteNumberOf.set(invoice.credit_note_of_id, invoice.number);
+    }
+  }
 
   for (const invoice of sources.invoices) {
     if (!inPeriod(invoice.issued_on, sources.period)) continue;
@@ -102,26 +109,12 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
       invoice.client_snapshot?.full_name?.trim() ||
       sources.clientName(invoice.client_id) ||
       "Без клиента";
-    // КРЕДИТ-НОТА — СТОРНО ОТМЕНЁННОГО СЧЁТА, А НЕ СЧЁТ К ОПЛАТЕ (аудит
-    // 2026-09-30): «Инвойс CN-2026-001 −€100 · Оплачен» читался как второй
-    // оплаченный инвойс. Своё имя и слово, строка гаснет — как у отменённого.
-    if (invoice.kind === "credit_note") {
-      docs.push({
-        id: invoice.id,
-        kind: "invoice",
-        title: `Кредит-нота ${invoice.number}`,
-        clientName,
-        date: invoice.issued_on,
-        amount: invoice.total,
-        currency: invoice.currency,
-        state: "Сторно",
-        dead: true,
-        creditNote: true,
-        teamId: invoice.brigade_id ?? null,
-        search: searchKey(invoice.number, clientName, invoice.total),
-      });
-      continue;
-    }
+    // КРЕДИТ-НОТА — ЧАСТЬ СВОЕГО ИНВОЙСА, А НЕ ОТДЕЛЬНАЯ СТРОКА (владелец
+    // 2026-10-04: «она не должна быть отдельным списком… это по сути один
+    // файл: инвойс становится серым, как отменённый»). Нота живёт на странице
+    // инвойса; в списке — только он, погасший, и её номер находит его поиском.
+    if (invoice.kind === "credit_note") continue;
+    const noteNumber = noteNumberOf.get(invoice.id);
     docs.push({
       id: invoice.id,
       kind: "invoice",
@@ -146,7 +139,11 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
               : "К оплате",
       dead,
       teamId: invoice.brigade_id ?? null,
-      search: searchKey(invoice.number, clientName, invoice.total),
+      search: searchKey(
+        noteNumber ? `${invoice.number} ${noteNumber}` : invoice.number,
+        clientName,
+        invoice.total,
+      ),
     });
   }
 

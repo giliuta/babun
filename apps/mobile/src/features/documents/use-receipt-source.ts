@@ -85,7 +85,9 @@ export function useReceiptSource(
     });
   }, [mode, ready, tx, editing, invoiceRow, invoiceNumber, invoiceCompanyId, appointment.data, change]);
 
-  const language: InvoiceLanguage = invoiceRow?.language === "en" ? "en" : "ru";
+  // Бумага — на языке инвойса; чек без инвойса — по-английски (владелец
+  // 04.10: «делай пока что всё на английском»).
+  const language: InvoiceLanguage = invoiceRow?.language === "ru" ? "ru" : "en";
   return { mode, tx, editing, invoiceNumber, invoiceCompanyId, language, ready };
 }
 

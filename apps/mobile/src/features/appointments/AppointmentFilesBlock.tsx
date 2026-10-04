@@ -27,7 +27,7 @@ import {
 } from "@/features/clients/card-attachments";
 import { useReceipts } from "@/features/documents/receipts-queries";
 import { useCreditNoteLinks, useInvoices } from "@/features/invoices/queries";
-import { liveAppointmentInvoices } from "@/features/invoices/appointment-invoices";
+import { appointmentInvoiceFiles } from "@/features/invoices/appointment-invoices";
 import { AppointmentPhotoViewer } from "./AppointmentPhotoViewer";
 import { docTitle, isVideoPath, pendingDocs, pendingMedia, type PendingFile } from "./appointment-files";
 import {
@@ -112,7 +112,7 @@ export function AppointmentFilesBlock({
   const invoices = useMemo(
     () =>
       saved && documentsOn
-        ? liveAppointmentInvoices(
+        ? appointmentInvoiceFiles(
             invoicesQuery.data ?? [],
             appointmentId,
             creditLinks.data?.originalByNoteId ?? new Map(),

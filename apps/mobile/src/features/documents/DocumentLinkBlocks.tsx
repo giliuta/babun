@@ -56,6 +56,7 @@ export function DocumentLinkBlocks({
   const location = client?.locations.find((loc) => loc.id === locationId) ?? null;
   const docs = documents ?? [];
 
+  const openClient = (id: string) => router.push({ pathname: "/client", params: { id } });
   const openDoc = (doc: DocEntry) =>
     router.push(
       (doc.type === "invoice" ? `/invoices/${doc.item.id}` : `/documents/receipt/${doc.item.id}`) as Href,
@@ -64,7 +65,15 @@ export function DocumentLinkBlocks({
   return (
     <View style={{ gap: 6, marginTop: 6 }}>
       {client ? (
-        <ClientBlock client={client} onOpenCard={() => router.push(`/clients/${client.id}` as Href)} />
+        // Карточка — маршрутом корневого стека, поверх документа: `/clients/…`
+        // живёт во вкладке «Клиенты», и «назад» оттуда уводил в календарь
+        // (владелец 04.10). Тот же путь, что у записи (`app/(shared)/client`).
+        // Выбирать здесь некого — карточку открывает и тап, и удержание.
+        <ClientBlock
+          client={client}
+          onPick={() => openClient(client.id)}
+          onOpenCard={() => openClient(client.id)}
+        />
       ) : null}
 
       {location ? (
@@ -72,7 +81,7 @@ export function DocumentLinkBlocks({
           <ObjectRow
             loc={location}
             showNote={false}
-            onPress={() => router.push(`/clients/${client?.id}` as Href)}
+            onPress={() => client && openClient(client.id)}
           />
         </SectionCard>
       ) : null}

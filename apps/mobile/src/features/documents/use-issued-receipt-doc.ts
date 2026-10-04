@@ -36,7 +36,7 @@ export function useIssuedReceiptDoc(receipt: Receipt | null): {
   const appointment = appointmentQuery.data ?? null;
 
   if (!receipt) {
-    return { doc: null, lineItems: undefined, language: "ru", invoiceNumber: null, appointment, invoice: null, linesLoading: false };
+    return { doc: null, lineItems: undefined, language: "en", invoiceNumber: null, appointment, invoice: null, linesLoading: false };
   }
   const linesLoading =
     !receipt.lines &&
@@ -55,8 +55,8 @@ export function useIssuedReceiptDoc(receipt: Receipt | null): {
       lineItems = receiptLinesFromAppointment(appointment);
     }
   }
-  // Язык бумаги — язык инвойса оплаты; без инвойса — русский.
-  const language: InvoiceLanguage = invoiceQuery.data?.language === "en" ? "en" : "ru";
+  // Как у черновика: язык инвойса, без инвойса — английский (владелец 04.10).
+  const language: InvoiceLanguage = invoiceQuery.data?.language === "ru" ? "ru" : "en";
   const invoiceNumber = invoiceQuery.data?.number ?? null;
   return {
     doc: buildReceiptDocument(receipt, lineItems, language, invoiceNumber),

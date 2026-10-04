@@ -58,14 +58,14 @@ describe("лента файлов клиента", () => {
     assert.deepEqual(timeline.map((e) => e.type), ["photo", "file"]);
   });
 
-  test("аннулированные, отменённые и кредит-ноты в ленту не попадают", () => {
+  test("кредит-нота и аннулированный чек в ленту не попадают; отменённый инвойс стоит", () => {
     const timeline = clientFileTimeline({
       attachments: [],
       visitPhotos: [],
       invoices: [inv("void", "2026-09-01", "void"), inv("cn", "2026-09-01", "issued", "credit_note"), inv("ok", "2026-09-01")],
       receipts: [rec("rv", "2026-09-01", "void"), rec("r", "2026-09-01")],
     });
-    assert.deepEqual(timeline.map((e) => e.item.id).sort(), ["ok", "r"]);
+    assert.deepEqual(timeline.map((e) => e.item.id).sort(), ["ok", "r", "void"]);
   });
 
   test("документ встаёт в день своей даты, а не в день, когда его завели", () => {

@@ -81,15 +81,21 @@ export function ClientFileRow({
       title = docTitle(entry.item.filename);
       subtitle = [time, formatBytes(entry.item.size_bytes)].filter(Boolean).join(" · ");
       break;
-    case "invoice":
+    case "invoice": {
+      // Отменённый (кредит-нотой) или аннулированный — серым, со словом.
+      const dead = entry.item.status === "cancelled" || entry.item.status === "void";
       title = `Инвойс ${entry.item.number}`;
-      subtitle = time;
+      subtitle = dead
+        ? [time, entry.item.status === "void" ? "Аннулирован" : "Отменён"].filter(Boolean).join(" · ")
+        : time;
       icon = Receipt;
+      if (dead) color = t.faint;
       amount = {
         text: formatEUR(entry.item.total),
-        color: entry.item.status === "paid" ? t.success : t.warning,
+        color: dead ? t.faint : entry.item.status === "paid" ? t.success : t.warning,
       };
       break;
+    }
     case "receipt":
       title = `Чек ${entry.item.number}`;
       subtitle = time;

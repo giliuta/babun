@@ -5353,16 +5353,23 @@ export type Database = {
         }
         Returns: Json
       }
+      delete_invoice: {
+        Args: { p_invoice_id: string }
+        Returns: undefined
+      }
       update_invoice_draft: {
         Args: {
           p_account_id?: string
           p_appointment_id: string
           p_brigade_id: string
           p_client_id: string
+          p_client_requisites_id?: string
           p_company_id?: string
           p_due_on: string
           p_invoice_id: string
+          p_issued_on?: string
           p_lines: Json
+          p_location_id?: string
           p_notes?: string
           p_vat_mode: string
           p_vat_percent: number

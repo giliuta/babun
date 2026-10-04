@@ -980,8 +980,10 @@ function FinancesContent() {
       people,
       // Визит вне периода (предоплата сегодня за завтра) — строка днём денег.
       window: { from: period.from, to: period.to },
+      // Оплата инвойса — строкой «Инвойс INV-…» (владелец 04.10).
+      invoices,
     }),
-    [scopedAppointments, clients, services, categories, allAccounts, people, period.from, period.to],
+    [scopedAppointments, clients, services, categories, allAccounts, people, period.from, period.to, invoices],
   );
 
   const blockRows = useMemo(() => {

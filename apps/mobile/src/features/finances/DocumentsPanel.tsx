@@ -12,8 +12,13 @@ import type {
 } from "@babun/shared/local/finance/invoice-ledger";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
-import { Receipt as ReceiptIcon, ReceiptText } from "lucide-react-native";
+import { Receipt as ReceiptIcon, ReceiptText, Trash2 } from "lucide-react-native";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useRouter } from "expo-router";
+import { SwipeRow } from "@/components/ui/SwipeRow";
+import { openReceiptMenu } from "@/features/documents/receipt-menu";
+import { invoiceDeleteBlock } from "@/features/invoices/invoice-delete";
+import { useInvoiceMenu } from "@/features/invoices/invoice-menu";
 import { SELECT_SIDE, SelectRow } from "@/components/ui/select-rows";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useThemeColors } from "@/theme/colors";
@@ -91,6 +96,8 @@ export function DocumentsPanel({
   refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   const t = useThemeColors();
+  const router = useRouter();
+  const invoiceMenu = useInvoiceMenu();
   // Список документов периода — общий с плиткой «Документы» на «Финансах»
   // (`usePeriodDocuments`): число на плитке и строки здесь из одного места.
   const {
@@ -183,6 +190,33 @@ export function DocumentsPanel({
 
   const searching = query.trim().length > 0;
 
+  // ДЕЙСТВИЯ С ДОКУМЕНТОМ — ТЕ ЖЕ, ЧТО «⋯» НА ЕГО СТРАНИЦЕ (владелец 04.10:
+  // «долгое нажатие на чек или инвойс — шторка-менюшка»). Смахнуть вправо —
+  // «Удалить» (только последний в серии без денег: номер вернётся); у прочих
+  // правой кромки нет.
+  const invoiceById = new Map(invoices.map((item) => [item.id, item]));
+  const receiptById = new Map((receipts ?? []).map((item) => [item.id, item]));
+  const menuContext = (invoice: InvoiceLedger) => ({
+    all: invoices,
+    payments: payments[invoice.id] ?? [],
+    hasReceipt: (receipts ?? []).some((receipt) => receipt.invoice_id === invoice.id),
+  });
+  const deleteAction = (doc: FinanceDocument) => {
+    if (doc.kind !== "invoice") return null;
+    const invoice = invoiceById.get(doc.id);
+    if (!invoice || invoiceDeleteBlock(invoice, invoices, false) !== null) return null;
+    return invoiceMenu.actionsFor(invoice, menuContext(invoice)).find((a) => a.key === "delete") ?? null;
+  };
+  const openMenu = (doc: FinanceDocument) => {
+    if (doc.kind === "invoice") {
+      const invoice = invoiceById.get(doc.id);
+      if (invoice) void invoiceMenu.open(invoice, menuContext(invoice));
+      return;
+    }
+    const receipt = receiptById.get(doc.id);
+    if (receipt) void openReceiptMenu(receipt, router);
+  };
+
   return (
     <>
       <SectionList
@@ -210,25 +244,38 @@ export function DocumentsPanel({
         ListHeaderComponent={header}
         // Плашки — с воздухом между ними, без швов.
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-        renderItem={({ item }) => (
-          <View style={{ paddingHorizontal: SELECT_SIDE }}>
+        renderItem={({ item }) => {
+          const row = (
             <DocumentRow
               document={item}
               onPress={() => {
-                // Инвойс — документ, который правят (сумма, срок, оплата), и он
-                // открывается своей страницей. Чек править нечем: он открывается
-                // листом прямо здесь.
-                if (item.kind === "invoice") {
-                  onOpen(`/invoices/${item.id}`);
-                  return;
-                }
-                // Чек — своей страницей, как инвойс (владелец 04.10: «чек — в
-                // такой же архитектуре»).
-                onOpen(`/documents/receipt/${item.id}`);
+                // Инвойс и чек — каждый своей страницей (владелец 04.10: «чек —
+                // в такой же архитектуре»).
+                onOpen(item.kind === "invoice" ? `/invoices/${item.id}` : `/documents/receipt/${item.id}`);
               }}
+              onLongPress={() => openMenu(item)}
             />
-          </View>
-        )}
+          );
+          const removable = deleteAction(item);
+          return (
+            <View style={{ paddingHorizontal: SELECT_SIDE }}>
+              {removable ? (
+                <SwipeRow
+                  radius={t.radius.input}
+                  label="Удалить"
+                  color={t.danger}
+                  icon={Trash2}
+                  accessibilityLabel={`Удалить ${item.title}`}
+                  onAction={removable.run}
+                >
+                  {row}
+                </SwipeRow>
+              ) : (
+                row
+              )}
+            </View>
+          );
+        }}
         ListEmptyComponent={
           <EmptyState
             title={
@@ -259,9 +306,12 @@ export function DocumentsPanel({
 function DocumentRow({
   document,
   onPress,
+  onLongPress,
 }: {
   document: FinanceDocument;
   onPress: () => void;
+  /** Удержание — шторка действий документа (как «⋯» его страницы). */
+  onLongPress?: () => void;
 }) {
   const t = useThemeColors();
   const invoice = document.kind === "invoice";
@@ -285,6 +335,7 @@ function DocumentRow({
           .filter(Boolean)
           .join(", ")}
         onPress={onPress}
+        onLongPress={onLongPress}
         trailing={
           <View style={{ alignItems: "flex-end", flexShrink: 0 }}>
             <Text

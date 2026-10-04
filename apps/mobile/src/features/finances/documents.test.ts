@@ -315,23 +315,22 @@ describe("сегмент и поиск режут уже собранный сп
 });
 
 describe("кредит-нота в «Документах»", () => {
-  test("называется кредит-нотой, состояние «Сторно», строка погашена", async () => {
-    const { collectDocuments: collect } = await import("./documents");
+  // Владелец 2026-10-04: нота — часть своего инвойса, а не отдельная строка;
+  // в списке стоит только инвойс, погасший, и номер ноты находит его.
+  test("своей строки нет: инвойс погашен «Отменён», номер ноты его находит", async () => {
+    const { collectDocuments: collect, filterDocuments: filter } = await import("./documents");
+    const base = {
+      issued_on: "2026-09-10",
+      currency: "EUR",
+      client_id: null,
+      client_snapshot: null,
+      team_id: null,
+      due_on: null,
+    };
     const docs = collect({
       invoices: [
-        {
-          id: "cn",
-          kind: "credit_note",
-          number: "CN-2026-001",
-          issued_on: "2026-09-10",
-          total: -100,
-          currency: "EUR",
-          status: "issued",
-          client_id: null,
-          client_snapshot: null,
-          team_id: null,
-          due_on: null,
-        } as never,
+        { ...base, id: "inv", kind: "invoice", number: "INV-2026-001", total: 100, status: "cancelled", credit_note_of_id: null } as never,
+        { ...base, id: "cn", kind: "credit_note", number: "CN-2026-001", total: -100, status: "issued", credit_note_of_id: "inv" } as never,
       ],
       payments: {},
       receipts: [],
@@ -341,9 +340,9 @@ describe("кредит-нота в «Документах»", () => {
       teamId: null,
       today: "2026-09-30",
     });
-    assert.equal(docs[0].title, "Кредит-нота CN-2026-001");
-    assert.equal(docs[0].state, "Сторно");
+    assert.deepEqual(docs.map((d) => d.id), ["inv"]);
+    assert.equal(docs[0].state, "Отменён");
     assert.equal(docs[0].dead, true);
-    assert.equal(docs[0].creditNote, true);
+    assert.equal(filter(docs, "invoice", "CN-2026-001").length, 1);
   });
 });

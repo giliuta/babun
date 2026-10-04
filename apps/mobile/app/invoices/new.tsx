@@ -15,8 +15,10 @@ import {
   type InvoiceEditorValue,
 } from "@/features/invoices/InvoiceEditor";
 import {
+  useInvoice,
   useInvoices,
   useIssueInvoice,
+  useUpdateInvoice,
 } from "@/features/invoices/queries";
 import { rememberedDueDays } from "@/features/invoices/due-days";
 import { useSession } from "@/providers/SessionProvider";
@@ -45,7 +47,11 @@ export default function NewInvoiceScreen() {
     amount?: string;
     title?: string;
     issuedOn?: string;
+    /** Правка выставленного счёта на месте (владелец 04.10). */
+    invoiceId?: string;
   }>();
+  const editId = params.invoiceId || undefined;
+  const existing = useInvoice(editId);
   const clients = useClients();
   const appointments = useAppointments();
   // Услуги нужны генератору: он расписывает визит их названиями.
@@ -71,6 +77,7 @@ export default function NewInvoiceScreen() {
   const me = useSession().session?.user.id ?? null;
   const calendarSettings = useCalendarSettings();
   const issue = useIssueInvoice();
+  const update = useUpdateInvoice(editId ?? "");
   const vat = useVatSettings();
   const teamVat = useTeamVatOverrides();
   const businessToday = todayYmd(
@@ -86,7 +93,8 @@ export default function NewInvoiceScreen() {
   // строки без названий и запомнил бы их — генератор считает ОДИН раз.
   const loading = clients.isLoading || appointments.isLoading || teams.isLoading
     || services.isLoading || tenant.isLoading || calendarSettings.isLoading
-    || vat.isLoading || teamVat.isLoading || invoices.isLoading;
+    || vat.isLoading || teamVat.isLoading || invoices.isLoading
+    || (!!editId && existing.isLoading);
   // A failed background refetch must not unmount InvoiceEditor and erase the
   // user's draft. Only replace the editor when a required query has no usable
   // data at all; retrying keeps all local form state intact.
@@ -99,7 +107,8 @@ export default function NewInvoiceScreen() {
     || (tenant.data === undefined ? tenant.error : null)
     || (calendarSettings.data === undefined ? calendarSettings.error : null)
     || (vat.data === undefined ? vat.error : null)
-    || (teamVat.data === undefined ? teamVat.error : null);
+    || (teamVat.data === undefined ? teamVat.error : null)
+    || (editId && existing.data === undefined ? existing.error : null);
   const retry = () => void Promise.all([
     clients.refetch(),
     appointments.refetch(),
@@ -112,13 +121,21 @@ export default function NewInvoiceScreen() {
   ]);
 
   const submit = async (value: InvoiceEditorValue) => {
+    if (editId) {
+      const { link_to_tx_id: _link, ...draft } = value;
+      await update.mutateAsync(draft);
+      // Сохранён — тот же номер, назад к его странице.
+      leavingRef.current = true;
+      back();
+      return;
+    }
     const invoice = await issue.mutateAsync({ ...value, request_id: requestId });
     // Язык не записался (сеть моргнула дважды) — сказать, а не молчать: иначе
     // клиенту ушла бы русская бумага вместо утверждённой английской.
     if (value.language && invoice.language !== value.language) {
       notify(
         "Инвойс выставлен, язык бумаги не сохранился",
-        "Документ пока на русском. Переключите язык в «⋯» на странице инвойса.",
+        "Документ пока на русском. Смените язык через «Изменить инвойс» в «⋯».",
       );
     }
     // Выставлен — черновика больше нет, уход без вопроса.
@@ -161,7 +178,10 @@ export default function NewInvoiceScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Новый инвойс" onBack={back} />
+      <ScreenHeader
+        title={existing.data ? `Инвойс ${existing.data.number}` : "Новый инвойс"}
+        onBack={back}
+      />
       {loading ? (
         <EmptyState state="loading" fill />
       ) : error ? (
@@ -171,8 +191,11 @@ export default function NewInvoiceScreen() {
           subtitle={(error as Error).message}
           action={{ label: "Повторить", onPress: retry }}
         />
+      ) : editId && !existing.data ? (
+        <EmptyState fill title="Инвойс не найден" />
       ) : (
         <InvoiceEditor
+          existing={existing.data ?? null}
           prefill={{
             transactionId: params.transactionId,
             clientId: params.clientId,
@@ -206,7 +229,7 @@ export default function NewInvoiceScreen() {
           teams={issueTeams}
           businessToday={businessToday}
           tenant={tenant.data}
-          submitting={issue.isPending}
+          submitting={issue.isPending || update.isPending}
           onSubmit={submit}
         />
       )}

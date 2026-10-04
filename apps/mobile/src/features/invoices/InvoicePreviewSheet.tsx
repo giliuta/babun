@@ -35,6 +35,8 @@ export function InvoicePreviewSheet({
   onChangeLanguage,
   onIssue,
   onClose,
+  title = "Инвойс",
+  onExited,
 }: {
   visible: boolean;
   doc: InvoiceDocument | null;
@@ -52,13 +54,19 @@ export function InvoicePreviewSheet({
   onChangeLanguage: (next: InvoiceLanguage) => void;
   onIssue: () => void;
   onClose: () => void;
+  /** Шапка листа: «Инвойс» или «Кредит-нота» (04.10). */
+  title?: string;
+  /** Лист уехал — экран может открыть выписанный документ (iOS не даёт
+   *  открыть страницу поверх уходящей модалки). */
+  onExited?: () => void;
 }) {
   const t = useThemeColors();
   return (
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Инвойс"
+      onExited={onExited}
+      title={title}
       scroll
       maxHeightRatio={0.9}
       footer={

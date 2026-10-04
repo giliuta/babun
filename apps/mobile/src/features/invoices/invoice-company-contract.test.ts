@@ -20,7 +20,8 @@ describe("реквизиты инвойса", () => {
   test("номер превью — из серии тех же реквизитов; партнёру не спрашивается", () => {
     assert.match(
       editor(),
-      /useNextInvoiceSeries\(issuedYear, owner \? \(pickedCompany\?\.id \?\? companyId\) : null, owner\)/,
+      // У выставленного счёта (правка, 04.10) номер свой — серию не спрашивают.
+      /useNextInvoiceSeries\(\s*issuedYear,\s*owner \? \(pickedCompany\?\.id \?\? companyId\) : null,\s*owner && !existing,\s*\)/,
     );
   });
 });
@@ -29,6 +30,8 @@ describe("дата нового инвойса (аудит 03.10)", () => {
   test("не раньше сегодня: прошлый визит не рождает документ просроченным", () => {
     const src = editor();
     assert.match(src, /const firstIssuedOn = sourceIssuedOn > businessToday \? sourceIssuedOn : businessToday;/);
-    assert.match(src, /useState<string \| null>\(\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*addDaysYmd\(firstIssuedOn, Math\.max\(0, generator\.dueDays\)\),/);
+    // Новый счёт — срок от даты выставления; выставленный (правка) — свой.
+    assert.match(src, /existing\s*\? existing\.due_on\s*: addDaysYmd\(firstIssuedOn, Math\.max\(0, generator\.dueDays\)\),/);
+    assert.match(src, /useState\(existing\?\.issued_on \?\? firstIssuedOn\)/);
   });
 });

@@ -118,6 +118,10 @@ export interface RecordRowRefs {
    *  завтра — вставал днём визита, и в сентябрьской ленте появлялся заголовок
    *  «1 октября». Такая строка стоит днём, когда пришли деньги. */
   window?: { from: string; to: string };
+  /** Инвойсы — номер для строки оплаты по инвойсу (владелец 2026-10-04:
+   *  «оплачен — в доходе такая же строчка „Инвойс такой-то“, нажал — и всё
+   *  чётко»). Нет списка — оплата печатается как раньше. */
+  invoices?: readonly { id: string; number: string }[];
 }
 
 /** Имена услуг визита. Снимок в записи сильнее каталога: услугу могли
@@ -183,6 +187,7 @@ export function recordRows(
   const category = new Map(refs.categories.map((c) => [c.id, c.name]));
   const account = new Map((refs.accounts ?? []).map((a) => [a.id, a.name]));
   const accountRank = new Map((refs.accounts ?? []).map((a, i) => [a.id, i]));
+  const invoiceNumber = new Map((refs.invoices ?? []).map((i) => [i.id, i.number]));
   /** Счета строки по id проводок. Неизвестный счёт молчит: печатать «счёт»
    *  рядом с услугами — сказать меньше, чем ничего. */
   const accountTags = (
@@ -198,6 +203,9 @@ export function recordRows(
   };
 
   const byRecord = new Map<string, RecordRow>();
+  /** Оплаты одного инвойса — одной строкой, как платежи одной записи. */
+  const byInvoice = new Map<string, RecordRow>();
+  const invoiceAccounts = new Map<string, Set<string | null>>();
   /** Счета визита копятся по мере сложения его проводок. */
   const recordAccounts = new Map<string, Set<string | null>>();
   const rows: RecordRow[] = [];
@@ -247,6 +255,41 @@ export function recordRows(
   for (const tx of transactions) {
     if (paired.has(tx.id)) continue;
     const apt = tx.appointment_id ? appointment.get(tx.appointment_id) : null;
+    // ДЕНЬГИ ПО ИНВОЙСУ — СТРОКОЙ ИНВОЙСА: кто заплатил и «Инвойс INV-…»,
+    // тап открывает инвойс (как неоплаченный в «Долгах»).
+    const invNumber = tx.invoice_id ? invoiceNumber.get(tx.invoice_id) : undefined;
+    if (tx.invoice_id && invNumber) {
+      const seen = byInvoice.get(tx.invoice_id);
+      if (seen) {
+        seen.amount += signedAmount(tx);
+        seen.count += 1;
+        invoiceAccounts.get(tx.invoice_id)?.add(tx.account_id);
+        if (tx.occurred_on > seen.date) {
+          seen.date = tx.occurred_on;
+          seen.time = tx.occurred_time;
+        }
+        continue;
+      }
+      const clientId = tx.client_id ?? apt?.client_id ?? null;
+      const row: RecordRow = {
+        key: `invoice:${tx.invoice_id}`,
+        appointmentId: null,
+        invoiceId: tx.invoice_id,
+        // Номер — заголовком: во второй строке после счёта он обрезался
+        // («Наличные · Инвойс INV-2026-0…»). Кто заплатил — второй строкой.
+        title: `Инвойс ${invNumber}`,
+        services: [],
+        subtitle: (clientId ? client.get(clientId) : null) || "Без клиента",
+        amount: signedAmount(tx),
+        date: tx.occurred_on,
+        time: tx.occurred_time,
+        count: 1,
+      };
+      byInvoice.set(tx.invoice_id, row);
+      invoiceAccounts.set(tx.invoice_id, new Set([tx.account_id]));
+      rows.push(row);
+      continue;
+    }
     // Проводка ссылается на запись, которой нет в окне периода (визит в
     // прошлом месяце, деньги в этом). Складывать её не с чем — печатаем как
     // одиночную, иначе строка потеряется вовсе.
@@ -327,6 +370,10 @@ export function recordRows(
 
   for (const [aptId, ids] of recordAccounts) {
     const row = byRecord.get(aptId);
+    if (row) row.accounts = accountTags(ids);
+  }
+  for (const [invoiceId, ids] of invoiceAccounts) {
+    const row = byInvoice.get(invoiceId);
     if (row) row.accounts = accountTags(ids);
   }
 

@@ -9,11 +9,10 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { ICON } from "@/components/ui/tokens";
-import { financesFrom } from "@/features/appointments/return-to";
 import { humanDay } from "@/features/appointments/helpers";
 import { useClients } from "@/features/clients/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
-import { chooseOption } from "@/lib/choose";
+import { openReceiptMenu, receiptCanEdit } from "./receipt-menu";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { DocumentLinkBlocks } from "./DocumentLinkBlocks";
@@ -63,7 +62,7 @@ export function ReceiptPage({ id }: { id: string }) {
   const appointment = paper.appointment;
   const client = (clients.data ?? []).find((c) => c.id === receipt.client_id) ?? null;
   const invoice = paper.invoice;
-  const canEdit = !dead && !!receipt.transaction_id;
+  const canEdit = receiptCanEdit(receipt);
 
   const sharePdf = async () => {
     if (pdfBusy || paper.linesLoading || !paper.doc) return;
@@ -81,23 +80,19 @@ export function ReceiptPage({ id }: { id: string }) {
     }
   };
 
-  const edit = () => router.push(`/documents/receipt-new?receiptId=${receipt.id}` as Href);
 
-  const openMenu = async () => {
-    const actions = [
-      { label: "Поделиться PDF", run: () => void sharePdf() },
-      ...(canEdit ? [{ label: "Изменить чек", run: edit }] : []),
-    ];
-    const index = await chooseOption(receipt.number, actions.map(({ label }) => ({ label })));
-    if (index !== null && index >= 0) actions[index]?.run();
-  };
+  // «⋯» — ДЕЙСТВИЯ С ЧЕКОМ, те же, что долгим нажатием в «Документах»
+  // (владелец 04.10: «поделиться и прочее — лишнее»): значок в шапке и
+  // кнопка внизу уже делятся PDF.
+  const openMenu = () => void openReceiptMenu(receipt, router);
 
   const openAppointment = () => {
     if (!appointment) return;
     router.push(
       (`/(dashboard)?appointmentId=${appointment.id}&date=${appointment.date}` +
         (appointment.team_id ? `&teamId=${appointment.team_id}` : "") +
-        `&from=${encodeURIComponent(financesFrom(null, { team: appointment.team_id }))}`) as Href,
+        // Закрыл запись — вернулся в этот чек, а не во вкладку денег.
+        `&from=${encodeURIComponent(`receipt:${receipt.id}`)}`) as Href,
     );
   };
 
@@ -121,15 +116,17 @@ export function ReceiptPage({ id }: { id: string }) {
                 {busy ? <Spinner size={18} label="Готовим PDF" /> : <Share2 color={t.body} size={ICON.sm} />}
               </Pressable>
             )}
-            <Pressable
-              onPress={() => void openMenu()}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Ещё действия"
-              className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
-            >
-              <MoreHorizontal color={t.body} size={ICON.sm} />
-            </Pressable>
+            {canEdit ? (
+              <Pressable
+                onPress={openMenu}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Ещё действия"
+                className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
+              >
+                <MoreHorizontal color={t.body} size={ICON.sm} />
+              </Pressable>
+            ) : null}
           </View>
         }
       />

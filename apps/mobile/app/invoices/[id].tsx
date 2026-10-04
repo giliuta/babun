@@ -23,7 +23,6 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Spinner } from "@/components/ui/Spinner";
 import { ICON } from "@/components/ui/tokens";
-import { chooseOption } from "@/lib/choose";
 import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
@@ -34,20 +33,19 @@ import {
   todayYmd,
 } from "@/features/invoices/format";
 import { InvoicePaymentSheet } from "@/features/invoices/InvoicePaymentSheet";
+import { useInvoiceMenu } from "@/features/invoices/invoice-menu";
 import { InvoiceRefundSheet } from "@/features/invoices/InvoiceRefundSheet";
 import { shareInvoicePdf } from "@/features/invoices/share-pdf";
 import { buildInvoiceDocument } from "@/features/invoices/document";
 import { InvoiceStatusBadge } from "@/features/invoices/InvoiceStatusBadge";
 import { InvoicePaper } from "@/features/invoices/InvoicePaper";
 import {
-  useCancelInvoice,
   useCreditNoteLinks,
   useInvoice,
   useInvoicePayments,
   useInvoices,
   useRecordInvoicePayment,
   useRefundInvoicePayment,
-  useSetInvoiceLanguage,
 } from "@/features/invoices/queries";
 import { useCurrentRole, useTenant } from "@/features/settings/tenant";
 import { accessGate } from "@/features/access/my-access";
@@ -55,7 +53,6 @@ import { useMyAccess } from "@/features/access/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useReceipts } from "@/features/documents/receipts-queries";
 import { DocumentLinkBlocks } from "@/features/documents/DocumentLinkBlocks";
-import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
@@ -98,8 +95,7 @@ export default function InvoiceDetailScreen() {
     : null;
   const pay = useRecordInvoicePayment(id);
   const refund = useRefundInvoicePayment(id);
-  const cancel = useCancelInvoice(id);
-  const setLanguage = useSetInvoiceLanguage(id);
+  const invoiceMenu = useInvoiceMenu();
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [accountCreateOpen, setAccountCreateOpen] = useState(false);
   const [refundTarget, setRefundTarget] = useState<InvoicePaymentLedger | null>(null);
@@ -211,55 +207,6 @@ export default function InvoiceDetailScreen() {
     } finally {
       setPdfBusy(false);
     }
-  };
-
-  const runCreditNote = () =>
-    cancel.mutate(undefined, {
-      onSuccess: (note) => {
-        haptics.success();
-        // Показываем рождённую кредит-ноту — она и есть результат.
-        router.push(`/invoices/${note.id}` as Href);
-      },
-      onError: (error) => notify("Инвойс не отменён", error.message),
-    });
-
-  // ОТКАЗ ОТ ИНВОЙСА — ОДНА ДВЕРЬ И ОДИН ПУТЬ.
-  //
-  // Владелец 2026-09-12 оставил одну красную кнопку, а выбор «кредит-нота или
-  // аннулирование» — в подтверждении. С 2026-10-01 (STORY-101, закон о VAT
-  // Кипра) выпущенный документ отменяется ТОЛЬКО кредит-нотой: номер инвойса
-  // уже в серии, и тихое «аннулировано» оставило бы в ней документ без
-  // встречной бумаги. Сервер «void» без кредит-ноты больше не принимает, и
-  // экран его не предлагает.
-  const cancelInvoice = async () => {
-    // Кнопка живёт только под загруженным документом; guard — на случай
-    // вызова не с неё (ротор VoiceOver).
-    if (!settlement) return;
-    if (settlement.paid > 0) {
-      // ДЕНЬГИ ВПЕРЁД БУМАГИ. Сервер отменяет инвойс только когда у нас по нему
-      // ничего не осталось (`cancel_invoice` считает доходы минус возвраты), и
-      // кредит-нота на инвойс с деньгами не выписывается вовсе. Раньше экран
-      // всё равно предлагал отмену и печатал отказ сервера ПОСЛЕ
-      // подтверждения — теперь он сразу называет единственный путь.
-      notify(
-        "Сначала верните оплату",
-        `По инвойсу получено ${formatInvoiceMoney(settlement.paid, invoice.data?.currency)}.`
-          + " Оформите возврат в списке платежей — после него инвойс отменяется"
-          + " кредит-нотой.",
-      );
-      return;
-    }
-    const index = await chooseOption(
-      "Отменить инвойс?",
-      // Одна кнопка рядом с «Отмена» — слово короткое, иначе обрезается.
-      [{ label: "Кредит-нота", destructive: true }],
-      {
-        message:
-          "Кредит-нота — встречный документ на ту же сумму: у клиента остаются"
-          + " оба, и отказ виден в истории.",
-      },
-    );
-    if (index === 0) runCreditNote();
   };
 
   const loading =
@@ -406,37 +353,19 @@ export default function InvoiceDetailScreen() {
       scope: "calendar",
       teamId: row.brigade_id ?? null,
     }) === "write";
-  const canCancel = owner && !isCreditNote && row.status === "issued";
-  // ЯЗЫК БУМАГИ — ПУНКТОМ МЕНЮ (аудит 03.10): переключателя на документе не
-  // было, хотя выставление обещало «переключается одним тапом», и счёт с
-  // несохранившимся английским уходил клиенту русским.
-  const paperEnglish = row.language === "en";
-  const switchLanguage = () =>
-    setLanguage.mutate(paperEnglish ? "ru" : "en", {
-      onSuccess: () => haptics.success(),
-      onError: (error) => notify("Язык не сменился", error.message),
-    });
-  const openMenu = async () => {
-    const actions = [
-      { label: "Поделиться PDF", run: () => void sharePdf() },
-      ...(docWrite
-        ? [
-            {
-              label: paperEnglish ? "Бумага на русском" : "Бумага на английском",
-              run: switchLanguage,
-            },
-          ]
-        : []),
-      ...(canCancel
-        ? [{ label: "Отменить инвойс", destructive: true, run: () => void cancelInvoice() }]
-        : []),
-    ];
-    const index = await chooseOption(
-      row.number,
-      actions.map(({ label, destructive }) => ({ label, destructive })),
-    );
-    if (index !== null && index >= 0) actions[index]?.run();
+  // «⋯» — ДЕЙСТВИЯ С ДОКУМЕНТОМ, те же, что долгим нажатием в «Документах»
+  // (`useInvoiceMenu`, владелец 04.10). Языка и «Поделиться» в меню нет.
+  const menuContext = {
+    all: invoicesQuery.data ?? [],
+    payments,
+    hasReceipt: receipts.length > 0,
+    onDeleted: () => {
+      if (router.canGoBack()) router.back();
+      else router.replace("/finances?view=documents" as Href);
+    },
   };
+  const hasMenu = invoiceMenu.actionsFor(row, menuContext).length > 0;
+  const openMenu = () => void invoiceMenu.open(row, menuContext);
 
   return (
     <Screen edges={["top"]}>
@@ -460,15 +389,17 @@ export default function InvoiceDetailScreen() {
                 <Share2 color={t.body} size={ICON.sm} />
               )}
             </Pressable>
-            <Pressable
-              onPress={() => void openMenu()}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Ещё действия"
-              className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
-            >
-              <MoreHorizontal color={t.body} size={ICON.sm} />
-            </Pressable>
+            {hasMenu ? (
+              <Pressable
+                onPress={openMenu}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Ещё действия"
+                className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
+              >
+                <MoreHorizontal color={t.body} size={ICON.sm} />
+              </Pressable>
+            ) : null}
           </View>
         }
       />
@@ -591,7 +522,18 @@ export default function InvoiceDetailScreen() {
         >
           <Button label="Выписать чек" onPress={issueReceipts} />
         </View>
-      ) : null}
+      ) : (
+        // ШАГОВ НЕ ОСТАЛОСЬ — ДОКУМЕНТ ОТПРАВЛЯЮТ, как у чека (владелец 04.10:
+        // «на чеке внизу „Поделиться PDF“ есть, а в инвойсе нет — расхождение
+        // в архитектуре; то же и в кредит-ноте»). Оплачен с чеком, отменён,
+        // кредит-нота — внизу «Поделиться PDF».
+        <View
+          className="px-4 pb-7 pt-3"
+          style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
+        >
+          <Button label="Поделиться PDF" loading={pdfBusy} onPress={() => void sharePdf()} />
+        </View>
+      )}
 
       <InvoicePaymentSheet
         visible={paymentOpen}

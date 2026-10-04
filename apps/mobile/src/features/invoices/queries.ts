@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
 import {
+  deleteInvoice,
   getInvoice,
   issueInvoice,
+  updateInvoice,
   listInvoices,
   setInvoiceLanguage,
   type IssueInvoiceDraft,
@@ -80,7 +82,7 @@ export function useNextInvoiceSeries(
   enabled = true,
   /** Серия какого документа: у юрлица свои INV и RC (чек — 04.10, «номер
    *  чека — так же, как номер инвойса»). */
-  docType: "invoice" | "receipt" = "invoice",
+  docType: "invoice" | "receipt" | "credit_note" = "invoice",
 ) {
   const tenantId = useTenantId();
   return useQuery({
@@ -205,19 +207,6 @@ function invalidateInvoices(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["appointment-ledger"] });
 }
 
-/** ЯЗЫК БУМАГИ ВЫСТАВЛЕННОГО ДОКУМЕНТА — пункт «⋯» на его странице (аудит
- *  03.10). Сторож оплаченного счёта язык не проверяет: клиент попросил
- *  английский уже после выставления — законная просьба; цифры не меняются. */
-export function useSetInvoiceLanguage(id: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    ...NEVER_PAUSE,
-    mutationFn: (language: "ru" | "en") => setInvoiceLanguage(supabase, id, language),
-    onSuccess: () => invalidateInvoices(qc),
-    meta: { errorHandled: true },
-  });
-}
-
 export function useIssueInvoice() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
@@ -226,8 +215,8 @@ export function useIssueInvoice() {
     // ЯЗЫК ПИШЕТСЯ ВТОРЫМ ШАГОМ И НЕ ВАЛИТ ВЫСТАВЛЕНИЕ. Серверная функция
     // `issue_invoice` его не принимает (добавить параметр — значит создать
     // перегрузку рядом со старой), а язык не деньги: если запись не прошла,
-    // счёт остаётся русским и переключается в «⋯» документа
-    // (`useSetInvoiceLanguage`). Ронять из-за этого выставленный документ было
+    // счёт остаётся русским, а язык меняют через «Изменить инвойс» (владелец
+    // 04.10: на странице выставленного языка нет). Ронять из-за этого выставленный документ было
     // бы куда хуже — но и молчать нельзя (аудит 03.10): вернувшийся документ
     // несёт язык, который реально записан, и экран говорит о расхождении.
     // Вторая попытка — на случай одного моргания сети.
@@ -249,6 +238,39 @@ export function useIssueInvoice() {
       }
       return invoice;
     },
+    onSuccess: () => invalidateInvoices(qc),
+    meta: { errorHandled: true },
+  });
+}
+
+/** ПРАВКА ВЫСТАВЛЕННОГО ИНВОЙСА НА МЕСТЕ — тот же номер (владелец 04.10). Язык
+ *  — вторым шагом, как при выставлении. */
+export function useUpdateInvoice(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: async ({
+      language,
+      ...draft
+    }: Omit<IssueInvoiceDraft, "request_id" | "link_to_tx_id"> & { language?: "ru" | "en" }) => {
+      const invoice = await updateInvoice(supabase, id, draft);
+      if (language && language !== invoice.language) {
+        await setInvoiceLanguage(supabase, id, language);
+        return { ...invoice, language };
+      }
+      return invoice;
+    },
+    onSuccess: () => invalidateInvoices(qc),
+    meta: { errorHandled: true },
+  });
+}
+
+/** УДАЛЕНИЕ ПОСЛЕДНЕГО ИНВОЙСА СЕРИИ — номер возвращается (владелец 04.10). */
+export function useDeleteInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: (id: string) => deleteInvoice(supabase, id),
     onSuccess: () => invalidateInvoices(qc),
     meta: { errorHandled: true },
   });
