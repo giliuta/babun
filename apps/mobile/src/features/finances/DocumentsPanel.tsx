@@ -26,7 +26,7 @@ import { SwipeRow } from "@/components/ui/SwipeRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
 import { useReceiptMenu } from "@/features/documents/receipt-menu";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useDocumentWriter } from "@/features/documents/document-rights";
 import { invoiceDeleteBlock } from "@/features/invoices/invoice-delete";
 import { useInvoiceMenu } from "@/features/invoices/invoice-menu";
 import { SELECT_SIDE, SelectRow } from "@/components/ui/select-rows";
@@ -108,7 +108,7 @@ export function DocumentsPanel({
   const t = useThemeColors();
   const invoiceMenu = useInvoiceMenu();
   const receiptMenu = useReceiptMenu();
-  const owner = useCurrentRole().data === "owner";
+  const canWrite = useDocumentWriter();
   const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
   // Список документов периода — общий с плиткой «Документы» на «Финансах»
   // (`usePeriodDocuments`): число на плитке и строки здесь из одного места.
@@ -230,6 +230,7 @@ export function DocumentsPanel({
       const invoice = invoiceById.get(doc.id);
       if (!invoice) return;
       const path = `/invoices/${invoice.id}`;
+      const write = canWrite(invoice.brigade_id);
       const own = payments[invoice.id] ?? [];
       const settlement = calculateInvoiceSettlement(invoice, own);
       const isInvoice = (invoice.kind ?? "invoice") === "invoice";
@@ -240,11 +241,12 @@ export function DocumentsPanel({
       setSheetMenu(
         invoiceMenu.menuFor(invoice, menuContext(invoice), [
           { ...open, run: () => onOpen(path) },
-          { ...share, run: () => onOpen(`${path}?action=share`) },
-          ...(owner && awaits
+          // «Документы: Видит» — открыть и смотреть, без отправки и денег.
+          ...(write ? [{ ...share, run: () => onOpen(`${path}?action=share`) }] : []),
+          ...(write && awaits
             ? [{ label: "Принять оплату", icon: Banknote, color: SETTINGS_TILE.green, run: () => onOpen(`${path}?action=pay`) }]
             : []),
-          ...(needsReceipt
+          ...(write && needsReceipt
             ? [{ label: "Выписать чек", icon: ReceiptText, color: SETTINGS_TILE.green, run: () => onOpen(`${path}?action=receipt`) }]
             : []),
         ]),
@@ -257,7 +259,7 @@ export function DocumentsPanel({
     setSheetMenu(
       receiptMenu.menuFor(receipt, [
         { ...open, run: () => onOpen(path) },
-        { ...share, run: () => onOpen(`${path}?action=share`) },
+        ...(canWrite(receipt.team_id) ? [{ ...share, run: () => onOpen(`${path}?action=share`) }] : []),
       ]),
     );
   };

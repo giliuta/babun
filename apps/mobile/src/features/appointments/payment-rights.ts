@@ -23,6 +23,9 @@ export interface PaymentRights {
   seeHistory: boolean;
   /** Принять оплату и снять её. */
   takeMoney: boolean;
+  /** «Документы» в команде записи (04.10): `write` — выписать инвойс и чек,
+   *  `read` — только открыть уже выписанные, `none` — значков нет. */
+  documents: "write" | "read" | "none";
 }
 
 export interface PaymentRightsInput {
@@ -55,10 +58,20 @@ export function paymentRights(input: PaymentRightsInput): PaymentRights {
     teamId,
   });
 
+  const documents = accessGate({
+    role: role ?? undefined,
+    map,
+    blockKey: "finance.documents",
+    scope: "calendar",
+    teamId,
+  });
+
   return {
     createAccount,
     seeHistory: operations === "read" || operations === "write",
     takeMoney: takeMoneyRight({ role, map, teamId, myCalendars, mirror }),
+    // Без команды сервер документов не даст никому, кроме владельца.
+    documents: role === "owner" ? "write" : teamId && documents !== "loading" && documents !== "locked" && documents !== "gone" ? documents : "none",
   };
 }
 

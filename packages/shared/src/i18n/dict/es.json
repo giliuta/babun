@@ -5187,5 +5187,8 @@
  "Кредит-нота вернула клиенту {0} {1} — её не удалить: документ на эти деньги остаётся": "La nota de crédito devolvió {0} {1} al cliente: no se puede eliminar, el documento de ese dinero se queda",
  "Кредит-нота не найдена": "No se encontró la nota de crédito",
  "Удалить кредит-ноту может только владелец": "Solo el propietario puede eliminar una nota de crédito",
- "Удалить можно только последнюю кредит-ноту серии ({0}) — после неё уже выписаны другие": "Solo se puede eliminar la última nota de crédito de la serie ({0}): después ya se emitieron otras"
+ "Удалить можно только последнюю кредит-ноту серии ({0}) — после неё уже выписаны другие": "Solo se puede eliminar la última nota de crédito de la serie ({0}): después ya se emitieron otras",
+ "Выписывает инвойсы и чеки клиентам команды, принимает по ним оплату, возвращает и удаляет": "Emite facturas y recibos a los clientes del equipo, cobra, reembolsa y elimina",
+ "Сможет выставлять, отменять и удалять инвойсы и чеки команды": "Podrá emitir, anular y eliminar las facturas y recibos del equipo",
+ "Нужно право «Документы: Выставляет» в команде документа": "Se necesita el permiso «Documentos: Emitir» en el equipo del documento"
 }

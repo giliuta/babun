@@ -4,11 +4,11 @@ import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { tDynamic } from "@babun/shared/i18n/runtime";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import type { ActionMenu } from "@/features/calendar/ActionMenuSheet";
-import { useCurrentRole } from "@/features/settings/tenant";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { formatInvoiceMoney } from "@/features/invoices/format";
+import { useDocumentWriter } from "./document-rights";
 import { useDeleteReceipt } from "./receipts-queries";
 
 // ДЕЙСТВИЯ С ЧЕКОМ — ОДНИ НА «⋯» СТРАНИЦЫ ЧЕКА И НА ДОЛГОЕ НАЖАТИЕ В
@@ -27,10 +27,11 @@ export function receiptCanEdit(receipt: Pick<Receipt, "status" | "transaction_id
 export function useReceiptMenu() {
   const router = useRouter();
   const remove = useDeleteReceipt();
-  const owner = useCurrentRole().data === "owner";
+  const canWrite = useDocumentWriter();
 
   const actionsFor = (receipt: Receipt, opts: { onDeleted?: () => void } = {}): Item[] => {
-    if (receipt.status === "void") return [];
+    // «Документы: Видит» — только смотреть (сервер откажет и сам).
+    if (receipt.status === "void" || !canWrite(receipt.team_id)) return [];
     const items: Item[] = [];
     if (receiptCanEdit(receipt)) {
       items.push({
@@ -40,7 +41,7 @@ export function useReceiptMenu() {
         run: () => router.push(`/documents/receipt-new?receiptId=${receipt.id}` as Href),
       });
     }
-    if (owner && receipt.transaction_id) {
+    if (receipt.transaction_id) {
       items.push({
         label: "Возврат",
         icon: Undo2,
@@ -48,29 +49,27 @@ export function useReceiptMenu() {
         run: () => router.push(`/documents/receipt-refund?receiptId=${receipt.id}` as Href),
       });
     }
-    if (owner) {
-      items.push({
-        label: "Удалить чек",
-        destructive: true,
-        run: () =>
-          confirmThen(
-            `Удалить ${receipt.number}?`,
-            {
-              message: "Чек исчезнет, его номер достанется следующему чеку. Деньги останутся — чек на них можно выписать снова.",
-              confirmLabel: "Удалить",
-              destructive: true,
-            },
-            () =>
-              remove.mutate(receipt.id, {
-                onSuccess: () => {
-                  haptics.success();
-                  opts.onDeleted?.();
-                },
-                onError: (error) => notify("Чек не удалён", tDynamic(error.message)),
-              }),
-          ),
-      });
-    }
+    items.push({
+      label: "Удалить чек",
+      destructive: true,
+      run: () =>
+        confirmThen(
+          `Удалить ${receipt.number}?`,
+          {
+            message: "Чек исчезнет, его номер достанется следующему чеку. Деньги останутся — чек на них можно выписать снова.",
+            confirmLabel: "Удалить",
+            destructive: true,
+          },
+          () =>
+            remove.mutate(receipt.id, {
+              onSuccess: () => {
+                haptics.success();
+                opts.onDeleted?.();
+              },
+              onError: (error) => notify("Чек не удалён", tDynamic(error.message)),
+            }),
+        ),
+    });
     return items;
   };
 

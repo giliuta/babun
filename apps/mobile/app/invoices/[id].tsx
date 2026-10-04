@@ -320,8 +320,8 @@ export default function InvoiceDetailScreen() {
     pendingAction.current = null;
     setTimeout(() => {
       if (next === "share" && docWrite) void sharePdf();
-      else if (next === "pay" && owner && awaitsPayment) openPayment();
-      else if (next === "receipt") issueReceipts();
+      else if (next === "pay" && docWrite && awaitsPayment) openPayment();
+      else if (next === "receipt" && docWrite) issueReceipts();
     }, 450);
   }
 
@@ -357,15 +357,18 @@ export default function InvoiceDetailScreen() {
     creditNote,
   });
   const owner = role === "owner";
+  // «Меняет» — весь блок (04.10): оплата, чек, возврат и меню — у всех, кто
+  // «Документы: Видит и меняет» в команде инвойса; без команды — владельцу.
   const docWrite =
     owner ||
+    (!!row.brigade_id &&
     accessGate({
       role,
       map: myAccess,
       blockKey: "finance.documents",
       scope: "calendar",
-      teamId: row.brigade_id ?? null,
-    }) === "write";
+      teamId: row.brigade_id,
+    }) === "write");
   // «⋯» — ДЕЙСТВИЯ С ДОКУМЕНТОМ, те же, что долгим нажатием в «Документах»
   // (`useInvoiceMenu`, владелец 04.10). Языка и «Поделиться» в меню нет.
   const menuContext = {
@@ -501,7 +504,7 @@ export default function InvoiceDetailScreen() {
                     // ВОЗВРАТ — ЧЕРЕЗ КРЕДИТ-НОТУ (04.10): документ и деньги одним
                     // движением; старый возврат без документа оставлял долг.
                     onRefund={
-                      owner && refundDestination === "invoice" && refundable > 0
+                      docWrite && refundDestination === "invoice" && refundable > 0
                         ? () =>
                             router.push(
                               `/invoices/credit-note?invoiceId=${row.id}&amount=${refundable}` as Href,
@@ -519,7 +522,7 @@ export default function InvoiceDetailScreen() {
 
       {/* ДЕЙСТВИЕ ЭКРАНА ОДНО И ЖИВЁТ ВНИЗУ (AGENTS: главное действие — в
           футере): пока документ ждёт денег — «Принять оплату». */}
-      {awaitsPayment && owner ? (
+      {awaitsPayment && docWrite ? (
         <View
           className="px-4 pb-7 pt-3"
           style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}

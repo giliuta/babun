@@ -5,7 +5,7 @@ import {
   type InvoicePaymentLedger,
 } from "@babun/shared/local/finance/invoice-ledger";
 import { tDynamic } from "@babun/shared/i18n/runtime";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useDocumentWriter } from "@/features/documents/document-rights";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import type { ActionMenu } from "@/features/calendar/ActionMenuSheet";
 import { confirmThen } from "@/lib/confirm";
@@ -47,7 +47,7 @@ export function useInvoiceMenu() {
   const router = useRouter();
   const remove = useDeleteInvoice();
   const removeNote = useDeleteCreditNote();
-  const owner = useCurrentRole().data === "owner";
+  const canWrite = useDocumentWriter();
 
   // УДАЛИТЬ КРЕДИТ-НОТУ (04.10: «отменил, а клиент — ладно, плачу; удаляю
   // ноту, пока не скинул»). Только последнюю в серии; если нота сама вернула
@@ -82,7 +82,7 @@ export function useInvoiceMenu() {
   };
 
   const actionsFor = (invoice: InvoiceLedger, ctx: InvoiceMenuContext): MenuAction[] => {
-    if (!owner) return [];
+    if (!canWrite(invoice.brigade_id)) return [];
     // Сама кредит-нота — её можно только удалить.
     if (invoice.kind === "credit_note") return deleteNoteAction(invoice, ctx);
     // Последняя нота инвойса — удалить её (отменённый оживает, частичная

@@ -5187,5 +5187,8 @@
  "Кредит-нота вернула клиенту {0} {1} — её не удалить: документ на эти деньги остаётся": "The credit note refunded {0} {1} to the client — it can't be deleted: the document for that money stays",
  "Кредит-нота не найдена": "Credit note not found",
  "Удалить кредит-ноту может только владелец": "Only the owner can delete a credit note",
- "Удалить можно только последнюю кредит-ноту серии ({0}) — после неё уже выписаны другие": "Only the last credit note in the series ({0}) can be deleted — others were issued after it"
+ "Удалить можно только последнюю кредит-ноту серии ({0}) — после неё уже выписаны другие": "Only the last credit note in the series ({0}) can be deleted — others were issued after it",
+ "Выписывает инвойсы и чеки клиентам команды, принимает по ним оплату, возвращает и удаляет": "Issues invoices and receipts to the team's clients, takes payment on them, refunds and deletes",
+ "Сможет выставлять, отменять и удалять инвойсы и чеки команды": "Will be able to issue, cancel and delete the team's invoices and receipts",
+ "Нужно право «Документы: Выставляет» в команде документа": "You need the “Documents: Can issue” right in the document's team"
 }

@@ -5187,5 +5187,8 @@
  "Кредит-нота вернула клиенту {0} {1} — её не удалить: документ на эти деньги остаётся": "Die Gutschrift hat dem Kunden {0} {1} erstattet — sie lässt sich nicht löschen: der Beleg für dieses Geld bleibt",
  "Кредит-нота не найдена": "Gutschrift nicht gefunden",
  "Удалить кредит-ноту может только владелец": "Nur der Inhaber kann eine Gutschrift löschen",
- "Удалить можно только последнюю кредит-ноту серии ({0}) — после неё уже выписаны другие": "Nur die letzte Gutschrift der Serie ({0}) kann gelöscht werden — danach wurden weitere ausgestellt"
+ "Удалить можно только последнюю кредит-ноту серии ({0}) — после неё уже выписаны другие": "Nur die letzte Gutschrift der Serie ({0}) kann gelöscht werden — danach wurden weitere ausgestellt",
+ "Выписывает инвойсы и чеки клиентам команды, принимает по ним оплату, возвращает и удаляет": "Stellt Rechnungen und Belege an Kunden des Teams aus, nimmt Zahlungen an, erstattet und löscht",
+ "Сможет выставлять, отменять и удалять инвойсы и чеки команды": "Kann Rechnungen und Belege des Teams ausstellen, stornieren und löschen",
+ "Нужно право «Документы: Выставляет» в команде документа": "Erforderlich ist das Recht „Dokumente: Ausstellen“ im Team des Dokuments"
 }
