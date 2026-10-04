@@ -35,6 +35,7 @@ import { removalMessage, upcomingWorkCount } from "./removal-impact";
 import { draftTeamBrief } from "../rights-ui/team-sentence";
 import { AccessSectionsCard } from "../rights-ui/AccessSectionsCard";
 import { MasterPersonalBlocks, MasterWorkBlock } from "./MasterProfileBlocks";
+import { PartnerFilesBlock } from "./PartnerFilesBlock";
 import { seenLine } from "./partner-facts";
 import { EmployeeNoteBlock } from "./EmployeeNoteBlock";
 import { contactsHolderOf, useMasterProfileWrite } from "./use-profile-write";
@@ -498,6 +499,8 @@ export function MasterMemberCard({
             {/* Журнала «Номера клиентов» больше нет (03.10): номер приходит
                 целиком с блоком «Клиент», открытий по одному не бывает. */}
             <MasterPersonalBlocks card={card} joinedAt={member?.joinedAt ?? null} />
+            {/* Договор, копия документа — его бумаги у владельца (04.10). */}
+            <PartnerFilesBlock masterId={card.id} canWrite={!manager.readOnly} />
           </>
         ) : null}
       </MasterCardView>

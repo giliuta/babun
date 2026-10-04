@@ -38,7 +38,7 @@ const EXEMPT: Record<string, string> = {
   location_requests: "запрос адреса у клиента — у клиента",
   legal_entities: "юрлица компании — команда выбирает своё полем teams.legal_entity_id (STORY-101)",
   document_sequences: "серия номеров — у юрлица, а не у команды: закон о VAT требует одну сплошную нумерацию на юрлицо",
-  master_documents: "команда через masters",
+  partner_files: "файлы партнёра — у его карточки (masters), право «Партнёры» на аккаунт",
   master_ratings: "команда через masters",
   master_rating_tokens: "команда через masters",
   tenant_sms_config: "баланс SMS — у компании, календари — списком team_ids",

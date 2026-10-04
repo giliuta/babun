@@ -5209,5 +5209,8 @@
  "Доступ ко всем вашим командам пропадёт сразу. Вернуть можно только новым приглашением.": "El acceso a todos tus equipos se pierde al instante. Solo se recupera con una nueva invitación.",
  "Не удалось загрузить выплаты": "No se pudieron cargar los pagos",
  "Выплат пока нет": "Aún no hay pagos",
- "Выплата": "Pago"
+ "Выплата": "Pago",
+ "Видео сюда не прикладывается — только фото и документы": "Aquí no se adjuntan vídeos: solo fotos y documentos",
+ "Поддерживаются фото (JPEG, PNG, WebP), PDF и текст.": "Se admiten fotos (JPEG, PNG, WebP), PDF y texto.",
+ "Файл не найден": "Archivo no encontrado"
 }

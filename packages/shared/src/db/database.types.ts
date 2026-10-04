@@ -2453,59 +2453,6 @@ export type Database = {
           },
         ]
       }
-      master_documents: {
-        Row: {
-          created_at: string
-          expires_at: string | null
-          id: string
-          issued_at: string | null
-          kind: string
-          label: string
-          master_id: string
-          mime_type: string | null
-          notes: string | null
-          size_bytes: number | null
-          storage_path: string
-          tenant_id: string
-        }
-        Insert: {
-          created_at?: string
-          expires_at?: string | null
-          id?: string
-          issued_at?: string | null
-          kind: string
-          label: string
-          master_id: string
-          mime_type?: string | null
-          notes?: string | null
-          size_bytes?: number | null
-          storage_path: string
-          tenant_id: string
-        }
-        Update: {
-          created_at?: string
-          expires_at?: string | null
-          id?: string
-          issued_at?: string | null
-          kind?: string
-          label?: string
-          master_id?: string
-          mime_type?: string | null
-          notes?: string | null
-          size_bytes?: number | null
-          storage_path?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "master_documents_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       master_rating_tokens: {
         Row: {
           appointment_id: string | null
@@ -2771,6 +2718,50 @@ export type Database = {
             columns: ["tenant_id", "team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["tenant_id", "id"]
+          },
+        ]
+      }
+      partner_files: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          filename: string
+          id: string
+          master_id: string
+          mime_type: string
+          size_bytes: number
+          storage_path: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          filename: string
+          id?: string
+          master_id: string
+          mime_type: string
+          size_bytes: number
+          storage_path: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          filename?: string
+          id?: string
+          master_id?: string
+          mime_type?: string
+          size_bytes?: number
+          storage_path?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_files_tenant_id_master_id_fkey"
+            columns: ["tenant_id", "master_id"]
+            isOneToOne: false
+            referencedRelation: "masters"
             referencedColumns: ["tenant_id", "id"]
           },
         ]

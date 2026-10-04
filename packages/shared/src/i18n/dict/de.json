@@ -5209,5 +5209,8 @@
  "Доступ ко всем вашим командам пропадёт сразу. Вернуть можно только новым приглашением.": "Der Zugriff auf alle Ihre Teams endet sofort. Wiederherstellen nur mit einer neuen Einladung.",
  "Не удалось загрузить выплаты": "Auszahlungen konnten nicht geladen werden",
  "Выплат пока нет": "Noch keine Auszahlungen",
- "Выплата": "Auszahlung"
+ "Выплата": "Auszahlung",
+ "Видео сюда не прикладывается — только фото и документы": "Videos können hier nicht angehängt werden — nur Fotos und Dokumente",
+ "Поддерживаются фото (JPEG, PNG, WebP), PDF и текст.": "Unterstützt: Fotos (JPEG, PNG, WebP), PDF und Text.",
+ "Файл не найден": "Datei nicht gefunden"
 }

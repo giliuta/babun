@@ -5209,5 +5209,8 @@
  "Доступ ко всем вашим командам пропадёт сразу. Вернуть можно только новым приглашением.": "Access to all your teams ends immediately. It can only be restored with a new invitation.",
  "Не удалось загрузить выплаты": "Couldn't load payouts",
  "Выплат пока нет": "No payouts yet",
- "Выплата": "Payout"
+ "Выплата": "Payout",
+ "Видео сюда не прикладывается — только фото и документы": "Videos can't be attached here — only photos and documents",
+ "Поддерживаются фото (JPEG, PNG, WebP), PDF и текст.": "Supported: photos (JPEG, PNG, WebP), PDF and text.",
+ "Файл не найден": "File not found"
 }
