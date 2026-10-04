@@ -50,7 +50,7 @@ export function TariffPaymentsScreen() {
   const t = useThemeColors();
   const role = useDataRole();
   const scope = useAccountScope();
-  const owner = scope.role === "owner";
+  const owner = scope.viewRole === "owner";
   const gate = useAccountGate("cabinet.tariff_payments");
   const accountName = useAccountName();
   const payments = useTariffPayments();

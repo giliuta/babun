@@ -5,8 +5,11 @@ import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { useMirror } from "@/features/access/mirror/mirror-state";
+import { useTeams } from "@/features/reference/queries";
 import { useMyMemberships } from "@/features/settings/my-memberships";
 import { useMyCalendars } from "@/features/settings/workspaces";
+import { useTenantId } from "@/lib/tenant";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { TariffRow } from "@/features/tariffs/TariffRow";
 
@@ -30,6 +33,24 @@ import { TariffPaymentsRow } from "./TariffPaymentsRow";
 export function InvitedAccounts() {
   const memberships = useMyMemberships().data ?? [];
   const calendars = useMyCalendars().data ?? [];
+  const mirror = useMirror();
+  const tenantId = useTenantId();
+  const teams = useTeams().data ?? [];
+  // «ПОСМОТРЕТЬ ЕГО ГЛАЗАМИ» (владелец 04.10: «как это будет выглядеть у
+  // мастера»): у него этот аккаунт — пригласивший, и блок стоит ровно так, как
+  // у него: его команды и строки по его правам (карта зеркала).
+  if (mirror && tenantId) {
+    const attached = new Set(mirror.map.attachedCalendars);
+    return (
+      <AccountScopeProvider tenantId={tenantId}>
+        <InvitedAccountBlock
+          tenantId={tenantId}
+          fallbackName={null}
+          teamNames={teams.filter((team) => attached.has(team.id)).map((team) => team.name)}
+        />
+      </AccountScopeProvider>
+    );
+  }
   const invited = memberships.filter((m) => m.role !== "owner");
   if (invited.length === 0) return null;
   return (

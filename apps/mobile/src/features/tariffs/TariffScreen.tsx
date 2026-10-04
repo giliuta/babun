@@ -55,7 +55,7 @@ export function TariffScreen() {
   const qc = useQueryClient();
   const { state, periodEnd, workingChosen } = useTariff();
   const scope = useAccountScope();
-  const owner = scope.role === "owner";
+  const owner = scope.viewRole === "owner";
   const gate = useAccountGate("cabinet.tariff");
   const accountName = useAccountName();
   const { data: teams = [] } = useTeams();
@@ -188,7 +188,10 @@ export function TariffScreen() {
               current === card.tier
                 ? state.trial
                   ? "Пробный"
-                  : "Ваш"
+                  : // Партнёру тариф не «его» — аккаунта, который пригласил.
+                    owner
+                    ? "Ваш"
+                    : "Действует"
                 : null
             }
             // Выдан навсегда — выбирать нечего: ни пробного, ни оплаты.

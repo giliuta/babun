@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { parseMemberAccessMap, type MemberAccessMap } from "@/features/access/access-map";
 import { accessGate, type AccessGate } from "@/features/access/my-access";
+import { useMirror } from "@/features/access/mirror/mirror-state";
 import { useMyAccess } from "@/features/access/queries";
 import { fetchTenantProfile } from "@/features/settings/company-fetchers";
 import { useMyMemberships } from "@/features/settings/my-memberships";
@@ -40,8 +41,11 @@ export interface AccountScope {
   foreign: boolean;
   /** Клиент под заголовком этого аккаунта (`x-babun-tenant`). */
   client: typeof supabase;
-  /** Роль человека в этом аккаунте; `null` — его там нет. */
+  /** Роль человека в этом аккаунте; `null` — его там нет. Ею ЧИТАЮТ данные. */
   role: UserRole | null | undefined;
+  /** Роль, которой страница РЕШАЕТ, что показать: в «Посмотреть его
+   *  глазами» — его (мастер), иначе та же `role`. */
+  viewRole: UserRole | null | undefined;
 }
 
 export function useAccountScope(): AccountScope {
@@ -56,7 +60,11 @@ export function useAccountScope(): AccountScope {
     [foreign, explicit],
   );
   const role = foreign && explicit ? roleInAccount(memberships, explicit) : activeRole;
-  return { tenantId, foreign, client, role };
+  // «ЕГО ГЛАЗАМИ» (04.10: «как это будет выглядеть у мастера»): данные —
+  // свои, решения — его ролью и его картой прав (`useMyAccess` в зеркале).
+  const mirror = useMirror();
+  const viewRole = !foreign && mirror ? mirror.role : role;
+  return { tenantId, foreign, client, role, viewRole };
 }
 
 /** Профиль аккаунта страницы (`current_tenant_profile_safe`): имя, тариф;
@@ -96,7 +104,7 @@ export function useAccountAccess(): MemberAccessMap | undefined {
 export function useAccountGate(blockKey: string): AccessGate {
   const scope = useAccountScope();
   const map = useAccountAccess();
-  return accessGate({ role: scope.role, map, blockKey, scope: "company" });
+  return accessGate({ role: scope.viewRole, map, blockKey, scope: "company" });
 }
 
 /** Имя аккаунта страницы — для шапки и кнопки оплаты («Оплатить за Giliuta»). */

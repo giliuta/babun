@@ -23,7 +23,10 @@ export function CabinetRequisitesRow({ tenantId }: { tenantId?: string } = {}) {
   const companies = useCompanies();
   // Номер следующего инвойса сервер показывает владельцу и тому, кто сам
   // выставляет инвойсы; партнёр «Реквизитов» видит наборы без номера.
-  const nextInvoice = useNextInvoiceNumber(new Date().getFullYear(), undefined, owner).data;
+  // Выключенный запрос всё равно отдаёт номер из кэша владельца — в «его
+  // глазами» партнёр видел бы чужое: номер — только владельцу.
+  const ownNumber = useNextInvoiceNumber(new Date().getFullYear(), undefined, owner).data;
+  const nextInvoice = owner ? ownNumber : null;
   const liveSets = (companies.data ?? []).filter((c) => !c.archived_at).length;
   return (
     <SettingsRow

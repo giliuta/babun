@@ -54,7 +54,7 @@ export function SmsScreen() {
   const router = useRouter();
   const toast = useToast();
   const scope = useAccountScope();
-  const ownerOfAccount = scope.role === "owner";
+  const ownerOfAccount = scope.viewRole === "owner";
   const gate = useAccountGate("cabinet.sms");
   const accountName = useAccountName();
   // Без тарифа SMS нет (02.10) — и пополнять нечего: кнопка серая. Тариф —

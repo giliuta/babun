@@ -13,7 +13,6 @@ import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
-import { useCurrentRole } from "@/features/settings/tenant";
 import { useAccountScope } from "@/features/cabinet/account-scope";
 import { useThemeColors } from "@/theme/colors";
 import { CompanySheet } from "./CompanySheet";
@@ -94,8 +93,7 @@ export function RequisitesScreen() {
   const [editing, setEditing] = useState<Company | null>(null);
   const [open, setOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const mirrorRole = useCurrentRole().data;
-  const role = scope.foreign ? scope.role : mirrorRole;
+  const role = scope.viewRole;
   // Пока роль грузится, владелец не должен видеть мигание «только чтение».
   const readOnly = role !== undefined && role !== "owner";
 
