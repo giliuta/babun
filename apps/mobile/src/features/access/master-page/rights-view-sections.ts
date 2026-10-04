@@ -178,7 +178,9 @@ export function sectionBrief(section: Pick<ViewSection, "rows">): string {
   return open
     .map((row, i) => {
       const title = briefTitle(row.block);
-      return i === 0 ? title : title.charAt(0).toLowerCase() + title.slice(1);
+      // Аббревиатура остаётся заглавной: «sMS» в подписи «Кабинета» (04.10).
+      const acronym = /^[A-ZА-ЯЁ]{2}/.test(title);
+      return i === 0 || acronym ? title : title.charAt(0).toLowerCase() + title.slice(1);
     })
     .join(", ");
 }

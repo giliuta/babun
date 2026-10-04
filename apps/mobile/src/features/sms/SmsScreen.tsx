@@ -185,14 +185,21 @@ export function SmsScreen() {
                 <SmsHistoryRow item={item} compact onPress={() => setOpen(item)} />
               </View>
             ))}
-            {(history.data ?? []).length > 0 ? <Divider inset={48} /> : null}
-            <SettingsRow
-              tile="neutral"
-              icon={History}
-              title="Вся история"
-              sub={(history.data ?? []).length > 0 ? undefined : "Сообщений пока нет"}
-              onPress={() => router.push("/cabinet/sms-history" as Href)}
-            />
+            {/* «Вся история» читает аккаунт, открытый на телефоне: свой
+                аккаунт, открытый из Кабинета со стороны (04.10), показывает
+                последние сообщения без двери. */}
+            {scope.foreign ? null : (
+              <>
+                {(history.data ?? []).length > 0 ? <Divider inset={48} /> : null}
+                <SettingsRow
+                  tile="neutral"
+                  icon={History}
+                  title="Вся история"
+                  sub={(history.data ?? []).length > 0 ? undefined : "Сообщений пока нет"}
+                  onPress={() => router.push("/cabinet/sms-history" as Href)}
+                />
+              </>
+            )}
           </SectionCard>
         ) : null}
       </ScrollView>

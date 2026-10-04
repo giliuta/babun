@@ -1,4 +1,5 @@
 import {
+  History,
   ArrowRightLeft,
   Banknote,
   Bookmark,
@@ -154,6 +155,8 @@ const LOOK: Record<string, RightLook> = {
   "cabinet.tariff": { icon: BadgeCheck, tile: SETTINGS_TILE.blue },
   "cabinet.tariff_payments": { icon: Receipt, tile: SETTINGS_TILE.blue },
   "cabinet.sms": { icon: MessageSquare, tile: SETTINGS_TILE.green },
+  // Тот же значок и цвет, что у строки «История изменений» в Кабинете.
+  "cabinet.history": { icon: History, tile: SETTINGS_TILE.teal },
 };
 
 /** Право, которого ещё нет в словаре (реестр живёт на сервере и может

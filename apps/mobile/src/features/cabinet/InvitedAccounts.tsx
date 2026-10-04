@@ -15,6 +15,7 @@ import { TariffRow } from "@/features/tariffs/TariffRow";
 
 import { AccountScopeProvider, useAccountGate, useAccountName } from "./account-scope";
 import { CabinetRequisitesRow } from "./CabinetRequisitesRow";
+import { HistoryRow } from "./HistoryRow";
 import { TariffPaymentsRow } from "./TariffPaymentsRow";
 
 // АККАУНТЫ, КОТОРЫЕ ПРИГЛАСИЛИ, — В КАБИНЕТЕ ПАРТНЁРА (владелец 04.10: «там,
@@ -26,7 +27,7 @@ import { TariffPaymentsRow } from "./TariffPaymentsRow";
 // Под строкой приглашений — по блоку на каждый аккаунт, где человек партнёр:
 // шапка — имя аккаунта, первой строкой — его команды, ниже — только то, что
 // этот аккаунт открыл правами раздела «Кабинет»: тариф, оплаты тарифа, SMS,
-// реквизиты. Нет права — нет строки. Каждая строка открывает страницу ЗА ЭТОТ
+// реквизиты, история изменений (04.10). Нет права — нет строки. Каждая строка открывает страницу ЗА ЭТОТ
 // аккаунт (`?tenant=`), а не за тот, что открыт на телефоне, — и платят на
 // ней за него.
 
@@ -84,12 +85,14 @@ function InvitedAccountBlock({
   const payments = useAccountGate("cabinet.tariff_payments");
   const sms = useAccountGate("cabinet.sms");
   const requisites = useAccountGate("finance.settings_requisites");
+  const history = useAccountGate("cabinet.history");
 
   const rows: { key: string; node: ReactNode }[] = [];
   if (seen(tariff)) rows.push({ key: "tariff", node: <TariffRow tenantId={tenantId} /> });
   if (seen(payments)) rows.push({ key: "payments", node: <TariffPaymentsRow tenantId={tenantId} /> });
   if (seen(sms)) rows.push({ key: "sms", node: <SmsCabinetRow tenantId={tenantId} /> });
   if (seen(requisites)) rows.push({ key: "requisites", node: <CabinetRequisitesRow tenantId={tenantId} /> });
+  if (seen(history)) rows.push({ key: "history", node: <HistoryRow tenantId={tenantId} /> });
 
   return (
     <>

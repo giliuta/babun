@@ -31,7 +31,8 @@ export function ChangeDetailSheet({
   item: ChangeLogItem | null;
   actor: string;
   team: string | null;
-  onOpen: (item: ChangeLogItem) => void;
+  /** Нет — двери к записи и клиенту нет (журнал чужого аккаунта, 04.10). */
+  onOpen?: (item: ChangeLogItem) => void;
   onClose: () => void;
 }) {
   const t = useThemeColors();
@@ -52,7 +53,7 @@ export function ChangeDetailSheet({
       onClose={onClose}
       title={row ? `${changeTitle(row)}${item && item.count > 1 ? ` ×${item.count}` : ""}` : ""}
       footer={
-        target && item ? (
+        target && item && onOpen ? (
           <View style={{ paddingHorizontal: GUTTER }}>
             <Button
               label={target.kind === "appointment" ? "Открыть запись" : "Открыть клиента"}

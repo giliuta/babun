@@ -95,7 +95,10 @@ export function RequisitesScreen() {
   const [dragging, setDragging] = useState(false);
   const role = scope.viewRole;
   // Пока роль грузится, владелец не должен видеть мигание «только чтение».
-  const readOnly = role !== undefined && role !== "owner";
+  // Аккаунт страницы — не открытый на телефоне (свой, открытый из Кабинета
+  // со стороны, 04.10): правка наборов пишет в открытый, поэтому здесь —
+  // только чтение; править — из своего аккаунта.
+  const readOnly = scope.foreign || (role !== undefined && role !== "owner");
 
   // Видимые сверху, скрытые под ними — тем же порядком, что у меток и услуг.
   const rows = useMemo(() => {

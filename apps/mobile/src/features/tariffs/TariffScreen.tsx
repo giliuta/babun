@@ -119,7 +119,7 @@ export function TariffScreen() {
   const manage = async () => {
     setPaying(true);
     try {
-      await openTariffPortal();
+      await openTariffPortal(scope.foreign ? scope.tenantId : null);
     } catch (e) {
       notify("Подписка не открылась", e instanceof Error ? e.message : undefined);
     } finally {

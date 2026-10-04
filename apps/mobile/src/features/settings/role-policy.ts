@@ -111,8 +111,9 @@ const INSIGHTS_ROUTE = "/cabinet/insights";
 // (`FinanceSettingsRoute`), а данные — политика `legal_entities`.
 const REQUISITES_ROUTE = "/cabinet/requisites";
 
-/** Страницы Кабинета за аккаунт (`?tenant=`, блок аккаунта, 04.10). */
-const ACCOUNT_CABINET_ROUTES = ["/cabinet/tariff", "/cabinet/payments", "/cabinet/sms"] as const;
+/** Страницы Кабинета за аккаунт (`?tenant=`, блок аккаунта, 04.10). История
+ *  изменений — по праву «История изменений» того же раздела «Кабинет». */
+const ACCOUNT_CABINET_ROUTES = ["/cabinet/tariff", "/cabinet/payments", "/cabinet/sms", "/cabinet/history"] as const;
 
 const DISPATCHER_CABINET_ROUTES = new Set([
   "/cabinet",

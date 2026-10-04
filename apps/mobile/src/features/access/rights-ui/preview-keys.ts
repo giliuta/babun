@@ -98,6 +98,7 @@ export const CABINET_PREVIEW_KEYS: readonly string[] = [
   "cabinet.tariff_payments",
   "cabinet.sms",
   "finance.settings_requisites",
+  "cabinet.history",
 ];
 
 /** «Ограничения» записей и финансов (03.10) — общий вид сроков. */

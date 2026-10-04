@@ -15,6 +15,9 @@ export function CabinetAccountRoute({ children }: { children: ReactNode }) {
 }
 
 /** Адрес страницы Кабинета за аккаунт `tenantId`. */
-export function accountHref(path: "/cabinet/tariff" | "/cabinet/payments" | "/cabinet/sms" | "/cabinet/requisites", tenantId: string): string {
+export function accountHref(
+  path: "/cabinet/tariff" | "/cabinet/payments" | "/cabinet/sms" | "/cabinet/requisites" | "/cabinet/history",
+  tenantId: string,
+): string {
   return `${path}?tenant=${encodeURIComponent(tenantId)}`;
 }

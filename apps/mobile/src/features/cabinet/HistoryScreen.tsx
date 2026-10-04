@@ -32,6 +32,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { GUTTER } from "@/components/ui/tokens";
 import { useCompanyMembers } from "@/features/access/queries";
 import { useTeams } from "@/features/reference/queries";
+import { useMyCalendars } from "@/features/settings/workspaces";
 import { dayTitle } from "@/features/sms/sms-history-view";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { haptics } from "@/lib/haptics";
@@ -53,6 +54,7 @@ import {
 } from "./change-log";
 import { ChangeDetailSheet } from "./ChangeDetailSheet";
 import { HistoryFilterSheet } from "./HistoryFilterSheet";
+import { useAccountName, useAccountScope } from "./account-scope";
 import { useChangeLogPeriod } from "./use-change-log";
 
 // «ИСТОРИЯ ИЗМЕНЕНИЙ» (Кабинет → Компания, владелец 03.10: «любое изменение
@@ -119,8 +121,25 @@ export function HistoryScreen() {
   const { session } = useSession();
   const me = session?.user?.id ?? null;
   // С архивными: строка о команде, которую потом удалили, всё равно знает её имя.
-  const { data: teams = [] } = useTeams({ includeInactive: true });
-  const { data: members = [] } = useCompanyMembers();
+  // ЖУРНАЛ АККАУНТА СТРАНИЦЫ (04.10): из блока аккаунта в Кабинете — его, а не
+  // открытого на телефоне. Тогда команды называет лента календарей, партнёров
+  // аккаунта телефон не знает (подпись строки — имя на тот момент), а дверей
+  // к записи и клиенту нет: они открылись бы в открытом аккаунте.
+  const scope = useAccountScope();
+  const accountName = useAccountName();
+  const { data: activeTeams = [] } = useTeams({ includeInactive: true });
+  const { data: calendars = [] } = useMyCalendars();
+  const teams = useMemo(
+    () =>
+      scope.foreign
+        ? calendars
+            .filter((c) => c.tenantId === scope.tenantId)
+            .map((c) => ({ id: c.teamId, name: c.teamName, color: c.teamColor, is_active: true }))
+        : activeTeams,
+    [scope.foreign, scope.tenantId, calendars, activeTeams],
+  );
+  const { data: activeMembers = [] } = useCompanyMembers();
+  const members = scope.foreign ? [] : activeMembers;
   const [period, setPeriod] = useState<HistoryPeriod>("all");
   const [filter, setFilter] = useState<HistoryFilter>(EMPTY_HISTORY_FILTER);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -228,7 +247,11 @@ export function HistoryScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="История изменений" right={filterButton} />
+      <ScreenHeader
+        title="История изменений"
+        subtitle={scope.foreign || scope.viewRole !== "owner" ? (accountName ?? undefined) : undefined}
+        right={filterButton}
+      />
       {log.isLoading ? (
         <EmptyState state="loading" fill />
       ) : log.isError ? (
@@ -319,7 +342,7 @@ export function HistoryScreen() {
         item={detail}
         actor={detail ? actorName(detail.row) : ""}
         team={detail && detail.row.entity !== "teams" ? teamName(detail.row.team_id) : null}
-        onOpen={openTarget}
+        onOpen={scope.foreign ? undefined : openTarget}
         onClose={() => setDetail(null)}
       />
     </Screen>

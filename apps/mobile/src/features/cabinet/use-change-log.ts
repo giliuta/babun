@@ -1,12 +1,16 @@
+import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
-import { useDataRole } from "@/features/settings/tenant";
+import { useMirror } from "@/features/access/mirror/mirror-state";
+import { useAccountGate, useAccountScope } from "./account-scope";
 import { periodRange, type ChangeLogRow, type HistoryPeriod } from "./change-log";
+import { HISTORY_KEY, historyRowVisible } from "./history-access";
 
 // ЖУРНАЛ ИЗМЕНЕНИЙ — чтение `change_log` (свежие сверху). Пишет только
-// сервер; владелец видит весь журнал аккаунта, остальным RLS отдаёт их
-// собственные строки.
+// сервер. Аккаунт — СТРАНИЦЫ (`useAccountScope`): свой или пригласивший, из
+// блока которого открыли (04.10). Владелец аккаунта читает весь журнал;
+// партнёр с правом «История изменений» — его команды в открытых ему разделах
+// (политика `change_log_select_partner`). «Посмотреть его глазами» читает
+// вашим токеном — строки режутся его картой прав (`history-access.ts`).
 
 const PAGE = 1000;
 const MAX_ROWS = 3000;
@@ -15,22 +19,41 @@ const COLUMNS =
 
 export const changeLogKey = (tenantId: string | null) => ["change-log", tenantId] as const;
 
+/** Кто читает журнал и чем его режет. */
+function useHistoryReader() {
+  const scope = useAccountScope();
+  const gate = useAccountGate(HISTORY_KEY);
+  const mirror = useMirror();
+  const enabled =
+    !!scope.tenantId && (scope.role === "owner" || gate === "read" || gate === "write");
+  const mirrorMap = !scope.foreign && mirror ? mirror.map : undefined;
+  const visible = useCallback(
+    (row: Pick<ChangeLogRow, "team_id" | "entity">) => !mirrorMap || historyRowVisible(row, mirrorMap),
+    [mirrorMap],
+  );
+  return { tenantId: scope.tenantId, client: scope.client, enabled, visible };
+}
+
 /** ИСТОРИЯ ЗА ПЕРИОД ЦЕЛИКОМ (до 3000 последних строк). Фильтры «кто, где,
  *  что, действие» и их счётчики считаются на телефоне — как в клиентах,
  *  мгновенно и с числом у каждого варианта; сервер режет только период. */
 export function useChangeLogPeriod(period: HistoryPeriod) {
-  const tenantId = useTenantId();
-  const role = useDataRole();
+  const { tenantId, client, enabled, visible } = useHistoryReader();
+  const select = useCallback(
+    (data: { rows: ChangeLogRow[]; capped: boolean }) => ({ ...data, rows: data.rows.filter(visible) }),
+    [visible],
+  );
   return useQuery({
     queryKey: [...changeLogKey(tenantId), "period", period],
-    enabled: !!tenantId && role.data === "owner",
+    enabled,
     staleTime: 0,
+    select,
     queryFn: async (): Promise<{ rows: ChangeLogRow[]; capped: boolean }> => {
       const { from, to } = periodRange(period);
       const rows: ChangeLogRow[] = [];
       let before: number | null = null;
       while (rows.length < MAX_ROWS) {
-        let q = supabase
+        let q = client
           .from("change_log")
           .select(COLUMNS)
           .eq("tenant_id", tenantId as string)
@@ -51,33 +74,44 @@ export function useChangeLogPeriod(period: HistoryPeriod) {
   });
 }
 
-/** Последняя строка и сколько изменений сегодня — подпись строки Кабинета. */
+type TodayRow = Pick<ChangeLogRow, "team_id" | "entity" | "created_at">;
+
+/** Последняя строка и сколько изменений сегодня — подпись строки Кабинета.
+ *  Строки, а не счёт сервера: в «его глазами» их режет телефон. */
 export function useChangeLogToday() {
-  const tenantId = useTenantId();
-  const role = useDataRole();
+  const { tenantId, client, enabled, visible } = useHistoryReader();
+  const select = useCallback(
+    (data: { today: TodayRow[]; recent: TodayRow[] }) => {
+      const recent = data.recent.filter(visible);
+      return { today: data.today.filter(visible).length, lastAt: recent[0]?.created_at ?? null };
+    },
+    [visible],
+  );
   return useQuery({
     queryKey: [...changeLogKey(tenantId), "today"],
-    enabled: !!tenantId && role.data === "owner",
+    enabled,
     staleTime: 30_000,
-    queryFn: async (): Promise<{ today: number; lastAt: string | null }> => {
+    select,
+    queryFn: async (): Promise<{ today: TodayRow[]; recent: TodayRow[] }> => {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
-      const [{ count, error }, last] = await Promise.all([
-        supabase
+      const [today, recent] = await Promise.all([
+        client
           .from("change_log")
-          .select("id", { count: "exact", head: true })
+          .select("team_id, entity, created_at")
           .eq("tenant_id", tenantId as string)
-          .gte("created_at", start.toISOString()),
-        supabase
+          .gte("created_at", start.toISOString())
+          .limit(PAGE),
+        client
           .from("change_log")
-          .select("created_at")
+          .select("team_id, entity, created_at")
           .eq("tenant_id", tenantId as string)
           .order("id", { ascending: false })
-          .limit(1),
+          .limit(50),
       ]);
-      if (error) throw new Error(`change_log: ${error.message}`);
-      if (last.error) throw new Error(`change_log: ${last.error.message}`);
-      return { today: count ?? 0, lastAt: last.data?.[0]?.created_at ?? null };
+      if (today.error) throw new Error(`change_log: ${today.error.message}`);
+      if (recent.error) throw new Error(`change_log: ${recent.error.message}`);
+      return { today: (today.data ?? []) as TodayRow[], recent: (recent.data ?? []) as TodayRow[] };
     },
   });
 }

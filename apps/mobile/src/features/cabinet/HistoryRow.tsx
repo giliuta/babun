@@ -3,13 +3,16 @@ import { History } from "lucide-react-native";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { accountHref } from "./CabinetAccountRoute";
 import { shortDate } from "./change-log";
 import { useChangeLogToday } from "./use-change-log";
 
 // «ИСТОРИЯ ИЗМЕНЕНИЙ» — СТРОКА-ДВЕРЬ КАБИНЕТА (владелец 03.10). Подпись —
 // живое состояние: сколько изменений сегодня, а без них — когда было
 // последнее.
-export function HistoryRow() {
+/** `tenantId` — строка блока аккаунта (пригласившего или своего, открытого
+ *  со стороны, 04.10): его журнал и его страница. */
+export function HistoryRow({ tenantId }: { tenantId?: string } = {}) {
   const router = useRouter();
   const { data } = useChangeLogToday();
   const sub = !data
@@ -25,7 +28,7 @@ export function HistoryRow() {
       icon={History}
       title="История изменений"
       sub={sub}
-      onPress={() => router.push("/cabinet/history" as Href)}
+      onPress={() => router.push((tenantId ? accountHref("/cabinet/history", tenantId) : "/cabinet/history") as Href)}
     />
   );
 }

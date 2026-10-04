@@ -73,7 +73,7 @@ export function TariffPaymentsScreen() {
     if (opening.current) return;
     opening.current = true;
     try {
-      await openTariffPortal();
+      await openTariffPortal(scope.foreign ? scope.tenantId : null);
     } catch (e) {
       notify("Подписка не открылась", e instanceof Error ? e.message : undefined);
     } finally {

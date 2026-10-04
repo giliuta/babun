@@ -110,6 +110,7 @@ const TITLE: Record<string, string> = {
   "cabinet.tariff": "Тариф",
   "cabinet.tariff_payments": "Оплаты тарифа",
   "cabinet.sms": "SMS",
+  "cabinet.history": "История изменений",
 };
 
 /** Слова ступеней. Что не названо — берётся общее слово. */
@@ -203,6 +204,7 @@ const STEP: Record<string, Words> = {
   "cabinet.tariff": { off: "Скрыт", read: "Только видит", write: "Оплачивает" },
   "cabinet.tariff_payments": { off: "Скрыты", read: "Только видит" },
   "cabinet.sms": { off: "Скрыт", read: "Только видит", write: "Пополняет" },
+  "cabinet.history": { off: "Скрыта", read: "Только видит" },
   // КЛИЕНТЫ — ТЕМИ ЖЕ СЛОВАМИ, ЧТО «КАЛЕНДАРЬ» (владелец 30.09: страница
   // «Клиенты» — так же, блоками).
   // База — «Скрыта · Видит» (владелец 02.10: «редактировать убираем… по

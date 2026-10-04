@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 
 import type { AccessBlock, AccessLevel } from "../access-map";
 import { dependantResets } from "./master-draft";
-import { viewSections } from "./rights-view-sections";
+import { sectionBrief, viewSections } from "./rights-view-sections";
 
 // СТРАНИЦЫ РАЗДЕЛОВ ДОСТУПА — БЛОКАМИ (владелец 30.09). Право стоит там, куда
 // его поставил владелец, и только там: «Доход» и «Расход» с 03.10 — в
@@ -230,5 +230,20 @@ describe("страница раздела доступа — блоками вл
     assert.deepEqual(sections.map((section) => section.rows.map((row) => row.block.key)), [
       ["cabinet.tariff", "cabinet.tariff_payments", "cabinet.sms", "finance.settings_requisites"],
     ]);
+  });
+});
+
+describe("подпись раздела в «Доступе»", () => {
+  test("аббревиатура не строчится: «Тариф, SMS», а не «Тариф, sMS» (04.10)", () => {
+    const rows = [
+      { block: block("cabinet.tariff", ["off", "read", "write"], 371), level: "read" },
+      { block: block("cabinet.sms", ["off", "read", "write"], 373), level: "write" },
+      { block: block("finance.settings_requisites", ["off", "read"], 156), level: "read" },
+      { block: block("cabinet.history", ["off", "read"], 374), level: "off" },
+    ];
+    assert.equal(
+      sectionBrief({ rows } as unknown as Parameters<typeof sectionBrief>[0]),
+      "Тариф, SMS, реквизиты",
+    );
   });
 });

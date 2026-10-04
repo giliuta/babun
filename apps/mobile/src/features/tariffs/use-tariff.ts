@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
 import { useToast } from "@/components/ui/Toast";
 import { supabase } from "@/lib/supabase";
-import { useAccountProfile } from "@/features/cabinet/account-scope";
+import { useAccountProfile, useAccountScope } from "@/features/cabinet/account-scope";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { TENANT_HEADER } from "@/lib/tenant-header";
 import { tierOf, trialLeft, trialUsed, type TariffState, type Tier } from "./tiers";
@@ -70,7 +70,10 @@ type TariffRpc = {
     args: { p_tier: string } | { p_team_ids: string[] },
   ) => PromiseLike<{ error: { message?: string } | null }>;
 };
-const tariffRpc = supabase as unknown as TariffRpc;
+/** Двери тарифа — под заголовком аккаунта СТРАНИЦЫ (04.10): свой аккаунт,
+ *  открытый из Кабинета, пока на телефоне чужой, пробует и выбирает команды
+ *  у себя, а не у того, что открыт. */
+const tariffRpcOf = (client: typeof supabase) => client as unknown as TariffRpc;
 
 /** Отказ двери словами: сервер говорит по-русски, клиентская обёртка — нет. */
 function rpcError(error: { message?: string } | null): Error {
@@ -79,9 +82,10 @@ function rpcError(error: { message?: string } | null): Error {
 
 export function useStartTrial() {
   const qc = useQueryClient();
+  const { client } = useAccountScope();
   return useMutation({
     mutationFn: async (tier: Exclude<Tier, "free">) => {
-      const { error } = await tariffRpc.rpc("start_trial", { p_tier: tier });
+      const { error } = await tariffRpcOf(client).rpc("start_trial", { p_tier: tier });
       if (error) throw rpcError(error);
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["tenant"] }),
@@ -91,9 +95,10 @@ export function useStartTrial() {
 
 export function useChooseWorkingTeams() {
   const qc = useQueryClient();
+  const { client } = useAccountScope();
   return useMutation({
     mutationFn: async (teamIds: string[]) => {
-      const { error } = await tariffRpc.rpc("choose_working_teams", { p_team_ids: teamIds });
+      const { error } = await tariffRpcOf(client).rpc("choose_working_teams", { p_team_ids: teamIds });
       if (error) throw rpcError(error);
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["tenant"] }),
@@ -168,11 +173,13 @@ export async function openTariffCheckout(
   throw new Error("Не получилось открыть оплату. Попробуйте ещё раз");
 }
 
-/** «Управление подпиской» — страница Stripe: карта, счета, отмена. */
-export async function openTariffPortal(): Promise<void> {
+/** «Управление подпиской» — страница Stripe: карта, счета, отмена.
+ *  `tenantId` — аккаунт страницы, если он не тот, что открыт на телефоне. */
+export async function openTariffPortal(tenantId?: string | null): Promise<void> {
   const { web, back } = returnUrl();
   const { data, error } = await supabase.functions.invoke("tariff-checkout", {
     body: { action: "portal", return_url: back },
+    ...(tenantId ? { headers: { [TENANT_HEADER]: tenantId } } : null),
   });
   if (error) throw await checkoutRefusal(error);
   const url = (data as { url?: string } | null)?.url;

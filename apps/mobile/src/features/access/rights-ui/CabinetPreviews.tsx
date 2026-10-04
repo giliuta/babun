@@ -1,4 +1,4 @@
-import { BadgeCheck, Building2, MessageSquare, Receipt } from "lucide-react-native";
+import { BadgeCheck, Building2, History, MessageSquare, Receipt } from "lucide-react-native";
 
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
@@ -46,13 +46,22 @@ export function CabinetPreview({ blockKey, level }: { blockKey: string; level: A
         return (
           <SettingsRow tile={SETTINGS_TILE.green} icon={Building2} title="Реквизиты" sub="1 набор" onPress={onPress} />
         );
+      case "cabinet.history":
+        return (
+          <SettingsRow tile={SETTINGS_TILE.teal} icon={History} title="История изменений" sub="Сегодня 3 изменения" onPress={onPress} />
+        );
       default:
         return null;
     }
   })();
   if (!row) return null;
-  // SMS не оплачивают, а пополняют; реквизиты — только «Видит».
-  const caption = state === "write" && blockKey === "cabinet.sms" ? "Так он пополняет — кнопкой с именем вашего аккаунта" : CAPTION[state];
+  // SMS не оплачивают, а пополняют; реквизитам и истории платить нечем.
+  const caption =
+    state === "write" && blockKey === "cabinet.sms"
+      ? "Так он пополняет — кнопкой с именем вашего аккаунта"
+      : state === "read" && (blockKey === "cabinet.history" || blockKey === "finance.settings_requisites")
+        ? "Так он видит в блоке вашего аккаунта"
+        : CAPTION[state];
   return (
     <PreviewFrame state={state === "hidden" ? "hidden" : state} caption={caption} captionOff={state === "hidden"}>
       <SectionCard>{row}</SectionCard>
