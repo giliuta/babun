@@ -5221,5 +5221,7 @@
  "Скрыть календарь": "Kalender ausblenden",
  "Нужен другой календарь": "Ein weiterer Kalender ist nötig",
  "Вход": "Anmeldung",
- "Куда платить": "Wohin zahlen"
+ "Куда платить": "Wohin zahlen",
+ "Оплата {0} по {1} · {2}": "Zahlung {0} zu {1} · {2}",
+ "По записи выставлен инвойс {0} — примите оплату по нему": "Für den Termin ist Rechnung {0} ausgestellt — nehmen Sie die Zahlung darauf an"
 }

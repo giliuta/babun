@@ -28,7 +28,9 @@ describe("инвойс в оплате и тариф", () => {
   test("без тарифа записи клиентов — плитки, «Часть суммы» и снятие серые и зовут плашку", () => {
     const src = block();
     assert.match(src, /const bookingInPlan = usePlanAllows\("book-clients"\);/);
-    assert.match(src, /const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && !slotChange && !visitCancelled && canTakeMoney && bookingInPlan;/);
+    // Право денег — у записи «Оплата», у записи с инвойсом — «Документы» (04.10).
+    assert.match(src, /const moneyRight = invoicePay\.open \? docWrite : canTakeMoney;/);
+    assert.match(src, /const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && !slotChange && !visitCancelled && moneyRight && bookingInPlan;/);
     // Все три входа в деньги: тап по плитке, снятие с оплаченной, «Часть суммы».
     assert.equal((src.match(/if \(!bookingInPlan\) \{\s*tariffNudge\(\);\s*return;\s*\}/g) ?? []).length, 3);
     assert.match(src, /dimmed=\{!bookingInPlan\}/);

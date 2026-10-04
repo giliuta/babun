@@ -5221,5 +5221,7 @@
  "Скрыть календарь": "Hide calendar",
  "Нужен другой календарь": "Needs another calendar",
  "Вход": "Sign-in",
- "Куда платить": "Where to pay"
+ "Куда платить": "Where to pay",
+ "Оплата {0} по {1} · {2}": "Payment {0} on {1} · {2}",
+ "По записи выставлен инвойс {0} — примите оплату по нему": "Invoice {0} is issued for this appointment — take the payment on it"
 }

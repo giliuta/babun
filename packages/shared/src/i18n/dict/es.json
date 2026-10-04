@@ -5221,5 +5221,7 @@
  "Скрыть календарь": "Ocultar calendario",
  "Нужен другой календарь": "Hace falta otro calendario",
  "Вход": "Acceso",
- "Куда платить": "Dónde pagar"
+ "Куда платить": "Dónde pagar",
+ "Оплата {0} по {1} · {2}": "Pago {0} de {1} · {2}",
+ "По записи выставлен инвойс {0} — примите оплату по нему": "Hay una factura {0} emitida para esta cita: cobra sobre ella"
 }

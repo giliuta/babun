@@ -10,6 +10,7 @@ import type {
 import { randomUuid } from "@babun/shared/sync";
 import { formatEURExact, moneySymbol } from "@babun/shared/common/utils/money";
 import { usePaymentRights } from "./usePaymentRights";
+import { useAppointmentInvoicePay } from "./use-appointment-invoice-pay";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
@@ -175,6 +176,9 @@ export function PaymentBlock({
       )[0] ?? null,
     [appointment?.id, invoicesQuery.data, creditLinks.data],
   );
+  // ВЫСТАВЛЕН ИНВОЙС — ДЕНЬГИ В НЕГО (владелец 04.10): к оплате — его остаток,
+  // плитка записывает платёж инвойса, сервер закрывает им запись.
+  const invoicePay = useAppointmentInvoicePay(invoice, appointment?.id ?? null);
 
   const started = visitStarted(
     { date: visit.date, time_start: visit.timeStart },
@@ -183,7 +187,8 @@ export function PaymentBlock({
   // СЧИТАЕМ ПО ИТОГУ ФОРМЫ. У сохранённой записи итог в базе — прошлая версия:
   // человек дописал услуги, «Итого» стало €280, а блок ещё жил числом 160 и
   // объявлял запись оплаченной. Правило и его причина — в `paymentMath`.
-  const { outstanding, overpaid } = paymentMath(appointment, totalDraft);
+  const { outstanding: recordOutstanding, overpaid } = paymentMath(appointment, totalDraft);
+  const outstanding = invoicePay.open ? invoicePay.remainingCents : recordOutstanding;
   // Итог формы разошёлся с сохранённым: долг уже настоящий, а вот принять по
   // нему деньги сервер откажется — он считает остаток по своей строке. Пока
   // запись не сохранена, плитки стоят погашенными и говорят почему.
@@ -228,7 +233,8 @@ export function PaymentBlock({
   const visitCancelled =
     appointment !== null &&
     (appointment.status === "cancelled" || appointment.payment_status === "refunded");
-  const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && !slotChange && !visitCancelled && canTakeMoney && bookingInPlan;
+  const moneyRight = invoicePay.open ? docWrite : canTakeMoney;
+  const acceptsMoney = outstanding > 0 && !billUnsaved && !clientUnsaved && !slotChange && !visitCancelled && moneyRight && bookingInPlan;
 
   // СНЯТИЕ И ПРИЁМ — ПО ТАПУ, А НЕ ПО ОТВЕТУ (владелец 2026-09-30: «должно
   // всё мгновенно»): запись в кэше меняется сразу так, как её поменяет
@@ -260,12 +266,12 @@ export function PaymentBlock({
   };
 
   const handleTileTap = (account: PaymentAccountOption) => {
-    if (outstanding <= 0 || busy) return;
+    if (outstanding <= 0 || busy || invoicePay.busy || invoicePay.loading) return;
     if (!bookingInPlan) {
       tariffNudge();
       return;
     }
-    if (!canTakeMoney) {
+    if (!moneyRight) {
       haptics.warning();
       toast(NO_PAYMENT_RIGHT, "info");
       return;
@@ -303,6 +309,30 @@ export function PaymentBlock({
     if (problem === "empty") {
       haptics.warning();
       toast("Введите сумму", "error");
+      return;
+    }
+    // ПЛАТЁЖ ИНВОЙСА, А НЕ ЗАПИСИ: инвойс получает деньги и статус, запись
+    // закрывается его зачётом, чек выписывается на этот платёж.
+    if (invoicePay.open && appointment) {
+      const source = appointment;
+      haptics.success();
+      setPartText(null);
+      invoicePay
+        .pay({
+          accountId: account.id,
+          accountKind: account.kind,
+          amountCents,
+          businessToday: businessNow().ymd,
+        })
+        .then((fresh) => {
+          if (fresh) onAppointmentChanged(fresh);
+          toast(`Оплата ${formatEURExact(amountCents / 100)} по ${invoicePay.number} · ${account.name}`, "success");
+        })
+        .catch((error: unknown) => {
+          haptics.error();
+          onAppointmentChanged(source);
+          toast(error instanceof Error ? error.message : "Не удалось записать оплату", "error");
+        });
       return;
     }
     const amount = amountCents / 100;
