@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { AppState, TextInput } from "react-native";
+import { AppState, Text, TextInput } from "react-native";
 import * as Linking from "expo-linking";
 import { AuthCard, FormError, GhostLink, PillButton } from "@/components/auth/AuthCard";
 import { CodeInput, EMAIL_CODE_LENGTH } from "@/components/auth/CodeInput";
 import { mapAuthError } from "@/components/auth/authErrors";
+import { useAuthTheme } from "@/components/auth/theme";
 import { supabase } from "@/lib/supabase";
 
 /** Куда ведёт кнопка письма подтверждения. Подтверждает почту сам переход по
- *  ссылке (сервер Supabase), страница после него — веб Babun. */
-export const SIGNUP_LINK_REDIRECT = "https://babun.app";
+ *  ссылке (сервер Supabase), а вход из ссылки берёт экран входа веба Babun
+ *  (`useSessionFromEmailLink`). */
+export const SIGNUP_LINK_REDIRECT = "https://babun.app/login";
 
 const RESEND_COOLDOWN_S = 45;
 
@@ -42,6 +44,7 @@ export function EmailCodeCard({
   onChangeEmail: () => void;
   onBackToLogin: () => void;
 }) {
+  const t = useAuthTheme();
   const inputRef = useRef<TextInput>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +128,7 @@ export function EmailCodeCard({
   return (
     <AuthCard
       title="Введите код"
-      subtitle={sent ? `Отправили на ${email}` : `Код из письма на ${email}`}
+      subtitle={sent ? `Отправили письмо на ${email}` : `Письмо с кодом — на ${email}`}
     >
       <CodeInput
         ref={inputRef}
@@ -137,6 +140,16 @@ export function EmailCodeCard({
         onComplete={(v) => void verify(v)}
         disabled={verifying}
       />
+      {/* ДВА ВХОДА ИЗ ОДНОГО ПИСЬМА (владелец 04.10: «либо по ссылке, либо
+          сразу код — и так, и так принимать»): говорим об обоих. */}
+      <Text
+        maxFontSizeMultiplier={1.4}
+        style={{ marginTop: 12, paddingHorizontal: 8, textAlign: "center", fontSize: 13, lineHeight: 18, color: t.sub }}
+      >
+        {kind === "signup"
+          ? "Введите код из письма или нажмите в письме «Подтвердить почту»"
+          : "Введите код из письма или нажмите в письме «Задать новый пароль»"}
+      </Text>
       <FormError message={error} />
       <PillButton
         label={verifying ? "Проверяем…" : "Подтвердить"}

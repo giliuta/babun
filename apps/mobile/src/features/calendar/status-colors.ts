@@ -91,7 +91,7 @@ export type BlockColors = {
   solid: string;
   /** Та же заливка под пальцем — на ступень глубже. */
   pressed: string;
-  /** Контур блока: тот же тон на 0.2 темнее по светлоте. */
+  /** Контур блока: тот же тон на полтона глубже (`BLOCK_CONTOUR_STEP`). */
   contour: string;
 };
 
