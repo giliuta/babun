@@ -5366,6 +5366,10 @@ export type Database = {
         }
         Returns: Json
       }
+      delete_receipt: {
+        Args: { p_receipt_id: string }
+        Returns: undefined
+      }
       delete_invoice: {
         Args: { p_invoice_id: string }
         Returns: undefined

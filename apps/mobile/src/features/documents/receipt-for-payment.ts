@@ -60,6 +60,33 @@ export function incomesAwaitingReceipt<T extends Tx>(
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
+/**
+ * ПРИХОДЫ ЗАПИСИ БЕЗ ИНВОЙСА (владелец 2026-10-04: «оплачено заранее — хочу
+ * ещё и выписать инвойс, и он сразу принимает эту оплату»). Живой приход,
+ * не привязанный к инвойсу и не возвращённый целиком, — на него форма
+ * выставит инвойс сразу оплаченным (`issue_invoice` с `p_link_to_tx_id`).
+ * Первым — самый ранний, как у чека.
+ */
+export function incomesAwaitingInvoice<T extends Tx & { invoice_id?: string | null }>(
+  ledger: readonly T[],
+): T[] {
+  const refunded = new Map<string, number>();
+  for (const tx of ledger) {
+    if (tx.type === "refund" && tx.refund_of_id) {
+      refunded.set(tx.refund_of_id, (refunded.get(tx.refund_of_id) ?? 0) + Math.abs(tx.amount));
+    }
+  }
+  return ledger
+    .filter(
+      (tx) =>
+        tx.type === "income" &&
+        tx.amount > 0 &&
+        !tx.invoice_id &&
+        cents(tx.amount - (refunded.get(tx.id) ?? 0)) > 0,
+    )
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+}
+
 /** Своя строка чека — не из прайса. */
 function customLine(name: string, qty: number, price: number, unit: string | null): AppointmentService {
   const line: AppointmentService = {

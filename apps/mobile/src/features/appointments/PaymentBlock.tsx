@@ -428,6 +428,23 @@ export function PaymentBlock({
       router.push(`/invoices/${invoice.id}` as Href);
       return;
     }
+    // ОПЛАЧЕНО — ИНВОЙС НА ЭТИ ДЕНЬГИ (владелец 04.10: «оплачено заранее, а я
+    // хочу ещё выписать инвойс, и он сразу принимает оплату»). Форма
+    // заполнена приходом и выставит инвойс уже оплаченным, без долга.
+    if (outstanding <= 0 && receiptState.invoiceNext) {
+      const income = receiptState.invoiceNext;
+      router.push({
+        pathname: "/invoices/new",
+        params: {
+          transactionId: income.id,
+          appointmentId: appointment.id,
+          amount: String(income.amount),
+          ...(appointment.client_id ? { clientId: appointment.client_id } : {}),
+          ...(appointment.team_id ? { teamId: appointment.team_id } : {}),
+        },
+      } as unknown as Href);
+      return;
+    }
     router.push({
       pathname: "/invoices/new",
       params: { appointmentId: appointment.id },
@@ -479,7 +496,10 @@ export function PaymentBlock({
   // открывается как раньше — бумагу не теряем.
   // Инвойсы — функция компании (STORY-088): выключены — иконки нет, даже у
   // уже выставленного (он открывается из «Файлов», когда функцию вернут).
-  const canInvoice = documentsOn && (Boolean(invoice) || outstanding > 0);
+  // Инвойс — пока есть долг, после выставления (открыть) и после оплаты, если
+  // по деньгам записи его ещё нет (выставится оплаченным, 04.10).
+  const canInvoice =
+    documentsOn && (Boolean(invoice) || outstanding > 0 || Boolean(receiptState.invoiceNext));
   // ЧЕК — ПОСЛЕ ОПЛАТЫ (владелец 03.10): есть приход без чека — значок ведёт
   // в составитель чека, заполненный этой оплатой; чек уже выписан — горит и
   // открывает его. Денег нет — значка нет.

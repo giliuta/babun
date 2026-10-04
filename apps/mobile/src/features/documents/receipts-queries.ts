@@ -298,3 +298,18 @@ export function useRefundReceipt() {
     meta: { errorHandled: true },
   });
 }
+
+/** УДАЛЕНИЕ ПОСЛЕДНЕГО ЧЕКА СЕРИИ — номер возвращается, деньги остаются
+ *  (владелец 04.10: «чек тоже нужно удалить»; `delete_receipt`). */
+export function useDeleteReceipt() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: async (receiptId: string) => {
+      const { error } = await supabase.rpc("delete_receipt", { p_receipt_id: receiptId });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => invalidateLedger(qc),
+    meta: { errorHandled: true },
+  });
+}

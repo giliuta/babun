@@ -1,4 +1,5 @@
 import { useRouter, type Href } from "expo-router";
+import { Pencil, Undo2, type LucideIcon } from "lucide-react-native";
 import {
   calculateInvoiceSettlement,
   type InvoiceLedger,
@@ -6,7 +7,8 @@ import {
 } from "@babun/shared/local/finance/invoice-ledger";
 import { tDynamic } from "@babun/shared/i18n/runtime";
 import { useCurrentRole } from "@/features/settings/tenant";
-import { chooseOption } from "@/lib/choose";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import type { ActionMenu } from "@/features/calendar/ActionMenuSheet";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
@@ -26,6 +28,9 @@ export interface MenuAction {
   key: "edit" | "cancel" | "delete";
   label: string;
   destructive?: boolean;
+  /** Значок и цвет строки в листе действий (как у меню записи). */
+  icon?: LucideIcon;
+  color?: string;
   run: () => void;
 }
 
@@ -101,26 +106,34 @@ export function useInvoiceMenu() {
     };
 
     return [
-      ...(untouched ? [{ key: "edit" as const, label: "Изменить инвойс", run: edit }] : []),
+      ...(untouched
+        ? [{ key: "edit" as const, label: "Изменить инвойс", icon: Pencil, color: SETTINGS_TILE.indigo, run: edit }]
+        : []),
       // «Кредит-нота», а не «Отменить инвойс»: рядом с «Отмена» шторки два
       // «отменить» путались (04.10).
-      { key: "cancel" as const, label: "Кредит-нота", destructive: true, run: cancel },
+      { key: "cancel" as const, label: "Кредит-нота", icon: Undo2, color: SETTINGS_TILE.orange, run: cancel },
       ...(untouched
         ? [{ key: "delete" as const, label: "Удалить инвойс", destructive: true, run: del }]
         : []),
     ];
   };
 
-  /** Шторка действий; пусто — шторки нет. */
-  const open = async (invoice: InvoiceLedger, ctx: InvoiceMenuContext) => {
-    const actions = actionsFor(invoice, ctx);
-    if (actions.length === 0) return;
-    const index = await chooseOption(
-      invoice.number,
-      actions.map(({ label, destructive }) => ({ label, destructive })),
-    );
-    if (index !== null && index >= 0) actions[index]?.run();
+  /** Лист действий инвойса — тот же, что у записи в календаре (04.10:
+   *  «зажимаю — вылезает полноценный список»). `lead` — пункты, которые знает
+   *  только место вызова (открыть, поделиться, оплата, чек). */
+  const menuFor = (
+    invoice: InvoiceLedger,
+    ctx: InvoiceMenuContext,
+    lead: Omit<MenuAction, "key">[] = [],
+  ): ActionMenu | null => {
+    const items = [...lead, ...actionsFor(invoice, ctx)];
+    if (items.length === 0) return null;
+    return {
+      title: invoice.number,
+      subtitle: formatInvoiceMoney(invoice.total, invoice.currency),
+      items: items.map(({ label, destructive, icon, color, run }) => ({ label, destructive, icon, color, run })),
+    };
   };
 
-  return { actionsFor, open };
+  return { actionsFor, menuFor };
 }

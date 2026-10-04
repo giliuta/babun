@@ -34,6 +34,7 @@ import {
 } from "@/features/invoices/format";
 import { InvoicePaymentSheet } from "@/features/invoices/InvoicePaymentSheet";
 import { useInvoiceMenu } from "@/features/invoices/invoice-menu";
+import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
 import { InvoiceRefundSheet } from "@/features/invoices/InvoiceRefundSheet";
 import { shareInvoicePdf } from "@/features/invoices/share-pdf";
 import { buildInvoiceDocument } from "@/features/invoices/document";
@@ -105,6 +106,7 @@ export default function InvoiceDetailScreen() {
   const pay = useRecordInvoicePayment(id);
   const refund = useRefundInvoicePayment(id);
   const invoiceMenu = useInvoiceMenu();
+  const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [accountCreateOpen, setAccountCreateOpen] = useState(false);
   const [refundTarget, setRefundTarget] = useState<InvoicePaymentLedger | null>(null);
@@ -384,7 +386,7 @@ export default function InvoiceDetailScreen() {
     },
   };
   const hasMenu = invoiceMenu.actionsFor(row, menuContext).length > 0;
-  const openMenu = () => void invoiceMenu.open(row, menuContext);
+  const openMenu = () => setSheetMenu(invoiceMenu.menuFor(row, menuContext));
 
   return (
     <Screen edges={["top"]}>
@@ -554,6 +556,8 @@ export default function InvoiceDetailScreen() {
           <Button label="Поделиться PDF" loading={pdfBusy} onPress={() => void sharePdf()} />
         </View>
       )}
+
+      <ActionMenuSheet menu={sheetMenu} onClose={() => setSheetMenu(null)} />
 
       <InvoicePaymentSheet
         visible={paymentOpen}

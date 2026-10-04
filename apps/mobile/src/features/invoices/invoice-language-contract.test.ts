@@ -27,6 +27,6 @@ describe("язык бумаги инвойса", () => {
     const page = read("../../../app/invoices/[id].tsx");
     assert.doesNotMatch(page, /useSetInvoiceLanguage|Бумага на (русском|английском)/);
     assert.match(page, /useInvoiceMenu\(\)/);
-    assert.match(read("invoice-menu.ts"), /label: "Изменить инвойс", run: edit/);
+    assert.match(read("invoice-menu.ts"), /label: "Изменить инвойс",[^}]*run: edit/);
   });
 });

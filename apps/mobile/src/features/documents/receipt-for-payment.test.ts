@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { isCustomServiceId } from "@babun/shared/local/appointments";
 import {
+  incomesAwaitingInvoice,
   incomesAwaitingReceipt,
   paymentLinesTotal,
   paymentReceiptLines,
@@ -116,5 +117,19 @@ describe("подпись VAT на бумаге чека", () => {
       total: 178.5,
     });
     assert.equal(inside.vat?.label, "VAT 19% в сумме");
+  });
+});
+
+// Владелец 04.10: оплачено заранее — инвойс выставляется на эти деньги.
+describe("инвойс на принятую оплату", () => {
+  it("ждут доходы без инвойса и не возвращённые целиком, ранние первыми", () => {
+    const ledger = [
+      { ...tx({ id: "a", created_at: "2026-10-03T09:00:00Z" }), invoice_id: null },
+      { ...tx({ id: "b" }), invoice_id: null },
+      { ...tx({ id: "r", type: "refund", amount: -50, refund_of_id: "b" }), invoice_id: null },
+      { ...tx({ id: "c", created_at: "2026-10-03T08:00:00Z" }), invoice_id: "inv-1" },
+      { ...tx({ id: "d", created_at: "2026-10-03T07:00:00Z" }), invoice_id: null },
+    ];
+    assert.deepEqual(incomesAwaitingInvoice(ledger).map((t) => t.id), ["d", "a"]);
   });
 });

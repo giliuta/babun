@@ -1,4 +1,4 @@
-import { useMemo, type ReactElement } from "react";
+import { useMemo, useState, type ReactElement } from "react";
 import {
   SectionList,
   Text,
@@ -6,17 +6,27 @@ import {
   type RefreshControlProps,
 } from "react-native";
 import { money } from "@babun/shared/common/utils/money";
-import type {
-  InvoiceLedger,
-  InvoicePaymentLedger,
+import {
+  calculateInvoiceSettlement,
+  type InvoiceLedger,
+  type InvoicePaymentLedger,
 } from "@babun/shared/local/finance/invoice-ledger";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
-import { Receipt as ReceiptIcon, ReceiptText, Trash2 } from "lucide-react-native";
+import {
+  Banknote,
+  ExternalLink,
+  Receipt as ReceiptIcon,
+  ReceiptText,
+  Share2,
+  Trash2,
+} from "lucide-react-native";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useRouter } from "expo-router";
 import { SwipeRow } from "@/components/ui/SwipeRow";
-import { openReceiptMenu } from "@/features/documents/receipt-menu";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
+import { useReceiptMenu } from "@/features/documents/receipt-menu";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { invoiceDeleteBlock } from "@/features/invoices/invoice-delete";
 import { useInvoiceMenu } from "@/features/invoices/invoice-menu";
 import { SELECT_SIDE, SelectRow } from "@/components/ui/select-rows";
@@ -96,8 +106,10 @@ export function DocumentsPanel({
   refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   const t = useThemeColors();
-  const router = useRouter();
   const invoiceMenu = useInvoiceMenu();
+  const receiptMenu = useReceiptMenu();
+  const owner = useCurrentRole().data === "owner";
+  const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
   // Список документов периода — общий с плиткой «Документы» на «Финансах»
   // (`usePeriodDocuments`): число на плитке и строки здесь из одного места.
   const {
@@ -207,18 +219,52 @@ export function DocumentsPanel({
     if (!invoice || invoiceDeleteBlock(invoice, invoices, false) !== null) return null;
     return invoiceMenu.actionsFor(invoice, menuContext(invoice)).find((a) => a.key === "delete") ?? null;
   };
+  // ПОЛНЫЙ СПИСОК, КАК У ЗАПИСИ В КАЛЕНДАРЕ (владелец 04.10: «зажимаю —
+  // вылезает список: поделиться, принять оплату, удалить, кредит-нота…»).
+  // «Поделиться», «Принять оплату» и «Выписать чек» открывают страницу
+  // документа с этим действием — там вся их логика.
   const openMenu = (doc: FinanceDocument) => {
+    const open = { label: "Открыть", icon: ExternalLink, color: SETTINGS_TILE.blue };
+    const share = { label: "Поделиться PDF", icon: Share2, color: SETTINGS_TILE.teal };
     if (doc.kind === "invoice") {
       const invoice = invoiceById.get(doc.id);
-      if (invoice) void invoiceMenu.open(invoice, menuContext(invoice));
+      if (!invoice) return;
+      const path = `/invoices/${invoice.id}`;
+      const own = payments[invoice.id] ?? [];
+      const settlement = calculateInvoiceSettlement(invoice, own);
+      const isInvoice = (invoice.kind ?? "invoice") === "invoice";
+      const awaits = isInvoice && invoice.status === "issued" && settlement.remaining > 0;
+      const withReceipt = new Set((receipts ?? []).map((r) => r.transaction_id));
+      const needsReceipt =
+        isInvoice && own.some((p) => p.type === "income" && !withReceipt.has(p.id));
+      setSheetMenu(
+        invoiceMenu.menuFor(invoice, menuContext(invoice), [
+          { ...open, run: () => onOpen(path) },
+          { ...share, run: () => onOpen(`${path}?action=share`) },
+          ...(owner && awaits
+            ? [{ label: "Принять оплату", icon: Banknote, color: SETTINGS_TILE.green, run: () => onOpen(`${path}?action=pay`) }]
+            : []),
+          ...(needsReceipt
+            ? [{ label: "Выписать чек", icon: ReceiptText, color: SETTINGS_TILE.green, run: () => onOpen(`${path}?action=receipt`) }]
+            : []),
+        ]),
+      );
       return;
     }
     const receipt = receiptById.get(doc.id);
-    if (receipt) void openReceiptMenu(receipt, router);
+    if (!receipt) return;
+    const path = `/documents/receipt/${receipt.id}`;
+    setSheetMenu(
+      receiptMenu.menuFor(receipt, [
+        { ...open, run: () => onOpen(path) },
+        { ...share, run: () => onOpen(`${path}?action=share`) },
+      ]),
+    );
   };
 
   return (
     <>
+      <ActionMenuSheet menu={sheetMenu} onClose={() => setSheetMenu(null)} />
       <SectionList
         style={{ flex: 1 }}
         sections={sections}

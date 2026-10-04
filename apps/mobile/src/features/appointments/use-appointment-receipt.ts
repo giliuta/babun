@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import { useAppointmentLedger } from "@/features/finances/queries";
 import { useReceipts } from "@/features/documents/receipts-queries";
-import { incomesAwaitingReceipt } from "@/features/documents/receipt-for-payment";
+import {
+  incomesAwaitingInvoice,
+  incomesAwaitingReceipt,
+} from "@/features/documents/receipt-for-payment";
 
 // ЧЕК ЗАПИСИ ДЛЯ ЗНАЧКА В «ОПЛАТЕ» (владелец 2026-10-03: «оплатили — запись
 // становится оплачена, и открывается возможность делать чек; нажимаю на
@@ -21,6 +24,8 @@ export function useAppointmentReceipt(appointmentId: string | null, enabled: boo
       next: receipts.isSuccess ? (awaiting[0] ?? null) : null,
       /** Последний выписанный чек записи. */
       latest: live[0] ?? null,
+      /** Первый приход без инвойса — на него инвойс выставится оплаченным. */
+      invoiceNext: ledger.isSuccess ? (incomesAwaitingInvoice(ledger.data ?? [])[0] ?? null) : null,
     };
-  }, [ledger.data, receipts.data, receipts.isSuccess]);
+  }, [ledger.data, ledger.isSuccess, receipts.data, receipts.isSuccess]);
 }

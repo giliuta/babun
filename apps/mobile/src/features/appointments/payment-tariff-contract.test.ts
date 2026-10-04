@@ -13,7 +13,11 @@ const block = () => readFileSync(resolve(here, "PaymentBlock.tsx"), "utf8");
 
 describe("инвойс в оплате и тариф", () => {
   test("значок есть при остатке независимо от тарифа", () => {
-    assert.match(block(), /const canInvoice = documentsOn && \(Boolean\(invoice\) \|\| outstanding > 0\);/);
+    // И после оплаты, если по деньгам записи инвойса ещё нет (04.10).
+    assert.match(
+      block(),
+      /const canInvoice =\s*documentsOn && \(Boolean\(invoice\) \|\| outstanding > 0 \|\| Boolean\(receiptState\.invoiceNext\)\);/,
+    );
   });
   test("без документов в тарифе — серый и зовёт плашку, выписанный — открывается", () => {
     assert.match(block(), /const invoiceTariffLocked = !invoice && !canUseDocuments;/);
