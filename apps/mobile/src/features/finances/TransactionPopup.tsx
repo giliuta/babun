@@ -23,6 +23,7 @@ import { useThemeColors } from "@/theme/colors";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
+import { useLastNonNull } from "@/lib/use-last-non-null";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useTenant } from "@/features/settings/tenant";
@@ -183,8 +184,14 @@ export function TransactionPopup({
     setBusy(false);
   }, [visible, transaction?.id]);
 
-  if (!transaction) return null;
-  const tx = transaction;
+  // ЛИСТ ДОЖИВАЕТ ДО КОНЦА УХОДА С ПОСЛЕДНЕЙ ОПЕРАЦИЕЙ. Родитель обнуляет
+  // `transaction` в том же кадре, что и `visible`, и ранний `return null`
+  // снимал лист целиком — без ухода и без `onExited`. А вопрос «Отменить
+  // перевод?» / «Удалить операцию?» ждёт именно `onExited`: кнопка закрывала
+  // лист и молчала (04.10, перевод Карта → Наличные так и остался в ленте).
+  const shownTx = useLastNonNull(transaction);
+  if (!shownTx) return null;
+  const tx = shownTx;
 
   const account = accounts.find((a) => a.id === tx.account_id);
   const team = teams.find((x) => x.id === tx.team_id);
