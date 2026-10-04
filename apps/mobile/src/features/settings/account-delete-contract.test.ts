@@ -12,6 +12,7 @@ import { test } from "node:test";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
 const FN = readFileSync(path.join(ROOT, "supabase/functions/account-delete/index.ts"), "utf8");
+const WEBHOOK = readFileSync(path.join(ROOT, "supabase/functions/stripe-webhook/index.ts"), "utf8");
 
 test("подписки Stripe отменяются раньше первого необратимого шага", () => {
   const cancel = FN.indexOf("await cancelSoleOwnedSubscriptions(service, user.id)");
@@ -29,4 +30,12 @@ test("отбор аккаунтов — как у серверной чистк�
 
 test("CORS пропускает заголовок компании", () => {
   assert.match(FN, /"authorization, content-type, x-client-info, apikey, x-babun-tenant"/);
+});
+
+// Событие об отменённой подписке приходит, когда аккаунта уже нет: запись
+// журнала с его id падала на внешнем ключе, вебхук отвечал 500, и Stripe
+// повторял событие трое суток.
+test("вебхук Stripe не падает на событии стёртого аккаунта", () => {
+  assert.match(WEBHOOK, /if \(typeof clientRef === "string" && clientRef\) return liveTenant\(sbs, clientRef\);/);
+  assert.match(WEBHOOK, /if \(typeof metaTenant === "string" && metaTenant\) return liveTenant\(sbs, metaTenant\);/);
 });

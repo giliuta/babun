@@ -256,14 +256,25 @@ function computeUpdate(event: Stripe.Event): ReconcileFields | null {
   }
 }
 
+/** Аккаунт ещё существует. Метка на подписке переживает удаление аккаунта:
+ *  `account-delete` отменяет подписку, и событие об отмене приходит, когда
+ *  аккаунта уже нет — запись журнала с его id падала на внешнем ключе, ответ
+ *  500, и Stripe повторял событие трое суток (аудит 04.10). Такое событие
+ *  пишется в журнал без аккаунта и тариф не трогает. */
+// deno-lint-ignore no-explicit-any
+async function liveTenant(sbs: any, id: string): Promise<string | null> {
+  const { data } = await sbs.from("tenants").select("id").eq("id", id).maybeSingle();
+  return typeof data?.id === "string" ? data.id : null;
+}
+
 // deno-lint-ignore no-explicit-any
 async function resolveTenantId(event: Stripe.Event, sbs: any): Promise<string | null> {
   const data = event.data.object as unknown as Record<string, unknown>;
   const clientRef = data.client_reference_id;
-  if (typeof clientRef === "string" && clientRef) return clientRef;
+  if (typeof clientRef === "string" && clientRef) return liveTenant(sbs, clientRef);
   // Подписка тарифа несёт аккаунт в метке (`tariff-checkout`).
   const metaTenant = (data.metadata as Record<string, unknown> | undefined)?.tenant_id;
-  if (typeof metaTenant === "string" && metaTenant) return metaTenant;
+  if (typeof metaTenant === "string" && metaTenant) return liveTenant(sbs, metaTenant);
 
   const customer = data.customer;
   if (typeof customer === "string" && customer) {
