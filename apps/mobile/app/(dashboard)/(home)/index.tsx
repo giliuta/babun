@@ -1178,6 +1178,18 @@ export default function CalendarTab() {
         // один кадр, а вернуться нужно, когда лист закроют. Словарь дорог —
         // `resolveReturnTo`, один на весь продукт.
         returnToRef.current = resolveReturnTo(params.from);
+        // ЛИСТЫ КАЛЕНДАРЯ УХОДЯТ ПЕРЕД ЗАПИСЬЮ (прогон 04.10). Тап по
+        // уведомлению, пока открыт, скажем, «Финансы дня», открывал страницу
+        // записи ПОД листом: человек видел прежний лист и думал, что тап не
+        // сработал. Цель пришла снаружи — всё, что было открыто, закрываем.
+        setFinModalYmd(null);
+        setSlotDraft(null);
+        setSheetMenu(null);
+        setSmsOpen(false);
+        setReminderFor(null);
+        setRecolor(null);
+        setCityPickerYmd(null);
+        setMiniCalOpen(false);
         // Владельцу и диспетчеру — СТРАНИЦА записи (STORY-064: форма одна);
         // старый лист правки здесь больше не открывается. Дорогу назад отдаём
         // ей же: `returnToRef` читает только лист бригадира, а страница —
