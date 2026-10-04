@@ -65,6 +65,10 @@ export interface InvoicePaymentLedger {
 export type InvoicePaymentRefundDestination = "invoice" | "appointment" | null;
 
 export interface InvoiceSettlement {
+  /** К оплате по инвойсу: сумма минус уже сторнированное частичными
+   *  кредит-нотами (04.10). Без нот — сама сумма. Необязательное в типе:
+   *  собранные руками расчёты (тесты бумаги) его не несут. */
+  due?: number;
   income: number;
   refunded: number;
   paid: number;
@@ -191,6 +195,10 @@ export interface InvoiceLedger {
   /** Чек, который сторнирует эта кредит-нота (возврат по чеку без инвойса,
    *  миграция 20261004091731). */
   credit_note_of_receipt_id?: string | null;
+  /** Сколько инвойса уже сторнировано частичными кредит-нотами (04.10). */
+  credited_amount?: number;
+  /** Кредит-нота — частичная: инвойс остаётся в силе. */
+  credit_partial?: boolean;
   /** Режим НДС, КОТОРЫМ ДОКУМЕНТ ПОСЧИТАН (колонка с 20260915120000): сервер
    *  пишет ровно то, чем считал. У выписанных раньше пусто — их режим
    *  восстанавливают по суммам, а не выдумывают (`invoiceVatMode`). */
@@ -403,9 +411,12 @@ export function invoiceDisplayStatus(
  * still reopen the balance because they are subtracted after that fallback.
  */
 export function calculateInvoiceSettlement(
-  invoice: Pick<InvoiceLedger, "status" | "total">,
+  invoice: Pick<InvoiceLedger, "status" | "total" | "credited_amount">,
   payments: readonly InvoicePaymentLedger[],
 ): InvoiceSettlement {
+  // К ОПЛАТЕ = СУММА − СТОРНИРОВАНО (частичная кредит-нота, 04.10) — то же
+  // правило, что у сервера (`sync_invoice_status_from_ledger`).
+  const due = round2(Math.max(0, invoice.total - (invoice.credited_amount ?? 0)));
   const income = round2(
     payments.reduce(
       (sum, payment) =>
@@ -421,18 +432,19 @@ export function calculateInvoiceSettlement(
     ),
   );
   const recognizedIncome =
-    invoice.status === "paid" ? Math.max(invoice.total, income) : income;
+    invoice.status === "paid" ? Math.max(due, income) : income;
   const rawPaid = round2(Math.max(0, recognizedIncome - refunded));
-  const paid = round2(Math.min(invoice.total, rawPaid));
-  const overpaid = round2(Math.max(0, rawPaid - invoice.total));
+  const paid = round2(Math.min(due, rawPaid));
+  const overpaid = round2(Math.max(0, rawPaid - due));
   // ЗАКРЫТАЯ БУМАГА ДЕНЕГ НЕ ЖДЁТ. «Аннулирован» — ошибочный документ;
   // «отменён» — сторнированный кредит-нотой, и сервер отменяет инвойс только
   // когда у нас по нему ничего не осталось (`cancel_invoice`: доходы минус
   // возвраты). Пока `cancelled` считался открытым, отменённый счёт показывал
   // остаток, попадал в «ждут оплату» и звал принять по нему деньги.
   const closed = invoice.status === "void" || invoice.status === "cancelled";
-  const remaining = closed ? 0 : round2(Math.max(0, invoice.total - paid));
+  const remaining = closed ? 0 : round2(Math.max(0, due - paid));
   return {
+    due,
     income,
     refunded,
     paid,

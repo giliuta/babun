@@ -12,6 +12,8 @@ import {
   type InvoiceLedgerWithLines,
 } from "@babun/shared/local/finance/invoice-ledger";
 import { tDynamic } from "@babun/shared/i18n/runtime";
+import { formatMoneyForInput } from "@babun/shared/common/utils/money";
+import { randomUuid } from "@babun/shared/sync";
 import { setInvoiceLanguage } from "@babun/shared/db/repositories/invoices";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FieldRow } from "@/components/ui/card-rows";
@@ -23,12 +25,15 @@ import { useClients } from "@/features/clients/queries";
 import { DocumentLinkBlocks } from "@/features/documents/DocumentLinkBlocks";
 import { buildInvoiceDocument } from "@/features/invoices/document";
 import type { InvoiceLanguage } from "@/features/invoices/dictionary";
-import { formatInvoiceMoney, todayYmd } from "@/features/invoices/format";
+import { formatInvoiceMoney, parseMoneyAmount, todayYmd } from "@/features/invoices/format";
+import { AmountBlock } from "@/features/finances/AmountBlock";
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
 import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
 import {
   useCancelInvoice,
   useInvoice,
+  useInvoicePayments,
+  useIssuePartialCreditNote,
   useNextInvoiceSeries,
 } from "@/features/invoices/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
@@ -39,10 +44,13 @@ import { useThemeColors } from "@/theme/colors";
 
 // КРЕДИТ-НОТА — В ТОЙ ЖЕ АРХИТЕКТУРЕ, ЧТО ИНВОЙС И ЧЕК (владелец 2026-10-04:
 // «сначала превью, отредактировать, и она закрепляется чётко за инвойсом —
-// в одном файле»). Форма → превью → «Выписать». Сумма и услуги — встречные к
-// инвойсу целиком (`cancel_invoice`), поэтому в форме правится только то, что
-// на бумаге своё: причина отмены и язык. Реквизиты и серия — инвойса: CN
-// выдаётся из серии его юрлица, дата — сегодняшний день компании.
+// в одном файле»). Форма → превью → «Выписать». Реквизиты и серия — инвойса:
+// CN выдаётся из серии его юрлица, дата — сегодняшний день компании.
+//
+// СУММА — ВСЯ ИЛИ ЧАСТЬ (04.10). Вся — инвойс отменяется (`cancel_invoice`,
+// строки инвойса с минусом); часть — инвойс остаётся в силе, к оплате —
+// остаток (`issue_partial_credit_note`), а если получено больше, разница
+// возвращается клиенту тем же движением.
 export default function CreditNoteScreen() {
   const t = useThemeColors();
   const router = useRouter();
@@ -57,6 +65,10 @@ export default function CreditNoteScreen() {
     calendarSettings.data?.timezone ?? "Europe/Nicosia",
   );
   const cancel = useCancelInvoice(invoiceId ?? "");
+  const partial = useIssuePartialCreditNote(invoiceId ?? "");
+  const paymentRows = useInvoicePayments();
+  const requestId = useRef(randomUuid()).current;
+  const [amountText, setAmountText] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [language, setLanguage] = useState<InvoiceLanguage | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -75,11 +87,48 @@ export default function CreditNoteScreen() {
   const paperLanguage: InvoiceLanguage = language ?? "en";
   const client =
     (clients.data ?? []).find((c) => c.id === row?.client_id) ?? null;
+  const settlement = row
+    ? calculateInvoiceSettlement(row, paymentRows.data?.[row.id] ?? [])
+    : null;
+  // К оплате по инвойсу сейчас (сумма минус уже сторнированное).
+  const due = settlement?.due ?? row?.total ?? 0;
+  const paid = settlement?.paid ?? 0;
+  const text = amountText ?? (paid > 0 ? "" : formatMoneyForInput(due));
+  const parsed = parseMoneyAmount(text);
+  const value = parsed ?? 0;
+  const whole = Math.abs(value - due) < 0.005;
+  // Получено больше нового «к оплате» — столько вернётся клиенту.
+  const toRefund = whole ? 0 : Math.max(0, Math.round((paid - (due - value)) * 100) / 100);
+  const problem =
+    !text
+      ? paid > 0
+        ? "Впишите, какую часть сторнировать"
+        : null
+      : parsed == null
+        ? "Не больше двух знаков после запятой"
+        : value <= 0
+          ? "Сумма должна быть больше нуля"
+          : value > due + 0.005
+            ? `Не больше ${formatInvoiceMoney(due, row?.currency)}`
+            : whole && paid > 0
+              ? "По инвойсу получены деньги — на всю сумму сначала оформите возврат"
+              : null;
+  const valid = !!text && problem == null;
+
+  const defaultNote = row
+    ? whole
+      ? `Отмена инвойса ${row.number}`
+      : `Частичная отмена инвойса ${row.number}`
+    : "";
 
   // Черновик ноты — тот самый документ, что сервер соберёт из инвойса: суммы
   // с минусом, без строк (бумага печатает одну строку «к инвойсу …»).
   const paperDoc = useMemo(() => {
     if (!row) return null;
+    // Налог ноты — доля налога инвойса; строки — только у полной отмены без
+    // прежних частичных (как у сервера).
+    const vat = row.total > 0 ? Math.round((row.vat_amount * value) / row.total * 100) / 100 : 0;
+    const fullFirst = whole && (row.credited_amount ?? 0) === 0;
     const draft: InvoiceLedgerWithLines = {
       ...row,
       id: "credit-note-draft",
@@ -89,11 +138,14 @@ export default function CreditNoteScreen() {
       status: "issued",
       issued_on: businessToday,
       due_on: null,
-      subtotal_net: -row.subtotal_net,
-      vat_amount: -row.vat_amount,
-      total: -row.total,
-      notes: reason.trim() || `Отмена инвойса ${row.number}`,
-      lines: [],
+      subtotal_net: -(value - vat),
+      vat_amount: -vat,
+      total: -value,
+      credited_amount: 0,
+      notes: reason.trim() || defaultNote,
+      lines: fullFirst
+        ? row.lines.map((line) => ({ ...line, unit_price: -line.unit_price, total: -line.total }))
+        : [],
     };
     return buildInvoiceDocument({
       invoice: draft,
@@ -108,6 +160,9 @@ export default function CreditNoteScreen() {
     row,
     series.data,
     reason,
+    value,
+    whole,
+    defaultNote,
     tenant.data,
     client,
     paperLanguage,
@@ -127,11 +182,18 @@ export default function CreditNoteScreen() {
     );
   }
 
-  const amount = formatInvoiceMoney(-row.total, row.currency);
+  const amount = formatInvoiceMoney(value, row.currency);
   const issue = async () => {
     setError(null);
     try {
-      const note = await cancel.mutateAsync(reason.trim() || undefined);
+      const note = whole
+        ? await cancel.mutateAsync(reason.trim() || undefined)
+        : await partial.mutateAsync({
+            requestId,
+            amount: value,
+            reason: reason.trim() || null,
+            language: paperLanguage,
+          });
       // Язык — вторым шагом, как у инвойса: сервер копирует язык инвойса.
       // Не записался — нота остаётся на языке инвойса и меняется в «⋯».
       if (paperLanguage !== row.language) {
@@ -185,24 +247,22 @@ export default function CreditNoteScreen() {
             documentsTitle="Отменяет"
           />
 
-          {/* СУММА — ВСЯ, С МИНУСОМ: нота сторнирует инвойс целиком. */}
-          <SectionCard title="Сумма">
-            <View className="flex-row items-center justify-between px-4 pb-3 pt-2">
-              <Text style={{ fontSize: 17, fontWeight: "600", color: t.ink }}>
-                Итого
-              </Text>
-              <Text
-                style={{
-                  fontSize: 20,
-                  fontWeight: "700",
-                  color: t.ink,
-                  fontVariant: ["tabular-nums"],
-                }}
-              >
-                {amount}
-              </Text>
-            </View>
-          </SectionCard>
+          {/* СУММА — ВСЯ (инвойс отменяется) ИЛИ ЧАСТЬ (остаётся в силе). */}
+          <AmountBlock
+            value={text}
+            onChange={setAmountText}
+            accessibilityLabel="Сумма кредит-ноты"
+            selectOnFocus
+            hint={
+              problem
+                ? { text: problem, error: !!text }
+                : whole
+                  ? { text: "Вся сумма — инвойс будет отменён" }
+                  : toRefund > 0
+                    ? { text: `Часть — инвойс остаётся, клиенту вернётся ${formatInvoiceMoney(toRefund, row.currency)}` }
+                    : { text: `Часть — инвойс остаётся, к оплате ${formatInvoiceMoney(Math.max(0, due - value), row.currency)}` }
+            }
+          />
 
           <SectionCard title="Причина">
             <FieldRow
@@ -212,7 +272,7 @@ export default function CreditNoteScreen() {
               live
               multiline
               value={reason}
-              placeholder={`Отмена инвойса ${row.number}`}
+              placeholder={defaultNote}
               onSave={setReason}
             />
           </SectionCard>
@@ -227,8 +287,8 @@ export default function CreditNoteScreen() {
           }}
         >
           <GradientButton
-            label={`Выписать кредит-ноту · ${amount}`}
-            disabled={!series.data}
+            label={valid ? `Выписать кредит-ноту · ${amount}` : "Выписать кредит-ноту"}
+            disabled={!series.data || !valid}
             onPress={() => setPreviewOpen(true)}
           />
           {series.error ? (
@@ -245,7 +305,7 @@ export default function CreditNoteScreen() {
       <InvoicePreviewSheet
         visible={previewOpen}
         doc={paperDoc}
-        busy={cancel.isPending}
+        busy={cancel.isPending || partial.isPending}
         title="Кредит-нота"
         label="Выписать кредит-ноту"
         error={error}

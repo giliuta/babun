@@ -1,7 +1,6 @@
 import { useRouter, type Href } from "expo-router";
 import { Pencil, Undo2, type LucideIcon } from "lucide-react-native";
 import {
-  calculateInvoiceSettlement,
   type InvoiceLedger,
   type InvoicePaymentLedger,
 } from "@babun/shared/local/finance/invoice-ledger";
@@ -59,26 +58,15 @@ export function useInvoiceMenu() {
     ) {
       return [];
     }
-    const paid = calculateInvoiceSettlement(invoice, [...ctx.payments]).paid;
     const hasNote = ctx.all.some((item) => item.credit_note_of_id === invoice.id);
     const untouched =
       invoice.status === "issued" && ctx.payments.length === 0 && !ctx.hasReceipt && !hasNote;
 
     const edit = () => router.push(`/invoices/new?invoiceId=${invoice.id}` as Href);
-    // ОТМЕНА — КРЕДИТ-НОТОЙ, СВОЕЙ ФОРМОЙ С ПРЕВЬЮ (04.10). Деньги вперёд
-    // бумаги: на инвойс с оплатой нота не выписывается — сразу говорим путь.
-    const cancel = () => {
-      if (paid > 0) {
-        notify(
-          "Сначала верните оплату",
-          `По инвойсу получено ${formatInvoiceMoney(paid, invoice.currency)}.`
-            + " Оформите возврат в списке платежей — после него инвойс отменяется"
-            + " кредит-нотой.",
-        );
-        return;
-      }
-      router.push(`/invoices/credit-note?invoiceId=${invoice.id}` as Href);
-    };
+    // КРЕДИТ-НОТА — СВОЕЙ ФОРМОЙ С ПРЕВЬЮ (04.10): вся сумма — отмена, часть —
+    // инвойс остаётся в силе. По оплаченному форма сама скажет, что на всю
+    // сумму сначала возврат, а часть вернёт клиенту тем же движением.
+    const cancel = () => router.push(`/invoices/credit-note?invoiceId=${invoice.id}` as Href);
     const del = () => {
       if (invoiceDeleteBlock(invoice, ctx.all, false) === "not-last") {
         notify(

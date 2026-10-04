@@ -5197,5 +5197,19 @@
  "＋ Описание": "＋ Description",
  "＋ Перерыв": "＋ Break",
  "＋ Перерыв после услуги": "＋ Break after service",
- "＋ По дням недели": "＋ By weekday"
+ "＋ По дням недели": "＋ By weekday",
+ "Впишите, какую часть сторнировать": "Enter the part to credit",
+ "Сумма должна быть больше нуля": "The amount must be greater than zero",
+ "Не больше {0}": "No more than {0}",
+ "По инвойсу получены деньги — на всю сумму сначала оформите возврат": "Money was received on this invoice — for the full amount, refund it first",
+ "Частичная отмена инвойса {0}": "Partial cancellation of invoice {0}",
+ "Сумма кредит-ноты": "Credit note amount",
+ "Вся сумма — инвойс будет отменён": "Full amount — the invoice will be cancelled",
+ "Часть — инвойс остаётся, клиенту вернётся {0}": "Part — the invoice stays, the client gets {0} back",
+ "Часть — инвойс остаётся, к оплате {0}": "Part — the invoice stays, {0} left to pay",
+ "Инвойс уже отменён — сторнировать нечего": "The invoice is already cancelled — nothing to credit",
+ "На всю сумму инвойс отменяется полной кредит-нотой": "For the full amount, the invoice is cancelled with a full credit note",
+ "Не нашлось платежа инвойса для возврата": "No invoice payment was found to refund",
+ "Не указан идентификатор кредит-ноты": "The credit note ID is missing",
+ "Сумма кредит-ноты должна быть больше нуля": "The credit note amount must be greater than zero"
 }

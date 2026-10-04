@@ -280,11 +280,13 @@ export default function InvoiceDetailScreen() {
   // отменяется, а честно называет себя и ссылается на сторнированный документ.
   const stornoOfId = creditLinks.data?.originalByNoteId.get(row.id) ?? null;
   const isCreditNote = stornoOfId != null || row.kind === "credit_note";
-  const creditNoteId = creditLinks.data?.noteByInvoiceId.get(row.id) ?? null;
   const invoiceById = (target: string | null) =>
     target ? ((invoicesQuery.data ?? []).find((item) => item.id === target) ?? null) : null;
   const stornoOfInvoice = invoiceById(stornoOfId);
-  const creditNoteInvoice = invoiceById(creditNoteId);
+  // Все ноты инвойса — частичные и полная (04.10), плашками в «Документах».
+  const creditNotes = (invoicesQuery.data ?? []).filter(
+    (item) => item.kind === "credit_note" && item.credit_note_of_id === row.id,
+  );
   const clientIsArchived = client
     ? client.deleted_at != null
     : row.client_snapshot?.archived === true
@@ -481,7 +483,7 @@ export default function InvoiceDetailScreen() {
           documents={[
             ...(stornoOfInvoice ? [{ type: "invoice" as const, item: stornoOfInvoice }] : []),
             ...(noteReceipt ? [{ type: "receipt" as const, item: noteReceipt }] : []),
-            ...(creditNoteInvoice ? [{ type: "invoice" as const, item: creditNoteInvoice }] : []),
+            ...creditNotes.map((note) => ({ type: "invoice" as const, item: note })),
             ...(isCreditNote ? [] : receipts.map((receipt) => ({ type: "receipt" as const, item: receipt }))),
           ]}
         />

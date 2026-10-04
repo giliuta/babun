@@ -5197,5 +5197,19 @@
  "＋ Описание": "＋ Beschreibung",
  "＋ Перерыв": "＋ Pause",
  "＋ Перерыв после услуги": "＋ Pause nach der Leistung",
- "＋ По дням недели": "＋ Nach Wochentagen"
+ "＋ По дням недели": "＋ Nach Wochentagen",
+ "Впишите, какую часть сторнировать": "Gib den gutzuschreibenden Teil ein",
+ "Сумма должна быть больше нуля": "Der Betrag muss größer als null sein",
+ "Не больше {0}": "Höchstens {0}",
+ "По инвойсу получены деньги — на всю сумму сначала оформите возврат": "Zu dieser Rechnung ist Geld eingegangen — für den vollen Betrag zuerst erstatten",
+ "Частичная отмена инвойса {0}": "Teilstornierung der Rechnung {0}",
+ "Сумма кредит-ноты": "Betrag der Gutschrift",
+ "Вся сумма — инвойс будет отменён": "Voller Betrag — die Rechnung wird storniert",
+ "Часть — инвойс остаётся, клиенту вернётся {0}": "Teil — die Rechnung bleibt, der Kunde erhält {0} zurück",
+ "Часть — инвойс остаётся, к оплате {0}": "Teil — die Rechnung bleibt, offen {0}",
+ "Инвойс уже отменён — сторнировать нечего": "Die Rechnung ist bereits storniert — nichts gutzuschreiben",
+ "На всю сумму инвойс отменяется полной кредит-нотой": "Für den vollen Betrag wird die Rechnung mit einer vollständigen Gutschrift storniert",
+ "Не нашлось платежа инвойса для возврата": "Keine Rechnungszahlung zum Erstatten gefunden",
+ "Не указан идентификатор кредит-ноты": "Die Gutschrift-ID fehlt",
+ "Сумма кредит-ноты должна быть больше нуля": "Der Gutschriftsbetrag muss größer als null sein"
 }

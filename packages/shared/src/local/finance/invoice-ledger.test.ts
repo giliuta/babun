@@ -322,3 +322,39 @@ describe("invoice party snapshot parsing", () => {
     expect(parseInvoiceClientSnapshot("client")).toBeNull();
   });
 });
+
+// Владелец 04.10: частичная кредит-нота — инвойс в силе, к оплате остаток.
+describe("частичная кредит-нота в расчёте", () => {
+  const pay = (amount: number) => ({
+    id: "p1",
+    invoice_id: "invoice-1",
+    type: "income" as const,
+    amount,
+    account_id: "account-1",
+    payment_method: "cash",
+    occurred_on: "2026-10-04",
+    refund_of_id: null,
+    notes: null,
+    created_at: "2026-10-04T10:00:00Z",
+  });
+
+  it("к оплате — сумма минус сторнированное", () => {
+    const s = calculateInvoiceSettlement({ status: "issued", total: 178.5, credited_amount: 50 }, []);
+    expect(s.due).toBe(128.5);
+    expect(s.remaining).toBe(128.5);
+    expect(s.isPaid).toBe(false);
+  });
+
+  it("оплата остатка закрывает инвойс", () => {
+    const s = calculateInvoiceSettlement({ status: "paid", total: 178.5, credited_amount: 50 }, [pay(128.5)]);
+    expect(s.remaining).toBe(0);
+    expect(s.isPaid).toBe(true);
+    expect(s.overpaid).toBe(0);
+  });
+
+  it("без ноты — как раньше", () => {
+    const s = calculateInvoiceSettlement({ status: "issued", total: 178.5 }, [pay(100)]);
+    expect(s.due).toBe(178.5);
+    expect(s.remaining).toBe(78.5);
+  });
+});

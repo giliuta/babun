@@ -2144,6 +2144,8 @@ export type Database = {
           created_by: string | null
           credit_note_of_id: string | null
           credit_note_of_receipt_id: string | null
+          credit_partial: boolean
+          credited_amount: number
           currency: string
           due_on: string | null
           id: string
@@ -2179,6 +2181,8 @@ export type Database = {
           created_by?: string | null
           credit_note_of_id?: string | null
           credit_note_of_receipt_id?: string | null
+          credit_partial?: boolean
+          credited_amount?: number
           currency?: string
           due_on?: string | null
           id?: string
@@ -2214,6 +2218,8 @@ export type Database = {
           created_by?: string | null
           credit_note_of_id?: string | null
           credit_note_of_receipt_id?: string | null
+          credit_partial?: boolean
+          credited_amount?: number
           currency?: string
           due_on?: string | null
           id?: string
@@ -4638,6 +4644,16 @@ export type Database = {
       set_default_company: {
         Args: { p_company_id: string }
         Returns: undefined
+      }
+      issue_partial_credit_note: {
+        Args: {
+          p_amount: number
+          p_invoice_id: string
+          p_language?: string
+          p_reason?: string
+          p_request_id: string
+        }
+        Returns: Database["public"]["Tables"]["invoices"]["Row"]
       }
       issue_receipt_credit_note: {
         Args: { p_language?: string; p_reason?: string; p_receipt_id: string }

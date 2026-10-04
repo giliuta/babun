@@ -277,6 +277,37 @@ export function useDeleteInvoice() {
 }
 
 /**
+ * ЧАСТИЧНАЯ КРЕДИТ-НОТА (владелец 04.10): инвойс остаётся в силе, к оплате —
+ * сумма минус сторнированное; получено больше — разница возвращается клиенту
+ * тем же движением (`issue_partial_credit_note`). Id ноты = id запроса.
+ */
+export function useIssuePartialCreditNote(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: async (input: {
+      requestId: string;
+      amount: number;
+      reason: string | null;
+      language: string;
+    }) => {
+      const { data, error } = await supabase.rpc("issue_partial_credit_note", {
+        p_invoice_id: id,
+        p_request_id: input.requestId,
+        p_amount: input.amount,
+        ...(input.reason ? { p_reason: input.reason } : {}),
+        p_language: input.language,
+      });
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error("Кредит-нота не подтверждена сервером");
+      return data;
+    },
+    onSuccess: () => invalidateInvoices(qc),
+    meta: { errorHandled: true },
+  });
+}
+
+/**
  * Канонный отказ (ТЗ документов 2026-08-09): сервер выпускает кредит-ноту и
  * помечает инвойс «Отменён». Оплаченный документ сервер не отменит — попросит
  * сначала оформить возврат; его текст показывается человеку как есть.

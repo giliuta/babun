@@ -88,6 +88,8 @@ function rowToInvoice(r: Row): InvoiceLedger {
     kind: (r.kind as InvoiceKind | null) ?? "invoice",
     credit_note_of_id: r.credit_note_of_id,
     credit_note_of_receipt_id: r.credit_note_of_receipt_id ?? null,
+    credited_amount: Number(r.credited_amount ?? 0),
+    credit_partial: r.credit_partial ?? false,
     vat_mode: (r.vat_mode as InvoiceVatMode | null) ?? null,
     pdf_url: r.pdf_url,
     notes: r.notes,

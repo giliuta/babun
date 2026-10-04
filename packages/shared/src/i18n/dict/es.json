@@ -5197,5 +5197,19 @@
  "＋ Описание": "＋ Descripción",
  "＋ Перерыв": "＋ Descanso",
  "＋ Перерыв после услуги": "＋ Descanso tras el servicio",
- "＋ По дням недели": "＋ Por días de la semana"
+ "＋ По дням недели": "＋ Por días de la semana",
+ "Впишите, какую часть сторнировать": "Indica qué parte acreditar",
+ "Сумма должна быть больше нуля": "El importe debe ser mayor que cero",
+ "Не больше {0}": "No más de {0}",
+ "По инвойсу получены деньги — на всю сумму сначала оформите возврат": "Esta factura ya cobró dinero: para el importe total, primero haz el reembolso",
+ "Частичная отмена инвойса {0}": "Anulación parcial de la factura {0}",
+ "Сумма кредит-ноты": "Importe de la nota de crédito",
+ "Вся сумма — инвойс будет отменён": "Importe total: la factura se anulará",
+ "Часть — инвойс остаётся, клиенту вернётся {0}": "Parte: la factura sigue, al cliente se le devuelven {0}",
+ "Часть — инвойс остаётся, к оплате {0}": "Parte: la factura sigue, quedan {0} por pagar",
+ "Инвойс уже отменён — сторнировать нечего": "La factura ya está anulada: no hay nada que acreditar",
+ "На всю сумму инвойс отменяется полной кредит-нотой": "Por el importe total, la factura se anula con una nota de crédito completa",
+ "Не нашлось платежа инвойса для возврата": "No se encontró un pago de la factura para reembolsar",
+ "Не указан идентификатор кредит-ноты": "Falta el identificador de la nota de crédito",
+ "Сумма кредит-ноты должна быть больше нуля": "El importe de la nota de crédito debe ser mayor que cero"
 }
