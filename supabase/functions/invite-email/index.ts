@@ -1,16 +1,18 @@
-// invite-email — ПИСЬМО-ПРИГЛАШЕНИЕ С АДРЕСА BABUN.
+// invite-email — ПИСЬМО-ПРИГЛАШЕНИЕ ПАРТНЁРУ С АДРЕСА BABUN (владелец 04.10).
 //
-// Зовёт приложение сразу после `create_invitation` (и по «Отправить ещё раз»):
-//   POST { invitation_id }  +  Authorization: Bearer <токен владельца>
-//                           +  x-babun-tenant: <активная компания>
+// Зовёт приложение сразу после `create_invitation`:
+//   POST { invitation_id, locale? }  +  Authorization: Bearer <токен звонящего>
+//                                     +  x-babun-tenant: <активный аккаунт>
 //
 // Сервисного ключа здесь нет намеренно. Данные письма берёт
 // `claim_invitation_email` КЛЮЧОМ ЗВОНЯЩЕГО: сервер сам проверяет, что это
-// владелец активной компании и что приглашение открыто, ставит штамп отправки и
-// держит лимиты. Функция только рисует письмо (`render.ts`) и отдаёт его Resend.
+// владелец или директор аккаунта и что приглашение открыто, ставит штамп
+// отправки и держит лимиты. Функция только рисует письмо (`render.ts`) на
+// языке звонящего и отдаёт его Resend.
 //
 // Секреты Edge Functions:
-//   RESEND_API_KEY      — ключ Resend (тот же, что паролем SMTP у Supabase Auth)
+//   RESEND_API_KEY      — ключ Resend (без него ответ 503, приложение молчит:
+//                         приглашение всё равно ждёт во «Входящих» партнёра)
 //   INVITE_EMAIL_FROM   — необязательно, по умолчанию «Babun <noreply@babun.app>»
 //   INVITE_LINK_ORIGIN  — необязательно, по умолчанию https://babun.app
 //
@@ -21,7 +23,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 
-import { renderInvitationEmail, type InvitationEmailPayload } from "./render.ts";
+import { emailLocale, renderInvitationEmail, type InvitationEmailPayload } from "./render.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,9 +77,11 @@ Deno.serve(async (req) => {
   if (!UUID_RE.test(tenant)) return reply(400, { sent: false, reason: "no_company" });
 
   let invitationId = "";
+  let locale = emailLocale(null);
   try {
-    const body = (await req.json()) as { invitation_id?: unknown };
+    const body = (await req.json()) as { invitation_id?: unknown; locale?: unknown };
     invitationId = typeof body.invitation_id === "string" ? body.invitation_id : "";
+    locale = emailLocale(body.locale);
   } catch {
     invitationId = "";
   }
@@ -109,13 +113,22 @@ Deno.serve(async (req) => {
   }
 
   const payload = data as (InvitationEmailPayload & { claimed_at?: string }) | null;
-  if (!payload || typeof payload.email !== "string" || typeof payload.token !== "string") {
+  if (
+    !payload ||
+    typeof payload.email !== "string" ||
+    typeof payload.token !== "string" ||
+    !Array.isArray(payload.teams)
+  ) {
     return reply(500, { sent: false, reason: "server_error" });
   }
 
   let mail;
   try {
-    mail = renderInvitationEmail(payload, Deno.env.get("INVITE_LINK_ORIGIN") ?? "https://babun.app");
+    mail = renderInvitationEmail(
+      payload,
+      Deno.env.get("INVITE_LINK_ORIGIN") ?? "https://babun.app",
+      locale,
+    );
   } catch (renderError) {
     console.error("invite-email render failed", { message: String(renderError) });
     return reply(500, { sent: false, reason: "server_error" });
