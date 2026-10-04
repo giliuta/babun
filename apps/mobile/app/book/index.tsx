@@ -3065,9 +3065,9 @@ function BookForm() {
                   clientId={editing?.client_id ?? client?.id ?? null}
                   locationId={editing?.location_id ?? locationId ?? null}
                   canUpload={status !== "cancelled" && can.editFiles}
-                  // Удаляет файлы записи только владелец и диспетчер — сервер
-                  // сотруднику откажет, корзину ему не рисуем (аудит 24.09).
-                  canDelete={!isMemberView}
+                  // «Меняет» — весь блок (04.10): удаляет тот, кто прикладывает;
+                  // сервер пускает по тому же праву календаря записи.
+                  canDelete={!isMemberView || can.editFiles}
                   pending={pendingFiles}
                   onPendingChange={setPendingFiles}
                 />
@@ -3409,9 +3409,9 @@ function BookForm() {
                   clientId={editing?.client_id ?? client?.id ?? null}
                   locationId={editing?.location_id ?? locationId ?? null}
                   canUpload={status !== "cancelled" && can.editFiles}
-                  // Удаляет файлы записи только владелец и диспетчер — сервер
-                  // сотруднику откажет, корзину ему не рисуем (аудит 24.09).
-                  canDelete={!isMemberView}
+                  // «Меняет» — весь блок (04.10): удаляет тот, кто прикладывает;
+                  // сервер пускает по тому же праву календаря записи.
+                  canDelete={!isMemberView || can.editFiles}
                   pending={pendingFiles}
                   onPendingChange={setPendingFiles}
                 />

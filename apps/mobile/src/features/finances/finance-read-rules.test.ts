@@ -66,9 +66,9 @@ describe("владелец — без изменений", () => {
       assert.equal(readableDocuments(docs, [], rules), docs);
       assert.equal(rules.documentReadable(null), true);
     }
-    assert.deepEqual(moneySides({ role: "owner", map: undefined }), { income: true, expense: true });
+    assert.deepEqual(moneySides({ role: "owner", map: undefined }), { income: true, expense: true, profit: true });
     for (const panel of ["income", "expense", "profit", "check", "services"]) {
-      assert.equal(moneyPanelOpen(panel, { income: true, expense: true }), true, panel);
+      assert.equal(moneyPanelOpen(panel, { income: true, expense: true, profit: true }), true, panel);
     }
   });
 });
@@ -125,7 +125,7 @@ describe("сотрудник и зеркало — строка по своей 
   test("роль или карта ещё не пришли — не видно ничего", () => {
     const rules = financeReadRules({ role: undefined, map: undefined });
     assert.deepEqual(readableTransactions(ROWS, rules, NO_DEBTS), []);
-    assert.deepEqual(moneySides({ role: "master", map: undefined }), { income: false, expense: false });
+    assert.deepEqual(moneySides({ role: "master", map: undefined }), { income: false, expense: false, profit: false });
   });
 });
 
@@ -179,16 +179,26 @@ describe("документы", () => {
 describe("аналитика — стороны денег порознь", () => {
   test("доход без расхода: панели расхода и прибыли закрыты", () => {
     const sides = moneySides({ role: "master", map: map({ [A]: { "finance.income": "read" } }) });
-    assert.deepEqual(sides, { income: true, expense: false });
+    assert.deepEqual(sides, { income: true, expense: false, profit: false });
     assert.equal(moneyPanelOpen("income", sides), true);
     assert.equal(moneyPanelOpen("check", sides), true);
     assert.equal(moneyPanelOpen("expense", sides), false);
     assert.equal(moneyPanelOpen("profit", sides), false);
   });
 
+  test("обе стороны, но «Прибыль: Скрыта» — прибыли нет (04.10)", () => {
+    const both = { "finance.income": "read", "finance.expense": "read" } as const;
+    const hidden = moneySides({ role: "master", map: map({ [A]: { ...both, "finance.profit": "off" } }) });
+    assert.deepEqual(hidden, { income: true, expense: true, profit: false });
+    assert.equal(moneyPanelOpen("profit", hidden), false);
+    const shown = moneySides({ role: "master", map: map({ [A]: { ...both, "finance.profit": "read" } }) });
+    assert.equal(shown.profit, true);
+    assert.equal(moneyPanelOpen("profit", shown), true);
+  });
+
   test("расход без дохода: закрыты доход, средний чек и прибыль", () => {
     const sides = moneySides({ role: "master", map: map({ [B]: { "finance.expense": "write" } }) });
-    assert.deepEqual(sides, { income: false, expense: true });
+    assert.deepEqual(sides, { income: false, expense: true, profit: false });
     for (const panel of ["income", "check", "profit"]) {
       assert.equal(moneyPanelOpen(panel, sides), false, panel);
     }
@@ -200,10 +210,10 @@ describe("аналитика — стороны денег порознь", () =
       role: "dispatcher",
       map: map({ [A]: { "finance.income": "off" }, [B]: { "finance.income": "full" } }),
     });
-    assert.deepEqual(sides, { income: true, expense: false });
+    assert.deepEqual(sides, { income: true, expense: false, profit: false });
     assert.deepEqual(
       moneySides({ role: "master", map: map({ [A]: { "finance.operations": "read" } }) }),
-      { income: false, expense: false },
+      { income: false, expense: false, profit: false },
     );
   });
 });
