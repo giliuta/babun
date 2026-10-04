@@ -18,21 +18,25 @@ test("флаг — только веб", () => {
   assert.match(read("lib/pay-here.ts"), /export const CAN_PAY_HERE = Platform\.OS === "web";/);
 });
 
-test("страница «Тариф»: без флага — только бесплатный пробный, без цен и подписки", () => {
+test("страница «Тариф»: без флага — только состояние, без выбора, цен и подписки", () => {
   const src = read("features/tariffs/TariffScreen.tsx");
-  // Действие в приложении из магазина — лишь пробный, и только своему
-  // аккаунту, у которого пробного ещё не было и ничего не оплачено.
-  assert.match(src, /const trialOffer = owner && !scope\.foreign && !state\.forever && !state\.paid && !state\.trial && !state\.trialUsed;/);
-  assert.match(src, /const action = !CAN_PAY_HERE\s*\?\s*trialOffer\s*\?\s*tariffAction\(state, selected\)\s*:\s*null/);
-  assert.match(src, /const showTiers = CAN_PAY_HERE \|\| trialOffer;/);
-  // Цены в плитке — только с флагом.
+  assert.match(src, /const action = !CAN_PAY_HERE\s*\?\s*null/);
+  assert.match(src, /const showTiers = CAN_PAY_HERE;/);
   assert.match(src, /\{CAN_PAY_HERE \? \(\s*<>\s*<Text[^>]*>\s*\{card\.monthly\}/);
-  assert.match(src, /\{CAN_PAY_HERE \? \(\s*<Text[^>]*>\s*\{`За год/);
   assert.match(src, /\{CAN_PAY_HERE && owner && state\.paid && !state\.forever \?/);
   assert.match(src, /tariffStatus\(state, periodEnd, CAN_PAY_HERE\)/);
 });
 
-test("действие пробного — бесплатное: пока пробного не было, кнопка «Попробовать 14 дней», а не оплата", () => {
+test("пробный в приложении из магазина включается сам: «Про», свой аккаунт, только владелец, только раз", () => {
+  const src = read("features/tariffs/AutoTrial.tsx");
+  assert.match(src, /export const AUTO_TRIAL_TIER = "pro" as const;/);
+  for (const cond of ["!CAN_PAY_HERE", "scope.viewRole === \"owner\"", "!scope.foreign", "!state.forever", "!state.paid", "!state.trial", "!state.trialUsed"]) {
+    assert.ok(src.includes(cond), `AutoTrial без условия ${cond}`);
+  }
+  assert.match(read("../app/(dashboard)/_layout.tsx"), /<AutoTrial \/>/);
+});
+
+test("действие пробного на сайте — бесплатное: пока пробного не было, «Попробовать 14 дней», а не оплата", () => {
   const fresh = { tier: "free", paid: false, forever: false, trial: null, trialUsed: false, pastDue: false } as const;
   assert.deepEqual(tariffAction(fresh, "pro"), { kind: "trial", label: "Попробовать 14 дней" });
 });

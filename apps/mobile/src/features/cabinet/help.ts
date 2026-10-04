@@ -190,7 +190,7 @@ const PAYMENT_FAQ_IDS: ReadonlySet<string> = new Set(["tariff"]);
 
 /** SMS без слова «пополнение» — для приложения из магазина. */
 const SMS_ANSWER_NO_PAY =
-  "Баланс — Кабинет → SMS. Шаблоны и имя отправителя у каждой команды свои: шестерёнка календаря → SMS. Одна часть SMS стоит €0,12.";
+  "Баланс — Кабинет → SMS. Шаблоны и имя отправителя у каждой команды свои: шестерёнка календаря → SMS.";
 
 /** Частые вопросы для платформы: `payHere` — `CAN_PAY_HERE`. */
 export function helpFaq(payHere: boolean): readonly HelpFaqItem[] {

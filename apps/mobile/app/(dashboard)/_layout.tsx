@@ -16,6 +16,7 @@ import { MESSAGING_ENABLED, can } from "@/features/settings/role-policy";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { DashboardGate } from "@/lib/DashboardGate";
 import { TeamActivityNotifier } from "@/features/cabinet/TeamActivityNotifier";
+import { AutoTrial } from "@/features/tariffs/AutoTrial";
 
 export default function DashboardLayout() {
   const t = useThemeColors();
@@ -60,6 +61,8 @@ export default function DashboardLayout() {
       {/* Уведомления о делах команды из истории изменений (03.10) — пока
           приложение открыто; без интерфейса. */}
       <TeamActivityNotifier />
+      {/* Пробный на 14 дней — сам, в приложении из магазина (04.10). */}
+      <AutoTrial />
       <RoleCapabilityBoundary capability="view-cabinet" title="Babun">
         <Tabs
           // ПОВТОРНЫЙ ТАП ПО СВОЕЙ ЖЕ ВКЛАДКЕ ВОЗВРАЩАЕТ К ЕЁ НАЧАЛУ.

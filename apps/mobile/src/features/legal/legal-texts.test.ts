@@ -77,6 +77,6 @@ test("адреса без входа: файл маршрута и строка 
 
 test("«Помощь» в приложении из магазина не говорит о ценах тарифа и оплате", () => {
   const native = helpFaq(false).map((i) => `${i.question} ${i.answer}`).join("\n");
-  assert.doesNotMatch(native, /Stripe|оплат|пополн|€6|€29|€59/i);
+  assert.doesNotMatch(native, /Stripe|оплат|пополн|€/i);
   assert.ok(helpFaq(true).some((i) => i.id === "tariff"), "на сайте вопрос о тарифе остаётся");
 });
