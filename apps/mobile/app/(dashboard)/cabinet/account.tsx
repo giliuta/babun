@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Smartphone, Trash2 } from "lucide-react-native";
+import { ChevronRight, Smartphone, Trash2 } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -30,22 +30,46 @@ import { confirmThen } from "@/lib/confirm";
 import { writeErrorWords } from "@/lib/connection-words";
 import { isHumanText } from "@babun/shared/i18n/runtime";
 import { deleteRefusal, passwordRefusal } from "@/features/cabinet/account-errors";
+import { ChangeEmailSheet } from "@/features/cabinet/ChangeEmailSheet";
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  /** Строка-дверь: шеврон справа, тап открывает правку (почта, 04.10). */
+  onPress?: () => void;
+}) {
   const t = useThemeColors();
-  return (
-    <View className="px-4 py-3">
+  const body = (
+    <View className="flex-1">
       <Text style={{ fontSize: 12, color: t.faint }}>{label}</Text>
-      <Text style={{ marginTop: 2, fontSize: 16, color: t.ink }} selectable>
+      <Text style={{ marginTop: 2, fontSize: 16, color: t.ink }} selectable={!onPress}>
         {value}
       </Text>
     </View>
+  );
+  if (!onPress) return <View className="px-4 py-3">{body}</View>;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}`}
+      className="flex-row items-center px-4 py-3"
+      style={({ pressed }) => ({ backgroundColor: pressed ? t.pressed : "transparent" })}
+    >
+      {body}
+      <ChevronRight size={ICON.sm} color={t.faint} />
+    </Pressable>
   );
 }
 
 export default function AccountScreen() {
   const { session } = useSession();
   const u = session?.user;
+  const [emailSheet, setEmailSheet] = useState(false);
   const registered = u?.created_at
     ? new Date(u.created_at).toLocaleDateString("ru-RU", {
         day: "numeric",
@@ -68,7 +92,11 @@ export default function AccountScreen() {
           contentContainerStyle={{ paddingBottom: 32 }}
         >
           <SectionCard>
-            <Row label="Email" value={u?.email ?? "—"} />
+            <Row
+              label="Email"
+              value={u?.email ?? "—"}
+              onPress={u?.email ? () => setEmailSheet(true) : undefined}
+            />
             <Divider inset={16} />
             <Row label="Зарегистрирован" value={registered} />
             <Divider inset={16} />
@@ -80,6 +108,11 @@ export default function AccountScreen() {
           <DangerZoneSection email={u?.email ?? ""} />
         </ScrollView>
       </KeyboardAvoidingView>
+      <ChangeEmailSheet
+        visible={emailSheet}
+        onClose={() => setEmailSheet(false)}
+        currentEmail={u?.email ?? ""}
+      />
     </Screen>
   );
 }

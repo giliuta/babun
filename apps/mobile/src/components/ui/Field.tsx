@@ -90,7 +90,9 @@ export function Field({
   );
   return (
     <View style={{ marginBottom: 16 }}>
-      <FieldLabel text={label} />
+      {/* Пустая подпись — поле под шапкой листа, которая уже его назвала
+          («Новая почта»): третий раз то же слово не печатаем. */}
+      {label ? <FieldLabel text={label} /> : null}
       {framed ? (
         <View
           style={{
