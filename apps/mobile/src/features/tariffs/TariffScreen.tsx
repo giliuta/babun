@@ -50,9 +50,12 @@ import { openTariffCheckout, openTariffPortal, useStartTrial, useTariff } from "
 // <аккаунт>», пока подписки нет. Пробный, смена тарифа, рабочие команды и
 // управление подпиской — у владельца.
 //
-// В ПРИЛОЖЕНИИ ИЗ МАГАЗИНА — ТОЛЬКО СОСТОЯНИЕ (владелец 04.10, `pay-here.ts`):
-// строка тарифа со сроком и «Рабочие команды». Ни плиток с ценами, ни
-// пробного, ни оплаты, ни «Управления подпиской» — всё это на babun.app.
+// В ПРИЛОЖЕНИИ ИЗ МАГАЗИНА — СОСТОЯНИЕ И БЕСПЛАТНЫЙ ПРОБНЫЙ (владелец 04.10,
+// `pay-here.ts`): строка тарифа со сроком и «Рабочие команды»; пока пробный не
+// взят — три тарифа с тем, что в них входит, БЕЗ ЦЕН, и «Попробовать 14 дней»
+// (владелец вечером 04.10: «прям перед лицом выставить, что у вас 14-дневный
+// бесплатный…»; бесплатный пробный — не покупка). Ни цен, ни оплаты, ни смены
+// тарифа, ни «Управления подпиской» — это на babun.app, туда ведут письма.
 
 export function TariffScreen() {
   const router = useRouter();
@@ -86,15 +89,22 @@ export function TariffScreen() {
   // Рабочие команды выбирает владелец — и только своего, открытого аккаунта.
   const overLimit = owner && !scope.foreign && live.length > limit;
   const working = workingTeamIds(live, state.tier, workingChosen);
+  // Свой аккаунт, пробного ещё не было и ничего не оплачено — единственное,
+  // что приложение из магазина предлагает.
+  const trialOffer = owner && !scope.foreign && !state.forever && !state.paid && !state.trial && !state.trialUsed;
   const action = !CAN_PAY_HERE
-    ? null
+    ? trialOffer
+      ? tariffAction(state, selected)
+      : null
     : owner
       ? tariffAction(state, selected)
       : gate === "write"
         ? partnerTariffAction(state, selected, accountName)
         : null;
   // Выбирать тариф есть смысл тому, кто может за него заплатить.
-  const canPick = !state.forever && (owner || gate === "write");
+  const canPick = CAN_PAY_HERE ? !state.forever && (owner || gate === "write") : trialOffer;
+  // Плитки тарифов: на сайте — всегда, в приложении — только к пробному.
+  const showTiers = CAN_PAY_HERE || trialOffer;
 
   const run = async () => {
     if (!action) return;
@@ -185,8 +195,8 @@ export function TariffScreen() {
           ) : null}
         </SectionCard>
 
-        {CAN_PAY_HERE ? <SectionEyebrow>Тарифы</SectionEyebrow> : null}
-        {(CAN_PAY_HERE ? TIER_CARDS : []).map((card) => (
+        {showTiers ? <SectionEyebrow>Тарифы</SectionEyebrow> : null}
+        {(showTiers ? TIER_CARDS : []).map((card) => (
           <TierTile
             key={card.tier}
             card={card}
@@ -236,7 +246,8 @@ function TierTile({
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ selected: on }}
-      accessibilityLabel={`${card.name}, ${card.monthly} в месяц`}
+      // Цены — только там, где за тариф можно заплатить (`pay-here.ts`).
+      accessibilityLabel={CAN_PAY_HERE ? `${card.name}, ${card.monthly} в месяц` : card.name}
       onPress={onPress}
       style={{
         marginHorizontal: GUTTER,
@@ -258,10 +269,14 @@ function TierTile({
           <Text style={{ ...TYPE.subhead, color: t.accent }}>{mark}</Text>
         ) : null}
         <View style={{ flex: 1 }} />
-        <Text style={{ ...TYPE.headline, color: t.ink, fontVariant: ["tabular-nums"] }}>
-          {card.monthly}
-        </Text>
-        <Text style={{ ...TYPE.subhead, color: t.faint }}>в месяц</Text>
+        {CAN_PAY_HERE ? (
+          <>
+            <Text style={{ ...TYPE.headline, color: t.ink, fontVariant: ["tabular-nums"] }}>
+              {card.monthly}
+            </Text>
+            <Text style={{ ...TYPE.subhead, color: t.faint }}>в месяц</Text>
+          </>
+        ) : null}
       </View>
       <View style={{ gap: 6 }}>
         {card.includes.map((line) => (
@@ -271,9 +286,11 @@ function TierTile({
           </View>
         ))}
       </View>
-      <Text style={{ ...TYPE.subhead, color: t.faint }}>
-        {`За год — ${card.yearlyMonthly} в месяц`}
-      </Text>
+      {CAN_PAY_HERE ? (
+        <Text style={{ ...TYPE.subhead, color: t.faint }}>
+          {`За год — ${card.yearlyMonthly} в месяц`}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }

@@ -179,7 +179,9 @@ export function SmsScreen() {
 
         <SmsBalanceCard account={data} />
 
-        <SmsTariffCard priceCents={data.priceCents} />
+        {/* Цены за SMS — только на сайте: в приложении из магазина это прайс
+            того, что покупают мимо Apple (владелец 04.10, `pay-here.ts`). */}
+        {CAN_PAY_HERE ? <SmsTariffCard priceCents={data.priceCents} /> : null}
 
         {/* Переписка с клиентами — владельцу аккаунта (04.10). */}
         {ownerOfAccount ? (
