@@ -1,11 +1,16 @@
-import { useRef, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Fragment, useState } from "react";
+import { ScrollView, View } from "react-native";
 import { Cake, CalendarHeart, CreditCard, Hash, Landmark, MapPin, type LucideIcon } from "lucide-react-native";
 
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Button } from "@/components/ui/Button";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
+import { Divider } from "@/components/ui/Divider";
+import { FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SelectRow } from "@/components/ui/select-rows";
+import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { GUTTER } from "@/components/ui/tokens";
 import { formatShortDateRu } from "@/features/clients/format";
 import type { MasterProfile } from "@/features/reference/master-profile";
 import type { Master } from "@/features/reference/queries";
@@ -14,14 +19,15 @@ import { useThemeColors } from "@/theme/colors";
 
 import { useMasterProfileWrite } from "./use-profile-write";
 
-// «ЛИЧНОЕ» И «ВЫПЛАТЫ» ПАРТНЁРА (владелец 04.10: «выплаты и личное —
-// редизайн, в нашем дизайне, максимально удобно»; «Выплачено · €15 в октябре»
-// он назвал лишним — его нет). Из двух вариантов остался второй: плашки со
-// значками, как «SMS» у клиента — каждое поле своей плашкой с цветной
-// плиткой, значение в мягкой плашке справа; даты — барабаном, текст правится
-// на месте и сохраняется, когда поле отпускают.
+// «ЛИЧНОЕ» И «ВЫПЛАТЫ» ПАРТНЁРА — СТРОКАМИ, КАК «ДОСТУП» НА ЭТОЙ ЖЕ СТРАНИЦЕ
+// (владелец 04.10: «слева нормально, а выбор справа — пусть шторку
+// поднимает»; до того: «Выплачено · €15 в октябре» — лишнее). Строка —
+// цветная плитка, название, значение второй строкой и стрелка; тап — шторка: даты —
+// барабаном, адрес — полем, реквизиты для выплат — одним листом из трёх полей
+// (их присылают одним сообщением) с курсором в том, по которому тапнули.
 
 type DateField = "birthday" | "hire_date";
+type TextKey = "address" | "bank_name" | "iban" | "tax_number";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const localYmd = (iso: string) => {
@@ -29,16 +35,17 @@ const localYmd = (iso: string) => {
   return Number.isNaN(d.getTime()) ? null : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-type PayoutKey = "bank_name" | "iban" | "tax_number";
-
-const PAYOUT_FIELDS: { key: PayoutKey; label: string; icon: LucideIcon; caps: "words" | "characters" }[] = [
-  { key: "bank_name", label: "Банк", icon: Landmark, caps: "words" },
-  { key: "iban", label: "IBAN", icon: CreditCard, caps: "characters" },
-  { key: "tax_number", label: "Налоговый номер", icon: Hash, caps: "characters" },
+const PAYOUT_FIELDS: { key: Exclude<TextKey, "address">; label: string; icon: LucideIcon }[] = [
+  { key: "bank_name", label: "Банк", icon: Landmark },
+  { key: "iban", label: "IBAN", icon: CreditCard },
+  { key: "tax_number", label: "Налоговый номер", icon: Hash },
 ];
 
-const cleanPayout = (key: PayoutKey, value: string) =>
+const clean = (key: TextKey, value: string) =>
   key === "iban" ? value.replace(/\s+/g, " ").trim() : value.trim();
+
+/** Шов между строками — до текста, мимо плитки, как в «Доступе». */
+const ROW_SEAM_INSET = 48;
 
 export function PartnerPersonalBlocks({
   card,
@@ -50,28 +57,60 @@ export function PartnerPersonalBlocks({
   joinedAt?: string | null;
   readOnly: boolean;
 }) {
-  const { profile, write, writeText } = useMasterProfileWrite(card);
+  const t = useThemeColors();
+  const { profile, write } = useMasterProfileWrite(card);
   const [dateOpen, setDateOpen] = useState<DateField | null>(null);
+  const [sheet, setSheet] = useState<{ keys: TextKey[]; focus: TextKey } | null>(null);
   const stored = (field: DateField) => (profile[field] as string | undefined) || null;
   const dateValue = (field: DateField) =>
     stored(field) ?? (field === "hire_date" && joinedAt ? localYmd(joinedAt) : null);
-  const openDate = readOnly
-    ? undefined
-    : (field: DateField) => {
-        haptics.tap();
-        setDateOpen(field);
-      };
-  const value = (key: PayoutKey | "address") => ((profile[key] as string | undefined) ?? "").trim();
-  const save = (key: PayoutKey | "address", next: string) =>
-    writeText(key, key === "address" ? next.trim() : cleanPayout(key as PayoutKey, next));
+  const text = (key: TextKey) => ((profile[key] as string | undefined) ?? "").trim();
+  const open = (run: () => void) =>
+    readOnly
+      ? undefined
+      : () => {
+          haptics.tap();
+          run();
+        };
 
-  const body = (
-    <PlaqueLook dateValue={dateValue} value={value} save={save} openDate={openDate} readOnly={readOnly} />
+  const row = (
+    i: number,
+    title: string,
+    icon: LucideIcon,
+    tile: string,
+    value: string | null,
+    onPress?: () => void,
+  ) => (
+    <Fragment key={title}>
+      {i > 0 ? <Divider inset={ROW_SEAM_INSET} /> : null}
+      <SettingsRow
+        tile={tile}
+        icon={icon}
+        title={title}
+        sub={value || "не указан"}
+        subColor={value ? undefined : t.faint}
+        onPress={onPress}
+      />
+    </Fragment>
   );
+
+  const birthday = dateValue("birthday");
+  const since = dateValue("hire_date");
+  const payoutKeys: TextKey[] = PAYOUT_FIELDS.map((f) => f.key);
 
   return (
     <>
-      {body}
+      <SectionCard title="Личное" padded={false}>
+        {row(0, "День рождения", Cake, SETTINGS_TILE.red, birthday ? formatShortDateRu(birthday) : null, open(() => setDateOpen("birthday")))}
+        {row(1, "С нами с", CalendarHeart, SETTINGS_TILE.green, since ? formatShortDateRu(since) : null, open(() => setDateOpen("hire_date")))}
+        {row(2, "Адрес", MapPin, SETTINGS_TILE.blue, text("address") || null, open(() => setSheet({ keys: ["address"], focus: "address" })))}
+      </SectionCard>
+      <SectionCard title="Выплаты" padded={false}>
+        {PAYOUT_FIELDS.map((field, i) =>
+          row(i, field.label, field.icon, SETTINGS_TILE.indigo, text(field.key) || null, open(() => setSheet({ keys: payoutKeys, focus: field.key }))),
+        )}
+      </SectionCard>
+
       <DateWheelSheet
         visible={dateOpen !== null}
         title={dateOpen === "birthday" ? "День рождения" : "С нами с"}
@@ -89,161 +128,91 @@ export function PartnerPersonalBlocks({
         }}
         onClose={() => setDateOpen(null)}
       />
-    </>
-  );
-}
-
-function PlaqueLook({
-  dateValue,
-  value,
-  save,
-  openDate,
-  readOnly,
-}: {
-  dateValue: (field: DateField) => string | null;
-  value: (key: PayoutKey | "address") => string;
-  save: (key: PayoutKey | "address", next: string) => void;
-  openDate?: (field: DateField) => void;
-  readOnly: boolean;
-}) {
-  const t = useThemeColors();
-  const tone = (on: string) => (readOnly ? t.faint : on);
-  const dateRow = (field: DateField, title: string, icon: LucideIcon, color: string) => {
-    const ymd = dateValue(field);
-    return (
-      <SelectRow
-        icon={icon}
-        color={tone(color)}
-        plain
-        title={title}
-        disabled={readOnly}
-        accessibilityLabel={`${title}: ${ymd ? formatShortDateRu(ymd) : "не указано"}`}
-        onPress={() => openDate?.(field)}
-        trailing={<Pill text={ymd ? formatShortDateRu(ymd) : "Выбрать"} muted={!ymd} />}
+      <TextFieldsSheet
+        open={sheet}
+        initial={text}
+        onClose={() => setSheet(null)}
+        onApply={(patch) => {
+          write(patch as MasterProfile);
+          setSheet(null);
+        }}
       />
-    );
-  };
-  return (
-    <>
-      <SectionCard title="Личное" padded={false}>
-        <View style={{ paddingHorizontal: 2, paddingTop: 2, paddingBottom: 4, gap: 2 }}>
-          {dateRow("birthday", "День рождения", Cake, SETTINGS_TILE.red)}
-          {dateRow("hire_date", "С нами с", CalendarHeart, SETTINGS_TILE.green)}
-          <EditPlaque
-            icon={MapPin}
-            color={tone(SETTINGS_TILE.blue)}
-            title="Адрес"
-            value={value("address")}
-            caps="sentences"
-            readOnly={readOnly}
-            onSave={(next) => save("address", next)}
-          />
-        </View>
-      </SectionCard>
-      <SectionCard title="Выплаты" padded={false}>
-        <View style={{ paddingHorizontal: 2, paddingTop: 2, paddingBottom: 4, gap: 2 }}>
-          {PAYOUT_FIELDS.map((field) => (
-            <EditPlaque
-              key={field.key}
-              icon={field.icon}
-              color={tone(t.accent)}
-              title={field.label}
-              value={value(field.key)}
-              caps={field.caps}
-              readOnly={readOnly}
-              onSave={(next) => save(field.key, next)}
-            />
-          ))}
-        </View>
-      </SectionCard>
     </>
   );
 }
 
-function Pill({ text, muted }: { text: string; muted?: boolean }) {
-  const t = useThemeColors();
-  return (
-    <View
-      style={{
-        minWidth: 96,
-        height: 36,
-        justifyContent: "center",
-        alignItems: "center",
-        paddingHorizontal: 12,
-        borderRadius: t.radius.input,
-        backgroundColor: `${t.accent}14`,
-      }}
-    >
-      <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 15, color: muted ? t.placeholder : t.accent }}>
-        {text}
-      </Text>
-    </View>
-  );
-}
+const SHEET_FIELD: Record<TextKey, { label: string; caps: "words" | "characters" | "sentences"; multiline?: boolean }> = {
+  address: { label: "Адрес", caps: "sentences", multiline: true },
+  bank_name: { label: "Банк", caps: "words" },
+  iban: { label: "IBAN", caps: "characters" },
+  tax_number: { label: "Налоговый номер", caps: "characters" },
+};
 
-/** Плашка со значком и значением в мягкой плашке справа — правится на месте,
- *  сохраняется, когда поле отпускают (как «Имя для SMS» у клиента). */
-function EditPlaque({
-  icon,
-  color,
-  title,
-  value,
-  caps,
-  readOnly,
-  onSave,
+/** Лист полей — как лист реквизитов клиента: поля стопкой, «Применить»
+ *  внизу, закрыли фоном с правкой — набранное сохраняется. */
+function TextFieldsSheet({
+  open,
+  initial,
+  onClose,
+  onApply,
 }: {
-  icon: LucideIcon;
-  color: string;
-  title: string;
-  value: string;
-  caps: "words" | "characters" | "sentences";
-  readOnly: boolean;
-  onSave: (next: string) => void;
+  open: { keys: TextKey[]; focus: TextKey } | null;
+  initial: (key: TextKey) => string;
+  onClose: () => void;
+  onApply: (patch: Partial<Record<TextKey, string | null>>) => void;
 }) {
   const t = useThemeColors();
-  const ref = useRef<TextInput>(null);
-  const [draft, setDraft] = useState<string | null>(null);
+  const [form, setForm] = useState<Partial<Record<TextKey, string>>>({});
+  const [shownFor, setShownFor] = useState<typeof open>(null);
+  // Открыли заново — поля с сохранённого.
+  if (open && open !== shownFor) {
+    setShownFor(open);
+    setForm(Object.fromEntries(open.keys.map((key) => [key, initial(key)])));
+  }
+  const keys = open?.keys ?? shownFor?.keys ?? [];
+  const changed = keys.some((key) => clean(key, form[key] ?? "") !== initial(key));
+  const apply = () =>
+    onApply(Object.fromEntries(keys.map((key) => [key, clean(key, form[key] ?? "") || null])));
+  const title = keys.length > 1 ? "Выплаты" : SHEET_FIELD[keys[0] ?? "address"].label;
   return (
-    <SelectRow
-      icon={icon}
-      color={color}
-      plain
+    <BottomSheet
+      visible={open !== null}
+      onClose={() => (changed ? apply() : onClose())}
       title={title}
-      disabled={readOnly}
-      accessibilityLabel={`${title}: ${value || "не указан"}`}
-      onPress={() => ref.current?.focus()}
-      trailing={
-        <View
-          style={{
-            minWidth: 96,
-            maxWidth: 190,
-            height: 36,
-            justifyContent: "center",
-            paddingHorizontal: 12,
-            borderRadius: t.radius.input,
-            backgroundColor: `${t.accent}14`,
-          }}
-        >
-          <TextInput
-            ref={ref}
-            value={draft ?? value}
-            editable={!readOnly}
-            placeholder="не указан"
-            placeholderTextColor={t.placeholder}
-            selectionColor={t.accent}
-            autoCapitalize={caps}
-            autoCorrect={false}
-            numberOfLines={1}
-            onFocus={() => setDraft(value)}
-            onChangeText={setDraft}
-            onBlur={() => {
-              if (draft !== null && draft.trim() !== value) onSave(draft);
-              setDraft(null);
-            }}
-            style={{ fontSize: 15, color: t.accent, padding: 0, textAlign: "right" }}
-          />
+      padded={false}
+      maxHeightRatio={0.92}
+      avoidKeyboard
+      footer={
+        <View style={{ paddingHorizontal: GUTTER }}>
+          <Button label="Применить" disabled={!changed} onPress={apply} />
         </View>
       }
-    />
+    >
+      <ScrollView
+        style={{ flexShrink: 1, backgroundColor: t.canvas }}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: 16 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <SectionCard dense title={keys.length > 1 ? "Куда платить" : undefined}>
+          {keys.map((key, i) => (
+            <FieldRow
+              key={key}
+              label={SHEET_FIELD[key].label}
+              value={form[key] ?? ""}
+              placeholder={SHEET_FIELD[key].label}
+              addLabel="Добавить"
+              stacked
+              live
+              tabular={key === "iban" || key === "tax_number"}
+              multiline={SHEET_FIELD[key].multiline}
+              separated={i > 0}
+              autoCapitalize={SHEET_FIELD[key].caps}
+              autoFocus={open?.focus === key}
+              onSave={(v) => setForm((prev) => ({ ...prev, [key]: v }))}
+            />
+          ))}
+        </SectionCard>
+      </ScrollView>
+    </BottomSheet>
   );
 }

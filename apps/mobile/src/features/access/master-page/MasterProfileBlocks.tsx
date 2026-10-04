@@ -3,7 +3,11 @@ import { useRouter, type Href } from "expo-router";
 import { getPaidAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
 
-import { NavRow } from "@/components/ui/card-rows";
+import { CalendarDays, History } from "lucide-react-native";
+
+import { Divider } from "@/components/ui/Divider";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useAppointments } from "@/features/calendar/queries";
 import { useActorChanges, useCanReadHistory } from "@/features/cabinet/use-change-log";
@@ -56,13 +60,18 @@ export function MasterWorkBlock({
         ? seenLine(changes.data.lastAt, now)
         : "пока нет"
     : null;
+  // СТРОКИ — КАК «ДОСТУП» И «ЛИЧНОЕ» НА ЭТОЙ ЖЕ СТРАНИЦЕ (владелец 04.10:
+  // «работа должна быть улучшена»): плитка, название, значение второй
+  // строкой — длинное «3 записи в октябре · €167» больше не режется справа.
   return (
     <SectionCard title="Работа" padded={false}>
       {/* Одна дверь: итоги периода и записи — на одной странице. Выручка —
           числом в той же строке, а не второй строкой с той же дверью. */}
-      <NavRow
-        label="Записи"
-        value={received > 0 ? `${workLine(work)} · ${formatEUR(received)}` : workLine(work)}
+      <SettingsRow
+        tile={SETTINGS_TILE.blue}
+        icon={CalendarDays}
+        title="Записи"
+        sub={received > 0 ? `${workLine(work)} · ${formatEUR(received)}` : workLine(work)}
         onPress={() =>
           router.push(
             `/cabinet/people/${card.id}/visits?teams=${encodeURIComponent(teamIds.join(","))}` as Href,
@@ -70,12 +79,16 @@ export function MasterWorkBlock({
         }
       />
       {canReadHistory && userId ? (
-        <NavRow
-          label="История изменений"
-          value={changesValue}
-          separated
-          onPress={() => router.push(`/cabinet/history?actor=${encodeURIComponent(userId)}` as Href)}
-        />
+        <>
+          <Divider inset={48} />
+          <SettingsRow
+            tile={SETTINGS_TILE.purple}
+            icon={History}
+            title="История изменений"
+            sub={changesValue ?? undefined}
+            onPress={() => router.push(`/cabinet/history?actor=${encodeURIComponent(userId)}` as Href)}
+          />
+        </>
       ) : null}
     </SectionCard>
   );
