@@ -246,4 +246,13 @@ describe("подпись раздела в «Доступе»", () => {
       "Тариф, SMS, реквизиты",
     );
   });
+  test("длинный список — два имени и число (04.10)", () => {
+    const rows = ["a", "b", "c", "d", "e"].map((key, i) => ({
+      block: block(`calendar.${key}`, ["off", "read"], 10 + i),
+      level: "read",
+    }));
+    const brief = sectionBrief({ rows: [...rows, { ...rows[0], level: "off" }] } as unknown as Parameters<typeof sectionBrief>[0]);
+    assert.match(brief, / и ещё 3$/);
+    assert.equal(brief.split(", ").length, 2);
+  });
 });

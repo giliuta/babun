@@ -146,6 +146,9 @@ export interface MasterCardViewProps {
   onDetachCalendar?: (teamId: string) => void;
   /** Кнопка в хвосте номера — «Связаться». */
   phoneAction?: ReactNode;
+  /** «В приложении · сегодня, 13:40» под почтой — живой ли аккаунт. Нет —
+   *  строки нет. */
+  accountSeen?: string;
   /** Строка «Доступ в CRM» в блоке «Сотрудник». Нет — строки нет. */
   access?: EmployeeAccessLine;
   /** Контакты под основным номером и «Добавить контакт». Нет — у человека

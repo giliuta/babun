@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Keyboard } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
+import { Archive, ArchiveRestore } from "lucide-react-native";
 
 import { useAppointments } from "@/features/calendar/queries";
 import { useBusinessNow } from "@/features/appointments/business-now";
@@ -10,17 +11,19 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
 import { formatPhoneAsYouType } from "@/features/clients/phone";
 import { phoneToSave } from "@/features/profile/profile";
 import { useMasters, useTeams, useUpdateMaster } from "@/features/reference/queries";
 import { useRemoveTenantMember } from "@/features/settings/team-access";
 import { chooseOption } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
+import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 
 import { levelOf as mapLevelOf, type AccessBlock, type AccessRefusal } from "../access-map";
-import { waitSheetExit } from "../InviteMemberSheet";
 import {
   useAccessBlocks,
   useCompanyMembers,
@@ -32,6 +35,7 @@ import { removalMessage, upcomingWorkCount } from "./removal-impact";
 import { draftTeamBrief } from "../rights-ui/team-sentence";
 import { AccessSectionsCard } from "../rights-ui/AccessSectionsCard";
 import { MasterPersonalBlocks, MasterWorkBlock } from "./MasterProfileBlocks";
+import { seenLine } from "./partner-facts";
 import { EmployeeNoteBlock } from "./EmployeeNoteBlock";
 import { contactsHolderOf, useMasterProfileWrite } from "./use-profile-write";
 import { rightsFocusQuery } from "./rights-focus";
@@ -105,6 +109,7 @@ export function MasterMemberCard({
   const preview = usePreview();
   const [nameText, setNameText] = useState<string | null>(null);
   const [calendarsOpen, setCalendarsOpen] = useState(false);
+  const [menu, setMenu] = useState<ActionMenu | null>(null);
   // КОМАНДА, ЧЬИ ПРАВА НА СТРАНИЦЕ (лента под шапкой). Первой — та, из
   // которой открыли; её нет среди его команд — первая из них.
   const [activeTeam, setActiveTeam] = useState<string | null>(teamId);
@@ -177,7 +182,7 @@ export function MasterMemberCard({
   const identity = {
     name: nameText ?? name,
     email: member?.email ?? "",
-    phone: formatPhoneAsYouType(card?.phone ?? member?.phone ?? ""),
+    phone: formatPhoneAsYouType(card?.phone || member?.phone || ""),
     title: card?.title ?? "",
     color: card?.color ?? null,
   };
@@ -324,39 +329,13 @@ export function MasterMemberCard({
   };
 
   const isStaff = member?.role === "master" || member?.role === "dispatcher";
-  // «Убрать из компании», а не «из календаря»: членство одно на компанию, а
-  // открепить от одного календаря приложение ещё не умеет. Слово не обещает
-  // меньше, чем будет.
-  // ⋯ — ТО, ЧЕГО НЕТ В БЛОКАХ СТРАНИЦЫ (STORY-087): архив карточки и уход из
-  // компании. «Посмотреть его глазами» переехало строкой в блок «Доступ».
-  const openMenu = async () => {
+  // «УБРАТЬ ИЗ КОМАНД» (04.10: компаний нет — аккаунт и команды): членство
+  // одно на аккаунт, и уходит человек разом из всех ваших команд. Слово не
+  // обещает меньше, чем будет.
+  const askRemove = () => {
     if (!member) return;
-    Keyboard.dismiss();
-    const options = [
-      ...(card
-        ? [
-            {
-              label: card.is_active ? "В архив" : "Вернуть из архива",
-              run: () => {
-                patchCard({ is_active: !card.is_active });
-                toast(card.is_active ? "Мастер в архиве — в выборе команды его нет" : "Мастер снова в работе");
-              },
-            },
-          ]
-        : []),
-    ];
-    const picked = await chooseOption(member.name, [
-      ...options.map((option) => ({ label: option.label })),
-      { label: "Убрать из компании", destructive: true },
-    ]);
-    if (picked === null) return;
-    if (picked < options.length) {
-      options[picked].run();
-      return;
-    }
-    await waitSheetExit();
     confirmThen(
-      `Убрать ${member.name} из компании?`,
+      `Убрать ${member.name} из команд?`,
       {
         // ВОПРОС НАЗЫВАЕТ ЦИФРУ. Владельца держит не «пропадёт доступ», а то,
         // что на четверг у человека три выезда: убрал в среду — узнал от
@@ -371,13 +350,41 @@ export function MasterMemberCard({
         try {
           await remove.mutateAsync(member.userId);
           void qc.invalidateQueries({ queryKey: ["calendar-members"] });
-          toast(`${member.name} больше не в компании`);
+          toast(`${member.name} больше не в ваших командах`);
           onBack();
         } catch (error) {
-          notify("Не удалось убрать из компании", (error as Error).message);
+          notify("Не удалось убрать из команд", (error as Error).message);
         }
       },
     );
+  };
+  // ⋯ — ТО, ЧЕГО НЕТ В БЛОКАХ СТРАНИЦЫ (STORY-087): архив карточки и уход из
+  // команд. Шторкой действий, как у записи и документа (04.10), а не
+  // системным списком. «Посмотреть его глазами» — строкой в блоке «Доступ».
+  const openMenu = () => {
+    if (!member) return;
+    Keyboard.dismiss();
+    haptics.tap();
+    setMenu({
+      title: member.name,
+      subtitle: member.email || undefined,
+      items: [
+        ...(card
+          ? [
+              {
+                label: card.is_active ? "В архив" : "Вернуть из архива",
+                icon: card.is_active ? Archive : ArchiveRestore,
+                color: card.is_active ? SETTINGS_TILE.yellow : SETTINGS_TILE.green,
+                run: () => {
+                  patchCard({ is_active: !card.is_active });
+                  toast(card.is_active ? "Партнёр в архиве — в выборе команды его нет" : "Партнёр снова в работе");
+                },
+              },
+            ]
+          : []),
+        { label: "Убрать из команд", destructive: true, run: askRemove },
+      ],
+    });
   };
 
   return (
@@ -387,10 +394,12 @@ export function MasterMemberCard({
         onBack={back}
         headerRight={
         member && isStaff && manager.canRemove ? (
-          <HeaderMenuButton label="Действия с партнёром" onPress={() => void openMenu()} />
+          <HeaderMenuButton label="Действия с партнёром" onPress={openMenu} />
         ) : undefined
         }
         identity={identity}
+        // Живой ли аккаунт — когда он последний раз был в приложении (04.10).
+        accountSeen={member ? seenLine(member.lastSeenAt, new Date()) : undefined}
         live={false}
         editable={card !== null && !manager.readOnly}
         emailEditable={false}
@@ -438,7 +447,7 @@ export function MasterMemberCard({
         }
         onDetachCalendar={manager.readOnly ? undefined : (id) => void toggleCalendar(id)}
         phoneAction={
-          identity.phone ? <PhoneChannelButton number={card?.phone ?? member?.phone ?? ""} label={name} /> : undefined
+          identity.phone ? <PhoneChannelButton number={card?.phone || member?.phone || ""} label={name} /> : undefined
         }
         contacts={
           card
@@ -485,13 +494,14 @@ export function MasterMemberCard({
       >
         {card ? (
           <>
-            <MasterWorkBlock card={card} teamIds={draft.teamIds} />
+            <MasterWorkBlock card={card} teamIds={draft.teamIds} userId={userId} />
             {/* Журнала «Номера клиентов» больше нет (03.10): номер приходит
                 целиком с блоком «Клиент», открытий по одному не бывает. */}
-            <MasterPersonalBlocks card={card} />
+            <MasterPersonalBlocks card={card} joinedAt={member?.joinedAt ?? null} />
           </>
         ) : null}
       </MasterCardView>
+      <ActionMenuSheet menu={menu} onClose={() => setMenu(null)} />
       <CalendarPickerSheet
         visible={calendarsOpen}
         teams={teamsAllowed ? teams.filter((team) => teamsAllowed.has(team.id) || draft.teamIds.includes(team.id)) : teams}

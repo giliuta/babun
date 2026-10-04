@@ -175,12 +175,19 @@ export function sectionBrief(section: Pick<ViewSection, "rows">): string {
   const open = section.rows.filter((row) => !row.foldedBy && !isClosedStep(row.level));
   if (open.length === 0) return "Всё закрыто";
   if (open.length === section.rows.length) return "Всё открыто";
-  return open
-    .map((row, i) => {
-      const title = briefTitle(row.block);
-      // Аббревиатура остаётся заглавной: «sMS» в подписи «Кабинета» (04.10).
-      const acronym = /^[A-ZА-ЯЁ]{2}/.test(title);
-      return i === 0 || acronym ? title : title.charAt(0).toLowerCase() + title.slice(1);
-    })
-    .join(", ");
+  const titles = open.map((row, i) => {
+    const title = briefTitle(row.block);
+    // Аббревиатура остаётся заглавной: «sMS» в подписи «Кабинета» (04.10).
+    const acronym = /^[A-ZА-ЯЁ]{2}/.test(title);
+    return i === 0 || acronym ? title : title.charAt(0).toLowerCase() + title.slice(1);
+  });
+  // ДЛИННЫЙ СПИСОК — ДВА ИМЕНИ И ЧИСЛО (04.10): подпись в одну строку
+  // обрывалась на полуслове, и последнее открытое не читалось вовсе.
+  if (titles.length > BRIEF_NAMES + 1) {
+    return `${titles.slice(0, BRIEF_NAMES).join(", ")} и ещё ${titles.length - BRIEF_NAMES}`;
+  }
+  return titles.join(", ");
 }
+
+/** Сколько имён прав подпись раздела называет до «и ещё N». */
+const BRIEF_NAMES = 2;

@@ -115,3 +115,51 @@ export function useChangeLogToday() {
     },
   });
 }
+
+/** ЧТО ДЕЛАЛ ОДИН ЧЕЛОВЕК — подпись строки «История изменений» на странице
+ *  партнёра (04.10): сколько его правок сегодня и когда была последняя. Те
+ *  же права чтения, что у журнала. */
+export function useActorChanges(actorId: string | null) {
+  const { tenantId, client, enabled, visible } = useHistoryReader();
+  const select = useCallback(
+    (data: { today: TodayRow[]; recent: TodayRow[] }) => {
+      const recent = data.recent.filter(visible);
+      return { today: data.today.filter(visible).length, lastAt: recent[0]?.created_at ?? null };
+    },
+    [visible],
+  );
+  return useQuery({
+    queryKey: [...changeLogKey(tenantId), "actor", actorId],
+    enabled: enabled && !!actorId,
+    staleTime: 30_000,
+    select,
+    queryFn: async (): Promise<{ today: TodayRow[]; recent: TodayRow[] }> => {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const [today, recent] = await Promise.all([
+        client
+          .from("change_log")
+          .select("team_id, entity, created_at")
+          .eq("tenant_id", tenantId as string)
+          .eq("actor_id", actorId as string)
+          .gte("created_at", start.toISOString())
+          .limit(PAGE),
+        client
+          .from("change_log")
+          .select("team_id, entity, created_at")
+          .eq("tenant_id", tenantId as string)
+          .eq("actor_id", actorId as string)
+          .order("id", { ascending: false })
+          .limit(20),
+      ]);
+      if (today.error) throw new Error(`change_log: ${today.error.message}`);
+      if (recent.error) throw new Error(`change_log: ${recent.error.message}`);
+      return { today: (today.data ?? []) as TodayRow[], recent: (recent.data ?? []) as TodayRow[] };
+    },
+  });
+}
+
+/** Журнал открыт тому, кто смотрит? Без права строки на странице партнёра нет. */
+export function useCanReadHistory(): boolean {
+  return useHistoryReader().enabled;
+}

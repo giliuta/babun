@@ -1,7 +1,7 @@
 import { View } from "react-native";
 import { Check, MailCheck, Send, UserRound, type LucideIcon } from "lucide-react-native";
 
-import { FieldRow } from "@/components/ui/card-rows";
+import { FieldRow, NavRow } from "@/components/ui/card-rows";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { GUTTER } from "@/components/ui/tokens";
@@ -65,6 +65,7 @@ type IdentityProps = Pick<
   | "onPhoneChange"
   | "onPhoneEditEnd"
   | "phoneAction"
+  | "accountSeen"
   | "access"
   | "contacts"
 >;
@@ -187,6 +188,9 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
             onSave={p.onEmailChange ?? noop}
           />
         )}
+
+        {/* Показание, а не дверь: когда он последний раз был в приложении. */}
+        {p.accountSeen ? <NavRow label="В приложении" value={p.accountSeen} separated /> : null}
 
         {p.contacts ? (
           <ClientExtraContacts
