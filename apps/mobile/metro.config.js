@@ -74,4 +74,17 @@ const i18nPrint = crypto.createHash("sha1");
 for (const file of i18nInputs) i18nPrint.update(fs.readFileSync(path.join(projectRoot, file)));
 config.cacheVersion = `${config.cacheVersion ?? ""}:i18n-${i18nPrint.digest("hex").slice(0, 12)}`;
 
+// ВСЁ В ОДНОЙ ПАПКЕ (владелец 04.10): рабочие копии параллельных сессий живут
+// внутри репозитория, в `.claude/worktrees/` (в git их нет — `.gitignore`).
+// Metro смотрит весь монорепозиторий и без запрета обходил бы чужие копии с их
+// `node_modules`: два экземпляра модулей в одном бандле. Запрет — от корня
+// ЭТОЙ копии, поэтому Metro самой вложенной копии свои файлы видит.
+const worktreesDir = path.join(path.resolve(projectRoot, "../.."), ".claude", "worktrees");
+const worktreesBlock = new RegExp(`^${worktreesDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/.*`);
+const blockList = config.resolver.blockList;
+config.resolver.blockList = [
+  ...(Array.isArray(blockList) ? blockList : blockList ? [blockList] : []),
+  worktreesBlock,
+];
+
 module.exports = config;
