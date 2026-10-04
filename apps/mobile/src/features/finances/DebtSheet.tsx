@@ -388,6 +388,16 @@ export function DebtSheet({
       <PickerSheet
         visible={categoryOpen}
         title="Категория долга"
+        // Пустой лист говорит, где заводят категории, — как у операции.
+        // Без этой строки лист долга открывался немым: заголовок и пустота
+        // (04.10, у AirFix ни одной категории долгов).
+        subtitle={
+          cats.length > 0
+            ? undefined
+            : categoriesLevelOf(debtTeamId)[CATEGORY_KIND_ROW.debt] === "write"
+              ? "Категорий нет — создайте их (значок справа)"
+              : "Категорий пока нет"
+        }
         items={cats.map((c) => ({
           id: c.id,
           label: c.name,
