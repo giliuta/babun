@@ -1492,3 +1492,92 @@ describe("replayer — вид только для чтения", () => {
     expect(calls.some((c) => c.table === "appointments" && c.op === "update")).toBe(true);
   });
 });
+
+// ─── Выход из аккаунта и слив без входа (аудит 04.10) ─────────────────
+// После выхода хост гасит компанию (`forgetActiveTenantId`), а гейт брал
+// вместо неё снимок с запуска — и слив шёл дальше без входа. Аноним по RLS не
+// видит ни строки: удаление находило ноль строк, проверка видимости — тоже, и
+// операция снималась как «уже удалено». Человек входил снова: очередь пуста,
+// удалённая запись на месте.
+describe("replayer — выход из аккаунта", () => {
+  const queueDelete = (id: string) =>
+    enqueueOp({
+      table: "appointments",
+      op: "delete",
+      row_id: id,
+      payload: { id, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+  const withSession = (client: unknown, session: unknown) => ({
+    ...(client as Record<string, unknown>),
+    auth: { getSession: async () => ({ data: { session } }) },
+  });
+
+  test("живое чтение ответило «компании нет» — снимок с запуска его не подменяет, очередь ждёт", async () => {
+    await queueDelete(UUID_A);
+    const { client, calls } = makeFakeSupabase(() => ({ data: [], error: null }));
+
+    await kickReplayer({
+      supabase: asSupabase(client),
+      tenantId: TENANT,
+      currentTenantId: () => null,
+    });
+
+    expect(calls).toHaveLength(0);
+    expect(await queueDepth()).toBe(1);
+  });
+
+  test("сессии нет — ни одного запроса анонимом, операция цела", async () => {
+    await queueDelete(UUID_A);
+    const { client, calls } = makeFakeSupabase(() => ({ data: [], error: null }));
+
+    await kickReplayer({
+      supabase: asSupabase(withSession(client, null)),
+      currentTenantId: () => TENANT,
+    });
+
+    expect(calls).toHaveLength(0);
+    const [left] = await dequeueAll();
+    expect(left?.attempts).toBe(0);
+  });
+
+  test("вход есть — удаление уходит, как раньше", async () => {
+    await queueDelete(UUID_A);
+    const { client, calls } = makeFakeSupabase((rec) =>
+      rec.op === "delete" ? { data: [{ id: UUID_A }], error: null } : { data: null, error: null },
+    );
+
+    await kickReplayer({
+      supabase: asSupabase(withSession(client, { access_token: "t" })),
+      currentTenantId: () => TENANT,
+    });
+
+    expect(calls.filter((c) => c.op === "delete")).toHaveLength(1);
+    expect(await queueDepth()).toBe(0);
+  });
+
+  test("вышли посреди слива — следующая операция не уходит", async () => {
+    await queueDelete(UUID_A);
+    await queueDelete(UUID_B);
+    let signedOut = false;
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "delete") {
+        // Первое удаление прошло, и в этот миг пришёл SIGNED_OUT.
+        signedOut = true;
+        return { data: [{ id: rec.filters.id }], error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    await kickReplayer({
+      supabase: asSupabase(client),
+      tenantId: TENANT,
+      currentTenantId: () => (signedOut ? null : TENANT),
+    });
+
+    expect(calls.filter((c) => c.op === "delete")).toHaveLength(1);
+    const left = await dequeueAll();
+    expect(left.map((o) => o.row_id)).toEqual([UUID_B]);
+    expect(left[0]?.attempts).toBe(0);
+  });
+});

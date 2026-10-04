@@ -20,6 +20,7 @@
 
 import { onlineManager } from "@tanstack/react-query";
 import {
+  cancelReplayerRetry,
   kickReplayer,
   setReplayerDefaults,
   setSyncToast,
@@ -116,7 +117,13 @@ export function startSyncRuntime(tenantId: string): () => void {
     unsubscribe = null;
     started = false;
     activeTenantId = null;
-    setReplayerDefaults(null);
+    // ОСТАНОВКА ГАСИТ ВЫГРУЗКУ, НО НЕ ГЕЙТ — как пауза ниже (аудит 04.10).
+    // Рантайм останавливается и на выходе из аккаунта, а обёртки кэша зовут
+    // `kickReplayer` напрямую: с обнулёнными умолчаниями такой заход сливал
+    // очередь вовсе без проверки компании — и уже без входа. Взведённый
+    // повтор слива гасим: он держит опции запуска.
+    cancelReplayerRetry();
+    setReplayerDefaults({ currentTenantId: getActiveTenantId });
     setSyncToast(() => {});
   };
 }
@@ -138,6 +145,7 @@ export function pauseSyncRuntimeForTenantSwitch(): () => void {
   // заход посреди паузы сливал очередь вообще без проверок — ровно в ту
   // минуту, когда компания меняется. Живое чтение компании умолчаний не
   // требует: оно смотрит на устройство, а не на рантайм.
+  cancelReplayerRetry();
   setReplayerDefaults({ currentTenantId: getActiveTenantId });
   setSyncToast(() => {});
   return () => {
