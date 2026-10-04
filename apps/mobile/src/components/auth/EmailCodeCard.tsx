@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { AppState, Text, TextInput } from "react-native";
-import * as Linking from "expo-linking";
 import { AuthCard, FormError, GhostLink, PillButton } from "@/components/auth/AuthCard";
 import { CodeInput, EMAIL_CODE_LENGTH } from "@/components/auth/CodeInput";
 import { mapAuthError } from "@/components/auth/authErrors";
@@ -11,6 +10,12 @@ import { supabase } from "@/lib/supabase";
  *  ссылке (сервер Supabase), а вход из ссылки берёт экран входа веба Babun
  *  (`useSessionFromEmailLink`). */
 export const SIGNUP_LINK_REDIRECT = "https://babun.app/login";
+
+/** Куда ведёт кнопка письма сброса пароля. Веб-страница, а не babun://:
+ *  кнопку жмут и на компьютере, где адрес приложения открыть некому —
+ *  Chrome показывал белую страницу (владелец 04.10). Страница нового пароля
+ *  на babun.app работает везде, код из письма — в приложении. */
+export const RECOVERY_LINK_REDIRECT = "https://babun.app/reset-password";
 
 const RESEND_COOLDOWN_S = 45;
 
@@ -103,7 +108,7 @@ export function EmailCodeCard({
             options: { emailRedirectTo: SIGNUP_LINK_REDIRECT },
           })
         : await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: Linking.createURL("/reset-password"),
+            redirectTo: RECOVERY_LINK_REDIRECT,
           });
     setResending(false);
     if (e) {

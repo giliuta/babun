@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
-import * as Linking from "expo-linking";
 import {
   AuthCard,
   AuthField,
@@ -9,6 +8,7 @@ import {
   InputCard,
   PillButton,
 } from "@/components/auth/AuthCard";
+import { RECOVERY_LINK_REDIRECT } from "@/components/auth/EmailCodeCard";
 import { supabase } from "@/lib/supabase";
 
 // «Сброс пароля»: почта → код из письма Babun (владелец 04.10: «сброс пароля
@@ -26,7 +26,7 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     setError(null);
     const { error: e } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: Linking.createURL("/reset-password"),
+      redirectTo: RECOVERY_LINK_REDIRECT,
     });
     setLoading(false);
     if (e) {
