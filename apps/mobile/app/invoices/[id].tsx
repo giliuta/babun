@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { MoreHorizontal, Share2 } from "lucide-react-native";
@@ -51,7 +51,7 @@ import { useCurrentRole, useTenant } from "@/features/settings/tenant";
 import { accessGate } from "@/features/access/my-access";
 import { useMyAccess } from "@/features/access/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { useReceipts } from "@/features/documents/receipts-queries";
+import { useReceipt, useReceipts } from "@/features/documents/receipts-queries";
 import { DocumentLinkBlocks } from "@/features/documents/DocumentLinkBlocks";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -60,7 +60,11 @@ import { useThemeColors } from "@/theme/colors";
 export default function InvoiceDetailScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, action } = useLocalSearchParams<{ id: string; action?: string }>();
+  // ДЕЙСТВИЕ ИЗ МЕНЮ СПИСКА (04.10: долгое нажатие в «Документах» — «Поделиться
+  // PDF», «Принять оплату», «Выписать чек»): страница открывается и делает его
+  // сама, один раз, когда всё нужное загружено.
+  const pendingAction = useRef<string | null>(action ?? null);
   const invoice = useInvoice(id);
   const clientsQuery = useClients();
   const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
@@ -90,9 +94,14 @@ export default function InvoiceDetailScreen() {
   // Кредит-нота печатается кредит-нотой со ссылкой на отменённый инвойс —
   // на странице, в PDF и в тексте одинаково (аудит 03.10).
   const creditNoteOfId = creditLinks.data?.originalByNoteId.get(id) ?? null;
+  // Кредит-нота к ЧЕКУ (возврат по чеку, 04.10) ссылается на чек, а не на
+  // инвойс: номер — его.
+  const noteReceipt = useReceipt(invoice.data?.credit_note_of_receipt_id ?? null).data ?? null;
   const creditNote = creditNoteOfId
     ? { originalNumber: numberById.get(creditNoteOfId) ?? null }
-    : null;
+    : invoice.data?.kind === "credit_note"
+      ? { originalNumber: noteReceipt?.number ?? null, ofReceipt: true }
+      : null;
   const pay = useRecordInvoicePayment(id);
   const refund = useRefundInvoicePayment(id);
   const invoiceMenu = useInvoiceMenu();
@@ -268,7 +277,7 @@ export default function InvoiceDetailScreen() {
   // Кредит-нота — не инвойс: не оплачивается, не редактируется и не
   // отменяется, а честно называет себя и ссылается на сторнированный документ.
   const stornoOfId = creditLinks.data?.originalByNoteId.get(row.id) ?? null;
-  const isCreditNote = stornoOfId != null;
+  const isCreditNote = stornoOfId != null || row.kind === "credit_note";
   const creditNoteId = creditLinks.data?.noteByInvoiceId.get(row.id) ?? null;
   const invoiceById = (target: string | null) =>
     target ? ((invoicesQuery.data ?? []).find((item) => item.id === target) ?? null) : null;
@@ -311,6 +320,16 @@ export default function InvoiceDetailScreen() {
       setTimeout(() => setAccountCreateOpen(true), SHEET_EXIT_MS + 350);
     });
   };
+
+  if (pendingAction.current && receiptsQuery.isSuccess) {
+    const next = pendingAction.current;
+    pendingAction.current = null;
+    setTimeout(() => {
+      if (next === "share") void sharePdf();
+      else if (next === "pay" && owner && awaitsPayment) openPayment();
+      else if (next === "receipt") issueReceipts();
+    }, 450);
+  }
 
   const openLinkedAppointment = () => {
     if (!appointment) return;
@@ -456,6 +475,7 @@ export default function InvoiceDetailScreen() {
           onOpenAppointment={openLinkedAppointment}
           documents={[
             ...(stornoOfInvoice ? [{ type: "invoice" as const, item: stornoOfInvoice }] : []),
+            ...(noteReceipt ? [{ type: "receipt" as const, item: noteReceipt }] : []),
             ...(creditNoteInvoice ? [{ type: "invoice" as const, item: creditNoteInvoice }] : []),
             ...(isCreditNote ? [] : receipts.map((receipt) => ({ type: "receipt" as const, item: receipt }))),
           ]}

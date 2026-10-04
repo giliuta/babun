@@ -2143,6 +2143,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           credit_note_of_id: string | null
+          credit_note_of_receipt_id: string | null
           currency: string
           due_on: string | null
           id: string
@@ -2177,6 +2178,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           credit_note_of_id?: string | null
+          credit_note_of_receipt_id?: string | null
           currency?: string
           due_on?: string | null
           id?: string
@@ -2211,6 +2213,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           credit_note_of_id?: string | null
+          credit_note_of_receipt_id?: string | null
           currency?: string
           due_on?: string | null
           id?: string
@@ -4996,6 +4999,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      refund_receipt: {
+        Args: {
+          p_amount: number
+          p_language?: string
+          p_reason?: string
+          p_receipt_id: string
+          p_request_id: string
+        }
+        Returns: Database["public"]["Tables"]["invoices"]["Row"]
       }
       refund_invoice_payment: {
         Args: {

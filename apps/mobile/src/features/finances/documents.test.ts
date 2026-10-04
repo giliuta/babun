@@ -346,3 +346,31 @@ describe("кредит-нота в «Документах»", () => {
     assert.equal(filter(docs, "invoice", "CN-2026-001").length, 1);
   });
 });
+
+describe("возврат по чеку в «Документах» (04.10)", () => {
+  test("погашен возвратом — «Возвращён», частично — «Частично возвращён», номер ноты ищет чек", () => {
+    const note = (id: string, receiptId: string, number: string) =>
+      invoice({
+        id,
+        number,
+        kind: "credit_note",
+        credit_note_of_receipt_id: receiptId,
+        total: -10,
+      } as never);
+    const docs = collectDocuments(
+      sources({
+        invoices: [note("n1", "full", "CN-2026-010"), note("n2", "part", "CN-2026-011")],
+        receipts: [
+          receipt({ id: "full", number: "RC-2026-001", status: "void" }),
+          receipt({ id: "part", number: "RC-2026-002" }),
+          receipt({ id: "dead", number: "RC-2026-003", status: "void" }),
+        ],
+      }),
+    );
+    assert.equal(docs.find((d) => d.id === "full")?.state, "Возвращён");
+    assert.equal(docs.find((d) => d.id === "part")?.state, "Частично возвращён");
+    assert.equal(docs.find((d) => d.id === "dead")?.state, "Аннулирован");
+    assert.equal(docs.some((d) => d.id === "n1" || d.id === "n2"), false);
+    assert.equal(filterDocuments(docs, "receipt", "CN-2026-011").length, 1);
+  });
+});

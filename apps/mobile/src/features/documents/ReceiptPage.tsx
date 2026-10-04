@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { MoreHorizontal, Share2 } from "lucide-react-native";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -12,6 +12,7 @@ import { ICON } from "@/components/ui/tokens";
 import { humanDay } from "@/features/appointments/helpers";
 import { useClients } from "@/features/clients/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
+import { useInvoices } from "@/features/invoices/queries";
 import { openReceiptMenu, receiptCanEdit } from "./receipt-menu";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
@@ -35,7 +36,11 @@ export function ReceiptPage({ id }: { id: string }) {
   const accounts = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
   const paper = useIssuedReceiptDoc(receipt);
   const clients = useClients();
+  const invoices = useInvoices();
   const [pdfBusy, setPdfBusy] = useState(false);
+  // «Поделиться PDF» из меню списка (04.10) — один раз, когда бумага готова.
+  const { action } = useLocalSearchParams<{ action?: string }>();
+  const pendingAction = useRef<string | null>(action ?? null);
 
   if (!receipt) {
     return (
@@ -62,6 +67,15 @@ export function ReceiptPage({ id }: { id: string }) {
   const appointment = paper.appointment;
   const client = (clients.data ?? []).find((c) => c.id === receipt.client_id) ?? null;
   const invoice = paper.invoice;
+  // КРЕДИТ-НОТЫ ВОЗВРАТА (04.10) — к самому чеку или к его инвойсу: «вернули
+  // деньги — документ закреплён за чеком».
+  const notes = (invoices.data ?? []).filter(
+    (item) =>
+      item.kind === "credit_note" &&
+      (item.credit_note_of_receipt_id === receipt.id ||
+        (!!receipt.invoice_id && item.credit_note_of_id === receipt.invoice_id)),
+  );
+  const returned = notes.length > 0;
   const canEdit = receiptCanEdit(receipt);
 
   const sharePdf = async () => {
@@ -85,6 +99,11 @@ export function ReceiptPage({ id }: { id: string }) {
   // (владелец 04.10: «поделиться и прочее — лишнее»): значок в шапке и
   // кнопка внизу уже делятся PDF.
   const openMenu = () => void openReceiptMenu(receipt, router);
+
+  if (pendingAction.current === "share" && paper.doc && !paper.linesLoading) {
+    pendingAction.current = null;
+    setTimeout(() => void sharePdf(), 450);
+  }
 
   const openAppointment = () => {
     if (!appointment) return;
@@ -135,7 +154,14 @@ export function ReceiptPage({ id }: { id: string }) {
         <View style={{ paddingHorizontal: 16, gap: 12, marginBottom: 4 }}>
           {/* Статус — одной строкой над бумагой, как у инвойса. */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Badge label={dead ? "Аннулирован" : "Выписан"} variant={dead ? "danger" : "success"} />
+            <Badge
+              label={
+                dead
+                  ? returned ? "Возвращён" : "Аннулирован"
+                  : returned ? "Частично возвращён" : "Выписан"
+              }
+              variant={dead ? "danger" : returned ? "warning" : "success"}
+            />
             <Text className="text-sm" style={{ color: t.sub }}>
               {humanDay(receipt.issued_on)}
             </Text>
@@ -150,8 +176,11 @@ export function ReceiptPage({ id }: { id: string }) {
           locationId={receipt.location_id ?? null}
           appointment={appointment}
           onOpenAppointment={openAppointment}
-          documents={invoice ? [{ type: "invoice", item: invoice }] : []}
-          documentsTitle="Инвойс"
+          documents={[
+            ...(invoice ? [{ type: "invoice" as const, item: invoice }] : []),
+            ...notes.map((note) => ({ type: "invoice" as const, item: note })),
+          ]}
+          documentsTitle="Документы"
           account={account}
         />
       </ScrollView>

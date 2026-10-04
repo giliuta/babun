@@ -84,7 +84,11 @@ export function ClientFileRow({
     case "invoice": {
       // Отменённый (кредит-нотой) или аннулированный — серым, со словом.
       const dead = entry.item.status === "cancelled" || entry.item.status === "void";
-      title = `Инвойс ${entry.item.number}`;
+      // Кредит-нота называет себя (на страницах инвойса и чека она — плашкой).
+      title =
+        entry.item.kind === "credit_note"
+          ? `Кредит-нота ${entry.item.number}`
+          : `Инвойс ${entry.item.number}`;
       subtitle = dead
         ? [time, entry.item.status === "void" ? "Аннулирован" : "Отменён"].filter(Boolean).join(" · ")
         : time;

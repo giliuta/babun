@@ -1,5 +1,11 @@
 import { useMemo, useRef, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   calculateInvoiceSettlement,
@@ -47,7 +53,9 @@ export default function CreditNoteScreen() {
   const calendarSettings = useCalendarSettings();
   // Дату ноты ставит сервер (`tenant_business_date`); превью — тот же день
   // компании по её часовому поясу.
-  const businessToday = todayYmd(calendarSettings.data?.timezone ?? "Europe/Nicosia");
+  const businessToday = todayYmd(
+    calendarSettings.data?.timezone ?? "Europe/Nicosia",
+  );
   const cancel = useCancelInvoice(invoiceId ?? "");
   const [reason, setReason] = useState("");
   const [language, setLanguage] = useState<InvoiceLanguage | null>(null);
@@ -65,7 +73,8 @@ export default function CreditNoteScreen() {
   // По умолчанию — английский (владелец 04.10: «делай пока что всё на
   // английском»); русский — разовым выбором в превью.
   const paperLanguage: InvoiceLanguage = language ?? "en";
-  const client = (clients.data ?? []).find((c) => c.id === row?.client_id) ?? null;
+  const client =
+    (clients.data ?? []).find((c) => c.id === row?.client_id) ?? null;
 
   // Черновик ноты — тот самый документ, что сервер соберёт из инвойса: суммы
   // с минусом, без строк (бумага печатает одну строку «к инвойсу …»).
@@ -95,7 +104,15 @@ export default function CreditNoteScreen() {
       language: paperLanguage,
       creditNote: { originalNumber: row.number },
     });
-  }, [row, series.data, reason, tenant.data, client, paperLanguage, businessToday]);
+  }, [
+    row,
+    series.data,
+    reason,
+    tenant.data,
+    client,
+    paperLanguage,
+    businessToday,
+  ]);
 
   if (!row) {
     return (
@@ -118,7 +135,9 @@ export default function CreditNoteScreen() {
       // Язык — вторым шагом, как у инвойса: сервер копирует язык инвойса.
       // Не записался — нота остаётся на языке инвойса и меняется в «⋯».
       if (paperLanguage !== row.language) {
-        await setInvoiceLanguage(supabase, note.id, paperLanguage).catch(() => undefined);
+        await setInvoiceLanguage(supabase, note.id, paperLanguage).catch(
+          () => undefined,
+        );
       }
       haptics.success();
       issued.current = note.id;
@@ -131,71 +150,97 @@ export default function CreditNoteScreen() {
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title={`Кредит-нота к ${row.number}`} />
-      <ScrollView contentContainerStyle={{ paddingTop: 6, paddingBottom: 32, gap: 6 }}>
-        <InvoiceRequisitesBlock
-          companyId={row.company_id ?? null}
-          onCompanyChange={() => {}}
-          locked
-          number={
-            row.company_id
-              ? {
-                  companyId: row.company_id,
-                  year: row.year,
-                  next: series.data ? { ...series.data, canSetStart: false } : null,
-                }
-              : undefined
-          }
-        />
-
-        {/* ЧТО ОТМЕНЯЕТСЯ — плашкой инвойса и блоком клиента, как на страницах
-            документов. Закреплена нота будет за этим инвойсом. */}
-        <DocumentLinkBlocks
-          client={client}
-          documents={[{ type: "invoice", item: row }]}
-          documentsTitle="Отменяет"
-        />
-
-        {/* СУММА — ВСЯ, С МИНУСОМ: нота сторнирует инвойс целиком. */}
-        <SectionCard title="Сумма">
-          <View className="flex-row items-center justify-between px-4 pb-3 pt-2">
-            <Text style={{ fontSize: 17, fontWeight: "600", color: t.ink }}>Итого</Text>
-            <Text
-              style={{ fontSize: 20, fontWeight: "700", color: t.ink, fontVariant: ["tabular-nums"] }}
-            >
-              {amount}
-            </Text>
-          </View>
-        </SectionCard>
-
-        <SectionCard title="Причина">
-          <FieldRow
-            label="Причина"
-            hideLabel
-            stacked
-            live
-            multiline
-            value={reason}
-            placeholder={`Отмена инвойса ${row.number}`}
-            onSave={setReason}
-          />
-        </SectionCard>
-      </ScrollView>
-
-      <View
-        className="px-4 pb-7 pt-3"
-        style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
+      {/* Кнопка внизу поднимается над клавиатурой, прокрутка её убирает. */}
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <GradientButton
-          label={`Выписать кредит-ноту · ${amount}`}
-          disabled={!series.data}
-          onPress={() => setPreviewOpen(true)}
-        />
-        {series.error ? (
-          <Text className="mt-2 text-center text-sm" style={{ color: t.danger }}>
-            {tDynamic((series.error as Error).message)}
-          </Text>
-        ) : null}
-      </View>
+        <ScrollView
+          contentContainerStyle={{ paddingTop: 6, paddingBottom: 32, gap: 6 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          <InvoiceRequisitesBlock
+            companyId={row.company_id ?? null}
+            onCompanyChange={() => {}}
+            locked
+            number={
+              row.company_id
+                ? {
+                    companyId: row.company_id,
+                    year: row.year,
+                    next: series.data
+                      ? { ...series.data, canSetStart: false }
+                      : null,
+                  }
+                : undefined
+            }
+          />
+
+          {/* ЧТО ОТМЕНЯЕТСЯ — плашкой инвойса и блоком клиента, как на страницах
+            документов. Закреплена нота будет за этим инвойсом. */}
+          <DocumentLinkBlocks
+            client={client}
+            documents={[{ type: "invoice", item: row }]}
+            documentsTitle="Отменяет"
+          />
+
+          {/* СУММА — ВСЯ, С МИНУСОМ: нота сторнирует инвойс целиком. */}
+          <SectionCard title="Сумма">
+            <View className="flex-row items-center justify-between px-4 pb-3 pt-2">
+              <Text style={{ fontSize: 17, fontWeight: "600", color: t.ink }}>
+                Итого
+              </Text>
+              <Text
+                style={{
+                  fontSize: 20,
+                  fontWeight: "700",
+                  color: t.ink,
+                  fontVariant: ["tabular-nums"],
+                }}
+              >
+                {amount}
+              </Text>
+            </View>
+          </SectionCard>
+
+          <SectionCard title="Причина">
+            <FieldRow
+              label="Причина"
+              hideLabel
+              stacked
+              live
+              multiline
+              value={reason}
+              placeholder={`Отмена инвойса ${row.number}`}
+              onSave={setReason}
+            />
+          </SectionCard>
+        </ScrollView>
+
+        <View
+          className="px-4 pb-7 pt-3"
+          style={{
+            backgroundColor: t.surface,
+            borderTopWidth: 1,
+            borderTopColor: t.separator,
+          }}
+        >
+          <GradientButton
+            label={`Выписать кредит-ноту · ${amount}`}
+            disabled={!series.data}
+            onPress={() => setPreviewOpen(true)}
+          />
+          {series.error ? (
+            <Text
+              className="mt-2 text-center text-sm"
+              style={{ color: t.danger }}
+            >
+              {tDynamic((series.error as Error).message)}
+            </Text>
+          ) : null}
+        </View>
+      </KeyboardAvoidingView>
 
       <InvoicePreviewSheet
         visible={previewOpen}
@@ -210,7 +255,8 @@ export default function CreditNoteScreen() {
         onClose={() => setPreviewOpen(false)}
         // Выписанная нота открывается своей страницей, когда лист уехал.
         onExited={() => {
-          if (issued.current) router.replace(`/invoices/${issued.current}` as Href);
+          if (issued.current)
+            router.replace(`/invoices/${issued.current}` as Href);
         }}
       />
     </Screen>

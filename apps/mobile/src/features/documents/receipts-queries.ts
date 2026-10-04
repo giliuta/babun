@@ -8,7 +8,8 @@ import type {
   Receipt,
   ReceiptLineSnapshot,
 } from "@babun/shared/local/finance/receipt";
-import { useInsertTransaction } from "@/features/finances/queries";
+import { invalidateLedger, useInsertTransaction } from "@/features/finances/queries";
+import { randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
@@ -261,6 +262,39 @@ export function useUpdateReceipt() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["receipts"] });
     },
+    meta: { errorHandled: true },
+  });
+}
+
+/**
+ * ВОЗВРАТ ПО ЧЕКУ — ДЕНЬГИ И КРЕДИТ-НОТА ОДНИМ ДВИЖЕНИЕМ (владелец 2026-10-04:
+ * «вернули деньги — нужен документ»). Сервер (`refund_receipt`) пишет возврат
+ * и выписывает ноту: к чеку — на сумму возврата, к инвойсу — целиком.
+ * Возвращает выписанную кредит-ноту.
+ */
+export function useRefundReceipt() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: async (input: {
+      receiptId: string;
+      amount: number;
+      reason: string | null;
+      language: string;
+      requestId?: string;
+    }): Promise<{ id: string; number: string }> => {
+      const { data, error } = await supabase.rpc("refund_receipt", {
+        p_receipt_id: input.receiptId,
+        p_request_id: input.requestId ?? randomUuid(),
+        p_amount: input.amount,
+        ...(input.reason ? { p_reason: input.reason } : {}),
+        p_language: input.language,
+      });
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error("Возврат не подтверждён сервером");
+      return { id: data.id, number: data.number };
+    },
+    onSuccess: () => invalidateLedger(qc),
     meta: { errorHandled: true },
   });
 }

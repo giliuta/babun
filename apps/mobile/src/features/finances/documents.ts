@@ -83,9 +83,14 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
   const docs: FinanceDocument[] = [];
   // Номер кредит-ноты ищется по её инвойсу: своей строки у ноты нет.
   const noteNumberOf = new Map<string, string>();
+  // Чеки с возвратом (04.10): нота к самому чеку или к его инвойсу.
+  const receiptNotes = new Map<string, string>();
   for (const invoice of sources.invoices) {
     if (invoice.kind === "credit_note" && invoice.credit_note_of_id) {
       noteNumberOf.set(invoice.credit_note_of_id, invoice.number);
+    }
+    if (invoice.kind === "credit_note" && invoice.credit_note_of_receipt_id) {
+      receiptNotes.set(invoice.credit_note_of_receipt_id, invoice.number);
     }
   }
 
@@ -164,10 +169,22 @@ export function collectDocuments(sources: DocumentSources): FinanceDocument[] {
       // только у аннулированного — иначе непонятно, почему строка потухла.
       // Слово то же, что у инвойса: «погашен» в финансах значит «оплачен»,
       // и потухший чек сообщал бы противоположное случившемуся.
-      state: receipt.status === "void" ? "Аннулирован" : null,
+      // ВОЗВРАТ — СЛОВОМ (04.10): погашенный возвратом — «Возвращён», частично —
+      // «Частично возвращён»; номер ноты находит чек поиском.
+      state: (() => {
+        const returned =
+          receiptNotes.has(receipt.id)
+          || (!!receipt.invoice_id && noteNumberOf.has(receipt.invoice_id));
+        if (receipt.status === "void") return returned ? "Возвращён" : "Аннулирован";
+        return returned ? "Частично возвращён" : null;
+      })(),
       dead: receipt.status === "void",
       teamId: team,
-      search: searchKey(receipt.number, clientName, receipt.amount),
+      search: searchKey(
+        [receipt.number, receiptNotes.get(receipt.id)].filter(Boolean).join(" "),
+        clientName,
+        receipt.amount,
+      ),
     });
   }
 
