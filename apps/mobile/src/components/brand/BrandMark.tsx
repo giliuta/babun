@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import Svg, {
   Circle,
   Defs,
@@ -125,6 +125,22 @@ export function BrandMark({
           <Head maneId={maneId} />
         )}
       </Svg>
+    </View>
+  );
+}
+
+// Знак со словом в строку — шапка страниц, которые открывают без входа
+// («Оплата прошла», приглашение): человек видит, чьё это окно.
+export function BrandLockup({ size = 36 }: { size?: number }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: size * 0.28 }}>
+      <BrandMark size={size} variant="tile" />
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={{ fontSize: size * 0.62, fontWeight: "800", letterSpacing: -0.4, color: INK }}
+      >
+        Babun
+      </Text>
     </View>
   );
 }

@@ -7,6 +7,7 @@ import {
   CalendarRange,
   Mail,
 } from "lucide-react-native";
+import { BrandLockup } from "@/components/brand/BrandMark";
 import { Button } from "@/components/ui/Button";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
@@ -308,6 +309,9 @@ export default function InvitationScreen() {
         contentContainerStyle={{ paddingTop: 20, paddingBottom: 24 }}
         keyboardShouldPersistTaps="handled"
       >
+        <View style={{ alignItems: "center", marginBottom: 20 }}>
+          <BrandLockup />
+        </View>
         {content}
       </ScrollView>
       {footer ? (
