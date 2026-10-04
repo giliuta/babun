@@ -38,16 +38,21 @@ export function mapAuthError(
       m.includes("already been registered")
     )
       return "Этот email уже зарегистрирован — войдите";
-    if (c.includes("weak_password") || m.includes("should be at least") || m.includes("password"))
+    if (m.includes("should be at least"))
       return "Пароль слишком простой — минимум 8 символов";
+    // Supabase отклоняет известные и утёкшие пароли (HaveIBeenPwned, 04.10).
+    if (c.includes("weak_password") || m.includes("password"))
+      return "Этот пароль слишком простой или уже утекал в интернет — придумайте другой";
     return "Не удалось создать аккаунт";
   }
 
   if (kind === "reset") {
-    if (c.includes("weak_password") || m.includes("should be at least"))
+    if (m.includes("should be at least"))
       return "Пароль слишком простой — минимум 8 символов";
     if (m.includes("same") || m.includes("different from"))
       return "Новый пароль должен отличаться от старого";
+    if (c.includes("weak_password"))
+      return "Этот пароль слишком простой или уже утекал в интернет — придумайте другой";
     return "Не удалось обновить пароль. Попробуйте ещё раз";
   }
 
