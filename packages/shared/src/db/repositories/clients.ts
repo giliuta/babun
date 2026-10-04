@@ -507,13 +507,13 @@ function atomicWriteResultToClient(
 
 // ─── Public API ────────────────────────────────────────────────
 
-export async function listClients(
+async function listClientsAndRows(
   supabase: DbSupabase,
   tenantId: string,
-  options: { includeDeleted?: boolean } = {},
-): Promise<Client[]> {
+  includeDeleted: boolean,
+): Promise<{ rows: ClientRow[]; clients: Client[] }> {
   const [rows, assigns] = await Promise.all([
-    listClientRows(supabase, tenantId, !!options.includeDeleted),
+    listClientRows(supabase, tenantId, includeDeleted),
     listClientTagAssignments(supabase, tenantId),
   ]);
 
@@ -524,10 +524,41 @@ export async function listClients(
     tagsByClient.set(a.client_id, arr);
   }
 
-  return rows.map((r) => ({
+  const clients = rows.map((r) => ({
     ...rowToClient(r),
     tag_ids: tagsByClient.get(r.id) ?? [],
   }));
+  return { rows, clients };
+}
+
+export async function listClients(
+  supabase: DbSupabase,
+  tenantId: string,
+  options: { includeDeleted?: boolean } = {},
+): Promise<Client[]> {
+  return (await listClientsAndRows(supabase, tenantId, !!options.includeDeleted)).clients;
+}
+
+/** Клиенты и их `updated_at` — из ОДНИХ И ТЕХ ЖЕ строк (аудит 04.10). Кэшу
+ *  штамп нужен для сторожа правок. Отдельным вторым запросом он мог приехать
+ *  НОВЕЕ данных — правка между запросами давала старые заметки с новым
+ *  штампом, и следующая правка из очереди проходила сторож и тихо затирала
+ *  чужую заметку, без всякого «Конфликта». */
+export async function listClientsWithStamps(
+  supabase: DbSupabase,
+  tenantId: string,
+  options: { includeDeleted?: boolean } = {},
+): Promise<{ clients: Client[]; updatedAtById: Map<string, string> }> {
+  const { rows, clients } = await listClientsAndRows(
+    supabase,
+    tenantId,
+    !!options.includeDeleted,
+  );
+  const updatedAtById = new Map<string, string>();
+  for (const r of rows) {
+    if (r.updated_at) updatedAtById.set(r.id, r.updated_at);
+  }
+  return { clients, updatedAtById };
 }
 
 export async function getClient(
