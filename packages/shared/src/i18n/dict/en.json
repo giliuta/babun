@@ -5218,5 +5218,7 @@
  "Больше суммы инвойса сторнировать нельзя: {0} {1}": "You can't credit more than the invoice amount: {0} {1}",
  "Баланс на исходе": "Balance running low",
  "≈ {0} · баланс на исходе": "≈ {0} · balance running low",
- "Оплата не прошла": "Payment failed"
+ "Оплата не прошла": "Payment failed",
+ "Баланс — Кабинет → SMS. Шаблоны и имя отправителя у каждой команды свои: шестерёнка календаря → SMS. Одна часть SMS стоит €0,12.": "Balance — Office → SMS. Each team has its own templates and sender name: calendar gear → SMS. One SMS part costs €0.12.",
+ "Удаление аккаунта": "Account deletion"
 }

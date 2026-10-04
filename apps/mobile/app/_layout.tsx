@@ -147,6 +147,12 @@ function RootNavigator() {
       {/* «Оплата прошла» — возврат из Stripe после пополнения SMS из
           приложения (STORY-089): без входа, как «l» и «r». */}
       <Stack.Screen name="pay" />
+      {/* Документы и «Помощь» (04.10, выпуск в магазины): ссылки из карточек
+          App Store и Google Play открываются без входа, как «l», «r» и «pay». */}
+      <Stack.Screen name="privacy" />
+      <Stack.Screen name="terms" />
+      <Stack.Screen name="delete-account" />
+      <Stack.Screen name="support" />
     </Stack>
   );
 }

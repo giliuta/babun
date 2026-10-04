@@ -1,8 +1,10 @@
 import { Fragment, useState } from "react";
 import { Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { useRouter, type Href } from "expo-router";
 import {
   ChevronDown,
   ChevronUp,
+  FileText,
   Mail,
   MessageCircle,
   Send,
@@ -17,10 +19,12 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useToast } from "@/components/ui/Toast";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 
 import {
-  HELP_FAQ,
+  helpFaq,
+  LEGAL_LINKS,
   SUPPORT_CONTACTS,
   supportLink,
   supportRows,
@@ -36,6 +40,11 @@ import {
 // «Частые вопросы» — строки без дверей: тап раскрывает ответ под вопросом, тут
 // же, без перехода. Открыт один вопрос за раз — длинный список не вырастает в
 // простыню.
+//
+// «Документы» (04.10, выпуск в магазины) — политика, условия, удаление
+// аккаунта: Apple требует, чтобы политика открывалась из самого приложения.
+// Тот же экран без входа — babun.app/support (адрес поддержки в карточках
+// магазинов). В приложении из магазина вопросы об оплате скрыты (`helpFaq`).
 
 const CONTACT_ICON: Record<SupportChannel, LucideIcon> = {
   whatsapp: MessageCircle,
@@ -54,6 +63,8 @@ const TILE_ROW_INSET = 56;
 
 export function HelpScreen() {
   const toast = useToast();
+  const router = useRouter();
+  const faq = helpFaq(CAN_PAY_HERE);
   const [openId, setOpenId] = useState<string | null>(null);
   const contacts = supportRows(SUPPORT_CONTACTS);
 
@@ -86,13 +97,27 @@ export function HelpScreen() {
         ) : null}
 
         <SectionCard title="Частые вопросы">
-          {HELP_FAQ.map((item, index) => (
+          {faq.map((item, index) => (
             <Fragment key={item.id}>
               {index > 0 ? <Divider inset={16} /> : null}
               <FaqRow
                 item={item}
                 open={openId === item.id}
                 onToggle={() => setOpenId(openId === item.id ? null : item.id)}
+              />
+            </Fragment>
+          ))}
+        </SectionCard>
+
+        <SectionCard title="Документы">
+          {LEGAL_LINKS.map((link, index) => (
+            <Fragment key={link.href}>
+              {index > 0 ? <Divider inset={48} /> : null}
+              <SettingsRow
+                tile="neutral"
+                icon={FileText}
+                title={link.title}
+                onPress={() => router.push(link.href as Href)}
               />
             </Fragment>
           ))}

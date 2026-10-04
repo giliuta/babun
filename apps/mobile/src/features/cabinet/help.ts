@@ -3,10 +3,12 @@
 // Владелец 03.10: «помощь, связь с поддержкой — да, надо». Файл чистый: ни React,
 // ни RN — ссылки и список вопросов проверяются тестом, а экран только рисует.
 //
-// КОНТАКТЫ ПОКА ПУСТЫЕ. Живой номер, адрес и ник владелец назовёт позже, и
-// выдумывать их нельзя: строка-дверь в чужой номер — худший вид вранья (закон
-// `SettingsRow.onPress`). Пока пусто — раздела «Связаться» на экране нет вообще,
-// без заглушек и без «скоро»; заполнил — строки появились сами.
+// КОНТАКТЫ — ТОЛЬКО НАЗВАННЫЕ ВЛАДЕЛЬЦЕМ. Почту поддержки он назвал 04.10
+// («babun.app@gmail.com — почта от приложения, специально создал»); номер и ник
+// выдумывать нельзя: строка-дверь в чужой номер — худший вид вранья (закон
+// `SettingsRow.onPress`). Пустой канал — строки нет вовсе, без заглушек и без
+// «скоро»; заполнил — строка появилась сама. Та же почта стоит в документах
+// (`features/legal/operator.ts`).
 
 export interface SupportContacts {
   /** Номер для WhatsApp в любом виде: «+357 99 123 456». */
@@ -19,7 +21,7 @@ export interface SupportContacts {
 export const SUPPORT_CONTACTS: SupportContacts = {
   whatsapp: "",
   telegram: "",
-  email: "",
+  email: "babun.app@gmail.com",
 };
 
 export type SupportChannel = "whatsapp" | "telegram" | "email";
@@ -180,3 +182,27 @@ export const HELP_FAQ: readonly HelpFaqItem[] = [
       "Кабинет → Выгрузка данных: клиенты, записи и финансы ваших команд выгружаются в CSV.",
   },
 ];
+
+/** Вопросы, которые говорят об оплате: в приложении из магазина их нет
+ *  (владелец 04.10, `lib/pay-here.ts` — ни цены-предложения, ни «где
+ *  платить»). На сайте — все. */
+const PAYMENT_FAQ_IDS: ReadonlySet<string> = new Set(["tariff"]);
+
+/** SMS без слова «пополнение» — для приложения из магазина. */
+const SMS_ANSWER_NO_PAY =
+  "Баланс — Кабинет → SMS. Шаблоны и имя отправителя у каждой команды свои: шестерёнка календаря → SMS. Одна часть SMS стоит €0,12.";
+
+/** Частые вопросы для платформы: `payHere` — `CAN_PAY_HERE`. */
+export function helpFaq(payHere: boolean): readonly HelpFaqItem[] {
+  if (payHere) return HELP_FAQ;
+  return HELP_FAQ.filter((item) => !PAYMENT_FAQ_IDS.has(item.id)).map((item) =>
+    item.id === "sms" ? { ...item, answer: SMS_ANSWER_NO_PAY } : item,
+  );
+}
+
+/** Документы — строки «Помощи» и адреса сайта без входа (04.10). */
+export const LEGAL_LINKS = [
+  { href: "/privacy", title: "Политика конфиденциальности" },
+  { href: "/terms", title: "Условия использования" },
+  { href: "/delete-account", title: "Удаление аккаунта" },
+] as const;

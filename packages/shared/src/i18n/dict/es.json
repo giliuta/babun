@@ -5218,5 +5218,7 @@
  "Больше суммы инвойса сторнировать нельзя: {0} {1}": "No se puede acreditar más que el importe de la factura: {0} {1}",
  "Баланс на исходе": "Saldo bajo",
  "≈ {0} · баланс на исходе": "≈ {0} · saldo bajo",
- "Оплата не прошла": "El pago no se realizó"
+ "Оплата не прошла": "El pago no se realizó",
+ "Баланс — Кабинет → SMS. Шаблоны и имя отправителя у каждой команды свои: шестерёнка календаря → SMS. Одна часть SMS стоит €0,12.": "Saldo — Oficina → SMS. Cada equipo tiene sus propias plantillas y nombre de remitente: engranaje del calendario → SMS. Una parte de SMS cuesta €0,12.",
+ "Удаление аккаунта": "Eliminación de la cuenta"
 }

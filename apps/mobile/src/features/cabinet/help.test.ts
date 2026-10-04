@@ -52,8 +52,11 @@ describe("emailLink", () => {
 });
 
 describe("supportRows", () => {
-  test("пока все контакты пустые — строк нет", () => {
-    assert.deepEqual(supportRows(SUPPORT_CONTACTS), []);
+  test("в продукте — только почта, названная владельцем 04.10; пустые каналы строк не дают", () => {
+    assert.deepEqual(
+      supportRows(SUPPORT_CONTACTS).map((row) => row.sub),
+      ["babun.app@gmail.com"],
+    );
     assert.deepEqual(supportRows({ whatsapp: " ", telegram: " @ ", email: "  " }), []);
   });
 
