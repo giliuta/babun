@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useState, type ReactNode } from "react";
+import { forwardRef, useEffect, useId, useState, type ReactNode } from "react";
 import {
   AccessibilityInfo,
   KeyboardAvoidingView,
@@ -33,16 +33,17 @@ const FILL = { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 } as c
 // The single decorative light source — a soft cobalt bloom from the top.
 function AmbientHalo() {
   const t = useAuthTheme();
+  const gid = `halo-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   return (
     <Svg style={FILL} width="100%" height="100%" pointerEvents="none">
       <Defs>
-        <RadialGradient id="halo" cx="50%" cy="6%" r="75%">
+        <RadialGradient id={gid} cx="50%" cy="6%" r="75%">
           <Stop offset="0" stopColor={t.accentFrom} stopOpacity={t.haloOpacity} />
           <Stop offset="1" stopColor={t.accentFrom} stopOpacity={0} />
         </RadialGradient>
       </Defs>
       <Rect width="100%" height="100%" fill={t.canvas} />
-      <Rect width="100%" height="100%" fill="url(#halo)" />
+      <Rect width="100%" height="100%" fill={`url(#${gid})`} />
     </Svg>
   );
 }
