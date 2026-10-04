@@ -2908,7 +2908,7 @@ export default function CalendarTab() {
     // отпускает её. Раньше тап переносил запись в место тапа, и «отпустить»
     // её было нечем, кроме крестика на плашке.
     if (editingApt) {
-      haptics.tap();
+      // Тик даёт сама колонка (`onSlotPress`) — второй здесь был бы дублем.
       setEditingApt(null);
       return;
     }

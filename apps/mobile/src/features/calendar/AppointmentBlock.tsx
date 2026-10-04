@@ -148,8 +148,15 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   const screenW = useWindowDimensions().width;
   /** Новое начало, пока запись под пальцем, — пишется на самой карточке. */
   const [liveStart, setLiveStart] = useState<string | null>(null);
+  // Переход на другой день чувствуется сильнее шага времени.
+  const lastDays = useRef(0);
+  const resetDays = () => {
+    lastDays.current = 0;
+  };
   const onSnap = (steps: number, days = 0) => {
-    haptics.tap();
+    if (days !== lastDays.current) haptics.edge();
+    else haptics.step();
+    lastDays.current = days;
     if (steps === 0 && days === 0) {
       setLiveStart(null);
       return;
@@ -389,7 +396,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   const durMin = Math.max(resizeStep, spanEnd - startMin);
   const maxShrink = Math.floor((durMin - resizeStep) / resizeStep);
   const onResizeSnap = (edge: "top" | "bottom", steps: number) => {
-    haptics.tap();
+    haptics.step();
     const s0 = Math.max(0, edge === "top" ? startMin + steps * resizeStep : startMin);
     const e0 = edge === "bottom" ? spanEnd + steps * resizeStep : spanEnd;
     setLiveStart(`${minToHM(s0)}–${endHM(e0)}`);
@@ -431,6 +438,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     .onStart(() => {
       active.value = withSpring(1);
       snapSteps.value = 0;
+      runOnJS(resetDays)();
       daySteps.value = 0;
       rSteps.value = 0;
       // РЕЖИМ — ПО МЕСТУ КАСАНИЯ, одним жестом: нижний край растягивает
@@ -536,6 +544,11 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   useEffect(() => {
     press.value = withTiming(0, { duration: 120 });
   }, [editing, press]);
+  // Касание записи ощущается рукой (владелец 04.10) — тик до открытия.
+  const openWithTick = (a: Appointment) => {
+    haptics.tap();
+    onEdit(a);
+  };
   const tap = Gesture.Tap()
     .onBegin(() => {
       press.value = withTiming(1, { duration: 90 });
@@ -543,7 +556,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
     .onFinalize(() => {
       press.value = withTiming(0, { duration: 150 });
     })
-    .onEnd(() => runOnJS(onEdit)(apt));
+    .onEnd(() => runOnJS(openWithTick)(apt));
   // A crew member still gets the useful long-press actions (next status,
   // call, route), but never enters the drag gesture that the server rejects.
   const longPress = Gesture.LongPress()

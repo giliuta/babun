@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { Platform, View } from "react-native";
+import { haptics } from "@/lib/haptics";
 import {
   Gesture,
   GestureDetector,
@@ -18,6 +19,7 @@ import Animated, {
 } from "react-native-reanimated";
 import {
   HOUR_H_DEFAULT,
+  HOUR_H_MAX,
   minHourH,
   PAD_BOTTOM,
   PAD_TOP,
@@ -223,6 +225,9 @@ export function ZoomableTimeGrid({
     step(0, scrollY.value);
   };
 
+  // Упор щипка в край масштаба чувствуется рукой (владелец 04.10: «чтоб
+  // можно было ощущать блоки») — один удар на вход в край, не на каждый кадр.
+  const atLimit = useSharedValue(false);
   const pinch = Gesture.Pinch()
     // Recognize alongside the native scroll instead of losing to it. The
     // first pinch frame sets `pinching` → scrollEnabled(false) cancels the
@@ -233,6 +238,7 @@ export function ZoomableTimeGrid({
       // Недоделанное отпускание прошлого жеста гасится: картинку держит его
       // сдвиг, и новый жест стартует ровно с того, что видно.
       settleToken.value += 1;
+      atLimit.value = false;
       active.value = true;
       pinching.value = true;
       baseH.value = layoutH.value;
@@ -258,6 +264,11 @@ export function ZoomableTimeGrid({
       });
       hourHSv.value = f.h;
       lastFocalY.value = e.focalY;
+      const limit =
+        f.h >= HOUR_H_MAX - 0.01 ||
+        f.h <= minHourH(endHour - startHour, viewportH.value) + 0.01;
+      if (limit && !atLimit.value) runOnJS(haptics.edge)();
+      atLimit.value = limit;
       // Кадр жеста = два числа трансформа, БЕЗ layout и БЕЗ scrollTo:
       // якорное время держится под фокусом пальцев, края — как bounces=false.
       gestureScale.value = f.h / baseH.value;

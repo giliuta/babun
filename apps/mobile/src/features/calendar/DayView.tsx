@@ -664,6 +664,8 @@ export const DayColumn = memo(function DayColumn({
   };
   const onSlotPress = (hour: number, locationY: number) => {
     if (!onCreateAt) return;
+    // Касание свободного времени ощущается рукой (владелец 04.10).
+    haptics.tap();
     onCreateAt(dateYmd, slotTime(hour, locationY));
   };
 
