@@ -22,6 +22,8 @@
 export const READ_RPCS: ReadonlySet<string> = new Set([
   "account_balances",
   "appointment_link_lookup",
+  // Оплаты тарифа в Кабинете (20261004085616): `stable`, сверено в базе 04.10.
+  "cabinet_tariff_payments",
   "current_tenant_profile_safe",
   "current_user_role",
   "invitation_preview",
