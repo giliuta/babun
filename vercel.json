@@ -4,9 +4,15 @@
   "outputDirectory": "apps/mobile/dist",
   "installCommand": "bun install",
   "framework": null,
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "master": true
+    }
+  },
   "rewrites": [
     {
-      "source": "/((?!_expo/|assets/|icons/|favicon.ico|apple-touch-icon.png|manifest.json|metadata.json).*)",
+      "source": "/((?!_expo/|assets/|icons/|favicon|apple-touch-icon|manifest.json|metadata.json|og-image.png).*)",
       "destination": "/index.html"
     }
   ],
