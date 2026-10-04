@@ -13,7 +13,7 @@ import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { formatInvoiceMoney } from "./format";
 import { invoiceDeleteBlock } from "./invoice-delete";
-import { useDeleteInvoice } from "./queries";
+import { useDeleteCreditNote, useDeleteInvoice } from "./queries";
 
 // ДЕЙСТВИЯ С ИНВОЙСОМ — ОДНИ НА «⋯» СТРАНИЦЫ И НА ДОЛГОЕ НАЖАТИЕ В
 // «ДОКУМЕНТАХ» (владелец 2026-10-04: «три точки — не „поделиться“ и прочее
@@ -24,7 +24,7 @@ import { useDeleteInvoice } from "./queries";
 // — кредит-нотой, и только когда денег по нему у нас не осталось.
 
 export interface MenuAction {
-  key: "edit" | "cancel" | "delete";
+  key: "edit" | "cancel" | "delete" | "delete-note";
   label: string;
   destructive?: boolean;
   /** Значок и цвет строки в листе действий (как у меню записи). */
@@ -46,18 +46,52 @@ export interface InvoiceMenuContext {
 export function useInvoiceMenu() {
   const router = useRouter();
   const remove = useDeleteInvoice();
+  const removeNote = useDeleteCreditNote();
   const owner = useCurrentRole().data === "owner";
 
+  // УДАЛИТЬ КРЕДИТ-НОТУ (04.10: «отменил, а клиент — ладно, плачу; удаляю
+  // ноту, пока не скинул»). Только последнюю в серии; если нота сама вернула
+  // деньги, сервер откажет и скажет почему. Инвойс возвращается как был.
+  const deleteNoteAction = (note: InvoiceLedger, ctx: InvoiceMenuContext): MenuAction[] => {
+    const later = ctx.all.some(
+      (item) =>
+        item.kind === "credit_note" &&
+        item.company_id === note.company_id &&
+        item.year === note.year &&
+        item.seq > note.seq,
+    );
+    if (later) return [];
+    const run = () =>
+      confirmThen(
+        `Удалить ${note.number}?`,
+        {
+          message: "Кредит-нота исчезнет, её номер достанется следующей. Инвойс снова будет таким, каким был до неё.",
+          confirmLabel: "Удалить",
+          destructive: true,
+        },
+        () =>
+          removeNote.mutate(note.id, {
+            onSuccess: () => {
+              haptics.success();
+              ctx.onDeleted?.();
+            },
+            onError: (error) => notify("Кредит-нота не удалена", tDynamic(error.message)),
+          }),
+      );
+    return [{ key: "delete-note", label: `Удалить ${note.number}`, destructive: true, run }];
+  };
+
   const actionsFor = (invoice: InvoiceLedger, ctx: InvoiceMenuContext): MenuAction[] => {
-    // Оплаченный тоже получает «Отменить»: шторка не молчит, а называет путь —
-    // сначала возврат оплаты, потом кредит-нота.
-    if (
-      !owner ||
-      (invoice.kind ?? "invoice") !== "invoice" ||
-      (invoice.status !== "issued" && invoice.status !== "paid")
-    ) {
-      return [];
-    }
+    if (!owner) return [];
+    // Сама кредит-нота — её можно только удалить.
+    if (invoice.kind === "credit_note") return deleteNoteAction(invoice, ctx);
+    // Последняя нота инвойса — удалить её (отменённый оживает, частичная
+    // возвращает сумму к оплате).
+    const notes = ctx.all
+      .filter((item) => item.kind === "credit_note" && item.credit_note_of_id === invoice.id)
+      .sort((a, b) => b.seq - a.seq);
+    const undo = notes[0] ? deleteNoteAction(notes[0], { ...ctx, onDeleted: undefined }) : [];
+    if (invoice.status !== "issued" && invoice.status !== "paid") return undo;
     const hasNote = ctx.all.some((item) => item.credit_note_of_id === invoice.id);
     const untouched =
       invoice.status === "issued" && ctx.payments.length === 0 && !ctx.hasReceipt && !hasNote;
@@ -103,6 +137,7 @@ export function useInvoiceMenu() {
       ...(untouched
         ? [{ key: "delete" as const, label: "Удалить инвойс", destructive: true, run: del }]
         : []),
+      ...undo,
     ];
   };
 

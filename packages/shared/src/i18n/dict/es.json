@@ -5181,5 +5181,11 @@
  "＋ Описание": "＋ Descripción",
  "＋ Перерыв": "＋ Descanso",
  "＋ Перерыв после услуги": "＋ Descanso tras el servicio",
- "＋ По дням недели": "＋ Por días de la semana"
+ "＋ По дням недели": "＋ Por días de la semana",
+ "Кредит-нота исчезнет, её номер достанется следующей. Инвойс снова будет таким, каким был до неё.": "La nota de crédito desaparecerá y su número pasará a la siguiente. La factura vuelve a estar como antes.",
+ "Кредит-нота не удалена": "La nota de crédito no se eliminó",
+ "Кредит-нота вернула клиенту {0} {1} — её не удалить: документ на эти деньги остаётся": "La nota de crédito devolvió {0} {1} al cliente: no se puede eliminar, el documento de ese dinero se queda",
+ "Кредит-нота не найдена": "No se encontró la nota de crédito",
+ "Удалить кредит-ноту может только владелец": "Solo el propietario puede eliminar una nota de crédito",
+ "Удалить можно только последнюю кредит-ноту серии ({0}) — после неё уже выписаны другие": "Solo se puede eliminar la última nota de crédito de la serie ({0}): después ya se emitieron otras"
 }

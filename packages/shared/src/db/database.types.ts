@@ -5458,6 +5458,10 @@ export type Database = {
         Args: { p_receipt_id: string }
         Returns: undefined
       }
+      delete_credit_note: {
+        Args: { p_note_id: string }
+        Returns: undefined
+      }
       delete_invoice: {
         Args: { p_invoice_id: string }
         Returns: undefined

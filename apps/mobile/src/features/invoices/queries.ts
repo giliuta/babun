@@ -264,6 +264,22 @@ export function useUpdateInvoice(id: string) {
   });
 }
 
+/** УДАЛЕНИЕ КРЕДИТ-НОТЫ, ПОКА ЕЁ НЕ ОТПРАВИЛИ (владелец 04.10: «отменил
+ *  инвойс, а клиент: ладно, плачу»). Последняя в серии, без движения денег;
+ *  инвойс возвращается как был (`delete_credit_note`). */
+export function useDeleteCreditNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: async (noteId: string) => {
+      const { error } = await supabase.rpc("delete_credit_note", { p_note_id: noteId });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => invalidateInvoices(qc),
+    meta: { errorHandled: true },
+  });
+}
+
 /** УДАЛЕНИЕ ПОСЛЕДНЕГО ИНВОЙСА СЕРИИ — номер возвращается (владелец 04.10). */
 export function useDeleteInvoice() {
   const qc = useQueryClient();

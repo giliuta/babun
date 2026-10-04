@@ -5181,5 +5181,11 @@
  "＋ Описание": "＋ Description",
  "＋ Перерыв": "＋ Break",
  "＋ Перерыв после услуги": "＋ Break after service",
- "＋ По дням недели": "＋ By weekday"
+ "＋ По дням недели": "＋ By weekday",
+ "Кредит-нота исчезнет, её номер достанется следующей. Инвойс снова будет таким, каким был до неё.": "The credit note will be gone and its number will go to the next one. The invoice goes back to how it was before it.",
+ "Кредит-нота не удалена": "Credit note not deleted",
+ "Кредит-нота вернула клиенту {0} {1} — её не удалить: документ на эти деньги остаётся": "The credit note refunded {0} {1} to the client — it can't be deleted: the document for that money stays",
+ "Кредит-нота не найдена": "Credit note not found",
+ "Удалить кредит-ноту может только владелец": "Only the owner can delete a credit note",
+ "Удалить можно только последнюю кредит-ноту серии ({0}) — после неё уже выписаны другие": "Only the last credit note in the series ({0}) can be deleted — others were issued after it"
 }
