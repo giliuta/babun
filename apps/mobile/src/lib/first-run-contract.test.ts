@@ -27,18 +27,34 @@ describe("первый вход нового аккаунта", () => {
   test("первые экраны говорят «аккаунт» и «команды», не «компания»", () => {
     const invite = app("invite/[token].tsx");
     assert.doesNotMatch(invite, /Подключаем компанию|в этой компании|владельца компании/);
-    assert.doesNotMatch(app("(auth)/onboarding.tsx"), /"Название компании"/);
     assert.doesNotMatch(app("(dashboard)/(home)/index.tsx"), /"В компании ещё нет календарей"/);
   });
 
-  test("мастер: одна дверь в календарь, выход с первого шага, реквизиты переименованы", () => {
-    const wizard = app("(auth)/onboarding.tsx");
-    assert.doesNotMatch(wizard, /"Создать команду"/);
-    assert.match(wizard, /label=\{saving \? "Сохраняем…" : "Открыть календарь"\}/);
-    assert.match(wizard, /<PillButton label="Далее"[^\n]*\n[\s\S]{0,200}<GhostLink label="Выйти" muted onPress=\{\(\) => void signOutAndWipe\(\)\} \/>/);
-    assert.match(wizard, /previousName: tenant\.name/);
+  // ВЛАДЕЛЕЦ 04.10: «как называется ваш бизнес… чем вы занимаетесь… всё
+  // готово, соберите команду — это неправильно». Мастера нет: имя аккаунта —
+  // первое поле регистрации, после кода из письма сразу календарь.
+  test("регистрация без мастера: имя с формы, код из письма, сразу календарь", () => {
+    assert.throws(() => app("(auth)/onboarding.tsx"));
+    const register = app("(auth)/register.tsx");
+    assert.match(register, /placeholder="Имя или название компании"/);
+    assert.match(register, /full_name: fullName\.trim\(\),/);
+    assert.match(register, /<EmailCodeCard\s+kind="signup"/);
+    assert.doesNotMatch(register, /"\/onboarding"/);
     const tenant = src("lib/tenant.ts");
-    assert.match(tenant, /\.from\("legal_entities"\)\s*\.update\(\{ name: name\.trim\(\) \}\)\s*\.eq\("tenant_id", tenantId\)\s*\.eq\("is_default", true\)\s*\.eq\("name", before\);/);
+    assert.doesNotMatch(tenant, /needs-onboarding|useCompleteOnboarding/);
+    assert.doesNotMatch(src("lib/DashboardGate.tsx"), /\/onboarding/);
+    assert.doesNotMatch(app("(auth)/_layout.tsx"), /\/onboarding/);
+  });
+
+  test("неподтверждённый вход и сброс пароля — тем же кодом", () => {
+    const login = app("(auth)/login.tsx");
+    assert.match(login, /email_not_confirmed/);
+    assert.match(login, /<EmailCodeCard\s+kind="signup"/);
+    const reset = app("(auth)/reset-password.tsx");
+    assert.match(reset, /<EmailCodeCard\s+kind="recovery"/);
+    assert.match(app("(auth)/forgot-password.tsx"), /pathname: "\/reset-password", params: \{ email: email\.trim\(\) \}/);
+    const card = src("components/auth/EmailCodeCard.tsx");
+    assert.match(card, /type: kind === "signup" \? "email" : "recovery",/);
   });
 
   test("регистрация на занятый email не обещает письмо", () => {

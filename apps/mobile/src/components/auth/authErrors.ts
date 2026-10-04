@@ -4,7 +4,7 @@ type SbError = { message?: string; code?: string };
 
 export function mapAuthError(
   e: SbError,
-  kind: "signin" | "signup" | "reset" = "signin",
+  kind: "signin" | "signup" | "reset" | "code" = "signin",
 ): string {
   const m = (e.message ?? "").toLowerCase();
   const c = (e.code ?? "").toLowerCase();
@@ -21,7 +21,15 @@ export function mapAuthError(
     return "Слишком много попыток, подождите минуту";
 
   if (c.includes("email_not_confirmed") || m.includes("not confirmed"))
-    return "Подтвердите почту — мы отправили ссылку";
+    return "Подтвердите почту — введите код из письма";
+
+  // Неверный, уже потраченный или просроченный код из письма GoTrue называет
+  // одним «Token has expired or is invalid» (`otp_expired`).
+  if (kind === "code") {
+    if (c.includes("otp") || m.includes("token") || m.includes("expired") || m.includes("invalid"))
+      return "Неверный код или срок его истёк";
+    return "Не удалось проверить код. Попробуйте ещё раз";
+  }
 
   if (kind === "signup") {
     if (

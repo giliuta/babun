@@ -13,6 +13,7 @@ import {
   SwitchLink,
 } from "@/components/auth/AuthCard";
 import { mapAuthError } from "@/components/auth/authErrors";
+import { EmailCodeCard } from "@/components/auth/EmailCodeCard";
 import { supabase } from "@/lib/supabase";
 
 // «Вход в Babun» — email/password right on the screen (fewest taps),
@@ -24,6 +25,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState(false);
 
   const valid = email.trim().length > 0 && password.length > 0;
 
@@ -43,8 +45,27 @@ export default function LoginScreen() {
       password,
     });
     setLoading(false);
+    // ПОЧТА НЕ ПОДТВЕРЖДЕНА — СРАЗУ ЭКРАН КОДА (владелец 04.10), а не ошибка:
+    // зарегистрировался, закрыл приложение, не ввёл код — вводит его здесь.
+    if (e && (e.code === "email_not_confirmed" || /not confirmed/i.test(e.message))) {
+      setUnconfirmed(true);
+      return;
+    }
     if (e) setError(mapAuthError(e, "signin"));
     // success → SessionProvider redirects
+  }
+
+  if (unconfirmed) {
+    return (
+      <EmailCodeCard
+        kind="signup"
+        email={email.trim()}
+        password={password}
+        sentAlready={false}
+        onChangeEmail={() => setUnconfirmed(false)}
+        onBackToLogin={() => setUnconfirmed(false)}
+      />
+    );
   }
 
   return (

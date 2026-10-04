@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { uiLocale } from "@babun/shared/i18n/locale";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
@@ -6,15 +6,14 @@ import {
   AuthCard,
   AuthField,
   FormError,
-  GhostLink,
   InputCard,
   InputDivider,
-  NoticeCard,
   PasswordInput,
   PillButton,
   SwitchLink,
 } from "@/components/auth/AuthCard";
 import { mapAuthError, signUpHitExistingAccount } from "@/components/auth/authErrors";
+import { EmailCodeCard, SIGNUP_LINK_REDIRECT } from "@/components/auth/EmailCodeCard";
 import { useAuthTheme } from "@/components/auth/theme";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/notify";
@@ -22,8 +21,10 @@ import { invitationSignupErrorMessage } from "@/features/settings/invitation-flo
 import { getPendingInvitationToken } from "@/features/settings/pending-invitation";
 
 // «Создать аккаунт» — name/email/password inline (chained return key).
-// Non-functional OAuth placeholders are not shown. Terms is a one-line legal note. The
-// «Проверьте почту» state is an actionable hub (resend / open mail / fix email).
+// Non-functional OAuth placeholders are not shown. Terms is a one-line legal note.
+// После отправки — «Введите код» из письма Babun (EmailCodeCard); верный код
+// сразу открывает календарь. Мастера «название бизнеса / род занятий» больше
+// нет (владелец 04.10): имя аккаунта — первое поле этой формы.
 export default function RegisterScreen() {
   const router = useRouter();
   const t = useAuthTheme();
@@ -35,14 +36,6 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
-  const [resending, setResending] = useState(false);
-
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const id = setInterval(() => setCooldown((c) => (c > 0 ? c - 1 : 0)), 1000);
-    return () => clearInterval(id);
-  }, [cooldown]);
 
   const valid =
     fullName.trim().length > 0 &&
@@ -67,6 +60,7 @@ export default function RegisterScreen() {
       email: email.trim(),
       password,
       options: {
+        emailRedirectTo: SIGNUP_LINK_REDIRECT,
         data: {
           full_name: fullName.trim(),
           // Язык, на котором человек регистрировался, — письма ему на нём же.
@@ -94,43 +88,14 @@ export default function RegisterScreen() {
       return;
     }
     if (data.session) {
-      // Email confirmation is off — we are signed in already. Go straight to
-      // the onboarding gate (it re-routes onboarded accounts to the dashboard).
-      // Keep the spinner on until navigation unmounts this screen.
-      router.replace("/onboarding");
+      // Подтверждение почты выключено — вход уже есть. Гейт входа уводит в
+      // календарь сам; спиннер держим до размонтирования экрана.
+      router.replace("/");
       return;
     }
     setPending(true);
-    setCooldown(45);
     setLoading(false);
   }
-
-  async function resend() {
-    if (cooldown > 0 || resending) return;
-    setResending(true);
-    const { error: e } = await supabase.auth.resend({
-      type: "signup",
-      email: email.trim(),
-    });
-    if (e) {
-      // Rate limit / network — don't restart the cooldown and don't let the
-      // user believe the email went out.
-      setError(mapAuthError(e, "signup"));
-      setResending(false);
-      return;
-    }
-    setError(null);
-    setCooldown(45);
-    setResending(false);
-  }
-
-  const openMail = () =>
-    Linking.openURL("message://").catch(() => {
-      notify(
-        "Почта недоступна",
-        "Откройте приложение почты вручную и найдите письмо от Babun.",
-      );
-    });
 
   const openLegal = (url: string) =>
     Linking.openURL(url).catch(() => {
@@ -142,29 +107,13 @@ export default function RegisterScreen() {
 
   if (pending) {
     return (
-      <AuthCard title="Проверьте почту" subtitle="Подтвердите адрес, чтобы войти">
-        <NoticeCard>
-          Письмо со ссылкой ушло на{" "}
-          <Text style={{ fontWeight: "600", color: t.ink }}>{email.trim()}</Text>.
-          Откройте его, перейдите по ссылке — и возвращайтесь, чтобы войти.
-        </NoticeCard>
-        <FormError message={error} />
-        <PillButton label="Открыть Почту" onPress={openMail} />
-        <GhostLink
-          label={
-            resending
-              ? "Отправляем…"
-              : cooldown > 0
-                ? `Отправить снова (${cooldown})`
-                : "Отправить ещё раз"
-          }
-          muted={cooldown > 0 || resending}
-          disabled={cooldown > 0 || resending}
-          onPress={resend}
-        />
-        <GhostLink label="Изменить email" muted onPress={() => setPending(false)} />
-        <GhostLink label="Вернуться ко входу" muted onPress={() => router.replace("/login")} />
-      </AuthCard>
+      <EmailCodeCard
+        kind="signup"
+        email={email.trim()}
+        password={password}
+        onChangeEmail={() => setPending(false)}
+        onBackToLogin={() => router.replace("/login")}
+      />
     );
   }
 
@@ -174,8 +123,8 @@ export default function RegisterScreen() {
         <AuthField
           value={fullName}
           onChangeText={edit(setFullName)}
-          placeholder="Ваше имя"
-          accessibilityLabel="Ваше имя"
+          placeholder="Имя или название компании"
+          accessibilityLabel="Имя или название компании"
           autoComplete="name"
           textContentType="name"
           maxLength={120}

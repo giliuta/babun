@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Text } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Linking from "expo-linking";
 import {
   AuthCard,
@@ -12,6 +12,7 @@ import {
   PillButton,
 } from "@/components/auth/AuthCard";
 import { mapAuthError } from "@/components/auth/authErrors";
+import { EmailCodeCard } from "@/components/auth/EmailCodeCard";
 import { useAuthTheme } from "@/components/auth/theme";
 import { signOutScopeAndWipe } from "@/lib/auth-clear";
 import { parseRecoveryLink, recoveryLinkKey } from "@/lib/recovery-link";
@@ -28,6 +29,11 @@ export default function ResetPasswordScreen() {
   const router = useRouter();
   const t = useAuthTheme();
   const url = Linking.useURL();
+  // Пришли с «Сброс пароля» — почта в адресе, код из письма вводится здесь:
+  // сессию восстановления гейт входа держит только на этом экране.
+  const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
+  const codeEmail = typeof emailParam === "string" ? emailParam.trim() : "";
+  const [awaitingCode, setAwaitingCode] = useState(false);
   const [ready, setReady] = useState(false);
   const [expired, setExpired] = useState(false);
   const [password, setPassword] = useState("");
@@ -51,7 +57,10 @@ export default function ResetPasswordScreen() {
         const link = url ?? (await Linking.getInitialURL());
         const credential = parseRecoveryLink(link);
         if (!credential) {
-          if (active) setExpired(true);
+          if (active) {
+            if (codeEmail) setAwaitingCode(true);
+            else setExpired(true);
+          }
           return;
         }
         const key = recoveryLinkKey(credential);
@@ -88,7 +97,7 @@ export default function ResetPasswordScreen() {
     return () => {
       active = false;
     };
-  }, [url]);
+  }, [url, codeEmail]);
 
   async function update() {
     if (password.length < 8 || loading) return;
@@ -133,6 +142,21 @@ export default function ResetPasswordScreen() {
           onPress={() => router.replace(sessionEnded ? "/login" : "/")}
         />
       </AuthCard>
+    );
+  }
+
+  if (awaitingCode) {
+    return (
+      <EmailCodeCard
+        kind="recovery"
+        email={codeEmail}
+        onVerified={() => {
+          setAwaitingCode(false);
+          setReady(true);
+        }}
+        onChangeEmail={() => router.replace("/forgot-password")}
+        onBackToLogin={() => router.replace("/login")}
+      />
     );
   }
 

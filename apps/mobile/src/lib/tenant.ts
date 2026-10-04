@@ -1,7 +1,6 @@
 import { useSyncExternalStore } from "react";
 import {
   type QueryClient,
-  useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -31,8 +30,10 @@ import { useSession } from "@/providers/SessionProvider";
 //   fail-OPEN  → transient lookup errors ("unknown") land in the dashboard,
 //                never on the onboarding wizard: a network blip must not
 //                throw a configured owner out of the app;
-//   fail-CLOSED→ only a CONFIRMED missing membership / tenant row / NULL
-//                onboarded_at routes to (auth)/onboarding.
+//   fail-CLOSED→ only a CONFIRMED missing membership / tenant row routes to
+//                (auth)/account-missing. Мастера настройки нет (04.10):
+//                `onboarded_at` ставит регистрация, и пустой он экран не
+//                меняет.
 
 // ---------------------------------------------------------------------------
 // Local cache (MMKV via the shared KV seam). Keys sit under the "babun:"
@@ -69,7 +70,7 @@ function removeCache(key: string): void {
 }
 
 /** Positive local stamp «этот tenant уже прошёл онбординг». Module-private:
- *  the onboarding screen goes through the gate helpers above, not through the
+ *  the account screens go through the gate helpers above, not through the
  *  stamp itself. */
 function stampOnboarded(tenantId: string): void {
   writeCache(onboardedStampKey(tenantId), "1");
@@ -228,11 +229,6 @@ export type OnboardingGate =
   | { status: "signed-out" }
   | { status: "loading" }
   | { status: "onboarded"; tenantId: string }
-  | {
-      status: "needs-onboarding";
-      tenantId: string;
-      tenant: OnboardingTenant;
-    }
   // Confirmed: no membership row / tenant row gone. Terminal for this device
   // until retry — web maps this to /login?error=tenant_missing.
   | { status: "no-tenant" }
@@ -336,9 +332,7 @@ export function useOnboardingGate(): OnboardingGate {
     const row = tenantQ.data;
     if (row !== undefined) {
       if (row === null) return { status: "no-tenant" };
-      return row.onboarded_at
-        ? { status: "onboarded", tenantId }
-        : { status: "needs-onboarding", tenantId, tenant: row };
+      return { status: "onboarded", tenantId };
     }
     if (tenantQ.isError || isPaused(tenantQ)) {
       return { status: "unknown", tenantId };
@@ -354,77 +348,12 @@ export function useOnboardingGate(): OnboardingGate {
   return { status: "loading" };
 }
 
-/** Re-run failed gate lookups (the «Повторить» button on the onboarding
- *  screen's error states). */
+/** Re-run failed gate lookups (the «Повторить» button on the
+ *  account-missing screen). */
 export function useRetryOnboardingGate(): () => void {
   const qc = useQueryClient();
   return () => {
     void qc.invalidateQueries({ queryKey: ["tenant-membership"] });
     void qc.invalidateQueries({ queryKey: ["tenant-onboarding"] });
   };
-}
-
-// ---------------------------------------------------------------------------
-// Completion — mobile port of apps/web/src/app/onboarding/complete-action.ts.
-// personal_calendar_enabled is intentionally NOT touched: the web wizard
-// writes back the tenant's current value unchanged (the step was removed),
-// so omitting the column produces the identical end state.
-
-export interface CompleteOnboardingArgs {
-  tenantId: string;
-  name: string;
-  vertical: string;
-  /** Имя, с которым аккаунт пришёл в мастер (триггер регистрации ставит
-   *  туда email). */
-  previousName?: string | null;
-}
-
-export function useCompleteOnboarding() {
-  const qc = useQueryClient();
-  return useMutation({
-    // Онбординг-экран показывает ошибку сам (FormError) — без meta глобальный
-    // MutationCache добавил бы второй, дублирующий Alert.
-    meta: { errorHandled: true },
-    mutationFn: async ({ tenantId, name, vertical, previousName }: CompleteOnboardingArgs) => {
-      const { error, count } = await supabase
-        .from("tenants")
-        .update(
-          {
-            name: name.trim(),
-            vertical,
-            onboarded_at: new Date().toISOString(),
-          },
-          { count: "exact" },
-        )
-        .eq("id", tenantId);
-      if (error) throw new Error(error.message);
-      // RLS silently filters refused rows — 0 affected = permissions failure
-      // (same guard as features/settings/tenant.ts useUpdateTenant).
-      if (count === 0) {
-        throw new Error(
-          "Не удалось сохранить: завершить настройку может только владелец.",
-        );
-      }
-      // РЕКВИЗИТЫ ПО УМОЛЧАНИЮ — ТЕМ ЖЕ ИМЕНЕМ (аудит первого входа 03.10).
-      // Триггер регистрации называет аккаунт email'ом, и тот же email уходил
-      // в «Реквизиты» по умолчанию — а оттуда продавцом в первый инвойс.
-      // Переименовываем только нетронутые: строка всё ещё носит прежнее имя.
-      const before = previousName?.trim();
-      if (before && before !== name.trim()) {
-        const { error: entityError } = await supabase
-          .from("legal_entities")
-          .update({ name: name.trim() })
-          .eq("tenant_id", tenantId)
-          .eq("is_default", true)
-          .eq("name", before);
-        if (entityError) throw new Error(entityError.message);
-      }
-    },
-    onSuccess: (_data, { tenantId }) => {
-      stampOnboarded(tenantId);
-      // Всё tenant-состояние собиралось до онбординга (имя, vertical, гейт,
-      // справочники) — инвалидируем целиком, кэш свежего тенанта пуст и дёшев.
-      void qc.invalidateQueries();
-    },
-  });
 }
