@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
-import { TextInput } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Platform, TextInput } from "react-native";
+import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import {
   AuthCard,
@@ -14,11 +15,31 @@ import {
 } from "@/components/auth/AuthCard";
 import { mapAuthError } from "@/components/auth/authErrors";
 import { EmailCodeCard } from "@/components/auth/EmailCodeCard";
+import { parseRecoveryLink } from "@/lib/recovery-link";
 import { supabase } from "@/lib/supabase";
 
 // «Вход в Babun» — email/password right on the screen (fewest taps),
 // Registration and password recovery stay available; unfinished OAuth is hidden.
+// КНОПКА ИЗ ПИСЬМА ПОДТВЕРЖДЕНИЯ (04.10). Сервер подтверждает почту и
+// открывает babun.app/login со входом в адресе (#access_token…). Без этого
+// новая вкладка показывала пустой вход, хотя почта уже подтверждена.
+function useSessionFromEmailLink() {
+  const url = Linking.useURL();
+  useEffect(() => {
+    const credential = parseRecoveryLink(url);
+    if (credential?.kind !== "session") return;
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    void supabase.auth.setSession({
+      access_token: credential.accessToken,
+      refresh_token: credential.refreshToken,
+    });
+  }, [url]);
+}
+
 export default function LoginScreen() {
+  useSessionFromEmailLink();
   const router = useRouter();
   const passwordRef = useRef<TextInput>(null);
   const [email, setEmail] = useState("");
