@@ -31,10 +31,14 @@ function useSessionFromEmailLink() {
     if (Platform.OS === "web" && typeof window !== "undefined") {
       window.history.replaceState(null, "", window.location.pathname);
     }
-    void supabase.auth.setSession({
-      access_token: credential.accessToken,
-      refresh_token: credential.refreshToken,
-    });
+    // Битая или просроченная ссылка — остаёмся на входе молча: supabase-js
+    // бросает на нечитаемом токене, и без catch веб показывал красный экран.
+    supabase.auth
+      .setSession({
+        access_token: credential.accessToken,
+        refresh_token: credential.refreshToken,
+      })
+      .catch(() => undefined);
   }, [url]);
 }
 
