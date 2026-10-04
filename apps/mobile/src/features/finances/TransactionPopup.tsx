@@ -34,6 +34,8 @@ import { deleteOperationAlert, deleteTransferAlert } from "./account-alerts";
 import { refundRemainingCents as refundRemainingCentsOf } from "./refund";
 import { payeeName } from "./category-asks";
 import { randomUuid } from "@babun/shared/sync";
+import { useRouter, type Href } from "expo-router";
+import { useReceipts } from "@/features/documents/receipts-queries";
 
 /** Строка-факт витрины: ярлык слева, значение справа. Читается, но не
  *  правится — правка живёт в форме операции. */
@@ -171,6 +173,18 @@ export function TransactionPopup({
   const afterExit = useRef<(() => void) | null>(null);
   const currency = useTenant().data?.currency;
   const documentsOn = useFeatureOn("documents");
+  const router = useRouter();
+  // ОДНА ДВЕРЬ ВОЗВРАТА (владелец 04.10): у дохода с выписанным чеком возврат
+  // идёт через чек — форма вернёт деньги и выпишет кредит-ноту, а не голую
+  // минусовую строку без документа.
+  const txReceipts = useReceipts({
+    transactionIds: transaction?.id && transaction.type === "income" ? [transaction.id] : [],
+    enabled: visible && !!transaction?.id && transaction.type === "income",
+  });
+  const liveReceipt =
+    (txReceipts.data ?? []).find(
+      (receipt) => receipt.transaction_id === transaction?.id && receipt.status === "issued",
+    ) ?? null;
   const { data: counterpartAccountId } = useTransferCounterpartAccountId(
     visible ? transaction : null,
   );
@@ -417,6 +431,12 @@ export function TransactionPopup({
     actions.push({
       label: "Создать возврат",
       onPress: () => {
+        if (liveReceipt && !tx.invoice_id) {
+          afterExit.current = () =>
+            router.push(`/documents/receipt-refund?receiptId=${liveReceipt.id}` as Href);
+          onClose();
+          return;
+        }
         setShowRefundForm(true);
         setRefundAmount(String(refundRemaining));
         setRefundRequestId(randomUuid());

@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { MoreHorizontal, Share2 } from "lucide-react-native";
+import { FileMinus, MoreHorizontal, Share2 } from "lucide-react-native";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { formatInvoiceMoney } from "@/features/invoices/format";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -12,7 +14,7 @@ import { ICON } from "@/components/ui/tokens";
 import { humanDay } from "@/features/appointments/helpers";
 import { useClients } from "@/features/clients/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
-import { useInvoices } from "@/features/invoices/queries";
+import { useReceiptRefunds } from "./use-receipt-refunds";
 import { useReceiptMenu } from "./receipt-menu";
 import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
 import { notify } from "@/lib/notify";
@@ -37,7 +39,7 @@ export function ReceiptPage({ id }: { id: string }) {
   const accounts = useAccountsWithBalances({ includeInactive: true, includeHidden: true });
   const paper = useIssuedReceiptDoc(receipt);
   const clients = useClients();
-  const invoices = useInvoices();
+  const refunds = useReceiptRefunds(receiptQuery.data ?? null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const receiptMenu = useReceiptMenu();
   const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
@@ -72,14 +74,22 @@ export function ReceiptPage({ id }: { id: string }) {
   const invoice = paper.invoice;
   // КРЕДИТ-НОТЫ ВОЗВРАТА (04.10) — к самому чеку или к его инвойсу: «вернули
   // деньги — документ закреплён за чеком».
-  const notes = (invoices.data ?? []).filter(
-    (item) =>
-      item.kind === "credit_note" &&
-      (item.credit_note_of_receipt_id === receipt.id ||
-        (!!receipt.invoice_id && item.credit_note_of_id === receipt.invoice_id)),
-  );
-  const returned = notes.length > 0;
-  const hasMenu = receiptMenu.actionsFor(receipt).length > 0;
+  const notes = refunds.notes;
+  // Возвращён и без ноты, если деньги вернули другой дверью (отмена визита).
+  const returned = notes.length > 0 || refunds.refunded > 0;
+  const openRefundDocument = () =>
+    router.push(`/documents/receipt-refund?receiptId=${receipt.id}` as Href);
+  // Возврат без документа — первым пунктом меню и кнопкой внизу.
+  const documentItem =
+    refunds.uncovered > 0
+      ? [{
+          label: "Кредит-нота на возврат",
+          icon: FileMinus,
+          color: SETTINGS_TILE.orange,
+          run: openRefundDocument,
+        }]
+      : [];
+  const hasMenu = documentItem.length > 0 || receiptMenu.actionsFor(receipt).length > 0;
 
   const sharePdf = async () => {
     if (pdfBusy || paper.linesLoading || !paper.doc) return;
@@ -103,7 +113,7 @@ export function ReceiptPage({ id }: { id: string }) {
   // кнопка внизу уже делятся PDF.
   const openMenu = () =>
     setSheetMenu(
-      receiptMenu.menuFor(receipt, [], {
+      receiptMenu.menuFor(receipt, documentItem, {
         onDeleted: () => {
           if (router.canGoBack()) router.back();
           else router.replace("/finances?view=documents" as Href);
@@ -197,13 +207,21 @@ export function ReceiptPage({ id }: { id: string }) {
       </ScrollView>
 
       {/* ГЛАВНОЕ ДЕЙСТВИЕ ВЫПИСАННОГО ЧЕКА — ОТПРАВИТЬ (владелец 04.10: «и уже
-          всё можно отправлять»). */}
-      {dead ? null : (
+          всё можно отправлять»); вернули деньги без документа — выписать его,
+          и у погашенного чека тоже. */}
+      {dead && refunds.uncovered <= 0 ? null : (
         <View
           className="px-4 pb-7 pt-3"
           style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
         >
-          <GradientButton label="Поделиться PDF" loading={busy} onPress={() => void sharePdf()} />
+          {refunds.uncovered > 0 ? (
+            <GradientButton
+              label={`Выписать кредит-ноту · ${formatInvoiceMoney(refunds.uncovered, receipt.currency)}`}
+              onPress={openRefundDocument}
+            />
+          ) : (
+            <GradientButton label="Поделиться PDF" loading={busy} onPress={() => void sharePdf()} />
+          )}
         </View>
       )}
       <ActionMenuSheet menu={sheetMenu} onClose={() => setSheetMenu(null)} />

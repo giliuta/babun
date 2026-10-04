@@ -4639,6 +4639,10 @@ export type Database = {
         Args: { p_company_id: string }
         Returns: undefined
       }
+      issue_receipt_credit_note: {
+        Args: { p_language?: string; p_reason?: string; p_receipt_id: string }
+        Returns: Database["public"]["Tables"]["invoices"]["Row"]
+      }
       issue_receipt: {
         Args: {
           p_client_requisites_id?: string

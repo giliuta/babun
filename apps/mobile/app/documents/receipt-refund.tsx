@@ -7,7 +7,6 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
 import {
   calculateInvoiceSettlement,
   type InvoiceLedgerWithLines,
@@ -24,6 +23,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { useClients } from "@/features/clients/queries";
 import { DocumentLinkBlocks } from "@/features/documents/DocumentLinkBlocks";
 import {
+  useIssueReceiptCreditNote,
   useReceipt,
   useReceiptTransaction,
   useRefundReceipt,
@@ -40,11 +40,10 @@ import {
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
 import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
 import { useNextInvoiceSeries } from "@/features/invoices/queries";
+import { useReceiptRefunds } from "@/features/documents/use-receipt-refunds";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useTenant } from "@/features/settings/tenant";
 import { haptics } from "@/lib/haptics";
-import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
 
 // ВОЗВРАТ ПО ЧЕКУ — ФОРМА → ПРЕВЬЮ → «ВЫПИСАТЬ» (владелец 2026-10-04:
@@ -57,7 +56,6 @@ import { useThemeColors } from "@/theme/colors";
 export default function ReceiptRefundScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  const tenantId = useTenantId();
   const { receiptId } = useLocalSearchParams<{ receiptId: string }>();
   const receiptQuery = useReceipt(receiptId);
   const receipt = receiptQuery.data ?? null;
@@ -74,31 +72,19 @@ export default function ReceiptRefundScreen() {
     calendarSettings.data?.timezone ?? "Europe/Nicosia",
   );
   const refund = useRefundReceipt();
+  const issueDocument = useIssueReceiptCreditNote();
   const requestId = useRef(randomUuid()).current;
   const issued = useRef<string | null>(null);
 
-  // Сколько по чеку уже вернули — остаток и есть то, что можно вернуть.
-  const refunded = useQuery({
-    queryKey: ["transactions", tenantId, "refunds-of", tx?.id],
-    enabled: !!tenantId && !!tx?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("finance_transactions")
-        .select("amount")
-        .eq("tenant_id", tenantId as string)
-        .eq("refund_of_id", tx?.id as string)
-        .eq("type", "refund");
-      if (error) throw new Error(error.message);
-      return (data ?? []).reduce(
-        (sum, row) => sum + Math.abs(Number(row.amount)),
-        0,
-      );
-    },
-  });
+  // Сколько по чеку уже вернули и сколько из этого ещё без документа —
+  // общий подсчёт со страницей чека (`useReceiptRefunds`).
+  const refunds = useReceiptRefunds(receipt);
+  const uncovered = refunds.uncovered;
+  const documentOnly = !!receipt && !receipt.invoice_id && uncovered > 0;
   const refundable = receipt
     ? Math.max(
         0,
-        Math.round((receipt.amount - (refunded.data ?? 0)) * 100) / 100,
+        Math.round((receipt.amount - refunds.refunded) * 100) / 100,
       )
     : 0;
 
@@ -117,9 +103,9 @@ export default function ReceiptRefundScreen() {
 
   const byInvoice = !!receipt?.invoice_id;
   const amountText = amount ?? formatMoneyForInput(refundable);
-  const parsed = byInvoice ? refundable : parseMoneyAmount(amountText);
+  const parsed = documentOnly ? uncovered : byInvoice ? refundable : parseMoneyAmount(amountText);
   const value = parsed ?? 0;
-  const valid = value > 0 && value <= refundable;
+  const valid = documentOnly ? value > 0 : value > 0 && value <= refundable;
   const client =
     (clients.data ?? []).find((c) => c.id === receipt?.client_id) ?? null;
   const account =
@@ -208,7 +194,7 @@ export default function ReceiptRefundScreen() {
   // разошёлся бы с ним. Путь — одной кнопкой внизу.
   const fromRecord =
     !!tx && (tx.source === "auto" || !!tx.appointment_payment_kind);
-  if (fromRecord || receipt.status !== "issued") {
+  if (!documentOnly && (fromRecord || receipt.status !== "issued")) {
     const openRecord = receipt.appointment_id
       ? () =>
           router.push(
@@ -244,13 +230,19 @@ export default function ReceiptRefundScreen() {
   const issue = async () => {
     setError(null);
     try {
-      const note = await refund.mutateAsync({
-        receiptId: receipt.id,
-        amount: value,
-        reason: reason.trim() || null,
-        language,
-        requestId,
-      });
+      const note = documentOnly
+        ? await issueDocument.mutateAsync({
+            receiptId: receipt.id,
+            reason: reason.trim() || null,
+            language,
+          })
+        : await refund.mutateAsync({
+            receiptId: receipt.id,
+            amount: value,
+            reason: reason.trim() || null,
+            language,
+            requestId,
+          });
       haptics.success();
       issued.current = note.id;
       setPreviewOpen(false);
@@ -260,7 +252,9 @@ export default function ReceiptRefundScreen() {
   };
 
   const money = formatInvoiceMoney(value, receipt.currency);
-  const hint = byInvoice
+  const hint = documentOnly
+    ? { text: "Деньги уже вернули — выпишем на них кредит-ноту" }
+    : byInvoice
     ? { text: "Платёж инвойса возвращается целиком — инвойс отменится" }
     : amountText && parsed == null
       ? { text: "Не больше двух знаков после запятой", error: true }
@@ -304,11 +298,11 @@ export default function ReceiptRefundScreen() {
           />
 
           {/* СУММА — ВСЯ ИЛИ ЧАСТЬ; у платежа инвойса — вся (инвойс отменяется). */}
-          {byInvoice ? (
+          {byInvoice || documentOnly ? (
             <SectionCard title="Сумма">
               <View className="flex-row items-center justify-between px-4 pb-1 pt-2">
                 <Text style={{ fontSize: 17, fontWeight: "600", color: t.ink }}>
-                  Вернуть
+                  {documentOnly ? "Возвращено" : "Вернуть"}
                 </Text>
                 <Text
                   style={{
@@ -370,7 +364,13 @@ export default function ReceiptRefundScreen() {
           }}
         >
           <GradientButton
-            label={valid ? `Вернуть · ${money}` : "Вернуть"}
+            label={
+              documentOnly
+                ? `Выписать кредит-ноту · ${money}`
+                : valid
+                  ? `Вернуть · ${money}`
+                  : "Вернуть"
+            }
             disabled={!valid || !series.data}
             onPress={() => setPreviewOpen(true)}
           />
@@ -380,7 +380,7 @@ export default function ReceiptRefundScreen() {
       <InvoicePreviewSheet
         visible={previewOpen}
         doc={paperDoc}
-        busy={refund.isPending}
+        busy={refund.isPending || issueDocument.isPending}
         title="Кредит-нота"
         label="Выписать кредит-ноту"
         error={error}

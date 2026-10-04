@@ -313,3 +313,29 @@ export function useDeleteReceipt() {
     meta: { errorHandled: true },
   });
 }
+
+/** КРЕДИТ-НОТА НА ВОЗВРАТ, СДЕЛАННЫЙ ДРУГОЙ ДВЕРЬЮ (04.10): деньги уже вернули
+ *  (отмена визита, запись, операция) — документ на ещё не покрытую сумму
+ *  (`issue_receipt_credit_note`). Денег не двигает. */
+export function useIssueReceiptCreditNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...NEVER_PAUSE,
+    mutationFn: async (input: {
+      receiptId: string;
+      reason: string | null;
+      language: string;
+    }): Promise<{ id: string; number: string }> => {
+      const { data, error } = await supabase.rpc("issue_receipt_credit_note", {
+        p_receipt_id: input.receiptId,
+        ...(input.reason ? { p_reason: input.reason } : {}),
+        p_language: input.language,
+      });
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error("Кредит-нота не подтверждена сервером");
+      return { id: data.id, number: data.number };
+    },
+    onSuccess: () => invalidateLedger(qc),
+    meta: { errorHandled: true },
+  });
+}

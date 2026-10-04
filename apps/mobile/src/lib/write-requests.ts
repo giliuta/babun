@@ -91,6 +91,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   // Возврат по чеку + кредит-нота (миграция 20261004091731).
   "refund_receipt",
   "delete_receipt",
+  "issue_receipt_credit_note",
   "location_request_create",
   "location_request_submit",
   "member_appointment_copy",
