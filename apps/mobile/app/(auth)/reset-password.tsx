@@ -69,6 +69,7 @@ export default function ResetPasswordScreen() {
             data: { session },
           } = await supabase.auth.getSession();
           if (active) {
+            setAwaitingCode(false);
             if (session) setReady(true);
             else setExpired(true);
           }
@@ -86,11 +87,17 @@ export default function ResetPasswordScreen() {
               });
         if (!recoveryError) verifiedRecoveryLinks.add(key);
         if (active) {
+          // КНОПКА ИЗ ПИСЬМА, ПОКА ОТКРЫТ ЭКРАН КОДА (04.10): ссылка решает
+          // сама — экран кода уходит, иначе он закрывал «Новый пароль».
+          setAwaitingCode(false);
           if (recoveryError) setExpired(true);
           else setReady(true);
         }
       } catch {
-        if (active) setExpired(true);
+        if (active) {
+          setAwaitingCode(false);
+          setExpired(true);
+        }
       }
     }
     void hydrate();
