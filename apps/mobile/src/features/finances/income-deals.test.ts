@@ -42,6 +42,19 @@ describe("incomeDeals", () => {
     assert.deepEqual(incomeDeals(rows).map((r) => r.id), ["i1", "r1"]);
   });
 
+  test("возврат частями, сложившийся в целую оплату, прячется вместе с ней", () => {
+    const rows = [
+      tx({ id: "i1", type: "income", amount: 50 }),
+      tx({ id: "r1", type: "refund", amount: -20, refund_of_id: "i1" }),
+      tx({ id: "r2", type: "refund", amount: -30, refund_of_id: "i1" }),
+      tx({ id: "i2", type: "income", amount: 40 }),
+      tx({ id: "r3", type: "refund", amount: -10, refund_of_id: "i2" }),
+      tx({ id: "r4", type: "refund", amount: -10, refund_of_id: "i2" }),
+    ];
+    // Вторая оплата вернулась не вся: и она, и оба её возврата — на месте.
+    assert.deepEqual(incomeDeals(rows).map((r) => r.id), ["i2", "r3", "r4"]);
+  });
+
   test("расходы и переводы в доход не попадают; возврат без исходника виден", () => {
     const rows = [
       tx({ id: "e1", type: "expense", amount: 20 }),
