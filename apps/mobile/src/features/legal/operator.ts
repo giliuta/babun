@@ -22,7 +22,7 @@ export interface LegalOperator {
 // аккаунте Apple Developer, его же App Store покажет продавцом.
 export const LEGAL_OPERATOR: LegalOperator = {
   name: "Artem Hiliuta",
-  address: "",
+  address: "Paphos, Cyprus",
 };
 
 /** Почта для вопросов о данных и удаления аккаунта — та же, что в «Помощи». */
