@@ -29,6 +29,12 @@ export default function AuthLayout() {
   const onResetPassword = path[1] === "reset-password";
   const onAccountMissing = path[1] === "account-missing";
 
+  // ВЫШЕДШИЙ НЕ ЖДЁТ НА ЗАПАСНОМ ЭКРАНЕ (04.10, Pro Max владельца: «застыла и
+  // не открывается»). Запасной экран — для вошедшего, чьи данные не открылись;
+  // гейт ниже уводит только ВОШЕДШИХ, а без сессии экран показывал загрузку
+  // без поля и кнопки — навсегда, пока приложение не убьют.
+  if (!session && onAccountMissing) return <Redirect href="/login" />;
+
   // A signed-in user doesn't belong in the auth stack: send them to the app.
   // Мастера настройки нет (04.10): только аккаунт без данных уходит на
   // запасной экран. "unknown" fails open to the dashboard, mirroring
@@ -59,6 +65,10 @@ export default function AuthLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      {/* ВХОД — ПЕРВЫЙ ЭКРАН ГРУППЫ. Переход в группу без адреса открывает
+          первый объявленный экран; первым стоял запасной — и вышедший
+          попадал на вечную загрузку вместо входа. */}
+      <Stack.Screen name="login" />
       {/* Запасной экран аккаунта — гейт: свайп назад на логин не должен
           «сбегать» с него (гейт выше всё равно вернёт). */}
       <Stack.Screen name="account-missing" options={{ gestureEnabled: false }} />
