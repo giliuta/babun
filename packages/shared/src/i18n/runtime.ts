@@ -124,14 +124,34 @@ function patterns(): ServerPattern[] {
   return serverPatterns;
 }
 
+// «ЗАПИСЬ», А НЕ «ЗАЯВКА» (прогон оплаты 04.10). Слово продукта — «запись»,
+// а функции базы писались, когда она звалась заявкой: под «Записью» в шапке
+// всплывало «Полученная сумма больше итога заявки», «Заявка не найдена».
+// Переписывать два десятка функций базы и ключи шести словарей ради одного
+// слова — накат без пользы для человека; русский текст сервера правится при
+// показе. Род у слов один (женский), поэтому соседние прилагательные
+// («отменённой заявке» → «отменённой записи») согласованы сами.
+const ZAYAVKA = /(^|[^А-Яа-яЁё])([Зз])а(?:явк(ами|ам|ах|ой|ою|а|и|е|у)|явок)(?![А-Яа-яЁё])/g;
+const ZAPIS_ENDING: Readonly<Record<string, string>> = {
+  ами: "ями", ам: "ям", ах: "ях", ой: "ью", ою: "ью", а: "ь", и: "и", е: "и", у: "ь",
+};
+
+function productWords(text: string): string {
+  return text.replace(ZAYAVKA, (_all, before: string, z: string, ending?: string) =>
+    `${before}${z}апис${ending === undefined ? "ей" : ZAPIS_ENDING[ending]}`,
+  );
+}
+
 /**
  * TEXT THAT CAME FROM OUTSIDE THE BUNDLE — an error raised by the database, a
  * message a server returned. The plugin never saw it, so it is looked up when
  * printed (toasts, empty states): verbatim first, then as a server message
- * with values, then «Prefix: message» by its tail. Unknown text stays as is.
+ * with values, then «Prefix: message» by its tail. Unknown text stays as is
+ * — in Russian, with the product's words (`productWords`).
  */
 export function tDynamic(text: string): string {
-  if (!text || active() === null) return text;
+  if (!text) return text;
+  if (active() === null) return productWords(text);
   const exact = lookup(text);
   if (exact !== text) return exact;
   for (const { key, match } of patterns()) {
@@ -142,9 +162,9 @@ export function tDynamic(text: string): string {
   if (colon > 0) {
     const tail = text.slice(colon + 2);
     const translated = tDynamic(tail);
-    if (translated !== tail) return `${text.slice(0, colon)}: ${translated}`;
+    if (translated !== productWords(tail)) return `${text.slice(0, colon)}: ${translated}`;
   }
-  return text;
+  return productWords(text);
 }
 
 let phrases: Set<string> | null = null;
