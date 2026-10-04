@@ -4060,6 +4060,35 @@ export type Database = {
         }
         Relationships: []
       }
+      user_hidden_calendars: {
+        Row: {
+          created_at: string
+          team_id: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          team_id: string
+          tenant_id: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          team_id?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_hidden_calendars_tenant_id_team_id_fkey"
+            columns: ["tenant_id", "team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["tenant_id", "id"]
+          },
+        ]
+      }
       webhooks: {
         Row: {
           created_at: string

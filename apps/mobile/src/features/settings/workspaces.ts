@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { useTenantId } from "@/lib/tenant";
 import { switchTenant } from "./switch-tenant";
+import { useHiddenCalendars } from "./use-hidden-calendars";
 import { myCalendarsQueryKey } from "./my-calendars-key";
 import { USER_ROLES, type UserRole } from "./role-policy";
 import {
@@ -133,6 +134,12 @@ export function useMyCalendars() {
   });
 }
 
+/** Скрытые календари человека по его ленте (владелец 04.10,
+ *  `hidden-calendars.ts`): что скрыто, можно ли скрыть, тумблер. */
+export function useCalendarVisibility() {
+  return useHiddenCalendars(useMyCalendars().data);
+}
+
 export function useSwitchWorkspace() {
   return useMutation({
     networkMode: "always",
@@ -174,6 +181,9 @@ export function useCalendarChips(opts: {
   onPickOwn: (teamId: string) => void;
   /** Переход не состоялся — человек остаётся там, где был, и знает почему. */
   onSwitchError: (message: string) => void;
+  /** Показывать и скрытые календари — только шестерёнке календаря, где их
+   *  включают обратно (владелец 04.10). */
+  includeHidden?: boolean;
 }): {
   items: CalendarChip[];
   pick: (chipId: string) => void;
@@ -235,14 +245,20 @@ export function useCalendarChips(opts: {
   // владельца их несколько компаний: в предпросмотре сотрудника одной фирмы
   // была видна вторая — и дверь в неё. Сотрудник видит только свою.
   const inMirror = useMirror() !== null;
-  const calendars = inMirror ? myCalendars.filter(isActiveCompany) : myCalendars;
+  // СКРЫТЫЕ КАЛЕНДАРИ (владелец 04.10) — вне ленты, кроме шестерёнки.
+  const visibility = useHiddenCalendars(calendarsPending ? undefined : myCalendars);
+  const shown = (tenantId: string | null | undefined, teamId: string) =>
+    opts.includeHidden || !visibility.isHidden(tenantId, teamId);
+  const calendars = (inMirror ? myCalendars.filter(isActiveCompany) : myCalendars).filter((c) =>
+    shown(c.tenantId, c.teamId),
+  );
 
   const foreign = calendars.filter((c) => !isActiveCompany(c));
   // Состав и порядок ряда — чистая функция в листе `calendar-chips.ts`: там
   // она проверяется тестом, а здесь, рядом с react-native и supabase, раннер
   // тестов её не поднимет.
   const items = composeCalendarChips({
-    own: opts.own,
+    own: opts.own.filter((team) => shown(activeTenantId, team.id)),
     myCalendars: calendars,
     activeTenantId,
   });

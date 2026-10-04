@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useTenantId } from "@/lib/tenant";
+import { useCalendarVisibility } from "@/features/settings/workspaces";
 import {
   FlatList,
   Pressable,
@@ -247,9 +249,18 @@ function ClientsListScreen() {
   // прийти и своим хуком, и гостевым источником (её календарь открыт), а два
   // одинаковых ключа в списке — это и предупреждение React, и две одинаковые
   // строки в фильтре.
+  // Скрытого календаря (владелец 04.10) в ленте команд клиентов нет.
+  const calendarVisibility = useCalendarVisibility();
+  const visibilityTenantId = useTenantId();
   const teams = useMemo(
-    () => uniqueById([...ownTeams, ...guests.list.flatMap((guest) => guest.teams)]),
-    [ownTeams, guests.list],
+    () =>
+      uniqueById([
+        ...ownTeams.filter((team) => !calendarVisibility.isHidden(visibilityTenantId, team.id)),
+        ...guests.list.flatMap((guest) =>
+          guest.teams.filter((team) => !calendarVisibility.isHidden(guest.scope.tenantId, team.id)),
+        ),
+      ]),
+    [ownTeams, guests.list, calendarVisibility.isHidden, visibilityTenantId],
   );
   const tags = useMemo(
     () => uniqueById([...ownTags, ...guests.list.flatMap((guest) => guest.tags)]),

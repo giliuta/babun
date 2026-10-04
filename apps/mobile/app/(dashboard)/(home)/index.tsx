@@ -184,7 +184,8 @@ import {
 import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
-import { useCalendarChips } from "@/features/settings/workspaces";
+import { useCalendarChips, useCalendarVisibility } from "@/features/settings/workspaces";
+import { FOREIGN_PREFIX } from "@/features/settings/calendar-chips";
 import { useMirror } from "@/features/access/mirror/mirror-state";
 import { hiddenByWindow } from "@/features/appointments/record-window";
 import {
@@ -320,7 +321,7 @@ export default function CalendarTab() {
     [servicesQuery.data],
   );
   const {
-    data: teams = [],
+    data: teamsAll = [],
     isLoading: teamsLoading,
     isPending: teamsPending,
     isFetching: teamsFetching,
@@ -329,6 +330,16 @@ export default function CalendarTab() {
     error: teamsQueryError,
     refetch: refetchTeams,
   } = useTeams();
+  // СКРЫТЫЕ КАЛЕНДАРИ (владелец 04.10): скрытого своего в ленте и в выборе
+  // нет. Скрыты все свои — экран уходит в календарь другого аккаунта (ниже):
+  // скрыть последний видимый правило не даёт.
+  const calendarVisibility = useCalendarVisibility();
+  const visibilityTenantId = useTenantId();
+  const teams = useMemo(
+    () => teamsAll.filter((tm) => !calendarVisibility.isHidden(visibilityTenantId, tm.id)),
+    [teamsAll, calendarVisibility.isHidden, visibilityTenantId],
+  );
+  const ownAllHidden = teamsAll.length > 0 && teams.length === 0;
   // УДАЛЁННЫХ КАЛЕНДАРЕЙ В ЛЕНТЕ НЕТ — НИ ЗДЕСЬ, НИ В «ФИНАНСАХ».
   //
   // Здесь год стоял второй список, `useTeams({ includeInactive: true })`:
@@ -893,6 +904,23 @@ export default function CalendarTab() {
     },
     onSwitchError: (message) => toast(message, "error"),
   });
+
+  // ВСЕ СВОИ СКРЫТЫ — В ЧУЖОЙ КАЛЕНДАРЬ (владелец 04.10: скрытый «Личный»
+  // не показывается, а смотреть человек будет календарь, которым с ним
+  // поделились). Только пока экран на виду: из шестерёнки, где скрытый
+  // включают обратно, никуда не уводим. Раз на аккаунт — без петли на сбое.
+  const hiddenSwitchTried = useRef<string | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      if (!ownAllHidden || pendingChipId) return;
+      const target = chipItems.find((chip) => chip.id.startsWith(FOREIGN_PREFIX));
+      if (!target || hiddenSwitchTried.current === visibilityTenantId) return;
+      hiddenSwitchTried.current = visibilityTenantId;
+      pickCalendar(target.id);
+      // pickCalendar пересоздаётся каждый рендер — сторожем служит ref.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ownAllHidden, pendingChipId, chipItems, visibilityTenantId]),
+  );
 
   // ЕЩЁ НЕ ЗНАЕМ, ЕСТЬ ЛИ ЗДЕСЬ КАЛЕНДАРИ И КАКИЕ ЕСТЬ В ДРУГИХ КОМПАНИЯХ.
   //
@@ -1897,13 +1925,14 @@ export default function CalendarTab() {
     if (!tenantId || firstCalendarStarted.current === tenantId) return;
     if (role !== "owner") return;
     if (teamsPending || teamsFetching || teamsError) return;
-    if (teams.length > 0) return;
+    // Скрытые свои — тоже календари: второй «Личный» им не нужен.
+    if (teamsAll.length > 0) return;
     firstCalendarStarted.current = tenantId;
     createFirstCalendar();
     // createFirstCalendar намеренно не в зависимостях: он пересоздаётся
     // каждый рендер, и его включение превратило бы эффект в цикл.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId, role, teamsPending, teamsFetching, teamsError, teams.length]);
+  }, [tenantId, role, teamsPending, teamsFetching, teamsError, teamsAll.length]);
   const openEdit = (apt: Appointment) => {
     // Виртуальное вхождение повтора редактируем через его seed-запись —
     // у виртуала синтетический id, мутации по нему невалидны (web parity).
@@ -3126,9 +3155,10 @@ export default function CalendarTab() {
             onSelect={pickCalendar}
           />
         ) : null}
-        {calendarsUnknown ? (
+        {calendarsUnknown || ownAllHidden ? (
           // Скелет, а не голый спиннер: один экран — один язык ожидания.
-          // Полосы чипов в скелете нет — команд ещё нет.
+          // Полосы чипов в скелете нет — команд ещё нет. Свои скрыты — идёт
+          // переход в календарь другого аккаунта.
           <CalendarSkeleton mode="week" />
         ) : teamsError ? (
           <EmptyState

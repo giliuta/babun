@@ -7,6 +7,7 @@ import { BarChart3, Search, Settings, X } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { containsPattern } from "@/lib/like-pattern";
 import { useTenantId } from "@/lib/tenant";
+import { useCalendarVisibility } from "@/features/settings/workspaces";
 import { useSession } from "@/providers/SessionProvider";
 import { GUTTER } from "@/components/ui/tokens";
 import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finance/transaction";
@@ -342,7 +343,17 @@ function FinancesContent() {
     () => categoriesQuery.data ?? [],
     [categoriesQuery.data],
   );
-  const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
+  // Скрытого календаря (владелец 04.10) в ленте и выборе разреза нет; деньги
+  // его счетов при этом никуда не деваются.
+  const calendarVisibility = useCalendarVisibility();
+  const visibilityTenantId = useTenantId();
+  const teams = useMemo(
+    () =>
+      (teamsQuery.data ?? []).filter(
+        (team) => !calendarVisibility.isHidden(visibilityTenantId, team.id),
+      ),
+    [teamsQuery.data, calendarVisibility.isHidden, visibilityTenantId],
+  );
   const allTeams = useMemo(
     () => allTeamsQuery.data ?? [],
     [allTeamsQuery.data],

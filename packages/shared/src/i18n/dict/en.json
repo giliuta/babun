@@ -5217,5 +5217,7 @@
  "Счетов пока нет": "No accounts yet",
  "Счёт — касса, карта или банк: на него приходят деньги и с него уходят. Начните с первого.": "An account is cash, a card or a bank: money comes in and goes out through it. Start with the first one.",
  "Сначала добавьте реквизиты: Кабинет → Реквизиты": "Add your business details first: Office → Business details",
- "не указано": "not set"
+ "не указано": "not set",
+ "Скрыть календарь": "Hide calendar",
+ "Нужен другой календарь": "Needs another calendar"
 }
