@@ -111,7 +111,7 @@ import {
 import { haptics } from "@/lib/haptics";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { useKeyboardShown } from "@/lib/keyboard";
-import { confirmAction, confirmThen } from "@/lib/confirm";
+import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 
 import {
@@ -140,8 +140,7 @@ import {
   usePersonalEventTypes,
 } from "@/features/settings/local-settings";
 import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
-import { overpaymentToRefund, pendingPaymentToSend } from "@/features/appointments/payment-draft";
-import { formatEURExact } from "@babun/shared/common/utils/money";
+import { pendingPaymentToSend } from "@/features/appointments/payment-draft";
 import { useBusinessNow } from "@/features/appointments/business-now";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { EventTypeBlock } from "@/features/appointments/EventTypeBlock";
@@ -153,7 +152,7 @@ import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { uploadPendingFiles, type PendingFile } from "@/features/appointments/pending-files";
 import { useTenantId } from "@/lib/tenant";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRecordPayment, useRefundOverpayment } from "@/features/appointments/payment-mutations";
+import { useRecordPayment } from "@/features/appointments/payment-mutations";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import {
   resolveBookingClientPrefill,
@@ -283,18 +282,7 @@ function serviceBuffersMinutes(
   return before + after;
 }
 
-// ДРУГАЯ ЗАПИСЬ — ДРУГАЯ ФОРМА (прогон оплаты 04.10). Ссылка на `/book` с
-// другим `appointmentId`, пришедшая при открытой форме, меняет параметры ТОГО
-// ЖЕ экрана, а не открывает новый. Гидрация правки идёт один раз — и форма
-// держала дату и время прежней записи («чт, 8 октября 11:00»), а оплату
-// показывала уже новой («Дата изменена — сохраните»): «Сохранить» перенёс бы
-// запись на чужой день. Ключ по записи собирает форму заново.
 export default function BookScreen() {
-  const params = useLocalSearchParams<{ appointmentId?: string }>();
-  return <BookForm key={first(params.appointmentId) ?? "new"} />;
-}
-
-function BookForm() {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -558,10 +546,6 @@ function BookForm() {
   const tenantIdForFiles = useTenantId();
   const queryClientForFiles = useQueryClient();
   const recordPayment = useRecordPayment();
-  const refundOverpayment = useRefundOverpayment(editId);
-  // Номер попытки возврата переплаты — один на это нажатие «Сохранить» и
-  // его повторы после обрыва: сервер второго возврата не запишет.
-  const overpayRequestRef = useRef<string | null>(null);
   const [reminderOn, setReminderOn] = useState(false);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
@@ -2077,31 +2061,9 @@ function BookForm() {
             : (editing ?? {}),
           buildPatch(),
         );
-        // ИТОГ НИЖЕ ПОЛУЧЕННОГО — СНАЧАЛА ВЕРНУТЬ КЛИЕНТУ РАЗНИЦУ (владелец
-        // 04.10: «разделил платежи 20 + 10 + 20, потом изменил итог на 30 —
-        // словила баг по оплате»). Сервер такой итог не сохранит («Полученная
-        // сумма больше итога заявки»), и форма упиралась в отказ без выхода:
-        // «Снять» — это «деньги не поступили», а вернуть часть было нечем.
-        // Теперь «Сохранить» спрашивает и возвращает разницу возвратом
-        // клиенту (`refund_appointment_overpayment`), а потом сохраняет итог.
-        const refund = overpaymentToRefund(editing ?? null, effectiveTotal);
-        if (refund && "total_amount" in patch) {
-          const ok = await confirmAction(`Вернуть клиенту ${formatEURExact(refund.amountCents / 100)}?`, {
-            message: `Итог ${formatEURExact(effectiveTotal)}, а получено ${formatEURExact(refund.receivedCents / 100)}. Разница вернётся клиенту с последних платежей — в финансах будет возврат.`,
-            confirmLabel: `Вернуть ${formatEURExact(refund.amountCents / 100)}`,
-          });
-          if (!ok) return;
-          overpayRequestRef.current ??= randomUuid();
-          await refundOverpayment.mutateAsync({
-            appointmentId: editId,
-            amount: refund.amountCents / 100,
-            requestId: overpayRequestRef.current,
-          });
-        }
         if (Object.keys(patch).length > 0) {
           await updateMut.mutateAsync({ id: editId, patch });
         }
-        overpayRequestRef.current = null;
         toast("Изменения сохранены", "success");
         haptics.success();
       } else {
@@ -3650,20 +3612,6 @@ function BookForm() {
           serviceIds.map((id) => [id, overrides[id]?.qty ?? 1]),
         )}
         onQtyChange={setQty}
-        // Цена, которую держит запись (снимок прошлой правки или вписанная
-        // руками), — лист печатает её, а не сегодняшний прайс.
-        recordLines={Object.fromEntries(
-          selectedServices
-            .filter(
-              (line) =>
-                overrides[line.serviceId]?.locked != null ||
-                overrides[line.serviceId]?.price != null,
-            )
-            .map((line) => [
-              line.serviceId,
-              { unitPrice: line.pricePerUnit, total: line.totalPrice },
-            ]),
-        )}
         catalog={
           servicesQuery.isLoadingError
             ? "failed"

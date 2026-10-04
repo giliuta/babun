@@ -74,7 +74,6 @@ export function ServicePicker({
   quantities,
   onToggle,
   onQtyChange,
-  recordLines,
   catalog = "ready",
   catalogError,
   onRetryCatalog,
@@ -99,9 +98,6 @@ export function ServicePicker({
   quantities: Record<string, number>;
   /** Ноль убирает услугу из записи. */
   onQtyChange: (id: string, qty: number) => void;
-  /** Цена, которую держит САМА запись: снимок цены прошлой правки или цена,
-   *  вписанная руками. Нет ключа — услуга по прайсу. */
-  recordLines?: Record<string, { unitPrice: number; total: number }>;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -144,24 +140,17 @@ export function ServicePicker({
   );
   // ЦЕНА — ПО ЛЕСТНИЦЕ КОЛИЧЕСТВА, КАК В ФОРМЕ: подвал считал по базовой цене
   // и обещал «€150», а «Итого» на форме — €135 по опту от трёх.
-  //
-  // А У ЗАПИСИ — ЕЁ ЦЕНА (прогон оплаты 04.10). Запись держит снимок цены:
-  // чистка по €30, прайс с тех пор поднят до €50. Лист читал прайс и обещал
-  // «Применить · 1 · €50», а форма после «Применить» честно оставляла €30.
-  // Строка, которую форма уже посчитала, берётся у формы.
   const subtotal = useMemo(
     () =>
       round2(
         catalogIds.reduce((sum, id) => {
-          const held = recordLines?.[id];
-          if (held) return sum + held.total;
           const svc = services.find((s) => s.id === id);
           if (!svc) return sum;
           const qty = quantities[id] ?? 1;
           return sum + unitPriceFor(svc, qty) * qty;
         }, 0),
       ),
-    [catalogIds, services, quantities, recordLines],
+    [catalogIds, services, quantities],
   );
   const close = () => {
     setQ("");
@@ -302,11 +291,11 @@ export function ServicePicker({
                 subtitle={
                   offDayIds.has(s.id)
                     ? offDayLabel
-                    : `${formatEURExact(recordLines?.[s.id]?.unitPrice ?? s.price)} · ${durationLabel(s.duration_minutes)}`
+                    : `${formatEURExact(s.price)} · ${durationLabel(s.duration_minutes)}`
                 }
                 selected={on}
                 accessibilityRole="checkbox"
-                accessibilityLabel={`${s.name}, ${formatEURExact(recordLines?.[s.id]?.unitPrice ?? s.price)}${
+                accessibilityLabel={`${s.name}, ${formatEURExact(s.price)}${
                   on ? `, взято ${qty ?? 1}` : ""
                 }`}
                 onPress={() => toggle(s.id)}
