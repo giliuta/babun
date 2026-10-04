@@ -18,8 +18,10 @@ export interface LegalOperator {
   address: string;
 }
 
+// Владелец 04.10: выпускаем от себя (личная лицензия Apple) — имя ровно как в
+// аккаунте Apple Developer, его же App Store покажет продавцом.
 export const LEGAL_OPERATOR: LegalOperator = {
-  name: "",
+  name: "Artem Hiliuta",
   address: "",
 };
 
