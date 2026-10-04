@@ -5,6 +5,15 @@
 //   без переменной         → боевой Babun как в app.json (релиз/TestFlight)
 const IS_DEV = process.env.APP_VARIANT === "development";
 
+// ССЫЛКИ НА babun.app ОТКРЫВАЮТ ПРИЛОЖЕНИЕ (04.10, выпуск в магазины).
+// Кнопки писем Babun и приглашения партнёру ведут на https://babun.app —
+// на телефоне с Babun такие адреса открываются сразу в приложении, без
+// браузера. Только эти пути: оплата (/pay) и страницы для клиентов (/r, /l)
+// остаются сайтом. Пара на сайте — public/.well-known (apple-app-site-
+// association, assetlinks.json); dev-клиент живёт под другим bundle id и
+// домен не берёт.
+const APP_LINK_PATHS = ["/invite", "/reset-password", "/login"];
+
 module.exports = ({ config }) => ({
   ...config,
   name: IS_DEV ? "Babun Dev" : config.name,
@@ -41,12 +50,29 @@ module.exports = ({ config }) => ({
   // MapPicker на провайдер Google без его SDK в сборке.
   android: {
     ...config.android,
+    ...(IS_DEV
+      ? null
+      : {
+          intentFilters: [
+            {
+              action: "VIEW",
+              autoVerify: true,
+              data: APP_LINK_PATHS.map((pathPrefix) => ({
+                scheme: "https",
+                host: "babun.app",
+                pathPrefix,
+              })),
+              category: ["BROWSABLE", "DEFAULT"],
+            },
+          ],
+        }),
     ...(process.env.GOOGLE_MAPS_ANDROID_API_KEY
       ? { config: { ...config.android?.config, googleMaps: { apiKey: process.env.GOOGLE_MAPS_ANDROID_API_KEY } } }
       : null),
   },
   ios: {
     ...config.ios,
+    ...(IS_DEV ? null : { associatedDomains: ["applinks:babun.app"] }),
     bundleIdentifier: IS_DEV
       ? "com.babun.crm.dev"
       : config.ios?.bundleIdentifier,

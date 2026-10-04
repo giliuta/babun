@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "LW4NJRQ462.com.babun.crm",
+        "appIDs": ["LW4NJRQ462.com.babun.crm"],
+        "paths": ["/invite/*", "/reset-password", "/reset-password/*", "/login", "/login/*"],
+        "components": [
+          { "/": "/invite/*" },
+          { "/": "/reset-password" },
+          { "/": "/login" }
+        ]
+      }
+    ]
+  }
+}

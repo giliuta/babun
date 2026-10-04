@@ -12,11 +12,17 @@
   },
   "rewrites": [
     {
-      "source": "/((?!_expo/|assets/|icons/|favicon|apple-touch-icon|manifest.json|metadata.json|og-image.png).*)",
+      "source": "/((?!_expo/|assets/|icons/|\\.well-known/|favicon|apple-touch-icon|manifest.json|metadata.json|og-image.png).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/.well-known/(apple-app-site-association|assetlinks.json)",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" }
+      ]
+    },
     {
       "source": "/_expo/static/(.*)",
       "headers": [

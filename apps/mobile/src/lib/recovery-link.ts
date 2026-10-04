@@ -37,3 +37,20 @@ export function recoveryLinkKey(credential: RecoveryLinkCredential): string {
     ? `session:${credential.refreshToken}`
     : `hash:${credential.tokenHash}`;
 }
+
+/** Тип одноразового ключа из ссылки письма (`?token_hash=…&type=…`). Письма
+ *  подтверждения и входа по коду ведут на babun.app/login с `type=email`
+ *  (или устаревшими signup/magiclink); остальное — не наше. */
+export type EmailLinkOtpType = "email" | "signup" | "magiclink";
+
+export function emailLinkOtpType(link: string | null | undefined): EmailLinkOtpType {
+  if (!link) return "email";
+  try {
+    const url = new URL(link);
+    const fragment = new URLSearchParams(url.hash.replace(/^#/, ""));
+    const type = url.searchParams.get("type") ?? fragment.get("type");
+    return type === "signup" || type === "magiclink" ? type : "email";
+  } catch {
+    return "email";
+  }
+}
