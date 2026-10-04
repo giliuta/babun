@@ -327,7 +327,7 @@ export default function InvoiceDetailScreen() {
     const next = pendingAction.current;
     pendingAction.current = null;
     setTimeout(() => {
-      if (next === "share") void sharePdf();
+      if (next === "share" && docWrite) void sharePdf();
       else if (next === "pay" && owner && awaitsPayment) openPayment();
       else if (next === "receipt") issueReceipts();
     }, 450);
@@ -394,6 +394,8 @@ export default function InvoiceDetailScreen() {
         title={row.number}
         right={
           <View style={{ flexDirection: "row" }}>
+            {/* «Документы: Видит» — смотрит, но не отправляет (владелец 04.10). */}
+            {docWrite ? (
             <Pressable
               onPress={pdfBusy ? undefined : sharePdf}
               disabled={pdfBusy}
@@ -410,6 +412,7 @@ export default function InvoiceDetailScreen() {
                 <Share2 color={t.body} size={ICON.sm} />
               )}
             </Pressable>
+            ) : null}
             {hasMenu ? (
               <Pressable
                 onPress={openMenu}
@@ -544,7 +547,7 @@ export default function InvoiceDetailScreen() {
         >
           <Button label="Выписать чек" onPress={issueReceipts} />
         </View>
-      ) : (
+      ) : !docWrite ? null : (
         // ШАГОВ НЕ ОСТАЛОСЬ — ДОКУМЕНТ ОТПРАВЛЯЮТ, как у чека (владелец 04.10:
         // «на чеке внизу „Поделиться PDF“ есть, а в инвойсе нет — расхождение
         // в архитектуре; то же и в кредит-ноте»). Оплачен с чеком, отменён,

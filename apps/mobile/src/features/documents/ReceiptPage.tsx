@@ -16,6 +16,7 @@ import { useClients } from "@/features/clients/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { useReceiptRefunds } from "./use-receipt-refunds";
 import { useReceiptMenu } from "./receipt-menu";
+import { useDocumentLevel } from "./document-rights";
 import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
@@ -42,6 +43,10 @@ export function ReceiptPage({ id }: { id: string }) {
   const refunds = useReceiptRefunds(receiptQuery.data ?? null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const receiptMenu = useReceiptMenu();
+  // «ДОКУМЕНТЫ: ВИДИТ» — СМОТРИТ, НО НЕ ОТПРАВЛЯЕТ (владелец 04.10): ни
+  // «Поделиться PDF», ни кнопки внизу, ни «⋯». Отправка и действия — у
+  // «Выставляет» в команде чека (владельцу — всегда).
+  const docWrite = useDocumentLevel(receipt?.team_id ?? null) === "write";
   const [sheetMenu, setSheetMenu] = useState<ActionMenu | null>(null);
   // «Поделиться PDF» из меню списка (04.10) — один раз, когда бумага готова.
   const { action } = useLocalSearchParams<{ action?: string }>();
@@ -89,7 +94,7 @@ export function ReceiptPage({ id }: { id: string }) {
           run: openRefundDocument,
         }]
       : [];
-  const hasMenu = documentItem.length > 0 || receiptMenu.actionsFor(receipt).length > 0;
+  const hasMenu = docWrite && (documentItem.length > 0 || receiptMenu.actionsFor(receipt).length > 0);
 
   const sharePdf = async () => {
     if (pdfBusy || paper.linesLoading || !paper.doc) return;
@@ -121,7 +126,7 @@ export function ReceiptPage({ id }: { id: string }) {
       }),
     );
 
-  if (pendingAction.current === "share" && paper.doc && !paper.linesLoading) {
+  if (pendingAction.current === "share" && docWrite && paper.doc && !paper.linesLoading) {
     pendingAction.current = null;
     setTimeout(() => void sharePdf(), 450);
   }
@@ -144,7 +149,7 @@ export function ReceiptPage({ id }: { id: string }) {
         title={receipt.number}
         right={
           <View style={{ flexDirection: "row" }}>
-            {dead ? null : (
+            {dead || !docWrite ? null : (
               <Pressable
                 onPress={busy ? undefined : () => void sharePdf()}
                 disabled={busy}
@@ -209,7 +214,7 @@ export function ReceiptPage({ id }: { id: string }) {
       {/* ГЛАВНОЕ ДЕЙСТВИЕ ВЫПИСАННОГО ЧЕКА — ОТПРАВИТЬ (владелец 04.10: «и уже
           всё можно отправлять»); вернули деньги без документа — выписать его,
           и у погашенного чека тоже. */}
-      {dead && refunds.uncovered <= 0 ? null : (
+      {!docWrite || (dead && refunds.uncovered <= 0) ? null : (
         <View
           className="px-4 pb-7 pt-3"
           style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
