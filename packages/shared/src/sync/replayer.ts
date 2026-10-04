@@ -184,6 +184,27 @@ export function tenantRefreshHeld(
       .filter((op) => op.attempts >= MAX_ATTEMPTS)
       .map((op) => `${op.table}:${op.row_id}`),
   );
+  // ЖДУЩАЯ НАВСЕГДА УПАВШЕГО КЛИЕНТА — ТОЖЕ ЗАСТРЯЛА (аудит 04.10). Запись,
+  // заведённая без сети к новому клиенту, ждёт его вставку, попыток не тратя
+  // (`waitsForClient` в `drain`). Упала вставка клиента навсегда («номер уже
+  // заведён», конец пробного) — запись ждала бы вечно и держала перечитку
+  // календаря: чужие брони, удаления и оплаты на телефоне не появлялись, и
+  // занятое время выглядело свободным. Она ждёт в «Синхронизации» вместе с
+  // клиентом; на сетке остаётся (`appointmentsCached`, неотправленные вставки).
+  const failedClientInserts = new Set(
+    pending
+      .filter((op) => op.attempts >= MAX_ATTEMPTS && op.table === "clients" && op.op === "insert")
+      .map((op) => op.row_id),
+  );
+  if (failedClientInserts.size > 0) {
+    for (const op of pending) {
+      if (op.table === "clients") continue;
+      const clientId = (op.payload as { client_id?: unknown } | null)?.client_id;
+      if (typeof clientId === "string" && failedClientInserts.has(clientId)) {
+        stuck.add(`${op.table}:${op.row_id}`);
+      }
+    }
+  }
   return pending.some(
     (op) =>
       holdsTenantRefresh(op, table, tenantId) && !stuck.has(`${op.table}:${op.row_id}`),

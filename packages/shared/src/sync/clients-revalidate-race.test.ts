@@ -20,7 +20,13 @@ import {
   NavigatorOnlineNetwork,
 } from "../storage/sql/provider";
 import type { NetworkAdapter } from "../storage/sql/types";
-import { __resetCacheForTests, cacheRead, cacheUpsert } from "../db/cache/sql";
+import {
+  __resetCacheForTests,
+  cacheRead,
+  cacheUpsert,
+  enqueueOp,
+  markOpPermanentlyFailed,
+} from "../db/cache/sql";
 import { __resetReplayerForTests } from "./replayer";
 import { listClients } from "./clientsCached";
 import { listClientTags } from "./tagsCached";
@@ -225,5 +231,32 @@ describe("сверка тегов и правка, легшая во время 
     await settle();
     expect(await cachedTagNames()).toEqual(["VIP", "Новый"]);
     expect(server.reads()).toBe(2);
+  });
+});
+
+// КЛИЕНТ, ЧЬЯ ВСТАВКА УПАЛА НАВСЕГДА, С ЭКРАНА НЕ ПРОПАДАЕТ (аудит 04.10):
+// перечитку он не держит, и снимок сервера стирал его из кэша — запись к нему
+// оставалась на сетке без клиента. Пока вставка в очереди, клиент на месте.
+describe("перечитка клиентов и неотправленная вставка", () => {
+  test("клиент с навсегда упавшей вставкой остаётся в кэше, остальное — по серверу", async () => {
+    await cacheUpsert("clients", { ...clientRow(CLIENT_A, "Анна", "2026-10-01T00:00:00Z"), tag_ids: [] });
+    await cacheUpsert("clients", { ...clientRow(CLIENT_B, "Борис офлайн", "2026-10-04T10:00:00Z"), tag_ids: [] });
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: CLIENT_B,
+      payload: { id: CLIENT_B, tenant_id: TENANT, full_name: "Борис офлайн" },
+      expected_updated_at: null,
+    });
+    const [queued] = await (await import("../db/cache/sql")).dequeueAll();
+    await markOpPermanentlyFailed(queued!.id, "номер уже заведён");
+    const server = slowServer("clients");
+
+    await listClients(server.client, TENANT);
+    await settle();
+    server.answer(0, [clientRow(CLIENT_A, "Анна Петрова", "2026-10-02T00:00:00Z")]);
+    await settle();
+
+    expect(await cachedNames()).toEqual(["Анна Петрова", "Борис офлайн"]);
   });
 });

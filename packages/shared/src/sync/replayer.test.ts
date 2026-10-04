@@ -712,6 +712,47 @@ describe("replayer — навсегда упавшая правка держит
     expect(tenantRefreshHeld([op(1, UUID_A, MAX_ATTEMPTS), op(2, UUID_A, 0)], "appointments", TENANT)).toBe(false);
     expect(tenantRefreshHeld([op(1, UUID_A, MAX_ATTEMPTS), op(2, UUID_B, 0)], "appointments", TENANT)).toBe(true);
   });
+
+  // Аудит 04.10: запись к клиенту, чья вставка упала навсегда, ждёт его, не
+  // тратя попыток, — и без этой сверки держала перечитку календаря вечно.
+  test("запись, ждущая навсегда упавшего клиента, не замораживает перечитку календаря", () => {
+    const clientInsert: QueuedOp = {
+      id: 1,
+      created_at: 1,
+      table: "clients",
+      op: "insert",
+      row_id: UUID_C,
+      payload: { id: UUID_C, tenant_id: TENANT },
+      expected_updated_at: null,
+      attempts: MAX_ATTEMPTS,
+      last_error: "duplicate key value violates unique constraint \"clients_tenant_phone_e164_idx\"",
+    };
+    const appointmentInsert: QueuedOp = {
+      id: 2,
+      created_at: 2,
+      table: "appointments",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT, client_id: UUID_C },
+      expected_updated_at: null,
+      attempts: 0,
+      last_error: null,
+    };
+    const laterEdit: QueuedOp = { ...appointmentInsert, id: 3, created_at: 3, op: "update", payload: { tenant_id: TENANT } };
+    expect(tenantRefreshHeld([clientInsert, appointmentInsert, laterEdit], "appointments", TENANT)).toBe(false);
+    // Пока вставка клиента ещё живая (не упала навсегда) — держит, как раньше.
+    expect(
+      tenantRefreshHeld([{ ...clientInsert, attempts: 0 }, appointmentInsert], "appointments", TENANT),
+    ).toBe(true);
+    // Чужая запись того же дня, не связанная с клиентом, держит по-прежнему.
+    expect(
+      tenantRefreshHeld(
+        [clientInsert, appointmentInsert, { ...appointmentInsert, id: 4, row_id: UUID_B, payload: { tenant_id: TENANT } }],
+        "appointments",
+        TENANT,
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("replayer — вторая офлайн-правка строки без ложного конфликта (аудит 03.10)", () => {

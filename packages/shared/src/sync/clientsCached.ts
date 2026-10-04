@@ -312,7 +312,28 @@ async function refreshCacheFromSupabase(
   );
   // Читаем нефильтрованно — иначе слева активные, справа все, и сверка не
   // совпала бы никогда («revalidated» уходил бы на каждый проход).
-  if (sameClientRows(await allCachedClients(tenantId), rows)) return false;
+  const cachedRows = await allCachedClients(tenantId);
+  // КЛИЕНТ, НЕ ДОШЕДШИЙ ДО СЕРВЕРА, С ЭКРАНА НЕ ПРОПАДАЕТ (аудит 04.10; у
+  // записей — то же правило). Его вставка, отклонённая навсегда («номер уже
+  // заведён», конец пробного), перечитку не держит, и замена кэша снимком
+  // сервера стирала клиента: его запись оставалась на сетке без клиента.
+  // Пока вставка лежит в очереди («Синхронизация» — повторить или удалить),
+  // клиент остаётся.
+  const serverIds = new Set(rows.map((r) => r.id));
+  const unsentIds = new Set(
+    pending
+      .filter(
+        (op) =>
+          op.table === "clients" &&
+          op.op === "insert" &&
+          (op.payload as { tenant_id?: unknown } | null)?.tenant_id === tenantId,
+      )
+      .map((op) => op.row_id),
+  );
+  for (const cached of cachedRows) {
+    if (unsentIds.has(cached.id) && !serverIds.has(cached.id)) rows.push(cached);
+  }
+  if (sameClientRows(cachedRows, rows)) return false;
   const replaced = await cacheReplaceTenant("clients", tenantId, rows, {
     unlessLocalWriteSince: writeSeq,
   });
