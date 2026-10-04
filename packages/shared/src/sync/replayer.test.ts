@@ -158,10 +158,10 @@ const asSupabase = (c: unknown) => c as any;
 describe("replayer — insert", () => {
   test("successful insert drains the op", async () => {
     await enqueueOp({
-      table: "clients",
+      table: "appointments",
       op: "insert",
       row_id: UUID_A,
-      payload: { id: UUID_A, tenant_id: TENANT, full_name: "A" },
+      payload: { id: UUID_A, tenant_id: TENANT, date: "2026-10-05" },
       expected_updated_at: null,
     });
     const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
@@ -170,12 +170,12 @@ describe("replayer — insert", () => {
 
     expect(await queueDepth()).toBe(0);
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ table: "clients", op: "insert" });
+    expect(calls[0]).toMatchObject({ table: "appointments", op: "insert" });
   });
 
   test("23505 по первичному ключу: строка УЖЕ на сервере — операция снимается", async () => {
     await enqueueOp({
-      table: "clients",
+      table: "appointments",
       op: "insert",
       row_id: UUID_A,
       payload: { id: UUID_A, tenant_id: TENANT },
@@ -189,13 +189,78 @@ describe("replayer — insert", () => {
             error: {
               code: "23505",
               message:
-                'duplicate key value violates unique constraint "clients_pkey"',
+                'duplicate key value violates unique constraint "appointments_pkey"',
             },
           },
     );
 
     await kickReplayer({ supabase: asSupabase(client) });
     expect(await queueDepth()).toBe(0);
+  });
+
+  // Аудит 04.10: клиент без тегов шёл прямой вставкой мимо серверных
+  // умолчаний (`create_client_with_tags` ставит команду) и уезжал без команды.
+  test("клиент без тегов встаёт той же функцией, что в сети, с пустым списком тегов", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT, full_name: "A" },
+      expected_updated_at: null,
+    });
+    const { client, calls, rpcCalls } = makeFakeSupabase(
+      () => ({ data: null, error: null }),
+      () => ({ data: null, error: null }),
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(await queueDepth()).toBe(0);
+    expect(calls.filter((c) => c.op === "insert")).toHaveLength(0);
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0]).toMatchObject({
+      name: "create_client_with_tags",
+      args: { p_tenant_id: TENANT, p_client_id: UUID_A, p_tag_ids: [] },
+    });
+    expect((rpcCalls[0]!.args.p_client as Record<string, unknown>).full_name).toBe("A");
+  });
+
+  test("клиент без тегов: дубль по первичному ключу — уже на сервере, операция снимается", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client, rpcCalls } = makeFakeSupabase(
+      (rec) => (rec.op === "select" ? { data: { id: UUID_A }, error: null } : { data: null, error: null }),
+      () => ({ data: null, error: { code: "23505", message: 'duplicate key value violates unique constraint "clients_pkey"' } }),
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+    expect(await queueDepth()).toBe(0);
+    // Теги не трогали: без них чинить нечего.
+    expect(rpcCalls.map((c) => c.name)).toEqual(["create_client_with_tags"]);
+  });
+
+  test("клиент без тегов: дубль по номеру — операцию не хороним молча", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client } = makeFakeSupabase(
+      (rec) => (rec.op === "select" ? { data: null, error: null } : { data: null, error: null }),
+      () => ({ data: null, error: { code: "23505", message: 'duplicate key value violates unique constraint "clients_tenant_phone_e164_idx"' } }),
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+    const [left] = await dequeueAll();
+    expect(left?.attempts).toBe(1);
+    expect(left?.last_error).toContain("Клиент с таким номером уже заведён");
   });
 
   test("23505 по ЧУЖОМУ индексу (номер занят): операцию не хороним молча", async () => {
@@ -980,7 +1045,7 @@ describe("replayer — injected quota gate", () => {
 
   test("non-quota gate error falls through to normal dispatch", async () => {
     await enqueueOp({
-      table: "clients",
+      table: "appointments",
       op: "insert",
       row_id: UUID_A,
       payload: { id: UUID_A, tenant_id: TENANT },
