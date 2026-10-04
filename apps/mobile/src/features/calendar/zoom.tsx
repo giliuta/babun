@@ -16,38 +16,42 @@ import Animated, {
   useSharedValue,
   type SharedValue,
 } from "react-native-reanimated";
+import {
+  HOUR_H_DEFAULT,
+  minHourH,
+  PAD_BOTTOM,
+  PAD_TOP,
+  pinchAnchor,
+  pinchFrame,
+  pinchRelease,
+  settleStep,
+} from "./zoom-math";
 
 // Vertical scale of the time grid (pixels per hour). The LIVE value is a
 // Reanimated shared value (`hourHSv`) owned by the calendar screen: the
 // pinch gesture below mutates it on the UI thread, so zooming never touches
 // React state mid-gesture. The committed value (`hourH` prop, updated once
 // per gesture via onZoom) exists only for render-time derivations.
-export const HOUR_H_DEFAULT = 64;
-export const HOUR_H_MIN = 28;
-export const HOUR_H_MAX = 200;
-
-// Content paddings of the grid scroll — part of the anchor math, so they
-// live next to it instead of inline in the views. Bottom is cosmetic
-// breathing room only: the create flow is tap-a-slot (no floating button
-// to clear), and the zoom floor below guarantees the grid itself always
-// fills the viewport — a big trailing pad would just read as a dead void
-// under the last hour.
-const PAD_TOP = 6;
-const PAD_BOTTOM = 16;
+// Числа и вся математика жеста — в `zoom-math.ts`, там их видит тест.
+export { HOUR_H_DEFAULT, HOUR_H_MAX, HOUR_H_MIN } from "./zoom-math";
 
 // The scrollable, pinch-zoomable shell shared by DayView and WeekView.
 // Children = <TimeRail> + N <DayColumn>, laid out in a row whose height is
 // driven by `hourHSv` on the UI thread.
 //
 // Zoom design (the whole point of this module):
-//   * the pinch NEVER crosses the JS bridge mid-gesture — `hourHSv` and the
-//     scroll offset are updated in the same UI-thread frame, so the grid
-//     cannot "jump" between a height change and its scroll correction;
+//   * the pinch NEVER crosses the JS bridge mid-gesture — every frame is two
+//     transform numbers on the UI thread, no layout and no scrollTo;
 //   * the anchor is the FOCAL POINT of the pinch (iOS-native), not the
 //     viewport centre: the time under the user's fingers stays under them,
 //     and finger drift pans the grid while zooming (Photos/Maps feel);
+//   * the scale counts from the moment the pinch is recognized, so the first
+//     frame does not leap by the distance the fingers travelled before it;
 //   * native scrolling is disabled while the pinch is active so the scroll
 //     view doesn't fight the programmatic scrollTo;
+//   * release is TWO frames: the new height lands in layout under a holding
+//     translate, and only then the scroll moves (see `zoom-math.ts` — RN
+//     clamps scrollTo to the content size it has right now);
 //   * on release the value snaps to a whole pixel and is committed to React
 //     exactly once via `onZoom`.
 export function ZoomableTimeGrid({
@@ -79,11 +83,18 @@ export function ZoomableTimeGrid({
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollY = useSharedValue(0);
   const viewportH = useSharedValue(0);
+  // true от признания пинча до конца отпускания (шаг 2): прокрутка стоит.
   const pinching = useSharedValue(false);
-  // Captured at pinch start: base scale + the time (hours since window
-  // start) under the initial focal point.
+  // true только пока пальцы на стекле: отпускание срабатывает ровно раз.
+  const active = useSharedValue(false);
+  // Captured at pinch start: base scale, the gesture scale at recognition
+  // and the time (hours since window start) under the initial focal point.
   const baseH = useSharedValue(HOUR_H_DEFAULT);
+  const scale0 = useSharedValue(1);
   const anchorTime = useSharedValue(0);
+  const lastFocalY = useSharedValue(0);
+  // Номер отпускания: новый жест гасит недоделанный шаг 2 прошлого.
+  const settleToken = useSharedValue(0);
   // Высота, которой живёт LAYOUT. Во время пинча она ЗАМОРОЖЕНА: жест
   // рисуется чистыми GPU-трансформами (scaleY+translateY) поверх готовой
   // сетки — ни одного прогона Yoga на кадр. Прежняя схема анимировала
@@ -125,13 +136,7 @@ export function ZoomableTimeGrid({
   // отлипала от низа на уже смонтированном экране.
   const applyFitFloor = (vh: number) => {
     if (vh <= 0) return;
-    const fit = Math.min(
-      HOUR_H_MAX,
-      Math.max(
-        HOUR_H_MIN,
-        Math.ceil((vh - PAD_TOP - PAD_BOTTOM) / (endHour - startHour)),
-      ),
-    );
+    const fit = minHourH(endHour - startHour, vh);
     if (hourHSv.value < fit) {
       hourHSv.value = fit;
       onZoom?.(fit);
@@ -165,17 +170,6 @@ export function ZoomableTimeGrid({
     scrollEnabled: !pinching.value && !lockedSv.value,
   }));
 
-  // Zoom floor: the whole visible window must keep filling the viewport —
-  // zooming further out would detach the last hour from the screen bottom
-  // and leave a dead void under the grid. (ceil → never a sub-pixel gap.)
-  const minHourH = () => {
-    "worklet";
-    const fit = Math.ceil(
-      (viewportH.value - PAD_TOP - PAD_BOTTOM) / (endHour - startHour),
-    );
-    return Math.min(HOUR_H_MAX, Math.max(HOUR_H_MIN, fit));
-  };
-
   // The scroll view's own (native) pan recognizer, wrapped into RNGH so the
   // pinch can declare a relation with it. Without the explicit relation the
   // native pan claims any sloppy two-finger touch (real fingers always drift
@@ -184,6 +178,36 @@ export function ZoomableTimeGrid({
   // on a device.
   const nativeScroll = Gesture.Native();
 
+  // ШАГ 2 ОТПУСКАНИЯ. `scrollTo` React Native клампит offset по contentSize,
+  // который нативный скролл ЕЩЁ НЕ ЗНАЕТ: высота, записанная на отпускании,
+  // попадает на экран в коммите кадра, а колбэки requestAnimationFrame идут
+  // раньше коммита. При увеличении прыжок к старому краю был в часы
+  // (владелец 04.10: «растягивается время и потом резкий скачок»; на
+  // симуляторе нужно было 896, встало 174 — старый предел). Поэтому
+  // прокрутка дожимается по кадрам, а сдвиг каждый кадр равен недокрученному
+  // остатку (`settleStep`): картинка стоит при ЛЮБОМ фактическом offset
+  // (событие скролла приходит синхронно внутри `scrollTo`, `scrollY` свежий).
+  const settle = (token: number, target: number) => {
+    "worklet";
+    // Шаг — локальная функция: worklet, зовущий сам себя по имени из
+    // замыкания, на UI-рантайме не переносится (первый же повтор ронял
+    // приложение — поймано на симуляторе 04.10).
+    const step = (tries: number, prev: number) => {
+      if (settleToken.value !== token) return;
+      scrollTo(scrollRef, 0, target, false);
+      const actual = scrollY.value;
+      const s = settleStep(actual, target, tries, prev);
+      gestureTy.value = s.ty;
+      if (s.again) {
+        requestAnimationFrame(() => step(tries + 1, actual));
+        return;
+      }
+      pinching.value = false;
+      if (onZoom) runOnJS(onZoom)(layoutH.value);
+    };
+    step(0, scrollY.value);
+  };
+
   const pinch = Gesture.Pinch()
     // Recognize alongside the native scroll instead of losing to it. The
     // first pinch frame sets `pinching` → scrollEnabled(false) cancels the
@@ -191,56 +215,60 @@ export function ZoomableTimeGrid({
     // for the rest of the gesture.
     .simultaneousWithExternalGesture(nativeScroll)
     .onStart((e) => {
+      // Недоделанное отпускание прошлого жеста гасится: картинку держит его
+      // сдвиг, и новый жест стартует ровно с того, что видно.
+      settleToken.value += 1;
+      active.value = true;
       pinching.value = true;
       baseH.value = layoutH.value;
       scrollY0.value = scrollY.value;
-      anchorTime.value =
-        (scrollY.value + e.focalY - PAD_TOP) / baseH.value;
+      scale0.value = e.scale > 0 ? e.scale : 1;
+      lastFocalY.value = e.focalY;
+      anchorTime.value = pinchAnchor(
+        scrollY.value - gestureTy.value,
+        e.focalY,
+        baseH.value,
+      );
     })
     .onUpdate((e) => {
-      const h = Math.min(
-        HOUR_H_MAX,
-        Math.max(minHourH(), baseH.value * e.scale),
-      );
-      hourHSv.value = h;
-      // Кадр жеста = два числа трансформа, БЕЗ layout и БЕЗ scrollTo.
-      // eff — «эффективный» offset, который показывал бы настоящий скролл
-      // при высоте h: якорное время держится под текущим фокусом пальцев
-      // (дрейф = двухпальцевый пан), края клампятся как bounces=false.
-      const span = endHour - startHour;
-      const maxY = Math.max(
-        0,
-        PAD_TOP + span * h + PAD_BOTTOM - viewportH.value,
-      );
-      const eff = Math.min(
-        maxY,
-        Math.max(0, PAD_TOP + anchorTime.value * h - e.focalY),
-      );
-      gestureScale.value = h / baseH.value;
-      gestureTy.value = scrollY0.value - eff;
+      if (!active.value) return;
+      const f = pinchFrame({
+        baseH: baseH.value,
+        anchor: anchorTime.value,
+        scale: e.scale,
+        scale0: scale0.value,
+        focalY: e.focalY,
+        span: endHour - startHour,
+        vh: viewportH.value,
+      });
+      hourHSv.value = f.h;
+      lastFocalY.value = e.focalY;
+      // Кадр жеста = два числа трансформа, БЕЗ layout и БЕЗ scrollTo:
+      // якорное время держится под фокусом пальцев, края — как bounces=false.
+      gestureScale.value = f.h / baseH.value;
+      gestureTy.value = scrollY0.value - f.offset;
     })
     .onFinalize(() => {
-      if (!pinching.value) return;
-      // Единый кадр отпускания: настоящая высота, сброс трансформов и
-      // реальный offset согласованы — сетка приземляется ровно там, где
-      // была под пальцами, один relayout на весь жест.
-      const snapped = Math.round(hourHSv.value);
+      if (!active.value) return;
+      active.value = false;
+      // ШАГ 1: целая высота уходит в layout при ПРЕЖНЕЙ прокрутке, а сдвиг
+      // держит картинку там, где она была под пальцами. Прокрутка — шагом 2.
       const span = endHour - startHour;
-      const maxY = Math.max(
-        0,
-        PAD_TOP + span * snapped + PAD_BOTTOM - viewportH.value,
-      );
-      const eff = Math.min(
-        maxY,
-        Math.max(0, scrollY0.value - gestureTy.value),
-      );
-      layoutH.value = snapped;
-      hourHSv.value = snapped;
+      const r = pinchRelease({
+        h: hourHSv.value,
+        offset: scrollY0.value - gestureTy.value,
+        focalY: lastFocalY.value,
+        scrollY0: scrollY0.value,
+        span,
+        vh: viewportH.value,
+      });
+      layoutH.value = r.snapped;
+      hourHSv.value = r.snapped;
       gestureScale.value = 1;
-      gestureTy.value = 0;
-      scrollTo(scrollRef, 0, eff, false);
-      pinching.value = false;
-      if (onZoom) runOnJS(onZoom)(snapped);
+      gestureTy.value = r.holdTy;
+      const token = settleToken.value + 1;
+      settleToken.value = token;
+      requestAnimationFrame(() => settle(token, r.target));
     });
 
   const rowStyle = useAnimatedStyle(() => ({
