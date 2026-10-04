@@ -5211,5 +5211,6 @@
  "На всю сумму инвойс отменяется полной кредит-нотой": "Für den vollen Betrag wird die Rechnung mit einer vollständigen Gutschrift storniert",
  "Не нашлось платежа инвойса для возврата": "Keine Rechnungszahlung zum Erstatten gefunden",
  "Не указан идентификатор кредит-ноты": "Die Gutschrift-ID fehlt",
- "Сумма кредит-ноты должна быть больше нуля": "Der Gutschriftsbetrag muss größer als null sein"
+ "Сумма кредит-ноты должна быть больше нуля": "Der Gutschriftsbetrag muss größer als null sein",
+ "«Точный адрес» не заполнен — на чеке адреса не будет": "„Genaue Adresse“ ist leer — auf der Quittung steht keine Adresse"
 }

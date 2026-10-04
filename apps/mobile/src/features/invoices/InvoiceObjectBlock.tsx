@@ -36,10 +36,13 @@ export function InvoiceObjectBlock({
   client,
   locationId,
   onLocationChange,
+  paper = "invoice",
 }: {
   client: Client | null;
   locationId: string | null;
   onLocationChange: (id: string | null) => void;
+  /** Чья бумага: подсказка про адрес называет её («на чеке», 04.10). */
+  paper?: "invoice" | "receipt";
 }) {
   const t = useThemeColors();
   const updateClient = useUpdateClientById();
@@ -98,7 +101,9 @@ export function InvoiceObjectBlock({
                   color: t.warning,
                 }}
               >
-                «Точный адрес» не заполнен — на инвойсе адреса не будет
+                {paper === "receipt"
+                  ? "«Точный адрес» не заполнен — на чеке адреса не будет"
+                  : "«Точный адрес» не заполнен — на инвойсе адреса не будет"}
               </Text>
             )}
           </View>

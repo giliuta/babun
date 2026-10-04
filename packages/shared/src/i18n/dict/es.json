@@ -5211,5 +5211,6 @@
  "На всю сумму инвойс отменяется полной кредит-нотой": "Por el importe total, la factura se anula con una nota de crédito completa",
  "Не нашлось платежа инвойса для возврата": "No se encontró un pago de la factura para reembolsar",
  "Не указан идентификатор кредит-ноты": "Falta el identificador de la nota de crédito",
- "Сумма кредит-ноты должна быть больше нуля": "El importe de la nota de crédito debe ser mayor que cero"
+ "Сумма кредит-ноты должна быть больше нуля": "El importe de la nota de crédito debe ser mayor que cero",
+ "«Точный адрес» не заполнен — на чеке адреса не будет": "«Dirección exacta» está vacía: el recibo no tendrá dirección"
 }

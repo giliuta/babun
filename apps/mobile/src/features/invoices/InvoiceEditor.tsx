@@ -281,6 +281,10 @@ export function InvoiceEditor({
     // У счетов до колонки режима (20260915120000) он пуст — восстанавливаем
     // по суммам, как бумага, а не угадываем «в цене».
     if (existing) return invoiceVatMode(existing);
+    // ИНВОЙС НА ПОЛУЧЕННЫЕ ДЕНЬГИ ЗАПИСИ — С ЕЁ НАЛОГОМ (04.10): у записи без
+    // VAT его нет и в инвойсе. Налог команды «сверху» насчитывал €55,93 на
+    // полученные €47, и выставить было нельзя.
+    if (incomeAmount != null && sourceAppointment && !appointmentVat) return "off";
     const mode = appointmentVat?.mode ?? seedVat.mode;
     return incomeAmount != null && !seed && mode === "exclusive" ? "inclusive" : mode;
   });

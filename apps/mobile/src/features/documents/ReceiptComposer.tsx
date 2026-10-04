@@ -328,6 +328,7 @@ export function ReceiptComposer({
           client={client}
           locationId={draft.locationId}
           onLocationChange={(locationId) => onChange({ locationId })}
+          paper="receipt"
         />
 
         {client && clientRequisitesOf(client).length > 0 ? (

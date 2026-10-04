@@ -5211,5 +5211,6 @@
  "На всю сумму инвойс отменяется полной кредит-нотой": "For the full amount, the invoice is cancelled with a full credit note",
  "Не нашлось платежа инвойса для возврата": "No invoice payment was found to refund",
  "Не указан идентификатор кредит-ноты": "The credit note ID is missing",
- "Сумма кредит-ноты должна быть больше нуля": "The credit note amount must be greater than zero"
+ "Сумма кредит-ноты должна быть больше нуля": "The credit note amount must be greater than zero",
+ "«Точный адрес» не заполнен — на чеке адреса не будет": "“Exact address” is empty — the receipt will have no address"
 }
