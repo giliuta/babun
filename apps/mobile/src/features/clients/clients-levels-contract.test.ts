@@ -70,6 +70,10 @@ const cardBlocks = norm(readFileSync(join(MIGRATIONS_DIR, CARD_BLOCKS), "utf8"))
 // ОБХОДНЫЕ ДОРОГИ (аудит 30.09): SMS, чеки, копия записи, старые записи
 // мастера — данные клиента не уходят мимо «номер по одному» и «Около записи».
 const LEAKS = "20260930235950_clients_leak_paths.sql";
+// ССЫЛКА ИЗ SMS ОТМЕНЯЕТ ЗАПИСЬ (аудит 04.10): сотруднику её выдают только с
+// правом «Отменять и удалять записи»; защита клиента LEAKS — на месте.
+const SMS_LINKS = "20261004085941_sms_links_and_archived_calendars.sql";
+const smsLinks = norm(readFileSync(join(MIGRATIONS_DIR, SMS_LINKS), "utf8"));
 // Копия партнёра принимает номер с телефона (повтор без дубля, 03.10) —
 // с прежним сторожем клиента команды.
 const COPY = "20261003191837_member_copy_idempotent.sql";
@@ -175,9 +179,9 @@ describe("сервер: клиенты по уровням", () => {
     ]) {
       assert.equal(lastDefiner(fn), CLIENT_BLOCKS, `${fn} переопределён позже`);
     }
+    assert.equal(lastDefiner("sms_appointment_link"), SMS_LINKS, "sms_appointment_link переопределён позже");
     for (const fn of [
       "list_master_appointments_safe",
-      "sms_appointment_link",
       "receipts_client_snapshot_no_phone",
       "member_client_in_team",
       "member_appointment_update",
@@ -491,6 +495,15 @@ describe("сервер: клиенты по уровням", () => {
     assert.ok(
       leaks.includes("and (v_team = any(public.access_calendars('record.client', 'read'))) is not true then raise exception 'sms:rights'"),
       "ссылка записи без «Клиент в записи»",
+    );
+    // Последнее определение ссылки держит и защиту клиента, и право отмены.
+    assert.ok(
+      smsLinks.includes("and (v_team = any(public.access_calendars('record.client', 'read'))) is not true then raise exception 'sms:rights'"),
+      "ссылка записи без «Клиент в записи»",
+    );
+    assert.ok(
+      smsLinks.includes("and public.member_can('calendar.cancel', 'write', v_team) is not true then raise exception 'sms:rights'"),
+      "ссылку записи выдают без права отмены",
     );
     // Чек — без телефона клиента: снимок режет триггер, прежние строки вычищены.
     assert.ok(leaks.includes("new.client_snapshot := new.client_snapshot - 'phone';"), "в чек снова ложится телефон");
