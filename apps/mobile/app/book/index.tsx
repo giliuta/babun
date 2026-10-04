@@ -3198,7 +3198,10 @@ function BookForm() {
               {/* БЛОК «КЛИЕНТ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ClientBlock.tsx`):
                   его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
                   ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
-              {evShowClient && can.showClient ? (
+              {/* БЕЗ ТАРИФА КЛИЕНТОВ НЕТ (владелец 04.10: «зачем этот блок, если
+                  клиента я не могу добавлять без тарифа»): блока нет; уже
+                  выбранный прежде клиент остаётся виден. */}
+              {evShowClient && can.showClient && (workInPlan || client) ? (
               <SmsComposeProvider context={recordSmsContext}>
                 <ClientBlock
                   client={client}
@@ -3248,7 +3251,8 @@ function BookForm() {
                   объект не выбран, он стоит тем же полем и уезжает в патч. */}
               {evShowObject &&
               can.showObject &&
-              (can.editObject || eventLocationEntry || eventAddress.trim()) ? (
+              // Объект — всегда объект клиента: без тарифа его не завести.
+              ((workInPlan && can.editObject) || eventLocationEntry || eventAddress.trim()) ? (
               <SectionCard title="Объект">
                 {eventLocationEntry ? (
                   <>

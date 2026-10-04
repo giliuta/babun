@@ -7,6 +7,9 @@ export type SegmentOption<V extends string> = {
   label: string;
   /** Active label hue — e.g. danger for «Расход», success for «Доход». */
   color?: string;
+  /** Вариант закрыт (например, тарифом): серый, тап зовёт `onChange`, а
+   *  зовущий сам решает — плашка тарифа вместо переключения. */
+  dimmed?: boolean;
 };
 
 // «Halo Cobalt» segmented control — the ONE recipe for every inline
@@ -59,7 +62,7 @@ export function SegmentedControl<V extends string>({
               // Тик — на СМЕНУ, а не на касание: повторный тап по уже
               // выбранному ничего не меняет, и отклик на него читается как
               // «что-то произошло».
-              if (!active) haptics.tap();
+              if (!active && !opt.dimmed) haptics.tap();
               onChange(opt.value);
             }}
             accessibilityRole="radio"
@@ -74,7 +77,7 @@ export function SegmentedControl<V extends string>({
               paddingHorizontal: compact ? 6 : 0,
               minHeight: compact ? 38 : 44,
               backgroundColor: active ? t.surface : "transparent",
-              opacity: disabled && !active ? 0.4 : 1,
+              opacity: (disabled || opt.dimmed) && !active ? 0.4 : 1,
             }}
           >
             <Text
