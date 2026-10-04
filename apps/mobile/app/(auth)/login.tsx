@@ -133,6 +133,8 @@ export default function LoginScreen() {
       />
 
       <GhostLink label="Забыли пароль?" onPress={() => router.push("/forgot-password")} />
+      {/* ВХОД БЕЗ ПАРОЛЯ (04.10): код из письма, как при регистрации. */}
+      <GhostLink label="Войти по коду из письма" onPress={() => router.push("/code-login")} />
       <SwitchLink
         lead="Нет аккаунта?"
         action="Зарегистрироваться"
