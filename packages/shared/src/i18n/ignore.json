@@ -28,6 +28,14 @@
     {
       "path": "packages/shared/src/db/cache/sql.ts",
       "why": "SQL text"
+    },
+    {
+      "path": "apps/mobile/src/features/invoices/paper-languages.ts",
+      "why": "invoice paper in bg/el/uk/de/es — paper language is chosen per document; Bulgarian and Ukrainian words would otherwise hit Russian keys («Цена»)"
+    },
+    {
+      "path": "apps/mobile/src/features/documents/receipt-words.ts",
+      "why": "receipt paper words per language — the receipt speaks its invoice's language, not the UI's"
     }
   ],
   "literals": {
@@ -97,12 +105,6 @@
       {
         "text": "ч",
         "why": "stored service unit code"
-      }
-    ],
-    "apps/mobile/src/features/invoices/InvoiceEditor.tsx": [
-      {
-        "text": "Скидка",
-        "why": "discount line on Russian invoice paper — paper language, not UI"
       }
     ],
     "apps/mobile/src/features/clients/bulk-sms.ts": [

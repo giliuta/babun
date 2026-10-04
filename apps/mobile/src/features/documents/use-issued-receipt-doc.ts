@@ -1,6 +1,7 @@
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import type { InvoiceLanguage } from "@/features/invoices/dictionary";
+import { isUiLocale } from "@babun/shared/i18n/locales";
 import { useInvoice } from "@/features/invoices/queries";
 import type { InvoiceLedgerWithLines } from "@babun/shared/local/finance/invoice-ledger";
 import {
@@ -56,7 +57,8 @@ export function useIssuedReceiptDoc(receipt: Receipt | null): {
     }
   }
   // Как у черновика: язык инвойса, без инвойса — английский (владелец 04.10).
-  const language: InvoiceLanguage = invoiceQuery.data?.language === "ru" ? "ru" : "en";
+  const paperLanguage = invoiceQuery.data?.language;
+  const language: InvoiceLanguage = isUiLocale(paperLanguage) ? paperLanguage : "en";
   const invoiceNumber = invoiceQuery.data?.number ?? null;
   return {
     doc: buildReceiptDocument(receipt, lineItems, language, invoiceNumber),

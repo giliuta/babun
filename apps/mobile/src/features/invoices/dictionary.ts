@@ -13,7 +13,15 @@
  *
  * Валюту и числа Intl форматирует сам по локали: «80,00 €» против «€80.00».
  */
-export type InvoiceLanguage = "ru" | "en";
+//
+// С 2026-10-04 БУМАГА ГОВОРИТ НА ЛЮБОМ ЯЗЫКЕ ПРИЛОЖЕНИЯ (владелец: «выбор языка
+// в инвойсе… я могу выбирать язык соответственно тому, что я выберу»). Список
+// языков один на продукт — `UI_LOCALES`; русский и английский словари здесь,
+// остальные — в `paper-languages.ts`.
+import type { UiLocale } from "@babun/shared/i18n/locales";
+import { BG, DE, EL, ES, UK } from "./paper-languages";
+
+export type InvoiceLanguage = UiLocale;
 
 export interface InvoiceDictionary {
   /** Локаль для Intl — дат и денег. */
@@ -94,6 +102,17 @@ export interface InvoiceDictionary {
   /** Строка таблицы: сервер позиций сторно не пишет, сумма — одна строка. */
   creditNoteLine: (number: string | null) => string;
   creditNoteFooter: (number: string) => string;
+  /** Итог кредит-ноты: платить по ней нечего, «К оплате» на ней лжёт
+   *  (019, 04.10). Нейтральное «Итого» — верно и для оплаченного счёта
+   *  (деньги вернут), и для неоплаченного (долг снят). */
+  creditNoteTotal: string;
+  /** Кредит-нота к ЧЕКУ — возврат по чеку без инвойса (019, 04.10,
+   *  `refund_receipt`): шапка «К чеку RC-…» и строка таблицы. */
+  creditNoteForReceipt: (number: string) => string;
+  creditNoteReceiptLine: (number: string | null) => string;
+  /** Частичная кредит-нота (`invoices.credit_partial`, 019, 04.10): инвойс
+   *  остаётся в силе, «Отмена инвойса» на ней — неправда. */
+  creditNotePartialLine: (number: string | null) => string;
   paymentsDate: string;
   paymentsOperation: string;
   paymentsEmpty: string;
@@ -169,6 +188,11 @@ const RU: InvoiceDictionary = {
   creditNoteFor: (number) => `К инвойсу ${number}`,
   creditNoteLine: (number) => (number ? `Отмена инвойса ${number}` : "Отмена инвойса"),
   creditNoteFooter: (number) => `Кредит-нота ${number}`,
+  creditNoteTotal: "Итого",
+  creditNoteForReceipt: (number) => `К чеку ${number}`,
+  creditNoteReceiptLine: (number) => (number ? `Возврат по чеку ${number}` : "Возврат по чеку"),
+  creditNotePartialLine: (number) =>
+    number ? `Частичная отмена инвойса ${number}` : "Частичная отмена инвойса",
   paymentsDate: "Дата",
   paymentsOperation: "Операция",
   paymentsEmpty: "Подтверждённых операций оплаты пока нет.",
@@ -241,6 +265,11 @@ const EN: InvoiceDictionary = {
   creditNoteLine: (number) =>
     number ? `Cancellation of invoice ${number}` : "Cancellation of invoice",
   creditNoteFooter: (number) => `Credit note ${number}`,
+  creditNoteTotal: "Total",
+  creditNoteForReceipt: (number) => `Credits receipt ${number}`,
+  creditNoteReceiptLine: (number) => (number ? `Refund for receipt ${number}` : "Refund for receipt"),
+  creditNotePartialLine: (number) =>
+    number ? `Partial credit for invoice ${number}` : "Partial credit for invoice",
   paymentsDate: "Date",
   paymentsOperation: "Operation",
   paymentsEmpty: "No confirmed payments yet.",
@@ -255,14 +284,20 @@ const EN: InvoiceDictionary = {
   status_cancelled: "Cancelled",
 };
 
+const PAPER: Record<InvoiceLanguage, InvoiceDictionary> = {
+  ru: RU,
+  en: EN,
+  bg: BG,
+  el: EL,
+  uk: UK,
+  de: DE,
+  es: ES,
+};
+
+/** Словарь бумаги по языку документа. Неизвестный код (строка старше этого
+ *  списка) печатается по-русски — как печатался до выбора языка. */
 export function invoiceDictionary(
   language: InvoiceLanguage | string | null | undefined,
 ): InvoiceDictionary {
-  return language === "en" ? EN : RU;
+  return (language && PAPER[language as InvoiceLanguage]) || RU;
 }
-
-/** «Русский» / «English» — как язык называют в переключателе на документе. */
-export const INVOICE_LANGUAGE_LABEL: Record<InvoiceLanguage, string> = {
-  ru: "Русский",
-  en: "English",
-};

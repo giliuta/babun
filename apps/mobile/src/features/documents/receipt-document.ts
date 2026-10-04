@@ -170,7 +170,7 @@ export function buildDraftReceiptDocument(input: {
   const money = (value: number) => formatInvoiceMoney(value, input.currency, words.locale);
   return {
     words,
-    recipient: input.recipient ? { label: dict.recipient, ...input.recipient } : null,
+    recipient: input.recipient ? { label: words.payer, ...input.recipient } : null,
     basis: clean(input.invoiceNumber) ? dict.footer(clean(input.invoiceNumber), input.currency) : null,
     number: input.numberLabel,
     voidLabel: null,
@@ -221,7 +221,7 @@ export function buildReceiptDocument(
     : null;
   const buyerName = clean(buyer?.full_name) || clean(receipt.client_snapshot?.name as string | undefined);
   const recipient = buyer && (buyerName || clean(buyer.legal_name))
-    ? { label: dict.recipient, ...clientSnapshotParty({ ...buyer, full_name: buyerName }, dict) }
+    ? { label: words.payer, ...clientSnapshotParty({ ...buyer, full_name: buyerName }, dict) }
     : null;
   const money = (value: number) => formatInvoiceMoney(value, receipt.currency, words.locale);
   const seller = receipt.seller_snapshot as ReceiptSellerSnapshot | null;

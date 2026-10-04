@@ -9,6 +9,7 @@ import {
   setInvoiceLanguage,
   type IssueInvoiceDraft,
 } from "@babun/shared/db/repositories/invoices";
+import type { InvoiceLanguage } from "./dictionary";
 import {
   listInvoicePayments,
   recordInvoicePayment,
@@ -221,7 +222,7 @@ export function useIssueInvoice() {
     mutationFn: async ({
       language,
       ...draft
-    }: IssueInvoiceDraft & { language?: "ru" | "en" }) => {
+    }: IssueInvoiceDraft & { language?: InvoiceLanguage }) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
       const invoice = await issueInvoice(supabase, tenantId, draft);
       if (language && language !== "ru") {
@@ -250,7 +251,7 @@ export function useUpdateInvoice(id: string) {
     mutationFn: async ({
       language,
       ...draft
-    }: Omit<IssueInvoiceDraft, "request_id" | "link_to_tx_id"> & { language?: "ru" | "en" }) => {
+    }: Omit<IssueInvoiceDraft, "request_id" | "link_to_tx_id"> & { language?: InvoiceLanguage }) => {
       const invoice = await updateInvoice(supabase, id, draft);
       if (language && language !== invoice.language) {
         await setInvoiceLanguage(supabase, id, language);

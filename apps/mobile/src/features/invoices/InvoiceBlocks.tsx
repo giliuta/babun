@@ -69,6 +69,7 @@ export function InvoiceBlocks({
   showRequisites = true,
   number,
   companyLocked = false,
+  language,
   teamId,
   lines,
   currency,
@@ -112,6 +113,8 @@ export function InvoiceBlocks({
   number?: InvoiceNumberTarget;
   /** Реквизиты не меняются — правка выставленного счёта (номер из их серии). */
   companyLocked?: boolean;
+  /** «Язык · English» под номером — язык бумаги; шторку открывает составитель. */
+  language?: { value: string; onPress?: () => void };
   /** Команда документа — от неё зависит, чей прайс предлагать. */
   teamId: string | null;
   lines: readonly EditableInvoiceLine[];
@@ -267,6 +270,7 @@ export function InvoiceBlocks({
             onCompanyChange={onCompanyChange}
             number={number}
             locked={companyLocked}
+            language={language}
           />
         ) : null}
 

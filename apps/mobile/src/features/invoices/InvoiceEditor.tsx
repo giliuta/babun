@@ -31,13 +31,14 @@ import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { InvoiceBlocks } from "./InvoiceBlocks";
 import { useNextInvoiceSeries } from "./queries";
 import { InvoicePreviewSheet } from "./InvoicePreviewSheet";
+import { PaperLanguageSheet } from "./PaperLanguageSheet";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import {
   clientRequisitesOf,
   invoiceRequisites,
   requisitesMirror,
 } from "@babun/shared/local/client-requisites";
-import type { InvoiceLanguage } from "./dictionary";
+import { invoiceDictionary, type InvoiceLanguage } from "./dictionary";
 import {
   addDaysYmd,
   type EditableInvoiceLine,
@@ -47,6 +48,7 @@ import {
   parseMoneyAmount,
 } from "./format";
 import { tDynamic } from "@babun/shared/i18n/runtime";
+import { isUiLocale, localeInfo } from "@babun/shared/i18n/locales";
 
 export interface InvoicePrefill {
   transactionId?: string | null;
@@ -68,7 +70,7 @@ export interface InvoiceEditorValue {
   vat_percent: number;
   lines: InvoiceLineDraft[];
   /** Язык бумаги — пишется вторым шагом после выставления (см. queries). */
-  language?: "ru" | "en";
+  language?: InvoiceLanguage;
   notes: string | null;
   link_to_tx_id: string | null;
   /** Набор реквизитов, которым подписан счёт. `null` — сервер подставит
@@ -127,10 +129,15 @@ export function InvoiceEditor({
   /** ЯЗЫК БУМАГИ. У выставленного счёта — свой, у нового — ВСЕГДА английский
    *  (владелец 2026-09-22: инвойсы уходят в министерство, а там принимают
    *  греческий или английский). Не запоминается ни за устройством, ни за
-   *  клиентом: русский — разовый выбор в шторке предпросмотра. */
+   *  клиентом: другой язык — разовый выбор. Выбирают его строкой «Язык» в
+   *  «Реквизитах» и блоком «Язык» в предпросмотре — одно значение, две двери:
+   *  в форме язык виден до выпуска, в предпросмотре — вместе с бумагой.
+   *  Правка выставленного счёта открывается на его языке — любом из семи. */
+  const existingLanguage = existing?.language;
   const [language, setLanguage] = useState<InvoiceLanguage>(
-    existing?.language === "ru" ? "ru" : "en",
+    isUiLocale(existingLanguage) ? existingLanguage : "en",
   );
+  const [languageOpen, setLanguageOpen] = useState(false);
   const serial = useRef(0);
   const newLine = (
     title = "",
@@ -483,7 +490,7 @@ export function InvoiceEditor({
   const discountLine: InvoiceLineDraft | null =
     discountAmount > 0
       ? {
-          title: language === "en" ? "Discount" : "Скидка",
+          title: invoiceDictionary(language).discount,
           qty: 1,
           unit_price: -discountAmount,
           discount: true,
@@ -754,6 +761,7 @@ export function InvoiceEditor({
             onCompanyChange={setCompanyId}
             showRequisites={owner}
             companyLocked={!!existing}
+            language={{ value: localeInfo(language).name, onPress: () => setLanguageOpen(true) }}
             number={
               !pickedCompany
                 ? undefined
@@ -866,6 +874,13 @@ export function InvoiceEditor({
           void submit();
         }}
         onClose={() => setPreviewOpen(false)}
+      />
+
+      <PaperLanguageSheet
+        visible={languageOpen}
+        value={language}
+        onChange={setLanguage}
+        onClose={() => setLanguageOpen(false)}
       />
 
 

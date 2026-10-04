@@ -110,6 +110,21 @@ describe("i18n babel plugin", () => {
     has(code, `locale={__i18n_locale()}`);
   });
 
+  // Бумага инвойса и чека говорит на языке ДОКУМЕНТА: болгарское «Цена»
+  // совпало бы с русским ключом и на английском приложении печаталось бы
+  // «Price». Файлы бумаги стоят в ignore.json — и остаются нетронутыми.
+  it("leaves document paper in its own language", () => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    for (const file of [
+      "apps/mobile/src/features/invoices/dictionary.ts",
+      "apps/mobile/src/features/invoices/paper-languages.ts",
+      "apps/mobile/src/features/documents/receipt-words.ts",
+    ]) {
+      const source = fs.readFileSync(path.resolve(__dirname, "../../../..", file), "utf8");
+      lacks(run(source, file).code, "__i18n");
+    }
+  });
+
   it("touches only app source — not tests, not files outside the app", () => {
     lacks(run(`const a = "Клиент";`, "apps/mobile/src/features/demo/demo.test.ts").code, "__i18n");
     lacks(run(`const a = "Клиент";`, "supabase/functions/x/index.ts").code, "__i18n");

@@ -163,7 +163,9 @@ export interface IssuedDocumentInput extends BaseInput {
   sellerPreview?: InvoiceDraftSeller | null;
   /** Документ — КРЕДИТ-НОТА: номер инвойса, который она отменяет (`null` —
    *  номер ещё не известен). Не передан — это инвойс. */
-  creditNote?: { originalNumber: string | null } | null;
+  /** `ofReceipt` — кредит-нота к ЧЕКУ (возврат по чеку без инвойса): шапка
+   *  и строка таблицы говорят о чеке, а не об инвойсе. */
+  creditNote?: { originalNumber: string | null; ofReceipt?: boolean } | null;
 }
 
 export interface DraftDocumentInput extends BaseInput {
@@ -229,7 +231,11 @@ function issuedDocument({
   return {
     title: creditNote ? dict.creditNote : dict.invoice,
     eyebrow: creditNote ? dict.creditNoteEyebrow : dict.invoiceEyebrow,
-    reference: original ? dict.creditNoteFor(original) : null,
+    reference: original
+      ? creditNote?.ofReceipt
+        ? dict.creditNoteForReceipt(original)
+        : dict.creditNoteFor(original)
+      : null,
     number: invoice.number,
     draft: false,
     dict,
@@ -289,7 +295,12 @@ function issuedDocument({
       creditNote && invoice.lines.length === 0
         ? [
             {
-              title: dict.creditNoteLine(original),
+              // Частичная нота инвойс не отменяет — он остаётся в силе.
+              title: creditNote.ofReceipt
+                ? dict.creditNoteReceiptLine(original)
+                : invoice.credit_partial
+                  ? dict.creditNotePartialLine(original)
+                  : dict.creditNoteLine(original),
               description: null,
               qty: formatQty(1, null, dict.locale),
               unitPrice: paperMoney(invoice.subtotal_net, invoice.currency, dict.locale),
@@ -304,7 +315,8 @@ function issuedDocument({
             total: paperMoney(line.total, invoice.currency, dict.locale),
           })),
     totals: totalRows({
-      dict,
+      // У кредит-ноты итог — «Итого», не «К оплате»: платить по ней нечего.
+      dict: creditNote ? { ...dict, grandTotal: dict.creditNoteTotal } : dict,
       currency: invoice.currency,
       subtotalNet: invoice.subtotal_net,
       vatAmount: invoice.vat_amount,
@@ -346,11 +358,14 @@ function issuedDocument({
         refund,
       };
     }),
-    // Причина по умолчанию сервер пишет по-русски («Отмена инвойса INV-…») —
+    // Причина по умолчанию сервер пишет по-русски («Отмена инвойса INV-…»,
+    // у частичной — «Частичная отмена инвойса INV-…», у возврата по чеку —
+    // «Возврат по чеку RC-…») —
     // на бумаге её уже говорят шапка и строка таблицы на языке документа.
     // Своя причина, набранная человеком, печатается как есть.
     notes:
-      creditNote && /^Отмена инвойса \S+$/.test(clean(invoice.notes))
+      creditNote &&
+      /^(Отмена инвойса|Частичная отмена инвойса|Возврат по чеку) \S+$/.test(clean(invoice.notes))
         ? ""
         : clean(invoice.notes),
     footer: creditNote

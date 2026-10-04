@@ -25,6 +25,7 @@ import {
   roundInvoiceMoney,
   validateInvoiceDraft,
 } from "./invoice-write-helpers";
+import type { UiLocale } from "../../i18n/locales";
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["invoices"]["Row"];
@@ -256,7 +257,7 @@ export async function getInvoice(
 export async function setInvoiceLanguage(
   supabase: DbSupabase,
   id: string,
-  language: "ru" | "en",
+  language: UiLocale,
 ): Promise<void> {
   const { error } = await supabase
     .from("invoices")

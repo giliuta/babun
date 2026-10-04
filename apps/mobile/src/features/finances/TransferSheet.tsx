@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { DateTimeInput } from "@/components/ui/DateTimeInput";
-import { ArrowUpDown, CalendarDays, ChevronLeft, Wallet } from "lucide-react-native";
+import { ArrowUpDown, CalendarDays, Wallet } from "lucide-react-native";
 import {
   formatMoneyForInput,
   money,
@@ -17,6 +17,7 @@ import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { accountIcon } from "./account-ui";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { StepBack } from "@/components/ui/StepBack";
 import { SelectRow } from "@/components/ui/select-rows";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { AmountBlock } from "./AmountBlock";
@@ -713,32 +714,5 @@ export function TransferSheet({
         </SectionCard>
       </View>
     </BottomSheet>
-  );
-}
-
-/** Строка «Назад» второго шага — одна на выбор счёта и на выбор дня. */
-function StepBack({ onPress }: { onPress: () => void }) {
-  const t = useThemeColors();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Назад"
-      hitSlop={8}
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 2,
-        alignSelf: "flex-start",
-        minHeight: 44,
-        paddingRight: 12,
-        opacity: pressed ? 0.6 : 1,
-      })}
-    >
-      <ChevronLeft color={t.accent} size={20} strokeWidth={2.2} />
-      <Text style={{ fontSize: 15, fontWeight: "600", color: t.accent }}>
-        Назад
-      </Text>
-    </Pressable>
   );
 }

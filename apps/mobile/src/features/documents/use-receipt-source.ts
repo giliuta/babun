@@ -5,6 +5,7 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { useInvoice } from "@/features/invoices/queries";
 import type { InvoiceLanguage } from "@/features/invoices/dictionary";
+import { isUiLocale } from "@babun/shared/i18n/locales";
 import type { ReceiptDraftState } from "./ReceiptComposer";
 import { paymentReceiptLines } from "./receipt-for-payment";
 import {
@@ -87,7 +88,8 @@ export function useReceiptSource(
 
   // Бумага — на языке инвойса; чек без инвойса — по-английски (владелец
   // 04.10: «делай пока что всё на английском»).
-  const language: InvoiceLanguage = invoiceRow?.language === "ru" ? "ru" : "en";
+  const rowLanguage = invoiceRow?.language;
+  const language: InvoiceLanguage = isUiLocale(rowLanguage) ? rowLanguage : "en";
   return { mode, tx, editing, invoiceNumber, invoiceCompanyId, language, ready };
 }
 
