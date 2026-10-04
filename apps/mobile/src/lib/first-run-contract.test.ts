@@ -10,18 +10,12 @@ const app = (rel: string) => readFileSync(resolve(here, "../../app", rel), "utf8
 const src = (rel: string) => readFileSync(resolve(here, "..", rel), "utf8");
 
 describe("первый вход нового аккаунта", () => {
-  test("подсказки календаря без тарифа не ведут в тупик", () => {
-    const card = src("features/calendar/CalendarOnboardingCard.tsx");
-    assert.match(card, /<TariffLocked key=\{s\.n\} locked=\{!!locked && !s\.done\}>/);
-    assert.match(card, /label: workInPlan \? "Запланируйте запись" : "Запланируйте событие",/);
-    assert.match(card, /disabled: workInPlan && \(!hasClients \|\| !hasServices\),/);
-    assert.doesNotMatch(card, /\/cabinet\/services/);
+  // ВЛАДЕЛЕЦ 04.10: «этой плашки не должно быть… вот этого внизу тоже».
+  test("пустой календарь — просто сетка, без плашек первого запуска", () => {
+    assert.throws(() => src("features/calendar/CalendarOnboardingCard.tsx"));
+    assert.throws(() => src("features/calendar/CalendarEmptyState.tsx"));
     const home = app("(dashboard)/(home)/index.tsx");
-    assert.equal(home.match(/\.\.\.\(workInPlan \? \{\} : \{ kind: "event" as const \}\),/g)?.length, 2);
-    assert.match(home, /\/calendar\/services\?team=\$\{encodeURIComponent\(activeTeamId\)\}/);
-    const empty = src("features/calendar/CalendarEmptyState.tsx");
-    assert.match(empty, /\{event \? "Добавить первое событие" : "Добавить первую запись"\}/);
-    assert.match(home, /<CalendarEmptyState\s+event=\{!workInPlan\}/);
+    assert.doesNotMatch(home, /CalendarOnboardingCard|CalendarEmptyState|onboardingDismissed/);
   });
 
   test("первые экраны говорят «аккаунт» и «команды», не «компания»", () => {

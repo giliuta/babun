@@ -94,11 +94,6 @@ import { CalendarHeader } from "@/features/calendar/CalendarHeader";
 import { MiniCalendar } from "@/features/calendar/MiniCalendar";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { FirstRunCalendarChoice } from "@/features/calendar/FirstRunCalendarChoice";
-import { CalendarOnboardingCard } from "@/features/calendar/CalendarOnboardingCard";
-import {
-  CalendarEmptyState,
-  suggestFirstSlot,
-} from "@/features/calendar/CalendarEmptyState";
 import { DayLabelSheet } from "@/features/calendar/DayLabelSheet";
 import {
   BookSlotSheet,
@@ -253,8 +248,6 @@ import { useSession } from "@/providers/SessionProvider";
 const CAL_VIEW_LEGACY_KEY = "calendar.view";
 /** Режим календаря живёт на устройстве и компанию в имени не носит. */
 const CAL_MODE_DEVICE_KEY = devicePrefKey("calendar.mode");
-// Онбординг-карточка: «✕» переживает перезапуск (web parity: localStorage).
-const ONBOARDING_DISMISSED_LEGACY_KEY = "calendar.onboardingDismissed";
 
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -817,29 +810,10 @@ export default function CalendarTab() {
   // компанию (пауза синхронизации, чистка кэша, новый токен) — наша работа,
   // и человеку про неё знать незачем.
   const [miniCalOpen, setMiniCalOpen] = useState(false);
-  // First-run onboarding card — «✕» persists across restarts in MMKV
-  // (web parity: localStorage, STORY-060 §F1.1; the card also self-clears
-  // once data appears).
-  const [onboardingDismissed, setOnboardingDismissed] = useState(
-    () =>
-      (tenantId
-        ? readTenantPref<boolean>(
-            "calendar.onboardingDismissed",
-            tenantId,
-            ONBOARDING_DISMISSED_LEGACY_KEY,
-          )
-        : null) ?? false,
-  );
-  const dismissOnboarding = () => {
-    if (tenantId) {
-      writeTenantPref("calendar.onboardingDismissed", tenantId, true);
-    }
-    setOnboardingDismissed(true);
-  };
 
   // ПЕРЕСЕВ ПРИ СМЕНЕ КОМПАНИИ — ТОЛЬКО ТОГО, ЧТО ПРИНАДЛЕЖИТ КОМПАНИИ.
   // Переход в другую компанию этот экран НЕ размонтирует, поэтому выбор
-  // календаря и карточку первого запуска надо перечитать: без этого человек
+  // календаря надо перечитать: без этого человек
   // увидел бы в новой базе команду прежней, а первое же действие записало бы
   // её туда как «свою».
   //
@@ -860,11 +834,6 @@ export default function CalendarTab() {
         : null) ?? null;
     prefRef.current = { ...prefRef.current, teamId: nextTeam };
     setTeamChoice(nextTeam);
-    setOnboardingDismissed(
-      (tenantId
-        ? readTenantPref<boolean>("calendar.onboardingDismissed", tenantId)
-        : null) ?? false,
-    );
   }, [tenantId]);
   const [crewViewing, setCrewViewing] = useState<Appointment | null>(null);
   // РЕЖИМ ПЕРЕНОСА — запись, для которой сетка показывает зелёные кубики
@@ -3463,49 +3432,10 @@ export default function CalendarTab() {
         </GestureDetector>
       )}
 
-      {/* Первый запуск. Гейт по ЗАПИСЯМ: пока в системе нет ни одной записи,
-          онбординг ведёт человека по шагам и помечает пройденное галочкой.
-          Прежний гейт «0 клиентов И 0 услуг И 0 записей» гасил карточку сразу
-          после первого шага — вместе с невыполненным вторым.
-          Когда шаги пройдены или карточка закрыта, эстафету принимает тихая
-          строка «Пока нет записей» — дыры между состояниями нет. */}
-      {canManageBookings && !calendarLoading && !calendarError && appts.length === 0 ? (
-        !onboardingDismissed ? (
-          <CalendarOnboardingCard
-            hasClients={clients.length > 0}
-            hasServices={services.length > 0}
-            workInPlan={workInPlan}
-            servicesHref={
-              activeTeamId
-                ? `/calendar/services?team=${encodeURIComponent(activeTeamId)}`
-                : "/calendar/services"
-            }
-            onCreate={() => {
-              const slot = suggestFirstSlot(now);
-              // Без тарифа форма открывалась на записи с клиентом — она
-              // только для чтения; план разрешает событие.
-              bookAt({
-                date: formatYMD(slot.date),
-                time_start: slot.time,
-                ...(workInPlan ? {} : { kind: "event" as const }),
-              });
-            }}
-            onDismiss={dismissOnboarding}
-          />
-        ) : (
-          <CalendarEmptyState
-            event={!workInPlan}
-            onCreate={() => {
-              const slot = suggestFirstSlot(now);
-              bookAt({
-                date: formatYMD(slot.date),
-                time_start: slot.time,
-                ...(workInPlan ? {} : { kind: "event" as const }),
-              });
-            }}
-          />
-        )
-      ) : null}
+      {/* ПУСТОЙ КАЛЕНДАРЬ — ПРОСТО СЕТКА (владелец 04.10: «этой плашки не
+          должно быть… вот этого внизу тоже»). Ни «Начните за 3 шага», ни
+          строки «Пока нет записей»: запись создаётся тапом по свободному
+          времени, как и всегда. */}
 
       {/* ПЛАШКИ «N без оплаты · закройте до конца дня» БОЛЬШЕ НЕТ (владелец
           2026-09-06: «это ненужная штука — и так всё видно»): долг стоит
