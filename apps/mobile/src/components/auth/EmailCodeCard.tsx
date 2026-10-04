@@ -130,7 +130,7 @@ export function EmailCodeCard({
     setResending(false);
     if (e) {
       // Лимит или сеть — счётчик не перезапускаем и не делаем вид, что письмо ушло.
-      setError(mapAuthError(e, "code"));
+      setError(mapAuthError(e, "send"));
       return;
     }
     setSent(true);

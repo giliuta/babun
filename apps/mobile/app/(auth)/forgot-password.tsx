@@ -9,6 +9,7 @@ import {
   PillButton,
 } from "@/components/auth/AuthCard";
 import { RECOVERY_LINK_REDIRECT } from "@/components/auth/EmailCodeCard";
+import { mapAuthError } from "@/components/auth/authErrors";
 import { supabase } from "@/lib/supabase";
 
 // «Сброс пароля»: почта → код из письма Babun (владелец 04.10: «сброс пароля
@@ -30,10 +31,7 @@ export default function ForgotPasswordScreen() {
     });
     setLoading(false);
     if (e) {
-      const m = (e.message ?? "").toLowerCase();
-      if (m.includes("rate") || m.includes("too many"))
-        setError("Слишком много попыток, подождите минуту");
-      else setError("Нет связи. Проверьте интернет и повторите");
+      setError(mapAuthError(e, "send"));
       return;
     }
     router.push({ pathname: "/reset-password", params: { email: email.trim() } });

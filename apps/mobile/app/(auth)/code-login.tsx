@@ -33,7 +33,7 @@ export default function CodeLoginScreen() {
       const c = (e.code ?? "").toLowerCase();
       if (c.includes("otp_disabled") || m.includes("signups not allowed"))
         setError("Аккаунта с такой почтой нет — зарегистрируйтесь");
-      else setError(mapAuthError(e, "code"));
+      else setError(mapAuthError(e, "send"));
       return;
     }
     setSent(true);
