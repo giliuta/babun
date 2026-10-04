@@ -70,8 +70,9 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
     // дверь вела в «Подписки ещё нет» (аудит Кабинета 03.10).
     assert.match(screen, /const hasSubscription = tariffState\.paid && !tariffState\.forever;/);
     // Дверь — только владельцу: партнёр с «Оплатами тарифа» (04.10) видит
-    // оплаты, но подпиской не управляет.
-    assert.match(screen, /\{!owner \|\| \(!hasSubscription && months\.length === 0\) \? null : \(/);
+    // оплаты, но подпиской не управляет. И только на сайте: в приложении из
+    // магазина двери в Stripe нет (владелец 04.10, `lib/pay-here.ts`).
+    assert.match(screen, /\{!CAN_PAY_HERE \|\| !owner \|\| \(!hasSubscription && months\.length === 0\) \? null : \(/);
   });
 
   test("SMS из карточки: «ближайшая запись» — по часам бизнеса", () => {

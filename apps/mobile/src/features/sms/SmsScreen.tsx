@@ -17,6 +17,7 @@ import { useAccountGate, useAccountName, useAccountProfile, useAccountScope } fr
 import { tierAllows, tierOf } from "@/features/tariffs/tiers";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { notify } from "@/lib/notify";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { openSmsCheckout, useSmsAccount, useSmsHistory, type SmsHistoryItem } from "./sms-account";
 import { balanceWarning } from "./sms-model";
 import { SmsHistoryRow } from "./SmsHistoryRow";
@@ -49,6 +50,10 @@ import { tDynamic } from "@babun/shared/i18n/runtime";
 // аккаунт («Пополнить баланс Giliuta»), платят за него. «Видит» — баланс и
 // месяц; «Пополняет» — ещё и кнопка. Истории сообщений (переписки с
 // клиентами) партнёру здесь нет.
+//
+// В ПРИЛОЖЕНИИ ИЗ МАГАЗИНА ПОПОЛНЕНИЯ НЕТ (владелец 04.10, `pay-here.ts`):
+// баланс, месяц и история — да; кнопки, шторки суммы и слова «пополните» —
+// нет. Пополняют на babun.app.
 
 export function SmsScreen() {
   const router = useRouter();
@@ -113,7 +118,7 @@ export function SmsScreen() {
   };
 
   const subtitle = !ownerOfAccount || scope.foreign ? (accountName ?? undefined) : undefined;
-  const canTopUp = ownerOfAccount || gate === "write";
+  const canTopUp = CAN_PAY_HERE && (ownerOfAccount || gate === "write");
 
   // Без права «SMS» страница пуста — сюда ведёт только старая ссылка.
   if (!ownerOfAccount && gate !== "read" && gate !== "write") {
@@ -147,7 +152,7 @@ export function SmsScreen() {
     );
   }
 
-  const warning = balanceWarning(data);
+  const warning = balanceWarning(data, CAN_PAY_HERE);
 
   return (
     <Screen edges={["top"]}>
@@ -217,7 +222,7 @@ export function SmsScreen() {
       ) : null}
 
       <SmsTopupSheet
-        visible={topupOpen}
+        visible={canTopUp && topupOpen}
         priceCents={data.priceCents}
         onClose={() => setTopupOpen(false)}
         onPay={(cents) => void topup(cents)}

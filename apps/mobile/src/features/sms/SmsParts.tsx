@@ -3,6 +3,7 @@ import { MessageSquare } from "lucide-react-native";
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { LOW_BALANCE_CENTS, type SmsAccount } from "./sms-model";
@@ -36,12 +37,14 @@ export function SmsBalanceCard({ account }: { account: SmsAccount }) {
   // печатал число сообщений — «€1,20 · 5 SMS» при цене €0,12 за SMS. Месяц —
   // в частях (сумма частей по командам); нет разбивки — число сообщений.
   const monthParts = owner.teams.reduce((sum, team) => sum + team.segments, 0) || owner.monthCount;
+  // В приложении из магазина «пополните» не говорим (владелец 04.10,
+  // `pay-here.ts`) — только состояние.
   const line = debt
-    ? "Долг — пополните баланс"
+    ? CAN_PAY_HERE ? "Долг — пополните баланс" : "Долг"
     : low
       ? left > 0
-        ? `≈ ${smsCount(left)} · пополните баланс`
-        : "Пополните баланс"
+        ? CAN_PAY_HERE ? `≈ ${smsCount(left)} · пополните баланс` : `≈ ${smsCount(left)} · баланс на исходе`
+        : CAN_PAY_HERE ? "Пополните баланс" : "Баланс на исходе"
       : `≈ ${smsCount(left)}`;
   return (
     <SectionCard title="Баланс">

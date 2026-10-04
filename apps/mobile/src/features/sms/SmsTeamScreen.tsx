@@ -16,6 +16,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import {
   balanceWarning,
@@ -129,12 +130,12 @@ export function SmsTeamScreen() {
               title={owner ? euro(owner.balanceCents) : "—"}
               // Ниже €5 — «Пополните баланс» строкой, без плашки (владелец 30.09).
               sub={
-                balanceWarning(account.data) ??
+                balanceWarning(account.data, CAN_PAY_HERE) ??
                 (owner && account.data
                   ? balanceWords(owner.balanceCents, owner.freeLeft, account.data.priceCents)
                   : undefined)
               }
-              subColor={balanceWarning(account.data) ? t.warning : undefined}
+              subColor={balanceWarning(account.data, CAN_PAY_HERE) ? t.warning : undefined}
               onPress={() => router.push("/cabinet/sms" as Href)}
             />
           </SectionCard>

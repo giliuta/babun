@@ -16,6 +16,7 @@ import { useAccountGate, useAccountName, useAccountScope } from "@/features/cabi
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useTeams } from "@/features/reference/queries";
 import { notify } from "@/lib/notify";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import {
   TIER_CARDS,
@@ -48,6 +49,10 @@ import { openTariffCheckout, openTariffPortal, useStartTrial, useTariff } from "
 // «Видит» — только что действует; «Оплачивает» — кнопка «Оплатить … за
 // <аккаунт>», пока подписки нет. Пробный, смена тарифа, рабочие команды и
 // управление подпиской — у владельца.
+//
+// В ПРИЛОЖЕНИИ ИЗ МАГАЗИНА — ТОЛЬКО СОСТОЯНИЕ (владелец 04.10, `pay-here.ts`):
+// строка тарифа со сроком и «Рабочие команды». Ни плиток с ценами, ни
+// пробного, ни оплаты, ни «Управления подпиской» — всё это на babun.app.
 
 export function TariffScreen() {
   const router = useRouter();
@@ -81,11 +86,13 @@ export function TariffScreen() {
   // Рабочие команды выбирает владелец — и только своего, открытого аккаунта.
   const overLimit = owner && !scope.foreign && live.length > limit;
   const working = workingTeamIds(live, state.tier, workingChosen);
-  const action = owner
-    ? tariffAction(state, selected)
-    : gate === "write"
-      ? partnerTariffAction(state, selected, accountName)
-      : null;
+  const action = !CAN_PAY_HERE
+    ? null
+    : owner
+      ? tariffAction(state, selected)
+      : gate === "write"
+        ? partnerTariffAction(state, selected, accountName)
+        : null;
   // Выбирать тариф есть смысл тому, кто может за него заплатить.
   const canPick = !state.forever && (owner || gate === "write");
 
@@ -151,7 +158,7 @@ export function TariffScreen() {
             tile="neutral"
             icon={BadgeCheck}
             title={state.tier ? tierName(state.tier) : "—"}
-            sub={tariffStatus(state, periodEnd)}
+            sub={tariffStatus(state, periodEnd, CAN_PAY_HERE)}
           />
           {overLimit ? (
             <>
@@ -165,7 +172,7 @@ export function TariffScreen() {
               />
             </>
           ) : null}
-          {owner && state.paid && !state.forever ? (
+          {CAN_PAY_HERE && owner && state.paid && !state.forever ? (
             <>
               <Divider inset={48} />
               <SettingsRow
@@ -178,8 +185,8 @@ export function TariffScreen() {
           ) : null}
         </SectionCard>
 
-        <SectionEyebrow>Тарифы</SectionEyebrow>
-        {TIER_CARDS.map((card) => (
+        {CAN_PAY_HERE ? <SectionEyebrow>Тарифы</SectionEyebrow> : null}
+        {(CAN_PAY_HERE ? TIER_CARDS : []).map((card) => (
           <TierTile
             key={card.tier}
             card={card}

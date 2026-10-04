@@ -2,6 +2,7 @@ import { useRouter, type Href } from "expo-router";
 import { MessageSquare } from "lucide-react-native";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import { balanceWarning, useSmsAccount } from "./sms-account";
 import { euro } from "./sms-words";
@@ -23,9 +24,9 @@ export function SmsCabinetRow({ tenantId }: { tenantId?: string } = {}) {
       icon={MessageSquare}
       title="SMS"
       value={owner ? euro(owner.balanceCents) : undefined}
-      sub={balanceWarning(data) ?? undefined}
-      valueColor={balanceWarning(data) ? t.warning : undefined}
-      valueQuiet={!owner || (owner.balanceCents === 0 && !balanceWarning(data))}
+      sub={balanceWarning(data, CAN_PAY_HERE) ?? undefined}
+      valueColor={balanceWarning(data, CAN_PAY_HERE) ? t.warning : undefined}
+      valueQuiet={!owner || (owner.balanceCents === 0 && !balanceWarning(data, CAN_PAY_HERE))}
       onPress={() => router.push((tenantId ? accountHref("/cabinet/sms", tenantId) : "/cabinet/sms") as Href)}
     />
   );

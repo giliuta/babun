@@ -253,10 +253,16 @@ export function partnerTariffAction(
 }
 
 /** Подпись текущего тарифа на странице: живое состояние, не пояснение. */
-export function tariffStatus(state: TariffState, periodEnd?: string | null): string {
+export function tariffStatus(
+  state: TariffState,
+  periodEnd?: string | null,
+  /** Можно ли платить здесь (`CAN_PAY_HERE`): в приложении из магазина
+   *  «обновите карту» не говорим — только состояние (владелец 04.10). */
+  payHere = true,
+): string {
   if (state.forever) return "Навсегда";
   if (state.trial) return `Пробный · ещё ${state.trial.days} ${daysWord(state.trial.days)}`;
-  if (state.pastDue) return "Оплата не прошла — обновите карту";
+  if (state.pastDue) return payHere ? "Оплата не прошла — обновите карту" : "Оплата не прошла";
   if (state.paid) {
     const end = periodEnd ? new Date(periodEnd) : null;
     return end && !Number.isNaN(end.getTime())

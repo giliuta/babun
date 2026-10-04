@@ -13,6 +13,7 @@ import { useDataRole } from "@/features/settings/tenant";
 import { openTariffPortal, useTariff } from "@/features/tariffs/use-tariff";
 import { loadErrorWords } from "@/lib/connection-words";
 import { notify } from "@/lib/notify";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
 
@@ -32,7 +33,8 @@ import { useTariffPayments } from "./use-tariff-payments";
 //
 // Видит владелец аккаунта и партнёр с правом «Оплаты тарифа» (04.10, из
 // блока аккаунта, который пригласил: шапка называет аккаунт); остальным —
-// слова. Управлять подпиской — только владелец.
+// слова. Управлять подпиской — только владелец, и только на сайте: в
+// приложении из магазина двери в Stripe нет (владелец 04.10, `pay-here.ts`).
 
 // Вшитый отступ разделителя нейтральной строки: поле 16 + глиф 20 + зазор 12.
 const NEUTRAL_ROW_INSET = 48;
@@ -139,7 +141,7 @@ export function TariffPaymentsScreen() {
           <RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColor={t.accent} />
         }
       >
-        {!owner || (!hasSubscription && months.length === 0) ? null : (
+        {!CAN_PAY_HERE || !owner || (!hasSubscription && months.length === 0) ? null : (
           <SectionCard>
             <SettingsRow
               tile={SETTINGS_TILE.blue}

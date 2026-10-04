@@ -5215,5 +5215,8 @@
  "«Точный адрес» не заполнен — на чеке адреса не будет": "“Exact address” is empty — the receipt will have no address",
  "Впишите сумму": "Enter the amount",
  "Вся сумма — инвойс будет отменён, клиенту вернётся {0}": "Full amount — the invoice will be cancelled, the client gets {0} back",
- "Больше суммы инвойса сторнировать нельзя: {0} {1}": "You can't credit more than the invoice amount: {0} {1}"
+ "Больше суммы инвойса сторнировать нельзя: {0} {1}": "You can't credit more than the invoice amount: {0} {1}",
+ "Баланс на исходе": "Balance running low",
+ "≈ {0} · баланс на исходе": "≈ {0} · balance running low",
+ "Оплата не прошла": "Payment failed"
 }

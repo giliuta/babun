@@ -235,6 +235,9 @@ export const LOW_BALANCE_CENTS = 500;
  *  отправителя — пугать нечем). Пусто — SMS не уходят вовсе. */
 export function balanceWarning(
   account: Pick<SmsAccount, "priceCents" | "owner" | "senders" | "frozen"> | null | undefined,
+  /** Можно ли платить здесь (`CAN_PAY_HERE`): в приложении из магазина
+   *  «пополните» не говорим — только состояние (владелец 04.10). */
+  payHere = true,
 ): string | null {
   const owner = account?.owner;
   if (!owner || !account) return null;
@@ -242,7 +245,8 @@ export function balanceWarning(
   if (account.frozen) return FROZEN_WORDS;
   if (owner.balanceCents < 0) return "Долг по балансу — SMS не уходят";
   if (Object.keys(account.senders ?? {}).length === 0) return null;
-  return owner.balanceCents < LOW_BALANCE_CENTS ? "Пополните баланс" : null;
+  if (owner.balanceCents >= LOW_BALANCE_CENTS) return null;
+  return payHere ? "Пополните баланс" : "Баланс на исходе";
 }
 
 /** Отправка остановлена сверкой: баланс не сошёлся с журналом денег. */
