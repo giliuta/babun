@@ -5,7 +5,7 @@ import type {
   RecordColorRule,
 } from "@babun/shared/local/calendar-settings";
 import { getStorage } from "@babun/shared/storage";
-import { changedDesignColumns, designColumns } from "./team-design-columns";
+import { changedDesignColumns, designColumns, rebaseDesign } from "./team-design-columns";
 import { supabase } from "@/lib/supabase";
 import { useScopeCompany } from "@/features/clients/company-scope";
 
@@ -97,6 +97,9 @@ const table = (client: typeof supabase) =>
 
 const cacheKey = (tenantId: string) => `babun-team-design:${tenantId}`;
 
+const DESIGN_COLUMNS =
+  "team_id, record_color_rule, record_color_palette, record_color_fallback, disabled_blocks, client_list_off, contact_ways, map_services";
+
 function toDesign(row: Row): TeamDesign {
   return {
     rule: row.record_color_rule ?? "team",
@@ -138,9 +141,7 @@ export function useTeamDesigns() {
     placeholderData: () => (foreign ? undefined : readCache(tenantId)),
     queryFn: async (): Promise<DesignMap> => {
       const { data, error } = await table(client)
-        .select(
-          "team_id, record_color_rule, record_color_palette, record_color_fallback, disabled_blocks, client_list_off, contact_ways, map_services",
-        )
+        .select(DESIGN_COLUMNS)
         .eq("tenant_id", tenantId as string);
       if (error) {
         // Таблицы ещё нет (миграция не накачена) или нет сети — живём на
@@ -179,29 +180,50 @@ export function useSaveTeamDesign() {
   const before = useRef(new Map<string, TeamDesign | null>());
   return useMutation({
     networkMode: "always",
-    mutationFn: async (input: { teamId: string; next: TeamDesign }) => {
+    mutationFn: async (input: {
+      teamId: string;
+      next: TeamDesign;
+      /** Что экран показывал перед правкой — от этого `next` и построен. */
+      base: TeamDesign;
+    }): Promise<{ teamId: string; next: TeamDesign }> => {
       if (!tenantId) throw new Error("Аккаунт ещё не открыт — попробуйте ещё раз");
-      const was = before.current.get(input.teamId) ?? null;
+      let was = before.current.get(input.teamId) ?? null;
       before.current.delete(input.teamId);
+      let next = input.next;
+      if (!was) {
+        // СТРОКИ У ТЕЛЕФОНА НЕ БЫЛО — СПРАШИВАЕМ СЕРВЕР (аудит 04.10). Экран
+        // показывал умолчания (страница открыта до ответа сервера, чтение
+        // упало, строку завёл другой телефон), и запись целой строкой стирала
+        // остальные настройки команды. Правка ложится на строку сервера.
+        const { data, error } = await table(client)
+          .select(DESIGN_COLUMNS)
+          .eq("tenant_id", tenantId);
+        if (error) throw new Error(error.message);
+        const row = (data ?? []).find((r) => r.team_id === input.teamId);
+        if (row) {
+          was = toDesign(row);
+          next = rebaseDesign(input.base, input.next, was);
+        }
+      }
       const stamp = { updated_at: new Date().toISOString() };
       if (was) {
         // Строка на сервере есть — уходят только изменённые колонки.
-        const patch = changedDesignColumns(was, input.next);
-        if (Object.keys(patch).length === 0) return input;
+        const patch = changedDesignColumns(was, next);
+        if (Object.keys(patch).length === 0) return { teamId: input.teamId, next };
         const { error } = await table(client)
           .update({ ...patch, ...stamp })
           .eq("tenant_id", tenantId)
           .eq("team_id", input.teamId);
         if (error) throw new Error(error.message);
-        return input;
+        return { teamId: input.teamId, next };
       }
       // Строки ещё нет — первая правка команды заводит её целиком.
       const { error } = await table(client).upsert(
-        { tenant_id: tenantId, team_id: input.teamId, ...designColumns(input.next), ...stamp },
+        { tenant_id: tenantId, team_id: input.teamId, ...designColumns(next), ...stamp },
         { onConflict: "tenant_id,team_id" },
       );
       if (error) throw new Error(error.message);
-      return input;
+      return { teamId: input.teamId, next };
     },
     onMutate: async ({ teamId, next }) => {
       await qc.cancelQueries({ queryKey: key });
@@ -213,15 +235,23 @@ export function useSaveTeamDesign() {
     onError: (_e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(key, ctx.prev);
     },
-    onSuccess: () => {
-      const map = qc.getQueryData<DesignMap>(key);
-      if (map && tenantId && !foreign) {
+    onSuccess: (saved) => {
+      // На экране — то, что легло на сервер (правка поверх строки сервера),
+      // а не умолчания с правкой.
+      const map = { ...(qc.getQueryData<DesignMap>(key) ?? {}), [saved.teamId]: saved.next };
+      qc.setQueryData<DesignMap>(key, map);
+      if (tenantId && !foreign) {
         try {
           getStorage().set(cacheKey(tenantId), map);
         } catch {
           /* кэш не обязателен */
         }
       }
+    },
+    // `onMutate` отменял летящую загрузку и мог оставить на экране карту из
+    // одной команды — после записи карта перечитывается целиком (04.10).
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: key });
     },
   });
 }

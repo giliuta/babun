@@ -231,7 +231,7 @@ function useToggleTeamBlock(teamId: string | null | undefined) {
       const off = new Set(base.disabledBlocks);
       if (off.has(key)) off.delete(key);
       else off.add(key);
-      save.mutate({ teamId, next: { ...base, disabledBlocks: [...off] } });
+      save.mutate({ teamId, base, next: { ...base, disabledBlocks: [...off] } });
     },
   };
 }
@@ -377,7 +377,7 @@ function useSaveDesign(teamId: string | null | undefined) {
     base,
     patch: (p: Partial<TeamDesign>) => {
       if (!teamId) return;
-      save.mutate({ teamId, next: { ...base, ...p } });
+      save.mutate({ teamId, base, next: { ...base, ...p } });
     },
   };
 }

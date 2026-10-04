@@ -162,6 +162,7 @@ export function useToggleCardField(teamId: string | null = null) {
       const next = { ...current, [field]: !current[field] };
       saveTeam.mutate({
         teamId,
+        base,
         next: { ...base, listOff: CARD_FIELDS.filter((f) => !next[f]) },
       });
     },

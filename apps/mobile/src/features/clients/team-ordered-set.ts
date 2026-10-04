@@ -37,7 +37,7 @@ export function teamOrderedSet<T extends string>(prefs: Prefs<T>, field: Field) 
       isPending: save.isPending,
       write: (next: { enabled: T[]; order: T[] }) => {
         if (!teamId) return;
-        save.mutate({ teamId, next: { ...base, [field]: next } });
+        save.mutate({ teamId, base, next: { ...base, [field]: next } });
       },
     };
   }

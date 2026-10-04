@@ -54,7 +54,7 @@ export function useToggleClientFunction(teamId: string | null | undefined) {
       const off = new Set(base.disabledBlocks);
       if (input.on) off.delete(input.key);
       else off.add(input.key);
-      save.mutate({ teamId, next: { ...base, disabledBlocks: [...off] } });
+      save.mutate({ teamId, base, next: { ...base, disabledBlocks: [...off] } });
     },
   };
 }
