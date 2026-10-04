@@ -28,6 +28,7 @@ import {
 import { BLOCK_TEXT, fillRgba } from "@/components/ui/color-contrast";
 import { BLOCK_GLASS } from "@/components/ui/RecordMark";
 import { blockPropsEqual } from "@/features/calendar/grid-memo";
+import { useUnstretchedStyle } from "@/features/calendar/zoom";
 import {
   dayShort,
   GAP,
@@ -599,6 +600,7 @@ export const AppointmentBlock = memo(function AppointmentBlock({
   // быстрого пути отрисовки, и смена фона заставляла бы iOS перерисовывать
   // картинку канта каждый кадр нажатия. Отклик у неё остаётся масштабом —
   // отменённую и не открывают так часто, чтобы платить за это кадрами.
+  const unstretched = useUnstretchedStyle();
   const cardStyle = useAnimatedStyle(() => ({
     top: topPx.value,
     bottom: 2 - botPx.value,
@@ -769,97 +771,100 @@ export const AppointmentBlock = memo(function AppointmentBlock({
               девятка, которой неделя набиралась раньше, была нечитаема.
               Лестница только ДОПИСЫВАЕТСЯ вниз и никогда не переставляется:
               при щипке глаз не должен терять якорь. */}
-          {textW >= 24 && nameLineW >= 24
-            ? nameParts.map((part, i) => (
-                <Text
-                  key={i}
-                  style={{
-                    color: nameColor,
-                    fontSize: 13,
-                    lineHeight: lineH,
-                    fontWeight: "700",
-                    marginRight: Math.max(
-                      i === 0 ? markReserve : 0,
-                      i === 0 && deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0,
-                      lastRow === "name" && i === nameParts.length - 1
-                        ? dotReserve
-                        : 0,
-                    ),
-                    textDecorationLine: cancelled ? "line-through" : "none",
-                  }}
-                  numberOfLines={1}
-                  // УЗКАЯ КАРТОЧКА: КОРОТКОЕ ИМЯ СЖИМАЕТСЯ, А НЕ РЕЖЕТСЯ
-                  // ПОПОЛАМ БУКВЫ. Обрезка по краю оставляла огрызок глифа
-                  // («Андреі», «Перерı»); кегль до 11 (0.85 от 13 — пол шрифта
-                  // продукта) вмещает «Андрей», «Встреча», «Перерыв» целиком.
-                  // Режим «clip» подгонку кегля в iOS выключает, поэтому при
-                  // сжатии — «tail» (текст и так влез). Длинное имя, которому
-                  // и 11pt мало, режется по краю, как раньше: «Конс» говорит
-                  // больше, чем «Ко…».
-                  ellipsizeMode={
-                    (i === 0 ? nameLineW : textW) >= 96 ||
-                    nameShrinkFits(part, i === 0 ? nameLineW : textW)
-                      ? "tail"
-                      : "clip"
-                  }
-                  adjustsFontSizeToFit={
-                    (i === 0 ? nameLineW : textW) < 96 &&
-                    nameShrinkFits(part, i === 0 ? nameLineW : textW)
-                  }
-                  minimumFontScale={NAME_MIN_SCALE}
-                  maxFontSizeMultiplier={1.3}
-                >
-                  {part}
-                </Text>
-              ))
-            : null}
-          {ladder.showTime && textW >= 24 ? (
-            <Text
-              style={{
-                color: subColor,
-                fontSize: 13,
-                lineHeight: lineH,
-                fontWeight: overdue ? "700" : "500",
-                marginRight: lastRow === "time" ? dotReserve : 0,
-                fontVariant: ["tabular-nums"],
-              }}
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-            >
-              {textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start}
-            </Text>
-          ) : null}
-          {showService && textW >= 24 ? (
-            <Text
-              style={{
-                color: subColor,
-                fontSize: 13,
-                lineHeight: lineH,
-                marginRight: lastRow === "service" ? dotReserve : 0,
-              }}
-              numberOfLines={1}
-              ellipsizeMode={textW < 96 ? "clip" : "tail"}
-              maxFontSizeMultiplier={1.3}
-            >
-              {service}
-            </Text>
-          ) : null}
-          {showAddress && textW >= 24 ? (
-            <Text
-              style={{
-                color: subColor,
-                fontSize: 13,
-                lineHeight: lineH,
-                marginRight: dotReserve,
-              }}
-              numberOfLines={1}
-              ellipsizeMode={textW < 96 ? "clip" : "tail"}
-              maxFontSizeMultiplier={1.3}
-            >
-              {address}
-            </Text>
-          ) : null}
-
+          {/* ЩИПОК ТЯНЕТ РАМКУ, НО НЕ БУКВЫ (владелец 04.10): обратный масштаб
+              жеста от верхнего края — текст карточки держит форму. */}
+          <Animated.View style={[{ transformOrigin: "top" }, unstretched]}>
+            {textW >= 24 && nameLineW >= 24
+              ? nameParts.map((part, i) => (
+                  <Text
+                    key={i}
+                    style={{
+                      color: nameColor,
+                      fontSize: 13,
+                      lineHeight: lineH,
+                      fontWeight: "700",
+                      marginRight: Math.max(
+                        i === 0 ? markReserve : 0,
+                        i === 0 && deckMore > 0 && !deckBadgeLow ? deckBadgeW : 0,
+                        lastRow === "name" && i === nameParts.length - 1
+                          ? dotReserve
+                          : 0,
+                      ),
+                      textDecorationLine: cancelled ? "line-through" : "none",
+                    }}
+                    numberOfLines={1}
+                    // УЗКАЯ КАРТОЧКА: КОРОТКОЕ ИМЯ СЖИМАЕТСЯ, А НЕ РЕЖЕТСЯ
+                    // ПОПОЛАМ БУКВЫ. Обрезка по краю оставляла огрызок глифа
+                    // («Андреі», «Перерı»); кегль до 11 (0.85 от 13 — пол шрифта
+                    // продукта) вмещает «Андрей», «Встреча», «Перерыв» целиком.
+                    // Режим «clip» подгонку кегля в iOS выключает, поэтому при
+                    // сжатии — «tail» (текст и так влез). Длинное имя, которому
+                    // и 11pt мало, режется по краю, как раньше: «Конс» говорит
+                    // больше, чем «Ко…».
+                    ellipsizeMode={
+                      (i === 0 ? nameLineW : textW) >= 96 ||
+                      nameShrinkFits(part, i === 0 ? nameLineW : textW)
+                        ? "tail"
+                        : "clip"
+                    }
+                    adjustsFontSizeToFit={
+                      (i === 0 ? nameLineW : textW) < 96 &&
+                      nameShrinkFits(part, i === 0 ? nameLineW : textW)
+                    }
+                    minimumFontScale={NAME_MIN_SCALE}
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {part}
+                  </Text>
+                ))
+              : null}
+            {ladder.showTime && textW >= 24 ? (
+              <Text
+                style={{
+                  color: subColor,
+                  fontSize: 13,
+                  lineHeight: lineH,
+                  fontWeight: overdue ? "700" : "500",
+                  marginRight: lastRow === "time" ? dotReserve : 0,
+                  fontVariant: ["tabular-nums"],
+                }}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.3}
+              >
+                {textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start}
+              </Text>
+            ) : null}
+            {showService && textW >= 24 ? (
+              <Text
+                style={{
+                  color: subColor,
+                  fontSize: 13,
+                  lineHeight: lineH,
+                  marginRight: lastRow === "service" ? dotReserve : 0,
+                }}
+                numberOfLines={1}
+                ellipsizeMode={textW < 96 ? "clip" : "tail"}
+                maxFontSizeMultiplier={1.3}
+              >
+                {service}
+              </Text>
+            ) : null}
+            {showAddress && textW >= 24 ? (
+              <Text
+                style={{
+                  color: subColor,
+                  fontSize: 13,
+                  lineHeight: lineH,
+                  marginRight: dotReserve,
+                }}
+                numberOfLines={1}
+                ellipsizeMode={textW < 96 ? "clip" : "tail"}
+                maxFontSizeMultiplier={1.3}
+              >
+                {address}
+              </Text>
+            ) : null}
+          </Animated.View>
           {/* «+N» СТОПКИ — справа вверху верхней карточки: под ней ещё записи
               на то же время; тап откроет их списком. */}
           {deckMore > 0 ? (

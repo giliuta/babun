@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
-import type { SharedValue } from "react-native-reanimated";
+import Animated, { type SharedValue } from "react-native-reanimated";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD, pad2, parseYMD } from "@/features/appointments/helpers";
 import { pluralize } from "@babun/shared/common/utils/pluralize";
@@ -28,7 +28,7 @@ import {
   TEXT_MIN_W,
 } from "@/features/calendar/block-geometry";
 import { BLOCK_TEXT, fillRgba } from "@/components/ui/color-contrast";
-import { ZoomableTimeGrid } from "@/features/calendar/zoom";
+import { useUnstretchedStyle, ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { AppointmentBlock } from "@/features/calendar/AppointmentBlock";
 import { MIN_H, minToHM, pct, RAIL_W } from "@/features/calendar/grid-units";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
@@ -363,6 +363,8 @@ export function TimeRail({
       : null;
   const nearNow = (h: number) =>
     nowInWin != null && Math.abs(h * 60 - nowInWin) < 18;
+  // Пока идёт щипок, сетка тянется картинкой — подписи держат форму.
+  const unstretched = useUnstretchedStyle();
   // Чёрные цифры на белом рельсе — принцип «из чёрного, не серого»
   // (Bumpix-эталон): подписи осей не приглушаем.
   const labelStyle = {
@@ -388,10 +390,11 @@ export function TimeRail({
       {hours.map((h) => (
         <View key={h} style={{ flex: 1 }}>
           {nearNow(h) ? null : (
-            <Text
+            <Animated.Text
               style={[
                 labelStyle,
                 { top: h === startHour ? 0 : -7, fontVariant: ["tabular-nums"] },
+                unstretched,
               ]}
               maxFontSizeMultiplier={1.3}
               // Крупный шрифт системы × 1.3 не влезает в 40pt рельса: «06:00»
@@ -402,39 +405,42 @@ export function TimeRail({
               minimumFontScale={0.7}
             >
               {`${pad2(h % 24)}:00`}
-            </Text>
+            </Animated.Text>
           )}
         </View>
       ))}
       {/* endHour label — anchored to the rail bottom, no cell needed. */}
       <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 0 }}>
         {nearNow(endHour) ? null : (
-          <Text
-            style={[labelStyle, { top: -7, fontVariant: ["tabular-nums"] }]}
+          <Animated.Text
+            style={[labelStyle, { top: -7, fontVariant: ["tabular-nums"] }, unstretched]}
             maxFontSizeMultiplier={1.3}
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.7}
           >
             {endHour === 24 ? "24:00" : `${pad2(endHour % 24)}:00`}
-          </Text>
+          </Animated.Text>
         )}
       </View>
       {/* Капсула текущего времени — на высоте now-line колонки сегодня. */}
       {nowInWin != null ? (
-        <View
+        <Animated.View
           pointerEvents="none"
-          style={{
-            position: "absolute",
-            right: 3,
-            top: pct(nowInWin - winStart, winEnd - winStart),
-            marginTop: -8,
-            height: 16,
-            borderRadius: t.radius.card,
-            paddingHorizontal: 4,
-            justifyContent: "center",
-            backgroundColor: t.danger,
-          }}
+          style={[
+            {
+              position: "absolute",
+              right: 3,
+              top: pct(nowInWin - winStart, winEnd - winStart),
+              marginTop: -8,
+              height: 16,
+              borderRadius: t.radius.card,
+              paddingHorizontal: 4,
+              justifyContent: "center",
+              backgroundColor: t.danger,
+            },
+            unstretched,
+          ]}
         >
           <Text
             maxFontSizeMultiplier={1.2}
@@ -447,7 +453,7 @@ export function TimeRail({
           >
             {minToHM(nowInWin)}
           </Text>
-        </View>
+        </Animated.View>
       ) : null}
     </View>
   );
@@ -567,6 +573,8 @@ export const DayColumn = memo(function DayColumn({
   tintColor?: string | null;
 }) {
   const t = useThemeColors();
+  // Линия «сейчас» в щипке держит форму точки (см. `useUnstretchedStyle`).
+  const nowUnstretched = useUnstretchedStyle();
   const blockColors = useBlockColors(teamColorFor);
   const [laneW, setLaneW] = useState(0);
   const { fontScale } = useWindowDimensions();
@@ -942,9 +950,9 @@ export const DayColumn = memo(function DayColumn({
           `zIndex` блока на это не влиял: у обёртки он приходит анимированным
           стилем и до первого кадра не применяется. */}
       {nowMin != null ? (
-        <View
+        <Animated.View
           pointerEvents="none"
-          style={{
+          style={[{
             position: "absolute",
             top: pct(nowMin, totalMin),
             // Ряд высотой в точку (9pt) центрирует линию на 4.5pt НИЖЕ своего
@@ -956,11 +964,11 @@ export const DayColumn = memo(function DayColumn({
             right: 0,
             flexDirection: "row",
             alignItems: "center",
-          }}
+          }, nowUnstretched]}
         >
           <View style={{ height: 9, width: 9, borderRadius: 5, backgroundColor: t.danger }} />
           <View style={{ height: 1.5, flex: 1, backgroundColor: t.danger, opacity: 0.85 }} />
-        </View>
+        </Animated.View>
       ) : null}
 
       {laneW > 0

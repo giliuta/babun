@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { View } from "react-native";
 import {
   Gesture,
@@ -34,6 +34,20 @@ import {
 // per gesture via onZoom) exists only for render-time derivations.
 // Числа и вся математика жеста — в `zoom-math.ts`, там их видит тест.
 export { HOUR_H_DEFAULT, HOUR_H_MAX, HOUR_H_MIN } from "./zoom-math";
+
+// МАСШТАБ ЖЕСТА — ДЛЯ ТОГО, ЧТО НЕ ДОЛЖНО ТЯНУТЬСЯ (владелец 04.10, снимки с
+// телефона: при щипке цифры часов и «16:49» сплющивались и вытягивались).
+// Пока пальцы на стекле, сетка — картинка под scaleY; подписи двигаются
+// вместе с ней, но обратным масштабом сохраняют форму.
+const GestureScaleContext = createContext<SharedValue<number> | null>(null);
+
+/** Обратный масштаб жеста: подпись едет вместе с сеткой, но не тянется. */
+export function useUnstretchedStyle() {
+  const scale = useContext(GestureScaleContext);
+  return useAnimatedStyle(() => ({
+    transform: [{ scaleY: scale && scale.value > 0 ? 1 / scale.value : 1 }],
+  }));
+}
 
 // The scrollable, pinch-zoomable shell shared by DayView and WeekView.
 // Children = <TimeRail> + N <DayColumn>, laid out in a row whose height is
@@ -322,7 +336,9 @@ export function ZoomableTimeGrid({
           <Animated.View
             style={[{ flexDirection: "row", transformOrigin: "top" }, rowStyle]}
           >
-            {children}
+            <GestureScaleContext.Provider value={gestureScale}>
+              {children}
+            </GestureScaleContext.Provider>
           </Animated.View>
         </Animated.ScrollView>
       </GestureDetector>
