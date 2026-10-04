@@ -902,17 +902,11 @@ function FinancesContent() {
     period,
     today: businessToday,
   });
-  // ДОКУМЕНТЫ — ПО ПРАВУ ЧИТАЮЩЕГО: инвойсы видит только владелец, чек — тот,
-  // кому видна его операция. Журнал периода всей компании — тот же ключ, что
-  // у ленты, лишнего запроса нет. Плитка и панель режут одним отбором.
-  const ledgerById = useMemo(
-    () => new Map((companyLedgerQuery.data ?? []).map((tx) => [tx.id, tx] as const)),
-    [companyLedgerQuery.data],
-  );
+  // ДОКУМЕНТЫ — ПО ПРАВУ «ДОКУМЕНТЫ» КОМАНДЫ: скрыты — плитка «0» и пустая
+  // панель (владелец 04.10). Плитка и панель режут одним отбором.
   const documentsReadable = useCallback<DocumentsReadable>(
-    (documents, receipts) =>
-      readableDocuments(documents, receipts, readRules, ledgerById, debtTeams),
-    [readRules, ledgerById, debtTeams],
+    (documents, receipts) => readableDocuments(documents, receipts, readRules),
+    [readRules],
   );
   const periodDocuments = useMemo(
     () => ({

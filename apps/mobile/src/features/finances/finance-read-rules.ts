@@ -32,7 +32,6 @@ type TxLike = Pick<FinanceTransaction, "type" | "team_id" | "debt_id"> & {
   occurred_on?: string;
 };
 type DebtLike = Pick<Debt, "team_id">;
-type ReceiptLike = Pick<Receipt, "transaction_id" | "team_id">;
 
 export interface FinanceReadRules {
   /** Владелец читает всё: фильтры отдают вход без копии. */
@@ -44,12 +43,8 @@ export interface FinanceReadRules {
   debtReadable: (debt: DebtLike) => boolean;
   /** Инвойс команды — «Документы» этой команды (`invoices_select_documents`). */
   documentReadable: (teamId: string | null) => boolean;
-  /** `tx` — операция чека, если она есть среди загруженных строк. */
-  receiptReadable: (
-    receipt: ReceiptLike,
-    tx?: TxLike | null,
-    debtTeamId?: string | null,
-  ) => boolean;
+  /** Все чеки компании — владельцу и диспетчеру (`receipts_read`). */
+  allReceipts: boolean;
 }
 
 export interface FinanceReader {
@@ -99,13 +94,7 @@ export function financeReadRules({ role, map, today }: FinanceReader): FinanceRe
     txReadable,
     debtReadable: (debt) => owner || readable("finance.debts", debt.team_id),
     documentReadable: (teamId) => owner || (!!teamId && readable("finance.documents", teamId)),
-    receiptReadable: (receipt, tx, debtTeamId) => {
-      if (owner || role === "dispatcher") return true;
-      if (!receipt.transaction_id) return false;
-      if (tx) return txReadable(tx, debtTeamId);
-      // Операция за окном периода: чек выдаётся на ДОХОД в своей команде.
-      return readable(sideBlock("income"), receipt.team_id ?? null);
-    },
+    allReceipts: owner || role === "dispatcher",
   };
 }
 
@@ -137,25 +126,23 @@ export type DocumentsReadable = (
   receipts: readonly Receipt[] | undefined,
 ) => FinanceDocument[];
 
-/** Документы периода, которые человек вправе прочитать: инвойс — по
- *  «Документам» своей команды, чек — так же или по своей операции.
+/** Документы периода, которые человек вправе прочитать: инвойс и чек — по
+ *  «Документам» своей команды. «ДОКУМЕНТЫ: СКРЫТЫ» — НИ ОДНОГО (владелец
+ *  04.10: «скрывается совсем, в документах пишется ноль, и их просто не
+ *  видно»): чек своей операции сюда больше не проходит, хотя сервер его
+ *  отдаёт (`receipts_read_own_money` — для истории клиента и записи).
  *  Неизвестный чек не показывается. */
 export function readableDocuments(
   documents: FinanceDocument[],
   receipts: readonly Receipt[] | undefined,
   rules: FinanceReadRules,
-  txById: ReadonlyMap<string, TxLike>,
-  debtTeams: DebtTeams,
 ): FinanceDocument[] {
   if (rules.owner) return documents;
-  const receiptById = new Map((receipts ?? []).map((receipt) => [receipt.id, receipt]));
+  const receiptIds = new Set((receipts ?? []).map((receipt) => receipt.id));
   return documents.filter((doc) => {
     if (doc.kind === "invoice") return rules.documentReadable(doc.teamId);
-    const receipt = receiptById.get(doc.id);
-    if (!receipt) return false;
-    if (rules.documentReadable(doc.teamId)) return true;
-    const tx = receipt.transaction_id ? (txById.get(receipt.transaction_id) ?? null) : null;
-    return rules.receiptReadable(receipt, tx, tx ? debtTeamOf(debtTeams, tx.debt_id) : undefined);
+    if (!receiptIds.has(doc.id)) return false;
+    return rules.allReceipts || rules.documentReadable(doc.teamId);
   });
 }
 

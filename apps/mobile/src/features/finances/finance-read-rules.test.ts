@@ -63,7 +63,7 @@ describe("владелец — без изменений", () => {
       const debts = [{ id: "d", team_id: null }];
       assert.equal(readableDebts(debts, rules), debts);
       const docs = [{ id: "i", kind: "invoice" }] as FinanceDocument[];
-      assert.equal(readableDocuments(docs, [], rules, new Map(), NO_DEBTS), docs);
+      assert.equal(readableDocuments(docs, [], rules), docs);
       assert.equal(rules.documentReadable(null), true);
     }
     assert.deepEqual(moneySides({ role: "owner", map: undefined }), { income: true, expense: true });
@@ -144,21 +144,20 @@ describe("документы", () => {
     ...RECEIPTS.map((r) => ({ id: r.id, kind: "receipt", teamId: r.team_id })),
     { id: "r-unknown", kind: "receipt", teamId: A },
   ] as FinanceDocument[];
-  const txById = new Map(ROWS.map((row) => [row.id, row]));
 
-  test("мастер: инвойсов нет, чек — по своей операции", () => {
-    const rules = partner({ "finance.income": "read" });
-    assert.deepEqual(ids(readableDocuments(DOCS, RECEIPTS, rules, txById, NO_DEBTS)), ["r-a", "r-old"]);
+  test("«Документы: Скрыты» — ни одного, даже чека своей операции (владелец 04.10)", () => {
+    const rules = partner({ "finance.income": "write" });
+    assert.deepEqual(ids(readableDocuments(DOCS, RECEIPTS, rules)), []);
   });
 
   test("мастер без «Доходов» не видит ни одного чека", () => {
     const rules = partner({ "finance.expense": "write", "finance.accounts": "write" });
-    assert.deepEqual(ids(readableDocuments(DOCS, RECEIPTS, rules, txById, NO_DEBTS)), []);
+    assert.deepEqual(ids(readableDocuments(DOCS, RECEIPTS, rules)), []);
   });
 
   test("«Документы: Видит» в команде — её инвойсы и чеки, чужой — нет (03.10)", () => {
     const rules = partner({ "finance.documents": "read" });
-    assert.deepEqual(ids(readableDocuments(DOCS, RECEIPTS, rules, txById, NO_DEBTS)), [
+    assert.deepEqual(ids(readableDocuments(DOCS, RECEIPTS, rules)), [
       "inv-1",
       "r-a",
       "r-free",
@@ -168,7 +167,7 @@ describe("документы", () => {
 
   test("диспетчер: инвойсов нет, чеки — все (`receipts_read`)", () => {
     const rules = partner({}, "dispatcher");
-    assert.deepEqual(ids(readableDocuments(DOCS, RECEIPTS, rules, txById, NO_DEBTS)), [
+    assert.deepEqual(ids(readableDocuments(DOCS, RECEIPTS, rules)), [
       "r-a",
       "r-b",
       "r-free",
