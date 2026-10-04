@@ -116,8 +116,9 @@ describe("двери и подписи по уровню", () => {
     const footer = read("FinancesFooter.tsx");
     assert.match(footer, /\{shownReason \? \( <Text/);
     assert.match(footer, /disabled=\{!enabled\}/);
-    // «Добавить счёт» — своё право (строка шестерёнки «Счета», 03.10).
-    assert.match(footer, /label="Добавить счёт" disabled=\{!create\.enabled\}/);
+    // «Создать счёт» — своё право (строка шестерёнки «Счета», 03.10); с
+    // 04.10 — на любой панели, пока у команды нет счёта.
+    assert.match(footer, /label="Создать счёт" disabled=\{!create\.enabled\}/);
     assert.match(footer, /const shownReason = creating \? create\.reason : reason;/);
   });
 

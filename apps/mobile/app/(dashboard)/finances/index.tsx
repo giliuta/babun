@@ -20,6 +20,7 @@ import {
 } from "@babun/shared/common/utils/date-utils";
 import { Screen } from "@/components/ui/Screen";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
 import { LoadingBar } from "@/components/ui/LoadingBar";
 import { useThemeColors } from "@/theme/colors";
 import { usePullRefresh } from "@/lib/pull-refresh";
@@ -241,6 +242,7 @@ function FinancesContent() {
   // снаружи панели (тот же довод, что у `docFilter`).
   const [debtSide, setDebtSide] = useState<DebtDirection>("incoming");
   const [debtOpen, setDebtOpen] = useState(false);
+  const [firstAccountOpen, setFirstAccountOpen] = useState(false);
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
   // Платёж по долгу открывает ТУ ЖЕ форму операции, что и всё остальное:
   // движение денег в продукте одно, и второй его формы быть не должно.
@@ -1522,6 +1524,37 @@ function FinancesContent() {
     );
   }
 
+  // ПЕРВЫЙ ВХОД — СНАЧАЛА СЧЁТ (владелец 04.10: «на „Финансах“ первым делом
+  // не показываются все финансы, а кнопка „Создать счёт“ — и там название
+  // счёта»). Счетов сами больше не заводим; пока у аккаунта нет ни одного
+  // (со скрытыми), плитки и журнал ни о чём не говорят — экран один: слова и
+  // главная кнопка внизу. Кто счёт завести не может (партнёр без права),
+  // видит обычные «Финансы».
+  const noAccountsYet =
+    accountsLoaded &&
+    access.accountCreate.enabled &&
+    (transferAccountsQuery.data ?? accounts).length === 0;
+  if (noAccountsYet) {
+    return (
+      <Screen edges={["top"]}>
+        {header}
+        {scopeBar(true)}
+        <EmptyState
+          fill
+          title="Счетов пока нет"
+          subtitle="Счёт — касса, карта или банк: на него приходят деньги и с него уходят. Начните с первого."
+          action={{ label: "Создать счёт", onPress: () => setFirstAccountOpen(true) }}
+        />
+        <AccountEditorSheet
+          visible={firstAccountOpen}
+          accountId={null}
+          presetTeamId={scope === NO_TEAM ? null : scope}
+          onClose={() => setFirstAccountOpen(false)}
+        />
+      </Screen>
+    );
+  }
+
   return (
     <Screen edges={["top"]}>
       {header}
@@ -1750,6 +1783,7 @@ function FinancesContent() {
         enabled={access.footer(view).enabled}
         reason={access.footer(view).reason}
         create={access.accountCreate}
+        accountsReady={accountsLoaded}
       />
 
       <TransactionPopup

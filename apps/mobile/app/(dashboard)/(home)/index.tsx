@@ -184,8 +184,6 @@ import {
 import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
-import { useCreateTeamAccounts } from "@/features/finances/accounts";
-import { financeAccountsHref } from "@/features/finances/accounts-sections";
 import { useCalendarChips } from "@/features/settings/workspaces";
 import { useMirror } from "@/features/access/mirror/mirror-state";
 import { hiddenByWindow } from "@/features/appointments/record-window";
@@ -406,7 +404,6 @@ export default function CalendarTab() {
   // (ожидание → успех) перерисовывал бы весь календарь на переносе.
   const updateAppt = useQuietUpdateAppointment();
   const createFirstCalendarMutation = useCreateFirstCalendar();
-  const seedFirstCalendarAccounts = useCreateTeamAccounts();
   const toast = useToast();
   const t = useThemeColors();
 
@@ -1860,20 +1857,10 @@ export default function CalendarTab() {
           // совершал, значит требовать внимания ни за чем. Имя видно в
           // чипе над сеткой, переименование живёт под шестерёнкой.
           //
-          // СЧЕТА ЗАВОДЯТСЯ ТОЙ ЖЕ ДВЕРЬЮ, ЧТО И У ШТОРКИ СОЗДАНИЯ.
-          // «Календарь без счёта не может принять деньги — это поломка, а не
-          // выбор» (CalendarCreateSheet). Автосозданный календарь про это
-          // забывал: календарь из шторки рождался со «Наличные» и «Карта», а
-          // самый первый — вообще без счетов, и первая же оплата упиралась в
-          // пустой выбор. Успех молчит (человек ничего не просил), а провал
-          // говорит вслух и даёт дверь в счета команды на «Финансах».
-          seedFirstCalendarAccounts.mutate(team.id, {
-            onError: () =>
-              toast("Календарю нужны счета — добавьте их", "error", {
-                label: "Счета",
-                onPress: () => router.navigate(financeAccountsHref(team.id) as Href),
-              }),
-          });
+          // СЧЕТОВ САМИ НЕ ЗАВОДИМ (владелец 04.10: «оно сразу создало счёт…
+          // на „Финансах“ первым делом — кнопка „Создать счёт“»). Первый счёт
+          // человек заводит сам, со своим названием: «Финансы» без счёта
+          // встречают именно этой кнопкой.
         },
         onError: () => {
           // Автосоздание не прошло — показываем кнопку как ручной выход.

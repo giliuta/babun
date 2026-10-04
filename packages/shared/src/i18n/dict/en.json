@@ -5212,5 +5212,9 @@
  "Выплата": "Payout",
  "Видео сюда не прикладывается — только фото и документы": "Videos can't be attached here — only photos and documents",
  "Поддерживаются фото (JPEG, PNG, WebP), PDF и текст.": "Supported: photos (JPEG, PNG, WebP), PDF and text.",
- "Файл не найден": "File not found"
+ "Файл не найден": "File not found",
+ "Создать счёт": "Create account",
+ "Счетов пока нет": "No accounts yet",
+ "Счёт — касса, карта или банк: на него приходят деньги и с него уходят. Начните с первого.": "An account is cash, a card or a bank: money comes in and goes out through it. Start with the first one.",
+ "Сначала добавьте реквизиты: Кабинет → Реквизиты": "Add your business details first: Office → Business details"
 }
