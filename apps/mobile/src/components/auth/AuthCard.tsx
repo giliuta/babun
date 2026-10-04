@@ -194,6 +194,12 @@ export const AuthField = forwardRef<
         }}
         style={[
           { flex: 1, minHeight: 52, paddingLeft: 16, paddingRight: trailing ? 4 : 16, paddingVertical: 14, fontSize: 15, color: t.ink },
+          // ОДНА РАМКА ФОКУСА (владелец 04.10, вход на babun.app: «как будто
+          // три блока сразу»). Браузер рисует свою обводку только вокруг
+          // <input> — без «глаза» и поверх нашего кольца ниже. Кольцо и есть
+          // фокус поля; браузерную обводку гасим. Только ширины мало: Chrome
+          // рисует `outline-style: auto` при любой ширине — нужен прозрачный цвет.
+          Platform.OS === "web" ? { outlineWidth: 0, outlineColor: "transparent" } : null,
           style,
         ]}
         {...props}
