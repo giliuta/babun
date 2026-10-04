@@ -13,13 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Eye, EyeOff } from "lucide-react-native";
-import Svg, {
-  Defs,
-  LinearGradient,
-  RadialGradient,
-  Rect,
-  Stop,
-} from "react-native-svg";
+import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -27,6 +21,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { BrandMark } from "@/components/brand/BrandMark";
 import { useAuthTheme } from "@/components/auth/theme";
 import { useReduceMotion } from "@/lib/reduce-motion";
 
@@ -51,40 +46,11 @@ function AmbientHalo() {
   );
 }
 
-// Cobalt gradient tile with a «b» monogram, nudged down onto the optical centre.
-export function BrandMark({ size = 64 }: { size?: number }) {
+// Brand tile — the Babun mark on its «Рассвет» plate with the Halo Cobalt
+// brand shadow. The mark itself lives in src/components/brand/BrandMark.tsx.
+export function AuthBrandMark({ size = 64 }: { size?: number }) {
   const t = useAuthTheme();
-  return (
-    <View
-      accessibilityRole="image"
-      accessibilityLabel="Babun"
-      style={{
-        height: size,
-        width: size,
-        borderRadius: size * 0.28,
-        overflow: "hidden",
-        alignItems: "center",
-        justifyContent: "center",
-        boxShadow: t.brandShadow,
-      }}
-    >
-      <Svg width={size} height={size} style={{ position: "absolute" }}>
-        <Defs>
-          <LinearGradient id="mark" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={t.accentFrom} />
-            <Stop offset="1" stopColor={t.accentTo} />
-          </LinearGradient>
-        </Defs>
-        <Rect width={size} height={size} fill="url(#mark)" />
-      </Svg>
-      <Text
-        maxFontSizeMultiplier={1.1}
-        style={{ fontSize: size * 0.56, lineHeight: size * 0.62, fontWeight: "800", color: "#fff", marginTop: size * 0.03 }}
-      >
-        b
-      </Text>
-    </View>
-  );
+  return <BrandMark size={size} variant="tile" shadow={t.brandShadow} />;
 }
 
 // Centered auth layout: ambient halo, brand block, optional title/subtitle,
@@ -136,7 +102,7 @@ export function AuthCard({
           >
             <Animated.View style={[{ width: "100%", maxWidth: 360, alignSelf: "center" }, colStyle]}>
               <View className="items-center">
-                <BrandMark />
+                <AuthBrandMark />
                 <Text
                   maxFontSizeMultiplier={1.2}
                   style={{ marginTop: 16, fontSize: 34, lineHeight: 40, fontWeight: "800", letterSpacing: -0.6, color: t.ink }}
