@@ -55,6 +55,7 @@ import {
   teamForNewClient,
   toggleTeamChoice,
 } from "@/features/clients/team-scope";
+import { useAccessMapOf } from "@/features/clients/use-card-access";
 import { useClientsTeam, useSetClientsTeam } from "@/features/clients/team-pref";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import {
@@ -264,6 +265,21 @@ function ClientsListScreen() {
     savedTeam,
     teams.map((tm) => tm.id),
   );
+  // «СОЗДАТЬ КЛИЕНТА» — В ВЫБРАННУЮ КОМАНДУ (владелец 04.10: «если запрещено
+  // — гаси, он не может создать клиентов, если у него нет доступа»). Своя
+  // команда или «все» — своя база, как было. Команда партнёра на ленте —
+  // клиент заводится в ЕЁ компанию, и только при «Создании клиента: Может»
+  // в этой команде; иначе кнопка серая. Раньше кнопка горела везде и
+  // заводила клиента в свою базу, хотя на экране была чужая команда.
+  const chipGuest =
+    teamChoice === ALL_TEAMS || ownTeams.some((tm) => tm.id === teamChoice)
+      ? null
+      : (guests.list.find((guest) => guest.teams.some((tm) => tm.id === teamChoice)) ?? null);
+  const chipGuestAccess = useAccessMapOf(chipGuest?.scope);
+  const createHere = chipGuest
+    ? capabilitiesOf(chipGuest.scope).create &&
+      chipGuestAccess?.calendars[teamChoice]?.["clients.create"] === "write"
+    : caps.create;
   // Команды компаний-партнёров — ТЕМ ЖЕ ЧИПОМ, что свои (владелец 1.10: «как
   // будто все команды его»): граница баз держится данными, а не видом.
   const teamChips = useMemo(
@@ -988,8 +1004,14 @@ function ClientsListScreen() {
           <TariffLocked locked={!clientsInPlan}>
             <GradientButton
               label="Создать клиента"
-              onPress={() => router.push(ownClientCardHref("new", scope))}
-              disabled={!caps.create}
+              onPress={() =>
+                router.push(
+                  chipGuest
+                    ? clientCardHref("new", chipGuest.scope.tenantId)
+                    : ownClientCardHref("new", scope),
+                )
+              }
+              disabled={!createHere}
             />
           </TariffLocked>
         </View>

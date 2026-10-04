@@ -17,7 +17,14 @@ import { useTeams } from "@/features/reference/queries";
  *  (в зеркале уже подменена), работодателя вне активной — тем же ключом через
  *  привязанный клиент (как `sources.ts`). Своя база — `null`. */
 function useScopeAccessMap(): MemberAccessMap | null {
-  const scope = useClientsScopeOrNull();
+  return useAccessMapOf(useClientsScopeOrNull());
+}
+
+/** То же для любого источника — например, гостевой команды на ленте
+ *  «Клиентов» (кнопка «Создать клиента» по выбранной команде, 04.10). */
+export function useAccessMapOf(
+  scope: { kind: string; tenantId: string; isActive: boolean } | null | undefined,
+): MemberAccessMap | null {
   const active = useMyAccess().data ?? null;
   const foreignId = scope?.kind === "member" && !scope.isActive ? scope.tenantId : null;
   const foreign = useQuery({

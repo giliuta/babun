@@ -779,13 +779,7 @@ async function dispatch(
     // transaction-owning RPC as the online repository. A lost successful
     // response is repaired idempotently through update_client_with_tags on
     // the next duplicate-key attempt.
-    // КЛИЕНТ ВСЕГДА ВСТАЁТ ТОЙ ЖЕ ДВЕРЬЮ, ЧТО В СЕТИ (аудит 04.10). Без
-    // тегов он раньше шёл прямой вставкой — мимо серверных умолчаний
-    // `create_client_with_tags`, главное из которых команда: в сети пустую
-    // команду функция заменяет первой активной, а с очереди клиент уезжал с
-    // `team_id = NULL`, и партнёрам его не было видно. Прямая вставка
-    // осталась только для старых строк с не-UUID id (ниже, v489).
-    if (op.table === "clients" && (queuedClientTagIds.length > 0 || isUuid(op.row_id))) {
+    if (op.table === "clients" && queuedClientTagIds.length > 0) {
       if (!isUuid(op.row_id)) {
         throw new Error(
           "replay client tags: client id is not a UUID; aggregate cannot be restored",
@@ -829,21 +823,6 @@ async function dispatch(
         const duplicate =
           aggregateError.code === "23505" ||
           /duplicate key/i.test(aggregateError.message);
-        // Без тегов дубль — либо клиент уже на сервере (ответ прошлой попытки
-        // потерялся), либо номер занят ЧУЖИМ клиентом; различает сервер, как
-        // у прямой вставки ниже. Теги при этом не трогаем: пустой список
-        // снял бы теги, поставленные с другого телефона.
-        if (duplicate && queuedClientTagIds.length === 0) {
-          const probe = await supabase
-            .from("clients")
-            .select("id")
-            .eq("id", op.row_id)
-            .maybeSingle();
-          if (probe.data) return false;
-          throw new Error(
-            "Клиент с таким номером уже заведён — откройте его карточку, а этот черновик удалите",
-          );
-        }
         if (!duplicate) {
           const unavailable =
             aggregateError.code === "PGRST202" ||
