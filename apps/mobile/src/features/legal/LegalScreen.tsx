@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import Head from "expo-router/head";
 import { uiLocale } from "@babun/shared/i18n/locale";
 
+import { BrandLockup } from "@/components/brand/BrandMark";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { GUTTER, TYPE } from "@/components/ui/tokens";
@@ -59,6 +60,9 @@ export function LegalScreen({ doc }: { doc: LegalDocId }) {
       />
       <ScrollView contentContainerStyle={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 40 }}>
         <View style={{ width: "100%", maxWidth: READ_WIDTH, alignSelf: "center" }}>
+          <View style={{ alignItems: "flex-start", paddingTop: 8, paddingBottom: 12 }}>
+            <BrandLockup size={32} />
+          </View>
           {blocks.map((block, index) => {
             switch (block.kind) {
               case "title":
