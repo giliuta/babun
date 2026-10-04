@@ -99,7 +99,9 @@ export function BookSlotSheet({
    *  сигнала нет) — тот же резолвер, что красит серый wash сетки. */
   bandFor?: (dateYmd: string) => WorkBand | null | undefined;
   onClose: () => void;
-  /** Выбор дороги создания — родитель закрывает лист и открывает /book. */
+  /** Выбор дороги создания. Зовётся, когда окно листа уже СНЯТО
+   *  (`onExited`): родитель открывает /book, и её шторка клиента не
+   *  сталкивается с уходящим листом. */
   onPick: (kind: "work" | "event", slot: SlotDraft) => void;
   /** Права сотрудника в этом календаре (STORY-088): «Новые записи» и
    *  «События: Меняет». Нет права — нет и кнопки, а не кнопка с отказом. */
@@ -123,6 +125,7 @@ export function BookSlotSheet({
   // хаптики (prevOffRef).
   const wasOpen = useRef(false);
   const pickedRef = useRef(false);
+  const afterExit = useRef<(() => void) | null>(null);
   const prevOffRef = useRef<boolean | null>(null);
   useEffect(() => {
     if (slot && !wasOpen.current) {
@@ -198,7 +201,14 @@ export function BookSlotSheet({
     if (!draft || pickedRef.current) return;
     pickedRef.current = true;
     haptics.tap();
-    onPick(kind, draft);
+    // /book — ПОСЛЕ ухода листа (блокер App Review 04.10). /book сразу
+    // поднимает шторку клиента, а лист — отдельное окно `Modal`: пока он
+    // уезжает, iOS второе окно не показывает, и невидимая шторка накрывала
+    // форму — ни одного тапа, даже «Отмена». Сперва лист закрывается, дорога
+    // открывается по `onExited`.
+    const chosen = draft;
+    afterExit.current = () => onPick(kind, chosen);
+    onClose();
   };
 
   const voSuffix = captionOn ? ", вне рабочих часов" : undefined;
@@ -216,6 +226,11 @@ export function BookSlotSheet({
       padded={false}
       visible={slot != null}
       onClose={onClose}
+      onExited={() => {
+        const run = afterExit.current;
+        afterExit.current = null;
+        run?.();
+      }}
       title={draft ? dateLabel(draft.date) : undefined}
       footer={
         draft ? (
