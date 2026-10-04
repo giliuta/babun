@@ -12,6 +12,7 @@ import { usePartnersAccess } from "@/features/access/master-page/use-partner-man
 import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
 import { useMasters, useTeams, type Master } from "@/features/reference/queries";
+import { useDataRole } from "@/features/settings/tenant";
 import { usePendingInvitations } from "@/features/settings/team-access";
 import { canAddPartner } from "@/features/tariffs/tiers";
 import { useTariff, useTariffNudge } from "@/features/tariffs/use-tariff";
@@ -111,9 +112,18 @@ export default function MastersScreen() {
   // повторила бы его вторым рядом.
   const staffIds = useMemo(() => new Set(staff.map((member) => member.userId)), [staff]);
   // Все карточки компании, кроме тех, чей человек уже стоит строкой выше.
+  // ПАРТНЁР КАРТОЧЕК НЕ ВИДИТ (прогон 04.10: у Дмитрия в «Партнёрах» Giliuta
+  // он сам стоял дважды). Ему мастера приходят из
+  // `list_operational_masters_safe` без `user_id`, и свою же карточку
+  // приглашённого не отличить от строки человека. Карточка без аккаунта —
+  // дело владельца (все — партнёры с аккаунтом, владелец 01.10).
+  const dataRole = useDataRole().data;
   const cards = useMemo(
-    () => calendarCards(masters, { teamId: undefined, teams, staffUserIds: staffIds }),
-    [masters, teams, staffIds],
+    () =>
+      dataRole === "owner"
+        ? calendarCards(masters, { teamId: undefined, teams, staffUserIds: staffIds })
+        : [],
+    [dataRole, masters, teams, staffIds],
   );
   // Отказ «людей видит владелец» — не беда: раздела просто нет. Любая другая
   // ошибка называется вслух, иначе пустой список соврёт «Нет мастеров».
