@@ -50,3 +50,6 @@ verify_jwt = true
 # by pg_net (sms_autotopup_wake) with x-cron-secret from edge_cron_secrets.
 [functions.sms-autotopup]
 verify_jwt = false
+
+[functions.invite-email]
+verify_jwt = true

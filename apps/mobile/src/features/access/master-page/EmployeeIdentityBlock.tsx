@@ -8,6 +8,9 @@ import { GUTTER } from "@/components/ui/tokens";
 import { IdentityCard } from "@/features/appointments/TeamLabelRow";
 import { ClientExtraContacts } from "@/features/clients/ClientExtraContacts";
 import type { ContactHolder } from "@/features/clients/contact-fields";
+import { CONTACT_COLUMN } from "@/features/clients/contact-column";
+import { useDefaultCountry } from "@/features/clients/default-country";
+import { usePhoneCodeField } from "@/features/clients/use-phone-country";
 import { useThemeColors } from "@/theme/colors";
 
 import type { MasterCardViewProps } from "./MasterCardView";
@@ -65,6 +68,7 @@ type IdentityProps = Pick<
   | "onPhoneChange"
   | "onPhoneEditEnd"
   | "phoneAction"
+  | "accountSeen"
   | "access"
   | "contacts"
 >;
@@ -77,6 +81,16 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
   const check = <Check color={t.success} size={18} strokeWidth={2.5} />;
   const danger = p.emailState === "invalid" ? t.danger : undefined;
   const access = p.access ? ACCESS_TILE[p.access.state] : null;
+  // НОМЕР — КАК У КЛИЕНТА (владелец 04.10: «номер телефона в карточке
+  // партнёра сделать так, как в клиенте — код, выбор кода — всё в одной
+  // архитектуре»): «Телефон» колонкой слева, код страны тихим префиксом,
+  // тап по нему — шторка «Код страны», в поле только цифры. Тот же
+  // `usePhoneCodeField`, что у профиля. Черновик (live) печатает как раньше.
+  const phoneField = usePhoneCodeField({
+    phone: p.identity.phone,
+    home: useDefaultCountry(),
+    onSave: (full) => p.onPhoneChange?.(full),
+  });
 
   // Новый партнёр и ждущее приглашение — только почта (01.10): имя и
   // телефон он ведёт сам в своём профиле.
@@ -145,7 +159,24 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
         {/* Пустое, которое нельзя заполнить, не показываем: строка без
             значения и без правки читалась бы сломанным полем. Номер — как у
             клиента: без подписи, крупно, «Связаться» в хвосте. */}
-        {p.editable || p.identity.phone ? (
+        {(p.editable || p.identity.phone) && !p.live ? (
+          <FieldRow
+            label="Телефон"
+            column={CONTACT_COLUMN}
+            separated
+            tabular
+            prefix={phoneField.prefix}
+            onPrefixPress={p.editable ? phoneField.onPrefixPress : undefined}
+            value={phoneField.value}
+            placeholder="Номер"
+            keyboardType="phone-pad"
+            readOnly={!p.editable}
+            inputRef={p.refs?.phone}
+            onEditEnd={p.onPhoneEditEnd}
+            onSave={phoneField.onSave}
+            trailing={p.identity.phone ? p.phoneAction : undefined}
+          />
+        ) : p.editable || p.identity.phone ? (
           <FieldRow
             compact
             stacked
@@ -168,10 +199,8 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
 
         {p.hideEmail ? null : (
           <FieldRow
-            compact
-            stacked
-            hideLabel
             separated
+            column={CONTACT_COLUMN}
             label="Почта"
             placeholder="Почта"
             value={p.identity.email}
@@ -188,6 +217,21 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
           />
         )}
 
+        {/* Показание, а не дверь: когда он последний раз был в приложении —
+            той же колонкой, что «Телефон» и «Почта». */}
+        {p.accountSeen ? (
+          <FieldRow
+            label="Вход"
+            column={CONTACT_COLUMN}
+            separated
+            readOnly
+            noCopy
+            value={p.accountSeen}
+            placeholder=""
+            onSave={noop}
+          />
+        ) : null}
+
         {p.contacts ? (
           <ClientExtraContacts
             client={p.contacts.holder}
@@ -198,6 +242,7 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
           />
         ) : null}
       </SectionCard>
+      {phoneField.sheet}
 
       {access && p.access ? (
         <View style={{ flexDirection: "row", marginHorizontal: GUTTER, marginTop: 8 }}>

@@ -15,8 +15,9 @@ import { TransferSheet } from "./TransferSheet";
 // ГЛАВНОЕ ДЕЙСТВИЕ «ФИНАНСОВ» СЛЕДУЕТ ЗА ОТКРЫТОЙ ПАНЕЛЬЮ (владелец
 // 2026-08-12). Кнопка стоит на одном месте — том же, что «Создать клиента» на
 // вкладке «Клиенты», — но делает то, чего человек хочет ЗДЕСЬ:
-//   • счета     → «Сделать перевод»; «Добавить счёт» — только когда у
-//                 команды нет ни одного счёта (`accounts-footer.ts`);
+//   • у команды нет ни одного счёта → на ЛЮБОЙ панели «Создать счёт»
+//                 (владелец 04.10, `accounts-footer.ts`);
+//   • счета     → «Сделать перевод»;
 //   • документы → новый инвойс, а на срезе «Чеки» — новый чек: с 20.09
 //                 чек тоже выписывают руками, кнопкой;
 //   • долги     → свой долг;
@@ -49,6 +50,7 @@ export function FinancesFooter({
   enabled = true,
   reason = null,
   create = { enabled: true, reason: null },
+  accountsReady = true,
 }: {
   view: HomeView;
   debtSide: DebtDirection;
@@ -80,6 +82,8 @@ export function FinancesFooter({
   /** «Добавить счёт» (у команды нет ни одного счёта) — своё право: счёт
    *  заводит строка шестерёнки «Счета», перевод — право «Счета» (03.10). */
   create?: { enabled: boolean; reason: string | null };
+  /** Счета доехали — до этого «нет счетов» не значит ничего. */
+  accountsReady?: boolean;
 }) {
   const t = useThemeColors();
   const toast = useToast();
@@ -95,11 +99,15 @@ export function FinancesFooter({
     // «Для перевода нужен второй счёт» (аудит финансов 03.10).
     company: transferAccounts ?? accounts,
   });
-  const creating = view === "accounts" && accountsAction.kind === "create";
+  // У КОМАНДЫ ЧИПА НЕТ СЧЁТА — ГЛАВНОЕ ДЕЙСТВИЕ ВЕЗДЕ «СОЗДАТЬ СЧЁТ» (владелец
+  // 04.10): без счёта ни доход, ни расход, ни перевод не записать, и первым
+  // делом человеку нужен счёт. Пока счета едут — не судим.
+  const creating = accountsReady && accountsAction.kind === "create";
   const shownReason = creating ? create.reason : reason;
 
-  const button =
-    view === "accounts" ? (
+  const button = creating ? (
+    <GradientButton label="Создать счёт" disabled={!create.enabled} onPress={() => setCreateOpen(true)} />
+  ) : view === "accounts" ? (
       accountsAction.kind === "transfer" ? (
         <GradientButton
           label="Сделать перевод"
@@ -119,11 +127,7 @@ export function FinancesFooter({
           }}
         />
       ) : (
-        <GradientButton
-          label="Добавить счёт"
-          disabled={!create.enabled}
-          onPress={() => setCreateOpen(true)}
-        />
+        <GradientButton label="Создать счёт" disabled={!create.enabled} onPress={() => setCreateOpen(true)} />
       )
     ) : view === "documents" ? (
       // ОТДЕЛЬНОГО ЧЕКА НЕТ (владелец 2026-09-30: «отдельно чеки пока что не

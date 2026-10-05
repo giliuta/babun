@@ -197,7 +197,6 @@ export function CrewAppointmentSheet({
               teamName={team?.name ?? null}
               workLines={crewWorkLines(appointment, catalogNames, blocks)}
               money={crewMoney(appointment, blocks)}
-              role={role}
               onOpenClient={(clientId) => {
                 onClose();
                 router.push(`/clients/${clientId}`);

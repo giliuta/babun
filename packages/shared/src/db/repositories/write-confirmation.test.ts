@@ -3,11 +3,6 @@ import { insertAccount, softCloseAccount, updateAccount } from "./accounts";
 import { deleteAppointment } from "./appointments";
 import { deletePhoto } from "./appointment-photos";
 import {
-  deleteFinanceTemplate,
-  insertFinanceTemplate,
-  updateFinanceTemplate,
-} from "./finance-templates";
-import {
   deleteFinanceCategory,
   updateFinanceCategory,
 } from "./finance-categories";
@@ -57,16 +52,6 @@ describe("repository write confirmation", () => {
     ).rejects.toThrow("заявка не найдена или недоступна");
   });
 
-  test("template writes reject an RLS-filtered zero-row success", async () => {
-    const supabase = noRowWriteSupabase();
-    await expect(
-      updateFinanceTemplate(supabase as never, ROW_ID, { name: "Аренда" }),
-    ).rejects.toThrow("не найден или недоступен");
-    await expect(
-      deleteFinanceTemplate(supabase as never, ROW_ID),
-    ).rejects.toThrow("не найден или недоступен");
-  });
-
   test("category writes reject an RLS-filtered zero-row success", async () => {
     const supabase = noRowWriteSupabase();
     await expect(
@@ -89,13 +74,6 @@ describe("repository write confirmation", () => {
         name: "Касса",
         kind: "cash",
         opening_balance: 1.005,
-      }),
-    ).rejects.toThrow("двух знаков");
-    await expect(
-      insertFinanceTemplate(noDatabase as never, TENANT, {
-        name: "Аренда",
-        kind: "expense",
-        amount: 1.005,
       }),
     ).rejects.toThrow("двух знаков");
   });

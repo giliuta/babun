@@ -65,3 +65,6 @@ apps/mobile/ds-web/out/
 
 # Кэш Supabase CLI (версия CLI), не исходник
 supabase/.temp/
+
+# Ключи и секреты владельца (ключ Apple .p8 и т.п.) — только на этом Mac, в git никогда (04.10).
+.secrets/

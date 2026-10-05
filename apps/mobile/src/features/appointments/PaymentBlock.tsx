@@ -152,7 +152,11 @@ export function PaymentBlock({
     createAccount: canCreateAccount,
     seeHistory: canSeeHistory,
     takeMoney: canTakeMoney,
+    documents: documentsLevel,
   } = usePaymentRights(teamId);
+  // «Документы» (04.10): «Видит» открывает выписанный, «Меняет» и выписывает.
+  const docWrite = documentsLevel === "write";
+  const receiptNext = docWrite ? receiptState.next : null;
   const canUseDocuments = usePlanAllows("documents");
   // БЕЗ ТАРИФА ЗАПИСИ КЛИЕНТОВ — ТОЛЬКО ДЛЯ ПРОСМОТРА (владелец 2.10: «люди 14
   // дней бесплатно насоздают клиентов, потом будут переносить»). Сервер
@@ -408,10 +412,10 @@ export function PaymentBlock({
 
   const handleReceipt = () => {
     haptics.tap();
-    if (receiptState.next) {
+    if (receiptNext) {
       router.push({
         pathname: "/documents/receipt-new",
-        params: { transactionId: receiptState.next.id },
+        params: { transactionId: receiptNext.id },
       } as unknown as Href);
       return;
     }
@@ -499,11 +503,14 @@ export function PaymentBlock({
   // Инвойс — пока есть долг, после выставления (открыть) и после оплаты, если
   // по деньгам записи его ещё нет (выставится оплаченным, 04.10).
   const canInvoice =
-    documentsOn && (Boolean(invoice) || outstanding > 0 || Boolean(receiptState.invoiceNext));
+    documentsOn &&
+    documentsLevel !== "none" &&
+    (Boolean(invoice) || (docWrite && (outstanding > 0 || Boolean(receiptState.invoiceNext))));
   // ЧЕК — ПОСЛЕ ОПЛАТЫ (владелец 03.10): есть приход без чека — значок ведёт
   // в составитель чека, заполненный этой оплатой; чек уже выписан — горит и
   // открывает его. Денег нет — значка нет.
-  const canReceipt = documentsOn && Boolean(receiptState.next || receiptState.latest);
+  const canReceipt =
+    documentsOn && documentsLevel !== "none" && Boolean(receiptNext || receiptState.latest);
   const receiptTariffLocked = !receiptState.latest && !canUseDocuments;
   const invoiceTariffLocked = !invoice && !canUseDocuments;
   // История — и у возвращённой записи: строк у неё нет (деньги вернули), но
@@ -566,7 +573,7 @@ export function PaymentBlock({
                 <ModeIconButton
                   icon={ReceiptIcon}
                   label="Чек"
-                  active={!receiptState.next}
+                  active={!receiptNext}
                   dimmed={receiptTariffLocked}
                   onPress={receiptTariffLocked ? tariffNudge : handleReceipt}
                 />

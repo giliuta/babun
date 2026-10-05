@@ -44,6 +44,9 @@ export interface CalendarMember {
   phoneVerified: boolean;
   calendars: string[];
   joinedAt: string;
+  /** Когда последний раз был в приложении (вход или обновление сессии);
+   *  `null` — ещё не заходил или сервер старее поля. */
+  lastSeenAt: string | null;
 }
 
 /** Ошибка запроса с `hint` контракта — по нему экран называет причину. */
@@ -77,7 +80,8 @@ function parseMembers(value: unknown): CalendarMember[] {
       typeof row.phone_verified !== "boolean" ||
       !Array.isArray(calendars) ||
       !calendars.every((id) => typeof id === "string") ||
-      typeof row.joined_at !== "string"
+      typeof row.joined_at !== "string" ||
+      !(row.last_seen_at == null || typeof row.last_seen_at === "string")
     ) {
       throw new Error(BAD_MEMBERS);
     }
@@ -90,6 +94,7 @@ function parseMembers(value: unknown): CalendarMember[] {
       phoneVerified: row.phone_verified,
       calendars,
       joinedAt: row.joined_at,
+      lastSeenAt: row.last_seen_at ?? null,
     };
   });
 }

@@ -89,22 +89,10 @@
         "why": "ё→е search normalisation"
       }
     ],
-    "packages/shared/src/local/master-presets.ts": [
-      {
-        "text": "е",
-        "why": "ё→е normalisation"
-      }
-    ],
     "packages/shared/src/local/masters.ts": [
       {
         "text": "бригадир",
         "why": "compared with role names stored in the database"
-      }
-    ],
-    "packages/shared/src/local/services-pricing.ts": [
-      {
-        "text": "ч",
-        "why": "stored service unit code"
       }
     ],
     "apps/mobile/src/features/clients/bulk-sms.ts": [

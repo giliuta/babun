@@ -130,6 +130,7 @@ export function TeamRightsCards({
                       // видит»).
                       value={rowWord(row.block, row.level, levels)}
                       valueQuiet
+                      valueWraps
                       valueColor={closed ? t.faint : danger ? t.warning : t.ink}
                       onPress={() => open(row.block)}
                     />

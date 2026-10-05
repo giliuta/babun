@@ -327,7 +327,6 @@ function BookForm() {
     teamId?: string;
     clientId?: string;
     locationId?: string;
-    reminderId?: string;
     /** Правка существующей записи. Та же страница, тот же порядок полей —
      *  других форм записи в продукте нет (STORY-064). */
     appointmentId?: string;
@@ -399,18 +398,10 @@ function BookForm() {
     [clientsQuery.data, allAppts],
   );
   const calendarSettings = calendarSettingsQuery.data;
-  // Создание заявки и весь его хвост (закрытие напоминания, синхронизация
-  // push события, тосты, хаптика) живут в общем хуке — на нём же строится
+  // Создание заявки и весь его хвост (синхронизация push события, тосты,
+  // хаптика) живут в общем хуке — на нём же строится
   // шторка «Записать» с карточки клиента, чтобы путь создания остался один.
   const booking = useBookingSave();
-  const rawReminderId = first(params.reminderId);
-  const reminderId =
-    rawReminderId &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      rawReminderId,
-    )
-      ? rawReminderId
-      : null;
   // «ЕЩЁ НЕТ ДАННЫХ», А НЕ «ИДЁТ ЗАПРОС». `isLoading` ложно, пока запрос
   // выключен (роль ещё не доехала) — и эффекты дефолтов срабатывали по
   // ПУСТОМУ списку: команда из ссылки «не находилась» и обнулялась, клиент
@@ -2114,7 +2105,6 @@ function BookForm() {
           // создания в `calendar/mutations.ts`).
           patch: { ...buildPatch(), id: newRecordIdRef.current },
           kind,
-          reminderId,
           eventReminderOffset,
           timezone:
             team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
@@ -3065,9 +3055,9 @@ function BookForm() {
                   clientId={editing?.client_id ?? client?.id ?? null}
                   locationId={editing?.location_id ?? locationId ?? null}
                   canUpload={status !== "cancelled" && can.editFiles}
-                  // Удаляет файлы записи только владелец и диспетчер — сервер
-                  // сотруднику откажет, корзину ему не рисуем (аудит 24.09).
-                  canDelete={!isMemberView}
+                  // «Меняет» — весь блок (04.10): удаляет тот, кто прикладывает;
+                  // сервер пускает по тому же праву календаря записи.
+                  canDelete={!isMemberView || can.editFiles}
                   pending={pendingFiles}
                   onPendingChange={setPendingFiles}
                 />
@@ -3198,7 +3188,10 @@ function BookForm() {
               {/* БЛОК «КЛИЕНТ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ClientBlock.tsx`):
                   его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
                   ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
-              {evShowClient && can.showClient ? (
+              {/* БЕЗ ТАРИФА КЛИЕНТОВ НЕТ (владелец 04.10: «зачем этот блок, если
+                  клиента я не могу добавлять без тарифа»): блока нет; уже
+                  выбранный прежде клиент остаётся виден. */}
+              {evShowClient && can.showClient && (workInPlan || client) ? (
               <SmsComposeProvider context={recordSmsContext}>
                 <ClientBlock
                   client={client}
@@ -3248,7 +3241,8 @@ function BookForm() {
                   объект не выбран, он стоит тем же полем и уезжает в патч. */}
               {evShowObject &&
               can.showObject &&
-              (can.editObject || eventLocationEntry || eventAddress.trim()) ? (
+              // Объект — всегда объект клиента: без тарифа его не завести.
+              ((workInPlan && can.editObject) || eventLocationEntry || eventAddress.trim()) ? (
               <SectionCard title="Объект">
                 {eventLocationEntry ? (
                   <>
@@ -3409,9 +3403,9 @@ function BookForm() {
                   clientId={editing?.client_id ?? client?.id ?? null}
                   locationId={editing?.location_id ?? locationId ?? null}
                   canUpload={status !== "cancelled" && can.editFiles}
-                  // Удаляет файлы записи только владелец и диспетчер — сервер
-                  // сотруднику откажет, корзину ему не рисуем (аудит 24.09).
-                  canDelete={!isMemberView}
+                  // «Меняет» — весь блок (04.10): удаляет тот, кто прикладывает;
+                  // сервер пускает по тому же праву календаря записи.
+                  canDelete={!isMemberView || can.editFiles}
                   pending={pendingFiles}
                   onPendingChange={setPendingFiles}
                 />

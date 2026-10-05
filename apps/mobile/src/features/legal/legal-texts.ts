@@ -142,7 +142,7 @@ const TERMS_RU = /* i18n-ignore */ `# Условия использования
 Эти условия — договор между вами и {NAME} ({ADDRESS}) об использовании Babun: приложения для iPhone и Android и сайта babun.app. Регистрируясь, вы с ними соглашаетесь.
 
 ## Аккаунт
-Вам должно быть не меньше 18 лет, и вы используете Babun для работы. Вы отвечаете за пароль и за то, что делают партнёры, которым вы дали доступ. Один аккаунт — один человек; партнёры входят своими аккаунтами.
+Babun — инструмент для работы: аккаунт заводит человек, который ведёт дела своего бизнеса или работает в нём. Вы отвечаете за пароль и за то, что делают партнёры, которым вы дали доступ. Один аккаунт — один человек; партнёры входят своими аккаунтами.
 
 ## Тарифы и оплата
 Без тарифа доступны личный календарь и события. Тарифы «Соло», «Про» и «Макс» открывают работу с клиентами, командами и партнёрами; у нового аккаунта есть пробный период 14 дней. Тариф и баланс SMS оплачиваются на сайте babun.app через Stripe: подписка продлевается каждый месяц, пока вы её не отмените. Отмена действует с конца оплаченного периода, деньги за уже начатый период не возвращаются, если закон не требует иного. Цены могут меняться — о новой цене мы предупредим заранее.
@@ -177,7 +177,7 @@ Last updated: October 4, 2026
 These terms are an agreement between you and {NAME} ({ADDRESS}) about using Babun: the iPhone and Android apps and the babun.app website. By signing up you accept them.
 
 ## Account
-You must be at least 18 and use Babun for work. You are responsible for your password and for what the partners you invite do. One account is one person; partners sign in with their own accounts.
+Babun is a work tool: an account is opened by a person who runs or works in a business. You are responsible for your password and for what the partners you invite do. One account is one person; partners sign in with their own accounts.
 
 ## Plans and payment
 Without a plan you get a personal calendar and events. The Solo, Pro and Max plans unlock clients, teams and partners; new accounts get a 14-day trial. Plans and SMS balance are paid on babun.app through Stripe: a subscription renews every month until you cancel it. Cancellation takes effect at the end of the paid period; we do not refund a period that has already started unless the law requires it. Prices may change — we will tell you about a new price in advance.

@@ -8,7 +8,6 @@ import { PRESET_COLOR_VALUES } from "@babun/shared/common/utils/colors";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { ICON } from "@/components/ui/tokens";
 import { actionLook } from "@/features/calendar/ActionMenuSheet";
 import { DateCell } from "@/features/calendar/date-header";
 import { useThemeColors } from "@/theme/colors";

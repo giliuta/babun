@@ -206,4 +206,26 @@ describe("права блока «Оплата»", () => {
       );
     });
   });
+
+  // «МЕНЯЕТ» — ВЕСЬ БЛОК (04.10): значки инвойса и чека слушаются права
+  // «Документы» в команде записи; без команды — только владелец.
+  test("«Документы» в команде записи решают значки инвойса и чека", () => {
+    const docs = (level: string | undefined, teamId: string | null = TEAM) =>
+      paymentRights({
+        role: "master",
+        map: map(level ? { "finance.documents": level } : {}),
+        teamId,
+        myCalendars: [],
+        mirror: null,
+      }).documents;
+    assert.equal(docs("write"), "write");
+    assert.equal(docs("read"), "read");
+    assert.equal(docs("off"), "none");
+    assert.equal(docs(undefined), "none");
+    assert.equal(docs("write", null), "none");
+    assert.equal(
+      paymentRights({ role: "owner", map: undefined, teamId: null, myCalendars: [], mirror: null }).documents,
+      "write",
+    );
+  });
 });

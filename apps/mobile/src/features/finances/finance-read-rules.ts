@@ -153,18 +153,20 @@ export function readableDocuments(
 export interface MoneySides {
   income: boolean;
   expense: boolean;
+  /** «Прибыль» (`finance.profit`, аудит прав 04.10): «Скрыта» прятала только
+   *  плитку «Финансов», а аналитика показывала прибыль всё равно. Нужны и
+   *  обе стороны денег, и само право. */
+  profit: boolean;
 }
 
 export function moneySides({ role, map }: FinanceReader): MoneySides {
-  if (role === "owner" || map?.isOwner === true) return { income: true, expense: true };
-  if (role === undefined || role === null || !map) return { income: false, expense: false };
-  const seen = (side: "income" | "expense"): boolean => {
-    const key = moneyKey(map, side);
-    return Object.keys(map.calendars).some((teamId) =>
-      levelInCalendar({ role, map }, key, teamId) !== "locked",
-    );
-  };
-  return { income: seen("income"), expense: seen("expense") };
+  if (role === "owner" || map?.isOwner === true) return { income: true, expense: true, profit: true };
+  if (role === undefined || role === null || !map) return { income: false, expense: false, profit: false };
+  const seen = (key: string): boolean =>
+    Object.keys(map.calendars).some((teamId) => levelInCalendar({ role, map }, key, teamId) !== "locked");
+  const income = seen(moneyKey(map, "income"));
+  const expense = seen(moneyKey(map, "expense"));
+  return { income, expense, profit: income && expense && seen("finance.profit") };
 }
 
 /** Денежная панель аналитики открыта, только если видны её деньги; иначе —
@@ -172,6 +174,6 @@ export function moneySides({ role, map }: FinanceReader): MoneySides {
 export function moneyPanelOpen(panel: string, sides: MoneySides): boolean {
   if (panel === "income" || panel === "check") return sides.income;
   if (panel === "expense") return sides.expense;
-  if (panel === "profit") return sides.income && sides.expense;
+  if (panel === "profit") return sides.profit;
   return true;
 }

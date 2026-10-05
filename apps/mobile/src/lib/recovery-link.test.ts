@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { parseRecoveryLink, recoveryLinkKey } from "./recovery-link";
+import { emailLinkOtpType, parseRecoveryLink, recoveryLinkKey } from "./recovery-link";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -65,5 +65,23 @@ describe("ссылка сброса меняет пароль своему че�
     const handler = authClear.slice(authClear.indexOf("export async function handleAuthEvent("));
     const guard = handler.slice(0, handler.indexOf("const next = session?.user?.id;"));
     assert.match(guard, /event !== "PASSWORD_RECOVERY"/);
+  });
+});
+
+// Письма подтверждения и входа по коду ведут на babun.app/login?token_hash=…
+// (04.10): тип ключа берётся из ссылки, неизвестный — «email».
+describe("тип ключа из ссылки письма", () => {
+  test("type из адреса, по умолчанию email", () => {
+    assert.equal(emailLinkOtpType("https://babun.app/login?token_hash=abc&type=email"), "email");
+    assert.equal(emailLinkOtpType("https://babun.app/login?token_hash=abc&type=magiclink"), "magiclink");
+    assert.equal(emailLinkOtpType("https://babun.app/login?token_hash=abc&type=recovery"), "email");
+    assert.equal(emailLinkOtpType("https://babun.app/login?token_hash=abc"), "email");
+    assert.equal(emailLinkOtpType(null), "email");
+  });
+  test("ключ из ссылки распознаётся как одноразовый", () => {
+    assert.deepEqual(parseRecoveryLink("https://babun.app/login?token_hash=abc&type=email"), {
+      kind: "token-hash",
+      tokenHash: "abc",
+    });
   });
 });

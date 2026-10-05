@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { ScrollView } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import * as Updates from "expo-updates";
 import { Download, Info } from "lucide-react-native";
 
+import { BrandMark } from "@/components/brand/BrandMark";
 import { Divider } from "@/components/ui/Divider";
 import { LoadingBar } from "@/components/ui/LoadingBar";
 import { Screen } from "@/components/ui/Screen";
@@ -11,6 +12,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { useToast } from "@/components/ui/Toast";
 import { confirmAction } from "@/lib/confirm";
+import { useThemeColors } from "@/theme/colors";
 
 import { updateSummary, versionSummary } from "./about";
 import { appBuildFacts, appUpdateFacts } from "./app-facts";
@@ -40,6 +42,7 @@ const PHASE_SUB: Partial<Record<Phase, string>> = {
 };
 
 export function AboutScreen() {
+  const t = useThemeColors();
   const toast = useToast();
   const [phase, setPhase] = useState<Phase>("idle");
   const update = appUpdateFacts();
@@ -99,6 +102,15 @@ export function AboutScreen() {
       <ScreenHeader title="О приложении" />
       <LoadingBar visible={phase === "checking" || phase === "downloading"} />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        <View style={{ alignItems: "center", paddingTop: 24, paddingBottom: 20 }}>
+          <BrandMark size={72} variant="tile" />
+          <Text
+            maxFontSizeMultiplier={1.2}
+            style={{ marginTop: 12, fontSize: 28, lineHeight: 34, fontWeight: "800", letterSpacing: -0.5, color: t.ink }}
+          >
+            Babun
+          </Text>
+        </View>
         <SectionCard>
           <SettingsRow
             tile="neutral"

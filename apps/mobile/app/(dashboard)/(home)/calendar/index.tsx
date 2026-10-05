@@ -12,6 +12,9 @@ import {
 } from "lucide-react-native";
 import { readTenantPref } from "@/lib/tenant-prefs";
 import { useTenantId } from "@/lib/tenant";
+import { SwitchRow } from "@/components/ui/SwitchRow";
+import { FOREIGN_PREFIX } from "@/features/settings/calendar-chips";
+import { useCalendarChips, useCalendarVisibility } from "@/features/settings/workspaces";
 import {
   AUTO_COLOR_RULES,
   BOOKING_BLOCKS,
@@ -192,6 +195,27 @@ export default function CalendarSettingsScreen() {
   const [createOpen, setCreateOpen] = useState(false);
 
   const tenantId = useTenantId();
+  // СКРЫТЫЕ КАЛЕНДАРИ ВКЛЮЧАЮТ ЗДЕСЬ (владелец 04.10: «в настройках календаря
+  // тумблер — и он снова показывается»). Лента шестерёнки — свои календари
+  // этого аккаунта, все, со скрытыми, плюс скрытые календари других
+  // аккаунтов: тап по такому переводит в его аккаунт, и тумблер под рукой.
+  const calendarVisibility = useCalendarVisibility();
+  const gearChips = useCalendarChips({
+    own: teams,
+    includeHidden: true,
+    onPickOwn: (teamId) => router.setParams({ team: teamId }),
+    onSwitchError: (message) => toast(message, "error"),
+  });
+  const hiddenElsewhere = (chipId: string) => {
+    const separator = chipId.indexOf(":");
+    return calendarVisibility.isHidden(
+      chipId.slice(FOREIGN_PREFIX.length, separator),
+      chipId.slice(separator + 1),
+    );
+  };
+  const gearChipItems = gearChips.items.filter(
+    (chip) => !chip.id.startsWith(FOREIGN_PREFIX) || hiddenElsewhere(chip.id),
+  );
   // Какой календарь настраиваем: параметр из шестерёнки → тот, что открыт в
   // самом календаре (MMKV, тот же ключ) → первый. Экран всегда показывает
   // календарь, в котором человек работает, а не абстрактный «первый».
@@ -357,8 +381,8 @@ export default function CalendarSettingsScreen() {
           календаре и в финансах, и настройки каждой команды правятся не выходя
           с экрана. Раньше переключатель лежал последней секцией внизу. */}
       <ScopeChips
-        items={teams}
-        activeId={team?.id ?? null}
+        items={gearChipItems}
+        activeId={gearChips.pendingId ?? team?.id ?? null}
         // СОЗДАНИЕ ЖИВЁТ В ЛЕНТЕ КАЛЕНДАРЕЙ, СПРАВА (владелец 2026-08-27:
         // «переносим в правую сторону, там где все календари, закрепляем
         // кнопку»). Отдельной строкой ниже оно стояло среди НАСТРОЕК
@@ -398,7 +422,7 @@ export default function CalendarSettingsScreen() {
         ) : undefined}
         // «Все календари разом» здесь нет: настройки правятся у КОНКРЕТНОЙ
         // команды, и лента другого выбора не предлагает.
-        onSelect={(id) => router.setParams({ team: id })}
+        onSelect={(id) => (id.startsWith(FOREIGN_PREFIX) ? gearChips.pick(id) : router.setParams({ team: id }))}
       />
       {rows.any ? (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
@@ -633,6 +657,32 @@ export default function CalendarSettingsScreen() {
           {/* ПОД ПРОВЕРКОЙ `team` НЕ ДЛЯ КРАСОТЫ: карточка печатает `team.name`,
               а при нуле календарей его нет — экран падал бы на первом же кадре.
               Дыру открыл я сам, когда добавлял удаление 27 августа. */}
+          {/* СКРЫТЬ КАЛЕНДАРЬ — ВЫБОР ЧЕЛОВЕКА, НЕ КОМАНДЫ (владелец 04.10).
+              Скрытый пропадает из календаря, финансов и клиентов только у
+              него; здесь остаётся, и тумблер его возвращает. Серый, пока
+              другого видимого календаря нет: смотреть было бы некуда. */}
+          {team && tenantId ? (
+            <SectionCard className="mt-4">
+              <SwitchRow
+                label="Скрыть календарь"
+                hint={
+                  !calendarVisibility.isHidden(tenantId, team.id) && !calendarVisibility.canHide(tenantId, team.id)
+                    ? "Нужен другой календарь"
+                    : undefined
+                }
+                value={calendarVisibility.isHidden(tenantId, team.id)}
+                disabled={
+                  !calendarVisibility.isHidden(tenantId, team.id) && !calendarVisibility.canHide(tenantId, team.id)
+                }
+                onChange={(hide) =>
+                  calendarVisibility.toggle.mutate(
+                    { tenantId, teamId: team.id, hide },
+                    { onError: (e) => notify("Ошибка", e.message) },
+                  )
+                }
+              />
+            </SectionCard>
+          ) : null}
           {team && rows.remove ? (
             <>
               {/* УДАЛЕНИЕ КАЛЕНДАРЯ — ПОСЛЕДНЕЙ СТРОКОЙ ЭКРАНА (владелец

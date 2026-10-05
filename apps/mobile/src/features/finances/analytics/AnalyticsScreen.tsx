@@ -146,7 +146,7 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
   const [pickedPanel, setPanel] = useState<Panel>("services");
   // Денежная панель без права на её деньги не открывается — экран стоит на
   // услугах, как при входе.
-  const panel: Panel = moneyPanelOpen(pickedPanel, { income: showMoney, expense: showExpense })
+  const panel: Panel = moneyPanelOpen(pickedPanel, { income: showMoney, expense: showExpense, profit: sides.profit })
     ? pickedPanel
     : "services";
 
@@ -406,7 +406,9 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
       ? [
           cmp("income", "Доход", money.income, moneyPrev.income, formatEUR, t.success),
           cmp("expense", "Расход", money.expense, moneyPrev.expense, formatEUR, t.danger, false),
-          cmp("profit", "Прибыль", money.profit, moneyPrev.profit, formatEUR, t.brandAccent),
+          ...(sides.profit
+            ? [cmp("profit", "Прибыль", money.profit, moneyPrev.profit, formatEUR, t.brandAccent)]
+            : []),
           cmp("worked", "Работ на", work.worked, workPrev.worked, formatEUR, t.accent),
           cmp("check", "Средний чек", work.averageCheck, workPrev.averageCheck, formatEUR, t.accent),
         ]
@@ -825,7 +827,10 @@ export function AnalyticsScreen({ start }: { start: AnalyticsStart }) {
               )}
               {row(
                 <>
-                  {tile("profit", "Прибыль", moneyText(money.profit), t.brandAccent, moneyPending || moneySign(money.profit) === 0)}
+                  {/* «Прибыль: Скрыта» — плитки нет (аудит прав 04.10). */}
+                  {sides.profit
+                    ? tile("profit", "Прибыль", moneyText(money.profit), t.brandAccent, moneyPending || moneySign(money.profit) === 0)
+                    : null}
                   {checkTile}
                 </>,
               )}

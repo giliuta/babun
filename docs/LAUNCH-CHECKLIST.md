@@ -83,7 +83,9 @@ Android без WRITE_CONTACTS / RECORD_AUDIO / SYSTEM_ALERT_WINDOW; образ E
 - [ ] Data safety, рейтинг контента, ссылка удаления аккаунта
       `https://babun.app/delete-account`, политика `https://babun.app/privacy`.
 - [ ] Ключ сервисного аккаунта Google для `eas submit` (после первой ручной загрузки).
-- [ ] Своя почта для писем Supabase (SMTP) — до наплыва регистраций.
+- [x] Своя почта для писем — Resend подключён (владелец 04.10).
+- [ ] Vercel Pro — владелец 04.10: пока бесплатный тариф.
+- [ ] support@babun.app — передано сессии 023 (Cloudflare Email Routing → babun.app@gmail.com).
 
 ## SMS через сервис (STORY-089)
 

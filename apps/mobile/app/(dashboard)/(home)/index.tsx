@@ -94,11 +94,6 @@ import { CalendarHeader } from "@/features/calendar/CalendarHeader";
 import { MiniCalendar } from "@/features/calendar/MiniCalendar";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { FirstRunCalendarChoice } from "@/features/calendar/FirstRunCalendarChoice";
-import { CalendarOnboardingCard } from "@/features/calendar/CalendarOnboardingCard";
-import {
-  CalendarEmptyState,
-  suggestFirstSlot,
-} from "@/features/calendar/CalendarEmptyState";
 import { DayLabelSheet } from "@/features/calendar/DayLabelSheet";
 import {
   BookSlotSheet,
@@ -189,9 +184,8 @@ import {
 import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
-import { useCreateTeamAccounts } from "@/features/finances/accounts";
-import { financeAccountsHref } from "@/features/finances/accounts-sections";
-import { useCalendarChips } from "@/features/settings/workspaces";
+import { useCalendarChips, useCalendarVisibility } from "@/features/settings/workspaces";
+import { FOREIGN_PREFIX } from "@/features/settings/calendar-chips";
 import { useMirror } from "@/features/access/mirror/mirror-state";
 import { hiddenByWindow } from "@/features/appointments/record-window";
 import {
@@ -253,8 +247,6 @@ import { useSession } from "@/providers/SessionProvider";
 const CAL_VIEW_LEGACY_KEY = "calendar.view";
 /** Режим календаря живёт на устройстве и компанию в имени не носит. */
 const CAL_MODE_DEVICE_KEY = devicePrefKey("calendar.mode");
-// Онбординг-карточка: «✕» переживает перезапуск (web parity: localStorage).
-const ONBOARDING_DISMISSED_LEGACY_KEY = "calendar.onboardingDismissed";
 
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -324,12 +316,8 @@ export default function CalendarTab() {
   const clientsQuery = useClients();
   const servicesQuery = useServices();
   const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
-  const services = useMemo(
-    () => servicesQuery.data ?? [],
-    [servicesQuery.data],
-  );
   const {
-    data: teams = [],
+    data: teamsAll = [],
     isLoading: teamsLoading,
     isPending: teamsPending,
     isFetching: teamsFetching,
@@ -338,6 +326,16 @@ export default function CalendarTab() {
     error: teamsQueryError,
     refetch: refetchTeams,
   } = useTeams();
+  // СКРЫТЫЕ КАЛЕНДАРИ (владелец 04.10): скрытого своего в ленте и в выборе
+  // нет. Скрыты все свои — экран уходит в календарь другого аккаунта (ниже):
+  // скрыть последний видимый правило не даёт.
+  const calendarVisibility = useCalendarVisibility();
+  const visibilityTenantId = useTenantId();
+  const teams = useMemo(
+    () => teamsAll.filter((tm) => !calendarVisibility.isHidden(visibilityTenantId, tm.id)),
+    [teamsAll, calendarVisibility.isHidden, visibilityTenantId],
+  );
+  const ownAllHidden = teamsAll.length > 0 && teams.length === 0;
   // УДАЛЁННЫХ КАЛЕНДАРЕЙ В ЛЕНТЕ НЕТ — НИ ЗДЕСЬ, НИ В «ФИНАНСАХ».
   //
   // Здесь год стоял второй список, `useTeams({ includeInactive: true })`:
@@ -413,7 +411,6 @@ export default function CalendarTab() {
   // (ожидание → успех) перерисовывал бы весь календарь на переносе.
   const updateAppt = useQuietUpdateAppointment();
   const createFirstCalendarMutation = useCreateFirstCalendar();
-  const seedFirstCalendarAccounts = useCreateTeamAccounts();
   const toast = useToast();
   const t = useThemeColors();
 
@@ -644,7 +641,6 @@ export default function CalendarTab() {
     teamId?: string;
     date?: string;
     kind?: string; // AppointmentKind черновика
-    reminderId?: string; // recurring ТО → mark booked after successful create
     /** Куда вернуться, когда запись закроют. Ставит её тот, кто сюда привёл:
      *  деньги по заявке открывают запись с «Финансов», и закрытие обязано
      *  вернуть человека в ту же ленту, а не оставить в календаре (владелец
@@ -657,10 +653,9 @@ export default function CalendarTab() {
     // который уже существует, и там просто выбираешь»).
     pickClient?: string;
     pickLocation?: string;
-    /** Команда и напоминание того же задания — везём их до формы, а не
-     *  теряем на пересадке в календаре. */
+    /** Команда того же задания — везём её до формы, а не теряем на
+     *  пересадке в календаре. */
     pickTeam?: string;
-    pickReminder?: string;
   }>();
   // РЕЖИМ — СОСТОЯНИЕ ЭКРАНА, А НЕ АДРЕС. Параметр вкладки переживает всё:
   // и уход в форму, и переключение табов — плашка «Записать: Иван» висела
@@ -671,7 +666,6 @@ export default function CalendarTab() {
     clientId: string;
     locationId: string | null;
     teamId: string | null;
-    reminderId: string | null;
   } | null>(null);
   const pickClientId = pick?.clientId ?? null;
   useEffect(() => {
@@ -680,19 +674,16 @@ export default function CalendarTab() {
       clientId: params.pickClient,
       locationId: params.pickLocation || null,
       teamId: params.pickTeam || null,
-      reminderId: params.pickReminder || null,
     });
     router.setParams({
       pickClient: "",
       pickLocation: "",
       pickTeam: "",
-      pickReminder: "",
     });
   }, [
     params.pickClient,
     params.pickLocation,
     params.pickTeam,
-    params.pickReminder,
     router,
   ]);
   // Уход с календаря снимает вопросы «когда?» и «куда?»: они заданы один раз.
@@ -817,29 +808,10 @@ export default function CalendarTab() {
   // компанию (пауза синхронизации, чистка кэша, новый токен) — наша работа,
   // и человеку про неё знать незачем.
   const [miniCalOpen, setMiniCalOpen] = useState(false);
-  // First-run onboarding card — «✕» persists across restarts in MMKV
-  // (web parity: localStorage, STORY-060 §F1.1; the card also self-clears
-  // once data appears).
-  const [onboardingDismissed, setOnboardingDismissed] = useState(
-    () =>
-      (tenantId
-        ? readTenantPref<boolean>(
-            "calendar.onboardingDismissed",
-            tenantId,
-            ONBOARDING_DISMISSED_LEGACY_KEY,
-          )
-        : null) ?? false,
-  );
-  const dismissOnboarding = () => {
-    if (tenantId) {
-      writeTenantPref("calendar.onboardingDismissed", tenantId, true);
-    }
-    setOnboardingDismissed(true);
-  };
 
   // ПЕРЕСЕВ ПРИ СМЕНЕ КОМПАНИИ — ТОЛЬКО ТОГО, ЧТО ПРИНАДЛЕЖИТ КОМПАНИИ.
   // Переход в другую компанию этот экран НЕ размонтирует, поэтому выбор
-  // календаря и карточку первого запуска надо перечитать: без этого человек
+  // календаря надо перечитать: без этого человек
   // увидел бы в новой базе команду прежней, а первое же действие записало бы
   // её туда как «свою».
   //
@@ -860,11 +832,6 @@ export default function CalendarTab() {
         : null) ?? null;
     prefRef.current = { ...prefRef.current, teamId: nextTeam };
     setTeamChoice(nextTeam);
-    setOnboardingDismissed(
-      (tenantId
-        ? readTenantPref<boolean>("calendar.onboardingDismissed", tenantId)
-        : null) ?? false,
-    );
   }, [tenantId]);
   const [crewViewing, setCrewViewing] = useState<Appointment | null>(null);
   // РЕЖИМ ПЕРЕНОСА — запись, для которой сетка показывает зелёные кубики
@@ -927,6 +894,23 @@ export default function CalendarTab() {
     },
     onSwitchError: (message) => toast(message, "error"),
   });
+
+  // ВСЕ СВОИ СКРЫТЫ — В ЧУЖОЙ КАЛЕНДАРЬ (владелец 04.10: скрытый «Личный»
+  // не показывается, а смотреть человек будет календарь, которым с ним
+  // поделились). Только пока экран на виду: из шестерёнки, где скрытый
+  // включают обратно, никуда не уводим. Раз на аккаунт — без петли на сбое.
+  const hiddenSwitchTried = useRef<string | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      if (!ownAllHidden || pendingChipId) return;
+      const target = chipItems.find((chip) => chip.id.startsWith(FOREIGN_PREFIX));
+      if (!target || hiddenSwitchTried.current === visibilityTenantId) return;
+      hiddenSwitchTried.current = visibilityTenantId;
+      pickCalendar(target.id);
+      // pickCalendar пересоздаётся каждый рендер — сторожем служит ref.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ownAllHidden, pendingChipId, chipItems, visibilityTenantId]),
+  );
 
   // ЕЩЁ НЕ ЗНАЕМ, ЕСТЬ ЛИ ЗДЕСЬ КАЛЕНДАРИ И КАКИЕ ЕСТЬ В ДРУГИХ КОМПАНИЯХ.
   //
@@ -1140,7 +1124,6 @@ export default function CalendarTab() {
         teamId: undefined,
         date: undefined,
         kind: undefined,
-        reminderId: undefined,
         appointmentId: undefined,
       });
     // Гонка с загрузкой команд: на холодном старте по диплинку teams=[]
@@ -1235,7 +1218,6 @@ export default function CalendarTab() {
           ...(params.teamId ? { teamId: params.teamId } : {}),
           ...(draftDate ? { date: draftDate } : {}),
           ...(draftKind ? { kind: draftKind } : {}),
-          ...(params.reminderId ? { reminderId: params.reminderId } : {}),
         },
       });
       clearParams();
@@ -1257,7 +1239,6 @@ export default function CalendarTab() {
     params.appointmentId,
     params.new,
     params.clientId,
-    params.reminderId,
     params.date,
     params.teamId,
     teamsLoading,
@@ -1305,9 +1286,7 @@ export default function CalendarTab() {
     [addressById],
   );
 
-  // Лента дня называет услуги ПРОШЕДШИХ записей — по полному справочнику;
-  // `services` выше остаётся про живой каталог (онбординг спрашивает им,
-  // заведён ли прайс вообще).
+  // Лента дня называет услуги ПРОШЕДШИХ записей — по полному справочнику.
   const { data: allServices = [] } = useAllServices();
   // ЦВЕТ УСЛУГИ ЧИТАЕТСЯ ПО ПОЛНОМУ СПРАВОЧНИКУ, как и имя: услуга, убранная
   // из прайса, обязана продолжать красить прошлые дни.
@@ -1891,20 +1870,10 @@ export default function CalendarTab() {
           // совершал, значит требовать внимания ни за чем. Имя видно в
           // чипе над сеткой, переименование живёт под шестерёнкой.
           //
-          // СЧЕТА ЗАВОДЯТСЯ ТОЙ ЖЕ ДВЕРЬЮ, ЧТО И У ШТОРКИ СОЗДАНИЯ.
-          // «Календарь без счёта не может принять деньги — это поломка, а не
-          // выбор» (CalendarCreateSheet). Автосозданный календарь про это
-          // забывал: календарь из шторки рождался со «Наличные» и «Карта», а
-          // самый первый — вообще без счетов, и первая же оплата упиралась в
-          // пустой выбор. Успех молчит (человек ничего не просил), а провал
-          // говорит вслух и даёт дверь в счета команды на «Финансах».
-          seedFirstCalendarAccounts.mutate(team.id, {
-            onError: () =>
-              toast("Календарю нужны счета — добавьте их", "error", {
-                label: "Счета",
-                onPress: () => router.navigate(financeAccountsHref(team.id) as Href),
-              }),
-          });
+          // СЧЕТОВ САМИ НЕ ЗАВОДИМ (владелец 04.10: «оно сразу создало счёт…
+          // на „Финансах“ первым делом — кнопка „Создать счёт“»). Первый счёт
+          // человек заводит сам, со своим названием: «Финансы» без счёта
+          // встречают именно этой кнопкой.
         },
         onError: () => {
           // Автосоздание не прошло — показываем кнопку как ручной выход.
@@ -1941,13 +1910,14 @@ export default function CalendarTab() {
     if (!tenantId || firstCalendarStarted.current === tenantId) return;
     if (role !== "owner") return;
     if (teamsPending || teamsFetching || teamsError) return;
-    if (teams.length > 0) return;
+    // Скрытые свои — тоже календари: второй «Личный» им не нужен.
+    if (teamsAll.length > 0) return;
     firstCalendarStarted.current = tenantId;
     createFirstCalendar();
     // createFirstCalendar намеренно не в зависимостях: он пересоздаётся
     // каждый рендер, и его включение превратило бы эффект в цикл.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId, role, teamsPending, teamsFetching, teamsError, teams.length]);
+  }, [tenantId, role, teamsPending, teamsFetching, teamsError, teamsAll.length]);
   const openEdit = (apt: Appointment) => {
     // Виртуальное вхождение повтора редактируем через его seed-запись —
     // у виртуала синтетический id, мутации по нему невалидны (web parity).
@@ -2853,9 +2823,8 @@ export default function CalendarTab() {
         clientId: pickClientId,
         ...(pick?.locationId ? { locationId: pick.locationId } : {}),
         ...(activeTeamId ? { teamId: activeTeamId } : {}),
-        // Услуги прошлого визита («Повторить») и гашение напоминания о ТО
-        // доезжают до формы вместе с выбранным временем.
-        ...(pick?.reminderId ? { reminderId: pick.reminderId } : {}),
+        // Услуги прошлого визита («Повторить») доезжают до формы вместе с
+        // выбранным временем.
         date: dateYmd,
         // Форма ждёт именно `time_start` — под именем `time` выбранный кубик
         // молча терялся и запись открывалась на дефолтные 10:00.
@@ -2939,7 +2908,7 @@ export default function CalendarTab() {
     // отпускает её. Раньше тап переносил запись в место тапа, и «отпустить»
     // её было нечем, кроме крестика на плашке.
     if (editingApt) {
-      haptics.tap();
+      // Тик даёт сама колонка (`onSlotPress`) — второй здесь был бы дублем.
       setEditingApt(null);
       return;
     }
@@ -3170,9 +3139,10 @@ export default function CalendarTab() {
             onSelect={pickCalendar}
           />
         ) : null}
-        {calendarsUnknown ? (
+        {calendarsUnknown || ownAllHidden ? (
           // Скелет, а не голый спиннер: один экран — один язык ожидания.
-          // Полосы чипов в скелете нет — команд ещё нет.
+          // Полосы чипов в скелете нет — команд ещё нет. Свои скрыты — идёт
+          // переход в календарь другого аккаунта.
           <CalendarSkeleton mode="week" />
         ) : teamsError ? (
           <EmptyState
@@ -3463,49 +3433,10 @@ export default function CalendarTab() {
         </GestureDetector>
       )}
 
-      {/* Первый запуск. Гейт по ЗАПИСЯМ: пока в системе нет ни одной записи,
-          онбординг ведёт человека по шагам и помечает пройденное галочкой.
-          Прежний гейт «0 клиентов И 0 услуг И 0 записей» гасил карточку сразу
-          после первого шага — вместе с невыполненным вторым.
-          Когда шаги пройдены или карточка закрыта, эстафету принимает тихая
-          строка «Пока нет записей» — дыры между состояниями нет. */}
-      {canManageBookings && !calendarLoading && !calendarError && appts.length === 0 ? (
-        !onboardingDismissed ? (
-          <CalendarOnboardingCard
-            hasClients={clients.length > 0}
-            hasServices={services.length > 0}
-            workInPlan={workInPlan}
-            servicesHref={
-              activeTeamId
-                ? `/calendar/services?team=${encodeURIComponent(activeTeamId)}`
-                : "/calendar/services"
-            }
-            onCreate={() => {
-              const slot = suggestFirstSlot(now);
-              // Без тарифа форма открывалась на записи с клиентом — она
-              // только для чтения; план разрешает событие.
-              bookAt({
-                date: formatYMD(slot.date),
-                time_start: slot.time,
-                ...(workInPlan ? {} : { kind: "event" as const }),
-              });
-            }}
-            onDismiss={dismissOnboarding}
-          />
-        ) : (
-          <CalendarEmptyState
-            event={!workInPlan}
-            onCreate={() => {
-              const slot = suggestFirstSlot(now);
-              bookAt({
-                date: formatYMD(slot.date),
-                time_start: slot.time,
-                ...(workInPlan ? {} : { kind: "event" as const }),
-              });
-            }}
-          />
-        )
-      ) : null}
+      {/* ПУСТОЙ КАЛЕНДАРЬ — ПРОСТО СЕТКА (владелец 04.10: «этой плашки не
+          должно быть… вот этого внизу тоже»). Ни «Начните за 3 шага», ни
+          строки «Пока нет записей»: запись создаётся тапом по свободному
+          времени, как и всегда. */}
 
       {/* ПЛАШКИ «N без оплаты · закройте до конца дня» БОЛЬШЕ НЕТ (владелец
           2026-09-06: «это ненужная штука — и так всё видно»): долг стоит

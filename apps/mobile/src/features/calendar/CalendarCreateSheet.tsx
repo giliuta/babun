@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
-import { useRouter, type Href } from "expo-router";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -8,14 +7,11 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { GUTTER } from "@/components/ui/tokens";
-import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
 import {
   useCreateTeam,
   type Team,
 } from "@/features/reference/queries";
-import { useCreateTeamAccounts } from "@/features/finances/accounts";
-import { financeAccountsHref } from "@/features/finances/accounts-sections";
 import { tDynamic } from "@babun/shared/i18n/runtime";
 
 // СОЗДАНИЕ КАЛЕНДАРЯ — ЕДИНСТВЕННАЯ ДВЕРЬ НА ВЕСЬ ПРОДУКТ.
@@ -52,11 +48,8 @@ export function CalendarCreateSheet({
   teams: Team[];
 }) {
   const t = useThemeColors();
-  const router = useRouter();
-  const toast = useToast();
   const online = useIsOnline();
   const create = useCreateTeam();
-  const seedAccounts = useCreateTeamAccounts();
 
   // Первый свободный цвет рабочей палитры — чтобы чипы календарей
   // оставались различимы, а первый календарь не рождался вишнёвым.
@@ -113,37 +106,10 @@ export function CalendarCreateSheet({
       setFailure(e instanceof Error ? tDynamic(e.message) : "Не удалось создать календарь");
       return;
     }
-    // Календарь уже есть — закрываем лист и переключаем ленту ДО засева
-    // счетов: счета это следствие, и ждать их, глядя на форму, незачем.
+    // Счетов сами не заводим (владелец 04.10): первый счёт новой команды
+    // человек создаёт на «Финансах» — там это главная кнопка, пока счетов нет.
     onCreated(team);
     onClose();
-    try {
-      const created = await seedAccounts.mutateAsync(team.id);
-      if (created.length > 0) {
-        toast(
-          `Календарю «${team.name}» созданы счета: ${created.map((a) => a.name).join(", ")}`,
-          "success",
-          // «Изменить» ведёт на счета ИМЕННО ЭТОГО календаря на «Финансах»
-          // (списка счетов с 2026-09-15 нет): без параметра панель открылась
-          // бы на первом чипе, и человек смотрел бы на чужие счета сразу
-          // после слов «созданы счета». `navigate`, а не `push`: вкладку
-          // «Финансы» не кладём второй копией поверх календаря.
-          {
-            label: "Изменить",
-            onPress: () => router.navigate(financeAccountsHref(team.id) as Href),
-          },
-        );
-      }
-    } catch (e) {
-      // Календарь создан — молчать нельзя, но и держать человека незачем:
-      // счета дозаводятся на «Финансах», панелью «Счета».
-      toast(
-        `Календарь создан, но счета не завелись: ${
-          e instanceof Error ? e.message : "попробуйте ещё раз"
-        }`,
-        "error",
-      );
-    }
   };
 
   return (

@@ -3,6 +3,7 @@ import type { Database } from "@babun/shared/db/database.types";
 
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { sendInvitationEmail } from "@/features/access/invitation-email";
 
 import {
   createInvitationArgs,
@@ -79,7 +80,10 @@ export function useCreateMasterInvitation() {
       if (error) throw new MasterInvitationError(error);
       return parseSavedInvitation(data);
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["tenant-invitations"] }),
+    onSuccess: (saved) => {
+      sendInvitationEmail(saved.id);
+      void qc.invalidateQueries({ queryKey: ["tenant-invitations"] });
+    },
     meta: { errorHandled: true },
   });
 }

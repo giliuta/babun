@@ -48,7 +48,8 @@ import {
   type EventBlockId,
 } from "@/features/appointments/booking-prefs";
 import { useCalendarSettings, usePersonalEventTypes } from "@/features/settings/local-settings";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole, usePlanAllows } from "@/features/settings/tenant";
+import { useTariffNudge } from "@/features/tariffs/use-tariff";
 import { useMemberUpdateTeam } from "@/features/calendar/mutations";
 import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
 
@@ -97,7 +98,6 @@ const BLOCK_ICON: Record<string, LucideIcon> = {
 
 
 export function DesignScreen() {
-  const t = useThemeColors();
   const router = useRouter();
   // «ДИЗАЙН» — У КАЖДОЙ КОМАНДЫ СВОЙ (владелец 24.09). Команда едет адресом из
   // настроек календаря; без неё — первая.
@@ -142,7 +142,6 @@ export function DesignScreen() {
   // просто выбор самого цвета, в какой красить, когда всё заполнено»).
   // Выбор здесь и есть цвет команды: так он один на сетку, ленту команд и
   // её записи.
-  const teams = allTeams;
   const ordinary = team?.color || fallback;
   const updateTeam = useUpdateTeam();
 
@@ -177,7 +176,14 @@ export function DesignScreen() {
   );
   // ПЕРЕКЛЮЧАТЕЛЬ СТРАНИЦЫ (владелец 25.09): «Клиент» — цвет записи и её
   // блоки, «Событие» — блоки события и типы; открывается «Клиент».
-  const [tab, setTab] = useState<"record" | "event">("record");
+  //
+  // БЕЗ ТАРИФА КЛИЕНТОВ НЕТ (владелец 04.10: «если нет тарифа, открывает
+  // сразу события, а клиента не может открыть»): «Клиент» серый, тап — плашка
+  // тарифа; страница стоит на «Событии».
+  const clientsInPlan = usePlanAllows("book-clients");
+  const nudgeTariff = useTariffNudge();
+  const [pickedTab, setTab] = useState<"record" | "event" | null>(null);
+  const tab = clientsInPlan ? (pickedTab ?? "record") : "event";
   const openColor = (target: ColorTarget) => {
     if (readOnly) return;
     haptics.tap();
@@ -222,12 +228,15 @@ export function DesignScreen() {
         <View style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 4 }}>
           <SegmentedControl
             options={[
-              { value: "record", label: "Клиент" },
+              { value: "record", label: "Клиент", dimmed: !clientsInPlan },
               { value: "event", label: "Событие" },
             ]}
             value={tab}
             onChange={(next) => {
-              haptics.tap();
+              if (next === "record" && !clientsInPlan) {
+                nudgeTariff();
+                return;
+              }
               setTab(next);
             }}
           />
@@ -285,14 +294,18 @@ export function DesignScreen() {
               <AlwaysLine blocks={EVENT_BLOCKS} />
               {EVENT_BLOCKS.filter((b) => !b.pinned).map((block) => {
                 // Объекта события нет, пока у команды выключены объекты.
+                // Без тарифа нет клиентов, а объект — всегда объект клиента:
+                // обе строки сняты и не ставятся (владелец 04.10).
                 const noObjects = block.id === "object" && !objectsOn;
+                const noPlan = !clientsInPlan && (block.id === "client" || block.id === "object");
+                const locked = noObjects || noPlan;
                 return (
                   <BlockCell
                     key={block.id}
                     label={block.label}
                     icon={BLOCK_ICON[block.id] ?? Bookmark}
-                    on={!noObjects && eventOn(block.id)}
-                    locked={noObjects}
+                    on={!locked && eventOn(block.id)}
+                    locked={locked}
                     readOnly={readOnly}
                     onToggle={() => toggleEventBlock.mutate(block.id)}
                   />

@@ -4,7 +4,7 @@ type SbError = { message?: string; code?: string };
 
 export function mapAuthError(
   e: SbError,
-  kind: "signin" | "signup" | "reset" | "code" = "signin",
+  kind: "signin" | "signup" | "reset" | "code" | "send" = "signin",
 ): string {
   const m = (e.message ?? "").toLowerCase();
   const c = (e.code ?? "").toLowerCase();
@@ -20,11 +20,23 @@ export function mapAuthError(
   if (c.includes("rate") || m.includes("rate limit") || m.includes("too many"))
     return "Слишком много попыток, подождите минуту";
 
+  // Опечатка в адресе («gmail,com», без «@»): GoTrue отвечает
+  // email_address_invalid / «Unable to validate email address: invalid format».
+  if (
+    c.includes("email_address_invalid") ||
+    m.includes("invalid format") ||
+    (m.includes("email address") && m.includes("invalid"))
+  )
+    return "Проверьте адрес почты";
+
   if (c.includes("email_not_confirmed") || m.includes("not confirmed"))
     return "Подтвердите почту — введите код из письма";
 
   // Неверный, уже потраченный или просроченный код из письма GoTrue называет
   // одним «Token has expired or is invalid» (`otp_expired`).
+  // Письмо с кодом не ушло (сброс, вход по коду, «Отправить ещё раз»).
+  if (kind === "send") return "Не удалось отправить письмо. Попробуйте ещё раз";
+
   if (kind === "code") {
     if (c.includes("otp") || m.includes("token") || m.includes("expired") || m.includes("invalid"))
       return "Неверный код или срок его истёк";
@@ -38,16 +50,21 @@ export function mapAuthError(
       m.includes("already been registered")
     )
       return "Этот email уже зарегистрирован — войдите";
-    if (c.includes("weak_password") || m.includes("should be at least") || m.includes("password"))
+    if (m.includes("should be at least"))
       return "Пароль слишком простой — минимум 8 символов";
+    // Supabase отклоняет известные и утёкшие пароли (HaveIBeenPwned, 04.10).
+    if (c.includes("weak_password") || m.includes("password"))
+      return "Этот пароль слишком простой или уже утекал в интернет — придумайте другой";
     return "Не удалось создать аккаунт";
   }
 
   if (kind === "reset") {
-    if (c.includes("weak_password") || m.includes("should be at least"))
+    if (m.includes("should be at least"))
       return "Пароль слишком простой — минимум 8 символов";
     if (m.includes("same") || m.includes("different from"))
       return "Новый пароль должен отличаться от старого";
+    if (c.includes("weak_password"))
+      return "Этот пароль слишком простой или уже утекал в интернет — придумайте другой";
     return "Не удалось обновить пароль. Попробуйте ещё раз";
   }
 

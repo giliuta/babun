@@ -2,6 +2,7 @@ import { Linking, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import Head from "expo-router/head";
 import { CircleCheck, CircleX } from "lucide-react-native";
+import { BrandLockup } from "@/components/brand/BrandMark";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { GUTTER } from "@/components/ui/tokens";
@@ -35,6 +36,9 @@ export default function PayDone() {
       <Head>
         <title>{`${words.title} · Babun`}</title>
       </Head>
+      <View style={{ alignItems: "center", paddingTop: 16 }}>
+        <BrandLockup />
+      </View>
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: GUTTER * 2 }}>
         <Icon size={56} strokeWidth={1.8} color={cancelled ? t.sub : t.success} />
         <Text

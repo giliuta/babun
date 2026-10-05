@@ -1,22 +1,22 @@
-import { useMemo, useState } from "react";
-import { View } from "react-native";
+import { useMemo } from "react";
 import { useRouter, type Href } from "expo-router";
+import { getPaidAmount } from "@babun/shared/local/appointments";
+import { formatEUR } from "@babun/shared/common/utils/money";
 
-import { FieldRow, NavRow } from "@/components/ui/card-rows";
-import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
+import { CalendarDays, History } from "lucide-react-native";
+
+import { Divider } from "@/components/ui/Divider";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SwitchRow } from "@/components/ui/SwitchRow";
 import { useAppointments } from "@/features/calendar/queries";
-import { formatShortDateRu } from "@/features/clients/format";
-import type { MasterProfile } from "@/features/reference/master-profile";
+import { useActorChanges, useCanReadHistory } from "@/features/cabinet/use-change-log";
 import type { Master } from "@/features/reference/queries";
-import { haptics } from "@/lib/haptics";
-import { useThemeColors } from "@/theme/colors";
 
 import { monthWorkOf, workLine } from "./master-work";
-import { useMasterProfileWrite } from "./use-profile-write";
+import { monthReceived, seenLine } from "./partner-facts";
 
-// БЛОКИ «РАБОТА», «ЛИЧНОЕ» И «БАНК И НАЛОГИ» НА СТРАНИЦЕ СОТРУДНИКА
+// БЛОК «РАБОТА» НА СТРАНИЦЕ СОТРУДНИКА
 // (STORY-087). Раньше они жили на отдельной странице «Информация» старой
 // формой — поля в рамках, даты текстом «ГГГГ-ММ-ДД», роли старой системы
 // прав. Теперь это блоки главной страницы в том же языке, что у клиента:
@@ -25,132 +25,71 @@ import { useMasterProfileWrite } from "./use-profile-write";
 // Записи привязаны к КАЛЕНДАРЮ, а не к мастеру (`appointments.team_id`;
 // `master_id` у работ пуст): «работа мастера» — это работа его календарей.
 
-/** «Работа» — сводка месяца и дверь в записи сотрудника. */
+/** «Работа» — сводка месяца с выручкой и что он делал
+ *  (владелец 04.10: «да, давай делай» по мозговому штурму страницы). */
 export function MasterWorkBlock({
   card,
   teamIds,
+  userId,
 }: {
   card: Master;
   teamIds: readonly string[];
+  /** Аккаунт партнёра — строка «История изменений». Нет — строки нет. */
+  userId?: string | null;
 }) {
   const router = useRouter();
   const appts = useAppointments();
+  const canReadHistory = useCanReadHistory();
+  const changes = useActorChanges(canReadHistory && userId ? userId : null);
+  const now = new Date();
   const work = useMemo(
     () => monthWorkOf(appts.data ?? [], teamIds, new Date()),
     [appts.data, teamIds],
   );
+  // Выручка — тем же правилом записи, что «Выручка» на странице записей
+  // (`getPaidAmount`). Долгов команд здесь нет (владелец 04.10): это деньги
+  // команды, а не его, и живут они в «Финансах».
+  const received = useMemo(
+    () => monthReceived(appts.data ?? [], teamIds, new Date(), getPaidAmount),
+    [appts.data, teamIds],
+  );
+  const changesValue = changes.data
+    ? changes.data.today > 0
+      ? `${changes.data.today} сегодня`
+      : changes.data.lastAt
+        ? seenLine(changes.data.lastAt, now)
+        : "пока нет"
+    : null;
+  // СТРОКИ — КАК «ДОСТУП» И «ЛИЧНОЕ» НА ЭТОЙ ЖЕ СТРАНИЦЕ (владелец 04.10:
+  // «работа должна быть улучшена»): плитка, название, значение второй
+  // строкой — длинное «3 записи в октябре · €167» больше не режется справа.
   return (
     <SectionCard title="Работа" padded={false}>
-      {/* Одна дверь: итоги периода и записи — на одной странице. */}
-      <NavRow
-        label="Записи"
-        value={workLine(work)}
+      {/* Одна дверь: итоги периода и записи — на одной странице. Выручка —
+          числом в той же строке, а не второй строкой с той же дверью. */}
+      <SettingsRow
+        tile={SETTINGS_TILE.blue}
+        icon={CalendarDays}
+        title="Записи"
+        sub={received > 0 ? `${workLine(work)} · ${formatEUR(received)}` : workLine(work)}
         onPress={() =>
           router.push(
             `/cabinet/people/${card.id}/visits?teams=${encodeURIComponent(teamIds.join(","))}` as Href,
           )
         }
       />
-    </SectionCard>
-  );
-}
-
-type DateField = "birthday" | "hire_date";
-
-const DATE_TITLE: Record<DateField, string> = {
-  birthday: "День рождения",
-  hire_date: "Дата найма",
-};
-
-/** «Личное» и «Банк и налоги» — поля профиля карточки мастера. */
-export function MasterPersonalBlocks({ card }: { card: Master }) {
-  const t = useThemeColors();
-  const [dateOpen, setDateOpen] = useState<DateField | null>(null);
-  const { profile, write, writeText } = useMasterProfileWrite(card);
-  const dateValue = (field: DateField) => (profile[field] as string | undefined) || null;
-
-  return (
-    <>
-      <SectionCard title="Личное" padded={false}>
-        {(["birthday", "hire_date"] as const).map((field, i) => {
-          const value = dateValue(field);
-          return (
-            <NavRow
-              key={field}
-              label={DATE_TITLE[field]}
-              value={value ? formatShortDateRu(value) : null}
-              placeholder="не указана"
-              separated={i > 0}
-              onPress={() => {
-                haptics.tap();
-                setDateOpen(field);
-              }}
-            />
-          );
-        })}
-        <FieldRow
-          label="Адрес"
-          value={profile.address ?? ""}
-          placeholder="не указан"
-          autoCapitalize="sentences"
-          separated
-          onSave={(v) => writeText("address", v)}
-        />
-      </SectionCard>
-
-      <SectionCard title="Банк и налоги" padded={false}>
-        <FieldRow
-          label="IBAN"
-          value={profile.iban ?? ""}
-          placeholder="не указан"
-          autoCapitalize="characters"
-          tabular
-          onSave={(v) => writeText("iban", v.replace(/\s+/g, " "))}
-        />
-        <FieldRow
-          label="Банк"
-          value={profile.bank_name ?? ""}
-          placeholder="не указан"
-          autoCapitalize="words"
-          separated
-          onSave={(v) => writeText("bank_name", v)}
-        />
-        <FieldRow
-          label="Налоговый номер"
-          value={profile.tax_number ?? ""}
-          placeholder="не указан"
-          autoCapitalize="characters"
-          separated
-          onSave={(v) => writeText("tax_number", v)}
-        />
-        {/* Та же черта между строками, что у полей выше: без неё тумблер
-            прилипал к «Налоговому номеру» (аудит 24.09). */}
-        <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-          <SwitchRow
-            label="Налоговый резидент Кипра"
-            value={profile.tax_resident === true}
-            onChange={(next) => write({ tax_resident: next })}
+      {canReadHistory && userId ? (
+        <>
+          <Divider inset={48} />
+          <SettingsRow
+            tile={SETTINGS_TILE.purple}
+            icon={History}
+            title="История изменений"
+            sub={changesValue ?? undefined}
+            onPress={() => router.push(`/cabinet/history?actor=${encodeURIComponent(userId)}` as Href)}
           />
-        </View>
-      </SectionCard>
-
-      <DateWheelSheet
-        visible={dateOpen !== null}
-        title={dateOpen ? DATE_TITLE[dateOpen] : ""}
-        value={dateOpen ? dateValue(dateOpen) : null}
-        // День рождения не с сегодняшней даты: у неё смысла нет.
-        seed={dateOpen === "birthday" ? "1990-01-01" : undefined}
-        clearLabel={dateOpen && dateValue(dateOpen) ? "Убрать дату" : undefined}
-        onApply={(ymd) => {
-          if (dateOpen) write({ [dateOpen]: ymd } as MasterProfile);
-          setDateOpen(null);
-        }}
-        onClear={() => {
-          if (dateOpen) write({ [dateOpen]: null } as unknown as MasterProfile);
-          setDateOpen(null);
-        }}
-        onClose={() => setDateOpen(null)}
-      />
-    </>
+        </>
+      ) : null}
+    </SectionCard>
   );
 }

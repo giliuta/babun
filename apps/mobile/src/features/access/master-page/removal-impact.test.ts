@@ -35,7 +35,7 @@ describe("сколько работы впереди в календарях ч�
 
   test("работы нет — вопрос прежний, без цифры", () => {
     const text = removalMessage(0);
-    assert.ok(text.startsWith("Доступ ко всем календарям"));
+    assert.ok(text.startsWith("Доступ ко всем вашим командам"));
     assert.ok(!/запис/.test(text));
   });
 

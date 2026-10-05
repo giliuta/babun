@@ -55,7 +55,7 @@ describe("supportRows", () => {
   test("в продукте — только почта, названная владельцем 04.10; пустые каналы строк не дают", () => {
     assert.deepEqual(
       supportRows(SUPPORT_CONTACTS).map((row) => row.sub),
-      ["babun.app@gmail.com"],
+      ["support@babun.app"],
     );
     assert.deepEqual(supportRows({ whatsapp: " ", telegram: " @ ", email: "  " }), []);
   });

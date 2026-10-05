@@ -27,7 +27,8 @@ import { cardTeamIds } from "../masters-list";
 import { openMasterDraftFromCard } from "./draft-store";
 import { invitationSegment } from "./master-draft";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
-import { MasterPersonalBlocks, MasterWorkBlock } from "./MasterProfileBlocks";
+import { MasterWorkBlock } from "./MasterProfileBlocks";
+import { PartnerPersonalBlocks } from "./PartnerPersonalBlocks";
 import { EmployeeNoteBlock } from "./EmployeeNoteBlock";
 import { contactsHolderOf, useMasterProfileWrite } from "./use-profile-write";
 
@@ -199,7 +200,7 @@ export function MasterCardOnly({ cardId, onBack }: { cardId: string; onBack: () 
       note={<EmployeeNoteBlock card={card} />}
     >
       <MasterWorkBlock card={card} teamIds={teamIds} />
-      <MasterPersonalBlocks card={card} />
+      <PartnerPersonalBlocks card={card} readOnly={false} />
     </MasterCardView>
   );
 }

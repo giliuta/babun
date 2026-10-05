@@ -14,9 +14,10 @@ const block = () => readFileSync(resolve(here, "PaymentBlock.tsx"), "utf8");
 describe("инвойс в оплате и тариф", () => {
   test("значок есть при остатке независимо от тарифа", () => {
     // И после оплаты, если по деньгам записи инвойса ещё нет (04.10).
+    // Выписать — с «Документы: Выставляет», открыть выписанный — с «Видит».
     assert.match(
       block(),
-      /const canInvoice =\s*documentsOn && \(Boolean\(invoice\) \|\| outstanding > 0 \|\| Boolean\(receiptState\.invoiceNext\)\);/,
+      /const canInvoice =\s*documentsOn &&\s*documentsLevel !== "none" &&\s*\(Boolean\(invoice\) \|\| \(docWrite && \(outstanding > 0 \|\| Boolean\(receiptState\.invoiceNext\)\)\)\);/,
     );
   });
   test("без документов в тарифе — серый и зовёт плашку, выписанный — открывается", () => {

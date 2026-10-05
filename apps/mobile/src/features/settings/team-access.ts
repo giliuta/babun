@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Database, Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { sendInvitationEmail } from "@/features/access/invitation-email";
 import { useSession } from "@/providers/SessionProvider";
 import {
   isInvitableRole,
@@ -109,8 +110,10 @@ export function useCreateInvitation() {
       if (error) throw new Error(error.message);
       return parseCreatedInvitation(data);
     },
-    onSuccess: () =>
-      void qc.invalidateQueries({ queryKey: ["tenant-invitations"] }),
+    onSuccess: (created) => {
+      sendInvitationEmail(created.id);
+      void qc.invalidateQueries({ queryKey: ["tenant-invitations"] });
+    },
     meta: { errorHandled: true },
   });
 }

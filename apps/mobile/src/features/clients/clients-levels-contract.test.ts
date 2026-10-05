@@ -1020,16 +1020,22 @@ describe("экраны: вкладка «Клиенты» открывается
   // компания не станет активной.
   test("шестерёнка и аналитика не смотрят на активную компанию", () => {
     const list = read("index.tsx");
-    // Срез строго по разметке шапки: «ClientsFilterBar» стоит и в импортах,
-    // поэтому якорь — сам тег, а не имя.
-    const header = list.slice(list.indexOf("minHeight: 48"), list.indexOf("<ClientsFilterBar"));
+    // Срез строго по разметке шапки: от неё до ленты команд под ней. Якорь —
+    // сам тег; не найден — тест падает, а не проверяет весь файл (до 04.10
+    // якорем был снесённый `<ClientsFilterBar`, и срез молча шёл до конца).
+    const start = list.indexOf("minHeight: 48");
+    const end = list.indexOf("<ScopeChips");
+    assert.ok(start > 0 && end > start, "границы шапки списка не найдены");
+    const header = list.slice(start, end);
     assert.ok(header.includes("Настройки клиентов"), "шапка списка не найдена");
     assert.ok(
       !/isActive/.test(header),
       "двери шапки снова закрыты тем, какая компания открыта в календаре",
     );
+    // Шестерёнка — в шапке; «Аналитика» живёт в шторке фильтров (кнопка
+    // внизу шторки) — тем же правилом источника.
     assert.ok(
-      header.includes("clientsSettingsHref()") && header.includes("clientsInsightsHref(scope)"),
+      header.includes("clientsSettingsHref()") && list.includes("router.push(clientsInsightsHref(scope))"),
       "шапка ведёт мимо правила источников",
     );
     assert.ok(

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Pressable, SectionList, Text, View } from "react-native";
-import { useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   Bookmark,
   Briefcase,
@@ -141,7 +141,12 @@ export function HistoryScreen() {
   const { data: activeMembers = [] } = useCompanyMembers();
   const members = scope.foreign ? [] : activeMembers;
   const [period, setPeriod] = useState<HistoryPeriod>("all");
-  const [filter, setFilter] = useState<HistoryFilter>(EMPTY_HISTORY_FILTER);
+  // `?actor=<id>` — «Что делал» со страницы партнёра (04.10): журнал сразу
+  // отобран по нему, снять фильтр можно обычным листом.
+  const { actor } = useLocalSearchParams<{ actor?: string }>();
+  const [filter, setFilter] = useState<HistoryFilter>(() =>
+    actor ? { ...EMPTY_HISTORY_FILTER, actors: [actor] } : EMPTY_HISTORY_FILTER,
+  );
   const [sheetOpen, setSheetOpen] = useState(false);
   const [detail, setDetail] = useState<ChangeLogItem | null>(null);
   const log = useChangeLogPeriod(period);

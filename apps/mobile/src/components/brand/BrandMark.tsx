@@ -1,4 +1,5 @@
-import { View } from "react-native";
+import { useId } from "react";
+import { Text, View } from "react-native";
 import Svg, {
   Circle,
   Defs,
@@ -50,10 +51,10 @@ const DAWN = [
   { offset: "1", color: "#cfdcf8" },
 ] as const;
 
-function Head() {
+function Head({ maneId }: { maneId: string }) {
   return (
     <>
-      <Path d={MANE_PATH} fill="url(#babunMane)" />
+      <Path d={MANE_PATH} fill={`url(#${maneId})`} />
       <Path d={FACE_PATH} fill={FACE} />
       <Path d={EYE_RIGHT} fill={INK} />
       <Path d={EYE_LEFT} fill={INK} />
@@ -85,6 +86,12 @@ export function BrandMark({
   shadow?: string;
 }) {
   const tile = variant === "tile";
+  // Gradient ids are document-global on web: with a fixed id the login
+  // screen kept mounted under «Создать аккаунт» owns the gradient, and
+  // url(#…) into a display:none subtree paints nothing.
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const maneId = `babunMane${uid}`;
+  const dawnId = `babunDawn${uid}`;
   return (
     <View
       accessibilityRole="image"
@@ -97,11 +104,11 @@ export function BrandMark({
     >
       <Svg width={size} height={size} viewBox="0 0 200 200">
         <Defs>
-          <LinearGradient id="babunMane" x1="0" y1="0" x2="0" y2="1">
+          <LinearGradient id={maneId} x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0" stopColor={MANE_FROM} />
             <Stop offset="1" stopColor={MANE_TO} />
           </LinearGradient>
-          <LinearGradient id="babunDawn" x1="0" y1="0" x2="0.5" y2="1">
+          <LinearGradient id={dawnId} x1="0" y1="0" x2="0.5" y2="1">
             {DAWN.map((s) => (
               <Stop key={s.offset} offset={s.offset} stopColor={s.color} />
             ))}
@@ -109,15 +116,31 @@ export function BrandMark({
         </Defs>
         {tile ? (
           <>
-            <Rect width={200} height={200} fill="url(#babunDawn)" />
+            <Rect width={200} height={200} fill={`url(#${dawnId})`} />
             <G transform="translate(20 24) scale(0.8)">
-              <Head />
+              <Head maneId={maneId} />
             </G>
           </>
         ) : (
-          <Head />
+          <Head maneId={maneId} />
         )}
       </Svg>
+    </View>
+  );
+}
+
+// Знак со словом в строку — шапка страниц, которые открывают без входа
+// («Оплата прошла», приглашение): человек видит, чьё это окно.
+export function BrandLockup({ size = 36 }: { size?: number }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: size * 0.28 }}>
+      <BrandMark size={size} variant="tile" />
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={{ fontSize: size * 0.62, fontWeight: "800", letterSpacing: -0.4, color: INK }}
+      >
+        Babun
+      </Text>
     </View>
   );
 }

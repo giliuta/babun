@@ -51,8 +51,10 @@ import { openTariffCheckout, openTariffPortal, useStartTrial, useTariff } from "
 // управление подпиской — у владельца.
 //
 // В ПРИЛОЖЕНИИ ИЗ МАГАЗИНА — ТОЛЬКО СОСТОЯНИЕ (владелец 04.10, `pay-here.ts`):
-// строка тарифа со сроком и «Рабочие команды». Ни плиток с ценами, ни
-// пробного, ни оплаты, ни «Управления подпиской» — всё это на babun.app.
+// строка тарифа со сроком и «Рабочие команды». Тариф здесь не выбирают:
+// пробный «Про» на 14 дней включается сам (`AutoTrial`), а выбор и оплата —
+// на babun.app, туда ведут письма (владелец вечером 04.10: «первую версию без
+// тарифа выбираем — пусть автоматически включается на 14 дней»).
 
 export function TariffScreen() {
   const router = useRouter();
@@ -95,6 +97,8 @@ export function TariffScreen() {
         : null;
   // Выбирать тариф есть смысл тому, кто может за него заплатить.
   const canPick = !state.forever && (owner || gate === "write");
+  // Плитки тарифов — только там, где тариф выбирают: на сайте.
+  const showTiers = CAN_PAY_HERE;
 
   const run = async () => {
     if (!action) return;
@@ -185,8 +189,8 @@ export function TariffScreen() {
           ) : null}
         </SectionCard>
 
-        {CAN_PAY_HERE ? <SectionEyebrow>Тарифы</SectionEyebrow> : null}
-        {(CAN_PAY_HERE ? TIER_CARDS : []).map((card) => (
+        {showTiers ? <SectionEyebrow>Тарифы</SectionEyebrow> : null}
+        {(showTiers ? TIER_CARDS : []).map((card) => (
           <TierTile
             key={card.tier}
             card={card}
@@ -236,7 +240,8 @@ function TierTile({
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ selected: on }}
-      accessibilityLabel={`${card.name}, ${card.monthly} в месяц`}
+      // Цены — только там, где за тариф можно заплатить (`pay-here.ts`).
+      accessibilityLabel={CAN_PAY_HERE ? `${card.name}, ${card.monthly} в месяц` : card.name}
       onPress={onPress}
       style={{
         marginHorizontal: GUTTER,
@@ -258,10 +263,14 @@ function TierTile({
           <Text style={{ ...TYPE.subhead, color: t.accent }}>{mark}</Text>
         ) : null}
         <View style={{ flex: 1 }} />
-        <Text style={{ ...TYPE.headline, color: t.ink, fontVariant: ["tabular-nums"] }}>
-          {card.monthly}
-        </Text>
-        <Text style={{ ...TYPE.subhead, color: t.faint }}>в месяц</Text>
+        {CAN_PAY_HERE ? (
+          <>
+            <Text style={{ ...TYPE.headline, color: t.ink, fontVariant: ["tabular-nums"] }}>
+              {card.monthly}
+            </Text>
+            <Text style={{ ...TYPE.subhead, color: t.faint }}>в месяц</Text>
+          </>
+        ) : null}
       </View>
       <View style={{ gap: 6 }}>
         {card.includes.map((line) => (
@@ -271,9 +280,11 @@ function TierTile({
           </View>
         ))}
       </View>
-      <Text style={{ ...TYPE.subhead, color: t.faint }}>
-        {`За год — ${card.yearlyMonthly} в месяц`}
-      </Text>
+      {CAN_PAY_HERE ? (
+        <Text style={{ ...TYPE.subhead, color: t.faint }}>
+          {`За год — ${card.yearlyMonthly} в месяц`}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }

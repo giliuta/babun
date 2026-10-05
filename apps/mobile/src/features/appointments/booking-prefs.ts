@@ -9,7 +9,7 @@ import {
 } from "@babun/shared/local/company-features";
 import { getStorage } from "@babun/shared/storage";
 import { useDataRole } from "@/features/settings/tenant";
-import { useDisabledFeatures, useSetCompanyFeature } from "@/features/settings/company-features";
+import { useDisabledFeatures } from "@/features/settings/company-features";
 import { useTenantId } from "@/lib/tenant";
 import { localBookingCarry } from "./booking-carry";
 import {

@@ -54,6 +54,7 @@ export function SettingsRow({
   value,
   valueColor,
   valueQuiet,
+  valueWraps = false,
   stacked,
   titleLines,
   a11yLabel,
@@ -99,6 +100,10 @@ export function SettingsRow({
    *  подпись, и обычным весом. «€0» и «€5», набранные одинаково громко,
    *  превращали список в ровный шаблон — глаз не находил, где деньги. */
   valueQuiet?: boolean;
+  /** Длинное слово справа («Без ограничения») переносится само, а название
+   *  слева остаётся целым. Без этого значение не сжималось, и однословное
+   *  название рвалось посреди слова: «Ограничени / я» (04.10). */
+  valueWraps?: boolean;
   /** Стопка вместо строки: плитка с названием сверху, подпись и число снизу.
    *  Нужна на крупном системном шрифте (fontScale > 1.35) — в одну строку
    *  название и сумма там уже не помещаются и сумма обрезается первой. */
@@ -223,9 +228,10 @@ export function SettingsRow({
   const valueNode = value ? (
     <Text
       maxFontSizeMultiplier={scale}
-      numberOfLines={1}
+      numberOfLines={valueWraps ? 2 : 1}
       style={{
-        flexShrink: 0,
+        flexShrink: valueWraps ? 1 : 0,
+        ...(valueWraps ? { textAlign: "right" as const } : null),
         fontSize: 17,
         lineHeight: 22,
         fontWeight: valueQuiet ? "500" : "700",
@@ -268,7 +274,15 @@ export function SettingsRow({
   ) : (
     <>
       {tileNode}
-      <View style={{ flex: 1 }}>
+      {/* Название — своей шириной (не больше 55%), значение сжимается под
+          него и переносится; без режима — как всегда, всё отдаётся названию. */}
+      <View
+        style={
+          valueWraps
+            ? { flexGrow: 1, flexShrink: 0, flexBasis: "auto", maxWidth: "55%" }
+            : { flex: 1 }
+        }
+      >
         {titleNode}
         {subNode}
       </View>

@@ -6,7 +6,6 @@ import type { Client } from "@babun/shared/local/clients";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 
 import { Button } from "@/components/ui/Button";
-import { Chip } from "@/components/ui/Chip";
 import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ICON } from "@/components/ui/tokens";
@@ -38,7 +37,6 @@ export function CrewWorkRecord({
   teamName,
   workLines,
   money,
-  role,
   onOpenClient,
 }: {
   appointment: Appointment;
@@ -51,7 +49,6 @@ export function CrewWorkRecord({
   /** Уже по праву: без «Услуг» пусто, без «Суммы» — без цен (`crew-work.ts`). */
   workLines: CrewWorkLine[];
   money: CrewMoney;
-  role: "owner" | "dispatcher" | "master" | null | undefined;
   onOpenClient: (clientId: string) => void;
 }) {
   const t = useThemeColors();
@@ -219,9 +216,9 @@ export function CrewWorkRecord({
           clientId={null}
           locationId={blocks.object ? appointment.location_id : null}
           canUpload={blocks.files === "write" && appointment.status !== "cancelled"}
-          // Удалять файлы сервер пускает только владельца и диспетчера, и то
-          // при «Меняет»; мастеру корзинку не рисуем (15.09).
-          canDelete={blocks.files === "write" && role !== "master"}
+          // «Меняет» — весь блок (04.10): прикладывает и удаляет; сервер
+          // пускает по тому же праву календаря записи.
+          canDelete={blocks.files === "write"}
           pending={[]}
           onPendingChange={() => {}}
         />

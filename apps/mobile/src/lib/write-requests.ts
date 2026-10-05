@@ -11,7 +11,7 @@
 // 20.09 спрошена объявленная ВОЛАТИЛЬНОСТЬ каждой из вызываемых функций
 // (`pg_proc.provolatile`). `stable` — чтение, `volatile` — запись. Так
 // список опирается на свойство самой функции, а не на догадку по приставке
-// (`write_sms_templates_safe` тоже кончается на `_safe`, а пишет).
+// (у `_safe` в конце бывают и пишущие функции).
 //
 // НЕИЗВЕСТНОЕ ИМЯ СЧИТАЕТСЯ ЗАПИСЬЮ. Новая функция, о которой этот файл не
 // знает, в просмотре будет отбита: в худшем случае экран покажет ошибку, а
@@ -50,7 +50,6 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   // (миграция 20261001001000).
   "peek_document_number",
   "read_operational_calendar_settings_safe",
-  "read_sms_templates_safe",
   "sms_account",
   "sms_for_appointment",
   "sms_for_client",
@@ -144,7 +143,6 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "update_invoice_draft",
   "update_master_appointment_safe",
   "void_invoice",
-  "write_sms_templates_safe",
 ]);
 
 const READING_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

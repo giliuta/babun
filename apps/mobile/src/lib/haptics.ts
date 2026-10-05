@@ -23,6 +23,20 @@ export const haptics = {
     if (!Haptics) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   },
+  /** ШАГ ПОД ПАЛЬЦЕМ (владелец 04.10: «чтоб можно было ощущать блоки»):
+   *  запись переехала на следующий шаг времени, край — на шаг длительности.
+   *  Тик выбора на руке почти не слышен — здесь лёгкий удар, как у
+   *  колёсика времени в iOS. */
+  step() {
+    if (!Haptics) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  },
+  /** Упор и переход границы: запись ушла на другой день, щипок дошёл до
+   *  самого крупного или самого мелкого масштаба. */
+  edge() {
+    if (!Haptics) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+  },
   /** Операция удалась (статус, оплата, перенос). */
   success() {
     if (!Haptics) return;
