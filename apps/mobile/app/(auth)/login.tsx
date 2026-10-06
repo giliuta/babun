@@ -20,7 +20,7 @@ import { supabase } from "@/lib/supabase";
 
 // «Вход в Babun» — email/password right on the screen (fewest taps),
 // Registration and password recovery stay available; unfinished OAuth is hidden.
-// КНОПКА ИЗ ПИСЬМА ПОДТВЕРЖДЕНИЯ ИЛИ ВХОДА ПО КОДУ (04.10). Два вида ссылки:
+// КНОПКА ИЗ ПИСЬМА ПОДТВЕРЖДЕНИЯ (04.10). Два вида ссылки:
 // • #access_token… — сервер Supabase уже подтвердил и вернул вход в адресе;
 // • ?token_hash=…&type=email — одноразовый ключ, который тратит только этот
 //   экран (verifyOtp). Такую ссылку не «съедает» почтовый сканер, открывающий
@@ -143,8 +143,6 @@ export default function LoginScreen() {
       />
 
       <GhostLink label="Забыли пароль?" onPress={() => router.push("/forgot-password")} />
-      {/* ВХОД БЕЗ ПАРОЛЯ (04.10): код из письма, как при регистрации. */}
-      <GhostLink label="Войти по коду из письма" onPress={() => router.push("/code-login")} />
       <SwitchLink
         lead="Нет аккаунта?"
         action="Зарегистрироваться"

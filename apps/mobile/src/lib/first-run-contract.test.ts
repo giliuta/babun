@@ -40,6 +40,14 @@ describe("первый вход нового аккаунта", () => {
     assert.doesNotMatch(app("(auth)/_layout.tsx"), /\/onboarding/);
   });
 
+  // ВЛАДЕЛЕЦ 06.10: «нельзя просто так войти по коду из письма… код только
+  // на регистрацию или забыл пароль».
+  test("входа по коду без пароля нет", () => {
+    assert.throws(() => app("(auth)/code-login.tsx"));
+    assert.doesNotMatch(app("(auth)/login.tsx"), /code-login|Войти по коду/);
+    assert.doesNotMatch(src("components/auth/EmailCodeCard.tsx"), /signInWithOtp|"signin"/);
+  });
+
   test("неподтверждённый вход и сброс пароля — тем же кодом", () => {
     const login = app("(auth)/login.tsx");
     assert.match(login, /email_not_confirmed/);
