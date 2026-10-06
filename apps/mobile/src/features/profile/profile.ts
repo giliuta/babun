@@ -1,10 +1,11 @@
 // ЛИЧНЫЙ ПРОФИЛЬ — ЧИСТЫЙ СЛОЙ (Кабинет = личное; 007 и 008, 15.09).
 //
-// Имя и телефон живут в `user_metadata` аккаунта: имя пишет регистрация
-// (`full_name`), телефон — страница «Профиль» (`phone` в E.164 и
-// `phone_verified: false` до SMS). `list_members` читает оттуда же, пока у
-// человека нет карточки сотрудника; с карточкой владелец видит в «Мастерах»
-// её имя и телефон — те, что написал в приглашении (15.09).
+// Имя, телефон и день рождения живут в `user_metadata` аккаунта: имя пишет
+// регистрация (`full_name`), телефон — страница «Профиль» (`phone` в E.164 и
+// `phone_verified: false` до SMS), день рождения — она же (`birthday`).
+// `list_members` читает оттуда же, пока у человека нет карточки сотрудника; с
+// карточкой владелец видит в «Мастерах» её имя и телефон — те, что написал в
+// приглашении (15.09).
 //
 // Лист без React и без сети: разбор метаданных и решение «что сохранить из
 // поля телефона» проверяются тестом.
@@ -16,6 +17,8 @@ export interface PersonalProfile {
   /** E.164 или пусто. */
   phone: string;
   phoneVerified: boolean;
+  /** «YYYY-MM-DD» или пусто (06.10, «Профиль» → «День рождения»). */
+  birthday: string;
 }
 
 export function profileFromMetadata(meta: unknown): PersonalProfile {
@@ -26,6 +29,7 @@ export function profileFromMetadata(meta: unknown): PersonalProfile {
     name: text(row.full_name),
     phone: text(row.phone),
     phoneVerified: row.phone_verified === true,
+    birthday: /^\d{4}-\d{2}-\d{2}$/.test(text(row.birthday)) ? text(row.birthday) : "",
   };
 }
 

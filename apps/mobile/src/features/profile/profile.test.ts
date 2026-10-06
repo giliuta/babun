@@ -7,20 +7,27 @@ describe("profileFromMetadata", () => {
   test("имя, телефон и отметка подтверждения из метаданных", () => {
     assert.deepEqual(
       profileFromMetadata({ full_name: " Dmitry ", phone: "+35799123456", phone_verified: false }),
-      { name: "Dmitry", phone: "+35799123456", phoneVerified: false },
+      { name: "Dmitry", phone: "+35799123456", phoneVerified: false, birthday: "" },
     );
   });
 
   test("старый аккаунт без имени и мусор вместо метаданных", () => {
-    assert.deepEqual(profileFromMetadata({}), { name: "", phone: "", phoneVerified: false });
-    assert.deepEqual(profileFromMetadata(null), { name: "", phone: "", phoneVerified: false });
-    assert.deepEqual(profileFromMetadata([]), { name: "", phone: "", phoneVerified: false });
+    assert.deepEqual(profileFromMetadata({}), { name: "", phone: "", phoneVerified: false, birthday: "" });
+    assert.deepEqual(profileFromMetadata(null), { name: "", phone: "", phoneVerified: false, birthday: "" });
+    assert.deepEqual(profileFromMetadata([]), { name: "", phone: "", phoneVerified: false, birthday: "" });
     assert.deepEqual(profileFromMetadata({ full_name: 42, phone_verified: "true" }), {
       name: "",
       phone: "",
       phoneVerified: false,
+      birthday: "",
     });
   });
+});
+
+test("день рождения — только «YYYY-MM-DD»", () => {
+  assert.equal(profileFromMetadata({ birthday: " 1990-03-12 " }).birthday, "1990-03-12");
+  assert.equal(profileFromMetadata({ birthday: "12.03.1990" }).birthday, "");
+  assert.equal(profileFromMetadata({ birthday: 19900312 }).birthday, "");
 });
 
 describe("phoneToSave", () => {
