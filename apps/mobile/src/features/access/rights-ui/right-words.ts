@@ -202,7 +202,8 @@ const STEP: Record<string, Words> = {
   "finance.settings_currency": { off: "Скрыта", read: "Только видит" },
   "finance.settings_requisites": { off: "Скрыты", read: "Только видит" },
   // Кабинет (04.10): платит и пополняет — за ваш аккаунт, кнопкой с его
-  // именем; смену тарифа и управление подпиской оставляет владельцу.
+  // именем; смену тарифа и управление подпиской оставляет владельцу. В
+  // приложении из магазина этих ступеней нет (`PAY_STEPS` ниже).
   "cabinet.tariff": { off: "Скрыт", read: "Только видит", write: "Оплачивает" },
   "cabinet.tariff_payments": { off: "Скрыты", read: "Только видит" },
   "cabinet.sms": { off: "Скрыт", read: "Только видит", write: "Пополняет" },
@@ -273,6 +274,28 @@ const DANGER: Record<string, Words> = {
   "clients.settings_sources": { write: "Клиенты удалённого источника останутся без источника" },
 };
 
+/** ОПЛАТА — ТОЛЬКО НА САЙТЕ (`pay-here.ts`, App Store 3.1.3(f)). Ступени,
+ *  которые платят за ваш аккаунт: «Тариф — Оплачивает», «SMS — Пополняет».
+ *  В приложении из магазина их не предлагают, а выданная на сайте читается
+ *  ступенью ниже, «Только видит»: платить с телефона он всё равно не может.
+ *  `payHere` у функций ниже — `CAN_PAY_HERE` экрана. */
+const PAY_STEPS: Readonly<Record<string, AccessLevel>> = {
+  "cabinet.tariff": "write",
+  "cabinet.sms": "write",
+};
+
+/** Ступень, которую человек получит на этой платформе. Шторка права
+ *  отмечает и сравнивает с ней, а не с записанной: выданное на сайте
+ *  «Оплачивает» меняется, только когда владелец выбрал другую ступень. */
+export function shownLevel(block: Pick<AccessBlock, "key">, level: AccessLevel, payHere: boolean): AccessLevel {
+  return !payHere && PAY_STEPS[block.key] === level ? "read" : level;
+}
+
+/** Ступени в шторке права: в приложении из магазина — без ступени оплаты. */
+export function offeredSteps(block: Pick<AccessBlock, "key" | "levels">, payHere = true): readonly AccessLevel[] {
+  return payHere ? block.levels : block.levels.filter((level) => PAY_STEPS[block.key] !== level);
+}
+
 /** Имя строки права. */
 export function rightTitle(block: Pick<AccessBlock, "key" | "title">): string {
   return TITLE[block.key] ?? block.title;
@@ -310,10 +333,11 @@ export function rowWord(
   block: Pick<AccessBlock, "key" | "levels">,
   level: AccessLevel,
   context?: Context,
+  payHere = true,
 ): string {
   // С 02.10 «Меняет» блока карточки работает своим правом, без «Меняет» у
   // базы, — на строке ступень как есть.
-  return stepWord(block, level, context);
+  return stepWord(block, level, context, payHere);
 }
 
 /** Слово ступени — на строке справа и крупно в шторке. */
@@ -321,20 +345,28 @@ export function stepWord(
   block: Pick<AccessBlock, "key" | "levels">,
   level: AccessLevel,
   context?: Context,
+  payHere = true,
 ): string {
-  if (paysIntoAccounts(block, level, context)) return "Только при оплате";
-  return STEP[block.key]?.[level] ?? segmentWord(block.levels, level);
+  const shown = shownLevel(block, level, payHere);
+  if (paysIntoAccounts(block, shown, context)) return "Только при оплате";
+  return STEP[block.key]?.[shown] ?? segmentWord(block.levels, shown);
 }
 
 /** Пояснение ступени: что именно человек получит. */
-export function stepHint(block: Pick<AccessBlock, "key">, level: AccessLevel, context?: Context): string {
-  if (paysIntoAccounts(block, level, context)) return "Остатков не видит, счёт выбирает только в оплате записи";
-  return levelSentence(block.key, level);
+export function stepHint(
+  block: Pick<AccessBlock, "key">,
+  level: AccessLevel,
+  context?: Context,
+  payHere = true,
+): string {
+  const shown = shownLevel(block, level, payHere);
+  if (paysIntoAccounts(block, shown, context)) return "Остатков не видит, счёт выбирает только в оплате записи";
+  return levelSentence(block.key, shown, payHere);
 }
 
 /** Предупреждение опасной ступени; `null` — ступень спокойная. */
-export function stepDanger(block: Pick<AccessBlock, "key">, level: AccessLevel): string | null {
-  return DANGER[block.key]?.[level] ?? null;
+export function stepDanger(block: Pick<AccessBlock, "key">, level: AccessLevel, payHere = true): string | null {
+  return DANGER[block.key]?.[shownLevel(block, level, payHere)] ?? null;
 }
 
 /** Ступень закрывает право целиком — слово на строке тише. */

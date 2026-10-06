@@ -12,6 +12,7 @@ import { useTeams } from "@/features/reference/queries";
 import { useMyMemberships } from "@/features/settings/my-memberships";
 import { useMyCalendars, useSwitchWorkspace } from "@/features/settings/workspaces";
 import { notify } from "@/lib/notify";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useTenantId } from "@/lib/tenant";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { TariffRow } from "@/features/tariffs/TariffRow";
@@ -103,7 +104,8 @@ function InvitedAccountBlock({
 
   const rows: { key: string; node: ReactNode }[] = [];
   if (seen(tariff)) rows.push({ key: "tariff", node: <TariffRow tenantId={tenantId} /> });
-  if (seen(payments)) rows.push({ key: "payments", node: <TariffPaymentsRow tenantId={tenantId} /> });
+  // Оплаты тарифа — только на сайте: в приложении из магазина покупок нет (`pay-here.ts`).
+  if (CAN_PAY_HERE && seen(payments)) rows.push({ key: "payments", node: <TariffPaymentsRow tenantId={tenantId} /> });
   if (seen(sms)) rows.push({ key: "sms", node: <SmsCabinetRow tenantId={tenantId} /> });
   if (seen(requisites)) rows.push({ key: "requisites", node: <CabinetRequisitesRow tenantId={tenantId} /> });
   if (seen(history)) rows.push({ key: "history", node: <HistoryRow tenantId={tenantId} /> });

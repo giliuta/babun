@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import type { AccessBlock, AccessLevel } from "../access-map";
 import { hasBlockPreview } from "./preview-keys";
-import { WORDED_KEYS, rightTitle, rowWord, stepDanger, stepHint, stepWord } from "./right-words";
+import { WORDED_KEYS, offeredSteps, rightTitle, rowWord, shownLevel, stepDanger, stepHint, stepWord } from "./right-words";
 
 // Живые права реестра на 04.10 (`access_blocks where live`, все 73, в порядке
 // `position`) — с их лестницами. Сверка с базой 04.10 нашла, что прежний список
@@ -158,5 +161,64 @@ describe("блок карточки клиента правится своим �
       rowWord({ key: "record.note", levels: ["off", "read", "write"] }, "write", { clients: "read" }),
       stepWord({ key: "record.note", levels: ["off", "read", "write"] }, "write"),
     );
+  });
+});
+
+// ОПЛАТА — ТОЛЬКО НА САЙТЕ (`pay-here.ts`, App Store 3.1.3(f)): в приложении
+// из магазина (`payHere` = `CAN_PAY_HERE` = ложь) права «Кабинета» не платят и
+// не пополняют — ни ступени, ни слова, ни предупреждения о карте.
+describe("права «Кабинета» в приложении из магазина", () => {
+  const tariff = block("cabinet.tariff", ["off", "read", "write"]);
+  const sms = block("cabinet.sms", ["off", "read", "write"]);
+  const PAY_WORDS = /оплач|оплат|пополн|плат|карт|подписк/i;
+
+  test("на сайте — как было: «Оплачивает», «Пополняет» и предупреждение о карте", () => {
+    assert.deepEqual(offeredSteps(tariff), ["off", "read", "write"]);
+    assert.equal(stepWord(tariff, "write"), "Оплачивает");
+    assert.equal(stepWord(sms, "write"), "Пополняет");
+    assert.ok(stepDanger(tariff, "write"));
+  });
+
+  test("ступени оплаты нет, остальные права ступени не теряют", () => {
+    assert.deepEqual(offeredSteps(tariff, false), ["off", "read"]);
+    assert.deepEqual(offeredSteps(sms, false), ["off", "read"]);
+    const partners = block("company.partners", ["off", "read", "write"]);
+    assert.deepEqual(offeredSteps(partners, false), ["off", "read", "write"]);
+    assert.equal(stepWord(partners, "write", undefined, false), stepWord(partners, "write"));
+  });
+
+  test("выданная на сайте ступень оплаты читается как «Только видит», без денег и карты", () => {
+    for (const b of [tariff, sms]) {
+      for (const level of ["read", "write"] as const) {
+        assert.equal(rowWord(b, level, undefined, false), "Только видит");
+        assert.doesNotMatch(stepHint(b, level, undefined, false), PAY_WORDS, `${b.key}/${level}`);
+        assert.equal(stepDanger(b, level, false), null);
+      }
+    }
+  });
+
+  // Шторка права сверяется со ступенью строки, а не с записанной: иначе у
+  // выданного на сайте «Оплачивает» в шторке не отмечено ничего, а «Применить»
+  // на «Только видит», которое и так на строке, молча снимало право сайта.
+  test("шторка: выданная на сайте ступень оплаты отмечена «Только видит» и без выбора не перезаписывается", () => {
+    for (const b of [tariff, sms]) {
+      assert.equal(shownLevel(b, "write", false), "read");
+      assert.equal(shownLevel(b, "write", true), "write");
+      for (const level of b.levels) {
+        assert.ok(offeredSteps(b, false).includes(shownLevel(b, level, false)), `${b.key}/${level}: в шторке не отмечено ничего`);
+      }
+    }
+    assert.equal(shownLevel(block("company.partners", ["off", "read", "write"]), "write", false), "write");
+
+    const here = dirname(fileURLToPath(import.meta.url));
+    const sheet = readFileSync(resolve(here, "RightSheet.tsx"), "utf8");
+    assert.match(sheet, /const level = block \? shownLevel\(block, stored, CAN_PAY_HERE\) : stored;/);
+    assert.match(sheet, /useState<AccessLevel>\(level\)/);
+    assert.match(sheet, /if \(visible\) setChosen\(level\);/);
+    assert.match(sheet, /if \(chosen === level \|\| locked\)/);
+    assert.match(sheet, /selected=\{step === chosen\}/);
+    // Записанная ступень нужна шторке только чтобы вывести из неё видимую.
+    const rest = sheet.replace(/^.*const (stored|level) = .*$/gm, "");
+    assert.doesNotMatch(rest, /\bstored\b/, "шторка сверяется с записанной ступенью мимо shownLevel");
   });
 });

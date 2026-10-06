@@ -14,6 +14,7 @@ import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { TariffRow } from "@/features/tariffs/TariffRow";
 import { useTenantId } from "@/lib/tenant";
 import { notify } from "@/lib/notify";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 
 import { AccountScopeProvider } from "./account-scope";
 import { ArchiveRow } from "./ArchiveRow";
@@ -63,9 +64,15 @@ export function OwnAccountSection() {
               там только «Пригласить партнёра». */}
           <TariffRow />
           <Divider inset={48} />
-          {/* ОПЛАТЫ ТАРИФА (владелец 03.10) — платежи за подписку и чеки. */}
-          <TariffPaymentsRow />
-          <Divider inset={48} />
+          {/* ОПЛАТЫ ТАРИФА (владелец 03.10) — платежи за подписку и чеки.
+              Только на сайте: страница ведёт к счетам Stripe с оплатой, а в
+              приложении из магазина покупок нет (`pay-here.ts`). */}
+          {CAN_PAY_HERE ? (
+            <>
+              <TariffPaymentsRow />
+              <Divider inset={48} />
+            </>
+          ) : null}
           {/* ПАРТНЁРЫ — ОДИН СПИСОК НА АККАУНТ (владелец 29.09: «страницу
               мастера перенесём в кабинет… и полноценно на каждую команду, что
               он может делать»). */}
@@ -115,8 +122,12 @@ export function OwnAccountSection() {
       <SectionCard>
         <TariffRow tenantId={own} />
         <Divider inset={48} />
-        <TariffPaymentsRow tenantId={own} />
-        <Divider inset={48} />
+        {CAN_PAY_HERE ? (
+          <>
+            <TariffPaymentsRow tenantId={own} />
+            <Divider inset={48} />
+          </>
+        ) : null}
         <SettingsRow
           tile={SETTINGS_TILE.indigo}
           icon={Users}

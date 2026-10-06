@@ -8,7 +8,20 @@ import { pagesToPdf, scanDocumentPages } from "./document-scanner";
 
 // ПИКЕРЫ БЛОКА «ФАЙЛЫ» — разрешения, лимиты, разбор ответа. Блок решает,
 // что делать с выбранным: грузить сразу (сохранённая запись) или держать в
-// очереди до создания (новая). Камера отдаёт и фото, и видео.
+// очереди до создания (новая).
+//
+// КАМЕРА СНИМАЕТ ТОЛЬКО ФОТО (выпуск в App Store, 06.10). Видео с камеры
+// пишет звук, а микрофон в сборке выключен (`microphonePermission: false` в
+// app.json): на живом iPhone expo-image-picker на такой вызов бросает
+// MissingMicrophonePermissionException, и камера не открывалась вовсе. Видео
+// по-прежнему можно приложить из галереи.
+//
+// ГАЛЕРЕЯ БЕЗ РАЗРЕШЕНИЯ: системный выбор фото (PHPicker на iOS, Photo
+// Picker на Android) отдаёт только выбранное и доступа к медиатеке не
+// требует — запрос доступа перед ним лишь пугал лишним окном.
+//
+// Текст системной ошибки человеку не показываем — только короткое «Попробуйте
+// ещё раз.»: сырое сообщение модуля английское и ничего ему не объясняет.
 
 export function useFilePickers(opts: {
   remaining: number;
@@ -45,30 +58,18 @@ export function useFilePickers(opts: {
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ["images", "videos"],
+        mediaTypes: ["images"],
         quality: 0.75,
-        videoMaxDuration: 60,
-        // МИНУТА ВИДЕО ОБЯЗАНА ВЛЕЗТЬ В 50 МБ ХРАНИЛИЩА. По умолчанию камера
-        // пишет в высшем качестве — 1080p, 60–120 МБ в минуту (миграция
-        // бакета), и ролик длиннее ~30 с снимался, а потом отвергался «Видео
-        // больше 50 МБ» и пропадал (аудит формы записи 03.10). 640×480 —
-        // десятки мегабайт в минуту, а агрегат и щиток на нём видно.
-        videoQuality: ImagePicker.UIImagePickerControllerQualityType.VGA640x480,
       });
       if (!result.canceled && result.assets.length > 0) opts.onMedia(toMedia(result.assets));
-    } catch (error) {
-      notify("Не удалось открыть камеру", error instanceof Error ? error.message : "Попробуйте ещё раз.");
+    } catch {
+      notify("Не удалось открыть камеру", "Попробуйте ещё раз.");
     }
   };
 
   const pick = async () => {
     if (!gate()) return;
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        notify("Нет доступа к фото", "Разрешите доступ: Настройки → Babun → Фото.");
-        return;
-      }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images", "videos"],
         allowsMultipleSelection: true,
@@ -79,8 +80,8 @@ export function useFilePickers(opts: {
           ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       });
       if (!result.canceled && result.assets.length > 0) opts.onMedia(toMedia(result.assets));
-    } catch (error) {
-      notify("Не удалось открыть галерею", error instanceof Error ? error.message : "Попробуйте ещё раз.");
+    } catch {
+      notify("Не удалось открыть галерею", "Попробуйте ещё раз.");
     }
   };
 
@@ -101,8 +102,8 @@ export function useFilePickers(opts: {
           fileSize: asset.size,
         })),
       );
-    } catch (error) {
-      notify("Не удалось выбрать файл", error instanceof Error ? error.message : "Попробуйте ещё раз.");
+    } catch {
+      notify("Не удалось выбрать файл", "Попробуйте ещё раз.");
     }
   };
 
@@ -114,8 +115,8 @@ export function useFilePickers(opts: {
       if (!pages) return;
       const pdf = await pagesToPdf(pages);
       opts.onDocs([{ uri: pdf.uri, fileName: pdf.fileName, mimeType: "application/pdf" }]);
-    } catch (error) {
-      notify("Не удалось отсканировать", error instanceof Error ? error.message : "Попробуйте ещё раз.");
+    } catch {
+      notify("Не удалось отсканировать", "Попробуйте ещё раз.");
     }
   };
 

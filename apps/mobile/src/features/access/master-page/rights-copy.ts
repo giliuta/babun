@@ -542,11 +542,19 @@ const SENTENCES: Record<string, LevelCopy> = {
   },
 };
 
+/** Фразы для приложения из магазина (`pay-here.ts`, App Store 3.1.3(f)): без
+ *  слов об оплате. Ступени «Оплачивает» и «Пополняет» там не предлагаются
+ *  (`right-words.ts`), остаётся сказать «Видит» без «срока оплаты». */
+const APP_SENTENCES: Record<string, LevelCopy> = {
+  "cabinet.tariff": { read: "Видит тариф вашего аккаунта" },
+};
+
 /** Фраза последствия для положения блока. Незнакомый ключ или положение —
  *  слово положения: экран обязан работать и на блоке, которого ещё нет в
- *  словаре (реестр живёт на сервере и может обогнать сборку). */
-export function levelSentence(blockKey: string, level: AccessLevel): string {
-  return SENTENCES[blockKey]?.[level] ?? LEVEL_WORD[level];
+ *  словаре (реестр живёт на сервере и может обогнать сборку). `payHere` —
+ *  `CAN_PAY_HERE` экрана: в приложении из магазина — фразы без оплаты. */
+export function levelSentence(blockKey: string, level: AccessLevel, payHere = true): string {
+  return (payHere ? undefined : APP_SENTENCES[blockKey]?.[level]) ?? SENTENCES[blockKey]?.[level] ?? LEVEL_WORD[level];
 }
 
 /** Слово на сегменте. Короче, чем в реестре: «Из его календарей» в трети

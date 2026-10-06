@@ -8,9 +8,10 @@ import { BrandLockup } from "@/components/brand/BrandMark";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { GUTTER, TYPE } from "@/components/ui/tokens";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 
-import { fillLegal, LEGAL_SHORT, LEGAL_TEXTS, legalLang, parseLegal, type LegalDocId } from "./legal-texts";
+import { fillLegal, LEGAL_SHORT, LEGAL_TEXTS, LEGAL_TEXTS_APP, legalLang, parseLegal, type LegalDocId } from "./legal-texts";
 import { LEGAL_OPERATOR, legalEmail } from "./operator";
 
 // ДОКУМЕНТ — ПОЛИТИКА, УСЛОВИЯ, УДАЛЕНИЕ АККАУНТА (04.10, выпуск в магазины).
@@ -20,8 +21,12 @@ import { LEGAL_OPERATOR, legalEmail } from "./operator";
 // имя документа и переключатель языка; ниже — полное название и текст колонкой не шире 720, чтобы на
 // компьютере строки не растягивались на весь экран. Язык — `?lang=ru|en`,
 // без него — язык интерфейса (русский или английский для всех остальных).
+//
+// В приложении из магазина условия — без адреса и способа оплаты
+// (`LEGAL_TEXTS_APP`, App Store 3.1.3(f)); на сайте — полный текст.
 
 const READ_WIDTH = 720;
+const TEXTS = CAN_PAY_HERE ? LEGAL_TEXTS : LEGAL_TEXTS_APP;
 
 export function LegalScreen({ doc }: { doc: LegalDocId }) {
   const t = useThemeColors();
@@ -31,7 +36,7 @@ export function LegalScreen({ doc }: { doc: LegalDocId }) {
   const blocks = useMemo(
     () =>
       parseLegal(
-        fillLegal(LEGAL_TEXTS[doc][lang], { ...LEGAL_OPERATOR, email: legalEmail() }),
+        fillLegal(TEXTS[doc][lang], { ...LEGAL_OPERATOR, email: legalEmail() }),
       ),
     [doc, lang],
   );

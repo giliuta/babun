@@ -28,7 +28,8 @@ describe("telegramLink", () => {
 });
 
 describe("emailLink", () => {
-  const link = emailLink(" help@babun.app ", "v1.8.33");
+  // Версия — так, как её печатает «О приложении» на телефоне (`versionSummary`).
+  const link = emailLink(" help@babun.app ", "1.0.0 · сборка 12");
 
   test("адрес как есть, без пробелов по краям", () => {
     assert.ok(link.startsWith("mailto:help@babun.app?"));
@@ -37,7 +38,7 @@ describe("emailLink", () => {
   test("тема и тело закодированы, переводы строк — %0A", () => {
     const query = new URLSearchParams(link.slice(link.indexOf("?") + 1));
     assert.equal(query.get("subject"), "Вопрос по Babun");
-    assert.equal(query.get("body"), supportMailBody("v1.8.33"));
+    assert.equal(query.get("body"), supportMailBody("1.0.0 · сборка 12"));
     assert.ok(!link.includes("\n"));
     assert.ok(!link.includes(" "));
     assert.ok(link.includes("%0A"));
@@ -45,8 +46,8 @@ describe("emailLink", () => {
 
   test("в тело письма встают версия, устройство и пустая строка под вопрос", () => {
     assert.equal(
-      supportMailBody("v1.8.33"),
-      "Версия приложения: v1.8.33\nУстройство: iPhone\n\n",
+      supportMailBody("1.0.0 · сборка 12"),
+      "Версия приложения: 1.0.0 · сборка 12\nУстройство: iPhone\n\n",
     );
   });
 });

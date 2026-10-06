@@ -5302,5 +5302,16 @@
  "＋ Описание": "＋ Beschreibung",
  "＋ Перерыв": "＋ Pause",
  "＋ Перерыв после услуги": "＋ Pause nach der Leistung",
- "＋ По дням недели": "＋ Nach Wochentagen"
+ "＋ По дням недели": "＋ Nach Wochentagen",
+ "Аккаунта с такой почтой нет — зарегистрируйтесь": "Es gibt kein Konto mit dieser E-Mail — registrieren Sie sich",
+ "Архивирование сохраняет историю и не уменьшает лимит.": "Archivieren behält den Verlauf und gibt kein Limit frei.",
+ "Введите код из письма или нажмите в письме «Войти»": "Geben Sie den Code aus der E-Mail ein oder tippen Sie darin auf „Anmelden“",
+ "Видит тариф вашего аккаунта": "Sieht den Tarif Ihres Kontos",
+ "Войти по коду из письма": "Mit Code aus der E-Mail anmelden",
+ "Вход по коду": "Anmeldung per Code",
+ "Недоступно для этого аккаунта": "Für dieses Konto nicht verfügbar",
+ "Новые записи откроются в следующем месяце.": "Neue Termine sind ab dem nächsten Monat wieder möglich.",
+ "Разрешите доступ к контактам в настройках iPhone. Babun читает контакты только когда вы открываете этот список и добавляет в клиенты только отмеченных.": "Erlauben Sie den Zugriff auf Kontakte in den iPhone-Einstellungen. Babun liest die Kontakte nur, wenn Sie diese Liste öffnen, und übernimmt nur die markierten als Kunden.",
+ "Тарифный лимит: можно добавить ещё {0} {1}, выбрано {2}. Уменьшите импорт.": "Tariflimit: Sie können noch {0} {1} hinzufügen, ausgewählt: {2}. Importieren Sie weniger.",
+ "Чек выписывается кнопкой в «Финансах».": "Quittungen werden per Schaltfläche in „Finanzen“ ausgestellt."
 }

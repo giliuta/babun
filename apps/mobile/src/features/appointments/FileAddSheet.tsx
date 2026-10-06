@@ -9,7 +9,7 @@ import type { useFilePickers } from "./use-file-pickers";
 // у нас файлы, как везде хранятся файлы»): второй список пунктов разошёлся бы
 // с первым в первую же правку — порядок, слова, значки.
 //
-// Пункты: снять фото или видео, выбрать из галереи, выбрать файл,
+// Пункты: снять фото, выбрать из галереи, выбрать файл,
 // отсканировать документ. Документы требуют владельца-клиента (они лежат во
 // вложениях клиента), поэтому без `withDocuments` двух последних нет; скан —
 // ещё и только там, где собран нативный сканер.
@@ -27,7 +27,7 @@ export function FileAddSheet({
 }) {
   const t = useThemeColors();
   const menu: PickerSheetItem[] = [
-    { id: "camera", label: "Снять фото или видео", icon: Camera, color: t.accent, onPress: () => void pickers.shoot() },
+    { id: "camera", label: "Снять фото", icon: Camera, color: t.accent, onPress: () => void pickers.shoot() },
     { id: "library", label: "Выбрать из галереи", icon: Images, color: t.accent, onPress: () => void pickers.pick() },
     ...(withDocuments
       ? [{ id: "file", label: "Выбрать файл", icon: FileText, color: t.accent, onPress: () => void pickers.pickDocument() }]

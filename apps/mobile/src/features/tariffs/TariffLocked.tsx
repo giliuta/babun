@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
-import { useTariffNudge } from "./use-tariff";
+import { TARIFF_LOCKED_HINT, useTariffNudge } from "./use-tariff";
 
 // ЗАКРЫТОЕ ТАРИФОМ — СЕРЫМ, А НЕ СПРЯТАНО (владелец 01.10: «клиенты серым,
 // нажимаю — сверху плашка „нужно изменить тариф“ с кнопкой»). Обёртка гасит
@@ -22,7 +22,8 @@ export function TariffLocked({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityHint="Нужно изменить тариф"
+      // В приложении из магазина — без «измените тариф» (`TARIFF_LOCKED_HINT`).
+      accessibilityHint={TARIFF_LOCKED_HINT}
       onPress={() => {
         beforeNudge?.();
         nudge();

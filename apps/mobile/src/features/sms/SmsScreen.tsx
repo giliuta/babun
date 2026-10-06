@@ -67,6 +67,9 @@ export function SmsScreen() {
   const smsInPlan = tierAllows(tierOf(useAccountProfile().data), "sms");
   const nudgeTariff = useTariffNudge();
   const params = useLocalSearchParams<{ topup?: string }>();
+  // Возврат с оплаты бывает только на сайте: в приложении из магазина
+  // `?topup=` из чужой ссылки не говорит об оплате (`pay-here.ts`).
+  const topupReturn = CAN_PAY_HERE ? params.topup : undefined;
   const account = useSmsAccount();
   const history = useSmsHistory(5);
   const [topupOpen, setTopupOpen] = useState(false);
@@ -79,15 +82,15 @@ export function SmsScreen() {
   // Возврат с оплаты на сайте: Stripe привёл обратно — баланс пересчитает
   // вебхук через секунды, страница перечитывает его.
   useEffect(() => {
-    if (params.topup === "paid") {
+    if (topupReturn === "paid") {
       toast("Оплата прошла — баланс обновится через минуту", "success");
       const timer = setTimeout(() => void account.refetch(), 4000);
       return () => clearTimeout(timer);
     }
-    if (params.topup === "cancelled") toast("Оплата отменена", "info");
+    if (topupReturn === "cancelled") toast("Оплата отменена", "info");
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.topup]);
+  }, [topupReturn]);
 
   // В приложении оплата — в браузере: вернулись в приложение — перечитать
   // баланс (вебхук Stripe зачисляет за секунды).

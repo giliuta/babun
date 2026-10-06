@@ -55,18 +55,27 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Babun использует фото для снимков объектов и выполненных работ клиента.",
-          "cameraPermission": "Babun использует камеру для снимков объекта до и после выполнения работ.",
+          "photosPermission": "Babun uses your photo library so you can attach photos of job sites, completed work and receipts.",
+          "cameraPermission": "Babun uses the camera to photograph job sites, completed work and receipts, and to scan documents you attach.",
           "microphonePermission": false
         }
       ],
       [
         "expo-contacts",
         {
-          "contactsPermission": "Babun использует контакты, чтобы быстро добавить клиента из телефонной книги."
+          "contactsPermission": "Babun reads your contacts only when you open “From phone contacts”, so you can choose people to add as clients."
         }
       ]
     ],
+    "locales": {
+      "en": "./locales/en.json",
+      "ru": "./locales/ru.json",
+      "uk": "./locales/uk.json",
+      "bg": "./locales/bg.json",
+      "el": "./locales/el.json",
+      "de": "./locales/de.json",
+      "es": "./locales/es.json"
+    },
     "experiments": {
       "typedRoutes": true
     },

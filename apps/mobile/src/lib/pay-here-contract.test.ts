@@ -3,8 +3,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import { LEGAL_TEXTS, LEGAL_TEXTS_APP } from "../features/legal/legal-texts";
 import { balanceWarning } from "../features/sms/sms-model";
-import { tariffAction, tariffStatus } from "../features/tariffs/tiers";
+import { tariffAction, tariffStatus, tierLine } from "../features/tariffs/tiers";
 
 // ОПЛАТА — ТОЛЬКО НА САЙТЕ (владелец 04.10, `pay-here.ts`). Приложение из
 // App Store / Google Play с кнопкой на чужую оплату отклоняют, поэтому каждая
@@ -13,6 +14,7 @@ import { tariffAction, tariffStatus } from "../features/tariffs/tiers";
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel: string) => readFileSync(path.join(SRC, rel), "utf8");
+const readApp = (rel: string) => readFileSync(path.join(SRC, "../app", rel), "utf8");
 
 test("флаг — только веб", () => {
   assert.match(read("lib/pay-here.ts"), /export const CAN_PAY_HERE = Platform\.OS === "web";/);
@@ -66,3 +68,81 @@ test("слова состояния без флага не зовут плати
   assert.equal(tariffStatus(pastDue, null), "Оплата не прошла — обновите карту");
   assert.equal(tariffStatus(pastDue, null, false), "Оплата не прошла");
 });
+
+// ПРОВЕРКА APP STORE 06.10 (3.1.3(f)): в приложении из магазина нет ни
+// покупки, ни призыва к ней — в том числе косвенного: кнопки «Тариф» у
+// закрытого, отсчёта пробного, счетов Stripe с оплатой, адреса оплаты в
+// условиях, страницы возврата из Stripe.
+
+test("закрытое тарифом без флага — спокойная фраза, без кнопки «Тариф»", () => {
+  const src = read("features/tariffs/use-tariff.ts");
+  assert.match(src, /export const TARIFF_LOCKED_HINT = CAN_PAY_HERE \? "Нужно изменить тариф" : "Недоступно для этого аккаунта";/);
+  const nudge = src.slice(src.indexOf("export function useTariffNudge"));
+  const guard = nudge.search(/if \(!CAN_PAY_HERE\) \{\s*toast\(TARIFF_LOCKED_HINT, "info"\);\s*return;\s*\}/);
+  assert.ok(guard > 0, "useTariffNudge без ветки приложения из магазина");
+  assert.ok(nudge.indexOf('label: "Тариф"') > guard, "кнопка «Тариф» раньше проверки флага");
+  for (const rel of ["features/tariffs/TariffLocked.tsx", "features/appointments/PaymentTiles.tsx"]) {
+    const file = read(rel);
+    assert.match(file, /accessibilityHint=\{(dimmed \? )?TARIFF_LOCKED_HINT/, `${rel}: подсказка VoiceOver мимо флага`);
+    assert.doesNotMatch(file, /"Нужно изменить тариф"/, `${rel}: «Нужно изменить тариф» мимо флага`);
+  }
+});
+
+test("тариф без флага — только имя: ни отсчёта пробного, ни «пробный закончился»", () => {
+  const trial = { tier: "pro", paid: false, forever: false, trial: { tier: "pro", days: 9 }, trialUsed: true, pastDue: false } as const;
+  const over = { tier: "free", paid: false, forever: false, trial: null, trialUsed: true, pastDue: false } as const;
+  // Сайт — как было.
+  assert.equal(tierLine("pro", { days: 9 }), "Про · пробный, ещё 9 дней");
+  assert.equal(tariffStatus(trial, null), "Пробный · ещё 9 дней");
+  assert.equal(tariffStatus(over, null), "Пробный закончился");
+  // Приложение из магазина.
+  assert.equal(tierLine("pro", { days: 9 }, false), "Про");
+  assert.equal(tierLine("free", null, false), "Без тарифа");
+  for (const state of [trial, over]) {
+    assert.doesNotMatch(tariffStatus(state, null, false), /ещё|пробн/i);
+  }
+  assert.match(read("features/tariffs/TariffRow.tsx"), /tierLine\(state\.tier, state\.trial, CAN_PAY_HERE\)/);
+  assert.match(read("features/cabinet/CompanyScreen.tsx"), /tierLine\(tierOf\(tenant\.data\), trialLeft\(tenant\.data\), CAN_PAY_HERE\)/);
+});
+
+test("«Оплаты тарифа» (счета Stripe с оплатой) — только с флагом", () => {
+  const own = read("features/cabinet/OwnAccountSection.tsx");
+  const rows = own.match(/<TariffPaymentsRow\b/g) ?? [];
+  const gated = own.match(/\{CAN_PAY_HERE \? \(\s*<>\s*<TariffPaymentsRow\b/g) ?? [];
+  assert.ok(rows.length > 0);
+  assert.equal(gated.length, rows.length, "OwnAccountSection: строка оплат мимо флага");
+  assert.match(read("features/cabinet/InvitedAccounts.tsx"), /if \(CAN_PAY_HERE && seen\(payments\)\) rows\.push\(\{ key: "payments"/);
+  assert.match(readApp("(dashboard)/cabinet/payments.tsx"), /if \(!CAN_PAY_HERE\) return <Redirect href="\/cabinet" \/>;/);
+});
+
+test("условия без флага — без Stripe и babun.app как места оплаты; на сайте — полные", () => {
+  const screen = read("features/legal/LegalScreen.tsx");
+  assert.match(screen, /const TEXTS = CAN_PAY_HERE \? LEGAL_TEXTS : LEGAL_TEXTS_APP;/);
+  assert.match(screen, /fillLegal\(TEXTS\[doc\]\[lang\]/);
+  assert.doesNotMatch(screen, /LEGAL_TEXTS\[doc\]/, "экран читает веб-текст мимо флага");
+  for (const lang of ["ru", "en"] as const) {
+    assert.doesNotMatch(LEGAL_TEXTS_APP.terms[lang], /Stripe|на сайте|on babun\.app|on the website/);
+    assert.match(LEGAL_TEXTS.terms[lang], /Stripe/);
+  }
+});
+
+test("регистрация без флага открывает условия своим экраном, а не сайт с полным текстом", () => {
+  // babun.app/terms в Safari — веб-сборка с флагом, там `LEGAL_TEXTS` со Stripe.
+  const src = readApp("(auth)/register.tsx");
+  assert.match(src, /const openLegal = \(href: "\/terms" \| "\/privacy"\) => \{\s*if \(!CAN_PAY_HERE\) \{\s*router\.push\(href\);\s*return;\s*\}/);
+  assert.match(src, /onPress=\{\(\) => openLegal\("\/terms"\)\}/);
+  assert.match(src, /onPress=\{\(\) => openLegal\("\/privacy"\)\}/);
+  assert.doesNotMatch(src, /babun\.app\/(terms|privacy)/, "регистрация открывает сайт мимо флага");
+  for (const doc of ["terms", "privacy"]) {
+    assert.match(readApp(`${doc}.tsx`), new RegExp(`<LegalScreen doc="${doc}" />`));
+  }
+});
+
+test("возврат из Stripe без флага не открывается: /pay/done — на главную, ?topup= молчит", () => {
+  const done = readApp("pay/done.tsx");
+  assert.match(done, /export default function PayDoneRoute\(\) \{\s*if \(!CAN_PAY_HERE\) return <Redirect href="\/" \/>;\s*return <PayDone \/>;/);
+  const sms = read("features/sms/SmsScreen.tsx");
+  assert.match(sms, /const topupReturn = CAN_PAY_HERE \? params\.topup : undefined;/);
+  assert.doesNotMatch(sms, /params\.topup ===/, "SmsScreen читает ?topup= мимо флага");
+});
+

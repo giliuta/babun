@@ -4,6 +4,7 @@ import { Check } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { AddRow } from "@/components/ui/AddRow";
 import { GUTTER } from "@/components/ui/tokens";
+import { TARIFF_LOCKED_HINT } from "@/features/tariffs/use-tariff";
 import { useThemeColors } from "@/theme/colors";
 
 // ПЛИТКИ БЛОКА «ОПЛАТА» — только вид (STORY-065, выбор владельца 2026-09-06:
@@ -216,7 +217,7 @@ export function ModeIconButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ selected: Boolean(active) }}
-      accessibilityHint={dimmed ? "Нужно изменить тариф" : undefined}
+      accessibilityHint={dimmed ? TARIFF_LOCKED_HINT : undefined}
       hitSlop={8}
       style={({ pressed }) => ({
         width: 32,

@@ -17,6 +17,7 @@ import { EmailCodeCard, SIGNUP_LINK_REDIRECT } from "@/components/auth/EmailCode
 import { useAuthTheme } from "@/components/auth/theme";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/notify";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { invitationSignupErrorMessage } from "@/features/settings/invitation-flow";
 import { getPendingInvitationToken } from "@/features/settings/pending-invitation";
 
@@ -97,13 +98,22 @@ export default function RegisterScreen() {
     setLoading(false);
   }
 
-  const openLegal = (url: string) =>
-    Linking.openURL(url).catch(() => {
+  // В приложении из магазина документ открывается своим экраном (`app/terms.tsx`,
+  // `app/privacy.tsx`, без входа): там условия без способа оплаты
+  // (`LEGAL_TEXTS_APP`, App Store 3.1.3(f)), а сайт в Safari показал бы полный
+  // текст. На сайте — как было, ссылкой.
+  const openLegal = (href: "/terms" | "/privacy") => {
+    if (!CAN_PAY_HERE) {
+      router.push(href);
+      return;
+    }
+    Linking.openURL(`https://babun.app${href}`).catch(() => {
       notify(
         "Не удалось открыть ссылку",
         "Проверьте интернет и повторите.",
       );
     });
+  };
 
   if (pending) {
     return (
@@ -198,7 +208,7 @@ export default function RegisterScreen() {
         }}
       >
         <Pressable
-          onPress={() => void openLegal("https://babun.app/terms")}
+          onPress={() => openLegal("/terms")}
           accessibilityRole="link"
           accessibilityLabel="Условия использования"
           style={({ pressed }) => ({
@@ -214,7 +224,7 @@ export default function RegisterScreen() {
         </Pressable>
         <Text style={{ fontSize: 13, color: t.sub }}>и</Text>
         <Pressable
-          onPress={() => void openLegal("https://babun.app/privacy")}
+          onPress={() => openLegal("/privacy")}
           accessibilityRole="link"
           accessibilityLabel="Политика конфиденциальности"
           style={({ pressed }) => ({

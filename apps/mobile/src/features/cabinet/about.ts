@@ -7,12 +7,22 @@ import { clockTime, dayMonth } from "./when";
 // (тот же, что в TestFlight) и откуда пришёл код: из самой сборки или
 // обновлением, и когда.
 //
+// ВЕРСИЯ МАГАЗИНА, А НЕ ВНУТРЕННЯЯ (06.10, выпуск в магазины). В приложении с
+// телефона строка говорит то же, что App Store: «1.0.0 · сборка 12».
+// Внутренний номер `v1.8.33` придуман для сайта и наших сборок; на телефоне он
+// расходился с карточкой магазина, и проверка App Store видела две версии
+// одного приложения. Сайт показывает внутренний, как раньше.
+//
+// ОБНОВЛЕНИЕ — ТОЛЬКО ПОКАЗАНИЕ. Кнопок «проверить», «скачать», «перезапустить»
+// нет: в приложении из магазина обновление не предлагают вне App Store, а
+// обновление по воздуху и так встаёт само при следующем запуске.
+//
 // УСЛОВИЯ И КОНФИДЕНЦИАЛЬНОСТЬ — НЕ ЗДЕСЬ, А В «ПОМОЩИ» → «Документы» (04.10):
 // там же, где связь с поддержкой; те же страницы открываются без входа на
 // babun.app/privacy, /terms, /delete-account (`features/legal`).
 
 export interface AppBuildFacts {
-  /** `DISPLAY_VERSION` — версия, которую продукт показывает человеку. */
+  /** Версия, которую продукт показывает человеку (`shownVersion`). */
   displayVersion: string;
   /** CFBundleVersion бинарника: номер сборки в TestFlight. */
   buildNumber: string | null;
@@ -26,7 +36,24 @@ export interface AppUpdateFacts {
   createdAt: Date | null;
 }
 
-/** «v1.8.28 · сборка 4». */
+/** Какую версию показать: на телефоне — версию магазина (`expo.version`, она же
+ *  CFBundleShortVersionString), на сайте — внутреннюю `DISPLAY_VERSION`. Пустая
+ *  версия магазина на телефоне не бывает (её вшивает сборка) — тогда
+ *  внутренняя, чтобы строка не осталась без числа. */
+export function shownVersion({
+  web,
+  storeVersion,
+  internalVersion,
+}: {
+  web: boolean;
+  storeVersion: string | null | undefined;
+  internalVersion: string;
+}): string {
+  if (web) return internalVersion;
+  return storeVersion?.trim() || internalVersion;
+}
+
+/** «1.0.0 · сборка 12». */
 export function versionSummary({ displayVersion, buildNumber }: AppBuildFacts): string {
   const build = buildNumber?.trim();
   return build ? `${displayVersion} · сборка ${build}` : displayVersion;

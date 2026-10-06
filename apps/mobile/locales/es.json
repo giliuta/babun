@@ -1,0 +1,7 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "Babun usa la cámara para fotografiar inmuebles, trabajos terminados y recibos, y para escanear los documentos que adjuntas.",
+    "NSPhotoLibraryUsageDescription": "Babun usa tu fototeca para que puedas adjuntar fotos de inmuebles, trabajos terminados y recibos.",
+    "NSContactsUsageDescription": "Babun lee tus contactos solo cuando abres «Desde los contactos del móvil», para que elijas a quién añadir como cliente."
+  }
+}

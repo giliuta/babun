@@ -21,7 +21,7 @@ export type LegalDocId = "privacy" | "terms" | "delete-account";
 export type LegalLang = "ru" | "en";
 
 const PRIVACY_RU = /* i18n-ignore */ `# Политика конфиденциальности
-Обновлено 4 октября 2026
+Обновлено 6 октября 2026
 
 Babun — CRM для сервисного бизнеса: календарь записей, клиенты, объекты, финансы и SMS. Сервис предоставляет {NAME} ({ADDRESS}). Вопросы о данных — {EMAIL}.
 
@@ -56,9 +56,11 @@ Babun — CRM для сервисного бизнеса: календарь з�
 - Expo — доставка обновлений приложения;
 - Stripe — приём оплат;
 - Twilio — отправка SMS (номер получателя и текст сообщения);
+- Resend — отправка служебных писем (например, приглашений партнёрам);
+- OpenStreetMap Nominatim — превращает набранный адрес в точку на карте и точку в адрес (уходят только адрес или координаты, без имён и телефонов);
 - Sentry — отчёты об ошибках.
 
-Часть подрядчиков может обрабатывать данные вне ЕС — по стандартным договорным условиям ЕС. Партнёры, которых вы пригласили, видят только те команды и блоки, к которым вы дали доступ.
+Каждый подрядчик защищает данные не хуже, чем требует эта политика. Часть подрядчиков может обрабатывать данные вне ЕС — по стандартным договорным условиям ЕС. Партнёры, которых вы пригласили, видят только те команды и блоки, к которым вы дали доступ.
 
 ## Сколько храним
 Пока аккаунт существует. После удаления аккаунта данные стираются (подробно — на странице babun.app/delete-account). Резервные копии базы перезаписываются в течение 7 дней. Записи о платежах Stripe хранит столько, сколько требует закон.
@@ -70,7 +72,7 @@ Babun — CRM для сервисного бизнеса: календарь з�
 Соединения шифруются, у каждого аккаунта своя изолированная база команд, доступ партнёров настраивается по блокам. Ни одна система не защищена полностью, но о серьёзной утечке мы сообщим вам и надзорному органу, как требует закон.
 
 ## Дети
-Babun — инструмент для работы и не предназначен для детей младше 16 лет.
+Babun — инструмент для работы и не предназначен для детей.
 
 ## Изменения
 О существенных изменениях этой политики мы сообщим в приложении или по почте. Дата наверху — дата последней правки.
@@ -79,7 +81,7 @@ Babun — инструмент для работы и не предназнач�
 {NAME}, {ADDRESS}, {EMAIL}`;
 
 const PRIVACY_EN = `# Privacy Policy
-Last updated: October 4, 2026
+Last updated: October 6, 2026
 
 Babun is a CRM for service businesses: appointment calendar, clients, sites, finances and SMS. The service is provided by {NAME} ({ADDRESS}). Questions about your data: {EMAIL}.
 
@@ -114,9 +116,11 @@ Only service providers the product cannot work without, and only what they need:
 - Expo — delivery of app updates;
 - Stripe — payments;
 - Twilio — SMS delivery (recipient number and message text);
+- Resend — transactional email (such as partner invitations);
+- OpenStreetMap Nominatim — turns a typed address into a map point and a point into an address (only the address or coordinates are sent, never names or phone numbers);
 - Sentry — crash reports.
 
-Some providers may process data outside the EU under the EU Standard Contractual Clauses. Partners you invite see only the teams and blocks you give them access to.
+Each provider protects the data to at least the standard of this policy. Some providers may process data outside the EU under the EU Standard Contractual Clauses. Partners you invite see only the teams and blocks you give them access to.
 
 ## How long we keep it
 As long as your account exists. When you delete your account, the data is erased (details at babun.app/delete-account). Database backups are overwritten within 7 days. Stripe keeps payment records for as long as the law requires.
@@ -128,7 +132,7 @@ You can request access to your data, correct it, export it (Office → Data expo
 Connections are encrypted, each account's teams are isolated from every other account, and partner access is set per block. No system is perfectly secure, but we will notify you and the authority of a serious breach as the law requires.
 
 ## Children
-Babun is a work tool and is not intended for children under 16.
+Babun is a work tool and is not directed at children.
 
 ## Changes
 We will announce material changes in the app or by email. The date at the top is the date of the last change.
@@ -206,6 +210,24 @@ These terms are governed by the laws of the Republic of Cyprus. If you are a con
 ## Contact
 {NAME}, {ADDRESS}, {EMAIL}`;
 
+// УСЛОВИЯ В ПРИЛОЖЕНИИ ИЗ МАГАЗИНА (App Store 3.1.3(f), `pay-here.ts`): тот же
+// договор, но без «оплачиваются на babun.app через Stripe» и «цены на сайте» —
+// в приложении это читается как призыв платить мимо магазина. Текст правится
+// выше, в веб-версии; здесь — только замена этих фраз. Разошлась фраза —
+// замена молча не сработает, поэтому её сторожит `legal-texts.test.ts`.
+const TERMS_RU_APP = TERMS_RU.replace(
+  /* i18n-ignore */ "Тариф и баланс SMS оплачиваются на сайте babun.app через Stripe: подписка продлевается каждый месяц, пока вы её не отмените.",
+  /* i18n-ignore */ "Платные тарифы и баланс SMS оплачиваются отдельно; подписка продлевается каждый месяц, пока вы её не отмените.",
+).replace(
+  /* i18n-ignore */ "по цене, указанной на сайте.",
+  /* i18n-ignore */ "по действующей цене.",
+);
+
+const TERMS_EN_APP = TERMS_EN.replace(
+  "Plans and SMS balance are paid on babun.app through Stripe: a subscription renews every month until you cancel it.",
+  "Paid plans and SMS balance are billed separately; subscriptions renew monthly until cancelled.",
+).replace("at the price shown on the website.", "at the current price.");
+
 const DELETE_RU = /* i18n-ignore */ `# Удаление аккаунта Babun
 Обновлено 4 октября 2026
 
@@ -258,6 +280,13 @@ export const LEGAL_TEXTS: Readonly<Record<LegalDocId, Readonly<Record<LegalLang,
   privacy: { ru: PRIVACY_RU, en: PRIVACY_EN },
   terms: { ru: TERMS_RU, en: TERMS_EN },
   "delete-account": { ru: DELETE_RU, en: DELETE_EN },
+};
+
+/** Документы для приложения из магазина (`CAN_PAY_HERE` ложь): условия — без
+ *  адреса и способа оплаты, остальное — как на сайте. */
+export const LEGAL_TEXTS_APP: Readonly<Record<LegalDocId, Readonly<Record<LegalLang, string>>>> = {
+  ...LEGAL_TEXTS,
+  terms: { ru: TERMS_RU_APP, en: TERMS_EN_APP },
 };
 
 /** Короткое имя для шапки: полное название на телефоне не помещается. */

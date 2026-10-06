@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/Button";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { ICON } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 
 import type { AccessBlock, AccessLevel } from "../access-map";
 import { BlockPreview } from "./BlockPreview";
 import { stepLook } from "./right-look";
-import { rightTitle, stepDanger, stepHint, stepWord } from "./right-words";
+import { offeredSteps, rightTitle, shownLevel, stepDanger, stepHint, stepWord } from "./right-words";
 
 // ШТОРКА ОДНОГО ПРАВА (владелец 29.09: «по строке поднимается шторка… и
 // сам этот блок вставить визуально в этой шторке сверху»). Сверху — блок
@@ -24,6 +25,9 @@ import { rightTitle, stepDanger, stepHint, stepWord } from "./right-words";
 // ступени только показывает её: вид сверху меняется на глазах, и можно
 // сравнить ступени, ничего не выдав сотруднику. Уходит выбранное одной
 // записью по «Применить»; закрыли шторку без кнопки — ничего не поменялось.
+//
+// В приложении из магазина ступеней оплаты («Оплачивает», «Пополняет») нет
+// (`offeredSteps`, `pay-here.ts`).
 
 export function RightSheet({
   visible,
@@ -67,7 +71,12 @@ export function RightSheet({
   onClose: () => void;
 }) {
   const t = useThemeColors();
-  const level = block ? (rowLevel ?? levels[block.key] ?? block.levels[0] ?? "off") : "off";
+  const stored = block ? (rowLevel ?? levels[block.key] ?? block.levels[0] ?? "off") : "off";
+  // Ступень, которую видно на строке: в приложении из магазина выданное на
+  // сайте «Оплачивает» читается «Только видит» (`shownLevel`). С ней шторка
+  // и сверяется — иначе отмеченной не было бы ни одной ступени, а «Применить»
+  // на том же «Только видит» молча сняло бы право, выданное на сайте.
+  const level = block ? shownLevel(block, stored, CAN_PAY_HERE) : stored;
   /** Ступень, выбранная в шторке, но ещё не применённая. */
   const [chosen, setChosen] = useState<AccessLevel>(level);
 
@@ -129,8 +138,8 @@ export function RightSheet({
             </Text>
           ) : null}
           <SelectList>
-            {block.levels.map((step) => {
-              const danger = stepDanger(block, step);
+            {offeredSteps(block, CAN_PAY_HERE).map((step) => {
+              const danger = stepDanger(block, step, CAN_PAY_HERE);
               const look = stepLook(step);
               // Ступень выше своей у директора — видна, но не ставится.
               const above = !!stepAllowed && step !== level && !stepAllowed(step);
@@ -140,13 +149,13 @@ export function RightSheet({
                   key={step}
                   icon={look.icon}
                   color={look.tile}
-                  title={stepWord(block, step, shown)}
+                  title={stepWord(block, step, shown, CAN_PAY_HERE)}
                   selected={step === chosen}
                   accessibilityRole="radio"
                   subtitle={
                     <View style={{ gap: 2, paddingBottom: 2 }}>
                       <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, lineHeight: 17, color: t.sub }}>
-                        {stepHint(block, step, shown)}
+                        {stepHint(block, step, shown, CAN_PAY_HERE)}
                       </Text>
                       {above ? (
                         <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, lineHeight: 17, color: t.sub }}>
