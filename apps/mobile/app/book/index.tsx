@@ -90,7 +90,10 @@ import {
   selfReminderLabel,
   type SelfReminder,
 } from "@/features/calendar/reminder-time";
-import { resolveCalendarDayLabel } from "@/features/calendar/day-label";
+import {
+  LABEL_FALLBACK_COLOR,
+  resolveCalendarDayLabel,
+} from "@/features/calendar/day-label";
 import { useFeatureOn } from "@/features/settings/company-features";
 import { useDayCities } from "@/features/calendar/day-cities";
 import {
@@ -803,10 +806,10 @@ function BookForm() {
         teamId,
         dateYmd: date,
         todayYmd,
-        fallbackColor: t.faint,
+        fallbackColor: LABEL_FALLBACK_COLOR,
         off: !dayLabelsOn,
       }),
-    [dayCities, teamCities, teamId, date, todayYmd, t.faint, dayLabelsOn],
+    [dayCities, teamCities, teamId, date, todayYmd, dayLabelsOn],
   );
   const dayLabel = dayLabelResolved?.name ?? null;
   // Новая запись надевает метку дня сама и меняет её вслед за днём и

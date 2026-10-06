@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+import { setShownSessionUserId } from "@/lib/active-tenant";
 import { handleAuthEvent } from "@/lib/auth-clear";
 import { supabase } from "@/lib/supabase";
 import { shouldPublishSession } from "./session-publish";
@@ -72,6 +73,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  // Заслонка анонимного запроса держится, пока на экране страницы вошедшего:
+  // выбор компании в памяти гаснет на выходе раньше, чем дерево уходит на
+  // логин (`active-tenant.ts`, 06.10). Ставится после отрисовки — дочерние
+  // эффекты той же отрисовки ещё видят прежнего и отбиваются, а не уходят
+  // анонимом.
+  const shownUserId = session?.user?.id ?? null;
+  useEffect(() => {
+    setShownSessionUserId(shownUserId);
+  }, [shownUserId]);
 
   return (
     <SessionContext.Provider value={{ session, loading }}>

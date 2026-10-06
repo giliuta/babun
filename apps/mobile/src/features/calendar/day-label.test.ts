@@ -98,7 +98,8 @@ describe("метка дня календаря", () => {
     // Метку стёрли, а на дне она стоит рукой. Прошлое не переписывается:
     // имя это правда о том дне, красить его просто нечем.
     const got = call({ dayCities: { [`${TEAM}:${TODAY}`]: "Стёртая" } });
-    assert.deepEqual(got, { name: "Стёртая", color: GREY, tint: true });
+    // Колонку не красим: подсветку дня выбирает метка, а её нет (06.10).
+    assert.deepEqual(got, { name: "Стёртая", color: GREY, tint: false });
   });
 
   test("tint_day = false доезжает как есть", () => {

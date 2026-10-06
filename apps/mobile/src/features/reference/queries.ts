@@ -364,7 +364,7 @@ export function useCities(opts?: {
   includeInactive?: boolean;
   teamId?: string | null;
 }) {
-  const { tenantId, client } = useReferenceCompany();
+  const { tenantId, client, ready } = useReferenceCompany();
   const includeInactive = !!opts?.includeInactive;
   const teamId = opts?.teamId ?? null;
   // КЛЮЧ — ВЕСЬ СПРАВОЧНИК КОМПАНИИ, КОМАНДА — `select` (2026-09-15). Ключ по
@@ -377,7 +377,11 @@ export function useCities(opts?: {
   );
   return useQuery({
     queryKey: citiesQueryKey(tenantId, includeInactive, null),
-    enabled: !!tenantId,
+    // ЖДЁТ РОЛЬ, КАК СОСЕДИ (команды, метки дней — 06.10). Без входа роль не
+    // читается (401), а метки читались: на выходе из аккаунта календарь
+    // успевал получить анонимом «200, пусто», и после входа дни стояли
+    // серыми с «У команды пока нет меток».
+    enabled: !!tenantId && ready,
     queryFn: () =>
       fetchCities(client, tenantId as string, includeInactive, null),
     select,

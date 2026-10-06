@@ -3,7 +3,7 @@ import { AppState, Platform } from "react-native";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@babun/shared/db/database.types";
 import { LargeSecureStore } from "@/lib/secure-store";
-import { getActiveTenantId, getActiveUserId } from "@/lib/active-tenant";
+import { getActiveTenantId, getSignedInUserId } from "@/lib/active-tenant";
 import { anonymousRequestError, isAnonymousDataRequest } from "@/lib/anon-guard";
 import { applyTenantHeader } from "@/lib/tenant-header";
 import { isWriteRequest } from "@/lib/write-requests";
@@ -75,7 +75,7 @@ function fetchWithActiveTenant(
       url: requestUrl(input),
       authorization: headers.get("Authorization"),
       publishableKey: key ?? "",
-      signedInUserId: getActiveUserId(),
+      signedInUserId: getSignedInUserId(),
     })
   ) {
     return Promise.reject(anonymousRequestError());

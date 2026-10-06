@@ -26,7 +26,8 @@ export interface AnonGuardInput {
   authorization: string | null;
   /** Публичный ключ клиента: без сессии supabase-js кладёт его в `Bearer`. */
   publishableKey: string;
-  /** Человек, вошедший на устройстве (`getActiveUserId`); null — не вошёл. */
+  /** Человек, вошедший на устройстве (`getSignedInUserId`: выбор компании в
+   *  памяти либо его страницы ещё на экране); null — не вошёл. */
   signedInUserId: string | null;
 }
 

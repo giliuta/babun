@@ -5,6 +5,16 @@ import {
 } from "@babun/shared/local/day-cities";
 import { isoWeekdayOf } from "@babun/shared/common/utils/date-utils";
 
+// ЦВЕТ МЕТКИ, КОТОРОЙ НЕТ В СПРАВОЧНИКЕ, — HEX, А НЕ ТОКЕН ТЕМЫ (06.10).
+//
+// Чип, колонка дня и полоска под датой дописывают к цвету метки альфу
+// суффиксом (`${color}29`, `${color}0d`). Токен `faint` — это
+// `rgba(11,18,32,0.64)`, и разборщик цвета RN хвост после скобки молча
+// отбрасывает: задуманные 5 % заливки колонки рисовались 64 % почти чёрного.
+// Так на видео для App Review дни с метками стали тёмно-серыми. Цвет метки
+// обязан быть `#rrggbb` — как у меток из справочника.
+export const LABEL_FALLBACK_COLOR = "#8E8E93";
+
 // КАКАЯ МЕТКА У ЭТОГО ДНЯ — ОДНО ПРАВИЛО НА ПРОДУКТ.
 //
 // Жило внутри экрана календаря (`labelFor` в (home)/index.tsx) и наружу не
@@ -87,6 +97,8 @@ export function resolveCalendarDayLabel(opts: {
   return {
     name,
     color: city?.color ?? fallbackColor,
-    tint: city?.tint_day ?? true,
+    // Метки нет в справочнике — колонку не красим: «подсвечивать ли день»
+    // решает сама метка, а решать некому (06.10).
+    tint: city ? (city.tint_day ?? true) : false,
   };
 }
