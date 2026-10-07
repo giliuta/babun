@@ -146,3 +146,14 @@ test("возврат из Stripe без флага не открывается: 
   assert.doesNotMatch(sms, /params\.topup ===/, "SmsScreen читает ?topup= мимо флага");
 });
 
+
+test("на iPhone нет регистрации без приглашения (App Review 07.10, 3.1.1)", () => {
+  // «Регистрация аккаунта для бизнеса — доступ к внешней оплате; уберите её».
+  assert.match(read("lib/pay-here.ts"), /export const CAN_SIGN_UP_HERE = Platform\.OS !== "ios";/);
+  const login = readApp("(auth)/login.tsx");
+  assert.match(login, /\{CAN_SIGN_UP_HERE \? \(\s*<SwitchLink/);
+  const register = readApp("(auth)/register.tsx");
+  assert.match(register, /export default function RegisterRoute\(\)/);
+  assert.match(register, /if \(!allowed\) return <Redirect href="\/login" \/>;/);
+  assert.match(register, /getPendingInvitationToken\(\)/);
+});

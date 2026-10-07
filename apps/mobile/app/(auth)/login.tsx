@@ -15,11 +15,12 @@ import {
 } from "@/components/auth/AuthCard";
 import { mapAuthError } from "@/components/auth/authErrors";
 import { EmailCodeCard } from "@/components/auth/EmailCodeCard";
+import { CAN_SIGN_UP_HERE } from "@/lib/pay-here";
 import { emailLinkOtpType, parseRecoveryLink } from "@/lib/recovery-link";
 import { supabase } from "@/lib/supabase";
 
 // «Вход в Babun» — email/password right on the screen (fewest taps),
-// Registration and password recovery stay available; unfinished OAuth is hidden.
+// Password recovery stays; registration is web/Android only (CAN_SIGN_UP_HERE).
 // КНОПКА ИЗ ПИСЬМА ПОДТВЕРЖДЕНИЯ (04.10). Два вида ссылки:
 // • #access_token… — сервер Supabase уже подтвердил и вернул вход в адресе;
 // • ?token_hash=…&type=email — одноразовый ключ, который тратит только этот
@@ -143,11 +144,13 @@ export default function LoginScreen() {
       />
 
       <GhostLink label="Забыли пароль?" onPress={() => router.push("/forgot-password")} />
-      <SwitchLink
-        lead="Нет аккаунта?"
-        action="Зарегистрироваться"
-        onPress={() => router.push("/register")}
-      />
+      {CAN_SIGN_UP_HERE ? (
+        <SwitchLink
+          lead="Нет аккаунта?"
+          action="Зарегистрироваться"
+          onPress={() => router.push("/register")}
+        />
+      ) : null}
     </AuthCard>
   );
 }

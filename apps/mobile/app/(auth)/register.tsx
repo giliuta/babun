@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { uiLocale } from "@babun/shared/i18n/locale";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import {
   AuthCard,
   AuthField,
@@ -17,7 +17,7 @@ import { EmailCodeCard, SIGNUP_LINK_REDIRECT } from "@/components/auth/EmailCode
 import { useAuthTheme } from "@/components/auth/theme";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/notify";
-import { CAN_PAY_HERE } from "@/lib/pay-here";
+import { CAN_PAY_HERE, CAN_SIGN_UP_HERE } from "@/lib/pay-here";
 import { invitationSignupErrorMessage } from "@/features/settings/invitation-flow";
 import { getPendingInvitationToken } from "@/features/settings/pending-invitation";
 
@@ -26,7 +26,25 @@ import { getPendingInvitationToken } from "@/features/settings/pending-invitatio
 // После отправки — «Введите код» из письма Babun (EmailCodeCard); верный код
 // сразу открывает календарь. Мастера «название бизнеса / род занятий» больше
 // нет (владелец 04.10): имя аккаунта — первое поле этой формы.
-export default function RegisterScreen() {
+// НА iPhone — ТОЛЬКО ПО ПРИГЛАШЕНИЮ (App Review 07.10, `CAN_SIGN_UP_HERE`).
+// Ссылка с экрана входа убрана, а прямой переход сюда без приглашения
+// возвращает на вход: аккаунт компании заводится на babun.app.
+export default function RegisterRoute() {
+  const [allowed, setAllowed] = useState<boolean | null>(
+    CAN_SIGN_UP_HERE ? true : null,
+  );
+  useEffect(() => {
+    if (CAN_SIGN_UP_HERE) return;
+    void getPendingInvitationToken()
+      .catch(() => null)
+      .then((token) => setAllowed(Boolean(token)));
+  }, []);
+  if (allowed === null) return null;
+  if (!allowed) return <Redirect href="/login" />;
+  return <RegisterScreen />;
+}
+
+function RegisterScreen() {
   const router = useRouter();
   const t = useAuthTheme();
   const emailRef = useRef<TextInput>(null);
