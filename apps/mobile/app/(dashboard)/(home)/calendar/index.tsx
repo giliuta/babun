@@ -196,9 +196,12 @@ export default function CalendarSettingsScreen() {
 
   const tenantId = useTenantId();
   // СКРЫТЫЕ КАЛЕНДАРИ ВКЛЮЧАЮТ ЗДЕСЬ (владелец 04.10: «в настройках календаря
-  // тумблер — и он снова показывается»). Лента шестерёнки — свои календари
-  // этого аккаунта, все, со скрытыми, плюс скрытые календари других
-  // аккаунтов: тап по такому переводит в его аккаунт, и тумблер под рукой.
+  // тумблер — и он снова показывается»), поэтому шестерёнка видит и скрытые.
+  // ВСЕ КАЛЕНДАРИ ВСЕХ АККАУНТОВ ОДНОЙ ЛЕНТОЙ (владелец 09.10: «можно
+  // переключаться между командой один, командой два и своей личной… сразу
+  // всё видно, только разный доступ»). Раньше чужие аккаунты стояли здесь
+  // лишь скрытыми, и «Личный» рядом с командами не было. Тап по календарю
+  // другого аккаунта переводит в него; строки ниже — по доступу в нём.
   const calendarVisibility = useCalendarVisibility();
   const gearChips = useCalendarChips({
     own: teams,
@@ -206,16 +209,6 @@ export default function CalendarSettingsScreen() {
     onPickOwn: (teamId) => router.setParams({ team: teamId }),
     onSwitchError: (message) => toast(message, "error"),
   });
-  const hiddenElsewhere = (chipId: string) => {
-    const separator = chipId.indexOf(":");
-    return calendarVisibility.isHidden(
-      chipId.slice(FOREIGN_PREFIX.length, separator),
-      chipId.slice(separator + 1),
-    );
-  };
-  const gearChipItems = gearChips.items.filter(
-    (chip) => !chip.id.startsWith(FOREIGN_PREFIX) || hiddenElsewhere(chip.id),
-  );
   // Какой календарь настраиваем: параметр из шестерёнки → тот, что открыт в
   // самом календаре (MMKV, тот же ключ) → первый. Экран всегда показывает
   // календарь, в котором человек работает, а не абстрактный «первый».
@@ -381,7 +374,7 @@ export default function CalendarSettingsScreen() {
           календаре и в финансах, и настройки каждой команды правятся не выходя
           с экрана. Раньше переключатель лежал последней секцией внизу. */}
       <ScopeChips
-        items={gearChipItems}
+        items={gearChips.items}
         activeId={gearChips.pendingId ?? team?.id ?? null}
         // СОЗДАНИЕ ЖИВЁТ В ЛЕНТЕ КАЛЕНДАРЕЙ, СПРАВА (владелец 2026-08-27:
         // «переносим в правую сторону, там где все календари, закрепляем

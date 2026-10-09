@@ -16,6 +16,7 @@ import { Divider } from "@/components/ui/Divider";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { ScopeChips } from "@/components/ui/ScopeChips";
+import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import {
   deletedOperationsDoorLine,
@@ -25,6 +26,7 @@ import {
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { accountsDoorLine } from "@/features/finances/accounts-sections";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { useCalendarChips } from "@/features/settings/workspaces";
 import {
   CATEGORY_KIND_ROW,
   anyFinanceSetting,
@@ -97,6 +99,16 @@ export default function FinanceSettingsScreen() {
   // все), как в шестерёнке клиентов.
   const teams = owner ? allTeams : allTeams.filter((team) => anyFinanceSetting(levelsOf(team.id)));
   const teamId = settingsTeamId(teams, teamParam);
+  // ЛЕНТА — ВСЕ КАЛЕНДАРИ ВСЕХ АККАУНТОВ, КАК НАД ФИНАНСАМИ (владелец 09.10:
+  // «то же самое в финансах… сразу все видно три команды, только разный
+  // доступ»). Тап по календарю другого аккаунта переводит в него, и строки
+  // ниже читаются по правам там.
+  const toast = useToast();
+  const chips = useCalendarChips({
+    own: teams,
+    onPickOwn: (id) => router.setParams({ team: id }),
+    onSwitchError: (message) => toast(message, "error"),
+  });
   const levels = levelsOf(teamId);
   const shown = (row: FinanceSettingRow) => levels[row] !== "hidden";
   const withTeam = (path: string, extra?: string) =>
@@ -124,14 +136,15 @@ export default function FinanceSettingsScreen() {
   return (
     <Screen edges={["top"]}>
       {/* Шов под шапкой один — его несёт лента команд. */}
-      <ScreenHeader title="Настройки финансов" seam={teams.length === 0} />
+      <ScreenHeader title="Настройки финансов" seam={chips.items.length === 0} />
       {/* КОМАНДЫ СВЕРХУ, КАК В НАСТРОЙКАХ КАЛЕНДАРЯ: выбрана ровно одна —
-          всё ниже неё — её. */}
-      {any && teams.length > 0 ? (
+          всё ниже неё — её. Лента стоит и там, где в этом аккаунте строк
+          нет: через неё уходят в календарь, где они есть. */}
+      {chips.items.length > 0 ? (
         <ScopeChips
-          items={teams}
-          activeId={teamId}
-          onSelect={(id) => router.setParams({ team: id })}
+          items={chips.items}
+          activeId={chips.pendingId ?? teamId}
+          onSelect={chips.pick}
         />
       ) : null}
       {any ? (
