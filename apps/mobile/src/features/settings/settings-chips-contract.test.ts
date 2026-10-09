@@ -23,3 +23,22 @@ test("настройки финансов — та же лента, что на�
   assert.match(src, /items=\{chips\.items\}/);
   assert.match(src, /onSelect=\{chips\.pick\}/);
 });
+
+// ПАРТНЁР ВЫХОДИТ ИЗ КОМАНДЫ САМ (владелец 09.10: «добавить добавили, а выйти
+// я уже не могу, если меня не удалят»).
+test("в настройках чужой команды — «Выйти из команды», а не удаление", () => {
+  const src = app("(dashboard)/(home)/calendar/index.tsx");
+  assert.match(src, /const canLeave = role != null && role !== "owner";/);
+  assert.match(src, /\{team && tenantId && canLeave \? \(/);
+  assert.match(src, /leaveCalendar\.mutate\(\s*\{ tenantId, teamId: team\.id \}/);
+  assert.match(src, /\{rows\.any \|\| canLeave \? \(/);
+  const hook = readFileSync(resolve(here, "leave-calendar.ts"), "utf8");
+  assert.match(hook, /supabase\.rpc\("leave_calendar"/);
+  assert.match(hook, /if \(leftAccount\) await evictCompanyFromDevice\(input\.tenantId, \{ fresh: true \}\);/);
+  const migration = readFileSync(
+    resolve(here, "../../../../../supabase/migrations/20261009055418_leave_calendar.sql"),
+    "utf8",
+  );
+  assert.match(migration, /if my_role = 'owner' then/);
+  assert.match(migration, /revoke all on function public\.leave_calendar\(uuid, text\) from public, anon;/);
+});

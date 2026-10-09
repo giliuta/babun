@@ -8,6 +8,7 @@ import {
   Briefcase,
   ClipboardList,
   Tags,
+  LogOut,
   Trash2,
 } from "lucide-react-native";
 import { readTenantPref } from "@/lib/tenant-prefs";
@@ -15,6 +16,7 @@ import { useTenantId } from "@/lib/tenant";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { FOREIGN_PREFIX } from "@/features/settings/calendar-chips";
 import { useCalendarChips, useCalendarVisibility } from "@/features/settings/workspaces";
+import { useLeaveCalendar } from "@/features/settings/leave-calendar";
 import {
   AUTO_COLOR_RULES,
   BOOKING_BLOCKS,
@@ -175,6 +177,11 @@ export default function CalendarSettingsScreen() {
   // команды без строки расписания — стандарт 06:00–20:00.
   const [picker, setPicker] = useState<"view" | "tz" | null>(null);
   const role = useCurrentRole().data;
+  // ПАРТНЁР ВЫХОДИТ САМ (владелец 09.10: «внизу должно быть не „удалить
+  // команду", а „выйти из неё"»). Своё удаляет владелец; чужую команду
+  // партнёр не удаляет, а покидает — `leave_calendar`.
+  const leaveCalendar = useLeaveCalendar();
+  const canLeave = role != null && role !== "owner";
   const isOwner = role === "owner";
   // График команды правится ЛИСТОМ, а не страницей (владелец 2026-08-17):
   // семь дней надо видеть целиком, пока правишь один. См. шапку
@@ -417,7 +424,7 @@ export default function CalendarSettingsScreen() {
         // команды, и лента другого выбора не предлагает.
         onSelect={(id) => (id.startsWith(FOREIGN_PREFIX) ? gearChips.pick(id) : router.setParams({ team: id }))}
       />
-      {rows.any ? (
+      {rows.any || canLeave ? (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
           {team ? (
             <>
@@ -759,6 +766,52 @@ export default function CalendarSettingsScreen() {
                 </Pressable>
               </SectionCard>
             </>
+          ) : null}
+          {team && tenantId && canLeave ? (
+            <SectionCard className="mt-4">
+              <Pressable
+                onPress={() =>
+                  confirmThen(
+                    `Выйти из команды «${team.name}»?`,
+                    {
+                      message:
+                        "Команда пропадёт из вашего календаря, её записи и клиенты станут вам не видны. Вернуть доступ может владелец, пригласив вас снова.",
+                      confirmLabel: "Выйти",
+                      destructive: true,
+                    },
+                    () =>
+                      leaveCalendar.mutate(
+                        { tenantId, teamId: team.id },
+                        {
+                          onSuccess: ({ leftAccount }) => {
+                            toast(`Вы вышли из команды «${team.name}»`, "success");
+                            // Последней командой аккаунта человек уходит
+                            // из него целиком — увести в свой календарь
+                            // успела чистка (`evictCompanyFromDevice`).
+                            if (leftAccount) return;
+                            const next = teams.find((x) => x.id !== team.id);
+                            router.setParams({ team: next?.id });
+                          },
+                          onError: (e) => notify("Не удалось выйти", e.message),
+                        },
+                      ),
+                  )
+                }
+                disabled={leaveCalendar.isPending}
+                accessibilityRole="button"
+                accessibilityLabel={`Выйти из команды ${team.name}`}
+                className="min-h-[52px] flex-row items-center justify-center gap-2 px-4 py-3.5"
+                style={({ pressed }: { pressed: boolean }) => ({
+                  backgroundColor: pressed ? t.pressed : "transparent",
+                  opacity: leaveCalendar.isPending ? 0.5 : 1,
+                })}
+              >
+                <LogOut color={t.danger} size={16} strokeWidth={2.2} />
+                <Text style={{ fontSize: 15, fontWeight: "600", color: t.danger }}>
+                  Выйти из команды
+                </Text>
+              </Pressable>
+            </SectionCard>
           ) : null}
 
           {teams.length === 0 ? (
