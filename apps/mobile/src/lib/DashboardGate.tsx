@@ -8,6 +8,7 @@ import {
   useRetryOnboardingGate,
 } from "@/lib/tenant";
 import { shouldBlockUnresolvedTenant } from "@/lib/dashboard-gate-policy";
+import { signupFinish } from "@/components/auth/signup-finish";
 
 // Гейт приложения: без сессии — на /login, без данных аккаунта — на
 // запасной /account-missing (мастера настройки нет с 04.10). Рендерится как
@@ -38,6 +39,9 @@ export function DashboardGate({ children }: { children: ReactNode }) {
   const dashboardShown = useRef(false);
 
   if (!session) return <Redirect href="/login" />;
+  // Вход через Apple/Google без пароля или аккаунт без имени — сначала
+  // «Почти готово» (09.10), даже если приложение открыли сразу на календаре.
+  if (signupFinish(session.user).needed) return <Redirect href="/finish-signup" />;
   if (gate.status === "loading" && dashboardShown.current) return <>{children}</>;
   if (gate.status === "loading") {
     return (

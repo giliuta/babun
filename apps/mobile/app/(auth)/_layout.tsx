@@ -4,6 +4,7 @@ import { useOnboardingGate } from "@/lib/tenant";
 import { usePendingInvitationToken } from "@/features/settings/invitations";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
+import { signupFinish } from "@/components/auth/signup-finish";
 
 function AccountLoading() {
   return (
@@ -28,6 +29,7 @@ export default function AuthLayout() {
   const path = segments as readonly string[];
   const onResetPassword = path[1] === "reset-password";
   const onAccountMissing = path[1] === "account-missing";
+  const onFinishSignup = path[1] === "finish-signup";
 
   // ВЫШЕДШИЙ НЕ ЖДЁТ НА ЗАПАСНОМ ЭКРАНЕ (04.10, Pro Max владельца: «застыла и
   // не открывается»). Запасной экран — для вошедшего, чьи данные не открылись;
@@ -56,7 +58,11 @@ export default function AuthLayout() {
         />
       );
     }
-    if (gate.status === "no-tenant") {
+    // «ПОЧТИ ГОТОВО» (09.10): первый вход через Apple/Google — придумать
+    // пароль; аккаунт почтой с экрана входа — назвать себя.
+    if (signupFinish(session.user).needed) {
+      if (!onFinishSignup) return <Redirect href="/finish-signup" />;
+    } else if (gate.status === "no-tenant") {
       if (!onAccountMissing) return <Redirect href="/account-missing" />;
     } else if (gate.status === "onboarded" || gate.status === "unknown") {
       return <Redirect href="/" />;
@@ -72,6 +78,7 @@ export default function AuthLayout() {
       {/* Запасной экран аккаунта — гейт: свайп назад на логин не должен
           «сбегать» с него (гейт выше всё равно вернёт). */}
       <Stack.Screen name="account-missing" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="finish-signup" options={{ gestureEnabled: false }} />
     </Stack>
   );
 }

@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.babun.crm",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.babun.crm",
@@ -65,7 +66,9 @@
         {
           "contactsPermission": "Babun reads your contacts only when you open “From phone contacts”, so you can choose people to add as clients."
         }
-      ]
+      ],
+      "expo-apple-authentication",
+      "expo-web-browser"
     ],
     "locales": {
       "en": "./locales/en.json",
