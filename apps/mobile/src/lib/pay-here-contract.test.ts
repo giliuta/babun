@@ -147,9 +147,11 @@ test("возврат из Stripe без флага не открывается: 
 });
 
 
-test("на iPhone нет регистрации без приглашения (App Review 07.10, 3.1.1)", () => {
+test("регистрация читает один флаг — его и переключают при отказе App Review", () => {
   // «Регистрация аккаунта для бизнеса — доступ к внешней оплате; уберите её».
-  assert.match(read("lib/pay-here.ts"), /export const CAN_SIGN_UP_HERE = Platform\.OS !== "ios";/);
+  // 10.10 владелец включил полную регистрацию и на iPhone; при отказе 3.1.1
+  // флаг возвращают в `Platform.OS !== "ios"`.
+  assert.match(read("lib/pay-here.ts"), /export const CAN_SIGN_UP_HERE: boolean = true;/);
   // Единая страница входа (09.10): ссылки на регистрацию нет, а новый аккаунт
   // почтой заводится только при CAN_SIGN_UP_HERE или по приглашению.
   const login = readApp("(auth)/login.tsx");
