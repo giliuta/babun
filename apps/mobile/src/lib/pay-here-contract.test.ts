@@ -16,8 +16,10 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel: string) => readFileSync(path.join(SRC, rel), "utf8");
 const readApp = (rel: string) => readFileSync(path.join(SRC, "../app", rel), "utf8");
 
-test("флаг — только веб", () => {
-  assert.match(read("lib/pay-here.ts"), /export const CAN_PAY_HERE = Platform\.OS === "web";/);
+test("оплата читает один флаг — его и переключают при отказе App Review", () => {
+  // 10.10 владелец включил оплату ссылкой на сайт и в приложениях из
+  // магазинов; при отказе 3.1.1 флаг возвращают в `Platform.OS === "web"`.
+  assert.match(read("lib/pay-here.ts"), /export const CAN_PAY_HERE: boolean = true;/);
 });
 
 test("страница «Тариф»: без флага — только состояние, без выбора, цен и подписки", () => {
