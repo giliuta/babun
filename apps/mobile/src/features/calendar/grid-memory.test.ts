@@ -95,3 +95,12 @@ describe("сетка открывается на месте", () => {
     assert.match(src, /onMomentumEnd: \(e\) => \{\s*runOnJS\(saveTop\)/);
   });
 });
+
+test("лента страниц: замер ширины не монтирует видимую неделю второй раз (11.10)", async () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(resolve(here, "pager.tsx"), "utf8");
+  assert.match(src, /const offs = width > 0 \? \(\[-1, 0, 1\] as const\) : \(\[0\] as const\);/);
+  assert.match(src, /key=\{idx \+ off\}/);
+  // Голой страницы до замера больше нет — у неё был другой ключ.
+  assert.doesNotMatch(src, /\) : \(\s*(\/\/[^\n]*\s*)*renderPage\(0\)/);
+});

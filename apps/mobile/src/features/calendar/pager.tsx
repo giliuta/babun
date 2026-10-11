@@ -166,38 +166,39 @@ export function PagedStrip({
     transform: [{ translateX: pager.axisX.value }],
   }));
   const { idx, width } = pager;
+  // ДО ЗАМЕРА ШИРИНЫ — ТОЛЬКО ТЕКУЩАЯ СТРАНИЦА, НО В ТОЙ ЖЕ ОБЁРТКЕ И С ТЕМ
+  // ЖЕ КЛЮЧОМ (владелец 11.10: «при заходе календарь подтормаживает и
+  // дёргает»). Прежде первый кадр рисовал страницу голой, а после замера —
+  // в слоте с ключом: React считал это другой страницей и монтировал
+  // текущую неделю ВТОРОЙ раз (сотни узлов) вместе с соседями. Теперь замер
+  // только добавляет соседей, а видимая страница остаётся смонтированной.
+  const offs = width > 0 ? ([-1, 0, 1] as const) : ([0] as const);
   return (
     <View
       style={[{ flex: 1, overflow: "hidden" }, style]}
       onLayout={(e) => pager.onLayoutWidth(e.nativeEvent.layout.width)}
     >
-      {width > 0 ? (
-        <Animated.View
-          style={[
-            { position: "absolute", top: 0, bottom: 0, left: 0, right: 0 },
-            anim,
-          ]}
-        >
-          {([-1, 0, 1] as const).map((off) => (
-            <View
-              key={idx + off}
-              style={{
-                position: "absolute",
-                left: (idx + off) * width,
-                width,
-                top: 0,
-                bottom: 0,
-              }}
-            >
-              {renderPage(off)}
-            </View>
-          ))}
-        </Animated.View>
-      ) : (
-        // Первый кадр до замера ширины — статичная текущая страница,
-        // чтобы сетка не мигала пустотой.
-        renderPage(0)
-      )}
+      <Animated.View
+        style={[
+          { position: "absolute", top: 0, bottom: 0, left: 0, right: 0 },
+          anim,
+        ]}
+      >
+        {offs.map((off) => (
+          <View
+            key={idx + off}
+            style={{
+              position: "absolute",
+              left: (idx + off) * width,
+              width: width > 0 ? width : "100%",
+              top: 0,
+              bottom: 0,
+            }}
+          >
+            {renderPage(off)}
+          </View>
+        ))}
+      </Animated.View>
     </View>
   );
 }
