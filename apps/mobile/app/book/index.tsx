@@ -1547,7 +1547,9 @@ function BookForm() {
   // вкладки «Клиенты» видит «клиента записи» — заметка клиента, заметка и
   // правка объекта, «Добавить объект» пишут в карточку и всегда получали
   // отказ «ведёт владелец». Такие поля здесь только читаются.
-  const clientWritable = useClientCardWritable();
+  const clientCan = useClientCardWritable(client);
+  const clientNoteWritable = clientCan("clients.note");
+  const clientObjectsWritable = clientCan("clients.objects");
   const objectNote = useInlineNote<string | null>(
     selectedLocation?.note ?? "",
     locationId,
@@ -2814,7 +2816,7 @@ function BookForm() {
                         placeholder="Заметка клиента"
                         accessibilityLabel="Заметка клиента"
                         maxLength={500}
-                        readOnly={!clientWritable}
+                        readOnly={!clientNoteWritable}
                       />
                     ) : undefined
                   }
@@ -2875,7 +2877,7 @@ function BookForm() {
                               : undefined
                           }
                           onLongPress={
-                            can.editObject && clientWritable
+                            can.editObject && clientObjectsWritable
                               ? () => {
                                   haptics.tap();
                                   setObjectEdit(true);
@@ -2891,7 +2893,7 @@ function BookForm() {
                           note={objectNote}
                           placeholder="Заметка объекта"
                           accessibilityLabel="Заметка объекта"
-                          readOnly={!clientWritable}
+                          readOnly={!clientObjectsWritable}
                         />
                       </>
                     ) : clientLocations.length > 0 && can.editObject ? (
@@ -2950,7 +2952,7 @@ function BookForm() {
                         под надписью «ОБЪЕКТ», а голая синяя строка — рядом с
                         «Выбрать услугу», у которой кружок есть. Один вопрос —
                         одна дверь: `ChooseRow`, как у соседей. */}
-                    {clientLocations.length === 0 && can.editObject && clientWritable ? (
+                    {clientLocations.length === 0 && can.editObject && clientObjectsWritable ? (
                       <View
                         style={{
                           borderTopWidth: pendingRequests.length > 0 ? 1 : 0,
@@ -3267,7 +3269,7 @@ function BookForm() {
                         placeholder="Заметка клиента"
                         accessibilityLabel="Заметка клиента"
                         maxLength={500}
-                        readOnly={!clientWritable}
+                        readOnly={!clientNoteWritable}
                       />
                     ) : undefined
                   }
@@ -3318,7 +3320,7 @@ function BookForm() {
                           : undefined
                       }
                       onLongPress={
-                        can.editObject && clientWritable
+                        can.editObject && clientObjectsWritable
                           ? () => {
                               haptics.tap();
                               setObjectEdit(true);
@@ -3347,7 +3349,7 @@ function BookForm() {
                       note={eventObjectNote}
                       placeholder="Заметка объекта"
                       accessibilityLabel="Заметка объекта"
-                      readOnly={!clientWritable}
+                      readOnly={!clientObjectsWritable}
                     />
                   </>
                 ) : (
@@ -3639,7 +3641,7 @@ function BookForm() {
           haptics.tap();
         }}
         onAdd={
-          !clientWritable ? undefined : kind === "event" ? openEventObjectAdd : () => setObjectSheet(true)
+          !clientObjectsWritable ? undefined : kind === "event" ? openEventObjectAdd : () => setObjectSheet(true)
         }
         onClose={() => setObjectPicker(false)}
       />

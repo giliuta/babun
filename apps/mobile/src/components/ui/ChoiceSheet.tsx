@@ -147,6 +147,9 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
       <BottomSheet
       padded={false}
         visible={visible}
+        // Позванный из открытого листа — внутри его окна, а не вторым окном
+        // поверх (корень «застываний», `sheet-overlay.tsx`).
+        overlayIfStacked
         onClose={() => answer(null)}
         onExited={flushGone}
         maxHeightRatio={0.8}

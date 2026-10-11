@@ -382,6 +382,12 @@ export default function CalendarTab() {
     (a: Appointment) => recordRightsIn(a.team_id ?? null).payment === "hidden",
     [recordRightsIn],
   );
+  // Сумма в повестке — по праву «Сумма» календаря записи, а не по роли
+  // (аудит 11.10).
+  const amountVisible = useCallback(
+    (a: Appointment) => recordRightsIn(a.team_id ?? null).amount !== "hidden",
+    [recordRightsIn],
+  );
   // ЧЬЁ СОБЫТИЕ — ГЛАЗАМИ ТОГО, КОГО ПОКАЗЫВАЕМ (повторный аудит 03.10). В
   // зеркале «своё» сверялось с вошедшим владельцем: его события выглядели
   // доступными сотруднику для переноса и удаления, а события самого
@@ -3328,7 +3334,7 @@ export default function CalendarTab() {
           hueFor={(a) => a.color_override || teamColorFor(a) || t.accent}
           situationFor={situationFor}
           overdueFor={overdueFor}
-          showAmounts={!isCrew}
+          showAmounts={isCrew ? amountVisible : true}
           refreshing={pull.refreshing}
           onRefresh={pull.onRefresh}
           onCreate={

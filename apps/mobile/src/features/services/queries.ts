@@ -92,7 +92,26 @@ export async function fetchServices(
   role: UserRole,
   opts: { archived: boolean },
 ): Promise<Service[]> {
-  if (role === "master") return listMasterServices(client, tenantId);
+  // СОТРУДНИК С ОТКРЫТЫМИ «УСЛУГАМИ» (аудит 11.10, тот же класс, что
+  // «клиент не находится»): форма записи, инвойс и чек читали мастеру только
+  // проекцию «услуги его записей» с нулём вместо цены и минут — услуга,
+  // заведённая им же на странице «Услуги», в записи не появлялась. Сервер
+  // отдаёт таблицу ровно по командам, где «Услуги» ему открыты
+  // (`services_select_access`); к ней добавлена проекция — услуги его записей
+  // в командах, где прайс закрыт.
+  if (role === "master") {
+    const [table, own] = await Promise.all([
+      client
+        .from("services")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("position")
+        .then(({ data, error }) => (error ? [] : (data ?? []))),
+      listMasterServices(client, tenantId),
+    ]);
+    const seen = new Set(table.map((row) => row.id));
+    return [...table, ...own.filter((row) => !seen.has(row.id))];
+  }
   if (role === "dispatcher") return listDispatcherServices(client, tenantId);
   let q = client.from("services").select("*").eq("tenant_id", tenantId);
   if (!opts.archived) q = q.eq("is_active", true);

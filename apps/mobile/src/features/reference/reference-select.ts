@@ -35,15 +35,17 @@ export function pickLiveTeams<Row extends { is_active: boolean }>(
   return rows.filter((row) => row.is_active);
 }
 
-/** Услуги каталога выбора — зеркало `fetchServices(..., archived: false)`.
+/** Услуги каталога выбора — только живые, у всех ролей.
  *
- *  Архив отсекается ТОЛЬКО у владельца: только его путь добавлял
- *  `.eq("is_active", true)`. Мастеру и диспетчеру оба варианта отдавали одну и
- *  ту же проекцию RPC, и отбор здесь сузил бы список против прежнего. */
+ *  До 11.10 архив отсекался только у владельца: мастеру и диспетчеру
+ *  приходила проекция RPC, а в ней строки всегда живые. С 11.10 мастер с
+ *  открытыми «Услугами» читает и саму таблицу (`fetchServices`) — с архивом,
+ *  и отбор нужен ему тоже. Строкам проекции он ничего не стоит: у них
+ *  `is_active: true`. Диспетчеру — по-прежнему всё, что отдала его проекция. */
 export function pickLiveServices<Row extends { is_active: boolean }>(
   rows: Row[],
   role: UserRole | null | undefined,
 ): Row[] {
-  if (role !== "owner") return rows;
+  if (role === "dispatcher") return rows;
   return rows.filter((row) => row.is_active === true);
 }

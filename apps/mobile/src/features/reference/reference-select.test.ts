@@ -69,8 +69,11 @@ describe("услуги каталога выбора из полного спр�
     assert.deepEqual(ids(pickLiveServices(services, "owner")), ["s1", "s3"]);
   });
 
-  test("мастер и диспетчер — ровно проекция RPC, без добавочного отбора", () => {
-    assert.deepEqual(ids(pickLiveServices(services, "master")), ["s1", "s2", "s3"]);
+  test("мастер — тоже только живые: с 11.10 он читает и таблицу с архивом", () => {
+    assert.deepEqual(ids(pickLiveServices(services, "master")), ["s1", "s3"]);
+  });
+
+  test("диспетчер — ровно проекция RPC, без добавочного отбора", () => {
     assert.deepEqual(ids(pickLiveServices(services, "dispatcher")), ["s1", "s2", "s3"]);
   });
 });
