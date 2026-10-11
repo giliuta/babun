@@ -2507,6 +2507,7 @@
  "Не хватило платежей записи для возврата: осталось {0}": "Los pagos de la cita no cubren el reembolso: quedan {0}",
  "Небесный": "Celeste",
  "Неверная почта или пароль": "Email o contraseña incorrectos",
+ "Неверная почта или пароль. Если вы здесь впервые — этот пароль слишком простой, придумайте другой": "Correo o contraseña incorrectos. Si eres nuevo aquí, esta contraseña es demasiado simple: elige otra",
  "Неверный код или срок его истёк": "Código incorrecto o caducado",
  "Недавний визит": "Visita reciente",
  "Неделя": "Semana",

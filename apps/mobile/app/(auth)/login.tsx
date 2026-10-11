@@ -116,7 +116,17 @@ export default function LoginScreen() {
         });
         setLoading(false);
         if (signUpError) {
-          setError(mapAuthError(signUpError, "signup"));
+          // ПАРОЛЬ НЕ ПОДОШЁЛ К ЗАНЯТОМУ АДРЕСУ — НЕ «ПАРОЛЬ УТЁК» (11.10).
+          // Проверка утёкших паролей у GoTrue срабатывает на signUp раньше,
+          // чем он узнаёт, что адрес уже занят. Человек с аккаунтом, ошибшийся
+          // в пароле, видел «пароль слишком простой» вместо «неверный пароль».
+          // Узнать, занят ли адрес, нельзя — говорим оба варианта.
+          const weak = (signUpError.code ?? "").includes("weak_password");
+          setError(
+            weak
+              ? "Неверная почта или пароль. Если вы здесь впервые — этот пароль слишком простой, придумайте другой"
+              : mapAuthError(signUpError, "signup"),
+          );
           return;
         }
         // Адрес занят — значит, не подошёл пароль.

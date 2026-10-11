@@ -2507,6 +2507,7 @@
  "Не хватило платежей записи для возврата: осталось {0}": "Die Zahlungen des Termins reichen für die Erstattung nicht: {0} übrig",
  "Небесный": "Himmelblau",
  "Неверная почта или пароль": "E-Mail oder Passwort falsch",
+ "Неверная почта или пароль. Если вы здесь впервые — этот пароль слишком простой, придумайте другой": "Falsche E-Mail oder falsches Passwort. Wenn Sie neu hier sind: Dieses Passwort ist zu einfach – wählen Sie ein anderes",
  "Неверный код или срок его истёк": "Falscher Code oder abgelaufen",
  "Недавний визит": "Neuester Besuch",
  "Неделя": "Woche",

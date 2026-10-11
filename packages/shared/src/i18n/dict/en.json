@@ -2507,6 +2507,7 @@
  "Не хватило платежей записи для возврата: осталось {0}": "The appointment's payments don't cover the refund: {0} left",
  "Небесный": "Sky blue",
  "Неверная почта или пароль": "Incorrect email or password",
+ "Неверная почта или пароль. Если вы здесь впервые — этот пароль слишком простой, придумайте другой": "Wrong email or password. If you are new here, this password is too simple — choose another one",
  "Неверный код или срок его истёк": "Wrong code, or it has expired",
  "Недавний визит": "Recent visit",
  "Неделя": "Week",

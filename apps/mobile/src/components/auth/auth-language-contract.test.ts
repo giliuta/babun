@@ -46,3 +46,9 @@ describe("язык до входа", () => {
     assert.match(sheet, /const \{ height: SCREEN_H \} = useWindowDimensions\(\);/);
   });
 });
+
+test("неверный пароль к занятому адресу не выдаётся за «пароль утёк» (11.10)", () => {
+  const login = read("../../../app/(auth)/login.tsx");
+  assert.match(login, /const weak = \(signUpError\.code \?\? ""\)\.includes\("weak_password"\);/);
+  assert.match(login, /"Неверная почта или пароль\. Если вы здесь впервые — этот пароль слишком простой, придумайте другой"/);
+});
