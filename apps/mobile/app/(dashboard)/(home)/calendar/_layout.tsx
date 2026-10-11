@@ -57,8 +57,6 @@ export default function CalendarSettingsLayout() {
   );
   const isIndex = pathname === "/calendar" || pathname === "/calendar/";
   if (isIndex) return stack;
-  // Порядок календарей — лента человека, а не настройка команды: открыт всем.
-  if (pathname.replace(/\/$/, "") === "/calendar/order") return stack;
   // Без команды в адресе ступень не спросить — такую ссылку ведёт общее
   // правило (владельцу открыто всё).
   if (pageBlock && teamParam && pageLevel !== "hidden") return stack;
