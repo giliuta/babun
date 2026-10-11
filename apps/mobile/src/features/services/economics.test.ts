@@ -278,3 +278,15 @@ test("барабан времени у строки посередине не у
   assert.match(src, /const lastId = economics\.tiers\[economics\.tiers\.length - 1\]\?\.id \?\? "base";\s*if \(id && id === lastId\) \{/);
   assert.match(src, /if \(id\) Keyboard\.dismiss\(\);/);
 });
+
+test("готовые услуги из других команд — значком справа вверху, только у владельца (11.10)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { dirname, resolve } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(resolve(here, "../../../app/(dashboard)/cabinet/services.tsx"), "utf8");
+  assert.match(src, /const isOwner = useDataRole\(\)\.data === "owner";/);
+  assert.match(src, /if \(!isOwner \|\| !activeTeamId\) return \[\];/);
+  assert.match(src, /right=\{\s*!readOnly && copyCandidates\.length > 0 \?/);
+  assert.match(src, /setEditing\(\{ mode: "create", from, copy: true \}\)/);
+});
