@@ -186,6 +186,7 @@ import {
 import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
+import { useAccountKind } from "@/features/settings/my-accounts";
 import { useCalendarChips, useCalendarVisibility } from "@/features/settings/workspaces";
 import { FOREIGN_PREFIX } from "@/features/settings/calendar-chips";
 import { useMirror } from "@/features/access/mirror/mirror-state";
@@ -1916,11 +1917,17 @@ export default function CalendarTab() {
   // ложны — и пустой список читался как «календарей нет». Владелец получал
   // второй «Личный», как только возвращалась сеть. Поэтому ждём `isPending`.
   // Раз — на КОМПАНИЮ, а не на жизнь экрана: экран переход переживает.
+  //
+  // ТОЛЬКО В ЛИЧНОМ (владелец 11.10). Компания рождается с календарём
+  // (`create_company`), а все её календари в архиве — не повод заводить в ней
+  // «Личный». Вид аккаунта ещё не известен — ждём.
   const firstCalendarStarted = useRef<string | null>(null);
   const [firstCalendarFailed, setFirstCalendarFailed] = useState(false);
+  const accountKind = useAccountKind(tenantId);
   useEffect(() => {
     if (!tenantId || firstCalendarStarted.current === tenantId) return;
     if (role !== "owner") return;
+    if (accountKind !== "personal") return;
     if (teamsPending || teamsFetching || teamsError) return;
     // Скрытые свои — тоже календари: второй «Личный» им не нужен.
     if (teamsAll.length > 0) return;
@@ -1929,7 +1936,7 @@ export default function CalendarTab() {
     // createFirstCalendar намеренно не в зависимостях: он пересоздаётся
     // каждый рендер, и его включение превратило бы эффект в цикл.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId, role, teamsPending, teamsFetching, teamsError, teamsAll.length]);
+  }, [tenantId, role, accountKind, teamsPending, teamsFetching, teamsError, teamsAll.length]);
   const openEdit = (apt: Appointment) => {
     // Виртуальное вхождение повтора редактируем через его seed-запись —
     // у виртуала синтетический id, мутации по нему невалидны (web parity).

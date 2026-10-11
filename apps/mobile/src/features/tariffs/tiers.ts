@@ -19,6 +19,17 @@ export type Tier = "free" | "solo" | "pro" | "max";
 
 export const PAID_TIERS: readonly Exclude<Tier, "free">[] = ["solo", "pro", "max"];
 
+/** ТАРИФЫ АККАУНТА (владелец 11.10): у Личного — Соло, у компании — Про и
+ *  Макс. Вид ещё не известен — все три, как было. Сервер держит то же
+ *  (`start_trial`: в Личном пробный — Соло, в компании — не ниже Про). */
+export function tiersForKind(
+  kind: "personal" | "company" | null | undefined,
+): readonly Exclude<Tier, "free">[] {
+  if (kind === "personal") return ["solo"];
+  if (kind === "company") return ["pro", "max"];
+  return PAID_TIERS;
+}
+
 const RANK: Record<Tier, number> = { free: 0, solo: 1, pro: 2, max: 3 };
 
 /** Что открывает тариф. */

@@ -20,6 +20,7 @@ import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import {
   TIER_CARDS,
+  tiersForKind,
   TIER_LIMITS,
   partnerTariffAction,
   tariffAction,
@@ -30,6 +31,7 @@ import {
   type TierCard,
 } from "./tiers";
 import { openTariffCheckout, openTariffPortal, useStartTrial, useTariff } from "./use-tariff";
+import { useAccountKind } from "@/features/settings/my-accounts";
 
 // КАБИНЕТ → ТАРИФ (владелец 01.10): «Соло · Про · Макс», пробный 14 дней без
 // карты — один раз, на выбранный тариф; оплата — страница Stripe в браузере.
@@ -66,6 +68,8 @@ export function TariffScreen() {
   const qc = useQueryClient();
   const { state, periodEnd, workingChosen } = useTariff();
   const scope = useAccountScope();
+  const kind = useAccountKind(scope.tenantId);
+  const offered = tiersForKind(kind);
   const owner = scope.viewRole === "owner";
   const gate = useAccountGate("cabinet.tariff");
   const accountName = useAccountName();
@@ -78,9 +82,11 @@ export function TariffScreen() {
   const [picked, setPicked] = useState<Exclude<Tier, "free"> | null>(null);
   // Выдан навсегда — выбирать нечего: выделен свой тариф, а не прошлый тап.
   // Без плиток выбора (сборка без оплаты) пробный — на основной «Про».
+  // Личное — Соло, компания — Про (11.10); вид не известен — как было.
+  const fallback = kind ? offered[0]! : CAN_PAY_HERE ? "solo" : "pro";
   const selected = state.forever
     ? (current ?? "max")
-    : (picked ?? current ?? (CAN_PAY_HERE ? "solo" : "pro"));
+    : (picked ?? current ?? fallback);
 
   // Вернулся из браузера (оплата, управление подпиской) — перечитать тариф.
   useEffect(() => {
@@ -197,7 +203,7 @@ export function TariffScreen() {
         </SectionCard>
 
         {showTiers ? <SectionEyebrow>Тарифы</SectionEyebrow> : null}
-        {(showTiers ? TIER_CARDS : []).map((card) => (
+        {(showTiers ? TIER_CARDS.filter((card) => offered.includes(card.tier)) : []).map((card) => (
           <TierTile
             key={card.tier}
             card={card}

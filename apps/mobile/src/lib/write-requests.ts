@@ -40,6 +40,9 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "member_client_history",
   "list_members",
   "list_my_calendars",
+  // Личное и компании (11.10): мои аккаунты и что мешает удалить аккаунт.
+  "list_my_accounts",
+  "companies_blocking_account_delete",
   "list_operational_masters_safe",
   "list_operational_teams_safe",
   "list_payment_accounts_safe",
@@ -79,6 +82,10 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "create_client_with_tags",
   // Первый календарь владельца — заводит только при пустой компании (03.10).
   "create_first_calendar",
+  // Компания (11.10): завести, выйти, передать владение.
+  "create_company",
+  "leave_company",
+  "transfer_company_ownership",
   "create_invitation",
   "decline_invitation",
   "delete_account_transfer",

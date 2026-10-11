@@ -17,7 +17,12 @@ import { useTenantId } from "@/lib/tenant";
 import { SmsCabinetRow } from "@/features/sms/SmsCabinetRow";
 import { TariffRow } from "@/features/tariffs/TariffRow";
 
+import { ActionRow } from "@/components/ui/card-rows";
+import { useToast } from "@/components/ui/Toast";
+import { confirmThen } from "@/lib/confirm";
+
 import { AccountScopeProvider, useAccountGate, useAccountName } from "./account-scope";
+import { useLeaveCompany } from "./company-actions";
 import { CabinetRequisitesRow } from "./CabinetRequisitesRow";
 import { HistoryRow } from "./HistoryRow";
 import { TariffPaymentsRow } from "./TariffPaymentsRow";
@@ -76,6 +81,47 @@ export function InvitedAccounts() {
   );
 }
 
+/** КОМПАНИЯ, ГДЕ ЧЕЛОВЕК ПАРТНЁР, — блок под переключателем Кабинета
+ *  (владелец 11.10): его календари и строки по его правам, ниже — «Покинуть
+ *  компанию» (выйти целиком; по одному календарю — в шестерёнке календаря). */
+export function MemberAccountSection({ tenantId, name }: { tenantId: string; name: string }) {
+  const calendars = useMyCalendars().data ?? [];
+  const leave = useLeaveCompany();
+  const toast = useToast();
+  return (
+    <AccountScopeProvider tenantId={tenantId}>
+      <InvitedAccountBlock
+        tenantId={tenantId}
+        fallbackName={name}
+        teamNames={calendars.filter((c) => c.tenantId === tenantId).map((c) => c.teamName)}
+        bare
+      />
+      <SectionCard className="mt-4">
+        <ActionRow
+          label="Покинуть компанию"
+          tone="danger"
+          onPress={() =>
+            confirmThen(
+              `Покинуть компанию «${name}»?`,
+              {
+                message:
+                  "Её календари пропадут из вашей ленты, записи и клиенты станут вам не видны. Вернуть доступ может владелец, пригласив вас снова.",
+                confirmLabel: "Покинуть",
+                destructive: true,
+              },
+              () =>
+                leave.mutate(tenantId, {
+                  onSuccess: () => toast(`Вы покинули компанию «${name}»`, "success"),
+                  onError: (e) => notify("Не удалось выйти", e.message),
+                }),
+            )
+          }
+        />
+      </SectionCard>
+    </AccountScopeProvider>
+  );
+}
+
 const seen = (gate: string) => gate === "read" || gate === "write";
 
 function InvitedAccountBlock({
@@ -83,12 +129,15 @@ function InvitedAccountBlock({
   fallbackName,
   teamNames,
   mirrored = false,
+  bare = false,
 }: {
   tenantId: string;
   fallbackName: string | null;
   teamNames: string[];
   /** «Посмотреть его глазами»: строки — картинка, переходов нет. */
   mirrored?: boolean;
+  /** Под переключателем Кабинета: имя аккаунта уже в выбранном чипе. */
+  bare?: boolean;
 }) {
   const router = useRouter();
   const activeTenant = useTenantId();
@@ -141,7 +190,7 @@ function InvitedAccountBlock({
 
   return (
     <>
-      <SectionEyebrow>{name}</SectionEyebrow>
+      {bare ? null : <SectionEyebrow>{name}</SectionEyebrow>}
       <SectionCard>
         {/* Команды этого аккаунта, в которых человек работает, — словами:
             сами они живут в ленте календаря. */}

@@ -47,6 +47,7 @@ import { activeOf, usePreview } from "./rights-page-shared";
 import { memberRefusal, memberRefusalText } from "./member-rights-writer";
 import { viewSections } from "./rights-view-sections";
 import { usePartnerManager, useTeamsAllowed } from "./use-partner-manager";
+import { useTransferOwnershipItem } from "./use-transfer-ownership";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import {
   copyCalendarLevels,
@@ -132,6 +133,8 @@ export function MasterMemberCard({
 
   const member = membersQuery.data?.find((candidate) => candidate.userId === userId) ?? null;
   const card = mastersQuery.data?.find((master) => master.user_id === userId) ?? null;
+  // До раннего выхода ниже: хук зовётся на каждом рендере.
+  const transferItem = useTransferOwnershipItem(member, onBack);
   const name = card?.full_name || member?.name || "";
   const profileWrite = useMasterProfileWrite(card);
 
@@ -357,8 +360,8 @@ export function MasterMemberCard({
       },
     );
   };
-  // ⋯ — ТО, ЧЕГО НЕТ В БЛОКАХ СТРАНИЦЫ (STORY-087): архив карточки и уход из
-  // команд. Шторкой действий, как у записи и документа (04.10), а не
+  // ⋯ — ТО, ЧЕГО НЕТ В БЛОКАХ СТРАНИЦЫ (STORY-087): архив карточки, передача
+  // владения компанией (11.10) и уход из команд. Шторкой действий, как у записи и документа (04.10), а не
   // системным списком. «Посмотреть его глазами» — строкой в блоке «Доступ».
   const openMenu = () => {
     if (!member) return;
@@ -381,6 +384,7 @@ export function MasterMemberCard({
               },
             ]
           : []),
+        ...(transferItem ? [transferItem] : []),
         { label: "Убрать из команд", destructive: true, run: askRemove },
       ],
     });
