@@ -13,16 +13,9 @@ import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { ValueRow } from "@/components/ui/ValueRow";
-import { SwipeRow } from "@/components/ui/SwipeRow";
-import {
-  MINUTE_STEP,
-  TimeRangePicker,
-  TimeWheelPair,
-} from "@/components/ui/TimeWheel";
+import { TimeRangePicker } from "@/components/ui/TimeWheel";
 import { GUTTER } from "@/components/ui/tokens";
-import { Trash2 } from "lucide-react-native";
 import { haptics } from "@/lib/haptics";
-import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { useCalendarSettings } from "@/features/settings/local-settings";
@@ -40,7 +33,6 @@ import {
   effectiveWorkHours,
   hourLabel,
 } from "@/features/calendar/setting-options";
-import { formatHm } from "@/features/calendar/window";
 
 // ─── ГРАФИК КОМАНДЫ — ОДИН ЛИСТ СНИЗУ ────────────────────────────────
 //
@@ -83,12 +75,22 @@ import { formatHm } from "@/features/calendar/window";
 // выходной на дату — тумблером в шторке метки дня, перерыв — долгим нажатием
 // по свободному месту. `date_overrides` живёт только ради выходного на дату.
 
+// ОБЩЕЕ ВРЕМЯ — ПО УМОЛЧАНИЮ, ДНИ — ПО КНОПКЕ (владелец 11.10: «если я меняю
+// график, я не должен выбирать на каждый день, а ставлю общее время, а если
+// нужно распределить по дням — нажимаю кнопку, и открывается разбивка»).
+// Лист открывается общим видом: отмеченные рабочие дни и одни часы на все.
+// «По дням» — та же неделя колонками и правка одного дня. Неделя с разными
+// часами открывается сразу по дням: общий вид соврал бы про неё.
+//
+// ПЕРЕРЫВОВ В ЛИСТЕ БОЛЬШЕ НЕТ (владелец 11.10: «перерыв давай уберём») — ни
+// перерывов дня, ни «Перерыва после записи». В базе их нет ни у одной команды
+// (проверено 11.10); поля графика остались, вернуть интерфейс можно, не
+// трогая данные.
+
 export function TeamScheduleSheet({
   visible,
   teamId,
   teamName,
-  buffer,
-  onBufferChange,
   onClose,
 }: {
   visible: boolean;
@@ -107,12 +109,10 @@ export function TeamScheduleSheet({
   const { data: schedule, isPending: schedulePending } = useTeamSchedule(teamId);
   const upsert = useUpsertTeamSchedule();
   const [active, setActive] = useState<WeekdayKey>("mon");
-  const [bufferOpen, setBufferOpen] = useState(false);
-  /** Что правит барабан: часы дня, один из перерывов, либо ничего (все строки
-   *  свёрнуты — тогда день читается коротким списком). */
-  const [target, setTarget] = useState<
-    { kind: "none" } | { kind: "shift" } | { kind: "break"; index: number }
-  >({ kind: "none" });
+  /** Общий вид («одни часы на все дни») или разбивка по дням. */
+  const [mode, setMode] = useState<"common" | "days">("common");
+  /** Раскрыт ли барабан часов (общих либо выбранного дня). */
+  const [hoursOpen, setHoursOpen] = useState(false);
 
   // Каждое ОТКРЫТИЕ начинает с понедельника и со смены — но только по фронту:
   // фоновый рефетч графика не должен перекидывать день, который сейчас правят.
@@ -122,9 +122,9 @@ export function TeamScheduleSheet({
       setActive("mon");
       // НИЧЕГО НЕ РАСКРЫТО НА ВХОДЕ (владелец 2026-08-17: «пусть будет не сразу
       // открытые тумблера — рабочие часы я должен нажать, и только потом оно
-      // открывает»). Лист открывается коротким списком дня: сначала видно
-      // ЧТО стоит, и только потом правят.
-      setTarget({ kind: "none" });
+      // открывает»).
+      setHoursOpen(false);
+      setMode(sameHoursEveryDay(schedule ?? null) ? "common" : "days");
     }
     wasVisible.current = visible;
   }, [visible]);
@@ -142,32 +142,10 @@ export function TeamScheduleSheet({
   const base: TeamSchedule = schedule ?? companyBase;
   const days = allDays(base);
   const day = dayOf(base, active);
-  // Выбранный перерыв мог исчезнуть под нами: смена дня, чужая правка,
-  // удаление. Барабану нужны РЕАЛЬНЫЕ часы, поэтому цель, потерявшая свой
-  // перерыв, читается как смена — молча и без пустого экрана.
-  const brk =
-    target.kind === "break" ? (day.breaks[target.index] ?? null) : null;
-  const edited = brk ?? { start: day.start, end: day.end };
-
-  // ПЕРЕРЫВ ПОСЛЕ ЗАПИСИ ЧИТАЕТСЯ КАК ВРЕМЯ (владелец 2026-08-17: «тумблер
-  // должен быть такой же — 01:05, точно так же, как рабочие часы: слева часы,
-  // справа минуты, а если ничего нет, значит 00:00»). Хранится он минутами,
-  // поэтому здесь ровно один перевод в пару и обратно.
-  const bufferMinutesTotal = Math.max(
-    0,
-    Math.round((buffer ?? 0) / MINUTE_STEP) * MINUTE_STEP,
-  );
-  const bufferTime = {
-    hour: Math.floor(bufferMinutesTotal / 60),
-    minute: bufferMinutesTotal % 60,
-  };
-  const bufferLabel = formatHm(bufferTime);
-  /** Пишем ТОЛЬКО настоящую правку. Барабан, вставая на своё же значение при
-   *  открытии, звал `onChange` — и у команды, которая наследовала перерыв
-   *  компании, молча появлялся собственный ноль. */
-  const setBuffer = (next: number) => {
-    if (next !== bufferMinutesTotal) onBufferChange?.(next);
-  };
+  // Общие часы — часы первого рабочего дня (в общем виде они у всех одни).
+  const firstWorking = days.find(({ day: d }) => d.is_working)?.day ?? base;
+  const common = { start: firstWorking.start, end: firstWorking.end };
+  const edited = mode === "common" ? common : { start: day.start, end: day.end };
 
   /** Правка ОДНОГО ДНЯ поверх СВЕЖЕГО графика команды (аудит 04.10).
    *
@@ -178,22 +156,28 @@ export function TeamScheduleSheet({
    *  дней, перерывы и выходные на даты. Теперь хук берёт график с сервера
    *  (`(current) => next`), и на него ложится только этот день; общие часы —
    *  лишь когда строки у команды правда нет. */
-  const commitDay = (patchOf: (day: DaySchedule) => Partial<DaySchedule>) => {
+  const commitDays = (
+    weekdays: readonly WeekdayKey[],
+    patchOf: (day: DaySchedule) => Partial<DaySchedule>,
+  ) => {
     if (!teamId) return;
     // Карта графиков ещё не пришла — правке не на что опереться на экране.
     if (schedulePending) return;
-    const weekday = active;
     upsert.mutate(
       {
         teamId,
-        schedule: (current) => {
-          const from = current ?? companyBase;
-          return withDay(from, weekday, patchOf(dayOf(from, weekday)));
-        },
+        schedule: (current) =>
+          weekdays.reduce(
+            (from, weekday) => withDay(from, weekday, patchOf(dayOf(from, weekday))),
+            current ?? companyBase,
+          ),
       },
       { onError: (e) => notify("Ошибка", (e as Error).message) },
     );
   };
+  const commitDay = (patchOf: (day: DaySchedule) => Partial<DaySchedule>) =>
+    commitDays([active], patchOf);
+  const ALL_DAYS = days.map(({ key }) => key);
 
   const hm = (v: string) => {
     const [h, m] = v.split(":").map(Number);
@@ -206,17 +190,10 @@ export function TeamScheduleSheet({
   // (workBand → undefined, день красится ОБЩИМИ часами), то есть настройка дня
   // просто не действует. Двигаем ту границу, которую сейчас не трогают, и
   // минимально — на шаг барабана.
-  /** Записать пару в то, что сейчас выбрано: смену дня либо этот перерыв. */
+  /** Записать часы: в общем виде — всем дням сразу, по дням — выбранному. */
   const writePair = (pair: { start: string; end: string }) => {
-    if (target.kind === "break" && brk) {
-      // Перерыв ищем по значению: в свежем графике номер мог указать на другой.
-      const was = brk;
-      commitDay((d) => ({
-        breaks: d.breaks.map((b) => (b.start === was.start && b.end === was.end ? pair : b)),
-      }));
-      return;
-    }
-    commitDay(() => pair);
+    if (mode === "common") commitDays(ALL_DAYS, () => pair);
+    else commitDay(() => pair);
   };
 
   // ПЕРЕСКОК БАРАБАНА ЧЕРЕЗ ПОЛНОЧЬ — НЕ ПРАВКА ДРУГОЙ ГРАНИЦЫ (аудит
@@ -272,70 +249,6 @@ export function TeamScheduleSheet({
     });
   };
 
-  /** Новый перерыв — час около 13:00, прижатый внутрь смены, и сразу выбранный:
-   *  добавили — крутите. Список держим по возрастанию, как читают день. */
-  const addBreak = () => {
-    haptics.tap();
-    const dayStart = timeToMinutes(day.start);
-    const dayEnd = timeToMinutes(day.end);
-    const from = Math.max(dayStart, Math.min(13 * 60, dayEnd - 60));
-    const fresh = {
-      start: text({ hour: Math.floor(from / 60), minute: from % 60 }),
-      end: text({ hour: Math.floor((from + 60) / 60), minute: (from + 60) % 60 }),
-    };
-    const next = [...day.breaks, fresh].sort((a, b) =>
-      a.start.localeCompare(b.start),
-    );
-    commitDay((d) => ({
-      breaks: [...d.breaks, fresh].sort((a, b) => a.start.localeCompare(b.start)),
-    }));
-    setTarget({ kind: "break", index: next.indexOf(fresh) });
-  };
-
-  /** Убрать перерыв ПО ИНДЕКСУ: и свайп, и меню долгого нажатия говорят про
-   *  конкретную строку, а не про «выбранное» — выбор при этом может стоять на
-   *  другом перерыве. Подтверждения нет намеренно: перерыв — это два числа,
-   *  вернуть его стоит одного тапа «Добавить перерыв», и диалог на такой цене
-   *  только мешает. */
-  const removeBreakAt = (index: number) => {
-    haptics.success();
-    const victim = day.breaks[index];
-    if (!victim) return;
-    // По значению, а не по номеру: в свежем графике номер мог указать на другой.
-    commitDay((d) => ({
-      breaks: d.breaks.filter((b) => !(b.start === victim.start && b.end === victim.end)),
-    }));
-    // Цель возвращается на часы, только если уносим ТУ строку, что крутится.
-    setTarget((prev) =>
-      prev.kind === "break" && prev.index === index ? { kind: "shift" } : prev,
-    );
-  };
-
-  /**
-   * Долгое нажатие — ВИДИМЫЙ ДУБЛЁР смахивания, и он обязан быть СИСТЕМНЫМ
-   * АЛЕРТОМ, а не листом выбора.
-   *
-   * Первая версия звала `chooseOption` — и меню оказалось НЕВИДИМЫМ: канонический
-   * выбор рисует нижний лист, а мы уже внутри `BottomSheet`, то есть внутри RN
-   * `Modal`; лист поверх листа в этом стеке не живёт (тот же закон, по которому
-   * дата особого дня ушла страницей). Палец «зажал» — и ничего не произошло,
-   * только закрылся лист графика. Поймано в симе 2026-08-17.
-   *
-   * Алерт — единственное окно, которое встаёт ПОВЕРХ модалки, поэтому дублёр
-   * жеста живёт в нём. Он же берёт на себя подтверждение: у долгого нажатия,
-   * в отличие от свайпа, нет промежуточной кнопки, которую видно перед тапом.
-   */
-  const confirmRemove = (index: number, b: { start: string; end: string }) => {
-    confirmThen(
-      `Перерыв ${b.start}–${b.end}`,
-      {
-        confirmLabel: "Убрать",
-        destructive: true,
-      },
-      () => removeBreakAt(index),
-    );
-  };
-
   /**
    * Барабан — ОДИН на лист, но рисуется ПОД той строкой, которую правит (выбор
    * владельца 2026-08-17): галки и подсветки тогда не нужно — связь показывает
@@ -347,18 +260,12 @@ export function TeamScheduleSheet({
         // key по дню и цели: барабаны — прокручиваемые ленты, и
         // переключение обязано ПЕРЕСОБРАТЬ их на новых часах, а не
         // доезжать анимацией с чужого значения.
-        key={`${active}-${target.kind}-${
-          target.kind === "break" ? target.index : ""
-        }`}
+        key={`${mode}-${active}`}
         start={hm(edited.start)}
         end={hm(edited.end)}
         onChangeStart={changeStart}
         onChangeEnd={changeEnd}
-        labels={
-          target.kind === "break"
-            ? { start: "Перерыв с", end: "Перерыв до" }
-            : { start: "Начало", end: "Конец" }
-        }
+        labels={{ start: "Начало", end: "Конец" }}
         // Смена и перерыв заканчиваются часом суток, а не их концом:
         // 24:00 — граница ОКНА календаря, здесь такого времени нет.
         allowEndOfDay={false}
@@ -396,6 +303,74 @@ export function TeamScheduleSheet({
           </Text>
         ) : null}
 
+        {mode === "common" ? (
+          <>
+            {/* ОБЩИЙ ВИД: какие дни рабочие — тапом по дню, часы — одни на
+                всех. «По дням» в шапке карточки открывает разбивку. */}
+            <SectionCard
+              title="Рабочие дни"
+              action={{
+                label: "По дням",
+                onPress: () => {
+                  haptics.tap();
+                  setHoursOpen(false);
+                  setMode("days");
+                },
+              }}
+            >
+              <View style={{ flexDirection: "row", gap: 4, paddingHorizontal: 12, paddingTop: 4, paddingBottom: 12 }}>
+                {days.map(({ key, day: d }) => (
+                  <Pressable
+                    key={key}
+                    onPress={() => {
+                      haptics.tap();
+                      commitDays([key], () => ({ is_working: !d.is_working }));
+                    }}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: d.is_working }}
+                    accessibilityLabel={`${WEEKDAY_FULL[key]}: ${d.is_working ? "рабочий" : "выходной"}`}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      minHeight: 44,
+                      borderRadius: t.radius.card,
+                      borderCurve: "continuous",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: d.is_working
+                        ? t.accent
+                        : pressed
+                          ? t.rowFillPressed
+                          : t.fill,
+                    })}
+                  >
+                    <Text
+                      maxFontSizeMultiplier={1.1}
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "700",
+                        color: d.is_working ? t.onAccent : t.faint,
+                      }}
+                    >
+                      {WEEKDAY_NAMES[key]}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Divider inset={16} />
+              <ValueRow
+                label="Рабочие часы"
+                value={`${common.start}–${common.end}`}
+                expanded={hoursOpen}
+                onPress={() => {
+                  haptics.tap();
+                  setHoursOpen((v) => !v);
+                }}
+              />
+              {hoursOpen ? WHEEL : null}
+            </SectionCard>
+          </>
+        ) : (
+          <>
         {/* НЕДЕЛЯ ЧИТАЕТСЯ ЦИФРАМИ. Колонка = день: имя сверху, под ним ЕГО
             ЧАСЫ двумя строками, у выходного прочерк.
             Полос суток, залитых цветом команды, здесь БОЛЬШЕ НЕТ (владелец
@@ -422,10 +397,9 @@ export function TeamScheduleSheet({
                 onPress={() => {
                   haptics.tap();
                   setActive(key);
-                  // Смена дня всё сворачивает: перерыв с прошлого дня в новом
-                  // мог не существовать вовсе, а раскрытый барабан на чужих
-                  // часах читается как «я это уже правлю».
-                  setTarget({ kind: "none" });
+                  // Смена дня сворачивает барабан: раскрытый на чужих часах
+                  // он читается как «я это уже правлю».
+                  setHoursOpen(false);
                 }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
@@ -496,131 +470,53 @@ export function TeamScheduleSheet({
           })}
         </View>
 
-        {/* ОДИН СПИСОК ЦЕЛЕЙ. Смена — ПЕРВАЯ его строка, а не отдельный
-            режим: пока она была «состоянием по умолчанию», у барабана было два
-            разных способа получить цель, и «что сейчас крутится» приходилось
-            помнить. Теперь цель всегда выбрана строкой, и строка называет её
-            СЛОВОМ — этого не умели ни ряд чипов, ни вырез на полосе. */}
-        {/* ИМЯ ДНЯ — ЭТО И ЕСТЬ ПОДПИСЬ ТУМБЛЕРА (владелец 2026-08-17: «давай
-            рабочий день уберём и поставим вместо этого просто понедельник, чтоб
-            меньше шума было»). Раньше день был написан дважды: капс-эйбрау над
-            карточкой и слова «Рабочий день» в первой строке.
-            ДОБАВЛЕНИЕ ПЕРЕРЫВА ЖИВЁТ В ШАПКЕ КАРТОЧКИ (его выбор там же): своя
-            синяя строка внизу забирала 52pt у списка и стояла в одном ряду с
-            данными, хотя она — команда, а не факт дня. */}
-        <SectionCard
-          title="График дня"
-          action={
-            day.is_working
-              ? { label: "＋ Перерыв", onPress: addBreak }
-              : undefined
-          }
-        >
-          <SwitchRow
-            label={WEEKDAY_FULL[active]}
-            value={day.is_working}
-            onChange={(v) => commitDay(() => ({ is_working: v }))}
-          />
-          {day.is_working ? (
-            <>
-              <Divider inset={16} />
-              {/* РАСКРЫВАЕТСЯ ПО ТАПУ, и на входе всё свёрнуто. */}
-              <ValueRow
-                label="Рабочие часы"
-                value={`${day.start}–${day.end}`}
-                expanded={target.kind === "shift"}
-                onPress={() => {
+            {/* РАЗБИВКА ПО ДНЯМ: неделя колонками, правка выбранного дня.
+                «Для всех дней» в шапке карточки возвращает общий вид; часы
+                всех дней он перепишет только при правке. */}
+            <SectionCard
+              title="График дня"
+              action={{
+                label: "Для всех дней",
+                onPress: () => {
                   haptics.tap();
-                  setTarget((prev) =>
-                    prev.kind === "shift" ? { kind: "none" } : { kind: "shift" },
-                  );
-                }}
+                  setHoursOpen(false);
+                  setMode("common");
+                },
+              }}
+            >
+              <SwitchRow
+                label={WEEKDAY_FULL[active]}
+                value={day.is_working}
+                onChange={(v) => commitDay(() => ({ is_working: v }))}
               />
-              {target.kind === "shift" ? WHEEL : null}
-              {day.breaks.map((b, i) => (
-                // Ключ — место перерыва, а не его часы (аудит шестерёнки
-                // 03.10): каждый поворот барабана менял ключ, строка
-                // пересобиралась вместе с барабаном, и «Перерыв до»
-                // отскакивал на «Перерыв с» после каждой прокрутки.
-                <View key={`break-${i}`}>
+              {day.is_working ? (
+                <>
                   <Divider inset={16} />
-                  {/* УБИРАЮТ ПЕРЕРЫВ ЖЕСТОМ, А НЕ ЛИШНЕЙ КНОПКОЙ (владелец
-                      2026-08-17: «удалить перерыв — это должен быть свайп, а не
-                      ещё одна кнопка»). Канонический `SwipeRow`: смахнуть влево
-                      → кромка «Убрать». Тот же жест уже живёт на счетах и
-                      объектах клиента. Долгое нажатие — видимый дублёр словом:
-                      без него жест недостижим для VoiceOver (закон DS).
-                      `fullSwipe` НЕ включаем: размашистое движение не должно
-                      уносить перерыв без тапа по кнопке. */}
-                  <SwipeRow
-                    label="Убрать"
-                    color={t.danger}
-                    icon={Trash2}
-                    accessibilityLabel={`Убрать перерыв ${b.start}–${b.end}`}
-                    onAction={() => removeBreakAt(i)}
-                  >
-                    <ValueRow
-                      label="Перерыв"
-                      value={`${b.start}–${b.end}`}
-                      expanded={target.kind === "break" && target.index === i}
-                      longPressLabel="Убрать перерыв"
-                      onPress={() => {
-                        haptics.tap();
-                        setTarget((prev) =>
-                          prev.kind === "break" && prev.index === i
-                            ? { kind: "none" }
-                            : { kind: "break", index: i },
-                        );
-                      }}
-                      onLongPress={() => confirmRemove(i, b)}
-                    />
-                  </SwipeRow>
-                  {target.kind === "break" && target.index === i
-                    ? WHEEL
-                    : null}
-                </View>
-              ))}
-            </>
-          ) : null}
-        </SectionCard>
-
-        {/* ПЕРЕРЫВ ПОСЛЕ ЗАПИСИ — ТОТ ЖЕ ПЕРЕРЫВ, только не в конкретное время,
-            а после каждой работы, поэтому он живёт в графике команды. Своей
-            КАРТОЧКОЙ, а не строкой дня: он один на команду и внутри карточки
-            дня читался бы как свойство понедельника.
-
-            БАРАБАН, А НЕ ШЕСТЬ ЧИПОВ (владелец 2026-08-17: «нет 5 минут, а если
-            я хочу 45 минут — надо это продумать»): готовый набор значений
-            отвечал только на те вопросы, которые мы придумали за человека.
-            Барабан пятиминутками до трёх часов отвечает на любой. Открывается
-            тем же тапом по строке, что и часы дня выше. */}
-        {onBufferChange ? (
-        <SectionCard>
-          <ValueRow
-            label="Перерыв после записи"
-            value={bufferLabel}
-            expanded={bufferOpen}
-            onPress={() => {
-              haptics.tap();
-              setBufferOpen((v) => !v);
-            }}
-          />
-          {bufferOpen ? (
-            <View style={{ alignItems: "center", paddingBottom: 12 }}>
-              <TimeWheelPair
-                hour={bufferTime.hour}
-                minute={bufferTime.minute}
-                onChangeHour={(hour) => setBuffer(hour * 60 + bufferTime.minute)}
-                onChangeMinute={(minute) =>
-                  setBuffer(bufferTime.hour * 60 + minute)
-                }
-                labelPrefix="Перерыв после записи"
-              />
-            </View>
-          ) : null}
-        </SectionCard>
-        ) : null}
+                  <ValueRow
+                    label="Рабочие часы"
+                    value={`${day.start}–${day.end}`}
+                    expanded={hoursOpen}
+                    onPress={() => {
+                      haptics.tap();
+                      setHoursOpen((v) => !v);
+                    }}
+                  />
+                  {hoursOpen ? WHEEL : null}
+                </>
+              ) : null}
+            </SectionCard>
+          </>
+        )}
       </View>
     </BottomSheet>
   );
+}
+
+/** У всех рабочих дней одни часы — график читается общим видом. */
+function sameHoursEveryDay(schedule: TeamSchedule | null): boolean {
+  if (!schedule) return true;
+  const working = allDays(schedule)
+    .map(({ day }) => day)
+    .filter((d) => d.is_working);
+  return working.every((d) => d.start === working[0]?.start && d.end === working[0]?.end);
 }

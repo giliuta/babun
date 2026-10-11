@@ -16,12 +16,17 @@ const sheet = readFileSync(
 );
 
 test("правка уходит функцией от свежего графика, а не готовым блобом из кэша", () => {
-  assert.match(sheet, /schedule: \(current\) => \{\s*const from = current \?\? companyBase;/);
-  assert.match(sheet, /return withDay\(from, weekday, patchOf\(dayOf\(from, weekday\)\)\);/);
+  // 11.10: правка может касаться нескольких дней сразу (общее время), и
+  // каждый день ложится на график с сервера, а не на кэш.
+  assert.match(sheet, /schedule: \(current\) =>\s*weekdays\.reduce\(/);
+  assert.match(sheet, /\(from, weekday\) => withDay\(from, weekday, patchOf\(dayOf\(from, weekday\)\)\),\s*current \?\? companyBase,/);
   assert.doesNotMatch(sheet, /commit\(withDay\(base,/);
 });
 
-test("перерыв убирают и правят по значению, а не по номеру", () => {
-  assert.match(sheet, /d\.breaks\.filter\(\(b\) => !\(b\.start === victim\.start && b\.end === victim\.end\)\)/);
-  assert.match(sheet, /b\.start === was\.start && b\.end === was\.end \? pair : b/);
+// ОБЩЕЕ ВРЕМЯ ПО УМОЛЧАНИЮ, ДНИ — ПО КНОПКЕ; ПЕРЕРЫВОВ НЕТ (владелец 11.10).
+test("общий вид пишет часы всем дням, по дням — одному; перерывов в листе нет", () => {
+  assert.match(sheet, /if \(mode === "common"\) commitDays\(ALL_DAYS, \(\) => pair\);\s*else commitDay\(\(\) => pair\);/);
+  assert.match(sheet, /setMode\(sameHoursEveryDay\(schedule \?\? null\) \? "common" : "days"\);/);
+  assert.match(sheet, /label: "По дням"/);
+  assert.doesNotMatch(sheet, /＋ Перерыв|label="Перерыв после записи"/);
 });

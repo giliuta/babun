@@ -424,9 +424,8 @@ describe("повторный аудит календаря 03.10", () => {
     }
   });
 
-  test("шестерёнка: перерыв не пересобирается на повороте, полночь не ломает смену", () => {
+  test("шестерёнка: полночь не ломает смену (перерывы из листа убраны 11.10)", () => {
     const sheet = readFileSync(resolve(here, "TeamScheduleSheet.tsx"), "utf8");
-    assert.match(sheet, /<View key=\{`break-\$\{i\}`\}>/);
     assert.match(sheet, /prevEnd >= DAY_LAST - WRAP_EDGE && next\.hour \* 60 \+ next\.minute < WRAP_EDGE/);
     assert.match(sheet, /prevStart < WRAP_EDGE && next\.hour \* 60 \+ next\.minute >= DAY_LAST - WRAP_EDGE/);
   });
