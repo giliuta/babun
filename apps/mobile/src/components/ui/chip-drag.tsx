@@ -26,6 +26,9 @@ export { CHIP_GAP } from "./chip-drag-math";
 // туда в миг отпускания, а перерисовка React раскладку не трогает вовсе.
 // Отпущенный чип доезжает до своей ячейки коротким скольжением.
 
+/** Ширина слоя под чипами: больше любой ленты календарей. */
+const MEASURE_ROOM = 4000;
+
 function tick(): void {
   haptics.tap();
 }
@@ -235,19 +238,28 @@ export function DraggableChipRow({
     // Пока ширины не измерены — ряд невидим один кадр: иначе чипы мелькнули бы
     // стопкой в левом углу.
     <View style={{ width: size?.w ?? 1, height: size?.h ?? 36, opacity: size ? 1 : 0 }}>
-      {ids.map((id) => (
-        <Item
-          key={id}
-          id={id}
-          shared={shared}
-          pad={pad}
-          onMeasure={onMeasure}
-          onDrop={drop}
-          onDragging={onDragging}
-        >
-          {renderChip(id)}
-        </Item>
-      ))}
+      {/* ШИРОКИЙ СЛОЙ ПОД ЧИПАМИ (11.10). Абсолютный чип меряется шириной
+          родителя: в ряду из ОДНОГО чипа («Личный» отдельной группой) ряд
+          узкий ровно на этот чип, и подпись сжималась в ноль — чип стоял
+          пустым. Слой шире любой ленты, ширину чипа задаёт его подпись. */}
+      <View
+        pointerEvents="box-none"
+        style={{ position: "absolute", left: 0, top: 0, width: MEASURE_ROOM, height: size?.h ?? 36 }}
+      >
+        {ids.map((id) => (
+          <Item
+            key={id}
+            id={id}
+            shared={shared}
+            pad={pad}
+            onMeasure={onMeasure}
+            onDrop={drop}
+            onDragging={onDragging}
+          >
+            {renderChip(id)}
+          </Item>
+        ))}
+      </View>
     </View>
   );
 }
