@@ -1,3 +1,4 @@
+import { syncCalendarBilling } from "@/features/tariffs/sync-calendars";
 import { useCallback } from "react";
 import {
   useMutation,
@@ -245,6 +246,8 @@ export function useCreateTeam() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["teams"] });
+      // Новый календарь — в подписке со следующего платежа (12.10).
+      syncCalendarBilling();
     },
     meta: { errorHandled: true }, // RefListScreen call sites alert themselves
   });

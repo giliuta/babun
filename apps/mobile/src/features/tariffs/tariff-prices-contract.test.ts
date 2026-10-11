@@ -4,9 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
 
-import { TIER_CARDS, TIER_LIMITS } from "./tiers";
+import { CALENDAR_PRICE, TIER_CARDS, TIER_LIMITS } from "./tiers";
 
-// ЦЕНА НА СТРАНИЦЕ «ТАРИФ» = ЦЕНА, КОТОРУЮ СПИШЕТ STRIPE.
+// ЦЕНА НА СТРАНИЦЕ «ТАРИФ» = ЦЕНА, КОТОРУЮ СПИШЕТ STRIPE (с 12.10 — одна
+// цена за календарь, количество = живые календари).
 //
 // Страница показывает цены из `tiers.ts`, а заводит цену в Stripe и
 // списывает деньги функция `tariff-checkout` — своим списком в центах. Два
@@ -20,36 +21,40 @@ const WEBHOOK = readFileSync(path.join(ROOT, "supabase/functions/stripe-webhook/
 
 const cents = (euro: string) => Math.round(Number(euro.replace("€", "")) * 100);
 
-function fnPrice(tier: string, period: "month" | "year"): number {
-  const row = new RegExp(`${tier}: \\{ month: ([0-9* ]+), year: ([0-9* ]+) \\}`).exec(FN);
-  assert.ok(row, `в tariff-checkout нет цены тарифа ${tier}`);
+function fnPrice(period: "month" | "year"): number {
+  const row = /const CALENDAR_PRICE: Record<Period, number> = \{ month: ([0-9* ]+), year: ([0-9* ]+) \}/.exec(FN);
+  assert.ok(row, "в tariff-checkout нет цены календаря");
   const expr = period === "month" ? row[1] : row[2];
   return expr.split("*").map((part) => Number(part.trim())).reduce((a, b) => a * b, 1);
 }
 
-describe("цены тарифов: страница и Stripe", () => {
-  for (const card of TIER_CARDS) {
-    test(`${card.name}: в месяц и за год`, () => {
-      assert.equal(fnPrice(card.tier, "month"), cents(card.monthly));
-      assert.equal(fnPrice(card.tier, "year"), cents(card.yearlyMonthly) * 12);
-    });
-  }
-
-  test("лимит партнёров при смене тарифа — тот же, что у приложения", () => {
-    const row = /const PARTNERS: Record<Tier, number> = \{ solo: (\d+), pro: (\d+), max: (\d+) \}/.exec(FN);
-    assert.ok(row, "в tariff-checkout нет лимитов партнёров");
-    assert.deepEqual(
-      [Number(row[1]), Number(row[2]), Number(row[3])],
-      [TIER_LIMITS.solo.partners, TIER_LIMITS.pro.partners, TIER_LIMITS.max.partners],
-    );
+describe("цена за календарь: страница и Stripe", () => {
+  test("одна карточка — «Календарь», цена как у функции, в месяц и за год", () => {
+    assert.equal(TIER_CARDS.length, 1);
+    const card = TIER_CARDS[0]!;
+    assert.equal(card.monthly, "€9.99");
+    assert.equal(card.yearlyMonthly, "€7.99");
+    assert.equal(fnPrice("month"), cents(card.monthly));
+    assert.equal(fnPrice("year"), cents(card.yearlyMonthly) * 12);
+    assert.equal(cents(card.monthly), Math.round(CALENDAR_PRICE.monthly * 100));
   });
 
-  test("вебхук узнаёт тариф по метке цены, которую ставит функция", () => {
-    assert.match(FN, /"metadata\[tier\]": tier/);
+  test("в подписке столько календарей, сколько живых; людей не считаем", () => {
+    assert.match(FN, /"line_items\[0\]\[quantity\]": String\(quantity\)/);
+    assert.match(FN, /\.eq\("is_active", true\)/);
+    assert.doesNotMatch(FN, /too_many_partners/);
+    assert.match(FN, /proration_behavior: "none"/);
+    assert.equal(TIER_LIMITS.max.partners, 1000);
+  });
+
+  test("вебхук узнаёт цену за календарь и пишет число календарей", () => {
+    assert.match(FN, /"metadata\[tier\]": PAID_TIER/);
+    assert.match(FN, /const PAID_TIER = "max"/);
     assert.match(FN, /lookup_key: lookup/);
-    assert.match(WEBHOOK, /price\.metadata\?\.tier/);
-    assert.match(WEBHOOK, /\^babun_\(solo\|pro\|max\)_/);
-    // Старый Business — теперь Макс, а не бесплатный и не «business».
+    assert.match(WEBHOOK, /\^babun_calendar_\//);
+    assert.match(WEBHOOK, /paid_calendars: item\?\.quantity \?\? null/);
+    assert.match(WEBHOOK, /"invoice\.upcoming"/);
+    // Старый Business — по-прежнему Макс, а не бесплатный и не «business».
     assert.match(WEBHOOK, /STRIPE_PRICE_BUSINESS"\)\) return "max"/);
   });
 });

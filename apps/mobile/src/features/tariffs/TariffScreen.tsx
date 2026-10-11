@@ -20,6 +20,7 @@ import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import {
   TIER_CARDS,
+  calendarsMonthly,
   tiersForKind,
   TIER_LIMITS,
   partnerTariffAction,
@@ -31,14 +32,16 @@ import {
   type TierCard,
 } from "./tiers";
 import { openTariffCheckout, openTariffPortal, useStartTrial, useTariff } from "./use-tariff";
-import { useAccountKind } from "@/features/settings/my-accounts";
 
-// КАБИНЕТ → ТАРИФ (владелец 01.10): «Соло · Про · Макс», пробный 14 дней без
-// карты — один раз, на выбранный тариф; оплата — страница Stripe в браузере.
+// КАБИНЕТ → ТАРИФ — ЦЕНА ЗА КАЛЕНДАРЬ (владелец 12.10: €9.99 в месяц за
+// рабочий календарь, €7.99 при оплате за год, люди бесплатно; до 12.10 —
+// «Соло · Про · Макс»). Пробный 14 дней без карты — один раз; оплата —
+// страница Stripe в браузере.
 //
-// Сверху — что действует сейчас; ниже — три тарифа плитками, тап выбирает;
-// действие страницы одно, в футере: «Попробовать 14 дней», «Оплатить» или,
-// когда подписка уже есть, «Перейти на …». Подписка есть — строка
+// Сверху — что действует сейчас; ниже — карточка «Календарь»: цена одного и
+// итог за все живые календари аккаунта; действие страницы одно, в футере:
+// «Попробовать 14 дней», «Оплатить €… в месяц» или, когда старая подписка
+// есть, «Перейти на цену за календарь». Подписка есть — строка
 // «Управление подпиской» (страница Stripe: карта, счета, отмена). Команд
 // больше лимита — строка «Рабочие команды» ведёт к выбору, какие работают;
 // остальные только смотрят.
@@ -68,8 +71,7 @@ export function TariffScreen() {
   const qc = useQueryClient();
   const { state, periodEnd, workingChosen } = useTariff();
   const scope = useAccountScope();
-  const kind = useAccountKind(scope.tenantId);
-  const offered = tiersForKind(kind);
+  const offered = tiersForKind(null);
   const owner = scope.viewRole === "owner";
   const gate = useAccountGate("cabinet.tariff");
   const accountName = useAccountName();
@@ -83,7 +85,7 @@ export function TariffScreen() {
   // Выдан навсегда — выбирать нечего: выделен свой тариф, а не прошлый тап.
   // Без плиток выбора (сборка без оплаты) пробный — на основной «Про».
   // Личное — Соло, компания — Про (11.10); вид не известен — как было.
-  const fallback = kind ? offered[0]! : CAN_PAY_HERE ? "solo" : "pro";
+  const fallback = offered[0]!;
   const selected = state.forever
     ? (current ?? "max")
     : (picked ?? current ?? fallback);
@@ -101,10 +103,12 @@ export function TariffScreen() {
   // Рабочие команды выбирает владелец — и только своего, открытого аккаунта.
   const overLimit = owner && !scope.foreign && live.length > limit;
   const working = workingTeamIds(live, state.tier, workingChosen);
+  // Платят за каждый живой календарь (12.10) — столько и в кнопке.
+  const calendars = Math.max(1, live.length);
   const full = owner
-    ? tariffAction(state, selected)
+    ? tariffAction(state, selected, calendars)
     : gate === "write"
-      ? partnerTariffAction(state, selected, accountName)
+      ? partnerTariffAction(state, selected, accountName, calendars)
       : null;
   // Без оплаты здесь — только бесплатный пробный.
   const action = CAN_PAY_HERE ? full : full?.kind === "trial" ? full : null;
@@ -118,7 +122,7 @@ export function TariffScreen() {
     if (action.kind === "trial") {
       try {
         await startTrial.mutateAsync(selected);
-        toast(`Пробный «${tierName(selected)}» — 14 дней`, "success");
+        toast("Пробный — 14 дней", "success");
       } catch (e) {
         notify("Пробный не включился", e instanceof Error ? e.message : undefined);
       }
@@ -128,7 +132,7 @@ export function TariffScreen() {
     try {
       const result = await openTariffCheckout(selected, scope.foreign ? scope.tenantId : null);
       if (result === "changed") {
-        toast(`Тариф меняется на «${tierName(selected)}»`, "success");
+        toast("Оплата за календари обновлена", "success");
         // Тариф пишет вебхук Stripe — через пару секунд.
         void qc.invalidateQueries({ queryKey: ["tenant"] });
         setTimeout(() => void qc.invalidateQueries({ queryKey: ["tenant"] }), 4000);
@@ -202,11 +206,12 @@ export function TariffScreen() {
           ) : null}
         </SectionCard>
 
-        {showTiers ? <SectionEyebrow>Тарифы</SectionEyebrow> : null}
+        {showTiers ? <SectionEyebrow>Цена</SectionEyebrow> : null}
         {(showTiers ? TIER_CARDS.filter((card) => offered.includes(card.tier)) : []).map((card) => (
           <TierTile
             key={card.tier}
             card={card}
+            calendars={calendars}
             selected={selected === card.tier}
             mark={
               current === card.tier
@@ -239,11 +244,14 @@ export function TariffScreen() {
 
 function TierTile({
   card,
+  calendars,
   selected: on,
   mark,
   onPress,
 }: {
   card: TierCard;
+  /** Живых календарей аккаунта — итог в месяц под ценой одного. */
+  calendars: number;
   selected: boolean;
   mark: string | null;
   onPress?: () => void;
@@ -294,9 +302,14 @@ function TierTile({
         ))}
       </View>
       {CAN_PAY_HERE ? (
-        <Text style={{ ...TYPE.subhead, color: t.faint }}>
-          {`За год — ${card.yearlyMonthly} в месяц`}
-        </Text>
+        <View style={{ gap: 2 }}>
+          <Text style={{ ...TYPE.subhead, color: t.ink }}>
+            {`Ваших календарей: ${calendars} — ${calendarsMonthly(calendars)} в месяц`}
+          </Text>
+          <Text style={{ ...TYPE.subhead, color: t.faint }}>
+            {`За год — ${card.yearlyMonthly} за календарь в месяц`}
+          </Text>
+        </View>
       ) : null}
     </Pressable>
   );

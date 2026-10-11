@@ -73,10 +73,10 @@ describe("лента: Личное первым, компании группам
 });
 
 describe("тарифы по виду аккаунта", () => {
-  test("Личное — Соло, компания — Про и Макс, неизвестно — все", () => {
-    assert.deepEqual(tiersForKind("personal"), ["solo"]);
-    assert.deepEqual(tiersForKind("company"), ["pro", "max"]);
-    assert.deepEqual(tiersForKind(null), ["solo", "pro", "max"]);
+  test("одна цена за календарь — и в Личном, и в компании (12.10)", () => {
+    assert.deepEqual(tiersForKind("personal"), ["max"]);
+    assert.deepEqual(tiersForKind("company"), ["max"]);
+    assert.deepEqual(tiersForKind(null), ["max"]);
   });
 });
 

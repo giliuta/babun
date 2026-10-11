@@ -52,12 +52,12 @@ describe("что открывает тариф", () => {
     assert.equal(canAddTeam("solo", 1), false);
   });
 
-  test("Про — до 5 команд и 5 партнёров, Макс — до 50", () => {
+  test("старый пробный Про — до 5; оплата за календари — без лимита (12.10)", () => {
     assert.equal(canAddTeam("pro", 4), true);
     assert.equal(canAddTeam("pro", 5), false);
     assert.equal(canAddPartner("pro", 5), false);
-    assert.equal(canAddTeam("max", 49), true);
-    assert.equal(canAddTeam("max", 50), false);
+    assert.equal(canAddTeam("max", 50), true);
+    assert.equal(canAddPartner("max", 200), true);
   });
 });
 
@@ -120,19 +120,20 @@ describe("действие страницы «Тариф»", () => {
     assert.equal(tariffStatus(fresh), "Календарь и события");
   });
 
-  test("идёт пробный или он кончился — оплата выбранного", () => {
-    const trial = { ...fresh, tier: "pro" as const, trial: { tier: "pro" as const, days: 3 }, trialUsed: true };
-    assert.deepEqual(tariffAction(trial, "pro"), { kind: "pay", label: "Оплатить €29.99 в месяц" });
+  test("идёт пробный или он кончился — оплата за все живые календари", () => {
+    const trial = { ...fresh, tier: "max" as const, trial: { tier: "max" as const, days: 3 }, trialUsed: true };
+    assert.deepEqual(tariffAction(trial, "max", 3), { kind: "pay", label: "Оплатить €29.97 в месяц" });
     assert.equal(tariffStatus(trial), "Пробный · ещё 3 дня");
     const over = { ...fresh, trialUsed: true };
-    assert.equal(tariffAction(over, "solo")?.label, "Оплатить €6.99 в месяц");
+    assert.equal(tariffAction(over, "max")?.label, "Оплатить €9.99 в месяц");
     assert.equal(tariffStatus(over), "Пробный закончился");
   });
 
   test("свой оплаченный и выданный навсегда — без кнопки", () => {
     const paid = { ...fresh, tier: "pro" as const, paid: true, trialUsed: true };
     assert.equal(tariffAction(paid, "pro"), null);
-    assert.deepEqual(tariffAction(paid, "max"), { kind: "change", label: "Перейти на Макс" });
+    // Старая подписка Соло · Про — переход на цену за календарь.
+    assert.deepEqual(tariffAction(paid, "max"), { kind: "change", label: "Перейти на цену за календарь" });
     assert.equal(tariffAction({ ...paid, tier: "max", forever: true }, "solo"), null);
     assert.equal(tariffStatus({ ...paid, forever: true }), "Навсегда");
   });
@@ -150,13 +151,13 @@ describe("оплата тарифа партнёром", () => {
   const fresh: TariffState = { tier: "free", paid: false, forever: false, trial: null, trialUsed: false };
 
   test("подписки нет — «Оплатить … за <аккаунт>», без пробного", () => {
-    assert.deepEqual(partnerTariffAction(fresh, "pro", "Giliuta"), {
+    assert.deepEqual(partnerTariffAction(fresh, "max", "Giliuta", 2), {
       kind: "pay",
-      label: "Оплатить €29.99 в месяц за Giliuta",
+      label: "Оплатить €19.98 в месяц за Giliuta",
     });
-    const trial = { ...fresh, tier: "pro" as const, trial: { tier: "pro" as const, days: 3 }, trialUsed: true };
-    assert.equal(partnerTariffAction(trial, "solo", "Giliuta")?.label, "Оплатить €6.99 в месяц за Giliuta");
-    assert.equal(partnerTariffAction(fresh, "max", null)?.label, "Оплатить €59.99 в месяц");
+    const trial = { ...fresh, tier: "max" as const, trial: { tier: "max" as const, days: 3 }, trialUsed: true };
+    assert.equal(partnerTariffAction(trial, "max", "Giliuta")?.label, "Оплатить €9.99 в месяц за Giliuta");
+    assert.equal(partnerTariffAction(fresh, "max", null)?.label, "Оплатить €9.99 в месяц");
   });
 
   test("подписка есть или тариф навсегда — кнопки нет: смена тарифа — у владельца", () => {
