@@ -269,3 +269,12 @@ describe("время новой строки продолжает шаг (вла
     assert.equal(createTierDraft([tier("60"), tier("90")], 30).totalDuration, "120");
   });
 });
+
+test("барабан времени у строки посередине не уносит лист вниз (11.10)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { dirname, resolve } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "ServiceSheet.tsx"), "utf8");
+  assert.match(src, /const lastId = economics\.tiers\[economics\.tiers\.length - 1\]\?\.id \?\? "base";\s*if \(id && id === lastId\) \{/);
+  assert.match(src, /if \(id\) Keyboard\.dismiss\(\);/);
+});
