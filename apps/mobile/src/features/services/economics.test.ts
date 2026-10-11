@@ -290,3 +290,14 @@ test("готовые услуги из других команд — значк�
   assert.match(src, /right=\{\s*!readOnly && copyCandidates\.length > 0 \?/);
   assert.match(src, /setEditing\(\{ mode: "create", from, copy: true \}\)/);
 });
+
+test("«Убрать» строку количества убирает сразу — без вопроса поверх листа (11.10)", async () => {
+  // Вопрос рисуется своим Modal поверх Modal листа услуги — iOS его не
+  // показывает, и кнопка молчала. Строка — черновик листа, спрашивать незачем.
+  const { readFileSync } = await import("node:fs");
+  const { dirname, resolve } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "ServiceLadder.tsx"), "utf8");
+  assert.doesNotMatch(src, /confirmThen\(|confirmAction\(|chooseOption\(/);
+  assert.match(src, /onAction=\{\(\) => onRemove\(id\)\}/);
+});
