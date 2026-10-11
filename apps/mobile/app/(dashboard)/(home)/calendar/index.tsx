@@ -11,12 +11,12 @@ import {
   LogOut,
   Trash2,
   ZoomIn,
-  ArrowUpDown,
 } from "lucide-react-native";
 import { readTenantPref } from "@/lib/tenant-prefs";
 import { useTenantId } from "@/lib/tenant";
 import { SwitchRow } from "@/components/ui/SwitchRow";
-import { FOREIGN_PREFIX } from "@/features/settings/calendar-chips";
+import { FOREIGN_PREFIX, calendarOrderKey } from "@/features/settings/calendar-chips";
+import { useSaveCalendarOrder } from "@/features/settings/use-calendar-order";
 import { useCalendarChips, useCalendarVisibility } from "@/features/settings/workspaces";
 import { useLeaveCalendar } from "@/features/settings/leave-calendar";
 import {
@@ -220,6 +220,7 @@ export default function CalendarSettingsScreen() {
   // лишь скрытыми, и «Личный» рядом с командами не было. Тап по календарю
   // другого аккаунта переводит в него; строки ниже — по доступу в нём.
   const calendarVisibility = useCalendarVisibility();
+  const saveCalendarOrder = useSaveCalendarOrder();
   const gearChips = useCalendarChips({
     own: teams,
     includeHidden: true,
@@ -450,6 +451,18 @@ export default function CalendarSettingsScreen() {
         // «Все календари разом» здесь нет: настройки правятся у КОНКРЕТНОЙ
         // команды, и лента другого выбора не предлагает.
         onSelect={(id) => (id.startsWith(FOREIGN_PREFIX) ? gearChips.pick(id) : router.setParams({ team: id }))}
+        // ПОРЯДОК — ЗАЖАТЬ И ПЕРЕТАЩИТЬ (владелец 11.10: «зайти в настройки,
+        // зажать на календарик и перетащить… каждый у себя, у каждого по-
+        // своему»). Порядок — человека (`user_calendar_order`): по нему стоят
+        // ленты календаря, финансов и эта.
+        onReorder={(ids) =>
+          saveCalendarOrder.mutate(
+            ids
+              .map((id) => calendarOrderKey(id, tenantId))
+              .filter((key): key is string => key != null),
+            { onError: (e) => notify("Не удалось сохранить порядок", e.message) },
+          )
+        }
       />
       {rows.any || canLeave ? (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
@@ -702,20 +715,6 @@ export default function CalendarSettingsScreen() {
               Скрытый пропадает из календаря, финансов и клиентов только у
               него; здесь остаётся, и тумблер его возвращает. Серый, пока
               другого видимого календаря нет: смотреть было бы некуда. */}
-          {/* ПОРЯДОК КАЛЕНДАРЕЙ (владелец 11.10: «чтоб можно менять местами
-              календари») — выбор человека, как «Скрыть»: его лента во всех
-              аккаунтах, своя страница с перетаскиванием. */}
-          {gearChips.items.length > 1 ? (
-            <SectionCard className="mt-4">
-              <SettingsRow
-                tile={SETTINGS_TILE.indigo}
-                icon={ArrowUpDown}
-                title="Порядок календарей"
-                sub={gearChips.items.map((chip) => chip.name).join(", ")}
-                onPress={() => router.push("/calendar/order" as Href)}
-              />
-            </SectionCard>
-          ) : null}
           {team && tenantId ? (
             <SectionCard className="mt-4">
               <SwitchRow

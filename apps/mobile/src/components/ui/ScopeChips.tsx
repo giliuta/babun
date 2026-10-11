@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { CHIP_GAP, DraggableChip, useChipDrag } from "@/components/ui/chip-drag";
 import { ScrollView, View } from "react-native";
 import { Chip } from "@/components/ui/Chip";
 import { useThemeColors } from "@/theme/colors";
@@ -42,6 +43,7 @@ export function ScopeChips({
   onCanvas = false,
   trailing,
   onSelect,
+  onReorder,
 }: {
   items: ScopeChip[];
   /** `null` — справочник ещё не приехал и выбирать нечего. */
@@ -68,9 +70,25 @@ export function ScopeChips({
    *  белыми полосами появляется серый разрыв. */
   onCanvas?: boolean;
   onSelect: (id: string) => void;
+  /** Новый порядок ленты: чип зажимают и перетаскивают (шестерёнка
+   *  календаря, владелец 11.10). Без него лента не перетаскивается. */
+  onReorder?: (ids: string[]) => void;
 }) {
   const t = useThemeColors();
   const scrollRef = useRef<ScrollView>(null);
+  // Пока чип тянут, лента не листается, а отпущенный палец не «тапает» чип.
+  const [dragging, setDragging] = useState(false);
+  const justDragged = useRef(false);
+  const onDragging = (on: boolean) => {
+    setDragging(on);
+    if (on) justDragged.current = true;
+    else setTimeout(() => (justDragged.current = false), 250);
+  };
+  const drag = useChipDrag(
+    items.map((item) => item.id),
+    (ids) => onReorder?.(ids),
+    onDragging,
+  );
   // Левый край каждого чипа в координатах ленты + к какому чипу лента уже
   // подведена. БЕЗ второго ref повторный layout (поворот, дозагрузка команд)
   // дёргал бы ленту обратно посреди ручной прокрутки.
@@ -97,7 +115,21 @@ export function ScopeChips({
   // пропадала бы единственная дверь создания.
   if (items.length === 0 && !trailing) return null;
 
-  const chip = (key: string, node: ReactNode) => (
+  const chip = (key: string, node: ReactNode, index: number) =>
+    onReorder ? (
+      <DraggableChip
+        key={key}
+        index={index}
+        drag={drag}
+        onDragging={onDragging}
+        onMeasured={(x) => {
+          offsets.current.set(key, x);
+          if (key === activeId) reveal(key, false);
+        }}
+      >
+        {node}
+      </DraggableChip>
+    ) : (
     <View
       key={key}
       onLayout={(e) => {
@@ -109,13 +141,14 @@ export function ScopeChips({
     >
       {node}
     </View>
-  );
+    );
 
   const strip = (
     <ScrollView
       ref={scrollRef}
       horizontal
       showsHorizontalScrollIndicator={false}
+      scrollEnabled={!dragging}
       style={{
         flexGrow: 0,
         // С приколотым действием фон и шов несёт обёртка: иначе линия
@@ -133,11 +166,11 @@ export function ScopeChips({
         // упёрся в край и лента кончилась.
         paddingRight: 24,
         paddingVertical: 10,
-        gap: 8,
+        gap: CHIP_GAP,
         alignItems: "center",
       }}
     >
-      {items.map((item) => {
+      {items.map((item, index) => {
         const selected = activeId === item.id;
         return chip(
           item.id,
@@ -152,9 +185,13 @@ export function ScopeChips({
             // появлялась, то пропадала вместе с выбором, и пилюля меняла
             // ширину — соседи ездили по ленте. Цвет команды теперь несёт
             // только заливка выбранного чипа; покой — одинаково серый.
-            onPress={() => onSelect(item.id)}
+            onPress={() => {
+              if (justDragged.current) return;
+              onSelect(item.id);
+            }}
             style={{ maxWidth: 180 }}
           />,
+          index,
         );
       })}
     </ScrollView>
