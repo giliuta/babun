@@ -47,8 +47,8 @@ describe("язык до входа", () => {
   });
 });
 
-test("неверный пароль к занятому адресу не выдаётся за «пароль утёк» (11.10)", () => {
+test("неверный пароль — просто «Неверная почта или пароль»: вход аккаунт не заводит (11.10)", () => {
   const login = read("../../../app/(auth)/login.tsx");
-  assert.match(login, /const weak = \(signUpError\.code \?\? ""\)\.includes\("weak_password"\);/);
-  assert.match(login, /"Неверная почта или пароль\. Если вы здесь впервые — этот пароль слишком простой, придумайте другой"/);
+  assert.doesNotMatch(login, /signUp\(/);
+  assert.match(login, /if \(e\) setError\(mapAuthError\(e, "signin"\)\);/);
 });

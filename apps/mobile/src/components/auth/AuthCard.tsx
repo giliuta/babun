@@ -320,6 +320,46 @@ export function GhostLink({
   );
 }
 
+/** Вторая главная кнопка экрана («Зарегистрироваться» под «Войти»): та же
+ *  высота и форма, что у кнопок Apple/Google, белая с контуром — видна сразу,
+ *  но не спорит с главной (владелец 11.10: «регистрацию — кнопкой»). */
+export function OutlineButton({
+  label,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const t = useAuthTheme();
+  return (
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      style={({ pressed }) => ({
+        marginTop: 16,
+        minHeight: 52,
+        borderRadius: t.radius.card,
+        borderCurve: "continuous",
+        backgroundColor: t.surface,
+        borderWidth: 1,
+        borderColor: t.separator,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: pressed || disabled ? 0.7 : 1,
+      })}
+    >
+      <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 17, fontWeight: "600", color: t.accent }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 // «Lead text + accent action» cross-screen switch link.
 export function SwitchLink({
   lead,
