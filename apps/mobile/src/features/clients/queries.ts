@@ -77,6 +77,7 @@ import { masterClientJsonToClient } from "@/features/settings/master-reference";
 import { isPhoneTakenError } from "@/features/clients/client-create-errors";
 import { parseClientBlocks } from "@/features/clients/client-block-access";
 import { clientsAccessOf } from "@/features/clients/clients-access";
+import { useMyAccess } from "@/features/access/queries";
 import { inMirrorView, mirrorMemberClient } from "@/features/access/mirror/mirror-client";
 import { useMirrorClientScope } from "@/features/access/mirror/use-mirror-client-scope";
 import { refreshRevealedContacts } from "@/features/clients/revealed-contacts";
@@ -147,6 +148,9 @@ interface QueryScope {
   tenantId: string | null;
   role: UserRole | null | undefined;
   kind: ClientsCompanyKind;
+  /** Сотрудник вне вкладки: к его окну клиентов добавляются клиенты его
+   *  записей (`list_master_clients_safe`) — см. `useQueryScope`. */
+  withRecordClients?: boolean;
   /** Третий элемент ключей: роль у своей компании, уровни у работодателя. */
   view: string;
   ready: boolean;
@@ -164,6 +168,7 @@ function useQueryScope(): QueryScope {
   const roleQuery = useCurrentRole();
   const activeRole = roleQuery.data;
   const mirror = useMirror();
+  const myAccess = useMyAccess();
   if (scope) return scopeOf(scope);
   // ЗЕРКАЛО ВНЕ ВКЛАДКИ (выбор клиента в записи и календаре). Дверь мастера
   // (`list_master_clients_safe`) по токену владельца отдаёт пусто — в
@@ -179,6 +184,41 @@ function useQueryScope(): QueryScope {
       activeTenantId,
     );
     if (mirrored) return scopeOf(mirrored);
+  }
+  // СОТРУДНИК С ОТКРЫТОЙ БАЗОЙ ВНЕ ВКЛАДКИ (владелец 11.10: «брат создал
+  // клиента — у него не появилось, у меня появилось; потом пишет „клиент с
+  // этим номером есть“; запись залагала»). Форма записи и выбор клиента
+  // читали мастеру только «клиентов его записей» (`list_master_clients_safe`):
+  // клиент, только что заведённый из записи, записей ещё не имеет — форма
+  // его не находила, второй заход упирался в занятый номер. Теперь, если в
+  // компании календаря ему открыты клиенты, источник тот же, что во вкладке
+  // (окно `list_member_clients` по его правам), и к нему добавлены клиенты
+  // его записей — в командах, где база закрыта, запись свою он видит как раньше.
+  if (!mirror && activeTenantId && activeRole === "master") {
+    if (myAccess.isPending) {
+      return {
+        tenantId: activeTenantId,
+        role: activeRole,
+        kind: "record",
+        view: "role-pending",
+        ready: false,
+        isActive: true,
+        contacts: true,
+        tenantName: null,
+        writeOpts: undefined,
+      };
+    }
+    const map = myAccess.data;
+    const member = map
+      ? memberScope(
+          activeTenantId,
+          activeRole,
+          { isOwner: false, ...clientsAccessOf(map) },
+          new Map(),
+          activeTenantId,
+        )
+      : null;
+    if (member) return { ...scopeOf(member), withRecordClients: true, view: `${viewKeyOf(member)}+records` };
   }
   return {
     tenantId: activeTenantId,
@@ -319,6 +359,18 @@ export async function memberClientContacts(
   return parseMemberContacts(data);
 }
 
+/** Окно сотрудника плюс клиенты его записей, без дублей: строка окна
+ *  главнее (у неё блоки и контакты по правам). Отказ второй двери не роняет
+ *  первую. */
+async function withRecordClients(
+  member: Promise<Client[]>,
+  records: Promise<Client[]>,
+): Promise<Client[]> {
+  const [own, extra] = await Promise.all([member, records.catch(() => [] as Client[])]);
+  const seen = new Set(own.map((c) => c.id));
+  return [...own, ...extra.filter((c) => !seen.has(c.id))];
+}
+
 /** КЛИЕНТЫ КОМПАНИИ-РАБОТОДАТЕЛЯ — ТОЛЬКО ОКНОМ СЕРВЕРА.
  *
  *  Таблица сотруднику закрыта: её строка несёт телефоны и деньги клиента, а
@@ -402,7 +454,9 @@ export function useClients() {
     queryFn: () => {
       if (scope.kind === "record") return listMasterClientsSafe(supabase);
       if (scope.kind === "member") {
-        return listMemberClients(tenantBoundClient(tenantId as string));
+        const bound = tenantBoundClient(tenantId as string);
+        if (!scope.withRecordClients) return listMemberClients(bound);
+        return withRecordClients(listMemberClients(bound), listMasterClientsSafe(supabase));
       }
       return listClientsCached(tenantBoundClient(tenantId as string), tenantId as string);
     },
@@ -447,7 +501,9 @@ export function useClient(id: string) {
         return (await listMasterClientsSafe(supabase, id))[0] ?? null;
       }
       if (scope.kind === "member") {
-        return (await listMemberClients(tenantBoundClient(tenantId as string), id))[0] ?? null;
+        const found = (await listMemberClients(tenantBoundClient(tenantId as string), id))[0];
+        if (found || !scope.withRecordClients) return found ?? null;
+        return (await listMasterClientsSafe(supabase, id))[0] ?? null;
       }
       try {
         return await getClient(tenantBoundClient(tenantId as string), id, tenantId as string);
