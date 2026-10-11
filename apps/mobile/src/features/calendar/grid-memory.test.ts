@@ -8,8 +8,9 @@ import {
   scrollYForTopHour,
   topHourForScrollY,
   zoomForHourH,
-  zoomLabel,
-  ZOOM_PRESETS,
+  zoomFromPct,
+  zoomPctHint,
+  zoomToPct,
 } from "./grid-memory";
 import { HOUR_H_DEFAULT, HOUR_H_MAX, maxScroll, minHourH, PAD_BOTTOM, PAD_TOP } from "./zoom-math";
 
@@ -49,11 +50,16 @@ describe("масштаб — в часах на экране", () => {
     assert.equal(zoomForHourH(minHourH(24, VH), 24, VH), "fit");
   });
 
-  test("подписи настройки", () => {
-    assert.equal(zoomLabel("fit", VH), "Весь день на экране");
-    assert.equal(zoomLabel(8, VH), "8 ч на экране");
-    assert.equal(zoomLabel(null, null), "Обычный");
-    assert.equal(ZOOM_PRESETS[0].zoom, "fit");
+  test("ползунок 0…100: 0 — весь день, 100 — самый крупный, туда и обратно", () => {
+    assert.equal(zoomFromPct(0, 18, VH), "fit");
+    assert.equal(zoomToPct("fit", 18, VH), 0);
+    assert.equal(hourHForZoom(zoomFromPct(100, 18, VH), 18, VH), HOUR_H_MAX);
+    assert.equal(zoomToPct(zoomFromPct(100, 18, VH), 18, VH), 100);
+    for (let pct = 5; pct <= 100; pct += 5) {
+      assert.equal(zoomToPct(zoomFromPct(pct, 18, VH), 18, VH), pct, `${pct}% вернулось иначе`);
+    }
+    assert.equal(zoomPctHint(0, 18, VH), "Весь день на экране");
+    assert.match(zoomPctHint(50, 18, VH), /^≈ \d+ ч на экране$/);
   });
 });
 

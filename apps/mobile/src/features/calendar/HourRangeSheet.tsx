@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
+import { StepSlider } from "@/components/ui/StepSlider";
+import { useThemeColors } from "@/theme/colors";
+import {
+  ZOOM_PCT_STEP,
+  zoomFromPct,
+  zoomPctHint,
+  zoomToPct,
+  type GridZoom,
+} from "@/features/calendar/grid-memory";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { TimeRangePicker } from "@/components/ui/TimeWheel";
@@ -43,6 +52,8 @@ export function HourRangeSheet({
   allowEndOfDay,
   onClose,
   onApply,
+  zoom,
+  hoursEditable = true,
 }: {
   visible: boolean;
   title: string;
@@ -58,9 +69,26 @@ export function HourRangeSheet({
     startMinute: number;
     endMinute: number;
   }) => void;
+  /** МАСШТАБ ПРИ ОТКРЫТИИ (владелец 11.10: «масштаб добавь в шторку часы
+   *  календаря, ползунок в процентах»). Личный — телефона, не команды;
+   *  `vh` — прошлый замер сетки. */
+  zoom?: {
+    initial: GridZoom | null;
+    vh: number | null;
+    onApply: (zoom: GridZoom) => void;
+  };
+  /** Часы команды менять нельзя — лист только с масштабом. */
+  hoursEditable?: boolean;
 }) {
+  const t = useThemeColors();
   const [start, setStart] = useState({ hour: 8, minute: 0 });
   const [end, setEnd] = useState({ hour: 20, minute: 0 });
+  // Окно, которое увидит сетка: часы наружу, как в `calendar/index` сетки.
+  const span = Math.max(
+    1,
+    Math.ceil((end.hour * 60 + end.minute) / 60) - Math.floor((start.hour * 60 + start.minute) / 60),
+  );
+  const [pct, setPct] = useState(0);
 
   // Ресинк черновика — по фронту открытия (приём PeriodWheelsModal): рефетч
   // настроек не должен перескакивать границу, которую человек сейчас крутит.
@@ -69,18 +97,29 @@ export function HourRangeSheet({
     if (visible && !wasVisible.current) {
       setStart({ hour: value.start, minute: value.startMinute ?? 0 });
       setEnd({ hour: value.end, minute: value.endMinute ?? 0 });
+      if (zoom) {
+        const openSpan = Math.max(
+          1,
+          Math.ceil((value.end * 60 + (value.endMinute ?? 0)) / 60) -
+            Math.floor((value.start * 60 + (value.startMinute ?? 0)) / 60),
+        );
+        setPct(zoomToPct(zoom.initial, openSpan, zoom.vh));
+      }
     }
     wasVisible.current = visible;
   }, [visible, value]);
 
   const apply = () => {
     haptics.tap();
-    onApply({
-      start: start.hour,
-      end: end.hour,
-      startMinute: start.minute,
-      endMinute: end.minute,
-    });
+    if (hoursEditable) {
+      onApply({
+        start: start.hour,
+        end: end.hour,
+        startMinute: start.minute,
+        endMinute: end.minute,
+      });
+    }
+    zoom?.onApply(zoomFromPct(pct, span, zoom.vh));
     onClose();
   };
 
@@ -135,15 +174,45 @@ export function HourRangeSheet({
         </View>
       }
     >
-      <View className="px-5 pb-4">
-        <TimeRangePicker
-          start={start}
-          end={end}
-          onChangeStart={changeStart}
-          onChangeEnd={changeEnd}
-          allowEndOfDay={allowEndOfDay}
-        />
-      </View>
+      {hoursEditable ? (
+        <View className="px-5 pb-4">
+          <TimeRangePicker
+            start={start}
+            end={end}
+            onChangeStart={changeStart}
+            onChangeEnd={changeEnd}
+            allowEndOfDay={allowEndOfDay}
+          />
+        </View>
+      ) : null}
+      {zoom ? (
+        <View className="px-5 pb-4" style={{ paddingTop: hoursEditable ? 4 : 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" }}>
+            <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
+              Масштаб при открытии
+            </Text>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 17, fontWeight: "700", color: t.accent, fontVariant: ["tabular-nums"] }}
+            >
+              {pct}%
+            </Text>
+          </View>
+          <View style={{ marginTop: 6 }}>
+            <StepSlider
+              value={pct}
+              min={0}
+              max={100}
+              step={ZOOM_PCT_STEP}
+              onChange={setPct}
+              accessibilityLabel="Масштаб при открытии"
+            />
+          </View>
+          <Text maxFontSizeMultiplier={1.3} style={{ marginTop: 2, fontSize: 13, color: t.sub }}>
+            {zoomPctHint(pct, span, zoom.vh)}
+          </Text>
+        </View>
+      ) : null}
     </BottomSheet>
   );
 }

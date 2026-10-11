@@ -36,14 +36,6 @@ export type GridZoom = "fit" | number;
 const ZOOM_KEY = devicePrefKey("calendar.zoom");
 const TOP_KEY = devicePrefKey("calendar.topHour");
 
-/** Выбор в настройке «Масштаб». Числа — часы на экране. */
-export const ZOOM_PRESETS: readonly { zoom: GridZoom; label: string }[] = [
-  { zoom: "fit", label: "Весь день на экране" },
-  { zoom: 12, label: "12 часов на экране" },
-  { zoom: 8, label: "8 часов на экране" },
-  { zoom: 6, label: "6 часов на экране" },
-];
-
 const usable = (vh: number) => Math.max(1, vh - PAD_TOP - PAD_BOTTOM);
 
 /** Высота часа для масштаба. Без выбора — прежние 64 px (у тех, кто ничего
@@ -64,15 +56,6 @@ export function hourHForZoom(
 export function zoomForHourH(h: number, span: number, vh: number): GridZoom {
   if (h <= minHourH(span, vh)) return "fit";
   return Math.round((usable(vh) / h) * 100) / 100;
-}
-
-/** Подпись масштаба для строки настроек. */
-export function zoomLabel(zoom: GridZoom | null, vh: number | null): string {
-  if (zoom === "fit") return "Весь день на экране";
-  const hours =
-    zoom ?? (vh && vh > 0 ? usable(vh) / HOUR_H_DEFAULT : null);
-  if (hours == null) return "Обычный";
-  return `${Math.round(hours)} ч на экране`;
 }
 
 /** Прокрутка, при которой у верхнего края стоит `topHour`. */
@@ -151,4 +134,44 @@ export function readViewportH(view: string): number | null {
 }
 export function writeViewportH(view: string, vh: number): void {
   write(viewportKey(view), Math.round(vh * 100) / 100);
+}
+
+// МАСШТАБ В ПРОЦЕНТАХ (владелец 11.10: «ползунок в процентах — на сколько
+// открывать при заходе»; «от 0 до 100 может лучше»). 0 % — весь день на экране
+// (самый мелкий), 100 % — самый крупный (`HOUR_H_MAX`), между ними — ровно по
+// высоте часа. Хранится по-прежнему как «весь день» / «часы на экране»:
+// проценты — только язык ползунка.
+
+export const ZOOM_PCT_STEP = 5;
+/** Вьюпорт, пока экран ни разу не мерили (средний iPhone, неделя). */
+const FALLBACK_VH = 600;
+
+function pctRange(span: number, vh: number | null): { lo: number; hi: number; v: number } {
+  const v = vh ?? FALLBACK_VH;
+  return { lo: minHourH(span, v), hi: HOUR_H_MAX, v };
+}
+
+/** Сколько процентов показывает сохранённый масштаб (0…100). */
+export function zoomToPct(zoom: GridZoom | null, span: number, vh: number | null): number {
+  const { lo, hi, v } = pctRange(span, vh);
+  if (hi <= lo) return 0;
+  const h = hourHForZoom(zoom, span, v);
+  const pct = ((h - lo) / (hi - lo)) * 100;
+  return Math.min(100, Math.max(0, Math.round(pct / ZOOM_PCT_STEP) * ZOOM_PCT_STEP));
+}
+
+/** Масштаб из процентов ползунка: 0 % — «весь день». */
+export function zoomFromPct(pct: number, span: number, vh: number | null): GridZoom {
+  const { lo, hi, v } = pctRange(span, vh);
+  if (pct <= 0 || hi <= lo) return "fit";
+  const h = lo + (Math.min(100, pct) / 100) * (hi - lo);
+  return Math.round((usable(v) / h) * 100) / 100;
+}
+
+/** Подпись под ползунком: сколько часов видно сразу. */
+export function zoomPctHint(pct: number, span: number, vh: number | null): string {
+  if (pct <= 0) return "Весь день на экране";
+  const { lo, hi, v } = pctRange(span, vh);
+  const h = lo + (Math.min(100, pct) / 100) * (hi - lo);
+  return `≈ ${Math.max(1, Math.round(usable(v) / h))} ч на экране`;
 }

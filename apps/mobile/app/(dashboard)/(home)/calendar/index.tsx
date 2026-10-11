@@ -57,10 +57,9 @@ import {
   readGridZoom,
   readViewportH,
   writeGridZoom,
-  zoomLabel,
-  ZOOM_PRESETS,
+  zoomToPct,
+  type GridZoom,
 } from "@/features/calendar/grid-memory";
-import { chooseOption } from "@/lib/choose";
 import { useCurrentRole,
   usePlanAllows,
 } from "@/features/settings/tenant";
@@ -185,7 +184,7 @@ export default function CalendarSettingsScreen() {
   // когда работает команда, отвечает её ГРАФИК — он правится листом снизу.
   // Колонки `work_start_hour/work_end_hour` живы и остаются фолбэком сетки для
   // команды без строки расписания — стандарт 06:00–20:00.
-  const [picker, setPicker] = useState<"view" | "tz" | null>(null);
+  const [picker, setPicker] = useState<"view" | "zoom" | "tz" | null>(null);
   const role = useCurrentRole().data;
   // ПАРТНЁР ВЫХОДИТ САМ (владелец 09.10: «внизу должно быть не „удалить
   // команду", а „выйти из неё"»). Своё удаляет владелец; чужую команду
@@ -300,20 +299,11 @@ export default function CalendarSettingsScreen() {
 
   // Масштаб сетки — с этого телефона; щипок меняет его же.
   const [gridZoom, setGridZoom] = useState(readGridZoom);
-  const pickZoom = async () => {
-    const i = await chooseOption(
-      "Масштаб календаря",
-      ZOOM_PRESETS.map((p) => ({ label: p.label })),
-      {
-        message:
-          "Сколько времени видно на экране сразу. Пальцами масштаб меняется так же — календарь запоминает последний.",
-      },
-    );
-    if (i == null) return;
-    const zoom = ZOOM_PRESETS[i].zoom;
+  const applyZoom = (zoom: GridZoom) => {
     writeGridZoom(zoom, true);
     setGridZoom(zoom);
   };
+
 
   const work = effectiveWorkHours(s);
   // ПОЯС ЭТОГО КАЛЕНДАРЯ. Порядок ровно тот же, что читает весь продукт
@@ -340,7 +330,13 @@ export default function CalendarSettingsScreen() {
     end: window.end.hour,
     startMinute: window.start.minute,
     endMinute: window.end.minute,
-  };
+  };  const viewSpan = Math.max(
+    1,
+    Math.ceil((window.end.hour * 60 + window.end.minute) / 60) -
+      Math.floor((window.start.hour * 60 + window.start.minute) / 60),
+  );
+  const zoomPct = zoomToPct(gridZoom, viewSpan, readViewportH("week"));
+
 
   // ОДИН ДИАЛЕКТ У СТРОКИ ГРАФИКА (владелец 2026-08-21: «почему у команды один
   // график Пн–Вс 10–20, а у команды два просто 6–22, что это за хуета»).
@@ -554,30 +550,31 @@ export default function CalendarSettingsScreen() {
                   2026-08-25). Так и читается: сначала настраивают саму сетку — то,
                   на что смотришь каждый день, — а уже потом заполняют её работой
                   конкретной команды. */}
-              {/* «МАСШТАБ» — РЯДОМ С ЧАСАМИ (владелец 11.10: «брату удобней,
-                  чтоб первоначальный масштаб был меньше… это в часах
-                  календаря»). Часы говорят, КАКОЙ отрезок суток есть на сетке,
-                  масштаб — СКОЛЬКО его видно сразу. Масштаб — личный и
-                  телефонный (глаза и экран человека, `grid-memory.ts`),
-                  поэтому строка есть у каждого, даже без права менять часы,
-                  а щипок пальцами пишет в него же. */}
+              {/* «МАСШТАБ» — В ШТОРКЕ «ЧАСЫ КАЛЕНДАРЯ» (владелец 11.10: «масштаб
+                  добавь в шторку часы календаря, ползунок в процентах»). Часы
+                  говорят, КАКОЙ отрезок суток есть на сетке, масштаб — СКОЛЬКО
+                  его видно сразу. Масштаб личный и телефонный (`grid-memory.ts`),
+                  поэтому шторка открыта каждому: без права менять часы — только
+                  с ползунком. Тот, кому часы не видны вовсе, получает свою
+                  строку «Масштаб» с той же шторкой. */}
               <SectionCard className="mt-4">
                 {rows.hours ? (
                   <SettingsRow
                     tile={SETTINGS_TILE.teal}
                     icon={CalendarRange}
                     title="Часы календаря"
-                    sub={`${formatHm(window.start)}–${formatHm(window.end)}`}
-                    onPress={rows.hoursEdit ? () => setPicker("view") : undefined}
+                    sub={`${formatHm(window.start)}–${formatHm(window.end)} · масштаб ${zoomPct}%`}
+                    onPress={() => setPicker("view")}
                   />
-                ) : null}
-                <SettingsRow
-                  tile={SETTINGS_TILE.indigo}
-                  icon={ZoomIn}
-                  title="Масштаб"
-                  sub={zoomLabel(gridZoom, readViewportH("week"))}
-                  onPress={pickZoom}
-                />
+                ) : (
+                  <SettingsRow
+                    tile={SETTINGS_TILE.indigo}
+                    icon={ZoomIn}
+                    title="Масштаб"
+                    sub={`${zoomPct}%`}
+                    onPress={() => setPicker("zoom")}
+                  />
+                )}
               </SectionCard>
               {rows.schedule ? (
                 <SectionCard>
@@ -902,9 +899,11 @@ export default function CalendarSettingsScreen() {
       {/* Часы календаря — нижним листом «С … До …» (владелец 2026-08-16: «как
           время в финансах»): сегмент С|До, список часов, «Применить». */}
       <HourRangeSheet
-        visible={picker === "view"}
-        title="Часы календаря"
+        visible={picker === "view" || picker === "zoom"}
+        title={picker === "zoom" ? "Масштаб" : "Часы календаря"}
         value={view}
+        hoursEditable={picker === "view" && rows.hoursEdit}
+        zoom={{ initial: gridZoom, vh: readViewportH("week"), onApply: applyZoom }}
         onClose={() => setPicker(null)}
         // ПИШЕТСЯ В КОМАНДУ, А НЕ В КОМПАНИЮ: часы календаря принадлежат этому
         // календарю. Текст «ЧЧ:ММ» в `teams.calendar_window_*` несёт и минуты,

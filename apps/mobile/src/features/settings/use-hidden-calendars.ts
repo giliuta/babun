@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { getStorage } from "@babun/shared/storage";
 import { useMirror } from "@/features/access/mirror/mirror-state";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
@@ -13,6 +14,32 @@ import { calendarKey, canHideCalendar, effectiveHidden } from "./hidden-calendar
 // предпросмотр показывает его ленты, а не ваш выбор.
 
 const hiddenKey = (userId: string | null) => ["hidden-calendars", userId] as const;
+
+// КОПИЯ НА ТЕЛЕФОНЕ (владелец 11.10: «скрыл свой календарь, но при заходе он
+// показывается»). Список жил только на сервере: первые секунды после входа
+// приложение не знало, что календарь скрыт, открывало его и рисовало в ленте,
+// а потом прятало. Теперь первый кадр читает копию, сервер её подтверждает.
+// Ключ — человека (реестр `tenant-prefs.ts`): переход между аккаунтами её не
+// сносит, выход из аккаунта — сносит.
+export const HIDDEN_CALENDARS_CACHE_PREFIX = "babun:calendars.hidden:";
+const cacheKey = (userId: string) => `${HIDDEN_CALENDARS_CACHE_PREFIX}${userId}`;
+function readCache(userId: string | null): string[] | undefined {
+  if (!userId) return undefined;
+  try {
+    const v = getStorage().get<string[]>(cacheKey(userId));
+    return Array.isArray(v) ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+function writeCache(userId: string | null, keys: string[]): void {
+  if (!userId) return;
+  try {
+    getStorage().set(cacheKey(userId), keys);
+  } catch {
+    // копия — удобство, не данные
+  }
+}
 
 /** `calendars` — все календари человека (`useMyCalendars`); `undefined`, пока
  *  список едет. Список передаёт зовущий: этот модуль не тянет `workspaces`,
@@ -28,12 +55,15 @@ export function useHiddenCalendars(
     queryKey: hiddenKey(userId),
     enabled: !!userId,
     staleTime: 60_000,
+    placeholderData: () => readCache(userId),
     queryFn: async (): Promise<string[]> => {
       const { data, error } = await supabase
         .from("user_hidden_calendars")
         .select("tenant_id, team_id");
       if (error) throw new Error(error.message);
-      return (data ?? []).map((row) => calendarKey(row.tenant_id, row.team_id));
+      const keys = (data ?? []).map((row) => calendarKey(row.tenant_id, row.team_id));
+      writeCache(userId, keys);
+      return keys;
     },
   });
 
@@ -97,10 +127,9 @@ export function useHiddenCalendars(
       await qc.cancelQueries({ queryKey: hiddenKey(userId) });
       const key = calendarKey(input.tenantId, input.teamId);
       const before = qc.getQueryData<string[]>(hiddenKey(userId)) ?? [];
-      qc.setQueryData<string[]>(
-        hiddenKey(userId),
-        input.hide ? [...before.filter((k) => k !== key), key] : before.filter((k) => k !== key),
-      );
+      const next = input.hide ? [...before.filter((k) => k !== key), key] : before.filter((k) => k !== key);
+      qc.setQueryData<string[]>(hiddenKey(userId), next);
+      writeCache(userId, next);
       return { before };
     },
     onError: (_error, _input, context) => {
@@ -110,5 +139,10 @@ export function useHiddenCalendars(
     meta: { errorHandled: true },
   });
 
-  return { hidden, isHidden, canHide, toggle, loading: storedQuery.isPending };
+  // ИЗВЕСТНО ЛИ, ЧТО СКРЫТО: есть копия на телефоне или ответ сервера (в том
+  // числе ошибка — тогда живём без скрытых, а не на вечной заставке).
+  // Календарь не открывает ничего, пока это неизвестно, — иначе первым
+  // кадром показался бы скрытый.
+  const known = inMirror || !userId || storedQuery.data !== undefined || !storedQuery.isPending;
+  return { hidden, isHidden, canHide, toggle, loading: storedQuery.isPending, known };
 }

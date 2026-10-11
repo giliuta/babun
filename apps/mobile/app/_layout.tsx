@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { View } from "react-native";
 import { router, Stack, type ErrorBoundaryProps } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { BootSplash } from "@/features/boot/BootSplash";
 import { AppProviders } from "@/providers/AppProviders";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
@@ -114,6 +115,7 @@ function RootNavigator() {
   if (loading) return null;
 
   return (
+    <>
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(dashboard)" />
@@ -155,6 +157,9 @@ function RootNavigator() {
       <Stack.Screen name="delete-account" />
       <Stack.Screen name="support" />
     </Stack>
+    {/* Заставка поверх первого экрана — до готовности календаря (11.10). */}
+    <BootSplash hold={!!session} />
+    </>
   );
 }
 

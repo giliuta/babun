@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { CHIP_GAP, DraggableChip, useChipDrag } from "@/components/ui/chip-drag";
+import { CHIP_GAP, DraggableChipRow } from "@/components/ui/chip-drag";
 import { ScrollView, View } from "react-native";
 import { Chip } from "@/components/ui/Chip";
 import { useThemeColors } from "@/theme/colors";
@@ -84,11 +84,7 @@ export function ScopeChips({
     if (on) justDragged.current = true;
     else setTimeout(() => (justDragged.current = false), 250);
   };
-  const drag = useChipDrag(
-    items.map((item) => item.id),
-    (ids) => onReorder?.(ids),
-    onDragging,
-  );
+
   // Левый край каждого чипа в координатах ленты + к какому чипу лента уже
   // подведена. БЕЗ второго ref повторный layout (поворот, дозагрузка команд)
   // дёргал бы ленту обратно посреди ручной прокрутки.
@@ -115,21 +111,7 @@ export function ScopeChips({
   // пропадала бы единственная дверь создания.
   if (items.length === 0 && !trailing) return null;
 
-  const chip = (key: string, node: ReactNode, index: number) =>
-    onReorder ? (
-      <DraggableChip
-        key={key}
-        index={index}
-        drag={drag}
-        onDragging={onDragging}
-        onMeasured={(x) => {
-          offsets.current.set(key, x);
-          if (key === activeId) reveal(key, false);
-        }}
-      >
-        {node}
-      </DraggableChip>
-    ) : (
+  const chip = (key: string, node: ReactNode) => (
     <View
       key={key}
       onLayout={(e) => {
@@ -141,7 +123,27 @@ export function ScopeChips({
     >
       {node}
     </View>
-    );
+  );
+
+  const renderChip = (item: ScopeChip) => (
+    <Chip
+      label={item.name}
+      variant="scope"
+      color={item.color || undefined}
+      radio
+      selected={activeId === item.id}
+      // БЕЗ ТОЧКИ ЦВЕТА (владелец 30.09: «уберём вообще этот
+      // кругляшок — просто меняет цвет, когда тапаешь»). Точка то
+      // появлялась, то пропадала вместе с выбором, и пилюля меняла
+      // ширину — соседи ездили по ленте. Цвет команды теперь несёт
+      // только заливка выбранного чипа; покой — одинаково серый.
+      onPress={() => {
+        if (justDragged.current) return;
+        onSelect(item.id);
+      }}
+      style={{ maxWidth: 180 }}
+    />
+  );
 
   const strip = (
     <ScrollView
@@ -170,30 +172,27 @@ export function ScopeChips({
         alignItems: "center",
       }}
     >
-      {items.map((item, index) => {
-        const selected = activeId === item.id;
-        return chip(
-          item.id,
-          <Chip
-            label={item.name}
-            variant="scope"
-            color={item.color || undefined}
-            radio
-            selected={selected}
-            // БЕЗ ТОЧКИ ЦВЕТА (владелец 30.09: «уберём вообще этот
-            // кругляшок — просто меняет цвет, когда тапаешь»). Точка то
-            // появлялась, то пропадала вместе с выбором, и пилюля меняла
-            // ширину — соседи ездили по ленте. Цвет команды теперь несёт
-            // только заливка выбранного чипа; покой — одинаково серый.
-            onPress={() => {
-              if (justDragged.current) return;
-              onSelect(item.id);
-            }}
-            style={{ maxWidth: 180 }}
-          />,
-          index,
-        );
-      })}
+      {onReorder ? (
+        // ЗАЖАТЬ И ПЕРЕТАЩИТЬ (шестерёнка календаря): места чипов считает
+        // поток анимации (`chip-drag.tsx`), поэтому отпускание не прыгает.
+        <DraggableChipRow
+          ids={items.map((item) => item.id)}
+          pad={0}
+          onReorder={onReorder}
+          onDragging={onDragging}
+          onPositions={(x) => {
+            // Края — от начала ленты: её левый отступ 20.
+            for (const [id, left] of Object.entries(x)) offsets.current.set(id, left + 20);
+            if (activeId && x[activeId] != null) reveal(activeId, false);
+          }}
+          renderChip={(id) => {
+            const item = items.find((it) => it.id === id);
+            return item ? renderChip(item) : null;
+          }}
+        />
+      ) : (
+        items.map((item) => chip(item.id, renderChip(item)))
+      )}
     </ScrollView>
   );
 
