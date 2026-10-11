@@ -1,3 +1,9 @@
+import {
+  TemplateList,
+  TemplatesHeaderButton,
+  useTemplatePicking,
+  type TemplateItem,
+} from "@/components/ui/TemplatePicker";
 import { useState } from "react";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Keyboard, ScrollView, View } from "react-native";
@@ -149,7 +155,10 @@ export function SmsTemplateSheet({
   teamName,
   template,
   onClose,
+  templates,
 }: {
+  /** Шаблоны из других команд аккаунта (значок в шапке при создании). */
+  templates?: readonly TemplateItem<SmsTeamTemplate>[];
   visible: boolean;
   teamId: string;
   teamName?: string;
@@ -157,6 +166,7 @@ export function SmsTemplateSheet({
   template: SmsTeamTemplate | null;
   onClose: () => void;
 }) {
+  const { picking, setPicking } = useTemplatePicking();
   const t = useThemeColors();
   const toast = useToast();
   const save = useSaveTeamTemplate();
@@ -167,6 +177,7 @@ export function SmsTemplateSheet({
   const key = !visible ? null : template ? template.id : "create";
   if (key !== seededFor) {
     setSeededFor(key);
+    setPicking(false);
     if (key) setDraft(template ? draftOf(template) : blankDraft(teamId));
   }
   const [whenOpen, setWhenOpen] = useState(false);
@@ -209,6 +220,12 @@ export function SmsTemplateSheet({
       onError: (e) => notify("Не удалось сохранить", e instanceof Error ? e.message : undefined),
     });
 
+  const applyTemplate = (tpl: SmsTeamTemplate) => {
+    // Новый шаблон ЭТОЙ команды: текст, когда и вид — как у шаблона.
+    setDraft({ ...draftOf(tpl), id: null, teamId });
+    setPicking(false);
+  };
+
   return (
     <BottomSheet
       visible={visible && !guard.hidden}
@@ -219,8 +236,7 @@ export function SmsTemplateSheet({
       padded={false}
       maxHeightRatio={0.92}
       avoidKeyboard
-      footer={
-        <View
+      footer={picking ? undefined : (<View
           style={{
             paddingHorizontal: GUTTER,
             paddingTop: 10,
@@ -243,9 +259,18 @@ export function SmsTemplateSheet({
                 : undefined
             }
           />
-        </View>
+        </View>)}
+    
+      headerAction={
+        !template && (templates?.length ?? 0) > 0 ? (
+          <TemplatesHeaderButton picking={picking} onToggle={() => setPicking((v) => !v)} />
+        ) : undefined
       }
     >
+      {picking ? (
+        <TemplateList items={templates ?? []} gutter={true} onPick={applyTemplate} />
+      ) : (
+      <>
       {/* Тело — язык страницы (блоки на прохладном фоне), как у листа объекта.
           Паддинги только через contentContainerStyle — className на ScrollView
           NativeWind молча роняет. */}
@@ -317,6 +342,8 @@ export function SmsTemplateSheet({
         />
         <SmsTermSheet kind={term} value={draft} onClose={() => setTerm(null)} onApply={(patch) => set(patch)} />
       </ScrollView>
+          </>
+      )}
     </BottomSheet>
   );
 }

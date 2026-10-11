@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import {
@@ -19,6 +20,9 @@ import { useEventTypesEditor } from "./use-event-types-editor";
 import { useLocalSearchParams } from "expo-router";
 import { useTeams } from "@/features/reference/queries";
 import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
+import { useDataRole } from "@/features/settings/tenant";
+import { usePersonalEventTypes } from "@/features/settings/local-settings";
+import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 
 // ТИПЫ СОБЫТИЙ — СПРАВОЧНИК ПО ОБЩЕМУ КАНОНУ (владелец 2026-09-08: «в
 // настройках событий надо сделать то же самое, как сделано в услугах или как
@@ -68,6 +72,28 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
   // Типы — часть «Записей» (владелец 30.09): «Только видит» — список без
   // правки, ни кнопки, ни свайпов, ни ручек.
   const readOnly = useTeamSettingLevel("calendar.booking_form", teamId) !== "write";
+  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг). Только владелец.
+  const isOwner = useDataRole().data === "owner";
+  const allTypes = usePersonalEventTypes().data ?? [];
+  const typeTemplates = useMemo(
+    () =>
+      isOwner
+        ? otherTeamTemplates(allTypes, {
+            teamId,
+            teamOf: (x) => x.teamId,
+            nameOf: (x) => x.label,
+            active: (x) => !x.hidden,
+          }).map((x) => ({
+            key: x.id,
+            name: x.label,
+            color: x.color ?? null,
+            icon: x.icon ?? null,
+            sub: teams.find((tm) => tm.id === x.teamId)?.name,
+            value: x,
+          }))
+        : [],
+    [isOwner, allTypes, teamId, teams],
+  );
 
   return (
     <Screen edges={["top"]}>
@@ -202,6 +228,7 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
         busy={save.isPending}
         onClose={() => setEditing(null)}
         onSubmit={submit}
+        templates={typeTemplates}
       />
     </Screen>
   );

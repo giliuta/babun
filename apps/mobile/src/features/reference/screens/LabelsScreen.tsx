@@ -1,3 +1,9 @@
+import {
+  TemplateList,
+  TemplatesHeaderButton,
+  useTemplatePicking,
+  type TemplateItem,
+} from "@/components/ui/TemplatePicker";
 import { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { readTenantPref } from "@/lib/tenant-prefs";
@@ -42,6 +48,8 @@ import {
   type City,
 } from "@/features/reference/queries";
 import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
+import { useDataRole } from "@/features/settings/tenant";
+import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
 
 /** Что лист отдаёт наружу при сохранении. Объектом, а не пятью позиционными
@@ -145,6 +153,28 @@ export function LabelsScreen() {
   // Раньше `useCities()` их отфильтровывал, и скрытая метка исчезала с экрана
   // совсем — вернуть её было нечем.
   const citiesQuery = useCities({ includeInactive: true, teamId });
+  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг): метки других
+  // команд аккаунта, которых здесь ещё нет по имени. Только у владельца.
+  const isOwner = useDataRole().data === "owner";
+  const allCities = useCities({ includeInactive: true }).data ?? [];
+  const labelTemplates = useMemo(
+    () =>
+      isOwner
+        ? otherTeamTemplates(allCities, {
+            teamId,
+            teamOf: (c) => c.team_id,
+            nameOf: (c) => c.name,
+            active: (c) => c.is_active !== false && !c.deleted_at,
+          }).map((c) => ({
+            key: c.id,
+            name: c.name,
+            color: c.color ?? null,
+            sub: teams.find((tm) => tm.id === c.team_id)?.name,
+            value: c,
+          }))
+        : [],
+    [isOwner, allCities, teamId, teams],
+  );
   const dayCitiesQuery = useDayCities();
   const schedulesQuery = useAllTeamSchedules();
   // Живые сверху, скрытые под ними, удалённые в самом хвосте — тем же
@@ -586,6 +616,7 @@ export function LabelsScreen() {
         onClose={() => setEditing(null)}
         onCreate={add}
         onUpdate={edit}
+        templates={labelTemplates}
       />
     </Screen>
   );
@@ -599,7 +630,10 @@ function LabelEditSheet({
   onClose,
   onCreate,
   onUpdate,
+  templates,
 }: {
+  /** Шаблоны из других команд аккаунта (значок в шапке при создании). */
+  templates?: readonly TemplateItem<City>[];
   editing: Editing | null;
   /** День недели → метка, которая его уже держит, вместе с её цветом. */
   takenBy: Map<number, { name: string; color: string | null }>;
@@ -610,6 +644,7 @@ function LabelEditSheet({
   onCreate: (draft: LabelDraft) => void;
   onUpdate: (city: City, draft: LabelDraft) => void;
 }) {
+  const { picking, setPicking } = useTemplatePicking();
   const t = useThemeColors();
   const isEdit = editing?.mode === "edit";
   // key-remount через editing==null → null; локальный стейт инициализируем
@@ -631,6 +666,7 @@ function LabelEditSheet({
 
   if (editing !== seeded) {
     setSeeded(editing);
+    setPicking(false);
     setName(isEdit ? editing.city.name : "");
     setColor(
       isEdit ? editing.city.color ?? FALLBACK_COLOR : PRESET_COLOR_CYCLE[0].value,
@@ -679,6 +715,13 @@ function LabelEditSheet({
   // выглядит ужасно — сделай как везде»). Разница видна пальцем: у примитива
   // скрим гаснет на месте, лист приезжает пружиной, есть грабер и свайп вниз,
   // а системная «слайд-модалка» тащила вверх ВЕСЬ серый прямоугольник экрана.
+  const applyTemplate = (tpl: City) => {
+    setName(tpl.name);
+    setColor(tpl.color ?? FALLBACK_COLOR);
+    setTintDay(tpl.tint_day ?? true);
+    setPicking(false);
+  };
+
   return (
     <BottomSheet
       visible={editing !== null && !guard.hidden}
@@ -686,8 +729,7 @@ function LabelEditSheet({
       onExited={guard.onExited}
       title={isEdit ? "Метка" : "Новая метка"}
       avoidKeyboard
-      footer={
-        <>
+      footer={picking ? undefined : (<>
           <Button
             label={isEdit ? "Сохранить" : "Создать"}
             onPress={() => {
@@ -710,9 +752,18 @@ function LabelEditSheet({
               `Modal` и подтверждение показывается честно.
 
               Одно действие — одно место. */}
-        </>
+        </>)}
+    
+      headerAction={
+        !isEdit && (templates?.length ?? 0) > 0 ? (
+          <TemplatesHeaderButton picking={picking} onToggle={() => setPicking((v) => !v)} />
+        ) : undefined
       }
     >
+      {picking ? (
+        <TemplateList items={templates ?? []} gutter={false} onPick={applyTemplate} />
+      ) : (
+      <>
       {/* ТА ЖЕ СТРОКА, ЧТО У КАЛЕНДАРЯ И УСЛУГИ (владелец 2026-08-29:
           «делаем как везде по архитектуре»): цвет точкой слева, имя справа,
           один элемент вместо двух. Здесь стояли поле «Название» и отдельная
@@ -895,6 +946,8 @@ function LabelEditSheet({
           onChange={setTintDay}
         />
       </View>
+          </>
+      )}
     </BottomSheet>
   );
 }

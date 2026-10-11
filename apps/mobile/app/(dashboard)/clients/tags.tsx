@@ -1,8 +1,16 @@
+import {
+  TemplateList,
+  TemplatesHeaderButton,
+  useTemplatePicking,
+  type TemplateItem,
+} from "@/components/ui/TemplatePicker";
 import { useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import type { ClientTag } from "@babun/shared/local/clients";
+import { useDataRole } from "@/features/settings/tenant";
+import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -102,6 +110,26 @@ function ClientTagsScreen() {
   // ПОРЯДОК СПИСКА: сначала видимые в порядке владельца, скрытые — в конце.
   // Имя разводит только равные позиции (у тегов, заведённых до 2026-09-10,
   // позиция проставлена миграцией по алфавиту).
+  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг). Только владелец.
+  const isOwner = useDataRole().data === "owner";
+  const tagTemplates = useMemo(
+    () =>
+      isOwner
+        ? otherTeamTemplates(tagsQuery.data ?? [], {
+            teamId,
+            teamOf: (x) => x.team_id,
+            nameOf: (x) => x.name,
+          }).map((x) => ({
+            key: x.id,
+            name: x.name,
+            color: x.color ?? null,
+            icon: x.icon ?? null,
+            sub: ownTeams.find((tm) => tm.id === x.team_id)?.name,
+            value: x,
+          }))
+        : [],
+    [isOwner, tagsQuery.data, teamId, ownTeams],
+  );
   const tags = useMemo(
     () =>
       [...(tagsQuery.data ?? [])]
@@ -347,6 +375,7 @@ function ClientTagsScreen() {
         busy={busy}
         onClose={() => (busy ? undefined : setEditing(null))}
         onSubmit={submit}
+        templates={tagTemplates}
       />
     </Screen>
   );
@@ -360,12 +389,16 @@ function TagSheet({
   busy,
   onClose,
   onSubmit,
+  templates,
 }: {
+  /** Шаблоны из других команд аккаунта (значок в шапке при создании). */
+  templates?: readonly TemplateItem<ClientTag>[];
   editing: Editing | null;
   busy: boolean;
   onClose: () => void;
   onSubmit: (draft: { name: string; color: string; icon: string | null }) => void;
 }) {
+  const { picking, setPicking } = useTemplatePicking();
   const isEdit = editing?.mode === "edit";
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEFAULT_COLOR);
@@ -375,10 +408,18 @@ function TagSheet({
   const [seeded, setSeeded] = useState<Editing | null>(null);
   if (editing !== seeded) {
     setSeeded(editing);
+    setPicking(false);
     setName(isEdit ? editing.tag.name : "");
     setColor(isEdit ? editing.tag.color || DEFAULT_COLOR : DEFAULT_COLOR);
     setIcon(isEdit ? (editing.tag.icon ?? null) : null);
   }
+
+  const applyTemplate = (tpl: ClientTag) => {
+    setName(tpl.name);
+    setColor(tpl.color || DEFAULT_COLOR);
+    setIcon(tpl.icon ?? null);
+    setPicking(false);
+  };
 
   return (
     <BottomSheet
@@ -386,17 +427,25 @@ function TagSheet({
       onClose={onClose}
       title={isEdit ? "Тег" : "Новый тег"}
       avoidKeyboard
-      footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+      footer={picking ? undefined : (<View style={{ paddingHorizontal: GUTTER }}>
           <Button
             label={isEdit ? "Сохранить" : "Создать тег"}
             disabled={!name.trim() || busy}
             loading={busy}
             onPress={() => onSubmit({ name, color, icon })}
           />
-        </View>
+        </View>)}
+    
+      headerAction={
+        !isEdit && (templates?.length ?? 0) > 0 ? (
+          <TemplatesHeaderButton picking={picking} onToggle={() => setPicking((v) => !v)} />
+        ) : undefined
       }
     >
+      {picking ? (
+        <TemplateList items={templates ?? []} gutter={false} onPick={applyTemplate} />
+      ) : (
+      <>
       <NameColorField
         name={name}
         onNameChange={setName}
@@ -406,6 +455,8 @@ function TagSheet({
         onIconChange={setIcon}
         autoFocus={!isEdit}
       />
+          </>
+      )}
     </BottomSheet>
   );
 }

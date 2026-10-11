@@ -306,6 +306,7 @@ test("шаблоны новой услуги — значком в шапке Л
   const sheet = readFileSync(resolve(here, "ServiceSheet.tsx"), "utf8");
   assert.match(sheet, /const canPickTemplate = !service && \(templates\?\.length \?\? 0\) > 0;/);
   assert.match(sheet, /\{picking \? \(\s*<TemplateList/);
+  assert.match(sheet, /<TemplatesHeaderButton picking=\{picking\}/);
   assert.match(sheet, /seedFields\(from, from\.name\);/);
   assert.match(sheet, /\? \{ copied_from_service_id: template\.id \}/);
   assert.doesNotMatch(sheet, /chooseOption\(|confirmThen\(/);

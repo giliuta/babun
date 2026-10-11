@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Keyboard, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { CopyPlus, X } from "lucide-react-native";
-import { AppearanceTile } from "@/components/ui/AppearanceSheet";
-import { haptics } from "@/lib/haptics";
+import { X } from "lucide-react-native";
+import { TemplateList, TemplatesHeaderButton } from "@/components/ui/TemplatePicker";
 import { moneySymbol } from "@babun/shared/common/utils/money";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
@@ -442,7 +441,6 @@ export function ServiceSheet({
 
   const canPickTemplate = !service && (templates?.length ?? 0) > 0;
   const applyTemplate = (from: Service) => {
-    haptics.tap();
     // Имя — как у шаблона: в этой команде это не копия, а своя услуга.
     seedFields(from, from.name);
     setTemplate(from);
@@ -477,29 +475,7 @@ export function ServiceSheet({
       // и обходить нечего; скопировать услугу можно, заведя новую.
       headerAction={
         canPickTemplate ? (
-          <Pressable
-            onPress={() => {
-              haptics.tap();
-              Keyboard.dismiss();
-              setPicking((v) => !v);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={picking ? "Закрыть шаблоны" : "Шаблоны услуг"}
-            hitSlop={10}
-            style={({ pressed }) => ({
-              width: 32,
-              height: 32,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: pressed ? 0.5 : 1,
-            })}
-          >
-            {picking ? (
-              <X color={t.sub} size={22} strokeWidth={2} />
-            ) : (
-              <CopyPlus color={t.accent} size={22} strokeWidth={2} />
-            )}
-          </Pressable>
+          <TemplatesHeaderButton picking={picking} onToggle={() => setPicking((v) => !v)} />
         ) : undefined
       }
       footer={
@@ -517,8 +493,15 @@ export function ServiceSheet({
     >
       {picking ? (
         <TemplateList
-          templates={templates ?? []}
-          currencySymbol={currencySymbol}
+          items={(templates ?? []).map(({ service: sv, teamName }) => ({
+            key: sv.id,
+            name: sv.name,
+            color: sv.color ?? null,
+            icon: sv.icon ?? null,
+            sub: teamName,
+            trailing: `${currencySymbol}${Number(sv.price)}`,
+            value: sv,
+          }))}
           onPick={applyTemplate}
         />
       ) : (
@@ -961,60 +944,5 @@ export function ServiceSheet({
       </>
       )}
     </BottomSheet>
-  );
-}
-
-/** Шаблоны новой услуги: готовые услуги других команд аккаунта. Строка — как
- *  в прайсе: значок вида, имя, команда и цена; тап заполняет форму. */
-function TemplateList({
-  templates,
-  currencySymbol,
-  onPick,
-}: {
-  templates: readonly { service: Service; teamName: string }[];
-  currencySymbol: string;
-  onPick: (service: Service) => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <View style={{ paddingHorizontal: GUTTER, paddingBottom: 16, gap: 8 }}>
-      <FieldLabel text="Готовые услуги других команд" />
-      {templates.map(({ service, teamName }) => (
-        <Pressable
-          key={service.id}
-          onPress={() => onPick(service)}
-          accessibilityRole="button"
-          accessibilityLabel={`Шаблон ${service.name}`}
-          style={({ pressed }) => ({
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 12,
-            minHeight: 60,
-            paddingHorizontal: 14,
-            borderRadius: t.radius.card,
-            borderCurve: "continuous",
-            backgroundColor: pressed ? t.pressed : t.surface,
-            borderWidth: 1,
-            borderColor: t.separator,
-          })}
-        >
-          <AppearanceTile color={service.color} icon={service.icon} size={34} />
-          <View style={{ flex: 1 }}>
-            <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 16, fontWeight: "600", color: t.ink }}>
-              {service.name}
-            </Text>
-            {teamName ? (
-              <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, color: t.sub, marginTop: 1 }}>
-                {teamName}
-              </Text>
-            ) : null}
-          </View>
-          <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 16, fontWeight: "600", color: t.ink }}>
-            {currencySymbol}
-            {Number(service.price)}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
   );
 }
