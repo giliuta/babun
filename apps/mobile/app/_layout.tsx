@@ -13,6 +13,7 @@ import { MirrorBanner, MirrorInsetShim } from "@/features/access/mirror/MirrorBa
 import { useSession } from "@/providers/SessionProvider";
 import { ChoiceSheetHost } from "@/components/ui/ChoiceSheet";
 import { ToastProvider } from "@/components/ui/Toast";
+import { AppUpdateGate } from "@/features/app-update/AppUpdateGate";
 import {
   consumeLastAppointmentNotificationTarget,
   subscribeToAppointmentNotificationResponses,
@@ -176,7 +177,11 @@ export default function RootLayout() {
           <View style={{ flex: 1 }}>
             <MirrorBanner />
             <MirrorInsetShim>
-              <RootNavigator />
+              {/* «Вышло обновление» (11.10): устаревшую сборку не пускает
+                  дальше, новую версию в магазине — показывает плашкой. */}
+              <AppUpdateGate>
+                <RootNavigator />
+              </AppUpdateGate>
             </MirrorInsetShim>
           </View>
         </ChoiceSheetHost>

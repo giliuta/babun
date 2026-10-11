@@ -343,6 +343,30 @@ export type Database = {
           },
         ]
       }
+      app_release: {
+        Row: {
+          latest_version: string
+          min_version: string
+          platform: string
+          store_url: string
+          updated_at: string
+        }
+        Insert: {
+          latest_version: string
+          min_version?: string
+          platform: string
+          store_url: string
+          updated_at?: string
+        }
+        Update: {
+          latest_version?: string
+          min_version?: string
+          platform?: string
+          store_url?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           key: string

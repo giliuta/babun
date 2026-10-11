@@ -12,6 +12,7 @@ import {
   pinchAnchor,
   pinchFrame,
   pinchRelease,
+  releaseScrollsFirst,
   screenY,
   settleStep,
   wheelZoomFactor,
@@ -60,8 +61,18 @@ class Grid {
     const callbacks = this.raf;
     this.raf = [];
     for (const cb of callbacks) cb();
+    this.flush();
+  }
+  /** Конец обработчика события жеста: Reanimated гонит мапперы микрозадачей и
+   *  выкладывает их сразу, не дожидаясь кадра (`performOperations`). */
+  flush() {
     Object.assign(this.mounted, this.pending);
     this.pending = {};
+    // UIKit на смене contentSize сам вдвигает прокрутку в новый предел
+    // (`_adjustContentOffsetIfNecessary`): сетка стала ниже — offset за её
+    // краем срезается в этом же кадре. Именно это давало отскок при
+    // уменьшении (владелец 11.10).
+    this.scrollY = Math.min(this.scrollY, maxScroll(this.span, this.mounted.layoutH, VH));
   }
   y(t: number): number {
     return screenY(t, { ...this.mounted, scrollY: this.scrollY });
@@ -84,7 +95,7 @@ function probes(g: Grid): number[] {
 /** Ровно то, что делает `zoom.tsx`: onStart, кадры onUpdate, onFinalize и
  *  шаги отпускания через requestAnimationFrame. Возвращает след кадров. */
 function runPinch(g: Grid, p: Pinch) {
-  const baseH = g.read("layoutH");
+  const baseH = g.read("layoutH") * g.read("scale");
   const scrollY0 = g.scrollY;
   const anchor = pinchAnchor(g.scrollY - g.read("ty"), p.focal0, baseH);
   const before = new Map(probes(g).map((t) => [t, g.y(t)]));
@@ -105,7 +116,7 @@ function runPinch(g: Grid, p: Pinch) {
     h = f.h;
     lastFocal = fr.focalY;
     lastOffset = f.offset;
-    g.write({ scale: f.h / baseH, ty: scrollY0 - f.offset });
+    g.write({ scale: f.h / g.read("layoutH"), ty: scrollY0 - f.offset });
     g.frame();
     gesture.push({
       focalY: fr.focalY,
@@ -123,7 +134,21 @@ function runPinch(g: Grid, p: Pinch) {
     span: g.span,
     vh: VH,
   });
-  g.write({ layoutH: r.snapped, scale: 1, ty: r.holdTy });
+  const commitLayout = () => {
+    g.write({ layoutH: r.snapped, scale: 1, ty: g.scrollY - r.target });
+    g.raf.push(() => step(0, g.scrollY));
+  };
+  if (releaseScrollsFirst(r.target, scrollY0)) {
+    g.scrollTo(r.target);
+    g.write({ ty: g.read("ty") - (scrollY0 - r.target) });
+    g.raf.push(commitLayout);
+  } else {
+    commitLayout();
+  }
+  g.flush();
+  const snap = () => new Map([...last.ys.keys()].map((t) => [t, g.y(t)]));
+  // Кадр самого отпускания — тот, что выложен до первого requestAnimationFrame.
+  const release: Map<number, number>[] = [snap()];
   let settled = false;
   const step = (tries: number, prev: number) => {
     g.scrollTo(r.target);
@@ -133,13 +158,11 @@ function runPinch(g: Grid, p: Pinch) {
     if (s.again) g.raf.push(() => step(tries + 1, actual));
     else settled = true;
   };
-  g.raf.push(() => step(0, g.scrollY));
-  const release: Map<number, number>[] = [];
   let frames = 0;
   while (!settled && frames < 60) {
     g.frame();
     frames++;
-    release.push(new Map([...last.ys.keys()].map((t) => [t, g.y(t)])));
+    release.push(snap());
   }
   // Время под пальцами в последнем кадре — точка, от которой растягивается
   // округление высоты (у края дня это уже не якорь начала жеста).
@@ -227,7 +250,7 @@ describe("зум сетки: время под пальцами", () => {
         // Отпускание: картинка не двигается ни в одном кадре — только
         // округление высоты до целого пикселя, ноль под пальцами.
         assert.ok(run.settled, `жест ${i}: прокрутка не встала`);
-        assert.ok(run.frames <= 3, `жест ${i}: встала за ${run.frames} кадров`);
+        assert.ok(run.frames <= 4, `жест ${i}: встала за ${run.frames} кадров`);
         for (const ys of run.release) {
           for (const [t, y0] of run.last.ys) {
             const tol = Math.abs(run.r.snapped - run.h) * Math.abs(t - run.pivot) + 0.02;
@@ -267,16 +290,60 @@ describe("зум сетки: время под пальцами", () => {
   });
 });
 
+describe("зум сетки: уменьшение без отскока (владелец 11.10)", () => {
+  test("уменьшение снизу дня: ни кадра вниз-и-обратно", () => {
+    // Случай владельца: прокручено к вечеру, щипок «свести» — сетка ниже,
+    // прежний offset за её новым краем. До правки кадр отпускания прыгал.
+    const g = new Grid(18, 64, maxScroll(18, 64, VH));
+    const frames: Frame[] = [0.9, 0.75, 0.6, 0.5].map((s) => ({ scale: s, focalY: 300 }));
+    const run = runPinch(g, { scale0: 1, focal0: 300, frames });
+    for (const ys of run.release) {
+      for (const [t, y0] of run.last.ys) {
+        assert.ok(near(ys.get(t) as number, y0, Math.abs(run.r.snapped - run.h) * g.span + 0.02), `${t} ч прыгнуло`);
+      }
+    }
+    assert.equal(g.scrollY, run.r.target);
+  });
+
+  test("новый щипок между кадрами уменьшения стартует с того, что видно", () => {
+    const g = new Grid(24, 120, 1500);
+    // Отпускание оборвано после первого кадра: прокрутка уже вверху, сетка
+    // ещё старая и под масштабом жеста.
+    const scale = 0.5;
+    const offset = 700;
+    const r = pinchRelease({ h: 60, offset, focalY: 250, scrollY0: 1500, span: 24, vh: VH });
+    g.write({ scale, ty: 1500 - offset });
+    g.flush();
+    assert.ok(releaseScrollsFirst(r.target, 1500));
+    g.scrollTo(r.target);
+    g.write({ ty: g.read("ty") - (1500 - r.target) });
+    g.flush();
+    const seen = new Map(probes(g).map((t) => [t, g.y(t)]));
+    const second = runPinch(g, { scale0: 1, focal0: 200, frames: [{ scale: 1, focalY: 200 }] });
+    for (const [t, y] of seen) {
+      assert.ok(near(second.gesture[0].ys.get(t) ?? y, y, 0.01), `${t} ч сдвинулось на старте второго жеста`);
+    }
+  });
+});
+
 describe("зум сетки: устройство компонента", () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(resolve(here, "zoom.tsx"), "utf8");
   const between = (from: string, to: string) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
 
-  test("на отпускании прокрутка не трогается — только шагом 2", () => {
+  test("отпускание: при росте сперва высота, при уменьшении сперва прокрутка (11.10)", () => {
     const finalize = between(".onFinalize(", "const rowStyle");
-    assert.doesNotMatch(finalize, /scrollTo\(/);
-    assert.match(finalize, /gestureTy\.value = r\.holdTy;/);
-    assert.match(finalize, /requestAnimationFrame\(\(\) => settle\(token, r\.target\)\);/);
+    assert.match(finalize, /if \(releaseScrollsFirst\(r\.target, scrollY0\.value\)\) \{\s*(\/\/[^\n]*\s*)*scrollTo\(scrollRef, 0, r\.target, false\);\s*gestureTy\.value -= scrollY0\.value - r\.target;/);
+    assert.match(finalize, /if \(settleToken\.value === token\) commitLayout\(\);/);
+    assert.match(finalize, /\} else \{\s*commitLayout\(\);/);
+    assert.match(finalize, /gestureTy\.value = scrollY\.value - r\.target;\s*requestAnimationFrame\(\(\) => settle\(token, r\.target\)\);/);
+    assert.equal(releaseScrollsFirst(100, 400), true);
+    assert.equal(releaseScrollsFirst(400, 100), false);
+  });
+
+  test("новый жест между кадрами уменьшения считает от видимого масштаба", () => {
+    assert.match(src, /baseH\.value = layoutH\.value \* gestureScale\.value;/);
+    assert.match(src, /gestureScale\.value = f\.h \/ layoutH\.value;/);
   });
 
   test("шаг 2 — локальная функция, а не worklet, зовущий сам себя", () => {

@@ -61,6 +61,11 @@ export interface TeamDesign {
   contactWays?: TeamOrderedSet | null;
   /** «Карты для маршрута». */
   mapServices?: TeamOrderedSet | null;
+  // ПОРЯДОК БЛОКОВ ФОРМЫ (миграция 20261011062510). `null` — не меняли.
+  /** Подвижные блоки записи в порядке показа. */
+  recordOrder?: string[] | null;
+  /** Подвижные блоки события в порядке показа. */
+  eventOrder?: string[] | null;
 }
 
 type Row = {
@@ -72,6 +77,8 @@ type Row = {
   client_list_off?: string[] | null;
   contact_ways?: TeamOrderedSet | null;
   map_services?: TeamOrderedSet | null;
+  record_order?: string[] | null;
+  event_order?: string[] | null;
 };
 
 // Таблицы ещё нет в сгенерированных типах (database.types.ts отстаёт от
@@ -98,7 +105,7 @@ const table = (client: typeof supabase) =>
 const cacheKey = (tenantId: string) => `babun-team-design:${tenantId}`;
 
 const DESIGN_COLUMNS =
-  "team_id, record_color_rule, record_color_palette, record_color_fallback, disabled_blocks, client_list_off, contact_ways, map_services";
+  "team_id, record_color_rule, record_color_palette, record_color_fallback, disabled_blocks, client_list_off, contact_ways, map_services, record_order, event_order";
 
 function toDesign(row: Row): TeamDesign {
   return {
@@ -109,6 +116,8 @@ function toDesign(row: Row): TeamDesign {
     listOff: row.client_list_off ?? null,
     contactWays: row.contact_ways ?? null,
     mapServices: row.map_services ?? null,
+    recordOrder: row.record_order ?? null,
+    eventOrder: row.event_order ?? null,
   };
 }
 

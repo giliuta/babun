@@ -14,6 +14,7 @@ import {
   FOREIGN_PREFIX,
   type CalendarChip,
 } from "./calendar-chips";
+import { useCalendarOrder } from "./use-calendar-order";
 
 export type { CalendarChip } from "./calendar-chips";
 
@@ -257,10 +258,12 @@ export function useCalendarChips(opts: {
   // Состав и порядок ряда — чистая функция в листе `calendar-chips.ts`: там
   // она проверяется тестом, а здесь, рядом с react-native и supabase, раннер
   // тестов её не поднимет.
+  const order = useCalendarOrder();
   const items = composeCalendarChips({
     own: opts.own.filter((team) => shown(activeTenantId, team.id)),
     myCalendars: calendars,
     activeTenantId,
+    order,
   });
 
   const pick = (chipId: string) => {

@@ -203,6 +203,18 @@ export function economicsDraftFromService(
   };
 }
 
+/** Время новой строки: последнее время + шаг между двумя последними. */
+export function nextDuration(existing: ServiceTierDraft[], baseDuration: number): number {
+  const series = [
+    baseDuration,
+    ...existing.map((tier) => looseNumber(tier.totalDuration) ?? null),
+  ].filter((value): value is number => value !== null);
+  const last = series[series.length - 1] ?? baseDuration;
+  if (series.length < 2) return last;
+  const step = last - series[series.length - 2];
+  return Math.max(0, last + step);
+}
+
 /** НОВАЯ СТРОКА НЕ ПОДСТАВЛЯЕТ ЦЕНУ (владелец 2026-08-21: «когда я добавляю
  *  новое, оно меняет цену всегда на 50 — мне это не нравится»). Цена от
  *  количества почти всегда НИЖЕ базовой, поэтому подставленная база — это не
@@ -246,12 +258,12 @@ export function createTierDraft(
   // количество стало значить ровно одно — СКОЛЬКО РАЗ взяли услугу. Для
   // счёта «два после одного» не выдумка, а очевидное следующее.
   //
-  // ВРЕМЯ НАСЛЕДУЕТСЯ, А НЕ МАСШТАБИРУЕТСЯ. Оно обязано быть числом (услуга
-  // без длительности не встаёт в сетку), поэтому пустым его оставить нельзя.
-  // Но и умножать нельзя: прежняя заготовка на второй строке писала «2 ч»,
-  // которых человек не вводил, — продукт называл цифру за него. Берём время
-  // предыдущей строки как есть: это заметно неверно и просится под правку,
-  // а не притворяется расчётом.
+  // ВРЕМЯ ПРОДОЛЖАЕТ ШАГ, КОТОРЫЙ ЗАДАЛ ЧЕЛОВЕК (владелец 11.10: «если я
+  // ставлю на 30 мин больше, логично, что следующая будет на 30 мин больше;
+  // если две подряд время одинаковое — следующая такая же»). Ряд — первая
+  // строка (количество 1) и все ступени; шаг — разница двух последних.
+  // Пока строка одна, шага нет — берём её время как есть, а не умножаем:
+  // «2 ч», которых человек не вводил, продукт за него не называет.
   const used = new Set(
     existing
       .map((tier) => looseNumber(tier.minQuantity))
@@ -265,9 +277,7 @@ export function createTierDraft(
     minQuantity: String(minimum),
     rowPrice: "",
     rowCost: previous ? previous.rowCost : baseCost,
-    totalDuration: String(
-      previous ? looseNumber(previous.totalDuration) ?? baseDuration : baseDuration,
-    ),
+    totalDuration: String(nextDuration(existing, baseDuration)),
   };
 }
 

@@ -50,11 +50,15 @@ import { openTariffCheckout, openTariffPortal, useStartTrial, useTariff } from "
 // <аккаунт>», пока подписки нет. Пробный, смена тарифа, рабочие команды и
 // управление подпиской — у владельца.
 //
-// В ПРИЛОЖЕНИИ ИЗ МАГАЗИНА — ТОЛЬКО СОСТОЯНИЕ (владелец 04.10, `pay-here.ts`):
-// строка тарифа со сроком и «Рабочие команды». Тариф здесь не выбирают:
-// пробный «Про» на 14 дней включается сам (`AutoTrial`), а выбор и оплата —
-// на babun.app, туда ведут письма (владелец вечером 04.10: «первую версию без
-// тарифа выбираем — пусть автоматически включается на 14 дней»).
+// ПРОБНЫЙ — ТОЛЬКО КНОПКОЙ ЗДЕСЬ (владелец 11.10: «пробный период не
+// автоматически — нужно зайти в тарифы и включить пробный, а не сразу после
+// регистрации»). С 04.10 приложение из магазина включало пробный «Про» само
+// при первом входе владельца (`AutoTrial`, снят). Теперь новый аккаунт
+// начинает без тарифа, а «Попробовать 14 дней» стоит здесь в любой сборке.
+//
+// В ПРИЛОЖЕНИИ ИЗ МАГАЗИНА БЕЗ ОПЛАТЫ (`CAN_PAY_HERE` выключен, `pay-here.ts`)
+// — строка тарифа со сроком, «Рабочие команды» и только кнопка пробного «Про»:
+// он бесплатный, это не покупка. Выбор тарифа и оплата — на babun.app.
 
 export function TariffScreen() {
   const router = useRouter();
@@ -73,7 +77,10 @@ export function TariffScreen() {
   // приехать после первого кадра).
   const [picked, setPicked] = useState<Exclude<Tier, "free"> | null>(null);
   // Выдан навсегда — выбирать нечего: выделен свой тариф, а не прошлый тап.
-  const selected = state.forever ? (current ?? "max") : (picked ?? current ?? "solo");
+  // Без плиток выбора (сборка без оплаты) пробный — на основной «Про».
+  const selected = state.forever
+    ? (current ?? "max")
+    : (picked ?? current ?? (CAN_PAY_HERE ? "solo" : "pro"));
 
   // Вернулся из браузера (оплата, управление подпиской) — перечитать тариф.
   useEffect(() => {
@@ -88,13 +95,13 @@ export function TariffScreen() {
   // Рабочие команды выбирает владелец — и только своего, открытого аккаунта.
   const overLimit = owner && !scope.foreign && live.length > limit;
   const working = workingTeamIds(live, state.tier, workingChosen);
-  const action = !CAN_PAY_HERE
-    ? null
-    : owner
-      ? tariffAction(state, selected)
-      : gate === "write"
-        ? partnerTariffAction(state, selected, accountName)
-        : null;
+  const full = owner
+    ? tariffAction(state, selected)
+    : gate === "write"
+      ? partnerTariffAction(state, selected, accountName)
+      : null;
+  // Без оплаты здесь — только бесплатный пробный.
+  const action = CAN_PAY_HERE ? full : full?.kind === "trial" ? full : null;
   // Выбирать тариф есть смысл тому, кто может за него заплатить.
   const canPick = !state.forever && (owner || gate === "write");
   // Плитки тарифов — только там, где тариф выбирают: на сайте.

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { FOREIGN_PREFIX, composeCalendarChips, type ChipSourceCalendar } from "./calendar-chips";
+import {
+  FOREIGN_PREFIX,
+  applyCalendarOrder,
+  calendarOrderKey,
+  composeCalendarChips,
+  type ChipSourceCalendar,
+} from "./calendar-chips";
 
 // Чужой чип узнаётся по адресу (`@компания:команда`), а не по виду: с 1.10
 // команды партнёра рисуются так же, как свои.
@@ -66,5 +72,41 @@ describe("лента календарей — состав от компании
       activeTenantId: null,
     });
     assert.deepEqual(names(chips), ["Y&D", "Команда 1"]);
+  });
+});
+
+describe("порядок человека (владелец 11.10: «менять местами календари»)", () => {
+  const chips = [
+    { id: "t1", name: "Личный" },
+    { id: "t2", name: "Y&D" },
+    { id: "@B:x", name: "Чужая" },
+  ];
+
+  test("ключ одинаков по обе стороны перехода", () => {
+    assert.equal(calendarOrderKey("t1", "A"), "A:t1");
+    assert.equal(calendarOrderKey("@B:x", "A"), "B:x");
+    assert.equal(calendarOrderKey("t1", null), null);
+  });
+
+  test("названные — в его порядке, новые — следом в заводском", () => {
+    const out = applyCalendarOrder(chips, "A", ["B:x", "A:t2"]);
+    assert.deepEqual(out.map((c) => c.name), ["Чужая", "Y&D", "Личный"]);
+  });
+
+  test("порядка нет или компания не известна — заводской", () => {
+    assert.deepEqual(applyCalendarOrder(chips, "A", null), chips);
+    assert.deepEqual(applyCalendarOrder(chips, null, ["B:x"]), chips);
+  });
+
+  test("composeCalendarChips держит порядок и после перехода в другой аккаунт", () => {
+    const myCalendars = [
+      { tenantId: "A", tenantName: "Мой", teamId: "t1", teamName: "Личный", teamColor: null, isActive: true },
+      { tenantId: "B", tenantName: "Брат", teamId: "x", teamName: "Чужая", teamColor: null, isActive: false },
+    ];
+    const order = ["B:x", "A:t1"];
+    const inA = composeCalendarChips({ own: [{ id: "t1", name: "Личный" }], myCalendars, activeTenantId: "A", order });
+    const inB = composeCalendarChips({ own: [{ id: "x", name: "Чужая" }], myCalendars, activeTenantId: "B", order });
+    assert.deepEqual(inA.map((c) => c.name), ["Чужая", "Личный"]);
+    assert.deepEqual(inB.map((c) => c.name), ["Чужая", "Личный"]);
   });
 });

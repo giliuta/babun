@@ -1267,6 +1267,7 @@ export const DayView = memo(function DayView({
         </View>
       ) : null}
       <ZoomableTimeGrid
+        view="day"
         hourHSv={hourHSv}
         scrollLocked={!!editingId}
         onZoom={onZoom}

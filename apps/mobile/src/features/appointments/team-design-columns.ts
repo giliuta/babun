@@ -13,6 +13,8 @@ export function designColumns(design: TeamDesign): Record<string, unknown> {
     client_list_off: design.listOff ?? null,
     contact_ways: design.contactWays ?? null,
     map_services: design.mapServices ?? null,
+    record_order: design.recordOrder ?? null,
+    event_order: design.eventOrder ?? null,
   };
 }
 
@@ -65,6 +67,8 @@ export function rebaseDesign(shown: TeamDesign, next: TeamDesign, server: TeamDe
     fallback: same(shown.fallback, next.fallback) ? server.fallback : next.fallback,
     contactWays: same(shown.contactWays, next.contactWays) ? server.contactWays : next.contactWays,
     mapServices: same(shown.mapServices, next.mapServices) ? server.mapServices : next.mapServices,
+    recordOrder: same(shown.recordOrder, next.recordOrder) ? server.recordOrder : next.recordOrder,
+    eventOrder: same(shown.eventOrder, next.eventOrder) ? server.eventOrder : next.eventOrder,
     disabledBlocks: same(shown.disabledBlocks ?? [], next.disabledBlocks ?? [])
       ? server.disabledBlocks
       : mergeSet(shown.disabledBlocks, next.disabledBlocks, server.disabledBlocks),

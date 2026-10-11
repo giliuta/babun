@@ -6,7 +6,6 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { useThemeColors } from "@/theme/colors";
-import { confirmThen } from "@/lib/confirm";
 import { durationLabel } from "./format";
 import type { PriceEntryMode, ServiceTierDraft } from "./economics";
 
@@ -455,21 +454,22 @@ export function ServiceLadder({
                 случайного пальца.
                 `fullSwipe` НЕ включён намеренно: закон канона — размашистый
                 свайп не носит разрушительного, у «Убрать» промах стоил бы
-                ступени. Подтверждение остаётся: строка уносит с собой цену,
-                расход и время. */}
+                ступени.
+
+                БЕЗ ВОПРОСА «УБРАТЬ?» (владелец 11.10: «удалить не работает»).
+                Вопрос рисует `ChoiceSheetHost` своим `Modal`, а лестница живёт
+                внутри листа услуги — тоже `Modal`; второе окно поверх первого
+                iOS молча не показывает, и тап по «Убрать» ничего не делал (тот
+                же капкан описан у меток, `LabelsScreen`). Спрашивать и незачем:
+                строка — черновик листа, в базу она уходит только по «Создать»
+                или «Сохранить», а лист закрывается без сохранения. */}
             {s.tier ? (
               <SwipeRow
                 label="Убрать"
                 color={t.danger}
                 icon={Trash2}
                 accessibilityLabel={`Убрать количество ${s.qty}`}
-                onAction={() =>
-                  confirmThen(
-                    `Убрать количество «${s.qty}»?`,
-                    { confirmLabel: "Убрать", destructive: true },
-                    () => onRemove(id),
-                  )
-                }
+                onAction={() => onRemove(id)}
               >
                 {row}
               </SwipeRow>

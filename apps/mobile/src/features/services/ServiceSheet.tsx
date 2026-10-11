@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Keyboard, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { X } from "lucide-react-native";
 import { moneySymbol } from "@babun/shared/common/utils/money";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -598,10 +598,17 @@ export function ServiceSheet({
         openTimeId={openRow}
         onOpenTime={(id) => {
           setOpenRow(id);
-          // Барабан раскрывается ПОД строкой и в блоке «Время», то есть у
-          // самого низа листа — за кнопкой «Создать». Лист обязан сам довести
-          // его до глаза, иначе тап по времени выглядит не сделавшим ничего.
-          if (id) {
+          // Клавиатура от поля цены закрывается: время выбирают барабаном, а
+          // открытая клавиатура поднимала лист и сдвигала строку из-под пальца.
+          if (id) Keyboard.dismiss();
+          // Барабан раскрывается ПОД строкой. У ПОСЛЕДНЕЙ строки это самый
+          // низ листа — за кнопкой «Создать», и лист сам доводит его до глаза.
+          // У строки посередине он и так перед глазами: прокрутка в конец
+          // уносила его вниз, и время выбиралось вслепую (владелец 11.10:
+          // «когда выбираю время, оно проваливается вниз, а не остаётся на
+          // месте — только если наперёд добавлены услуги»).
+          const lastId = economics.tiers[economics.tiers.length - 1]?.id ?? "base";
+          if (id && id === lastId) {
             requestAnimationFrame(() =>
               scrollRef.current?.scrollToEnd({ animated: true }),
             );

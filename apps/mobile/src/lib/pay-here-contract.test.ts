@@ -22,22 +22,20 @@ test("оплата читает один флаг — его и переключ
   assert.match(read("lib/pay-here.ts"), /export const CAN_PAY_HERE: boolean = true;/);
 });
 
-test("страница «Тариф»: без флага — только состояние, без выбора, цен и подписки", () => {
+test("страница «Тариф»: без флага — состояние и только бесплатный пробный, без выбора, цен и подписки", () => {
   const src = read("features/tariffs/TariffScreen.tsx");
-  assert.match(src, /const action = !CAN_PAY_HERE\s*\?\s*null/);
+  assert.match(src, /const action = CAN_PAY_HERE \? full : full\?\.kind === "trial" \? full : null;/);
   assert.match(src, /const showTiers = CAN_PAY_HERE;/);
   assert.match(src, /\{CAN_PAY_HERE \? \(\s*<>\s*<Text[^>]*>\s*\{card\.monthly\}/);
   assert.match(src, /\{CAN_PAY_HERE && owner && state\.paid && !state\.forever \?/);
   assert.match(src, /tariffStatus\(state, periodEnd, CAN_PAY_HERE\)/);
 });
 
-test("пробный в приложении из магазина включается сам: «Про», свой аккаунт, только владелец, только раз", () => {
-  const src = read("features/tariffs/AutoTrial.tsx");
-  assert.match(src, /export const AUTO_TRIAL_TIER = "pro" as const;/);
-  for (const cond of ["!CAN_PAY_HERE", "scope.viewRole === \"owner\"", "!scope.foreign", "!state.forever", "!state.paid", "!state.trial", "!state.trialUsed"]) {
-    assert.ok(src.includes(cond), `AutoTrial без условия ${cond}`);
-  }
-  assert.match(read("../app/(dashboard)/_layout.tsx"), /<AutoTrial \/>/);
+test("пробный НЕ включается сам — только кнопкой на странице «Тариф» (владелец 11.10)", () => {
+  assert.throws(() => read("features/tariffs/AutoTrial.tsx"));
+  assert.doesNotMatch(read("../app/(dashboard)/_layout.tsx"), /AutoTrial/);
+  const fresh = { tier: "free", paid: false, forever: false, trial: null, trialUsed: false, pastDue: false } as const;
+  assert.equal(tariffAction(fresh, "pro")?.kind, "trial");
 });
 
 test("действие пробного на сайте — бесплатное: пока пробного не было, «Попробовать 14 дней», а не оплата", () => {
@@ -154,11 +152,13 @@ test("регистрация читает один флаг — его и пер
   // 10.10 владелец включил полную регистрацию и на iPhone; при отказе 3.1.1
   // флаг возвращают в `Platform.OS !== "ios"`.
   assert.match(read("lib/pay-here.ts"), /export const CAN_SIGN_UP_HERE: boolean = true;/);
-  // Единая страница входа (09.10): ссылки на регистрацию нет, а новый аккаунт
-  // почтой заводится только при CAN_SIGN_UP_HERE или по приглашению.
+  // Регистрация — своей кнопкой (11.10): «Войти» только входит, а кнопка
+  // «Зарегистрироваться» есть при CAN_SIGN_UP_HERE или по приглашению.
   const login = readApp("(auth)/login.tsx");
-  assert.doesNotMatch(login, /"\/register"/);
-  assert.match(login, /const mayCreate =\s*CAN_SIGN_UP_HERE \|\| !!\(await getPendingInvitationToken\(\)/);
+  assert.doesNotMatch(login, /supabase\.auth\.signUp/);
+  assert.match(login, /const \[canRegister, setCanRegister\] = useState\(CAN_SIGN_UP_HERE\);/);
+  assert.match(login, /\.then\(\(token\) => setCanRegister\(Boolean\(token\)\)\);/);
+  assert.match(login, /\{canRegister \? \(\s*<OutlineButton\s+label="Зарегистрироваться"\s+onPress=\{\(\) => router\.push\("\/register"\)\}/);
   // Вход через Apple/Google создаёт пользователя сам — «Почти готово» на
   // iPhone пускает дальше только по приглашению или в чужую команду.
   const finish = readApp("(auth)/finish-signup.tsx");

@@ -46,3 +46,9 @@ describe("язык до входа", () => {
     assert.match(sheet, /const \{ height: SCREEN_H \} = useWindowDimensions\(\);/);
   });
 });
+
+test("неверный пароль — просто «Неверная почта или пароль»: вход аккаунт не заводит (11.10)", () => {
+  const login = read("../../../app/(auth)/login.tsx");
+  assert.doesNotMatch(login, /signUp\(/);
+  assert.match(login, /if \(e\) setError\(mapAuthError\(e, "signin"\)\);/);
+});

@@ -18,27 +18,34 @@ export function BlockCell({
   on,
   locked,
   readOnly = false,
+  fixed = false,
   onToggle,
 }: {
   label: string;
   icon: LucideIcon;
   on: boolean;
   locked: boolean;
+  /** Обязательный блок в списке порядка (клиент, услуги записи): включён
+   *  всегда — замок вместо галки, но строка живая, её двигают. */
+  fixed?: boolean;
   /** «Только видит»: блок показан как есть, тап ничего не меняет. */
   readOnly?: boolean;
   onToggle: () => void;
 }) {
   const t = useThemeColors();
-  const tone = locked ? t.faint : on ? t.ink : t.faint;
+  // Обязательный — всегда включён и не «запрещён»: строка тёмная, как живая.
+  const isOn = fixed || on;
+  const isLocked = !fixed && locked;
+  const tone = isLocked ? t.faint : isOn ? t.ink : t.faint;
   return (
     <Pressable
-      disabled={locked || readOnly}
+      disabled={isLocked || readOnly || fixed}
       onPress={() => {
         haptics.tap();
         onToggle();
       }}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: on, disabled: locked || readOnly }}
+      accessibilityState={{ checked: isOn, disabled: isLocked || readOnly || fixed }}
       accessibilityLabel={label}
       style={({ pressed }) => ({
         flexDirection: "row",
@@ -50,17 +57,17 @@ export function BlockCell({
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >
-      <Icon size={17} strokeWidth={2.1} color={on && !locked ? t.accent : t.faint} />
+      <Icon size={17} strokeWidth={2.1} color={isOn && !isLocked ? t.accent : t.faint} />
       <Text
         numberOfLines={1}
         maxFontSizeMultiplier={1.3}
-        style={{ flex: 1, fontSize: 15, fontWeight: on ? "600" : "500", color: tone }}
+        style={{ flex: 1, fontSize: 15, fontWeight: isOn ? "600" : "500", color: tone }}
       >
         {label}
       </Text>
-      {locked ? (
+      {isLocked || fixed ? (
         <Lock size={14} strokeWidth={2.2} color={t.faint} />
-      ) : on ? (
+      ) : isOn ? (
         <Check size={18} strokeWidth={2.6} color={t.accent} />
       ) : null}
     </Pressable>

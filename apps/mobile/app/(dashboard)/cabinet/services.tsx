@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Briefcase, EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
+import { Briefcase, CopyPlus, EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { Screen } from "@/components/ui/Screen";
@@ -40,6 +40,7 @@ import {
 import { durationLabel } from "@/features/services/format";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
+import { chooseOption } from "@/lib/choose";
 
 import { parsePriceTiers } from "@/features/services/economics";
 import { ServiceSheet, type ServiceEditing } from "@/features/services/ServiceSheet";
@@ -175,6 +176,41 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
   /** Справочник команд ещё не ответил: «команд нет» и «команды не спросили» —
    *  разные вещи, и путать их нельзя ни в кнопке, ни в пустом состоянии. */
   const teamsUnknown = teamsQuery.isLoading;
+
+  // ГОТОВЫЕ УСЛУГИ ИЗ ДРУГИХ КОМАНД — ЗНАЧКОМ СПРАВА ВВЕРХУ (владелец 11.10:
+  // «в другой команде сразу добавить услугу, которая есть в той команде…
+  // сверху справа… выбор по готовым услугам, которые делал лично я со своего
+  // аккаунта, не чужие»). Только у владельца аккаунта: партнёр в чужом
+  // аккаунте свои услуги туда не носит. Уже заведённые здесь по имени — не
+  // предлагаются. Выбор открывает лист создания, засеянный этой услугой
+  // (`copy: true` — имя без «копия», связь `copied_from_service_id`).
+  const isOwner = useDataRole().data === "owner";
+  const copyCandidates = useMemo(() => {
+    if (!isOwner || !activeTeamId) return [];
+    const here = new Set(
+      allServices
+        .filter((sv) => sv.team_id === activeTeamId)
+        .map((sv) => sv.name.trim().toLowerCase()),
+    );
+    return allServices.filter(
+      (sv) =>
+        sv.is_active &&
+        sv.team_id !== activeTeamId &&
+        !here.has(sv.name.trim().toLowerCase()),
+    );
+  }, [isOwner, activeTeamId, allServices]);
+  const pickReadyService = async () => {
+    const teamName = (id: string | null) => teams.find((tm) => tm.id === id)?.name ?? "";
+    const index = await chooseOption(
+      "Добавить готовую услугу",
+      copyCandidates.map((sv) => ({
+        label: [sv.name, teamName(sv.team_id)].filter(Boolean).join(" · "),
+      })),
+    );
+    if (index === null) return;
+    const from = copyCandidates[index];
+    if (from) setEditing({ mode: "create", from, copy: true });
+  };
 
   // ВЫКЛЮЧЕННЫЕ ОСТАЮТСЯ В СПИСКЕ, СЕРЫМИ И В ХВОСТЕ (владелец 2026-08-29:
   // «смахнул вправо — и она просто выключена, серая, не используется»).
@@ -327,6 +363,25 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
       <ScreenHeader
         title="Услуги"
         subtitle={activeTeam?.name ?? undefined}
+        right={
+          !readOnly && copyCandidates.length > 0 ? (
+            <Pressable
+              onPress={() => void pickReadyService()}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Добавить готовую услугу"
+              style={({ pressed }: { pressed: boolean }) => ({
+                minWidth: 44,
+                minHeight: 44,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: pressed ? 0.5 : 1,
+              })}
+            >
+              <CopyPlus color={t.accent} size={22} strokeWidth={2} />
+            </Pressable>
+          ) : undefined
+        }
       />
 
       {servicesQuery.isLoading ? (

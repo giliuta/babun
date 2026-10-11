@@ -227,6 +227,7 @@ export const WeekView = memo(function WeekView({
 
       {/* grid */}
       <ZoomableTimeGrid
+        view="week"
         hourHSv={hourHSv}
         scrollLocked={!!editingId}
         onZoom={onZoom}
