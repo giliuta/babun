@@ -10,6 +10,7 @@ import {
   Tags,
   LogOut,
   Trash2,
+  ZoomIn,
 } from "lucide-react-native";
 import { readTenantPref } from "@/lib/tenant-prefs";
 import { useTenantId } from "@/lib/tenant";
@@ -51,6 +52,14 @@ import { useCalendarDelete } from "@/features/calendar/useCalendarDelete";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
 import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
 import { calendarSettingsRows } from "@/features/calendar/settings-rows";
+import {
+  readGridZoom,
+  readViewportH,
+  writeGridZoom,
+  zoomLabel,
+  ZOOM_PRESETS,
+} from "@/features/calendar/grid-memory";
+import { chooseOption } from "@/lib/choose";
 import { useCurrentRole,
   usePlanAllows,
 } from "@/features/settings/tenant";
@@ -287,6 +296,23 @@ export default function CalendarSettingsScreen() {
     );
   };
 
+  // Масштаб сетки — с этого телефона; щипок меняет его же.
+  const [gridZoom, setGridZoom] = useState(readGridZoom);
+  const pickZoom = async () => {
+    const i = await chooseOption(
+      "Масштаб календаря",
+      ZOOM_PRESETS.map((p) => ({ label: p.label })),
+      {
+        message:
+          "Сколько времени видно на экране сразу. Пальцами масштаб меняется так же — календарь запоминает последний.",
+      },
+    );
+    if (i == null) return;
+    const zoom = ZOOM_PRESETS[i].zoom;
+    writeGridZoom(zoom, true);
+    setGridZoom(zoom);
+  };
+
   const work = effectiveWorkHours(s);
   // ПОЯС ЭТОГО КАЛЕНДАРЯ. Порядок ровно тот же, что читает весь продукт
   // (`activeTeam?.timezone ?? calSettings?.timezone` в календаре, в записи и в
@@ -514,8 +540,15 @@ export default function CalendarSettingsScreen() {
                   2026-08-25). Так и читается: сначала настраивают саму сетку — то,
                   на что смотришь каждый день, — а уже потом заполняют её работой
                   конкретной команды. */}
-              {rows.hours ? (
-                <SectionCard className="mt-4">
+              {/* «МАСШТАБ» — РЯДОМ С ЧАСАМИ (владелец 11.10: «брату удобней,
+                  чтоб первоначальный масштаб был меньше… это в часах
+                  календаря»). Часы говорят, КАКОЙ отрезок суток есть на сетке,
+                  масштаб — СКОЛЬКО его видно сразу. Масштаб — личный и
+                  телефонный (глаза и экран человека, `grid-memory.ts`),
+                  поэтому строка есть у каждого, даже без права менять часы,
+                  а щипок пальцами пишет в него же. */}
+              <SectionCard className="mt-4">
+                {rows.hours ? (
                   <SettingsRow
                     tile={SETTINGS_TILE.teal}
                     icon={CalendarRange}
@@ -523,8 +556,15 @@ export default function CalendarSettingsScreen() {
                     sub={`${formatHm(window.start)}–${formatHm(window.end)}`}
                     onPress={rows.hoursEdit ? () => setPicker("view") : undefined}
                   />
-                </SectionCard>
-              ) : null}
+                ) : null}
+                <SettingsRow
+                  tile={SETTINGS_TILE.indigo}
+                  icon={ZoomIn}
+                  title="Масштаб"
+                  sub={zoomLabel(gridZoom, readViewportH("week"))}
+                  onPress={pickZoom}
+                />
+              </SectionCard>
               {rows.schedule ? (
                 <SectionCard>
                   <SettingsRow

@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Platform, View } from "react-native";
 import { haptics } from "@/lib/haptics";
 import {
@@ -8,6 +16,7 @@ import {
 } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
+  runOnUI,
   scrollTo,
   useAnimatedProps,
   useAnimatedReaction,
@@ -26,9 +35,24 @@ import {
   pinchAnchor,
   pinchFrame,
   pinchRelease,
+  releaseScrollsFirst,
   settleStep,
   wheelZoomFactor,
 } from "./zoom-math";
+import {
+  hourHForZoom,
+  readGridZoom,
+  readTopHour,
+  readViewportH,
+  scrollYForTopHour,
+  subscribeGridZoom,
+  topHourForScrollY,
+  writeGridZoom,
+  writeTopHour,
+  writeViewportH,
+  zoomForHourH,
+  type GridZoom,
+} from "./grid-memory";
 
 // Vertical scale of the time grid (pixels per hour). The LIVE value is a
 // Reanimated shared value (`hourHSv`) owned by the calendar screen: the
@@ -66,9 +90,12 @@ export function useUnstretchedStyle() {
 //     frame does not leap by the distance the fingers travelled before it;
 //   * native scrolling is disabled while the pinch is active so the scroll
 //     view doesn't fight the programmatic scrollTo;
-//   * release is TWO frames: the new height lands in layout under a holding
-//     translate, and only then the scroll moves (see `zoom-math.ts` — RN
-//     clamps scrollTo to the content size it has right now);
+//   * release is TWO frames, ordered so that neither RN nor UIKit ever
+//     clamps the scroll: growing — the new height lands first under a
+//     holding translate, then the scroll moves (RN clamps scrollTo to the
+//     content size it has right now); shrinking — the scroll moves first
+//     inside the old taller grid, then the height lands (UIKit pulls an
+//     offset past the new bottom back on its own — `releaseScrollsFirst`);
 //   * on release the value snaps to a whole pixel and is committed to React
 //     exactly once via `onZoom`.
 export function ZoomableTimeGrid({
@@ -79,6 +106,7 @@ export function ZoomableTimeGrid({
   scrollToHour,
   pageGesture,
   scrollLocked = false,
+  view,
   children,
 }: {
   hourHSv: SharedValue<number>;
@@ -87,7 +115,10 @@ export function ZoomableTimeGrid({
   onZoom?: (next: number) => void;
   startHour: number;
   endHour: number;
-  /** Час, на котором календарь открывается: начало графика команды. */
+  /** Час первого открытия — начало графика команды. Только пока своего
+   *  места нет: дальше сетка открывается там, где её оставили
+   *  (`grid-memory.ts`), и смена этого числа (свайп на день с другим
+   *  графиком) прокрутку больше не дёргает. */
   scrollToHour?: number;
   /** Горизонтальный pan пейджера периода (см. pager.tsx) — компонуется
    *  Race'ом с пинчем: один палец вбок = листание, два = зум. */
@@ -95,10 +126,11 @@ export function ZoomableTimeGrid({
   /** Запись в режиме правки («Двигать и растягивать»): прокрутка стоит, чтобы
    *  палец на записи двигал её, а не сетку. */
   scrollLocked?: boolean;
+  /** «week» | «day» — под ним сетка помнит замер своего экрана. */
+  view: string;
   children: ReactNode;
 }) {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
-  const scrollY = useSharedValue(0);
   const viewportH = useSharedValue(0);
   // true от признания пинча до конца отпускания (шаг 2): прокрутка стоит.
   const pinching = useSharedValue(false);
@@ -118,10 +150,31 @@ export function ZoomableTimeGrid({
   // height напрямую: полный релэйаут сотен узлов каждый кадр + scrollTo,
   // приземляющийся в соседний кадр, — календарь «трясся» под пальцами.
   // Вне жеста следует за hourHSv (fit-пол, смена окна в настройках).
-  const layoutH = useSharedValue(HOUR_H_DEFAULT);
+  // ПЕРВЫЙ КАДР — УЖЕ НА МЕСТЕ (владелец 11.10: «при заходе календарь
+  // дёргает, как будто подпрыгивает»). Прежде сетка рисовалась с 64 px и
+  // прокруткой 0, а масштаб и час графика догоняли её после замера — два
+  // видимых прыжка. Теперь масштаб и время берутся из памяти сетки
+  // (`grid-memory.ts`) по прошлому замеру экрана, и первый кадр открывается
+  // ровно там, где человек был; замер лишь подтверждает его.
+  const [boot] = useState(() => {
+    const vh = readViewportH(view);
+    if (vh == null) return null;
+    const h = hourHForZoom(readGridZoom(), endHour - startHour, vh);
+    const top = readTopHour() ?? scrollToHour ?? startHour;
+    return { vh, h, y: scrollYForTopHour(top, startHour, endHour, h, vh) };
+  });
+  const layoutH = useSharedValue(boot?.h ?? HOUR_H_DEFAULT);
   const gestureScale = useSharedValue(1);
   const gestureTy = useSharedValue(0);
+  const scrollY = useSharedValue(boot?.y ?? 0);
   const scrollY0 = useSharedValue(0);
+  useLayoutEffect(() => {
+    if (!boot) return;
+    hourHSv.value = boot.h;
+    onZoom?.(boot.h);
+    // Один раз на маунт: дальше масштабом владеют щипок и настройка.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useAnimatedReaction(
     () => hourHSv.value,
     (v) => {
@@ -130,43 +183,133 @@ export function ZoomableTimeGrid({
     [],
   );
 
-  // Открывающий скролл к часу графика выполняется ПОСЛЕ первого layout
-  // (см. onLayout ниже): до него зум-пол мог поднять hourHSv выше дефолта,
-  // и посчитанный заранее y промахивался на сотни px (аудит). Смена
-  // настройки после маунта докручивает через этот эффект.
-  const didOpenScroll = useRef(false);
-  const openScroll = () => {
-    if (scrollToHour == null) return;
-    const y = Math.max(0, (scrollToHour - startHour) * hourHSv.value);
-    scrollRef.current?.scrollTo({ y, animated: false });
-  };
-  useEffect(() => {
-    if (didOpenScroll.current) openScroll();
-    // hourHSv is read imperatively on purpose: zoom must NOT re-fire the
-    // open-scroll (web parity with the old views' `hourH` exclusion).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scrollToHour, startHour]);
+  // Свежие окно и коллбек — для слушателей, живущих дольше одного рендера.
+  const measuredVh = useRef<number | null>(null);
+  const latest = useRef({ startHour, endHour, onZoom });
+  latest.current = { startHour, endHour, onZoom };
 
-  // Поднять текущий зум до fit-пола (сетка обязана заполнять вьюпорт).
-  // Вызывается из onLayout И при смене видимого окна часов: сужение окна в
-  // настройках не перезамеряет вьюпорт, но поднимает пол — без этого сетка
-  // отлипала от низа на уже смонтированном экране.
-  const applyFitFloor = (vh: number) => {
-    if (vh <= 0) return;
-    const fit = minHourH(endHour - startHour, vh);
-    if (hourHSv.value < fit) {
-      hourHSv.value = fit;
-      onZoom?.(fit);
+  // Новая высота часа и прокрутка — В ПОРЯДКЕ, КОТОРЫЙ НИКТО НЕ СРЕЖЕТ (тот же
+  // закон, что у отпускания щипка, `releaseScrollsFirst`): вверх — сперва
+  // прокрутка в старой сетке, вниз — сперва выросшая сетка.
+  const applyGeometry = (h: number, y: number) => {
+    "worklet";
+    if (pinching.value) return;
+    const grow = () => {
+      hourHSv.value = h;
+      layoutH.value = h;
+    };
+    if (y < scrollY.value) {
+      scrollTo(scrollRef, 0, y, false);
+      requestAnimationFrame(grow);
+    } else {
+      grow();
+      requestAnimationFrame(() => scrollTo(scrollRef, 0, y, false));
     }
   };
-  useEffect(() => {
-    applyFitFloor(viewportH.value);
-    // applyFitFloor намеренно вне deps: пересчёт нужен только при смене окна.
+
+  /** Масштаб из памяти для этого экрана и окна; время у верха — как было. */
+  const restore = (vh: number, zoom: GridZoom | null, top: number | null) => {
+    const { startHour: s0, endHour: e0, onZoom: commit } = latest.current;
+    const h = hourHForZoom(zoom, e0 - s0, vh);
+    const y = scrollYForTopHour(
+      top ?? readTopHour() ?? scrollToHour ?? s0,
+      s0,
+      e0,
+      h,
+      vh,
+    );
+    runOnUI(applyGeometry)(h, y);
+    commit?.(h);
+  };
+
+  // Время у верхнего края запоминается, когда прокрутка встала: при смене
+  // вида, команды и после перезапуска календарь открывается на нём же.
+  const saveTop = (y: number, h: number) => {
+    if (h > 0) writeTopHour(topHourForScrollY(y, latest.current.startHour, h));
+  };
+  useEffect(
+    () => () => saveTop(scrollY.value, layoutH.value),
+    // Только на уходе: веб не шлёт конца инерции, вид сменился — место то же.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // СМЕНА ОКНА ЧАСОВ НА ЖИВОМ ЭКРАНЕ (настройка, запись за краем недели):
+  // время у верхнего края остаётся тем же, «весь день» — снова весь, пол
+  // зума поднимается. Прежде прокрутка оставалась прежним числом пикселей, и
+  // под ним оказывалось другое время.
+  const prevWindow = useRef({ startHour, endHour });
+  useLayoutEffect(() => {
+    const prev = prevWindow.current;
+    if (prev.startHour === startHour && prev.endHour === endHour) return;
+    prevWindow.current = { startHour, endHour };
+    const vh = viewportH.value;
+    if (vh <= 0) return;
+    const zoom = readGridZoom();
+    const top = topHourForScrollY(scrollY.value, prev.startHour, layoutH.value);
+    // Без выбора масштаба держится текущий зум (только не ниже пола).
+    const h =
+      zoom == null
+        ? Math.max(minHourH(endHour - startHour, vh), layoutH.value)
+        : hourHForZoom(zoom, endHour - startHour, vh);
+    runOnUI(applyGeometry)(
+      h,
+      scrollYForTopHour(top, startHour, endHour, h, vh),
+    );
+    if (h !== layoutH.value) onZoom?.(h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startHour, endHour]);
 
-  const onScroll = useAnimatedScrollHandler((e) => {
-    scrollY.value = e.contentOffset.y;
+  // Выбор в настройке «Масштаб» — сразу на открытой сетке.
+  useEffect(
+    () =>
+      subscribeGridZoom((zoom) => {
+        const vh = viewportH.value;
+        if (vh <= 0) return;
+        const top = topHourForScrollY(
+          scrollY.value,
+          latest.current.startHour,
+          layoutH.value,
+        );
+        restore(vh, zoom, top);
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // Щипок отпущен: масштаб запоминается как «сколько часов на экране».
+  const commitZoom = (h: number) => {
+    const { startHour: s0, endHour: e0, onZoom: commit } = latest.current;
+    const vh = viewportH.value;
+    if (vh > 0) writeGridZoom(zoomForHourH(h, e0 - s0, vh));
+    saveTop(scrollY.value, h);
+    commit?.(h);
+  };
+
+  const isWeb = Platform.OS === "web";
+  // Веб не шлёт ни конца драга, ни конца инерции: там место пишется
+  // в паузе прокрутки.
+  const webSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onWebScroll = isWeb
+    ? () => {
+        if (webSaveTimer.current) clearTimeout(webSaveTimer.current);
+        webSaveTimer.current = setTimeout(
+          () => saveTop(scrollY.value, layoutH.value),
+          300,
+        );
+      }
+    : undefined;
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y;
+      if (onWebScroll) runOnJS(onWebScroll)();
+    },
+    onEndDrag: (e) => {
+      runOnJS(saveTop)(e.contentOffset.y, layoutH.value);
+    },
+    onMomentumEnd: (e) => {
+      runOnJS(saveTop)(e.contentOffset.y, layoutH.value);
+    },
   });
 
   // Two fingers down would otherwise ALSO pan the scroll view (iOS scrolls
@@ -220,7 +363,7 @@ export function ZoomableTimeGrid({
         return;
       }
       pinching.value = false;
-      if (onZoom) runOnJS(onZoom)(layoutH.value);
+      runOnJS(commitZoom)(layoutH.value);
     };
     step(0, scrollY.value);
   };
@@ -241,7 +384,9 @@ export function ZoomableTimeGrid({
       atLimit.value = false;
       active.value = true;
       pinching.value = true;
-      baseH.value = layoutH.value;
+      // Видимая высота часа: если новый жест пришёл между кадрами
+      // уменьшения, сетка ещё под масштабом прошлого — отсчёт от того, что видно.
+      baseH.value = layoutH.value * gestureScale.value;
       scrollY0.value = scrollY.value;
       scale0.value = e.scale > 0 ? e.scale : 1;
       lastFocalY.value = e.focalY;
@@ -271,14 +416,12 @@ export function ZoomableTimeGrid({
       atLimit.value = limit;
       // Кадр жеста = два числа трансформа, БЕЗ layout и БЕЗ scrollTo:
       // якорное время держится под фокусом пальцев, края — как bounces=false.
-      gestureScale.value = f.h / baseH.value;
+      gestureScale.value = f.h / layoutH.value;
       gestureTy.value = scrollY0.value - f.offset;
     })
     .onFinalize(() => {
       if (!active.value) return;
       active.value = false;
-      // ШАГ 1: целая высота уходит в layout при ПРЕЖНЕЙ прокрутке, а сдвиг
-      // держит картинку там, где она была под пальцами. Прокрутка — шагом 2.
       const span = endHour - startHour;
       const r = pinchRelease({
         h: hourHSv.value,
@@ -288,13 +431,31 @@ export function ZoomableTimeGrid({
         span,
         vh: viewportH.value,
       });
-      layoutH.value = r.snapped;
       hourHSv.value = r.snapped;
-      gestureScale.value = 1;
-      gestureTy.value = r.holdTy;
       const token = settleToken.value + 1;
       settleToken.value = token;
-      requestAnimationFrame(() => settle(token, r.target));
+      // Целая высота уходит в layout, сдвиг держит картинку под ТЕКУЩЕЙ
+      // прокруткой; дожим прокрутки — шагом 2.
+      const commitLayout = () => {
+        "worklet";
+        layoutH.value = r.snapped;
+        gestureScale.value = 1;
+        gestureTy.value = scrollY.value - r.target;
+        requestAnimationFrame(() => settle(token, r.target));
+      };
+      if (releaseScrollsFirst(r.target, scrollY0.value)) {
+        // УМЕНЬШЕНИЕ (и любая прокрутка вверх): сперва прокрутка — в старой,
+        // более высокой сетке она встаёт без среза, а сдвиг на ту же
+        // величину держит картинку. Высота — кадром позже, когда прокрутка
+        // уже в пределе новой сетки и UIKit её не тронет.
+        scrollTo(scrollRef, 0, r.target, false);
+        gestureTy.value -= scrollY0.value - r.target;
+        requestAnimationFrame(() => {
+          if (settleToken.value === token) commitLayout();
+        });
+      } else {
+        commitLayout();
+      }
     });
 
   const rowStyle = useAnimatedStyle(() => ({
@@ -342,7 +503,7 @@ export function ZoomableTimeGrid({
       const snapped = Math.max(minHourH(span, viewportH.value), Math.round(hourHSv.value));
       hourHSv.value = snapped;
       layoutH.value = snapped;
-      onZoom?.(snapped);
+      commitZoom(snapped);
     };
     const scheduleCommit = () => {
       if (commitTimer) clearTimeout(commitTimer);
@@ -409,15 +570,27 @@ export function ZoomableTimeGrid({
           }}
           onScroll={onScroll}
           animatedProps={scrollProps}
+          // Первый кадр — сразу на запомненном времени (натив; веб
+          // докручивает на замере).
+          contentOffset={boot ? { x: 0, y: boot.y } : undefined}
           onLayout={(e) => {
-            viewportH.value = e.nativeEvent.layout.height;
-            // A viewport/window change can push the fit floor above the
-            // current zoom (e.g. taller viewport after rotation) — snap up
-            // so the grid never sits detached above a void.
-            applyFitFloor(e.nativeEvent.layout.height);
-            if (!didOpenScroll.current) {
-              didOpenScroll.current = true;
-              openScroll();
+            const vh = e.nativeEvent.layout.height;
+            const prev = measuredVh.current;
+            measuredVh.current = vh;
+            viewportH.value = vh;
+            writeViewportH(view, vh);
+            if (prev == null) {
+              // Замер подтвердил прошлый — первый кадр уже на месте.
+              if (boot && !isWeb && Math.abs(boot.vh - vh) < 0.5) return;
+              restore(vh, readGridZoom(), null);
+            } else if (Math.abs(prev - vh) >= 0.5) {
+              // Экран стал другим (поворот, клавиатура): масштаб «в часах»
+              // пересчитывается, время у верха — то же.
+              restore(
+                vh,
+                readGridZoom(),
+                topHourForScrollY(scrollY.value, latest.current.startHour, layoutH.value),
+              );
             }
           }}
           scrollEventThrottle={16}
