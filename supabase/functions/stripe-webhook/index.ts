@@ -87,6 +87,8 @@ interface ReconcileFields {
   stripe_subscription_id?: string | null;
   trial_ends_at?: string | null;
   current_period_end?: string | null;
+  /** Календарей в подписке (цена за календарь, 12.10). */
+  paid_calendars?: number | null;
 }
 
 function priceToTier(price: Stripe.Price | undefined): Tier {
@@ -96,6 +98,8 @@ function priceToTier(price: Stripe.Price | undefined): Tier {
   if (meta === "solo" || meta === "pro" || meta === "max") return meta;
   const lookup = /^babun_(solo|pro|max)_/.exec(price.lookup_key ?? "");
   if (lookup) return lookup[1] as Tier;
+  // Цена за календарь (12.10) — оплата календарей = полный доступ.
+  if (/^babun_calendar_/.test(price.lookup_key ?? "")) return "max";
   // Старые цены Pro/Business (до 01.10): Business теперь — Макс.
   if (price.id === Deno.env.get("STRIPE_PRICE_PRO")) return "pro";
   if (price.id === Deno.env.get("STRIPE_PRICE_BUSINESS")) return "max";
@@ -137,6 +141,7 @@ function fieldsOfSubscription(sub: Stripe.Subscription): ReconcileFields {
     plan: ended ? "free" : priceToTier(item?.price),
     subscription_status: status,
     stripe_subscription_id: ended ? null : sub.id,
+    paid_calendars: ended ? null : (item?.quantity ?? null),
   };
   const withPeriod = sub as unknown as {
     current_period_end?: number | null;
@@ -211,6 +216,7 @@ function computeUpdate(event: Stripe.Event): ReconcileFields | null {
         plan: priceToTier(item?.price),
         subscription_status: mapSubscriptionStatus(sub.status),
         stripe_subscription_id: sub.id,
+        paid_calendars: item?.quantity ?? null,
       };
       const withPeriod = sub as unknown as {
         current_period_end?: number | null;
@@ -243,6 +249,7 @@ function computeUpdate(event: Stripe.Event): ReconcileFields | null {
         subscription_status: "canceled",
         stripe_subscription_id: null,
         trial_ends_at: null,
+        paid_calendars: null,
       };
     case "invoice.payment_succeeded":
       return { subscription_status: "active" };
@@ -506,6 +513,46 @@ async function smsMoney(event: Stripe.Event, sbs: any, stripe: Stripe): Promise<
   }
 }
 
+/** СВЕРКА ЧИСЛА КАЛЕНДАРЕЙ ПЕРЕД СЧЁТОМ (цена за календарь, 12.10).
+ *  Приложение после создания или архива календаря само зовёт
+ *  `tariff-checkout` (sync), но из приложения магазина и без сети этот шаг
+ *  пропадает. Перед каждым счётом (`invoice.upcoming`) количество в подписке
+ *  ставится по живым календарям — без доплаты сегодня. */
+async function syncCalendarsBeforeInvoice(
+  event: Stripe.Event,
+  stripe: Stripe,
+  // deno-lint-ignore no-explicit-any
+  sbs: any,
+  tenantId: string,
+): Promise<void> {
+  if (event.type !== "invoice.upcoming") return;
+  const obj = event.data.object as unknown as Record<string, unknown>;
+  const subId =
+    idOf(obj.subscription) ??
+    idOf((obj.parent as { subscription_details?: { subscription?: unknown } } | undefined)?.subscription_details?.subscription);
+  if (!subId) return;
+  const { data: tenant } = await sbs
+    .from("tenants")
+    .select("plan_override, stripe_subscription_id")
+    .eq("id", tenantId)
+    .maybeSingle();
+  if (!tenant || tenant.plan_override || tenant.stripe_subscription_id !== subId) return;
+  const sub = await stripe.subscriptions.retrieve(subId);
+  const item = sub.items?.data?.[0];
+  if (!item || !/^babun_calendar_/.test(item.price?.lookup_key ?? "")) return;
+  const { count } = await sbs
+    .from("teams")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true);
+  const live = Math.max(1, typeof count === "number" ? count : 1);
+  if (item.quantity === live) return;
+  await stripe.subscriptions.update(subId, {
+    items: [{ id: item.id, quantity: live }],
+    proration_behavior: "none",
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
@@ -589,6 +636,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    if (tenantIdHint) await syncCalendarsBeforeInvoice(event, stripe, sbs, tenantIdHint);
     if (tenantIdHint) {
       const bySubscription =
         event.type.startsWith("customer.subscription.") && event.type !== "customer.subscription.trial_will_end"

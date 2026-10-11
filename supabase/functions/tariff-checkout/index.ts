@@ -1,5 +1,12 @@
-// tariff-checkout — ОПЛАТА ТАРИФА «СОЛО · ПРО · МАКС» НА СТРАНИЦЕ STRIPE
-// (владелец 01.10; оплата — не через Apple, а в браузере).
+// tariff-checkout — ОПЛАТА ЗА КАЛЕНДАРИ НА СТРАНИЦЕ STRIPE (владелец 12.10:
+// «цена за календарь», €9.99 в месяц / €7.99 при оплате за год; люди
+// бесплатно). Оплата — не через Apple, а в браузере.
+//
+// Подписка одна на аккаунт: одна цена «календарь», количество — живые
+// календари аккаунта. Добавили или убрали календарь — количество меняется со
+// следующего платежа (`proration_behavior: none`): действие "sync" после
+// создания/архива и сверка вебхуком перед счётом (`invoice.upcoming`).
+// Старые клиенты шлют `tier` solo/pro/max — любой означает «календари».
 //
 // Что умеет (поле `action`):
 //   • "checkout" (по умолчанию) — подписка на выбранный тариф. Подписки ещё
@@ -7,18 +14,16 @@
 //     меняет в ней тариф (пересчёт за остаток периода делает Stripe) и
 //     отвечает `{ changed: true }`. Идёт свой пробный период — списание
 //     начнётся в его последний день, а не сегодня: 14 дней — без оплаты.
+//   • "sync" — количество календарей в живой подписке = живым календарям.
 //   • "portal" — страница Stripe «Управление подпиской»: карта, счета,
 //     отмена. Её нужно один раз включить в Stripe (Settings → Billing →
 //     Customer portal); пока не включена — отвечаем `portal_not_configured`.
 //
 // Тариф на нашей стороне меняет НЕ эта функция, а вебхук `stripe-webhook`
-// по событиям подписки (`customer.subscription.*`): цена несёт метку тарифа
-// (`metadata.tier`, `lookup_key` babun_<tier>_<period>). Цены заводятся здесь
-// сами при первой оплате — в Stripe руками ничего создавать не нужно.
-//
-// Понижение тарифа: партнёров больше, чем даёт новый тариф, — отказ
-// «сначала уберите лишних» (владелец 01.10). Команд больше — можно: лишние
-// встают «только смотреть», рабочие владелец выбирает в «Тариф».
+// по событиям подписки (`customer.subscription.*`): цена несёт метку
+// (`metadata.tier` = max, `lookup_key` babun_calendar_<period>), количество —
+// `paid_calendars`. Цены заводятся здесь сами при первой оплате — в Stripe
+// руками ничего создавать не нужно. Людей не считаем: партнёры бесплатно.
 //
 // Кто зовёт: владелец аккаунта (JWT + `x-babun-tenant`); аккаунт и роль
 // отвечает сама база (`current_tenant_id`, `current_user_role`). Партнёр с
@@ -30,19 +35,13 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 
-type Tier = "solo" | "pro" | "max";
 type Period = "month" | "year";
 
-/** Цены в центах EUR — те же, что на странице «Тариф» (`tiers.ts`). Год —
- *  цена месяца при оплате за год × 12. */
-const PRICES: Record<Tier, Record<Period, number>> = {
-  solo: { month: 699, year: 499 * 12 },
-  pro: { month: 2999, year: 2199 * 12 },
-  max: { month: 5999, year: 4499 * 12 },
-};
-const NAMES: Record<Tier, string> = { solo: "Соло", pro: "Про", max: "Макс" };
-/** Партнёров в тарифе — те же числа, что `tenant_tier_limit` в базе. */
-const PARTNERS: Record<Tier, number> = { solo: 0, pro: 5, max: 50 };
+/** Цена ОДНОГО календаря в центах EUR — та же, что на странице «Тариф»
+ *  (`tiers.ts`). Год — цена месяца при оплате за год × 12. */
+const CALENDAR_PRICE: Record<Period, number> = { month: 999, year: 799 * 12 };
+/** Метка цены для вебхука: оплата календарей — «полный доступ» в базе. */
+const PAID_TIER = "max";
 
 const RETURN_ORIGINS = [
   "https://babun.app",
@@ -97,8 +96,6 @@ function safeReturn(value: unknown): string {
   }
 }
 
-const isTier = (v: unknown): v is Tier => v === "solo" || v === "pro" || v === "max";
-
 class StripeError extends Error {
   constructor(public status: number, public code: string | undefined, message: string) {
     super(message);
@@ -130,35 +127,48 @@ async function stripe(
   return data;
 }
 
-/** Цена тарифа — по `lookup_key`; нет — заводим товар и цену один раз. */
-async function priceFor(key: string, tier: Tier, period: Period): Promise<string> {
-  const lookup = `babun_${tier}_${period}`;
+/** Цена календаря — по `lookup_key`; нет — заводим товар и цену один раз. */
+async function priceFor(key: string, period: Period): Promise<string> {
+  const lookup = `babun_calendar_${period}`;
   const found = await stripe(key, "GET", "prices", { "lookup_keys[]": lookup, active: "true", limit: "1" });
   const existing = (found.data as { id: string }[] | undefined)?.[0]?.id;
   if (existing) return existing;
-  const productId = `babun_${tier}`;
+  const productId = "babun_calendar";
   try {
     await stripe(key, "GET", `products/${productId}`);
   } catch (e) {
     if (!(e instanceof StripeError) || e.status !== 404) throw e;
     await stripe(key, "POST", "products", {
       id: productId,
-      name: `Babun ${NAMES[tier]}`,
-      "metadata[tier]": tier,
+      name: "Babun · календарь",
+      "metadata[tier]": PAID_TIER,
+      "metadata[unit]": "calendar",
     });
   }
   const price = await stripe(key, "POST", "prices", {
     product: productId,
     currency: "eur",
-    unit_amount: String(PRICES[tier][period]),
+    unit_amount: String(CALENDAR_PRICE[period]),
     "recurring[interval]": period,
     lookup_key: lookup,
     transfer_lookup_key: "true",
-    nickname: `${NAMES[tier]} · ${period === "month" ? "месяц" : "год"}`,
-    "metadata[tier]": tier,
+    nickname: `Календарь · ${period === "month" ? "месяц" : "год"}`,
+    "metadata[tier]": PAID_TIER,
+    "metadata[unit]": "calendar",
     "metadata[period]": period,
   });
   return price.id as string;
+}
+
+/** Живые календари аккаунта — столько и в подписке (не меньше одного). */
+// deno-lint-ignore no-explicit-any
+async function liveCalendars(service: any, tenantId: string): Promise<number> {
+  const { count } = await service
+    .from("teams")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true);
+  return Math.max(1, typeof count === "number" ? count : 1);
 }
 
 Deno.serve(async (request: Request) => {
@@ -198,7 +208,7 @@ Deno.serve(async (request: Request) => {
   } catch {
     // пустое тело — ниже отказ по тарифу
   }
-  const action = body.action === "portal" ? "portal" : "checkout";
+  const action = body.action === "portal" ? "portal" : body.action === "sync" ? "sync" : "checkout";
   const back = safeReturn(body.return_url);
 
   const { data: tenant, error: tenantError } = await service
@@ -226,51 +236,46 @@ Deno.serve(async (request: Request) => {
       }
     }
 
-    const tier = body.tier;
-    if (!isTier(tier)) return json(400, { error: "bad_tier" });
+    const live = ["active", "trialing", "past_due"].includes(String(tenant.subscription_status ?? ""));
+    const quantity = await liveCalendars(service, tenantId);
+
+    // СВЕРКА КОЛИЧЕСТВА: календарь добавили или убрали — подписка следом,
+    // со следующего платежа (владелец 12.10), без доплаты сегодня.
+    if (action === "sync") {
+      if (tenant.plan_override || !live || !tenant.stripe_subscription_id) return json(200, { synced: false });
+      const sub = await stripe(stripeKey, "GET", `subscriptions/${tenant.stripe_subscription_id}`);
+      const item = (sub.items as { data?: { id: string; quantity?: number }[] } | undefined)?.data?.[0];
+      if (!item) return json(409, { error: "subscription_without_items" });
+      if (item.quantity === quantity) return json(200, { synced: true, quantity });
+      await stripe(stripeKey, "POST", `subscriptions/${tenant.stripe_subscription_id}`, {
+        "items[0][id]": item.id,
+        "items[0][quantity]": String(quantity),
+        proration_behavior: "none",
+      });
+      return json(200, { synced: true, quantity });
+    }
+
     const period: Period = body.period === "year" ? "year" : "month";
     if (tenant.plan_override) return json(409, { error: "forever" });
 
-    const priceId = await priceFor(stripeKey, tier, period);
-    const live = ["active", "trialing", "past_due"].includes(String(tenant.subscription_status ?? ""));
+    const priceId = await priceFor(stripeKey, period);
 
-    // ПОДПИСКА УЖЕ ЕСТЬ — МЕНЯЕМ В НЕЙ ТАРИФ, А НЕ ЗАВОДИМ ВТОРУЮ.
+    // ПОДПИСКА УЖЕ ЕСТЬ — ПЕРЕВОДИМ ЕЁ НА ЦЕНУ ЗА КАЛЕНДАРЬ И ЧИСЛО
+    // КАЛЕНДАРЕЙ, А НЕ ЗАВОДИМ ВТОРУЮ (старые подписки Соло · Про · Макс).
     if (live && tenant.stripe_subscription_id) {
-      // Смена тарифа в живой подписке спишет разницу с карты владельца.
+      // Смена в живой подписке меняет списания с карты владельца.
       if (!owner) return json(409, { error: "owner_only_change" });
-      const { data: people } = await service.rpc("tariff_partner_count", { p_tenant: tenantId });
-      if (typeof people === "number" && people > PARTNERS[tier]) {
-        return json(409, { error: "too_many_partners", limit: PARTNERS[tier] });
-      }
       const sub = await stripe(stripeKey, "GET", `subscriptions/${tenant.stripe_subscription_id}`);
-      const item = (sub.items as { data?: { id: string; price?: { id?: string } }[] } | undefined)?.data?.[0];
+      const item = (sub.items as { data?: { id: string; quantity?: number; price?: { id?: string } }[] } | undefined)?.data?.[0];
       if (!item) return json(409, { error: "subscription_without_items" });
-      if (item.price?.id === priceId) return json(200, { changed: false });
-      // СМЕНА ТАРИФА — ТОЛЬКО ПОСЛЕ ОПЛАТЫ РАЗНИЦЫ (аудит 03.10). Было
-      // `create_prorations`: доплата за остаток периода ждала СЛЕДУЮЩЕГО
-      // счёта, а вебхук сразу ставил новый тариф — Соло → «Макс» → отмена в
-      // портале давали «Макс» до конца периода без доплаты. Теперь разница
-      // выставляется счётом сразу, и при `pending_if_incomplete` новая цена
-      // встаёт в подписку лишь когда счёт оплачен (до того вебхук видит
-      // прежнюю цену). Понижение даёт кредит на следующий счёт. Метки в такой
-      // запрос Stripe не принимает — они уже стоят на подписке с оформления.
+      if (item.price?.id === priceId && item.quantity === quantity) return json(200, { changed: false });
       await stripe(stripeKey, "POST", `subscriptions/${tenant.stripe_subscription_id}`, {
         "items[0][id]": item.id,
         "items[0][price]": priceId,
-        proration_behavior: "always_invoice",
-        payment_behavior: "pending_if_incomplete",
+        "items[0][quantity]": String(quantity),
+        proration_behavior: "none",
       });
       return json(200, { changed: true });
-    }
-
-    // ЛИМИТ ПАРТНЁРОВ — И У НОВОЙ ПОДПИСКИ (аудит 03.10): проверка стояла
-    // только у смены тарифа в живой подписке. Пробный «Макс» → 50 партнёров
-    // → пробный кончился → новая подписка «Про» оживляла всех 50 по цене Про.
-    {
-      const { data: people } = await service.rpc("tariff_partner_count", { p_tenant: tenantId });
-      if (typeof people === "number" && people > PARTNERS[tier]) {
-        return json(409, { error: "too_many_partners", limit: PARTNERS[tier] });
-      }
     }
 
     // Клиент Stripe аккаунта: свой, иначе тот, что завёлся для SMS, иначе новый.
@@ -297,17 +302,17 @@ Deno.serve(async (request: Request) => {
       mode: "subscription",
       customer,
       "line_items[0][price]": priceId,
-      "line_items[0][quantity]": "1",
+      "line_items[0][quantity]": String(quantity),
       client_reference_id: tenantId,
       "metadata[kind]": "tariff",
       "metadata[tenant_id]": tenantId,
-      "metadata[tier]": tier,
+      "metadata[tier]": PAID_TIER,
       "subscription_data[metadata][tenant_id]": tenantId,
-      "subscription_data[metadata][tier]": tier,
+      "subscription_data[metadata][tier]": PAID_TIER,
       success_url: `${back}?tariff=paid`,
       cancel_url: `${back}?tariff=cancelled`,
       // За какой аккаунт платят — прямо на странице оплаты (04.10).
-      "custom_text[submit][message]": `Тариф аккаунта «${String(tenant.name ?? "").trim() || "Babun"}»`,
+      "custom_text[submit][message]": `Календари аккаунта «${String(tenant.name ?? "").trim() || "Babun"}»`,
     };
     // Идёт свой пробный — списание с его последнего дня (Stripe требует
     // запас не меньше двух суток; ближе к концу — платим сразу).
