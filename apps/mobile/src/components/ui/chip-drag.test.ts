@@ -54,3 +54,17 @@ test("шестерёнка календаря: лента перетаскива
   // В worklet — не методы объектов (падало на UI-рантайме).
   assert.doesNotMatch(drag, /runOnJS\((haptics|drag)\./);
 });
+
+test("место чипа — из порядка и ширин: отпускание ставит ровно в ячейку (11.10)", async () => {
+  const { slotX } = await import("./chip-drag-math");
+  const widths = { a: 80, b: 50, c: 100 };
+  assert.equal(slotX(["a", "b", "c"], widths, 0, 0), 0);
+  assert.equal(slotX(["a", "b", "c"], widths, 2, 0), 80 + 8 + 50 + 8);
+  // Переставили «c» первым — «a» встаёт за ним на ширину «c».
+  assert.equal(slotX(["c", "a", "b"], widths, 1, 0), 100 + 8);
+  const here = dirname(fileURLToPath(import.meta.url));
+  const drag = readFileSync(resolve(here, "chip-drag.tsx"), "utf8");
+  // Новый порядок пишется на потоке UI в миг отпускания, одной записью.
+  assert.match(drag, /order\.value = next;\s*settleId\.value = id;/);
+  assert.match(drag, /position: "absolute", left: 0, top: 0/);
+});

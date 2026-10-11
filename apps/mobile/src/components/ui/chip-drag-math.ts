@@ -26,3 +26,17 @@ export function shiftOf(index: number, active: number, target: number, width: nu
   if (active > index && index >= target) return width + CHIP_GAP;
   return 0;
 }
+
+/** Левый край чипа на месте `index` при порядке `order` и ширинах `widths`
+ *  (лента начинается с `pad`, между чипами — `CHIP_GAP`). */
+export function slotX(
+  order: readonly string[],
+  widths: Readonly<Record<string, number>>,
+  index: number,
+  pad: number,
+): number {
+  "worklet";
+  let x = pad;
+  for (let i = 0; i < index && i < order.length; i++) x += (widths[order[i]] ?? 0) + CHIP_GAP;
+  return x;
+}

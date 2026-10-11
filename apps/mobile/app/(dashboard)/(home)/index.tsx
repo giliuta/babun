@@ -142,6 +142,7 @@ import { MonthView } from "@/features/calendar/MonthView";
 import { AgendaView } from "@/features/calendar/AgendaView";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { CalendarSkeleton } from "@/features/calendar/CalendarSkeleton";
+import { markBootReady } from "@/features/boot/BootSplash";
 import { startOfWeek } from "@/features/calendar/week";
 import { useLatestHandler } from "@/features/calendar/use-latest-handler";
 import {
@@ -921,8 +922,12 @@ export default function CalendarTab() {
   //
   // Ошибка роли сюда НЕ входит намеренно: она своя и показывается своим
   // экраном, а вечный скелет вместо неё — тупик хуже прежнего.
+  // СКРЫТЫЕ ТОЖЕ ДОЛЖНЫ БЫТЬ ИЗВЕСТНЫ (владелец 11.10: «скрыл свой
+  // календарь, но при заходе он показывается»): без списка скрытых первым
+  // кадром открылся бы скрытый. Список берётся с телефона, ждать сервер
+  // приходится только при самом первом входе.
   const calendarsUnknown =
-    !roleQuery.isError && (teamsPending || chipsLoading);
+    !roleQuery.isError && (teamsPending || chipsLoading || !calendarVisibility.known);
 
   // Active team calendar. Derived (not stored) so it self-heals: falls back
   // to the first team until the user picks one, and re-anchors if the chosen
@@ -3065,6 +3070,9 @@ export default function CalendarTab() {
   );
 
   const calendarLoading =
+    // Пока не известно, что скрыто, сетка не показывает ни одного календаря:
+    // иначе первым кадром мелькал бы скрытый (11.10).
+    !calendarVisibility.known ||
     isLoading ||
     clientsQuery.isLoading ||
     servicesQuery.isLoading ||
@@ -3072,6 +3080,11 @@ export default function CalendarTab() {
     citiesQuery.isLoading ||
     dayCitiesQuery.isLoading ||
     teamScheduleQuery.isLoading;
+  // Календарь загрузился (или упал с ошибкой) — заставка загрузки уходит.
+  useEffect(() => {
+    if (!calendarLoading) markBootReady();
+  }, [calendarLoading]);
+
   // СЕТКУ ПРЯЧЕТ ТОЛЬКО ОШИБКА ПЕРВОЙ ЗАГРУЗКИ (аудит 03.10). Неудачное
   // ПЕРЕЧИТЫВАНИЕ в react-query ставит `error`, а данные оставляет — и
   // загруженная неделя целиком менялась на «Не удалось загрузить календарь»,
