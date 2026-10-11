@@ -30,7 +30,9 @@ describe("первый вход нового аккаунта", () => {
   test("регистрация без мастера: имя с формы, код из письма, сразу календарь", () => {
     assert.throws(() => app("(auth)/onboarding.tsx"));
     const register = app("(auth)/register.tsx");
-    assert.match(register, /placeholder="Имя или название компании"/);
+    // Только имя человека (владелец 11.10): компанию заводят потом в Кабинете.
+    assert.match(register, /placeholder="Ваше имя"/);
+    assert.doesNotMatch(register, /название компании/);
     assert.match(register, /full_name: fullName\.trim\(\),/);
     assert.match(register, /<EmailCodeCard\s+kind="signup"/);
     assert.doesNotMatch(register, /"\/onboarding"/);

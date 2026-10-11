@@ -151,8 +151,8 @@ function RegisterScreen() {
         <AuthField
           value={fullName}
           onChangeText={edit(setFullName)}
-          placeholder="Имя или название компании"
-          accessibilityLabel="Имя или название компании"
+          placeholder="Ваше имя"
+          accessibilityLabel="Ваше имя"
           autoComplete="name"
           textContentType="name"
           maxLength={120}

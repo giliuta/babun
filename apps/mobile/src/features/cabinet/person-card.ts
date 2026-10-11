@@ -46,9 +46,9 @@ export function personCardView(user: UserLike, accountName?: string | null): Per
   const birthday = birthdayText(clean(user?.user_metadata?.birthday));
   const title = name || email || "Аккаунт";
   const account = clean(accountName);
-  // Регистрация кладёт одно поле «Имя или название компании» и в имя, и в
-  // аккаунт — пока их не развели в «Профиле», второй раз то же слово не
-  // печатаем.
+  // Регистрация кладёт одно поле «Ваше имя» (до 11.10 — «Имя или название
+  // компании») и в имя, и в аккаунт — пока их не развели в «Профиле», второй
+  // раз то же слово не печатаем.
   const company =
     account && account.toLocaleLowerCase() !== title.toLocaleLowerCase() ? account : null;
   const facts: PersonFact[] = [];
