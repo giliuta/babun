@@ -70,6 +70,7 @@ function Row({
   label,
   handleInside,
   spaced,
+  divided = true,
   onDrop,
   drag,
   onActiveChange,
@@ -89,6 +90,7 @@ function Row({
    *  карточки. Внутри строки ручка уезжает вместе со всем остальным. */
   handleInside?: boolean;
   spaced?: boolean;
+  divided?: boolean;
   onDrop: (from: number, to: number) => void;
   drag: DragState;
   onActiveChange: (dragging: boolean) => void;
@@ -234,7 +236,7 @@ function Row({
                 boxShadow: t.cardShadow,
               }
             : {
-                borderTopWidth: index > 0 ? 1 : 0,
+                borderTopWidth: index > 0 && divided ? 1 : 0,
                 borderTopColor: t.separator,
               }),
         },
@@ -260,6 +262,7 @@ export function ReorderList<T extends ReorderRow>({
   rowHeight = 56,
   rangeFor,
   spaced,
+  divided,
   labelFor,
   handleInside,
   onReorder,
@@ -274,6 +277,8 @@ export function ReorderList<T extends ReorderRow>({
   rangeFor?: (index: number) => readonly [number, number];
   /** Каждая строка — своя поверхность с зазором, а не полоса в общей карточке. */
   spaced?: boolean;
+  /** Волосок между строками; `false` — строки без шва, как галки блоков. */
+  divided?: boolean;
   /** Как назвать строку в озвучке ручки. */
   labelFor: (item: T) => string;
   /** Новый порядок id — целиком, в том порядке, в каком строки теперь стоят. */
@@ -356,6 +361,7 @@ export function ReorderList<T extends ReorderRow>({
             label={labelFor(item)}
             handleInside={handleInside}
             spaced={spaced}
+            divided={divided}
             onDrop={drop}
             drag={drag}
             onActiveChange={dragging}

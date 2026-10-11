@@ -207,6 +207,8 @@ const FIELD_WORDS: Record<string, string> = {
   calendar_window_start: "Часы календаря",
   calendar_window_end: "Часы календаря",
   disabled_blocks: "Блоки",
+  record_order: "Порядок блоков записи",
+  event_order: "Порядок блоков события",
   contact_ways: "Связь",
   map_services: "Карты",
   client_list_off: "Строка в списке",

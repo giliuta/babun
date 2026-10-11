@@ -12,6 +12,7 @@ import { useDataRole } from "@/features/settings/tenant";
 import { useDisabledFeatures } from "@/features/settings/company-features";
 import { useTenantId } from "@/lib/tenant";
 import { localBookingCarry } from "./booking-carry";
+import { orderMovable } from "./block-order";
 import {
   useSaveTeamDesign,
   useTeamDesign,
@@ -126,19 +127,58 @@ export function useRecordFeaturesOff(teamId: string | null | undefined): string[
   return [...out];
 }
 
+// ПОРЯДОК БЛОКОВ — У КОМАНДЫ (владелец 11.10: «брат хотел бы менять
+// местонахождение блока — поставить первым объект, вторым клиент — и самому
+// редактировать»). Двигаются блоки ТЕЛА формы; команда с меткой и время —
+// шапка записи («кто, куда, когда») и стоят сверху всегда. Порядок хранится в
+// строке «Записей» команды (`team_design.record_order/event_order`) и потому
+// одинаков у всей команды — как и выключенные блоки.
+
+/** Подвижные блоки записи в заводском порядке — так форма стояла всегда. */
+export const RECORD_MOVABLE: readonly BookingBlockId[] = [
+  "client",
+  "object",
+  "services",
+  "payment",
+  "note",
+  "files",
+];
+
+/** Подвижные блоки события в заводском порядке — как стоит форма события. */
+export const EVENT_MOVABLE: readonly EventBlockId[] = [
+  "type",
+  "client",
+  "object",
+  "note",
+  "files",
+];
+
+/** Полный порядок формы: шапка как в определениях, затем тело в порядке
+ *  команды. */
+function orderForm<T extends string>(
+  all: readonly { id: T }[],
+  movable: readonly T[],
+  stored: readonly string[] | null | undefined,
+): T[] {
+  const head = all.map((b) => b.id).filter((id) => !movable.includes(id));
+  return [...head, ...orderMovable(movable, stored)];
+}
+
 /** Включённые блоки формы записи КОМАНДЫ, в порядке показа (владелец 24.09:
  *  «всё отдельно под каждую команду»). Объект — ещё и функция компании
  *  (объекты клиентов): выключены объекты у компании — блока нет нигде. */
 export function useBookingBlocks(teamId: string | null | undefined): BookingBlockId[] {
   const off = useTeamBlocksOff(teamId);
   const disabled = useDisabledFeatures();
+  const order = useTeamDesign(teamId)?.recordOrder;
   useCarryLocalBookingBlocks();
-  return BOOKING_BLOCKS.filter((block) => {
+  const on = BOOKING_BLOCKS.filter((block) => {
     if (block.pinned) return true;
     if (block.id === "object" && !isFeatureOn(disabled, "objects")) return false;
     const key = RECORD_BLOCK_KEY[block.id];
     return !key || !off.has(key);
   }).map((block) => block.id);
+  return orderForm(BOOKING_BLOCKS, RECORD_MOVABLE, order).filter((id) => on.includes(id));
 }
 
 // ── БЛОКИ СОБЫТИЯ ──
@@ -170,9 +210,11 @@ export const EVENT_BLOCKS: EventBlockDef[] = [
   { id: "team", label: "Команда", pinned: true },
   { id: "label", label: "Метка" },
   { id: "when", label: "Время", pinned: true },
+  // Тип — под временем, как его и рисует форма события (список настроек
+  // прежде ставил его после объекта и расходился с формой).
+  { id: "type", label: "Тип" },
   { id: "client", label: "Клиент" },
   { id: "object", label: "Объект" },
-  { id: "type", label: "Тип" },
   { id: "note", label: "Заметка" },
   { id: "files", label: "Файлы" },
 ];
@@ -190,7 +232,8 @@ const EVENT_BLOCK_KEY: Partial<Record<EventBlockId, TeamBlockKey>> = {
 export function useEventBlocks(teamId: string | null | undefined): EventBlockId[] {
   const off = useTeamBlocksOff(teamId);
   const disabled = useDisabledFeatures();
-  return EVENT_BLOCKS.filter((block) => {
+  const order = useTeamDesign(teamId)?.eventOrder;
+  const on = EVENT_BLOCKS.filter((block) => {
     if (block.pinned) return true;
     // Объекта события нет там, где у компании нет объектов вовсе, — и там,
     // где команда выключила «Объект» в блоках записи: страница «Записи»
@@ -201,6 +244,7 @@ export function useEventBlocks(teamId: string | null | undefined): EventBlockId[
     const key = EVENT_BLOCK_KEY[block.id];
     return !key || !off.has(key);
   }).map((block) => block.id);
+  return orderForm(EVENT_BLOCKS, EVENT_MOVABLE, order).filter((id) => on.includes(id));
 }
 
 /** Текущий «Дизайн» команды целиком — основа для патча. Без строки —
@@ -246,6 +290,34 @@ export function useToggleEventBlock(teamId: string | null | undefined) {
 export function useToggleBookingBlock(teamId: string | null | undefined) {
   const t = useToggleTeamBlock(teamId);
   return { ...t, mutate: (id: BookingBlockId) => t.mutate(RECORD_BLOCK_KEY[id]) };
+}
+
+/** Порядок подвижных блоков записи команды (перетаскивание в «Записях»). */
+export function useRecordBlockOrder(teamId: string | null | undefined) {
+  const base = useDesignBase(teamId);
+  const save = useSaveTeamDesign();
+  return {
+    ...save,
+    order: orderMovable(RECORD_MOVABLE, base.recordOrder),
+    mutate: (ids: string[], opts?: { onError?: (e: Error) => void }) => {
+      if (!teamId) return;
+      save.mutate({ teamId, base, next: { ...base, recordOrder: ids } }, opts);
+    },
+  };
+}
+
+/** Порядок подвижных блоков события команды. */
+export function useEventBlockOrder(teamId: string | null | undefined) {
+  const base = useDesignBase(teamId);
+  const save = useSaveTeamDesign();
+  return {
+    ...save,
+    order: orderMovable(EVENT_MOVABLE, base.eventOrder),
+    mutate: (ids: string[], opts?: { onError?: (e: Error) => void }) => {
+      if (!teamId) return;
+      save.mutate({ teamId, base, next: { ...base, eventOrder: ids } }, opts);
+    },
+  };
 }
 
 /** ПЕРЕНОС С ТЕЛЕФОНА — ОДИН РАЗ. У владельца, который уже выключил блоки на

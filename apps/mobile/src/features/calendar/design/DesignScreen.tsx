@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
@@ -25,6 +25,7 @@ import { GUTTER } from "@/components/ui/tokens";
 import { RecordMark } from "@/components/ui/RecordMark";
 import { RowCaption } from "@/components/ui/card-rows";
 import { AlwaysLine, BlockCell } from "@/components/ui/block-toggles";
+import { ReorderList } from "@/components/ui/ReorderList";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
@@ -37,8 +38,10 @@ import {
   EVENT_BLOCKS,
   useAutoColorRule,
   useBookingBlocks,
+  useEventBlockOrder,
   useEventBlocks,
   useFallbackColor,
+  useRecordBlockOrder,
   useSetAutoColorRule,
   useSetSituationColor,
   useSituationPalette,
@@ -97,6 +100,43 @@ const BLOCK_ICON: Record<string, LucideIcon> = {
 
 
 
+/** Подвижные блоки формы: строки с ручкой справа — тянут за неё, тап по
+ *  строке по-прежнему включает и выключает блок. Без права «Записи» — те же
+ *  строки в том же порядке, без ручек. */
+function BlockOrder({
+  ids,
+  readOnly,
+  labelFor,
+  onReorder,
+  onDraggingChange,
+  cell,
+}: {
+  ids: readonly string[];
+  readOnly: boolean;
+  labelFor: (id: string) => string;
+  onReorder: (ids: string[]) => void;
+  onDraggingChange: (dragging: boolean) => void;
+  cell: (id: string) => ReactNode;
+}) {
+  if (readOnly) return <>{ids.map((id) => <View key={id}>{cell(id)}</View>)}</>;
+  return (
+    <ReorderList
+      items={ids.map((id) => ({ id }))}
+      rowHeight={44}
+      divided={false}
+      labelFor={(item) => labelFor(item.id)}
+      onReorder={onReorder}
+      onDraggingChange={onDraggingChange}
+    >
+      {(item) => cell(item.id)}
+    </ReorderList>
+  );
+}
+
+const BLOCK_LABEL: Record<string, string> = Object.fromEntries(
+  [...BOOKING_BLOCKS, ...EVENT_BLOCKS].map((b) => [b.id, b.label]),
+);
+
 export function DesignScreen() {
   const router = useRouter();
   // «ДИЗАЙН» — У КАЖДОЙ КОМАНДЫ СВОЙ (владелец 24.09). Команда едет адресом из
@@ -127,6 +167,12 @@ export function DesignScreen() {
   const eventBlocks = useEventBlocks(teamId);
   const toggleEventBlock = useToggleEventBlock(teamId);
   const objectsOn = recordBlocks.includes("object");
+  // ПОРЯДОК БЛОКОВ (владелец 11.10: «поставить первым объект, вторым клиент
+  // и самому редактировать»). Пока строку тянут, страница не едет.
+  const recordOrder = useRecordBlockOrder(teamId);
+  const eventOrder = useEventBlockOrder(teamId);
+  const [dragging, setDragging] = useState(false);
+  const saveOrderError = (e: Error) => notify("Не удалось сохранить порядок", e.message);
 
   // ── типы событий ──
   const typesQuery = usePersonalEventTypes(teamId);
@@ -221,7 +267,7 @@ export function DesignScreen() {
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title="Записи" subtitle={team?.name} />
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView scrollEnabled={!dragging} contentContainerStyle={{ paddingBottom: 24 }}>
         {/* ПЕРЕКЛЮЧАТЕЛЬ «КЛИЕНТ | СОБЫТИЕ» — НАВЕРХУ И НА ВСЮ СТРАНИЦУ
             (владелец 25.09: «выбираю клиенты — настраиваю всё по клиентам,
             события — всё по событиям»). */}
@@ -249,19 +295,38 @@ export function DesignScreen() {
                 растягивали список и спорили с теми, что правда выключаются. */}
             <SectionCard title="Блоки записи">
               <AlwaysLine blocks={BOOKING_BLOCKS} />
-              {BOOKING_BLOCKS.filter((b) => !b.pinned).map((block) => (
-                <BlockCell
-                  key={block.id}
-                  label={block.label}
-                  icon={BLOCK_ICON[block.id] ?? Bookmark}
-                  on={recordOn(block.id)}
-                  locked={false}
-                  readOnly={readOnly}
-                  onToggle={() => toggleRecordBlock.mutate(block.id)}
-                />
-              ))}
+              {/* Метка живёт в карточке команды — она всегда первая. */}
+              <BlockCell
+                label="Метка"
+                icon={Bookmark}
+                on={recordOn("label")}
+                locked={false}
+                readOnly={readOnly}
+                onToggle={() => toggleRecordBlock.mutate("label")}
+              />
+              <BlockOrder
+                ids={recordOrder.order}
+                readOnly={readOnly}
+                labelFor={(id) => BLOCK_LABEL[id] ?? id}
+                onReorder={(ids) => recordOrder.mutate(ids, { onError: saveOrderError })}
+                onDraggingChange={setDragging}
+                cell={(id) => {
+                  const pinned = !!BOOKING_BLOCKS.find((b) => b.id === id)?.pinned;
+                  return (
+                    <BlockCell
+                      label={BLOCK_LABEL[id] ?? id}
+                      icon={BLOCK_ICON[id] ?? Bookmark}
+                      on={recordOn(id)}
+                      locked={false}
+                      fixed={pinned}
+                      readOnly={readOnly}
+                      onToggle={() => toggleRecordBlock.mutate(id as BookingBlockId)}
+                    />
+                  );
+                }}
+              />
             </SectionCard>
-            <RowCaption text="Выключенный блок пропадает у всей команды. Данные остаются." />
+            <RowCaption text="Порядок — перетащите за точки справа. Выключенный блок пропадает у всей команды, данные остаются." />
 
             {/* ЦВЕТ ЗАПИСИ — ПОД БЛОКАМИ, ОБЫЧНЫМИ СТРОКАМИ: слева случай,
                 справа его цвет (или «Без цвета»), тап — палитра. */}
@@ -292,27 +357,41 @@ export function DesignScreen() {
           <>
             <SectionCard title="Блоки события">
               <AlwaysLine blocks={EVENT_BLOCKS} />
-              {EVENT_BLOCKS.filter((b) => !b.pinned).map((block) => {
-                // Объекта события нет, пока у команды выключены объекты.
-                // Без тарифа нет клиентов, а объект — всегда объект клиента:
-                // обе строки сняты и не ставятся (владелец 04.10).
-                const noObjects = block.id === "object" && !objectsOn;
-                const noPlan = !clientsInPlan && (block.id === "client" || block.id === "object");
-                const locked = noObjects || noPlan;
-                return (
-                  <BlockCell
-                    key={block.id}
-                    label={block.label}
-                    icon={BLOCK_ICON[block.id] ?? Bookmark}
-                    on={!locked && eventOn(block.id)}
-                    locked={locked}
-                    readOnly={readOnly}
-                    onToggle={() => toggleEventBlock.mutate(block.id)}
-                  />
-                );
-              })}
+              <BlockCell
+                label="Метка"
+                icon={Bookmark}
+                on={eventOn("label")}
+                locked={false}
+                readOnly={readOnly}
+                onToggle={() => toggleEventBlock.mutate("label")}
+              />
+              <BlockOrder
+                ids={eventOrder.order}
+                readOnly={readOnly}
+                labelFor={(id) => BLOCK_LABEL[id] ?? id}
+                onReorder={(ids) => eventOrder.mutate(ids, { onError: saveOrderError })}
+                onDraggingChange={setDragging}
+                cell={(id) => {
+                  // Объекта события нет, пока у команды выключены объекты.
+                  // Без тарифа нет клиентов, а объект — всегда объект клиента:
+                  // обе строки сняты и не ставятся (владелец 04.10).
+                  const noObjects = id === "object" && !objectsOn;
+                  const noPlan = !clientsInPlan && (id === "client" || id === "object");
+                  const locked = noObjects || noPlan;
+                  return (
+                    <BlockCell
+                      label={BLOCK_LABEL[id] ?? id}
+                      icon={BLOCK_ICON[id] ?? Bookmark}
+                      on={!locked && eventOn(id)}
+                      locked={locked}
+                      readOnly={readOnly}
+                      onToggle={() => toggleEventBlock.mutate(id as EventBlockId)}
+                    />
+                  );
+                }}
+              />
             </SectionCard>
-            <RowCaption text="Выключенный блок пропадает у всей команды. Данные остаются." />
+            <RowCaption text="Порядок — перетащите за точки справа. Выключенный блок пропадает у всей команды, данные остаются." />
 
             {/* ТИПЫ СОБЫТИЙ — дверь на свою страницу, как у услуг и меток. */}
             {eventOn("type") ? (
