@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  createTierDraft,
   displayValue,
   draftValue,
   economicsDraftFromService,
+  nextDuration,
   parseDurationTiers,
   parsePriceTiers,
   validateServiceEconomics,
@@ -243,3 +245,27 @@ describe("линза «за всё ↔ за одну»", () => {
   });
 });
 
+
+describe("время новой строки продолжает шаг (владелец 11.10)", () => {
+  const tier = (totalDuration: string) => ({
+    id: totalDuration, minQuantity: "", rowPrice: "", rowCost: "0", totalDuration,
+  });
+  test("+30 мин, +30 мин → следующая ещё +30", () => {
+    assert.equal(nextDuration([tier("60"), tier("90")], 30), 120);
+  });
+  test("две подряд одинаковые → следующая такая же", () => {
+    assert.equal(nextDuration([tier("60"), tier("60")], 30), 60);
+  });
+  test("строка одна → её время, без умножения", () => {
+    assert.equal(nextDuration([], 45), 45);
+  });
+  test("первая ступень после базы: шаг от базы", () => {
+    assert.equal(nextDuration([tier("50")], 30), 70);
+  });
+  test("убывающий шаг не уводит ниже нуля", () => {
+    assert.equal(nextDuration([tier("10")], 60), 0);
+  });
+  test("createTierDraft берёт это время", () => {
+    assert.equal(createTierDraft([tier("60"), tier("90")], 30).totalDuration, "120");
+  });
+});
