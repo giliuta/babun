@@ -279,17 +279,6 @@ test("барабан времени у строки посередине не у
   assert.match(src, /if \(id\) Keyboard\.dismiss\(\);/);
 });
 
-test("готовые услуги из других команд — значком справа вверху, только у владельца (11.10)", async () => {
-  const { readFileSync } = await import("node:fs");
-  const { dirname, resolve } = await import("node:path");
-  const { fileURLToPath } = await import("node:url");
-  const here = dirname(fileURLToPath(import.meta.url));
-  const src = readFileSync(resolve(here, "../../../app/(dashboard)/cabinet/services.tsx"), "utf8");
-  assert.match(src, /const isOwner = useDataRole\(\)\.data === "owner";/);
-  assert.match(src, /if \(!isOwner \|\| !activeTeamId\) return \[\];/);
-  assert.match(src, /right=\{\s*!readOnly && copyCandidates\.length > 0 \?/);
-  assert.match(src, /setEditing\(\{ mode: "create", from, copy: true \}\)/);
-});
 
 test("«Убрать» строку количества убирает сразу — без вопроса поверх листа (11.10)", async () => {
   // Вопрос рисуется своим Modal поверх Modal листа услуги — iOS его не
@@ -300,4 +289,24 @@ test("«Убрать» строку количества убирает сраз
   const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "ServiceLadder.tsx"), "utf8");
   assert.doesNotMatch(src, /confirmThen\(|confirmAction\(|chooseOption\(/);
   assert.match(src, /onAction=\{\(\) => onRemove\(id\)\}/);
+});
+
+test("шаблоны новой услуги — значком в шапке ЛИСТА, список и заполнение в том же листе (11.10)", async () => {
+  // Владелец: «значок в самой шторке справа — нажимаю шаблон, и в этой же
+  // шторке появляется вся услуга». Второе окно поверх листа iOS не показывает.
+  const { readFileSync } = await import("node:fs");
+  const { dirname, resolve } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const page = readFileSync(resolve(here, "../../../app/(dashboard)/cabinet/services.tsx"), "utf8");
+  assert.match(page, /const isOwner = useDataRole\(\)\.data === "owner";/);
+  assert.match(page, /if \(!isOwner \|\| !activeTeamId\) return \[\];/);
+  assert.match(page, /templates=\{readOnly \? undefined : templates\}/);
+  assert.doesNotMatch(page, /CopyPlus|chooseOption\(/);
+  const sheet = readFileSync(resolve(here, "ServiceSheet.tsx"), "utf8");
+  assert.match(sheet, /const canPickTemplate = !service && \(templates\?\.length \?\? 0\) > 0;/);
+  assert.match(sheet, /\{picking \? \(\s*<TemplateList/);
+  assert.match(sheet, /seedFields\(from, from\.name\);/);
+  assert.match(sheet, /\? \{ copied_from_service_id: template\.id \}/);
+  assert.doesNotMatch(sheet, /chooseOption\(|confirmThen\(/);
 });
