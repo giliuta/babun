@@ -40,7 +40,7 @@ import {
 import { durationLabel } from "@/features/services/format";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
-import { chooseOption } from "@/lib/choose";
+import { chooseOption, afterChoiceSheet } from "@/lib/choose";
 
 import { parsePriceTiers } from "@/features/services/economics";
 import { ServiceSheet, type ServiceEditing } from "@/features/services/ServiceSheet";
@@ -209,7 +209,12 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
     );
     if (index === null) return;
     const from = copyCandidates[index];
-    if (from) setEditing({ mode: "create", from, copy: true });
+    if (!from) return;
+    // ЛИСТ УСЛУГИ — КОГДА ЛИСТ ВЫБОРА УЕХАЛ (владелец 11.10: «выбрал шаблон —
+    // залагало»). Оба — окна `Modal`; открытое в миг ухода предыдущего iOS не
+    // показывает, и экран вставал под невидимым окном.
+    await afterChoiceSheet();
+    setEditing({ mode: "create", from, copy: true });
   };
 
   // ВЫКЛЮЧЕННЫЕ ОСТАЮТСЯ В СПИСКЕ, СЕРЫМИ И В ХВОСТЕ (владелец 2026-08-29:

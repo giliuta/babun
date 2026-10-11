@@ -301,3 +301,12 @@ test("«Убрать» строку количества убирает сраз
   assert.doesNotMatch(src, /confirmThen\(|confirmAction\(|chooseOption\(/);
   assert.match(src, /onAction=\{\(\) => onRemove\(id\)\}/);
 });
+
+test("готовая услуга: лист услуги открывается, когда лист выбора уехал (11.10)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { dirname, resolve } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(resolve(here, "../../../app/(dashboard)/cabinet/services.tsx"), "utf8");
+  assert.match(src, /await afterChoiceSheet\(\);\s*setEditing\(\{ mode: "create", from, copy: true \}\);/);
+});
