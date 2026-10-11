@@ -39,8 +39,12 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
     assert.match(src("invoices/InvoiceRequisitesBlock.tsx"), /if \(!editing\) onCompanyChange\(id\);/);
   });
 
-  test("фото и видео записи: минута влезает, пачка не рвётся молча", () => {
-    assert.match(src("appointments/use-file-pickers.ts"), /videoQuality: ImagePicker\.UIImagePickerControllerQualityType\.VGA640x480,/);
+  test("фото и видео записи: камера не пишет видео, пачка не рвётся молча", () => {
+    // Минуту видео с камеры (03.10 — VGA, чтобы влезла в 50 МБ) сняли 06.10
+    // целиком: видео пишет звук, а микрофона в сборке нет — на живом iPhone
+    // камера падала. Видео приходит только из галереи; сторож — в
+    // appointment-photo-picker-contract.test.ts.
+    assert.match(src("appointments/use-file-pickers.ts"), /launchCameraAsync\(\{\s*mediaTypes: \["images"\],/);
     const upload = src("appointments/appointment-photos.ts");
     const loop = upload.slice(upload.indexOf("for (let index = 0; index < selected.length"));
     assert.match(loop, /try \{[\s\S]{0,300}const bytes = await assetBytes\(asset, mime\);/);

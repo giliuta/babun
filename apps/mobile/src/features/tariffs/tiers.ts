@@ -167,9 +167,16 @@ export function trialUsed(profile: { trial_started_at?: string | null } | null |
 
 /** Подпись тарифа в Кабинете: «Макс», «Про · пробный, ещё 9 дней», «Без
  *  тарифа». */
-export function tierLine(tier: Tier | null, trial: { days: number } | null): string {
+export function tierLine(
+  tier: Tier | null,
+  trial: { days: number } | null,
+  /** Можно ли платить здесь (`CAN_PAY_HERE`). В приложении из магазина —
+   *  только имя тарифа: отсчёт пробного зовёт купить, а покупки там нет
+   *  (App Store 3.1.3(f)). */
+  payHere = true,
+): string {
   if (!tier) return "—";
-  if (trial && tier !== "free") return `${NAMES[tier]} · пробный, ещё ${trial.days} ${daysWord(trial.days)}`;
+  if (payHere && trial && tier !== "free") return `${NAMES[tier]} · пробный, ещё ${trial.days} ${daysWord(trial.days)}`;
   return NAMES[tier];
 }
 
@@ -257,11 +264,13 @@ export function tariffStatus(
   state: TariffState,
   periodEnd?: string | null,
   /** Можно ли платить здесь (`CAN_PAY_HERE`): в приложении из магазина
-   *  «обновите карту» не говорим — только состояние (владелец 04.10). */
+   *  «обновите карту» не говорим — только состояние (владелец 04.10). Ни
+   *  отсчёта пробного, ни «пробный закончился»: это зовёт купить, а покупки
+   *  там нет (App Store 3.1.3(f)). */
   payHere = true,
 ): string {
   if (state.forever) return "Навсегда";
-  if (state.trial) return `Пробный · ещё ${state.trial.days} ${daysWord(state.trial.days)}`;
+  if (state.trial) return payHere ? `Пробный · ещё ${state.trial.days} ${daysWord(state.trial.days)}` : "Действует";
   if (state.pastDue) return payHere ? "Оплата не прошла — обновите карту" : "Оплата не прошла";
   if (state.paid) {
     const end = periodEnd ? new Date(periodEnd) : null;
@@ -269,6 +278,6 @@ export function tariffStatus(
       ? `Оплачен до ${String(end.getDate()).padStart(2, "0")}.${String(end.getMonth() + 1).padStart(2, "0")}`
       : "Оплачен";
   }
-  if (state.trialUsed) return "Пробный закончился";
+  if (state.trialUsed && payHere) return "Пробный закончился";
   return "Календарь и события";
 }

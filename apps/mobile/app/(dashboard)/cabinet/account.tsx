@@ -372,7 +372,9 @@ function DangerZoneSection({ email }: { email: string }) {
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const targetPhrase = email.trim() || "УДАЛИТЬ";
+  // Запасное слово — данные: account-delete сверяет его с русским «УДАЛИТЬ»,
+  // поэтому оно не переводится ни здесь, ни в подсказке ниже.
+  const targetPhrase = email.trim() || /* i18n-ignore */ "УДАЛИТЬ";
   const ready =
     typed.trim().length > 0 &&
     typed.trim().toLowerCase() === targetPhrase.toLowerCase();
@@ -384,7 +386,10 @@ function DangerZoneSection({ email }: { email: string }) {
     try {
       const { data, error: invokeError } = await supabase.functions.invoke(
         "account-delete",
-        { body: { confirmation: typed.trim() } },
+        // Своя минута вместо общего потолка 12 с (lib/supabase.ts): функция
+        // делает около дюжины шагов подряд, и обрыв на полпути показывал
+        // «не удалось», пока сервер дочищал аккаунт, — повтор упирался в 401.
+        { body: { confirmation: typed.trim() }, timeout: 60_000 },
       );
       if (invokeError) throw await deleteRefusal(invokeError);
       if (!data || data.ok !== true) {
@@ -457,7 +462,7 @@ function DangerZoneSection({ email }: { email: string }) {
               Удалить аккаунт?
             </Text>
             <Text style={{ marginTop: 8, marginBottom: 16, fontSize: 14, lineHeight: 20, color: t.sub }}>
-              Введите {email ? "email аккаунта" : "УДАЛИТЬ"} для подтверждения. Все данные будут потеряны.
+              Введите {email ? "email аккаунта" : /* i18n-ignore */ "УДАЛИТЬ"} для подтверждения. Все данные будут потеряны.
             </Text>
             <Text style={{ marginBottom: 6, fontSize: 13, color: t.ink }} selectable>
               {targetPhrase}

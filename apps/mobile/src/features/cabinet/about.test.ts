@@ -1,19 +1,46 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { updateSummary, versionSummary } from "./about";
+import { shownVersion, updateSummary, versionSummary } from "./about";
+
+describe("shownVersion", () => {
+  test("на телефоне — версия магазина, а не внутренняя (06.10, выпуск в магазины)", () => {
+    assert.equal(
+      shownVersion({ web: false, storeVersion: "1.0.0", internalVersion: "v1.8.33" }),
+      "1.0.0",
+    );
+  });
+
+  test("на сайте — внутренняя, как раньше", () => {
+    assert.equal(
+      shownVersion({ web: true, storeVersion: "1.0.0", internalVersion: "v1.8.33" }),
+      "v1.8.33",
+    );
+  });
+
+  test("без версии магазина строка не остаётся пустой", () => {
+    assert.equal(
+      shownVersion({ web: false, storeVersion: undefined, internalVersion: "v1.8.33" }),
+      "v1.8.33",
+    );
+    assert.equal(
+      shownVersion({ web: false, storeVersion: " ", internalVersion: "v1.8.33" }),
+      "v1.8.33",
+    );
+  });
+});
 
 describe("versionSummary", () => {
-  test("версия и номер сборки из TestFlight", () => {
+  test("версия и номер сборки — как в App Store и TestFlight", () => {
     assert.equal(
-      versionSummary({ displayVersion: "v1.8.28", buildNumber: "4" }),
-      "v1.8.28 · сборка 4",
+      versionSummary({ displayVersion: "1.0.0", buildNumber: "12" }),
+      "1.0.0 · сборка 12",
     );
   });
 
   test("без номера сборки — одна версия", () => {
-    assert.equal(versionSummary({ displayVersion: "v1.8.28", buildNumber: null }), "v1.8.28");
-    assert.equal(versionSummary({ displayVersion: "v1.8.28", buildNumber: " " }), "v1.8.28");
+    assert.equal(versionSummary({ displayVersion: "1.0.0", buildNumber: null }), "1.0.0");
+    assert.equal(versionSummary({ displayVersion: "1.0.0", buildNumber: " " }), "1.0.0");
   });
 });
 

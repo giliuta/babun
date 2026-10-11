@@ -8,6 +8,7 @@ import {
   Briefcase,
   ClipboardList,
   Tags,
+  LogOut,
   Trash2,
 } from "lucide-react-native";
 import { readTenantPref } from "@/lib/tenant-prefs";
@@ -15,6 +16,7 @@ import { useTenantId } from "@/lib/tenant";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { FOREIGN_PREFIX } from "@/features/settings/calendar-chips";
 import { useCalendarChips, useCalendarVisibility } from "@/features/settings/workspaces";
+import { useLeaveCalendar } from "@/features/settings/leave-calendar";
 import {
   AUTO_COLOR_RULES,
   BOOKING_BLOCKS,
@@ -175,6 +177,11 @@ export default function CalendarSettingsScreen() {
   // команды без строки расписания — стандарт 06:00–20:00.
   const [picker, setPicker] = useState<"view" | "tz" | null>(null);
   const role = useCurrentRole().data;
+  // ПАРТНЁР ВЫХОДИТ САМ (владелец 09.10: «внизу должно быть не „удалить
+  // команду", а „выйти из неё"»). Своё удаляет владелец; чужую команду
+  // партнёр не удаляет, а покидает — `leave_calendar`.
+  const leaveCalendar = useLeaveCalendar();
+  const canLeave = role != null && role !== "owner";
   const isOwner = role === "owner";
   // График команды правится ЛИСТОМ, а не страницей (владелец 2026-08-17):
   // семь дней надо видеть целиком, пока правишь один. См. шапку
@@ -196,9 +203,12 @@ export default function CalendarSettingsScreen() {
 
   const tenantId = useTenantId();
   // СКРЫТЫЕ КАЛЕНДАРИ ВКЛЮЧАЮТ ЗДЕСЬ (владелец 04.10: «в настройках календаря
-  // тумблер — и он снова показывается»). Лента шестерёнки — свои календари
-  // этого аккаунта, все, со скрытыми, плюс скрытые календари других
-  // аккаунтов: тап по такому переводит в его аккаунт, и тумблер под рукой.
+  // тумблер — и он снова показывается»), поэтому шестерёнка видит и скрытые.
+  // ВСЕ КАЛЕНДАРИ ВСЕХ АККАУНТОВ ОДНОЙ ЛЕНТОЙ (владелец 09.10: «можно
+  // переключаться между командой один, командой два и своей личной… сразу
+  // всё видно, только разный доступ»). Раньше чужие аккаунты стояли здесь
+  // лишь скрытыми, и «Личный» рядом с командами не было. Тап по календарю
+  // другого аккаунта переводит в него; строки ниже — по доступу в нём.
   const calendarVisibility = useCalendarVisibility();
   const gearChips = useCalendarChips({
     own: teams,
@@ -206,16 +216,6 @@ export default function CalendarSettingsScreen() {
     onPickOwn: (teamId) => router.setParams({ team: teamId }),
     onSwitchError: (message) => toast(message, "error"),
   });
-  const hiddenElsewhere = (chipId: string) => {
-    const separator = chipId.indexOf(":");
-    return calendarVisibility.isHidden(
-      chipId.slice(FOREIGN_PREFIX.length, separator),
-      chipId.slice(separator + 1),
-    );
-  };
-  const gearChipItems = gearChips.items.filter(
-    (chip) => !chip.id.startsWith(FOREIGN_PREFIX) || hiddenElsewhere(chip.id),
-  );
   // Какой календарь настраиваем: параметр из шестерёнки → тот, что открыт в
   // самом календаре (MMKV, тот же ключ) → первый. Экран всегда показывает
   // календарь, в котором человек работает, а не абстрактный «первый».
@@ -381,7 +381,7 @@ export default function CalendarSettingsScreen() {
           календаре и в финансах, и настройки каждой команды правятся не выходя
           с экрана. Раньше переключатель лежал последней секцией внизу. */}
       <ScopeChips
-        items={gearChipItems}
+        items={gearChips.items}
         activeId={gearChips.pendingId ?? team?.id ?? null}
         // СОЗДАНИЕ ЖИВЁТ В ЛЕНТЕ КАЛЕНДАРЕЙ, СПРАВА (владелец 2026-08-27:
         // «переносим в правую сторону, там где все календари, закрепляем
@@ -424,7 +424,7 @@ export default function CalendarSettingsScreen() {
         // команды, и лента другого выбора не предлагает.
         onSelect={(id) => (id.startsWith(FOREIGN_PREFIX) ? gearChips.pick(id) : router.setParams({ team: id }))}
       />
-      {rows.any ? (
+      {rows.any || canLeave ? (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
           {team ? (
             <>
@@ -766,6 +766,52 @@ export default function CalendarSettingsScreen() {
                 </Pressable>
               </SectionCard>
             </>
+          ) : null}
+          {team && tenantId && canLeave ? (
+            <SectionCard className="mt-4">
+              <Pressable
+                onPress={() =>
+                  confirmThen(
+                    `Выйти из команды «${team.name}»?`,
+                    {
+                      message:
+                        "Команда пропадёт из вашего календаря, её записи и клиенты станут вам не видны. Вернуть доступ может владелец, пригласив вас снова.",
+                      confirmLabel: "Выйти",
+                      destructive: true,
+                    },
+                    () =>
+                      leaveCalendar.mutate(
+                        { tenantId, teamId: team.id },
+                        {
+                          onSuccess: ({ leftAccount }) => {
+                            toast(`Вы вышли из команды «${team.name}»`, "success");
+                            // Последней командой аккаунта человек уходит
+                            // из него целиком — увести в свой календарь
+                            // успела чистка (`evictCompanyFromDevice`).
+                            if (leftAccount) return;
+                            const next = teams.find((x) => x.id !== team.id);
+                            router.setParams({ team: next?.id });
+                          },
+                          onError: (e) => notify("Не удалось выйти", e.message),
+                        },
+                      ),
+                  )
+                }
+                disabled={leaveCalendar.isPending}
+                accessibilityRole="button"
+                accessibilityLabel={`Выйти из команды ${team.name}`}
+                className="min-h-[52px] flex-row items-center justify-center gap-2 px-4 py-3.5"
+                style={({ pressed }: { pressed: boolean }) => ({
+                  backgroundColor: pressed ? t.pressed : "transparent",
+                  opacity: leaveCalendar.isPending ? 0.5 : 1,
+                })}
+              >
+                <LogOut color={t.danger} size={16} strokeWidth={2.2} />
+                <Text style={{ fontSize: 15, fontWeight: "600", color: t.danger }}>
+                  Выйти из команды
+                </Text>
+              </Pressable>
+            </SectionCard>
           ) : null}
 
           {teams.length === 0 ? (

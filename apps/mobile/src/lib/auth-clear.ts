@@ -67,6 +67,19 @@ const KEEP_PREFIXES = [ACTIVE_TENANT_KEY_PREFIX, PENDING_CLAIM_KEY_PREFIX];
 // tenant's SQLite queue is still present.
 let intentionalSignOutBarrier: Promise<void> | null = null;
 
+// ВЫШЕЛ И ВОШЁЛ ТЕМ ЖЕ ЧЕЛОВЕКОМ — КЭШ ЗАПРОСОВ НАЧИНАЕТСЯ ЗАНОВО (06.10).
+//
+// Чистка на выходе сносит кэш, пока экраны вошедшего ещё на месте, и всё,
+// что они успели перечитать до ухода на логин, ложится в те же ключи, под
+// которыми вернувшийся человек будет читать снова: компания та же, человек
+// тот же, чистки на входе нет. Так пустой ответ анониму стал серыми метками
+// (видео для App Review). Заслонка теперь такие запросы отбивает
+// (`getSignedInUserId`), а этот флаг — вторая стена: всё, что осталось без
+// подписчиков с момента выхода, на входе выбрасывается и читается заново.
+// Ставит его полная чистка кэша (`wipeFastStores` без подписчиков) — значит,
+// и «Выйти», и выход со всех устройств, и чистка после удаления аккаунта.
+let signedOutOnPurpose = false;
+
 // ДВА РЕЖИМА ЧИСТКИ, И ВЫБОР МЕЖДУ НИМИ — НЕ ВКУС.
 //
 // `queryClient.clear()` сносит САМИ запросы. Экран, подписанный на такой
@@ -113,6 +126,7 @@ function wipeFastStores(
     // выходе уходят вместе с остальным (30.09).
     forgetRevealedContacts();
     queryClient.clear();
+    signedOutOnPurpose = true;
     return;
   }
 
@@ -456,6 +470,14 @@ export async function handleAuthEvent(
     await wipeTenantScopedData();
   }
   if (prev !== next) storage.setRaw(LAST_USER_KEY, next);
+
+  // Тот же человек после выхода: сессия ещё не опубликована, на экране
+  // логин, значит всё, что без подписчиков, — хвост вышедших страниц.
+  // Удаление гасит и повторы запросов, отбитых заслонкой в том окне.
+  if (signedOutOnPurpose) {
+    signedOutOnPurpose = false;
+    if (prev === next) queryClient.removeQueries({ type: "inactive" });
+  }
 
   // УСТРОЙСТВО ЗАПОМИНАЕТ СВОЙ ВЫБОР С ПЕРВОГО ЖЕ ЗАПУСКА.
   //

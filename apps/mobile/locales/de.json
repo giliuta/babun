@@ -1,0 +1,7 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "Babun verwendet die Kamera, um Objekte, erledigte Arbeiten und Belege zu fotografieren und Dokumente zu scannen, die Sie anhängen.",
+    "NSPhotoLibraryUsageDescription": "Babun verwendet Ihre Fotomediathek, damit Sie Fotos von Objekten, erledigten Arbeiten und Belegen anhängen können.",
+    "NSContactsUsageDescription": "Babun liest Ihre Kontakte nur, wenn Sie „Aus Telefonkontakten“ öffnen, damit Sie Personen auswählen können, die Sie als Kunden hinzufügen."
+  }
+}

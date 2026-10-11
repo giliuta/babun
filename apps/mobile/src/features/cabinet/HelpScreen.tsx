@@ -10,7 +10,6 @@ import {
   Send,
   type LucideIcon,
 } from "lucide-react-native";
-import { DISPLAY_VERSION } from "@babun/shared/common/utils/version";
 
 import { Divider } from "@/components/ui/Divider";
 import { Screen } from "@/components/ui/Screen";
@@ -22,6 +21,8 @@ import { useToast } from "@/components/ui/Toast";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 
+import { versionSummary } from "./about";
+import { appBuildFacts } from "./app-facts";
 import {
   helpFaq,
   LEGAL_LINKS,
@@ -69,7 +70,9 @@ export function HelpScreen() {
   const contacts = supportRows(SUPPORT_CONTACTS);
 
   const handleContact = (row: SupportRow) => {
-    Linking.openURL(supportLink(row, DISPLAY_VERSION)).catch(() => {
+    // В письме — та же версия, что на «О приложении»: на телефоне — версия
+    // магазина и номер сборки, на сайте — внутренняя.
+    Linking.openURL(supportLink(row, versionSummary(appBuildFacts()))).catch(() => {
       // Нет приложения под ссылку (например, почты) — сказать, а не молчать.
       toast("Не удалось открыть", "error");
     });

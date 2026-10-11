@@ -19,8 +19,9 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Здесь список контактов с номерами: уже заведённые отмечены и выключены
 // (сверка по последним 8 цифрам — тот же ключ, что у слияния дублей),
-// остальные выбираются галочками. Ничего не пишется, пока не нажали
-// «Добавить»: контакты — чужие данные, и молча заливать их в CRM нельзя.
+// остальные выбираются галочками. Лист открывается БЕЗ ЕДИНОЙ ГАЛКИ
+// (06.10, выпуск в магазины): контакты — чужие данные, и в CRM уходят только
+// те, кого человек отметил сам, а не вся книга одним «Добавить 135».
 
 // expo-contacts может отсутствовать в старом дев-билде — тот же охранный
 // require, что в useClientDraft.
@@ -85,7 +86,7 @@ export function ContactsImportSheet({
   // `known` НЕ в зависимостях: он пересобирается на каждое создание клиента
   // (инвалидация `["clients"]`), и эффект перезапускался прямо посреди
   // импорта — заново спрашивал разрешение, перечитывал книгу и СБРАСЫВАЛ
-  // расставленные галки во «всё новое». Свежий снимок берём через ref.
+  // расставленные галки. Свежий снимок берём через ref.
   const knownRef = useRef(known);
   knownRef.current = known;
   useEffect(() => {
@@ -130,9 +131,8 @@ export function ContactsImportSheet({
       }
         list.sort((a, b) => a.name.localeCompare(b.name, "ru"));
         setRows(list);
-        // По умолчанию отмечено всё новое: чаще всего человек хочет именно
-        // это, а снять лишнее проще, чем отметить сотню.
-        setPicked(new Set(list.filter((r) => !r.exists).map((r) => r.key)));
+        // Ничего не отмечено: каждого контакта человек выбирает сам.
+        setPicked(new Set());
       } catch {
         // Нативный модуль может упасть (нет NSContactsUsageDescription,
         // отозвали доступ на ходу). Без catch лист навсегда застревал на
@@ -204,6 +204,37 @@ export function ContactsImportSheet({
         onClose();
       }}
       maxHeightRatio={0.92}
+      // Кнопка — в футере листа: он платит нижний безопасный отступ, а свой
+      // ряд с `paddingBottom: 24` ставил её на полосу home-индикатора.
+      footer={
+        <View style={{ paddingHorizontal: 20, paddingTop: 10 }}>
+          <Pressable
+            onPress={() => void run()}
+            disabled={busy || picked.size === 0}
+            accessibilityRole="button"
+            accessibilityLabel={`Добавить ${picked.size}`}
+            style={({ pressed }) => ({
+              minHeight: 52,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: t.radius.input,
+              backgroundColor:
+                busy || picked.size === 0 ? t.fill : pressed ? t.pressed : t.accent,
+            })}
+          >
+            <Text
+              maxFontSizeMultiplier={1.2}
+              style={{
+                fontSize: 17,
+                fontWeight: "600",
+                color: busy || picked.size === 0 ? t.faint : t.onAccent,
+              }}
+            >
+              {busy ? "Добавляем…" : `Добавить ${picked.size}`}
+            </Text>
+          </Pressable>
+        </View>
+      }
     >
       <View style={{ alignItems: "center", paddingTop: 8, paddingBottom: 6 }}>
         <Text
@@ -238,7 +269,7 @@ export function ContactsImportSheet({
           }}
         >
           {CONTACTS_AVAILABLE
-            ? "Разрешите доступ к контактам в настройках iPhone — Babun читает их только по этой кнопке и ничего не отправляет наружу."
+            ? "Разрешите доступ к контактам в настройках iPhone. Babun читает контакты только когда вы открываете этот список и добавляет в клиенты только отмеченных."
             : "Адресная книга появится после следующей сборки приложения."}
         </Text>
       ) : (
@@ -317,34 +348,6 @@ export function ContactsImportSheet({
           }}
         />
       )}
-
-      <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 24 }}>
-        <Pressable
-          onPress={() => void run()}
-          disabled={busy || picked.size === 0}
-          accessibilityRole="button"
-          accessibilityLabel={`Добавить ${picked.size}`}
-          style={({ pressed }) => ({
-            minHeight: 52,
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: t.radius.input,
-            backgroundColor:
-              busy || picked.size === 0 ? t.fill : pressed ? t.pressed : t.accent,
-          })}
-        >
-          <Text
-            maxFontSizeMultiplier={1.2}
-            style={{
-              fontSize: 17,
-              fontWeight: "600",
-              color: busy || picked.size === 0 ? t.faint : t.onAccent,
-            }}
-          >
-            {busy ? "Добавляем…" : `Добавить ${picked.size}`}
-          </Text>
-        </Pressable>
-      </View>
     </BottomSheet>
   );
 }

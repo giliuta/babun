@@ -1,15 +1,20 @@
+import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
 import { DISPLAY_VERSION } from "@babun/shared/common/utils/version";
 
-import type { AppBuildFacts, AppUpdateFacts } from "./about";
+import { shownVersion, type AppBuildFacts, type AppUpdateFacts } from "./about";
 
 // Факты о запущенном коде берутся из нативных модулей здесь, а слова над ними
 // решает чистый `about.ts` — там они и проверены тестом.
 
 export function appBuildFacts(): AppBuildFacts {
   return {
-    displayVersion: DISPLAY_VERSION,
+    displayVersion: shownVersion({
+      web: Platform.OS === "web",
+      storeVersion: Constants.expoConfig?.version,
+      internalVersion: DISPLAY_VERSION,
+    }),
     buildNumber: Constants.platform?.ios?.buildNumber ?? null,
   };
 }

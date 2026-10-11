@@ -4807,6 +4807,10 @@ export type Database = {
         Returns: Json[]
       }
       list_master_services_safe: { Args: never; Returns: Json[] }
+      leave_calendar: {
+        Args: { p_team_id: string; p_tenant_id: string }
+        Returns: Json
+      }
       list_member_access: { Args: { p_user_id: string }; Returns: Json }
       list_members: { Args: { p_team_id?: string }; Returns: Json }
       list_my_calendars: {

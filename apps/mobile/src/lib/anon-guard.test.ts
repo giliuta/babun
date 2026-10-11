@@ -95,6 +95,8 @@ describe("клиент Supabase зовёт заслонку до отправк�
     assert.ok(guard > 0, "заслонки нет в fetchWithActiveTenant");
     assert.ok(firstFetch > guard, "запрос уходит раньше заслонки");
     assert.match(body, /authorization: headers\.get\("Authorization"\)/);
-    assert.match(body, /signedInUserId: getActiveUserId\(\)/);
+    // Не `getActiveUserId`: на выходе тот гаснет раньше, чем экраны уходят
+    // на логин, и календарь успевал перечитать метки анонимом (06.10).
+    assert.match(body, /signedInUserId: getSignedInUserId\(\)/);
   });
 });

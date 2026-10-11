@@ -5,6 +5,7 @@ import { Divider } from "@/components/ui/Divider";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { haptics } from "@/lib/haptics";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 
 import type { AccessBlock, AccessLevel } from "../access-map";
@@ -112,7 +113,7 @@ export function TeamRightsCards({
               const look = rightLook(row.block.key);
               const folded = !!row.foldedBy;
               const closed = folded || isClosedStep(row.level);
-              const danger = !closed && stepDanger(row.block, row.level) !== null;
+              const danger = !closed && stepDanger(row.block, row.level, CAN_PAY_HERE) !== null;
               return (
                 <Fragment key={row.block.key}>
                   {i > 0 ? <Divider inset={ROW_SEAM_INSET} /> : null}
@@ -128,7 +129,7 @@ export function TeamRightsCards({
                       // СЛЕВА ПРАВО, СПРАВА ЕГО СТУПЕНЬ (владелец 29.09: «слева
                       // метка дня, справа уже показано, что он видит или не
                       // видит»).
-                      value={rowWord(row.block, row.level, levels)}
+                      value={rowWord(row.block, row.level, levels, CAN_PAY_HERE)}
                       valueQuiet
                       valueWraps
                       valueColor={closed ? t.faint : danger ? t.warning : t.ink}

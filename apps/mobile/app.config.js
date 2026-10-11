@@ -14,6 +14,23 @@ const IS_DEV = process.env.APP_VARIANT === "development";
 // домен не берёт.
 const APP_LINK_PATHS = ["/invite", "/reset-password", "/login"];
 
+// ТЕКСТ КАМЕРЫ — ОДИН (выпуск в App Store, 06.10). Ключ в Info.plist один
+// (NSCameraUsageDescription), а пишут его два плагина: expo-image-picker из
+// app.json и сканер ниже. Свой текст у сканера молча перетирал бы общий
+// (или наоборот — смотря чей мод сработал последним), поэтому сканер берёт
+// текст у expo-image-picker. Базовые строки — английские; переводы лежат в
+// `locales/<язык>.json` (ключ `locales` в app.json → <язык>.lproj/InfoPlist.strings).
+function imagePickerCameraText(plugins) {
+  const entry = (plugins ?? []).find(
+    (plugin) => Array.isArray(plugin) && plugin[0] === "expo-image-picker",
+  );
+  const text = entry?.[1]?.cameraPermission;
+  if (typeof text !== "string" || !text) {
+    throw new Error("app.json: expo-image-picker.cameraPermission is required");
+  }
+  return text;
+}
+
 module.exports = ({ config }) => ({
   ...config,
   name: IS_DEV ? "Babun Dev" : config.name,
@@ -35,11 +52,12 @@ module.exports = ({ config }) => ({
       },
     ],
     // Сканер документов (STORY-070, этап 2): VisionKit на iOS. Плагин пишет
-    // только текст разрешения камеры; сам модуль нативный — dev-клиент
-    // пересобирается, а в JS он подключён через проверку наличия.
+    // только текст разрешения камеры — тот же, что у expo-image-picker; сам
+    // модуль нативный — dev-клиент пересобирается, а в JS он подключён через
+    // проверку наличия.
     [
       "react-native-document-scanner-plugin",
-      { cameraPermission: "Babun использует камеру для фото объектов и сканирования документов" },
+      { cameraPermission: imagePickerCameraText(config.plugins) },
     ],
   ],
   // КАРТА НА ANDROID (выпуск в Google Play, 04.10): там у react-native-maps

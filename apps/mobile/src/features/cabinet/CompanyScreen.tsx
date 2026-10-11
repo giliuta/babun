@@ -18,6 +18,7 @@ import {
   useSwitchWorkspace,
 } from "@/features/settings/workspaces";
 import { notify } from "@/lib/notify";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { fetchQuotaUsage, type MobileQuotaKind } from "@/lib/quota";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
@@ -136,7 +137,7 @@ export function CompanyScreen() {
                 tile="neutral"
                 icon={BadgeCheck}
                 title="Тариф"
-                sub={tierLine(tierOf(tenant.data), trialLeft(tenant.data))}
+                sub={tierLine(tierOf(tenant.data), trialLeft(tenant.data), CAN_PAY_HERE)}
               />
               <Divider inset={56} />
               <QuotaRow tenantId={company.tenantId} kind="clients" title="Клиенты" />

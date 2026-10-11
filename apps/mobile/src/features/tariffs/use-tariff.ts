@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/Toast";
 import { supabase } from "@/lib/supabase";
 import { useAccountProfile, useAccountScope } from "@/features/cabinet/account-scope";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { TENANT_HEADER } from "@/lib/tenant-header";
 import { tierOf, trialLeft, trialUsed, type TariffState, type Tier } from "./tiers";
 
@@ -187,14 +188,24 @@ export async function openTariffPortal(tenantId?: string | null): Promise<void> 
   await openPage(url, web);
 }
 
+/** Слова закрытого тарифом — плашка и подсказка VoiceOver. В приложении из
+ *  магазина — без призыва менять тариф: тариф там не выбирают и не
+ *  оплачивают, и звать к покупке нельзя (App Store 3.1.3(f), `pay-here.ts`). */
+export const TARIFF_LOCKED_HINT = CAN_PAY_HERE ? "Нужно изменить тариф" : "Недоступно для этого аккаунта";
+
 /** ПЛАШКА «НУЖНО ИЗМЕНИТЬ ТАРИФ» (владелец 01.10): закрытое тарифом видно
  *  серым, тап поднимает плашку сверху. Владельцу — с кнопкой «Тариф»;
- *  партнёру в чужой команде менять нечего — тариф у хозяина команды. */
+ *  партнёру в чужой команде менять нечего — тариф у хозяина команды. В
+ *  приложении из магазина — одна спокойная фраза, без кнопки «Тариф». */
 export function useTariffNudge() {
   const toast = useToast();
   const router = useRouter();
   const { data: role } = useCurrentRole();
   return useCallback(() => {
+    if (!CAN_PAY_HERE) {
+      toast(TARIFF_LOCKED_HINT, "info");
+      return;
+    }
     if (role === "owner") {
       toast("Нужно изменить тариф", "info", {
         label: "Тариф",

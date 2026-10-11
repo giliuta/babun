@@ -1,0 +1,13 @@
+-- УДАЛЕНИЕ АККАУНТА ПАДАЛО У ВСЕХ (проверка перед видео для Apple, 06.10).
+--
+-- account-delete (supabase/functions/account-delete/index.ts) до первого
+-- необратимого шага читает public.tenant_members ключом service_role — ищет
+-- компании, где человек единственный владелец, чтобы отменить их подписки
+-- Stripe. У service_role на этой таблице нет ни одного права (relacl:
+-- postgres, anon, authenticated), PostgREST отвечал «permission denied»,
+-- функция возвращала 503, и в приложении было «Удаление сейчас недоступно —
+-- аккаунт не удалён». Тот же запрос делает calendar-ics.
+--
+-- service_role и так обходит RLS; право чтения — ровно то, что нужно
+-- функциям, без записи.
+grant select on table public.tenant_members to service_role;

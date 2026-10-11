@@ -1,0 +1,7 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "Babun uses the camera to photograph job sites, completed work and receipts, and to scan documents you attach.",
+    "NSPhotoLibraryUsageDescription": "Babun uses your photo library so you can attach photos of job sites, completed work and receipts.",
+    "NSContactsUsageDescription": "Babun reads your contacts only when you open “From phone contacts”, so you can choose people to add as clients."
+  }
+}

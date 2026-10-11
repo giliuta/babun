@@ -108,6 +108,7 @@ import {
 } from "@/features/calendar/day-cities";
 import { CITY_CLEARED } from "@babun/shared/local/day-cities";
 import {
+  LABEL_FALLBACK_COLOR,
   resolveCalendarDayLabel,
   type DayLabel,
 } from "@/features/calendar/day-label";
@@ -1446,10 +1447,10 @@ export default function CalendarTab() {
         teamId: activeTeamId,
         dateYmd,
         todayYmd,
-        fallbackColor: t.faint,
+        fallbackColor: LABEL_FALLBACK_COLOR,
         off: !dayLabelsOn,
       }),
-    [activeTeamId, dayCities, cities, todayYmd, t.faint, dayLabelsOn],
+    [activeTeamId, dayCities, cities, todayYmd, dayLabelsOn],
   );
 
   // ЦВЕТ ЗАПИСИ В АВТОМАТИЧЕСКОМ РЕЖИМЕ — ПО ПРАВИЛУ ИЗ НАСТРОЙКИ (Кабинет →
@@ -3632,7 +3633,7 @@ export default function CalendarTab() {
               teamId: activeTeamId,
               dateYmd: cityPickerYmd,
               todayYmd,
-              fallbackColor: t.faint,
+              fallbackColor: LABEL_FALLBACK_COLOR,
               off: !dayLabelsOn,
             });
             setDayCityMut.mutate({

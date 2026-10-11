@@ -126,6 +126,8 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "set_document_series_start",
   "set_member_access",
   "set_member_calendars",
+  // Партнёр выходит из команды сам (миграция 20261009055418).
+  "leave_calendar",
   "sms_appointment_link",
   "sms_autotopup_forget",
   "sms_autotopup_save",

@@ -1,10 +1,17 @@
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
-import { ChevronRight } from "lucide-react-native";
+import { Cake, ChevronRight, Mail, Phone, type LucideIcon } from "lucide-react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { GUTTER, TYPE } from "@/components/ui/tokens";
 import { useSession } from "@/providers/SessionProvider";
 import { useThemeColors } from "@/theme/colors";
-import { personCardView } from "./person-card";
+import { useOwnAccountName } from "./own-account-name";
+import { personCardView, type PersonFactKind } from "./person-card";
+
+const FACT_ICON: Record<PersonFactKind, LucideIcon> = {
+  email: Mail,
+  phone: Phone,
+  birthday: Cake,
+};
 
 // КАРТА ЧЕЛОВЕКА — ВЕРХ КАБИНЕТА (владелец 2026-09-15: «как компании не будет,
 // будет только как личное»). Прежний герой печатал КОМПАНИЮ — её имя,
@@ -17,11 +24,16 @@ import { personCardView } from "./person-card";
 // ВСЯ РАСКЛАДКА — СТАТИЧЕСКИМ `style`, без `className`: стиль-функция
 // `Pressable` рядом с `className` раскладку не донесла, и аватар, имя и почта
 // легли столбцом у самого края карты (iPhone 17, 2026-09-15).
+//
+// ВИЗИТКА (владелец 06.10: «больше информации в шапке… имя, компания, почта,
+// номер, дата рождения»): под именем — компания, ниже — факты значком и
+// значением одной колонкой с именем. Значок и есть подпись; пустого нет.
 
 export function PersonCard({ onPress }: { onPress?: () => void }) {
   const t = useThemeColors();
   const { session } = useSession();
-  const view = personCardView(session?.user);
+  const accountName = useOwnAccountName().data;
+  const view = personCardView(session?.user, accountName);
   const label = onPress ? `${view.title}, открыть профиль` : view.title;
 
   // Поле, радиус и кривая угла — те же, что у `SectionCard`: края карты
@@ -86,26 +98,56 @@ export function PersonCard({ onPress }: { onPress?: () => void }) {
           >
             {view.title}
           </Text>
-          {view.lines.map((line) => (
+          {view.company ? (
             <Text
-              key={line}
               maxFontSizeMultiplier={1.3}
               numberOfLines={1}
-              style={{
-                ...TYPE.subhead,
-                marginTop: 2,
-                color: t.onAccent,
-                opacity: 0.85,
-              }}
+              style={{ ...TYPE.subhead, marginTop: 2, color: t.onAccent, opacity: 0.85 }}
             >
-              {line}
+              {view.company}
             </Text>
-          ))}
+          ) : null}
         </View>
         {onPress ? (
           <ChevronRight color={t.onAccent} size={16} strokeWidth={1.75} />
         ) : null}
       </View>
+      {view.facts.length > 0 ? (
+        <View
+          style={{
+            // Колонка фактов — под именем, не под аватаром.
+            marginLeft: 16 + 56 + 12,
+            marginRight: 16,
+            marginTop: -4,
+            paddingTop: 10,
+            paddingBottom: 14,
+            gap: 6,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: "rgba(255,255,255,0.35)",
+          }}
+        >
+          {view.facts.map((fact) => {
+            const Icon = FACT_ICON[fact.kind];
+            return (
+              <View key={fact.kind} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Icon color={t.onAccent} size={15} strokeWidth={1.75} style={{ opacity: 0.85 }} />
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  numberOfLines={1}
+                  style={{
+                    ...TYPE.subhead,
+                    flex: 1,
+                    color: t.onAccent,
+                    fontVariant: fact.kind === "phone" ? ["tabular-nums"] : undefined,
+                  }}
+                >
+                  {fact.text}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
     </>
   );
 

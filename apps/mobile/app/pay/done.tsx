@@ -1,11 +1,12 @@
 import { Linking, Text, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { Redirect, useLocalSearchParams } from "expo-router";
 import Head from "expo-router/head";
 import { CircleCheck, CircleX } from "lucide-react-native";
 import { BrandLockup } from "@/components/brand/BrandMark";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { GUTTER } from "@/components/ui/tokens";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 
 // «ОПЛАТА ПРОШЛА» — СТРАНИЦА ВОЗВРАТА ИЗ STRIPE (STORY-089; владелец 30.09:
@@ -16,7 +17,15 @@ import { useThemeColors } from "@/theme/colors";
 // ТАРИФ (01.10): сюда же возвращает оплата тарифа (`?tariff=paid|cancelled`)
 // и «Управление подпиской» (`?tariff=portal`) — слова свои, кнопка ведёт в
 // Кабинет → Тариф.
-export default function PayDone() {
+//
+// Страница сайта: в приложении из магазина покупок нет (App Store 3.1.3(f),
+// `pay-here.ts`), и адрес, открытый в нём ссылкой, ведёт на главную.
+export default function PayDoneRoute() {
+  if (!CAN_PAY_HERE) return <Redirect href="/" />;
+  return <PayDone />;
+}
+
+function PayDone() {
   const t = useThemeColors();
   const { topup, tariff } = useLocalSearchParams<{ topup?: string; tariff?: string }>();
   const isTariff = typeof tariff === "string";

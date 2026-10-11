@@ -22,16 +22,6 @@ export const RECOVERY_LINK_REDIRECT = "https://babun.app/reset-password";
  *  «Слишком много попыток». */
 const RESEND_COOLDOWN_S = 60;
 
-/** Код входа без пароля. Только в существующий аккаунт: регистрация идёт
- *  своей формой, с именем и паролем. На чужой адрес GoTrue отвечает
- *  `otp_disabled`/«Signups not allowed» — экран называет это словами. */
-export function sendSignInCode(email: string) {
-  return supabase.auth.signInWithOtp({
-    email,
-    options: { shouldCreateUser: false, emailRedirectTo: SIGNUP_LINK_REDIRECT },
-  });
-}
-
 // «Введите код» — один экран на код из письма Babun (владелец 04.10: «чтоб
 // дальше продолжить, оно должно отправить на почту подтверждение»).
 //
@@ -40,8 +30,8 @@ export function sendSignInCode(email: string) {
 //   уводит в календарь. Кнопка в письме тоже подтверждает: человек
 //   возвращается в приложение, и экран входит паролем, который он только что
 //   набрал (`password`), — код вводить уже не нужно.
-// • signin — «Войти по коду из письма» без пароля (04.10). Тот же код, что у
-//   подтверждения: проверка `type: "email"`, кнопка письма — «Войти».
+// Входа по коду без пароля НЕТ (владелец 06.10: «нельзя просто так войти по
+// коду из письма… код только на регистрацию или забыл пароль»).
 // • recovery — «Забыли пароль»: верный код открывает сессию восстановления,
 //   дальше экран нового пароля (`onVerified`).
 export function EmailCodeCard({
@@ -53,7 +43,7 @@ export function EmailCodeCard({
   onChangeEmail,
   onBackToLogin,
 }: {
-  kind: "signup" | "signin" | "recovery";
+  kind: "signup" | "recovery";
   email: string;
   /** Пароль, набранный на этом устройстве, — для входа после кнопки в письме. */
   password?: string;
@@ -122,11 +112,9 @@ export function EmailCodeCard({
             email,
             options: { emailRedirectTo: SIGNUP_LINK_REDIRECT },
           })
-        : kind === "signin"
-          ? await sendSignInCode(email)
-          : await supabase.auth.resetPasswordForEmail(email, {
-              redirectTo: RECOVERY_LINK_REDIRECT,
-            });
+        : await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: RECOVERY_LINK_REDIRECT,
+          });
     setResending(false);
     if (e) {
       // Лимит или сеть — счётчик не перезапускаем и не делаем вид, что письмо ушло.
@@ -170,9 +158,7 @@ export function EmailCodeCard({
       >
         {kind === "signup"
           ? "Введите код из письма или нажмите в письме «Подтвердить почту»"
-          : kind === "signin"
-            ? "Введите код из письма или нажмите в письме «Войти»"
-            : "Введите код из письма или нажмите в письме «Задать новый пароль»"}
+          : "Введите код из письма или нажмите в письме «Задать новый пароль»"}
       </Text>
       <FormError message={error} />
       <PillButton
