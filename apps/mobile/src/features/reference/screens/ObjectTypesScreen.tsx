@@ -1,4 +1,12 @@
+import {
+  TemplateList,
+  TemplatesHeaderButton,
+  useTemplatePicking,
+  type TemplateItem,
+} from "@/components/ui/TemplatePicker";
 import { useMemo, useState } from "react";
+import { useDataRole } from "@/features/settings/tenant";
+import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import { useLocalSearchParams } from "expo-router";
 import { useClientSettingLevel } from "@/features/clients/use-client-settings";
 import { useTeams } from "@/features/reference/queries";
@@ -82,6 +90,27 @@ export function ObjectTypesScreen() {
   // свайпов, ни ручек, строка не открывает редактор. Вне вкладки «Клиенты»
   // (Кабинет, запись) — как и раньше, правка.
   const readOnly = useClientSettingLevel("objects", teamId) !== "write";
+  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг). Только владелец.
+  const isOwner = useDataRole().data === "owner";
+  const allLabels = useLocationLabels(null).data ?? [];
+  const typeTemplates = useMemo(
+    () =>
+      isOwner
+        ? otherTeamTemplates(allLabels, {
+            teamId,
+            teamOf: (x) => x.teamId,
+            nameOf: (x) => x.name,
+          }).map((x) => ({
+            key: x.id,
+            name: x.name,
+            color: x.color ?? null,
+            icon: x.icon ?? null,
+            sub: ownTeams.find((tm) => tm.id === x.teamId)?.name,
+            value: x,
+          }))
+        : [],
+    [isOwner, allLabels, teamId, ownTeams],
+  );
   const {
     data: labels = [],
     isLoading,
@@ -315,6 +344,7 @@ export function ObjectTypesScreen() {
         busy={save.isPending}
         onClose={() => setEditing(null)}
         onSubmit={submit}
+        templates={typeTemplates}
       />
     </Screen>
   );
@@ -328,12 +358,16 @@ function TypeSheet({
   busy,
   onClose,
   onSubmit,
+  templates,
 }: {
+  /** Шаблоны из других команд аккаунта (значок в шапке при создании). */
+  templates?: readonly TemplateItem<LocationLabel>[];
   editing: Editing | null;
   busy: boolean;
   onClose: () => void;
   onSubmit: (draft: TypeDraft) => void;
 }) {
+  const { picking, setPicking } = useTemplatePicking();
   const isEdit = editing?.mode === "edit";
   const [name, setName] = useState("");
   const [color, setColor] = useState<string | null>(null);
@@ -344,6 +378,7 @@ function TypeSheet({
   const key = editing == null ? null : isEdit ? editing.label.id : "create";
   if (key !== seededFor) {
     setSeededFor(key);
+    setPicking(false);
     setName(editing?.mode === "edit" ? editing.label.name : "");
     // НОВЫЙ ТИП РОЖДАЕТСЯ ЦВЕТНЫМ. Пустой вид у первой же строки читается как
     // «сломалось»: соседние справочники цветные. Правка чужой вид не трогает.
@@ -355,21 +390,36 @@ function TypeSheet({
     setIcon(editing?.mode === "edit" ? (editing.label.icon ?? null) : "house");
   }
 
+  const applyTemplate = (tpl: LocationLabel) => {
+    setName(tpl.name);
+    setColor(tpl.color ?? null);
+    setIcon(tpl.icon ?? "house");
+    setPicking(false);
+  };
+
   return (
     <BottomSheet
       visible={editing !== null}
       onClose={onClose}
       title={isEdit ? "Тип объекта" : "Новый тип"}
       avoidKeyboard
-      footer={
-        <Button
+      footer={picking ? undefined : (<Button
           label={isEdit ? "Сохранить" : "Создать"}
           onPress={() => onSubmit({ name, color, icon })}
           disabled={!name.trim() || busy}
           loading={busy}
-        />
+        />)}
+    
+      headerAction={
+        !isEdit && (templates?.length ?? 0) > 0 ? (
+          <TemplatesHeaderButton picking={picking} onToggle={() => setPicking((v) => !v)} />
+        ) : undefined
       }
     >
+      {picking ? (
+        <TemplateList items={templates ?? []} gutter={false} onPick={applyTemplate} />
+      ) : (
+      <>
       {/* ИМЯ, ЦВЕТ И ЗНАЧОК ОДНОЙ СТРОКОЙ — тот же блок, что у метки, услуги,
           тега, категории и типа события (владелец 2026-09-10: «точно такой же
           блок… и используются везде»). */}
@@ -382,6 +432,8 @@ function TypeSheet({
         onIconChange={setIcon}
         autoFocus
       />
+          </>
+      )}
     </BottomSheet>
   );
 }

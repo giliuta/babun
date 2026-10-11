@@ -1,3 +1,9 @@
+import {
+  TemplateList,
+  TemplatesHeaderButton,
+  useTemplatePicking,
+  type TemplateItem,
+} from "@/components/ui/TemplatePicker";
 import { useState } from "react";
 import { View } from "react-native";
 import type { PersonalEventType, PersonalEventTypeIcon } from "@babun/shared/local/personal-event-types";
@@ -36,7 +42,10 @@ export function EventTypeSheet({
   busy,
   onClose,
   onSubmit,
+  templates,
 }: {
+  /** Шаблоны из других команд аккаунта (значок в шапке при создании). */
+  templates?: readonly TemplateItem<PersonalEventType>[];
   visible: boolean;
   /** Правим этот тип; `null` — заводим новый. */
   type: PersonalEventType | null;
@@ -44,6 +53,7 @@ export function EventTypeSheet({
   onClose: () => void;
   onSubmit: (draft: EventTypeDraft) => void;
 }) {
+  const { picking, setPicking } = useTemplatePicking();
   const [label, setLabel] = useState("");
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [icon, setIcon] = useState<PersonalEventTypeIcon>("tag");
@@ -54,6 +64,7 @@ export function EventTypeSheet({
   const key = !visible ? null : type ? type.id : "create";
   if (key !== seededFor) {
     setSeededFor(key);
+    setPicking(false);
     setLabel(type?.label ?? "");
     setColor(type?.color ?? DEFAULT_COLOR);
     setIcon(type?.icon ?? "tag");
@@ -79,6 +90,14 @@ export function EventTypeSheet({
     message: "Набранное в типе события не сохранится.",
   });
 
+  const applyTemplate = (tpl: PersonalEventType) => {
+    setLabel(tpl.label);
+    setColor(tpl.color ?? DEFAULT_COLOR);
+    setIcon(tpl.icon ?? "tag");
+    setDuration(tpl.defaultDuration ?? 60);
+    setPicking(false);
+  };
+
   return (
     <BottomSheet
       visible={visible && !guard.hidden}
@@ -87,8 +106,7 @@ export function EventTypeSheet({
       title={type ? "Тип события" : "Новый тип"}
       avoidKeyboard
       scroll
-      footer={
-        <Button
+      footer={picking ? undefined : (<Button
           label={type ? "Сохранить" : "Создать"}
           onPress={() =>
             // «Весь день» у типа снят (24.09): ни форма события, ни «Быстрое
@@ -98,9 +116,18 @@ export function EventTypeSheet({
           }
           disabled={!label.trim() || busy}
           loading={busy}
-        />
+        />)}
+    
+      headerAction={
+        !type && (templates?.length ?? 0) > 0 ? (
+          <TemplatesHeaderButton picking={picking} onToggle={() => setPicking((v) => !v)} />
+        ) : undefined
       }
     >
+      {picking ? (
+        <TemplateList items={templates ?? []} gutter={false} onPick={applyTemplate} />
+      ) : (
+      <>
       {/* Имя, цвет и значок одной строкой — тот же блок, что у услуги, метки,
           тега и категории. Значок был отдельным полем со своей решёткой; с
           2026-09-10 цвет и значок — один вопрос и одна шторка. */}
@@ -142,6 +169,8 @@ export function EventTypeSheet({
             units
           />
         </View>
+          </>
+      )}
     </BottomSheet>
   );
 }

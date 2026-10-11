@@ -1,3 +1,9 @@
+import {
+  TemplateList,
+  TemplatesHeaderButton,
+  useTemplatePicking,
+  type TemplateItem,
+} from "@/components/ui/TemplatePicker";
 import { useLayoutEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import type {
@@ -23,7 +29,9 @@ import { useCurrency } from "@/features/settings/currency";
 import { AmountBlock } from "./AmountBlock";
 import { askBudgetNotificationPermission } from "./budget-notify";
 import { budgetInputText, parseBudgetInput } from "./category-budget";
-import { useInsertCategory, useUpdateCategory } from "./queries";
+import { useFinanceCategories, useInsertCategory, useUpdateCategory } from "./queries";
+import { useDataRole } from "@/features/settings/tenant";
+import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import { useCategoryMonthSpend } from "./use-category-budget";
 
 // ШТОРКА КАТЕГОРИИ — ОДНА НА СТРАНИЦУ КАТЕГОРИЙ И НА ШЕСТЕРЁНКУ «ФИНАНСОВ»
@@ -75,6 +83,7 @@ export function CategoryEditorSheet({
   target: CategoryEditorTarget | null;
   onClose: () => void;
 }) {
+  const { picking, setPicking } = useTemplatePicking();
   const th = useThemeColors();
   const insert = useInsertCategory();
   const update = useUpdateCategory();
@@ -98,6 +107,24 @@ export function CategoryEditorSheet({
   const levelsOf = useFinanceSettingLevelsOf();
   const teams = allTeamsList.filter((team) => levelsOf(team.id)[CATEGORY_KIND_ROW[kind]] === "write");
   const spend = useCategoryMonthSpend(kind === "expense" && view != null);
+  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг): категории того же
+  // вида из других команд аккаунта, которых здесь нет по имени. Только у
+  // владельца; шаблон несёт и вопросы, и бюджет.
+  const isOwner = useDataRole().data === "owner";
+  const allCategories = useFinanceCategories().data ?? [];
+  const templates: TemplateItem<FinanceCategory>[] = isOwner
+    ? otherTeamTemplates(
+        allCategories.filter((c) => c.type === kind),
+        { teamId, teamOf: (c) => c.team_id, nameOf: (c) => c.name },
+      ).map((c) => ({
+        key: c.id,
+        name: c.name,
+        color: c.color ?? null,
+        icon: c.icon ?? null,
+        sub: allTeamsList.find((tm) => tm.id === c.team_id)?.name,
+        value: c,
+      }))
+    : [];
 
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEFAULT_COLOR);
@@ -147,6 +174,7 @@ export function CategoryEditorSheet({
       opened.current = JSON.stringify(["", DEFAULT_COLOR, null, NO_ASKS, ""]);
     }
     setAllTeams(false);
+    setPicking(false);
   }, [target]);
 
   // У долга «кто» уже есть своим блоком (клиент или имя) — прикреплять нечего.
@@ -226,6 +254,15 @@ export function CategoryEditorSheet({
     }
   };
 
+  const applyTemplate = (tpl: FinanceCategory) => {
+    setName(tpl.name);
+    setColor(tpl.color ?? DEFAULT_COLOR);
+    setIcon(tpl.icon ?? null);
+    setAsks({ employee: tpl.ask_employee, client: tpl.ask_client, receipt: tpl.require_receipt });
+    setBudgetText(budgetInputText(tpl.monthly_budget));
+    setPicking(false);
+  };
+
   return (
     <BottomSheet
       visible={target != null && !askingClose}
@@ -235,16 +272,24 @@ export function CategoryEditorSheet({
       scroll
       title={editing ? "Категория" : `Новая категория · ${KIND_WORD[kind]}`}
       avoidKeyboard
-      footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+      footer={picking ? undefined : (<View style={{ paddingHorizontal: GUTTER }}>
           <Button
             label={editing ? "Сохранить" : "Создать категорию"}
             disabled={!name.trim() || budget === undefined || saving}
             onPress={() => void submit()}
           />
-        </View>
+        </View>)}
+    
+      headerAction={
+        !editing && (templates?.length ?? 0) > 0 ? (
+          <TemplatesHeaderButton picking={picking} onToggle={() => setPicking((v) => !v)} />
+        ) : undefined
       }
     >
+      {picking ? (
+        <TemplateList items={templates ?? []} gutter={true} onPick={applyTemplate} />
+      ) : (
+      <>
       <View style={{ backgroundColor: th.canvas, paddingBottom: 16 }}>
         <SectionCard title="Категория" dense>
           <NameColorField
@@ -322,6 +367,8 @@ export function CategoryEditorSheet({
           </SectionCard>
         ) : null}
       </View>
+          </>
+      )}
     </BottomSheet>
   );
 }

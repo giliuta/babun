@@ -1,3 +1,9 @@
+import {
+  TemplateList,
+  TemplatesHeaderButton,
+  useTemplatePicking,
+  type TemplateItem,
+} from "@/components/ui/TemplatePicker";
 import { useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -17,6 +23,8 @@ import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
 import { teamSources, type ClientSource, sourceDisplayName } from "@/features/clients/acquisition-source";
+import { useDataRole } from "@/features/settings/tenant";
+import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import {
   useClientSources,
   useCreateClientSource,
@@ -76,6 +84,24 @@ function ClientSourcesScreen() {
   const [editing, setEditing] = useState<Editing | null>(null);
 
   const list = useMemo(() => teamSources(query.data ?? [], teamId), [query.data, teamId]);
+  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг). Только владелец.
+  const isOwner = useDataRole().data === "owner";
+  const sourceTemplates = useMemo(
+    () =>
+      isOwner
+        ? otherTeamTemplates(query.data ?? [], {
+            teamId,
+            teamOf: (x) => x.team_id,
+            nameOf: (x) => sourceDisplayName(x),
+          }).map((x) => ({
+            key: x.id,
+            name: sourceDisplayName(x),
+            sub: ownTeams.find((tm) => tm.id === x.team_id)?.name,
+            value: x,
+          }))
+        : [],
+    [isOwner, query.data, teamId, ownTeams],
+  );
   const busy = createSource.isPending || renameSource.isPending;
   const failed = (title: string, error: unknown) =>
     notify(title, (error as Error).message || "Проверьте соединение и попробуйте ещё раз.");
@@ -224,6 +250,7 @@ function ClientSourcesScreen() {
         busy={busy}
         onClose={() => (busy ? undefined : setEditing(null))}
         onSubmit={submit}
+        templates={sourceTemplates}
       />
     </Screen>
   );
@@ -236,19 +263,29 @@ function SourceSheet({
   busy,
   onClose,
   onSubmit,
+  templates,
 }: {
+  /** Шаблоны из других команд аккаунта (значок в шапке при создании). */
+  templates?: readonly TemplateItem<ClientSource>[];
   editing: Editing | null;
   busy: boolean;
   onClose: () => void;
   onSubmit: (name: string) => void;
 }) {
+  const { picking, setPicking } = useTemplatePicking();
   const isEdit = editing?.mode === "edit";
   const [name, setName] = useState("");
   const [seeded, setSeeded] = useState<Editing | null>(null);
   if (editing !== seeded) {
     setSeeded(editing);
+    setPicking(false);
     setName(isEdit ? editing.source.name : "");
   }
+
+  const applyTemplate = (tpl: ClientSource) => {
+    setName(sourceDisplayName(tpl));
+    setPicking(false);
+  };
 
   return (
     <BottomSheet
@@ -256,18 +293,28 @@ function SourceSheet({
       onClose={onClose}
       title={isEdit ? "Источник" : "Новый источник"}
       avoidKeyboard
-      footer={
-        <View style={{ paddingHorizontal: GUTTER }}>
+      footer={picking ? undefined : (<View style={{ paddingHorizontal: GUTTER }}>
           <Button
             label={isEdit ? "Сохранить" : "Добавить источник"}
             disabled={!name.trim() || busy}
             loading={busy}
             onPress={() => onSubmit(name)}
           />
-        </View>
+        </View>)}
+    
+      headerAction={
+        !isEdit && (templates?.length ?? 0) > 0 ? (
+          <TemplatesHeaderButton picking={picking} onToggle={() => setPicking((v) => !v)} />
+        ) : undefined
       }
     >
+      {picking ? (
+        <TemplateList items={templates ?? []} gutter={false} onPick={applyTemplate} />
+      ) : (
+      <>
       <NameField name={name} onNameChange={setName} autoFocus={!isEdit} maxLength={60} />
+          </>
+      )}
     </BottomSheet>
   );
 }

@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useDataRole } from "@/features/settings/tenant";
+import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { BadgeCheck, EyeOff, RotateCcw, Trash2, Wallet } from "lucide-react-native";
@@ -61,6 +63,27 @@ export function SmsTeamScreen() {
   const teamId = team?.id ?? "";
   const account = useSmsAccount();
   const templates = useTeamTemplates(teamId || null);
+  // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг). Только владелец.
+  const isOwner = useDataRole().data === "owner";
+  const allTemplates = useTeamTemplates(null);
+  const smsTemplates = useMemo(
+    () =>
+      isOwner
+        ? otherTeamTemplates(allTemplates.data ?? [], {
+            teamId,
+            teamOf: (x) => x.teamId,
+            nameOf: (x) => x.name,
+          }).map((x) => ({
+            key: x.id,
+            name: x.name,
+            color: x.color ?? null,
+            icon: x.icon ?? null,
+            sub: teams.find((tm) => tm.id === x.teamId)?.name,
+            value: x,
+          }))
+        : [],
+    [isOwner, allTemplates.data, teamId, teams],
+  );
   const toggle = useSetTeamTemplateEnabled();
   const remove = useDeleteTeamTemplate();
   const reorder = useReorderTeamTemplates(teamId || null);
@@ -260,6 +283,7 @@ export function SmsTeamScreen() {
           teamName={team?.name}
           template={editing?.mode === "edit" ? editing.template : null}
           onClose={() => setEditing(null)}
+          templates={smsTemplates}
         />
       ) : null}
     </Screen>
