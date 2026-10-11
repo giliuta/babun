@@ -1,13 +1,14 @@
 import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 
-// ТАРИФЫ «СОЛО · ПРО · МАКС» (владелец 01.10) — ЧИСТЫЙ СЛОЙ.
+// ЦЕНА ЗА КАЛЕНДАРЬ (владелец 12.10) — ЧИСТЫЙ СЛОЙ.
 //
-//   • без тарифа — свой календарь («Личный»), события, свои финансы;
+//   • без оплаты — свой календарь («Личный»), события, свои финансы;
 //     клиенты, записи клиентов, услуги, документы и SMS — серым;
-//   • Соло — всё это, один календарь, без партнёров;
-//   • Про — до 5 команд и 5 партнёров;
-//   • Макс — до 50 команд и 50 партнёров;
-//   • пробный 14 дней — один раз, на выбранный тариф, без карты;
+//   • оплачено — €9.99 в месяц (€7.99 при оплате за год) за каждый живой
+//     календарь; всё открыто, календарей и людей без лимита, люди бесплатно.
+//     В базе это `max` («полный доступ») и `paid_calendars`;
+//   • Соло и Про — прежняя лестница (01.10): доживают старые пробные;
+//   • пробный 14 дней — один раз, без карты;
 //   • тариф — у аккаунта-владельца команды: партнёр в чужой команде работает
 //     по тарифу её владельца.
 //
@@ -18,6 +19,15 @@ import { pluralRu } from "@babun/shared/common/utils/plural-ru";
 export type Tier = "free" | "solo" | "pro" | "max";
 
 export const PAID_TIERS: readonly Exclude<Tier, "free">[] = ["solo", "pro", "max"];
+
+/** ЧТО ПРЕДЛАГАЕТ СТРАНИЦА «ТАРИФ» (12.10): одна цена за календарь — и в
+ *  Личном, и в компании. Сервер держит то же: пробный в Личном — Соло (там
+ *  один календарь), в компании — полный доступ. */
+export function tiersForKind(
+  _kind: "personal" | "company" | null | undefined,
+): readonly Exclude<Tier, "free">[] {
+  return ["max"];
+}
 
 const RANK: Record<Tier, number> = { free: 0, solo: 1, pro: 2, max: 3 };
 
@@ -49,7 +59,8 @@ export const TIER_LIMITS: Record<Tier, { teams: number; partners: number }> = {
   free: { teams: 1, partners: 0 },
   solo: { teams: 1, partners: 0 },
   pro: { teams: 5, partners: 5 },
-  max: { teams: 50, partners: 50 },
+  // Оплачено за календари: не упирается — подписка растёт следом (12.10).
+  max: { teams: 1000, partners: 1000 },
 };
 
 /** Карточка тарифа на странице «Тариф». Цена — евро в месяц; за год — цена
@@ -64,35 +75,31 @@ export interface TierCard {
   includes: readonly string[];
 }
 
+/** Цена одного календаря — та же, что `tariff-checkout` (сверяет тест). */
+export const CALENDAR_PRICE = { monthly: 9.99, yearlyMonthly: 7.99 } as const;
+
+const euro = (n: number) => `€${n.toFixed(2)}`;
+
 export const TIER_CARDS: readonly TierCard[] = [
   {
-    tier: "solo",
-    name: "Соло",
-    monthly: "€6.99",
-    yearlyMonthly: "€4.99",
-    includes: ["Клиенты без лимита", "Записи, услуги и оплата", "Инвойсы, чеки и SMS", "Один календарь"],
-  },
-  {
-    tier: "pro",
-    name: "Про",
-    monthly: "€29.99",
-    yearlyMonthly: "€21.99",
-    includes: ["Всё, что в Соло", "До 5 команд", "До 5 партнёров"],
-  },
-  {
     tier: "max",
-    name: "Макс",
-    monthly: "€59.99",
-    yearlyMonthly: "€44.99",
-    includes: ["Всё, что в Про", "До 50 команд", "До 50 партнёров"],
+    name: "Календарь",
+    monthly: euro(CALENDAR_PRICE.monthly),
+    yearlyMonthly: euro(CALENDAR_PRICE.yearlyMonthly),
+    includes: ["Клиенты, записи и деньги", "Инвойсы, чеки и SMS", "Люди — бесплатно и без лимита"],
   },
 ];
+
+/** Сколько в месяц за столько календарей: «€29.97». */
+export function calendarsMonthly(calendars: number): string {
+  return euro(CALENDAR_PRICE.monthly * Math.max(1, calendars));
+}
 
 const NAMES: Record<Tier, string> = {
   free: "Без тарифа",
   solo: "Соло",
   pro: "Про",
-  max: "Макс",
+  max: "Календари",
 };
 
 export function tierName(tier: Tier): string {
@@ -232,15 +239,16 @@ export interface TariffState {
 export function tariffAction(
   state: TariffState,
   selected: Exclude<Tier, "free">,
+  /** Живых календарей аккаунта — столько и в оплате. */
+  calendars = 1,
 ): { kind: "trial" | "pay" | "change"; label: string } | null {
   if (state.forever) return null;
   if (state.paid && state.tier === selected) return null;
-  if (state.paid) return { kind: "change", label: `Перейти на ${NAMES[selected]}` };
+  if (state.paid) return { kind: "change", label: "Перейти на цену за календарь" };
   if (!state.trial && !state.trialUsed) {
     return { kind: "trial", label: "Попробовать 14 дней" };
   }
-  const card = TIER_CARDS.find((item) => item.tier === selected);
-  return { kind: "pay", label: card ? `Оплатить ${card.monthly} в месяц` : "Оплатить" };
+  return { kind: "pay", label: `Оплатить ${calendarsMonthly(calendars)} в месяц` };
 }
 
 /** ДЕЙСТВИЕ ПАРТНЁРА С «ТАРИФ: ОПЛАЧИВАЕТ» (владелец 04.10: «чтоб кто-то
@@ -250,12 +258,12 @@ export function tariffAction(
  *  аккаунта — в самой кнопке, чтобы не спутать со своим. */
 export function partnerTariffAction(
   state: TariffState,
-  selected: Exclude<Tier, "free">,
+  _selected: Exclude<Tier, "free">,
   accountName: string | null,
+  calendars = 1,
 ): { kind: "pay"; label: string } | null {
   if (state.forever || state.paid) return null;
-  const card = TIER_CARDS.find((item) => item.tier === selected);
-  const pay = card ? `Оплатить ${card.monthly} в месяц` : "Оплатить";
+  const pay = `Оплатить ${calendarsMonthly(calendars)} в месяц`;
   return { kind: "pay", label: accountName ? `${pay} за ${accountName}` : pay };
 }
 

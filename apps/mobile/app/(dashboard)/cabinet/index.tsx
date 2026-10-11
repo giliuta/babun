@@ -9,12 +9,10 @@
 // Состав — то, что принадлежит человеку и этому телефону, и у каждой строки
 // подпись с живым состоянием, а не пояснение:
 //   • карта человека → «Профиль»;
-//   • ПРИГЛАШЕНИЯ и под ними — БЛОК КАЖДОГО АККАУНТА, КОТОРЫЙ ПРИГЛАСИЛ
-//     (владелец 04.10): шапка — его имя, строки — его команды и то, что он
-//     открыл правами «Кабинета» (тариф, оплаты, SMS, реквизиты); страницы
-//     открываются и платят за этот аккаунт (`InvitedAccounts`);
-//   • КОМАНДЫ (не «Компания»: у владельца нет компаний, есть аккаунт и его
-//     команды — 01.10; «Аккаунт» — уже имя секции входа ниже) — «Тариф», «Оплаты тарифа», «Партнёры», «История изменений»,
+//   • ПРИГЛАШЕНИЯ;
+//   • ЛИЧНОЕ И КОМПАНИИ (владелец 11.10, `AccountsSection`): лента аккаунтов
+//     и хозяйство выбранного. Своё — «Календари» (у компании), «Тариф»,
+//     «Оплаты тарифа», «Партнёры» (у компании), «История изменений»,
 //     «Реквизиты» (03.10, из шестерёнки «Финансов»: «единый блок на все
 //     компании»), «SMS», «Выгрузка данных» и «Архив» — всегда за СВОЙ
 //     аккаунт, какой бы ни был открыт на телефоне (04.10, `OwnAccountSection`);
@@ -46,8 +44,7 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { TYPE } from "@/components/ui/tokens";
 import { AboutRow } from "@/features/cabinet/AboutRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
-import { InvitedAccounts } from "@/features/cabinet/InvitedAccounts";
-import { OwnAccountSection } from "@/features/cabinet/OwnAccountSection";
+import { AccountsSection } from "@/features/cabinet/AccountsSection";
 import { HelpRow } from "@/features/cabinet/HelpRow";
 import { LanguageRow } from "@/features/cabinet/LanguageRow";
 import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
@@ -75,14 +72,9 @@ export default function CabinetHome() {
 
         <CompaniesSection />
 
-        {/* АККАУНТЫ, КОТОРЫЕ ПРИГЛАСИЛИ (04.10): по блоку на каждый — его
-            команды и то, что он открыл правами «Кабинета». */}
-        <InvitedAccounts />
-
-        {/* СВОЙ АККАУНТ — ВСЕГДА (владелец 04.10): какой бы аккаунт ни был
-            открыт на телефоне, тариф, SMS, партнёры и остальное хозяйство —
-            за свой (`OwnAccountSection`). */}
-        <OwnAccountSection />
+        {/* ЛИЧНОЕ И КОМПАНИИ (владелец 11.10): лента «Личное │ компании»,
+            справа «Создать»; под ней — хозяйство выбранного аккаунта. */}
+        <AccountsSection />
 
         <SectionEyebrow>Этот телефон</SectionEyebrow>
         <SectionCard>

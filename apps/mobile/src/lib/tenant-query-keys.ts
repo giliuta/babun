@@ -36,6 +36,8 @@ export const PERSON_SCOPED_QUERY_HEADS: readonly string[] = [
   // Свои членства с ролью и датой вступления: по ним вкладка «Клиенты»
   // находит компанию, где человек владелец (`my-memberships-key.ts`).
   "my-memberships",
+  // Мои аккаунты — Личное и компании с видом и ролью (`my-accounts.ts`).
+  "my-accounts",
   // Привычки устройства, продублированные в react-query: без них экран
   // читал бы умолчание, пока MMKV не перечитан.
   "clients-sort",

@@ -366,6 +366,20 @@ function DevicesSection() {
 // the current access token, while the function validates it again before any
 // service-role cascade.
 
+/** Компании, которые человек держит один и где есть другие участники. */
+async function companiesBlockingDelete(): Promise<string[]> {
+  const { data, error } = await (
+    supabase as unknown as {
+      rpc: (name: "companies_blocking_account_delete") => PromiseLike<{
+        data: { name: string }[] | null;
+        error: { message: string } | null;
+      }>;
+    }
+  ).rpc("companies_blocking_account_delete");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => row.name);
+}
+
 function DangerZoneSection({ email }: { email: string }) {
   const t = useThemeColors();
   const [open, setOpen] = useState(false);
@@ -384,6 +398,15 @@ function DangerZoneSection({ email }: { email: string }) {
     setBusy(true);
     setError(null);
     try {
+      // КОМПАНИЯ ЖИВЁТ БЕЗ ОСНОВАТЕЛЯ (владелец 11.10): пока человек один
+      // держит компанию, где работают другие, аккаунт не удаляется — иначе
+      // она ушла бы вместе со всеми. Сначала — передать владение.
+      const blocking = await companiesBlockingDelete();
+      if (blocking.length > 0) {
+        throw new Error(
+          `Вы владелец компании ${blocking.map((n) => `«${n}»`).join(", ")}, в ней работают другие люди. Сначала передайте владение: Кабинет → компания → Партнёры.`,
+        );
+      }
       const { data, error: invokeError } = await supabase.functions.invoke(
         "account-delete",
         // Своя минута вместо общего потолка 12 с (lib/supabase.ts): функция

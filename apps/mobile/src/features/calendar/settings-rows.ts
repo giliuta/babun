@@ -65,8 +65,6 @@ export interface CalendarSettingsRows {
   rename: boolean;
   /** Карточка правится (иначе — строка с именем и цветом без правки). */
   renameEdit: boolean;
-  /** «Добавить» в ленте календарей. */
-  addCalendar: boolean;
   timezone: boolean;
   timezoneEdit: boolean;
   /** «Часы календаря» — видимое окно команды. */
@@ -109,7 +107,6 @@ export function calendarSettingsRows(
   const rows = {
     rename: shown(access.identity),
     renameEdit: edits(access.identity),
-    addCalendar: manage,
     timezone: shown(access.timezone),
     timezoneEdit: edits(access.timezone),
     hours: shown(access.hours),

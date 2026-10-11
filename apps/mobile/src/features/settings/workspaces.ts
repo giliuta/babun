@@ -15,6 +15,7 @@ import {
   type CalendarChip,
 } from "./calendar-chips";
 import { useCalendarOrder } from "./use-calendar-order";
+import { usePersonalTenantId } from "./my-accounts";
 
 export type { CalendarChip } from "./calendar-chips";
 
@@ -259,11 +260,13 @@ export function useCalendarChips(opts: {
   // она проверяется тестом, а здесь, рядом с react-native и supabase, раннер
   // тестов её не поднимет.
   const order = useCalendarOrder();
+  const personalTenantId = usePersonalTenantId();
   const items = composeCalendarChips({
     own: opts.own.filter((team) => shown(activeTenantId, team.id)),
     myCalendars: calendars,
     activeTenantId,
     order,
+    personalTenantId,
   });
 
   const pick = (chipId: string) => {

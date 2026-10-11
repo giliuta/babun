@@ -111,8 +111,8 @@ export default function FinishSignupScreen() {
             setName(v);
             if (error) setError(null);
           }}
-          placeholder="Имя или название компании"
-          accessibilityLabel="Имя или название компании"
+          placeholder="Ваше имя"
+          accessibilityLabel="Ваше имя"
           autoCapitalize="words"
           autoComplete="name"
           textContentType="name"

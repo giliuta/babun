@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { syncCalendarBilling } from "@/features/tariffs/sync-calendars";
 import { listAccounts } from "@babun/shared/db/repositories/accounts";
 import { listInvoices } from "@babun/shared/db/repositories/invoices";
 import { useUpdateTeam } from "@/features/reference/queries";
@@ -60,14 +61,21 @@ export function useCalendarDelete() {
   const archive = useMutation({
     ...NEVER_PAUSE,
     mutationFn: (teamId: string) => setActive(teamId, false),
-    onSuccess: refreshEverything,
+    // Календарь в архиве не оплачивается — подписка следом (12.10).
+    onSuccess: () => {
+      syncCalendarBilling();
+      return refreshEverything();
+    },
     meta: { errorHandled: true },
   });
 
   const restore = useMutation({
     ...NEVER_PAUSE,
     mutationFn: (teamId: string) => setActive(teamId, true),
-    onSuccess: refreshEverything,
+    onSuccess: () => {
+      syncCalendarBilling();
+      return refreshEverything();
+    },
     meta: { errorHandled: true },
   });
 
