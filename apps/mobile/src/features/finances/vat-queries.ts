@@ -38,15 +38,28 @@ export function useVatSettings() {
     queryKey: ["vat-settings", tenantId],
     enabled: !!tenantId,
     queryFn: async (): Promise<VatSettings> => {
+      // СОТРУДНИКУ ТАБЛИЦА КОМПАНИИ ЗАКРЫТА (аудит 11.10): `.single()` по
+      // нулю строк бросал, и новый инвойс партнёра падал на загрузке, а в
+      // записи и чеке ставка выходила 0 %. Строки нет — ставка из безопасного
+      // профиля компании (`current_tenant_profile_safe` отдаёт её всем членам).
       const { data, error } = await supabase
         .from("tenants")
         .select("vat_mode, vat_rate")
         .eq("id", tenantId as string)
-        .single();
+        .maybeSingle();
       if (error) throw new Error(error.message);
+      if (data) {
+        return {
+          mode: (data.vat_mode ?? "off") as VatMode,
+          rate: Number(data.vat_rate ?? 0),
+        };
+      }
+      const profile = await supabase.rpc("current_tenant_profile_safe");
+      if (profile.error) throw new Error(profile.error.message);
+      const row = (profile.data ?? {}) as { vat_mode?: string | null; vat_rate?: number | string | null };
       return {
-        mode: (data.vat_mode ?? "off") as VatMode,
-        rate: Number(data.vat_rate ?? 0),
+        mode: (row.vat_mode ?? "off") as VatMode,
+        rate: Number(row.vat_rate ?? 0),
       };
     },
   });

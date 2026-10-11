@@ -75,7 +75,11 @@ import {
 } from "./clients-company";
 import { masterClientJsonToClient } from "@/features/settings/master-reference";
 import { isPhoneTakenError } from "@/features/clients/client-create-errors";
-import { parseClientBlocks } from "@/features/clients/client-block-access";
+import {
+  clientBlockLevel,
+  parseClientBlocks,
+  type ClientCardBlock,
+} from "@/features/clients/client-block-access";
 import { clientsAccessOf } from "@/features/clients/clients-access";
 import { useMyAccess } from "@/features/access/queries";
 import { inMirrorView, mirrorMemberClient } from "@/features/access/mirror/mirror-client";
@@ -169,7 +173,18 @@ function useQueryScope(): QueryScope {
   const activeRole = roleQuery.data;
   const mirror = useMirror();
   const myAccess = useMyAccess();
-  if (scope) return scopeOf(scope);
+  if (scope) {
+    const fromProvider = scopeOf(scope);
+    // КАРТОЧКА ИЗ ЗАПИСИ (аудит 11.10): маршрут карточки, открытой из записи
+    // или календаря, даёт мастеру источник активной компании — окно
+    // сотрудника. Клиент его записи вне этого окна отвечал «не найден», хотя
+    // в форме записи он виден. В активной компании мастер читает окно плюс
+    // клиентов своих записей — так же, как вне вкладки.
+    if (!mirror && fromProvider.kind === "member" && scope.isActive && activeRole === "master") {
+      return { ...fromProvider, withRecordClients: true, view: `${fromProvider.view}+records` };
+    }
+    return fromProvider;
+  }
   // ЗЕРКАЛО ВНЕ ВКЛАДКИ (выбор клиента в записи и календаре). Дверь мастера
   // (`list_master_clients_safe`) по токену владельца отдаёт пусто — в
   // «его глазами» выбор клиента был пуст (владелец 03.10). Источник — тот
@@ -240,8 +255,20 @@ function useQueryScope(): QueryScope {
  *  правка карточки отсюда отказывает (`saveClient`, kind "record") — экран
  *  записи не должен её обещать: заметка клиента и объекты там только
  *  читаются. */
-export function useClientCardWritable(): boolean {
-  return useQueryScope().kind !== "record";
+export function useClientCardWritable(
+  client: Pick<Client, "blocks"> | null | undefined,
+): (block: ClientCardBlock) => boolean {
+  const kind = useQueryScope().kind;
+  // С 11.10 сотрудник с открытой базой читает и вне вкладки окном сотрудника
+  // (`useQueryScope`). Правка — ровно как пустит сервер
+  // (`update_client_with_tags`): клиент из его окна (у строки есть `blocks`)
+  // и блок этого клиента открыт на «Меняет». Клиент «только его записей»
+  // блоков не несёт — его карточка отсюда только читается.
+  return (block) => {
+    if (kind === "record") return false;
+    if (kind !== "member") return true;
+    return !!client?.blocks && clientBlockLevel(client, block) === "write";
+  };
 }
 
 /** ИСТОЧНИК ЭКРАНА ЦЕЛИКОМ — для правил, которым мало `QueryScope`.

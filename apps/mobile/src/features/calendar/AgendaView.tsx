@@ -73,8 +73,10 @@ export function AgendaView({
    *  просроченной прошлой неделе он однороден. Слово живёт здесь: лента
    *  служит сетке легендой, как уже служит для ситуаций. */
   overdueFor?: (a: Appointment) => boolean;
-  /** Master/brigadier sees job logistics, never company/customer money. */
-  showAmounts?: boolean;
+  /** Суммы в строках. Сотруднику — по его праву «Сумма» в календаре записи
+   *  (аудит 11.10: прятались целиком по роли, хотя сервер отдаёт суммы тем,
+   *  у кого «Сумма» не скрыта). */
+  showAmounts?: boolean | ((a: Appointment) => boolean);
   /** Куда ехать — то же правило, что у блока сетки и «Маршрута» в меню:
    *  снимок адреса записи, иначе адрес клиента. */
   addressFor?: (a: Appointment) => string | null;
@@ -210,7 +212,7 @@ function DaySection({
   serviceSummary: (a: Appointment) => string;
   onEdit: (a: Appointment) => void;
   onMenu?: (a: Appointment) => void;
-  showAmounts: boolean;
+  showAmounts: boolean | ((a: Appointment) => boolean);
   addressFor?: (a: Appointment) => string | null;
   t: ThemeColors;
 }) {
@@ -342,7 +344,7 @@ function DaySection({
               serviceSummary={serviceSummary(apt)}
               onPress={() => onEdit(apt)}
               onLongPress={onMenu ? () => onMenu(apt) : undefined}
-              showAmounts={showAmounts}
+              showAmounts={typeof showAmounts === "function" ? showAmounts(apt) : showAmounts}
               offLabel={offLabelFor?.(apt) ?? null}
               hue={hueFor?.(apt) ?? t.accent}
               situation={situationFor?.(apt) ?? null}

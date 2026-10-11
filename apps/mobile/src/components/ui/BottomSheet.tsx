@@ -37,6 +37,17 @@ import { useKeyboardShown } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
 import { GUTTER } from "@/components/ui/tokens";
 import { useReduceMotion } from "@/lib/reduce-motion";
+import {
+  SheetOverlayOutlet,
+  clearOverlay,
+  isSheetOpen,
+  newSheetId,
+  pushSheet,
+  removeSheet,
+  setOverlay,
+  topSheet,
+  useSheetStackVersion,
+} from "@/components/ui/sheet-overlay";
 
 // ─── Канонический нижний лист приложения ───────────────────────────────
 // ЕДИНСТВЕННЫЙ способ показать выезжающую снизу панель. Заменяет собой
@@ -101,6 +112,7 @@ export function BottomSheet({
   padded = true,
   headerAction,
   onExited,
+  overlayIfStacked = false,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -142,6 +154,9 @@ export function BottomSheet({
    *  появлялся (2026-09-04). Кто открывает окно вслед за листом, ждёт этот
    *  сигнал, а не таймер. */
   onExited?: () => void;
+  /** Открытый поверх другого листа — рисуется ВНУТРИ его окна, а не вторым
+   *  окном (`sheet-overlay.tsx`). Лист выбора и вопроса. */
+  overlayIfStacked?: boolean;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -184,6 +199,37 @@ export function BottomSheet({
     wasMounted.current = mounted;
   }, [mounted]);
 
+  // ОКНО ПОВЕРХ ОКНА (`sheet-overlay.tsx`). Свой лист со своим окном стоит
+  // в стопке, пока открыт; лист-накладка, открытый поверх другого, ложится в
+  // его окно. Решение — в миг открытия и до закрытия.
+  const [sheetId] = useState(newSheetId);
+  const target = useRef<string | null>(null);
+  const wasVisible = useRef(false);
+  if (visible && !wasVisible.current) {
+    const top = overlayIfStacked ? topSheet() : null;
+    target.current = top && top !== sheetId ? top : null;
+  }
+  wasVisible.current = visible;
+  const stackVersion = useSheetStackVersion();
+  const asOverlay = target.current !== null;
+  useEffect(() => {
+    if (asOverlay || !mounted || !visible) {
+      removeSheet(sheetId);
+      return;
+    }
+    pushSheet(sheetId);
+  }, [asOverlay, mounted, visible, sheetId]);
+  useEffect(() => () => removeSheet(sheetId), [sheetId]);
+  // Лист под накладкой закрылся — накладка закрывается «Отменой», а не
+  // висит без окна.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const host = target.current;
+    if (!host || !visible) return;
+    if (!isSheetOpen(host)) closeRef.current();
+  }, [stackVersion, visible]);
+
   const ty = useSharedValue(SCREEN_H); // сдвиг листа вниз (0 = на месте)
   const scrim = useSharedValue(0); // прозрачность затемнения (0…1)
   const sheetH = useSharedValue(0); // измеренная высота листа
@@ -191,6 +237,12 @@ export function BottomSheet({
   useEffect(() => {
     if (visible) setMounted(true);
   }, [visible]);
+  useEffect(() => {
+    if (mounted) return;
+    const host = target.current;
+    if (host) clearOverlay(host);
+    if (!visible) target.current = null;
+  }, [mounted, visible]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -393,18 +445,8 @@ export function BottomSheet({
     </Animated.View>
   );
 
-  return (
-    <Modal
-      visible
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
-      {/* GestureHandlerRootView внутри Modal обязателен — иначе жест
-          перетаскивания грабера не долетает (RN Modal — отдельное окно).
-          style, не className: NativeWind v5 не красит компоненты-обёртки. */}
-      <GestureHandlerRootView style={{ flex: 1, justifyContent: "flex-end" }}>
+  const layers = (
+    <>
         <AnimatedPressable
           onPress={() => {
             haptics.tap();
@@ -441,9 +483,40 @@ export function BottomSheet({
             {shown.banner}
           </View>
         ) : null}
+    </>
+  );
+
+  if (asOverlay) {
+    return <OverlayLayers target={target.current as string} layers={layers} />;
+  }
+
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      {/* GestureHandlerRootView внутри Modal обязателен — иначе жест
+          перетаскивания грабера не долетает (RN Modal — отдельное окно).
+          style, не className: NativeWind v5 не красит компоненты-обёртки. */}
+      <GestureHandlerRootView style={{ flex: 1, justifyContent: "flex-end" }}>
+        {layers}
+        {/* Место для вопроса или выбора поверх этого листа. */}
+        <SheetOverlayOutlet id={sheetId} />
       </GestureHandlerRootView>
     </Modal>
   );
+}
+
+/** Слои листа-накладки уходят в окно листа под ним (`SheetOverlayOutlet`). */
+function OverlayLayers({ target, layers }: { target: string; layers: ReactNode }) {
+  useLayoutEffect(() => {
+    setOverlay(target, layers);
+  });
+  useEffect(() => () => clearOverlay(target), [target]);
+  return null;
 }
 
 /** Подвал листа — ЕДИНСТВЕННОЕ место, где лист платит нижний безопасный
