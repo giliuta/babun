@@ -11,6 +11,7 @@ import {
   LogOut,
   Trash2,
   ZoomIn,
+  ArrowUpDown,
 } from "lucide-react-native";
 import { readTenantPref } from "@/lib/tenant-prefs";
 import { useTenantId } from "@/lib/tenant";
@@ -701,6 +702,20 @@ export default function CalendarSettingsScreen() {
               Скрытый пропадает из календаря, финансов и клиентов только у
               него; здесь остаётся, и тумблер его возвращает. Серый, пока
               другого видимого календаря нет: смотреть было бы некуда. */}
+          {/* ПОРЯДОК КАЛЕНДАРЕЙ (владелец 11.10: «чтоб можно менять местами
+              календари») — выбор человека, как «Скрыть»: его лента во всех
+              аккаунтах, своя страница с перетаскиванием. */}
+          {gearChips.items.length > 1 ? (
+            <SectionCard className="mt-4">
+              <SettingsRow
+                tile={SETTINGS_TILE.indigo}
+                icon={ArrowUpDown}
+                title="Порядок календарей"
+                sub={gearChips.items.map((chip) => chip.name).join(", ")}
+                onPress={() => router.push("/calendar/order" as Href)}
+              />
+            </SectionCard>
+          ) : null}
           {team && tenantId ? (
             <SectionCard className="mt-4">
               <SwitchRow

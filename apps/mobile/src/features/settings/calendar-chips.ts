@@ -37,6 +37,44 @@ export function composeCalendarChips(input: {
   /** Компания УСТРОЙСТВА. Меняется в том же кадре, что и тап, и сети не
    *  требует. `null` — ещё не известна. */
   activeTenantId: string | null;
+  /** Порядок человека (`user_calendar_order`): ключи `calendarOrderKey`. */
+  order?: readonly string[] | null;
+}): CalendarChip[] {
+  return applyCalendarOrder(composeDefault(input), input.activeTenantId, input.order);
+}
+
+/** Ключ календаря в порядке человека: компания и команда — один и тот же по
+ *  обе стороны перехода между аккаунтами (у своего чипа компании в id нет). */
+export function calendarOrderKey(chipId: string, activeTenantId: string | null): string | null {
+  if (chipId.startsWith(FOREIGN_PREFIX)) return chipId.slice(FOREIGN_PREFIX.length);
+  return activeTenantId ? `${activeTenantId}:${chipId}` : null;
+}
+
+/** ПОРЯДОК ЧЕЛОВЕКА (владелец 11.10: «чтоб можно менять местами календари»).
+ *  Названные — в его порядке; не названные (новый календарь, порядок ещё не
+ *  задан) — следом, в заводском порядке. Компания устройства ещё не известна
+ *  — заводской: свои чипы без компании не сопоставить. */
+export function applyCalendarOrder(
+  chips: CalendarChip[],
+  activeTenantId: string | null,
+  order: readonly string[] | null | undefined,
+): CalendarChip[] {
+  if (!order || order.length === 0 || !activeTenantId) return chips;
+  const rank = new Map(order.map((key, i) => [key, i]));
+  const at = (chip: CalendarChip) => {
+    const key = calendarOrderKey(chip.id, activeTenantId);
+    return key != null && rank.has(key) ? (rank.get(key) as number) : Infinity;
+  };
+  return chips
+    .map((chip, i) => ({ chip, i, r: at(chip) }))
+    .sort((a, b) => (a.r === b.r ? a.i - b.i : a.r - b.r))
+    .map((x) => x.chip);
+}
+
+function composeDefault(input: {
+  own: readonly { id: string; name: string; color?: string | null }[];
+  myCalendars: readonly ChipSourceCalendar[];
+  activeTenantId: string | null;
 }): CalendarChip[] {
   // СВОЁ И ЧУЖОЕ — ОТ КОМПАНИИ УСТРОЙСТВА, А НЕ ОТ ФЛАГА СЕРВЕРА. Сразу после
   // тапа список ещё прежний: в нём «активна» компания, откуда человек ушёл.
