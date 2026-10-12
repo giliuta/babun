@@ -1,8 +1,7 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { CHIP_GAP, DraggableChipRow } from "@/components/ui/chip-drag";
 import { ScrollView, View } from "react-native";
 import { Chip } from "@/components/ui/Chip";
-import { chipGroups, type ScopeChip } from "./ScopeChips.groups";
 import { useThemeColors } from "@/theme/colors";
 
 // ЛЕНТА ОБЛАСТИ ПРОСМОТРА — одна на весь продукт: календарь, финансы, счета.
@@ -26,8 +25,11 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Родом из TeamChips календаря (web-parity TeamTabStrip).
 
-export type { ScopeChip } from "./ScopeChips.groups";
-
+export type ScopeChip = {
+  id: string;
+  name: string;
+  color?: string | null;
+};
 // КОМАНДЫ ПАРТНЁРА ВЫГЛЯДЯТ КАК СВОИ (владелец 1.10: «как будто все три
 // команды его, а по факту незаметный переход для партнёра, который
 // поделился командой; ничем не должна отличаться — и в финансах, и в
@@ -88,10 +90,6 @@ export function ScopeChips({
   // дёргал бы ленту обратно посреди ручной прокрутки.
   const offsets = useRef(new Map<string, number>());
   const shown = useRef<string | null>(null);
-  // Перетаскиваемая лента — ряд на каждый аккаунт: левый край ряда и края
-  // его чипов внутри ряда; край чипа в ленте — их сумма.
-  const segX = useRef(new Map<string, number>());
-  const segPositions = useRef(new Map<string, Record<string, number>>());
 
   const reveal = useCallback((key: string, animated: boolean) => {
     const x = offsets.current.get(key);
@@ -147,21 +145,6 @@ export function ScopeChips({
     />
   );
 
-  const groups = chipGroups(items);
-  const divider = (key: string) => (
-    <View
-      key={key}
-      style={{ width: 1, height: 18, marginHorizontal: 2, backgroundColor: t.separator }}
-    />
-  );
-  const placeSegment = (key: string) => {
-    const base = segX.current.get(key);
-    const x = segPositions.current.get(key);
-    if (base === undefined || !x) return;
-    for (const [id, left] of Object.entries(x)) offsets.current.set(id, left + base);
-    if (activeId && x[activeId] != null) reveal(activeId, false);
-  };
-
   const strip = (
     <ScrollView
       ref={scrollRef}
@@ -192,40 +175,23 @@ export function ScopeChips({
       {onReorder ? (
         // ЗАЖАТЬ И ПЕРЕТАЩИТЬ (шестерёнка календаря): места чипов считает
         // поток анимации (`chip-drag.tsx`), поэтому отпускание не прыгает.
-        // Ряд на каждый аккаунт: календарь не переезжает в чужую компанию.
-        groups.map((group, gi) => (
-          <Fragment key={`seg-${group.key}`}>
-            {gi > 0 ? divider(`div-${group.key}`) : null}
-            <View
-              onLayout={(e) => {
-                segX.current.set(group.key, e.nativeEvent.layout.x);
-                placeSegment(group.key);
-              }}
-            >
-              <DraggableChipRow
-                ids={group.items.map((item) => item.id)}
-                pad={0}
-                onReorder={(ids) =>
-                  onReorder(groups.flatMap((g) => (g.key === group.key ? ids : g.items.map((it) => it.id))))
-                }
-                onDragging={onDragging}
-                onPositions={(x) => {
-                  segPositions.current.set(group.key, x);
-                  placeSegment(group.key);
-                }}
-                renderChip={(id) => {
-                  const item = group.items.find((it) => it.id === id);
-                  return item ? renderChip(item) : null;
-                }}
-              />
-            </View>
-          </Fragment>
-        ))
+        <DraggableChipRow
+          ids={items.map((item) => item.id)}
+          pad={0}
+          onReorder={onReorder}
+          onDragging={onDragging}
+          onPositions={(x) => {
+            // Края — от начала ленты: её левый отступ 20.
+            for (const [id, left] of Object.entries(x)) offsets.current.set(id, left + 20);
+            if (activeId && x[activeId] != null) reveal(activeId, false);
+          }}
+          renderChip={(id) => {
+            const item = items.find((it) => it.id === id);
+            return item ? renderChip(item) : null;
+          }}
+        />
       ) : (
-        groups.flatMap((group, gi) => [
-          ...(gi > 0 ? [divider(`div-${group.key}`)] : []),
-          ...group.items.map((item) => chip(item.id, renderChip(item))),
-        ])
+        items.map((item) => chip(item.id, renderChip(item)))
       )}
     </ScrollView>
   );

@@ -20,9 +20,8 @@ export type Tier = "free" | "solo" | "pro" | "max";
 
 export const PAID_TIERS: readonly Exclude<Tier, "free">[] = ["solo", "pro", "max"];
 
-/** ЧТО ПРЕДЛАГАЕТ СТРАНИЦА «ТАРИФ» (12.10): одна цена за календарь — и в
- *  Личном, и в компании. Сервер держит то же: пробный в Личном — Соло (там
- *  один календарь), в компании — полный доступ. */
+/** ЧТО ПРЕДЛАГАЕТ СТРАНИЦА «ТАРИФ» (12.10): одна цена за календарь в любом
+ *  аккаунте. Сервер держит то же: пробный — полный доступ. */
 export function tiersForKind(
   _kind: "personal" | "company" | null | undefined,
 ): readonly Exclude<Tier, "free">[] {

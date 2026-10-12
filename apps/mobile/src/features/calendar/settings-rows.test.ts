@@ -11,6 +11,7 @@ describe("строки настроек календаря", () => {
     assert.deepEqual(rows, {
       rename: true,
       renameEdit: true,
+      addCalendar: true,
       timezone: true,
       timezoneEdit: true,
       hours: true,
@@ -69,6 +70,7 @@ describe("строки настроек календаря", () => {
     assert.equal(rows.timezoneEdit, false, "«Только видит» — строка без двери");
     assert.equal(rows.hours, false);
     assert.equal(rows.remove, false);
+    assert.equal(rows.addCalendar, false);
   });
 
   test("сотрудник: «Записи», «Услуги», «Метки» — по его праву, дверь и на «Только видит»", () => {
