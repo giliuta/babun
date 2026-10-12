@@ -36,6 +36,9 @@ export type ScopeChip = {
 // календаре»). Обводка чужих чипов (12.09) снята: у всех один вид, разница
 // только «выбран / нет».
 
+/** Левый и правый отступ ленты (12.10: компактнее — было 20 и 24). */
+const STRIP_PAD = 16;
+
 export function ScopeChips({
   items,
   activeId,
@@ -141,7 +144,10 @@ export function ScopeChips({
         if (justDragged.current) return;
         onSelect(item.id);
       }}
-      style={{ maxWidth: 180 }}
+      // КОМПАКТНО (владелец 12.10: «сделай сверху команды компактней»):
+      // ниже и уже обычной пилюли, длинное имя — в одну строку с многоточием.
+      numberOfLines={1}
+      style={{ maxWidth: 140, minHeight: 28, paddingHorizontal: 10 }}
     />
   );
 
@@ -163,11 +169,11 @@ export function ScopeChips({
         // 20, а не гуттер 16: у пилюли скруглённый бок, и на общем отступе она
         // оптически «падает» за край — прямая кромка карточки под ней стоит
         // ровно, а круглая просит воздуха.
-        paddingLeft: 20,
+        paddingLeft: STRIP_PAD,
         // Справа больше: у последнего чипа не должно быть ощущения, что он
         // упёрся в край и лента кончилась.
-        paddingRight: 24,
-        paddingVertical: 10,
+        paddingRight: STRIP_PAD,
+        paddingVertical: 6,
         gap: CHIP_GAP,
         alignItems: "center",
       }}
@@ -181,8 +187,8 @@ export function ScopeChips({
           onReorder={onReorder}
           onDragging={onDragging}
           onPositions={(x) => {
-            // Края — от начала ленты: её левый отступ 20.
-            for (const [id, left] of Object.entries(x)) offsets.current.set(id, left + 20);
+            // Края — от начала ленты: её левый отступ STRIP_PAD.
+            for (const [id, left] of Object.entries(x)) offsets.current.set(id, left + STRIP_PAD);
             if (activeId && x[activeId] != null) reveal(activeId, false);
           }}
           renderChip={(id) => {

@@ -56,12 +56,12 @@ test("шестерёнка календаря: лента перетаскива
 });
 
 test("место чипа — из порядка и ширин: отпускание ставит ровно в ячейку (11.10)", async () => {
-  const { slotX } = await import("./chip-drag-math");
+  const { slotX, CHIP_GAP: GAP } = await import("./chip-drag-math");
   const widths = { a: 80, b: 50, c: 100 };
   assert.equal(slotX(["a", "b", "c"], widths, 0, 0), 0);
-  assert.equal(slotX(["a", "b", "c"], widths, 2, 0), 80 + 8 + 50 + 8);
+  assert.equal(slotX(["a", "b", "c"], widths, 2, 0), 80 + GAP + 50 + GAP);
   // Переставили «c» первым — «a» встаёт за ним на ширину «c».
-  assert.equal(slotX(["c", "a", "b"], widths, 1, 0), 100 + 8);
+  assert.equal(slotX(["c", "a", "b"], widths, 1, 0), 100 + GAP);
   const here = dirname(fileURLToPath(import.meta.url));
   const drag = readFileSync(resolve(here, "chip-drag.tsx"), "utf8");
   // Новый порядок пишется на потоке UI в миг отпускания, одной записью.
