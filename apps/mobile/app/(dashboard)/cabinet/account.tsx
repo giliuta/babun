@@ -29,6 +29,7 @@ import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
 import { writeErrorWords } from "@/lib/connection-words";
 import { isHumanText } from "@babun/shared/i18n/runtime";
+import { PASSWORD_MIN, passwordTooShort } from "@/components/auth/password-rule";
 import { deleteRefusal, passwordRefusal } from "@/features/cabinet/account-errors";
 import { ChangeEmailSheet } from "@/features/cabinet/ChangeEmailSheet";
 
@@ -126,12 +127,12 @@ function PasswordSection({ email }: { email: string | null }) {
   const [confirm, setConfirm] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const tooShort = pwd.length > 0 && pwd.length < 8;
+  const tooShort = passwordTooShort(pwd);
   const mismatch = confirm.length > 0 && pwd !== confirm;
   const samePwd = pwd.length > 0 && pwd === currentPwd;
   const canSubmit =
     currentPwd.length > 0 &&
-    pwd.length >= 8 &&
+    pwd.length >= PASSWORD_MIN &&
     confirm === pwd &&
     !samePwd &&
     !saving;
@@ -202,13 +203,13 @@ function PasswordSection({ email }: { email: string | null }) {
         label="Новый пароль"
         value={pwd}
         onChangeText={setPwd}
-        placeholder="Минимум 8 символов"
+        placeholder="Минимум 6 символов"
         secureTextEntry
         autoComplete="new-password"
         textContentType="newPassword"
         error={
           tooShort
-            ? "Минимум 8 символов"
+            ? "Минимум 6 символов"
             : samePwd
               ? "Новый пароль должен отличаться от текущего"
               : null

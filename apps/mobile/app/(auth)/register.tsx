@@ -17,6 +17,7 @@ import { EmailCodeCard, SIGNUP_LINK_REDIRECT } from "@/components/auth/EmailCode
 import { useAuthTheme } from "@/components/auth/theme";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/notify";
+import { PASSWORD_MIN, passwordTooShort } from "@/components/auth/password-rule";
 import { CAN_PAY_HERE, CAN_SIGN_UP_HERE } from "@/lib/pay-here";
 import { invitationSignupErrorMessage } from "@/features/settings/invitation-flow";
 import { getPendingInvitationToken } from "@/features/settings/pending-invitation";
@@ -59,7 +60,7 @@ function RegisterScreen() {
   const valid =
     fullName.trim().length > 0 &&
     email.trim().length > 0 &&
-    password.length >= 8;
+    password.length >= PASSWORD_MIN;
 
   function edit(set: (v: string) => void) {
     return (v: string) => {
@@ -190,9 +191,9 @@ function RegisterScreen() {
         />
       </InputCard>
 
-      {password.length > 0 && password.length < 8 ? (
+      {passwordTooShort(password) ? (
         <Text style={{ marginTop: 8, marginLeft: 4, fontSize: 13, color: t.sub }}>
-          Минимум 8 символов
+          Минимум 6 символов
         </Text>
       ) : null}
 

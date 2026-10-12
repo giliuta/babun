@@ -51,7 +51,7 @@ export function mapAuthError(
     )
       return "Этот email уже зарегистрирован — войдите";
     if (m.includes("should be at least"))
-      return "Пароль слишком простой — минимум 8 символов";
+      return "Пароль слишком короткий";
     // Supabase отклоняет известные и утёкшие пароли (HaveIBeenPwned, 04.10).
     if (c.includes("weak_password") || m.includes("password"))
       return "Этот пароль слишком простой или уже утекал в интернет — придумайте другой";
@@ -60,7 +60,7 @@ export function mapAuthError(
 
   if (kind === "reset") {
     if (m.includes("should be at least"))
-      return "Пароль слишком простой — минимум 8 символов";
+      return "Пароль слишком короткий";
     if (m.includes("same") || m.includes("different from"))
       return "Новый пароль должен отличаться от старого";
     if (c.includes("weak_password"))
