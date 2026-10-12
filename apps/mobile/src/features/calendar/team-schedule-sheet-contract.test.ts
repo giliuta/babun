@@ -23,10 +23,13 @@ test("правка уходит функцией от свежего графи�
   assert.doesNotMatch(sheet, /commit\(withDay\(base,/);
 });
 
-// ОБЩЕЕ ВРЕМЯ ПО УМОЛЧАНИЮ, ДНИ — ПО КНОПКЕ; ПЕРЕРЫВОВ НЕТ (владелец 11.10).
-test("общий вид пишет часы всем дням, по дням — одному; перерывов в листе нет", () => {
-  assert.match(sheet, /if \(mode === "common"\) commitDays\(ALL_DAYS, \(\) => pair\);\s*else commitDay\(\(\) => pair\);/);
-  assert.match(sheet, /setMode\(sameHoursEveryDay\(schedule \?\? null\) \? "common" : "days"\);/);
-  assert.match(sheet, /label: "По дням"/);
+// ОДИН ЭКРАН (владелец 12.10): дни кнопками, общие часы, тумблер «Разные
+// часы по дням»; выключение тумблера пишет всем дням одни часы. Перерывов нет.
+test("общие часы — всем дням, дня — ему; выключение «разных» пишет всем одни часы", () => {
+  assert.match(sheet, /if \(target === "common"\) commitDays\(ALL_DAYS, \(\) => pair\);\s*else commitDays\(\[target\], \(\) => pair\);/);
+  assert.match(sheet, /setPerDay\(!sameHoursEveryDay\(schedule \?\? null\)\);/);
+  assert.match(sheet, /label="Разные часы по дням"/);
+  assert.match(sheet, /setPerDay\(false\);\s*commitDays\(ALL_DAYS, \(\) => common\);/);
+  assert.doesNotMatch(sheet, /label: "По дням"|label: "Для всех дней"/, "вернулись два режима");
   assert.doesNotMatch(sheet, /＋ Перерыв|label="Перерыв после записи"/);
 });
