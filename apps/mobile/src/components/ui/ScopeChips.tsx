@@ -37,7 +37,7 @@ export type ScopeChip = {
 // только «выбран / нет».
 
 /** Левый и правый отступ ленты (12.10: компактнее — было 20 и 24). */
-const STRIP_PAD = 16;
+const STRIP_PAD = 12;
 
 export function ScopeChips({
   items,
@@ -144,10 +144,11 @@ export function ScopeChips({
         if (justDragged.current) return;
         onSelect(item.id);
       }}
-      // КОМПАКТНО (владелец 12.10: «сделай сверху команды компактней»):
-      // ниже и уже обычной пилюли, длинное имя — в одну строку с многоточием.
+      // КОМПАКТНО (владелец 12.10: «сделай сверху команды компактней», затем
+      // «ещё компактней — справа налево»): ниже и уже обычной пилюли, длинное
+      // имя — в одну строку с многоточием.
       numberOfLines={1}
-      style={{ maxWidth: 140, minHeight: 28, paddingHorizontal: 10 }}
+      style={{ maxWidth: 112, minHeight: 28, paddingHorizontal: 7 }}
     />
   );
 
