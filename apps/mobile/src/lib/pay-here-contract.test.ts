@@ -108,7 +108,7 @@ test("тариф без флага — только имя: ни отсчёта 
 test("«Оплаты тарифа» (счета Stripe с оплатой) — только с флагом", () => {
   const own = read("features/cabinet/OwnAccountSection.tsx");
   const rows = own.match(/<TariffPaymentsRow\b/g) ?? [];
-  const gated = own.match(/if \(CAN_PAY_HERE\) rows\.push\(\{ key: "payments", node: <TariffPaymentsRow\b/g) ?? [];
+  const gated = own.match(/\{CAN_PAY_HERE \? \(\s*<>\s*<TariffPaymentsRow\b/g) ?? [];
   assert.ok(rows.length > 0);
   assert.equal(gated.length, rows.length, "OwnAccountSection: строка оплат мимо флага");
   assert.match(read("features/cabinet/InvitedAccounts.tsx"), /if \(CAN_PAY_HERE && seen\(payments\)\) rows\.push\(\{ key: "payments"/);

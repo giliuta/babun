@@ -34,6 +34,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { useThemeColors } from "@/theme/colors";
@@ -83,6 +84,8 @@ import { utcLabel, zoneClock } from "@/features/calendar/device-timezone";
 import { zoneCities } from "@/features/calendar/zone-label";
 import { SmsSettingsRow } from "@/features/sms/SmsSettingsRow";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
+import { canAddTeam } from "@/features/tariffs/tiers";
+import { useTariff, useTariffNudge } from "@/features/tariffs/use-tariff";
 
 // ─── «Календарь» — ВСЕ настройки на одном экране ─────────────────────
 // Сюда ведёт шестерёнка. Уровня «/calendar/[teamId]» больше нет: целый экран
@@ -169,6 +172,9 @@ export default function CalendarSettingsScreen() {
   const settingsQuery = useCalendarSettings();
   const settings = settingsQuery.data;
   const { data: teams = [], isLoading: teamsLoading } = useTeams();
+  const tariffTier = useTariff().state.tier;
+  const nudgeTariff = useTariffNudge();
+  const canNewTeam = canAddTeam(tariffTier, teams.length);
   const { data: schedules = {} } = useAllTeamSchedules();
   const update = useUpdateTeam();
   const archiveTeam = useCalendarDelete().archive;
@@ -202,6 +208,7 @@ export default function CalendarSettingsScreen() {
   // туда, но блоков уже внутри шестерёнки не будет… визуал целой страницы мы
   // полностью сохраняем»). Правило и его причины — `settings-rows.ts`.
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const tenantId = useTenantId();
   // СКРЫТЫЕ КАЛЕНДАРИ ВКЛЮЧАЮТ ЗДЕСЬ (владелец 04.10: «в настройках календаря
@@ -400,9 +407,43 @@ export default function CalendarSettingsScreen() {
       <ScopeChips
         items={gearChips.items}
         activeId={gearChips.pendingId ?? team?.id ?? null}
-        // СОЗДАНИЯ ЗДЕСЬ НЕТ (владелец 11.10: «создание календаря не в
-        // настройках — перейти в компанию и там создать»): Кабинет → компания
-        // → «Календари» → «Добавить» (`CompanyCalendarsScreen`).
+        // СОЗДАНИЕ ЖИВЁТ В ЛЕНТЕ КАЛЕНДАРЕЙ, СПРАВА (владелец 2026-08-27:
+        // «переносим в правую сторону, там где все календари, закрепляем
+        // кнопку»). Отдельной строкой ниже оно стояло среди НАСТРОЕК
+        // выбранного календаря — то есть в списке свойств одного объекта
+        // лежало действие, создающее другой.
+        //
+        // ПРИКОЛОТА, А НЕ ВЛОЖЕНА В ЛЕНТУ: при трёх календарях со средними
+        // именами лента длиннее экрана, а автоскролл подводит её к выбранному
+        // чипу — вложенная кнопка пряталась бы ровно у того, кому она нужнее.
+        //
+        // ТЕКСТОМ, БЕЗ «+»: канон — «действия создания всегда подписаны
+        // текстом», и это стережёт контрактный тест (импорт Plus из lucide
+        // запрещён). Слово «календарь» в подписи лишнее: лента и так из них.
+        // Заводит календари владелец: у того, кому настройки не открыты,
+        // лента остаётся лентой его календарей, без действия.
+        trailing={rows.addCalendar ? (
+          <Pressable
+            // ЛИМИТ КОМАНД ТАРИФА (01.10): Соло — одна, Про — 5, Макс — 50.
+            // Сверх — «Добавить» серое, тап поднимает плашку про тариф.
+            onPress={() => (canNewTeam ? setCreateOpen(true) : nudgeTariff())}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить календарь"
+            style={({ pressed }: { pressed: boolean }) => ({
+              minHeight: 44,
+              justifyContent: "center",
+              opacity: !canNewTeam ? 0.4 : pressed ? 0.5 : 1,
+            })}
+          >
+            <Text
+              maxFontSizeMultiplier={1.2}
+              style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
+            >
+              Добавить
+            </Text>
+          </Pressable>
+        ) : undefined}
         // «Все календари разом» здесь нет: настройки правятся у КОНКРЕТНОЙ
         // команды, и лента другого выбора не предлагает.
         onSelect={(id) => (id.startsWith(FOREIGN_PREFIX) ? gearChips.pick(id) : router.setParams({ team: id }))}
@@ -730,6 +771,10 @@ export default function CalendarSettingsScreen() {
                         // обрезается многоточием. «Что делать» говорит кнопка.
                         "Последний календарь удалить нельзя",
                         "warn",
+                        // Плашка говорит «создайте другой» — здесь же и даёт
+                        // это сделать. Без кнопки человек читает указание,
+                        // закрывает плашку и ищет, чем его выполнить.
+                        { label: "Создать", onPress: () => setCreateOpen(true) },
                       );
                       return;
                     }
@@ -830,7 +875,9 @@ export default function CalendarSettingsScreen() {
                   color: t.faint,
                 }}
               >
-                Календарей пока нет.
+                {rows.addCalendar
+                  ? "Календарей пока нет — создайте первый на вкладке «Календарь»."
+                  : "Календарей пока нет."}
               </Text>
             </SectionCard>
           ) : null}
@@ -841,6 +888,13 @@ export default function CalendarSettingsScreen() {
         // состояний, LOCKED 2026-08-27).
         <EmptyState fill title="Настроек пока нет" />
       )}
+
+      <CalendarCreateSheet
+        visible={createOpen}
+        onClose={() => setCreateOpen(false)}
+        teams={teams}
+        onCreated={(created) => router.setParams({ team: created.id })}
+      />
 
       {/* Часы календаря — нижним листом «С … До …» (владелец 2026-08-16: «как
           время в финансах»): сегмент С|До, список часов, «Применить». */}
