@@ -1,7 +1,7 @@
 // Расчёт места чипа при перетаскивании ленты — лист без React, его читают
 // `chip-drag.tsx` и тест.
 
-export const CHIP_GAP = 6;
+export const CHIP_GAP = 4;
 
 /** Куда встанет чип с индексом `active`, если его центр сейчас в `center`. */
 export function dropIndex(
