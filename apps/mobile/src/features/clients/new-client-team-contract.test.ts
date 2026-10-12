@@ -29,9 +29,9 @@ describe("команда и страна нового клиента", () => {
     assert.match(draft, /\(!current\.team_id \|\| current\.team_id === previous\) &&\s*current\.team_id !== newClientTeam/);
   });
 
-  test("пустое поле номера идёт за страной команды, выбранная руками — нет", () => {
+  test("код в ненабранном поле номера идёт за страной команды, стёртый руками — нет", () => {
     const hook = read("use-phone-country.tsx");
-    assert.match(hook, /if \(picked\.current \|\| phone\.trim\(\)\) return;\s*setCountry\(\(cur\) => \(cur === home \? cur : home\)\);/);
-    assert.match(hook, /const pick = \(next: CountryCode\) => \{\s*picked\.current = true;/);
+    assert.match(hook, /const untouched = seeded\.current === null \? typed === "" : typed === seeded\.current;/);
+    assert.match(hook, /onChange\(dialPrefix\(home\)\);/);
   });
 });

@@ -24,12 +24,12 @@ describe("код страны номера по поясу команды", () =
 
 describe("все страны мира в выборе кода (владелец 12.10)", () => {
   test("Беларусь +375 есть и стоит среди частых", async () => {
-    const { SUPPORTED_COUNTRIES, POPULAR_COUNTRIES, countryDialCode, countryNameIn, phoneCountryOf } = await import("./phone");
+    const { SUPPORTED_COUNTRIES, POPULAR_COUNTRIES, countryDialCode, countryNameIn, tryToE164 } = await import("./phone");
     assert.ok(SUPPORTED_COUNTRIES.length > 200);
     assert.ok(POPULAR_COUNTRIES.includes("BY"));
     assert.equal(countryDialCode("BY"), "+375");
     assert.equal(countryNameIn("BY", "ru"), "Беларусь");
     assert.equal(countryNameIn("BY", "en"), "Belarus");
-    assert.equal(phoneCountryOf("+375 29 123 45 67", "CY"), "BY");
+    assert.equal(tryToE164("+375 29 123 45 67", "CY"), "+375291234567");
   });
 });

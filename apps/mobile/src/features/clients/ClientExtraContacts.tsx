@@ -10,18 +10,12 @@ import {
 } from "lucide-react-native";
 import type { PhoneEntry } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
-import type { CountryCode } from "libphonenumber-js";
-import { CountryPickerSheet } from "@/features/clients/use-phone-country";
+import { withHomeCode } from "@/features/clients/use-phone-country";
 import {
-  composePhone,
-  countryDialCode,
   dialPrefix,
-  nationalPart,
-  phoneCountryOf,
   formatPhoneAsYouType,
   formatPhoneForDisplay,
   isDialOnly,
-  phoneParts,
 } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { FieldRow, RowActionButton } from "@/components/ui/card-rows";
@@ -59,13 +53,6 @@ const EMPTY_PHONES: PhoneEntry[] = [];
 // не муж-жена»). Родственные подписи («Супруг(а)») убраны: это про отношения,
 // а не про номер, и у бизнес-клиента их не бывает.
 const EXTRA_LABELS = ["Мобильный", "Рабочий", "Домашний", "WhatsApp", "Другой"];
-
-/** Цифры, набранные без кода, — с кодом строки; свой «+» уважается. */
-function withCode(typed: string, code: string): string {
-  const v = typed.trim();
-  if (!v) return "";
-  return v.startsWith("+") ? v : `${code} ${v}`;
-}
 
 /** Значок подписи — тот же язык, что у остальных листов продукта. */
 const LABEL_ICONS: Record<string, LucideIcon> = {
@@ -219,13 +206,7 @@ export function ClientExtraContacts({
    *  Перебор по кругу требовал до пяти тапов и не показывал, что есть. */
   const [labelFor, setLabelFor] = useState<PhoneEntry | null>(null);
   /** Номер, у которого сейчас выбирают страну (тап по «+357»). */
-  const [codeFor, setCodeFor] = useState<PhoneEntry | null>(null);
-  const pickCode = (next: CountryCode) => {
-    if (!codeFor) return;
-    const from = phoneCountryOf(codeFor.number, country);
-    const national = nationalPart(codeFor.number, from);
-    if (national) patchPhone(codeFor.id, { number: composePhone(national, next) });
-  };
+
 
   return (
     <>
@@ -235,7 +216,6 @@ export function ClientExtraContacts({
         .filter((p) => p.id !== pending?.id)
         .map((p, index) => {
           if (column !== undefined) {
-            const parts = phoneParts(p.number, country);
             return (
               <FieldRow
                 noCopy={noCopy}
@@ -245,17 +225,17 @@ export function ClientExtraContacts({
                 // трогаем и не показываем.
                 label={`Телефон ${index + 2}`}
                 column={column}
-                prefix={parts.code}
-                // Тап по коду — выбрать страну этого номера (30.09).
-                onPrefixPress={readOnly ? undefined : () => setCodeFor(p)}
-                value={parts.rest}
+                // Код страны — в самом поле (владелец 12.10): пустое
+                // начинается с кода команды, стирают и вписывают свой.
+                value={formatPhoneForDisplay(p.number, country)}
+                seed={dialPrefix(country)}
                 placeholder="Номер"
                 separated
                 keyboardType="phone-pad"
                 tabular
                 live={draft}
                 readOnly={readOnly}
-                onSave={(v) => savePhone(p.id, withCode(v, parts.code), draft)}
+                onSave={(v) => savePhone(p.id, withHomeCode(v, country), draft)}
                 onLongPress={
                   !draft && !noCopy && p.number.trim()
                     ? () => copy(formatPhoneAsYouType(p.number, country))
@@ -327,14 +307,14 @@ export function ClientExtraContacts({
           noCopy={noCopy}
           label={`Телефон ${extras.filter((p) => p.id !== pending.id).length + 2}`}
           column={column}
-          prefix={countryDialCode(country)}
           value=""
+          seed={dialPrefix(country)}
           placeholder="Номер"
           separated
           keyboardType="phone-pad"
           tabular
           autoFocus
-          onSave={(v) => commitPending(withCode(v, countryDialCode(country)))}
+          onSave={(v) => commitPending(withHomeCode(v, country))}
           onEditEnd={() => setPendingRow(null)}
         />
       ) : pending ? (
@@ -381,16 +361,16 @@ export function ClientExtraContacts({
         const shown = saved || (addingField === f.id ? (f.prefix ?? "") : "");
         const url = f.url(typing?.id === f.id ? typing.value : shown);
         if (column !== undefined) {
-          // WhatsApp — номер: код страны тем же тихим префиксом.
-          const wa = f.id === "whatsapp" ? phoneParts(saved, country) : null;
+          // WhatsApp — номер: код страны в самом поле, как у телефона.
+          const wa = f.id === "whatsapp";
           return (
             <FieldRow
               noCopy={noCopy}
               key={f.id}
               label={f.label}
               column={column}
-              prefix={wa?.code}
-              value={wa ? wa.rest : shown}
+              value={wa ? formatPhoneForDisplay(saved, country) : shown}
+              seed={wa ? dialPrefix(country) : undefined}
               placeholder={f.placeholder}
               separated
               keyboardType={f.keyboardType}
@@ -398,8 +378,8 @@ export function ClientExtraContacts({
               tabular={f.id === "whatsapp"}
               readOnly={readOnly}
               autoFocus={addingField === f.id}
-              onType={(v) => setTyping({ id: f.id, value: wa ? withCode(v, wa.code) : v })}
-              onSave={(v) => update(f.patch(wa ? withCode(v, wa.code) : v))}
+              onType={(v) => setTyping({ id: f.id, value: wa ? withHomeCode(v, country) : v })}
+              onSave={(v) => update(f.patch(wa ? withHomeCode(v, country) : v))}
               onEditEnd={() => {
                 setAddingField(null);
                 setTyping(null);
@@ -477,13 +457,6 @@ export function ClientExtraContacts({
         />
       )}
 
-
-      <CountryPickerSheet
-        visible={codeFor !== null}
-        selected={codeFor ? phoneCountryOf(codeFor.number, country) : null}
-        onPick={pickCode}
-        onClose={() => setCodeFor(null)}
-      />
 
       <PickerSheet
         visible={labelFor !== null}

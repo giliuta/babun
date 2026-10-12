@@ -12,7 +12,7 @@ import { useOwnAccountId, useOwnAccountName, useRenameOwnAccount } from "@/featu
 import { birthdayText } from "@/features/cabinet/person-card";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useDefaultCountry } from "@/features/clients/default-country";
-import { usePhoneCodeField } from "@/features/clients/use-phone-country";
+import { usePhoneField } from "@/features/clients/use-phone-country";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { supabase } from "@/lib/supabase";
@@ -52,7 +52,7 @@ export function ProfileScreen() {
   };
   // КОД СТРАНЫ — ТИХИМ ПРЕФИКСОМ, ЦИФРЫ — В ПОЛЕ (владелец 01.10: «обязательно
   // код страны — выбирать код, потом писать номер»), как номер клиента.
-  const phoneField = usePhoneCodeField({
+  const phoneField = usePhoneField({
     phone: profile.phone ?? "",
     home: useDefaultCountry(),
     onSave: (full) => {
@@ -154,8 +154,7 @@ export function ProfileScreen() {
             label="Телефон"
             column={PROFILE_COLUMN}
             tabular
-            prefix={phoneField.prefix}
-            onPrefixPress={phoneField.onPrefixPress}
+            seed={phoneField.seed}
             value={phoneField.value}
             placeholder="Номер"
             keyboardType="phone-pad"
@@ -179,7 +178,6 @@ export function ProfileScreen() {
             onSave={() => {}}
           />
         </SectionCard>
-        {phoneField.sheet}
       </ScrollView>
 
       <DateWheelSheet

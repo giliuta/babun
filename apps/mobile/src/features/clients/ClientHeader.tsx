@@ -26,7 +26,6 @@ import { Check } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import {
   formatPhoneAsYouType,
-  phoneParts,
   tryToE164,
 } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
@@ -38,7 +37,7 @@ import { useCopyValue } from "@/lib/copy-value";
 import { useThemeColors } from "@/theme/colors";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { ClientExtraContacts } from "@/features/clients/ClientExtraContacts";
-import { usePhoneCountry } from "@/features/clients/use-phone-country";
+import { useDraftPhone, usePhoneField } from "@/features/clients/use-phone-country";
 import { contactsLocked } from "@/features/clients/member-contacts";
 import { LockedPhoneRow } from "@/features/clients/LockedPhoneRow";
 import { CONTACT_COLUMN } from "@/features/clients/contact-column";
@@ -105,29 +104,38 @@ export default function ClientHeader({
   const toast = useToast();
   const country = useDefaultCountry(client.team_id ?? null);
   const copy = useCopyValue();
-  // Код страны отдельно, цифры отдельно — для строки «Телефон».
-  const phone = phoneParts(client.phone, country);
   // Номер сотруднику ещё не открыт (30.09): на месте цифр — замок, правки
   // контактов нет, пока номер не открыт дверью.
   const locked = !draft && contactsLocked(client);
-  // Новый клиент: страна номера — подписью над полем, цифры — в поле.
-  const dial = usePhoneCountry({
+  // Новый клиент: поле рождается с кодом страны команды, номер — живьём в
+  // черновик. Карточка: весь номер с кодом в поле, правка — по уходу.
+  const draftPhone = useDraftPhone({
     phone: client.phone,
     home: country,
-    onChange: (full) => {
-      if (draft) {
-        draft.onPhoneChange(full);
+    onChange: (full) => draft?.onPhoneChange(full),
+  });
+  const savedPhone = usePhoneField({
+    phone: client.phone,
+    home: country,
+    // Телефон — ключ дедупа (phone_e164 + UNIQUE-индекс), но с 12.10 он
+    // НЕОБЯЗАТЕЛЕН (владелец: «номер добавлять необязательно»): стёртый
+    // номер сохраняется пустым. Неразбираемое значение не пишем.
+    onSave: (next) => {
+      if (!next) {
+        update({ phone: "", phone_e164: null });
         return;
       }
-      // Карточка: страну сменили в шторке — номер переписывается тем же
-      // путём, что правка строки (ключ дедупа вместе с ним).
-      const e164 = full ? tryToE164(full, country) : null;
+      // Номер без «+» разбирается кодом страны КОМПАНИИ: у греческой фирмы
+      // «99…» — греческий номер, а не кипрский.
+      const e164 = tryToE164(next, country);
+      // Молча отклонять нельзя: строка возвращала прежний номер, и человек
+      // не понимал, почему правка «не сохранилась».
       if (!e164) {
         haptics.warning();
         toast("Номер не распознан — проверьте код страны", "error");
         return;
       }
-      update({ phone: full, phone_e164: e164 });
+      update({ phone: next, phone_e164: e164 });
     },
   });
 
@@ -197,23 +205,16 @@ export default function ClientHeader({
         ) : (
         <FieldRow
           // СТРОКА «ТЕЛЕФОН» — ВАРИАНТ 10 ВЛАДЕЛЬЦА (30.09): подпись слева
-          // колонкой, код страны тихим серым, цифры тёмные — «Телефон | +357
-          // 97 469 998». Флагов нет («сдержанно, стильно»). В новом клиенте
-          // код нажимается — выбор страны; печатают только цифры.
+          // колонкой — «Телефон | +357 97 469 998». Флагов нет
+          // («сдержанно, стильно»).
           label="Телефон"
           column={CONTACT_COLUMN}
           separated
-          prefix={
-            draft
-              ? dial.value.trim().startsWith("+")
-                ? undefined
-                : dial.code
-              : phone.code
-          }
-          // Код страны меняется тапом по нему — и в новом клиенте, и на
-          // карточке (владелец 30.09: «а как менять код страны?»).
-          onPrefixPress={draft || !readOnly ? dial.openPicker : undefined}
-          value={draft ? dial.value : phone.rest}
+          // КОД СТРАНЫ — В САМОМ ПОЛЕ (владелец 12.10: «писать код страны,
+          // не нужно выбирать»): «+357 97 469 998» целиком; пустое поле
+          // начинается с кода страны команды.
+          value={draft ? draftPhone.value : savedPhone.value}
+          seed={savedPhone.seed}
           placeholder="Номер"
           keyboardType="phone-pad"
           tabular
@@ -231,31 +232,7 @@ export default function ClientHeader({
           // Телефон — ключ дедупа (phone_e164 + UNIQUE-индекс), но с 12.10 он
           // НЕОБЯЗАТЕЛЕН (владелец: «номер добавлять необязательно»): стёртый
           // номер сохраняется пустым. Неразбираемое значение не пишем.
-          onSave={(v) => {
-            if (draft) {
-              dial.onType(v);
-              return;
-            }
-            const typed = v.trim();
-            // Печатают цифры без кода — код строки добавляется сам; свой «+»
-            // уважается как есть.
-            const next = typed ? (typed.startsWith("+") ? typed : `${phone.code} ${typed}`) : "";
-            // Разбираем номер кодом страны КОМПАНИИ: у греческой фирмы «99…»
-            // без «+» — греческий номер, а не кипрский.
-            if (!next) {
-              update({ phone: "", phone_e164: null });
-              return;
-            }
-            const e164 = tryToE164(next, country);
-            // Молча отклонять нельзя: строка возвращала прежний номер, и
-            // человек не понимал, почему правка «не сохранилась».
-            if (!e164) {
-              haptics.warning();
-              toast("Номер не распознан — проверьте код страны", "error");
-              return;
-            }
-            update({ phone: next, phone_e164: e164 });
-          }}
+          onSave={draft ? draftPhone.onType : savedPhone.onSave}
           trailing={
             draft ? (
               draft.valid ? (
@@ -294,7 +271,6 @@ export default function ClientHeader({
           noCopy={noCopy}
         />
       </SectionCard>
-      {dial.sheet}
 
       {/* ЛЮДИ — СВОИМ БЛОКОМ СРАЗУ ПОД КЛИЕНТОМ (владелец 22.09: «давай
           сделаем отдельным блоком добавления человека»). Пункт «Человек» в
