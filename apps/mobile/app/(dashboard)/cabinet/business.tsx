@@ -16,11 +16,11 @@ import { LogoRow } from "@/features/settings/LogoRow";
 import { Button } from "@/components/ui/Button";
 import { ChevronRight } from "lucide-react-native";
 import {
-  COUNTRY_NAMES_RU,
   countryDialCode,
   normalizeCountry,
-  SUPPORTED_COUNTRIES,
+  POPULAR_COUNTRIES,
 } from "@/features/clients/phone";
+import { countryName } from "@/features/clients/use-phone-country";
 import { chooseValue } from "@/lib/choose";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
@@ -68,13 +68,13 @@ export default function BusinessScreen() {
   const [dirty, setDirty] = useState(false);
 
   const country = normalizeCountry(form.country);
-  const countryLabel = `${COUNTRY_NAMES_RU[country] ?? country} · ${countryDialCode(country)}`;
+  const countryLabel = `${countryName(country)} · ${countryDialCode(country)}`;
   const pickCountry = async () => {
     const picked = await chooseValue<string>(
       "Код страны",
-      SUPPORTED_COUNTRIES.map((code) => ({
+      POPULAR_COUNTRIES.map((code) => ({
         value: code as string,
-        label: `${COUNTRY_NAMES_RU[code] ?? code} · ${countryDialCode(code)}`,
+        label: `${countryName(code)} · ${countryDialCode(code)}`,
       })),
     );
     if (!picked?.value) return;

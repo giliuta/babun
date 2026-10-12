@@ -228,10 +228,9 @@ export default function ClientHeader({
               : undefined
           }
           noCopy={noCopy}
-          // Телефон — ключ дедупа (phone_e164 + UNIQUE-индекс). Стирание
-          // номера у сохранённого клиента уносило и ключ: клиент становился
-          // невидимым для защиты от дублей, и его можно было создать заново.
-          // Пустое и неразбираемое значение не пишем.
+          // Телефон — ключ дедупа (phone_e164 + UNIQUE-индекс), но с 12.10 он
+          // НЕОБЯЗАТЕЛЕН (владелец: «номер добавлять необязательно»): стёртый
+          // номер сохраняется пустым. Неразбираемое значение не пишем.
           onSave={(v) => {
             if (draft) {
               dial.onType(v);
@@ -243,17 +242,16 @@ export default function ClientHeader({
             const next = typed ? (typed.startsWith("+") ? typed : `${phone.code} ${typed}`) : "";
             // Разбираем номер кодом страны КОМПАНИИ: у греческой фирмы «99…»
             // без «+» — греческий номер, а не кипрский.
-            const e164 = next ? tryToE164(next, country) : null;
+            if (!next) {
+              update({ phone: "", phone_e164: null });
+              return;
+            }
+            const e164 = tryToE164(next, country);
             // Молча отклонять нельзя: строка возвращала прежний номер, и
             // человек не понимал, почему правка «не сохранилась».
             if (!e164) {
               haptics.warning();
-              toast(
-                next
-                  ? "Номер не распознан — проверьте код страны"
-                  : "Телефон обязателен",
-                "error",
-              );
+              toast("Номер не распознан — проверьте код страны", "error");
               return;
             }
             update({ phone: next, phone_e164: e164 });
@@ -267,6 +265,7 @@ export default function ClientHeader({
               <PhoneChannelButton
                 number={client.phone}
                 telegramUsername={client.telegram_username}
+                instagramUsername={client.instagram_username}
                 label="основной"
                 teamId={client.team_id ?? null}
               />

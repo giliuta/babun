@@ -13,21 +13,42 @@
 
 import {
   AsYouType,
+  getCountries,
   getCountryCallingCode,
   parsePhoneNumberFromString,
   type CountryCode,
 } from "libphonenumber-js";
+import COUNTRY_NAMES from "./country-names.json";
 
 /** Tenant default country — Cyprus today (mirrors the web default). */
 export const DEFAULT_COUNTRY: CountryCode = "CY";
 
-// Country-picker data — web parity (apps/web/src/lib/phone/normalize.ts,
-// clients-99 F2.7 «drop the hardcoded +357»).
-export const SUPPORTED_COUNTRIES: readonly CountryCode[] = [
-  "CY", "GR", "RU", "UA", "GB", "DE", "FR", "IT", "ES", "PT",
+// Частые страны — первыми в списке и в выборе страны компании.
+export const POPULAR_COUNTRIES: readonly CountryCode[] = [
+  "CY", "GR", "RU", "UA", "BY", "GB", "DE", "FR", "IT", "ES", "PT",
   "PL", "RO", "BG", "TR", "IL", "CZ", "SK", "HU", "NL", "BE",
   "AT", "CH", "DK", "SE", "NO", "FI", "LV", "LT", "EE",
 ] as const;
+
+/** Названия стран на языках приложения (сняты с Intl.DisplayNames, 12.10):
+ *  `{ ru: { BY: "Беларусь" }, en: { … } … }`. Данные, а не фразы — плагин
+ *  перевода их не трогает: у каждого языка своя таблица. */
+export const COUNTRY_NAMES_BY_LOCALE = COUNTRY_NAMES as Record<string, Record<string, string>>;
+
+/** Название страны на языке `locale`; нет — по-русски, нет и там — ISO. */
+export function countryNameIn(code: CountryCode, locale: string): string {
+  return COUNTRY_NAMES_BY_LOCALE[locale]?.[code] ?? COUNTRY_NAMES_BY_LOCALE.ru?.[code] ?? code;
+}
+
+// ВСЕ СТРАНЫ МИРА (владелец 12.10: «добавь абсолютно все коды страны — там
+// нет, допустим, +375, Беларусь»). Было 29; теперь каждая страна, которую
+// знает libphonenumber (245), — частые первыми, остальные по алфавиту.
+export const SUPPORTED_COUNTRIES: readonly CountryCode[] = [
+  ...POPULAR_COUNTRIES,
+  ...getCountries()
+    .filter((c) => !(POPULAR_COUNTRIES as readonly string[]).includes(c))
+    .sort((a, b) => countryNameIn(a, "ru").localeCompare(countryNameIn(b, "ru"), "ru")),
+];
 
 /** «+357»-style dial code; never throws. */
 export function countryDialCode(code: CountryCode): string {
@@ -53,16 +74,9 @@ export function isDialOnly(value: string, code: CountryCode): boolean {
   return digits === countryDialCode(code).replace(/\D/g, "");
 }
 
-/** Human-readable country name (RU); falls back to the ISO code. */
-export const COUNTRY_NAMES_RU: Partial<Record<CountryCode, string>> = {
-  CY: "Кипр", GR: "Греция", RU: "Россия", UA: "Украина",
-  GB: "Великобритания", DE: "Германия", FR: "Франция", IT: "Италия",
-  ES: "Испания", PT: "Португалия", PL: "Польша", RO: "Румыния",
-  BG: "Болгария", TR: "Турция", IL: "Израиль", CZ: "Чехия",
-  SK: "Словакия", HU: "Венгрия", NL: "Нидерланды", BE: "Бельгия",
-  AT: "Австрия", CH: "Швейцария", DK: "Дания", SE: "Швеция",
-  NO: "Норвегия", FI: "Финляндия", LV: "Латвия", LT: "Литва", EE: "Эстония",
-};
+/** Названия по-русски — для мест, где язык не важен (поиск, тесты). */
+export const COUNTRY_NAMES_RU: Partial<Record<CountryCode, string>> =
+  (COUNTRY_NAMES_BY_LOCALE.ru ?? {}) as Partial<Record<CountryCode, string>>;
 
 /**
  * Returns the canonical E.164 form of `raw` or `null` if the number

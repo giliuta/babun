@@ -7,10 +7,12 @@ import {
   SelectRow,
   SelectSearch,
 } from "@/components/ui/select-rows";
+import { uiLocale } from "@babun/shared/i18n/locale";
 import {
   COUNTRY_NAMES_RU,
   SUPPORTED_COUNTRIES,
   composePhone,
+  countryNameIn,
   countryDialCode,
   countryFlag,
   formatPhoneAsYouType,
@@ -27,6 +29,11 @@ import { useThemeColors } from "@/theme/colors";
 // ним и тапом открывает список стран. В данные уходит полный номер
 // («+357 99887766»), поэтому номер чужой страны не зависит от страны
 // компании. Набрали «+7…» сами — страна переключается по коду.
+
+/** Название страны на языке приложения (12.10: все страны мира). */
+export function countryName(code: CountryCode): string {
+  return countryNameIn(code, uiLocale());
+}
 
 export function usePhoneCountry({
   phone,
@@ -91,7 +98,7 @@ export function usePhoneCountry({
   };
 
   return {
-    label: `${countryFlag(country)} ${COUNTRY_NAMES_RU[country] ?? country} ${countryDialCode(country)}`,
+    label: `${countryFlag(country)} ${countryName(country)} ${countryDialCode(country)}`,
     /** Код страны номера — тихий префикс строки «Телефон» (30.09). */
     code: countryDialCode(country),
     value: ownCode ? nationalPart(phone, country) : formatPhoneAsYouType(phone, home),
@@ -105,6 +112,13 @@ export function usePhoneCountry({
         visible={open}
         selected={country}
         onPick={pick}
+        onCustomCode={(dial) => {
+          // СВОЙ КОД (владелец 12.10: «если код не находит — написать
+          // самому»): номер начинается с набранного «+код», цифры — дальше.
+          picked.current = true;
+          const national = nationalPart(phone, country).replace(/\D/g, "");
+          onChange(`+${dial} ${national}`.trimEnd());
+        }}
         onClose={() => setOpen(false)}
       />
     ),
@@ -152,6 +166,10 @@ export function usePhoneCodeField({
           if (national) onSave(composePhone(national, next));
           else setPicked(next);
         }}
+        onCustomCode={(dial) => {
+          const national = nationalPart(phone, country).replace(/\D/g, "");
+          if (national) onSave(`+${dial} ${national}`);
+        }}
         onClose={() => setOpen(false)}
       />
     ),
@@ -164,17 +182,28 @@ export function CountryPickerSheet({
   visible,
   selected,
   onPick,
+  onCustomCode,
   onClose,
 }: {
   visible: boolean;
   selected: CountryCode | null;
   onPick: (code: CountryCode) => void;
+  /** Набранного кода нет ни у одной страны — «Свой код +…» (12.10). */
+  onCustomCode?: (dial: string) => void;
   onClose: () => void;
 }) {
   const t = useThemeColors();
-  // ПОИСК ПО СПИСКУ: стран 29, и «Великобритания» ищется быстрее набором,
-  // чем глазами. Ищем и по названию, и по коду («44»).
+  // ПОИСК ПО СПИСКУ: стран 245, ищутся набором — по названию на языке
+  // приложения, по-русски и по коду («375»).
   const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase().replace(/^\+/, "");
+  const found = SUPPORTED_COUNTRIES.filter((code) => {
+    if (!needle) return true;
+    const name = countryName(code).toLowerCase();
+    const ru = (COUNTRY_NAMES_RU[code] ?? "").toLowerCase();
+    return name.includes(needle) || ru.includes(needle) || countryDialCode(code).slice(1).startsWith(needle);
+  });
+  const customDial = /^\d{1,4}$/.test(needle) ? needle : null;
   return (
     <BottomSheet
       visible={visible}
@@ -194,17 +223,27 @@ export function CountryPickerSheet({
         autoCapitalize="words"
       />
       <SelectList>
-        {SUPPORTED_COUNTRIES.filter((code) => {
-          const needle = q.trim().toLowerCase().replace(/^\+/, "");
-          if (!needle) return true;
-          const name = (COUNTRY_NAMES_RU[code] ?? code).toLowerCase();
-          return name.includes(needle) || countryDialCode(code).slice(1).startsWith(needle);
-        }).map((code) => (
+        {customDial && onCustomCode && !found.some((code) => countryDialCode(code).slice(1) === customDial) ? (
+          <SelectRow
+            key="custom"
+            icon="+"
+            color={t.accent}
+            title="Свой код"
+            hint={`+${customDial}`}
+            selected={false}
+            onPress={() => {
+              haptics.tap();
+              onCustomCode(customDial);
+              onClose();
+            }}
+          />
+        ) : null}
+        {found.map((code) => (
           <SelectRow
             key={code}
             icon={countryFlag(code)}
             color={t.accent}
-            title={COUNTRY_NAMES_RU[code] ?? code}
+            title={countryName(code)}
             hint={countryDialCode(code)}
             selected={code === selected}
             onPress={() => {

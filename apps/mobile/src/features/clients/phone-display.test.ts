@@ -45,10 +45,13 @@ describe("кнопка связи у номера", () => {
     assert.match(button(), /onLongPress=\{single \? undefined : dial\}/);
   });
   test("один способ — сразу звонок, без листа из одной строки", () => {
-    assert.match(button(), /const single = channels\.length === 1;/);
+    assert.match(button(), /const single = items\.length === 1;/);
   });
   test("заголовок листа — номер для глаз, а не сырой из базы", () => {
-    assert.match(button(), /title=\{formatPhoneForDisplay\(number, country\)\}/);
+    assert.match(button(), /title=\{channels\.length > 0 \? formatPhoneForDisplay\(number, country\)/);
+    // Instagram — способ связи и без номера (владелец 12.10).
+    assert.match(button(), /instagramDmUrl\(instagramUsername\)/);
+    assert.match(button(), /if \(channels\.length === 0 && !instagram\) return null;/);
   });
   // 03.10: строка работодателя в общем списке жила в компании экрана — лист
   // читал набор телефона, а шестерёнки не было вовсе.
@@ -114,6 +117,8 @@ describe("шторка кода страны", () => {
     const hook = read("use-phone-country.tsx");
     assert.match(hook, /export function CountryPickerSheet/);
     assert.match(hook, /<SelectSearch/);
-    assert.match(hook, /name\.includes\(needle\) \|\| countryDialCode\(code\)\.slice\(1\)\.startsWith\(needle\)/);
+    assert.match(hook, /name\.includes\(needle\) \|\| ru\.includes\(needle\) \|\| countryDialCode\(code\)\.slice\(1\)\.startsWith\(needle\)/);
+    // Все страны мира и свой код, если набранного нет ни у одной (12.10).
+    assert.match(hook, /title="Свой код"/);
   });
 });
