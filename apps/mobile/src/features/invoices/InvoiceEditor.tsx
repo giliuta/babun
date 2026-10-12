@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import type { VatSettings } from "@babun/shared/local/finance/vat";
@@ -740,7 +741,7 @@ export function InvoiceEditor({
           onSelect={changeTeam}
         />
       ) : null}
-        <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardLift style={{ flex: 1 }}>
           {/* ФОРМА СЧЁТА — БЛОКАМИ, КАК ЗАПИСЬ И ЧЕК. Сами блоки живут в
               `InvoiceBlocks.tsx`: реквизиты, даты, клиент, услуги с «Итого»,
               счёт и комментарий. Здесь остаётся только состояние документа и
@@ -853,7 +854,7 @@ export function InvoiceEditor({
               </View>
             }
           />
-        </KeyboardAvoidingView>
+        </KeyboardLift>
 
       <InvoicePreviewSheet
         visible={previewOpen}

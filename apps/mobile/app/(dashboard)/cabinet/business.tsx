@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   Text,
   View,
 } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -159,9 +158,8 @@ export default function BusinessScreen() {
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title="Личная информация" />
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <KeyboardLift
+        style={{ flex: 1 }}
       >
       <ScrollView
         className="flex-1"
@@ -298,7 +296,7 @@ export default function BusinessScreen() {
           />
         </View>
       </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardLift>
     </Screen>
   );
 }

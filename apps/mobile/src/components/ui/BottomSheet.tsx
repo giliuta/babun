@@ -8,7 +8,6 @@ import {
 } from "react";
 import {
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -17,6 +16,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import {
   Gesture,
   GestureDetector,
@@ -104,7 +104,8 @@ export function BottomSheet({
    *  плашка честно всплывала ПОД ним. Всё, что лист хочет сказать поверх
    *  себя, он передаёт сюда (см. `NoticeBar`). */
   banner,
-  /** Внутри листа есть ввод: поднимать его над клавиатурой. RN Modal —
+  /** Внутри листа есть ввод: поднимать его над клавиатурой (на Android
+   *  подъём включён у всех листов, см. ниже). RN Modal —
    *  отдельное окно, и подъём экрана под ним листу не достаётся, поэтому
    *  KeyboardAvoidingView нужен ЗДЕСЬ. flex:1 обязателен: без него лист
    *  вырастает на высоту клавиатуры и уезжает шапкой за верхний край. */
@@ -460,13 +461,18 @@ export function BottomSheet({
             scrimStyle,
           ]}
         />
-        {avoidKeyboard ? (
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+        {/* ANDROID — ПОДЪЁМ У КАЖДОГО ЛИСТА (владелец 12.10: «на андроид
+            шторка загораживает всё»). Сборка рисует окна во весь экран
+            (edge-to-edge), и Android больше не сжимает окно под клавиатурой:
+            лист с полями целиком уходил под неё вместе с кнопкой. Подъём
+            безвреден листу без ввода — он срабатывает только с клавиатурой.
+            На iOS — по флагу, как было. */}
+        {avoidKeyboard || Platform.OS === "android" ? (
+          <KeyboardLift
             style={{ flex: 1, justifyContent: "flex-end" }}
           >
             {sheet}
-          </KeyboardAvoidingView>
+          </KeyboardLift>
         ) : (
           sheet
         )}

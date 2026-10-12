@@ -1,13 +1,12 @@
 import { useState } from "react";
 import {
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   Text,
   View,
 } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { ChevronRight, Smartphone, Trash2 } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -83,9 +82,8 @@ export default function AccountScreen() {
     <Screen edges={["top"]}>
       {/* Шапка = строка Кабинета, которой сюда пришли (аудит 03.10). */}
       <ScreenHeader title="Вход и безопасность" />
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <KeyboardLift
+        style={{ flex: 1 }}
       >
         <ScrollView
           className="flex-1"
@@ -108,7 +106,7 @@ export default function AccountScreen() {
           <DevicesSection />
           <DangerZoneSection email={u?.email ?? ""} />
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardLift>
       <ChangeEmailSheet
         visible={emailSheet}
         onClose={() => setEmailSheet(false)}
@@ -446,8 +444,7 @@ function DangerZoneSection({ email }: { email: string }) {
         animationType="fade"
         onRequestClose={() => !busy && setOpen(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        <KeyboardLift
           style={{ flex: 1, justifyContent: "center", padding: 20, backgroundColor: t.scrim }}
         >
           <View
@@ -499,7 +496,7 @@ function DangerZoneSection({ email }: { email: string }) {
               </View>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardLift>
       </Modal>
     </>
   );

@@ -36,7 +36,7 @@ describe("единственное действие черновика — вн�
     const src = page();
     const scrollEnd = src.indexOf("</ScrollView>");
     const footer = src.indexOf("<ClientScreenFooter");
-    const kavEnd = src.indexOf("</KeyboardAvoidingView>");
+    const kavEnd = src.indexOf("</KeyboardLift>");
     assert.notEqual(footer, -1, "футер черновика пропал со страницы");
     assert.ok(
       scrollEnd < footer && footer < kavEnd,
@@ -53,7 +53,7 @@ describe("единственное действие черновика — вн�
   test("клавиатура не закрывает нижние поля: отступ на высоту безопасной зоны", () => {
     assert.match(
       page(),
-      /<KeyboardAvoidingView[\s\S]{0,200}?keyboardVerticalOffset=\{insets\.top\}/,
+      /<KeyboardLift[\s\S]{0,200}?keyboardVerticalOffset=\{insets\.top\}/,
       "KAV снова меряет себя без верхней зоны — нижние поля уйдут под клавиатуру",
     );
   });
