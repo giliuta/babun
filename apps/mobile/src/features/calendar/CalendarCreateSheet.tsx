@@ -39,6 +39,7 @@ export function CalendarCreateSheet({
   onClose,
   onCreated,
   teams,
+  note,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -46,6 +47,8 @@ export function CalendarCreateSheet({
   onCreated: (team: Team) => void;
   /** Уже существующие — из них берётся ещё не занятый цвет. */
   teams: Team[];
+  /** Тихая строка над кнопкой: цена календаря в подписке (12.10). */
+  note?: string;
 }) {
   const t = useThemeColors();
   const online = useIsOnline();
@@ -88,7 +91,7 @@ export function CalendarCreateSheet({
   const canSave = !offline && name.trim().length > 0 && !create.isPending;
   const footerNote =
     failure ??
-    (create.isPending || !offline ? null : "Нет связи — календарь не создать");
+    (create.isPending || !offline ? (note ?? null) : "Нет связи — календарь не создать");
 
   const submit = async () => {
     // Сеть проверяется В МОМЕНТ нажатия, а не только реактивным `online`:

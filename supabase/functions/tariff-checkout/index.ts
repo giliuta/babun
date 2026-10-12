@@ -237,7 +237,12 @@ Deno.serve(async (request: Request) => {
     }
 
     const live = ["active", "trialing", "past_due"].includes(String(tenant.subscription_status ?? ""));
-    const quantity = await liveCalendars(service, tenantId);
+    const liveNow = await liveCalendars(service, tenantId);
+    // Предложение «Новый календарь» платит и за тот, что заводят: живые + 1,
+    // не больше (12.10). Сверка «sync» ставит ровно живые.
+    const asked = Number(body.calendars);
+    const quantity =
+      action === "checkout" && Number.isFinite(asked) && asked > liveNow ? Math.min(asked, liveNow + 1) : liveNow;
 
     // СВЕРКА КОЛИЧЕСТВА: календарь добавили или убрали — подписка следом,
     // со следующего платежа (владелец 12.10), без доплаты сегодня.

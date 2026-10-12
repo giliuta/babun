@@ -157,10 +157,13 @@ export async function openTariffCheckout(
   /** Аккаунт, ЗА КОТОРЫЙ платят (блок аккаунта в Кабинете), — явно, а не
    *  тот, что открыт на телефоне (04.10). */
   tenantId?: string | null,
+  /** Сколько календарей оплатить: предложение «Новый календарь» платит и
+   *  за тот, что заводят (живые + 1); сервер не даст больше. */
+  calendars?: number,
 ): Promise<"opened" | "changed" | "same"> {
   const { web, back } = returnUrl();
   const { data, error } = await supabase.functions.invoke("tariff-checkout", {
-    body: { action: "checkout", tier, period: "month", return_url: back },
+    body: { action: "checkout", tier, period: "month", return_url: back, ...(calendars ? { calendars } : null) },
     ...(tenantId ? { headers: { [TENANT_HEADER]: tenantId } } : null),
   });
   if (error) throw await checkoutRefusal(error);

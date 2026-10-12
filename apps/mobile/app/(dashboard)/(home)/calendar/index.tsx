@@ -35,6 +35,9 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
+import { CalendarOfferSheet } from "@/features/tariffs/CalendarOfferSheet";
+import { CALENDAR_PRICE, euro } from "@/features/tariffs/calendar-price";
+import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { useThemeColors } from "@/theme/colors";
@@ -85,7 +88,7 @@ import { zoneCities } from "@/features/calendar/zone-label";
 import { SmsSettingsRow } from "@/features/sms/SmsSettingsRow";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import { canAddTeam } from "@/features/tariffs/tiers";
-import { useTariff, useTariffNudge } from "@/features/tariffs/use-tariff";
+import { useTariff } from "@/features/tariffs/use-tariff";
 
 // ─── «Календарь» — ВСЕ настройки на одном экране ─────────────────────
 // Сюда ведёт шестерёнка. Уровня «/calendar/[teamId]» больше нет: целый экран
@@ -172,8 +175,10 @@ export default function CalendarSettingsScreen() {
   const settingsQuery = useCalendarSettings();
   const settings = settingsQuery.data;
   const { data: teams = [], isLoading: teamsLoading } = useTeams();
-  const tariffTier = useTariff().state.tier;
-  const nudgeTariff = useTariffNudge();
+  const tariffState = useTariff().state;
+  const tariffTier = tariffState.tier;
+  const tariffPaid = tariffState.paid;
+  const tariffForever = tariffState.forever;
   const canNewTeam = canAddTeam(tariffTier, teams.length);
   const { data: schedules = {} } = useAllTeamSchedules();
   const update = useUpdateTeam();
@@ -209,6 +214,7 @@ export default function CalendarSettingsScreen() {
   // полностью сохраняем»). Правило и его причины — `settings-rows.ts`.
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [offerOpen, setOfferOpen] = useState(false);
 
   const tenantId = useTenantId();
   // СКРЫТЫЕ КАЛЕНДАРИ ВКЛЮЧАЮТ ЗДЕСЬ (владелец 04.10: «в настройках календаря
@@ -426,7 +432,9 @@ export default function CalendarSettingsScreen() {
           <Pressable
             // ЛИМИТ КОМАНД ТАРИФА (01.10): Соло — одна, Про — 5, Макс — 50.
             // Сверх — «Добавить» серое, тап поднимает плашку про тариф.
-            onPress={() => (canNewTeam ? setCreateOpen(true) : nudgeTariff())}
+            // Сверх оплаченного — предложение «Новый календарь» (12.10):
+            // цена, итог и «Оплатить» / пробный, а не плашка про тариф.
+            onPress={() => (canNewTeam ? setCreateOpen(true) : setOfferOpen(true))}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Добавить календарь"
@@ -889,8 +897,20 @@ export default function CalendarSettingsScreen() {
         <EmptyState fill title="Настроек пока нет" />
       )}
 
+      <CalendarOfferSheet
+        visible={offerOpen}
+        calendars={teams.length}
+        onClose={() => setOfferOpen(false)}
+        onUnlocked={() => setCreateOpen(true)}
+      />
       <CalendarCreateSheet
         visible={createOpen}
+        // Подписка уже есть — календарь в ней со следующего платежа (12.10).
+        note={
+          CAN_PAY_HERE && tariffPaid && !tariffForever
+            ? `+${euro(CALENDAR_PRICE.monthly)} в месяц со следующего платежа`
+            : undefined
+        }
         onClose={() => setCreateOpen(false)}
         teams={teams}
         onCreated={(created) => router.setParams({ team: created.id })}
