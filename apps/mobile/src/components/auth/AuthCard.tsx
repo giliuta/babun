@@ -61,10 +61,14 @@ export function AuthCard({
   title,
   subtitle,
   children,
+  footer,
 }: {
   title?: string;
   subtitle?: string;
   children: ReactNode;
+  /** Тихая строка у нижнего края экрана — «Нет аккаунта? Регистрация»
+   *  (владелец 12.10: «маленькую надпись внизу»). */
+  footer?: ReactNode;
 }) {
   const t = useAuthTheme();
   const reduced = useReduceMotion();
@@ -136,6 +140,7 @@ export function AuthCard({
               <View style={{ marginTop: 26 }}>{children}</View>
             </Animated.View>
           </ScrollView>
+          {footer ? <View style={{ paddingHorizontal: 28, paddingBottom: 8 }}>{footer}</View> : null}
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>

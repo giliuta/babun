@@ -158,7 +158,8 @@ test("регистрация читает один флаг — его и пер
   assert.doesNotMatch(login, /supabase\.auth\.signUp/);
   assert.match(login, /const \[canRegister, setCanRegister\] = useState\(CAN_SIGN_UP_HERE\);/);
   assert.match(login, /\.then\(\(token\) => setCanRegister\(Boolean\(token\)\)\);/);
-  assert.match(login, /\{canRegister \? \(\s*<OutlineButton\s+label="Зарегистрироваться"\s+onPress=\{\(\) => router\.push\("\/register"\)\}/);
+  // С 12.10 — тихой строкой внизу экрана, а не большой кнопкой.
+  assert.match(login, /canRegister \? \(\s*<SwitchLink lead="Нет аккаунта\?" action="Регистрация" onPress=\{\(\) => router\.push\("\/register"\)\} \/>/);
   // Вход через Apple/Google создаёт пользователя сам — «Почти готово» на
   // iPhone пускает дальше только по приглашению или в чужую команду.
   const finish = readApp("(auth)/finish-signup.tsx");

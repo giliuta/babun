@@ -9,9 +9,9 @@ import {
   GhostLink,
   InputCard,
   InputDivider,
-  OutlineButton,
   PasswordInput,
   PillButton,
+  SwitchLink,
 } from "@/components/auth/AuthCard";
 import { mapAuthError } from "@/components/auth/authErrors";
 import { EmailCodeCard } from "@/components/auth/EmailCodeCard";
@@ -121,7 +121,15 @@ export default function LoginScreen() {
   }
 
   return (
-    <AuthCard>
+    <AuthCard
+      // РЕГИСТРАЦИЯ — ТИХОЙ СТРОКОЙ ВНИЗУ (владелец 12.10: «не нравится
+      // большая кнопка — маленькую надпись внизу, типа „регистрация“»).
+      footer={
+        canRegister ? (
+          <SwitchLink lead="Нет аккаунта?" action="Регистрация" onPress={() => router.push("/register")} />
+        ) : null
+      }
+    >
       <SocialButtons onError={setError} disabled={loading} />
       <InputCard>
         <AuthField
@@ -162,13 +170,6 @@ export default function LoginScreen() {
 
       <GhostLink label="Забыли пароль?" onPress={() => router.push("/forgot-password")} />
 
-      {canRegister ? (
-        <OutlineButton
-          label="Зарегистрироваться"
-          onPress={() => router.push("/register")}
-          disabled={loading}
-        />
-      ) : null}
     </AuthCard>
   );
 }
