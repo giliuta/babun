@@ -407,8 +407,8 @@ describe("по одному имени сохраняется только кл�
       ...over,
     });
 
-  test("без связи закон «нужен номер» стоит", () => {
-    assert.equal(gate({}), false);
+  test("с 12.10 номер необязателен и без связи — по одному имени", () => {
+    assert.equal(gate({}), true);
     assert.equal(gate({ e164: "+35799123456", phoneTyped: true }), true);
   });
 

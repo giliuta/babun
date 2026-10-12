@@ -83,6 +83,8 @@ export default function ClientRow({
   const country = useDefaultCountry(client.team_id ?? null);
   const swipeRef = useRef<SwipeableMethods | null>(null);
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
+  // Instagram — тоже способ связи (владелец 12.10): кнопка есть и без номера.
+  const hasInstagram = !!client.instagram_username?.trim();
 
   // ДЕНЕГ В СТРОКЕ НЕТ (владелец 01.10: «уберём полностью этот блок — долг,
   // доход, ожидается — со страницы клиентов»). Долг и доход — на странице
@@ -143,7 +145,7 @@ export default function ClientRow({
             : "Открыть карточку клиента"
         }
         accessibilityState={selectionMode ? { selected: picked } : undefined}
-        className={`min-h-[56px] flex-1 flex-row items-center py-2.5 pl-4 active:opacity-60 ${phoneDigits && !selectionMode ? "" : "pr-4"}`}
+        className={`min-h-[56px] flex-1 flex-row items-center py-2.5 pl-4 active:opacity-60 ${(phoneDigits || hasInstagram) && !selectionMode ? "" : "pr-4"}`}
       >
         {/* БЕЗ КРУЖКА С ИНИЦИАЛАМИ (владелец 30.09: «не нравится слева эти
             кружочки… давай компактнее»). Инициалы по хешу имени не несли
@@ -235,11 +237,12 @@ export default function ClientRow({
           удержанием. */}
       {trailing ? (
         <View className="mx-4 my-3 self-center">{trailing}</View>
-      ) : phoneDigits && !selectionMode ? (
+      ) : (phoneDigits || hasInstagram) && !selectionMode ? (
         <View className="mx-4 my-3 self-center">
           <PhoneChannelButton
             number={client.phone}
             telegramUsername={client.telegram_username}
+            instagramUsername={client.instagram_username}
             label={client.full_name || undefined}
             teamId={client.team_id ?? null}
             source={source}

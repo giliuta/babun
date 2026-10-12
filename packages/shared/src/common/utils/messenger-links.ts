@@ -49,6 +49,13 @@ export function instagramUrl(username: string | null | undefined): string | null
   return `https://instagram.com/${uname}`;
 }
 
+/** Переписка с аккаунтом Instagram (ig.me/m — сразу директ, а не профиль). */
+export function instagramDmUrl(username: string | null | undefined): string | null {
+  const uname = stripAt(username);
+  if (!uname) return null;
+  return `https://ig.me/m/${uname}`;
+}
+
 export function telUrl(phone: string | null | undefined): string | null {
   const dialable = dialableDigits(phone);
   return dialable ? `tel:${dialable}` : null;

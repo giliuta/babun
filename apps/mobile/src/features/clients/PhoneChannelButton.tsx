@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Linking } from "react-native";
 import { useRouter } from "expo-router";
-import { Phone } from "lucide-react-native";
+import { Instagram, Phone } from "lucide-react-native";
+import { instagramDmUrl } from "@babun/shared/common/utils/messenger-links";
 import {
   resolveChannelsForNumber,
 } from "@/features/clients/contact-channels";
@@ -17,6 +18,7 @@ import { useSmsComposeContext } from "@/features/sms/SmsCompose";
 import { SmsSendSheet } from "@/features/sms/SmsSendSheet";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
 // КНОПКА У КОНКРЕТНОГО НОМЕРА: ТАП — «СВЯЗАТЬСЯ», УДЕРЖАНИЕ — ЗВОНОК.
 //
@@ -39,6 +41,11 @@ interface ChannelButtonProps {
   number: string;
   /** @username клиента — только у основного номера. */
   telegramUsername?: string | null;
+  /** Instagram клиента — только у основного номера (владелец 12.10:
+   *  «нажимаю вызов, а добавлен Instagram — сразу видит Instagram и можно
+   *  туда перейти, написать»). Есть Instagram, а номера нет — кнопка всё
+   *  равно стоит: связаться можно. */
+  instagramUsername?: string | null;
   /** Для озвучки: «Связаться · Жена». */
   label?: string;
   /** Чей номер, если не клиента страницы: [Имя] в шаблоне SMS — его. */
@@ -72,6 +79,7 @@ export default function PhoneChannelButton({
 function ChannelButton({
   number,
   telegramUsername,
+  instagramUsername,
   label,
   smsName,
   teamId = null,
@@ -93,8 +101,10 @@ function ChannelButton({
     country,
   });
 
-  // Нет разбираемого номера — нет и кнопки: мёртвых контролов не держим.
-  if (channels.length === 0) return null;
+  const instagram = instagramDmUrl(instagramUsername);
+
+  // Ни номера, ни Instagram — нет и кнопки: мёртвых контролов не держим.
+  if (channels.length === 0 && !instagram) return null;
 
   const items: PickerSheetItem[] = channels.map((c) => ({
     id: c.id,
@@ -110,14 +120,28 @@ function ChannelButton({
         ? () => setSmsOpen(true)
         : () => void Linking.openURL(c.url),
   }));
+  if (instagram) {
+    items.push({
+      id: "instagram",
+      label: "Instagram",
+      icon: Instagram,
+      color: MOBILE_CHANNEL_COLORS.instagram,
+      onPress: () => void Linking.openURL(instagram),
+    });
+  }
 
   // Звонок отключить нельзя (`optional: false`), так что у разобранного
-  // номера он есть всегда; запасной путь — первый канал списка.
-  const call = channels.find((c) => c.id === "call") ?? channels[0];
-  const single = channels.length === 1;
+  // номера он есть всегда; номера нет — «звонок» удержанием ведёт в
+  // Instagram, единственный способ.
+  const callUrl = (channels.find((c) => c.id === "call") ?? channels[0])?.url ?? instagram ?? "";
+  const single = items.length === 1;
   const dial = () => {
     haptics.tap();
-    void Linking.openURL(call.url);
+    if (single) {
+      items[0]!.onPress();
+      return;
+    }
+    void Linking.openURL(callUrl);
   };
   const openChannels = () => {
     haptics.tap();
@@ -144,7 +168,7 @@ function ChannelButton({
       <PickerSheet
         visible={open}
         // Номер — как его диктуют (своя страна без «+357»), а не сырой из базы.
-        title={formatPhoneForDisplay(number, country)}
+        title={channels.length > 0 ? formatPhoneForDisplay(number, country) : `@${(instagramUsername ?? "").replace(/^@/, "")}`}
         items={items}
         // Страница этого же списка — см. AddContactSheet.
         onSettings={settingsHref ? () => router.push(settingsHref) : undefined}
