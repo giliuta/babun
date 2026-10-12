@@ -1,4 +1,5 @@
 import { pluralRu } from "@babun/shared/common/utils/plural-ru";
+import { CALENDAR_PRICE, calendarsMonthly, euro } from "./calendar-price";
 
 // ЦЕНА ЗА КАЛЕНДАРЬ (владелец 12.10) — ЧИСТЫЙ СЛОЙ.
 //
@@ -74,10 +75,7 @@ export interface TierCard {
   includes: readonly string[];
 }
 
-/** Цена одного календаря — та же, что `tariff-checkout` (сверяет тест). */
-export const CALENDAR_PRICE = { monthly: 9.99, yearlyMonthly: 7.99 } as const;
-
-const euro = (n: number) => `€${n.toFixed(2)}`;
+export { CALENDAR_PRICE, calendarsMonthly } from "./calendar-price";
 
 export const TIER_CARDS: readonly TierCard[] = [
   {
@@ -89,10 +87,6 @@ export const TIER_CARDS: readonly TierCard[] = [
   },
 ];
 
-/** Сколько в месяц за столько календарей: «€29.97». */
-export function calendarsMonthly(calendars: number): string {
-  return euro(CALENDAR_PRICE.monthly * Math.max(1, calendars));
-}
 
 const NAMES: Record<Tier, string> = {
   free: "Без тарифа",
