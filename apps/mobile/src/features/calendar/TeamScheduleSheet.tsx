@@ -82,6 +82,15 @@ import {
 // «По дням» — та же неделя колонками и правка одного дня. Неделя с разными
 // часами открывается сразу по дням: общий вид соврал бы про неё.
 //
+// ОДИН ЭКРАН ВМЕСТО ДВУХ РЕЖИМОВ (владелец 12.10: «правильно продумай этот
+// блок… можно делать выходной… нажимаю „по дням“ — открывает по дням, а
+// закрываю — всё ровно те же дни»). Режимы «общий» и «по дням» врали: «Для
+// всех дней» лишь переключал вид, и общий вид показывал часы первого дня
+// при разных часах недели. Теперь: дни — кнопками (синий — рабочий, серый —
+// выходной), «Рабочие часы» — одни на все, тумблер «Разные часы по дням»
+// раскрывает список рабочих дней со своими часами; выключение тумблера
+// ПИШЕТ всем дням одни часы — на экране ровно то, что в базе.
+//
 // ПЕРЕРЫВОВ В ЛИСТЕ БОЛЬШЕ НЕТ (владелец 11.10: «перерыв давай уберём») — ни
 // перерывов дня, ни «Перерыва после записи». В базе их нет ни у одной команды
 // (проверено 11.10); поля графика остались, вернуть интерфейс можно, не
@@ -108,23 +117,21 @@ export function TeamScheduleSheet({
   const { data: settings } = useCalendarSettings();
   const { data: schedule, isPending: schedulePending } = useTeamSchedule(teamId);
   const upsert = useUpsertTeamSchedule();
-  const [active, setActive] = useState<WeekdayKey>("mon");
-  /** Общий вид («одни часы на все дни») или разбивка по дням. */
-  const [mode, setMode] = useState<"common" | "days">("common");
-  /** Раскрыт ли барабан часов (общих либо выбранного дня). */
-  const [hoursOpen, setHoursOpen] = useState(false);
+  /** Разные часы по дням — тумблер; на входе — по графику. */
+  const [perDay, setPerDay] = useState(false);
+  /** Чей барабан раскрыт: общих часов, одного дня или ничей. */
+  const [open, setOpen] = useState<"common" | WeekdayKey | null>(null);
 
   // Каждое ОТКРЫТИЕ начинает с понедельника и со смены — но только по фронту:
   // фоновый рефетч графика не должен перекидывать день, который сейчас правят.
   const wasVisible = useRef(false);
   useEffect(() => {
     if (visible && !wasVisible.current) {
-      setActive("mon");
       // НИЧЕГО НЕ РАСКРЫТО НА ВХОДЕ (владелец 2026-08-17: «пусть будет не сразу
       // открытые тумблера — рабочие часы я должен нажать, и только потом оно
       // открывает»).
-      setHoursOpen(false);
-      setMode(sameHoursEveryDay(schedule ?? null) ? "common" : "days");
+      setOpen(null);
+      setPerDay(!sameHoursEveryDay(schedule ?? null));
     }
     wasVisible.current = visible;
   }, [visible]);
@@ -141,11 +148,12 @@ export function TeamScheduleSheet({
   };
   const base: TeamSchedule = schedule ?? companyBase;
   const days = allDays(base);
-  const day = dayOf(base, active);
-  // Общие часы — часы первого рабочего дня (в общем виде они у всех одни).
+  // Общие часы — часы первого рабочего дня (без «разных по дням» они у всех одни).
   const firstWorking = days.find(({ day: d }) => d.is_working)?.day ?? base;
   const common = { start: firstWorking.start, end: firstWorking.end };
-  const edited = mode === "common" ? common : { start: day.start, end: day.end };
+  const target: "common" | WeekdayKey = open ?? "common";
+  const targetDay = target === "common" ? null : dayOf(base, target);
+  const edited = targetDay ? { start: targetDay.start, end: targetDay.end } : common;
 
   /** Правка ОДНОГО ДНЯ поверх СВЕЖЕГО графика команды (аудит 04.10).
    *
@@ -175,8 +183,6 @@ export function TeamScheduleSheet({
       { onError: (e) => notify("Ошибка", (e as Error).message) },
     );
   };
-  const commitDay = (patchOf: (day: DaySchedule) => Partial<DaySchedule>) =>
-    commitDays([active], patchOf);
   const ALL_DAYS = days.map(({ key }) => key);
 
   const hm = (v: string) => {
@@ -190,10 +196,10 @@ export function TeamScheduleSheet({
   // (workBand → undefined, день красится ОБЩИМИ часами), то есть настройка дня
   // просто не действует. Двигаем ту границу, которую сейчас не трогают, и
   // минимально — на шаг барабана.
-  /** Записать часы: в общем виде — всем дням сразу, по дням — выбранному. */
+  /** Записать часы: общие — всем дням сразу, дня — только ему. */
   const writePair = (pair: { start: string; end: string }) => {
-    if (mode === "common") commitDays(ALL_DAYS, () => pair);
-    else commitDay(() => pair);
+    if (target === "common") commitDays(ALL_DAYS, () => pair);
+    else commitDays([target], () => pair);
   };
 
   // ПЕРЕСКОК БАРАБАНА ЧЕРЕЗ ПОЛНОЧЬ — НЕ ПРАВКА ДРУГОЙ ГРАНИЦЫ (аудит
@@ -260,7 +266,7 @@ export function TeamScheduleSheet({
         // key по дню и цели: барабаны — прокручиваемые ленты, и
         // переключение обязано ПЕРЕСОБРАТЬ их на новых часах, а не
         // доезжать анимацией с чужого значения.
-        key={`${mode}-${active}`}
+        key={target}
         start={hm(edited.start)}
         end={hm(edited.end)}
         onChangeStart={changeStart}
@@ -303,210 +309,91 @@ export function TeamScheduleSheet({
           </Text>
         ) : null}
 
-        {mode === "common" ? (
-          <>
-            {/* ОБЩИЙ ВИД: какие дни рабочие — тапом по дню, часы — одни на
-                всех. «По дням» в шапке карточки открывает разбивку. */}
-            <SectionCard
-              title="Рабочие дни"
-              action={{
-                label: "По дням",
-                onPress: () => {
-                  haptics.tap();
-                  setHoursOpen(false);
-                  setMode("days");
-                },
-              }}
-            >
-              <View style={{ flexDirection: "row", gap: 4, paddingHorizontal: 12, paddingTop: 4, paddingBottom: 12 }}>
-                {days.map(({ key, day: d }) => (
-                  <Pressable
-                    key={key}
-                    onPress={() => {
-                      haptics.tap();
-                      commitDays([key], () => ({ is_working: !d.is_working }));
-                    }}
-                    accessibilityRole="switch"
-                    accessibilityState={{ checked: d.is_working }}
-                    accessibilityLabel={`${WEEKDAY_FULL[key]}: ${d.is_working ? "рабочий" : "выходной"}`}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      minHeight: 44,
-                      borderRadius: t.radius.card,
-                      borderCurve: "continuous",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: d.is_working
-                        ? t.accent
-                        : pressed
-                          ? t.rowFillPressed
-                          : t.fill,
-                    })}
-                  >
-                    <Text
-                      maxFontSizeMultiplier={1.1}
-                      style={{
-                        fontSize: 13,
-                        fontWeight: "700",
-                        color: d.is_working ? t.onAccent : t.faint,
-                      }}
-                    >
-                      {WEEKDAY_NAMES[key]}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Divider inset={16} />
-              <ValueRow
-                label="Рабочие часы"
-                value={`${common.start}–${common.end}`}
-                expanded={hoursOpen}
-                onPress={() => {
-                  haptics.tap();
-                  setHoursOpen((v) => !v);
-                }}
-              />
-              {hoursOpen ? WHEEL : null}
-            </SectionCard>
-          </>
-        ) : (
-          <>
-        {/* НЕДЕЛЯ ЧИТАЕТСЯ ЦИФРАМИ. Колонка = день: имя сверху, под ним ЕГО
-            ЧАСЫ двумя строками, у выходного прочерк.
-            Полос суток, залитых цветом команды, здесь БОЛЬШЕ НЕТ (владелец
-            2026-08-17: «всё в красном — дерьмо, до этого было лучше»). Причина
-            не во вкусе: 46pt высоты на 1440 минут — это 31 минута на точку, и
-            «до 15:00» вместо «до 22:00» полоса физически не могла показать; а
-            семь заливок цветом команды на денежном языке продукта (красный =
-            расход, зелёный = приход) произносили то, чего в графике нет.
-            Цвета команды в этом листе не осталось вовсе — выбранность несёт
-            акцент, а не пигмент. */}
-        <View
-          style={{
-            flexDirection: "row",
-            paddingHorizontal: 12,
-            gap: 4,
-            marginBottom: 10,
-          }}
-        >
-          {days.map(({ key, day: d }) => {
-            const on = key === active;
-            return (
+        <SectionCard title="Рабочие дни">
+          {/* ДНИ — КНОПКАМИ: синий — рабочий, серый — выходной; тап сразу
+              пишет (владелец 12.10: «можно делать выходной»). */}
+          <View style={{ flexDirection: "row", gap: 4, paddingHorizontal: 12, paddingTop: 4, paddingBottom: 12 }}>
+            {days.map(({ key, day: d }) => (
               <Pressable
                 key={key}
                 onPress={() => {
                   haptics.tap();
-                  setActive(key);
-                  // Смена дня сворачивает барабан: раскрытый на чужих часах
-                  // он читается как «я это уже правлю».
-                  setHoursOpen(false);
+                  if (open === key) setOpen(null);
+                  commitDays([key], () => ({ is_working: !d.is_working }));
                 }}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={`${WEEKDAY_FULL[key]}: ${
-                  d.is_working ? `${d.start}–${d.end}` : "выходной"
-                }`}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: d.is_working }}
+                accessibilityLabel={`${WEEKDAY_FULL[key]}: ${d.is_working ? "рабочий" : "выходной"}`}
                 style={({ pressed }) => ({
                   flex: 1,
-                  paddingVertical: 5,
+                  minHeight: 44,
                   borderRadius: t.radius.card,
                   borderCurve: "continuous",
                   alignItems: "center",
-                  gap: 2,
-                  backgroundColor: on
-                    ? `${t.accent}14`
-                    : pressed
-                      ? t.rowFillPressed
-                      : t.fill,
+                  justifyContent: "center",
+                  backgroundColor: d.is_working ? t.accent : pressed ? t.rowFillPressed : t.fill,
                 })}
               >
                 <Text
                   maxFontSizeMultiplier={1.1}
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "700",
-                    color: on ? t.accent : d.is_working ? t.ink : t.faint,
-                  }}
+                  style={{ fontSize: 13, fontWeight: "700", color: d.is_working ? t.onAccent : t.faint }}
                 >
                   {WEEKDAY_NAMES[key]}
                 </Text>
-                {d.is_working ? (
-                  <>
-                    <Text
-                      maxFontSizeMultiplier={1.1}
-                      style={{
-                        fontSize: 11,
-                        lineHeight: 14,
-                        color: on ? t.accent : t.caption,
-                        fontVariant: ["tabular-nums"],
-                      }}
-                    >
-                      {d.start}
-                    </Text>
-                    <Text
-                      maxFontSizeMultiplier={1.1}
-                      style={{
-                        fontSize: 11,
-                        lineHeight: 14,
-                        color: on ? t.accent : t.caption,
-                        fontVariant: ["tabular-nums"],
-                      }}
-                    >
-                      {d.end}
-                    </Text>
-                  </>
-                ) : (
-                  // Прочерк на месте часов, а не пустота: колонки обязаны
-                  // стоять одной высоты, иначе ряд «дышит» при переключении.
-                  <Text
-                    maxFontSizeMultiplier={1.1}
-                    style={{ fontSize: 11, lineHeight: 28, color: t.muted }}
-                  >
-                    —
-                  </Text>
-                )}
               </Pressable>
-            );
-          })}
-        </View>
-
-            {/* РАЗБИВКА ПО ДНЯМ: неделя колонками, правка выбранного дня.
-                «Для всех дней» в шапке карточки возвращает общий вид; часы
-                всех дней он перепишет только при правке. */}
-            <SectionCard
-              title="График дня"
-              action={{
-                label: "Для всех дней",
-                onPress: () => {
+            ))}
+          </View>
+          {!perDay ? (
+            <>
+              <Divider inset={16} />
+              <ValueRow
+                label="Рабочие часы"
+                value={`${common.start}–${common.end}`}
+                expanded={open === "common"}
+                onPress={() => {
                   haptics.tap();
-                  setHoursOpen(false);
-                  setMode("common");
-                },
-              }}
-            >
-              <SwitchRow
-                label={WEEKDAY_FULL[active]}
-                value={day.is_working}
-                onChange={(v) => commitDay(() => ({ is_working: v }))}
+                  setOpen((v) => (v === "common" ? null : "common"));
+                }}
               />
-              {day.is_working ? (
-                <>
-                  <Divider inset={16} />
-                  <ValueRow
-                    label="Рабочие часы"
-                    value={`${day.start}–${day.end}`}
-                    expanded={hoursOpen}
-                    onPress={() => {
-                      haptics.tap();
-                      setHoursOpen((v) => !v);
-                    }}
-                  />
-                  {hoursOpen ? WHEEL : null}
-                </>
-              ) : null}
-            </SectionCard>
-          </>
-        )}
+              {open === "common" ? WHEEL : null}
+            </>
+          ) : null}
+          <Divider inset={16} />
+          <SwitchRow
+            label="Разные часы по дням"
+            value={perDay}
+            onChange={(v) => {
+              setOpen(null);
+              if (v) {
+                setPerDay(true);
+                return;
+              }
+              // Выключили — всем дням одни часы, сразу в базу: закрыл и
+              // открыл — то же, что видно сейчас.
+              setPerDay(false);
+              commitDays(ALL_DAYS, () => common);
+            }}
+          />
+          {perDay
+            ? days
+                .filter(({ day: d }) => d.is_working)
+                .map(({ key, day: d }) => (
+                  <View key={key}>
+                    <Divider inset={16} />
+                    <ValueRow
+                      label={WEEKDAY_FULL[key]}
+                      value={`${d.start}–${d.end}`}
+                      expanded={open === key}
+                      onPress={() => {
+                        haptics.tap();
+                        setOpen((v) => (v === key ? null : key));
+                      }}
+                    />
+                    {open === key ? WHEEL : null}
+                  </View>
+                ))
+            : null}
+        </SectionCard>
       </View>
     </BottomSheet>
   );
