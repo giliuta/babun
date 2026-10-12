@@ -6,6 +6,7 @@ import { View } from "react-native";
 import { router, Stack, type ErrorBoundaryProps } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { BootSplash } from "@/features/boot/BootSplash";
+import { applyUpdateOnStart } from "@/features/boot/apply-update-on-start";
 import { AppProviders } from "@/providers/AppProviders";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
@@ -28,6 +29,8 @@ import {
 import { reconcileBabunNotifications } from "@/lib/notifications";
 
 void SplashScreen.preventAutoHideAsync();
+// Свежее обновление по воздуху — с первого запуска, пока видна заставка.
+applyUpdateOnStart();
 
 /** ПОСЛЕДНЯЯ ДВЕРЬ, ЕСЛИ ЭКРАН УПАЛ. Рабочий день не должен застрять на
  *  белом экране. Expo Router сбрасывает упавший маршрут и зовёт `retry`.
