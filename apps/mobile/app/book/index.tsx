@@ -2039,7 +2039,12 @@ function BookForm() {
     } else if (res === "denied") toast("Разрешите уведомления в Настройках", "error");
     else if (res === "past") toast("Это время уже прошло", "info");
     else if (res === "deferred")
-      toast("Напоминание в очереди — установится, когда на iPhone освободится место", "info");
+      toast(
+        Platform.OS === "android"
+          ? "Напоминание в очереди — установится, когда на телефоне освободится место"
+          : "Напоминание в очереди — установится, когда на iPhone освободится место",
+        "info",
+      );
     else if (res === "capacity")
       toast("Очередь напоминаний переполнена", "error");
     else if (res === "unavailable") toast("Появится после обновления приложения", "info");

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { FlatList, Pressable, Text, View, Platform } from "react-native";
 import { Check } from "lucide-react-native";
 import type { CountryCode } from "libphonenumber-js";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -269,7 +269,9 @@ export function ContactsImportSheet({
           }}
         >
           {CONTACTS_AVAILABLE
-            ? "Разрешите доступ к контактам в настройках iPhone. Babun читает контакты только когда вы открываете этот список и добавляет в клиенты только отмеченных."
+            ? Platform.OS === "android"
+              ? "Разрешите доступ к контактам в настройках телефона. Babun читает контакты только когда вы открываете этот список и добавляет в клиенты только отмеченных."
+              : "Разрешите доступ к контактам в настройках iPhone. Babun читает контакты только когда вы открываете этот список и добавляет в клиенты только отмеченных."
             : "Адресная книга появится после следующей сборки приложения."}
         </Text>
       ) : (

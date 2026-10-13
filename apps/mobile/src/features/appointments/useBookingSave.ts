@@ -17,6 +17,7 @@
 // Поведение перенесено дословно из app/book/index.tsx (save), включая
 // порядок тостов и то, какие сбои НЕ роняют создание.
 
+import { Platform } from "react-native";
 import { useCallback } from "react";
 import {
   createBlankAppointment,
@@ -64,7 +65,9 @@ export function useBookingSave() {
           toast("Событие создано, но уведомления запрещены в Настройках", "info");
         } else if (reminderResult === "deferred") {
           toast(
-            "Событие создано; напоминание стоит в очереди и установится, когда на iPhone освободится место",
+            Platform.OS === "android"
+              ? "Событие создано; напоминание стоит в очереди и установится, когда на телефоне освободится место"
+              : "Событие создано; напоминание стоит в очереди и установится, когда на iPhone освободится место",
             "info",
           );
         } else if (reminderResult === "capacity") {

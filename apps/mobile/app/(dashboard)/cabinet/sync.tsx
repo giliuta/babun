@@ -5,6 +5,7 @@ import {
   ScrollView,
   Text,
   View,
+  Platform,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { CheckCircle2, RefreshCw, Trash2, WifiOff } from "lucide-react-native";
@@ -185,7 +186,9 @@ export default function SyncStatusScreen() {
           >
             <WifiOff color={t.warning} size={20} />
             <Text className="flex-1 text-sm" style={{ color: t.body }}>
-              Изменения хранятся только на этом iPhone и отправятся после подключения.
+              {Platform.OS === "android"
+                ? "Изменения хранятся только на этом телефоне и отправятся после подключения."
+                : "Изменения хранятся только на этом iPhone и отправятся после подключения."}
             </Text>
           </View>
         ) : null}
@@ -202,7 +205,11 @@ export default function SyncStatusScreen() {
           <EmptyState
             icon={<CheckCircle2 color={t.success} size={36} />}
             title="Всё синхронизировано"
-            subtitle="На этом iPhone нет ожидающих изменений."
+            subtitle={
+              Platform.OS === "android"
+                ? "На этом телефоне нет ожидающих изменений."
+                : "На этом iPhone нет ожидающих изменений."
+            }
           />
         ) : null}
 
@@ -228,7 +235,9 @@ export default function SyncStatusScreen() {
                       ? op.last_error || "Сервер отклонил изменение."
                       : online
                         ? "Ожидает отправки"
-                        : "Сохранено на этом iPhone"}
+                        : Platform.OS === "android"
+                          ? "Сохранено на этом телефоне"
+                          : "Сохранено на этом iPhone"}
                   </Text>
                 </View>
               </View>

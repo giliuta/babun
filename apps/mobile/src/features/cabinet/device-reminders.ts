@@ -220,12 +220,15 @@ export interface PermissionRowView {
   action: "request" | "settings" | null;
 }
 
-export function permissionRow(permission: DevicePermission): PermissionRowView {
+export function permissionRow(permission: DevicePermission, android = false): PermissionRowView {
   switch (permission) {
     case "granted":
       return { sub: "Разрешены", action: "settings" };
     case "denied":
-      return { sub: "Выключены в настройках iPhone", action: "settings" };
+      return {
+        sub: android ? "Выключены в настройках телефона" : "Выключены в настройках iPhone",
+        action: "settings",
+      };
     case "undetermined":
       return { sub: "Не разрешены", action: "request" };
     case "unavailable":

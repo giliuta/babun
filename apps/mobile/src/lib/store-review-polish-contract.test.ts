@@ -61,6 +61,6 @@ describe("«О приложении»", () => {
     assert.match(facts, /web: Platform\.OS === "web",\s*storeVersion: Constants\.expoConfig\?\.version,/);
     const help = read("../features/cabinet/HelpScreen.tsx");
     assert.doesNotMatch(help, /DISPLAY_VERSION/);
-    assert.match(help, /supportLink\(row, versionSummary\(appBuildFacts\(\)\)\)/);
+    assert.match(help, /supportLink\(row, versionSummary\(appBuildFacts\(\)\), device\)/);
   });
 });

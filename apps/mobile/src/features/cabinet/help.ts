@@ -60,15 +60,15 @@ export function telegramLink(username: string): string {
 
 /** Тело письма: версия и устройство уже стоят, ниже — пустая строка под вопрос.
  *  Версию говорит экран — здесь нет ни нативных модулей, ни констант сборки. */
-export function supportMailBody(appVersion: string): string {
-  return `Версия приложения: ${appVersion}\nУстройство: iPhone\n\n`;
+export function supportMailBody(appVersion: string, device = "iPhone"): string {
+  return `Версия приложения: ${appVersion}\nУстройство: ${device}\n\n`;
 }
 
 /** `mailto:` с темой и заготовкой письма. Адрес в ссылке — как есть, тема и
  *  тело — через `encodeURIComponent` (кириллица, переводы строк). */
-export function emailLink(email: string, appVersion: string): string {
+export function emailLink(email: string, appVersion: string, device?: string): string {
   const subject = encodeURIComponent("Вопрос по Babun");
-  const body = encodeURIComponent(supportMailBody(appVersion));
+  const body = encodeURIComponent(supportMailBody(appVersion, device));
   return `mailto:${email.trim()}?subject=${subject}&body=${body}`;
 }
 
@@ -96,14 +96,14 @@ export function supportRows(contacts: SupportContacts): SupportRow[] {
 }
 
 /** Ссылка строки «Связаться». Версия нужна только письму. */
-export function supportLink(row: SupportRow, appVersion: string): string {
+export function supportLink(row: SupportRow, appVersion: string, device?: string): string {
   switch (row.channel) {
     case "whatsapp":
       return whatsappLink(row.value);
     case "telegram":
       return telegramLink(row.value);
     case "email":
-      return emailLink(row.value, appVersion);
+      return emailLink(row.value, appVersion, device);
   }
 }
 
