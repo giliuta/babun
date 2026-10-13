@@ -1425,7 +1425,7 @@ export default function CalendarTab() {
     /** Новый тап — новая плашка: время на ней сменилось, срок начинается
      *  заново (владелец 13.10: «если тапаю ещё раз — время обновляется»). */
     id: number;
-    /** Какое время тапнули: «13:00» сегодня, «7 октября, 13:00» — в другой день. */
+    /** Какое время тапнули: «7 октября, 13:00». */
     when: string;
     message: string;
     onAction: () => void;
@@ -3015,10 +3015,8 @@ export default function CalendarTab() {
       const [ny, nm, nd] = dateYmd.split("-").map(Number);
       setNotice({
         id: Date.now(),
-        when:
-          dateYmd === todayYmd
-            ? timeStart
-            : `${dayMonthLabel(new Date(ny, nm - 1, nd))}, ${timeStart}`,
+        // Дата — всегда, и сегодня тоже (владелец 13.10: «13 октября, …»).
+        when: `${dayMonthLabel(new Date(ny, nm - 1, nd))}, ${timeStart}`,
         message: reason,
         onAction: () => {
           setNotice(null);
@@ -3290,7 +3288,7 @@ export default function CalendarTab() {
       />
       {notice ? (
         <CalendarNotice
-          key={notice.id}
+          stamp={notice.id}
           when={notice.when}
           message={notice.message}
           actionLabel="Записать"
