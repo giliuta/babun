@@ -17,3 +17,10 @@ test("«Назад» не закрывает мастер импорта, пок
   const wizard = read("../../features/clients/import/ImportWizardSheet.tsx");
   assert.match(wizard, /onRequestClose=\{\(\) => \{\s*if \(!\(importer\.isPending \|\| preparing\)\) close\(\);/);
 });
+
+test("«Маршрут» в меню записи — шторка карт команды, а не Apple Карты в браузере", () => {
+  const screen = read("../../../app/(dashboard)/(home)/index.tsx");
+  assert.doesNotMatch(screen, /maps\.apple\.com/);
+  assert.match(screen, /run: \(\) => route\.open\(null, address\)/);
+  assert.match(screen, /\{route\.sheet\}/);
+});

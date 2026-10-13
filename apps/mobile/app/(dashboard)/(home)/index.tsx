@@ -72,6 +72,7 @@ import {
   ActionMenuSheet,
   type ActionMenu,
 } from "@/features/calendar/ActionMenuSheet";
+import { useRouteOpener } from "@/features/clients/use-route-opener";
 import {
   resolveReturnTo,
   returnToParam,
@@ -952,6 +953,10 @@ export default function CalendarTab() {
       ? teamChoice
       : teams[0]?.id ?? null;
   const activeTeam = teams.find((tm) => tm.id === activeTeamId);
+  // «МАРШРУТ» ИЗ МЕНЮ ЗАПИСИ — та же шторка карт, что у листа выезда
+  // (`useRouteOpener`): «Карты для маршрута» команды, а не Apple Карты в
+  // браузере — на Android это была веб-страница вместо Google Карт (13.10).
+  const route = useRouteOpener(activeTeamId ?? null);
   // Что сотрудник может в открытом календаре: новые записи, события, метка
   // дня. Владельцу — всё.
   const activeActions = actionsIn(activeTeamId);
@@ -2397,10 +2402,7 @@ export default function CalendarTab() {
       if (address)
         items.push({
           label: "Маршрут",
-          run: () =>
-            Linking.openURL(
-              `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
-            ),
+          run: () => route.open(null, address),
           view: true,
         });
       // ДЕЙСТВИЯ ПО ПРАВАМ (STORY-088): каждое — свой блок в календаре
@@ -3532,6 +3534,7 @@ export default function CalendarTab() {
           />
         );
       })() : null}
+      {route.sheet}
       <SelfReminderSheet
         visible={reminderFor != null}
         value={reminderFor ? getSelfReminder(reminderFor.id) : null}
