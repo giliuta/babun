@@ -1,123 +1,138 @@
-# Babun Architecture — current state
+# Архитектура Babun
 
-> Фактическое состояние на 2026-08-25. Обновлять вместе с архитектурными изменениями.
+> Состояние на 2026-10-13. Правится тем же коммитом, что меняет устройство.
+> Правила работы — в [`../AGENTS.md`](../AGENTS.md), оглавление документов —
+> [`README.md`](README.md).
 
 ## Обзор
 
-Babun — multi-tenant CRM для выездного сервиса. Монорепозиторий содержит один
-клиент поверх Supabase backend:
-
-- `apps/mobile` — Expo SDK 54 / React Native 0.81: iOS, Android и Web из одного
-  кода (веб — React Native Web через `expo export --platform web`);
-- `packages/shared` — типы БД, domain helpers, offline cache и sync queue.
+Babun — CRM для выездного сервиса: календарь записей, клиенты с объектами,
+услуги, деньги и документы, команды с правами по календарям. Один клиент
+поверх Supabase:
 
 ```text
-Mobile / Web (Expo RN + RN Web) ── Supabase Auth + PostgreSQL/RLS + Realtime + Storage
-       │
-       └── SQLite/MMKV cache + offline mutation queue
+apps/mobile (Expo SDK 54 / React Native: iOS, Android, Web)
+   │  TanStack Query ── packages/shared (репозитории, доменные правила)
+   │                         │
+   │                         └── SQLite-кэш + очередь офлайн-записей ── реплеер
+   ▼
+Supabase: Auth · PostgreSQL + RLS + функции и триггеры · Realtime · Storage · Edge Functions
 ```
 
-Supabase — источник истины. Локальное хранилище не является primary database:
-это кэш последнего снимка, очередь синхронизации и device preferences.
+Источник истины — база. Локально хранятся снимок данных (SQLite), очередь
+записей, сделанных без сети, и настройки устройства (MMKV).
 
-## Структура
+## Приложение — `apps/mobile`
 
 ```text
-
-├── apps/
-│   └── mobile/
-│       ├── app/                     # Expo Router routes
-│       ├── src/features/            # calendar, appointments, clients, cabinet
-│       ├── src/components/ui/       # canonical mobile primitives
-│       ├── src/theme/               # light-only semantic tokens
-│       └── docs/DESIGN-SYSTEM.md    # visual canon
-├── packages/shared/src/
-│   ├── db/                          # generated Database types + repositories
-│   ├── local/                       # синхронные KV-хранилища справочников и настроек
-│   ├── storage/                     # KVStorage seam (MMKV на нативе, localStorage на вебе) + SQLite
-│   └── sync/                        # realtime and replay machinery
-├── supabase/
-│   ├── migrations/                  # схема, RLS, триггеры, RPC (счёт: ls supabase/migrations/*.sql | wc -l)
-│   └── functions/                   # edge-функции (счёт: ls supabase/functions | wc -l)
-├── vercel.json                      # bun run build:web → apps/mobile/dist
-└── bun.lock                         # единственный lockfile
+app/                маршруты expo-router; файл маршрута — тонкая раскладка
+                    или реэкспорт тела из src/features («дверь»)
+src/
+  session/          кто вошёл и что ему можно: компания, роль, тариф,
+                    карта доступа, «смотрю глазами партнёра»
+  lib/              общие помощники: период, телефон, уведомления,
+                    журнал изменений; lib/paper/ — бумага документов
+  components/ui/    примитивы дизайн-системы (BottomSheet, card-rows …)
+  components/blocks/ блоки, общие нескольким разделам
+  features/<раздел>/ календарь, запись, клиенты, финансы, услуги,
+                    документы, инвойсы, кабинет, права …
+  providers/  theme/  storage/
 ```
 
-## Данные и изоляция tenant
+**Слои.** Раздел (`features/*`) берёт из `session/`, `lib/` и
+`components/`; те не импортируют ни одного раздела. Два раздела не
+импортируют друг друга в обе стороны: общий кусок уходит вниз. Это
+проверяет тест `src/lib/feature-cycles.test.ts`: новая пара разделов,
+импорт раздела из нижнего слоя или устаревшая строка в списке
+разрешённых исключений валят его. Оставшиеся пары перечислены в нём с
+причинами.
 
-- Каждая бизнес-сущность принадлежит `tenant_id`.
-- Доступ ограничивают PostgreSQL RLS policies и membership пользователя.
-- `tenant_members` связывает auth user, tenant и роль.
-- Серверных роутов у приложения нет: клиент ходит в Supabase напрямую, сессия
-  живёт в supabase-js (Keychain/Keystore на нативе, `localStorage` на вебе).
-- Привилегированные операции вынесены в edge-функции на service-ключе. Удаление
-  аккаунта — функция `account-delete`, авторизация Supabase access token'ом в
-  `Authorization: Bearer …` (см. `docs/EDGE-FUNCTIONS-CUTOVER.md`).
-- Миграции находятся в `supabase/migrations`; production schema
-  всегда проверяется перед записью или применением миграции.
+**Экран.** Маршрут — раскладка в несколько десятков строк. Состояние и
+поведение живут в хуках раздела (`use-…`), чистые правила — в модулях без
+React с тестами, крупные части разметки — в компонентах той же папки.
+Образцы: `features/calendar/home/` (календарь), `features/appointments/book-form/`
+(запись), `features/finances/home/` (финансы). Предел — 400 строк на файл.
 
-## Mobile runtime
+**Данные в экране.** Чтение и запись — через хуки `queries`/`mutations`
+раздела поверх репозиториев `packages/shared`. Ключи кэша react-query —
+фабрики (`company-query-keys.ts`, `client-query-keys.ts`,
+`reference/query-keys.ts`) с тестами, которые закрепляют форму каждого
+ключа: прогрев чужой компании кладёт данные под теми же ключами, под
+которыми их спросит экран.
 
-Expo Router делит приложение на auth и dashboard route groups. Dashboard
-содержит календарь, клиентов, создание записи `/book` и кабинет. Данные
-загружаются из Supabase через TanStack Query; shared cache позволяет читать
-последний snapshot offline, а mutation queue повторяет изменения после
-восстановления сети. Realtime invalidation синхронизирует tenant tables.
+**Тексты.** Русский литерал в коде — источник перевода: плагин Babel
+оборачивает его в словарь выбранного языка (правило 8.1 `AGENTS.md`).
 
-Приложение намеренно работает только в светлой теме
-(`userInterfaceStyle: light`) и игнорирует системное переключение темы.
-Светлая палитра определена semantic tokens в `src/theme/colors.ts`.
-UI должен соответствовать `apps/mobile/docs/DESIGN-SYSTEM.md`, HIG и правилам
-44 pt minimum target / VoiceOver labels.
+## Общий пакет — `packages/shared/src`
 
-Веб-таргет — тот же код: `expo export --platform web` собирает статический
-бандл в `apps/mobile/dist`, Vercel отдаёт его с SPA-rewrite на `/index.html`.
-Отдельного веб-приложения, server components и API routes в проекте нет —
-Next.js снесён 2026-08-25.
+```text
+db/database.types.ts  типы, сгенерированные по живой схеме
+db/repositories/      чтение и запись таблиц: строка базы ↔ доменный объект
+db/cache/             SQLite: строки кэша, очередь, замена снимка компании
+db/json.ts            toJson — доменное значение → jsonb, одно место приведения
+local/                доменные типы и чистые правила (деньги, НДС, записи,
+                      клиенты, команды); хранилища настроек устройства
+sync/                 офлайн-слой: обёртки *Cached, реплеер очереди,
+                      фоновая сверка, realtime
+common/utils/         даты, деньги, телефоны
+i18n/                 словари и рантайм перевода
+```
 
-## Toolchain и quality gates
+У пакета свой `tsconfig` (типы проверяются целиком, вместе с тестами) и
+`eslint`.
 
-Канонический package manager — Bun. Используется только `bun.lock`;
-npm lockfile удалён.
+## Офлайн-синхронизация
+
+1. Экран зовёт обёртку `sync/*Cached` (клиенты, записи, метки). Чтение
+   сразу отдаёт строки из SQLite и в фоне спрашивает сервер (`revalidator`:
+   одна сверка на компанию за раз).
+2. Запись в сети идёт прямо в Supabase. Если сети нет или связь оборвалась
+   (`transient-error.ts`), оптимистичная строка и операция очереди ложатся
+   в SQLite одной транзакцией.
+3. Реплеер (`sync/replayer/`) выгружает очередь по порядку:
+   - `dispatch` выбирает ветку `replay-delete`, `replay-insert` или
+     `replay-update`;
+   - правила отдельных таблиц собраны в `table-rules.ts` и `replay-clients.ts`.
+4. Конфликт ловится сторожем версии: правка уходит с `expected_updated_at`.
+   Если сервер правил строку после постановки в очередь, правка денег и
+   статуса записи уступает серверу, остальные применяются поверх.
+5. Сервер — снова источник истины: свежая строка кладётся в кэш.
+
+Идентификаторы новых строк — настоящий uuid на любом движке
+(`sync/uuid.ts`): иначе сервер не примет операцию из очереди.
+
+## База
+
+Карта таблиц, прав и правил миграций — [`db/README.md`](db/README.md);
+снимок живой схемы — [`db/schema/`](db/schema/). Изоляция компаний — RLS
+по `current_tenant_id()` (компания приходит заголовком запроса и
+сверяется с членством), права работы — по календарям. Деньги, документы,
+SMS, квоты — функции `SECURITY DEFINER` и триггеры.
+
+## Ворота качества
+
+Из корня, все четыре блокируют и в CI:
 
 ```bash
-bun install --frozen-lockfile
-
-# гейты — из корня репозитория
-bun run typecheck    # tsc --noEmit в apps/mobile, должен быть 0
-bun test             # bun:test — файлы *.test.ts в apps/mobile и packages/shared
-                     # (сколько их — печатает сам раннер: «Ran N tests across M files»)
-bun run lint
-bun run build:web    # ровно то, что запускает Vercel
-
-# точечный прогон одного теста
-bun test apps/mobile/src/features/appointments/booking-prefill.test.ts
-
-# состояние Expo-зависимостей
-bun run --cwd apps/mobile doctor
+bun run typecheck   # приложение + весь packages/shared с тестами
+bun test            # раннер печатает «Ran N tests across M files»
+bun run lint        # оба пакета, --max-warnings 0
+bun run build:web   # то, что собирает Vercel
 ```
 
-Целевой `.github/workflows/ci.yml` повторяет ровно этот список: один job на
-`ubuntu-latest`, `oven-sh/setup-bun` → `bun install --frozen-lockfile` →
-`typecheck` → `test` → `lint` → `build:web`. Ни npm, ни vitest, ни `next build`
-в нём быть не должно: lockfile один (`bun.lock`), раннер один (`bun:test`),
-сборка веба одна (`expo export --platform web`).
-
-**Состояние временное:** пока владелец не запушил переписанный workflow, в дереве
-лежит версия Next.js-эпохи (`babun-crm/apps/web`, `npm ci`, `vitest`,
-`next build`) — она в текущем дереве неработоспособна. Проверять состояние
-файлом, а не этим абзацем; независимо от цвета CI гейты прогоняются локально
-перед словом «готово».
+`pre-push` гоняет `typecheck` и `test`. Видимая правка проверяется ещё и в
+симуляторе (правило 12 `AGENTS.md`).
 
 ## Известные ограничения
 
-- Production deployment и migrations выполняются только через обычный
-  review/deploy flow; локальная готовность не означает, что код уже на prod.
-- Supply-chain audit может содержать транзитивные advisories, для которых ещё
-  нет совместимого upstream patch; адресные overrides допустимы только после
-  полного typecheck/tests/build.
-- Часть справочников в `packages/shared/src/local/*` до сих пор ходит в
-  `window.localStorage` напрямую вместо seam'а `getStorage()` — на нативе такие
-  функции молча ничего не сохраняют. Переводить при касании файла.
-- Старые крупные mobile-компоненты постепенно декомпозируются; новое UI не
-  должно увеличивать этот долг.
+- Шесть пар разделов ещё импортируют друг друга. Список и причины — в
+  `feature-cycles.test.ts`.
+- `features/calendar/zoom.tsx` больше 400 строк: жест щипка живёт на
+  UI-потоке (Reanimated), и резать его без проверки на устройстве опасно.
+- Чат (`app/(dashboard)/chats/`) выключен флагом и не разбирался.
+- Edge-функции дублируют вспомогательный код: сервисный клиент,
+  сравнение секретов, ответ JSON. Свести его в `functions/_shared` можно
+  только вместе с перевыкладкой функций.
+- Номера части миграций повторяются, а у некоторых невозможное время.
+  Версии в базе от имён файлов не зависят, но `supabase db push` с этой
+  папкой не работает.
