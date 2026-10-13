@@ -1116,6 +1116,9 @@ function FinancesContent() {
     if (tx.source === "auto") {
       throw new Error("Возврат этой оплаты оформляется в связанной заявке.");
     }
+    if (tx.invoice_id) {
+      throw new Error("Возврат по инвойсу оформляется кредит-нотой на странице инвойса.");
+    }
     await insertTx.mutateAsync(buildRefundDraft(tx, amount, businessToday, requestId));
   };
 

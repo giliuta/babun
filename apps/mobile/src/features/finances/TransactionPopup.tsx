@@ -261,6 +261,10 @@ export function TransactionPopup({
     // а деньги ушли бы клиенту (аудит 2026-09-30). Такой платёж снимают
     // удалением, тогда долг снова виден.
     !tx.debt_id &&
+    // Доход по инвойсу возвращают кредит-нотой на странице инвойса («Открыть
+    // инвойс» рядом): простой возврат без документа снова открыл бы инвойс
+    // долгом (04.10, 20261004151231).
+    !tx.invoice_id &&
     // Кап неизвестен, пока Σ возвратов не приехала (или упала) — действие
     // не предлагаем, а не гасим молча: строка ниже называет причину.
     !refundTotalsLoading &&
@@ -272,7 +276,7 @@ export function TransactionPopup({
   // кроме самого кап-числа: показываем строку ИМЕННО тогда, когда причина —
   // загрузка или ошибка, а не типы/права/appointment-ledger.
   const refundStatusCaption =
-    (allow?.refund ?? true) && tx.type === "income" && !isAppointmentLedger && !tx.debt_id
+    (allow?.refund ?? true) && tx.type === "income" && !isAppointmentLedger && !tx.debt_id && !tx.invoice_id
       ? refundTotalsLoading
         ? "Считаем, сколько уже возвращено…"
         : refundTotalsError
@@ -431,7 +435,7 @@ export function TransactionPopup({
     actions.push({
       label: "Создать возврат",
       onPress: () => {
-        if (liveReceipt && !tx.invoice_id) {
+        if (liveReceipt) {
           afterExit.current = () =>
             router.push(`/documents/receipt-refund?receiptId=${liveReceipt.id}` as Href);
           onClose();
