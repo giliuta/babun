@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { orderMovable } from "./block-order";
+import { bookFormSource } from "./book-form/source-for-tests";
 
 // ПОРЯДОК БЛОКОВ ЗАПИСИ И СОБЫТИЯ (владелец 11.10: «поставить первым объект,
 // вторым клиент — и самому редактировать»).
@@ -41,14 +42,16 @@ describe("порядок подвижных блоков", () => {
 });
 
 describe("форма и настройка читают один порядок", () => {
-  const form = readFileSync(resolve(here, "../../../app/book/index.tsx"), "utf8");
+  // The booking form is the route plus `book-form/`.
+  const form = bookFormSource();
   const design = readFileSync(resolve(here, "../calendar/design/DesignScreen.tsx"), "utf8");
 
   test("тело записи и события — по порядку команды", () => {
     assert.match(form, /\{inOrder\(blocks, \{\s*(\{\/\*[\s\S]*?\*\/\}\s*)?client: \(/);
     assert.match(form, /\{inOrder\(eventBlocks, \{\s*type: \(/);
     for (const id of ["client", "object", "services", "payment", "note", "files"]) {
-      assert.match(form, new RegExp(`\\n {16}${id}: \\(\\n {18}<>`), `нет блока ${id} в записи`);
+      // Keys of the record body's map, at its indentation in `book-form/WorkBody.tsx`.
+      assert.match(form, new RegExp(`\\n {8}${id}: \\(\\n {10}<>`), `нет блока ${id} в записи`);
     }
   });
 

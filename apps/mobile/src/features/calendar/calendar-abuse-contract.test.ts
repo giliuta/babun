@@ -5,6 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 import { readModuleSource } from "@/lib/module-source";
+import { bookFormSource } from "../appointments/book-form/source-for-tests";
 
 // ЖЁСТКАЯ ПРОВЕРКА КАЛЕНДАРЯ 03.10 — СТОРОЖА ПРАВОК, КОТОРЫЕ НЕ ПОДНЯТЬ БЕЗ
 // СИМУЛЯТОРА (экран и жесты тянут react-native). Каждый держит конкретную
@@ -269,7 +270,7 @@ describe("повторный аудит календаря 03.10", () => {
   test("событие без типа показывает своё имя, а не пустую дверь", () => {
     const block = readFileSync(resolve(here, "../appointments/EventTypeBlock.tsx"), "utf8");
     assert.match(block, /: freeTitle\s*\? \{ name: freeTitle, color: titleColor \?\? null, Icon: Tag \}/);
-    const book = readFileSync(resolve(here, "../../../app/book/index.tsx"), "utf8");
+    const book = bookFormSource();
     assert.match(book, /<EventTypeBlock\s*type=\{eventType\}\s*title=\{eventTitle\}\s*titleColor=\{eventColor\}/);
   });
 
@@ -337,7 +338,7 @@ describe("повторный аудит календаря 03.10", () => {
     const compose = readFileSync(resolve(here, "../sms/SmsCompose.tsx"), "utf8");
     assert.match(compose, /smsInPlan && context\?\.clientId && !context\.optOut && account\?\.serviceOn/);
     assert.match(screen(), /optOut: smsClient\?\.sms_opt_out === true,/);
-    const book = readFileSync(resolve(here, "../../../app/book/index.tsx"), "utf8");
+    const book = bookFormSource();
     assert.match(book, /optOut: client\?\.sms_opt_out === true,/);
     const card = readFileSync(resolve(here, "../../../app/(dashboard)/clients/[id].tsx"), "utf8");
     assert.match(card, /optOut: c\.sms_opt_out === true,/);

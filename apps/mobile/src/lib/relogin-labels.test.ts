@@ -14,6 +14,7 @@ import {
 import { LABEL_FALLBACK_COLOR } from "@/features/calendar/day-label";
 import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 import { readModuleSource } from "./module-source";
+import { bookFormSource } from "../features/appointments/book-form/source-for-tests";
 
 // ВЫШЕЛ И ВОШЁЛ — МЕТКИ СЕРЫЕ (видео для App Review, 06.10).
 //
@@ -135,8 +136,13 @@ describe("цвет метки, которой нет в справочнике",
       "../../app/(dashboard)/(home)/index.tsx",
       "../../app/book/index.tsx",
     ]) {
-      // The calendar screen is the route file plus `features/calendar/home/`.
-      const source = file.includes("(home)") ? calendarScreenSource() : read(file);
+      // The calendar screen is the route plus `features/calendar/home/`, the
+      // booking form the route plus `book-form/`.
+      const source = file.includes("(home)")
+        ? calendarScreenSource()
+        : file === "../../app/book/index.tsx"
+          ? bookFormSource()
+          : read(file);
       const calls = source.split("resolveCalendarDayLabel({").slice(1);
       assert.ok(calls.length > 0, `${file}: нет вызова`);
       for (const call of calls) {

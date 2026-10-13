@@ -216,8 +216,10 @@
 
 ## 2. Блок «Объект» + шторка + форма объекта
 
-**Канон:** `app/book/index.tsx:2447` (запись), `2974` (событие),
-`src/features/clients/blocks/ObjectsBlock.tsx:126` (`ObjectRow` — строка).
+**Канон:** `src/features/appointments/book-form/WorkObjectBlock.tsx` (запись),
+`src/features/appointments/book-form/EventObjectBlock.tsx` (событие) — части
+формы `app/book/index.tsx`, `src/features/clients/blocks/ObjectsBlock.tsx:126`
+(`ObjectRow` — строка).
 
 Строка объекта не копируется, а берётся та же: `ObjectRow`. В записи объект
 ВЫБИРАЮТ, поэтому справа шеврон, а заметка объекта — своей плашкой под строкой.
@@ -358,7 +360,7 @@
 
 ## 4. Блок «Оплата»
 
-**Канон:** `app/book/index.tsx` → `<PaymentBlock>`,
+**Канон:** `src/features/appointments/book-form/WorkBody.tsx` → `<PaymentBlock>`,
 `src/features/appointments/PaymentBlock.tsx`, плитки —
 `src/features/appointments/PaymentTiles.tsx`.
 
@@ -370,8 +372,9 @@
 
 ## 5. Блок «Заметка»
 
-**Канон записи:** `app/book/index.tsx` — `SectionCard title="Заметка"` +
-`InlineNoteField`. **Канон события:** там же ниже — ТОТ ЖЕ блок и то же поле,
+**Канон записи:** `src/features/appointments/book-form/WorkBody.tsx` —
+`SectionCard title="Заметка"` + `InlineNoteField`. **Канон события:**
+`src/features/appointments/book-form/EventBody.tsx` — ТОТ ЖЕ блок и то же поле,
 отличаются только подсказка и то, во что оно пишет.
 
 ```tsx
@@ -684,7 +687,9 @@
 
 ## 10. Что ещё НЕ компонент (и потому копируется глазами)
 
-Блок «Объект» живёт разметкой внутри `app/book/index.tsx`. Пока это так,
+Блок «Объект» живёт разметкой внутри формы записи —
+`src/features/appointments/book-form/WorkObjectBlock.tsx` и
+`src/features/appointments/book-form/EventObjectBlock.tsx`. Пока это так,
 «взять готовый блок» значит «скопировать из указанной строки», а не
 «поставить один тег». Вынести его — ближайший шаг.
 
