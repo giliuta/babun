@@ -607,7 +607,8 @@ export const DayColumn = memo(function DayColumn({
   const openDeck = (apt: Appointment) => {
     const deck = decks.get(apt.id);
     if (!deck) return onEdit(apt);
-    haptics.tap();
+    // Тик уже дал сам блок (`openWithTick`): второй здесь давал двойную
+    // вибрацию на тап по стопке (13.10, нашла сессия 025).
     setDeckOpen(deck.members);
   };
 
