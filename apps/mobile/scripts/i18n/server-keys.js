@@ -180,14 +180,33 @@ const ACCESS_BLOCK_TITLES = [
   "Шаблоны SMS",
 ];
 
+// A later `drop function` retires the messages too: a dropped function raises
+// nothing, and its phrases would sit untranslated forever (the «Личное и
+// Компании» guards after the 12.10 revert). But migrations also drop an OLD
+// signature and `execute` a patched live body under the same name — a body
+// this scanner never sees. So a name is retired only when a drop is the LAST
+// mention of it in all migrations: a later grant, revoke, `::regprocedure` or
+// redefinition means the function lives on.
+const DROP = /drop\s+function\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_0-9]+)"?[^;]*;/gi;
+
 function collect() {
   const latest = new Map();
+  /** name → was its last mention a drop statement */
+  const lastIsDrop = new Map();
   for (const file of fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()) {
     const sql = fs.readFileSync(path.join(MIGRATIONS, file), "utf8");
     for (const m of sql.matchAll(FUNCTION)) latest.set(m[1], m[4]);
+    const drops = [...sql.matchAll(DROP)].map((m) => ({ name: m[1], from: m.index, to: m.index + m[0].length }));
+    for (const name of latest.keys()) {
+      let last = -1;
+      for (const m of sql.matchAll(new RegExp(`\\b${name}\\b`, "g"))) last = m.index;
+      if (last < 0) continue;
+      lastIsDrop.set(name, drops.some((d) => d.name === name && d.from <= last && last < d.to));
+    }
   }
   const keys = new Set([...EDGE_FUNCTION_MESSAGES, ...PATCHED_FUNCTION_MESSAGES, ...SEEDED_NAMES, ...ACCESS_BLOCK_TITLES]);
-  for (const body of latest.values()) {
+  for (const [name, body] of latest) {
+    if (lastIsDrop.get(name)) continue;
     for (const m of body.matchAll(RAISE)) if (CYRILLIC.test(m[1])) keys.add(toKey(m[1]));
   }
   return [...keys].sort();
