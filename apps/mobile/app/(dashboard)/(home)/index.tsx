@@ -1642,27 +1642,62 @@ export default function CalendarTab() {
   // видимой при выключенном «Скрывать отменённые» (byTeam выше сам фильтрует
   // по hideCancelled). Virtuals carry virtualParentId — openEdit routes
   // their tap back to the seed.
+  // ОКНО РАЗВОРОТА ПОВТОРОВ — ГРУБЫМ ШАГОМ (аудит Android 13.10). Окно
+  // считалось от `day`, и КАЖДЫЙ свайп недели/дня разворачивал повторы по
+  // всей истории заново, а следом пересчитывалась вся цепочка (видимые,
+  // по датам, финансы). Теперь окно сдвигается раз в четыре недели (в месяце
+  // — раз в месяц) и с запасом покрывает прежние «−30…+60 дней» от любого дня
+  // своего шага; свайп внутри шага не трогает ничего.
+  const expandAnchor = useMemo(() => {
+    if (mode === "month") return formatYMD(new Date(day.getFullYear(), day.getMonth(), 1));
+    const epochDays = Math.floor(
+      Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 86_400_000,
+    );
+    const bucketStart = epochDays - (((epochDays % 28) + 28) % 28);
+    const d = new Date(bucketStart * 86_400_000);
+    return formatYMD(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  }, [day, mode]);
+  // Вхождения повторов — ТЕ ЖЕ ОБЪЕКТЫ, пока не поменялась сама серия: новый
+  // объект на каждый пересчёт ломал сравнение колонок, и каждая колонка с
+  // повтором перерисовывалась.
+  const occurrenceCache = useRef(new Map<string, { seed: Appointment; occ: Appointment }>());
   const expandedAppts = useMemo(() => {
+    const [ay, am, ad] = expandAnchor.split("-").map(Number);
+    const anchor = new Date(ay, am - 1, ad);
     const monthWindow = mode === "month";
     const fromKey = formatYMD(
       monthWindow
-        ? addDays(new Date(day.getFullYear(), day.getMonth() - 1, 1), -7)
-        : addDays(day, -30),
+        ? addDays(new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1), -7)
+        : addDays(anchor, -35),
     );
     const toKey = formatYMD(
       monthWindow
-        ? addDays(new Date(day.getFullYear(), day.getMonth() + 2, 0), 7)
-        : addDays(day, 60),
+        ? addDays(new Date(anchor.getFullYear(), anchor.getMonth() + 2, 0), 7)
+        : addDays(anchor, 90),
     );
+    const cache = occurrenceCache.current;
+    const next = new Map<string, { seed: Appointment; occ: Appointment }>();
     const out: Appointment[] = [];
     for (const a of appts) {
       const rule = a.event_repeat;
-      if (!rule || rule.kind === "none") out.push(a);
-      else
-        out.push(...expandRepeat(a, fromKey, toKey, { includeCancelled: true }));
+      if (!rule || rule.kind === "none") {
+        out.push(a);
+        continue;
+      }
+      for (const occ of expandRepeat(a, fromKey, toKey, { includeCancelled: true })) {
+        if (occ === a) {
+          out.push(occ);
+          continue;
+        }
+        const hit = cache.get(occ.id);
+        const kept = hit && hit.seed === a ? hit.occ : occ;
+        next.set(occ.id, { seed: a, occ: kept });
+        out.push(kept);
+      }
     }
+    occurrenceCache.current = next;
     return out;
-  }, [appts, day, mode]);
+  }, [appts, expandAnchor, mode]);
 
   // Team-scoped set — MonthView counts every visible cell (incl. the
   // prev/next-month tails) and the MiniCalendar dots from this.
@@ -1789,7 +1824,10 @@ export default function CalendarTab() {
   // сентябрь, значит весь список по сентябрю, не ближайшее»). Шапка называет
   // месяц, как у недели и месяца; прежние «ближайшие 60 дней» от выбранного
   // дня путали: шапка говорила одно, лента показывала другое.
+  // Список месяца нужен только виду «Список» — в неделе и дне сортировать
+  // месяц на каждый пересчёт незачем (аудит Android 13.10).
   const agendaSections = useMemo(() => {
+    if (mode !== "agenda") return [];
     const startKey = formatYMD(monthAnchor);
     const endKey = formatYMD(
       addDays(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 1), -1),
@@ -1808,7 +1846,7 @@ export default function CalendarTab() {
       byDate.set(a.date, arr);
     }
     return [...byDate.entries()].map(([d, data]) => ({ title: d, data }));
-  }, [visibleAppts, monthAnchor]);
+  }, [visibleAppts, monthAnchor, mode]);
 
   // Тап по свободному слоту / действие из агенды / «Записать» с карточки открывает
   // ОТДЕЛЬНЫЙ экран /book (реальный маршрут, а не шит-модал поверх попапа):

@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
+import { FlatList, Text, View } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { matchesClient, rankClientMatches } from "@babun/shared/local/selectors/client-search";
@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { GUTTER } from "@/components/ui/tokens";
 import {
   SELECT_SHEET_RATIO,
-  SelectList,
+  SELECT_SIDE,
   SelectRow,
   SelectSearch,
 } from "@/components/ui/select-rows";
@@ -162,8 +162,14 @@ export function ClientPickerSheet({
   // «я вроде создал клиента, но он не создался — проверяй это»). Клиент
   // создавался исправно; не показывался, потому что «недавние» — это те, у
   // кого УЖЕ были записи, а у новорождённого их нет по определению.
+  // СПИСОК НЕ СТРОИТСЯ, ПОКА ШТОРКА ЗАКРЫТА, И ПОИСК НЕ ДЁРГАЕТ ЕГО НА
+  // КАЖДУЮ БУКВУ (аудит Android 13.10): шторка смонтирована у формы записи
+  // всегда, и сортировка сотен имён шла уже при открытии формы; буква в
+  // поиске перестраивала и перерисовывала весь список под пальцем.
+  const searched = useDeferredValue(q);
   const rows = useMemo(() => {
-    const query = q.trim();
+    if (!visible) return [];
+    const query = searched.trim();
     // Найденные по имени — выше найденных по метке или адресу
     // (`rankClientMatches`, повторный аудит 03.10).
     if (query) return rankClientMatches(pool.filter((c) => matchesClient(c, query)), query);
@@ -179,7 +185,7 @@ export function ClientPickerSheet({
       .filter((c) => !seen.has(c.id))
       .sort((a, b) => byName.compare(a.full_name || "", b.full_name || ""));
     return [...recent, ...others];
-  }, [pool, q, recentIds]);
+  }, [visible, pool, searched, recentIds]);
 
   // ПОИСК НЕ ПОМНИТ ПРОШЛЫЙ ЗАПРОС: шторка остаётся смонтированной между
   // открытиями, и набранное переживало выбор.
@@ -239,7 +245,6 @@ export function ClientPickerSheet({
       }}
       title={title}
       padded={false}
-      scroll
       avoidKeyboard
       maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
@@ -285,11 +290,26 @@ export function ClientPickerSheet({
         autoCapitalize="words"
         autoFocus={autoFocusSearch}
       />
-      <SelectList>
-        {rows.length > 0 ? (
-          rows.map((c) => (
+      {/* ВИРТУАЛЬНЫЙ СПИСОК (аудит Android 13.10): строки рисуются по мере
+          прокрутки, а не все сотни разом в кадр, где начинается пружина
+          шторки — на Android это была секундная заморозка формы записи.
+          Поиск стоит над списком и не уезжает с прокруткой. */}
+      <FlatList
+        data={rows}
+        keyExtractor={(c) => c.id}
+        style={{ flexShrink: 1 }}
+        contentContainerStyle={{
+          paddingHorizontal: SELECT_SIDE,
+          paddingTop: 4,
+          paddingBottom: 12,
+        }}
+        ItemSeparatorComponent={RowGap}
+        keyboardShouldPersistTaps="handled"
+        initialNumToRender={14}
+        maxToRenderPerBatch={14}
+        windowSize={7}
+        renderItem={({ item: c }) => (
             <SelectRow
-              key={c.id}
               title={c.full_name || "Без имени"}
               // СТРОКА — КАК В СПИСКЕ КЛИЕНТОВ (владелец 03.10: «тут тоже не
               // нужно показывать долг, „два визита“… и кругляшки с именем —
@@ -326,16 +346,20 @@ export function ClientPickerSheet({
                 .join(", ")}
               onPress={() => pick(c)}
             />
-          ))
-        ) : (
+        )}
+        ListEmptyComponent={
           <EmptyState
             title={q.trim() ? "Клиенты не найдены" : "Клиентов пока нет"}
           />
-        )}
-
-      </SelectList>
+        }
+      />
     </BottomSheet>
   );
 }
 
 export default ClientPickerSheet;
+
+/** Зазор между строками — как `gap: 8` у `SelectList`. */
+function RowGap() {
+  return <View style={{ height: 8 }} />;
+}

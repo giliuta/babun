@@ -19,6 +19,7 @@ import {
 import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { DateCell } from "@/features/calendar/date-header";
+import { dayMonthLabel } from "./day-month-label";
 
 function sameDay(a: Date, b: Date) {
   return (
@@ -332,7 +333,7 @@ function WeekHeaderRow({
             onLongPress={() => onPickDay(d)}
             delayLongPress={350}
             accessibilityRole="button"
-            accessibilityLabel={`${d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
+            accessibilityLabel={`${dayMonthLabel(d)}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
             accessibilityHint={
               onPickLabelDay
                 ? "Нажатие меняет метку, долгое нажатие открывает день"

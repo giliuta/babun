@@ -97,6 +97,15 @@ export default function DashboardLayout() {
               borderTopColor: t.separator,
             },
             tabBarLabelStyle: { fontSize: 10, fontWeight: "500" },
+            // СКРЫТАЯ ВКЛАДКА СПИТ (аудит Android 13.10). Однажды открытые
+            // «Клиенты» и «Финансы» оставались подписаны на записи и на
+            // каждое их изменение — перетаскивание блока, сохранение формы,
+            // возврат приложения — пересчитывали в фоне статистику клиентов,
+            // фильтры и десятки сумм, ровно когда календарь анимирует.
+            // Заснувшая вкладка догоняет данные в миг возврата. Календарь не
+            // усыпляется: он ведёт напоминания (`reconcile…`) для всего
+            // приложения.
+            freezeOnBlur: true,
           }}
         >
         {/* Активная вкладка выделяется весом штриха (2.4 vs 2), не второй
@@ -104,6 +113,7 @@ export default function DashboardLayout() {
         <Tabs.Screen
           name="(home)"
           options={{
+            freezeOnBlur: false,
             title: "Календарь",
             tabBarIcon: ({ color, size, focused }) => (
               <Calendar color={color} size={size} strokeWidth={focused ? 2.4 : 2} />

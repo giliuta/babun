@@ -22,6 +22,7 @@ import {
   readableTextOnColor,
 } from "@/components/ui/color-contrast";
 import { useThemeColors } from "@/theme/colors";
+import { dayMonthLabel } from "./day-month-label";
 
 const ymd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
@@ -260,7 +261,7 @@ export const MonthView = memo(function MonthView({
                   onLongPress={() => onPickDay(d)}
                   delayLongPress={350}
                   accessibilityRole="button"
-                  accessibilityLabel={`${d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${unclosed > 0 ? `, не закрыто: ${unclosed}` : ""}${hole ? `, ${hole.name.toLowerCase()}` : ""}${dayOff ? ", выходной" : label ? `, метка: ${label.name}` : ""}`}
+                  accessibilityLabel={`${dayMonthLabel(d)}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${unclosed > 0 ? `, не закрыто: ${unclosed}` : ""}${hole ? `, ${hole.name.toLowerCase()}` : ""}${dayOff ? ", выходной" : label ? `, метка: ${label.name}` : ""}`}
                   accessibilityHint={
                     onPickLabelDay
                       ? "Нажатие меняет метку, долгое нажатие открывает неделю"
