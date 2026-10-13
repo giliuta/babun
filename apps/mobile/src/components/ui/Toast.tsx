@@ -116,7 +116,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         style={{
           position: "absolute",
           // ПОЛОСА ВО ВСЮ ШИРИНУ, вплотную к верху — у любого тона: ровно
-          // так лежит `CalendarNotice`, и поля с зазором делали бы из неё
+          // так лежит `NoticeBar`, и поля с зазором делали бы из неё
           // висящую карточку (владелец 2026-09-06: «все уведомления везде
           // одинаковые — как полноценный design block»).
           top: insets.top,

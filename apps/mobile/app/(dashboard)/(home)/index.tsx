@@ -220,6 +220,9 @@ import {
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { useSession } from "@/providers/SessionProvider";
 
+/** Сколько живёт плашка «время прошло / нерабочее — всё равно записать?». */
+const NOTICE_LIFETIME_MS = 8000;
+
 // Agenda horizon — web AgendaView parity («what's next», not «this month»).
 // Персист выбранного вида и команды (mode/teamId) между запусками — ПО
 // КОМПАНИИ — НО НЕ ВСЁ.
@@ -1420,12 +1423,12 @@ export default function CalendarTab() {
     message: string;
     onAction: () => void;
   } | null>(null);
-  // «Временно перекрывает» — значит уходит сама. Пять секунд: столько живёт
-  // тост с кнопкой, и месяц с переключателем вида не должны быть закрыты
-  // дольше, чем человек читает одну строку.
+  // «Временно перекрывает» — значит уходит сама. Восемь секунд (владелец
+  // 13.10: плашку не замечали — ей нужно время, чтобы её увидели и успели
+  // нажать «Записать»); полоска внизу плашки тает ровно столько же.
   useEffect(() => {
     if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), 5000);
+    const timer = setTimeout(() => setNotice(null), NOTICE_LIFETIME_MS);
     return () => clearTimeout(timer);
   }, [notice]);
   // Вопрос задан про КОНКРЕТНУЮ сетку: чужая команда, другой вид или
@@ -3239,6 +3242,7 @@ export default function CalendarTab() {
           message={notice.message}
           actionLabel="Записать"
           onAction={notice.onAction}
+          lifetimeMs={NOTICE_LIFETIME_MS}
         />
       ) : null}
       </View>
