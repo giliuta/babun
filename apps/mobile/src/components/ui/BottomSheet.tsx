@@ -42,6 +42,7 @@ import {
   clearOverlay,
   isSheetOpen,
   newSheetId,
+  overlayBackFor,
   pushSheet,
   removeSheet,
   setOverlay,
@@ -524,7 +525,7 @@ export function BottomSheet({
   );
 
   if (asOverlay) {
-    return <OverlayLayers target={target.current as string} layers={layers} />;
+    return <OverlayLayers target={target.current as string} layers={layers} onBack={onClose} />;
   }
 
   return (
@@ -533,7 +534,15 @@ export function BottomSheet({
       transparent
       animationType="none"
       statusBarTranslucent
-      onRequestClose={onClose}
+      // «НАЗАД» ANDROID СНАЧАЛА ЗАКРЫВАЕТ ВОПРОС ПОВЕРХ ЛИСТА (13.10). Вопрос
+      // лежит в окне этого листа, и «Назад» приходит сюда: раньше он закрывал
+      // весь лист под вопросом (а лист с защитой — открывал «Закрыть без
+      // сохранения?»).
+      onRequestClose={() => {
+        const back = overlayBackFor(sheetId);
+        if (back) back();
+        else onClose();
+      }}
     >
       {/* GestureHandlerRootView внутри Modal обязателен — иначе жест
           перетаскивания грабера не долетает (RN Modal — отдельное окно).
@@ -548,9 +557,17 @@ export function BottomSheet({
 }
 
 /** Слои листа-накладки уходят в окно листа под ним (`SheetOverlayOutlet`). */
-function OverlayLayers({ target, layers }: { target: string; layers: ReactNode }) {
+function OverlayLayers({
+  target,
+  layers,
+  onBack,
+}: {
+  target: string;
+  layers: ReactNode;
+  onBack: () => void;
+}) {
   useLayoutEffect(() => {
-    setOverlay(target, layers);
+    setOverlay(target, layers, onBack);
   });
   useEffect(() => () => clearOverlay(target), [target]);
   return null;
