@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
+import { clientsListSource, clientsListTopBarSource } from "./list/source-for-tests";
 
 // КЛИЕНТЫ СЛУШАЮТСЯ УРОВНЕЙ — СТОРОЖ ПРАВИЛА (STORY-082, владелец 19.09).
 //
@@ -1020,14 +1021,16 @@ describe("экраны: вкладка «Клиенты» открывается
   // меняется»). Первый заход гасил шестерёнку и аналитику, пока своя
   // компания не станет активной.
   test("шестерёнка и аналитика не смотрят на активную компанию", () => {
-    const list = read("index.tsx");
+    // Список — маршрут + папка `list/`; шапка с лентой команд — `ListTopBar.tsx`.
+    const list = clientsListSource();
+    const top = clientsListTopBarSource();
     // Срез строго по разметке шапки: от неё до ленты команд под ней. Якорь —
     // сам тег; не найден — тест падает, а не проверяет весь файл (до 04.10
     // якорем был снесённый `<ClientsFilterBar`, и срез молча шёл до конца).
-    const start = list.indexOf("minHeight: 48");
-    const end = list.indexOf("<ScopeChips");
+    const start = top.indexOf("minHeight: 48");
+    const end = top.indexOf("<ScopeChips");
     assert.ok(start > 0 && end > start, "границы шапки списка не найдены");
-    const header = list.slice(start, end);
+    const header = top.slice(start, end);
     assert.ok(header.includes("Настройки клиентов"), "шапка списка не найдена");
     assert.ok(
       !/isActive/.test(header),

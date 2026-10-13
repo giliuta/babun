@@ -5,10 +5,15 @@ import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
+import { clientCardPageSource, clientCardSource } from "./card/source-for-tests";
+import { clientsListSource } from "./list/source-for-tests";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
-const page = () => read("../../../app/(dashboard)/clients/[id].tsx");
+// Карточка — маршрут + папка `card/` (правило 400 строк); порядок внутри
+// разметки сторожится по самой странице `card/ClientCardPage.tsx`.
+const page = () => clientCardSource();
+const cardPage = () => clientCardPageSource();
 // Люди карточки, жильцы и дверь связи вынесены со страницы (правило 400 строк):
 // сторожа ниже смотрят туда, где этот код живёт теперь.
 const people = () => read("ClientPeopleDoor.tsx");
@@ -34,7 +39,7 @@ describe("единственное действие черновика — вн�
   });
 
   test("футер стоит внутри KeyboardAvoidingView, вне прокрутки, только у черновика", () => {
-    const src = page();
+    const src = cardPage();
     const scrollEnd = src.indexOf("</ScrollView>");
     const footer = src.indexOf("<ClientScreenFooter");
     const kavEnd = src.indexOf("</KeyboardLift>");
@@ -659,7 +664,7 @@ describe("дубль номера не заводится — плашка св�
   // Владелец 30.09: «если находит дубль — не даёт сдать, сразу плашка сверху,
   // что этот телефон уже зарегистрирован; лучше, чем страница „Дубли“».
   test("плашка стоит над блоком «Клиент», а не в слоте под номером", () => {
-    const src = page();
+    const src = cardPage();
     const notice = src.indexOf("<ClientDraftNotice");
     assert.notEqual(notice, -1, "плашка дубля пропала со страницы");
     assert.ok(notice < src.indexOf("<ClientHeader"), "плашка дубля снова под номером");
@@ -677,7 +682,7 @@ describe("общий список без чипа — все команды, н�
   // Владелец 1.10: «когда нет выбора команды — сразу все три команды, общий
   // список». Клиенты партнёра видны, но в выгрузку, рассылку и архив не
   // попадают: «Выбрать всё» и массовые действия считают только свою базу.
-  const list = () => read("../../../app/(dashboard)/clients/index.tsx");
+  const list = () => clientsListSource();
   test("без чипа — весь склеенный список", () => {
     assert.match(list(), /teamChoice === ALL_TEAMS \? clients : clientsOfTeam\(/);
   });
@@ -692,7 +697,7 @@ describe("общий список без чипа — все команды, н�
 // текст из списка шли по выключателю СВОЕЙ компании: лист меню стоял под
 // источником экрана, а флаг считался `useFeatureOn` открытой в календаре.
 describe("«Поделиться» из списка — реквизиты как на карточке, в компании строки", () => {
-  const list = () => read("../../../app/(dashboard)/clients/index.tsx");
+  const list = () => clientsListSource();
   test("лист меню стоит в компании строки", () => {
     assert.match(list(), /useLastNonNull\(menuClient \? \(guestOf\.get\(menuClient\.id\) \?\? scope\) : null\)/);
     assert.match(list(), /<RowScope scope=\{menuScope\}>\s*<ClientActionsSheet/);

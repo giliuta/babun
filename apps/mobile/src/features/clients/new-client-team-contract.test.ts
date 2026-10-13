@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { bookFormSource } from "../appointments/book-form/source-for-tests";
+import { clientCardSource } from "./card/source-for-tests";
 
 // НОВЫЙ КЛИЕНТ — ОТ ТОЙ КОМАНДЫ, КУДА ОН УЙДЁТ (аудит 03.10).
 // (а) Клиент, заведённый из записи, уходил в команду последнего чипа вкладки
@@ -17,7 +18,7 @@ const read = (path: string) => readFileSync(resolve(here, path), "utf8");
 describe("команда и страна нового клиента", () => {
   test("запись отдаёт карточке свою команду, карточка — черновику", () => {
     assert.match(bookFormSource(), /params: \{ id: "new", \.\.\.prefill, \.\.\.\(teamId \? \{ team: teamId \} : \{\}\) \}/);
-    assert.match(read("../../../app/(dashboard)/clients/[id].tsx"), /team: isDraft \? \(teamParam \?\? null\) : null,/);
+    assert.match(clientCardSource(), /team: isDraft \? \(teamParam \?\? null\) : null,/);
   });
 
   test("команда записи сильнее чипа вкладки", () => {

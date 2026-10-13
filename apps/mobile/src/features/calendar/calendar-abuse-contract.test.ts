@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 import { readModuleSource } from "@/lib/module-source";
 import { bookFormSource } from "../appointments/book-form/source-for-tests";
+import { clientCardSource } from "../clients/card/source-for-tests";
 
 // ЖЁСТКАЯ ПРОВЕРКА КАЛЕНДАРЯ 03.10 — СТОРОЖА ПРАВОК, КОТОРЫЕ НЕ ПОДНЯТЬ БЕЗ
 // СИМУЛЯТОРА (экран и жесты тянут react-native). Каждый держит конкретную
@@ -349,7 +350,7 @@ describe("повторный аудит календаря 03.10", () => {
     assert.match(screen(), /optOut: smsClient\?\.sms_opt_out === true,/);
     const book = bookFormSource();
     assert.match(book, /optOut: client\?\.sms_opt_out === true,/);
-    const card = readFileSync(resolve(here, "../../../app/(dashboard)/clients/[id].tsx"), "utf8");
+    const card = clientCardSource();
     assert.match(card, /optOut: c\.sms_opt_out === true,/);
   });
 

@@ -5,13 +5,13 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { invoiceEditorSource } from "../invoices/invoice-editor/editor-source";
 import { bookFormSource } from "./book-form/source-for-tests";
+import { clientCardSource } from "../clients/card/source-for-tests";
 
 // АУДИТ ФОРМЫ ЗАПИСИ, ИНВОЙСОВ И SMS 03.10 — сторожа на сборку экранов;
 // чистые правила (цена лестницы, поля партнёра, части SMS) проверены своими
 // тестами рядом с ними.
 const here = dirname(fileURLToPath(import.meta.url));
 const src = (rel: string) => readFileSync(resolve(here, "..", rel), "utf8");
-const app = (rel: string) => readFileSync(resolve(here, "../../../app", rel), "utf8");
 
 describe("аудит записи, инвойсов и SMS 03.10", () => {
   test("оплата судит «визит начался» по часам команды записи", () => {
@@ -83,7 +83,7 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   });
 
   test("SMS из карточки: «ближайшая запись» — по часам бизнеса", () => {
-    const card = app("(dashboard)/clients/[id].tsx");
+    const card = clientCardSource();
     assert.match(card, /today: now\.ymd,\s*nowHm: now\.hm,/);
   });
 });
