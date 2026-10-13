@@ -50,6 +50,7 @@ import { useThemeColors } from "@/theme/colors";
 const DISMISS_DISTANCE = 16;
 const DISMISS_VELOCITY = 400;
 export function CalendarNotice({
+  stamp,
   when,
   message,
   actionLabel,
@@ -57,7 +58,11 @@ export function CalendarNotice({
   onDismiss,
   lifetimeMs,
 }: {
-  /** Тапнутое время: «13:00» сегодня, «7 октября, 13:00» — в другой день. */
+  /** Номер тапа. Новый тап — та же плашка без нового появления (владелец
+   *  13.10: «подпрыгивает и заново открывается — как будто бах»): меняется
+   *  только время, полоска срока начинается заново. */
+  stamp: number;
+  /** Тапнутое время: «7 октября, 13:00». */
   when: string;
   message: string;
   actionLabel: string;
@@ -73,9 +78,10 @@ export function CalendarNotice({
   const dragY = useSharedValue(0);
 
   useEffect(() => {
+    life.value = 1;
     life.value = withTiming(0, { duration: lifetimeMs, easing: Easing.linear });
     return () => cancelAnimation(life);
-  }, [lifetimeMs, life]);
+  }, [stamp, lifetimeMs, life]);
 
   const dismiss = () => {
     haptics.tap();
@@ -194,8 +200,11 @@ export function CalendarNotice({
               <Text
                 numberOfLines={1}
                 maxFontSizeMultiplier={1.2}
+                // КОМПАКТНО (владелец 13.10: «слишком растянуто»): строки
+                // впритык — время и вопрос читаются одной подписью.
                 style={{
                   fontSize: 12,
+                  lineHeight: 14,
                   color: t.sub,
                   fontVariant: ["tabular-nums"],
                 }}
@@ -205,7 +214,7 @@ export function CalendarNotice({
               <Text
                 numberOfLines={1}
                 maxFontSizeMultiplier={1.2}
-                style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
+                style={{ fontSize: 14, lineHeight: 17, fontWeight: "600", color: t.ink }}
               >
                 {message}
               </Text>
