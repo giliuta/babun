@@ -35,3 +35,9 @@ test("экраны над табами (`(shared)`) не прячут подва
   const layout = read("../../../app/(shared)/_layout.tsx");
   assert.match(layout, /paddingBottom: Platform\.OS === "android" \? insets\.bottom : 0/);
 });
+
+test("инвойсы и чеки над табами тоже держат отступ навигации Android", () => {
+  for (const f of ["../../../app/invoices/_layout.tsx", "../../../app/documents/_layout.tsx"]) {
+    assert.match(read(f), /paddingBottom: Platform\.OS === "android" \? insets\.bottom : 0/, f);
+  }
+});

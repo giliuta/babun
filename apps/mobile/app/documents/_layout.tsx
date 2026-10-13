@@ -1,4 +1,6 @@
+import { Platform } from "react-native";
 import { Stack } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DashboardGate } from "@/lib/DashboardGate";
 import { useThemeColors } from "@/theme/colors";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -17,13 +19,20 @@ import { useDocumentLevel } from "@/features/documents/document-rights";
 // решает она сама (`ReceiptPage`); какие чеки видны, режет сервер.
 export default function DocumentsLayout() {
   const t = useThemeColors();
+  const insets = useSafeAreaInsets();
   const role = useCurrentRole().data;
   const level = useDocumentLevel();
   const stack = (
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: t.canvas },
+        // Низ — над навигацией Android: подвалы документов («Выставить»,
+        // «Оформить возврат») стоят у экранов `edges={["top"]}` и над табами
+        // ложились под «Назад / Домой» (13.10). На iOS вид прежний.
+        contentStyle: {
+          backgroundColor: t.canvas,
+          paddingBottom: Platform.OS === "android" ? insets.bottom : 0,
+        },
       }}
     />
   );
