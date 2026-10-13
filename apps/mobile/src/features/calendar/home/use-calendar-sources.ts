@@ -15,6 +15,8 @@ import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { useMyAccess } from "@/features/access/queries";
 import { useSession } from "@/providers/SessionProvider";
+import { clientKeys } from "@/features/clients/query-keys";
+import { referenceKeys } from "@/features/reference/query-keys";
 
 /** Data the calendar screen reads: records, clients, services, calendars,
  *  settings, role and access, plus the pull-to-refresh wiring. */
@@ -85,12 +87,12 @@ export function useCalendarSources() {
     () =>
       Promise.all([
         qc.invalidateQueries({ queryKey: ["appointments"] }),
-        qc.invalidateQueries({ queryKey: ["clients"] }),
+        qc.invalidateQueries({ queryKey: clientKeys.all() }),
         qc.invalidateQueries({ queryKey: ["services"] }),
-        qc.invalidateQueries({ queryKey: ["teams"] }),
+        qc.invalidateQueries({ queryKey: referenceKeys.teamAll() }),
         qc.invalidateQueries({ queryKey: ["calendar-settings"] }),
         qc.invalidateQueries({ queryKey: ["team-schedules"] }),
-        qc.invalidateQueries({ queryKey: ["cities"] }),
+        qc.invalidateQueries({ queryKey: referenceKeys.cityAll() }),
         qc.invalidateQueries({ queryKey: ["day-cities"] }),
       ]),
     [qc],
