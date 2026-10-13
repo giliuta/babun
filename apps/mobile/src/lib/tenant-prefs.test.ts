@@ -5,6 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { MemoryKVStorage, setStorage } from "@babun/shared/storage";
 import { CHROME_STORAGE_KEY } from "./chrome-cache";
+import { readModuleSource } from "./module-source";
 
 import {
   TENANT_SCOPED_KEY_PREFIXES,
@@ -108,7 +109,7 @@ describe("настройки, помнящиеся по компании", () =>
   });
 
   test("чистка при переходе спрашивает реестр, а не свой список", () => {
-    const authClear = readFileSync(resolve(here, "auth-clear.ts"), "utf8");
+    const authClear = readModuleSource(resolve(here, "auth-clear.ts"));
     assert.match(authClear, /isTenantScopedKey\(key\)/);
     // Второй список тех же префиксов внутри чистки разойдётся с реестром на
     // первой же правке — именно так в продукте и заводятся две правды.

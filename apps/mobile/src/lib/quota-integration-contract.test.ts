@@ -24,7 +24,7 @@ function ordered(sourceText: string, first: string, second: string): void {
 describe("mobile create quota integration", () => {
   test("client and appointment hooks preflight before the cached create", () => {
     const clients = readModuleSource(path.join(MOBILE_ROOT, "src/features/clients/queries.ts"));
-    const appointments = source("src/features/calendar/mutations.ts");
+    const appointments = readModuleSource(path.join(MOBILE_ROOT, "src/features/calendar/mutations.ts"));
 
     ordered(clients, "await preflightQuotaForCreate", "return createClientCached");
     assert.match(clients, /online:\s*isOnline\(\)/);

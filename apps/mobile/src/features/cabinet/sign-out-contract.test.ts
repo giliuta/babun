@@ -28,7 +28,7 @@ function functionBody(source: string, declaration: string): string {
 describe("выход из аккаунта", () => {
   test("обычная «Выйти» гасит только сессию этого устройства", () => {
     const body = functionBody(
-      read("../../lib/auth-clear.ts"),
+      readModuleSource(resolve(here, "../../lib/auth-clear.ts")),
       "export async function signOutAndWipe()",
     );
     assert.match(body, /signOutScopeAndWipe\("local"\)/);
@@ -45,7 +45,10 @@ describe("выход из аккаунта", () => {
   test("«Выйти из аккаунта» в Кабинете всегда спрашивает (аудит 03.10)", () => {
     const cabinet = read("../../../app/(dashboard)/cabinet/index.tsx");
     assert.match(cabinet, /onPress=\{\(\) => void confirmAndSignOut\(\)\}/);
-    const body = functionBody(read("../../lib/auth-clear.ts"), "export async function confirmAndSignOut()");
+    const body = functionBody(
+      readModuleSource(resolve(here, "../../lib/auth-clear.ts")),
+      "export async function confirmAndSignOut()",
+    );
     assert.match(body, /confirmAction\("Выйти из аккаунта\?"/);
     assert.match(body, /signOutScopeAndWipe\("local"\)/);
     assert.doesNotMatch(body, /"global"/);

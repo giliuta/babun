@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 import { bookFormSource } from "../appointments/book-form/source-for-tests";
 import { clientCardSource } from "./card/source-for-tests";
 
@@ -22,12 +23,12 @@ describe("команда и страна нового клиента", () => {
   });
 
   test("команда записи сильнее чипа вкладки", () => {
-    const draft = read("useClientDraft.ts");
+    const draft = readModuleSource(resolve(here, "useClientDraft.ts"));
     assert.match(draft, /const newClientTeam =\s*bookingTeam \?\? teamForNewClient\(/);
   });
 
   test("команда черновика ставится сразу, выбранную руками не трогает", () => {
-    const draft = read("useClientDraft.ts");
+    const draft = readModuleSource(resolve(here, "useClientDraft.ts"));
     assert.match(draft, /\(!current\.team_id \|\| current\.team_id === previous\) &&\s*current\.team_id !== newClientTeam/);
   });
 

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 import { orderMovable } from "./block-order";
 import { bookFormSource } from "./book-form/source-for-tests";
 
@@ -10,7 +11,7 @@ import { bookFormSource } from "./book-form/source-for-tests";
 // вторым клиент — и самому редактировать»).
 //
 const here = dirname(fileURLToPath(import.meta.url));
-const prefs = readFileSync(resolve(here, "booking-prefs.ts"), "utf8");
+const prefs = readModuleSource(resolve(here, "booking-prefs.ts"));
 
 const RECORD = ["client", "object", "services", "payment", "note", "files"];
 

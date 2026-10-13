@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { readModuleSource } from "@/lib/module-source";
 import { bookFormSource } from "./book-form/source-for-tests";
 
 // ФОРМА ЗАПИСИ НА ЛЕЖАЩЕМ СЕРВЕРЕ (03.10 вечер, шлюз отдавал 503/525).
@@ -57,7 +58,7 @@ describe("booking form while the server is down", () => {
   });
 
   test("the owner's repeated «Создать» after a dropped answer is the same record", () => {
-    const mutations = readFileSync(path.join(MOBILE, "src/features/calendar/mutations.ts"), "utf8");
+    const mutations = readModuleSource(path.join(MOBILE, "src/features/calendar/mutations.ts"));
     assert.match(mutations, /if \(isOwnRecordAlreadyCreated\(error as Error\)\) return stampedOwn;/);
   });
 });

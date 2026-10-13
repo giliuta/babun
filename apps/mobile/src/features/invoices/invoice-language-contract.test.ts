@@ -109,7 +109,7 @@ describe("язык бумаги инвойса", () => {
 
   // КЛИЕНТ НА ЧЕКЕ — «ПЛАТЕЛЬЩИК», А НЕ «ПОЛУЧАТЕЛЬ» ИНВОЙСА (019, 04.10).
   test("на чеке клиент подписан словом чека, а не словом инвойса", () => {
-    const doc = read("../documents/receipt-document.ts");
+    const doc = readModuleSource(resolve(here, "../documents/receipt-document.ts"));
     assert.doesNotMatch(doc, /label: dict\.recipient/);
     assert.equal((doc.match(/label: words\.payer/g) ?? []).length, 2);
     for (const { code } of UI_LOCALES) assert.ok(RECEIPT_WORDS[code].payer.trim(), code);

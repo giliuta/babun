@@ -1,59 +1,29 @@
-export type PriceTierValue = {
-  min_qty: number;
-  price_per_unit: number;
-};
+import { looseNumber, parseCostDrafts, parseDurationTiers, parsePriceTiers } from "./economics/parse";
+import type {
+  CostTierValue,
+  DurationTierValue,
+  PriceTierValue,
+  ServiceEconomicsDraft,
+  ServiceEconomicsErrors,
+  ServiceEconomicsValue,
+  ServiceTierDraft,
+  ServiceTierErrors,
+} from "./economics/types";
 
-export type DurationTierValue = {
-  min_qty: number;
-  duration_minutes: number;
-};
+// Service economics: tier draft <-> stored values. Shapes and stored-JSON
+// readers live in `./economics/`.
 
-export interface ServiceTierDraft {
-  id: string;
-  minQuantity: string;
-  rowPrice: string;
-  /** Расход за одну на этом количестве. Пустым не бывает: очищенный
-   *  схлопывается в «0» — расход не доходит до клиента, он живёт только в
-   *  прибыли, поэтому здесь пусто МОЖНО читать как ноль (у цены нельзя). */
-  rowCost: string;
-  totalDuration: string;
-}
-
-export interface ServiceEconomicsDraft {
-  tiers: ServiceTierDraft[];
-}
-
-export interface ServiceTierErrors {
-  minQuantity?: string;
-  rowPrice?: string;
-  rowCost?: string;
-  totalDuration?: string;
-  row?: string;
-}
-
-export interface ServiceEconomicsErrors {
-  tiers: Record<string, ServiceTierErrors>;
-}
-
-export type CostTierValue = {
-  min_qty: number;
-  cost_per_unit: number;
-};
-
-export interface ServiceEconomicsValue {
-  price_tiers: PriceTierValue[] | null;
-  duration_tiers: DurationTierValue[] | null;
-  /** Пустая лестница расхода уезжает пустым массивом, а не `null`: колонка
-   *  `not null default '[]'`, и снятое пишем явно — патч частичный. */
-  cost_tiers: CostTierValue[];
-  /** ЗЕРКАЛО ОПТА ОБНУЛЯЕТСЯ ЯВНО, А НЕ «ПЕРЕСТАЁТ ПИСАТЬСЯ» (2026-08-21).
-   *  Обновление услуги шлёт ЧАСТИЧНЫЙ патч, а `rowPrice` падает в
-   *  легаси-ветку ровно тогда, когда `price_tiers` пуст: без явного нуля
-   *  убранная цена от количества воскресала из этих двух колонок и считала
-   *  деньги в записи. Читатель легаси остаётся — уходит только писатель. */
-  bulk_threshold: number;
-  bulk_price: number;
-}
+export type {
+  CostTierValue,
+  DurationTierValue,
+  PriceTierValue,
+  ServiceEconomicsDraft,
+  ServiceEconomicsErrors,
+  ServiceEconomicsValue,
+  ServiceTierDraft,
+  ServiceTierErrors,
+} from "./economics/types";
+export { parseDurationTiers, parsePriceTiers } from "./economics/parse";
 
 interface ServiceEconomicsSource {
   cost_tiers?: unknown;
@@ -61,89 +31,6 @@ interface ServiceEconomicsSource {
   duration_tiers?: unknown;
   bulk_threshold?: unknown;
   bulk_price?: unknown;
-}
-
-type LooseRecord = Record<string, unknown>;
-
-function asLooseArray(raw: unknown): unknown[] {
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw !== "string") return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function asRecord(value: unknown): LooseRecord | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as LooseRecord)
-    : null;
-}
-
-function looseNumber(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value !== "string" || value.trim() === "") return null;
-  const parsed = Number(value.trim().replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function tierMinimum(record: LooseRecord): number | null {
-  const value = looseNumber(
-    record.min_qty ??
-      record.min_quantity ??
-      record.minimum_quantity ??
-      record.threshold,
-  );
-  return value !== null && Number.isSafeInteger(value) && value >= 2 ? value : null;
-}
-
-/** Accepts current DB JSON and known legacy aliases. Invalid rows are ignored. */
-export function parsePriceTiers(raw: unknown): PriceTierValue[] {
-  const byMinimum = new Map<number, PriceTierValue>();
-  for (const item of asLooseArray(raw)) {
-    const record = asRecord(item);
-    if (!record) continue;
-    const minQuantity = tierMinimum(record);
-    const price = looseNumber(
-      record.price_per_unit ?? record.unit_price ?? record.price,
-    );
-    if (minQuantity === null || price === null || price < 0) continue;
-    byMinimum.set(minQuantity, {
-      min_qty: minQuantity,
-      price_per_unit: price,
-    });
-  }
-  return [...byMinimum.values()].sort((a, b) => a.min_qty - b.min_qty);
-}
-
-/** Accepts current DB JSON and known legacy aliases. Invalid rows are ignored. */
-export function parseDurationTiers(raw: unknown): DurationTierValue[] {
-  const byMinimum = new Map<number, DurationTierValue>();
-  for (const item of asLooseArray(raw)) {
-    const record = asRecord(item);
-    if (!record) continue;
-    const minQuantity = tierMinimum(record);
-    const duration = looseNumber(
-      record.duration_minutes ??
-        record.total_duration_minutes ??
-        record.total_duration,
-    );
-    if (
-      minQuantity === null ||
-      duration === null ||
-      !Number.isSafeInteger(duration) ||
-      duration < 0
-    ) {
-      continue;
-    }
-    byMinimum.set(minQuantity, {
-      min_qty: minQuantity,
-      duration_minutes: duration,
-    });
-  }
-  return [...byMinimum.values()].sort((a, b) => a.min_qty - b.min_qty);
 }
 
 export function economicsDraftFromService(
@@ -214,28 +101,6 @@ export function nextDuration(existing: ServiceTierDraft[], baseDuration: number)
   const step = last - series[series.length - 2];
   return Math.max(0, last + step);
 }
-
-/** НОВАЯ СТРОКА НЕ ПОДСТАВЛЯЕТ ЦЕНУ (владелец 2026-08-21: «когда я добавляю
- *  новое, оно меняет цену всегда на 50 — мне это не нравится»). Цена от
- *  количества почти всегда НИЖЕ базовой, поэтому подставленная база — это не
- *  подсказка, а лишняя работа: её надо стереть и напечатать своё. Количество и
- *  время подставляются, потому что там угадывать нечего: следующее свободное
- *  число и та же работа, взятая столько раз. */
-function parseCostDrafts(raw: unknown): CostTierValue[] {
-  const byMinimum = new Map<number, CostTierValue>();
-  for (const item of asLooseArray(raw)) {
-    const record = asRecord(item);
-    if (!record) continue;
-    const minimum = tierMinimum(record);
-    const cost = looseNumber(record.cost_per_unit ?? record.cost);
-    if (minimum === null || cost === null || cost < 0) continue;
-    byMinimum.set(minimum, { min_qty: minimum, cost_per_unit: cost });
-  }
-  return [...byMinimum.values()].sort((a, b) => a.min_qty - b.min_qty);
-}
-
-
-
 
 /** НОВАЯ СТРОКА НЕ ПОДСТАВЛЯЕТ ЦЕНУ (владелец 2026-08-21: «когда я добавляю
  *  новое, оно меняет цену всегда на 50 — мне это не нравится»). Цена от

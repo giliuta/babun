@@ -1,4 +1,4 @@
-import type { Database, Json } from "@babun/shared/db/database.types";
+import type { Json } from "@babun/shared/db/database.types";
 import { getPaidAmount, type Appointment } from "@babun/shared/local/appointments";
 import { ACQUISITION_LABELS } from "@babun/shared/local/clients";
 import { TX_TYPE_LABEL } from "@babun/shared/local/finance/transaction";
@@ -20,77 +20,28 @@ import { csvCell, csvDocument, csvTextCell } from "@/lib/share-csv";
 //
 // ДАТЫ — КАК ЛЕЖАТ В БАЗЕ, `ГГГГ-ММ-ДД`: Excel читает их датой при любой
 // локали, а по алфавиту они совпадают с хронологией.
+//
+// Export kinds and row shapes live in `./data-export/types.ts`.
 
-type Row<T extends keyof Database["public"]["Tables"]> =
-  Database["public"]["Tables"][T]["Row"];
+import type {
+  AccountRef,
+  AppointmentExportRow,
+  ClientExportRow,
+  ExportKind,
+  Names,
+  SourceRef,
+  TransactionExportRow,
+} from "./data-export/types";
 
-export type ExportKind = "clients" | "appointments" | "finances";
-
-export const EXPORT_KINDS: readonly ExportKind[] = ["clients", "appointments", "finances"];
-
-// ─── Строки, которые читает хук (колонки — те же, что в его select) ─────────
-
-export type ClientExportRow = Pick<
-  Row<"clients">,
-  | "id"
-  | "full_name"
-  | "phone"
-  | "email"
-  | "team_id"
-  | "city"
-  | "acquisition_source"
-  | "birthday"
-  | "comment"
-  | "notes"
-  | "created_at"
->;
-
-export type AppointmentExportRow = Pick<
-  Row<"appointments">,
-  | "id"
-  | "date"
-  | "time_start"
-  | "time_end"
-  | "kind"
-  | "team_id"
-  | "client_id"
-  | "status"
-  | "services"
-  | "total_amount"
-  | "paid_amount"
-  | "prepaid_amount"
-  | "payment_status"
-  | "payments"
-  | "payment"
-  | "address"
-  | "comment"
-  | "event_notes"
->;
-
-export type TransactionExportRow = Pick<
-  Row<"finance_transactions">,
-  | "id"
-  | "type"
-  | "amount"
-  | "occurred_on"
-  | "occurred_time"
-  | "category_id"
-  | "account_id"
-  | "team_id"
-  | "client_id"
-  | "notes"
-  | "vat_amount"
-  | "vat_mode"
-  | "created_at"
->;
-
-export type SourceRef = Pick<Row<"client_sources">, "id" | "name" | "key" | "team_id">;
-
-/** Счёт с командой, на которую он записан: по нему находятся операции без
- *  команды (см. `financeTeamFilter`). */
-export type AccountRef = Pick<Row<"accounts">, "id" | "name" | "brigade_id">;
-
-type Names = ReadonlyMap<string, string>;
+export {
+  EXPORT_KINDS,
+  type AccountRef,
+  type AppointmentExportRow,
+  type ClientExportRow,
+  type ExportKind,
+  type SourceRef,
+  type TransactionExportRow,
+} from "./data-export/types";
 
 // ─── Мелочи ─────────────────────────────────────────────────────────────────
 

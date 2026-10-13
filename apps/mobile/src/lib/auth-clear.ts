@@ -1,10 +1,9 @@
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { getStorage } from "@babun/shared/storage";
-import { cacheClearAll, queueDepth } from "@babun/shared/db/cache/sql";
+import { queueDepth } from "@babun/shared/db/cache/sql";
 import { confirmAction } from "@/lib/confirm";
 import { queryClient } from "@/lib/query-client";
 import { unsentChangesNote } from "@/lib/unsent-changes";
-import { forgetRevealedContacts } from "@/features/clients/revealed-contacts";
 import { notify } from "./notify";
 import { supabase } from "@/lib/supabase";
 import {
@@ -14,16 +13,18 @@ import {
   restoreActiveTenantId,
   setActiveTenantId,
 } from "@/lib/active-tenant";
-import { isTenantScopedKey } from "@/lib/tenant-prefs";
-import { sweepQueryCacheOnSwitch } from "@/lib/switch-cache-sweep";
 import { settleClaimDebt } from "@/lib/claim-catch-up";
-import { notificationsForWipe } from "@/lib/wipe-plan";
 import {
   babunNotificationRegistrySnapshot,
-  clearAllBabunNotifications,
   suspendAllBabunNotifications,
 } from "@/lib/notifications";
-import { resetTeamPrefsCache } from "@/features/cabinet/notification-prefs-cache";
+import {
+  LAST_USER_KEY,
+  consumeSignedOutOnPurpose,
+  wipeTenantScopedData,
+} from "./auth-clear/wipe";
+
+export { wipeLocalData, wipeTenantScopedData } from "./auth-clear/wipe";
 
 // Wipe device-local data when this device must no longer see the previous
 // account's data. Originally ported from the Next.js web app's
@@ -45,272 +46,14 @@ import { resetTeamPrefsCache } from "@/features/cabinet/notification-prefs-cache
 //     nuked real user data on web (v504). Native notifications ARE suspended
 //     immediately so a revoked/expired session cannot keep exposing client PII.
 //     Their logical queue survives and can be restored after a transient blip.
-
-// Every Babun-owned key starts with one of these — a prefix sweep catches new
-// modules automatically (no «we forgot to add the key» follow-ups).
-const TENANT_PREFIXES = ["babun-", "babun2:", "babun:", "calendar."];
-
-// Identity stamp — must SURVIVE the wipe so the next sign-in can detect a
-// different account (the LAST_USER_KEY / KEEP_KEYS pair carried over from web).
-const LAST_USER_KEY = "babun:auth:last-user-id";
-const KEEP_KEYS = new Set<string>([LAST_USER_KEY]);
-
-// Выбранная компания тоже переживает чистку: при переходе она и есть то, ради
-// чего переход случился, — стереть её значит вернуть человека туда, откуда он
-// ушёл. Аккаунт при этом меняется РЕДКО, и тогда ключ уносит ветка ниже
-// (`handleAuthEvent`), а не общий подмёт.
-const KEEP_PREFIXES = [ACTIVE_TENANT_KEY_PREFIX, PENDING_CLAIM_KEY_PREFIX];
+//
+// The wipe (kept keys, query-cache sweep, SQLite) lives in `./auth-clear/wipe.ts`.
 
 // Supabase publishes SIGNED_OUT before an awaiting UI handler necessarily
 // finishes its local cleanup. SessionProvider waits on this barrier so the
 // login tree cannot mount (and another account cannot sign in) while the old
 // tenant's SQLite queue is still present.
 let intentionalSignOutBarrier: Promise<void> | null = null;
-
-// ВЫШЕЛ И ВОШЁЛ ТЕМ ЖЕ ЧЕЛОВЕКОМ — КЭШ ЗАПРОСОВ НАЧИНАЕТСЯ ЗАНОВО (06.10).
-//
-// Чистка на выходе сносит кэш, пока экраны вошедшего ещё на месте, и всё,
-// что они успели перечитать до ухода на логин, ложится в те же ключи, под
-// которыми вернувшийся человек будет читать снова: компания та же, человек
-// тот же, чистки на входе нет. Так пустой ответ анониму стал серыми метками
-// (видео для App Review). Заслонка теперь такие запросы отбивает
-// (`getSignedInUserId`), а этот флаг — вторая стена: всё, что осталось без
-// подписчиков с момента выхода, на входе выбрасывается и читается заново.
-// Ставит его полная чистка кэша (`wipeFastStores` без подписчиков) — значит,
-// и «Выйти», и выход со всех устройств, и чистка после удаления аккаунта.
-let signedOutOnPurpose = false;
-
-// ДВА РЕЖИМА ЧИСТКИ, И ВЫБОР МЕЖДУ НИМИ — НЕ ВКУС.
-//
-// `queryClient.clear()` сносит САМИ запросы. Экран, подписанный на такой
-// запрос, остаётся с замороженным снимком «идёт загрузка» и никогда не узнаёт,
-// что загрузка кончилась: будить некого, объекта больше нет.
-//
-// Пока чистка случалась только на выходе из аккаунта, это не стреляло: дерево
-// уходит на логин, подписчиков не остаётся. Выстрелило, когда чистка пошла
-// СЕРЕДИНОЙ сессии — при переходе в другую компанию: гейт «Открываем
-// компанию» висел шестьдесят секунд при пяти секундах самой работы, потому
-// что ответ пришёл, а сказать о нём было некому (замер 2026-09-12).
-//
-// Поэтому чистка посреди работы СБРАСЫВАЕТ запросы, а не сносит: данных
-// прежней компании сброс так же не оставляет, но подписчики остаются живыми и
-// узнают, что данных больше нет. На выходе из аккаунта остаётся `clear()` —
-// там сброс означал бы залп запросов без сессии.
-function wipeFastStores(
-  keepSubscribers: boolean,
-  keepTenantNamedKeys = false,
-  knownTenantIds?: readonly string[],
-): void {
-  const storage = getStorage();
-  for (const key of storage.list()) {
-    if (KEEP_KEYS.has(key)) continue;
-    if (KEEP_PREFIXES.some((p) => key.startsWith(p))) continue;
-    // ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ НЕ СНОСИТ КЛЮЧИ, КОТОРЫЕ КОМПАНИЮ НАЗЫВАЮТ.
-    //
-    // Такой ключ безопасен по построению: под другой компанией его просто не
-    // прочитают — имя не совпадёт. А снос превращал «настройку компании» в
-    // «настройку до первого переключения»: способы связи, блоки записи, карты,
-    // шаблоны SMS и вид календаря возвращались к умолчаниям на каждом переходе,
-    // хотя все они уже давно носят компанию в имени. Список — в `tenant-prefs`.
-    //
-    // На выходе из аккаунта они уходят вместе со всем остальным: компанию они
-    // называют, а ЧЕЛОВЕКА нет, и на общем телефоне их оставлять нельзя.
-    if (keepTenantNamedKeys && isTenantScopedKey(key)) continue;
-    if (TENANT_PREFIXES.some((p) => key.startsWith(p))) storage.remove(key);
-  }
-  // Копия настроек уведомлений живёт и в памяти — на выходе из аккаунта
-  // уходит вместе с MMKV (проверка системы 03.10).
-  if (!keepTenantNamedKeys) resetTeamPrefsCache();
-  if (!keepSubscribers) {
-    // Номера, открытые сотрудником дверью, живут только в памяти — и на
-    // выходе уходят вместе с остальным (30.09).
-    forgetRevealedContacts();
-    queryClient.clear();
-    signedOutOnPurpose = true;
-    return;
-  }
-
-  // ПЕРЕХОД НЕ ВЫБРАСЫВАЕТ ДАННЫЕ КОМПАНИИ, В КОТОРУЮ ИДЁТ.
-  //
-  // Владелец 2026-09-12: «всё равно очень долго открывается, должно
-  // моментально — сразу топаю на Команду 1, и сразу видно записи». Замер
-  // показал не медленную сеть, а СКЕЛЕТ: после перехода календарь рисовал
-  // серые заглушки вместо дат и записей.
-  //
-  // Виноват был `resetQueries()`. Она стирает данные У ВСЕХ запросов — включая
-  // те, что принадлежат компании, КУДА мы переходим и которые лежали готовыми
-  // с прошлого захода. То есть каждое переключение делалось холодным на
-  // ровном месте: данные были, их выбрасывали, и человек ждал сеть.
-  //
-  // Выбрасывать всё подряд и не требовалось: 59 ключей из 69 НАЗЫВАЮТ
-  // компанию (`["appointments", tenantId, role]`), а такой запрос чужого не
-  // покажет по построению — под другой компанией у него другой ключ.
-  //
-  // Поэтому: запросы ЛЮБОЙ из компаний человека остаются и рисуются
-  // НЕМЕДЛЕННО, а помечаются протухшими и досчитываются в фоне. Всё остальное
-  // сносится — сюда попадает и `["client", id]`, ключ которого компанию не
-  // называет и потому мог бы показать карточку клиента прежней фирмы.
-  //
-  // ЛЮБОЙ, А НЕ ТОЛЬКО ТОЙ, КУДА ИДЁМ — это правка второй попытки. Первая
-  // берегла лишь компанию назначения и тем самым стирала кэш той, откуда
-  // уходим: круг «AirFix → Giliuta → AirFix» оставался холодным на обратном
-  // пути, и владелец снова видел скелет. Поймано на симуляторе.
-  if (knownTenantIds?.length) {
-    // Снос ничьих ключей и немедленный перезапрос ленты календарей — в листе
-    // `switch-cache-sweep.ts`: там их зовёт тест, а не копия строк. Там же
-    // разбор двойных чипов: ленту перечитываем, флаг «активная» руками не
-    // трогаем.
-    sweepQueryCacheOnSwitch(queryClient, knownTenantIds);
-
-    // ПОМЕТКИ «ПРОТУХЛО» НА ВЕСЬ КЭШ БОЛЬШЕ НЕТ, И ЭТО ГЛАВНАЯ ПРАВКА ПО
-    // СКОРОСТИ ПЕРЕХОДА (владелец 2026-09-15: «загружается с задержкой»).
-    //
-    // Здесь стояло `invalidateQueries({ refetchType: "none" })`. Само оно в
-    // сеть не ходило, но делало протухшим каждый ключ — и новая компания,
-    // рисуясь, запрашивала заново ВСЁ, что уже лежало тёплым: 17–20 запросов
-    // разом, а бесплатный план держал их в очереди по 3–5 с. Теперь ключи
-    // компаний сохраняют свою свежесть, а что перечитать, решает возраст
-    // данных: `staleTime` по умолчанию и тихая очередь дообновления
-    // (`switch-revalidate.ts`), по два запроса за раз.
-    //
-    // ГОНКА ПОТЕРИ ДАННЫХ ОТ ЭТОГО НЕ ОТКРЫВАЕТСЯ. Она такая: запрос ПРЕЖНЕЙ
-    // компании, у которого её `tenantId` закрыт в замыкании, уходит уже с
-    // НОВЫМ заголовком; сервер честно отвечает нулём строк (компания в
-    // фильтре одна, а заголовок называет другую), и обёртка кэша принимает это
-    // за авторитетный ответ — `cacheReplaceTenant` УДАЛЯЕТ строки прежней
-    // компании и ставит метку «сервер сказал: пусто». Возврат в неё холодный,
-    // офлайн — пустой день.
-    //
-    // Закрыта она так:
-    //   • пометка «протух» и сама не перезапрашивала (`refetchType: "none"`),
-    //     а теперь её нет вовсе — у прежней компании нет ни пометки, ни
-    //     наблюдателей, будить её нечем;
-    //   • экран после перехода спрашивает ДРУГИЕ ключи — новой компании;
-    //   • ключ другой компании человека живёт под длинным порогом свежести,
-    //     так что экран, успевший смонтироваться в кадре перехода, не уйдёт с
-    //     ним в сеть под чужим заголовком;
-    //   • и главное — чтения SQLite-обёрток (записи, клиенты, теги, архив и
-    //     корзина) идут клиентом, ПРИВЯЗАННЫМ к компании ключа
-    //     (`tenantBoundClient`): все страницы и отпущенное фоновое
-    //     перечитывание несут её заголовок, куда бы ни перешло устройство.
-    //
-    // Сверка очереди дообновления «устройство всё ещё в этой компании» гонку
-    // НЕ закрывает, и считать так было ошибкой: она покрывает только СТАРТ
-    // перечитывания. Обёртка отдаёт снимок сразу и читает сеть уже после —
-    // страница за страницей, по 2–6 с каждая, — и следующие запросы брали бы
-    // заголовок в момент отправки.
-    return;
-  }
-
-  // Компания неизвестна (чистка не из перехода) — прежнее поведение.
-  void queryClient.resetQueries();
-}
-
-/** Убирает с устройства всё, что помнило прежнюю компанию, и ЖДЁТ, пока это
- *  случится: при переходе в другую компанию следующий токен не имеет права
- *  ничего нарисовать, пока живы MMKV, кэш запросов и офлайн-очередь прежней.
- *
- *  `keepSubscribers` обязателен, когда чистка идёт ПОСРЕДИ работающей сессии
- *  (тот самый переход): иначе смонтированные экраны застынут на «загрузке»
- *  навсегда — объяснение над `wipeFastStores`.
- *
- *  `keepLocalCache` — ТОЖЕ про переход, и это про сохранность работы. Разбор
- *  над `cacheClearAll` ниже. */
-
-export async function wipeTenantScopedData(
-  opts: {
-    keepSubscribers?: boolean;
-    keepLocalCache?: boolean;
-    /** ВСЕ компании человека. Запросы, чьи ключи их называют, не
-     *  выбрасываются — см. разбор выше; без списка чистка ведёт себя как
-     *  прежде. Беречь ТОЛЬКО компанию назначения нельзя: так стирается кэш
-     *  той, откуда уходим, и обратный путь снова холодный. */
-    knownTenantIds?: readonly string[];
-  } = {},
-): Promise<void> {
-  // ОТМЕНА НЕ ЖДЁТСЯ, И ЭТО ГЛАВНАЯ СТРОКА ПО СКОРОСТИ ПЕРЕХОДА.
-  //
-  // `cancelQueries()` возвращает обещание, которое исполняется, когда УЖЕ
-  // ОТПРАВЛЕННЫЕ запросы отменятся или доедут. Запросы supabase сигнала отмены
-  // не принимают, поэтому «отменятся» для них означает «доедут»: `await` здесь
-  // держал переход до конца летящих сейчас поездок. Замер на симуляторе —
-  // 695 мс из 981 мс всего перехода, и это на быстрой сети; на телефоне в поле
-  // столько же будет стоить одна поездка.
-  //
-  // Ждать незачем. Поздний ответ компании, которую мы покидаем, ложится в
-  // ключ, НАЗЫВАЮЩИЙ её, — под новой компанией такой ключ никто не читает, а
-  // мы его теперь и не сносим. Ключи без компании сносятся ниже, и поздний
-  // ответ в снесённый запрос никто не отрисует.
-  void queryClient.cancelQueries();
-
-  // НАТИВНЫЕ УВЕДОМЛЕНИЯ ГАСНУТ ПЕРВЫМИ — иначе на локскрине остаются имена
-  // клиентов компании, из которой человек уже ушёл. Это условие не обсуждается
-  // и держится контрактом `notification-privacy-contract.test.ts`.
-  //
-  // А вот СПИСОК напоминаний при переходе остаётся жив, и это правка бага:
-  // `clearAllBabunNotifications` уносит реестр целиком, то есть переключение в
-  // другую компанию безвозвратно стирало напоминания, выставленные руками, — у
-  // ОБЕИХ компаний сразу. Человек возвращался к себе, а «позвонить клиенту в
-  // 9:00» больше не существовало. `suspend` снимает доставку, но оставляет
-  // список, и он восстанавливается, как только компания снова открыта.
-  if (notificationsForWipe(opts) === "clear") {
-    await clearAllBabunNotifications();
-  }
-
-  wipeFastStores(
-    opts.keepSubscribers ?? false,
-    opts.keepLocalCache ?? false,
-    opts.knownTenantIds,
-  );
-
-  // ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ НЕ СНОСИТ SQLite, И ЭТО НЕ ПОСЛАБЛЕНИЕ.
-  //
-  // `cacheClearAll()` бьёт по ВСЕМ пяти таблицам разом, а строки в них уже
-  // разложены по компаниям: `clients`, `appointments` и `tags` несут колонку
-  // `tenant_id` с индексом, и запрос другой компании их и так не читает.
-  // Значит снос ничего не защищает — он только заставляет заново скачать всё
-  // при возврате назад. Именно это владелец чувствует как «лаг» на ВТОРОМ
-  // переключении: первое качает одну компанию, второе — снова обе.
-  //
-  // Отдельно про `sync_queue`, и это уже не про скорость, а про потерю
-  // работы. Очередь несохранённых операций ГЛОБАЛЬНА, и снос уносил из неё всё
-  // подряд, включая то, что человек только что набрал в прежней компании.
-  // Защитой это не было никогда: `sync/replayer.ts` сам сверяет
-  // `payload.tenant_id` с активной компанией и чужие операции не выгружает, а
-  // ОСТАВЛЯЕТ в очереди (tenant-gate, offline-plan risk #1). То есть граница
-  // между компаниями держится у выгрузки, а чистка лишь уничтожала работу до
-  // того, как её успели отправить.
-  //
-  // На выходе из аккаунта снос остаётся обязательным: там устройство не имеет
-  // права помнить ни строки — это и есть межтенантная защита.
-  if (opts.keepLocalCache) return;
-  try {
-    await cacheClearAll();
-  } catch {
-    // SQLite is not injected on Expo web/pre-bootstrap. MMKV + Query remain
-    // cleared, and native bootstrap always injects before a user can switch.
-  }
-}
-
-/** Drop every tenant-scoped local key + the in-memory query cache + the
- *  SQLite offline cache (clients / appointments / tags / sync_queue /
- *  sync_meta). Without the SQLite wipe, Tenant A's cached rows AND — worse
- *  — A's un-drained sync_queue ops survive a logout→login-B on the same
- *  device: those ops would replay onto the server under B's session
- *  (cross-tenant leak, offline-plan risk #1). This compatibility helper keeps
- *  the old fire-and-forget shape for post-deletion/global-signout call sites;
- *  normal logout and account-switch guards use wipeTenantScopedData() and
- *  await the SQLite clear before another session can render. */
-export function wipeLocalData(): void {
-  void clearAllBabunNotifications();
-  wipeFastStores(false);
-  void cacheClearAll().catch(() => {
-    // Cache not injected yet (SqlAdapter set only on native bootstrap) or a
-    // transient SQLite error — swallow. The cross-tenant leak this guards
-    // only materialises once slice 4 wires mutations onto the wrappers; on
-    // web / pre-bootstrap there is nothing to clear.
-  });
-}
 
 /** The sentence about changes still waiting in the sync queue, or null when
  *  nothing would be lost (an unreadable cache has nothing to lose either). */
@@ -474,8 +217,7 @@ export async function handleAuthEvent(
   // Тот же человек после выхода: сессия ещё не опубликована, на экране
   // логин, значит всё, что без подписчиков, — хвост вышедших страниц.
   // Удаление гасит и повторы запросов, отбитых заслонкой в том окне.
-  if (signedOutOnPurpose) {
-    signedOutOnPurpose = false;
+  if (consumeSignedOutOnPurpose()) {
     if (prev === next) queryClient.removeQueries({ type: "inactive" });
   }
 

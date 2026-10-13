@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
-const source = readFileSync(
+const source = readModuleSource(
   resolve(dirname(fileURLToPath(import.meta.url)), "local-settings.ts"),
-  "utf8",
 );
 
 function section(start: string, end?: string): string {

@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
+import { readModuleSource } from "@/lib/module-source";
 import { buildReceiptPdfHtml } from "./receipt-pdf";
 import { RECEIPT_WORDS } from "./receipt-words";
 
@@ -28,7 +29,7 @@ import { RECEIPT_WORDS } from "./receipt-words";
 const here = dirname(fileURLToPath(import.meta.url));
 const paperSource = readFileSync(resolve(here, "ReceiptPaper.tsx"), "utf8");
 const pdfSource = readFileSync(resolve(here, "receipt-pdf.ts"), "utf8");
-const documentSource = readFileSync(resolve(here, "receipt-document.ts"), "utf8");
+const documentSource = readModuleSource(resolve(here, "receipt-document.ts"));
 
 /** Код без `/* … *\/` и `// …` — комментарий не имеет права ни подтвердить,
  *  ни сломать проверку состава. */

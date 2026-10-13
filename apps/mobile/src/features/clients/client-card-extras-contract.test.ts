@@ -117,7 +117,7 @@ describe("убираем свайпом, без вопросов", () => {
     assert.match(req, /label: "Отменить"/);
     const door = peopleDoor();
     assert.match(door, /onPress: \(\) => void linkWriter\.restore\(item\)/);
-    assert.match(read("use-link-writer.ts"), /restore\(item: ClientLinkItem\): Promise<boolean>;/);
+    assert.match(readModuleSource(resolve(here, "use-link-writer.ts")), /restore\(item: ClientLinkItem\): Promise<boolean>;/);
   });
 });
 
@@ -205,7 +205,7 @@ describe("аудит 23.09 — то, что чинили", () => {
     assert.match(search, /for \(const set of client\.requisites \?\? \[\]\) \{/);
   });
   test("двери подстраниц уносят компанию клиента", () => {
-    assert.match(read("clients-company.ts"), /export function clientSubParams\(/);
+    assert.match(readModuleSource(resolve(here, "clients-company.ts")), /export function clientSubParams\(/);
     assert.match(page(), /pathname: subPage\("objects"\), params: clientSubParams\(id, scope\)/);
     assert.match(page(), /pathname: subPage\("requisites"\), params: clientSubParams\(id, scope\)/);
     assert.match(read("blocks/ClientFilesBlock.tsx"), /clientSubParams\(clientId, scope\)/);
@@ -237,7 +237,7 @@ describe("«Отменить» после «Убрать» находит чел
   // перечне карточки-группы, и возврат молча сдавался.
   test("строка человека ищется и в общем списке клиентов", () => {
     assert.match(
-      read("use-link-writer.ts"),
+      readModuleSource(resolve(here, "use-link-writer.ts")),
       /qc\.getQueriesData<Client\[\]>\(\{ queryKey: clientKeys\.all\(\) \}\)/,
     );
   });
@@ -248,10 +248,10 @@ describe("«Отменить» возвращает связь по-настоя
   // связь ещё числилась, — «уже есть», и ничего не писалось.
   test("возврат считается от последней своей записи", () => {
     assert.match(
-      read("use-link-writer.ts"),
+      readModuleSource(resolve(here, "use-link-writer.ts")),
       /const base = queue\.latest \? \[\.\.\.queue\.latest\] : freshLinks\(queue, clientMemberships\(row\)\);/,
     );
-    assert.match(read("use-link-writer.ts"), /detachedRows\.set\(ref\.memberId, row\);/);
+    assert.match(readModuleSource(resolve(here, "use-link-writer.ts")), /detachedRows\.set\(ref\.memberId, row\);/);
   });
 });
 

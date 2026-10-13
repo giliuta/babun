@@ -56,7 +56,7 @@ describe("выход и вход тем же человеком", () => {
   });
 
   test("хвост вышедших страниц на входе выбрасывается", () => {
-    const source = read("./auth-clear.ts");
+    const source = readModuleSource(resolve(here, "./auth-clear.ts"));
     const wipe = functionBody(source, "function wipeFastStores(");
     assert.ok(
       wipe.indexOf("signedOutOnPurpose = true") > wipe.indexOf("queryClient.clear()"),

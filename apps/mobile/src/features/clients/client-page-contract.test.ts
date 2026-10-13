@@ -289,10 +289,10 @@ type DraftCore = Pick<
   "draftLinkParams" | "draftLinkFromParams" | "draftCanSave"
 >;
 const draftCore = await (async (): Promise<DraftCore> => {
-  const source = read("useClientDraft.ts");
+  const source = read("useClientDraft/core.ts");
   const begin = source.indexOf("// ─── ЧИСТОЕ ЯДРО: НАЧАЛО");
   const end = source.indexOf("// ─── ЧИСТОЕ ЯДРО: КОНЕЦ");
-  assert.ok(begin >= 0 && end > begin, "useClientDraft.ts: метки чистого ядра потеряны");
+  assert.ok(begin >= 0 && end > begin, "useClientDraft/core.ts: метки чистого ядра потеряны");
   const dir = mkdtempSync(join(tmpdir(), "babun-page-core-"));
   const copy = join(dir, "useClientDraft.core.ts");
   writeFileSync(copy, source.slice(begin, end), "utf8");
@@ -368,7 +368,7 @@ describe("сценарий г-б: новый человек со связью", 
       "страница не читает связь из адреса",
     );
     assert.match(page(), /link: draftLink,/, "страница не отдаёт связь черновику");
-    const hook = read("useClientDraft.ts");
+    const hook = readModuleSource(resolve(here, "useClientDraft.ts"));
     assert.match(hook, /memberships: link\?\.groupId\s*\?\s*\[/, "черновик не кладёт связь в memberships");
     assert.match(hook, /const linked = \(draft\.memberships\?\.length \?\? 0\) > 0;/);
     assert.match(hook, /draftCanSave\(\{[^}]*\blinked,/, "гейт не спрашивает связь черновика");
@@ -396,7 +396,7 @@ describe("сценарий г-б: новый человек со связью", 
       /const handBack = isDraft && pathname === "\/client" && !draftLink;/,
       "жилец из шторки уедет в ящик записи и подставится ей клиентом",
     );
-    const hook = read("useClientDraft.ts");
+    const hook = readModuleSource(resolve(here, "useClientDraft.ts"));
     const save = hook.indexOf("const save = async");
     assert.match(
       hook.slice(save),
@@ -522,7 +522,7 @@ describe("«Объединить с дублем» в «⋯» карточки",
 describe("«Разделить клиента» в «⋯» карточки", () => {
   const hook = () => read("use-split-client.ts");
   const splitCore = () => read("split-client.ts");
-  const draftHook = () => read("useClientDraft.ts");
+  const draftHook = () => readModuleSource(resolve(here, "useClientDraft.ts"));
 
   test("пункт есть только у сохранённой карточки с правами и дополнительными номерами", () => {
     assert.match(
@@ -681,7 +681,7 @@ describe("дубль номера не заводится — плашка св�
     );
   });
   test("создать при найденном дубле нельзя", () => {
-    assert.match(read("useClientDraft.ts"), /gate\.duplicate/);
+    assert.match(readModuleSource(resolve(here, "useClientDraft.ts")), /gate\.duplicate/);
   });
 });
 
