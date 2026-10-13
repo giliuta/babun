@@ -1,15 +1,11 @@
-import { Linking, Platform } from "react-native";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
-import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/features/settings/tenant";
 import { useAccountScope } from "@/features/cabinet/account-scope";
-import { TENANT_HEADER } from "@/lib/tenant-header";
 import {
   applyPatch,
-  checkoutErrorText,
   parseSmsAccount,
   parseSmsHistory,
   parseSmsRecordLog,
@@ -17,14 +13,13 @@ import {
   type SmsHistoryItem,
   type SmsSettingsPatch,
 } from "./sms-model";
-import {
-  draftPayload,
-  parseTeamTemplate,
-  parseTeamTemplates,
-  type SmsTeamTemplate,
-  type TemplateDraft,
-} from "./sms-team-templates";
 import { clientKeys } from "@/features/clients/query-keys";
+import {
+  clientOf,
+  smsAccountKey,
+  smsHistoryKey,
+  smsLogKey,
+} from "./sms-account/keys";
 
 export * from "./sms-model";
 export * from "./sms-team-templates";
@@ -37,13 +32,28 @@ export * from "./sms-team-templates";
 // только показывает и просит. Баланс приходит
 // только владельцу — сотрудник узнаёт лишь, можно ли отправить через сервис
 // в его календаре и хватает ли денег (`can_pay`).
+//
+// Query keys, team templates and the Stripe top-up live in `./sms-account/`;
+// this path stays the public entry.
 
-export const smsAccountKey = (tenantId: string | null) => ["sms-account", tenantId];
-export const smsHistoryKey = (tenantId: string | null) => ["sms-history", tenantId];
-/** SMS записи и клиента — один префикс: после отправки перечитываются оба. */
-export const smsLogKey = (tenantId: string | null) => ["sms-log", tenantId];
-/** Шаблоны команд: все и одной команды — один префикс. */
-export const smsTemplatesKey = (tenantId: string | null) => ["sms-team-templates", tenantId];
+export {
+  smsAccountKey,
+  smsHistoryKey,
+  smsLogKey,
+  smsTemplatesKey,
+} from "./sms-account/keys";
+export {
+  useDeleteTeamTemplate,
+  useReorderTeamTemplates,
+  useSaveTeamTemplate,
+  useSetTeamTemplateEnabled,
+  useTeamTemplates,
+} from "./sms-account/templates";
+export {
+  SMS_PAY_DONE_URL,
+  openSmsCheckout,
+  startSmsTopup,
+} from "./sms-account/checkout";
 
 export function useSmsAccount() {
   // Баланс АККАУНТА СТРАНИЦЫ (04.10): в блоке пригласившего аккаунта —
@@ -83,113 +93,6 @@ export function useSaveSmsSettings() {
       if (context?.before) qc.setQueryData(smsAccountKey(tenantId), context.before);
     },
     onSuccess: (account) => qc.setQueryData(smsAccountKey(tenantId), account),
-    meta: { errorHandled: true },
-  });
-}
-
-/** Шаблоны команды (`teamId`) или всех видимых команд (`null`). */
-export function useTeamTemplates(teamId: string | null, cardTenantId?: string | null) {
-  const activeTenantId = useTenantId();
-  const role = useDataRole();
-  // Шаблоны команды СВОЕЙ компании карточки (03.10): пока в календаре открыта
-  // команда партнёра, команда клиента — не из активной компании, и чтение без
-  // её заголовка возвращало пустой список («Шаблонов пока нет»).
-  const tenantId = cardTenantId ?? activeTenantId;
-  return useQuery({
-    queryKey: [...smsTemplatesKey(tenantId), teamId],
-    enabled: !!tenantId && role.isSuccess && role.data != null,
-    queryFn: async () => {
-      const { data, error } = await clientOf(cardTenantId, activeTenantId).rpc("sms_team_templates", {
-        p_team_id: teamId ?? undefined,
-      });
-      if (error) throw new Error(error.message);
-      return parseTeamTemplates(data);
-    },
-  });
-}
-
-/** После правки шаблона перечитываются списки, счёт шаблонов команд и
- *  шаблоны в листах записи. */
-function useTemplatesChanged() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: smsTemplatesKey(tenantId) });
-    void qc.invalidateQueries({ queryKey: smsAccountKey(tenantId) });
-    void qc.invalidateQueries({ queryKey: smsLogKey(tenantId) });
-  };
-}
-
-export function useSaveTeamTemplate() {
-  const changed = useTemplatesChanged();
-  return useMutation({
-    mutationFn: async (draft: TemplateDraft): Promise<SmsTeamTemplate> => {
-      const { data, error } = await supabase.rpc("sms_save_team_template", {
-        p: draftPayload(draft) as unknown as Json,
-      });
-      if (error) throw new Error(error.message);
-      const saved = parseTeamTemplate(data);
-      if (!saved) throw new Error("Шаблон не сохранился");
-      return saved;
-    },
-    onSettled: changed,
-    meta: { errorHandled: true },
-  });
-}
-
-/** Включить / выключить: строка откликается сразу, ответ базы — после. */
-export function useSetTeamTemplateEnabled() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  const changed = useTemplatesChanged();
-  return useMutation({
-    mutationFn: async (input: { id: string; enabled: boolean }) => {
-      const { error } = await supabase.rpc("sms_set_team_template_enabled", {
-        p_id: input.id,
-        p_enabled: input.enabled,
-      });
-      if (error) throw new Error(error.message);
-      return input;
-    },
-    onMutate: async (input) => {
-      const key = smsTemplatesKey(tenantId);
-      await qc.cancelQueries({ queryKey: key });
-      const before = qc.getQueriesData<SmsTeamTemplate[]>({ queryKey: key });
-      qc.setQueriesData<SmsTeamTemplate[]>({ queryKey: key }, (list) =>
-        list?.map((x) => (x.id === input.id ? { ...x, enabled: input.enabled } : x)),
-      );
-      return { before };
-    },
-    onError: (_e, _input, context) => {
-      for (const [key, value] of context?.before ?? []) qc.setQueryData(key, value);
-    },
-    onSettled: changed,
-    meta: { errorHandled: true },
-  });
-}
-
-export function useDeleteTeamTemplate() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  const changed = useTemplatesChanged();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc("sms_delete_team_template", { p_id: id });
-      if (error) throw new Error(error.message);
-      return id;
-    },
-    // Строка уходит сразу; отказ базы возвращает её на место.
-    onMutate: async (id) => {
-      const key = smsTemplatesKey(tenantId);
-      await qc.cancelQueries({ queryKey: key });
-      const before = qc.getQueriesData<SmsTeamTemplate[]>({ queryKey: key });
-      qc.setQueriesData<SmsTeamTemplate[]>({ queryKey: key }, (list) => list?.filter((x) => x.id !== id));
-      return { before };
-    },
-    onError: (_e, _id, context) => {
-      for (const [key, value] of context?.before ?? []) qc.setQueryData(key, value);
-    },
-    onSettled: changed,
     meta: { errorHandled: true },
   });
 }
@@ -245,42 +148,6 @@ export function useForgetAutotopupCard() {
       return parseSmsAccount(data);
     },
     onSuccess: (account) => qc.setQueryData(smsAccountKey(tenantId), account),
-    meta: { errorHandled: true },
-  });
-}
-
-/** Порядок шаблонов команды — как лёг список после ручки. Строки встают
- *  сразу, ответ базы — после. */
-export function useReorderTeamTemplates(teamId: string | null) {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  const changed = useTemplatesChanged();
-  return useMutation({
-    mutationFn: async (ids: string[]) => {
-      const { error } = await supabase.rpc("sms_reorder_team_templates", {
-        p_team_id: teamId ?? "",
-        p_ids: ids,
-      });
-      if (error) throw new Error(error.message);
-      return ids;
-    },
-    onMutate: async (ids) => {
-      const key = [...smsTemplatesKey(tenantId), teamId];
-      await qc.cancelQueries({ queryKey: key });
-      const before = qc.getQueryData<SmsTeamTemplate[]>(key);
-      if (before) {
-        const rank = new Map(ids.map((id, index) => [id, index]));
-        qc.setQueryData<SmsTeamTemplate[]>(
-          key,
-          before.map((x) => ({ ...x, position: rank.get(x.id) ?? x.position })),
-        );
-      }
-      return { before };
-    },
-    onError: (_e, _ids, context) => {
-      if (context?.before) qc.setQueryData([...smsTemplatesKey(tenantId), teamId], context.before);
-    },
-    onSettled: changed,
     meta: { errorHandled: true },
   });
 }
@@ -385,13 +252,6 @@ export function useAppointmentLink(appointmentId: string | null | undefined, ena
   });
 }
 
-/** Клиент Supabase компании карточки: вкладка «Клиенты» открывает и
- *  клиентов компании-работодателя (`?tenant=`), и их SMS читаются и меняются
- *  под её заголовком, а не под активной компанией устройства. */
-function clientOf(cardTenantId: string | null | undefined, activeTenantId: string | null) {
-  return cardTenantId && cardTenantId !== activeTenantId ? tenantBoundClient(cardTenantId) : supabase;
-}
-
 /** SMS клиента — блок на странице клиента. `cardTenantId` — компания
  *  карточки; нет — активная. */
 export function useClientSms(clientId: string | null | undefined, limit = 20, cardTenantId?: string | null) {
@@ -494,65 +354,4 @@ export function useSetClientSmsOptOut() {
     },
     meta: { errorHandled: true },
   });
-}
-
-/** Куда Stripe вернёт человека, платившего из приложения: страница
- *  «Оплата прошла» на сайте (без входа). */
-export const SMS_PAY_DONE_URL = "https://babun.app/pay/done";
-
-/** ОПЛАТА — ОТДЕЛЬНОЙ СТРАНИЦЕЙ STRIPE, НЕ ЧЕРЕЗ APPLE (владелец 30.09:
- *  «кнопка должна вести на пополнение через отдельную страницу… оплату
- *  полноценно, просто и легко для клиента»). На сайте страница открывается в
- *  той же вкладке и возвращает в Кабинет → SMS; в приложении — в браузере,
- *  а после возврата экран сам перечитывает баланс. */
-export async function openSmsCheckout(
-  amountCents: number,
-  autotopup?: { thresholdCents: number },
-  /** Аккаунт, ЧЕЙ баланс пополняют (блок аккаунта в Кабинете), — явно, а не
-   *  тот, что открыт на телефоне (04.10). */
-  tenantId?: string | null,
-): Promise<void> {
-  const web = Platform.OS === "web" && typeof window !== "undefined";
-  const back = web ? `${window.location.origin}/cabinet/sms` : SMS_PAY_DONE_URL;
-  const url = await startSmsTopup(amountCents, back, autotopup, tenantId);
-  if (web) window.location.assign(url);
-  else await Linking.openURL(url);
-}
-
-/** Оплата на сайте: функция открывает Stripe Checkout и отдаёт адрес.
- *  `autotopup` — эта оплата ещё и сохраняет карту: дальше баланс сам
- *  пополняется на ту же сумму, когда падает ниже порога (волна 13). */
-export async function startSmsTopup(
-  amountCents: number,
-  returnUrl: string,
-  autotopup?: { thresholdCents: number },
-  tenantId?: string | null,
-): Promise<string> {
-  const { data, error } = await supabase.functions.invoke("sms-checkout", {
-    body: {
-      amount_cents: amountCents,
-      return_url: returnUrl,
-      ...(autotopup ? { autotopup: { threshold_cents: autotopup.thresholdCents } } : null),
-    },
-    ...(tenantId ? { headers: { [TENANT_HEADER]: tenantId } } : null),
-  });
-  if (error) throw new Error(await checkoutFailure(error));
-  const url = (data as { url?: string } | null)?.url;
-  if (!url) throw new Error(checkoutErrorText(null));
-  return url;
-}
-
-/** Отказ функции оплаты словами: код лежит в теле ответа (`{ error }`),
- *  а сообщение самого клиента — «Edge Function returned a non-2xx…». */
-async function checkoutFailure(error: unknown): Promise<string> {
-  const e = error as { name?: string; context?: { clone?: () => { json: () => Promise<unknown> } } };
-  if (e.name === "FunctionsFetchError") return checkoutErrorText(null, true);
-  let code: string | null = null;
-  try {
-    const body = (await e.context?.clone?.().json()) as { error?: unknown } | undefined;
-    if (typeof body?.error === "string") code = body.error;
-  } catch {
-    // тело не JSON — общие слова
-  }
-  return checkoutErrorText(code);
 }

@@ -75,8 +75,8 @@ type WriterCore = Pick<typeof import("./use-link-writer"), (typeof WRITER_CORE)[
 const DRAFT_CORE = ["draftCanSave", "draftPhoneTyped", "draftHasInput"] as const;
 type DraftCore = Pick<typeof import("./useClientDraft"), (typeof DRAFT_CORE)[number]>;
 
-const writer = await loadCore<WriterCore>("use-link-writer.ts");
-const draft = await loadCore<DraftCore>("useClientDraft.ts");
+const writer = await loadCore<WriterCore>("use-link-writer/core.ts");
+const draft = await loadCore<DraftCore>("useClientDraft/core.ts");
 
 const NATALIA = "natalia-0000-0000";
 const MARIA = "maria-0000-0000";

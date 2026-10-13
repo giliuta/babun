@@ -5,6 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { QueryClient } from "@tanstack/react-query";
 import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
+import { readModuleSource } from "./module-source";
 
 import {
   knownTenantsForSwitch,
@@ -204,7 +205,7 @@ describe("проводка перехода в коде", () => {
   test("auth-clear зовёт настоящую чистку и не метит протухшим весь кэш", () => {
     // Комментарии вырезаются: разбор над чисткой называет снятый вызов по
     // имени, и сторож обязан смотреть на код, а не на его историю.
-    const authClear = read("auth-clear.ts").replace(/^\s*\/\/.*$/gm, "");
+    const authClear = readModuleSource(resolve(here, "auth-clear.ts")).replace(/^\s*\/\/.*$/gm, "");
     assert.match(authClear, /sweepQueryCacheOnSwitch\(queryClient, knownTenantIds\)/);
     assert.doesNotMatch(
       authClear,

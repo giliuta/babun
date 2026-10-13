@@ -22,7 +22,7 @@ function unpausedCount(src: string): { mutations: number; neverPause: number } {
 
 describe("работа без сети: правки не ждут в памяти", () => {
   test("мутации записей не встают на паузу без сети", () => {
-    const src = read("features/calendar/mutations.ts");
+    const src = readModuleSource(resolve(here, "..", "features/calendar/mutations.ts"));
     const { mutations, neverPause } = unpausedCount(src);
     // + общий объект опций правки (`useUpdateAppointmentOptions`).
     assert.equal(neverPause, mutations + 1);

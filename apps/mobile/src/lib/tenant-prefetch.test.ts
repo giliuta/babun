@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { readModuleSource } from "./module-source";
 
 // СТОРОЖ: ПРОГРЕВ ЧУЖОЙ КОМПАНИИ — ТОЛЬКО В ПАМЯТЬ.
 //
@@ -90,7 +91,9 @@ describe("прогрев чужой компании не имеет побоч�
 
   test("обратная сторона: у активной компании побочные действия на месте", () => {
     const tenantHook = read("../features/settings/tenant.ts");
-    const settingsHook = read("../features/settings/local-settings.ts");
+    const settingsHook = stripComments(
+      readModuleSource(join(here, "../features/settings/local-settings.ts")),
+    );
     assert.ok(tenantHook.includes("setDefaultCurrency(profile?.currency)"));
     assert.ok(settingsHook.includes("safeSaveCalendarSettings(settings)"));
     assert.ok(settingsHook.includes("safeSaveOperationalCalendarSettings("));

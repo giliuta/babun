@@ -4,6 +4,8 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { readModuleSource } from "@/lib/module-source";
+
 import { createInvitationArgs } from "./invitation-contract";
 import { monthWorkOf, workLine, workOfPeriod, workWindow } from "./master-work";
 import { rightsFocusOf, rightsFocusQuery } from "./rights-focus";
@@ -88,7 +90,7 @@ describe("одна дверь на человека", () => {
   test("права названы словами про человека", () => {
     const map = read("../access-map.ts");
     assert.match(map, /off: "Не видит",\s*read: "Видит",\s*write: "Меняет"/);
-    assert.match(read("master-draft.ts"), /export const MIXED_WORD = "Частично";/);
+    assert.match(readModuleSource(resolve(here, "master-draft.ts")), /export const MIXED_WORD = "Частично";/);
   });
 });
 

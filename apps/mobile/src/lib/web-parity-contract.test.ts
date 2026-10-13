@@ -63,6 +63,9 @@ const NATIVE_ONLY_EXEMPT = new Set([
   // reconcile возвращает статус "unavailable", и его показывают человеку
   // (features/appointments/useBookingSave.ts, AppointmentSheet.tsx).
   "src/lib/notifications.ts",
+  // Type-only import of the scheduler shapes; nothing here runs, the guarded
+  // require stays in src/lib/notifications.ts.
+  "src/lib/notifications/types.ts",
 ]);
 
 function sourceFiles(root: string): string[] {

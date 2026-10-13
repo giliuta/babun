@@ -39,7 +39,7 @@ describe("календарь под нагрузкой", () => {
   test("копия партнёра несёт номер попытки — повтор не даёт дубля", () => {
     const src = screen();
     assert.match(src, /timeEnd: addMinutesHM\(timeStart, moveWindowMin\),\s*id: attemptId\(attempt\),/);
-    assert.match(readFileSync(resolve(here, "mutations.ts"), "utf8"), /p_id: input\.id,/);
+    assert.match(readModuleSource(resolve(here, "mutations.ts")), /p_id: input\.id,/);
   });
 
   test("двойной тап не открывает форму записи дважды", () => {
@@ -174,7 +174,7 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("правки одной записи уходят по очереди жестов, устаревшая — строкой сервера", () => {
-    const src = readFileSync(resolve(here, "mutations.ts"), "utf8");
+    const src = readModuleSource(resolve(here, "mutations.ts"));
     assert.match(src, /return afterPreviousEdit\(id, \(\) =>\s*updateAppointment\(supabase, id, patch, tenantId as string\),\s*\);/);
     assert.match(src, /const next = previous\.then\(run, run\);/);
     assert.match(src, /err instanceof StaleAppointmentError && err\.fresh \? err\.fresh : ctx\?\.prevRecord/);
@@ -362,12 +362,12 @@ describe("повторный аудит календаря 03.10", () => {
   test("поиск клиента: найденные по имени — выше найденных по метке", () => {
     const picker = readFileSync(resolve(here, "../clients/ClientPickerSheet.tsx"), "utf8");
     assert.match(picker, /if \(query\) return rankClientMatches\(pool\.filter\(\(c\) => matchesClient\(c, query\)\), query\);/);
-    const list = readFileSync(resolve(here, "../clients/useClientFilters.ts"), "utf8");
+    const list = readModuleSource(resolve(here, "../clients/useClientFilters.ts"));
     assert.match(list, /return rankClientMatches\(hits, search\);/);
   });
 
   test("удалённая запись уходит с сетки вместе с тостом, а не после перечитывания", () => {
-    const src = readFileSync(resolve(here, "mutations.ts"), "utf8");
+    const src = readModuleSource(resolve(here, "mutations.ts"));
     const del = src.slice(src.indexOf("export function useDeleteAppointment"), src.indexOf("export function useUndoAppointmentPayment"));
     assert.match(del, /onSuccess: \(_data, id\) => \{[\s\S]*?cur\?\.filter\(\(a\) => a\.id !== id\)/);
   });
@@ -403,7 +403,7 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("шестерёнка: выключенный «Объект» записи гасит объект и у события", () => {
-    const prefs = readFileSync(resolve(here, "../appointments/booking-prefs.ts"), "utf8");
+    const prefs = readModuleSource(resolve(here, "../appointments/booking-prefs.ts"));
     assert.match(prefs, /block\.id === "object" && \(!isFeatureOn\(disabled, "objects"\) \|\| off\.has\("record_object"\)\)/);
   });
 

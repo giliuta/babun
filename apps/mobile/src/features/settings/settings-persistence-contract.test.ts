@@ -24,7 +24,7 @@ describe("native settings persistence contract", () => {
       resolve(here, "../../../app/(dashboard)/cabinet/account.tsx"),
       resolve(here, "../cabinet/account"),
     );
-    const authClear = read("../../lib/auth-clear.ts");
+    const authClear = readModuleSource(resolve(here, "../../lib/auth-clear.ts"));
     assert.doesNotMatch(source, /\bwipeLocalData\b/);
     assert.match(source, /await signOutScopeAndWipe\("global"\)/);
     assert.match(source, /await wipeTenantScopedData\(\)/);

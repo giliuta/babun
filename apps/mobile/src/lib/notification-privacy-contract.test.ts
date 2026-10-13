@@ -4,13 +4,14 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { readModuleSource } from "./module-source";
 import { notificationsForWipe } from "./wipe-plan";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 describe("notification privacy contract", () => {
   test("ВЫХОД ИЗ АККАУНТА: нативные гаснут ДО кэшей, и список тоже уходит", () => {
-    const source = readFileSync(resolve(here, "auth-clear.ts"), "utf8");
+    const source = readModuleSource(resolve(here, "auth-clear.ts"));
     // ЭТО ЕДИНСТВЕННОЕ, РАДИ ЧЕГО КОНТРАКТ ПИСАЛСЯ: на устройстве может
     // оказаться ДРУГОЙ человек, и имена чужих клиентов не имеют права остаться
     // на локскрине. Гасить надо ДО того, как уйдут кэши, иначе между двумя
@@ -39,10 +40,9 @@ describe("notification privacy contract", () => {
   });
 
   test("suspends native PII delivery for every signed-out startup without erasing transient state", () => {
-    const authSource = readFileSync(resolve(here, "auth-clear.ts"), "utf8");
-    const notificationSource = readFileSync(
+    const authSource = readModuleSource(resolve(here, "auth-clear.ts"));
+    const notificationSource = readModuleSource(
       resolve(here, "notifications.ts"),
-      "utf8",
     );
     const sessionSource = readFileSync(
       resolve(here, "../providers/SessionProvider.tsx"),
@@ -67,7 +67,7 @@ describe("notification privacy contract", () => {
   });
 
   test("wipes legacy calendar keys and keeps new reminder registries scoped", () => {
-    const authSource = readFileSync(resolve(here, "auth-clear.ts"), "utf8");
+    const authSource = readModuleSource(resolve(here, "auth-clear.ts"));
     const reminderSource = readFileSync(
       resolve(here, "../features/clients/reminders.ts"),
       "utf8",
@@ -89,7 +89,7 @@ describe("notification privacy contract", () => {
   });
 
   test("presents reminders while the dispatcher keeps Babun open", () => {
-    const source = readFileSync(resolve(here, "notifications.ts"), "utf8");
+    const source = readModuleSource(resolve(here, "notifications.ts"));
     assert.match(source, /setNotificationHandler/);
     assert.match(source, /shouldShowBanner: true/);
     assert.match(source, /shouldShowList: true/);
