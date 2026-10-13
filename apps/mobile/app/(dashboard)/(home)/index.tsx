@@ -575,7 +575,9 @@ export default function CalendarTab() {
           // блок лёг на слот, рука это чувствует.
           haptics.impact();
           if (isCalendarEvent(apt)) {
-            void syncEventAppointmentReminders(moved, appointmentTimeZone(apt));
+            if (visibilityTenantId) {
+              void syncEventAppointmentReminders(moved, appointmentTimeZone(apt), visibilityTenantId);
+            }
           } else {
             void cancelAppointmentReminders(apt.id);
           }
@@ -1037,7 +1039,11 @@ export default function CalendarTab() {
       "Europe/Nicosia";
     const timer = setTimeout(() => {
       const list = apptsRef.current;
-      void reconcileEventAppointmentReminders(list, tzFor).catch(() => {});
+      // Сверка — только своей группы аккаунта (`event:<аккаунт>:`): список
+      // держит записи открытого аккаунта, и замена всей группы стирала пуши
+      // остальных (13.10).
+      if (!tenantId) return;
+      void reconcileEventAppointmentReminders(list, tzFor, tenantId).catch(() => {});
       // Пуши «себе» (колокольчик) пересчитываются от свежих дат: перенесли
       // запись — напоминание переехало, отменили — снято.
       // С ИМЕНЕМ КЛИЕНТА (аудит 2026-10-03): «Напомнить» ставится с именем,
@@ -1046,18 +1052,17 @@ export default function CalendarTab() {
       void reconcileSelfReminders(
         list,
         tzFor,
+        tenantId,
         (a) => clientNameRef.current(a) || undefined,
       ).catch(() => {});
       // Напоминание о каждой записи — по правилу телефона; у записи с
       // колокольчиком звонит колокольчик.
-      if (tenantId) {
-        void reconcileAutoReminders(
-          list,
-          tzFor,
-          (a) => clientNameRef.current(a) || undefined,
-          tenantId,
-        ).catch(() => {});
-      }
+      void reconcileAutoReminders(
+        list,
+        tzFor,
+        (a) => clientNameRef.current(a) || undefined,
+        tenantId,
+      ).catch(() => {});
     }, 1000);
     return () => clearTimeout(timer);
   }, [
@@ -2308,8 +2313,8 @@ export default function CalendarTab() {
   const pickReminderFor = (rule: SelfReminder | null) => {
     const apt = reminderFor;
     setReminderFor(null);
-    if (!apt) return;
-    void setSelfReminder(apt, rule, appointmentTimeZone(apt), clientName(apt) || undefined).then(
+    if (!apt || !tenantId) return;
+    void setSelfReminder(apt, rule, appointmentTimeZone(apt), tenantId, clientName(apt) || undefined).then(
       (res) => {
         if (res === "cleared") toast("Напоминание снято", "info");
         else if (res === "scheduled" && rule) {
@@ -2879,8 +2884,8 @@ export default function CalendarTab() {
     };
     const tz = appointmentTimeZone(apt);
     const syncReminders = (placed: Appointment) => {
-      if (isCalendarEvent(placed)) void syncEventAppointmentReminders(placed, tz);
-      else void cancelAppointmentReminders(placed.id);
+      if (!isCalendarEvent(placed)) void cancelAppointmentReminders(placed.id);
+      else if (tenantId) void syncEventAppointmentReminders(placed, tz, tenantId);
     };
     updateAppt.mutate(
       { id: apt.id, patch: next },

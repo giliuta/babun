@@ -13,7 +13,7 @@ describe("напоминание себе, которое не зазвонит,
       time_start: "10:00",
       time_end: "11:00",
     });
-    const result = await setSelfReminder(apt, { kind: "before", minutes: 30 } as never, "Asia/Nicosia");
+    const result = await setSelfReminder(apt, { kind: "before", minutes: 30 } as never, "Asia/Nicosia", "tenant-a");
     assert.equal(result, "past");
     assert.equal(getSelfReminder(apt.id), null);
   });

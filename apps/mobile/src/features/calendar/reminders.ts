@@ -57,7 +57,41 @@ function writeRegistry(next: ReminderIdRegistry): void {
 
 const manualOwnerKey = (appointmentId: string) =>
   `appointment:${appointmentId}`;
-const eventOwnerKey = (appointmentId: string) => `event:${appointmentId}`;
+// КЛЮЧИ С АККАУНТОМ (13.10). Сверка календаря заменяет ВСЮ группу ключей
+// разом, а в списке — записи только открытого аккаунта: переход на календарь
+// другого аккаунта стирал пуши событий и колокольчики своего, и они молчали,
+// пока человек не вернётся. У `auto:` это починили раньше — теперь у `event:`
+// и `self:` то же устройство: `<группа>:<аккаунт>:<запись>`, и сверка
+// заменяет только группу своего аккаунта.
+const eventOwnerKey = (tenantId: string, appointmentId: string) =>
+  `event:${tenantId}:${appointmentId}`;
+
+/** Ключи группы этой записи — любого аккаунта и старые, без аккаунта
+ *  (`event:<запись>`): оба оканчиваются на `:<запись>`. */
+function ownersOf(prefix: "event:" | "self:" | "auto:", appointmentId: string): string[] {
+  return [
+    ...new Set(
+      babunNotificationRegistrySnapshot()
+        .map((item) => item.ownerKey)
+        .filter((key) => key.startsWith(prefix) && key.endsWith(`:${appointmentId}`)),
+    ),
+  ];
+}
+
+/** Ключи первого вида (`<группа>:<запись>`, без аккаунта). Чей это аккаунт,
+ *  по ключу не узнать, поэтому `only` — записи, которые сверка своего
+ *  аккаунта тут же ставит под новым ключом: два звонка об одном не нужны, а
+ *  пуши записей других аккаунтов звонят дальше, пока там не пройдёт сверка. */
+function legacyOwners(prefix: "event:" | "self:" | "auto:", only?: ReadonlySet<string>): string[] {
+  return [
+    ...new Set(
+      babunNotificationRegistrySnapshot()
+        .map((item) => item.ownerKey)
+        .filter((key) => key.startsWith(prefix) && key.split(":").length === 2)
+        .filter((key) => !only || only.has(key.slice(prefix.length))),
+    ),
+  ];
+}
 
 /** Cancel every local notification attached to one appointment. This is
  * called when the record is moved, cancelled or deleted so an old absolute
@@ -68,7 +102,7 @@ export async function cancelAppointmentReminders(
   const registry = readRegistry();
   const ids = registry[appointmentId] ?? [];
   await removeBabunNotificationOwners(
-    [manualOwnerKey(appointmentId), eventOwnerKey(appointmentId)],
+    [manualOwnerKey(appointmentId), ...ownersOf("event:", appointmentId)],
     ids,
   );
   if (appointmentId in registry) {
@@ -231,6 +265,7 @@ export async function consumeLastAppointmentNotificationTarget(): Promise<
 export async function syncEventAppointmentReminders(
   appointment: Appointment,
   timeZone: string,
+  tenantId: string,
 ): Promise<ReminderResult | "cleared"> {
   if (!appointment.event_push_enabled) {
     await cancelAppointmentReminders(appointment.id);
@@ -241,12 +276,10 @@ export async function syncEventAppointmentReminders(
     await cancelAppointmentReminders(appointment.id);
     return "past";
   }
-  return scheduleAppointmentReminders(
-    appointment,
-    reminders,
-    undefined,
-    eventOwnerKey(appointment.id),
-  );
+  const ownerKey = eventOwnerKey(tenantId, appointment.id);
+  const stale = ownersOf("event:", appointment.id).filter((key) => key !== ownerKey);
+  if (stale.length > 0) await removeBabunNotificationOwners(stale);
+  return scheduleAppointmentReminders(appointment, reminders, undefined, ownerKey);
 }
 
 /** Rebuild every DB-backed event owner in one nearest-first pass. This runs
@@ -255,6 +288,7 @@ export async function syncEventAppointmentReminders(
 export async function reconcileEventAppointmentReminders(
   appointments: readonly Appointment[],
   timeZoneFor: (appointment: Appointment) => string,
+  tenantId: string,
 ): Promise<void> {
   const owners: BabunNotificationOwnerDrafts[] = [];
   const legacyRegistry = readRegistry();
@@ -270,7 +304,7 @@ export async function reconcileEventAppointmentReminders(
     ) {
       continue;
     }
-    const ownerKey = eventOwnerKey(appointment.id);
+    const ownerKey = eventOwnerKey(tenantId, appointment.id);
     const reminders = eventReminderOccurrences(
       appointment,
       timeZoneFor(appointment),
@@ -284,10 +318,12 @@ export async function reconcileEventAppointmentReminders(
   const legacyIds = [...eventIds].flatMap(
     (appointmentId) => legacyRegistry[appointmentId] ?? [],
   );
-  await replaceBabunNotificationScope("event:", owners, {
+  await replaceBabunNotificationScope(`event:${tenantId}:`, owners, {
     requestPermission: false,
     legacyIds,
   });
+  const legacy = legacyOwners("event:", eventIds);
+  if (legacy.length > 0) await removeBabunNotificationOwners(legacy);
   if (legacyIds.length > 0) {
     const next = { ...legacyRegistry };
     for (const appointmentId of eventIds) delete next[appointmentId];
@@ -304,7 +340,8 @@ export async function reconcileEventAppointmentReminders(
 // удалили или отменили — пуш снят (своя группа уведомлений `self:`).
 
 const SELF_REMINDERS_KEY = "calendar.selfReminders.v1";
-const selfOwnerKey = (appointmentId: string) => `self:${appointmentId}`;
+const selfOwnerKey = (tenantId: string, appointmentId: string) =>
+  `self:${tenantId}:${appointmentId}`;
 
 function readSelfReminders(): Record<string, SelfReminder> {
   return getStorage().get<Record<string, SelfReminder>>(SELF_REMINDERS_KEY) ?? {};
@@ -326,15 +363,20 @@ export async function setSelfReminder(
   apt: Appointment,
   rule: SelfReminder | null,
   timeZone: string,
+  tenantId: string,
   clientName?: string,
 ): Promise<ReminderResult | "cleared"> {
   const all = { ...readSelfReminders() };
+  const ownerKey = selfOwnerKey(tenantId, apt.id);
+  // Ключи этой записи прежнего вида — снять, чтобы не зазвонило дважды.
+  const stale = ownersOf("self:", apt.id).filter((key) => key !== ownerKey);
   if (!rule) {
     delete all[apt.id];
     writeSelfReminders(all);
-    await removeBabunNotificationOwners([selfOwnerKey(apt.id)]);
+    await removeBabunNotificationOwners([ownerKey, ...stale]);
     return "cleared";
   }
+  if (stale.length > 0) await removeBabunNotificationOwners(stale);
   all[apt.id] = rule;
   writeSelfReminders(all);
   // У записи с колокольчиком звонит колокольчик — автонапоминание снимаем
@@ -360,17 +402,17 @@ export async function setSelfReminder(
   }
   if (when.getTime() <= Date.now()) {
     forget();
-    await removeBabunNotificationOwners([selfOwnerKey(apt.id)]);
+    await removeBabunNotificationOwners([ownerKey]);
     return "past";
   }
   try {
     const result = await replaceBabunNotificationOwner(
-      selfOwnerKey(apt.id),
+      ownerKey,
       notificationDrafts(
         apt,
         [{ when, label: selfReminderLabel(rule), date: apt.date }],
         clientName,
-        selfOwnerKey(apt.id),
+        ownerKey,
       ),
       { requestPermission: true },
     );
@@ -389,6 +431,7 @@ export async function setSelfReminder(
 export async function reconcileSelfReminders(
   appointments: readonly Appointment[],
   timeZoneFor: (appointment: Appointment) => string,
+  tenantId: string,
   clientNameFor?: (appointment: Appointment) => string | undefined,
 ): Promise<void> {
   const rules = readSelfReminders();
@@ -404,7 +447,7 @@ export async function reconcileSelfReminders(
       continue;
     }
     if (when.getTime() <= now) continue;
-    const ownerKey = selfOwnerKey(apt.id);
+    const ownerKey = selfOwnerKey(tenantId, apt.id);
     owners.push({
       ownerKey,
       drafts: notificationDrafts(
@@ -415,7 +458,9 @@ export async function reconcileSelfReminders(
       ),
     });
   }
-  await replaceBabunNotificationScope("self:", owners, { requestPermission: false });
+  await replaceBabunNotificationScope(`self:${tenantId}:`, owners, { requestPermission: false });
+  const legacy = legacyOwners("self:", new Set(appointments.map((apt) => apt.id)));
+  if (legacy.length > 0) await removeBabunNotificationOwners(legacy);
 }
 
 /** Снять напоминание себе по id записи (страница «Уведомления»): запись
@@ -424,7 +469,7 @@ export async function clearSelfReminder(appointmentId: string): Promise<void> {
   const all = { ...readSelfReminders() };
   delete all[appointmentId];
   writeSelfReminders(all);
-  await removeBabunNotificationOwners([selfOwnerKey(appointmentId)]);
+  await removeBabunNotificationOwners(ownersOf("self:", appointmentId));
 }
 
 // ── НАПОМИНАНИЕ О КАЖДОЙ ЗАПИСИ (Кабинет → Уведомления, владелец 03.10) ──
@@ -443,13 +488,7 @@ const autoOwnerKey = (tenantId: string, appointmentId: string) => `auto:${tenant
 /** Ключи `auto:` этой записи (любого аккаунта) — снять, когда на запись
  *  ставят колокольчик: два пуша об одном не нужны. */
 function autoOwnersOf(appointmentId: string): string[] {
-  return [
-    ...new Set(
-      babunNotificationRegistrySnapshot()
-        .map((item) => item.ownerKey)
-        .filter((key) => key.startsWith("auto:") && key.endsWith(`:${appointmentId}`)),
-    ),
-  ];
+  return ownersOf("auto:", appointmentId);
 }
 
 export async function reconcileAutoReminders(
@@ -490,12 +529,6 @@ export async function reconcileAutoReminders(
   }
   await replaceBabunNotificationScope(`auto:${tenantId}:`, owners, { requestPermission: false });
   // Ключи первого дня (`auto:<запись>` без аккаунта) — снять.
-  const legacy = [
-    ...new Set(
-      babunNotificationRegistrySnapshot()
-        .map((item) => item.ownerKey)
-        .filter((key) => key.startsWith("auto:") && key.split(":").length === 2),
-    ),
-  ];
+  const legacy = legacyOwners("auto:");
   if (legacy.length > 0) await removeBabunNotificationOwners(legacy);
 }

@@ -2050,11 +2050,12 @@ function BookForm() {
     setReminderSheetOpen(false);
     // У сохранённой записи пуш ставится сразу — это не поле записи, его не
     // надо «сохранять»; у новой — после создания, когда появится id.
-    if (isEdit && editing) {
+    if (isEdit && editing && tenantIdForFiles) {
       void setSelfReminder(
         { ...editing, date, time_start: timeStart },
         rule,
         team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
+        tenantIdForFiles,
         client?.full_name,
       ).then((res) => reminderToast(res, rule));
     }
@@ -2133,11 +2134,12 @@ function BookForm() {
           timezone:
             team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
         });
-        if (selfReminder) {
+        if (selfReminder && tenantIdForFiles) {
           void setSelfReminder(
             created,
             selfReminder,
             team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
+            tenantIdForFiles,
             client?.full_name,
           ).then((res) => reminderToast(res, selfReminder));
         }
