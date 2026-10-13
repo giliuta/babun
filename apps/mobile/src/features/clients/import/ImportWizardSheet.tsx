@@ -325,7 +325,13 @@ export function ImportWizardSheet({
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={close}
+      // «Назад» Android — то же, что крестик: пока идёт импорт, не закрывает
+      // (13.10). Иначе мастер сбрасывался, импорт шёл дальше невидимо, а
+      // повторный запуск того же файла плодил дубли — уникального индекса по
+      // телефону у базы нет.
+      onRequestClose={() => {
+        if (!(importer.isPending || preparing)) close();
+      }}
     >
       {/* `pageSheet` закрывает почти весь экран вместе с корневой плашкой. */}
       <MirrorBanner inModal />
