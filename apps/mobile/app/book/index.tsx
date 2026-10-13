@@ -62,6 +62,7 @@ import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { useTeamVatRate } from "@/features/finances/vat-queries";
 import { applyTxVat, round2, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { LocalDraftNoteField } from "@/features/appointments/LocalDraftNoteField";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { useClientFunctionOn } from "@/features/clients/client-functions";
@@ -539,6 +540,14 @@ function BookForm() {
   const [discountReason, setDiscountReason] = useState<string | null>(null);
   const [status, setStatus] = useState<AppointmentStatus>("scheduled");
   const [comment, setComment] = useState("");
+  // Заметка, как набрана СЕЙЧАС: поле отдаёт её сюда на каждую букву без
+  // перерисовки формы, состояние догоняет после паузы (`LocalDraftNoteField`).
+  // Сохранение читает отсюда — нажатое посреди набора «Создать» не теряет
+  // последние буквы.
+  const commentNow = useRef("");
+  useEffect(() => {
+    commentNow.current = comment;
+  }, [comment]);
   // Название события — отдельное состояние от заметки команде: раньше общий
   // `comment` перетекал между режимами Клиент/Событие.
   const [eventTitle, setEventTitle] = useState("");
@@ -1765,7 +1774,7 @@ function BookForm() {
         computedDuration > 0
           ? computedDuration
           : minutesBetweenHM(timeStart, timeEnd),
-      comment: comment.trim(),
+      comment: commentNow.current.trim(),
       status,
       // Объект могли удалить листом правки прямо отсюда: висячий id в новую
       // запись не пишем, адрес-снимок остаётся. Правку не трогаем — там
@@ -3065,17 +3074,18 @@ function BookForm() {
                     заметка — одно поле. Скролл докручивается к полю при
                     фокусе: оно последнее, и KAV оставлял его под клавиатурой
                     (поймано 2026-09-03). */}
-                <InlineNoteField
-                  note={{
-                    draft: comment,
-                    setDraft: setComment,
-                    onFocus: () =>
-                      setTimeout(
-                        () => scrollRef.current?.scrollToEnd({ animated: true }),
-                        KEYBOARD_SETTLE_MS,
-                      ),
-                    onBlur: () => {},
+                <LocalDraftNoteField
+                  value={comment}
+                  onType={(text) => {
+                    commentNow.current = text;
                   }}
+                  onSettled={setComment}
+                  onFocus={() =>
+                    setTimeout(
+                      () => scrollRef.current?.scrollToEnd({ animated: true }),
+                      KEYBOARD_SETTLE_MS,
+                    )
+                  }
                   // ПОДСКАЗКА НАЗЫВАЕТ ПОЛЕ, А НЕ ОБЪЯСНЯЕТ ПРИМЕРОМ
                   // (владелец 2026-09-10, четвёртый раз за день — после
                   // заметок долга, операции и объекта): «убери „детали,
