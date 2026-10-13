@@ -30,3 +30,8 @@ test("кнопки мессенджеров клиента не молчат, к
   assert.doesNotMatch(src, /void Linking\.openURL/);
   assert.match(src, /Linking\.openURL\(url\)\.catch\(\(\) =>\s*notify\(/);
 });
+
+test("экраны над табами (`(shared)`) не прячут подвал под навигацию Android", () => {
+  const layout = read("../../../app/(shared)/_layout.tsx");
+  assert.match(layout, /paddingBottom: Platform\.OS === "android" \? insets\.bottom : 0/);
+});

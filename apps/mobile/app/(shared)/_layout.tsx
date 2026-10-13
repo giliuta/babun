@@ -1,4 +1,6 @@
+import { Platform } from "react-native";
 import { Stack } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "@/theme/colors";
 import { DashboardGate } from "@/lib/DashboardGate";
 
@@ -23,12 +25,21 @@ import { DashboardGate } from "@/lib/DashboardGate";
 // группа — не про запись, а про «поверх позвавшего».
 export default function SharedLayout() {
   const t = useThemeColors();
+  const insets = useSafeAreaInsets();
   return (
     <DashboardGate>
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: t.canvas },
+          // НИЗ — НАД НАВИГАЦИЕЙ ANDROID (13.10). Экраны группы — те же, что во
+          // вкладках (`Screen edges={["top"]}`): там низ закрывает таб-бар, а
+          // здесь, над табами, подвал («Создать услугу», «Создать клиента»)
+          // ложился под «Назад / Домой» и почти не нажимался. На iOS вид
+          // прежний.
+          contentStyle: {
+            backgroundColor: t.canvas,
+            paddingBottom: Platform.OS === "android" ? insets.bottom : 0,
+          },
         }}
       />
     </DashboardGate>
