@@ -37,6 +37,7 @@ import {
   clientMembersQueryKey,
   type LinkTarget,
 } from "@/features/clients/use-link-writer";
+import { clientKeys } from "@/features/clients/query-keys";
 
 // ─── ЧИСТОЕ ЯДРО: НАЧАЛО ───────────────────────────────────────────────
 //
@@ -402,7 +403,7 @@ export function useClientDraft(
    *  и человеку говорится словами, что убрать его надо руками. */
   const dropSplitPhone = async (ref: SplitRef, createdKey: string | null) => {
     const fresh = qc
-      .getQueriesData<Client | null>({ queryKey: ["client", ref.sourceId] })
+      .getQueriesData<Client | null>({ queryKey: clientKeys.card(ref.sourceId) })
       .map(([, row]) => row)
       .find((row): row is Client => !!row);
     const step = fresh

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 // ПРОВОДКА ТРЁХ ДОБАВОК КАРТОЧКИ КЛИЕНТА (22.09): «был 12 авг» у объекта,
 // «Обращение» в «Личном», тап по долгу → «Неоплаченные». Правила — чистые
@@ -209,7 +210,7 @@ describe("аудит 23.09 — то, что чинили", () => {
     assert.match(read("../../../app/(dashboard)/clients/people.tsx"), /<ClientsCompanyRoute kind="card">/);
   });
   test("неудачная правка откатывает только свои поля", () => {
-    assert.match(read("queries.ts"), /const keys = Object\.keys\(variables\.patch\)/);
+    assert.match(readModuleSource(resolve(here, "queries.ts")), /const keys = Object\.keys\(variables\.patch\)/);
   });
   test("инвойсы и чеки — в ленте файлов, а не за второй дверью (03.10)", () => {
     const files = read("../../../app/(dashboard)/clients/attachments.tsx");
@@ -232,7 +233,7 @@ describe("«Отменить» после «Убрать» находит чел
   test("строка человека ищется и в общем списке клиентов", () => {
     assert.match(
       read("use-link-writer.ts"),
-      /qc\.getQueriesData<Client\[\]>\(\{ queryKey: \["clients"\] \}\)/,
+      /qc\.getQueriesData<Client\[\]>\(\{ queryKey: clientKeys\.all\(\) \}\)/,
     );
   });
 });

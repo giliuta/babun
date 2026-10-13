@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) =>
@@ -10,7 +11,7 @@ const read = (relative: string) =>
 
 describe("native settings persistence contract", () => {
   test("reference updates confirm a returned row and team snapshots use CAS", () => {
-    const source = read("../reference/queries.ts");
+    const source = readModuleSource(resolve(here, "../reference/queries.ts"));
     assert.doesNotMatch(source, /\bas any\b/);
     assert.match(source, /\.select\("id"\)[\s\S]*\.maybeSingle\(\)/);
     assert.match(source, /expectedUpdatedAt: string/);

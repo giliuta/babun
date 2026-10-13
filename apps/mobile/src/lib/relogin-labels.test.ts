@@ -12,6 +12,7 @@ import {
   setShownSessionUserId,
 } from "./active-tenant";
 import { LABEL_FALLBACK_COLOR } from "@/features/calendar/day-label";
+import { readModuleSource } from "./module-source";
 
 // ВЫШЕЛ И ВОШЁЛ — МЕТКИ СЕРЫЕ (видео для App Review, 06.10).
 //
@@ -68,7 +69,7 @@ describe("выход и вход тем же человеком", () => {
 
   test("метки ждут роль, как команды и метки дней", () => {
     const body = functionBody(
-      read("../features/reference/queries.ts"),
+      readModuleSource(resolve(here, "../features/reference/queries.ts")),
       "export function useCities(",
     );
     assert.match(body, /enabled: !!tenantId && ready,/);

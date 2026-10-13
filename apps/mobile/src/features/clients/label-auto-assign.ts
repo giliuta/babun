@@ -17,6 +17,7 @@ import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import type { UserRole } from "@/features/settings/tenant";
 import { dayCitiesQueryKey } from "@/features/calendar/day-cities";
 import { clientsQueryKey } from "./queries";
+import { clientKeys } from "@/features/clients/query-keys";
 
 // Метка дня → метка клиента («Тихий лист 2», решение владельца
 // 2026-07-22). Best-effort вызов из onSuccess создания/переноса записи:
@@ -77,8 +78,8 @@ export async function autoAssignClientLabel(opts: {
     if (client.city.trim() === label) return;
 
     await updateClient(supabase, clientId, { city: label }, tenantId);
-    qc.invalidateQueries({ queryKey: ["clients"] });
-    qc.invalidateQueries({ queryKey: ["client", clientId] });
+    qc.invalidateQueries({ queryKey: clientKeys.all() });
+    qc.invalidateQueries({ queryKey: clientKeys.card(clientId) });
   } catch {
     // Автоматика не должна ронять сохранение записи — тихий скип
     // (холодный оффлайн-кэш, гонка с удалением клиента и т.п.).

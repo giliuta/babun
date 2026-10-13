@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 // ЖЁСТКАЯ ПРОВЕРКА КАЛЕНДАРЯ 03.10 — СТОРОЖА ПРАВОК, КОТОРЫЕ НЕ ПОДНЯТЬ БЕЗ
 // СИМУЛЯТОРА (экран и жесты тянут react-native). Каждый держит конкретную
@@ -434,7 +435,7 @@ describe("повторный аудит календаря 03.10", () => {
     const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
     assert.match(month, /const label = dayOff \? null : labelFor\?\.\(key\) \?\? null;/);
     assert.match(screen(), /isDayOff=\{\(ymd\) => workBandFor\?\.\(ymd\) === null\}/);
-    const ref = readFileSync(resolve(here, "../reference/queries.ts"), "utf8");
+    const ref = readModuleSource(resolve(here, "../reference/queries.ts"));
     assert.equal(ref.match(/\.order\("position"\)\.order\("created_at"\)/g)?.length, 2);
   });
 

@@ -8,6 +8,7 @@ import {
 import { capabilitiesOf } from "./clients-company";
 import { useClientsSourceScope, useUpdateClientById } from "./queries";
 import type { ClientLinkItem } from "./blocks/ClientLinksBlock";
+import { clientKeys } from "@/features/clients/query-keys";
 
 // ПИСАТЕЛЬ СВЯЗЕЙ (STORY-086).
 //
@@ -280,11 +281,11 @@ function freshMemberRow(
   memberId: string,
   tenantId: string | null,
 ): Client | null {
-  for (const [, value] of qc.getQueriesData<Client | null>({ queryKey: ["client", memberId] })) {
+  for (const [, value] of qc.getQueriesData<Client | null>({ queryKey: clientKeys.card(memberId) })) {
     if (value && value.id === memberId) return value;
   }
   for (const [, rows] of qc.getQueriesData<Client[]>({
-    queryKey: ["client-members", tenantId],
+    queryKey: clientKeys.membersOfTenant(tenantId),
   })) {
     const found = Array.isArray(rows) ? rows.find((row) => row.id === memberId) : undefined;
     if (found) return found;
@@ -292,7 +293,7 @@ function freshMemberRow(
   // Общий список клиентов. После «Убрать» человека уже нет в перечне
   // карточки-группы, и «Отменить» не находило его строку — связь молча не
   // возвращалась (снято 23.09 на симуляторе).
-  for (const [, rows] of qc.getQueriesData<Client[]>({ queryKey: ["clients"] })) {
+  for (const [, rows] of qc.getQueriesData<Client[]>({ queryKey: clientKeys.all() })) {
     const found = Array.isArray(rows) ? rows.find((row) => row?.id === memberId) : undefined;
     if (found) return found;
   }
@@ -351,7 +352,7 @@ export function useLinkWriter(): LinkWriter {
       // переселяют, и ни одна из них не должна ждать рефетча.
       const touched = new Set<string>([groupId]);
       for (const [key, rows] of qc.getQueriesData<Client[]>({
-        queryKey: ["client-members", tenantId],
+        queryKey: clientKeys.membersOfTenant(tenantId),
       })) {
         const listGroup = key[2];
         if (typeof listGroup !== "string" || !Array.isArray(rows)) continue;

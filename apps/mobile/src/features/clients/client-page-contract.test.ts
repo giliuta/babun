@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
@@ -573,7 +574,7 @@ describe("«Разделить клиента» в «⋯» карточки", ()
     assert.equal(src.split("dropSplitPhone(").length - 1, 1, "номер убирается ещё где-то, кроме сохранения");
     assert.match(
       src,
-      /\.getQueriesData<Client \| null>\(\{ queryKey: \["client", ref\.sourceId\] \}\)/,
+      /\.getQueriesData<Client \| null>\(\{ queryKey: clientKeys\.card\(ref\.sourceId\) \}\)/,
       "патч исходной снова собирается не из свежей строки",
     );
     assert.match(
@@ -605,8 +606,8 @@ describe("«Разделить клиента» в «⋯» карточки", ()
 // это за несохранение.
 describe("правка клиента и блоки людей", () => {
   test("обе правки клиента сбрасывают перечни людей", () => {
-    const q = read("queries.ts");
-    const hits = q.match(/qc\.invalidateQueries\(\{ queryKey: \["client-members"\] \}\);/g) ?? [];
+    const q = readModuleSource(resolve(here, "queries.ts"));
+    const hits = q.match(/qc\.invalidateQueries\(\{ queryKey: clientKeys\.memberAll\(\) \}\);/g) ?? [];
     assert.equal(hits.length, 2, "правка клиента не сбрасывает «Людей» других карточек");
   });
 });

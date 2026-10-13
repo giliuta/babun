@@ -23,6 +23,7 @@ import {
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import type { Master } from "./queries";
+import { referenceKeys } from "@/features/reference/query-keys";
 
 // The rich fields that ride inside `profile`. Everything the shared Master
 // carries beyond the flat `masters` columns. All optional — a legacy/blank
@@ -117,7 +118,7 @@ export function useUpdateMasterProfile() {
       });
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["masters"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: referenceKeys.masterAll() }),
     meta: { errorHandled: true },
   });
 }

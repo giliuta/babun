@@ -47,6 +47,8 @@ import {
   memberWriteRefusal,
 } from "@/features/appointments/member-writes";
 import { appointmentsQueryKey } from "./queries";
+import { clientKeys } from "@/features/clients/query-keys";
+import { referenceKeys } from "@/features/reference/query-keys";
 
 /** Сотрудник пишет запись только дверями сервера (STORY-088): каждое поле там
  *  проверяется своим блоком в календаре записи. Отказ — словами, с названием
@@ -68,7 +70,7 @@ function invalidateKeys() {
   return [
     ["appointments"],
     ["transactions"],
-    ["clients"],
+    clientKeys.all(),
     ["accounts"],
     ["invoices"],
     // Чек рождается сервером на приём денег (issue_receipt_for_income):
@@ -354,7 +356,7 @@ function useUpdateAppointmentOptions() {
       if (FINANCE_FIELDS.some((f) => patch[f] !== undefined)) {
         for (const key of [
           ["transactions"],
-          ["clients"],
+          clientKeys.all(),
           ["accounts"],
           ["invoices"],
           // Оплата в патче рождает чек на сервере — тот же закон, что у
@@ -471,7 +473,7 @@ export function useMemberUpdateTeam() {
       if (error) throw refusal("updateTeam", error.message);
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["teams"] });
+      void qc.invalidateQueries({ queryKey: referenceKeys.teamAll() });
     },
     meta: { errorHandled: true }, // call sites alert themselves
   });

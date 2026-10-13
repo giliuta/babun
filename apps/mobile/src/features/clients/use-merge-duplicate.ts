@@ -27,6 +27,7 @@ import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { useTenantId } from "@/lib/tenant";
 import { useSetClientSmsOptOut } from "@/features/sms/sms-account";
+import { clientKeys } from "@/features/clients/query-keys";
 
 // «ОБЪЕДИНИТЬ С ДУБЛЕМ» — ПУНКТ «⋯» КАРТОЧКИ.
 //
@@ -64,7 +65,7 @@ function peopleIdsOf(
 
 function freshestClient(qc: QueryClient, id: string): Client | null {
   let best: { at: number; client: Client } | null = null;
-  for (const query of qc.getQueryCache().findAll({ queryKey: ["client", id] })) {
+  for (const query of qc.getQueryCache().findAll({ queryKey: clientKeys.card(id) })) {
     const client = query.state.data as Client | null | undefined;
     if (!client || client.id !== id) continue;
     if (!best || query.state.dataUpdatedAt > best.at) best = { at: query.state.dataUpdatedAt, client };
