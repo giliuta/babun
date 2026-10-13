@@ -22,77 +22,11 @@ export interface MasterExtraContacts {
   email?: string;
 }
 
-// Sprint 027 — the permission surface grew from 9 to ~25 flags to
-// support a real SaaS onboarding (lead working only in their brigade
-// must not see finances or other brigades). Grouped into five
-// semantic clusters: calendar / clients / finance / chats / admin.
-// The legacy 9-field shape is preserved so records persisted before
-// this sprint keep parsing.
-export interface MasterPermissions {
-  // ── Legacy / calendar-related ──────────────────────────────────
-  /** Видеть цены услуг в каталоге и в записи. */
-  see_prices: boolean;
-  /** Видеть доходы / расходы / прибыль (общий тумблер финансов). */
-  see_finances: boolean;
-  see_clients_phone: boolean;
-  see_clients_address: boolean;
-  see_clients_balance: boolean;
-
-  can_create_appointments: boolean;
-  can_edit_appointments: boolean;
-  can_delete_appointments: boolean;
-  can_complete_appointments: boolean;
-
-  /** Which teams' calendars are visible.
-   *  Empty array = only own team. `['*']` = all teams. */
-  visible_team_ids: string[];
-
-  // ── Новые флаги Sprint 027 (все optional — legacy-записи не ломаются) ──
-  // Календарь
-  can_reschedule_appointments?: boolean;
-  can_edit_all_appointments?: boolean; // иначе только свои
-  can_see_all_teams_calendar?: boolean; // синоним `visible_team_ids = ['*']`, но явный флаг для UX
-
-  // Клиенты
-  see_clients_list?: boolean; // если false — мастер видит клиента только внутри своей записи
-  see_clients_financial_history?: boolean;
-  can_create_clients?: boolean;
-  can_edit_clients?: boolean;
-  can_delete_clients?: boolean;
-
-  // Финансы
-  see_own_salary?: boolean;
-  see_own_brigade_revenue?: boolean;
-  see_own_brigade_expenses?: boolean;
-  see_all_company_finances?: boolean; // только admin/dispatcher
-  can_add_expenses?: boolean;
-  can_record_payments?: boolean;
-  can_apply_discounts?: boolean;
-
-  // Чаты
-  see_brigade_chats?: boolean;
-  see_all_chats?: boolean;
-  can_reply_chats?: boolean;
-
-  // Администрирование
-  can_manage_masters?: boolean;
-  can_manage_teams?: boolean;
-  can_manage_services?: boolean;
-  can_manage_settings?: boolean;
-}
-
 export type AccountStatus =
   | "invited" // CEO created creds, user hasn't logged in yet
   | "active" // logged in at least once
   | "paused" // temporarily disabled (отпуск, больничный)
   | "terminated"; // уволен
-
-export const ACCOUNT_STATUS_LABELS: Record<AccountStatus, string> = {
-  invited: "Приглашён",
-  active: "Активен",
-  paused: "На паузе",
-  terminated: "Уволен",
-};
 
 export interface Master {
   id: string;
@@ -102,7 +36,6 @@ export interface Master {
   team_id: string | null; // primary team (null = no team, e.g. admin or universal substitute)
   role: MasterRole;
   is_active: boolean;
-  permissions: MasterPermissions;
   created_at: string; // ISO date
 
   /** Custom job title the tenant writes themselves ("Старший техник",
@@ -267,10 +200,6 @@ export interface BrigadeRole {
 export interface BrigadeMember {
   master_id: string;
   role_id: string | null; // null = без роли
-  /** Sprint 033 Phase I47 — granular per-brigade permissions. Undef
-   *  = full access (backward compat). See lib/brigade-permissions.ts
-   *  for the type (avoids a circular import). */
-  permissions?: import("./brigade-permissions").BrigadeMemberPermissions;
 }
 
 // NOTE: no default roles are auto-created for a fresh brigade — the
@@ -278,7 +207,6 @@ export interface BrigadeMember {
 // page) is the only place these IDs still appear, and only for
 // buckets that actually have members.
 export const LEGACY_LEAD_ROLE_ID = "role-lead";
-export const LEGACY_HELPER_ROLE_ID = "role-helper";
 
 // STORY audit: до этой константы три разных места жёстко проверяли
 // `role.name.trim().toLowerCase() === "бригадир"`. Это хрупкая логика
@@ -290,289 +218,6 @@ export const LEAD_ROLE_NAME = "бригадир";
 
 export function isLeadRole(role: { name: string }): boolean {
   return role.name.trim().toLowerCase() === LEAD_ROLE_NAME;
-}
-
-// ─── Default permissions per role ──────────────────────────────────────
-//
-// The role → permission mapping is deliberately conservative: if a
-// flag makes the CEO think twice, default it OFF. The form then lets
-// them flip individual toggles for edge cases without touching the
-// defaults.
-
-export function defaultPermissionsForRole(role: MasterRole): MasterPermissions {
-  const base = {
-    // Legacy flags
-    see_prices: false,
-    see_finances: false,
-    see_clients_phone: true,
-    see_clients_address: true,
-    see_clients_balance: false,
-    can_create_appointments: false,
-    can_edit_appointments: false,
-    can_delete_appointments: false,
-    can_complete_appointments: true,
-    visible_team_ids: [] as string[],
-
-    // Sprint 027 extended flags — defaulted off; role branches flip on.
-    can_reschedule_appointments: false,
-    can_edit_all_appointments: false,
-    can_see_all_teams_calendar: false,
-
-    see_clients_list: false,
-    see_clients_financial_history: false,
-    can_create_clients: false,
-    can_edit_clients: false,
-    can_delete_clients: false,
-
-    see_own_salary: true,
-    see_own_brigade_revenue: false,
-    see_own_brigade_expenses: false,
-    see_all_company_finances: false,
-    can_add_expenses: false,
-    can_record_payments: false,
-    can_apply_discounts: false,
-
-    see_brigade_chats: false,
-    see_all_chats: false,
-    can_reply_chats: false,
-
-    can_manage_masters: false,
-    can_manage_teams: false,
-    can_manage_services: false,
-    can_manage_settings: false,
-  };
-
-  switch (role) {
-    case "admin":
-      return {
-        ...base,
-        see_prices: true,
-        see_finances: true,
-        see_clients_balance: true,
-        can_create_appointments: true,
-        can_edit_appointments: true,
-        can_delete_appointments: true,
-        can_complete_appointments: true,
-        visible_team_ids: ["*"],
-        can_reschedule_appointments: true,
-        can_edit_all_appointments: true,
-        can_see_all_teams_calendar: true,
-        see_clients_list: true,
-        see_clients_financial_history: true,
-        can_create_clients: true,
-        can_edit_clients: true,
-        can_delete_clients: true,
-        see_own_brigade_revenue: true,
-        see_own_brigade_expenses: true,
-        see_all_company_finances: true,
-        can_add_expenses: true,
-        can_record_payments: true,
-        can_apply_discounts: true,
-        see_brigade_chats: true,
-        see_all_chats: true,
-        can_reply_chats: true,
-        can_manage_masters: true,
-        can_manage_teams: true,
-        can_manage_services: true,
-        can_manage_settings: true,
-      };
-    case "dispatcher":
-      return {
-        ...base,
-        see_prices: true,
-        see_finances: true,
-        see_clients_balance: true,
-        can_create_appointments: true,
-        can_edit_appointments: true,
-        can_delete_appointments: true,
-        can_complete_appointments: true,
-        visible_team_ids: ["*"],
-        can_reschedule_appointments: true,
-        can_edit_all_appointments: true,
-        can_see_all_teams_calendar: true,
-        see_clients_list: true,
-        see_clients_financial_history: true,
-        can_create_clients: true,
-        can_edit_clients: true,
-        see_own_brigade_revenue: true,
-        see_own_brigade_expenses: true,
-        see_all_company_finances: true,
-        can_add_expenses: true,
-        can_record_payments: true,
-        can_apply_discounts: true,
-        see_brigade_chats: true,
-        see_all_chats: true,
-        can_reply_chats: true,
-      };
-    case "lead":
-      // Brigade lead: manages own brigade, earns % of brigade, does
-      // not see other brigades or company finances by default.
-      return {
-        ...base,
-        see_prices: true,
-        see_clients_balance: true,
-        can_edit_appointments: true,
-        can_complete_appointments: true,
-        visible_team_ids: [], // own team only
-        can_reschedule_appointments: true,
-        see_clients_list: true,
-        can_edit_clients: true,
-        see_own_brigade_revenue: true,
-        see_own_brigade_expenses: true,
-        can_add_expenses: true,
-        can_record_payments: true,
-        see_brigade_chats: true,
-        can_reply_chats: true,
-      };
-    case "helper":
-    default:
-      // Helper: sees only their own brigade's calendar, minimal writes.
-      return {
-        ...base,
-        can_complete_appointments: true,
-        visible_team_ids: [], // own team only
-      };
-  }
-}
-
-export const ROLE_LABELS: Record<MasterRole, string> = {
-  admin: "Администратор",
-  dispatcher: "Диспетчер",
-  lead: "Старший",
-  helper: "Помощник",
-};
-
-type PermissionKey = keyof Omit<MasterPermissions, "visible_team_ids">;
-
-export const PERMISSION_LABELS: Record<PermissionKey, string> = {
-  // Календарь
-  can_create_appointments: "Создавать записи",
-  can_edit_appointments: "Редактировать свои записи",
-  can_edit_all_appointments: "Редактировать чужие записи",
-  can_delete_appointments: "Удалять записи",
-  can_complete_appointments: "Отмечать выполненные",
-  can_reschedule_appointments: "Переносить записи",
-  can_see_all_teams_calendar: "Видеть календарь всех команд",
-  see_prices: "Видеть цены услуг",
-
-  // Клиенты
-  see_clients_list: "Открывать список клиентов",
-  see_clients_phone: "Видеть телефон клиента",
-  see_clients_address: "Видеть адрес клиента",
-  see_clients_balance: "Видеть баланс клиента",
-  see_clients_financial_history: "Видеть историю оплат клиента",
-  can_create_clients: "Создавать клиентов",
-  can_edit_clients: "Редактировать клиентов",
-  can_delete_clients: "Удалять клиентов",
-
-  // Финансы
-  see_finances: "Видеть общие доходы и расходы",
-  see_own_salary: "Видеть свою ЗП",
-  see_own_brigade_revenue: "Видеть доходы команды",
-  see_own_brigade_expenses: "Видеть расходы команды",
-  see_all_company_finances: "Видеть финансы всей компании",
-  can_add_expenses: "Добавлять расходы",
-  can_record_payments: "Отмечать оплату визита",
-  can_apply_discounts: "Применять скидки",
-
-  // Чаты
-  see_brigade_chats: "Видеть чаты своей команды",
-  see_all_chats: "Видеть все чаты компании",
-  can_reply_chats: "Отвечать в чатах",
-
-  // Админ
-  can_manage_masters: "Управление мастерами",
-  can_manage_teams: "Управление командами",
-  can_manage_services: "Управление услугами",
-  can_manage_settings: "Настройки компании",
-};
-
-/** Permission groups matching Bumpix "Права доступа" categories. */
-export type PermissionGroupKey =
-  | "calendar"
-  | "clients"
-  | "finance"
-  | "chats"
-  | "admin";
-
-export const PERMISSION_GROUPS: {
-  key: PermissionGroupKey;
-  title: string;
-  description: string;
-  permissions: PermissionKey[];
-}[] = [
-  {
-    key: "calendar",
-    title: "Календарь",
-    description: "Просмотр и изменение записей",
-    permissions: [
-      "can_see_all_teams_calendar",
-      "see_prices",
-      "can_create_appointments",
-      "can_edit_appointments",
-      "can_edit_all_appointments",
-      "can_complete_appointments",
-      "can_reschedule_appointments",
-      "can_delete_appointments",
-    ],
-  },
-  {
-    key: "clients",
-    title: "Клиенты",
-    description: "Что видно в карточке клиента",
-    permissions: [
-      "see_clients_list",
-      "see_clients_phone",
-      "see_clients_address",
-      "see_clients_balance",
-      "see_clients_financial_history",
-      "can_create_clients",
-      "can_edit_clients",
-      "can_delete_clients",
-    ],
-  },
-  {
-    key: "finance",
-    title: "Финансы",
-    description: "Деньги, ЗП, кто что получает",
-    permissions: [
-      "see_own_salary",
-      "see_own_brigade_revenue",
-      "see_own_brigade_expenses",
-      "see_finances",
-      "see_all_company_finances",
-      "can_add_expenses",
-      "can_record_payments",
-      "can_apply_discounts",
-    ],
-  },
-  {
-    key: "chats",
-    title: "Чаты",
-    description: "Переписка с клиентами",
-    permissions: ["see_brigade_chats", "see_all_chats", "can_reply_chats"],
-  },
-  {
-    key: "admin",
-    title: "Администрирование",
-    description: "Только для владельца и диспетчера",
-    permissions: [
-      "can_manage_masters",
-      "can_manage_teams",
-      "can_manage_services",
-      "can_manage_settings",
-    ],
-  },
-];
-
-/** Backwards-compatible default for records saved before Sprint 027.
- *  Merges legacy permissions on top of the role-based default so the
- *  form never shows a half-empty matrix. */
-export function mergePermissions(
-  role: MasterRole,
-  stored: MasterPermissions
-): MasterPermissions {
-  return { ...defaultPermissionsForRole(role), ...stored };
 }
 
 // ─── Seed data ─────────────────────────────────────────────────────────

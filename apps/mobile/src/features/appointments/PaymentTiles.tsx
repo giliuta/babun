@@ -347,34 +347,6 @@ export function PaymentStateRow({
   );
 }
 
-/** Тихая текстовая ссылка под сеткой («Внести часть» / «Вся сумма»). */
-export function QuietLink({
-  label,
-  onPress,
-}: {
-  label: string;
-  onPress: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <View
-      className="flex-row justify-end"
-      style={{ paddingHorizontal: 16, paddingBottom: 8, marginTop: -4 }}
-    >
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        hitSlop={8}
-        style={{ minHeight: 32, justifyContent: "center" }}
-      >
-        <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
-          {label}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
 /** У команды нет касс: владельцу — дверь создания, остальным — слова. */
 export function NoAccountsNotice({
   canCreate,

@@ -28,26 +28,6 @@ export function visitsWord(n: number): string {
   return pluralRu(n, ["визит", "визита", "визитов"]);
 }
 
-/** reminder_at (YYYY-MM-DD) → метка бейджа напоминания: «сегодня», когда
- *  день настал, иначе короткая дата; due = сегодня или прошло (пора
- *  действовать — красный). null — напоминания нет. Один источник для
- *  строки списка и шапки карточки. */
-export function reminderBadge(
-  reminderAt: string | null | undefined,
-): { label: string; due: boolean } | null {
-  if (!reminderAt) return null;
-  // После синка reminder_at приходит как timestamptz («…T00:00:00+00») —
-  // режем до YYYY-MM-DD, иначе «сегодня» не совпадёт и бейдж не краснеет.
-  const ymd = reminderAt.slice(0, 10);
-  const d = new Date();
-  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  if (ymd === today) return { label: "сегодня", due: true };
-  return {
-    label: formatShortDateRu(ymd) || ymd,
-    due: ymd < today,
-  };
-}
-
 /** YYYY-MM-DD через n дней (локальная TZ) — пресеты «Напомнить»
  *  (карточка и long-press меню списка). */
 export function ymdInDays(days: number): string {

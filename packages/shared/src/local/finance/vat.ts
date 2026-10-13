@@ -17,12 +17,6 @@ export type VatMode = "off" | "inclusive" | "exclusive";
  *  налогом, «Плюс НДС» — налог сверху введённой цены. */
 export type TxVatMode = "none" | "inclusive" | "exclusive";
 
-export const TX_VAT_MODE_LABELS: Record<TxVatMode, string> = {
-  none: "Без VAT",
-  inclusive: "VAT включён",
-  exclusive: "Плюс VAT",
-};
-
 /** Режим операции по умолчанию — из действующей настройки (счёт → команда →
  *  компания). Выключенный НДС означает «без налога», а не «спроси ещё раз». */
 export function defaultTxVatMode(settings: VatSettings): TxVatMode {

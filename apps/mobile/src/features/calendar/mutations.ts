@@ -27,11 +27,8 @@ import {
 import type { Json } from "@babun/shared/db/database.types";
 import type { Appointment } from "@babun/shared/local/appointments";
 import {
-  resetAppointmentPayment,
-  setAppointmentPrepayment,
   undoAppointmentPayment,
 } from "@babun/shared/db/repositories/finance-transactions";
-import type { PaymentMethod } from "@babun/shared/local/finance/transaction";
 import { supabase } from "@/lib/supabase";
 import { preflightQuotaForCreate } from "@/lib/quota";
 import { useTenantId } from "@/lib/tenant";
@@ -536,45 +533,3 @@ export function useUndoAppointmentPayment() {
   });
 }
 
-/** Permanent payment reset. The RPC refunds every still-outstanding receipt,
- * returns the appointment to debt and recalculates an attached invoice. */
-export function useResetAppointmentPayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    ...NEVER_PAUSE,
-    mutationFn: (appointmentId: string) =>
-      resetAppointmentPayment(supabase, appointmentId),
-    onSuccess: () => {
-      for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });
-    },
-    meta: { errorHandled: true },
-  });
-}
-
-/** Server-only absolute prepayment adjustment. The RPC owns both the booking
- * and every receipt/refund event, so an offline replay can never duplicate it. */
-export function useSetAppointmentPrepayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    ...NEVER_PAUSE,
-    mutationFn: ({
-      appointmentId,
-      amount,
-      paymentMethod,
-    }: {
-      appointmentId: string;
-      amount: number;
-      paymentMethod: PaymentMethod | null;
-    }) =>
-      setAppointmentPrepayment(
-        supabase,
-        appointmentId,
-        amount,
-        paymentMethod,
-      ),
-    onSuccess: () => {
-      for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });
-    },
-    meta: { errorHandled: true },
-  });
-}

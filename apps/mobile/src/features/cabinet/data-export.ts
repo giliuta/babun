@@ -26,8 +26,6 @@ type Row<T extends keyof Database["public"]["Tables"]> =
 
 export type ExportKind = "clients" | "appointments" | "finances";
 
-export const EXPORT_KINDS: readonly ExportKind[] = ["clients", "appointments", "finances"];
-
 // ─── Строки, которые читает хук (колонки — те же, что в его select) ─────────
 
 export type ClientExportRow = Pick<
@@ -236,7 +234,6 @@ export function serviceNames(services: Json, catalog: Names): string {
   }
   return names.join(", ");
 }
-
 
 /** Получено по записи — общей формулой `getPaidAmount` (аванс + доплата,
  *  возврат — ноль). Строка выгрузки несёт только нужные ей колонки. */

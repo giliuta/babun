@@ -120,22 +120,6 @@ export function useAccessBlocks({ fresh = false }: { fresh?: boolean } = {}) {
   });
 }
 
-/** Люди, прикреплённые к календарю (все уровни, в том числе «Скрыт»). */
-export function useCalendarMembers(teamId: string | undefined) {
-  const tenantId = useTenantId();
-  return useQuery({
-    queryKey: calendarMembersQueryKey(tenantId, teamId ?? null),
-    enabled: !!tenantId && !!teamId,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("list_members", {
-        p_team_id: teamId as string,
-      });
-      if (error) throw new AccessRequestError(error);
-      return parseMembers(data);
-    },
-  });
-}
-
 /** ВСЕ ЛЮДИ КОМПАНИИ (`list_members` без календаря). Страница сотрудника ищет
  *  человека по нему самому: поиск в календаре из адреса терял его, когда
  *  страницу открывали не из календаря (почта пустая, меню «⋯» пропадало). */

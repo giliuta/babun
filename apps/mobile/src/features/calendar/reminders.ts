@@ -96,23 +96,6 @@ export async function cancelManualAppointmentReminder(
   }
 }
 
-// Локальное напоминание о записи. Для каждой записи хранится id системного
-// уведомления: новый пресет заменяет старый, а перенос/отмена/удаление снимают
-// устаревшее уведомление через cancelAppointmentReminders.
-export async function scheduleAppointmentReminder(
-  apt: Appointment,
-  when: Date,
-  label: string,
-  clientName?: string,
-): Promise<ReminderResult> {
-  return scheduleAppointmentReminders(
-    apt,
-    [{ when, label, date: apt.date }],
-    clientName,
-    manualOwnerKey(apt.id),
-  );
-}
-
 function notificationDrafts(
   apt: Appointment,
   reminders: readonly ReminderNotification[],

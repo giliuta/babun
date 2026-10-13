@@ -74,19 +74,6 @@ export function withDay(
   };
 }
 
-// Сдвиг «HH:MM» на час в пределах суток — минимальная починка пары
-// начало/конец, когда правка одной границы перескочила другую.
-function shiftHourHM(hm: string, delta: number): string {
-  const [h, m] = hm.split(":").map(Number);
-  const next = Math.max(0, Math.min(23, (Number.isFinite(h) ? h : 0) + delta));
-  return `${String(next).padStart(2, "0")}:${String(
-    Number.isFinite(m) ? m : 0,
-  ).padStart(2, "0")}`;
-}
-
-export const addHourHM = (hm: string) => shiftHourHM(hm, 1);
-export const subHourHM = (hm: string) => shiftHourHM(hm, -1);
-
 /** Есть ли хоть один день со своими часами (для подписи «Разный по дням»). */
 function hasMixedHours(schedule: TeamSchedule): boolean {
   const working = allDays(schedule)

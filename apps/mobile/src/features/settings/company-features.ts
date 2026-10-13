@@ -1,14 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   isFeatureOn,
-  withFeature,
   type CompanyFeatureKey,
 } from "@babun/shared/local/company-features";
 import { useScopeCompany } from "@/features/clients/company-scope";
 import { calendarSettingsQueryKey } from "@/lib/company-query-keys";
 
 import { fetchCalendarSettings } from "./company-fetchers";
-import { useCalendarSettings, useSaveCalendarSettings } from "./local-settings";
+import { useCalendarSettings } from "./local-settings";
 
 // ФУНКЦИИ КОМПАНИИ НА ЭКРАНЕ (STORY-088). Читаются той же дверью, что
 // остальные настройки компании (`useCalendarSettings`: сервер + кэш телефона,
@@ -49,22 +48,3 @@ export function useFeatureOn(key: CompanyFeatureKey): boolean {
   return isFeatureOn(useDisabledFeatures(), key);
 }
 
-/** Переключить функцию (только владелец — сервер откажет остальным). */
-export function useSetCompanyFeature() {
-  const settings = useCalendarSettings();
-  const save = useSaveCalendarSettings();
-  return {
-    ...save,
-    mutate: (
-      input: { key: CompanyFeatureKey; on: boolean },
-      // Сбой тумблера говорит словами у вызывающего (аудит 2026-09-30).
-      options?: { onError?: (error: unknown) => void },
-    ) =>
-      save.mutate(
-        {
-          disabledFeatures: withFeature(settings.data?.disabledFeatures, input.key, input.on),
-        },
-        options?.onError ? { onError: options.onError } : undefined,
-      ),
-  };
-}

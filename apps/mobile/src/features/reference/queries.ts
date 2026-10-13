@@ -12,7 +12,6 @@ import {
   LEGACY_LEAD_ROLE_ID,
   type BrigadeMember,
   type BrigadeRole,
-  type MasterRole,
 } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
@@ -308,49 +307,6 @@ export function useMaster(id: string | undefined) {
       if (error) throw new Error(error.message);
       return data;
     },
-  });
-}
-
-export function useCreateMaster() {
-  const tenantId = useTenantId();
-  const role = useDataRole().data;
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
-      full_name: string;
-      phone?: string;
-      // v-hubs: the create sheet can seed the display fields the hub reads
-      // directly off the row (not the profile jsonb). All optional so the
-      // RefListScreen quick-add call (name only) keeps working.
-      role?: MasterRole;
-      title?: string;
-      color?: string;
-      team_id?: string | null;
-      account_status?: string;
-    }) => {
-      if (role !== "owner") {
-        throw new Error("Приглашать партнёров может только владелец.");
-      }
-      const { data, error } = await supabase
-        .from("masters")
-        .insert({
-          id: generateId("master"),
-          tenant_id: tenantId as string,
-          full_name: input.full_name,
-          phone: input.phone || null,
-          role: input.role ?? undefined,
-          title: input.title || null,
-          color: input.color || null,
-          team_id: input.team_id ?? null,
-          account_status: input.account_status ?? undefined,
-        })
-        .select("*")
-        .single();
-      if (error) throw new Error(error.message);
-      return data;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["masters"] }),
-    meta: { errorHandled: true }, // RefListScreen call sites alert themselves
   });
 }
 
@@ -744,56 +700,6 @@ function deriveLeadHelperIds(
     else helper_ids.push(m.master_id);
   }
   return { lead_ids, helper_ids, lead_id: lead_ids[0] ?? null };
-}
-
-export function useUpdateTeamMembers() {
-  const tenantId = useTenantId();
-  const role = useDataRole().data;
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      teamId,
-      expectedUpdatedAt,
-      roles,
-      members,
-    }: {
-      teamId: string;
-      expectedUpdatedAt: string;
-      roles: BrigadeRole[];
-      members: BrigadeMember[];
-    }) => {
-      const { lead_ids, helper_ids, lead_id } = deriveLeadHelperIds(
-        roles,
-        members,
-      );
-      if (!tenantId) throw new Error("Нет активного аккаунта.");
-      if (role !== "owner") {
-        throw new Error("Изменять состав команды может только владелец.");
-      }
-      const { data, error } = await supabase
-        .from("teams")
-        .update({
-          roles: roles as unknown as Json,
-          members: members as unknown as Json,
-          lead_ids: lead_ids as unknown as Json,
-          helper_ids: helper_ids as unknown as Json,
-          lead_id,
-        })
-        .eq("tenant_id", tenantId)
-        .eq("id", teamId)
-        .eq("updated_at", expectedUpdatedAt)
-        .select("id")
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      if (!data) {
-        throw new Error(
-          "Состав команды уже изменился. Обновите экран и повторите действие.",
-        );
-      }
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["teams"] }),
-    meta: { errorHandled: true },
-  });
 }
 
 // ─── Master deletion side-effects (web parity, handleDelete) ─────────

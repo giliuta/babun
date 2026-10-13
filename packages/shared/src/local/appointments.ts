@@ -102,17 +102,6 @@ export type AppointmentSource =
   | "walk_in"
   | "other";
 
-export const APPOINTMENT_SOURCE_LABELS: Record<AppointmentSource, string> = {
-  instagram: "Instagram",
-  whatsapp: "WhatsApp",
-  online: "Сайт",
-  phone: "Звонок",
-  referral: "Рекомендация",
-  repeat: "Повторный",
-  walk_in: "Проездом",
-  other: "Другое",
-};
-
 export type PhotoKind = "before" | "after" | "other";
 
 export interface AppointmentPhoto {

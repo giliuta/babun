@@ -647,60 +647,6 @@ export function useUpdateClient(id: string) {
   });
 }
 
-// Как useUpdateClient, но id приходит с вызовом — для действий по строке
-// СПИСКА (long-press меню: закрепить, напомнить), где хук на каждый ряд
-// не заведёшь. Семантика кэша и ошибок — та же.
-//
-// ПРАВКА ВИДНА ДО ОТВЕТА СЕРВЕРА И ОТКАТЫВАЕТСЯ ПРИ ОТКАЗЕ (STORY-086).
-// Этим хуком пишутся связи людей: связь правится в строке ЧУЖОЙ карточки
-// (добавили Екатерину к Павлу — патчится Екатерина), и её собственная строка
-// в кэше обязана измениться сразу — иначе следующая правка соберёт патч от
-// старого массива и затрёт первую. `notify` в `onError` при этом остаётся:
-// откат чинит кэш, но молчать об отказе нельзя.
-/** КОМАНДА КЛИЕНТА (30.09) — отдельной дверью `set_client_team`: у правки
- *  карточки свой белый список, а переезд между командами решает, кто клиента
- *  увидит. Список и карточка меняются сразу; отказ сервера возвращает как
- *  было. */
-export function useSetClientTeam() {
-  const scope = useQueryScope();
-  const qc = useQueryClient();
-  return useMutation({
-    ...NEVER_PAUSE,
-    mutationFn: async ({ id, teamId }: { id: string; teamId: string }) => {
-      const { error } = await writeClientOf(scope).rpc("set_client_team", {
-        p_client_id: id,
-        p_team_id: teamId,
-      });
-      if (error) throw new Error(error.message);
-    },
-    onMutate: async ({ id, teamId }) => {
-      await qc.cancelQueries({ queryKey: ["clients"] });
-      await qc.cancelQueries({ queryKey: ["client", id] });
-      const previous = [
-        ...qc.getQueriesData<Client[]>({ queryKey: ["clients"] }),
-        ...qc.getQueriesData<Client | null>({ queryKey: ["client", id] }),
-      ];
-      qc.setQueriesData<Client[]>({ queryKey: ["clients"] }, (list) =>
-        Array.isArray(list)
-          ? list.map((c) => (c.id === id ? { ...c, team_id: teamId } : c))
-          : list,
-      );
-      qc.setQueriesData<Client | null>({ queryKey: ["client", id] }, (current) =>
-        current ? { ...current, team_id: teamId } : current,
-      );
-      return { previous };
-    },
-    onError: (_e, _input, context) => {
-      for (const [key, value] of context?.previous ?? []) qc.setQueryData(key, value);
-    },
-    onSettled: (_d, _e, { id }) => {
-      void qc.invalidateQueries({ queryKey: ["clients"] });
-      void qc.invalidateQueries({ queryKey: ["client", id] });
-    },
-    meta: { errorHandled: true }, // caller messages the refusal itself
-  });
-}
-
 /** КЛИЕНТ ЧУЖОЙ СТРОКИ СПИСКА (аудит 03.10). Список склеен из нескольких
  *  компаний, а источник у экрана один — своя. Действие по строке
  *  работодателя (`guestOf`) несёт её источник: без него запись ушла бы под

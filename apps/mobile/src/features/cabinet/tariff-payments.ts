@@ -22,9 +22,6 @@ import { tierName, type Tier } from "@/features/tariffs/tiers";
 // Суммы Stripe хранит в центах, а тарифы у нас только в евро (`tariff-checkout`),
 // поэтому «÷ 100» без таблицы валют без десятичных знаков.
 
-/** События Stripe, из которых складывается лента. */
-export const PAYMENT_EVENTS = ["invoice.payment_succeeded", "invoice.payment_failed"] as const;
-
 /** Строка `billing_events` так, как её отдаёт запрос. */
 export interface BillingEventRow {
   id: string;

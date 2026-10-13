@@ -30,12 +30,6 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   master: "Бригадир / мастер",
 };
 
-export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
-  owner: "Полный доступ к аккаунту, партнёрам и финансам.",
-  dispatcher: "Клиенты, записи и рабочая коммуникация без финансов и опасных настроек.",
-  master: "Рабочий график и разрешённые действия внутри назначенных заявок.",
-};
-
 const ROLE_CAPABILITIES: Record<UserRole, ReadonlySet<AppCapability>> = {
   owner: new Set<AppCapability>([
     "view-cabinet",

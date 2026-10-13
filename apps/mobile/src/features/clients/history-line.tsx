@@ -61,15 +61,6 @@ export function clientHistoryParts(
   return parts;
 }
 
-/** Тот же текст, что видит глаз, — для `accessibilityLabel` и подписей. */
-export function clientHistoryText(
-  client: Client,
-  stats: ClientStats | undefined,
-): string | null {
-  const parts = clientHistoryParts(client, stats);
-  return parts.length > 0 ? parts.map((p) => p.text).join(" · ") : null;
-}
-
 export function ClientHistoryLine({
   client,
   stats,

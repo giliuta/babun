@@ -137,14 +137,6 @@ export function windowWords(from: number, to: number): string {
 /** Действует ли окно отправки: ручному и «накануне в ЧЧ:ММ» — нет. */
 export const usesWindow = (trigger: SmsWhen): boolean => trigger !== "manual" && trigger !== "day_before";
 
-/** Сроки на выбор — видны сразу, ставятся одним тапом. */
-export const HOURS_BEFORE = [1, 2, 3, 6, 12, 24, 48, 72] as const;
-export const HOURS_AFTER = [1, 2, 3, 6, 24, 48] as const;
-export const DAY_BEFORE_TIMES = ["09:00", "12:00", "15:00", "17:00", "18:00", "19:00", "20:00"] as const;
-export const REPEAT_MONTHS = [1, 3, 6, 9, 12] as const;
-export const WINDOW_FROM = [7, 8, 9, 10] as const;
-export const WINDOW_TO = [20, 21, 22, 24] as const;
-
 /** Короткая подпись фишки срока: «24 ч», «2 дня», «6 мес». */
 export function hoursChip(h: number): string {
   return h % 24 === 0 && h >= 48 ? formatCountRu(h / 24, ["день", "дня", "дней"]) : `${h} ч`;

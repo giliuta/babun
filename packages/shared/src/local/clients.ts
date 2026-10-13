@@ -81,12 +81,6 @@ export const PROPERTY_LABELS: Record<PropertyType, string> = {
 
 export type ACType = "split" | "ducted" | "cassette";
 
-export const AC_TYPE_LABELS: Record<ACType, string> = {
-  split: "Сплит",
-  ducted: "Канальный",
-  cassette: "Кассетный",
-};
-
 /** Что подставить в «Адрес» заявки при выборе объекта. Поле заявки принимает
  *  и текст, и ссылку на карту, поэтому присланный пин честнее подписи: по
  *  «Дом» команда никуда не доедет, а по ссылке — доедет. Подпись остаётся

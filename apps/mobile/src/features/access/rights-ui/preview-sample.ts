@@ -59,8 +59,6 @@ export const SAMPLE_INCOME = row({
   time: "10:00",
 });
 
-export const SAMPLE_EXPENSE = row({ key: "expense", title: "Фреон R32", subtitle: "Материалы", amount: -40 });
-
 export const SAMPLE_DEBT = row({ key: "debt", title: "Иван Смирнов", subtitle: "Заправка фреоном", amount: 80 });
 
 // Ручные операции команды: своя («добавил он») открыта уже на «Добавляет»,

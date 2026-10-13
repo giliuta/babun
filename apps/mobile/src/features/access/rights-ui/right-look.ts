@@ -169,8 +169,6 @@ export function rightLook(key: string): RightLook {
   return LOOK[key] ?? FALLBACK;
 }
 
-export const LOOKED_KEYS: readonly string[] = Object.keys(LOOK);
-
 /** Плитка строки РАЗДЕЛА в блоке «Доступ» — по разделу приложения. */
 const SECTION_LOOK: Record<string, RightLook> = {
   calendar: { icon: CalendarDays, tile: SETTINGS_TILE.blue },

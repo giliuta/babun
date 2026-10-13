@@ -43,10 +43,6 @@ export interface PersonalEventType {
 
 const STORAGE_KEY = "babun2:settings:personal-event-types";
 
-/** Заготовок больше нет — список пустой. Имя осталось: по нему сохранение
- *  перекладывает старые общие id на авторские (`useSavePersonalEventTypes`). */
-export const SEED_PERSONAL_EVENT_TYPES: PersonalEventType[] = [];
-
 /** Id пяти прежних заготовок (Обед, Встреча, Выезд в офис, Выходной, Отпуск).
  *  На сервер они не уезжали ни у кого (в базе 24.09 — ноль строк), но лежат
  *  в памяти телефонов; загрузка их выбрасывает. Свои типы (id `pet-…`) не

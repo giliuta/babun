@@ -113,13 +113,6 @@ export function withCompositeBlocks(offered: readonly AccessBlock[]): AccessBloc
   return out;
 }
 
-/** Реальные изменения прав для ступени строки. Не составная строка — само
- *  право. */
-export function rowChanges(key: string, level: AccessLevel, get: LevelGet): Record<string, AccessLevel> {
-  const row = BY_KEY.get(key);
-  return row ? row.changesFor(level, get) : { [key]: level };
-}
-
 /** Ступень строки. Не составная — положение самого права. */
 export function rowLevel(key: string, get: LevelGet): AccessLevel {
   const row = BY_KEY.get(key);

@@ -66,9 +66,6 @@ export interface SmsAlert {
   own: boolean;
 }
 
-/** Пороги автопополнения, центы: «когда меньше €5 / €10 / €25». */
-export const AUTOTOPUP_THRESHOLDS_CENTS = [500, 1000, 2500] as const;
-
 export interface SmsHistoryItem {
   id: string;
   createdAt: string;

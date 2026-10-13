@@ -130,14 +130,3 @@ export function computeDayFinance(
   };
 }
 
-// ─── Day mode (drives the finance modal layout) ─────────────────────
-// By date, not by data: past day shows that day's P&L, today shows
-// progress, future shows the plan. Both keys must be YYYY-MM-DD so the
-// lexicographic compare matches chronological order.
-export type DayMode = "future" | "today" | "past";
-
-export function getDayMode(dateKey: string, todayKey: string): DayMode {
-  if (dateKey > todayKey) return "future";
-  if (dateKey < todayKey) return "past";
-  return "today";
-}
