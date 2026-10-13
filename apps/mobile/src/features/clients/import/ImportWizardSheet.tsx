@@ -1103,7 +1103,7 @@ function ResultStep({
           <View className="flex-row items-start gap-2">
             <AlertTriangle color={t.warning} size={16} strokeWidth={2.2} />
             <Text className="flex-1 text-[13px] leading-snug" style={{ color: t.warning }}>
-              {errorCount} {countRowsRu(errorCount)} не {errorCount === 1 ? "прошла" : "прошли"} (первая: #{result.errors[0].source} —{" "}
+              {errorCount} {countRowsRu(errorCount)} не {passedRu(errorCount)} (первая: #{result.errors[0].source} —{" "}
               {result.errors[0].reason}).
             </Text>
           </View>
@@ -1128,6 +1128,11 @@ function ResultStep({
 function countRowsRu(n: number): string {
   // Форма числа — общим правилом: на других языках интерфейса «21» уже не «один».
   return pluralRu(n, ["строка", "строки", "строк"]);
+}
+
+/** Глагол — тем же правилом, что «строка»: «21 строка не прошла», «22 строки не прошли». */
+function passedRu(n: number): string {
+  return pluralRu(n, ["прошла", "прошли", "прошли"]);
 }
 
 // ─── Shared bits ────────────────────────────────────────────────────────
