@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { QueryClient } from "@tanstack/react-query";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 
 import {
   knownTenantsForSwitch,
@@ -234,7 +235,7 @@ describe("проводка перехода в коде", () => {
 
   test("выбор календаря пишется в той же форме, что читает календарь", () => {
     const switching = read("../features/settings/switch-tenant.ts");
-    const calendar = read("../../app/(dashboard)/(home)/index.tsx");
+    const calendar = calendarScreenSource();
     assert.match(switching, /const CALENDAR_VIEW_PREF = "calendar\.view";/);
     assert.match(
       calendar,
@@ -255,7 +256,7 @@ describe("проводка перехода в коде", () => {
   });
 
   test("полоса загрузки молчит, пока идёт тихое дообновление", () => {
-    const calendar = read("../../app/(dashboard)/(home)/index.tsx");
+    const calendar = calendarScreenSource();
     assert.match(
       calendar,
       /<LoadingBar\s+visible=\{isRefetching && !pull\.refreshing && !silentRevalidating\}/,

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 
 // АУДИТ 11.10 «СОТРУДНИК ВИДИТ НЕ ТО» (владелец: «проверь всё, что может быть
 // в таком плане… убедись, что во всех страницах такого рода бага не будет»).
@@ -35,6 +36,6 @@ test("правка клиента из записи — по блоку клие
 });
 
 test("суммы в повестке — по праву «Сумма», а не по роли", () => {
-  const home = read("../../../app/(dashboard)/(home)/index.tsx");
+  const home = calendarScreenSource();
   assert.match(home, /showAmounts=\{isCrew \? amountVisible : true\}/);
 });
