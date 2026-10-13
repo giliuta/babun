@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { bookFormSource } from "./book-form/source-for-tests";
 
 // АУДИТ ФОРМЫ ЗАПИСИ, ИНВОЙСОВ И SMS 03.10 — сторожа на сборку экранов;
 // чистые правила (цена лестницы, поля партнёра, части SMS) проверены своими
@@ -53,7 +54,7 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   });
 
   test("форма записи: лестница, часы команды, снятый объект, команда при оплате", () => {
-    const book = app("book/index.tsx");
+    const book = bookFormSource();
     assert.match(book, /overrideWithQuantity\(p\[id\], qty, repriceable, catalog\.get\(id\)\)/);
     assert.match(book, /const businessNow = useBusinessNow\(teamId\);/);
     assert.match(book, /setLocationId\(null\);[\s\S]{0,400}if \(kind === "work"\) setAddress\(""\);/);
@@ -61,7 +62,7 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   });
 
   test("партнёр: один номер новой записи на форму, команда записи не меняется", () => {
-    const book = app("book/index.tsx");
+    const book = bookFormSource();
     assert.match(book, /patch: \{ \.\.\.buildPatch\(\), id: newRecordIdRef\.current \},/);
     assert.match(book, /const newRecordIdRef = useRef\(randomUuid\(\)\);/);
     assert.match(book, /teams=\{isMemberView && isEdit \? teams\.filter\(\(tm\) => tm\.id === teamId\) : teams\}/);

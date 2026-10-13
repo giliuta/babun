@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { bookFormSource } from "../appointments/book-form/source-for-tests";
 
 // АУДИТ 11.10 «СОТРУДНИК ВИДИТ НЕ ТО» (владелец: «проверь всё, что может быть
 // в таком плане… убедись, что во всех страницах такого рода бага не будет»).
@@ -29,7 +30,7 @@ test("«Типы объектов» из записи — по праву стр
 });
 
 test("правка клиента из записи — по блоку клиента, как пустит сервер", () => {
-  const book = read("../../../app/book/index.tsx");
+  const book = bookFormSource();
   assert.match(book, /const clientCan = useClientCardWritable\(client\);/);
   assert.doesNotMatch(book, /\bclientWritable\b/);
 });

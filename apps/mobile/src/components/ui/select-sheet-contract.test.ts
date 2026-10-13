@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { bookFormSource } from "../../features/appointments/book-form/source-for-tests";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
@@ -115,7 +116,7 @@ describe("анатомия шторки выбора", () => {
   test("глиф команды один и тот же в плитке и в шторке", () => {
     const card = read("../../features/appointments/TeamLabelRow.tsx");
     const sheet = read("../../features/appointments/BookingSheets.tsx");
-    const book = read("../../../app/book/index.tsx");
+    const book = bookFormSource();
     assert.doesNotMatch(
       sheet,
       /icon=\{Circle\}|import \{[^}]*\bCircle\b[^}]*\} from "lucide-react-native"/,

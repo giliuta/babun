@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { bookFormSource } from "../features/appointments/book-form/source-for-tests";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** apps/mobile — от него отсчитываются пути в каталоге. */
@@ -79,7 +80,8 @@ describe("библиотека блоков указывает на живой �
   });
 
   test("образцы разметки всё ещё стоят там, куда посылает каталог", () => {
-    const book = readFileSync(resolve(APP, "app/book/index.tsx"), "utf8");
+    // The booking form is the route plus `src/features/appointments/book-form/`.
+    const book = bookFormSource();
     // Блоки записи, которые каталог показывает разметкой (пока они не вынесены
     // в компоненты). Исчезла подпись — каталог посылает в пустоту.
     for (const marker of [
@@ -98,7 +100,7 @@ describe("библиотека блоков указывает на живой �
     ]) {
       assert.ok(
         book.includes(marker),
-        `в app/book/index.tsx больше нет «${marker}» — поправь BLOCKS.md`,
+        `в форме записи (app/book + book-form/) больше нет «${marker}» — поправь BLOCKS.md`,
       );
     }
     const servicesBlock = readFileSync(

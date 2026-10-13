@@ -12,6 +12,7 @@ import {
   setShownSessionUserId,
 } from "./active-tenant";
 import { LABEL_FALLBACK_COLOR } from "@/features/calendar/day-label";
+import { bookFormSource } from "../features/appointments/book-form/source-for-tests";
 
 // ВЫШЕЛ И ВОШЁЛ — МЕТКИ СЕРЫЕ (видео для App Review, 06.10).
 //
@@ -133,7 +134,8 @@ describe("цвет метки, которой нет в справочнике",
       "../../app/(dashboard)/(home)/index.tsx",
       "../../app/book/index.tsx",
     ]) {
-      const source = read(file);
+      // The booking form is the route plus `book-form/`.
+      const source = file === "../../app/book/index.tsx" ? bookFormSource() : read(file);
       const calls = source.split("resolveCalendarDayLabel({").slice(1);
       assert.ok(calls.length > 0, `${file}: нет вызова`);
       for (const call of calls) {
