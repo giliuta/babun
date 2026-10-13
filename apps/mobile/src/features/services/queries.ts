@@ -4,7 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { Database, Json } from "@babun/shared/db/database.types";
+import type { Database } from "@babun/shared/db/database.types";
 import { generateId } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
@@ -17,6 +17,7 @@ import {
   dispatcherServiceJsonToService,
   masterServiceJsonToService,
 } from "@/features/settings/master-reference";
+import { toJson } from "@babun/shared/db/json";
 
 // Services live in the canonical `services` table (text PK, was localStorage-
 // only before the migration). No shared repo yet — query the typed client
@@ -56,7 +57,7 @@ export async function listMasterServices(
     .order("position");
   if (fallback.error) throw new Error(fallback.error.message);
   return (fallback.data ?? []).map((row) =>
-    masterServiceJsonToService(row as unknown as Json),
+    masterServiceJsonToService(toJson(row)),
   );
 }
 
@@ -78,7 +79,7 @@ export async function listDispatcherServices(
     .order("position");
   if (fallback.error) throw new Error(fallback.error.message);
   return (fallback.data ?? []).map((row) =>
-    dispatcherServiceJsonToService(row as unknown as Json),
+    dispatcherServiceJsonToService(toJson(row)),
   );
 }
 

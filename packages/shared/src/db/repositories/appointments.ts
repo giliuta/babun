@@ -39,6 +39,7 @@ import type {
   Discount,
   Payment,
 } from "../../local/appointments";
+import { toJson } from "../json";
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["appointments"]["Row"];
@@ -198,17 +199,17 @@ function appointmentToInsert(a: Appointment, tenantId: string): Insert {
     color_override: a.color_override,
     city: a.city ?? null,
     reminder_enabled: a.reminder_enabled,
-    reminder_offsets: (a.reminder_offsets ?? []) as unknown as Json,
+    reminder_offsets: toJson(a.reminder_offsets ?? []),
     reminder_template: a.reminder_template,
-    service_ids: (a.service_ids ?? []) as unknown as Json,
-    services: (a.services ?? []) as unknown as Json,
+    service_ids: toJson(a.service_ids ?? []),
+    services: toJson(a.services ?? []),
     service_price_overrides:
-      (a.service_price_overrides ?? {}) as unknown as Json,
-    expenses: (a.expenses ?? []) as unknown as Json,
-    payments: (a.payments ?? []) as unknown as Json,
-    payment: a.payment as unknown as Json | null,
+      toJson(a.service_price_overrides ?? {}),
+    expenses: toJson(a.expenses ?? []),
+    payments: toJson(a.payments ?? []),
+    payment: toJson(a.payment),
     // STORY-049 — photos column gone from schema; ignore here.
-    global_discount: a.global_discount as unknown as Json | null,
+    global_discount: toJson(a.global_discount),
     total_duration: a.total_duration,
     created_at: a.created_at || undefined,
     // updated_at handled by the DB trigger.
@@ -218,9 +219,9 @@ function appointmentToInsert(a: Appointment, tenantId: string): Insert {
     ...(a.event_notes !== undefined ? { event_notes: a.event_notes } : {}),
     ...(a.event_url !== undefined ? { event_url: a.event_url } : {}),
     ...(a.event_push_enabled !== undefined ? { event_push_enabled: a.event_push_enabled } : {}),
-    ...(a.event_push_offsets !== undefined ? { event_push_offsets: a.event_push_offsets as unknown as Json } : {}),
+    ...(a.event_push_offsets !== undefined ? { event_push_offsets: toJson(a.event_push_offsets) } : {}),
     ...(a.event_push_at !== undefined ? { event_push_at: a.event_push_at } : {}),
-    ...(a.event_repeat !== undefined ? { event_repeat: a.event_repeat as unknown as Json } : {}),
+    ...(a.event_repeat !== undefined ? { event_repeat: toJson(a.event_repeat) } : {}),
   };
 }
 
@@ -277,23 +278,23 @@ function appointmentToUpdate(patch: Partial<Appointment>): Update {
 
   // Nested — REPLACED ATOMICALLY (see header).
   if (patch.reminder_offsets !== undefined)
-    out.reminder_offsets = patch.reminder_offsets as unknown as Json;
+    out.reminder_offsets = toJson(patch.reminder_offsets);
   if (patch.service_ids !== undefined)
-    out.service_ids = patch.service_ids as unknown as Json;
+    out.service_ids = toJson(patch.service_ids);
   if (patch.services !== undefined)
-    out.services = patch.services as unknown as Json;
+    out.services = toJson(patch.services);
   if (patch.service_price_overrides !== undefined)
-    out.service_price_overrides = patch.service_price_overrides as unknown as Json;
+    out.service_price_overrides = toJson(patch.service_price_overrides);
   if (patch.expenses !== undefined)
-    out.expenses = patch.expenses as unknown as Json;
+    out.expenses = toJson(patch.expenses);
   if (patch.payments !== undefined)
-    out.payments = patch.payments as unknown as Json;
+    out.payments = toJson(patch.payments);
   if (patch.payment !== undefined)
-    out.payment = patch.payment as unknown as Json | null;
+    out.payment = toJson(patch.payment);
   // STORY-049 — patch.photos is intentionally ignored; the column
   // doesn't exist anymore. PhotoBlock writes via the dedicated repo.
   if (patch.global_discount !== undefined)
-    out.global_discount = patch.global_discount as unknown as Json | null;
+    out.global_discount = toJson(patch.global_discount);
   // Personal-calendar event fields.
   if (patch.event_all_day !== undefined) out.event_all_day = patch.event_all_day;
   if (patch.event_notes !== undefined) out.event_notes = patch.event_notes;
@@ -301,10 +302,10 @@ function appointmentToUpdate(patch: Partial<Appointment>): Update {
   if (patch.event_push_enabled !== undefined)
     out.event_push_enabled = patch.event_push_enabled;
   if (patch.event_push_offsets !== undefined)
-    out.event_push_offsets = patch.event_push_offsets as unknown as Json;
+    out.event_push_offsets = toJson(patch.event_push_offsets);
   if (patch.event_push_at !== undefined) out.event_push_at = patch.event_push_at;
   if (patch.event_repeat !== undefined)
-    out.event_repeat = patch.event_repeat as unknown as Json;
+    out.event_repeat = toJson(patch.event_repeat);
   return out;
 }
 

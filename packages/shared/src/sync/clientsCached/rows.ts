@@ -3,6 +3,7 @@
 
 import type { Client } from "../../local/clients";
 import type { CachedClient, CachedClientData } from "../../db/cache/sql";
+import { toJson } from "../../db/json";
 
 // Cache row → domain. The cache stores the full domain object decorated
 // with tenant_id + updated_at; strip those two bookkeeping keys and return
@@ -59,11 +60,11 @@ export function makeServerRow(
     reg_number: input.reg_number ?? null,
     billing_address: input.billing_address ?? null,
     // Наборы реквизитов — целым массивом, как связи ниже.
-    requisites: (input.requisites ?? []) as unknown as CachedClient["requisites"],
+    requisites: toJson(input.requisites ?? []),
     // Связи едут целым массивом: третий ключ `location_id` (STORY-086) внутри
     // jsonb, перечислять ключи здесь нельзя — забытый ключ офлайн-очередь
     // стёрла бы при отправке, а перечень пришлось бы держать в двух местах.
-    memberships: (input.memberships ?? []) as unknown as CachedClient["memberships"],
+    memberships: toJson(input.memberships ?? []),
     whatsapp_phone: input.whatsapp_phone ?? "",
     email: input.email ?? "",
     sms_name: input.sms_name ?? "",
@@ -89,10 +90,10 @@ export function makeServerRow(
     sms_opt_out: input.sms_opt_out ?? false,
     pinned_at: input.pinned_at ?? null,
     reminder_at: input.reminder_at ?? null,
-    phones: (input.phones ?? []) as unknown as CachedClient["phones"],
-    locations: (input.locations ?? []) as unknown as CachedClient["locations"],
-    notes: (input.notes ?? []) as unknown as CachedClient["notes"],
-    equipment: (input.equipment ?? []) as unknown as CachedClient["equipment"],
+    phones: toJson(input.phones ?? []),
+    locations: toJson(input.locations ?? []),
+    notes: toJson(input.notes ?? []),
+    equipment: toJson(input.equipment ?? []),
     phone_e164: input.phone_e164 ?? null,
     avatar_url: input.avatar_url ?? null,
     deleted_at: input.deleted_at ?? null,

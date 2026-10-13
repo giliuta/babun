@@ -13,6 +13,7 @@ import type {
   PhoneEntry,
   PropertyType,
 } from "../../../local/clients";
+import { toJson } from "../../json";
 
 export type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 export type ClientInsert = Database["public"]["Tables"]["clients"]["Insert"];
@@ -132,7 +133,7 @@ export function rowToClient(r: ClientRow): Client {
       property_type: l.property_type,
       isPrimary: l.isPrimary,
       note: l.note,
-      equipment: asArray<ACUnit>(l.equipment as unknown as Json).map(rowToUnit),
+      equipment: asArray<ACUnit>(toJson(l.equipment)).map(rowToUnit),
     })),
     notes: asArray<ClientNote>(r.notes).map((n) => ({
       id: n.id,
@@ -171,11 +172,11 @@ export function clientToInsert(c: Client, tenantId: string): ClientInsert {
     // и так по умолчанию, а сервер без миграции 20260922100000 отверг бы
     // незнакомый ключ у КАЖДОГО нового клиента.
     ...(c.requisites && c.requisites.length > 0
-      ? { requisites: c.requisites as unknown as Json }
+      ? { requisites: toJson(c.requisites) }
       : {}),
     // Пустой список не шлём: в базе он и так пустой по умолчанию.
     ...(c.memberships && c.memberships.length > 0
-      ? { memberships: c.memberships as unknown as Json }
+      ? { memberships: toJson(c.memberships) }
       : {}),
     whatsapp_phone: c.whatsapp_phone ?? "",
     email: c.email ?? "",
@@ -201,10 +202,10 @@ export function clientToInsert(c: Client, tenantId: string): ClientInsert {
     pinned_at: c.pinned_at ?? null,
     reminder_at: c.reminder_at ?? null,
 
-    phones: (c.phones ?? []) as unknown as Json,
-    locations: (c.locations ?? []) as unknown as Json,
-    notes: (c.notes ?? []) as unknown as Json,
-    equipment: (c.equipment ?? []) as unknown as Json,
+    phones: toJson(c.phones ?? []),
+    locations: toJson(c.locations ?? []),
+    notes: toJson(c.notes ?? []),
+    equipment: toJson(c.equipment ?? []),
 
     phone_e164: c.phone_e164 ?? null,
     avatar_url: c.avatar_url ?? null,
@@ -231,8 +232,8 @@ export function clientToUpdate(patch: Partial<Client>): ClientUpdate {
   if (patch.vat_number !== undefined) out.vat_number = patch.vat_number ?? null;
   if (patch.reg_number !== undefined) out.reg_number = patch.reg_number ?? null;
   if (patch.billing_address !== undefined) out.billing_address = patch.billing_address ?? null;
-  if (patch.requisites !== undefined) out.requisites = patch.requisites as unknown as Json;
-  if (patch.memberships !== undefined) out.memberships = patch.memberships as unknown as Json;
+  if (patch.requisites !== undefined) out.requisites = toJson(patch.requisites);
+  if (patch.memberships !== undefined) out.memberships = toJson(patch.memberships);
   if (patch.whatsapp_phone !== undefined) out.whatsapp_phone = patch.whatsapp_phone;
   if (patch.email !== undefined) out.email = patch.email;
   if (patch.sms_name !== undefined) out.sms_name = patch.sms_name;
@@ -252,10 +253,10 @@ export function clientToUpdate(patch: Partial<Client>): ClientUpdate {
   if (patch.blacklisted !== undefined) out.blacklisted = patch.blacklisted;
   if (patch.pinned_at !== undefined) out.pinned_at = patch.pinned_at;
   if (patch.reminder_at !== undefined) out.reminder_at = patch.reminder_at;
-  if (patch.phones !== undefined) out.phones = patch.phones as unknown as Json;
-  if (patch.locations !== undefined) out.locations = patch.locations as unknown as Json;
-  if (patch.notes !== undefined) out.notes = patch.notes as unknown as Json;
-  if (patch.equipment !== undefined) out.equipment = patch.equipment as unknown as Json;
+  if (patch.phones !== undefined) out.phones = toJson(patch.phones);
+  if (patch.locations !== undefined) out.locations = toJson(patch.locations);
+  if (patch.notes !== undefined) out.notes = toJson(patch.notes);
+  if (patch.equipment !== undefined) out.equipment = toJson(patch.equipment);
   if (patch.phone_e164 !== undefined) out.phone_e164 = patch.phone_e164 ?? null;
   if (patch.avatar_url !== undefined) out.avatar_url = patch.avatar_url ?? null;
   if (patch.deleted_at !== undefined) out.deleted_at = patch.deleted_at ?? null;

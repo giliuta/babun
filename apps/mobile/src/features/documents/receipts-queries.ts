@@ -2,7 +2,6 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
 import { getAppointment } from "@babun/shared/db/repositories/appointments";
 import type { TransactionDraft } from "@babun/shared/db/repositories/finance-transactions";
-import type { Json } from "@babun/shared/db/database.types";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type {
   Receipt,
@@ -12,6 +11,7 @@ import { invalidateLedger, useInsertTransaction } from "@/features/finances/quer
 import { randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { toJson } from "@babun/shared/db/json";
 
 // В ТАБЛИЦУ `receipts` ПРИЛОЖЕНИЕ НЕ ПИШЕТ НИКОГДА. Номер документа назначает
 // только сервер, под замком: два телефона офлайн выдали бы один и тот же
@@ -135,7 +135,7 @@ export function useIssueReceipt() {
     }): Promise<Receipt> => {
       const { data, error } = await supabase.rpc("issue_receipt", {
         p_transaction_id: transactionId,
-        ...(lines && lines.length > 0 ? { p_lines: lines as unknown as Json } : {}),
+        ...(lines && lines.length > 0 ? { p_lines: toJson(lines) } : {}),
         ...(companyId ? { p_company_id: companyId } : {}),
         ...(issuedOn ? { p_issued_on: issuedOn } : {}),
         ...(locationId ? { p_location_id: locationId } : {}),
@@ -250,7 +250,7 @@ export function useUpdateReceipt() {
     }): Promise<Receipt> => {
       const { data, error } = await supabase.rpc("update_receipt", {
         p_receipt_id: input.receiptId,
-        p_lines: input.lines as unknown as Json,
+        p_lines: toJson(input.lines),
         p_issued_on: input.issuedOn,
         ...(input.locationId ? { p_location_id: input.locationId } : {}),
         ...(input.clientRequisitesId ? { p_client_requisites_id: input.clientRequisitesId } : {}),

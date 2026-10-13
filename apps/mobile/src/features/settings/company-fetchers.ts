@@ -6,6 +6,7 @@ import {
 } from "@babun/shared/db/repositories/calendar-settings";
 import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
 import type { UserRole } from "./role-policy";
+import { toJson } from "@babun/shared/db/json";
 
 // ЧТЕНИЯ БЕЗ ПОБОЧНЫХ ЭФФЕКТОВ — ДЛЯ ПРОГРЕВА ЧУЖОЙ КОМПАНИИ.
 //
@@ -127,7 +128,7 @@ async function readTenantProfileFallback(
       .eq("id", tenantId)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    return parseTenantProfile(data as unknown as Json | null);
+    return parseTenantProfile(toJson(data));
   }
   const { data, error } = await client
     .from("tenants")
@@ -137,7 +138,7 @@ async function readTenantProfileFallback(
     .eq("id", tenantId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return parseTenantProfile(data as unknown as Json | null);
+  return parseTenantProfile(toJson(data));
 }
 
 /** Профиль компании. ЧИСТО: валюту не трогает — это делает хук, и только для

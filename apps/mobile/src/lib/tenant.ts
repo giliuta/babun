@@ -14,6 +14,7 @@ import {
 } from "@/lib/active-tenant";
 import { liveTenantId, markTenantGone } from "@/lib/gone-tenants";
 import { useSession } from "@/providers/SessionProvider";
+import { toJson } from "@babun/shared/db/json";
 
 // Tenant resolution + onboarding gate — mobile port of the web logic in
 // apps/web/src/lib/supabase/tenant-context.ts and apps/web/src/app/dashboard/
@@ -287,7 +288,7 @@ export function useOnboardingGate(): OnboardingGate {
             .maybeSingle(),
         );
         if (fallback.error) throw new Error(fallback.error.message);
-        data = fallback.data as unknown as Json | null;
+        data = toJson(fallback.data);
       }
       let tenant: OnboardingTenant | null = null;
       if (data != null) {

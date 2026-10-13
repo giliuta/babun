@@ -3,6 +3,7 @@
 
 import type { Appointment } from "../../local/appointments";
 import type { CachedAppointment, CachedAppointmentData } from "../../db/cache/sql";
+import { toJson } from "../../db/json";
 // CachedAppointment (raw Row) is the queue-payload projection; CachedAppointmentData
 // (full domain) is the cache-read projection. Both are used below.
 
@@ -69,14 +70,14 @@ export function makeServerRow(
     color_override: input.color_override ?? null,
     city: input.city ?? null,
     reminder_enabled: input.reminder_enabled ?? false,
-    reminder_offsets: (input.reminder_offsets ?? []) as unknown as CachedAppointment["reminder_offsets"],
+    reminder_offsets: toJson(input.reminder_offsets ?? []),
     reminder_template: input.reminder_template ?? "",
-    service_ids: (input.service_ids ?? []) as unknown as CachedAppointment["service_ids"],
-    services: (input.services ?? []) as unknown as CachedAppointment["services"],
-    service_price_overrides: (input.service_price_overrides ?? {}) as unknown as CachedAppointment["service_price_overrides"],
-    expenses: (input.expenses ?? []) as unknown as CachedAppointment["expenses"],
-    payments: (input.payments ?? []) as unknown as CachedAppointment["payments"],
-    prepayments: (input.prepayments ?? []) as unknown as CachedAppointment["prepayments"],
+    service_ids: toJson(input.service_ids ?? []),
+    services: toJson(input.services ?? []),
+    service_price_overrides: toJson(input.service_price_overrides ?? {}),
+    expenses: toJson(input.expenses ?? []),
+    payments: toJson(input.payments ?? []),
+    prepayments: toJson(input.prepayments ?? []),
     payment: (input.payment ?? null) as CachedAppointment["payment"],
     global_discount: (input.global_discount ?? null) as CachedAppointment["global_discount"],
     total_duration: input.total_duration ?? 0,
@@ -102,9 +103,9 @@ export function makeServerRow(
     event_notes: input.event_notes ?? "",
     event_url: input.event_url ?? "",
     event_push_enabled: input.event_push_enabled ?? false,
-    event_push_offsets: (input.event_push_offsets ?? []) as unknown as CachedAppointment["event_push_offsets"],
+    event_push_offsets: toJson(input.event_push_offsets ?? []),
     event_push_at: input.event_push_at ?? null,
-    event_repeat: (input.event_repeat ?? { kind: "none" }) as unknown as CachedAppointment["event_repeat"],
+    event_repeat: toJson(input.event_repeat ?? { kind: "none" }),
   };
 }
 
@@ -137,14 +138,14 @@ export function patchToRow(patch: Partial<Appointment>): Partial<CachedAppointme
   if (patch.color_override !== undefined) out.color_override = patch.color_override;
   if (patch.city !== undefined) out.city = patch.city;
   if (patch.reminder_enabled !== undefined) out.reminder_enabled = patch.reminder_enabled;
-  if (patch.reminder_offsets !== undefined) out.reminder_offsets = patch.reminder_offsets as unknown as CachedAppointment["reminder_offsets"];
+  if (patch.reminder_offsets !== undefined) out.reminder_offsets = toJson(patch.reminder_offsets);
   if (patch.reminder_template !== undefined) out.reminder_template = patch.reminder_template;
-  if (patch.service_ids !== undefined) out.service_ids = patch.service_ids as unknown as CachedAppointment["service_ids"];
-  if (patch.services !== undefined) out.services = patch.services as unknown as CachedAppointment["services"];
-  if (patch.service_price_overrides !== undefined) out.service_price_overrides = patch.service_price_overrides as unknown as CachedAppointment["service_price_overrides"];
-  if (patch.expenses !== undefined) out.expenses = patch.expenses as unknown as CachedAppointment["expenses"];
-  if (patch.payments !== undefined) out.payments = patch.payments as unknown as CachedAppointment["payments"];
-  if (patch.prepayments !== undefined) out.prepayments = patch.prepayments as unknown as CachedAppointment["prepayments"];
+  if (patch.service_ids !== undefined) out.service_ids = toJson(patch.service_ids);
+  if (patch.services !== undefined) out.services = toJson(patch.services);
+  if (patch.service_price_overrides !== undefined) out.service_price_overrides = toJson(patch.service_price_overrides);
+  if (patch.expenses !== undefined) out.expenses = toJson(patch.expenses);
+  if (patch.payments !== undefined) out.payments = toJson(patch.payments);
+  if (patch.prepayments !== undefined) out.prepayments = toJson(patch.prepayments);
   if (patch.payment !== undefined) out.payment = patch.payment as CachedAppointment["payment"];
   if (patch.global_discount !== undefined) out.global_discount = patch.global_discount as CachedAppointment["global_discount"];
   if (patch.total_duration !== undefined) out.total_duration = patch.total_duration;
@@ -159,8 +160,8 @@ export function patchToRow(patch: Partial<Appointment>): Partial<CachedAppointme
   if (patch.event_notes !== undefined) out.event_notes = patch.event_notes;
   if (patch.event_url !== undefined) out.event_url = patch.event_url;
   if (patch.event_push_enabled !== undefined) out.event_push_enabled = patch.event_push_enabled;
-  if (patch.event_push_offsets !== undefined) out.event_push_offsets = patch.event_push_offsets as unknown as CachedAppointment["event_push_offsets"];
+  if (patch.event_push_offsets !== undefined) out.event_push_offsets = toJson(patch.event_push_offsets);
   if (patch.event_push_at !== undefined) out.event_push_at = patch.event_push_at;
-  if (patch.event_repeat !== undefined) out.event_repeat = patch.event_repeat as unknown as CachedAppointment["event_repeat"];
+  if (patch.event_repeat !== undefined) out.event_repeat = toJson(patch.event_repeat);
   return out;
 }

@@ -1,7 +1,6 @@
 // Team SMS templates: read, save, enable, delete, reorder.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/features/settings/tenant";
@@ -18,6 +17,7 @@ import {
   smsLogKey,
   smsTemplatesKey,
 } from "./keys";
+import { toJson } from "@babun/shared/db/json";
 
 /** Шаблоны команды (`teamId`) или всех видимых команд (`null`). */
 export function useTeamTemplates(teamId: string | null, cardTenantId?: string | null) {
@@ -57,7 +57,7 @@ export function useSaveTeamTemplate() {
   return useMutation({
     mutationFn: async (draft: TemplateDraft): Promise<SmsTeamTemplate> => {
       const { data, error } = await supabase.rpc("sms_save_team_template", {
-        p: draftPayload(draft) as unknown as Json,
+        p: toJson(draftPayload(draft)),
       });
       if (error) throw new Error(error.message);
       const saved = parseTeamTemplate(data);

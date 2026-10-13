@@ -20,10 +20,10 @@ import {
   type MasterPermissions,
   type MasterRole,
 } from "@babun/shared/local/masters";
-import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import type { Master } from "./queries";
 import { referenceKeys } from "@/features/reference/query-keys";
+import { toJson } from "@babun/shared/db/json";
 
 // The rich fields that ride inside `profile`. Everything the shared Master
 // carries beyond the flat `masters` columns. All optional — a legacy/blank
@@ -114,7 +114,7 @@ export function useUpdateMasterProfile() {
     }) => {
       const { error } = await supabase.rpc("patch_master_profile", {
         p_master_id: id,
-        p_patch: patch as unknown as Json,
+        p_patch: toJson(patch),
       });
       if (error) throw new Error(error.message);
     },

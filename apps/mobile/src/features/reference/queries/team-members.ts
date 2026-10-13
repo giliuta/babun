@@ -2,7 +2,6 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { Json } from "@babun/shared/db/database.types";
 import {
   isLeadRole,
   LEGACY_LEAD_ROLE_ID,
@@ -14,6 +13,7 @@ import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/features/settings/tenant";
 import { referenceKeys } from "../query-keys";
 import { teamMembers, teamRoles, type Team } from "./types";
+import { toJson } from "@babun/shared/db/json";
 
 // ─── Brigade membership write (roles/members ↔ lead_ids/helper_ids) ───
 // RISK-2 parity: the web finances / schedule readers still consume the
@@ -82,8 +82,8 @@ export function useUpdateTeamMembers() {
         .from("teams")
         .update({
           // Domain interfaces carry no index signature, so they are not Json.
-          roles: roles as unknown as Json,
-          members: members as unknown as Json,
+          roles: toJson(roles),
+          members: toJson(members),
           lead_ids,
           helper_ids,
           lead_id,
@@ -180,8 +180,8 @@ export function useRemoveMasterFromTeams() {
           .from("teams")
           .update({
             // Domain interfaces carry no index signature, so they are not Json.
-            roles: roles as unknown as Json,
-            members: nextMembers as unknown as Json,
+            roles: toJson(roles),
+            members: toJson(nextMembers),
             lead_ids,
             helper_ids,
             lead_id,

@@ -1,5 +1,4 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useDataRole } from "@/features/settings/tenant";
@@ -20,6 +19,7 @@ import {
   smsHistoryKey,
   smsLogKey,
 } from "./sms-account/keys";
+import { toJson } from "@babun/shared/db/json";
 
 export * from "./sms-model";
 export * from "./sms-team-templates";
@@ -76,7 +76,7 @@ export function useSaveSmsSettings() {
   return useMutation({
     mutationFn: async (patch: SmsSettingsPatch) => {
       const { data, error } = await supabase.rpc("sms_save_settings", {
-        p: patch as unknown as Json,
+        p: toJson(patch),
       });
       if (error) throw new Error(error.message);
       return parseSmsAccount(data);
@@ -318,7 +318,7 @@ export function useSendSmsBulk() {
     mutationFn: async (input: { teamId: string; items: { clientId: string; body: string }[] }) => {
       const { data, error } = await supabase.rpc("sms_send_bulk", {
         p_team_id: input.teamId,
-        p_items: input.items.map((x) => ({ client_id: x.clientId, body: x.body })) as unknown as Json,
+        p_items: toJson(input.items.map((x) => ({ client_id: x.clientId, body: x.body }))),
       });
       if (error) throw new Error(error.message);
       const r = (data ?? {}) as { queued?: number; skipped?: number };
