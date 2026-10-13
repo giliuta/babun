@@ -128,7 +128,7 @@ export function TeamScheduleSheet({
       setPerDay(!sameHoursEveryDay(schedule ?? null));
     }
     wasVisible.current = visible;
-  }, [visible]);
+  }, [visible, schedule]);
 
   // Строки графика ещё нет: сетку красят общие рабочие часы. Показываем ИХ — и
   // первая же правка материализует строку из них же, поэтому после сохранения

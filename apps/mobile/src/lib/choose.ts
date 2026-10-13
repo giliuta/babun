@@ -4,13 +4,13 @@ import {
   choiceSheetReady,
   presentChoiceSheet,
 } from "@/components/ui/ChoiceSheet";
+import { haptics } from "@/lib/haptics";
 
 /** Ждать, пока лист выбора уедет целиком, — перед системным окном
  *  («Поделиться», камера), которое iOS поверх уезжающего листа не покажет. */
 export function afterChoiceSheet(): Promise<void> {
   return choiceSheetGone();
 }
-import { haptics } from "@/lib/haptics";
 
 // ВЫБОР «ЧТО СДЕЛАТЬ» / «КАКОЕ ЗНАЧЕНИЕ» — ОДНА ТОЧКА НА ВЕСЬ ПРОДУКТ.
 //

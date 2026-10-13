@@ -108,7 +108,8 @@ export function LabelsScreen() {
   // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг): метки других
   // команд аккаунта, которых здесь ещё нет по имени. Только у владельца.
   const isOwner = useDataRole().data === "owner";
-  const allCities = useCities({ includeInactive: true }).data ?? [];
+  const citiesData = useCities({ includeInactive: true }).data;
+  const allCities = useMemo(() => citiesData ?? [], [citiesData]);
   const labelTemplates = useMemo(
     () =>
       isOwner

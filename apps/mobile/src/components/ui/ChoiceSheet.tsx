@@ -35,7 +35,7 @@ let present: ((request: Request) => void) | null = null;
 
 /** Лист на экране — показан или ещё уезжает. */
 let sheetOnScreen = false;
-let goneWaiters: Array<() => void> = [];
+let goneWaiters: (() => void)[] = [];
 
 function flushGone(): void {
   sheetOnScreen = false;

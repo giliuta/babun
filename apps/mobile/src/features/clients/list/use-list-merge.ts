@@ -56,17 +56,17 @@ export function useListMerge({
   // одинаковых ключа в списке — это и предупреждение React, и две одинаковые
   // строки в фильтре.
   // Скрытого календаря (владелец 04.10) в ленте команд клиентов нет.
-  const calendarVisibility = useCalendarVisibility();
+  const { isHidden } = useCalendarVisibility();
   const visibilityTenantId = useTenantId();
   const teams = useMemo(
     () =>
       uniqueById([
-        ...ownTeams.filter((team) => !calendarVisibility.isHidden(visibilityTenantId, team.id)),
+        ...ownTeams.filter((team) => !isHidden(visibilityTenantId, team.id)),
         ...guests.list.flatMap((guest) =>
-          guest.teams.filter((team) => !calendarVisibility.isHidden(guest.scope.tenantId, team.id)),
+          guest.teams.filter((team) => !isHidden(guest.scope.tenantId, team.id)),
         ),
       ]),
-    [ownTeams, guests.list, calendarVisibility.isHidden, visibilityTenantId],
+    [ownTeams, guests.list, isHidden, visibilityTenantId],
   );
   const tags = useMemo(
     () => uniqueById([...ownTags, ...guests.list.flatMap((guest) => guest.tags)]),

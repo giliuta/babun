@@ -107,7 +107,7 @@ export function HourRangeSheet({
       }
     }
     wasVisible.current = visible;
-  }, [visible, value]);
+  }, [visible, value, zoom]);
 
   const apply = () => {
     haptics.tap();

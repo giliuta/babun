@@ -73,7 +73,8 @@ export function ObjectTypesScreen() {
   const readOnly = useClientSettingLevel("objects", teamId) !== "write";
   // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг). Только владелец.
   const isOwner = useDataRole().data === "owner";
-  const allLabels = useLocationLabels(null).data ?? [];
+  const labelsData = useLocationLabels(null).data;
+  const allLabels = useMemo(() => labelsData ?? [], [labelsData]);
   const typeTemplates = useMemo(
     () =>
       isOwner

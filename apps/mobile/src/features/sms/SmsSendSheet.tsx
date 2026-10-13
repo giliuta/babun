@@ -91,7 +91,7 @@ export function SmsSendSheet({
     context.teamId && service.senders[context.teamId] ? context.teamId : (service.senderTeams[0] ?? context.teamId ?? null);
   const fromTeam = fixedTeam ?? pickedTeam ?? defaultTeam;
   const fetched = useTeamTemplates(given ? null : fromTeam, foreign ? context.tenantId : null).data;
-  const templates = given ?? fetched ?? [];
+  const templates = useMemo(() => given ?? fetched ?? [], [given, fetched]);
 
   const needsLink = templates.some((tpl) => wantsLink(tpl.body));
   const link = useAppointmentLink(context.appointmentId, visible && needsLink).data ?? null;

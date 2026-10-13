@@ -77,8 +77,11 @@ export function HistoryScreen() {
         : activeTeams,
     [scope.foreign, scope.tenantId, calendars, activeTeams],
   );
-  const { data: activeMembers = [] } = useCompanyMembers();
-  const members = scope.foreign ? [] : activeMembers;
+  const activeMembers = useCompanyMembers().data;
+  const members = useMemo(
+    () => (scope.foreign ? [] : (activeMembers ?? [])),
+    [scope.foreign, activeMembers],
+  );
   const [period, setPeriod] = useState<HistoryPeriod>("all");
   // `?actor=<id>` — «Что делал» со страницы партнёра (04.10): журнал сразу
   // отобран по нему, снять фильтр можно обычным листом.

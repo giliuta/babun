@@ -46,10 +46,11 @@ export function useCalendarSources() {
   // нет. Скрыты все свои — экран уходит в календарь другого аккаунта (ниже):
   // скрыть последний видимый правило не даёт.
   const calendarVisibility = useCalendarVisibility();
+  const { isHidden } = calendarVisibility;
   const visibilityTenantId = useTenantId();
   const teams = useMemo(
-    () => teamsAll.filter((tm) => !calendarVisibility.isHidden(visibilityTenantId, tm.id)),
-    [teamsAll, calendarVisibility.isHidden, visibilityTenantId],
+    () => teamsAll.filter((tm) => !isHidden(visibilityTenantId, tm.id)),
+    [teamsAll, isHidden, visibilityTenantId],
   );
   const ownAllHidden = teamsAll.length > 0 && teams.length === 0;
   // УДАЛЁННЫХ КАЛЕНДАРЕЙ В ЛЕНТЕ НЕТ — НИ ЗДЕСЬ, НИ В «ФИНАНСАХ».

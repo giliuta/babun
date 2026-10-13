@@ -74,7 +74,8 @@ export function EventTypesScreen({ teamId: teamProp }: { teamId?: string | null 
   const readOnly = useTeamSettingLevel("calendar.booking_form", teamId) !== "write";
   // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД (владелец 11.10, как у услуг). Только владелец.
   const isOwner = useDataRole().data === "owner";
-  const allTypes = usePersonalEventTypes().data ?? [];
+  const eventTypesData = usePersonalEventTypes().data;
+  const allTypes = useMemo(() => eventTypesData ?? [], [eventTypesData]);
   const typeTemplates = useMemo(
     () =>
       isOwner

@@ -175,7 +175,7 @@ export function CategoryEditorSheet({
     }
     setAllTeams(false);
     setPicking(false);
-  }, [target]);
+  }, [target, setPicking]);
 
   // У долга «кто» уже есть своим блоком (клиент или имя) — прикреплять нечего.
   const attachable = kind !== "debt";

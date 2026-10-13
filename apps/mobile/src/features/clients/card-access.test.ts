@@ -3,6 +3,8 @@ import { describe, test } from "node:test";
 
 import { cardAccess, type TeamBlocksOn } from "./card-access";
 
+import { statsByBlocks } from "./card-access";
+
 const ALL_ON: TeamBlocksOn = {
   note: true, people: true, objects: true, labels: true, tags: true, personal: true, files: true, requisites: true,
 };
@@ -81,8 +83,6 @@ describe("карточка клиента: блоки по команде и п�
     assert.equal(a.card.edit, true);
   });
 });
-
-import { statsByBlocks } from "./card-access";
 
 describe("сводка клиента по его правам", () => {
   const stats = {

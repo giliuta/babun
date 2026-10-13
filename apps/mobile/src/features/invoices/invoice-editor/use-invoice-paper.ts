@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   calculateInvoiceTotals,
   type InvoiceLineDraft,
@@ -113,17 +113,22 @@ export function useInvoicePaper({
   const linesSum = calculateInvoiceTotals(validLines, "off", 0).total;
   const discountAmount = discountAmountOf(linesSum, discountKind, discountValue);
   /** Строка скидки для сервера и бумаги — на языке бумаги. */
-  const discountLine: InvoiceLineDraft | null =
-    discountAmount > 0
-      ? {
-          title: invoiceDictionary(language).discount,
-          qty: 1,
-          unit_price: -discountAmount,
-          discount: true,
-        }
-      : null;
-  const withDiscount = (list: InvoiceLineDraft[]) =>
-    discountLine ? [...list, discountLine] : list;
+  const discountLine = useMemo<InvoiceLineDraft | null>(
+    () =>
+      discountAmount > 0
+        ? {
+            title: invoiceDictionary(language).discount,
+            qty: 1,
+            unit_price: -discountAmount,
+            discount: true,
+          }
+        : null,
+    [discountAmount, language],
+  );
+  const withDiscount = useCallback(
+    (list: InvoiceLineDraft[]) => (discountLine ? [...list, discountLine] : list),
+    [discountLine],
+  );
   const totals = calculateInvoiceTotals(
     withDiscount(validLines),
     vatMode,
@@ -221,8 +226,8 @@ export function useInvoicePaper({
           }),
     // Пересобираем на каждое изменение формы — в этом весь смысл зеркала.
     [tenant, selectedClient, clientRequisitesId, selectedLocation, paperSeller, nextNumber, issuedOn, dueOn,
-     clientId, parsedLines, vatMode, rate, totals, notes, businessToday,
-     currency, language],
+     clientId, parsedLines, vatMode, rate, totals, notes,
+     currency, language, withDiscount],
   );
 
   return {
