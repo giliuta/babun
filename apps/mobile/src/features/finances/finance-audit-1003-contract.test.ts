@@ -4,6 +4,8 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { financesScreenSource } from "./home/screen-source";
+import { operationSheetSource } from "./operation-sheet/sheet-source";
+import { transferSheetSource } from "./transfer-sheet/sheet-source";
 
 // ПОВТОРНЫЙ АУДИТ ФИНАНСОВ 03.10 — сторожа на исходник там, где чистой
 // функции нет: экран и формы собирают уже проверенные помощники.
@@ -12,7 +14,8 @@ const read = (rel: string) => readFileSync(resolve(here, rel), "utf8");
 
 describe("повторный аудит финансов 03.10", () => {
   test("скрытый счёт — не закрытый: операция на нём правится и удаляется", () => {
-    const sheet = read("OperationSheet.tsx");
+    // The form is `OperationSheet.tsx` plus its `operation-sheet/` folder.
+    const sheet = operationSheetSource();
     assert.match(sheet, /useAccountsWithBalances\(\{ includeHidden: true \}\)/);
     assert.match(sheet, /!a\.is_hidden \|\| a\.id === txOwnAccountId \|\| a\.id === defaultAccountId/);
   });
@@ -37,7 +40,8 @@ describe("повторный аудит финансов 03.10", () => {
   });
 
   test("время новой операции и долга — по часам бизнеса, не телефона", () => {
-    const sheet = read("OperationSheet.tsx");
+    // The form is `OperationSheet.tsx` plus its `operation-sheet/` folder.
+    const sheet = operationSheetSource();
     assert.doesNotMatch(sheet, /formatHM\(new Date\(\)\)/);
     assert.match(sheet, /useState<string \| null>\(\(\) => businessNow\(\)\.hm\)/);
     const debt = read("use-debt-draft.ts");
@@ -61,7 +65,8 @@ describe("повторный аудит финансов 03.10", () => {
   });
 
   test("лист перевода не теряет набранное свайпом (017)", () => {
-    const sheet = read("TransferSheet.tsx");
+    // The sheet is `TransferSheet.tsx` plus its `transfer-sheet/` steps.
+    const sheet = transferSheetSource();
     assert.match(sheet, /const guard = useGuardedClose\(\{/);
     assert.equal((sheet.match(/onClose=\{guard\.close\}/g) ?? []).length, 3);
     assert.equal((sheet.match(/onExited=\{guard\.onExited\}/g) ?? []).length, 3);

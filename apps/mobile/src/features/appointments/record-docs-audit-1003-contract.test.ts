@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { invoiceEditorSource } from "../invoices/invoice-editor/editor-source";
 import { bookFormSource } from "./book-form/source-for-tests";
 
 // АУДИТ ФОРМЫ ЗАПИСИ, ИНВОЙСОВ И SMS 03.10 — сторожа на сборку экранов;
@@ -33,7 +34,8 @@ describe("аудит записи, инвойсов и SMS 03.10", () => {
   });
 
   test("инвойс: отказ выпуска виден в листе, VAT без номера ловится заранее", () => {
-    const editor = src("invoices/InvoiceEditor.tsx");
+    // The form is `InvoiceEditor.tsx` plus its `invoice-editor/` folder.
+    const editor = invoiceEditorSource();
     assert.match(editor, /error=\{error\}/);
     assert.match(editor, /vatMode !== "off" && rate > 0 && pickedCompany && !pickedCompany\.vat_number\?\.trim\(\)/);
     assert.match(src("invoices/InvoicePreviewSheet.tsx"), /\) : error \? \(/);

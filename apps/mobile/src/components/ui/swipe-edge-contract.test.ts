@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { operationSheetSource } from "../../features/finances/operation-sheet/sheet-source";
 
 // КРОМКА СВАЙПА ЗАКРЕПЛЕНА ЗА СМЫСЛОМ, А НЕ ЗА СИЛОЙ ДЕЙСТВИЯ.
 //
@@ -195,7 +196,8 @@ describe("кромки свайпа", () => {
     assert.match(screen, /Number\(a\.hidden\) - Number\(b\.hidden\)/);
     // Лист операции берёт выбор из общего правила (`pickableCategories`):
     // сторож смотрит и на правило, и на то, что лист его зовёт.
-    const sheet = readFileSync(join(app, "src/features/finances/OperationSheet.tsx"), "utf8");
+    // The form is `OperationSheet.tsx` plus its `operation-sheet/` folder.
+    const sheet = operationSheetSource();
     assert.ok(
       sheet.includes("pickableCategories("),
       "лист операции: выбор категорий обязан идти через pickableCategories",

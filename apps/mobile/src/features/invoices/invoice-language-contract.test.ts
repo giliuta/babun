@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { invoiceEditorSource } from "./invoice-editor/editor-source";
 import { UI_LOCALES } from "@babun/shared/i18n/locales";
 import type { InvoiceLedgerWithLines } from "@babun/shared/local/finance/invoice-ledger";
 import { RECEIPT_WORDS } from "../documents/receipt-words";
@@ -114,7 +115,8 @@ describe("язык бумаги инвойса", () => {
   });
 
   test("в форме инвойса язык — строкой «Язык» в «Реквизитах», по умолчанию English", () => {
-    const editor = read("InvoiceEditor.tsx");
+    // The form is `InvoiceEditor.tsx` plus its `invoice-editor/` folder.
+    const editor = invoiceEditorSource();
     // Новый — English, правка выставленного — на его языке, любом из семи.
     assert.match(editor, /useState<InvoiceLanguage>\(\s*isUiLocale\(existingLanguage\) \? existingLanguage : "en",\s*\)/);
     assert.match(read("queries.ts"), /link_to_tx_id"> & \{ language\?: InvoiceLanguage \}\) => \{/);

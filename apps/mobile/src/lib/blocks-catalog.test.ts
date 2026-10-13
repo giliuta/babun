@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { bookFormSource } from "../features/appointments/book-form/source-for-tests";
+import { readModuleSource } from "./module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** apps/mobile — от него отсчитываются пути в каталоге. */
@@ -235,7 +236,8 @@ describe("библиотека блоков указывает на живой �
       ["src/components/ui/ValuePickerSheet.tsx", "Settings2", "настройки списка"],
     ];
     for (const [path, icon, role] of expected) {
-      const source = readFileSync(resolve(APP, path), "utf8");
+      // A barrel with a folder (`card-rows.tsx` + `card-rows/`) reads as one.
+      const source = readModuleSource(resolve(APP, path));
       assert.match(
         source,
         new RegExp(`\\b${icon}\\b`),
