@@ -53,9 +53,10 @@ import {
   enqueueOpWithCacheUpsertAndEmit,
   enqueueOpWithCacheDeleteAndEmit,
 } from "./queue-events";
-import { emitRevalidated, cacheSignature } from "./revalidate-events";
+import { cacheSignature } from "./revalidate-events";
 import { randomUuid } from "./uuid";
 import { isTransientNetworkError } from "./transient-error";
+import { createRevalidator } from "./revalidator";
 
 type DbSupabase = SupabaseClient<Database>;
 
@@ -85,35 +86,10 @@ export async function listClientTags(
   }
 }
 
-/** Сверка компании уже идёт — вторая ждёт её (как у записей и клиентов):
- *  параллельные снимки ложились в произвольном порядке, старый поверх нового. */
-const revalidatingTags = new Map<string, Promise<void>>();
-/** Сверка, чью замену отменила свежая локальная правка: за ней идёт ещё одна. */
-const staleTagRevalidation = new Set<string>();
-
-function revalidateTags(
-  supabase: DbSupabase,
-  tenantId: string,
-): Promise<void> {
-  const running = revalidatingTags.get(tenantId);
-  if (running) return running;
-  const run = (async () => {
-    try {
-      const changed = await refreshCacheFromSupabase(supabase, tenantId);
-      // Emit only on a real change (loop guard — see revalidate-events).
-      if (changed) emitRevalidated("tags");
-    } catch {
-      /* ignore */
-    } finally {
-      revalidatingTags.delete(tenantId);
-      if (staleTagRevalidation.delete(tenantId)) {
-        void revalidateTags(supabase, tenantId);
-      }
-    }
-  })();
-  revalidatingTags.set(tenantId, run);
-  return run;
-}
+const tagsRevalidator = createRevalidator<DbSupabase>("tags", (sb, tenantId) =>
+  refreshCacheFromSupabase(sb, tenantId),
+);
+const revalidateTags = tagsRevalidator.revalidate;
 
 /** Slice 5 — AUTHORITATIVE + REVALIDATE-BRIDGE. `cacheReplaceTenant` prunes
  *  tags deleted on another device; the signature diff (which folds the whole
@@ -160,7 +136,7 @@ async function refreshCacheFromSupabase(
     unlessLocalWriteSince: writeSeq,
   });
   if (!replaced) {
-    staleTagRevalidation.add(tenantId);
+    tagsRevalidator.markStale(tenantId);
     return false;
   }
   const after = cacheSignature(rows);

@@ -80,9 +80,10 @@ import {
   enqueueOpWithCacheUpsertAndEmit,
   enqueueOpWithCacheDeleteAndEmit,
 } from "./queue-events";
-import { emitRevalidated, cacheSignature } from "./revalidate-events";
+import { cacheSignature } from "./revalidate-events";
 import { isUuid, randomUuid } from "./uuid";
 import { isTransientNetworkError } from "./transient-error";
+import { createRevalidator } from "./revalidator";
 import { ColdOfflineCacheMissError, OnlineOnlyWriteError } from "./cache-errors";
 
 type DbSupabase = SupabaseClient<Database>;
@@ -123,39 +124,10 @@ export async function listAppointments(
   }
 }
 
-/** Сверка компании уже идёт — вторая ждёт её, а не запускает свою: каждое
- *  чтение списка (экран, форма записи, шторка дня) звало свою, и полные
- *  перезаписи кэша вставали в очередь за блокировкой SQLite, а правки
- *  записей ждали их все (владелец 2026-09-30: «перенос подлагивает»). */
-const revalidating = new Map<string, Promise<void>>();
-/** Сверка, чью замену отменила свежая локальная правка: ждущие чтения
- *  получили старый снимок, поэтому сразу за ней идёт ещё одна. */
-const staleRevalidation = new Set<string>();
-
-function revalidateAppointments(
-  supabase: DbSupabase,
-  tenantId: string,
-): Promise<void> {
-  const running = revalidating.get(tenantId);
-  if (running) return running;
-  const run = (async () => {
-    try {
-      const changed = await refreshCacheFromSupabase(supabase, tenantId);
-      // Emit only on a real change (loop guard — see revalidate-events).
-      if (changed) emitRevalidated("appointments");
-    } catch {
-      // ignore — cached list already returned
-    } finally {
-      revalidating.delete(tenantId);
-      // Снимок оказался старше правки — сверяем снова, уже после неё.
-      if (staleRevalidation.delete(tenantId)) {
-        void revalidateAppointments(supabase, tenantId);
-      }
-    }
-  })();
-  revalidating.set(tenantId, run);
-  return run;
-}
+const appointmentsRevalidator = createRevalidator<DbSupabase>("appointments", (sb, tenantId) =>
+  refreshCacheFromSupabase(sb, tenantId),
+);
+const revalidateAppointments = appointmentsRevalidator.revalidate;
 
 /** Кэш уже совпадает с сервером строка в строку? Тогда перезаписывать его
  *  незачем: `cacheReplaceTenant` — эксклюзивная транзакция на весь список
@@ -242,7 +214,7 @@ async function refreshCacheFromSupabase(
     unlessLocalWriteSince: writeSeq,
   });
   if (!replaced) {
-    staleRevalidation.add(tenantId);
+    appointmentsRevalidator.markStale(tenantId);
     return false;
   }
   const after = cacheSignature(rows);

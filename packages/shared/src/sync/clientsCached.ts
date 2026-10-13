@@ -92,9 +92,9 @@ import {
   enqueueOpWithCacheUpsertAndEmit,
   enqueueOpWithCacheDeleteAndEmit,
 } from "./queue-events";
-import { emitRevalidated } from "./revalidate-events";
 import { randomUuid } from "./uuid";
 import { isTransientNetworkError } from "./transient-error";
+import { createRevalidator } from "./revalidator";
 import { ColdOfflineCacheMissError, OnlineOnlyWriteError } from "./cache-errors";
 
 type DbSupabase = SupabaseClient<Database>;
@@ -196,38 +196,10 @@ export async function listClients(
   }
 }
 
-/** Сверка компании уже идёт — вторая ждёт её, а не запускает свою (тот же
- *  закон, что у записей): параллельные снимки ложились в произвольном
- *  порядке, и старый мог лечь поверх нового. */
-const revalidatingClients = new Map<string, Promise<void>>();
-/** Сверка, чью замену отменила свежая локальная правка: сразу за ней идёт
- *  ещё одна, уже после правки. */
-const staleClientRevalidation = new Set<string>();
-
-function revalidateClients(
-  supabase: DbSupabase,
-  tenantId: string,
-): Promise<void> {
-  const running = revalidatingClients.get(tenantId);
-  if (running) return running;
-  const run = (async () => {
-    try {
-      const changed = await refreshCacheFromSupabase(supabase, tenantId);
-      // Emit only on a real change so the mobile bridge's invalidate →
-      // refetch → revalidate cycle settles after one pass (loop guard).
-      if (changed) emitRevalidated("clients");
-    } catch {
-      // ignore — list() already returned cached data; UI is fine.
-    } finally {
-      revalidatingClients.delete(tenantId);
-      if (staleClientRevalidation.delete(tenantId)) {
-        void revalidateClients(supabase, tenantId);
-      }
-    }
-  })();
-  revalidatingClients.set(tenantId, run);
-  return run;
-}
+const clientsRevalidator = createRevalidator<DbSupabase>("clients", (sb, tenantId) =>
+  refreshCacheFromSupabase(sb, tenantId),
+);
+const revalidateClients = clientsRevalidator.revalidate;
 
 /** Кэш уже совпадает с сервером строка в строку? Сравнение — полным JSON,
  *  а не подписью `id@updated_at`: смена тегов клиента `updated_at` не
@@ -323,7 +295,7 @@ async function refreshCacheFromSupabase(
     unlessLocalWriteSince: writeSeq,
   });
   if (!replaced) {
-    staleClientRevalidation.add(tenantId);
+    clientsRevalidator.markStale(tenantId);
     return false;
   }
   return true;
