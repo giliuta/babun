@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "./module-source";
 import { test } from "node:test";
 import { LEGAL_TEXTS, LEGAL_TEXTS_APP } from "../features/legal/legal-texts";
 import { balanceWarning } from "../features/sms/sms-model";
@@ -81,8 +82,11 @@ test("закрытое тарифом без флага — спокойная �
   const guard = nudge.search(/if \(!CAN_PAY_HERE\) \{\s*toast\(TARIFF_LOCKED_HINT, "info"\);\s*return;\s*\}/);
   assert.ok(guard > 0, "useTariffNudge без ветки приложения из магазина");
   assert.ok(nudge.indexOf('label: "Тариф"') > guard, "кнопка «Тариф» раньше проверки флага");
+  // PaymentTiles reads together with its `payment-tiles/` parts.
   for (const rel of ["features/tariffs/TariffLocked.tsx", "features/appointments/PaymentTiles.tsx"]) {
-    const file = read(rel);
+    const file = rel.endsWith("PaymentTiles.tsx")
+      ? readModuleSource(path.join(SRC, rel), path.join(SRC, "features/appointments/payment-tiles"))
+      : read(rel);
     assert.match(file, /accessibilityHint=\{(dimmed \? )?TARIFF_LOCKED_HINT/, `${rel}: подсказка VoiceOver мимо флага`);
     assert.doesNotMatch(file, /"Нужно изменить тариф"/, `${rel}: «Нужно изменить тариф» мимо флага`);
   }

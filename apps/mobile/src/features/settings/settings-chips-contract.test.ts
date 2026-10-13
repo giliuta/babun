@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 // ШЕСТЕРЁНКИ КАЛЕНДАРЯ И ФИНАНСОВ — ВСЕ КАЛЕНДАРИ ВСЕХ АККАУНТОВ ОДНОЙ ЛЕНТОЙ
 // (владелец 09.10: «переключаться между командой один, командой два и своей
@@ -10,9 +11,15 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const app = (relative: string) => readFileSync(resolve(here, "../../../app", relative), "utf8");
+// The gear route is a door; its body lives in `features/calendar/settings-screen/`.
+const gear = () =>
+  readModuleSource(
+    resolve(here, "../../../app/(dashboard)/(home)/calendar/index.tsx"),
+    resolve(here, "../calendar/settings-screen"),
+  );
 
 test("настройки календаря не отбирают календари других аккаунтов", () => {
-  const src = app("(dashboard)/(home)/calendar/index.tsx");
+  const src = gear();
   assert.match(src, /items=\{gearChips\.items\}/);
   assert.doesNotMatch(src, /gearChipItems|hiddenElsewhere/);
 });
@@ -27,7 +34,7 @@ test("настройки финансов — та же лента, что на�
 // ПАРТНЁР ВЫХОДИТ ИЗ КОМАНДЫ САМ (владелец 09.10: «добавить добавили, а выйти
 // я уже не могу, если меня не удалят»).
 test("в настройках чужой команды — «Выйти из команды», а не удаление", () => {
-  const src = app("(dashboard)/(home)/calendar/index.tsx");
+  const src = gear();
   assert.match(src, /const canLeave = role != null && role !== "owner";/);
   assert.match(src, /\{team && tenantId && canLeave \? \(/);
   assert.match(src, /leaveCalendar\.mutate\(\s*\{ tenantId, teamId: team\.id \}/);

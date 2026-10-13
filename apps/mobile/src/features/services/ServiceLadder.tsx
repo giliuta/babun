@@ -1,5 +1,5 @@
-import { Fragment, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Fragment } from "react";
+import { Pressable, Text, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -8,6 +8,9 @@ import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { useThemeColors } from "@/theme/colors";
 import { durationLabel } from "./format";
 import type { PriceEntryMode, ServiceTierDraft } from "./economics";
+import { LadderCell as Cell } from "./service-ladder/LadderCell";
+import { LadderHeader } from "./service-ladder/LadderHeader";
+import { CELL_H, GAP, ROW_H, W_COST, W_QTY, W_TIME } from "./service-ladder/layout";
 
 // ЕДИНИЦЫ ИЗМЕРЕНИЯ ЗДЕСЬ НЕТ, И ЭТО РЕШЕНИЕ, А НЕ УПРОЩЕНИЕ
 // (владелец 2026-08-27, после живого прогона):
@@ -50,29 +53,8 @@ import type { PriceEntryMode, ServiceTierDraft } from "./economics";
 // строке. Это прямое требование прежней редакции блока (2026-08-25: подписи
 // занимали в два с половиной раза больше места, чем числа под ними), и
 // колонки его не отменяют, а исполняют буквально: подпись у колонки одна.
-
-const ROW_H = 56;
-/** Высота плитки внутри строки: 44 — минимальная цель пальца. */
-const CELL_H = 44;
-
-const W_QTY = 50;
-const W_COST = 88;
-const W_TIME = 94;
-const GAP = 8;
-
-// КОЛОНКИ РАЗДЕЛЕНЫ БЛОКАМИ, А НЕ ЧЕРТАМИ (владелец 2026-08-27: «разделение
-// между столбиками не волосинка, а полноценно правильные блоки, красивые
-// блоки как в iOS»).
 //
-// Волосинка стояла здесь один заход и была полумерой: она рисует границу, но
-// не делает ячейку предметом — четыре числа всё равно читались одной строкой
-// с насечками. Теперь у каждой ячейки СВОЯ залитая плитка со скруглением, а
-// между плитками воздух. Так устроены группы в самом iOS: предмет отделяется
-// не линией, а собственным телом и зазором вокруг него.
-//
-// Заливка ещё и подсказывает, что в ячейку МОЖНО ПИСАТЬ: на белом фоне поле
-// ввода ничем не отличалось от подписи, и человек не понимал, где тут число,
-// а где надпись.
+// Размеры — `service-ladder/layout.ts`, ячейка и шапка — там же.
 
 export interface LadderStep {
   /** `null` — базовая строка (количество 1): её нельзя убрать, она и есть
@@ -82,84 +64,6 @@ export interface LadderStep {
   price: string;
   cost: string;
   duration: string;
-}
-
-function Cell({
-  value,
-  onChange,
-  width,
-  prefix,
-  suffix,
-  align = "right",
-  accessibilityLabel,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  width?: number;
-  /** Приписка СЛЕВА от числа — «от» у количества. */
-  prefix?: string;
-  /** Знак валюты. Стоит СПРАВА ОТ ЧИСЛА, а не слева от ячейки: слева он
-   *  прижимался к соседней колонке и читался её частью — строка начиналась
-   *  «1 €», хотя единица это количество, а евро уже цена. */
-  suffix?: string;
-  align?: "right" | "center";
-  accessibilityLabel: string;
-  placeholder?: string;
-}) {
-  const t = useThemeColors();
-  // НАБРАННОЕ — КАК НАБРАНО, ПОКА ПОЛЕ В ФОКУСЕ (аудит шестерёнки 03.10).
-  // Строка ступени хранит сумму «за всё» и показывает «за одну»: «12.»
-  // на количестве 2 уходило в черновик как 24, возвращалось «12», и точка
-  // стиралась — копейки на ступени не набирались вовсе. Пока человек
-  // печатает, поле держит его текст; пересчитанное число — после ухода.
-  const [typing, setTyping] = useState<string | null>(null);
-  return (
-    <View
-      className="flex-row items-center justify-end"
-      style={{
-        width,
-        flex: width ? undefined : 1,
-        gap: 2,
-        height: CELL_H,
-        paddingHorizontal: 10,
-        borderRadius: t.radius.input,
-        borderCurve: "continuous",
-        backgroundColor: t.fill,
-      }}
-    >
-      {prefix ? (
-        <Text style={{ fontSize: 13, color: t.sub }}>{prefix}</Text>
-      ) : null}
-      <TextInput
-        value={typing ?? value}
-        onFocus={() => setTyping(value)}
-        onBlur={() => setTyping(null)}
-        onChangeText={(next) => {
-          setTyping(next);
-          onChange(next);
-        }}
-        placeholder={placeholder}
-        placeholderTextColor={t.placeholder}
-        keyboardType="decimal-pad"
-        accessibilityLabel={accessibilityLabel}
-        selectionColor={t.accent}
-        keyboardAppearance="light"
-        style={{
-          flex: 1,
-          textAlign: align,
-          fontSize: 16,
-          fontWeight: "600",
-          color: t.ink,
-          fontVariant: ["tabular-nums"],
-          paddingVertical: 8,
-        }}
-      />
-      {suffix ? (
-        <Text style={{ fontSize: 14, color: t.sub }}>{suffix}</Text>
-      ) : null}
-    </View>
-  );
 }
 
 export function ServiceLadder({
@@ -202,138 +106,14 @@ export function ServiceLadder({
   const t = useThemeColors();
   const idOf = (s: LadderStep) => s.tier?.id ?? "base";
 
-
-  // ШАПКА — НЕ ПОДПИСЬ, А НАСТРОЙКА КОЛОНКИ (владелец 2026-08-27: «если топаю
-  // на количество, там выбирается не количество, а единица измерения; если
-  // топаю на цену — можно выбрать цена за всё или цена за единицу»).
-  //
-  // Это и решает старую беду: подписи занимали больше места, чем числа. Здесь
-  // подпись ОДНА на колонку и вдобавок работает — она же и есть тот
-  // переключатель, который иначе стоял бы отдельной строкой.
-  //
-  // Нажимаемая подпись помечена цветом акцента: серая читалась бы обычным
-  // ярлыком, и на неё никто бы не нажал.
-  // ШАПКА КОЛОНКИ: ИМЯ СВЕРХУ, РЕЖИМ В СКОБКАХ СНИЗУ, ТАП ПЕРЕКЛЮЧАЕТ
-  // (владелец 2026-08-27: «цена — первая строчка, внизу в скобках „за одну";
-  // топну один раз — скобки поменяются на „за всё"»).
-  //
-  // До этого тап открывал панель с двумя пилюлями. На ДВУХ значениях панель —
-  // лишний ход: она занимала целую строку блока, толкала таблицу вниз и
-  // висела, пока в неё не ткнут второй раз. Переключатель из двух положений
-  // переключается тапом, а не выбором из списка.
-  //
-  // Имя колонки серое, как у «Кол» и «Время», — все четыре читаются
-  // одинаково. Синие только скобки: они и есть то, что нажимается, и они же
-  // говорят текущее состояние. Одна строка отвечает на оба вопроса.
-  const headCell = (
-    text: string,
-    width?: number,
-    mode?: PriceEntryMode,
-    onToggle?: () => void,
-  ) => {
-    const body = (
-      <>
-        <Text
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{
-            textAlign: "right",
-            fontSize: 11,
-            fontWeight: "700",
-            letterSpacing: 0.6,
-            textTransform: "uppercase",
-            color: t.faint,
-          }}
-        >
-          {text}
-        </Text>
-        {mode ? (
-          <Text
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-            style={{
-              textAlign: "right",
-              fontSize: 11,
-              fontWeight: "600",
-              color: t.accent,
-              marginTop: 1,
-            }}
-          >
-            {mode === "total" ? "(за всё)" : "(за одну)"}
-          </Text>
-        ) : null}
-      </>
-    );
-    if (!onToggle) {
-      return (
-        <View style={{ width, flex: width ? undefined : 1 }}>{body}</View>
-      );
-    }
-    return (
-      <Pressable
-        onPress={onToggle}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={`${text}, сейчас ${
-          mode === "total" ? "за всё" : "за одну"
-        }. Переключить`}
-        style={({ pressed }) => ({
-          width,
-          flex: width ? undefined : 1,
-          opacity: pressed ? 0.5 : 1,
-        })}
-      >
-        {body}
-      </Pressable>
-    );
-  };
-
-  const flip = (m: PriceEntryMode): PriceEntryMode =>
-    m === "total" ? "unit" : "total";
-
-
   return (
     <SectionCard>
-      {/* ШАПКА ОДИН РАЗ. Она и есть единственные подписи в блоке. */}
-      <View
-        className="flex-row items-center"
-        style={{
-          paddingHorizontal: 12,
-          paddingTop: 12,
-          paddingBottom: 6,
-          gap: GAP,
-        }}
-      >
-        {/* КОЛОНКА КОЛИЧЕСТВА СТОИТ ВСЕГДА (владелец 2026-08-29: «когда
-            создаётся новая услуга, пусть блок количества всё равно
-            показывает единицу»).
-            Утром её прятали, пока ступеней нет: одинокое «1» выглядело
-            колонкой ради строки. Но пряталась вместе с ней и сама мысль, что
-            цена вообще привязана к количеству, — а таблица без первого
-            столбца читается как три несвязанных поля. Единица на месте
-            объясняет остальные три числа: «одна штука стоит столько». */}
-          <Text
-            maxFontSizeMultiplier={1.2}
-            style={{
-              width: W_QTY,
-              textAlign: "center",
-              fontSize: 11,
-              fontWeight: "700",
-              letterSpacing: 0.6,
-              textTransform: "uppercase",
-              color: t.faint,
-            }}
-          >
-            Кол
-          </Text>
-        {headCell("Цена", undefined, priceEntry, () =>
-          onPriceEntryChange(flip(priceEntry)),
-        )}
-        {headCell("Расход", W_COST, costEntry, () =>
-          onCostEntryChange(flip(costEntry)),
-        )}
-        {headCell("Время", W_TIME)}
-      </View>
+      <LadderHeader
+        priceEntry={priceEntry}
+        costEntry={costEntry}
+        onPriceEntryChange={onPriceEntryChange}
+        onCostEntryChange={onCostEntryChange}
+      />
 
       {steps.map((s) => {
         const id = idOf(s);

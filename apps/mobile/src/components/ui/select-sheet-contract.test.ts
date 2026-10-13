@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { bookFormSource } from "../../features/appointments/book-form/source-for-tests";
+import { readModuleSource } from "@/lib/module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
@@ -20,6 +21,13 @@ const read = (relative: string) => readFileSync(resolve(here, relative), "utf8")
 
 /** Все шторки, где ВЫБИРАЮТ из списка. Новая шторка выбора добавляется сюда
  *  тем же коммитом, которым появляется. */
+/** A sheet whose parts live in a sibling folder is read together with it. */
+const PARTS: Record<string, string> = {
+  "../../features/appointments/BookingPickers.tsx": "../../features/appointments/booking-pickers",
+};
+const readSheet = (path: string) =>
+  readModuleSource(resolve(here, path), PARTS[path] ? resolve(here, PARTS[path]) : undefined);
+
 const SHEETS = [
   "../../features/clients/ClientPickerSheet.tsx",
   "../../features/clients/ObjectPickerSheet.tsx",
@@ -33,7 +41,7 @@ const SHEETS = [
 describe("анатомия шторки выбора", () => {
   test("строку рисует только общий примитив", () => {
     for (const path of SHEETS) {
-      const source = read(path);
+      const source = readSheet(path);
       // Своя высота строки = своя анатомия. Единственное законное место, где
       // высота названа числом, — сам примитив.
       assert.doesNotMatch(
@@ -51,7 +59,7 @@ describe("анатомия шторки выбора", () => {
 
   test("поиск — общий, второго поля в шторках не бывает", () => {
     for (const path of SHEETS) {
-      const source = read(path);
+      const source = readSheet(path);
       assert.doesNotMatch(
         source,
         /<TextInput/,
@@ -62,7 +70,7 @@ describe("анатомия шторки выбора", () => {
 
   test("шапка задаётся пропом, а не рисуется в теле", () => {
     for (const path of SHEETS) {
-      const source = read(path);
+      const source = readSheet(path);
       assert.match(
         source,
         /title=\{|title="/,

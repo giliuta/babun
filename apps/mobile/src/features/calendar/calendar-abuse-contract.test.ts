@@ -20,6 +20,7 @@ const block = () =>
   readModuleSource(resolve(here, "AppointmentBlock.tsx"), resolve(here, "appointment-block"));
 // The day grid is `DayView.tsx` plus its parts in `day-view/`.
 const dayGrid = () => readModuleSource(resolve(here, "DayView.tsx"), resolve(here, "day-view"));
+const monthGrid = () => readModuleSource(resolve(here, "MonthView.tsx"), resolve(here, "month-view"));
 // «Список» is `AgendaView.tsx` plus its parts in `agenda/`.
 const agendaList = () => readModuleSource(resolve(here, "AgendaView.tsx"), resolve(here, "agenda"));
 // The day money sheet is `DayFinanceSheet.tsx` plus its parts in `day-finance/`.
@@ -292,7 +293,7 @@ describe("повторный аудит календаря 03.10", () => {
     const sheet = daySheet();
     assert.match(sheet, /const ledgerLoading = awaitingAnswer\(txQuery\) \|\| awaitingAnswer\(recordsTxQuery\);/);
     assert.doesNotMatch(sheet, /recordsTxQuery\.isPlaceholderData;/);
-    const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
+    const month = monthGrid();
     assert.match(month, /const ledgerAwaiting = awaitingAnswer\(ledgerQuery\);/);
     // Операции записей не гасят месяц: создание записи не стирает суммы.
     assert.match(month, /if \(ledgerAwaiting\) return undefined;[\s\S]{0,200}?\[\.\.\.\(ledgerQuery\.data \?\? \[\]\), \.\.\.\(recordsLedgerQuery\.data \?\? \[\]\)\]\.filter\(readable\)/);
@@ -313,7 +314,7 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("месяц: метка видна и на хвостовых днях; окошко дат не подсвечивает «1» в Месяце", () => {
-    const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
+    const month = monthGrid();
     // Выходной команды заменяет метку (03.10) — в остальном метка у каждого дня.
     assert.match(month, /const label = dayOff \? null : labelFor\?\.\(key\) \?\? null;/);
     const mini = readFileSync(resolve(here, "MiniCalendar.tsx"), "utf8");
@@ -323,7 +324,7 @@ describe("повторный аудит календаря 03.10", () => {
 
   test("озвучка даты — «3 октября», а не «3 октябрь»", () => {
     for (const f of ["MonthView.tsx", "MiniCalendar.tsx", "WeekView.tsx", "DayView.tsx"]) {
-      const src = f === "DayView.tsx" ? dayGrid() : readFileSync(resolve(here, f), "utf8");
+      const src = f === "DayView.tsx" ? dayGrid() : f === "MonthView.tsx" ? monthGrid() : readFileSync(resolve(here, f), "utf8");
       assert.doesNotMatch(src, /toLocaleDateString\("ru-RU", \{ month: "long" \}\)/, f);
     }
   });
@@ -419,7 +420,10 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("имя календаря, набранное перед уходом со страницы, сохраняется", () => {
-    const gear = readFileSync(resolve(here, "../../../app/(dashboard)/(home)/calendar/index.tsx"), "utf8");
+    const gear = readModuleSource(
+      resolve(here, "../../../app/(dashboard)/(home)/calendar/index.tsx"),
+      resolve(here, "settings-screen"),
+    );
     assert.match(gear, /latest\.current = \{ draft, teamName: team\.name, onPatch \};/);
     assert.match(gear, /if \(trimmed && trimmed !== teamName\) patch\(\{ name: trimmed \}\);/);
     assert.match(gear, /latest\.current\.draft = null;\s*setDraft\(null\);/);
@@ -442,13 +446,13 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("шестерёнка: полночь не ломает смену (перерывы из листа убраны 11.10)", () => {
-    const sheet = readFileSync(resolve(here, "TeamScheduleSheet.tsx"), "utf8");
+    const sheet = readModuleSource(resolve(here, "TeamScheduleSheet.tsx"), resolve(here, "team-schedule"));
     assert.match(sheet, /prevEnd >= DAY_LAST - WRAP_EDGE && next\.hour \* 60 \+ next\.minute < WRAP_EDGE/);
     assert.match(sheet, /prevStart < WRAP_EDGE && next\.hour \* 60 \+ next\.minute >= DAY_LAST - WRAP_EDGE/);
   });
 
   test("шестерёнка: выходной виден и в Месяце; порядок команд и меток стоит", () => {
-    const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
+    const month = monthGrid();
     assert.match(month, /const label = dayOff \? null : labelFor\?\.\(key\) \?\? null;/);
     assert.match(screen(), /isDayOff=\{\(ymd\) => workBandFor\?\.\(ymd\) === null\}/);
     const ref = readModuleSource(resolve(here, "../reference/queries.ts"));
@@ -470,10 +474,10 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("услуга: копейки на ступени набираются, цена за штуку держится при смене количества", () => {
-    const ladder = readFileSync(resolve(here, "../services/ServiceLadder.tsx"), "utf8");
+    const ladder = readModuleSource(resolve(here, "../services/ServiceLadder.tsx"), resolve(here, "../services/service-ladder"));
     assert.match(ladder, /value=\{typing \?\? value\}/);
     assert.match(ladder, /placeholder=\{id === "base" \? "0" : "—"\}/);
-    const sheet = readFileSync(resolve(here, "../services/ServiceSheet.tsx"), "utf8");
+    const sheet = readModuleSource(resolve(here, "../services/ServiceSheet.tsx"), resolve(here, "../services/service-sheet"));
     assert.match(sheet, /rowPrice: draftValue\(unit, qtyOf\(v\), "unit"\),/);
   });
 

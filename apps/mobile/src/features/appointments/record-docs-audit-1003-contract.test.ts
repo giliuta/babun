@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 import { invoiceEditorSource } from "../invoices/invoice-editor/editor-source";
 import { bookFormSource } from "./book-form/source-for-tests";
 import { clientCardSource } from "../clients/card/source-for-tests";
@@ -16,7 +17,8 @@ const src = (rel: string) => readFileSync(resolve(here, "..", rel), "utf8");
 describe("аудит записи, инвойсов и SMS 03.10", () => {
   test("оплата судит «визит начался» по часам команды записи", () => {
     assert.match(src("appointments/business-now.ts"), /export function useBusinessNow\(teamId\?: string \| null\)/);
-    assert.match(src("appointments/PaymentBlock.tsx"), /useBusinessNow\(teamId\)/);
+    const block = readModuleSource(resolve(here, "PaymentBlock.tsx"), resolve(here, "payment-block"));
+    assert.match(block, /useBusinessNow\(teamId\)/);
   });
 
   test("маршрут листа выезда и события — общей шторкой карт", () => {
