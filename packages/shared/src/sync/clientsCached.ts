@@ -34,7 +34,7 @@
 //
 // TWO PROJECTIONS (offline-plan rule 4). What lands in the queue payload is
 // the RAW DB-column projection the server accepts (built by `makeServerRow`
-// / `patchToRow` — NO `tag_ids`, nested arrays as jsonb). What lands in the
+// / `clientToUpdate` — NO `tag_ids`, nested arrays as jsonb). What lands in the
 // cache `data` is the full domain object (built by `makeCachedRow` /
 // `mergeCachedRow`). The two never mix: dispatch relays `payload` straight
 // to PostgREST; reads parse `data`.
@@ -70,6 +70,7 @@ import {
   deleteClient as repoDeleteClient,
   softDeleteClient as repoSoftDeleteClient,
   restoreClient as repoRestoreClient,
+  clientToUpdate,
 } from "../db/repositories/clients";
 import type { Client } from "../local/clients";
 import {
@@ -445,7 +446,7 @@ export async function updateClient(
     op: "update" as const,
     row_id: id,
     // Компания — для гейта очереди (`replayer.ts`), на сервер она не уходит.
-    payload: { ...patchToRow(scrubbedPatch), tenant_id: tenantId } as Record<string, unknown>,
+    payload: { ...clientToUpdate(scrubbedPatch), tenant_id: tenantId } as Record<string, unknown>,
     expected_updated_at: expectedUpdatedAt,
   };
 
@@ -788,7 +789,7 @@ async function refetchAndCacheOne(
 
 /** `created_by` is left out on purpose: the column default `auth.uid()`
  *  stamps the creator, and an explicit NULL would override it. */
-function makeServerRow(
+export function makeServerRow(
   input: Client,
   tenantId: string,
   id: string,
@@ -856,45 +857,3 @@ function makeServerRow(
   };
 }
 
-function patchToRow(patch: Partial<Client>): Partial<CachedClient> {
-  // Mirror only the columns Supabase will accept. Nested arrays go
-  // straight through as jsonb.
-  const out: Partial<CachedClient> = {};
-  if (patch.full_name !== undefined) out.full_name = patch.full_name;
-  if (patch.phone !== undefined) out.phone = patch.phone;
-  if (patch.legal_name !== undefined) out.legal_name = patch.legal_name ?? null;
-  if (patch.vat_number !== undefined) out.vat_number = patch.vat_number ?? null;
-  if (patch.reg_number !== undefined) out.reg_number = patch.reg_number ?? null;
-  if (patch.billing_address !== undefined) out.billing_address = patch.billing_address ?? null;
-  if (patch.requisites !== undefined) out.requisites = patch.requisites as unknown as CachedClient["requisites"];
-  if (patch.memberships !== undefined) out.memberships = patch.memberships as unknown as CachedClient["memberships"];
-  if (patch.whatsapp_phone !== undefined) out.whatsapp_phone = patch.whatsapp_phone;
-  if (patch.email !== undefined) out.email = patch.email;
-  if (patch.sms_name !== undefined) out.sms_name = patch.sms_name;
-  if (patch.telegram_username !== undefined) out.telegram_username = patch.telegram_username;
-  if (patch.instagram_username !== undefined) out.instagram_username = patch.instagram_username;
-  if (patch.balance !== undefined) out.balance = patch.balance;
-  if (patch.discount !== undefined) out.discount = patch.discount;
-  if (patch.comment !== undefined) out.comment = patch.comment;
-  if (patch.acquisition_source !== undefined) out.acquisition_source = patch.acquisition_source;
-  if (patch.referred_by_client_id !== undefined) out.referred_by_client_id = patch.referred_by_client_id;
-  if (patch.first_contact_date !== undefined) out.first_contact_date = patch.first_contact_date;
-  if (patch.address !== undefined) out.address = patch.address;
-  if (patch.city !== undefined) out.city = patch.city;
-  if (patch.city_manual !== undefined) out.city_manual = patch.city_manual;
-  if (patch.property_type !== undefined) out.property_type = patch.property_type;
-  if (patch.birthday !== undefined) out.birthday = patch.birthday;
-  if (patch.blacklisted !== undefined) out.blacklisted = patch.blacklisted;
-  if (patch.pinned_at !== undefined) out.pinned_at = patch.pinned_at;
-  if (patch.reminder_at !== undefined) out.reminder_at = patch.reminder_at;
-  if (patch.phones !== undefined) out.phones = patch.phones as unknown as CachedClient["phones"];
-  if (patch.locations !== undefined) out.locations = patch.locations as unknown as CachedClient["locations"];
-  if (patch.notes !== undefined) out.notes = patch.notes as unknown as CachedClient["notes"];
-  if (patch.equipment !== undefined) out.equipment = patch.equipment as unknown as CachedClient["equipment"];
-  if (patch.phone_e164 !== undefined) out.phone_e164 = patch.phone_e164 ?? null;
-  if (patch.avatar_url !== undefined) out.avatar_url = patch.avatar_url ?? null;
-  if (patch.deleted_at !== undefined) out.deleted_at = patch.deleted_at ?? null;
-  if (patch.purge_at !== undefined) out.purge_at = patch.purge_at ?? null;
-  if (patch.favorite_master_id !== undefined) out.favorite_master_id = patch.favorite_master_id ?? null;
-  return out;
-}

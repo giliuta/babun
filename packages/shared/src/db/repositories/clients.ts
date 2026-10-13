@@ -256,7 +256,9 @@ export function rowToClient(r: ClientRow): Client {
   };
 }
 
-function clientToInsert(c: Client, tenantId: string): ClientInsert {
+/** Client → INSERT row. Exported so the offline row (`makeServerRow` in
+ *  sync/clientsCached.ts) can be checked against it in tests. */
+export function clientToInsert(c: Client, tenantId: string): ClientInsert {
   return {
     id: c.id || undefined,
     tenant_id: tenantId,
@@ -320,7 +322,9 @@ function clientToInsert(c: Client, tenantId: string): ClientInsert {
   };
 }
 
-function clientToUpdate(patch: Partial<Client>): ClientUpdate {
+/** Client patch → UPDATE columns. The one mapper for online and queued
+ *  (offline) edits alike. */
+export function clientToUpdate(patch: Partial<Client>): ClientUpdate {
   const out: ClientUpdate = {};
   if (patch.full_name !== undefined) out.full_name = patch.full_name;
   if (patch.phone !== undefined) out.phone = patch.phone;
