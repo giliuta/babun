@@ -49,3 +49,12 @@ test("лист без футера на Android держит отступ нав
   assert.match(sheet, /\) : Platform\.OS === "android" && !keyboardShown \? \(/);
   assert.match(sheet, /<View style=\{\{ height: insets\.bottom \}\} \/>/);
 });
+
+test("уезжающий лист не тянется, отклонённый свайп возвращает лист", () => {
+  // Второй рывок во время выхода срывал анимацию — лист оставался
+  // смонтированным невидимкой со скримом, глотавшим каждый тап (13.10).
+  const sheet = read("BottomSheet.tsx");
+  assert.match(sheet, /const drag = Gesture\.Pan\(\)[\s\S]{0,700}\.enabled\(visible\)/);
+  assert.match(sheet, /runOnJS\(closeFromDrag\)\(\);/);
+  assert.match(sheet, /if \(!visibleRef\.current\) return;\s*ty\.value = withSpring\(0/);
+});
