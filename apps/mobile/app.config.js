@@ -4,6 +4,14 @@
 //   APP_VARIANT=development → «Babun Dev», com.babun.crm.dev, scheme babundev
 //   без переменной         → боевой Babun как в app.json (релиз/TestFlight)
 const IS_DEV = process.env.APP_VARIANT === "development";
+// ВХОД ЧЕРЕЗ GOOGLE РОДНЫМ ОКНОМ (13.10): клиентские id Google — публичные,
+// живут в google-oauth.json (его же читает приложение). Плагин нужен iOS:
+// он прописывает URL-схему iOS-клиента; без id плагин не ставим — сборка без
+// него идёт как раньше, а кнопка Google на iPhone не появляется.
+const GOOGLE_OAUTH = require("./google-oauth.json");
+const GOOGLE_IOS_SCHEME = GOOGLE_OAUTH.ios
+  ? `com.googleusercontent.apps.${GOOGLE_OAUTH.ios.replace(/\.apps\.googleusercontent\.com$/, "")}`
+  : null;
 
 // ССЫЛКИ НА babun.app ОТКРЫВАЮТ ПРИЛОЖЕНИЕ (04.10, выпуск в магазины).
 // Кнопки писем Babun и приглашения партнёру ведут на https://babun.app —
@@ -59,6 +67,9 @@ module.exports = ({ config }) => ({
       "react-native-document-scanner-plugin",
       { cameraPermission: imagePickerCameraText(config.plugins) },
     ],
+    ...(GOOGLE_IOS_SCHEME && !IS_DEV
+      ? [["@react-native-google-signin/google-signin", { iosUrlScheme: GOOGLE_IOS_SCHEME }]]
+      : []),
   ],
   // КАРТА НА ANDROID (выпуск в Google Play, 04.10): там у react-native-maps
   // один провайдер — Google, и без ключа карта точки объекта пустая. Ключ —
