@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { Linking } from "react-native";
 import {
   Briefcase,
   Home,
@@ -18,13 +17,12 @@ import {
   isDialOnly,
 } from "@/features/clients/phone";
 import { useDefaultCountry } from "@/features/clients/default-country";
-import { FieldRow, RowActionButton } from "@/components/ui/card-rows";
+import { FieldRow } from "@/components/ui/card-rows";
 import {
   AddContactSheet,
   type AddContactChoice,
 } from "@/features/clients/AddContactSheet";
 import {
-  CONTACT_FIELDS,
   type ContactFieldId,
   type ContactHolder,
 } from "@/features/clients/contact-fields";
@@ -35,6 +33,8 @@ import { useCopyValue } from "@/lib/copy-value";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
+import { ContactFieldRows } from "@/features/clients/extra-contacts/ContactFieldRows";
+import { EXTRA_LABELS, nextExtraLabel } from "@/features/clients/extra-contacts/extra-labels";
 
 // ДОПОЛНИТЕЛЬНЫЕ КОНТАКТЫ КЛИЕНТА — строки блока идентичности под главным
 // номером: ещё номера (`client.phones`), мессенджеры и почта, и один плюс на
@@ -48,12 +48,6 @@ import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
  *  дёргал пересинхронизацию писателя. */
 const EMPTY_PHONES: PhoneEntry[] = [];
 
-// СТАНДАРТНЫЙ НАБОР ПОДПИСЕЙ, как в контактах iPhone (владелец 2026-07-27:
-// «что значит „Второй"? напиши сотовый, рабочий — стандартная, как у iPhone;
-// не муж-жена»). Родственные подписи («Супруг(а)») убраны: это про отношения,
-// а не про номер, и у бизнес-клиента их не бывает.
-const EXTRA_LABELS = ["Мобильный", "Рабочий", "Домашний", "WhatsApp", "Другой"];
-
 /** Значок подписи — тот же язык, что у остальных листов продукта. */
 const LABEL_ICONS: Record<string, LucideIcon> = {
   Мобильный: Smartphone,
@@ -62,11 +56,6 @@ const LABEL_ICONS: Record<string, LucideIcon> = {
   WhatsApp: MessageCircle,
   Другой: Phone,
 };
-
-function nextExtraLabel(existing: PhoneEntry[]): string {
-  const used = new Set(existing.map((p) => p.label));
-  return EXTRA_LABELS.find((l) => !used.has(l)) ?? "Другой";
-}
 
 export function ClientExtraContacts({
   client,
@@ -346,97 +335,21 @@ export function ClientExtraContacts({
         />
       ) : null}
 
-      {/* Способы связи, которые не являются номером: Telegram, Instagram,
-        WhatsApp на другом номере, почта. Стоят там же, где номера — это
-        такой же контакт этого же человека. Строка есть, только если поле
-        заполнено (или его сейчас заполняют): пустых полок не держим.
-        Раньше за ними надо было уходить на страницу «Ещё» внизу карточки. */}
-      {CONTACT_FIELDS.filter(
-        (f) => f.display(client).trim().length > 0 || addingField === f.id,
-      ).map((f) => {
-        const saved = f.display(client);
-        // Новая строка открывается СРАЗУ С ПРИСТАВКОЙ «@» (владелец
-        // 2026-08-02: «как код страны +357 у телефона»): стереть можно, но
-        // печатать её каждый раз не нужно.
-        const shown = saved || (addingField === f.id ? (f.prefix ?? "") : "");
-        const url = f.url(typing?.id === f.id ? typing.value : shown);
-        if (column !== undefined) {
-          // WhatsApp — номер: код страны в самом поле, как у телефона.
-          const wa = f.id === "whatsapp";
-          return (
-            <FieldRow
-              noCopy={noCopy}
-              key={f.id}
-              label={f.label}
-              column={column}
-              value={wa ? formatPhoneForDisplay(saved, country) : shown}
-              seed={wa ? dialPrefix(country) : undefined}
-              placeholder={f.placeholder}
-              separated
-              keyboardType={f.keyboardType}
-              autoCapitalize={f.autoCapitalize}
-              tabular={f.id === "whatsapp"}
-              readOnly={readOnly}
-              autoFocus={addingField === f.id}
-              onType={(v) => setTyping({ id: f.id, value: wa ? withHomeCode(v, country) : v })}
-              onSave={(v) => update(f.patch(wa ? withHomeCode(v, country) : v))}
-              onEditEnd={() => {
-                setAddingField(null);
-                setTyping(null);
-              }}
-              trailing={
-                url ? (
-                  <RowActionButton
-                    icon={f.icon}
-                    color={f.color}
-                    label={`${f.label} · открыть`}
-                    onPress={() => {
-                      haptics.tap();
-                      void Linking.openURL(url);
-                    }}
-                  />
-                ) : null
-              }
-            />
-          );
-        }
-        return (
-          <FieldRow
-            noCopy={noCopy}
-            key={f.id}
-            label={f.label}
-            value={shown}
-            placeholder={f.placeholder}
-            separated
-            stacked={!inline}
-            compact={compact}
-            keyboardType={f.keyboardType}
-            autoCapitalize={f.autoCapitalize}
-            tabular={f.id === "whatsapp"}
-            readOnly={readOnly}
-            autoFocus={addingField === f.id}
-            onType={(v) => setTyping({ id: f.id, value: v })}
-            onSave={(v) => update(f.patch(v))}
-            onEditEnd={() => {
-              setAddingField(null);
-              setTyping(null);
-            }}
-            trailing={
-              url ? (
-                <RowActionButton
-                  icon={f.icon}
-                  color={f.color}
-                  label={`${f.label} · открыть`}
-                  onPress={() => {
-                    haptics.tap();
-                    void Linking.openURL(url);
-                  }}
-                />
-              ) : null
-            }
-          />
-        );
-      })}
+      {/* Messengers and email: see `extra-contacts/ContactFieldRows`. */}
+      <ContactFieldRows
+        client={client}
+        update={update}
+        country={country}
+        column={column}
+        addingField={addingField}
+        setAddingField={setAddingField}
+        typing={typing}
+        setTyping={setTyping}
+        readOnly={readOnly}
+        noCopy={noCopy}
+        compact={compact}
+        inline={inline}
+      />
 
       {/* ОДИН ПЛЮС НА ВСЁ (владелец 2026-08-02): номер, WhatsApp, Telegram,
         Instagram, почта — выбираются в листе снизу, как метка или тег.

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 // ШАБЛОНЫ ИЗ ДРУГИХ КОМАНД — ВО ВСЕХ СПРАВОЧНИКАХ (владелец 11.10: «как с
 // услугами — со всеми: категории, метки и так далее»).
@@ -18,6 +19,16 @@ test("отбор шаблонов: другие команды, без заве�
   assert.match(src, /if \(!name \|\| here\.has\(name\) \|\| seen\.has\(name\)\) return false;/);
 });
 
+// Screens split into an entry and a parts folder (rule of 400 lines) are
+// read together with the folder: the sheet itself lives there.
+const PARTS: Record<string, string> = {
+  "../../features/reference/screens/LabelsScreen.tsx": "../../features/reference/screens/labels",
+  "../../features/reference/screens/ObjectTypesScreen.tsx": "../../features/reference/screens/object-types",
+  "../../../app/(dashboard)/clients/tags.tsx": "../../features/clients/tags-page",
+};
+const readWithParts = (rel: string) =>
+  readModuleSource(resolve(here, rel), PARTS[rel] && resolve(here, PARTS[rel]));
+
 const SHEETS: [string, string][] = [
   ["метки", "../../features/reference/screens/LabelsScreen.tsx"],
   ["типы событий", "../../features/reference/screens/EventTypeSheet.tsx"],
@@ -31,7 +42,7 @@ const SHEETS: [string, string][] = [
 
 for (const [name, path] of SHEETS) {
   test(`${name}: значок шаблонов в шапке шторки, список в той же шторке`, () => {
-    const src = read(path);
+    const src = readWithParts(path);
     assert.match(src, /<TemplatesHeaderButton picking=\{picking\}/);
     assert.match(src, /\{picking \? \(\s*<TemplateList/);
     assert.doesNotMatch(src, /chooseOption\(/);
@@ -48,6 +59,6 @@ test("шаблоны — только у владельца аккаунта", (
     "../../features/finances/CategoryEditorSheet.tsx",
     "../../features/sms/SmsTeamScreen.tsx",
   ]) {
-    assert.match(read(path), /const isOwner = useDataRole\(\)\.data === "owner";/, path);
+    assert.match(readWithParts(path), /const isOwner = useDataRole\(\)\.data === "owner";/, path);
   }
 });

@@ -26,7 +26,8 @@ describe("готовых тегов клиентов нет", () => {
 
   test("тег создаёт только человек — экраном «Теги клиентов»", () => {
     const app = resolve(here, "../../../app");
-    const tags = readFileSync(join(app, "(dashboard)/clients/tags.tsx"), "utf8");
+    // The route is thin; the page lives in `tags-page/`.
+    const tags = readModuleSource(join(app, "(dashboard)/clients/tags.tsx"), join(here, "tags-page"));
     assert.match(tags, /useCreateClientTag\(\)/);
     const queries = readModuleSource(join(here, "queries.ts"));
     assert.doesNotMatch(queries, /["']Постоянн|["']VIP["']/);

@@ -438,12 +438,12 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 |---|---|---|
 | Клиент (карточка = создание) | `src/features/clients/card/ClientDetailScreen.tsx` (страница — `card/ClientCardPage.tsx`, проводка — `card/use-client-card.ts`) | `app/(dashboard)/clients/[id].tsx` (маршрут вкладки), `app/(shared)/client.tsx` |
 | Логика черновика клиента | `src/features/clients/useClientDraft.ts` | — |
-| Объект (создание = правка) | `src/features/clients/ObjectSheet.tsx` + `ObjectFields.tsx` | — |
-| Метки (справочник) | `src/features/reference/screens/LabelsScreen.tsx` | `cabinet/labels.tsx`, `calendar/labels.tsx`, `clients/labels.tsx`, `(shared)/labels.tsx` (шестерёнка листа «Метка клиента», адрес — `useReferenceHref().labels`) |
+| Объект (создание = правка) | `src/features/clients/ObjectSheet.tsx` + `ObjectFields.tsx` (карта — `object-fields/ObjectMapPanel.tsx`) | — |
+| Метки (справочник) | `src/features/reference/screens/LabelsScreen.tsx` (лист — `labels/LabelEditSheet.tsx`, строка — `labels/LabelRow.tsx`, правила — `labels/label-rules.ts`, запись — `labels/use-label-actions.ts`) | `cabinet/labels.tsx`, `calendar/labels.tsx`, `clients/labels.tsx`, `(shared)/labels.tsx` (шестерёнка листа «Метка клиента», адрес — `useReferenceHref().labels`) |
 | Услуги (справочник) | `app/(dashboard)/cabinet/services.tsx` | `calendar/services.tsx`, `(shared)/services.tsx` |
 | Форма услуги прайса | `src/features/services/ServiceSheet.tsx` | — |
 | Своя услуга (запись, чек, инвойс) | `src/features/appointments/TotalSheet.tsx` (`onAddLine`) | значок в шапке «Итого» |
-| Типы объектов | `src/features/reference/screens/ObjectTypesScreen.tsx` | `cabinet/`, `clients/`, `(shared)/` |
+| Типы объектов | `src/features/reference/screens/ObjectTypesScreen.tsx` (лист — `object-types/TypeSheet.tsx`) | `cabinet/`, `clients/`, `(shared)/` |
 | Типы событий | `src/features/reference/screens/EventTypesScreen.tsx` | `cabinet/`, `calendar/`, `(shared)/` |
 | Запись и событие (форма) | `app/book/index.tsx` | — |
 | Вид и состав записи и события («Записи») | `src/features/calendar/design/DesignScreen.tsx` | `app/(dashboard)/(home)/calendar/design.tsx` |

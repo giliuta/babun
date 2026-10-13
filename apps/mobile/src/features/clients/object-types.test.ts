@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 import {
   findObjectType,
   objectTypeKey,
@@ -51,15 +52,16 @@ describe("тип объекта по метке", () => {
 
 describe("готовых типов нет нигде", () => {
   test("ни словарь, ни страница типов, ни ссылка клиенту не подставляют «Дом · Квартира · Офис»", () => {
-    const sources = [
-      "object-types.ts",
-      "location-request-form.ts",
-      "../reference/screens/ObjectTypesScreen.tsx",
-      "../../../app/l/[token].tsx",
-      "../../../../../packages/shared/src/local/location-labels.ts",
+    // Split screens are read as entry + parts folder (rule of 400 lines).
+    const sources: [string, string?][] = [
+      ["object-types.ts"],
+      ["location-request-form.ts"],
+      ["../reference/screens/ObjectTypesScreen.tsx", "../reference/screens/object-types"],
+      ["../../../app/l/[token].tsx", "location-link"],
+      ["../../../../../packages/shared/src/local/location-labels.ts"],
     ];
-    for (const path of sources) {
-      const code = read(path)
+    for (const [path, folder] of sources) {
+      const code = readModuleSource(resolve(here, path), folder && resolve(here, folder))
         .split("\n")
         .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
         .join("\n");
@@ -69,7 +71,10 @@ describe("готовых типов нет нигде", () => {
   });
 
   test("строка объекта и выбор объекта красят только существующим типом", () => {
-    assert.match(read("blocks/ObjectsBlock.tsx"), /findObjectType\(labelPresets, loc\.label\)/);
+    assert.match(
+      readModuleSource(resolve(here, "blocks/ObjectsBlock.tsx"), resolve(here, "blocks/objects-block")),
+      /findObjectType\(labelPresets, loc\.label\)/,
+    );
     assert.match(read("ObjectPickerSheet.tsx"), /findObjectType\(labelPresets, loc\.label\)/);
   });
 });

@@ -3,9 +3,13 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) => readFileSync(resolve(here, relative), "utf8");
+// Split into an entry and a parts folder (rule of 400 lines): the guards read both.
+const objectsBlock = () =>
+  readModuleSource(resolve(here, "blocks/ObjectsBlock.tsx"), resolve(here, "blocks/objects-block"));
 
 // ЖИЛЬЦЫ ОБЪЕКТА: ОДНА ДВЕРЬ, ОДНО ОКНО ЗА РАЗ, ОДНА ШТОРКА ВЫБОРА (STORY-086).
 //
@@ -27,7 +31,7 @@ describe("жилец заводится в листе виллы и нигде �
   // полностью убираем, это перебор». Двери нет нигде.
   test("двери «Добавить жильца» нет ни в листе объекта, ни под виллами", () => {
     const sheet = read("ObjectEditSheet.tsx");
-    const block = read("blocks/ObjectsBlock.tsx");
+    const block = objectsBlock();
     assert.doesNotMatch(sheet, /addLabel="Добавить жильца"/, "в лист объекта вернулась дверь жильца");
     assert.doesNotMatch(sheet, /<ClientLinksBlock/, "в лист объекта вернулся блок «Жильцы»");
     // Ищется ДВЕРЬ, а не слово: почему её здесь нет, написано в самом файле
@@ -51,7 +55,7 @@ describe("жилец заводится в листе виллы и нигде �
   });
 
   test("под виллой на странице — только показание, без правки", () => {
-    const block = read("blocks/ObjectsBlock.tsx");
+    const block = objectsBlock();
     // Строка жильцов приходит готовой и печатается как есть.
     assert.match(block, /residents=\{residentsFor\?\.\(loc\)\}/);
     // Ни строк связей, ни поля роли: правится роль только там, где человек
