@@ -102,6 +102,7 @@ import {
   type SlotDraft,
 } from "@/features/calendar/BookSlotSheet";
 import { CalendarNotice } from "@/features/calendar/CalendarNotice";
+import { dayMonthLabel } from "@/features/calendar/day-month-label";
 import {
   useDayCities,
   useSetDayCity,
@@ -1417,6 +1418,11 @@ export default function CalendarTab() {
   const [slotDraft, setSlotDraft] = useState<SlotDraft | null>(null);
   /** Вопрос, накрывший шапку: «время нерабочее / уже прошло — всё равно?» */
   const [notice, setNotice] = useState<{
+    /** Новый тап — новая плашка: время на ней сменилось, срок начинается
+     *  заново (владелец 13.10: «если тапаю ещё раз — время обновляется»). */
+    id: number;
+    /** Какое время тапнули: «13:00» сегодня, «7 октября, 13:00» — в другой день. */
+    when: string;
     message: string;
     onAction: () => void;
   } | null>(null);
@@ -3002,7 +3008,13 @@ export default function CalendarTab() {
         : null;
     if (reason) {
       haptics.warning();
+      const [ny, nm, nd] = dateYmd.split("-").map(Number);
       setNotice({
+        id: Date.now(),
+        when:
+          dateYmd === todayYmd
+            ? timeStart
+            : `${dayMonthLabel(new Date(ny, nm - 1, nd))}, ${timeStart}`,
         message: reason,
         onAction: () => {
           setNotice(null);
@@ -3274,6 +3286,8 @@ export default function CalendarTab() {
       />
       {notice ? (
         <CalendarNotice
+          key={notice.id}
+          when={notice.when}
           message={notice.message}
           actionLabel="Записать"
           onAction={notice.onAction}

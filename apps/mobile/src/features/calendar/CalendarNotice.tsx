@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { Clock } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 
 /**
@@ -22,12 +23,19 @@ import { useThemeColors } from "@/theme/colors";
  * на который в половине случаев отвечают «да, записывай». Поэтому: подложка
  * почти белая и слегка просвечивает, тон — один тонкий янтарный слой поверх
  * неё, и ни одной заливки в полный цвет. Громкость несёт кнопка, а не фон.
+ *
+ * ЧАСЫ И ВРЕМЯ (владелец 13.10, после проб и отката): слева значок часов,
+ * сверху мелким серым — какое время тапнули («7 октября, 13:00»), под ним
+ * вопрос чёрным, как весь текст приложения. Новый тап — новое время.
  */
 export function CalendarNotice({
+  when,
   message,
   actionLabel,
   onAction,
 }: {
+  /** Тапнутое время: «13:00» сегодня, «7 октября, 13:00» — в другой день. */
+  when: string;
   message: string;
   actionLabel: string;
   onAction: () => void;
@@ -53,8 +61,8 @@ export function CalendarNotice({
           в 100% это была бы та самая ядовитая плашка.
           ПОДЛОЖКА ПОЧТИ ГЛУХАЯ, И ЭТО НЕ ПРИДИРКА. На 0.94 сквозь неё
           проступали «Август 2026» и «Неделя» — буквы ложились на буквы, и
-          тихая плашка читалась как дефект вёрстки. Прозрачность осталась
-          ровно настолько, чтобы под ней угадывалась поверхность, а не текст. */}
+          тихая плашка читалась как дефект вёрстки. С 13.10 подложка глухая:
+          и на 0.985 «Октябрь 2026» проступал сквозь серое время. */}
       <View
         style={{
           position: "absolute",
@@ -62,7 +70,7 @@ export function CalendarNotice({
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: "rgba(255,255,255,0.985)",
+          backgroundColor: t.surface,
         }}
       />
       <View
@@ -86,13 +94,23 @@ export function CalendarNotice({
           gap: 8,
         }}
       >
-        <Text
-          numberOfLines={1}
-          maxFontSizeMultiplier={1.2}
-          style={{ flex: 1, fontSize: 14, fontWeight: "600", color: t.warning }}
-        >
-          {message}
-        </Text>
+        <Clock size={18} color={t.warning} strokeWidth={2.2} />
+        <View style={{ flex: 1 }}>
+          <Text
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.2}
+            style={{ fontSize: 12, color: t.sub, fontVariant: ["tabular-nums"] }}
+          >
+            {when}
+          </Text>
+          <Text
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.2}
+            style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
+          >
+            {message}
+          </Text>
+        </View>
         <Pressable
           onPress={onAction}
           accessibilityRole="button"
