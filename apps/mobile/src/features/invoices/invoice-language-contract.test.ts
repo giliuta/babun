@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 import { invoiceEditorSource } from "./invoice-editor/editor-source";
 import { UI_LOCALES } from "@babun/shared/i18n/locales";
 import type { InvoiceLedgerWithLines } from "@babun/shared/local/finance/invoice-ledger";
@@ -30,7 +31,8 @@ describe("язык бумаги инвойса", () => {
   // Владелец 2026-10-04: «в инвойсе не надо менять язык; если надо — пусть
   // переделывает полностью». Язык — в превью выставления и правки.
   test("у выставленного инвойса язык не переключается — только через «Изменить»", () => {
-    const page = read("../../../app/invoices/[id].tsx");
+    // The page is the thin route plus `detail/`.
+    const page = readModuleSource(resolve(here, "../../../app/invoices/[id].tsx"), resolve(here, "detail"));
     assert.doesNotMatch(page, /useSetInvoiceLanguage|Бумага на (русском|английском)/);
     assert.match(page, /useInvoiceMenu\(\)/);
     assert.match(read("invoice-menu.ts"), /label: "Изменить инвойс",[^}]*run: edit/);
@@ -123,7 +125,10 @@ describe("язык бумаги инвойса", () => {
     assert.match(read("../documents/use-receipt-source.ts"), /isUiLocale\(rowLanguage\) \? rowLanguage : "en"/);
     assert.match(editor, /language=\{\{ value: localeInfo\(language\)\.name, onPress: \(\) => setLanguageOpen\(true\) \}\}/);
     assert.match(editor, /<PaperLanguageSheet\s+visible=\{languageOpen\}\s+value=\{language\}\s+onChange=\{setLanguage\}/);
-    assert.match(read("InvoiceBlocks.tsx"), /<InvoiceRequisitesBlock[\s\S]*?language=\{language\}/);
+    assert.match(
+      readModuleSource(resolve(here, "InvoiceBlocks.tsx"), resolve(here, "invoice-blocks")),
+      /<InvoiceRequisitesBlock[\s\S]*?language=\{language\}/,
+    );
   });
 
   test("перед выставлением язык — блоком «Язык» и вторым шагом листа", () => {

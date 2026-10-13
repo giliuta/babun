@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { unsentChangesNote } from "./unsent-changes";
+import { readModuleSource } from "./module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -38,9 +39,10 @@ describe("выход и неотправленные правки (аудит 03
         local.indexOf("unsentChangesNow()") < local.indexOf("signOutScopeAndWipe(\"local\")"),
       "«Выйти» читает очередь раньше, чем стирает",
     );
-    const account = readFileSync(
+    // The page is the thin route plus `features/cabinet/account/`.
+    const account = readModuleSource(
       resolve(here, "../../app/(dashboard)/cabinet/account.tsx"),
-      "utf8",
+      resolve(here, "../features/cabinet/account"),
     );
     assert.match(account, /await unsentChangesNow\(\)/);
   });

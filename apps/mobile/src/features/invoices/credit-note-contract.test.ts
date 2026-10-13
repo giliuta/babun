@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 // КРЕДИТ-НОТА — ФОРМА → ПРЕВЬЮ → «ВЫПИСАТЬ» (владелец 2026-10-04: «сначала
 // превью… закрепляется чётко за инвойсом»). Страница инвойса не выпускает
@@ -17,7 +18,11 @@ describe("кредит-нота", () => {
     const menu = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "invoice-menu.ts"), "utf8");
     assert.match(menu, /router\.push\(`\/invoices\/credit-note\?invoiceId=\$\{invoice\.id\}`/);
     assert.doesNotMatch(menu, /useCancelInvoice/);
-    assert.doesNotMatch(read("[id].tsx"), /useCancelInvoice/);
+    // The page is the thin route plus `src/features/invoices/detail/`.
+    assert.doesNotMatch(
+      readModuleSource(resolve(app, "[id].tsx"), resolve(app, "../../src/features/invoices/detail")),
+      /useCancelInvoice/,
+    );
   });
 
   test("выпуск — из листа превью формы", () => {

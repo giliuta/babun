@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { readModuleSource } from "@/lib/module-source";
 import { financesScreenSource } from "./home/screen-source";
 
 // «ФИНАНСЫ» ПО УРОВНЮ — ПРОВЕРКА ПОДКЛЮЧЕНИЯ (этап 2 доступа).
@@ -19,6 +20,9 @@ const strip = (source: string) =>
     .replace(/\s+/g, " ");
 
 const read = (rel: string) => strip(readFileSync(join(__dirname, rel), "utf8"));
+/** A component entry together with its parts folder. */
+const readParts = (rel: string, folder: string) =>
+  strip(readModuleSource(join(__dirname, rel), join(__dirname, folder)));
 
 describe("экран «Финансы» спрашивает уровень один раз", () => {
   // The route is layout only; the screen's logic lives in `home/`: read both.
@@ -125,14 +129,14 @@ describe("двери и подписи по уровню", () => {
   });
 
   test("витрина операции рисует только открытые действия", () => {
-    const popup = read("TransactionPopup.tsx");
+    const popup = readParts("TransactionPopup.tsx", "transaction-popup");
     assert.match(popup, /const canRefund = \(allow\?\.refund \?\? true\) &&/);
     assert.match(popup, /const canDelete = \(allow\?\.remove \?\? true\) &&/);
     assert.match(popup, /const canInvoice = \(allow\?\.invoice \?\? true\) &&/);
   });
 
   test("лист долга на «Смотрит»: серое сохранение и без карточки «Ещё»", () => {
-    const sheet = read("DebtSheet.tsx");
+    const sheet = readParts("DebtSheet.tsx", "debt-sheet");
     assert.match(sheet, /disabled=\{!canSave \|\| !canWrite\}/);
     assert.match(sheet, /\{!canWrite \? \( <Text/);
     assert.match(sheet, /\{isEdit && debt && canWrite \?/);
