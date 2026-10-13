@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { Check } from "lucide-react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useToast } from "@/components/ui/Toast";
@@ -41,6 +42,12 @@ export function CalendarOfferSheet({
   const role = useCurrentRole().data;
   const startTrial = useStartTrial();
   const [paying, setPaying] = useState(false);
+  const qc = useQueryClient();
+  // ЧТО ДЕЛАТЬ, КОГДА ЛИСТ УЕДЕТ (13.10). Лист создания календаря — второе
+  // окно: открытое, пока это ещё уезжает, iOS не показывает («already
+  // presenting»), и невидимое окно глотает тапы. Как у остальных листов —
+  // через `onExited`.
+  const afterExit = useRef<(() => void) | null>(null);
   const owner = role === "owner";
   const next = calendars + 1;
   const canTrial = owner && !state.trial && !state.trialUsed && !state.paid;
@@ -49,8 +56,8 @@ export function CalendarOfferSheet({
     try {
       await startTrial.mutateAsync("max");
       toast("Пробный — 14 дней", "success");
+      afterExit.current = onUnlocked;
       onClose();
-      onUnlocked();
     } catch (e) {
       notify("Пробный не включился", e instanceof Error ? e.message : undefined);
     }
@@ -59,7 +66,19 @@ export function CalendarOfferSheet({
   const pay = async () => {
     setPaying(true);
     try {
-      await openTariffCheckout("max", null, next);
+      const result = await openTariffCheckout("max", null, next);
+      // ПОДПИСКА УЖЕ ЕСТЬ — СЕРВЕР МЕНЯЕТ ЕЁ НА МЕСТЕ, без браузера (13.10).
+      // Раньше лист молча закрывался: ни тоста, ни нового тарифа, и
+      // «Добавить» снова открывал это же предложение.
+      if (result === "changed" || result === "same") {
+        // Тариф пишет вебхук Stripe — через пару секунд.
+        void qc.invalidateQueries({ queryKey: ["tenant"] });
+        setTimeout(() => void qc.invalidateQueries({ queryKey: ["tenant"] }), 4000);
+      }
+      if (result === "changed") {
+        toast("Оплата за календари обновлена", "success");
+        afterExit.current = onUnlocked;
+      }
       onClose();
     } catch (e) {
       notify("Оплата не открылась", e instanceof Error ? e.message : undefined);
@@ -80,6 +99,11 @@ export function CalendarOfferSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
+      onExited={() => {
+        const run = afterExit.current;
+        afterExit.current = null;
+        run?.();
+      }}
       title="Новый календарь"
       padded={false}
       footer={
