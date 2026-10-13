@@ -31,6 +31,7 @@ describe("matchesClient", () => {
         id: "location-1",
         label: "Офис",
         address: "Agias Fylaxeos 10",
+        isPrimary: true,
         note: "Код ворот 42",
         equipment: [
           {

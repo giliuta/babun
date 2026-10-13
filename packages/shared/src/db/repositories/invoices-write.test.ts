@@ -92,8 +92,8 @@ function lineRow(overrides: Record<string, unknown> = {}) {
  *  invoice_lines), — иначе половина сторожа остаётся непроверенной. */
 function fakeSupabase(opts: {
   rpc?: { data: unknown; error: { message: string } | null };
-  savedLines?: Array<Record<string, unknown>>;
-  calls?: Array<Record<string, unknown>>;
+  savedLines?: Record<string, unknown>[];
+  calls?: Record<string, unknown>[];
 }) {
   const rpcResult = opts.rpc ?? { data: invoiceRow(), error: null };
   const savedLines = opts.savedLines ?? [lineRow()];
@@ -165,7 +165,7 @@ const SERVER_OWNED_COLUMNS = new Set(["invoice_id", "position", "total"]);
 
 describe("строка счёта доезжает до сервера целиком", () => {
   it("кладёт описание и единицу в p_lines", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await issueInvoice(fakeSupabase({ calls }), TENANT, issueDraft);
 
     expect(calls[0]?.name).toBe("issue_invoice");
@@ -179,10 +179,10 @@ describe("строка счёта доезжает до сервера цели�
   });
 
   it("шлёт ровно те поля, которые пишет серверная вставка", async () => {
-    const calls: Array<Record<string, unknown>> = [];
+    const calls: Record<string, unknown>[] = [];
     await issueInvoice(fakeSupabase({ calls }), TENANT, issueDraft);
     const sent = Object.keys(
-      (calls[0]?.p_lines as Array<Record<string, unknown>>)[0],
+      (calls[0]?.p_lines as Record<string, unknown>[])[0],
     ).sort();
     const expected = serverLineColumns()
       .filter((column) => !SERVER_OWNED_COLUMNS.has(column))

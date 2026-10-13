@@ -229,7 +229,7 @@ export async function listAccountBalances(
   if (error) throw new Error(error.message || "Не удалось посчитать остатки");
   // Генератор типов Supabase не размечает NULL в колонках setof-функции, а
   // они здесь настоящие: строка «без счёта» и счёт без единой операции.
-  const rows: Array<{
+  const rows: {
     account_id: string | null;
     delta: number | null;
     has_history: boolean | null;
@@ -237,7 +237,7 @@ export async function listAccountBalances(
     last_outflow_on: string | null;
     last_tx_on: string | null;
     first_tx_on: string | null;
-  }> = data ?? [];
+  }[] = data ?? [];
   return rows.map((r) => ({
     account_id: r.account_id,
     delta: Number(r.delta ?? 0),
@@ -290,9 +290,7 @@ export async function listRefundTotals(
       .order("id", { ascending: true })
       .limit(LEDGER_PAGE_SIZE);
     if (error) throw new Error(`listRefundTotals: ${error.message}`);
-    const page = (data ?? []) as Array<
-      Pick<Row, "id" | "refund_of_id" | "amount">
-    >;
+    const page = (data ?? []) as Pick<Row, "id" | "refund_of_id" | "amount">[];
     for (const row of page) {
       if (!row.refund_of_id) continue;
       totals.set(

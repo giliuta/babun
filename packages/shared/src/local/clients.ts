@@ -1,6 +1,7 @@
 // Clients data layer — форма клиента, объекты, техника и долг по записям.
 
 import { generateId } from "./masters";
+import { getDebtAmount, type Appointment } from "./appointments";
 
 // STORY-036: client ids must be uuid-shaped because the canonical
 // store is now Supabase (clients.id is uuid pk). `crypto.randomUUID`
@@ -15,7 +16,6 @@ function newClientId(): string {
   }
   return generateId("cli");
 }
-import { getDebtAmount, type Appointment } from "./appointments";
 
 export interface ClientTag {
   id: string;

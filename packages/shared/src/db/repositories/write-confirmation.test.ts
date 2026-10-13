@@ -70,6 +70,7 @@ describe("repository write confirmation", () => {
     };
     await expect(
       insertAccount(noDatabase as never, TENANT, {
+        scope: "team",
         brigade_id: "team-1",
         name: "Касса",
         kind: "cash",

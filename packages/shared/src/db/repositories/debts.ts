@@ -106,11 +106,11 @@ export async function listDebtPaidTotals(
       .order("id", { ascending: true })
       .limit(DEBTS_PAGE_SIZE);
     if (error) throw new Error(`listDebtPaidTotals: ${error.message}`);
-    const page = (data ?? []) as Array<{
+    const page = (data ?? []) as {
       id: string;
       debt_id: string | null;
       amount: number;
-    }>;
+    }[];
     for (const row of page) {
       if (!row.debt_id) continue;
       totals.set(

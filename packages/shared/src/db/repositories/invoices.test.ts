@@ -32,8 +32,8 @@ function invoiceRow(index: number) {
 describe("invoice repository paging", () => {
   it("reads past the PostgREST 1000-row cap with a stable total order", async () => {
     const source = Array.from({ length: 1001 }, (_, index) => invoiceRow(index + 1));
-    const ranges: Array<[number, number]> = [];
-    const orderCalls: Array<[string, boolean]> = [];
+    const ranges: [number, number][] = [];
+    const orderCalls: [string, boolean][] = [];
     const supabase = {
       from: () => {
         const builder = {

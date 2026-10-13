@@ -4,14 +4,14 @@ name: CI
 # on 2026-08-25 — the web target is now Expo Web, exported from apps/mobile,
 # so there is a single codebase behind iOS, Android and Web.
 #
-#   typecheck — `tsc --noEmit` over apps/mobile (which pulls in
-#               packages/shared through the path alias). Hard gate.
-#   test      — `vitest run` over apps/** and packages/**. Hard gate.
+#   typecheck — `tsc --noEmit` over apps/mobile and, separately, over the
+#               whole of packages/shared (its tests included). Hard gate.
+#   test      — `bun test` over apps/** and packages/**. Hard gate.
 #   build:web — `expo export --platform web`, the exact command Vercel
 #               runs. Catches web-only breakage (native-only modules,
 #               missing shims) before it reaches a deploy.
-#
-# Lint stays informational — see the pre-existing React-Compiler hints.
+#   lint      — eslint over apps/mobile and packages/shared. Hard gate on
+#               errors; warnings are reported, not blocking.
 #
 # BUN ЗАКРЕПЛЁН (`.bun-version`, 2026-09-07). Без версии setup-bun ставит
 # свежайший bun, а с ним — свежие ICU и tzdata. Тесты поясов сверяют группы
@@ -49,7 +49,7 @@ jobs:
       - run: bun run typecheck
 
   test:
-    name: vitest
+    name: bun test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +78,7 @@ jobs:
         run: bun run build:web
 
   lint:
-    name: eslint (informational)
+    name: eslint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,5 +87,4 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - name: ESLint
-        continue-on-error: true
         run: bun run lint

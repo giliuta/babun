@@ -28,6 +28,9 @@ import {
   dequeueAll,
   removeOp,
   markOpPermanentlyFailed,
+  type CachedAppointmentData,
+  type CachedClientData,
+  type CachedTag,
 } from "../db/cache/sql";
 import {
   createClient,
@@ -57,6 +60,7 @@ import { ColdOfflineCacheMissError, OnlineOnlyWriteError } from "./cache-errors"
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
 const OTHER_TENANT = "22222222-2222-2222-2222-222222222222";
+const TEAM = "33333333-3333-4333-8333-333333333333";
 const CLIENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const APPT_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
@@ -150,7 +154,7 @@ function emptyClientSnapshotSupabase() {
 }
 
 // The offline path never calls Supabase; a bare stub satisfies the type.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const stubSupabase = {} as any;
 
 beforeEach(() => {
@@ -180,7 +184,7 @@ describe("clients cache-of-domain", () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
 
     expect(server.readPages()).toBe(0);
-    const cached = await cacheRead<Record<string, unknown>>("clients", TENANT);
+    const cached = await cacheRead<CachedClientData>("clients", TENANT);
     expect(cached.map((row) => row.id)).toEqual([CLIENT_ID]);
   });
 
@@ -200,7 +204,7 @@ describe("clients cache-of-domain", () => {
     setNetwork(new OfflineNetwork());
     expect(await listClients(stubSupabase, OTHER_TENANT)).toEqual([]);
     // Строка A и её операция на месте.
-    const cachedA = await cacheRead<Record<string, unknown>>("clients", TENANT);
+    const cachedA = await cacheRead<CachedClientData>("clients", TENANT);
     expect(cachedA.map((row) => row.id)).toEqual([CLIENT_ID]);
     expect((await dequeueAll()).map((op) => op.row_id)).toEqual([CLIENT_ID]);
   });
@@ -257,12 +261,12 @@ describe("clients cache-of-domain", () => {
     expect(c.locations[0]!.equipment).toHaveLength(1);
     expect(c.notes[0]!.text).toBe("звонить после 18");
     // The domain read must NOT leak the cache bookkeeping keys.
-    expect((c as Record<string, unknown>).tenant_id).toBeUndefined();
-    expect((c as Record<string, unknown>).updated_at).toBeUndefined();
+    expect((c as Partial<CachedClientData>).tenant_id).toBeUndefined();
+    expect((c as Partial<CachedClientData>).updated_at).toBeUndefined();
 
     // 2. Raw cache row (what physically lands in `data`) carries the
     //    denorm keys the SQL layer needs.
-    const raw = await cacheRead<Record<string, unknown>>("clients", TENANT);
+    const raw = await cacheRead<CachedClientData>("clients", TENANT);
     expect(raw[0]!.tenant_id).toBe(TENANT);
     expect(typeof raw[0]!.updated_at).toBe("string");
 
@@ -348,11 +352,11 @@ describe("clients cache-of-domain", () => {
     // видел НИКТО — ни рабочий список, ни экран архива (тот читал прямо с
     // сервера, где клиент ещё числился живым). Владелец 2026-08-08:
     // «заархивировал — куда он делся». Теперь он всегда где-то виден.
-    const cached = (await cacheRead("clients", TENANT)) as Array<{
+    const cached = (await cacheRead("clients", TENANT)) as {
       id: string;
       deleted_at: string | null;
       purge_at: string | null;
-    }>;
+    }[];
     expect(cached).toHaveLength(1);
     expect(cached[0]!.id).toBe(CLIENT_ID);
     expect(typeof cached[0]!.deleted_at).toBe("string");
@@ -482,7 +486,7 @@ describe("clients cache-of-domain", () => {
       ),
     ).rejects.toThrow("Его номер уже у другого клиента");
 
-    const cached = await cacheRead<Record<string, unknown>>("clients", TENANT);
+    const cached = await cacheRead<CachedClientData>("clients", TENANT);
     expect(cached.map((row) => row.id)).toEqual([CLIENT_ID]);
     expect(cached[0]!.deleted_at).not.toBeNull();
     expect(await dequeueAll()).toEqual([]);
@@ -509,7 +513,7 @@ describe("clients cache-of-domain", () => {
       ),
     ).rejects.toThrow("row-level security");
 
-    const [cached] = await cacheRead<Record<string, unknown>>("clients", TENANT);
+    const [cached] = await cacheRead<CachedClientData>("clients", TENANT);
     expect(cached?.full_name).toBe("До изменения");
     expect((await dequeueAll()).length).toBe(queuedBefore);
   });
@@ -605,7 +609,7 @@ describe("appointments cache-of-domain", () => {
 
     setNetwork(new OfflineNetwork());
     expect(await listAppointments(stubSupabase, OTHER_TENANT)).toEqual([]);
-    const cachedA = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    const cachedA = await cacheRead<CachedAppointmentData>("appointments", TENANT);
     expect(cachedA.map((row) => row.id)).toEqual([APPT_ID]);
   });
 
@@ -629,7 +633,7 @@ describe("appointments cache-of-domain", () => {
     await listAppointments(server.client as never, TENANT);
     await new Promise((resolve) => setTimeout(resolve, 30));
 
-    const cached = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    const cached = await cacheRead<CachedAppointmentData>("appointments", TENANT);
     expect(cached.map((row) => row.id)).toEqual([APPT_ID]);
   });
 
@@ -645,10 +649,10 @@ describe("appointments cache-of-domain", () => {
       time_start: "09:00",
       time_end: "10:00",
       services: [
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         { id: "s1", name: "Чистка", price: 50, duration: 60 } as any,
       ],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       expenses: [{ id: "e1", label: "фреон", amount: 10 } as any],
       service_ids: ["svc-1", "svc-2"],
     });
@@ -664,10 +668,10 @@ describe("appointments cache-of-domain", () => {
     expect(a.expenses).toHaveLength(1);
     expect(a.service_ids).toEqual(["svc-1", "svc-2"]);
     // No leaked bookkeeping key.
-    expect((a as Record<string, unknown>).tenant_id).toBeUndefined();
+    expect((a as Partial<CachedAppointmentData>).tenant_id).toBeUndefined();
 
     // Raw cache row carries the denorm keys (tenant_id / date / updated_at).
-    const raw = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    const raw = await cacheRead<CachedAppointmentData>("appointments", TENANT);
     expect(raw[0]!.tenant_id).toBe(TENANT);
     expect(raw[0]!.date).toBe("2026-07-10");
     expect(typeof raw[0]!.updated_at).toBe("string");
@@ -742,7 +746,7 @@ describe("appointments cache-of-domain", () => {
       ),
     ).rejects.toThrow("row-level security");
 
-    const [cached] = await cacheRead<Record<string, unknown>>(
+    const [cached] = await cacheRead<CachedAppointmentData>(
       "appointments",
       TENANT,
     );
@@ -805,7 +809,7 @@ describe("appointments cache-of-domain", () => {
     );
     for (const op of await dequeueAll()) await removeOp(op.id);
     setNetwork(new OnlineNetwork());
-    const [before] = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    const [before] = await cacheRead<CachedAppointmentData>("appointments", TENANT);
     // Пока телефон смотрел старую копию, другой телефон принял оплату.
     const serverRow = {
       id: APPT_ID,
@@ -869,7 +873,7 @@ describe("appointments cache-of-domain", () => {
     // Правка шла только поверх той строки, что видел телефон.
     expect(seenUpdateFilters).toHaveLength(1);
     expect(seenUpdateFilters[0]!.updated_at).toBe(before!.updated_at);
-    const [cached] = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+    const [cached] = await cacheRead<CachedAppointmentData>("appointments", TENANT);
     expect(cached?.status).toBe("scheduled");
     expect(cached?.payment_status).toBe("paid");
     expect(await dequeueAll()).toHaveLength(0);
@@ -907,7 +911,7 @@ describe("appointments cache-of-domain", () => {
     await expect(
       updateAppointment(gone as never, APPT_ID, { time_start: "11:00" }, TENANT),
     ).rejects.toThrow("больше нет");
-    expect(await cacheRead<Record<string, unknown>>("appointments", TENANT)).toEqual([]);
+    expect(await cacheRead<CachedAppointmentData>("appointments", TENANT)).toEqual([]);
     expect(await dequeueAll()).toHaveLength(0);
   });
 
@@ -960,7 +964,7 @@ describe("appointments cache-of-domain", () => {
       deleteAppointment(semanticRejectSupabase() as never, APPT_ID, TENANT),
     ).rejects.toThrow("row-level security");
 
-    const cached = await cacheRead<Record<string, unknown>>(
+    const cached = await cacheRead<CachedAppointmentData>(
       "appointments",
       TENANT,
     );
@@ -973,7 +977,7 @@ describe("client tags offline and semantic failures", () => {
   test("правка тега встаёт за его ждущей правкой, а не обгоняет её (аудит 03.10)", async () => {
     const created = await createClientTag(
       stubSupabase,
-      { name: "A", color: "#3366ff" },
+      { name: "A", color: "#3366ff", team_id: TEAM },
       TENANT,
     );
     for (const op of await dequeueAll()) await removeOp(op.id);
@@ -1002,10 +1006,10 @@ describe("client tags offline and semantic failures", () => {
   test("offline create keeps one stable UUID in cache and replay payload", async () => {
     const created = await createClientTag(
       stubSupabase,
-      { name: "VIP", color: "#3366ff" },
+      { name: "VIP", color: "#3366ff", team_id: TEAM },
       TENANT,
     );
-    const [cached] = await cacheRead<Record<string, unknown>>("tags", TENANT);
+    const [cached] = await cacheRead<CachedTag>("tags", TENANT);
     const [op] = await dequeueAll();
 
     expect(cached?.id).toBe(created.id);
@@ -1018,7 +1022,7 @@ describe("client tags offline and semantic failures", () => {
     await expect(
       createClientTag(
         semanticRejectSupabase() as never,
-        { name: "Запрещено", color: "#3366ff" },
+        { name: "Запрещено", color: "#3366ff", team_id: TEAM },
         TENANT,
       ),
     ).rejects.toThrow("row-level security");
@@ -1030,7 +1034,7 @@ describe("client tags offline and semantic failures", () => {
   test("online semantic update and delete restore the cached tag", async () => {
     const created = await createClientTag(
       stubSupabase,
-      { name: "Исходная", color: "#3366ff" },
+      { name: "Исходная", color: "#3366ff", team_id: TEAM },
       TENANT,
     );
     // Вставка «ушла на сервер»: без неё в очереди правка в сети идёт напрямую
@@ -1047,7 +1051,7 @@ describe("client tags offline and semantic failures", () => {
         TENANT,
       ),
     ).rejects.toThrow("row-level security");
-    let [cached] = await cacheRead<Record<string, unknown>>("tags", TENANT);
+    let [cached] = await cacheRead<CachedTag>("tags", TENANT);
     expect(cached?.name).toBe("Исходная");
 
     await expect(
@@ -1057,7 +1061,7 @@ describe("client tags offline and semantic failures", () => {
         TENANT,
       ),
     ).rejects.toThrow("row-level security");
-    [cached] = await cacheRead<Record<string, unknown>>("tags", TENANT);
+    [cached] = await cacheRead<CachedTag>("tags", TENANT);
     expect(cached?.id).toBe(created.id);
     expect((await dequeueAll()).length).toBe(queuedBefore);
   });

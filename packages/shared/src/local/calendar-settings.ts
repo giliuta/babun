@@ -1,4 +1,3 @@
-export { TIMEZONE_OPTIONS } from "./timezones";
 // Calendar display settings. Persisted via the storage seam (WebKVStorage
 // on web, MMKV on RN).
 //
@@ -18,6 +17,7 @@ export { TIMEZONE_OPTIONS } from "./timezones";
 
 import type { CompanyFeatureKey } from "./company-features";
 import { getStorage } from "../storage/provider";
+export { TIMEZONE_OPTIONS } from "./timezones";
 
 /** Ситуации, которыми красится запись, когда своего цвета у неё нет. Список
  *  ЕДИНСТВЕННЫЙ: подписи к этим же идентификаторам живут в приложении

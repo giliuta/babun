@@ -44,9 +44,9 @@ function ledgerRow(index: number, overrides: Record<string, unknown> = {}) {
 }
 
 function pagedSupabase(
-  source: Array<Record<string, unknown>>,
-  ranges: Array<[number, number]>,
-  orders: Array<[string, boolean]>,
+  source: Record<string, unknown>[],
+  ranges: [number, number][],
+  orders: [string, boolean][],
 ) {
   return {
     from: () => {
@@ -93,8 +93,8 @@ function pagedSupabase(
 describe("finance transaction repository paging", () => {
   it("reads a date-range ledger past the PostgREST 1000-row cap", async () => {
     const source = Array.from({ length: 1001 }, (_, i) => ledgerRow(i + 1));
-    const ranges: Array<[number, number]> = [];
-    const orders: Array<[string, boolean]> = [];
+    const ranges: [number, number][] = [];
+    const orders: [string, boolean][] = [];
 
     const rows = await listTransactionsForRange(
       pagedSupabase(source, ranges, orders) as never,
@@ -120,8 +120,8 @@ describe("finance transaction repository paging", () => {
         refund_of_id: "income-1",
       }),
     );
-    const ranges: Array<[number, number]> = [];
-    const orders: Array<[string, boolean]> = [];
+    const ranges: [number, number][] = [];
+    const orders: [string, boolean][] = [];
 
     const totals = await listRefundTotals(
       pagedSupabase(source, ranges, orders) as never,

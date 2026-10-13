@@ -57,7 +57,7 @@ export function setStorage(impl: KVStorage): void {
 // сессия, чистка, кэш запросов, — вычисляется ДО `setStorage`, и чтение
 // при загрузке модуля бросало. Так шапка вкладок без сервера (`chrome-cache`)
 // при холодном старте не поднималась ни разу: чтение глоталось, «поднято 0».
-const _onReady: Array<() => void> = [];
+const _onReady: (() => void)[] = [];
 
 /** Run `fn` once the storage backend exists — now, if it already does. For
  *  work a module wants to do at load time: on native the backend is bound

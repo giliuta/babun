@@ -16,8 +16,6 @@ const account = (
   overrides: Partial<TransferAccountSnapshot> = {},
 ): TransferAccountSnapshot => ({
   id,
-  scope: "team",
-  brigade_id: "team-a",
   balance: 100,
   is_active: true,
   ...overrides,
@@ -47,13 +45,10 @@ describe("transferValidationError", () => {
 
   // ЗАПРЕТ «МЕЖДУ БРИГАДАМИ ТОЛЬКО ЧЕРЕЗ ОБЩИЙ СЧЁТ» СНЯТ (владелец
   // 2026-08-15): он существовал ради общего счёта, а того в продукте нет.
+  // The snapshot no longer carries a team, so no cross-team rule can apply.
   it("allows a direct transfer between two brigades", () => {
     expect(
-      transferValidationError(
-        account("from"),
-        account("to", { brigade_id: "team-b" }),
-        1,
-      ),
+      transferValidationError(account("from"), account("to"), 1),
     ).toBeNull();
   });
 

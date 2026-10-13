@@ -17,11 +17,17 @@
     "./sync/*":        { "types": "./src/sync/*.ts",              "default": "./src/sync/*.ts" },
     "./i18n/*":        { "types": "./src/i18n/*.ts",              "default": "./src/i18n/*.ts" }
   },
-  "scripts": {},
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "lint": "eslint src"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"
   },
   "peerDependencies": {
     "react": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14"
   }
 }

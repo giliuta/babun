@@ -74,8 +74,8 @@ async function listClientRows(
 async function listClientTagAssignments(
   supabase: DbSupabase,
   tenantId: string,
-): Promise<Array<{ client_id: string; tag_id: string }>> {
-  const rows: Array<{ client_id: string; tag_id: string }> = [];
+): Promise<{ client_id: string; tag_id: string }[]> {
+  const rows: { client_id: string; tag_id: string }[] = [];
   for (let offset = 0; ; offset += CLIENT_PAGE_SIZE) {
     const { data, error } = await supabase
       .from("client_tag_assignments")

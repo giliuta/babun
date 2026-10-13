@@ -22,6 +22,7 @@ const TENANT = "11111111-1111-1111-1111-111111111111";
 const tag = (id: string, name = id): CachedTag => ({
   id,
   tenant_id: TENANT,
+  team_id: "33333333-3333-3333-3333-333333333333",
   name,
   color: "#000",
   icon: null,

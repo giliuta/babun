@@ -26,6 +26,7 @@ import {
   cacheUpsert,
   cacheGetOne,
   markOpPermanentlyFailed,
+  type CachedAppointmentData,
   type CachedClient,
   type QueuedOp,
 } from "../db/cache/sql";
@@ -152,7 +153,7 @@ afterEach(() => {
   __resetCacheForTests();
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const asSupabase = (c: unknown) => c as any;
 
 describe("replayer — insert", () => {
@@ -772,7 +773,6 @@ describe("replayer — навсегда упавшая правка держит
       payload: { tenant_id: TENANT },
       expected_updated_at: null,
       attempts,
-      last_error: null,
     });
     expect(tenantRefreshHeld([op(1, UUID_A, MAX_ATTEMPTS), op(2, UUID_A, 0)], "appointments", TENANT)).toBe(false);
     expect(tenantRefreshHeld([op(1, UUID_A, MAX_ATTEMPTS), op(2, UUID_B, 0)], "appointments", TENANT)).toBe(true);
@@ -801,7 +801,6 @@ describe("replayer — навсегда упавшая правка держит
       payload: { id: UUID_A, tenant_id: TENANT, client_id: UUID_C },
       expected_updated_at: null,
       attempts: 0,
-      last_error: null,
     };
     const laterEdit: QueuedOp = { ...appointmentInsert, id: 3, created_at: 3, op: "update", payload: { tenant_id: TENANT } };
     expect(tenantRefreshHeld([clientInsert, appointmentInsert, laterEdit], "appointments", TENANT)).toBe(false);
@@ -946,7 +945,7 @@ describe("replayer — статус и деньги записи силой не
     expect(toasts).toHaveLength(1);
     expect(toasts[0]).toContain("не применена");
     expect(await queueDepth()).toBe(0);
-    const cached = await cacheGetOne<{ status: string; updated_at: string }>("appointments", UUID_A);
+    const cached = await cacheGetOne<CachedAppointmentData>("appointments", UUID_A);
     expect(cached?.status).toBe("scheduled");
   });
 

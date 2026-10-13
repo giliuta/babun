@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import type { Location } from "../../local/clients";
 import { listClients, listClientTags } from "./clients";
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
 
-function pagedSupabase(tables: Record<string, Array<Record<string, unknown>>>) {
+function pagedSupabase(tables: Record<string, Record<string, unknown>[]>) {
   return {
     from(table: string) {
       let rows = [...(tables[table] ?? [])];
@@ -100,7 +101,7 @@ describe("client repository paging", () => {
   // молчал при заполненных датах. Поле, добавленное в Location/ACUnit, но
   // забытое здесь, воспроизводит ровно эту потерю.
   test("объект и кондиционер доезжают до домена целиком (график ТО не теряется)", async () => {
-    const location = {
+    const location: Location = {
       id: "loc-1",
       label: "Дом",
       address: "Агиос Тихонас 21",

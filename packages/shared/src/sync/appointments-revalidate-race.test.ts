@@ -16,7 +16,11 @@ import {
   NavigatorOnlineNetwork,
 } from "../storage/sql/provider";
 import type { NetworkAdapter } from "../storage/sql/types";
-import { __resetCacheForTests, cacheRead } from "../db/cache/sql";
+import {
+  __resetCacheForTests,
+  cacheRead,
+  type CachedAppointmentData,
+} from "../db/cache/sql";
 import { cacheServerAppointment, listAppointments } from "./appointmentsCached";
 import { createBlankAppointment } from "../local/appointments";
 
@@ -36,7 +40,7 @@ type ListResult = { data: unknown[]; error: null };
 
 /** Сервер, чьи ответы на список записей отдаются по команде теста. */
 function slowServer() {
-  const pending: Array<(value: ListResult) => void> = [];
+  const pending: ((value: ListResult) => void)[] = [];
   const client = {
     from() {
       const chain: Record<string, unknown> = {};
@@ -64,7 +68,7 @@ function slowServer() {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 25));
 
 async function cachedStart(): Promise<string[]> {
-  const rows = await cacheRead<Record<string, unknown>>("appointments", TENANT);
+  const rows = await cacheRead<CachedAppointmentData>("appointments", TENANT);
   return rows.map((row) => String(row.time_start));
 }
 
