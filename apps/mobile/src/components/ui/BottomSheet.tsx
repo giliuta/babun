@@ -469,6 +469,7 @@ export function BottomSheet({
             На iOS — по флагу, как было. */}
         {avoidKeyboard || Platform.OS === "android" ? (
           <KeyboardLift
+            pointerEvents="box-none"
             style={{ flex: 1, justifyContent: "flex-end" }}
           >
             {sheet}

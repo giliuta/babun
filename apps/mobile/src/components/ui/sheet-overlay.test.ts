@@ -30,3 +30,14 @@ test("накладка будит только своё место, а не вс
   assert.match(src, /export function setOverlay[\s\S]{0,120}emitOverlay\(\);/);
   assert.doesNotMatch(src.slice(src.indexOf("export function setOverlay"), src.indexOf("/** Подписка на перемены стопки")), /\bemit\(\);/);
 });
+
+test("тап мимо листа закрывает его и с рамкой подъёма над клавиатурой", () => {
+  // Рамка подъёма во весь экран лежит ПОВЕРХ затемнения (сосед, не предок):
+  // без `box-none` она съедала тап, и на Android ни один лист не закрывался
+  // тапом мимо (12.10, подъём у каждого листа).
+  const sheet = read("BottomSheet.tsx");
+  assert.match(sheet, /<KeyboardLift\s+pointerEvents="box-none"/);
+  const lift = read("KeyboardLift.tsx");
+  assert.match(lift, /<KeyboardAvoidingView[\s\S]{0,80}pointerEvents=\{pointerEvents\}/);
+  assert.match(lift, /<View ref=\{ref\} pointerEvents=\{pointerEvents\}/);
+});
