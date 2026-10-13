@@ -10,6 +10,7 @@ import {
   tryToE164,
 } from "./phone";
 import { withHomeCode } from "./use-phone-country";
+import { readModuleSource } from "../../lib/module-source";
 
 // НОМЕР И КНОПКА СВЯЗИ (владелец 22.09: «как правильно писать номер»,
 // «звоночек справа должен открывать, как я хочу связаться»).
@@ -101,7 +102,8 @@ describe("код страны — в самом поле (владелец 12.10
     assert.match(extras, /seed=\{dialPrefix\(country\)\}/);
     assert.doesNotMatch(read("use-phone-country.tsx"), /CountryPickerSheet/);
     // Один оставленный код номером не считается — строка сохраняется пустой.
-    const row = read("../../components/ui/card-rows.tsx");
+    // `card-rows.tsx` is a barrel; the rows live in `card-rows/`.
+    const row = readModuleSource(resolve(here, "../../components/ui/card-rows.tsx"));
     assert.match(row, /return seed && typed === seed\.trim\(\) \? "" : typed;/);
   });
 });

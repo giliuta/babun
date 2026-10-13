@@ -22,10 +22,10 @@
 | Примитив | Файл | Роль |
 |---|---|---|
 | `SectionCard` | `src/components/ui/SectionCard.tsx` | Блок с ИМЕНЕМ: капс-подпись внутри белой карточки, её команды — иконками справа в той же строке (`action`, до двух) |
-| `RowGroup` | `src/components/ui/card-rows.tsx` | Секция с подытогом справа и пояснением под ней. **Только финансы.** Под именованный блок не брать |
+| `RowGroup` | `src/components/ui/card-rows/RowGroup.tsx` (импорт — из `src/components/ui/card-rows.tsx`) | Секция с подытогом справа и пояснением под ней. **Только финансы.** Под именованный блок не брать |
 | `ChooseRow` | `src/components/ui/ChooseRow.tsx` | Пустое состояние блока — дверь: кружок со значком, синяя подпись, серый хинт |
 | `ReferenceBlock` | `src/components/ui/ReferenceBlock.tsx` | БЛОК ВЫБОРА ИЗ СПРАВОЧНИКА целиком: шапка → дверь «Выбрать …» → выбранное значком, цветом и именем. Одно тело у категории и у типа события |
-| `FieldRow` · `ChoiceRow` · `NavRow` · `ActionRow` · `ValueRow` | `src/components/ui/card-rows.tsx`, `src/components/ui/ValueRow.tsx` | Строки внутри блока |
+| `FieldRow` · `ChoiceRow` · `NavRow` · `ActionRow` · `ValueRow` | `src/components/ui/card-rows.tsx` (одна строка — один файл в `card-rows/`), `src/components/ui/ValueRow.tsx` | Строки внутри блока |
 | `SwipeRow` | `src/components/ui/SwipeRow.tsx` | Кромки закреплены за смыслом: ПРАВАЯ (`label`) — «Удалить»/«Убрать», ЛЕВАЯ (`leading`) — «Скрыть»/«Показать»/«Вернуть». Нечего удалять — правой кромки нет (`label` необязателен) |
 | `SelectRow` · `SelectSearch` · `SelectList` | `src/components/ui/select-rows.tsx` | Строка, поиск и ритм ЛЮБОЙ шторки выбора |
 | `BottomSheet` | `src/components/ui/BottomSheet.tsx` | Шторка: `title`, `subtitle`, `headerAction`, `footer`, `maxHeightRatio` |
