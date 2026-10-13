@@ -24,3 +24,9 @@ test("«Маршрут» в меню записи — шторка карт ко
   assert.match(screen, /run: \(\) => route\.open\(null, address\)/);
   assert.match(screen, /\{route\.sheet\}/);
 });
+
+test("кнопки мессенджеров клиента не молчат, когда приложения нет", () => {
+  const src = read("../../features/clients/PhoneChannelButton.tsx");
+  assert.doesNotMatch(src, /void Linking\.openURL/);
+  assert.match(src, /Linking\.openURL\(url\)\.catch\(\(\) =>\s*notify\(/);
+});
