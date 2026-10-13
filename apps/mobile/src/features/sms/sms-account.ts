@@ -21,6 +21,7 @@ import {
   type SmsTeamTemplate,
   type TemplateDraft,
 } from "./sms-team-templates";
+import { NEVER_PAUSE } from "@/features/finances/accounts";
 
 export * from "./sms-model";
 export * from "./sms-team-templates";
@@ -92,6 +93,9 @@ function useTemplatesChanged() {
 export function useSaveTeamTemplate() {
   const changed = useTemplatesChanged();
   return useMutation({
+    // Без сети запись падает ошибкой, а не встаёт на паузу: лист с
+    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем (13.10).
+    ...NEVER_PAUSE,
     mutationFn: async (draft: TemplateDraft): Promise<SmsTeamTemplate> => {
       const { data, error } = await supabase.rpc("sms_save_team_template", {
         p: draftPayload(draft) as unknown as Json,

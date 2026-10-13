@@ -31,6 +31,7 @@ import {
   operationalTeamJsonToTeam,
 } from "@/features/settings/master-reference";
 import { pickLiveTeams, pickTeamLabels } from "./reference-select";
+import { NEVER_PAUSE } from "@/features/finances/accounts";
 
 // СПРАВОЧНИКИ ЧИТАЮТСЯ В КОМПАНИИ ЭКРАНА. Вкладка «Клиенты» открывается в
 // своей компании, даже когда в календаре стоит чужая (STORY-082), и команды
@@ -371,6 +372,9 @@ export function useCreateCity() {
   const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
+    // Без сети запись падает ошибкой, а не встаёт на паузу: лист с
+    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем (13.10).
+    ...NEVER_PAUSE,
     // `color` — v492 labels: custom tags («Германия», «День ног») get a
     // per-city accent colour that tints the calendar day chip (web parity).
     mutationFn: async (input: {
@@ -504,6 +508,9 @@ function useRefUpdate<Table extends RefTable>(table: Table) {
   const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
+    // Без сети запись падает ошибкой, а не встаёт на паузу: лист с
+    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем (13.10).
+    ...NEVER_PAUSE,
     mutationFn: async ({
       id,
       patch,
@@ -525,6 +532,9 @@ function useRefDelete(table: RefTable) {
   const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
+    // Без сети запись падает ошибкой, а не встаёт на паузу: лист с
+    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем (13.10).
+    ...NEVER_PAUSE,
     mutationFn: async (id: string) => {
       if (!tenantId) throw new Error("Нет активного аккаунта.");
       assertCanWriteReference(table, role);

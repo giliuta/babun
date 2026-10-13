@@ -17,6 +17,7 @@ import {
   dispatcherServiceJsonToService,
   masterServiceJsonToService,
 } from "@/features/settings/master-reference";
+import { NEVER_PAUSE } from "@/features/finances/accounts";
 
 // Services live in the canonical `services` table (text PK, was localStorage-
 // only before the migration). No shared repo yet — query the typed client
@@ -283,6 +284,9 @@ export function useCreateService() {
   const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
+    // Без сети запись падает ошибкой, а не встаёт на паузу: лист с
+    // `useGuardedClose` ждёт конца записи и иначе не закрывался ничем (13.10).
+    ...NEVER_PAUSE,
     mutationFn: async (input: ServiceInput) => {
       // Сотрудник — по праву «Услуги» своей команды (30.09): чужую команду
       // отобьёт политика `services_write_access`.
