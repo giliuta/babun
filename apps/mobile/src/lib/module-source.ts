@@ -4,13 +4,16 @@
 // one text — the barrel first, then every non-test module of the folder,
 // sorted by name — so a contract keeps guarding the code wherever inside the
 // folder it lives. A module without such a folder is read as is.
+//
+// A component entry whose parts live in a differently named sibling folder
+// (`DayView.tsx` + `day-view/`) passes that folder explicitly.
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-export function readModuleSource(file: string): string {
+export function readModuleSource(file: string, partsFolder?: string): string {
   const own = readFileSync(file, "utf8");
-  const folder = file.replace(/\.tsx?$/, "");
+  const folder = partsFolder ?? file.replace(/\.tsx?$/, "");
   if (folder === file || !existsSync(folder) || !statSync(folder).isDirectory()) return own;
   const modules = readdirSync(folder)
     .filter((name) => /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name))

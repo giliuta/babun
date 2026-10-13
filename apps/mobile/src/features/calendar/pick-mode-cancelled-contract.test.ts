@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { readFileSync } from "node:fs";
 import path from "node:path";
+import { readModuleSource } from "@/lib/module-source";
 
 // ОТМЕНЁННАЯ ЗАПИСЬ В РЕЖИМЕ ВЫБОРА ВРЕМЕНИ (прогон 03.10). «Копировать» и
 // «Перенести» рисуют зелёные кубики свободного времени; отменённая запись
@@ -9,7 +9,8 @@ import path from "node:path";
 // зачёркнутое «Тест Календарь» и «11:00» кубика читались одно поверх другого,
 // и тап по кубику открывал отменённую запись вместо выбора времени.
 
-const src = readFileSync(path.join(__dirname, "DayView.tsx"), "utf8");
+// The day grid is `DayView.tsx` plus its parts in `day-view/`.
+const src = readModuleSource(path.join(__dirname, "DayView.tsx"), path.join(__dirname, "day-view"));
 
 describe("slot-pick mode hides cancelled blocks", () => {
   test("a cancelled placement is skipped while free slots are shown", () => {

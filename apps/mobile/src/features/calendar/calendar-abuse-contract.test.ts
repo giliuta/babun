@@ -14,7 +14,16 @@ import { bookFormSource } from "../appointments/book-form/source-for-tests";
 const here = dirname(fileURLToPath(import.meta.url));
 // The calendar screen is the route file plus `features/calendar/home/`.
 const screen = () => calendarScreenSource();
-const block = () => readFileSync(resolve(here, "AppointmentBlock.tsx"), "utf8");
+// The grid block is `AppointmentBlock.tsx` plus its parts in `appointment-block/`.
+const block = () =>
+  readModuleSource(resolve(here, "AppointmentBlock.tsx"), resolve(here, "appointment-block"));
+// The day grid is `DayView.tsx` plus its parts in `day-view/`.
+const dayGrid = () => readModuleSource(resolve(here, "DayView.tsx"), resolve(here, "day-view"));
+// «Список» is `AgendaView.tsx` plus its parts in `agenda/`.
+const agendaList = () => readModuleSource(resolve(here, "AgendaView.tsx"), resolve(here, "agenda"));
+// The day money sheet is `DayFinanceSheet.tsx` plus its parts in `day-finance/`.
+const daySheet = () =>
+  readModuleSource(resolve(here, "DayFinanceSheet.tsx"), resolve(here, "day-finance"));
 
 describe("календарь под нагрузкой", () => {
   test("быстрое событие рождается с uuid — «Отменить» удаляет именно его", () => {
@@ -225,13 +234,13 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("«Маршрут →» не раздвигает шапку дня и считает адреса по-русски", () => {
-    const agenda = readFileSync(resolve(here, "AgendaView.tsx"), "utf8");
+    const agenda = agendaList();
     assert.match(agenda, /minHeight: 44,\s*marginVertical: -13,/);
     assert.match(agenda, /pluralize\(addresses\.length, "адрес", "адреса", "адресов"\)/);
   });
 
   test("«Финансы дня»: нули тихие, выбранная серая плитка — светлый тинт", () => {
-    const sheet = readFileSync(resolve(here, "DayFinanceSheet.tsx"), "utf8");
+    const sheet = daySheet();
     for (const k of ["income", "expense", "debt", "planned"]) {
       assert.match(sheet, new RegExp(`quiet=\\{moneySign\\(money\\.${k}\\) === 0\\}`));
     }
@@ -240,7 +249,7 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("«Список» текущего месяца открывается на сегодня, один раз на месяц", () => {
-    const agenda = readFileSync(resolve(here, "AgendaView.tsx"), "utf8");
+    const agenda = agendaList();
     assert.match(agenda, /const todayIndex = todayYmd\.startsWith\(monthKey\)\s*\? sections\.findIndex\(\(s\) => s\.title >= todayYmd\)/);
     assert.match(agenda, /if \(!monthKey \|\| scrolledFor\.current === monthKey\) return;\s*scrolledFor\.current = monthKey;/);
     assert.match(agenda, /onScrollToIndexFailed=/);
@@ -275,7 +284,7 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("день и месяц без записей не «грузятся» вечно на заглушке выключенного запроса", () => {
-    const sheet = readFileSync(resolve(here, "DayFinanceSheet.tsx"), "utf8");
+    const sheet = daySheet();
     assert.match(sheet, /const ledgerLoading = awaitingAnswer\(txQuery\) \|\| awaitingAnswer\(recordsTxQuery\);/);
     assert.doesNotMatch(sheet, /recordsTxQuery\.isPlaceholderData;/);
     const month = readFileSync(resolve(here, "MonthView.tsx"), "utf8");
@@ -309,13 +318,13 @@ describe("повторный аудит календаря 03.10", () => {
 
   test("озвучка даты — «3 октября», а не «3 октябрь»", () => {
     for (const f of ["MonthView.tsx", "MiniCalendar.tsx", "WeekView.tsx", "DayView.tsx"]) {
-      const src = readFileSync(resolve(here, f), "utf8");
+      const src = f === "DayView.tsx" ? dayGrid() : readFileSync(resolve(here, f), "utf8");
       assert.doesNotMatch(src, /toLocaleDateString\("ru-RU", \{ month: "long" \}\)/, f);
     }
   });
 
   test("сетка: линия «сейчас» на своём времени, шаг колонки без +1, стопка с самым ранним началом", () => {
-    const day = readFileSync(resolve(here, "DayView.tsx"), "utf8");
+    const day = dayGrid();
     assert.match(day, /top: pct\(nowMin, totalMin\),[\s\S]{0,400}?marginTop: -4\.5,/);
     assert.match(day, /dayW=\{compact && laneW > 0 \? laneW : undefined\}/);
     assert.match(day, /minToHM\(Math\.min\(\.\.\.deckOpen\.map\(\(p\) => p\.startMin\)\)\)/);
@@ -376,7 +385,7 @@ describe("повторный аудит календаря 03.10", () => {
   });
 
   test("«Список»: у отменённой сумма зачёркнута и без «к оплате»", () => {
-    const agenda = readFileSync(resolve(here, "AgendaView.tsx"), "utf8");
+    const agenda = agendaList();
     assert.match(agenda, /textDecorationLine: cancelled \? "line-through" : "none",/);
     assert.match(agenda, /\{debt > 0 && !cancelled \? \(/);
   });

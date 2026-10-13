@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
+import { readModuleSource } from "@/lib/module-source";
 
 // ДЕНЬГИ В КАЛЕНДАРЕ — ПРАВОМ КАЛЕНДАРЯ «ДОХОД И РАСХОД ДНЯ» (владелец 04.10:
 // «функция расход/доход должна быть в доступах календаря — не общие
@@ -27,7 +28,10 @@ function has(text: string, fragment: string, label: string, times = 1): void {
 }
 
 describe("шторка «Финансы дня»", () => {
-  const sheet = read("DayFinanceSheet.tsx");
+  // The sheet is `DayFinanceSheet.tsx` plus its parts in `day-finance/`.
+  const sheet = normalize(
+    readModuleSource(join(__dirname, "DayFinanceSheet.tsx"), join(__dirname, "day-finance")),
+  );
 
   test("уровень — право календаря «Доход и расход дня» в ЭТОМ календаре (04.10)", () => {
     has(
