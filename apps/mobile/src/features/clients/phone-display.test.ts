@@ -4,14 +4,12 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
-  composePhone,
   formatPhoneAsYouType,
   formatPhoneForDisplay,
   groupCyprusDigits,
-  nationalPart,
-  phoneCountryOf,
   tryToE164,
 } from "./phone";
+import { withHomeCode } from "./use-phone-country";
 
 // НОМЕР И КНОПКА СВЯЗИ (владелец 22.09: «как правильно писать номер»,
 // «звоночек справа должен открывать, как я хочу связаться»).
@@ -78,47 +76,32 @@ describe("кипрский номер группами 2 · 3 · 3 (аудит 2
     assert.equal(groupCyprusDigits("990000011"), null);
   });
   test("поле ввода и живой формат", () => {
-    assert.equal(nationalPart("99000001", "CY"), "99 000 001");
     assert.equal(formatPhoneAsYouType("99000001", "CY"), "99 000 001");
     assert.equal(formatPhoneAsYouType("+35799000001", "CY"), "+357 99 000 001");
     assert.equal(formatPhoneAsYouType("+79161234567", "CY"), "+7 916 123 45 67");
   });
 });
 
-describe("ввод номера: страна подписью, цифры в поле", () => {
-  test("страна узнаётся по набранному коду", () => {
-    assert.equal(phoneCountryOf("+35799887766", "CY"), "CY");
-    assert.equal(phoneCountryOf("+79161234567", "CY"), "RU");
-    assert.equal(phoneCountryOf("+447700900123", "CY"), "GB");
-    assert.equal(phoneCountryOf("99887766", "CY"), "CY");
+describe("код страны — в самом поле (владелец 12.10: «писать код страны, не нужно выбирать»)", () => {
+  test("набранное без «+» получает код команды, свой «+» — как есть", () => {
+    assert.equal(withHomeCode("99 887 766", "CY"), "+357 99 887 766");
+    assert.equal(withHomeCode("+375 29 123 45 67", "CY"), "+375 29 123 45 67");
+    assert.equal(withHomeCode("  ", "CY"), "");
+    assert.equal(tryToE164(withHomeCode("+375 29 123 45 67", "CY"), "CY"), "+375291234567");
+    assert.equal(tryToE164(withHomeCode("916 123 45 67", "RU"), "CY"), "+79161234567");
   });
-  test("поле держит цифры без кода, в данные — полный номер", () => {
-    assert.equal(nationalPart("+357 99887766", "CY"), "99 887 766");
-    assert.equal(composePhone("99 887 766", "CY"), "+357 99 887 766");
-    assert.equal(tryToE164(composePhone("916 123 45 67", "RU"), "CY"), "+79161234567");
-    assert.equal(composePhone("", "CY"), "");
-    assert.equal(composePhone("+7 916", "CY"), "+7 916");
-  });
-  test("номер нового клиента набирается с выбором страны", () => {
+  test("строки номера без выбора страны: код начинает поле", () => {
     const header = read("ClientHeader.tsx");
-    // С 30.09 (вариант 10 владельца) страна — не подписью с флагом, а тихим
-    // кодом перед цифрами; тап по коду открывает выбор страны.
-    assert.match(header, /:\s*dial\.code/);
-    // Тап по коду меняет страну и в новом клиенте, и на карточке (30.09).
-    assert.match(header, /onPrefixPress=\{draft \|\| !readOnly \? dial\.openPicker : undefined\}/);
-    assert.match(read("ClientExtraContacts.tsx"), /onPrefixPress=\{readOnly \? undefined : \(\) => setCodeFor\(p\)\}/);
-    assert.match(header, /dial\.onType\(v\)/);
-    assert.doesNotMatch(header, /countryFlag/);
-  });
-});
-
-describe("шторка кода страны", () => {
-  test("ищет по названию и по коду", () => {
-    const hook = read("use-phone-country.tsx");
-    assert.match(hook, /export function CountryPickerSheet/);
-    assert.match(hook, /<SelectSearch/);
-    assert.match(hook, /name\.includes\(needle\) \|\| ru\.includes\(needle\) \|\| countryDialCode\(code\)\.slice\(1\)\.startsWith\(needle\)/);
-    // Все страны мира и свой код, если набранного нет ни у одной (12.10).
-    assert.match(hook, /title="Свой код"/);
+    const extras = read("ClientExtraContacts.tsx");
+    for (const src of [header, extras]) {
+      assert.doesNotMatch(src, /onPrefixPress|CountryPickerSheet|prefix=\{/);
+    }
+    assert.match(header, /seed=\{savedPhone\.seed\}/);
+    assert.match(header, /onSave=\{draft \? draftPhone\.onType : savedPhone\.onSave\}/);
+    assert.match(extras, /seed=\{dialPrefix\(country\)\}/);
+    assert.doesNotMatch(read("use-phone-country.tsx"), /CountryPickerSheet/);
+    // Один оставленный код номером не считается — строка сохраняется пустой.
+    const row = read("../../components/ui/card-rows.tsx");
+    assert.match(row, /return seed && typed === seed\.trim\(\) \? "" : typed;/);
   });
 });

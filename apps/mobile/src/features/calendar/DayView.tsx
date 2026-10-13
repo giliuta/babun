@@ -34,6 +34,7 @@ import { MIN_H, minToHM, pct, RAIL_W } from "@/features/calendar/grid-units";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { DateCell } from "@/features/calendar/date-header";
 import { dayColumnPropsEqual } from "@/features/calendar/grid-memo";
+import { dayMonthLabel } from "./day-month-label";
 
 export { RAIL_W } from "@/features/calendar/grid-units";
 // Высота полосы шапки дат над сеткой (web DayColumn header h-[64px]) —
@@ -1072,7 +1073,7 @@ function DayHeader({
       accessibilityRole={onLabelTap ? "button" : undefined}
       accessibilityLabel={
         onLabelTap
-          ? `${date.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}, ${label ? `метка: ${label.name}` : "без метки"} — сменить метку`
+          ? `${dayMonthLabel(date)}, ${label ? `метка: ${label.name}` : "без метки"} — сменить метку`
           : undefined
       }
       className="active:opacity-70"

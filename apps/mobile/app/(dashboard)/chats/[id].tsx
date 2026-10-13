@@ -3,14 +3,13 @@ import {
   Clipboard,
   FlatList,
   Image,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useBookingNav } from "@/features/clients/card-booking";
 import {
@@ -543,9 +542,8 @@ export default function ChatThreadScreen() {
           </Pressable>
         }
       />
-      <KeyboardAvoidingView
+      <KeyboardLift
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <FlatList
           style={{ flex: 1 }}
@@ -643,7 +641,7 @@ export default function ChatThreadScreen() {
             <Send color="#fff" size={18} />
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardLift>
 
       {/* header ⋮ menu */}
       <Modal
@@ -878,9 +876,8 @@ export default function ChatThreadScreen() {
 
       {/* link client */}
       <Modal visible={linkOpen} transparent animationType="slide" onRequestClose={() => setLinkOpen(false)}>
-        <KeyboardAvoidingView
-          className="flex-1"
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        <KeyboardLift
+          style={{ flex: 1 }}
         >
         <Pressable
           className="flex-1"
@@ -995,7 +992,7 @@ export default function ChatThreadScreen() {
             )}
           />
         </View>
-        </KeyboardAvoidingView>
+        </KeyboardLift>
       </Modal>
     </Screen>
   );

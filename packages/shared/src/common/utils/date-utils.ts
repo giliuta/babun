@@ -93,18 +93,35 @@ export function getCurrentCyprusTime(): Date {
 // returned as a local Date whose getHours()/getMinutes() read that zone's
 // clock. Used so a brigade calendar can place its "now" line in the
 // brigade's own timezone. Falls back to device-local time on a bad zone id.
+// Форматтер на зону — один на процесс (аудит Android 13.10): постройка
+// Intl.DateTimeFormat на Android идёт через JNI в ICU и стоит заметно, а
+// «сейчас в зоне» спрашивают на каждой перерисовке финансов и календаря.
+// Неверная зона бросает при постройке — такую не кэшируем, вызов падает в
+// прежний фолбэк.
+const nowFormatterByZone = new Map<string, Intl.DateTimeFormat>();
+
+/** Тот же форматтер, что и в `getCurrentTimeInZone`; бросает на неверной
+ *  зоне — им же проверяют зону без лишней постройки. */
+export function zoneNowFormatter(timeZone: string): Intl.DateTimeFormat {
+  const cached = nowFormatterByZone.get(timeZone);
+  if (cached) return cached;
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  nowFormatterByZone.set(timeZone, formatter);
+  return formatter;
+}
+
 export function getCurrentTimeInZone(timeZone: string): Date {
   try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      hour12: false,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    }).formatToParts(new Date());
+    const parts = zoneNowFormatter(timeZone).formatToParts(new Date());
     const get = (type: string) =>
       Number(parts.find((p) => p.type === type)?.value);
     const hour = get("hour") % 24; // Intl can emit "24" at midnight

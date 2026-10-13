@@ -1,13 +1,12 @@
 import { useMemo, useState } from "react";
 import {
   FlatList,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   Text,
   View,
 } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { Package, Trash2 } from "lucide-react-native";
 import {
   createBlankEquipment,
@@ -322,9 +321,8 @@ export function InventoryList({
         animationType="slide"
         onRequestClose={() => setOpen(false)}
       >
-        <KeyboardAvoidingView
-          className="flex-1"
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        <KeyboardLift
+          style={{ flex: 1 }}
         >
           <Pressable
             className="flex-1"
@@ -421,7 +419,7 @@ export function InventoryList({
               </Pressable>
             ) : null}
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardLift>
       </Modal>
     </Screen>
   );

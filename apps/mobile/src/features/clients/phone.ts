@@ -74,10 +74,6 @@ export function isDialOnly(value: string, code: CountryCode): boolean {
   return digits === countryDialCode(code).replace(/\D/g, "");
 }
 
-/** Названия по-русски — для мест, где язык не важен (поиск, тесты). */
-export const COUNTRY_NAMES_RU: Partial<Record<CountryCode, string>> =
-  (COUNTRY_NAMES_BY_LOCALE.ru ?? {}) as Partial<Record<CountryCode, string>>;
-
 /**
  * Returns the canonical E.164 form of `raw` or `null` if the number
  * couldn't be parsed into something valid. Empty input → `null`.
@@ -174,11 +170,6 @@ export function formatPhoneAsYouType(
   return formatted;
 }
 
-/** Страна номера ДЛЯ ФЛАГА: по набранному «+коду», а для локального
- *  формата (без «+») — страна по умолчанию, которой его и разбирают.
- *  Пустой номер → undefined (флагу нечего показывать). Один хелпер на
- *  оба режима карточки клиента: черновик и сохранённая строка. */
-
 /** НОМЕР ДЛЯ ГЛАЗ — ВСЕГДА С КОДОМ СТРАНЫ (владелец 01.10: «обязательно
  *  код страны, он вставляется везде… под именем начинается +357 — тот код
  *  страны, который выбран в самом клиенте»). До 01.10 номер своей страны
@@ -198,94 +189,4 @@ export function formatPhoneForDisplay(
     if (grouped) return `+357 ${grouped}`;
   }
   return parsed.formatInternational();
-}
-
-// ─── ВВОД НОМЕРА: СТРАНА ОТДЕЛЬНО, ЦИФРЫ ОТДЕЛЬНО (владелец 22.09: «сделать
-// удобное вписывание номера, выбор кода страны»). Поле держит только цифры
-// номера, код страны — в подписи над ним, тапом меняется. В данные уходит
-// полный номер «+357 99887766»: так его разбирает любой дальнейший код, и
-// номер чужой страны не зависит от страны компании.
-
-/** Флаг страны из ISO-кода: «CY» → 🇨🇾. */
-export function countryFlag(code: CountryCode): string {
-  return String.fromCodePoint(
-    ...[...code.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65),
-  );
-}
-
-/** Страна набранного номера: с «+» — по коду (среди стран списка, самый
- *  длинный совпавший код), без «+» — страна по умолчанию. */
-export function phoneCountryOf(
-  raw: string,
-  home: CountryCode = DEFAULT_COUNTRY,
-): CountryCode {
-  const s = (raw ?? "").replace(/[^\d+]/g, "");
-  if (!s.startsWith("+")) return home;
-  const digits = s.slice(1);
-  const byCode = [...SUPPORTED_COUNTRIES]
-    .filter((c) => digits.startsWith(countryDialCode(c).slice(1)))
-    .sort((a, b) => countryDialCode(b).length - countryDialCode(a).length);
-  // Один код на несколько стран (+7, +44…) — берём ту, что назовёт сам
-  // номер, иначе первую из списка.
-  const told = new AsYouType();
-  told.input(s);
-  const named = told.getCountry();
-  if (named && (SUPPORTED_COUNTRIES as readonly string[]).includes(named)) return named;
-  return byCode[0] ?? home;
-}
-
-/** Цифры номера без кода страны, группами по маске страны. */
-export function nationalPart(raw: string, country: CountryCode): string {
-  const s = (raw ?? "").trim();
-  if (!s) return "";
-  const dial = countryDialCode(country).slice(1);
-  const digits = s.replace(/\D/g, "");
-  const rest = s.startsWith("+") && digits.startsWith(dial)
-    ? digits.slice(dial.length)
-    : digits;
-  if (!rest) return "";
-  if (country === "CY") {
-    const grouped = groupCyprusDigits(rest);
-    if (grouped !== null) return grouped;
-  }
-  return new AsYouType(country).input(rest);
-}
-
-/** Полный номер из страны и набранных цифр; пусто — пусто. Набрали сами
- *  «+…» — уважаем как есть. */
-export function composePhone(typed: string, country: CountryCode): string {
-  const s = (typed ?? "").trim();
-  if (!s) return "";
-  if (s.startsWith("+")) return s;
-  return `${countryDialCode(country)} ${s}`;
-}
-
-/** КОД СТРАНЫ ОТДЕЛЬНО, ЦИФРЫ ОТДЕЛЬНО — для показа (владелец 30.09: «код
- *  страны сдержанно, стильно, без флагов»). Блок «Клиент» печатает код тихим
- *  серым перед номером: «+357 97 469 998», «+44 7700 900123». Код берётся у
- *  самого номера; номер без «+» — страны компании. Пусто — код компании и
- *  пустые цифры (строка нового номера). */
-export function phoneParts(
-  raw: string,
-  home: CountryCode = DEFAULT_COUNTRY,
-): { code: string; rest: string } {
-  const s = (raw ?? "").trim();
-  if (!s) return { code: countryDialCode(home), rest: "" };
-  const parsed = parsePhoneNumberFromString(s, home);
-  const country =
-    parsed?.country ?? (s.startsWith("+") ? phoneCountryOf(s, home) : home);
-  const code = parsed ? `+${parsed.countryCallingCode}` : countryDialCode(country);
-  const digits = s.replace(/\D/g, "");
-  const dial = code.slice(1);
-  const own = s.startsWith("+") && digits.startsWith(dial) ? digits.slice(dial.length) : digits;
-  if (country === "CY") {
-    const grouped = groupCyprusDigits(own);
-    if (grouped) return { code, rest: grouped };
-  }
-  // Международный вид без кода: с кодом впереди национальный «0» лишний
-  // («+44 7700 900123», а не «+44 07700…»).
-  const rest = parsed?.isPossible()
-    ? parsed.formatInternational().replace(/^\+\d+\s*/, "")
-    : new AsYouType(country).input(own);
-  return { code, rest };
 }

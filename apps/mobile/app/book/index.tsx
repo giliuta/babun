@@ -11,7 +11,6 @@ import {
   AccessibilityInfo,
   InputAccessoryView,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -19,6 +18,7 @@ import {
   View,
   type TextProps,
 } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import {
   useFocusEffect,
   useLocalSearchParams,
@@ -2640,9 +2640,8 @@ function BookForm() {
           под клавиатуру наполовину — поймано на симуляторе 2026-09-03, когда
           у него отключили аппаратную клавиатуру. `keyboardVerticalOffset` и
           есть это расстояние от верха окна до View. */}
-      <KeyboardAvoidingView
+      <KeyboardLift
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={insets.top}
       >
         <ScrollView
@@ -3542,7 +3541,7 @@ function BookForm() {
           loading={bookingBusy}
         />
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardLift>
 
       <WhenSheet
         open={whenOpen}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTenantId } from "@/lib/tenant";
 import { useCalendarVisibility } from "@/features/settings/workspaces";
 import {
@@ -387,6 +387,10 @@ function ClientsListScreen() {
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
   // (deps без поиска) — фикс Волны 1 сохранён: клавиши не гоняют
   // localeCompare-компаратор.
+  // Поиск фильтрует отложенно (аудит Android 13.10): буква сразу видна в
+  // поле, а пересчёт сотен клиентов и перерисовка строк идут следом и не
+  // держат клавиатуру.
+  const searched = useDeferredValue(query);
   const result = useClientFilters(
     teamClients,
     teamAppointments,
@@ -396,7 +400,7 @@ function ClientsListScreen() {
     statsMap,
     sort,
     filter,
-    query,
+    searched,
     sheetOpen, // счётчики попапов считаем только при открытом листе
     ownSources,
     teamChoice === ALL_TEAMS ? null : teamChoice,
@@ -905,6 +909,7 @@ function ClientsListScreen() {
             const actions = rowActionsOf(item, selecting);
             return (
               <ClientRow
+                memoKey={selecting ? "selecting" : "browsing"}
                 client={item}
                 stats={stats}
                 cardFields={cardFieldsFor(item.team_id)}
@@ -942,12 +947,13 @@ function ClientsListScreen() {
               />
             );
           }}
-          ItemSeparatorComponent={() => (
-            <View
-              className="ml-4 h-px"
-              style={{ backgroundColor: t.separator }}
-            />
-          )}
+          ItemSeparatorComponent={ClientSeparator}
+          // Плотнее окно отрисовки (аудит Android 13.10): строка клиента
+          // тяжёлая (свайп, кнопка связи), и FlatList по умолчанию держал
+          // 21 экран строк смонтированными.
+          initialNumToRender={12}
+          maxToRenderPerBatch={8}
+          windowSize={9}
           refreshControl={
             // В режиме выбора pull-to-refresh отключаем — refetch мог бы
             // выронить выбранные строки из-под чекбоксов.
@@ -1110,4 +1116,12 @@ function ClientsListScreen() {
       />
     </Screen>
   );
+}
+
+/** Линия между строками — один тип компонента на все перерисовки: стрелочная
+ *  функция в пропе была новым типом каждый раз, и все линии монтировались
+ *  заново. */
+function ClientSeparator() {
+  const t = useThemeColors();
+  return <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />;
 }

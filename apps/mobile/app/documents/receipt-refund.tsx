@@ -1,11 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   Text,
   View,
 } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   calculateInvoiceSettlement,
@@ -271,9 +270,8 @@ export default function ReceiptRefundScreen() {
     <Screen edges={["top"]}>
       <ScreenHeader title={`Возврат по ${receipt.number}`} />
       {/* Кнопка внизу поднимается над клавиатурой, прокрутка её убирает. */}
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <KeyboardLift
+        style={{ flex: 1 }}
       >
         <ScrollView
           contentContainerStyle={{ paddingTop: 6, paddingBottom: 32, gap: 6 }}
@@ -375,7 +373,7 @@ export default function ReceiptRefundScreen() {
             onPress={() => setPreviewOpen(true)}
           />
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardLift>
 
       <InvoicePreviewSheet
         visible={previewOpen}

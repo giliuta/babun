@@ -15,6 +15,7 @@ import { mapAuthError } from "@/components/auth/authErrors";
 import { EmailCodeCard } from "@/components/auth/EmailCodeCard";
 import { useAuthTheme } from "@/components/auth/theme";
 import { signOutScopeAndWipe } from "@/lib/auth-clear";
+import { PASSWORD_MIN, passwordTooShort } from "@/components/auth/password-rule";
 import { parseRecoveryLink, recoveryLinkKey } from "@/lib/recovery-link";
 import { supabase } from "@/lib/supabase";
 
@@ -107,7 +108,7 @@ export default function ResetPasswordScreen() {
   }, [url, codeEmail]);
 
   async function update() {
-    if (password.length < 8 || loading) return;
+    if (password.length < PASSWORD_MIN || loading) return;
     setLoading(true);
     setError(null);
     const { error: e } = await supabase.auth.updateUser({ password });
@@ -206,9 +207,9 @@ export default function ResetPasswordScreen() {
         />
       </InputCard>
 
-      {password.length > 0 && password.length < 8 ? (
+      {passwordTooShort(password) ? (
         <Text style={{ marginTop: 8, marginLeft: 4, fontSize: 13, color: t.sub }}>
-          Минимум 8 символов
+          Минимум 6 символов
         </Text>
       ) : null}
 
@@ -217,7 +218,7 @@ export default function ResetPasswordScreen() {
       <PillButton
         label={loading ? "Сохраняем…" : "Сохранить пароль"}
         onPress={update}
-        disabled={password.length < 8 || !ready}
+        disabled={password.length < PASSWORD_MIN || !ready}
         loading={loading}
       />
 

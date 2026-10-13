@@ -1,13 +1,12 @@
 import { type ReactNode, type RefObject } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   Text,
   View,
   type TextInput,
 } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { MoreHorizontal } from "lucide-react-native";
 
 import { NavRow } from "@/components/ui/card-rows";
@@ -231,9 +230,8 @@ export function MasterCardView(p: MasterCardViewProps) {
           trailing={p.teamChips.onAdd ? <ChipsAddButton onPress={p.teamChips.onAdd} /> : undefined}
         />
       ) : null}
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <KeyboardLift
+        style={{ flex: 1 }}
       >
         <ScrollView
           className="flex-1"
@@ -289,7 +287,7 @@ export function MasterCardView(p: MasterCardViewProps) {
             {p.footer}
           </View>
         ) : null}
-      </KeyboardAvoidingView>
+      </KeyboardLift>
     </Screen>
   );
 }

@@ -10,7 +10,7 @@ import { ClientExtraContacts } from "@/features/clients/ClientExtraContacts";
 import type { ContactHolder } from "@/features/clients/contact-fields";
 import { CONTACT_COLUMN } from "@/features/clients/contact-column";
 import { useDefaultCountry } from "@/features/clients/default-country";
-import { usePhoneCodeField } from "@/features/clients/use-phone-country";
+import { usePhoneField } from "@/features/clients/use-phone-country";
 import { useThemeColors } from "@/theme/colors";
 
 import type { MasterCardViewProps } from "./MasterCardView";
@@ -83,10 +83,10 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
   const access = p.access ? ACCESS_TILE[p.access.state] : null;
   // НОМЕР — КАК У КЛИЕНТА (владелец 04.10: «номер телефона в карточке
   // партнёра сделать так, как в клиенте — код, выбор кода — всё в одной
-  // архитектуре»): «Телефон» колонкой слева, код страны тихим префиксом,
-  // тап по нему — шторка «Код страны», в поле только цифры. Тот же
-  // `usePhoneCodeField`, что у профиля. Черновик (live) печатает как раньше.
-  const phoneField = usePhoneCodeField({
+  // архитектуре»): «Телефон» колонкой слева, номер с кодом страны целиком в
+  // поле, пустое начинается с кода команды (12.10). Тот же `usePhoneField`,
+  // что у профиля. Черновик (live) печатает как раньше.
+  const phoneField = usePhoneField({
     phone: p.identity.phone,
     home: useDefaultCountry(),
     onSave: (full) => p.onPhoneChange?.(full),
@@ -165,8 +165,7 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
             column={CONTACT_COLUMN}
             separated
             tabular
-            prefix={phoneField.prefix}
-            onPrefixPress={p.editable ? phoneField.onPrefixPress : undefined}
+            seed={phoneField.seed}
             value={phoneField.value}
             placeholder="Номер"
             keyboardType="phone-pad"
@@ -242,7 +241,6 @@ export function EmployeeIdentityBlock(p: IdentityProps) {
           />
         ) : null}
       </SectionCard>
-      {phoneField.sheet}
 
       {access && p.access ? (
         <View style={{ flexDirection: "row", marginHorizontal: GUTTER, marginTop: 8 }}>

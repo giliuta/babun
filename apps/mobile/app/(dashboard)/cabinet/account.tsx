@@ -1,13 +1,12 @@
 import { useState } from "react";
 import {
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   Text,
   View,
 } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { ChevronRight, Smartphone, Trash2 } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -29,6 +28,7 @@ import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
 import { writeErrorWords } from "@/lib/connection-words";
 import { isHumanText } from "@babun/shared/i18n/runtime";
+import { PASSWORD_MIN, passwordTooShort } from "@/components/auth/password-rule";
 import { deleteRefusal, passwordRefusal } from "@/features/cabinet/account-errors";
 import { ChangeEmailSheet } from "@/features/cabinet/ChangeEmailSheet";
 
@@ -82,9 +82,8 @@ export default function AccountScreen() {
     <Screen edges={["top"]}>
       {/* Шапка = строка Кабинета, которой сюда пришли (аудит 03.10). */}
       <ScreenHeader title="Вход и безопасность" />
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <KeyboardLift
+        style={{ flex: 1 }}
       >
         <ScrollView
           className="flex-1"
@@ -107,7 +106,7 @@ export default function AccountScreen() {
           <DevicesSection />
           <DangerZoneSection email={u?.email ?? ""} />
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardLift>
       <ChangeEmailSheet
         visible={emailSheet}
         onClose={() => setEmailSheet(false)}
@@ -126,12 +125,12 @@ function PasswordSection({ email }: { email: string | null }) {
   const [confirm, setConfirm] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const tooShort = pwd.length > 0 && pwd.length < 8;
+  const tooShort = passwordTooShort(pwd);
   const mismatch = confirm.length > 0 && pwd !== confirm;
   const samePwd = pwd.length > 0 && pwd === currentPwd;
   const canSubmit =
     currentPwd.length > 0 &&
-    pwd.length >= 8 &&
+    pwd.length >= PASSWORD_MIN &&
     confirm === pwd &&
     !samePwd &&
     !saving;
@@ -202,13 +201,13 @@ function PasswordSection({ email }: { email: string | null }) {
         label="Новый пароль"
         value={pwd}
         onChangeText={setPwd}
-        placeholder="Минимум 8 символов"
+        placeholder="Минимум 6 символов"
         secureTextEntry
         autoComplete="new-password"
         textContentType="newPassword"
         error={
           tooShort
-            ? "Минимум 8 символов"
+            ? "Минимум 6 символов"
             : samePwd
               ? "Новый пароль должен отличаться от текущего"
               : null
@@ -445,8 +444,7 @@ function DangerZoneSection({ email }: { email: string }) {
         animationType="fade"
         onRequestClose={() => !busy && setOpen(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        <KeyboardLift
           style={{ flex: 1, justifyContent: "center", padding: 20, backgroundColor: t.scrim }}
         >
           <View
@@ -498,7 +496,7 @@ function DangerZoneSection({ email }: { email: string }) {
               </View>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardLift>
       </Modal>
     </>
   );

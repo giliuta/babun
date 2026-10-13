@@ -1,7 +1,6 @@
 import { forwardRef, useEffect, useId, useState, type ReactNode } from "react";
 import {
   AccessibilityInfo,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   View,
   type TextInputProps,
 } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Eye, EyeOff } from "lucide-react-native";
@@ -94,9 +94,8 @@ export function AuthCard({
         <View style={{ alignItems: "flex-end", paddingHorizontal: 16, paddingTop: 8 }}>
           <AuthLanguageButton />
         </View>
-        <KeyboardAvoidingView
+        <KeyboardLift
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <ScrollView
             contentContainerStyle={{
@@ -141,7 +140,7 @@ export function AuthCard({
             </Animated.View>
           </ScrollView>
           {footer ? <View style={{ paddingHorizontal: 28, paddingBottom: 8 }}>{footer}</View> : null}
-        </KeyboardAvoidingView>
+        </KeyboardLift>
       </SafeAreaView>
     </View>
   );

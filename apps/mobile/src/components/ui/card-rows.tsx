@@ -271,9 +271,8 @@ export function FieldRow({
   noCopy,
   followValue,
   column,
-  prefix,
-  onPrefixPress,
   sanitize,
+  seed,
   onSave,
 }: {
   label: string;
@@ -285,11 +284,6 @@ export function FieldRow({
    *  Значение — по левому краю своей колонки, линия между строками — от
    *  колонки значений. Нет — прежние виды строки. */
   column?: number;
-  /** Тихий префикс перед значением — код страны: «+357». Не входит в поле
-   *  ввода: печатают только цифры. */
-  prefix?: string;
-  /** Префикс нажимается (новый клиент: сменить страну номера). */
-  onPrefixPress?: () => void;
   /** `decimal-pad` — деньги; `numbers-and-punctuation` — деньги, которые
    *  бывают отрицательными (остаток счёта в долге): минуса на цифровой
    *  клавиатуре нет ни в одной раскладке. */
@@ -371,6 +365,11 @@ export function FieldRow({
    *  латиница заглавными и цифры). Отсечённое не появляется в поле вовсе —
    *  родитель, получив то же значение, перерисовкой его бы не убрал. */
   sanitize?: (v: string) => string;
+  /** С ЧЕГО НАЧИНАЕТСЯ ПУСТОЕ ПОЛЕ — код страны номера («+357 », владелец
+   *  12.10: «чтоб можно было писать код страны, не нужно выбирать»). Код —
+   *  часть набранного: его стирают и вписывают свой. Оставленный один код
+   *  номером не считается — строка сохраняется пустой. */
+  seed?: string;
   onSave: (v: string) => void;
 }) {
   // ЧИСЛО ВЫДЕЛЯЕТСЯ ЦЕЛИКОМ ПРИ ФОКУСЕ — иначе правка «135» на «140» даёт
@@ -402,7 +401,16 @@ export function FieldRow({
     if (typeof inputRef === "function") inputRef(node);
     else if (inputRef) (inputRef as { current: TextInput | null }).current = node;
   };
-  const [text, setText] = useState(value);
+  const [text, setText] = useState(() => (!value && autoFocus && seed ? seed : value));
+  /** Набранное без одного кода страны: только код — пусто. */
+  const typedOf = (v: string) => {
+    const typed = v.trim();
+    return seed && typed === seed.trim() ? "" : typed;
+  };
+  const startEditing = () => {
+    if (!text.trim() && seed) setText(seed);
+    setEditing(true);
+  };
   useEffect(() => {
     if (!editing || followValue) setText(value);
   }, [value, editing, followValue]);
@@ -420,33 +428,25 @@ export function FieldRow({
   // строки. Раньше коммит был только в onBlur, а кнопки «Готово» и «Назад»
   // живут вне прокрутки и фокус не снимают — уход с экрана с открытой
   // клавиатурой стирал всё набранное.
-  const latest = useRef({ text, value, live: !!live, onSave, onEditEnd });
-  latest.current = { text, value, live: !!live, onSave, onEditEnd };
+  const latest = useRef({ text, value, live: !!live, onSave, onEditEnd, typedOf });
+  latest.current = { text, value, live: !!live, onSave, onEditEnd, typedOf };
   const commit = () => {
     setEditing(false);
     const cur = latest.current;
-    if (!cur.live && cur.text.trim() !== cur.value) cur.onSave(cur.text.trim());
+    if (!cur.live && cur.typedOf(cur.text) !== cur.value) cur.onSave(cur.typedOf(cur.text));
     cur.onEditEnd?.();
   };
   useEffect(
     () => () => {
       const cur = latest.current;
-      if (!cur.live && cur.text.trim() !== cur.value) {
-        cur.onSave(cur.text.trim());
+      if (!cur.live && cur.typedOf(cur.text) !== cur.value) {
+        cur.onSave(cur.typedOf(cur.text));
       }
     },
     [],
   );
 
   if (column !== undefined) {
-    const prefixNode = prefix ? (
-      <Text
-        maxFontSizeMultiplier={1.2}
-        style={{ fontSize: 17, color: t.muted, fontVariant: ["tabular-nums"], marginRight: 6 }}
-      >
-        {prefix}
-      </Text>
-    ) : null;
     return (
       <View>
         {separated ? (
@@ -471,33 +471,19 @@ export function FieldRow({
           >
             {label}
           </Text>
-          {prefixNode && onPrefixPress && !readOnly ? (
-            <Pressable
-              onPress={onPrefixPress}
-              accessibilityRole="button"
-              accessibilityLabel={`Код страны ${prefix}`}
-              accessibilityHint="Нажмите, чтобы сменить страну"
-              hitSlop={{ top: 12, bottom: 12, left: 8, right: 4 }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-            >
-              {prefixNode}
-            </Pressable>
-          ) : (
-            prefixNode
-          )}
           <Pressable
             onPress={
               readOnly
                 ? undefined
                 : editingNow
                   ? () => ownInput.current?.focus()
-                  : () => setEditing(true)
+                  : startEditing
             }
             onLongPress={editingNow ? undefined : onLongPress}
             disabled={!!readOnly && !onLongPress}
             accessible={!editingNow}
             accessibilityRole={editingNow ? "none" : readOnly ? "text" : "button"}
-            accessibilityLabel={value ? `${label}, ${prefix ? `${prefix} ` : ""}${value}` : label}
+            accessibilityLabel={value ? `${label}, ${value}` : label}
             accessibilityHint={editingNow || readOnly ? undefined : "Нажмите, чтобы изменить"}
             style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.6 : 1 })}
           >
@@ -589,7 +575,7 @@ export function FieldRow({
               ? undefined
               : editingNow
                 ? () => ownInput.current?.focus()
-                : () => setEditing(true)
+                : startEditing
           }
           onLongPress={editingNow ? undefined : onLongPress}
           disabled={!!readOnly && !onLongPress}
@@ -821,7 +807,7 @@ export function FieldRow({
           />
         ) : (
           <Pressable
-            onPress={readOnly ? undefined : () => setEditing(true)}
+            onPress={readOnly ? undefined : startEditing}
             disabled={!!readOnly}
             accessibilityRole="button"
             accessibilityLabel={value ? `${label}: ${value}` : label}

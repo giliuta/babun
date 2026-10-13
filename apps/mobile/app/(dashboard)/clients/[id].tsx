@@ -31,15 +31,14 @@
 
 import { useMemo, useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   Share,
   Text,
   View,
 } from "react-native";
+import { KeyboardLift } from "@/components/ui/KeyboardLift";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronRight, Phone, Trash2, UserPlus } from "lucide-react-native";
 import {
@@ -702,9 +701,8 @@ export function ClientDetailScreen() {
           клавиатуру: `padding` меряет расстояние от низа ОКНА, а карточка
           начинается ниже — на безопасной зоне сверху и своей шапке. Ровно эта
           ошибка уже ловилась на записи. */}
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <KeyboardLift
+        style={{ flex: 1 }}
         keyboardVerticalOffset={insets.top}
       >
       <ScrollView
@@ -937,7 +935,7 @@ export function ClientDetailScreen() {
           overTabBar={pathname !== "/client"}
         />
       ) : null}
-      </KeyboardAvoidingView>
+      </KeyboardLift>
 
       <RemindSheet
         visible={remindOpen}
