@@ -249,8 +249,12 @@ Deno.serve(async (request: Request) => {
     if (action === "sync") {
       if (tenant.plan_override || !live || !tenant.stripe_subscription_id) return json(200, { synced: false });
       const sub = await stripe(stripeKey, "GET", `subscriptions/${tenant.stripe_subscription_id}`);
-      const item = (sub.items as { data?: { id: string; quantity?: number }[] } | undefined)?.data?.[0];
+      const item = (sub.items as { data?: { id: string; quantity?: number; price?: { lookup_key?: string | null } }[] } | undefined)?.data?.[0];
       if (!item) return json(409, { error: "subscription_without_items" });
+      // Количество — только у цены «за календарь». Старая подписка Соло · Про ·
+      // Макс стоит фиксированно: её количество, поднятое до числа календарей,
+      // умножило бы плоскую цену (тот же сторож, что у вебхука).
+      if (!/^babun_calendar_/.test(item.price?.lookup_key ?? "")) return json(200, { synced: false });
       if (item.quantity === quantity) return json(200, { synced: true, quantity });
       await stripe(stripeKey, "POST", `subscriptions/${tenant.stripe_subscription_id}`, {
         "items[0][id]": item.id,

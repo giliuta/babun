@@ -47,6 +47,14 @@ describe("цена за календарь: страница и Stripe", () => {
     assert.equal(TIER_LIMITS.max.partners, 1000);
   });
 
+  test("сверка количества не трогает старую подписку с плоской ценой", () => {
+    // Иначе Про за €X при трёх календарях стал бы стоить 3 × €X.
+    const sync = FN.slice(FN.indexOf('if (action === "sync")'), FN.indexOf("const period: Period"));
+    const guard = sync.indexOf("/^babun_calendar_/.test(item.price?.lookup_key");
+    assert.ok(guard > 0, "sync меняет количество, не проверив цену «за календарь»");
+    assert.ok(guard < sync.indexOf('"items[0][quantity]"'), "проверка цены стоит после записи количества");
+  });
+
   test("вебхук узнаёт цену за календарь и пишет число календарей", () => {
     assert.match(FN, /"metadata\[tier\]": PAID_TIER/);
     assert.match(FN, /const PAID_TIER = "max"/);
