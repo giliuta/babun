@@ -1,6 +1,6 @@
 // Clients data layer — форма клиента, объекты, техника и долг по записям.
 
-import { generateId } from "./masters";
+import { randomUuid } from "../sync/uuid";
 import { getDebtAmount, type Appointment } from "./appointments";
 
 import type {
@@ -28,18 +28,11 @@ export type {
   PropertyType,
 } from "./clients/types";
 
-// STORY-036: client ids must be uuid-shaped because the canonical
-// store is now Supabase (clients.id is uuid pk). `crypto.randomUUID`
-// is available in every browser we ship to + Node 19+. Falls back to
-// the legacy `cli-…` id only in environments where crypto is missing
-// (very old browsers, certain SSR contexts) — those clients won't
-// round-trip to Supabase but will at least stay readable in
-// localStorage.
+// Client ids are uuids (clients.id is a uuid primary key). `randomUuid`
+// yields a real uuid on every runtime, React Native included, where
+// `crypto.randomUUID` is missing.
 function newClientId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return generateId("cli");
+  return randomUuid();
 }
 
 export const ACQUISITION_LABELS: Record<AcquisitionSource, string> = {
