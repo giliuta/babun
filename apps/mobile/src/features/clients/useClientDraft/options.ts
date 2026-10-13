@@ -2,8 +2,6 @@ import type { SplitRef } from "@/features/clients/split-client";
 import type { LinkTarget } from "@/features/clients/use-link-writer";
 
 export interface ClientDraftOptions {
-  /** Черновик открыт ПОВЕРХ записи (`/book/client`): после «Готово» клиент
-   *  отдаётся записи и экран уходит «назад», а не на карточку созданного. */
   /** Отдать созданного клиента тому, кто позвал, и уйти «назад», а не на его
    *  карточку. Так ведёт себя карточка, открытая ПОВЕРХ звавшего — из записи
    *  или из шторки долга (см. `app/(shared)`). */

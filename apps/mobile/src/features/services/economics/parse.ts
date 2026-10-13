@@ -85,12 +85,7 @@ export function parseDurationTiers(raw: unknown): DurationTierValue[] {
   return [...byMinimum.values()].sort((a, b) => a.min_qty - b.min_qty);
 }
 
-/** НОВАЯ СТРОКА НЕ ПОДСТАВЛЯЕТ ЦЕНУ (владелец 2026-08-21: «когда я добавляю
- *  новое, оно меняет цену всегда на 50 — мне это не нравится»). Цена от
- *  количества почти всегда НИЖЕ базовой, поэтому подставленная база — это не
- *  подсказка, а лишняя работа: её надо стереть и напечатать своё. Количество и
- *  время подставляются, потому что там угадывать нечего: следующее свободное
- *  число и та же работа, взятая столько раз. */
+/** Cost tiers from stored JSON (`cost_per_unit`, legacy `cost`). Invalid rows are ignored. */
 export function parseCostDrafts(raw: unknown): CostTierValue[] {
   const byMinimum = new Map<number, CostTierValue>();
   for (const item of asLooseArray(raw)) {

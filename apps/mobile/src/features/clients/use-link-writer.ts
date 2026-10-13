@@ -75,6 +75,10 @@ export interface LinkWriter {
   restore(item: ClientLinkItem): Promise<boolean>;
 }
 
+/** Строка человека в момент «Убрать» — для «Отменить». После снятия связи
+ *  его может не быть ни в одном кэше экрана, и возврат не находил строку. */
+const detachedRows = new Map<string, Client>();
+
 /** СВЕЖАЯ СТРОКА ЧЛЕНА — только оттуда, где связи ЕСТЬ.
  *
  *  Сначала его собственная карточка (`["client", memberId]` — её же патчит
@@ -83,10 +87,6 @@ export interface LinkWriter {
  *  (`list_master_clients_safe`) среди них нет намеренно: он связей не отдаёт
  *  вовсе, и первая же запись от него стёрла бы все связи человека — поэтому у
  *  такого источника блока связей нет (`caps.links`). */
-/** Строка человека в момент «Убрать» — для «Отменить». После снятия связи
- *  его может не быть ни в одном кэше экрана, и возврат не находил строку. */
-const detachedRows = new Map<string, Client>();
-
 function freshMemberRow(
   qc: QueryClient,
   memberId: string,
