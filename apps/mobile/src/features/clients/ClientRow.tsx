@@ -18,11 +18,11 @@ import { haptics } from "@/lib/haptics";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { formatShortDateRu } from "@/features/clients/format";
-import { formatPhoneForDisplay } from "@/features/clients/phone";
-import { useDefaultCountry } from "@/features/clients/default-country";
+import { formatPhoneForDisplay } from "@/lib/phone";
+import { useDefaultCountry } from "@/features/reference/default-country";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import type { CardFieldPrefs } from "@/features/clients/card-prefs";
-import type { ClientsScope } from "@/features/clients/clients-company";
+import type { ClientsScope } from "@/session/clients-company";
 import { clientBlockLevel } from "@/features/clients/client-block-access";
 import { visitMark } from "@/features/clients/visit-mark";
 

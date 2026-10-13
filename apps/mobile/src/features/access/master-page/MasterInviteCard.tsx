@@ -7,7 +7,7 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
-import { formatPhoneAsYouType } from "@/features/clients/phone";
+import { formatPhoneAsYouType } from "@/lib/phone";
 import { phoneToSave } from "@/features/profile/profile";
 import { useTeams } from "@/features/reference/queries";
 import { invitationErrorMessage } from "@/features/settings/invitation-flow";
@@ -15,13 +15,13 @@ import {
   usePendingInvitations,
   useRevokeInvitation,
 } from "@/features/settings/team-access";
-import { useTenant } from "@/features/settings/tenant";
+import { useTenant } from "@/session/tenant";
 import { chooseOption } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 
 import { shareInvitation, waitSheetExit } from "../InviteMemberSheet";
-import { useAccessBlocks } from "../queries";
+import { useAccessBlocks } from "@/session/access-queries";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
 import { useUpdateMasterInvitation } from "./invitation-api";
 import { invitationRefusalText, isInvitationGone } from "./invitation-contract";

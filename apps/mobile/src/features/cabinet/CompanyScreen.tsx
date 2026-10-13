@@ -10,13 +10,13 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { ROLE_LABELS } from "@/features/settings/role-policy";
-import { tierLine, tierOf, trialLeft } from "@/features/tariffs/tiers";
-import { useTenant } from "@/features/settings/tenant";
+import { ROLE_LABELS } from "@/session/role-policy";
+import { tierLine, tierOf, trialLeft } from "@/session/tiers";
+import { useTenant } from "@/session/tenant";
 import {
   useMyCalendars,
   useSwitchWorkspace,
-} from "@/features/settings/workspaces";
+} from "@/session/workspaces";
 import { notify } from "@/lib/notify";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { fetchQuotaUsage, type MobileQuotaKind } from "@/lib/quota";

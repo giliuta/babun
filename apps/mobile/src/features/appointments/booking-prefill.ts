@@ -1,5 +1,5 @@
 import type { Client } from "@babun/shared/local/clients";
-import { tryToE164 } from "../clients/phone";
+import { tryToE164 } from "@/lib/phone";
 
 export type BookingClientRef = Pick<
   Client,

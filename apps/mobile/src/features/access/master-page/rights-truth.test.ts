@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { AccessBlock } from "../access-map";
+import type { AccessBlock } from "@/session/access-map";
 import { mirrorMapOf } from "../mirror/mirror-map";
 import {
   areaLevel,

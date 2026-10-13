@@ -4,8 +4,8 @@ import { UserRound, Users } from "lucide-react-native";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
 import { SelfReminderSheet } from "@/features/calendar/SelfReminderSheet";
-import { eventTypeIcon } from "@/features/calendar/event-type-icons";
-import { durationLabel } from "@/features/services/format";
+import { eventTypeIcon } from "@/features/reference/event-type-icons";
+import { durationLabel } from "@/lib/service-format";
 import { TotalSheet } from "@/features/appointments/TotalSheet";
 import {
   ColorSheet,

@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import { Linking, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { useInClientsTab } from "@/features/clients/reference-href";
+import { useInClientsTab } from "@/lib/reference-href";
 import type { PhotoKind } from "@babun/shared/db/repositories/appointment-photos";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -13,7 +13,7 @@ import { SelectList } from "@/components/ui/select-rows";
 import { useToast } from "@/components/ui/Toast";
 import { getSignedUrl, useDeleteAttachment, type ClientAttachment } from "@/features/clients/card-attachments";
 import { useClient } from "@/features/clients/queries";
-import { groupFilesByDay } from "@/features/clients/client-files";
+import { groupFilesByDay } from "@/lib/client-files";
 import { ClientFileRow } from "@/features/clients/ClientFileRow";
 import { VisitDayHeader } from "@/features/clients/VisitRow";
 import { useClientFileUpload, useClientFiles, type ClientFileItem } from "@/features/clients/use-client-files";

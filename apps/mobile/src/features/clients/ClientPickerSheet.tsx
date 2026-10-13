@@ -23,9 +23,9 @@ import {
 import { useClients } from "@/features/clients/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { useDefaultCountry } from "@/features/clients/default-country";
-import { formatPhoneForDisplay } from "@/features/clients/phone";
-import { usePlanAllows } from "@/features/settings/tenant";
+import { useDefaultCountry } from "@/features/reference/default-country";
+import { formatPhoneForDisplay } from "@/lib/phone";
+import { usePlanAllows } from "@/session/tenant";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 
 // ВЫБОР КЛИЕНТА — ОДНА ШТОРКА НА ВЕСЬ ПРОДУКТ (владелец 2026-09-10: «если я

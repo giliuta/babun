@@ -6,9 +6,9 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { NavRow, RowCaption, RowGroup } from "@/components/ui/card-rows";
 import { useClients } from "@/features/clients/queries";
-import { formatInvoiceMoney } from "@/features/invoices/format";
-import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
-import { useReceipts } from "@/features/documents/receipts-queries";
+import { formatInvoiceMoney } from "@/lib/paper/format";
+import { useInvoicePayments, useInvoices } from "@/features/finances/invoices-queries";
+import { useReceipts } from "@/features/finances/receipts-queries";
 
 // «Документы клиента» — бывшая дверь карточки клиента («Счета и чеки» в
 // снятой 22.09 «Документации»; теперь бумаги клиента стоят плашками в его

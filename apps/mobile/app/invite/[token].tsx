@@ -20,7 +20,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { useSession } from "@/providers/SessionProvider";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { getActiveTenantId } from "@/lib/active-tenant";
-import { myCalendarsQueryKey } from "@/features/settings/my-calendars-key";
+import { myCalendarsQueryKey } from "@/session/my-calendars-key";
 import {
   acceptAndActivateInvitation,
   useInvitationPreview,

@@ -1,7 +1,7 @@
 import { Stack, useGlobalSearchParams, usePathname } from "expo-router";
 import { useThemeColors } from "@/theme/colors";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
-import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
+import { useTeamSettingLevel } from "@/session/team-setting-level";
 
 // Настройки календаря. Живут ВНУТРИ вкладки «Календарь» (app/(dashboard)/
 // (home)), поэтому таб-бар остаётся на месте, а вкладка помнит, на какой

@@ -1,4 +1,4 @@
-import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/features/access/access-map";
+import type { AccessBlock, AccessLevel, MemberAccessMap } from "@/session/access-map";
 import type { EventBlocks, RecordBlocks, RecordLevel } from "./record-blocks/levels";
 import { asRecordWindow, type RecordWindow } from "./record-window";
 

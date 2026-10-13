@@ -7,9 +7,9 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { useFeatureOn } from "@/features/settings/company-features";
-import { useCurrentRole } from "@/features/settings/tenant";
-import { accessGate } from "@/features/access/my-access";
-import { useMyAccess } from "@/features/access/queries";
+import { useCurrentRole } from "@/session/tenant";
+import { accessGate } from "@/session/my-access";
+import { useMyAccess } from "@/session/access-queries";
 import { useTeams } from "@/features/reference/queries";
 
 // ДВЕРЬ (03.10): владельцу — как было (граница роли); партнёру — если хоть в

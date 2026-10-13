@@ -1,4 +1,4 @@
-import type { AccessLevel, MemberAccessMap } from "@/features/access/access-map";
+import type { AccessLevel, MemberAccessMap } from "@/session/access-map";
 
 // ПРАВА КЛИЕНТОВ ЧЕЛОВЕКА В КОМПАНИИ — ИЗ ЕГО КОМАНД (владелец 29.09: «в
 // команде один он может видеть клиентов, в команде три — нет»). С миграции

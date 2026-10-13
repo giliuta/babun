@@ -7,7 +7,7 @@ import {
   BreakdownSectionHeader,
   ProfitBreakdown,
 } from "../ProfitBreakdown";
-import { dmyShort } from "../period";
+import { dmyShort } from "@/lib/period";
 import type { Analytics } from "./use-analytics";
 
 /** «Доход» / «Расход» — сама `ProfitBreakdown` с хвостом аналитики. */

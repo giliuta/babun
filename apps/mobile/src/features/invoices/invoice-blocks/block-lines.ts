@@ -1,5 +1,5 @@
 import { invoiceLineTotal } from "@babun/shared/local/finance/invoice-ledger";
-import { parseDecimal, parseMoneyAmount, type EditableInvoiceLine } from "../format";
+import { parseDecimal, parseMoneyAmount, type EditableInvoiceLine } from "@/lib/paper/format";
 
 export interface InvoiceBlockLine {
   id: string;

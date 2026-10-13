@@ -12,7 +12,7 @@ import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { useToast } from "@/components/ui/Toast";
 import { GUTTER, TYPE } from "@/components/ui/tokens";
-import { useAccountGate, useAccountName, useAccountScope } from "@/features/cabinet/account-scope";
+import { useAccountGate, useAccountName, useAccountScope } from "@/session/account-scope";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useTeams } from "@/features/reference/queries";
 import { notify } from "@/lib/notify";
@@ -30,7 +30,7 @@ import {
   workingTeamIds,
   type Tier,
   type TierCard,
-} from "./tiers";
+} from "@/session/tiers";
 import { openTariffCheckout, openTariffPortal, useStartTrial, useTariff } from "./use-tariff";
 
 // КАБИНЕТ → ТАРИФ — ЦЕНА ЗА КАЛЕНДАРЬ (владелец 12.10: €9.99 в месяц за

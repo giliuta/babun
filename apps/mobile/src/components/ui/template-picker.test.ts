@@ -23,7 +23,7 @@ test("отбор шаблонов: другие команды, без заве�
 // read together with the folder: the sheet itself lives there.
 const PARTS: Record<string, string> = {
   "../../features/reference/screens/LabelsScreen.tsx": "../../features/reference/screens/labels",
-  "../../features/reference/screens/ObjectTypesScreen.tsx": "../../features/reference/screens/object-types",
+  "../../features/clients/ObjectTypesScreen.tsx": "../../features/clients/object-types",
   "../../../app/(dashboard)/clients/tags.tsx": "../../features/clients/tags-page",
 };
 const readWithParts = (rel: string) =>
@@ -32,7 +32,7 @@ const readWithParts = (rel: string) =>
 const SHEETS: [string, string][] = [
   ["метки", "../../features/reference/screens/LabelsScreen.tsx"],
   ["типы событий", "../../features/reference/screens/EventTypeSheet.tsx"],
-  ["типы объектов", "../../features/reference/screens/ObjectTypesScreen.tsx"],
+  ["типы объектов", "../../features/clients/ObjectTypesScreen.tsx"],
   ["источники", "../../../app/(dashboard)/clients/sources.tsx"],
   ["теги", "../../../app/(dashboard)/clients/tags.tsx"],
   ["категории", "../../features/finances/CategoryEditorSheet.tsx"],
@@ -53,7 +53,7 @@ test("шаблоны — только у владельца аккаунта", (
   for (const path of [
     "../../features/reference/screens/LabelsScreen.tsx",
     "../../features/reference/screens/EventTypesScreen.tsx",
-    "../../features/reference/screens/ObjectTypesScreen.tsx",
+    "../../features/clients/ObjectTypesScreen.tsx",
     "../../../app/(dashboard)/clients/sources.tsx",
     "../../../app/(dashboard)/clients/tags.tsx",
     "../../features/finances/CategoryEditorSheet.tsx",

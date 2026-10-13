@@ -2,7 +2,7 @@ import { Pressable, View } from "react-native";
 import { Bell, BellRing } from "lucide-react-native";
 import { Halo } from "@/components/ui/Halo";
 import { colorName } from "@babun/shared/common/utils/colors";
-import { selfReminderLabel } from "@/features/calendar/reminder-time";
+import { selfReminderLabel } from "@/lib/reminder-time";
 import { haptics } from "@/lib/haptics";
 import { Text } from "./book-text";
 import type { BookModel } from "./use-book-form";

@@ -10,7 +10,7 @@ import { useSplitClient } from "@/features/clients/use-split-client";
 import { parseSplit } from "@/features/clients/split-client";
 import { useClientDraft, type DraftOpen } from "@/features/clients/useClientDraft";
 import { useCardAccess } from "@/features/clients/use-card-access";
-import { contactsLocked } from "@/features/clients/member-contacts";
+import { contactsLocked } from "@/session/member-contacts";
 import { notify } from "@/lib/notify";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";

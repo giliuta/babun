@@ -6,9 +6,9 @@ import type {
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
-import { useReceipts } from "@/features/documents/receipts-queries";
+import { useReceipts } from "@/features/finances/receipts-queries";
 import type { AccountWithBalance } from "./accounts";
-import type { Period } from "./period";
+import type { Period } from "@/lib/period";
 import { collectDocuments } from "./documents";
 
 // ДОКУМЕНТЫ ПЕРИОДА — ОДИН ИСТОЧНИК ДЛЯ ПЛИТКИ И СПИСКА (аудит 2026-09-29:

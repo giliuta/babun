@@ -14,7 +14,7 @@ import {
 import { hasAddressPlace, objectPlacePatch } from "@/features/clients/object-address";
 import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { snapObjectType } from "@/features/clients/object-types";
-import { useReferenceHref } from "@/features/clients/reference-href";
+import { useReferenceHref } from "@/lib/reference-href";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";

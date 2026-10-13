@@ -4,11 +4,11 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { invitationErrorMessage } from "@/features/settings/invitation-flow";
 import { activateAcceptedInvitation } from "@/features/settings/invitations";
-import { myCalendarsQueryKey } from "@/features/settings/my-calendars-key";
+import { myCalendarsQueryKey } from "@/session/my-calendars-key";
 import { getActiveTenantId } from "@/lib/active-tenant";
 
 import { isInvitationGone, parseMyInvitations, type IncomingInvitation } from "./invitation-inbox";
-import { AccessRequestError } from "./queries";
+import { AccessRequestError } from "@/session/access-queries";
 
 // ВХОДЯЩИЕ ПРИГЛАШЕНИЯ — ДОРОГА К СЕРВЕРУ (STORY-081, контракт 006). Список
 // принадлежит ЧЕЛОВЕКУ, а не компании: приглашения приходят из чужих компаний,

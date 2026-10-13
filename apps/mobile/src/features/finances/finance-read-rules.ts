@@ -1,9 +1,9 @@
 import type { Debt } from "@babun/shared/local/finance/debt";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
-import type { MemberAccessMap } from "@/features/access/access-map";
-import { moneyKey } from "@/features/access/my-access";
-import type { UserRole } from "@/features/settings/role-policy";
+import type { MemberAccessMap } from "@/session/access-map";
+import { moneyKey } from "@/session/my-access";
+import type { UserRole } from "@/session/role-policy";
 import type { FinanceDocument } from "./documents";
 import { levelInCalendar } from "./finance-page-access";
 import { asRecordWindow, recordWindowStart } from "@/features/appointments/record-window";

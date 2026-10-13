@@ -6,8 +6,8 @@ import {
   useRef,
 } from "react";
 import { useFocusEffect } from "expo-router";
-import { useCalendarChips } from "@/features/settings/workspaces";
-import { FOREIGN_PREFIX } from "@/features/settings/calendar-chips";
+import { useCalendarChips } from "@/session/workspaces";
+import { FOREIGN_PREFIX } from "@/session/calendar-chips";
 import { dayMoneyGate, seesDayMoney } from "@/features/calendar/day-money-access";
 import type { CalendarRights } from "./use-calendar-rights";
 import type { CalendarSources } from "./use-calendar-sources";

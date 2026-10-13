@@ -7,7 +7,7 @@ import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
 
 import { waitSubtitle } from "./invitation-wait";
-import type { CalendarMember } from "./queries";
+import type { CalendarMember } from "@/session/access-queries";
 
 // СТРОКИ ЛЮДЕЙ КАЛЕНДАРЯ в «Мастерах» (STORY-081): кто уже с доступом и кто
 // ещё не ответил на приглашение. Ритм тот же, что у карточки мастера на экране:

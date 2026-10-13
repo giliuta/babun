@@ -6,10 +6,10 @@ import {
   useUploadAttachments,
   type PickedFile,
 } from "@/features/clients/card-attachments";
-import { clientFileTimeline } from "@/features/clients/client-files";
+import { clientFileTimeline } from "@/lib/client-files";
 import { useClientVisitPhotos } from "@/features/clients/visit-photos";
-import { useReceipts } from "@/features/documents/receipts-queries";
-import { useInvoices } from "@/features/invoices/queries";
+import { useReceipts } from "@/features/finances/receipts-queries";
+import { useInvoices } from "@/features/finances/invoices-queries";
 import type { PickedAppointmentPhoto } from "@/features/appointments/appointment-photos";
 import { useFilePickers } from "@/features/appointments/use-file-pickers";
 import { useToast } from "@/components/ui/Toast";

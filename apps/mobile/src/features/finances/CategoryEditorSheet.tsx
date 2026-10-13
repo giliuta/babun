@@ -30,7 +30,7 @@ import { AmountBlock } from "./AmountBlock";
 import { askBudgetNotificationPermission } from "./budget-notify";
 import { budgetInputText, parseBudgetInput } from "./category-budget";
 import { useFinanceCategories, useInsertCategory, useUpdateCategory } from "./queries";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { otherTeamTemplates } from "@/components/ui/TemplatePicker";
 import { useCategoryMonthSpend } from "./use-category-budget";
 

@@ -1,5 +1,5 @@
-import type { MemberAccessMap } from "@/features/access/access-map";
-import { accessGate, type AccessGate } from "@/features/access/my-access";
+import type { MemberAccessMap } from "@/session/access-map";
+import { accessGate, type AccessGate } from "@/session/my-access";
 import { isFeatureOn, type CompanyFeatureKey } from "@babun/shared/local/company-features";
 
 // ЧТО ИЗ ЗАПИСИ ВИДИТ И МЕНЯЕТ КОМАНДА — ОДНИМ ОТВЕТОМ (STORY-084).

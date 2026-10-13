@@ -18,13 +18,13 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { SwitchControl } from "@/components/ui/SwitchControl";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
-import { IdentityCard } from "@/features/appointments/TeamLabelRow";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
+import { IdentityCard } from "@/components/blocks/TeamLabelRow";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 import { VisitDayHeader } from "@/features/clients/VisitRow";
 import { useThemeColors } from "@/theme/colors";
 
-import type { AccessLevel } from "../access-map";
+import type { AccessLevel } from "@/session/access-map";
 import { PreviewFrame, levelState } from "./PreviewFrame";
 import { CLIENT_CARD_PREVIEW_KEYS } from "./preview-keys";
 import { SAMPLE_LOCATION } from "./preview-sample";

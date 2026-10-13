@@ -14,7 +14,7 @@ import {
   type RecordRow,
 } from "./record-rows";
 import { inTeamScope } from "./team-scope";
-import { isPastRecord } from "@/features/calendar/day-ledger";
+import { isPastRecord } from "@/features/finances/day-ledger";
 
 // ДОЛГ — ТАКАЯ ЖЕ СТРОКА-ЗАПИСЬ, КАК ДОХОД И РАСХОД (владелец 2026-09-09:
 // «общая — это когда по времени там сразу долг, доход и расход, всё это туда

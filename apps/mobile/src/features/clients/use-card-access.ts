@@ -1,16 +1,16 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Client } from "@babun/shared/local/clients";
-import { useClientsCapabilities, useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useClientsCapabilities, useClientsScopeOrNull } from "@/session/company-scope";
 import { useClientFunctionOn } from "@/features/clients/client-functions";
 import { useFeatureOn } from "@/features/settings/company-features";
 import { cardAccess, type CardAccess } from "@/features/clients/card-access";
-import { useMyAccess } from "@/features/access/queries";
-import { parseMemberAccessMap, type MemberAccessMap } from "@/features/access/access-map";
-import { mirrorClientBlocks } from "@/features/access/mirror/mirror-client";
+import { useMyAccess } from "@/session/access-queries";
+import { parseMemberAccessMap, type MemberAccessMap } from "@/session/access-map";
+import { mirrorClientBlocks } from "@/session/mirror-client";
 import { myAccessQueryKey } from "@/lib/company-query-keys";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
-import { usePlanAllows } from "@/features/settings/tenant";
+import { usePlanAllows } from "@/session/tenant";
 import { useTeams } from "@/features/reference/queries";
 
 /** Карта прав сотрудника в компании источника: активной — `useMyAccess`

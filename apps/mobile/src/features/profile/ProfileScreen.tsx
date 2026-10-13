@@ -11,7 +11,7 @@ import { TYPE } from "@/components/ui/tokens";
 import { useOwnAccountId, useOwnAccountName, useRenameOwnAccount } from "@/features/cabinet/own-account-name";
 import { birthdayText } from "@/features/cabinet/person-card";
 import { formatYMD } from "@/features/appointments/helpers";
-import { useDefaultCountry } from "@/features/clients/default-country";
+import { useDefaultCountry } from "@/features/reference/default-country";
 import { usePhoneField } from "@/features/clients/use-phone-country";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";

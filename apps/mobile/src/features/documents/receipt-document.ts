@@ -1,9 +1,9 @@
 import type { Receipt } from "@babun/shared/local/finance/receipt";
-import { formatInvoiceMoney } from "@/features/invoices/format";
-import { clientSnapshotParty, formatQty } from "@/features/invoices/document";
-import { invoiceDictionary } from "@/features/invoices/dictionary";
+import { formatInvoiceMoney } from "@/lib/paper/format";
+import { clientSnapshotParty, formatQty } from "@/lib/paper/document";
+import { invoiceDictionary } from "@/lib/paper/dictionary";
 import { parseInvoiceClientSnapshot } from "@babun/shared/local/finance/invoice-ledger";
-import type { InvoiceLanguage } from "@/features/invoices/dictionary";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import { RECEIPT_WORDS, type ReceiptWords } from "./receipt-words";
 import type {
   ReceiptDocumentLineInput,

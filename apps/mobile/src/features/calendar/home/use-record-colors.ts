@@ -17,7 +17,7 @@ import {
   type ColorSituation,
 } from "@/features/appointments/record-color";
 import { useCities } from "@/features/reference/queries";
-import { useDayCities, useSetDayCity } from "@/features/calendar/day-cities";
+import { useDayCities, useSetDayCity } from "@/features/reference/day-cities";
 import {
   LABEL_FALLBACK_COLOR,
   resolveCalendarDayLabel,

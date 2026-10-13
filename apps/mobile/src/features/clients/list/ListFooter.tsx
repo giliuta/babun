@@ -1,7 +1,7 @@
 import { View } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { BulkActionBar } from "@/features/clients/BulkActionBar";
-import { clientCardHref, ownClientCardHref } from "@/features/clients/clients-company";
+import { clientCardHref, ownClientCardHref } from "@/session/clients-company";
 import { TariffLocked } from "@/features/tariffs/TariffLocked";
 import type { ClientsList } from "./use-clients-list";
 

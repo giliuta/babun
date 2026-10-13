@@ -12,7 +12,7 @@
 // сверяются тестом с тем, что делал сервер. Доступа это не расширяет: широкий
 // запрос читает то же, что RLS и так отдаёт этой роли в этой компании.
 
-import type { UserRole } from "@/features/settings/role-policy";
+import type { UserRole } from "@/session/role-policy";
 
 /** Метки одной команды — зеркало `.eq("team_id", teamId)` в `fetchCities`.
  *  Без команды (пусто, `null`) — весь справочник компании, как и там: так

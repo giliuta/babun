@@ -19,9 +19,9 @@ Routes:
 
 Feature code:
 - `apps/mobile/src/features/calendar/TeamScheduleSheet.tsx` (the week as seven columns — the schedule IS a sheet)
-- `apps/mobile/src/features/calendar/BreaksSection.tsx`, `schedule-days.ts`, `window.ts`
-- `apps/mobile/src/features/reference/team-schedule.ts`, `master-profile.ts`
-- `apps/mobile/src/features/settings/team-access.ts`, `role-policy.ts`, `invitations.ts`
+- `apps/mobile/src/features/calendar/BreaksSection.tsx`, `window.ts`
+- `apps/mobile/src/features/reference/team-schedule.ts`, `schedule-days.ts`, `master-profile.ts`
+- `apps/mobile/src/features/settings/team-access.ts`, `invitations.ts`; roles — `apps/mobile/src/session/role-policy.ts`
 - Shared: `packages/shared/src/local/masters.ts` (`Master`, `Team`, `BrigadeRole`,
   `BrigadeMember` — teams and brigades live in this one
   file), `brigade-permissions.ts` (`BrigadeMemberPermissions`), `schedule.ts`

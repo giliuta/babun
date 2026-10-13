@@ -10,7 +10,7 @@ import { haptics } from "@/lib/haptics";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { BlockPreview } from "./BlockPreview";
 import { stepLook } from "./right-look";
 import { offeredSteps, rightTitle, shownLevel, stepDanger, stepHint, stepWord } from "./right-words";

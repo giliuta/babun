@@ -27,7 +27,7 @@ import {
 import { useFinanceCategories } from "./queries";
 import { useFinanceSettingLevel } from "./use-finance-settings";
 import { useSession } from "@/providers/SessionProvider";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { RecordRowView, type RecordRowTone } from "./RecordRow";
 import { recordRows, type RecordRow } from "./record-rows";
 

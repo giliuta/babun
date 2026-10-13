@@ -11,7 +11,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useTeams } from "@/features/reference/queries";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { writeErrorWords } from "@/lib/connection-words";

@@ -4,7 +4,7 @@ import type { Service } from "@/features/services/queries";
 import { previousPeriod } from "../analytics/analytics-math";
 import type { HomeView } from "../FinanceOverview";
 import type { DebtTeams, FinanceReadRules } from "../finance-read-rules";
-import type { Period } from "../period";
+import type { Period } from "@/lib/period";
 import { useTransactions } from "../queries";
 import type { LedgerFilter } from "./home-scope";
 import { previousProfit } from "./home-totals";

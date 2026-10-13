@@ -18,7 +18,7 @@ import { ICON } from "@/components/ui/tokens";
 import type { Team } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 
-import { AREA_TITLE } from "../access-map";
+import { AREA_TITLE } from "@/session/access-map";
 import {
   levelTone,
   type AreaLevel,

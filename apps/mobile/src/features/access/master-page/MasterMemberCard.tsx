@@ -10,19 +10,19 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
-import { formatPhoneAsYouType } from "@/features/clients/phone";
+import { formatPhoneAsYouType } from "@/lib/phone";
 import { phoneToSave } from "@/features/profile/profile";
 import { useMasters, useTeams, useUpdateMaster } from "@/features/reference/queries";
 import { useRemoveTenantMember } from "@/features/settings/team-access";
 
-import { levelOf as mapLevelOf, type AccessBlock, type AccessRefusal } from "../access-map";
+import { levelOf as mapLevelOf, type AccessBlock, type AccessRefusal } from "@/session/access-map";
 import {
   useAccessBlocks,
   useCompanyMembers,
   useMemberAccess,
   useSetMemberAccess,
   useSetMemberCalendars,
-} from "../queries";
+} from "@/session/access-queries";
 import { draftTeamBrief } from "../rights-ui/team-sentence";
 import { AccessSectionsCard } from "../rights-ui/AccessSectionsCard";
 import { MasterWorkBlock } from "./MasterProfileBlocks";
@@ -38,7 +38,7 @@ import { CALENDAR_GROUPS } from "./access-summary";
 import { activeOf, usePreview } from "./rights-page-shared";
 import { memberRefusal } from "./member-rights-writer";
 import { viewSections } from "./rights-view-sections";
-import { usePartnerManager, useTeamsAllowed } from "./use-partner-manager";
+import { usePartnerManager, useTeamsAllowed } from "@/session/use-partner-manager";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
 import { withLiveTeams } from "./master-draft";
 import {
@@ -47,7 +47,7 @@ import {
   companyAreasOf,
   draftFromMemberAccess,
 } from "./rights-rows";
-import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
+import { ActionMenuSheet, type ActionMenu } from "@/components/blocks/ActionMenuSheet";
 import { calendarToggler } from "./member-calendar-toggle";
 import { memberMenuActions } from "./member-menu";
 

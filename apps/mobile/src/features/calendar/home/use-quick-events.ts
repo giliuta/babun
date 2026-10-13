@@ -10,7 +10,7 @@ import { haptics } from "@/lib/haptics";
 import { addMinutesHM, humanDayTitle } from "@/features/appointments/helpers";
 import { useEventBlocks } from "@/features/appointments/booking-prefs";
 import { usePersonalEventTypes } from "@/features/settings/local-settings";
-import { eventTypeIcon } from "@/features/calendar/event-type-icons";
+import { eventTypeIcon } from "@/features/reference/event-type-icons";
 import { serverReason } from "@/features/calendar/server-reason";
 import type { CalendarRights } from "./use-calendar-rights";
 import type { CalendarRoute } from "./use-calendar-route";

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type Ref } from "react";
 import { TextInput, View } from "react-native";
 import { MapPinned, Send, Tag } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
+import { useClientsCapabilities } from "@/session/company-scope";
 import { FieldRow } from "@/components/ui/card-rows";
 import { iconPreset } from "@/components/ui/icon-set";
 import { PickerSheet } from "@/components/ui/PickerSheet";

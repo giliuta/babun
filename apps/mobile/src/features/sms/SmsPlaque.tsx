@@ -1,6 +1,6 @@
 import { AlertCircle, CheckCheck, Clock, Send } from "lucide-react-native";
 import { SelectRow } from "@/components/ui/select-rows";
-import { fileTime } from "@/features/clients/client-files";
+import { fileTime } from "@/lib/client-files";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 import { when } from "./SmsHistoryRow";
 import type { SmsHistoryItem } from "./sms-model";

@@ -4,9 +4,9 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import { useBusinessNow } from "@/features/appointments/business-now";
 import type { CardAccess } from "@/features/clients/card-access";
-import type { ClientsScope } from "@/features/clients/clients-company";
+import type { ClientsScope } from "@/session/clients-company";
 import { useTeams } from "@/features/reference/queries";
-import { useTenant } from "@/features/settings/tenant";
+import { useTenant } from "@/session/tenant";
 import { clientSmsVars } from "@/features/sms/client-sms-vars";
 
 /** The card's shared stats and the SMS context its phone numbers offer. */

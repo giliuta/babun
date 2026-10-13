@@ -7,7 +7,7 @@ import { generateId, type MasterRole } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { mastersQueryKey } from "@/lib/company-query-keys";
-import { useDataRole, type UserRole } from "@/features/settings/tenant";
+import { useDataRole, type UserRole } from "@/session/tenant";
 import { operationalMasterJsonToMaster } from "@/features/settings/master-reference";
 import { referenceKeys } from "../query-keys";
 import type { Master } from "./types";

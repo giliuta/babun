@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { useThemeColors } from "@/theme/colors";
 
-import type { AccessLevel } from "../access-map";
+import type { AccessLevel } from "@/session/access-map";
 import { PreviewFrame, levelState } from "./PreviewFrame";
 import { CLIENTS_PREVIEW_KEYS } from "./preview-keys";
 

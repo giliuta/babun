@@ -19,8 +19,9 @@ Calendar settings live INSIDE the calendar tab, not here:
 Client settings live inside the clients tab: `apps/mobile/app/(dashboard)/clients/*`.
 
 Feature code:
-- `apps/mobile/src/features/settings/*` (`local-settings.ts`, `tenant.ts`, `role-policy.ts`, `team-access.ts`, `invitations.ts`, `sms-templates.ts`)
-- `apps/mobile/src/features/reference/*` (`RefListScreen.tsx`, `screens/CitiesScreen.tsx`, `screens/LabelsScreen.tsx`, `screens/ObjectTypesScreen.tsx`, `label-cascade.ts`, `team-schedule.ts`)
+- `apps/mobile/src/features/settings/*` (`local-settings.ts`, `team-access.ts`, `invitations.ts`, `sms-templates.ts`)
+- `apps/mobile/src/features/reference/*` (`RefListScreen.tsx`, `screens/CitiesScreen.tsx`, `screens/LabelsScreen.tsx`, `label-cascade.ts`, `team-schedule.ts`)
+- Session (active company, role): `apps/mobile/src/session/tenant.ts`, `role-policy.ts`; object types — `apps/mobile/src/features/clients/ObjectTypesScreen.tsx`
 - Shared: `packages/shared/src/local/calendar-settings.ts`, `day-cities.ts`
   (`CityConfig` / `CYPRUS_CITY_PRESETS` — there is no `local/cities.ts`),
   `location-labels.ts`, `services.ts`, `sms-templates.ts`

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { TeamSchedule } from "@babun/shared/local/schedule";
-import { withDay } from "../schedule-days";
+import { withDay } from "@/features/reference/schedule-days";
 import { hm, pairOnEnd, pairOnStart, sameHoursEveryDay, text } from "./schedule-pair";
 
 describe("schedule pair", () => {

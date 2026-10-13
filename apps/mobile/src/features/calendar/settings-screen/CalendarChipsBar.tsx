@@ -1,5 +1,5 @@
 import { Pressable, Text } from "react-native";
-import { FOREIGN_PREFIX, calendarOrderKey } from "@/features/settings/calendar-chips";
+import { FOREIGN_PREFIX, calendarOrderKey } from "@/session/calendar-chips";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";

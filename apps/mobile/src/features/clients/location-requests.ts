@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/Toast";
-import { useScopeCompany } from "@/features/clients/company-scope";
+import { useScopeCompany } from "@/session/company-scope";
 import {
   isLocationRequestToken,
   locationRequestState,
   type LocationRequest,
 } from "@/features/clients/location-request-link";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 
 // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС» — данные (STORY-077). Чистые правила —
 // в location-request-link.ts, действия с тостами и «Поделиться» — в

@@ -439,7 +439,7 @@ describe("повторный аудит календаря 03.10", () => {
   test("в календаре и листах записи — «запись», не «заявка»", () => {
     const src = screen();
     assert.doesNotMatch(src, /"Открыть заявку"|исчезнут из заявки/);
-    for (const file of ["../appointments/BookingSheets.tsx", "../appointments/CrewWorkRecord.tsx", "../appointments/CrewAppointmentSheet.tsx", "ActionMenuSheet.tsx"]) {
+    for (const file of ["../appointments/BookingSheets.tsx", "../appointments/CrewWorkRecord.tsx", "../appointments/CrewAppointmentSheet.tsx", "../../components/blocks/ActionMenuSheet.tsx"]) {
       const body = readFileSync(resolve(here, file), "utf8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
       assert.doesNotMatch(body, /"[^"]*[Зз]аявк[^"]*"/, file);
     }

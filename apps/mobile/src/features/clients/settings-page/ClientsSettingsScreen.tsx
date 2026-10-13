@@ -7,14 +7,14 @@ import {
   ClientsScopeProvider,
   useClientsCapabilities,
   useClientsScopeOrNull,
-} from "@/features/clients/company-scope";
-import type { ClientsScope } from "@/features/clients/clients-company";
+} from "@/session/company-scope";
+import type { ClientsScope } from "@/session/clients-company";
 import { useAccessMaps, useClientsSources } from "@/features/clients/sources";
 import { useGuestSources } from "@/features/clients/guest-sources";
 import { anyClientSetting, clientSettingLevels } from "@/features/clients/settings-levels";
 import { useClientsTeam } from "@/features/clients/team-pref";
 import { ALL_TEAMS } from "@/features/clients/team-scope";
-import { useMyAccess } from "@/features/access/queries";
+import { useMyAccess } from "@/session/access-queries";
 import { useTeams } from "@/features/reference/queries";
 import { useTenantId } from "@/lib/tenant";
 import { SettingsBody } from "./SettingsBody";

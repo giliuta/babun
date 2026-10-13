@@ -8,7 +8,7 @@ import {
 import {
   useTeamNotifyPrefs,
   useTeamNotifyVersion,
-} from "@/features/cabinet/notification-prefs-store";
+} from "@/lib/notification-prefs-store";
 import { reminderSignature } from "./grouping";
 import type { CalendarRoute } from "./use-calendar-route";
 import type { CalendarSources } from "./use-calendar-sources";

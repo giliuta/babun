@@ -38,7 +38,7 @@ import {
   subscribeClaimSettled,
 } from "@/lib/claim-resync-plan";
 import { isKnownChange, ownWindowEndsAt, takeMissedChange } from "@/lib/own-writes";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 
 /** Строки записей во всех списках кэша — версия каждой (`updated_at`). */
 function* cachedAppointmentRows(

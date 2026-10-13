@@ -12,8 +12,8 @@ import {
   type AccessLevel,
   type AccessRefusal,
   type MemberAccessMap,
-} from "../access-map";
-import { AccessRequestError, useSetMemberAccess } from "../queries";
+} from "@/session/access-map";
+import { AccessRequestError, useSetMemberAccess } from "@/session/access-queries";
 import { MEMBER_REFUSAL_TEXT, levelChanges, withMemberChanges } from "./rights-rows";
 
 // ЗАПИСЬ ПРАВ СОТРУДНИКА — ОДНА НА ГЛАВНУЮ СТРАНИЦУ И НА СТРАНИЦУ ПРАВ.

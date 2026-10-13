@@ -1,5 +1,5 @@
 import { money } from "@babun/shared/common/utils/money";
-import { tierName, type Tier } from "@/features/tariffs/tiers";
+import { tierName, type Tier } from "@/session/tiers";
 
 // «ОПЛАТЫ ТАРИФА» — ЧИСТЫЙ СЛОЙ (владелец 03.10: «оплаты тарифа — да, надо»).
 //

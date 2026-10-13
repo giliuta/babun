@@ -6,11 +6,11 @@ import { getNotificationsModule } from "@/lib/notifications";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useTeams } from "@/features/reference/queries";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { useSession } from "@/providers/SessionProvider";
-import type { ChangeLogRow } from "./change-log";
-import { activityNotification, shouldNotify } from "./notification-prefs";
-import { readTeamNotifyPrefs } from "./notification-prefs-cache";
+import type { ChangeLogRow } from "@/lib/change-log";
+import { activityNotification, shouldNotify } from "@/lib/notification-prefs";
+import { readTeamNotifyPrefs } from "@/lib/notification-prefs-cache";
 
 // ЧТО ПРОИСХОДИТ В КОМАНДЕ — УВЕДОМЛЕНИЯ ИЗ ИСТОРИИ ИЗМЕНЕНИЙ (владелец 03.10:
 // «уведомления настраиваем чётко на эту команду»).

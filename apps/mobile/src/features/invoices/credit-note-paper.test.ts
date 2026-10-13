@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { InvoiceLedgerWithLines } from "@babun/shared/local/finance/invoice-ledger";
-import { buildInvoiceDocument } from "./document";
-import { buildInvoicePdfHtml } from "./pdf";
+import { buildInvoiceDocument } from "@/lib/paper/document";
+import { buildInvoicePdfHtml } from "@/lib/paper/pdf";
 
 // КРЕДИТ-НОТА ПЕЧАТАЛАСЬ СЛОМАННЫМ «INVOICE» (аудит 03.10): сервер
 // (`_issue_credit_note`) пишет только суммы с минусом и русскую причину —

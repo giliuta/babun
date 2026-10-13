@@ -1,7 +1,7 @@
 // Dependant blocks: what folds and resets under a hidden parent, and the
 // rows that carry a companion right.
 
-import type { AccessBlock, AccessChange, AccessLevel } from "../../access-map";
+import type { AccessBlock, AccessChange, AccessLevel } from "@/session/access-map";
 import { defaultLevel } from "./draft";
 
 /** Зависимые блоки: пока главный скрыт, их строки на странице прав свёрнуты,

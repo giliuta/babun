@@ -11,7 +11,7 @@ import {
   useMapServicesOrder,
   useReorderMapServices,
   useToggleMapService,
-} from "@/lib/map-services";
+} from "@/features/clients/map-services";
 
 // «Карты для маршрута» — что предлагать по кнопке «Маршрут» и в каком
 // порядке (первая в списке — первая в выборе).

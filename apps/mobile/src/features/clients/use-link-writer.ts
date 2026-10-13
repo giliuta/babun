@@ -5,10 +5,10 @@ import {
   type Client,
   type ClientMembership,
 } from "@babun/shared/local/clients";
-import { capabilitiesOf } from "./clients-company";
+import { capabilitiesOf } from "@/session/clients-company";
 import { useClientsSourceScope, useUpdateClientById } from "./queries";
 import type { ClientLinkItem } from "./blocks/ClientLinksBlock";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 import {
   clientMembersQueryKey,
   freshLinks,

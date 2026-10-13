@@ -3,9 +3,9 @@ import type { ScrollView } from "react-native";
 import { moneySymbol } from "@babun/shared/common/utils/money";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import type { LadderStep } from "@/features/services/ServiceLadder";
-import { useTenant } from "@/features/settings/tenant";
+import { useTenant } from "@/session/tenant";
 import { type Service, type ServiceInput } from "@/features/services/queries";
-import { roundToStep } from "@/features/services/format";
+import { roundToStep } from "@/lib/service-format";
 import {
   displayValue,
   createTierDraft,

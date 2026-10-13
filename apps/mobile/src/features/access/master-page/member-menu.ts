@@ -4,11 +4,11 @@ import { Archive, ArchiveRestore } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { useToast } from "@/components/ui/Toast";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import type { ActionMenu } from "@/features/calendar/ActionMenuSheet";
+import type { ActionMenu } from "@/components/blocks/ActionMenuSheet";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
-import type { CalendarMember } from "../queries";
+import type { CalendarMember } from "@/session/access-queries";
 import { removalMessage, upcomingWorkCount } from "./removal-impact";
 
 export interface MemberMenuDeps {

@@ -15,7 +15,7 @@ const read = (name: string) => readFileSync(resolve(app, name), "utf8");
 describe("кредит-нота", () => {
   test("«Кредит-нота» в меню ведёт в форму, а не выпускает ноту", () => {
     // Меню одно на «⋯» страницы и долгое нажатие в «Документах».
-    const menu = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "invoice-menu.ts"), "utf8");
+    const menu = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../finances/invoice-menu.ts"), "utf8");
     assert.match(menu, /router\.push\(`\/invoices\/credit-note\?invoiceId=\$\{invoice\.id\}`/);
     assert.doesNotMatch(menu, /useCancelInvoice/);
     // The page is the thin route plus `src/features/invoices/detail/`.

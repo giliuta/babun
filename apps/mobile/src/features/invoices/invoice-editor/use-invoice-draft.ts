@@ -9,8 +9,8 @@ import { round2 } from "@babun/shared/local/finance/appointment-calc";
 import { isUiLocale } from "@babun/shared/i18n/locales";
 import type { DiscountKind } from "@/features/appointments/TotalSheet";
 import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
-import type { InvoiceLanguage } from "../dictionary";
-import { addDaysYmd, type EditableInvoiceLine } from "../format";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
+import { addDaysYmd, type EditableInvoiceLine } from "@/lib/paper/format";
 import {
   appointmentVatOf,
   existingDiscountOf,

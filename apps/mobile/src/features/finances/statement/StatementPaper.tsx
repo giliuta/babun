@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 import { useThemeColors } from "@/theme/colors";
-import { headCell, numCell, PAPER, TotalRow } from "@/features/documents/ReceiptPaperParts";
+import { headCell, numCell, PAPER, TotalRow } from "@/components/blocks/ReceiptPaperParts";
 import type { StatementDocument } from "./statement-document";
 
 // ЗЕРКАЛО ВЫПИСКИ — ТА ЖЕ БУМАГА, ЧТО УЙДЁТ В PDF (`statement-pdf.ts`).

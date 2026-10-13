@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import { useIsOnline } from "@babun/shared/sync";
-import { todayYmd } from "@/features/invoices/format";
+import { todayYmd } from "@/lib/paper/format";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
 import { useThemeColors } from "@/theme/colors";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { useTenant } from "@/features/settings/tenant";
+import { useTenant } from "@/session/tenant";
 import type { Team } from "@/features/reference/queries";
 import type { AccountWithBalance } from "./accounts";
 import {

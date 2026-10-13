@@ -1,4 +1,4 @@
-import { can, type UserRole } from "@/features/settings/role-policy";
+import { can, type UserRole } from "@/session/role-policy";
 
 // СТРАНИЦА НАСТРОЕК КАЛЕНДАРЯ ОТКРЫВАЕТСЯ ВСЕМ, А СТРОКИ В НЕЙ — ПО ДОСТУПУ.
 //

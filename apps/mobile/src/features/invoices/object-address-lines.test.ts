@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { hasExactAddress, objectAddressLines } from "./document";
-import { invoiceDictionary } from "./dictionary";
+import { hasExactAddress, objectAddressLines } from "@/lib/paper/document";
+import { invoiceDictionary } from "@/lib/paper/dictionary";
 
 // АДРЕС ПОЛУЧАТЕЛЯ — ТОЛЬКО ТОЧНЫЙ АДРЕС ОБЪЕКТА (владелец 2026-09-22):
 // строки бумаги на её языке; без «где» — адреса нет вовсе.

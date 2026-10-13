@@ -21,7 +21,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 
-import type { AccessLevel } from "../access-map";
+import type { AccessLevel } from "@/session/access-map";
 import { PreviewFrame } from "./PreviewFrame";
 
 // ВИД СТРОК «НАСТРОЕК КОМАНДЫ» И «НАСТРОЕК КЛИЕНТОВ» В ШТОРКЕ ПРАВА

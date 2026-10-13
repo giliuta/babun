@@ -17,7 +17,7 @@ Routes:
 Feature code (`apps/mobile/src/features/finances/`):
 - `FinanceOverview.tsx`, `ProfitBreakdown.tsx`, `AccountsPanel.tsx`, `FinancesFooter.tsx`, `DocumentsPanel.tsx`, `DebtorsList.tsx`
 - `OperationSheet.tsx`, `TransferSheet.tsx`, `PeriodSheets.tsx`; лист создания и правки счёта — `account-editor/AccountEditorSheet.tsx`; строки страницы «Счета» — `accounts-page/*`
-- `accounts.ts`, `accounts-sections.ts`, `accounts-footer.ts`, `breakdown.ts`, `period.ts`, `transfer-*.ts`, `refund.ts`, `documents.ts`
+- `accounts.ts`, `accounts-sections.ts`, `accounts-footer.ts`, `breakdown.ts`, `transfer-*.ts` (periods — `apps/mobile/src/lib/period.ts`), `refund.ts`, `documents.ts`
 - Invoices/receipts: `apps/mobile/src/features/invoices/*`, `apps/mobile/src/features/documents/*`
 
 Shared math (`packages/shared/src/local/finance/`):

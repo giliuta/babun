@@ -28,7 +28,7 @@ import {
   changeTitle,
   changesSummary,
   type ChangeLogItem,
-} from "../change-log";
+} from "@/lib/change-log";
 
 const ICONS: Record<string, LucideIcon> = {
   clients: UserRound,

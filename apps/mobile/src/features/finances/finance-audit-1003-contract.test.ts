@@ -56,13 +56,13 @@ describe("повторный аудит финансов 03.10", () => {
     const ledger = read("queries.ts");
     const helper = ledger.slice(ledger.indexOf("export function invalidateLedger"), ledger.indexOf("export function useInsertTransaction"));
     assert.match(helper, /queryKey: \["appointment-ledger"\]/);
-    const invoices = read("../invoices/queries.ts");
+    const invoices = read("invoices-queries.ts");
     const inv = invoices.slice(invoices.indexOf("function invalidateInvoices"), invoices.indexOf("/** ЯЗЫК БУМАГИ"));
     assert.match(inv, /queryKey: \["appointment-ledger"\]/);
   });
 
   test("отказ «Номер не сохранён» — одно окно, без «Проверьте соединение» (017)", () => {
-    const invoices = read("../invoices/queries.ts");
+    const invoices = read("invoices-queries.ts");
     const hook = invoices.slice(invoices.indexOf("export function useSetInvoiceNextNumber"), invoices.indexOf("mutationFn", invoices.indexOf("export function useSetInvoiceNextNumber")));
     assert.match(hook, /meta: \{ errorHandled: true \}/);
   });

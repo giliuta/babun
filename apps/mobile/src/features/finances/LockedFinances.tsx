@@ -10,11 +10,11 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { useTeams } from "@/features/reference/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { usePlanAllows } from "@/features/settings/tenant";
+import { usePlanAllows } from "@/session/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { FinanceOverview } from "./FinanceOverview";
 import { RecordRowsPanel } from "./RecordRowsPanel";
-import { defaultPeriod } from "./period";
+import { defaultPeriod } from "@/lib/period";
 import type { RecordRow } from "./record-rows";
 
 // «ФИНАНСЫ» БЕЗ ДОСТУПА — ТА ЖЕ СТРАНИЦА, ТОЛЬКО СЕРАЯ (владелец 15.09: «если

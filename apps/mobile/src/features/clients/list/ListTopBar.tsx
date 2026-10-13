@@ -1,7 +1,7 @@
 import { Pressable, Text, TextInput, View } from "react-native";
 import { Search, Settings, SlidersHorizontal } from "lucide-react-native";
 import { ScopeChips } from "@/components/ui/ScopeChips";
-import { clientsSettingsHref } from "@/features/clients/clients-company";
+import { clientsSettingsHref } from "@/session/clients-company";
 import { ALL_TEAMS, toggleTeamChoice } from "@/features/clients/team-scope";
 import { haptics } from "@/lib/haptics";
 import type { ClientsList } from "./use-clients-list";

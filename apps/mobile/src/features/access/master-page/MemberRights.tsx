@@ -2,9 +2,9 @@ import { useState } from "react";
 
 import { useTeams } from "@/features/reference/queries";
 
-import { levelOf as mapLevelOf, type AccessRefusal } from "../access-map";
-import { useAccessBlocks, useCompanyMembers, useMemberAccess } from "../queries";
-import { usePartnerManager } from "./use-partner-manager";
+import { levelOf as mapLevelOf, type AccessRefusal } from "@/session/access-map";
+import { useAccessBlocks, useCompanyMembers, useMemberAccess } from "@/session/access-queries";
+import { usePartnerManager } from "@/session/use-partner-manager";
 import { MasterRightsView, focusViewProps, type RightsFocus } from "./MasterRightsView";
 import { previewAreaOf } from "./rights-focus";
 import { memberRefusal, useMemberRightsWriter } from "./member-rights-writer";

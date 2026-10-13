@@ -16,10 +16,10 @@ import {
   REWARM_EVERY_MS,
   warmOtherCompanies,
 } from "@/lib/tenant-prefetch";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { myInvitationsKeyRoot } from "@/features/access/inbox-queries";
-import type { MemberAccessMap } from "@/features/access/access-map";
-import { isNewerAccess } from "@/features/access/my-access";
+import type { MemberAccessMap } from "@/session/access-map";
+import { isNewerAccess } from "@/session/my-access";
 import { myAccessQueryKey } from "@/lib/company-query-keys";
 import { referenceKeys } from "@/features/reference/query-keys";
 

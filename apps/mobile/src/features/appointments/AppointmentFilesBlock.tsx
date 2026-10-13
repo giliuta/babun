@@ -11,7 +11,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { useThemeColors } from "@/theme/colors";
 import { confirmThen } from "@/lib/confirm";
-import { clientFileTimeline } from "@/features/clients/client-files";
+import { clientFileTimeline } from "@/lib/client-files";
 import { ClientFileRow } from "@/features/clients/ClientFileRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
@@ -25,9 +25,9 @@ import {
   type ClientAttachment,
   type PickedFile,
 } from "@/features/clients/card-attachments";
-import { useReceipts } from "@/features/documents/receipts-queries";
-import { useCreditNoteLinks, useInvoices } from "@/features/invoices/queries";
-import { appointmentInvoiceFiles } from "@/features/invoices/appointment-invoices";
+import { useReceipts } from "@/features/finances/receipts-queries";
+import { useCreditNoteLinks, useInvoices } from "@/features/finances/invoices-queries";
+import { appointmentInvoiceFiles } from "@/features/finances/appointment-invoices";
 import { AppointmentPhotoViewer } from "./AppointmentPhotoViewer";
 import { docTitle, isVideoPath, pendingDocs, pendingMedia, type PendingFile } from "./appointment-files";
 import {

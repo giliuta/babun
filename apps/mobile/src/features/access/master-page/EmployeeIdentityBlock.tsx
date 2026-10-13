@@ -5,11 +5,11 @@ import { FieldRow } from "@/components/ui/card-rows";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { GUTTER } from "@/components/ui/tokens";
-import { IdentityCard } from "@/features/appointments/TeamLabelRow";
+import { IdentityCard } from "@/components/blocks/TeamLabelRow";
 import { ClientExtraContacts } from "@/features/clients/ClientExtraContacts";
 import type { ContactHolder } from "@/features/clients/contact-fields";
 import { CONTACT_COLUMN } from "@/features/clients/contact-column";
-import { useDefaultCountry } from "@/features/clients/default-country";
+import { useDefaultCountry } from "@/features/reference/default-country";
 import { usePhoneField } from "@/features/clients/use-phone-country";
 import { useThemeColors } from "@/theme/colors";
 

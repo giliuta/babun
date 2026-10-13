@@ -8,7 +8,7 @@ import {
   MESSAGING_READINESS,
   MessagingUnavailableError,
   requireMessagingReady,
-} from "./readiness";
+} from "@/lib/messaging-readiness";
 
 const here = dirname(fileURLToPath(import.meta.url));
 

@@ -12,12 +12,12 @@ import {
   teamsQueryKey,
 } from "@/lib/company-query-keys";
 import { fetchTeams } from "@/features/reference/queries";
-import { useMirrorMode } from "@/features/access/mirror/mirror-state";
+import { useMirrorMode } from "@/session/mirror-state";
 import { listMasterAppointmentsSafePaged } from "@/features/calendar/master-appointments";
 import { listMemberClients } from "./queries";
 import { withClientHistory } from "./member-history";
 import { listMemberClientHistory, memberHistoryQueryKey } from "./use-member-history";
-import { viewKeyOf, type ClientsScope } from "./clients-company";
+import { viewKeyOf, type ClientsScope } from "@/session/clients-company";
 
 // КЛИЕНТЫ КОМПАНИЙ, ГДЕ ЧЕЛОВЕК РАБОТАЕТ, — ВТОРАЯ ПОЛОВИНА ОБЩЕГО СПИСКА.
 //

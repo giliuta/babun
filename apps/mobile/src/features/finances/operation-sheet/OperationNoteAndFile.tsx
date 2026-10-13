@@ -1,5 +1,5 @@
 import { SectionCard } from "@/components/ui/SectionCard";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
 import { OperationReceiptRow } from "../OperationReceiptRow";
 import type { ReceiptSession } from "../receipt-upload";
 

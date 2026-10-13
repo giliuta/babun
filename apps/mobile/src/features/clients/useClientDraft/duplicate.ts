@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Client } from "@babun/shared/local/clients";
 import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
 import { listClients as listClientsCached } from "@babun/shared/sync/clientsCached";
-import type { ClientsCompanyKind } from "@/features/clients/clients-company";
-import { tryToE164 } from "@/features/clients/phone";
+import type { ClientsCompanyKind } from "@/session/clients-company";
+import { tryToE164 } from "@/lib/phone";
 
 /** Database client the draft writes through (own or a bound tenant). */
 type DraftDb = Parameters<typeof findClientByPhoneE164>[0];

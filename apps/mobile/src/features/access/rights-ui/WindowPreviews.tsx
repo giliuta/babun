@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { RecordRowView } from "@/features/finances/RecordRow";
 import { useThemeColors } from "@/theme/colors";
 
-import type { AccessLevel } from "../access-map";
+import type { AccessLevel } from "@/session/access-map";
 import { PreviewFrame } from "./PreviewFrame";
 import { row } from "./preview-sample";
 

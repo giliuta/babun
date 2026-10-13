@@ -27,8 +27,8 @@ import type { Client } from "@babun/shared/local/clients";
 import {
   formatPhoneAsYouType,
   tryToE164,
-} from "@/features/clients/phone";
-import { useDefaultCountry } from "@/features/clients/default-country";
+} from "@/lib/phone";
+import { useDefaultCountry } from "@/features/reference/default-country";
 import { FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
@@ -38,7 +38,7 @@ import { useThemeColors } from "@/theme/colors";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { ClientExtraContacts } from "@/features/clients/ClientExtraContacts";
 import { useDraftPhone, usePhoneField } from "@/features/clients/use-phone-country";
-import { contactsLocked } from "@/features/clients/member-contacts";
+import { contactsLocked } from "@/session/member-contacts";
 import { LockedPhoneRow } from "@/features/clients/LockedPhoneRow";
 import { CONTACT_COLUMN } from "@/features/clients/contact-column";
 

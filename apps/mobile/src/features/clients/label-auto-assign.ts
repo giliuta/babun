@@ -14,10 +14,10 @@ import {
 } from "@babun/shared/sync/clientsCached";
 import { isOnline } from "@babun/shared/sync";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
-import type { UserRole } from "@/features/settings/tenant";
-import { dayCitiesQueryKey } from "@/features/calendar/day-cities";
+import type { UserRole } from "@/session/tenant";
+import { dayCitiesQueryKey } from "@/features/reference/day-cities";
 import { clientsQueryKey } from "./queries";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 
 // Метка дня → метка клиента («Тихий лист 2», решение владельца
 // 2026-07-22). Best-effort вызов из onSuccess создания/переноса записи:

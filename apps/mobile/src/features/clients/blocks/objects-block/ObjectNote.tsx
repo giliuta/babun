@@ -1,7 +1,7 @@
 import type { Location } from "@babun/shared/local/clients";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
-import { useInlineNote } from "@/features/appointments/use-inline-note";
+import { useClientsCapabilities } from "@/session/company-scope";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
+import { useInlineNote } from "@/components/blocks/use-inline-note";
 
 /** МИНИ-ЗАМЕТКА ОБЪЕКТА — ТА ЖЕ ПЛАШКА, ЧТО У ЗАМЕТКИ ЗАПИСИ (владелец
  *  22.09: «в записи мы выбираем объект, и там снизу сразу заметка; сделай

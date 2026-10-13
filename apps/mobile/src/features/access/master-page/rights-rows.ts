@@ -6,7 +6,7 @@ import {
   type AccessLevel,
   type AccessRefusal,
   type MemberAccessMap,
-} from "../access-map";
+} from "@/session/access-map";
 import {
   compositeRow,
   rowAnchor,

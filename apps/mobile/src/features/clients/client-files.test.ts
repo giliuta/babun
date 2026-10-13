@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { clientFileTimeline, fileDay, fileTime, groupFilesByDay } from "./client-files";
+import { clientFileTimeline, fileDay, fileTime, groupFilesByDay } from "@/lib/client-files";
 
 // ФАЙЛЫ КЛИЕНТА — ЛЕНТОЙ ПО ДНЯМ, КАК «ИСТОРИЯ» (владелец 03.10: «файлы —
 // как история, по датам… файлы, чеки, инвойсы — полноценные блоки, чтобы

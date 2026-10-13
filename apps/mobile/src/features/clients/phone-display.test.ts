@@ -8,7 +8,7 @@ import {
   formatPhoneForDisplay,
   groupCyprusDigits,
   tryToE164,
-} from "./phone";
+} from "@/lib/phone";
 import { withHomeCode } from "./use-phone-country";
 import { readModuleSource } from "../../lib/module-source";
 import { clientsListSource } from "./list/source-for-tests";

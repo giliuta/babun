@@ -17,7 +17,7 @@ const read = (path: string) => readFileSync(resolve(here, path), "utf8");
 describe("чеки страницы инвойса", () => {
   test("ищутся и по инвойсу, и по его платежам", () => {
     assert.match(
-      read("receipts-queries.ts"),
+      read("../finances/receipts-queries.ts"),
       /q = q\.or\(`invoice_id\.eq\.\$\{invoiceId\},transaction_id\.in\.\(\$\{transactionIds\.join\(","\)\}\)`\);/,
     );
   });

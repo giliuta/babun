@@ -21,7 +21,7 @@ import { randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 
 const BUCKET = "client-attachments";
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB

@@ -1,6 +1,6 @@
-import type { MemberAccessMap } from "@/features/access/access-map";
-import { accessGate } from "@/features/access/my-access";
-import type { UserRole } from "@/features/settings/role-policy";
+import type { MemberAccessMap } from "@/session/access-map";
+import { accessGate } from "@/session/my-access";
+import type { UserRole } from "@/session/role-policy";
 
 // «НАСТРОЙКИ ФИНАНСОВ» ПО ПРАВАМ (владелец 03.10: «сделай полноценно страницу
 // доступа в финансах… как делали другие страницы»). Тот же закон, что у

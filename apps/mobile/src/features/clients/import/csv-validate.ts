@@ -11,7 +11,7 @@
 import type { CountryCode } from "libphonenumber-js";
 import type { ParsedRow } from "./csv-parse";
 import type { ImportableField } from "./csv-mapping";
-import { tryToE164 } from "../phone";
+import { tryToE164 } from "@/lib/phone";
 
 export type RowReason =
   | "пустое имя"

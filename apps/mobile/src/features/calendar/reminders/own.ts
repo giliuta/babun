@@ -2,13 +2,13 @@
 // per-team reminder about every record (`auto:`).
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getStorage } from "@babun/shared/storage";
-import { readTeamNotifyPrefs } from "@/features/cabinet/notification-prefs-cache";
-import { AUTO_REMINDER_HORIZON_MS } from "@/features/cabinet/notification-prefs";
+import { readTeamNotifyPrefs } from "@/lib/notification-prefs-cache";
+import { AUTO_REMINDER_HORIZON_MS } from "@/lib/notification-prefs";
 import {
   selfReminderInstant,
   selfReminderLabel,
   type SelfReminder,
-} from "@/features/calendar/reminder-time";
+} from "@/lib/reminder-time";
 import {
   babunNotificationRegistrySnapshot,
   removeBabunNotificationOwners,

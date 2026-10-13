@@ -7,9 +7,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { GUTTER } from "@/components/ui/tokens";
-import { useCompanyMembers } from "@/features/access/queries";
+import { useCompanyMembers } from "@/session/access-queries";
 import { useTeams } from "@/features/reference/queries";
-import { useMyCalendars } from "@/features/settings/workspaces";
+import { useMyCalendars } from "@/session/workspaces";
 import { dayTitle } from "@/features/sms/sms-history-view";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { haptics } from "@/lib/haptics";
@@ -25,11 +25,11 @@ import {
   type ChangeLogItem,
   type HistoryFilter,
   type HistoryPeriod,
-} from "./change-log";
+} from "@/lib/change-log";
 import { ChangeDetailSheet } from "./ChangeDetailSheet";
 import { HistoryFilterSheet } from "./HistoryFilterSheet";
-import { useAccountName, useAccountScope } from "./account-scope";
-import { useChangeLogPeriod } from "./use-change-log";
+import { useAccountName, useAccountScope } from "@/session/account-scope";
+import { useChangeLogPeriod } from "@/lib/use-change-log";
 import { ChangeRow, iconOf } from "./history/ChangeRow";
 
 // «ИСТОРИЯ ИЗМЕНЕНИЙ» (Кабинет → Компания, владелец 03.10: «любое изменение

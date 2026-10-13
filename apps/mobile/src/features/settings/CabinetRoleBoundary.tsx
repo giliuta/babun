@@ -5,10 +5,10 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "./tenant";
-import { useMyMemberships } from "./my-memberships";
-import { usePartnersAccess } from "@/features/access/master-page/use-partner-manager";
-import { cabinetScreenRole, canAccessCabinetPath } from "./role-policy";
+import { useCurrentRole } from "@/session/tenant";
+import { useMyMemberships } from "@/session/my-memberships";
+import { usePartnersAccess } from "@/session/use-partner-manager";
+import { cabinetScreenRole, canAccessCabinetPath } from "@/session/role-policy";
 
 // РОЛЬ РЕШАЕТ ПО КОМПАНИИ ЭКРАНА, А НЕ ПО ОТКРЫТОЙ В КАЛЕНДАРЕ.
 //

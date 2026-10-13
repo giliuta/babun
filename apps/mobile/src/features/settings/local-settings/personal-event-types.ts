@@ -14,11 +14,11 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 // The data role, not the mirrored one — see the note in ./calendar-settings.
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import {
   isConfirmedNetworkUnavailable,
   isMissingPersonalEventTypesContract,
-} from "@/features/settings/server-read-fallback";
+} from "@/lib/server-read-fallback";
 import { asServerReadError, serverOperationError } from "./server-error";
 
 // ─── Personal event types (personal_event_types, row per type) ───────

@@ -1,4 +1,4 @@
-import type { UserRole } from "./role-policy";
+import type { UserRole } from "@/session/role-policy";
 
 export type InvitableRole = Extract<UserRole, "dispatcher" | "master">;
 export type InvitationState = "active" | "expired" | "accepted";

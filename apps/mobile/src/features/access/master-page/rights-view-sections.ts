@@ -1,4 +1,4 @@
-import { AREA_TITLE, type AccessBlock, type AccessLevel } from "../access-map";
+import { AREA_TITLE, type AccessBlock, type AccessLevel } from "@/session/access-map";
 import { briefTitle, isClosedStep } from "../rights-ui/right-words";
 import {
   CALENDAR_GROUPS,

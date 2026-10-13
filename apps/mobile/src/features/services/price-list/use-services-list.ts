@@ -18,8 +18,8 @@ import {
   type Service,
   type ServiceInput,
 } from "@/features/services/queries";
-import { useDataRole } from "@/features/settings/tenant";
-import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
+import { useDataRole } from "@/session/tenant";
+import { useTeamSettingLevel } from "@/session/team-setting-level";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
 import { type ServiceEditing } from "@/features/services/ServiceSheet";

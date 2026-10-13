@@ -48,7 +48,7 @@ Neighbours it leans on:
 
 ## What you own
 - The «Кому и куда едем» hero + «Маршрут» action — `RouteSheet` (the same
-  `PickerSheet` the object row uses) over `src/lib/route-menu.ts` and
+  `PickerSheet` the object row uses) over `src/features/clients/route-menu.ts` and
   `buildMapUrl` from `packages/shared/src/common/utils/map-links.ts`. Not
   `ActionSheetIOS`: the map choice is one sheet for the whole product, and
   `ActionSheetIOS` exists only on iOS while this code also runs on Android and Web.

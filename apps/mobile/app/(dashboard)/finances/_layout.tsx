@@ -2,7 +2,7 @@ import { Stack, usePathname } from "expo-router";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { useMyAccess } from "@/features/access/queries";
+import { useMyAccess } from "@/session/access-queries";
 import { LockedFinances } from "@/features/finances/LockedFinances";
 import { financesGate } from "@/features/finances/finances-gate";
 import { anyFinanceSetting } from "@/features/finances/settings-levels";
@@ -10,7 +10,7 @@ import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-setti
 import { useTeams } from "@/features/reference/queries";
 import { useBudgetWatch } from "@/features/finances/use-category-budget";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 
 // Раздел «Финансы» — ОДНА вкладка со стеком внутри, как «Клиенты».
 //

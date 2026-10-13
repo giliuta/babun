@@ -11,7 +11,7 @@ import { accountBalancesQueryKey } from "@/lib/company-query-keys";
 import { markOwnWrite, OWN_WRITE_IN_FLIGHT_MS, OWN_WRITE_SETTLE_MS } from "@/lib/own-writes";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { appointmentsQueryKey } from "@/features/calendar/queries";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
 import { laterPaymentQueued, paymentScope } from "./payment-queue";

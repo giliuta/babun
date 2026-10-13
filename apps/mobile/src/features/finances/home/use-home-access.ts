@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { useMyAccess } from "@/features/access/queries";
+import { useMyAccess } from "@/session/access-queries";
 import { useDisabledFeatures } from "@/features/settings/company-features";
-import { useCurrentRole, usePlanAllows } from "@/features/settings/tenant";
+import { useCurrentRole, usePlanAllows } from "@/session/tenant";
 import { useSession } from "@/providers/SessionProvider";
 import type { HomeView } from "../FinanceOverview";
 import { financePageAccess } from "../finance-page-access";

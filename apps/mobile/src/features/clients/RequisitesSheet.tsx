@@ -13,7 +13,7 @@ import { SwitchRow } from "@/components/ui/SwitchRow";
 import { GUTTER } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { useClientsCapabilities } from "@/features/clients/company-scope";
+import { useClientsCapabilities } from "@/session/company-scope";
 
 // ЛИСТ ОДНОГО НАБОРА РЕКВИЗИТОВ — создание и правка одним телом (закон
 // «одна сущность — одно тело»). Четыре поля разом: реквизиты почти всегда

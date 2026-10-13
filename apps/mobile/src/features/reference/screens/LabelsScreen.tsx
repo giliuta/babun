@@ -12,15 +12,15 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useThemeColors } from "@/theme/colors";
-import { useDayCities } from "@/features/calendar/day-cities";
+import { useDayCities } from "@/features/reference/day-cities";
 import { useAllTeamSchedules } from "@/features/reference/team-schedule";
 import {
   useCities,
   useTeams,
   usePurgeExpiredCities,
 } from "@/features/reference/queries";
-import { useTeamSettingLevel } from "@/features/calendar/team-setting-level";
-import { useDataRole } from "@/features/settings/tenant";
+import { useTeamSettingLevel } from "@/session/team-setting-level";
+import { useDataRole } from "@/session/tenant";
 import { LabelEditSheet } from "./labels/LabelEditSheet";
 import { LabelRow } from "./labels/LabelRow";
 import {

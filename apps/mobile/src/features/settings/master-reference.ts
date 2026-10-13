@@ -1,6 +1,6 @@
 import type { Database, Json } from "@babun/shared/db/database.types";
 import type { Client } from "@babun/shared/local/clients";
-import { contactsHiddenOf } from "@/features/clients/member-contacts";
+import { contactsHiddenOf } from "@/session/member-contacts";
 
 type Service = Database["public"]["Tables"]["services"]["Row"];
 type Team = Database["public"]["Tables"]["teams"]["Row"];

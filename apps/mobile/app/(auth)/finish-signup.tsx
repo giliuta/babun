@@ -15,7 +15,7 @@ import { mapAuthError } from "@/components/auth/authErrors";
 import { mayFinishHere, signupFinish } from "@/components/auth/signup-finish";
 import { useOwnAccountName, useRenameOwnAccount } from "@/features/cabinet/own-account-name";
 import { usePendingInvitationToken } from "@/features/settings/invitations";
-import { useMyMemberships } from "@/features/settings/my-memberships";
+import { useMyMemberships } from "@/session/my-memberships";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { CAN_SIGN_UP_HERE } from "@/lib/pay-here";
 import { supabase } from "@/lib/supabase";

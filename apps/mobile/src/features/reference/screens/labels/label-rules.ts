@@ -1,6 +1,6 @@
 import type { TeamSchedule } from "@babun/shared/local/schedule";
 import type { City } from "@/features/reference/queries";
-import { allDays, ISO_BY_KEY } from "@/features/calendar/schedule-days";
+import { allDays, ISO_BY_KEY } from "@/features/reference/schedule-days";
 
 // Pure rules of the labels screen (`LabelsScreen.tsx`): list order, usage,
 // who holds a weekday, team days off, the revive patch and the blocked-day

@@ -6,13 +6,13 @@ import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { resolveChannels } from "@/features/clients/contact-channels";
 import { useEnabledChannels } from "@/features/clients/contact-ways";
-import { useDefaultCountry } from "@/features/clients/default-country";
+import { useDefaultCountry } from "@/features/reference/default-country";
 import { MessageCircle } from "lucide-react-native";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ClientSummaryCard } from "@/features/clients/ClientSummaryCard";
 import { lastClientRecord } from "@/features/clients/last-record";
-import { moreLabel } from "@/features/clients/more-label";
+import { moreLabel } from "@/lib/more-label";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 

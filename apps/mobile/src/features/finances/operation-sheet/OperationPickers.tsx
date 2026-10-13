@@ -8,7 +8,7 @@ import { iconPreset } from "@/components/ui/icon-set";
 import type { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
-import { useReferenceHref } from "@/features/clients/reference-href";
+import { useReferenceHref } from "@/lib/reference-href";
 import { useThemeColors } from "@/theme/colors";
 import type { useClientChoice } from "../use-client-choice";
 import { CATEGORY_KIND_ROW } from "../settings-levels";

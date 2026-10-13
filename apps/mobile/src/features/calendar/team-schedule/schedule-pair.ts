@@ -2,7 +2,7 @@
 // at a time, never inverted and never wrapped through midnight.
 
 import { timeToMinutes, type TeamSchedule } from "@babun/shared/local/schedule";
-import { allDays } from "../schedule-days";
+import { allDays } from "@/features/reference/schedule-days";
 
 export type TimePair = { start: string; end: string };
 export type TimePatch = { hour?: number; minute?: number };

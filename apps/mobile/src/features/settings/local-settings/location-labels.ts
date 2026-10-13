@@ -8,12 +8,12 @@ import {
   type LocationLabel,
 } from "@babun/shared/local/location-labels";
 import { supabase } from "@/lib/supabase";
-import { useScopeCompany } from "@/features/clients/company-scope";
+import { useScopeCompany } from "@/session/company-scope";
 import {
   locationLabelRemoveIds,
   positionedLocationLabelUpserts,
 } from "@/features/settings/location-label-sync";
-import { isConfirmedNetworkUnavailable } from "@/features/settings/server-read-fallback";
+import { isConfirmedNetworkUnavailable } from "@/lib/server-read-fallback";
 
 // ─── Location labels (location_labels, soft-retained server rows) ────
 type LocationLabelRow = Database["public"]["Tables"]["location_labels"]["Row"];

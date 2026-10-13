@@ -1,9 +1,9 @@
 import { UserRound, Users } from "lucide-react-native";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { EventTypeBlock } from "@/features/appointments/EventTypeBlock";
 import { WhenRow } from "@/features/appointments/BookingSummary";
-import { TeamLabelRow } from "@/features/appointments/TeamLabelRow";
+import { TeamLabelRow } from "@/components/blocks/TeamLabelRow";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
 import { minutesBetweenHM } from "@/features/appointments/helpers";
 import { SmsComposeProvider } from "@/features/sms/SmsCompose";

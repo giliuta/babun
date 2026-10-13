@@ -18,7 +18,7 @@ import {
   sameSelfReminder,
   selfReminderLabel,
   type SelfReminder,
-} from "@/features/calendar/reminder-time";
+} from "@/lib/reminder-time";
 
 // «НАПОМНИТЬ» — ПУШ СЕБЕ О ЗАПИСИ ИЛИ СОБЫТИИ (владелец 2026-09-24).
 //

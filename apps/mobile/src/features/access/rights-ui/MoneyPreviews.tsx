@@ -11,7 +11,7 @@ import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/Pay
 import { RecordRowView } from "@/features/finances/RecordRow";
 import { useThemeColors } from "@/theme/colors";
 
-import type { AccessLevel } from "../access-map";
+import type { AccessLevel } from "@/session/access-map";
 import { PreviewFrame, levelState } from "./PreviewFrame";
 import {
   SAMPLE_DEBT,

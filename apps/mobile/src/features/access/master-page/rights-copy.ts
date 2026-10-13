@@ -1,4 +1,4 @@
-import { LEVEL_WORD, type AccessBlock, type AccessLevel } from "../access-map";
+import { LEVEL_WORD, type AccessBlock, type AccessLevel } from "@/session/access-map";
 
 // ЧТО ЧЕЛОВЕК СМОЖЕТ — ПРЕДЛОЖЕНИЕМ, А НЕ ТЕРМИНОМ.
 //

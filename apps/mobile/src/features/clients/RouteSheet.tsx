@@ -1,8 +1,8 @@
 import { useRouter } from "expo-router";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { useClientSettingsDoor } from "@/features/clients/use-settings-door";
-import { useEnabledMapServices } from "@/lib/map-services";
-import { openInMap, routeServices } from "@/lib/route-menu";
+import { useEnabledMapServices } from "@/features/clients/map-services";
+import { openInMap, routeServices } from "@/features/clients/route-menu";
 
 // ЛИСТ «КУДА ЕХАТЬ» — тот же примитив, что «Добавить» и «Как связаться»
 // (владелец 2026-08-06: «чтобы выглядело так же, как когда нажимаю добавить

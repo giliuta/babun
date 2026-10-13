@@ -11,7 +11,7 @@ import type { PickedAppointmentPhoto } from "@/features/appointments/appointment
 import { FileAddSheet } from "@/features/appointments/FileAddSheet";
 import { useFilePickers } from "@/features/appointments/use-file-pickers";
 import type { PickedFile } from "@/features/clients/card-attachments";
-import { clientFileTimeline } from "@/features/clients/client-files";
+import { clientFileTimeline } from "@/lib/client-files";
 import { ClientFileRow } from "@/features/clients/ClientFileRow";
 import type { ClientFileItem } from "@/features/clients/use-client-files";
 import { confirmThen } from "@/lib/confirm";

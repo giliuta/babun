@@ -3,7 +3,7 @@ import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import { useThemeColors } from "@/theme/colors";
 import { PanelHeader } from "../PanelHeader";
 import { BreakdownBarRow, BreakdownSectionHeader } from "../ProfitBreakdown";
-import { dmyShort } from "../period";
+import { dmyShort } from "@/lib/period";
 import { hoursLabel } from "./analytics-math";
 import { compareRow, monthTrend as monthTrendRows } from "./compare-rows";
 import { MonthTable, monthLabel } from "./MonthTable";

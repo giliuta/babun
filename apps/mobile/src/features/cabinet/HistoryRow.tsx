@@ -3,9 +3,9 @@ import { History } from "lucide-react-native";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { accountHref } from "./CabinetAccountRoute";
-import { shortDate } from "./change-log";
-import { useChangeLogToday } from "./use-change-log";
+import { accountHref } from "@/session/CabinetAccountRoute";
+import { shortDate } from "@/lib/change-log";
+import { useChangeLogToday } from "@/lib/use-change-log";
 
 // «ИСТОРИЯ ИЗМЕНЕНИЙ» — СТРОКА-ДВЕРЬ КАБИНЕТА (владелец 03.10). Подпись —
 // живое состояние: сколько изменений сегодня, а без них — когда было

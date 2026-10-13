@@ -6,7 +6,7 @@ import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 import { balanceWarning, useSmsAccount } from "./sms-account";
 import { euro } from "./sms-words";
-import { accountHref } from "@/features/cabinet/CabinetAccountRoute";
+import { accountHref } from "@/session/CabinetAccountRoute";
 
 // СТРОКА «SMS» В КАБИНЕТЕ (STORY-089; владелец 29.09: «баланс и пополнение —
 // это всё будет Кабинет SMS»). Деньги компании — не настройка раздела, как и

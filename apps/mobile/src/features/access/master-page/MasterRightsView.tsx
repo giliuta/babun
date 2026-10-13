@@ -9,7 +9,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import type { Team } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 
-import { AREA_TITLE, type AccessBlock, type AccessLevel } from "../access-map";
+import { AREA_TITLE, type AccessBlock, type AccessLevel } from "@/session/access-map";
 import { TeamRightsCards } from "../rights-ui/TeamRightsCards";
 import { CALENDAR_GROUP_TITLE, type CalendarGroup } from "./access-summary";
 import type { RightsArea } from "./master-draft";

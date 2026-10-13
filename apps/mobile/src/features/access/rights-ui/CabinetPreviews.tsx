@@ -5,7 +5,7 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 
-import type { AccessLevel } from "../access-map";
+import type { AccessLevel } from "@/session/access-map";
 import { PreviewFrame } from "./PreviewFrame";
 
 // ВИД ПРАВ «КАБИНЕТА» В ШТОРКЕ (владелец 04.10: «можем дать доступ к

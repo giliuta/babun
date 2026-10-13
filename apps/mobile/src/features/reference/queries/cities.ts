@@ -8,7 +8,7 @@ import { generateId } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { citiesQueryKey } from "@/lib/company-query-keys";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { pickTeamLabels } from "../reference-select";
 import { referenceKeys } from "../query-keys";
 import { useReferenceCompany } from "./company";

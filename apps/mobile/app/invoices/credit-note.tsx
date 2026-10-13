@@ -21,10 +21,10 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useClients } from "@/features/clients/queries";
-import { DocumentLinkBlocks } from "@/features/documents/DocumentLinkBlocks";
-import { buildInvoiceDocument } from "@/features/invoices/document";
-import type { InvoiceLanguage } from "@/features/invoices/dictionary";
-import { formatInvoiceMoney, parseMoneyAmount, todayYmd } from "@/features/invoices/format";
+import { DocumentLinkBlocks } from "@/features/invoices/DocumentLinkBlocks";
+import { buildInvoiceDocument } from "@/lib/paper/document";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
+import { formatInvoiceMoney, parseMoneyAmount, todayYmd } from "@/lib/paper/format";
 import { AmountBlock } from "@/features/finances/AmountBlock";
 import { InvoicePreviewSheet } from "@/features/invoices/InvoicePreviewSheet";
 import { InvoiceRequisitesBlock } from "@/features/invoices/InvoiceRequisitesBlock";
@@ -34,9 +34,9 @@ import {
   useInvoicePayments,
   useIssuePartialCreditNote,
   useNextInvoiceSeries,
-} from "@/features/invoices/queries";
+} from "@/features/finances/invoices-queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { useTenant } from "@/features/settings/tenant";
+import { useTenant } from "@/session/tenant";
 import { supabase } from "@/lib/supabase";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";

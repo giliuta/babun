@@ -8,11 +8,11 @@ import { haptics } from "@/lib/haptics";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { useThemeColors } from "@/theme/colors";
 
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import type { ViewSection } from "../master-page/rights-view-sections";
 import { compositeRow } from "../master-page/composite-rows";
 import { rightLook } from "./right-look";
-import { useStepAllowed } from "../master-page/use-partner-manager";
+import { useStepAllowed } from "@/session/use-partner-manager";
 import { RightSheet } from "./RightSheet";
 import { isClosedStep, rightTitle, rowWord, stepDanger } from "./right-words";
 

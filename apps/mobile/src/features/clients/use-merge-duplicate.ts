@@ -3,7 +3,7 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Client } from "@babun/shared/local/clients";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClientAppointments } from "@/features/clients/appointments";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import {
   duplicateQueryKeyPrefix,
   useDuplicateOf,
@@ -27,7 +27,7 @@ import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { useTenantId } from "@/lib/tenant";
 import { useSetClientSmsOptOut } from "@/features/sms/sms-account";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 
 // «ОБЪЕДИНИТЬ С ДУБЛЕМ» — ПУНКТ «⋯» КАРТОЧКИ.
 //

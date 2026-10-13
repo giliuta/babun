@@ -21,8 +21,8 @@ import { InvoiceDatesBlock } from "./InvoiceDatesBlock";
 import { InvoiceRequisitesBlock } from "./InvoiceRequisitesBlock";
 import { InvoiceObjectBlock } from "./InvoiceObjectBlock";
 import { InvoiceClientRequisitesBlock } from "./InvoiceClientRequisitesBlock";
-import type { InvoiceNumberTarget } from "./InvoiceNumberRow";
-import type { EditableInvoiceLine } from "./format";
+import type { InvoiceNumberTarget } from "@/features/finances/InvoiceNumberRow";
+import type { EditableInvoiceLine } from "@/lib/paper/format";
 import { invoiceBlockLines, serviceSelection } from "./invoice-blocks/block-lines";
 import { InvoiceTotalSheet } from "./invoice-blocks/InvoiceTotalSheet";
 

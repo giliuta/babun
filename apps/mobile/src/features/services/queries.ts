@@ -10,8 +10,8 @@ import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { allServicesQueryKey } from "@/lib/company-query-keys";
 import { pickLiveServices } from "@/features/reference/reference-select";
-import { useDataRole, type UserRole } from "@/features/settings/tenant";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useDataRole, type UserRole } from "@/session/tenant";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import {
   dispatcherServiceJsonToService,

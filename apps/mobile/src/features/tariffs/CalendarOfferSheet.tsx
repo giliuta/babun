@@ -5,11 +5,11 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useToast } from "@/components/ui/Toast";
 import { GUTTER, TYPE } from "@/components/ui/tokens";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { CAN_PAY_HERE } from "@/lib/pay-here";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
-import { CALENDAR_PRICE, calendarsMonthly, euro } from "./calendar-price";
+import { CALENDAR_PRICE, calendarsMonthly, euro } from "@/session/calendar-price";
 import { openTariffCheckout, useStartTrial, useTariff } from "./use-tariff";
 
 // ПРЕДЛОЖЕНИЕ «НОВЫЙ КАЛЕНДАРЬ» (владелец 12.10: «чтоб добавить календарь,

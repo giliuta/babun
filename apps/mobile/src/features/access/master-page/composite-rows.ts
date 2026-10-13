@@ -1,4 +1,4 @@
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 
 // СТРОКИ ЗАПИСИ, КОТОРЫЕ НЕ РАВНЫ ОДНОМУ ПРАВУ (владелец 30.09: «блоки внутри
 // записи — что видит, что не видит, что может редактировать», и «продумай

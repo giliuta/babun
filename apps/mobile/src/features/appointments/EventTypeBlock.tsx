@@ -1,7 +1,7 @@
 import { Tag } from "lucide-react-native";
 import type { PersonalEventType } from "@babun/shared/local/personal-event-types";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
-import { eventTypeIcon } from "@/features/calendar/event-type-icons";
+import { eventTypeIcon } from "@/features/reference/event-type-icons";
 
 // ТИП СОБЫТИЯ — ТОТ ЖЕ БЛОК, ЧТО КАТЕГОРИЯ ОПЕРАЦИИ (владелец 2026-09-10:
 // «этот блок удаляем и сделай его точно таким же, как в категории в финансах…

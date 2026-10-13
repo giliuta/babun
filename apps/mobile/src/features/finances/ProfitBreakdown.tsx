@@ -13,7 +13,7 @@ import {
   type BreakdownRow,
 } from "./breakdown";
 import { PanelHeader } from "./PanelHeader";
-import { dmyShort } from "./period";
+import { dmyShort } from "@/lib/period";
 import { changeOf } from "./profit-compare";
 import { BreakdownBarRow, BreakdownSectionHeader } from "./profit-breakdown/BreakdownRows";
 

@@ -18,8 +18,8 @@ import {
   type Company,
 } from "@/features/companies/queries";
 import { notify } from "@/lib/notify";
-import { InvoiceNumberRow, type InvoiceNumberTarget } from "./InvoiceNumberRow";
-import { DocMetaRow } from "./DocMetaRow";
+import { InvoiceNumberRow, type InvoiceNumberTarget } from "@/features/finances/InvoiceNumberRow";
+import { DocMetaRow } from "@/components/blocks/DocMetaRow";
 import { useThemeColors } from "@/theme/colors";
 
 // БЛОК «РЕКВИЗИТЫ» ИНВОЙСА — ЧЕМ ПОДПИСАН ДОКУМЕНТ.

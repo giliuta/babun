@@ -16,8 +16,8 @@ import {
 import type { Client } from "@babun/shared/local/clients";
 import type { supabase } from "@/lib/supabase";
 import { assertQuotaAvailable } from "@/lib/quota";
-import { useScopeCompany } from "@/features/clients/company-scope";
-import { tryToE164 } from "../phone";
+import { useScopeCompany } from "@/session/company-scope";
+import { tryToE164 } from "@/lib/phone";
 import type { CountryCode } from "libphonenumber-js";
 import type { MappedRow } from "./csv-validate";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -27,7 +27,7 @@ import {
   type ImportResumeState,
 } from "./resume";
 import { importClientId, rowToClient } from "./import-client";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 
 // Parallel round-trips per chunk. Same 10 the existing importer uses — the
 // repo has no array-insert, so «batch» on mobile = a bounded Promise.all.

@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Navigation } from "lucide-react-native";
 import { RowActionButton } from "@/components/ui/card-rows";
 import { RouteSheet } from "@/features/clients/RouteSheet";
-import { useEnabledMapServices } from "@/lib/map-services";
-import { directRouteUrl, openDirect, routeTarget } from "@/lib/route-menu";
+import { useEnabledMapServices } from "@/features/clients/map-services";
+import { directRouteUrl, openDirect, routeTarget } from "@/features/clients/route-menu";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 

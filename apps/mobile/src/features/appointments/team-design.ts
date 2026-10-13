@@ -7,7 +7,7 @@ import type {
 import { getStorage } from "@babun/shared/storage";
 import { changedDesignColumns, designColumns, rebaseDesign } from "./team-design-columns";
 import { supabase } from "@/lib/supabase";
-import { useScopeCompany } from "@/features/clients/company-scope";
+import { useScopeCompany } from "@/session/company-scope";
 
 // «ДИЗАЙН» КОМАНДЫ (владелец 2026-09-24: «всё отдельно под каждую команду»;
 // миграция 20260924233000_team_design). Одна строка `team_design` на команду:

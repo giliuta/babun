@@ -9,7 +9,7 @@ import { moneyName, moneySymbol } from "@babun/shared/common/utils/money";
 
 import { CurrencySheet } from "./CurrencySheet";
 import { useCurrency } from "./currency";
-import { useUpdateTenant } from "./tenant";
+import { useUpdateTenant } from "@/session/tenant";
 
 // ВАЛЮТА КОМПАНИИ — СТРОКА И ЕЁ ШТОРКА (владелец 30.09: «валюту перенесём в
 // финансы — полноценно блок „Валюта" переходит в настройки финансов»). Одна

@@ -1,7 +1,7 @@
 import type { InvoiceVatMode } from "@babun/shared/local/finance/invoice-ledger";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { TotalSheet, type DiscountKind } from "@/features/appointments/TotalSheet";
-import type { EditableInvoiceLine } from "../format";
+import type { EditableInvoiceLine } from "@/lib/paper/format";
 import { typedNumber, type InvoiceBlockLine } from "./block-lines";
 
 /** «Итого» of the invoice — the same sheet as the appointment's and receipt's. */

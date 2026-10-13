@@ -11,7 +11,7 @@ import {
 } from "../finance-read-rules";
 import type { HomeView } from "../FinanceOverview";
 import { materialExpenseRows } from "../material-expenses";
-import type { Period } from "../period";
+import type { Period } from "@/lib/period";
 import { usePeriodDocuments } from "../use-period-documents";
 import { buildFeedRows } from "./feed-rows";
 import { scopedAccountsFor } from "./home-scope";

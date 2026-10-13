@@ -6,8 +6,8 @@ import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 import { dayMoney, type DayMoney } from "@/features/calendar/day-money";
 import { useAppointmentsLedger, useTransactions } from "@/features/finances/queries";
 import { awaitingAnswer } from "@/features/finances/ledger-select";
-import { useMyAccess } from "@/features/access/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useMyAccess } from "@/session/access-queries";
+import { useCurrentRole } from "@/session/tenant";
 import { dayMoneyRowReadable } from "@/features/calendar/day-money-access";
 import { ymd } from "./month-grid";
 

@@ -3,9 +3,9 @@ import { useLocalSearchParams } from "expo-router";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
-import { ClientsScopeProvider } from "./company-scope";
-import { clientsRouteDecision, type RouteKind } from "./clients-company";
+import { useCurrentRole, useTenant } from "@/session/tenant";
+import { ClientsScopeProvider } from "@/session/company-scope";
+import { clientsRouteDecision, type RouteKind } from "@/session/clients-company";
 import { useClientsSources } from "./sources";
 
 // ВОРОТА ВКЛАДКИ «КЛИЕНТЫ» (STORY-082, владелец 19.09: «вся страница, вся

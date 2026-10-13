@@ -10,7 +10,7 @@ import type { ClientTag } from "@babun/shared/local/clients";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { clientTagsQueryKey, sourceClientTagsQueryKey } from "@/lib/company-query-keys";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
-import { clientKeys } from "../query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 import { assertOwnCompany, useQueryScope, writeClientOf, type QueryScope } from "./scope";
 
 export function useClientTags() {

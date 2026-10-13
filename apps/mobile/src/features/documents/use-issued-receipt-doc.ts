@@ -1,8 +1,8 @@
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
-import type { InvoiceLanguage } from "@/features/invoices/dictionary";
+import type { InvoiceLanguage } from "@/lib/paper/dictionary";
 import { isUiLocale } from "@babun/shared/i18n/locales";
-import { useInvoice } from "@/features/invoices/queries";
+import { useInvoice } from "@/features/finances/invoices-queries";
 import type { InvoiceLedgerWithLines } from "@babun/shared/local/finance/invoice-ledger";
 import {
   buildReceiptDocument,
@@ -12,7 +12,7 @@ import {
   type ReceiptDocument,
   type ReceiptLineItemsInput,
 } from "./receipt-document";
-import { useReceiptAppointment } from "./receipts-queries";
+import { useReceiptAppointment } from "@/features/finances/receipts-queries";
 
 // БУМАГА ВЫПИСАННОГО ЧЕКА — ОДНО ПРАВИЛО НА СТРАНИЦУ ЧЕКА И PDF.
 //

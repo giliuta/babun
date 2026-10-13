@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Building2, EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
-import { useNextInvoiceNumber } from "@/features/invoices/queries";
+import { useNextInvoiceNumber } from "@/features/finances/invoices-queries";
 import { AppearanceTile, appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -13,7 +13,7 @@ import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
-import { useAccountScope } from "@/features/cabinet/account-scope";
+import { useAccountScope } from "@/session/account-scope";
 import { useThemeColors } from "@/theme/colors";
 import { CompanySheet } from "./CompanySheet";
 import { companyDetail, companyFilled, defaultHeir } from "./company-rules";

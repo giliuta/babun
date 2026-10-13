@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { isFeatureOn } from "@babun/shared/local/company-features";
 import { getStorage } from "@babun/shared/storage";
-import { useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/session/tenant";
 import { useDisabledFeatures } from "@/features/settings/company-features";
 import { useTenantId } from "@/lib/tenant";
 import { localBookingCarry } from "./booking-carry";

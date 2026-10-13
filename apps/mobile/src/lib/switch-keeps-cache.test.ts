@@ -215,7 +215,7 @@ describe("проводка перехода в коде", () => {
   });
 
   test("ПОРЯДОК: выбор календаря, роль и фаза дообновления — до смены компании; getSession нет", () => {
-    const switching = read("../features/settings/switch-tenant.ts");
+    const switching = read("../session/switch-tenant.ts");
     const setActive = switching.indexOf("setActiveTenantId(userId, tenantId)");
     assert.notEqual(setActive, -1);
     for (const before of [
@@ -235,7 +235,7 @@ describe("проводка перехода в коде", () => {
   });
 
   test("выбор календаря пишется в той же форме, что читает календарь", () => {
-    const switching = read("../features/settings/switch-tenant.ts");
+    const switching = read("../session/switch-tenant.ts");
     const calendar = calendarScreenSource();
     assert.match(switching, /const CALENDAR_VIEW_PREF = "calendar\.view";/);
     assert.match(
@@ -246,7 +246,7 @@ describe("проводка перехода в коде", () => {
   });
 
   test("лента не зовёт onPickOwn замыканием тапа — оно знает покидаемую компанию", () => {
-    const workspaces = read("../features/settings/workspaces.ts");
+    const workspaces = read("../session/workspaces.ts");
     assert.equal(
       workspaces.split("opts.onPickOwn(").length - 1,
       1,

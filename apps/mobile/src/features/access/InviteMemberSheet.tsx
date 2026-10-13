@@ -8,7 +8,7 @@ import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { notify } from "@/lib/notify";
-import { formatPhoneAsYouType } from "@/features/clients/phone";
+import { formatPhoneAsYouType } from "@/lib/phone";
 import { phoneToSave } from "@/features/profile/profile";
 import {
   invitationErrorMessage,

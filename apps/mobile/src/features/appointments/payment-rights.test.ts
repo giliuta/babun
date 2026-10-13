@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { MemberAccessMap } from "@/features/access/access-map";
+import type { MemberAccessMap } from "@/session/access-map";
 import { paymentRights, type PaymentCalendar } from "./payment-rights";
 
 // «КТО МОЖЕТ БРАТЬ ДЕНЬГИ» — ПРАВИЛО, А НЕ РАЗМЕТКА.

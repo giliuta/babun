@@ -236,11 +236,11 @@ const SERVICES = "../features/services/queries.ts";
 const CLIENTS = "../features/clients/queries.ts";
 const FINANCES = "../features/finances/queries.ts";
 const ACCOUNTS = "../features/finances/accounts.ts";
-const INVOICES = "../features/invoices/queries.ts";
+const INVOICES = "../features/finances/invoices-queries.ts";
 const DEBTS = "../features/finances/debts-queries.ts";
 
 const HOOKS: Record<WarmKind, HookContract> = {
-  tenant: { file: "../features/settings/tenant.ts", hooks: ["useTenant"], builder: "tenantQueryKey" },
+  tenant: { file: "../session/tenant.ts", hooks: ["useTenant"], builder: "tenantQueryKey" },
   "calendar-settings": {
     file: "../features/settings/local-settings.ts",
     hooks: ["useCalendarSettings"],
@@ -262,7 +262,7 @@ const HOOKS: Record<WarmKind, HookContract> = {
     builder: "allServicesQueryKey",
   },
   cities: { file: REFERENCE, hooks: ["useCities"], builder: "citiesQueryKey" },
-  "day-cities": { file: "../features/calendar/day-cities.ts", hooks: ["useDayCities"], builder: "dayCitiesQueryKey" },
+  "day-cities": { file: "../features/reference/day-cities.ts", hooks: ["useDayCities"], builder: "dayCitiesQueryKey" },
   "team-schedules-all": {
     file: "../features/reference/team-schedule.ts",
     hooks: ["useTeamSchedule", "useAllTeamSchedules"],

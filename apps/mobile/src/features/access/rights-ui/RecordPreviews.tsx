@@ -8,14 +8,14 @@ import { EventTypeBlock } from "@/features/appointments/EventTypeBlock";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { DocumentPill } from "@/features/appointments/AppointmentFileTiles";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { InlineNoteField } from "@/components/blocks/InlineNoteField";
 import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/PaymentTiles";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
 import { WhenRow } from "@/features/appointments/BookingSummary";
-import { IdentityCard, TeamLabelRow } from "@/features/appointments/TeamLabelRow";
+import { IdentityCard, TeamLabelRow } from "@/components/blocks/TeamLabelRow";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 
-import type { AccessBlock, AccessLevel } from "../access-map";
+import type { AccessBlock, AccessLevel } from "@/session/access-map";
 import { PreviewFrame, levelState } from "./PreviewFrame";
 import {
   SAMPLE_CLIENT,

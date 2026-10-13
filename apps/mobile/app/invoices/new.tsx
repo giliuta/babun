@@ -19,15 +19,15 @@ import {
   useInvoices,
   useIssueInvoice,
   useUpdateInvoice,
-} from "@/features/invoices/queries";
+} from "@/features/finances/invoices-queries";
 import { rememberedDueDays } from "@/features/invoices/due-days";
 import { useSession } from "@/providers/SessionProvider";
 import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole , useTenant } from "@/features/settings/tenant";
-import { accessGate } from "@/features/access/my-access";
-import { useMyAccess } from "@/features/access/queries";
+import { useCurrentRole , useTenant } from "@/session/tenant";
+import { accessGate } from "@/session/my-access";
+import { useMyAccess } from "@/session/access-queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { todayYmd } from "@/features/invoices/format";
+import { todayYmd } from "@/lib/paper/format";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import {

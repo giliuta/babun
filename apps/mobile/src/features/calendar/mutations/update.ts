@@ -13,11 +13,11 @@ import type { Json } from "@babun/shared/db/database.types";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { autoAssignClientLabel } from "@/features/clients/label-auto-assign";
 import { memberPatch } from "@/features/appointments/member-writes";
 import { appointmentsQueryKey } from "../queries";
-import { clientKeys } from "@/features/clients/query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 import { useMemberRefusal } from "./shared";
 
 /** Поля «места» записи: перенос по сетке трогает только их. */

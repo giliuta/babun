@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { InvoiceLineDraft } from "@babun/shared/local/finance/invoice-ledger";
-import type { EditableInvoiceLine } from "../format";
+import type { EditableInvoiceLine } from "@/lib/paper/format";
 import {
   appointmentVatOf,
   discountAmountOf,

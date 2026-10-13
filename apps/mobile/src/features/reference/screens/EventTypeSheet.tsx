@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { FieldLabel } from "@/components/ui/Field";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
-import { eventTypeIconPresets } from "@/features/calendar/event-type-icons";
+import { eventTypeIconPresets } from "@/features/reference/event-type-icons";
 import { useGuardedClose } from "@/components/ui/use-guarded-close";
 
 // ПРАВКА ТИПА СОБЫТИЯ — КАНОНИЧЕСКИЙ ЛИСТ, как «Новая метка» и «Услуга».

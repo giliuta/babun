@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useDataRole } from "@/features/settings/tenant";
-import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { useDataRole } from "@/session/tenant";
+import { useClientsScopeOrNull } from "@/session/company-scope";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 
 // СПРАВОЧНИКИ ЧИТАЮТСЯ В КОМПАНИИ ЭКРАНА. Вкладка «Клиенты» открывается в

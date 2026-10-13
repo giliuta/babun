@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { useInvoiceNavigation } from "@/features/invoices/navigation";
+import { useInvoiceNavigation } from "@/features/finances/invoice-navigation";
 import { useAllTimeSearch } from "./use-all-time-search";
 import { useBusinessClock } from "./use-business-clock";
 import { useHomeAccess } from "./use-home-access";

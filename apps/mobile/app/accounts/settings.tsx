@@ -29,7 +29,7 @@ import { accountOrderGroups, financeAccountsHref } from "@/features/finances/acc
 import { useTeams } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
 import { useFinanceSettingLevelsOf } from "@/features/finances/use-finance-settings";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 
 // СЧЕТА — ОДНА СТРАНИЦА ЗА ДВУМЯ ДВЕРЯМИ (владелец 2026-09-15).
 //

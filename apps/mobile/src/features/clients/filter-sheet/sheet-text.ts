@@ -4,7 +4,7 @@
 
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { formatYMD } from "@/features/appointments/helpers";
-import { periodDates } from "@/features/finances/period";
+import { periodDates } from "@/lib/period";
 import {
   periodLabel,
   propertyTypeLabel,

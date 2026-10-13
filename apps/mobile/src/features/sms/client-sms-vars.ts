@@ -1,7 +1,7 @@
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import { formatDateKey } from "@babun/shared/common/utils/date-utils";
-import { addressedAs, firstName } from "@/features/clients/sms-name";
+import { addressedAs, firstName } from "@/lib/sms-name";
 import { smsVars, type SmsVars } from "./sms-compose";
 
 // ШАБЛОН SMS ИЗ КАРТОЧКИ КЛИЕНТА (STORY-089, волна 1).

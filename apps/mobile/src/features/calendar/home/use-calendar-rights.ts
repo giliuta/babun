@@ -10,9 +10,9 @@ import {
   canMutateCalendarAppointment,
   isCalendarEvent,
 } from "@/features/calendar/event-access";
-import { usePlanAllows, useTenant } from "@/features/settings/tenant";
+import { usePlanAllows, useTenant } from "@/session/tenant";
 import { useTariffNudge } from "@/features/tariffs/use-tariff";
-import { useMirror } from "@/features/access/mirror/mirror-state";
+import { useMirror } from "@/session/mirror-state";
 import type { CalendarSources } from "./use-calendar-sources";
 
 type UseCalendarRightsDeps =

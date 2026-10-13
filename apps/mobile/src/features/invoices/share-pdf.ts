@@ -4,12 +4,12 @@ import type {
   InvoicePaymentLedger,
   InvoiceSettlement,
 } from "@babun/shared/local/finance/invoice-ledger";
-import type { Tenant } from "@/features/settings/tenant";
-import { invoiceDictionary, type InvoiceLanguage } from "./dictionary";
-import { shareHtmlAsPdf } from "@/features/documents/share-pdf";
-import { buildInvoicePdfHtml } from "./pdf";
+import type { Tenant } from "@/session/tenant";
+import { invoiceDictionary, type InvoiceLanguage } from "@/lib/paper/dictionary";
+import { shareHtmlAsPdf } from "@/lib/share-pdf";
+import { buildInvoicePdfHtml } from "@/lib/paper/pdf";
 
-// Печать — общий примитив `@/features/documents/share-pdf` (см. его
+// Печать — общий примитив `@/lib/share-pdf` (см. его
 // комментарий: веб-iframe/`printToFileAsync`+`shareAsync`, один на продукт).
 // Здесь остаётся только сборка HTML конкретного инвойса и имя, под которым
 // он уходит наружу — поведение самой печати не менялось ни на шаг.

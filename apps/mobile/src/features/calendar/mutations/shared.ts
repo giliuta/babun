@@ -1,6 +1,6 @@
 // Helpers every appointment mutation hook shares.
-import { clientKeys } from "@/features/clients/query-keys";
-import { useAccessBlocks } from "@/features/access/queries";
+import { clientKeys } from "@/lib/client-query-keys";
+import { useAccessBlocks } from "@/session/access-queries";
 import { memberWriteRefusal } from "@/features/appointments/member-writes";
 
 /** Сотрудник пишет запись только дверями сервера (STORY-088): каждое поле там

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "expo-router";
-import { useReferenceHref } from "@/features/clients/reference-href";
+import { useReferenceHref } from "@/lib/reference-href";
 import { Pressable, View } from "react-native";
 import { Briefcase, Settings2 } from "lucide-react-native";
 import { formatEURExact } from "@babun/shared/common/utils/money";
@@ -21,7 +21,7 @@ import { PickerQty } from "./booking-pickers/PickerQty";
 import { useThemeColors } from "@/theme/colors";
 import type { Service } from "@/features/services/queries";
 import { isoWeekdayOf, servedOnWeekday } from "@babun/shared/local/services";
-import { durationLabel } from "@/features/services/format";
+import { durationLabel } from "@/lib/service-format";
 import { unitPriceFor } from "@/features/appointments/helpers";
 import { round2 } from "@babun/shared/local/finance/appointment-calc";
 import { loadErrorWords } from "@/lib/connection-words";

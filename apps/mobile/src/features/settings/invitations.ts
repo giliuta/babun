@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
-import { switchTenant } from "./switch-tenant";
+import { switchTenant } from "@/session/switch-tenant";
 import {
   clearPendingInvitationToken,
   getPendingInvitationToken,

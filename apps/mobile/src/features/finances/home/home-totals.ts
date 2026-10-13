@@ -5,7 +5,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount } from "@babun/shared/local/appointments";
 import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { Service } from "@/features/services/queries";
-import { isPastRecord } from "@/features/calendar/day-ledger";
+import { isPastRecord } from "@/features/finances/day-ledger";
 import { materialsByService } from "../breakdown";
 import type { FinancePageAccess } from "../finance-page-access";
 import {

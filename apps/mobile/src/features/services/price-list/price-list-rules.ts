@@ -3,7 +3,7 @@
 
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { parsePriceTiers } from "../economics";
-import { durationLabel } from "../format";
+import { durationLabel } from "@/lib/service-format";
 import type { Service } from "../queries";
 
 type TeamRef = { id: string };

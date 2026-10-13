@@ -3,7 +3,7 @@ import {
   getCurrentTimeInZone,
 } from "@babun/shared/common/utils/date-utils";
 import { formatHM } from "@/features/appointments/helpers";
-import { todayYmd } from "@/features/invoices/format";
+import { todayYmd } from "@/lib/paper/format";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 
 /** The company's clock: its timezone, "now", today (YYYY-MM-DD) and HH:MM. */

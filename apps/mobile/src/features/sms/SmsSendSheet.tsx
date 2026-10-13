@@ -12,7 +12,7 @@ import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/session/tenant";
 import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";

@@ -6,7 +6,7 @@ import { localeInfo } from "@babun/shared/i18n/locales";
 import { InvoiceBlocks } from "./InvoiceBlocks";
 import { InvoicePreviewSheet } from "./InvoicePreviewSheet";
 import { PaperLanguageSheet } from "./PaperLanguageSheet";
-import { type EditableInvoiceLine, formatInvoiceMoney } from "./format";
+import { type EditableInvoiceLine, formatInvoiceMoney } from "@/lib/paper/format";
 import { InvoiceEditorFooter } from "./invoice-editor/InvoiceEditorFooter";
 import { invoiceReason } from "./invoice-editor/invoice-rules";
 import type { InvoiceEditorProps } from "./invoice-editor/types";

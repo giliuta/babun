@@ -15,7 +15,7 @@ import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { cancelClientReminder } from "@/features/clients/reminders";
 import { NEVER_PAUSE } from "@/features/finances/accounts";
-import { clientKeys } from "../query-keys";
+import { clientKeys } from "@/lib/client-query-keys";
 import type { ClientWriteTarget } from "./mutations-update";
 import { syncClientReminderWithFeedback } from "./reminder-feedback";
 import { assertOwnCompany, useQueryScope, writeClientOf } from "./scope";

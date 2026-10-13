@@ -1,4 +1,4 @@
-import type { UserRole } from "@/features/settings/role-policy";
+import type { UserRole } from "@/session/role-policy";
 
 // КЛЮЧИ ЗАПРОСОВ КОМПАНИИ — ОДНО ТЕЛО НА ПРОДУКТ.
 //

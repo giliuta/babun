@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { LEVEL_WORD, type AccessBlock } from "../access-map";
+import { LEVEL_WORD, type AccessBlock } from "@/session/access-map";
 import { hasSentences, levelSentence, offeredBlocks, segmentWord } from "./rights-copy";
 
 const block = (over: Partial<AccessBlock>): AccessBlock => ({

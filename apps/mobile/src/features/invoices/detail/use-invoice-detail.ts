@@ -5,24 +5,24 @@ import {
   calculateInvoiceSettlement,
 } from "@babun/shared/local/finance/invoice-ledger";
 import { accountsForTeam } from "@babun/shared/local/finance/integrity";
-import type { ActionMenu } from "@/features/calendar/ActionMenuSheet";
+import type { ActionMenu } from "@/components/blocks/ActionMenuSheet";
 import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
-import { useReceipt, useReceipts } from "@/features/documents/receipts-queries";
+import { useReceipt, useReceipts } from "@/features/finances/receipts-queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
-import { useMyAccess } from "@/features/access/queries";
+import { useMyAccess } from "@/session/access-queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { useCurrentRole, useTenant } from "@/session/tenant";
 import { notify } from "@/lib/notify";
-import { todayYmd } from "../format";
-import { useInvoiceMenu } from "../invoice-menu";
+import { todayYmd } from "@/lib/paper/format";
+import { useInvoiceMenu } from "@/features/finances/invoice-menu";
 import {
   useCreditNoteLinks,
   useInvoice,
   useInvoicePayments,
   useInvoices,
   useRecordInvoicePayment,
-} from "../queries";
+} from "@/features/finances/invoices-queries";
 import { shareInvoicePdf } from "../share-pdf";
 import { earliestPayment } from "./payment-meta";
 
