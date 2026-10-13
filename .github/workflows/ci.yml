@@ -10,8 +10,8 @@ name: CI
 #   build:web — `expo export --platform web`, the exact command Vercel
 #               runs. Catches web-only breakage (native-only modules,
 #               missing shims) before it reaches a deploy.
-#   lint      — eslint over apps/mobile and packages/shared. Hard gate on
-#               errors; warnings are reported, not blocking.
+#   lint      — eslint over apps/mobile and packages/shared with
+#               --max-warnings 0. Hard gate: a new warning fails it too.
 #
 # BUN ЗАКРЕПЛЁН (`.bun-version`, 2026-09-07). Без версии setup-bun ставит
 # свежайший bun, а с ним — свежие ICU и tzdata. Тесты поясов сверяют группы

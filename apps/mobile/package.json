@@ -18,7 +18,7 @@
     "build:android": "eas build --platform android --profile production",
     "submit:ios": "eas submit --platform ios --latest",
     "doctor": "expo-doctor",
-    "lint": "expo lint",
+    "lint": "eslint src app --max-warnings 0",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
