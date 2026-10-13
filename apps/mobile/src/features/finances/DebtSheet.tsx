@@ -26,7 +26,7 @@ import { AmountBlock } from "./AmountBlock";
 import { CategoryBlock } from "./CategoryBlock";
 import { DebtWhoBlock } from "./DebtWhoBlock";
 import { useRouter, type Href } from "expo-router";
-import { formatHM } from "@/features/appointments/helpers";
+import { useBusinessNow } from "@/features/appointments/business-now";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { VIEW_ONLY_REASON } from "./finance-page-access";
@@ -138,6 +138,10 @@ export function DebtSheet({
     onReopen,
   });
 
+  // «СЕЙЧАС» ДЛЯ ДОЛГА БЕЗ ЧАСА — ПО ЧАСАМ БИЗНЕСА, как у черновика и листа
+  // операции. Здесь стояли часы телефона: телефон в другом поясе подставлял
+  // старому долгу чужой час (13.10, нашла сессия 025).
+  const businessNow = useBusinessNow();
   const [whenOpen, setWhenOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [clientOpen, setClientOpen] = useState(false);
@@ -244,11 +248,11 @@ export function DebtSheet({
 
         <WhenRow
           date={date}
-          timeStart={time ?? formatHM(new Date())}
+          timeStart={time ?? businessNow().hm}
           onPress={() => {
             // Час подставляем в момент открытия, а не в рендере: иначе барабан
             // родился бы со значением первого кадра и застыл на нём.
-            if (time == null) setTime(formatHM(new Date()));
+            if (time == null) setTime(businessNow().hm);
             setWhenOpen(true);
             haptics.tap();
           }}
@@ -374,8 +378,8 @@ export function DebtSheet({
         open={whenOpen}
         onClose={() => setWhenOpen(false)}
         date={date}
-        timeStart={time ?? formatHM(new Date())}
-        timeEnd={time ?? formatHM(new Date())}
+        timeStart={time ?? businessNow().hm}
+        timeEnd={time ?? businessNow().hm}
         allDay={false}
         allowAllDay={false}
         singleTime
