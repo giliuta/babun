@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "./module-source";
 
 // ВЫПУСК В МАГАЗИНЫ 06.10 — ЧТО ВИДИТ ПРОВЕРКА APP STORE. Экраны тянут
 // react-native, поэтому сторожим исходник: каждая проверка держит правку,
@@ -37,7 +38,10 @@ describe("импорт из контактов телефона", () => {
 
 describe("заглушек «Скоро» нет", () => {
   test("форма услуги — без строки «Онлайн-запись · Скоро»", () => {
-    const src = read("../features/services/ServiceSheet.tsx");
+    const src = readModuleSource(
+      resolve(here, "../features/services/ServiceSheet.tsx"),
+      resolve(here, "../features/services/service-sheet"),
+    );
     assert.doesNotMatch(src, /^\s*Онлайн-запись\s*$/m);
     assert.doesNotMatch(src, /^\s*Скоро\s*$/m);
   });

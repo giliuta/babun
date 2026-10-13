@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
+import { readModuleSource } from "@/lib/module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => readFileSync(resolve(here, rel), "utf8");
@@ -30,7 +31,10 @@ test("масштаб — ползунком 0…100 в шторке «Часы �
   const sheet = read("../calendar/HourRangeSheet.tsx");
   assert.match(sheet, /<StepSlider\s+value=\{pct\}\s+min=\{0\}\s+max=\{100\}/);
   assert.match(sheet, /zoom\?\.onApply\(zoomFromPct\(pct, span, zoom\.vh\)\);/);
-  const gear = read("../../../app/(dashboard)/(home)/calendar/index.tsx");
+  const gear = readModuleSource(
+    resolve(here, "../../../app/(dashboard)/(home)/calendar/index.tsx"),
+    resolve(here, "../calendar/settings-screen"),
+  );
   assert.match(gear, /zoom=\{\{ initial: gridZoom, vh: readViewportH\("week"\), onApply: applyZoom \}\}/);
   assert.doesNotMatch(gear, /chooseOption\(/);
 });

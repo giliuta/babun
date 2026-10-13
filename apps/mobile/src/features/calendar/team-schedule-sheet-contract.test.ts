@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 // ЛИСТ «ГРАФИК КОМАНДЫ» ПРАВИТ ДЕНЬ ПОВЕРХ СВЕЖЕГО ГРАФИКА (аудит 04.10).
 // Апсерт заменяет блоб целиком, а лист собирал его из кэша: упавшее чтение
@@ -10,10 +10,9 @@ import { fileURLToPath } from "node:url";
 // стирались первым же поворотом барабана — вместе с перерывами и выходными
 // на даты. Теперь хук получает правку функцией и применяет её к графику с
 // сервера; общие часы — только когда строки у команды нет.
-const sheet = readFileSync(
-  resolve(dirname(fileURLToPath(import.meta.url)), "TeamScheduleSheet.tsx"),
-  "utf8",
-);
+// The sheet is `TeamScheduleSheet.tsx` plus its parts in `team-schedule/`.
+const here = dirname(fileURLToPath(import.meta.url));
+const sheet = readModuleSource(resolve(here, "TeamScheduleSheet.tsx"), resolve(here, "team-schedule"));
 
 test("правка уходит функцией от свежего графика, а не готовым блобом из кэша", () => {
   // 11.10: правка может касаться нескольких дней сразу (общее время), и

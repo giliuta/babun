@@ -4,10 +4,15 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { readModuleSource } from "@/lib/module-source";
 
-// The day sheet is `DayFinanceSheet.tsx` plus its parts in `day-finance/`.
+// The day sheet is `DayFinanceSheet.tsx` plus its parts in `day-finance/`,
+// the month is `MonthView.tsx` plus `month-view/`.
+const PARTS: Record<string, string> = {
+  "DayFinanceSheet.tsx": "day-finance",
+  "MonthView.tsx": "month-view",
+};
 const source = (file: string): string =>
-  file === "DayFinanceSheet.tsx"
-    ? readModuleSource(join(__dirname, file), join(__dirname, "day-finance"))
+  PARTS[file]
+    ? readModuleSource(join(__dirname, file), join(__dirname, PARTS[file]))
     : readFileSync(join(__dirname, file), "utf8");
 
 // ПОЛОСА «ДОХОД / РАСХОД» ПОД СЕТКОЙ — ТОЛЬКО ПРИШЕДШИЕ ДЕНЬГИ (владелец

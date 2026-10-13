@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 // «ВЫСТАВИТЬ ИНВОЙС» БЕЗ ДОКУМЕНТОВ В ТАРИФЕ — СЕРЫМ (владелец 1.10:
 // «закончилась подписка — всё видно, новое серым»). Значок не пропадает,
 // тап поднимает плашку тарифа; выписанный документ открывается как раньше.
 
 const here = dirname(fileURLToPath(import.meta.url));
-const block = () => readFileSync(resolve(here, "PaymentBlock.tsx"), "utf8");
+// The block is `PaymentBlock.tsx` plus its `payment-block/` folder.
+const block = () => readModuleSource(resolve(here, "PaymentBlock.tsx"), resolve(here, "payment-block"));
 
 describe("инвойс в оплате и тариф", () => {
   test("значок есть при остатке независимо от тарифа", () => {

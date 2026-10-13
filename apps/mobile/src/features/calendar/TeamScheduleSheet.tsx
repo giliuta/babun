@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { DEFAULT_CALENDAR_SETTINGS } from "@babun/shared/local/calendar-settings";
 import {
-  timeToMinutes,
   WEEKDAY_NAMES,
   type TeamSchedule,
   type WeekdayKey,
@@ -33,6 +32,7 @@ import {
   effectiveWorkHours,
   hourLabel,
 } from "@/features/calendar/setting-options";
+import { hm, pairOnEnd, pairOnStart, sameHoursEveryDay } from "./team-schedule/schedule-pair";
 
 // ─── ГРАФИК КОМАНДЫ — ОДИН ЛИСТ СНИЗУ ────────────────────────────────
 //
@@ -185,75 +185,18 @@ export function TeamScheduleSheet({
   };
   const ALL_DAYS = days.map(({ key }) => key);
 
-  const hm = (v: string) => {
-    const [h, m] = v.split(":").map(Number);
-    return { hour: Number.isFinite(h) ? h : 0, minute: Number.isFinite(m) ? m : 0 };
-  };
-  const text = (v: { hour: number; minute: number }) =>
-    `${String(v.hour).padStart(2, "0")}:${String(v.minute).padStart(2, "0")}`;
-
   // КОНЕЦ ОБЯЗАН БЫТЬ ПОЗЖЕ НАЧАЛА: пару «20:00–09:00» сетка молча отвергает
   // (workBand → undefined, день красится ОБЩИМИ часами), то есть настройка дня
   // просто не действует. Двигаем ту границу, которую сейчас не трогают, и
-  // минимально — на шаг барабана.
+  // минимально — на шаг барабана. Арифметика пары — `team-schedule/schedule-pair.ts`.
   /** Записать часы: общие — всем дням сразу, дня — только ему. */
   const writePair = (pair: { start: string; end: string }) => {
     if (target === "common") commitDays(ALL_DAYS, () => pair);
     else commitDays([target], () => pair);
   };
 
-  // ПЕРЕСКОК БАРАБАНА ЧЕРЕЗ ПОЛНОЧЬ — НЕ ПРАВКА ДРУГОЙ ГРАНИЦЫ (аудит
-  // шестерёнки 03.10). Барабан часов закольцован: конец смены, докрученный за
-  // 23, становился 00 — меньше начала, и «двигаем другую границу» ставил
-  // начало на 00:00. Смена превращалась в 00:00–00:00, и сетка молча рисовала
-  // этот день общими часами. Пересчёт через полночь прижимаем к краю суток,
-  // другую границу не трогаем.
-  const WRAP_EDGE = 60;
-  const DAY_LAST = 23 * 60 + 55;
-
-  const changeStart = (patch: { hour?: number; minute?: number }) => {
-    const next = { ...hm(edited.start), ...patch };
-    const prevStart = timeToMinutes(edited.start);
-    if (prevStart < WRAP_EDGE && next.hour * 60 + next.minute >= DAY_LAST - WRAP_EDGE) {
-      // 00 → 23 назад через полночь: начало остаётся в начале суток.
-      writePair({ start: "00:00", end: edited.end });
-      return;
-    }
-    const startMin = next.hour * 60 + next.minute;
-    const endMin = timeToMinutes(edited.end);
-    // Конец обязан быть позже начала: у смены пару «20:00–09:00» сетка молча
-    // отвергает (workBand → undefined, день красится ОБЩИМИ часами), у перерыва
-    // из неё вышла бы полоса отрицательной длины. Двигаем ту границу, которую
-    // сейчас не трогают, и минимально — на шаг барабана.
-    const fixedEnd = startMin >= endMin ? Math.min(23 * 60 + 55, startMin + 5) : null;
-    writePair({
-      start: text(next),
-      end:
-        fixedEnd != null
-          ? text({ hour: Math.floor(fixedEnd / 60), minute: fixedEnd % 60 })
-          : edited.end,
-    });
-  };
-
-  const changeEnd = (patch: { hour?: number; minute?: number }) => {
-    const next = { ...hm(edited.end), ...patch };
-    const prevEnd = timeToMinutes(edited.end);
-    if (prevEnd >= DAY_LAST - WRAP_EDGE && next.hour * 60 + next.minute < WRAP_EDGE) {
-      // 23 → 00 вперёд через полночь: конец остаётся в конце суток.
-      writePair({ start: edited.start, end: "23:55" });
-      return;
-    }
-    const endMin = next.hour * 60 + next.minute;
-    const startMin = timeToMinutes(edited.start);
-    const fixedStart = endMin <= startMin ? Math.max(0, endMin - 5) : null;
-    writePair({
-      start:
-        fixedStart != null
-          ? text({ hour: Math.floor(fixedStart / 60), minute: fixedStart % 60 })
-          : edited.start,
-      end: text(next),
-    });
-  };
+  const changeStart = (patch: { hour?: number; minute?: number }) => writePair(pairOnStart(edited, patch));
+  const changeEnd = (patch: { hour?: number; minute?: number }) => writePair(pairOnEnd(edited, patch));
 
   /**
    * Барабан — ОДИН на лист, но рисуется ПОД той строкой, которую правит (выбор
@@ -399,11 +342,3 @@ export function TeamScheduleSheet({
   );
 }
 
-/** У всех рабочих дней одни часы — график читается общим видом. */
-function sameHoursEveryDay(schedule: TeamSchedule | null): boolean {
-  if (!schedule) return true;
-  const working = allDays(schedule)
-    .map(({ day }) => day)
-    .filter((d) => d.is_working);
-  return working.every((d) => d.start === working[0]?.start && d.end === working[0]?.end);
-}

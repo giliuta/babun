@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useMoney } from "@/features/settings/currency";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
-import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { COL_GAP, KEY_W, Key, RATE_W, Rate, Row, Sum, Unit, VAT_W } from "./vat-looks/parts";
 
 // ДВЕ ИТОГОВЫЕ СТРОКИ ДЕНЕЖНОГО ЛИСТА.
 //
@@ -20,6 +20,8 @@ import { useThemeColors } from "@/theme/colors";
 // формулы в double, и на реальных деньгах она расходилась с каноном на цент
 // (нетто €42,50 при 19 % «сверху»: €50,57 против €50,58) — то есть бумага и
 // журнал по одной работе называли РАЗНЫЕ суммы.
+//
+// Ячейки строк — `vat-looks/parts.tsx`.
 
 const NEXT: Record<TxVatMode, TxVatMode> = {
   none: "exclusive",
@@ -32,12 +34,6 @@ const SPOKEN: Record<TxVatMode, string> = {
   exclusive: "налог сверху цены",
   inclusive: "налог внутри цены",
 };
-
-/** Клавиша одной ширины на обе строки — иначе строка едет под пальцем. */
-const KEY_W = 80;
-const RATE_W = 76;
-const VAT_W = 70;
-const COL_GAP = 8;
 
 /** Ставка из набранного: запятая и точка одинаковы, два знака, 0…99.99. */
 export function parseVatRate(text: string): number | null {
@@ -305,137 +301,5 @@ export function PayRow({
         </Text>
       </View>
     </View>
-  );
-}
-
-function Row({
-  strong,
-  children,
-}: {
-  strong?: boolean;
-  children: ReactNode;
-}) {
-  const t = useThemeColors();
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: COL_GAP,
-        minHeight: strong ? 48 : 44,
-        paddingHorizontal: 14,
-        borderTopWidth: strong ? 0 : 1,
-        borderTopColor: t.separator,
-      }}
-    >
-      {children}
-    </View>
-  );
-}
-
-/** Колонка числа рядом с клавишей: число прижато к своей единице. */
-/** Число рядом с клавишей — ПИЛЮЛЕЙ одной ширины у скидки и у ставки
- *  (владелец 2026-09-22: «где ноль процентик и ставка — чтоб столбиками,
- *  ровненько»). Знак, число и единица внутри, число прижато к единице —
- *  «0 %» над «+19 %» стоят рамка в рамку. */
-function Rate({ children }: { children?: ReactNode }) {
-  const t = useThemeColors();
-  return (
-    <View
-      style={{
-        width: RATE_W,
-        height: 32,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 2,
-        paddingHorizontal: 8,
-        borderRadius: t.radius.input,
-        backgroundColor: t.fill,
-      }}
-    >
-      {children}
-    </View>
-  );
-}
-
-function Unit({ children }: { children: ReactNode }) {
-  const t = useThemeColors();
-  return (
-    <Text style={{ fontSize: 14, fontWeight: "600", color: t.sub }}>
-      {children}
-    </Text>
-  );
-}
-
-/** Сумма строки — в той же колонке, что «СУММА» у работ. */
-function Sum({ value }: { value: number }) {
-  const t = useThemeColors();
-  return (
-    <Text
-      style={{
-        // Прижата к правому краю, как «К ОПЛАТЕ» строкой ниже: две итоговые
-        // суммы шторки стоят одна под другой (владелец 2026-09-22: «итого
-        // чётко по колонкам»).
-        flex: 1,
-        minWidth: 96,
-        textAlign: "right",
-        fontSize: 15,
-        fontWeight: "700",
-        color: t.ink,
-        fontVariant: ["tabular-nums"],
-      }}
-    >
-      {formatEURExact(value)}
-    </Text>
-  );
-}
-
-/** Подпись-клавиша постоянной ширины, как «%» у скидки. */
-function Key({
-  children,
-  label,
-  hint,
-  struck,
-  onPress,
-}: {
-  children: ReactNode;
-  label: string;
-  hint?: string;
-  struck?: boolean;
-  onPress: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <Pressable
-      onPress={() => {
-        haptics.tap();
-        onPress();
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={hint}
-      hitSlop={6}
-      style={({ pressed }) => ({
-        width: KEY_W,
-        height: 28,
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: t.radius.input,
-        backgroundColor: t.surface,
-        boxShadow: t.cardShadow,
-        opacity: pressed ? 0.6 : 1,
-      })}
-    >
-      <Text
-        style={{
-          fontSize: 15,
-          fontWeight: "700",
-          color: struck ? t.faint : t.ink,
-          textDecorationLine: struck ? "line-through" : "none",
-        }}
-      >
-        {children}
-      </Text>
-    </Pressable>
   );
 }

@@ -440,7 +440,7 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Логика черновика клиента | `src/features/clients/useClientDraft.ts` | — |
 | Объект (создание = правка) | `src/features/clients/ObjectSheet.tsx` + `ObjectFields.tsx` | — |
 | Метки (справочник) | `src/features/reference/screens/LabelsScreen.tsx` | `cabinet/labels.tsx`, `calendar/labels.tsx`, `clients/labels.tsx`, `(shared)/labels.tsx` (шестерёнка листа «Метка клиента», адрес — `useReferenceHref().labels`) |
-| Услуги (справочник) | `app/(dashboard)/cabinet/services.tsx` | `calendar/services.tsx`, `(shared)/services.tsx` |
+| Услуги (справочник) | `app/(dashboard)/cabinet/services.tsx` (тело — `src/features/services/price-list/ServicesList.tsx`) | `calendar/services.tsx`, `(shared)/services.tsx` |
 | Форма услуги прайса | `src/features/services/ServiceSheet.tsx` | — |
 | Своя услуга (запись, чек, инвойс) | `src/features/appointments/TotalSheet.tsx` (`onAddLine`) | значок в шапке «Итого» |
 | Типы объектов | `src/features/reference/screens/ObjectTypesScreen.tsx` | `cabinet/`, `clients/`, `(shared)/` |
