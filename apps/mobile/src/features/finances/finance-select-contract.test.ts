@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { financesScreenSource } from "./home/screen-source";
 
 // КОМАНДА И СЧЁТ В ДЕНЬГАХ ЖИВУТ ТОЛЬКО В `select`.
 //
@@ -160,9 +161,8 @@ describe("долги: ключ компании, команда — select", () 
 });
 
 describe("экран «Финансы»: гашение, обновление и «Без команды»", () => {
-  const source = stripComments(
-    readFileSync(join(here, "../../../app/(dashboard)/finances/index.tsx"), "utf8"),
-  ).replace(/\s+/g, " ");
+  // The route is layout only; the screen's logic lives in `home/`: read both.
+  const source = stripComments(financesScreenSource()).replace(/\s+/g, " ");
 
   test("гасятся и журнал, и долги на загрузке периода", () => {
     const stale = source.match(/const stale = ([^;]*);/);
@@ -227,9 +227,12 @@ describe("экран «Финансы»: гашение, обновление и
     // литерал на месте, но при сиротах чип получит ноль строк и потеряет их
     // деньги, а без сирот `accountIds: []` значит «фильтра нет» — журнал всей
     // компании.
+    // The ternary lives in `ledgerFilterFor` (`home/home-scope.ts`, behaviour
+    // pinned by `home-scope.test.ts`); the screen must take the filter there.
+    assert.match(source, /const ledgerFilter = ledgerFilterFor\(scope, orphanAccounts\);/);
     assert.match(
       source,
-      /const ledgerFilter = scope === NO_TEAM \? orphanAccounts\.length > 0 \? \{ accountIds: orphanAccounts\.map\(\(account\) => account\.id\), \} : \{ brigadeIds: \[NO_TEAM\] \} : \{ brigadeIds: scope \? \[scope\] : undefined \};/,
+      /return scope === NO_TEAM \? orphanAccounts\.length > 0 \? \{ accountIds: orphanAccounts\.map\(\(account\) => account\.id\), \} : \{ brigadeIds: \[NO_TEAM\] \} : \{ brigadeIds: scope \? \[scope\] : undefined \};/,
       "чип «Без команды»: при сиротах — срез по их счетам, без сирот — ноль строк, а не журнал всей компании",
     );
     // Тот же отбор — у текущего периода и у прошлого в «Прибыли» (30.09).

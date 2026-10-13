@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { financesScreenSource } from "./home/screen-source";
 
 // «ФИНАНСЫ» ПО УРОВНЮ — ПРОВЕРКА ПОДКЛЮЧЕНИЯ (этап 2 доступа).
 //
@@ -11,16 +12,17 @@ import { describe, test } from "node:test";
 // идёт по исходнику. Верни голый `canEditTransaction(tx)` или убери «Только
 // просмотр» — и у сотрудника появится кнопка, которую сервер откажет.
 
-const read = (rel: string) =>
-  readFileSync(join(__dirname, rel), "utf8")
+const strip = (source: string) =>
+  source
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/(^|[^:"'`])\/\/.*$/gm, "$1")
     .replace(/\s+/g, " ");
 
-const INDEX = "../../../app/(dashboard)/finances/index.tsx";
+const read = (rel: string) => strip(readFileSync(join(__dirname, rel), "utf8"));
 
 describe("экран «Финансы» спрашивает уровень один раз", () => {
-  const index = read(INDEX);
+  // The route is layout only; the screen's logic lives in `home/`: read both.
+  const index = strip(financesScreenSource());
 
   test("правило зовётся ровно один раз, ролью и картой прав", () => {
     // С 24.09 (STORY-088) правило знает и функции компании, с 29.09 (срез 2а)

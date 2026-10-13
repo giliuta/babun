@@ -3,19 +3,15 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { financesScreenSource } from "./home/screen-source";
 
 // ПЛИТКА И СПИСОК ПОД НЕЙ РЕЖУТ ПО ОДНОМУ ПРАВИЛУ. Арифметика плитки живёт в
 // JSX-странице и другим способом не проверяется, а расхождение здесь стоит
 // дороже всего: инвойс без команды выпадал из счётчика «Документы», его
 // работа уже была вычеркнута из «Долгов» как выставленная, и дебиторка
 // исчезала с экрана целиком.
-const financesScreen = readFileSync(
-  resolve(
-    dirname(fileURLToPath(import.meta.url)),
-    "../../../app/(dashboard)/finances/index.tsx",
-  ),
-  "utf8",
-);
+// The route is layout only; the screen's logic lives in `home/`: read both.
+const financesScreen = financesScreenSource();
 
 const panel = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), "DocumentsPanel.tsx"),
