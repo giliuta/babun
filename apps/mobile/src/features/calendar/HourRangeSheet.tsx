@@ -89,6 +89,11 @@ export function HourRangeSheet({
     Math.ceil((end.hour * 60 + end.minute) / 60) - Math.floor((start.hour * 60 + start.minute) / 60),
   );
   const [pct, setPct] = useState(0);
+  // Ползунок при открытии: масштаб пишется, только если его сдвинули (13.10).
+  // Иначе каждое «Применить» переписывало личный масштаб округлённым до 5 %
+  // (null по умолчанию становился явным и другим), а смена часов при том же
+  // проценте меняла, сколько часов видно, — открытая сетка прыгала.
+  const openedPct = useRef<number | null>(null);
 
   // Ресинк черновика — по фронту открытия (приём PeriodWheelsModal): рефетч
   // настроек не должен перескакивать границу, которую человек сейчас крутит.
@@ -103,7 +108,9 @@ export function HourRangeSheet({
           Math.ceil((value.end * 60 + (value.endMinute ?? 0)) / 60) -
             Math.floor((value.start * 60 + (value.startMinute ?? 0)) / 60),
         );
-        setPct(zoomToPct(zoom.initial, openSpan, zoom.vh));
+        const initialPct = zoomToPct(zoom.initial, openSpan, zoom.vh);
+        openedPct.current = initialPct;
+        setPct(initialPct);
       }
     }
     wasVisible.current = visible;
@@ -119,7 +126,7 @@ export function HourRangeSheet({
         endMinute: end.minute,
       });
     }
-    zoom?.onApply(zoomFromPct(pct, span, zoom.vh));
+    if (zoom && pct !== openedPct.current) zoom.onApply(zoomFromPct(pct, span, zoom.vh));
     onClose();
   };
 
