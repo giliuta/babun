@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, test } from "node:test";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@babun/shared/db/database.types";
@@ -71,4 +73,12 @@ describe("клиент, привязанный к одной компании", 
       assert.throws(() => bound[property], /только from и rpc/);
     }
   });
+});
+
+test("клиент чужой компании — один объект на компанию, а не новый на каждый рендер", () => {
+  // Новый объект ломал зависимости хуков: проверка дубля номера в черновике
+  // клиента чужой компании крутилась по кругу (13.10).
+  const src = readFileSync(join(__dirname, "tenant-bound-client.ts"), "utf8");
+  assert.match(src, /const bound = new Map</);
+  assert.match(src, /let client = bound\.get\(tenantId\);/);
 });

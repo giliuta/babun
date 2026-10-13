@@ -241,7 +241,6 @@ export function ClientDetailScreen() {
     e164,
     isDirty: isDraftDirty,
     canSave,
-    linked: draftLinked,
     phoneTyped: draftPhoneTyped,
     isSaving,
     onPhoneChange: onDraftPhoneChange,
