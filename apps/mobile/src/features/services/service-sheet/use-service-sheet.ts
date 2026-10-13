@@ -26,8 +26,6 @@ export type ServiceSheetProps = {
   busy: boolean;
   onClose: () => void;
   onSave: (draft: ServiceInput, serviceId?: string) => void;
-  /** Дубль из шапки листа — вторая дверь к тому же, что делает свайп вправо
-   *  по строке прайса (который перехватывает системный жест «назад»). */
 };
 
 /** State and actions of the service form sheet. */

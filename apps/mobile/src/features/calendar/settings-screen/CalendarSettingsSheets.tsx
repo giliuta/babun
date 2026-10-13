@@ -7,7 +7,6 @@ import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
 import { readViewportH } from "@/features/calendar/grid-memory";
 import { TeamScheduleSheet } from "@/features/calendar/TeamScheduleSheet";
 import { formatHm } from "@/features/calendar/window";
-import { effectiveBuffer } from "@/features/calendar/setting-options";
 import type { CalendarSettingsState } from "./use-calendar-settings-screen";
 
 /** The screen's sheets: new calendar offer and form, hours, timezone and
@@ -17,7 +16,6 @@ export function CalendarSettingsSheets({ screen }: { screen: CalendarSettingsSta
     router,
     teams,
     team,
-    settings,
     rows,
     offerOpen,
     setOfferOpen,
@@ -88,11 +86,6 @@ export function CalendarSettingsSheets({ screen }: { screen: CalendarSettingsSta
         visible={scheduleOpen}
         teamId={team?.id}
         teamName={team?.name}
-        // ПОКАЗЫВАЕМ ДЕЙСТВУЮЩИЙ перерыв, а не сырое поле команды: пустое
-        // поле означает «как у компании», и печатать вместо него 00:00 —
-        // врать про то, что на самом деле стоит между записями.
-        buffer={effectiveBuffer(team, settings)}
-        onBufferChange={rows.buffer ? (minutes) => patchTeam({ buffer_minutes: minutes }) : undefined}
         onClose={() => setScheduleOpen(false)}
       />
     </>

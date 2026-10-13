@@ -105,12 +105,6 @@ export function TeamScheduleSheet({
   visible: boolean;
   teamId: string | undefined;
   teamName?: string;
-  /** Буфер команды после каждой записи; `null` — «как у компании». */
-  buffer?: number | null;
-  /** Нет — карточки перерыва нет: тому, кому перерыв команды не открыт.
-   *  Перерыв хранится в самой команде; сотрудник с «График команды: Видит и
-   *  меняет» пишет его своей дверью `member_update_team` (30.09). */
-  onBufferChange?: (minutes: number) => void;
   onClose: () => void;
 }) {
   const t = useThemeColors();

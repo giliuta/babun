@@ -336,7 +336,9 @@
 
 **Страница услуг** — `app/(dashboard)/cabinet/services.tsx` (тело —
 `src/features/services/price-list/ServicesList.tsx`), двери
-`calendar/services.tsx`, `(shared)/services.tsx`. Цвета у услуги НЕТ (снят 2026-09-08).
+`calendar/services.tsx`, `(shared)/services.tsx`. Цвет у услуги есть: точка слева от имени
+(`NameColorField` в форме, `AppearanceTile` в строке прайса), и её берёт запись при правиле
+«Обычный цвет: Цвет услуги».
 
 **Форма услуги прайса** — `src/features/services/ServiceSheet.tsx`.
 
