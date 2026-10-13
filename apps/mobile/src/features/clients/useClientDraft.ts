@@ -233,6 +233,11 @@ export function useClientDraft(
   const [draft, setDraft] = useState<Client>(() =>
     createBlankClient({
       full_name: name?.trim() ?? "",
+      // КОМАНДА — С ПЕРВОГО КАДРА (13.10), если она уже известна. Поле номера,
+      // открытое сразу с фокусом (имя пришло из записи), берёт код страны на
+      // первом кадре и потом его не меняет: команда, дописанная эффектом
+      // ниже, приходила поздно, и греческая команда видела «+357».
+      ...(newClientTeam ? { team_id: newClientTeam } : {}),
       // ПУСТО, А НЕ «+357 »: код страны с 22.09 стоит ПОДПИСЬЮ над полем
       // (`use-phone-country.tsx`), и продублированный в значении он мешал —
       // после смены страны в поле оставался прежний код.
@@ -254,7 +259,7 @@ export function useClientDraft(
   // номером читает `client.team_id`, и у черновика без неё код брался от
   // пояса компании, а не команды, куда клиент уйдёт. Выбранную руками
   // команду не трогаем — только ту, что поставили сами.
-  const autoTeam = useRef<string | null>(null);
+  const autoTeam = useRef<string | null>(newClientTeam ?? null);
   useEffect(() => {
     if (!active || !newClientTeam) return;
     const previous = autoTeam.current;
