@@ -152,10 +152,10 @@ export function ClientPickerSheet({
     [clients, excludeId, banned],
   );
 
-  const quickDraft = useMemo(() => buildQuickClientDraft(q), [q]);
+  const quickDraft = useMemo(() => buildQuickClientDraft(q, country), [q, country]);
   const duplicate = useMemo(
-    () => findQuickClientDuplicate(pool, quickDraft.phone_e164),
-    [pool, quickDraft.phone_e164],
+    () => findQuickClientDuplicate(pool, quickDraft.phone_e164, country),
+    [pool, quickDraft.phone_e164, country],
   );
 
   // ПРИ ПУСТОМ ПОИСКЕ ВИДНЫ ВСЕ, А НЕ ТОЛЬКО НЕДАВНИЕ (владелец 2026-08-31:
