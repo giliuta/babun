@@ -3,12 +3,8 @@ import { ScrollView } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import type { Client } from "@babun/shared/local/clients";
-import {
-  invoiceLineTotal,
-  type InvoiceVatMode,
-} from "@babun/shared/local/finance/invoice-ledger";
+import type { InvoiceVatMode } from "@babun/shared/local/finance/invoice-ledger";
 import { isServiceAllowedForTeam } from "@/features/appointments/booking-selection";
-import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
@@ -16,7 +12,7 @@ import { useAppointments } from "@/features/calendar/queries";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
-import { TotalSheet, type DiscountKind } from "@/features/appointments/TotalSheet";
+import type { DiscountKind } from "@/features/appointments/TotalSheet";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import type { Service } from "@/features/services/queries";
 import { useClientFunctionOn } from "@/features/clients/client-functions";
@@ -26,7 +22,9 @@ import { InvoiceRequisitesBlock } from "./InvoiceRequisitesBlock";
 import { InvoiceObjectBlock } from "./InvoiceObjectBlock";
 import { InvoiceClientRequisitesBlock } from "./InvoiceClientRequisitesBlock";
 import type { InvoiceNumberTarget } from "./InvoiceNumberRow";
-import { parseDecimal, parseMoneyAmount, type EditableInvoiceLine } from "./format";
+import type { EditableInvoiceLine } from "./format";
+import { invoiceBlockLines, serviceSelection } from "./invoice-blocks/block-lines";
+import { InvoiceTotalSheet } from "./invoice-blocks/InvoiceTotalSheet";
 
 // ИНВОЙС — ИЗ ТЕХ ЖЕ БЛОКОВ, ЧТО ЗАПИСЬ И ЧЕК.
 //
@@ -186,15 +184,7 @@ export function InvoiceBlocks({
     () => services.filter((service) => isServiceAllowedForTeam(service, teamId)),
     [services, teamId],
   );
-  // ВЫБОР УСЛУГ — ТОТ ЖЕ, ЧТО В ЗАПИСИ (владелец 2026-09-22: «удали этот
-  // блок услуг и добавь тот, который мы постоянно используем… не могу выбрать
-  // количество»). Выбор знает услугу по id: строка инвойса помнит, из какой
-  // она услуги (`serviceId`), и количество правится степпером прямо в списке.
-  const serviceLines = lines.filter((line) => line.serviceId);
-  const selectedServiceIds = serviceLines.map((line) => line.serviceId as string);
-  const quantities = Object.fromEntries(
-    serviceLines.map((line) => [line.serviceId as string, parseDecimal(line.qty) ?? 1]),
-  );
+  const { selectedServiceIds, quantities } = serviceSelection(lines);
   const toggleService = (id: string) => {
     const existing = lines.find((line) => line.serviceId === id);
     if (existing) {
@@ -214,48 +204,13 @@ export function InvoiceBlocks({
     else onLineChange({ ...line, qty: String(qty) });
   };
 
-  // ПЕРЕВОД «ПОЗИЦИЯ СЧЁТА → СТРОКА БЛОКА» — ОДИН НА ЭКРАН: его читают и блок
-  // «Позиции», и шторка «Итого». Числа позиции лежат СТРОКАМИ, пока их правят
-  // руками (иначе каретка прыгает в конец), и разбираются здесь — в одном
-  // месте, теми же функциями, которыми их разберёт отправка на сервер.
-  const blockLines = useMemo(
-    () =>
-      lines.map((line) => {
-        const qty = parseDecimal(line.qty) ?? 0;
-        const price = parseMoneyAmount(line.unitPrice) ?? 0;
-        return {
-          id: line.id,
-          name: line.title.trim() || "Услуга",
-          // Вторая строка у позиции — что входит в работу, а не длительность:
-          // у счёта нет минут.
-          subtitle: line.description?.trim() || null,
-          qty,
-          unit: line.unit ?? null,
-          pricePerUnit: price,
-          // ОДИН СЧЁТ НА ВЕСЬ ПРОДУКТ (`invoiceLineTotal`): своё
-          // `round(qty * price * 100) / 100` в double печатало в карточке
-          // позиции €3,01 там, где бумага, PDF и сервер считают €3,02.
-          total: invoiceLineTotal(qty, price),
-          // Своя строка: имя правится в «Итого».
-          ...(line.serviceId ? {} : { editableName: line.title }),
-        };
-      }),
-    [lines],
-  );
+  // One translation «invoice line → block line» per screen (`invoiceBlockLines`).
+  const blockLines = useMemo(() => invoiceBlockLines(lines), [lines]);
   /** Сумма строк КАК ЕЁ НАБРАЛ ЧЕЛОВЕК — вход для канона налога. */
   const linesSum = useMemo(
     () => blockLines.reduce((sum, line) => sum + line.total, 0),
     [blockLines],
   );
-
-  /** Правка числа возвращается в позицию СТРОКОЙ — той же, какую набрал бы
-   *  человек: у позиции числа хранятся текстом, и превращать их в `1.0000001`
-   *  на обратном пути нельзя. */
-  const writeNumber = (id: string, field: "qty" | "unitPrice", value: number) => {
-    const line = lines.find((item) => item.id === id);
-    if (!line) return;
-    onLineChange({ ...line, [field]: String(Number(value.toFixed(field === "qty" ? 3 : 2))) });
-  };
 
   return (
     <>
@@ -392,57 +347,20 @@ export function InvoiceBlocks({
         onQtyChange={setServiceQty}
       />
 
-
-      {/* ДЕНЬГИ СЧЁТА — ТА ЖЕ ШТОРКА, ЧТО У ЗАПИСИ И ЧЕКА: скидка (с
-          22.09 — строкой счёта с флагом, миграция 20260922030000) и налог.
-          Налог приходит сюда и возвращается обратно — шторка его не
-          включает сама. */}
-      <TotalSheet
+      <InvoiceTotalSheet
         visible={sheet === "total"}
-        // СВОЯ СТРОКА БЕЗ НАЗВАНИЯ УХОДИТ САМА (владелец 2026-09-22: «стираем
-        // имя услуги — и она удаляется»): в услугах остаются только названные.
-        onClose={() => {
-          for (const line of lines) {
-            if (!line.serviceId && !line.title.trim()) onRemoveLine(line);
-          }
-          setSheet(null);
-        }}
-        onAddLine={onAddCustomLine}
-        onRemoveLine={(id) => {
-          const line = lines.find((item) => item.id === id);
-          if (line) onRemoveLine(line);
-        }}
-        onNameChange={(id, title) => {
-          const line = lines.find((item) => item.id === id);
-          if (line) onLineChange({ ...line, title });
-        }}
-        lines={blockLines}
-        onQtyChange={(id, qty) => writeNumber(id, "qty", qty)}
-        onPriceChange={(id, price) => writeNumber(id, "unitPrice", price)}
-        // СЫРАЯ СУММА СТРОК, А НЕ НЕТТО. `applyTxVat` внутри шторки
-        // трактует вход как «то, что человек набрал руками»: при «налог
-        // сверху» это нетто, при «налог в цене» — уже брутто. Нетто из
-        // `calculateInvoiceTotals` в режиме «в цене» уже очищено от налога, и
-        // шторка снимала его ВТОРОЙ раз: счёт на €119 показывал «К оплате
-        // €99,99». Чек передаёт сюда ровно так же — сырую сумму.
-        // После скидки: так шторка считает свою строку скидки (сумма строк −
-        // это число) и налог — с суммы после скидки, как запись и сервер.
-        total={Math.max(0, linesSum - discount.amount)}
-        discount={{
-          kind: discount.kind,
-          value: discount.value,
-          onKindChange: discount.onKindChange,
-          onValueChange: discount.onValueChange,
-        }}
-        vat={{
-          // «off» у счёта и «none» у операции — одно и то же слово на двух
-          // диалектах; канон считает налог по `TxVatMode`.
-          mode: vatMode === "off" ? "none" : vatMode,
-          rate: vatRate,
-          onModeChange: (next: TxVatMode) =>
-            onVatModeChange(next === "none" ? "off" : next),
-          onRateChange: onVatRateChange,
-        }}
+        onClose={() => setSheet(null)}
+        lines={lines}
+        blockLines={blockLines}
+        linesSum={linesSum}
+        onAddCustomLine={onAddCustomLine}
+        onRemoveLine={onRemoveLine}
+        onLineChange={onLineChange}
+        discount={discount}
+        vatMode={vatMode}
+        vatRate={vatRate}
+        onVatModeChange={onVatModeChange}
+        onVatRateChange={onVatRateChange}
       />
     </>
   );

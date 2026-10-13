@@ -5,6 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { changeEmailRefusal } from "./change-email";
+import { readModuleSource } from "@/lib/module-source";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -24,7 +25,8 @@ describe("смена почты аккаунта", () => {
   test("код проверяется как смена почты, строка Email — дверь", () => {
     const sheet = readFileSync(resolve(here, "ChangeEmailSheet.tsx"), "utf8");
     assert.match(sheet, /type: "email_change",/);
-    const page = readFileSync(resolve(here, "../../../app/(dashboard)/cabinet/account.tsx"), "utf8");
+    // The page is the thin route plus `account/`.
+    const page = readModuleSource(resolve(here, "../../../app/(dashboard)/cabinet/account.tsx"), resolve(here, "account"));
     assert.match(page, /onPress=\{u\?\.email \? \(\) => setEmailSheet\(true\) : undefined\}/);
   });
 });

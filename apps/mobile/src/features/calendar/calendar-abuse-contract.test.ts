@@ -245,7 +245,11 @@ describe("повторный аудит календаря 03.10", () => {
     for (const k of ["income", "expense", "debt", "planned"]) {
       assert.match(sheet, new RegExp(`quiet=\\{moneySign\\(money\\.${k}\\) === 0\\}`));
     }
-    const toggle = readFileSync(resolve(here, "../finances/FinanceOverview.tsx"), "utf8");
+    // `SummaryToggle` lives in `finances/finance-overview/`, re-exported by the entry.
+    const toggle = readModuleSource(
+      resolve(here, "../finances/FinanceOverview.tsx"),
+      resolve(here, "../finances/finance-overview"),
+    );
     assert.match(toggle, /backgroundColor: active && !locked \? fillRgba\(color, 0\.1\) : t\.surface,/);
   });
 

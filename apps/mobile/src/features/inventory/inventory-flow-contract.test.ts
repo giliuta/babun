@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
-const source = readFileSync(
-  resolve(
-    dirname(fileURLToPath(import.meta.url)),
-    "../../../app/(dashboard)/cabinet/inventory.tsx",
-  ),
-  "utf8",
+// The screen is the thin route plus this folder (`InventoryList.tsx`).
+const here = dirname(fileURLToPath(import.meta.url));
+const source = readModuleSource(
+  resolve(here, "../../../app/(dashboard)/cabinet/inventory.tsx"),
+  here,
 );
 
 describe("inventory destructive flow", () => {

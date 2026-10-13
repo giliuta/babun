@@ -19,7 +19,11 @@ describe("native settings persistence contract", () => {
   });
 
   test("global sign-out and account deletion await tenant-data erasure", () => {
-    const source = read("../../../app/(dashboard)/cabinet/account.tsx");
+    // The page is the thin route plus `cabinet/account/`.
+    const source = readModuleSource(
+      resolve(here, "../../../app/(dashboard)/cabinet/account.tsx"),
+      resolve(here, "../cabinet/account"),
+    );
     const authClear = read("../../lib/auth-clear.ts");
     assert.doesNotMatch(source, /\bwipeLocalData\b/);
     assert.match(source, /await signOutScopeAndWipe\("global"\)/);
@@ -29,7 +33,11 @@ describe("native settings persistence contract", () => {
   });
 
   test("inventory is read-only outside owner and master cache is visibility-scoped", () => {
-    const screen = read("../../../app/(dashboard)/cabinet/inventory.tsx");
+    // The screen is the thin route plus `features/inventory/`.
+    const screen = readModuleSource(
+      resolve(here, "../../../app/(dashboard)/cabinet/inventory.tsx"),
+      resolve(here, "../inventory"),
+    );
     const query = read("../inventory/queries.ts");
     const cache = read("../../../../../packages/shared/src/local/equipment.ts");
     assert.match(screen, /const owner = role === "owner"/);

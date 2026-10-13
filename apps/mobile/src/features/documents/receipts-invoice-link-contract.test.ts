@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 // ЧЕК, ВЫПИСАННЫЙ ДО ИНВОЙСА, ВИДЕН НА СТРАНИЦЕ ИНВОЙСА (аудит 03.10).
 // `issue_invoice` по доходу (p_link_to_tx_id) чек этого дохода к инвойсу не
@@ -23,7 +24,8 @@ describe("чеки страницы инвойса", () => {
 
   test("страница отдаёт платежи инвойса", () => {
     assert.match(
-      read("../../../app/invoices/[id].tsx"),
+      // The page is the thin route plus `invoices/detail/`.
+      readModuleSource(resolve(here, "../../../app/invoices/[id].tsx"), resolve(here, "../invoices/detail")),
       /useReceipts\(\{ invoiceId: id, transactionIds: incomeIds, enabled: !!id \}\)/,
     );
   });

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 
 // «ВЫЙТИ» — ТОЛЬКО С ЭТОГО УСТРОЙСТВА (владелец 2026-09-15: «чтоб ничего не
 // повторялось»). Каждая «Выйти» в приложении шла через
@@ -35,7 +36,8 @@ describe("выход из аккаунта", () => {
   });
 
   test("в «Вход и безопасность» нет второй «Выйти», выход со всех устройств — явной строкой", () => {
-    const account = read("../../../app/(dashboard)/cabinet/account.tsx");
+    // The page is the thin route plus `account/`.
+    const account = readModuleSource(resolve(here, "../../../app/(dashboard)/cabinet/account.tsx"), resolve(here, "account"));
     assert.doesNotMatch(account, /\bsignOutAndWipe\b/);
     assert.match(account, /await signOutScopeAndWipe\("global"\)/);
   });

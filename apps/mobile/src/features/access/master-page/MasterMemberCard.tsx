@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { Keyboard } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
-import { Archive, ArchiveRestore } from "lucide-react-native";
 
 import { useAppointments } from "@/features/calendar/queries";
 import { useBusinessNow } from "@/features/appointments/business-now";
@@ -11,16 +10,10 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { useToast } from "@/components/ui/Toast";
-import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
 import { formatPhoneAsYouType } from "@/features/clients/phone";
 import { phoneToSave } from "@/features/profile/profile";
 import { useMasters, useTeams, useUpdateMaster } from "@/features/reference/queries";
 import { useRemoveTenantMember } from "@/features/settings/team-access";
-import { chooseOption } from "@/lib/choose";
-import { confirmThen } from "@/lib/confirm";
-import { haptics } from "@/lib/haptics";
-import { notify } from "@/lib/notify";
 
 import { levelOf as mapLevelOf, type AccessBlock, type AccessRefusal } from "../access-map";
 import {
@@ -30,7 +23,6 @@ import {
   useSetMemberAccess,
   useSetMemberCalendars,
 } from "../queries";
-import { removalMessage, upcomingWorkCount } from "./removal-impact";
 import { draftTeamBrief } from "../rights-ui/team-sentence";
 import { AccessSectionsCard } from "../rights-ui/AccessSectionsCard";
 import { MasterWorkBlock } from "./MasterProfileBlocks";
@@ -44,21 +36,20 @@ import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { CalendarPickerSheet } from "./CalendarPickerSheet";
 import { CALENDAR_GROUPS } from "./access-summary";
 import { activeOf, usePreview } from "./rights-page-shared";
-import { memberRefusal, memberRefusalText } from "./member-rights-writer";
+import { memberRefusal } from "./member-rights-writer";
 import { viewSections } from "./rights-view-sections";
 import { usePartnerManager, useTeamsAllowed } from "./use-partner-manager";
 import { HeaderMenuButton, MasterCardView } from "./MasterCardView";
-import {
-  copyCalendarLevels,
-  starterCalendarChanges,
-  withLiveTeams,
-} from "./master-draft";
+import { withLiveTeams } from "./master-draft";
 import {
   MEMBER_REFUSAL_TEXT,
   areaLevelsOf,
   companyAreasOf,
   draftFromMemberAccess,
 } from "./rights-rows";
+import { ActionMenuSheet, type ActionMenu } from "@/features/calendar/ActionMenuSheet";
+import { calendarToggler } from "./member-calendar-toggle";
+import { memberMenuActions } from "./member-menu";
 
 // СОТРУДНИК — ТА ЖЕ КАРТОЧКА МАСТЕРА (владелец 15.09: «полная карточка
 // мастера»). Раньше тап по человеку в «Мастерах» открывал экран-таблицу прав
@@ -192,101 +183,19 @@ export function MasterMemberCard({
     new Set(teams.map((team) => team.id)),
   );
 
-
-  /** Прикрепить или открепить календарь. Открепление спрашивает словами: в
-   *  этом календаре человек разом теряет и записи, и деньги, и права — их
-   *  уровни там больше не считаются. */
-  const toggleCalendar = async (id: string) => {
-    if (manager.readOnly) {
-      notify(manager.readOnly);
-      return;
-    }
-    if (teamsAllowed && !teamsAllowed.has(id)) {
-      notify("Эту команду назначает владелец", "Добавлять и снимать можно только команды, где работаете вы.");
-      return;
-    }
-    const current = draft.teamIds;
-    const attached = current.includes(id);
-    const next = attached ? current.filter((teamId) => teamId !== id) : [...current, id];
-    // ЖДЁМ ОТВЕТ ПРЯМО (`mutateAsync`), а не обратным вызовом `mutate`:
-    // ответ перерисовывает карточку, и обратный вызов прежнего нажатия
-    // react-query молча не зовёт — вопрос про права не появлялся (снято
-    // 23.09 на симуляторе).
-    const save = async (): Promise<boolean> => {
-      try {
-        await setCalendars.mutateAsync(next);
-        return true;
-      } catch (error) {
-        toast(memberRefusalText(error), "error");
-        return false;
-      }
-    };
-    if (!attached) {
-      // НОВЫЙ КАЛЕНДАРЬ — СПРОСИТЬ, КАК В КАКОМ (STORY-087; владелец 23.09:
-      // «в каждый календарь буду добавлять одного и того же мастера»). В новом
-      // календаре у человека всё «Не видит»; чаще всего нужны те же права,
-      // что уже стоят в его первом календаре, — одним тапом, без десяти строк.
-      const source = current.find((teamId) => teamNameOf(teamId));
-      if (!(await save())) return;
-      // Новая команда сразу выбрана в ленте: её права ставятся прямо здесь.
-      setActiveTeam(id);
-      // Стартовые права нового календаря (владелец 24.09): без них человек
-      // входил в календарь и не видел в нём даже своей работы.
-      const applyStarter = async () => {
-        const changes = starterCalendarChanges(blocks, id);
-        if (changes.length === 0) return;
-        try {
-          await setAccess.mutateAsync(changes);
-        } catch (error) {
-          toast(memberRefusalText(error), "error");
-        }
-      };
-      // Шаблонов доступа больше нет (владелец 30.09: «этот блок полностью
-      // убери… по сути вот эти шаблоны»): вопрос — «как в …» или сам.
-      if (!source) {
-        await applyStarter();
-        return;
-      }
-      // ВОПРОС — КОГДА ЛИСТ КАЛЕНДАРЕЙ УЖЕ СНЯТ. Два нижних листа iOS подряд
-      // не показывает: вопрос, поднятый по таймеру, пока лист ещё уезжал,
-      // молча терялся (снято 23.09). Ждём `onExited` самого листа.
-      await closeCalendarsSheet();
-      const sourceName = source ? (teamNameOf(source) ?? "первом календаре") : "";
-      const targetName = teamNameOf(id) ?? "новом календаре";
-      const answer = await chooseOption(`Права в «${targetName}»`, [
-        { label: `Как в «${sourceName}»` },
-        { label: "Выставлю сам" },
-      ]);
-      if (answer === 0) {
-        try {
-          await setAccess.mutateAsync(copyCalendarLevels(blocks, draft, source, id));
-          toast(`Права как в «${sourceName}»`);
-        } catch (error) {
-          toast(memberRefusalText(error), "error");
-        }
-      } else {
-        // «Выставлю сам» и закрытый вопрос — со стартовых прав.
-        await applyStarter();
-      }
-      return;
-    }
-    // УБИРАЕМ СРАЗУ, С «ОТМЕНИТЬ» (владелец 22.09: «всё можно вот так вот
-    // убирать» — свайпом, без вопроса). Права в этом календаре уходят вместе
-    // с ним (каскад на сервере), поэтому «Отменить» возвращает и календарь, и
-    // его положения — из снимка до ухода.
-    const teamName = teamNameOf(id) ?? "календаря";
-    const restoreLevels = copyCalendarLevels(blocks, draft, id, id);
-    setCalendarsOpen(false);
-    if (!(await save())) return;
-    toast(`Убран из «${teamName}»`, "success", {
-      label: "Отменить",
-      onPress: () =>
-        void setCalendars
-          .mutateAsync(current)
-          .then(() => setAccess.mutateAsync(restoreLevels))
-          .catch((error) => toast(memberRefusalText(error), "error")),
-    });
-  };
+  const toggleCalendar = calendarToggler({
+    manager,
+    teamsAllowed,
+    draft,
+    blocks,
+    teamNameOf,
+    setCalendars,
+    setAccess,
+    toast,
+    setActiveTeam,
+    setCalendarsOpen,
+    closeCalendarsSheet,
+  });
 
   // ПРАВА ВЫБРАННОЙ КОМАНДЫ — ПРЯМО НА СТРАНИЦЕ (владелец 29.09: «захожу в
   // календарь команда один, и там полностью все настройки по каждому»). Тот
@@ -328,63 +237,19 @@ export function MasterMemberCard({
   };
 
   const isStaff = member?.role === "master" || member?.role === "dispatcher";
-  // «УБРАТЬ ИЗ КОМАНД» (04.10: компаний нет — аккаунт и команды): членство
-  // одно на аккаунт, и уходит человек разом из всех ваших команд. Слово не
-  // обещает меньше, чем будет.
-  const askRemove = () => {
-    if (!member) return;
-    confirmThen(
-      `Убрать ${member.name} из команд?`,
-      {
-        // ВОПРОС НАЗЫВАЕТ ЦИФРУ. Владельца держит не «пропадёт доступ», а то,
-        // что на четверг у человека три выезда: убрал в среду — узнал от
-        // клиента (`removal-impact.ts`).
-        message: removalMessage(
-          upcomingWorkCount(appts.data ?? [], draft.teamIds, businessNow().ymd),
-        ),
-        confirmLabel: "Убрать",
-        destructive: true,
-      },
-      async () => {
-        try {
-          await remove.mutateAsync(member.userId);
-          void qc.invalidateQueries({ queryKey: ["calendar-members"] });
-          toast(`${member.name} больше не в ваших командах`);
-          onBack();
-        } catch (error) {
-          notify("Не удалось убрать из команд", (error as Error).message);
-        }
-      },
-    );
-  };
-  // ⋯ — ТО, ЧЕГО НЕТ В БЛОКАХ СТРАНИЦЫ (STORY-087): архив карточки и уход из
-  // команд. Шторкой действий, как у записи и документа (04.10), а не
-  // системным списком. «Посмотреть его глазами» — строкой в блоке «Доступ».
-  const openMenu = () => {
-    if (!member) return;
-    Keyboard.dismiss();
-    haptics.tap();
-    setMenu({
-      title: member.name,
-      subtitle: member.email || undefined,
-      items: [
-        ...(card
-          ? [
-              {
-                label: card.is_active ? "В архив" : "Вернуть из архива",
-                icon: card.is_active ? Archive : ArchiveRestore,
-                color: card.is_active ? SETTINGS_TILE.yellow : SETTINGS_TILE.green,
-                run: () => {
-                  patchCard({ is_active: !card.is_active });
-                  toast(card.is_active ? "Партнёр в архиве — в выборе команды его нет" : "Партнёр снова в работе");
-                },
-              },
-            ]
-          : []),
-        { label: "Убрать из команд", destructive: true, run: askRemove },
-      ],
-    });
-  };
+  const { openMenu } = memberMenuActions({
+    member,
+    card,
+    patchCard,
+    setMenu,
+    toast,
+    appointments: appts.data,
+    teamIds: draft.teamIds,
+    businessNow,
+    remove,
+    qc,
+    onBack,
+  });
 
   return (
     <>

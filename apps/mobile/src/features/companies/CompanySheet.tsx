@@ -1,13 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { InvoiceNumberRow } from "@/features/invoices/InvoiceNumberRow";
-import { useNextInvoiceSeries } from "@/features/invoices/queries";
-import { ScrollView, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ScrollView, View } from "react-native";
 import { Building2 } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { FieldRow, RowCaption } from "@/components/ui/card-rows";
 import { NameColorField } from "@/components/ui/picker-fields";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { GUTTER } from "@/components/ui/tokens";
@@ -16,14 +13,13 @@ import { getStorage } from "@babun/shared/storage";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
 import {
-  NUMBER_PADDINGS,
   canSaveCompany,
   cleanSeriesPrefix,
-  documentNumberPreview,
   isCompanyDraftDirty,
   normalizeCompanyDraft,
 } from "./company-rules";
 import type { Company, CompanyDraft } from "./queries";
+import { SeriesBlock } from "./company-sheet/SeriesBlock";
 
 // КАРТОЧКА РЕКВИЗИТОВ — ОДНА ФОРМА НА СОЗДАНИЕ И НА ПРАВКУ (тот же закон, что у
 // объекта: «если я показываю в одном месте, значит то же самое будет
@@ -358,69 +354,5 @@ export function CompanySheet({
         ) : null}
       </ScrollView>
     </BottomSheet>
-  );
-}
-
-// БЛОК «НОМЕР» (владелец 03.10: «буквы и длина номера — в реквизитах,
-// сразу»). Следующий инвойс показывает набранное до «Сохранить»: сменил
-// буквы — видишь, как будет. Порядок номера при этом не трогается — дальше
-// идёт тот же счётчик серии, выпущенные бумаги хранят свой номер.
-function SeriesBlock({
-  company,
-  draft,
-  onPadding,
-  children,
-}: {
-  company: Company | null;
-  draft: CompanyDraft;
-  onPadding: (padding: number) => void;
-  children: ReactNode;
-}) {
-  const t = useThemeColors();
-  const year = new Date().getFullYear();
-  const next = useNextInvoiceSeries(year, company?.id ?? null).data ?? null;
-  const padding = draft.number_padding ?? company?.number_padding ?? 4;
-  const prefix =
-    cleanSeriesPrefix(draft.invoice_prefix ?? "") || company?.invoice_prefix || "INV";
-  return (
-    <SectionCard dense title="Номер">
-      {company ? (
-        <InvoiceNumberRow
-          stacked
-          label="Следующий инвойс"
-          target={{ companyId: company.id, year, next }}
-          preview={next ? documentNumberPreview(prefix, year, next.seq, padding) : undefined}
-        />
-      ) : null}
-      {children}
-      <View
-        style={{
-          // Линия — как у строк-полей над ней: от края до края карточки.
-          borderTopWidth: 1,
-          borderTopColor: t.separator,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          minHeight: 60,
-          paddingHorizontal: 16,
-          paddingVertical: 8,
-        }}
-      >
-        <Text
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{ flex: 1, fontSize: 15, color: t.ink }}
-        >
-          Цифр в номере
-        </Text>
-        <SegmentedControl
-          compact
-          options={NUMBER_PADDINGS.map((n) => ({ value: String(n), label: String(n) }))}
-          value={String(padding)}
-          onChange={(value) => onPadding(Number(value))}
-          style={{ width: 176 }}
-        />
-      </View>
-    </SectionCard>
   );
 }

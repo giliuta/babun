@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 import { financesScreenSource } from "./home/screen-source";
 
 // ПЛИТКА И СПИСОК ПОД НЕЙ РЕЖУТ ПО ОДНОМУ ПРАВИЛУ. Арифметика плитки живёт в
@@ -13,9 +14,10 @@ import { financesScreenSource } from "./home/screen-source";
 // The route is layout only; the screen's logic lives in `home/`: read both.
 const financesScreen = financesScreenSource();
 
-const panel = readFileSync(
+// The panel is `DocumentsPanel.tsx` plus its `documents-panel/` parts.
+const panel = readModuleSource(
   resolve(dirname(fileURLToPath(import.meta.url)), "DocumentsPanel.tsx"),
-  "utf8",
+  resolve(dirname(fileURLToPath(import.meta.url)), "documents-panel"),
 );
 const documentsRule = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), "documents.ts"),

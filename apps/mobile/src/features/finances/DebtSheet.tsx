@@ -1,37 +1,29 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
-import { Tag } from "lucide-react-native";
+import { View } from "react-native";
 import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
 import { DEBT_DIRECTION_LABEL } from "@babun/shared/local/finance/debt";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
-import type { Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useReferenceHref } from "@/features/clients/reference-href";
-import { CATEGORY_KIND_ROW } from "./settings-levels";
 import { useFinanceSettingLevelsOf } from "./use-finance-settings";
-import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { PickerSheet } from "@/components/ui/PickerSheet";
-import { iconPreset } from "@/components/ui/icon-set";
 import { GUTTER } from "@/components/ui/tokens";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { OperationReceiptRow } from "./OperationReceiptRow";
 import { WhenRow } from "@/features/appointments/BookingSummary";
-import { WhenSheet } from "@/features/appointments/WhenSheet";
-import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { AmountBlock } from "./AmountBlock";
 import { CategoryBlock } from "./CategoryBlock";
 import { DebtWhoBlock } from "./DebtWhoBlock";
-import { useRouter, type Href } from "expo-router";
+import { useRouter } from "expo-router";
 import { formatHM } from "@/features/appointments/helpers";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { VIEW_ONLY_REASON } from "./finance-page-access";
 import { useDebtDraft } from "./use-debt-draft";
 import { TeamChips } from "./account-editor/TeamChips";
+import { DebtPickers, DebtSheetFooter } from "./debt-sheet/DebtSheetParts";
 
 // ФОРМА ДОЛГА — ТЕ ЖЕ БЛОКИ, ЧТО У ОПЕРАЦИИ (владелец 2026-09-10: «почему,
 // когда я нажимаю „Добавить долг“, открывается форма записи? Там должна
@@ -89,24 +81,27 @@ export function DebtSheet({
   const categoriesHref = useReferenceHref().categories;
   const categoriesLevelOf = useFinanceSettingLevelsOf();
   const router = useRouter();
+  const d = useDebtDraft({
+    visible,
+    debt,
+    initialDirection,
+    teamId,
+    paid,
+    onClose,
+    onReopen,
+  });
   const {
     isEdit,
     direction,
     setDirection,
     counterparty,
-    setCounterparty,
-    setClientId,
     client,
     amount,
     setAmount,
     date,
-    setDate,
     time,
     setTime,
-    categoryId,
-    setCategoryId,
     category,
-    cats,
     teams,
     debtTeamId,
     setDebtTeamId,
@@ -116,27 +111,16 @@ export function DebtSheet({
     setReceiptUrl,
     receiptSession,
     busy,
-    clients,
     statsById,
-    recentIds,
     remainder,
     canSave,
     reason,
     save,
     destroy,
-    leaveForClient,
     runAfterExit,
     guardedClose,
     askingClose,
-  } = useDebtDraft({
-    visible,
-    debt,
-    initialDirection,
-    teamId,
-    paid,
-    onClose,
-    onReopen,
-  });
+  } = d;
 
   const [whenOpen, setWhenOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
@@ -156,38 +140,14 @@ export function DebtSheet({
       avoidKeyboard
       maxHeightRatio={0.86}
       footer={
-        <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
-          {/* Причина «Смотрит» вытесняет остальные: пока права нет, ни сумма,
-              ни клиент кнопку не оживят. */}
-          {!canWrite ? (
-            <Text
-              accessibilityLiveRegion="polite"
-              maxFontSizeMultiplier={1.3}
-              style={{ fontSize: 13, lineHeight: 18, textAlign: "center", color: th.sub }}
-            >
-              {VIEW_ONLY_REASON}
-            </Text>
-          ) : reason ? (
-            <Text
-              accessibilityLiveRegion="polite"
-              maxFontSizeMultiplier={1.3}
-              style={{
-                fontSize: 13,
-                lineHeight: 18,
-                textAlign: "center",
-                color: reason.error ? th.danger : th.sub,
-              }}
-            >
-              {reason.text}
-            </Text>
-          ) : null}
-          <Button
-            label={isEdit ? "Сохранить" : "Записать долг"}
-            onPress={save}
-            disabled={!canSave || !canWrite}
-            loading={busy}
-          />
-        </View>
+        <DebtSheetFooter
+          canWrite={canWrite}
+          reason={reason}
+          isEdit={isEdit}
+          save={save}
+          canSave={canSave}
+          busy={busy}
+        />
       }
     >
       <View style={{ backgroundColor: th.canvas, paddingBottom: 16 }}>
@@ -370,89 +330,18 @@ export function DebtSheet({
         ) : null}
       </View>
 
-      <WhenSheet
-        open={whenOpen}
-        onClose={() => setWhenOpen(false)}
-        date={date}
-        timeStart={time ?? formatHM(new Date())}
-        timeEnd={time ?? formatHM(new Date())}
-        allDay={false}
-        allowAllDay={false}
-        singleTime
-        onCommit={(next) => {
-          setDate(next.date);
-          setTime(next.timeStart);
-        }}
-      />
-
-      <PickerSheet
-        visible={categoryOpen}
-        title="Категория долга"
-        // Пустой лист говорит, где заводят категории, — как у операции.
-        // Без этой строки лист долга открывался немым: заголовок и пустота
-        // (04.10, у AirFix ни одной категории долгов).
-        subtitle={
-          cats.length > 0
-            ? undefined
-            : categoriesLevelOf(debtTeamId)[CATEGORY_KIND_ROW.debt] === "write"
-              ? "Категорий нет — создайте их (значок справа)"
-              : "Категорий пока нет"
-        }
-        items={cats.map((c) => ({
-          id: c.id,
-          label: c.name,
-          // БЕЗ ЭМОДЗИ (владелец 2026-09-10: «переделай категории так же, как
-          // события; эмодзи убираем, это не надо»). В справочнике у категорий
-          // лежат ⛽ 🍔 📦, и лист печатал их вперемешку со значками словаря —
-          // единственное место продукта, где строка выбора выглядела иначе,
-          // чем у команды, метки и типа события. Цвет категории остаётся: он и
-          // различает строки.
-          icon: iconPreset(c.icon) ?? Tag,
-          color: c.color ?? th.accent,
-          onPress: () => setCategoryId(c.id),
-        }))}
-        selectedId={categoryId}
-        // Та же дверь и та же парковка, что у листа операции; у партнёра —
-        // по праву «Категории долгов» в команде долга (03.10).
-        onSettings={
-          categoriesLevelOf(debtTeamId)[CATEGORY_KIND_ROW.debt] !== "hidden"
-            ? () =>
-                doorway.open(() =>
-                  router.push(
-                    (debtTeamId
-                      ? `${categoriesHref}?team=${encodeURIComponent(debtTeamId)}&kind=debt`
-                      : `${categoriesHref}?kind=debt`) as Href,
-                  ),
-                )
-            : undefined
-        }
-        settingsLabel="Категории долгов"
-        onClose={() => setCategoryOpen(false)}
-      />
-
-      {/* ТОТ ЖЕ ВЫБОР КЛИЕНТА, ЧТО В ЗАПИСИ — со вводной о каждом и недавними
-          первыми. «Создать клиента» внутри него уходит на карточку нового
-          клиента отдельным маршрутом, а маршрут под открытым окном `Modal` не
-          виден: поэтому лист долга на это время уезжает и возвращается сам,
-          когда клиент заведён (см. `wentForClient`). Набранное переживает
-          поход — `keepDraft` запрещает пересев. */}
-      <ClientPickerSheet
-        visible={clientOpen}
-        onClose={() => setClientOpen(false)}
-        onCreate={(prefill) => {
-          // Уходим МЫ, а не лист выбора: под открытым окном шторки долга
-          // маршрут карточки не виден. Сперва уезжаем сами, потом пуш.
-          setClientOpen(false);
-          leaveForClient(prefill);
-        }}
-        clients={clients as Client[]}
-        recentIds={recentIds}
-        statsById={statsById}
-        onSelect={(picked) => {
-          setClientId(picked.id);
-          setCounterparty(picked.full_name || "");
-          setClientOpen(false);
-        }}
+      <DebtPickers
+        d={d}
+        whenOpen={whenOpen}
+        setWhenOpen={setWhenOpen}
+        categoryOpen={categoryOpen}
+        setCategoryOpen={setCategoryOpen}
+        clientOpen={clientOpen}
+        setClientOpen={setClientOpen}
+        doorway={doorway}
+        categoriesHref={categoriesHref}
+        categoriesLevelOf={categoriesLevelOf}
+        router={router}
       />
     </BottomSheet>
   );

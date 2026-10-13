@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { readModuleSource } from "@/lib/module-source";
 import { financesScreenSource } from "./home/screen-source";
 import { operationSheetSource } from "./operation-sheet/sheet-source";
 import { transferSheetSource } from "./transfer-sheet/sheet-source";
@@ -28,13 +29,15 @@ describe("повторный аудит финансов 03.10", () => {
   });
 
   test("«Аналитика» гасит деньги, пока журнал нового периода в пути", () => {
-    const analytics = read("analytics/AnalyticsScreen.tsx");
+    // The screen is `analytics/AnalyticsScreen.tsx` plus its hook and panels.
+    const analytics = readModuleSource(resolve(here, "analytics/AnalyticsScreen.tsx"), resolve(here, "analytics"));
     assert.match(analytics, /const moneyPending = showMoney && \(ledger\.data === undefined \|\| awaitingAnswer\(ledger\)\);/);
     assert.match(analytics, /const ahead = upcomingWork\.owed;/);
   });
 
   test("пустой разбор дохода не прячет «Работы и оплаты» и «Прогноз»", () => {
-    const breakdown = read("ProfitBreakdown.tsx");
+    // The panel is `ProfitBreakdown.tsx` plus its `profit-breakdown/` rows.
+    const breakdown = readModuleSource(resolve(here, "ProfitBreakdown.tsx"), resolve(here, "profit-breakdown"));
     const empty = breakdown.slice(breakdown.indexOf("if (empty) {"), breakdown.indexOf("return (", breakdown.indexOf("if (empty) {") + 40));
     assert.match(empty, /<EmptyState[\s\S]*\{footer\}\s*<\/ScrollView>/);
   });
