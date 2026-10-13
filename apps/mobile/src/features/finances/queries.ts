@@ -6,6 +6,7 @@ import {
   listRefundTotals,
   listTransactionsForAppointments,
   listTransactionsForRange,
+  rowToTx,
   updateTransaction,
   type TransactionDraft,
 } from "@babun/shared/db/repositories/finance-transactions";
@@ -21,6 +22,7 @@ import {
 } from "@babun/shared/db/repositories/finance-categories";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { supabase } from "@/lib/supabase";
+import { containsPattern } from "@/lib/like-pattern";
 import { useTenantId } from "@/lib/tenant";
 import {
   financeCategoriesQueryKey,
@@ -139,6 +141,31 @@ export function useAppointmentsLedger(
     placeholderData,
     queryFn: () =>
       listTransactionsForAppointments(supabase, tenantId as string, key.split(",")),
+  });
+}
+
+/**
+ * All-time search by note — the fallback of the «Финансы» feed when the open
+ * period has nothing for the typed text. Notes only, newest 50: the screen
+ * enables it just while the period is honestly empty. Key sits under the
+ * `["transactions", company]` prefix, so ledger invalidation refreshes it.
+ */
+export function useAllTimeNoteSearch(trimmedQuery: string, enabled: boolean) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["transactions", tenantId, "search-all-time", trimmedQuery],
+    enabled: !!tenantId && enabled,
+    queryFn: async (): Promise<FinanceTransaction[]> => {
+      const { data, error } = await supabase
+        .from("finance_transactions")
+        .select("*")
+        .eq("tenant_id", tenantId as string)
+        .ilike("notes", containsPattern(trimmedQuery))
+        .order("occurred_on", { ascending: false })
+        .limit(50);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map(rowToTx);
+    },
   });
 }
 

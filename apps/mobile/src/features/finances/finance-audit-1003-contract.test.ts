@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { financesScreenSource } from "./home/screen-source";
 
 // ПОВТОРНЫЙ АУДИТ ФИНАНСОВ 03.10 — сторожа на исходник там, где чистой
 // функции нет: экран и формы собирают уже проверенные помощники.
@@ -18,7 +19,8 @@ describe("повторный аудит финансов 03.10", () => {
 
   test("перевод ищет второй счёт вместе со скрытыми; попап подписывает по всем", () => {
     assert.match(read("FinancesFooter.tsx"), /company: transferAccounts \?\? accounts,/);
-    const screen = read("../../../app/(dashboard)/finances/index.tsx");
+    // The popup lives in `home/HomeSheets.tsx`; the route is layout only.
+    const screen = financesScreenSource();
     assert.match(screen, /transaction=\{popupTx\}[\s\S]{0,200}accounts=\{allAccounts\}/);
   });
 
