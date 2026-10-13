@@ -59,3 +59,13 @@ test("«Назад» выходит из режима корневой вкла�
   assert.match(hook, /if \(!active\) return undefined;/);
   assert.match(hook, /return true;/);
 });
+
+test("подъём над клавиатурой меряет рамку в координатах экрана, как и клавиатуру", () => {
+  // `measureInWindow` на странице отсчитывает от низа строки состояния, а
+  // `screenY` клавиатуры — от верха экрана: подъём недобирал ~52 dp, и подвал
+  // страницы («Создать клиента», «Сохранить» записи) уходил под клавиатуру.
+  const lift = read("KeyboardLift.tsx");
+  assert.match(lift, /ref\.current\?\.measure\(\(_x, _y, _w, h, _pageX, pageY\) =>/);
+  assert.match(lift, /pageY \+ h - kb\.screenY/);
+  assert.doesNotMatch(lift, /ref\.current\?\.measureInWindow\(/);
+});
