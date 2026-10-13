@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { readModuleSource } from "@/lib/module-source";
+import { clientCardPageSource, clientCardSource } from "./card/source-for-tests";
 
 // ПРОВОДКА ТРЁХ ДОБАВОК КАРТОЧКИ КЛИЕНТА (22.09): «был 12 авг» у объекта,
 // «Обращение» в «Личном», тап по долгу → «Неоплаченные». Правила — чистые
@@ -75,7 +76,7 @@ describe("метка и тег — плитками перед «Личным»"
     assert.doesNotMatch(personal, /label="Метка"|label="Теги"/);
     // Владелец 03.10: «метку и тег поставим в самый верх перед блоком
     // „Клиент“» (22.09 они уезжали вниз, к «Личному»).
-    const page = read("../../../app/(dashboard)/clients/[id].tsx");
+    const page = clientCardPageSource();
     assert.match(page, /<ClientLabelTags[\s\S]{0,400}<ClientHeader/);
     assert.doesNotMatch(read("ClientProfileBlocks.tsx"), /labelTags/);
     assert.doesNotMatch(read("ClientHeader.tsx"), /identity/);
@@ -121,7 +122,7 @@ describe("заметки: клиента — наверху, объекта — 
   // объектом своя мини-заметка, как в записи».
   test("«Заметка клиента» стоит ВТОРЫМ блоком, под «Клиентом»", () => {
     // Владелец 23.09: «сначала идёт блок „Клиент", потом заметка клиента».
-    const page = read("../../../app/(dashboard)/clients/[id].tsx");
+    const page = clientCardSource();
     // Без «Клиенты: Меняет» заметка только читается (STORY-088, волна 4).
     assert.match(
       page,
@@ -167,7 +168,7 @@ describe("длинные списки — своей страницей", () => 
     const page = read("../../../app/(dashboard)/clients/objects.tsx");
     assert.match(page, /<ClientObjectsSection/);
     assert.doesNotMatch(page, /limit=/);
-    assert.match(read("../../../app/(dashboard)/clients/[id].tsx"), /pathname: subPage\("objects"\)/);
+    assert.match(clientCardSource(), /pathname: subPage\("objects"\)/);
   });
 });
 
@@ -179,7 +180,7 @@ describe("люди и реквизиты — тоже своими страни�
     // тап по нему — страница всех (двери «Все реквизиты» нет).
     assert.match(read("blocks/RequisitesBlock.tsx"), /const shown = single \? ordered\.slice\(0, 1\) : ordered;/);
     assert.match(read("ClientProfileBlocks.tsx"), /onOpenAll=\{draft \? undefined : onOpenRequisites\}/);
-    const page = read("../../../app/(dashboard)/clients/[id].tsx");
+    const page = clientCardSource();
     assert.match(page, /label="Все люди"/);
     assert.match(page, /limit: PEOPLE_ON_CARD/);
     assert.match(page, /pathname: subPage\("people"\)/);
@@ -194,7 +195,7 @@ describe("люди и реквизиты — тоже своими страни�
 });
 
 describe("аудит 23.09 — то, что чинили", () => {
-  const page = () => read("../../../app/(dashboard)/clients/[id].tsx");
+  const page = () => clientCardSource();
   test("поиск находит клиента по любому набору реквизитов", () => {
     const search = read("../../../../../packages/shared/src/local/selectors/client-search.ts");
     assert.match(search, /for \(const set of client\.requisites \?\? \[\]\) \{/);

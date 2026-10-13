@@ -436,7 +436,7 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 
 | Сущность | Единственное тело | Двери (реэкспорт) |
 |---|---|---|
-| Клиент (карточка = создание) | `app/(dashboard)/clients/[id].tsx` | `app/(shared)/client.tsx` |
+| Клиент (карточка = создание) | `src/features/clients/card/ClientDetailScreen.tsx` (страница — `card/ClientCardPage.tsx`, проводка — `card/use-client-card.ts`) | `app/(dashboard)/clients/[id].tsx` (маршрут вкладки), `app/(shared)/client.tsx` |
 | Логика черновика клиента | `src/features/clients/useClientDraft.ts` | — |
 | Объект (создание = правка) | `src/features/clients/ObjectSheet.tsx` + `ObjectFields.tsx` | — |
 | Метки (справочник) | `src/features/reference/screens/LabelsScreen.tsx` | `cabinet/labels.tsx`, `calendar/labels.tsx`, `clients/labels.tsx`, `(shared)/labels.tsx` (шестерёнка листа «Метка клиента», адрес — `useReferenceHref().labels`) |

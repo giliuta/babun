@@ -634,7 +634,7 @@
 |---|---|---|
 | «Клиент» | `src/features/clients/ClientHeader.tsx` | имя · «чей он» (`src/features/clients/MemberOfLine.tsx`) · номер с кнопкой «Связаться» (тап — лист способов, удержание — звонок) · доп. номера и мессенджеры (`src/features/clients/ClientExtraContacts.tsx`) · дверь «Добавить контакт»; в новом клиенте над номером — страна «🇨🇾 Кипр +357» с поиском (`src/features/clients/use-phone-country.tsx`) |
 | «Заметка клиента» | `src/features/clients/blocks/NotesBlock.tsx` | `InlineNoteField` сразу под «Клиентом» (слот `note` шапки) |
-| «Люди» | `app/(dashboard)/clients/[id].tsx` + `src/features/clients/ClientPeopleDoor.tsx` | `LinkRow` одной строкой без аватара · свайп «Убрать» + «Отменить» · «Все люди · N» → `clients/people.tsx` · дверь «Добавить человека» |
+| «Люди» | `src/features/clients/card/ClientCardPage.tsx` + `src/features/clients/ClientPeopleDoor.tsx` | `LinkRow` одной строкой без аватара · свайп «Убрать» + «Отменить» · «Все люди · N» → `clients/people.tsx` · дверь «Добавить человека» |
 | «История» | `src/features/clients/ClientContactRow.tsx` | сводка `src/features/clients/ClientSummaryCard.tsx` (визиты · сумма · был · команда; при долге — в «Неоплаченные») · дверь «Записать» |
 | «Объекты» | `src/features/clients/ClientObjectsSection.tsx` + `src/features/clients/blocks/ObjectsBlock.tsx` | `ObjectRow` · мини-заметка объекта под строкой · «Все объекты · N» → `clients/objects.tsx` · дверь «Добавить объект» (курсор сразу в адрес) |
 | «Файлы» | `src/features/clients/blocks/ClientFilesBlock.tsx` | последний файл под заголовком дня (`ClientFileRow`) → `clients/attachments.tsx`: лента по дням, инвойсы и чеки в ней же · пустой блок — дверь «Добавить файл» |

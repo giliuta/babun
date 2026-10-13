@@ -151,7 +151,7 @@
 | То же, но в цвете сущности | `GradientButton tint` | `app/book/index.tsx:2420` |
 | Показать «пусто / грузим / сломалось» | `EmptyState` | `app/accounts/settings.tsx:175` |
 | Точечное ожидание (в кнопке, у строки) | `Spinner` | `src/components/ui/GradientButton.tsx:158` |
-| Показать фоновое дообновление поверх готовых данных | `LoadingBar` | `app/(dashboard)/clients/index.tsx:589` |
+| Показать фоновое дообновление поверх готовых данных | `LoadingBar` | `src/features/clients/list/ListBody.tsx:58` |
 | Дать «потянуть список вниз» | `usePullRefresh` | `app/(dashboard)/finances/index.tsx:525` |
 | Сказать «сделано» в ответ на нажатие | `toast` (+ `action` для «Отменить») | `src/features/clients/archive-undo.ts:56` |
 | Сообщить о сбое, который пришёл сам | `notify` | `src/lib/query-client.ts:47` |

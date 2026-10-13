@@ -10,6 +10,7 @@ import {
   tryToE164,
 } from "./phone";
 import { withHomeCode } from "./use-phone-country";
+import { clientsListSource } from "./list/source-for-tests";
 
 // НОМЕР И КНОПКА СВЯЗИ (владелец 22.09: «как правильно писать номер»,
 // «звоночек справа должен открывать, как я хочу связаться»).
@@ -61,7 +62,7 @@ describe("кнопка связи у номера", () => {
     );
     assert.match(read("ClientRow.tsx"), /<PhoneChannelButton[^>]*source=\{source\}/, "строка не передаёт компанию кнопке");
     assert.match(
-      read("../../../app/(dashboard)/clients/index.tsx"),
+      clientsListSource(),
       /<ClientRow[^>]*source=\{guest\}/,
       "список не передаёт строке компанию работодателя",
     );

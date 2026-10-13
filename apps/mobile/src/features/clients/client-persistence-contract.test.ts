@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { clientCardSource } from "./card/source-for-tests";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (relative: string) =>
@@ -29,7 +30,7 @@ describe("client native persistence contract", () => {
   });
 
   test("inline note and object editors clear only after a confirmed save", () => {
-    const screen = read("../../../app/(dashboard)/clients/[id].tsx");
+    const screen = clientCardSource();
     const notes = read("blocks/NotesBlock.tsx");
     // Страницы объекта и техники удалены (2026-08-06): правка объекта живёт
     // листом, уровень техники снесён целиком. Правило осталось прежним и
