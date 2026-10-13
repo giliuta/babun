@@ -41,3 +41,15 @@ test("инвойсы и чеки над табами тоже держат от�
     assert.match(read(f), /paddingBottom: Platform\.OS === "android" \? insets\.bottom : 0/, f);
   }
 });
+
+test("«Назад» выходит из режима корневой вкладки, а не сворачивает приложение", () => {
+  // Перенос записи и «Записать: …» — плашка режима; выбор — список клиентов.
+  assert.match(read("../../features/calendar/ModePlaque.tsx"), /useAndroidBack\(true, onExit\);/);
+  assert.match(read("../../../app/(dashboard)/clients/index.tsx"), /useAndroidBack\(selecting, exitSelection\);/);
+  // Только пока экран в фокусе: форма записи поверх календаря в режиме
+  // «Записать» закрывается своим «назад», а не гасит режим под собой.
+  const hook = read("../../lib/android-back.ts");
+  assert.match(hook, /useFocusEffect\(/);
+  assert.match(hook, /if \(!active\) return undefined;/);
+  assert.match(hook, /return true;/);
+});

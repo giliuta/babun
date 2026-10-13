@@ -29,6 +29,7 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { useToast } from "@/components/ui/Toast";
 import { usePullRefresh } from "@/lib/pull-refresh";
+import { useAndroidBack } from "@/lib/android-back";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import {
@@ -617,6 +618,8 @@ function ClientsListScreen() {
     setSelecting(false);
     setSelectedIds(new Set());
   };
+  // «Назад» Android снимает выбор, а не сворачивает приложение с ним.
+  useAndroidBack(selecting, exitSelection);
   const toggleId = (id: string) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
