@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 
 // АУДИТ ПЕРВОГО ВХОДА 03.10: новый аккаунт без тарифа, мастер, регистрация.
 const here = dirname(fileURLToPath(import.meta.url));
@@ -14,14 +15,14 @@ describe("первый вход нового аккаунта", () => {
   test("пустой календарь — просто сетка, без плашек первого запуска", () => {
     assert.throws(() => src("features/calendar/CalendarOnboardingCard.tsx"));
     assert.throws(() => src("features/calendar/CalendarEmptyState.tsx"));
-    const home = app("(dashboard)/(home)/index.tsx");
+    const home = calendarScreenSource();
     assert.doesNotMatch(home, /CalendarOnboardingCard|CalendarEmptyState|onboardingDismissed/);
   });
 
   test("первые экраны говорят «аккаунт» и «команды», не «компания»", () => {
     const invite = app("invite/[token].tsx");
     assert.doesNotMatch(invite, /Подключаем компанию|в этой компании|владельца компании/);
-    assert.doesNotMatch(app("(dashboard)/(home)/index.tsx"), /"В компании ещё нет календарей"/);
+    assert.doesNotMatch(calendarScreenSource(), /"В компании ещё нет календарей"/);
   });
 
   // ВЛАДЕЛЕЦ 04.10: «как называется ваш бизнес… чем вы занимаетесь… всё

@@ -3,14 +3,15 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 
 // ЖЁСТКАЯ ПРОВЕРКА КАЛЕНДАРЯ 03.10 — СТОРОЖА ПРАВОК, КОТОРЫЕ НЕ ПОДНЯТЬ БЕЗ
 // СИМУЛЯТОРА (экран и жесты тянут react-native). Каждый держит конкретную
 // поломку, найденную разбором «как сломать то, что пользователь не делает».
 
 const here = dirname(fileURLToPath(import.meta.url));
-const screen = () =>
-  readFileSync(resolve(here, "../../../app/(dashboard)/(home)/index.tsx"), "utf8");
+// The calendar screen is the route file plus `features/calendar/home/`.
+const screen = () => calendarScreenSource();
 const block = () => readFileSync(resolve(here, "AppointmentBlock.tsx"), "utf8");
 
 describe("календарь под нагрузкой", () => {

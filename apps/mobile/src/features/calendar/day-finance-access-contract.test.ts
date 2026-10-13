@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 
 // ДЕНЬГИ В КАЛЕНДАРЕ — ПРАВОМ КАЛЕНДАРЯ «ДОХОД И РАСХОД ДНЯ» (владелец 04.10:
 // «функция расход/доход должна быть в доступах календаря — не общие
@@ -115,7 +116,8 @@ describe("ручные операции дня", () => {
 });
 
 describe("полоса денег под календарём", () => {
-  const home = read("../../../app/(dashboard)/(home)/index.tsx");
+  // The calendar screen is the route file plus `features/calendar/home/`.
+  const home = normalize(calendarScreenSource());
 
   test("видна по праву календаря «Доход и расход дня», а не по роли и не по «Финансам»", () => {
     has(

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, test } from "node:test";
 import { firstCalendarFromRpc } from "./first-calendar";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 
 const here = import.meta.dirname;
 
@@ -24,7 +25,7 @@ describe("ответ «завести первый календарь»", () => 
 
 describe("первый календарь заводит база, а не список на устройстве", () => {
   test("экран календаря зовёт create_first_calendar, а не прямую вставку", () => {
-    const screen = readFileSync(resolve(here, "../../../app/(dashboard)/(home)/index.tsx"), "utf8");
+    const screen = calendarScreenSource();
     assert.match(screen, /useCreateFirstCalendar\(\)/);
     assert.doesNotMatch(screen, /useCreateTeam\(\)/);
     // «Создавать нечего» — только перечитать список, без счетов и выбора.

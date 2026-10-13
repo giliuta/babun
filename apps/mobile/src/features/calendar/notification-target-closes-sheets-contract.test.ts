@@ -1,16 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { calendarScreenSource } from "@/features/calendar/home/source-for-tests";
 
 // ЛИСТЫ КАЛЕНДАРЯ УХОДЯТ ПЕРЕД ЗАПИСЬЮ ИЗ УВЕДОМЛЕНИЯ (прогон 04.10). Тап по
 // уведомлению при открытых «Финансах дня» открывал страницу записи ПОД
 // листом: человек видел прежний лист и думал, что тап не сработал.
 
-const home = readFileSync(
-  path.join(__dirname, "../../../app/(dashboard)/(home)/index.tsx"),
-  "utf8",
-);
+// The calendar screen is the route file plus `features/calendar/home/`.
+const home = calendarScreenSource();
 
 describe("запись из уведомления", () => {
   test("перед страницей записи закрыты все листы календаря", () => {
