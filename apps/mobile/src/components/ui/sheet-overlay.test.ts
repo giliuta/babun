@@ -41,3 +41,11 @@ test("тап мимо листа закрывает его и с рамкой п
   assert.match(lift, /<KeyboardAvoidingView[\s\S]{0,80}pointerEvents=\{pointerEvents\}/);
   assert.match(lift, /<View ref=\{ref\} pointerEvents=\{pointerEvents\}/);
 });
+
+test("лист без футера на Android держит отступ навигации снизу", () => {
+  // Окно листа edge-to-edge: без отступа последняя строка выбора ложилась под
+  // «Назад / Домой» трёхкнопочной навигации, где её не нажать (13.10).
+  const sheet = read("BottomSheet.tsx");
+  assert.match(sheet, /\) : Platform\.OS === "android" && !keyboardShown \? \(/);
+  assert.match(sheet, /<View style=\{\{ height: insets\.bottom \}\} \/>/);
+});

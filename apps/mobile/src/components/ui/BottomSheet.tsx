@@ -161,6 +161,7 @@ export function BottomSheet({
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
+  const keyboardShown = useKeyboardShown();
   // ВЫСОТА ОКНА — ПРИ ПОКАЗЕ, А НЕ ПРИ ЗАГРУЗКЕ МОДУЛЯ (04.10). В браузере
   // вкладка, открытая «за кадром», грузит код при окне 0×0: константа
   // модуля давала `maxHeight: 0`, лист схлопывался, и строки уходили под
@@ -442,7 +443,16 @@ export function BottomSheet({
       ) : (
         shown.children
       )}
-      {shown.footer ? <SheetFooter padded={padded}>{shown.footer}</SheetFooter> : null}
+      {shown.footer ? (
+        <SheetFooter padded={padded}>{shown.footer}</SheetFooter>
+      ) : Platform.OS === "android" && !keyboardShown ? (
+        // ЛИСТ БЕЗ ФУТЕРА НЕ УХОДИТ ПОД НАВИГАЦИЮ ANDROID (13.10). Окно листа
+        // edge-to-edge, и последняя строка выбора ложилась под полосу жестов,
+        // а при трёх кнопках навигации — под «Назад / Домой», где её не
+        // нажать. Футер этот отступ уже держит (`SheetFooter`), тело без
+        // футера — теперь тоже. На iOS вид прежний.
+        <View style={{ height: insets.bottom }} />
+      ) : null}
     </Animated.View>
   );
 
